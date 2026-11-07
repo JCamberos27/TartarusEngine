@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SurfaceLookup.h"
 #include "WeaponAudio.h"
 
 #include "../Components.h"
@@ -62,6 +63,7 @@ private:
     std::unordered_map<std::string, double> m_LastImpact;
     double m_LastFlyby = -1e9;
     Counts m_Played;
+    SurfaceLookup m_Surfaces;
     SoundSet* ImpactSet(const std::string& surface);
     SoundSet* CasingSet(bool shell, const std::string& surface);
 };

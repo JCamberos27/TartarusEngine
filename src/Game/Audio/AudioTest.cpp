@@ -226,49 +226,8 @@ void QuietShotExtras(WeaponAudioProfile& p, bool quiet) {
     p.ShotPitchMin = p.ShotPitchMax = 1.0f;
 }
 
-} // namespace
-
-int RunAudioTest(const std::string& scene, const std::string& reportPath) {
-    const std::string sceneArg = scene.empty() ? std::string("AudioLab") : scene;
-    if (!reportPath.empty()) {
-        s_Report.open(reportPath);
-        if (!s_Report.is_open()) std::fprintf(stderr, "--audio-test: cannot write the report '%s'\n", reportPath.c_str());
-    }
-    const fs::path root = ProjectPaths::Resolve("");
-    fs::path scenePath = sceneArg;
-    if (scenePath.extension() != ".json") scenePath = root / "scenes" / (sceneArg + ".json");
-    else if (scenePath.is_relative() && !fs::exists(scenePath)) scenePath = root / scenePath;
-    Out("[audio-test] scene %s\n", scenePath.string().c_str());
-
-    // Loading a scene uploads its textures and meshes: a GL context has to exist. The window stays hidden (it is only shown after a
-    // first frame, which never comes here).
-    Window window(64, 64, "Tartarus Engine (audio test)");
-    World world;
-    AssetLibrary assets;
-    if (!SceneSerializer::Load(world, assets, scenePath.string(), /*persistMigration=*/false)) {
-        Out("[audio-test] FAIL: could not load the scene\n");
-        return 1;
-    }
-    Out("[audio-test] scene loaded\n");
-    json manifest, spec;
-    const bool haveManifest = ReadJson(root / "assets/Audio/audio_manifest.json", manifest);
-    const bool haveSpec = ReadJson((root / "..").lexically_normal() / "tools/audio/recipes/mix.json", spec) && spec.contains("levels");
-    float refLufs = 0.0f;
-    const bool haveRef = haveManifest && manifest.contains("mix") && Num(manifest["mix"], "reference_lufs_m", refLufs);
-    if (!haveRef || !haveSpec) Out("[audio-test] FAIL: no %s: the levels and the ambience are not checked\n", !haveRef ? "mix.reference_lufs_m in the manifest" : "tools/audio/recipes/mix.json");
-    Check(haveRef && haveSpec);
-
-    AudioEngine::InitOffline(kRate);
-    Out("[audio-test] offline engine up\n");
-    AudioEngine::EnableTaps(true);
-    WeaponAudio& wa = WeaponAudio::Get();
-    wa.Start(world);
-    Rig rig{wa};
-    const std::vector<ReverbZoneVolume>& zones = wa.Zones().Zones();
-    Out("[audio-test] %d zone(s), reference %.2f LUFS-M\n", (int)zones.size(), refLufs);
-
-    // A spot in a zone: its floor + 1.6 m (boxes) or its centre, facing along its longest horizontal axis.
-    auto spotIn = [](const ReverbZoneVolume& z, glm::vec3& pos, glm::vec3& fwd, float& room) {
+// A spot in a zone: its floor + 1.6 m (boxes) or its centre, facing along its longest horizontal axis.
+void SpotIn(const ReverbZoneVolume& z, glm::vec3& pos, glm::vec3& fwd, float& room) {
         pos = z.Center;
         fwd = glm::vec3(0.0f, 0.0f, -1.0f);
         room = z.Radius;
@@ -278,30 +237,65 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
             fwd = z.Extents.x >= z.Extents.z ? ax : az;
             room = std::max(z.Extents.x, z.Extents.z);
         }
-    };
-    int hall = -1; // the loudest room for the peak: the first indoor large zone, else the first zone
-    for (size_t i = 0; i < zones.size(); ++i)
-        if (zones[i].Class == SpaceClass::IndoorLarge && hall < 0) hall = (int)i;
-    if (hall < 0 && !zones.empty()) hall = 0;
-    {
-        glm::vec3 p(0.0f, 1.6f, 0.0f), f(0.0f, 0.0f, -1.0f);
-        float room = 0.0f;
-        if (hall >= 0) spotIn(zones[(size_t)hall], p, f, room);
-        rig.Place(p, f);
-    }
+}
 
-    // --- 1. levels --------------------------------------------------------------------------------------------------
+// What the parts share: the engine's rig, the scene's zones, the manifest and the mix spec with what was found of them.
+struct Ctx {
+    WeaponAudio& Wa;
+    Rig& R;
+    const std::vector<ReverbZoneVolume>& Zones;
+    const json& Manifest;
+    const json& Spec;
+    bool HaveManifest, HaveSpec, HaveRef;
+    float RefLufs;
+    int Hall;                   // the loudest room for the peak: the first indoor large zone, else the first zone
+    AudioMixComponent SceneMix; // the scene's own mix, put back for the firefight
+};
+
+// Plays up to 3 variants of `set` once each, `pos` away from the listener's place (2D when !spatial), and returns the mean LUFS-M max
+// of what was heard; `played` is how many variants started. A looping set runs 1.5 s and is stopped.
+float MeasureKey(Ctx& c, SoundSet& set, const glm::vec3& pos, bool spatial, int& played) {
+    Rig& rig = c.R;
+    float sum = 0.0f;
+    played = 0;
+    const int plays = std::min<int>(3, (int)set.Files.size());
+    for (int k = 0; k < plays; ++k) {
+        rig.Clear();
+        const SoundPlayer::Played pl = c.Wa.PlayKeyed(set, pos, !spatial, 1.0f);
+        if (!pl.Started) continue;
+        if (set.Loop) {
+            rig.Run(1.5f);
+            AudioEngine::Stop(pl.Handle);
+            rig.Run(0.1f);
+        } else {
+            rig.RunUntilDone(pl.Handle, 6.0f);
+        }
+        sum += LufsMax(rig.Pre);
+        ++played;
+    }
+    return played > 0 ? sum / (float)played : 0.0f;
+}
+
+// --- 1. levels: set-up --------------------------------------------------------------------------------------------
+void DryMix(Ctx& c) {
+    WeaponAudio& wa = c.Wa;
+    Rig& rig = c.R;
     wa.Bus().Enabled = false;            // dry: no sends
     wa.Bus().OcclusionEnabled = false;   // and nothing between the listener and the source
     AudioEngine::SetReverbEnabled(false, 0);
     AudioEngine::SetReverbEnabled(false, 1);
     AudioEngine::SetBusVolume(AudioEngine::Bus::Ambient, 0.0f);
-    const AudioMixComponent sceneMix = wa.Mix();
+    c.SceneMix = wa.Mix();
     wa.Mix().DuckEnabled = wa.Mix().FocusEnabled = false; // static levels: nothing ducks (part 5 runs the dynamic mix)
     wa.ApplyMix();
     rig.Run(1.2f); // (any bed of the zone fades in silently)
+}
 
-    // --- 0. the tier ladder ----------------------------------------------------------------------------------------------
+// --- 0. the tier ladder ----------------------------------------------------------------------------------------------
+void PartTierLadder(Ctx& c) {
+    const json& manifest = c.Manifest;
+    const json& spec = c.Spec;
+    const bool haveSpec = c.HaveSpec, haveManifest = c.HaveManifest;
     if (haveSpec && haveManifest) {
         const json& L = spec.contains("levels") ? spec["levels"] : json::object();
         float shotNpc = 0.0f, walk = 0.0f, bedMax = -99.0f;
@@ -339,6 +333,16 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
         Out("the player's walk (%.1f) is 4 dB over the loudest bed %s\n", walk, Verdict(Check(walk >= bedMax + 4.0f)));
         Out("a soldier's walk at 5 m (%.1f) is over the player's own %s\n", walk + st.GainDbAt(5.0f), Verdict(Check(walk + st.GainDbAt(5.0f) > walk)));
     }
+}
+
+// --- 1. levels --------------------------------------------------------------------------------------------------
+void PartLevels(Ctx& c) {
+    WeaponAudio& wa = c.Wa;
+    Rig& rig = c.R;
+    const json& manifest = c.Manifest;
+    const json& spec = c.Spec;
+    const float refLufs = c.RefLufs;
+    const bool haveRef = c.HaveRef, haveSpec = c.HaveSpec;
     if (haveRef && haveSpec) {
         Out("\n== levels (LUFS-M max, dB re the player's shot; tolerance %.1f dB)\n", kLevelTolDb);
         Out("%-36s %8s %8s %7s\n", "key", "played", "spec", "diff");
@@ -353,7 +357,7 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
         const DistanceModel npcShot = ModelOf(manifest, "npc_shot");
         float npcDb = 0.0f;
         const bool haveNpc = Num(spec["levels"], "npc_shot", npcDb) && npcShot.Valid();
-        for (const char* gun : {"ak", "870"}) {
+        for (const char* gun : kBuiltInGunIds) {
             WeaponAudioProfile* p = wa.Profile(gun);
             if (!p) continue;
             QuietShotExtras(*p, true);
@@ -406,28 +410,13 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
             set->PitchMin = set->PitchMax = 1.0f;
             const DistanceModel model = ModelOf(manifest, refName);
             const float dist = model.Valid() ? model.RefM : 0.0f;
-            const int plays = std::min<int>(3, (int)set->Files.size());
-            float sum = 0.0f;
             int n = 0;
-            for (int k = 0; k < plays; ++k) {
-                rig.Clear();
-                const SoundPlayer::Played pl = wa.PlayKeyed(*set, rig.Pos + rig.Fwd * dist, dist <= 0.0f, 1.0f);
-                if (!pl.Started) continue;
-                if (set->Loop) {
-                    rig.Run(1.5f);
-                    AudioEngine::Stop(pl.Handle);
-                    rig.Run(0.1f);
-                } else {
-                    rig.RunUntilDone(pl.Handle, 6.0f);
-                }
-                sum += LufsMax(rig.Pre);
-                ++n;
-            }
+            const float mean = MeasureKey(c, *set, rig.Pos + rig.Fwd * dist, dist > 0.0f, n);
             if (n == 0) {
                 Out("%-36s   did not play %s\n", key.c_str(), Verdict(Check(false)));
                 continue;
             }
-            report(dist > 0.0f ? key + " @" + std::to_string((int)dist) + "m" : key, sum / (float)n, level);
+            report(dist > 0.0f ? key + " @" + std::to_string((int)dist) + "m" : key, mean, level);
         }
         // A soldier's step and reload: the player's files, in the world at the model's reference distance (level + offset).
         for (const auto& [key, model] : {std::pair<const char*, const char*>{"snd.foley.step_concrete.walk", "npc_step"}, {"snd.ak.mag_in", "npc_gear"}}) {
@@ -438,22 +427,19 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
             if (!m.Valid() || !SpecLevel(spec, key, level, ignored) || !set || set->Files.empty()) continue;
             set->VolumeJitterDb = 0.0f;
             set->PitchMin = set->PitchMax = 1.0f;
-            float sum = 0.0f;
             int n = 0;
-            for (int k = 0; k < std::min<int>(3, (int)set->Files.size()); ++k) {
-                rig.Clear();
-                const SoundPlayer::Played pl = wa.PlayKeyed(*set, rig.Pos + rig.Fwd * m.RefM, false, 1.0f);
-                if (!pl.Started) continue;
-                rig.RunUntilDone(pl.Handle, 6.0f);
-                sum += LufsMax(rig.Pre);
-                ++n;
-            }
-            if (n > 0) report(std::string(key) + " (soldier) @" + std::to_string((int)m.RefM) + "m", sum / (float)n, level + m.OffsetDb);
+            const float mean = MeasureKey(c, *set, rig.Pos + rig.Fwd * m.RefM, true, n);
+            if (n > 0) report(std::string(key) + " (soldier) @" + std::to_string((int)m.RefM) + "m", mean, level + m.OffsetDb);
         }
         Out("levels: worst %.1f dB off; %d key(s) not levelled here (shot layers, impulse responses, ambience below)\n", worst, skipped);
     }
+}
 
-    // --- 2. wet / dry per zone ---------------------------------------------------------------------------------------
+// --- 2. wet / dry per zone ---------------------------------------------------------------------------------------
+void PartWetDry(Ctx& c) {
+    WeaponAudio& wa = c.Wa;
+    Rig& rig = c.R;
+    const std::vector<ReverbZoneVolume>& zones = c.Zones;
     wa.Bus().Enabled = true;
     AudioEngine::SetReverbEnabled(true, 0);
     Out("\n== wet / dry per zone (K-weighted reverb return energy re the dry signal, an impact 2 m in front; tolerance %.1f dB)\n", kWetTolDb);
@@ -469,7 +455,7 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
             const ReverbZoneVolume& z = zones[i];
             glm::vec3 p, f;
             float room = 0.0f;
-            spotIn(z, p, f, room);
+            SpotIn(z, p, f, room);
             rig.Place(p, f);
             rig.Run(1.5f); // the reverb glides to this room
             const AudioEngine::ReverbSpec spec0 = wa.CurrentReverb();
@@ -506,8 +492,15 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
                 Verdict(Check(std::fabs(diff) <= kWetTolDb)), raw);
         }
     }
+}
 
-    // --- 3. ambience ---------------------------------------------------------------------------------------------------
+// --- 3. ambience ---------------------------------------------------------------------------------------------------
+void PartAmbience(Ctx& c) {
+    Rig& rig = c.R;
+    const std::vector<ReverbZoneVolume>& zones = c.Zones;
+    const json& spec = c.Spec;
+    const float refLufs = c.RefLufs;
+    const bool haveRef = c.HaveRef, haveSpec = c.HaveSpec;
     AudioEngine::SetBusVolume(AudioEngine::Bus::Ambient, 1.0f);
     if (haveRef && haveSpec) {
         Out("\n== ambience beds (LUFS-M max at the zone's centre, dB re the player's shot; tolerance %.1f dB)\n", kLevelTolDb);
@@ -523,7 +516,7 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
             level += 20.0f * std::log10(std::max(z.AmbienceVolume, 1e-4f));
             glm::vec3 p, f;
             float room = 0.0f;
-            spotIn(z, p, f, room);
+            SpotIn(z, p, f, room);
             rig.Place(p, f);
             rig.Run(2.5f); // the bed fades in (1 s), the last zone's fades out
             rig.Clear();
@@ -532,107 +525,177 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
             Out("zone %d %-24s %8.1f %8.1f %+7.1f %s\n", (int)i, z.Ambience.c_str(), rel, level, diff, Verdict(Check(std::fabs(diff) <= kLevelTolDb)));
         }
     }
+}
 
-    // --- 4. master peak --------------------------------------------------------------------------------------------------
+// --- 4. master peak --------------------------------------------------------------------------------------------------
+void PartPeak(Ctx& c) {
+    WeaponAudio& wa = c.Wa;
+    Rig& rig = c.R;
+    const std::vector<ReverbZoneVolume>& zones = c.Zones;
+    const int hall = c.Hall;
+    glm::vec3 p(0.0f, 1.6f, 0.0f), f(0.0f, 0.0f, -1.0f);
+    float room = 10.0f;
+    if (hall >= 0) SpotIn(zones[(size_t)hall], p, f, room);
+    rig.Place(p, f);
+    rig.Run(1.5f);
+    rig.Clear();
+    AudioEngine::TakeLimiterGainReductionDb();
+    SoundSet* impact = wa.KeySet("snd.impact.concrete");
+    for (int s = 0; s < 30; ++s) { // 30 rounds at 600 rpm, each hitting the far wall, a soldier answering every other
+        wa.Shot(kDefaultGunId, rig.Pos, true);
+        if (impact && !impact->Files.empty()) wa.PlayKeyed(*impact, rig.Pos + rig.Fwd * std::min(8.0f, 0.8f * room), false, 1.0f);
+        if (s % 2 == 0) wa.Shot(kDefaultGunId, rig.Pos + rig.Fwd * 10.0f, false, 7u);
+        rig.Run(0.1f);
+    }
+    rig.Run(2.0f);
+    const LimiterSettings lim = AudioEngine::GetMasterLimiter();
+    const float master = LoudnessMeter::PeakDb(rig.Master, 0, rig.Master.size() / 2), pre = LoudnessMeter::PeakDb(rig.Pre, 0, rig.Pre.size() / 2);
+    const float gr = AudioEngine::TakeLimiterGainReductionDb();
+    Out("\n== master peak (a 30-round burst with impacts and a soldier, in the %s)\n", hall >= 0 ? SpaceClassName(zones[(size_t)hall].Class) : "scene");
+    Out("into the limiter %.1f dBFS, out %.2f dBFS (ceiling %.1f), deepest gain reduction %.1f dB, LUFS-M max %.1f %s\n", pre, master, lim.CeilingDb, gr,
+        LufsMax(rig.Master), Verdict(Check(!lim.Enabled || master <= lim.CeilingDb + 0.05f)));
+    const AudioEngine::ReverbStats rs = AudioEngine::GetReverbStats();
+    if (rs.Callbacks > 0)
+        Out("reverb: %llu blocks, mean %.1f us, max %.1f us per 10 ms block (offline, tail inline)\n", (unsigned long long)rs.Callbacks,
+            rs.TotalMicros / (double)rs.Callbacks, rs.MaxMicros);
+}
+
+// --- 5. firefight -------------------------------------------------------------------------------------------------
+void PartFirefight(Ctx& c) {
+    WeaponAudio& wa = c.Wa;
+    Rig& rig = c.R;
+    const std::vector<ReverbZoneVolume>& zones = c.Zones;
+    const int hall = c.Hall;
+    wa.Mix() = c.SceneMix; // the whole dynamic mix, as the scene has it
+    wa.ApplyMix();
+    wa.Bus().OcclusionEnabled = true;
+    int arena = -1; // an outdoor zone with a bed if there is one (where fights are), else the hall
+    for (size_t i = 0; i < zones.size(); ++i)
+        if (arena < 0 && !zones[i].Ambience.empty() && (zones[i].Class == SpaceClass::OutdoorUrban || zones[i].Class == SpaceClass::OutdoorOpen)) arena = (int)i;
+    if (arena < 0) arena = hall;
+    glm::vec3 p(0.0f, 1.6f, 0.0f), f(0.0f, 0.0f, -1.0f);
+    float room = 20.0f;
+    if (arena >= 0) SpotIn(zones[(size_t)arena], p, f, room);
+    rig.Place(p, f);
+    const glm::vec3 side = glm::normalize(glm::cross(rig.Fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
+    rig.Run(2.0f); // the bed fades in
+    rig.Clear();
+    AudioEngine::TakeLimiterGainReductionDb();
+    AudioEngine::TakeGlueGainReductionDb();
+    SoundSet* impact = wa.KeySet("snd.impact.concrete");
+    SoundSet* npcStep = wa.KeySet("snd.foley.step_concrete.walk");
+    SoundSet* ownStep = wa.KeySet("snd.foley.step_concrete.run");
+    SoundSet* casing = wa.KeySet("snd.casing.rifle.concrete");
+    SoundSet* flyby = wa.KeySet("snd.flyby");
+    auto has = [](SoundSet* s) { return s && !s->Files.empty(); };
+    const float dt = (float)kBlock / (float)kRate;
+    const int blocks = (int)(20.0f / dt);
+    int limBlocks = 0, glueBlocks = 0;
+    float limMax = 0.0f, glueMax = 0.0f, glueSum = 0.0f, duckMax = 0.0f;
+    for (int b = 0; b < blocks; ++b) {
+        const float t = (float)b * dt;
+        const int tick = b; // 10 ms
+        // the player: a 5-round burst (600 rpm) every 2.5 s, impacts on the far wall, casings at the feet; running steps every 0.33 s
+        const float inCycle = std::fmod(t, 2.5f);
+        if (inCycle < 0.5f && tick % 10 == 0) {
+            wa.Shot(kDefaultGunId, rig.Pos, true);
+            if (has(impact)) wa.PlayKeyed(*impact, rig.Pos + rig.Fwd * std::min(15.0f, 0.8f * room), false, 1.0f);
+            if (has(casing)) wa.PlayKeyed(*casing, rig.Pos + side * 0.8f - glm::vec3(0.0f, 1.5f, 0.0f), false, 1.0f);
+        }
+        if (has(ownStep) && tick % 33 == 0 && inCycle > 0.6f) wa.PlayKeyed(*ownStep, rig.Pos, true, 1.0f);
+        // two soldiers answering: 3-round bursts from 20 m and 35 m, rounds cracking past
+        if (std::fmod(t + 1.2f, 2.5f) < 0.3f && tick % 10 == 0) {
+            wa.Shot(kDefaultGunId, rig.Pos + rig.Fwd * 20.0f + side * 6.0f, false, 11u);
+            if (has(flyby) && tick % 20 == 0) wa.PlayKeyed(*flyby, rig.Pos + side * 1.5f, false, 1.0f);
+        }
+        if (std::fmod(t + 0.3f, 5.0f) < 0.3f && tick % 10 == 0) wa.Shot(kDefaultGunId, rig.Pos + rig.Fwd * 35.0f - side * 10.0f, false, 12u);
+        // a third walking up the flank at 8 m
+        if (has(npcStep) && tick % 50 == 0) wa.PlayKeyed(*npcStep, rig.Pos + side * 8.0f, false, 1.0f);
+        rig.Step();
+        const float lim = AudioEngine::TakeLimiterGainReductionDb(), glue = AudioEngine::TakeGlueGainReductionDb();
+        limMax = std::max(limMax, lim);
+        glueMax = std::max(glueMax, glue);
+        glueSum += glue;
+        if (lim > 1.0f) ++limBlocks;
+        if (glue > 0.5f) ++glueBlocks;
+        duckMax = std::max(duckMax, wa.Ducker().Amount());
+    }
+    rig.Run(1.0f);
+    const float integrated = LoudnessMeter::Integrated(rig.Master, kRate);
+    const float lra = LoudnessMeter::ShortTermRange(rig.Master, kRate);
+    const LimiterSettings lim = AudioEngine::GetMasterLimiter();
+    const float master = LoudnessMeter::PeakDb(rig.Master, 0, rig.Master.size() / 2);
+    Out("\n== firefight (20 s in the %s: your bursts, two soldiers answering, flybys, a third walking the flank; ducking / air / glue on)\n",
+        arena >= 0 ? SpaceClassName(zones[(size_t)arena].Class) : "scene");
+    Out("integrated %.1f LUFS, short-term range %.1f LU, peak %.2f dBFS\n", integrated, lra, master);
+    Out("glue: deepest %.1f dB, mean %.1f dB, working (> 0.5 dB) %.0f%% of the time\n", glueMax, glueSum / (float)blocks, 100.0f * (float)glueBlocks / (float)blocks);
+    Out("limiter: deepest %.1f dB, working (> 1 dB) %.1f%% of the time %s\n", limMax, 100.0f * (float)limBlocks / (float)blocks,
+        Verdict(Check((float)limBlocks <= 0.05f * (float)blocks)));
+    Out("the beds ducked to %.1f dB under the fire %s\n", -wa.Mix().DuckBedDb * duckMax, Verdict(Check(!wa.Mix().DuckEnabled || duckMax > 0.9f)));
+    Out("peak under the ceiling %s; integrated loudness in [-22, -16] LUFS (a sustained fight) %s\n", Verdict(Check(!lim.Enabled || master <= lim.CeilingDb + 0.05f)),
+        Verdict(Check(integrated >= -22.0f && integrated <= -16.0f)));
+}
+
+} // namespace
+
+int RunAudioTest(const std::string& scene, const std::string& reportPath) {
+    const std::string sceneArg = scene.empty() ? std::string("AudioLab") : scene;
+    if (!reportPath.empty()) {
+        s_Report.open(reportPath);
+        if (!s_Report.is_open()) std::fprintf(stderr, "--audio-test: cannot write the report '%s'\n", reportPath.c_str());
+    }
+    const fs::path root = ProjectPaths::Resolve("");
+    fs::path scenePath = sceneArg;
+    if (scenePath.extension() != ".json") scenePath = root / "scenes" / (sceneArg + ".json");
+    else if (scenePath.is_relative() && !fs::exists(scenePath)) scenePath = root / scenePath;
+    Out("[audio-test] scene %s\n", scenePath.string().c_str());
+
+    // Loading a scene uploads its textures and meshes: a GL context has to exist. The window stays hidden (it is only shown after a
+    // first frame, which never comes here).
+    Window window(64, 64, "Tartarus Engine (audio test)");
+    World world;
+    AssetLibrary assets;
+    if (!SceneSerializer::Load(world, assets, scenePath.string(), /*persistMigration=*/false)) {
+        Out("[audio-test] FAIL: could not load the scene\n");
+        return 1;
+    }
+    Out("[audio-test] scene loaded\n");
+    json manifest, spec;
+    const bool haveManifest = ReadJson(root / "assets/Audio/audio_manifest.json", manifest);
+    const bool haveSpec = ReadJson((root / "..").lexically_normal() / "tools/audio/recipes/mix.json", spec) && spec.contains("levels");
+    float refLufs = 0.0f;
+    const bool haveRef = haveManifest && manifest.contains("mix") && Num(manifest["mix"], "reference_lufs_m", refLufs);
+    if (!haveRef || !haveSpec) Out("[audio-test] FAIL: no %s: the levels and the ambience are not checked\n", !haveRef ? "mix.reference_lufs_m in the manifest" : "tools/audio/recipes/mix.json");
+    Check(haveRef && haveSpec);
+
+    AudioEngine::InitOffline(kRate);
+    Out("[audio-test] offline engine up\n");
+    AudioEngine::EnableTaps(true);
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.Start(world);
+    Rig rig{wa};
+    const std::vector<ReverbZoneVolume>& zones = wa.Zones().Zones();
+    Out("[audio-test] %d zone(s), reference %.2f LUFS-M\n", (int)zones.size(), refLufs);
+
+    int hall = -1; // the loudest room for the peak: the first indoor large zone, else the first zone
+    for (size_t i = 0; i < zones.size(); ++i)
+        if (zones[i].Class == SpaceClass::IndoorLarge && hall < 0) hall = (int)i;
+    if (hall < 0 && !zones.empty()) hall = 0;
     {
         glm::vec3 p(0.0f, 1.6f, 0.0f), f(0.0f, 0.0f, -1.0f);
-        float room = 10.0f;
-        if (hall >= 0) spotIn(zones[(size_t)hall], p, f, room);
+        float room = 0.0f;
+        if (hall >= 0) SpotIn(zones[(size_t)hall], p, f, room);
         rig.Place(p, f);
-        rig.Run(1.5f);
-        rig.Clear();
-        AudioEngine::TakeLimiterGainReductionDb();
-        SoundSet* impact = wa.KeySet("snd.impact.concrete");
-        for (int s = 0; s < 30; ++s) { // 30 rounds at 600 rpm, each hitting the far wall, a soldier answering every other
-            wa.Shot("ak", rig.Pos, true);
-            if (impact && !impact->Files.empty()) wa.PlayKeyed(*impact, rig.Pos + rig.Fwd * std::min(8.0f, 0.8f * room), false, 1.0f);
-            if (s % 2 == 0) wa.Shot("ak", rig.Pos + rig.Fwd * 10.0f, false, 7u);
-            rig.Run(0.1f);
-        }
-        rig.Run(2.0f);
-        const LimiterSettings lim = AudioEngine::GetMasterLimiter();
-        const float master = LoudnessMeter::PeakDb(rig.Master, 0, rig.Master.size() / 2), pre = LoudnessMeter::PeakDb(rig.Pre, 0, rig.Pre.size() / 2);
-        const float gr = AudioEngine::TakeLimiterGainReductionDb();
-        Out("\n== master peak (a 30-round burst with impacts and a soldier, in the %s)\n", hall >= 0 ? SpaceClassName(zones[(size_t)hall].Class) : "scene");
-        Out("into the limiter %.1f dBFS, out %.2f dBFS (ceiling %.1f), deepest gain reduction %.1f dB, LUFS-M max %.1f %s\n", pre, master, lim.CeilingDb, gr,
-            LufsMax(rig.Master), Verdict(Check(!lim.Enabled || master <= lim.CeilingDb + 0.05f)));
-        const AudioEngine::ReverbStats rs = AudioEngine::GetReverbStats();
-        if (rs.Callbacks > 0)
-            Out("reverb: %llu blocks, mean %.1f us, max %.1f us per 10 ms block (offline, tail inline)\n", (unsigned long long)rs.Callbacks,
-                rs.TotalMicros / (double)rs.Callbacks, rs.MaxMicros);
     }
 
-    // --- 5. firefight -------------------------------------------------------------------------------------------------
-    {
-        wa.Mix() = sceneMix; // the whole dynamic mix, as the scene has it
-        wa.ApplyMix();
-        wa.Bus().OcclusionEnabled = true;
-        int arena = -1; // an outdoor zone with a bed if there is one (where fights are), else the hall
-        for (size_t i = 0; i < zones.size(); ++i)
-            if (arena < 0 && !zones[i].Ambience.empty() && (zones[i].Class == SpaceClass::OutdoorUrban || zones[i].Class == SpaceClass::OutdoorOpen)) arena = (int)i;
-        if (arena < 0) arena = hall;
-        glm::vec3 p(0.0f, 1.6f, 0.0f), f(0.0f, 0.0f, -1.0f);
-        float room = 20.0f;
-        if (arena >= 0) spotIn(zones[(size_t)arena], p, f, room);
-        rig.Place(p, f);
-        const glm::vec3 side = glm::normalize(glm::cross(rig.Fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
-        rig.Run(2.0f); // the bed fades in
-        rig.Clear();
-        AudioEngine::TakeLimiterGainReductionDb();
-        AudioEngine::TakeGlueGainReductionDb();
-        SoundSet* impact = wa.KeySet("snd.impact.concrete");
-        SoundSet* npcStep = wa.KeySet("snd.foley.step_concrete.walk");
-        SoundSet* ownStep = wa.KeySet("snd.foley.step_concrete.run");
-        SoundSet* casing = wa.KeySet("snd.casing.rifle.concrete");
-        SoundSet* flyby = wa.KeySet("snd.flyby");
-        auto has = [](SoundSet* s) { return s && !s->Files.empty(); };
-        const float dt = (float)kBlock / (float)kRate;
-        const int blocks = (int)(20.0f / dt);
-        int limBlocks = 0, glueBlocks = 0;
-        float limMax = 0.0f, glueMax = 0.0f, glueSum = 0.0f, duckMax = 0.0f;
-        for (int b = 0; b < blocks; ++b) {
-            const float t = (float)b * dt;
-            const int tick = b; // 10 ms
-            // the player: a 5-round burst (600 rpm) every 2.5 s, impacts on the far wall, casings at the feet; running steps every 0.33 s
-            const float inCycle = std::fmod(t, 2.5f);
-            if (inCycle < 0.5f && tick % 10 == 0) {
-                wa.Shot("ak", rig.Pos, true);
-                if (has(impact)) wa.PlayKeyed(*impact, rig.Pos + rig.Fwd * std::min(15.0f, 0.8f * room), false, 1.0f);
-                if (has(casing)) wa.PlayKeyed(*casing, rig.Pos + side * 0.8f - glm::vec3(0.0f, 1.5f, 0.0f), false, 1.0f);
-            }
-            if (has(ownStep) && tick % 33 == 0 && inCycle > 0.6f) wa.PlayKeyed(*ownStep, rig.Pos, true, 1.0f);
-            // two soldiers answering: 3-round bursts from 20 m and 35 m, rounds cracking past
-            if (std::fmod(t + 1.2f, 2.5f) < 0.3f && tick % 10 == 0) {
-                wa.Shot("ak", rig.Pos + rig.Fwd * 20.0f + side * 6.0f, false, 11u);
-                if (has(flyby) && tick % 20 == 0) wa.PlayKeyed(*flyby, rig.Pos + side * 1.5f, false, 1.0f);
-            }
-            if (std::fmod(t + 0.3f, 5.0f) < 0.3f && tick % 10 == 0) wa.Shot("ak", rig.Pos + rig.Fwd * 35.0f - side * 10.0f, false, 12u);
-            // a third walking up the flank at 8 m
-            if (has(npcStep) && tick % 50 == 0) wa.PlayKeyed(*npcStep, rig.Pos + side * 8.0f, false, 1.0f);
-            rig.Step();
-            const float lim = AudioEngine::TakeLimiterGainReductionDb(), glue = AudioEngine::TakeGlueGainReductionDb();
-            limMax = std::max(limMax, lim);
-            glueMax = std::max(glueMax, glue);
-            glueSum += glue;
-            if (lim > 1.0f) ++limBlocks;
-            if (glue > 0.5f) ++glueBlocks;
-            duckMax = std::max(duckMax, wa.Ducker().Amount());
-        }
-        rig.Run(1.0f);
-        const float integrated = LoudnessMeter::Integrated(rig.Master, kRate);
-        const float lra = LoudnessMeter::ShortTermRange(rig.Master, kRate);
-        const LimiterSettings lim = AudioEngine::GetMasterLimiter();
-        const float master = LoudnessMeter::PeakDb(rig.Master, 0, rig.Master.size() / 2);
-        Out("\n== firefight (20 s in the %s: your bursts, two soldiers answering, flybys, a third walking the flank; ducking / air / glue on)\n",
-            arena >= 0 ? SpaceClassName(zones[(size_t)arena].Class) : "scene");
-        Out("integrated %.1f LUFS, short-term range %.1f LU, peak %.2f dBFS\n", integrated, lra, master);
-        Out("glue: deepest %.1f dB, mean %.1f dB, working (> 0.5 dB) %.0f%% of the time\n", glueMax, glueSum / (float)blocks, 100.0f * (float)glueBlocks / (float)blocks);
-        Out("limiter: deepest %.1f dB, working (> 1 dB) %.1f%% of the time %s\n", limMax, 100.0f * (float)limBlocks / (float)blocks,
-            Verdict(Check((float)limBlocks <= 0.05f * (float)blocks)));
-        Out("the beds ducked to %.1f dB under the fire %s\n", -wa.Mix().DuckBedDb * duckMax, Verdict(Check(!wa.Mix().DuckEnabled || duckMax > 0.9f)));
-        Out("peak under the ceiling %s; integrated loudness in [-22, -16] LUFS (a sustained fight) %s\n", Verdict(Check(!lim.Enabled || master <= lim.CeilingDb + 0.05f)),
-            Verdict(Check(integrated >= -22.0f && integrated <= -16.0f)));
-    }
+    Ctx ctx{wa, rig, zones, manifest, spec, haveManifest, haveSpec, haveRef, refLufs, hall, AudioMixComponent{}};
+    DryMix(ctx);
+    PartTierLadder(ctx);
+    PartLevels(ctx);
+    PartWetDry(ctx);
+    PartAmbience(ctx);
+    PartPeak(ctx);
+    PartFirefight(ctx);
 
     wa.Stop();
     AudioEngine::Shutdown();

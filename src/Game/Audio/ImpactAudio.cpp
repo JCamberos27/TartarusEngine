@@ -1,6 +1,5 @@
 #include "ImpactAudio.h"
 
-#include "FoleyAudio.h"
 #include "World.h"
 
 #include <algorithm>
@@ -44,13 +43,7 @@ float ImpactAudio::FlybyGain(const ImpactAudioComponent& t, float miss) {
 }
 
 std::string ImpactAudio::SurfaceOf(const World& world, std::uint32_t entity) const {
-    const auto e = static_cast<entt::entity>(entity);
-    if (entity == 0xFFFFFFFFu || !world.Registry.valid(e)) return m_T.DefaultSurface;
-    std::string name;
-    if (const auto* c = world.Registry.try_get<ColliderComponent>(e)) name += c->Material + " ";
-    if (const auto* t = world.Registry.try_get<TagComponent>(e)) name += t->Tag + " ";
-    if (const auto* n = world.Registry.try_get<NameComponent>(e)) name += n->Name;
-    return FoleyAudio::SurfaceFromName(m_T.SurfaceTable, name, m_T.DefaultSurface);
+    return m_Surfaces.FromEntity(world, entity, m_T.SurfaceTable, m_T.DefaultSurface);
 }
 
 SoundSet* ImpactAudio::ImpactSet(const std::string& surface) {
