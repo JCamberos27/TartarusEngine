@@ -123,6 +123,17 @@ FolderCopy CopyFolderInto(const std::string& sourceDir, const std::string& destP
     fs::path name = src.filename();
     if (name.empty()) name = src.parent_path().filename(); // "C:/Pack/" -> "Pack"
 
+    {   // copying a folder into itself (or a descendant) would never finish
+        const fs::path destAbs = fs::weakly_canonical(fs::absolute(destParent, ec), ec);
+        const fs::path srcCanon = fs::weakly_canonical(src, ec);
+        if (!ec) {
+            auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
+            const fs::path rel = fs::path(lower(destAbs.generic_string())).lexically_relative(fs::path(lower(srcCanon.generic_string())));
+            if (!rel.empty() && *rel.begin() != "..") { out.Error = "destination is inside the source folder"; return out; }
+        }
+        ec.clear();
+    }
+
     fs::create_directories(destParent, ec);
     fs::path dest = fs::path(destParent) / name;
     for (int n = 2; fs::exists(dest, ec); ++n) dest = fs::path(destParent) / (name.string() + " (" + std::to_string(n) + ")");

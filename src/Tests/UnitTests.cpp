@@ -106,6 +106,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <atomic>
 #include <vector>
 
 using json = nlohmann::json;
@@ -4601,6 +4602,53 @@ void TestProjectWatcher() {
     CHECK(has(c5, K::Removed, moved));
     CHECK(!has(c5, K::Added, t) && !has(c5, K::Removed, t));
 
+    // A file written continuously must not starve other settled changes.
+    {
+        const fs::path busy = dir / "busy.png", quiet = dir / "quiet.png";
+        std::atomic<bool> writing{true};
+        std::thread writer([&] {
+            while (writing) { std::ofstream(busy, std::ios::app) << "x"; std::this_thread::sleep_for(std::chrono::milliseconds(30)); }
+        });
+        std::ofstream(quiet) << "q";
+        std::vector<ProjectWatcher::Change> got;
+        bool overflow = false;
+        for (int i = 0; i < 200 && !has(got, K::Added, quiet) && !has(got, K::Modified, quiet); ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            auto d = ProjectWatcher::Drain(200, overflow);
+            got.insert(got.end(), d.begin(), d.end());
+        }
+        writing = false;
+        writer.join();
+        CHECK(has(got, K::Added, quiet) || has(got, K::Modified, quiet));
+        settle();
+    }
+
+    // Two Removed + one Added sharing a file name is ambiguous: no move is guessed.
+    {
+        fs::create_directories(dir / "d1", ec);
+        fs::create_directories(dir / "d2", ec);
+        fs::create_directories(dir / "d3", ec);
+        std::ofstream(dir / "d1" / "m.png") << "1";
+        std::ofstream(dir / "d2" / "m.png") << "2";
+        settle();
+        fs::remove(dir / "d1" / "m.png", ec);
+        fs::remove(dir / "d2" / "m.png", ec);
+        std::ofstream(dir / "d3" / "m.png") << "3";
+        auto c6 = settle();
+        CHECK(has(c6, K::Removed, dir / "d1" / "m.png"));
+        CHECK(has(c6, K::Removed, dir / "d2" / "m.png"));
+        CHECK(has(c6, K::Added, dir / "d3" / "m.png"));
+        CHECK(std::none_of(c6.begin(), c6.end(), [](const auto& c) { return c.Type == K::Renamed; }));
+    }
+
+    // bin/obj folders are ordinary now.
+    {
+        fs::create_directories(dir / "bin", ec);
+        std::ofstream(dir / "bin" / "x.png") << "x";
+        auto c7 = settle();
+        CHECK(has(c7, K::Added, dir / "bin" / "x.png") || has(c7, K::Modified, dir / "bin" / "x.png"));
+    }
+
     ProjectWatcher::Stop();
     CHECK(!ProjectWatcher::IsRunning());
     fs::remove_all(dir, ec);
@@ -5608,6 +5656,13 @@ void TestAssetPackImport() {
     CHECK(importDir(base / "library-other" / "a.fbx", library.string(), "Models") == (assets / "Models").lexically_normal());
     CHECK(importDir(library / ".." / "outside" / "a.png", library.string(), "Textures") == (assets / "Textures").lexically_normal());
     CHECK(importDir(pack, "", "Models") == (assets / "Models").lexically_normal());
+    {   // a destination inside the source folder is rejected up front
+        const AssetImport::FolderCopy inside = AssetImport::CopyFolderInto(pack.string(), (pack / "Models").string());
+        CHECK(inside.Error == "destination is inside the source folder");
+        CHECK(inside.Files.empty());
+        const AssetImport::FolderCopy self = AssetImport::CopyFolderInto(pack.string(), pack.string());
+        CHECK(self.Error == "destination is inside the source folder");
+    }
     const AssetImport::FolderCopy privateCopy = AssetImport::CopyFolderInto(pack.string(), privateAssets.string());
     CHECK(privateCopy.Error.empty() && same(privateCopy.Folder, privateAssets / "Gun"));
     CHECK(fs::exists(privateAssets / "Gun" / "Textures" / "Gun_Textures" / "Gun_Albedo_Transparency.png", ec));
