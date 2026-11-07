@@ -55,11 +55,6 @@ std::string Key(const std::string& p) {
 // Paths the editor itself churns (caches, captures, layouts) and transient files are never news.
 bool Ignored(const fs::path& rel) {
     if (rel.empty()) return true;
-    for(const auto& part:rel) {
-        std::string segment=part.string();
-        std::transform(segment.begin(),segment.end(),segment.begin(),[](unsigned char c){ return (char)std::tolower(c); });
-        if(segment=="bin" || segment=="obj") return true;
-    }
     std::string first = rel.begin()->string();
     std::transform(first.begin(), first.end(), first.begin(), [](unsigned char c) { return (char)std::tolower(c); });
     if (first == "library" || first == "screenshots" || first == "layouts") return true;
@@ -148,7 +143,12 @@ void ThreadMain(std::wstring rootW) {
         }
         HANDLE waits[2] = {ov.hEvent, g_StopEvent};
         const DWORD w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
-        if (w != WAIT_OBJECT_0) { CancelIoEx(dir, &ov); break; } // stop requested
+        if (w != WAIT_OBJECT_0) { // stop requested
+            CancelIoEx(dir, &ov);
+            DWORD cancelled = 0;
+            GetOverlappedResult(dir, &ov, &cancelled, TRUE); // the kernel may still write &ov/buffer until this returns
+            break;
+        }
         DWORD bytes = 0;
         if (!GetOverlappedResult(dir, &ov, &bytes, FALSE)) { armed = arm(); continue; }
         events.assign(buffer, buffer + bytes);
@@ -224,7 +224,7 @@ bool Start(const std::string& root) {
     g_Running = true;
     g_Thread = std::thread(ThreadMain, fs::path(g_Root).wstring());
     WaitForSingleObject(g_ReadyEvent, 5000); // the watch is live when Start returns: nothing after it is missed
-    return true;
+    return g_Running; // false when the directory couldn't be opened
 #else
     (void)root;
     return false;
@@ -252,28 +252,43 @@ bool IsRunning() { return g_Running; }
 std::vector<Change> Drain(int settleMs, bool& overflowed) {
     std::vector<Change> out;
     const auto now = Clock::now();
+    const auto settle = std::chrono::milliseconds(settleMs);
     std::lock_guard<std::mutex> lk(g_Mutex);
     overflowed = g_Overflowed;
     g_Overflowed = false;
-    // Hold everything back while anything is still settling: a move across folders arrives as a
-    // Removed + an Added, and they must be handed out together to be recognised as a move.
+    // Hand out settled entries and hold back only the unsettled ones, so one file that is written
+    // continuously can't starve the rest. A Removed and an Added sharing a file name are a possible
+    // move and are held back together if either is still settling.
+    auto nameOf = [](const std::string& key) { return fs::path(key).filename().string(); };
+    std::unordered_map<std::string, bool> busyNames;
     for (const auto& [key, p] : g_Pending)
-        if (now - p.Last < std::chrono::milliseconds(settleMs)) return out;
-    for (auto& [key, p] : g_Pending) out.push_back(std::move(p.C));
-    g_Pending.clear();
+        if (now - p.Last < settle && (p.C.Type == Change::Kind::Removed || p.C.Type == Change::Kind::Added))
+            busyNames[nameOf(key)] = true;
+    for (auto it = g_Pending.begin(); it != g_Pending.end();) {
+        const bool pairable = it->second.C.Type == Change::Kind::Removed || it->second.C.Type == Change::Kind::Added;
+        const bool busy = now - it->second.Last < settle || (pairable && busyNames.count(nameOf(it->first)));
+        if (busy) { ++it; continue; }
+        out.push_back(std::move(it->second.C));
+        it = g_Pending.erase(it);
+    }
 
     // A Removed + an Added with the same file name in one batch is a move (Explorer moves across
-    // folders that way): report it as a rename so the asset keeps its identity.
-    for (auto& removed : out) {
-        if (removed.Type != Change::Kind::Removed) continue;
-        const std::string name = Key(fs::path(removed.Path).filename().string());
-        for (auto& added : out) {
-            if (added.Type != Change::Kind::Added || Key(fs::path(added.Path).filename().string()) != name) continue;
-            added.Type = Change::Kind::Renamed;
-            added.OldPath = removed.Path;
-            removed.Path.clear(); // consumed
-            break;
-        }
+    // folders that way): report it as a rename so the asset keeps its identity. Only an unambiguous
+    // pair (exactly one of each for that name) is treated as a move.
+    struct NameGroup { int Removed = -1, Added = -1, RemovedCount = 0, AddedCount = 0; };
+    std::unordered_map<std::string, NameGroup> groups;
+    for (int i = 0; i < (int)out.size(); ++i) {
+        const Change& c = out[i];
+        if (c.Type != Change::Kind::Removed && c.Type != Change::Kind::Added) continue;
+        NameGroup& g = groups[Key(fs::path(c.Path).filename().string())];
+        if (c.Type == Change::Kind::Removed) { g.Removed = i; ++g.RemovedCount; }
+        else { g.Added = i; ++g.AddedCount; }
+    }
+    for (const auto& [name, g] : groups) {
+        if (g.RemovedCount != 1 || g.AddedCount != 1) continue;
+        out[g.Added].Type = Change::Kind::Renamed;
+        out[g.Added].OldPath = out[g.Removed].Path;
+        out[g.Removed].Path.clear(); // consumed
     }
     out.erase(std::remove_if(out.begin(), out.end(), [](const Change& c) { return c.Path.empty(); }), out.end());
     return out;

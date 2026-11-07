@@ -265,9 +265,10 @@ AssetGuid ResolveDuplicateGuid(const std::string& path, AssetGuid guid) {
     }
 
     // A real duplicate. The file created first is the original; if creation times are
-    // unavailable or equal, the one already registered keeps the GUID.
+    // unavailable or equal (git checkout makes them arbitrary), the lexicographically smaller
+    // normalized path keeps the GUID so the outcome is deterministic.
     const unsigned long long tPath = CreationTime(path), tOther = CreationTime(other);
-    const bool pathIsOriginal = tPath && tOther && tPath < tOther;
+    const bool pathIsOriginal = (tPath && tOther && tPath != tOther) ? tPath < tOther : Key(path) < Key(other);
     const std::string& copy = pathIsOriginal ? other : path;
     const std::string& original = pathIsOriginal ? path : other;
 
@@ -512,10 +513,6 @@ void ScanProject() {
     for (auto it = fs::recursive_directory_iterator(root, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
         if (ec) { ec.clear(); continue; }
         const auto& entry = *it;
-        if(entry.is_directory(ec)) {
-            const auto folder=entry.path().filename().string();
-            if(folder=="bin" || folder=="obj") { it.disable_recursion_pending(); continue; }
-        }
         // #133 / #132 — Library/ holds caches (thumbnails etc.) and screenshots/ holds editor
         // captures, not assets. Scanning them gave every cached thumbnail and every screenshot
         // its own .meta and GUID. (A screenshot used as a texture still gets one on first use.)
