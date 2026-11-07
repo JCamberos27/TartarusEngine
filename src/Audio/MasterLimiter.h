@@ -33,14 +33,12 @@ public:
     explicit MasterLimiter(int sampleRate);
     // Audio thread (or before processing starts). Changing the look-ahead does not allocate.
     void Configure(const LimiterSettings& s);
-    const LimiterSettings& Settings() const { return m_S; }
     // Interleaved stereo, `frames` frames; may alias.
     void Process(const float* in, float* out, int frames);
     int LatencyFrames() const { return m_L + 2; }
     // The deepest gain reduction (dB, >= 0) since the last call; read from any thread.
     float TakeGainReductionDb() { return m_GrDb.exchange(0.0f, std::memory_order_relaxed); }
     float TakeGlueReductionDb() { return m_GlueGrDb.exchange(0.0f, std::memory_order_relaxed); } // the glue's, the same way
-    float CurrentGain() const { return (float)m_Gs; }
     void Reset();
 
 private:

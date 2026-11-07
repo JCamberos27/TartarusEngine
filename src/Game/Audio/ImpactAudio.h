@@ -21,7 +21,6 @@ public:
     static ImpactAudio& Get();
     void Start(World& world);
     void Stop();
-    bool Active() const { return m_Active; }
     const ImpactAudioComponent& Tuning() const { return m_T; }
     void SetTuning(const ImpactAudioComponent& t) { m_T = t; }
     void StartForTest(const ImpactAudioComponent& t) { m_T = t; m_Active = true; m_LastImpact.clear(); m_LastFlyby = -1e9; m_Played = Counts{}; }
@@ -34,8 +33,6 @@ public:
     static float CasingGain(const ImpactAudioComponent& t, float speed);
     // Whether a shell is a shotgun shell (wider than ShellRadius) rather than a rifle case.
     static bool IsShell(const ImpactAudioComponent& t, float caseRadius) { return caseRadius > t.ShellRadius; }
-    // A surface name for the table of sets that have files: `surface` itself when `available` lists it, else the default's.
-    static std::string ResolveSurface(const std::string& surface, const std::vector<std::string>& available, const std::string& fallback);
     // A round passing the listener `miss` metres away: gain 1 at 0 falling to FlybyFarGain at FlybyRadius, 0 beyond.
     static float FlybyGain(const ImpactAudioComponent& t, float miss);
 

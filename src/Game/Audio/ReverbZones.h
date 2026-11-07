@@ -59,7 +59,6 @@ struct ReverbZoneMix {
     float Gain = 1.0f;                 // the zones' tail gain, weighted (the probe's share counts 1)
     ReverbZoneClaim Claims[kMaxClaims]; // the zones that took a share, highest priority first (the reverb and the ambience follow these)
     int ClaimCount = 0;
-    int Zones = 0;                     // zones with any weight at the point
 };
 
 struct ReverbPortalVolume {
@@ -75,7 +74,7 @@ struct ReverbPortalVolume {
 
     // What this portal does to a sound entering from `from` and leaving towards `to` (both world points): gain (linear) and the
     // low-pass cutoff (Hz) - the open amount and the bend round the opening (the angle between the two legs).
-    void Loss(const glm::vec3& from, const glm::vec3& to, float& gain, float& cutoffHz, float* bendDegrees = nullptr) const;
+    void Loss(const glm::vec3& from, const glm::vec3& to, float& gain, float& cutoffHz) const;
 };
 
 // A sound's way from `source` to `listener` through portals.
@@ -100,10 +99,8 @@ public:
     bool Refresh(const World& world);
     bool LastRefreshRebuilt() const { return m_Rebuilt; }
     void Set(std::vector<ReverbZoneVolume> zones); // tests / scripts; sorted by priority
-    void SetPortals(std::vector<ReverbPortalVolume> portals) { m_Portals = std::move(portals); }
     const std::vector<ReverbZoneVolume>& Zones() const { return m_Zones; }
     const std::vector<ReverbPortalVolume>& Portals() const { return m_Portals; }
-    bool Empty() const { return m_Zones.empty(); }
     // The zones' layered mix at `p`: from the highest priority down, each takes its weight of what is still unclaimed.
     ReverbZoneMix Mix(const glm::vec3& p) const;
     // The room at `p`: the highest-priority zone that contains it (its entity), else kNoRoom.

@@ -43,7 +43,6 @@ public:
     // Game thread. Registers an IR (allocates its convolver and buffers); -1 when all slots are taken. Instances live as long as
     // the reverb.
     int AddIr(std::shared_ptr<const IrData> ir);
-    int InstanceCount() const { return m_Count.load(std::memory_order_acquire); }
     // Game thread: where the reverb is heading (picked up by the callback's next block).
     void SetTarget(const ReverbRtTarget& t);
     ReverbRtTarget Target() const;
@@ -60,7 +59,6 @@ public:
     std::uint64_t LateBlocks() const;           // tail blocks the worker had not finished in time
     std::uint64_t WorkerJobs() const { return m_Worker ? m_Worker->Jobs() : 0; }
     double WorkerMicros() const { return m_Worker ? m_Worker->TotalMicros() : 0.0; }
-    int SampleRate() const { return m_Rate; }
 
 private:
     struct Biquad {

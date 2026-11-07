@@ -36,8 +36,6 @@ public:
     // Frees one path's preloaded PCM data (or all of them). Safe to call while a Play()'d
     // instance of that sound is still audible — voices share the decoded data by reference
     // (#171), so the PCM lives until the last voice playing it is reaped.
-    static bool Unload(const std::string& path);
-    static void UnloadAll();
     // Re-decodes a preloaded sound after its file changed on disk (`path` absolute; preloaded
     // entries under a project-relative name match too). Voices already playing keep the old PCM;
     // a failed decode keeps the old copy. False when the sound isn't preloaded (streamed sounds
@@ -57,7 +55,6 @@ public:
     static void SetBusVolume(Bus bus, float volume);  // 0..1
     static float BusVolume(Bus bus);
     static void SetMasterVolume(float volume);        // 0..1, applied on top of every bus
-    static float MasterVolume();
 
     // startOffsetSeconds > 0 starts the voice that far into the file (skips a lead-in: weapon sounds whose contact
     // transient has to land on an animation frame that is nearer than the file's lead).
@@ -201,13 +198,11 @@ public:
     // from the same position on SetPaused(false). Paused voices aren't reaped by Update(). The
     // Asset Browser preview is unaffected. Idempotent, so it can be driven every frame.
     static void SetPaused(bool paused);
-    static bool IsPaused();
 
     // Master mute — silences the game's output (not the editor's UI sounds, see PlayEditor) without stopping any voice (they keep
     // their playback position, so unmuting resumes mid-clip). Used by the editor's
     // View ▸ Mute Audio toggle (#236 R2 toolbar tail).
     static void SetMuted(bool muted);
-    static bool IsMuted();
 
     // Decodes `path` and fills `outPeaks` with `buckets` normalized (0..1) max-amplitude
     // values — a cheap waveform envelope for the Asset Browser's sound cells (#236 G).

@@ -56,7 +56,6 @@ struct SoundSet {
     bool HasMixDb = false;
     float MixDb = 0.0f;
     float GainLin(size_t i) const;
-    float PeakLin(size_t i) const;
     bool FilesExplicit = false;            // the files came from a Data File: the manifest does not replace them
     // 3D plays of a category the mix spec places in the world (manifest mix.distance, by key): the level holds at the model's
     // reference distance, capped close up, its own slope beyond; MinDistance / MaxDistance / Rolloff above are then not used.
@@ -76,10 +75,10 @@ struct BlendCurve {
 
 // One entry of tools/audio's manifest (assets/Audio/audio_manifest.json): file, key, category, layer.
 struct SoundManifestEntry {
-    std::string File, Key, Category, Layer;
+    std::string File, Key, Layer;
     float AnchorMs = 0.0f, MixDb = 0.0f, PeakDb = -3.0f;
     float LufsM = 0.0f; bool HasLufs = false; // lufs_m_max: the file's loudness (the mix's level of a voice is this + its gain - the reference)
-    float Rt60S = 0.0f, PreDelayMs = 0.0f; // impulse responses (layer "ir", key ir.<class>)
+    float PreDelayMs = 0.0f; // impulse responses (layer "ir", key ir.<class>)
     bool Loop = false;
 };
 struct SoundManifest {
@@ -210,7 +209,6 @@ public:
     using PathFn = std::function<VoicePath(const glm::vec3& listener, const glm::vec3& source)>;
     void SetPathFn(PathFn fn) { m_Path = std::move(fn); }
     int PortalVoices() const { return m_PortalVoices; }
-    int PathChecks() const { return m_PathChecks; }
     const ReverbPreset& RemoteRoom() const { return m_RemoteRoom; }
     // True when something solid is between the two points.
     using BlockedFn = std::function<bool(const glm::vec3& from, const glm::vec3& to)>;
@@ -227,7 +225,6 @@ public:
     void GroupVoices(int (&out)[(int)MixGroup::Count]) const;
     static float AirCutoff(const OcclusionSettings& s, float distance);
     int OccludedVoices() const { return (int)m_Occluded.size(); }
-    int OcclusionChecks() const { return m_OccChecks; }
     // Cutoff for an occlusion amount 0..1 (log-spaced from open to CutoffHz).
     static float OcclusionCutoff(const OcclusionSettings& s, float amount);
 
@@ -276,11 +273,10 @@ private:
     OcclusionSettings m_Occ;
     BlockedFn m_Blocked;
     PathFn m_Path;
-    int m_PortalVoices = 0, m_PathChecks = 0;
+    int m_PortalVoices = 0;
     ReverbPreset m_RemoteRoom;
     RoutingFn m_Routing;
     glm::vec3 m_ListenerPos{0.0f};
-    int m_OccChecks = 0;
     size_t m_OccCursor = 0;
     void UpdateOcclusion(float dt);
     std::vector<Pending> m_Pending;
@@ -393,7 +389,6 @@ public:
     // Sets for an element/key; fills from the manifest or the file layout on first use.
     SoundSet* EventSet(WeaponAudioProfile& p, const std::string& element);
     SoundSet* FoleySet(const std::string& category, const std::string& element);
-    const std::string& ProjectRoot() const { return m_Root; }
     // Resolves a set's files from the manifest / layout when it has none of its own.
     void FillSet(SoundSet& set);
 
@@ -401,10 +396,6 @@ public:
     struct Emitted { double Time = 0.0; std::string Key; bool At2D = true; std::string Space; /* tail: "outdoor_open" or "a+b" (the classes heard) */ };
     const std::deque<Emitted>& History() const { return m_History; }
     void ClearHistory() { m_History.clear(); }
-    // Tests: keep every emission since Start (unbounded, unlike History); the flag survives Start / Stop.
-    void SetRecording(bool on) { m_Record = on; }
-    const std::vector<Emitted>& Transcript() const { return m_Transcript; }
-    int ShotVoicesStarted() const { return m_ShotVoices; }
     // Tests: the manifest the class impulse responses and sets are looked up in.
     void SetManifestForTest(const SoundManifest& m) { m_Manifest = m; m_Player.SetReferenceLufs(m.HasReference, m.ReferenceLufs); }
     // Tests: starts with a given set of profiles and no scene.
@@ -421,8 +412,6 @@ public:
     const MixDucker& Ducker() const { return m_Ducker; }
     // Aiming down sights (the player's own): the focus state.
     void SetFocus(bool aiming) { m_Ducker.SetFocus(aiming); }
-    // A loud event heard at the listener (dB re the player's own shot): ducks the groups under it.
-    void KeyDuck(float levelDb) { m_Ducker.Key(levelDb); }
     // The category's send level for a set key ("snd.foley.step_wood.walk" -> footsteps ...); 0 for the gun tails.
     float SendFor(const std::string& key) const;
     // The reverb at `pos`: the zones' reverbs (layered, faded), the probe's class reverbs for what no zone claims; the two heaviest
@@ -437,9 +426,8 @@ public:
     // --- zone ambience beds ---
     struct AmbienceDebug { std::string Key; float Target = 0.0f, Level = 0.0f; bool Playing = false; };
     const std::vector<AmbienceDebug>& Ambience() const { return m_AmbienceDebug; }
-    // What the editor's Audio panel shows: the zones at the listener (the last Update) and the spec sent to the reverb.
+    // What the editor's Audio panel shows: the zones at the listener (the last Update).
     const ReverbZoneMix& ListenerMix() const { return m_ListenerMix; }
-    const AudioEngine::ReverbSpec& RemoteSpec() const { return m_RemoteSent; }
     // A set by exact key (filled from the manifest on first use): the impact, casing and flyby sets use this; `init` runs once
     // on creation for the set's defaults.
     SoundSet* KeySet(const std::string& key, const std::function<void(SoundSet&)>& init = nullptr);
@@ -461,10 +449,7 @@ private:
     glm::vec3 m_Listener{0.0f};
     std::FILE* m_LogFile = nullptr;
     std::deque<Emitted> m_History;
-    std::vector<Emitted> m_Transcript;
-    bool m_Record = false;
     double m_LastTail = -1e9;
-    int m_ShotVoices = 0;
     struct Burst { int Count = 0; double Last = -1e9; };
     std::map<std::string, Burst> m_Bursts;
     friend class FoleyAudio;
