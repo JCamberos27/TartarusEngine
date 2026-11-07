@@ -1,9 +1,11 @@
 #include "ReverbZones.h"
 
+#include "Log.h"
 #include "World.h"
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 namespace {
 
@@ -19,7 +21,12 @@ bool Same(const ReverbPortalComponent& a, const ReverbPortalComponent& b) {
            a.DiffractionCutoff == b.DiffractionCutoff && a.DiffractionMaxAngle == b.DiffractionMaxAngle && a.DiffractionGainDb == b.DiffractionGainDb;
 }
 
-void ApplyZone(ReverbZoneVolume& v, const ReverbZoneComponent& c, const glm::mat4& m, entt::entity e) {
+std::string NameOf(const World& world, entt::entity e) {
+    const auto* n = world.Registry.try_get<NameComponent>(e);
+    return n ? n->Name : std::string();
+}
+
+void ApplyZone(ReverbZoneVolume& v, const ReverbZoneComponent& c, const glm::mat4& m, entt::entity e, const std::string& name) {
     glm::mat3 rot(m);
     for (int i = 0; i < 3; ++i) {
         const float len = glm::length(rot[i]);
@@ -38,6 +45,7 @@ void ApplyZone(ReverbZoneVolume& v, const ReverbZoneComponent& c, const glm::mat
     v.Ambience = c.Ambience;
     v.AmbienceVolume = std::max(c.AmbienceVolume, 0.0f);
     v.Entity = (unsigned)e;
+    v.Name = name;
     v.Placed = m;
     v.Src = c;
 }
@@ -65,11 +73,18 @@ void PlacePortal(ReverbPortalVolume& v, const glm::mat4& m, entt::entity e) {
     v.Placed = m;
 }
 
-unsigned ZoneNamed(const World& world, const std::string& name) {
+// The enabled zone (one of `zones`, highest priority first) called `name`. Two with the same name: the first wins, said once.
+unsigned ZoneNamed(const std::vector<ReverbZoneVolume>& zones, const std::string& name) {
     if (name.empty()) return kNoRoom;
-    for (const entt::entity e : world.Registry.view<const ReverbZoneComponent, const NameComponent>())
-        if (world.Registry.get<const NameComponent>(e).Name == name) return (unsigned)e;
-    return kNoRoom;
+    unsigned found = kNoRoom;
+    for (const ReverbZoneVolume& z : zones) {
+        if (z.Name != name) continue;
+        if (found == kNoRoom) { found = z.Entity; continue; }
+        static std::unordered_set<std::string> warned;
+        if (warned.insert(name).second) Log::Warn("Reverb Portal: more than one enabled Reverb Zone is called '" + name + "'; using the first.");
+        break;
+    }
+    return found;
 }
 
 } // namespace
@@ -116,7 +131,7 @@ void ReverbZones::Set(std::vector<ReverbZoneVolume> zones) {
 }
 
 void ReverbZones::ResolveRooms(ReverbPortalVolume& p, const World* world) const {
-    const unsigned named[2] = {world ? ZoneNamed(*world, p.Src.RoomA) : kNoRoom, world ? ZoneNamed(*world, p.Src.RoomB) : kNoRoom};
+    const unsigned named[2] = {world ? ZoneNamed(m_Zones, p.Src.RoomA) : kNoRoom, world ? ZoneNamed(m_Zones, p.Src.RoomB) : kNoRoom}; // not found: the room at the portal's sides
     const float out = p.Extents.z + p.ProbeDistance;
     p.RoomA = named[0] != kNoRoom ? named[0] : RoomAt(p.Center - p.Normal * out);
     p.RoomB = named[1] != kNoRoom ? named[1] : RoomAt(p.Center + p.Normal * out);
@@ -128,7 +143,7 @@ void ReverbZones::Build(const World& world) {
         const ReverbZoneComponent& c = world.Registry.get<const ReverbZoneComponent>(e);
         if (!c.Enabled) continue;
         ReverbZoneVolume v;
-        ApplyZone(v, c, world.GetCachedWorldTransform(e), e);
+        ApplyZone(v, c, world.GetCachedWorldTransform(e), e, NameOf(world, e));
         zones.push_back(v);
     }
     Set(std::move(zones));
@@ -157,8 +172,9 @@ bool ReverbZones::Refresh(const World& world) {
             if (z.Entity == (unsigned)e) { v = &z; break; }
         if (!v || c.Priority != v->Priority) { structural = true; break; }
         const glm::mat4 m = world.GetCachedWorldTransform(e);
-        if (m != v->Placed || !Same(c, v->Src)) {
-            ApplyZone(*v, c, m, e);
+        const std::string name = NameOf(world, e);
+        if (m != v->Placed || !Same(c, v->Src) || name != v->Name) { // a rename moves the portals' named rooms
+            ApplyZone(*v, c, m, e, name);
             changed = zonesMoved = true;
         }
     }
@@ -200,10 +216,11 @@ ReverbZoneMix ReverbZones::Mix(const glm::vec3& p) const {
         if (remaining <= 1e-5f) break;
         const float w = z.Weight(p);
         if (w <= 0.0f) continue;
+        if (mix.ClaimCount >= ReverbZoneMix::kMaxClaims) break; // no slot to record a claim: the rest stays with the probe
         const float take = remaining * w;
         mix.Weights[(int)z.Class] += take;
         gain += take * z.TailGain;
-        if (mix.ClaimCount < ReverbZoneMix::kMaxClaims) mix.Claims[mix.ClaimCount++] = {(int)(&z - m_Zones.data()), take};
+        mix.Claims[mix.ClaimCount++] = {(int)(&z - m_Zones.data()), take};
         remaining -= take;
     }
     mix.ProbeShare = std::max(remaining, 0.0f);
@@ -236,11 +253,12 @@ bool ReverbZones::FindPath(const glm::vec3& source, const glm::vec3& listener, P
     float bestLen = 1e30f;
     int bestPortals[3] = {-1, -1, -1};
     int bestCount = 0;
-    Frame stack[64];
-    int top = 0;
-    stack[top++] = {{-1, -1, -1}, {from, kNoRoom, kNoRoom, kNoRoom}, 0};
-    while (top > 0) {
-        const Frame f = stack[--top];
+    std::vector<Frame> stack;
+    stack.reserve(16);
+    stack.push_back({{-1, -1, -1}, {from, kNoRoom, kNoRoom, kNoRoom}, 0});
+    while (!stack.empty()) {
+        const Frame f = stack.back();
+        stack.pop_back();
         const unsigned here = f.Rooms[f.Count];
         for (int i = 0; i < (int)m_Portals.size(); ++i) {
             const ReverbPortalVolume& p = m_Portals[(size_t)i];
@@ -270,8 +288,8 @@ bool ReverbZones::FindPath(const glm::vec3& source, const glm::vec3& listener, P
                     bestCount = g.Count;
                     for (int k = 0; k < 3; ++k) bestPortals[k] = g.Portals[k];
                 }
-            } else if (g.Count < 3 && top < 64) {
-                stack[top++] = g;
+            } else if (g.Count < 3) {
+                stack.push_back(g);
             }
         }
     }

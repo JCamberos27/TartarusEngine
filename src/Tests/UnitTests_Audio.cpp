@@ -2757,9 +2757,9 @@ void TestOfflineEngineLimiterAndReverbCalibration() {
     fs::remove_all(dir, ec);
 }
 
-// --- audit S03: engine bug fixes ---------------------------------------------------------------------------------------------
+// --- engine fixes -------------------------------------------------------------------------------------------------
 
-// S03-14 / S03-19: a NaN / Inf sample never poisons the limiter, the reverb or the meter; a changed trim ramps instead of stepping.
+// A NaN / Inf sample never poisons the limiter, the reverb or the meter; a changed trim ramps instead of stepping.
 void TestAudioNonFiniteInputIsScrubbed() {
     const int rate = 48000;
     const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
@@ -2830,7 +2830,7 @@ void TestAudioNonFiniteInputIsScrubbed() {
     }
 }
 
-// S03-15: the pre-delay ring follows the sample rate (a fixed 16384 frames wrapped a 250 ms delay above ~65 kHz).
+// the pre-delay ring follows the sample rate (a fixed 16384 frames wrapped a 250 ms delay above ~65 kHz).
 void TestConvolutionReverbPreDelayAtHighRates() {
     for (int rate : {48000, 192000}) {
         ConvolutionReverb verb(rate, false);
@@ -2859,7 +2859,7 @@ void TestConvolutionReverbPreDelayAtHighRates() {
     }
 }
 
-// S03-22: two layers on one IR average their settings by weight instead of the last one winning.
+// two layers on one IR average their settings by weight instead of the last one winning.
 void TestConvolutionReverbSharedInstanceAveragesLayers() {
     const int rate = 48000;
     const std::vector<float> h = NoiseIr(rate / 4, 0.2f, 41u);
@@ -2891,7 +2891,7 @@ void TestConvolutionReverbSharedInstanceAveragesLayers() {
     CHECK(b > 1e-6 && std::fabs(Db(a / b)) < 0.5);
 }
 
-// S03-17: with every slot taken, an idle one the target does not name is recycled for a new IR.
+// with every slot taken, an idle one the target does not name is recycled for a new IR.
 void TestConvolutionReverbRecyclesIdleSlots() {
     const int rate = 48000;
     ConvolutionReverb verb(rate, false);
@@ -2918,7 +2918,7 @@ void TestConvolutionReverbRecyclesIdleSlots() {
     CHECK(verb.GetInfo().On[a]);
 }
 
-// S03-13: switching a bus off resets the reverb, so switching it on does not replay the old tail.
+// switching a bus off resets the reverb, so switching it on does not replay the old tail.
 void TestConvolutionReverbSilenceDropsTail() {
     const int rate = 48000;
     const std::vector<float> h = NoiseIr(rate / 2, 0.5f, 51u);
@@ -2948,7 +2948,7 @@ void TestConvolutionReverbSilenceDropsTail() {
     CHECK(tailEnergy(false) > 1e-4 && tailEnergy(true) < 1e-9);
 }
 
-// S03-18: a convolver with tail blocks queued on the worker destroys cleanly (the worker drains its queue first).
+// a convolver with tail blocks queued on the worker destroys cleanly (the worker drains its queue first).
 void TestConvolverDestroyWithQueuedTail() {
     const int rate = 48000;
     const std::vector<float> h = NoiseIr(rate, 0.8f, 71u);
@@ -2960,6 +2960,156 @@ void TestConvolverDestroyWithQueuedTail() {
     } // (~Convolver waits, bounded, for the posted blocks)
     worker.reset();
     CHECK(true);
+}
+
+// disabled foley is silent but every footfall still reaches the step listener (the blood's footprints); NpcGone drops a soldier's stride.
+void TestFoleyDisabledStillReportsSteps() {
+    World world;
+    FakeBackend be;
+    WeaponAudio::Get().StartForTest("", &be);
+    FoleyAudio& fo = FoleyAudio::Get();
+    FoleyAudioComponent t;
+    t.Enabled = false;
+    fo.StartForTest(t);
+    WeaponAudio::Get().ClearHistory();
+    int playerSteps = 0, npcSteps = 0;
+    fo.SetStepListener([&](int walker, const glm::vec3&, const glm::vec3&, int) { (walker < 0 ? playerSteps : npcSteps)++; });
+    FoleyPlayerInput in;
+    in.Velocity = glm::vec3(2.0f, 0.0f, 0.0f);
+    const float dt = 1.0f / 60.0f;
+    for (int i = 0; i < 600; ++i) {
+        fo.UpdatePlayer(world, dt, in);
+        fo.NpcWalk(world, 1, glm::vec3(0.0f), glm::vec3(2.0f, 0.0f, 0.0f), false, dt);
+    }
+    CHECK(std::abs(playerSteps - 25) <= 1 && std::abs(npcSteps - 25) <= 1);
+    CHECK(WeaponAudio::Get().History().empty() && be.Voices.empty() && fo.StepsPlayed() == 0);
+    // Enabled again: the same steps are heard.
+    t.Enabled = true;
+    fo.StartForTest(t);
+    for (int i = 0; i < 600; ++i) fo.UpdatePlayer(world, dt, in);
+    CHECK(fo.StepsPlayed() > 20 && !WeaponAudio::Get().History().empty());
+
+    // NpcGone: half a stride walked, the soldier goes, a new one with his id walks the other half - no step yet.
+    fo.StartForTest(t);
+    int steps = 0;
+    fo.SetStepListener([&](int, const glm::vec3&, const glm::vec3&, int) { ++steps; });
+    for (int i = 0; i < 20; ++i) fo.NpcWalk(world, 3, glm::vec3(0.0f), glm::vec3(2.0f, 0.0f, 0.0f), false, dt);
+    fo.NpcGone(3);
+    for (int i = 0; i < 20; ++i) fo.NpcWalk(world, 3, glm::vec3(0.0f), glm::vec3(2.0f, 0.0f, 0.0f), false, dt);
+    CHECK(steps == 0);
+    fo.SetStepListener(nullptr);
+    WeaponAudio::Get().Stop();
+}
+
+// portals find their named rooms among the enabled zones only; the first of two same-named zones wins; an unknown name
+// falls back to the zone on that side; a rename re-resolves; past 8 claims the rest stays with the probe.
+void TestReverbZoneNamesAndClaimCap() {
+    World world;
+    auto zone = [&](const char* name, const glm::vec3& at, bool enabled) {
+        const entt::entity e = world.Registry.create();
+        world.Registry.emplace<TransformComponent>(e).Position = at;
+        world.Registry.emplace<NameComponent>(e).Name = name;
+        ReverbZoneComponent& z = world.Registry.emplace<ReverbZoneComponent>(e);
+        z.Enabled = enabled;
+        z.FadeDistance = 0.0f;
+        z.Extents = glm::vec3(2.0f);
+        return e;
+    };
+    const entt::entity offTwin = zone("Twin", glm::vec3(100.0f, 0.0f, 0.0f), false);
+    const entt::entity twin = zone("Twin", glm::vec3(200.0f, 0.0f, 0.0f), true);
+    zone("Dup", glm::vec3(300.0f, 0.0f, 0.0f), true);
+    zone("Dup", glm::vec3(400.0f, 0.0f, 0.0f), true);
+    const entt::entity side = zone("Side", glm::vec3(0.0f, 0.0f, -0.6f), true); // holds the portal's -Z probe point
+    const entt::entity renamed = zone("Before", glm::vec3(500.0f, 0.0f, 0.0f), true);
+    const entt::entity portal = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(portal);
+    ReverbPortalComponent& pc = world.Registry.emplace<ReverbPortalComponent>(portal);
+    pc.RoomA = "Twin";
+    pc.RoomB = "Dup";
+    ReverbZones zones;
+    zones.Build(world);
+    CHECK(zones.Portals().size() == 1);
+    CHECK(zones.Portals()[0].RoomA == (unsigned)twin && zones.Portals()[0].RoomA != (unsigned)offTwin); // a disabled zone is no room
+    {
+        const ReverbZoneVolume* first = nullptr;
+        for (const ReverbZoneVolume& z : zones.Zones())
+            if (z.Name == "Dup") { first = &z; break; }
+        CHECK(first && zones.Portals()[0].RoomB == first->Entity); // two Dup: the first by priority order
+    }
+    // A name nobody has: the zone on that side of the portal.
+    world.Registry.get<ReverbPortalComponent>(portal).RoomA = "Nobody";
+    zones.Build(world);
+    CHECK(zones.Portals()[0].RoomA == (unsigned)side);
+    // A rename: the portal names "After"; renaming the zone re-resolves it.
+    world.Registry.get<ReverbPortalComponent>(portal).RoomA = "After";
+    zones.Build(world);
+    CHECK(zones.Portals()[0].RoomA == (unsigned)side);
+    world.Registry.get<NameComponent>(renamed).Name = "After";
+    zones.Refresh(world);
+    CHECK(zones.Portals()[0].RoomA == (unsigned)renamed);
+
+    // Claim cap: ten zones each taking a sliver; what no claim records stays with the probe, so the shares still total 1.
+    std::vector<ReverbZoneVolume> many;
+    for (int i = 0; i < 10; ++i) {
+        ReverbZoneVolume v;
+        v.Shape = 1;
+        v.Radius = 10.0f;
+        v.FadeDistance = 100.0f;
+        v.Priority = 10 - i;
+        v.Entity = (unsigned)i;
+        many.push_back(v);
+    }
+    ReverbZones crowd;
+    crowd.Set(many);
+    const ReverbZoneMix mix = crowd.Mix(glm::vec3(0.0f));
+    float claimed = 0.0f, weights = 0.0f;
+    for (int i = 0; i < mix.ClaimCount; ++i) claimed += mix.Claims[i].Weight;
+    for (float w : mix.Weights) weights += w;
+    CHECK(mix.ClaimCount == ReverbZoneMix::kMaxClaims);
+    CHECK(std::fabs(claimed - weights) < 1e-5f && std::fabs(claimed + mix.ProbeShare - 1.0f) < 1e-4f);
+}
+
+// a burst is counted per shooter, an unknown gun makes no profile, and bad distances are made sane.
+void TestWeaponShooterBurstsUnknownGunAndDistances() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    WeaponAudioProfile* ak = wa.Profile("ak");
+    ak->Close.Set.Files = {"close.wav"};
+    ak->Close.Every = 2; // every other round of a burst
+    wa.SetListener(glm::vec3(0.0f));
+    const glm::vec3 at(5.0f, 0.0f, 0.0f);
+    wa.Shot("ak", at, false, 1u);
+    wa.Shot("ak", at, false, 2u); // another soldier's first round of his own burst
+    CHECK(be.Started("close.wav") == 2);
+    wa.Shot("ak", at, false, 1u); // his second round: skipped
+    CHECK(be.Started("close.wav") == 2);
+
+    // An unknown gun: nothing is created, nothing plays.
+    CHECK(wa.Profile("nope") == nullptr);
+    CHECK(wa.Shot("nope", at, false, 1u) == 0);
+    CHECK(!wa.HasEventFiles("nope", "mag_out"));
+    CHECK(!wa.PlayEvent("snd.nope.mag_out", "", at, false));
+    CHECK(wa.Profile("nope") == nullptr);
+
+    // Distances: Min 0 / Max below Min reach the voice as Min > 0, Max >= Min.
+    be.Voices.clear();
+    ak->Close.Every = 1;
+    ak->Close.Set.MinDistance = 0.0f;
+    ak->Close.Set.MaxDistance = -4.0f;
+    wa.Update(1.0f);
+    wa.Shot("ak", at, false, 1u);
+    bool sane = false;
+    for (const auto& v : be.Voices)
+        if (v.Voice.File == "close.wav") sane = v.Voice.MinDistance > 0.0f && v.Voice.MaxDistance >= v.Voice.MinDistance;
+    CHECK(sane);
+    ak->ApplyJson(R"({"layers":{"close":{"minDistance":0,"maxDistance":-1}}})");
+    CHECK(ak->Close.Set.MinDistance > 0.0f && ak->Close.Set.MaxDistance >= ak->Close.Set.MinDistance);
+    // A Data File's generic tail files do not leave the class tails marked explicit.
+    ak->ApplyJson(R"({"layers":{"tail":{"files":["t.wav"]}}})");
+    CHECK(ak->Tail.Set.FilesExplicit);
+    for (const WeaponAudioProfile::Layer& l : ak->TailClass) CHECK(!l.Set.FilesExplicit && l.Set.Files.empty());
+    wa.Stop();
 }
 
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
@@ -2990,6 +3140,9 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ReverbZoneContainmentPriorityAndBlend", TestReverbZoneContainmentPriorityAndBlend});
     tests.push_back({"EnvironmentZonesBeatTheProbe", TestEnvironmentZonesBeatTheProbe});
     tests.push_back({"ReverbSendRoutingByCategory", TestReverbSendRoutingByCategory});
+    tests.push_back({"FoleyDisabledStillReportsSteps", TestFoleyDisabledStillReportsSteps});
+    tests.push_back({"ReverbZoneNamesAndClaimCap", TestReverbZoneNamesAndClaimCap});
+    tests.push_back({"WeaponShooterBurstsUnknownGunAndDistances", TestWeaponShooterBurstsUnknownGunAndDistances});
     tests.push_back({"OcclusionLowPass", TestOcclusionLowPass});
     tests.push_back({"ReverbFollowsListenerSpace", TestReverbFollowsListenerSpace});
     tests.push_back({"CasingContactGating", TestCasingContactGating});

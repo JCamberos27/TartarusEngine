@@ -37,6 +37,7 @@ struct ReverbZoneVolume {
     std::string Ambience;      // the ambience bed's sound key ("" = none)
     float AmbienceVolume = 1.0f;
     unsigned Entity = 0xFFFFFFFFu;
+    std::string Name;                  // the entity's name when built (portals name their rooms; Refresh sees a rename)
     glm::mat4 Placed{1.0f};            // the world matrix it was built from (Refresh compares against the entity's)
     ReverbZoneComponent Src;           // the component it was built from (Refresh compares)
 

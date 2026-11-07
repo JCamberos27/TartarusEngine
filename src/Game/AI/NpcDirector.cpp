@@ -686,6 +686,7 @@ void NpcDirector::Despawn(World& world, Npc& n, bool keepBody) {
     if (n.Weapon) n.Weapon->Stop(world);
     n.Weapon.reset();
     n.Body.Stop();
+    FoleyAudio::Get().NpcGone(n.Index); // his stride / foot state goes with him
     if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::DestroyNpcCharacter(n.Cct);
     n.Cct = PhysicsWorld::kNoCharacter;
     if (n.Agent >= 0) m_Crowd.Remove(n.Agent);

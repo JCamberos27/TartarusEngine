@@ -87,7 +87,7 @@ bool Num(const json& j, const char* key, float& out) {
 // The spec's level of a key (dB re the player's shot) and the distance it holds at (0 = 2D). False for keys the spec does not level
 // here (the shot layers are measured as whole shots; impulse responses are not sounds).
 bool SpecLevel(const json& spec, const std::string& key, float& level, std::string& refName) {
-    const json& L = spec["levels"];
+    const json& L = spec.contains("levels") ? spec["levels"] : json::object();
     const json& surf = spec.contains("surface_db") ? spec["surface_db"] : json::object();
     auto surface = [&](const std::string& s) {
         float d = 0.0f;
@@ -303,7 +303,7 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
 
     // --- 0. the tier ladder ----------------------------------------------------------------------------------------------
     if (haveSpec && haveManifest) {
-        const json& L = spec["levels"];
+        const json& L = spec.contains("levels") ? spec["levels"] : json::object();
         float shotNpc = 0.0f, walk = 0.0f, bedMax = -99.0f;
         Num(L, "npc_shot", shotNpc);
         if (L.contains("step")) Num(L["step"], "walk", walk);
@@ -322,7 +322,10 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
             // the category's level at its reference distance: the spec's (steps / gear: the player's level + the offset)
             float level = 0.0f;
             if (std::string(name) == "npc_step") level = walk + m.OffsetDb;
-            else if (std::string(name) == "npc_gear") { Num(L["elements"], "mag_in", level); level += m.OffsetDb; }
+            else if (std::string(name) == "npc_gear") {
+                if (L.contains("elements") && Num(L["elements"], "mag_in", level)) level += m.OffsetDb;
+                else Out("%-12s spec has no levels.elements.mag_in %s\n", name, Verdict(Check(false)));
+            }
             else if (std::string(name) == "npc_shot") level = shotNpc;
             else Num(L, name, level);
             const float cap = level + m.NearDb, far = level + m.GainDbAt(20.0f) - m.OffsetDb;
@@ -379,10 +382,12 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
         }
         // Every other key: each variant once (up to 3), 2D unless the spec levels it at a distance.
         std::vector<std::string> keys;
-        for (const json& e : manifest["files"]) {
-            const std::string k = e.value("key", "");
-            if (!k.empty() && std::find(keys.begin(), keys.end(), k) == keys.end()) keys.push_back(k);
-        }
+        if (!manifest.contains("files") || !manifest["files"].is_array()) Out("manifest has no files list %s\n", Verdict(Check(false)));
+        else
+            for (const json& e : manifest["files"]) {
+                const std::string k = e.value("key", "");
+                if (!k.empty() && std::find(keys.begin(), keys.end(), k) == keys.end()) keys.push_back(k);
+            }
         std::sort(keys.begin(), keys.end());
         int skipped = 0;
         for (const std::string& key : keys) {
