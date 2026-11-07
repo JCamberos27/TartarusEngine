@@ -42,10 +42,8 @@ bool IsUnfetchedExternal(const std::string& path);
 
 // #132 - ScanProject on a worker thread, so a big project's scan overlaps window / GL / shader
 // start-up instead of blocking it. Every lookup below (from another thread) waits for the scan
-// to finish, so callers never see a half-registered project. WaitForScan blocks explicitly.
+// to finish, so callers never see a half-registered project..
 void BeginScanProject();
-void WaitForScan();
-bool IsScanning();
 
 // The asset type a path would be registered as ("texture", "model", "scene", ...), or "" when
 // it isn't an asset (unknown extension, or a .json outside project/scenes).

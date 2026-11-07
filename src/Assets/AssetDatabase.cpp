@@ -587,12 +587,6 @@ void BeginScanProject() {
     g_ScanThread = g_ScanWorker.Thread.get_id();
 }
 
-void WaitForScan() {
-    WaitIfScanning();
-    if (g_ScanWorker.Thread.joinable() && !g_Scanning.load()) g_ScanWorker.Thread.join();
-}
-
-bool IsScanning() { return g_Scanning.load(std::memory_order_acquire); }
 
 namespace {
 std::string RefFileAbsolute(const std::string& file) {
