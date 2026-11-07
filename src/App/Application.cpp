@@ -2444,5 +2444,4 @@ int Application::RunSession() {
     }
 
     return 0;
-    return 0;
 }
