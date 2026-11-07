@@ -4494,6 +4494,25 @@ void TestAssetIdentity() {
     CHECK(AssetDatabase::PathKey(a) == AssetDatabase::PathKey((dir / "sub" / "tex.png").generic_string()));
     CHECK(AssetDatabase::PathKey(a) == AssetDatabase::PathKey((dir / "Sub" / "." / "Tex.png").string()));
     CHECK(AssetDatabase::PathKey(a) != AssetDatabase::PathKey((dir / "Sub" / "Tex2.png").string()));
+    // A folder with or without its trailing '/' is one folder; "inside" means a real child.
+    const std::string sub = (dir / "Sub").generic_string();
+    CHECK(AssetDatabase::SamePath(sub, sub + "/"));
+    CHECK(!AssetDatabase::SamePath(a, ""));
+    CHECK(AssetDatabase::IsUnderPath(a, sub + "/"));
+    CHECK(AssetDatabase::IsUnderPath((dir / "sub" / "deep" / "x.png").string(), sub));
+    CHECK(!AssetDatabase::IsUnderPath(sub, sub));
+    CHECK(!AssetDatabase::IsUnderPath((dir / "Sub2" / "x.png").string(), sub)); // a sibling sharing a prefix
+#ifdef _WIN32
+    CHECK(AssetDatabase::PathKey("C:/") == "c:/");
+    CHECK(AssetDatabase::IsUnderPath("C:/x/y.png", "C:/"));
+#endif
+    // The raw-text GUID scan (what a corrupt .meta and the thumbnail prune read).
+    CHECK(AssetDatabase::FindMetaGuid("{\"guid\": \"0123456789ABCDEF\"}") == "0123456789abcdef");
+    CHECK(AssetDatabase::FindMetaGuid("<<<<<<< HEAD\n  \"guid\"\t:\n\"aaaaaaaaaaaaaaaa\",") == "aaaaaaaaaaaaaaaa");
+    CHECK(AssetDatabase::FindMetaGuid("\"guid\": 7, \"x\": {\"guid\":\"1111222233334444\"}") == "1111222233334444");
+    CHECK(AssetDatabase::FindMetaGuid("\"guid\": \"0123456789abcdeg\"").empty()); // not hex
+    CHECK(AssetDatabase::FindMetaGuid("\"guid\": \"0123456789abcdef0\"").empty()); // 17 digits
+    CHECK(AssetDatabase::FindMetaGuid("\"guid\": \"0123456789abcdef").empty());    // cut off
 
     // Asset types by extension; .json only under project/scenes, never the editor's safety copies.
     CHECK(AssetDatabase::AssetType("x/a.PNG") == "texture");

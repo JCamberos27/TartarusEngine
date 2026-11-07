@@ -50,8 +50,18 @@ void BeginScanProject();
 std::string AssetType(const std::string& path);
 
 // The canonical spelling of a path used for comparisons: absolute, normalised, '/' separators,
-// lower-case on Windows. Two spellings of one file compare equal.
+// no trailing '/', lower-case on Windows. Two spellings of one file compare equal. The engine's
+// one path normaliser: compare paths with this or the two helpers below, never by hand.
+// Lexical only: it doesn't touch the disk, so it won't see through symlinks or junctions.
 std::string PathKey(const std::string& path);
+// Both non-empty and the same file by PathKey.
+bool SamePath(const std::string& a, const std::string& b);
+// `path` is strictly inside folder `dir` (at any depth) by PathKey.
+bool IsUnderPath(const std::string& path, const std::string& dir);
+
+// The first `"guid": "<16 hex>"` in a .meta's raw text, lower-cased; "" if there is none. Works on
+// text that no longer parses as JSON (merge markers, a truncated write).
+std::string FindMetaGuid(const std::string& text);
 
 // Drops `path` from the GUID maps (its file was deleted outside the editor). Leaves any .meta
 // on disk alone; the next scan prunes it if the asset really is gone.

@@ -16,7 +16,6 @@
 #include <cctype>
 #include <cstring>
 #include <sstream>
-#include <regex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -155,11 +154,8 @@ AssetGuid SalvageMetaGuid(const std::string& metaPath) {
     if (!f.is_open()) return {};
     std::stringstream ss;
     ss << f.rdbuf();
-    static const std::regex kGuid("\"guid\"\\s*:\\s*\"([0-9a-fA-F]{16})\"");
-    std::smatch m;
-    const std::string text = ss.str();
-    if (!std::regex_search(text, m, kGuid)) return {};
-    return AssetGuid::FromString(m[1].str());
+    const std::string guid = FindMetaGuid(ss.str());
+    return guid.empty() ? AssetGuid{} : AssetGuid::FromString(guid);
 }
 
 // Writes a new .meta sidecar. Returns false on I/O error.
@@ -195,6 +191,8 @@ std::string Key(const std::string& path) {
     std::error_code ec;
     std::string k = std::filesystem::absolute(path, ec).lexically_normal().generic_string();
     if (ec || k.empty()) k = std::filesystem::path(path).lexically_normal().generic_string();
+    // "C:/Pack/" and "C:/Pack" are one folder (but "C:/" stays a root, not drive-relative "C:").
+    while (k.size() > 1 && k.back() == '/' && k[k.size() - 2] != ':') k.pop_back();
 #ifdef _WIN32
     for (char& c : k) c = (char)std::tolower((unsigned char)c);
 #endif
@@ -294,11 +292,41 @@ AssetGuid ResolveDuplicateGuid(const std::string& path, AssetGuid guid) {
 // Public API
 // ---------------------------------------------------------------------------
 
-namespace {
-bool IsUnderRoot(const std::string& path, const std::string& root);
-} // namespace
-
 std::string PathKey(const std::string& path) { return Key(path); }
+
+bool SamePath(const std::string& a, const std::string& b) {
+    return !a.empty() && !b.empty() && Key(a) == Key(b);
+}
+
+bool IsUnderPath(const std::string& path, const std::string& dir) {
+    if (path.empty() || dir.empty()) return false;
+    const std::string p = Key(path), d = Key(dir);
+    if (p.size() <= d.size() || p.compare(0, d.size(), d) != 0) return false;
+    return d.back() == '/' || p[d.size()] == '/'; // (a root key like "c:/" already ends in '/')
+}
+
+std::string FindMetaGuid(const std::string& text) {
+    const auto space = [&text](size_t i) {
+        while (i < text.size() && std::isspace((unsigned char)text[i])) ++i;
+        return i;
+    };
+    for (size_t at = text.find("\"guid\""); at != std::string::npos; at = text.find("\"guid\"", at + 1)) {
+        size_t i = space(at + 6);
+        if (i >= text.size() || text[i] != ':') continue;
+        i = space(i + 1);
+        if (i >= text.size() || text[i] != '"') continue;
+        ++i;
+        if (i + 16 >= text.size() || text[i + 16] != '"') continue;
+        std::string g = text.substr(i, 16);
+        bool hex = true;
+        for (char& c : g) {
+            if (!std::isxdigit((unsigned char)c)) { hex = false; break; }
+            c = (char)std::tolower((unsigned char)c);
+        }
+        if (hex) return g;
+    }
+    return {};
+}
 
 std::string AssetType(const std::string& path) {
     std::string ext = std::filesystem::path(path).extension().string();
@@ -307,7 +335,7 @@ std::string AssetType(const std::string& path) {
     if (auto it = known.find(ext); it != known.end()) return it->second;
     // #132 - a .json is a scene only under project/scenes (settings.json, layers.json and
     // player.json are not assets), so scenes get GUIDs without every JSON file getting a .meta.
-    if (ext == ".json" && IsUnderRoot(path, ProjectPaths::Resolve("scenes"))) {
+    if (ext == ".json" && IsUnderPath(path, ProjectPaths::Resolve("scenes"))) {
         const std::string name = std::filesystem::path(path).filename().string();
         auto endsWith = [&](const char* s) { const size_t n = std::strlen(s); return name.size() > n && name.compare(name.size() - n, n, s) == 0; };
         if (endsWith(".recovery.json") || endsWith(".backup.json")) return {}; // editor safety copies
@@ -315,22 +343,6 @@ std::string AssetType(const std::string& path) {
     }
     return {};
 }
-
-namespace {
-bool IsUnderRoot(const std::string& path, const std::string& root) {
-    namespace fs = std::filesystem;
-    std::error_code ec;
-    const std::string r = fs::weakly_canonical(fs::absolute(root, ec), ec).generic_string();
-    const std::string p = fs::weakly_canonical(fs::absolute(path, ec), ec).generic_string();
-    if (r.empty() || p.size() <= r.size()) return false;
-#ifdef _WIN32
-    auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
-    return lower(p).rfind(lower(r) + "/", 0) == 0;
-#else
-    return p.rfind(r + "/", 0) == 0;
-#endif
-}
-} // namespace
 
 bool IsSynthetic(const std::string& path) {
     return path.rfind("primitive://", 0) == 0;
@@ -380,7 +392,7 @@ AssetGuid EnsureGuid(const std::string& path) {
         // #125 — never litter a folder outside the project (Downloads, another repo, read-only
         // media) with .meta sidecars. Such a file is referenced by path only; importing copies
         // it into the project first, where it gets a GUID.
-        if (!IsUnderRoot(path, ProjectPaths::Root()) && !IsUnderRoot(path, EnginePaths::Resolve("assets")))
+        if (!IsUnderPath(path, ProjectPaths::Root()) && !IsUnderPath(path, EnginePaths::Resolve("assets")))
             return {};
         guid = AssetGuid::Generate();
         if (!WriteMetaFile(meta, guid, type)) {

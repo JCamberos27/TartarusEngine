@@ -1,4 +1,5 @@
 #include "AssetImport.h"
+#include "AssetDatabase.h"
 #include "AtomicFile.h"
 
 #include <algorithm>
@@ -96,19 +97,8 @@ bool SameContents(const std::string& a, const std::string& b) {
 
 std::string ProjectImportDirectory(const std::string& projectRoot, const std::string& source,
                                    const std::string& libraryRoot, const std::string& subfolder) {
-    auto key = [](const std::string& path) {
-        std::error_code ec;
-        std::string result = fs::absolute(fs::u8path(path), ec).lexically_normal().generic_string();
-        if (ec) return std::string{};
-        while (result.size() > 1 && result.back() == '/') result.pop_back();
-#ifdef _WIN32
-        for (char& c : result) c = (char)std::tolower((unsigned char)c);
-#endif
-        return result;
-    };
-    const std::string library = libraryRoot.empty() ? std::string{} : key(libraryRoot);
-    const std::string file = key(source);
-    const bool externalLibrary = !library.empty() && (file == library || file.rfind(library + "/", 0) == 0);
+    const bool externalLibrary = !libraryRoot.empty() &&
+        (AssetDatabase::SamePath(source, libraryRoot) || AssetDatabase::IsUnderPath(source, libraryRoot));
     fs::path directory = fs::u8path(projectRoot) / "assets";
     if (externalLibrary) directory /= "External";
     if (!subfolder.empty()) directory /= fs::u8path(subfolder);
@@ -127,9 +117,11 @@ FolderCopy CopyFolderInto(const std::string& sourceDir, const std::string& destP
         const fs::path destAbs = fs::weakly_canonical(fs::absolute(destParent, ec), ec);
         const fs::path srcCanon = fs::weakly_canonical(src, ec);
         if (!ec) {
-            auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
-            const fs::path rel = fs::path(lower(destAbs.generic_string())).lexically_relative(fs::path(lower(srcCanon.generic_string())));
-            if (!rel.empty() && *rel.begin() != "..") { out.Error = "destination is inside the source folder"; return out; }
+            const std::string d = destAbs.generic_string(), s = srcCanon.generic_string();
+            if (AssetDatabase::SamePath(d, s) || AssetDatabase::IsUnderPath(d, s)) {
+                out.Error = "destination is inside the source folder";
+                return out;
+            }
         }
         ec.clear();
     }
