@@ -2803,11 +2803,13 @@ void TestAudioNonFiniteInputIsScrubbed() {
         CHECK(finite);
     }
     {
-        LoudnessMeter meter(rate);
-        std::vector<float> in((size_t)rate / 5 * 2, 0.2f);
+        LoudnessMeter meter(rate); // (noise, not DC: the K-weighting's high-pass takes DC out)
+        Lcg rng;
+        std::vector<float> in((size_t)rate / 5 * 2);
+        for (float& v : in) v = 0.3f * rng.Next();
         in[50] = nan;
         meter.Process(in.data(), (int)in.size() / 2);
-        std::fill(in.begin(), in.end(), 0.2f);
+        for (float& v : in) v = 0.3f * rng.Next();
         meter.Process(in.data(), (int)in.size() / 2);
         meter.Process(in.data(), (int)in.size() / 2);
         CHECK(std::isfinite(meter.MomentaryLufs()) && meter.MomentaryLufs() > -40.0f && meter.PeakDb() > -20.0f);
