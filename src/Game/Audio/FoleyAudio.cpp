@@ -1,22 +1,15 @@
 #include "FoleyAudio.h"
 
+#include "SurfaceLookup.h"
 #include "GameModuleAPI.h"
 #include "PhysicsWorld.h"
 #include "World.h"
 #include "Core/Env.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-
-namespace {
-std::string Lower(std::string s) {
-    for (char& c : s) c = (char)std::tolower((unsigned char)c);
-    return s;
-}
-} // namespace
 
 int FoleyStepper::Advance(float distance, float stepDistance) {
     if (stepDistance <= 1e-4f || distance <= 0.0f) return 0;
@@ -92,28 +85,8 @@ void FoleyAudio::Stop() {
 }
 
 std::string FoleyAudio::SurfaceFromName(const std::string& table, const std::string& name, const std::string& fallback) {
-    const std::string hay = Lower(name);
-    size_t pos = 0;
-    while (pos < table.size()) {
-        size_t end = table.find(';', pos);
-        if (end == std::string::npos) end = table.size();
-        const std::string entry = table.substr(pos, end - pos);
-        pos = end + 1;
-        const size_t eq = entry.find('=');
-        if (eq == std::string::npos || eq == 0) continue;
-        const std::string surface = entry.substr(0, eq);
-        size_t w = eq + 1;
-        while (w <= entry.size()) {
-            size_t we = entry.find(',', w);
-            if (we == std::string::npos) we = entry.size();
-            std::string word = Lower(entry.substr(w, we - w));
-            while (!word.empty() && word.front() == ' ') word.erase(word.begin());
-            while (!word.empty() && word.back() == ' ') word.pop_back();
-            if (!word.empty() && hay.find(word) != std::string::npos) return surface;
-            w = we + 1;
-        }
-    }
-    return fallback;
+    static const SurfaceLookup lookup;
+    return lookup.FromName(table, name, fallback);
 }
 
 float FoleyAudio::StepDistance(const FoleyAudioComponent& t, const FoleyPlayerInput& in) {
@@ -135,13 +108,7 @@ std::string FoleyAudio::SurfaceAt(World& world, const glm::vec3& feet) const {
     filter.HitTriggers = 0;
     RaycastHit hit;
     if (!PhysicsWorld::RaycastFiltered(origin, down, 1.5f, filter, hit) || !hit.Hit) return m_T.DefaultSurface;
-    const auto e = static_cast<entt::entity>(hit.Entity);
-    if (!world.Registry.valid(e)) return m_T.DefaultSurface;
-    std::string name;
-    if (const auto* c = world.Registry.try_get<ColliderComponent>(e)) name += c->Material + " ";
-    if (const auto* t = world.Registry.try_get<TagComponent>(e)) name += t->Tag + " ";
-    if (const auto* n = world.Registry.try_get<NameComponent>(e)) name += n->Name;
-    return SurfaceFromName(m_T.SurfaceTable, name, m_T.DefaultSurface);
+    return m_Surfaces.FromEntity(world, hit.Entity, m_T.SurfaceTable, m_T.DefaultSurface);
 }
 
 void FoleyAudio::Play(const std::string& surface, const std::string& element, float gain, bool at2D, const glm::vec3& pos) {

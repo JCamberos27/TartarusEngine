@@ -74,8 +74,9 @@ public:
     EnvironmentReading Probe(const glm::vec3& origin, const EnvironmentSettings& s, std::vector<EnvironmentRay>* raysOut = nullptr);
     // The shooter's cached reading, refreshed when it is older than RefreshInterval, the shooter moved more than
     // RefreshMoveDistance since the last probe, or it has none. `shooter` 0 = not named: matched by position (MatchRadius).
-    // `now` is sim time in seconds. `refreshed` says whether this call probed.
-    const EnvironmentReading& Query(std::uint32_t shooter, const glm::vec3& pos, double now, const EnvironmentSettings& s, bool* refreshed = nullptr);
+    // `now` is sim time in seconds. `refreshed` says whether this call probed. By value: the cache evicts its oldest shooter when full,
+    // so a reference into it would not stay valid across the next Query.
+    EnvironmentReading Query(std::uint32_t shooter, const glm::vec3& pos, double now, const EnvironmentSettings& s, bool* refreshed = nullptr);
     void Clear();
 
     // Overlay lines (7 floats per vertex: xyz rgba, two vertices per line) for the shooters whose last probe had DebugDraw on.

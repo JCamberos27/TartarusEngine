@@ -159,7 +159,7 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
         while (std::getline(files, file, ';')) if (!file.empty()) set.Files.push_back(file);
         SoundPlayer::Request request; request.Position = origin; request.At2D = fromPlayer;
         audio.Player().Play(set, request);
-    } else audio.Shot(muzzle && !muzzle->FiringSoundProfile.empty() ? muzzle->FiringSoundProfile : shotgun ? "870" : "ak", origin, fromPlayer, shooter);
+    } else audio.Shot(muzzle && !muzzle->FiringSoundProfile.empty() ? muzzle->FiringSoundProfile : shotgun ? kShotgunGunId : kDefaultGunId, origin, fromPlayer, shooter);
     MuzzleEffectSettings fallback;
     fallback.FlashTime=Settings.FlashTime;fallback.PlayerFlashScale=Settings.PlayerFlashScale;
     fallback.FlameGlow=Settings.FlameGlow*(shotgun?0.5f:1.0f);fallback.FlameScale=Settings.FlameScale;

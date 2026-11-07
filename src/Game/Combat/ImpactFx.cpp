@@ -1,6 +1,6 @@
 #include "ImpactFx.h"
 
-#include "Audio/FoleyAudio.h"
+#include "Audio/SurfaceLookup.h"
 #include "Components.h"
 #include "FxSprites.h"
 #include "Model.h"
@@ -9,16 +9,17 @@
 #include <algorithm>
 #include <cmath>
 
-std::string ImpactFx::SurfaceFromName(const std::string& name) { return FoleyAudio::SurfaceFromName(kSurfaceTable, name, "concrete"); }
+namespace {
+const SurfaceLookup& HoleSurfaces() {
+    static const SurfaceLookup lookup;
+    return lookup;
+}
+} // namespace
+
+std::string ImpactFx::SurfaceFromName(const std::string& name) { return HoleSurfaces().FromName(kSurfaceTable, name, "concrete"); }
 
 std::string ImpactFx::SurfaceOf(const World& world, std::uint32_t entity) const {
-    const auto e = static_cast<entt::entity>(entity);
-    if (entity == 0xFFFFFFFFu || !world.Registry.valid(e)) return "concrete";
-    std::string name;
-    if (const auto* c = world.Registry.try_get<ColliderComponent>(e)) name += c->Material + " ";
-    if (const auto* t = world.Registry.try_get<TagComponent>(e)) name += t->Tag + " ";
-    if (const auto* n = world.Registry.try_get<NameComponent>(e)) name += n->Name;
-    return SurfaceFromName(name);
+    return HoleSurfaces().FromEntity(world, entity, kSurfaceTable, "concrete");
 }
 
 bool ImpactFx::IsStatic(const World& world, std::uint32_t entity) {

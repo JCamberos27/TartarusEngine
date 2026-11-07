@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SurfaceLookup.h"
 #include "WeaponAudio.h"
 
 #include "../Components.h"
@@ -108,5 +109,6 @@ private:
     int m_Steps = 0;
     StepListener m_StepListener;
     bool m_PlayerFoot = false; // alternates when the steps come from distance
+    SurfaceLookup m_Surfaces;
     void Play(const std::string& surface, const std::string& element, float gain, bool at2D, const glm::vec3& pos);
 };

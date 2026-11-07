@@ -157,7 +157,7 @@ EnvironmentReading EnvironmentProbe::Probe(const glm::vec3& origin, const Enviro
     return r;
 }
 
-const EnvironmentReading& EnvironmentProbe::Query(std::uint32_t shooter, const glm::vec3& pos, double now, const EnvironmentSettings& s, bool* refreshed) {
+EnvironmentReading EnvironmentProbe::Query(std::uint32_t shooter, const glm::vec3& pos, double now, const EnvironmentSettings& s, bool* refreshed) {
     if (refreshed) *refreshed = false;
     constexpr size_t kMaxEntries = 64;
     Entry* e = nullptr;
