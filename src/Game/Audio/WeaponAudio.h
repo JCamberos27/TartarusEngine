@@ -269,6 +269,7 @@ private:
         glm::vec3 Pos{0.0f};
         float Amount = 0.0f, Target = 0.0f, LastCutoff = 20000.0f;
         double NextCheck = 0.0;
+        double NextPath = 0.0;      // the portal path search runs once an interval, on its own clock (it takes no ray budget)
         float MinDist = 3.0f;
         bool Raycast = true;               // occlusion / portals (false: tracked for the air absorption only)
         bool Portal = false;               // heard through a portal

@@ -575,8 +575,16 @@ void SoundPlayer::UpdateOcclusion(float dt) {
         Tracked& t = m_Occluded[(m_OccCursor + k) % n];
         if (t.Raycast && m_Now >= t.NextCheck && (m_Path || (budget > 0 && m_Blocked))) {
             VoicePath vp;
-            if (m_Path) {
+            const bool pathDue = m_Path && m_Now >= t.NextPath;
+            if (pathDue) {
                 vp = m_Path(m_ListenerPos, t.Pos);
+                t.NextPath = m_Now + (double)m_Occ.Interval;
+            } else if (t.Portal) {
+                vp.ViaPortal = true; // (between searches a portal voice keeps its last way round)
+                vp.Virtual = t.TargetPos;
+                vp.Gain = t.TargetGain;
+                vp.CutoffHz = t.TargetPortalCut;
+                vp.Remote = m_RemoteRoom;
             }
             if (vp.ViaPortal) {
                 if (!t.Portal) {
@@ -601,7 +609,7 @@ void SoundPlayer::UpdateOcclusion(float dt) {
                     --budget;
                     t.NextCheck = m_Now + (double)m_Occ.Interval;
                     t.Target = glm::length(t.Pos - m_ListenerPos) >= t.MinDist && m_Blocked(m_ListenerPos, t.Pos) ? 1.0f : 0.0f;
-                } else if (!m_Blocked || m_Path) { // (a path check was spent this frame: the next one is an interval away)
+                } else if (!m_Blocked) {
                     t.NextCheck = m_Now + (double)m_Occ.Interval;
                 }
             }

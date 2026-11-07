@@ -2334,7 +2334,8 @@ void TestMixDuckerCachedGainsMatchTheFormula() {
     CHECK(matches());
     d.Update(s.DuckHold * 0.5f);
     CHECK(matches());
-    d.Update(s.DuckHold + s.DuckRelease * 0.4f);
+    d.Update(s.DuckHold); // (the hold runs out first)
+    d.Update(s.DuckRelease * 0.4f);
     CHECK(matches() && d.Amount() > 0.0f && d.Amount() < 1.0f);
     d.SetFocus(true);
     d.Update(s.FocusTime * 0.5f);
