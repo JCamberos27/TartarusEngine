@@ -68,6 +68,8 @@ public:
     // A soldier walking: footfalls by distance on the same stride rule as the player's (his gait's, planar speed), each 3D.
     // `id` keeps each soldier's stride count. Soldiers beyond the NPC step range of the listener are skipped.
     void NpcWalk(World& world, int id, const glm::vec3& feet, const glm::vec3& velocity, bool sprint, float dt);
+    // A soldier is gone (despawned/removed): drop his stride and foot state.
+    void NpcGone(int id);
     // A soldier's animated feet (NpcBody::FootHeights), each frame it is animated: a step on each touch-down. `dt` = the time
     // since its last animated frame. Returns false (nothing done) with Steps From Feet off: walk him with NpcWalk instead.
     bool NpcFeet(World& world, int id, const glm::vec3& feet, const float height[2], bool sprint, float speed, float dt);

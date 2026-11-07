@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <unordered_map>
 #include <cmath>
 #include <cstdlib>
@@ -75,8 +76,8 @@ SoundSet ApplySetJson(const json& j, SoundSet s) {
     s.PitchMin = Num(j, "pitchMin", s.PitchMin);
     s.PitchMax = Num(j, "pitchMax", s.PitchMax);
     s.Bus = BusFrom(Str(j, "bus"), s.Bus);
-    s.MinDistance = Num(j, "minDistance", s.MinDistance);
-    s.MaxDistance = Num(j, "maxDistance", s.MaxDistance);
+    s.MinDistance = std::max(Num(j, "minDistance", s.MinDistance), 0.01f);
+    s.MaxDistance = std::max(Num(j, "maxDistance", s.MaxDistance), s.MinDistance);
     if (const std::string r = Str(j, "rolloff"); !r.empty())
         s.Rolloff = r == "linear" ? AudioEngine::Rolloff::Linear : AudioEngine::Rolloff::Logarithmic;
     s.NoImmediateRepeat = Flag(j, "noImmediateRepeat", s.NoImmediateRepeat);
@@ -424,8 +425,8 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     v.Bus = set.Bus;
     v.Spatial = !req.At2D;
     v.Position = req.Position;
-    v.MinDistance = set.MinDistance;
-    v.MaxDistance = set.MaxDistance;
+    v.MinDistance = std::max(set.MinDistance, 0.01f); // (Max >= Min > 0: the clamp and the duck's ratio below need it)
+    v.MaxDistance = std::max(set.MaxDistance, v.MinDistance);
     v.Rolloff = set.Rolloff;
     if (v.Spatial && set.Distance.Valid()) { // the mix spec's distance model: the level holds at its reference distance, capped close up
         v.Rolloff = AudioEngine::Rolloff::Exponential;
@@ -704,8 +705,9 @@ void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
     Sub.Set.MinDistance = Tail.Set.MinDistance = Far.Set.MinDistance = std::max(c.BassMinDistance, 0.1f);
     EventMinDistance = std::max(c.EventMinDistance, 0.1f);
     EventMaxDistance = std::max(c.EventMaxDistance, EventMinDistance + 0.1f);
-    Close.Set.MaxDistance = Mech.Set.MaxDistance = Sub.Set.MaxDistance = c.MaxDistance;
-    Far.Set.MaxDistance = Tail.Set.MaxDistance = c.FarMaxDistance;
+    Close.Set.MaxDistance = Mech.Set.MaxDistance = std::max(c.MaxDistance, Close.Set.MinDistance);
+    Sub.Set.MaxDistance = std::max(c.MaxDistance, Sub.Set.MinDistance);
+    Far.Set.MaxDistance = Tail.Set.MaxDistance = std::max(c.FarMaxDistance, Far.Set.MinDistance);
     Tail.Set.MaxVoices = std::max(1, c.TailMaxVoices);
     Tail.Set.StealFadeTime = c.TailFadeTime;
     TailMinInterval = c.TailMinInterval;
@@ -715,8 +717,8 @@ void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
     BurstGap = c.BurstGap;
     for (Layer& l : TailClass) { // the class tails follow the tail layer's voice policy
         l.Set.VolumeJitterDb = c.VolumeJitterDb;
-        l.Set.MaxDistance = c.FarMaxDistance;
         l.Set.MinDistance = Tail.Set.MinDistance;
+        l.Set.MaxDistance = std::max(c.FarMaxDistance, l.Set.MinDistance);
         l.Set.MaxVoices = std::max(1, c.TailMaxVoices);
         l.Set.StealFadeTime = c.TailFadeTime;
     }
@@ -756,9 +758,11 @@ void WeaponAudioProfile::ApplyJson(const std::string& text) {
                 for (Layer& tc : TailClass) {
                     const std::string ck = tc.Set.Key;
                     const std::vector<std::string> cf = tc.Set.Files;
+                    const bool cx = tc.Set.FilesExplicit;
                     tc.Set = ApplySetJson(l.value(), tc.Set);
                     tc.Set.Key = ck;
                     tc.Set.Files = cf; // the generic tail's files are not the class tails'
+                    tc.Set.FilesExplicit = cx; // (nor its explicit flag: the manifest's tail_<class> files still load)
                 }
             layer->Player2D = Flag(l.value(), "player2d", layer->Player2D);
             layer->Every = std::max(1, (int)Num(l.value(), "every", (float)layer->Every));
@@ -862,6 +866,7 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_Player.StopAll();
     m_Player.Seed(12345u);
     m_Bursts.clear();
+    m_RetryAt.clear();
     m_Profiles.clear();
     m_Foley.clear();
     m_History.clear();
@@ -900,6 +905,7 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
 
 void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     Stop();
+    m_RetryAt.clear();
     m_Root = projectRoot.empty() ? ProjectPaths::Resolve("") : projectRoot;
     m_Player.SetBackend(nullptr);
     m_Player.Seed(0xA5F00Du);
@@ -916,7 +922,7 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     for (const entt::entity e : world.Registry.view<WeaponAudioComponent>()) {
         const WeaponAudioComponent& c = world.Registry.get<WeaponAudioComponent>(e);
         if (c.Gun.empty()) continue;
-        auto it = m_Profiles.find(c.Gun);
+        auto it = m_Profiles.find(c.Gun); // (a scene's Weapon Audio component is where a gun's profile is made)
         if (it == m_Profiles.end()) it = m_Profiles.emplace(c.Gun, WeaponAudioProfile::Default(c.Gun)).first;
         it->second.ApplyComponent(c);
         if (!c.DataFile.empty()) {
@@ -1131,7 +1137,7 @@ SoundPlayer::VoicePath WeaponAudio::PathFor(const glm::vec3& listener, const glm
         vp.ViaPortal = true;
         vp.Virtual = pp.Virtual;
         vp.Gain = pp.Gain;
-        vp.CutoffHz = pp.CutoffHz;
+        vp.CutoffHz = std::max(pp.CutoffHz, 20.0f); // (the smoothing takes its log)
         const ReverbZoneVolume* room = m_Zones.ZoneOfRoom(pp.SourceRoom);
         vp.Remote = room ? room->Reverb : ReverbPresetFor((int)SpaceClass::OutdoorOpen);
     }
@@ -1375,10 +1381,9 @@ void WeaponAudio::UpdateAmbience(float dt) {
 
 // A set with no recordings is looked for again at most every few seconds (files imported meanwhile), not on every use:
 // each look scans the manifest and the folder, and a surface without impact takes was asked for by every round into it.
-static bool RetryEmptySet(const std::string& key) {
-    static std::unordered_map<std::string, std::chrono::steady_clock::time_point> s_Next;
+bool WeaponAudio::RetryEmptySet(const std::string& key) {
     const auto now = std::chrono::steady_clock::now();
-    auto& next = s_Next[key];
+    auto& next = m_RetryAt[key];
     if (now < next) return false;
     next = now + std::chrono::seconds(5);
     return true;
@@ -1412,8 +1417,7 @@ SoundPlayer::Played WeaponAudio::PlayKeyed(SoundSet& set, const glm::vec3& pos, 
 WeaponAudioProfile* WeaponAudio::Profile(const std::string& gun) {
     const auto it = m_Profiles.find(gun);
     if (it != m_Profiles.end()) return &it->second;
-    if (!m_Active || gun.empty()) return nullptr;
-    return &m_Profiles.emplace(gun, WeaponAudioProfile::Default(gun)).first->second;
+    return nullptr;
 }
 
 void WeaponAudio::Note(const std::string& key, bool at2D, const std::string& space) {
@@ -1430,7 +1434,9 @@ int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D, s
     int started = 0;
     // Full auto: which shot of the burst this is decides which layers sound (close / sub / mech every shot, the long tails and
     // the distant report on every Nth), so a burst doesn't stack a tail per round.
-    Burst& burst = m_Bursts[gun + (at2D ? "/2d" : "/3d")];
+    if (m_Bursts.size() > 64) // (soldiers come and go: drop the bursts long over)
+        for (auto b = m_Bursts.begin(); b != m_Bursts.end();) b = m_Player.Now() - b->second.Last > 5.0 ? m_Bursts.erase(b) : std::next(b);
+    Burst& burst = m_Bursts[{p, ((std::uint64_t)shooter << 1) | (at2D ? 1u : 0u)}];
     if (m_Player.Now() - burst.Last > p->BurstGap) burst.Count = 0;
     const int shotNumber = burst.Count++;
     burst.Last = m_Player.Now();
@@ -1621,6 +1627,8 @@ SoundSet* WeaponAudio::FoleySet(const std::string& category, const std::string& 
         FillSet(s);
         it = m_Foley.emplace(key, std::move(s)).first;
         for (const std::string& f : it->second.Files) m_Player.Backend().Preload(f);
+    } else if (it->second.Files.empty() && RetryEmptySet(key)) {
+        FillSet(it->second);
     }
     return &it->second;
 }
@@ -1635,10 +1643,13 @@ bool WeaponAudio::PlayEvent(const std::string& name, const std::string& gun, con
     }
     if (g.empty() || element.empty()) return false;
     if (g != "foley") {
-        WeaponAudioProfile* p = Profile(g);
-        if (!p || !p->Enabled) return false;
-        // A gear sound the shared foley owns (ads_in, equip ...): the same event, the foley's key.
-        if (const auto al = p->Aliases.find(element); al != p->Aliases.end() && al->second != "snd." + g + "." + element) {
+        const WeaponAudioProfile* p = Profile(g);
+        if (p && !p->Enabled) return false;
+        // A gear sound the shared foley owns (ads_in, equip ...): the same event, the foley's key. A gun with no profile
+        // (no recordings of its own) still gets the default's shared gear sounds.
+        static const WeaponAudioProfile kShared = WeaponAudioProfile::Default("");
+        const auto& aliases = p ? p->Aliases : kShared.Aliases;
+        if (const auto al = aliases.find(element); al != aliases.end() && al->second != "snd." + g + "." + element) {
             std::string ag, ae;
             if (ParseKey(al->second, ag, ae)) {
                 g = ag;

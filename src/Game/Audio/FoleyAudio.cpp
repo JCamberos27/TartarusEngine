@@ -146,7 +146,7 @@ std::string FoleyAudio::SurfaceAt(World& world, const glm::vec3& feet) const {
 
 void FoleyAudio::Play(const std::string& surface, const std::string& element, float gain, bool at2D, const glm::vec3& pos) {
     WeaponAudio& wa = WeaponAudio::Get();
-    if (!wa.Active()) return;
+    if (!m_T.Enabled || !wa.Active()) return; // disabled foley is silent, but steps are still detected (the blood's footprints)
     // `surface` is the foley category: step_<surface> for footsteps, move for the body.
     SoundSet* base = wa.FoleySet(surface, element);
     if (base->Files.empty() && element == "crouch") // no crouch takes: the walk's, quieter by the crouch volume
@@ -175,19 +175,19 @@ void FoleyAudio::Play(const std::string& surface, const std::string& element, fl
 }
 
 void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in) {
-    if (!m_Active || !m_T.Enabled || dt <= 0.0f) return;
+    if (!m_Active || dt <= 0.0f) return;
     const float speed = glm::length(glm::vec2(in.Velocity.x, in.Velocity.z));
     // Landing: the fall speed the frame before touching down.
     if (in.Grounded && !m_PrevGrounded) {
         const float fall = std::max(0.0f, -m_PrevVy), g = LandGain(m_T, fall);
-        if (g > 0.0f) {
+        if (g > 0.0f && m_T.Enabled) {
             Play("move", fall >= m_T.LandHeavySpeed ? "land_heavy" : "land_light", g, true, in.Feet);
             Play(StepCategory(SurfaceAt(world, in.Feet), m_T.Footwear), "land", g, true, in.Feet);
         }
         m_Stepper.Reset();
         m_Feet.Reset(); // the landing is the touch-down: the feet coming to rest after it are not steps
     }
-    if (in.Jumped) Play("move", "jump", m_T.JumpVolume, true, in.Feet);
+    if (in.Jumped && m_T.Enabled) Play("move", "jump", m_T.JumpVolume, true, in.Feet);
     const bool fromFeet = m_T.StepsFromFeet && in.HaveFootHeights;
     if (!in.Grounded || !fromFeet) m_Feet.Reset();
     int n = 0;
@@ -203,7 +203,7 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
         if (m_StepListener)
             for (int i = 0; i < n; ++i) { m_PlayerFoot = !m_PlayerFoot; m_StepListener(-1, in.Feet, in.Velocity, m_PlayerFoot ? 0 : 1); }
     }
-    if (n > 0) {
+    if (n > 0 && m_T.Enabled) {
         const bool run = !in.Crouched && (in.Sprinting || speed >= m_T.RunSpeed);
         const char* element = in.Crouched ? "crouch" : run ? "run" : "walk";
         const float gain = in.Crouched ? m_T.CrouchVolume : run ? m_T.RunVolume : m_T.WalkVolume;
@@ -229,8 +229,13 @@ void FoleyAudio::NpcStep(World& world, const glm::vec3& feet, bool sprint) {
     Play(StepCategory(SurfaceAt(world, feet), m_T.NpcFootwear), sprint ? "run" : "walk", m_T.NpcStepVolume * (sprint ? m_T.RunVolume : m_T.WalkVolume) / std::max(m_T.WalkVolume, 0.01f), false, feet);
 }
 
+void FoleyAudio::NpcGone(int id) {
+    m_NpcSteppers.erase(id);
+    m_NpcFeet.erase(id);
+}
+
 void FoleyAudio::NpcWalk(World& world, int id, const glm::vec3& feet, const glm::vec3& velocity, bool sprint, float dt) {
-    if (!m_Active || !m_T.Enabled || dt <= 0.0f) return;
+    if (!m_Active || dt <= 0.0f) return;
     const float speed = glm::length(glm::vec2(velocity.x, velocity.z));
     FoleyStepper& st = m_NpcSteppers[id];
     if (speed < m_T.MinStepSpeed) {
@@ -246,7 +251,7 @@ void FoleyAudio::NpcWalk(World& world, int id, const glm::vec3& feet, const glm:
 }
 
 bool FoleyAudio::NpcFeet(World& world, int id, const glm::vec3& feet, const float height[2], bool sprint, float speed, float dt) {
-    if (!m_Active || !m_T.Enabled) return true;
+    if (!m_Active) return true;
     if (!m_T.StepsFromFeet) return false;
     // Tracked at any range (the feet stay primed), heard within the NPC step range.
     FootContactDetector& fd = m_NpcFeet[id];

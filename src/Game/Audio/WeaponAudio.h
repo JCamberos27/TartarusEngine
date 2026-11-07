@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <chrono>
 #include <unordered_map>
 #include <vector>
 
@@ -383,6 +384,7 @@ public:
     // Has this gun's element any recorded file (so the old placeholder cues stay quiet)?
     bool HasEventFiles(const std::string& gun, const std::string& element);
 
+    // A gun's profile, or nullptr for one the scene never gave audio (lookup only: unknown names make nothing).
     WeaponAudioProfile* Profile(const std::string& gun);
     const SoundManifest& Manifest() const { return m_Manifest; }
     SoundPlayer& Player() { return m_Player; }
@@ -451,7 +453,10 @@ private:
     std::deque<Emitted> m_History;
     double m_LastTail = -1e9;
     struct Burst { int Count = 0; double Last = -1e9; };
-    std::map<std::string, Burst> m_Bursts;
+    // One burst per gun and shooter (and 2D / 3D); the tail cooldown (m_LastTail) stays shared.
+    std::map<std::pair<const WeaponAudioProfile*, std::uint64_t>, Burst> m_Bursts;
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_RetryAt; // empty sets: when to look again
+    bool RetryEmptySet(const std::string& key);
     friend class FoleyAudio;
     void Note(const std::string& key, bool at2D, const std::string& space = std::string());
     // The tail of one shot: the space's tail sets (the two heaviest classes, equal-power), or the generic one.
