@@ -159,6 +159,12 @@ public:
         // transient sits AnchorMs into it starts (LeadMs - AnchorMs) later, or - when that is negative - that far into
         // the file, so the transient lands on the frame whatever the variant's lead-in. < 0: start now.
         float LeadMs = -1.0f;
+        // Per-play replacements of the set's pitch range and volume jitter (Override) and of its 3D reach (OverrideDistance), so a
+        // caller need not copy the whole set to change them.
+        bool Override = false;
+        float OverridePitchMin = 1.0f, OverridePitchMax = 1.0f, OverrideJitterDb = 0.0f;
+        bool OverrideDistance = false;
+        float OverrideMinDistance = 2.0f, OverrideMaxDistance = 40.0f;
     };
     struct Played {
         bool Started = false;   // a voice started (false: no files, or the engine is down)
@@ -398,8 +404,11 @@ public:
     struct Emitted { double Time = 0.0; std::string Key; bool At2D = true; std::string Space; /* tail: "outdoor_open" or "a+b" (the classes heard) */ };
     const std::deque<Emitted>& History() const { return m_History; }
     void ClearHistory() { m_History.clear(); }
+    // Recording the history costs two string copies per layer played, so it is off in the game; StartForTest turns it on.
+    void SetHistoryEnabled(bool on) { m_HistoryOn = on; if (!on) m_History.clear(); }
+    bool HistoryEnabled() const { return m_HistoryOn; }
     // Tests: the manifest the class impulse responses and sets are looked up in.
-    void SetManifestForTest(const SoundManifest& m) { m_Manifest = m; m_Player.SetReferenceLufs(m.HasReference, m.ReferenceLufs); }
+    void SetManifestForTest(const SoundManifest& m) { m_Manifest = m; m_Player.SetReferenceLufs(m.HasReference, m.ReferenceLufs); CacheClassIrs(); }
     // Tests: starts with a given set of profiles and no scene.
     void StartForTest(const std::string& projectRoot, SoundBackend* backend);
 
@@ -419,6 +428,7 @@ public:
     // The reverb at `pos`: the zones' reverbs (layered, faded), the probe's class reverbs for what no zone claims; the two heaviest
     // impulse responses, weights summing to 1 (Count 0: no impulse response for this space, the reverb is off).
     AudioEngine::ReverbSpec ReverbAt(const glm::vec3& pos);
+    AudioEngine::ReverbSpec ReverbAt(const glm::vec3& pos, const ReverbZoneMix& zones); // (`zones` = m_Zones.Mix(pos), already computed)
     const AudioEngine::ReverbSpec& CurrentReverb() const { return m_ReverbSent; }
     // The class impulse response / pre-delay (from the manifest's ir.<class>) and the final wet level of a space (dB): the Reverb Bus's
     // calibrated level for the class + the preset's trim.
@@ -447,10 +457,12 @@ private:
     SoundManifest m_Manifest;
     std::map<std::string, WeaponAudioProfile> m_Profiles;
     std::map<std::string, SoundSet> m_Foley;
+    std::map<std::string, std::map<std::string, SoundSet*, std::less<>>, std::less<>> m_FoleyIndex; // category -> element -> the set in m_Foley
     SoundPlayer m_Player;
     glm::vec3 m_Listener{0.0f};
     std::FILE* m_LogFile = nullptr;
     std::deque<Emitted> m_History;
+    bool m_HistoryOn = false;
     double m_LastTail = -1e9;
     struct Burst { int Count = 0; double Last = -1e9; };
     // One burst per gun and shooter (and 2D / 3D); the tail cooldown (m_LastTail) stays shared.
@@ -501,4 +513,8 @@ private:
     std::map<std::string, SpaceClass> m_LastDominant; // per shooter key, for the console line when it changes
     int m_SpaceLines = 0;
     void InstallLog();
+    // The manifest's ir.<class> entries, resolved once per manifest (ClassIr / ClassPreDelayMs run for every layer of every frame's reverb).
+    struct ClassIrEntry { std::string File; float PreDelayMs = 0.0f; };
+    ClassIrEntry m_ClassIr[kSpaceClassCount];
+    void CacheClassIrs();
 };

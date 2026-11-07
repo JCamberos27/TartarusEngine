@@ -45,7 +45,8 @@ private:
     int m_Rate;
     LimiterSettings m_S;
     int m_L = 72;                   // look-ahead frames in use
-    int m_Cap;                      // ring capacity (frames)
+    int m_Cap;                      // ring capacity (frames), a power of two
+    int m_MaxL = 0;                 // the longest look-ahead (frames)
     std::vector<float> m_X[2];      // input history
     std::vector<long long> m_QIdx;  // monotonic deque of the required gains (frame numbers), as a ring
     std::vector<float> m_QVal;

@@ -158,20 +158,21 @@ void FoleyAudio::Play(const std::string& surface, const std::string& element, fl
         base = wa.FoleySet("barefoot_" + m_T.DefaultSurface, element);
     if (base->Files.empty() && surface != "step_" + m_T.DefaultSurface && (bare || surface.rfind("step_", 0) == 0))
         base = wa.FoleySet("step_" + m_T.DefaultSurface, element);
-    SoundSet set = *base;
-    set.PitchMin = std::min(m_T.PitchMin, m_T.PitchMax);
-    set.PitchMax = std::max(m_T.PitchMin, m_T.PitchMax);
-    set.VolumeJitterDb = m_T.VolumeJitterDb;
-    if (!at2D) {
-        set.MinDistance = m_T.NpcStepMinDistance;
-        set.MaxDistance = m_T.NpcStepMaxDistance;
-    }
     SoundPlayer::Request r;
+    r.Override = true;
+    r.OverridePitchMin = std::min(m_T.PitchMin, m_T.PitchMax);
+    r.OverridePitchMax = std::max(m_T.PitchMin, m_T.PitchMax);
+    r.OverrideJitterDb = m_T.VolumeJitterDb;
+    if (!at2D) {
+        r.OverrideDistance = true;
+        r.OverrideMinDistance = m_T.NpcStepMinDistance;
+        r.OverrideMaxDistance = m_T.NpcStepMaxDistance;
+    }
     r.At2D = at2D;
     r.Position = pos;
     r.Gain = gain * m_T.Volume;
     wa.Note(base->Key, at2D);
-    wa.Player().Play(set, r);
+    wa.Player().Play(*base, r);
 }
 
 void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in) {

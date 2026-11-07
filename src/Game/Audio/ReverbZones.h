@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class World;
@@ -118,4 +119,7 @@ private:
     std::vector<ReverbPortalVolume> m_Portals;
     bool m_Rebuilt = false;
     void ResolveRooms(ReverbPortalVolume& p, const World* world) const;
+    void IndexZones();
+    // entity -> index into m_Zones / m_Portals (Refresh matches the world's entities against these without scanning)
+    std::unordered_map<unsigned, int> m_ZoneIndex, m_PortalIndex;
 };

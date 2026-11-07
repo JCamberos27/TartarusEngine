@@ -2317,6 +2317,173 @@ void TestGlueCompressorAndIntegratedLoudness() {
     CHECK(std::fabs(LoudnessMeter::Integrated(two, rate) + 20.0f) < 0.3f);
 }
 
+void TestMixDuckerCachedGainsMatchTheFormula() {
+    AudioMixComponent s;
+    MixDucker d;
+    auto matches = [&]() {
+        for (int g = 0; g < (int)MixGroup::Count; ++g)
+            if (d.Gain((MixGroup)g) != std::pow(10.0f, d.GainDb((MixGroup)g) / 20.0f)) return false;
+        return true;
+    };
+    CHECK(matches()); // before any Configure
+    d.Configure(s);
+    CHECK(matches());
+    d.Key(-13.0f);
+    CHECK(matches() && d.Gain(MixGroup::Bed) < 1.0f);
+    d.Key(0.0f);
+    CHECK(matches());
+    d.Update(s.DuckHold * 0.5f);
+    CHECK(matches());
+    d.Update(s.DuckHold + s.DuckRelease * 0.4f);
+    CHECK(matches() && d.Amount() > 0.0f && d.Amount() < 1.0f);
+    d.SetFocus(true);
+    d.Update(s.FocusTime * 0.5f);
+    CHECK(matches() && d.Focus() > 0.0f);
+    d.Update(s.FocusTime);
+    CHECK(matches() && d.Gain(MixGroup::Bed) < 1.0f && d.Gain(MixGroup::Threat) == 1.0f);
+    d.Reset();
+    CHECK(matches() && d.Gain(MixGroup::Bed) == 1.0f);
+    s.DuckEnabled = false;
+    d.Configure(s);
+    d.Key(0.0f);
+    d.Update(0.1f);
+    CHECK(matches() && d.Gain(MixGroup::Bed) == 1.0f);
+}
+
+// The limiter ring is a power of two now; the original modulo-indexed version, kept here, must produce the same samples.
+void TestMasterLimiterMatchesModuloReference() {
+    struct Ref {
+        int Cap, L;
+        std::vector<float> X[2], QVal, Mv;
+        std::vector<long long> QIdx;
+        int QHead = 0, QCount = 0;
+        double Sum, Gs = 1.0, Alpha;
+        long long N = 0;
+        float PrevSeg = 0.0f, Ceil;
+        Ref(int rate, const LimiterSettings& s) {
+            Cap = (int)(10.0f * 0.001f * (float)rate) + 16;
+            for (auto& x : X) x.assign((size_t)Cap, 0.0f);
+            QIdx.assign((size_t)Cap, 0);
+            QVal.assign((size_t)Cap, 1.0f);
+            Mv.assign((size_t)Cap, 1.0f);
+            L = std::clamp((int)std::lround(std::clamp(s.LookaheadMs, 0.1f, 10.0f) * 0.001f * (float)rate), 1, Cap - 16);
+            Alpha = 1.0 - std::exp(-1.0 / ((double)std::max(s.ReleaseMs, 1.0f) * 0.001 * (double)rate));
+            Ceil = std::pow(10.0f, std::min(s.CeilingDb, 0.0f) / 20.0f);
+            Sum = (double)(L + 1);
+        }
+        static float Cat(float p0, float p1, float p2, float p3, float t) {
+            return 0.5f * ((2.0f * p1) + (-p0 + p2) * t + (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t * t + (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t * t * t);
+        }
+        void Process(const float* in, float* out, int frames) {
+            const int cap = Cap;
+            for (int f = 0; f < frames; ++f) {
+                const float inL = in[2 * f], inR = in[2 * f + 1];
+                const long long n = N++;
+                X[0][(size_t)(n % cap)] = inL;
+                X[1][(size_t)(n % cap)] = inR;
+                out[2 * f] = out[2 * f + 1] = 0.0f;
+                if (n < 2) continue;
+                const long long j = n - 2;
+                auto at = [&](int c, long long k) { return X[c][(size_t)(((k % cap) + cap) % cap)]; };
+                float seg = 0.0f, peak = 0.0f;
+                for (int c = 0; c < 2; ++c) {
+                    const float p0 = at(c, j - 1), p1 = at(c, j), p2 = at(c, j + 1), p3 = at(c, j + 2);
+                    peak = std::max(peak, std::fabs(p1));
+                    for (int q = 1; q <= 3; ++q) seg = std::max(seg, std::fabs(Cat(p0, p1, p2, p3, 0.25f * (float)q)));
+                }
+                const float need = std::max({peak, seg, PrevSeg});
+                PrevSeg = seg;
+                const float t = need > Ceil ? Ceil / need : 1.0f;
+                while (QCount > 0 && QVal[(size_t)((QHead + QCount - 1) % cap)] >= t) --QCount;
+                const int slot = (QHead + QCount) % cap;
+                QIdx[(size_t)slot] = j;
+                QVal[(size_t)slot] = t;
+                ++QCount;
+                while (QCount > 0 && QIdx[(size_t)QHead] < j - L) {
+                    QHead = (QHead + 1) % cap;
+                    --QCount;
+                }
+                const float m = QVal[(size_t)QHead];
+                const long long old = j - L - 1;
+                Sum += (double)m - (double)Mv[(size_t)(((old % cap) + cap) % cap)];
+                Mv[(size_t)(j % cap)] = m;
+                const double g = std::min(Sum / (double)(L + 1), 1.0);
+                if (g < Gs) Gs = g;
+                else Gs += Alpha * (g - Gs);
+                const long long o = j - L;
+                if (o >= 0) {
+                    const float gs = (float)Gs;
+                    out[2 * f] = std::clamp(at(0, o) * gs, -Ceil, Ceil);
+                    out[2 * f + 1] = std::clamp(at(1, o) * gs, -Ceil, Ceil);
+                }
+            }
+        }
+    };
+    const int rate = 48000;
+    std::vector<float> x(2 * 6000);
+    unsigned r = 12345u;
+    for (size_t i = 0; i < x.size() / 2; ++i) {
+        r = r * 1664525u + 1013904223u;
+        const float noise = (float)(r >> 8) / (float)(1u << 24) * 2.0f - 1.0f;
+        const float amp = (i / 1500) % 2 ? 3.0f : 0.3f; // bursts well over the ceiling, then quiet
+        x[2 * i] = amp * noise;
+        x[2 * i + 1] = amp * (0.7f * noise + 0.3f * (float)std::sin(0.05 * (double)i));
+    }
+    for (float lookMs : {0.1f, 1.5f, 5.0f, 10.0f}) {
+        LimiterSettings ls;
+        ls.LookaheadMs = lookMs;
+        MasterLimiter lim(rate);
+        lim.Configure(ls);
+        Ref ref(rate, ls);
+        std::vector<float> a(x.size()), b(x.size());
+        for (size_t at = 0; at < x.size() / 2; at += 700) { // (blocks of an awkward size, past several ring wraps)
+            const int n = (int)std::min<size_t>(700, x.size() / 2 - at);
+            lim.Process(x.data() + 2 * at, a.data() + 2 * at, n);
+            ref.Process(x.data() + 2 * at, b.data() + 2 * at, n);
+        }
+        CHECK(a == b);
+    }
+}
+
+void TestPathCheckRunsOncePerInterval() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    SoundPlayer& pl = wa.Player();
+    int paths = 0;
+    pl.SetPathFn([&](const glm::vec3&, const glm::vec3&) {
+        ++paths;
+        return SoundPlayer::VoicePath{};
+    });
+    pl.SetBlockedFn([](const glm::vec3&, const glm::vec3&) { return false; });
+    pl.SetListener(glm::vec3(0.0f));
+    SoundPlayer::OcclusionSettings occ = pl.GetOcclusion();
+    occ.RaysPerFrame = 0; // starved of line-of-sight casts: the path checks still have to keep to the interval
+    occ.Interval = 0.2f;
+    pl.SetOcclusion(occ);
+    SoundSet* s = wa.KeySet("snd.impact.concrete", [](SoundSet& set) { set.Files = {"i.wav"}; set.MaxVoices = 8; });
+    wa.PlayKeyed(*s, glm::vec3(20.0f, 0.0f, 0.0f), false, 1.0f);
+    paths = 0; // (Play asks once for its start)
+    for (int i = 0; i < 100; ++i) pl.Update(0.01f); // 1 s
+    CHECK(paths >= 3 && paths <= 6);
+    wa.Stop();
+}
+
+void TestHistoryIsOptIn() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    CHECK(wa.HistoryEnabled());
+    wa.Shot("ak", glm::vec3(0.0f), true);
+    CHECK(!wa.History().empty());
+    wa.SetHistoryEnabled(false);
+    CHECK(wa.History().empty());
+    wa.Shot("ak", glm::vec3(0.0f), true);
+    CHECK(wa.History().empty());
+    wa.SetHistoryEnabled(true);
+    wa.Stop();
+}
+
 void TestZoneFadeIgnoresTheFloor() {
     // A box zone 6 m tall with a 3 m fade: at head height over its floor, in the middle, the listener is fully inside (the fade is
     // across the walls and the ceiling, not the floor stood on).
@@ -3163,6 +3330,10 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"DistanceModelAndMixGroups", TestDistanceModelAndMixGroups});
     tests.push_back({"MixDuckerEnvelope", TestMixDuckerEnvelope});
     tests.push_back({"GlueCompressorAndIntegratedLoudness", TestGlueCompressorAndIntegratedLoudness});
+    tests.push_back({"MixDuckerCachedGainsMatchTheFormula", TestMixDuckerCachedGainsMatchTheFormula});
+    tests.push_back({"MasterLimiterMatchesModuloReference", TestMasterLimiterMatchesModuloReference});
+    tests.push_back({"PathCheckRunsOncePerInterval", TestPathCheckRunsOncePerInterval});
+    tests.push_back({"HistoryIsOptIn", TestHistoryIsOptIn});
     tests.push_back({"ZoneFadeIgnoresTheFloor", TestZoneFadeIgnoresTheFloor});
     tests.push_back({"ZoneAmbienceBeds", TestZoneAmbienceBeds});
     tests.push_back({"ReverbZoneOldKeysAndNewFields", TestReverbZoneOldKeysAndNewFields});

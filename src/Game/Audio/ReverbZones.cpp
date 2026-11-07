@@ -21,9 +21,10 @@ bool Same(const ReverbPortalComponent& a, const ReverbPortalComponent& b) {
            a.DiffractionCutoff == b.DiffractionCutoff && a.DiffractionMaxAngle == b.DiffractionMaxAngle && a.DiffractionGainDb == b.DiffractionGainDb;
 }
 
-std::string NameOf(const World& world, entt::entity e) {
+const std::string& NameOf(const World& world, entt::entity e) {
+    static const std::string kEmpty;
     const auto* n = world.Registry.try_get<NameComponent>(e);
-    return n ? n->Name : std::string();
+    return n ? n->Name : kEmpty;
 }
 
 void ApplyZone(ReverbZoneVolume& v, const ReverbZoneComponent& c, const glm::mat4& m, entt::entity e, const std::string& name) {
@@ -128,6 +129,13 @@ void ReverbZones::Set(std::vector<ReverbZoneVolume> zones) {
         if (a.Priority != b.Priority) return a.Priority > b.Priority;
         return a.Entity < b.Entity;
     });
+    IndexZones();
+}
+
+void ReverbZones::IndexZones() {
+    m_ZoneIndex.clear();
+    m_ZoneIndex.reserve(m_Zones.size());
+    for (size_t i = 0; i < m_Zones.size(); ++i) m_ZoneIndex.emplace(m_Zones[i].Entity, (int)i); // (the first of a duplicate wins)
 }
 
 void ReverbZones::ResolveRooms(ReverbPortalVolume& p, const World* world) const {
@@ -148,6 +156,7 @@ void ReverbZones::Build(const World& world) {
     }
     Set(std::move(zones));
     m_Portals.clear();
+    m_PortalIndex.clear();
     for (const entt::entity e : world.Registry.view<const ReverbPortalComponent>()) {
         const ReverbPortalComponent& c = world.Registry.get<const ReverbPortalComponent>(e);
         if (!c.Enabled) continue;
@@ -155,6 +164,7 @@ void ReverbZones::Build(const World& world) {
         ApplyPortalParams(v, c);
         PlacePortal(v, world.GetCachedWorldTransform(e), e);
         ResolveRooms(v, &world);
+        m_PortalIndex.emplace(v.Entity, (int)m_Portals.size());
         m_Portals.push_back(v);
     }
 }
@@ -167,12 +177,11 @@ bool ReverbZones::Refresh(const World& world) {
         const ReverbZoneComponent& c = world.Registry.get<const ReverbZoneComponent>(e);
         if (!c.Enabled) continue;
         ++zoneCount;
-        ReverbZoneVolume* v = nullptr;
-        for (ReverbZoneVolume& z : m_Zones)
-            if (z.Entity == (unsigned)e) { v = &z; break; }
+        const auto zi = m_ZoneIndex.find((unsigned)e);
+        ReverbZoneVolume* v = zi == m_ZoneIndex.end() ? nullptr : &m_Zones[(size_t)zi->second];
         if (!v || c.Priority != v->Priority) { structural = true; break; }
         const glm::mat4 m = world.GetCachedWorldTransform(e);
-        const std::string name = NameOf(world, e);
+        const std::string& name = NameOf(world, e);
         if (m != v->Placed || !Same(c, v->Src) || name != v->Name) { // a rename moves the portals' named rooms
             ApplyZone(*v, c, m, e, name);
             changed = zonesMoved = true;
@@ -184,9 +193,8 @@ bool ReverbZones::Refresh(const World& world) {
             const ReverbPortalComponent& c = world.Registry.get<const ReverbPortalComponent>(e);
             if (!c.Enabled) continue;
             ++portalCount;
-            ReverbPortalVolume* v = nullptr;
-            for (ReverbPortalVolume& p : m_Portals)
-                if (p.Entity == (unsigned)e) { v = &p; break; }
+            const auto pi = m_PortalIndex.find((unsigned)e);
+            ReverbPortalVolume* v = pi == m_PortalIndex.end() ? nullptr : &m_Portals[(size_t)pi->second];
             if (!v) { structural = true; break; }
             const glm::mat4 m = world.GetCachedWorldTransform(e);
             const bool moved = m != v->Placed, edited = !Same(c, v->Src);

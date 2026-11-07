@@ -78,6 +78,7 @@ void MixDucker::Configure(const AudioMixComponent& s) {
     m_FocusDb[(int)MixGroup::Bed] = s.FocusBedDb;
     m_FocusDb[(int)MixGroup::OwnFoley] = s.FocusOwnFoleyDb;
     m_FocusDb[(int)MixGroup::Debris] = s.FocusDebrisDb;
+    RefreshGains();
 }
 
 void MixDucker::Key(float levelDb) {
@@ -86,6 +87,7 @@ void MixDucker::Key(float levelDb) {
     if (a <= 0.0f) return;
     m_Amount = std::max(m_Amount, a);
     m_HoldLeft = m_Hold;
+    RefreshGains();
 }
 
 void MixDucker::Update(float dt) {
@@ -96,6 +98,7 @@ void MixDucker::Update(float dt) {
     const float target = m_FocusEnabled && m_FocusOn ? 1.0f : 0.0f;
     const float step = dt / m_FocusTime;
     m_Focus += std::clamp(target - m_Focus, -step, step);
+    RefreshGains();
 }
 
 float MixDucker::GainDb(MixGroup g) const {
@@ -103,9 +106,14 @@ float MixDucker::GainDb(MixGroup g) const {
     return -(m_DuckDb[i] * m_Amount + m_FocusDb[i] * m_Focus);
 }
 
-float MixDucker::Gain(MixGroup g) const { return DbToLin(GainDb(g)); }
+void MixDucker::RefreshGains() {
+    for (int i = 0; i < (int)MixGroup::Count; ++i) m_Gain[i] = DbToLin(GainDb((MixGroup)i));
+}
+
+float MixDucker::Gain(MixGroup g) const { return m_Gain[std::clamp((int)g, 0, (int)MixGroup::Count - 1)]; }
 
 void MixDucker::Reset() {
     m_Amount = m_HoldLeft = m_Focus = 0.0f;
     m_FocusOn = false;
+    RefreshGains();
 }
