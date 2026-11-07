@@ -139,7 +139,6 @@ float SoundSet::GainLin(size_t i) const {
     if (HasMixDb) return std::pow(10.0f, MixDb / 20.0f);
     return i < FileGainDb.size() ? std::pow(10.0f, FileGainDb[i] / 20.0f) : 1.0f;
 }
-float SoundSet::PeakLin(size_t i) const { return i < FilePeakDb.size() ? std::pow(10.0f, FilePeakDb[i] / 20.0f) : 0.7f; }
 
 float BlendCurve::Weight(float distance) const {
     const float span = FarDistance - NearDistance;
@@ -180,14 +179,12 @@ bool SoundManifest::FromJson(const std::string& text, SoundManifest& out, std::s
         SoundManifestEntry m;
         m.File = ManifestPath(file);
         m.Key = Str(e, "key");
-        m.Category = Str(e, "category");
         m.Layer = Str(e, "layer");
         m.AnchorMs = Num(e, "anchor_ms", 0.0f);
         m.MixDb = Num(e, "mix_db", 0.0f);
         m.PeakDb = Num(e, "true_peak_dbtp", -3.0f);
         m.HasLufs = e.contains("lufs_m_max") && e["lufs_m_max"].is_number();
         m.LufsM = Num(e, "lufs_m_max", 0.0f);
-        m.Rt60S = Num(e, "rt60_s", 0.0f);
         m.PreDelayMs = Num(e, "predelay_ms", 0.0f);
         m.Loop = Flag(e, "loop", false);
         if (!m.Key.empty()) out.Entries.push_back(std::move(m));
@@ -450,7 +447,6 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     VoicePath vp;
     if (occ && m_Path) {
         vp = m_Path(m_ListenerPos, req.Position);
-        ++m_PathChecks;
     }
     const float occDistance = glm::length(req.Position - m_ListenerPos);
     if (vp.ViaPortal) { // another room: heard from the portal, through its loss, with the source room's reverb
@@ -459,7 +455,6 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
         v.ReverbBus = 1;
     } else if (occ && m_Blocked && occDistance >= m_Occ.MinDistance && m_Blocked(m_ListenerPos, req.Position)) {
         occAmount = 1.0f; // behind something already: it starts muffled
-        ++m_OccChecks;
     }
     v.OcclusionHz = vp.ViaPortal ? std::min(vp.CutoffHz, 20000.0f) : OcclusionCutoff(m_Occ, occAmount);
     if (v.Spatial) v.OcclusionHz = std::min(v.OcclusionHz, AirCutoff(m_Occ, glm::length(v.Position - m_ListenerPos)));
@@ -579,7 +574,6 @@ void SoundPlayer::UpdateOcclusion(float dt) {
             VoicePath vp;
             if (m_Path) {
                 vp = m_Path(m_ListenerPos, t.Pos);
-                ++m_PathChecks;
             }
             if (vp.ViaPortal) {
                 if (!t.Portal) {
@@ -602,7 +596,6 @@ void SoundPlayer::UpdateOcclusion(float dt) {
                 }
                 if (budget > 0 && m_Blocked) {
                     --budget;
-                    ++m_OccChecks;
                     t.NextCheck = m_Now + (double)m_Occ.Interval;
                     t.Target = glm::length(t.Pos - m_ListenerPos) >= t.MinDist && m_Blocked(m_ListenerPos, t.Pos) ? 1.0f : 0.0f;
                 } else if (!m_Blocked) {
@@ -873,7 +866,6 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_Foley.clear();
     m_History.clear();
     m_Manifest = SoundManifest{};
-    m_ShotVoices = 0;
     m_LastTail = -1e9;
     m_Probe = EnvironmentProbe{};
     m_ListenerProbe = EnvironmentProbe{};
@@ -974,8 +966,6 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
         for (const std::string& f : m_Manifest.FilesFor(key)) m_Player.Backend().Preload(f);
     InstallLog();
     m_History.clear();
-    m_Transcript.clear();
-    m_ShotVoices = 0;
     m_LastTail = -1e9;
     m_Probe = EnvironmentProbe{};
     m_ListenerProbe = EnvironmentProbe{};
@@ -1428,7 +1418,6 @@ WeaponAudioProfile* WeaponAudio::Profile(const std::string& gun) {
 
 void WeaponAudio::Note(const std::string& key, bool at2D, const std::string& space) {
     m_History.push_back({m_Player.Now(), key, at2D, space});
-    if (m_Record) m_Transcript.push_back({m_Player.Now(), key, at2D, space});
     if (m_History.size() > kMaxHistory) m_History.pop_front();
 }
 
@@ -1465,7 +1454,6 @@ int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D, s
         Note(l->Set.Key, at2D);
         if (m_Player.Play(l->Set, r).Started) ++started;
     }
-    m_ShotVoices += started;
     return started;
 }
 

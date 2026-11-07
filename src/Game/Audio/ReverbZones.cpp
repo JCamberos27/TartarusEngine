@@ -94,12 +94,11 @@ float ReverbZoneVolume::Weight(const glm::vec3& p) const {
     return t * t * (3.0f - 2.0f * t);
 }
 
-void ReverbPortalVolume::Loss(const glm::vec3& from, const glm::vec3& to, float& gain, float& cutoffHz, float* bendDegrees) const {
+void ReverbPortalVolume::Loss(const glm::vec3& from, const glm::vec3& to, float& gain, float& cutoffHz) const {
     const glm::vec3 in = Center - from, out = to - Center;
     const float li = glm::length(in), lo = glm::length(out);
     float bend = 0.0f;
     if (li > 1e-4f && lo > 1e-4f) bend = glm::degrees(std::acos(std::clamp(glm::dot(in / li, out / lo), -1.0f, 1.0f)));
-    if (bendDegrees) *bendDegrees = bend;
     const float k = std::clamp(bend / std::max(DiffractionMaxAngle, 1.0f), 0.0f, 1.0f);
     const float db = (1.0f - Open) * ClosedGainDb + k * DiffractionGainDb;
     gain = std::pow(10.0f, db / 20.0f);
@@ -206,7 +205,6 @@ ReverbZoneMix ReverbZones::Mix(const glm::vec3& p) const {
         gain += take * z.TailGain;
         if (mix.ClaimCount < ReverbZoneMix::kMaxClaims) mix.Claims[mix.ClaimCount++] = {(int)(&z - m_Zones.data()), take};
         remaining -= take;
-        ++mix.Zones;
     }
     mix.ProbeShare = std::max(remaining, 0.0f);
     mix.Gain = gain + mix.ProbeShare;

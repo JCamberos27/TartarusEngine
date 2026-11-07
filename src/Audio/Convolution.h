@@ -52,7 +52,6 @@ struct IrData {
     std::vector<float> TailSpec[2];              // TailParts x (2 x kTailStride), planar
     // `right` may be null (mono: both channels get the left). `count` frames at `rate`.
     static std::shared_ptr<IrData> FromSamples(const float* left, const float* right, int count, int rate, const IrBuildOptions& opt = IrBuildOptions());
-    float Seconds() const { return Rate > 0 ? (float)Length / (float)Rate : 0.0f; }
 };
 
 class Convolver;
@@ -93,7 +92,6 @@ public:
     bool Idle() const { return m_InFlight.load(std::memory_order_acquire) == 0; }
     // `frames` (any count) of mono input -> the left / right convolution (overwritten).
     void Process(const float* in, float* outL, float* outR, int frames);
-    const IrData& Ir() const { return *m_Ir; }
     std::uint64_t LateBlocks() const { return m_Late.load(std::memory_order_relaxed); }
     // The worker side (TailWorker only).
     void RunTail(std::int64_t block);

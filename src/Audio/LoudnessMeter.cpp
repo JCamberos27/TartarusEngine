@@ -36,21 +36,6 @@ LoudnessMeter::LoudnessMeter(int sampleRate) : m_Rate(sampleRate < 8000 ? 8000 :
     for (int c = 0; c < 2; ++c) Design(m_Rate, m_Shelf[c], m_Hp[c]);
 }
 
-void LoudnessMeter::Reset() {
-    for (int c = 0; c < 2; ++c) {
-        m_Shelf[c].Z1 = m_Shelf[c].Z2 = m_Hp[c].Z1 = m_Hp[c].Z2 = 0.0;
-    }
-    m_Sum = 0.0;
-    m_InBlock = 0;
-    m_BlockPeak = 0.0f;
-    std::fill(std::begin(m_Blocks), std::end(m_Blocks), 0.0);
-    std::fill(std::begin(m_Peaks), std::end(m_Peaks), 0.0f);
-    m_NumBlocks = m_Head = 0;
-    m_PeakDb.store(-120.0f);
-    m_Momentary.store(-120.0f);
-    m_ShortTerm.store(-120.0f);
-}
-
 void LoudnessMeter::Process(const float* in, int frames) {
     for (int f = 0; f < frames; ++f) {
         for (int c = 0; c < 2; ++c) {

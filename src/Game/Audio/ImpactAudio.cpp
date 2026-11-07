@@ -37,11 +37,6 @@ float ImpactAudio::CasingGain(const ImpactAudioComponent& t, float speed) {
     return t.CasingVolume * (t.CasingGainMin + (1.0f - t.CasingGainMin) * k);
 }
 
-std::string ImpactAudio::ResolveSurface(const std::string& surface, const std::vector<std::string>& available, const std::string& fallback) {
-    if (std::find(available.begin(), available.end(), surface) != available.end()) return surface;
-    return fallback;
-}
-
 float ImpactAudio::FlybyGain(const ImpactAudioComponent& t, float miss) {
     if (miss > t.FlybyRadius || t.FlybyRadius <= 1e-4f) return 0.0f;
     const float k = std::clamp(miss / t.FlybyRadius, 0.0f, 1.0f);

@@ -13,7 +13,6 @@
 class LoudnessMeter {
 public:
     explicit LoudnessMeter(int sampleRate = 48000);
-    void Reset();
     // Interleaved stereo.
     void Process(const float* in, int frames);
     float PeakDb() const { return m_PeakDb.load(std::memory_order_relaxed); }

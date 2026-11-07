@@ -67,7 +67,6 @@ struct TapRing {
     std::vector<float> Master, Pre, Wet;                      // kFrames x 2 each
     std::atomic<unsigned long long> Written{0};
     unsigned long long Read = 0;
-    unsigned long long Lost = 0;
 };
 std::atomic<TapRing*> s_Taps{nullptr};
 std::unique_ptr<TapRing> s_TapStorage;
@@ -617,7 +616,7 @@ void AudioEngine::Shutdown() {
         s_EditorClipGuard = nullptr;
     }
     // (The editor clips stay: plain PCM at their own rate, still playable by a later Init, and their ids stay meaningful.)
-    UnloadAll();
+    s_Preloaded.clear();
     s_Paused = false;
     if (s_BusesReady) for (int b = 0; b < kBusCount; ++b) ma_sound_group_uninit(&s_Buses[b]);
     s_BusesReady = false;
@@ -714,14 +713,6 @@ bool AudioEngine::Load(const std::string& path) {
 
     s_Preloaded.emplace(path, std::move(clip));
     return true;
-}
-
-bool AudioEngine::Unload(const std::string& path) {
-    return s_Preloaded.erase(path) > 0;
-}
-
-void AudioEngine::UnloadAll() {
-    s_Preloaded.clear();
 }
 
 bool AudioEngine::Reload(const std::string& path) {
@@ -1099,7 +1090,6 @@ size_t AudioEngine::DrainTaps(std::vector<float>& master, std::vector<float>& pr
     if (!t || !s_Taps.load()) return 0;
     const unsigned long long w = t->Written.load(std::memory_order_acquire);
     if (w - t->Read > TapRing::kFrames) {
-        t->Lost += w - t->Read - TapRing::kFrames;
         t->Read = w - TapRing::kFrames;
     }
     const size_t n = (size_t)(w - t->Read);
@@ -1245,19 +1235,16 @@ void AudioEngine::SetPaused(bool paused) {
         }
     }
 }
-bool AudioEngine::IsPaused() { return s_Paused; }
 
 void AudioEngine::SetMuted(bool muted) {
     s_MutedFlag = muted;
     if (s_Initialized) ApplyMasterVolume(s_Engine);
 }
-bool AudioEngine::IsMuted() { return s_MutedFlag; }
 
 void AudioEngine::SetMasterVolume(float volume) {
     s_MasterVolume = std::clamp(volume, 0.0f, 1.0f);
     if (s_Initialized) ApplyMasterVolume(s_Engine);
 }
-float AudioEngine::MasterVolume() { return s_MasterVolume; }
 
 void AudioEngine::SetBusVolume(Bus bus, float volume) {
     const int b = std::clamp((int)bus, 0, kBusCount - 1);

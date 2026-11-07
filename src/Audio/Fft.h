@@ -41,8 +41,6 @@ public:
         m_Z.resize(2 * (size_t)m_M);
     }
 
-    int Size() const { return m_N; }
-    int Bins() const { return m_M + 1; }
 
     void Forward(const float* in, float* out) {
         const int M = m_M;
