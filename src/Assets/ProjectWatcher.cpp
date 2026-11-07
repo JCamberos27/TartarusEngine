@@ -1,4 +1,5 @@
 #include "ProjectWatcher.h"
+#include "AssetDatabase.h"
 #include "Log.h"
 
 #include <algorithm>
@@ -44,13 +45,7 @@ HANDLE g_StopEvent = nullptr;
 HANDLE g_ReadyEvent = nullptr; // set once the first directory read is armed (Start waits on it)
 #endif
 
-std::string Key(const std::string& p) {
-    std::string k = fs::path(p).lexically_normal().generic_string();
-#ifdef _WIN32
-    for (char& c : k) c = (char)std::tolower((unsigned char)c);
-#endif
-    return k;
-}
+std::string Key(const std::string& p) { return AssetDatabase::PathKey(p); }
 
 // Paths the editor itself churns (caches, captures, layouts) and transient files are never news.
 bool Ignored(const fs::path& rel) {

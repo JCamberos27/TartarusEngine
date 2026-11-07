@@ -120,13 +120,8 @@ void ApplyMetaBrowserData(const json& j, const std::string& path,
 
 // --- #132: path matching shared by the loaders and the project-sync entry points ----------------
 namespace {
-bool SamePath(const std::string& a, const std::string& b) {
-    return !a.empty() && !b.empty() && AssetDatabase::PathKey(a) == AssetDatabase::PathKey(b);
-}
-bool UnderPath(const std::string& path, const std::string& dir) {
-    const std::string p = AssetDatabase::PathKey(path), d = AssetDatabase::PathKey(dir);
-    return p.size() > d.size() && p.compare(0, d.size(), d) == 0 && p[d.size()] == '/';
-}
+using AssetDatabase::SamePath;
+bool UnderPath(const std::string& path, const std::string& dir) { return AssetDatabase::IsUnderPath(path, dir); }
 template <typename Map>
 void RekeyMap(Map& m, const std::string& oldPath, const std::string& newPath) {
     for (auto it = m.begin(); it != m.end(); ++it) {
