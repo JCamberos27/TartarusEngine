@@ -1318,11 +1318,8 @@ bool PoseIsFinite(const PxTransform& p) {
            ok(p.q.x) && ok(p.q.y) && ok(p.q.z) && ok(p.q.w);
 }
 
-namespace {std::uint64_t g_EventSequence=0;}
-std::uint64_t EventSequence() {return g_EventSequence;}
 std::uint64_t SimulationGeneration() {return g_SimulationGeneration;}
 void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFixedStep) {
-    ++g_EventSequence;
     if (!g_State || !g_State->scene) return;
     // dt arrives time-scaled (Time::DeltaTime); the debug-draw history fades in real time.
     const float rawDt = Time::UnscaledDeltaTime();
@@ -1485,10 +1482,8 @@ bool PolicyRejects(const PxRigidActor* actor, bool solidOnly = false) {
 // Drop the Player capsule from scene queries — a "from the player" ray/sweep almost never
 // wants to hit itself, and its shape sits right on the query origin (#185 hardening).
 struct ExcludeActorFilter : PxQueryFilterCallback {
-    const PxRigidActor* skip = nullptr;
     PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape*, const PxRigidActor* actor,
                                    PxHitFlags&) override {
-        if (actor && actor == skip) return PxQueryHitType::eNONE;
         return PolicyRejects(actor) ? PxQueryHitType::eNONE : PxQueryHitType::eBLOCK;
     }
     PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
@@ -1980,7 +1975,6 @@ namespace {
 // (simulation filter word0, stamped at build time) isn't in the mask. `touchMode` turns every
 // accepted hit into a touch, for the "all hits" queries.
 struct LayerQueryFilter : PxQueryFilterCallback {
-    const PxRigidActor* skip = nullptr;
     PxU32 mask = 0xFFFFFFFFu;
     bool triggers = true;
     bool touchMode = false;
@@ -1988,7 +1982,6 @@ struct LayerQueryFilter : PxQueryFilterCallback {
     bool skipStartInside = false; // ignore a shape the ray starts inside (PhysX reports it at distance 0, normal -dir)
     PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
                                    PxHitFlags&) override {
-        if (actor && actor == skip) return PxQueryHitType::eNONE;
         if (PolicyRejects(actor, skipSimulated)) return PxQueryHitType::eNONE;
         if (skipSimulated && actor) {
             if (const PxRigidDynamic* dyn = actor->is<PxRigidDynamic>();
@@ -3851,7 +3844,6 @@ int CopyDebugLines(float* out, int maxLines) {
 
 void StepOneSubstep(World& world) {
     if (!g_State || !g_State->scene) return;
-    ++g_EventSequence;
     g_State->triggerEvents.clear();
     g_State->enteredThisFrame.clear();
     g_State->contactEvents.clear();
@@ -4076,23 +4068,6 @@ bool GetActorPosition(unsigned entity, float out[3]) {
     const PxVec3 p = a->getGlobalPose().p;
     out[0] = p.x; out[1] = p.y; out[2] = p.z;
     return true;
-}
-
-// --- Debug (#185 PR 12) --------------------------------------------------------------
-
-int CopyContactPoints(float* outXYZ, int maxPoints) {
-    if (!g_State) return 0;
-    int n = 0;
-    for (const ContactEvent& ev : g_State->contactEvents) {
-        if (ev.Kind == ContactEvent::Exit) continue;
-        if (outXYZ && n < maxPoints) {
-            outXYZ[n * 3 + 0] = ev.Point[0];
-            outXYZ[n * 3 + 1] = ev.Point[1];
-            outXYZ[n * 3 + 2] = ev.Point[2];
-        }
-        ++n;
-    }
-    return n;
 }
 
 } // namespace PhysicsWorld

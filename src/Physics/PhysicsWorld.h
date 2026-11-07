@@ -316,7 +316,6 @@ bool GetBodyState(unsigned entity, BodyState& out);
 
 // This frame's solid-contact transitions; same copy/return convention as GetTriggerEvents.
 int GetContactEvents(ContactEvent* out, int maxEvents);
-std::uint64_t EventSequence(); // changes once per Step, including a paused step that clears events
 std::uint64_t SimulationGeneration(); // changes when the active simulation is replaced
 
 // --- Shape queries (#185 PR 9) --------------------------------------------------------
@@ -453,9 +452,5 @@ bool SweepBody(unsigned entity, const float from[3], const float dir[3], float d
 // The bounding radius of `entity`'s collision shape about its origin (0 if unknown).
 float BodyRadius(unsigned entity);
 
-// --- Debug (#185 PR 12) -------------------------------------------------------------
-// Copy up to `maxPoints` world-space contact points from this frame's events (3 floats each)
-// into `outXYZ`; returns the count written. For the collider gizmo's contact markers.
-int CopyContactPoints(float* outXYZ, int maxPoints);
 
 } // namespace PhysicsWorld

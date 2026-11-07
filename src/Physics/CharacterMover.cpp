@@ -132,7 +132,8 @@ glm::vec3 ClipToPlanes(const glm::vec3& v, const glm::vec3* normals, int count) 
     return out;
 }
 
-MoverFloor FindFloor(IMoverWorld& world, const MoverCapsule& cap, const glm::vec3& feet, float probe, const MoverSettings& s) {
+// What's under the capsule at `feet`, looked for `probe` down.
+static MoverFloor FindFloor(IMoverWorld& world, const MoverCapsule& cap, const glm::vec3& feet, float probe, const MoverSettings& s) {
     MoverFloor f;
     // The capsule itself (a wall alongside is a skin away, never met going straight down): the gap found is the one the feet
     // can be snapped across.

@@ -97,7 +97,4 @@ MoverResult Move(IMoverWorld& world, const MoverCapsule& cap, const glm::vec3& f
 // stop it. Never turns `v` back on itself.
 glm::vec3 ClipToPlanes(const glm::vec3& v, const glm::vec3* normals, int count);
 
-// What's under the capsule at `feet`, looked for `probe` down.
-MoverFloor FindFloor(IMoverWorld& world, const MoverCapsule& cap, const glm::vec3& feet, float probe, const MoverSettings& settings);
-
 } // namespace CharacterMover
