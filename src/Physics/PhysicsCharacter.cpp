@@ -407,9 +407,8 @@ namespace PhysicsWorld {
 namespace {
 // --- NPC characters --------------------------------------------------------------------
 NpcCharacter* NpcSlot(CharacterId id) {
-    if (!g_State || id < 0 || id >= (int)g_State->npcs.size()) return nullptr;
-    NpcCharacter& n = g_State->npcs[(size_t)id];
-    return n.Used() ? &n : nullptr;
+    NpcCharacter* n = g_State ? HandleTarget(g_State->npcs, id) : nullptr;
+    return n && n->Used() ? n : nullptr;
 }
 CharacterBody* NpcBody(CharacterId id) {
     const NpcCharacter* n = NpcSlot(id);
@@ -428,10 +427,12 @@ PxRigidActor* NpcActor(CharacterId id) {
 namespace PhysicsWorld {
 namespace {
 CharacterId AddNpcSlot(NpcCharacter&& n) {
-    for (size_t i = 0; i < g_State->npcs.size(); ++i)
-        if (!g_State->npcs[i].Used()) { g_State->npcs[i] = std::move(n); return (CharacterId)i; }
-    g_State->npcs.push_back(std::move(n));
-    return (CharacterId)g_State->npcs.size() - 1;
+    const int slot = AcquireSlot(g_State->npcs, [](const NpcCharacter& x) { return !x.Used(); });
+    if (slot < 0) return kNoCharacter;
+    NpcCharacter& dst = g_State->npcs[(size_t)slot];
+    n.Gen = NextGen(dst.Gen);
+    dst = std::move(n);
+    return MakeHandle((size_t)slot, dst.Gen);
 }
 } // namespace
 } // namespace PhysicsWorld
@@ -444,8 +445,11 @@ CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalf
     n.body = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]), entity,
                       PxFilterData(1u, 0u, 0u, 0u)); // the Default layer
     if (!n.body) return kNoCharacter; // (MakeBody logged why)
-    g_State->npcActors.insert(n.body->Actor);
-    return AddNpcSlot(std::move(n));
+    PxRigidDynamic* actor = n.body->Actor;
+    const CharacterId id = AddNpcSlot(std::move(n));
+    if (id == kNoCharacter) { Log::Error("PhysX: out of NPC character slots."); actor->release(); return kNoCharacter; }
+    g_State->npcActors.insert(actor);
+    return id;
 }
 
 void DestroyNpcCharacter(CharacterId id) {
@@ -456,8 +460,12 @@ void DestroyNpcCharacter(CharacterId id) {
     // The Player standing on this soldier's capsule (a kinematic: his ground, MoveCharacter carries him with it) lets go of it
     // first - released, the next move read the freed actor.
     if (a && g_State->playerGround == a) g_State->playerGround = nullptr;
+    ForgetHitboxCapsule(*g_State, a);
+    ReleaseRagdollAttachments(*g_State, a);
     if (n->body) n->body->Actor->release();
+    const std::uint16_t gen = n->Gen;
     *n = NpcCharacter{};
+    n->Gen = gen;
 }
 
 bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
@@ -468,7 +476,7 @@ bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
     for (PxShape* sh : shapes) {
         PxFilterData f = sh->getSimulationFilterData();
         // As IgnoreRagdollParts: the ignorer slot of the ragdoll's own numbering, every part's bit in the mask.
-        f.word2 = on ? (((PxU32)ragdoll + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
+        f.word2 = on ? (((PxU32)HandleSlot(ragdoll) + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
         f.word3 = on ? 0xFFFFFFFFu : 0u;
         sh->setSimulationFilterData(f);
     }
@@ -478,8 +486,8 @@ bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
 
 void SetNpcPassesRagdolls(CharacterId id, bool on) {
     PxRigidActor* a = NpcActor(id);
-    if (!a || g_State->npcs[(size_t)id].passRagdolls == on) return;
-    g_State->npcs[(size_t)id].passRagdolls = on;
+    if (!a || NpcSlot(id)->passRagdolls == on) return;
+    NpcSlot(id)->passRagdolls = on;
     std::vector<PxShape*> shapes = ShapesOf(*a);
     for (PxShape* sh : shapes) {
         PxFilterData f = sh->getSimulationFilterData();
@@ -538,14 +546,14 @@ bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
 bool NpcFitsAt(CharacterId id, float cylinderHalfHeight) {
     if (!NpcSlot(id) || cylinderHalfHeight <= 0.0f) return false;
     const CharacterBody* b = NpcBody(id);
-    ScopedQueryPolicy self(g_State->npcs[(size_t)id].entity, /*hitPlayer=*/true);
+    ScopedQueryPolicy self(NpcSlot(id)->entity, /*hitPlayer=*/true);
     return CapsuleFitsAt(b->Feet, b->Cap.Radius, cylinderHalfHeight);
 }
 
 CharacterId NpcCharacterOf(unsigned entity) {
     if (!g_State) return kNoCharacter;
     for (size_t i = 0; i < g_State->npcs.size(); ++i)
-        if (g_State->npcs[i].Used() && g_State->npcs[i].entity == entity) return (CharacterId)i;
+        if (g_State->npcs[i].Used() && g_State->npcs[i].entity == entity) return MakeHandle(i, g_State->npcs[i].Gen);
     return kNoCharacter;
 }
 

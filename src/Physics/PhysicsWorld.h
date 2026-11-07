@@ -102,8 +102,11 @@ bool CharacterFitsAt(float cylinderHalfHeight);
 // --- NPC characters ------------------------------------------------------------------
 // More kinematic capsules, one per AI character, beside the Player's. Each is tagged with its
 // owner entity (so shots that hit it report that entity) and sits on the Default layer. They
-// don't ride platforms or fire the Player's trigger overlap. Ids are small ints, -1 = none;
+// don't ride platforms or fire the Player's trigger overlap. Ids are ints, -1 = none;
 // all released with the world.
+// Character, ragdoll and hitbox-set ids are generational: a destroyed one's slot is reused under a new id, so a
+// stale id finds nothing. HandleIndex gives the slot: small and stable for the object's life (a per-body seed).
+inline int HandleIndex(int id) { return id < 0 ? -1 : (id & 0xFFFF); }
 using CharacterId = int;
 constexpr CharacterId kNoCharacter = -1;
 CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalfHeight, const float footPos[3]);

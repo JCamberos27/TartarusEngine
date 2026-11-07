@@ -116,6 +116,37 @@ constexpr PxU32 kPassBodies = 1u << 29;
 // A ragdoll's own part (word2: its id + 1, the part 0..31 above), not an object told to ignore one (slot kRagdollIgnorerSlot).
 constexpr PxU32 kRagdollIgnorerSlot = 32u;
 inline bool IsRagdollPart(const PxFilterData& f) { return (f.word2 & 0xFFFFu) != 0u && ((f.word2 >> 16) & 63u) < kRagdollIgnorerSlot; }
+// An object told to ignore the ragdoll in `slot` (IgnoreRagdollParts / IgnoreRagdollForNpc).
+inline bool IgnoresRagdollSlot(const PxFilterData& f, int slot) {
+    return (f.word2 & 0xFFFFu) == (PxU32)slot + 1u && ((f.word2 >> 16) & 63u) == kRagdollIgnorerSlot;
+}
+
+// Ragdoll, hitbox-set and NPC character ids handed out by the API: the slot in the low 16 bits, the slot's generation above.
+// A freed slot is reused with the next generation, so a stale id held past its Destroy finds nothing instead of the
+// slot's next owner. Generations run 1..0x7FFF (the id stays positive; -1 is still "none").
+constexpr int kMaxHandleSlots = 0xFFFE; // (a ragdoll's slot + 1 must fit word2's low 16 bits)
+inline int MakeHandle(size_t slot, std::uint16_t gen) { return (int)(((unsigned)gen << 16) | (unsigned)slot); }
+inline int HandleSlot(int handle) { return HandleIndex(handle); }
+inline std::uint16_t HandleGen(int handle) { return (std::uint16_t)(((unsigned)handle >> 16) & 0x7FFFu); }
+inline std::uint16_t NextGen(std::uint16_t gen) { return gen >= 0x7FFF ? (std::uint16_t)1 : (std::uint16_t)(gen + 1); }
+// The slot `handle` names in `v` if it is that slot's current generation (in use or not), else null.
+template <class T> T* HandleTarget(std::vector<T>& v, int handle) {
+    if (handle < 0) return nullptr;
+    const int slot = HandleSlot(handle);
+    if (slot >= (int)v.size() || v[(size_t)slot].Gen != HandleGen(handle)) return nullptr;
+    return &v[(size_t)slot];
+}
+// A free slot (by `isFree`) or a new one, its generation advanced; -1 when every slot is taken.
+template <class T, class F> int AcquireSlot(std::vector<T>& v, F isFree) {
+    size_t slot = v.size();
+    for (size_t i = 0; i < v.size(); ++i)
+        if (isFree(v[i])) { slot = i; break; }
+    if (slot == v.size()) {
+        if ((int)slot >= kMaxHandleSlots) return -1;
+        v.emplace_back();
+    }
+    return (int)slot;
+}
 
 // #167 - everything that doesn't depend on the scene lives for the whole editor session: the
 // foundation, PxPhysics, the CPU dispatcher, materials and the cooked-mesh cache. Before, all of
@@ -174,6 +205,7 @@ struct PhysicsState {
     // for the query filters that skip characters.
     struct NpcCharacter {
         std::uint32_t entity = 0xFFFFFFFFu;
+        std::uint16_t Gen = 0; // the slot's generation (see MakeHandle); kept when the slot is freed
         bool passRagdolls = false;
         std::unique_ptr<CharacterBody> body;
         bool Used() const { return body != nullptr; }
@@ -246,18 +278,25 @@ struct PhysicsState {
         // A hit (RagdollImpulse), the Player walking into it or anything attached to it puts the articulation back.
         PxRigidStatic* Frozen = nullptr;
         float Rest = 0.0f; // seconds asleep (unfrozen)
+        std::uint16_t Gen = 0; // the slot's generation (see MakeHandle); kept when the slot is freed
     };
     std::vector<Ragdoll> ragdolls;
     std::vector<int> thawRequests; // frozen ragdolls the Player walked into (the Player's character hit handling): thawed before the next step
     // Per-bone hitboxes of living NPCs (see CreateNpcHitboxes): their kinematic actors, the capsule each shadows while
-    // active. hitboxActors: every hitbox actor, for the query filters; hitboxedCapsules: the capsules currently shadowed.
-    struct Hitboxes { std::vector<PxRigidDynamic*> Bodies; const PxRigidActor* Capsule = nullptr; bool Active = false; };
+    // active. hitboxActors: every hitbox actor, for the query filters; hitboxedCapsules: the capsules currently shadowed, each
+    // with the number of active sets shadowing it (a soldier's old set and its replacement can overlap).
+    struct Hitboxes {
+        std::vector<PxRigidDynamic*> Bodies;
+        const PxRigidActor* Capsule = nullptr;
+        bool Active = false;
+        std::uint16_t Gen = 0; // the slot's generation (see MakeHandle); kept when the slot is freed
+    };
     std::vector<Hitboxes> hitboxes;
     std::unordered_set<const PxRigidActor*> hitboxActors;
     // Of those, a creature body's (CreateBodyHitboxes: a spider's, with no capsule): for shots only - they never push or
     // block a character's mover.
     std::unordered_set<const PxRigidActor*> bodyHitboxActors;
-    std::unordered_set<const PxRigidActor*> hitboxedCapsules;
+    std::unordered_map<const PxRigidActor*, int> hitboxedCapsules;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
     // Dynamic bodies with at least one joint: solved with more iterations, and grabbed gently.
@@ -458,9 +497,15 @@ int OverlapFiltered(const PxGeometry& geom, const PxTransform& pose, const Query
 // Once a frame: corpses asleep a while freeze; the ones walked into thaw.
 void FreezeRestingRagdolls(PhysicsState& s, float dt);
 
-// The live ragdoll `id` (a valid index whose articulation exists), or null. The no-state overload looks in g_State.
+// The live ragdoll `id` (an id of the slot's current generation whose articulation exists), or null. The no-state overload
+// looks in g_State. RagdollInSlot takes a bare slot (word2's numbering), not an id.
 PhysicsState::Ragdoll* RagdollAt(PhysicsState& s, int id);
 PhysicsState::Ragdoll* RagdollAt(int id);
+PhysicsState::Ragdoll* RagdollInSlot(PhysicsState& s, int slot);
+// Every attachment joint (AttachToRagdollPart) holding `actor`, released: the actor is going away.
+void ReleaseRagdollAttachments(PhysicsState& s, const PxRigidActor* actor);
+// The shadow `capsule` gets from its hitbox sets dropped (the capsule itself is going away).
+void ForgetHitboxCapsule(PhysicsState& s, const PxRigidActor* capsule);
 bool ValidRagdoll(int ragdoll); // RagdollAt(ragdoll) != nullptr
 
 // Before every substep: the extra gravity, and pairs that overlapped at build let collide once they are apart.

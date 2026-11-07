@@ -289,6 +289,7 @@ void RemoveActor(PhysicsState& s, std::uint32_t id) {
         s.staticByEntity.erase(st);
     }
     if (!actor) return;
+    ReleaseRagdollAttachments(s, actor); // a gun held in a dead hand, the gun gone
     for (PxJoint*& j : s.joints) {
         if (!j) continue;
         PxRigidActor *a0 = nullptr, *a1 = nullptr;

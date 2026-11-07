@@ -1404,6 +1404,30 @@ void TestNpcBodyParts() {
     float p[3], q[4];
     CHECK(PhysicsWorld::GetRagdollPart(ragdoll, 5, p, q) && std::isfinite(p[0]) && std::isfinite(p[1]) && p[1] < parts[5].Position[1]);
     PhysicsWorld::DestroyRagdoll(ragdoll);
+    // Ids are generational: a freed slot's next owner gets a new id, and the stale one finds nothing (nor destroys the new one).
+    const int ragdoll2 = PhysicsWorld::CreateRagdoll(kEntity, parts, NpcRagdoll::kParts);
+    CHECK(ragdoll2 >= 0 && ragdoll2 != ragdoll);
+    CHECK(!PhysicsWorld::GetRagdollPart(ragdoll, 5, p, q));
+    PhysicsWorld::DestroyRagdoll(ragdoll);
+    CHECK(PhysicsWorld::GetRagdollPart(ragdoll2, 5, p, q));
+    PhysicsWorld::DestroyRagdoll(ragdoll2);
+    // (cct and boxes were destroyed above.) Their slots' next owners get new ids; the stale ones touch nothing.
+    const PhysicsWorld::CharacterId cct2 = PhysicsWorld::CreateNpcCharacter(kEntity, 0.3f, 0.6f, foot);
+    CHECK(cct2 != PhysicsWorld::kNoCharacter && cct2 != cct);
+    float f3[3];
+    CHECK(!PhysicsWorld::GetNpcCapsule(cct, f3, nullptr, nullptr) && PhysicsWorld::GetNpcCapsule(cct2, f3, nullptr, nullptr));
+    const int boxes2 = PhysicsWorld::CreateNpcHitboxes(cct2, caps, NpcRagdoll::kParts);
+    CHECK(boxes2 >= 0 && boxes2 != boxes);
+    PhysicsWorld::SetNpcHitboxesActive(boxes, false); // stale: boxes2 stays active
+    PhysicsWorld::DestroyNpcHitboxes(boxes);
+    settle();
+    {
+        const float o[3] = {-3.0f, caps[2].Position[1], caps[2].Position[2]}; // (moved to z = 1 above)
+        PhysicsWorld::BodyPartHit part;
+        CHECK(PhysicsWorld::RaycastBodyParts(o, along, 20.0f, part) && part.Kind == 1 && part.Part == 2);
+    }
+    PhysicsWorld::DestroyNpcHitboxes(boxes2);
+    PhysicsWorld::DestroyNpcCharacter(cct2);
     PhysicsWorld::Destroy(); // (the core stays up for the next test)
 }
 

@@ -409,7 +409,8 @@ void NpcRagdollMotor::Begin(int id, const PhysicsWorld::RagdollPart* parts, cons
         if (glm::length(fwdFlat) > 1e-4f) m_Fall.Fwd = glm::dot(d, glm::normalize(fwdFlat));
         if (glm::length(leftFlat) > 1e-4f) m_Fall.Lat = glm::dot(d, glm::normalize(leftFlat));
     }
-    m_Fall.Bias = (float)(((unsigned)id * 2654435761u >> 12) & 1023u) / 511.5f - 1.0f; // this body's own lean, always the same for the same body
+    // This body's own lean, always the same for the same body (seeded by its slot, not its generational id).
+    m_Fall.Bias = (float)(((unsigned)PhysicsWorld::HandleIndex(id) * 2654435761u >> 12) & 1023u) / 511.5f - 1.0f;
     m_Fall.Head = IsHeadHit(hitPart);
     m_Fall.WeakLeg = weakLeg >= 0 && weakLeg <= 1 ? weakLeg : -1;
     // A torso hit: the hand on the struck side goes to the wound (a round that entered the front reaches to the front).
@@ -545,7 +546,7 @@ bool NpcRagdollMotor::TipPropped() {
         glm::vec3 lean(dir.x, 0.0f, dir.z);
         const float l = glm::length(lean);
         if (l < 0.05f) { // straight up: either way
-            const float a = (float)((m_Id * 7 + part * 13 + m_Tips * 5) % 16) * 0.3927f;
+            const float a = (float)((PhysicsWorld::HandleIndex(m_Id) * 7 + part * 13 + m_Tips * 5) % 16) * 0.3927f;
             lean = glm::vec3(std::cos(a), 0.0f, std::sin(a));
         } else {
             lean /= l;
