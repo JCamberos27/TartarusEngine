@@ -95,6 +95,9 @@ namespace InstanceBuffer {
 // The per-frame instance transforms, two mat4s per instance (the transform, then its normal matrix), bound at 27.
 // Each Upload re-specifies the buffer (the draws before it keep reading what they were issued with).
 std::vector<glm::mat4>& Staging();
+// Appends one instance for a depth pass: its transform, then an identity in the normal-matrix slot (a depth pass reads
+// no normal matrix, but the shader's layout is still two mat4s per instance).
+void Append(std::vector<glm::mat4>& staging, const glm::mat4& xform);
 void Upload();
 }
 

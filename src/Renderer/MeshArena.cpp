@@ -66,7 +66,6 @@ struct Page {
     FreeList Verts, Indices;
     bool Dedicated = false; // one oversized mesh
 };
-std::vector<std::unique_ptr<Page>> g_Pages;
 
 // Creates a page's vertex and index storage. A page is tens of MiB, so the allocation can fail; on failure
 // the buffers are deleted again and false is returned.
@@ -84,17 +83,104 @@ bool CreatePageBuffers(Page& p, std::uint32_t verts, std::uint32_t indices) {
     return false;
 }
 
-bool NewPage(std::uint32_t verts, std::uint32_t indices, bool dedicated) {
-    auto p = std::make_unique<Page>();
-    if (!CreatePageBuffers(*p, verts, indices)) return false;
-    glCreateVertexArrays(1, &p->Vao);
-    ConfigureModelVao(p->Vao, p->Vbo, p->Ebo);
-    p->Verts.Reset(verts);
-    p->Indices.Reset(indices);
-    p->Dedicated = dedicated;
-    g_Pages.push_back(std::move(p));
-    return true;
-}
+// A list of pages with first-fit suballocation; used once for the static pages (which carry a VAO each) and once
+// for the skin pages (plain buffers).
+class PagePool {
+public:
+    explicit PagePool(bool withVao) : m_WithVao(withVao) {}
+
+    // Returns false if the page's buffer storage could not be allocated.
+    bool NewPage(std::uint32_t verts, std::uint32_t indices, bool dedicated) {
+        auto p = std::make_unique<Page>();
+        if (!CreatePageBuffers(*p, verts, indices)) return false;
+        if (m_WithVao) {
+            glCreateVertexArrays(1, &p->Vao);
+            ConfigureModelVao(p->Vao, p->Vbo, p->Ebo);
+        }
+        p->Verts.Reset(verts);
+        p->Indices.Reset(indices);
+        p->Dedicated = dedicated;
+        m_Pages.push_back(std::move(p));
+        return true;
+    }
+
+    // Takes from one page; if the index take fails, the vertex take is given back.
+    static bool TakeFrom(Page& p, std::uint32_t verts, std::uint32_t indices, std::uint32_t& vOff, std::uint32_t& iOff) {
+        vOff = p.Verts.Take(verts);
+        if (vOff == ~0u) return false;
+        iOff = p.Indices.Take(indices);
+        if (iOff == ~0u) { p.Verts.Give(vOff, verts); return false; }
+        return true;
+    }
+
+    // First-fit over the shared (non-dedicated) pages. Returns the page index, or ~0u if none has room.
+    std::uint32_t TryTake(std::uint32_t verts, std::uint32_t indices, std::uint32_t& vOff, std::uint32_t& iOff) {
+        for (std::uint32_t k = 0; k < (std::uint32_t)m_Pages.size(); ++k) {
+            Page& p = *m_Pages[k];
+            if (p.Dedicated || !p.Vbo) continue;
+            if (TakeFrom(p, verts, indices, vOff, iOff)) return k;
+        }
+        return ~0u;
+    }
+
+    // Finds room for a mesh: a shared page if it fits one, else a new page (dedicated when the mesh is bigger than a
+    // standard page). Returns the page index, or ~0u if a new page could not be created.
+    std::uint32_t Reserve(std::uint32_t verts, std::uint32_t indices, std::uint32_t& vOff, std::uint32_t& iOff) {
+        const bool big = verts > kPageVertices || indices > kPageIndices;
+        std::uint32_t page = big ? ~0u : TryTake(verts, indices, vOff, iOff);
+        if (page != ~0u) return page;
+        if (!NewPage(big ? verts : kPageVertices, big ? indices : kPageIndices, big)) return ~0u;
+        page = (std::uint32_t)m_Pages.size() - 1;
+        TakeFrom(*m_Pages[page], verts, indices, vOff, iOff);
+        return page;
+    }
+
+    // Returns a range to its page (page1 is 1-based). A dedicated page's one mesh is gone: its memory goes back (the
+    // slot stays, so page numbers don't shift).
+    void Give(std::uint32_t page1, std::uint32_t vOff, std::uint32_t vCount, std::uint32_t iOff, std::uint32_t iCount) {
+        if (!page1 || page1 > m_Pages.size()) return;
+        Page& p = *m_Pages[page1 - 1];
+        if (p.Dedicated) {
+            glDeleteBuffers(1, &p.Vbo);
+            glDeleteBuffers(1, &p.Ebo);
+            if (m_WithVao) glDeleteVertexArrays(1, &p.Vao);
+            p.Vao = p.Vbo = p.Ebo = 0;
+            p.Verts.Reset(0);
+            p.Indices.Reset(0);
+            return;
+        }
+        p.Verts.Give(vOff, vCount);
+        p.Indices.Give(iOff, iCount);
+    }
+
+    // Writes the mesh into its taken range, from memory or from a source buffer.
+    void Upload(std::uint32_t page, std::uint32_t v, std::uint32_t i, const ModelVertex* vertices, std::uint32_t vertexCount,
+                const std::uint32_t* indices, std::uint32_t indexCount, unsigned srcBuffer, std::size_t srcVertexOffset,
+                std::size_t srcIndexOffset) const {
+        const Page& p = *m_Pages[page];
+        if (srcBuffer) {
+            glCopyNamedBufferSubData(srcBuffer, p.Vbo, (GLintptr)srcVertexOffset, (GLintptr)v * (GLintptr)sizeof(ModelVertex),
+                                     (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex));
+            glCopyNamedBufferSubData(srcBuffer, p.Ebo, (GLintptr)srcIndexOffset, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4);
+        } else {
+            glNamedBufferSubData(p.Vbo, (GLintptr)v * (GLintptr)sizeof(ModelVertex), (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex),
+                                 vertices);
+            glNamedBufferSubData(p.Ebo, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4, indices);
+        }
+    }
+
+    unsigned Vao(std::uint32_t page) const { return page && page <= m_Pages.size() ? m_Pages[page - 1]->Vao : 0u; }
+    unsigned Vbo(std::uint32_t page) const { return page && page <= m_Pages.size() ? m_Pages[page - 1]->Vbo : 0u; }
+    unsigned Ebo(std::uint32_t page) const { return page && page <= m_Pages.size() ? m_Pages[page - 1]->Ebo : 0u; }
+    const std::vector<std::unique_ptr<Page>>& Pages() const { return m_Pages; }
+
+private:
+    bool m_WithVao;
+    std::vector<std::unique_ptr<Page>> m_Pages;
+};
+
+PagePool g_Static(true);
+PagePool g_Skin(false);
 } // namespace
 
 bool Enabled() {
@@ -105,64 +191,22 @@ bool Enabled() {
 bool Allocate(const ModelVertex* vertices, std::uint32_t vertexCount, const std::uint32_t* indices, std::uint32_t indexCount,
               Range& out, unsigned srcBuffer, std::size_t srcVertexOffset, std::size_t srcIndexOffset) {
     if (!Enabled() || !vertexCount || !indexCount) return false;
-    const bool big = vertexCount > kPageVertices || indexCount > kPageIndices;
-    std::uint32_t page = ~0u, v = ~0u, i = ~0u;
-    if (!big) {
-        for (std::uint32_t k = 0; k < (std::uint32_t)g_Pages.size() && page == ~0u; ++k) {
-            Page& p = *g_Pages[k];
-            if (p.Dedicated || !p.Vao) continue;
-            v = p.Verts.Take(vertexCount);
-            if (v == ~0u) continue;
-            i = p.Indices.Take(indexCount);
-            if (i == ~0u) { p.Verts.Give(v, vertexCount); continue; }
-            page = k;
-        }
-    }
-    if (page == ~0u) {
-        if (!NewPage(big ? vertexCount : kPageVertices, big ? indexCount : kPageIndices, big)) return false;
-        page = (std::uint32_t)g_Pages.size() - 1;
-        v = g_Pages[page]->Verts.Take(vertexCount);
-        i = g_Pages[page]->Indices.Take(indexCount);
-    }
-    const Page& p = *g_Pages[page];
-    if (srcBuffer) {
-        glCopyNamedBufferSubData(srcBuffer, p.Vbo, (GLintptr)srcVertexOffset, (GLintptr)v * (GLintptr)sizeof(ModelVertex),
-                                 (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex));
-        glCopyNamedBufferSubData(srcBuffer, p.Ebo, (GLintptr)srcIndexOffset, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4);
-    } else {
-        glNamedBufferSubData(p.Vbo, (GLintptr)v * (GLintptr)sizeof(ModelVertex), (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex),
-                             vertices);
-        glNamedBufferSubData(p.Ebo, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4, indices);
-    }
+    std::uint32_t v = ~0u, i = ~0u;
+    const std::uint32_t page = g_Static.Reserve(vertexCount, indexCount, v, i);
+    if (page == ~0u) return false;
+    g_Static.Upload(page, v, i, vertices, vertexCount, indices, indexCount, srcBuffer, srcVertexOffset, srcIndexOffset);
     out = {page + 1, v, i, vertexCount, indexCount};
     return true;
 }
 
-void Free(const Range& r) {
-    if (!r.Page || r.Page > g_Pages.size()) return;
-    Page& p = *g_Pages[r.Page - 1];
-    if (p.Dedicated) { // its one mesh is gone: give the memory back (the slot stays, so page numbers don't shift)
-        glDeleteBuffers(1, &p.Vbo);
-        glDeleteBuffers(1, &p.Ebo);
-        glDeleteVertexArrays(1, &p.Vao);
-        p.Vao = p.Vbo = p.Ebo = 0;
-        p.Verts.Reset(0);
-        p.Indices.Reset(0);
-        return;
-    }
-    p.Verts.Give(r.BaseVertex, r.VertexCount);
-    p.Indices.Give(r.FirstIndex, r.IndexCount);
-}
+void Free(const Range& r) { g_Static.Give(r.Page, r.BaseVertex, r.VertexCount, r.FirstIndex, r.IndexCount); }
 
-unsigned PageVao(std::uint32_t page) { return page && page <= g_Pages.size() ? g_Pages[page - 1]->Vao : 0u; }
-unsigned PageVbo(std::uint32_t page) { return page && page <= g_Pages.size() ? g_Pages[page - 1]->Vbo : 0u; }
-unsigned PageEbo(std::uint32_t page) { return page && page <= g_Pages.size() ? g_Pages[page - 1]->Ebo : 0u; }
+unsigned PageVao(std::uint32_t page) { return g_Static.Vao(page); }
+unsigned PageVbo(std::uint32_t page) { return g_Static.Vbo(page); }
+unsigned PageEbo(std::uint32_t page) { return g_Static.Ebo(page); }
 
 // --- Skinned pages ----------------------------------------------------------------------------------------------------
 namespace {
-constexpr std::uint32_t kSkinPageVertices = (64u << 20) / sizeof(ModelVertex);
-constexpr std::uint32_t kSkinPageIndices = (16u << 20) / sizeof(std::uint32_t);
-std::vector<std::unique_ptr<Page>> g_SkinPages;
 std::vector<GLuint> g_SpareVaos;
 constexpr int kVaoBatch = 256;
 
@@ -190,15 +234,6 @@ std::uint32_t SkinAlignVertices() {
     return n;
 }
 
-bool NewSkinPage(std::uint32_t verts, std::uint32_t indices, bool dedicated) {
-    auto p = std::make_unique<Page>();
-    if (!CreatePageBuffers(*p, verts, indices)) return false;
-    p->Verts.Reset(verts);
-    p->Indices.Reset(indices);
-    p->Dedicated = dedicated;
-    g_SkinPages.push_back(std::move(p));
-    return true;
-}
 } // namespace
 
 bool SkinEnabled() {
@@ -217,12 +252,12 @@ void WarmSkinned() {
     if (!SkinEnabled()) return;
     if (g_SpareVaos.size() < kVaoBatch / 4) RefillVaos();
     std::uint32_t freeVerts = 0, freeIndices = 0;
-    for (const auto& p : g_SkinPages) {
+    for (const auto& p : g_Skin.Pages()) {
         if (p->Dedicated || !p->Vbo) continue;
         freeVerts += p->Verts.FreeUnits();
         freeIndices += p->Indices.FreeUnits();
     }
-    if (freeVerts < kSkinPageVertices / 4 || freeIndices < kSkinPageIndices / 4) NewSkinPage(kSkinPageVertices, kSkinPageIndices, false);
+    if (freeVerts < kPageVertices / 4 || freeIndices < kPageIndices / 4) g_Skin.NewPage(kPageVertices, kPageIndices, false);
 }
 
 bool AllocateSkinned(const ModelVertex* vertices, std::uint32_t vertexCount, const std::uint32_t* indices, std::uint32_t indexCount,
@@ -230,55 +265,17 @@ bool AllocateSkinned(const ModelVertex* vertices, std::uint32_t vertexCount, con
     if (!SkinEnabled() || !vertexCount || !indexCount) return false;
     const std::uint32_t align = SkinAlignVertices();
     const std::uint32_t takeVerts = (vertexCount + align - 1) / align * align;
-    const bool big = takeVerts > kSkinPageVertices || indexCount > kSkinPageIndices;
-    std::uint32_t page = ~0u, v = ~0u, i = ~0u;
-    if (!big) {
-        for (std::uint32_t k = 0; k < (std::uint32_t)g_SkinPages.size() && page == ~0u; ++k) {
-            Page& p = *g_SkinPages[k];
-            if (p.Dedicated || !p.Vbo) continue;
-            v = p.Verts.Take(takeVerts);
-            if (v == ~0u) continue;
-            i = p.Indices.Take(indexCount);
-            if (i == ~0u) { p.Verts.Give(v, takeVerts); continue; }
-            page = k;
-        }
-    }
-    if (page == ~0u) {
-        if (!NewSkinPage(big ? takeVerts : kSkinPageVertices, big ? indexCount : kSkinPageIndices, big)) return false;
-        page = (std::uint32_t)g_SkinPages.size() - 1;
-        v = g_SkinPages[page]->Verts.Take(takeVerts);
-        i = g_SkinPages[page]->Indices.Take(indexCount);
-    }
-    const Page& p = *g_SkinPages[page];
-    if (srcBuffer) {
-        glCopyNamedBufferSubData(srcBuffer, p.Vbo, (GLintptr)srcVertexOffset, (GLintptr)v * (GLintptr)sizeof(ModelVertex),
-                                 (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex));
-        glCopyNamedBufferSubData(srcBuffer, p.Ebo, (GLintptr)srcIndexOffset, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4);
-    } else {
-        glNamedBufferSubData(p.Vbo, (GLintptr)v * (GLintptr)sizeof(ModelVertex), (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex),
-                             vertices);
-        glNamedBufferSubData(p.Ebo, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4, indices);
-    }
+    std::uint32_t v = ~0u, i = ~0u;
+    const std::uint32_t page = g_Skin.Reserve(takeVerts, indexCount, v, i);
+    if (page == ~0u) return false;
+    g_Skin.Upload(page, v, i, vertices, vertexCount, indices, indexCount, srcBuffer, srcVertexOffset, srcIndexOffset);
     out = {page + 1, v, i, takeVerts, indexCount};
     return true;
 }
 
-void FreeSkinned(const SkinRange& r) {
-    if (!r.Page || r.Page > g_SkinPages.size()) return;
-    Page& p = *g_SkinPages[r.Page - 1];
-    if (p.Dedicated) {
-        glDeleteBuffers(1, &p.Vbo);
-        glDeleteBuffers(1, &p.Ebo);
-        p.Vbo = p.Ebo = 0;
-        p.Verts.Reset(0);
-        p.Indices.Reset(0);
-        return;
-    }
-    p.Verts.Give(r.FirstVertex, r.VertexCount);
-    p.Indices.Give(r.FirstIndex, r.IndexCount);
-}
+void FreeSkinned(const SkinRange& r) { g_Skin.Give(r.Page, r.FirstVertex, r.VertexCount, r.FirstIndex, r.IndexCount); }
 
-unsigned SkinPageVbo(std::uint32_t page) { return page && page <= g_SkinPages.size() ? g_SkinPages[page - 1]->Vbo : 0u; }
-unsigned SkinPageEbo(std::uint32_t page) { return page && page <= g_SkinPages.size() ? g_SkinPages[page - 1]->Ebo : 0u; }
+unsigned SkinPageVbo(std::uint32_t page) { return g_Skin.Vbo(page); }
+unsigned SkinPageEbo(std::uint32_t page) { return g_Skin.Ebo(page); }
 
 } // namespace MeshArena
