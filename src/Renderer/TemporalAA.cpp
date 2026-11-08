@@ -2,6 +2,7 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLStateCache.h"
+#include "GLStateScope.h"
 #include "gl.h"
 
 #include <algorithm>
@@ -121,6 +122,12 @@ unsigned int TemporalAA::Resolve(unsigned int color, unsigned int depth, unsigne
     EnsureTargets(m_ReqW, m_ReqH);
 
     const int src = 1 - m_Cur, dst = m_Cur;
+    // Leave the caller's pipeline state as found (depth test/write, blend, cull, scissor, draw framebuffer).
+    GLStateScope stateScope;
+    const bool hadScissor = glIsEnabled(GL_SCISSOR_TEST) == GL_TRUE;
+    GLint prevDrawFbo = 0, prevReadFbo = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFbo);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
     glBindVertexArray(m_Vao);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
@@ -157,10 +164,11 @@ unsigned int TemporalAA::Resolve(unsigned int color, unsigned int depth, unsigne
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
     glBindVertexArray(0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
     for (int u = 0; u < 4; ++u) glBindTextureUnit(u, 0);
     GLStateCache::Invalidate(); // raw program / texture binds above
-    glEnable(GL_DEPTH_TEST);
+    if (hadScissor) glEnable(GL_SCISSOR_TEST);
 
     m_HistoryValid = true;
     m_Cur = src;

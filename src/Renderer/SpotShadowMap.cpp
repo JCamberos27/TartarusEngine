@@ -10,6 +10,8 @@
 SpotShadowMap::~SpotShadowMap() { Release(); }
 
 void SpotShadowMap::Release() {
+    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (live)", this), 0);
+    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (static cache)", this), 0);
     if (m_Fbo)        { glDeleteFramebuffers(1, &m_Fbo);    m_Fbo = 0; }
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
     if (m_StaticFbo)   { glDeleteFramebuffers(1, &m_StaticFbo);   m_StaticFbo = 0; }
@@ -43,8 +45,8 @@ void SpotShadowMap::Configure(int resolution, int layers) {
     glCreateFramebuffers(1, &m_Fbo);
     glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
 
-    GpuMemTrack::Set("SpotShadowMap (live)", (size_t)resolution * resolution * layers * 4);
-    GpuMemTrack::Set("SpotShadowMap (static cache)", 0);
+    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (live)", this), (size_t)resolution * resolution * layers * 4);
+    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (static cache)", this), 0);
     glCreateFramebuffers(1, &m_StaticFbo);
     glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
 
@@ -70,7 +72,7 @@ void SpotShadowMap::EnsureStatic() const {
     if (m_StaticArray) return;
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
     glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, m_Resolution, m_Resolution, m_Layers);
-    GpuMemTrack::Set("SpotShadowMap (static cache)", (size_t)m_Resolution * m_Resolution * m_Layers * 4);
+    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (static cache)", this), (size_t)m_Resolution * m_Resolution * m_Layers * 4);
 }
 
 void SpotShadowMap::BeginStatic(int i) const {

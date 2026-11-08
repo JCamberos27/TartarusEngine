@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <mutex>
 #include <string>
@@ -14,6 +15,11 @@ inline std::map<std::string, size_t>& Entries() { static auto* e = new std::map<
 inline void Set(const std::string& key, size_t bytes) {
     std::lock_guard<std::mutex> l(Mu());
     if (bytes == 0) Entries().erase(key); else Entries()[key] = bytes;
+}
+// A key unique to one owner (several instances of the same target type can be alive at once) and stable across
+// its resizes. Clear it with Set(key, 0) when the owner releases.
+inline std::string Key(const std::string& name, const void* owner) {
+    return name + " @" + std::to_string(reinterpret_cast<std::uintptr_t>(owner));
 }
 inline std::map<std::string, size_t> Snapshot() {
     std::lock_guard<std::mutex> l(Mu());

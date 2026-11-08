@@ -70,6 +70,7 @@ private:
     mutable unsigned int m_ResolveDepth = 0; // 0 until ResolvedDepthTexture() is first called
     mutable bool m_DepthRequested = false;   // sticky, so a later Resize()/Create() still provisions it
     int m_Width = 0, m_Height = 0, m_Samples = 0;
+    int m_FailW = 0, m_FailH = 0, m_FailSamples = 0; // the last request that came out incomplete (0 = none)
 
     void Release();
     void Create(int width, int height, int samples);

@@ -2,6 +2,7 @@
 #include "ModelVertex.h"
 #include "gl.h"
 #include "Core/Env.h"
+#include "Core/Log.h"
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
@@ -67,12 +68,25 @@ struct Page {
 };
 std::vector<std::unique_ptr<Page>> g_Pages;
 
+// Creates a page's vertex and index storage. A page is tens of MiB, so the allocation can fail; on failure
+// the buffers are deleted again and false is returned.
+bool CreatePageBuffers(Page& p, std::uint32_t verts, std::uint32_t indices) {
+    while (glGetError() != GL_NO_ERROR) {} // drain, so only these calls' errors are seen below
+    glCreateBuffers(1, &p.Vbo);
+    glCreateBuffers(1, &p.Ebo);
+    glNamedBufferStorage(p.Vbo, (GLsizeiptr)verts * (GLsizeiptr)sizeof(ModelVertex), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(p.Ebo, (GLsizeiptr)indices * (GLsizeiptr)sizeof(std::uint32_t), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    if (glGetError() == GL_NO_ERROR) return true;
+    glDeleteBuffers(1, &p.Vbo);
+    glDeleteBuffers(1, &p.Ebo);
+    p.Vbo = p.Ebo = 0;
+    Log::Error("MeshArena: out of GPU memory allocating a mesh page");
+    return false;
+}
+
 bool NewPage(std::uint32_t verts, std::uint32_t indices, bool dedicated) {
     auto p = std::make_unique<Page>();
-    glCreateBuffers(1, &p->Vbo);
-    glCreateBuffers(1, &p->Ebo);
-    glNamedBufferStorage(p->Vbo, (GLsizeiptr)verts * (GLsizeiptr)sizeof(ModelVertex), nullptr, GL_DYNAMIC_STORAGE_BIT);
-    glNamedBufferStorage(p->Ebo, (GLsizeiptr)indices * (GLsizeiptr)sizeof(std::uint32_t), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    if (!CreatePageBuffers(*p, verts, indices)) return false;
     glCreateVertexArrays(1, &p->Vao);
     ConfigureModelVao(p->Vao, p->Vbo, p->Ebo);
     p->Verts.Reset(verts);
@@ -178,10 +192,7 @@ std::uint32_t SkinAlignVertices() {
 
 bool NewSkinPage(std::uint32_t verts, std::uint32_t indices, bool dedicated) {
     auto p = std::make_unique<Page>();
-    glCreateBuffers(1, &p->Vbo);
-    glCreateBuffers(1, &p->Ebo);
-    glNamedBufferStorage(p->Vbo, (GLsizeiptr)verts * (GLsizeiptr)sizeof(ModelVertex), nullptr, GL_DYNAMIC_STORAGE_BIT);
-    glNamedBufferStorage(p->Ebo, (GLsizeiptr)indices * (GLsizeiptr)sizeof(std::uint32_t), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    if (!CreatePageBuffers(*p, verts, indices)) return false;
     p->Verts.Reset(verts);
     p->Indices.Reset(indices);
     p->Dedicated = dedicated;

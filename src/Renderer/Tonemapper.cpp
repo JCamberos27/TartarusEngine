@@ -3,6 +3,7 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLStateCache.h"
+#include "GLFramebufferCheck.h"
 #include "gl.h"
 
 #include <glm/gtc/type_ptr.hpp> // make_mat4 - #162 motion blur
@@ -88,6 +89,7 @@ unsigned int MakeColorTarget(unsigned int& fbo, int size, GLenum internalFormat,
     glGenFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    GLFramebufferCheck::Complete("Tonemapper luminance target", fbo, size, size);
     return tex;
 }
 

@@ -9,6 +9,8 @@
 #define GL_FALSE 0
 #define GL_DEPTH_TEST 0x0B71
 #define GL_DEPTH_WRITEMASK 0x0B72
+#define GL_COLOR_WRITEMASK 0x0C23
+#define GL_NO_ERROR 0
 #define GL_CULL_FACE 0x0B44
 #define GL_BACK 0x0405
 #define GL_FRONT 0x0404
@@ -330,6 +332,7 @@ void __stdcall glTexImage2D(GLenum target, GLint level, GLint internalformat, GL
 void __stdcall glDeleteTextures(GLsizei n, const GLuint* textures);
 void __stdcall glGetIntegerv(GLenum pname, GLint* data);
 GLboolean __stdcall glIsEnabled(GLenum cap);
+GLenum __stdcall glGetError(void);
 void __stdcall glGetBooleanv(GLenum pname, GLboolean* data);
 const GLubyte* __stdcall glGetString(GLenum name);
 void __stdcall glPixelStorei(GLenum pname, GLint param);
