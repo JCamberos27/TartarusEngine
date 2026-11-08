@@ -47,6 +47,10 @@ std::vector<glm::mat4> g_Staging;
 }
 
 std::vector<glm::mat4>& Staging() { return g_Staging; }
+void Append(std::vector<glm::mat4>& staging, const glm::mat4& xform) {
+    staging.push_back(xform);
+    staging.push_back(glm::mat4(1.0f));
+}
 
 void Upload() {
     if (g_Staging.empty()) return;
@@ -126,8 +130,7 @@ int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, c
         }
         const std::uint32_t base = (std::uint32_t)(staging.size() / 2);
         for (std::uint32_t k = 0; k < grp.Count; ++k) {
-            staging.push_back(*casters[groups.Order[grp.First + k]].Xform);
-            staging.push_back(glm::mat4(1.0f));
+            InstanceBuffer::Append(staging, *casters[groups.Order[grp.First + k]].Xform);
         }
         for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
             int cull = 0;
@@ -180,12 +183,8 @@ int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, c
 } // namespace
 
 namespace {
-bool g_DirectOnly = false; // drawing the casters the multi-draw path left
-}
-
-int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc) {
-    if (casters.empty()) return 0;
-    const bool instancing = ProjectSettings::Quality().GpuInstancing;
+// Groups the casters for the depth passes (see GroupInstances); the result lives until the next call.
+const InstanceGroups& GroupCasters(const std::vector<DepthCaster>& casters, bool instancing) {
     static InstanceGroups groups;
     GroupInstances(
         casters.size(),
@@ -204,21 +203,14 @@ int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, in
                    SameSlots(*x.Slots, *y.Slots);
         },
         groups);
+    return groups;
+}
 
-    // GPU-driven: the arena models go out as multi-draws; what's left (skinned, partly hidden) draws as below.
-    if (instancing && !g_DirectOnly && MultiDrawEnabled()) {
-        static std::vector<std::uint32_t> rest;
-        static std::vector<DepthCaster> restCasters;
-        rest.clear();
-        const int indirectDraws = DrawDepthIndirect(shader, casters, groups, firstLoc, rest);
-        if (rest.empty()) return indirectDraws;
-        restCasters.clear();
-        for (std::uint32_t i : rest) restCasters.push_back(casters[i]);
-        g_DirectOnly = true;
-        const int directDraws = DrawDepthCasters(shader, restCasters, firstLoc);
-        g_DirectOnly = false;
-        return indirectDraws + directDraws;
-    }
+// One draw per caster, or per group of two or more copies through the instance buffer.
+int DrawDepthCastersDirect(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc) {
+    if (casters.empty()) return 0;
+    const bool instancing = ProjectSettings::Quality().GpuInstancing;
+    const InstanceGroups& groups = GroupCasters(casters, instancing);
 
     // Every group of two or more: its transforms, back to back (a depth pass reads no normal matrix).
     static std::vector<int> base;
@@ -230,8 +222,7 @@ int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, in
         if (grp.Count < 2) continue;
         base[g] = (int)(staging.size() / 2);
         for (std::uint32_t k = 0; k < grp.Count; ++k) {
-            staging.push_back(*casters[groups.Order[grp.First + k]].Xform);
-            staging.push_back(glm::mat4(1.0f));
+            InstanceBuffer::Append(staging, *casters[groups.Order[grp.First + k]].Xform);
         }
     }
     InstanceBuffer::Upload();
@@ -269,4 +260,21 @@ int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, in
     }
     if (instancedNow != 0) shader.SetInt(instancedLoc, 0);
     return draws;
+}
+} // namespace
+
+int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc) {
+    if (casters.empty()) return 0;
+    const bool instancing = ProjectSettings::Quality().GpuInstancing;
+    if (!instancing || !MultiDrawEnabled()) return DrawDepthCastersDirect(shader, casters, firstLoc);
+
+    // GPU-driven: the arena models go out as multi-draws; what's left (skinned, partly hidden) draws directly.
+    static std::vector<std::uint32_t> rest;
+    static std::vector<DepthCaster> restCasters;
+    rest.clear();
+    const int indirectDraws = DrawDepthIndirect(shader, casters, GroupCasters(casters, instancing), firstLoc, rest);
+    if (rest.empty()) return indirectDraws;
+    restCasters.clear();
+    for (std::uint32_t i : rest) restCasters.push_back(casters[i]);
+    return indirectDraws + DrawDepthCastersDirect(shader, restCasters, firstLoc);
 }
