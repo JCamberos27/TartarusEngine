@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -32,6 +33,11 @@ std::uint64_t HashBytes(std::uint64_t h, const void* data, size_t n) {
     const unsigned char* p = static_cast<const unsigned char*>(data);
     for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
     return h;
+}
+
+std::uint64_t HashWord(std::uint64_t h, std::uint64_t w) {
+    h = (h ^ w) * 0x9E3779B97F4A7C15ull;
+    return h ^ (h >> 29);
 }
 } // namespace
 
@@ -117,20 +123,17 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
         // touch, and the vertex shader routes each instance to its layer (gl_Layer) - a quarter of the draw calls of
         // the per-cascade loop below, which remains the fallback.
         shadowMap.BeginLayered();
-        Frustum cascadeFrustums[CascadedShadowMap::kMaxCascades];
         glm::mat4 cascadeVP[CascadedShadowMap::kMaxCascades];
-        for (int c = 0; c < cascadeCount; ++c) {
-            cascadeVP[c] = shadowMap.LightViewProj(c);
-            cascadeFrustums[c] = Frustum::FromViewProj(cascadeVP[c]);
-        }
+        for (int c = 0; c < cascadeCount; ++c) cascadeVP[c] = shadowMap.LightViewProj(c);
         shadowShader.SetMat4Array("uCascadeViewProj[0]", cascadeCount, cascadeVP);
-        shadowShader.SetInt("uCascadeLayered", 1);
+        const int cascadeLayeredLoc = shadowShader.Loc("uCascadeLayered");
+        shadowShader.SetInt(cascadeLayeredLoc, 1);
         const int firstLoc = shadowShader.Loc("uCascadeFirst");
         m_Draws.clear();
         for (const SunCaster& sc : m_SunCasters) {
             unsigned mask = 0;
             for (int c = 0; c < cascadeCount; ++c)
-                if (castsInto(sc, c, cascadeFrustums[c])) mask |= 1u << c;
+                if (castsInto(sc, c, casterCells[c])) mask |= 1u << c;
             if (!mask) continue;
             // One draw per run of consecutive cascades (almost always one run), instanced over them; the copies of a
             // model with the same run draw together (GPU instancing).
@@ -146,24 +149,25 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
         // BeginLayeredScissor): the rest of a layer is never sampled, and the forest's terrain and canopy filled all
         // of it - most of the pass's fill cost.
         static const bool sliceScissor = CascadedShadowMap::ViewportIndexSupported();
+        const int cascadeViewportLoc = sliceScissor ? shadowShader.Loc("uCascadeViewport") : -1;
         if (sliceScissor) {
             shadowMap.BeginLayeredScissor(sunKernelTexels, fl.SunShadowNormalBias);
-            shadowShader.SetInt("uCascadeViewport", 1);
+            shadowShader.SetInt(cascadeViewportLoc, 1);
         }
         DrawDepthCasters(shadowShader, m_Draws, firstLoc);
         if (sliceScissor) {
-            shadowShader.SetInt("uCascadeViewport", 0);
+            shadowShader.SetInt(cascadeViewportLoc, 0);
             CascadedShadowMap::EndLayeredScissor();
         }
         // The SSAO depth pre-pass reuses this program with uLightViewProj.
-        shadowShader.SetInt("uCascadeLayered", 0);
+        shadowShader.SetInt(cascadeLayeredLoc, 0);
     } else {
         for (int c = 0; c < cascadeCount; ++c) {
             shadowMap.Begin(c);
             shadowShader.SetMat4(shadowLightViewProjLoc, shadowMap.LightViewProj(c));
             // Cull each cascade's caster list against that cascade's own ortho frustum - the near slice covers a few
             // metres yet used to redraw the whole level x4. Animated casters cull on their padded bounds too.
-            const Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
+            const Frustum& cascadeFrustum = casterCells[c];
             m_Draws.clear();
             for (const SunCaster& sc : m_SunCasters)
                 if (castsInto(sc, c, cascadeFrustum)) m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided});
@@ -249,15 +253,16 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
         lc.settling = !lc.moving && !lc.animated && now - lc.settleStart < kSettleFrames;
         lc.bounded = v.Bounded; // as posed, like the main pass
         lc.bounds = AABB{v.WorldMin, v.WorldMax};
+        // A change signature, not an identity: 64-bit words through a multiply-xorshift mix.
         std::uint64_t h = kFnvOffset;
-        h = HashBytes(h, &lc.id, sizeof lc.id);
-        h = HashBytes(h, &lc.model, sizeof lc.model);
-        const void* mats = lc.materials->empty() ? nullptr : lc.materials->front().get();
-        h = HashBytes(h, &mats, sizeof mats);
-        const size_t matCount = lc.materials->size();
-        h = HashBytes(h, &matCount, sizeof matCount);
-        h = HashBytes(h, &lc.xform, sizeof lc.xform);
-        lc.hash = HashBytes(h, &lc.twoSided, sizeof lc.twoSided);
+        h = HashWord(h, lc.id);
+        h = HashWord(h, (std::uint64_t)(std::uintptr_t)lc.model);
+        h = HashWord(h, (std::uint64_t)(std::uintptr_t)(lc.materials->empty() ? nullptr : lc.materials->front().get()));
+        h = HashWord(h, (std::uint64_t)lc.materials->size());
+        std::uint64_t xw[8];
+        std::memcpy(xw, &lc.xform, sizeof xw);
+        for (const std::uint64_t w : xw) h = HashWord(h, w);
+        lc.hash = HashWord(h, lc.twoSided ? 1u : 0u);
     }
     // Drop the records of casters gone for a while so the map doesn't grow across scene loads.
     if ((now & 255) == 0)
@@ -303,6 +308,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         m_SpotLastVP[s] = fl.SpotVP[s];
         const Frustum lf = Frustum::FromViewProj(fl.SpotVP[s]);
         m_Visible.clear();
+        m_VisibleDynamic.clear();
         bool animated = false;
         // The static casters' signature: animated ones redraw every frame anyway.
         std::uint64_t sig = kFnvOffset;
@@ -320,6 +326,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
             // Animated or recently moved casters are drawn over the cached static depth every frame; the rest are the
             // static signature.
             const bool dynamic = DynamicFor(c, s, frame);
+            m_VisibleDynamic.push_back(dynamic);
             animated = animated || dynamic;
             if (!dynamic) sig = HashCaster(sig, c.hash);
         }
@@ -340,8 +347,9 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         // slack each side. A caster without bounds or reaching behind the light covers it all.
         const int mapRes = spotShadowMap.Resolution();
         glm::ivec4 dynRect(mapRes, mapRes, 0, 0); // empty
-        for (const LocalCaster* c : m_Visible) {
-            if (!DynamicFor(*c, s, frame)) continue;
+        for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
+            if (!m_VisibleDynamic[vi]) continue;
+            const LocalCaster* c = m_Visible[vi];
             bool whole = !c->bounded;
             for (int k = 0; k < 8 && !whole; ++k) {
                 const glm::vec3 corner((k & 1) ? c->bounds.Max.x : c->bounds.Min.x, (k & 2) ? c->bounds.Max.y : c->bounds.Min.y,
@@ -356,8 +364,10 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         }
         auto drawCasters = [&](bool animatedOnes) {
             m_Draws.clear();
-            for (const LocalCaster* c : m_Visible)
-                if (DynamicFor(*c, s, frame) == animatedOnes) m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
+            for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
+                const LocalCaster* c = m_Visible[vi];
+                if ((m_VisibleDynamic[vi] != 0) == animatedOnes) m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
+            }
             DrawDepthCasters(localShadowShader, m_Draws);
         };
         if (lightMoved) {
@@ -431,6 +441,7 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
         const float reach = fl.PointFar[s];
         const AABB range{lp - glm::vec3(reach), lp + glm::vec3(reach)};
         m_Visible.clear();
+        m_VisibleDynamic.clear();
         std::uint64_t sig = kFnvOffset;
         const unsigned int map = pointShadowMap.DepthCubeArray();
         const int res = pointShadowMap.Resolution() * 64 + pointShadowMap.Cubes(); // a reallocation
@@ -445,7 +456,9 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
         for (const LocalCaster& c : m_LocalCasters) {
             if (c.bounded && !range.Intersects(c.bounds)) continue;
             m_Visible.push_back(&c);
-            if (!DynamicFor(c, s + 2, frame)) sig = HashCaster(sig, c.hash);
+            const bool dynamic = DynamicFor(c, s + 2, frame);
+            m_VisibleDynamic.push_back(dynamic);
+            if (!dynamic) sig = HashCaster(sig, c.hash);
         }
         const bool staticChanged = sig != m_PointShadowSig[s];
         m_PointShadowSig[s] = sig;
@@ -456,15 +469,18 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
             const glm::mat4 vp = proj * glm::lookAt(lp, lp + kFaceDir[f], kFaceUp[f]);
             const Frustum lf = Frustum::FromViewProj(vp);
             bool dynamicHere = false;
-            for (const LocalCaster* c : m_Visible)
-                if (DynamicFor(*c, s + 2, frame) && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
+            for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
+                const LocalCaster* c = m_Visible[vi];
+                if (m_VisibleDynamic[vi] && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
+            }
             if (!staticChanged && !dynamicHere && !m_PointFaceHadDynamic[s][f]) continue; // keep the face
             m_PointFaceHadDynamic[s][f] = dynamicHere;
             localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
             const auto drawCasters = [&](bool dynamicOnes) {
                 m_Draws.clear();
-                for (const LocalCaster* c : m_Visible) {
-                    if (DynamicFor(*c, s + 2, frame) != dynamicOnes) continue;
+                for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
+                    const LocalCaster* c = m_Visible[vi];
+                    if ((m_VisibleDynamic[vi] != 0) != dynamicOnes) continue;
                     if (c->bounded && !lf.Intersects(c->bounds)) continue;
                     m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
                 }

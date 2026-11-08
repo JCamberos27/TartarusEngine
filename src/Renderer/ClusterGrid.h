@@ -111,8 +111,9 @@ private:
     void ReadDecalOverflow() const;
     // binding 2. #160: one AABB set per recently-used projection. With a single set, the Scene and
     // Game views (different projections) invalidated each other and the build pass ran twice
-    // every frame; two slots cover both views, reused least-recently-used.
-    static constexpr int kBuildSlots = 2;
+    // every frame. Four cover the Scene and Game views and each one's view-model projection (more than two cycling
+    // through a least-recently-used pair would never hit), reused least-recently-used.
+    static constexpr int kBuildSlots = 4;
     unsigned int m_AABBs[kBuildSlots] = {};
     unsigned int m_Counts = 0;  // binding 3: per-cluster {offset, count} pairs (#208)
     unsigned int m_Indices = 0; // binding 4: global compacted light-index list (#208)

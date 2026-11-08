@@ -243,6 +243,7 @@ const CandidateCache& Candidates(World& world) {
             Candidate& c = cache.List[cache.Index[slot]];
             if (c.Entity != e) continue;
             c.V.Xform = world.GetCachedWorldTransform(e);
+            c.V.Normal = glm::transpose(glm::inverse(glm::mat3(c.V.Xform)));
             FillBounds(c.V, *c.Renderable);
             CandidateCell& cell = cache.Cells[c.Cell];
             if (!cell.Always) {
@@ -286,8 +287,11 @@ const CandidateCache& Candidates(World& world) {
         const auto* lc = reg.try_get<LayerComponent>(entity);
         c.Layer = lc ? lc->Layer : 0;
         c.V.Entity = entity;
+        c.V.CandFlags = c.Flags;
+        c.V.Layer = c.Layer;
         c.V.Renderable = &r;
         c.V.Xform = world.GetCachedWorldTransform(entity);
+        c.V.Normal = glm::transpose(glm::inverse(glm::mat3(c.V.Xform)));
         FillBounds(c.V, r);
         built.push_back(c);
     }
@@ -882,6 +886,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // World bounds (HiZCuller box test); Bounded false = none, never culled.
         glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
         bool Bounded = false;
+        glm::mat3 Normal{1.0f}; // transpose(inverse(mat3(Xform))), from the candidate cache (opaque items)
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -924,16 +929,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // Tagged view-model geometry belongs to the sub-pass below when there is one; with no
         // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
         // "route to the other list", not "hide".
-        const bool isViewModel = viewModelPass && world.Registry.all_of<ViewModelTag>(entity);
+        const bool hasViewModelTag = (vis.CandFlags & kCandViewModel) != 0;
+        const bool isViewModel = viewModelPass && hasViewModelTag;
         // The player's own body, around the camera: not in the view-model pass (its arms must be whole there).
-        const auto* bodyTag = world.Registry.try_get<PlayerBodyTag>(entity);
+        const auto* bodyTag = (vis.CandFlags & kCandPlayerBody) ? world.Registry.try_get<PlayerBodyTag>(entity) : nullptr;
         const bool cameraBody = bodyTag && !isViewModel && !ctx.EditorView && ctx.OwnerView;
         if (cameraBody && bodyTag->CameraHidden) continue; // the head: only the player's own camera skips it
         const float nearHide = cameraBody ? bodyTag->NearHide : 0.0f;
         const int* hideBones = cameraBody && bodyTag->CameraHideBones[0] >= 0 ? bodyTag->CameraHideBones : nullptr;
         // The SSAO pre-pass skips view-model geometry always and the camera's own body (its hidden parts
         // would occlude): read at their pixels, the map holds whatever stands behind them - see-through AO.
-        const bool noSsao = cameraBody || world.Registry.all_of<ViewModelTag>(entity);
+        const bool noSsao = cameraBody || hasViewModelTag;
         // Clothing on the player's arms while they're in the view-model pass: the sleeves are drawn there
         // too (a second copy, only them), the rest here without them - see PlayerBodyTag.
         const bool splitSleeves = viewModelPass && cameraBody && bodyTag->SleevesInViewModel;
@@ -992,8 +998,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // PR9 / #112: classify per submesh — a model whose slot 1 is transparent used to draw
         // entirely opaque because only slot 0's queue was checked (and vice versa). A model
         // with both kinds is queued in both passes, each drawing only its own submeshes.
-        const auto* layerComp = world.Registry.try_get<LayerComponent>(entity); // #203 lighting layers
-        const int layerBit = (int)(1u << (layerComp ? std::clamp(layerComp->Layer, 0, 31) : 0));
+        const int layerBit = (int)(1u << std::clamp(vis.Layer, 0, 31)); // #203 lighting layers (0 without a LayerComponent)
         bool anyOpaque = false, anyTransparent = false;
         int qi = 2000; // QueueIndex of the first transparent slot
         for (int i = 0; i < m->MeshCount(); ++i) {
@@ -1062,6 +1067,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.WorldMin = vis.WorldMin;
             item.WorldMax = vis.WorldMax;
             item.Bounded = validBounds;
+            item.Normal = vis.Normal;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -1401,9 +1407,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             const std::uint32_t base = (std::uint32_t)(staging.size() / 2);
             groupBase[g] = (int)base;
             for (std::uint32_t k = 0; k < grp.Count; ++k) {
-                const glm::mat4& x = drawList[opaqueGroups.Order[grp.First + k]].Xform;
-                staging.push_back(x);
-                staging.push_back(glm::mat4(glm::transpose(glm::inverse(glm::mat3(x)))));
+                const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];
+                staging.push_back(member.Xform);
+                staging.push_back(glm::mat4(member.Normal));
             }
             if (hiz) {
                 // Foliage sways past its bounds: the box grows by the most any of its materials can move a vertex.
@@ -1451,9 +1457,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             if (groupIndirect[g] || grp.Count < 2) continue;
             groupBase[g] = (int)(staging.size() / 2);
             for (std::uint32_t k = 0; k < grp.Count; ++k) {
-                const glm::mat4& x = drawList[opaqueGroups.Order[grp.First + k]].Xform;
-                staging.push_back(x);
-                staging.push_back(glm::mat4(glm::transpose(glm::inverse(glm::mat3(x)))));
+                const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];
+                staging.push_back(member.Xform);
+                staging.push_back(glm::mat4(member.Normal));
             }
         }
         InstanceBuffer::Upload();

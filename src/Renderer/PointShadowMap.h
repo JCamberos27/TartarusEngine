@@ -37,10 +37,11 @@ public:
 
 private:
     void Release();
+    void EnsureStatic() const;
 
     unsigned int m_DepthArray = 0;
     unsigned int m_Fbo = 0;
-    unsigned int m_StaticArray = 0;
+    mutable unsigned int m_StaticArray = 0; // made lazily (EnsureStatic)
     unsigned int m_StaticFbo = 0;
     int m_Resolution = 0;
     int m_Cubes = 0;
