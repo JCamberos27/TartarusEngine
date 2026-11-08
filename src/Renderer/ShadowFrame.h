@@ -19,6 +19,7 @@ class Model;
 struct MaterialAsset;
 class VisibleIndexBuffer;
 struct FrameLights;
+struct Frustum;
 
 struct ShadowFrameInputs {
     World* world = nullptr;
@@ -73,6 +74,11 @@ private:
     void RenderSpots(const ShadowFrameInputs& in);
     void RenderPoints(const ShadowFrameInputs& in);
     bool DynamicFor(const LocalCaster& c, int turnSlot, std::uint64_t frame) const;
+    // The collect + signature step RenderSpots and RenderPoints share: fills m_Visible / m_VisibleDynamic with the local
+    // casters inside `frustum` (a spot) or `range` (a point; the other is null), skipping the player's own copies when
+    // `skipPlayer`, and folds each static one's hash into `sig`. Returns whether any visible caster is dynamic.
+    bool CollectLocalCasters(const Frustum* frustum, const AABB* range, bool skipPlayer, int turnSlot, std::uint64_t frame,
+                             std::uint64_t& sig);
 
     // Sun
     struct SunFit { std::uint64_t frame = ~0ull; glm::mat4 view{0.0f}, proj{0.0f}; };

@@ -53,7 +53,7 @@ layout(std430, binding = 3) readonly buffer ClusterCounts { ClusterRange uCluste
 layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
 uniform int  uClusterEnabled;
 uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
-const uint C_GX = 16u, C_GY = 9u, C_GZ = 24u;
+#include "ClusterGrid.glsl"
 
 // --- shadows (the model shader's maps and matrices) ---
 uniform int  uShadowEnabled;

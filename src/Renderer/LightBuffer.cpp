@@ -31,17 +31,24 @@ float LayerBits(std::uint32_t bits) {
 }
 } // namespace
 
+// The packing the three Add* share: Params = (x, y, excluded-layer bits, volumetric scale clamped to >= 0).
+LightBuffer::GpuLight LightBuffer::Pack(const glm::vec4& positionType, const glm::vec4& colorRange, const glm::vec4& dirCutoff,
+                                        float paramX, float paramY, std::uint32_t excludedLayers, float volumetric) {
+    GpuLight l{};
+    l.PositionType = positionType;
+    l.ColorRange   = colorRange;
+    l.DirCutoff    = dirCutoff;
+    l.Params       = glm::vec4(paramX, paramY, LayerBits(excludedLayers), volumetric < 0.0f ? 0.0f : volumetric);
+    return l;
+}
+
 void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity,
                                  bool sampleSunShadow, std::uint32_t excludedLayers, float volumetric) {
     if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
-    GpuLight l{};
-    l.PositionType = glm::vec4(0.0f, 0.0f, 0.0f, (float)Type::Directional);
-    l.ColorRange   = glm::vec4(colorLinear * intensity, 0.0f);
-    l.DirCutoff    = glm::vec4(d, -1.0f);
-    l.Params       = glm::vec4(-1.0f, sampleSunShadow ? 0.0f : -1.0f, 0.0f, 0.0f); // y: cascade map, as spot/point slots
-    l.Params.z     = LayerBits(excludedLayers);
-    l.Params.w     = volumetric < 0.0f ? 0.0f : volumetric;
+    // Params.y: cascade map, as spot/point slots
+    const GpuLight l = Pack(glm::vec4(0.0f, 0.0f, 0.0f, (float)Type::Directional), glm::vec4(colorLinear * intensity, 0.0f),
+                            glm::vec4(d, -1.0f), -1.0f, sampleSunShadow ? 0.0f : -1.0f, excludedLayers, volumetric);
     // Insert right after the existing directional run, not at the end - keeps every directional
     // light packed at the front of the array so the shader can loop just uDirectionalCount
     // entries instead of scanning the whole buffer (#188).
@@ -52,14 +59,9 @@ void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& col
 void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
                           int shadowSlot, std::uint32_t excludedLayers, float volumetric) {
     if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
-    GpuLight l{};
-    l.PositionType = glm::vec4(posWorld, (float)Type::Point);
-    l.ColorRange   = glm::vec4(colorLinear * intensity, range);
-    l.DirCutoff    = glm::vec4(0.0f, 0.0f, -1.0f, -1.0f);
-    l.Params       = glm::vec4(-1.0f, (float)shadowSlot, 0.0f, 0.0f); // .y = point cube-shadow slot, -1 = none (#119)
-    l.Params.z     = LayerBits(excludedLayers);
-    l.Params.w     = volumetric < 0.0f ? 0.0f : volumetric;
-    m_Lights.push_back(l);
+    // Params.y = point cube-shadow slot, -1 = none (#119)
+    m_Lights.push_back(Pack(glm::vec4(posWorld, (float)Type::Point), glm::vec4(colorLinear * intensity, range),
+                            glm::vec4(0.0f, 0.0f, -1.0f, -1.0f), -1.0f, (float)shadowSlot, excludedLayers, volumetric));
 }
 
 void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
@@ -67,14 +69,9 @@ void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, 
                           std::uint32_t excludedLayers, float volumetric) {
     if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
-    GpuLight l{};
-    l.PositionType = glm::vec4(posWorld, (float)Type::Spot);
-    l.ColorRange   = glm::vec4(colorLinear * intensity, range);
-    l.DirCutoff    = glm::vec4(d, cosOuter);
-    l.Params       = glm::vec4(cosInner, (float)shadowSlot, 0.0f, 0.0f); // .y = spot shadow slot, -1 = none (#119)
-    l.Params.z     = LayerBits(excludedLayers);
-    l.Params.w     = volumetric < 0.0f ? 0.0f : volumetric;
-    m_Lights.push_back(l);
+    // Params.y = spot shadow slot, -1 = none (#119)
+    m_Lights.push_back(Pack(glm::vec4(posWorld, (float)Type::Spot), glm::vec4(colorLinear * intensity, range),
+                            glm::vec4(d, cosOuter), cosInner, (float)shadowSlot, excludedLayers, volumetric));
 }
 
 void LightBuffer::SortLocalNearestFirst(const glm::vec3& eye) {

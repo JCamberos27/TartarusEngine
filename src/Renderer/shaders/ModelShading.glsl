@@ -152,7 +152,7 @@ layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIn
 uniform int  uClusterEnabled;
 uniform vec2 uClusterScreenSize;
 uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
-const uint C_GX = 16u, C_GY = 9u, C_GZ = 24u;
+#include "ClusterGrid.glsl"
 
 // Cascaded shadow maps for the directional sun (see CascadedShadowMap). uView is also used to
 // pick the cascade by view-space depth.

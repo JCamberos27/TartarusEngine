@@ -22,7 +22,8 @@ layout(std430, binding = 5) buffer ClusterGlobal { uint uGlobalCounter; uint uOv
 
 uniform mat4 uView;
 
-const uint GX = 16u, GY = 9u, GZ = 24u;
+#include "ClusterGrid.glsl"
+const uint GX = C_GX, GY = C_GY, GZ = C_GZ;
 // Total capacity of the global index list; must match ClusterGrid::GLOBAL_INDEX_CAPACITY (#208).
 const uint GLOBAL_CAPACITY = 65536u;
 

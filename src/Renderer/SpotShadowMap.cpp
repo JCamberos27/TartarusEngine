@@ -1,4 +1,3 @@
-#include "GpuMemTrack.h"
 #include "SpotShadowMap.h"
 #include "GLFramebufferCheck.h"
 #include "Log.h"
@@ -7,93 +6,64 @@
 #include <algorithm>
 #include <string>
 
-SpotShadowMap::~SpotShadowMap() { Release(); }
-
-void SpotShadowMap::Release() {
-    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (live)", this), 0);
-    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (static cache)", this), 0);
-    if (m_Fbo)        { glDeleteFramebuffers(1, &m_Fbo);    m_Fbo = 0; }
-    if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
-    if (m_StaticFbo)   { glDeleteFramebuffers(1, &m_StaticFbo);   m_StaticFbo = 0; }
-    if (m_StaticArray) { glDeleteTextures(1, &m_StaticArray); m_StaticArray = 0; }
-}
-
 void SpotShadowMap::Configure(int resolution, int layers) {
     resolution = std::clamp(resolution, 256, 4096);
     layers = std::clamp(layers, 1, kMaxSpots);
     // Grow-only for a given resolution: the array is sized to the slots in use, and never shrinks back
     // (a shrink then regrow would redraw every cache again for the sake of a few MB).
-    if (m_DepthArray != 0 && resolution == m_Resolution) layers = std::max(layers, m_Layers);
-    if (m_DepthArray != 0 && resolution == m_Resolution && layers == m_Layers) return;
+    if (m_Target.Texture() != 0 && resolution == m_Resolution) layers = std::max(layers, m_Layers);
+    if (m_Target.Texture() != 0 && resolution == m_Resolution && layers == m_Layers) return;
 
-    Release();
     m_Resolution = resolution;
     m_Layers = layers;
     m_CompleteChecked = false; // re-check after a resolution change (audit #358)
 
-    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_DepthArray);
-    glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, layers);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    const float border[4] = {1.0f, 1.0f, 1.0f, 1.0f}; // outside the map = fully lit
-    glTextureParameterfv(m_DepthArray, GL_TEXTURE_BORDER_COLOR, border);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+    DepthArrayTarget::Desc d;
+    d.target = GL_TEXTURE_2D_ARRAY;
+    d.resolution = resolution;
+    d.layers = layers;
+    d.borderClamp = true;
+    d.liveName = "SpotShadowMap (live)";
+    d.staticName = "SpotShadowMap (static cache)";
+    m_Target.Create(d, this);
 
-    glCreateFramebuffers(1, &m_Fbo);
-    glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
-
-    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (live)", this), (size_t)resolution * resolution * layers * 4);
-    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (static cache)", this), 0);
-    glCreateFramebuffers(1, &m_StaticFbo);
-    glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
-
-    if (!m_Fbo || !m_DepthArray)
+    if (!m_Target.Fbo() || !m_Target.Texture())
         Log::Error("SpotShadowMap: failed to create depth array (" + std::to_string(resolution) + ")");
 }
 
 void SpotShadowMap::Begin(int i) const {
     i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
-    glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Target.Fbo());
+    m_Target.AttachLayer(i);
     if (!m_CompleteChecked) { // audit #358 — layered FBO: check once, after a layer is attached
         m_CompleteChecked = true;
-        GLFramebufferCheck::Complete("SpotShadowMap", m_Fbo, m_Resolution, m_Resolution);
+        GLFramebufferCheck::Complete("SpotShadowMap", m_Target.Fbo(), m_Resolution, m_Resolution);
     }
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
-// The static-caster cache (only ever rendered to and copied from, never sampled) is made on first use: a scene whose
-// spots all move (the flashlight) never pays for it.
-void SpotShadowMap::EnsureStatic() const {
-    if (m_StaticArray) return;
-    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
-    glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, m_Resolution, m_Resolution, m_Layers);
-    GpuMemTrack::Set(GpuMemTrack::Key("SpotShadowMap (static cache)", this), (size_t)m_Resolution * m_Resolution * m_Layers * 4);
-}
-
+// The static-caster cache (DepthArrayTarget::EnsureStatic) is made on first use: a scene whose spots all move (the
+// flashlight) never pays for it.
 void SpotShadowMap::BeginStatic(int i) const {
-    EnsureStatic();
+    m_Target.EnsureStatic();
     i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_StaticFbo);
-    glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, i);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Target.StaticFbo());
+    m_Target.AttachStaticLayer(i);
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
 void SpotShadowMap::BeginFromStatic(int i, int x0, int y0, int x1, int y1) const {
-    EnsureStatic();
+    m_Target.EnsureStatic();
     i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
-    glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
+    m_Target.AttachLayer(i);
     x0 = std::clamp(x0, 0, m_Resolution); x1 = std::clamp(x1, 0, m_Resolution);
     y0 = std::clamp(y0, 0, m_Resolution); y1 = std::clamp(y1, 0, m_Resolution);
     if (x0 < x1 && y0 < y1) {
-        glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, i);
-        glBlitNamedFramebuffer(m_StaticFbo, m_Fbo, x0, y0, x1, y1, x0, y0, x1, y1, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        m_Target.AttachStaticLayer(i);
+        glBlitNamedFramebuffer(m_Target.StaticFbo(), m_Target.Fbo(), x0, y0, x1, y1, x0, y0, x1, y1, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
     }
-    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Target.Fbo());
     glViewport(0, 0, m_Resolution, m_Resolution);
 }

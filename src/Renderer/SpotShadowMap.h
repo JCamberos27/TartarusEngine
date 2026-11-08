@@ -1,6 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <array>
+#include "DepthArrayTarget.h"
 
 // Perspective shadow maps for spot lights (#119).
 //
@@ -17,7 +18,6 @@ public:
     static constexpr int kMaxSpots = 16;
 
     SpotShadowMap() = default;
-    ~SpotShadowMap();
     SpotShadowMap(const SpotShadowMap&) = delete;
     SpotShadowMap& operator=(const SpotShadowMap&) = delete;
 
@@ -36,18 +36,12 @@ public:
     void BeginStatic(int i) const;
     void BeginFromStatic(int i, int x0, int y0, int x1, int y1) const;
 
-    unsigned int DepthArray() const { return m_DepthArray; }
+    unsigned int DepthArray() const { return m_Target.Texture(); }
     int Resolution() const { return m_Resolution; }
     int Layers() const { return m_Layers; }
 
 private:
-    void EnsureStatic() const;
-    void Release();
-
-    unsigned int m_DepthArray = 0;
-    unsigned int m_Fbo = 0;
-    mutable unsigned int m_StaticArray = 0; // made lazily (EnsureStatic)
-    unsigned int m_StaticFbo = 0;
+    DepthArrayTarget m_Target; // the layer array, its FBOs and the lazily made static cache
     int m_Resolution = 0;
     int m_Layers = 0;
     mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check in Begin()

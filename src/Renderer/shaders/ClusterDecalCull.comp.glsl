@@ -37,7 +37,8 @@ uniform int uPass;         // 0: decals into view space, 1: bin per cluster
 uniform int uReadbackSlot; // this cull's ring slot
 uniform int uSerial;       // and the tag that marks it landed
 
-const uint CLUSTERS = 16u * 9u * 24u;
+#include "ClusterGrid.glsl"
+const uint CLUSTERS = C_GX * C_GY * C_GZ;
 const uint MAX_VISIBLE = 4096u;    // Decals::MAX_VISIBLE: the hit bitmask's size
 const uint MAX_PER_CLUSTER = 256u; // Decals::MAX_PER_CLUSTER
 const uint WORDS = MAX_VISIBLE / 32u; // 128: two per thread
