@@ -1,6 +1,7 @@
 #include "Tests/SmokeHarness.h"
 
 #include "App/LaunchOptions.h"
+#include "App/PlaySession.h"
 #include "AI/NpcTest.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
@@ -373,6 +374,17 @@ void SmokeHarness::EndFrame() {
         ShotCameraFrame();
     } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode) {
         PoseShotFrame();
+    }
+    // --perf-bench: a scene with a Camera entity (tests/perf-scenes) holds the Scene view on it too, so the edit
+    // phase measures the same fixed view as the two Play phases.
+    if (opt.perfBenchMode && !npcTest && !m_Ctx.playing) {
+        const entt::entity cam = FindActiveSceneCamera(m_Ctx.world);
+        if (cam != entt::null) {
+            const glm::mat4 m = m_Ctx.world.ComposeWorldTransform(cam);
+            editorCamera.Position = glm::vec3(m[3]);
+            YawPitchFromWorld(m, editorCamera.Yaw, editorCamera.Pitch);
+            editorCamera.Fov = m_Ctx.world.Registry.get<CameraComponent>(cam).FovDegrees;
+        }
     }
     if (npcTest) {
         glm::vec3 p;
