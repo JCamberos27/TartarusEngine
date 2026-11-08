@@ -14,6 +14,7 @@
 CascadedShadowMap::~CascadedShadowMap() { Release(); }
 
 void CascadedShadowMap::Release() {
+    GpuMemTrack::Set(GpuMemTrack::Key("CascadedShadowMap", this), 0);
     for (unsigned int& fbo : m_Fbos)
         if (fbo) { glDeleteFramebuffers(1, &fbo); fbo = 0; }
     if (m_LayeredFbo) { glDeleteFramebuffers(1, &m_LayeredFbo); m_LayeredFbo = 0; }
@@ -31,7 +32,7 @@ void CascadedShadowMap::Configure(int resolution, int count) {
 
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_DepthArray);
     glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, count);
-    GpuMemTrack::Set("CascadedShadowMap", (size_t)resolution * resolution * count * 4);
+    GpuMemTrack::Set(GpuMemTrack::Key("CascadedShadowMap", this), (size_t)resolution * resolution * count * 4);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);

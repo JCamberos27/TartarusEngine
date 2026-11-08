@@ -43,7 +43,7 @@ void SelectionOutline::Render(const SelectionOutlineInputs& in) {
             // Lights and empties have nothing to outline - they get a screen-space
             // selection ring from EditorLayer::DrawEntityIcons instead.
             auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
-            if (!renderablePtr) continue;
+            if (!renderablePtr || !renderablePtr->ModelRef) continue;
             xforms.push_back(world.GetCachedWorldTransform(entity));
             models.push_back(renderablePtr->ModelRef.get());
         }

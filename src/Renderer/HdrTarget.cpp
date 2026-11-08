@@ -15,6 +15,11 @@ int MaxSamples() {
     }();
     return s;
 }
+
+// GpuMemTrack key unique to one target (scene, game and probe views each own one) and stable across resizes.
+std::string MemKey(const HdrTarget* t, const char* what) {
+    return GpuMemTrack::Key(std::string("HdrTarget ") + what, t);
+}
 } // namespace
 
 HdrTarget::~HdrTarget() { Release(); }
@@ -29,6 +34,10 @@ void HdrTarget::Release() {
     if (m_MsColor)      { glDeleteTextures(1, &m_MsColor);         m_MsColor = 0; }
     if (m_MsDepth)      { glDeleteTextures(1, &m_MsDepth);         m_MsDepth = 0; }
     if (m_MsVelocity)   { glDeleteTextures(1, &m_MsVelocity);      m_MsVelocity = 0; }
+    GpuMemTrack::Set(MemKey(this, "MS color+depth"), 0);
+    GpuMemTrack::Set(MemKey(this, "resolve color"), 0);
+    GpuMemTrack::Set(MemKey(this, "resolve depth"), 0);
+    GpuMemTrack::Set(MemKey(this, "MS velocity"), 0);
     // m_DepthRequested is deliberately NOT reset - a Resize() calls Release() then Create(),
     // and if depth was already provisioned before that resize, Create() needs to know to
     // re-provision it rather than silently dropping it (#206).
@@ -39,6 +48,8 @@ void HdrTarget::Resize(int width, int height, int samples) {
     height = height > 0 ? height : 1;
     samples = std::clamp(samples, 1, MaxSamples());
     if (m_MsFbo != 0 && width == m_Width && height == m_Height && samples == m_Samples) return;
+    // The last attempt at exactly this size came out incomplete: don't rebuild and re-log it every frame.
+    if (m_MsFbo == 0 && width == m_FailW && height == m_FailH && samples == m_FailSamples) return;
     Create(width, height, samples);
 }
 
@@ -65,8 +76,8 @@ void HdrTarget::Create(int width, int height, int samples) {
     // --- Single-sample resolve target the tonemap pass samples.
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveColor);
     glTextureStorage2D(m_ResolveColor, 1, GL_RGBA16F, width, height);
-    GpuMemTrack::Set("HdrTarget MS color+depth (" + std::to_string(width) + "x" + std::to_string(height) + " x" + std::to_string(samples) + ")", (size_t)width * height * samples * 12);
-    GpuMemTrack::Set("HdrTarget resolve color", (size_t)width * height * 8);
+    GpuMemTrack::Set(MemKey(this, "MS color+depth"), (size_t)width * height * samples * 12);
+    GpuMemTrack::Set(MemKey(this, "resolve color"), (size_t)width * height * 8);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -92,6 +103,11 @@ void HdrTarget::Create(int width, int height, int samples) {
                    std::to_string(height) + " x" + std::to_string(samples) + "  ms=0x" +
                    std::to_string(ms) + " resolve=0x" + std::to_string(rs) + ")");
         Release();
+        m_FailW = width;
+        m_FailH = height;
+        m_FailSamples = samples;
+    } else {
+        m_FailW = m_FailH = m_FailSamples = 0;
     }
 }
 
@@ -101,12 +117,13 @@ void HdrTarget::SetVelocityEnabled(bool on) {
     if (on && !m_MsVelocity) {
         glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsVelocity);
         glTextureStorage2DMultisample(m_MsVelocity, m_Samples, GL_RG16F, m_Width, m_Height, GL_TRUE);
-        GpuMemTrack::Set("HdrTarget MS velocity", (size_t)m_Width * m_Height * m_Samples * 4);
+        GpuMemTrack::Set(MemKey(this, "MS velocity"), (size_t)m_Width * m_Height * m_Samples * 4);
         glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT1, m_MsVelocity, 0);
     } else if (!on && m_MsVelocity) {
         glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT1, 0, 0);
         glDeleteTextures(1, &m_MsVelocity);
         m_MsVelocity = 0;
+        GpuMemTrack::Set(MemKey(this, "MS velocity"), 0);
     }
     SetVelocityWrites(false);
 }
@@ -121,9 +138,12 @@ void HdrTarget::ClearVelocity(float value) const {
     if (!m_MsFbo || !m_MsVelocity) return;
     const GLenum bufs[2] = {GL_NONE, GL_COLOR_ATTACHMENT1};
     glNamedFramebufferDrawBuffers(m_MsFbo, 2, bufs);
+    GLboolean mask[4];
+    glGetBooleanv(GL_COLOR_WRITEMASK, mask);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // a clear honours the write mask
     const float v[4] = {value, value, 0.0f, 0.0f};
     glClearNamedFramebufferfv(m_MsFbo, GL_COLOR, 1, v);
+    glColorMask(mask[0], mask[1], mask[2], mask[3]);
     SetVelocityWrites(false);
 }
 
@@ -135,7 +155,7 @@ void HdrTarget::BindForRender() const {
 void HdrTarget::CreateResolveDepth() const {
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveDepth);
     glTextureStorage2D(m_ResolveDepth, 1, GL_DEPTH_COMPONENT32F, m_Width, m_Height);
-    GpuMemTrack::Set("HdrTarget resolve depth", (size_t)m_Width * m_Height * 4);
+    GpuMemTrack::Set(MemKey(this, "resolve depth"), (size_t)m_Width * m_Height * 4);
     glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

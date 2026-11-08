@@ -10,6 +10,7 @@
 PointShadowMap::~PointShadowMap() { Release(); }
 
 void PointShadowMap::Release() {
+    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (dynamic + static)", this), 0);
     if (m_Fbo)        { glDeleteFramebuffers(1, &m_Fbo);    m_Fbo = 0; }
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
     if (m_StaticFbo)   { glDeleteFramebuffers(1, &m_StaticFbo);  m_StaticFbo = 0; }
@@ -43,7 +44,7 @@ void PointShadowMap::Configure(int resolution, int cubes) {
     // The static casters' depth, never sampled: only copied from.
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
     glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, cubes * 6);
-    GpuMemTrack::Set("PointShadowMap (dynamic + static)", (size_t)resolution * resolution * cubes * 6 * 4 * 2);
+    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (dynamic + static)", this), (size_t)resolution * resolution * cubes * 6 * 4 * 2);
     glCreateFramebuffers(1, &m_StaticFbo);
     glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
 

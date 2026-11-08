@@ -56,7 +56,7 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
         // (Scored on the intensity now: holding a flickering light's shadow through its bright peaks - a TV
         // across the living room - cost the main pass ~1.3 ms in Floor3. Its slot, and so its cache, waits for it.)
         if (!lc.Shadow.Enabled || !world.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
-            lc.Intensity <= 0.0f || world.Registry.all_of<InactiveTag>(e) || (in.suppressed && in.suppressed(e)))
+            lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f || world.Registry.all_of<InactiveTag>(e) || (in.suppressed && in.suppressed(e)))
             continue;
         const glm::vec3 lpos = glm::vec3(world.ComposeWorldTransform(e)[3]);
         const float range = std::max(lc.Range, 0.2f);
@@ -107,7 +107,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
             out.SpotLive[slot] = true;
             out.SpotCount = std::max(out.SpotCount, slot + 1);
             const glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-            const float fov = glm::radians(torch->SpillOuterDeg * 2.0f + 4.0f);
+            const float fov = glm::radians(std::min(torch->SpillOuterDeg * 2.0f + 4.0f, 175.0f));
             out.SpotFar[slot] = torch->HotRange;
             out.SpotPos[slot] = pos;
             out.SpotHalfTan[slot] = std::tan(0.5f * fov);

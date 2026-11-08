@@ -233,10 +233,10 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
         // Skinned, not "has its own clips": a character whose clips live in other files (every NPC and outfit piece)
         // animates too, and its shadow must follow. First seen counts as settled (unsigned wrap keeps that true on
         // early frames).
-        auto [motion, first] = m_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now, now});
+        auto [motion, first] = m_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, lc.model->PoseVersion(), now - kMovingFrames - kSettleFrames, now});
         // A record not touched for a while belongs to a gone entity: a recycled id starts fresh, not with its history.
         if (!first && now - motion->second.seen > kStaleFrames)
-            motion->second = CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now, now};
+            motion->second = CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, lc.model->PoseVersion(), now - kMovingFrames - kSettleFrames, now};
         motion->second.seen = now;
         if (motion->second.xform != lc.xform) { motion->second.xform = lc.xform; motion->second.moved = now; }
         lc.moving = now - motion->second.moved < kMovingFrames;

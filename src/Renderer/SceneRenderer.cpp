@@ -1439,6 +1439,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 mix(ma ? (std::uint64_t)(std::uintptr_t)ma->Shader.get() : 1ull);
                 mix(lead.Ref->MeshStateKey(m, *lead.Slots, lead.DoubleSided));
                 mix(r.Page);
+                mix((mat.AlphaClip || (ma && ma->RenderQueue == MaterialAsset::Queue::AlphaTest)) ? 1ull : 0ull);
                 opaqueTags.push_back({(std::uint32_t)g, (std::uint16_t)m});
                 opaqueItems.push_back({key, (std::uint32_t)opaqueTags.size() - 1,
                                        {r.IndexCount, grp.Count, r.FirstIndex, (std::int32_t)r.BaseVertex, base}});
@@ -1663,7 +1664,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // --- View-model sub-pass: tagged geometry, its own projection, after a depth clear --------
     // Everything above has been written; only the tagged arms/weapon remain, and they now draw
     // on top of all of it rather than fighting it for depth.
-    if (viewModelPass && !viewModelList.empty()) {
+    if (viewModelPass && (!viewModelList.empty() || !viewModelTransparentList.empty())) {
         PROFILE_SCOPE("View Model Draw");
         PROFILE_GPU_SCOPE("View Model Draw");
 

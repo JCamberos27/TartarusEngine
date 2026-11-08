@@ -21,6 +21,7 @@
 Ssao::~Ssao() { Release(); }
 
 void Ssao::Release() {
+    GpuMemTrack::Set(GpuMemTrack::Key("Ssao depth copy", this), 0);
     if (m_Vao)       { glDeleteVertexArrays(1, &m_Vao);        m_Vao       = 0; }
     if (m_DepthFbo)  { glDeleteFramebuffers(1, &m_DepthFbo);   m_DepthFbo  = 0; }
     if (m_DepthTex)  { glDeleteTextures(1, &m_DepthTex);       m_DepthTex  = 0; }
@@ -73,7 +74,7 @@ void Ssao::Create(int width, int height) {
     // Depth pre-pass: depth-only FBO, no color attachment
     glCreateTextures(GL_TEXTURE_2D, 1, &m_DepthTex);
     glTextureStorage2D(m_DepthTex, 1, GL_DEPTH_COMPONENT32F, width, height);
-    GpuMemTrack::Set("Ssao depth copy", (size_t)width * height * 4);
+    GpuMemTrack::Set(GpuMemTrack::Key("Ssao depth copy", this), (size_t)width * height * 4);
     glTextureParameteri(m_DepthTex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(m_DepthTex, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTextureParameteri(m_DepthTex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

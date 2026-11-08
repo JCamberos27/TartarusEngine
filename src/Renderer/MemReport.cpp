@@ -1,6 +1,7 @@
 #include "MemReport.h"
 #include <windows.h>
 #include <psapi.h>
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -50,8 +51,15 @@ void MemReport::Write(const std::string& dir, const std::string& label, const st
                     {"privateMiB", pmc.PrivateUsage / 1048576.0}, {"peakPagefileMiB", pmc.PeakPagefileUsage / 1048576.0}};
 
     GLint totKiB = 0, availKiB = 0; // GL_GPU_MEMORY_INFO_TOTAL/CURRENT_AVAILABLE_VIDMEM_NVX
+    // The loader can't list core-profile extensions, so probe the enums as SystemReport does: a driver without
+    // GL_NVX_gpu_memory_info raises GL_INVALID_ENUM, which is cleared here so it doesn't surface in a later check.
+    while (glGetError() != GL_NO_ERROR) {}
     glGetIntegerv(0x9047, &totKiB);
     glGetIntegerv(0x9049, &availKiB);
+    if (glGetError() != GL_NO_ERROR) totKiB = availKiB = 0;
+    while (glGetError() != GL_NO_ERROR) {}
+    if (totKiB < 0) totKiB = 0;
+    availKiB = std::clamp<GLint>(availKiB, 0, totKiB);
     j["vram"] = {{"totalMiB", totKiB / 1024.0}, {"availableMiB", availKiB / 1024.0}, {"usedMiB", (totKiB - availKiB) / 1024.0}};
 
     double texMiB = 0, texEmbeddedMiB = 0;
