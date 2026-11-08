@@ -143,7 +143,6 @@ void Free(const Range& r) {
 unsigned PageVao(std::uint32_t page) { return page && page <= g_Pages.size() ? g_Pages[page - 1]->Vao : 0u; }
 unsigned PageVbo(std::uint32_t page) { return page && page <= g_Pages.size() ? g_Pages[page - 1]->Vbo : 0u; }
 unsigned PageEbo(std::uint32_t page) { return page && page <= g_Pages.size() ? g_Pages[page - 1]->Ebo : 0u; }
-std::size_t PageCount() { return g_Pages.size(); }
 
 // --- Skinned pages ----------------------------------------------------------------------------------------------------
 namespace {

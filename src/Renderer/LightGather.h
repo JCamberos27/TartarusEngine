@@ -46,7 +46,6 @@ struct FrameLights {
     glm::vec3 SpotPos[SpotShadowMap::kMaxSpots] = {};
     float SpotFar[SpotShadowMap::kMaxSpots] = {};
     float SpotHalfTan[SpotShadowMap::kMaxSpots] = {}; // tan(half-FOV) of the map: sizes the shader's texel estimate (#134)
-    float SpotNear[SpotShadowMap::kMaxSpots] = {};
     // Per-light shadow multipliers (#140 phase 2): 1.0 unless the light's ShadowSettings override them.
     float SpotBias[SpotShadowMap::kMaxSpots] = {};
     float SpotNormalBias[SpotShadowMap::kMaxSpots] = {};

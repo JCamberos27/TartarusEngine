@@ -32,7 +32,6 @@ void Free(const Range& r);
 unsigned PageVao(std::uint32_t page);
 unsigned PageVbo(std::uint32_t page);
 unsigned PageEbo(std::uint32_t page);
-std::size_t PageCount();
 
 // The first-fit free list one page keeps per buffer (exposed for the unit tests).
 class FreeList {
