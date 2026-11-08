@@ -112,4 +112,3 @@ void GLDebug::Init() {
 
 bool GLDebug::IsEnabled() { return gDebugActive; }
 int GLDebug::ErrorCount() { return gErrorCount.load(std::memory_order_relaxed); }
-void GLDebug::ResetErrorCount() { gErrorCount.store(0, std::memory_order_relaxed); }

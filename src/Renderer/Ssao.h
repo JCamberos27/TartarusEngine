@@ -28,16 +28,15 @@ public:
     // glDrawBuffer is GL_NONE. Clear GL_DEPTH_BUFFER_BIT before drawing into it.
     unsigned int DepthFbo() const { return m_DepthFbo; }
     unsigned int DepthTexture() const { return m_DepthTex; } // DEPTH_COMPONENT32F, this frame's view depth
-    unsigned int DepthTex() const { return m_DepthTex; }
 
-    // SSAO compute pass — reads DepthTex() and the noise texture, writes the raw occlusion at half
+    // SSAO compute pass — reads DepthTexture() and the noise texture, writes the raw occlusion at half
     // resolution (a quarter of the 32-tap work; occlusion is low-frequency and Blur() upsamples it
     // by depth). proj is the same projection matrix used for the depth pre-pass.
     // #160: radius (view-space units) and depth bias used to be hard-coded 0.5 / 0.025.
     void Compute(Shader& ssaoShader, const glm::mat4& proj, float radius = 0.5f, float bias = 0.025f);
 
     // Full-resolution 4x4 (half-resolution texel) box blur, weighed by depth — reads the raw
-    // occlusion and DepthTex(), writes the final blurred occlusion.
+    // occlusion and DepthTexture(), writes the final blurred occlusion.
     void Blur(Shader& blurShader);
 
     // Final blurred R8 occlusion texture. Bind as uSSAOMap (unit 15) before drawScene.

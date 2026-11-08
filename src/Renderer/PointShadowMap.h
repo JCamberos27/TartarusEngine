@@ -35,9 +35,9 @@ public:
     int Resolution() const { return m_Resolution; }
     int Cubes() const { return m_Cubes; }
 
+private:
     void Release();
 
-private:
     unsigned int m_DepthArray = 0;
     unsigned int m_Fbo = 0;
     unsigned int m_StaticArray = 0;

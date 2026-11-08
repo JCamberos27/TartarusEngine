@@ -111,7 +111,6 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
             out.SpotFar[slot] = torch->HotRange;
             out.SpotPos[slot] = pos;
             out.SpotHalfTan[slot] = std::tan(0.5f * fov);
-            out.SpotNear[slot] = torch->ShadowNear;
             out.SpotBias[slot] = 1.0f;
             out.SpotNormalBias[slot] = 1.0f;
             out.SpotSoftness[slot] = 1.5f;
@@ -187,7 +186,6 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
                 out.SpotFar[slot] = std::max(lc.Range, 0.2f);
                 out.SpotPos[slot] = pos;
                 out.SpotHalfTan[slot] = std::tan(0.5f * fov);
-                out.SpotNear[slot] = nearP;
                 out.SpotBias[slot] = lc.Shadow.Bias;
                 out.SpotNormalBias[slot] = lc.Shadow.NormalBias;
                 out.SpotSoftness[slot] = lc.Shadow.Softness;

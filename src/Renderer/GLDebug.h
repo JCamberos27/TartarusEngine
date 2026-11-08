@@ -33,12 +33,11 @@ void Init();
 // no debug output to count errors from.
 bool IsEnabled();
 
-// Running count of GL_DEBUG_TYPE_ERROR and GL_DEBUG_SEVERITY_HIGH messages seen since startup
-// (or since the last ResetErrorCount()). Used by the --smoke-test harness (main.cpp) to detect
+// Running count of GL_DEBUG_TYPE_ERROR and GL_DEBUG_SEVERITY_HIGH messages seen since startup.
+// Used by the --smoke-test harness (Tests/SmokeHarness.cpp) to detect
 // whether a scene's load+render introduced any NEW driver-reported errors: it snapshots this
 // before a scene and diffs against it after N frames, rather than needing an absolute-zero
 // baseline across the whole run.
 int ErrorCount();
-void ResetErrorCount();
 
 } // namespace GLDebug
