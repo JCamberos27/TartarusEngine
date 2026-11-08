@@ -156,8 +156,8 @@ def build(repo):
               'fogBaseHeight': 0.0, 'fogHeightFalloff': 0.08,
               'ssaoEnabled': True, 'shadowsEnabled': True, 'shadowResolution': 2048, 'shadowCascades': 2,
               'shadowDistance': 120.0, 'maxSpotShadows': 4, 'maxPointShadows': 0,
-              'vignetteIntensity': 0.15, 'filmGrain': 0.0, 'motionBlur': False, 'depthOfField': False,
-              'chromaticAberration': 0.0, 'gradeContrast': 0.0, 'gradeSaturation': 0.0})
+              'depthOfField': False,
+              'gradeContrast': 0.0, 'gradeSaturation': 0.0})
     d['skyHdriPath'] = ''
     d.pop('skyHdriGuid', None)
 

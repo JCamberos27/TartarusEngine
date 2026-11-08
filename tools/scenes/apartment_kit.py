@@ -873,8 +873,8 @@ class Builder:
                        'skyAmbientIntensity': 0.06, 'exposureEV': 1.7, 'autoExposure': False, 'fogEnabled': False,
                        'shadowDistance': 40.0, 'maxPointShadows': 8, 'maxSpotShadows': 12, 'ssaoEnabled': True,
                        'ssaoIntensity': 1.25, 'ssaoRadius': 0.45, 'bloomEnabled': True, 'bloomIntensity': 0.12,
-                       'bloomThreshold': 1.0, 'vignetteIntensity': 0.32, 'vignetteSmoothness': 0.55,
-                       'filmGrain': 0.06, 'gradeContrast': 8.0, 'gradeSaturation': -6.0, 'gradeTemperature': 0.0})
+                       'bloomThreshold': 1.0,
+                       'gradeContrast': 8.0, 'gradeSaturation': -6.0, 'gradeTemperature': 0.0})
 
     def apartment(self, number, xf, household, parent=-1, name=None):
         """One apartment of the plan at xf (see floor_units), lived in by `household` (a households/ module:

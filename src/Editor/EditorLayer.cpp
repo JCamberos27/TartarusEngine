@@ -932,7 +932,7 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
 
-    // #162 - anti-aliasing, colour grading and vignette (all in the final tonemap pass).
+    // #162 - anti-aliasing and colour grading (all in the final tonemap pass).
     {
         // Unity's Anti-aliasing mode. Off / FXAA / MSAA set the older MSAA + FXAA fields; TAA overrides both.
         static const char* kAaLabels[] = { "Off", "FXAA", "MSAA", "TAA" };
@@ -995,22 +995,6 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         world.GradeColorFilter = glm::vec3(1.0f);
     }
 
-    EditorUIPrimitives::SectionHeader("Vignette");
-    postSlider("Vignette intensity", &world.VignetteIntensity, 0.0f, 1.0f, "%.2f", "Edit Vignette",
-               "Darkens the corners of the image. 0 = off.");
-    if (world.VignetteIntensity > 0.0f)
-        postSlider("Vignette smoothness", &world.VignetteSmoothness, 0.01f, 1.0f, "%.2f", "Edit Vignette",
-                   "How gradually the darkening fades in from the centre.");
-
-    EditorUIPrimitives::SectionHeader("Lens");
-    postSlider("Chromatic aberration", &world.ChromaticAberration, 0.0f, 1.0f, "%.2f", "Edit Chromatic Aberration",
-               "Splits red and blue apart toward the edges of the image, like a cheap lens. 0 = off.");
-    postSlider("Film grain", &world.FilmGrain, 0.0f, 1.0f, "%.2f", "Edit Film Grain",
-               "Animated noise over the image, like film stock. 0 = off.");
-    if (world.FilmGrain > 0.0f)
-        postSlider("Grain response", &world.FilmGrainResponse, 0.0f, 1.0f, "%.2f", "Edit Film Grain",
-                   "How much bright areas are spared: 0 = grain everywhere, 1 = mostly in the shadows.");
-
     EditorUIPrimitives::SectionHeader("Depth of Field");
     if (EditorUIPrimitives::Checkbox("Depth of field", &world.DepthOfField)) PushUndo(world, "Toggle Depth of Field");
     if (ImGui::IsItemHovered())
@@ -1024,23 +1008,6 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
                    "one more range beyond it (in front and behind).");
         postSlider("Max blur", &world.DofMaxBlur, 0.0f, 32.0f, "%.1f px", "Edit Depth of Field",
                    "Blur radius at full strength, in pixels at 1080p (scaled with resolution).");
-    }
-    EditorUIPrimitives::SectionHeader("Motion Blur");
-    if (EditorUIPrimitives::Checkbox("Motion blur", &world.MotionBlur)) PushUndo(world, "Toggle Motion Blur");
-    if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Streaks the image along the camera's movement, like a real shutter.\n"
-                             "Camera motion only - an object moving under a still camera is not blurred.\n"
-                             "Game view and built player only - the Scene view stays sharp for editing.");
-    if (world.MotionBlur) {
-        postSlider("Intensity", &world.MotionBlurIntensity, 0.0f, 1.0f, "%.2f", "Edit Motion Blur",
-                   "Streak length as a fraction of how far the image moved this frame.");
-        int samples = world.MotionBlurSamples;
-        if (ImGui::SliderInt("Samples", &samples, 2, 32)) {
-            PushUndo(world, "Edit Motion Blur");
-            world.MotionBlurSamples = samples;
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Taps along the streak. More is smoother and costs more.");
     }
 
     EditorUIPrimitives::SectionHeader("Rain Wetness");

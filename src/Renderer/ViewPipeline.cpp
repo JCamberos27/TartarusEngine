@@ -2,11 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <glm/gtc/type_ptr.hpp> // #162 - motion blur matrices
 
 #include "Bloom.h"
 #include "BodyDebugDraw.h"
@@ -55,11 +53,6 @@ PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float b
     p.Contrast = world.GradeContrast;
     p.Saturation = world.GradeSaturation;
     for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.GradeColorFilter[i];
-    p.VignetteIntensity = world.VignetteIntensity;
-    p.VignetteSmoothness = world.VignetteSmoothness;
-    p.ChromaticAberration = world.ChromaticAberration;
-    p.FilmGrain = world.FilmGrain;
-    p.FilmGrainResponse = world.FilmGrainResponse;
     p.FocusDistance = world.FocusDistance;
     p.FocusRange = world.FocusRange;
     p.MaxBlur = world.DofMaxBlur;
@@ -79,34 +72,15 @@ PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float b
 // #162 - depth of field reads the view's resolved depth (requested only when DOF is on, so the
 // depth resolve stays off otherwise, #206) and its projection. Game views only: blurring the
 // Scene view would just get in the way of editing.
-// #162 - motion blur joins DOF here: both need this view's resolved depth, so they share the
-// one place that requests it. `viewSlot` picks which previous view-projection to remember -
-// the docked Game view and the maximized player are separate views and must not blur with each
-// other's camera motion.
 PostSettings ViewPipeline::WithDepthEffects(PostSettings p, const World& world, const HdrTarget& hdr,
-                                            const glm::mat4& view, const glm::mat4& proj, int viewSlot) {
-    const int slot = std::clamp(viewSlot, 0, kViewSlots - 1);
-    const glm::mat4 vp = proj * view;
-
-    if (world.MotionBlur) {
-        p.MotionBlur = true;
-        p.MotionBlurIntensity = world.MotionBlurIntensity;
-        p.MotionBlurSamples = world.MotionBlurSamples;
-        p.PrevViewProjValid = m_PrevValid[slot];
-        const glm::mat4 invVP = glm::inverse(vp);
-        std::memcpy(p.InvViewProj, glm::value_ptr(invVP), sizeof(p.InvViewProj));
-        std::memcpy(p.PrevViewProj, glm::value_ptr(m_PrevVP[slot]), sizeof(p.PrevViewProj));
-    }
-    m_PrevVP[slot] = vp;
-    m_PrevValid[slot] = true;
-
+                                            const glm::mat4& proj) {
     if (world.DepthOfField) {
         p.DepthOfField = true;
         p.ProjA = proj[2][2];
         p.ProjB = proj[3][2];
         p.Ortho = proj[2][3] == 0.0f;
     }
-    if (p.DepthOfField || p.MotionBlur) p.DepthTexture = hdr.ResolvedDepthTexture();
+    if (p.DepthOfField) p.DepthTexture = hdr.ResolvedDepthTexture();
     return p;
 }
 
@@ -437,7 +411,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // tab shows, so their colours are the editor's own sRGB values (EditorTheme::Axis*,
     // the traffic lights' family) rather than linear light pushed through exposure, the
     // tonemap curve, grading and gamma, which washed them out toward white. Also keeps
-    // them out of bloom, vignette and grain. The grid quad sits at a constant depth and
+    // them out of bloom. The grid quad sits at a constant depth and
     // never occluded against the scene, so no depth test is lost by drawing here.
     sceneFramebuffer.Bind();
     if (editor.ShowGrid() && !editor.OverlaysHidden() && !in.harnessCleanViews) { // (no grid lines through a test's shots)
@@ -471,7 +445,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
 
 void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4& view, const glm::mat4& proj,
                                    const glm::vec3& eye, int rw, int rh, unsigned outFbo, int outW, int outH,
-                                   int postSlot, bool overlayInPlayOnly, EditorLayer::RenderStats& stats) {
+                                   bool overlayInPlayOnly, EditorLayer::RenderStats& stats) {
     World& world = *in.world;
     const ViewTargets& t = in.game;
     HdrTarget& gameHdr = *t.hdr;
@@ -521,7 +495,7 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     ComputeBloom(in, t, gameColorTex, rw, rh, "Bloom (Game)", bloomGlowTex, bloomGlowIntensity);
     {
     PROFILE_GPU_SCOPE("Tonemap");
-    const PostSettings post = WithDepthEffects(MakePostSettings(world, bloomGlowTex, bloomGlowIntensity, in.dt, 1, eye), world, gameHdr, view, proj, postSlot);
+    const PostSettings post = WithDepthEffects(MakePostSettings(world, bloomGlowTex, bloomGlowIntensity, in.dt, 1, eye), world, gameHdr, proj);
     if (scaled) {
         in.gameLdr->Resize(rw, rh);
         in.tonemapper->Apply(gameColorTex, in.gameLdr->Handle(), rw, rh, post);

@@ -43,9 +43,6 @@ void ApplyPostProcessVolumes(const World& world, const glm::vec3& cameraPos, Pos
         blend(p.Tint, v.OverrideTint, v.Tint, a.W);
         blend(p.Contrast, v.OverrideContrast, v.Contrast, a.W);
         blend(p.Saturation, v.OverrideSaturation, v.Saturation, a.W);
-        blend(p.VignetteIntensity, v.OverrideVignette, v.Vignette, a.W);
-        blend(p.ChromaticAberration, v.OverrideChromatic, v.ChromaticAberration, a.W);
-        blend(p.FilmGrain, v.OverrideGrain, v.FilmGrain, a.W);
         // Bloom only brightens a glow that was computed this frame; with the scene's bloom off
         // there is no glow texture for a volume to turn up.
         if (p.BloomTexture) blend(p.BloomIntensity, v.OverrideBloom, v.BloomIntensity, a.W);

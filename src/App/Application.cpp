@@ -165,7 +165,6 @@
 #include <json.hpp>         // --model-report reads each model's .meta
 #include <cstdio>
 #include <stb_image_write.h>
-#include <glm/gtc/type_ptr.hpp> // #162 - motion blur matrices
 #include <cstring>
 #include <imgui_internal.h> // --editor-shot finds dock tabs by title
 #include "CurveEditor.h"
@@ -2023,7 +2022,7 @@ int Application::RunSession() {
                 }
                 EditorLayer::RenderStats gvRenderStats;
                 viewPipeline.RenderGameFrame(viewIn, gvView, gvProj, gvEye, gvRw, gvRh, gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
-                                                 /*postSlot=*/0, /*overlayInPlayOnly=*/true, gvRenderStats);
+                                                 /*overlayInPlayOnly=*/true, gvRenderStats);
                 // With the Scene view hidden (the Game tab in front), the Game view is the frame on
                 // screen: the Statistics panel reports it, so it agrees with the Game view's overlay.
                 if (!editor.SceneImageWanted()) editor.SetRenderStats(gvRenderStats);
@@ -2214,7 +2213,7 @@ int Application::RunSession() {
                 glm::mat4 view = gameCam->ViewMatrix();
                 glm::mat4 proj = gameCam->ProjectionMatrix(aspect);
                 EditorLayer::RenderStats stats;
-                viewPipeline.RenderGameFrame(viewIn, view, proj, gameCam->Position, mRw, mRh, 0, mw, mh, /*postSlot=*/1, /*overlayInPlayOnly=*/false, stats);
+                viewPipeline.RenderGameFrame(viewIn, view, proj, gameCam->Position, mRw, mRh, 0, mw, mh, /*overlayInPlayOnly=*/false, stats);
                 editor.SetRenderStats(stats);
             }
 

@@ -1260,16 +1260,8 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["gradeContrast"] = world.GradeContrast;
         root["gradeSaturation"] = world.GradeSaturation;
         root["gradeColorFilter"] = {world.GradeColorFilter.r, world.GradeColorFilter.g, world.GradeColorFilter.b};
-        root["vignetteIntensity"] = world.VignetteIntensity;
-        root["vignetteSmoothness"] = world.VignetteSmoothness;
-    root["chromaticAberration"] = world.ChromaticAberration;
-    root["filmGrain"] = world.FilmGrain;
-    root["filmGrainResponse"] = world.FilmGrainResponse;
     root["depthOfField"] = world.DepthOfField;
     root["focusDistance"] = world.FocusDistance;
-    root["motionBlur"] = world.MotionBlur;                      // #162
-    root["motionBlurIntensity"] = world.MotionBlurIntensity;
-    root["motionBlurSamples"] = world.MotionBlurSamples;
     // Anti-aliasing mode: written only when it says more than msaaSamples + fxaa already do (TAA), so
     // scenes that never touch it save byte-for-byte as before. Rain wetness likewise only when set.
     if (world.AntiAliasing != World::LegacyAntiAliasing(world.MsaaSamples, world.FxaaEnabled)) {
@@ -1661,11 +1653,6 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
                 for (int i = 0; i < 3; ++i)
                     if (root["gradeColorFilter"][i].is_number())
                         world.GradeColorFilter[i] = std::max(0.0f, root["gradeColorFilter"][i].get<float>());
-            world.VignetteIntensity  = std::clamp(root.value("vignetteIntensity", 0.0f), 0.0f, 1.0f);
-            world.VignetteSmoothness = std::clamp(root.value("vignetteSmoothness", 0.4f), 0.01f, 1.0f);
-    world.ChromaticAberration = std::clamp(root.value("chromaticAberration", 0.0f), 0.0f, 1.0f);
-    world.FilmGrain          = std::clamp(root.value("filmGrain", 0.0f), 0.0f, 1.0f);
-    world.FilmGrainResponse  = std::clamp(root.value("filmGrainResponse", 0.8f), 0.0f, 1.0f);
     // Volumetric fog: absent in older scenes, which load with it off.
     world.VolumetricEnabled       = root.value("volumetricEnabled", false);
     world.VolumetricDensity       = std::clamp(root.value("volDensity", 0.02f), 0.0f, 10.0f);
@@ -1681,9 +1668,6 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     world.VolumetricQuality       = std::clamp(root.value("volQuality", 1), 0, 2);
     world.DepthOfField  = root.value("depthOfField", false);
     world.FocusDistance = std::clamp(root.value("focusDistance", 10.0f), 0.0f, 10000.0f);
-    world.MotionBlur          = root.value("motionBlur", false); // #162
-    world.MotionBlurIntensity = std::clamp(root.value("motionBlurIntensity", 0.5f), 0.0f, 1.0f);
-    world.MotionBlurSamples   = std::clamp(root.value("motionBlurSamples", 12), 2, 32);
     // Absent: the mode the older msaaSamples / fxaa fields already describe (never TAA).
     world.AntiAliasing = World::LegacyAntiAliasing(world.MsaaSamples, world.FxaaEnabled);
     if (const auto aa = root.find("antiAliasing"); aa != root.end() && aa->is_string()) {

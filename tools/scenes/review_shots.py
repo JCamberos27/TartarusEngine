@@ -21,7 +21,7 @@ from apartment_kit import AREAS, FURNISHED, ROOMS, H, floor_units, inner  # noqa
 
 EYE = 1.6
 REVIEW = {'skyHorizonColor': [0.85, 0.85, 0.85], 'skyZenithColor': [0.9, 0.9, 0.9], 'skyAmbientIntensity': 1.4,
-          'exposureEV': 0.0, 'filmGrain': 0.0, 'vignetteIntensity': 0.0, 'bloomEnabled': False, 'gradeContrast': 0.0,
+          'exposureEV': 0.0, 'bloomEnabled': False, 'gradeContrast': 0.0,
           'gradeSaturation': 0.0, 'ssaoIntensity': 1.0}
 SHEET_W, SHEET_H = 620, 290   # each view on the sheet
 

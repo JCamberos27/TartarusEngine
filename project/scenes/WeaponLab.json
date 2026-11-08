@@ -8,12 +8,9 @@
   "bloomIntensity": 0.11999999731779099,
   "bloomKnee": 0.5,
   "bloomThreshold": 1.2000000476837158,
-  "chromaticAberration": 0.0,
   "depthOfField": false,
   "dofMaxBlur": 8.0,
   "exposureEV": 0.0,
-  "filmGrain": 0.0,
-  "filmGrainResponse": 0.800000011920929,
   "focusDistance": 10.0,
   "focusRange": 3.0,
   "fogBaseHeight": 0.0,
@@ -962,9 +959,6 @@
   ],
   "maxPointShadows": 2,
   "maxSpotShadows": 4,
-  "motionBlur": false,
-  "motionBlurIntensity": 0.5,
-  "motionBlurSamples": 12,
   "msaaSamples": 4,
   "shadowCascades": 4,
   "shadowDistance": 150.0,
@@ -1055,8 +1049,6 @@
   "ssaoIntensity": 1.0,
   "ssaoRadius": 0.5,
   "tonemapOperator": 1,
-  "vignetteIntensity": 0.18000000715255737,
-  "vignetteSmoothness": 0.44999998807907104,
   "boxes": [
     {
       "collider": {

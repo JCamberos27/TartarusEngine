@@ -575,8 +575,8 @@ def build(repo):
               'bloomEnabled': True, 'bloomThreshold': 1.0, 'bloomKnee': 0.5, 'bloomIntensity': 0.12,
               'fogEnabled': False, 'ssaoEnabled': True, 'ssaoIntensity': 1.25, 'ssaoRadius': 0.45,
               'shadowsEnabled': True, 'shadowResolution': 4096, 'shadowCascades': 3, 'shadowDistance': 60.0,
-              'maxSpotShadows': 12, 'maxPointShadows': 0, 'vignetteIntensity': 0.3, 'vignetteSmoothness': 0.55,
-              'filmGrain': 0.0, 'motionBlur': False, 'depthOfField': False, 'chromaticAberration': 0.0,
+              'maxSpotShadows': 12, 'maxPointShadows': 0,
+              'depthOfField': False,
               'gradeContrast': 6.0, 'gradeSaturation': -6.0, 'gradeTemperature': 0.0})
     d['skyHdriPath'] = ''
     d.pop('skyHdriGuid', None)

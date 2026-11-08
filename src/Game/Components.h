@@ -224,10 +224,7 @@ struct PostProcessVolumeComponent {
     bool OverrideTint = false;        float Tint = 0.0f;
     bool OverrideContrast = false;    float Contrast = 0.0f;
     bool OverrideSaturation = false;  float Saturation = 0.0f;
-    bool OverrideVignette = false;    float Vignette = 0.3f;
     bool OverrideBloom = false;       float BloomIntensity = 0.1f;
-    bool OverrideChromatic = false;   float ChromaticAberration = 0.5f;
-    bool OverrideGrain = false;       float FilmGrain = 0.3f;
 };
 
 // #171 - Unity's Audio Listener: in Play, 3D sounds are heard from this entity (position and

@@ -203,8 +203,7 @@ scene = {
             'cirrusCoverage': 0.3, 'aerialPerspectiveScale': 6.0},
     'volumetricEnabled': True, 'volDensity': 0.01, 'volDistance': 64.0, 'volQuality': 1, 'volAnisotropy': 0.6,
     'volBaseHeight': 0.0, 'volHeightFalloff': 0.0,
-    'fogEnabled': False, 'motionBlur': False, 'depthOfField': False, 'chromaticAberration': False,
-    'filmGrain': 0.0, 'vignetteIntensity': 0.0,
+    'fogEnabled': False, 'depthOfField': False,
 }
 scene.update(ents)
 os.makedirs(os.path.dirname(out), exist_ok=True)
