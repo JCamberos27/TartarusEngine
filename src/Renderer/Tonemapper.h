@@ -4,7 +4,7 @@ class Shader;
 class Framebuffer;
 
 // #162 - everything the final HDR -> display pass applies, gathered so call sites don't grow
-// a parameter per effect. Defaults are neutral (grading off, no vignette, no FXAA).
+// a parameter per effect. Defaults are neutral (grading off, no FXAA).
 struct PostSettings {
     float ExposureEV = 0.0f;
     int Operator = 1; // Tonemapper::Operator
@@ -15,12 +15,6 @@ struct PostSettings {
     float Temperature = 0.0f, Tint = 0.0f, Contrast = 0.0f, Saturation = 0.0f;
     float ColorFilter[3] = {1.0f, 1.0f, 1.0f};
 
-    float VignetteIntensity = 0.0f; // 0 = off
-    float VignetteSmoothness = 0.4f;
-    float ChromaticAberration = 0.0f; // 0..1, colour fringing toward the edges
-    float FilmGrain = 0.0f;           // 0..1, animated luminance noise
-    float FilmGrainResponse = 0.8f;   // 0..1, how much bright areas are spared
-
     // #162 - depth of field. Needs DepthTexture (this view's resolved depth) and the view's
     // projection terms (proj[2][2], proj[3][2]) to turn it back into distance.
     bool  DepthOfField = false;
@@ -30,16 +24,6 @@ struct PostSettings {
     unsigned int DepthTexture = 0;
     float ProjA = 0.0f, ProjB = 0.0f;
     bool  Ortho = false;
-
-    // #162 - camera motion blur. Velocity comes from reprojecting this frame's depth through the
-    // previous frame's view-projection, so it covers camera movement only (not a moving object
-    // under a still camera - that needs a velocity target). Needs DepthTexture, like DOF does.
-    bool  MotionBlur = false;
-    float MotionBlurIntensity = 0.5f; // 0..1, streak length as a fraction of the frame's motion
-    int   MotionBlurSamples = 12;     // taps along the streak
-    float InvViewProj[16] = {};       // this frame, clip -> world
-    float PrevViewProj[16] = {};      // last frame, world -> clip
-    bool  PrevViewProjValid = false;  // false on the first frame of a view / after a camera cut
 
     bool Fxaa = false;
     bool Dither = true;
@@ -82,11 +66,6 @@ private:
     void EnsureCreated();
     // #162 - meters srcHdrTexture and updates the slot's adapted EV; returns that 1x1 texture.
     unsigned int UpdateAutoExposure(unsigned int srcHdrTexture, const PostSettings& post);
-    // #162 - reprojects srcHdrTexture along camera motion into m_MbTex (w x h) and returns it.
-    unsigned int ApplyMotionBlur(unsigned int srcHdrTexture, int w, int h, const PostSettings& post);
-    Shader* m_MbShader = nullptr;
-    unsigned int m_MbTex = 0, m_MbFbo = 0;
-    int m_MbW = 0, m_MbH = 0;
 
     // #162 - blurs srcHdrTexture by depth into m_DofTex (w x h) and returns it.
     unsigned int ApplyDepthOfField(unsigned int srcHdrTexture, int w, int h, const PostSettings& post);

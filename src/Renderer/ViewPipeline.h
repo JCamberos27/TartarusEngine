@@ -106,9 +106,9 @@ public:
 
     // The game camera's frame, from the HDR clear to the HUD: drawn at rw x rh, shown at outW x outH in `outFbo`
     // (upscaled when smaller). The docked Game view and Free-Aspect maximized play differ only in what they pass:
-    // `postSlot` is the post chain's motion-blur history, and `overlayInPlayOnly` keeps the physics debug overlay to Play.
+    // `overlayInPlayOnly` keeps the physics debug overlay to Play.
     void RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye,
-                         int rw, int rh, unsigned outFbo, int outW, int outH, int postSlot, bool overlayInPlayOnly,
+                         int rw, int rh, unsigned outFbo, int outW, int outH, bool overlayInPlayOnly,
                          EditorLayer::RenderStats& stats);
 
 private:
@@ -127,14 +127,7 @@ private:
     void SsaoDepthPrepass(const ViewPipelineInputs& in, Ssao& target, int w, int h, const glm::mat4& view,
                           const glm::mat4& proj, bool editorView);
 
-    PostSettings WithDepthEffects(PostSettings p, const World& world, const HdrTarget& hdr, const glm::mat4& view,
-                                  const glm::mat4& proj, int viewSlot);
-
-    // Remembered per view even when motion blur is off, so switching it on mid-session starts
-    // from the real previous frame rather than a stale one from minutes ago.
-    static constexpr int kViewSlots = 2;
-    glm::mat4 m_PrevVP[kViewSlots] = {glm::mat4(1.0f), glm::mat4(1.0f)};
-    bool m_PrevValid[kViewSlots] = {false, false};
+    PostSettings WithDepthEffects(PostSettings p, const World& world, const HdrTarget& hdr, const glm::mat4& proj);
 
     std::vector<VisibleRenderable> m_PrepassVisible; // the SSAO depth pre-pass's gather, reused frame to frame
     std::vector<DepthCaster> m_PrepassDraws;

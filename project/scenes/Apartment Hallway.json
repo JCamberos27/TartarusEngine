@@ -27067,7 +27067,6 @@
       "static": true
     }
   ],
-  "chromaticAberration": 0.0,
   "depthOfField": false,
   "dofMaxBlur": 8.0,
   "empties": [
@@ -77268,8 +77267,6 @@
     }
   ],
   "exposureEV": 1.7999999523162842,
-  "filmGrain": 0.0,
-  "filmGrainResponse": 0.800000011920929,
   "focusDistance": 10.0,
   "focusRange": 3.0,
   "fogBaseHeight": 0.0,
@@ -113021,9 +113018,6 @@
       ]
     }
   ],
-  "motionBlur": false,
-  "motionBlurIntensity": 0.5,
-  "motionBlurSamples": 12,
   "msaaSamples": 4,
   "shadowCascadeSplit": 0.75,
   "shadowCascades": 3,
@@ -113114,8 +113108,6 @@
   "ssaoIntensity": 1.25,
   "ssaoRadius": 0.44999998807907104,
   "tonemapOperator": 1,
-  "vignetteIntensity": 0.30000001192092896,
-  "vignetteSmoothness": 0.550000011920929,
   "volAlbedo": [
     0.8999999761581421,
     0.8999999761581421,

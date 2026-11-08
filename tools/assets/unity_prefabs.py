@@ -1291,11 +1291,11 @@ SPAWN_FLOOR_Y = {
 
 
 # The AAA look, so regenerating a scene keeps it. Every pack scene gets the physical sky, TAA, bloom, auto exposure and a
-# gritty grade, with the lens effects (grain, vignette, CA, motion blur, DOF) off. The playable scenes then get their own
+# gritty grade, with depth of field off. The playable scenes then get their own
 # time of day on top; the catalog scenes (Showcase, Prefabs, Asset_list) keep the base look only.
 LOOK_BASE = dict(
     skySource=2, antiAliasing='TAA', msaaSamples=1, fxaa=False, tonemapOperator=1,
-    filmGrain=0.0, vignetteIntensity=0.0, chromaticAberration=0.0, motionBlur=False, depthOfField=False,
+    depthOfField=False,
     bloomEnabled=True, bloomThreshold=1.0, bloomKnee=0.5, bloomIntensity=0.14,
     autoExposure=True, autoExposureMinEV=-3.0, autoExposureMaxEV=3.0, autoExposureSpeedUp=1.5, autoExposureSpeedDown=1.0,
     gradeContrast=14.0, gradeSaturation=-10.0, gradeTint=0.0,

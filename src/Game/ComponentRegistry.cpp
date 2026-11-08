@@ -1453,7 +1453,7 @@ void RegisterEngineComponents() {
     {
         ReflectComponent m{
             "Post-process Volume", ICON_FA_WAND_MAGIC_SPARKLES,
-            "Changes the look (exposure, colour, vignette, bloom, lens effects) while the camera is\n"
+            "Changes the look (exposure, colour, bloom) while the camera is\n"
             "inside this box, fading in over Blend Distance - or everywhere, when Global. Tick an\n"
             "override to take that setting over from Lighting > Post-processing.",
             "Rendering",
@@ -1482,15 +1482,9 @@ void RegisterEngineComponents() {
                 { "Override Saturation", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideSaturation), 0.0f, "" },
                 { "Saturation", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Saturation), 0.5f,
                   "-100 = greyscale.", -100.0f, 100.0f },
-                { "Override Vignette", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideVignette), 0.0f, "" },
-                { "Vignette", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Vignette), 0.01f, "", 0.0f, 1.0f },
                 { "Override Bloom", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideBloom), 0.0f,
                   "Needs bloom enabled in Lighting > Post-processing." },
                 { "Bloom Intensity", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, BloomIntensity), 0.005f, "", 0.0f, 2.0f },
-                { "Override Chromatic Aberration", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideChromatic), 0.0f, "" },
-                { "Chromatic Aberration", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, ChromaticAberration), 0.01f, "", 0.0f, 1.0f },
-                { "Override Film Grain", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideGrain), 0.0f, "" },
-                { "Film Grain", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, FilmGrain), 0.01f, "", 0.0f, 1.0f },
             },
         };
         for (auto& f : m.Fields)

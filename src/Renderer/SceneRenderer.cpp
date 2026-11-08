@@ -1684,7 +1684,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // Nothing here is clipped at the near plane: a view model reaches back past it (the player
         // body's arms piece has its shoulders at the eye), and clipped it showed as an open cut through
         // the shoulder. Depth clamp pins those fragments to the near plane instead, keeping the
-        // projection - and so the depth that depth of field and motion blur read - unchanged.
+        // projection - and so the depth that depth of field reads - unchanged.
         glEnable(0x864F /*GL_DEPTH_CLAMP, core since 3.2; not in this loader*/);
 
         // Re-fit the froxel lists to this projection. They were culled for the world's FOV, so

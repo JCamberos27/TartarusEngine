@@ -99,22 +99,11 @@ public:
     float GradeContrast{0.0f};
     float GradeSaturation{0.0f};
     glm::vec3 GradeColorFilter{1.0f};
-    float VignetteIntensity{0.0f}; // 0 = off
-    float VignetteSmoothness{0.4f};
-    float ChromaticAberration{0.0f}; // #162 - 0 = off
-    float FilmGrain{0.0f};           // #162 - 0 = off
-    float FilmGrainResponse{0.8f};
     // #162 - depth of field (Game view / player only).
     bool  DepthOfField{false};
     float FocusDistance{10.0f};
     float FocusRange{3.0f};
     float DofMaxBlur{8.0f};
-
-    // #162 - camera motion blur (Game view / player only, like DOF). Velocity is reprojected
-    // from depth, so this blurs camera movement, not an object moving under a still camera.
-    bool  MotionBlur{false};
-    float MotionBlurIntensity{0.5f};
-    int   MotionBlurSamples{12};
 
     // Anti-aliasing mode (Unity's camera Anti-aliasing). Off / FXAA / MSAA only summarise the older
     // MsaaSamples + FxaaEnabled fields, which still drive those modes exactly as before (so a scene saved
