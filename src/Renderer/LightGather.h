@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <utility>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -92,7 +93,11 @@ private:
     };
     void AssignShadowSlots(const LightGatherInputs& in, FrameLights& out);
 
-    std::set<entt::entity> m_PrevShadowed;
+    std::vector<entt::entity> m_PrevShadowed;   // last frame's shadow holders, sorted
+    std::vector<entt::entity> m_ShadowedScratch; // this frame's, built here and swapped in (keeps its storage)
+    // The shadow candidates' world transforms in registry order (what AssignShadowSlots composed), which Gather's pass
+    // over the same view takes instead of composing them again.
+    std::vector<std::pair<entt::entity, glm::mat4>> m_LightXforms;
     StableSlots m_SpotSlots, m_PointSlots;
     std::unordered_map<entt::entity, int> m_SpotSlotOf, m_PointSlotOf;
 };

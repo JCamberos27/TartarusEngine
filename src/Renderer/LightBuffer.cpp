@@ -1,5 +1,8 @@
 #include "LightBuffer.h"
+#include <algorithm>
 #include <cstring>
+#include <utility>
+#include <vector>
 #include "gl.h"
 
 #include <cstdint>
@@ -79,21 +82,24 @@ void LightBuffer::SortLocalNearestFirst(const glm::vec3& eye) {
         const float d = glm::length(glm::vec3(l.PositionType) - eye) - l.ColorRange.a;
         return d > 0.0f ? d : 0.0f;
     };
-    for (size_t i = (size_t)m_DirectionalCount + 1; i < m_Lights.size(); ++i) {
-        const GpuLight l = m_Lights[i];
-        const float k = gap(l);
-        size_t j = i;
-        while (j > (size_t)m_DirectionalCount && gap(m_Lights[j - 1]) > k) { m_Lights[j] = m_Lights[j - 1]; --j; }
-        m_Lights[j] = l;
-    }
+    const size_t first = (size_t)m_DirectionalCount;
+    if (m_Lights.size() < first + 2) return;
+    // Each light's key once, then a stable sort of the order (ties keep their place, as the insertion sort did).
+    static std::vector<std::pair<float, std::uint32_t>> keyed;
+    static std::vector<GpuLight> sorted;
+    keyed.clear();
+    for (size_t i = first; i < m_Lights.size(); ++i) keyed.emplace_back(gap(m_Lights[i]), (std::uint32_t)i);
+    std::stable_sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    sorted.clear();
+    for (const auto& k : keyed) sorted.push_back(m_Lights[k.second]);
+    std::copy(sorted.begin(), sorted.end(), m_Lights.begin() + (std::ptrdiff_t)first);
 }
 
 void LightBuffer::Upload() {
     EnsureCreated();
-    uint32_t count = (uint32_t)m_Lights.size();
-    uint32_t dirCount = (uint32_t)m_DirectionalCount;
-    glNamedBufferSubData(m_Ssbo, 0, sizeof(uint32_t), &count);
-    glNamedBufferSubData(m_Ssbo, sizeof(uint32_t), sizeof(uint32_t), &dirCount);
+    const uint32_t count = (uint32_t)m_Lights.size();
+    const uint32_t header[2] = {count, (uint32_t)m_DirectionalCount}; // light count, then directional count
+    glNamedBufferSubData(m_Ssbo, 0, sizeof header, header);
     if (count > 0) {
         glNamedBufferSubData(m_Ssbo, kHeaderBytes,
                              (GLsizeiptr)(count * sizeof(GpuLight)), m_Lights.data());

@@ -44,7 +44,9 @@ void LightGather::StableSlots::Assign(const std::vector<entt::entity>& want, int
 // shifted every later light to another layer whenever one light gained or lost its shadow, and redrew all their caches.
 void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& out) {
     World& world = *in.world;
-    std::set<entt::entity> frameShadowed;
+    std::vector<entt::entity>& frameShadowed = m_ShadowedScratch;
+    frameShadowed.clear();
+    m_LightXforms.clear();
     std::vector<entt::entity> chosenSpots, chosenPoints;
     // The player's flashlight takes the first spot shadow; the scene's spots share the rest.
     const int sceneSpotShadowBudget = std::max(out.SpotBudget - (in.torch ? 1 : 0), 0);
@@ -58,22 +60,25 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
         if (!lc.Shadow.Enabled || !world.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
             lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f || world.Registry.all_of<InactiveTag>(e) || (in.suppressed && in.suppressed(e)))
             continue;
-        const glm::vec3 lpos = glm::vec3(world.ComposeWorldTransform(e)[3]);
+        const glm::mat4 lightXform = world.ComposeWorldTransform(e);
+        m_LightXforms.emplace_back(e, lightXform);
+        const glm::vec3 lpos = glm::vec3(lightXform[3]);
         const float range = std::max(lc.Range, 0.2f);
         const float lightDist = glm::length(lpos - viewPos);
         if (LightBuffer::DistanceFade(lc.Range, lightDist, tanHalfFov) <= 0.0f) continue;
         const float gap = std::max(lightDist - range, 0.0f);
         float score = lc.Intensity * range * range / (gap * gap + 1.0f);
-        if (m_PrevShadowed.count(e)) score *= 1.25f;
+        if (std::binary_search(m_PrevShadowed.begin(), m_PrevShadowed.end(), e)) score *= 1.25f;
         (lc.Kind == LightComponent::Type::Spot ? spots : points).emplace_back(score, e);
     }
     auto take = [&](std::vector<std::pair<float, entt::entity>>& v, size_t n, std::vector<entt::entity>& chosen) {
         std::stable_sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-        for (size_t i = 0; i < v.size() && i < n; ++i) { frameShadowed.insert(v[i].second); chosen.push_back(v[i].second); }
+        for (size_t i = 0; i < v.size() && i < n; ++i) { frameShadowed.push_back(v[i].second); chosen.push_back(v[i].second); }
     };
     take(spots, (size_t)sceneSpotShadowBudget, chosenSpots);
     take(points, (size_t)out.PointBudget, chosenPoints);
-    m_PrevShadowed = frameShadowed;
+    std::sort(frameShadowed.begin(), frameShadowed.end());
+    m_PrevShadowed.swap(frameShadowed); // now this frame's holders (frameShadowed keeps last frame's storage)
     if (in.torch && world.ShadowsEnabled && out.SpotBudget > 0) chosenSpots.insert(chosenSpots.begin(), kTorchSlotKey);
     m_SpotSlots.Assign(chosenSpots, out.SpotBudget, in.frame + 1, m_SpotSlotOf);
     m_PointSlots.Assign(chosenPoints, out.PointBudget, in.frame + 1, m_PointSlotOf);
@@ -81,7 +86,7 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
     out.OverBudget.clear();
     for (const auto* v : {&spots, &points})
         for (const auto& [score, e] : *v)
-            if (!frameShadowed.count(e)) out.OverBudget.insert(e);
+            if (!std::binary_search(m_PrevShadowed.begin(), m_PrevShadowed.end(), e)) out.OverBudget.insert(e);
 }
 
 void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
@@ -123,6 +128,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
         lightBuffer.AddSpot(pos, aim, torch->Color, torch->SpillIntensity, torch->SpillRange,
                             std::cos(glm::radians(torch->SpillOuterDeg)), std::cos(glm::radians(torch->SpillInnerDeg)), slot, 0u);
     }
+    size_t xformAt = 0; // m_LightXforms is in this view's order and a subset of it
     for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
         if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
         if (world.Registry.all_of<InactiveTag>(e)) continue;
@@ -133,7 +139,9 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
         // range would still shade it. (A directional keeps its slot: it decides the cascade pass.)
         if (lc.Kind != LightComponent::Type::Directional &&
             (lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f)) continue;
-        glm::mat4 m = world.ComposeWorldTransform(e);
+        glm::mat4 m;
+        if (xformAt < m_LightXforms.size() && m_LightXforms[xformAt].first == e) m = m_LightXforms[xformAt++].second;
+        else m = world.ComposeWorldTransform(e);
         glm::vec3 pos = glm::vec3(m[3]);
         glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
         // A point/spot light too small on screen to show fades out, then drops out (DistanceFade).

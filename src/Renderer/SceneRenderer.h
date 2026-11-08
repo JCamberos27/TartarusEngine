@@ -51,11 +51,16 @@ struct VisibleRenderable {
     entt::entity Entity;
     RenderableComponent* Renderable;
     glm::mat4 Xform;              // the cached world transform
+    glm::mat3 Normal;             // transpose(inverse(mat3(Xform))), kept with it so the instance buffer needn't invert per frame
     glm::vec3 LocalMin, LocalMax; // the model's bounds as posed (Model::PosedBounds)
     // Those bounds in world space; Bounded is false when the model has none (a never-populated pair), which draws or
     // casts without a frustum test.
     glm::vec3 WorldMin, WorldMax;
     bool Bounded;
+    // The renderable's tags and layer as the candidate cache read them (SceneRenderer.cpp's CandidateFlag bits), so the
+    // draw-list build needn't look them up again per view. Only set on what GatherVisible returns.
+    std::uint16_t CandFlags = 0;
+    int Layer = 0;
 };
 // Clears `out` and fills it with what passes `q`.
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);

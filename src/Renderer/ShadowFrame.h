@@ -85,6 +85,7 @@ private:
     std::vector<LocalCaster> m_LocalCasters;
     std::unordered_map<std::uint32_t, CasterMotion> m_CasterMotion;
     std::vector<const LocalCaster*> m_Visible;
+    std::vector<std::uint8_t> m_VisibleDynamic; // per m_Visible entry: DynamicFor for the light being rendered
     std::uint64_t m_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'
     std::uint64_t m_SpotLiveSig[SpotShadowMap::kMaxSpots] = {};   // the static signature a moving light's live layer was drawn with
     bool m_SpotHadAnimated[SpotShadowMap::kMaxSpots] = {};

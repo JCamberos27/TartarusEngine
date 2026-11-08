@@ -10,7 +10,8 @@
 PointShadowMap::~PointShadowMap() { Release(); }
 
 void PointShadowMap::Release() {
-    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (dynamic + static)", this), 0);
+    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (live)", this), 0);
+    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (static cache)", this), 0);
     if (m_Fbo)        { glDeleteFramebuffers(1, &m_Fbo);    m_Fbo = 0; }
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
     if (m_StaticFbo)   { glDeleteFramebuffers(1, &m_StaticFbo);  m_StaticFbo = 0; }
@@ -41,10 +42,8 @@ void PointShadowMap::Configure(int resolution, int cubes) {
     glCreateFramebuffers(1, &m_Fbo);
     glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
 
-    // The static casters' depth, never sampled: only copied from.
-    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
-    glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, cubes * 6);
-    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (dynamic + static)", this), (size_t)resolution * resolution * cubes * 6 * 4 * 2);
+    // The static casters' depth (never sampled, only copied from) is made on first use: EnsureStatic.
+    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (live)", this), (size_t)resolution * resolution * cubes * 6 * 4);
     glCreateFramebuffers(1, &m_StaticFbo);
     glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
 
@@ -67,7 +66,16 @@ void PointShadowMap::BeginFace(int slot, int face) const {
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
+// The static-caster cache is allocated when a face first needs it: a scene with no shadowed point light never pays for it.
+void PointShadowMap::EnsureStatic() const {
+    if (m_StaticArray) return;
+    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
+    glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, m_Resolution, m_Resolution, m_Cubes * 6);
+    GpuMemTrack::Set(GpuMemTrack::Key("PointShadowMap (static cache)", this), (size_t)m_Resolution * m_Resolution * m_Cubes * 6 * 4);
+}
+
 void PointShadowMap::BeginStaticFace(int slot, int face) const {
+    EnsureStatic();
     slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
     face = std::clamp(face, 0, 5);
     glBindFramebuffer(GL_FRAMEBUFFER, m_StaticFbo);
@@ -77,6 +85,7 @@ void PointShadowMap::BeginStaticFace(int slot, int face) const {
 }
 
 void PointShadowMap::BeginFaceFromStatic(int slot, int face) const {
+    EnsureStatic();
     slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
     face = std::clamp(face, 0, 5);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, slot * 6 + face);
