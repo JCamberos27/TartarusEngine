@@ -213,6 +213,14 @@
      "path": "assets/Weapons/Remington870/Remington870.prefab",
      "pathGuid": "cf1fec9edad348ec"
     },
+    "Sidearm Animation Set": {
+      "path": "assets/Weapons/Revolver38/Revolver38.fpsanim",
+      "pathGuid": "0f90a3dcb9db04dd"
+    },
+    "Sidearm Weapon Prefab": {
+      "path": "assets/Weapons/Revolver38/Revolver38.prefab",
+      "pathGuid": "6c10f2fcf9d4e6a9"
+    },
     "Field of View": 90.0
    }
   },

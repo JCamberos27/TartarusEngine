@@ -43,6 +43,7 @@ struct FirstPersonWorldGunInput {
     float MeshClearance = 0.05f;   // ... and how far from the drawn head / neck / hood vertices, m (0 = off)
     float TorsoKeepOut = 0.0f;     // 0..1: how much the gun also keeps MeshClearance from the drawn torso (1 - Shouldered)
     float CheekWeld = 0.0f;        // 0..1 (eased): the head's tilt over the stock - on the sights only
+    float Action = 0.0f;           // 0..1: a reload / inspect / mag check / melee off the sights - the world gun takes less of the view pitch
 };
 
 // The weapon's hand anchor (FirstPersonPresentation::HandAnchor), for the world body: the free hand's trip off the gun
@@ -212,6 +213,9 @@ private:
     entt::entity m_Driver = entt::null; // the piece whose Animator Controller runs the body
     std::vector<std::shared_ptr<Model>> m_Models; // every piece's model (Stop un-hides their bones)
     std::vector<entt::entity> m_Pieces;           // ... and its entity, in step with m_Models
+    float m_StanceYaw = 0.0f;                     // the view's usual heading off the world shoulders (their blade), radians
+    bool m_HaveStanceYaw = false;
+    float m_ActionHold = 0.0f;                    // 0..1 (eased Action): the world gun pitched with the chest, not the view
     float m_ArmsWeight = 0.0f;                    // 0..1: how much the arms follow the weapon's
     std::map<std::string, std::string> m_BoneMap; // the Bone Map, parsed at Start
     int m_ShoulderNode[2] = {-1, -1};             // upperarm_l / upperarm_r on the driver

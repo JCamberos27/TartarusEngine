@@ -142,6 +142,53 @@ REMINGTON = {
     },
 }
 
+REVOLVER = {
+    "arms": "Armature", "weapon": "Armature.001", "prefix": "Revolver38",
+    # Run on the "(3P)" working copy tools/weapons/export_revolver38.py writes (save3p): it carries the fixed
+    # actions (*_fixed, *_baked) these clips name. A two-handed handgun: both hand targets ride CB_Gun, so there
+    # is no support-hand rework. "Butt" here is the back of the grip.
+    # Starting holds, to be measured in the engine as the Remington's were (right, up, forward cm from the 1P gun):
+    # hip - a compact two-hand ready at the chest, muzzle a little down; aim - out to the right eye's line, since
+    # the 1P gun sits on the view's centreline; sprint - muzzle-down low ready.
+    "groups": {
+        "hip": {"move": (6.0, -10.0, -4.0), "pitch": 10.0},
+        "aim": {"move": (6.0, -5.0, 0.0), "pitch": 0.0},
+        "sprint": {"carry": True, "base": "hip", "pitch": 35.0, "yaw": 10.0, "move": (0.0, -4.0, 0.0), "motion": 0.4},
+        # Inspect: the 1P clip lifts the gun to the camera; from outside that put it out at arm's length. Kept nearer
+        # the chest: less of the clip's swing, drawn down and only a little out (drawn in 8 cm, the arms crossed into the chest
+        # as the view turned).
+        "inspect": {"damp": 0.6, "base": "hip", "away": (-2.0, -4.0, 2.0)},
+    },
+    # The 1P inspect turns the gun one-handed and drops the left hand out of view (f6-f240) before it works the crane:
+    # from outside, a hand hanging at the hip. It stays on the grip (its f0 hold) and eases onto the crane by f240;
+    # after the crane shuts it drops out of view again (f324-354): straight back to the grip instead.
+    "fx": {
+        "Inspect": {"hand": [(0, 200, "hold_to", 240), (318, 360, "bridge")]},
+        # The reload: for each pair of rounds the left hand drops 75 cm off the gun, out of the 1P view (f66-126, f156-204,
+        # f234-282), and swings 42 cm out after slapping the crane shut (f300-348) - from outside, back through the hip and
+        # the side of the body. The same trips, a third as far (a half for the slap): down by the belt in front of the hip.
+        "Reload": {"hand": [(66, 126, "shrink", 0.33), (156, 204, "shrink", 0.33), (234, 282, "shrink", 0.33),
+                            (300, 348, "shrink", 0.5)]},
+    },
+    "clips": {
+        "Idle": ("A_FP_Idle", "A_W_Idle_baked", "hip"),
+        "Walk": ("A_FP_Walk", "A_W_Idle_baked", "hip"),
+        "Fire": ("A_FP_Fire_fixed", "A_W_Fire_fixed_baked", "hip"),
+        "Regrip": ("A_FP_Regrip", "A_W_Idle_baked", "hip"),
+        "Inspect": ("A_FP_Inspect", "A_W_Inspect_baked", "inspect"),
+        "Mag_Check": ("A_FP_Mag_Check", "A_W_Mag_Check_baked", "magcheck"),
+        "Melee": ("A_FP_Melee", "A_W_Idle_baked", "melee"),
+        "Reload": ("A_FP_Reload_fixed", "A_W_Reload_baked", "hip"),
+        "Sprint": ("A_FP_Sprint", "A_W_Idle_baked", "sprint"),
+        "IdleToSprint": ("A_FP_Sprint_start", "A_W_Idle_baked", ("hip", "sprint")),
+        "SprintToIdle": ("A_FP_Sprint_end", "A_W_Idle_baked", ("sprint", "hip")),
+        "Draw": ("A_FP_Draw", "A_W_Idle_baked", (None, "hip", 0.0, 0.45)),
+        "Holster": ("A_FP_Holster", "A_W_Idle_baked", ("hip", None, 0.55, 1.0)),
+        # Solved by export_revolver38.py; the shipped 1P Aim FBX gives the socket.
+        "Aim": ("A_FP_Idle", "A_W_Idle_baked", "aim"),
+    },
+}
+
 # --- arguments ------------------------------------------------------------------------------------------------
 _args = globals().get("ARGS")
 if _args is None:
@@ -152,7 +199,7 @@ WEAPON_DIR = os.path.dirname(OUT)
 ONLY = _args.get("only")
 
 scn = bpy.context.scene
-CFG = AK if bpy.data.objects.get("AK") else REMINGTON
+CFG = AK if bpy.data.objects.get("AK") else REVOLVER if bpy.data.objects.get("Revolver") else REMINGTON
 arm = bpy.data.objects[CFG["arms"]]
 wep = bpy.data.objects[CFG["weapon"]]
 bpy.context.view_layer.objects.active = arm  # the FBX importer needs one
@@ -443,11 +490,27 @@ def rework_hand(dst, frames, windows):
             if mode == "hold":
                 want[f] = (gf @ a_h, gf @ a_p)
                 continue
+            if mode == "hold_to":  # held as "hold" to fb, then eased onto the clip's own hand at window[3]
+                continue
             t = (f - fa) / max(fb - fa, 1)
             s = t * t * (3.0 - 2.0 * t)
+            if mode == "shrink":  # the clip's own trip, only window[3] of the way off the line between its ends
+                (hf, pf, _), k = rec[f], window[3]
+                want[f] = (gf @ rigid_mix(rigid_mix(a_h, b_h, s), gf.inverted() @ hf, k),
+                           gf @ rigid_mix(rigid_mix(a_p, b_p, s), gf.inverted() @ pf, k))
+                continue
             h = gf @ rigid_mix(a_h, b_h, s)
             h = M.Matrix.Translation(M.Vector((0.0, 0.0, -3.0 * math.sin(math.pi * t)))) @ h  # a little low of the line
             want[f] = (h, gf @ rigid_mix(a_p, b_p, s))
+        if mode == "hold_to":
+            fc = window[3]
+            hc, pc, gc = rec[fc]
+            c_h, c_p = gc.inverted() @ hc, gc.inverted() @ pc
+            for f in range(fa, fc + 1):
+                gf = rec[f][2]
+                t = min(max((f - fb) / max(fc - fb, 1), 0.0), 1.0)
+                s = t * t * (3.0 - 2.0 * t)
+                want[f] = (gf @ rigid_mix(a_h, c_h, s), gf @ rigid_mix(a_p, c_p, s))
     prev_h = prev_p = None
     for f in frames:
         scn.frame_set(f)

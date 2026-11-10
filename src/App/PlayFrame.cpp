@@ -210,14 +210,16 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
             // hand. With the gravity gun on the controller, holstering hands the mouse
             // to it instead (gravityGunLive), so the two never read the same frame.
-            // Weapon1/Weapon2/Weapon3/Holster always switch between them; F is the flashlight.
+            // Weapon1..Weapon4/Holster always switch between them; F is the flashlight.
             const bool weaponInput = gameHasInput && !GravityGunLive(in) && !playerVitals.IsDead();
             if (gameHasInput && !playerVitals.IsDead()) {
                 const bool wasEquipped = firstPersonPresentation.IsEquipped();
-                // 1 = the Animation Set, 2 = the Secondary Animation Set, 3 = unarmed (the gravity gun).
-                if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SelectSlot(0);
-                if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SelectSlot(1);
-                if (InputMap::GetButtonDown("Weapon3")) firstPersonPresentation.SetEquipped(false);
+                // 1 = the Animation Set, 2 = the secondary, 3 = the sidearm, 4 = unarmed (the gravity gun).
+                static constexpr const char* kSlotKeys[] = {"Weapon1", "Weapon2", "Weapon3"};
+                for (int key = 0; key < 3; ++key)
+                    if (const int slot = firstPersonPresentation.SlotForKey(key); slot >= 0 && InputMap::GetButtonDown(kSlotKeys[key]))
+                        firstPersonPresentation.SelectSlot(slot);
+                if (InputMap::GetButtonDown("Weapon4")) firstPersonPresentation.SetEquipped(false);
                 if (InputMap::GetButtonDown("Flashlight")) flashlight.Toggle(player.Cam.Position);
                 // The wheel is the gravity gun's hold distance, so it only switches without one:
                 // through the weapons, then unarmed.
@@ -245,9 +247,12 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             if (npcTest && !playerVitals.IsDead()) {
                 firstPersonPresentation.UpdateTrigger(npcTest->Firing(), npcTest->Firing());
                 if (npcTest->WantsReload()) firstPersonPresentation.Reload();
+                // Here, not in Drive: Update (above) drops any trigger set before it.
+                if (!npcTest->Action().empty()) firstPersonPresentation.TriggerAction(npcTest->Action());
             }
             // No lean key: aiming at a corner peeks around it (the presentation's corner peek).
-            firstPersonPresentation.Tick(gameDt, player.Velocity, gameHasInput && InputMap::GetButton("Sprint"),
+            firstPersonPresentation.Tick(gameDt, player.Velocity,
+                                         (gameHasInput && InputMap::GetButton("Sprint")) || (npcTest && player.ScriptedMove && player.ScriptSprint),
                                          (weaponInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()), 0.0f,
                                          player.Grounded);
             // This frame's recoil on the view (Tick just worked it out), not last frame's.
@@ -440,8 +445,10 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                                                    firstPersonPresentation.MuzzleFrames(fpMuzzle, worldMuzzle, bore))
             combatFx.FollowMuzzle(world, fpMuzzle, worldMuzzle, bore);
         // The spent cases out of the port, then every case on the ground moved on.
-        for (const CasingSpawn& spawn : firstPersonPresentation.TakeEjections())
+        for (const CasingSpawn& spawn : firstPersonPresentation.TakeEjections()) {
+            if (npcTest) npcTest->OnPlayerEjection(spawn.Model);
             shellCasings.Spawn(world, assets, spawn);
+        }
         {
         PROFILE_SCOPE("Shell Casings");
         shellCasings.Update(world, gameDt, player.Cam, player.Cam.Position);

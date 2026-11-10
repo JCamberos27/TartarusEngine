@@ -1,0 +1,39 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": ".38 Special Cartridge",
+  "properties": {
+    "_AOMap": "assets/Weapons/Revolver38/Textures/Bullet38_AO.png",
+    "_AlbedoMap": "assets/Weapons/Revolver38/Textures/Bullet38_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Weapons/Revolver38/Textures/Bullet38_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Weapons/Revolver38/Textures/Bullet38_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Weapons/Revolver38/Textures/Bullet38_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "8835098b8bee694f",
+    "_AlbedoMap": "383954bb1cfe75e2",
+    "_MetallicMap": "58cd3dee0b36c21d",
+    "_NormalMap": "7e7a53015de2317a",
+    "_RoughnessMap": "50c1e57b5eb4af95"
+  }
+}

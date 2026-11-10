@@ -59,6 +59,12 @@ struct FirstPersonEjectSettings {
     float Spread = 12.0f;    // degrees of random cone around Direction
     float Spin = 20.0f;      // rad/s of tumble
     enum class Trigger { Shot, Event } When = Trigger::Shot;
+    // A gun that throws several cases at once (a revolver's cylinder): one origin per chamber (root space), used in
+    // turn from the first for each batch of Eject events that fire together. Empty: every case leaves from Origin.
+    std::vector<glm::vec3> Origins;
+    // Thrown instead of Model for the chambers still loaded when a batch starts (the unfired rounds a reload dumps).
+    // Empty: every case is Model.
+    std::string LiveModel;
 };
 
 // The weapon's laser: a beam from the muzzle down the (zeroed) bore and the dot where it lands.
@@ -230,6 +236,11 @@ struct FirstPersonAnimationSet {
     WeaponProceduralSettings Procedural = WeaponProceduralSettings::Defaults();
     std::string RecoilProfile; // project-relative .recoil asset, or empty for embedded legacy data
     std::string RecoilProfileGuid;
+    // "hipFireClip": hip shots play the Fire clip (its Shot event spends the round) even with a recoil profile,
+    // which otherwise makes every shot procedural. Sights-up shots stay procedural. For guns whose mechanism
+    // shows in the Fire clip (a revolver's hammer and cylinder).
+    bool HipFireClip = false;
+    bool HipShotsProcedural() const { return !HipFireClip && (Procedural.Recoil.HipProcedural || !RecoilProfile.empty()); }
     ActionCameraSettings ActionCamera;
     std::string CameraShakeProfile, CameraShakeProfileGuid;
     CameraShakeAsset CameraShake; // resolved shared asset; no shake when the path is empty

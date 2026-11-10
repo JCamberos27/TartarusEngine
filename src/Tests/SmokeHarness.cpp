@@ -77,6 +77,7 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
             m_ScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Arena.json"
                                                           : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                           : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
+                                                          : opt.npcTestScenario == "revolver" ? "scenes/WeaponLab.json"
                                                           : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
                                                           : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" || opt.npcTestScenario == "spiderdoor" ? "scenes/Apartment Hallway.json"
                                                                                        : "scenes/Arena.json"));

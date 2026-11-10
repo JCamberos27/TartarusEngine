@@ -41,6 +41,11 @@ class World;
 //           against the shoulder and the hands logged through each the AK shot
 //   flame   the player's muzzle flames: the AK's and the Remington's (second slot), shots from the hip
 //           then on the sights (record it: NPC_TEST_RECORD, every frame)
+//   revolver the .38 in scenes/WeaponLab.json (NpcTest_Revolver.cpp): hip, the sights held (the sight line logged),
+//           2 shots, a partial reload, 6 from the hip, a full reload (hammer, trigger and cylinder measured per shot,
+//           every ejection and the cases' sleep counted), inspect, mag check, melee, walk and sprint, then the AK and
+//           the 870 fired and reloaded (one case per shot / pump), each slot's ammo kept, one scroll notch; both views
+//           shot at fixed moments, close on the gun and on the floor
 //   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp
 //   blood   the volumetric blood (scenes/BloodTest.json): a wound, a chest kill against a wall, a head kill and a
 //           corpse shot, each watched from the side in shots through the spray's flight
@@ -91,9 +96,12 @@ public:
     bool Firing() const { return m_Firing; }
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
+    // A weapon action trigger this frame (Inspect, MagCheck, Melee); the host applies it after the weapon's Update.
+    const std::string& Action() const { return m_Action; }
+    std::string m_Action;
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -128,6 +136,11 @@ public:
     };
     std::function<bool(const std::string& piece, const glm::vec3& from, const glm::vec3& dir, const std::string& painter, float seconds)> Spray;
     std::function<void(SprayView& out, bool roundTrip)> SprayState;
+    // The revolver scenario: the cases on the ground (all, asleep), and each of the player's ejections (its model).
+    std::function<void(int& count, int& sleeping)> CasingState;
+    // ... the brightest muzzle light (intensity, where), and the tracer streaks in flight.
+    std::function<void(float& lit, glm::vec3& at, int& tracers)> MuzzleState;
+    void OnPlayerEjection(const std::string& model);
     // An NPC's can: a character stood at `feet` facing `yawDeg` (0 = +Z) sprays `piece` through
     // SprayCanAction::ForCharacter (from its hand, along its facing).
     std::function<bool(const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds)> SprayNpc;
@@ -315,6 +328,12 @@ private:
     unsigned m_Frame = 0, m_Reloads = 0, m_Fidgets = 0;
     // flame
     bool m_FlameSwitched = false;
+    glm::vec2 m_RevLook{0.0f}; // the revolver scenario's look-around: yaw, pitch (degrees) on top of the default view
+    int m_RevAmmoAtReload1 = -1, m_RevAmmoAfterReload1 = -1, m_RevAmmoAtEnd = -1, m_RevShots = -1;
+    struct RevolverRun;
+    std::shared_ptr<RevolverRun> m_Rev;
+    void RevolverDrive(Player& player, FirstPersonPresentation& weapon, float dt);
+    void RevolverAfter(const Player& player);
     // feet
     std::string m_FProbe;
     int m_FStage = 0, m_FMeasured = 0;

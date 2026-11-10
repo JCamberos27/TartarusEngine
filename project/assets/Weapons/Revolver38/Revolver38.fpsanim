@@ -1,0 +1,1184 @@
+{
+  "actionCamera": {
+    "enabled": true,
+    "node": "head",
+    "referenceState": "Idle",
+    "tags": [
+      "Reload",
+      "Busy"
+    ],
+    "states": [
+      "Draw",
+      "Holster"
+    ],
+    "rotationScale": 1.0,
+    "positionScale": 1.0,
+    "adsScale": 1.0
+  },
+  "cameraShakeProfile": "assets/Weapons/Revolver38/Revolver38.camerashake",
+  "cameraShakeProfileGuid": "03d63bde909d0aaf",
+  "armsMaterials": {
+    "M_Quantum_Arms": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+  },
+  "armsModel": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+  "controller": "assets/Weapons/Revolver38/Revolver38.controller",
+  "ads": {
+    "zoom": 1.2,
+    "viewModelZoom": 1.1,
+    "zoomTime": 0.13,
+    "referenceState": "Aim",
+    "carryTag": "ADSCarry",
+    "matchElbows": true,
+    "matchTwist": true,
+    "aimHoldTime": 0.15,
+    "actionBones": [
+      "clavicle_l"
+    ],
+    "gunMotion": {
+      "MagCheck": {
+        "rotation": 0.6,
+        "position": 0.2
+      },
+      "Reload": {
+        "rotation": 1.0,
+        "position": 1.0
+      }
+    },
+    "sightPivot": 0.25,
+    "handAnchor": {
+      "near": 0.05,
+      "far": 0.6,
+      "bones": [
+        "Cylinder"
+      ]
+    }
+  },
+  "eject": {
+    "enabled": true,
+    "model": "assets/Weapons/Revolver38/Casing_38Special.fbx",
+    "liveModel": "assets/Weapons/Revolver38/Round_38Special.fbx",
+    "material": "assets/Weapons/Revolver38/Materials/Bullet38.mat",
+    "origin": [
+      0.0353,
+      0.0128,
+      -0.0172
+    ],
+    "origins": [
+      [
+        0.048,
+        0.0128,
+        -0.0172
+      ],
+      [
+        0.0419,
+        0.024,
+        -0.0172
+      ],
+      [
+        0.0289,
+        0.024,
+        -0.0172
+      ],
+      [
+        0.0221,
+        0.0128,
+        -0.0172
+      ],
+      [
+        0.0289,
+        0.0015,
+        -0.0172
+      ],
+      [
+        0.0419,
+        0.0015,
+        -0.0172
+      ]
+    ],
+    "direction": [
+      0.0122,
+      0.0038,
+      -0.4873
+    ],
+    "speed": 0.6,
+    "speedJitter": 0.3,
+    "spread": 12.0,
+    "spin": 8.0,
+    "trigger": "event"
+  },
+  "recoilProfile": "assets/Weapons/Revolver38/Revolver38.recoil",
+  "recoilProfileGuid": "1efee3813327bc1f",
+  "procedural": {
+    "bob": {
+      "walkStride": 3.2,
+      "sprintStride": 4.3,
+      "walkFullSpeed": 4.0
+    },
+    "recoil": {
+      "_comment": ".38 Special revolver: a light gun with a high bore axis - a sharp flip about the wrist and a short shove into the arms, a fraction of the 12-gauge's push, settled in about a third of a second. The 870's curves, lighter and quicker. Double action, semi only: no burst wander or growth.",
+      "duration": 0.36,
+      "rotation": {
+        "x": [
+          [
+            0.0,
+            0.0,
+            28.3333332,
+            28.3333332
+          ],
+          [
+            0.072,
+            2.04,
+            28.3333332,
+            -15.0
+          ],
+          [
+            0.136,
+            1.2742548,
+            -9.3695208,
+            -9.3695208
+          ],
+          [
+            0.2,
+            0.79594392,
+            -5.852528099999999,
+            -5.852528099999999
+          ],
+          [
+            0.328,
+            0.31055232000000005,
+            -2.2834725000000002,
+            -2.2834725000000002
+          ],
+          [
+            0.45599999999999996,
+            0.1211676,
+            -0.8909391,
+            -0.8909391
+          ],
+          [
+            0.8,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "y": [
+          [
+            0.0,
+            0.0,
+            7.0,
+            7.0
+          ],
+          [
+            0.064,
+            0.44799999999999995,
+            7.0,
+            -3.73333328
+          ],
+          [
+            0.128,
+            0.262817536,
+            -2.1901459200000004,
+            -2.1901459200000004
+          ],
+          [
+            0.192,
+            0.15418086400000003,
+            -1.2848408,
+            -1.2848408
+          ],
+          [
+            0.32000000000000006,
+            0.053061888,
+            -0.44218288000000006,
+            -0.44218288000000006
+          ],
+          [
+            0.44800000000000006,
+            0.018261504,
+            -0.15217888000000002,
+            -0.15217888000000002
+          ],
+          [
+            0.8,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "z": [
+          [
+            0.0,
+            0.0,
+            34.57142854,
+            34.57142854
+          ],
+          [
+            0.05600000000000001,
+            1.9360000000000004,
+            34.57142854,
+            -16.13333326
+          ],
+          [
+            0.12,
+            1.135747008,
+            -9.464559060000001,
+            -9.464559060000001
+          ],
+          [
+            0.18400000000000002,
+            0.666281792,
+            -5.5523476800000005,
+            -5.5523476800000005
+          ],
+          [
+            0.31200000000000006,
+            0.22930336000000004,
+            -1.9108614800000003,
+            -1.9108614800000003
+          ],
+          [
+            0.44000000000000006,
+            0.07891558400000001,
+            -0.6576301600000001,
+            -0.6576301600000001
+          ],
+          [
+            0.8,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "position": {
+        "x": [
+          [
+            0.0,
+            0.0,
+            0.016874999999999998,
+            0.016874999999999998
+          ],
+          [
+            0.048,
+            0.00081,
+            0.016874999999999998,
+            -0.0072321187500000005
+          ],
+          [
+            0.11200000000000002,
+            0.000457425,
+            -0.00408414375,
+            -0.00408414375
+          ],
+          [
+            0.17600000000000002,
+            0.0002583,
+            -0.0023063625,
+            -0.0023063625
+          ],
+          [
+            0.30400000000000005,
+            8.2395e-05,
+            -0.0007355249999999999,
+            -0.0007355249999999999
+          ],
+          [
+            0.43200000000000005,
+            2.6280000000000002e-05,
+            -0.0002345625,
+            -0.0002345625
+          ],
+          [
+            0.8,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "y": [
+          [
+            0.0,
+            0.0,
+            0.0140625,
+            0.0140625
+          ],
+          [
+            0.064,
+            0.0009000000000000001,
+            0.0140625,
+            -0.00703125
+          ],
+          [
+            0.128,
+            0.0005458500000000001,
+            -0.00426465,
+            -0.00426465
+          ],
+          [
+            0.192,
+            0.00033111,
+            -0.0025866,
+            -0.0025866
+          ],
+          [
+            0.32000000000000006,
+            0.00012177000000000001,
+            -0.0009515249999999999,
+            -0.0009515249999999999
+          ],
+          [
+            0.44800000000000006,
+            4.482e-05,
+            -0.00035009999999999994,
+            -0.00035009999999999994
+          ],
+          [
+            0.8,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "z": [
+          [
+            0.0,
+            0.0,
+            0.8357143275000001,
+            0.8357143275000001
+          ],
+          [
+            0.028000000000000004,
+            0.023400000000000004,
+            0.8357143275000001,
+            -0.24375004875
+          ],
+          [
+            0.09200000000000001,
+            0.012013911,
+            -0.12514539375,
+            -0.12514539375
+          ],
+          [
+            0.15600000000000003,
+            0.006168123,
+            -0.06425186625,
+            -0.06425186625
+          ],
+          [
+            0.284,
+            0.0016259490000000002,
+            -0.0169366275,
+            -0.0169366275
+          ],
+          [
+            0.41200000000000003,
+            0.00042857100000000004,
+            -0.004464427499999999,
+            -0.004464427499999999
+          ],
+          [
+            0.8,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "pitchRange": [
+        1.0,
+        1.4
+      ],
+      "yawRange": [
+        -1.0,
+        1.0
+      ],
+      "rollRange": [
+        -1.0,
+        1.0
+      ],
+      "sideRange": [
+        -1.0,
+        1.0
+      ],
+      "upRange": [
+        0.7,
+        1.3
+      ],
+      "kickRange": [
+        1.05,
+        1.35
+      ],
+      "hipScale": 1.2,
+      "adsScale": 0.95,
+      "pivot": [
+        0.0,
+        -0.04,
+        0.02
+      ],
+      "smoothing": {
+        "frequency": 26.0,
+        "damping": 0.85
+      },
+      "cameraPitch": [
+        [
+          0.0,
+          0.0,
+          6.562499906250001,
+          6.562499906250001
+        ],
+        [
+          0.096,
+          0.6300000000000001,
+          6.562499906250001,
+          -3.937499999999999
+        ],
+        [
+          0.16000000000000003,
+          0.42230160000000005,
+          -2.63938528125,
+          -2.63938528125
+        ],
+        [
+          0.22400000000000003,
+          0.28307722500000004,
+          -1.7692326562499998,
+          -1.7692326562499998
+        ],
+        [
+          0.35200000000000004,
+          0.12719475,
+          -0.7949674687499999,
+          -0.7949674687499999
+        ],
+        [
+          0.48,
+          0.057152249999999995,
+          -0.35720184375,
+          -0.35720184375
+        ],
+        [
+          0.8,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "cameraYaw": [
+        [
+          0.0,
+          0.0,
+          1.3124999999999998,
+          1.3124999999999998
+        ],
+        [
+          0.096,
+          0.126,
+          1.3124999999999998,
+          -0.7874999999999999
+        ],
+        [
+          0.16000000000000003,
+          0.08446031999999999,
+          -0.5278769999999999,
+          -0.5278769999999999
+        ],
+        [
+          0.22400000000000003,
+          0.056615475,
+          -0.3538465875,
+          -0.3538465875
+        ],
+        [
+          0.35200000000000004,
+          0.025438979999999996,
+          -0.15899349375,
+          -0.15899349375
+        ],
+        [
+          0.48,
+          0.01143051,
+          -0.07144042499999999,
+          -0.07144042499999999
+        ],
+        [
+          0.8,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "cameraYawRange": [
+        -1.0,
+        1.0
+      ],
+      "cameraScale": 1.5,
+      "aimPitch": [
+        0.9,
+        1.3
+      ],
+      "aimYaw": [
+        -0.2,
+        0.25
+      ],
+      "aimRecovery": 0.7,
+      "aimRecoveryDelay": 0.18,
+      "aimRecoverySpeed": 6.0,
+      "hipProcedural": true,
+      "boltCycle": 0.0,
+      "boltBone": "",
+      "cameraSmoothing": {
+        "frequency": 14.0,
+        "damping": 1.0
+      },
+      "kickSpread": 10.0,
+      "kickBias": 3.0,
+      "timeJitter": 0.1,
+      "firstShotScale": 1.0,
+      "wander": 0.0,
+      "wanderReturn": 0.25,
+      "burstGrowth": 0.0,
+      "burstGrowthMax": 1.0,
+      "shakeAmount": 0.5,
+      "shakeMax": [
+        0.6,
+        0.45,
+        1.4
+      ],
+      "shakeFrequency": 18.0,
+      "shakeDecay": 3.2,
+      "shakeAdsScale": 0.8,
+      "fovPunch": 0.7
+    },
+    "sway": {
+      "enabled": true,
+      "weaponBone": "ik_hand_gun",
+      "weaponAdditiveBone": "weapon_bone_additive",
+      "aimingSway": {
+        "position": {
+          "damping": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "stiffness": [
+            0.4,
+            0.4,
+            0.8
+          ],
+          "speed": [
+            7,
+            7,
+            7
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "clamp": [
+            1,
+            1,
+            1
+          ]
+        },
+        "rotation": {
+          "damping": [
+            0.4,
+            0.4,
+            0.3
+          ],
+          "stiffness": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "speed": [
+            15,
+            20,
+            15
+          ],
+          "scale": [
+            -2,
+            2,
+            -2
+          ],
+          "clamp": [
+            1,
+            1,
+            1
+          ]
+        },
+        "dampingFactor": 8,
+        "space": "ComponentSpace",
+        "adsScale": 0.51
+      },
+      "movementSway": {
+        "position": {
+          "damping": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "stiffness": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "speed": [
+            7,
+            7,
+            7
+          ],
+          "scale": [
+            1,
+            0,
+            1
+          ],
+          "clamp": [
+            0,
+            0,
+            0
+          ]
+        },
+        "rotation": {
+          "damping": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "stiffness": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "speed": [
+            12,
+            12,
+            12
+          ],
+          "scale": [
+            2,
+            2,
+            -2
+          ],
+          "clamp": [
+            0,
+            0,
+            0
+          ]
+        },
+        "dampingFactor": 8,
+        "space": "ComponentSpace",
+        "adsScale": 0.18
+      },
+      "spaceOffset": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "adsCurveScale": 1,
+      "adsCurveSmoothing": 10
+    },
+    "aim": {
+      "blend": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "blendTime": 0.18,
+      "cameraShare": 0.0,
+      "crouchBlendTime": 0.25,
+      "crouchPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "crouchRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hipPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hipRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "positionAdditive": 1.0,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotationAdditive": 1.0
+    },
+    "breath": {
+      "adsScale": 0.35,
+      "driftFrequency": 0.3,
+      "driftPosition": [
+        0.0004,
+        0.0003,
+        0.0
+      ],
+      "driftRotation": [
+        0.1,
+        0.14,
+        0.18
+      ],
+      "enabled": true,
+      "exertionBuild": 4.0,
+      "exertionRate": 1.7,
+      "exertionRecover": 5.0,
+      "exertionScale": 2.2,
+      "hipScale": 1.0,
+      "period": 4.0,
+      "pitch": [
+        [
+          0.0,
+          0.0,
+          0.75398,
+          0.75398
+        ],
+        [
+          0.125,
+          0.08485,
+          0.53315,
+          0.53315
+        ],
+        [
+          0.25,
+          0.12,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.375,
+          0.08485,
+          -0.53315,
+          -0.53315
+        ],
+        [
+          0.5,
+          -0.0,
+          -0.75398,
+          -0.75398
+        ],
+        [
+          0.625,
+          -0.08485,
+          -0.53315,
+          -0.53315
+        ],
+        [
+          0.75,
+          -0.12,
+          0.0,
+          0.0
+        ],
+        [
+          0.875,
+          -0.08485,
+          0.53315,
+          0.53315
+        ],
+        [
+          1.0,
+          0.0,
+          0.75398,
+          0.75398
+        ]
+      ],
+      "position": {
+        "x": [
+          [
+            0.0,
+            0.0003,
+            -0.0,
+            -0.0
+          ],
+          [
+            0.125,
+            0.00021,
+            -0.00133,
+            -0.00133
+          ],
+          [
+            0.25,
+            -0.0,
+            -0.00188,
+            -0.00188
+          ],
+          [
+            0.375,
+            -0.00021,
+            -0.00133,
+            -0.00133
+          ],
+          [
+            0.5,
+            -0.0003,
+            0.0,
+            0.0
+          ],
+          [
+            0.625,
+            -0.00021,
+            0.00133,
+            0.00133
+          ],
+          [
+            0.75,
+            0.0,
+            0.00188,
+            0.00188
+          ],
+          [
+            0.875,
+            0.00021,
+            0.00133,
+            0.00133
+          ],
+          [
+            1.0,
+            0.0003,
+            -0.0,
+            -0.0
+          ]
+        ],
+        "y": [
+          [
+            0.0,
+            0.0,
+            0.00377,
+            0.00377
+          ],
+          [
+            0.125,
+            0.00042,
+            0.00267,
+            0.00267
+          ],
+          [
+            0.25,
+            0.0006,
+            -0.0,
+            -0.0
+          ],
+          [
+            0.375,
+            0.00042,
+            -0.00267,
+            -0.00267
+          ],
+          [
+            0.5,
+            -0.0,
+            -0.00377,
+            -0.00377
+          ],
+          [
+            0.625,
+            -0.00042,
+            -0.00267,
+            -0.00267
+          ],
+          [
+            0.75,
+            -0.0006,
+            0.0,
+            0.0
+          ],
+          [
+            0.875,
+            -0.00042,
+            0.00267,
+            0.00267
+          ],
+          [
+            1.0,
+            0.0,
+            0.00377,
+            0.00377
+          ]
+        ],
+        "z": []
+      }
+    },
+    "cameraMotion": {
+      "adsScale": 0.4,
+      "enabled": true,
+      "landDip": 0.01,
+      "landPitch": 0.35,
+      "spring": {
+        "damping": 0.55,
+        "frequency": 1.4
+      },
+      "sprintBob": [
+        0.012,
+        0.5
+      ],
+      "strafeRoll": 0.2,
+      "walkBob": [
+        0.02,
+        0.2
+      ]
+    },
+    "ik": {
+      "blendTime": 0.12,
+      "curveAll": "IK",
+      "curveLeftHand": "IK_LeftHand",
+      "curveLook": "Look",
+      "curveRightHand": "IK_RightHand",
+      "enabled": true,
+      "gunBone": "ik_hand_gun",
+      "leftHand": "hand_l",
+      "leftHandPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "leftHandRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "leftLower": "lowerarm_l",
+      "leftUpper": "upperarm_l",
+      "offTag": "IKOff",
+      "rightHand": "hand_r",
+      "rightHandPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rightHandRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rightLower": "lowerarm_r",
+      "rightUpper": "upperarm_r",
+      "useClipCurves": true
+    },
+    "jump": {
+      "adsScale": 0.5,
+      "airPitch": 0.5,
+      "airPosition": 0.003,
+      "enabled": true,
+      "landPitch": 1.0,
+      "landPosition": 0.005,
+      "landRoll": 0.5,
+      "maxImpact": 12.0,
+      "maxPitch": 4.0,
+      "maxPosition": 0.025,
+      "minImpact": 1.5,
+      "spring": {
+        "damping": 0.45,
+        "frequency": 4.5
+      }
+    },
+    "lean": {
+      "angle": 14.0,
+      "cornerPeek": true,
+      "enabled": true,
+      "offset": 0.3,
+      "peekMargin": 0.08,
+      "peekRange": 1.0,
+      "spring": {
+        "damping": 0.8,
+        "frequency": 3.2
+      },
+      "weaponRoll": 4.0,
+      "weaponRollAds": 0.5,
+      "weaponSpring": {
+        "damping": 0.6,
+        "frequency": 2.4
+      },
+      "whileSprinting": false
+    },
+    "locomotion": {
+      "matchSpeed": true,
+      "maxRate": 1.4,
+      "minRate": 0.6,
+      "sprintReference": 0.0,
+      "walkReference": 0.0
+    },
+    "obstruction": {
+      "blockAt": 0.0,
+      "enabled": true,
+      "highPosition": [
+        0.0,
+        0.02,
+        0.04
+      ],
+      "highRotation": [
+        20.0,
+        -6.0,
+        -10.0
+      ],
+      "maxRetract": 0.12,
+      "position": [
+        0.015,
+        -0.015,
+        0.05
+      ],
+      "probeOffset": [
+        0.1,
+        -0.08
+      ],
+      "reach": 0.75,
+      "rotation": [
+        -12.0,
+        14.0,
+        16.0
+      ],
+      "sidePosition": [
+        -0.025,
+        -0.005,
+        0.04
+      ],
+      "sideRotation": [
+        -3.0,
+        16.0,
+        8.0
+      ],
+      "spring": {
+        "damping": 1.0,
+        "frequency": 8.0
+      },
+      "tuckRange": 0.2
+    },
+    "stateOffsets": [
+      {
+        "blendIn": 0.3,
+        "blendOut": 0.3,
+        "match": "Walk",
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "blendIn": 0.2,
+        "blendOut": 0.25,
+        "match": "Sprint",
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "stockLock": {
+    "enabled": false,
+    "tags": [
+      "Idle",
+      "Ready",
+      "ADS",
+      "Cycling",
+      "Shouldered"
+    ],
+    "pocket": [
+      -0.06,
+      -0.045,
+      0.03
+    ],
+    "maxShift": 0.3,
+    "headTilt": 25.0,
+    "blendTime": 0.2,
+    "neckRadius": 0.09,
+    "headRadius": 0.14,
+    "gunLength": 0.45,
+    "meshClearance": 0.05,
+    "releaseStart": -40.0,
+    "releaseEnd": -70.0
+  },
+  "viewRotation": [
+    0.0,
+    180.0,
+    0.0
+  ],
+  "weaponModel": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+  "weaponMaterials": {
+    "Revolver": "assets/Weapons/Revolver38/Materials/Revolver38.mat",
+    "Bullet": "assets/Weapons/Revolver38/Materials/Bullet38.mat"
+  },
+  "weaponMountRotation": [
+    90.0,
+    0.0,
+    0.0
+  ],
+  "weaponRoot": "Root",
+  "weaponSocket": "ik_hand_gun",
+  "weaponMountOffset": [
+    0.0,
+    0.0,
+    -0.0064
+  ],
+  "spareMagazine": {
+    "bones": [],
+    "grabDistance": 0.21
+  },
+  "muzzle": {
+    "auto": false,
+    "origin": [
+      0.0,
+      0.0334,
+      0.114
+    ],
+    "direction": [
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "laser": {
+    "enabled": false,
+    "color": [
+      1.0,
+      0.0227,
+      0.0136
+    ],
+    "beamBrightness": 1.1,
+    "spotBrightness": 9.0
+  },
+  "viewPosition": [
+    0,
+    0,
+    0
+  ],
+  "adsLocomotionScale": 0.31,
+  "hipFireClip": true
+}

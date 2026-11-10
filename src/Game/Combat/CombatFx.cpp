@@ -368,6 +368,11 @@ void CombatFx::FollowMuzzle(World& world, const glm::vec3& firstPerson, const gl
     }
 }
 
+int CombatFx::TracersLive(const World& world) const {
+    const auto* ps = world.Registry.valid(m_Tracers) ? world.Registry.try_get<ParticleSystemComponent>(m_Tracers) : nullptr;
+    return ps ? (int)ps->Live.size() : 0;
+}
+
 float CombatFx::FlybyReach() const { return std::max(1.6f, ImpactAudio::Get().FlybyRadius()); }
 
 void CombatFx::Impact(World& world, std::uint32_t entity, const glm::vec3& point) {
@@ -404,6 +409,7 @@ void CombatFx::Update(World& world, float dt) {
     m_Now += dt;
     WeaponAudio::Get().SetListener(m_Listener);
     WeaponAudio::Get().Update(dt);
+    m_Lit = 0.0f;
     for (Flash& f : m_Flashes) {
         if (!world.Registry.valid(f.Light)) continue;
         auto& l = world.Registry.get<LightComponent>(f.Light);
@@ -416,6 +422,7 @@ void CombatFx::Update(World& world, float dt) {
         const float k = std::clamp(f.Left / std::max(f.Duration, 1e-4f), 0.0f, 1.0f);
         l.Intensity = f.Peak * k * k;
         l.Range = f.Range;
+        if (l.Intensity > m_Lit) { m_Lit = l.Intensity; m_LitAt = world.Registry.get<TransformComponent>(f.Light).Position; }
         f.Left -= dt;
     }
 }

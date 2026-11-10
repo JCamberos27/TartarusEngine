@@ -328,6 +328,8 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
     m_ViewConfig = std::make_shared<FirstPersonControllerComponent>();
     if (playerConfig) *m_ViewConfig = *playerConfig;
     m_ViewConfig->SecondaryAnimationSet.clear();
+    m_ViewConfig->SidearmAnimationSet.clear();
+    m_ViewConfig->SidearmWeaponPrefab.clear();
     m_ViewConfig->GravityGun = false;
     if (m_ViewConfig->CameraBone.empty()) m_ViewConfig->CameraBone = "head";
     // The soldiers are the player's body holding the player's rigs: they hold them by the player's numbers.
@@ -631,6 +633,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     // A copied player configuration must not override the chosen NPC weapon with slot 0.
     cfg.PrimaryWeaponPrefab = weapon == 1 ? m_Cfg.ShotgunPrefab : m_Cfg.RiflePrefab;
     cfg.SecondaryWeaponPrefab.clear();
+    cfg.SidearmWeaponPrefab.clear();
     n->Class = weapon == 1 ? WeaponClass::Shotgun : WeaponClass::Rifle;
     FirstPersonPresentation::Options opt;
     opt.OwnerView = false;

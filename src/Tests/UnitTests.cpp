@@ -3704,7 +3704,8 @@ void TestSprintTransitionWalk() {
         Log::Info("Sprint transition walk: no weapon project data - skipped.");
         return;
     }
-    for (const char* path : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller"}) {
+    for (const char* path : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller",
+                             "assets/Weapons/Revolver38/Revolver38.controller"}) {
         AnimatorController c;
         std::string error;
         CHECK(AnimatorController::LoadFile(ProjectPaths::Resolve(path), c, &error));
@@ -3970,7 +3971,8 @@ void TestFirstPersonGunSeat() {
 // The third-person hold (FirstPersonPresentation::ThirdPersonGunCorrection): each weapon's controller plays an
 // "arms3p" clip wherever it plays an "arms" one - that clip's ThirdPerson/ *_A_3P_* version (tools/weapons/add_3p_track.py).
 void TestThirdPersonArmsTrack() {
-    for (const char* rel : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller"}) {
+    for (const char* rel : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller",
+                            "assets/Weapons/Revolver38/Revolver38.controller"}) {
         const std::string path = ProjectPaths::Resolve(rel);
         AnimatorController ctrl;
         if (!AnimatorController::LoadFile(path, ctrl)) {
@@ -4124,6 +4126,99 @@ void TestRemingtonController() {
     }
     CHECK(set.Gameplay.Magazine == kMagazine && set.Gameplay.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound &&
           set.Gameplay.CycleAfterShot && set.Gameplay.Pellets > 1 && !set.Muzzle.Auto);
+    FirstPersonWeaponCheckInput in;
+    in.Set = &set;
+    in.Controller = &ctrl;
+    for (const FPBody::Check& c : FirstPersonWeaponValidate(in)) {
+        CHECK(c.Level != FPBody::Severity::Warning && c.Level != FPBody::Severity::Error);
+        if (c.Level == FPBody::Severity::Warning || c.Level == FPBody::Severity::Error) std::printf("  %s\n", c.Message.c_str());
+    }
+}
+
+// The .38 Special revolver (project/assets/Weapons/Revolver38, tools/weapons/make_revolver38_*.py): one Reload state
+// that ejects all six (one Eject event per chamber, eject.origins) and refills once the crane shuts; every state's
+// clips attach to the rigs; the definition beside it validates clean.
+void TestRevolver38Assets() {
+    namespace K = FirstPersonAnimatorContract;
+    const std::string path = ProjectPaths::Resolve("assets/Weapons/Revolver38/Revolver38.controller");
+    AnimatorController ctrl;
+    if (!AnimatorController::LoadFile(path, ctrl)) {
+        std::printf("  (skipped: no %s)\n", path.c_str());
+        return;
+    }
+    constexpr int kCylinder = 6;
+    AnimatorControllerComponent ac;
+    const auto oneSecond = [](int, int) { return 1.0f; };
+    int ammo = kCylinder, ejects = 0, refills = 0;
+    auto step = [&](float seconds) {
+        for (float t = 0.0f; t < seconds - 1e-4f; t += 1.0f / 60.0f) {
+            ac.SetInt(K::kAmmo, ammo);
+            AdvanceAnimator(ctrl, ac, 1.0f / 60.0f, oneSecond);
+            for (const std::string& e : ac.FiredEvents) {
+                if (e == K::kEventEject) ++ejects;
+                if (e == K::kEventRefill) { ammo = kCylinder; ++refills; }
+            }
+            ac.FiredEvents.clear();
+            for (const char* tr : {K::kFire, K::kReload}) ac.ResetTrigger(tr);
+        }
+    };
+    ac.SetBool(K::kEquipped, true);
+    step(0.5f);
+    CHECK(ac.StateName == "Idle");
+    // Full: Reload does nothing.
+    ac.SetTrigger(K::kReload);
+    step(0.1f);
+    CHECK(ac.StateName == "Idle");
+    // Two left: the crane swings out, six come out, one refill, back to Idle.
+    ammo = 2;
+    ac.SetTrigger(K::kReload);
+    step(0.1f);
+    CHECK(ac.StateName == "Reload" && ac.HasTag(K::kTagReload));
+    ac.SetTrigger(K::kFire);
+    step(0.1f);
+    CHECK(ac.StateName == "Reload"); // a shot can't interrupt the reload
+    step(2.0f);
+    CHECK(ejects == kCylinder && refills == 1 && ammo == kCylinder);
+    CHECK(ac.StateName == "Idle");
+    // A shot: Fire plays and comes back.
+    ac.SetTrigger(K::kFire);
+    step(0.1f);
+    CHECK(ac.StateName == "Fire");
+    step(1.5f);
+    CHECK(ac.StateName == "Idle");
+
+    FirstPersonAnimationSet set;
+    std::string error;
+    CHECK(FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve("assets/Weapons/Revolver38/Revolver38.fpsanim"), set, &error));
+    CHECK(Gameplay::ResolveWeaponGameplay("assets/Weapons/Revolver38/Revolver38.prefab", set.Gameplay, error));
+    CHECK(set.Gameplay.Magazine == kCylinder && set.Gameplay.Reload == FirstPersonWeaponGameplay::ReloadMode::Magazine &&
+          !set.Gameplay.CycleAfterShot && set.Gameplay.Pellets <= 1 && !set.Muzzle.Auto);
+    CHECK(set.Eject.When == FirstPersonEjectSettings::Trigger::Event && set.Eject.Origins.size() == (size_t)kCylinder &&
+          !set.Eject.LiveModel.empty() && !set.StockLock.Enabled && set.WeaponRoot == "Root");
+    if (std::filesystem::exists(ProjectPaths::Resolve(set.ArmsModel)) && std::filesystem::exists(ProjectPaths::Resolve(set.WeaponModel))) {
+        const auto arms = Model::ImportDeferred(ProjectPaths::Resolve(set.ArmsModel), ModelImportSettings{});
+        const auto weapon = Model::ImportDeferred(ProjectPaths::Resolve(set.WeaponModel), ModelImportSettings{});
+        CHECK(arms && weapon);
+        if (arms && weapon) {
+            std::map<std::string, std::shared_ptr<Model>> clips;
+            auto attaches = [&](Model& target, const std::string& ref) {
+                auto& src = clips[ref];
+                if (!src) src = Model::ImportDeferred(ProjectPaths::Resolve(ref), ModelImportSettings{});
+                return src && src->OwnAnimationCount() > 0 && target.AttachClip(*src, 0, ref, ref) >= 0;
+            };
+            const int at = ctrl.TrackIndex("arms"), wt = ctrl.TrackIndex("weapon"), tt = ctrl.TrackIndex("arms3p");
+            for (const auto& st : ctrl.Layers[0].States) {
+                const bool armsOk = attaches(*arms, st.MotionFor(at).Clip);
+                const bool weaponOk = attaches(*weapon, st.MotionFor(wt).Clip);
+                const bool thirdOk = tt < 0 || attaches(*arms, st.MotionFor(tt).Clip);
+                CHECK(armsOk && weaponOk && thirdOk);
+                if (!armsOk || !weaponOk || !thirdOk)
+                    std::printf("  state '%s' can't attach its %s clip\n", st.Name.c_str(), !armsOk ? "arms" : !weaponOk ? "weapon" : "3P");
+            }
+            CHECK(arms->NodeIndex(set.WeaponSocket) >= 0 && weapon->NodeIndex(set.WeaponRoot) >= 0);
+            for (const char* bone : {"Cylinder", "Bullet1", "Bullet6"}) CHECK(weapon->NodeIndex(bone) >= 0);
+        }
+    }
     FirstPersonWeaponCheckInput in;
     in.Set = &set;
     in.Controller = &ctrl;
@@ -5156,6 +5251,18 @@ void TestShellCasings() {
         FirstPersonAnimationSet bad;
         CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c", "eject": {"trigger": "shot"}})", bad, &why));
         CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c", "eject": {"model": "m.fbx", "trigger": "pump"}})", bad, &why));
+        // A revolver's cylinder: one origin per chamber and a live-round model, both round-tripped; absent, neither is written.
+        const std::string cyl = R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c.controller", "eject": {"model": "assets/case.fbx",
+            "liveModel": "assets/round.fbx", "origins": [[0.01, 0.02, 0.03], [0.04, 0.05, 0.06]], "trigger": "event"}})";
+        FirstPersonAnimationSet rev;
+        CHECK(FirstPersonAnimationSet::FromJsonString(cyl, rev, &why));
+        CHECK(rev.Eject.LiveModel == "assets/round.fbx" && rev.Eject.Origins.size() == 2 && rev.Eject.Origins[1] == glm::vec3(0.04f, 0.05f, 0.06f));
+        FirstPersonAnimationSet revBack;
+        CHECK(FirstPersonAnimationSet::FromJsonString(rev.ToJsonString(), revBack, &why));
+        CHECK(revBack.Eject.LiveModel == rev.Eject.LiveModel && revBack.Eject.Origins == rev.Eject.Origins);
+        CHECK(json::parse(set.ToJsonString())["eject"].count("origins") == 0 && json::parse(set.ToJsonString())["eject"].count("liveModel") == 0);
+        CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c", "eject": {"model": "m.fbx", "origins": [[0, 1]]}})", bad, &why));
+        CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c", "eject": {"model": "m.fbx", "origins": 3}})", bad, &why));
     }
 }
 
@@ -5881,6 +5988,7 @@ int RunUnitTests(const char* filter) {
         {"AK additive ADS walking", TestAKAdditiveWalking},
         {"Sprint transition additive walk", TestSprintTransitionWalk},
         {"RemingtonController", TestRemingtonController},
+        {"Revolver38Assets", TestRevolver38Assets},
         {"ThirdPersonArmsTrack", TestThirdPersonArmsTrack},
         {"FirstPersonGunSeat", TestFirstPersonGunSeat},
         {"WeaponJankMeter", TestWeaponJankMeter},

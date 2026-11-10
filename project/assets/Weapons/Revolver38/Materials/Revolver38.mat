@@ -1,0 +1,39 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": ".38 Special Revolver",
+  "properties": {
+    "_AOMap": "assets/Weapons/Revolver38/Textures/Revolver38_AO.png",
+    "_AlbedoMap": "assets/Weapons/Revolver38/Textures/Revolver38_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Weapons/Revolver38/Textures/Revolver38_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Weapons/Revolver38/Textures/Revolver38_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Weapons/Revolver38/Textures/Revolver38_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "e9855ed45dc0c047",
+    "_AlbedoMap": "8313f4e3f5e63ef8",
+    "_MetallicMap": "e967d720a25f3073",
+    "_NormalMap": "bd5ab194c7aaa2a9",
+    "_RoughnessMap": "fb552ffe868bd910"
+  }
+}

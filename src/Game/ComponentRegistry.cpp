@@ -630,7 +630,9 @@ void RegisterEngineComponents() {
             { "Primary Weapon Prefab", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, PrimaryWeaponPrefab), 0.0f,
               "Weapon prefab for slot 0. Its Weapon Definition supplies the animation set; takes priority over Animation Set." },
             { "Secondary Weapon Prefab", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryWeaponPrefab), 0.0f,
-              "Weapon prefab for slot 1. Its Weapon Definition supplies the animation set." },
+              "Weapon prefab for slot 1 (key 2). Its Weapon Definition supplies the animation set." },
+            { "Sidearm Weapon Prefab", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SidearmWeaponPrefab), 0.0f,
+              "Weapon prefab for the sidearm slot (key 3). Its Weapon Definition supplies the animation set." },
             { "Move Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MoveSpeed), 0.05f,
               "Walking speed, metres per second.", 0.0f, 100.0f },
             { "Sprint Multiplier", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SprintMultiplier), 0.01f,
@@ -699,8 +701,10 @@ void RegisterEngineComponents() {
             { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
               "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
             { "Secondary Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryAnimationSet), 0.0f,
-              "Optional second weapon (.fpsanim). In Play, 1 draws the Animation Set, 3 this one and 2 goes\n"
-              "unarmed; switching holsters the weapon in hand first, and each weapon keeps its own ammo." },
+              "Optional second weapon (.fpsanim). In Play, 1 draws the Animation Set, 2 this one, 3 the sidearm and\n"
+              "4 goes unarmed; switching holsters the weapon in hand first, and each weapon keeps its own ammo." },
+            { "Sidearm Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SidearmAnimationSet), 0.0f,
+              "Optional sidearm (.fpsanim), drawn with 3. A Sidearm Weapon Prefab takes priority." },
             { "View Model Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelOffset), 0.01f,
               "Residual nudge, in the play camera's frame, applied on top of the Camera Bone\n"
               "anchor. Leave at zero unless you are deliberately nudging the view model." },
@@ -2809,6 +2813,8 @@ void RegisterEngineComponents() {
         {"First Person Controller", "Secondary Animation Set"},
         {"First Person Controller", "Primary Weapon Prefab"},
         {"First Person Controller", "Secondary Weapon Prefab"},
+        {"First Person Controller", "Sidearm Animation Set"},
+        {"First Person Controller", "Sidearm Weapon Prefab"},
         {"Weapon Audio", "Data File"},
     };
     for (const auto& [component, field] : kAssetPathFields)
