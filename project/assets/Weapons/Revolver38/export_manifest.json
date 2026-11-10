@@ -1,5 +1,5 @@
 {
-  "source": "D:\\Jacob\\JCamberos\\Downloads\\38 Special 60fps.blend",
+  "source": "D:\\Jacob\\JCamberos\\Downloads\\38 Special 60fps - index fix.blend",
   "fps": 60,
   "armsSkeleton": "Armature",
   "weaponSkeleton": "Armature.001",
@@ -17,7 +17,7 @@
       ],
       "note": "Weapon model and the weapon clip of every state whose gun doesn't move by itself.",
       "bytes": 840556,
-      "sha256": "6101e9dcc835ddfd7e4321315d233f84db73c6266081d8ec1b95740b2b3c6f5a"
+      "sha256": "7c016ae063a3bbb096080419761aed91420916ba3ca89aea1cf3e35172a0a216"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Idle.fbx",
@@ -26,8 +26,8 @@
       "frameStart": 0,
       "frameEnd": 120,
       "skeleton": "Armature",
-      "bytes": 3332972,
-      "sha256": "edfdb333a44986fd9a82ff142511b55d5e8b8892fd7dfce64ba4e5fbdecc497b"
+      "bytes": 3335228,
+      "sha256": "b2e4906318d48d3d0a28319c374401965176a5534ec5dce46aea608256008d0c"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Walk.fbx",
@@ -36,8 +36,8 @@
       "frameStart": 0,
       "frameEnd": 44,
       "skeleton": "Armature",
-      "bytes": 2276844,
-      "sha256": "fdc26374d78e3a2cdf1864b78197c5c1749dab8de4e19ef99e6c29afc5fb0501"
+      "bytes": 2277548,
+      "sha256": "5628563b258119285292bd372891beab4f67a0263cc9168885f33fdb4a683c35"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Sprint.fbx",
@@ -46,8 +46,8 @@
       "frameStart": 0,
       "frameEnd": 44,
       "skeleton": "Armature",
-      "bytes": 2285500,
-      "sha256": "a3d2aad4e8d4d5a138d1916e2c06ba0170b478474376e7a06473dc0c4294d7b6"
+      "bytes": 2286572,
+      "sha256": "f6e51eab3998bdd1aaf3987292a91231dc72df87e54e8ade69b468085a9c2f21"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_IdleToSprint.fbx",
@@ -56,8 +56,8 @@
       "frameStart": 0,
       "frameEnd": 16,
       "skeleton": "Armature",
-      "bytes": 1891596,
-      "sha256": "8fc133ffe9496a0dcbf0dfe31949e0540996807fa2576d1313db3988af12011b"
+      "bytes": 1891452,
+      "sha256": "42378148f3237a2ef55d485f6aa9e6ab71583bbf3f9671192529fd9ca4126cae"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_SprintToIdle.fbx",
@@ -66,8 +66,8 @@
       "frameStart": 0,
       "frameEnd": 32,
       "skeleton": "Armature",
-      "bytes": 2083628,
-      "sha256": "8b240ef7a8a3de2f2bdbf43fe1af01b44548173bd63558fda218caffd594a207"
+      "bytes": 2084300,
+      "sha256": "d5d8aef1f9aade45d39225310bdc665cfa4288cb1eb6a370f52329cda33873cd"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Fire.fbx",
@@ -76,8 +76,8 @@
       "frameStart": 0,
       "frameEnd": 46,
       "skeleton": "Armature",
-      "bytes": 2318252,
-      "sha256": "cf58c387943d65afadbf2778a7b2a825f48ea988f0d4778a2ece2d158299e4a5"
+      "bytes": 2318076,
+      "sha256": "0fc4289175caa819f53de1b1fdef029350748b2c90768ce3ef90b5baa20cd7c3"
     },
     {
       "file": "Weapon/Revolver38_A_W_Fire.fbx",
@@ -87,8 +87,8 @@
       "frameEnd": 46,
       "skeleton": "Armature.001",
       "note": "Exported over the arms clip's range (the weapon action holds its last key).",
-      "bytes": 131916,
-      "sha256": "ede0379a32987d8df70cd040ac03a3da9464ed2ea3ca56d892865c99751ce748"
+      "bytes": 132140,
+      "sha256": "d4cde63c8077f007939d32ed92cdacd8753bdf4848ef19d7e28185f359e34cc8"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Regrip.fbx",
@@ -97,8 +97,8 @@
       "frameStart": 0,
       "frameEnd": 44,
       "skeleton": "Armature",
-      "bytes": 2284476,
-      "sha256": "e812837d6aebf89e66cc3aecaa0c81a26ecc28a14fc9a2b879c73eef87d5c4fb"
+      "bytes": 2285260,
+      "sha256": "f19085a87c6d95fddff748b54fca8f082497025b74202ec47fe144e253e65411"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Inspect.fbx",
@@ -107,8 +107,8 @@
       "frameStart": 0,
       "frameEnd": 374,
       "skeleton": "Armature",
-      "bytes": 6789228,
-      "sha256": "6aeecd7eb583df57f07cca0c2a09e58c994f334b66e7c1ab9d419022fa8dde7e"
+      "bytes": 6790508,
+      "sha256": "ef8e9d53288cd66b7b5d43586feed21b6089023981a340471a56d6f14c3de496"
     },
     {
       "file": "Weapon/Revolver38_A_W_Inspect.fbx",
@@ -119,7 +119,7 @@
       "skeleton": "Armature.001",
       "note": "Exported over the arms clip's range (the weapon action holds its last key).",
       "bytes": 366204,
-      "sha256": "d42971ef3efeb383774ae493ea43d039383a70708b811618c6b569935042a792"
+      "sha256": "9aeb665f03feced6639de348bdaa7fe5949c08f307780e46edb24d1969448c2b"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Mag_Check.fbx",
@@ -128,8 +128,8 @@
       "frameStart": 0,
       "frameEnd": 214,
       "skeleton": "Armature",
-      "bytes": 4693644,
-      "sha256": "e7b527f44495a6c1323646359fa11822aea5e4d829ddedbc81ed8c8dde301699"
+      "bytes": 4694700,
+      "sha256": "40831cfb462315900cd5e14cdf673f6d5d46f8dff7e6a41396582abbc66b422a"
     },
     {
       "file": "Weapon/Revolver38_A_W_Mag_Check.fbx",
@@ -140,7 +140,7 @@
       "skeleton": "Armature.001",
       "note": "Exported over the arms clip's range (the weapon action holds its last key).",
       "bytes": 253996,
-      "sha256": "3e4ee2e5d60670826034bb4d67e88e9d85f1866aed94b3d3d58ae5882229edb6"
+      "sha256": "8a46fc59fb5123688189982b9475c63911ccc6cabd306f493d7f9643ec259cd8"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Melee.fbx",
@@ -149,8 +149,8 @@
       "frameStart": 0,
       "frameEnd": 69,
       "skeleton": "Armature",
-      "bytes": 2650156,
-      "sha256": "df0f9ba7592ed2df86eb0e801d8f629eb039e8b87a927916c165064180526ee5"
+      "bytes": 2651660,
+      "sha256": "fde4ae64c3f1135b499cc4f973dd9d2578155e78661339bba0ca674c3621f9a4"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Reload.fbx",
@@ -159,8 +159,8 @@
       "frameStart": 0,
       "frameEnd": 372,
       "skeleton": "Armature",
-      "bytes": 6918188,
-      "sha256": "09b206c2d22813cfd1ca5ae73f53ef2a2854b75a06f6ddfacdd8100f9b5fc4f0"
+      "bytes": 6919308,
+      "sha256": "744e95831ebd5fe558fc74c844b6c975e757cc1759d8d4c78f364deb264c5535"
     },
     {
       "file": "Weapon/Revolver38_A_W_Reload.fbx",
@@ -171,7 +171,7 @@
       "skeleton": "Armature.001",
       "note": "Exported over the arms clip's range (the weapon action holds its last key).",
       "bytes": 381580,
-      "sha256": "fea87301145a7f12f10b8789eb7e80eee279f27b04200e2452988105ca7fb61f"
+      "sha256": "8e9a2075fc33ab6fa8353edf03b108778ff27d62b0656369a4ef2b299c5da4fb"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Draw.fbx",
@@ -180,8 +180,8 @@
       "frameStart": 0,
       "frameEnd": 46,
       "skeleton": "Armature",
-      "bytes": 2323500,
-      "sha256": "abcfab301ba4574b4f5a74a7d0e1c3a4345bffcb8eb93bc302feb284f24ba443"
+      "bytes": 2324444,
+      "sha256": "502cb121d6a2f9149e5ef6eb15259c6c55129d3298ac6ffcba594fc017463014"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Holster.fbx",
@@ -190,8 +190,8 @@
       "frameStart": 0,
       "frameEnd": 30,
       "skeleton": "Armature",
-      "bytes": 2226604,
-      "sha256": "117c1e914229823da44d938bf6861bd4eee716e7b3ed96199fac82607fcce567"
+      "bytes": 2226476,
+      "sha256": "8c92616ad77afc5da73d208f4f89ce0f6a146eb9003a76628867174a958d11d2"
     },
     {
       "file": "FirstPerson/Revolver38_A_FP_Aim.fbx",
@@ -201,11 +201,11 @@
       "frameEnd": 1,
       "skeleton": "Armature",
       "solve": {
-        "rootError": 1.52587890625e-05,
-        "rightGripDrift": 2.1051158957141987e-05,
+        "rootError": 1.525890547737774e-05,
+        "rightGripDrift": 2.773864664506719e-05,
         "handReachError": {
-          "l": 0.00038120983628718303,
-          "r": 4.5714091135255555e-05
+          "l": 0.00036016462579379764,
+          "r": 5.109282892700058e-05
         },
         "notchRoot": [
           0.0,
@@ -219,18 +219,18 @@
         ],
         "eyeToNotch": 34.0,
         "notchWorld": [
-          0.8943082094192505,
-          -43.53387451171875,
-          158.8067169189453
+          -0.4326361417770386,
+          -43.46147537231445,
+          160.40185546875
         ],
         "postWorld": [
-          0.810264527797699,
-          -55.04670715332031,
-          158.76527404785156
+          -0.5166798233985901,
+          -54.974308013916016,
+          160.36041259765625
         ]
       },
-      "bytes": 1532812,
-      "sha256": "e1e17480137b5ab5faeff51e029aa5bb9165862710f38d920fffc40177aaf66a"
+      "bytes": 1532684,
+      "sha256": "dc5256791950d3ca2a62018e52a9271ddb1dc636cba0a4b8266ce2d4421fc525"
     },
     {
       "file": "Casing_38Special.fbx",
@@ -241,7 +241,7 @@
       "lengthCm": 2.938,
       "note": "Cut from the Revolver mesh's Bullet1 (case only), long axis +Y, base at +Y.",
       "bytes": 23804,
-      "sha256": "1a6855a5d52b444f583355efdefe2fd8bcbd4a79c47a34d8db9b1810a41ffbfb"
+      "sha256": "cdf044fdfc2d826d87c1ffa96fb8db717b6324c272e6edc2dcd73a91f779b29c"
     },
     {
       "file": "Round_38Special.fbx",
@@ -252,7 +252,7 @@
       "lengthCm": 3.944,
       "note": "Cut from the Revolver mesh's Bullet1 (whole round), long axis +Y, base at +Y.",
       "bytes": 26668,
-      "sha256": "5789d96cc02caa732d48012edfc71a24c0fe7ff25e0df545d019ad774e72dae2"
+      "sha256": "2ae9c5e7fc8bfd758b9ff26afbd1e7e0bf46950bb5145af107d4f50579b2ae33"
     }
   ],
   "ejectTimeline": [
@@ -349,8 +349,9 @@
   ],
   "fixes": [
     "A_FP_Reload: CB_ik_hand_r keyed at the constant every other take holds (loc [8.925, -33.652, 44.26]).",
-    "A_W_Fire: double-action pull re-keyed (trigger 20 deg, hammer 35 deg, cylinder 60 deg CCW from the rear; pulled f2, hammer falls f3, trigger reset f18), over the arms' 0..46.",
-    "A_FP_Fire: index finger curls with the trigger (11 deg over three joints about local (-1.0, 0.0, 0.0); trigger face travels 0.73 cm, alignment 0.76).",
+    "A_W_Fire: double-action pull re-keyed (trigger 20 deg, hammer 35 deg, cylinder 60 deg CCW from the rear; pulled f6, hammer falls f7, trigger reset f24), over the arms' 0..46.",
+    "A_FP_Fire: index finger curls with the trigger (7 deg over three joints about local (0.0, 0.0, 1.0); trigger face travels 0.62 cm, alignment 0.47).",
+    "A_FP_Fire: the gun's kick (CB_Gun off frame 0) kept to x0.50 of the take's.",
     "A_FP_Aim: solved (rear notch 34 cm ahead of the AK eye, on its sight line).",
     "Bullet1..6 re-parented under Cylinder, CHILD_OF baked; reload rounds hidden between leaving the cylinder and the left hand picking them up."
   ],

@@ -50,7 +50,7 @@ struct NpcTest::RevolverRun {
     // Sights-up kick, per weapon (0 revolver, 1 AK): the procedural pose's largest offset after a shot, the IK weight
     // carrying it, the camera's punch, and how far the gun really moved in the view (the right hand, from its spot before the shot).
     // Flip: the bore's largest swing off the view from where it sat before the shot (deg); Climb: the view's own (deg).
-    struct Kick { float Pos = 0.0f, Rot = 0.0f, Cam = 0.0f, Moved = 0.0f, MinIK = 1.0f, Flip = 0.0f, Climb = 0.0f, RestBore = 0.0f, RestPitch = 0.0f;
+    struct Kick { glm::vec2 RestGap{0.0f}; float Pos = 0.0f, Rot = 0.0f, Cam = 0.0f, Moved = 0.0f, MinIK = 1.0f, Flip = 0.0f, Climb = 0.0f, RestBore = 0.0f, RestPitch = 0.0f;
                   bool HaveRest = false; glm::vec3 Rest{0.0f}; };
     Kick AdsKick[3];
     // Shot to shot: the bore's direction in the view 0.1 s after each revolver round, off where it was as the round left
@@ -181,8 +181,16 @@ void NpcTest::RevolverDrive(Player& player, FirstPersonPresentation& weapon, flo
             RevolverRun::Kick& K = R.AdsKick[k];
             const float bore = glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(md), player.Cam.Front()), -1.0f, 1.0f)));
             const bool before = t < kShotAt[k];
-            if (before) { K.Rest = root; K.RestBore = bore; K.RestPitch = player.Cam.Pitch; K.HaveRest = true; }
-            else {
+            // The hand on the gun: point-to-point distances (index tip to trigger, palm to cylinder; all view space) don't
+            // change under a rigid move, so any change is the hand slipping on the gun.
+            glm::vec3 tipP, trigP, cylP;
+            const bool grip = weapon.ArmsNodeInView("index_03_r", tipP) && weapon.WeaponNodeInView("Trigger", trigP) &&
+                              weapon.WeaponNodeInView("Cylinder", cylP);
+            const glm::vec2 gap = grip ? glm::vec2(glm::length(tipP - trigP), glm::length(root - cylP)) : glm::vec2(0.0f);
+            if (before) {
+                K.Rest = root; K.RestBore = bore; K.RestPitch = player.Cam.Pitch; K.HaveRest = true;
+                if (grip) K.RestGap = gap;
+            } else {
                 if (K.HaveRest) {
                     K.Flip = std::max(K.Flip, std::abs(bore - K.RestBore));
                     K.Climb = std::max(K.Climb, player.Cam.Pitch - K.RestPitch);
@@ -194,9 +202,11 @@ void NpcTest::RevolverDrive(Player& player, FirstPersonPresentation& weapon, flo
                 K.MinIK = std::min(K.MinIK, p.IKWeight);
                 if (K.HaveRest) K.Moved = std::max(K.Moved, glm::length(root - K.Rest));
                 if (K.HaveRest && t < kShotAt[k] + 0.45f) // the first shot's kick over time
-                    std::printf("[NpcTest] revolver: kick trace %s +%.3f s: hand %.1f mm, bore off %.2f deg, view climb %.2f deg\n",
+                    std::printf("[NpcTest] revolver: kick trace %s +%.3f s: hand %.1f mm, bore off %.2f deg, view climb %.2f deg; "
+                                "slip on the gun: index tip-trigger %+.1f mm, hand-cylinder %+.1f mm\n",
                                 k == 0 ? "revolver-ads" : k == 1 ? "AK-ads" : "revolver-hip", t - kShotAt[k],
-                                glm::length(root - K.Rest) * 1000.0f, std::abs(bore - K.RestBore), player.Cam.Pitch - K.RestPitch);
+                                glm::length(root - K.Rest) * 1000.0f, std::abs(bore - K.RestBore), player.Cam.Pitch - K.RestPitch,
+                                (gap.x - K.RestGap.x) * 1000.0f, (gap.y - K.RestGap.y) * 1000.0f);
             }
         }
     }
