@@ -19,7 +19,7 @@
 #  - A_W_Fire only flicked the hammer. Re-keyed as a double-action pull: trigger back, hammer
 #    cocked and the cylinder indexing one chamber (60 deg, counter-clockwise from the rear) over the
 #    first 2 frames, the hammer falling on frame 3, the trigger resetting by frame 18. The arms'
-#    A_FP_Fire never moved the trigger finger; it now curls with the trigger.
+#    A_FP_Fire never moved the trigger finger; it now curls with the trigger, about the joints' hinge (local Z).
 #  - No ADS pose. Solved like the Remington's: A_FP_Idle frame 0 with CB_Gun moved so the rear
 #    notch and front post lie on the AKS-74U's measured ADS sight line.
 #  - Bullet1..6 are re-parented under Cylinder and their CHILD_OF motion baked, so the FBX
@@ -223,9 +223,12 @@ def fix_arms_fire(w_fire):
     fs, fe = frange("A_FP_Fire")
     scn.frame_set(0)
     tip = lambda: world(arm, "index_03_r").translation + (world(arm, "index_03_r").to_3x3() @ M.Vector((0, arm.pose.bones["index_03_r"].length, 0)))
-    trig_at = lambda f: (scn.frame_set(f), world(wep, "Trigger") @ M.Vector((0, wep.pose.bones["Trigger"].length * 0.6, 0)))[1]
+    # The trigger face's travel in the right hand's space: the take's kick moves gun and hand together, and must not
+    # count as travel the finger has to follow.
+    trig_at = lambda f: (scn.frame_set(f), world(arm, "hand_r").inverted() @ (world(wep, "Trigger") @ M.Vector((0, wep.pose.bones["Trigger"].length * 0.6, 0))))[1]
     want = trig_at(F_PULLED) - trig_at(0)
     scn.frame_set(0)
+    want = world(arm, "hand_r").to_3x3() @ want  # into world, at frame 0 (where the trials run)
     base = {n: get_rot(arm.pose.bones[n]) for n, _ in FINGER}
     tip0 = tip()
 
@@ -239,8 +242,10 @@ def fix_arms_fire(w_fire):
         bpy.context.view_layer.update()
         return d
 
+    # Only the finger's hinge: local Z is the curl axis of these joints (the take's own curl is keyed on Z; X rolls
+    # the curled finger about its length and swings the tip out of the guard). The search only picks the sign.
     best = None
-    for axis in (M.Vector((1, 0, 0)), M.Vector((-1, 0, 0)), M.Vector((0, 0, 1)), M.Vector((0, 0, -1))):
+    for axis in (M.Vector((0, 0, 1)), M.Vector((0, 0, -1))):
         d = trial(axis, math.radians(10))
         score = d.normalized().dot(want.normalized()) if d.length > 1e-6 else -1
         if best is None or score > best[0]:
@@ -519,7 +524,8 @@ manifest = {"source": bpy.data.filepath, "fps": scn.render.fps, "armsSkeleton": 
 
 # The hip shot's kick, kept to this share of the source take's (user, 2026-11-09: the barrel went way too high - the
 # muzzle flipped ~28 deg). CB_Gun carries the gun and both hands: its motion off frame 0, scaled.
-HIP_FIRE_KICK = 0.6
+# 0.6 -> 0.5 (user, 2026-11-10): the hip shot matches the sights-up kick, halved that day (~14 deg peak flip, NpcTest).
+HIP_FIRE_KICK = 0.5
 
 
 def damp_fire_gun(act, w_act, k):

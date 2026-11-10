@@ -91,7 +91,9 @@ r.update({
     # Sights up it's to kick like the hip shot (measured: the hip's Fire clip flips the muzzle 28 deg and the gun 45 mm, peak
     # at 0.2 s, back by ~0.5 s; the sights had 4.6 deg / 25 mm). The hip shot runs this profile too, on top of its clip, so
     # the extra is the sights' alone: the flip x6 (measured ~25 deg), the shove x1.6, the rise x2.3.
-    "aimRot": [6.0, 1.0, 1.0],
+    # Then x3 (user, 2026-11-10): ~25 deg tipped the grip's underside into view - the gap between the hand and the frame
+    # the idle hold leaves, hidden at rest. The hand doesn't slip on the gun (NpcTest kick trace: 0.0 mm); it's the angle.
+    "aimRot": [3.0, 1.0, 1.0],
     "aimLoc": [1.6, 2.3, 1.6],
 })
 # The kick's shape over time is these curves (not the smoothing): at the 870's x0.8 it peaked at 0.03 s and was spent by
