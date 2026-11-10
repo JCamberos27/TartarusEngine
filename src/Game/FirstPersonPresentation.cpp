@@ -130,8 +130,11 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     Stop(world);
     m_Options = options;
     m_LastError.clear();
+    int configuredSlot=0;
     for (auto slot : {std::pair<const std::string*,const std::string*>{&config.PrimaryWeaponPrefab,&config.AnimationSet},
-                      {&config.SecondaryWeaponPrefab,&config.SecondaryAnimationSet}}) {
+                      {&config.SecondaryWeaponPrefab,&config.SecondaryAnimationSet},
+                      {&config.SidearmWeaponPrefab,&config.SidearmAnimationSet}}) {
+        const int configured=configuredSlot++;
         std::string set=*slot.second;
         MuzzleEffectSettings muzzle;
         if(!slot.first->empty()) {
@@ -139,7 +142,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
             if(!Gameplay::ResolveWeaponPrefab(*slot.first,set,why,&muzzle)) { SetError(why); return false; }
         }
         if(!set.empty()) {
-            m_SlotSets.push_back(set);m_SlotPrefabs.push_back(*slot.first);m_SlotMuzzles.push_back(muzzle);
+            m_SlotSets.push_back(set);m_SlotPrefabs.push_back(*slot.first);m_SlotMuzzles.push_back(muzzle);m_SlotConfigured.push_back(configured);
             std::error_code ec;
             m_SlotPrefabTimes.push_back(slot.first->empty()?std::filesystem::file_time_type{}:
                 std::filesystem::last_write_time(ProjectPaths::Resolve(*slot.first),ec));
@@ -216,13 +219,14 @@ void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const std::s
 void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set) {
     if (!set.Eject.Enabled || set.Eject.Model.empty()) return;
     assets.LoadModel(ProjectPaths::Resolve(set.Eject.Model));
+    if (!set.Eject.LiveModel.empty()) assets.LoadModel(ProjectPaths::Resolve(set.Eject.LiveModel));
     if (!set.Eject.Material.empty()) assets.LoadMaterial(ProjectPaths::Resolve(set.Eject.Material));
 }
 
 void FirstPersonPresentation::Stop(World& world) {
     StopSet(world);
     m_SlotSets.clear();
-    m_SlotPrefabs.clear();m_SlotMuzzles.clear();m_SlotPrefabTimes.clear();
+    m_SlotPrefabs.clear();m_SlotMuzzles.clear();m_SlotPrefabTimes.clear();m_SlotConfigured.clear();
     m_SlotAmmo.clear();
     m_SlotAttachmentSelections.clear();
     m_Slot = 0;
@@ -1195,6 +1199,8 @@ bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const
     // starting and ending (states the pocket lock lets go in) no longer nods it 25 degrees each way.
     const float z = std::clamp(m_Zoom, 0.0f, 1.0f);
     out.CheekWeld = (sl.Enabled ? z * z * (3.0f - 2.0f * z) : 0.0f) * held;
+    // A reload, inspect, mag check or melee from the hip: the world body keeps the gun level with its chest (see ArmsLateUpdate).
+    out.Action = HasTag("Reload") || HasTag("Busy") ? 1.0f - z * z * (3.0f - 2.0f * z) : 0.0f;
     out.Pocket = sl.Pocket;
     out.MaxShift = sl.MaxShift;
     out.HeadTiltDegrees = sl.HeadTilt;
@@ -1475,13 +1481,15 @@ void FirstPersonPresentation::Eject() {
     // player's own speed plus the throw. The case leaves lying down the bore, base first, tumbling end
     // over end about the axis across the bore and the throw.
     const glm::mat4& R = m_RootSeen;
-    const glm::vec3 port = glm::vec3(R * glm::vec4(ej.Origin, 1.0f));
+    const int slot = m_EjectIndex++;
+    const glm::vec3 local = ej.Origins.empty() ? ej.Origin : ej.Origins[(size_t)slot % ej.Origins.size()];
+    const glm::vec3 port = glm::vec3(R * glm::vec4(local, 1.0f));
     const glm::vec3 out = glm::normalize(glm::mat3(R) * ej.Direction);
     const glm::vec3 bore = glm::normalize(glm::mat3(R) * (m_HaveMuzzle ? m_BoreLocal : glm::vec3(0.0f, 0.0f, -1.0f)));
     std::uniform_real_distribution<float> u(0.0f, 1.0f), s(-1.0f, 1.0f);
     const glm::vec3 dir = FirstPersonPelletDirection(out, ej.Spread, u(m_Rng), u(m_Rng));
     CasingSpawn c;
-    c.Model = ej.Model;
+    c.Model = slot < m_LiveEjects && !ej.LiveModel.empty() ? ej.LiveModel : ej.Model;
     c.Material = ej.Material;
     c.Position = port;
     c.Velocity = m_PlayerVelocity + dir * ej.Speed * (1.0f + ej.SpeedJitter * s(m_Rng));
@@ -1502,7 +1510,9 @@ void FirstPersonPresentation::WriteIK() {
     if (!m_World || !m_World->Registry.valid(m_Arms)) return;
     auto* rig = m_World->Registry.try_get<IKRigComponent>(m_Arms);
     if (!rig) return;
-    rig->PreserveBaseGrip = ActionBlocksSprint();
+    // On the sights too: walking there layers the walk additively onto the aim pose, and a grip read from that blend let the
+    // hands slide on the gun (the .38: right 1 mm, left 2 mm in the gun's own frame; 0 with this).
+    rig->PreserveBaseGrip = ActionBlocksSprint() || m_AdsHold > 0.0f;
     const WeaponProceduralPose& p = m_Procedural.Pose();
     const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
     const glm::quat Ci = glm::inverse(C);
@@ -1671,6 +1681,7 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     m_Set.Procedural.Sway.UnityPort=true;
     m_Set.RecoilProfile = fresh.RecoilProfile;
     m_Set.RecoilProfileGuid = fresh.RecoilProfileGuid;
+    m_Set.HipFireClip = fresh.HipFireClip;
     m_Set.Muzzle = fresh.Muzzle;
     m_Set.Eject = fresh.Eject;
     m_Set.Laser = fresh.Laser;
@@ -1795,7 +1806,7 @@ Gameplay::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float d
     f.PerRound=g.Reload==FirstPersonWeaponGameplay::ReloadMode::PerRound;
     f.CycleAfterShot=g.CycleAfterShot;
     f.HipProcedural=m_Set.Procedural.Recoil.HipProcedural;
-    f.RecoilProfile=!m_Set.RecoilProfile.empty();
+    f.RecoilProfile=!m_Set.RecoilProfile.empty() && !m_Set.HipFireClip; // hipFireClip: the profile only shapes sights-up shots
     f.UnityRecoil=m_Set.Procedural.Recoil.UnityPort;
     if(ac->HasTag(K::kTagHidden)) f.Tags|=1;
     if(ac->HasTag(K::kTagReload)) f.Tags|=2;
@@ -1911,6 +1922,11 @@ Gameplay::WeaponLoadoutFrame FirstPersonPresentation::RunLoadout(int operation,i
     return f;
 }
 void FirstPersonPresentation::RefillAmmo(){RunLoadout(3);}
+int FirstPersonPresentation::SlotForKey(int configured) const {
+    for (size_t i = 0; i < m_SlotConfigured.size(); ++i)
+        if (m_SlotConfigured[i] == configured) return (int)i;
+    return -1;
+}
 void FirstPersonPresentation::SelectSlot(int slot){const auto f=RunLoadout(0,slot);if(f.Commands&16)SetEquipped(true);}
 void FirstPersonPresentation::CycleSlot(int step){const auto f=RunLoadout(1,step);if(f.Commands&32)SelectSlot(f.Value);}
 
@@ -2206,13 +2222,21 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Arms);
     if (ac) {
         // What the controller did last frame: rounds spent on hip fire, a reload that landed.
-        if (m_WaitingAnimatedShot && ac->EventFired(K::kEventShot) && m_Set.RecoilProfile.empty() && !m_Set.Procedural.Recoil.HipProcedural &&
+        if (m_WaitingAnimatedShot && ac->EventFired(K::kEventShot) && !m_Set.HipShotsProcedural() &&
             !ac->HasTag(K::kTagAds)) {
             m_WaitingAnimatedShot = false;
             CommitShot(false, false);
         }
-        if (ac->EventFired(K::kEventEject) && m_Set.Eject.Enabled && m_Set.Eject.When == FirstPersonEjectSettings::Trigger::Event)
-            ++m_PendingEjects; // the action worked: the spent hull comes out
+        if (ac->EventFired(K::kEventEject) && m_Set.Eject.Enabled && m_Set.Eject.When == FirstPersonEjectSettings::Trigger::Event) {
+            // The action worked: the spent hull comes out - one per Eject event, so a cylinder's six at one time throw six.
+            const int n = std::max(1, (int)std::count(ac->FiredEvents.begin(), ac->FiredEvents.end(), std::string(K::kEventEject)));
+            if (m_Set.Eject.Origins.size() > 1 && m_PendingEjects == 0) {
+                // A new batch starts at the first chamber; the rounds still unfired come out live.
+                m_EjectIndex = 0;
+                m_LiveEjects = m_Set.Eject.LiveModel.empty() ? 0 : std::clamp(m_Ammo, 0, n);
+            }
+            m_PendingEjects += n;
+        }
         RunGameplay(8,0.0f,false,false,(ac->EventFired(K::kEventRefill)?1:0)|(ac->EventFired(K::kEventLoadRound)?2:0));
         // The audio the controller's states carry: events named snd.<gun>.<element> (see docs/AUDIO.md) play that set.
         for (const std::string& e : ac->FiredEvents)

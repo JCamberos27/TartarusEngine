@@ -572,6 +572,7 @@ struct OpticAttachmentComponent {
 struct FirstPersonControllerComponent {
     std::string PrimaryWeaponPrefab;
     std::string SecondaryWeaponPrefab;
+    std::string SidearmWeaponPrefab;
     float MoveSpeed = 6.0f;
     float SprintMultiplier = 1.6f;
     float JumpSpeed = 5.5f;
@@ -623,9 +624,10 @@ struct FirstPersonControllerComponent {
     // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
     // playtests). The fields below are authored setup, not a second physics character.
     std::string AnimationSet;
-    // A second weapon (.fpsanim) for the same arms: key 1 draws AnimationSet, 3 this one, 2 goes
-    // unarmed. Switching holsters the one in hand, then draws the other; each keeps its ammo.
+    // More weapons (.fpsanim) for the same arms: key 1 draws AnimationSet, 2 the secondary, 3 the
+    // sidearm, 4 goes unarmed. Switching holsters the one in hand, then draws the other; each keeps its ammo.
     std::string SecondaryAnimationSet;
+    std::string SidearmAnimationSet;
     // The rig bone the play camera sits on. Placement parks this bone's world position exactly on
     // the camera, so ViewModelOffset below is only a residual nudge - which matters because these
     // rigs are authored standing in their own scene (feet at y=0, head near y=1.56): without a

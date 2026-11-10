@@ -4924,7 +4924,8 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         const auto* fp = registry.try_get<FirstPersonControllerComponent>(entity);
         if (!fp) return;
         for(const auto& slot:{std::pair<const char*,const std::string*>{"Edit Primary Weapon Definition",&fp->PrimaryWeaponPrefab},
-                              {"Edit Secondary Weapon Definition",&fp->SecondaryWeaponPrefab}}) {
+                              {"Edit Secondary Weapon Definition",&fp->SecondaryWeaponPrefab},
+                              {"Edit Sidearm Weapon Definition",&fp->SidearmWeaponPrefab}}) {
             if(slot.second->empty())continue;
             ImGui::BeginDisabled(m_InPlayMode);
             if(ActionButton(slot.first,"Open the weapon prefab's Definition and muzzle-effect tabs",false,ImVec2(-FLT_MIN,0)))

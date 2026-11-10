@@ -121,12 +121,14 @@ public:
     // while it is in a state tagged Hidden both rigs are hidden. Holstering cancels a pending swap.
     void SetEquipped(bool equipped);
 
-    // Weapon slots: the controller's Animation Set is slot 0, its Secondary Animation Set slot 1.
+    // Weapon slots: the controller's Animation Set, then its Secondary and Sidearm sets - those that are set, in that
+    // order (SlotForKey maps 0 primary / 1 secondary / 2 sidearm to the slot, -1 when that one is empty).
     // Selecting the slot in hand just draws it; another one holsters this weapon, then swaps the
     // rigs over and draws that one (see Tick). Each slot keeps its own ammo.
     int SlotCount() const { return (int)m_SlotSets.size(); }
     int Slot() const { return m_Slot; }
     void SelectSlot(int slot);
+    int SlotForKey(int configured) const;
     // The scroll wheel wraps through weapon slots (`step` +1 / -1).
     void CycleSlot(int step);
     void CycleAttachment(Gameplay::AttachmentKind kind);
@@ -304,6 +306,8 @@ private:
     // Queued like a shot and thrown in LateUpdate from the port as the gun is drawn.
     void Eject();
     int m_PendingEjects = 0;
+    int m_EjectIndex = 0;   // eject.origins: the chamber the next case of this batch leaves from
+    int m_LiveEjects = 0;   // ... and how many of the batch's first cases are live rounds (eject.liveModel)
     std::vector<CasingSpawn> m_Ejections;
     // The weapon root as SEEN this frame (world space, through the view-model FOV stretch): where
     // the port is on screen. Valid once PlaceRigs found the root.
@@ -391,6 +395,7 @@ private:
     // the one in hand and the one to swap to once this one is holstered (-1 = none).
     std::vector<std::string> m_SlotSets;
     std::vector<std::string> m_SlotPrefabs;
+    std::vector<int> m_SlotConfigured; // per slot: 0 primary, 1 secondary, 2 sidearm
     std::vector<MuzzleEffectSettings> m_SlotMuzzles;
     std::vector<std::filesystem::file_time_type> m_SlotPrefabTimes;
     std::vector<int> m_SlotAmmo;

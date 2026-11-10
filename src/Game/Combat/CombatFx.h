@@ -65,6 +65,9 @@ public:
     // --- tests ---
     int ShotsHeard() const { return m_ShotsHeard; }
     int WhizzesHeard() const { return m_Whizzes; }
+    // The brightest muzzle light this frame (its intensity and where it is), and the tracer streaks in flight.
+    float LitFlash(glm::vec3* at = nullptr) const { if (at) *at = m_LitAt; return m_Lit; }
+    int TracersLive(const World& world) const;
 
 private:
     class FxSprites* m_Sprites = nullptr;
@@ -85,6 +88,8 @@ private:
     float m_LastWhizz = -1e9f, m_Now = 0.0f;
     std::uint32_t m_Rng = 0xC0FFEEu;
     int m_ShotsHeard = 0, m_Whizzes = 0;
+    float m_Lit = 0.0f;
+    glm::vec3 m_LitAt{0.0f};
 
     float Rand01();
 };

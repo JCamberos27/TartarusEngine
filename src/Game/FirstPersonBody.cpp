@@ -2017,6 +2017,9 @@ glm::mat4 FirstPersonPartialMove(const glm::mat4& move, const glm::mat4& m, floa
 
 namespace {
 constexpr float kWorldGunChestTurn = 0.3f; // how much of the world body's chest turn (off the player's own) the world gun takes
+constexpr float kActionGunPitch = 0.0f;        // in an action, how much of the view's pitch the world gun still takes
+constexpr float kStanceYawEase = 1.0f;         // ... and the time constant the stance's heading offset is learnt over (s)
+constexpr float kActionEase = 0.08f;           // ... and the time constant it eases onto the chest and back (s)
 } // namespace
 
 void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera,
@@ -2477,6 +2480,41 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         }
         const glm::mat4 chestDelta = glm::translate(glm::mat4(1.0f), bladeShift) * m_WorldGunDelta;
         m_WorldGunDelta = chestDelta * rigWorld * thirdPersonGun * glm::inverse(rigWorld);
+        // An action from the hip (a reload, inspect, mag check, melee): the clips hold the gun at the chest and the face, and
+        // the first-person gun it comes from turns with the view, which the chest only partly keeps up with. Looking up held
+        // the gun overhead (the chest takes a share of the pitch), looking down pushed it into the belly, and a turn to the
+        // left - the shoulders lag it, up to ~35 degrees past their usual bladed stance - put the gun in the jaw. In one, the
+        // world gun (and the hands on it) turns about the chest back to level, and by the shoulders' lag behind the view
+        // beyond the stance's own (learnt outside actions); both ease back as the action ends.
+        m_ActionHold += ((gun ? std::clamp(gun->Action, 0.0f, 1.0f) : 0.0f) - m_ActionHold) * (1.0f - std::exp(-dt / kActionEase));
+        if (glm::vec3 chestAt(0.0f), shoulderL(0.0f), shoulderR(0.0f); camera && driverBone(kSpine[4], chestAt)) {
+            const glm::vec3 up(0.0f, 1.0f, 0.0f);
+            const glm::vec3 view = glm::normalize(camera->Front());
+            const glm::vec3 flat(view.x, 0.0f, view.z);
+            glm::vec3 across(0.0f);
+            if (driverBone(FPBody::kBoneUpperArm[0], shoulderL) && driverBone(FPBody::kBoneUpperArm[1], shoulderR)) across = shoulderR - shoulderL;
+            across.y = 0.0f;
+            if (glm::dot(flat, flat) > 1e-6f) {
+                const glm::vec3 heading = glm::normalize(flat);
+                // The view's heading off the shoulders' facing (+ = to the left), and its usual value: the stance's blade.
+                float lag = 0.0f;
+                if (glm::dot(across, across) > 1e-8f) {
+                    const glm::vec3 facing = glm::normalize(glm::cross(up, glm::normalize(across)));
+                    const float off = std::atan2(glm::dot(glm::cross(facing, heading), up), glm::dot(facing, heading));
+                    if (!m_HaveStanceYaw) { m_StanceYaw = off; m_HaveStanceYaw = true; }
+                    if (m_ActionHold < 1e-3f) m_StanceYaw += (off - m_StanceYaw) * (1.0f - std::exp(-dt / kStanceYawEase));
+                    lag = off - m_StanceYaw;
+                }
+                if (m_ActionHold > 1e-3f) {
+                    const glm::vec3 side = glm::normalize(glm::cross(heading, up));
+                    const float pitch = std::asin(std::clamp(view.y, -1.0f, 1.0f));
+                    const glm::quat turn = glm::angleAxis(-lag * m_ActionHold, up) *
+                                           glm::angleAxis((kActionGunPitch - 1.0f) * pitch * m_ActionHold, side); // about `side`, + raises
+                    m_WorldGunDelta = glm::translate(glm::mat4(1.0f), chestAt) * glm::mat4_cast(turn) *
+                                      glm::translate(glm::mat4(1.0f), -chestAt) * m_WorldGunDelta;
+                }
+            }
+        }
         // The 3P clips' grip: their hands, elbows and fingers where they hold their gun, put on the first-person rig's gun
         // (so its recoil, sway and sights still carry them), and from there carried with the world gun below. Where the 3P
         // clips hold the gun as the first-person ones do this is the rig's own pose; where they don't - the support hand

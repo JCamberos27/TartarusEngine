@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Weapons/Revolver38",
+  "guid": "a494b323fcbbeb49",
+  "materialRemap": {
+    "Bullet": "assets/Weapons/Revolver38/Materials/Bullet38.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

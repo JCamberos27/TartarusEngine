@@ -73,6 +73,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "feet") m_Duration = 10.0f;
     if (m_Scenario == "reload") m_Duration = 28.0f;
     if (m_Scenario == "flame") m_Duration = 14.0f;
+    if (m_Scenario == "revolver") m_Duration = 116.0f;
     if (m_Scenario == "blood") m_Duration = 44.0f;
     if (m_Scenario == "decals") m_Duration = 52.0f;
     if (m_Scenario == "doors") m_Duration = 300.0f; // (done once the route is walked)
@@ -271,6 +272,11 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
         }
         m_Reload = weapon.Ammo() == 0;
     }
+    if (m_Scenario == "revolver") {
+        RevolverDrive(player, weapon, dt);
+        wantYaw += m_RevLook.x;
+        wantPitch += m_RevLook.y;
+    }
     if (m_Scenario == "tactics") {
         auto aimAt = [&](const glm::vec3& at) {
             const glm::vec3 d = glm::normalize(at - player.Cam.Position);
@@ -407,6 +413,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "reload") {
         Reload(world, npcs, now);
+        return;
+    }
+    if (m_Scenario == "revolver") {
+        RevolverAfter(player);
         return;
     }
     if (m_Scenario == "flame") {

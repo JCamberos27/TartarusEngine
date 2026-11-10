@@ -1,0 +1,1877 @@
+{
+  "layers": [
+    {
+      "anyPosition": [
+        -330.0,
+        -260.0
+      ],
+      "blending": "override",
+      "defaultState": "Idle",
+      "entryPosition": [
+        -330.0,
+        60.0
+      ],
+      "exitPosition": [
+        980.0,
+        -60.0
+      ],
+      "name": "Base Layer",
+      "states": [
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "name": "Idle",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "speed": 0,
+          "tags": [
+            "Idle"
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "name": "Walk",
+          "position": [
+            0.0,
+            120.0
+          ],
+          "speed": 0,
+          "tags": [
+            "Ready"
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "name": "Sprint",
+          "position": [
+            330.0,
+            120.0
+          ],
+          "speed": 0
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Aim.fbx",
+              "clipGuid": "3fe5a5d850cc4e73"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Aim.fbx",
+              "clipGuid": "f86500397c613c05"
+            }
+          },
+          "name": "Aim",
+          "position": [
+            0.0,
+            240.0
+          ],
+          "speed": 1.0,
+          "tags": [
+            "ADS"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "name": "IdleToSprint",
+          "position": [
+            330.0,
+            0.0
+          ],
+          "priority": 1,
+          "speed": 0
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "name": "SprintToIdle",
+          "position": [
+            330.0,
+            240.0
+          ],
+          "priority": 1,
+          "speed": 0
+        },
+        {
+          "events": [
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.03
+            },
+            {
+              "name": "snd.revolver38.handle",
+              "time": 0.6364
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Regrip.fbx",
+              "clipGuid": "a449d2a010506151"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Regrip.fbx",
+              "clipGuid": "bcbb54e606a4d94a"
+            }
+          },
+          "name": "Regrip",
+          "position": [
+            0.0,
+            -140.0
+          ],
+          "priority": 2,
+          "speed": 1.0,
+          "tags": [
+            "IKOff",
+            "Shouldered"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "Shot",
+              "time": 0.1522
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Fire.fbx",
+              "clipGuid": "bc9b2a142800a0b6"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Fire.fbx",
+              "clipGuid": "ff543eb48d4c09eb"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Fire.fbx",
+              "clipGuid": "32a7f39c44ea9461"
+            }
+          },
+          "name": "Fire",
+          "position": [
+            660.0,
+            -330.0
+          ],
+          "priority": 2,
+          "speed": 1.6,
+          "tags": [
+            "Ready"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.02
+            },
+            {
+              "name": "snd.revolver38.hammer_cock",
+              "time": 0.369
+            },
+            {
+              "name": "snd.revolver38.hammer_decock",
+              "time": 0.4866
+            },
+            {
+              "name": "snd.revolver38.crane_open",
+              "time": 0.6203
+            },
+            {
+              "name": "snd.revolver38.cylinder_spin",
+              "time": 0.7487
+            },
+            {
+              "name": "snd.revolver38.crane_close",
+              "time": 0.8556
+            },
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.9358
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Inspect.fbx",
+              "clipGuid": "3d7b4afb35b49e66"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Inspect.fbx",
+              "clipGuid": "33fb2a7c27a33d42"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Inspect.fbx",
+              "clipGuid": "c413319b5cec112f"
+            }
+          },
+          "name": "Inspect",
+          "position": [
+            660.0,
+            -255.0
+          ],
+          "priority": 2,
+          "speed": 1.0,
+          "tags": [
+            "Busy"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.02
+            },
+            {
+              "name": "snd.revolver38.crane_open",
+              "time": 0.0654
+            },
+            {
+              "name": "snd.revolver38.crane_close",
+              "time": 0.729
+            },
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.8411
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Mag_Check.fbx",
+              "clipGuid": "9167c7d2eaaca26c"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Mag_Check.fbx",
+              "clipGuid": "0e70aedd1338c9b9"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Mag_Check.fbx",
+              "clipGuid": "b46ab8ef72f0a30b"
+            }
+          },
+          "name": "MagCheck",
+          "position": [
+            660.0,
+            -180.0
+          ],
+          "priority": 2,
+          "speed": 1.0,
+          "tags": [
+            "Busy"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "snd.revolver38.melee_swing",
+              "time": 0.0
+            },
+            {
+              "name": "snd.revolver38.melee_hit",
+              "time": 0.1159
+            },
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.2609
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Melee.fbx",
+              "clipGuid": "f73b2b502288c7a7"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Melee.fbx",
+              "clipGuid": "5ae788070e5b6972"
+            }
+          },
+          "name": "Melee",
+          "position": [
+            660.0,
+            -105.0
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Busy"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "snd.revolver38.draw",
+              "time": 0.08
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Draw.fbx",
+              "clipGuid": "ed05572b88d52414"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Draw.fbx",
+              "clipGuid": "547550570730434c"
+            }
+          },
+          "name": "Draw",
+          "position": [
+            -330.0,
+            330.0
+          ],
+          "priority": 4,
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "snd.revolver38.holster",
+              "time": 0.3
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Holster.fbx",
+              "clipGuid": "2020e2ea423762dd"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Holster.fbx",
+              "clipGuid": "59fac1efb488571e"
+            }
+          },
+          "name": "Holster",
+          "position": [
+            330.0,
+            400.0
+          ],
+          "priority": 4,
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Holster.fbx",
+              "clipGuid": "2020e2ea423762dd"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Holster.fbx",
+              "clipGuid": "59fac1efb488571e"
+            }
+          },
+          "name": "Holstered",
+          "position": [
+            0.0,
+            440.0
+          ],
+          "priority": 5,
+          "speed": 1.0,
+          "tags": [
+            "Hidden"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.0
+            },
+            {
+              "name": "snd.revolver38.crane_open",
+              "time": 0.0376
+            },
+            {
+              "name": "snd.revolver38.ejector",
+              "time": 0.1398
+            },
+            {
+              "name": "Eject",
+              "time": 0.1559
+            },
+            {
+              "name": "Eject",
+              "time": 0.1559
+            },
+            {
+              "name": "Eject",
+              "time": 0.1559
+            },
+            {
+              "name": "Eject",
+              "time": 0.1559
+            },
+            {
+              "name": "Eject",
+              "time": 0.1559
+            },
+            {
+              "name": "Eject",
+              "time": 0.1559
+            },
+            {
+              "name": "snd.revolver38.round_insert",
+              "time": 0.3387
+            },
+            {
+              "name": "snd.revolver38.round_insert",
+              "time": 0.5484
+            },
+            {
+              "name": "snd.revolver38.round_insert",
+              "time": 0.7581
+            },
+            {
+              "name": "snd.revolver38.crane_close",
+              "time": 0.8495
+            },
+            {
+              "name": "Refill",
+              "time": 0.8656
+            },
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.914
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Reload.fbx",
+              "clipGuid": "308c2227bb6b1879"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Reload.fbx",
+              "clipGuid": "9db637a18017a0dc"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Reload.fbx",
+              "clipGuid": "eca4cae953b18757"
+            }
+          },
+          "name": "Reload",
+          "position": [
+            660,
+            45
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Reload",
+            "ADSCarry"
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "fromEntry": true,
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "fromEntry": true,
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "fromEntry": true,
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Holster"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Melee",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Melee"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Fire",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Fire"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Inspect",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.08,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Inspect"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "MagCheck",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.06,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "MagCheck"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Fidget",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.06,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Regrip"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.08,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.08,
+          "exitTime": 1.0,
+          "from": "Aim",
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Aim",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 1.0,
+          "from": "Aim",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "threshold": 0.0,
+              "param": "Sprint",
+              "mode": "if"
+            },
+            {
+              "threshold": 0.05,
+              "param": "Speed",
+              "mode": "greater"
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "threshold": 0.0,
+              "param": "Sprint",
+              "mode": "ifNot"
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Fire",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Inspect",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.3,
+          "exitTime": 1.0,
+          "from": "MagCheck",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Melee",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Draw",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "from": "Holster",
+          "hasExitTime": true,
+          "offset": 1.0,
+          "to": "Holstered"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Holstered",
+          "hasExitTime": false,
+          "to": "Draw"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "threshold": 0.05,
+              "param": "Speed",
+              "mode": "less"
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "canTransitionToSelf": false,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Reload",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Ammo",
+              "threshold": 5.5
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Reload"
+        },
+        {
+          "conditions": [],
+          "duration": 0.25,
+          "exitTime": 1.0,
+          "from": "Reload",
+          "hasExitTime": true,
+          "to": "Exit"
+        }
+      ],
+      "weight": 1.0
+    },
+    {
+      "additiveReferenceState": "Idle",
+      "anyPosition": [
+        -320.0,
+        -150.0
+      ],
+      "blending": "additive",
+      "defaultState": "Off",
+      "entryPosition": [
+        -640.0,
+        140.0
+      ],
+      "exitPosition": [
+        960.0,
+        140.0
+      ],
+      "name": "Weapon Locomotion",
+      "states": [
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "name": "Idle",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "speed": 1.0,
+          "tags": [
+            "Idle"
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "name": "Walk",
+          "position": [
+            0.0,
+            140.0
+          ],
+          "speed": 0.0,
+          "tags": [
+            "Ready"
+          ],
+          "curves": [
+            {
+              "keys": [
+                [
+                  0.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ]
+              ],
+              "name": "WalkBlend"
+            }
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Sprint.fbx",
+              "clipGuid": "af4b1ded39a734a4"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Sprint.fbx",
+              "clipGuid": "fb3494f54234a12d"
+            }
+          },
+          "name": "Sprint",
+          "position": [
+            640.0,
+            0.0
+          ],
+          "speed": 1.0,
+          "speedParam": "SprintRate"
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_IdleToSprint.fbx",
+              "clipGuid": "c9be01a6440f1d42"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_IdleToSprint.fbx",
+              "clipGuid": "9b10be8f854233ab"
+            }
+          },
+          "name": "IdleToSprint",
+          "position": [
+            320.0,
+            0.0
+          ],
+          "priority": 1,
+          "speed": 1.0,
+          "curves": [
+            {
+              "keys": [
+                [
+                  0.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ]
+              ],
+              "name": "WalkBlend"
+            }
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_SprintToIdle.fbx",
+              "clipGuid": "6132841c90f2d1e4"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_SprintToIdle.fbx",
+              "clipGuid": "68342622c4314ee6"
+            }
+          },
+          "name": "SprintToIdle",
+          "position": [
+            640.0,
+            140.0
+          ],
+          "priority": 1,
+          "speed": 1.0,
+          "curves": [
+            {
+              "keys": [
+                [
+                  0.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ]
+              ],
+              "name": "WalkBlend"
+            }
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {},
+          "name": "Off",
+          "position": [
+            -320.0,
+            140.0
+          ],
+          "speed": 1.0
+        }
+      ],
+      "transitions": [
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.2,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.01
+            }
+          ],
+          "duration": 0.4,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.2,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.01
+            }
+          ],
+          "duration": 0.4,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [],
+          "duration": 0.25,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": true,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": true,
+          "to": "Walk"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": true,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 0.9,
+          "from": "Off",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "fromAny": true,
+          "hasExitTime": false,
+          "to": "Off"
+        }
+      ],
+      "weight": 1.0
+    },
+    {
+      "name": "Weapon Walk",
+      "blending": "additive",
+      "weight": 1.0,
+      "additiveReferenceState": "Off",
+      "weightCurve": "WalkBlend",
+      "weightCurveLayer": "Weapon Locomotion",
+      "defaultState": "Off",
+      "entryPosition": [
+        -640,
+        140
+      ],
+      "anyPosition": [
+        -320,
+        -150
+      ],
+      "exitPosition": [
+        960,
+        140
+      ],
+      "states": [
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Walk.fbx",
+              "clipGuid": "d906dcdb1322e18b"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Walk.fbx",
+              "clipGuid": "10c4d9a823efcea4"
+            }
+          },
+          "name": "Walk",
+          "position": [
+            0.0,
+            140.0
+          ],
+          "speed": 1.0,
+          "speedParam": "WalkRate",
+          "tags": [
+            "Ready"
+          ]
+        },
+        {
+          "name": "Off",
+          "loop": true,
+          "speed": 0.0,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Revolver38/FirstPerson/Revolver38_A_FP_Idle.fbx",
+              "clipGuid": "c5eb4aeb5284e8d1"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Revolver38/Weapon/Revolver38_A_W_Idle.fbx",
+              "clipGuid": "3377680b2965aead"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Revolver38/ThirdPerson/Revolver38_A_3P_Idle.fbx",
+              "clipGuid": "ffca0296c60e0ab2"
+            }
+          },
+          "position": [
+            -320,
+            140
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "to": "Walk",
+          "hasExitTime": false,
+          "conditions": [
+            {
+              "param": "Equipped",
+              "threshold": 0.0,
+              "mode": "if"
+            },
+            {
+              "param": "Speed",
+              "threshold": 0.05,
+              "mode": "greater"
+            }
+          ],
+          "duration": 0.1,
+          "from": "Off"
+        },
+        {
+          "to": "Off",
+          "hasExitTime": false,
+          "conditions": [
+            {
+              "param": "Speed",
+              "threshold": 0.05,
+              "mode": "less"
+            }
+          ],
+          "duration": 0.1,
+          "from": "Walk"
+        },
+        {
+          "fromAny": true,
+          "to": "Off",
+          "hasExitTime": false,
+          "conditions": [
+            {
+              "param": "Equipped",
+              "threshold": 0.0,
+              "mode": "ifNot"
+            }
+          ],
+          "duration": 0.12
+        }
+      ]
+    }
+  ],
+  "parameters": [
+    {
+      "default": 0.0,
+      "name": "Speed",
+      "type": "float"
+    },
+    {
+      "default": 1.0,
+      "name": "WalkRate",
+      "type": "float"
+    },
+    {
+      "default": 1.0,
+      "name": "SprintRate",
+      "type": "float"
+    },
+    {
+      "default": 0.0,
+      "name": "Sprint",
+      "type": "bool"
+    },
+    {
+      "default": 0.0,
+      "name": "Aim",
+      "type": "bool"
+    },
+    {
+      "default": 1.0,
+      "name": "Equipped",
+      "type": "bool"
+    },
+    {
+      "default": 6.0,
+      "name": "Ammo",
+      "type": "int"
+    },
+    {
+      "default": 0.0,
+      "name": "Fire",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Reload",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "MagCheck",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Inspect",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Melee",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Fidget",
+      "type": "trigger"
+    }
+  ],
+  "tracks": [
+    "arms",
+    "weapon",
+    "arms3p"
+  ],
+  "version": 2
+}

@@ -683,6 +683,10 @@ int Application::RunSession() {
             if (opt.weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
         }
         AssetLibrary assets;
+        if (npcTest) // --npc-test revolver: the cases on the ground
+            npcTest->CasingState = [&](int& count, int& sleeping) { count = shellCasings.Count(); sleeping = shellCasings.SleepingCount(); };
+        if (npcTest) // ... the muzzle light and the tracers
+            npcTest->MuzzleState = [&](float& lit, glm::vec3& at, int& tracers) { lit = combatFx.LitFlash(&at); tracers = combatFx.TracersLive(world); };
         if (npcTest) { // --npc-test decals: the spray can's state, the game state saved and read back
             npcTest->SprayState = [&](NpcTest::SprayView& v, bool roundTrip) {
                 const SprayCanSystem::Report r = sprayCans.Inspect(world, roundTrip ? &assets : nullptr);

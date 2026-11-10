@@ -85,6 +85,10 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.Controller = String(root, "controller");
     parsed.RecoilProfile = String(root, "recoilProfile");
     parsed.RecoilProfileGuid = String(root, "recoilProfileGuid");
+    if (root.contains("hipFireClip")) {
+        if (!root["hipFireClip"].is_boolean()) return Fail(error, "hipFireClip must be true or false");
+        parsed.HipFireClip = root["hipFireClip"].get<bool>();
+    }
     for (const char* key : {"recoilProfile", "recoilProfileGuid"})
         if (root.contains(key) && !root[key].is_string()) return Fail(error, std::string(key) + " must be a string");
     parsed.ViewRotation = Vec3(root, "viewRotation", glm::vec3(0.0f));
@@ -272,6 +276,18 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
             else if (t == "event") ej.When = FirstPersonEjectSettings::Trigger::Event;
             else return Fail(error, "'eject.trigger' must be \"shot\" or \"event\"");
         }
+        ej.LiveModel = String(*e, "liveModel");
+        ej.Origins.clear();
+        if (const auto os = e->find("origins"); os != e->end()) {
+            if (!os->is_array()) return Fail(error, "'eject.origins' must be an array of [x, y, z]");
+            for (const auto& p : *os) {
+                if (!p.is_array() || p.size() != 3 || !p[0].is_number() || !p[1].is_number() || !p[2].is_number())
+                    return Fail(error, "'eject.origins' entries must be three finite numbers");
+                const glm::vec3 v(p[0].get<float>(), p[1].get<float>(), p[2].get<float>());
+                if (!Finite(v)) return Fail(error, "'eject.origins' entries must be three finite numbers");
+                ej.Origins.push_back(v);
+            }
+        }
         if (ej.Enabled && ej.Model.empty()) return Fail(error, "'eject' needs a 'model' (.fbx path)");
     }
     if (const auto s = root.find("stockLock"); s != root.end() && s->is_object()) {
@@ -333,7 +349,7 @@ bool FirstPersonAnimationSet::LoadFile(const std::string& path, FirstPersonAnima
         // Bolt setup and firing policy belong to the weapon, not the shared profile.
         const auto legacy = parsed.Procedural.Recoil;
         parsed.Procedural.Recoil = profile.Data;
-        parsed.Procedural.Recoil.HipProcedural = true;
+        parsed.Procedural.Recoil.HipProcedural = !parsed.HipFireClip;
         parsed.Procedural.Recoil.BoltBone = legacy.BoltBone;
         parsed.Procedural.Recoil.BoltCycle = legacy.BoltCycle;
         parsed.Procedural.Recoil.BoltTravel = legacy.BoltTravel;
@@ -370,6 +386,7 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         j["recoilProfile"] = RecoilProfile;
         const auto guid = AssetDatabase::RefGuid(RecoilProfile);
         j["recoilProfileGuid"] = guid.empty() ? RecoilProfileGuid : guid;
+        if (HipFireClip) j["hipFireClip"] = true;
     }
     j["viewRotation"] = vec3(ViewRotation);
     j["viewPosition"] = vec3(ViewPosition);
@@ -435,6 +452,11 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
                       {"origin", vec3(Eject.Origin)}, {"direction", vec3(Eject.Direction)}, {"speed", Eject.Speed},
                       {"speedJitter", Eject.SpeedJitter}, {"spread", Eject.Spread}, {"spin", Eject.Spin},
                       {"trigger", Eject.When == FirstPersonEjectSettings::Trigger::Event ? "event" : "shot"}};
+    if (j.contains("eject") && !Eject.Origins.empty()) {
+        j["eject"]["origins"] = json::array();
+        for (const glm::vec3& o : Eject.Origins) j["eject"]["origins"].push_back(vec3(o));
+    }
+    if (j.contains("eject") && !Eject.LiveModel.empty()) j["eject"]["liveModel"] = Eject.LiveModel;
     j["stockLock"] = {{"enabled", StockLock.Enabled}, {"tags", StockLock.Tags}, {"pocket", vec3(StockLock.Pocket)},
                       {"maxShift", StockLock.MaxShift}, {"headTilt", StockLock.HeadTilt}, {"blendTime", StockLock.BlendTime},
                       {"neckRadius", StockLock.NeckRadius}, {"headRadius", StockLock.HeadRadius}, {"gunLength", StockLock.GunLength},
@@ -726,7 +748,7 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
             {kFidget, PT::Trigger, Sev::Info, "Set after a long idle: the fidget."},
         };
         for (const P& p : kParams) {
-            if (std::string(p.Name) == kFire && (set.Procedural.Recoil.HipProcedural || !set.RecoilProfile.empty())) continue;
+            if (std::string(p.Name) == kFire && set.HipShotsProcedural()) continue;
             const AnimatorController::Parameter* found = c.FindParameter(p.Name);
             if (!found)
                 add(p.Level, std::string("The controller has no parameter '") + p.Name + "'. " + p.What,
@@ -752,7 +774,7 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
         if (set.Eject.Enabled && set.Eject.When == FirstPersonEjectSettings::Trigger::Event && !hasEvent(kEventEject))
             add(Sev::Warning, std::string("Casings eject on an event, but no state has an '") + kEventEject + "' event.",
                 "Add an 'Eject' event to the state that works the action (the pump), or set eject.trigger to \"shot\".");
-        if (!set.Procedural.Recoil.HipProcedural && set.RecoilProfile.empty() && !hasEvent(kEventShot))
+        if (!set.HipShotsProcedural() && !hasEvent(kEventShot))
             add(Sev::Warning, std::string("No state has a '") + kEventShot + "' event.",
                 "Add a 'Shot' event on the fire clip at the moment a round leaves the gun; without it hip fire spends no ammo.");
         const FirstPersonWeaponGameplay& gp = set.Gameplay;

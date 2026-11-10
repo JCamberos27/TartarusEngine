@@ -12,7 +12,8 @@ the same files in a second location without their extensions.
 
 ## Weapons
 
-`project/assets/Weapons/AKS74U/` and `project/assets/Weapons/Remington870/`
+`project/assets/Weapons/AKS74U/`, `project/assets/Weapons/Remington870/` and
+`project/assets/Weapons/Revolver38/` ([.38 Special](WEAPON_REVOLVER38.md))
 each contain the complete weapon setup:
 
 | Extension / folder | Purpose |
@@ -23,6 +24,7 @@ each contain the complete weapon setup:
 | `.recoil` | Recoil profile |
 | `.camerashake` | Camera shake profile |
 | `FirstPerson/` | First-person arm animation clips |
+| `ThirdPerson/` | Third-person arm clips (`tools/weapons/author_3p.py`) |
 | `Weapon/` | Weapon model and animation clips |
 | `Materials/`, `Textures/` | Rendering assets |
 

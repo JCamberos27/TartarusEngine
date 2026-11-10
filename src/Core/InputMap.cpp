@@ -92,10 +92,11 @@ std::vector<Action> Defaults() {
         act("Melee",    GLFW_KEY_Q, kNone, kNone, kNone, kNone, kNone, false),
         act("Holster",  GLFW_KEY_H, kNone, kNone, kNone, kNone, kNone, false),
         // Weapon slots: 1 = the controller's Animation Set (the AK), 2 = its Secondary Animation Set (the
-        // Remington 870), 3 = unarmed. The scroll wheel steps through the weapons too.
+        // Remington 870), 3 = its Sidearm (the .38 revolver), 4 = unarmed. The scroll wheel steps through them too.
         act("Weapon1",  GLFW_KEY_1, kNone, kNone, kNone, kNone, kNone, false),
         act("Weapon2",  GLFW_KEY_2, kNone, kNone, kNone, kNone, kNone, false),
         act("Weapon3",  GLFW_KEY_3, kNone, kNone, kNone, kNone, kNone, false),
+        act("Weapon4",  GLFW_KEY_4, kNone, kNone, kNone, kNone, kNone, false),
         act("Flashlight", GLFW_KEY_F, kNone, kNone, kNone, kNone, kNone, false),
     };
 }

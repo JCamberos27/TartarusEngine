@@ -1,0 +1,564 @@
+{
+  "method": "Blender 5.2 FBX re-import of every installed payload (tools/weapons/export_revolver38.py output); render checks of the fixes; gameplay tests left to the user",
+  "source": "D:\\Jacob\\JCamberos\\Downloads\\38 Special 60fps.blend",
+  "fixes": [
+    "A_FP_Reload: CB_ik_hand_r keyed at the constant every other take holds (loc [8.925, -33.652, 44.26]).",
+    "A_W_Fire: double-action pull re-keyed (trigger 20 deg, hammer 35 deg, cylinder 60 deg CCW from the rear; pulled f2, hammer falls f3, trigger reset f18), over the arms' 0..46.",
+    "A_FP_Fire: index finger curls with the trigger (11 deg over three joints about local (-1.0, 0.0, 0.0); trigger face travels 0.73 cm, alignment 0.76).",
+    "A_FP_Aim: solved (rear notch 34 cm ahead of the AK eye, on its sight line).",
+    "Bullet1..6 re-parented under Cylinder, CHILD_OF baked; reload rounds hidden between leaving the cylinder and the left hand picking them up."
+  ],
+  "rootTranslation": "Root constant in every weapon clip; bind translation 0.64 cm compensated by weaponMountOffset (same scheme as the Remington 870 Main, 1.6 cm).",
+  "geometry": "Weapon model in root space: bounds x +-0.021, y -0.114..0.086 (muzzle), z -0.071..0.067 m.",
+  "ejectTimeline": [
+    {
+      "bullet": "Bullet1",
+      "ejectFrame": 58,
+      "loadedFrame": 132,
+      "origin": [
+        0.048,
+        0.0128,
+        -0.0172
+      ],
+      "velocity": [
+        0.005,
+        0.008,
+        -0.485
+      ]
+    },
+    {
+      "bullet": "Bullet2",
+      "ejectFrame": 58,
+      "loadedFrame": 132,
+      "origin": [
+        0.0419,
+        0.024,
+        -0.0172
+      ],
+      "velocity": [
+        0.002,
+        0.007,
+        -0.485
+      ]
+    },
+    {
+      "bullet": "Bullet3",
+      "ejectFrame": 58,
+      "loadedFrame": 210,
+      "origin": [
+        0.0289,
+        0.024,
+        -0.0172
+      ],
+      "velocity": [
+        0.018,
+        0.002,
+        -0.486
+      ]
+    },
+    {
+      "bullet": "Bullet4",
+      "ejectFrame": 58,
+      "loadedFrame": 210,
+      "origin": [
+        0.0221,
+        0.0128,
+        -0.0172
+      ],
+      "velocity": [
+        0.005,
+        0.002,
+        -0.49
+      ]
+    },
+    {
+      "bullet": "Bullet5",
+      "ejectFrame": 58,
+      "loadedFrame": 288,
+      "origin": [
+        0.0289,
+        0.0015,
+        -0.0172
+      ],
+      "velocity": [
+        0.017,
+        0.001,
+        -0.491
+      ]
+    },
+    {
+      "bullet": "Bullet6",
+      "ejectFrame": 58,
+      "loadedFrame": 288,
+      "origin": [
+        0.0419,
+        0.0015,
+        -0.0172
+      ],
+      "velocity": [
+        0.026,
+        0.003,
+        -0.487
+      ]
+    }
+  ],
+  "problems": [],
+  "files": [
+    {
+      "file": "Casing_38Special.fbx",
+      "guid": "8cee4c9c8229c8a9",
+      "bytes": 23804,
+      "sha256": "1a6855a5d52b444f583355efdefe2fd8bcbd4a79c47a34d8db9b1810a41ffbfb",
+      "takes": 0,
+      "importedRange": null,
+      "bones": 0,
+      "materials": [
+        "Bullet"
+      ]
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Aim.fbx",
+      "guid": "3fe5a5d850cc4e73",
+      "bytes": 1532812,
+      "sha256": "e1e17480137b5ab5faeff51e029aa5bb9165862710f38d920fffc40177aaf66a",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        2.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Draw.fbx",
+      "guid": "ed05572b88d52414",
+      "bytes": 2323500,
+      "sha256": "abcfab301ba4574b4f5a74a7d0e1c3a4345bffcb8eb93bc302feb284f24ba443",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        47.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Fire.fbx",
+      "guid": "bc9b2a142800a0b6",
+      "bytes": 2318252,
+      "sha256": "cf58c387943d65afadbf2778a7b2a825f48ea988f0d4778a2ece2d158299e4a5",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        47.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Holster.fbx",
+      "guid": "2020e2ea423762dd",
+      "bytes": 2226604,
+      "sha256": "117c1e914229823da44d938bf6861bd4eee716e7b3ed96199fac82607fcce567",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        31.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Idle.fbx",
+      "guid": "c5eb4aeb5284e8d1",
+      "bytes": 3332972,
+      "sha256": "edfdb333a44986fd9a82ff142511b55d5e8b8892fd7dfce64ba4e5fbdecc497b",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        121.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_IdleToSprint.fbx",
+      "guid": "c9be01a6440f1d42",
+      "bytes": 1891596,
+      "sha256": "8fc133ffe9496a0dcbf0dfe31949e0540996807fa2576d1313db3988af12011b",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        17.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Inspect.fbx",
+      "guid": "3d7b4afb35b49e66",
+      "bytes": 6789228,
+      "sha256": "6aeecd7eb583df57f07cca0c2a09e58c994f334b66e7c1ab9d419022fa8dde7e",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        375.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Mag_Check.fbx",
+      "guid": "9167c7d2eaaca26c",
+      "bytes": 4693644,
+      "sha256": "e7b527f44495a6c1323646359fa11822aea5e4d829ddedbc81ed8c8dde301699",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        215.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Melee.fbx",
+      "guid": "f73b2b502288c7a7",
+      "bytes": 2650156,
+      "sha256": "df0f9ba7592ed2df86eb0e801d8f629eb039e8b87a927916c165064180526ee5",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        70.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Regrip.fbx",
+      "guid": "a449d2a010506151",
+      "bytes": 2284476,
+      "sha256": "e812837d6aebf89e66cc3aecaa0c81a26ecc28a14fc9a2b879c73eef87d5c4fb",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        45.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Reload.fbx",
+      "guid": "308c2227bb6b1879",
+      "bytes": 6918188,
+      "sha256": "09b206c2d22813cfd1ca5ae73f53ef2a2854b75a06f6ddfacdd8100f9b5fc4f0",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        373.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Sprint.fbx",
+      "guid": "af4b1ded39a734a4",
+      "bytes": 2285500,
+      "sha256": "a3d2aad4e8d4d5a138d1916e2c06ba0170b478474376e7a06473dc0c4294d7b6",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        45.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_SprintToIdle.fbx",
+      "guid": "6132841c90f2d1e4",
+      "bytes": 2083628,
+      "sha256": "8b240ef7a8a3de2f2bdbf43fe1af01b44548173bd63558fda218caffd594a207",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        33.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "FirstPerson/Revolver38_A_FP_Walk.fbx",
+      "guid": "d906dcdb1322e18b",
+      "bytes": 2276844,
+      "sha256": "fdc26374d78e3a2cdf1864b78197c5c1749dab8de4e19ef99e6c29afc5fb0501",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        45.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "Round_38Special.fbx",
+      "guid": "a494b323fcbbeb49",
+      "bytes": 26668,
+      "sha256": "5789d96cc02caa732d48012edfc71a24c0fe7ff25e0df545d019ad774e72dae2",
+      "takes": 0,
+      "importedRange": null,
+      "bones": 0,
+      "materials": [
+        "Bullet"
+      ]
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Aim.fbx",
+      "guid": "f86500397c613c05",
+      "bytes": 1532844,
+      "sha256": "8413efcac012a7c07acd822147e7224004d658d1eb4e2322dfade79cdf5be2ef",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        2.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Draw.fbx",
+      "guid": "547550570730434c",
+      "bytes": 2322044,
+      "sha256": "97a78ef4c37ffeb5ec2ee78166ea6eb08416cb2c0d417e19e65011b68c7b0ab5",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        47.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Fire.fbx",
+      "guid": "32a7f39c44ea9461",
+      "bytes": 2316556,
+      "sha256": "5c3fc062c063b65abdad2216afe4387df5c4a06095b5abbede7a348b70669a53",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        47.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Holster.fbx",
+      "guid": "59fac1efb488571e",
+      "bytes": 2226636,
+      "sha256": "8233cabb2ae0b4df26869b5a5fb53755c87c85179f5f29f20e73f126e07e1a05",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        31.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Idle.fbx",
+      "guid": "ffca0296c60e0ab2",
+      "bytes": 3328364,
+      "sha256": "a9d720f9b0794d44f47dc8dd1a7be8267869a9bde1bee0918a9ee760b85a9676",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        121.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_IdleToSprint.fbx",
+      "guid": "9b10be8f854233ab",
+      "bytes": 1891612,
+      "sha256": "c937b44b14abf3daf723f759965efe5b3f8bb0f53b359afab4fdfd4a5a93590c",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        17.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Inspect.fbx",
+      "guid": "c413319b5cec112f",
+      "bytes": 6945564,
+      "sha256": "f4f998e6d62f5ca854c073ef5250bdec4fb756d13a6b6b3dcde9db46b8236a57",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        375.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Mag_Check.fbx",
+      "guid": "b46ab8ef72f0a30b",
+      "bytes": 4681580,
+      "sha256": "249603c126c4c0e275ea26b7a4ac16b8a8face8b008a177d844b59f5f7408dc5",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        215.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Melee.fbx",
+      "guid": "5ae788070e5b6972",
+      "bytes": 2649852,
+      "sha256": "e159ccf6dc7c8b27580df00ee53410e6fdccf3b26cfeb93ab618e1af24c9b694",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        70.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Regrip.fbx",
+      "guid": "bcbb54e606a4d94a",
+      "bytes": 2282940,
+      "sha256": "a268a9e82eb55aa57f407a2ee6a1cfa1149b8f18521bc97db0934f0d806846ad",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        45.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Reload.fbx",
+      "guid": "eca4cae953b18757",
+      "bytes": 6918108,
+      "sha256": "82a1ed6f388f9ed8211e8d14578e46899674410bc684914a8b7c6c44b5ea4273",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        373.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Sprint.fbx",
+      "guid": "fb3494f54234a12d",
+      "bytes": 2276044,
+      "sha256": "0d71b8840d0c4bb46c6eab863382691ac87d370c655c93bf634ed612f3c562f0",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        45.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_SprintToIdle.fbx",
+      "guid": "68342622c4314ee6",
+      "bytes": 2080972,
+      "sha256": "93b2ce1020e37416c26cbd9ab3015b1ad1c151d08d72df2e43f23a4dc30144dd",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        33.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "ThirdPerson/Revolver38_A_3P_Walk.fbx",
+      "guid": "10c4d9a823efcea4",
+      "bytes": 2275020,
+      "sha256": "afeaee4067496cc27b968093b643f6eea070548e8a562a4d979ba1740ff74e45",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        45.0
+      ],
+      "bones": 263,
+      "materials": []
+    },
+    {
+      "file": "Weapon/Revolver38_A_W_Fire.fbx",
+      "guid": "ff543eb48d4c09eb",
+      "bytes": 131916,
+      "sha256": "ede0379a32987d8df70cd040ac03a3da9464ed2ea3ca56d892865c99751ce748",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        47.0
+      ],
+      "bones": 13,
+      "materials": []
+    },
+    {
+      "file": "Weapon/Revolver38_A_W_Idle.fbx",
+      "guid": "3377680b2965aead",
+      "bytes": 840556,
+      "sha256": "6101e9dcc835ddfd7e4321315d233f84db73c6266081d8ec1b95740b2b3c6f5a",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        2.0
+      ],
+      "bones": 13,
+      "materials": [
+        "Bullet",
+        "Revolver"
+      ]
+    },
+    {
+      "file": "Weapon/Revolver38_A_W_Inspect.fbx",
+      "guid": "33fb2a7c27a33d42",
+      "bytes": 366204,
+      "sha256": "d42971ef3efeb383774ae493ea43d039383a70708b811618c6b569935042a792",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        375.0
+      ],
+      "bones": 13,
+      "materials": []
+    },
+    {
+      "file": "Weapon/Revolver38_A_W_Mag_Check.fbx",
+      "guid": "0e70aedd1338c9b9",
+      "bytes": 253996,
+      "sha256": "3e4ee2e5d60670826034bb4d67e88e9d85f1866aed94b3d3d58ae5882229edb6",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        215.0
+      ],
+      "bones": 13,
+      "materials": []
+    },
+    {
+      "file": "Weapon/Revolver38_A_W_Reload.fbx",
+      "guid": "9db637a18017a0dc",
+      "bytes": 381580,
+      "sha256": "fea87301145a7f12f10b8789eb7e80eee279f27b04200e2452988105ca7fb61f",
+      "takes": 1,
+      "importedRange": [
+        1.0,
+        373.0
+      ],
+      "bones": 13,
+      "materials": []
+    }
+  ]
+}
