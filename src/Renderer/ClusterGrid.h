@@ -27,6 +27,8 @@ class Shader;
 // last (proj, screenW, screenH, nearZ, farZ) and skip the build dispatch when unchanged.
 class ClusterGrid {
 public:
+    // The grid is also written out in GLSL, once, in shaders/ClusterGrid.glsl (C_GX / C_GY / C_GZ), which the build,
+    // cull, decal cull, model shading and volumetric-inject shaders include: change both together.
     static constexpr int GRID_X = 16;
     static constexpr int GRID_Y = 9;
     static constexpr int GRID_Z = 24;

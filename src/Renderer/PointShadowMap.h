@@ -1,4 +1,5 @@
 #pragma once
+#include "DepthArrayTarget.h"
 
 // Cube-map shadow maps for point lights (#119). Companion to SpotShadowMap.
 //
@@ -15,7 +16,6 @@ public:
     static constexpr int kMaxPoints = 8;
 
     PointShadowMap() = default;
-    ~PointShadowMap();
     PointShadowMap(const PointShadowMap&) = delete;
     PointShadowMap& operator=(const PointShadowMap&) = delete;
 
@@ -31,18 +31,12 @@ public:
     void BeginStaticFace(int slot, int face) const;
     void BeginFaceFromStatic(int slot, int face) const;
 
-    unsigned int DepthCubeArray() const { return m_DepthArray; }
+    unsigned int DepthCubeArray() const { return m_Target.Texture(); }
     int Resolution() const { return m_Resolution; }
     int Cubes() const { return m_Cubes; }
 
 private:
-    void Release();
-    void EnsureStatic() const;
-
-    unsigned int m_DepthArray = 0;
-    unsigned int m_Fbo = 0;
-    mutable unsigned int m_StaticArray = 0; // made lazily (EnsureStatic)
-    unsigned int m_StaticFbo = 0;
+    DepthArrayTarget m_Target; // the cube array (layer = cube*6 + face), its FBOs and the lazily made static cache
     int m_Resolution = 0;
     int m_Cubes = 0;
     mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check in Begin()

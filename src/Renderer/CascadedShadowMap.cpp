@@ -1,4 +1,3 @@
-#include "GpuMemTrack.h"
 #include "CascadedShadowMap.h"
 #include "GLFramebufferCheck.h"
 #include "Log.h"
@@ -14,47 +13,42 @@
 CascadedShadowMap::~CascadedShadowMap() { Release(); }
 
 void CascadedShadowMap::Release() {
-    GpuMemTrack::Set(GpuMemTrack::Key("CascadedShadowMap", this), 0);
     for (unsigned int& fbo : m_Fbos)
         if (fbo) { glDeleteFramebuffers(1, &fbo); fbo = 0; }
     if (m_LayeredFbo) { glDeleteFramebuffers(1, &m_LayeredFbo); m_LayeredFbo = 0; }
-    if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
+    m_Target.Release();
 }
 
 void CascadedShadowMap::Configure(int resolution, int count) {
     resolution = std::clamp(resolution, 256, 8192);
     count = std::clamp(count, 1, kMaxCascades);
-    if (m_DepthArray != 0 && resolution == m_Resolution && count == m_Count) return;
+    if (m_Target.Texture() != 0 && resolution == m_Resolution && count == m_Count) return;
 
     Release();
     m_Resolution = resolution;
     m_Count = count;
 
-    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_DepthArray);
-    glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, count);
-    GpuMemTrack::Set(GpuMemTrack::Key("CascadedShadowMap", this), (size_t)resolution * resolution * count * 4);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    const float border[4] = {1.0f, 1.0f, 1.0f, 1.0f}; // outside the map = fully lit
-    glTextureParameterfv(m_DepthArray, GL_TEXTURE_BORDER_COLOR, border);
-    // Hardware depth comparison so a sampler2DArrayShadow tap returns a filtered 0..1 visibility.
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-    glTextureParameteri(m_DepthArray, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+    DepthArrayTarget::Desc d;
+    d.target = GL_TEXTURE_2D_ARRAY;
+    d.resolution = resolution;
+    d.layers = count;
+    d.borderClamp = true;
+    d.fbos = false; // one FBO per cascade instead, below
+    d.liveName = "CascadedShadowMap";
+    m_Target.Create(d, this);
 
+    const unsigned int tex = m_Target.Texture();
     glCreateFramebuffers(count, m_Fbos.data());
     for (int i = 0; i < count; ++i) {
         glNamedFramebufferDrawBuffers(m_Fbos[i], 0, nullptr); // depth only
-        glNamedFramebufferTextureLayer(m_Fbos[i], GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
+        glNamedFramebufferTextureLayer(m_Fbos[i], GL_DEPTH_ATTACHMENT, tex, 0, i);
     }
-    glCreateFramebuffers(1, &m_LayeredFbo);
-    glNamedFramebufferDrawBuffers(m_LayeredFbo, 0, nullptr);
-    glNamedFramebufferTexture(m_LayeredFbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0);
+    m_LayeredFbo = DepthArrayTarget::CreateDepthFbo();
+    glNamedFramebufferTexture(m_LayeredFbo, GL_DEPTH_ATTACHMENT, tex, 0);
     // The completeness check stays in Begin() (audit GL-204), once per Configure().
     m_CompleteChecked = false; // re-check after a resolution/count change
 
-    if (!m_Fbos[0] || !m_DepthArray)
+    if (!m_Fbos[0] || !m_Target.Texture())
         Log::Error("CascadedShadowMap: failed to create depth array (" +
                    std::to_string(resolution) + "x" + std::to_string(count) + ")");
 }
@@ -206,6 +200,15 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
     }
 }
 
+// What SunShadow reaches from a receiver, in shadow-map texels: the Poisson kernel (longest offset ~1.23 radii, radius
+// widened 35% per cascade), the 2x2 compare, the normal offset (at most one texel x normalBias) and a texel of slack. A
+// hard kernel (0) still reaches the 2x2 compare's neighbour; the 3-texel slack covers it. Shared by ReadRect and
+// CasterReachesSlice.
+static float ReachTexels(int c, float kernelTexels, float normalBias) {
+    return (kernelTexels > 0.0f ? std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f : 0.0f) +
+           std::max(normalBias, 0.0f) + 3.0f;
+}
+
 // The light clip-space rectangle cascade c's receivers can read: the slice footprint's bounding box (for cascade 0 also
 // everything within kViewModelReach of the eye: the view model draws at its own field of view, so its fragments can sit
 // outside the world view's frustum near the eye), grown by what SunShadow reaches from a receiver - the Poisson kernel
@@ -213,8 +216,7 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
 // normalBias) and a texel of slack.
 void CascadedShadowMap::ReadRect(int c, float kernelTexels, float normalBias, glm::vec2& lo, glm::vec2& hi) const {
     const float res = (float)std::max(m_Resolution, 1);
-    const float texels = (kernelTexels > 0.0f ? std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f : 0.0f) +
-                         std::max(normalBias, 0.0f) + 3.0f;
+    const float texels = ReachTexels(c, kernelTexels, normalBias);
     lo = m_SliceMin[c];
     hi = m_SliceMax[c];
     if (c == 0) {
@@ -261,9 +263,7 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
         lo = glm::min(lo, xy);
         hi = glm::max(hi, xy);
     }
-    // A hard kernel (0) still reaches the 2x2 compare's neighbour; the 3-texel slack covers it.
-    const float texels = (kernelTexels > 0.0f ? std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f : 0.0f) +
-                         std::max(normalBias, 0.0f) + 3.0f;
+    const float texels = ReachTexels(c, kernelTexels, normalBias);
     const float margin = texels * 2.0f / (float)std::max(m_Resolution, 1);
     lo -= glm::vec2(margin);
     hi += glm::vec2(margin);

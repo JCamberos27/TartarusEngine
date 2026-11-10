@@ -9,7 +9,8 @@ uniform vec2  uScreenSize;
 uniform float uZNear;
 uniform float uZFar;
 
-const uint GX = 16u, GY = 9u, GZ = 24u;
+#include "ClusterGrid.glsl"
+const uint GX = C_GX, GY = C_GY, GZ = C_GZ;
 
 // Pixel coordinate -> a point on the near plane in view space.
 vec3 screenToView(vec2 px) {

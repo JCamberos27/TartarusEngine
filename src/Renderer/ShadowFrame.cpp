@@ -276,6 +276,23 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
 // one multiply instead of re-hashing ~100 bytes per caster per light.
 static std::uint64_t HashCaster(std::uint64_t h, std::uint64_t casterHash) { return (h ^ casterHash) * 1099511628211ull; }
 
+bool ShadowFrame::CollectLocalCasters(const Frustum* frustum, const AABB* range, bool skipPlayer, int turnSlot,
+                                      std::uint64_t frame, std::uint64_t& sig) {
+    m_Visible.clear();
+    m_VisibleDynamic.clear();
+    bool anyDynamic = false;
+    for (const LocalCaster& c : m_LocalCasters) {
+        if (c.bounded && (frustum ? !frustum->Intersects(c.bounds) : !range->Intersects(c.bounds))) continue;
+        if (c.player && skipPlayer) continue;
+        m_Visible.push_back(&c);
+        const bool dynamic = DynamicFor(c, turnSlot, frame);
+        m_VisibleDynamic.push_back(dynamic);
+        anyDynamic = anyDynamic || dynamic;
+        if (!dynamic) sig = HashCaster(sig, c.hash);
+    }
+    return anyDynamic;
+}
+
 void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
     PROFILE_SCOPE("Spot Shadow Pass");
     PROFILE_GPU_SCOPE("Spot Shadow Pass");
@@ -307,9 +324,6 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         const bool lightMoved = fl.SpotVP[s] != m_SpotLastVP[s];
         m_SpotLastVP[s] = fl.SpotVP[s];
         const Frustum lf = Frustum::FromViewProj(fl.SpotVP[s]);
-        m_Visible.clear();
-        m_VisibleDynamic.clear();
-        bool animated = false;
         // The static casters' signature: animated ones redraw every frame anyway.
         std::uint64_t sig = kFnvOffset;
         const unsigned int map = spotShadowMap.DepthArray();
@@ -319,17 +333,9 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         sig = HashBytes(sig, &fl.SpotVP[s], sizeof fl.SpotVP[s]);
         sig = HashBytes(sig, &fl.SpotPos[s], sizeof fl.SpotPos[s]);
         sig = HashBytes(sig, &fl.SpotFar[s], sizeof fl.SpotFar[s]);
-        for (const LocalCaster& c : m_LocalCasters) {
-            if (c.bounded && !lf.Intersects(c.bounds)) continue;
-            if (c.player && s == fl.TorchShadowSlot) continue; // the torch is in the player's hand
-            m_Visible.push_back(&c);
-            // Animated or recently moved casters are drawn over the cached static depth every frame; the rest are the
-            // static signature.
-            const bool dynamic = DynamicFor(c, s, frame);
-            m_VisibleDynamic.push_back(dynamic);
-            animated = animated || dynamic;
-            if (!dynamic) sig = HashCaster(sig, c.hash);
-        }
+        // Animated or recently moved casters are drawn over the cached static depth every frame; the rest are the
+        // static signature. The torch is in the player's hand: no player shadow in its own light.
+        const bool animated = CollectLocalCasters(&lf, nullptr, s == fl.TorchShadowSlot, s, frame, sig);
         const bool staticChanged = sig != m_SpotShadowSig[s];
         // Drawn whole when the light last moved, nothing has changed or moved in it since, and it isn't this light's
         // turn: that layer is still right. Its cache is built on its turn, not all at once the frame after a batch of
@@ -440,8 +446,6 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
         const glm::vec3 lp = fl.PointPos[s];
         const float reach = fl.PointFar[s];
         const AABB range{lp - glm::vec3(reach), lp + glm::vec3(reach)};
-        m_Visible.clear();
-        m_VisibleDynamic.clear();
         std::uint64_t sig = kFnvOffset;
         const unsigned int map = pointShadowMap.DepthCubeArray();
         const int res = pointShadowMap.Resolution() * 64 + pointShadowMap.Cubes(); // a reallocation
@@ -453,13 +457,7 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
         // Animated or recently moved casters are drawn over each face's cached static depth; the rest make the static
         // signature (as the spot maps do). A face redraws only when the static casters changed or a moving one is in it
         // (or was, last frame): an NPC walking past a lamp used to redraw all six faces of every cube in reach.
-        for (const LocalCaster& c : m_LocalCasters) {
-            if (c.bounded && !range.Intersects(c.bounds)) continue;
-            m_Visible.push_back(&c);
-            const bool dynamic = DynamicFor(c, s + 2, frame);
-            m_VisibleDynamic.push_back(dynamic);
-            if (!dynamic) sig = HashCaster(sig, c.hash);
-        }
+        CollectLocalCasters(nullptr, &range, false, s + 2, frame, sig);
         const bool staticChanged = sig != m_PointShadowSig[s];
         m_PointShadowSig[s] = sig;
         const glm::mat4 proj = MakePerspective(90.0f, 1.0f, fl.PointNear[s], reach); // #202

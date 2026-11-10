@@ -1,6 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <array>
+#include "DepthArrayTarget.h"
 
 // Cascaded shadow maps for the directional sun.
 //
@@ -64,7 +65,7 @@ public:
     // cascade, which BeginLayeredScissor needs.
     static bool ViewportIndexSupported();
 
-    unsigned int DepthArray() const { return m_DepthArray; }
+    unsigned int DepthArray() const { return m_Target.Texture(); }
     int Resolution() const { return m_Resolution; }
     int Count() const { return m_Count; }
     const glm::mat4& LightViewProj(int i) const { return m_LightViewProj[i]; }
@@ -100,7 +101,7 @@ public:
     const std::array<glm::vec2, 8>& SliceCorners(int c) const { return m_SliceCorners[c]; }
 
 private:
-    unsigned int m_DepthArray = 0;
+    DepthArrayTarget m_Target; // the cascade array (its own per-layer FBOs below, so no FBOs of its own)
     // One FBO per cascade, each attached to its own layer once in Configure(). Re-pointing a
     // single FBO's attachment in every Begin() made the driver revalidate it once per cascade.
     std::array<unsigned int, kMaxCascades> m_Fbos{};

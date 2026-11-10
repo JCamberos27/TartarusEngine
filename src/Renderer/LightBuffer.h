@@ -109,4 +109,6 @@ private:
     unsigned int m_Ssbo = 0;
 
     void EnsureCreated();
+    static GpuLight Pack(const glm::vec4& positionType, const glm::vec4& colorRange, const glm::vec4& dirCutoff,
+                         float paramX, float paramY, std::uint32_t excludedLayers, float volumetric);
 };
