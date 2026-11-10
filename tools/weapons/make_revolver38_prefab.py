@@ -75,7 +75,7 @@ for e in prefab["empties"]:
     if e["name"] in ("Muzzle Flash", "Muzzle Core", "Muzzle Smoke") and "Particle System" in ak_fx.get(e["name"], {}):
         e["Particle System"] = copy.deepcopy(ak_fx[e["name"]]["Particle System"])
     if "Muzzle Attachment" in e:
-        e["Muzzle Attachment"]["Firing Sound Profile"] = "38"
+        e["Muzzle Attachment"]["Firing Sound Profile"] = "revolver38"
 
 with open(DST, "w", encoding="utf-8") as fh:
     json.dump(prefab, fh, indent=2)

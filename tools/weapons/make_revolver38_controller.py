@@ -10,8 +10,9 @@
 #                   case per chamber, eject.origins), pairs seated f132 / f210 / f288, crane shut f316-322 (Refill)
 #   MagCheck 0..214 crane out f14, shut f156
 #   Inspect 0..374  hammer cocked f138, lowered f182, crane out f232, cylinder spun f280, crane shut f320
-# Sound events name the snd.revolver38.* sets (assets/Audio/Weapons/Revolver38); until recordings are supplied
-# they resolve to no files and play nothing.
+# Sound events name the snd.revolver38.* sets (assets/Audio/Weapons/Revolver38, built by tools/audio/build_elements.py
+# revolver38). The hand events (handle = a hand arrives on the gun, cloth = the arms move) are the hands' contact frames
+# from bone-motion analysis of the same clips (the AE showcase's sync_38.json, contacts_38.py), the AK / 870's density.
 import copy
 import json
 import os
@@ -46,30 +47,43 @@ EVENTS = {
     "Fire": [{"name": "Shot", "time": t(7, 46)}],  # the hammer falls (export_revolver38.py F_FALL); the clip is 0..46
     "Reload": [
         {"name": S + "cloth", "time": 0.0},
+        {"name": S + "handle", "time": t(13, 372)},
         {"name": S + "crane_open", "time": t(14, 372)},
+        {"name": S + "cloth", "time": t(32, 372)},
+        {"name": S + "handle", "time": t(49, 372)},
         {"name": S + "ejector", "time": t(52, 372)},
     ] + [{"name": "Eject", "time": t(58, 372)} for _ in range(CAPACITY)] + [
         {"name": S + "round_insert", "time": t(126, 372)},
+        {"name": S + "handle", "time": t(136, 372)},
         {"name": S + "round_insert", "time": t(204, 372)},
         {"name": S + "round_insert", "time": t(282, 372)},
+        {"name": S + "cloth", "time": t(298, 372)},
         {"name": S + "crane_close", "time": t(316, 372)},
         {"name": "Refill", "time": t(322, 372)},
         {"name": S + "cloth", "time": t(340, 372)},
+        {"name": S + "handle", "time": t(355, 372)},
     ],
     "MagCheck": [
         {"name": S + "cloth", "time": 0.02},
+        {"name": S + "handle", "time": t(10, 214)},
         {"name": S + "crane_open", "time": t(14, 214)},
         {"name": S + "crane_close", "time": t(156, 214)},
         {"name": S + "cloth", "time": t(180, 214)},
+        {"name": S + "handle", "time": t(194, 214)},
     ],
     "Inspect": [
         {"name": S + "cloth", "time": 0.02},
+        {"name": S + "handle", "time": t(16, 374)},
         {"name": S + "hammer_cock", "time": t(138, 374)},
         {"name": S + "hammer_decock", "time": t(182, 374)},
         {"name": S + "crane_open", "time": t(232, 374)},
+        {"name": S + "cloth", "time": t(235, 374)},
+        {"name": S + "handle", "time": t(271, 374)},
+        {"name": S + "cloth", "time": t(279, 374)},
         {"name": S + "cylinder_spin", "time": t(280, 374)},
         {"name": S + "crane_close", "time": t(320, 374)},
         {"name": S + "cloth", "time": t(350, 374)},
+        {"name": S + "handle", "time": t(362, 374)},
     ],
     "Draw": [{"name": S + "draw", "time": 0.08}],
     "Holster": [{"name": S + "holster", "time": 0.3}],

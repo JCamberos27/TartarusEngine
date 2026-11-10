@@ -166,7 +166,7 @@ void RegisterEngineComponents() {
             {"Muzzle Transform", T::String, TARTARUS_REFLECT_FIELD(MuzzleAttachmentComponent, MuzzleTransform), 0.0f, "Path to the muzzle transform below this object. Its local -Z axis is the bore direction."},
             {"Muzzle Flash", T::String, TARTARUS_REFLECT_FIELD(MuzzleAttachmentComponent, MuzzleFlash), 0.0f, "Path to the muzzle flash Particle System below this object. Its Texture supplies the flash asset."},
             {"Firing Sounds", T::String, TARTARUS_REFLECT_FIELD(MuzzleAttachmentComponent, FiringSounds), 0.0f, "Audio assets for the firing sound; variants alternate per shot. Empty uses the gun's layered audio."},
-            {"Firing Sound Profile", T::String, TARTARUS_REFLECT_FIELD(MuzzleAttachmentComponent, FiringSoundProfile), 0.0f, "Layered firing sound profile (empty, ak or 870), used when Firing Sounds is empty."},
+            {"Firing Sound Profile", T::String, TARTARUS_REFLECT_FIELD(MuzzleAttachmentComponent, FiringSoundProfile), 0.0f, "Layered firing sound profile (empty, ak, 870 or revolver38), used when Firing Sounds is empty."},
         }
     });
     Register<GripAttachmentComponent>({

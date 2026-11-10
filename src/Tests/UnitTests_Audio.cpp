@@ -383,6 +383,7 @@ void TestAnimEventPlaysItsSet() {
     CHECK(WeaponAudio::ParseKey("snd.870.shell_insert", gun, element) && gun == "870" && element == "shell_insert");
     CHECK(!WeaponAudio::ParseKey("Shot", gun, element) && !WeaponAudio::ParseKey("snd.", gun, element) && !WeaponAudio::ParseKey("snd.ak", gun, element));
     CHECK(WeaponAudioGunId("assets/Weapons/AKS74U/AKS74U.fpsanim") == "ak" && WeaponAudioGunId("assets/Weapons/Remington870/Remington870.fpsanim") == "870");
+    CHECK(WeaponAudioGunId("assets/Weapons/Revolver38/Revolver38.fpsanim") == "revolver38" && wa.Profile("revolver38") != nullptr);
     wa.Stop();
 }
 
@@ -446,6 +447,7 @@ void TestAudioManifestGroupsVariants() {
     // The contract's file layout as the fallback: variants are <element>_<n>.wav in the gun's / category's folder.
     CHECK(SoundKeyFilePrefix("snd.ak.mag_out") == "assets/Audio/Weapons/AKS74U/mag_out_");
     CHECK(SoundKeyFilePrefix("snd.870.pump_back") == "assets/Audio/Weapons/Remington870/pump_back_");
+    CHECK(SoundKeyFilePrefix("snd.revolver38.hammer_cock") == "assets/Audio/Weapons/Revolver38/hammer_cock_");
     CHECK(SoundKeyFilePrefix("snd.foley.concrete.walk") == "assets/Audio/Foley/concrete/walk_");
     CHECK(SoundKeyFilePrefix("Shot").empty() && SoundKeyFilePrefix("snd.ak").empty());
     namespace fs = std::filesystem;

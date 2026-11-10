@@ -19,14 +19,18 @@ BAREFOOT = os.path.join(SRC_ROOT, "barefoot", "Barefoot and Socks")   # Ocular S
 
 
 # ----------------------------------------------------------------------------------------------------------- io
-LIBRARIES = ("sonniss/", "ae/")  # ae: wavs copied out of the AE Master Unity project by extract.py
+LIBRARIES = ("sonniss/", "ae/", "sfx/")  # ae: wavs copied out of the AE Master Unity project by extract.py
+# sfx: the Drive's "Raw/Audio/SFX" packs, next to audio-src (TARTARUS_SFX_SRC overrides), e.g. "sfx/Free Pack/Hand Gun 1"
+SFX_ROOT = os.environ.get("TARTARUS_SFX_SRC", os.path.join(os.path.dirname(os.path.normpath(SRC_ROOT)), "SFX"))
 
 
 def resolve_sonniss(spec):
-    """'<sonniss|ae>/<pack dir prefix>/<file name prefix>' -> the single matching wav under C:/tb/audio-src/<library>."""
+    """'<sonniss|ae|sfx>/<pack dir prefix>/<file name prefix>' -> the single matching wav under C:/tb/audio-src/<library>
+    (sfx: under SFX_ROOT)."""
     import glob
     lib, pack, name = spec.split("/", 2)
-    hits = glob.glob(os.path.join(SRC_ROOT, lib, glob.escape(pack) + "*", glob.escape(name) + "*.wav"))
+    root = SFX_ROOT if lib == "sfx" else os.path.join(SRC_ROOT, lib)
+    hits = glob.glob(os.path.join(root, glob.escape(pack) + "*", glob.escape(name) + "*.wav"))
     hits = [h for h in hits if h.lower().endswith(".wav")]
     if len(hits) != 1:
         raise FileNotFoundError(f"{spec}: {len(hits)} matches")

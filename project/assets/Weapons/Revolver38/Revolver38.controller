@@ -244,6 +244,10 @@
               "time": 0.02
             },
             {
+              "name": "snd.revolver38.handle",
+              "time": 0.0428
+            },
+            {
               "name": "snd.revolver38.hammer_cock",
               "time": 0.369
             },
@@ -256,6 +260,18 @@
               "time": 0.6203
             },
             {
+              "name": "snd.revolver38.cloth",
+              "time": 0.6283
+            },
+            {
+              "name": "snd.revolver38.handle",
+              "time": 0.7246
+            },
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.746
+            },
+            {
               "name": "snd.revolver38.cylinder_spin",
               "time": 0.7487
             },
@@ -266,6 +282,10 @@
             {
               "name": "snd.revolver38.cloth",
               "time": 0.9358
+            },
+            {
+              "name": "snd.revolver38.handle",
+              "time": 0.9679
             }
           ],
           "loop": false,
@@ -301,6 +321,10 @@
               "time": 0.02
             },
             {
+              "name": "snd.revolver38.handle",
+              "time": 0.0467
+            },
+            {
               "name": "snd.revolver38.crane_open",
               "time": 0.0654
             },
@@ -311,6 +335,10 @@
             {
               "name": "snd.revolver38.cloth",
               "time": 0.8411
+            },
+            {
+              "name": "snd.revolver38.handle",
+              "time": 0.9065
             }
           ],
           "loop": false,
@@ -480,8 +508,20 @@
               "time": 0.0
             },
             {
+              "name": "snd.revolver38.handle",
+              "time": 0.0349
+            },
+            {
               "name": "snd.revolver38.crane_open",
               "time": 0.0376
+            },
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.086
+            },
+            {
+              "name": "snd.revolver38.handle",
+              "time": 0.1317
             },
             {
               "name": "snd.revolver38.ejector",
@@ -516,12 +556,20 @@
               "time": 0.3387
             },
             {
+              "name": "snd.revolver38.handle",
+              "time": 0.3656
+            },
+            {
               "name": "snd.revolver38.round_insert",
               "time": 0.5484
             },
             {
               "name": "snd.revolver38.round_insert",
               "time": 0.7581
+            },
+            {
+              "name": "snd.revolver38.cloth",
+              "time": 0.8011
             },
             {
               "name": "snd.revolver38.crane_close",
@@ -534,6 +582,10 @@
             {
               "name": "snd.revolver38.cloth",
               "time": 0.914
+            },
+            {
+              "name": "snd.revolver38.handle",
+              "time": 0.9543
             }
           ],
           "loop": false,

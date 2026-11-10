@@ -20,12 +20,23 @@
         "close": 3.0,
         "sub": 7.5,
         "mech": 2.0
+      },
+      "_doc_revolver38": "The .38 snub-nose (2026-11-10, the approved AE showcase balance close 0 / sub -4 / mech -5 re each layer's loudness target): with shot_layer_db (0 / -2 / -3) these give 0 / -4 / -5. Not in the reference (mixspec.REFERENCE_GUNS).",
+      "revolver38": {
+        "close": 0.0,
+        "sub": -2.0,
+        "mech": -2.0
       }
     },
     "gun_tail_db": {
       "_doc": "dB on a gun's tails (fire_tail, fire_tail_<space>) over levels.shot.tail: the 12-gauge's recorded tails ring longer than the carbine's (user, 2026-10-03: 'a huge trail anywhere you go').",
       "ak": 0.0,
-      "870": -3.0
+      "870": -3.0,
+      "revolver38": -2.8
+    },
+    "gun_far_db": {
+      "_doc": "dB on a gun's distant report (fire_far) over levels.shot.far. The .38 (2026-11-10): tail -2.8 / far -3.3 put its tail 11.5 dB and its far 17 dB under its close layer, the approved AE showcase balance (tail -3.5 / far -6 re their loudness targets, close 0).",
+      "revolver38": -3.3
     },
     "short_key_max_s": 0.9,
     "layer_peak_headroom_db": {
@@ -62,7 +73,15 @@
       "dry_fire": -14.0,
       "draw": -15.0,
       "holster": -15.0,
-      "firemode": -19.0
+      "firemode": -19.0,
+      "_doc_revolver38": "The .38's actions (2026-11-10): the AE showcase's relative balance (build_38.py ACTIONS mix_db) anchored on the shared draw (-15 here, -8 there), so every one sits 7 dB under its showcase value; draw / holster use the shared levels.",
+      "crane_close": -12.5,
+      "ejector": -13.5,
+      "crane_open": -14.0,
+      "round_insert": -16.0,
+      "cylinder_spin": -19.0,
+      "hammer_cock": -23.0,
+      "hammer_decock": -25.0
     },
     "gear": {
       "ads_in": -22.0,
