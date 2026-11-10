@@ -84,7 +84,8 @@ struct GunLayout {
     const char* Folder;
     const char* PathWord;
 };
-constexpr GunLayout kGuns[] = {{kDefaultGunId, "AKS74U", "aks74u"}, {kShotgunGunId, "Remington870", "remington870"}};
+constexpr GunLayout kGuns[] = {{kDefaultGunId, "AKS74U", "aks74u"}, {kShotgunGunId, "Remington870", "remington870"},
+                               {kRevolverGunId, "Revolver38", "revolver38"}};
 
 } // namespace
 

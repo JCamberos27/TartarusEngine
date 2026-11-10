@@ -1,0 +1,336 @@
+{
+ "_doc": "Revolver38 (.38 Special snub-nose) gunfire, ported 2026-11-10 from the approved AE showcase design (AE_Weapon_Renders/audio/build_38.py FIRE; audition 38_new_shot.wav). Revolver / pistol recordings only - no TR15 / Mk14 / MP5 / Shapeforms. A short barrel dumps a harsh blast: a mid bark (~1.2 kHz), a splashy top (~6 kHz), cylinder-gap spit, little sub, a fast body and a slappy tail - deliberately unlike the AK chain (110 Hz weight + 3.3 kHz rifle crack). close = R08 fire + WK-11 Viper crack (hp 1800, -5 dB) + Free Pack 'Hand Gun' bark (450-2400 Hz, -8 dB), small positive pitch offsets only; sub = R08 lp 150 + WK-11 low donor lp 130; mech = R08 Insert / CloseCylinder clicks (hammer fall + index); tail = the R08's own recorded tail from +0.09 s, hp 160 / lp 9000; far = Hand Gun 3 + R08_Fire_02 low-passed 2200, mono, 60-75 ms late. Layer balance (close 0 / sub -4 / mech -5 / tail -3.5 / far -6 re each layer's loudness target) is in mix.json reference.gun_db / gun_tail_db / gun_far_db (revolver38).",
+ "gun": "revolver38",
+ "dir": "Weapons/Revolver38",
+ "rpm": 120,
+ "close": {
+  "length_s": 0.36,
+  "chain": {
+   "hp": 75,
+   "eq": [
+    [
+     220,
+     -3.5,
+     1.0
+    ],
+    [
+     1250,
+     3.5,
+     0.9
+    ],
+    [
+     3400,
+     -1.5,
+     1.2
+    ],
+    [
+     6200,
+     3.0,
+     0.8
+    ]
+   ],
+   "attack": 0.8,
+   "sustain": -0.45,
+   "comp": {
+    "threshold_db": -18,
+    "ratio": 2.5,
+    "attack_ms": 1,
+    "release_ms": 60
+   },
+   "drive": 1.25
+  },
+  "decay": {
+   "hold_ms": 15,
+   "over_ms": 170,
+   "to_db": -34
+  },
+  "variants": [
+   {
+    "base": {
+     "src": "R08/S_R08_Fire_01.WAV"
+    },
+    "crack": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "dur": 0.08,
+     "hp": 1800,
+     "gain_db": -5
+    },
+    "body": {
+     "src": "sfx/Free Pack/Hand Gun 1",
+     "dur": 0.16,
+     "hp": 450,
+     "lp": 2400,
+     "gain_db": -8
+    },
+    "pitch": 0.6
+   },
+   {
+    "base": {
+     "src": "R08/S_R08_Fire_02.WAV"
+    },
+    "crack": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_3_With_Tail.wav",
+     "dur": 0.08,
+     "hp": 1800,
+     "gain_db": -5
+    },
+    "body": {
+     "src": "sfx/Free Pack/Hand Gun 3",
+     "dur": 0.16,
+     "hp": 450,
+     "lp": 2400,
+     "gain_db": -8
+    },
+    "pitch": 0.2
+   },
+   {
+    "base": {
+     "src": "R08/S_R08_Fire_03.WAV"
+    },
+    "crack": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "dur": 0.08,
+     "hp": 1800,
+     "gain_db": -5
+    },
+    "body": {
+     "src": "sfx/Free Pack/Hand Gun 2",
+     "dur": 0.16,
+     "hp": 450,
+     "lp": 2400,
+     "gain_db": -8
+    },
+    "pitch": 0.9
+   },
+   {
+    "base": {
+     "src": "R08/S_R08_Fire_01.WAV"
+    },
+    "crack": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "dur": 0.08,
+     "hp": 1800,
+     "gain_db": -5
+    },
+    "body": {
+     "src": "sfx/Free Pack/Hand Gun 1",
+     "dur": 0.16,
+     "hp": 450,
+     "lp": 2400,
+     "gain_db": -8
+    },
+    "pitch": 0.0
+   },
+   {
+    "base": {
+     "src": "R08/S_R08_Fire_02.WAV"
+    },
+    "crack": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_3_With_Tail.wav",
+     "dur": 0.08,
+     "hp": 1800,
+     "gain_db": -5
+    },
+    "body": {
+     "src": "sfx/Free Pack/Hand Gun 3",
+     "dur": 0.16,
+     "hp": 450,
+     "lp": 2400,
+     "gain_db": -8
+    },
+    "pitch": 1.2
+   },
+   {
+    "base": {
+     "src": "R08/S_R08_Fire_03.WAV"
+    },
+    "crack": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "dur": 0.08,
+     "hp": 1800,
+     "gain_db": -5
+    },
+    "body": {
+     "src": "sfx/Free Pack/Hand Gun 2",
+     "dur": 0.16,
+     "hp": 450,
+     "lp": 2400,
+     "gain_db": -8
+    },
+    "pitch": 0.4
+   }
+  ]
+ },
+ "sub": {
+  "length_s": 0.3,
+  "decay": {
+   "hold_ms": 30,
+   "over_ms": 180,
+   "to_db": -32
+  },
+  "variants": [
+   {
+    "src": "R08/S_R08_Fire_01.WAV",
+    "lp": 150,
+    "drive": 1.2,
+    "donors": [
+     {
+      "src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+      "lp": 130,
+      "gain_db": -4,
+      "pitch": 0.0
+     }
+    ]
+   },
+   {
+    "src": "R08/S_R08_Fire_02.WAV",
+    "lp": 150,
+    "drive": 1.2,
+    "donors": [
+     {
+      "src": "WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+      "lp": 130,
+      "gain_db": -4,
+      "pitch": 0.5
+     }
+    ]
+   },
+   {
+    "src": "R08/S_R08_Fire_03.WAV",
+    "lp": 150,
+    "drive": 1.2,
+    "donors": [
+     {
+      "src": "WK-11_Viper/Fire/S_WK-11_Viper_3_With_Tail.wav",
+      "lp": 130,
+      "gain_db": -4,
+      "pitch": -0.5
+     }
+    ]
+   },
+   {
+    "src": "R08/S_R08_Fire_01.WAV",
+    "lp": 150,
+    "drive": 1.2,
+    "donors": [
+     {
+      "src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+      "lp": 130,
+      "gain_db": -4,
+      "pitch": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ "mech": {
+  "length_s": 0.25,
+  "chain": {
+   "hp": 600,
+   "eq": [
+    [
+     2200,
+     2.0,
+     1.0
+    ]
+   ],
+   "comp": {
+    "threshold_db": -16,
+    "ratio": 3.0,
+    "attack_ms": 2,
+    "release_ms": 60
+   },
+   "drive": 1.2
+  },
+  "variants": [
+   {
+    "src": "R08/S_R08_Insert.WAV",
+    "t": 0.05,
+    "dur": 0.09,
+    "delay_ms": 30,
+    "pitch": 1.0
+   },
+   {
+    "src": "R08/S_R08_CloseCylinder.WAV",
+    "t": 0.245,
+    "dur": 0.07,
+    "delay_ms": 28,
+    "pitch": 1.5
+   },
+   {
+    "src": "R08/S_R08_Insert.WAV",
+    "t": 0.05,
+    "dur": 0.09,
+    "delay_ms": 34,
+    "pitch": 0.0
+   }
+  ]
+ },
+ "tail": {
+  "length_s": 2.4,
+  "start_s": 0.09,
+  "chain": {
+   "hp": 160,
+   "lp": 9000,
+   "eq": [
+    [
+     400,
+     -2.0,
+     0.9
+    ],
+    [
+     1600,
+     2.0,
+     0.8
+    ]
+   ],
+   "comp": {
+    "threshold_db": -38,
+    "ratio": 3.0,
+    "attack_ms": 15,
+    "release_ms": 380
+   }
+  },
+  "variants": [
+   {
+    "src": "R08/S_R08_Fire_01.WAV"
+   },
+   {
+    "src": "R08/S_R08_Fire_02.WAV"
+   },
+   {
+    "src": "R08/S_R08_Fire_03.WAV"
+   },
+   {
+    "src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+    "pitch": 0.5
+   }
+  ]
+ },
+ "far": {
+  "length_s": 2.2,
+  "delay_ms": 60,
+  "chain": {
+   "hp": 90,
+   "lp": 2200,
+   "lp_order": 4,
+   "comp": {
+    "threshold_db": -34,
+    "ratio": 3.0,
+    "attack_ms": 25,
+    "release_ms": 450
+   }
+  },
+  "variants": [
+   {
+    "src": "sfx/Free Pack/Hand Gun 3",
+    "delay_ms": 60
+   },
+   {
+    "src": "R08/S_R08_Fire_02.WAV",
+    "delay_ms": 75,
+    "pitch": 0.5
+   }
+  ]
+ }
+}

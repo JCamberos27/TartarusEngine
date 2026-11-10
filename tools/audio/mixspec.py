@@ -27,6 +27,9 @@ SHOT_LAYERS = ("close", "sub", "mech")
 SPACES = ("indoor_small", "indoor_large", "outdoor_urban", "outdoor_open")
 TOLERANCE_DB = 0.1
 PEAK_CAP_DB = -0.5        # a file's true peak + its mix_db (before the engine's Player Gain) never passes this
+REFERENCE_GUNS = ("ak", "870")            # the 0 dB shot is measured over these only: a new gun never moves the rest of the mix
+GUNS = REFERENCE_GUNS + ("revolver38",)
+_GUN_RE = "(" + "|".join(GUNS) + ")"
 
 
 def _lvl():
@@ -38,13 +41,13 @@ def classify(e):
     'shot' (the unscaled shot sum), 'played' (the reference as played = x Player Gain), 'none'."""
     key = e["key"]
     L, S = _lvl(), SPEC["surface_db"]
-    m = re.fullmatch(r"snd\.(ak|870)\.fire_(close|sub|mech|far|tail)(?:_(\w+))?", key)
+    m = re.fullmatch(r"snd\." + _GUN_RE + r"\.fire_(close|sub|mech|far|tail)(?:_(\w+))?", key)
     if m:
         part, space = m.group(2), m.group(3)
         if part in SHOT_LAYERS:
             return "shot_" + part, SPEC["reference"]["shot_layer_db"][part], "shot-layer"
         if part == "far":
-            return "shot_far", L["shot"]["far"], "shot"
+            return "shot_far", L["shot"]["far"] + float(SPEC["reference"].get("gun_far_db", {}).get(m.group(1), 0.0)), "shot"
         gun_tail = float(SPEC["reference"].get("gun_tail_db", {}).get(m.group(1), 0.0))
         return "shot_tail", L["shot"]["tail"] + SPEC["space_db"].get(space or "outdoor_urban", 0.0) + gun_tail, "shot"
     if key == "snd.flyby":
@@ -74,7 +77,7 @@ def classify(e):
     m = re.fullmatch(r"snd\.foley\.weapon\.(\w+)", key)
     if m and m.group(1) in L["gear"]:
         return "gear", L["gear"][m.group(1)], "played"
-    m = re.fullmatch(r"snd\.(ak|870)\.(\w+)", key)
+    m = re.fullmatch(r"snd\." + _GUN_RE + r"\.(\w+)", key)
     if m:
         el = m.group(2)
         if el == "melee_hit":
@@ -107,7 +110,7 @@ def _layer_of(e):
 
 def gun_db(e):
     """The gun's own offset on its report (reference.gun_db, e.g. the shotgun above the carbine); 0 for anything else."""
-    m = re.match(r"snd\.(ak|870)\.fire_(close|sub|mech)\b", e["key"])
+    m = re.match(r"snd\." + _GUN_RE + r"\.fire_(close|sub|mech)\b", e["key"])
     if not m:
         return 0.0
     g = SPEC["reference"].get("gun_db", {}).get(m.group(1), 0.0)
@@ -134,9 +137,10 @@ def shot_layer_mix_db(e, lufs_m, with_gun=True):
 
 def compute_reference(files, lufs_of, with_gun=False):
     """Mean over variant combinations (both guns) of the LUFS-M of close + sub + mech at their mix_db, summed from t = 0.
-    -> (unscaled shot LUFS-M, per-gun means). with_gun: as played, the guns' own offsets (reference.gun_db) included."""
+    -> (unscaled shot LUFS-M over REFERENCE_GUNS, per-gun means of every gun in GUNS). with_gun: as played, the guns' own offsets
+    (reference.gun_db) included."""
     per_gun = {}
-    for gun in ("ak", "870"):
+    for gun in GUNS:
         by = {l: [e for e in files if e["key"] == f"snd.{gun}.fire_{l}"] for l in SHOT_LAYERS}
         if not all(by.values()):
             continue
@@ -150,9 +154,10 @@ def compute_reference(files, lufs_of, with_gun=False):
                 mix[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e), with_gun=with_gun) / 20)).astype(np.float32)
             res.append(adsp.lufs(mix)[1])
         per_gun[gun] = float(np.mean(res))
-    if not per_gun:
+    ref = [v for g, v in per_gun.items() if g in REFERENCE_GUNS]
+    if not ref:
         raise RuntimeError("no gun shot layers in the manifest: cannot measure the mix reference")
-    return float(np.mean(list(per_gun.values()))), per_gun
+    return float(np.mean(ref)), per_gun
 
 
 def compute(files, lufs_of=None):

@@ -1125,6 +1125,479 @@
      }
     ]
    }
+  },
+  "revolver38": {
+   "_doc": "The .38 Special's actions, ported 2026-11-10 from the approved AE showcase design (AE_Weapon_Renders/audio/build_38.py ACTIONS; audition hammer_old_then_new.wav). Exact slices (cut = [start, end] s of the source, contact = the transient the anchor sits on, pitch in st, hp in Hz; build_elements.cut_variant): no onset snap, no transient designer. Keys follow Revolver38.controller (snd.revolver38.*): cock -> hammer_cock, decock -> hammer_decock, cyl_open -> crane_open, cyl_close -> crane_close, eject -> ejector, insert -> round_insert, spin -> cylinder_spin. Hammer cock: the R08's own ratchet then the sear catch (2.7745 s) from its empty reload, +1.5 / +2.2 st, thin (hp 900), quiet. Decock: single real dry-fire clicks (Steyr TMP, Pole Position Production), same treatment, a touch quieter. Levels: mix.json levels.elements. Added 2026-11-10 (not in the showcase): cloth / handle = the soft movement and hand-on-frame grabs of the Kinemation pack's MKR9 pistol handling (draw / holster / inspect; SFX/Kinemation, sfx/ in adsp) and its General pistol draw - the R08's own handling takes sit only 24-35 dB over their hiss (the AK's 40-57 dB; these and the 870's: digital silence between events), so normalized they hissed; dry_fire = a double-action pull on an empty chamber: the R08's cylinder-hand ratchet (just before the sear catch of hammer_cock, +1.5 / +2 st, thin) and a real hammer-fall click (the Steyr TMP dry-fire takes the AK uses) ~85 ms later; melee_swing = the AK's lighter swings, pitched up for a small gun; melee_hit = the AK's punch / thud layers with R08 metal (the cylinder slamming shut, the crane seating) in place of the AK's. These use the shared levels (mix.json levels.elements cloth / handle / dry_fire, levels.melee_*).",
+   "dir": "Weapons/Revolver38",
+   "elements": {
+    "crane_open": [
+     {
+      "src": "R08/S_R08_OpenCylinder.WAV",
+      "cut": [
+       0.04,
+       0.52
+      ],
+      "contact": 0.2,
+      "pitch": 0.0
+     },
+     {
+      "src": "R08/S_R08_OpenCylinder.WAV",
+      "cut": [
+       0.04,
+       0.52
+      ],
+      "contact": 0.2,
+      "pitch": -0.6
+     }
+    ],
+    "crane_close": [
+     {
+      "src": "R08/S_R08_CloseCylinder.WAV",
+      "cut": [
+       0.1,
+       0.55
+      ],
+      "contact": 0.245,
+      "pitch": 0.0
+     },
+     {
+      "src": "R08/S_R08_CloseCylinder.WAV",
+      "cut": [
+       0.1,
+       0.55
+      ],
+      "contact": 0.245,
+      "pitch": 0.5
+     }
+    ],
+    "ejector": [
+     {
+      "src": "R08/S_R08_Eject_01.WAV",
+      "cut": [
+       0.1,
+       2.1
+      ],
+      "contact": 0.27,
+      "pitch": 0.0
+     },
+     {
+      "src": "R08/S_R08_Eject_03.WAV",
+      "cut": [
+       0.04,
+       2.2
+      ],
+      "contact": 0.125,
+      "pitch": 0.0
+     },
+     {
+      "src": "R08/S_R08_Eject_05.WAV",
+      "cut": [
+       0.06,
+       2.4
+      ],
+      "contact": 0.14,
+      "pitch": 0.0
+     }
+    ],
+    "round_insert": [
+     {
+      "src": "R08/S_R08_Insert.WAV",
+      "cut": [
+       0.0,
+       0.33
+      ],
+      "contact": 0.05,
+      "pitch": 0.0
+     },
+     {
+      "src": "R08/S_R08_Insert.WAV",
+      "cut": [
+       0.0,
+       0.33
+      ],
+      "contact": 0.05,
+      "pitch": 0.7
+     },
+     {
+      "src": "R08/S_R08_Insert.WAV",
+      "cut": [
+       0.0,
+       0.33
+      ],
+      "contact": 0.05,
+      "pitch": -0.6
+     },
+     {
+      "src": "R08/S_R08_Insert.WAV",
+      "cut": [
+       0.0,
+       0.33
+      ],
+      "contact": 0.05,
+      "pitch": 1.2
+     }
+    ],
+    "cylinder_spin": [
+     {
+      "src": "R08/S_R08_AmmoCheck.WAV",
+      "cut": [
+       1.06,
+       1.6
+      ],
+      "contact": 1.11,
+      "pitch": 0.0
+     },
+     {
+      "src": "R08/S_R08_AmmoCheck.WAV",
+      "cut": [
+       1.58,
+       2.1
+      ],
+      "contact": 1.645,
+      "pitch": 0.0
+     }
+    ],
+    "draw": [
+     {
+      "src": "R08/S_R08_Draw.WAV",
+      "cut": [
+       0.1,
+       1.1
+      ],
+      "contact": 0.495,
+      "pitch": 0.0
+     },
+     {
+      "src": "General/S_DrawPistolWithoutHolster.WAV",
+      "cut": [
+       0.0,
+       0.9
+      ],
+      "contact": null,
+      "pitch": 0.0
+     }
+    ],
+    "holster": [
+     {
+      "src": "R08/S_R08_Holster.WAV",
+      "cut": [
+       0.0,
+       0.66
+      ],
+      "contact": 0.07,
+      "pitch": 0.0
+     },
+     {
+      "src": "General/S_HolsterPistolWithoutHolster.WAV",
+      "cut": [
+       0.0,
+       0.8
+      ],
+      "contact": null,
+      "pitch": 0.0
+     }
+    ],
+    "hammer_cock": [
+     {
+      "src": "R08/S_R08_Reload_Empty.WAV",
+      "cut": [
+       2.69,
+       2.88
+      ],
+      "contact": 2.7745,
+      "pitch": 1.5,
+      "hp": 900.0
+     },
+     {
+      "src": "R08/S_R08_Reload_Empty.WAV",
+      "cut": [
+       2.69,
+       2.88
+      ],
+      "contact": 2.7745,
+      "pitch": 2.2,
+      "hp": 900.0
+     }
+    ],
+    "hammer_decock": [
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP_9mm_foley_distant",
+      "cut": [
+       6.925,
+       7.02
+      ],
+      "contact": 6.94,
+      "pitch": 1.5,
+      "hp": 900.0
+     },
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP_9mm_foley_distant",
+      "cut": [
+       12.253,
+       12.35
+      ],
+      "contact": 12.268,
+      "pitch": 2.0,
+      "hp": 900.0
+     }
+    ],
+    "cloth": [
+     {
+      "src": "sfx/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Draw",
+      "t": 0.1,
+      "dur": 0.4,
+      "snap": false,
+      "fade_in_ms": 30
+     },
+     {
+      "src": "sfx/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Holster",
+      "t": 0.08,
+      "dur": 0.45,
+      "snap": false,
+      "fade_in_ms": 30
+     },
+     {
+      "src": "sfx/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect",
+      "t": 1.85,
+      "dur": 0.45,
+      "snap": false,
+      "fade_in_ms": 30
+     },
+     {
+      "src": "General/S_DrawPistolWithoutHolster.WAV",
+      "t": 0.1,
+      "dur": 0.45,
+      "snap": false,
+      "fade_in_ms": 30
+     }
+    ],
+    "handle": [
+     {
+      "src": "sfx/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect",
+      "t": 0.434,
+      "dur": 0.22
+     },
+     {
+      "src": "sfx/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect",
+      "t": 2.146,
+      "dur": 0.22
+     },
+     {
+      "src": "sfx/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect",
+      "t": 3.301,
+      "dur": 0.16
+     },
+     {
+      "src": "sfx/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect",
+      "t": 3.471,
+      "dur": 0.22
+     }
+    ],
+    "dry_fire": [
+     {
+      "layers": [
+       {
+        "src": "R08/S_R08_Reload_Empty.WAV",
+        "t": 2.69,
+        "dur": 0.075,
+        "snap": false,
+        "pitch": 1.5,
+        "hp": 900
+       },
+       {
+        "src": "sonniss/Pole Position Production/Steyr_TMP",
+        "t": 1.962,
+        "dur": 0.12,
+        "hp": 300,
+        "pitch": 0.5,
+        "delay_ms": 85
+       }
+      ],
+      "anchor_ms": 0.0
+     },
+     {
+      "layers": [
+       {
+        "src": "R08/S_R08_Reload_Empty.WAV",
+        "t": 2.69,
+        "dur": 0.075,
+        "snap": false,
+        "pitch": 2.0,
+        "hp": 900
+       },
+       {
+        "src": "sonniss/Pole Position Production/Steyr_TMP",
+        "t": 6.93,
+        "dur": 0.12,
+        "hp": 300,
+        "pitch": 1.0,
+        "delay_ms": 80
+       }
+      ],
+      "anchor_ms": 0.0
+     },
+     {
+      "layers": [
+       {
+        "src": "R08/S_R08_Reload_Empty.WAV",
+        "t": 2.69,
+        "dur": 0.075,
+        "snap": false,
+        "pitch": 1.5,
+        "hp": 900
+       },
+       {
+        "src": "sonniss/Pole Position Production/Steyr_TMP",
+        "t": 15.622,
+        "dur": 0.12,
+        "hp": 300,
+        "pitch": 1.5,
+        "delay_ms": 90
+       }
+      ],
+      "anchor_ms": 0.0
+     },
+     {
+      "layers": [
+       {
+        "src": "R08/S_R08_Reload_Empty.WAV",
+        "t": 2.69,
+        "dur": 0.075,
+        "snap": false,
+        "pitch": 2.0,
+        "hp": 900
+       },
+       {
+        "src": "sonniss/Pole Position Production/Steyr_TMP",
+        "t": 21.27,
+        "dur": 0.12,
+        "hp": 300,
+        "pitch": 0.0,
+        "delay_ms": 85
+       }
+      ],
+      "anchor_ms": 0.0
+     }
+    ],
+    "melee_swing": [
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_High",
+      "peak_at_ms": 70,
+      "dur": 0.3
+     },
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_Normal",
+      "peak_at_ms": 85,
+      "dur": 0.4,
+      "pitch": 1.0
+     },
+     {
+      "src": "sonniss/Gamemaster Audio - Punch/whoosh_weapon_knife_swing_04",
+      "peak_at_ms": 70,
+      "dur": 0.28
+     },
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_High",
+      "peak_at_ms": 70,
+      "dur": 0.3,
+      "pitch": 1.5
+     }
+    ],
+    "melee_hit": [
+     {
+      "layers": [
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Deep Punch 02",
+        "t": 0.0,
+        "dur": 0.21
+       },
+       {
+        "src": "R08/S_R08_AmmoCheck.WAV",
+        "t": 2.532,
+        "dur": 0.12,
+        "delay_ms": 14,
+        "gain_db": -8
+       },
+       {
+        "src": "sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08",
+        "t": 0.0,
+        "dur": 0.2,
+        "delay_ms": 0,
+        "gain_db": -12,
+        "snap": false
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/Shapeforms/PUNCH_PERCUSSIVE_HEAVY_06",
+        "t": 0.0,
+        "dur": 0.18
+       },
+       {
+        "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -6
+       },
+       {
+        "src": "R08/S_R08_CloseCylinder.WAV",
+        "t": 0.245,
+        "dur": 0.12,
+        "delay_ms": 16,
+        "gain_db": -8
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+        "t": 0.0,
+        "dur": 0.4
+       },
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Deep Punch 02",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -3
+       },
+       {
+        "src": "R08/S_R08_AmmoCheck.WAV",
+        "t": 0.587,
+        "dur": 0.12,
+        "delay_ms": 12,
+        "gain_db": -7
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+        "t": 0.0,
+        "dur": 0.4
+       },
+       {
+        "src": "R08/S_R08_CloseCylinder.WAV",
+        "t": 0.245,
+        "dur": 0.12,
+        "delay_ms": 18,
+        "gain_db": -8,
+        "pitch": 1.0
+       },
+       {
+        "src": "sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -12,
+        "snap": false
+       }
+      ]
+     }
+    ]
+   }
   }
  },
  "snap": {

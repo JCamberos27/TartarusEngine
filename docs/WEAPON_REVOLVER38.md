@@ -77,7 +77,31 @@ summary says FAIL only for 4 log errors that predate the revolver (`T_Spider_AO.
 
 ## Open items
 
-- **Audio.** The `snd.revolver38.*` events are authored, but no revolver recordings exist yet. The prefab names
-  the firing profile `38`.
+- **Audio.** Gun id `revolver38` (the prefab's Firing Sound Profile and the controller's `snd.revolver38.*` events;
+  a built-in gun in `SoundManifest.h`). See *Audio* below. The gun has no environment tails (`fire_tail_<space>`,
+  `build_tails.py`): the libraries hold no pistol shots in rooms, so every space plays its own recorded R08 tail.
 - **Play tuning.** `SIGHT_CORRECTION`, the 3P holds in `author_3p.py` (`REVOLVER`) and the recoil and damage
   values are first passes.
+
+## Audio
+
+Ported from the approved AE showcase design (`AE_Weapon_Renders/audio/build_38.py`), rebuilt the engine's way:
+
+```text
+export TARTARUS_AUDIO_SRC="<Drive>/Tartarus Assets/Raw/Audio/audio-src"
+cd tools/audio
+uv run -q --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python build_fire.py revolver38
+uv run -q --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python build_elements.py revolver38
+```
+
+- **Gunfire** (`recipes/revolver38_fire.json`): five layers from revolver / pistol recordings only (R08, WK-11 Viper and
+  the Free Pack's `Hand Gun` takes, `sfx/` in `adsp`: the Drive's `Raw/Audio/SFX`, next to audio-src).
+- **Actions** (`recipes/elements.json`, `revolver38`): exact slices (`cut`, `contact`; `build_elements.cut_variant`).
+  The hammer cock is the R08's ratchet and sear catch, the decock a Steyr TMP dry-fire click, both pitched up and thin.
+  Not in the showcase: `cloth` / `handle` (the Kinemation pack's MKR9 pistol handling and its General pistol draw: the R08's own
+  handling takes are too close to their noise floor; the hand events' frames are the clips' bone-motion contacts), `dry_fire` (the R08 ratchet, then a real
+  hammer-fall click ~85 ms later: a double-action pull on an empty chamber) and `melee_swing` / `melee_hit` (the AK's
+  swing and punch sources, R08 metal in the hits). All real recordings, sliced and processed; nothing synthesized.
+- **Levels** (`recipes/mix.json`): `reference.gun_db` / `gun_tail_db` / `gun_far_db` and `levels.elements` hold the
+  showcase balance. The revolver is not part of the 0 dB shot reference (`mixspec.REFERENCE_GUNS`), so adding it moved
+  no AK / 870 level.

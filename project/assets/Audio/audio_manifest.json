@@ -8,11 +8,13 @@
   "player_gain": 0.75,
   "per_gun_lufs_m": {
    "ak": -12.73,
-   "870": -12.73
+   "870": -12.73,
+   "revolver38": -12.86
   },
   "gun_offset_db": {
    "ak": 0.0,
-   "870": 3.12
+   "870": 3.12,
+   "revolver38": -0.54
   },
   "distance": {
    "npc_shot": {
@@ -21151,6 +21153,1734 @@
    "variant": 4,
    "source": "S_Herrington_11-87_Reload_Start_Empty.wav@1.796",
    "mix_db": -5.08
+  },
+  {
+   "file": "Weapons/Revolver38/cloth_1.wav",
+   "key": "snd.revolver38.cloth",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.13,
+   "length_s": 0.403,
+   "peak_ms": 325.3,
+   "sources": [
+    {
+     "file": "../SFX/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Draw.WAV",
+     "start": 0.097,
+     "end": 0.5,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "cloth",
+   "variant": 1,
+   "source": "S_MKR9_Draw@0.1",
+   "mix_db": -20.69
+  },
+  {
+   "file": "Weapons/Revolver38/cloth_2.wav",
+   "key": "snd.revolver38.cloth",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.07,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.38,
+   "length_s": 0.453,
+   "peak_ms": 303.8,
+   "sources": [
+    {
+     "file": "../SFX/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Holster.WAV",
+     "start": 0.077,
+     "end": 0.53,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "cloth",
+   "variant": 2,
+   "source": "S_MKR9_Holster@0.08",
+   "mix_db": -21.93
+  },
+  {
+   "file": "Weapons/Revolver38/cloth_3.wav",
+   "key": "snd.revolver38.cloth",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.24,
+   "length_s": 0.453,
+   "peak_ms": 298.4,
+   "sources": [
+    {
+     "file": "../SFX/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect.WAV",
+     "start": 1.847,
+     "end": 2.3,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "cloth",
+   "variant": 3,
+   "source": "S_MKR9_Inspect@1.85",
+   "mix_db": -21.77
+  },
+  {
+   "file": "Weapons/Revolver38/cloth_4.wav",
+   "key": "snd.revolver38.cloth",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.5,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.98,
+   "length_s": 0.453,
+   "peak_ms": 331.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_DrawPistolWithoutHolster.WAV",
+     "start": 0.097,
+     "end": 0.55,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "cloth",
+   "variant": 4,
+   "source": "S_DrawPistolWithoutHolster.WAV@0.1",
+   "mix_db": -19.82
+  },
+  {
+   "file": "Weapons/Revolver38/crane_close_1.wav",
+   "key": "snd.revolver38.crane_close",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -8.08,
+   "length_s": 0.45,
+   "peak_ms": 171.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_CloseCylinder.WAV",
+     "start": 0.1,
+     "end": 0.55,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 145.0,
+   "gun": "revolver38",
+   "element": "crane_close",
+   "variant": 1,
+   "source": "S_R08_CloseCylinder.WAV[0.1-0.55]@0.245 st=0.0",
+   "mix_db": -6.73
+  },
+  {
+   "file": "Weapons/Revolver38/crane_close_2.wav",
+   "key": "snd.revolver38.crane_close",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -7.49,
+   "length_s": 0.437,
+   "peak_ms": 166.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_CloseCylinder.WAV",
+     "start": 0.1,
+     "end": 0.55,
+     "pitch_st": 0.5
+    }
+   ],
+   "anchor_ms": 140.9,
+   "gun": "revolver38",
+   "element": "crane_close",
+   "variant": 2,
+   "source": "S_R08_CloseCylinder.WAV[0.1-0.55]@0.245 st=0.5",
+   "mix_db": -6.73
+  },
+  {
+   "file": "Weapons/Revolver38/crane_open_1.wav",
+   "key": "snd.revolver38.crane_open",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.69,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.84,
+   "length_s": 0.48,
+   "peak_ms": 160.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_OpenCylinder.WAV",
+     "start": 0.04,
+     "end": 0.52,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 160.0,
+   "gun": "revolver38",
+   "element": "crane_open",
+   "variant": 1,
+   "source": "S_R08_OpenCylinder.WAV[0.04-0.52]@0.2 st=0.0",
+   "mix_db": -8.19
+  },
+  {
+   "file": "Weapons/Revolver38/crane_open_2.wav",
+   "key": "snd.revolver38.crane_open",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.65,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.94,
+   "length_s": 0.497,
+   "peak_ms": 166.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_OpenCylinder.WAV",
+     "start": 0.04,
+     "end": 0.52,
+     "pitch_st": -0.6
+    }
+   ],
+   "anchor_ms": 165.6,
+   "gun": "revolver38",
+   "element": "crane_open",
+   "variant": 2,
+   "source": "S_R08_OpenCylinder.WAV[0.04-0.52]@0.2 st=-0.6",
+   "mix_db": -8.27
+  },
+  {
+   "file": "Weapons/Revolver38/cylinder_spin_1.wav",
+   "key": "snd.revolver38.cylinder_spin",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.06,
+   "lufs_m_max": -23.01,
+   "true_peak_dbtp": -1.46,
+   "length_s": 0.54,
+   "peak_ms": 47.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_AmmoCheck.WAV",
+     "start": 1.06,
+     "end": 1.6,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 50.0,
+   "gun": "revolver38",
+   "element": "cylinder_spin",
+   "variant": 1,
+   "source": "S_R08_AmmoCheck.WAV[1.06-1.6]@1.11 st=0.0",
+   "mix_db": -11.25
+  },
+  {
+   "file": "Weapons/Revolver38/cylinder_spin_2.wav",
+   "key": "snd.revolver38.cylinder_spin",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.99,
+   "lufs_m_max": -23.16,
+   "true_peak_dbtp": -2.07,
+   "length_s": 0.52,
+   "peak_ms": 93.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_AmmoCheck.WAV",
+     "start": 1.58,
+     "end": 2.1,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 65.0,
+   "gun": "revolver38",
+   "element": "cylinder_spin",
+   "variant": 2,
+   "source": "S_R08_AmmoCheck.WAV[1.58-2.1]@1.645 st=0.0",
+   "mix_db": -11.04
+  },
+  {
+   "file": "Weapons/Revolver38/draw_1.wav",
+   "key": "snd.revolver38.draw",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.78,
+   "lufs_m_max": -21.76,
+   "true_peak_dbtp": -1.0,
+   "length_s": 1.0,
+   "peak_ms": 396.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Draw.WAV",
+     "start": 0.1,
+     "end": 1.1,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 395.0,
+   "gun": "revolver38",
+   "element": "draw",
+   "variant": 1,
+   "source": "S_R08_Draw.WAV[0.1-1.1]@0.495 st=0.0",
+   "mix_db": -8.47
+  },
+  {
+   "file": "Weapons/Revolver38/draw_2.wav",
+   "key": "snd.revolver38.draw",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.31,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -4.54,
+   "length_s": 0.9,
+   "peak_ms": 428.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_DrawPistolWithoutHolster.WAV",
+     "start": 0.0,
+     "end": 0.9,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 428.7,
+   "gun": "revolver38",
+   "element": "draw",
+   "variant": 2,
+   "source": "S_DrawPistolWithoutHolster.WAV[0.0-0.9]@None st=0.0",
+   "mix_db": -9.23
+  },
+  {
+   "file": "Weapons/Revolver38/dry_fire_1.wav",
+   "key": "snd.revolver38.dry_fire",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.92,
+   "length_s": 0.243,
+   "peak_ms": 26.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Reload_Empty.WAV",
+     "start": 2.687,
+     "end": 2.85,
+     "pitch_st": 1.5
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 1.968,
+     "end": 2.131,
+     "pitch_st": 1.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "dry_fire",
+   "variant": 1,
+   "source": "S_R08_Reload_Empty.WAV@2.69+Steyr_TMP@1.962",
+   "mix_db": -8.23
+  },
+  {
+   "file": "Weapons/Revolver38/dry_fire_2.wav",
+   "key": "snd.revolver38.dry_fire",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.18,
+   "length_s": 0.234,
+   "peak_ms": 25.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Reload_Empty.WAV",
+     "start": 2.687,
+     "end": 2.85,
+     "pitch_st": 2.0
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 6.931,
+     "end": 7.094,
+     "pitch_st": 2.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "dry_fire",
+   "variant": 2,
+   "source": "S_R08_Reload_Empty.WAV@2.69+Steyr_TMP@6.93",
+   "mix_db": -8.23
+  },
+  {
+   "file": "Weapons/Revolver38/dry_fire_3.wav",
+   "key": "snd.revolver38.dry_fire",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.93,
+   "length_s": 0.239,
+   "peak_ms": 26.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Reload_Empty.WAV",
+     "start": 2.687,
+     "end": 2.85,
+     "pitch_st": 1.5
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 15.633,
+     "end": 15.796,
+     "pitch_st": 1.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "dry_fire",
+   "variant": 3,
+   "source": "S_R08_Reload_Empty.WAV@2.69+Steyr_TMP@15.622",
+   "mix_db": -8.23
+  },
+  {
+   "file": "Weapons/Revolver38/dry_fire_4.wav",
+   "key": "snd.revolver38.dry_fire",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.14,
+   "length_s": 0.248,
+   "peak_ms": 25.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Reload_Empty.WAV",
+     "start": 2.687,
+     "end": 2.85,
+     "pitch_st": 2.0
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 21.281,
+     "end": 21.444,
+     "pitch_st": 2.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "dry_fire",
+   "variant": 4,
+   "source": "S_R08_Reload_Empty.WAV@2.69+Steyr_TMP@21.27",
+   "mix_db": -8.23
+  },
+  {
+   "file": "Weapons/Revolver38/ejector_1.wav",
+   "key": "snd.revolver38.ejector",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.6,
+   "lufs_m_max": -22.79,
+   "true_peak_dbtp": -1.0,
+   "length_s": 2.0,
+   "peak_ms": 184.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Eject_01.WAV",
+     "start": 0.1,
+     "end": 2.1,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 170.0,
+   "gun": "revolver38",
+   "element": "ejector",
+   "variant": 1,
+   "source": "S_R08_Eject_01.WAV[0.1-2.1]@0.27 st=0.0",
+   "mix_db": -5.94
+  },
+  {
+   "file": "Weapons/Revolver38/ejector_2.wav",
+   "key": "snd.revolver38.ejector",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.67,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.97,
+   "length_s": 2.16,
+   "peak_ms": 1029.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Eject_03.WAV",
+     "start": 0.04,
+     "end": 2.2,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 85.0,
+   "gun": "revolver38",
+   "element": "ejector",
+   "variant": 2,
+   "source": "S_R08_Eject_03.WAV[0.04-2.2]@0.125 st=0.0",
+   "mix_db": -7.73
+  },
+  {
+   "file": "Weapons/Revolver38/ejector_3.wav",
+   "key": "snd.revolver38.ejector",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.13,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.14,
+   "length_s": 2.34,
+   "peak_ms": 793.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Eject_05.WAV",
+     "start": 0.06,
+     "end": 2.4,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 80.0,
+   "gun": "revolver38",
+   "element": "ejector",
+   "variant": 3,
+   "source": "S_R08_Eject_05.WAV[0.06-2.4]@0.14 st=0.0",
+   "mix_db": -7.73
+  },
+  {
+   "file": "Weapons/Revolver38/fire_close_1.wav",
+   "key": "snd.revolver38.fire_close",
+   "layer": "close",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -14.33,
+   "lufs_m_max": -14.28,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.348,
+   "peak_ms": 2.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_01.WAV",
+     "start": 0.028,
+     "end": 0.388,
+     "pitch_st": 0.6
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "start": 0.043,
+     "end": 0.123,
+     "pitch_st": 0.6
+    },
+    {
+     "file": "../SFX/Free Pack/Hand Gun 1.wav",
+     "start": 0.0,
+     "end": 0.16,
+     "pitch_st": 0.6
+    }
+   ],
+   "anchor_ms": 2.4,
+   "gun": "revolver38",
+   "element": "fire_close",
+   "variant": 1,
+   "source": "base:S_R08_Fire_01.WAV crack:S_WK-11_Viper_2_With_Tail.wav lag=25smp pol=+1 body:Hand Gun 1 lag=-5smp pol=-1",
+   "mix_db": 0.28
+  },
+  {
+   "file": "Weapons/Revolver38/fire_close_2.wav",
+   "key": "snd.revolver38.fire_close",
+   "layer": "close",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -14.22,
+   "lufs_m_max": -14.17,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.356,
+   "peak_ms": 2.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_02.WAV",
+     "start": 0.026,
+     "end": 0.386,
+     "pitch_st": 0.2
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_3_With_Tail.wav",
+     "start": 0.05,
+     "end": 0.13,
+     "pitch_st": 0.2
+    },
+    {
+     "file": "../SFX/Free Pack/Hand Gun 3.wav",
+     "start": 0.055,
+     "end": 0.215,
+     "pitch_st": 0.2
+    }
+   ],
+   "anchor_ms": 2.7,
+   "gun": "revolver38",
+   "element": "fire_close",
+   "variant": 2,
+   "source": "base:S_R08_Fire_02.WAV crack:S_WK-11_Viper_3_With_Tail.wav lag=-43smp pol=+1 body:Hand Gun 3 lag=-9smp pol=+1",
+   "mix_db": 0.17
+  },
+  {
+   "file": "Weapons/Revolver38/fire_close_3.wav",
+   "key": "snd.revolver38.fire_close",
+   "layer": "close",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -14.21,
+   "lufs_m_max": -14.16,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.342,
+   "peak_ms": 2.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_03.WAV",
+     "start": 0.027,
+     "end": 0.387,
+     "pitch_st": 0.9
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "start": 0.037,
+     "end": 0.117,
+     "pitch_st": 0.9
+    },
+    {
+     "file": "../SFX/Free Pack/Hand Gun 2.wav",
+     "start": 0.018,
+     "end": 0.177,
+     "pitch_st": 0.9
+    }
+   ],
+   "anchor_ms": 2.3,
+   "gun": "revolver38",
+   "element": "fire_close",
+   "variant": 3,
+   "source": "base:S_R08_Fire_03.WAV crack:S_WK-11_Viper_Shot_1_With_Tail.wav lag=37smp pol=+1 body:Hand Gun 2 lag=-20smp pol=-1",
+   "mix_db": 0.16
+  },
+  {
+   "file": "Weapons/Revolver38/fire_close_4.wav",
+   "key": "snd.revolver38.fire_close",
+   "layer": "close",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -14.42,
+   "lufs_m_max": -14.38,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.36,
+   "peak_ms": 2.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_01.WAV",
+     "start": 0.028,
+     "end": 0.388,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "start": 0.043,
+     "end": 0.123,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "../SFX/Free Pack/Hand Gun 1.wav",
+     "start": 0.0,
+     "end": 0.16,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 2.5,
+   "gun": "revolver38",
+   "element": "fire_close",
+   "variant": 4,
+   "source": "base:S_R08_Fire_01.WAV crack:S_WK-11_Viper_2_With_Tail.wav lag=25smp pol=+1 body:Hand Gun 1 lag=-5smp pol=-1",
+   "mix_db": 0.38
+  },
+  {
+   "file": "Weapons/Revolver38/fire_close_5.wav",
+   "key": "snd.revolver38.fire_close",
+   "layer": "close",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -14.29,
+   "lufs_m_max": -14.25,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.336,
+   "peak_ms": 2.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_02.WAV",
+     "start": 0.026,
+     "end": 0.386,
+     "pitch_st": 1.2
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_3_With_Tail.wav",
+     "start": 0.05,
+     "end": 0.13,
+     "pitch_st": 1.2
+    },
+    {
+     "file": "../SFX/Free Pack/Hand Gun 3.wav",
+     "start": 0.055,
+     "end": 0.215,
+     "pitch_st": 1.2
+    }
+   ],
+   "anchor_ms": 2.5,
+   "gun": "revolver38",
+   "element": "fire_close",
+   "variant": 5,
+   "source": "base:S_R08_Fire_02.WAV crack:S_WK-11_Viper_3_With_Tail.wav lag=-43smp pol=+1 body:Hand Gun 3 lag=-9smp pol=+1",
+   "mix_db": 0.25
+  },
+  {
+   "file": "Weapons/Revolver38/fire_close_6.wav",
+   "key": "snd.revolver38.fire_close",
+   "layer": "close",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -14.37,
+   "lufs_m_max": -14.33,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.352,
+   "peak_ms": 2.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_03.WAV",
+     "start": 0.027,
+     "end": 0.387,
+     "pitch_st": 0.4
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "start": 0.037,
+     "end": 0.117,
+     "pitch_st": 0.4
+    },
+    {
+     "file": "../SFX/Free Pack/Hand Gun 2.wav",
+     "start": 0.018,
+     "end": 0.177,
+     "pitch_st": 0.4
+    }
+   ],
+   "anchor_ms": 2.2,
+   "gun": "revolver38",
+   "element": "fire_close",
+   "variant": 6,
+   "source": "base:S_R08_Fire_03.WAV crack:S_WK-11_Viper_Shot_1_With_Tail.wav lag=37smp pol=+1 body:Hand Gun 2 lag=-20smp pol=-1",
+   "mix_db": 0.33
+  },
+  {
+   "file": "Weapons/Revolver38/fire_far_1.wav",
+   "key": "snd.revolver38.fire_far",
+   "layer": "far",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -29.14,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -12.26,
+   "length_s": 1.377,
+   "peak_ms": 77.1,
+   "sources": [
+    {
+     "file": "../SFX/Free Pack/Hand Gun 3.wav",
+     "start": 0.058,
+     "end": 1.375,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 65.9,
+   "gun": "revolver38",
+   "element": "fire_far",
+   "variant": 1,
+   "source": "Hand Gun 3 delay=60ms",
+   "mix_db": -6.03
+  },
+  {
+   "file": "Weapons/Revolver38/fire_far_2.wav",
+   "key": "snd.revolver38.fire_far",
+   "layer": "far",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.53,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -10.76,
+   "length_s": 2.212,
+   "peak_ms": 90.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_02.WAV",
+     "start": 0.029,
+     "end": 2.229,
+     "pitch_st": 0.5
+    }
+   ],
+   "anchor_ms": 90.2,
+   "gun": "revolver38",
+   "element": "fire_far",
+   "variant": 2,
+   "source": "S_R08_Fire_02.WAV delay=75ms",
+   "mix_db": -6.03
+  },
+  {
+   "file": "Weapons/Revolver38/fire_mech_1.wav",
+   "key": "snd.revolver38.fire_mech",
+   "layer": "mech",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.2,
+   "lufs_m_max": -20.15,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.25,
+   "peak_ms": 42.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Insert.WAV",
+     "start": 0.052,
+     "end": 0.145,
+     "pitch_st": 1.0
+    }
+   ],
+   "anchor_ms": 42.0,
+   "gun": "revolver38",
+   "element": "fire_mech",
+   "variant": 1,
+   "source": "S_R08_Insert.WAV@0.05 delay=30ms",
+   "mix_db": -4.85
+  },
+  {
+   "file": "Weapons/Revolver38/fire_mech_2.wav",
+   "key": "snd.revolver38.fire_mech",
+   "layer": "mech",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.04,
+   "lufs_m_max": -20.0,
+   "true_peak_dbtp": -4.56,
+   "length_s": 0.25,
+   "peak_ms": 47.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_CloseCylinder.WAV",
+     "start": 0.247,
+     "end": 0.32,
+     "pitch_st": 1.5
+    }
+   ],
+   "anchor_ms": 31.2,
+   "gun": "revolver38",
+   "element": "fire_mech",
+   "variant": 2,
+   "source": "S_R08_CloseCylinder.WAV@0.245 delay=28ms",
+   "mix_db": -5.0
+  },
+  {
+   "file": "Weapons/Revolver38/fire_mech_3.wav",
+   "key": "snd.revolver38.fire_mech",
+   "layer": "mech",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.17,
+   "lufs_m_max": -20.13,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.25,
+   "peak_ms": 46.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Insert.WAV",
+     "start": 0.052,
+     "end": 0.145,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 46.7,
+   "gun": "revolver38",
+   "element": "fire_mech",
+   "variant": 3,
+   "source": "S_R08_Insert.WAV@0.05 delay=34ms",
+   "mix_db": -4.87
+  },
+  {
+   "file": "Weapons/Revolver38/fire_sub_1.wav",
+   "key": "snd.revolver38.fire_sub",
+   "layer": "sub",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -19.04,
+   "lufs_m_max": -19.0,
+   "true_peak_dbtp": -4.93,
+   "length_s": 0.3,
+   "peak_ms": 55.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_01.WAV",
+     "start": 0.029,
+     "end": 0.449,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "start": 0.038,
+     "end": 0.458,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 33.7,
+   "gun": "revolver38",
+   "element": "fire_sub",
+   "variant": 1,
+   "source": "real S_R08_Fire_01.WAV lp=150 +1 low donors lag=0smp pol=+1",
+   "mix_db": -4.0
+  },
+  {
+   "file": "Weapons/Revolver38/fire_sub_2.wav",
+   "key": "snd.revolver38.fire_sub",
+   "layer": "sub",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -19.04,
+   "lufs_m_max": -19.0,
+   "true_peak_dbtp": -5.42,
+   "length_s": 0.3,
+   "peak_ms": 54.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_02.WAV",
+     "start": 0.027,
+     "end": 0.447,
+     "pitch_st": 0.5
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "start": 0.044,
+     "end": 0.465,
+     "pitch_st": 0.5
+    }
+   ],
+   "anchor_ms": 12.7,
+   "gun": "revolver38",
+   "element": "fire_sub",
+   "variant": 2,
+   "source": "real S_R08_Fire_02.WAV lp=150 +1 low donors lag=-19smp pol=+1",
+   "mix_db": -4.0
+  },
+  {
+   "file": "Weapons/Revolver38/fire_sub_3.wav",
+   "key": "snd.revolver38.fire_sub",
+   "layer": "sub",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -19.04,
+   "lufs_m_max": -19.0,
+   "true_peak_dbtp": -4.7,
+   "length_s": 0.3,
+   "peak_ms": 46.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_03.WAV",
+     "start": 0.028,
+     "end": 0.448,
+     "pitch_st": -0.5
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_3_With_Tail.wav",
+     "start": 0.051,
+     "end": 0.471,
+     "pitch_st": -0.5
+    }
+   ],
+   "anchor_ms": 34.4,
+   "gun": "revolver38",
+   "element": "fire_sub",
+   "variant": 3,
+   "source": "real S_R08_Fire_03.WAV lp=150 +1 low donors lag=15smp pol=-1",
+   "mix_db": -4.0
+  },
+  {
+   "file": "Weapons/Revolver38/fire_sub_4.wav",
+   "key": "snd.revolver38.fire_sub",
+   "layer": "sub",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -19.04,
+   "lufs_m_max": -19.0,
+   "true_peak_dbtp": -4.68,
+   "length_s": 0.3,
+   "peak_ms": 56.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_01.WAV",
+     "start": 0.029,
+     "end": 0.449,
+     "pitch_st": 1.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "start": 0.038,
+     "end": 0.458,
+     "pitch_st": 1.0
+    }
+   ],
+   "anchor_ms": 34.1,
+   "gun": "revolver38",
+   "element": "fire_sub",
+   "variant": 4,
+   "source": "real S_R08_Fire_01.WAV lp=150 +1 low donors lag=-19smp pol=+1",
+   "mix_db": -4.0
+  },
+  {
+   "file": "Weapons/Revolver38/fire_tail_1.wav",
+   "key": "snd.revolver38.fire_tail",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.4,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -12.7,
+   "length_s": 2.4,
+   "peak_ms": 156.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_01.WAV",
+     "start": 0.121,
+     "end": 2.431,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 106.7,
+   "gun": "revolver38",
+   "element": "fire_tail",
+   "variant": 1,
+   "source": "S_R08_Fire_01.WAV tail from +0.09s",
+   "mix_db": -3.53
+  },
+  {
+   "file": "Weapons/Revolver38/fire_tail_2.wav",
+   "key": "snd.revolver38.fire_tail",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.38,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -11.55,
+   "length_s": 2.4,
+   "peak_ms": 168.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_02.WAV",
+     "start": 0.119,
+     "end": 2.429,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 105.1,
+   "gun": "revolver38",
+   "element": "fire_tail",
+   "variant": 2,
+   "source": "S_R08_Fire_02.WAV tail from +0.09s",
+   "mix_db": -3.53
+  },
+  {
+   "file": "Weapons/Revolver38/fire_tail_3.wav",
+   "key": "snd.revolver38.fire_tail",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.44,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -11.42,
+   "length_s": 2.4,
+   "peak_ms": 148.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Fire_03.WAV",
+     "start": 0.12,
+     "end": 2.43,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 104.9,
+   "gun": "revolver38",
+   "element": "fire_tail",
+   "variant": 3,
+   "source": "S_R08_Fire_03.WAV tail from +0.09s",
+   "mix_db": -3.53
+  },
+  {
+   "file": "Weapons/Revolver38/fire_tail_4.wav",
+   "key": "snd.revolver38.fire_tail",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.79,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -9.95,
+   "length_s": 2.334,
+   "peak_ms": 167.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "start": 0.13,
+     "end": 2.44,
+     "pitch_st": 0.5
+    }
+   ],
+   "anchor_ms": 123.5,
+   "gun": "revolver38",
+   "element": "fire_tail",
+   "variant": 4,
+   "source": "S_WK-11_Viper_Shot_1_With_Tail.wav tail from +0.09s",
+   "mix_db": -3.53
+  },
+  {
+   "file": "Weapons/Revolver38/hammer_cock_1.wav",
+   "key": "snd.revolver38.hammer_cock",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.76,
+   "length_s": 0.174,
+   "peak_ms": 23.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Reload_Empty.WAV",
+     "start": 2.69,
+     "end": 2.88,
+     "pitch_st": 1.5
+    }
+   ],
+   "anchor_ms": 77.5,
+   "gun": "revolver38",
+   "element": "hammer_cock",
+   "variant": 1,
+   "source": "S_R08_Reload_Empty.WAV[2.69-2.88]@2.7745 st=1.5",
+   "mix_db": -17.23
+  },
+  {
+   "file": "Weapons/Revolver38/hammer_cock_2.wav",
+   "key": "snd.revolver38.hammer_cock",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.76,
+   "length_s": 0.167,
+   "peak_ms": 22.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Reload_Empty.WAV",
+     "start": 2.69,
+     "end": 2.88,
+     "pitch_st": 2.2
+    }
+   ],
+   "anchor_ms": 74.4,
+   "gun": "revolver38",
+   "element": "hammer_cock",
+   "variant": 2,
+   "source": "S_R08_Reload_Empty.WAV[2.69-2.88]@2.7745 st=2.2",
+   "mix_db": -17.23
+  },
+  {
+   "file": "Weapons/Revolver38/hammer_decock_1.wav",
+   "key": "snd.revolver38.hammer_decock",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.27,
+   "length_s": 0.087,
+   "peak_ms": 14.2,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 6.925,
+     "end": 7.02,
+     "pitch_st": 1.5
+    }
+   ],
+   "anchor_ms": 13.8,
+   "gun": "revolver38",
+   "element": "hammer_decock",
+   "variant": 1,
+   "source": "Steyr_TMP_9mm_foley_distant[6.925-7.02]@6.94 st=1.5",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Weapons/Revolver38/hammer_decock_2.wav",
+   "key": "snd.revolver38.hammer_decock",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.86,
+   "lufs_m_max": -22.82,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.086,
+   "peak_ms": 12.8,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 12.253,
+     "end": 12.35,
+     "pitch_st": 2.0
+    }
+   ],
+   "anchor_ms": 13.4,
+   "gun": "revolver38",
+   "element": "hammer_decock",
+   "variant": 2,
+   "source": "Steyr_TMP_9mm_foley_distant[12.253-12.35]@12.268 st=2.0",
+   "mix_db": -17.41
+  },
+  {
+   "file": "Weapons/Revolver38/handle_1.wav",
+   "key": "snd.revolver38.handle",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.85,
+   "lufs_m_max": -20.81,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.161,
+   "peak_ms": 6.1,
+   "sources": [
+    {
+     "file": "../SFX/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect.WAV",
+     "start": 0.427,
+     "end": 0.65,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.0,
+   "gun": "revolver38",
+   "element": "handle",
+   "variant": 1,
+   "source": "S_MKR9_Inspect@0.434",
+   "mix_db": -22.45
+  },
+  {
+   "file": "Weapons/Revolver38/handle_2.wav",
+   "key": "snd.revolver38.handle",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.67,
+   "lufs_m_max": -22.63,
+   "true_peak_dbtp": -1.16,
+   "length_s": 0.102,
+   "peak_ms": 11.9,
+   "sources": [
+    {
+     "file": "../SFX/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect.WAV",
+     "start": 2.133,
+     "end": 2.356,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.0,
+   "gun": "revolver38",
+   "element": "handle",
+   "variant": 2,
+   "source": "S_MKR9_Inspect@2.146",
+   "mix_db": -20.69
+  },
+  {
+   "file": "Weapons/Revolver38/handle_3.wav",
+   "key": "snd.revolver38.handle",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.34,
+   "length_s": 0.163,
+   "peak_ms": 41.3,
+   "sources": [
+    {
+     "file": "../SFX/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect.WAV",
+     "start": 3.291,
+     "end": 3.454,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.0,
+   "gun": "revolver38",
+   "element": "handle",
+   "variant": 3,
+   "source": "S_MKR9_Inspect@3.301",
+   "mix_db": -22.19
+  },
+  {
+   "file": "Weapons/Revolver38/handle_4.wav",
+   "key": "snd.revolver38.handle",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.95,
+   "lufs_m_max": -23.9,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.223,
+   "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "../SFX/Kinemation - Tactical Shooter Pack/MKR9/S_MKR9_Inspect.WAV",
+     "start": 3.467,
+     "end": 3.69,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.0,
+   "gun": "revolver38",
+   "element": "handle",
+   "variant": 4,
+   "source": "S_MKR9_Inspect@3.471",
+   "mix_db": -19.24
+  },
+  {
+   "file": "Weapons/Revolver38/holster_1.wav",
+   "key": "snd.revolver38.holster",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.99,
+   "lufs_m_max": -20.84,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.66,
+   "peak_ms": 113.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Holster.WAV",
+     "start": 0.0,
+     "end": 0.66,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 70.0,
+   "gun": "revolver38",
+   "element": "holster",
+   "variant": 1,
+   "source": "S_R08_Holster.WAV[0.0-0.66]@0.07 st=0.0",
+   "mix_db": -10.36
+  },
+  {
+   "file": "Weapons/Revolver38/holster_2.wav",
+   "key": "snd.revolver38.holster",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.45,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -4.27,
+   "length_s": 0.8,
+   "peak_ms": 295.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_HolsterPistolWithoutHolster.WAV",
+     "start": 0.0,
+     "end": 0.8,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 295.7,
+   "gun": "revolver38",
+   "element": "holster",
+   "variant": 2,
+   "source": "S_HolsterPistolWithoutHolster.WAV[0.0-0.8]@None st=0.0",
+   "mix_db": -8.26
+  },
+  {
+   "file": "Weapons/Revolver38/melee_hit_1.wav",
+   "key": "snd.revolver38.melee_hit",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.99,
+   "length_s": 0.2,
+   "peak_ms": 19.8,
+   "sources": [
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Deep Punch 02.wav",
+     "start": 0.016,
+     "end": 0.208,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_AmmoCheck.WAV",
+     "start": 2.517,
+     "end": 2.68,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.2,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_hit",
+   "variant": 1,
+   "source": "Hand-to-Hand Combat - Body Hits - Deep Punch 02@0.0+S_R08_AmmoCheck.WAV@2.532+CLOTHING_MATERIAL_MOVEMENT_08@0.0",
+   "mix_db": -2.32
+  },
+  {
+   "file": "Weapons/Revolver38/melee_hit_2.wav",
+   "key": "snd.revolver38.melee_hit",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -5.68,
+   "length_s": 0.202,
+   "peak_ms": 19.5,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/PUNCH_PERCUSSIVE_HEAVY_06.wav",
+     "start": 0.02,
+     "end": 0.184,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.202,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_CloseCylinder.WAV",
+     "start": 0.247,
+     "end": 0.41,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_hit",
+   "variant": 2,
+   "source": "PUNCH_PERCUSSIVE_HEAVY_06@0.0+IMPACT_LOW_THUD_10@0.0+S_R08_CloseCylinder.WAV@0.245",
+   "mix_db": -2.22
+  },
+  {
+   "file": "Weapons/Revolver38/melee_hit_3.wav",
+   "key": "snd.revolver38.melee_hit",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -7.42,
+   "length_s": 0.403,
+   "peak_ms": 60.1,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_body_thump_02.wav",
+     "start": 0.004,
+     "end": 0.407,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Deep Punch 02.wav",
+     "start": 0.016,
+     "end": 0.208,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_AmmoCheck.WAV",
+     "start": 0.572,
+     "end": 0.735,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_hit",
+   "variant": 3,
+   "source": "bullet_impact_body_thump_02@0.0+Hand-to-Hand Combat - Body Hits - Deep Punch 02@0.0+S_R08_AmmoCheck.WAV@0.587",
+   "mix_db": -2.24
+  },
+  {
+   "file": "Weapons/Revolver38/melee_hit_4.wav",
+   "key": "snd.revolver38.melee_hit",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -4.62,
+   "length_s": 0.4,
+   "peak_ms": 108.1,
+   "sources": [
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav",
+     "start": 0.0,
+     "end": 0.4,
+     "pitch_st": 1.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_CloseCylinder.WAV",
+     "start": 0.247,
+     "end": 0.41,
+     "pitch_st": 1.0
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.2,
+     "pitch_st": 1.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_hit",
+   "variant": 4,
+   "source": "Hand-to-Hand Combat - Body Hits - Body Slam Floor 08@0.0+S_R08_CloseCylinder.WAV@0.245+CLOTHING_MATERIAL_MOVEMENT_08@0.0",
+   "mix_db": -1.36
+  },
+  {
+   "file": "Weapons/Revolver38/melee_swing_1.wav",
+   "key": "snd.revolver38.melee_swing",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.86,
+   "length_s": 0.3,
+   "peak_ms": 66.0,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_HighSwings15.wav",
+     "start": 0.013,
+     "end": 0.313,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_swing",
+   "variant": 1,
+   "source": "MeleeSwingsPack_96khz_Stereo_High@None",
+   "mix_db": -12.2
+  },
+  {
+   "file": "Weapons/Revolver38/melee_swing_2.wav",
+   "key": "snd.revolver38.melee_swing",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -10.07,
+   "length_s": 0.378,
+   "peak_ms": 62.2,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_NormalSwings39.wav",
+     "start": 0.17,
+     "end": 0.57,
+     "pitch_st": 1.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_swing",
+   "variant": 2,
+   "source": "MeleeSwingsPack_96khz_Stereo_Normal@None",
+   "mix_db": -11.67
+  },
+  {
+   "file": "Weapons/Revolver38/melee_swing_3.wav",
+   "key": "snd.revolver38.melee_swing",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.14,
+   "lufs_m_max": -23.1,
+   "true_peak_dbtp": -1.17,
+   "length_s": 0.234,
+   "peak_ms": 73.2,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/whoosh_weapon_knife_swing_04.wav",
+     "start": 0.012,
+     "end": 0.246,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_swing",
+   "variant": 3,
+   "source": "whoosh_weapon_knife_swing_04@None",
+   "mix_db": -10.3
+  },
+  {
+   "file": "Weapons/Revolver38/melee_swing_4.wav",
+   "key": "snd.revolver38.melee_swing",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.67,
+   "length_s": 0.275,
+   "peak_ms": 61.9,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_HighSwings15.wav",
+     "start": 0.013,
+     "end": 0.313,
+     "pitch_st": 1.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "gun": "revolver38",
+   "element": "melee_swing",
+   "variant": 4,
+   "source": "MeleeSwingsPack_96khz_Stereo_High@None",
+   "mix_db": -12.26
+  },
+  {
+   "file": "Weapons/Revolver38/round_insert_1.wav",
+   "key": "snd.revolver38.round_insert",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.65,
+   "lufs_m_max": -22.61,
+   "true_peak_dbtp": -1.3,
+   "length_s": 0.33,
+   "peak_ms": 228.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Insert.WAV",
+     "start": 0.0,
+     "end": 0.33,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 50.0,
+   "gun": "revolver38",
+   "element": "round_insert",
+   "variant": 1,
+   "source": "S_R08_Insert.WAV[0.0-0.33]@0.05 st=0.0",
+   "mix_db": -8.63
+  },
+  {
+   "file": "Weapons/Revolver38/round_insert_2.wav",
+   "key": "snd.revolver38.round_insert",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.87,
+   "lufs_m_max": -22.82,
+   "true_peak_dbtp": -1.29,
+   "length_s": 0.317,
+   "peak_ms": 219.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Insert.WAV",
+     "start": 0.0,
+     "end": 0.33,
+     "pitch_st": 0.7
+    }
+   ],
+   "anchor_ms": 48.0,
+   "gun": "revolver38",
+   "element": "round_insert",
+   "variant": 2,
+   "source": "S_R08_Insert.WAV[0.0-0.33]@0.05 st=0.7",
+   "mix_db": -8.42
+  },
+  {
+   "file": "Weapons/Revolver38/round_insert_3.wav",
+   "key": "snd.revolver38.round_insert",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.14,
+   "lufs_m_max": -22.1,
+   "true_peak_dbtp": -1.27,
+   "length_s": 0.342,
+   "peak_ms": 237.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Insert.WAV",
+     "start": 0.0,
+     "end": 0.33,
+     "pitch_st": -0.6
+    }
+   ],
+   "anchor_ms": 51.8,
+   "gun": "revolver38",
+   "element": "round_insert",
+   "variant": 3,
+   "source": "S_R08_Insert.WAV[0.0-0.33]@0.05 st=-0.6",
+   "mix_db": -9.12
+  },
+  {
+   "file": "Weapons/Revolver38/round_insert_4.wav",
+   "key": "snd.revolver38.round_insert",
+   "layer": "action",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.98,
+   "lufs_m_max": -20.94,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.308,
+   "peak_ms": 213.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/R08/S_R08_Insert.WAV",
+     "start": 0.0,
+     "end": 0.33,
+     "pitch_st": 1.2
+    }
+   ],
+   "anchor_ms": 46.7,
+   "gun": "revolver38",
+   "element": "round_insert",
+   "variant": 4,
+   "source": "S_R08_Insert.WAV[0.0-0.33]@0.05 st=1.2",
+   "mix_db": -9.88
   }
  ]
 }

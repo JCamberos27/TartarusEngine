@@ -1,8 +1,9 @@
 """Build the weapon action one-shot library from recipes/elements.json.
 
-  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_elements.py
+  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_elements.py [gun ...]
 
-Writes project/assets/Audio/Weapons/<gun>/<element>_<n>.wav and updates audio_manifest.json. Deterministic.
+Writes project/assets/Audio/Weapons/<gun>/<element>_<n>.wav and updates audio_manifest.json. Deterministic. With gun ids
+(ak / 870 / revolver38) only those guns are rebuilt; the other guns' files and manifest entries are left as they are.
 """
 import json
 import os
@@ -98,6 +99,29 @@ def motion_variant(v, pre, post):
     return apply_eq(y, v)
 
 
+def cut_variant(v):
+    """An exact slice [cut[0], cut[1]] s of a real recording: 2 ms fade in, a fade out of min(80 ms, 25 % of the slice), pitched
+    (st), high-passed at hp (default 70 Hz). No onset snap, no transient designer, no bleed trim: the slice is the sound (the .38's
+    actions, as approved in the AE showcase's build_38.py). The contact (the anchor) is v.contact, or the slice's loudest sample."""
+    x = src(v["src"])
+    a, b = v["cut"]
+    seg = adsp.cut(x, int(a * SR), int(b * SR))
+    seg = adsp.fade(seg, int(0.002 * SR), int(min(0.08, 0.25 * (b - a)) * SR))
+    if v.get("pitch"):
+        seg = adsp.pitch(seg, v["pitch"])
+    return adsp.filt(seg, "hp", v.get("hp", 70.0))
+
+
+def cut_anchor_ms(v):
+    """Where the contact lands in a cut_variant's file (pitch scales time)."""
+    a, b = v["cut"]
+    contact = v.get("contact")
+    if contact is None:                                  # the loudest transient of the (unprocessed) slice
+        x = src(v["src"])
+        contact = a + float(np.argmax(np.abs(adsp.to_mono(adsp.cut(x, int(a * SR), int(b * SR)))))) / SR
+    return (contact - a) * 1000.0 / (2 ** (v.get("pitch", 0.0) / 12.0))
+
+
 def thud_variant(v):
     """cloth bed + a heavier thud layer dropped in at delay_ms (used where the pack has no usable thud)."""
     x = src(v["src"])
@@ -138,7 +162,9 @@ def composite(v):
 
 
 def render_variant(v):
-    if "layers" in v:
+    if "cut" in v:
+        y = cut_variant(v)
+    elif "layers" in v:
         y = composite(v)
     elif "peak_at_ms" in v:
         y = peak_aligned(v)
@@ -155,6 +181,8 @@ def describe(v):
     if "layers" in v:
         return "+".join(describe(l) for l in v["layers"])
     s = v["src"].replace("\\", "/").split("/")[-1]
+    if "cut" in v:
+        return f"{s}[{v['cut'][0]}-{v['cut'][1]}]@{v.get('contact')} st={v.get('pitch', 0.0)}"
     return f"{s}@{v.get('t', v.get('t0'))}"
 
 
@@ -162,20 +190,28 @@ def main():
     global MIN_DUR_S
     recipe = json.load(open(os.path.join(abuild.HERE, "recipes", "elements.json")))
     MIN_DUR_S = float(recipe.get("min_dur_s", 0.0))
+    only = sys.argv[1:]
+    unknown = [g for g in only if g not in recipe["guns"]]
+    if unknown:
+        raise SystemExit(f"unknown gun(s) {unknown}; recipes/elements.json has {list(recipe['guns'])}")
+    guns = {gun: g for gun, g in recipe["guns"].items() if not only or gun in only}
     entries = []
-    for gun, g in recipe["guns"].items():
+    for gun, g in guns.items():
         for elem, variants in g["elements"].items():
             for n, v in enumerate(variants, 1):
                 adsp.take_uses()
                 y = render_variant(v)
                 uses = adsp.take_uses()
+                exact = "cut" in v
                 snap = recipe.get("snap")
-                if snap and elem not in snap.get("skip", []):   # mechanical contacts: harder attack, shorter ring
+                if snap and not exact and elem not in snap.get("skip", []):   # mechanical contacts: harder attack, shorter ring
                     y = adsp.transient_shape(y, snap.get("attack", 0.0), snap.get("sustain", 0.0))
-                y = abuild.finish(y, "action", trim_bleed="layers" not in v and not v.get("motion_only"))   # (a composite's later layers are meant)
+                y = abuild.finish(y, "action", trim_bleed="layers" not in v and not v.get("motion_only") and not exact)   # (a composite's later layers are meant)
                 rel = f"{g['dir']}/{elem}_{n}.wav"
                 extra = {"gun": gun, "element": elem, "variant": n, "source": describe(v)}
-                if "anchor_ms" in v:                 # the recipe says where the contact is (a composite of several)
+                if exact:                            # an exact slice: the contact's place in it
+                    extra["anchor_ms"] = round(cut_anchor_ms(v), 1)
+                elif "anchor_ms" in v:               # the recipe says where the contact is (a composite of several)
                     extra["anchor_ms"] = float(v["anchor_ms"])
                 elif "thud" in v:                    # contact = where the thud layer lands
                     extra["anchor_ms"] = float(v["thud"]["delay_ms"])
@@ -190,7 +226,7 @@ def main():
                 entries.append(abuild.emit(rel, y, f"snd.{gun}.{elem}", "action", extra, sources=uses))
                 e = entries[-1]
                 print(f"{rel:48s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
-    total = abuild.update_manifest(entries, [f"{g['dir']}/{e}_" for g in recipe["guns"].values() for e in g["elements"]])
+    total = abuild.update_manifest(entries, [f"{g['dir']}/{e}_" for g in guns.values() for e in g["elements"]])
     print("manifest files:", total)
 
 

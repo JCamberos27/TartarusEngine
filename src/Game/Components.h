@@ -553,7 +553,7 @@ struct MuzzleAttachmentComponent {
     std::string MuzzleTransform = "Muzzle"; // its local -Z is the bore direction
     std::string MuzzleFlash = "Muzzle";     // the flash Particle System
     std::string FiringSounds;               // audio assets; empty uses the gun's layered audio
-    std::string FiringSoundProfile;         // "", "ak" or "870": the layered profile when Firing Sounds is empty
+    std::string FiringSoundProfile;         // "", "ak", "870" or "revolver38": the layered profile when Firing Sounds is empty
 };
 struct GripAttachmentComponent {
     bool Enabled = true;

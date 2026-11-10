@@ -1,6 +1,6 @@
-"""Build the gunfire layers for both guns from recipes/ak_fire.json and recipes/remington870_fire.json.
+"""Build the gunfire layers of every gun from recipes/ak_fire.json, recipes/remington870_fire.json and recipes/revolver38_fire.json.
 
-  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_fire.py [ak|870]
+  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_fire.py [ak|870|revolver38]
 
 Per gun and layer (close / mech / sub / tail / far) writes <dir>/fire_<layer>_<n>.wav. Every layer is timelined from the
 shot instant, so the engine just starts them together; tails and far carry their own leading silence / delay.
@@ -234,11 +234,11 @@ LAYER_NAMES = ("close", "sub", "mech", "tail", "far")
 
 
 def main():
-    """build_fire.py [ak|870] [layer ...]   -- e.g.  build_fire.py ak sub   rebuilds only the AK sub layer."""
+    """build_fire.py [ak|870|revolver38] [layer ...]   -- e.g.  build_fire.py ak sub   rebuilds only the AK sub layer."""
     only = sys.argv[1] if len(sys.argv) > 1 else None
     layers = sys.argv[2:] or None
     allent, prefixes = [], []
-    for name, path in (("ak", "ak_fire.json"), ("870", "remington870_fire.json")):
+    for name, path in (("ak", "ak_fire.json"), ("870", "remington870_fire.json"), ("revolver38", "revolver38_fire.json")):
         if only and only != name:
             continue
         e, p = build(os.path.join(abuild.HERE, "recipes", path), layers)

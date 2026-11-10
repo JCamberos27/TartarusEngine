@@ -16,7 +16,8 @@
 // ones always have a profile.
 inline constexpr const char* kDefaultGunId = "ak";
 inline constexpr const char* kShotgunGunId = "870";
-inline constexpr const char* kBuiltInGunIds[] = {kDefaultGunId, kShotgunGunId};
+inline constexpr const char* kRevolverGunId = "revolver38";
+inline constexpr const char* kBuiltInGunIds[] = {kDefaultGunId, kShotgunGunId, kRevolverGunId};
 
 // One playable sound: its variants and how it is played.
 struct SoundSet {
