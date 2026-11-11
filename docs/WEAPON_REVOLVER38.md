@@ -35,6 +35,12 @@ Approved in the November 2026 audit, applied in memory on every export:
   that +60° start never blends back in sight. The round leaves on the hammer fall: the Fire state's Shot event
   is at frame 7 (0.117 s). The arms' trigger finger curls with the trigger, about the joints' hinge, by the
   trigger's travel in the hand's space (it stays in the guard).
+- **Index finger.** The takes lay the right index along the frame and hook its tip over the trigger's root.
+  Every arms take is re-keyed so the distal pad crosses the blade's face about 55% of the way down
+  (`INDEX_DIP`, `INDEX_PAD`: targets in the Trigger bone's space, solved once on Idle frame 0 as a curl about
+  each joint's hinge plus a spread at the knuckle). Where the take moves the finger off its grip spot (reload,
+  inspect, mag check), the fix fades out over `INDEX_FADE` (1 to 2.5 cm), so the hand-offs stay smooth. The
+  Fire curl is solved on top of the new pose.
 - **Hip shots play the Fire clip.** A recoil profile normally makes every shot procedural (`WeaponRules.cpp`,
   Fire request). The .fpsanim sets `"hipFireClip": true`, so hip shots play the clip (hammer, trigger,
   cylinder) and sights-up shots stay procedural with the profile. Both flip the muzzle ~14 deg: the profile's
