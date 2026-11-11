@@ -20,6 +20,8 @@
 #    cocked and the cylinder indexing one chamber (60 deg, counter-clockwise from the rear) over the
 #    first 2 frames, the hammer falling on frame 3, the trigger resetting by frame 18. The arms'
 #    A_FP_Fire never moved the trigger finger; it now curls with the trigger, about the joints' hinge (local Z).
+#  - Every arms take lays the right index along the frame, its tip hooked over the trigger's root. Re-keyed
+#    (fix_index_grip) so the distal pad sits on the blade's face, fading out where the hand leaves the grip.
 #  - No ADS pose. Solved like the Remington's: A_FP_Idle frame 0 with CB_Gun moved so the rear
 #    notch and front post lie on the AKS-74U's measured ADS sight line.
 #  - Bullet1..6 are re-parented under Cylinder and their CHILD_OF motion baked, so the FBX
@@ -549,7 +551,99 @@ def damp_fire_gun(act, w_act, k):
     return act
 
 
+# ---------------------------------------------------------------- arms: index finger on the trigger
+# The takes lay the right index along the frame and hook its tip over the trigger's root, by the frame, poking
+# out past the blade's far side. Re-posed so the distal pad crosses the blade's face about 55% of the way down.
+# Targets are in the Trigger bone's space (cm: +Y runs down the blade from its pivot, -Z out of its face, +X the
+# gun's left; the blade is 0.7 cm wide and spans Y -0.9..3.0). The finger's bones run along their local -X.
+INDEX = ["CB_index_01_r", "CB_index_02_r", "CB_index_03_r"]
+INDEX_DIP = M.Vector((-1.5, 1.3, -0.55))   # distal joint, off the blade's right side
+INDEX_PAD = M.Vector((-0.35, 1.35, -0.5))  # 55% along the distal phalanx: the pad on the blade, tip just past it
+INDEX_FADE = (1.0, 2.5)  # cm the take's own pad strays from its grip spot: full fix .. none (hand off the grip)
+
+
+def index_points():
+    inv = world(wep, "Trigger").inverted()
+    m = world(arm, "index_03_r")
+    head, tip = m.translation, m @ M.Vector((-arm.pose.bones["index_03_r"].length, 0, 0))
+    return inv @ head, inv @ head.lerp(tip, 0.55)
+
+
+def index_delta(params, w=1.0):
+    """Per-bone local rotation: curl about Z on all three joints, spread about Y on the knuckle."""
+    a1, a2, a3, b1 = (p * w for p in params)
+    Z, Y = M.Vector((0, 0, 1)), M.Vector((0, 1, 0))
+    return {INDEX[0]: M.Quaternion(Z, a1) @ M.Quaternion(Y, b1), INDEX[1]: M.Quaternion(Z, a2), INDEX[2]: M.Quaternion(Z, a3)}
+
+
+def solve_index():
+    pair("A_FP_Idle", "A_W_Idle")
+    scn.frame_set(0)
+    base = {n: get_rot(arm.pose.bones[n]) for n in INDEX}
+    ref_pad = index_points()[1]
+
+    def cost(p):
+        for n, q in index_delta(p).items():
+            set_rot(arm.pose.bones[n], base[n] @ q)
+        bpy.context.view_layer.update()
+        dip, pad = index_points()
+        return (dip - INDEX_DIP).length_squared + (pad - INDEX_PAD).length_squared
+
+    p, c = [0.0] * 4, None
+    c = cost(p)
+    step = math.radians(8)
+    while step > math.radians(0.2):
+        moved = False
+        for i in range(4):
+            for s in (step, -step):
+                q = list(p)
+                q[i] = max(-0.8, min(0.8, q[i] + s))
+                cq = cost(q)
+                if cq < c:
+                    p, c, moved = q, cq, True
+        if not moved:
+            step *= 0.5
+    cost(p)
+    dip, pad = index_points()
+    for n in INDEX:
+        set_rot(arm.pose.bones[n], base[n])
+    bpy.context.view_layer.update()
+    report["fixes"].append("Index finger re-posed on the trigger (curl %s deg, spread %.1f deg; pad off target %.2f cm, "
+                           "distal joint %.2f cm)." % ([round(math.degrees(x), 1) for x in p[:3]], math.degrees(p[3]),
+                                                       (pad - INDEX_PAD).length, (dip - INDEX_DIP).length))
+    return p, ref_pad
+
+
+def fix_index_grip():
+    """Re-keys the index in every arms take (in memory), fading the fix out where the hand leaves the grip."""
+    params, ref_pad = solve_index()
+    done = set()
+    for arms_name, weapon_name in CLIPS.values():
+        if arms_name in done:
+            continue
+        done.add(arms_name)
+        act = bpy.data.actions[arms_name]
+        pair(act, weapon_name)
+        fs, fe = frange(arms_name)
+        rows, full = [], 0
+        for f in range(fs, fe + 1):
+            scn.frame_set(f)
+            stray = (index_points()[1] - ref_pad).length
+            t = min(max((INDEX_FADE[1] - stray) / (INDEX_FADE[1] - INDEX_FADE[0]), 0.0), 1.0)
+            w = t * t * (3.0 - 2.0 * t)
+            full += w > 0.999
+            rows.append((f, w, {n: get_rot(arm.pose.bones[n]) for n in INDEX}))
+        for f, w, rots in rows:
+            delta = index_delta(params, w)
+            for n in INDEX:
+                pb = arm.pose.bones[n]
+                set_rot(pb, rots[n] @ delta[n])
+                pb.keyframe_insert("rotation_quaternion" if pb.rotation_mode == "QUATERNION" else "rotation_euler", frame=f)
+        print("INDEX %-18s %d/%d frames on the grip" % (arms_name, full, len(rows)))
+
+
 # Fixed / derived actions (all in memory).
+fix_index_grip()
 arms_override = {"Reload": fix_reload()}
 fire_fe = frange("A_FP_Fire")[1]
 w_fire = fix_weapon_fire(fire_fe)
