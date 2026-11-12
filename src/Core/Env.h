@@ -73,6 +73,7 @@
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \
     X(NoEngineVariants, "TARTARUS_NO_ENGINE_VARIANTS", Flag, "disable engine shader variants")                        \
     X(NoFur, "TARTARUS_NO_FUR", Flag, "disable fur rendering")                                                        \
+    X(NoGrass, "TARTARUS_NO_GRASS", Flag, "disable grass rendering")                                                  \
     X(NoSubstrate, "TARTARUS_NO_SUBSTRATE", Flag, "disable decal substrate")                                          \
     X(NoAnimPrefetch, "TARTARUS_NO_ANIM_PREFETCH", Flag, "disable animation clip prefetch")                           \
     X(NoUiThrottle, "TARTARUS_NO_UI_THROTTLE", Flag, "disable the asset browser UI throttle")                         \

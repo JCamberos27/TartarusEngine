@@ -6041,6 +6041,7 @@ int RunUnitTests(const char* filter) {
     RegisterRecoilPortTests(tests);
     RegisterSwayPortTests(tests);
     { void RegisterRenderTests(UnitTestSupport::TestList&); RegisterRenderTests(tests); } // UnitTests_Render.cpp
+    { void RegisterGrassTests(UnitTestSupport::TestList&); RegisterGrassTests(tests); } // UnitTests_Grass.cpp
     { void RegisterWorldTextTests(UnitTestSupport::TestList&); RegisterWorldTextTests(tests); } // UnitTests_WorldText.cpp
     { void RegisterOpenableTests(UnitTestSupport::TestList&); RegisterOpenableTests(tests); } // UnitTests_Openable.cpp
     RegisterCharacterMoverTests(tests); // UnitTests_CharacterMover.cpp

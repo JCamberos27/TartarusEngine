@@ -35,6 +35,7 @@
 #include "ParticleRenderer.h"
 #include "BloodRenderer.h"
 #include "FurRenderer.h"
+#include "GrassRenderer.h"
 #include "BloodPalette.h"
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
@@ -651,6 +652,7 @@ void SceneRenderer::WarmEffects() {
     FxSpriteRenderer::Get().WarmUp();
     BloodRenderer::Get().WarmUp();
     WorldTextRenderer::Get().WarmUp();
+    GrassRenderer::Get().WarmUp();
 }
 
 namespace {
@@ -719,6 +721,12 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     if (in.skyAtmosphere) in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos, cloudsAfterDepth);
 
     FrameState gathered = GatherFrameState(world, ctx, in);
+    // Grass Areas (GrassRenderer): gathered once a frame; scattered and drawn per view, never in a probe's room
+    // capture, a debug view or an orthographic one.
+    GrassRenderer& grass = GrassRenderer::Get();
+    grass.Gather(world);
+    const bool grassOn = grass.HasAreas() && !ctx.ProbeCapture && ctx.DebugView == 0 && std::abs(ctx.Proj[3][3]) < 0.5f;
+    bool grassCulled = false, grassInPrepass = false;
     // Clustered decals (docs/DECALS.md): this view's visible set, uploaded before the cluster cull
     // bins it. They need the froxel lists, so nothing without clustering (the previews) gets any.
     if (in.decals && in.decalCullShader && gathered.clusterOn) {
@@ -887,6 +895,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
         bool Bounded = false;
         glm::mat3 Normal{1.0f}; // transpose(inverse(mat3(Xform))), from the candidate cache (opaque items)
+        float LodFade = 0.0f;   // World::LodFadeOf: a LOD cross-fade under way (dithered, drawn on its own)
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -1032,6 +1041,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.StaticReceiver = staticReceiver;
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
+            item.LodFade = world.LodFadeOf(entity);
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -1061,6 +1071,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
+            item.LodFade = world.LodFadeOf(entity);
             item.Dynamic = dynamicItem;
             item.StaticReceiver = staticReceiver;
             item.Entity = (unsigned)entt::to_integral(entity);
@@ -1186,6 +1197,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
         prog.SetInt("uDecalStatic", probeItem->StaticReceiver ? 1 : 0);
         prog.SetFloat("uNearHide", probeItem->NearHide);
+        prog.SetFloat("uLodFade", probeItem->LodFade);
         prog.SetFloat("uNearHideWidth", probeItem->NearHideWidth);
         prog.SetVec3("uNearHideRight", nearHideRight);
         static const char* const kHideBone[8] = {"uHideBones[0]", "uHideBones[1]", "uHideBones[2]", "uHideBones[3]",
@@ -1230,7 +1242,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     unsigned hizDepth = 0; // the view's depth after the pre-pass, single sample: HiZCuller's occluders
     constexpr float kPrepassSlopeOffset = 0.02f;
     const auto prepassed = [&](const DrawItem& it) {
-        return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
+        return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.LodFade != 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
                                  it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
     };
     if (depthPrepass) {
@@ -1288,6 +1300,22 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             glDisable(GL_BLEND);
             ApplyFrameState(modelShader, fs); // the occlusion passes used texture units 0 and 1
         }
+        // The grass into the view's depth after SSAO has taken its copy: the lit pass then shades each grass pixel
+        // once, but SSAO and Hi-Z never see the blades - thin, swaying, half-transparent to the eye, they only left
+        // dark noisy halos in the occlusion and hid nothing worth culling.
+        if (grassOn) {
+            grassCulled = grass.Cull(ctx.View, ctx.Proj, ctx.ViewPos);
+            if (grassCulled) {
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(kPrepassSlopeOffset, 4.0f);
+                grass.DrawDepth(ctx.View, ctx.Proj);
+                glPolygonOffset(0.0f, 0.0f);
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                grassInPrepass = true;
+                depth.Bind();
+            }
+        }
         depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         GLStateCache::Invalidate();
@@ -1339,7 +1367,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     for (std::size_t i = 0; i < probeKeys.size(); ++i) probeKeys[i] = in.probeArray->SelectionKey(drawList[i].Centre);
     const auto probeKey = [&](std::uint32_t i) { return i < probeKeys.size() ? probeKeys[i] : 0u; };
     const auto batchable = [&](const DrawItem& it) {
-        if (!instancing || it.Dynamic || it.Ref->HasBones() || it.Visible || it.NearHide > 0.0f || it.HideBones ||
+        if (!instancing || it.Dynamic || it.Ref->HasBones() || it.Visible || it.NearHide > 0.0f || it.LodFade != 0.0f || it.HideBones ||
             it.HideVerts || it.CollarVerts || it.BoneMaskMode || it.LayerPull != 0.0f)
             return false;
         int bloodFirst = 0, bloodCount = 0;
@@ -1542,6 +1570,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     if (depthWrites != GL_TRUE) glDepthMask(GL_TRUE);
     }
     instanceBase = -1;
+    // Grass, lit (GrassRenderer): with the opaque pass, so it writes TAA motion for its sway.
+    if (grassOn) {
+        if (!grassCulled) grassCulled = grass.Cull(ctx.View, ctx.Proj, ctx.ViewPos);
+        if (grassCulled) {
+            grass.DrawLit(ctx.View, ctx.Proj, !grassInPrepass, [&](Shader& p) { ApplyFrameState(p, fs); });
+            modelShader.Bind();
+        }
+    }
     if (velocityOut) ctx.TxHdr->SetVelocityWrites(false);
     // Nothing after this pass draws instanced: leave every program it used reading uModel again (the previews share
     // the material shaders' programs).

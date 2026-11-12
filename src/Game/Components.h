@@ -1375,6 +1375,32 @@ struct PrefabInstanceComponent {
 // IBL (procedural or HDRI) at this probe's position; the shader corrects reflection vectors
 // to the box boundary, giving room-appropriate reflections without per-probe scene captures.
 // No probes in a scene â†’ the shader falls back to the global sky IBL path bit-identically.
+// Grass Area (GrassRenderer): a rectangle of procedural grass blades on the plane at this entity's position, SizeX
+// by SizeZ metres along its local X and Z (turns with the entity's yaw; scale is ignored). Nothing is stored per
+// blade: every frame the GPU scatters blades on a jittered grid in the chunks the camera sees, thins them with
+// distance (widening the survivors so the field stays solid), and draws them lit like any surface.
+struct GrassAreaComponent {
+    float SizeX = 20.0f;            // metres along local X
+    float SizeZ = 20.0f;            // metres along local Z
+    float Density = 300.0f;         // blades per square metre up close
+    float Height = 0.45f;           // metres, average blade
+    float HeightVariation = 0.35f;  // +- share of Height, blade to blade
+    float Width = 0.035f;           // metres at the root
+    float Bend = 0.35f;             // natural lean, 0 = upright
+    glm::vec3 BaseColor{0.045f, 0.085f, 0.03f};
+    glm::vec3 TipColor{0.30f, 0.38f, 0.12f};
+    glm::vec3 DryColor{0.34f, 0.30f, 0.16f};
+    float ColorVariation = 0.25f;   // blade-to-blade brightness spread
+    float Patchiness = 0.5f;        // 0 = even lawn; 1 = clumps, bare spots and dry patches
+    float WindStrength = 0.5f;
+    float WindSpeed = 1.0f;
+    float NearDistance = 14.0f;     // full density and curved blades within this
+    float DrawDistance = 60.0f;     // gone beyond this (thinned and shortened toward it)
+    float EdgeFade = 1.5f;          // metres over which the field thins out at its edges
+    int Seed = 1;
+    bool ReceiveShadows = true;
+};
+
 struct ReflectionProbeComponent {
     glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
