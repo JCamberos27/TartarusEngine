@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <optional>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -63,6 +64,9 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     glGetIntegerv(GL_VIEWPORT, prevViewport);
 
     shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
+    // Sub-scopes for the pass's CPU stages (fit + gather, sort + cascade masks, caster draws, grass).
+    std::optional<Profiler::ScopeTimer> stage;
+    stage.emplace("Sun: Fit + Gather");
     // Gather the casters once - registry lookups, world transform, world bounds - and reuse the list for every cascade.
     m_SunCasters.clear();
     // #160 - the cascades' near planes reach every occluder: fitted to a box around everything that can draw
@@ -94,6 +98,8 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
         sc.bounds = AABB{v.WorldMin, v.WorldMax};
     }
     // Consecutive draws of the same model share its VAO and (usually) its material, which the state cache then skips.
+    stage.reset();
+    stage.emplace("Sun: Sort + Masks");
     std::sort(m_SunCasters.begin(), m_SunCasters.end(), [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
 
     glEnable(GL_DEPTH_TEST);
@@ -155,6 +161,8 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
             shadowMap.BeginLayeredScissor(sunKernelTexels, fl.SunShadowNormalBias);
             shadowShader.SetInt(cascadeViewportLoc, 1);
         }
+        stage.reset();
+        stage.emplace("Sun: Draw Casters");
         DrawDepthCasters(shadowShader, m_Draws, firstLoc);
         if (sliceScissor) {
             shadowShader.SetInt(cascadeViewportLoc, 0);
@@ -179,7 +187,9 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     // Grass (GrassRenderer): its blades into the nearest cascades, scattered and culled against each cascade's own
     // box (thinned by distance from the view's eye, as the view sees them), so the field shades itself and the
     // ground under it. Farther out a blade is under a texel and its shadow is only noise.
+    stage.reset();
     {
+        PROFILE_SCOPE("Sun: Grass");
         GrassRenderer& grass = GrassRenderer::Get();
         grass.Gather(world);
         if (grass.HasAreas()) {

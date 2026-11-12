@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <array>
+#include <optional>
 #include "RenderFrameContext.h"
 
 #include "World.h"
@@ -373,6 +374,7 @@ bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, cons
 }
 
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out) {
+    PROFILE_SCOPE("Gather Visible");
     out.clear();
     const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
     const CandidateCache& cache = Candidates(world);
@@ -1246,6 +1248,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                                  it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
     };
     if (depthPrepass) {
+        PROFILE_SCOPE("Scene: Depth Pre-pass");
         PROFILE_GPU_SCOPE("Depth Pre-pass");
         Shader& depth = *in.depthShader;
         depth.Bind();
@@ -1384,6 +1387,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         return true;
     };
     static InstanceGroups opaqueGroups;
+    std::optional<Profiler::ScopeTimer> groupScope(std::in_place, "Scene: Group Instances");
     GroupInstances(
         drawList.size(),
         [&](std::uint32_t i) -> std::uint64_t {
@@ -1402,6 +1406,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                    x.NoSsao == y.NoSsao && x.LayerBit == y.LayerBit && probeKey(a) == probeKey(b) && SameSlots(*x.Slots, *y.Slots);
         },
         opaqueGroups);
+    groupScope.reset();
+    groupScope.emplace("Scene: Build Batches");
     static std::vector<int> groupBase;
     groupBase.assign(opaqueGroups.Groups.size(), -1);
     // GPU-driven draws (InstanceBatch.h): every batchable group of an arena model - a single copy too - goes into the
@@ -1522,7 +1528,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // buffers for it alone, and leaves again before fur, the sky and the transparents.
     const bool velocityOut = ctx.TxHdr && ctx.TxHdr->VelocityEnabled();
     if (velocityOut) ctx.TxHdr->SetVelocityWrites(true);
+    groupScope.reset();
     {
+    PROFILE_SCOPE("Scene: Opaque");
     PROFILE_GPU_SCOPE("Opaque");
     // What the pre-pass laid down draws without writing depth again: the model program can discard (alpha clip, hidden
     // parts), and a program that discards while writing depth loses early depth testing - every hidden layer of a
