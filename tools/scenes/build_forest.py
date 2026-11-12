@@ -38,6 +38,7 @@ import base64
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scene_kit as k  # noqa: E402
+import forest_house as fh  # noqa: E402
 
 HALF = 60.0                        # the playable forest: -HALF..HALF on X and Z
 OUTER = 100.0                      # trees carry on to here, past the bounds, so the forest never ends in view
@@ -243,9 +244,10 @@ class Forest(k.Scene):
 def grass(**kw):
     """A Grass Area of meadow grass, for where the canopy opens (under the cedars the floor is moss and litter, no
     grass). Short, olive and dull, with dry blades through it, so it sits in with the moss and bark."""
-    g = {'Size X': 12.0, 'Size Z': 12.0, 'Density': 300.0, 'Height': 0.34, 'Height Variation': 0.45,
-         'Width': 0.03, 'Bend': 0.5, 'Base Color': [0.026, 0.04, 0.018], 'Tip Color': [0.14, 0.17, 0.07],
-         'Dry Color': [0.2, 0.17, 0.1], 'Color Variation': 0.35, 'Patchiness': 0.55, 'Wind Strength': 0.35,
+    # (#753's tuning: denser, finer olive blades)
+    g = {'Size X': 12.0, 'Size Z': 12.0, 'Density': 480.0, 'Height': 0.36, 'Height Variation': 0.5,
+         'Width': 0.014, 'Bend': 0.4, 'Base Color': [0.022, 0.026, 0.012], 'Tip Color': [0.105, 0.112, 0.05],
+         'Dry Color': [0.17, 0.14, 0.085], 'Color Variation': 0.35, 'Patchiness': 0.55, 'Wind Strength': 0.35,
          'Wind Speed': 0.85, 'Near Distance': 16.0, 'Draw Distance': 60.0, 'Edge Fade': 3.0, 'Seed': 1,
          'Receive Shadows': True, 'Follow Terrain': True}
     g.update(kw)
@@ -330,7 +332,7 @@ def terrain_raw(x, z):
     cx, cz, cr = CLEARING
     clear = 0.15 + 0.85 * smoothstep(cr - 2.0, cr + 9.0, math.hypot(x - cx, z - cz))
     wall = min(abs(abs(x) - HALF) if abs(z) < HALF + 14 else 99.0, abs(abs(z) - HALF) if abs(x) < HALF + 14 else 99.0)
-    return h * clear * smoothstep(0.8, 14.0, wall)
+    return fh.flatten(x, z, h * clear * smoothstep(0.8, 14.0, wall))     # eased flat under the house's lot
 
 
 class Terrain:
@@ -672,7 +674,7 @@ def build(repo):
     counts, dropped = {}, {}
 
     root = s.empty('Forest', -1, (0, 0, 0), static=True)
-    ground = k.from_mat(repo, GROUND, triplanar=True, triplanarScale=0.25)
+    ground = k.from_mat(repo, GROUND, triplanar=True, triplanarScale=0.4, triplanarBreakup=1.0)   # (#753: no tiling)
     H = Terrain()
     H.entity(s, root, ground)
     concrete = k.textured(repo, *CONCRETE, base=WALL_TINT, triplanar_scale=0.6, roughness=0.9)
@@ -706,7 +708,7 @@ def build(repo):
         edge = dc < cr + 6.0
         scale = rng.uniform(0.55, 0.8) if edge else rng.uniform(0.8, 1.25)
         path, yaw = rng.choice(trees), round(rng.uniform(0, 360), 1)
-        if by_wall(x, z, WALL_CLEAR_TREE) or trail_d(x, z) < PATH_TREES:
+        if by_wall(x, z, WALL_CLEAR_TREE) or trail_d(x, z) < PATH_TREES or fh.in_lot(x, z, 2.5):
             continue
         tree_pts.append((x, z, scale))
         mask.crown(x, z, 1.2 * min(max(FOOTPRINTS['crowns'].get(path, 3.0), 2.0), 5.0) * scale)
@@ -1076,6 +1078,7 @@ def build(repo):
             vals[k_] = 0.0
         else:
             vals[k_] *= smoothstep(PATH_BARE[0], PATH_BARE[1], trail_d(wx, wz))
+        vals[k_] = fh.grass_value(wx, wz, vals[k_])     # the house's overgrown lawn
     s.empty('Forest Grass', g, (0.0, 0.0, 0.0), static=True,
             **grass(**{'Size X': GRASS_SPAN, 'Size Z': GRASS_SPAN, 'Seed': 2, 'Edge Fade': 0.0,
                        'Map Res X': mask.n, 'Map Res Z': mask.n, 'Density Map': mask.encode(vals)}))
@@ -1083,12 +1086,66 @@ def build(repo):
 
     counts['wall decals'], counts['wall lamps'] = dress_walls(s, root, repo)
 
-    # The player in the clearing, facing north into the trees
+    counts.update(house(s, root, repo, H))
+
+    # The player in the clearing, facing south across it to the house
+    px, pz = cx + 2.0, cz - 2.0
     for e in s.empties:
         if e['parentId'] == -1 and 'First Person Controller' in e:
-            e['position'] = [cx, round(H(cx, cz + 4.0), 3), cz + 4.0]
-            e['rotation'] = k.euler_quat(0.0)
+            e['position'] = [px, round(H(px, pz), 3), pz]
+            e['rotation'] = k.euler_quat(180.0)
     return s, counts
+
+
+# The forest groups cleared out of the house's lot (their pieces stay where they are everywhere else, so the rest of
+# the forest doesn't move); the yard gets its own planting.
+LOT_PRUNE = {'Ground Scans': 0.5, 'Mounds': 2.0, 'Logs': 1.5, 'Rocks': 1.0, 'Stumps': 1.0, 'Deadfall': 1.5,
+             'Moss Mats': 0.0, 'Ground Cover': 0.0, 'Ferns': 0.5, 'Flowers': 0.0, 'Wild Grass': 0.0, 'Bushes': 1.5,
+             'Debris': 0.0, 'Mushrooms': 0.0, 'Wood Fungi': 0.5}
+
+
+def prune_lot(s, root):
+    ents = {e['id']: e for e in s.empties + s.models + s.boxes}
+    kids = {}
+    for e in ents.values():
+        kids.setdefault(e['parentId'], []).append(e['id'])
+    gone = set()
+
+    def sub(i):
+        out = [i]
+        for c in kids.get(i, []):
+            out += sub(c)
+        return out
+    for gid in kids.get(root, []):
+        pad = LOT_PRUNE.get(ents[gid]['name'])
+        if pad is None:
+            continue
+        for item in kids.get(gid, []):
+            x, _, z = ents[item]['position']
+            pts = [(x, z)] + [(x + ents[c]['position'][0], z + ents[c]['position'][2]) for c in kids.get(item, [])]
+            if any(fh.in_lot(px, pz, pad) for px, pz in pts):
+                gone.update(sub(item))
+    for key in ('empties', 'models', 'boxes'):
+        setattr(s, key, [e for e in getattr(s, key) if e['id'] not in gone])
+    return len(gone)
+
+
+def house(s, root, repo, H):
+    """The abandoned house and its yard (forest_house.py), on the lot cleared for it."""
+    notes = {'pruned from the lot': prune_lot(s, root)}
+    here = os.path.dirname(os.path.abspath(__file__))
+    pk, lay, broken, rng = fh.add_house(s, root, repo, os.path.join(here, 'forest_house_pack.json'), notes)
+    litter = GROUND_COVER[9:11] + DEBRIS[7:12]
+    fh.dress_inside(s, lay, pk, rng, broken, litter, notes)
+    fh.board_up(s, lay, repo, pk, broken, rng, notes)
+    fh.grime(s, lay, pk, rng, notes)
+    fh.lights(s, lay, pk, repo, notes)
+    fh.porch_light(s, lay, notes)
+    fh.reflection_probes(s, root)
+    fh.add_yard(s, root, repo, H, {'yard': FERN_SPECIES[0] + FERN_SPECIES[1] + GROUND_COVER[3:9] + WILD_GRASS + FLOWERS,
+                                   'litter': GROUND_COVER[9:11] + DEBRIS, 'saplings': TREES, 'tree_lod': LODS['tree']},
+                notes)
+    return notes
 
 
 def write_meta(path):
