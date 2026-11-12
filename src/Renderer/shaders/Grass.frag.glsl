@@ -61,7 +61,9 @@ void main() {
     for (uint i = 0u; i < uDirectionalCount; ++i) {
         if (!LightAffects(i)) continue;
         vec3 L = normalize(-uLights[i].DirCutoff.xyz);
-        float shadow = uLights[i].Params.y >= 0.0 ? (receive ? SunShadow(vWorldPos, N, L) : 1.0) * CloudShadow(vWorldPos) : 1.0;
+        // Looked up as if on the ground under the blade (an upward normal): a blade's own tilted, swaying normal
+        // pushed the lookup around and broke its shadow into acne and crawling speckles.
+        float shadow = uLights[i].Params.y >= 0.0 ? (receive ? SunShadow(vWorldPos, vec3(0.0, 1.0, 0.0), L) : 1.0) * CloudShadow(vWorldPos) : 1.0;
         Lo += GrassLight(albedo, N, V, L, uLights[i].ColorRange.rgb * shadow, occl);
     }
     bool clustered = uClusterEnabled == 1;
@@ -77,11 +79,10 @@ void main() {
         Lo += GrassLight(albedo, N, V, L, radiance, occl);
     }
 
-    float ssao = uSSAOEnabled == 1
-        ? pow(texture(uSSAOMap, gl_FragCoord.xy / uScreenSize).r, uSSAOIntensity > 0.0 ? uSSAOIntensity : 1.0)
-        : 1.0;
+    // No SSAO: the blades aren't in its depth (SceneRenderer draws them in after its copy); the root darkening
+    // (occl) is their occlusion.
     vec3 irradiance = uIBLEnabled == 1 ? texture(uIrradianceMap, N).rgb * uIBLIntensity : vec3(0.03);
-    vec3 ambient = irradiance * albedo * occl * ssao;
+    vec3 ambient = irradiance * albedo * occl;
     vec3 color = ApplyVolumetricFog(ApplyAerialPerspective(ApplyFog(Lo + ambient)));
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0));

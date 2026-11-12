@@ -16,9 +16,10 @@ struct GrassAreaComponent;
 // and distance thinning allow and its bounds are on screen. Kept blades go to one of two instance lists - near:
 // curved blades of kNearSegments segments; far: a single tapered triangle - and the pass writes both lists' counts
 // into two DrawArraysIndirect commands, so the CPU never reads anything back.
-// The same program (Grass.vert / .frag.glsl) draws the blades into the depth pre-pass (depth only) and again lit
-// under LEQUAL, so the lit pass shades each pixel once, SSAO and Hi-Z see the grass, and TAA gets motion vectors
-// for the wind. The blades cast no shadows. TARTARUS_NO_GRASS=1 turns it off for a run (A/B measurements).
+// The same program (Grass.vert / .frag.glsl) draws the blades into the view's depth (after SSAO has copied the
+// pre-pass, so the blades leave no occlusion halos) and again lit under LEQUAL, so the lit pass shades each pixel
+// once, and TAA gets motion vectors for the wind.
+// The blades cast no shadows. TARTARUS_NO_GRASS=1 turns it off for a run (A/B measurements).
 class GrassRenderer {
 public:
     static GrassRenderer& Get();
@@ -87,7 +88,7 @@ private:
     std::unique_ptr<Shader> m_Draw;
     std::unique_ptr<Shader> m_Cull;
     std::unique_ptr<Shader> m_Clamp;
-    unsigned m_AreaBuf = 0, m_ChunkBuf = 0, m_BladeBuf = 0, m_CmdBuf = 0;
+    unsigned m_Vao = 0, m_AreaBuf = 0, m_ChunkBuf = 0, m_BladeBuf = 0, m_CmdBuf = 0;
     std::vector<AreaDesc> m_Areas;
     std::vector<ChunkGpu> m_Chunks;
     std::uint64_t m_GatheredFrame = ~0ull;

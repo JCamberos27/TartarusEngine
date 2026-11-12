@@ -1262,17 +1262,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         for (const DrawItem& it : drawList)
             if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         DrawDepthCasters(depth, prepass);
-        // The grass into the pre-pass too, under the same offset: SSAO and Hi-Z see it, and the lit pass shades each
-        // of its pixels once.
-        if (grassOn) {
-            grassCulled = grass.Cull(ctx.View, ctx.Proj, ctx.ViewPos);
-            if (grassCulled) {
-                grass.DrawDepth(ctx.View, ctx.Proj);
-                grassInPrepass = true;
-                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-                depth.Bind();
-            }
-        }
         glPolygonOffset(0.0f, 0.0f);
         glDisable(GL_POLYGON_OFFSET_FILL);
 
@@ -1306,6 +1295,22 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             glCullFace(GL_BACK);
             glDisable(GL_BLEND);
             ApplyFrameState(modelShader, fs); // the occlusion passes used texture units 0 and 1
+        }
+        // The grass into the view's depth after SSAO has taken its copy: the lit pass then shades each grass pixel
+        // once, but SSAO and Hi-Z never see the blades - thin, swaying, half-transparent to the eye, they only left
+        // dark noisy halos in the occlusion and hid nothing worth culling.
+        if (grassOn) {
+            grassCulled = grass.Cull(ctx.View, ctx.Proj, ctx.ViewPos);
+            if (grassCulled) {
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(kPrepassSlopeOffset, 4.0f);
+                grass.DrawDepth(ctx.View, ctx.Proj);
+                glPolygonOffset(0.0f, 0.0f);
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                grassInPrepass = true;
+                depth.Bind();
+            }
         }
         depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);

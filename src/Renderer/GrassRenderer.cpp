@@ -174,6 +174,7 @@ void GrassRenderer::EnsurePrograms() {
 
 void GrassRenderer::EnsureBuffers() {
     if (m_CmdBuf) return;
+    glGenVertexArrays(1, &m_Vao); // core GL draws nothing without one bound; the blades read no attributes
     glCreateBuffers(1, &m_AreaBuf);
     glCreateBuffers(1, &m_ChunkBuf);
     glCreateBuffers(1, &m_BladeBuf);
@@ -234,6 +235,7 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     prog.SetVec2("uWindDir", Material::WindDirection());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kAreaBinding, m_AreaBuf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBladeBinding, m_BladeBuf);
+    glBindVertexArray(m_Vao);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_CmdBuf);
     glDisable(GL_CULL_FACE); // blades are seen from both sides
     prog.SetInt("uInstanceBase", 0);
@@ -243,6 +245,7 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     prog.SetInt("uSegments", 1);
     glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)(4 * sizeof(std::uint32_t)));
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindVertexArray(0);
     glEnable(GL_CULL_FACE);
     GLStateCache::Invalidate();
 }
