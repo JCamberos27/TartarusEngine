@@ -907140,15 +907140,15 @@
   "ssaoRadius": 0.44999998807907104,
   "tonemapOperator": 1,
   "volAlbedo": [
-    0.8999999761581421,
-    0.8999999761581421,
-    0.8999999761581421
+    0.8,
+    0.8,
+    0.8
   ],
-  "volAnisotropy": 0.6000000238418579,
-  "volBaseHeight": 0.0,
-  "volDensity": 0.014,
+  "volAnisotropy": 0.25,
+  "volBaseHeight": -0.8,
+  "volDensity": 0.07,
   "volDistance": 64.0,
-  "volHeightFalloff": 0.0,
+  "volHeightFalloff": 0.8,
   "volQuality": 1,
   "volumetricEnabled": true
 }
