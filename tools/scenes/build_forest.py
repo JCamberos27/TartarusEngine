@@ -40,6 +40,8 @@ import scene_kit as k  # noqa: E402
 
 HALF = 60.0                        # the playable forest: -HALF..HALF on X and Z
 OUTER = 100.0                      # trees carry on to here, past the bounds, so the forest never ends in view
+MIST_DENSITY, MIST_BASE, MIST_FALLOFF = 0.07, -0.8, 0.8    # the ground mist (volumetric fog), see build()
+MIST_ANISOTROPY, MIST_ALBEDO = 0.25, [0.8, 0.8, 0.8]
 CLEARING = (0.0, 6.0, 8.5)         # centre x, z and radius of the clearing the player starts in
 SEEDMESH = 'assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/'
 VEG, GO = SEEDMESH + 'Vegetation/', SEEDMESH + 'Ground_objects/Prefabs/'
@@ -484,12 +486,16 @@ def build(repo):
     d['sky'].update({'seaLevel': 0.0, 'clouds': True, 'cloudCoverage': 0.3, 'cloudType': 0.35, 'cloudQuality': 0,
                      'cloudShadows': False, 'cloudWindSpeed': 4.0, 'moonBrightness': 0.0328, 'nightBrightness': 4.4,
                      'skyIntensity': 0.4})
-    # Volumetric fog for the depth between the trunks, not the distance fog (outdoors only - the rule is no fog
-    # indoors). The distance fog's settings stay for when it's switched back on. The shadows' fill is the night sky
-    # x skyIntensity x skyAmbientIntensity: dark, but never black.
+    # Volumetric fog as a low ground mist (outdoors only - the rule is no fog indoors): densest in the terrain's
+    # hollows (full below MIST_BASE), thinning by MIST_FALLOFF per metre above it, so it hangs among the trunks and
+    # leaves the canopy and the sky clear. Low anisotropy: little forward scattering, so looking toward the moon it
+    # doesn't wash out milky. The distance fog's settings stay for when it's switched back on. The shadows' fill is
+    # the night sky x skyIntensity x skyAmbientIntensity: dark, but never black.
     d.update({'shadowDistance': 45.0, 'maxSpotShadows': 8, 'fogEnabled': False, 'fogMode': 3, 'fogDensity': 0.02,
               'fogColor': [0.03, 0.038, 0.052], 'fogHeightFalloff': 0.06, 'fogBaseHeight': 0.0,
-              'volumetricEnabled': True, 'volDensity': 0.014, 'skyAmbientIntensity': 1.5})
+              'volumetricEnabled': True, 'volDensity': MIST_DENSITY, 'volBaseHeight': MIST_BASE,
+              'volHeightFalloff': MIST_FALLOFF, 'volAnisotropy': MIST_ANISOTROPY, 'volAlbedo': MIST_ALBEDO,
+              'skyAmbientIntensity': 1.5})
     rng = random.Random(11)
     cx, cz, cr = CLEARING
     counts, dropped = {}, {}
