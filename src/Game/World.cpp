@@ -286,7 +286,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     // caller redoes everything in full. The records are dense, in the view's order, so the steady pass over 40k
     // groups reads them front to back.
     // LodSmooth cross-fades (see LodFadeOf): the fade value of every renderer under `root`.
-    const double now = LodSmooth ? Time::RealtimeSinceStartup() : 0.0;
+    const double now = !LodSmooth ? 0.0 : LodClockOverride >= 0.0 ? LodClockOverride : Time::RealtimeSinceStartup();
     auto setFade = [&](entt::entity root, float v) {
         stack.assign(1, root);
         while (!stack.empty()) {
@@ -323,7 +323,12 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         st.Active = (std::int8_t)active; // first: the retag below reads this group's own record for nested ones
         if (nested) return;
         const int levels = st.Levels;
-        const bool fade = LodSmooth && was >= 0 && was < levels && was != active;
+        // Fade only a group that had settled: one that changed level within the last fade window is flipping between
+        // views that disagree (the Scene and Game views each apply their own levels every frame), and a fade begun on
+        // every flip never finished - its leaves stayed dithered for as long as both views were up. Those switch at once.
+        const bool settled = now - st.LastChange >= kLodFadeSeconds;
+        if (LodSmooth) st.LastChange = now;
+        const bool fade = LodSmooth && settled && was >= 0 && was < levels && was != active;
         for (int i = 0; i < levels; ++i) {
             const bool wasTagged = was >= -1 && i != was;
             const bool nowTagged = active >= -1 && i != active && !(fade && i == was);
