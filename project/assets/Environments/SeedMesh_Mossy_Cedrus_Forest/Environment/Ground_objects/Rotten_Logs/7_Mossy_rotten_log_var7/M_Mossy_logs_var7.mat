@@ -31,7 +31,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/7_Mossy_rotten_log_var7/Mossy_logs_var7_normal.png",
     "_ReflectionProbes": true,
-    "_Roughness": 1.0,
+    "_Roughness": 0.72,
     "_RoughnessMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/7_Mossy_rotten_log_var7/Mossy_logs_var7_Mask_Roughness100_0.png",
     "_Triplanar": false,
     "_TriplanarScale": 1.0

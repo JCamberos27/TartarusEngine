@@ -32,7 +32,7 @@
     "_NormalMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/5_Rotten_log_var5/Rotten_log_var5_normal.png",
     "_NormalStrength": 1.5,
     "_ReflectionProbes": true,
-    "_Roughness": 1.0,
+    "_Roughness": 0.85,
     "_RoughnessMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/5_Rotten_log_var5/Rotten_log_var5_Mask_Roughness100_0.png",
     "_Triplanar": false,
     "_TriplanarScale": 1.0

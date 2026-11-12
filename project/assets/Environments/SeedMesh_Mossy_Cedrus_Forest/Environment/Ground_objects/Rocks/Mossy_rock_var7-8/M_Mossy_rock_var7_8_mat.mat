@@ -31,7 +31,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_rock_var7-8/Mossy_rock_var7-8_normal.png",
     "_ReflectionProbes": true,
-    "_Roughness": 1.0,
+    "_Roughness": 0.72,
     "_RoughnessMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_rock_var7-8/Mossy_rock_var7-8_Mask_Roughness100_0.png",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
