@@ -16,15 +16,16 @@ constexpr std::size_t kCapacity = 128ull << 20;          // pinned, write-combin
 constexpr std::size_t kLargest = kCapacity / 4 * 3;       // a 4K RGBA8 map (64 MiB) still fits
 constexpr std::size_t kAlign = 256;
 
+// A retired region is reused kSafeFrames presented frames after the frame it was retired in, like InstanceBuffer's
+// ring: SwapBuffers never lets the CPU run more than a few frames ahead of the GPU, so by then the copy out of it is
+// long done - no fence, no fence query (each one waited for NVIDIA's driver thread: a 10-15 ms hitch whenever the
+// ring filled during Play's wardrobe warm-up).
+constexpr std::uint64_t kSafeFrames = 16;
+
 struct Live {
     std::size_t Offset, End;
-    std::uint64_t Batch = 0; // the fence batch it was retired in
+    std::uint64_t Frame = 0; // the frame it was retired in
     bool Retired = false;
-};
-
-struct BatchFence {
-    std::uint64_t Batch;
-    GLsync Sync;
 };
 
 struct Ring {
@@ -32,11 +33,8 @@ struct Ring {
     unsigned char* Base = nullptr;
     bool Failed = false;
     std::size_t Head = 0;
-    std::deque<Live> Spans;
-    std::deque<BatchFence> Fences; // oldest first
-    std::uint64_t OpenBatch = 1;   // regions retired now join this batch; Fence() closes it
-    std::uint64_t PassedBatch = 0; // every batch up to this one is known done on the GPU
-    bool OpenUsed = false;
+    std::deque<Live> Spans;  // oldest first
+    std::uint64_t Frame = 0; // frames ended (EndFrame)
 };
 Ring& R() {
     static Ring* r = new Ring(); // never destroyed: the GL context is gone by the time statics are
@@ -114,33 +112,29 @@ bool Enabled() {
     return !EnvOff() && ProjectSettings::Quality().AsyncUploads && !R().Failed;
 }
 
-void Fence() {
-    Ring& r = R();
-    if (!r.OpenUsed) return;
-    r.Fences.push_back({r.OpenBatch, glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0)});
-    ++r.OpenBatch;
-    r.OpenUsed = false;
-}
-
-void Poll() {
-    Fence();
+// Pops the oldest spans while they are retired and old enough (or every retired one when `all`, after waiting for the GPU).
+void Recycle(bool all) {
     Ring& r = R();
     while (!r.Spans.empty()) {
-        Live& s = r.Spans.front();
-        if (!s.Retired) break;
-        // One query per fence, not per region: a batch's regions all pass together.
-        while (s.Batch > r.PassedBatch && !r.Fences.empty()) {
-            BatchFence& f = r.Fences.front();
-            const GLenum st = glClientWaitSync(f.Sync, 0, 0);
-            if (st != GL_ALREADY_SIGNALED && st != GL_CONDITION_SATISFIED) break;
-            glDeleteSync(f.Sync);
-            r.PassedBatch = f.Batch;
-            r.Fences.pop_front();
-        }
-        if (s.Batch > r.PassedBatch) break;
+        const Live& s = r.Spans.front();
+        if (!s.Retired || (!all && r.Frame - s.Frame <= kSafeFrames)) break;
         r.Spans.pop_front();
     }
     if (r.Spans.empty()) r.Head = 0;
+}
+
+void EndFrame() {
+    ++R().Frame;
+    Recycle(false);
+}
+
+void Finish() {
+    Ring& r = R();
+    if (!r.Base || r.Spans.empty() || !r.Spans.front().Retired) return;
+    GLsync done = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    glClientWaitSync(done, GL_SYNC_FLUSH_COMMANDS_BIT, 5'000'000'000ull);
+    glDeleteSync(done);
+    Recycle(true);
 }
 
 bool Stageable(std::size_t size) {
@@ -155,11 +149,7 @@ Region Reserve(std::size_t size) {
         const std::size_t tail = r.Spans.empty() ? 0 : r.Spans.front().Offset;
         return RingFit(kCapacity, r.Head, tail, r.Spans.empty(), size);
     };
-    std::size_t at = fit();
-    if (at == ~std::size_t(0)) { // full: recycle what the GPU is done with (a driver round trip), then try again
-        Poll();
-        at = fit();
-    }
+    const std::size_t at = fit(); // full: the caller waits a frame for old spans to age out
     if (at == ~std::size_t(0)) return out;
     r.Spans.push_back({at, at + size});
     r.Head = at + size;
@@ -187,9 +177,8 @@ void Retire(Region& reg) {
     Ring& r = R();
     for (Live& s : r.Spans)
         if (s.Offset == reg.Offset && !s.Retired) {
-            s.Batch = r.OpenBatch;
+            s.Frame = r.Frame;
             s.Retired = true;
-            r.OpenUsed = true;
             break;
         }
     reg = Region{};

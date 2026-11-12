@@ -2320,10 +2320,9 @@ int Application::RunSession() {
                 window.SwapBuffers();
             }
             {
-                // The staging ring's fence and fence check, where the driver has just taken the frame: mid-frame each
-                // one waited for NVIDIA's driver thread to catch up (several ms while uploads streamed).
+                // The upload rings recycle by frame age (no fences: each one waited for NVIDIA's driver thread).
                 PROFILE_SCOPE("Upload Fences");
-                UploadStaging::Fence();
+                UploadStaging::EndFrame();
                 InstanceBuffer::EndFrame();
             }
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
