@@ -1,0 +1,182 @@
+{
+ "crowns": {
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var1.prefab": 5.26,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var10.prefab": 2.55,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var11.prefab": 1.78,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var12.prefab": 4.87,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var13.prefab": 6.06,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var15.prefab": 2.76,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var2.prefab": 2.33,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var3.prefab": 4.35,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var4.prefab": 4.19,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var5.prefab": 3.4,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var6.prefab": 5.4,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var7.prefab": 2.66,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var8.prefab": 1.31,
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Prefabs/Cedrus_tree_var9.prefab": 0.42
+ },
+ "solids": {
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Cedrus_stump_1.prefab": [
+   -0.23,
+   0.19,
+   -0.2,
+   0.2
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Large_RottenCedrus_log_1 Variant.prefab": [
+   -0.22,
+   0.14,
+   -1.32,
+   1.35
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_Rock_var3.prefab": [
+   -0.89,
+   0.88,
+   -0.96,
+   1.07
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_Rock_var4.prefab": [
+   -1.35,
+   1.22,
+   -0.67,
+   0.68
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_Rotten_log_var1.prefab": [
+   -1.33,
+   1.43,
+   -0.58,
+   0.88
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_Rotten_log_var2.prefab": [
+   -1.69,
+   1.66,
+   -0.55,
+   0.52
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_log_var10.prefab": [
+   -1.21,
+   1.28,
+   -0.12,
+   0.32
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_log_var11.prefab": [
+   -1.15,
+   1.28,
+   -0.11,
+   0.11
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_log_var9.prefab": [
+   -1.11,
+   1.17,
+   -0.14,
+   0.15
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rock_var1.prefab": [
+   -0.72,
+   0.76,
+   -0.62,
+   0.8
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rock_var2.prefab": [
+   -0.46,
+   0.33,
+   -0.42,
+   0.45
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rock_var5.prefab": [
+   -0.21,
+   0.23,
+   -0.18,
+   0.22
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rock_var6.prefab": [
+   -0.2,
+   0.17,
+   -0.17,
+   0.14
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rock_var7.prefab": [
+   -0.2,
+   0.2,
+   -0.17,
+   0.16
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rock_var8.prefab": [
+   -0.36,
+   0.35,
+   -0.27,
+   0.3
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rotten_log_var3.prefab": [
+   -1.33,
+   1.38,
+   -0.14,
+   0.1
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rotten_log_var4.prefab": [
+   -1.02,
+   0.99,
+   -0.15,
+   0.17
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rotten_log_var7.prefab": [
+   -2.07,
+   2.02,
+   -0.77,
+   0.63
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Mossy_rotten_log_var8.prefab": [
+   -3.89,
+   3.87,
+   -0.65,
+   0.64
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Rotten_log_var12.prefab": [
+   -0.91,
+   0.85,
+   -0.23,
+   0.22
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Rotten_log_var5.prefab": [
+   -1.58,
+   1.26,
+   -0.3,
+   0.56
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Rotten_log_var6.prefab": [
+   -1.31,
+   1.42,
+   -0.08,
+   0.2
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Tree_stump_var2.prefab": [
+   -0.44,
+   0.49,
+   -0.46,
+   0.55
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Tree_stump_var3.prefab": [
+   -0.8,
+   0.87,
+   -0.8,
+   0.76
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Tree_stump_var4.prefab": [
+   -0.46,
+   0.42,
+   -0.39,
+   0.47
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Tree_stump_var5.prefab": [
+   -0.72,
+   0.87,
+   -0.65,
+   0.73
+  ],
+  "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Prefabs/Volcanic_Mossy_Rocks.prefab": [
+   -0.99,
+   0.86,
+   -0.78,
+   0.82
+  ]
+ }
+}

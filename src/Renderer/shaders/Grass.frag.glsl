@@ -15,7 +15,7 @@ layout(location = 1) out vec2 oVelocity;
 
 #include "ModelShading.glsl"
 
-struct GrassArea { vec4 Origin; vec4 Axes; vec4 Size; vec4 Shape; vec4 Base; vec4 Tip; vec4 Dry; vec4 Lod; vec4 Wind; };
+struct GrassArea { vec4 Origin; vec4 Axes; vec4 Size; vec4 Shape; vec4 Base; vec4 Tip; vec4 Dry; vec4 Lod; vec4 Wind; vec4 Map; };
 layout(std430, binding = 30) readonly buffer GrassAreas { GrassArea uAreas[]; };
 uniform int uDepthOnly;
 

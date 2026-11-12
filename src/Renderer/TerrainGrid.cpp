@@ -1,54 +1,10 @@
 #include "TerrainGrid.h"
 #include "ModelVertex.h"
+#include "GrassDensityMap.h" // Base64
 
 #include <algorithm>
 #include <cmath>
 
-namespace {
-const char kB64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-int B64Value(char c) {
-    if (c >= 'A' && c <= 'Z') return c - 'A';
-    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
-    if (c >= '0' && c <= '9') return c - '0' + 52;
-    if (c == '+') return 62;
-    if (c == '/') return 63;
-    return -1;
-}
-
-bool B64Decode(const std::string& in, std::vector<std::uint8_t>& out) {
-    out.clear();
-    out.reserve(in.size() * 3 / 4);
-    unsigned acc = 0;
-    int bits = 0;
-    for (char c : in) {
-        if (c == '=' || c == '\n' || c == '\r' || c == ' ') continue;
-        const int v = B64Value(c);
-        if (v < 0) return false;
-        acc = (acc << 6) | (unsigned)v;
-        bits += 6;
-        if (bits >= 8) {
-            bits -= 8;
-            out.push_back((std::uint8_t)((acc >> bits) & 0xFFu));
-        }
-    }
-    return true;
-}
-
-std::string B64Encode(const std::vector<std::uint8_t>& in) {
-    std::string out;
-    out.reserve((in.size() + 2) / 3 * 4);
-    for (size_t i = 0; i < in.size(); i += 3) {
-        const unsigned b0 = in[i], b1 = i + 1 < in.size() ? in[i + 1] : 0u, b2 = i + 2 < in.size() ? in[i + 2] : 0u;
-        const unsigned v = (b0 << 16) | (b1 << 8) | b2;
-        out += kB64[(v >> 18) & 63];
-        out += kB64[(v >> 12) & 63];
-        out += i + 1 < in.size() ? kB64[(v >> 6) & 63] : '=';
-        out += i + 2 < in.size() ? kB64[v & 63] : '=';
-    }
-    return out;
-}
-} // namespace
 
 namespace {
 // The cell and in-cell fractions of a local point, clamped to the grid.
@@ -135,7 +91,7 @@ bool TerrainGrid::Decode(int resX, int resZ, float sizeX, float sizeZ, float hei
     out = TerrainGrid{};
     if (resX < 2 || resZ < 2 || !(sizeX > 0.0f) || !(sizeZ > 0.0f) || resX > 4097 || resZ > 4097) return false;
     std::vector<std::uint8_t> bytes;
-    if (!B64Decode(base64, bytes) || bytes.size() != (size_t)resX * (size_t)resZ * 2) return false;
+    if (!Base64::Decode(base64, bytes) || bytes.size() != (size_t)resX * (size_t)resZ * 2) return false;
     out.ResX = resX;
     out.ResZ = resZ;
     out.SizeX = sizeX;
@@ -164,5 +120,5 @@ std::string TerrainGrid::Encode(const std::vector<float>& heights, float heightM
         bytes.push_back((std::uint8_t)(q & 0xFFu));
         bytes.push_back((std::uint8_t)(q >> 8));
     }
-    return B64Encode(bytes);
+    return Base64::Encode(bytes);
 }

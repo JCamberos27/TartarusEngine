@@ -1,7 +1,8 @@
 # The Forest: a dense stand of mossy cedars at night, the project's main scene to build out from. Layers, from the
 # ground up:
-#   - a floor of soil and needles, and Grass Areas (GrassRenderer: procedural, GPU-scattered blades) only where the
-#     canopy opens: the clearing where the player starts and the glades;
+#   - a floor of soil and needles, and one forest-wide Grass Area (GrassRenderer: procedural, GPU-scattered blades)
+#     whose density mask follows the canopy - full in the clearing and the glades, thin under the crowns - and is
+#     cut out round every log, rock, stump and trunk;
 #   - a gently rolling terrain (a Terrain component: +-1-2 m of smooth noise, flatter in the clearing and down to
 #     y = 0 along the boundary wall), everything below seated on it - ground-hugging pieces tipped to its slope,
 #     trees and plants upright, sunk to its lowest point under their foot;
@@ -316,6 +317,97 @@ class Terrain:
         return e
 
 
+# Footprints measured by the engine (--scene-bounds on the pack's prefab folders): each solid piece's local XZ box
+# (min x, max x, min z, max z) and each cedar's crown radius. Regenerate with the engine if the pack changes.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'forest_footprints.json'), encoding='utf-8') as _f:
+    FOOTPRINTS = json.load(_f)
+
+GRASS_SPAN = 2 * (60.0 + 4.0)       # the forest-wide Grass Area: the playable square and a strip past it
+GRASS_CELL = 0.32                    # density mask sample spacing (metres)
+GRASS_SHADE = (0.3, 1.2)             # canopy shade (summed crown falloffs) at which the grass starts thinning / is gone
+GRASS_UNDER = 0.0                    # what's left under the thickest canopy (moss and litter there, no grass)
+TRUNK_CLEAR = 0.5                    # metres x tree scale kept bare round a trunk
+SOLID_PAD, SOLID_FADE = 0.08, 0.25   # bare margin round a log / rock / stump, then the blades ramp back in
+
+
+class GrassMask:
+    """The forest-wide Grass Area's density mask: canopy shade from the cedars' crowns, with the solid pieces' oriented
+    footprints and the trunks cut out. Sample (0, 0) at (-GRASS_SPAN / 2, -GRASS_SPAN / 2), GrassDensityMap.h."""
+    def __init__(self):
+        self.n = int(round(GRASS_SPAN / GRASS_CELL)) + 1
+        self.step = GRASS_SPAN / (self.n - 1)
+        self.shade = [0.0] * (self.n * self.n)
+        self.cut = [1.0] * (self.n * self.n)
+
+    def _box(self, x0, z0, x1, z1):
+        """The sample index ranges covering a world rectangle."""
+        lo = lambda v: max(0, int(math.floor((v + GRASS_SPAN / 2) / self.step)))  # noqa: E731
+        hi = lambda v: min(self.n - 1, int(math.ceil((v + GRASS_SPAN / 2) / self.step)))  # noqa: E731
+        return range(lo(z0), hi(z1) + 1), range(lo(x0), hi(x1) + 1)
+
+    def crown(self, x, z, r):
+        """A cedar's shade: a Gaussian falloff over its crown radius."""
+        rows, cols = self._box(x - 2.5 * r, z - 2.5 * r, x + 2.5 * r, z + 2.5 * r)
+        k = 1.0 / (r * r)
+        for j in rows:
+            wz = -GRASS_SPAN / 2 + j * self.step
+            for i in cols:
+                wx = -GRASS_SPAN / 2 + i * self.step
+                d2 = (wx - x) ** 2 + (wz - z) ** 2
+                self.shade[j * self.n + i] += math.exp(-d2 * k)
+
+    def circle(self, x, z, r, fade=SOLID_FADE):
+        rows, cols = self._box(x - r - fade, z - r - fade, x + r + fade, z + r + fade)
+        for j in rows:
+            wz = -GRASS_SPAN / 2 + j * self.step
+            for i in cols:
+                wx = -GRASS_SPAN / 2 + i * self.step
+                d = math.hypot(wx - x, wz - z) - r
+                v = min(max(d / fade, 0.0), 1.0)
+                c = j * self.n + i
+                self.cut[c] = min(self.cut[c], v)
+
+    def footprint(self, x, z, yaw, sc, box, pad=SOLID_PAD, fade=SOLID_FADE):
+        """A piece's local XZ box (scaled, turned by yaw like Forest.stamp) cut out, with a soft edge."""
+        if isinstance(sc, (int, float)):
+            sx = sz = sc
+        else:
+            sx, sz = sc[0], sc[2]
+        a = math.radians(yaw)
+        ca, sa = math.cos(a), math.sin(a)
+        x0, x1, z0, z1 = box[0] * sx - pad, box[1] * sx + pad, box[2] * sz - pad, box[3] * sz + pad
+        reach = max(abs(x0), abs(x1), abs(z0), abs(z1)) * 1.42 + fade
+        rows, cols = self._box(x - reach, z - reach, x + reach, z + reach)
+        for j in rows:
+            wz = -GRASS_SPAN / 2 + j * self.step - z
+            for i in cols:
+                wx = -GRASS_SPAN / 2 + i * self.step - x
+                lx, lz = wx * ca - wz * sa, wx * sa + wz * ca      # world -> the piece's local axes
+                dx = max(x0 - lx, lx - x1, 0.0)
+                dz = max(z0 - lz, lz - z1, 0.0)
+                v = min(math.hypot(dx, dz) / fade, 1.0)
+                c = j * self.n + i
+                self.cut[c] = min(self.cut[c], v)
+
+    def values(self, full):
+        """Per sample, 0..1: the canopy's thinning (full(x, z) forces 1, e.g. the clearing) times the cut-outs."""
+        lo, hi = GRASS_SHADE
+        out = []
+        for j in range(self.n):
+            wz = -GRASS_SPAN / 2 + j * self.step
+            for i in range(self.n):
+                wx = -GRASS_SPAN / 2 + i * self.step
+                c = j * self.n + i
+                t = min(max((self.shade[c] - lo) / (hi - lo), 0.0), 1.0)
+                t = t * t * (3 - 2 * t)
+                dens = 1.0 if full(wx, wz) else 1.0 - (1.0 - GRASS_UNDER) * t
+                out.append(dens * self.cut[c])
+        return out
+
+    def encode(self, values):
+        return base64.b64encode(bytes(int(round(min(max(v, 0.0), 1.0) * 255)) for v in values)).decode('ascii')
+
+
 def quat_mul(a, b):
     ax, ay, az, aw = a
     bx, by, bz, bw = b
@@ -511,9 +603,7 @@ def build(repo):
         s.box(f'Concrete Wall {side}', root, c, size, concrete, static=True)
 
     g = s.empty('Grass', root, (0, 0, 0), static=True)
-    # Grass only where the canopy opens and lets the light in: the clearing, and the glades (after the trees).
-    s.empty('Clearing Grass', g, (cx, 0.002, cz), static=True,
-            **grass(**{'Size X': 2 * cr, 'Size Z': 2 * cr, 'Seed': 2, 'Patchiness': 0.35}))
+    mask = GrassMask()      # filled as the trees and the solid pieces go down; the area is added at the end
 
     # --- cedars: clumps and glades. Spacing runs 3.2 m in a clump to 9 m in a glade, from a noise field; the
     # clearing stays open, with a softer edge of saplings-size trees round it.
@@ -540,6 +630,8 @@ def build(repo):
         if by_wall(x, z, WALL_CLEAR_TREE):
             continue
         tree_pts.append((x, z, scale))
+        mask.crown(x, z, 1.2 * min(max(FOOTPRINTS['crowns'].get(path, 3.0), 2.0), 5.0) * scale)
+        mask.circle(x, z, TRUNK_CLEAR * scale)
         # Storm damage: now and then a tree leans, its foot sunk so the lean reads as roots giving way.
         lean = lean_rng.random() < 0.035 and not edge
         tilt = (round(lean_rng.uniform(6.0, 15.0), 1), round(lean_rng.uniform(-4.0, 4.0), 1)) if lean else (0.0, 0.0)
@@ -553,19 +645,6 @@ def build(repo):
             covered += 1
     counts['cedars'], counts['tree covers'], counts['leaning'] = len(tree_pts), covered, leaning
 
-    # Glade grass: a 10 m cell with few trunks within 7 m of its middle gets a meadow patch (12 m, so neighbours
-    # overlap and the soft edges hide the grid).
-    glades = 0
-    for i in range(-6, 6):
-        for j in range(-6, 6):
-            x, z = (i + 0.5) * 10.0, (j + 0.5) * 10.0
-            near = sum(1 for tx, tz, _ in tree_pts if (tx - x) ** 2 + (tz - z) ** 2 < 49.0)
-            if near > 1 or math.hypot(x - cx, z - cz) < cr:
-                continue
-            glades += 1
-            s.empty('Glade Grass', g, (x, 0.002, z), static=True,
-                    **grass(Seed=10 + glades))
-    counts['glade grass'] = glades
     inside = [(x, z, sc) for x, z, sc in tree_pts if abs(x) < HALF + 6 and abs(z) < HALF + 6]
 
     trunks = Grid(2.0)          # every trunk, for keeping fallen logs out of standing trees
@@ -633,6 +712,8 @@ def build(repo):
             s.stamp(path, group, (round(x, 2), round(y - sink, 3), round(z, 2)), yaw=yaw, scale=sc, lod=LODS[lod],
                     normal=up)
             pts.append((x, z, path, yaw, sc))
+            if path in FOOTPRINTS['solids']:
+                mask.footprint(x, z, yaw, sc, FOOTPRINTS['solids'][path])
         counts[name] = counts.get(name, 0) + placed - dropped.get(name, 0)
         return pts
 
@@ -738,6 +819,8 @@ def build(repo):
             """The ground under a site-local point, relative to the site."""
             return round(H(x0 + px, z0 + pz) - y0 + 0.03, 3)
         stumps.append((x0, z0, st, 0.0, st_sc))
+        if st in FOOTPRINTS['solids']:
+            mask.circle(x0, z0, max(map(abs, FOOTPRINTS['solids'][st])) * st_sc)
         mid = 0.7 + length / 2          # the log starts just past the stump
         yaw = math.degrees(math.atan2(-dz, dx)) if axis == 'x' else math.degrees(math.atan2(dx, dz))
         # The log lies along the slope between its two ends and across it at its middle.
@@ -749,6 +832,8 @@ def build(repo):
         ln = math.sqrt(sum(v * v for v in n))
         s.stamp(path, site, (round(dx * mid, 2), round((h0 + h1) / 2 - y0 - 0.02, 3), round(dz * mid, 2)),
                 yaw=round(yaw, 1), scale=sc, lod=LODS['solid'], normal=tuple(v / ln for v in n))
+        if path in FOOTPRINTS['solids']:
+            mask.footprint(x0 + dx * mid, z0 + dz * mid, round(yaw, 1), sc, FOOTPRINTS['solids'][path])
         end = 0.7 + length
         crown = [p for p in CROWN_DEBRIS if s.prefab(p)]
         for i in range(rng.randint(2, 4)):
@@ -819,6 +904,18 @@ def build(repo):
                     yaw=round(math.degrees(math.atan2(dx, dz)), 1), scale=rng.uniform(0.7, 1.1), lod=LODS['small'])
             n_f += 1
     counts['wood fungi'] = n_f
+
+    # The forest-wide grass: full in the clearing, thinning under the canopy, bare at the wall's foot and round
+    # every solid piece and trunk.
+    vals = mask.values(lambda x, z: math.hypot(x - cx, z - cz) < cr)
+    for k_, v in enumerate(vals):
+        wx, wz = -GRASS_SPAN / 2 + (k_ % mask.n) * mask.step, -GRASS_SPAN / 2 + (k_ // mask.n) * mask.step
+        if by_wall(wx, wz, 0.6):
+            vals[k_] = 0.0
+    s.empty('Forest Grass', g, (0.0, 0.0, 0.0), static=True,
+            **grass(**{'Size X': GRASS_SPAN, 'Size Z': GRASS_SPAN, 'Seed': 2, 'Edge Fade': 0.0,
+                       'Map Res X': mask.n, 'Map Res Z': mask.n, 'Density Map': mask.encode(vals)}))
+    counts['grass cover %'] = round(100.0 * sum(vals) / len(vals), 1)
 
     counts['wall decals'], counts['wall lamps'] = dress_walls(s, root, repo)
 

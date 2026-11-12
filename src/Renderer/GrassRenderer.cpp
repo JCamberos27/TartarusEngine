@@ -12,6 +12,7 @@
 #include "Game/World.h"
 #include "Game/TerrainSystem.h"
 #include "TerrainGrid.h"
+#include "GrassDensityMap.h"
 #include "Physics/Frustum.h"
 
 #include <algorithm>
@@ -20,7 +21,7 @@
 
 namespace {
 // SSBO bindings (Grass.comp / .vert / .frag.glsl).
-constexpr unsigned kAreaBinding = 30, kChunkBinding = 31, kBladeBinding = 32, kCmdBinding = 33, kTerrainBinding = 34;
+constexpr unsigned kAreaBinding = 30, kChunkBinding = 31, kBladeBinding = 32, kCmdBinding = 33, kTerrainBinding = 34, kMapBinding = 35;
 constexpr std::size_t kBladeBytes = 3 * sizeof(glm::vec4); // GrassBlade: three vec4s
 constexpr int kNearVerts = 2 * GrassRenderer::kNearSegments + 1;
 constexpr int kFarVerts = 3;
@@ -97,6 +98,25 @@ GrassRenderer::AreaDesc GrassRenderer::Describe(const GrassAreaComponent& g, con
                       std::max(g.WindStrength, 0.0f));
     a.Wind = glm::vec4(std::max(g.WindSpeed, 0.0f), g.FollowTerrain ? 1.0f : 0.0f, 0.0f, 0.0f);
     d.MaxHeight = a.Shape.x * (1.0f + a.Shape.y) * (1.0f + 0.5f * a.Tip.w) + 0.3f;
+    // The density mask, decoded once per change (the component keeps it; a sampled key, not a full hash).
+    if (!g.DensityMap.empty() && g.MapResX >= 2 && g.MapResZ >= 2) {
+        std::uint64_t key = 1469598103934665603ull;
+        auto mix = [&](const void* p, size_t n) {
+            const auto* b = static_cast<const unsigned char*>(p);
+            for (size_t i = 0; i < n; ++i) { key ^= b[i]; key *= 1099511628211ull; }
+        };
+        const size_t n = g.DensityMap.size();
+        mix(&n, sizeof(n)); mix(&g.MapResX, sizeof(int)); mix(&g.MapResZ, sizeof(int));
+        for (size_t i = 0; i < n; i += 61) mix(&g.DensityMap[i], 1);
+        mix(g.DensityMap.data() + (n > 64 ? n - 64 : 0), n > 64 ? 64 : n);
+        if (!g.MapCache || g.MapKey != key) {
+            auto map = std::make_shared<GrassDensityMap>();
+            g.MapCache = GrassDensityMap::Decode(g.MapResX, g.MapResZ, g.DensityMap, *map) ? map : nullptr;
+            g.MapKey = key;
+        }
+        d.Map = g.MapCache;
+    }
+    a.Map = d.Map ? glm::vec4(0.0f, (float)d.Map->ResX, (float)d.Map->ResZ, 1.0f) : glm::vec4(0.0f);
     return d;
 }
 
@@ -117,6 +137,9 @@ void GrassRenderer::SelectChunks(const std::vector<AreaDesc>& areas, const Frust
         const glm::vec2 ax(a.Axes.x, a.Axes.y), az(a.Axes.z, a.Axes.w);
         const float drawDist = a.Lod.y;
         const TerrainGrid* ground = (a.Wind.y > 0.5f && terrain && terrain->Grid) ? terrain->Grid.get() : nullptr;
+        const GrassDensityMap* mask = areas[ai].Map.get();
+        int bareCols = 0;
+        const std::vector<std::uint8_t>* bare = mask ? &mask->BareChunks(sx, sz, cell, cpc, bareCols) : nullptr;
         // Whole area too far: skip its chunks without walking them.
         {
             const float r = 0.5f * std::sqrt(sx * sx + sz * sz);
@@ -126,6 +149,8 @@ void GrassRenderer::SelectChunks(const std::vector<AreaDesc>& areas, const Frust
             for (int cx = 0; cx < cellsX; cx += cpc) {
                 const float x0 = -0.5f * sx + cx * cell, z0 = -0.5f * sz + cz * cell;
                 const float x1 = std::min(x0 + cpc * cell, 0.5f * sx), z1 = std::min(z0 + cpc * cell, 0.5f * sz);
+                // A chunk the mask leaves bare (deep shade, under a log) isn't worth a workgroup.
+                if (bare && (*bare)[(size_t)(cz / cpc) * bareCols + (size_t)(cx / cpc)]) continue;
                 glm::vec3 mn(1e30f), mx(-1e30f);
                 for (int k = 0; k < 4; ++k) {
                     const float lx = (k & 1) ? x1 : x0, lz = (k & 2) ? z1 : z0;
@@ -175,6 +200,34 @@ void GrassRenderer::Gather(const World& world) {
         follow = follow || g.FollowTerrain;
     }
     if (follow) m_Terrain.Grid = TerrainSystem::Find(world, m_Terrain.Origin, &m_Terrain.Key);
+    // The masks, packed into one buffer (re-packed when the set changes); each area points at its first byte.
+    std::uint64_t set = 0;
+    for (const AreaDesc& a : m_Areas)
+        if (a.Map) set = set * 1099511628211ull ^ (std::uint64_t)(std::uintptr_t)a.Map.get();
+    if (set != m_MapSet) {
+        m_MapSet = set;
+        m_MapBytes.clear();
+    }
+    const bool repack = m_MapBytes.empty();
+    std::vector<std::pair<const GrassDensityMap*, std::uint32_t>> placed;
+    std::uint32_t next = 0;
+    for (AreaDesc& a : m_Areas) {
+        if (!a.Map) continue;
+        std::uint32_t at = next;
+        auto it = std::find_if(placed.begin(), placed.end(), [&](const auto& p) { return p.first == a.Map.get(); });
+        if (it != placed.end()) at = it->second;
+        else {
+            placed.emplace_back(a.Map.get(), at);
+            const std::uint32_t n = (std::uint32_t)a.Map->Values.size();
+            if (repack) {
+                m_MapBytes.resize((size_t)(at + n + 3) / 4, 0u);
+                for (std::uint32_t k = 0; k < n; ++k)
+                    m_MapBytes[(at + k) >> 2] |= (std::uint32_t)a.Map->Values[k] << (((at + k) & 3u) * 8u);
+            }
+            next = (at + n + 3u) & ~3u;
+        }
+        a.Gpu.Map.x = (float)at;
+    }
 }
 
 void GrassRenderer::EnsurePrograms() {
@@ -223,6 +276,14 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
         m_TerrainUploaded = m_Terrain.Key;
     }
     if (ground) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kTerrainBinding, m_TerrainBuf);
+    if (!m_MapBytes.empty()) {
+        if (m_MapUploaded != m_MapSet || !m_MapBuf) {
+            if (!m_MapBuf) glCreateBuffers(1, &m_MapBuf);
+            glNamedBufferData(m_MapBuf, (GLsizeiptr)(m_MapBytes.size() * sizeof(std::uint32_t)), m_MapBytes.data(), GL_STATIC_DRAW);
+            m_MapUploaded = m_MapSet;
+        }
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kMapBinding, m_MapBuf);
+    }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kAreaBinding, m_AreaBuf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kChunkBinding, m_ChunkBuf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBladeBinding, m_BladeBuf);

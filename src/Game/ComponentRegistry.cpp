@@ -1628,7 +1628,11 @@ void RegisterEngineComponents() {
             { "Seed", T::Int, TARTARUS_REFLECT_FIELD(G, Seed), 1.0f, "Random seed for the scatter." },
             { "Receive Shadows", T::Bool, TARTARUS_REFLECT_FIELD(G, ReceiveShadows), 0.0f, "Darkened by the sun's and lamps' shadows." },
             { "Follow Terrain", T::Bool, TARTARUS_REFLECT_FIELD(G, FollowTerrain), 0.0f, "Root the blades on the scene's Terrain instead of this object's flat plane." },
+            { "Map Res X", T::Int, TARTARUS_REFLECT_FIELD(G, MapResX), 1.0f, "Density mask samples along X (0: no mask).", 0.0f, 8192.0f },
+            { "Map Res Z", T::Int, TARTARUS_REFLECT_FIELD(G, MapResZ), 1.0f, "Density mask samples along Z (0: no mask).", 0.0f, 8192.0f },
+            { "Density Map", T::String, TARTARUS_REFLECT_FIELD(G, DensityMap), 0.0f, "Base64 8-bit density mask." },
         };
+        m.Fields.back().EditorHidden = true;
         Register<GrassAreaComponent>(std::move(m));
     }
 

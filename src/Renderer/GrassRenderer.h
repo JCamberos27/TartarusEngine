@@ -10,6 +10,7 @@ class World;
 struct Frustum;
 struct GrassAreaComponent;
 struct TerrainGrid;
+struct GrassDensityMap;
 
 // Procedural grass (GrassAreaComponent). Nothing is stored per blade: each view, the CPU picks the 4 m chunks of
 // every Grass Area that the camera can see and that lie within the area's draw distance, and a compute pass
@@ -51,6 +52,7 @@ public:
         glm::vec4 Dry;         // dry colour, receive shadows (0/1)
         glm::vec4 Lod;         // near distance, draw distance, edge fade, wind strength
         glm::vec4 Wind;        // wind speed, follow terrain (0/1), -, -
+        glm::vec4 Map;         // density mask: first byte in the mask buffer, res x, res z, has mask (0/1)
     };
     // One chunk to cull: area index, first cell (x, z) on the area's grid, cells per side.
     struct ChunkGpu { std::int32_t Area, CellX, CellZ, Cells; };
@@ -59,6 +61,7 @@ public:
     struct AreaDesc {
         AreaGpu Gpu;
         float MaxHeight = 0.0f; // tallest a blade can stand, plus sway
+        std::shared_ptr<const GrassDensityMap> Map; // the density mask, or null
     };
     static AreaDesc Describe(const GrassAreaComponent& g, const glm::mat4& world);
     // Chunks of `areas` inside `frustum` and nearer than their draw distance to `eye` (at most kMaxChunks, the
@@ -96,6 +99,9 @@ private:
     std::unique_ptr<Shader> m_Cull;
     std::unique_ptr<Shader> m_Clamp;
     unsigned m_Vao = 0, m_AreaBuf = 0, m_ChunkBuf = 0, m_BladeBuf = 0, m_CmdBuf = 0, m_TerrainBuf = 0;
+    unsigned m_MapBuf = 0;
+    std::vector<std::uint32_t> m_MapBytes; // every area's mask, packed 4 samples a uint (Grass.comp's uGrassMaps)
+    std::uint64_t m_MapSet = 0, m_MapUploaded = 0; // the masks in m_MapBytes / in m_MapBuf
     TerrainRef m_Terrain;              // this frame's (Grid null: none, or no area follows it)
     std::uint64_t m_TerrainUploaded = 0; // the key of the heights in m_TerrainBuf
     std::vector<AreaDesc> m_Areas;
