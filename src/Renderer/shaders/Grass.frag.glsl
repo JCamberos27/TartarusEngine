@@ -7,7 +7,8 @@
 in vec3 vWorldPos;
 in vec3 vNormal;
 in float vT;
-flat in vec4 vBlade;
+flat in vec4 vBlade;   // rand, dry, area, tuft hue
+in float vSide;
 in vec4 vCurClip;
 in vec4 vPrevClip;
 out vec4 FragColor;
@@ -44,9 +45,16 @@ void main() {
 
     gT = clamp(vT, 0.0, 1.0);
     GrassArea A = uAreas[int(vBlade.z + 0.5)];
-    float rnd = vBlade.x, dry = vBlade.y;
+    float rnd = vBlade.x, dry = vBlade.y, hue = vBlade.w;
     vec3 albedo = mix(A.Base.rgb, A.Tip.rgb, smoothstep(0.0, 1.0, gT));
-    albedo = mix(albedo, A.Dry.rgb * mix(0.65, 1.0, gT), dry);
+    // Each tuft its own shade: some yellower, some bluer, by the colour variation.
+    albedo *= mix(vec3(1.0), mix(vec3(1.12, 1.03, 0.78), vec3(0.86, 0.98, 1.08), hue), clamp(A.Base.a * 2.0, 0.0, 1.0));
+    // Withered tips on about half the blades: the last few centimetres go the dry colour.
+    float wither = step(0.5, fract(rnd * 7.31)) * smoothstep(0.8, 1.0, gT) * 0.8;
+    albedo = mix(albedo, A.Dry.rgb * 0.9, wither);
+    albedo = mix(albedo, A.Dry.rgb * mix(0.6, 1.0, gT), dry);
+    // A paler midrib down the middle of the leaf.
+    albedo *= 1.0 + 0.12 * (1.0 - smoothstep(0.0, 0.35, abs(vSide))) * (1.0 - gT);
     albedo = max(albedo * (1.0 + (rnd - 0.5) * 2.0 * A.Base.a), vec3(0.0));
     float occl = mix(0.22, 1.0, pow(gT, 0.65));
     bool receive = A.Dry.a > 0.5;
@@ -61,9 +69,11 @@ void main() {
     for (uint i = 0u; i < uDirectionalCount; ++i) {
         if (!LightAffects(i)) continue;
         vec3 L = normalize(-uLights[i].DirCutoff.xyz);
-        // Looked up as if on the ground under the blade (an upward normal): a blade's own tilted, swaying normal
-        // pushed the lookup around and broke its shadow into acne and crawling speckles.
-        float shadow = uLights[i].Params.y >= 0.0 ? (receive ? SunShadow(vWorldPos, vec3(0.0, 1.0, 0.0), L) : 1.0) * CloudShadow(vWorldPos) : 1.0;
+        // The blades cast into the sun's nearest cascades (ShadowFrame::RenderSun), so the lookup steps a few
+        // centimetres toward the light, clear of the blade's own depth there: the neighbours' shadows land, its own
+        // doesn't. The offset normal is the light's, not the blade's tilted, swaying one (that broke the shadow into
+        // acne and crawling speckles).
+        float shadow = uLights[i].Params.y >= 0.0 ? (receive ? SunShadow(vWorldPos + L * 0.04, L, L) : 1.0) * CloudShadow(vWorldPos) : 1.0;
         Lo += GrassLight(albedo, N, V, L, uLights[i].ColorRange.rgb * shadow, occl);
     }
     bool clustered = uClusterEnabled == 1;

@@ -293,6 +293,12 @@ void CascadedShadowMap::Begin(int i) const {
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
+void CascadedShadowMap::Resume(int i) const {
+    i = std::clamp(i, 0, m_Count - 1);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbos[i]);
+    glViewport(0, 0, m_Resolution, m_Resolution);
+}
+
 void CascadedShadowMap::BeginLayered() const {
     glBindFramebuffer(GL_FRAMEBUFFER, m_LayeredFbo);
     if (!m_CompleteChecked) {

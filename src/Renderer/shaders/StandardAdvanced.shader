@@ -66,6 +66,7 @@ Properties {
     // Engine-internal: bound and saved as before, not shown.
     [Hidden] _Triplanar      ("Triplanar",        Bool)      = 0
     [Hidden] _TriplanarScale ("Triplanar Scale",  Float)     = 1
+    [Hidden] _TriplanarBreakup ("Triplanar Breakup", Range(0, 1)) = 0
     [Hidden] _MetallicRoughnessMap ("Metallic Roughness", Texture2D) = "white"
 }
 

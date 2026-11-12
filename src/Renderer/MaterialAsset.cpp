@@ -282,6 +282,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     m.EmissiveStrength = r.Num(key("_EmissiveStrength", "emissiveStrength"), 1.0f);
     m.Triplanar        = r.Bool(key("_Triplanar", "triplanar"), false);
     m.TriplanarScale   = r.Num(key("_TriplanarScale", "triplanarScale"), 1.0f);
+    m.TriplanarBreakup = r.Num(key("_TriplanarBreakup", "triplanarBreakup"), 0.0f);
     // PR10-12 lobes
     m.ClearCoat            = r.Num(key("_ClearCoat", "clearCoat"), 0.0f);
     m.ClearCoatRoughness   = r.Num(key("_ClearCoatRoughness", "clearCoatRoughness"), 0.5f);
@@ -477,6 +478,7 @@ bool MaterialAsset::Save() const {
         props["_EmissiveStrength"]    = m.EmissiveStrength;
         props["_Triplanar"]           = m.Triplanar;
         props["_TriplanarScale"]      = m.TriplanarScale;
+        if (m.TriplanarBreakup != 0.0f)        props["_TriplanarBreakup"] = m.TriplanarBreakup;
         props["_AlbedoMap"]           = AlbedoMapPath;
         props["_NormalMap"]           = NormalMapPath;
         props["_MetallicRoughnessMap"]= MetallicRoughnessMapPath;
@@ -562,6 +564,7 @@ bool MaterialAsset::Save() const {
         j["emissiveStrength"]    = m.EmissiveStrength;
         j["triplanar"]           = m.Triplanar;
         j["triplanarScale"]      = m.TriplanarScale;
+        if (m.TriplanarBreakup != 0.0f) j["triplanarBreakup"] = m.TriplanarBreakup;
         j["albedoMap"]           = AlbedoMapPath;
         j["normalMap"]           = NormalMapPath;
         j["metallicRoughnessMap"]= MetallicRoughnessMapPath;
@@ -642,7 +645,7 @@ void MaterialAsset::DefaultFactorsForNewMap(Material& m, const std::string& n) {
 bool MaterialAsset::IsBuiltinProp(const std::string& n) {
     static const std::unordered_set<std::string> kBuiltin = {
         "_BaseColor", "_Metallic", "_Roughness", "_EmissiveColor", "_EmissiveStrength",
-        "_Triplanar", "_TriplanarScale",
+        "_Triplanar", "_TriplanarScale", "_TriplanarBreakup",
         "_ClearCoat", "_ClearCoatRoughness", "_Anisotropy", "_AnisotropyRotation",
         "_Sheen", "_SheenRoughness", "_SubsurfaceColor", "_Thickness",
         "_TransmissionStrength", "_IOR",
@@ -746,6 +749,7 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_Roughness")           return m.Roughness;
     if (n == "_EmissiveStrength")    return m.EmissiveStrength;
     if (n == "_TriplanarScale")      return m.TriplanarScale;
+    if (n == "_TriplanarBreakup")    return m.TriplanarBreakup;
     if (n == "_ClearCoat")           return m.ClearCoat;
     if (n == "_ClearCoatRoughness")  return m.ClearCoatRoughness;
     if (n == "_Anisotropy")          return m.Anisotropy;
@@ -828,6 +832,7 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_Roughness",            [](const Material& m) { return glm::vec4(m.Roughness, 0, 0, 0); }},
         {"_EmissiveStrength",     [](const Material& m) { return glm::vec4(m.EmissiveStrength, 0, 0, 0); }},
         {"_TriplanarScale",       [](const Material& m) { return glm::vec4(m.TriplanarScale, 0, 0, 0); }},
+        {"_TriplanarBreakup",     [](const Material& m) { return glm::vec4(m.TriplanarBreakup, 0, 0, 0); }},
         {"_ClearCoat",            [](const Material& m) { return glm::vec4(m.ClearCoat, 0, 0, 0); }},
         {"_ClearCoatRoughness",   [](const Material& m) { return glm::vec4(m.ClearCoatRoughness, 0, 0, 0); }},
         {"_Anisotropy",           [](const Material& m) { return glm::vec4(m.Anisotropy, 0, 0, 0); }},
@@ -917,6 +922,7 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_Roughness")           { m.Roughness = v; return; }
     if (n == "_EmissiveStrength")    { m.EmissiveStrength = v; return; }
     if (n == "_TriplanarScale")      { m.TriplanarScale = v; return; }
+    if (n == "_TriplanarBreakup")    { m.TriplanarBreakup = v; return; }
     if (n == "_ClearCoat")           { m.ClearCoat = v; return; }
     if (n == "_ClearCoatRoughness")  { m.ClearCoatRoughness = v; return; }
     if (n == "_Anisotropy")          { m.Anisotropy = v; return; }

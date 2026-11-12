@@ -5,8 +5,10 @@
 // own way (Bend) and over with the wind - rolling gusts across the field plus a flutter of its own - keeping its
 // length, tapering to a point. The depth pre-pass and the lit pass run this same program, so both put a fragment
 // at exactly the same depth.
-struct GrassBlade { vec4 A; vec4 B; vec4 C; }; // root, yaw | height, width, bend, wind strength | rand, dry, area, wind speed
+struct GrassBlade { vec4 A; vec4 B; vec4 C; }; // root, yaw | height, width, bend, wind strength | rand, dry, area, tuft hue
 layout(std430, binding = 32) readonly buffer GrassBlades { GrassBlade uBlades[]; };
+struct GrassArea { vec4 Origin; vec4 Axes; vec4 Size; vec4 Shape; vec4 Base; vec4 Tip; vec4 Dry; vec4 Lod; vec4 Wind; vec4 Map; };
+layout(std430, binding = 30) readonly buffer GrassAreas { GrassArea uAreas[]; };
 
 uniform mat4  uView;
 uniform mat4  uProj;
@@ -23,7 +25,8 @@ uniform vec2 uTaaJitter;
 out vec3 vWorldPos;
 out vec3 vNormal;
 out float vT;              // 0 at the root, 1 at the tip
-flat out vec4 vBlade;      // rand, dry, area, -
+flat out vec4 vBlade;      // rand, dry, area, tuft hue
+out float vSide;           // -1 the blade's left edge, +1 its right
 out vec4 vCurClip;
 out vec4 vPrevClip;
 invariant gl_Position;
@@ -31,7 +34,7 @@ invariant gl_Position;
 vec3 BladePoint(GrassBlade b, float t, float side, float time, out vec3 tangent, out vec3 right) {
     vec3 root = b.A.xyz;
     float h = b.B.x, w = b.B.y, bend = b.B.z, windStrength = b.B.w;
-    float speed = b.C.w, rnd = b.C.x;
+    float speed = uAreas[int(b.C.z + 0.5)].Wind.x, rnd = b.C.x;
     vec2 face = vec2(cos(b.A.w), sin(b.A.w));
     vec2 wind = dot(uWindDir, uWindDir) > 1e-6 ? normalize(uWindDir) : vec2(1.0, 0.0);
     // Gusts: long waves rolling downwind, beating against a slower one so they don't march in step.
@@ -48,7 +51,8 @@ vec3 BladePoint(GrassBlade b, float t, float side, float time, out vec3 tangent,
     vec3 d = 2.0 * u * (ctrl - root) + 2.0 * t * (tip - ctrl);
     tangent = dot(d, d) > 1e-12 ? normalize(d) : vec3(0.0, 1.0, 0.0);
     right = vec3(-face.y, 0.0, face.x);
-    float width = w * (1.0 - t) * (0.75 + 0.5 * sqrt(max(t, 0.0))); // fullest a little above the root
+    // A grass leaf keeps most of its width up its length and narrows to a point over the last third.
+    float width = w * (0.8 + 0.2 * sqrt(max(t, 0.0))) * (1.0 - smoothstep(0.45, 1.0, t)) + w * 0.06 * (1.0 - t);
     return p + right * ((side - 0.5) * width);
 }
 
@@ -62,11 +66,13 @@ void main() {
     vec3 T, R;
     precise vec3 world = BladePoint(b, t, side, uWindTime, T, R);
     vec3 N = normalize(cross(R, T));
-    N = normalize(N + R * ((side - 0.5) * 0.9)); // rounded across the blade, so it doesn't light flat
+    // Folded along its midrib (a shallow V), so each half catches the light differently.
+    N = normalize(N + R * ((side - 0.5) * 1.1));
     vWorldPos = world;
     vNormal = N;
     vT = t;
-    vBlade = vec4(b.C.x, b.C.y, b.C.z, 0.0);
+    vBlade = b.C;
+    vSide = side * 2.0 - 1.0;
     gl_Position = uProj * (uView * vec4(world, 1.0));
     if (uTaaVelocity == 1) {
         vCurClip = gl_Position;

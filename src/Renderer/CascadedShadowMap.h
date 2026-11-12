@@ -52,6 +52,8 @@ public:
     // Caller then draws occluders with LightViewProj(i). Does NOT restore the previous
     // framebuffer — the caller captured and restores it.
     void Begin(int i) const;
+    // Cascade i's target again, without clearing it: to add casters after the pass (the grass).
+    void Resume(int i) const;
 
     // Single-pass alternative to Begin(i): binds an FBO with the whole array attached (a layered
     // target), sets the viewport and clears every cascade at once. The caster draws then pick

@@ -271,6 +271,10 @@ uniform vec3 uEmissiveColor;
 // non-uniformly-scaled cube where 0..1 mesh UVs stretch a texture unrecognisably on long faces.
 uniform int uTriplanar;
 uniform float uTriplanarScale;
+// Triplanar Breakup (0..1): the top (XZ) projection stops repeating - a low-frequency noise picks one of eight
+// offsets of the texture per region and cross-fades between neighbouring ones (Quilez, "texture repetition", the
+// noise-index technique) - and a broad brightness/tone variation is laid over the albedo. 0 = plain tiling.
+uniform float uTriplanarBreakup;
 
 // Cover layer (Standard.shader _Cover*): a second material laid over up-facing surfaces, projected from above in world space.
 // Compiled only into the _COVER variant, so materials without it pay nothing. Units 34/35/36 are its own (TextureUnits.h,
@@ -733,9 +737,57 @@ vec3 TriplanarWeights(vec3 n) {
 
 // Blends the same texture sampled from the 3 world-space axis planes. rgba so it works for both
 // colour maps and single-channel (metallic/roughness/AO) maps read via .r/.g/.b afterward.
+// Triplanar Breakup state for this fragment (TriplanarBreakupSetup): the two offsets the top projection blends,
+// the blend, and the broad variation (0..1).
+vec2  gTriOffA = vec2(0.0), gTriOffB = vec2(0.0);
+float gTriBlend = 0.0;
+float gTriMacro = 0.5;
+bool  gTriBreak = false;
+
+float TriValueNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+    float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+    float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+    float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+void TriplanarBreakupSetup(vec3 worldPos) {
+    gTriBreak = uTriplanarBreakup > 0.0;
+    if (!gTriBreak) return;
+    vec2 p = worldPos.xz;
+    // Regions a few metres across (wider than a 4 m tile, so no tile repeats within one), their borders wandering.
+    float k = TriValueNoise(p * 0.11) * 0.7 + TriValueNoise(p * 0.37 + 17.0) * 0.3;
+    float l = k * 8.0;
+    float ia = floor(l), f = fract(l);
+    gTriOffA = sin(vec2(3.0, 7.0) * ia);
+    gTriOffB = sin(vec2(3.0, 7.0) * (ia + 1.0));
+    gTriBlend = smoothstep(0.2, 0.8, f);
+    gTriMacro = TriValueNoise(p * 0.035 + 5.3) * 0.6 + TriValueNoise(p * 0.12 - 9.1) * 0.4;
+}
+
+// The top projection's sample at uv, broken up when the material asks for it. Gradients from the unshifted uv, so
+// the offsets don't jump the mip level at a region's edge.
+vec4 TriplanarTop(sampler2D tex, vec2 uv) {
+    if (!gTriBreak) return texture(tex, uv);
+    vec2 dx = dFdx(uv), dy = dFdy(uv);
+    vec4 a = textureGrad(tex, uv + gTriOffA, dx, dy);
+    vec4 b = textureGrad(tex, uv + gTriOffB, dx, dy);
+    return mix(a, b, gTriBlend);
+}
+
+// The broad variation's tint for an albedo: darker, damper ground and lighter, drier ground, by the breakup amount.
+vec3 TriplanarMacroTint() {
+    if (!gTriBreak) return vec3(1.0);
+    vec3 tint = mix(vec3(0.72, 0.74, 0.76), vec3(1.18, 1.12, 1.02), smoothstep(0.15, 0.85, gTriMacro));
+    return mix(vec3(1.0), tint, clamp(uTriplanarBreakup, 0.0, 1.0));
+}
+
 vec4 SampleTriplanar(sampler2D tex, vec3 worldPos, vec3 w, float scale) {
     vec4 cx = texture(tex, worldPos.zy * scale);
-    vec4 cy = texture(tex, worldPos.xz * scale);
+    vec4 cy = TriplanarTop(tex, worldPos.xz * scale);
     vec4 cz = texture(tex, worldPos.xy * scale);
     return cx * w.x + cy * w.y + cz * w.z;
 }
