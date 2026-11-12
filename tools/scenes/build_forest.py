@@ -59,13 +59,13 @@ MUSHROOMS = ([SEEDMESH + f'Mushrooms/Prefabs/{n}_VMushroom.prefab'
 
 
 # LOD switch points (screen-height share where each level hands over; past the last, the piece isn't drawn). The
-# pack's own kept trees on their two heaviest levels out to ~50 m and dropped a 1 m fern at ~9 m: trees here step
-# down sooner and never vanish in view, small plants stay to ~50 m, under the fog.
+# pack's own dropped a 1 m fern at ~9 m: here each level holds out far enough that the swap happens in the fog
+# (World::LodSmooth cross-fades it), trees never vanish in view, and small plants stay to ~100 m.
 LODS = {
-    'tree': (1.2, 0.4, 0.15, 0.012),
-    'plant': (0.6, 0.25, 0.08, 0.02),
-    'small': (0.5, 0.2, 0.06, 0.03),
-    'solid': (0.8, 0.35, 0.12, 0.02),
+    'tree': (1.2, 0.25, 0.09, 0.012),
+    'plant': (0.45, 0.16, 0.05, 0.008),
+    'small': (0.4, 0.14, 0.04, 0.012),
+    'solid': (0.6, 0.22, 0.07, 0.01),
 }
 
 
@@ -208,7 +208,7 @@ def build(repo):
     d['sky'].update({'seaLevel': 0.0, 'clouds': True, 'cloudCoverage': 0.3, 'cloudType': 0.35, 'cloudQuality': 0,
                      'cloudShadows': False, 'cloudWindSpeed': 4.0})
     # A low ground fog: distance and depth between the trunks (outdoors only - the rule is no fog indoors).
-    d.update({'shadowDistance': 45.0, 'maxSpotShadows': 8, 'fogEnabled': True, 'fogMode': 3, 'fogDensity': 0.016,
+    d.update({'shadowDistance': 45.0, 'maxSpotShadows': 8, 'fogEnabled': True, 'fogMode': 3, 'fogDensity': 0.02,
               'fogColor': [0.03, 0.038, 0.052], 'fogHeightFalloff': 0.06, 'fogBaseHeight': 0.0})
     rng = random.Random(11)
     cx, cz, cr = CLEARING

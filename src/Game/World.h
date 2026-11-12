@@ -228,7 +228,7 @@ public:
     // a dithered cross-fade over kLodFadeSeconds - the old level dissolves out as the new one dissolves in, in
     // complementary screen-space patterns (LodFadeOf), so nothing pops.
     bool LodSmooth = false;
-    static constexpr float kLodFadeSeconds = 0.35f;
+    static constexpr float kLodFadeSeconds = 0.6f;
     static constexpr float kLodHysteresis = 0.1f;
     // The cross-fade value of a renderer now: 0 none; t > 0 fading in (drawn where the dither is under t); -t fading
     // out (drawn where it is t or over).

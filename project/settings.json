@@ -549,7 +549,8 @@
   "startupSceneGuid": "aefbdf0df68c9a9c",
   "tags": [],
   "quality": {
-    "decalTextureBudgetMB": 1024
+    "decalTextureBudgetMB": 1024,
+    "gpuOcclusionCulling": false
   },
   "time": {
     "maximumDeltaTime": 0.10000000149011612,
