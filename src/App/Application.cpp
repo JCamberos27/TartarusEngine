@@ -2324,6 +2324,7 @@ int Application::RunSession() {
                 // one waited for NVIDIA's driver thread to catch up (several ms while uploads streamed).
                 PROFILE_SCOPE("Upload Fences");
                 UploadStaging::Fence();
+                InstanceBuffer::EndFrame();
             }
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
