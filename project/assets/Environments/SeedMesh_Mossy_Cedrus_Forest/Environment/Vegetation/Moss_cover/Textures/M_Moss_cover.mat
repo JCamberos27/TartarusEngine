@@ -1,5 +1,5 @@
 {
-  "alphaCutoff": 0.004,
+  "alphaCutoff": 0.33,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Moss_cover",

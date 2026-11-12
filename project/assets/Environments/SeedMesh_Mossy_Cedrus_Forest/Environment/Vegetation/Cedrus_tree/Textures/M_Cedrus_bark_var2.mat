@@ -18,6 +18,7 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
+    "_Foliage": true,
     "_Metallic": 0.0,
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
@@ -26,7 +27,10 @@
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/Cedrus_bark_2/Cedrus_bark_2_mask_Roughness100_0.png",
     "_Triplanar": false,
-    "_TriplanarScale": 1.0
+    "_TriplanarScale": 1.0,
+    "_WindFlutter": 0.0,
+    "_WindHeight": 14.0,
+    "_WindStrength": 0.18
   },
   "shader": "engine://Standard.shader"
 }

@@ -1,5 +1,5 @@
 {
-  "alphaCutoff": 0,
+  "alphaCutoff": 0.5,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Dry_cedrus_leaves_mat",
