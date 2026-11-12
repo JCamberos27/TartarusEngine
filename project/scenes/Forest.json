@@ -370570,7 +370570,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -370585,7 +370585,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -371453,7 +371453,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -371468,7 +371468,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -371992,7 +371992,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -372007,7 +372007,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -372875,7 +372875,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -372890,7 +372890,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -373758,7 +373758,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -373773,7 +373773,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -374127,7 +374127,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -374142,7 +374142,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -374666,7 +374666,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -374681,7 +374681,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -375549,7 +375549,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -375564,7 +375564,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -375918,7 +375918,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -375933,7 +375933,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -376457,7 +376457,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -376472,7 +376472,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -377340,7 +377340,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -377355,7 +377355,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -377709,7 +377709,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -377724,7 +377724,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -378592,7 +378592,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -378607,7 +378607,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -379131,7 +379131,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -379146,7 +379146,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -379500,7 +379500,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -379515,7 +379515,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -380383,7 +380383,7 @@
     {
       "Light": {
         "Angular Size": 0.53,
-        "Cast Shadows": false,
+        "Cast Shadows": true,
         "Color": [
           1.0,
           0.86,
@@ -380398,7 +380398,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
         "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
+        "Shadow Update Mode": "Static (bake once)",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
@@ -380474,7 +380474,7 @@
   ],
   "gradeContrast": 6.0,
   "gradeSaturation": -6.0,
-  "gradeTemperature": 0.0,
+  "gradeTemperature": -6.0,
   "gradeTint": 0.0,
   "maxPointShadows": 0,
   "maxSpotShadows": 8,
@@ -906256,8 +906256,8 @@
   ],
   "msaaSamples": 4,
   "shadowCascadeSplit": 0.75,
-  "shadowCascades": 3,
-  "shadowDistance": 45.0,
+  "shadowCascades": 4,
+  "shadowDistance": 70.0,
   "shadowResolution": 4096,
   "shadowsEnabled": true,
   "sky": {
