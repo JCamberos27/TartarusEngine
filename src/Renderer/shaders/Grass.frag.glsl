@@ -21,7 +21,7 @@ uniform int uDepthOnly;
 
 const float kVelocityUnknown = 4.0;
 
-float gT; // vT, clamped: interpolation can take it a hair below 0, and pow() of that is NaN
+float gT = 0.0; // vT, clamped (main sets it first): interpolation can take it a hair below 0, and pow() of that is NaN
 
 vec3 GrassLight(vec3 albedo, vec3 N, vec3 V, vec3 L, vec3 radiance, float occl) {
     float NdotL = dot(N, L);
