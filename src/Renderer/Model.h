@@ -50,10 +50,10 @@ struct ModelImportSettings {
     bool ImportAnimations = true;
     bool ImportSkeleton = true;  // false imports every mesh as static (no bone weights)
     bool OptimizeGraph = true;   // aiProcess_JoinIdenticalVertices + OptimizeMeshes
-    // The share of each static mesh's triangles kept (meshoptimizer's simplifier, at import), 1 = as authored: a scanned
-    // statue or a film-grade prop can carry hundreds of thousands of triangles that no camera distance in a level needs,
-    // and pays for them in every pass that draws it (the view, the depth pre-pass, every shadow map). Skinned meshes
-    // are never simplified (their vertices are addressed by the outfit hiding).
+    // The share of each mesh's triangles kept (meshoptimizer's simplifier, at import), 1 = as authored: a scanned
+    // statue, a film-grade prop or a character head can carry far more triangles than any camera distance in a level
+    // needs, and pays for them in every pass that draws it (the view, the depth pre-pass, every shadow map). Skinned
+    // meshes keep each kept vertex's bone weights; the outfit hiding is worked out from the simplified mesh.
     float SimplifyRatio = 1.0f;
     // The up axis the geometry was modelled in. Z stands a Z-up export upright (rotates the root
     // into the engine's Y-up frame: up +Z, front -Y); NegZ is the opposite turn (up -Z, front +Y),
