@@ -561,8 +561,11 @@ def dress_walls(s, root, repo):
         lamp = s.empty('Wall Lamp', lamps, pos, yaw=yaw, static=True)
         s.box('Lamp Housing', lamp, (0.0, 0.0, 0.0), (0.45, 0.16, 0.3), housing, collider=False, static=True)
         s.box('Lamp Lens', lamp, (0.0, -0.085, 0.02), (0.36, 0.02, 0.22), lens, collider=False, static=True)
-        s.light('Lamp Light', lamp, (0.0, -0.12, 0.25), intensity=7.0, rng=9.0, kelvin=2100.0, spot=72.0,
-                pitch=-65.0)
+        # Every lamp casts shadows; the renderer gives the scene's 8 spot-shadow slots to the ones nearest the
+        # view. Nothing they light moves but grass and fronds, so the map is baked once.
+        light = s.light('Lamp Light', lamp, (0.0, -0.12, 0.25), intensity=7.0, rng=9.0, kelvin=2100.0, spot=72.0,
+                        pitch=-65.0, shadows=True)
+        next(e for e in s.empties if e['id'] == light)['Light']['Shadow Update Mode'] = 'Static (bake once)'
     s.empty('Decal Grading', grp, (0.0, 0.0, 0.0), **{'Decal Grading': {'Age': 0.25, 'Wear': 0.3}})
     assert w.n <= MAX_WALL_DECALS and len(w.maps) <= MAX_WALL_MAPS, (w.n, len(w.maps))
     return w.n, len(sites)
@@ -585,7 +588,9 @@ def build(repo):
     # indoors; a low-lying mist was tried in #745 and the uniform look kept). The distance fog's settings stay for
     # when it's switched back on. The scene is kept dark (sky 0.15, sky ambient 0.08, a dim moon) so the moonlit fog
     # glows against black trunks; the brighter fill of #741 is gone.
-    d.update({'shadowDistance': 45.0, 'maxSpotShadows': 8, 'fogEnabled': False, 'fogMode': 3, 'fogDensity': 0.02,
+    # Moon shadows out to 70 m over 4 cascades, so trunks across the clearing still cast; a slight cool grade for
+    # the moonlight (the sodium lamps stay warm against it).
+    d.update({'shadowDistance': 70.0, 'shadowCascades': 4, 'gradeTemperature': -6.0, 'maxSpotShadows': 8, 'fogEnabled': False, 'fogMode': 3, 'fogDensity': 0.02,
               'fogColor': [0.03, 0.038, 0.052], 'fogHeightFalloff': 0.06, 'fogBaseHeight': 0.0,
               'volumetricEnabled': True, 'volDensity': 0.02, 'volBaseHeight': 0.0, 'volHeightFalloff': 0.0,
               'volAnisotropy': 0.6, 'volAlbedo': [0.9, 0.9, 0.9], 'skyAmbientIntensity': 0.08})
