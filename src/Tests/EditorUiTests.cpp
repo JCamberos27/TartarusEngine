@@ -8,6 +8,9 @@
 // without the hooks and can't be addressed; everything the Enhancers draw is host-side.
 
 #include "EditorUiTests.h"
+#ifdef _WIN32
+extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsigned int format); // user32
+#endif
 #include "MotionDemo.h"
 
 #include "EditorLayer.h"
@@ -1093,6 +1096,16 @@ void RegisterMotionDemo() {
 // The editor smoke suites: every panel, menu, tool and action of the editor (see
 // src/Tests/EditorSmoke/README.md). Included here, inside this file's anonymous namespace, so they
 // share the harness above; each defines Register<Suite>Tests().
+// The system clipboard's text, or "" when it holds none. GLFW logs an error (failing the run) when asked for text
+// that isn't there, and the tests before one that saves the clipboard can leave it holding none.
+static std::string ClipboardTextOrEmpty() {
+#ifdef _WIN32
+    if (!IsClipboardFormatAvailable(13u /* CF_UNICODETEXT */)) return {};
+#endif
+    const char* t = ImGui::GetClipboardText();
+    return t ? t : "";
+}
+
 #include "EditorSmoke/Menus.inl"
 #include "EditorSmoke/Panels.inl"
 #include "EditorSmoke/Hierarchy.inl"
