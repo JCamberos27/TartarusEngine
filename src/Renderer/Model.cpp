@@ -464,7 +464,9 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
 
 // Import Settings > Simplify: the mesh cut to about `ratio` of its triangles (meshoptimizer, the error capped at 1% of the
 // mesh's size, so a flat or already lean mesh keeps what it needs), then its vertices packed to the ones still used.
-static void SimplifyStatic(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices, float ratio) {
+// Skinned meshes too: the simplifier only drops vertices, so each one kept keeps its own bone weights. What addresses a
+// skinned mesh's vertices by number (the outfit hiding, the first-person collar) works them out from the simplified mesh.
+static void SimplifyMesh(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices, float ratio) {
     if (!(ratio > 0.0f && ratio < 1.0f) || indices.size() < 3 * 512 || indices.size() % 3 != 0 || vertices.empty()) return;
     const size_t target = std::max<size_t>(3 * 64, (size_t)((double)indices.size() * ratio) / 3 * 3);
     std::vector<unsigned int> out(indices.size());
@@ -625,7 +627,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     }
 
     if (m_D->Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh, offsetFix);
-    if (!skinned) SimplifyStatic(vertices, indices, m_D->Settings.SimplifyRatio);
+    SimplifyMesh(vertices, indices, m_D->Settings.SimplifyRatio);
 
     // #98 — bounds, picking, snapping and collider cooking are rebuilt from this CPU copy at
     // the bind pose (same blend as the vertex shader), so they track whatever `bake` folded

@@ -114,6 +114,17 @@ int ModelReport(const std::vector<std::string>& inputs) {
         if (skinned) {
             std::printf("[ModelReport]   skin: %d vertices, %d over %d influences (most %d), largest weight lost %.1f%%\n", skinned,
                         overflow, MAX_BONE_INFLUENCE, most, lost * 100.0f);
+            // The vertices as drawn (after Simplify): how many are skinned, and how many of those carry no weight at all.
+            int drawn = 0, unweighted = 0;
+            for (int m = 0; m < model->MeshCount(); ++m)
+                for (const auto& v : model->MeshSkinVertices(m)) {
+                    ++drawn;
+                    float total = 0.0f;
+                    for (int k = 0; k < MAX_BONE_INFLUENCE; ++k)
+                        if (v.BoneIDs[k] >= 0) total += v.Weights[k];
+                    if (total <= 0.0001f) ++unweighted;
+                }
+            std::printf("[ModelReport]   skin drawn: %d vertices, %d unweighted\n", drawn, unweighted);
             // Where the rig's landmarks sit in the bind pose: pieces of one body must agree on these.
             std::string bones;
             for (const char* name : {"root", "pelvis", "hand_l", "hand_r"}) {

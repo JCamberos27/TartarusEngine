@@ -173,7 +173,7 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     Row("Optimize Mesh", "Merges identical/duplicate vertices and welds mesh pieces that\nshare a material - fewer draw calls and less GPU memory, purely a\nperformance optimization with no visible difference.");
     isDirty |= EditorUIPrimitives::Checkbox("##OptimizeGraph", &settings.OptimizeGraph);
 
-    Row("Simplify", "The share of each static mesh's triangles kept, 1 = as authored.\nFor a scanned or film-grade prop far denser than any view of it\nneeds: it is drawn in the view, the depth pre-pass and every\nshadow map. Skinned meshes are never simplified.");
+    Row("Simplify", "The share of each mesh's triangles kept, 1 = as authored.\nFor a scanned prop or a character head far denser than any view\nof it needs: it is drawn in the view, the depth pre-pass and every\nshadow map. Skinned meshes keep their bone weights.");
     {
         float keep = settings.SimplifyRatio;
         ImGui::SetNextItemWidth(-1.0f);

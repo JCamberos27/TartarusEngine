@@ -1083,6 +1083,7 @@ struct FileStamp {
     std::uint64_t Size = 0;
     std::int64_t Time = 0;
 };
+// The model's and its .meta's: an import setting that changes the vertices (Simplify) makes the saved coverage stale too.
 FileStamp StampOf(const std::string& rel) {
     FileStamp s;
     std::error_code ec;
@@ -1091,6 +1092,10 @@ FileStamp StampOf(const std::string& rel) {
     if (ec) s.Size = 0;
     const auto t = fs::last_write_time(p, ec);
     if (!ec) s.Time = (std::int64_t)t.time_since_epoch().count();
+    fs::path meta = p;
+    meta += ".meta";
+    const auto mt = fs::last_write_time(meta, ec);
+    if (!ec) s.Time ^= (std::int64_t)mt.time_since_epoch().count() * 31;
     return s;
 }
 
