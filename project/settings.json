@@ -244,7 +244,6 @@
     "assets/Weapons/Revolver38/Textures",
     "assets/Weapons/Revolver38/Weapon",
     "scripts",
-    "assets/Weapons/AKS74U/Attachments",
     "assets/Architecture",
     "assets/Architecture/Building",
     "assets/Architecture/Building/Textures",
@@ -292,8 +291,7 @@
     "assets/Props/Medical_Supplies",
     "assets/Props/Medical_Supplies/Textures",
     "assets/Props/Money",
-    "assets/Props/Money/Textures",
-    "assets/Weapons/AKS74U/Attachments/Textures"
+    "assets/Props/Money/Textures"
   ],
   "audio": {
     "busVolumes": [
