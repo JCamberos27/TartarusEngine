@@ -7,8 +7,8 @@
 #   - cedars from the SeedMesh pack's full LOD prefabs, packed in clumps with thinner glades between them (spacing
 #     from a noise field), in a 120 x 120 m playable square and a wall of more trees round it to the horizon;
 #   - the Apartment Hallway's night sky, moon and player, and volumetric fog for depth;
-#   - a 4 m precast concrete wall round the playable square (posts every 6 m), dressed in places with graffiti,
-#     spalled concrete, soot, painted-out patches, rust and water streaks and a grime band, under sodium wall lamps: the decal
+#   - a 4 m precast concrete wall round the playable square (posts every 6 m), dressed in places with spalled
+#     concrete, soot, old paint patches, rust and water streaks and a grime band, under sodium wall lamps: the decal
 #     test surface (bullet holes are the runtime ones: shoot it). Trees and ground pieces keep clear of it.
 #
 #   python tools/scenes/build_forest.py [<repo>]
@@ -212,16 +212,11 @@ WALL_CLEAR_TREE, WALL_CLEAR = 2.2, 1.2
 _CONCRETE = 'assets/Architecture/Building/Textures/Floor_Concrete/Floor_Concrete_'   # Wall_Concrete's sheet has trim bands
 CONCRETE = tuple(_CONCRETE + m + '.png' for m in ('Base_Color', 'Normal', 'Roughness', 'AO'))
 D = 'assets/Decals/'
-PIECE = D + 'Graffiti/Pieces/DA_Piece_{}.decal'
-SHAPE = D + 'Graffiti/Shapes/DA_GraffitiShape_{:03d}.decal'
-SPRAY = D + 'Graffiti/Spray/DA_GraffitiSpray_{:03d}.decal'
 STAIN = D + 'Stains/Splatters/DA_Stain_{:03d}.decal'
 SPLAT = D + 'Stains/LiquidSplatter/DA_LiquidSplatter_{:03d}.decal'
 PEEL = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}.decal'
-PAINT = {'red': [0.75, 0.07, 0.05], 'yellow': [0.92, 0.7, 0.08], 'white': [0.88, 0.88, 0.85], 'black': [0.04, 0.04, 0.04],
-         'blue': [0.08, 0.28, 0.85], 'green': [0.15, 0.65, 0.22], 'pink': [0.92, 0.28, 0.6]}
 RUST, GRIME, SPALL, SOOT = [0.3, 0.14, 0.06], [0.08, 0.08, 0.05], [0.07, 0.065, 0.06], [0.02, 0.02, 0.02]
-MAX_WALL_DECALS, MAX_WALL_MAPS = 300, 24     # unique maps: 2K slots of the decal texture budget (docs/DECALS.md)
+MAX_WALL_DECALS, MAX_WALL_MAPS = 300, 12     # unique maps: 2K slots of the decal texture budget (docs/DECALS.md)
 
 
 def by_wall(x, z, clear):
@@ -312,47 +307,26 @@ def dress_walls(s, root, repo):
                   next(seed), 1, rng.uniform(0.6, 0.85), tint)
 
     # The dressed panels: (side, panel index from the left as seen from inside, kind), a few on every wall.
-    sites = [('N', 9, 'piece'), ('N', 4, 'firefight'), ('N', 14, 'buffed'), ('N', 18, 'tags'),
-             ('S', 10, 'firefight'), ('S', 6, 'piece'), ('S', 15, 'tags'), ('S', 1, 'stained'),
-             ('W', 9, 'buffed'), ('W', 3, 'stained'), ('W', 13, 'firefight'), ('W', 17, 'piece'),
-             ('E', 10, 'tags'), ('E', 5, 'firefight'), ('E', 14, 'stained'), ('E', 1, 'buffed')]
+    sites = [('N', 9, 'patched'), ('N', 4, 'firefight'), ('N', 14, 'stained'), ('N', 18, 'firefight'),
+             ('S', 10, 'firefight'), ('S', 6, 'patched'), ('S', 15, 'stained'), ('S', 1, 'firefight'),
+             ('W', 9, 'patched'), ('W', 3, 'stained'), ('W', 13, 'firefight'), ('W', 17, 'patched'),
+             ('E', 10, 'firefight'), ('E', 5, 'stained'), ('E', 14, 'patched'), ('E', 1, 'firefight')]
     lamps = s.empty('Wall Lamps', grp, (0, 0, 0), static=True)
     housing = k.textured(repo, base=(0.05, 0.05, 0.05), roughness=0.5, metallic=0.8)
     lens = k.textured(repo, base=(1.0, 0.62, 0.3), emissive=(1.0, 0.62, 0.3), strength=6.0)
-    pieces = [('Rats', 'red'), ('Crown', None), ('Rats', 'blue')]
-    colours = list(PAINT)
-    for n_site, (side, i, kind) in enumerate(sites):
+    for side, i, kind in sites:
         u = -HALF + POST_EVERY * (i + 0.5)
-        if kind == 'piece':
-            name, colour = pieces[n_site % len(pieces)]
-            w.put(PEEL.format(13), side, u + 0.2, 1.7, 4.2, 2.4, next(seed), 1, 0.6, substrate=True)
-            w.put(PIECE.format(name), side, u, 1.75, 3.6, 1.8, next(seed), 3, 0.95, PAINT.get(colour))
-            w.put(SPRAY.format(16), side, u + 1.4, 0.8, 1.6, 0.8, next(seed), 4, 0.9, PAINT['black'])
-            w.put(SHAPE.format(36), side, u - 2.0, 2.3, 0.8, 0.8, next(seed), 5, 0.9, PAINT['white'])
-            chips(side, u + 1.6, 2.6, 0.5, 4)
-            streaks(side, u, 2)
-        elif kind == 'firefight':
+        if kind == 'firefight':
             for cu, cy in ((u - 1.2, 1.3), (u + 0.9, 1.6), (u + 0.1, 0.9)):
                 chips(side, cu, cy, 0.55, 6)
             w.put(STAIN.format(595), side, u - 0.3, 1.2, 1.8, 1.8, next(seed), 2, 0.6, SOOT,
                   spin=round(rng.uniform(0, 360), 1))
-            w.put(SHAPE.format(54), side, u + 1.8, 2.4, 0.7, 0.7, next(seed), 3, 0.9, PAINT['red'])
-        elif kind == 'buffed':
-            # tags painted out in grey, newer tags over that
-            w.put(SPRAY.format(6), side, u - 0.8, 1.5, 2.2, 1.0, next(seed), 1, 0.9, PAINT['green'])
-            w.put(SHAPE.format(32), side, u + 1.0, 1.7, 1.0, 1.0, next(seed), 1, 0.9, PAINT['pink'])
-            w.put(PEEL.format(7), side, u, 1.6, 4.0, 2.2, next(seed), 2, 0.75, [0.55, 0.55, 0.53], substrate=True)
-            w.put(SHAPE.format(46), side, u - 1.4, 1.9, 0.9, 0.9, next(seed), 4, 0.95, PAINT['black'])
-            w.put(SPRAY.format(21), side, u + 1.3, 1.4, 0.9, 1.0, next(seed), 4, 0.95, PAINT['yellow'])
+        elif kind == 'patched':
+            # an old grey paint patch, flaking back to the concrete, with grime runs and a few chips
+            w.put(PEEL.format(rng.choice((7, 13))), side, u, 1.6, 4.0, 2.2, next(seed), 2, 0.75, [0.55, 0.55, 0.53],
+                  substrate=True)
             streaks(side, u, 2, GRIME)
-        elif kind == 'tags':
-            for j, (shape, du, y, sz) in enumerate(((49, -1.8, 2.2, 1.0), (36, 0.0, 1.6, 0.9), (54, 1.6, 1.9, 0.7),
-                                                     (32, 0.9, 0.9, 0.8))):
-                w.put(SHAPE.format(shape), side, u + du, y, sz, sz, next(seed), 2 + j, 0.95,
-                      PAINT[colours[(n_site + j) % len(colours)]], spin=round(rng.uniform(-8, 8), 1))
-            w.put(SPRAY.format(33), side, u - 0.6, 0.9, 1.0, 1.2, next(seed), 1, 0.9, PAINT['blue'])
-            w.put(SPRAY.format(36), side, u + 2.2, 2.6, 0.4, 1.4, next(seed), 6, 0.9, PAINT['red'])
-            chips(side, u - 1.0, 2.9, 0.4, 3)
+            chips(side, u + 1.5, 2.4, 0.45, 4)
         elif kind == 'stained':
             streaks(side, u, 6)
             w.put(STAIN.format(595), side, u - 1.2, 0.7, 1.2, 1.2, next(seed), 2, 0.6, RUST,

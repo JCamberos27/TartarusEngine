@@ -372,9 +372,9 @@ maps, so the extra decals cost no texture memory). 301 is the hand-edited NPC ro
 The Forest's boundary (`project/scenes/Forest.json`) is a 4 m concrete wall with posts every 6 m: an outdoor decal test
 surface. `tools/scenes/build_forest.py` builds it, so a rebuild keeps it (`dress_walls`, on a random stream of its own;
 the trees and ground pieces keep 2.2 / 1.2 m off its line). Every panel gets a dark `DA_LiquidSplatter_003` grime band at
-the foot; 16 panels, a few per side, are dressed as one of: a graffiti piece over a painted-out patch, a firefight
-(bursts of dark `DA_Stain_596` / `_598` spall marks round a soot splat), buffed tags (a grey `DA_PeelingPaint_*` patch with
-the `SB_Wall_Concrete` preset over older tags, new tags on top), a run of tags, or rust runs (`DA_Stain_594`). Each has a
-sodium wall lamp (a spot, no shadows). Peeling-paint maps don't make chips here - they reveal concrete, and the wall is
-concrete already. Bullet holes are the runtime ones: shoot the wall (its name gives the concrete hole set). Limits
-asserted: at most 300 decals and 24 unique maps (it uses about 270 and 18).
+the foot; 16 panels, a few per side, are dressed as one of: a firefight (bursts of dark `DA_Stain_596` / `_598` spall
+marks round a soot splat), an old grey paint patch (`DA_PeelingPaint_007` / `_013` with the `SB_Wall_Concrete` preset)
+with grime runs, or rust runs (`DA_Stain_594`). Each has a sodium wall lamp (a spot, no shadows). No graffiti.
+Peeling-paint maps don't make chips here - they reveal concrete, and the wall is concrete already. Bullet holes are the
+runtime ones: shoot the wall (its name gives the concrete hole set). Limits asserted: at most 300 decals and 12 unique
+maps (it uses about 290 and 7).
