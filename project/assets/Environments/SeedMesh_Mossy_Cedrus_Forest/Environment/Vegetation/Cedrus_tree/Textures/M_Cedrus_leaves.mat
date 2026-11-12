@@ -1,5 +1,5 @@
 {
-  "alphaCutoff": 0.1,
+  "alphaCutoff": 0.33,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Cedrus_leaves",
