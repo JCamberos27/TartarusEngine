@@ -2,7 +2,10 @@
 # ground up:
 #   - a floor of soil and needles, and Grass Areas (GrassRenderer: procedural, GPU-scattered blades) only where the
 #     canopy opens: the clearing where the player starts and the glades;
-#   - scanned patches of real forest floor in drifts, and low root mounds, over the flat floor;
+#   - a gently rolling terrain (a Terrain component: +-1-2 m of smooth noise, flatter in the clearing and down to
+#     y = 0 along the boundary wall), everything below seated on it - ground-hugging pieces tipped to its slope,
+#     trees and plants upright, sunk to its lowest point under their foot;
+#   - scanned patches of real forest floor in drifts, and low root mounds;
 #   - logs, rocks and stumps, then what gathers round them: moss, ferns in stands of one species, mushrooms;
 #     ground cover in patches, flowers and tall grass in the glades, bushes, fallen branches and lichen;
 #   - deadfall: trunks lying out from the stumps they broke from, their crowns a litter of branches; fungi on the
@@ -18,7 +21,7 @@
 #   python tools/scenes/build_forest.py [<repo>]
 #
 # Writes project/scenes/Forest.json (+ .meta, its guid kept across rebuilds).
-# World (metres): X east, Z south, the ground at y = 0, the player in the clearing at the middle facing north.
+# World (metres): X east, Z south, the ground at ground(x, z) (0 at the wall), the player in the clearing facing north.
 #
 # Every prefab is checked before it is used: a LOD Group's levels are its first children in order, and each must be
 # an active model - the pack's "Background" tree variants have empty placeholders for their two nearest levels, so
@@ -28,7 +31,9 @@ import math
 import os
 import random
 import secrets
+import struct
 import sys
+import base64
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scene_kit as k  # noqa: E402
@@ -145,10 +150,11 @@ class Forest(k.Scene):
     def usable(self, paths):
         return [p for p in paths if self.prefab(p)]
 
-    def stamp(self, path, parent, pos, yaw=0.0, scale=1.0, name=None, lod=None, tilt=(0.0, 0.0)):
+    def stamp(self, path, parent, pos, yaw=0.0, scale=1.0, name=None, lod=None, tilt=(0.0, 0.0), normal=None):
         """A copy of a .prefab's entities under a new empty at pos (the editor's drop, by hand). New ids follow the
         prefab's own order, so children keep their order - a LOD Group's levels are its children in order.
-        `scale` may be one number or (x, y, z); `tilt` is (pitch, roll) after the yaw."""
+        `scale` may be one number or (x, y, z); `tilt` is (pitch, roll) after the yaw; `normal` tips the whole piece
+        (after its yaw and tilt) so its up follows that vector - the ground's slope."""
         p = self.prefab(path)
         root = self.empty(name or os.path.splitext(os.path.basename(path))[0], parent, pos, yaw=yaw, static=True)
         top = next(e for e in self.empties if e['id'] == root)
@@ -157,6 +163,8 @@ class Forest(k.Scene):
             top['scale'] = [round(v, 3) for v in sc]
         if tilt != (0.0, 0.0):
             top['rotation'] = k.euler_quat(yaw, tilt[0], tilt[1])
+        if normal is not None:
+            top['rotation'] = [round(v, 6) for v in quat_mul(up_to(normal), k.euler_quat(yaw, tilt[0], tilt[1]))]
         ents = sorted(((key, e) for key in ('empties', 'boxes', 'models') for e in p.get(key, [])),
                       key=lambda ke: (ke[1].get('order', ke[1]['id']), ke[1]['id']))
         remap = {e['id']: self._next() for _, e in ents}
@@ -202,7 +210,7 @@ def grass(**kw):
          'Width': 0.03, 'Bend': 0.5, 'Base Color': [0.026, 0.04, 0.018], 'Tip Color': [0.14, 0.17, 0.07],
          'Dry Color': [0.2, 0.17, 0.1], 'Color Variation': 0.35, 'Patchiness': 0.55, 'Wind Strength': 0.35,
          'Wind Speed': 0.85, 'Near Distance': 16.0, 'Draw Distance': 60.0, 'Edge Fade': 3.0, 'Seed': 1,
-         'Receive Shadows': True}
+         'Receive Shadows': True, 'Follow Terrain': True}
     g.update(kw)
     return {'Grass Area': g}
 
@@ -237,6 +245,92 @@ class Grid:
 
     def add(self, x, z, r):
         self.cells.setdefault((int(x // self.cell), int(z // self.cell)), []).append((x, z, r))
+
+def smoothstep(a, b, x):
+    t = min(max((x - a) / (b - a), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+# --- the terrain: TERRAIN_RES samples over TERRAIN_SIZE metres a side, centred on the origin, stored as 16-bit
+# heights (TerrainGrid.h). Placements sample the quantized grid with the engine's own triangle split, so they sit
+# exactly on the mesh and its collider.
+TERRAIN_SIZE = 2 * 100.0 + 40.0     # 2 * OUTER + 40: past the last trees
+TERRAIN_RES = 241                   # 1 m cells
+TERRAIN_SEED = 41
+
+
+def terrain_raw(x, z):
+    """The rolling ground before quantizing: two octaves of smooth noise, +-1-2 m, eased flat in the clearing (a
+    little roll left) and down to 0 along the wall's line, so its foot and lamps stay where they were."""
+    h = ((noise2(x, z, TERRAIN_SEED, 24.0) - 0.5) * 3.4 + (noise2(x, z, TERRAIN_SEED + 2, 13.0) - 0.5) * 0.5 +
+         (noise2(x, z, TERRAIN_SEED + 4, 60.0) - 0.5) * 1.6)
+    cx, cz, cr = CLEARING
+    clear = 0.15 + 0.85 * smoothstep(cr - 2.0, cr + 9.0, math.hypot(x - cx, z - cz))
+    wall = min(abs(abs(x) - HALF) if abs(z) < HALF + 14 else 99.0, abs(abs(z) - HALF) if abs(x) < HALF + 14 else 99.0)
+    return h * clear * smoothstep(0.8, 14.0, wall)
+
+
+class Terrain:
+    def __init__(self):
+        n, size = TERRAIN_RES, TERRAIN_SIZE
+        self.cell = size / (n - 1)
+        raw = [terrain_raw(-size / 2 + i * self.cell, -size / 2 + j * self.cell) for j in range(n) for i in range(n)]
+        self.lo, self.hi = math.floor(min(raw) * 10) / 10 - 0.1, math.ceil(max(raw) * 10) / 10 + 0.1
+        q = [round((h - self.lo) / (self.hi - self.lo) * 65535) for h in raw]
+        self.h = [self.lo + v * (self.hi - self.lo) / 65535 for v in q]       # what the engine decodes
+        self.b64 = base64.b64encode(struct.pack('<%dH' % len(q), *q)).decode('ascii')
+
+    def __call__(self, x, z):
+        """TerrainGrid::Height: the cell's two triangles, split from (i+1, j) to (i, j+1)."""
+        n = TERRAIN_RES
+        gx = min(max((x + TERRAIN_SIZE / 2) / self.cell, 0.0), n - 1.0)
+        gz = min(max((z + TERRAIN_SIZE / 2) / self.cell, 0.0), n - 1.0)
+        i, j = min(int(gx), n - 2), min(int(gz), n - 2)
+        fx, fz = gx - i, gz - j
+        h00, h10, h01, h11 = self.h[j * n + i], self.h[j * n + i + 1], self.h[(j + 1) * n + i], self.h[(j + 1) * n + i + 1]
+        if fx + fz <= 1.0:
+            return h00 + fx * (h10 - h00) + fz * (h01 - h00)
+        return h11 + (1 - fx) * (h01 - h11) + (1 - fz) * (h10 - h11)
+
+    def low(self, x, z, r):
+        """The lowest ground under a foot of radius r: an upright piece sunk to it never floats on a slope."""
+        return min(self(x + dx * r, z + dz * r) for dx, dz in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)))
+
+    def normal(self, x, z, r):
+        """The ground's up vector fitted over r metres round (x, z)."""
+        sx = (self(x + r, z) - self(x - r, z)) / (2 * r)
+        sz = (self(x, z + r) - self(x, z - r)) / (2 * r)
+        ln = math.sqrt(sx * sx + 1 + sz * sz)
+        return (-sx / ln, 1 / ln, -sz / ln)
+
+    def entity(self, s, parent, material):
+        """The floor: a model entity of the engine's Terrain, its mesh collider and the forest-floor material."""
+        e = s._common('Forest Floor', parent, (0.0, 0.0, 0.0), 0.0)
+        e.update({'path': 'primitive://terrain#0', 'static': True, 'materials': [{'embedded': material}],
+                  'collider': {'friction': 0.8, 'isTrigger': False, 'shape': 4},
+                  'Terrain': {'Size X': TERRAIN_SIZE, 'Size Z': TERRAIN_SIZE, 'Res X': TERRAIN_RES, 'Res Z': TERRAIN_RES,
+                              'Height Min': self.lo, 'Height Max': self.hi, 'UV Tile': 4.0, 'Heights': self.b64}})
+        s.models.append(e)
+        return e
+
+
+def quat_mul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
+
+
+def up_to(n):
+    """The shortest rotation taking +Y to the unit vector n."""
+    x, y, z = n
+    ax, az = z, -x                  # (0, 1, 0) x n
+    s = math.sqrt(ax * ax + az * az)
+    if s < 1e-9:
+        return [0.0, 0.0, 0.0, 1.0]
+    ang = math.atan2(s, y) / 2
+    return [ax / s * math.sin(ang), 0.0, az / s * math.sin(ang), math.cos(ang)]
+
 
 # The boundary wall: precast concrete panels between posts, the decal test surface. WALLS: side -> (the axis it sits
 # on, its sign); its inner face is WALL_T / 2 in from +-HALF. Trees keep WALL_CLEAR_TREE metres off its line, every
@@ -402,7 +496,8 @@ def build(repo):
 
     root = s.empty('Forest', -1, (0, 0, 0), static=True)
     ground = k.from_mat(repo, GROUND, triplanar=True, triplanarScale=0.25)
-    s.box('Forest Floor', root, (0.0, -0.2, 0.0), (2 * OUTER + 40.0, 0.4, 2 * OUTER + 40.0), ground, static=True)
+    H = Terrain()
+    H.entity(s, root, ground)
     concrete = k.textured(repo, *CONCRETE, base=WALL_TINT, triplanar_scale=0.6, roughness=0.9)
     for side, (axis, sign) in WALLS.items():
         c = (0.0, WALL_H / 2, sign * HALF) if axis == 'z' else (sign * HALF, WALL_H / 2, 0.0)
@@ -442,9 +537,9 @@ def build(repo):
         # Storm damage: now and then a tree leans, its foot sunk so the lean reads as roots giving way.
         lean = lean_rng.random() < 0.035 and not edge
         tilt = (round(lean_rng.uniform(6.0, 15.0), 1), round(lean_rng.uniform(-4.0, 4.0), 1)) if lean else (0.0, 0.0)
-        y = -0.25 if lean else 0.0
+        y = H.low(x, z, 0.5 * scale) - (0.25 if lean else 0.0)     # upright, sunk to the low side of its foot
         leaning += lean
-        tree = s.stamp(path, grp, (round(x, 2), y, round(z, 2)), yaw=yaw, scale=scale, name='Cedar', lod=LODS['tree'],
+        tree = s.stamp(path, grp, (round(x, 2), round(y, 3), round(z, 2)), yaw=yaw, scale=scale, name='Cedar', lod=LODS['tree'],
                        tilt=tilt)
         var = int(path.rsplit('_var', 1)[1].split('.')[0])
         if var in TREE_COVER and cover_rng.random() < TREE_COVER_SHARE and s.prefab(TREE_COVER[var]):
@@ -486,10 +581,13 @@ def build(repo):
         return px + math.cos(a) * r, pz + math.sin(a) * r
 
     def scatter(name, paths, n, near_tree, r_min, r_max, scale, avoid=1.0, spread=HALF + 4.0, clearing_ok=False,
-                lod='plant', anchors=None, near_anchor=0.0, a_min=0.5, a_max=2.0, off_mounds=False, group=None):
+                lod='plant', anchors=None, near_anchor=0.0, a_min=0.5, a_max=2.0, off_mounds=False, group=None,
+                hug=0.0, sink=0.0):
         """`n` copies of `paths`: round a random anchor (a_min..a_max off it) with probability `near_anchor`, else
         round a random trunk (r_min..r_max) with probability `near_tree`, else anywhere; kept off the clearing
-        (unless clearing_ok) and `avoid` metres apart. Returns what it placed: (x, z, path, yaw, scale)."""
+        (unless clearing_ok) and `avoid` metres apart. hug > 0: tipped to the ground's slope fitted over `hug` metres
+        (ground-hugging pieces); else upright, sunk to the lowest ground under it. `sink` lowers it further.
+        Returns what it placed: (x, z, path, yaw, scale)."""
         group = group or s.empty(name, root, (0, 0, 0), static=True)
         usable = s.usable(paths)
         pts = []
@@ -522,7 +620,12 @@ def build(repo):
             if by_wall(x, z, WALL_CLEAR):
                 dropped[name] = dropped.get(name, 0) + 1
                 continue
-            s.stamp(path, group, (round(x, 2), 0.0, round(z, 2)), yaw=yaw, scale=sc, lod=LODS[lod])
+            if hug > 0:
+                y, up = H(x, z), H.normal(x, z, hug * sc)
+            else:
+                y, up = H.low(x, z, 0.3 * sc), None
+            s.stamp(path, group, (round(x, 2), round(y - sink, 3), round(z, 2)), yaw=yaw, scale=sc, lod=LODS[lod],
+                    normal=up)
             pts.append((x, z, path, yaw, sc))
         counts[name] = counts.get(name, 0) + placed - dropped.get(name, 0)
         return pts
@@ -557,7 +660,8 @@ def build(repo):
                 if not ok(x, z, clearing_ok=clearing_ok) or local.near(x, z, avoid) or on_mound(x, z):
                     continue
                 local.add(x, z, avoid)
-                s.stamp(rng.choice(kind), group, (round(x, 2), 0.0, round(z, 2)), yaw=round(rng.uniform(0, 360), 1),
+                s.stamp(rng.choice(kind), group, (round(x, 2), round(H.low(x, z, 0.25), 3), round(z, 2)),
+                        yaw=round(rng.uniform(0, 360), 1),
                         scale=rng.uniform(*scale), lod=LODS[lod])
                 n += 1
         counts[name] = n
@@ -573,8 +677,9 @@ def build(repo):
         x, z = rng.uniform(-HALF - 4, HALF + 4), rng.uniform(-HALF - 4, HALF + 4)
         if noise2(x, z, 7, 14.0) < 0.5 or not ok(x, z, clearing_ok=True, clear=0.8):
             continue
-        s.stamp(rng.choice(scans), floor, (round(x, 2), -0.04, round(z, 2)), yaw=round(rng.uniform(0, 360), 1),
-                scale=rng.uniform(0.8, 1.5), lod=LODS['solid'])
+        sc = rng.uniform(0.8, 1.5)
+        s.stamp(rng.choice(scans), floor, (round(x, 2), round(H(x, z) - 0.04, 3), round(z, 2)),
+                yaw=round(rng.uniform(0, 360), 1), scale=sc, lod=LODS['solid'], normal=H.normal(x, z, 1.0 * sc))
         n_scan += 1
     counts['ground scans'] = n_scan
     hump = s.empty('Mounds', root, (0, 0, 0), static=True)
@@ -585,15 +690,16 @@ def build(repo):
         if not ok(x, z, clear=2.5) or math.hypot(x - cx, z - cz) < cr + 1.5 or on_mound(x, z):
             continue
         sxz, sy = rng.uniform(2.0, 3.2), rng.uniform(1.0, 1.6)
-        s.stamp(rng.choice(scans), hump, (round(x, 2), round(-0.05 * sy, 3), round(z, 2)),
-                yaw=round(rng.uniform(0, 360), 1), scale=(sxz, sy, sxz * rng.uniform(0.8, 1.1)), lod=LODS['solid'])
+        s.stamp(rng.choice(scans), hump, (round(x, 2), round(H(x, z) - 0.05 * sy, 3), round(z, 2)),
+                yaw=round(rng.uniform(0, 360), 1), scale=(sxz, sy, sxz * rng.uniform(0.8, 1.1)), lod=LODS['solid'],
+                normal=H.normal(x, z, 0.6 * sxz))
         mounds.append((x, z, 0.75 * sxz))
     counts['mounds'] = len(mounds)
 
     # --- the solid pieces first: logs, rocks and stumps are what ferns, moss and fungi gather round.
-    logs = scatter('Logs', LOGS, 45, 0.4, 2.0, 8.0, (0.8, 1.15), avoid=6.0, lod='solid')
-    rocks = scatter('Rocks', ROCKS, 70, 0.3, 1.5, 8.0, (0.6, 1.3), avoid=3.5, lod='solid')
-    stumps = scatter('Stumps', STUMPS, 35, 0.2, 2.0, 8.0, (0.8, 1.2), avoid=5.0, lod='solid')
+    logs = scatter('Logs', LOGS, 45, 0.4, 2.0, 8.0, (0.8, 1.15), avoid=6.0, lod='solid', hug=1.5, sink=0.04)
+    rocks = scatter('Rocks', ROCKS, 70, 0.3, 1.5, 8.0, (0.6, 1.3), avoid=3.5, lod='solid', hug=0.8, sink=0.05)
+    stumps = scatter('Stumps', STUMPS, 35, 0.2, 2.0, 8.0, (0.8, 1.2), avoid=5.0, lod='solid', sink=0.03)
 
     # --- deadfall: a trunk that broke and fell, lying out from its stump, its crown end a mess of branches and
     # needles, fungi at its foot.
@@ -617,25 +723,38 @@ def build(repo):
         st = rng.choice(STUMPS)
         if not s.prefab(st):
             continue
-        site = s.empty('Fallen Tree', dead, (round(x0, 2), 0.0, round(z0, 2)), static=True)
+        y0 = H.low(x0, z0, 0.4)
+        site = s.empty('Fallen Tree', dead, (round(x0, 2), round(y0 - 0.03, 3), round(z0, 2)), static=True)
         st_sc = rng.uniform(0.9, 1.15)
         s.stamp(st, site, (0.0, 0.0, 0.0), yaw=round(rng.uniform(0, 360), 1), scale=st_sc, lod=LODS['solid'])
+
+        def rel(px, pz):
+            """The ground under a site-local point, relative to the site."""
+            return round(H(x0 + px, z0 + pz) - y0 + 0.03, 3)
         stumps.append((x0, z0, st, 0.0, st_sc))
         mid = 0.7 + length / 2          # the log starts just past the stump
         yaw = math.degrees(math.atan2(-dz, dx)) if axis == 'x' else math.degrees(math.atan2(dx, dz))
-        s.stamp(path, site, (round(dx * mid, 2), 0.0, round(dz * mid, 2)), yaw=round(yaw, 1), scale=sc,
-                lod=LODS['solid'])
+        # The log lies along the slope between its two ends and across it at its middle.
+        h0, h1 = H(x0 + dx * 0.7, z0 + dz * 0.7), H(x0 + dx * (0.7 + length), z0 + dz * (0.7 + length))
+        ha = H(x0 + dx * mid - dz * 0.6, z0 + dz * mid + dx * 0.6)
+        hb = H(x0 + dx * mid + dz * 0.6, z0 + dz * mid - dx * 0.6)
+        along, across = (h1 - h0) / length, (hb - ha) / 1.2     # rise per metre along (dx, dz) and along (dz, -dx)
+        n = (-(along * dx + across * dz), 1.0, -(along * dz - across * dx))
+        ln = math.sqrt(sum(v * v for v in n))
+        s.stamp(path, site, (round(dx * mid, 2), round((h0 + h1) / 2 - y0 - 0.02, 3), round(dz * mid, 2)),
+                yaw=round(yaw, 1), scale=sc, lod=LODS['solid'], normal=tuple(v / ln for v in n))
         end = 0.7 + length
         crown = [p for p in CROWN_DEBRIS if s.prefab(p)]
         for i in range(rng.randint(2, 4)):
             t = end + rng.uniform(-0.6, 1.2)
             ox, oz = -dz * rng.uniform(-1.4, 1.4), dx * rng.uniform(-1.4, 1.4)
-            s.stamp(rng.choice(crown), site, (round(dx * t + ox, 2), 0.0, round(dz * t + oz, 2)),
+            s.stamp(rng.choice(crown), site, (round(dx * t + ox, 2), rel(dx * t + ox, dz * t + oz), round(dz * t + oz, 2)),
                     yaw=round(rng.uniform(0, 360), 1), scale=rng.uniform(0.8, 1.2), lod=LODS['small'])
         for i in range(rng.randint(5, 10)):
             t = rng.uniform(0.6, end + 1.5)
             ox, oz = -dz * rng.uniform(-1.2, 1.2), dx * rng.uniform(-1.2, 1.2)
-            s.stamp(rng.choice(FALLING_DEBRIS + DEBRIS[:7]), site, (round(dx * t + ox, 2), 0.0, round(dz * t + oz, 2)),
+            s.stamp(rng.choice(FALLING_DEBRIS + DEBRIS[:7]), site,
+                    (round(dx * t + ox, 2), rel(dx * t + ox, dz * t + oz), round(dz * t + oz, 2)),
                     yaw=round(rng.uniform(0, 360), 1), scale=rng.uniform(0.9, 1.4), lod=LODS['small'])
         falls += line
         # (as a log lying along its local X, which the fungi below go by)
@@ -645,7 +764,7 @@ def build(repo):
     wood_pts = [(x, z) for x, z, *_ in logs + stumps]
     anchors = wood_pts + [(x, z) for x, z, *_ in rocks]
     scatter('Moss Mats', MOSS, 260, 0.6, 0.5, 3.5, (0.8, 1.4), avoid=1.2, anchors=anchors, near_anchor=0.35,
-            a_min=0.4, a_max=1.6)
+            a_min=0.4, a_max=1.6, hug=0.6)
     patches('Ground Cover', [GROUND_COVER[0:3], GROUND_COVER[3:9], GROUND_COVER[9:11]], 260, (3, 8), 2.2,
             (0.8, 1.3), anchors, 0.2, 0.45, avoid=0.6, clearing_ok=True)
     patches('Ferns', FERN_SPECIES, 170, (4, 9), 3.0, (0.75, 1.3), anchors, 0.45, 0.35, avoid=0.8)
@@ -656,7 +775,7 @@ def build(repo):
             where=glade)
     scatter('Bushes', BUSHES, 260, 0.6, 1.5, 7.0, (0.7, 1.2), avoid=2.2)
     scatter('Debris', DEBRIS, 420, 0.75, 0.5, 6.0, (0.8, 1.2), avoid=0.8, clearing_ok=True, lod='small',
-            off_mounds=True)
+            off_mounds=True, hug=0.6)
     scatter('Mushrooms', MUSHROOMS, 160, 0.9, 0.4, 1.6, (0.8, 1.4), avoid=0.4, lod='small', anchors=wood_pts,
             near_anchor=0.5, a_min=0.3, a_max=1.1, off_mounds=True)
 
@@ -673,8 +792,8 @@ def build(repo):
             t, side = rng.uniform(-0.8, 0.8) * sc, rng.choice((-1, 1)) * 0.2 * sc
             px, pz = x + ax * t - az * side, z + az * t + ax * side
             for _ in range(rng.randint(2, 5)):
-                s.stamp(rng.choice(wood), fungi, (round(px + rng.uniform(-0.12, 0.12), 3), 0.0,
-                                                  round(pz + rng.uniform(-0.12, 0.12), 3)),
+                fx, fz = px + rng.uniform(-0.12, 0.12), pz + rng.uniform(-0.12, 0.12)
+                s.stamp(rng.choice(wood), fungi, (round(fx, 3), round(H(fx, fz), 3), round(fz, 3)),
                         yaw=round(rng.uniform(0, 360), 1), scale=rng.uniform(0.8, 1.5), lod=LODS['small'])
                 n_f += 1
     shelves = s.usable(TREE_MUSHROOMS)
@@ -688,7 +807,9 @@ def build(repo):
             a = a0 + rng.uniform(-0.6, 0.6)
             dx, dz = math.cos(a), math.sin(a)
             y = rng.uniform(lo, hi) * sc
-            s.stamp(rng.choice(shelves), fungi, (round(x + dx * r * sc * 0.92, 3), round(y, 3), round(z + dz * r * sc * 0.92, 3)),
+            base = H.low(x, z, 0.3 * sc) - 0.03     # the stump's own seat (Stumps: upright, sunk 3 cm)
+            s.stamp(rng.choice(shelves), fungi,
+                    (round(x + dx * r * sc * 0.92, 3), round(base + y, 3), round(z + dz * r * sc * 0.92, 3)),
                     yaw=round(math.degrees(math.atan2(dx, dz)), 1), scale=rng.uniform(0.7, 1.1), lod=LODS['small'])
             n_f += 1
     counts['wood fungi'] = n_f
@@ -698,7 +819,7 @@ def build(repo):
     # The player in the clearing, facing north into the trees
     for e in s.empties:
         if e['parentId'] == -1 and 'First Person Controller' in e:
-            e['position'] = [cx, 0.0, cz + 4.0]
+            e['position'] = [cx, round(H(cx, cz + 4.0), 3), cz + 4.0]
             e['rotation'] = k.euler_quat(0.0)
     return s, counts
 

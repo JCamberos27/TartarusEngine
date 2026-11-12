@@ -13,6 +13,11 @@ layout(std430, binding = 31) readonly buffer GrassChunks { ivec4 uChunks[]; };
 struct GrassBlade { vec4 A; vec4 B; vec4 C; };
 layout(std430, binding = 32) writeonly buffer GrassBlades { GrassBlade uBlades[]; };
 layout(std430, binding = 33) buffer GrassCmd { uint uCmd[8]; };
+// The scene's terrain (TerrainGrid), for areas with Follow Terrain (Wind.y): heights row-major along X.
+layout(std430, binding = 34) readonly buffer GrassTerrain { float uTerrainH[]; };
+uniform int  uHasTerrain;
+uniform vec4 uTerrainRect; // world x, z of the grid's (0, 0) sample, cell size x, z
+uniform vec3 uTerrainRes;  // samples along x, z, the terrain entity's world y
 
 uniform vec4 uFrustum[6]; // world-space planes (normal, d): inside where dot(n, p) + d >= 0
 uniform vec3 uEye;
@@ -49,6 +54,19 @@ float KeepFraction(float dist, float nearDist, float drawDist) { // GrassRendere
     return kMinKeep + (1.0 - kMinKeep) * f * f;
 }
 
+// TerrainGrid::Height: the same two triangles per cell (split from (i+1, j) to (i, j+1)) as the mesh.
+float TerrainHeight(vec2 wxz) {
+    ivec2 res = ivec2(uTerrainRes.xy);
+    vec2 g = clamp((wxz - uTerrainRect.xy) / uTerrainRect.zw, vec2(0.0), vec2(res - 1));
+    ivec2 c = min(ivec2(g), res - 2);
+    vec2 f = g - vec2(c);
+    int k = c.y * res.x + c.x;
+    float h00 = uTerrainH[k], h10 = uTerrainH[k + 1], h01 = uTerrainH[k + res.x], h11 = uTerrainH[k + res.x + 1];
+    float h = f.x + f.y <= 1.0 ? h00 + f.x * (h10 - h00) + f.y * (h01 - h00)
+                               : h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
+    return uTerrainRes.z + h;
+}
+
 void main() {
     ivec4 ch = uChunks[gl_WorkGroupID.x];
     GrassArea A = uAreas[ch.x];
@@ -78,7 +96,7 @@ void main() {
                 vec2 edge = 0.5 * A.Size.xy - abs(local);
                 if (edge.x >= 0.0 && edge.y >= 0.0) {
                     vec2 wxz = A.Origin.xz + A.Axes.xy * local.x + A.Axes.zw * local.y;
-                    vec3 root = vec3(wxz.x, A.Origin.y, wxz.y);
+                    vec3 root = vec3(wxz.x, A.Wind.y > 0.5 && uHasTerrain == 1 ? TerrainHeight(wxz) : A.Origin.y, wxz.y);
                     // Two octaves of patch noise: clumps a few metres across, broken up at their edges.
                     float patchN = ValueNoise(wxz * 0.16, seed * 7u + 3u) * 0.65 + ValueNoise(wxz * 0.55, seed * 7u + 5u) * 0.35;
                     float grow = mix(1.0, smoothstep(0.2, 0.55, patchN), patchiness);

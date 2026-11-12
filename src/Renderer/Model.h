@@ -1,4 +1,6 @@
 #pragma once
+struct TerrainGrid; // Model::CreateTerrain
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -149,6 +151,9 @@ public:
     // per-path asset cache and scene-save/load round-trip both work unmodified — the caller
     // (AssetLibrary) is responsible for making that path unique per placed instance.
     static std::shared_ptr<Model> CreatePrimitive(const std::string& kind, const std::string& path);
+    // A terrain's mesh (TerrainComponent / TerrainGrid), its own geometry (not shared), under `path`
+    // ("primitive://terrain#<key>", so it is treated as generated geometry everywhere a primitive is).
+    static std::shared_ptr<Model> CreateTerrain(const TerrainGrid& grid, float uvTile, const std::string& path);
 
     // #124 — the files a model file needs next to it to import completely: glTF buffers and
     // images, OBJ .mtl libraries, and every external texture the materials reference (resolved

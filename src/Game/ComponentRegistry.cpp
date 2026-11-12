@@ -1627,8 +1627,29 @@ void RegisterEngineComponents() {
             { "Edge Fade", T::Float, TARTARUS_REFLECT_FIELD(G, EdgeFade), 0.05f, "Metres over which the field thins out at its edges.", 0.0f, 20.0f },
             { "Seed", T::Int, TARTARUS_REFLECT_FIELD(G, Seed), 1.0f, "Random seed for the scatter." },
             { "Receive Shadows", T::Bool, TARTARUS_REFLECT_FIELD(G, ReceiveShadows), 0.0f, "Darkened by the sun's and lamps' shadows." },
+            { "Follow Terrain", T::Bool, TARTARUS_REFLECT_FIELD(G, FollowTerrain), 0.0f, "Root the blades on the scene's Terrain instead of this object's flat plane." },
         };
         Register<GrassAreaComponent>(std::move(m));
+    }
+
+    {
+        ReflectComponent m;
+        m.Name = "Terrain"; m.Icon = ICON_FA_MOUNTAIN; m.Category = "Rendering";
+        m.Tooltip = "A height-grid terrain, centred on this object: drawn with this object's material slots and collided\n"
+                    "with through a Mesh collider. The heights come from a tool (e.g. tools/scenes/build_forest.py).";
+        using G = TerrainComponent;
+        m.Fields = {
+            { "Size X", T::Float, TARTARUS_REFLECT_FIELD(G, SizeX), 0.5f, "Metres along local X.", 1.0f, 10000.0f },
+            { "Size Z", T::Float, TARTARUS_REFLECT_FIELD(G, SizeZ), 0.5f, "Metres along local Z.", 1.0f, 10000.0f },
+            { "Res X", T::Int, TARTARUS_REFLECT_FIELD(G, ResX), 1.0f, "Height samples along X.", 2.0f, 4097.0f },
+            { "Res Z", T::Int, TARTARUS_REFLECT_FIELD(G, ResZ), 1.0f, "Height samples along Z.", 2.0f, 4097.0f },
+            { "Height Min", T::Float, TARTARUS_REFLECT_FIELD(G, HeightMin), 0.01f, "Height of a 0 sample, metres." },
+            { "Height Max", T::Float, TARTARUS_REFLECT_FIELD(G, HeightMax), 0.01f, "Height of a 65535 sample, metres." },
+            { "UV Tile", T::Float, TARTARUS_REFLECT_FIELD(G, UVTile), 0.05f, "Metres per texture repeat.", 0.05f, 1000.0f },
+            { "Heights", T::String, TARTARUS_REFLECT_FIELD(G, Heights), 0.0f, "Base64 16-bit samples." },
+        };
+        m.Fields.back().EditorHidden = true;
+        Register<TerrainComponent>(std::move(m));
     }
 
     Register<ReflectionProbeComponent>({
