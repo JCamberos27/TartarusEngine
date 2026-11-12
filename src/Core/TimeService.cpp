@@ -29,6 +29,7 @@ float  g_TimeScale = 1.0f;
 float  g_DebugTimeScale = 1.0f;
 float  g_MaxDelta = 0.1f;
 double g_RefreshPeriod = 0.0; // SetRefreshPeriod; 0 = deltas as measured
+double g_FixedStep = 0.0; // SetFixedStep
 double g_Unpaced = 0.0;       // measured time not yet handed out as whole refreshes (+ ahead, - behind)
 double g_AvgDelta = 0.0;      // the measured delta, averaged over the last ~20 frames
 
@@ -70,6 +71,14 @@ void BeginFrame() {
     if (g_RealDelta < 0.0f) g_RealDelta = 0.0f;
     g_FrameStart = now;
     g_UnscaledDelta = std::min(g_RealDelta, g_MaxDelta);
+    if (g_FixedStep > 0.0) { // --perf-bench --smoke-shots: the same game time at every frame, run to run
+        g_UnscaledDelta = (float)g_FixedStep;
+        g_Delta = g_UnscaledDelta * EffectiveTimeScale();
+        g_UnscaledTime += g_UnscaledDelta;
+        g_Time += g_Delta;
+        ++g_FrameCount;
+        return;
+    }
     g_AvgDelta += ((double)g_UnscaledDelta - g_AvgDelta) * 0.05;
     // Frames coming faster than the refresh: the sync isn't holding them (the driver overrides it), so as measured.
     if (const double period = g_RefreshPeriod; period > 0.0 && g_UnscaledDelta > 0.0f && g_AvgDelta > period * 0.9) {
@@ -81,6 +90,8 @@ void BeginFrame() {
     g_Time += g_Delta;
     ++g_FrameCount;
 }
+
+void SetFixedStep(double seconds) { g_FixedStep = seconds > 0.0 ? seconds : 0.0; }
 
 void SetRefreshPeriod(double seconds) {
     seconds = seconds > 0.0 ? seconds : 0.0;
