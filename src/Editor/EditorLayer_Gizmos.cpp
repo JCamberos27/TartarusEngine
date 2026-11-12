@@ -35,6 +35,7 @@
 #include "gl.h"
 #include "DecalAsset.h"
 
+#include <chrono>
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax/ImFloor, ImGuiWindow, and the item-flag helpers the panels use
 #include <backends/imgui_impl_glfw.h>
@@ -151,9 +152,12 @@ struct SurfaceHit {
     glm::vec3 Normal{0.0f, 1.0f, 0.0f};
     int Mesh = -1; // index into the model's meshes = its material slot
 };
+// `cachedTransforms`: read this frame's world-transform cache instead of re-deriving every parent chain. Much cheaper
+// in a big scene, but an entity moved since the rebuild is tested where it was - fine for the icons' occlusion
+// rays, not for picking or snapping right after a drag.
 template <class SkipFn>
 SurfaceHit RaycastRenderables(const World& world, const glm::vec3& origin, const glm::vec3& dir, SkipFn skip,
-                              float maxT = 1e30f) {
+                              float maxT = 1e30f, bool cachedTransforms = false) {
     SurfaceHit best;
     best.T = maxT;
     auto view = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
@@ -161,7 +165,7 @@ SurfaceHit RaycastRenderables(const World& world, const glm::vec3& origin, const
         if (skip(entity)) continue;
         const auto& r = view.get<const RenderableComponent>(entity);
         if (!r.ModelRef || r.ModelRef->MeshCount() == 0) continue;
-        const glm::mat4 model = world.ComposeWorldTransform(entity);
+        const glm::mat4 model = cachedTransforms ? world.GetCachedWorldTransform(entity) : world.ComposeWorldTransform(entity);
         const AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}.Transformed(model);
         float boxT;
         if (!wb.RayIntersect(origin, dir, boxT) || boxT >= best.T) continue; // broadphase
@@ -1819,9 +1823,15 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
     // Pass 2: occlusion. One ray from the camera to each icon (the editor's triangle-exact
     // RaycastRenderables, which also works outside Play), refreshed stalest-first within a
     // per-frame budget; an icon never checked is treated as visible. Selected icons never hide.
+    // Each ray walks every renderable (no spatial index), so in a big scene (the Forest: ~18k
+    // models) one costs about a millisecond: the budget is time as well as count - at least one
+    // ray a frame, then more only while under kRayBudgetMs. Sixteen lamps took the Scene view
+    // from 35 to 6 fps on a count-only budget.
     ++m_IconOcclusionFrame;
     {
         constexpr size_t kRaysPerFrame = 24;
+        constexpr double kRayBudgetMs = 1.0;
+        const auto rayStart = std::chrono::steady_clock::now();
         std::vector<std::pair<std::uint32_t, size_t>> stale; // (frame last checked, item index)
         for (size_t i = 0; i < items.size(); ++i) {
             if (items[i].Selected) continue;
@@ -1831,6 +1841,9 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
         const size_t n = std::min(stale.size(), kRaysPerFrame);
         std::partial_sort(stale.begin(), stale.begin() + (std::ptrdiff_t)n, stale.end());
         for (size_t k = 0; k < n; ++k) {
+            if (k > 0 && std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - rayStart).count() >
+                             kRayBudgetMs)
+                break; // the rest stay stale and go first next frame
             const Item& it = items[stale[k].second];
             // The icon's own ancestors (a lamp fixture it hangs from) must not hide it.
             std::vector<entt::entity> skipChain;
@@ -1847,7 +1860,7 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
             const SurfaceHit hit = RaycastRenderables(
                 world, camPos, toIcon / dist,
                 [&](entt::entity e) { return std::find(skipChain.begin(), skipChain.end(), e) != skipChain.end(); },
-                std::max(dist - 0.3f, 0.0f));
+                std::max(dist - 0.3f, 0.0f), /*cachedTransforms=*/true);
             IconOcclusion& slot = m_IconOcclusion[it.Entity];
             slot.Occluded = hit.Entity != entt::null;
             slot.FrameChecked = m_IconOcclusionFrame;
