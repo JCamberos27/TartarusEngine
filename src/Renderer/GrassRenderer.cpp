@@ -10,6 +10,8 @@
 #include "Core/TimeService.h"
 #include "Game/Components.h"
 #include "Game/World.h"
+#include "Game/TerrainSystem.h"
+#include "TerrainGrid.h"
 #include "Physics/Frustum.h"
 
 #include <algorithm>
@@ -18,7 +20,7 @@
 
 namespace {
 // SSBO bindings (Grass.comp / .vert / .frag.glsl).
-constexpr unsigned kAreaBinding = 30, kChunkBinding = 31, kBladeBinding = 32, kCmdBinding = 33;
+constexpr unsigned kAreaBinding = 30, kChunkBinding = 31, kBladeBinding = 32, kCmdBinding = 33, kTerrainBinding = 34;
 constexpr std::size_t kBladeBytes = 3 * sizeof(glm::vec4); // GrassBlade: three vec4s
 constexpr int kNearVerts = 2 * GrassRenderer::kNearSegments + 1;
 constexpr int kFarVerts = 3;
@@ -93,13 +95,13 @@ GrassRenderer::AreaDesc GrassRenderer::Describe(const GrassAreaComponent& g, con
     const float drawDist = std::max(g.DrawDistance, 1.0f);
     a.Lod = glm::vec4(std::clamp(g.NearDistance, 0.0f, drawDist), drawDist, std::max(g.EdgeFade, 0.0f),
                       std::max(g.WindStrength, 0.0f));
-    a.Wind = glm::vec4(std::max(g.WindSpeed, 0.0f), 0.0f, 0.0f, 0.0f);
+    a.Wind = glm::vec4(std::max(g.WindSpeed, 0.0f), g.FollowTerrain ? 1.0f : 0.0f, 0.0f, 0.0f);
     d.MaxHeight = a.Shape.x * (1.0f + a.Shape.y) * (1.0f + 0.5f * a.Tip.w) + 0.3f;
     return d;
 }
 
 void GrassRenderer::SelectChunks(const std::vector<AreaDesc>& areas, const Frustum& frustum, const glm::vec3& eye,
-                                 std::vector<ChunkGpu>& out) {
+                                 std::vector<ChunkGpu>& out, const TerrainRef* terrain) {
     out.clear();
     struct Pick { float Dist; ChunkGpu Chunk; };
     static std::vector<Pick> picks;
@@ -114,6 +116,7 @@ void GrassRenderer::SelectChunks(const std::vector<AreaDesc>& areas, const Frust
         const glm::vec3 o(a.Origin);
         const glm::vec2 ax(a.Axes.x, a.Axes.y), az(a.Axes.z, a.Axes.w);
         const float drawDist = a.Lod.y;
+        const TerrainGrid* ground = (a.Wind.y > 0.5f && terrain && terrain->Grid) ? terrain->Grid.get() : nullptr;
         // Whole area too far: skip its chunks without walking them.
         {
             const float r = 0.5f * std::sqrt(sx * sx + sz * sz);
@@ -129,6 +132,13 @@ void GrassRenderer::SelectChunks(const std::vector<AreaDesc>& areas, const Frust
                     const glm::vec2 w = glm::vec2(o.x, o.z) + ax * lx + az * lz;
                     mn = glm::min(mn, glm::vec3(w.x, o.y - 0.1f, w.y));
                     mx = glm::max(mx, glm::vec3(w.x, o.y + areas[ai].MaxHeight, w.y));
+                }
+                if (ground) { // the blades stand on the terrain under the chunk's footprint
+                    float lo, hi;
+                    ground->RangeIn(mn.x - terrain->Origin.x, mn.z - terrain->Origin.z, mx.x - terrain->Origin.x,
+                                    mx.z - terrain->Origin.z, lo, hi);
+                    mn.y = terrain->Origin.y + lo - 0.1f;
+                    mx.y = terrain->Origin.y + hi + areas[ai].MaxHeight;
                 }
                 // Blades lean and sway past their cell: pad sideways by the tallest one's reach.
                 mn -= glm::vec3(areas[ai].MaxHeight, 0.0f, areas[ai].MaxHeight);
@@ -155,12 +165,16 @@ void GrassRenderer::Gather(const World& world) {
     m_GatheredFrame = frame;
     m_Areas.clear();
     if (Disabled()) return;
+    m_Terrain = TerrainRef{};
+    bool follow = false;
     auto view = world.Registry.view<const TransformComponent, const GrassAreaComponent>();
     for (auto [entity, tc, g] : view.each()) {
         if (world.Registry.all_of<InactiveTag>(entity)) continue;
         if (!(g.Density > 0.0f) || !(g.Height > 0.0f) || !(g.SizeX > 0.0f) || !(g.SizeZ > 0.0f)) continue;
         m_Areas.push_back(Describe(g, world.GetCachedWorldTransform(entity)));
+        follow = follow || g.FollowTerrain;
     }
+    if (follow) m_Terrain.Grid = TerrainSystem::Find(world, m_Terrain.Origin, &m_Terrain.Key);
 }
 
 void GrassRenderer::EnsurePrograms() {
@@ -190,7 +204,7 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
     const Frustum frustum = Frustum::FromViewProj(viewProj);
     {
         PROFILE_SCOPE("Grass Chunks");
-        SelectChunks(m_Areas, frustum, eye, m_Chunks);
+        SelectChunks(m_Areas, frustum, eye, m_Chunks, &m_Terrain);
     }
     if (m_Chunks.empty()) return false;
     EnsurePrograms();
@@ -202,6 +216,13 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
     glNamedBufferData(m_AreaBuf, (GLsizeiptr)(areas.size() * sizeof(AreaGpu)), areas.data(), GL_STREAM_DRAW);
     glNamedBufferData(m_ChunkBuf, (GLsizeiptr)(m_Chunks.size() * sizeof(ChunkGpu)), m_Chunks.data(), GL_STREAM_DRAW);
     glNamedBufferSubData(m_CmdBuf, 0, (GLsizeiptr)sizeof(kCmdReset), kCmdReset);
+    const TerrainGrid* ground = m_Terrain.Grid.get();
+    if (ground && m_TerrainUploaded != m_Terrain.Key) { // the Follow Terrain areas' heights, once per terrain
+        if (!m_TerrainBuf) glCreateBuffers(1, &m_TerrainBuf);
+        glNamedBufferData(m_TerrainBuf, (GLsizeiptr)(ground->Heights.size() * sizeof(float)), ground->Heights.data(), GL_STATIC_DRAW);
+        m_TerrainUploaded = m_Terrain.Key;
+    }
+    if (ground) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kTerrainBinding, m_TerrainBuf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kAreaBinding, m_AreaBuf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kChunkBinding, m_ChunkBuf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBladeBinding, m_BladeBuf);
@@ -212,6 +233,12 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
     static const char* kPlaneNames[6] = {"uFrustum[0]", "uFrustum[1]", "uFrustum[2]", "uFrustum[3]", "uFrustum[4]", "uFrustum[5]"};
     for (int i = 0; i < 6; ++i) cull.SetVec4(kPlaneNames[i], glm::vec4(frustum.Planes[i].Normal, frustum.Planes[i].D));
     cull.SetVec3("uEye", eye);
+    cull.SetInt("uHasTerrain", ground ? 1 : 0);
+    if (ground) {
+        cull.SetVec4("uTerrainRect", glm::vec4(m_Terrain.Origin.x - 0.5f * ground->SizeX, m_Terrain.Origin.z - 0.5f * ground->SizeZ,
+                                               ground->CellX(), ground->CellZ()));
+        cull.SetVec3("uTerrainRes", glm::vec3((float)ground->ResX, (float)ground->ResZ, m_Terrain.Origin.y));
+    }
     cull.SetInt("uNearCap", (int)kNearCap);
     cull.SetInt("uFarCap", (int)kFarCap);
     cull.DispatchCompute((unsigned)m_Chunks.size(), 1, 1);

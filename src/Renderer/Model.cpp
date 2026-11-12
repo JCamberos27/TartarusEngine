@@ -12,6 +12,7 @@
 #include "GLStateCache.h"
 #include "DefaultTextures.h"
 #include "PrimitiveMeshes.h"
+#include "TerrainGrid.h"
 #include "meshoptimizer.h"
 #include "gl.h"
 #include "Core/Env.h"
@@ -376,6 +377,13 @@ bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worl
 }
 
 std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std::string& path) {
+    if (kind == "terrain") { // a terrain's flat stand-in until TerrainSystem builds its mesh
+        TerrainGrid flat;
+        flat.ResX = flat.ResZ = 2;
+        flat.SizeX = flat.SizeZ = 1.0f;
+        flat.Heights.assign(4, 0.0f);
+        return CreateTerrain(flat, 1.0f, path);
+    }
     std::shared_ptr<Model> model(new Model());
     model->m_Path = path;
     model->m_D->GlobalInverseTransform = glm::mat4(1.0f);
@@ -408,6 +416,28 @@ std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std
     }
     model->m_D->Meshes.push_back(std::make_unique<ModelMesh>(*tmpl, ModelMesh::ShareGeometry{}));
 
+    model->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    return model;
+}
+
+std::shared_ptr<Model> Model::CreateTerrain(const TerrainGrid& grid, float uvTile, const std::string& path) {
+    std::vector<ModelVertex> verts;
+    std::vector<unsigned int> indices;
+    grid.BuildMesh(uvTile, verts, indices);
+    if (verts.empty()) return CreatePrimitive("cube", path);
+    std::shared_ptr<Model> model(new Model());
+    model->m_Path = path;
+    model->m_D->GlobalInverseTransform = glm::mat4(1.0f);
+    for (const ModelVertex& v : verts) {
+        model->m_D->BoundsMin = glm::min(model->m_D->BoundsMin, v.Position);
+        model->m_D->BoundsMax = glm::max(model->m_D->BoundsMax, v.Position);
+    }
+    // Built here and uploaded at once where there is a GL context; the unit tests (no context) only need its
+    // collision geometry.
+    auto mesh = std::make_unique<ModelMesh>(std::move(verts), indices, /*deferUpload=*/true);
+    if (glCreateBuffers) mesh->FinishUpload();
+    mesh->Mat.BaseColor = glm::vec3(0.75f);
+    model->m_D->Meshes.push_back(std::move(mesh));
     model->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     return model;
 }

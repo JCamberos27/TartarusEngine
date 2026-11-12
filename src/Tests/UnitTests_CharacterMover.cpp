@@ -7,6 +7,9 @@
 #include "../Core/ProjectSettings.h"
 #include "../Game/Components.h"
 #include "../Game/World.h"
+#include "../Game/TerrainSystem.h"
+#include "../Renderer/Model.h"
+#include "../Renderer/TerrainGrid.h"
 #include "../Core/Env.h"
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
@@ -280,6 +283,52 @@ void TestMoverSlopes() {
     }
 }
 
+// Over a rolling terrain (TerrainComponent, its mesh collider built by TerrainSystem from a scene-style stand-in):
+// the capsule walks 24 m across +-1.2 m hills, staying on the ground the whole way.
+void TestMoverTerrain() {
+    TerrainGrid hills;
+    std::vector<float> h(41 * 41);
+    for (int j = 0; j < 41; ++j)
+        for (int i = 0; i < 41; ++i)
+            h[j * 41 + i] = 1.2f * std::sin((float)(i - 20) / 6.0f) * std::cos((float)(j - 20) / 7.0f);
+    const std::string enc = TerrainGrid::Encode(h, -1.5f, 1.5f);
+    CHECK(TerrainGrid::Decode(41, 41, 40.0f, 40.0f, -1.5f, 1.5f, enc, hills));
+    const float startX = -15.0f, startZ = 2.0f;
+    MoverWorld w([&](MoverWorld& m) {
+        const entt::entity e = m.world.CreateModelEntity(Model::CreatePrimitive("terrain", "primitive://terrain#0"),
+                                                         glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Terrain");
+        TerrainComponent t;
+        t.SizeX = t.SizeZ = 40.0f;
+        t.ResX = t.ResZ = 41;
+        t.HeightMin = -1.5f;
+        t.HeightMax = 1.5f;
+        t.Heights = enc;
+        m.world.Registry.emplace<TerrainComponent>(e, t);
+        ColliderComponent c;
+        c.Kind = ColliderComponent::Shape::Mesh;
+        m.world.Registry.emplace<ColliderComponent>(e, c);
+        TerrainSystem::Sync(m.world);
+        CHECK(m.world.Registry.get<TerrainComponent>(e).Grid != nullptr);
+    }, glm::vec3(startX, hills.Height(startX, startZ) + 0.02f, startZ));
+    CHECK(w.Ok);
+    if (!w.Ok) return;
+    int frames = 0, grounded = 0;
+    float worst = 0.0f;
+    w.Walk(glm::vec3(1, 0, 0), 3.0f, 8.0f, [&](const MoverWorld::Frame& f) {
+        ++frames;
+        const glm::vec3 p = w.Feet();
+        if (f.Grounded) {
+            ++grounded;
+            worst = std::max(worst, std::abs(p.y - hills.Height(p.x, p.z)));
+        }
+        CHECK(p.y > hills.Height(p.x, p.z) - 0.1f); // never through the ground
+    });
+    CHECK(grounded >= frames * 9 / 10);
+    CHECK(worst < 0.12f);
+    CHECK(w.Feet().x > 7.0f);
+    std::printf("[MoverTerrain] grounded %d/%d, worst gap %.3f m, end x %.2f\n", grounded, frames, worst, w.Feet().x);
+}
+
 // On a ledge: the axis 0.3 radius past the edge, it stands; 0.8 radius past, it slides off and falls.
 void TestMoverLedge() {
     auto build = [](MoverWorld& m) { m.Box(glm::vec3(0.0f, 0.5f, -5.0f), glm::vec3(5.0f, 0.5f, 5.0f)); }; // a block to z = 0, top y = 1
@@ -435,6 +484,7 @@ void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MoverStepUnderLowCeiling", TestMoverStepUnderLowCeiling});
     tests.push_back({"MoverStairsAndBlock", TestMoverStairsAndBlock});
     tests.push_back({"MoverSlopes", TestMoverSlopes});
+    tests.push_back({"MoverTerrain", TestMoverTerrain});
     tests.push_back({"MoverLedge", TestMoverLedge});
     tests.push_back({"MoverDepenetrates", TestMoverDepenetrates});
     tests.push_back({"MoverCeiling", TestMoverCeiling});

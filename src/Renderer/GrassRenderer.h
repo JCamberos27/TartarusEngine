@@ -9,6 +9,7 @@ class Shader;
 class World;
 struct Frustum;
 struct GrassAreaComponent;
+struct TerrainGrid;
 
 // Procedural grass (GrassAreaComponent). Nothing is stored per blade: each view, the CPU picks the 4 m chunks of
 // every Grass Area that the camera can see and that lie within the area's draw distance, and a compute pass
@@ -49,7 +50,7 @@ public:
         glm::vec4 Tip;         // tip colour, patchiness
         glm::vec4 Dry;         // dry colour, receive shadows (0/1)
         glm::vec4 Lod;         // near distance, draw distance, edge fade, wind strength
-        glm::vec4 Wind;        // wind speed, -, -, -
+        glm::vec4 Wind;        // wind speed, follow terrain (0/1), -, -
     };
     // One chunk to cull: area index, first cell (x, z) on the area's grid, cells per side.
     struct ChunkGpu { std::int32_t Area, CellX, CellZ, Cells; };
@@ -62,8 +63,14 @@ public:
     static AreaDesc Describe(const GrassAreaComponent& g, const glm::mat4& world);
     // Chunks of `areas` inside `frustum` and nearer than their draw distance to `eye` (at most kMaxChunks, the
     // nearest first). Pure CPU: unit-tested.
+    // A terrain the Follow Terrain areas stand on: its grid and its entity's world origin (translation only).
+    struct TerrainRef {
+        std::shared_ptr<const TerrainGrid> Grid;
+        glm::vec3 Origin{0.0f};
+        std::uint64_t Key = 0;
+    };
     static void SelectChunks(const std::vector<AreaDesc>& areas, const Frustum& frustum, const glm::vec3& eye,
-                             std::vector<ChunkGpu>& out);
+                             std::vector<ChunkGpu>& out, const TerrainRef* terrain = nullptr);
 
     // This frame's areas from the world (once per frame: later calls the same frame return at once).
     void Gather(const World& world);
@@ -88,7 +95,9 @@ private:
     std::unique_ptr<Shader> m_Draw;
     std::unique_ptr<Shader> m_Cull;
     std::unique_ptr<Shader> m_Clamp;
-    unsigned m_Vao = 0, m_AreaBuf = 0, m_ChunkBuf = 0, m_BladeBuf = 0, m_CmdBuf = 0;
+    unsigned m_Vao = 0, m_AreaBuf = 0, m_ChunkBuf = 0, m_BladeBuf = 0, m_CmdBuf = 0, m_TerrainBuf = 0;
+    TerrainRef m_Terrain;              // this frame's (Grid null: none, or no area follows it)
+    std::uint64_t m_TerrainUploaded = 0; // the key of the heights in m_TerrainBuf
     std::vector<AreaDesc> m_Areas;
     std::vector<ChunkGpu> m_Chunks;
     std::uint64_t m_GatheredFrame = ~0ull;

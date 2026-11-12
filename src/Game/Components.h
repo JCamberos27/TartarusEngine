@@ -17,6 +17,7 @@
 class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
 class VisibleIndexBuffer; // OutfitHideTag
 class Model;
+struct TerrainGrid; // TerrainComponent (TerrainGrid.h)
 struct ParticleCurveCache;
 struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<MaterialAsset> is valid here
 
@@ -1399,6 +1400,25 @@ struct GrassAreaComponent {
     float EdgeFade = 1.5f;          // metres over which the field thins out at its edges
     int Seed = 1;
     bool ReceiveShadows = true;
+    bool FollowTerrain = false;     // root the blades on the scene's Terrain instead of this object's plane
+};
+
+// A height-grid terrain (TerrainGrid.h). The entity is a model whose path is "primitive://terrain#<key>": the
+// mesh is built from these fields (TerrainSystem::Sync) and drawn, shadowed, picked and collided with (a Mesh
+// collider) like any model; its material slots are the Renderable's. Heights are 16-bit samples between
+// HeightMin and HeightMax, base64, row-major along X, written by a tool (tools/scenes/build_forest.py).
+// Grass Areas with Follow Terrain root their blades on the scene's (first) terrain.
+struct TerrainComponent {
+    float SizeX = 100.0f, SizeZ = 100.0f; // metres, centred on the entity
+    int ResX = 2, ResZ = 2;               // samples along X and Z
+    float HeightMin = 0.0f, HeightMax = 1.0f;
+    float UVTile = 4.0f;                  // metres per texture repeat
+    std::string Heights;                  // base64 uint16 samples (not drawn in the Inspector)
+
+    // Runtime (never serialized): the decoded grid and the model built from it, and the key they were built for.
+    std::shared_ptr<const TerrainGrid> Grid;
+    std::shared_ptr<Model> Built;
+    std::uint64_t BuiltKey = 0;
 };
 
 struct ReflectionProbeComponent {

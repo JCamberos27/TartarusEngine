@@ -1,5 +1,6 @@
 #include "LayerRegistry.h"
 #include "SceneSerializer.h"
+#include "TerrainSystem.h"
 #include "ComponentJson.h"
 #include "AtomicFile.h"
 #include "World.h"
@@ -1932,6 +1933,10 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     // graph exists, rather than refusing individual links in file order (which would depend on
     // which entity happened to be read first).
     world.RepairHierarchyCycles();
+
+    // Terrains get their mesh now (the load gave them a flat stand-in), so Play's colliders, built before the
+    // next frame's Sync, collide with the real surface.
+    TerrainSystem::Sync(world);
 
     // #202 - clip planes are the one camera field where a bad value is fatal rather than ugly:
     // far == near divides by zero and a non-positive near makes the perspective divide

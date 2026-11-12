@@ -1,4 +1,5 @@
 #include "App/Application.h"
+#include "TerrainSystem.h"
 
 #include "Window.h"
 #include "Core/Env.h"
@@ -1486,6 +1487,7 @@ int Application::RunSession() {
             {
             PROFILE_SCOPE("Outfits + Transform Cache");
             { PROFILE_SCOPE("Outfit Attachments"); OutfitSystem::UpdateAttachments(world); } // rigid head wear onto the head bone, now it's posed
+            { PROFILE_SCOPE("Terrain Sync"); TerrainSystem::Sync(world); } // a Terrain edited in the Inspector, duplicated or reloaded
             { PROFILE_SCOPE("Transform Cache"); world.RebuildWorldTransformCache(); }
             }
             // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
