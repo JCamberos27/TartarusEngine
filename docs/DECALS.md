@@ -322,7 +322,7 @@ pass (a depth-reconstructing box draw with its own atlases on units 28/29 and SS
 ## Corridor wear
 
 The Apartment Hallway corridor is dressed as a derelict squat by `tools/scenes/dress_corridor.py`. It patches
-`project/scenes/Apartment Hallway.json` in place (never rebuild that scene with `build_apartment_hallway.py`; it has
+`tests/scenes/Apartment Hallway.json` in place (never rebuild that scene with `build_apartment_hallway.py`; it has
 hand edits):
 
 ```

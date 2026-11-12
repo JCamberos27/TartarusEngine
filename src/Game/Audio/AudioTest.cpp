@@ -646,7 +646,10 @@ int RunAudioTest(const std::string& scene, const std::string& reportPath) {
     }
     const fs::path root = ProjectPaths::Resolve("");
     fs::path scenePath = sceneArg;
-    if (scenePath.extension() != ".json") scenePath = root / "scenes" / (sceneArg + ".json");
+    if (scenePath.extension() != ".json") { // a test scene (tests/scenes/, AudioLab) first, else the project's scenes/
+        const fs::path test = EnginePaths::Resolve("tests/scenes/" + sceneArg + ".json");
+        scenePath = fs::exists(test) ? test : root / "scenes" / (sceneArg + ".json");
+    }
     else if (scenePath.is_relative() && !fs::exists(scenePath)) scenePath = root / scenePath;
     Out("[audio-test] scene %s\n", scenePath.string().c_str());
 

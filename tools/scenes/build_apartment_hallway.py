@@ -5,8 +5,8 @@
 #
 #   python tools/scenes/build_apartment_hallway.py [<repo>]
 #
-# Writes project/scenes/Apartment Hallway.json (+ .meta, its guid kept across rebuilds). Render settings and the
-# player's rig come from scenes/Arena.json.
+# Writes tests/scenes/Apartment Hallway.json (+ .meta, its guid kept across rebuilds). Render settings and the
+# player's rig come from tests/scenes/Arena.json.
 #
 # See-through walls: every wall face is a single-sided plane (Plane_1m) facing into its own room, so from inside the
 # walls are solid and from outside (the editor's scene view) back-face culling shows straight into the rooms. Inside
@@ -556,7 +556,7 @@ class Hallway(k.Scene):
 
 
 def build(repo):
-    with open(os.path.join(repo, 'project', 'scenes', 'Arena.json'), encoding='utf-8') as f:
+    with open(os.path.join(repo, 'tests', 'scenes', 'Arena.json'), encoding='utf-8') as f:
         arena = json.load(f)
     s = Hallway(arena, repo)
     d = s.data
@@ -609,7 +609,7 @@ def write_meta(path):
 def main():
     repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..'))
     s = build(repo)
-    out = os.path.join(repo, 'project', 'scenes', 'Apartment Hallway.json')
+    out = os.path.join(repo, 'tests', 'scenes', 'Apartment Hallway.json')
     s.write(out)
     write_meta(out)
     print(f'{out}: {len(s.boxes)} boxes, {len(s.models)} models, {len(s.empties)} empties; corridor {L:.1f} m; '

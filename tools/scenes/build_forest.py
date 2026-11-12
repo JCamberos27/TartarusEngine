@@ -200,7 +200,7 @@ class Grid:
 
 
 def build(repo):
-    with open(os.path.join(repo, 'project', 'scenes', 'Apartment Hallway.json'), encoding='utf-8') as f:
+    with open(os.path.join(repo, 'tests', 'scenes', 'Apartment Hallway.json'), encoding='utf-8') as f:
         base = json.load(f)
     s = Forest(base, repo)
     s.keep_from(base, {'Moon', 'Player Spawn'})

@@ -74,16 +74,20 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         }
         std::sort(m_ScenePaths.begin(), m_ScenePaths.end());
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
-            m_ScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Arena.json"
-                                                          : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
-                                                          : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
-                                                          : opt.npcTestScenario == "revolver" ? "scenes/WeaponLab.json"
-                                                          : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
-                                                          : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" || opt.npcTestScenario == "spiderdoor" ? "scenes/Apartment Hallway.json"
-                                                                                       : "scenes/Arena.json"));
+            m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario == "sandbox" ? "tests/scenes/Arena.json"
+                                                          : opt.npcTestScenario == "blood" ? "tests/scenes/BloodTest.json"
+                                                          : opt.npcTestScenario == "ragdoll" ? "tests/scenes/RagdollTest.json"
+                                                          : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
+                                                          : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "tests/scenes/Apartment Hallway.json"
+                                                          : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" || opt.npcTestScenario == "spiderdoor" ? "tests/scenes/Apartment Hallway.json"
+                                                                                       : "tests/scenes/Arena.json"));
 #pragma warning(suppress : 4996)
-        if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) // e.g. doors in a pack scene
-            m_ScenePaths.assign(1, ProjectPaths::Resolve("scenes/" + scene + ".json"));
+        if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) { // e.g. doors in the Forest
+            // A test scene (tests/scenes/) by that name first, else the project's scenes/.
+            const std::string test = EnginePaths::Resolve("tests/scenes/" + scene + ".json");
+            std::error_code tsEc;
+            m_ScenePaths.assign(1, std::filesystem::exists(test, tsEc) && !tsEc ? test : ProjectPaths::Resolve("scenes/" + scene + ".json"));
+        }
         std::cout << "[SmokeTest] Found " << m_ScenePaths.size() << " scene(s) under "
                   << scenesDir << std::endl;
         if (m_ScenePaths.empty()) {
