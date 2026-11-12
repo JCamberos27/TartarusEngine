@@ -4,6 +4,7 @@
 #include "Profiler.h"
 #include "SamplingProfiler.h"
 #include "Texture.h"
+#include "TimeService.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -113,6 +114,8 @@ void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int 
                 sceneFile.c_str(), mode, m_Frame.N, m_Frame.N ? m_Frame.Sum / m_Frame.N : 0.0,
                 m_Frame.Sum > 0.0 ? 1000.0 * m_Frame.N / m_Frame.Sum : 0.0,
                 m_Frame.Max, draws, tris, width, height);
+    // The engine frame this phase ended on: TARTARUS_TRIS_REPORT takes one (a phase's last frame minus a hundred).
+    std::printf("[PerfBench]   ended at engine frame %llu\n", (unsigned long long)Time::FrameCount());
     // Every texture this process has uploaded so far (the editor's own icons included), mips included.
     std::printf("[PerfBench]   textures=%d  %.1f MiB on the GPU\n", TextureLoadStats::Get().Count,
                 TextureLoadStats::Get().GpuBytes / (1024.0 * 1024.0));

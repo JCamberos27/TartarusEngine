@@ -45,6 +45,7 @@
 #include "gl.h"
 #include "Core/Profiler.h"
 #include "Core/Env.h"
+#include "TimeService.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -1161,22 +1162,28 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             });
     };
     sortOpaque(drawList);
-    // TARTARUS_TRIS_REPORT=<frame>: the opaque pass's triangles on that frame of the Game view, by size (for budgeting).
+    // TARTARUS_TRIS_REPORT=<frame>: the opaque pass's triangles on that frame (Time::FrameCount) of the Game view, by
+    // model (for budgeting). ShadowFrame prints the sun casters' on the same frame.
     if (static const int reportAt = Env::Int(Env::Var::TrisReport, -1);
-        reportAt >= 0 && !ctx.EditorView) {
-        static int frame = 0;
-        if (frame++ == reportAt) {
-            std::vector<const DrawItem*> v;
-            long long total = 0, big = 0;
-            for (const DrawItem& it : drawList) { v.push_back(&it); total += it.Tris; if (it.Tris >= 5000) big += it.Tris; }
-            std::sort(v.begin(), v.end(), [](const DrawItem* a, const DrawItem* b) { return a->Tris > b->Tris; });
-            std::printf("[TrisReport] opaque items %zu, %lld tris, %lld in items >= 5k\n", v.size(), total, big);
-            std::stable_partition(v.begin(), v.end(), [](const DrawItem* d) { return !d->Dynamic; }); // the static ones first
-            for (size_t i = 0; i < v.size() && i < 25; ++i)
-                std::printf("[TrisReport]   %7d tris  %s  at (%.1f, %.1f, %.1f)%s\n", v[i]->Tris, v[i]->Ref->Path().c_str(), v[i]->Centre.x,
-                            v[i]->Centre.y, v[i]->Centre.z, v[i]->Dynamic ? " dynamic" : "");
-            std::fflush(stdout);
+        reportAt >= 0 && !ctx.EditorView && Time::FrameCount() == (std::uint64_t)reportAt) {
+        struct Row { long long Tris = 0; int Items = 0; bool Dynamic = false; };
+        std::unordered_map<std::string, Row> byModel;
+        long long total = 0;
+        for (const DrawItem& it : drawList) {
+            Row& r = byModel[it.Ref->Path()];
+            r.Tris += it.Tris;
+            ++r.Items;
+            r.Dynamic |= it.Dynamic;
+            total += it.Tris;
         }
+        std::vector<std::pair<std::string, Row>> v(byModel.begin(), byModel.end());
+        std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second.Tris > b.second.Tris; });
+        std::printf("[TrisReport] frame %llu opaque: %zu items, %zu models, %lld tris\n", (unsigned long long)Time::FrameCount(),
+                    drawList.size(), v.size(), total);
+        for (size_t i = 0; i < v.size() && i < 30; ++i)
+            std::printf("[TrisReport]   opaque %8lld tris  %5d items  %s%s\n", v[i].second.Tris, v[i].second.Items, v[i].first.c_str(),
+                        v[i].second.Dynamic ? " (dynamic)" : "");
+        std::fflush(stdout);
     }
 
     // #108 — reflection probes are chosen per object (from its bounds centre), not once per

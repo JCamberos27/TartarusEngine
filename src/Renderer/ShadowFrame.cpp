@@ -1,19 +1,27 @@
 #include "ShadowFrame.h"
+#include <cstdio>
+#include <unordered_map>
+#include "Core/Env.h"
+#include "TimeService.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
 #include <optional>
+#include <unordered_map>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Camera.h"
 #include "Components.h"
+#include "Core/Env.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
 #include "GLStateCache.h"
 #include "GrassRenderer.h"
+#include "SkinHideBuffer.h"
+#include "TimeService.h"
 #include "gl.h"
 #include "LightGather.h"
 #include "Model.h"
@@ -151,6 +159,28 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
                 m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided, c, end - c + 1});
                 c = end + 1;
             }
+        }
+        // TARTARUS_TRIS_REPORT=<frame>: the sun casters' triangles on that frame, per cascade and by model.
+        if (static const int reportAt = Env::Int(Env::Var::TrisReport, -1);
+            reportAt >= 0 && Time::FrameCount() == (std::uint64_t)reportAt) {
+            long long perCascade[CascadedShadowMap::kMaxCascades] = {};
+            std::unordered_map<std::string, std::pair<long long, int>> byModel; // tris over all cascades, draws
+            for (const auto& d : m_Draws) {
+                const long long t = d.Visible ? (long long)d.Visible->Triangles() : (long long)d.Ref->TriangleCount();
+                for (int k = 0; k < d.Layers; ++k) perCascade[d.LayerFirst + k] += t;
+                auto& r = byModel[d.Ref->Path()];
+                r.first += t * d.Layers;
+                ++r.second;
+            }
+            std::printf("[TrisReport] frame %llu sun casters: %zu draws, tris per cascade", (unsigned long long)Time::FrameCount(),
+                        m_Draws.size());
+            for (int c = 0; c < cascadeCount; ++c) std::printf(" %lld", perCascade[c]);
+            std::printf("\n");
+            std::vector<std::pair<std::string, std::pair<long long, int>>> v(byModel.begin(), byModel.end());
+            std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second.first > b.second.first; });
+            for (size_t i = 0; i < v.size() && i < 30; ++i)
+                std::printf("[TrisReport]   shadow %8lld tris  %5d draws  %s\n", v[i].second.first, v[i].second.second, v[i].first.c_str());
+            std::fflush(stdout);
         }
         // Each cascade rasterises only the texels its slice of the view can read (CascadedShadowMap::
         // BeginLayeredScissor): the rest of a layer is never sampled, and the forest's terrain and canopy filled all
