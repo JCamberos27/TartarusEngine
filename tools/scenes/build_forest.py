@@ -6,7 +6,7 @@
 #     logs, mossy rocks, stumps and mushrooms, gathered round the trunks the way a forest floor grows;
 #   - cedars from the SeedMesh pack's full LOD prefabs, packed in clumps with thinner glades between them (spacing
 #     from a noise field), in a 120 x 120 m playable square and a wall of more trees round it to the horizon;
-#   - the Apartment Hallway's night sky, moon and player, and a low ground fog for depth.
+#   - the Apartment Hallway's night sky, moon and player, and volumetric fog for depth.
 #
 #   python tools/scenes/build_forest.py [<repo>]
 #
@@ -206,10 +206,12 @@ def build(repo):
     s.keep_from(base, {'Moon', 'Player Spawn'})
     d = s.data
     d['sky'].update({'seaLevel': 0.0, 'clouds': True, 'cloudCoverage': 0.3, 'cloudType': 0.35, 'cloudQuality': 0,
-                     'cloudShadows': False, 'cloudWindSpeed': 4.0})
-    # A low ground fog: distance and depth between the trunks (outdoors only - the rule is no fog indoors).
-    d.update({'shadowDistance': 45.0, 'maxSpotShadows': 8, 'fogEnabled': True, 'fogMode': 3, 'fogDensity': 0.02,
-              'fogColor': [0.03, 0.038, 0.052], 'fogHeightFalloff': 0.06, 'fogBaseHeight': 0.0})
+                     'cloudShadows': False, 'cloudWindSpeed': 4.0, 'moonBrightness': 0.0164, 'nightBrightness': 4.4})
+    # Volumetric fog for the depth between the trunks, not the distance fog (outdoors only - the rule is no fog
+    # indoors). The distance fog's settings stay for when it's switched back on.
+    d.update({'shadowDistance': 45.0, 'maxSpotShadows': 8, 'fogEnabled': False, 'fogMode': 3, 'fogDensity': 0.02,
+              'fogColor': [0.03, 0.038, 0.052], 'fogHeightFalloff': 0.06, 'fogBaseHeight': 0.0,
+              'volumetricEnabled': True})
     rng = random.Random(11)
     cx, cz, cr = CLEARING
     counts = {}

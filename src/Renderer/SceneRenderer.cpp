@@ -1272,6 +1272,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // SSAO from this pre-pass (RenderFrameContext::SsaoFromPrepass): copy the depth into SSAO's own target and
         // add only what the pre-pass left out, rather than SSAO drawing the whole visible scene a second time. The
         // view model and the player's own trimmed body stay out, as they did from SSAO's own pass (DrawItem::NoSsao).
+        // So does a LOD level mid cross-fade (DrawItem::LodFade): this depth would hold it whole while the screen shows
+        // it dithered, and the occlusion culler below tests against this copy - every tree behind a fading one went.
         bool viewDepthCopied = false; // SSAO's depth target holds this view's depth now
         if (ctx.SsaoFromPrepass && fs.ssaoOn && ctx.TxHdr && ctx.TxHdr->IsValid() &&
             ctx.SsaoSrc->Width() == ctx.TxHdr->Width() && ctx.SsaoSrc->Height() == ctx.TxHdr->Height()) {
@@ -1284,7 +1286,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             glViewport(0, 0, w, h);
             prepass.clear();
             for (const DrawItem& it : drawList)
-                if (!prepassed(it) && !it.NoSsao) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
+                if (!prepassed(it) && !it.NoSsao && it.LodFade == 0.0f) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
             DrawDepthCasters(depth, prepass);
             depth.SetInt("uSplitViewProj", 0);
             viewDepthCopied = true;

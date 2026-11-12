@@ -321599,7 +321599,7 @@
     0.052
   ],
   "fogDensity": 0.02,
-  "fogEnabled": true,
+  "fogEnabled": false,
   "fogEnd": 300.0,
   "fogHeightFalloff": 0.06,
   "fogMode": 3,
@@ -803567,11 +803567,11 @@
     "mieHeightKm": 1.2000000476837158,
     "mieScale": 1.0,
     "moon": true,
-    "moonBrightness": 0.09000000357627869,
+    "moonBrightness": 0.0164,
     "moonDiscScale": 20.0,
     "moonPhaseOffset": 0.4489000141620636,
     "multipleScattering": 1.0,
-    "nightBrightness": 5.0,
+    "nightBrightness": 4.4,
     "nightGlow": 0.019999999552965164,
     "northOffset": 312.0,
     "ozoneScale": 1.0,
@@ -803620,5 +803620,5 @@
   "volDistance": 64.0,
   "volHeightFalloff": 0.0,
   "volQuality": 1,
-  "volumetricEnabled": false
+  "volumetricEnabled": true
 }

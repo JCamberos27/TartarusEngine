@@ -129,8 +129,16 @@ void main() {
 
 struct Resources {
     std::unique_ptr<Shader> Copy, Down, Cull;
-    GLuint Pyramid = 0, Boxes = 0, Groups = 0, CmdList = 0, Remap = 0;
-    int W = 0, H = 0, Levels = 0;
+    GLuint Boxes = 0, Groups = 0, CmdList = 0, Remap = 0;
+    // One pyramid per view size: the editor's Scene and Game views (and Play's) cull every frame, and a single shared
+    // pyramid was reallocated for each of them in turn whenever their sizes differed.
+    struct Pyramid {
+        GLuint Tex = 0;
+        int W = 0, H = 0, Levels = 0;
+        std::uint64_t Used = 0;
+    };
+    std::vector<Pyramid> Pyramids;
+    std::uint64_t Clock = 0;
     bool Failed = false;
 };
 // Never destroyed: the GL context is gone by the time statics are.
@@ -164,20 +172,37 @@ bool EnsurePrograms() {
     return true;
 }
 
-void EnsurePyramid(int w, int h) {
+// The pyramid for a w x h view: an existing one of that size, else a new one (the least recently used of
+// kMaxPyramids makes way - a resized view's old size stops being used).
+constexpr std::size_t kMaxPyramids = 4;
+Resources::Pyramid& EnsurePyramid(int w, int h) {
     Resources& r = Res();
-    if (r.Pyramid && r.W == w && r.H == h) return;
-    if (r.Pyramid) glDeleteTextures(1, &r.Pyramid);
-    r.W = w;
-    r.H = h;
-    r.Levels = 1;
-    for (int m = std::max(w, h); m > 1; m >>= 1) ++r.Levels;
-    glCreateTextures(GL_TEXTURE_2D, 1, &r.Pyramid);
-    glTextureStorage2D(r.Pyramid, r.Levels, GL_R32F, w, h);
-    glTextureParameteri(r.Pyramid, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-    glTextureParameteri(r.Pyramid, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTextureParameteri(r.Pyramid, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(r.Pyramid, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    ++r.Clock;
+    for (Resources::Pyramid& p : r.Pyramids)
+        if (p.W == w && p.H == h) {
+            p.Used = r.Clock;
+            return p;
+        }
+    Resources::Pyramid* p = nullptr;
+    if (r.Pyramids.size() < kMaxPyramids) {
+        p = &r.Pyramids.emplace_back();
+    } else {
+        p = &*std::min_element(r.Pyramids.begin(), r.Pyramids.end(),
+                               [](const Resources::Pyramid& a, const Resources::Pyramid& b) { return a.Used < b.Used; });
+        glDeleteTextures(1, &p->Tex);
+    }
+    p->W = w;
+    p->H = h;
+    p->Used = r.Clock;
+    p->Levels = 1;
+    for (int m = std::max(w, h); m > 1; m >>= 1) ++p->Levels;
+    glCreateTextures(GL_TEXTURE_2D, 1, &p->Tex);
+    glTextureStorage2D(p->Tex, p->Levels, GL_R32F, w, h);
+    glTextureParameteri(p->Tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+    glTextureParameteri(p->Tex, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureParameteri(p->Tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(p->Tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return *p;
 }
 } // namespace
 
@@ -228,23 +253,23 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
                      unsigned indirectBuffer, std::uint32_t slotCount) {
     if (groups.empty() || !depthTex || w <= 0 || h <= 0 || !indirectBuffer || !EnsurePrograms()) return false;
     Resources& r = Res();
-    EnsurePyramid(w, h);
+    const Resources::Pyramid& pyr = EnsurePyramid(w, h);
 
     // The pyramid.
     glMemoryBarrier(0x00000400u /* GL_FRAMEBUFFER_BARRIER_BIT */ | GL_TEXTURE_FETCH_BARRIER_BIT);
     r.Copy->Bind();
     glUniform2i(r.Copy->Loc("uSize"), w, h);
     glBindTextureUnit(40, depthTex);
-    glBindImageTexture(1, r.Pyramid, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
+    glBindImageTexture(1, pyr.Tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
     r.Copy->DispatchCompute((unsigned)(w + 7) / 8, (unsigned)(h + 7) / 8, 1);
     r.Down->Bind();
     const int srcLoc = r.Down->Loc("uSrcSize"), dstLoc = r.Down->Loc("uDstSize");
     int sw = w, sh = h;
-    for (int level = 1; level < r.Levels; ++level) {
+    for (int level = 1; level < pyr.Levels; ++level) {
         const int dw = std::max(1, sw >> 1), dh = std::max(1, sh >> 1);
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-        glBindImageTexture(0, r.Pyramid, level - 1, GL_FALSE, 0, GL_READ_ONLY, GL_R32F);
-        glBindImageTexture(1, r.Pyramid, level, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
+        glBindImageTexture(0, pyr.Tex, level - 1, GL_FALSE, 0, GL_READ_ONLY, GL_R32F);
+        glBindImageTexture(1, pyr.Tex, level, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
         glUniform2i(srcLoc, sw, sh);
         glUniform2i(dstLoc, dw, dh);
         r.Down->DispatchCompute((unsigned)(dw + 7) / 8, (unsigned)(dh + 7) / 8, 1);
@@ -268,10 +293,10 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
     r.Cull->SetMat4("uViewProj", viewProj);
     r.Cull->SetVec4("uViewport", viewport);
     glUniform2i(r.Cull->Loc("uSize"), w, h);
-    r.Cull->SetInt("uMaxLevel", r.Levels - 1);
+    r.Cull->SetInt("uMaxLevel", pyr.Levels - 1);
     r.Cull->SetVec3("uEye", eye);
     r.Cull->SetFloat("uNearMargin", kNearMargin);
-    glBindTextureUnit(40, r.Pyramid);
+    glBindTextureUnit(40, pyr.Tex);
     r.Cull->DispatchCompute((unsigned)groups.size(), 1, 1);
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
