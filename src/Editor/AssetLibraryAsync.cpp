@@ -325,6 +325,12 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestMaterialAsync(const std::string& 
     return ticket;
 }
 
+double AssetLibrary::PumpBudgetMs(bool playing, bool urgent, double lastFrameWorkMs) {
+    constexpr double kFull = 3.0, kFloor = 0.25, kFrameMs = 1000.0 / 120.0;
+    if (!playing || urgent) return kFull;
+    return std::clamp(kFrameMs - lastFrameWorkMs, kFloor, kFull);
+}
+
 int AssetLibrary::PumpAsync(double budgetMs) {
     UploadStaging::Warm(); // the ring exists before anything loads in Play
     MeshArena::WarmSkinned(); // and a skinned page with room (a new one is the one big allocation)
@@ -333,7 +339,6 @@ int AssetLibrary::PumpAsync(double budgetMs) {
     AsyncLoader& a = *m_Async;
     const auto start = std::chrono::steady_clock::now();
     bool worked = false;
-    UploadStaging::Poll(); // recycle the staging regions the GPU has finished copying out of
     struct TraceTotal {
         std::chrono::steady_clock::time_point T0;
         ~TraceTotal() {

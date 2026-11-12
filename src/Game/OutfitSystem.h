@@ -69,6 +69,8 @@ Result Submit(World& world, AssetLibrary& assets, entt::entity root, const Wardr
               std::function<void(World&, AssetLibrary&, entt::entity)> then = nullptr);
 // Whether `root` has a change waiting to load, and how many of its loads are done / asked for.
 bool IsPending(const World& world, entt::entity root, int* done = nullptr, int* total = nullptr);
+// Whether any outfit has a change waiting to load (the asset pump then runs at its full budget).
+bool AnyPending();
 // Applies every waiting change whose assets have all loaded. Call once per frame, after
 // AssetLibrary::PumpAsync and before UpdateHiding.
 void UpdatePending(World& world, AssetLibrary& assets);

@@ -41,8 +41,13 @@ Region Reserve(std::size_t size);
 bool Stageable(std::size_t size);
 // Queues `fill(dst)` on the copy worker (the caller keeps the source alive until Ready()).
 void StageCopy(Region& r, std::function<void(unsigned char* dst)> fill);
-// After the GL commands that read the region are issued: fences it, and it is recycled once the GPU is past them.
+// After the GL commands that read the region are issued: it is recycled once the GPU is past them. The fence is
+// shared: every region retired before the next Fence() (once per pump) waits on that one fence.
 void Retire(Region& r);
+// Fences every region retired since the last call with one GL fence. Each fence and each fence query is a round trip
+// to NVIDIA's threaded driver (the main thread waits for its command queue): one per staged mesh or texture cost
+// editor Play ~10 ms a frame while the wardrobe streamed in. Called once per frame, right after SwapBuffers.
+void Fence();
 // Drops a region nothing will read (its owner is going away): waits for the worker's copy, then retires it.
 void Abandon(Region& r);
 // Runs `f` on the copy worker - for freeing an upload's big CPU buffers (returning tens of MB to the OS took
@@ -53,7 +58,8 @@ unsigned Buffer();
 // Creates the ring now (pinning 128 MiB takes a while): the first pump calls it, at startup, so the first load in
 // Play doesn't pay it.
 void Warm();
-// Recycles the regions whose fences have passed. Called by Reserve, and once per pump.
+// Recycles the regions whose fences have passed (fencing any retired since the last Fence first). Called once per
+// frame right after SwapBuffers, and by Reserve only when the ring is full.
 void Poll();
 
 // Testable ring arithmetic (unit tests): where a `size`-byte block goes in a ring of `capacity` bytes whose live

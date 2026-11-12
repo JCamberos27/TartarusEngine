@@ -251,6 +251,15 @@ void UploadStagingRing() {
     CHECK(UploadStaging::RingFit(1024, 300, 300, false, 1) == kNone); // head == tail and not empty: full
 }
 
+// The asset pump's frame share: full while editing or when a swap waits on its loads, else the 120 Hz headroom.
+void AssetPumpBudget() {
+    CHECK(AssetLibrary::PumpBudgetMs(false, false, 20.0) == 3.0); // editing
+    CHECK(AssetLibrary::PumpBudgetMs(true, true, 20.0) == 3.0);   // an outfit swap waiting
+    CHECK(AssetLibrary::PumpBudgetMs(true, false, 20.0) == 0.25); // a slow frame: the floor
+    CHECK(AssetLibrary::PumpBudgetMs(true, false, 7.0) > 1.3 && AssetLibrary::PumpBudgetMs(true, false, 7.0) < 1.4);
+    CHECK(AssetLibrary::PumpBudgetMs(true, false, 1.0) == 3.0);   // lots of headroom: capped
+}
+
 void InstanceSlots() {
     Material::NextHashFrame();
     auto mat = [](glm::vec3 colour) {
@@ -542,6 +551,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
+    tests.push_back({"Async uploads: the pump budget follows the frame headroom in Play", AssetPumpBudget});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: pyramid level choice, padding and near-eye boxes", HiZPieces});
