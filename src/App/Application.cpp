@@ -163,6 +163,7 @@
 #include <future>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include "Renderer/MemReport.h"
+#include "Renderer/UploadStaging.h"
 #include <json.hpp>         // --model-report reads each model's .meta
 #include <cstdio>
 #include <stb_image_write.h>
@@ -886,6 +887,7 @@ int Application::RunSession() {
         // What Play's state bits mean: PlayState (App/PlaySession.h).
         bool& editorUIVisible = play.EditorUIVisible;
         bool& playing = play.Playing;
+        double lastFrameWorkMs = 0.0; // the last frame's work before SwapBuffers (the asset pump's headroom)
         bool& paused = play.Paused;
         bool& playMaximized = play.Maximized;
         bool& gameInputEngaged = play.GameInputEngaged;
@@ -1077,6 +1079,7 @@ int Application::RunSession() {
             }
             MotionDemo::PinClock(); // the motion demo's virtual clock: exactly 1/60 s per frame
             Time::BeginFrame();
+            const auto frameWorkStart = std::chrono::steady_clock::now(); // to SwapBuffers: this frame's own work
             const float dt = Time::UnscaledDeltaTime();
             // --npc-test runs on a fixed step, so its timings don't depend on the machine.
             // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
@@ -1495,7 +1498,7 @@ int Application::RunSession() {
             {
             PROFILE_SCOPE("Asset Pump + Outfit Hiding");
             { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
-            { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(3.0); }
+            { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
             { PROFILE_SCOPE("Outfit Pending");
               // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.
               if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
@@ -2311,9 +2314,16 @@ int Application::RunSession() {
                 glfwGetFramebufferSize(window.Handle(), &w, &h);
                 MotionDemo::CaptureFrame(w, h);
             }
+            lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
             {
                 PROFILE_SCOPE("Swap Buffers");
                 window.SwapBuffers();
+            }
+            {
+                // The staging ring's fence and fence check, where the driver has just taken the frame: mid-frame each
+                // one waited for NVIDIA's driver thread to catch up (several ms while uploads streamed).
+                PROFILE_SCOPE("Upload Fences");
+                UploadStaging::Fence();
             }
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.

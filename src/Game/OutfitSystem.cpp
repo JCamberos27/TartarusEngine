@@ -573,6 +573,8 @@ Result Submit(World& world, AssetLibrary& assets, entt::entity root, const Wardr
     return r;
 }
 
+bool AnyPending() { return !Waiting().empty(); }
+
 bool IsPending(const World& world, entt::entity root, int* done, int* total) {
     int d = 0, t = 0;
     bool any = false;

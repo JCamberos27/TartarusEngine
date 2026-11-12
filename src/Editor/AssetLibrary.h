@@ -273,6 +273,10 @@ public:
     // Uploads finished work for about `budgetMs` (at least one step, so it always progresses)
     // and completes tickets. Call once per frame. Returns how many loads are still in flight.
     int PumpAsync(double budgetMs = 3.0);
+    // The pump's share of a frame. Editing, or a change waiting on its loads (an outfit swap), gets the full 3 ms; in
+    // Play otherwise (the wardrobe warm-up, prefetches) only what the last frame's work left of a 120 Hz frame, at
+    // least a quarter millisecond so the loads keep moving.
+    static double PumpBudgetMs(bool playing, bool urgent, double lastFrameWorkMs);
     int AsyncInFlight() const;
 
     // --- Play scope ----------------------------------------------------------------------------

@@ -18,8 +18,13 @@ constexpr std::size_t kAlign = 256;
 
 struct Live {
     std::size_t Offset, End;
-    GLsync Fence = nullptr;
+    std::uint64_t Batch = 0; // the fence batch it was retired in
     bool Retired = false;
+};
+
+struct BatchFence {
+    std::uint64_t Batch;
+    GLsync Sync;
 };
 
 struct Ring {
@@ -28,6 +33,10 @@ struct Ring {
     bool Failed = false;
     std::size_t Head = 0;
     std::deque<Live> Spans;
+    std::deque<BatchFence> Fences; // oldest first
+    std::uint64_t OpenBatch = 1;   // regions retired now join this batch; Fence() closes it
+    std::uint64_t PassedBatch = 0; // every batch up to this one is known done on the GPU
+    bool OpenUsed = false;
 };
 Ring& R() {
     static Ring* r = new Ring(); // never destroyed: the GL context is gone by the time statics are
@@ -105,16 +114,30 @@ bool Enabled() {
     return !EnvOff() && ProjectSettings::Quality().AsyncUploads && !R().Failed;
 }
 
+void Fence() {
+    Ring& r = R();
+    if (!r.OpenUsed) return;
+    r.Fences.push_back({r.OpenBatch, glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0)});
+    ++r.OpenBatch;
+    r.OpenUsed = false;
+}
+
 void Poll() {
+    Fence();
     Ring& r = R();
     while (!r.Spans.empty()) {
         Live& s = r.Spans.front();
         if (!s.Retired) break;
-        if (s.Fence) {
-            const GLenum st = glClientWaitSync(s.Fence, 0, 0);
+        // One query per fence, not per region: a batch's regions all pass together.
+        while (s.Batch > r.PassedBatch && !r.Fences.empty()) {
+            BatchFence& f = r.Fences.front();
+            const GLenum st = glClientWaitSync(f.Sync, 0, 0);
             if (st != GL_ALREADY_SIGNALED && st != GL_CONDITION_SATISFIED) break;
-            glDeleteSync(s.Fence);
+            glDeleteSync(f.Sync);
+            r.PassedBatch = f.Batch;
+            r.Fences.pop_front();
         }
+        if (s.Batch > r.PassedBatch) break;
         r.Spans.pop_front();
     }
     if (r.Spans.empty()) r.Head = 0;
@@ -127,10 +150,16 @@ bool Stageable(std::size_t size) {
 Region Reserve(std::size_t size) {
     Region out;
     if (!Enabled() || size == 0 || size > kLargest || !EnsureRing()) return out;
-    Poll();
     Ring& r = R();
-    const std::size_t tail = r.Spans.empty() ? 0 : r.Spans.front().Offset;
-    const std::size_t at = RingFit(kCapacity, r.Head, tail, r.Spans.empty(), size);
+    const auto fit = [&] {
+        const std::size_t tail = r.Spans.empty() ? 0 : r.Spans.front().Offset;
+        return RingFit(kCapacity, r.Head, tail, r.Spans.empty(), size);
+    };
+    std::size_t at = fit();
+    if (at == ~std::size_t(0)) { // full: recycle what the GPU is done with (a driver round trip), then try again
+        Poll();
+        at = fit();
+    }
     if (at == ~std::size_t(0)) return out;
     r.Spans.push_back({at, at + size});
     r.Head = at + size;
@@ -158,8 +187,9 @@ void Retire(Region& reg) {
     Ring& r = R();
     for (Live& s : r.Spans)
         if (s.Offset == reg.Offset && !s.Retired) {
-            s.Fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            s.Batch = r.OpenBatch;
             s.Retired = true;
+            r.OpenUsed = true;
             break;
         }
     reg = Region{};
