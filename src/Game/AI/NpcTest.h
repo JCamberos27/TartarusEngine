@@ -21,7 +21,7 @@ class SpiderDamage;
 class BloodFx;
 class World;
 
-// --npc-test [scenario] [--smoke-shots dir]: the enemy squad, headless, in scenes/Arena.json. The host
+// --npc-test [scenario] [--smoke-shots dir]: the enemy squad, headless, in tests/scenes/Arena.json. The host
 // enters Play, hands the player to this script each frame (Drive), and reports (After). It logs what
 // every soldier is doing, checks the fight works end to end, and frames the Scene view on the soldiers
 // for screenshots.
@@ -41,30 +41,30 @@ class World;
 //           against the shoulder and the hands logged through each the AK shot
 //   flame   the player's muzzle flames: the AK's and the Remington's (second slot), shots from the hip
 //           then on the sights (record it: NPC_TEST_RECORD, every frame)
-//   revolver the .38 in scenes/WeaponLab.json (NpcTest_Revolver.cpp): hip, the sights held (the sight line logged),
+//   revolver the .38 in tests/scenes/WeaponLab.json (NpcTest_Revolver.cpp): hip, the sights held (the sight line logged),
 //           2 shots, a partial reload, 6 from the hip, a full reload (hammer, trigger and cylinder measured per shot,
 //           every ejection and the cases' sleep counted), inspect, mag check, melee, walk and sprint, then the AK and
 //           the 870 fired and reloaded (one case per shot / pump), each slot's ammo kept, one scroll notch; both views
 //           shot at fixed moments, close on the gun and on the floor
 //   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp
-//   blood   the volumetric blood (scenes/BloodTest.json): a wound, a chest kill against a wall, a head kill and a
+//   blood   the volumetric blood (tests/scenes/BloodTest.json): a wound, a chest kill against a wall, a head kill and a
 //           corpse shot, each watched from the side in shots through the spray's flight
-//   ragdoll the deaths themselves (scenes/RagdollTest.json): a dozen soldiers, bare and dressed, standing, walking, jogging,
+//   ragdoll the deaths themselves (tests/scenes/RagdollTest.json): a dozen soldiers, bare and dressed, standing, walking, jogging,
 //           sprinting and strafing, at a ledge, a wall, a crate, on stairs and over another body, each killed by a round from
 //           a set side; every death is frozen at moments through the fall and at rest and shot from four sides (front, side,
 //           high three-quarter, ground level), and checked every frame: no part of a body inside another (self-collision),
 //           none inside the ground, no joint past its range, the gun out of the hand and lying on the floor clear of the body,
 //           the body asleep in time; then the corpses and guns stay while looked at and go once the view turns away
-//   aptfight the squad as fighters in Apartment Hallway (scenes/Apartment Hallway.json): 301's two dummies spawn as soldiers
+//   aptfight the squad as fighters in Apartment Hallway (tests/scenes/Apartment Hallway.json): 301's two dummies spawn as soldiers
 //           with AKs and real brains; the player (untouchable) holds the corridor outside 301's front door, then shoots
 //           back - a heavy round to stagger one, a thigh to put the other down crawling, then his own rifle - and last
 //           steps into 301's entry, by the arch. Measured every frame: awareness, fire and hits on the player, nobody stuck,
 //           nobody through a wall or doorframe (capsule, a ray along each step, the navmesh, the gun's muzzle), the doorways,
 //           the reloads, no pose pops or NaNs, the deaths and corpses in the small rooms, and the frame cost
-//   decals  (scenes/Apartment Hallway.json) rounds and blood put on a corridor wall and floor at fixed spots, shot from
+//   decals  (tests/scenes/Apartment Hallway.json) rounds and blood put on a corridor wall and floor at fixed spots, shot from
 //           fixed Scene-view cameras: the before/after of bullet holes and blood moving to the clustered decals
 //           (NpcTest_Decals.cpp, docs/DECALS.md)
-//   doors   (scenes/Apartment Hallway.json, no squad) every door opened and the player walked through each one five ways -
+//   doors   (tests/scenes/Apartment Hallway.json, no squad) every door opened and the player walked through each one five ways -
 //           straight, grazing the hinge jamb, grazing the latch jamb, strafing, sprinting on a diagonal - each pass measured:
 //           through in time, the speed kept within half a metre of the wall, time stuck, frames inside anything
 //           (NpcTest_Doors.cpp)

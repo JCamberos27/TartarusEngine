@@ -1,4 +1,4 @@
-# Generates project/scenes/Arena.json: a walled 64 x 64 m combat arena with cover, for testing the
+# Generates tests/scenes/Arena.json: a walled 64 x 64 m combat arena with cover, for testing the
 # player's weapons against the enemy squad. The player (Player Spawn with its weapons and the whole
 # Player Body / outfit subtree), the Sun and the sky / post settings are copied from the Sandbox so
 # the arena plays exactly like it; everything else is built here. Re-running overwrites hand edits.
@@ -9,7 +9,7 @@ import os
 import sys
 
 root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..')
-scenes = os.path.join(root, 'project', 'scenes')
+scenes = os.path.join(root, 'tests', 'scenes')
 sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scenes', 'sandbox_template.json'), encoding='utf-8'))
 
 AK = 'assets/Weapons/AKS74U/AKS74U.fpsanim'

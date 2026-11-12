@@ -1,4 +1,4 @@
-# Generates project/scenes/BloodTest.json: a small range for the volumetric blood.
+# Generates tests/scenes/BloodTest.json: a small range for the volumetric blood.
 # A line of four soldiers stands with a wall close behind them (exit sprays and wall spatter), one under a
 # low ceiling (spray clipped against it, ceiling drips), one beside a staircase (blood down the steps)
 # and one by a stack of loose physics crates (blood on moving props). The player (Player Spawn and its
@@ -11,7 +11,7 @@ import os
 import sys
 
 root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..')
-scenes = os.path.join(root, 'project', 'scenes')
+scenes = os.path.join(root, 'tests', 'scenes')
 sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scenes', 'sandbox_template.json'), encoding='utf-8'))
 
 SKIP_KEYS = {'boxes', 'empties', 'models', 'libraryMaterials', 'libraryModels', 'libraryPrefabs',

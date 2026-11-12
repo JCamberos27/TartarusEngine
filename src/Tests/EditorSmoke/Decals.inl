@@ -92,7 +92,7 @@ void RegisterDecalsTests() {
         }),
         FreshScene(), Wait(2),
         Do("open the Apartment Hallway", [](Ctx& c) {
-            EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, ProjectPaths::Resolve("scenes/Apartment Hallway.json"));
+            EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
         }),
         Wait(120), Aim(), Do("gizmos, icons and grid off for the shots", [](Ctx& c) { SA::Gizmos(c.E, false); }), Wait(5),
         // --- Library
@@ -175,7 +175,7 @@ void RegisterDecalsLitTests() {
         }),
         FreshScene(), Wait(2),
         Do("open the Apartment Hallway", [](Ctx& c) {
-            EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, ProjectPaths::Resolve("scenes/Apartment Hallway.json"));
+            EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
         }),
         Wait(120),
         Do("open the library to index", [](Ctx& c) { SA::Library(c.E, true); }),

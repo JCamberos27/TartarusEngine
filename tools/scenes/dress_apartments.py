@@ -1,5 +1,5 @@
 # Dresses the six apartments (301-306) of the Apartment Hallway as a derelict squat, the same layered peeling-paint
-# recipe as dress_corridor.py (it imports that script's helpers). It patches project/scenes/Apartment Hallway.json IN
+# recipe as dress_corridor.py (it imports that script's helpers). It patches tests/scenes/Apartment Hallway.json IN
 # PLACE, so run it AFTER dress_corridor.py:
 #
 #   python -I tools/scenes/dress_corridor.py [<repo>]
@@ -658,7 +658,7 @@ def camera_poses(S, rooms):
 
 def main():
     repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..'))
-    path = os.path.join(repo, 'project', 'scenes', 'Apartment Hallway.json')
+    path = os.path.join(repo, 'tests', 'scenes', 'Apartment Hallway.json')
     with open(path, encoding='utf-8') as f:
         d = json.load(f)
     removed = dc.remove_roots(d, ROOTS)

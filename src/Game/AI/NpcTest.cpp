@@ -2512,7 +2512,7 @@ void NpcTest::Feet(NpcDirector& npcs, float now) {
 }
 
 // --- blood: the volumetric blood on every kind of hit ----------------------------------------------
-// scenes/BloodTest.json: four soldiers in a line with a wall 1.5 m behind them, frozen, holding fire. One is wounded in
+// tests/scenes/BloodTest.json: four soldiers in a line with a wall 1.5 m behind them, frozen, holding fire. One is wounded in
 // the chest, one killed through the chest (the spray meets the wall), one through the head, and the chest kill's
 // corpse is shot. The Scene view watches each from the side; shots at the moments the spray is up, falling and down.
 void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
@@ -2708,7 +2708,7 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
 
 // --- ragdoll: the deaths, watched from four sides ------------------------------------------------------------------------
 namespace {
-// scenes/RagdollTest.json's NPC Spawns, in order.
+// tests/scenes/RagdollTest.json's NPC Spawns, in order.
 enum RagSpawn { RS_Open, RS_Ak, RS_Shotgun, RS_Crate, RS_Stairs, RS_Ledge, RS_Wall, RS_Sprinter, RS_Jogger, RS_Strafer, RS_PileA, RS_PileB, RS_Count };
 struct RagCase {
     const char* Name;

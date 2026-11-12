@@ -4,7 +4,7 @@
 // The scene file life cycle: an edit dirties the scene and Ctrl+S cleans it; what was saved
 // reopens identical; New Scene over unsaved work asks first (Cancel keeps everything, Don't Save
 // drops it, Save writes it then switches). File > Save / Revert / New themselves are in the Menus
-// suite. Last, every scene under project/scenes/ goes through a load -> save -> load round trip
+// suite. Last, every scene under project/scenes/ and tests/scenes/ goes through a load -> save -> load round trip
 // into a scratch copy and must come back byte-identical. Nothing under project/ is written, except
 // the Untitled*.json New Scene creates, which each test deletes again.
 
@@ -53,10 +53,10 @@ Step DeleteUntitled() {
 }
 std::vector<fs::path> ProjectScenes() {
     std::vector<fs::path> scenes;
-    for (const char* dir : {"scenes", "scenes/OutfitTest"}) {
+    for (const std::string& dir : {ProjectPaths::Resolve("scenes"), EnginePaths::Resolve("tests/scenes")}) {
         std::vector<fs::path> here;
         std::error_code ec;
-        for (const auto& entry : fs::directory_iterator(fs::path(ProjectPaths::Resolve(dir)), ec)) {
+        for (const auto& entry : fs::directory_iterator(fs::path(dir), ec)) {
             if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
             const std::string name = entry.path().filename().string();
             if (Contains(name, ".recovery.json") || Contains(name, ".backup.json") || Contains(name, "Untitled")) continue;

@@ -7,7 +7,7 @@
 #   python tools/scenes/build_master_scene.py [<repo>]
 #
 # Writes project/scenes/Master Scene.json (no longer committed: the Apartment Hallway is the startup scene) (+ .meta, its guid kept across rebuilds). Render settings and the player's
-# rig come from scenes/Arena.json; the grid textures from tools/assets/gen_proto_grid.py.
+# rig come from tests/scenes/Arena.json; the grid textures from tools/assets/gen_proto_grid.py.
 #
 # Layout (X east, -Z north, metres; the player spawns at the hub facing north):
 #   hub (0, 0)            spawn, compass, scene sign
@@ -134,7 +134,7 @@ class Master(Scene):
 
 
 def build(repo):
-    with open(os.path.join(repo, 'project', 'scenes', 'Arena.json'), encoding='utf-8') as f:
+    with open(os.path.join(repo, 'tests', 'scenes', 'Arena.json'), encoding='utf-8') as f:
         arena = json.load(f)
     s = Master(arena, repo)
     d = s.data

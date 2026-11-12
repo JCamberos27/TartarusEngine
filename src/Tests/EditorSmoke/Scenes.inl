@@ -1,7 +1,7 @@
 // Editor smoke suite: Scenes. Included by src/Tests/EditorUiTests.cpp inside its anonymous namespace
 // (see README.md in this folder).
 //
-// Every scene under project/scenes/ (and project/scenes/OutfitTest/) is opened through the
+// Every scene under project/scenes/ (the Forest) and tests/scenes/ (the test scenes) is opened through the
 // editor's own open path (RequestOpenScene, what the Asset Browser's double-click and File > Open
 // Recent use), left to settle, looked at through the Hierarchy and Inspector, then played for a
 // couple of seconds. Nothing is saved: each test ends back on the scratch scene.
@@ -102,10 +102,10 @@ void RegisterScenesTests() {
 
     // Found when the tests are registered (the first editor frame), in a stable order.
     std::vector<fs::path> scenes;
-    for (const char* dir : {"scenes", "scenes/OutfitTest"}) {
+    for (const std::string& dir : {ProjectPaths::Resolve("scenes"), EnginePaths::Resolve("tests/scenes")}) {
         std::vector<fs::path> here;
         std::error_code ec;
-        for (const auto& entry : fs::directory_iterator(fs::path(ProjectPaths::Resolve(dir)), ec)) {
+        for (const auto& entry : fs::directory_iterator(fs::path(dir), ec)) {
             if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
             const std::string name = entry.path().filename().string();
             if (Contains(name, ".recovery.json") || Contains(name, ".backup.json")) continue;
@@ -117,9 +117,7 @@ void RegisterScenesTests() {
 
     for (const fs::path& scene : scenes) {
         const std::string path = scene.generic_string(); // the Asset Browser's spelling of a scene key
-        std::string label = fs::path(ProjectPaths::Relativize(scene.string())).generic_string();
-        if (label.rfind("scenes/", 0) == 0) label = label.substr(7);
-        if (label.size() > 5 && label.compare(label.size() - 5, 5, ".json") == 0) label.resize(label.size() - 5);
+        const std::string label = scene.stem().string();
 
         Add("scenes: " + label + " opens, settles, inspects and plays", {
             // Allowed first: the previous scene's async loads can still log while FreshScene runs.

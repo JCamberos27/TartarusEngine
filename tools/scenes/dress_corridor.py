@@ -1,5 +1,5 @@
 # Dresses the Apartment Hallway's corridor as a derelict squat: peeling, flaking plaster, water-stained ceiling, dark
-# splashes by the doorways. It patches project/scenes/Apartment Hallway.json IN PLACE (the scene has hand edits that
+# splashes by the doorways. It patches tests/scenes/Apartment Hallway.json IN PLACE (the scene has hand edits that
 # build_apartment_hallway.py doesn't make, e.g. the 301 test room, so never rebuild it over the top):
 #
 #   python -I tools/scenes/dress_corridor.py [<repo>]
@@ -280,7 +280,7 @@ def build(d):
 
 def main():
     repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..'))
-    path = os.path.join(repo, 'project', 'scenes', 'Apartment Hallway.json')
+    path = os.path.join(repo, 'tests', 'scenes', 'Apartment Hallway.json')
     with open(path, encoding='utf-8') as f:
         d = json.load(f)
     removed = remove_roots(d)

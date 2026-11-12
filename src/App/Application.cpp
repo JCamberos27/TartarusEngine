@@ -680,7 +680,7 @@ int Application::RunSession() {
             if (!opt.editorShotIDE && !last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, sceneEc) && !sceneEc)
                 scenePath = last;
             if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
-            if (opt.weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
+            if (opt.weaponLabMode) scenePath = EnginePaths::Resolve("tests/scenes/WeaponLab.json");
         }
         AssetLibrary assets;
         if (npcTest) // --npc-test revolver: the cases on the ground
