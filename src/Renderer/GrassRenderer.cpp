@@ -97,7 +97,8 @@ GrassRenderer::AreaDesc GrassRenderer::Describe(const GrassAreaComponent& g, con
     a.Lod = glm::vec4(std::clamp(g.NearDistance, 0.0f, drawDist), drawDist, std::max(g.EdgeFade, 0.0f),
                       std::max(g.WindStrength, 0.0f));
     a.Wind = glm::vec4(std::max(g.WindSpeed, 0.0f), g.FollowTerrain ? 1.0f : 0.0f, 0.0f, 0.0f);
-    d.MaxHeight = a.Shape.x * (1.0f + a.Shape.y) * (1.0f + 0.5f * a.Tip.w) + 0.3f;
+    // Tallest: the top of the height spread, in the tallest patch, at a tall tuft's middle (Grass.comp: hScale).
+    d.MaxHeight = a.Shape.x * (1.0f + a.Shape.y) * (1.0f + 0.5f * a.Tip.w) * 1.4f + 0.3f;
     // The density mask, decoded once per change (the component keeps it; a sampled key, not a full hash).
     if (!g.DensityMap.empty() && g.MapResX >= 2 && g.MapResZ >= 2) {
         std::uint64_t key = 1469598103934665603ull;
@@ -250,14 +251,25 @@ void GrassRenderer::EnsureBuffers() {
     glNamedBufferData(m_CmdBuf, (GLsizeiptr)sizeof(kCmdReset), kCmdReset, GL_DYNAMIC_DRAW);
 }
 
-bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye) {
+bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, float maxDistance) {
     m_Culled = false;
     if (m_Areas.empty() || Disabled()) return false;
     const glm::mat4 viewProj = proj * view;
     const Frustum frustum = Frustum::FromViewProj(viewProj);
+    // A shorter reach (the shadow pass): every area's draw distance capped to it, its near range inside that.
+    static std::vector<AreaDesc> capped;
+    const std::vector<AreaDesc>* use = &m_Areas;
+    if (maxDistance < 1e29f) {
+        capped = m_Areas;
+        for (AreaDesc& a : capped) {
+            a.Gpu.Lod.y = std::min(a.Gpu.Lod.y, std::max(maxDistance, 1.0f));
+            a.Gpu.Lod.x = std::min(a.Gpu.Lod.x, a.Gpu.Lod.y);
+        }
+        use = &capped;
+    }
     {
         PROFILE_SCOPE("Grass Chunks");
-        SelectChunks(m_Areas, frustum, eye, m_Chunks, &m_Terrain);
+        SelectChunks(*use, frustum, eye, m_Chunks, &m_Terrain);
     }
     if (m_Chunks.empty()) return false;
     EnsurePrograms();
@@ -265,7 +277,7 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
     PROFILE_GPU_SCOPE("Grass Cull");
     static std::vector<AreaGpu> areas;
     areas.clear();
-    for (const AreaDesc& a : m_Areas) areas.push_back(a.Gpu);
+    for (const AreaDesc& a : *use) areas.push_back(a.Gpu);
     glNamedBufferData(m_AreaBuf, (GLsizeiptr)(areas.size() * sizeof(AreaGpu)), areas.data(), GL_STREAM_DRAW);
     glNamedBufferData(m_ChunkBuf, (GLsizeiptr)(m_Chunks.size() * sizeof(ChunkGpu)), m_Chunks.data(), GL_STREAM_DRAW);
     glNamedBufferSubData(m_CmdBuf, 0, (GLsizeiptr)sizeof(kCmdReset), kCmdReset);
@@ -315,7 +327,7 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
     return true;
 }
 
-void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& proj) {
+void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& proj, int nearSegments) {
     prog.SetMat4("uView", view);
     prog.SetMat4("uProj", proj);
     prog.SetFloat("uWindTime", Material::WindTime());
@@ -327,7 +339,7 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_CmdBuf);
     glDisable(GL_CULL_FACE); // blades are seen from both sides
     prog.SetInt("uInstanceBase", 0);
-    prog.SetInt("uSegments", kNearSegments);
+    prog.SetInt("uSegments", nearSegments);
     glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)0);
     prog.SetInt("uInstanceBase", (int)kNearCap);
     prog.SetInt("uSegments", 1);
@@ -346,6 +358,20 @@ void GrassRenderer::DrawDepth(const glm::mat4& view, const glm::mat4& proj) {
     prog.SetInt("uDepthOnly", 1);
     prog.SetInt("uTaaVelocity", 0);
     Draw(prog, view, proj);
+}
+
+void GrassRenderer::DrawShadow(const glm::mat4& lightViewProj, int nearSegments) {
+    if (!m_Culled) return;
+    nearSegments = std::clamp(nearSegments, 1, kNearSegments);
+    Shader& prog = *m_Draw;
+    prog.Bind();
+    prog.SetInt("uDepthOnly", 1);
+    prog.SetInt("uTaaVelocity", 0);
+    // The near command's vertex count to the coarser strip (the next Cull resets it).
+    const std::uint32_t verts = (std::uint32_t)(2 * nearSegments + 1);
+    glNamedBufferSubData(m_CmdBuf, 0, (GLsizeiptr)sizeof(verts), &verts);
+    glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
+    Draw(prog, glm::mat4(1.0f), lightViewProj, nearSegments);
 }
 
 void GrassRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, bool depthWrites,

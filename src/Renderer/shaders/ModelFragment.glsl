@@ -167,6 +167,7 @@ void main() {
     // plane below).
     bool tri = uTriplanar == 1;
     vec3 triW = tri ? TriplanarWeights(normalize(vNormal)) : vec3(0.0);
+    if (tri) TriplanarBreakupSetup(vWorldPos);
     // #102 — per-material UV tiling / offset, then parallax offset from a height map.
     vec2 uv = vUV * (uUVTiling == vec2(0.0) ? vec2(1.0) : uUVTiling) + uUVOffset;
     bool backFace = uDoubleSided == 1 && !gl_FrontFacing;
@@ -203,6 +204,7 @@ void main() {
     if (uUseVertexColor == 1) albedoSample.a *= vColor.a; // #113
     if (uAlphaClip == 1 && uHasAlbedoMap == 1 && albedoSample.a < uAlphaCutoff) discard; // #101
     vec3 albedo = (uHasAlbedoMap == 1 ? albedoSample.rgb : vec3(1.0)) * uBaseColor;
+    if (tri) albedo *= TriplanarMacroTint();
     if (uUseVertexColor == 1) albedo *= vColor.rgb; // #113
     vec2 detailUV = vUV * (uDetailTiling == vec2(0.0) ? vec2(1.0) : uDetailTiling);
     // Detail albedo, Unity-style "x2" in linear space: 50% grey (0.2159 linear) leaves the colour unchanged.
@@ -239,7 +241,7 @@ void main() {
         vec3 n0 = backFace ? -N : N;
         float strength = uNormalStrength > 0.0 ? uNormalStrength : 1.0;
         vec3 tx = UnpackNormal(texture(uNormalMap, vWorldPos.zy * uTriplanarScale).rgb);
-        vec3 ty = UnpackNormal(texture(uNormalMap, vWorldPos.xz * uTriplanarScale).rgb);
+        vec3 ty = UnpackNormal(TriplanarTop(uNormalMap, vWorldPos.xz * uTriplanarScale).rgb);
         vec3 tz = UnpackNormal(texture(uNormalMap, vWorldPos.xy * uTriplanarScale).rgb);
         if (uNormalFlipY == 1) { tx.y = -tx.y; ty.y = -ty.y; tz.y = -tz.y; }
         tx.xy *= strength; ty.xy *= strength; tz.xy *= strength;

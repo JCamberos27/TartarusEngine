@@ -358,6 +358,7 @@ json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matS
             if (smat.Thickness != 0.5f)            em["thickness"] = smat.Thickness;
             if (smat.TransmissionStrength != 0.0f) em["transmission"] = smat.TransmissionStrength;
             if (smat.IOR != 1.5f)                  em["ior"] = smat.IOR;
+            if (smat.TriplanarBreakup != 0.0f)     em["triplanarBreakup"] = smat.TriplanarBreakup;
             if (smat.ReflectionProbes)             em["reflectionProbes"] = true;
             // #102 / #113 surface options
             if (smat.UVTiling != glm::vec2(1.0f))  em["uvTiling"] = {smat.UVTiling.x, smat.UVTiling.y};
@@ -409,6 +410,7 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
     ma->Mat.EmissiveStrength= mj.value("emissiveStrength", 1.0f);
     ma->Mat.Triplanar       = mj.value("triplanar", false);
     ma->Mat.TriplanarScale  = mj.value("triplanarScale", 1.0f);
+    ma->Mat.TriplanarBreakup = mj.value("triplanarBreakup", 0.0f);
     ma->Mat.AlbedoMap            = LoadIfPresent(assets, mj, "albedoMap");
     ma->Mat.NormalMap            = LoadIfPresent(assets, mj, "normalMap");
     ma->Mat.MetallicRoughnessMap = LoadIfPresent(assets, mj, "metallicRoughnessMap");

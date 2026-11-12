@@ -2090,7 +2090,7 @@ namespace {
 // #194: per-material uniform locations for one Draw() call, resolved ONCE before the per-mesh
 // loop (below) instead of re-hashing all these literal names for every mesh of every model.
 struct MaterialLocs {
-    int baseColor, metallic, roughness, emissiveColor, triplanar, triplanarScale;
+    int baseColor, metallic, roughness, emissiveColor, triplanar, triplanarScale, triplanarBreakup;
     int hasAlbedo, albedoMap;
     int hasNormal, normalMap;
     int hasMetallicRoughness, metallicRoughnessMap;
@@ -2121,6 +2121,7 @@ MaterialLocs ResolveMaterialLocs(Shader& shader) {
     L.emissiveColor = shader.Loc("uEmissiveColor");
     L.triplanar = shader.Loc("uTriplanar");
     L.triplanarScale = shader.Loc("uTriplanarScale");
+    L.triplanarBreakup = shader.Loc("uTriplanarBreakup");
     L.hasAlbedo = shader.Loc("uHasAlbedoMap");
     L.albedoMap = shader.Loc("uAlbedoMap");
     L.hasNormal = shader.Loc("uHasNormalMap");
@@ -2581,6 +2582,7 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     shader.SetVec3(locs.emissiveColor, mat.EmissiveColor * mat.EmissiveStrength);
     shader.SetInt(locs.triplanar, mat.Triplanar ? 1 : 0);
     shader.SetFloat(locs.triplanarScale, mat.TriplanarScale);
+    shader.SetFloat(locs.triplanarBreakup, mat.TriplanarBreakup);
     shader.SetInt(locs.alphaClip, mat.AlphaClip ? 1 : 0);       // #101
     shader.SetFloat(locs.alphaCutoff, mat.AlphaCutoff);
 

@@ -12,6 +12,7 @@
 #include "DefaultTextures.h"
 #include "Frustum.h"
 #include "GLStateCache.h"
+#include "GrassRenderer.h"
 #include "gl.h"
 #include "LightGather.h"
 #include "Model.h"
@@ -172,6 +173,27 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
             for (const SunCaster& sc : m_SunCasters)
                 if (castsInto(sc, c, cascadeFrustum)) m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided});
             DrawDepthCasters(shadowShader, m_Draws);
+        }
+    }
+
+    // Grass (GrassRenderer): its blades into the nearest cascades, scattered and culled against each cascade's own
+    // box (thinned by distance from the view's eye, as the view sees them), so the field shades itself and the
+    // ground under it. Farther out a blade is under a texel and its shadow is only noise.
+    {
+        GrassRenderer& grass = GrassRenderer::Get();
+        grass.Gather(world);
+        if (grass.HasAreas()) {
+            PROFILE_GPU_SCOPE("Grass Shadow");
+            const glm::vec3 eye = glm::vec3(glm::inverse(fitView)[3]);
+            const int grassCascades = std::min(cascadeCount, GrassRenderer::kShadowCascades);
+            for (int c = 0; c < grassCascades; ++c) {
+                const glm::mat4 vp = shadowMap.LightViewProj(c);
+                if (!grass.Cull(glm::mat4(1.0f), vp, eye, GrassRenderer::kShadowDistance)) continue;
+                shadowMap.Resume(c);
+                // The nearest cascade's texels are a few millimetres: full blades. Past it, two-segment ones.
+                grass.DrawShadow(vp, c == 0 ? GrassRenderer::kNearSegments : 2);
+            }
+            shadowShader.Bind();
         }
     }
 

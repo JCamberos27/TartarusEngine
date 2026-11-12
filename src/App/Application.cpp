@@ -1766,7 +1766,9 @@ int Application::RunSession() {
             viewIn.tintOverlay = &tintOverlay;
             viewIn.grid = &grid;
             viewIn.selectionOutline = &selectionOutline;
-            viewIn.harnessCleanViews = npcTest && npcTest->WantsCleanViews();
+            // --smoke-shots with TARTARUS_SHOT_CAMERAS: review pictures, so no grid through them either.
+            viewIn.harnessCleanViews = (npcTest && npcTest->WantsCleanViews()) ||
+                                       (opt.smokeTestMode && !opt.smokeShotsDir.empty() && Env::IsSet(Env::Var::ShotCameras));
             viewIn.game = {&gameHdr, &gameTaa, &gameOpaqueColor, &gameSsao, &gameBloom};
             viewIn.gameLdr = &gameLdr;
             viewIn.upscaler = &upscaler;

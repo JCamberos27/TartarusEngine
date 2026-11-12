@@ -44,6 +44,9 @@ struct Material {
     // very different sizes/aspect ratios. TriplanarScale is texture tiles per world unit.
     bool Triplanar = false;
     float TriplanarScale = 1.0f;
+    // 0..1: the top projection stops repeating (random offsets per region, cross-faded) and a broad tone variation
+    // is laid over it - for ground. 0 = plain tiling.
+    float TriplanarBreakup = 0.0f;
 
     std::shared_ptr<Texture> AlbedoMap;
     std::shared_ptr<Texture> NormalMap;
@@ -229,7 +232,7 @@ struct Material {
         const float scalars[] = {
             BaseColor.x, BaseColor.y, BaseColor.z, Metallic, Roughness,
             EmissiveColor.x * EmissiveStrength, EmissiveColor.y * EmissiveStrength,
-            EmissiveColor.z * EmissiveStrength, TriplanarScale,
+            EmissiveColor.z * EmissiveStrength, TriplanarScale, TriplanarBreakup,
             ClearCoat, ClearCoatRoughness, Anisotropy, AnisotropyRotation,
             Sheen.x, Sheen.y, Sheen.z, SheenRoughness,
             SubsurfaceColor.x, SubsurfaceColor.y, SubsurfaceColor.z, Thickness,

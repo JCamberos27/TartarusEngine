@@ -60,6 +60,7 @@ Properties {
     // Engine-internal and advanced lobes: bound and saved as before, not shown.
     [Hidden] _Triplanar      ("Triplanar",        Bool)      = 0
     [Hidden] _TriplanarScale ("Triplanar Scale",  Float)     = 1
+    [Hidden] _TriplanarBreakup ("Triplanar Breakup", Range(0, 1)) = 0
     [Hidden] _MetallicRoughnessMap ("Metallic Roughness", Texture2D) = "white"
     [Hidden] _ClearCoat           ("Clear Coat",           Range(0, 1))     = 0
     [Hidden] _ClearCoatRoughness  ("Clear Coat Roughness",  Range(0, 1))     = 0.5

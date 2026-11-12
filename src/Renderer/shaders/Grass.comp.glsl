@@ -29,6 +29,7 @@ uniform int  uFarCap;
 shared uint sNear, sFar, sNearBase, sFarBase;
 
 const float kMinKeep = 0.1; // GrassRenderer::kMinKeep
+const float kClump = 0.22;  // metres between tuft centres, for 0.4 m grass
 
 uint Hash(uint x) { // lowbias32
     x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16;
@@ -124,8 +125,28 @@ void main() {
                     float kf = KeepFraction(dist, A.Lod.x, A.Lod.y);
                     if (r2 < grow * mix(0.35, 1.0, edgeK) && r3 < kf) {
                         float r4 = U01(Hash(h + 4u)), r5 = U01(Hash(h + 5u)), r6 = U01(Hash(h + 6u));
-                        float r7 = U01(Hash(h + 7u)), r8 = U01(Hash(h + 8u));
-                        float hScale = mix(1.0, 0.45 + 0.9 * patchN, patchiness) * mix(0.55, 1.0, edgeK) * mix(0.6, 1.0, dens);
+                        float r7 = U01(Hash(h + 7u)), r8 = U01(Hash(h + 8u)), r9 = U01(Hash(h + 9u));
+                        // Real grass grows in tufts: the nearest tuft centre (a jittered grid of kClump metres)
+                        // sets this blade's share of the tuft's height and hue, and it fans out from that centre.
+                        float clumpSize = kClump * clamp(A.Shape.x / 0.4, 0.6, 1.6);
+                        vec2 cp = wxz / clumpSize;
+                        vec2 ci = floor(cp);
+                        float best = 1e9;
+                        vec2 centre = wxz;
+                        uint clumpH = 0u;
+                        for (int oy = -1; oy <= 1; ++oy)
+                            for (int ox = -1; ox <= 1; ++ox) {
+                                ivec2 cc = ivec2(ci) + ivec2(ox, oy);
+                                uint hc = Hash3(uint(cc.x) * 7919u, uint(cc.y) * 104729u, seed ^ 0x51ed27u);
+                                vec2 c = (vec2(cc) + vec2(U01(hc), U01(Hash(hc + 1u)))) * clumpSize;
+                                float d2 = dot(c - wxz, c - wxz);
+                                if (d2 < best) { best = d2; centre = c; clumpH = hc; }
+                            }
+                        float clumpR = sqrt(best) / clumpSize;               // 0 at the tuft's heart, ~0.7 at its rim
+                        float clumpTall = mix(0.7, 1.25, U01(Hash(clumpH + 2u)));
+                        float clumpHue = U01(Hash(clumpH + 3u));
+                        float hScale = mix(1.0, 0.45 + 0.9 * patchN, patchiness) * mix(0.55, 1.0, edgeK);
+                        hScale *= clumpTall * mix(1.1, 0.75, clamp(clumpR * 1.4, 0.0, 1.0)); // the middle stands tallest
                         float height = A.Shape.x * (1.0 + A.Shape.y * (r4 * 2.0 - 1.0)) * hScale;
                         height *= smoothstep(A.Lod.y, A.Lod.y * 0.85, dist); // sinks into the ground at the draw distance
                         vec3 c = root + vec3(0.0, 0.5 * height, 0.0);
@@ -138,9 +159,17 @@ void main() {
                             // The survivors of the thinning widen, so the field keeps its cover.
                             float widen = min(inversesqrt(max(kf, 1e-3)), 3.0);
                             float dry = patchiness * (1.0 - smoothstep(0.25, 0.6, patchN)) * mix(0.6, 1.0, r8);
-                            b.A = vec4(root, r5 * 6.2831853);
-                            b.B = vec4(height, A.Shape.z * mix(0.75, 1.25, r6) * widen, A.Shape.w * mix(0.4, 1.6, r7), A.Lod.w);
-                            b.C = vec4(r8, dry, float(ch.x), A.Wind.x);
+                            // A few dead, straw-coloured blades through the whole field, more toward the tuft rims.
+                            if (r9 < 0.035 + 0.05 * clumpR) dry = max(dry, mix(0.75, 1.0, r8));
+                            // Faces turned out from the tuft (so the lean fans it open), with a little scatter.
+                            vec2 away = wxz - centre;
+                            float yaw = dot(away, away) > 1e-8 ? atan(away.y, away.x) + (r5 - 0.5) * 1.3 : r5 * 6.2831853;
+                            float bend = A.Shape.w * mix(0.4, 1.6, r7) * mix(0.6, 1.35, clamp(clumpR * 1.4, 0.0, 1.0));
+                            // Mostly fine blades, the odd broad one.
+                            float width = A.Shape.z * (r6 < 0.85 ? mix(0.7, 1.15, r6 / 0.85) : mix(1.4, 1.9, (r6 - 0.85) / 0.15));
+                            b.A = vec4(root, yaw);
+                            b.B = vec4(height, width * widen, bend, A.Lod.w);
+                            b.C = vec4(r8, dry, float(ch.x), clumpHue);
                         }
                     }
                 }

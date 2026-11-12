@@ -21,7 +21,8 @@ struct GrassDensityMap;
 // The same program (Grass.vert / .frag.glsl) draws the blades into the view's depth (after SSAO has copied the
 // pre-pass, so the blades leave no occlusion halos) and again lit under LEQUAL, so the lit pass shades each pixel
 // once, and TAA gets motion vectors for the wind.
-// The blades cast no shadows. TARTARUS_NO_GRASS=1 turns it off for a run (A/B measurements).
+// The blades cast into the sun's nearest kShadowCascades cascades (ShadowFrame::RenderSun: a cull and depth draw per
+// cascade), within kShadowDistance of the eye. TARTARUS_NO_GRASS=1 turns it off for a run (A/B measurements).
 class GrassRenderer {
 public:
     static GrassRenderer& Get();
@@ -33,6 +34,8 @@ public:
     static constexpr std::uint32_t kNearCap = 400000u;  // instances per list; the cull drops the rest
     static constexpr std::uint32_t kFarCap  = 900000u;
     static constexpr float kMinKeep = 0.1f;         // the share of blades left at the draw distance
+    static constexpr int   kShadowCascades = 2;     // sun cascades the blades cast into
+    static constexpr float kShadowDistance = 14.0f; // metres from the eye that blades cast shadows
 
     // Cells (one blade each) per chunk side for `density` blades per square metre: a whole number of cells close
     // to kChunkSize metres, at least 1.
@@ -60,7 +63,7 @@ public:
     // CPU side of one area for chunk selection.
     struct AreaDesc {
         AreaGpu Gpu;
-        float MaxHeight = 0.0f; // tallest a blade can stand, plus sway
+        float MaxHeight = 0.0f; // tallest a blade can stand (a tall tuft's middle), plus sway
         std::shared_ptr<const GrassDensityMap> Map; // the density mask, or null
     };
     static AreaDesc Describe(const GrassAreaComponent& g, const glm::mat4& world);
@@ -80,11 +83,14 @@ public:
     bool HasAreas() const { return !m_Areas.empty(); }
 
     // Per view: scatter and cull (compute). False when nothing is to be drawn.
-    bool Cull(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye);
+    // `maxDistance` caps every area's draw distance (the shadow pass's reach).
+    bool Cull(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, float maxDistance = 1e30f);
     // Draw the culled blades: depth only (inside the depth pre-pass, its polygon offset already set), or lit
     // (`applyFrameState` brings the program up to the view's lights, shadows and fog; `depthWrites` false when the
     // pre-pass already holds them). Adds the vertices drawn to `verts` (an upper bound: the caps).
     void DrawDepth(const glm::mat4& view, const glm::mat4& proj);
+    // Depth into a sun cascade (its target bound), the near blades' strips cut to `nearSegments` segments.
+    void DrawShadow(const glm::mat4& lightViewProj, int nearSegments);
     void DrawLit(const glm::mat4& view, const glm::mat4& proj, bool depthWrites,
                  const std::function<void(Shader&)>& applyFrameState);
 
@@ -93,7 +99,7 @@ public:
 private:
     void EnsurePrograms();
     void EnsureBuffers(); // the blade lists (~57 MB): only once some view has grass to draw
-    void Draw(Shader& prog, const glm::mat4& view, const glm::mat4& proj);
+    void Draw(Shader& prog, const glm::mat4& view, const glm::mat4& proj, int nearSegments = kNearSegments);
 
     std::unique_ptr<Shader> m_Draw;
     std::unique_ptr<Shader> m_Cull;
