@@ -12,7 +12,8 @@
     "meshNodes": [
       "Cedrus_tree_var2_LOD1"
     ],
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "simplify": 0.7
   },
   "materialRemap": {
     "Cedrus_2_3_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Billboards/Var2-3/M_Cedrus_2-3_billboards.mat",
