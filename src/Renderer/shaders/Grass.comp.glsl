@@ -7,7 +7,7 @@
 // and the seed, so a blade is the same every frame and in every view.
 layout(local_size_x = 256) in;
 
-struct GrassArea { vec4 Origin; vec4 Axes; vec4 Size; vec4 Shape; vec4 Base; vec4 Tip; vec4 Dry; vec4 Lod; vec4 Wind; };
+struct GrassArea { vec4 Origin; vec4 Axes; vec4 Size; vec4 Shape; vec4 Base; vec4 Tip; vec4 Dry; vec4 Lod; vec4 Wind; vec4 Map; };
 layout(std430, binding = 30) readonly buffer GrassAreas { GrassArea uAreas[]; };
 layout(std430, binding = 31) readonly buffer GrassChunks { ivec4 uChunks[]; };
 struct GrassBlade { vec4 A; vec4 B; vec4 C; };
@@ -18,6 +18,8 @@ layout(std430, binding = 34) readonly buffer GrassTerrain { float uTerrainH[]; }
 uniform int  uHasTerrain;
 uniform vec4 uTerrainRect; // world x, z of the grid's (0, 0) sample, cell size x, z
 uniform vec3 uTerrainRes;  // samples along x, z, the terrain entity's world y
+// The areas' density masks (GrassDensityMap), 4 samples a uint; an area's Map: first byte, res x, res z, has one.
+layout(std430, binding = 35) readonly buffer GrassMaps { uint uGrassMaps[]; };
 
 uniform vec4 uFrustum[6]; // world-space planes (normal, d): inside where dot(n, p) + d >= 0
 uniform vec3 uEye;
@@ -67,6 +69,20 @@ float TerrainHeight(vec2 wxz) {
     return uTerrainRes.z + h;
 }
 
+float MapByte(uint k) { return float((uGrassMaps[k >> 2u] >> ((k & 3u) * 8u)) & 0xFFu) * (1.0 / 255.0); }
+
+// GrassDensityMap::Sample: bilinear over the mask at uv in [0, 1] across the area.
+float MaskDensity(vec4 M, vec2 uv) {
+    ivec2 res = ivec2(M.yz);
+    vec2 g = clamp(uv, 0.0, 1.0) * vec2(res - 1);
+    ivec2 c = min(ivec2(g), res - 2);
+    vec2 f = g - vec2(c);
+    uint k = uint(M.x) + uint(c.y * res.x + c.x);
+    float a = mix(MapByte(k), MapByte(k + 1u), f.x);
+    float b = mix(MapByte(k + uint(res.x)), MapByte(k + uint(res.x) + 1u), f.x);
+    return mix(a, b, f.y);
+}
+
 void main() {
     ivec4 ch = uChunks[gl_WorkGroupID.x];
     GrassArea A = uAreas[ch.x];
@@ -100,13 +116,16 @@ void main() {
                     // Two octaves of patch noise: clumps a few metres across, broken up at their edges.
                     float patchN = ValueNoise(wxz * 0.16, seed * 7u + 3u) * 0.65 + ValueNoise(wxz * 0.55, seed * 7u + 5u) * 0.35;
                     float grow = mix(1.0, smoothstep(0.2, 0.55, patchN), patchiness);
+                    // The mask thins the blades (under the canopy) and clears them (at logs, rocks and trunks).
+                    float dens = A.Map.w > 0.5 ? MaskDensity(A.Map, local / A.Size.xy + 0.5) : 1.0;
+                    grow *= dens;
                     float edgeK = A.Lod.z > 0.0 ? smoothstep(0.0, A.Lod.z, min(edge.x, edge.y)) : 1.0;
                     float dist = distance(root, uEye);
                     float kf = KeepFraction(dist, A.Lod.x, A.Lod.y);
                     if (r2 < grow * mix(0.35, 1.0, edgeK) && r3 < kf) {
                         float r4 = U01(Hash(h + 4u)), r5 = U01(Hash(h + 5u)), r6 = U01(Hash(h + 6u));
                         float r7 = U01(Hash(h + 7u)), r8 = U01(Hash(h + 8u));
-                        float hScale = mix(1.0, 0.45 + 0.9 * patchN, patchiness) * mix(0.55, 1.0, edgeK);
+                        float hScale = mix(1.0, 0.45 + 0.9 * patchN, patchiness) * mix(0.55, 1.0, edgeK) * mix(0.6, 1.0, dens);
                         float height = A.Shape.x * (1.0 + A.Shape.y * (r4 * 2.0 - 1.0)) * hScale;
                         height *= smoothstep(A.Lod.y, A.Lod.y * 0.85, dist); // sinks into the ground at the draw distance
                         vec3 c = root + vec3(0.0, 0.5 * height, 0.0);

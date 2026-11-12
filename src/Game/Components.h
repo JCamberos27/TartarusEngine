@@ -18,6 +18,7 @@ class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
 class VisibleIndexBuffer; // OutfitHideTag
 class Model;
 struct TerrainGrid; // TerrainComponent (TerrainGrid.h)
+struct GrassDensityMap; // GrassAreaComponent (GrassDensityMap.h)
 struct ParticleCurveCache;
 struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<MaterialAsset> is valid here
 
@@ -1401,6 +1402,12 @@ struct GrassAreaComponent {
     int Seed = 1;
     bool ReceiveShadows = true;
     bool FollowTerrain = false;     // root the blades on the scene's Terrain instead of this object's plane
+    // Density mask (GrassDensityMap.h): MapResX x MapResZ 8-bit samples over the area, base64; empty = even.
+    std::string DensityMap;
+    int MapResX = 0, MapResZ = 0;
+    // Runtime (never serialized): the decoded mask and the key it was decoded for (GrassRenderer::Describe).
+    mutable std::shared_ptr<const GrassDensityMap> MapCache;
+    mutable std::uint64_t MapKey = 0;
 };
 
 // A height-grid terrain (TerrainGrid.h). The entity is a model whose path is "primitive://terrain#<key>": the
