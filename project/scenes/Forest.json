@@ -906345,15 +906345,15 @@
   "ssaoRadius": 0.44999998807907104,
   "tonemapOperator": 1,
   "volAlbedo": [
-    0.8,
-    0.8,
-    0.8
+    0.9,
+    0.9,
+    0.9
   ],
-  "volAnisotropy": 0.25,
-  "volBaseHeight": -0.8,
-  "volDensity": 0.07,
+  "volAnisotropy": 0.6,
+  "volBaseHeight": 0.0,
+  "volDensity": 0.014,
   "volDistance": 64.0,
-  "volHeightFalloff": 0.8,
+  "volHeightFalloff": 0.0,
   "volQuality": 1,
   "volumetricEnabled": true
 }
