@@ -1,6 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <array>
+#include <cstdint>
 #include "DepthArrayTarget.h"
 
 // Cascaded shadow maps for the directional sun.
@@ -59,7 +60,7 @@ public:
     // target), sets the viewport and clears every cascade at once. The caster draws then pick
     // their layer in the vertex shader (gl_Layer), one instance per cascade. Only valid when
     // LayeredSupported().
-    void BeginLayered() const;
+    void BeginLayered(unsigned mask = ~0u) const; // clears only `mask`'s layers (PlanRender)
     // Whether the driver lets a vertex shader write gl_Layer (ARB_shader_viewport_layer_array or
     // AMD_vertex_shader_layer). Checked once; needs a current GL context.
     static bool LayeredSupported();
@@ -71,6 +72,21 @@ public:
     int Resolution() const { return m_Resolution; }
     int Count() const { return m_Count; }
     const glm::mat4& LightViewProj(int i) const { return m_LightViewProj[i]; }
+    // Far cascades on alternate frames: cascade 2 renders on even frames, 3 on odd ones, and each is held (sampled
+    // as rendered, with its own matrix) on the frame between. The near two render every frame. A held layer is
+    // only reused when it was rendered the frame before, with the same light direction and texel size, and its
+    // rendered area - the slice then, grown by kHoldTexels - still covers this frame's slice; otherwise it renders
+    // now. Call after Update(); returns the cascades to render this frame (bit c = cascade c). Every cascade when
+    // called twice in one frame (two views sharing the map), with fewer than 4 cascades, or with
+    // TARTARUS_NO_CASCADE_ALTERNATE set. Shadows past cascade 1 (wind, things moving) update at half rate.
+    unsigned PlanRender(std::uint64_t frame);
+    // After the casters went into `mask`'s layers: they now hold this frame's fit.
+    void MarkRendered(unsigned mask, std::uint64_t frame);
+    // What a receiver samples cascade i with: this frame's fit, or a held layer's own.
+    const glm::mat4& SampleViewProj(int i) const { return m_SampleViewProj[i]; }
+    glm::vec4 SampleTexelWorldSizesVec4() const;
+    // The extra reach (texels) a cascade renders with when it will be held a frame: room for a frame of camera turn.
+    static constexpr float kHoldTexels = 64.0f;
     // Cascade split far-distances in *view space* (positive), one per cascade; [i] is the far
     // edge of cascade i. Packed into a vec4 for the shader (unused lanes hold the last split).
     glm::vec4 SplitDepthsVec4() const;
@@ -125,6 +141,17 @@ private:
     std::array<int, kMaxCascades> m_SliceAxisCount{};
     std::array<glm::vec2, kMaxCascades> m_SliceMin{}, m_SliceMax{};
     glm::vec3 m_Eye{0.0f}; // the fitted view's eye (BeginLayeredScissor's view-model reach)
+    glm::vec3 m_LightDir{0.0f, -1.0f, 0.0f}; // Update()'s, normalised
+    // Alternate-frame far cascades (PlanRender): what each layer holds and what receivers sample it with.
+    std::array<glm::mat4, kMaxCascades> m_SampleViewProj{};
+    std::array<float, kMaxCascades> m_SampleTexelWorld{};
+    std::array<glm::mat4, kMaxCascades> m_HeldViewProj{};
+    std::array<float, kMaxCascades> m_HeldTexelWorld{};
+    std::array<glm::vec3, kMaxCascades> m_HeldLightDir{};
+    std::array<glm::vec2, kMaxCascades> m_HeldLo{}, m_HeldHi{}; // the slice it was rendered for, grown by the hold
+    std::array<std::uint64_t, kMaxCascades> m_HeldFrame{};
+    std::array<float, kMaxCascades> m_HoldTexels{}; // extra reach this frame's render of the cascade carries
+    std::uint64_t m_LastPlanFrame = ~std::uint64_t(0);
     mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check in Begin()
 
     void Release();

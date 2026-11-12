@@ -18,6 +18,7 @@
     X(WeaponLab, "TARTARUS_WEAPON_LAB", Flag, "same as --weapon-lab (run-weapon-lab.cmd)")                            \
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
+    X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
     X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'x y z yaw pitch;...' camera poses to capture")      \
@@ -71,6 +72,7 @@
     X(NoSkinArena, "TARTARUS_NO_SKIN_ARENA", Flag, "disable the skinned mesh arena")                                  \
     X(NoPreskin, "TARTARUS_NO_PRESKIN", Flag, "disable compute pre-skinning")                                         \
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \
+    X(NoCascadeAlternate, "TARTARUS_NO_CASCADE_ALTERNATE", Flag, "render every sun cascade every frame")              \
     X(NoEngineVariants, "TARTARUS_NO_ENGINE_VARIANTS", Flag, "disable engine shader variants")                        \
     X(NoFur, "TARTARUS_NO_FUR", Flag, "disable fur rendering")                                                        \
     X(NoGrass, "TARTARUS_NO_GRASS", Flag, "disable grass rendering")                                                  \
