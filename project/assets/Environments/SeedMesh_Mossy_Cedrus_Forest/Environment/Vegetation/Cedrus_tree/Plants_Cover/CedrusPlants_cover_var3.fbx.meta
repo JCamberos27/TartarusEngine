@@ -12,7 +12,7 @@
     "optimizeGraph": true
   },
   "materialRemap": {
-    "Moss_cover": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Textures/M_Moss_cover.mat",
+    "Moss_cover": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Textures/M_Moss_cover_Tree.mat",
     "Wild_ferns_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_mat_Tree.mat"
   },
   "metaVersion": 1,
