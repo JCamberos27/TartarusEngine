@@ -41,6 +41,7 @@ import scene_kit as k  # noqa: E402
 
 HALF = 60.0                        # the playable forest: -HALF..HALF on X and Z
 OUTER = 100.0                      # trees carry on to here, past the bounds, so the forest never ends in view
+MOON_FOG_GLOW = 4.0               # the Moon light's Volumetric Intensity (its scatter in the fog)
 CLEARING = (0.0, 6.0, 8.5)         # centre x, z and radius of the clearing the player starts in
 SEEDMESH = 'assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/'
 VEG, GO = SEEDMESH + 'Vegetation/', SEEDMESH + 'Ground_objects/Prefabs/'
@@ -572,18 +573,22 @@ def build(repo):
         base = json.load(f)
     s = Forest(base, repo)
     s.keep_from(base, {'Moon', 'Player Spawn'})
+    # The moon lights the fog harder than the ground: toward it the haze glows behind black trunks.
+    for e in s.empties:
+        if e['parentId'] == -1 and e['name'] == 'Moon' and 'Light' in e:
+            e['Light']['Volumetric Intensity'] = MOON_FOG_GLOW
     d = s.data
     d['sky'].update({'seaLevel': 0.0, 'clouds': True, 'cloudCoverage': 0.3, 'cloudType': 0.35, 'cloudQuality': 0,
-                     'cloudShadows': False, 'cloudWindSpeed': 4.0, 'moonBrightness': 0.0328, 'nightBrightness': 4.4,
-                     'skyIntensity': 0.4})
+                     'cloudShadows': False, 'cloudWindSpeed': 4.0, 'moonBrightness': 0.0164, 'nightBrightness': 4.4,
+                     'skyIntensity': 0.15})
     # Volumetric fog for the depth between the trunks: uniform, dense and dark (outdoors only - the rule is no fog
     # indoors; a low-lying mist was tried in #745 and the uniform look kept). The distance fog's settings stay for
-    # when it's switched back on. The shadows' fill is the night sky x skyIntensity x skyAmbientIntensity: dark, but
-    # never black.
+    # when it's switched back on. The scene is kept dark (sky 0.15, sky ambient 0.08, a dim moon) so the moonlit fog
+    # glows against black trunks; the brighter fill of #741 is gone.
     d.update({'shadowDistance': 45.0, 'maxSpotShadows': 8, 'fogEnabled': False, 'fogMode': 3, 'fogDensity': 0.02,
               'fogColor': [0.03, 0.038, 0.052], 'fogHeightFalloff': 0.06, 'fogBaseHeight': 0.0,
-              'volumetricEnabled': True, 'volDensity': 0.014, 'volBaseHeight': 0.0, 'volHeightFalloff': 0.0,
-              'volAnisotropy': 0.6, 'volAlbedo': [0.9, 0.9, 0.9], 'skyAmbientIntensity': 1.5})
+              'volumetricEnabled': True, 'volDensity': 0.02, 'volBaseHeight': 0.0, 'volHeightFalloff': 0.0,
+              'volAnisotropy': 0.6, 'volAlbedo': [0.9, 0.9, 0.9], 'skyAmbientIntensity': 0.08})
     rng = random.Random(11)
     cx, cz, cr = CLEARING
     counts, dropped = {}, {}

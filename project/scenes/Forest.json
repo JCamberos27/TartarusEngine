@@ -7990,7 +7990,7 @@
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 35.0,
         "Type": "Directional",
-        "Volumetric Intensity": 1.0
+        "Volumetric Intensity": 4.0
       },
       "id": 1,
       "name": "Moon",
@@ -906302,7 +906302,7 @@
     "mieHeightKm": 1.2000000476837158,
     "mieScale": 1.0,
     "moon": true,
-    "moonBrightness": 0.0328,
+    "moonBrightness": 0.0164,
     "moonDiscScale": 20.0,
     "moonPhaseOffset": 0.4489000141620636,
     "multipleScattering": 1.0,
@@ -906319,14 +906319,14 @@
       1.0
     ],
     "seaLevel": 0.0,
-    "skyIntensity": 0.4,
+    "skyIntensity": 0.15,
     "starsBrightness": 2.5,
     "sunDiscBrightness": 1.0,
     "sunDiscScale": 0.44999998807907104,
     "timeOfDay": true,
     "timeOfDayHours": 18.799999237060547
   },
-  "skyAmbientIntensity": 1.5,
+  "skyAmbientIntensity": 0.08,
   "skyHorizonColor": [
     0.699999988079071,
     0.7599999904632568,
@@ -906351,7 +906351,7 @@
   ],
   "volAnisotropy": 0.6,
   "volBaseHeight": 0.0,
-  "volDensity": 0.014,
+  "volDensity": 0.02,
   "volDistance": 64.0,
   "volHeightFalloff": 0.0,
   "volQuality": 1,
