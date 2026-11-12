@@ -258,11 +258,20 @@ void main() {
             tn = vec3(tn.xy + dn.xy, tn.z * dn.z);
         }
         tn.xy *= uNormalStrength > 0.0 ? uNormalStrength : 1.0;
-        mat3 tbn = vTBN;
-        if (backFace) tbn[2] = -tbn[2];
-        N = normalize(tbn * tn);
+        // A back face is the same thin sheet seen from behind: its normal is the front's perturbed normal turned
+        // round, bumps and all. (Flipping only the TBN's normal mirrored the bumps instead, and with a strong normal
+        // map tipped whole patches of a leaf's underside away from the viewer - lit by nothing, near-black.)
+        N = normalize(vTBN * tn);
+        if (backFace) N = -N;
     } else if (backFace) {
         N = -N;
+    }
+    // A two-sided sheet is only ever seen from the side it faces: a normal-mapped normal that still turns away from
+    // the viewer (a strong map at a grazing view) is bent back to the view's horizon instead of going unlit.
+    if (uDoubleSided == 1 && !tri) {
+        vec3 Vn = normalize(uViewPos - vWorldPos);
+        float nv = dot(N, Vn);
+        if (nv < 0.02) N = normalize(N + Vn * (0.02 - nv));
     }
     // Cover layer (moss / snow): up-facing surfaces take the second material, its edge broken up by the cover's height.
     // Skipped (with its three fetches) where the weight is zero and beyond ~100 m, where the base layer carries on alone.
@@ -436,7 +445,9 @@ void main() {
 #else
             vec3 rad = radiance; // back-lit: radiance was looked up along -N above
 #endif
-            Lo += albedo * rad * (back * (0.35 + 1.4 * fwd) * uTranslucency / PI);
+            // A thin leaf transmits about what it reflects: Translucency 1 lights the back as the sun lights the front
+            // (it was 0.35 of that, and a leaf seen from below stayed dark at noon), plus the forward-scatter glow.
+            Lo += albedo * rad * (back * (1.0 + 1.4 * fwd) * uTranslucency / PI);
         }
 #ifdef _CLEARCOAT
         LoCc += radiance * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough) * ccStrength;
@@ -510,6 +521,10 @@ void main() {
         // The sky's irradiance, scaled by the scene's Ambient intensity. Inside a captured room probe the probe's own
         // cube replaces it below: indoors the open sky is not what lights a wall.
         vec3 irradiance = texture(uIrradianceMap, N).rgb * uIBLIntensity;
+        // A translucent leaf is lit through as well: what lights its other side (-N) shows on this one. Seen from
+        // below, a double-sided leaf's normal faces the dark ground, and with only the sun's transmission below its
+        // underside went near-black against a bright sky.
+        if (uTranslucency > 0.0) irradiance += texture(uIrradianceMap, -N).rgb * uIBLIntensity * uTranslucency;
 
         vec3 R = reflect(-V, N);
         vec3 prefiltered = textureLod(uPrefilteredMap, R, roughness * uIBLSpecularMaxLod).rgb;

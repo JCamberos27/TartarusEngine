@@ -229,6 +229,8 @@ public:
     // complementary screen-space patterns (LodFadeOf), so nothing pops.
     bool LodSmooth = false;
     static constexpr float kLodFadeSeconds = 0.6f;
+    // The clock the cross-fades run on, in seconds; < 0 (the default) is real time. Tests step it by hand.
+    double LodClockOverride = -1.0;
     static constexpr float kLodHysteresis = 0.1f;
     // The cross-fade value of a renderer now: 0 none; t > 0 fading in (drawn where the dither is under t); -t fading
     // out (drawn where it is t or over).
@@ -353,6 +355,7 @@ private:
         glm::vec3 Centre{0.0f};    // the group's world position
         std::int8_t FadeFrom = -1; // LodSmooth: the level fading out (left untagged meanwhile), -1 none
         double FadeStart = 0.0;    // when it began (Time::RealtimeSinceStartup)
+        double LastChange = -1e9;  // when its level last changed (LodSmooth): a group that keeps flipping doesn't fade
     };
     std::vector<float> m_LodFadeValue;        // entity slot -> LodFadeOf
     std::vector<entt::entity> m_LodFadeOwner; // entity slot -> the entity the value is for

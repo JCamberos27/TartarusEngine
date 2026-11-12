@@ -728,6 +728,63 @@ void TestLodGroup() {
     CHECK(world.Registry.view<LodCulledTag>().empty());
 }
 
+// LodSmooth cross-fades end: one still view finishes its fade, and two views that disagree on a group's level (the
+// Scene and Game views, every frame) don't keep restarting it - each frame used to begin a fresh fade, so the plants
+// stayed dithered for as long as both views were up.
+void TestLodFadeCompletes() {
+    auto make = [](World& world, entt::entity* lv) {
+        const glm::vec3 zero(0.0f), one(1.0f);
+        const entt::entity group = world.CreateEmptyEntity(zero, zero, one, "Group");
+        world.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+        for (int i = 0; i < 3; ++i) {
+            lv[i] = world.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i));
+            world.Registry.emplace<RenderableComponent>(lv[i]);
+            world.SetParent(lv[i], group);
+        }
+        world.LodSmooth = true;
+        world.LodClockOverride = 10.0;
+    };
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    const glm::vec3 nearView(0.0f, 0.0f, 1.0f), farView(0.0f, 0.0f, 2.0f); // LOD 0 / LOD 1
+    // 60 Hz frames on the world's LOD clock.
+    auto frames = [&](World& world, double seconds, const std::function<void()>& each) {
+        for (int i = 0, n = (int)(seconds * 60.0); i < n; ++i) {
+            world.LodClockOverride += 1.0 / 60.0;
+            world.RebuildWorldTransformCache();
+            each();
+        }
+    };
+    {
+        World world;
+        entt::entity lv[3];
+        make(world, lv);
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(nearView, proj);
+        frames(world, 0.1, [&] { world.ApplyLod(nearView, proj); });
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(farView, proj);                  // 0 -> 1: a fade starts
+        CHECK(world.LodFadeOf(lv[1]) > 0.0f && world.LodFadeOf(lv[0]) < 0.0f);
+        frames(world, World::kLodFadeSeconds + 0.3, [&] { world.ApplyLod(farView, proj); });
+        CHECK(world.LodFadeOf(lv[0]) == 0.0f && world.LodFadeOf(lv[1]) == 0.0f);
+        CHECK(world.Registry.all_of<LodCulledTag>(lv[0]) && !world.Registry.all_of<LodCulledTag>(lv[1]));
+    }
+    {
+        World world;
+        entt::entity lv[3];
+        make(world, lv);
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(nearView, proj);
+        frames(world, World::kLodFadeSeconds + 0.4, [&] { world.ApplyLod(nearView, proj); world.ApplyLod(farView, proj); });
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(nearView, proj);
+        CHECK(world.LodFadeOf(lv[0]) == 0.0f && world.LodFadeOf(lv[1]) == 0.0f); // whole, not dithered
+        CHECK(!world.Registry.all_of<LodCulledTag>(lv[0]) && world.Registry.all_of<LodCulledTag>(lv[1]));
+        world.ApplyLod(farView, proj);
+        CHECK(world.LodFadeOf(lv[0]) == 0.0f && world.LodFadeOf(lv[1]) == 0.0f);
+        CHECK(world.Registry.all_of<LodCulledTag>(lv[0]) && !world.Registry.all_of<LodCulledTag>(lv[1]));
+    }
+}
+
 // --- Active in hierarchy (#201) -------------------------------------------------------------
 void TestActiveInHierarchy() {
     World world;
@@ -6004,6 +6061,7 @@ int RunUnitTests(const char* filter) {
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
+        {"LodFadeCompletes", TestLodFadeCompletes},
         {"NearestEuler", TestNearestEuler},
         {"QuaternionTransformStorage", TestQuaternionTransformStorage},
         {"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis},
