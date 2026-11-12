@@ -19,6 +19,7 @@
 #include "ProjectSettings.h"
 #include "ShaderLibrary.h"
 #include "Tests/UnitTests.h"
+#include "Renderer/UploadStaging.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -280,7 +281,7 @@ int SceneBounds(const std::vector<std::string>& inputArgs, const std::string& ou
         std::ofstream out(file);
         out << j.dump(1);
     };
-    const auto drain = [&] { for (int k = 0; k < 20000 && assets.AsyncInFlight() > 0; ++k) assets.PumpAsync(50.0); };
+    const auto drain = [&] { for (int k = 0; k < 20000 && assets.AsyncInFlight() > 0; ++k) { assets.PumpAsync(50.0); UploadStaging::Finish(); } }; // no frames: free the staging ring by hand
     int failed = 0;
     for (const fs::path& in : inputs) {
         std::error_code ec;
