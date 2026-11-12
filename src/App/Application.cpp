@@ -1078,6 +1078,9 @@ int Application::RunSession() {
                 Time::SetRefreshPeriod(!headless && appliedVSyncMode == 1 && refreshHz >= 30 ? 1.0 / refreshHz : 0.0);
             }
             MotionDemo::PinClock(); // the motion demo's virtual clock: exactly 1/60 s per frame
+            // --perf-bench --smoke-shots: game time steps 1/120 s a frame, so the play-max picture is the same moment
+            // every run (a before/after pixel diff of a GPU change). The timings of such a run aren't the measurement.
+            Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : 0.0);
             Time::BeginFrame();
             const auto frameWorkStart = std::chrono::steady_clock::now(); // to SwapBuffers: this frame's own work
             const float dt = Time::UnscaledDeltaTime();
@@ -1992,6 +1995,15 @@ int Application::RunSession() {
             // has a source). Free-Aspect maximized play never needs this — the normal full-window
             // pass below already IS a free-aspect render, so skip the extra work entirely.
             bool playMaxLocked = playMaximized && gameView.GetCurrentPreset().Mode != AspectRatioMode::FreeAspect;
+            // --perf-bench --smoke-shots <dir>: one picture of maximized play (its 400th frame), to check what was
+            // measured. Locked aspect reads the Game view's target, Free Aspect the back buffer before the UI.
+            static int perfMaxFrames = 0;
+            const auto perfMaxShot = [&](unsigned fbo, int w, int h) {
+                if (!opt.perfBenchMode || opt.smokeShotsDir.empty() || ++perfMaxFrames != 400) return;
+                std::vector<unsigned char> px = FrameCapture::GrabTopDown(fbo, w, h);
+                for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
+                FrameCapture::WritePngTo(opt.smokeShotsDir, std::filesystem::path(smoke.CurrentPath()).stem().string() + "_playmax", w, h, px);
+            };
             bool gameTabVisible = editorUIVisible && gameView.IsVisible();
             GameViewStats gameViewStats{};
             if (gameTabVisible || playMaxLocked) {
@@ -2037,14 +2049,7 @@ int Application::RunSession() {
                 // With the Scene view hidden (the Game tab in front), the Game view is the frame on
                 // screen: the Statistics panel reports it, so it agrees with the Game view's overlay.
                 if (!editor.SceneImageWanted()) editor.SetRenderStats(gvRenderStats);
-                // --perf-bench --smoke-shots <dir>: one picture of maximized play, to check what was measured.
-                static int perfMaxFrames = 0;
-                if (opt.perfBenchMode && !opt.smokeShotsDir.empty() && playMaxLocked && ++perfMaxFrames == 400) {
-                    std::vector<unsigned char> px = FrameCapture::GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
-                    for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
-                    FrameCapture::WritePngTo(opt.smokeShotsDir, std::filesystem::path(smoke.CurrentPath()).stem().string() + "_playmax",
-                               gvWidth, gvHeight, px);
-                }
+                if (playMaxLocked) perfMaxShot(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
                 // --npc-test --smoke-shots <dir>: the Scene view on the left beside the Game view, as the editor is laid out.
                 const std::string harnessShot = npcTest ? npcTest->ShotName() : std::string();
                 if (npcTest && !opt.smokeShotsDir.empty() && !harnessShot.empty()) {
@@ -2226,6 +2231,7 @@ int Application::RunSession() {
                 EditorLayer::RenderStats stats;
                 viewPipeline.RenderGameFrame(viewIn, view, proj, gameCam->Position, mRw, mRh, 0, mw, mh, /*overlayInPlayOnly=*/false, stats);
                 editor.SetRenderStats(stats);
+                perfMaxShot(0, mw, mh);
             }
 
             {

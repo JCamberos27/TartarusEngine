@@ -43,6 +43,10 @@ double RealtimeSinceStartup();
 // Call before BeginFrame.
 void SetRefreshPeriod(double seconds);
 
+// Every frame advances game time by exactly `seconds` (0 = measured, the default), whatever the wall clock did.
+// For pictures that must match run to run (--perf-bench --smoke-shots). Call before BeginFrame.
+void SetFixedStep(double seconds);
+
 // One frame of that: `measured` seconds in, the paced delta out; `unpaced` carries the remainder
 // between frames (start it at 0).
 double PaceDelta(double measured, double period, double& unpaced);

@@ -10,6 +10,7 @@
 #include <glm/glm.hpp>
 #include "ShaderPropType.h"
 #include "Substrate.h"
+#include "TimeService.h"
 
 class Texture;
 
@@ -182,9 +183,10 @@ struct Material {
         if (++s_HashFrame == 0) s_HashFrame = 1;
         // Foliage wind: one clock value per frame, so the depth pre-pass, the shadow passes and the main pass bend a
         // vertex identically (a mismatch fails the main pass's LEQUAL against the pre-pass depth).
-        static const auto t0 = std::chrono::steady_clock::now();
+        // Game-clock time (Time::UnscaledTimeSinceStartup): the wall clock but for hitches, and fixed-step under
+        // --perf-bench --smoke-shots, so the picture's leaves are in the same place every run.
         s_PrevWindTime = s_WindTime; // TAA: the wind's motion vectors need where the leaves were last frame
-        s_WindTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+        s_WindTime = (float)Time::UnscaledTimeSinceStartup();
     }
     static std::uint32_t HashFrame() { return s_HashFrame; }
     static float WindTime() { return s_WindTime; }
