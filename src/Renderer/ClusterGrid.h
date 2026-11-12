@@ -22,23 +22,27 @@ class Shader;
 // coverage instead of worst case, and the fragment shader's per-cluster loop reads contiguously.
 //
 // Optimization (#205): The build pass (AABB computation) only needs to run when the projection
-// matrix or screen size changes (expensive operation: 3,456 froxel AABBs + glMemoryBarrier).
+// matrix or screen size changes (expensive operation: 8,064 froxel AABBs + glMemoryBarrier).
 // The cull pass (light binning) runs every frame regardless, since lights move. We cache the
 // last (proj, screenW, screenH, nearZ, farZ) and skip the build dispatch when unchanged.
 class ClusterGrid {
 public:
     // The grid is also written out in GLSL, once, in shaders/ClusterGrid.glsl (C_GX / C_GY / C_GZ), which the build,
     // cull, decal cull, model shading and volumetric-inject shaders include: change both together.
-    static constexpr int GRID_X = 16;
-    static constexpr int GRID_Y = 9;
+    // 24 x 14 tiles of ~80 px at 1080p (16 x 9 had 120 px): a pixel walks only the lights near its own tile. In the
+    // Forest the house's 40 point/spot lights made every 120 px tile list lights out of reach of most of its pixels;
+    // the opaque pass's loop over them dropped 0.3 ms for 0.13 ms more cull, the picture unchanged.
+    static constexpr int GRID_X = 24;
+    static constexpr int GRID_Y = 14;
     static constexpr int GRID_Z = 24;
-    static constexpr int CLUSTERS = GRID_X * GRID_Y * GRID_Z; // 3456
+    static constexpr int CLUSTERS = GRID_X * GRID_Y * GRID_Z; // 8064
     // Total capacity of the global compacted light-index list (#208), shared across all
     // clusters instead of each reserving its own fixed slot range. Generously sized relative to
     // typical light coverage (16x the old average of ~4 lights/cluster) while still being ~5.6x
     // smaller than the old fixed-stride buffer (65536 * 4 bytes = 256 KB vs. 1.38 MB). Must
     // match kCullLightsCompute's GLOBAL_CAPACITY.
-    static constexpr int GLOBAL_INDEX_CAPACITY = 65536;
+    // Raised with the finer grid (8,064 clusters): an overflow drops lights, which shows.
+    static constexpr int GLOBAL_INDEX_CAPACITY = 262144;
     // The decal index list (binding 14): every cluster owns a fixed Decals::MAX_PER_CLUSTER block
     // (3.5 MB in all), so it can't fill and a cluster's list sits at the same place every frame. The
     // shared 131072-entry list it replaces ran out in a dense view, and the clusters that reserved

@@ -25,7 +25,7 @@ uniform mat4 uView;
 #include "ClusterGrid.glsl"
 const uint GX = C_GX, GY = C_GY, GZ = C_GZ;
 // Total capacity of the global index list; must match ClusterGrid::GLOBAL_INDEX_CAPACITY (#208).
-const uint GLOBAL_CAPACITY = 65536u;
+const uint GLOBAL_CAPACITY = 262144u;
 
 float sqDistPointAABB(vec3 p, vec3 mn, vec3 mx) {
     float d = 0.0;
@@ -60,7 +60,7 @@ bool coneIntersectsSphere(vec3 apex, vec3 dir, float range, float cosOuter,
 
 // The lights go through in tiles of 64: each invocation puts one light into view space in shared
 // memory, then every invocation tests its cluster against the whole tile. The old loop moved each
-// light into view space (and normalised each spot's aim) once per cluster per pass - 3456 x lights
+// light into view space (and normalised each spot's aim) once per cluster per pass - clusters x lights
 // x 2 - and walked the SSBO twice; this does it once per workgroup and keeps the hits as a bitmask,
 // so the second pass only writes. Same tests, same ascending index order, same result.
 const uint TILE = 64u;

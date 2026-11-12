@@ -112,7 +112,7 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_Overflow);
 
     // Optimization (#205): skip the expensive build pass if projection state is unchanged.
-    // The build pass computes all 3,456 froxel AABBs from uInvProj, uScreenSize, uZNear, uZFar,
+    // The build pass computes all 8,064 froxel AABBs from uInvProj, uScreenSize, uZNear, uZFar,
     // which only change on resize/FOV/near-far edit. Cache comparison avoids ~6,912 dispatches
     // per typical gameplay frame (build runs once per view, view runs 2x: shadows+main).
     // #160: look for a slot already built for this projection; otherwise rebuild the least

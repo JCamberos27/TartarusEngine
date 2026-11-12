@@ -143,7 +143,7 @@ bool LightAffects(uint i) {
 }
 
 // Clustered-forward light culling (#120). The view frustum is diced into a fixed
-// 16 x 9 x 24 grid of froxels; a per-frame compute pass (ClusterGrid) fills, for each
+// 24 x 14 x 24 grid of froxels; a per-frame compute pass (ClusterGrid) fills, for each
 // froxel, a {offset, count} range into one global compacted light-index list (#208) covering
 // the point/spot lights whose range reaches it. This fragment finds its own froxel from
 // gl_FragCoord + view depth and loops only that froxel's [offset, offset+count) slice of the
@@ -792,7 +792,7 @@ vec4 SampleTriplanar(sampler2D tex, vec3 worldPos, vec3 w, float scale) {
     return cx * w.x + cy * w.y + cz * w.z;
 }
 
-// This fragment's froxel index in the 16 x 9 x 24 cluster grid (#120).
+// This fragment's froxel index in the 24 x 14 x 24 cluster grid (#120).
 uint clusterIndex() {
     uvec2 tile = uvec2(gl_FragCoord.xy / (uClusterScreenSize / vec2(float(C_GX), float(C_GY))));
     tile = min(tile, uvec2(C_GX - 1u, C_GY - 1u));
