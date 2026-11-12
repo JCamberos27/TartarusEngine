@@ -6,7 +6,7 @@
 # clearing, on a lot the terrain is eased flat for: a front yard with a cracked walk to a broken picket fence, a
 # driveway with a dead car, and a fenced backyard the forest is taking back.
 #
-# Abandoned and trashed: a third of the glass is gone and the ground-floor holes are boarded; chairs and lamps are
+# Abandoned and trashed: a third of the glass is gone and the chairs and lamps are
 # knocked over, furniture shoved about, pictures hang crooked, what was worth taking is gone; rubbish, papers,
 # books and leaves blown in lie across the floors; the floors are filthy, the ceilings water-stained, the walls
 # damp at the base and peeling. The power is mostly out: a dying porch light, a stuttering fluorescent tube in
@@ -387,31 +387,6 @@ def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
     notes['leaves blown in'] = n
 
 
-def board_up(s, lay, repo, pk, broken, rng, notes):
-    """Planks nailed across the ground floor's broken windows, on the outside."""
-    wood = k.from_mat(repo, PACK + 'Materials/M_Floor_PorchPlanks.mat', triplanar=True, triplanarScale=0.9,
-                      baseColor=[0.42, 0.38, 0.33])
-    g = s.empty('Boarded Windows', lay, (0, 0, 0), static=True)
-    n = 0
-    mid = (PACK_C[0], PACK_C[2])
-    for pos, rot, plain in broken:
-        if pos[1] > 3.0 or not plain or rng.random() < 0.25:
-            continue
-        nrm = qrot(rot, (0, 0, 1))
-        if nrm[0] * (pos[0] - mid[0]) + nrm[2] * (pos[2] - mid[1]) < 0:
-            nrm = [-v for v in nrm]
-        heading = math.degrees(math.atan2(nrm[0], nrm[2]))     # yaw that turns local +Z to the outward normal
-        for j, dy in enumerate((-0.42, -0.08, 0.3)):
-            if rng.random() < 0.2:
-                continue            # one prised off
-            p = (pos[0] + nrm[0] * 0.13, pos[1] + dy + rng.uniform(-0.05, 0.05), pos[2] + nrm[2] * 0.13 + 0.0)
-            box = s.box(f'Board {n:02d}', g, [round(v, 3) for v in p], (round(rng.uniform(1.0, 1.2), 2), 0.14, 0.025),
-                        wood, static=True)
-            box['rotation'] = k.euler_quat(round(heading, 2), 0.0, round(rng.uniform(-11.0, 11.0), 1))
-            n += 1
-    notes['boards'] = n
-
-
 # Decals (docs/DECALS.md): a fixed handful of maps so the house stays well inside the decal texture budget.
 D = 'assets/Decals/'
 FLOOR_DECALS = [D + f'Stains/Splatters/DA_Stain_{n}.decal' for n in (591, 592, 593, 594, 595)]
@@ -505,7 +480,8 @@ def grime(s, lay, pk, rng, notes):
     notes['decals'] = n
 
 
-RED_I, BOUNCE_I = 4.5, 0.16
+RED_I, BOUNCE_I, PORCH_I = 4.5, 0.16, 4.0
+POINT_SHADOWS = 2     # the red bulb's and the porch bulb's cube shadows
 
 
 def lights(s, lay, pk, repo, notes):
@@ -518,15 +494,14 @@ def lights(s, lay, pk, repo, notes):
         e['Light']['Volumetric Intensity'] = 0.0
         return i, e
 
-    # The master bedroom, upstairs at the front: one red bulb in the ceiling fitting, a cone down the room with
-    # shadows (the bed's, through the window onto the yard), a softer red fill, and the bulb stuttering now and then.
+    # The master bedroom, upstairs at the front: one bare red bulb in the ceiling fitting lighting the whole room,
+    # ceiling included, with cube shadows (the bed's, through the window onto the yard), a softer red fill, and the
+    # bulb stuttering now and then.
     fit = next(e for e in pk.named(r'Lamp_bedroom$'))
     fit['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
                                                 emissiveColor=[1.0, 0.06, 0.03], emissiveStrength=6.0)}]
     fx, fy, fz = pk.world(fit['id'])[0]
-    _, e = lamp('Red Bulb', (fx, fy - 0.25, fz), intensity=RED_I, rng=7.0, color=RED, shadows=True, spot=82.0,
-                softness=1.4)
-    e['Light']['Shadow Update Mode'] = 'Static (bake once)'     # the room doesn't move: its shadows bake once
+    _, e = lamp('Red Bulb', (fx, fy - 0.25, fz), intensity=RED_I, rng=7.0, color=RED, shadows=True, softness=1.4)
     e.update(k.light_flicker(Mode=0, MinInterval=7.0, MaxInterval=20.0, Depth=0.85, Seed=31))
     _, e = lamp('Red Fill', (fx - 0.6, fy - 0.9, fz), intensity=RED_I * 0.12, rng=4.2, color=RED)
     e.update(k.light_flicker(Mode=0, MinInterval=7.0, MaxInterval=20.0, Depth=0.85, Seed=31))
@@ -566,11 +541,9 @@ def porch_light(s, lay, notes):
             for m in s.models:
                 if m['parentId'] == r:
                     m['materials'] = [dict(OFF_OUT)]
-    s.light('Porch Bulb', g, (-30.75, 2.45, -1.018), intensity=5.0, rng=8.0, kelvin=2300.0, shadows=True,
-            spot=70.0, pitch=-55.0, yaw=-90.0)
+    s.light('Porch Bulb', g, (-30.75, 2.45, -1.018), intensity=PORCH_I, rng=8.0, kelvin=2300.0, shadows=True)
     e = s.empties[-1]
     e['Light']['Volumetric Intensity'] = 1.0        # outdoors: its glow in the night air
-    e['Light']['Shadow Update Mode'] = 'Static (bake once)'
     e.update(k.light_flicker(Mode=0, MinInterval=2.5, MaxInterval=9.0, Depth=1.0, Seed=5))
     notes['porch light'] = 1
 
