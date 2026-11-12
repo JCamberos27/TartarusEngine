@@ -7,8 +7,11 @@
 #include "GLStateCache.h"
 #include "ShaderAsset.h"
 #include "Core/Env.h"
+#include "UploadStaging.h"
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
+#include <deque>
 #include <unordered_map>
 
 namespace {
@@ -42,8 +45,78 @@ std::uint64_t HashSlots(const std::vector<std::shared_ptr<MaterialAsset>>& slots
 namespace InstanceBuffer {
 namespace {
 constexpr GLuint kBinding = 27; // ModelVertex.glsl / ShadowDepth.vert.glsl InstanceBlock
-GLuint g_Buffer = 0;
+GLuint g_Buffer = 0; // the fallback: an upload the ring can't take (or no ring)
 std::vector<glm::mat4> g_Staging;
+
+// Each Upload used to re-specify one buffer (glNamedBufferData). On NVIDIA's threaded driver that waits for the driver
+// thread to drain, and so does every fence query: either way the CPU stopped until the GPU had caught up, and the two
+// ran one after the other instead of overlapping (the Forest's GPU sat idle ~5 ms a frame). The transforms now go
+// into a persistently mapped ring, written with a memcpy and bound as a range, and a frame's span is reused only
+// kSafeFrames presented frames later: SwapBuffers never lets the CPU run more than a few frames ahead of the GPU,
+// so by then the GPU is long done with it - no fence, no query. The Forest uses under 1 MB a frame (~70 frames of
+// ring); an upload that doesn't fit takes the old path.
+constexpr std::size_t kRingBytes = 64ull << 20;
+constexpr std::uint64_t kSafeFrames = 16;
+struct FrameSpan {
+    std::size_t Start;
+    std::uint64_t Frame;
+};
+struct Ring {
+    GLuint Buffer = 0;
+    unsigned char* Base = nullptr;
+    bool Failed = false;
+    std::size_t Head = 0;
+    std::size_t FrameStart = 0;
+    bool FrameUsed = false;
+    std::uint64_t Frame = 0;    // frames ended (EndFrame)
+    std::deque<FrameSpan> Done; // past frames' spans, oldest first
+};
+Ring& R() {
+    static Ring* r = new Ring(); // never destroyed: the GL context is gone by the time statics are
+    return *r;
+}
+
+bool EnsureRing() {
+    Ring& r = R();
+    if (r.Base || r.Failed) return !r.Failed;
+    GLint align = 0;
+    glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &align);
+    if (align <= 0 || 256 % align != 0) { r.Failed = true; return false; } // RingFit places at multiples of 256
+    const GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+    glCreateBuffers(1, &r.Buffer);
+    glNamedBufferStorage(r.Buffer, (GLsizeiptr)kRingBytes, nullptr, flags);
+    r.Base = static_cast<unsigned char*>(glMapNamedBufferRange(r.Buffer, 0, (GLsizeiptr)kRingBytes, flags));
+    if (!r.Base) {
+        glDeleteBuffers(1, &r.Buffer);
+        r.Buffer = 0;
+        r.Failed = true;
+    }
+    return !r.Failed;
+}
+
+// Where `size` bytes go in the ring, or ~0 (the fallback takes them): past frames' spans are reused once they are
+// kSafeFrames old.
+std::size_t Take(std::size_t size) {
+    constexpr std::size_t kNone = ~std::size_t(0);
+    if (size > kRingBytes / 4 || !EnsureRing()) return kNone;
+    Ring& r = R();
+    while (!r.Done.empty() && r.Frame - r.Done.front().Frame > kSafeFrames) r.Done.pop_front();
+    const bool empty = r.Done.empty() && !r.FrameUsed;
+    const std::size_t tail = !r.Done.empty() ? r.Done.front().Start : r.FrameStart;
+    const std::size_t at = UploadStaging::RingFit(kRingBytes, r.Head, tail, empty, size);
+    if (at == kNone) return kNone;
+    if (!r.FrameUsed) r.FrameStart = at;
+    r.FrameUsed = true;
+    r.Head = at + size;
+    return at;
+}
+}
+
+void EndFrame() {
+    Ring& r = R();
+    if (r.FrameUsed) r.Done.push_back({r.FrameStart, r.Frame});
+    r.FrameUsed = false;
+    ++r.Frame;
 }
 
 std::vector<glm::mat4>& Staging() { return g_Staging; }
@@ -54,6 +127,13 @@ void Append(std::vector<glm::mat4>& staging, const glm::mat4& xform) {
 
 void Upload() {
     if (g_Staging.empty()) return;
+    const std::size_t bytes = g_Staging.size() * sizeof(glm::mat4);
+    const std::size_t at = Take(bytes);
+    if (at != ~std::size_t(0)) {
+        std::memcpy(R().Base + at, g_Staging.data(), bytes);
+        glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kBinding, R().Buffer, (GLintptr)at, (GLsizeiptr)bytes);
+        return;
+    }
     if (!g_Buffer) glCreateBuffers(1, &g_Buffer);
     // A new data store each time: the draws already issued against the old one still read their own transforms.
     glNamedBufferData(g_Buffer, (GLsizeiptr)(g_Staging.size() * sizeof(glm::mat4)), g_Staging.data(), GL_DYNAMIC_DRAW);
