@@ -138,6 +138,28 @@ def prefab_problem(p):
     return f'LOD levels {bad} are not active models' if bad else None
 
 
+# Cedar var4's prefab is its one full mesh (70k triangles) at every distance. Its pack ships two reduced meshes and a
+# 150-triangle bake beside it, so the prefab is rebuilt here as a LOD Group of the four.
+VAR4_LODS = [VEG + 'Cedrus_tree/Cedrus_Tree_mesh/' + m for m in
+             ('Cedrus_tree_var4.fbx', 'Cedrus_tree_var4_autoLOD1.fbx', 'Cedrus_tree_var4_autoLOD2.fbx',
+              'Bake_Mesh/Cedrus_tree_var4_BakeMesh.fbx')]
+
+
+def lod_var4(repo, p):
+    """var4's prefab as a LOD Group root over VAR4_LODS, its trunk colliders after the levels."""
+    def guid(path):
+        with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
+            return json.load(f)['guid']
+    root = {'id': 100, 'order': 0, 'parentId': -1, 'name': 'Cedrus_tree_var4', 'position': [0.0, 0.0, 0.0],
+            'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0], 'static': True,
+            'LOD Group': {'LOD 0': 0.6, 'LOD 1': 0.25, 'LOD 2': 0.08, 'LOD 3': 0.04, 'Size': 0.0}}
+    models = [{'id': 101 + i, 'order': 1 + i, 'parentId': 100, 'name': os.path.splitext(os.path.basename(m))[0],
+               'path': m, 'pathGuid': guid(m), 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0],
+               'scale': [1.0, 1.0, 1.0], 'static': True} for i, m in enumerate(VAR4_LODS)]
+    cols = [dict(e, parentId=100, order=10 + i) for i, e in enumerate(p['empties'])]
+    return {'boxes': [], 'empties': [root] + cols, 'formatVersion': p.get('formatVersion', 4), 'models': models}
+
+
 class Forest(k.Scene):
     def __init__(self, base, repo):
         super().__init__(base)
@@ -154,6 +176,8 @@ class Forest(k.Scene):
             else:
                 with open(full, encoding='utf-8') as f:
                     p = json.load(f)
+                if path.endswith('/Cedrus_tree_var4.prefab'):
+                    p = lod_var4(self.repo, p)
                 why = prefab_problem(p)
                 self.cache[path] = None if why else p
                 if why:
@@ -470,6 +494,16 @@ WALL_H, WALL_T = 4.0, 0.4
 WALL_TINT = (1.3, 1.28, 1.24)    # the floor-concrete maps are dark for a wall
 POST_EVERY, POST_W, POST_D, POST_H = 6.0, 0.5, 0.9, 4.3
 WALL_CLEAR_TREE, WALL_CLEAR = 2.2, 1.2
+DEAD_LAMPS, FLICKER_LAMPS = {('E', 14)}, {('N', 14)}   # (side, panel): one blown lamp, one failing (Fluorescent flicker)
+# The dressed panels: (side, panel index from the left as seen from inside, kind), a few on every wall, each
+# under a lamp.
+WALL_SITES = [('N', 9, 'patched'), ('N', 4, 'firefight'), ('N', 14, 'stained'), ('N', 18, 'firefight'),
+              ('S', 10, 'firefight'), ('S', 6, 'patched'), ('S', 15, 'stained'), ('S', 1, 'firefight'),
+              ('W', 9, 'patched'), ('W', 3, 'stained'), ('W', 13, 'firefight'), ('W', 17, 'patched'),
+              ('E', 10, 'firefight'), ('E', 5, 'stained'), ('E', 14, 'patched'), ('E', 1, 'firefight')]
+# A dead cedar fallen onto the west wall: its foot WALL_LEAN_FOOT m in from the wall, tipped so the trunk rests on
+# the wall's top edge, the crown hanging over the far side.
+WALL_LEAN_FOOT, WALL_HEIGHT_REST = 5.7, 4.0
 _CONCRETE = 'assets/Architecture/Building/Textures/Floor_Concrete/Floor_Concrete_'   # Wall_Concrete's sheet has trim bands
 CONCRETE = tuple(_CONCRETE + m + '.png' for m in ('Base_Color', 'Normal', 'Roughness', 'AO'))
 D = 'assets/Decals/'
@@ -567,14 +601,11 @@ def dress_walls(s, root, repo):
             w.put(STAIN.format(594), side, u + rng.uniform(-2.0, 2.0), WALL_H - h / 2, rng.uniform(0.4, 0.7), h,
                   next(seed), 1, rng.uniform(0.6, 0.85), tint)
 
-    # The dressed panels: (side, panel index from the left as seen from inside, kind), a few on every wall.
-    sites = [('N', 9, 'patched'), ('N', 4, 'firefight'), ('N', 14, 'stained'), ('N', 18, 'firefight'),
-             ('S', 10, 'firefight'), ('S', 6, 'patched'), ('S', 15, 'stained'), ('S', 1, 'firefight'),
-             ('W', 9, 'patched'), ('W', 3, 'stained'), ('W', 13, 'firefight'), ('W', 17, 'patched'),
-             ('E', 10, 'firefight'), ('E', 5, 'stained'), ('E', 14, 'patched'), ('E', 1, 'firefight')]
+    sites = WALL_SITES
     lamps = s.empty('Wall Lamps', grp, (0, 0, 0), static=True)
     housing = k.textured(repo, base=(0.05, 0.05, 0.05), roughness=0.5, metallic=0.8)
     lens = k.textured(repo, base=(1.0, 0.62, 0.3), emissive=(1.0, 0.62, 0.3), strength=6.0)
+    dead_lens = k.textured(repo, base=(0.22, 0.17, 0.12), roughness=0.3)    # a blown lamp: the glass, unlit
     for side, i, kind in sites:
         u = -HALF + POST_EVERY * (i + 0.5)
         if kind == 'firefight':
@@ -597,11 +628,16 @@ def dress_walls(s, root, repo):
         pos, yaw = WallDecals.face(side, u, 3.65, out=0.15)
         lamp = s.empty('Wall Lamp', lamps, pos, yaw=yaw, static=True)
         s.box('Lamp Housing', lamp, (0.0, 0.0, 0.0), (0.45, 0.16, 0.3), housing, collider=False, static=True)
-        s.box('Lamp Lens', lamp, (0.0, -0.085, 0.02), (0.36, 0.02, 0.22), lens, collider=False, static=True)
+        dead = (side, i) in DEAD_LAMPS
+        s.box('Lamp Lens', lamp, (0.0, -0.085, 0.02), (0.36, 0.02, 0.22), dead_lens if dead else lens, collider=False,
+              static=True)
+        if dead:
+            continue
         # Every lamp casts shadows; the renderer gives the scene's 8 spot-shadow slots to the ones nearest the
         # view. Nothing they light moves but grass and fronds, so the map is baked once.
         light = s.light('Lamp Light', lamp, (0.0, -0.12, 0.25), intensity=7.0, rng=9.0, kelvin=2100.0, spot=72.0,
-                        pitch=-65.0, shadows=True)
+                        pitch=-65.0, shadows=True,
+                        **(k.light_flicker(0, 3.0, 9.0, 0.8, 7) if (side, i) in FLICKER_LAMPS else {}))
         next(e for e in s.empties if e['id'] == light)['Light']['Shadow Update Mode'] = 'Static (bake once)'
     s.empty('Decal Grading', grp, (0.0, 0.0, 0.0), **{'Decal Grading': {'Age': 0.25, 'Wear': 0.3}})
     assert w.n <= MAX_WALL_DECALS and len(w.maps) <= MAX_WALL_MAPS, (w.n, len(w.maps))
@@ -992,6 +1028,44 @@ def build(repo):
                     yaw=round(math.degrees(math.atan2(dx, dz)), 1), scale=rng.uniform(0.7, 1.1), lod=LODS['small'])
             n_f += 1
     counts['wood fungi'] = n_f
+
+    # --- the wall's foot: drifts of fallen leaves and moss that have piled against it, with gaps.
+    foot, foot_rng = s.empty('Wall Foot', root, (0, 0, 0), static=True), random.Random(53)
+    litter, moss_mats, n_foot = s.usable(GROUND_COVER[9:11]), s.usable(MOSS), 0
+    for side, (axis, sign) in WALLS.items():
+        u = -HALF + 1.0
+        while u < HALF - 1.0:
+            u += foot_rng.uniform(1.2, 3.5)
+            if foot_rng.random() < 0.35 or not litter:
+                continue
+            d = HALF - foot_rng.uniform(0.55, 0.95)
+            x, z = (u, sign * d) if axis == 'z' else (sign * d, u)
+            moss = foot_rng.random() < 0.3 and moss_mats
+            sc = foot_rng.uniform(0.9, 1.3)
+            s.stamp(foot_rng.choice(moss_mats if moss else litter), foot, (round(x, 2), round(H(x, z), 3), round(z, 2)),
+                    yaw=round(foot_rng.uniform(0, 360), 1), scale=sc, lod=LODS['plant'], normal=H.normal(x, z, 0.6))
+            n_foot += 1
+    counts['wall foot'] = n_foot
+
+    # --- a dead cedar fallen onto the west wall, where the line from its foot to the wall misses every trunk.
+    tall = [t for t in s.usable(TREES) if '_var1.' in t or '_var6.' in t]     # the 22 m cedars
+    lean_deg = math.degrees(math.atan2(WALL_LEAN_FOOT, WALL_HEIGHT_REST))
+    for i in sorted(range(20), key=lambda i: abs(i - 9.5)):     # between two posts, from the middle out
+        zl, fx = -HALF + POST_EVERY * (i + 0.5), -HALF + WALL_LEAN_FOOT
+        if not tall or any(trunks.near(fx - t, zl, 1.2) for t in [i * 0.5 for i in range(12)]):
+            continue
+        # (a panel's u runs along the wall as seen from inside, so on the west wall z = -u)
+        if any(abs(zl + (-HALF + POST_EVERY * (j + 0.5))) < 3.0 for sd, j, _ in WALL_SITES if sd == 'W'):
+            continue
+        s.stamp(tall[0], root, (fx, round(H.low(fx, zl, 0.5) - 0.3, 3), zl), yaw=-90.0, name='Fallen On Wall',
+                lod=LODS['tree'], tilt=(round(lean_deg, 1), 0.0))
+        mask.circle(fx, zl, 0.8)
+        counts['fallen on wall'] = zl
+        break
+
+    # --- a reflection probe over the clearing: the wet rocks and wood there reflect the dark forest, not the sky.
+    s.empty('Clearing Reflection Probe', root, (cx, 4.0, cz), static=True,
+            **{'Reflection Probe': {'Importance': 1.0, 'Size': [28.0, 12.0, 28.0], 'Capture Scene': True}})
 
     # The forest-wide grass: full in the clearing, thinning under the canopy, bare at the wall's foot and round
     # every solid piece and trunk.
