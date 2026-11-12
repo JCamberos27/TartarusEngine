@@ -43,6 +43,17 @@ HALF = 60.0                        # the playable forest: -HALF..HALF on X and Z
 OUTER = 100.0                      # trees carry on to here, past the bounds, so the forest never ends in view
 MOON_FOG_GLOW = 4.0               # the Moon light's Volumetric Intensity (its scatter in the fog)
 CLEARING = (0.0, 6.0, 8.5)         # centre x, z and radius of the clearing the player starts in
+# A worn trail from the clearing's north edge, winding through the trees to the north wall's lamp (x -3): no trees
+# within PATH_TREES of its line, no plants, scans or litter within PATH_KEEP, the grass worn off within PATH_BARE.
+TRAIL = [(0.0, -1.5), (-2.5, -12.0), (1.5, -24.0), (-1.0, -36.0), (-4.0, -47.0), (-3.0, -57.0)]
+PATH_TREES, PATH_KEEP, PATH_BARE = 2.4, 1.4, (0.7, 1.7)
+# The hero spot at the clearing's north-east edge, in the player's view: a boulder and a smaller rock in front of a
+# long fallen trunk lying round the clearing's rim, the big stump it broke from at its near end. The boulder is
+# stretched up (x, y, z scale) so it stands out of the grass. (prefab, x, z, yaw, scale)
+HERO_ROCKS = [('Mossy_Rock_var3.prefab', 4.2, 3.9, 25.0, (1.5, 2.0, 1.5)),
+              ('Volcanic_Mossy_Rocks.prefab', 2.9, 1.6, 140.0, (1.1, 1.3, 1.1)),
+              ('Cedrus_stump_1.prefab', 3.75, -1.15, 210.0, (1.6, 1.6, 1.6))]
+HERO_LOG = ('Mossy_rotten_log_var8.prefab', 5.85, 3.15, -63.9, 1.0)   # lies along local X, tangent to the rim
 SEEDMESH = 'assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/'
 VEG, GO = SEEDMESH + 'Vegetation/', SEEDMESH + 'Ground_objects/Prefabs/'
 GROUND = SEEDMESH + 'Terrain_Textures/Dirt/M_Dirt_forest_mat.mat'     # soil, needles and twigs
@@ -247,6 +258,32 @@ class Grid:
 
     def add(self, x, z, r):
         self.cells.setdefault((int(x // self.cell), int(z // self.cell)), []).append((x, z, r))
+
+def _trail_points(step=0.5):
+    """TRAIL as a Catmull-Rom curve sampled every ~`step` metres."""
+    pts = [TRAIL[0]] + TRAIL + [TRAIL[-1]]
+    out = []
+    for i in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = pts[i - 1:i + 3]
+        n = max(1, int(math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / step))
+        for j in range(n):
+            t = j / n
+            out.append(tuple(0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t +
+                                    (-a + 3 * b - 3 * c + d) * t ** 3) for a, b, c, d in zip(p0, p1, p2, p3)))
+    return out + [TRAIL[-1]]
+
+
+TRAIL_PTS = _trail_points()
+_TX0, _TX1 = min(x for x, _ in TRAIL_PTS) - 4.0, max(x for x, _ in TRAIL_PTS) + 4.0
+_TZ0, _TZ1 = min(z for _, z in TRAIL_PTS) - 4.0, max(z for _, z in TRAIL_PTS) + 4.0
+
+
+def trail_d(x, z):
+    """Distance from (x, z) to the trail's line (99 when it's nowhere near)."""
+    if not (_TX0 < x < _TX1 and _TZ0 < z < _TZ1):
+        return 99.0
+    return min(math.hypot(x - px, z - pz) for px, pz in TRAIL_PTS)
+
 
 def smoothstep(a, b, x):
     t = min(max((x - a) / (b - a), 0.0), 1.0)
@@ -633,7 +670,7 @@ def build(repo):
         edge = dc < cr + 6.0
         scale = rng.uniform(0.55, 0.8) if edge else rng.uniform(0.8, 1.25)
         path, yaw = rng.choice(trees), round(rng.uniform(0, 360), 1)
-        if by_wall(x, z, WALL_CLEAR_TREE):
+        if by_wall(x, z, WALL_CLEAR_TREE) or trail_d(x, z) < PATH_TREES:
             continue
         tree_pts.append((x, z, scale))
         mask.crown(x, z, 1.2 * min(max(FOOTPRINTS['crowns'].get(path, 3.0), 2.0), 5.0) * scale)
@@ -663,7 +700,7 @@ def build(repo):
 
     def ok(x, z, spread=HALF + 4.0, clearing_ok=False, clear=WALL_CLEAR):
         return (abs(x) <= spread and abs(z) <= spread and (clearing_ok or math.hypot(x - cx, z - cz) >= cr - 0.5)
-                and not by_wall(x, z, clear))
+                and not by_wall(x, z, clear) and trail_d(x, z) >= PATH_KEEP)
 
     def around(pts, r_min, r_max):
         """A point r_min..r_max from a random one of pts ((x, z, ...))."""
@@ -708,7 +745,7 @@ def build(repo):
                 local.add(x, z, avoid)
             path, yaw, sc = rng.choice(usable), round(rng.uniform(0, 360), 1), rng.uniform(*scale)
             placed += 1     # counted even when the wall strip drops it, so the draws after it don't shift
-            if by_wall(x, z, WALL_CLEAR):
+            if by_wall(x, z, WALL_CLEAR) or trail_d(x, z) < PATH_KEEP:
                 dropped[name] = dropped.get(name, 0) + 1
                 continue
             if hug > 0:
@@ -860,6 +897,51 @@ def build(repo):
 
     wood_pts = [(x, z) for x, z, *_ in logs + stumps]
     anchors = wood_pts + [(x, z) for x, z, *_ in rocks]
+    # --- the hero spot: a boulder and a rock before a long fallen trunk at the clearing's rim, ferns, moss and
+    # mushrooms round their feet, fungi on the trunk (added to the logs below).
+    hero, hero_rng = s.empty('Hero Spot', root, (0, 0, 0), static=True), random.Random(41)
+    for name, x, z, yaw, sc in HERO_ROCKS + [HERO_LOG]:
+        path = GO + name
+        if not s.prefab(path):
+            continue
+        s.stamp(path, hero, (x, round(H(x, z) - 0.05, 3), z), yaw=yaw, scale=sc, lod=LODS['solid'],
+                normal=H.normal(x, z, 1.0))
+        if path in FOOTPRINTS['solids']:
+            mask.footprint(x, z, yaw, sc if isinstance(sc, float) else sc[0], FOOTPRINTS['solids'][path])
+        else:
+            mask.circle(x, z, 0.8 * (sc if isinstance(sc, float) else sc[0]))
+    hero_pts = [(x, z) for _, x, z, _, _ in HERO_ROCKS] + [(HERO_LOG[1], HERO_LOG[2])]
+    lx, lz, la = HERO_LOG[1], HERO_LOG[2], math.radians(HERO_LOG[3])
+    ldx, ldz = math.cos(la), -math.sin(la)
+
+    def by_hero(x, z):
+        """Inside the rocks or under the trunk?"""
+        t = (x - lx) * ldx + (z - lz) * ldz
+        if abs(t) < 3.9 and abs((x - lx) * -ldz + (z - lz) * ldx) < 0.75:
+            return True
+        return any(math.hypot(x - rx, z - rz) < 1.4 * sc[0] for _, rx, rz, _, sc in HERO_ROCKS)
+    for group, paths, n, r0, r1, sc_rng, lod, hug in (
+            ('Ferns', [p for sp in FERN_SPECIES[:2] for p in sp], 10, 1.2, 2.6, (0.9, 1.3), 'plant', 0.0),
+            ('Moss', MOSS, 6, 0.6, 1.8, (0.9, 1.3), 'plant', 0.6),
+            ('Mushrooms', MUSHROOMS, 8, 0.4, 1.4, (0.9, 1.4), 'small', 0.0)):
+        usable, placed = s.usable(paths), 0
+        for _ in range(n * 10):
+            if placed >= n or not usable:
+                break
+            ax, az = hero_rng.choice(hero_pts)
+            a, r = hero_rng.uniform(0, 2 * math.pi), hero_rng.uniform(r0, r1)
+            x, z = ax + math.cos(a) * r, az + math.sin(a) * r
+            if by_hero(x, z) or trail_d(x, z) < PATH_KEEP:
+                continue
+            sc = hero_rng.uniform(*sc_rng)
+            y, up = (H(x, z), H.normal(x, z, hug * sc)) if hug else (H.low(x, z, 0.25), None)
+            s.stamp(hero_rng.choice(usable), hero, (round(x, 2), round(y, 3), round(z, 2)),
+                    yaw=round(hero_rng.uniform(0, 360), 1), scale=sc, lod=LODS[lod], normal=up)
+            placed += 1
+        counts['hero ' + group.lower()] = placed
+    if s.prefab(GO + HERO_LOG[0]):
+        logs.append((lx, lz, GO + HERO_LOG[0], HERO_LOG[3], HERO_LOG[4]))
+
     scatter('Moss Mats', MOSS, 260, 0.6, 0.5, 3.5, (0.8, 1.4), avoid=1.2, anchors=anchors, near_anchor=0.35,
             a_min=0.4, a_max=1.6, hug=0.6)
     patches('Ground Cover', [GROUND_COVER[0:3], GROUND_COVER[3:9], GROUND_COVER[9:11]], 260, (3, 8), 2.2,
@@ -918,6 +1000,8 @@ def build(repo):
         wx, wz = -GRASS_SPAN / 2 + (k_ % mask.n) * mask.step, -GRASS_SPAN / 2 + (k_ // mask.n) * mask.step
         if by_wall(wx, wz, 0.6):
             vals[k_] = 0.0
+        else:
+            vals[k_] *= smoothstep(PATH_BARE[0], PATH_BARE[1], trail_d(wx, wz))
     s.empty('Forest Grass', g, (0.0, 0.0, 0.0), static=True,
             **grass(**{'Size X': GRASS_SPAN, 'Size Z': GRASS_SPAN, 'Seed': 2, 'Edge Fade': 0.0,
                        'Map Res X': mask.n, 'Map Res Z': mask.n, 'Density Map': mask.encode(vals)}))
