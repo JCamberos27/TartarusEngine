@@ -3,6 +3,7 @@
 // the driver lacks is only a warning; the engine never sets uCascadeLayered then.
 #extension GL_ARB_shader_viewport_layer_array : enable
 #extension GL_AMD_vertex_shader_layer : enable
+invariant gl_Position; // the depth pre-pass and the model program must land on bit-identical depth (GL_EQUAL)
 layout (location = 0) in vec3 aPos;
 layout (location = 2) in vec2 aUV;
 layout (location = 7) in vec4 aColor; // vertex colour (white when none): the foliage wind mask

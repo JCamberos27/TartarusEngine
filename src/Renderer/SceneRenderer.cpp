@@ -1243,9 +1243,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // Depth pre-pass (Project Settings > Quality): the static world's depth first, colour off, so the opaque pass
     // below shades each pixel once - the drawList's order is by program and material, front to back only within
     // one, and a room's floor, walls and props otherwise each ran the full lighting where the next one covered
-    // them. The depth program's positions round a hair differently from the model program's, so this pass is
-    // pushed back by a polygon offset: under the opaque pass's GL_LEQUAL the surface itself still passes, anything
-    // behind it doesn't. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
+    // them. Both programs compute an invariant gl_Position by the same expressions, so the opaque pass tests what this
+    // pass laid down GL_EQUAL (it used GL_LEQUAL over a polygon offset): a cut-out leaf's clear texels then fail the depth
+    // test before the model program runs - ~0.8 ms of the Forest's opaque pass. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
     // player body's or outfits' hidden parts, which the model program discards.
     const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
     unsigned hizDepth = 0; // the view's depth after the pre-pass, single sample: HiZCuller's occluders
@@ -1266,18 +1266,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         depth.SetInt("uUseSkinning", 0);
         depth.SetInt("uCascadeLayered", 0);
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        glEnable(GL_POLYGON_OFFSET_FILL);
-        // A small slope factor: the two programs' positions differ by rounding, far under a pixel. A whole pixel's
-        // slope (factor 1) pushed a grazing floor back ~15 cm at 10 m, so a floor mat 1.3 cm above it lost the
-        // LEQUAL test to the floor whenever the floor's program happened to sort after the mat's (Office hallway).
-        glPolygonOffset(kPrepassSlopeOffset, 4.0f);
+        // No polygon offset: both programs compute an invariant gl_Position by the same expressions (ShadowDepth.vert /
+        // ModelVertex.glsl), so the opaque pass below tests the pre-passed draws GL_EQUAL - a cut-out leaf's clear
+        // texels then fail the depth test before the model program runs, instead of shading up to its discard.
         static std::vector<DepthCaster> prepass;
         prepass.clear();
         for (const DrawItem& it : drawList)
             if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         DrawDepthCasters(depth, prepass);
-        glPolygonOffset(0.0f, 0.0f);
-        glDisable(GL_POLYGON_OFFSET_FILL);
 
         // SSAO from this pre-pass (RenderFrameContext::SsaoFromPrepass): copy the depth into SSAO's own target and
         // add only what the pre-pass left out, rather than SSAO drawing the whole visible scene a second time. The
@@ -1554,7 +1550,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 const OpaqueTag& t = opaqueTags[b.Tag];
                 const DrawItem& lead = drawList[opaqueGroups.Order[opaqueGroups.Groups[t.Group].First]];
                 const GLboolean leadWrites = prepassed(lead) ? GL_FALSE : GL_TRUE;
-                if (leadWrites != depthWrites) glDepthMask(depthWrites = leadWrites);
+                if (leadWrites != depthWrites) {
+                    glDepthMask(depthWrites = leadWrites);
+                    glDepthFunc(depthWrites ? GL_LEQUAL : GL_EQUAL);
+                }
                 probeItem = &lead;
                 instanceBase = 0; // uInstanced on; each command's baseInstance is its group's
                 instanceMode = hizCulled ? 2 : 1;
@@ -1570,7 +1569,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             continue;
         }
         const GLboolean wantWrites = prepassed(it) ? GL_FALSE : GL_TRUE;
-        if (wantWrites != depthWrites) glDepthMask(depthWrites = wantWrites);
+        if (wantWrites != depthWrites) {
+            glDepthMask(depthWrites = wantWrites);
+            glDepthFunc(depthWrites ? GL_LEQUAL : GL_EQUAL);
+        }
         probeItem = &it;
         instanceBase = groupBase[g];
         instanceMode = 1;
@@ -1584,7 +1586,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             localStats.Vertices += member.Verts;
         }
     }
-    if (depthWrites != GL_TRUE) glDepthMask(GL_TRUE);
+    if (depthWrites != GL_TRUE) {
+        glDepthMask(GL_TRUE);
+        glDepthFunc(GL_LEQUAL);
+    }
     }
     instanceBase = -1;
     // Grass, lit (GrassRenderer): with the opaque pass, so it writes TAA motion for its sway.

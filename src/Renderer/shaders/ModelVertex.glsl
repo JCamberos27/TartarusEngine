@@ -1,4 +1,5 @@
 #version 460 core
+invariant gl_Position; // the depth pre-pass and the model program must land on bit-identical depth (GL_EQUAL)
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aUV;
