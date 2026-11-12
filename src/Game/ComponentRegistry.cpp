@@ -1602,6 +1602,35 @@ void RegisterEngineComponents() {
 
     // PR14 (#333) — Reflection Probe. Registered with the generic reflection path so the
     // Add Component menu, Inspector, and SceneSerializer all work for free.
+    {
+        ReflectComponent m;
+        m.Name = "Grass Area"; m.Icon = ICON_FA_SEEDLING; m.Category = "Rendering";
+        m.Tooltip = "Procedural grass over a rectangle on this object's plane: scattered, culled and thinned on the GPU every frame, swaying in the wind, lit by the scene.";
+        using G = GrassAreaComponent;
+        m.Fields = {
+            { "Size X", T::Float, TARTARUS_REFLECT_FIELD(G, SizeX), 0.1f, "Metres along the object's local X.", 0.5f, 1000.0f },
+            { "Size Z", T::Float, TARTARUS_REFLECT_FIELD(G, SizeZ), 0.1f, "Metres along the object's local Z.", 0.5f, 1000.0f },
+            { "Density", T::Float, TARTARUS_REFLECT_FIELD(G, Density), 5.0f, "Blades per square metre up close.", 1.0f, 2000.0f },
+            { "Height", T::Float, TARTARUS_REFLECT_FIELD(G, Height), 0.01f, "Average blade height, metres.", 0.02f, 3.0f },
+            { "Height Variation", T::Float, TARTARUS_REFLECT_FIELD(G, HeightVariation), 0.01f, "Blade-to-blade height spread, +- share of Height.", 0.0f, 0.95f },
+            { "Width", T::Float, TARTARUS_REFLECT_FIELD(G, Width), 0.001f, "Blade width at the root, metres.", 0.002f, 0.3f },
+            { "Bend", T::Float, TARTARUS_REFLECT_FIELD(G, Bend), 0.01f, "Natural lean of the blades: 0 upright.", 0.0f, 1.0f },
+            { "Base Color", T::Color, TARTARUS_REFLECT_FIELD(G, BaseColor), 0.0f, "Colour at the roots." },
+            { "Tip Color", T::Color, TARTARUS_REFLECT_FIELD(G, TipColor), 0.0f, "Colour at the tips." },
+            { "Dry Color", T::Color, TARTARUS_REFLECT_FIELD(G, DryColor), 0.0f, "Colour of the dry patches (Patchiness)." },
+            { "Color Variation", T::Float, TARTARUS_REFLECT_FIELD(G, ColorVariation), 0.01f, "Blade-to-blade brightness spread.", 0.0f, 1.0f },
+            { "Patchiness", T::Float, TARTARUS_REFLECT_FIELD(G, Patchiness), 0.01f, "0: an even lawn. 1: clumps, thin spots and dry patches.", 0.0f, 1.0f },
+            { "Wind Strength", T::Float, TARTARUS_REFLECT_FIELD(G, WindStrength), 0.01f, "How far gusts push the blades over.", 0.0f, 2.0f },
+            { "Wind Speed", T::Float, TARTARUS_REFLECT_FIELD(G, WindSpeed), 0.01f, "How fast gusts roll across the field.", 0.0f, 5.0f },
+            { "Near Distance", T::Float, TARTARUS_REFLECT_FIELD(G, NearDistance), 0.5f, "Full density and curved blades within this many metres.", 1.0f, 200.0f },
+            { "Draw Distance", T::Float, TARTARUS_REFLECT_FIELD(G, DrawDistance), 0.5f, "No grass beyond this many metres: thinned and shortened toward it.", 2.0f, 500.0f },
+            { "Edge Fade", T::Float, TARTARUS_REFLECT_FIELD(G, EdgeFade), 0.05f, "Metres over which the field thins out at its edges.", 0.0f, 20.0f },
+            { "Seed", T::Int, TARTARUS_REFLECT_FIELD(G, Seed), 1.0f, "Random seed for the scatter." },
+            { "Receive Shadows", T::Bool, TARTARUS_REFLECT_FIELD(G, ReceiveShadows), 0.0f, "Darkened by the sun's and lamps' shadows." },
+        };
+        Register<GrassAreaComponent>(std::move(m));
+    }
+
     Register<ReflectionProbeComponent>({
         "Reflection Probe", ICON_FA_CIRCLE_HALF_STROKE,
         "Defines a box volume for parallax-corrected environment reflections. "

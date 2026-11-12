@@ -35,6 +35,7 @@
 #include "ParticleRenderer.h"
 #include "BloodRenderer.h"
 #include "FurRenderer.h"
+#include "GrassRenderer.h"
 #include "BloodPalette.h"
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
@@ -651,6 +652,7 @@ void SceneRenderer::WarmEffects() {
     FxSpriteRenderer::Get().WarmUp();
     BloodRenderer::Get().WarmUp();
     WorldTextRenderer::Get().WarmUp();
+    GrassRenderer::Get().WarmUp();
 }
 
 namespace {
@@ -719,6 +721,12 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     if (in.skyAtmosphere) in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos, cloudsAfterDepth);
 
     FrameState gathered = GatherFrameState(world, ctx, in);
+    // Grass Areas (GrassRenderer): gathered once a frame; scattered and drawn per view, never in a probe's room
+    // capture, a debug view or an orthographic one.
+    GrassRenderer& grass = GrassRenderer::Get();
+    grass.Gather(world);
+    const bool grassOn = grass.HasAreas() && !ctx.ProbeCapture && ctx.DebugView == 0 && std::abs(ctx.Proj[3][3]) < 0.5f;
+    bool grassCulled = false, grassInPrepass = false;
     // Clustered decals (docs/DECALS.md): this view's visible set, uploaded before the cluster cull
     // bins it. They need the froxel lists, so nothing without clustering (the previews) gets any.
     if (in.decals && in.decalCullShader && gathered.clusterOn) {
@@ -1254,6 +1262,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         for (const DrawItem& it : drawList)
             if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         DrawDepthCasters(depth, prepass);
+        // The grass into the pre-pass too, under the same offset: SSAO and Hi-Z see it, and the lit pass shades each
+        // of its pixels once.
+        if (grassOn) {
+            grassCulled = grass.Cull(ctx.View, ctx.Proj, ctx.ViewPos);
+            if (grassCulled) {
+                grass.DrawDepth(ctx.View, ctx.Proj);
+                grassInPrepass = true;
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+                depth.Bind();
+            }
+        }
         glPolygonOffset(0.0f, 0.0f);
         glDisable(GL_POLYGON_OFFSET_FILL);
 
@@ -1542,6 +1561,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     if (depthWrites != GL_TRUE) glDepthMask(GL_TRUE);
     }
     instanceBase = -1;
+    // Grass, lit (GrassRenderer): with the opaque pass, so it writes TAA motion for its sway.
+    if (grassOn) {
+        if (!grassCulled) grassCulled = grass.Cull(ctx.View, ctx.Proj, ctx.ViewPos);
+        if (grassCulled) {
+            grass.DrawLit(ctx.View, ctx.Proj, !grassInPrepass, [&](Shader& p) { ApplyFrameState(p, fs); });
+            modelShader.Bind();
+        }
+    }
     if (velocityOut) ctx.TxHdr->SetVelocityWrites(false);
     // Nothing after this pass draws instanced: leave every program it used reading uModel again (the previews share
     // the material shaders' programs).
