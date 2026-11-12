@@ -366,3 +366,15 @@ an opening. Limits asserted: at most 600 decals, and across corridor + apartment
 map (the apartments add eight flake and crack maps to the corridor's pool, `APT_POOL`; the stains reuse the blotch
 maps, so the extra decals cost no texture memory). 301 is the hand-edited NPC room: it only gains materials and decals.
 
+
+## Forest wall
+
+The Forest's boundary (`project/scenes/Forest.json`) is a 4 m concrete wall with posts every 6 m: an outdoor decal test
+surface. `tools/scenes/build_forest.py` builds it, so a rebuild keeps it (`dress_walls`, on a random stream of its own;
+the trees and ground pieces keep 2.2 / 1.2 m off its line). Every panel gets a dark `DA_LiquidSplatter_003` grime band at
+the foot; 16 panels, a few per side, are dressed as one of: a firefight (bursts of dark `DA_Stain_596` / `_598` spall
+marks round a soot splat), an old grey paint patch (`DA_PeelingPaint_007` / `_013` with the `SB_Wall_Concrete` preset)
+with grime runs, or rust runs (`DA_Stain_594`). Each has a sodium wall lamp (a spot, no shadows). No graffiti.
+Peeling-paint maps don't make chips here - they reveal concrete, and the wall is concrete already. Bullet holes are the
+runtime ones: shoot the wall (its name gives the concrete hole set). Limits asserted: at most 300 decals and 12 unique
+maps (it uses about 290 and 7).
