@@ -523,7 +523,7 @@ void RegisterAssetsTests() {
             TileMenu("Smoke Cube.obj", "Remove from Favorites"),
             {ExpectTrue("not a favorite", [](Ctx& c) { return !AX::Favorite(c.E, CellKey(c, "Smoke Cube.obj")); }),
              // Copy Path (the system clipboard is put back afterwards).
-             Do("keep the clipboard", [clip](Ctx&) { const char* t = ImGui::GetClipboardText(); *clip = t ? t : ""; })},
+             Do("keep the clipboard", [clip](Ctx&) { *clip = ClipboardTextOrEmpty(); })},
             TileMenu("Smoke Cube.obj", "Copy Path"),
             {Expect("the path is on the clipboard", [](Ctx& c) {
                  const char* t = ImGui::GetClipboardText();
