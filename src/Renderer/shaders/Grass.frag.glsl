@@ -21,12 +21,15 @@ uniform int uDepthOnly;
 
 const float kVelocityUnknown = 4.0;
 
+float gT; // vT, clamped: interpolation can take it a hair below 0, and pow() of that is NaN
+
 vec3 GrassLight(vec3 albedo, vec3 N, vec3 V, vec3 L, vec3 radiance, float occl) {
     float NdotL = dot(N, L);
     float diff = clamp((NdotL + 0.45) / 1.45, 0.0, 1.0);
-    float trans = (pow(clamp(dot(V, -L), 0.0, 1.0), 5.0) * 0.9 + 0.3 * clamp(-NdotL, 0.0, 1.0)) * vT;
-    vec3 H = normalize(L + V);
-    float spec = 0.05 * pow(max(dot(N, H), 0.0), 36.0) * vT;
+    float trans = (pow(clamp(dot(V, -L), 0.0, 1.0), 5.0) * 0.9 + 0.3 * clamp(-NdotL, 0.0, 1.0)) * gT;
+    vec3 H = L + V;
+    H *= inversesqrt(max(dot(H, H), 1e-8)); // looking straight into the light: no half vector
+    float spec = 0.05 * pow(max(dot(N, H), 0.0), 36.0) * gT;
     return (albedo / PI * (diff * occl + trans * vec3(0.9, 1.0, 0.55)) + spec) * radiance;
 }
 
@@ -39,16 +42,17 @@ void main() {
             oVelocity = (vCurClip.xy / vCurClip.w - vPrevClip.xy / vPrevClip.w) * 0.5;
     }
 
+    gT = clamp(vT, 0.0, 1.0);
     GrassArea A = uAreas[int(vBlade.z + 0.5)];
     float rnd = vBlade.x, dry = vBlade.y;
-    vec3 albedo = mix(A.Base.rgb, A.Tip.rgb, smoothstep(0.0, 1.0, vT));
-    albedo = mix(albedo, A.Dry.rgb * mix(0.65, 1.0, vT), dry);
-    albedo *= 1.0 + (rnd - 0.5) * 2.0 * A.Base.a;
-    float occl = mix(0.22, 1.0, pow(vT, 0.65));
+    vec3 albedo = mix(A.Base.rgb, A.Tip.rgb, smoothstep(0.0, 1.0, gT));
+    albedo = mix(albedo, A.Dry.rgb * mix(0.65, 1.0, gT), dry);
+    albedo = max(albedo * (1.0 + (rnd - 0.5) * 2.0 * A.Base.a), vec3(0.0));
+    float occl = mix(0.22, 1.0, pow(gT, 0.65));
     bool receive = A.Dry.a > 0.5;
 
     vec3 V = normalize(uViewPos - vWorldPos);
-    vec3 N = normalize(vNormal);
+    vec3 N = dot(vNormal, vNormal) > 1e-12 ? normalize(vNormal) : vec3(0.0, 1.0, 0.0);
     if (!gl_FrontFacing) N = -N;
     float dist = length(uViewPos - vWorldPos);
     N = normalize(mix(N, vec3(0.0, 1.0, 0.0), smoothstep(6.0, 35.0, dist) * 0.65));
@@ -83,5 +87,7 @@ void main() {
         color = color / (color + vec3(1.0));
         color = pow(color, vec3(1.0 / 2.2));
     }
+    // Never hand the post chain a NaN or Inf: bloom's mips spread one pixel of it into black blocks.
+    if (any(isnan(color)) || any(isinf(color))) color = vec3(0.0);
     FragColor = vec4(color, 1.0);
 }
