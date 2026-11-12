@@ -9,7 +9,8 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "simplify": 0.25
   },
   "materialRemap": {
     "Oreopanax_Xalapensis_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Textures/M_Oreopanax_Xalapensis_mat.mat",

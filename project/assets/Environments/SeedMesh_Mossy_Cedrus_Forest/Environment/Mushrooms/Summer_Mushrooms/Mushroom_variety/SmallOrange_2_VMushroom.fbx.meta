@@ -9,7 +9,8 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "simplify": 0.25
   },
   "materialRemap": {
     "Mushrooms_variety_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Summer_Mushrooms/Mushroom_variety/Textures/M_Mushrooms_variety_mat.mat"
