@@ -5,6 +5,7 @@
 #include <numeric>
 #include "Model.h"
 #include "Log.h"
+#include "TimeService.h"
 #include <string>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -284,12 +285,67 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     // One pass over the groups; returns false when the incremental pass meets a group it has no record of, and the
     // caller redoes everything in full. The records are dense, in the view's order, so the steady pass over 40k
     // groups reads them front to back.
+    // LodSmooth cross-fades (see LodFadeOf): the fade value of every renderer under `root`.
+    const double now = LodSmooth ? Time::RealtimeSinceStartup() : 0.0;
+    auto setFade = [&](entt::entity root, float v) {
+        stack.assign(1, root);
+        while (!stack.empty()) {
+            const entt::entity e = stack.back();
+            stack.pop_back();
+            if (!Registry.valid(e)) continue;
+            if (Registry.all_of<RenderableComponent>(e)) {
+                const size_t s = (size_t)entt::to_entity(e);
+                if (s >= m_LodFadeOwner.size()) {
+                    m_LodFadeOwner.resize(s + 1, entt::null);
+                    m_LodFadeValue.resize(s + 1, 0.0f);
+                }
+                m_LodFadeOwner[s] = v != 0.0f ? e : entt::null;
+                m_LodFadeValue[s] = v;
+            }
+            if (const auto* h = Registry.try_get<HierarchyComponent>(e))
+                stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+        }
+    };
+    // Ends a group's fade now: the old level tagged (unless it is the one shown again), both levels whole.
+    auto finishFade = [&](LodGroupState& st) {
+        if (st.FadeFrom < 0) return;
+        const int from = st.FadeFrom;
+        st.FadeFrom = -1;
+        if (from < st.Levels) {
+            if (from != st.Active) retagSubtree(st.Kids[from], true);
+            setFade(st.Kids[from], 0.0f);
+        }
+        if (st.Active >= 0 && st.Active < st.Levels) setFade(st.Kids[st.Active], 0.0f);
+    };
+    // A group's level goes from `was` to `active` (st.Active still `was`): retag, starting a fade when smooth.
+    auto changeLevel = [&](LodGroupState& st, int was, int active, bool nested) {
+        if (LodSmooth) finishFade(st);
+        st.Active = (std::int8_t)active; // first: the retag below reads this group's own record for nested ones
+        if (nested) return;
+        const int levels = st.Levels;
+        const bool fade = LodSmooth && was >= 0 && was < levels && was != active;
+        for (int i = 0; i < levels; ++i) {
+            const bool wasTagged = was >= -1 && i != was;
+            const bool nowTagged = active >= -1 && i != active && !(fade && i == was);
+            if (wasTagged != nowTagged) retagSubtree(st.Kids[i], nowTagged);
+        }
+        if (fade) {
+            st.FadeFrom = (std::int8_t)was;
+            st.FadeStart = now;
+            setFade(st.Kids[was], -1e-4f);
+            if (active >= 0) setFade(st.Kids[active], 1e-4f);
+            m_LodFading.push_back(st.Group);
+        }
+    };
+
     int evaluated = 0;
     auto pass = [&]() -> bool {
         evaluated = 0;
         if (full) {
             Registry.clear<LodCulledTag>();
             std::fill(m_LodCulledOwner.begin(), m_LodCulledOwner.end(), entt::null);
+            std::fill(m_LodFadeOwner.begin(), m_LodFadeOwner.end(), entt::null);
+            m_LodFading.clear();
             m_LodState.clear();
             std::fill(m_LodIndex.begin(), m_LodIndex.end(), ~0u);
         } else if (m_LodCentreStamp != m_TransformCacheStamp || m_TransformCacheStamp == 0) {
@@ -320,8 +376,13 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             const float dist = std::max(glm::length(st.Centre - viewPos), 1e-4f);
             const float height = ortho ? size * yScale * 0.5f : size * yScale / (2.0f * dist);
             const float thresholds[4] = {lod.Lod0, lod.Lod1, lod.Lod2, lod.Lod3};
-            for (int i = 0; i < st.Levels; ++i)
-                if (height >= thresholds[i]) return i;
+            // LodSmooth: the level shown now holds kLodHysteresis past its switch points either way.
+            const int cur = !LodSmooth || st.Active < -1 ? -100 : (st.Active == -1 ? (int)st.Levels : (int)st.Active);
+            for (int i = 0; i < st.Levels; ++i) {
+                float thr = thresholds[i];
+                if (cur != -100) thr *= i < cur ? 1.0f + kLodHysteresis : i == cur ? 1.0f - kLodHysteresis : 1.0f;
+                if (height >= thr) return i;
+            }
             return -1; // culled
         };
         if (!full) {
@@ -355,13 +416,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
                 const int active = m_LodNext[at];
                 const int was = st.Active;
                 if (levels == 0 || was == active) continue;
-                st.Active = (std::int8_t)active;
-                if (culledFromAbove(st.Group)) continue;
-                for (int i = 0; i < levels; ++i) {
-                    const bool wasTagged = was >= -1 && i != was;
-                    const bool nowTagged = active >= -1 && i != active;
-                    if (wasTagged != nowTagged) retagSubtree(st.Kids[i], nowTagged);
-                }
+                changeLevel(st, was, active, culledFromAbove(st.Group));
             }
             return true;
         }
@@ -388,24 +443,40 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             const int active = full ? pickLevel(st, lod, evaluated) : m_LodNext[at];
             const int was = st.Active; // kLodSkipped (or a fresh record) tagged nothing
             if (!full && was == active) continue;
-            st.Active = (std::int8_t)active; // first: the retag below reads this group's own record for nested ones
             if (full) {
+                st.Active = (std::int8_t)active;
                 for (int i = 0; i < levels; ++i)
                     if (i != active) tagSubtree(st.Kids[i]);
                 continue;
             }
-            if (culledFromAbove(g)) continue;
-            for (int i = 0; i < levels; ++i) {
-                const bool wasTagged = was >= -1 && i != was;
-                const bool nowTagged = active >= -1 && i != active;
-                if (wasTagged != nowTagged) retagSubtree(st.Kids[i], nowTagged);
-            }
+            changeLevel(st, was, active, culledFromAbove(g));
         }
         return index == m_LodState.size();
     };
     if (!pass()) {
         full = true;
         pass();
+    }
+    // The cross-fades under way: on with each, or done.
+    if (!m_LodFading.empty()) {
+        size_t keep = 0;
+        for (size_t i = 0; i < m_LodFading.size(); ++i) {
+            const entt::entity g = m_LodFading[i];
+            const size_t slot = (size_t)entt::to_entity(g);
+            LodGroupState* st = slot < m_LodIndex.size() && m_LodIndex[slot] < m_LodState.size() &&
+                                m_LodState[m_LodIndex[slot]].Group == g ? &m_LodState[m_LodIndex[slot]] : nullptr;
+            if (!st || st->FadeFrom < 0) continue;
+            const float t = (float)((now - st->FadeStart) / kLodFadeSeconds);
+            if (!LodSmooth || t >= 1.0f) {
+                finishFade(*st);
+                continue;
+            }
+            const float f = std::clamp(t, 1e-4f, 0.9999f);
+            setFade(st->Kids[st->FadeFrom], -f);
+            if (st->Active >= 0 && st->Active < st->Levels) setFade(st->Kids[st->Active], f);
+            m_LodFading[keep++] = g;
+        }
+        m_LodFading.resize(keep);
     }
     std::copy(signature, signature + 4, m_LodSignature);
     m_LodValid = true;

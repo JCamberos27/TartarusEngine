@@ -895,6 +895,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
         bool Bounded = false;
         glm::mat3 Normal{1.0f}; // transpose(inverse(mat3(Xform))), from the candidate cache (opaque items)
+        float LodFade = 0.0f;   // World::LodFadeOf: a LOD cross-fade under way (dithered, drawn on its own)
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -1040,6 +1041,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.StaticReceiver = staticReceiver;
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
+            item.LodFade = world.LodFadeOf(entity);
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -1069,6 +1071,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
+            item.LodFade = world.LodFadeOf(entity);
             item.Dynamic = dynamicItem;
             item.StaticReceiver = staticReceiver;
             item.Entity = (unsigned)entt::to_integral(entity);
@@ -1194,6 +1197,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
         prog.SetInt("uDecalStatic", probeItem->StaticReceiver ? 1 : 0);
         prog.SetFloat("uNearHide", probeItem->NearHide);
+        prog.SetFloat("uLodFade", probeItem->LodFade);
         prog.SetFloat("uNearHideWidth", probeItem->NearHideWidth);
         prog.SetVec3("uNearHideRight", nearHideRight);
         static const char* const kHideBone[8] = {"uHideBones[0]", "uHideBones[1]", "uHideBones[2]", "uHideBones[3]",
@@ -1238,7 +1242,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     unsigned hizDepth = 0; // the view's depth after the pre-pass, single sample: HiZCuller's occluders
     constexpr float kPrepassSlopeOffset = 0.02f;
     const auto prepassed = [&](const DrawItem& it) {
-        return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
+        return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.LodFade != 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
                                  it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
     };
     if (depthPrepass) {
@@ -1363,7 +1367,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     for (std::size_t i = 0; i < probeKeys.size(); ++i) probeKeys[i] = in.probeArray->SelectionKey(drawList[i].Centre);
     const auto probeKey = [&](std::uint32_t i) { return i < probeKeys.size() ? probeKeys[i] : 0u; };
     const auto batchable = [&](const DrawItem& it) {
-        if (!instancing || it.Dynamic || it.Ref->HasBones() || it.Visible || it.NearHide > 0.0f || it.HideBones ||
+        if (!instancing || it.Dynamic || it.Ref->HasBones() || it.Visible || it.NearHide > 0.0f || it.LodFade != 0.0f || it.HideBones ||
             it.HideVerts || it.CollarVerts || it.BoneMaskMode || it.LayerPull != 0.0f)
             return false;
         int bloodFirst = 0, bloodCount = 0;

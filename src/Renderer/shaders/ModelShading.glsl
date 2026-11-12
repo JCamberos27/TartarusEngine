@@ -8,6 +8,9 @@ uniform int uTaaVelocity; // TAA: 1 = write motion vectors (ModelVertex / ModelF
 // The player's own body (PlayerBodyTag): nothing of it within this many metres of the eye is drawn - the
 // near plane would slice it into slivers. 0 for everything else.
 uniform float uNearHide;
+// LOD cross-fade (World::LodFadeOf): 0 none; t > 0 this level fading in, drawn where the screen dither is under t;
+// -t fading out, drawn where it is t or over - complementary, so the two levels never overlap or leave holes.
+uniform float uLodFade;
 // Clothing's Near Hide reaches further to the sides (PlayerBodyTag::NearHideWidth, 0 = a sphere), along the
 // view's flat right, uNearHideRight.
 uniform float uNearHideWidth;

@@ -97,7 +97,7 @@ void ViewPipeline::DrawScene(const ViewPipelineInputs& in, const RenderFrameCont
     // TAA: LOD picks and the sun's cascade fit see the unjittered projection, or the cascades would
     // re-fit (and shimmer) with every sub-pixel step.
     const glm::mat4 steadyProj = ctx.TaaVelocity ? TemporalAA::JitterProjection(ctx.Proj, -ctx.TaaJitterNdc) : ctx.Proj;
-    { PROFILE_SCOPE("LOD Select"); world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
+    { PROFILE_SCOPE("LOD Select"); world.LodSmooth = true; world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
     in.sceneInputs->sunShadowsReady = in.shadowFrame->RenderSun(*in.shadowIn, ctx.View, steadyProj); // #109
     in.sceneRenderer->RenderScene(world, ctx, *in.sceneInputs, outStats);
 }

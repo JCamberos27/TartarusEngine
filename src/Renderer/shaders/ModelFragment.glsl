@@ -146,6 +146,11 @@ void main() {
         if (vCurClip.w > 1e-5 && vPrevClip.w > 1e-5)
             oVelocity = (vCurClip.xy / vCurClip.w - vPrevClip.xy / vPrevClip.w) * 0.5;
     }
+    if (uLodFade != 0.0) {
+        // Interleaved gradient noise: a fine, even dither that TAA resolves to a smooth dissolve.
+        float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        if (uLodFade > 0.0 ? n >= uLodFade : n < -uLodFade) discard;
+    }
     if (uNearHide > 0.0) {
         vec3 d = vWorldPos - uViewPos;
         if (uNearHideWidth > 0.0) { // FirstPersonBodyNearHidden

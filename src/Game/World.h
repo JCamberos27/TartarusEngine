@@ -223,6 +223,19 @@ public:
     // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
     // passes. Returns the number of LOD Groups evaluated.
     int ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj);
+    // Smooth LOD (the live views set it; off by default, so a level change is instant): a level holds a little past
+    // its switch point before handing over (kLodHysteresis, no flicker while standing at one), and the hand-over is
+    // a dithered cross-fade over kLodFadeSeconds - the old level dissolves out as the new one dissolves in, in
+    // complementary screen-space patterns (LodFadeOf), so nothing pops.
+    bool LodSmooth = false;
+    static constexpr float kLodFadeSeconds = 0.35f;
+    static constexpr float kLodHysteresis = 0.1f;
+    // The cross-fade value of a renderer now: 0 none; t > 0 fading in (drawn where the dither is under t); -t fading
+    // out (drawn where it is t or over).
+    float LodFadeOf(entt::entity e) const {
+        const size_t s = (size_t)entt::to_entity(e);
+        return s < m_LodFadeOwner.size() && m_LodFadeOwner[s] == e ? m_LodFadeValue[s] : 0.0f;
+    }
     // Removes every LodCulledTag.
     void ClearLod();
     // Whether ApplyLod tagged `e` LodCulledTag: the same answer as the tag, read from a flat per-slot table (the
@@ -338,7 +351,12 @@ private:
         entt::entity Kids[4] = {entt::null, entt::null, entt::null, entt::null};
         float AutoSize = 0.0f;     // LOD 0's measured size (for LODGroupComponent::Size 0)
         glm::vec3 Centre{0.0f};    // the group's world position
+        std::int8_t FadeFrom = -1; // LodSmooth: the level fading out (left untagged meanwhile), -1 none
+        double FadeStart = 0.0;    // when it began (Time::RealtimeSinceStartup)
     };
+    std::vector<float> m_LodFadeValue;        // entity slot -> LodFadeOf
+    std::vector<entt::entity> m_LodFadeOwner; // entity slot -> the entity the value is for
+    std::vector<entt::entity> m_LodFading;    // groups with a cross-fade under way
     std::vector<LodGroupState> m_LodState;    // dense, in the groups view's order
     std::vector<std::uint32_t> m_LodIndex;    // entity slot -> m_LodState index (~0u: none)
     std::uint64_t m_LodCentreStamp = 0;       // the transform cache stamp the centres were read at
