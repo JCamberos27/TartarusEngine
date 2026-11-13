@@ -136,9 +136,12 @@ public:
     std::string AssetFolder(const std::string& assetKey) const;
     // AssetFolder without the copy, for per-frame loops; valid until the next folder change.
     const std::string& AssetFolderRef(const std::string& assetKey) const;
-    // Bumped when an asset's folder is set or the metadata is cleared - not when a newly added asset adopts its disk
-    // folder - so the folder summaries know a listed asset may have changed folders.
+    // Bumped when an asset's folder is set, a folder or asset is renamed, or the metadata is cleared - not when a newly
+    // added asset adopts its disk folder - so the folder summaries and the Asset Browser grid know a listed asset may
+    // have changed folders or keys.
     unsigned FolderMoveGeneration() const { return m_FolderMoveGen; }
+    // Bumped when a display name or labels change: what the grid shows and searches by.
+    unsigned MetadataGeneration() const { return m_MetadataGen; }
 
     // Display name shown in the browser instead of the bare filename — renaming here never
     // touches the real file, it's a per-asset label override (empty clears it, falling back
@@ -368,4 +371,5 @@ private:
     mutable std::set<std::string> m_AllLabelsCache;
     mutable bool m_AllLabelsDirty = true;
     unsigned m_FolderMoveGen = 0;
+    unsigned m_MetadataGen = 0;
 };

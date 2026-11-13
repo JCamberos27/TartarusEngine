@@ -542,6 +542,7 @@ const std::string& AssetLibrary::AssetFolderRef(const std::string& assetKey) con
 void AssetLibrary::SetDisplayName(const std::string& assetKey, const std::string& name) {
     if (name.empty()) m_DisplayNames.erase(assetKey);
     else m_DisplayNames[assetKey] = name;
+    ++m_MetadataGen;
     AssetDatabase::MergeMetaFields(assetKey, json{{"displayName", name}}.dump());
 }
 
@@ -556,6 +557,7 @@ void AssetLibrary::SetLabels(const std::string& assetKey, const std::set<std::st
     if (labels.empty()) m_Labels.erase(assetKey);
     else m_Labels[assetKey] = labels;
     m_AllLabelsDirty = true;
+    ++m_MetadataGen;
     json labelsArr = json::array();
     for (const auto& l : labels) labelsArr.push_back(l);
     AssetDatabase::MergeMetaFields(assetKey, json{{"labels", labelsArr}}.dump());
@@ -705,6 +707,7 @@ void AssetLibrary::RenameFolder(const std::string& oldPath, const std::string& n
     for (auto& f : m_Folders) remap(f);
     for (auto& f : m_SavedFolders) remap(f);
     for (auto& [assetKey, folder] : m_AssetFolder) remap(folder);
+    ++m_FolderMoveGen;
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(oldPath, newPath);
 }
@@ -926,6 +929,8 @@ bool AssetLibrary::RenamePath(const std::string& oldPath, const std::string& new
     if (textureMoved)
         for (auto& mat : m_MaterialList) if (mat) mat->SyncTexturePathsFromMat();
     m_AllLabelsDirty = true;
+    ++m_FolderMoveGen; // a listed key changed in place
+    ++m_MetadataGen;
     return !listed.empty();
 }
 

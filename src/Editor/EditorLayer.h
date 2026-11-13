@@ -1814,6 +1814,7 @@ private:
     bool m_AssetGridCellsValid = false;
     std::uint64_t m_AssetGridCellsKey = 0, m_AssetGridCellsUserKey = 0;
     int m_AssetGridCellsFrame = 0;
+    std::uint64_t m_AssetGridCellsContentKey = 0; // Play: what the cells were listed from (0 = not tracked)
 
     // Unity Project-window-style left folder tree, shown alongside the icon grid rather than
     // breadcrumb-only navigation. Which folders are expanded is tracked here (not left to
@@ -2026,6 +2027,7 @@ private:
     // Per list (models, textures, materials, sounds, prefabs): how many entries m_ListedAssetKeys holds and the key of the
     // last one, so a list that only grew adds just its new tail (RefreshProjectAssetIndexIfNeeded).
     size_t m_ListedAssetCounts[5] = {};
+    unsigned m_ListedMoveGen = 0; // AssetLibrary::FolderMoveGeneration the keys were taken at (a rename re-keys)
     std::string m_ListedAssetTails[5];
     AssetThumbnailLoader m_AssetThumbs; // tiles of unloaded assets
     void RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets);
@@ -2317,6 +2319,10 @@ private:
     bool m_FolderSummariesValid = false;
     struct FolderIndexContribution { std::string Folder; Enhancers::FolderKind Kind; };
     std::unordered_map<std::string, FolderIndexContribution> m_FolderIndexContrib; // index file PathKey -> where it counts
+    // What the Asset Browser grid keys its Play-mode cell cache on (AssetGridFrameBegin): full walks, and per folder
+    // (and overall) how often a newly listed asset changed what it holds.
+    unsigned m_FolderSummaryWalkGen = 0, m_AnyFolderContentGen = 0;
+    std::unordered_map<std::string, unsigned> m_FolderContentGen;
     void RebuildFolderSummariesIfNeeded(AssetLibrary& assets);
     void NoteListedInFolderSummaries(AssetLibrary& assets, int list, const std::string& path, const std::string& key);
     std::string m_HoverAssetFolder;       // the folder under the mouse this frame (tree or grid)
