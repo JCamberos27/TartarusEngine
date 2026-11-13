@@ -383,6 +383,43 @@ void RegisterEngineComponents() {
 
     {
         ReflectComponent m;
+        m.Name = "Light Circuit"; m.Icon = ICON_FA_LIGHTBULB; m.Category = "Rendering";
+        m.Tooltip = "Puts this object on a light circuit that a Light Switch works while playing: a Light goes dark with "
+                    "it, a fitting or lamp loses its glow (its materials' emission).";
+        m.Fields = {
+            { "Circuit", T::String, TARTARUS_REFLECT_FIELD(LightCircuitComponent, Circuit), 0.0f,
+              "The circuit's name. A Light Switch with the same name turns it on and off." },
+            { "Glow", T::Float, TARTARUS_REFLECT_FIELD(LightCircuitComponent, Glow), 0.05f,
+              "Models: their materials' emission when on, as a multiple of what the materials have (0 = leave the "
+              "materials alone).", 0.0f, 20.0f },
+        };
+        Register<LightCircuitComponent>(std::move(m));
+    }
+
+    {
+        ReflectComponent m;
+        m.Name = "Light Switch"; m.Icon = ICON_FA_LIGHTBULB; m.Category = "Gameplay";
+        m.Tooltip = "Interact (E) on this object turns its light circuit on and off while playing: a wall switch, or a "
+                    "lamp's own body. Every switch on the circuit flips together.";
+        m.Fields = {
+            { "Circuit", T::String, TARTARUS_REFLECT_FIELD(LightSwitchComponent, Circuit), 0.0f,
+              "The circuit it works (Light Circuit components with the same name)." },
+            { "Start On", T::Bool, TARTARUS_REFLECT_FIELD(LightSwitchComponent, StartOn), 0.0f,
+              "The circuit is on when Play starts." },
+            { "Rocker", T::String, TARTARUS_REFLECT_FIELD(LightSwitchComponent, Rocker), 0.0f,
+              "A child's name that tips over when the switch flips (empty = none)." },
+            { "Rocker Angle", T::Float, TARTARUS_REFLECT_FIELD(LightSwitchComponent, RockerAngle), 0.5f,
+              "Degrees the rocker tips either way, about its local X.", 0.0f, 45.0f },
+            { "On Sound", T::String, TARTARUS_REFLECT_FIELD(LightSwitchComponent, OnSound), 0.0f,
+              "Audio assets played when it turns on; ';'-separated variants." },
+            { "Off Sound", T::String, TARTARUS_REFLECT_FIELD(LightSwitchComponent, OffSound), 0.0f,
+              "Audio assets played when it turns off; ';'-separated variants." },
+        };
+        Register<LightSwitchComponent>(std::move(m));
+    }
+
+    {
+        ReflectComponent m;
         m.Name = "Openable"; m.Icon = ICON_FA_DOOR_OPEN; m.Category = "Gameplay";
         m.Tooltip = "A door, drawer or lid the player opens and shuts with Interact (E) while playing. The hinge or slide "
                     "comes from the model's bounds, front facing local +Z; put it on the part, as a child of its body.";

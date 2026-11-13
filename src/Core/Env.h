@@ -21,6 +21,7 @@
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
+    X(LightsOn, "TARTARUS_LIGHTS_ON", Flag, "smoke shots: 1 = every light circuit on, 0 = as the switches start")     \
     X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'x y z yaw pitch;...' camera poses to capture")      \
     X(ShotStart, "TARTARUS_SHOT_START", Int, "--smoke-shots: frame of the first shot-camera capture (default 40)")    \
     X(ShotFov, "TARTARUS_SHOT_FOV", Float, "--smoke-shots: Scene-view FOV for shot cameras")                          \

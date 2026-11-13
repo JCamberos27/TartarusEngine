@@ -6169,6 +6169,7 @@ int RunUnitTests(const char* filter) {
     { void RegisterGrassTests(UnitTestSupport::TestList&); RegisterGrassTests(tests); } // UnitTests_Grass.cpp
     { void RegisterWorldTextTests(UnitTestSupport::TestList&); RegisterWorldTextTests(tests); } // UnitTests_WorldText.cpp
     { void RegisterOpenableTests(UnitTestSupport::TestList&); RegisterOpenableTests(tests); } // UnitTests_Openable.cpp
+    { void RegisterLightSwitchTests(UnitTestSupport::TestList&); RegisterLightSwitchTests(tests); } // UnitTests_LightSwitch.cpp
     RegisterCharacterMoverTests(tests); // UnitTests_CharacterMover.cpp
     RegisterEngineTests(tests);
     { void RegisterGameplayTests(UnitTestSupport::TestList&); RegisterGameplayTests(tests); }

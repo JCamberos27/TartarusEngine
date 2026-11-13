@@ -90,6 +90,7 @@ private:
     std::string m_MemReportDir;
     // TARTARUS_OPEN_ALL=1: every door, drawer and lid shown open, to check each one's hinge.
     bool m_OpenAll = false;
+    int m_LightsMode = -1; // TARTARUS_LIGHTS_ON: 1 every light circuit on, 0 as the switches start, unset untouched
 
     PerfBench m_Perf;
 

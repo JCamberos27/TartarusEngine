@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <string>
 #include <entt/entt.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -27,6 +28,17 @@ void Pose(int motion, float amount, const glm::vec3& lo, const glm::vec3& hi, co
 // Distance along the ray (origin + d * dir, dir unit length) to the box lo..hi placed by `xform`; negative for a miss.
 float RayBox(const glm::mat4& xform, const glm::vec3& lo, const glm::vec3& hi, const glm::vec3& origin,
              const glm::vec3& dir);
+
+// The nearest started openable under the crosshair within kReach and not behind a wall (its distance in `outDist`), or
+// null. What Interact would open or shut.
+entt::entity Pick(World& world, const glm::vec3& eye, const glm::vec3& forward, float* outDist = nullptr);
+
+// True when nothing solid stands between `eye` and `target`, `dist` along unit `dir`: the first solid the ray meets is
+// `target`, part of it, or no nearer than it. Shared by everything Interact reaches (Openable, LightSwitch).
+bool Unblocked(World& world, const glm::vec3& eye, const glm::vec3& dir, entt::entity target, float dist);
+
+// One of `files` (';'-separated audio assets) at `pos`, pitch jittered a little.
+void PlaySound(const std::string& files, const glm::vec3& pos);
 
 // One Play frame: with `interact` (the Interact button went down), the nearest openable under the crosshair within
 // kReach, and not behind a wall, opens or shuts; then every openable moves toward its target.

@@ -1236,6 +1236,34 @@ struct OpenableComponent {
     glm::vec3 PoseMin{0.0f}, PoseMax{0.0f}; // the box it turns about: its box collider, else the model's bounds
 };
 
+// A light, a fitting or a lamp on a circuit (Game/LightSwitch.h): every Light on the circuit goes dark and every model
+// on it loses its glow (its materials' emission) when the circuit is off. Play only; Play -> Stop restores the scene.
+struct LightCircuitComponent {
+    std::string Circuit;     // the circuit's name; a Light Switch with the same name works it
+    float Glow = 1.0f;       // models: the emission kept when on, x their materials' own (0 = leave them alone)
+
+    // Runtime, never serialized.
+    bool Started = false;
+    std::vector<std::shared_ptr<MaterialAsset>> OnMaterials, OffMaterials;
+};
+
+// Works a circuit with Interact (E): a wall switch (its Rocker child flips) or a lamp's own body. Every switch on the same
+// circuit flips together. Play only.
+struct LightSwitchComponent {
+    std::string Circuit;      // the circuit it works
+    bool StartOn = false;     // the circuit's state when Play starts (the first switch on it found decides)
+    std::string Rocker;       // a child's name that tips over when it flips (empty = none)
+    float RockerAngle = 14.0f; // degrees the rocker tips either way, about its local X
+    std::string OnSound;      // ';'-separated audio variants
+    std::string OffSound;
+
+    // Runtime, never serialized.
+    bool Started = false;
+    bool On = false;
+    entt::entity RockerEntity = entt::null;
+    glm::quat RockerBase{1.0f, 0.0f, 0.0f, 0.0f};
+};
+
 // Drives the Light on its entity: a fluorescent tube that stutters now and then, a TV screen's
 // restless glow, or a candle's fast shimmer. Works around the light's authored intensity and colour
 // while playing; Play -> Stop reloads the authored scene, so they come back untouched.
