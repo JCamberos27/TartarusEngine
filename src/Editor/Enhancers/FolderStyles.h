@@ -39,6 +39,7 @@ struct FolderSummary {
     std::uint16_t Counts[kFolderKindCount] = {};
     std::uint16_t Total = 0;
     void Add(FolderKind k) { if (Counts[(int)k] < 0xFFFF) ++Counts[(int)k]; if (Total < 0xFFFF) ++Total; }
+    void Remove(FolderKind k) { if (Counts[(int)k] == 0) return; --Counts[(int)k]; if (Total > 0) --Total; }
 };
 // The kind making up at least `share` of the folder's direct assets (with at least `minCount`
 // of them), else FolderKind::Count.

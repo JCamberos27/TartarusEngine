@@ -2660,33 +2660,65 @@ void CopyGlyph(char (&dst)[8], const char* glyph) {
 }
 } // namespace
 
+namespace {
+constexpr Enhancers::FolderKind kListedFolderKind[5] = {Enhancers::FolderKind::Model, Enhancers::FolderKind::Texture,
+                                                        Enhancers::FolderKind::Material, Enhancers::FolderKind::Sound,
+                                                        Enhancers::FolderKind::Prefab};
+} // namespace
+
 // Content counts per folder, from what the Asset Browser grid would list there: library assets
-// by their AssetFolder, plus the project index's not-yet-loaded files by theirs. One pass over
-// every asset - only when something changed, or once a second while the browser is open.
+// by their AssetFolder, plus the project index's not-yet-loaded files by theirs. A full walk
+// (~9 ms) runs only when the summaries were invalidated (a list shrank, a new index scan) or an
+// asset or folder moved; assets that get listed patch them instead (NoteListedInFolderSummaries).
 void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
-    const size_t sig = m_ListedAssetSignature ^ (m_ProjectAssetIndex.files.size() * 0x9E3779B97F4A7C15ull) ^
-                       (assets.AssetFolders().size() << 20) ^ (assets.Folders().size() << 40);
+    const size_t sig = (m_ProjectAssetIndex.files.size() * 0x9E3779B97F4A7C15ull) ^
+                       ((size_t)assets.FolderMoveGeneration() << 20) ^ (assets.Folders().size() << 40);
     m_FolderSummaryAge += ImGui::GetIO().DeltaTime;
-    if (sig == m_FolderSummarySig && m_FolderSummaryAge < 1.0f) return;
-    // During Play the summaries walk the whole library (~3 ms) at most once a second, and only when it changed: Play
-    // streams assets in, and each arrival moved the signature, so the walk ran on frame after frame of the load.
+    const bool stale = !m_FolderSummariesValid || sig != m_FolderSummarySig;
+    if (!stale) return;
+    // During Play a needed walk waits for the once-a-second slot.
     const bool throttle = m_InPlayMode && PlayUiThrottle();
     if (throttle && m_FolderSummaryAge < 1.0f) return;
-    if (throttle && sig == m_FolderSummarySig) { m_FolderSummaryAge = 0.0f; return; }
     m_FolderSummarySig = sig;
     m_FolderSummaryAge = 0.0f;
+    m_FolderSummariesValid = true;
     m_FolderSummaries.clear();
-    using F = Enhancers::FolderKind;
-    for (const auto& m : assets.Models())    m_FolderSummaries[assets.AssetFolderRef(m->Path())].Add(F::Model);
-    for (const auto& t : assets.Textures())  m_FolderSummaries[assets.AssetFolderRef(t->Path())].Add(F::Texture);
-    for (const auto& m : assets.Materials()) m_FolderSummaries[assets.AssetFolderRef(m->Path)].Add(F::Material);
-    for (const auto& s : assets.Sounds())    m_FolderSummaries[assets.AssetFolderRef(s)].Add(F::Sound);
-    for (const auto& p : assets.Prefabs())   m_FolderSummaries[assets.AssetFolderRef(p)].Add(F::Prefab);
+    m_FolderIndexContrib.clear();
+    // Only what RefreshProjectAssetIndexIfNeeded has keyed: the rest arrives through NoteListedInFolderSummaries.
+    const auto listed = [&](int l, size_t size) { return std::min(size, m_ListedAssetCounts[l]); };
+    for (size_t i = 0, n = listed(0, assets.Models().size()); i < n; ++i)
+        m_FolderSummaries[assets.AssetFolderRef(assets.Models()[i]->Path())].Add(kListedFolderKind[0]);
+    for (size_t i = 0, n = listed(1, assets.Textures().size()); i < n; ++i)
+        m_FolderSummaries[assets.AssetFolderRef(assets.Textures()[i]->Path())].Add(kListedFolderKind[1]);
+    for (size_t i = 0, n = listed(2, assets.Materials().size()); i < n; ++i)
+        m_FolderSummaries[assets.AssetFolderRef(assets.Materials()[i]->Path)].Add(kListedFolderKind[2]);
+    for (size_t i = 0, n = listed(3, assets.Sounds().size()); i < n; ++i)
+        m_FolderSummaries[assets.AssetFolderRef(assets.Sounds()[i])].Add(kListedFolderKind[3]);
+    for (size_t i = 0, n = listed(4, assets.Prefabs().size()); i < n; ++i)
+        m_FolderSummaries[assets.AssetFolderRef(assets.Prefabs()[i])].Add(kListedFolderKind[4]);
+    m_FolderIndexContrib.reserve(m_ProjectAssetIndex.files.size());
     for (const auto& f : m_ProjectAssetIndex.files) {
         if (m_ListedAssetKeys.count(f.Key)) continue;
         const std::string& moved = assets.AssetFolderRef(f.Path);
-        m_FolderSummaries[moved.empty() ? f.Folder : moved].Add(FolderKindOf(f.Kind));
+        const std::string& folder = moved.empty() ? f.Folder : moved;
+        const Enhancers::FolderKind kind = FolderKindOf(f.Kind);
+        if (m_FolderIndexContrib.try_emplace(f.Key, FolderIndexContribution{folder, kind}).second)
+            m_FolderSummaries[folder].Add(kind);
     }
+}
+
+// A library list entry just keyed by RefreshProjectAssetIndexIfNeeded: it counts in its folder, and the index file
+// for the same asset (if one was counted) no longer does.
+void EditorLayer::NoteListedInFolderSummaries(AssetLibrary& assets, int list, const std::string& path, const std::string& key) {
+    m_FolderSummaries[assets.AssetFolderRef(path)].Add(kListedFolderKind[list]);
+    const auto it = m_FolderIndexContrib.find(key);
+    if (it == m_FolderIndexContrib.end()) return;
+    const auto s = m_FolderSummaries.find(it->second.Folder);
+    if (s != m_FolderSummaries.end()) {
+        s->second.Remove(it->second.Kind);
+        if (s->second.Total == 0) m_FolderSummaries.erase(s); // as a full walk would leave it: no entry
+    }
+    m_FolderIndexContrib.erase(it);
 }
 
 bool EditorLayer::GetFolderVisual(AssetLibrary& assets, const std::string& path, EditorFolderVisual& out) {

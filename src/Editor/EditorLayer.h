@@ -2311,7 +2311,14 @@ private:
     std::unordered_map<std::string, Enhancers::FolderSummary> m_FolderSummaries;
     size_t m_FolderSummarySig = (size_t)-1;
     float m_FolderSummaryAge = 0.0f;
+    // The summaries count the first m_ListedAssetCounts entries of each library list plus the index files not listed;
+    // RefreshProjectAssetIndexIfNeeded patches them as lists grow (NoteListedInFolderSummaries) and clears this when a
+    // list shrinks or a new scan lands, which asks for a full walk.
+    bool m_FolderSummariesValid = false;
+    struct FolderIndexContribution { std::string Folder; Enhancers::FolderKind Kind; };
+    std::unordered_map<std::string, FolderIndexContribution> m_FolderIndexContrib; // index file PathKey -> where it counts
     void RebuildFolderSummariesIfNeeded(AssetLibrary& assets);
+    void NoteListedInFolderSummaries(AssetLibrary& assets, int list, const std::string& path, const std::string& key);
     std::string m_HoverAssetFolder;       // the folder under the mouse this frame (tree or grid)
     bool m_HoverAssetFolderSet = false;
     void HandleFolderHoverKeys(AssetLibrary& assets); // PostModuleDraw, after the module drew the tree
