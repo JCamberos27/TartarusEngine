@@ -100,13 +100,13 @@ void OpenableInWorld() {
     {
         World world;
         AssetLibrary assets;
-        const Json node = {{"id", 0}, {"name", "Door"}, {"Openable", {{"Motion", "Slide Out"}, {"Amount", 0.25}, {"Start Open", true}}}};
+        const Json node = {{"id", 0}, {"name", "Door"}, {"Openable", {{"Motion", "Slide Out"}, {"Amount", 0.25}, {"Start Open", true}, {"Start Ajar", 0.4}}}};
         CHECK(SceneSerializer::LoadFromString(world, assets, Json{{"formatVersion", 4}, {"empties", Json::array({node})}}.dump()));
         auto v = world.Registry.view<OpenableComponent>();
         CHECK(v.size() == 1);
         if (v.size() == 1) {
             const auto& o = v.get<OpenableComponent>(v.front());
-            CHECK(o.Motion == (int)Kind::SlideOut && o.Amount == 0.25f && o.StartOpen && o.OpenTime == 0.5f);
+            CHECK(o.Motion == (int)Kind::SlideOut && o.Amount == 0.25f && o.StartOpen && o.StartAjar == 0.4f && o.OpenTime == 0.5f);
         }
         const std::string saved = SceneSerializer::SaveToString(world);
         CHECK(saved.find("\"Openable\"") != std::string::npos && saved.find("Slide Out") != std::string::npos);
@@ -151,11 +151,22 @@ void OpenableInWorld() {
     CHECK(Near(w.Registry.get<TransformComponent>(door).Position, doorAt + glm::vec3(0.5f, 0.0f, 0.0f)));
     Openable::SetAll(w, 0.0f);
     CHECK(Near(w.Registry.get<TransformComponent>(door).Position, doorAt));
+
+    // Start Open is posed open as Play starts; Start Ajar starts it part of the way, and one Interact opens it all the way.
+    o.StartOpen = true;
+    o.StartAjar = 0.3f;
+    o.Started = false;
+    Openable::Update(w, eye, -ahead, false, 0.0f);
+    CHECK(o.Target > 0.0f && o.Target < 0.5f && Near(w.Registry.get<TransformComponent>(door).Position, doorAt + glm::vec3(0.15f, 0.0f, 0.0f)));
+    w.RebuildWorldTransformCache();
+    const glm::vec3 aimAjar = glm::normalize(doorAt + glm::vec3(0.15f, 0.0f, 0.0f) + (lo + hi) * 0.5f - eye);
+    Openable::Update(w, eye, aimAjar, true, 1.0f);
+    CHECK(o.Target == 1.0f && Near(w.Registry.get<TransformComponent>(door).Position, doorAt + glm::vec3(0.5f, 0.0f, 0.0f)));
 }
 } // namespace
 
 void RegisterOpenableTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Openable: each motion keeps its hinge and opens out the front", OpenablePoses});
     tests.push_back({"Openable: ray against a placed box", OpenableRayBox});
-    tests.push_back({"Openable: scene block, Interact toggles, reach and SetAll", OpenableInWorld});
+    tests.push_back({"Openable: scene block, Interact toggles, reach, SetAll, Start Open / Ajar", OpenableInWorld});
 }

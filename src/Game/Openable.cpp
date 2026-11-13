@@ -44,6 +44,12 @@ float Ease(float t) {
     return t * t * (3.0f - 2.0f * t);
 }
 
+// Ease's inverse: the progress at which the part has moved `s` of the way.
+float Uneased(float s) {
+    s = std::clamp(s, 0.0f, 1.0f);
+    return 0.5f - std::sin(std::asin(1.0f - 2.0f * s) / 3.0f);
+}
+
 // The depth (local Z, metres) of the model this entity hangs under, or 0 without one.
 float ParentDepth(World& world, entt::entity e) {
     const auto* h = world.Registry.try_get<HierarchyComponent>(e);
@@ -62,7 +68,7 @@ void Apply(OpenableComponent& o, TransformComponent& t) {
     t.Rotation = rot;
 }
 
-void Start(World& world, entt::entity e, OpenableComponent& o, const TransformComponent& t, const Model& m) {
+void Start(World& world, entt::entity e, OpenableComponent& o, TransformComponent& t, const Model& m) {
     o.Started = true;
     o.BasePosition = t.Position;
     o.BaseRotation = t.Rotation;
@@ -76,7 +82,9 @@ void Start(World& world, entt::entity e, OpenableComponent& o, const TransformCo
         o.PoseMax = c->Center + c->HalfExtents;
     }
     o.ResolvedAmount = o.Amount > 0.0f ? o.Amount : DefaultAmount(o.Motion, m.BoundsMin(), m.BoundsMax(), ParentDepth(world, e));
-    o.Progress = o.Target = o.StartOpen ? 1.0f : 0.0f;
+    // Ajar: it starts part of the way, but its full swing is still Amount, so one Interact opens it the rest of the way.
+    o.Progress = o.Target = o.StartOpen ? (o.StartAjar > 0.0f ? Uneased(std::max(o.StartAjar, 0.01f)) : 1.0f) : 0.0f;
+    if (o.Progress > 0.0f) Apply(o, t); // posed where it starts: a Start Open door is open when Play begins, not only flagged
 }
 
 // The part's box collider in the world with the part posed at `progress` (false: it has no box collider).

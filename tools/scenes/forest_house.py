@@ -7,9 +7,10 @@
 # driveway with a dead car, and a fenced backyard the forest is taking back.
 #
 # Abandoned and trashed: a third of the glass is gone and the chairs and lamps are
-# knocked over, furniture shoved about, pictures hang crooked, what was worth taking is gone; rubbish, papers,
-# books and leaves blown in lie across the floors; the floors are filthy, the ceilings water-stained, the walls
-# damp at the base and peeling. The power is mostly out: a dying porch light, a stuttering fluorescent tube in
+# knocked over, furniture shoved about, pictures hang crooked, what was worth taking is gone; rubbish, papers and
+# books kicked against the walls, leaves blown in; the plaster cracked off the door and window corners, along the wall
+# heads and across the ceilings, a leak's stain here and there. Every piece is fitted by its measured shape
+# (house_fit.py): nothing in a wall, in another piece or in a doorway, and every door opens all the way. The power is mostly out: a dying porch light, a stuttering fluorescent tube in
 # the kitchen, candles left burning in the living room, and the master bedroom upstairs, at the front, lit red.
 #
 # Interior work is authored in the pack's space and parented under the house's 'Pack Layout'; the yard in world
@@ -19,6 +20,7 @@ import math
 import random
 import re
 
+import house_fit as hf
 import scene_kit as k
 
 PACK = 'assets/Environments/SuburbNeighborhoodHousePack/'
@@ -152,10 +154,283 @@ OFF_OUT = {'guid': 'd48f49996a84314b', 'path': PACK + 'Materials/M_Lamps_Off.mat
 DEAD_SCREEN = {}    # filled by add_house: the devices' material with the emission off
 
 
+# --- fitting (house_fit.py): every piece by its measured bounds, in the pack's space --------------------------------
+# Pieces that hang on a wall or from a ceiling, or are part of the room: never shoved, never a support for clutter.
+FIXED = ('Painting_wide', 'Painting_large', 'Painting_photo', 'Painting_small', 'Painting_A', 'Painting_C',
+         'Painting_D', 'Painting_E', 'Painting_F', 'Painting_G', 'Mirror', 'Curtains_', 'Lamp_wall', 'Lamp_ceiling',
+         'Lamp_chandelier', 'Lamp_bedroom', 'Lamp_kitchen', 'Ventilationgrid', 'Lightswitch', 'Shelf_',
+         'To_towel_hanging', 'To_showercurtain', 'Kitcabinet_upper', 'Wooden_wallpilar', 'Clothcloset_with_wall',
+         'Fireplace_withwall', 'Carpet_', 'To_toilet_shelf')
+STRUCTURE_SKIP = ('Floor_', 'Ceiling_', 'Porch_floor', 'Carpet', 'Roof', 'Stair_carpet')
+
+
+def stem(e):
+    return re.sub(r' \(\d+\)$', '', e['name'])
+
+
+class Fit:
+    """The house's solid shapes in pack space - walls and stairs by their colliders, furniture by its measured mesh
+    bounds - and the keep-outs: every doorway with the swing of its door, and the stairs' runs."""
+    def __init__(self, pk):
+        self.pk = pk
+        self.B = hf.bounds()
+        self.props = {e['id']: e for e in pk.props()}
+        self.structure = []
+        for e in pk.ents:
+            c = e.get('collider')
+            if not c or e['id'] in pk.gone or c.get('isTrigger') or e.get('Openable') or 'halfExtents' not in c:
+                continue
+            if self._prop_of(e['id']) is not None or e['name'].startswith(STRUCTURE_SKIP):
+                continue
+            pos, rot = pk.world(e['id'])
+            he = c.get('halfExtents', [0.3, 0.3, 0.3])
+            ctr = c.get('center', [0, 0, 0])
+            lo = [ctr[i] - he[i] for i in range(3)]
+            hi = [ctr[i] + he[i] for i in range(3)]
+            self.structure.append(hf.Box.of(pos, rot, self.wscale(e['id']), lo, hi, tag=e['name']))
+        self.boxes = {i: self.prop_boxes(i) for i in self.props if i not in pk.gone}
+        self.zones = self.door_zones()
+        # pairs that already touch in the pack's own layout (a chair tucked under its table): left as they are
+        self.touching = {}
+        ids = [i for i in self.boxes if not stem(self.props[i]).startswith(FIXED)]
+        for n, i in enumerate(ids):
+            for j in ids[n + 1:]:
+                if self.hits(self.boxes[i], self.boxes[j], 0.0):
+                    self.touching[(min(i, j), max(i, j))] = self.depth(self.boxes[i], self.boxes[j])
+        self.riders = self.find_riders()
+
+    def _prop_of(self, i):
+        while i in self.pk.by:
+            if i in self.props:
+                return i
+            i = self.pk.by[i]['parentId']
+        return None
+
+    def wscale(self, i):
+        sc = [1.0, 1.0, 1.0]
+        while i in self.pk.by:
+            s = self.pk.by[i].get('scale', [1, 1, 1])
+            sc = [sc[k] * s[k] for k in range(3)]
+            i = self.pk.by[i]['parentId']
+        return sc
+
+    def prop_boxes(self, i):
+        """The prop's models as boxes (its own and its children's)."""
+        out, todo = [], [i]
+        while todo:
+            j = todo.pop()
+            if j in self.pk.gone:
+                continue
+            e = self.pk.by[j]
+            todo.extend(self.pk.kids.get(j, []))
+            b = self.B.get(e.get('path', ''))
+            if e['kind'] == 'models' and b and e.get('active', True):
+                pos, rot = self.pk.world(j)
+                out.append(hf.Box.of(pos, rot, self.wscale(j), b[0], b[1], tag=e['name']))
+        return out
+
+    @staticmethod
+    def depth(xs, ys):
+        return max((hf.penetration(a, b) for a in xs for b in ys), default=0.0)
+
+    @staticmethod
+    def hits(xs, ys, margin):
+        return any(hf.overlap(a, b, margin) for a in xs for b in ys)
+
+    def door_zones(self):
+        """A keep-out per doorway: the opening's width (plus a hand) by the leaf's width either side of the wall - the
+        swing and the way through."""
+        zones = []
+        for e in self.pk.ents:
+            o, c = e.get('Openable'), e.get('collider')
+            if not o or not c or e['id'] in self.pk.gone:
+                continue
+            he = c['halfExtents']
+            if he[1] * 2 < 1.8 or he[0] * 2 < 0.6:
+                continue
+            pos, rot = self.pk.world(e['id'])
+            ctr = c.get('center', [0, 0, 0])
+            w = he[0] * 2
+            mid = hf.qrot(rot, ctr)
+            cx, cz = pos[0] + mid[0], pos[2] + mid[2]
+            along, through = hf.qrot(rot, (1, 0, 0)), hf.qrot(rot, (0, 0, 1))
+            hw, hd = w / 2 + 0.12, w + 0.15
+            pts = [(cx + along[0] * sa * hw + through[0] * sd * hd, cz + along[2] * sa * hw + through[2] * sd * hd)
+                   for sa in (-1, 1) for sd in (-1, 1)]
+            y0 = pos[1] + mid[1] - he[1]
+            zones.append(hf.Zone(hf.hull(pts), y0, y0 + 2.2, self.pk.by[e['parentId']]['name']))
+        # the stairs: their run and a landing at each end
+        for e in self.pk.ents:
+            if e['kind'] == 'models' and e['name'].startswith('Stair') and e['id'] not in self.pk.gone:
+                b = self.B.get(e.get('path', ''))
+                if not b:
+                    continue
+                pos, rot = self.pk.world(e['id'])
+                box = hf.Box.of(pos, rot, self.wscale(e['id']), b[0], b[1])
+                pts = box.xz()
+                cx = sum(p[0] for p in pts) / len(pts)
+                cz = sum(p[1] for p in pts) / len(pts)
+                grown = [(cx + (p[0] - cx) * 1.0 + math.copysign(0.9, p[0] - cx),
+                          cz + (p[1] - cz) * 1.0 + math.copysign(0.9, p[1] - cz)) for p in pts]
+                zones.append(hf.Zone(hf.hull(grown), box.ylo() - 0.5, box.yhi() + 2.0, e['name']))
+        return zones
+
+    def find_riders(self):
+        """What stands on what: a prop whose underside is on another's top (a lamp on a side table) rides it."""
+        riders = {}
+        for i, bs in self.boxes.items():
+            e = self.props[i]
+            if not bs or stem(e).startswith(FIXED):
+                continue
+            bottom = min(b.ylo() for b in bs)
+            floor = FLOOR_1 if bottom < 3.0 else FLOOR_2
+            if bottom < floor + 0.06:
+                continue
+            best, top = None, -1e9
+            for j, cs in self.boxes.items():
+                if j == i or not cs or stem(self.props[j]).startswith(('Carpet_', 'Curtains_')):
+                    continue
+                for c in cs:
+                    t = c.yhi()
+                    if bottom - 0.08 <= t <= bottom + 0.05 and t > top and \
+                            any(hf.poly_overlap(c.xz(), b.xz()) for b in bs):
+                        best, top = j, t
+            if best is not None:
+                riders.setdefault(best, []).append(i)
+        return riders
+
+    def clear(self, i, boxes, ignore=(), zones=True, margin=0.008, nested=True):
+        """Can prop `i` stand as `boxes`? Not into the walls, other furniture, or a doorway it wasn't already in. With
+        `nested`, a piece the pack had it tucked into (a chair under its table) may stay as deep, no deeper."""
+        for b in boxes:
+            for s in self.structure:
+                if hf.overlap(b, s, margin):
+                    return False
+        skip = set(ignore) | {i}
+        for j, cs in self.boxes.items():
+            if j in skip or stem(self.props[j]).startswith(('Carpet_', 'Curtains_')):
+                continue
+            was = self.touching.get((min(i, j), max(i, j)))
+            if was is not None and nested:
+                if self.depth(boxes, cs) > was + 0.005:
+                    return False
+            elif self.hits(boxes, cs, margin):
+                return False
+        if zones:
+            before = self.boxes.get(i, [])
+            for z in self.zones:
+                if any(z.hits(b) for b in boxes) and not any(z.hits(b) for b in before):
+                    return False
+        return True
+
+    def free_spot(self, boxes, others, margin=0.006):
+        """Can a new piece (clutter) go here? Clear of the walls, the furniture, the doorways, the stairs and `others`."""
+        for b in boxes:
+            for s in self.structure:
+                if hf.overlap(b, s, margin):
+                    return False
+            for z in self.zones:
+                if z.hits(b):
+                    return False
+            for j, cs in self.boxes.items():
+                if stem(self.props[j]).startswith('Carpet_'):
+                    continue
+                if any(hf.overlap(b, c, margin) for c in cs):
+                    return False
+            if any(hf.overlap(b, o, margin) for o in others):
+                return False
+        return True
+
+    def near_wall(self, x, z, y, d):
+        probe = hf.Box([x, y + 0.3, z], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [d, 0.2, d])
+        return any(hf.overlap(probe, s) for s in self.structure)
+
+    # --- moving a prop rigidly, its riders with it
+    def set_world(self, i, pos, rot):
+        e = self.pk.by[i]
+        ppos, prot = self.pk.world(e['parentId']) if e['parentId'] in self.pk.by else ([0, 0, 0], [0, 0, 0, 1])
+        inv = hf.qinv(prot)
+        lp = hf.qrot(inv, [pos[k] - ppos[k] for k in range(3)])
+        e['position'] = [round(v, 4) for v in lp]
+        e['rotation'] = [round(v, 6) for v in hf.qmul(inv, rot)]
+
+    def group_of(self, i):
+        out, todo = [], [i]
+        while todo:
+            j = todo.pop()
+            out.append(j)
+            todo.extend(r for r in self.riders.get(j, []) if r not in self.pk.gone)
+        return out
+
+    def transform_group(self, ids, pivot, turn_q, shift, lift=0.0):
+        """Turn the group about `pivot` (world) by `turn_q`, then shift; returns the old placements to undo with."""
+        old = {}
+        for j in ids:
+            pos, rot = self.pk.world(j)
+            old[j] = (list(self.pk.by[j]['position']), list(self.pk.by[j]['rotation']))
+            rel = [pos[k] - pivot[k] for k in range(3)]
+            v = hf.qrot(turn_q, rel)
+            npos = [pivot[0] + v[0] + shift[0], pivot[1] + v[1] + lift, pivot[2] + v[2] + shift[1]]
+            self.set_world(j, npos, hf.qmul(turn_q, rot))
+        return old
+
+    def undo(self, old):
+        for j, (p, r) in old.items():
+            self.pk.by[j]['position'], self.pk.by[j]['rotation'] = p, r
+
+    def centre(self, boxes):
+        xs = [b.c[0] for b in boxes]
+        zs = [b.c[2] for b in boxes]
+        return [sum(xs) / len(xs), 0.0, sum(zs) / len(zs)]
+
+
+def open_sealed_doors(pk, notes):
+    """The pack hangs one upstairs door on a solid wall piece, sealing the room behind it: any door whose wall has no
+    opening gets the door wall of the same length in its place (same transform, its own colliders round the opening)."""
+    walls = [e for e in pk.ents if e['kind'] == 'models' and re.match(r'Wall_Interior_\d+x$', stem(e))]
+    fixed = 0
+    next_id = max(pk.by) + 1
+    for leaf in pk.ents:
+        if not leaf.get('Openable') or not pk.by[leaf['parentId']]['name'].startswith('Door_interior'):
+            continue
+        lp, _ = pk.world(leaf['id'])
+        for w in walls:
+            if w['id'] in pk.gone:
+                continue
+            wp, wr = pk.world(w['id'])
+            loc = qrot(hf.qinv(wr), [lp[k] - wp[k] for k in range(3)])
+            length = float(re.match(r'Wall_Interior_(\d+)x', w['name']).group(1)) * 0.97
+            if not (-0.3 < loc[2] < 0.3 and 0.2 < loc[0] < length - 0.2 and -0.6 < loc[1] < 0.6):
+                continue
+            template = next((e for e in pk.ents if e['name'] == stem(w) + '_door' and e['kind'] == 'models'), None)
+            if not template:
+                continue
+            copy = json.loads(json.dumps(template))
+            copy.update({'id': next_id, 'order': next_id, 'parentId': w['parentId'], 'name': stem(w) + '_door (sealed fix)',
+                         'position': list(w['position']), 'rotation': list(w['rotation'])})
+            if len(w.get('materials', [])) == len(template.get('materials', [])):
+                copy['materials'] = json.loads(json.dumps(w['materials']))
+            pk.ents.append(copy)
+            pk.by[next_id] = copy
+            pk.kids.setdefault(copy['parentId'], []).append(next_id)
+            parent = next_id
+            next_id += 1
+            for cid in pk.kids.get(template['id'], []):
+                c = json.loads(json.dumps(pk.by[cid]))
+                c.update({'id': next_id, 'order': next_id, 'parentId': parent})
+                pk.ents.append(c)
+                pk.by[next_id] = c
+                pk.kids.setdefault(parent, []).append(next_id)
+                next_id += 1
+            pk.remove(w['id'])
+            fixed += 1
+    notes['sealed doors opened'] = fixed
+
+
 def trash_house(pk, rng, notes):
-    """Edits to the pack's own pieces: broken glass, doors left open, furniture knocked about, things taken."""
-    def stem(e):
-        return re.sub(r' \(\d+\)$', '', e['name'])
+    """Edits to the pack's own pieces: broken glass, doors left open, furniture knocked about, things taken. Every move
+    is fitted: nothing goes into a wall, another piece or a doorway, what stood on a piece moves with it (or falls to the
+    floor when it goes over), and whatever is knocked over lies on the floor by its own shape."""
     broken = []
     for e in pk.named(r'Windowglass_singlewindow'):
         if rng.random() < 0.45:
@@ -167,23 +442,25 @@ def trash_house(pk, rng, notes):
             pk.remove(e['id'])
     notes['broken windows'] = len(broken)
 
-    # Doors: the front one stuck ajar, the side one wide open, the rest a mix.
+    # Doors: the front one stuck ajar, the side one wide open, the rest a mix of shut, ajar and open. Ajar is a start
+    # pose (Start Ajar), never a short swing: every door still opens all the way.
     n_open = 0
     for e in pk.ents:
         o = e.get('Openable')
         if not o:
             continue
+        o.pop('Amount', None) if o.get('Amount') == 90.0 else None
         frame = pk.by[e['parentId']]['name']
         if frame.startswith('Door_exterior_paneled'):
-            o.update({'Start Open': True, 'Amount': 38.0})
+            o.update({'Start Open': True, 'Start Ajar': 0.35})
         elif frame.startswith('Door_exterior_white'):
             o['Start Open'] = True
-        else:
+        elif frame.startswith('Door_'):
             u = rng.random()
             if u < 0.45:
                 o['Start Open'] = True
-            elif u < 0.7:
-                o.update({'Start Open': True, 'Amount': round(rng.uniform(18.0, 40.0), 1)})
+            elif u < 0.75:
+                o.update({'Start Open': True, 'Start Ajar': round(rng.uniform(0.2, 0.45), 2)})
         n_open += o.get('Start Open', False)
     notes['doors left open'] = n_open
 
@@ -194,46 +471,172 @@ def trash_house(pk, rng, notes):
         elif e['kind'] == 'models' and stem(e).startswith('D_'):
             e['materials'] = [{'embedded': dict(DEAD_SCREEN)}]
 
-    knocked = moved = taken = crooked = 0
+    # No basement under this house: its pipes go.
     for e in pk.props():
-        if e['kind'] != 'models' or e['id'] in pk.gone:
+        if stem(e).startswith('Basement_pipe'):
+            pk.remove(e['id'])
+
+    # What was worth carrying off goes first, so nothing is fitted round it.
+    taken = 0
+    for e in pk.props():
+        s = stem(e)
+        if e['id'] in pk.gone:
+            continue
+        if (s.startswith('Plant_interior') and rng.random() < 0.5) or \
+                (s.startswith(('D_TV', 'D_radio', 'D_alarmclock')) and rng.random() < 0.65) or \
+                (s.startswith(('KP_', 'LP_vase', 'LP_bowl', 'FP_vase', 'LP_candle')) and rng.random() < 0.4):
+            pk.remove(e['id'])
+            taken += 1
+
+    fit = Fit(pk)
+    knocked = moved = crooked = fell = 0
+
+    # Nothing stands in a doorway or a door's swing, the pack's own layout included: slid out to the nearest clear spot
+    # (along the wall it stood against, as a rule), or taken away.
+    cleared = 0
+    for i in sorted(fit.boxes):
+        e = fit.props[i]
+        if i in pk.gone or not fit.boxes[i] or stem(e).startswith(FIXED):
+            continue
+        if any(i in rs for rs in fit.riders.values()):
+            continue
+        if not any(z.hits(b.shrunk(0.01)) for z in fit.zones for b in fit.boxes[i]):
+            continue
+        group = [j for j in fit.group_of(i) if j not in pk.gone]
+        c = fit.centre(fit.boxes[i])
+        steps = sorted(((dx * 0.1, dz * 0.1) for dx in range(-14, 15) for dz in range(-14, 15)),
+                       key=lambda d: math.hypot(*d))
+        done = False
+        for sh in steps[1:]:
+            old = fit.transform_group(group, c, [0.0, 0.0, 0.0, 1.0], sh)
+            news = {j: fit.prop_boxes(j) for j in group}
+            if all(fit.clear(j, news[j], ignore=group) for j in group) and                     not any(z.hits(b.shrunk(0.01)) for z in fit.zones for bs in news.values() for b in bs):
+                fit.boxes.update(news)
+                done = True
+                break
+            fit.undo(old)
+        if not done:
+            for j in group:
+                pk.remove(j)
+                fit.boxes.pop(j, None)
+        cleared += 1
+    notes['out of doorways'] = cleared
+
+    def floor_of(boxes):
+        return FLOOR_1 if min(b.ylo() for b in boxes) < 3.0 else FLOOR_2
+
+    def refresh(ids):
+        for j in ids:
+            fit.boxes[j] = fit.prop_boxes(j)
+
+    def drop_riders(i):
+        """What stood on a piece that went over: on the floor beside it, lying as it fell, or gone."""
+        nonlocal fell
+        for r in list(fit.riders.get(i, [])):
+            if r in pk.gone:
+                continue
+            for sub in fit.group_of(r)[1:]:
+                pk.remove(sub)
+                fit.boxes.pop(sub, None)
+            placed = False
+            for _ in range(10):
+                bs = fit.boxes[r]
+                c = fit.centre(bs)
+                fl = floor_of(fit.boxes[i])
+                lo_y = min(b.ylo() for b in bs)
+                hi_y = max(b.yhi() for b in bs)
+                wide = max(max(b.h[0], b.h[2]) for b in bs) * 2
+                tall = (hi_y - lo_y) > wide * 1.3
+                a = rng.uniform(0, 2 * math.pi)
+                d = rng.uniform(0.25, 0.7)
+                q = axis_q((0, 1, 0), rng.uniform(0, 360))
+                if tall:
+                    q = qmul(q, axis_q((0, 0, 1), rng.choice((-90.0, 90.0))))
+                # land it: turned about its centre, moved out beside the piece, then set down on the floor
+                pos, rot = pk.world(r)
+                old = {r: (list(pk.by[r]['position']), list(pk.by[r]['rotation']))}
+                v = hf.qrot(q, [pos[k] - c[k] for k in range(3)])
+                fit.set_world(r, [c[0] + v[0] + math.cos(a) * d, pos[1], c[2] + v[2] + math.sin(a) * d], qmul(q, rot))
+                bs2 = fit.prop_boxes(r)
+                dy = fl + 0.002 - min(b.ylo() for b in bs2)
+                p2, r2 = pk.world(r)
+                fit.set_world(r, [p2[0], p2[1] + dy, p2[2]], r2)
+                bs2 = fit.prop_boxes(r)
+                if fit.clear(r, bs2, ignore=(i,), zones=True, nested=False):
+                    fit.boxes[r] = bs2
+                    placed = True
+                    fell += 1
+                    break
+                fit.undo(old)
+            if not placed:
+                pk.remove(r)
+                fit.boxes.pop(r, None)
+            fit.riders[i] = [x for x in fit.riders.get(i, []) if x != r]
+
+    def knock(i, axis, tries=8):
+        """Over on its side about its own `axis`, its centre about where it stood, lying on the floor."""
+        bs0 = fit.boxes[i]
+        fl = floor_of(bs0)
+        c = fit.centre(bs0)
+        pos, rot = pk.world(i)
+        for _ in range(tries):
+            q = qmul(axis_q((0, 1, 0), rng.uniform(-50, 50)), qmul(rot, qmul(axis_q(axis, rng.choice((-90.0, 90.0))),
+                                                                               hf.qinv(rot))))
+            rel = [pos[k] - c[k] for k in range(3)]
+            v = hf.qrot(q, rel)
+            sh = (rng.uniform(-0.2, 0.2), rng.uniform(-0.2, 0.2))
+            old = {i: (list(pk.by[i]['position']), list(pk.by[i]['rotation']))}
+            fit.set_world(i, [c[0] + v[0] + sh[0], pos[1], c[2] + v[2] + sh[1]], qmul(q, rot))
+            bs = fit.prop_boxes(i)
+            p2, r2 = pk.world(i)
+            fit.set_world(i, [p2[0], p2[1] + fl + 0.002 - min(b.ylo() for b in bs), p2[2]], r2)
+            bs = fit.prop_boxes(i)
+            if fit.clear(i, bs, ignore=fit.riders.get(i, []), nested=False):
+                fit.boxes[i] = bs
+                drop_riders(i)
+                return True
+            fit.undo(old)
+        return False
+
+    def shove(i, tries=8):
+        """Pushed and turned a little, about its own middle, with what stands on it."""
+        group = [j for j in fit.group_of(i) if j not in pk.gone]
+        c = fit.centre(fit.boxes[i])
+        for k in range(tries):
+            f = 1.0 - k / tries
+            turn = rng.uniform(6.0, 18.0) * rng.choice((-1, 1)) * f
+            sh = (rng.uniform(-0.3, 0.3) * f, rng.uniform(-0.3, 0.3) * f)
+            old = fit.transform_group(group, c, axis_q((0, 1, 0), turn), sh)
+            news = {j: fit.prop_boxes(j) for j in group}
+            if all(fit.clear(j, news[j], ignore=group) for j in group):
+                fit.boxes.update(news)
+                return True
+            fit.undo(old)
+        return False
+
+    for e in pk.props():
+        i = e['id']
+        if i in pk.gone or e['kind'] != 'models' or not fit.boxes.get(i):
             continue
         s = stem(e)
-        pos, rot = e['position'], e['rotation']
+        if any(i in rs for rs in fit.riders.values()):
+            continue                    # rides something: goes where that goes
         if s.startswith(('Kitchen_chair_wooden', 'Kitchen_chair_fabric')) and rng.random() < 0.6:
-            # on its side: rolled about its own forward axis, lifted half its width
-            e['rotation'] = [round(v, 6) for v in qmul(rot, axis_q((0, 0, 1), rng.choice((-90.0, 90.0))))]
-            e['rotation'] = [round(v, 6) for v in qmul(axis_q((0, 1, 0), rng.uniform(-40, 40)), e['rotation'])]
-            e['position'] = [pos[0], round(pos[1] + 0.215, 3), pos[2]]
-            knocked += 1
+            knocked += knock(i, (0, 0, 1))
         elif s == 'Lamp_stand' and rng.random() < 0.7:
-            e['rotation'] = [round(v, 6) for v in qmul(rot, axis_q((1, 0, 0), 90.0))]
-            e['position'] = [pos[0], round(pos[1] + 0.19, 3), pos[2]]
-            knocked += 1
+            knocked += knock(i, (1, 0, 0))
         elif s.startswith(('Sidetable_small', 'Sidetable_A', 'Sidetable_B', 'Bedstool')) and rng.random() < 0.45:
-            e['rotation'] = [round(v, 6) for v in qmul(rot, axis_q((0, 0, 1), rng.choice((-90.0, 90.0))))]
-            e['position'] = [pos[0], round(pos[1] + 0.25, 3), pos[2]]
-            knocked += 1
-        elif s.startswith('Plant_interior') and rng.random() < 0.5:
-            pk.remove(e['id'])
-            taken += 1
+            knocked += knock(i, (0, 0, 1))
         elif s.startswith(('Couch_', 'Chair_leather', 'Sidetable', 'Kitchen_table', 'Nightstand', 'Bedstool')):
-            turn, shove = rng.uniform(-22.0, 22.0), (rng.uniform(-0.35, 0.35), rng.uniform(-0.35, 0.35))
-            e['rotation'] = [round(v, 6) for v in qmul(axis_q((0, 1, 0), turn), rot)]
-            e['position'] = [round(pos[0] + shove[0], 3), pos[1], round(pos[2] + shove[1], 3)]
-            moved += 1
-        elif s.startswith('Painting_') and not s.startswith(('Painting_stand', 'Painting_standphoto')):
-            if rng.random() < 0.45:
-                e['rotation'] = [round(v, 6) for v in qmul(rot, axis_q((0, 0, 1), rng.choice((-1, 1)) *
-                                                                       rng.uniform(5.0, 13.0)))]
+            moved += shove(i)
+        elif s.startswith(('Painting_', 'Mirror')) and not s.startswith(('Painting_stand', 'Painting_standphoto')):
+            if rng.random() < 0.4:
+                e['rotation'] = [round(v, 6) for v in qmul(e['rotation'], axis_q((0, 0, 1), rng.choice((-1, 1)) *
+                                                                                  rng.uniform(2.5, 7.0)))]
                 crooked += 1
-        elif s.startswith(('D_TV', 'D_radio', 'D_alarmclock')) and rng.random() < 0.65:
-            pk.remove(e['id'])          # the things worth carrying off
-            taken += 1
-        elif s.startswith(('KP_', 'LP_vase', 'LP_bowl', 'FP_vase', 'LP_candle')) and rng.random() < 0.4:
-            pk.remove(e['id'])
-            taken += 1
-    notes.update({'knocked over': knocked, 'shoved': moved, 'taken': taken, 'crooked pictures': crooked})
+    notes.update({'knocked over': knocked, 'shoved': moved, 'taken': taken, 'crooked pictures': crooked,
+                  'fell off': fell})
+    pk.fit = fit
     return broken
 
 
@@ -253,101 +656,62 @@ def floor_rects(pk):
     return out
 
 
-def blockers(pk):
-    """Pack-space XZ boxes (x0, x1, z0, z1, y0, y1) that clutter keeps off: every collider and the stairs."""
-    out = []
-    for e in pk.ents:
-        c = e.get('collider')
-        if not c or e['id'] in pk.gone or c.get('isTrigger'):
-            continue
-        if any(e['name'].startswith(p) for p in ('Floor_', 'Ceiling_', 'Porch_floor', 'Carpet')):
-            continue
-        pos, rot = pk.world(e['id'])
-        ctr, he = c.get('center', [0, 0, 0]), c.get('halfExtents', [0.3, 0.3, 0.3])
-        sc = e.get('scale', [1, 1, 1])
-        pts = []
-        for sx in (-1, 1):
-            for sz in (-1, 1):
-                for sy in (-1, 1):
-                    v = qrot(rot, ((ctr[0] + sx * he[0]) * sc[0], (ctr[1] + sy * he[1]) * sc[1],
-                                   (ctr[2] + sz * he[2]) * sc[2]))
-                    pts.append((pos[0] + v[0], pos[1] + v[1], pos[2] + v[2]))
-        out.append((min(p[0] for p in pts), max(p[0] for p in pts), min(p[2] for p in pts), max(p[2] for p in pts),
-                    min(p[1] for p in pts), max(p[1] for p in pts)))
-    return out
+# Clutter: (prefab, weight, how it lies, against a wall only)
+CLUTTER = [(PROPS_IN + 'Newspaper.prefab', 5, 'flat', False), (PROPS_IN + 'LP_magazine.prefab', 4, 'flat', False),
+           (PROPS_IN + 'Book_A.prefab', 2, 'book', False), (PROPS_IN + 'Book_B.prefab', 2, 'book', False),
+           (PROPS_IN + 'Book_C.prefab', 2, 'book', False), (PROPS_IN + 'Garage_cardboardbox.prefab', 2, 'up', True),
+           (PROPS_IN + 'Garage_paperbag.prefab', 2, 'side', True), (PROPS_IN + 'KP_plate.prefab', 2, 'up', False),
+           (PROPS_IN + 'KP_glass_black.prefab', 1, 'side', False), (PROPS_IN + 'Basement_box.prefab', 1, 'up', True),
+           (PROPS_IN + 'Garage_plastic_box.prefab', 1, 'up', True), (PROPS_OUT + 'Trashbag.prefab', 2, 'up', True),
+           (PROPS_IN + 'Garage_paintbucket.prefab', 1, 'side', True)]
+LIE = {'flat': (0.0, 0.0), 'up': (0.0, 0.0), 'book': (-90.0, 0.0), 'side': (0.0, 90.0)}
 
 
-def free(blocks, x, z, y, r):
-    for x0, x1, z0, z1, y0, y1 in blocks:
-        if y1 < y + 0.03 or y0 > y + 1.2:
-            continue
-        if x0 - r < x < x1 + r and z0 - r < z < z1 + r:
-            return False
+def lay_down(s, fit, g, path, x, z, y, yaw, tilt, scale, others):
+    """Stamp a clutter prefab resting on the floor at (x, z) by its own shape, if it fits there."""
+    b = fit.B.get(path)
+    if not b:
+        return False
+    rot = k.euler_quat(yaw, tilt[0], tilt[1])
+    sc = (scale, scale, scale)
+    lift = hf.rest_lift(b[0], b[1], rot, sc)
+    box = hf.Box.of((x, y + lift + 0.001, z), rot, sc, b[0], b[1])
+    if not fit.free_spot([box], others):
+        return False
+    s.stamp(path, g, (round(x, 3), round(y + lift + 0.001, 4), round(z, 3)), yaw=round(yaw, 1), tilt=tilt,
+            scale=scale)
+    others.append(box)
     return True
 
 
-# Clutter: (prefab, weight, lie flat (book pitch), sink below the floor)
-CLUTTER = [(PROPS_IN + 'Newspaper.prefab', 5, False), (PROPS_IN + 'LP_magazine.prefab', 4, False),
-           (PROPS_IN + 'Book_A.prefab', 2, True), (PROPS_IN + 'Book_B.prefab', 2, True),
-           (PROPS_IN + 'Book_C.prefab', 2, True), (PROPS_IN + 'Garage_cardboardbox.prefab', 3, False),
-           (PROPS_IN + 'Garage_paperbag.prefab', 3, 'side'), (PROPS_IN + 'KP_plate.prefab', 2, False),
-           (PROPS_IN + 'KP_glass_black.prefab', 2, 'side'), (PROPS_IN + 'Basement_box.prefab', 2, False),
-           (PROPS_IN + 'Garage_plastic_box.prefab', 1, False), (PROPS_OUT + 'Trashbag.prefab', 2, False),
-           (PROPS_IN + 'Garage_paintbucket.prefab', 1, 'side')]
-
-
 def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
-    """Rubbish across the floors, thicker against the walls; leaves and needles where the windows are out."""
-    rects, blocks = floor_rects(pk), blockers(pk)
-    usable = [(p, w, f) for p, w, f in CLUTTER if s.prefab(p)]
-    bag = [c for c in usable for _ in range(c[1])]
+    """Rubbish where it would end up - kicked against the walls and into the corners, piled by the furniture - with
+    the doorways, door swings and stairs left clear; leaves and needles where the windows are out."""
+    fit = pk.fit
+    rects = floor_rects(pk)
+    usable = [c for c in CLUTTER if s.prefab(c[0]) and c[0] in fit.B]
+    loose = [c for c in usable if not c[3] for _ in range(c[1])]
+    heavy = [c for c in usable if c[3] for _ in range(c[1])]
     g = s.empty('Rubbish', lay, (0, 0, 0), static=True)
-    placed = 0
+    placed = []
     for x0, x1, z0, z1, y in rects:
         area = (x1 - x0) * (z1 - z0)
-        for _ in range(int(area * 0.95)):
-            # thicker toward the tile's edges, where things get kicked
-            u, v = rng.random(), rng.random()
-            if rng.random() < 0.5:
-                if rng.random() < 0.5:
-                    u = rng.choice((0.05, 0.95)) + rng.uniform(-0.04, 0.04)
-                else:
-                    v = rng.choice((0.05, 0.95)) + rng.uniform(-0.04, 0.04)
-            x, z = x0 + (x1 - x0) * u, z0 + (z1 - z0) * v
-            path, _w, flat = rng.choice(bag)
-            if not free(blocks, x, z, y, 0.12):
-                continue
-            yaw = rng.uniform(0, 360)
-            tilt, lift = (0.0, 0.0), 0.0
-            if flat is True:
-                tilt, lift = (-90.0, 0.0), 0.016
-            elif flat == 'side':
-                tilt, lift = (0.0, 90.0), 0.06
-            s.stamp(path, g, (round(x, 3), round(y + lift, 3), round(z, 3)), yaw=round(yaw, 1), tilt=tilt,
-                    scale=round(rng.uniform(0.9, 1.1), 2))
-            placed += 1
-    notes['rubbish'] = placed
+        for _ in range(int(area * 0.9)):
+            x, z = rng.uniform(x0 + 0.1, x1 - 0.1), rng.uniform(z0 + 0.1, z1 - 0.1)
+            walled = fit.near_wall(x, z, y, 0.45)
+            if walled and heavy and rng.random() < 0.35:
+                path, _w, how, _h = rng.choice(heavy)
+            elif walled or rng.random() < 0.25:
+                path, _w, how, _h = rng.choice(loose)
+            else:
+                continue                # the middle of a room stays mostly bare: things get kicked to the sides
+            lay_down(s, fit, g, path, x, z, y, rng.uniform(0, 360), LIE[how], round(rng.uniform(0.92, 1.08), 2),
+                     placed)
+    notes['rubbish'] = len(placed)
 
-    # Leaves and dead needles blown in under the broken windows and round the open doors.
-    leaves = s.usable(forest_litter)
-    n = 0
-    for pos, rot, _plain in broken:
-        y = FLOOR_1 if pos[1] < 3.0 else FLOOR_2
-        nrm = qrot(rot, (0, 0, 1))
-        c = (pos[0], pos[2])
-        for side in (-1, 1):            # whichever side is indoors is where the floor is
-            for _ in range(rng.randint(2, 4)):
-                d = rng.uniform(0.3, 1.4)
-                x, z = c[0] + nrm[0] * side * d + rng.uniform(-0.5, 0.5), c[1] + nrm[2] * side * d + rng.uniform(-0.5, 0.5)
-                if not any(r[0] < x < r[1] and r[2] < z < r[3] and abs(r[4] - y) < 0.3 for r in rects):
-                    continue
-                if not free(blocks, x, z, y, 0.05) or not leaves:
-                    continue
-                s.stamp(rng.choice(leaves), g, (round(x, 3), round(y + 0.005, 3), round(z, 3)),
-                        yaw=round(rng.uniform(0, 360), 1), scale=round(rng.uniform(0.5, 0.8), 2))
-                n += 1
     # Books swept off every bookshelf onto the floor in front of it.
-    books = [p for p in (PROPS_IN + 'Book_A.prefab', PROPS_IN + 'Book_B.prefab', PROPS_IN + 'Book_C.prefab') if s.prefab(p)]
+    books = [p for p in (PROPS_IN + 'Book_A.prefab', PROPS_IN + 'Book_B.prefab', PROPS_IN + 'Book_C.prefab')
+             if s.prefab(p) and p in fit.B]
     nb = 0
     for e in pk.props():
         if e['id'] in pk.gone or not e['name'].startswith(('Bookshelf', 'Book_set_bookshelf')):
@@ -355,45 +719,62 @@ def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
         pos, rot = pk.world(e['id'])
         y = FLOOR_1 if pos[1] < 3.0 else FLOOR_2
         fwd = qrot(rot, (0, 0, 1))
-        for _ in range(rng.randint(8, 14)):
-            d, side = rng.uniform(0.35, 1.3), rng.uniform(-0.8, 0.8)
-            x = pos[0] + fwd[0] * d - fwd[2] * side
-            z = pos[2] + fwd[2] * d + fwd[0] * side
+        for _ in range(rng.randint(10, 16)):
+            d, side = rng.uniform(0.3, 1.0), rng.uniform(-0.7, 0.7)
             for sign in (1, -1):        # in front of it, whichever way its front faces
-                xx, zz = pos[0] + (x - pos[0]) * sign, pos[2] + (z - pos[2]) * sign
-                if free(blocks, xx, zz, y, 0.05) and books:
-                    s.stamp(rng.choice(books), g, (round(xx, 3), round(y + 0.016, 3), round(zz, 3)),
-                            yaw=round(rng.uniform(0, 360), 1), tilt=(-90.0, 0.0) if rng.random() < 0.8 else (0.0, 90.0))
+                x = pos[0] + (fwd[0] * d - fwd[2] * side) * sign
+                z = pos[2] + (fwd[2] * d + fwd[0] * side) * sign
+                if books and lay_down(s, fit, g, rng.choice(books), x, z, y, rng.uniform(0, 360),
+                                      LIE['book'] if rng.random() < 0.8 else LIE['side'], 1.0, placed):
                     nb += 1
                     break
     notes['books on the floor'] = nb
-    # Dead leaves and needles all through the ground floor, drifted against the walls.
+
+    # Leaves and dead needles: blown in under the broken windows, drifted along the ground floor's walls.
+    leaves = s.usable(forest_litter)
+    n = 0
+
+    def leaf(x, z, y, scale):
+        nonlocal n
+        probe = hf.Box([x, y + 0.03, z], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [0.12 * scale, 0.03, 0.12 * scale])
+        if not leaves or any(hf.overlap(probe, b) for b in fit.structure):
+            return
+        if any(z_.hits(probe) for z_ in fit.zones if z_.name.startswith('Stair')):
+            return
+        s.stamp(rng.choice(leaves), g, (round(x, 3), round(y + 0.004, 3), round(z, 3)),
+                yaw=round(rng.uniform(0, 360), 1), scale=scale)
+        n += 1
+    for pos, rot, _plain in broken:
+        y = FLOOR_1 if pos[1] < 3.0 else FLOOR_2
+        nrm = qrot(rot, (0, 0, 1))
+        for side in (-1, 1):            # whichever side is indoors is where the floor is
+            for _ in range(rng.randint(2, 4)):
+                d = rng.uniform(0.3, 1.4)
+                x, z = pos[0] + nrm[0] * side * d + rng.uniform(-0.5, 0.5), pos[2] + nrm[2] * side * d + rng.uniform(-0.5, 0.5)
+                if any(r[0] < x < r[1] and r[2] < z < r[3] and abs(r[4] - y) < 0.3 for r in rects):
+                    leaf(x, z, y, round(rng.uniform(0.5, 0.8), 2))
     for x0, x1, z0, z1, y in rects:
-        if y > 3.0 or not leaves:
+        if y > 3.0:
             continue
-        for _ in range(int((x1 - x0) * (z1 - z0) * 0.3)):
-            u, v = rng.random(), rng.random()
-            if rng.random() < 0.6:
-                if rng.random() < 0.5:
-                    u = rng.choice((0.03, 0.97))
-                else:
-                    v = rng.choice((0.03, 0.97))
-            x, z = x0 + (x1 - x0) * u, z0 + (z1 - z0) * v
-            if not free(blocks, x, z, y, 0.02):
-                continue
-            s.stamp(rng.choice(leaves), g, (round(x, 3), round(y + 0.004, 3), round(z, 3)),
-                    yaw=round(rng.uniform(0, 360), 1), scale=round(rng.uniform(0.45, 0.75), 2))
-            n += 1
+        for _ in range(int((x1 - x0) * (z1 - z0) * 0.25)):
+            x, z = rng.uniform(x0 + 0.05, x1 - 0.05), rng.uniform(z0 + 0.05, z1 - 0.05)
+            if fit.near_wall(x, z, y, 0.35) or rng.random() < 0.2:
+                leaf(x, z, y, round(rng.uniform(0.45, 0.75), 2))
     notes['leaves blown in'] = n
 
 
-# Decals (docs/DECALS.md): a fixed handful of maps so the house stays well inside the decal texture budget.
+# Decals (docs/DECALS.md): a fixed handful of maps so the house stays well inside the decal texture budget. The plaster
+# is cracked where a settling house cracks - off the corners of the door and window openings, along the wall heads and
+# across the ceilings - with a leak's stain where a ceiling crack has let the rain through.
 D = 'assets/Decals/'
-FLOOR_DECALS = [D + f'Stains/Splatters/DA_Stain_{n}.decal' for n in (591, 592, 593, 594, 595)]
-CEIL_DECALS = [D + f'Stains/LiquidSplatter/DA_LiquidSplatter_{n:03d}.decal' for n in (1, 10, 19)]
+CRACK = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}.decal'
+WALL_CRACKS = [CRACK.format(n) for n in (72, 79, 91)]   # crack lines only (the others carry pale paint flakes)
+CEIL_CRACKS = [CRACK.format(73)]
+LEAK_DECALS = [D + f'Stains/LiquidSplatter/DA_LiquidSplatter_{n:03d}.decal' for n in (1, 10, 19)]
 BASE_DECALS = [D + f'Stains/LiquidSplatter/DA_LiquidSplatter_{n:03d}.decal' for n in (2, 9)]
-PEEL_DECALS = [D + f'Grime/PeelingPaint/DA_PeelingPaint_{n:03d}.decal' for n in (3, 19)]
-MAX_DECALS, MAX_MAPS = 560, 12
+CAR_DECAL = D + 'Stains/Splatters/DA_Stain_591.decal'
+MAX_DECALS, MAX_MAPS = 320, 12
+CRACK_TINT = [0.6, 0.56, 0.5]
 
 
 def decal(s, parent, name, pos, rot, asset, size, seed, opacity, tint=None, sort=2):
@@ -408,74 +789,175 @@ def decal(s, parent, name, pos, rot, asset, size, seed, opacity, tint=None, sort
 
 
 def grime(s, lay, pk, rng, notes):
-    """Filthy floors, water-stained ceilings, damp wall bases and peeling paint."""
-    g = s.empty('Grime', lay, (0, 0, 0), static=True)
+    """Cracked plaster and the odd leak inside; rain streaks and damp on the outside walls only."""
+    fit = pk.fit
+    g = s.empty('Damage', lay, (0, 0, 0), static=True)
     n, maps = 0, set()
-    down = axis_q((1, 0, 0), -90.0)     # -Z to -Y: projects onto the floor below
-    up = axis_q((1, 0, 0), 90.0)
-    for x0, x1, z0, z1, y in floor_rects(pk):
-        area = (x1 - x0) * (z1 - z0)
-        for _ in range(max(1, int(area / 2.2))):
-            x, z = rng.uniform(x0 + 0.3, x1 - 0.3), rng.uniform(z0 + 0.3, z1 - 0.3)
-            w = rng.uniform(1.2, 2.6)
-            a = rng.choice(FLOOR_DECALS)
-            decal(s, g, f'Floor Grime {n:03d}', (round(x, 3), y, round(z, 3)),
-                  qmul(axis_q((0, 1, 0), rng.uniform(0, 360)), down), a, (w, w * rng.uniform(0.7, 1.0), 0.3),
-                  rng.randint(1, 999), rng.uniform(0.8, 1.0), tint=[0.3, 0.26, 0.2])
-            maps.add(a)
-            n += 1
-        ceil = CEIL_1 if y < 3.0 else CEIL_2
-        if rng.random() < 0.7:
-            x, z = rng.uniform(x0 + 0.4, x1 - 0.4), rng.uniform(z0 + 0.4, z1 - 0.4)
-            w = rng.uniform(1.2, 2.6)
-            a = rng.choice(CEIL_DECALS)
-            decal(s, g, f'Ceiling Stain {n:03d}', (round(x, 3), ceil, round(z, 3)),
-                  qmul(axis_q((0, 1, 0), rng.uniform(0, 360)), up), a, (w, w * rng.uniform(0.7, 1.0), 0.28),
-                  rng.randint(1, 999), rng.uniform(0.6, 0.95), tint=[0.62, 0.55, 0.42])
-            maps.add(a)
-            n += 1
-    # The walls: a decal box straddling the wall's thickness marks both faces.
-    for e in pk.named(r'Wall_(Interior|1st|2nd)_(\d|½)'):
-        if e['kind'] != 'models' or e['id'] in pk.gone or rng.random() < 0.12:
-            continue
-        m = re.match(r'Wall_\w+?_([\d½]+)x', e['name'])
-        length = float(m.group(1).replace('½', '.5')) * 0.97 if m else 1.0
-        pos, rot = pk.world(e['id'])
-        floor = FLOOR_1 if pos[1] < 3.0 else FLOOR_2
-        u = rng.uniform(0.3, max(0.31, length - 0.3))
-        if rng.random() < 0.6:
-            a, h, y = rng.choice(BASE_DECALS), rng.uniform(0.5, 0.9), floor + 0.25
-            w = rng.uniform(0.9, 1.8)
-        else:
-            a, h, y = rng.choice(PEEL_DECALS), rng.uniform(0.6, 1.1), floor + rng.uniform(1.0, 2.0)
-            w = rng.uniform(0.5, 1.0)
-        v = qrot(rot, (u, 0.0, -0.097))
-        decal(s, g, f'Wall Grime {n:03d}', (round(pos[0] + v[0], 3), round(y + h * 0.3, 3), round(pos[2] + v[2], 3)),
-              rot, a, (w, h, 0.42), rng.randint(1, 999), rng.uniform(0.8, 1.0), tint=[0.42, 0.37, 0.28])
-        maps.add(a)
+    house_c = (-33.0, -1.0)
+    furniture = [b for i, bs in fit.boxes.items() if not stem(fit.props[i]).startswith('Carpet_') for b in bs]
+
+    def lands_clean(pos, rot, size):
+        """The decal's box must not reach any furniture (a crack smeared across a couch back) or a doorway."""
+        box = hf.Box(list(pos), [qrot(rot, a) for a in ((1, 0, 0), (0, 1, 0), (0, 0, 1))], [v / 2 for v in size])
+        return not any(hf.overlap(box, b, 0.0) for b in furniture)
+
+    def put(name, pos, rot, asset, size, opacity, tint):
+        nonlocal n
+        if n >= MAX_DECALS or not lands_clean(pos, rot, size):
+            return False
+        decal(s, g, f'{name} {n:03d}', tuple(round(v, 3) for v in pos), rot, asset, size, rng.randint(1, 999),
+              opacity, tint=tint)
+        maps.add(asset)
         n += 1
-        if n >= MAX_DECALS:
-            break
-    # Outside: rain streaks down the siding and green-black damp along the foundation, on every outer wall piece.
+        return True
+
+    def wall_faces(e):
+        """The wall's solid pieces (colliders: a door wall's are either side of and over the opening) as (centre, rot,
+        half extents, outward sign or 0 for an inside wall)."""
+        out = []
+        pid = e['id']
+        for cid in [pid] + pk.kids.get(pid, []):
+            c = pk.by[cid].get('collider')
+            if not c or c.get('isTrigger') or 'halfExtents' not in c:
+                continue
+            pos, rot = pk.world(cid)
+            v = qrot(rot, c.get('center', [0, 0, 0]))
+            ctr = [pos[0] + v[0], pos[1] + v[1], pos[2] + v[2]]
+            he = c['halfExtents']
+            outward = 0
+            if e['name'].startswith(('Wall_1st', 'Wall_2nd')):
+                nz = qrot(rot, (0, 0, 1))
+                outward = 1 if nz[0] * (ctr[0] - house_c[0]) + nz[2] * (ctr[2] - house_c[1]) > 0 else -1
+            out.append((ctr, rot, he, outward))
+        return out
+
+    def on_wall(face, u, y, size, twist, asset, opacity, tint, name):
+        """A decal on the wall piece at `u` along it and height y: through both faces of an inside wall, only the inside
+        face of an outer one."""
+        ctr, rot, he, outward = face
+        along = qrot(rot, (1, 0, 0))
+        nz = qrot(rot, (0, 0, 1))
+        r = qmul(rot, axis_q((0, 0, 1), twist))
+        if outward == 0:
+            off, depth = 0.0, he[2] * 2 + 0.06
+        else:
+            off, depth = -outward * he[2], 0.1
+        p = [ctr[0] + along[0] * u + nz[0] * off, y, ctr[2] + along[2] * u + nz[2] * off]
+        return put(name, p, r, asset, (size[0], size[1], depth), opacity, tint)
+
+    # Off the corners of the door openings: the lintel's corners, running up and out.
+    for e in pk.ents:
+        o, c = e.get('Openable'), e.get('collider')
+        if not o or not c or c['halfExtents'][1] * 2 < 1.8 or e['id'] in pk.gone or rng.random() < 0.2:
+            continue
+        pos, rot = pk.world(e['id'])
+        he, cc = c['halfExtents'], c.get('center', [0, 0, 0])
+        frame = pk.by[e['parentId']]['name']
+        for side in rng.sample((-1, 1), rng.choice((1, 1, 2))):
+            v = qrot(rot, (cc[0] + side * (he[0] + 0.25), cc[1] + he[1] + 0.3, cc[2]))
+            p = [pos[0] + v[0], pos[1] + v[1], pos[2] + v[2]]
+            w = rng.uniform(0.55, 0.85)
+            r = qmul(rot, axis_q((0, 0, 1), side * rng.uniform(35.0, 60.0)))
+            exterior = frame.startswith('Door_exterior')
+            depth = 0.2 if exterior else 0.3
+            if exterior:        # the inside face only: from just inside the leaf's plane to past the wall's inner face
+                nz = qrot(rot, (0, 0, 1))
+                inward = -1 if nz[0] * (p[0] - house_c[0]) + nz[2] * (p[2] - house_c[1]) > 0 else 1
+                p = [p[0] + nz[0] * inward * 0.13, p[1], p[2] + nz[2] * inward * 0.13]
+            put('Door Crack', p, r, rng.choice(WALL_CRACKS), (w, w * 0.55, depth), rng.uniform(0.85, 1.0), CRACK_TINT)
+
+    # Off the corners of the windows (inside face).
+    for e in pk.named(r'Windowglass_singlewindow'):
+        if rng.random() < 0.5:
+            continue
+        b = fit.B.get(e.get('path', ''))
+        if not b:
+            continue
+        pos, rot = pk.world(e['id'])
+        box = hf.Box.of(pos, rot, fit.wscale(e['id']), b[0], b[1])
+        if box.h[1] < 0.2:
+            continue
+        nz = box.ax[2] if box.h[2] < box.h[0] else box.ax[0]
+        along = box.ax[0] if box.h[2] < box.h[0] else box.ax[2]
+        ha = max(box.h[0], box.h[2])
+        inward = -1 if nz[0] * (box.c[0] - house_c[0]) + nz[2] * (box.c[2] - house_c[1]) > 0 else 1
+        sa, sy = rng.choice((-1, 1)), rng.choice((-1, 1))
+        p = [box.c[0] + along[0] * sa * (ha + 0.22) + nz[0] * inward * 0.14, box.c[1] + sy * (box.h[1] + 0.22),
+             box.c[2] + along[2] * sa * (ha + 0.22) + nz[2] * inward * 0.14]
+        yaw = math.degrees(math.atan2(-nz[2], nz[0])) - 90.0
+        r = qmul(axis_q((0, 1, 0), yaw), axis_q((0, 0, 1), sa * sy * rng.uniform(30.0, 55.0)))
+        w = rng.uniform(0.5, 0.8)
+        put('Window Crack', p, r, rng.choice(WALL_CRACKS), (w, w * 0.55, 0.12), rng.uniform(0.85, 1.0), CRACK_TINT)
+
+    # Along the wall heads, and the odd long crack down a wall.
+    for e in pk.named(r'Wall_(Interior|1st|2nd)_'):
+        if e['kind'] != 'models' or e['id'] in pk.gone:
+            continue
+        for face in wall_faces(e):
+            ctr, rot, he, outward = face
+            if he[0] < 0.35 or he[1] < 0.9:
+                continue
+            ceil = CEIL_1 if ctr[1] < 3.4 else CEIL_2
+            u = rng.uniform(-he[0] + 0.3, he[0] - 0.3)
+            w = rng.uniform(0.6, min(1.2, he[0] * 2 - 0.2))
+            if rng.random() < 0.25:
+                on_wall(face, u, ceil - 0.16, (w, 0.3), rng.uniform(-8, 8) + rng.choice((0, 180)),
+                        rng.choice(WALL_CRACKS), rng.uniform(0.8, 0.95), CRACK_TINT, 'Wall Head Crack')
+            elif rng.random() < 0.16:
+                floor = FLOOR_1 if ctr[1] < 3.4 else FLOOR_2
+                on_wall(face, u, floor + rng.uniform(1.2, 2.1), (rng.uniform(0.7, 1.1), 0.45),
+                        rng.uniform(55, 125), rng.choice(WALL_CRACKS), rng.uniform(0.8, 0.95), CRACK_TINT, 'Wall Crack')
+
+    # Across the ceilings, a leak's stain at the end of some of them - most often upstairs, under the roof.
+    up = axis_q((1, 0, 0), 90.0)
+    lamps = [pk.world(e['id'])[0] for e in pk.named(r'Lamp_(ceiling|chandelier|bedroom|kitchen)')]
+    for x0, x1, z0, z1, y in floor_rects(pk):
+        upstairs = y > 3.0
+        if rng.random() > (0.65 if upstairs else 0.4) or x1 - x0 < 1.6 or z1 - z0 < 1.6:
+            continue
+        ceil = CEIL_2 if upstairs else CEIL_1
+        for _ in range(6):
+            x, z = rng.uniform(x0 + 0.6, x1 - 0.6), rng.uniform(z0 + 0.6, z1 - 0.6)
+            if all(math.hypot(x - l[0], z - l[2]) > 0.9 for l in lamps):
+                break
+        else:
+            continue
+        yaw = rng.uniform(0, 360)
+        w = rng.uniform(1.0, 1.7)
+        if put('Ceiling Crack', (x, ceil, z), qmul(axis_q((0, 1, 0), yaw), up), rng.choice(CEIL_CRACKS),
+               (w, w * 0.6, 0.12), rng.uniform(0.85, 1.0), CRACK_TINT) and rng.random() < (0.6 if upstairs else 0.3):
+            a = math.radians(yaw)
+            ex, ez = x + math.cos(a) * w * 0.35, z - math.sin(a) * w * 0.35
+            sw = rng.uniform(0.55, 0.95)
+            put('Leak Stain', (ex, ceil, ez), qmul(axis_q((0, 1, 0), rng.uniform(0, 360)), up),
+                rng.choice(LEAK_DECALS), (sw, sw * rng.uniform(0.75, 1.0), 0.1), rng.uniform(0.55, 0.8),
+                [0.62, 0.55, 0.42])
+
+    # Outside: rain streaks down the siding and green-black damp along the foundation, on the outer face only.
     for e in pk.named(r'Wall_(1st|2nd)_'):
         if e['kind'] != 'models' or e['id'] in pk.gone or n >= MAX_DECALS - 2:
             continue
         m = re.match(r'Wall_\w+?_([\d½]+)x', e['name'])
         length = float(m.group(1).replace('½', '.5')) * 0.97 if m else 1.0
         pos, rot = pk.world(e['id'])
-        v = qrot(rot, (length / 2, 0.0, -0.097))
+        nz = qrot(rot, (0, 0, 1))
+        v = qrot(rot, (length / 2, 0.0, 0.0))
         cx, cz = pos[0] + v[0], pos[2] + v[2]
+        outward = 1 if nz[0] * (cx - house_c[0]) + nz[2] * (cz - house_c[1]) > 0 else -1
+        ox, oz = cx + nz[0] * outward * 0.11, cz + nz[2] * outward * 0.11
         if pos[1] < 3.0:
-            decal(s, g, f'Foundation Damp {n:03d}', (round(cx, 3), pos[1] + 0.1, round(cz, 3)), rot,
-                  rng.choice(BASE_DECALS), (length + 0.3, 1.0, 0.5), rng.randint(1, 999), rng.uniform(0.7, 0.95),
+            decal(s, g, f'Foundation Damp {n:03d}', (round(ox, 3), pos[1] + 0.1, round(oz, 3)), rot,
+                  rng.choice(BASE_DECALS), (length + 0.3, 1.0, 0.14), rng.randint(1, 999), rng.uniform(0.7, 0.95),
                   tint=[0.22, 0.27, 0.16])
+            maps.update(BASE_DECALS)
             n += 1
-        if rng.random() < 0.7:
-            decal(s, g, f'Rain Streak {n:03d}', (round(cx, 3), pos[1] + rng.uniform(1.6, 2.2), round(cz, 3)), rot,
-                  rng.choice(CEIL_DECALS), (length * rng.uniform(0.6, 1.0), rng.uniform(1.8, 2.6), 0.5),
+        if rng.random() < 0.6:
+            decal(s, g, f'Rain Streak {n:03d}', (round(ox, 3), pos[1] + rng.uniform(1.6, 2.2), round(oz, 3)), rot,
+                  rng.choice(LEAK_DECALS), (length * rng.uniform(0.6, 1.0), rng.uniform(1.8, 2.6), 0.14),
                   rng.randint(1, 999), rng.uniform(0.6, 0.9), tint=[0.4, 0.38, 0.3])
+            maps.update(LEAK_DECALS)
             n += 1
-    maps |= set(BASE_DECALS + CEIL_DECALS)
+    maps.add(CAR_DECAL)
     assert n <= MAX_DECALS and len(maps) <= MAX_MAPS, (n, len(maps))
     notes['decals'] = n
 
@@ -516,9 +998,10 @@ def lights(s, lay, pk, repo, notes):
     # Candles burned down on the living room floor, by the couch: someone's been here.
     couch = next(e for e in pk.props() if e['name'].startswith('Couch_3seat'))
     cx, _, cz = couch['position']
-    s.stamp(PROPS_IN + 'LP_candle_triple.prefab', g, (round(cx + 1.0, 3), FLOOR_1, round(cz - 1.1, 3)), yaw=30.0)
-    s.stamp(PROPS_IN + 'LP_candle_single.prefab', g, (round(cx + 1.35, 3), FLOOR_1, round(cz - 0.8, 3)))
-    s.stamp(PROPS_IN + 'LP_candle_small.prefab', g, (round(cx + 0.7, 3), FLOOR_1, round(cz - 1.35, 3)))
+    lit = []
+    for name, dx, dz, yaw in (('LP_candle_triple', 1.0, -1.1, 30.0), ('LP_candle_single', 1.35, -0.8, 0.0),
+                              ('LP_candle_small', 0.7, -1.35, 0.0)):
+        lay_down(s, pk.fit, g, PROPS_IN + name + '.prefab', cx + dx, cz + dz, FLOOR_1, yaw, (0.0, 0.0), 1.0, lit)
     _, e = lamp('Candle Glow', (round(cx + 1.0, 3), FLOOR_1 + 0.5, round(cz - 1.1, 3)), intensity=1.5, rng=5.0,
                 color=(1.0, 0.55, 0.22))
     e.update(k.light_flicker(Mode=2, MinInterval=0.1, MaxInterval=0.4, Depth=0.25, Seed=11))
@@ -548,12 +1031,34 @@ def porch_light(s, lay, notes):
     notes['porch light'] = 1
 
 
+# Small and flat things that cast no shadow worth its cost (the Forest's shadow pass): the rubbish, the books, the blown-in
+# leaves and the dead wall fittings.
+QUIET = re.compile(r'(Basement_box|Book_[ABC]|Garage_cardboardbox|Garage_paintbucket|Garage_paperbag|KP_glass_black|'
+                   r'KP_plate|LP_magazine|Newspaper|Lamp_wall_chan|Lamp_wall_toilet|Ground_Leaves_var\d@.*)\.(FBX|fbx)$')
+
+
+def quiet_shadows(s, house):
+    """castShadows off on QUIET models under the house."""
+    kids = {}
+    for e in s.empties + s.models + s.boxes:
+        kids.setdefault(e['parentId'], []).append(e)
+    todo, n = [house], 0
+    while todo:
+        for e in kids.get(todo.pop(), []):
+            todo.append(e['id'])
+            if QUIET.search(e.get('path', '')):
+                e['castShadows'] = 0
+                n += 1
+    return n
+
+
 def add_house(s, root, repo, pack_path, notes):
     """The house: the pack snapshot under 'Abandoned House' / 'Pack Layout', trashed and dressed."""
     pk = Pack(pack_path)
     rng = random.Random(301)
     DEAD_SCREEN.update(k.from_mat(repo, PACK + 'Materials/M_Devices_On.mat', emissiveColor=[0.0, 0.0, 0.0],
                                   emissiveStrength=0.0))
+    open_sealed_doors(pk, notes)
     broken = trash_house(pk, rng, notes)
     house = s.empty('Abandoned House', root, HOUSE_AT, yaw=HOUSE_YAW, static=True)
     lay = s.empty('Pack Layout', house, (-PACK_C[0], -PACK_C[1], -PACK_C[2]), static=True)
@@ -626,7 +1131,7 @@ def add_yard(s, root, repo, H, forest_paths, notes):
             ((-17.4, 1.6, 18.6), qmul(axis_q((0, 1, 0), -4.0), down), (2.3, 4.7, 1.8)),
             ((-16.3, 0.7, 18.6), axis_q((0, 1, 0), 86.0), (4.6, 1.3, 0.8)),
             ((-18.5, 0.7, 18.6), axis_q((0, 1, 0), -94.0), (4.6, 1.3, 0.8)))):
-        decal(s, drive, f'Car Grime {i}', pos, rot, FLOOR_DECALS[i], size, 40 + i, 0.95, tint=[0.36, 0.33, 0.25])
+        decal(s, drive, f'Car Grime {i}', pos, rot, CAR_DECAL, size, 40 + i, 0.95, tint=[0.36, 0.33, 0.25])
 
     # Fences: a broken white picket out front with the gate gone; the backyard's tall wooden fence, rotten through.
     fences = s.empty('Fences', yard, (0, 0, 0), static=True)
