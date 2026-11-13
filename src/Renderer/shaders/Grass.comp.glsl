@@ -114,16 +114,29 @@ void main() {
                 if (edge.x >= 0.0 && edge.y >= 0.0) {
                     vec2 wxz = A.Origin.xz + A.Axes.xy * local.x + A.Axes.zw * local.y;
                     vec3 root = vec3(wxz.x, A.Wind.y > 0.5 && uHasTerrain == 1 ? TerrainHeight(wxz) : A.Origin.y, wxz.y);
-                    // Two octaves of patch noise: clumps a few metres across, broken up at their edges.
-                    float patchN = ValueNoise(wxz * 0.16, seed * 7u + 3u) * 0.65 + ValueNoise(wxz * 0.55, seed * 7u + 5u) * 0.35;
-                    float grow = mix(1.0, smoothstep(0.2, 0.55, patchN), patchiness);
-                    // The mask thins the blades (under the canopy) and clears them (at logs, rocks and trunks).
-                    float dens = A.Map.w > 0.5 ? MaskDensity(A.Map, local / A.Size.xy + 0.5) : 1.0;
-                    grow *= dens;
-                    float edgeK = A.Lod.z > 0.0 ? smoothstep(0.0, A.Lod.z, min(edge.x, edge.y)) : 1.0;
                     float dist = distance(root, uEye);
                     float kf = KeepFraction(dist, A.Lod.x, A.Lod.y);
-                    if (r2 < grow * mix(0.35, 1.0, edgeK) && r3 < kf) {
+                    // Cheap rejections first (the same blades are kept): the distance thinning, then the bounds of
+                    // the tallest blade this area can grow (GrassRenderer::Describe's MaxHeight) against the view.
+                    // (No `continue`: every invocation must reach the barriers below.)
+                    bool maybe = r3 < kf;
+                    if (maybe) {
+                        float hMax = A.Shape.x * (1.0 + A.Shape.y) * (1.0 + 0.5 * A.Tip.w) * 1.4 + 0.3;
+                        vec3 cMax = root + vec3(0.0, 0.5 * hMax, 0.0);
+                        float radMax = 0.75 * hMax + 0.15;
+                        for (int i = 0; i < 6 && maybe; ++i) maybe = dot(uFrustum[i].xyz, cMax) + uFrustum[i].w >= -radMax;
+                    }
+                    float patchN = 0.0, grow = 0.0;
+                    if (maybe) {
+                        // Two octaves of patch noise: clumps a few metres across, broken up at their edges.
+                        patchN = ValueNoise(wxz * 0.16, seed * 7u + 3u) * 0.65 + ValueNoise(wxz * 0.55, seed * 7u + 5u) * 0.35;
+                        grow = mix(1.0, smoothstep(0.2, 0.55, patchN), patchiness);
+                        // The mask thins the blades (under the canopy) and clears them (at logs, rocks and trunks).
+                        float dens = A.Map.w > 0.5 ? MaskDensity(A.Map, local / A.Size.xy + 0.5) : 1.0;
+                        grow *= dens;
+                    }
+                    float edgeK = A.Lod.z > 0.0 ? smoothstep(0.0, A.Lod.z, min(edge.x, edge.y)) : 1.0;
+                    if (maybe && r2 < grow * mix(0.35, 1.0, edgeK)) {
                         float r4 = U01(Hash(h + 4u)), r5 = U01(Hash(h + 5u)), r6 = U01(Hash(h + 6u));
                         float r7 = U01(Hash(h + 7u)), r8 = U01(Hash(h + 8u)), r9 = U01(Hash(h + 9u));
                         // Real grass grows in tufts: the nearest tuft centre (a jittered grid of kClump metres)

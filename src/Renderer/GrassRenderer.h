@@ -100,8 +100,26 @@ private:
     void EnsurePrograms();
     void EnsureBuffers(); // the blade lists (~57 MB): only once some view has grass to draw
     void Draw(Shader& prog, const glm::mat4& view, const glm::mat4& proj, int nearSegments = kNearSegments);
+    // Space for `size` bytes in the upload ring (offset a multiple of 256), or ~0 when it is full or unavailable.
+    std::size_t TakeUpload(std::size_t size);
 
     std::unique_ptr<Shader> m_Draw;
+    // Each cull's areas and chunks go into a persistently mapped ring (written with a memcpy, bound as ranges); a span
+    // is reused only kUploadSafeFrames frames later, so no fence and no buffer re-specification (each one drained
+    // NVIDIA's threaded driver, three times a frame).
+    struct UploadSpan { std::size_t Start; std::uint64_t Frame; };
+    unsigned m_UploadBuf = 0;
+    unsigned char* m_UploadBase = nullptr;
+    bool m_UploadFailed = false;
+    std::size_t m_UploadHead = 0;
+    std::vector<UploadSpan> m_UploadSpans; // live spans, oldest first
+    // Where the last cull's areas and chunks went (the draws read the same areas).
+    struct BufferRange {
+        unsigned Buffer = 0;
+        std::size_t Offset = 0, Size = 0;
+        void Bind(unsigned binding) const;
+    };
+    BufferRange m_AreaBind, m_ChunkBind;
     std::unique_ptr<Shader> m_Cull;
     std::unique_ptr<Shader> m_Clamp;
     unsigned m_Vao = 0, m_AreaBuf = 0, m_ChunkBuf = 0, m_BladeBuf = 0, m_CmdBuf = 0, m_TerrainBuf = 0;
