@@ -1446,8 +1446,11 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
     const size_t signature = assets.Models().size() + (assets.Textures().size() << 12) +
                              (assets.Materials().size() << 24) + ((size_t)assets.Sounds().size() << 36) +
                              ((size_t)assets.Prefabs().size() << 48);
-    if (signature != m_ListedAssetSignature || replaced) {
+    // A rename changes a listed key in place, without the sizes moving: key everything again.
+    const bool renamed = assets.FolderMoveGeneration() != m_ListedMoveGen;
+    if (signature != m_ListedAssetSignature || replaced || renamed) {
         m_ListedAssetSignature = signature;
+        m_ListedMoveGen = assets.FolderMoveGeneration();
         // The lists only append, except an unload or a rename. While every list just grew (its last listed entry still
         // where it was), only the new entries are keyed: in Play the wardrobe warm-up adds models and textures most
         // frames, and re-keying every path each time cost several ms a frame.
@@ -1469,7 +1472,7 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
                 default: return assets.Prefabs()[i];
             }
         };
-        bool grewOnly = !replaced && !m_ListedAssetKeys.empty();
+        bool grewOnly = !replaced && !renamed && !m_ListedAssetKeys.empty();
         for (int l = 0; l < 5 && grewOnly; ++l) {
             const size_t was = m_ListedAssetCounts[l];
             grewOnly = count(l) >= was && (was == 0 || AssetDatabase::PathKey(pathAt(l, was - 1)) == m_ListedAssetTails[l]);
@@ -1851,9 +1854,12 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
 
     // During Play the list is kept between frames: collecting and sorting it walks every folder and every asset in
-    // the library (~3 ms with ~11k assets) while the game is what's being watched. A change the user makes - folder,
-    // search, favourites view, scope, sort - rebuilds it at once. The library growing (Play streams assets in) does
-    // at most every kPlayGridLibraryFrames frames, and renames or label edits show within kPlayGridRefreshFrames.
+    // the library (~3-5 ms with ~11k assets) while the game is what's being watched. A change the user makes - folder,
+    // search, favourites view, scope, sort - rebuilds it at once. While the folder summaries track the library
+    // (RefreshProjectAssetIndexIfNeeded patches them), so does a change to what the shown folder holds (or, while
+    // filtering, to anything listed), a move, a rename, a label or name edit, or a favourite; streaming into other
+    // folders costs nothing. Without that tracking, and for the disk-listed Scenes/Shaders/Library views, the library
+    // growing rebuilds it at most every kPlayGridLibraryFrames frames and anything else within kPlayGridRefreshFrames.
     // Edit mode rebuilds it every frame, as before.
     constexpr int kPlayGridLibraryFrames = 30, kPlayGridRefreshFrames = 60;
     std::uint64_t userKey = std::hash<std::string>{}(m_CurrentAssetFolder) * 31u + std::hash<std::string>{}(m_AssetSearchFilter);
@@ -1872,9 +1878,31 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     mixKey(m_ListedAssetKeys.size());
     const int gridFrame = ImGui::GetFrameCount();
     const int gridAge = gridFrame - m_AssetGridCellsFrame;
+    const bool listsFromDisk = m_CurrentAssetFolder == "Scenes" || m_CurrentAssetFolder == "Shaders" ||
+                               AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder);
+    std::uint64_t contentKey = 0;
+    RefreshProjectAssetIndexIfNeeded(assets); // keys (and patches the summaries for) what streamed in since last frame
+    if (m_FolderSummariesValid && !listsFromDisk) {
+        const bool filteringNow = !m_AssetSearchFilter.empty() || !parsedSearch.typeTerms.empty() ||
+                                  !parsedSearch.labelTerms.empty() || m_AssetFavoritesOnly;
+        const auto folderGen = m_FolderContentGen.find(m_CurrentAssetFolder);
+        RefreshFavoriteCache();
+        std::uint64_t k = 0x51ED27u;
+        const auto mixContent = [&k](std::uint64_t v) { k ^= v + 0x9E3779B97F4A7C15ull + (k << 6) + (k >> 2); };
+        mixContent(m_FolderSummaryWalkGen);
+        mixContent(assets.FolderMoveGeneration());
+        mixContent(assets.MetadataGeneration());
+        mixContent(assets.Folders().size());
+        mixContent(m_ProjectAssetIndex.files.size());
+        mixContent(m_AssetFavorites.size());
+        mixContent(filteringNow ? m_AnyFolderContentGen : folderGen != m_FolderContentGen.end() ? folderGen->second : 0u);
+        contentKey = k != 0 ? k : 1u; // never 0 (= not tracked)
+    }
     const bool reuseCells = m_InPlayMode && PlayUiThrottle() && m_AssetGridCellsValid && userKey == m_AssetGridCellsUserKey &&
-                            (gridKey == m_AssetGridCellsKey ? gridAge < kPlayGridRefreshFrames : gridAge < kPlayGridLibraryFrames);
+                            (contentKey != 0 ? contentKey == m_AssetGridCellsContentKey
+                                     : gridKey == m_AssetGridCellsKey ? gridAge < kPlayGridRefreshFrames : gridAge < kPlayGridLibraryFrames);
     if (!reuseCells) {
+        m_AssetGridCellsContentKey = contentKey;
         cells.clear();
         m_AssetGridCellsValid = true;
         m_AssetGridCellsUserKey = userKey;

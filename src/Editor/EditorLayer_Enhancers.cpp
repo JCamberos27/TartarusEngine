@@ -2682,6 +2682,7 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
     m_FolderSummarySig = sig;
     m_FolderSummaryAge = 0.0f;
     m_FolderSummariesValid = true;
+    ++m_FolderSummaryWalkGen;
     m_FolderSummaries.clear();
     m_FolderIndexContrib.clear();
     // Only what RefreshProjectAssetIndexIfNeeded has keyed: the rest arrives through NoteListedInFolderSummaries.
@@ -2710,9 +2711,13 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
 // A library list entry just keyed by RefreshProjectAssetIndexIfNeeded: it counts in its folder, and the index file
 // for the same asset (if one was counted) no longer does.
 void EditorLayer::NoteListedInFolderSummaries(AssetLibrary& assets, int list, const std::string& path, const std::string& key) {
-    m_FolderSummaries[assets.AssetFolderRef(path)].Add(kListedFolderKind[list]);
+    const std::string& folder = assets.AssetFolderRef(path);
+    m_FolderSummaries[folder].Add(kListedFolderKind[list]);
+    ++m_FolderContentGen[folder];
+    ++m_AnyFolderContentGen;
     const auto it = m_FolderIndexContrib.find(key);
     if (it == m_FolderIndexContrib.end()) return;
+    if (it->second.Folder != folder) ++m_FolderContentGen[it->second.Folder]; // its unloaded tile goes
     const auto s = m_FolderSummaries.find(it->second.Folder);
     if (s != m_FolderSummaries.end()) {
         s->second.Remove(it->second.Kind);
