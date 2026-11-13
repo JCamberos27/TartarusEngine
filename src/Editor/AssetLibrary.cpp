@@ -518,6 +518,7 @@ void AssetLibrary::RemovePrefab(const std::string& path) {
 void AssetLibrary::SetAssetFolder(const std::string& assetKey, const std::string& folder) {
     if (folder.empty()) m_AssetFolder.erase(assetKey);
     else m_AssetFolder[assetKey] = folder;
+    ++m_FolderMoveGen;
     // A folder adopted from disk (AdoptDiskFolder) was never in the .meta. Restoring it - every
     // undo restores every asset's folder - must not pin it there, or the asset stops following
     // its file when that moves on disk.
@@ -621,6 +622,7 @@ void AssetLibrary::PersistFolders() {
 
 void AssetLibrary::ClearMetadataOnly() {
     m_AssetFolder.clear();
+    ++m_FolderMoveGen;
     m_DisplayNames.clear();
     m_TextureSettings.clear();
     m_ModelSettings.clear();

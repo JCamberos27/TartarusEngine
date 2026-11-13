@@ -737,6 +737,13 @@ void TestEnhancerFolderKinds() {
     FolderSummary other;
     other.Add(FolderKind::Other); other.Add(FolderKind::Other); other.Add(FolderKind::Other);
     CHECK(DominantKind(other) == FolderKind::Count); // "Other" never names a folder
+    // Remove undoes Add (an index file standing in for an asset that got listed), and stops at zero.
+    FolderSummary patched;
+    patched.Add(FolderKind::Model); patched.Add(FolderKind::Prefab);
+    patched.Remove(FolderKind::Prefab);
+    CHECK(patched.Total == 1 && patched.Counts[(int)FolderKind::Model] == 1 && patched.Counts[(int)FolderKind::Prefab] == 0);
+    patched.Remove(FolderKind::Prefab); // none left: nothing changes
+    CHECK(patched.Total == 1 && patched.Counts[(int)FolderKind::Prefab] == 0);
 
     FolderKind top[4];
     const int n = TopKinds(s, top, 4);

@@ -1477,10 +1477,19 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
         if (!grewOnly) {
             m_ListedAssetKeys.clear();
             for (int l = 0; l < 5; ++l) m_ListedAssetCounts[l] = 0;
+            m_FolderSummariesValid = false;
         }
+        // The folder summaries follow along: each new entry counts in its folder, and an index file it was standing in
+        // for stops counting (a full summary walk is ~9 ms, and the warm-up lists new assets every second).
+        const bool patchSummaries = grewOnly && m_FolderSummariesValid;
         for (int l = 0; l < 5; ++l) {
             const size_t n = count(l);
-            for (size_t i = m_ListedAssetCounts[l]; i < n; ++i) m_ListedAssetKeys.insert(AssetDatabase::PathKey(pathAt(l, i)));
+            for (size_t i = m_ListedAssetCounts[l]; i < n; ++i) {
+                const std::string path = pathAt(l, i);
+                std::string key = AssetDatabase::PathKey(path);
+                if (patchSummaries) NoteListedInFolderSummaries(assets, l, path, key);
+                m_ListedAssetKeys.insert(std::move(key));
+            }
             m_ListedAssetCounts[l] = n;
             m_ListedAssetTails[l] = n ? AssetDatabase::PathKey(pathAt(l, n - 1)) : std::string();
         }

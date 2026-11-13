@@ -520,6 +520,7 @@ int AssetLibrary::EndPlayScope() {
         }
     };
     prune(m_AssetFolder, m.FolderKeys);
+    ++m_FolderMoveGen;
     prune(m_DisplayNames, m.NameKeys);
     prune(m_Labels, m.LabelKeys);
     prune(m_TextureSettings, m.TextureSettingKeys);
