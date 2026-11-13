@@ -994141,11 +994141,11 @@
       "static": true
     }
   ],
-  "msaaSamples": 4,
+  "msaaSamples": 2,
   "shadowCascadeSplit": 0.75,
   "shadowCascades": 4,
   "shadowDistance": 70.0,
-  "shadowResolution": 4096,
+  "shadowResolution": 2048,
   "shadowsEnabled": true,
   "sky": {
     "aerialPerspectiveScale": 6.0,
