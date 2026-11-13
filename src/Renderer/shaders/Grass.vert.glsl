@@ -14,9 +14,7 @@ uniform mat4  uView;
 uniform mat4  uProj;
 uniform int   uInstanceBase;
 uniform int   uSegments;
-uniform float uWindTime;
-uniform float uPrevWindTime;
-uniform vec2  uWindDir;
+#include "WindCommon.glsl" // the scene wind, shared with plants and trees
 // TAA motion vectors, as ModelVertex.glsl
 uniform int  uTaaVelocity;
 uniform mat4 uPrevViewProj;
@@ -36,12 +34,13 @@ vec3 BladePoint(GrassBlade b, float t, float side, float time, out vec3 tangent,
     float h = b.B.x, w = b.B.y, bend = b.B.z, windStrength = b.B.w;
     float speed = uAreas[int(b.C.z + 0.5)].Wind.x, rnd = b.C.x;
     vec2 face = vec2(cos(b.A.w), sin(b.A.w));
-    vec2 wind = dot(uWindDir, uWindDir) > 1e-6 ? normalize(uWindDir) : vec2(1.0, 0.0);
-    // Gusts: long waves rolling downwind, beating against a slower one so they don't march in step.
-    float phase = dot(root.xz, wind) * 0.22 - time * speed * 1.4;
-    float gust = 0.5 + 0.5 * sin(phase) * (0.6 + 0.4 * sin(phase * 0.31 + 1.7));
-    float flutter = 0.12 * sin(time * speed * 7.3 + rnd * 41.0);
-    vec2 lean = face * bend * 0.75 + wind * windStrength * (gust + flutter);
+    vec2 wind = uWindDir;
+    // The scene's gust fronts (WindCommon.glsl), the same ones that bend the plants and trees, plus each blade's own
+    // flutter (Wind Speed sets its rate) and a little side sway, both stronger in a gust.
+    float gust = WindGust(root.xz, time);
+    float flutter = 0.12 * sin(time * speed * 7.3 + rnd * 41.0) * (0.4 + 0.6 * gust);
+    float sideSway = 0.1 * sin(time * speed * 2.3 + rnd * 17.0) * gust;
+    vec2 lean = face * bend * 0.75 + (wind * (gust + flutter) + WindSide() * sideSway) * (windStrength * uWindGlobal);
     float len = length(lean);
     if (len > 0.92) lean *= 0.92 / len;
     vec3 tip = root + vec3(lean.x * h, h * sqrt(max(1.0 - dot(lean, lean), 0.15)), lean.y * h);

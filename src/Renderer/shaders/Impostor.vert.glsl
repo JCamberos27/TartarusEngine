@@ -31,8 +31,7 @@ uniform int uOrtho;           // 1: an orthographic view (a sun cascade): uLight
 uniform vec3 uOrthoToViewer;  // world, unit
 uniform mat4 uLightViewProj;
 uniform int uFrames;          // frames per atlas side (every set's)
-uniform float uWindTime;
-uniform vec2 uWindDir;
+#include "WindCommon.glsl" // the scene wind: the same lean as the tree's mesh (FoliageWind.glsl)
 
 // Object space below is the group's own at scale 1, centred on the bounding sphere.
 out vec3 vObj;                 // the card point
@@ -135,11 +134,9 @@ void main() {
     // height, the offset in metres). The atlas lookup above stays with the still card.
     precise vec3 origin = inst.OriginFade.xyz;
     precise float mask = clamp((P.y - origin.y) / s / max(sd.Wind.x, 0.01), 0.0, 1.0);
-    precise float along = dot(origin.xz, uWindDir);
-    precise float gust = 0.55 + 0.30 * sin(along * 0.35 - uWindTime * 1.1) + 0.15 * sin(along * 0.9 - uWindTime * 2.3 + 1.7);
-    vec2 side = vec2(-uWindDir.y, uWindDir.x);
-    precise vec2 bend = (uWindDir * gust + side * 0.25 * sin(uWindTime * 0.7 + along * 0.2)) * (mask * mask);
-    precise vec3 world = P + vec3(bend.x, 0.0, bend.y) * (1.4 * sd.BoxMaxBend.w);
+    float gust;
+    precise vec2 bend = WindMainLean(origin.xz, uWindTime, sd.BoxMaxBend.w, sd.Wind.y, gust) * (mask * mask);
+    precise vec3 world = P + vec3(bend.x, 0.0, bend.y);
 
     vCardWorld = world;
     vEyeRay = uOrtho == 1 ? -toViewer : world - uEye;

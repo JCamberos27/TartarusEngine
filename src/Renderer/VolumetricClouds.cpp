@@ -1,6 +1,7 @@
 #include "VolumetricClouds.h"
 #include "SkyAtmosphere.h"
 #include "SkySettings.h"
+#include "TimeOfDay.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
@@ -73,15 +74,7 @@ unsigned int MakeNoise3D(int size) {
     return tex;
 }
 
-// Compass bearing (degrees, clockwise from north) -> world XZ unit vector, with the scene's
-// compass rotation applied. North is -Z and east +X before the rotation (TimeOfDay.h).
-glm::vec2 BearingToXZ(float bearingDeg, float northOffsetDeg) {
-    const float b = glm::radians(bearingDeg);
-    const glm::vec2 local(std::sin(b), -std::cos(b));
-    const float a = glm::radians(northOffsetDeg);
-    const float c = std::cos(a), s = std::sin(a);
-    return glm::vec2(c * local.x + s * local.y, -s * local.x + c * local.y);
-}
+using TimeOfDay::BearingToXZ; // the scene's one wind convention (TimeOfDay.h)
 
 GLuint Groups(int n, int local) { return (GLuint)((n + local - 1) / local); }
 } // namespace

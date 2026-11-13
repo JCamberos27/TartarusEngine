@@ -69,7 +69,12 @@ struct SkySettings {
     float CloudScale = 1.0f;          // x the size of cloud formations
     float CloudDetail = 0.45f;        // edge erosion: 0 soft blobs .. 1 ragged wisps
     float CloudWindSpeed = 12.0f;     // m/s
-    float CloudWindDirectionDegrees = 45.0f; // the wind blows TOWARD this compass bearing
+    float CloudWindDirectionDegrees = 45.0f; // the wind blows TOWARD this compass bearing (the scene's one wind direction)
+
+    // --- Surface wind: grass, plants and trees (WindCommon.glsl), blowing toward CloudWindDirectionDegrees ---
+    float WindStrength = 1.0f;   // x every foliage bend and grass lean; 0 = still air
+    float WindGustiness = 0.5f;  // 0 steady .. 1 strong gusts and lulls
+    float WindGustSpeed = 4.0f;  // m/s the gust fronts roll across the ground
     float CloudWindShear = 0.6f;      // how far tops lean downwind (km over the layer)
     float CloudForwardScattering = 0.8f; // silver lining when looking toward the sun (0..0.95)
     float CloudAmbient = 1.0f;        // x sky light on the clouds
@@ -134,7 +139,7 @@ struct SkySettings {
     X(CloudScale) \
     X(CloudDetail) \
     X(CloudWindSpeed) \
-    X(CloudWindDirectionDegrees) \
+    X(CloudWindDirectionDegrees)     X(WindStrength)     X(WindGustiness)     X(WindGustSpeed) \
     X(CloudWindShear) \
     X(CloudForwardScattering) \
     X(CloudAmbient) \

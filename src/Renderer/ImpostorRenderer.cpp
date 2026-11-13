@@ -6,9 +6,11 @@
 #include "Core/ProjectSettings.h"
 #include "Core/TimeService.h"
 #include "GLStateCache.h"
+#include "HiZCuller.h"
 #include "Game/World.h"
 #include "ImpostorLibrary.h"
 #include "Material.h"
+#include "WindUniforms.h"
 #include "Physics/Frustum.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
@@ -146,7 +148,7 @@ bool ImpostorRenderer::EnsureAtlases() {
         std::vector<glm::vec2> extents;
         for (const ImpostorSet& s : sets) {
             gpu.push_back({glm::vec4(s.BoundsMin - s.Centre, s.Radius), glm::vec4(s.BoundsMax - s.Centre, s.WindBend),
-                           glm::vec4(s.WindHeight, 0.0f, 0.0f, 0.0f)});
+                           glm::vec4(s.WindHeight, s.WindFrequency, 0.0f, 0.0f)});
             extents.insert(extents.end(), s.FrameExtents.begin(), s.FrameExtents.end());
         }
         glCreateBuffers(1, &m_SetBuf);
@@ -231,7 +233,8 @@ bool ImpostorRenderer::Build(const World& world, int buckets,
             lo = glm::min(lo, w);
             hi = glm::max(hi, w);
         }
-        const glm::vec3 sway(s.WindBend * 1.8f, 0.0f, s.WindBend * 1.8f); // the card's lean at a full gust
+        const float lean = HiZCuller::FoliageSway(s.WindBend, Material::Wind().Strength); // the card's lean at a full gust
+        const glm::vec3 sway(lean, 0.0f, lean);
         const unsigned in = keep(lo - sway, hi + sway);
         if (!in) return;
         const glm::mat3 rot(glm::vec3(m[0]) / glm::length(glm::vec3(m[0])), glm::vec3(m[1]) / scale,
@@ -290,8 +293,7 @@ void ImpostorRenderer::DrawBucket(Shader& prog, int bucket) {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kExtentBinding, m_ExtentBuf);
     for (int k = 0; k < 3; ++k) glBindTextureUnit((GLuint)k, m_Arrays[k]);
     prog.SetInt("uFrames", ImpostorLibrary::Sets().front().Frames);
-    prog.SetFloat("uWindTime", Material::WindTime());
-    prog.SetVec2("uWindDir", Material::WindDirection());
+    SetWindFieldUniforms(prog);
     prog.SetFloat("uImpCutoff", kCutoff);
     prog.SetFloat("uMipAlphaScale", kMipAlphaScale);
     glDrawArraysInstancedBaseInstance(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)d.Count, d.First);

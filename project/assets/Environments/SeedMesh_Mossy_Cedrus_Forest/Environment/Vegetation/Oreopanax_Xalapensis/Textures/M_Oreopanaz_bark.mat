@@ -29,8 +29,9 @@
     "_Triplanar": false,
     "_TriplanarScale": 1.0,
     "_WindFlutter": 0.0,
-    "_WindHeight": 0.8,
-    "_WindStrength": 0.06
+    "_WindHeight": 2.0,
+    "_WindStrength": 0.08,
+    "_WindFrequency": 1.1
   },
   "shader": "engine://Standard.shader"
 }

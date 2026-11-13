@@ -368,22 +368,24 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
         for (const glm::vec2& e : extents) j["frameExtents"].push_back({e.x, e.y});
         j["boundsMin"] = {lo.x, lo.y, lo.z}; // the LOD 0's box: the draw fits each card to its outline
         j["boundsMax"] = {hi.x, hi.y, hi.z};
-        // The card's sway (ImpostorRenderer): the slow bend of the LOD 0's foliage materials - their flutter is too fine
-        // to see on a card - as FoliageWind.glsl scales it: WindStrength x (1 - WindFlutter) at WindHeight.
-        float windBend = 0.0f, windHeight = 0.0f;
+        // The card's sway (ImpostorRenderer): the lean of the LOD 0's foliage materials (WindMainLean) - the branch bob
+        // and leaf flutter are too fine to see on a card. Every material of one tree shares the lean, so take the largest.
+        float windBend = 0.0f, windHeight = 0.0f, windFrequency = 1.0f;
         for (const Part& part : b.parts)
             for (int m = 0; m < part.model->MeshCount(); ++m) {
                 const Material& mat = m < (int)part.materials.size() && part.materials[m] ? part.materials[m]->Mat
                                                                                          : part.model->MeshMaterial(m);
                 if (!mat.Foliage) continue;
-                const float bend = std::abs(mat.WindStrength) * (1.0f - std::clamp(mat.WindFlutter, 0.0f, 1.0f));
+                const float bend = std::abs(mat.WindStrength);
                 if (bend > windBend) {
                     windBend = bend;
                     windHeight = mat.WindHeight;
+                    windFrequency = mat.WindFrequency;
                 }
             }
         j["windBend"] = windBend;
         j["windHeight"] = windHeight;
+        j["windFrequency"] = windFrequency;
         j["albedo"] = files[0];
         j["normalDepth"] = files[1];
         j["mask"] = files[2];

@@ -139,7 +139,7 @@ void main() {
         normalMat = mat3(uInstances[at + 1]);
     }
     precise vec4 world = model * localPos;
-    world.xyz += FoliageWindOffset(localPos.xyz, aColor, model[3].xyz); // opt-in; zero unless uFoliage
+    world.xyz += FoliageWindOffset(localPos.xyz, aNormal, aColor, model); // opt-in; zero unless uFoliage (bind normal: as ShadowDepth.vert)
     vWorldPos = world.xyz;
 
     vNormal = normalize(normalMat * localNormal);
@@ -166,7 +166,7 @@ void main() {
         vCurClip = gl_Position;
         vCurClip.xy -= uTaaJitter * gl_Position.w;
         vec4 prevWorld = model * localPos;
-        prevWorld.xyz += FoliageWindOffsetAt(localPos.xyz, aColor, model[3].xyz, uPrevWindTime);
+        prevWorld.xyz += FoliageWindOffsetAt(localPos.xyz, aNormal, aColor, model, uPrevWindTime);
         vPrevClip = uPrevViewProj * prevWorld;
     } else {
         vCurClip = vec4(0.0, 0.0, 0.0, 1.0);

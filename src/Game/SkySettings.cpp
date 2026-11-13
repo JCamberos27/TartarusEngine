@@ -68,6 +68,8 @@ void ApplySkyPreset(SkySettings& s, SkyPreset preset) {
         s.CloudDensity = 1.15f;
         s.CirrusCoverage = 0.4f;
         s.CloudWindSpeed = 16.0f;
+        s.WindStrength = 1.3f;
+        s.WindGustiness = 0.6f;
         break;
     case SkyPreset::Overcast:
         s.TimeOfDayHours = 12.5f;
@@ -91,6 +93,9 @@ void ApplySkyPreset(SkySettings& s, SkyPreset preset) {
         s.CloudBaseMeters = 800.0f;
         s.CloudThicknessMeters = 7000.0f;
         s.CloudWindSpeed = 28.0f;
+        s.WindStrength = 2.2f;
+        s.WindGustiness = 0.9f;
+        s.WindGustSpeed = 9.0f;
         s.CloudWindShear = 1.5f;
         s.CloudAmbient = 0.8f;
         s.CirrusCoverage = 0.0f;
