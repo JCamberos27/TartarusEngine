@@ -154,6 +154,15 @@ typename Map::iterator FindAnySpelling(Map& cache, Index& index, std::uint64_t e
     return f == index.Keys.end() ? cache.end() : cache.find(f->second);
 }
 
+// A cache entry was just added: an index that was current before it takes the one key, rather than every load's next
+// lookup re-keying the whole cache (1.3-2 ms a texture with ~1000 loaded, every frame of Play's wardrobe warm-up).
+template <typename Map, typename Index>
+void NoteCacheInsert(const Map& cache, Index& index, std::uint64_t epoch, size_t sizeBefore, const std::string& key) {
+    if (cache.size() != sizeBefore + 1 || index.Size != sizeBefore || index.Epoch != epoch) return; // replaced, or stale
+    if (!key.empty()) index.Keys.emplace(AssetDatabase::PathKey(key), key);
+    index.Size = cache.size();
+}
+
 std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     if (path.rfind(kPrimitivePrefix, 0) == 0) {
         // "primitive://<kind>#<id>" — a per-instance procedural mesh, reconstructed from its
@@ -238,7 +247,9 @@ void AssetLibrary::PrepareModelImport(const std::string& path) {
 }
 
 std::shared_ptr<Model> AssetLibrary::RegisterModel(const std::string& path, std::shared_ptr<Model> model) {
+    const size_t cachedBefore = m_ModelCache.size();
     m_ModelCache[path] = model;
+    NoteCacheInsert(m_ModelCache, m_ModelKeys, m_KeyEpoch, cachedBefore, path);
     m_ModelList.push_back(model);
     AssetDatabase::EnsureGuid(path);
     return model;
@@ -345,7 +356,9 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, Text
 }
 
 std::shared_ptr<Texture> AssetLibrary::RegisterTexture(const std::string& path, std::shared_ptr<Texture> tex) {
+    const size_t cachedBefore = m_TextureCache.size();
     m_TextureCache[path] = tex;
+    NoteCacheInsert(m_TextureCache, m_TextureKeys, m_KeyEpoch, cachedBefore, path);
     m_TextureList.push_back(tex);
     m_TexturePaths.push_back(path);
     std::error_code ec;
@@ -449,7 +462,9 @@ std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& pat
     auto ma = MaterialAsset::Load(path, this);
     if (!ma) return nullptr;
 
+    const size_t cachedBefore = m_MaterialCache.size();
     m_MaterialCache[path] = ma;
+    NoteCacheInsert(m_MaterialCache, m_MaterialKeys, m_KeyEpoch, cachedBefore, path);
     m_MaterialList.push_back(ma);
     m_MaterialPaths.push_back(path);
     AssetDatabase::EnsureGuid(path);
