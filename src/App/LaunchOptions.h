@@ -20,6 +20,7 @@ enum class LaunchMode {
     ModelReport,  // --model-report <folder or model>...
     ModelNodes,   // --model-nodes <folder or fbx>...
     SceneBounds,  // --scene-bounds <scene.json|prefab dir>... --out <dir>
+    BakeImpostors, // --bake-impostors <scene.json>... --out <dir> [--match <text>]
     AudioTest,    // --audio-test [scene] [--report <file>]
     CrashTest,    // --crash-test <kind> [--crash-dialog]
     Help,         // --help
@@ -72,7 +73,8 @@ struct LaunchOptions {
     std::string crashTestInEditor;
     // --crash-dialog (crash-test, editor with --crash-test-in-editor): show the crash dialog anyway.
     bool crashDialog = false;
-    std::string sceneBoundsOut;   // --out <dir> (scene-bounds)
+    std::string sceneBoundsOut;   // --out <dir> (scene-bounds, bake-impostors)
+    std::string bakeMatch;        // --match <text> (bake-impostors): the model path the LOD 0s must draw
     std::string audioTestReport;  // --report <file> (audio-test)
     // --project <dir> (any mode): open that project folder instead of the one next to the exe. Applied by the parse.
     std::string projectDir;

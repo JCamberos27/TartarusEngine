@@ -1,5 +1,6 @@
 #include "App/CliTools.h"
 
+#include "App/ImpostorBake.h"
 #include "App/LaunchOptions.h"
 
 #include "BuildPipeline.h"
@@ -368,6 +369,9 @@ int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
         case LaunchMode::SceneBounds:
             CrashHandler::SetInteractive(false);
             return SceneBounds(opt.inputs, opt.sceneBoundsOut, argv0);
+        case LaunchMode::BakeImpostors:
+            CrashHandler::SetInteractive(false);
+            return BakeImpostors(opt.inputs, opt.sceneBoundsOut, opt.bakeMatch, argv0);
         // The audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
         case LaunchMode::AudioTest: return RunAudioTest(opt.audioTestScene, opt.audioTestReport);
         default: return -1;

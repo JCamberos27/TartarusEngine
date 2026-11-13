@@ -6,8 +6,8 @@ struct LaunchOptions;
 
 // The command-line tools that run and exit before the editor starts: no window, no GL context, no audio device.
 
-// The tools that run before anything else is set up: --unit-tests, --model-report, --model-nodes, --scene-bounds and
-// --audio-test. Returns the run's exit code when opt.mode is one of them, or -1 otherwise.
+// The tools that run before anything else is set up: --unit-tests, --model-report, --model-nodes, --scene-bounds,
+// --bake-impostors and --audio-test. Returns the run's exit code when opt.mode is one of them, or -1 otherwise.
 int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0);
 
 // #174 - `--build [outDir]`: File > Build without the UI, on a worker thread with progress as the editor's Build button
