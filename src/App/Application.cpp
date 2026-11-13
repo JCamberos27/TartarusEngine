@@ -2323,7 +2323,25 @@ int Application::RunSession() {
             lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
             {
                 PROFILE_SCOPE("Swap Buffers");
-                window.SwapBuffers();
+                // --perf-bench in a window that never shows (TARTARUS_HIDDEN): presenting a hidden window took NVIDIA's
+                // slow path, ~2.7 ms a frame with the GPU idle and the CPU blocked (the Forest's play-max read 14.2 ms
+                // hidden, 11.6 ms on screen). Nothing is on screen to present, so pace like a swap chain instead: a
+                // fence a frame, and wait for the one kHiddenFramesAhead frames back. The bench then measures the frame.
+                static const bool hiddenBench = opt.perfBenchMode && headless && Env::Flag(Env::Var::Hidden);
+                if (hiddenBench) {
+                    constexpr int kHiddenFramesAhead = 2;
+                    static GLsync s_Pace[kHiddenFramesAhead] = {};
+                    static int s_PaceAt = 0;
+                    if (GLsync old = s_Pace[s_PaceAt]) {
+                        glClientWaitSync(old, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ull); // at most 1 s
+                        glDeleteSync(old);
+                    }
+                    s_Pace[s_PaceAt] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                    s_PaceAt = (s_PaceAt + 1) % kHiddenFramesAhead;
+                    glFlush();
+                } else {
+                    window.SwapBuffers();
+                }
             }
             {
                 // The upload rings recycle by frame age (no fences: each one waited for NVIDIA's driver thread).
