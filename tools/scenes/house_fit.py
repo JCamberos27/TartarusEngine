@@ -217,7 +217,7 @@ def measure(repo, exe=None):
     with open(scene, 'w', encoding='utf-8') as f:
         json.dump({'formatVersion': 4, 'boxes': [], 'empties': [], 'models': models}, f)
     pack = 'project/assets/Environments/SuburbNeighborhoodHousePack/Prefabs/'
-    dirs = [os.path.join(repo, pack + d) for d in ('Props_interior', 'Props_exterior')]
+    dirs = [os.path.join(repo, pack + d) for d in ('Props_interior', 'Props_exterior', 'Ground')]
     out = os.path.join(tmp, 'out')
     env = dict(os.environ, TARTARUS_HIDDEN='1', TARTARUS_MUTE='1')
     r = subprocess.run([exe, '--project', os.path.join(repo, 'project'), '--scene-bounds', scene] + dirs + ['--out', out],
@@ -230,7 +230,7 @@ def measure(repo, exe=None):
             if e.get('min'):
                 i = int(e['path'].split('/')[-1][1:])
                 result[models[i]['path']] = [[round(v, 4) for v in e['min']], [round(v, 4) for v in e['max']]]
-    for d in ('Props_interior', 'Props_exterior'):
+    for d in ('Props_interior', 'Props_exterior', 'Ground'):
         with open(os.path.join(out, 'prefabs', d + '.json'), encoding='utf-8') as f:
             data = json.load(f)
         for name, pre in (data.get('prefabs') or {}).items():
