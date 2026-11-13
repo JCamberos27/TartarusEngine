@@ -245,11 +245,11 @@ void VolumetricFog::Render(const FrameState& fs) {
     inject.SetInt("uShadowCascadeCount", csm.Count());
     {
         glm::mat4 mats[CascadedShadowMap::kMaxCascades];
-        for (int i = 0; i < csm.Count(); ++i) mats[i] = csm.LightViewProj(i);
+        for (int i = 0; i < csm.Count(); ++i) mats[i] = csm.SampleViewProj(i);
         inject.SetMat4Array("uShadowMatrices[0]", csm.Count(), mats);
     }
     inject.SetVec4("uCascadeSplits", csm.SplitDepthsVec4());
-    inject.SetVec4("uShadowTexelWorld", csm.TexelWorldSizesVec4());
+    inject.SetVec4("uShadowTexelWorld", csm.SampleTexelWorldSizesVec4());
     inject.SetFloat("uShadowMapResolution", (float)csm.Resolution());
     glBindTextureUnit(8, csm.DepthArray() ? csm.DepthArray() : DefaultTextures::DepthArray());
     inject.SetInt("uSpotShadowCount", spotShadowCount);

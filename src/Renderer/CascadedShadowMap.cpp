@@ -1,4 +1,5 @@
 #include "CascadedShadowMap.h"
+#include "Core/Env.h"
 #include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
@@ -27,6 +28,7 @@ void CascadedShadowMap::Configure(int resolution, int count) {
     Release();
     m_Resolution = resolution;
     m_Count = count;
+    m_HeldFrame.fill(0); // a new array holds nothing yet
 
     DepthArrayTarget::Desc d;
     d.target = GL_TEXTURE_2D_ARRAY;
@@ -66,6 +68,7 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
                                const glm::vec3& lightDir, float shadowDistance,
                                const glm::vec3* casterMin, const glm::vec3* casterMax) {
     glm::vec3 L = glm::length(lightDir) > 1e-6f ? glm::normalize(lightDir) : glm::vec3(0, -1, 0);
+    m_LightDir = L;
 
     // Full camera frustum corners in world space, from the inverse view-projection.
     glm::mat4 invVP = glm::inverse(camProj * camView);
@@ -198,6 +201,9 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
         }
         m_SliceAxisCount[c] = axes;
     }
+    m_SampleViewProj = m_LightViewProj;
+    m_SampleTexelWorld = m_TexelWorld;
+    m_HoldTexels.fill(0.0f);
 }
 
 // What SunShadow reaches from a receiver, in shadow-map texels: the Poisson kernel (longest offset ~1.23 radii, radius
@@ -216,7 +222,7 @@ static float ReachTexels(int c, float kernelTexels, float normalBias) {
 // normalBias) and a texel of slack.
 void CascadedShadowMap::ReadRect(int c, float kernelTexels, float normalBias, glm::vec2& lo, glm::vec2& hi) const {
     const float res = (float)std::max(m_Resolution, 1);
-    const float texels = ReachTexels(c, kernelTexels, normalBias);
+    const float texels = ReachTexels(c, kernelTexels, normalBias) + m_HoldTexels[c];
     lo = m_SliceMin[c];
     hi = m_SliceMax[c];
     if (c == 0) {
@@ -263,7 +269,7 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
         lo = glm::min(lo, xy);
         hi = glm::max(hi, xy);
     }
-    const float texels = ReachTexels(c, kernelTexels, normalBias);
+    const float texels = ReachTexels(c, kernelTexels, normalBias) + m_HoldTexels[c];
     const float margin = texels * 2.0f / (float)std::max(m_Resolution, 1);
     lo -= glm::vec2(margin);
     hi += glm::vec2(margin);
@@ -299,14 +305,69 @@ void CascadedShadowMap::Resume(int i) const {
     glViewport(0, 0, m_Resolution, m_Resolution);
 }
 
-void CascadedShadowMap::BeginLayered() const {
+void CascadedShadowMap::BeginLayered(unsigned mask) const {
+    const unsigned all = (1u << m_Count) - 1u;
+    if ((mask & all) != all) { // held layers keep their depth: clear only the ones rendering now
+        glViewport(0, 0, m_Resolution, m_Resolution);
+        for (int c = 0; c < m_Count; ++c)
+            if (mask & (1u << c)) {
+                glBindFramebuffer(GL_FRAMEBUFFER, m_Fbos[c]);
+                glClear(GL_DEPTH_BUFFER_BIT);
+            }
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, m_LayeredFbo);
     if (!m_CompleteChecked) {
         m_CompleteChecked = true;
         GLFramebufferCheck::Complete("CascadedShadowMap (layered)", m_LayeredFbo, m_Resolution, m_Resolution);
     }
     glViewport(0, 0, m_Resolution, m_Resolution);
-    glClear(GL_DEPTH_BUFFER_BIT); // every layer of a layered attachment
+    if ((mask & all) == all) glClear(GL_DEPTH_BUFFER_BIT); // every layer of a layered attachment
+}
+
+unsigned CascadedShadowMap::PlanRender(std::uint64_t frame) {
+    const unsigned all = (1u << m_Count) - 1u;
+    static const bool off = Env::Flag(Env::Var::NoCascadeAlternate);
+    const bool once = frame != m_LastPlanFrame; // a second view this frame re-renders everything it samples
+    m_LastPlanFrame = frame;
+    if (off || m_Count != 4 || !once) return all;
+    unsigned mask = 0b0011u;
+    for (int c = 2; c < 4; ++c) {
+        m_HoldTexels[c] = kHoldTexels; // rendered or not, its next render is held a frame
+        const bool turn = ((frame + (std::uint64_t)c) & 1u) == 0u; // 2 on even frames, 3 on odd
+        bool keep = !turn && m_HeldFrame[c] != 0 && m_HeldFrame[c] + 1 == frame &&
+                    glm::dot(m_HeldLightDir[c], m_LightDir) > 0.999999f &&
+                    std::abs(m_HeldTexelWorld[c] - m_TexelWorld[c]) <= 1e-3f * m_TexelWorld[c];
+        if (keep) {
+            // This frame's slice, carried into the held layer's clip space (both orthographic along the same light, at
+            // the same scale: a shift), must lie inside what was rendered.
+            const glm::mat4 toHeld = m_HeldViewProj[c] * glm::inverse(m_LightViewProj[c]);
+            const glm::vec2 a = glm::vec2(toHeld * glm::vec4(m_SliceMin[c], 0.0f, 1.0f));
+            const glm::vec2 b = glm::vec2(toHeld * glm::vec4(m_SliceMax[c], 0.0f, 1.0f));
+            keep = glm::all(glm::greaterThanEqual(glm::min(a, b), m_HeldLo[c])) &&
+                   glm::all(glm::lessThanEqual(glm::max(a, b), m_HeldHi[c]));
+        }
+        if (keep) {
+            m_SampleViewProj[c] = m_HeldViewProj[c];
+            m_SampleTexelWorld[c] = m_HeldTexelWorld[c];
+        } else {
+            mask |= 1u << c;
+        }
+    }
+    return mask;
+}
+
+void CascadedShadowMap::MarkRendered(unsigned mask, std::uint64_t frame) {
+    const float res = (float)std::max(m_Resolution, 1);
+    for (int c = 0; c < m_Count; ++c) {
+        if (!(mask & (1u << c))) continue;
+        m_HeldViewProj[c] = m_LightViewProj[c];
+        m_HeldTexelWorld[c] = m_TexelWorld[c];
+        m_HeldLightDir[c] = m_LightDir;
+        m_HeldFrame[c] = m_HoldTexels[c] > 0.0f ? frame : 0; // rendered without the hold margin: never held
+        const glm::vec2 grow(m_HoldTexels[c] * 2.0f / res);
+        m_HeldLo[c] = m_SliceMin[c] - grow;
+        m_HeldHi[c] = m_SliceMax[c] + grow;
+    }
 }
 
 bool CascadedShadowMap::LayeredSupported() {
@@ -361,6 +422,12 @@ void CascadedShadowMap::EndLayeredScissor() {
 glm::vec4 CascadedShadowMap::SplitDepthsVec4() const {
     glm::vec4 v(m_SplitFar[m_Count - 1]);
     for (int i = 0; i < m_Count; ++i) v[i] = m_SplitFar[i];
+    return v;
+}
+
+glm::vec4 CascadedShadowMap::SampleTexelWorldSizesVec4() const {
+    glm::vec4 v(m_SampleTexelWorld[m_Count - 1]);
+    for (int i = 0; i < m_Count; ++i) v[i] = m_SampleTexelWorld[i];
     return v;
 }
 

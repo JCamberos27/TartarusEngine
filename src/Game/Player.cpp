@@ -1,4 +1,5 @@
 #include "Player.h"
+#include "Core/Env.h"
 #include "Input.h"
 #include "InputMap.h"
 #include "PhysicsWorld.h"
@@ -34,8 +35,11 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         const float stickPitch = -Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_Y) * (InvertY ? -1.0f : 1.0f) * StickLookDegPerSec * dt;
         // The camera clamps the mouse pass and the stick pass separately; these are their combined angles.
         const float lookPitch = std::clamp(std::clamp(Cam.Pitch + mousePitch, -89.0f, 89.0f) + stickPitch, -89.0f, 89.0f) - Cam.Pitch;
+        // TARTARUS_PERF_TURN: a steady turn, so --perf-bench measures a turning view (the worst case for anything
+        // cached across frames) rather than a still one.
+        static const float s_PerfTurn = Env::Float(Env::Var::PerfTurn, 0.0f);
         const float lookYaw = static_cast<float>(Input::GetMouseDeltaX()) * MouseSensitivity +
-                              Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_X) * StickLookDegPerSec * dt;
+                              Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_X) * StickLookDegPerSec * dt + s_PerfTurn * dt;
         LookDeltaInput = {mousePitch + stickPitch, lookYaw};
         const float before = Cam.Yaw;
         Cam.Yaw += lookYaw;

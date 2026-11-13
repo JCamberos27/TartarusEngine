@@ -84,6 +84,8 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     RenderableBounds(world, casterMin, casterMax);
     shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
     shadowMap.Update(fitView, fitProj, fl.SunDir, world.ShadowDistance, &casterMin, &casterMax);
+    const std::uint64_t frame = Time::FrameCount();
+    const unsigned renderMask = shadowMap.PlanRender(frame); // the far cascades on alternate frames
     Frustum casterCells[CascadedShadowMap::kMaxCascades];
     for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
     VisibilityQuery casts; // #163 - Cast Shadows: Off skips
@@ -129,6 +131,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     // (CascadedShadowMap::CasterReachesSlice), with the PCF kernel SunShadow uses.
     const float sunKernelTexels = CascadedShadowMap::SunKernelTexels(fl.SunAngularDeg, fl.SunShadowSoftness);
     auto castsInto = [&](const SunCaster& sc, int c, const Frustum& cascadeFrustum) {
+        if (!(renderMask & (1u << c))) return false; // held from last frame
         if (!sc.bounded) return true;
         return cascadeFrustum.Intersects(sc.bounds) &&
                shadowMap.CasterReachesSlice(c, sc.bounds.Min, sc.bounds.Max, sunKernelTexels, fl.SunShadowNormalBias);
@@ -137,7 +140,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
         // One pass for every cascade: each caster is drawn once, instanced over the consecutive cascades its bounds
         // touch, and the vertex shader routes each instance to its layer (gl_Layer) - a quarter of the draw calls of
         // the per-cascade loop below, which remains the fallback.
-        shadowMap.BeginLayered();
+        shadowMap.BeginLayered(renderMask);
         glm::mat4 cascadeVP[CascadedShadowMap::kMaxCascades];
         for (int c = 0; c < cascadeCount; ++c) cascadeVP[c] = shadowMap.LightViewProj(c);
         shadowShader.SetMat4Array("uCascadeViewProj[0]", cascadeCount, cascadeVP);
@@ -202,6 +205,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
         shadowShader.SetInt(cascadeLayeredLoc, 0);
     } else {
         for (int c = 0; c < cascadeCount; ++c) {
+            if (!(renderMask & (1u << c))) continue; // held from last frame
             shadowMap.Begin(c);
             shadowShader.SetMat4(shadowLightViewProjLoc, shadowMap.LightViewProj(c));
             // Cull each cascade's caster list against that cascade's own ortho frustum - the near slice covers a few
@@ -213,6 +217,8 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
             DrawDepthCasters(shadowShader, m_Draws);
         }
     }
+
+    shadowMap.MarkRendered(renderMask, frame);
 
     // Grass (GrassRenderer): its blades into the nearest cascades, scattered and culled against each cascade's own
     // box (thinned by distance from the view's eye, as the view sees them), so the field shades itself and the
@@ -227,6 +233,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
             const glm::vec3 eye = glm::vec3(glm::inverse(fitView)[3]);
             const int grassCascades = std::min(cascadeCount, GrassRenderer::kShadowCascades);
             for (int c = 0; c < grassCascades; ++c) {
+                if (!(renderMask & (1u << c))) continue;
                 const glm::mat4 vp = shadowMap.LightViewProj(c);
                 if (!grass.Cull(glm::mat4(1.0f), vp, eye, GrassRenderer::kShadowDistance)) continue;
                 shadowMap.Resume(c);
