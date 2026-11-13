@@ -2023,6 +2023,10 @@ private:
     // PathKeys of everything the library lists, rebuilt when its list sizes change.
     std::unordered_set<std::string> m_ListedAssetKeys;
     size_t m_ListedAssetSignature = (size_t)-1;
+    // Per list (models, textures, materials, sounds, prefabs): how many entries m_ListedAssetKeys holds and the key of the
+    // last one, so a list that only grew adds just its new tail (RefreshProjectAssetIndexIfNeeded).
+    size_t m_ListedAssetCounts[5] = {};
+    std::string m_ListedAssetTails[5];
     AssetThumbnailLoader m_AssetThumbs; // tiles of unloaded assets
     void RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets);
     // What an Inspector asset field of `kind` offers: every such file in the project (loaded or

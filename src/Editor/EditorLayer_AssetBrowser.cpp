@@ -1448,12 +1448,42 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
                              ((size_t)assets.Prefabs().size() << 48);
     if (signature != m_ListedAssetSignature || replaced) {
         m_ListedAssetSignature = signature;
-        m_ListedAssetKeys.clear();
-        for (const auto& m : assets.Models()) m_ListedAssetKeys.insert(AssetDatabase::PathKey(m->Path()));
-        for (const auto& t : assets.Textures()) m_ListedAssetKeys.insert(AssetDatabase::PathKey(t->Path()));
-        for (const auto& m : assets.Materials()) m_ListedAssetKeys.insert(AssetDatabase::PathKey(m->Path));
-        for (const auto& s : assets.Sounds()) m_ListedAssetKeys.insert(AssetDatabase::PathKey(s));
-        for (const auto& p : assets.Prefabs()) m_ListedAssetKeys.insert(AssetDatabase::PathKey(p));
+        // The lists only append, except an unload or a rename. While every list just grew (its last listed entry still
+        // where it was), only the new entries are keyed: in Play the wardrobe warm-up adds models and textures most
+        // frames, and re-keying every path each time cost several ms a frame.
+        const auto count = [&](int l) -> size_t {
+            switch (l) {
+                case 0: return assets.Models().size();
+                case 1: return assets.Textures().size();
+                case 2: return assets.Materials().size();
+                case 3: return assets.Sounds().size();
+                default: return assets.Prefabs().size();
+            }
+        };
+        const auto pathAt = [&](int l, size_t i) -> std::string {
+            switch (l) {
+                case 0: return assets.Models()[i]->Path();
+                case 1: return assets.Textures()[i]->Path();
+                case 2: return assets.Materials()[i]->Path;
+                case 3: return assets.Sounds()[i];
+                default: return assets.Prefabs()[i];
+            }
+        };
+        bool grewOnly = !replaced && !m_ListedAssetKeys.empty();
+        for (int l = 0; l < 5 && grewOnly; ++l) {
+            const size_t was = m_ListedAssetCounts[l];
+            grewOnly = count(l) >= was && (was == 0 || AssetDatabase::PathKey(pathAt(l, was - 1)) == m_ListedAssetTails[l]);
+        }
+        if (!grewOnly) {
+            m_ListedAssetKeys.clear();
+            for (int l = 0; l < 5; ++l) m_ListedAssetCounts[l] = 0;
+        }
+        for (int l = 0; l < 5; ++l) {
+            const size_t n = count(l);
+            for (size_t i = m_ListedAssetCounts[l]; i < n; ++i) m_ListedAssetKeys.insert(AssetDatabase::PathKey(pathAt(l, i)));
+            m_ListedAssetCounts[l] = n;
+            m_ListedAssetTails[l] = n ? AssetDatabase::PathKey(pathAt(l, n - 1)) : std::string();
+        }
     }
 }
 
