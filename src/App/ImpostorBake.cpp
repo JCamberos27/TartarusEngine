@@ -34,7 +34,10 @@ namespace {
 
 constexpr int kFrames = 8;       // frames per atlas side (Jacob's pick: 8 x 8 on a 2K atlas)
 constexpr int kFrameSize = 256;  // px per frame in the atlas
-constexpr int kSuper = 2;        // rendered at kSuper x the frame size, box-filtered down
+// Rendered at kSuper x the frame size, box-filtered down: 16 samples a texel give the coverage 17 steps, and the leaf
+// cards' own alpha test runs about as finely as the live trees' near the impostor's start distance (at 2x the needles
+// came out sparse).
+constexpr int kSuper = 4;
 
 // ImpostorCommon.glsl's functions, mirrored exactly.
 glm::vec3 HemiOctDecode(glm::vec2 p) {
@@ -50,7 +53,7 @@ void FrameBasis(const glm::vec3& d, glm::vec3& right, glm::vec3& up) {
 struct Part {
     std::shared_ptr<Model> model;
     std::vector<std::shared_ptr<MaterialAsset>> materials;
-    glm::mat4 local; // mesh -> the group's unscaled space
+    glm::mat4 local; // mesh -> the group's own space
 };
 
 struct Bake {
@@ -59,18 +62,6 @@ struct Bake {
     std::vector<Part> parts;
     int groups = 0; // how many LOD groups share it
 };
-
-// The group's world transform without its scale: the object space a bake is made in (an instance's scale is applied
-// to the impostor at draw time, as it is to the mesh).
-glm::mat4 Unscaled(const glm::mat4& m) {
-    glm::mat4 r(1.0f);
-    for (int c = 0; c < 3; ++c) {
-        const float len = glm::length(glm::vec3(m[c]));
-        r[c] = len > 1e-8f ? m[c] / len : glm::vec4(c == 0, c == 1, c == 2, 0);
-    }
-    r[3] = m[3];
-    return r;
-}
 
 // "…/Cedrus_tree_var13@Cedrus_tree_var12_LOD0.fbx" -> "Cedrus_tree_var13".
 std::string BakeName(const std::string& modelPath) {
@@ -194,7 +185,9 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
             std::vector<Part> parts;
             std::vector<std::string> paths;
             bool matched = false;
-            const glm::mat4 toGroup = glm::inverse(Unscaled(w.ComposeWorldTransform(g)));
+            // The group's own space, its scale included: the copies of a tree are scaled (the Forest's by 0.8-1.25, on
+            // their prefab roots), and the draw applies each copy's own scale to the shared bake (ImpostorRenderer).
+            const glm::mat4 toGroup = glm::inverse(w.ComposeWorldTransform(g));
             std::vector<entt::entity> stack{kids[0]};
             while (!stack.empty()) {
                 const entt::entity e = stack.back();
@@ -342,8 +335,8 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
                         for (int c = 0; c < 4; ++c) outMask[o + c] = Byte(m[c]);
                     }
             }
-        const std::string files[3] = {b.name + "_Impostor_Albedo.png", b.name + "_Impostor_NormalDepth.png",
-                                      b.name + "_Impostor_Mask.png"};
+        const std::string files[3] = {"T_" + b.name + "_Impostor_Albedo.png", "T_" + b.name + "_Impostor_NormalDepth.png",
+                                      "T_" + b.name + "_Impostor_Mask.png"};
         const bool ok = WritePng(outDir / files[0], atlas, outAlbedo) && WritePng(outDir / files[1], atlas, outNormal) &&
                         WritePng(outDir / files[2], atlas, outMask);
         if (!ok) ++failed;
@@ -352,6 +345,24 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
         j["groups"] = b.groups;
         j["centre"] = {centre.x, centre.y, centre.z};
         j["radius"] = radius;
+        j["boundsMin"] = {lo.x, lo.y, lo.z}; // the LOD 0's box: the draw fits each card to its outline
+        j["boundsMax"] = {hi.x, hi.y, hi.z};
+        // The card's sway (ImpostorRenderer): the slow bend of the LOD 0's foliage materials - their flutter is too fine
+        // to see on a card - as FoliageWind.glsl scales it: WindStrength x (1 - WindFlutter) at WindHeight.
+        float windBend = 0.0f, windHeight = 0.0f;
+        for (const Part& part : b.parts)
+            for (int m = 0; m < part.model->MeshCount(); ++m) {
+                const Material& mat = m < (int)part.materials.size() && part.materials[m] ? part.materials[m]->Mat
+                                                                                         : part.model->MeshMaterial(m);
+                if (!mat.Foliage) continue;
+                const float bend = std::abs(mat.WindStrength) * (1.0f - std::clamp(mat.WindFlutter, 0.0f, 1.0f));
+                if (bend > windBend) {
+                    windBend = bend;
+                    windHeight = mat.WindHeight;
+                }
+            }
+        j["windBend"] = windBend;
+        j["windHeight"] = windHeight;
         j["albedo"] = files[0];
         j["normalDepth"] = files[1];
         j["mask"] = files[2];

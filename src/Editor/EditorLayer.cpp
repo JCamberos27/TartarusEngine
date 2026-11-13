@@ -2218,6 +2218,12 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             EditorUI::SetTooltip("Lays down the static world's depth before shading it, so each pixel runs the\n"
                                  "lighting once instead of once per surface drawn over it. Cheaper on the GPU for\n"
                                  "crowded interiors; costs a second (depth-only) draw of the static scene.");
+        SettingsLabel("Impostors");
+        if (EditorUIPrimitives::Checkbox("##Impostors", &q.Impostors)) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Trees with a baked octahedral impostor (assets/Impostors) draw it instead of their\n"
+                                 "LOD levels past its start distance (40 m): one card per tree, lit and shadowed\n"
+                                 "like the tree, cross-faded at the hand-over. Off: the LOD levels all the way.");
         SettingsLabel("GPU instancing");
         if (EditorUIPrimitives::Checkbox("##GPU instancing", &q.GpuInstancing)) ProjectSettings::Save();
         if (ImGui::IsItemHovered())

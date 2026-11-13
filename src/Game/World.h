@@ -238,6 +238,18 @@ public:
         const size_t s = (size_t)entt::to_entity(e);
         return s < m_LodFadeOwner.size() && m_LodFadeOwner[s] == e ? m_LodFadeValue[s] : 0.0f;
     }
+    // Octahedral impostors (ImpostorLibrary): a LOD group whose LOD 0 matches a baked set draws its impostor instead of
+    // any level once its centre is past ImpostorLibrary::StartDistance() from the view (the screen-height levels still
+    // decide nearer, and the group stays culled where they cull it). The impostor is a level of its own to ApplyLod:
+    // every child is tagged, and the hand-over cross-fades like any other. Calls f(group, set, fade) for each group
+    // the last ApplyLod left showing its impostor, fade as LodFadeOf (0 whole, > 0 fading in, < 0 fading out).
+    template <class F>
+    void ForEachImpostor(F&& f) const {
+        if (!m_LodImpostors) return;
+        for (const LodGroupState& st : m_LodState)
+            if (st.Impostor >= 0 && (st.Active == kLodImpostor || st.FadeFrom == kLodImpostor))
+                f(st.Group, (int)st.Impostor, st.ImpostorFade);
+    }
     // Removes every LodCulledTag.
     void ClearLod();
     // Whether ApplyLod tagged `e` LodCulledTag: the same answer as the tag, read from a flat per-slot table (the
@@ -346,6 +358,7 @@ private:
     // ApplyLod's memory of what it tagged, per LOD Group slot (see ApplyLod). Active is the level left untagged, -1 for
     // a culled group (every level tagged), kLodSkipped for one that tagged nothing (inactive, or not seen yet).
     static constexpr int kLodSkipped = -2;
+    static constexpr int kLodImpostor = 8; // Active / FadeFrom: the group's impostor (past every child level)
     struct LodGroupState {
         entt::entity Group = entt::null;
         std::int8_t Active = kLodSkipped;
@@ -356,7 +369,10 @@ private:
         std::int8_t FadeFrom = -1; // LodSmooth: the level fading out (left untagged meanwhile), -1 none
         double FadeStart = 0.0;    // when it began (Time::RealtimeSinceStartup)
         double LastChange = -1e9;  // when its level last changed (LodSmooth): a group that keeps flipping doesn't fade
+        std::int16_t Impostor = -1; // ImpostorLibrary set drawn past the start distance, -1 none
+        float ImpostorFade = 0.0f;  // the impostor's cross-fade, as LodFadeOf
     };
+    bool m_LodImpostors = false; // some record has an impostor
     std::vector<float> m_LodFadeValue;        // entity slot -> LodFadeOf
     std::vector<entt::entity> m_LodFadeOwner; // entity slot -> the entity the value is for
     std::vector<entt::entity> m_LodFading;    // groups with a cross-fade under way
@@ -364,6 +380,7 @@ private:
     std::vector<std::uint32_t> m_LodIndex;    // entity slot -> m_LodState index (~0u: none)
     std::uint64_t m_LodCentreStamp = 0;       // the transform cache stamp the centres were read at
     std::vector<entt::entity> m_LodStack;
+    std::vector<const Model*> m_LodModels; // ApplyLod: a LOD 0's models, for ImpostorLibrary::Match
     struct LodMemo { std::uint64_t Stamp = 0; glm::vec3 ViewPos{0.0f}; float YScale = 0.0f; bool Ortho = false;
                      std::uint64_t Inactive = 0; int Evaluated = 0; };
     LodMemo m_LodMemo; // the last ApplyLod's view, so the same view again within a frame is free

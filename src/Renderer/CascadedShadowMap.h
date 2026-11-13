@@ -100,6 +100,9 @@ public:
     // is never sampled. Call after BeginLayered; EndLayeredScissor turns the test off again.
     void BeginLayeredScissor(float kernelTexels, float normalBias) const;
     static void EndLayeredScissor();
+    // Cascade c's read rectangle in texels (x, y, width, height), as BeginLayeredScissor sets it: for a draw into
+    // one cascade (Resume) that wants the same cut.
+    void SliceScissor(int c, float kernelTexels, float normalBias, int rect[4]) const;
     // Cascade c's readable rectangle in its light clip space (x, y): see the definition.
     void ReadRect(int c, float kernelTexels, float normalBias, glm::vec2& lo, glm::vec2& hi) const;
 

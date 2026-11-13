@@ -1,0 +1,385 @@
+{
+ "frameSize": 256,
+ "frames": 8,
+ "impostors": {
+  "Cedrus_tree_var1": {
+   "albedo": "T_Cedrus_tree_var1_Impostor_Albedo.png",
+   "boundsMax": [
+    4.921799659729004,
+    21.86150550842285,
+    5.11627721786499
+   ],
+   "boundsMin": [
+    -4.860795497894287,
+    -0.14283625781536102,
+    -4.985854148864746
+   ],
+   "centre": [
+    0.0305020809173584,
+    10.859334945678711,
+    0.06521153450012207
+   ],
+   "groups": 59,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var1@Cedrus_tree_var1_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var1_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var1_Impostor_NormalDepth.png",
+   "radius": 13.057021141052246,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var10": {
+   "albedo": "T_Cedrus_tree_var10_Impostor_Albedo.png",
+   "boundsMax": [
+    2.277341365814209,
+    17.64849853515625,
+    2.3741583824157715
+   ],
+   "boundsMin": [
+    -2.250946044921875,
+    -0.14871534705162048,
+    -2.2872936725616455
+   ],
+   "centre": [
+    0.013197660446166992,
+    8.74989128112793,
+    0.04343235492706299
+   ],
+   "groups": 66,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var10@Cedrus_tree_var10_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var10_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var10_Impostor_NormalDepth.png",
+   "radius": 9.473321914672852,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var11": {
+   "albedo": "T_Cedrus_tree_var11_Impostor_Albedo.png",
+   "boundsMax": [
+    1.5522937774658203,
+    10.378780364990234,
+    1.3551346063613892
+   ],
+   "boundsMin": [
+    -1.247148036956787,
+    -0.11240217089653015,
+    -1.7796804904937744
+   ],
+   "centre": [
+    0.1525728702545166,
+    5.1331892013549805,
+    -0.21227294206619263
+   ],
+   "groups": 53,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var11@Cedrus_tree_var11_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var11_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var11_Impostor_NormalDepth.png",
+   "radius": 5.650859355926514,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var12": {
+   "albedo": "T_Cedrus_tree_var12_Impostor_Albedo.png",
+   "boundsMax": [
+    1.2730430364608765,
+    1.4913934469223022,
+    4.005582332611084
+   ],
+   "boundsMin": [
+    -1.184371829032898,
+    -0.005527133587747812,
+    -4.767052173614502
+   ],
+   "centre": [
+    0.04433560371398926,
+    0.7429331541061401,
+    -0.380734920501709
+   ],
+   "groups": 49,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var12_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var12_Impostor_NormalDepth.png",
+   "radius": 4.616242408752441,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var13": {
+   "albedo": "T_Cedrus_tree_var13_Impostor_Albedo.png",
+   "boundsMax": [
+    1.2730374336242676,
+    1.7003451585769653,
+    2.8243837356567383
+   ],
+   "boundsMin": [
+    -1.184377670288086,
+    -0.10312330722808838,
+    -5.960463523864746
+   ],
+   "centre": [
+    0.04432988166809082,
+    0.7986109256744385,
+    -1.568039894104004
+   ],
+   "groups": 64,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var13_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var13_Impostor_NormalDepth.png",
+   "radius": 4.649325847625732,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var15": {
+   "albedo": "T_Cedrus_tree_var15_Impostor_Albedo.png",
+   "boundsMax": [
+    2.6968863010406494,
+    11.638588905334473,
+    2.241382360458374
+   ],
+   "boundsMin": [
+    -2.6341440677642822,
+    -0.07396545261144638,
+    -2.410590410232544
+   ],
+   "centre": [
+    0.031371116638183594,
+    5.782311916351318,
+    -0.08460402488708496
+   ],
+   "groups": 63,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var15@Cedrus_tree_var15_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var15_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var15_Impostor_NormalDepth.png",
+   "radius": 6.8418684005737305,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var2": {
+   "albedo": "T_Cedrus_tree_var2_Impostor_Albedo.png",
+   "boundsMax": [
+    2.056462526321411,
+    9.901251792907715,
+    2.1900668144226074
+   ],
+   "boundsMin": [
+    -2.1462185382843018,
+    -0.11240214854478836,
+    -2.2466259002685547
+   ],
+   "centre": [
+    -0.04487800598144531,
+    4.894424915313721,
+    -0.028279542922973633
+   ],
+   "groups": 64,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var2@Cedrus_tree_var2_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var2_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var2_Impostor_NormalDepth.png",
+   "radius": 5.8655781745910645,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var3": {
+   "albedo": "T_Cedrus_tree_var3_Impostor_Albedo.png",
+   "boundsMax": [
+    4.03122091293335,
+    17.035120010375977,
+    3.4748008251190186
+   ],
+   "boundsMin": [
+    -3.9641239643096924,
+    -0.136982262134552,
+    -4.259729385375977
+   ],
+   "centre": [
+    0.03354847431182861,
+    8.449069023132324,
+    -0.392464280128479
+   ],
+   "groups": 54,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var3@Cedrus_tree_var3_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var3_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var3_Impostor_NormalDepth.png",
+   "radius": 10.230219841003418,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var4": {
+   "albedo": "T_Cedrus_tree_var4_Impostor_Albedo.png",
+   "boundsMax": [
+    3.6969566345214844,
+    19.888566970825195,
+    3.8878376483917236
+   ],
+   "boundsMin": [
+    -3.3542284965515137,
+    -0.11724366247653961,
+    -4.190854072570801
+   ],
+   "centre": [
+    0.17136406898498535,
+    9.885662078857422,
+    -0.15150821208953857
+   ],
+   "groups": 70,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var4.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var4_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var4_Impostor_NormalDepth.png",
+   "radius": 11.34919548034668,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var5": {
+   "albedo": "T_Cedrus_tree_var5_Impostor_Albedo.png",
+   "boundsMax": [
+    3.3801162242889404,
+    9.235499382019043,
+    2.0018723011016846
+   ],
+   "boundsMin": [
+    -0.22095681726932526,
+    -0.073163241147995,
+    -1.2523757219314575
+   ],
+   "centre": [
+    1.5795797109603882,
+    4.581168174743652,
+    0.3747482895851135
+   ],
+   "groups": 60,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var5@Cedrus_tree_var5_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var5_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var5_Impostor_NormalDepth.png",
+   "radius": 5.249025344848633,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var6": {
+   "albedo": "T_Cedrus_tree_var6_Impostor_Albedo.png",
+   "boundsMax": [
+    4.0992584228515625,
+    21.52428436279297,
+    5.313038349151611
+   ],
+   "boundsMin": [
+    -3.9497289657592773,
+    -0.3381539583206177,
+    -4.380937576293945
+   ],
+   "centre": [
+    0.07476472854614258,
+    10.59306526184082,
+    0.466050386428833
+   ],
+   "groups": 65,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var6@Cedrus_tree_var6_D_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var6_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var6_Impostor_NormalDepth.png",
+   "radius": 12.616710662841797,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var7": {
+   "albedo": "T_Cedrus_tree_var7_Impostor_Albedo.png",
+   "boundsMax": [
+    2.5269434452056885,
+    8.348963737487793,
+    2.6270904541015625
+   ],
+   "boundsMin": [
+    -2.098978281021118,
+    -0.10581793636083603,
+    -2.5151357650756836
+   ],
+   "centre": [
+    0.21398258209228516,
+    4.121572971343994,
+    0.05597734451293945
+   ],
+   "groups": 63,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var7@Cedrus_tree_var7_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var7_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var7_Impostor_NormalDepth.png",
+   "radius": 5.461798667907715,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var8": {
+   "albedo": "T_Cedrus_tree_var8_Impostor_Albedo.png",
+   "boundsMax": [
+    1.0970665216445923,
+    3.7610766887664795,
+    1.2895925045013428
+   ],
+   "boundsMin": [
+    -1.0636757612228394,
+    -0.04409920796751976,
+    -1.0646865367889404
+   ],
+   "centre": [
+    0.016695380210876465,
+    1.8584887981414795,
+    0.11245298385620117
+   ],
+   "groups": 80,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var8@Cedrus_tree_var8_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var8_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var8_Impostor_NormalDepth.png",
+   "radius": 2.4844918251037598,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  },
+  "Cedrus_tree_var9": {
+   "albedo": "T_Cedrus_tree_var9_Impostor_Albedo.png",
+   "boundsMax": [
+    0.4205462634563446,
+    1.03288996219635,
+    0.4184318482875824
+   ],
+   "boundsMin": [
+    -0.41440245509147644,
+    -0.041407469660043716,
+    -0.3721797466278076
+   ],
+   "centre": [
+    0.003071904182434082,
+    0.49574124813079834,
+    0.02312605082988739
+   ],
+   "groups": 68,
+   "lod0Models": [
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var9@Cedrus_tree_var9_LOD0.fbx"
+   ],
+   "mask": "T_Cedrus_tree_var9_Impostor_Mask.png",
+   "normalDepth": "T_Cedrus_tree_var9_Impostor_NormalDepth.png",
+   "radius": 0.7868165373802185,
+   "windBend": 0.18000000715255737,
+   "windHeight": 14.0
+  }
+ },
+ "layout": "hemi-octahedral; frame (i, j) at p = (i, j) / (frames - 1) * 2 - 1 (ImpostorCommon.glsl)"
+}

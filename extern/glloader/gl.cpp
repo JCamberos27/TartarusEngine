@@ -103,6 +103,7 @@ PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer = nullptr;
 PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer = nullptr;
 PFNGLDISPATCHCOMPUTEPROC glDispatchCompute = nullptr;
 PFNGLMEMORYBARRIERPROC glMemoryBarrier = nullptr;
+PFNGLTEXTUREBARRIERPROC glTextureBarrier = nullptr;
 PFNGLBINDIMAGETEXTUREPROC glBindImageTexture = nullptr;
 PFNGLUNIFORM2IPROC glUniform2i = nullptr;
 
@@ -260,6 +261,7 @@ bool GLLoader_Init() {
     LOAD(PFNGLVERTEXARRAYELEMENTBUFFERPROC, glVertexArrayElementBuffer)
     LOAD(PFNGLDISPATCHCOMPUTEPROC, glDispatchCompute)
     LOAD(PFNGLMEMORYBARRIERPROC, glMemoryBarrier)
+    LOAD(PFNGLTEXTUREBARRIERPROC, glTextureBarrier)
     LOAD(PFNGLBINDIMAGETEXTUREPROC, glBindImageTexture)
     LOAD(PFNGLUNIFORM2IPROC, glUniform2i)
 

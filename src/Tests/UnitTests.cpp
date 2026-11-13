@@ -79,6 +79,7 @@
 #undef far
 #include "UndoDeltaChain.h"
 #include "World.h"
+#include "ImpostorLibrary.h"
 #include "BulletHoles.h"
 #include "ShellCasings.h"
 #include "RotationMath.h"
@@ -726,6 +727,71 @@ void TestLodGroup() {
     world.Registry.destroy(group);
     CHECK(world.ApplyLod(zero, proj) == 0); // no groups left: nothing stays tagged
     CHECK(world.Registry.view<LodCulledTag>().empty());
+}
+
+// Octahedral impostors (ImpostorLibrary): past the start distance a matched group shows its impostor - every level
+// tagged, the group listed by ForEachImpostor - held a little either way, never where the levels cull it, and the
+// hand-over cross-fades both ways like a level change.
+void TestLodImpostor() {
+    ImpostorLibrary::TestOverride(0, 10.0f);
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = world.CreateEmptyEntity(zero, zero, one, "Group");
+    world.Registry.emplace<LODGroupComponent>(group).Size = 4.0f; // 4 m: LOD 2 from 6.7 m, culled past 20 m
+    entt::entity lv[3];
+    for (int i = 0; i < 3; ++i) {
+        lv[i] = world.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i));
+        world.Registry.emplace<RenderableComponent>(lv[i]);
+        world.SetParent(lv[i], group);
+    }
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    world.RebuildWorldTransformCache();
+    auto impostor = [&](float* fade = nullptr) {
+        int n = 0;
+        world.ForEachImpostor([&](entt::entity g, int set, float f) {
+            n += g == group && set == 0;
+            if (fade) *fade = f;
+        });
+        return n == 1;
+    };
+    auto tagged = [&](int i) { return world.Registry.all_of<LodCulledTag>(lv[i]); };
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 1.0f), proj);
+    CHECK(!impostor() && !tagged(0) && tagged(1) && tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj); // LOD 2, short of 10 m
+    CHECK(!impostor() && !tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 12.0f), proj); // past it: the impostor, every level tagged
+    CHECK(impostor() && tagged(0) && tagged(1) && tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj); // back on LOD 2
+    CHECK(!impostor() && !tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 25.0f), proj); // the levels cull it there: so does the impostor
+    CHECK(!impostor() && tagged(0) && tagged(1) && tagged(2));
+
+    // The hand-over fades: LOD 2 out as the impostor comes in, then the other way.
+    world.LodSmooth = true;
+    world.LodClockOverride = 10.0;
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj);
+    world.LodClockOverride += 1.0;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 12.0f), proj);
+    float fade = 0.0f;
+    CHECK(impostor(&fade) && fade > 0.0f && world.LodFadeOf(lv[2]) < 0.0f && !tagged(2));
+    world.LodClockOverride += World::kLodFadeSeconds + 0.1;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 12.0f), proj);
+    CHECK(impostor(&fade) && fade == 0.0f && world.LodFadeOf(lv[2]) == 0.0f && tagged(2));
+    world.LodClockOverride += 1.0;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.8f), proj); // held just inside the start (smooth views hold a level)
+    CHECK(impostor(&fade) && fade == 0.0f && tagged(2));
+    world.LodClockOverride += 1.0;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj);
+    CHECK(impostor(&fade) && fade < 0.0f && world.LodFadeOf(lv[2]) > 0.0f && !tagged(2));
+    world.LodClockOverride += World::kLodFadeSeconds + 0.1;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj);
+    CHECK(!impostor() && world.LodFadeOf(lv[2]) == 0.0f && !tagged(2));
+    ImpostorLibrary::TestOverride(-1, 0.0f);
 }
 
 // LodSmooth cross-fades end: one still view finishes its fade, and two views that disagree on a group's level (the
@@ -6062,6 +6128,7 @@ int RunUnitTests(const char* filter) {
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
         {"LodFadeCompletes", TestLodFadeCompletes},
+        {"LodImpostor", TestLodImpostor},
         {"NearestEuler", TestNearestEuler},
         {"QuaternionTransformStorage", TestQuaternionTransformStorage},
         {"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis},

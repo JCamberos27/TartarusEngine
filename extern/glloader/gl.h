@@ -448,6 +448,7 @@ typedef void (__stdcall* PFNGLVERTEXARRAYELEMENTBUFFERPROC)(GLuint, GLuint);
 // Compute dispatch + memory barrier (GL 4.3) — clustered light culling (#120).
 typedef void (__stdcall* PFNGLDISPATCHCOMPUTEPROC)(GLuint, GLuint, GLuint);
 typedef void (__stdcall* PFNGLMEMORYBARRIERPROC)(GLbitfield);
+typedef void (__stdcall* PFNGLTEXTUREBARRIERPROC)(void);
 typedef void (__stdcall* PFNGLUNIFORM2IPROC)(GLint, GLint, GLint);
 typedef void (__stdcall* PFNGLBINDIMAGETEXTUREPROC)(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum);
 
@@ -551,6 +552,7 @@ extern PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer;
 extern PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer;
 extern PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
 extern PFNGLMEMORYBARRIERPROC glMemoryBarrier;
+extern PFNGLTEXTUREBARRIERPROC glTextureBarrier;
 extern PFNGLBINDIMAGETEXTUREPROC glBindImageTexture;
 extern PFNGLUNIFORM2IPROC glUniform2i;
 
