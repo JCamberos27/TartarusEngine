@@ -7,7 +7,7 @@ layout (location = 3) in vec3 aTangent;
 layout (location = 6) in float aTangentSign;
 layout (location = 7) in vec4 aColor;
 
-uniform mat4 uModel;        // mesh -> the object's own space (its LOD group, unscaled)
+uniform mat4 uModel;        // mesh -> the object's own space (its LOD group's, scale included)
 uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4
 uniform mat4 uViewProj;     // the frame's orthographic camera
 

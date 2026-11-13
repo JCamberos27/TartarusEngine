@@ -46,6 +46,9 @@ public:
     // stays provisioned (and re-provisioned across Resize()) for the life of this HdrTarget.
     unsigned int ResolvedDepthTexture() const;
     unsigned int MultisampleFbo() const { return m_MsFbo; }
+    // The multisampled depth itself (GL_TEXTURE_2D_MULTISAMPLE, Samples() of them): a pass that tests against it with
+    // depth writes off may also read it (after glTextureBarrier) - the impostors' lit pass does.
+    unsigned int MultisampleDepthTexture() const { return m_MsDepth; }
 
     // TAA motion vectors (TemporalAA.h): an RG16F second colour attachment at the same sample count. Off by default
     // and allocated only while a view wants it. Even when on, location 1 is NOT in the draw buffers unless

@@ -415,18 +415,28 @@ bool CascadedShadowMap::ViewportIndexSupported() {
     return supported;
 }
 
+void CascadedShadowMap::SliceScissor(int c, float kernelTexels, float normalBias, int rect[4]) const {
+    const float res = (float)std::max(m_Resolution, 1);
+    glm::vec2 lo, hi;
+    ReadRect(c, kernelTexels, normalBias, lo, hi);
+    const auto toTexel = [&](float ndc) { return (ndc * 0.5f + 0.5f) * res; };
+    const int x0 = std::clamp((int)std::floor(toTexel(lo.x)) - 1, 0, m_Resolution); // a texel more for the rounding
+    const int y0 = std::clamp((int)std::floor(toTexel(lo.y)) - 1, 0, m_Resolution);
+    const int x1 = std::clamp((int)std::ceil(toTexel(hi.x)) + 1, 0, m_Resolution);
+    const int y1 = std::clamp((int)std::ceil(toTexel(hi.y)) + 1, 0, m_Resolution);
+    rect[0] = x0;
+    rect[1] = y0;
+    rect[2] = std::max(x1 - x0, 0);
+    rect[3] = std::max(y1 - y0, 0);
+}
+
 void CascadedShadowMap::BeginLayeredScissor(float kernelTexels, float normalBias) const {
     const float res = (float)std::max(m_Resolution, 1);
     for (int c = 0; c < m_Count; ++c) {
         glViewportIndexedf((GLuint)c, 0.0f, 0.0f, res, res);
-        glm::vec2 lo, hi;
-        ReadRect(c, kernelTexels, normalBias, lo, hi);
-        const auto toTexel = [&](float ndc) { return (ndc * 0.5f + 0.5f) * res; };
-        const int x0 = std::clamp((int)std::floor(toTexel(lo.x)) - 1, 0, m_Resolution); // a texel more for the rounding
-        const int y0 = std::clamp((int)std::floor(toTexel(lo.y)) - 1, 0, m_Resolution);
-        const int x1 = std::clamp((int)std::ceil(toTexel(hi.x)) + 1, 0, m_Resolution);
-        const int y1 = std::clamp((int)std::ceil(toTexel(hi.y)) + 1, 0, m_Resolution);
-        glScissorIndexed((GLuint)c, x0, y0, std::max(x1 - x0, 0), std::max(y1 - y0, 0));
+        int r[4];
+        SliceScissor(c, kernelTexels, normalBias, r);
+        glScissorIndexed((GLuint)c, r[0], r[1], r[2], r[3]);
     }
     glEnable(GL_SCISSOR_TEST);
 }

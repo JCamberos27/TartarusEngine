@@ -4,6 +4,7 @@
 #include <execution>
 #include <numeric>
 #include "Model.h"
+#include "ImpostorLibrary.h"
 #include "Log.h"
 #include "TimeService.h"
 #include <string>
@@ -281,6 +282,28 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         // Automatic size: LOD 0's bounds, measured again whenever the group itself moves.
         if (lod.Size <= 0.0f && st.Levels > 0) st.AutoSize = subtreeSize(st.Kids[0], groupWorld);
     };
+    // Octahedral impostors (ForEachImpostor): groups are matched to a set whenever sets exist, and drawn only while
+    // enabled (Project Settings) - turned off, every start is out of reach and the next pass puts each back on its
+    // levels. impostorOf: the set a group's LOD 0 matches (the models its renderers draw, as the bake gathered them -
+    // Shadows Only left out), or -1.
+    const bool impostors = ImpostorLibrary::Available();
+    const float impostorStart = ImpostorLibrary::Enabled() ? ImpostorLibrary::StartDistance() : std::numeric_limits<float>::max();
+    std::vector<const Model*>& lod0Models = m_LodModels;
+    auto impostorOf = [&](entt::entity lod0) -> int {
+        lod0Models.clear();
+        stack.assign(1, lod0);
+        while (!stack.empty()) {
+            const entt::entity e = stack.back();
+            stack.pop_back();
+            if (!Registry.valid(e) || Registry.all_of<InactiveTag>(e)) continue;
+            if (const auto* r = Registry.try_get<RenderableComponent>(e);
+                r && r->ModelRef && r->CastShadows != RenderableComponent::ShadowCasting::ShadowsOnly)
+                lod0Models.push_back(r->ModelRef.get());
+            if (const auto* h = Registry.try_get<HierarchyComponent>(e))
+                stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+        }
+        return ImpostorLibrary::Match(lod0Models);
+    };
 
     // One pass over the groups; returns false when the incremental pass meets a group it has no record of, and the
     // caller redoes everything in full. The records are dense, in the view's order, so the steady pass over 40k
@@ -316,6 +339,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             setFade(st.Kids[from], 0.0f);
         }
         if (st.Active >= 0 && st.Active < st.Levels) setFade(st.Kids[st.Active], 0.0f);
+        st.ImpostorFade = 0.0f;
     };
     // A group's level goes from `was` to `active` (st.Active still `was`): retag, starting a fade when smooth.
     auto changeLevel = [&](LodGroupState& st, int was, int active, bool nested) {
@@ -328,7 +352,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         // every flip never finished - its leaves stayed dithered for as long as both views were up. Those switch at once.
         const bool settled = now - st.LastChange >= kLodFadeSeconds;
         if (LodSmooth) st.LastChange = now;
-        const bool fade = LodSmooth && settled && was >= 0 && was < levels && was != active;
+        const bool fade = LodSmooth && settled && ((was >= 0 && was < levels) || was == kLodImpostor) && was != active;
         for (int i = 0; i < levels; ++i) {
             const bool wasTagged = was >= -1 && i != was;
             const bool nowTagged = active >= -1 && i != active && !(fade && i == was);
@@ -337,8 +361,10 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         if (fade) {
             st.FadeFrom = (std::int8_t)was;
             st.FadeStart = now;
-            setFade(st.Kids[was], -1e-4f);
-            if (active >= 0) setFade(st.Kids[active], 1e-4f);
+            if (was < levels) setFade(st.Kids[was], -1e-4f);
+            else st.ImpostorFade = -1e-4f;
+            if (active >= 0 && active < levels) setFade(st.Kids[active], 1e-4f);
+            else if (active == kLodImpostor) st.ImpostorFade = 1e-4f;
             m_LodFading.push_back(st.Group);
         }
     };
@@ -347,6 +373,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     auto pass = [&]() -> bool {
         evaluated = 0;
         if (full) {
+            m_LodImpostors = false;
             Registry.clear<LodCulledTag>();
             std::fill(m_LodCulledOwner.begin(), m_LodCulledOwner.end(), entt::null);
             std::fill(m_LodFadeOwner.begin(), m_LodFadeOwner.end(), entt::null);
@@ -383,12 +410,21 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             const float thresholds[4] = {lod.Lod0, lod.Lod1, lod.Lod2, lod.Lod3};
             // LodSmooth: the level shown now holds kLodHysteresis past its switch points either way.
             const int cur = !LodSmooth || st.Active < -1 ? -100 : (st.Active == -1 ? (int)st.Levels : (int)st.Active);
+            int level = -1; // culled
             for (int i = 0; i < st.Levels; ++i) {
                 float thr = thresholds[i];
                 if (cur != -100) thr *= i < cur ? 1.0f + kLodHysteresis : i == cur ? 1.0f - kLodHysteresis : 1.0f;
-                if (height >= thr) return i;
+                if (height >= thr) {
+                    level = i;
+                    break;
+                }
             }
-            return -1; // culled
+            // Past the start distance, the impostor (wherever the levels draw anything); held half the hysteresis past
+            // it either way, so a view standing at it doesn't flip.
+            if (level >= 0 && st.Impostor >= 0 &&
+                dist >= impostorStart * (cur == kLodImpostor ? 1.0f - 0.5f * kLodHysteresis : 1.0f + 0.5f * kLodHysteresis))
+                return kLodImpostor;
+            return level;
         };
         if (!full) {
             const size_t count = m_LodState.size();
@@ -439,6 +475,10 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
                 if (slot >= m_LodIndex.size()) m_LodIndex.resize(slot + 1, ~0u);
                 m_LodIndex[slot] = (std::uint32_t)at;
                 measure(st, lod);
+                if (impostors && st.Levels > 0) {
+                    st.Impostor = (std::int16_t)impostorOf(st.Kids[0]);
+                    m_LodImpostors |= st.Impostor >= 0;
+                }
             } else if (at >= m_LodState.size() || m_LodState[at].Group != g) {
                 return false; // the children can't have changed without the signature changing
             }
@@ -477,8 +517,10 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
                 continue;
             }
             const float f = std::clamp(t, 1e-4f, 0.9999f);
-            setFade(st->Kids[st->FadeFrom], -f);
+            if (st->FadeFrom < st->Levels) setFade(st->Kids[st->FadeFrom], -f);
+            else st->ImpostorFade = -f;
             if (st->Active >= 0 && st->Active < st->Levels) setFade(st->Kids[st->Active], f);
+            else if (st->Active == kLodImpostor) st->ImpostorFade = f;
             m_LodFading[keep++] = g;
         }
         m_LodFading.resize(keep);

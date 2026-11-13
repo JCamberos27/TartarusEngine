@@ -20,6 +20,7 @@
 #include "Frustum.h"
 #include "GLStateCache.h"
 #include "GrassRenderer.h"
+#include "ImpostorRenderer.h"
 #include "SkinHideBuffer.h"
 #include "TimeService.h"
 #include "gl.h"
@@ -216,6 +217,26 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
                 if (castsInto(sc, c, cascadeFrustum)) m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided});
             DrawDepthCasters(shadowShader, m_Draws);
         }
+    }
+
+    // Octahedral impostors (ImpostorRenderer): the trees ApplyLod put on theirs cast as the sun sees their frames.
+    {
+        glm::mat4 cascadeVP[CascadedShadowMap::kMaxCascades];
+        for (int c = 0; c < cascadeCount; ++c) cascadeVP[c] = shadowMap.LightViewProj(c);
+        ImpostorRenderer::Get().DrawSun(
+            world, cascadeVP, casterCells, cascadeCount, renderMask, -fl.SunDir,
+            [&](int c, const glm::vec3& lo, const glm::vec3& hi) {
+                return shadowMap.CasterReachesSlice(c, lo, hi, sunKernelTexels, fl.SunShadowNormalBias);
+            },
+            [&](int c) {
+                shadowMap.Resume(c);
+                int r[4];
+                shadowMap.SliceScissor(c, sunKernelTexels, fl.SunShadowNormalBias, r);
+                glScissor(r[0], r[1], r[2], r[3]);
+                glEnable(GL_SCISSOR_TEST);
+            });
+        glDisable(GL_SCISSOR_TEST);
+        shadowShader.Bind();
     }
 
     shadowMap.MarkRendered(renderMask, frame);

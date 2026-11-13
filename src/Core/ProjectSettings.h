@@ -94,6 +94,9 @@ struct QualitySettings {
     // With GPU-driven draws: the opaque pass skips the copies its depth pre-pass already hides (HiZCuller.h), tested
     // on the GPU against a depth pyramid - no CPU wait, and only boxes fully behind that depth are skipped.
     bool GpuOcclusionCulling = true;
+    // Octahedral impostors (ImpostorLibrary.h): LOD groups with a baked impostor draw it instead of their levels past
+    // its start distance - one card per tree, in the camera, depth and sun passes.
+    bool Impostors = true;
     // Clustered decals (docs/DECALS.md): what their texture arrays may grow to, least-recently-used
     // decal textures making room past it, and how far away decals still draw (they fade out over the
     // last fifth).

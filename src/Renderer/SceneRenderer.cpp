@@ -37,6 +37,7 @@
 #include "BloodRenderer.h"
 #include "FurRenderer.h"
 #include "GrassRenderer.h"
+#include "ImpostorRenderer.h"
 #include "BloodPalette.h"
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
@@ -1248,6 +1249,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // test before the model program runs - ~0.8 ms of the Forest's opaque pass. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
     // player body's or outfits' hidden parts, which the model program discards.
     const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
+    // Octahedral impostors (ImpostorRenderer): the trees this view's ApplyLod put on theirs, in its frustum. Into the
+    // pre-pass with the static world, then lit over it with the opaque pass.
+    const bool impostorsOn = ImpostorRenderer::Get().Gather(world, camFrustum, ctx.ViewPos);
     unsigned hizDepth = 0; // the view's depth after the pre-pass, single sample: HiZCuller's occluders
     constexpr float kPrepassSlopeOffset = 0.02f;
     const auto prepassed = [&](const DrawItem& it) {
@@ -1274,6 +1278,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         for (const DrawItem& it : drawList)
             if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         DrawDepthCasters(depth, prepass);
+        if (impostorsOn) {
+            ImpostorRenderer::Get().DrawDepth(ctx.View, ctx.Proj, ctx.ViewPos);
+            localStats.DrawCalls += ImpostorRenderer::Get().DrawCalls();
+            depth.Bind();
+        }
 
         // SSAO from this pre-pass (RenderFrameContext::SsaoFromPrepass): copy the depth into SSAO's own target and
         // add only what the pre-pass left out, rather than SSAO drawing the whole visible scene a second time. The
@@ -1589,6 +1598,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     if (depthWrites != GL_TRUE) {
         glDepthMask(GL_TRUE);
         glDepthFunc(GL_LEQUAL);
+    }
+    if (impostorsOn) {
+        const bool viewDepth = ctx.TxHdr && ctx.TxHdr->IsValid();
+        ImpostorRenderer::Get().DrawLit(ctx.View, ctx.Proj, ctx.ViewPos, depthPrepass,
+                                        viewDepth ? ctx.TxHdr->MultisampleDepthTexture() : 0u,
+                                        viewDepth ? ctx.TxHdr->Samples() : 0, [&](Shader& p) { ApplyFrameState(p, fs); });
+        localStats.DrawCalls += ImpostorRenderer::Get().DrawCalls();
+        modelShader.Bind();
     }
     }
     instanceBase = -1;
