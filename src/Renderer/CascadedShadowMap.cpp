@@ -161,6 +161,7 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
         const float lo = c == 0 ? camNear : std::max(camNear, m_SplitFar[c - 1] * 0.88f);
         const float hi = c == m_Count - 1 ? realFar : std::min(m_SplitFar[c], realFar);
         const float t0 = (lo - camNear) / (realFar - camNear), t1 = (hi - camNear) / (realFar - camNear);
+        const float t0Last = t0;
         for (int i = 0; i < 4; ++i) {
             const glm::vec3 edge = farC[i] - nearC[i];
             for (int k = 0; k < 2; ++k) {
@@ -173,6 +174,21 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
         const std::array<glm::vec2, 8>& s = m_SliceCorners[c];
         m_SliceMin[c] = m_SliceMax[c] = s[0];
         for (const glm::vec2& p : s) { m_SliceMin[c] = glm::min(m_SliceMin[c], p); m_SliceMax[c] = glm::max(m_SliceMax[c], p); }
+        m_HoldMin[c] = m_SliceMin[c];
+        m_HoldMax[c] = m_SliceMax[c];
+        if (c == m_Count - 1 && realFar > m_SplitFar[c]) {
+            const float tIn = (m_SplitFar[c] - camNear) / (realFar - camNear);
+            m_HoldMin[c] = glm::vec2(std::numeric_limits<float>::max());
+            m_HoldMax[c] = -m_HoldMin[c];
+            for (int i = 0; i < 4; ++i) {
+                const glm::vec3 edge = farC[i] - nearC[i];
+                for (int k = 0; k < 2; ++k) {
+                    const glm::vec4 p = m_LightViewProj[c] * glm::vec4(nearC[i] + edge * (k ? tIn : t0Last), 1.0f);
+                    m_HoldMin[c] = glm::min(m_HoldMin[c], glm::vec2(p) / p.w);
+                    m_HoldMax[c] = glm::max(m_HoldMax[c], glm::vec2(p) / p.w);
+                }
+            }
+        }
         std::array<glm::vec2, 8> pts = s;
         std::sort(pts.begin(), pts.end(), [](const glm::vec2& a, const glm::vec2& b) { return a.x < b.x || (a.x == b.x && a.y < b.y); });
         std::array<glm::vec2, 16> hull{};
@@ -341,8 +357,8 @@ unsigned CascadedShadowMap::PlanRender(std::uint64_t frame) {
             // This frame's slice, carried into the held layer's clip space (both orthographic along the same light, at
             // the same scale: a shift), must lie inside what was rendered.
             const glm::mat4 toHeld = m_HeldViewProj[c] * glm::inverse(m_LightViewProj[c]);
-            const glm::vec2 a = glm::vec2(toHeld * glm::vec4(m_SliceMin[c], 0.0f, 1.0f));
-            const glm::vec2 b = glm::vec2(toHeld * glm::vec4(m_SliceMax[c], 0.0f, 1.0f));
+            const glm::vec2 a = glm::vec2(toHeld * glm::vec4(m_HoldMin[c], 0.0f, 1.0f));
+            const glm::vec2 b = glm::vec2(toHeld * glm::vec4(m_HoldMax[c], 0.0f, 1.0f));
             keep = glm::all(glm::greaterThanEqual(glm::min(a, b), m_HeldLo[c])) &&
                    glm::all(glm::lessThanEqual(glm::max(a, b), m_HeldHi[c]));
         }
@@ -365,8 +381,8 @@ void CascadedShadowMap::MarkRendered(unsigned mask, std::uint64_t frame) {
         m_HeldLightDir[c] = m_LightDir;
         m_HeldFrame[c] = m_HoldTexels[c] > 0.0f ? frame : 0; // rendered without the hold margin: never held
         const glm::vec2 grow(m_HoldTexels[c] * 2.0f / res);
-        m_HeldLo[c] = m_SliceMin[c] - grow;
-        m_HeldHi[c] = m_SliceMax[c] + grow;
+        m_HeldLo[c] = m_HoldMin[c] - grow;
+        m_HeldHi[c] = m_HoldMax[c] + grow;
     }
 }
 
