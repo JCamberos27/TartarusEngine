@@ -25,6 +25,7 @@ struct State {
     std::map<std::vector<const Model*>, int> ByPointer; // Match's cache
     int TestSet = -1;
     float TestStart = 0.0f;
+    bool Drawable = false;
 };
 
 State& S() {
@@ -74,6 +75,13 @@ void Load() {
             }
             set.WindBend = v.value("windBend", 0.0f);
             set.WindHeight = std::max(v.value("windHeight", 1.0f), 0.01f);
+            set.FrameExtents.assign((size_t)frames * frames, glm::vec2(set.Radius)); // an older bake: the sphere
+            if (const auto fe = v.find("frameExtents"); fe != v.end() && fe->is_array() && fe->size() == set.FrameExtents.size())
+                for (size_t k = 0; k < set.FrameExtents.size(); ++k) {
+                    const auto& e = (*fe)[k];
+                    if (e.is_array() && e.size() == 2)
+                        set.FrameExtents[k] = glm::max(glm::vec2(e[0].get<float>(), e[1].get<float>()), glm::vec2(1e-3f));
+                }
             set.Albedo = folder + v.value("albedo", std::string());
             set.NormalDepth = folder + v.value("normalDepth", std::string());
             set.Mask = folder + v.value("mask", std::string());
@@ -107,8 +115,16 @@ bool Available() {
     return !S().Sets.empty();
 }
 
-bool Enabled() {
+bool Wanted() {
     return Available() && (S().TestSet >= 0 || ProjectSettings::Quality().Impostors);
+}
+
+bool Enabled() {
+    return Wanted() && (S().TestSet >= 0 || S().Drawable);
+}
+
+void SetDrawable(bool drawable) {
+    S().Drawable = drawable;
 }
 
 const std::vector<ImpostorSet>& Sets() {
@@ -134,7 +150,9 @@ int Match(const std::vector<const Model*>& lod0) {
 }
 
 void Reload() {
+    const bool drawable = S().Drawable;
     S() = State{};
+    S().Drawable = drawable;
 }
 
 void TestOverride(int set, float startDistance) {

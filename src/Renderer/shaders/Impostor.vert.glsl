@@ -10,8 +10,19 @@ struct ImpostorInstance {
     vec4 CentreScale; // xyz the bounding sphere's centre (world), w the copy's scale
     vec4 Rotation;    // the group's rotation, object -> world (a quaternion, xyzw)
     vec4 OriginFade;  // xyz the group's origin (world: the wind's phase and height mask), w its LOD cross-fade
+    vec4 Set;         // x its set: the atlas arrays' layer and the entry in ImpostorSets
 };
 layout(std430, binding = 23) readonly buffer ImpostorInstances { ImpostorInstance uImpostors[]; };
+// Every set (ImpostorLibrary), at scale 1: the LOD 0's box relative to the sphere's centre, the sphere's radius, and
+// the card's sway - FoliageWind.glsl's slow bend at the set's own strength (WindStrength x (1 - WindFlutter)).
+struct ImpostorSetGpu {
+    vec4 BoxMinRadius; // xyz box min, w radius
+    vec4 BoxMaxBend;   // xyz box max, w wind bend (metres at WindHeight)
+    vec4 Wind;         // x wind height
+};
+layout(std430, binding = 24) readonly buffer ImpostorSets { ImpostorSetGpu uSets[]; };
+// Each set's frames' half-extents on their image planes (the bake fits each to the tree): set x frames^2 + j x frames + i.
+layout(std430, binding = 22) readonly buffer ImpostorFrameExtents { vec2 uFrameExtents[]; };
 
 uniform mat4 uView;
 uniform mat4 uProj;
@@ -19,15 +30,9 @@ uniform vec3 uEye;            // the camera (perspective views)
 uniform int uOrtho;           // 1: an orthographic view (a sun cascade): uLightViewProj, looking along -uOrthoToViewer
 uniform vec3 uOrthoToViewer;  // world, unit
 uniform mat4 uLightViewProj;
-uniform float uRadius;        // the set's bounding sphere at scale 1
-uniform vec3 uBoxMin;         // the LOD 0's box, relative to the sphere's centre, at scale 1
-uniform vec3 uBoxMax;
-uniform int uFrames;          // frames per atlas side
-// The card's sway: FoliageWind.glsl's slow bend, at the set's own strength (WindStrength x (1 - WindFlutter)).
+uniform int uFrames;          // frames per atlas side (every set's)
 uniform float uWindTime;
 uniform vec2 uWindDir;
-uniform float uWindBend;
-uniform float uWindHeight;
 
 // Object space below is the group's own at scale 1, centred on the bounding sphere.
 out vec3 vObj;                 // the card point
@@ -40,6 +45,9 @@ flat out vec3 vFrameDir[3];    // the three frames blended: their view direction
 flat out vec3 vFrameRight[3];
 flat out vec3 vFrameUp[3];
 flat out vec2 vFrameCell[3];   // their (column, row) in the atlas
+flat out vec2 vFrameExtent[3]; // their half-extents on their image planes
+flat out float vRadius;        // the set's sphere, scale 1
+flat out float vLayer;         // the set's layer in the atlas arrays
 flat out vec3 vWeights;
 flat out vec4 vRot;
 flat out float vScale;
@@ -49,9 +57,12 @@ vec3 QRot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w 
 
 void main() {
     ImpostorInstance inst = uImpostors[gl_BaseInstance + gl_InstanceID];
+    int set = int(inst.Set.x + 0.5);
+    ImpostorSetGpu sd = uSets[set];
+    vec3 boxMin = sd.BoxMinRadius.xyz, boxMax = sd.BoxMaxBend.xyz;
     precise vec3 C = inst.CentreScale.xyz;
     precise float s = inst.CentreScale.w;
-    precise float R = uRadius * s;
+    precise float R = sd.BoxMinRadius.w * s;
     vec4 q = inst.Rotation;
     vec4 qi = vec4(-q.xyz, q.w);
     precise vec3 toViewer = uOrtho == 1 ? uOrthoToViewer : normalize(uEye - C);
@@ -88,7 +99,10 @@ void main() {
         vFrameRight[k] = r;
         vFrameUp[k] = u;
         vFrameCell[k] = cells[k];
+        vFrameExtent[k] = uFrameExtents[set * uFrames * uFrames + int(cells[k].y + 0.5) * uFrames + int(cells[k].x + 0.5)];
     }
+    vRadius = sd.BoxMinRadius.w;
+    vLayer = float(set);
 
     // The card: square to the viewer at the sphere's near side, so every surface point lies behind it and the depth
     // offset only ever pushes away. Its outline is the LOD 0's box as seen from here (projected along the view rays onto
@@ -100,8 +114,8 @@ void main() {
     precise vec3 Pc = C + toViewer * (uOrtho == 1 ? 0.0 : R);
     precise vec2 lo = vec2(1e30), hi = vec2(-1e30);
     for (int k = 0; k < 8; ++k) {
-        vec3 b = vec3((k & 1) != 0 ? uBoxMax.x : uBoxMin.x, (k & 2) != 0 ? uBoxMax.y : uBoxMin.y,
-                      (k & 4) != 0 ? uBoxMax.z : uBoxMin.z);
+        vec3 b = vec3((k & 1) != 0 ? boxMax.x : boxMin.x, (k & 2) != 0 ? boxMax.y : boxMin.y,
+                      (k & 4) != 0 ? boxMax.z : boxMin.z);
         precise vec3 w = C + QRot(q, b * s);
         if (uOrtho != 1) { // along the ray from the eye, onto the card's plane
             precise vec3 dir = w - uEye;
@@ -120,12 +134,12 @@ void main() {
     // Sway: the canopy shears with the gust, as FoliageWindOffsetAt bends the tree (its height mask on the group's own
     // height, the offset in metres). The atlas lookup above stays with the still card.
     precise vec3 origin = inst.OriginFade.xyz;
-    precise float mask = clamp((P.y - origin.y) / s / uWindHeight, 0.0, 1.0);
+    precise float mask = clamp((P.y - origin.y) / s / max(sd.Wind.x, 0.01), 0.0, 1.0);
     precise float along = dot(origin.xz, uWindDir);
     precise float gust = 0.55 + 0.30 * sin(along * 0.35 - uWindTime * 1.1) + 0.15 * sin(along * 0.9 - uWindTime * 2.3 + 1.7);
     vec2 side = vec2(-uWindDir.y, uWindDir.x);
     precise vec2 bend = (uWindDir * gust + side * 0.25 * sin(uWindTime * 0.7 + along * 0.2)) * (mask * mask);
-    precise vec3 world = P + vec3(bend.x, 0.0, bend.y) * (1.4 * uWindBend);
+    precise vec3 world = P + vec3(bend.x, 0.0, bend.y) * (1.4 * sd.BoxMaxBend.w);
 
     vCardWorld = world;
     vEyeRay = uOrtho == 1 ? -toViewer : world - uEye;

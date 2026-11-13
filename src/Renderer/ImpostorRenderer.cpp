@@ -3,6 +3,7 @@
 #include "Core/Env.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
+#include "Core/ProjectSettings.h"
 #include "Core/TimeService.h"
 #include "GLStateCache.h"
 #include "Game/World.h"
@@ -24,13 +25,18 @@
 
 namespace {
 constexpr int kInstanceBinding = 23; // Impostor.vert.glsl's ImpostorInstances
+constexpr int kSetBinding = 24;      // ImpostorSets
+constexpr int kExtentBinding = 22;   // ImpostorFrameExtents
+constexpr int kAtlasSize = 2048;
+constexpr int kLayersPerFrame = 6;   // atlas layers uploaded a frame while they come in (~32 MB of BC3)
 constexpr float kCutoff = 0.5f;      // on the blended coverage
 // Coverage x (1 + mip x this) before the cut: a mip averages the needles' coverage toward grey and the cut then
 // thins the canopy with distance (Golus, "Anti-aliased Alpha Test"). 0.25 held the bake's own mips at about the
 // covered area of mip 0.
 constexpr float kMipAlphaScale = 0.25f;
 
-// As the atlases' .meta files say (albedo sRGB, the rest linear): they load here, not through the asset library.
+// As the atlases' .meta files say (albedo sRGB, the rest linear), forced to BC3 so every set packs into one array:
+// they load here, not through the asset library.
 TextureImportSettings AtlasSettings(bool srgb) {
     TextureImportSettings s;
     s.IsSRGB = srgb;
@@ -38,10 +44,17 @@ TextureImportSettings AtlasSettings(bool srgb) {
     s.FilterMode = TextureImportSettings::Filter::Trilinear;
     s.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
     s.CompressionMode = TextureImportSettings::Compression::Normal;
-    s.MaxTextureSize = 2048;
+    s.MaxTextureSize = kAtlasSize;
     s.AnisoLevel = 1;
+    s.ForceFormat = TextureImportSettings::ForcedFormat::BC3;
     return s;
 }
+
+struct alignas(16) SetGpu { // Impostor.vert.glsl's ImpostorSetGpu
+    glm::vec4 BoxMinRadius;
+    glm::vec4 BoxMaxBend;
+    glm::vec4 Wind;
+};
 } // namespace
 
 ImpostorRenderer& ImpostorRenderer::Get() {
@@ -49,8 +62,8 @@ ImpostorRenderer& ImpostorRenderer::Get() {
     return r;
 }
 
-bool ImpostorRenderer::Atlases::Ok() const {
-    return Albedo && Albedo->IsValid() && NormalDepth && NormalDepth->IsValid() && Mask && Mask->IsValid();
+ImpostorRenderer::~ImpostorRenderer() {
+    if (m_Loader.joinable()) m_Loader.join();
 }
 
 bool ImpostorRenderer::EnsurePrograms() {
@@ -59,9 +72,9 @@ bool ImpostorRenderer::EnsurePrograms() {
     const std::string vs = ShaderLibrary::ReadFileRequired("Impostor.vert.glsl");
     m_Depth = std::make_unique<Shader>(vs, ShaderLibrary::ReadFileRequired("ImpostorDepth.frag.glsl"), "ImpostorDepth");
     m_Lit = std::make_unique<Shader>(vs, ShaderLibrary::ReadFileRequired("ImpostorLit.frag.glsl"), "ImpostorLit");
+    m_Shadow = std::make_unique<Shader>(vs, ShaderLibrary::ReadFileRequired("ImpostorShadow.frag.glsl"), "ImpostorShadow");
     ShaderLibrary::RegisterForHotReload(*m_Depth, "Impostor.vert.glsl", "ImpostorDepth.frag.glsl");
     ShaderLibrary::RegisterForHotReload(*m_Lit, "Impostor.vert.glsl", "ImpostorLit.frag.glsl");
-    m_Shadow = std::make_unique<Shader>(vs, ShaderLibrary::ReadFileRequired("ImpostorShadow.frag.glsl"), "ImpostorShadow");
     ShaderLibrary::RegisterForHotReload(*m_Shadow, "Impostor.vert.glsl", "ImpostorShadow.frag.glsl");
     const auto linked = [](const Shader& s) { // once, at the first draw
         GLint ok = 0;
@@ -77,31 +90,94 @@ bool ImpostorRenderer::EnsurePrograms() {
         return false;
     }
     glGenVertexArrays(1, &m_Vao); // the cards read no attributes, but core GL draws nothing without one bound
-    // Every set's atlases now, at the first view with impostors (the scene's load), not as each set first comes into
-    // view mid-play.
-    for (int s = 0; s < (int)ImpostorLibrary::Sets().size(); ++s) EnsureAtlases(s);
     return true;
 }
 
-bool ImpostorRenderer::EnsureAtlases(int set) {
+bool ImpostorRenderer::EnsureAtlases() {
+    if (m_AtlasesReady) return true;
+    if (m_AtlasesFailed) return false;
     const auto& sets = ImpostorLibrary::Sets();
-    if (set < 0 || set >= (int)sets.size()) return false;
-    if ((int)m_Atlases.size() < (int)sets.size()) m_Atlases.resize(sets.size());
-    Atlases& a = m_Atlases[set];
-    if (!a.Tried) {
-        a.Tried = true;
-        const ImpostorSet& s = sets[set];
-        a.Albedo = std::make_shared<Texture>(ProjectPaths::Resolve(s.Albedo), AtlasSettings(true));
-        a.NormalDepth = std::make_shared<Texture>(ProjectPaths::Resolve(s.NormalDepth), AtlasSettings(false));
-        a.Mask = std::make_shared<Texture>(ProjectPaths::Resolve(s.Mask), AtlasSettings(false));
-        if (!a.Ok()) std::fprintf(stderr, "[Impostors] %s: an atlas failed to load\n", s.Name.c_str());
+    const std::size_t count = sets.size() * 3;
+    if (!m_LoadStarted) {
+        // Decoded on a worker (the texture cache's BC3 blocks, encoded once on the first run): a set's three 2K maps
+        // took ~35 ms on the main thread even from the cache.
+        m_LoadStarted = true;
+        Texture::InitGpuCaps(); // what DecodeFile needs, from the main thread
+        m_Decoded.resize(count);
+        std::vector<std::string> paths(count);
+        for (std::size_t s = 0; s < sets.size(); ++s) {
+            paths[s * 3 + 0] = ProjectPaths::Resolve(sets[s].Albedo);
+            paths[s * 3 + 1] = ProjectPaths::Resolve(sets[s].NormalDepth);
+            paths[s * 3 + 2] = ProjectPaths::Resolve(sets[s].Mask);
+        }
+        m_Loader = std::thread([this, paths]() {
+            for (std::size_t i = 0; i < paths.size(); ++i) m_Decoded[i] = Texture::DecodeFile(paths[i], AtlasSettings(i % 3 == 0));
+            m_LoaderDone.store(true, std::memory_order_release);
+        });
+        return false;
     }
-    return a.Ok();
+    if (!m_LoaderDone.load(std::memory_order_acquire)) return false;
+    if (m_Loader.joinable()) m_Loader.join();
+    if (!m_Arrays[0]) {
+        // Every layer of a kind must match the first: one format, size and mip count.
+        for (std::size_t i = 0; i < count; ++i) {
+            const TextureCpuData& t = m_Decoded[i];
+            const TextureCpuData& first = m_Decoded[i % 3];
+            if (!t.Ok || !t.GLFormat || t.Width != kAtlasSize || t.Height != kAtlasSize || t.GLFormat != first.GLFormat ||
+                t.LevelSizes != first.LevelSizes) {
+                std::fprintf(stderr, "[Impostors] %s: an atlas didn't decode to a %d^2 BC3 like the others - impostors off\n",
+                             sets[i / 3].Name.c_str(), kAtlasSize);
+                m_AtlasesFailed = true;
+                m_Decoded.clear();
+                return false;
+            }
+        }
+        for (int k = 0; k < 3; ++k) {
+            glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_Arrays[k]);
+            glTextureStorage3D(m_Arrays[k], (GLsizei)m_Decoded[k].LevelSizes.size(), m_Decoded[k].GLFormat, kAtlasSize,
+                               kAtlasSize, (GLsizei)sets.size());
+            glTextureParameteri(m_Arrays[k], GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTextureParameteri(m_Arrays[k], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTextureParameteri(m_Arrays[k], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTextureParameteri(m_Arrays[k], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
+        // The sets' shape and sway, and their frames' extents: fixed for the session (immutable buffers).
+        std::vector<SetGpu> gpu;
+        std::vector<glm::vec2> extents;
+        for (const ImpostorSet& s : sets) {
+            gpu.push_back({glm::vec4(s.BoundsMin - s.Centre, s.Radius), glm::vec4(s.BoundsMax - s.Centre, s.WindBend),
+                           glm::vec4(s.WindHeight, 0.0f, 0.0f, 0.0f)});
+            extents.insert(extents.end(), s.FrameExtents.begin(), s.FrameExtents.end());
+        }
+        glCreateBuffers(1, &m_SetBuf);
+        glNamedBufferStorage(m_SetBuf, (GLsizeiptr)(gpu.size() * sizeof(SetGpu)), gpu.data(), 0);
+        glCreateBuffers(1, &m_ExtentBuf);
+        glNamedBufferStorage(m_ExtentBuf, (GLsizeiptr)(extents.size() * sizeof(glm::vec2)), extents.data(), 0);
+    }
+    // A few layers a frame (each a 2K BC3 with its mips, ~5 MB).
+    for (int n = 0; n < kLayersPerFrame && m_Uploaded < count; ++n, ++m_Uploaded) {
+        TextureCpuData& t = m_Decoded[m_Uploaded];
+        const int kind = (int)(m_Uploaded % 3), layer = (int)(m_Uploaded / 3);
+        std::size_t off = 0;
+        for (std::size_t l = 0; l < t.LevelSizes.size(); ++l) {
+            const int size = std::max(kAtlasSize >> l, 1);
+            glCompressedTextureSubImage3D(m_Arrays[kind], (GLint)l, 0, 0, layer, size, size, 1, t.GLFormat,
+                                          (GLsizei)t.LevelSizes[l], t.Pixels.data() + off);
+            off += t.LevelSizes[l];
+        }
+        t = TextureCpuData{}; // its blocks are on the GPU now
+    }
+    if (m_Uploaded < count) return false;
+    m_Decoded.clear();
+    m_Decoded.shrink_to_fit();
+    m_AtlasesReady = true;
+    ImpostorLibrary::SetDrawable(true); // the next ApplyLod puts the trees on their impostors
+    return true;
 }
 
 std::size_t ImpostorRenderer::TakeUpload(std::size_t size) {
     constexpr std::size_t kNone = ~std::size_t(0);
-    constexpr std::size_t kUploadBytes = 4ull << 20;  // ~0.13 MB a frame in the Forest (the view and the sun)
+    constexpr std::size_t kUploadBytes = 4ull << 20;  // ~0.17 MB a frame in the Forest (the view and the sun)
     constexpr std::uint64_t kUploadSafeFrames = 16;   // SwapBuffers keeps the CPU a few frames ahead at most
     if (size == 0 || size > kUploadBytes / 4 || m_UploadFailed) return kNone;
     if (!m_UploadBase) {
@@ -136,14 +212,13 @@ bool ImpostorRenderer::Build(const World& world, int buckets,
                              const std::function<unsigned(const glm::vec3&, const glm::vec3&)>& keep,
                              const glm::vec3& sortFrom, const glm::vec3* sortDir) {
     m_HaveList = false;
-    if (!ImpostorLibrary::Enabled() || !EnsurePrograms()) return false;
+    if (!ImpostorLibrary::Wanted() || !EnsurePrograms() || !EnsureAtlases() || !ImpostorLibrary::Enabled()) return false;
     const auto& sets = ImpostorLibrary::Sets();
-    const std::size_t nsets = sets.size();
-    m_Lists.resize((std::size_t)buckets * nsets);
+    m_Lists.resize((std::size_t)buckets);
     for (auto& l : m_Lists) l.clear();
     std::size_t total = 0;
     world.ForEachImpostor([&](entt::entity g, int set, float fade) {
-        if (set < 0 || set >= (int)nsets || set >= (int)m_Atlases.size() || !m_Atlases[set].Ok()) return;
+        if (set < 0 || set >= (int)sets.size()) return;
         const ImpostorSet& s = sets[set];
         const glm::mat4 m = world.GetCachedWorldTransform(g);
         const float scale = glm::length(glm::vec3(m[1])); // the bake's copies scale uniformly
@@ -163,14 +238,15 @@ bool ImpostorRenderer::Build(const World& world, int buckets,
                             glm::vec3(m[2]) / glm::length(glm::vec3(m[2])));
         const glm::quat q = glm::normalize(glm::quat_cast(rot));
         const Instance inst{glm::vec4(glm::vec3(m * glm::vec4(s.Centre, 1.0f)), scale), glm::vec4(q.x, q.y, q.z, q.w),
-                            glm::vec4(glm::vec3(m[3]), fade)};
+                            glm::vec4(glm::vec3(m[3]), fade), glm::vec4((float)set, 0.0f, 0.0f, 0.0f)};
         for (int b = 0; b < buckets; ++b)
             if (in & (1u << b)) {
-                m_Lists[(std::size_t)b * nsets + set].push_back(inst);
+                m_Lists[(std::size_t)b].push_back(inst);
                 ++total;
             }
     });
     if (total == 0) return false;
+    // Near to far across every set (one draw): early depth testing drops what nearer cards already cover.
     const auto key = [&](const Instance& i) {
         const glm::vec3 d = glm::vec3(i.CentreScale) - sortFrom;
         return sortDir ? glm::dot(d, *sortDir) : glm::dot(d, d);
@@ -190,11 +266,7 @@ bool ImpostorRenderer::Build(const World& world, int buckets,
     }
     if (static const int reportAt = Env::Int(Env::Var::TrisReport, -1); reportAt >= 0 && Time::FrameCount() == (std::uint64_t)reportAt) {
         std::printf("[TrisReport] impostors (%d bucket(s)):", buckets);
-        for (int b = 0; b < buckets; ++b) {
-            std::size_t n = 0;
-            for (std::size_t si = 0; si < nsets; ++si) n += m_Lists[(std::size_t)b * nsets + si].size();
-            std::printf(" %zu", n);
-        }
+        for (const Range& r : m_Draws) std::printf(" %u", r.Count);
         std::printf("\n");
         std::fflush(stdout);
     }
@@ -209,35 +281,21 @@ bool ImpostorRenderer::Gather(const World& world, const Frustum& frustum, const 
                  eye, nullptr);
 }
 
-void ImpostorRenderer::SetCommon(Shader& prog, int set) {
-    const ImpostorSet& s = ImpostorLibrary::Sets()[set];
-    prog.SetFloat("uRadius", s.Radius);
-    prog.SetVec3("uBoxMin", s.BoundsMin - s.Centre);
-    prog.SetVec3("uBoxMax", s.BoundsMax - s.Centre);
-    prog.SetInt("uFrames", s.Frames);
-    prog.SetFloat("uWindBend", s.WindBend);
-    prog.SetFloat("uWindHeight", s.WindHeight);
-    const Atlases& a = m_Atlases[set];
-    a.Albedo->Bind(0);
-    a.NormalDepth->Bind(1);
-    a.Mask->Bind(2);
-}
-
-void ImpostorRenderer::DrawSets(Shader& prog, int bucket) {
+void ImpostorRenderer::DrawBucket(Shader& prog, int bucket) {
+    const Range& d = m_Draws[(std::size_t)bucket];
+    if (!d.Count) return;
     glBindVertexArray(m_Vao);
     glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kInstanceBinding, m_UploadBuf, (GLintptr)m_Span, (GLsizeiptr)m_SpanBytes);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSetBinding, m_SetBuf);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kExtentBinding, m_ExtentBuf);
+    for (int k = 0; k < 3; ++k) glBindTextureUnit((GLuint)k, m_Arrays[k]);
+    prog.SetInt("uFrames", ImpostorLibrary::Sets().front().Frames);
     prog.SetFloat("uWindTime", Material::WindTime());
     prog.SetVec2("uWindDir", Material::WindDirection());
     prog.SetFloat("uImpCutoff", kCutoff);
     prog.SetFloat("uMipAlphaScale", kMipAlphaScale);
-    const std::size_t nsets = ImpostorLibrary::Sets().size();
-    for (std::size_t s = 0; s < nsets; ++s) {
-        const SetDraw& d = m_Draws[(std::size_t)bucket * nsets + s];
-        if (!d.Count) continue;
-        SetCommon(prog, (int)s);
-        glDrawArraysInstancedBaseInstance(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)d.Count, d.First);
-        ++m_DrawCalls;
-    }
+    glDrawArraysInstancedBaseInstance(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)d.Count, d.First);
+    ++m_DrawCalls;
     glBindVertexArray(0);
     GLStateCache::Invalidate();
 }
@@ -254,7 +312,7 @@ void ImpostorRenderer::DrawDepth(const glm::mat4& view, const glm::mat4& proj, c
     p.SetInt("uOrtho", 0);
     p.SetFloat("uDepthPush", 0.0f);
     glDisable(GL_CULL_FACE); // a card faces the viewer, but its winding isn't kept
-    DrawSets(p, 0);
+    DrawBucket(p, 0);
     glEnable(GL_CULL_FACE);
 }
 
@@ -288,7 +346,7 @@ void ImpostorRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, con
         glDepthFunc(GL_EQUAL);
     }
     glDisable(GL_CULL_FACE);
-    DrawSets(p, 0);
+    DrawBucket(p, 0);
     glEnable(GL_CULL_FACE);
     if (depthPrepassed) {
         glDepthMask(GL_TRUE);
@@ -316,15 +374,12 @@ void ImpostorRenderer::DrawSun(const World& world, const glm::mat4* cascadeViewP
     p.SetInt("uOrtho", 1);
     p.SetVec3("uOrthoToViewer", glm::normalize(towardSun));
     glDisable(GL_CULL_FACE);
-    const std::size_t nsets = ImpostorLibrary::Sets().size();
     for (int c = 0; c < cascades; ++c) {
-        bool has = false;
-        for (std::size_t s = 0; s < nsets && !has; ++s) has = m_Draws[(std::size_t)c * nsets + s].Count > 0;
-        if (!has) continue;
+        if (!m_Draws[(std::size_t)c].Count) continue;
         bindCascade(c);
         p.Bind();
         p.SetMat4("uLightViewProj", cascadeViewProj[c]);
-        DrawSets(p, c);
+        DrawBucket(p, c);
     }
     glEnable(GL_CULL_FACE);
     m_HaveList = false; // the view's list is gone: Gather again before drawing the view

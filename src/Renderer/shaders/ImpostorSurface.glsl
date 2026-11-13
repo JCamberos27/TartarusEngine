@@ -9,14 +9,14 @@ uniform mat4 uView;
 uniform mat4 uProj;
 uniform int uOrtho;
 uniform mat4 uLightViewProj;
-uniform float uRadius;
 uniform int uFrames;
 uniform float uImpCutoff;     // on the blended coverage
 uniform float uMipAlphaScale; // coverage x (1 + mip x this): keeps the canopy's density as the atlas minifies
 uniform float uDepthPush;     // metres pushed away from the viewer (the sun's cascades: the impostor's own shadow)
-layout(binding = 0) uniform sampler2D uImpAlbedo;      // rgb albedo (sRGB), a coverage
-layout(binding = 1) uniform sampler2D uImpNormalDepth; // rgb object-space normal, a depth (0 = the sphere's near side)
-layout(binding = 2) uniform sampler2D uImpMask;        // r AO, g roughness, b translucency, a metallic
+// One layer per set (ImpostorRenderer): every set draws in one call.
+layout(binding = 0) uniform sampler2DArray uImpAlbedo;      // rgb albedo (sRGB), a coverage
+layout(binding = 1) uniform sampler2DArray uImpNormalDepth; // rgb object-space normal, a depth (0 = the sphere's near side)
+layout(binding = 2) uniform sampler2DArray uImpMask;        // r AO, g roughness, b translucency, a metallic
 
 in vec3 vObj;
 in vec3 vRay;
@@ -28,6 +28,9 @@ flat in vec3 vFrameDir[3];
 flat in vec3 vFrameRight[3];
 flat in vec3 vFrameUp[3];
 flat in vec2 vFrameCell[3];
+flat in vec2 vFrameExtent[3];
+flat in float vRadius;
+flat in float vLayer;
 flat in vec3 vWeights;
 flat in vec4 vRot;
 flat in float vScale;
@@ -36,7 +39,7 @@ flat in float vFade;
 layout(depth_greater) out float gl_FragDepth;
 
 struct ImpostorFrag {
-    vec2 Uv[3];       // atlas coordinates, one per frame
+    vec3 Uv[3];       // atlas coordinates and the set's layer, one per frame
     float Weight[3];  // barycentric weight x coverage (0: the ray misses that frame's image)
     float WeightSum;
     float Lod;        // the atlas mip here
@@ -62,17 +65,17 @@ bool ImpostorResolve(out ImpostorFrag o) {
         precise float denom = dot(vRay, D);
         precise float t = -dot(vObj, D) / (abs(denom) > 1e-6 ? denom : 1e-6);
         X[k] = vObj + vRay * t; // on the frame's plane through the centre
-        precise vec2 f = vec2(dot(X[k], vFrameRight[k]), dot(X[k], vFrameUp[k])) / uRadius * 0.5 + 0.5;
+        precise vec2 f = vec2(dot(X[k], vFrameRight[k]), dot(X[k], vFrameUp[k])) / vFrameExtent[k] * 0.5 + 0.5;
         bool inside = all(greaterThanEqual(f, vec2(0.0))) && all(lessThanEqual(f, vec2(1.0)));
         f = clamp(f, vec2(0.5 / 256.0), vec2(1.0 - 0.5 / 256.0));
-        o.Uv[k] = (vFrameCell[k] + vec2(f.x, 1.0 - f.y)) / float(uFrames); // a frame's top row is its image's top
+        o.Uv[k] = vec3((vFrameCell[k] + vec2(f.x, 1.0 - f.y)) / float(uFrames), vLayer); // a frame's top row: its image's top
         float a = texture(uImpAlbedo, o.Uv[k]).a * (inside ? 1.0 : 0.0); // sampled either way: derivatives stay defined
         precise float w = vWeights[k] * a;
         o.Weight[k] = w;
         alpha += w;
     }
     // The mip, for every later fetch (they follow a discard, where implicit derivatives are undefined).
-    o.Lod = max(textureQueryLod(uImpAlbedo, o.Uv[0]).y, 0.0);
+    o.Lod = max(textureQueryLod(uImpAlbedo, o.Uv[0].xy).y, 0.0);
     o.WeightSum = alpha;
     if (!ImpostorDithered()) return false; // after the fetches above: their derivatives need the whole quad
     // Coverage minifies toward grey and an alpha test then thins the canopy: scale it up with the mip.
@@ -80,10 +83,10 @@ bool ImpostorResolve(out ImpostorFrag o) {
     // The surface from the heaviest frame alone (the vertex stage puts it first): the blend's depth moved by
     // centimetres for twice the fetches.
     precise float depth = textureLod(uImpNormalDepth, o.Uv[0], o.Lod).a;
-    precise vec3 Ps = X[0] + vFrameDir[0] * (uRadius * (1.0 - 2.0 * depth));
+    precise vec3 Ps = X[0] + vFrameDir[0] * (vRadius * (1.0 - 2.0 * depth));
     // How far behind the card the surface lies, then that far along this pixel's own ray (keeps the depth monotone and
     // the fragment on its pixel).
-    precise float behind = max(uRadius - dot(Ps, vToViewerObj), 0.0) * vScale + uDepthPush;
+    precise float behind = max(vRadius - dot(Ps, vToViewerObj), 0.0) * vScale + uDepthPush;
     precise vec3 ray = uOrtho == 1 ? -vToViewerWorld : normalize(vEyeRay);
     precise float slant = max(dot(ray, -vToViewerWorld), 0.2);
     o.WorldPos = vCardWorld + ray * (behind / slant);
