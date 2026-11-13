@@ -9,7 +9,8 @@
 // the draw scales the bake by each copy's own scale).
 //
 // Each bake is a kFrames x kFrames grid of orthographic views over the upper hemi-octahedron (ImpostorCommon.glsl),
-// every frame `frameSize` px, rendered at 4x that and box-filtered by coverage, then the empty texels dilated
+// every frame `frameSize` px and fitted to the tree as that view sees it (frameExtents), rendered at 4x that and
+// box-filtered by coverage, then the empty texels dilated
 // from their covered neighbours (no dark fringes once mipped). Per bake, in <out>:
 //   T_<name>_Impostor_Albedo.png       rgb sRGB albedo, a coverage
 //   T_<name>_Impostor_NormalDepth.png  rgb object-space normal (n * 0.5 + 0.5), a depth (0 = the sphere's near side)

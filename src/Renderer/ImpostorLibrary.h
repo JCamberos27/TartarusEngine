@@ -19,6 +19,7 @@ struct ImpostorSet {
     float WindBend = 0.0f;   // the card's sway: metres at WindHeight in a full gust (FoliageWind.glsl's slow bend)
     float WindHeight = 1.0f;
     int Frames = 8;          // frames per atlas side
+    std::vector<glm::vec2> FrameExtents; // each frame's half-extents on its image plane (frame j x Frames + i)
     std::string Albedo, NormalDepth, Mask; // project-relative atlas paths
 };
 
@@ -28,8 +29,13 @@ namespace ImpostorLibrary {
 float StartDistance();
 // Some set loaded and TARTARUS_NO_IMPOSTORS off: LOD groups are matched to their sets. Loads the sets on first use.
 bool Available();
-// Available() and Project Settings > Quality > Impostors on: matched groups draw their impostors.
+// Available(), Project Settings > Quality > Impostors on, and the renderer's atlases loaded (SetDrawable): matched
+// groups draw their impostors. Until then they stay on their levels.
 bool Enabled();
+// Available() and the Quality toggle on: the renderer should get its atlases ready.
+bool Wanted();
+// The renderer has every set's atlases up (ImpostorRenderer).
+void SetDrawable(bool drawable);
 const std::vector<ImpostorSet>& Sets();
 // The set drawn for a LOD group whose LOD 0 draws `lod0` (its renderers' models, any order), or -1. Cached per model
 // list, so a full LOD pass over thousands of groups stays cheap.

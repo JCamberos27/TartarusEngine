@@ -251,7 +251,8 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
     json manifest;
     manifest["frames"] = kFrames;
     manifest["frameSize"] = kFrameSize;
-    manifest["layout"] = "hemi-octahedral; frame (i, j) at p = (i, j) / (frames - 1) * 2 - 1 (ImpostorCommon.glsl)";
+    manifest["layout"] = "hemi-octahedral; frame (i, j) at p = (i, j) / (frames - 1) * 2 - 1 (ImpostorCommon.glsl), "
+                         "spanning its frameExtents";
     json& list = manifest["impostors"] = json::object();
     const int atlas = kFrames * kFrameSize;
     int failed = 0;
@@ -275,6 +276,7 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
         std::vector<unsigned char> outAlbedo((size_t)atlas * atlas * 4), outNormal(outAlbedo.size()), outMask(outAlbedo.size());
         std::vector<float> px[3];
         for (auto& v : px) v.resize((size_t)big * big * 4);
+        std::vector<glm::vec2> extents((size_t)kFrames * kFrames, glm::vec2(radius));
         for (int fj = 0; fj < kFrames; ++fj)
             for (int fi = 0; fi < kFrames; ++fi) {
                 const glm::vec2 p = glm::vec2(fi, fj) / (float)(kFrames - 1) * 2.0f - 1.0f;
@@ -282,34 +284,49 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
                 glm::vec3 right, up;
                 FrameBasis(d, right, up);
                 const glm::mat4 view = glm::lookAt(centre + d * (2.0f * radius), centre, up);
-                const glm::mat4 proj = glm::ortho(-radius, radius, -radius, radius, 0.5f * radius, 3.5f * radius);
-
-                glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-                glViewport(0, 0, big, big);
-                const float zero[4] = {0, 0, 0, 0};
-                for (int i = 0; i < 3; ++i) glClearNamedFramebufferfv(fbo, GL_COLOR, i, zero);
-                glDepthMask(GL_TRUE);
-                glClear(GL_DEPTH_BUFFER_BIT);
-                glEnable(GL_DEPTH_TEST);
-                glDepthFunc(GL_LESS);
-                glDepthMask(GL_TRUE);
-                glDisable(GL_CULL_FACE);
-                glDisable(GL_BLEND);
-                GLStateCache::Invalidate();
-                shader.Bind();
-                shader.SetMat4("uViewProj", proj * view);
-                shader.SetVec3("uViewDir", d);
-                shader.SetVec3("uCentre", centre);
-                shader.SetFloat("uRadius", radius);
-                for (const Part& part : b.parts) {
-                    shader.SetMat4("uModel", part.local);
-                    shader.SetMat4("uNormalMatrix", glm::mat4(glm::transpose(glm::inverse(glm::mat3(part.local)))));
-                    part.model->Draw(shader, part.materials);
-                }
-                for (int i = 0; i < 3; ++i) {
-                    glReadBuffer(GL_COLOR_ATTACHMENT0 + i);
-                    glReadPixels(0, 0, big, big, GL_RGBA, GL_FLOAT, px[i].data());
-                }
+                const auto render = [&](float ex, float ey, int targets) {
+                    const glm::mat4 proj = glm::ortho(-ex, ex, -ey, ey, 0.5f * radius, 3.5f * radius);
+                    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                    glViewport(0, 0, big, big);
+                    const float zero[4] = {0, 0, 0, 0};
+                    for (int i = 0; i < 3; ++i) glClearNamedFramebufferfv(fbo, GL_COLOR, i, zero);
+                    glDepthMask(GL_TRUE);
+                    glClear(GL_DEPTH_BUFFER_BIT);
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthFunc(GL_LESS);
+                    glDepthMask(GL_TRUE);
+                    glDisable(GL_CULL_FACE);
+                    glDisable(GL_BLEND);
+                    GLStateCache::Invalidate();
+                    shader.Bind();
+                    shader.SetMat4("uViewProj", proj * view);
+                    shader.SetVec3("uViewDir", d);
+                    shader.SetVec3("uCentre", centre);
+                    shader.SetFloat("uRadius", radius);
+                    for (const Part& part : b.parts) {
+                        shader.SetMat4("uModel", part.local);
+                        shader.SetMat4("uNormalMatrix", glm::mat4(glm::transpose(glm::inverse(glm::mat3(part.local)))));
+                        part.model->Draw(shader, part.materials);
+                    }
+                    for (int i = 0; i < targets; ++i) {
+                        glReadBuffer(GL_COLOR_ATTACHMENT0 + i);
+                        glReadPixels(0, 0, big, big, GL_RGBA, GL_FLOAT, px[i].data());
+                    }
+                };
+                // The frame fitted to the tree as this view sees it, each axis on its own: a first look over the whole
+                // sphere finds where the coverage is, the frame then spans only that (centred, a texel to spare). A
+                // Cedrus seen from the side is ~22 m by ~10 m of its 26 m sphere, from above ~10 m square - 1.2-2.5x
+                // the texels on the tree for the same atlas.
+                render(radius, radius, 1);
+                glm::vec2 ext(0.0f);
+                for (int y = 0; y < big; ++y)
+                    for (int x = 0; x < big; ++x)
+                        if (px[0][((size_t)y * big + x) * 4 + 3] > 0.0f)
+                            ext = glm::max(ext, glm::abs(glm::vec2((x + 0.5f) / big, (y + 0.5f) / big) * 2.0f - 1.0f) * radius);
+                if (ext.x <= 0.0f || ext.y <= 0.0f) ext = glm::vec2(radius); // nothing in view: the sphere
+                ext = glm::clamp(ext + 2.0f * radius / (float)kFrameSize, glm::vec2(0.02f * radius), glm::vec2(radius));
+                extents[(size_t)fj * kFrames + fi] = ext;
+                render(ext.x, ext.y, 3);
                 Tile t[3];
                 std::vector<float> cov;
                 Downsample(px[0], px[0], t[0], &cov);
@@ -345,6 +362,10 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
         j["groups"] = b.groups;
         j["centre"] = {centre.x, centre.y, centre.z};
         j["radius"] = radius;
+        // Each frame's half-width and half-height on its image plane (frame (i, j) at j x frames + i): the frame
+        // spans [-x, x] x [-y, y] around the sphere's centre.
+        j["frameExtents"] = json::array();
+        for (const glm::vec2& e : extents) j["frameExtents"].push_back({e.x, e.y});
         j["boundsMin"] = {lo.x, lo.y, lo.z}; // the LOD 0's box: the draw fits each card to its outline
         j["boundsMax"] = {hi.x, hi.y, hi.z};
         // The card's sway (ImpostorRenderer): the slow bend of the LOD 0's foliage materials - their flutter is too fine
