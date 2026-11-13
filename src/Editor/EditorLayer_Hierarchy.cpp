@@ -99,16 +99,23 @@ template <typename View>
 std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View view) {
     // Each entity's order read once, then sorted as plain pairs: the comparator used to look up
     // OrderComponent twice per comparison, every frame.
-    thread_local std::vector<std::pair<int, entt::entity>> keyed;
+    // The sort is the cost (37k entities in the Forest: ~2 ms a frame of the Hierarchy panel), and frame to frame the
+    // input is almost always identical: the same (order, entity) pairs in the same storage order. Then last frame's
+    // sorted list is the answer, after one linear compare.
+    thread_local std::vector<std::pair<int, entt::entity>> keyed, lastKeyed;
+    thread_local std::vector<entt::entity> lastSorted;
     keyed.clear();
     for (const entt::entity e : view) {
         const auto* o = reg.try_get<OrderComponent>(e);
         keyed.emplace_back(o ? o->Value : 0, e);
     }
+    if (keyed == lastKeyed) return lastSorted;
+    lastKeyed = keyed;
     std::sort(keyed.begin(), keyed.end());
     std::vector<entt::entity> entities;
     entities.reserve(keyed.size());
     for (const auto& k : keyed) entities.push_back(k.second);
+    lastSorted = entities;
     return entities;
 }
 
