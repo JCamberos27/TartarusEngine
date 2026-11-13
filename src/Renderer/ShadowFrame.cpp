@@ -109,9 +109,12 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
         sc.bounds = AABB{v.WorldMin, v.WorldMax};
     }
     // Consecutive draws of the same model share its VAO and (usually) its material, which the state cache then skips.
+    // The multi-draw path doesn't need it: GroupCasters groups by hash in any order, its batches bind by page and state,
+    // and a depth-only pass lays down the same depth whatever the order (sorting the casters cost ~0.3 ms in the Forest).
     stage.reset();
     stage.emplace("Sun: Sort + Masks");
-    std::sort(m_SunCasters.begin(), m_SunCasters.end(), [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
+    if (!MultiDrawEnabled())
+        std::sort(m_SunCasters.begin(), m_SunCasters.end(), [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
 
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
