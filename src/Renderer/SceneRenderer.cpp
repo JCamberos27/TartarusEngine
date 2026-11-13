@@ -1199,7 +1199,20 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     nearHideRight = glm::dot(nearHideRight, nearHideRight) > 1e-8f ? glm::normalize(nearHideRight) : glm::vec3(1.0f, 0.0f, 0.0f);
     int instanceBase = -1; // the opaque pass's current group in the instance buffer, -1 = drawn with uModel
     int instanceMode = 1;  // uInstanced while instanceBase >= 0: 2 = through HiZCuller's remap
+    // An opaque multi-draw batch sets perDrawKey (what the hook reads for it): the hook then skips its ~20 uploads when
+    // the previous call was the same program with the same key. Any other call resets it.
+    std::uint64_t perDrawKey = 0, lastPerDrawKey = 0;
+    bool perDrawKeyed = false;
+    const Shader* lastPerDrawProg = nullptr;
+    const auto FloatBits = [](float f) { std::uint32_t u; std::memcpy(&u, &f, 4); return u; };
     const std::function<void(Shader&)> perDraw = [&](Shader& prog) {
+        if (perDrawKeyed) {
+            if (&prog == lastPerDrawProg && perDrawKey == lastPerDrawKey) return;
+            lastPerDrawProg = &prog;
+            lastPerDrawKey = perDrawKey;
+        } else {
+            lastPerDrawProg = nullptr;
+        }
         prog.SetInt("uInstanced", instanceBase >= 0 ? instanceMode : 0);
         if (instanceBase >= 0) prog.SetInt("uInstanceBase", instanceBase);
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
@@ -1429,7 +1442,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     const bool multiDraw = instancing && MultiDrawEnabled();
     static std::vector<std::uint8_t> groupIndirect; // 1: drawn by the multi-draw batches
     groupIndirect.assign(opaqueGroups.Groups.size(), 0);
-    struct OpaqueTag { std::uint32_t Group; std::uint16_t Mesh; };
+    // Prog/State/Mat/Object: how the batch binds, for drawing the pre-passed batches grouped by program and material.
+    struct OpaqueTag {
+        std::uint32_t Group;
+        std::uint16_t Mesh;
+        bool Prepassed;
+        const Shader* Prog;
+        std::uint64_t State, Mat, Object;
+    };
     static std::vector<OpaqueTag> opaqueTags;
     static std::vector<IndirectItem> opaqueItems;
     static std::vector<IndirectCommand> opaqueCommands;
@@ -1489,12 +1509,16 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 std::uint64_t key = objectKey;
                 const auto mix = [&key](std::uint64_t v) { key ^= v + 0x9E3779B97F4A7C15ull + (key << 6) + (key >> 2); };
                 mix((std::uint64_t)(std::uintptr_t)prog);
+                const std::uint64_t state = lead.Ref->MeshStateKey(m, *lead.Slots, lead.DoubleSided);
+                std::uint64_t matKey = mat.HashWithExtraProps();
+                matKey ^= (ma ? (std::uint64_t)(std::uintptr_t)ma->Shader.get() : 1ull) * 0x9E3779B97F4A7C15ull;
+                matKey ^= (mat.AlphaClip || (ma && ma->RenderQueue == MaterialAsset::Queue::AlphaTest)) ? 0x5bd1e995ull : 0ull;
                 mix(mat.HashWithExtraProps());
                 mix(ma ? (std::uint64_t)(std::uintptr_t)ma->Shader.get() : 1ull);
-                mix(lead.Ref->MeshStateKey(m, *lead.Slots, lead.DoubleSided));
+                mix(state);
                 mix(r.Page);
                 mix((mat.AlphaClip || (ma && ma->RenderQueue == MaterialAsset::Queue::AlphaTest)) ? 1ull : 0ull);
-                opaqueTags.push_back({(std::uint32_t)g, (std::uint16_t)m});
+                opaqueTags.push_back({(std::uint32_t)g, (std::uint16_t)m, prepassed(lead), prog, state, matKey, objectKey});
                 opaqueItems.push_back({key, (std::uint32_t)opaqueTags.size() - 1,
                                        {r.IndexCount, grp.Count, r.FirstIndex, (std::int32_t)r.BaseVertex, base}});
             }
@@ -1549,27 +1573,53 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // street or a forest was shaded in full. With writes off the test runs first, and the pre-pass depth (the same
     // clip) already holds the answer.
     GLboolean depthWrites = GL_TRUE;
-    std::uint32_t nextBatch = 0; // batches draw in order, each at the first group it holds
+    const auto drawBatch = [&](const IndirectBatch& b) {
+        const OpaqueTag& t = opaqueTags[b.Tag];
+        const DrawItem& lead = drawList[opaqueGroups.Order[opaqueGroups.Groups[t.Group].First]];
+        const GLboolean leadWrites = t.Prepassed ? GL_FALSE : GL_TRUE;
+        if (leadWrites != depthWrites) {
+            glDepthMask(depthWrites = leadWrites);
+            glDepthFunc(depthWrites ? GL_LEQUAL : GL_EQUAL);
+        }
+        probeItem = &lead;
+        instanceBase = 0; // uInstanced on; each command's baseInstance is its group's
+        instanceMode = hizCulled ? 2 : 1;
+        // Everything the per-draw hook reads for a batch's lead (batchable leads have no hiding, fade, pull or blood).
+        perDrawKey = t.Object ^ ((std::uint64_t)instanceMode << 32) ^ ((std::uint64_t)FloatBits(lead.NearHideWidth) << 13);
+        perDrawKeyed = true;
+        if (lead.Ref->DrawMeshIndirect(modelShader, t.Mesh, *lead.Slots, selectProgram, perDraw, lead.DoubleSided,
+                                       IndirectBuffer::Offset(b.First), (int)b.Count))
+            ++localStats.DrawCalls;
+        perDrawKeyed = false;
+    };
+    // The pre-passed batches test GL_EQUAL against the pre-pass depth with writes off, so their order doesn't change
+    // the picture: they draw together, grouped by program, render state and material (the material bind and the
+    // per-draw hook then skip their uploads between batches that bind alike). The rest keep the list's order.
+    static std::vector<std::uint32_t> prepassedBatches;
+    prepassedBatches.clear();
+    for (std::uint32_t i = 0; i < (std::uint32_t)opaqueBatches.size(); ++i)
+        if (opaqueTags[opaqueBatches[i].Tag].Prepassed) prepassedBatches.push_back(i);
+    std::sort(prepassedBatches.begin(), prepassedBatches.end(), [&](std::uint32_t a, std::uint32_t b) {
+        const OpaqueTag& x = opaqueTags[opaqueBatches[a].Tag];
+        const OpaqueTag& y = opaqueTags[opaqueBatches[b].Tag];
+        if (x.Prog != y.Prog) return x.Prog < y.Prog;
+        if (x.State != y.State) return x.State < y.State;
+        if (x.Mat != y.Mat) return x.Mat < y.Mat;
+        if (x.Object != y.Object) return x.Object < y.Object;
+        return a < b;
+    });
+    bool prepassedDrawn = false;
+    std::uint32_t nextBatch = 0; // the other batches draw in order, each at the first group it holds
     for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
         const auto& grp = opaqueGroups.Groups[g];
         const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
         if (groupIndirect[g]) {
-            for (; nextBatch < opaqueBatches.size() && opaqueTags[opaqueBatches[nextBatch].Tag].Group == g; ++nextBatch) {
-                const IndirectBatch& b = opaqueBatches[nextBatch];
-                const OpaqueTag& t = opaqueTags[b.Tag];
-                const DrawItem& lead = drawList[opaqueGroups.Order[opaqueGroups.Groups[t.Group].First]];
-                const GLboolean leadWrites = prepassed(lead) ? GL_FALSE : GL_TRUE;
-                if (leadWrites != depthWrites) {
-                    glDepthMask(depthWrites = leadWrites);
-                    glDepthFunc(depthWrites ? GL_LEQUAL : GL_EQUAL);
-                }
-                probeItem = &lead;
-                instanceBase = 0; // uInstanced on; each command's baseInstance is its group's
-                instanceMode = hizCulled ? 2 : 1;
-                if (lead.Ref->DrawMeshIndirect(modelShader, t.Mesh, *lead.Slots, selectProgram, perDraw, lead.DoubleSided,
-                                               IndirectBuffer::Offset(b.First), (int)b.Count))
-                    ++localStats.DrawCalls;
+            if (!prepassedDrawn) {
+                for (std::uint32_t i : prepassedBatches) drawBatch(opaqueBatches[i]);
+                prepassedDrawn = true;
             }
+            for (; nextBatch < opaqueBatches.size() && opaqueTags[opaqueBatches[nextBatch].Tag].Group == g; ++nextBatch)
+                if (!opaqueTags[opaqueBatches[nextBatch].Tag].Prepassed) drawBatch(opaqueBatches[nextBatch]);
             for (std::uint32_t k = 0; k < grp.Count; ++k) {
                 const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];
                 localStats.Triangles += member.Tris;
