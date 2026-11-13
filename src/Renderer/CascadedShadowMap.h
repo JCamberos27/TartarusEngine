@@ -140,6 +140,9 @@ private:
     std::array<std::array<SliceAxis, 8>, kMaxCascades> m_SliceAxes{};
     std::array<int, kMaxCascades> m_SliceAxisCount{};
     std::array<glm::vec2, kMaxCascades> m_SliceMin{}, m_SliceMax{};
+    // The slice's bounds within the shadow distance (PlanRender's hold test): the last cascade's slice runs on to the
+    // camera's far plane, and that part swings far on any turn.
+    std::array<glm::vec2, kMaxCascades> m_HoldMin{}, m_HoldMax{};
     glm::vec3 m_Eye{0.0f}; // the fitted view's eye (BeginLayeredScissor's view-model reach)
     glm::vec3 m_LightDir{0.0f, -1.0f, 0.0f}; // Update()'s, normalised
     // Alternate-frame far cascades (PlanRender): what each layer holds and what receivers sample it with.
