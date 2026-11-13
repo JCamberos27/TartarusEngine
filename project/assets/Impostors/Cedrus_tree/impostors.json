@@ -284,8 +284,9 @@
    "mask": "T_Cedrus_tree_var1_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var1_Impostor_NormalDepth.png",
    "radius": 13.057021141052246,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var10": {
    "albedo": "T_Cedrus_tree_var10_Impostor_Albedo.png",
@@ -569,8 +570,9 @@
    "mask": "T_Cedrus_tree_var10_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var10_Impostor_NormalDepth.png",
    "radius": 9.473321914672852,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var11": {
    "albedo": "T_Cedrus_tree_var11_Impostor_Albedo.png",
@@ -854,8 +856,9 @@
    "mask": "T_Cedrus_tree_var11_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var11_Impostor_NormalDepth.png",
    "radius": 5.650859355926514,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var12": {
    "albedo": "T_Cedrus_tree_var12_Impostor_Albedo.png",
@@ -1139,8 +1142,9 @@
    "mask": "T_Cedrus_tree_var12_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var12_Impostor_NormalDepth.png",
    "radius": 4.616242408752441,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var13": {
    "albedo": "T_Cedrus_tree_var13_Impostor_Albedo.png",
@@ -1424,8 +1428,9 @@
    "mask": "T_Cedrus_tree_var13_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var13_Impostor_NormalDepth.png",
    "radius": 4.649325847625732,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var15": {
    "albedo": "T_Cedrus_tree_var15_Impostor_Albedo.png",
@@ -1709,8 +1714,9 @@
    "mask": "T_Cedrus_tree_var15_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var15_Impostor_NormalDepth.png",
    "radius": 6.8418684005737305,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var2": {
    "albedo": "T_Cedrus_tree_var2_Impostor_Albedo.png",
@@ -1994,8 +2000,9 @@
    "mask": "T_Cedrus_tree_var2_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var2_Impostor_NormalDepth.png",
    "radius": 5.8655781745910645,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var3": {
    "albedo": "T_Cedrus_tree_var3_Impostor_Albedo.png",
@@ -2279,8 +2286,9 @@
    "mask": "T_Cedrus_tree_var3_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var3_Impostor_NormalDepth.png",
    "radius": 10.230219841003418,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var4": {
    "albedo": "T_Cedrus_tree_var4_Impostor_Albedo.png",
@@ -2564,8 +2572,9 @@
    "mask": "T_Cedrus_tree_var4_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var4_Impostor_NormalDepth.png",
    "radius": 11.34919548034668,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var5": {
    "albedo": "T_Cedrus_tree_var5_Impostor_Albedo.png",
@@ -2849,8 +2858,9 @@
    "mask": "T_Cedrus_tree_var5_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var5_Impostor_NormalDepth.png",
    "radius": 5.249025344848633,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var6": {
    "albedo": "T_Cedrus_tree_var6_Impostor_Albedo.png",
@@ -3134,8 +3144,9 @@
    "mask": "T_Cedrus_tree_var6_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var6_Impostor_NormalDepth.png",
    "radius": 12.616710662841797,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var7": {
    "albedo": "T_Cedrus_tree_var7_Impostor_Albedo.png",
@@ -3419,8 +3430,9 @@
    "mask": "T_Cedrus_tree_var7_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var7_Impostor_NormalDepth.png",
    "radius": 5.461798667907715,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var8": {
    "albedo": "T_Cedrus_tree_var8_Impostor_Albedo.png",
@@ -3704,8 +3716,9 @@
    "mask": "T_Cedrus_tree_var8_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var8_Impostor_NormalDepth.png",
    "radius": 2.4844918251037598,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   },
   "Cedrus_tree_var9": {
    "albedo": "T_Cedrus_tree_var9_Impostor_Albedo.png",
@@ -3989,8 +4002,9 @@
    "mask": "T_Cedrus_tree_var9_Impostor_Mask.png",
    "normalDepth": "T_Cedrus_tree_var9_Impostor_NormalDepth.png",
    "radius": 0.7868165373802185,
-   "windBend": 0.18000000715255737,
-   "windHeight": 14.0
+   "windBend": 0.35,
+   "windFrequency": 0.7,
+   "windHeight": 20.0
   }
  },
  "layout": "hemi-octahedral; frame (i, j) at p = (i, j) / (frames - 1) * 2 - 1 (ImpostorCommon.glsl), spanning its frameExtents"

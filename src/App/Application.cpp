@@ -50,6 +50,8 @@
 #include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
 #include "Sky.h"
 #include "SkyAtmosphere.h"
+#include "TimeOfDay.h"
+#include "Material.h"
 #include "ShaderLibrary.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
@@ -1519,6 +1521,15 @@ int Application::RunSession() {
             // and the atmosphere-filtered colour (SkyAtmosphere) - warm and dim at sunset, the moon's by night.
             const bool physicalSky = world.SkySourceMode == World::SkySource::Atmosphere;
             const glm::vec3 skyCameraPos = (playing ? *gameCam : editorCamera).Position;
+            // The scene's one wind (SkySettings): grass, plants, trees and impostors all read it, toward the clouds' bearing.
+            {
+                Material::WindField wind;
+                wind.Strength = world.Sky.WindStrength;
+                wind.Gustiness = world.Sky.WindGustiness;
+                wind.GustSpeed = world.Sky.WindGustSpeed;
+                wind.CameraPos = skyCameraPos;
+                Material::SetWind(TimeOfDay::BearingToXZ(world.Sky.CloudWindDirectionDegrees, world.Sky.NorthOffsetDegrees), wind);
+            }
             if (physicalSky) skyAtmosphere.Tick(world.Sky, playing ? gameDt : dt, playing);
 
             // The frame's lights and shadow slots, built ONCE per frame and shared by the Scene and Game views (#122).

@@ -16,8 +16,9 @@ struct ImpostorSet {
     glm::vec3 Centre{0.0f};          // the bounding sphere in the group's own space (scale 1)
     float Radius = 0.0f;
     glm::vec3 BoundsMin{0.0f}, BoundsMax{0.0f}; // the LOD 0's box in the same space (the card's outline)
-    float WindBend = 0.0f;   // the card's sway: metres at WindHeight in a full gust (FoliageWind.glsl's slow bend)
+    float WindBend = 0.0f;   // the card's lean: the tree's WindStrength, metres at WindHeight (WindCommon.glsl's WindMainLean)
     float WindHeight = 1.0f;
+    float WindFrequency = 1.0f; // the tree's sway rate, so the card rocks in step with its mesh
     int Frames = 8;          // frames per atlas side
     std::vector<glm::vec2> FrameExtents; // each frame's half-extents on its image plane (frame j x Frames + i)
     std::string Albedo, NormalDepth, Mask; // project-relative atlas paths

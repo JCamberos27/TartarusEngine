@@ -191,6 +191,17 @@ void EditorLayer::DrawPhysicalSkySettings(World& world, float w) {
         }
     }
 
+    // --- Wind: one direction for grass, plants, trees and clouds ---
+    if (section("Wind")) {
+        slider("Direction", &s.CloudWindDirectionDegrees, 0.0f, 360.0f, "%.0f deg",
+               "Compass bearing the wind blows toward (0 = north). Grass, plants, trees and clouds all follow it.");
+        slider("Strength", &s.WindStrength, 0.0f, 4.0f, "%.2f x",
+               "Scales every plant's sway and the grass lean. 0 = still air, 1 = each material's own tuning.");
+        slider("Gustiness", &s.WindGustiness, 0.0f, 1.0f, "%.2f",
+               "0 = a steady breeze, 1 = strong gusts and lulls rolling across the ground.");
+        slider("Gust speed", &s.WindGustSpeed, 0.0f, 30.0f, "%.1f m/s", "How fast the gust fronts travel downwind.");
+    }
+
     // --- Clouds ---
     if (section("Volumetric Clouds")) {
         checkbox("Clouds", &s.CloudsEnabled, "Raymarched volumetric clouds with their own lighting and shadows.");
@@ -204,8 +215,6 @@ void EditorLayer::DrawPhysicalSkySettings(World& world, float w) {
             slider("Size", &s.CloudScale, 0.25f, 4.0f, "%.2f x", "Size of the cloud formations.", ImGuiSliderFlags_Logarithmic);
             slider("Detail", &s.CloudDetail, 0.0f, 1.0f, "%.2f", "Edge erosion: soft blobs .. ragged, wispy edges.");
             slider("Wind speed", &s.CloudWindSpeed, 0.0f, 80.0f, "%.1f m/s", "How fast the clouds drift. They move in the editor too.");
-            slider("Wind direction", &s.CloudWindDirectionDegrees, 0.0f, 360.0f, "%.0f deg",
-                   "Compass bearing the wind blows toward (0 = north).");
             slider("Wind shear", &s.CloudWindShear, 0.0f, 4.0f, "%.2f km", "How far cloud tops lean downwind.");
             if (ImGui::TreeNode("Lighting##clouds")) {
                 slider("Silver lining", &s.CloudForwardScattering, 0.0f, 0.95f, "%.2f",

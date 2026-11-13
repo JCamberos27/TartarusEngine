@@ -5,6 +5,7 @@
 #extension GL_AMD_vertex_shader_layer : enable
 invariant gl_Position; // the depth pre-pass and the model program must land on bit-identical depth (GL_EQUAL)
 layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal; // the foliage wind's leaf flutter (FoliageWind.glsl), as the model VS
 layout (location = 2) in vec2 aUV;
 layout (location = 7) in vec4 aColor; // vertex colour (white when none): the foliage wind mask
 layout (location = 4) in ivec4 aBoneIDs;
@@ -67,7 +68,7 @@ void main() {
         layerOffset = gl_InstanceID % layers;
     }
     precise vec4 worldPos = model * localPos;
-    worldPos.xyz += FoliageWindOffset(localPos.xyz, aColor, model[3].xyz); // same as ModelVertex.glsl
+    worldPos.xyz += FoliageWindOffset(localPos.xyz, aNormal, aColor, model); // same as ModelVertex.glsl
     vWorldPos = worldPos.xyz;
 #if defined(GL_ARB_shader_viewport_layer_array) || defined(GL_AMD_vertex_shader_layer)
     if (uCascadeLayered == 1) {

@@ -8,6 +8,7 @@
 #include "AssetDatabase.h"
 #include "Texture.h"
 #include "Shader.h"
+#include "WindUniforms.h"
 #include "ShaderLibrary.h"
 #include "GLStateCache.h"
 #include "DefaultTextures.h"
@@ -2531,9 +2532,7 @@ void SetWindFrame(Shader& shader) {
     std::uint32_t& last = done[shader.Program()];
     if (last == Material::HashFrame()) return;
     last = Material::HashFrame();
-    shader.SetFloat("uWindTime", Material::WindTime());
-    shader.SetFloat("uPrevWindTime", Material::PrevWindTime());
-    shader.SetVec2("uWindDir", Material::WindDirection());
+    SetWindFieldUniforms(shader);
 }
 // The per-material half. uFoliage = 0 for everything else, so a program last used by a foliage material is reset.
 void SetFoliageUniforms(Shader& shader, const Material& mat, const MaterialLocs& L) {

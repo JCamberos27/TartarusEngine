@@ -75,6 +75,7 @@ void Load() {
             }
             set.WindBend = v.value("windBend", 0.0f);
             set.WindHeight = std::max(v.value("windHeight", 1.0f), 0.01f);
+            set.WindFrequency = v.value("windFrequency", 1.0f);
             set.FrameExtents.assign((size_t)frames * frames, glm::vec2(set.Radius)); // an older bake: the sphere
             if (const auto fe = v.find("frameExtents"); fe != v.end() && fe->is_array() && fe->size() == set.FrameExtents.size())
                 for (size_t k = 0; k < set.FrameExtents.size(); ++k) {

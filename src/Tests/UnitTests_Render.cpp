@@ -12,6 +12,7 @@
 #include "../Renderer/TemporalAA.h"
 #include "../Renderer/ReflectionProbeCapture.h"
 #include "../Game/SceneSerializer.h"
+#include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
@@ -366,6 +367,46 @@ void TaaAndWetnessRoundTrip() {
 
 // Volumetric fog settings and a light's Volumetric Intensity save and load; a scene saved before
 // they existed loads with the fog off and every light at 1.
+// The scene's one wind (SkySettings Wind*): the settings round-trip, an older scene gets the defaults, plants and clouds
+// share the bearing convention (toward the bearing; north = -Z), and the culling margin grows with the scene strength.
+void SceneWindSettings() {
+    AssetLibrary assets;
+    World world;
+    world.SkySourceMode = World::SkySource::Atmosphere;
+    world.Sky.CloudWindDirectionDegrees = 120.0f;
+    world.Sky.WindStrength = 0.6f;
+    world.Sky.WindGustiness = 0.3f;
+    world.Sky.WindGustSpeed = 6.5f;
+    const std::string saved = SceneSerializer::SaveToString(world);
+    {
+        World reloaded;
+        CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
+        CHECK(reloaded.Sky.CloudWindDirectionDegrees == 120.0f && reloaded.Sky.WindStrength == 0.6f);
+        CHECK(reloaded.Sky.WindGustiness == 0.3f && reloaded.Sky.WindGustSpeed == 6.5f);
+    }
+    nlohmann::json j = nlohmann::json::parse(saved);
+    CHECK(j.contains("sky"));
+    for (const char* k : {"windStrength", "windGustiness", "windGustSpeed"}) j["sky"].erase(k);
+    {
+        World old;
+        CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
+        const SkySettings d;
+        CHECK(old.Sky.WindStrength == d.WindStrength && old.Sky.WindGustiness == d.WindGustiness);
+        CHECK(old.Sky.WindGustSpeed == d.WindGustSpeed && old.Sky.CloudWindDirectionDegrees == 120.0f);
+    }
+    const glm::vec2 north = TimeOfDay::BearingToXZ(0.0f, 0.0f), east = TimeOfDay::BearingToXZ(90.0f, 0.0f);
+    CHECK(glm::length(north - glm::vec2(0.0f, -1.0f)) < 1e-5f && glm::length(east - glm::vec2(1.0f, 0.0f)) < 1e-5f);
+    const glm::vec2 turned = TimeOfDay::BearingToXZ(0.0f, 90.0f); // the compass offset turns it a quarter, staying unit
+    CHECK(std::abs(std::abs(turned.x) - 1.0f) < 1e-5f && std::abs(turned.y) < 1e-5f);
+    Material::WindField w;
+    w.Strength = 0.5f;
+    Material::SetWind(glm::vec2(3.0f, 4.0f), w);
+    CHECK(glm::length(Material::WindDirection() - glm::vec2(0.6f, 0.8f)) < 1e-5f && Material::Wind().Strength == 0.5f);
+    Material::SetWind(glm::vec2(0.8f, 0.6f), Material::WindField{});
+    CHECK(HiZCuller::FoliageSway(0.35f, 2.0f) > HiZCuller::FoliageSway(0.35f, 1.0f));
+    CHECK(HiZCuller::FoliageSway(0.0f, 0.0f) == 0.0f);
+}
+
 void VolumetricSettingsRoundTrip() {
     AssetLibrary assets;
     World world;
@@ -555,6 +596,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: pyramid level choice, padding and near-eye boxes", HiZPieces});
+    tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});

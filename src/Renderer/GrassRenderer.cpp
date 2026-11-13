@@ -2,6 +2,7 @@
 
 #include "GLStateCache.h"
 #include "Material.h"
+#include "WindUniforms.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "gl.h"
@@ -380,9 +381,7 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
 void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& proj, int nearSegments) {
     prog.SetMat4("uView", view);
     prog.SetMat4("uProj", proj);
-    prog.SetFloat("uWindTime", Material::WindTime());
-    prog.SetFloat("uPrevWindTime", Material::PrevWindTime());
-    prog.SetVec2("uWindDir", Material::WindDirection());
+    SetWindFieldUniforms(prog);
     m_AreaBind.Bind(kAreaBinding);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBladeBinding, m_BladeBuf);
     glBindVertexArray(m_Vao);

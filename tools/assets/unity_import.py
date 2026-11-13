@@ -47,18 +47,27 @@ SHADERS = {
     '6e4ae4064600d784cac1e41a9e6f2e59': 'lit',          # flat-colour display graph (Background_color, Ground)
     '41e99d5f2ee486e4f85e8cf7bf74a0bc': 'puddle',       # transparent puddle graph (only a water normal)
 }
-# SeedMesh wind (strength m, height m, flutter) by material-name pattern; first match wins. Billboards and mushrooms don't sway.
+# SeedMesh wind (strength m, height m, frequency, flutter) by material-name pattern; first match wins (FoliageWind.glsl).
+# Every material of one plant shares strength, height and frequency so leaves stay on their branches; only the leaves
+# flutter. Billboards and mushrooms don't sway; debris on the ground, moss and cover on trunks don't lean.
 SEED_WIND = [(re.compile(r'billboard|mushroom', re.I), None),
-             (re.compile(r'^Cedrus_leaves', re.I), (0.30, 14.0, 0.4)),
-             (re.compile(r'.*'), (0.10, 0.8, 0.4))]
+             (re.compile(r'^Cedrus_leaves', re.I), (0.35, 20.0, 0.7, 0.35)),
+             (re.compile(r'(^Moss_cover|dry_leaves|Dry_cedrus)', re.I), (0.0, 0.4, 1.0, 0.0)),
+             (re.compile(r'_Tree$', re.I), (0.0, 20.0, 1.2, 0.25)),
+             (re.compile(r'fern', re.I), (0.06, 0.9, 1.4, 0.3)),
+             (re.compile(r'Roldana', re.I), (0.07, 1.5, 1.2, 0.35)),
+             (re.compile(r'Oreopanax', re.I), (0.08, 2.0, 1.1, 0.35)),
+             (re.compile(r'Ground_cover', re.I), (0.03, 0.4, 1.6, 0.3)),
+             (re.compile(r'.*'), (0.05, 0.5, 1.6, 0.3))]
 # Shader graphs that convert to Standard with a note until their own shader exists (by .shadergraph file name).
 GRAPHS = {'Foliage': 'foliage', 'Water': 'water'}
-# The engine's foliage shader params (_WindStrength = metres of sway at the top of _WindHeight; _WindFlutter = leaf flutter
-# share), by material name; anything else gets the default. The pack's own graph wind values are not stored in the .mat.
+# The engine's foliage shader params (_WindStrength = metres of lean at the top of _WindHeight, _WindFrequency = sway rate,
+# _WindFlutter = additive leaf flutter), by material name; anything else gets the default. The pack's own graph wind
+# values are not stored in the .mat. A climber lies flat on a wall, so it only flutters.
 FOLIAGE_WIND = {
-    'Tree': (0.30, 10.0, 0.35), 'Plant_Treebush': (0.10, 3.0, 0.5), 'Plant_Hedgebush': (0.06, 2.0, 0.5),
-    'Plant_BushGrass': (0.10, 1.0, 0.4), 'Plant_Grass': (0.12, 0.6, 0.3), 'Plant_Flowers': (0.10, 0.8, 0.3),
-    'ClimberPlant': (0.05, 3.0, 0.5),
+    'Tree': (0.30, 10.0, 0.8, 0.3), 'Plant_Treebush': (0.08, 3.0, 1.0, 0.35), 'Plant_Hedgebush': (0.04, 2.0, 1.1, 0.3),
+    'Plant_BushGrass': (0.06, 1.0, 1.5, 0.3), 'Plant_Grass': (0.07, 0.6, 1.6, 0.25), 'Plant_Flowers': (0.06, 0.8, 1.5, 0.3),
+    'ClimberPlant': (0.0, 3.0, 1.2, 0.25),
 }
 
 
@@ -259,7 +268,8 @@ class Pack:
             p['_Translucency'] = 0.6
             wind = next(w for rx, w in SEED_WIND if rx.search(name))
             if wind:
-                p.update({'_Foliage': True, '_WindStrength': wind[0], '_WindHeight': wind[1], '_WindFlutter': wind[2]})
+                p.update({'_Foliage': True, '_WindStrength': wind[0], '_WindHeight': wind[1], '_WindFrequency': wind[2],
+                          '_WindFlutter': wind[3]})
         if any(k.startswith(('_Covering', '_Snow', '_COVERING')) for k in list(tex) + list(fl)):
             import seed_cover
             if seed_cover.add_cover(self, name, tex, fl, p, foliage):
@@ -329,9 +339,9 @@ class Pack:
             p['_MetallicMap'], p['_Metallic'] = '', 0.0
             p['_RoughnessMap'], p['_Roughness'] = '', 0.85   # Smoothness 1 on leaves rendered black mirrors
         if kind == 'foliage':
-            strength, height, flutter = FOLIAGE_WIND.get(name, (0.12, 4.0, 0.3))
-            p.update({'_Foliage': True, '_WindStrength': strength, '_WindHeight': height, '_WindFlutter': flutter,
-                      '_Translucency': 0.6})
+            strength, height, frequency, flutter = FOLIAGE_WIND.get(name, (0.08, 3.0, 1.0, 0.3))
+            p.update({'_Foliage': True, '_WindStrength': strength, '_WindHeight': height, '_WindFrequency': frequency,
+                      '_WindFlutter': flutter, '_Translucency': 0.6})
         if kind == 'water':
             p['_Roughness'] = min(p['_Roughness'], 0.05)
         g, _ = guid_of('_OcclusionMap')

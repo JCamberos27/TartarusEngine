@@ -1485,7 +1485,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
                     const MaterialAsset* ma = m < (int)lead.Slots->size() ? (*lead.Slots)[m].get() : nullptr;
                     const Material& mat = ma ? ma->Mat : lead.Ref->MeshMaterial(m);
-                    if (mat.Foliage) sway = std::max(sway, HiZCuller::FoliageSway(std::abs(mat.WindStrength)));
+                    if (mat.Foliage) sway = std::max(sway, HiZCuller::FoliageSway(std::abs(mat.WindStrength), Material::Wind().Strength));
                 }
                 for (std::uint32_t k = 0; k < grp.Count; ++k) {
                     const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];

@@ -42,8 +42,9 @@
       0.18
     ],
     "_WindFlutter": 0.0,
-    "_WindHeight": 14.0,
-    "_WindStrength": 0.18
+    "_WindHeight": 20.0,
+    "_WindStrength": 0.35,
+    "_WindFrequency": 0.7
   },
   "shader": "engine://Standard.shader"
 }

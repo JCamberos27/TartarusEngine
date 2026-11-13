@@ -115,13 +115,15 @@ struct Material {
     bool  ReceiveDecals  = true;          // clustered decals project onto this surface
     bool  NoWetness      = false;         // _NoWetness: World rain wetness / puddles skip it (interiors)
     // Foliage (docs: FoliageWind.glsl). Opt-in; off = the vertex and fragment shaders behave exactly as before.
-    // Vertex wind: a world-space gust (global direction + time, Model::SetWind) scaled by a height mask (the mesh's
-    // local Y over WindHeight, or the vertex colour's red when UseVertexColor is on) bends it, and a small
-    // per-vertex flutter shakes the leaves. Shadows use the same offset. Translucency adds sun light through the leaf.
+    // Vertex wind, in three layers (FoliageWind.glsl): the whole plant leans with the scene's gusts on a height mask
+    // (the mesh's local Y over WindHeight, or the vertex colour's red when UseVertexColor is on), its branches bob,
+    // and leaves add a small flutter. Every material of one plant (bark AND leaves) must share WindStrength,
+    // WindFrequency and WindHeight so the leaves stay on their branches; only WindFlutter differs (0 on bark).
+    // Shadows use the same offset. Translucency adds sun light through the leaf.
     bool  Foliage        = false;
-    float WindStrength   = 0.15f;         // metres the top of WindHeight sways in a full gust
-    float WindFrequency  = 1.0f;          // gust speed multiplier
-    float WindFlutter    = 0.3f;          // 0 = all slow bend, 1 = all leaf flutter
+    float WindStrength   = 0.15f;         // metres the top of WindHeight leans in a full gust (x the scene wind)
+    float WindFrequency  = 1.0f;          // the plant's own sway rate: < 1 heavy trees, > 1 light stems
+    float WindFlutter    = 0.3f;          // leaf flutter on top of the bend: 0 = none (bark), 1 = ~6 cm
     float WindHeight     = 6.0f;          // metres of local Y that map to a full wind mask
     float Translucency   = 0.0f;          // back-lit sun transmission, tinted by albedo; 0 = off
     // Substrate (Substrate.h): the material under the paint. Where the Grunge map's peel mask says the
@@ -193,6 +195,15 @@ struct Material {
     static float PrevWindTime() { return s_PrevWindTime; }
     static glm::vec2 WindDirection() { return s_WindDir; }
     static void SetWindDirection(glm::vec2 d) { if (glm::dot(d, d) > 1e-6f) s_WindDir = glm::normalize(d); }
+    // The scene's surface wind (SkySettings::Wind*), set once per frame before anything renders (WindCommon.glsl).
+    struct WindField {
+        float Strength = 1.0f;   // x every foliage bend, grass lean and flutter
+        float Gustiness = 0.5f;  // 0 steady .. 1 strong gusts and lulls
+        float GustSpeed = 4.0f;  // m/s the gust fronts roll downwind
+        glm::vec3 CameraPos{0.0f}; // the frame's view, for distance fading of the fine motion (the same in every pass)
+    };
+    static const WindField& Wind() { return s_Wind; }
+    static void SetWind(glm::vec2 dir, const WindField& w) { SetWindDirection(dir); s_Wind = w; }
 
     // ShaderVariantKeyForCached's per-frame slot, for the one shader this material links.
     bool CachedVariantKey(const void* shader, std::uint32_t& key) const {
@@ -295,4 +306,5 @@ private:
     inline static float s_WindTime = 0.0f;
     inline static float s_PrevWindTime = 0.0f;
     inline static glm::vec2 s_WindDir{0.8f, 0.6f}; // world XZ, unit length
+    inline static WindField s_Wind{};
 };

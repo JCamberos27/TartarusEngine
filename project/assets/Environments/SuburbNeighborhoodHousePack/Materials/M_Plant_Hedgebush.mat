@@ -30,9 +30,10 @@
     "_Translucency": 0.6,
     "_Triplanar": false,
     "_TriplanarScale": 1.0,
-    "_WindFlutter": 0.5,
+    "_WindFlutter": 0.3,
     "_WindHeight": 2.0,
-    "_WindStrength": 0.06
+    "_WindStrength": 0.04,
+    "_WindFrequency": 1.1
   },
   "renderQueue": 1,
   "shader": "engine://Standard.shader"

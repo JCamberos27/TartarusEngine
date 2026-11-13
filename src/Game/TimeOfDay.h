@@ -7,6 +7,16 @@
 // compass around +Y. All directions point FROM the viewer TOWARD the body.
 namespace TimeOfDay {
 
+// Compass bearing (degrees, clockwise from north) -> world XZ unit vector, with the scene's compass rotation applied.
+// The one wind convention: clouds (VolumetricClouds) and the surface wind (Material::SetWind) both blow TOWARD it.
+inline glm::vec2 BearingToXZ(float bearingDeg, float northOffsetDeg) {
+    const float b = glm::radians(bearingDeg);
+    const glm::vec2 local(std::sin(b), -std::cos(b));
+    const float a = glm::radians(northOffsetDeg);
+    const float c = std::cos(a), s = std::sin(a);
+    return glm::vec2(c * local.x + s * local.y, -s * local.x + c * local.y);
+}
+
 // Solar declination (radians) for a day of the year (1..365): +23.44 deg at the June solstice.
 float SolarDeclination(float dayOfYear);
 

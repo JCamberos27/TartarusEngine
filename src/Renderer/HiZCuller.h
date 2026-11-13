@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <algorithm>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -44,6 +45,9 @@ public:
     static void PadBounds(glm::vec3& wmin, glm::vec3& wmax);
     // The pyramid level whose texels cover pixels [x0, x1] x [y0, y1] with at most two in each direction.
     static int LevelFor(int x0, int y0, int x1, int y1);
-    // The foliage sway a material can add to a vertex, in metres (FoliageWind.glsl's largest offset).
-    static float FoliageSway(float windStrength) { return 2.5f * windStrength; }
+    // The foliage sway a material can add to a vertex, in metres (FoliageWind.glsl's largest offset: the lean's
+    // ~1.6 x strength in a full gust, the branches' 0.3 x and a few cm of flutter, x the scene's wind strength).
+    static float FoliageSway(float windStrength, float sceneStrength = 1.0f) {
+        return (2.5f * windStrength + 0.1f) * std::max(sceneStrength, 0.0f);
+    }
 };
