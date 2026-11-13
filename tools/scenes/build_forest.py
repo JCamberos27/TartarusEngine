@@ -1136,7 +1136,7 @@ def house(s, root, repo, H):
     s.data['maxPointShadows'] = max(s.data.get('maxPointShadows', 0), fh.POINT_SHADOWS)
     here = os.path.dirname(os.path.abspath(__file__))
     pk, lay, broken, rng = fh.add_house(s, root, repo, os.path.join(here, 'forest_house_pack.json'), notes)
-    litter = GROUND_COVER[9:11] + DEBRIS[7:12]
+    litter = DEBRIS[17:18]    # dry leaves only indoors: nothing green, no branches or needle clumps
     fh.dress_inside(s, lay, pk, rng, broken, litter, notes)
     fh.grime(s, lay, pk, rng, notes)
     fh.lights(s, lay, pk, repo, notes)
@@ -1146,6 +1146,7 @@ def house(s, root, repo, H):
     fh.add_yard(s, root, repo, H, {'yard': FERN_SPECIES[0] + FERN_SPECIES[1] + GROUND_COVER[3:9] + WILD_GRASS + FLOWERS,
                                    'litter': GROUND_COVER[9:11] + DEBRIS, 'saplings': TREES, 'tree_lod': LODS['tree']},
                 notes)
+    notes['quiet shadows'] += fh.quiet_shadows(s, next(e['id'] for e in s.empties if e['name'] == 'Yard'), fh.YARD_QUIET)
     return notes
 
 

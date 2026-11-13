@@ -41,8 +41,11 @@ CEIL_1, CEIL_2 = 3.395, 6.305          # pack y of the two ceilings
 LOT = (-21.0, 21.0, 11.0, 46.0)
 LOT_EASE = 7.0                          # metres outside the lot over which the ground rolls back in
 HOUSE_BOX = (-14.9, 14.9, 19.9, 32.2)   # the house's footprint in the world, porch included
-WALK_X = 2.9                            # the front walk's centre line, from the porch steps to the gate
+GATE = 0.8                              # half the gateway in the picket fence, on the walk
+WALK_X = 1.0                            # the front walk's centre line: the gap in the porch rail (pilars at x 0.03 / 1.97)
 DRIVE = (-19.6, -15.6, 11.0, 25.6)      # the driveway (x0, x1, z0, z1)
+OUTER_DOORS = ((1.0, 24.0), (14.6, 26.5))   # the front and side doors (world x, z)
+PORCH_DECK = (-6.76, 8.76, 20.64, 24.52, 0.165)   # the front porch's deck (world x0, x1, z0, z1, top y)
 
 RED = (1.0, 0.035, 0.02)
 
@@ -190,6 +193,7 @@ class Fit:
             self.structure.append(hf.Box.of(pos, rot, self.wscale(e['id']), lo, hi, tag=e['name']))
         self.boxes = {i: self.prop_boxes(i) for i in self.props if i not in pk.gone}
         self.zones = self.door_zones()
+        self.clutter_zones = self.door_zones(wide=True)
         # pairs that already touch in the pack's own layout (a chair tucked under its table): left as they are
         self.touching = {}
         ids = [i for i in self.boxes if not stem(self.props[i]).startswith(FIXED)]
@@ -237,7 +241,7 @@ class Fit:
     def hits(xs, ys, margin):
         return any(hf.overlap(a, b, margin) for a in xs for b in ys)
 
-    def door_zones(self):
+    def door_zones(self, wide=False):
         """A keep-out per doorway: the opening's width (plus a hand) by the leaf's width either side of the wall - the
         swing and the way through."""
         zones = []
@@ -254,7 +258,8 @@ class Fit:
             mid = hf.qrot(rot, ctr)
             cx, cz = pos[0] + mid[0], pos[2] + mid[2]
             along, through = hf.qrot(rot, (1, 0, 0)), hf.qrot(rot, (0, 0, 1))
-            hw, hd = w / 2 + 0.12, w + 0.15
+            # the swing and the way through; rubbish keeps further off (a bag by the frame crowds the door)
+            hw, hd = (w / 2 + 0.55, w + 0.45) if wide else (w / 2 + 0.12, w + 0.15)
             pts = [(cx + along[0] * sa * hw + through[0] * sd * hd, cz + along[2] * sa * hw + through[2] * sd * hd)
                    for sa in (-1, 1) for sd in (-1, 1)]
             y0 = pos[1] + mid[1] - he[1]
@@ -329,7 +334,7 @@ class Fit:
             for s in self.structure:
                 if hf.overlap(b, s, margin):
                     return False
-            for z in self.zones:
+            for z in self.clutter_zones:
                 if z.hits(b):
                     return False
             for j, cs in self.boxes.items():
@@ -340,6 +345,13 @@ class Fit:
             if any(hf.overlap(b, o, margin) for o in others):
                 return False
         return True
+
+    def near_corner(self, x, z, y, d):
+        """Walls within `d` along both X and Z: a corner (where bags and boxes get pushed, and nobody walks)."""
+        def hit(px, pz):
+            probe = hf.Box([px, y + 0.3, pz], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [0.04, 0.2, 0.04])
+            return any(hf.overlap(probe, s) for s in self.structure)
+        return (hit(x - d, z) or hit(x + d, z)) and (hit(x, z - d) or hit(x, z + d))
 
     def near_wall(self, x, z, y, d):
         probe = hf.Box([x, y + 0.3, z], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [d, 0.2, d])
@@ -427,6 +439,26 @@ def open_sealed_doors(pk, notes):
     notes['sealed doors opened'] = fixed
 
 
+def floor_the_stairwell(pk, notes):
+    """Without its basement the pack's cellar stairwell, behind the ground-floor door under the stairs, is a hole down
+    to the forest floor: it gets a floor of the hall's boards (a 3 x 5 tile, the same as the ones round it) and is a
+    store room now."""
+    hole = (-38.8, -35.89, -7.76, -2.91)
+    if any(r[0] < hole[1] - 0.1 and r[1] > hole[0] + 0.1 and r[2] < hole[3] - 0.1 and r[3] > hole[2] + 0.1
+           for r in floor_rects(pk) if r[4] < 3.0):
+        return
+    template = next(e for e in pk.ents if e['kind'] == 'models' and stem(e) == 'Floor_3x_5x'
+                    and pk.by[e['parentId']]['name'] == 'Floors_1st')
+    c = json.loads(json.dumps(template))
+    i = max(pk.by) + 1
+    c.update({'id': i, 'order': i, 'name': 'Floor_3x_5x (stairwell fill)', 'position': [hole[0], 0.485, hole[3]],
+              'rotation': [0.0, 0.0, 0.0, 1.0]})
+    pk.ents.append(c)
+    pk.by[i] = c
+    pk.kids.setdefault(c['parentId'], []).append(i)
+    notes['stairwell floored'] = 1
+
+
 def trash_house(pk, rng, notes):
     """Edits to the pack's own pieces: broken glass, doors left open, furniture knocked about, things taken. Every move
     is fitted: nothing goes into a wall, another piece or a doorway, what stood on a piece moves with it (or falls to the
@@ -491,26 +523,27 @@ def trash_house(pk, rng, notes):
     fit = Fit(pk)
     knocked = moved = crooked = fell = 0
 
-    # Nothing stands in a doorway or a door's swing, the pack's own layout included: slid out to the nearest clear spot
-    # (along the wall it stood against, as a rule), or taken away.
+    # Nothing stands in a doorway or a door's swing, the pack's own layout included: slid along the wall it stands
+    # against (its local X) to the nearest clear spot, or taken away. Only the doors count here - the stairs' run is
+    # a keep-out for things moved about, not for the furniture the pack stood beside them.
     cleared = 0
+    doors = [z for z in fit.zones if not z.name.startswith('Stair')]
     for i in sorted(fit.boxes):
         e = fit.props[i]
         if i in pk.gone or not fit.boxes[i] or stem(e).startswith(FIXED):
             continue
         if any(i in rs for rs in fit.riders.values()):
             continue
-        if not any(z.hits(b.shrunk(0.01)) for z in fit.zones for b in fit.boxes[i]):
+        if not any(z.hits(b.shrunk(0.01)) for z in doors for b in fit.boxes[i]):
             continue
         group = [j for j in fit.group_of(i) if j not in pk.gone]
         c = fit.centre(fit.boxes[i])
-        steps = sorted(((dx * 0.1, dz * 0.1) for dx in range(-14, 15) for dz in range(-14, 15)),
-                       key=lambda d: math.hypot(*d))
+        along = qrot(pk.world(i)[1], (1, 0, 0))
         done = False
-        for sh in steps[1:]:
-            old = fit.transform_group(group, c, [0.0, 0.0, 0.0, 1.0], sh)
+        for d in sorted((k_ * 0.1 for k_ in range(-15, 16) if k_), key=abs):
+            old = fit.transform_group(group, c, [0.0, 0.0, 0.0, 1.0], (along[0] * d, along[2] * d))
             news = {j: fit.prop_boxes(j) for j in group}
-            if all(fit.clear(j, news[j], ignore=group) for j in group) and                     not any(z.hits(b.shrunk(0.01)) for z in fit.zones for bs in news.values() for b in bs):
+            if all(fit.clear(j, news[j], ignore=group) for j in group) and                     not any(z.hits(b.shrunk(0.01)) for z in doors for bs in news.values() for b in bs):
                 fit.boxes.update(news)
                 done = True
                 break
@@ -699,8 +732,8 @@ def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
         for _ in range(int(area * 0.9)):
             x, z = rng.uniform(x0 + 0.1, x1 - 0.1), rng.uniform(z0 + 0.1, z1 - 0.1)
             walled = fit.near_wall(x, z, y, 0.45)
-            if walled and heavy and rng.random() < 0.35:
-                path, _w, how, _h = rng.choice(heavy)
+            if heavy and fit.near_corner(x, z, y, 0.5) and rng.random() < 0.6:
+                path, _w, how, _h = rng.choice(heavy)       # bags and boxes only in the corners
             elif walled or rng.random() < 0.25:
                 path, _w, how, _h = rng.choice(loose)
             else:
@@ -769,7 +802,7 @@ def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
 D = 'assets/Decals/'
 CRACK = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}.decal'
 WALL_CRACKS = [CRACK.format(n) for n in (72, 79, 91)]   # crack lines only (the others carry pale paint flakes)
-CEIL_CRACKS = [CRACK.format(73)]
+CEIL_CRACKS = [CRACK.format(n) for n in (72, 79, 91)]   # long hairlines, the same as the walls'
 LEAK_DECALS = [D + f'Stains/LiquidSplatter/DA_LiquidSplatter_{n:03d}.decal' for n in (1, 10, 19)]
 BASE_DECALS = [D + f'Stains/LiquidSplatter/DA_LiquidSplatter_{n:03d}.decal' for n in (2, 9)]
 CAR_DECAL = D + 'Stains/Splatters/DA_Stain_591.decal'
@@ -854,9 +887,9 @@ def grime(s, lay, pk, rng, notes):
         he, cc = c['halfExtents'], c.get('center', [0, 0, 0])
         frame = pk.by[e['parentId']]['name']
         for side in rng.sample((-1, 1), rng.choice((1, 1, 2))):
-            v = qrot(rot, (cc[0] + side * (he[0] + 0.25), cc[1] + he[1] + 0.3, cc[2]))
+            v = qrot(rot, (cc[0] + side * (he[0] + 0.14), cc[1] + he[1] + 0.16, cc[2]))
             p = [pos[0] + v[0], pos[1] + v[1], pos[2] + v[2]]
-            w = rng.uniform(0.55, 0.85)
+            w = rng.uniform(0.3, 0.5)
             r = qmul(rot, axis_q((0, 0, 1), side * rng.uniform(35.0, 60.0)))
             exterior = frame.startswith('Door_exterior')
             depth = 0.2 if exterior else 0.3
@@ -864,7 +897,7 @@ def grime(s, lay, pk, rng, notes):
                 nz = qrot(rot, (0, 0, 1))
                 inward = -1 if nz[0] * (p[0] - house_c[0]) + nz[2] * (p[2] - house_c[1]) > 0 else 1
                 p = [p[0] + nz[0] * inward * 0.13, p[1], p[2] + nz[2] * inward * 0.13]
-            put('Door Crack', p, r, rng.choice(WALL_CRACKS), (w, w * 0.55, depth), rng.uniform(0.85, 1.0), CRACK_TINT)
+            put('Door Crack', p, r, rng.choice(WALL_CRACKS), (w, w * 0.5, depth), rng.uniform(0.85, 1.0), CRACK_TINT)
 
     # Off the corners of the windows (inside face).
     for e in pk.named(r'Windowglass_singlewindow'):
@@ -882,11 +915,11 @@ def grime(s, lay, pk, rng, notes):
         ha = max(box.h[0], box.h[2])
         inward = -1 if nz[0] * (box.c[0] - house_c[0]) + nz[2] * (box.c[2] - house_c[1]) > 0 else 1
         sa, sy = rng.choice((-1, 1)), rng.choice((-1, 1))
-        p = [box.c[0] + along[0] * sa * (ha + 0.22) + nz[0] * inward * 0.14, box.c[1] + sy * (box.h[1] + 0.22),
-             box.c[2] + along[2] * sa * (ha + 0.22) + nz[2] * inward * 0.14]
+        p = [box.c[0] + along[0] * sa * (ha + 0.14) + nz[0] * inward * 0.14, box.c[1] + sy * (box.h[1] + 0.14),
+             box.c[2] + along[2] * sa * (ha + 0.14) + nz[2] * inward * 0.14]
         yaw = math.degrees(math.atan2(-nz[2], nz[0])) - 90.0
         r = qmul(axis_q((0, 1, 0), yaw), axis_q((0, 0, 1), sa * sy * rng.uniform(30.0, 55.0)))
-        w = rng.uniform(0.5, 0.8)
+        w = rng.uniform(0.25, 0.42)
         put('Window Crack', p, r, rng.choice(WALL_CRACKS), (w, w * 0.55, 0.12), rng.uniform(0.85, 1.0), CRACK_TINT)
 
     # Along the wall heads, and the odd long crack down a wall.
@@ -899,13 +932,13 @@ def grime(s, lay, pk, rng, notes):
                 continue
             ceil = CEIL_1 if ctr[1] < 3.4 else CEIL_2
             u = rng.uniform(-he[0] + 0.3, he[0] - 0.3)
-            w = rng.uniform(0.6, min(1.2, he[0] * 2 - 0.2))
+            w = rng.uniform(0.35, min(0.6, he[0] * 2 - 0.2))
             if rng.random() < 0.25:
-                on_wall(face, u, ceil - 0.16, (w, 0.3), rng.uniform(-8, 8) + rng.choice((0, 180)),
+                on_wall(face, u, ceil - 0.1, (w, 0.16), rng.uniform(-8, 8) + rng.choice((0, 180)),
                         rng.choice(WALL_CRACKS), rng.uniform(0.8, 0.95), CRACK_TINT, 'Wall Head Crack')
             elif rng.random() < 0.16:
                 floor = FLOOR_1 if ctr[1] < 3.4 else FLOOR_2
-                on_wall(face, u, floor + rng.uniform(1.2, 2.1), (rng.uniform(0.7, 1.1), 0.45),
+                on_wall(face, u, floor + rng.uniform(1.2, 2.1), (rng.uniform(0.35, 0.6), 0.22),
                         rng.uniform(55, 125), rng.choice(WALL_CRACKS), rng.uniform(0.8, 0.95), CRACK_TINT, 'Wall Crack')
 
     # Across the ceilings, a leak's stain at the end of some of them - most often upstairs, under the roof.
@@ -923,46 +956,59 @@ def grime(s, lay, pk, rng, notes):
         else:
             continue
         yaw = rng.uniform(0, 360)
-        w = rng.uniform(1.0, 1.7)
+        w = rng.uniform(0.5, 0.9)
         if put('Ceiling Crack', (x, ceil, z), qmul(axis_q((0, 1, 0), yaw), up), rng.choice(CEIL_CRACKS),
-               (w, w * 0.6, 0.12), rng.uniform(0.85, 1.0), CRACK_TINT) and rng.random() < (0.6 if upstairs else 0.3):
+               (w, w * 0.35, 0.12), rng.uniform(0.85, 1.0), CRACK_TINT) and rng.random() < (0.6 if upstairs else 0.3):
             a = math.radians(yaw)
             ex, ez = x + math.cos(a) * w * 0.35, z - math.sin(a) * w * 0.35
-            sw = rng.uniform(0.55, 0.95)
+            sw = rng.uniform(0.3, 0.55)
             put('Leak Stain', (ex, ceil, ez), qmul(axis_q((0, 1, 0), rng.uniform(0, 360)), up),
                 rng.choice(LEAK_DECALS), (sw, sw * rng.uniform(0.75, 1.0), 0.1), rng.uniform(0.55, 0.8),
                 [0.62, 0.55, 0.42])
 
-    # Outside: rain streaks down the siding and green-black damp along the foundation, on the outer face only.
+    # Outside, on the outer face only: a thin band of damp along the foundation where the ground splashes it, and a
+    # streak of grime under the sills of the windows on the ground floor, where the rain runs off them.
     for e in pk.named(r'Wall_(1st|2nd)_'):
         if e['kind'] != 'models' or e['id'] in pk.gone or n >= MAX_DECALS - 2:
             continue
         m = re.match(r'Wall_\w+?_([\d½]+)x', e['name'])
         length = float(m.group(1).replace('½', '.5')) * 0.97 if m else 1.0
         pos, rot = pk.world(e['id'])
+        if pos[1] > 3.0:
+            continue
         nz = qrot(rot, (0, 0, 1))
         v = qrot(rot, (length / 2, 0.0, 0.0))
         cx, cz = pos[0] + v[0], pos[2] + v[2]
         outward = 1 if nz[0] * (cx - house_c[0]) + nz[2] * (cz - house_c[1]) > 0 else -1
         ox, oz = cx + nz[0] * outward * 0.11, cz + nz[2] * outward * 0.11
-        if pos[1] < 3.0:
-            decal(s, g, f'Foundation Damp {n:03d}', (round(ox, 3), pos[1] + 0.1, round(oz, 3)), rot,
-                  rng.choice(BASE_DECALS), (length + 0.3, 1.0, 0.14), rng.randint(1, 999), rng.uniform(0.7, 0.95),
-                  tint=[0.22, 0.27, 0.16])
-            maps.update(BASE_DECALS)
-            n += 1
-        if rng.random() < 0.6:
-            decal(s, g, f'Rain Streak {n:03d}', (round(ox, 3), pos[1] + rng.uniform(1.6, 2.2), round(oz, 3)), rot,
-                  rng.choice(LEAK_DECALS), (length * rng.uniform(0.6, 1.0), rng.uniform(1.8, 2.6), 0.14),
-                  rng.randint(1, 999), rng.uniform(0.6, 0.9), tint=[0.4, 0.38, 0.3])
-            maps.update(LEAK_DECALS)
-            n += 1
+        decal(s, g, f'Foundation Damp {n:03d}', (round(ox, 3), pos[1] + 0.16, round(oz, 3)), rot,
+              rng.choice(BASE_DECALS), (length + 0.05, 0.38, 0.12), rng.randint(1, 999), rng.uniform(0.45, 0.6),
+              tint=[0.24, 0.27, 0.18])
+        maps.update(BASE_DECALS)
+        n += 1
+    for e in pk.named(r'Windowglass_singlewindow'):
+        b = fit.B.get(e.get('path', ''))
+        pos, rot = pk.world(e['id'])
+        if not b or pos[1] > 3.0 or rng.random() < 0.4:
+            continue
+        box = hf.Box.of(pos, rot, fit.wscale(e['id']), b[0], b[1])
+        nz = box.ax[2] if box.h[2] < box.h[0] else box.ax[0]
+        ha = max(box.h[0], box.h[2])
+        outward = 1 if nz[0] * (box.c[0] - house_c[0]) + nz[2] * (box.c[2] - house_c[1]) > 0 else -1
+        yaw = math.degrees(math.atan2(-nz[2], nz[0])) - 90.0
+        hgt = rng.uniform(0.45, 0.7)
+        p = (box.c[0] + nz[0] * outward * 0.2, box.c[1] - box.h[1] - 0.08 - hgt / 2, box.c[2] + nz[2] * outward * 0.2)
+        decal(s, g, f'Sill Streak {n:03d}', tuple(round(v_, 3) for v_ in p), axis_q((0, 1, 0), yaw),
+              rng.choice(LEAK_DECALS), (ha * 2 * rng.uniform(0.5, 0.8), hgt, 0.3), rng.randint(1, 999),
+              rng.uniform(0.35, 0.55), tint=[0.4, 0.38, 0.3])
+        maps.update(LEAK_DECALS)
+        n += 1
     maps.add(CAR_DECAL)
     assert n <= MAX_DECALS and len(maps) <= MAX_MAPS, (n, len(maps))
     notes['decals'] = n
 
 
-RED_I, BOUNCE_I, PORCH_I = 4.5, 0.16, 4.0
+RED_I, PORCH_I = 4.5, 4.0
 POINT_SHADOWS = 2     # the red bulb's and the porch bulb's cube shadows
 
 
@@ -976,43 +1022,53 @@ def lights(s, lay, pk, repo, notes):
         e['Light']['Volumetric Intensity'] = 0.0
         return i, e
 
+    # Every light here comes out of something you can see: a fitting, a tube, candles. Nothing fills the dark rooms;
+    # the sun or the moon through the windows does that.
     # The master bedroom, upstairs at the front: one bare red bulb in the ceiling fitting lighting the whole room,
-    # ceiling included, with cube shadows (the bed's, through the window onto the yard), a softer red fill, and the
-    # bulb stuttering now and then.
+    # ceiling included, with cube shadows (the bed's, through the window onto the yard), the bulb stuttering now and
+    # then.
     fit = next(e for e in pk.named(r'Lamp_bedroom$'))
     fit['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
                                                 emissiveColor=[1.0, 0.06, 0.03], emissiveStrength=6.0)}]
+    fit['castShadows'] = 0      # the bulb hangs in it: its own shade would print a dark disc on the ceiling round it
     fx, fy, fz = pk.world(fit['id'])[0]
     _, e = lamp('Red Bulb', (fx, fy - 0.25, fz), intensity=RED_I, rng=7.0, color=RED, shadows=True, softness=1.4)
-    e.update(k.light_flicker(Mode=0, MinInterval=7.0, MaxInterval=20.0, Depth=0.85, Seed=31))
-    _, e = lamp('Red Fill', (fx - 0.6, fy - 0.9, fz), intensity=RED_I * 0.12, rng=4.2, color=RED)
     e.update(k.light_flicker(Mode=0, MinInterval=7.0, MaxInterval=20.0, Depth=0.85, Seed=31))
 
     # The kitchen's fluorescent tube, dying.
     tube = next(e for e in pk.named(r'Lamp_wall_fluorescent$') if pk.world(e['id'])[0][1] > 1.0)
     tube.pop('materials', None)         # its own, lit material
-    tx, ty, tz = pk.world(tube['id'])[0]
-    _, e = lamp('Kitchen Tube', (tx + 0.6, ty - 0.1, tz + 0.5), intensity=3.2, rng=6.0, color=(0.82, 0.93, 1.0))
+    (tx, ty, tz), trot = pk.world(tube['id'])
+    tb = pk.fit.B.get(tube.get('path', ''))
+    if tb:      # the tube's own middle, a hand off the wall it hangs on
+        box = hf.Box.of((tx, ty, tz), trot, (1, 1, 1), tb[0], tb[1])
+        tx, ty, tz = box.c
+    _, e = lamp('Kitchen Tube', (tx, ty - 0.05, tz), intensity=3.2, rng=6.0, color=(0.82, 0.93, 1.0))
     e.update(k.light_flicker(Mode=0, MinInterval=1.5, MaxInterval=6.0, Depth=1.0, Seed=7))
 
     # Candles burned down on the living room floor, by the couch: someone's been here.
+    # In front of the couch, clear of everything; the glow sits on the flames.
     couch = next(e for e in pk.props() if e['name'].startswith('Couch_3seat'))
-    cx, _, cz = couch['position']
+    cb = pk.fit.boxes[couch['id']][0]
+    front = qrot(pk.world(couch['id'])[1], (0, 0, 1))
     lit = []
-    for name, dx, dz, yaw in (('LP_candle_triple', 1.0, -1.1, 30.0), ('LP_candle_single', 1.35, -0.8, 0.0),
-                              ('LP_candle_small', 0.7, -1.35, 0.0)):
-        lay_down(s, pk.fit, g, PROPS_IN + name + '.prefab', cx + dx, cz + dz, FLOOR_1, yaw, (0.0, 0.0), 1.0, lit)
-    _, e = lamp('Candle Glow', (round(cx + 1.0, 3), FLOOR_1 + 0.5, round(cz - 1.1, 3)), intensity=1.5, rng=5.0,
-                color=(1.0, 0.55, 0.22))
-    e.update(k.light_flicker(Mode=2, MinInterval=0.1, MaxInterval=0.4, Depth=0.25, Seed=11))
-    # The moon's bounce: a faint cold fill on each storey so the dark rooms read as shapes, not black.
+    for d in (0.75, 0.95, 1.15, 1.35):
+        if lit:
+            break
+        bx, bz = cb.c[0] + front[0] * (cb.h[2] + d), cb.c[2] + front[2] * (cb.h[2] + d)
+        for name, ox, oz, yaw in (('LP_candle_triple', 0.0, 0.0, 30.0), ('LP_candle_single', 0.22, 0.12, 0.0),
+                                  ('LP_candle_small', -0.18, 0.16, 0.0)):
+            lay_down(s, pk.fit, g, PROPS_IN + name + '.prefab', bx + ox, bz + oz, FLOOR_1, yaw, (0.0, 0.0), 1.0, lit)
     n = 0
-    for y in (FLOOR_1 + 1.6, FLOOR_2 + 1.6):
-        for x in (-37.4, -32.6):
-            for z in (-12.6, -6.4, -0.2, 6.0, 11.6):
-                lamp(f'Moon Bounce {n:02d}', (x, y, z), intensity=BOUNCE_I, rng=5.5, color=(0.55, 0.66, 0.9))
-                n += 1
-    notes['house lights'] = 4 + n
+    if lit:
+        mx = sum(b.c[0] for b in lit) / len(lit)
+        mz = sum(b.c[2] for b in lit) / len(lit)
+        top = max(b.yhi() for b in lit)
+        _, e = lamp('Candle Glow', (round(mx, 3), round(top + 0.04, 3), round(mz, 3)), intensity=1.5, rng=5.0,
+                    color=(1.0, 0.55, 0.22))
+        e.update(k.light_flicker(Mode=2, MinInterval=0.1, MaxInterval=0.4, Depth=0.25, Seed=11))
+        n = 1
+    notes['house lights'] = 2 + n
 
 
 def porch_light(s, lay, notes):
@@ -1034,11 +1090,17 @@ def porch_light(s, lay, notes):
 # Small and flat things that cast no shadow worth its cost (the Forest's shadow pass): the rubbish, the books, the blown-in
 # leaves and the dead wall fittings.
 QUIET = re.compile(r'(Basement_box|Book_[ABC]|Garage_cardboardbox|Garage_paintbucket|Garage_paperbag|KP_glass_black|'
-                   r'KP_plate|LP_magazine|Newspaper|Lamp_wall_chan|Lamp_wall_toilet|Ground_Leaves_var\d@.*)\.(FBX|fbx)$')
+                   r'KP_plate|LP_magazine|Newspaper|Lamp_wall_chan|Lamp_wall_toilet|Ground_Leaves_var\d@.*|'
+                   r'Generic_dry_leaves_var\d@?.*|Dry_cedrus_debris_Var\d@.*)\.(FBX|fbx)$')
 
 
-def quiet_shadows(s, house):
-    """castShadows off on QUIET models under the house."""
+# ... and in the yard, the ground litter, weeds and wild grass (as across the rest of the Forest).
+YARD_QUIET = re.compile(r'(Dry_cedrus_debris_Var\d@.*|Ground_flower_weed_var\d|Ground_weed_var\d@.*|'
+                        r'Wild_forest_grass_var\d@.*|Ground_Leaves_var\d@.*)\.(FBX|fbx)$')
+
+
+def quiet_shadows(s, house, rule=QUIET):
+    """castShadows off on the models under `house` that match `rule`."""
     kids = {}
     for e in s.empties + s.models + s.boxes:
         kids.setdefault(e['parentId'], []).append(e)
@@ -1046,7 +1108,7 @@ def quiet_shadows(s, house):
     while todo:
         for e in kids.get(todo.pop(), []):
             todo.append(e['id'])
-            if QUIET.search(e.get('path', '')):
+            if rule.search(e.get('path', '')):
                 e['castShadows'] = 0
                 n += 1
     return n
@@ -1059,6 +1121,7 @@ def add_house(s, root, repo, pack_path, notes):
     DEAD_SCREEN.update(k.from_mat(repo, PACK + 'Materials/M_Devices_On.mat', emissiveColor=[0.0, 0.0, 0.0],
                                   emissiveStrength=0.0))
     open_sealed_doors(pk, notes)
+    floor_the_stairwell(pk, notes)
     broken = trash_house(pk, rng, notes)
     house = s.empty('Abandoned House', root, HOUSE_AT, yaw=HOUSE_YAW, static=True)
     lay = s.empty('Pack Layout', house, (-PACK_C[0], -PACK_C[1], -PACK_C[2]), static=True)
@@ -1107,11 +1170,13 @@ def add_yard(s, root, repo, H, forest_paths, notes):
 
     # The front walk: cracked slabs from the porch steps to the gate, one gone.
     walk = s.empty('Front Walk', yard, (0, 0, 0), static=True)
-    z = 20.45
+    # the slab's measured middle is 8.5 cm off its pivot in x; the first one butts up to the porch's front edge
+    z = PORCH_DECK[2] - 0.01
     i = 0
     while z > LOT[2] + 0.2:
         if i != 3:
-            s.stamp(GROUND_P + 'Road_walkway_piece.prefab', walk, (WALK_X, round(LOT_Y - 0.004, 3), round(z - 0.97, 3)),
+            s.stamp(GROUND_P + 'Road_walkway_piece.prefab', walk, (round(WALK_X - 0.085, 3), round(LOT_Y - 0.004, 3),
+                                                                   round(z - 0.977, 3)),
                     yaw=round(rng.uniform(-1.5, 1.5), 2))
         z -= 1.95
         i += 1
@@ -1140,8 +1205,9 @@ def add_yard(s, root, repo, H, forest_paths, notes):
     if s.prefab(PROPS_OUT + 'Fence_small_2x_R.prefab'):
         picket = PROPS_OUT + 'Fence_small_2x_R.prefab'
     nf += fence_line(s, fences, picket, (LOT[0], LOT[2]), (DRIVE[0] - 0.4, LOT[2]), 2.07, rng, H, name='Picket')
-    nf += fence_line(s, fences, picket, (DRIVE[1] + 0.4, LOT[2]), (LOT[1], LOT[2]), 2.07, rng, H, name='Picket',
-                     gaps=((WALK_X - DRIVE[1] - 1.6, WALK_X - DRIVE[1] + 1.2),))
+    # either side of the gateway, run outward from it so the opening is exactly the walk's width plus a post's room
+    nf += fence_line(s, fences, picket, (WALK_X - GATE, LOT[2]), (DRIVE[1] + 0.4, LOT[2]), 2.07, rng, H, name='Picket')
+    nf += fence_line(s, fences, picket, (WALK_X + GATE, LOT[2]), (LOT[1], LOT[2]), 2.07, rng, H, name='Picket')
     wood = PROPS_OUT + 'Fence_wooden_2x.prefab'
     for a, b in (((LOT[0], 30.5), (LOT[0], LOT[3])), ((LOT[0], LOT[3]), (LOT[1], LOT[3])),
                  ((LOT[1], LOT[3]), (LOT[1], 30.5)), ((LOT[0], 30.5), (HOUSE_BOX[0], 30.5)),
@@ -1151,21 +1217,28 @@ def add_yard(s, root, repo, H, forest_paths, notes):
 
     # Yard junk.
     junk = s.empty('Yard Junk', yard, (0, 0, 0), static=True)
-    put = lambda p, x, z, yaw=0.0, tilt=(0.0, 0.0), dy=0.0, name=None: s.stamp(  # noqa: E731
-        p, junk, (x, round(H(x, z) + dy, 3), z), yaw=yaw, tilt=tilt, name=name)
-    put(PROPS_OUT + 'Mailbox.prefab', WALK_X + 1.6, LOT[2] + 0.5, yaw=-90.0, tilt=(0.0, 14.0))
-    put(PROPS_OUT + 'Trashbin.prefab', -15.9, 27.5, yaw=70.0, tilt=(0.0, 90.0), dy=0.3)      # knocked over
+    B = hf.bounds()
+
+    def put(p, x, z, yaw=0.0, tilt=(0.0, 0.0), dy=0.0, name=None, rest=True):
+        """On the porch deck or the ground under it, resting by its own measured shape (dy: sunk or raised more)."""
+        d = PORCH_DECK
+        ground = d[4] if d[0] <= x <= d[1] and d[2] <= z <= d[3] else H(x, z)
+        b = B.get(p)
+        lift = hf.rest_lift(b[0], b[1], k.euler_quat(yaw, tilt[0], tilt[1])) if b and rest else 0.0
+        return s.stamp(p, junk, (x, round(ground + lift + dy, 3), z), yaw=yaw, tilt=tilt, name=name)
+    put(PROPS_OUT + 'Mailbox.prefab', WALK_X + 1.6, LOT[2] + 0.5, yaw=-90.0, tilt=(0.0, 8.0), dy=-0.06)
+    put(PROPS_OUT + 'Trashbin.prefab', -15.9, 27.5, yaw=70.0, tilt=(0.0, 90.0))      # knocked over
     for x, z in ((-16.4, 26.3), (-15.6, 28.9), (-17.0, 28.1), (16.2, 22.4)):
         put(PROPS_OUT + 'Trashbag.prefab', x, z, yaw=rng.uniform(0, 360))
     # The porch: a table and stools left out, one blown over.
-    put(PROPS_OUT + 'Porch_table.prefab', -4.0, 21.6, dy=0.2, yaw=12.0)
-    put(PROPS_OUT + 'Porch_stool.prefab', -5.0, 21.4, dy=0.2, yaw=80.0)
-    put(PROPS_OUT + 'Porch_stool.prefab', -2.8, 21.2, dy=0.5, yaw=200.0, tilt=(0.0, 90.0))
+    put(PROPS_OUT + 'Porch_table.prefab', -4.0, 21.6, yaw=12.0)
+    put(PROPS_OUT + 'Porch_stool.prefab', -5.0, 21.5, yaw=80.0)
+    put(PROPS_OUT + 'Porch_stool.prefab', -2.9, 21.7, yaw=200.0, tilt=(0.0, 90.0))
     # The backyard: loungers and a sun umbrella from a summer a long time ago.
     put(PROPS_OUT + 'Sun_table.prefab', 4.0, 38.5, yaw=15.0)
-    put(PROPS_OUT + 'Sun_umbrella.prefab', 5.6, 39.6, yaw=-30.0, tilt=(84.0, 0.0), dy=0.25, name='Fallen Umbrella')
+    put(PROPS_OUT + 'Sun_umbrella.prefab', 5.6, 39.6, yaw=-30.0, tilt=(59.0, 0.0), name='Fallen Umbrella', rest=False)   # pole's foot and canopy rim on the ground
     put(PROPS_OUT + 'Sun_chair.prefab', 2.6, 37.8, yaw=110.0)
-    put(PROPS_OUT + 'Sun_chair.prefab', 6.1, 37.1, yaw=40.0, tilt=(0.0, 90.0), dy=0.26)
+    put(PROPS_OUT + 'Sun_chair.prefab', 6.1, 37.1, yaw=40.0, tilt=(0.0, 90.0))
     put(PROPS_OUT + 'Roadblock_wooden.prefab', -9.0, 41.5, yaw=25.0)
 
     # The forest coming back: tall dry grass and weeds along the foundation, ivy up the walls, saplings and ferns in
@@ -1182,12 +1255,15 @@ def add_yard(s, root, repo, H, forest_paths, notes):
             x, z = (x0 - rng.uniform(0.1, 0.9) if side == 2 else x1 + rng.uniform(0.1, 0.9)), rng.uniform(z0, z1)
         if abs(x - WALK_X) < 1.4 and z < z0 + 1:
             continue
+        if any(math.hypot(x - dx, z - dz) < 1.4 for dx, dz in OUTER_DOORS):
+            continue                     # the doorsteps stay clear
         if tall:
             s.stamp(rng.choice(tall), wild, (round(x, 2), round(H(x, z), 3), round(z, 2)),
                     yaw=round(rng.uniform(0, 360), 1), scale=round(rng.uniform(0.8, 1.4), 2))
             n_w += 1
     ivy = [p for p in (PROPS_OUT + 'Plant_climber_long.prefab', PROPS_OUT + 'Plant_climber_short.prefab') if s.prefab(p)]
-    for x, z, yaw in ((-14.95, 23.5, -90.0), (-14.95, 29.0, -90.0), (14.95, 27.0, 90.0), (-6.0, 32.25, 180.0),
+    # on blank stretches of wall only: never across a door or a window (the side door's is at z 26.5)
+    for x, z, yaw in ((-14.95, 23.5, -90.0), (-14.95, 29.0, -90.0), (14.95, 21.8, 90.0), (-6.0, 32.25, 180.0),
                       (8.5, 32.25, 180.0)):
         if ivy:
             s.stamp(rng.choice(ivy), wild, (x, round(H(x, z), 3), z), yaw=yaw, scale=round(rng.uniform(0.9, 1.2), 2))
@@ -1227,9 +1303,9 @@ def grass_value(x, z, v):
         return 0.0
     keep = 1.0
     if HOUSE_BOX[2] - 0.6 > z >= LOT[2] - 1.0 and abs(x - WALK_X) < 0.75:
-        keep = 0.12                              # weeds in the walk's cracks
+        keep = 0.05                              # a few weeds in the walk's cracks
     if DRIVE[0] < x < DRIVE[1] and DRIVE[2] - 1.0 < z < DRIVE[3]:
-        keep = 0.18
+        keep = 0.07
     if -18.6 < x < -16.2 and 16.3 < z < 20.9:
         keep = 0.0                               # under the car
     t = smoothstep(0.0, 1.0, lot_dist(x, z))
