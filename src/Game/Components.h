@@ -1219,6 +1219,7 @@ struct OpenableComponent {
     float Amount = 0.0f;     // degrees for a hinge, metres for a slide; 0 = the motion's usual amount
     float OpenTime = 0.5f;   // seconds from shut to open
     bool StartOpen = false;
+    float StartAjar = 0.0f;  // with StartOpen: how far it starts, 0..1 of Amount (0 = all the way); one Interact opens it fully
     bool SwingBack = false;  // a hinge or flap opens toward local -Z (its back face) instead: a front door whose inside is its back
     // Audio assets, ';'-separated variants (one picked per play), played at the part. Empty = silent.
     std::string OpenSound;  // as it starts to open (the knob turning, the hinge)

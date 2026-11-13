@@ -398,6 +398,9 @@ void RegisterEngineComponents() {
               "Seconds from shut to open.", 0.05f, 10.0f },
             { "Start Open", T::Bool, TARTARUS_REFLECT_FIELD(OpenableComponent, StartOpen), 0.0f,
               "Open when Play starts." },
+            { "Start Ajar", T::Float, TARTARUS_REFLECT_FIELD(OpenableComponent, StartAjar), 0.01f,
+              "With Start Open: how far open it starts, as a fraction of Amount (0 = all the way). A door left ajar still "
+              "swings its full Amount: one Interact opens it the rest of the way.", 0.0f, 1.0f },
             { "Swing Back", T::Bool, TARTARUS_REFLECT_FIELD(OpenableComponent, SwingBack), 0.0f,
               "A hinge or flap opens toward local -Z (the back face) instead of the front, its pin on the back face: an "
               "apartment door modelled with its chain and thumb-turn on the back, swinging into the room." },

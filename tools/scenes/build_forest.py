@@ -1142,6 +1142,7 @@ def house(s, root, repo, H):
     fh.lights(s, lay, pk, repo, notes)
     fh.porch_light(s, lay, notes)
     fh.reflection_probes(s, root)
+    notes['quiet shadows'] = fh.quiet_shadows(s, next(e['id'] for e in s.empties if e['name'] == 'Abandoned House'))
     fh.add_yard(s, root, repo, H, {'yard': FERN_SPECIES[0] + FERN_SPECIES[1] + GROUND_COVER[3:9] + WILD_GRASS + FLOWERS,
                                    'litter': GROUND_COVER[9:11] + DEBRIS, 'saplings': TREES, 'tree_lod': LODS['tree']},
                 notes)
