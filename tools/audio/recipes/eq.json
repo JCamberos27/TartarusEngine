@@ -1,0 +1,111 @@
+{
+  "_doc": "The mastering EQ (tools/audio/eqstage.py): the first rule whose `match` (a regex on the sound key) fits is applied to the file, then it is levelled back to its loudness before. hp = Butterworth high-pass (hp_order 2 or 4); bands = RBJ biquads: peak (hz, q, db), low_shelf / high_shelf (hz, q = shelf slope, db); gate = the pre-onset noise gate (settings under `gate`). Every manifest entry records the version it went through (`eq`); remaster.py equalises only files with none (cooked before this stage) and never a file twice: after changing a rule, bump `version` and rebuild the affected sounds with their build script. 2026-11-14 AAA pass: guns punchy cinematic (chest +2 dB under 100 Hz, the 400 Hz box -3 dB, the crack +3 dB at 4 kHz), footsteps clean and present (high-pass 70 Hz, the boom at 150 Hz -3 dB, detail +3 dB at 3.5 kHz), sub rumble off everything that is not a gunshot's body, the noise before the onset gated out of handling, foley and impacts.",
+  "version": 1,
+  "gate": {
+    "onset_db": -34.0,
+    "pre_ms": 6.0,
+    "ramp_ms": 8.0,
+    "noise_db": -36.0
+  },
+  "rules": [
+    {
+      "name": "ir",
+      "match": "^ir\\."
+    },
+    {
+      "name": "gun close",
+      "match": "^snd\\.[a-z0-9]+\\.fire_close$",
+      "hp": 25,
+      "bands": [
+        {
+          "type": "low_shelf",
+          "hz": 100,
+          "q": 0.7,
+          "db": 2.0
+        },
+        {
+          "type": "peak",
+          "hz": 400,
+          "q": 1.0,
+          "db": -3.0
+        },
+        {
+          "type": "peak",
+          "hz": 4000,
+          "q": 0.9,
+          "db": 3.0
+        }
+      ]
+    },
+    {
+      "name": "gun sub",
+      "match": "^snd\\.[a-z0-9]+\\.fire_sub$",
+      "hp": 25
+    },
+    {
+      "name": "gun tail / far",
+      "match": "^snd\\.[a-z0-9]+\\.fire_(tail|far)",
+      "hp": 30
+    },
+    {
+      "name": "gun mechanism",
+      "match": "^snd\\.[a-z0-9]+\\.fire_mech$",
+      "hp": 120,
+      "gate": true
+    },
+    {
+      "name": "gun handling",
+      "match": "^snd\\.(ak|870|revolver38)\\.",
+      "hp": 80,
+      "gate": true
+    },
+    {
+      "name": "weapon foley",
+      "match": "^snd\\.foley\\.weapon\\.",
+      "hp": 80,
+      "gate": true
+    },
+    {
+      "name": "footsteps",
+      "match": "^snd\\.foley\\.(step|barefoot)_",
+      "hp": 70,
+      "bands": [
+        {
+          "type": "peak",
+          "hz": 150,
+          "q": 0.8,
+          "db": -3.0
+        },
+        {
+          "type": "peak",
+          "hz": 3500,
+          "q": 0.7,
+          "db": 3.0
+        }
+      ],
+      "gate": true
+    },
+    {
+      "name": "impacts",
+      "match": "^snd\\.impact\\.",
+      "hp": 40,
+      "gate": true
+    },
+    {
+      "name": "body foley",
+      "match": "^snd\\.(foley\\.(move|spider|door)|body_fall)\\.?",
+      "hp": 50,
+      "gate": true
+    },
+    {
+      "name": "casings, flybys, ui",
+      "match": "^snd\\.(casing|flyby|ui)\\.",
+      "gate": true
+    },
+    {
+      "name": "ambience",
+      "match": "^snd\\.amb\\.",
+      "hp": 35
+    }
+  ]
+}

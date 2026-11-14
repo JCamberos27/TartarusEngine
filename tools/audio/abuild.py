@@ -60,8 +60,10 @@ def measure(x):
 
 
 def emit(rel_path, x, key, layer, extra=None, mono=False, sources=None):
-    """Write project/assets/Audio/<rel_path> and return its manifest entry."""
+    """Write project/assets/Audio/<rel_path> and return its manifest entry. The mastering EQ (eqstage, recipes/eq.json) runs first."""
+    import eqstage
     path = os.path.join(AUDIO_DIR, rel_path)
+    x, eq_rule = eqstage.apply(x, key, layer, loop=bool(extra and extra.get("loop")))
     y = adsp.to_mono(x)[:, None].repeat(2, axis=1).astype(np.float32) if mono else x
     adsp.write_wav(path, y, mono=mono)
     entry = {"file": rel_path.replace("\\", "/"), "key": key, "layer": layer, "channels": 1 if mono else 2,
@@ -71,6 +73,9 @@ def emit(rel_path, x, key, layer, extra=None, mono=False, sources=None):
     entry["anchor_ms"] = round(adsp.anchor_ms(y), 1)       # contact transient inside the file
     if extra:
         entry.update(extra)
+    if eq_rule:
+        entry["eq"] = eqstage.cfg()["version"]
+        entry["eq_rule"] = eq_rule
     return entry
 
 

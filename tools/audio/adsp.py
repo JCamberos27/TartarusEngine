@@ -35,6 +35,9 @@ def resolve_sonniss(spec):
     root = SFX_ROOT if lib == "sfx" else os.path.join(SRC_ROOT, lib)
     hits = glob.glob(os.path.join(root, glob.escape(pack) + "*", glob.escape(name) + "*.wav"))
     hits = [h for h in hits if h.lower().endswith(".wav")]
+    exact = [h for h in hits if os.path.splitext(os.path.basename(h))[0] == os.path.basename(name)]
+    if len(hits) > 1 and len(exact) == 1:                # "WoodHit_Insert 1" is a prefix of "... 10" too: the exact name wins
+        hits = exact
     if len(hits) != 1:
         raise FileNotFoundError(f"{spec}: {len(hits)} matches")
     return hits[0]
