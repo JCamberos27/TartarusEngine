@@ -22,6 +22,7 @@ enum class LaunchMode {
     SceneBounds,  // --scene-bounds <scene.json|prefab dir>... --out <dir>
     BakeImpostors, // --bake-impostors <scene.json>... --out <dir> [--match <text>]
     AudioTest,    // --audio-test [scene] [--report <file>]
+    BakeGI,       // --bake-gi <scene.json> [--gi-only <name>]
     CrashTest,    // --crash-test <kind> [--crash-dialog]
     Help,         // --help
 };
@@ -53,6 +54,7 @@ struct LaunchOptions {
     std::string buildOutArg;        // --build [outDir]
     std::string unitTestsFilter;    // --unit-tests [filter]
     std::string audioTestScene;     // --audio-test [scene]
+    std::string bakeGiScene;        // --bake-gi <scene.json>: bake its GI Volumes (GIBaker), write their .gi, exit
     std::string crashTestKind;      // --crash-test <av|overflow|abort|purecall|invalidparam|terminate>
     std::vector<std::string> inputs; // --model-report / --model-nodes / --scene-bounds inputs
 
@@ -76,6 +78,7 @@ struct LaunchOptions {
     std::string sceneBoundsOut;   // --out <dir> (scene-bounds, bake-impostors)
     std::string bakeMatch;        // --match <text> (bake-impostors): the model path the LOD 0s must draw
     std::string audioTestReport;  // --report <file> (audio-test)
+    std::string bakeGiOnly;       // --gi-only <name> (bake-gi): only the volumes whose name contains it
     // --project <dir> (any mode): open that project folder instead of the one next to the exe. Applied by the parse.
     std::string projectDir;
 };

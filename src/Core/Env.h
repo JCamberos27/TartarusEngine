@@ -58,6 +58,8 @@
     X(PumpTrace, "TARTARUS_PUMP_TRACE", Flag, "trace the asset library pump")                                         \
     X(ProbeLog, "TARTARUS_PROBE_LOG", Flag, "log reflection probe captures")                                          \
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \
+    X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Str, "--bake-gi: emission kept in the captures (default 0)")            \
+    X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Str, "--bake-gi: light bounces to bake (default 2)")                      \
     X(SkinAudit, "TARTARUS_SKIN_AUDIT", Flag, "log skinning audit")                                                   \
     X(TrisReport, "TARTARUS_TRIS_REPORT", Int, "print a triangle report on this frame")                               \
     X(HizStats, "TARTARUS_HIZ_STATS", Flag, "print Hi-Z culling stats")                                               \

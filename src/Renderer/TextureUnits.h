@@ -27,7 +27,7 @@ constexpr int Grunge         = 21; // Decals::UNIT_GRUNGE
 constexpr int DecalAlbedo    = 22; // Decals::UNIT_ALBEDO .. UNIT_AUX = 22..25
 constexpr int ProbeCubes     = 26;
 constexpr int VolumeFog      = 27;
-constexpr int Spare28        = 28; // free
+constexpr int GIAtlas        = 28; // GIVolumes: the baked GI bricks (GIVolumes.glsl)
 constexpr int PuddleSsr      = 29;
 constexpr int Aerial         = 30; // SkyAtmosphere::kAerialUnit
 constexpr int CloudShadow    = 31; // SkyAtmosphere::kCloudShadowUnit

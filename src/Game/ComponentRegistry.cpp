@@ -1729,6 +1729,28 @@ void RegisterEngineComponents() {
         },
     });
 
+    {
+        using G = GIVolumeComponent;
+        ReflectComponent m;
+        m.Name = "GI Volume"; m.Icon = ICON_FA_CUBES; m.Category = "Rendering";
+        m.Tooltip = "Baked bounce light for a room: a box of probes that --bake-gi fills once per light circuit (and the\n"
+                    "Outside). Each circuit's bounce follows its switch at runtime, with no re-bake. Size it to the room,\n"
+                    "padded a few cm into the walls like a light's Bounds.";
+        m.Fields = {
+            { "Size", T::Vec3, TARTARUS_REFLECT_FIELD(G, Size), 0.05f, "Full extents of the box, metres (x the scale).", 0.0f, 0.0f },
+            { "Spacing", T::Float, TARTARUS_REFLECT_FIELD(G, Spacing), 0.05f, "Metres between probes. Re-bake after changing it.", 0.1f, 4.0f },
+            { "Fade", T::Float, TARTARUS_REFLECT_FIELD(G, Fade), 0.01f, "Metres over which the light fades out at the box faces.", 0.0f, 4.0f },
+            { "Intensity", T::Float, TARTARUS_REFLECT_FIELD(G, Intensity), 0.01f, "Scales the baked light.", 0.0f, 16.0f },
+            { "Circuits", T::String, TARTARUS_REFLECT_FIELD(G, Circuits), 0.0f,
+              "Light circuits to bake a layer each for, ';'-separated. Each layer shows while its circuit is on." },
+            { "Outside", T::Bool, TARTARUS_REFLECT_FIELD(G, Outside), 0.0f,
+              "Also bake the moon, sun and sky through the windows (always on). With it, the volume replaces the\n"
+              "sky's ambient inside its box.", 0.0f, 0.0f },
+            { "Bake File", T::String, TARTARUS_REFLECT_FIELD(G, BakeFile), 0.0f, "The .gi file --bake-gi wrote (project-relative)." },
+        };
+        Register<GIVolumeComponent>(std::move(m));
+    }
+
     // Clustered decals (docs/DECALS.md). The .decal asset holds the look; these are per-placement
     // overrides. The Inspector's extras (EditorLayer_Decals.cpp) add the preview, atlas-frame grid,
     // Edit Asset and Fit to Surface; the box gizmo edits Size, never the Transform's scale.

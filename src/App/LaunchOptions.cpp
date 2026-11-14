@@ -20,7 +20,8 @@ enum class Arity {
 
 constexpr unsigned Bit(LaunchMode m) { return 1u << (unsigned)m; }
 constexpr unsigned kGuiModes = Bit(LaunchMode::Editor) | Bit(LaunchMode::SmokeTest) | Bit(LaunchMode::PerfBench) |
-                               Bit(LaunchMode::NpcTest) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::EditorShot);
+                               Bit(LaunchMode::NpcTest) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::EditorShot) |
+                               Bit(LaunchMode::BakeGI);
 constexpr unsigned kAnyMode = ~0u;
 
 using Apply = void (*)(LaunchOptions&, const std::string&);
@@ -77,6 +78,9 @@ const FlagDef kFlags[] = {
     {"--audio-test", Arity::Optional, "scene", true, LaunchMode::AudioTest, 0,
      [](LaunchOptions& o, const std::string& v) { o.audioTestScene = v; },
      "offline audio test: a scripted tour of a scene's reverb zones (default AudioLab)"},
+    {"--bake-gi", Arity::Required, "scene.json", true, LaunchMode::BakeGI, 0,
+     [](LaunchOptions& o, const std::string& v) { o.bakeGiScene = v; },
+     "bake the scene's GI Volumes (bounce light per circuit) into their .gi files, then exit"},
     {"--crash-test", Arity::Required, "kind", true, LaunchMode::CrashTest, 0,
      [](LaunchOptions& o, const std::string& v) { o.crashTestKind = v; },
      "crash on purpose (av|overflow|abort|purecall|invalidparam|terminate) to check the crash handler"},
@@ -88,6 +92,9 @@ const FlagDef kFlags[] = {
     {"--project", Arity::Required, "dir", false, kNoMode, kAnyMode,
      [](LaunchOptions& o, const std::string& v) { o.projectDir = v; },
      "open this project folder instead of the one next to the exe"},
+    {"--gi-only", Arity::Required, "name", false, kNoMode, Bit(LaunchMode::BakeGI),
+     [](LaunchOptions& o, const std::string& v) { o.bakeGiOnly = v; },
+     "bake only the GI Volumes whose name contains this"},
     {"--weapon-lab", Arity::None, "", false, kNoMode, kGuiModes,
      [](LaunchOptions& o, const std::string&) { o.weaponLabMode = true; },
      "the WeaponLab scene with the Weapon Lab panel"},

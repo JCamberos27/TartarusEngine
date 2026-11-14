@@ -11,7 +11,7 @@ class EditorLayer;
 namespace FKeyRow {
 
 enum Overlay : int { OverlayOff = 0, OverlayPhysics, OverlayAi, OverlayNav, OverlayHitboxes, OverlayCount };
-enum LightView : int { LightOff = 0, LightLighting, LightAlbedo, LightRoughMetal, LightComplexity, LightCount };
+enum LightView : int { LightOff = 0, LightLighting, LightAlbedo, LightRoughMetal, LightComplexity, LightGI, LightCount };
 
 // F5-F6 (and Shift+F5-F6 back), from the main loop through Shortcuts::TriggeredGlfw, in any mode. Outside Play F6
 // skips AI and Hitboxes (they need living NPCs).

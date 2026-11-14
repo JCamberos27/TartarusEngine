@@ -14,7 +14,7 @@ namespace {
 
 const char* kDrawNames[] = {"Shaded", "Wireframe", "Unlit", "Normals", "Shadow Cascades", "Mip / Texel"};
 const char* kOverlayNames[OverlayCount] = {"Off", "Physics", "AI", "Nav", "Hitboxes"};
-const char* kLightNames[LightCount] = {"Off", "Lighting Only", "Albedo", "Roughness / Metal", "Light Complexity"};
+const char* kLightNames[LightCount] = {"Off", "Lighting Only", "Albedo", "Roughness / Metal", "Light Complexity", "GI Only"};
 constexpr int kDrawCount = (int)(sizeof(kDrawNames) / sizeof(kDrawNames[0]));
 
 // The pill showing (one at a time: a new press replaces it).
@@ -98,6 +98,7 @@ bool PostFxOff() { return EditorSettings::Get().PostFxOff; }
 
 int DebugViewFor(int shadingIndex) {
     const int light = std::clamp(EditorSettings::Get().FRowLightDebug, 0, LightCount - 1);
+    if (light == LightGI) return 8;          // the baked GI alone (GI Volumes)
     if (light != LightOff) return 3 + light; // 4 Lighting, 5 Albedo, 6 Roughness / Metal, 7 Light complexity
     // EditorLayer::ShadingMode: 3 Normals, 4 Cascades, 5 Mip -> uDebugView 1, 2, 3.
     return shadingIndex >= 3 && shadingIndex <= 5 ? shadingIndex - 2 : 0;

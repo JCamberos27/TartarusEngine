@@ -34,6 +34,7 @@
 #include "Framebuffer.h"
 #include "gl.h"
 #include "DecalAsset.h"
+#include "GIData.h"
 
 #include <chrono>
 #include <imgui.h>
@@ -1800,6 +1801,8 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
             glyph = ICON_FA_VIDEO;
         } else if (world.Registry.all_of<ReflectionProbeComponent>(entity)) {
             glyph = ICON_FA_GLOBE;
+        } else if (world.Registry.all_of<GIVolumeComponent>(entity)) {
+            glyph = ICON_FA_CUBES;
         } else if (world.Registry.all_of<DecalComponent>(entity)) {
             glyph = ICON_FA_SPRAY_CAN;
         } else if (world.Registry.all_of<PostProcessVolumeComponent>(entity)) {
@@ -2151,6 +2154,51 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
             {0,4},{1,5},{2,6},{3,7}, // along Z
         };
         for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
+    }
+
+    // GI Volumes: the box, and when selected every probe as a dot in its baked colour (all layers at full weight, the
+    // DC term, tone-mapped), hollow where the volume has no bake for its current grid.
+    const ImU32 kGIColor = IM_COL32(255, 190, 90, 190);
+    auto giView = world.Registry.view<const TransformComponent, const GIVolumeComponent>();
+    for (auto [entity, tc, gv] : giView.each()) {
+        if (!vprefs.ShowProbeGizmos || !showVolume(entity)) continue;
+        const GI::Box box = GI::Box::FromTransform(world.GetCachedWorldTransform(entity), gv.Size);
+        glm::vec3 c[8];
+        for (int i = 0; i < 8; ++i)
+            c[i] = box.ToWorld({(i & 1) ? box.Half.x : -box.Half.x, (i & 2) ? box.Half.y : -box.Half.y,
+                                (i & 4) ? box.Half.z : -box.Half.z});
+        const int edges[12][2] = {{0,1},{2,3},{4,5},{6,7},{0,2},{1,3},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7}};
+        const bool selected = IsSelected(entity);
+        for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], selected ? kProbeSelected : kGIColor, kThick);
+        if (!selected) continue;
+        const glm::ivec3 dims = GI::GridDims(box.Half, gv.Spacing);
+        if (dims.x * dims.y * dims.z > 20000) continue;
+        const auto* nameC = world.Registry.try_get<NameComponent>(entity);
+        std::shared_ptr<const GI::BakeFile> file =
+            gv.BakeFile.empty() ? nullptr : GI::Cached(ProjectPaths::Resolve(gv.BakeFile));
+        const GI::VolumeBake* bake = file && nameC ? file->Find(nameC->Name) : nullptr;
+        if (bake && bake->Dims != dims) bake = nullptr;
+        for (int z = 0; z < dims.z; ++z)
+            for (int y = 0; y < dims.y; ++y)
+                for (int x = 0; x < dims.x; ++x) {
+                    const glm::ivec3 ijk(x, y, z);
+                    const glm::vec3 wp = box.ToWorld(GI::ProbeLocal(ijk, dims, box.Half));
+                    const glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
+                    if (clip.w < 0.1f) continue;
+                    ImVec2 s;
+                    if (!project(wp, s)) continue;
+                    const float r = std::clamp(6.0f / clip.w, 1.5f, 5.0f);
+                    if (!bake) { draw->AddCircle(s, r, kGIColor, 8, 1.0f); continue; }
+                    glm::vec3 dc(0.0f);
+                    for (const auto& l : bake->Layers) {
+                        const GI::ProbeSH& sh = l.Probes[GI::ProbeIndex(ijk, dims)];
+                        dc += glm::vec3(sh.c[0].x, sh.c[1].x, sh.c[2].x);
+                    }
+                    dc = glm::max(dc, glm::vec3(0.0f)) * gv.Intensity;
+                    dc = dc / (dc + glm::vec3(0.25f)); // simple tone curve: dim bounce still reads
+                    draw->AddCircleFilled(s, r, IM_COL32((int)(dc.r * 255), (int)(dc.g * 255), (int)(dc.b * 255), 235), 10);
+                    draw->AddCircle(s, r, IM_COL32(0, 0, 0, 120), 10, 1.0f);
+                }
     }
 
     // #162 / #203 - local Post-process Volumes: their (oriented) box.

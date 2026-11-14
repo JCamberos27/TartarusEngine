@@ -77,4 +77,13 @@ struct RenderFrameContext {
     // A reflection probe's room capture (ReflectionProbeCapture): opaque geometry, sky and lights only - no view model,
     // player body, transparents, particles, sprites, labels, volumetric fog or puddle reflections.
     bool ProbeCapture = false;
+
+    // A GI bake capture (GIBaker, with ProbeCapture): 1 = one light circuit alone - no sky drawn, no sky ambient;
+    // 2 = the Outside - the sky drawn (it lights the room through the windows) but still no sky ambient on surfaces.
+    // Back faces of one-sided surfaces write alpha 0 (the baker's inside-a-wall test); emission is scaled by
+    // GIBakeEmissive (the fittings' glow stands in for the lamp the light already is).
+    int   GIBake = 0;
+    float GIBakeEmissive = 0.0f;
+    // World box a GI bake capture draws inside (Min > Max = everything): the baked volumes plus a margin.
+    glm::vec3 GIBakeClipMin{1.0f}, GIBakeClipMax{-1.0f};
 };

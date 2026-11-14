@@ -334,7 +334,7 @@ void main() {
     // --- Debug draw modes (#236 R2; 4-7 the F7 light views) ---
 #ifndef _ENGINE_NO_DEBUG_VIEW // ShaderVariant.h: the view draws no debug mode
     if (uDebugView == 4) albedo = vec3(0.75); // Lighting only: lit as usual on a flat grey
-    if (uDebugView != 0 && uDebugView != 4) {
+    if (uDebugView != 0 && uDebugView != 4 && uDebugView != 8) { // 8 GI only: drawn at the ambient term
         if (uDebugView == 5) {            // Albedo
             FragColor = vec4(albedo, 1.0);
         } else if (uDebugView == 6) {     // Roughness (red) / Metallic (green)
@@ -527,6 +527,7 @@ void main() {
         // below, a double-sided leaf's normal faces the dark ground, and with only the sun's transmission below its
         // underside went near-black against a bright sky.
         if (uTranslucency > 0.0) irradiance += texture(uIrradianceMap, -N).rgb * uIBLIntensity * uTranslucency;
+        const vec3 skyIrradiance = irradiance; // before a room probe's stand-in replaces it (GI below)
 
         vec3 R = reflect(-V, N);
         vec3 prefiltered = textureLod(uPrefilteredMap, R, roughness * uIBLSpecularMaxLod).rgb;
@@ -557,7 +558,7 @@ void main() {
                 // runs both). Leaves keep the sky's: a canopy's inside never sees the lit street the probe saw, and
                 // the room's average on every leaf greyed the night trees.
                 vec3 probeSpec;
-                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0)
+                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0)
                     probeSpec = textureLod(uProbeCubes, vec4(correctedR, float(uProbeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb;
                 else
                     probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
@@ -566,7 +567,7 @@ void main() {
                 // cosine-weighted irradiance - the lamps, the lit walls and the windows, not the open sky. It is the
                 // scene's own radiance, so the sky's Ambient intensity does not scale it. Full weight in the box's
                 // core, fading to the sky's over its outer 20% so an outdoor neighbour shows no seam.
-                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0) {
+                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0) {
                     vec3 q = abs(vWorldPos - uProbeCenter[pi]) / max(uProbeHalfSize[pi], vec3(1e-3));
                     float inBox = 1.0 - smoothstep(0.8, 1.0, max(q.x, max(q.y, q.z)));
                     if (inBox > 0.0) {
@@ -580,6 +581,20 @@ void main() {
             if (roomW > 0.0) irradiance = irradiance * (1.0 - roomW) + roomIrradiance;
         }
 #endif
+        // Baked bounce light (GI Volumes, GIVolumes.glsl). Inside a volume it takes over from the room probe's diffuse
+        // stand-in above (both are the room's bounce: never both), and adds to the sky's ambient - or, in a volume with
+        // an Outside layer (moon, sun and sky baked through the windows), replaces that too. Faded at the box faces.
+        {
+            float giFade, giSky;
+            vec3 gi = SampleGI(vWorldPos, N, giFade, giSky);
+            if (giFade > 0.0) irradiance = mix(irradiance, skyIrradiance * (1.0 - giSky) + gi, giFade);
+#ifndef _ENGINE_NO_DEBUG_VIEW
+            if (uDebugView == 8) { // GI only: the baked bounce on flat grey, with its SSAO
+                FragColor = vec4(gi * giFade * 0.75 * ssaoFactor, 1.0);
+                return;
+            }
+#endif
+        }
         vec2 ab = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
         vec3 specW = F * ab.x + ab.y;
         vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * specW;
@@ -599,6 +614,7 @@ void main() {
     ambient *= ssaoFactor;
     ambient += ssrAdd;
     vec3 emissive = emissiveEarly;
+    if (uGIBake == 1) emissive *= uGIBakeEmissive;
 
 #ifdef _CLEARCOAT
     // Clear coat intercepts energy before it reaches the base: attenuate Lo and ambient by (1-Fc).
@@ -655,6 +671,8 @@ void main() {
     // transparent), multiplied by the material's Opacity.
     float surfaceAlpha = uOpacity * (uHasAlbedoMap == 1 ? albedoSample.a : 1.0);
     FragColor = vec4(color, uAlphaBlend != 0 ? surfaceAlpha : 1.0);
+    // GI bake: a one-sided surface seen from behind means the probe is inside a wall or a piece of furniture.
+    if (uGIBake == 1 && uDoubleSided == 0 && !gl_FrontFacing) FragColor = vec4(0.0);
 }
 // OIT (order-independent transparency) is explicitly out of scope for PR 9.
 // Transparent materials use back-to-front painter's algorithm via the transparent draw list.

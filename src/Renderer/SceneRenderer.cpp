@@ -18,6 +18,7 @@
 #include "PointShadowMap.h"
 #include "IblProbe.h"
 #include "ReflectionProbeArray.h"
+#include "GIVolumes.h"
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
 #include "DecalSystem.h"
@@ -410,6 +411,7 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
         const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
         if (v.Bounded) {
             if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) return;
+            if (q.Within && !q.Within->Intersects(AABB{v.WorldMin, v.WorldMax})) return;
             if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
                                                   q.MinScreenHeight)) return;
         }
@@ -573,10 +575,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.SpecularMap());
         glActiveTexture(GL_TEXTURE0 + 13);
         glBindTexture(GL_TEXTURE_2D, iblProbe.BrdfLut());
-        program.SetFloat("uIBLIntensity", std::max(fs.world->SkyAmbientIntensity, 0.0f));
+        program.SetFloat("uIBLIntensity", ctx.GIBake ? 0.0f : std::max(fs.world->SkyAmbientIntensity, 0.0f));
         program.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
     }
     program.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
+    program.SetInt("uGIBake", ctx.GIBake ? 1 : 0);
+    program.SetFloat("uGIBakeEmissive", ctx.GIBakeEmissive);
 
     // Physical sky: aerial perspective (unit 30) and cloud shadows (unit 31). Neutral textures
     // and both switched off for the other sky modes.
@@ -611,6 +615,9 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // PR14: nearest 2 reflection probes for parallax box projection — no-op (uProbeCount=0 or the
     // uniforms absent) when the shader lacks the _REFLECTION_PROBES keyword / the scene has none.
     probeArray.Bind(program, ctx.ViewPos);
+    // Baked GI (GIVolumes): atlas on unit 28, volumes on UBO binding 4. Unlit draws no lighting.
+    if (in.giVolumes && !ctx.Unlit) in.giVolumes->Bind(program);
+    else { program.SetInt("uGIEnabled", 0); glBindTextureUnit(28, DefaultTextures::Volume()); }
 
     // PR15: SSAO occlusion map (unit 15), pre-computed before this pass. ctx.SsaoSrc is the
     // caller's own per-viewport Ssao instance; IsValid() is false until its first filled frame.
@@ -923,6 +930,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         inView.SkipPlayerBody = true;
         inView.SkipTransparent = true;
     }
+    // A GI bake capture draws only what's near the volumes being baked (the house, its yard through the windows): the
+    // forest beyond was most of every tiny capture's cost and lights nothing inside.
+    const AABB giClip{ctx.GIBakeClipMin, ctx.GIBakeClipMax};
+    if (ctx.GIBake && ctx.GIBakeClipMin.x <= ctx.GIBakeClipMax.x) inView.Within = &giClip;
     // Too small to see from here (Project Settings > Quality); perspective views only. The SSAO depth pre-pass culls
     // with the same test, so the two agree on what stands in front.
     if (std::abs(ctx.Proj[3][3]) < 0.5f) {
@@ -1264,7 +1275,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
     // Octahedral impostors (ImpostorRenderer): the trees this view's ApplyLod put on theirs, in its frustum. Into the
     // pre-pass with the static world, then lit over it with the opaque pass.
-    const bool impostorsOn = ImpostorRenderer::Get().Gather(world, camFrustum, ctx.ViewPos);
+    const bool impostorsOn = !ctx.GIBake && ImpostorRenderer::Get().Gather(world, camFrustum, ctx.ViewPos);
     unsigned hizDepth = 0; // the view's depth after the pre-pass, single sample: HiZCuller's occluders
     constexpr float kPrepassSlopeOffset = 0.02f;
     const auto prepassed = [&](const DrawItem& it) {
@@ -1714,7 +1725,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // PR13: sky - the physical sky, HDRI cubemap or procedural gradient - at the far plane under a
     // GL_LEQUAL test, so the opaque pass above has already rejected every covered pixel. Before
     // the transparent pass (it blends over the sky, and transmission captures it).
-    if (in.skyAtmosphere) {
+    if (ctx.GIBake == 1) {
+        // A circuit's GI bake: the sky is black (the Outside layer carries it).
+    } else if (in.skyAtmosphere) {
         in.skyAtmosphere->DrawSky(ctx.TxHdr);
     } else if (world.SkySourceMode == World::SkySource::Hdri && in.hdriCube) {
         float rotRad = glm::radians(world.SkyRotationDegrees);
