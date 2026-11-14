@@ -119,7 +119,12 @@ void GIVolumes::Gather(const World& world) {
     auto view = world.Registry.view<const TransformComponent, const GIVolumeComponent>();
     for (auto [e, tc, gv] : view.each()) {
         if (world.Registry.any_of<InactiveTag, DeactivatedTag>(e)) continue;
-        if ((int)vols.size() >= kMaxVolumes) break;
+        if ((int)vols.size() >= kMaxVolumes) {
+            static bool warned = false;
+            if (!warned) Log::Warn("[GI] more than " + std::to_string(kMaxVolumes) + " GI Volumes: the rest get no GI");
+            warned = true;
+            break;
+        }
         Volume v;
         v.Name = NameOf(world, e);
         v.Bounds = GI::Box::FromTransform(world.GetCachedWorldTransform(e), gv.Size);
@@ -135,6 +140,16 @@ void GIVolumes::Gather(const World& world) {
             v.Layers.push_back(l);
             if (v.Bake->Layers[l].Circuit.empty()) v.ReplacesSky = true;
         }
+        v.WorldMin = glm::vec3(1e30f);
+        v.WorldMax = glm::vec3(-1e30f);
+        for (int c = 0; c < 8; ++c) {
+            const glm::vec3 q((c & 1) ? v.Bounds.Half.x : -v.Bounds.Half.x, (c & 2) ? v.Bounds.Half.y : -v.Bounds.Half.y,
+                              (c & 4) ? v.Bounds.Half.z : -v.Bounds.Half.z);
+            v.WorldMin = glm::min(v.WorldMin, v.Bounds.ToWorld(q));
+            v.WorldMax = glm::max(v.WorldMax, v.Bounds.ToWorld(q));
+        }
+        v.WorldMin -= glm::vec3(0.25f * v.Spacing);
+        v.WorldMax += glm::vec3(0.25f * v.Spacing);
         vols.push_back(std::move(v));
     }
 
@@ -152,6 +167,28 @@ void GIVolumes::Gather(const World& world) {
         }
     }
     m_Volumes = std::move(vols);
+    m_AllMin = glm::vec3(1e30f);
+    m_AllMax = glm::vec3(-1e30f);
+    for (const auto& v : m_Volumes) {
+        m_AllMin = glm::min(m_AllMin, v.WorldMin);
+        m_AllMax = glm::max(m_AllMax, v.WorldMax);
+    }
+}
+
+void GIVolumes::SetMask(Shader& program, std::uint64_t mask) {
+    program.SetInt("uGIMaskLo", (int)(std::uint32_t)mask);
+    program.SetInt("uGIMaskHi", (int)(std::uint32_t)(mask >> 32));
+}
+
+std::uint64_t GIVolumes::MaskFor(const glm::vec3& mn, const glm::vec3& mx) const {
+    std::uint64_t m = 0;
+    for (std::size_t i = 0; i < m_Volumes.size() && i < 64; ++i) {
+        const Volume& v = m_Volumes[i];
+        if (mn.x <= v.WorldMax.x && mx.x >= v.WorldMin.x && mn.y <= v.WorldMax.y && mx.y >= v.WorldMin.y &&
+            mn.z <= v.WorldMax.z && mx.z >= v.WorldMin.z)
+            m |= 1ull << i;
+    }
+    return m;
 }
 
 void GIVolumes::Rebuild() {
@@ -246,6 +283,10 @@ void GIVolumes::WriteUbo() {
 void GIVolumes::Bind(Shader& program) const {
     const bool on = m_Enabled && m_Atlas && !m_Volumes.empty();
     program.SetInt("uGIEnabled", on ? 1 : 0);
+    // Draws that don't set their own mask (grass, fur, impostors) test every volume, behind the quick reject.
+    SetMask(program, AllMask());
+    program.SetVec3("uGIBoundsMin", m_AllMin);
+    program.SetVec3("uGIBoundsMax", m_AllMax);
     glBindTextureUnit(kUnit, m_Atlas ? m_Atlas : DefaultTextures::Volume());
     if (m_Ubo) glBindBufferBase(GL_UNIFORM_BUFFER, kUboBinding, m_Ubo);
 }

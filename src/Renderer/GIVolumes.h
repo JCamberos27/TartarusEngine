@@ -2,6 +2,7 @@
 
 #include "GIData.h"
 #include <glm/glm.hpp>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -23,7 +24,7 @@ class World;
 // skips the lookup, bit-identical to before.
 class GIVolumes {
 public:
-    static constexpr int kMaxVolumes = 32;
+    static constexpr int kMaxVolumes = 64; // the Forest house alone has 46 (a mask of 64 bits, a 10 KB UBO)
     static constexpr int kMaxLayers = 4;
     static constexpr int kUnit = 28;      // TextureUnits::GIAtlas
     static constexpr int kUboBinding = 4; // uniform block GIBlock
@@ -39,6 +40,12 @@ public:
     void Gather(const World& world);
     // uGIEnabled, the atlas on unit 28 and the UBO on binding 4. Every program that shades (ApplyFrameState).
     void Bind(Shader& program) const;
+    // Which volumes a draw whose world bounds are [mn, mx] can touch (bit i = volume i): set per draw as uGIMask, so a
+    // pixel tests only those (testing all 46 house volumes on every forest pixel cost 2 ms). AllMask(): every volume.
+    std::uint64_t MaskFor(const glm::vec3& mn, const glm::vec3& mx) const;
+    std::uint64_t AllMask() const { return m_Volumes.empty() ? 0u : (m_Volumes.size() >= 64 ? ~0ull : (1ull << m_Volumes.size()) - 1ull); }
+    // uGIMaskLo / uGIMaskHi (the mask's low and high 32 bits) on a program.
+    static void SetMask(Shader& program, std::uint64_t mask);
     int Count() const { return (int)m_Volumes.size(); }
     void Release();
 
@@ -70,6 +77,7 @@ public:
         std::vector<int> Layers;      // indices into Bake->Layers, at most kMaxLayers
         std::vector<float> Weights;   // this frame, per entry of Layers
         bool ReplacesSky = false;     // has an Outside layer
+        glm::vec3 WorldMin{0.0f}, WorldMax{0.0f}; // the box's world AABB, grown by the normal bias
     };
     const std::vector<Volume>& Volumes() const { return m_Volumes; }
     // The irradiance the shader would add at p for normal n (all volumes, weighted and faded), and the total fade.
@@ -86,6 +94,7 @@ private:
     unsigned int m_Ubo = 0;
     glm::ivec3 m_AtlasSize{0};
     std::vector<float> m_LastUbo;
+    glm::vec3 m_AllMin{0.0f}, m_AllMax{0.0f};  // every volume's AABB together (the shader's quick reject)
     std::shared_ptr<const GI::BakeFile> m_Override;
     bool m_Enabled = true;
     bool m_SoloOn = false;

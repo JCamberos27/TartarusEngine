@@ -2,6 +2,7 @@
 
 #include <glm/gtc/packing.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -268,6 +269,7 @@ struct CacheEntry {
     std::filesystem::file_time_type Time{};
     std::uintmax_t Size = 0;
     std::shared_ptr<const BakeFile> File;
+    std::chrono::steady_clock::time_point Checked{};
 };
 std::unordered_map<std::string, CacheEntry>& Cache() {
     static std::unordered_map<std::string, CacheEntry> c;
@@ -277,11 +279,18 @@ std::unordered_map<std::string, CacheEntry>& Cache() {
 
 std::shared_ptr<const BakeFile> Cached(const std::string& absPath) {
     if (absPath.empty()) return nullptr;
+    // The disk is asked at most once a second per file (every GI Volume asks every frame, most for the same file).
+    {
+        auto it = Cache().find(absPath);
+        const auto now = std::chrono::steady_clock::now();
+        if (it != Cache().end() && now - it->second.Checked < std::chrono::seconds(1)) return it->second.File;
+    }
     std::error_code ec;
     const auto time = std::filesystem::last_write_time(absPath, ec);
-    if (ec) { Cache().erase(absPath); return nullptr; }
+    if (ec) { auto& miss = Cache()[absPath]; miss.File = nullptr; miss.Checked = std::chrono::steady_clock::now(); return nullptr; }
     const auto size = std::filesystem::file_size(absPath, ec);
     auto& e = Cache()[absPath];
+    e.Checked = std::chrono::steady_clock::now();
     if (e.File && e.Time == time && e.Size == size) return e.File;
     e.Time = time;
     e.Size = size;
