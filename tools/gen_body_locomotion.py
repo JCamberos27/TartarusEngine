@@ -44,7 +44,11 @@ for n, k, d in [
         ('Step', 'trigger', 0), ('StepX', 'float', 0), ('StepY', 'float', 1),
         # Idle variety: which fidget (an index into the Fidget / CrouchFidget trees).
         ('Fidget', 'trigger', 0), ('FidgetIndex', 'float', 0),
-        ('SprintRate', 'float', 1)]:
+        ('SprintRate', 'float', 1),
+        # m/s the body was falling at when it touched down (held until the next fall). Under HEAVY_LAND the
+        # landing is light: straight back to the gait, the camera dip and the gun's kick carry the weight; at or
+        # over it the recovery clip plays. Default high, so a driver that never sets it always plays the clip.
+        ('LandImpact', 'float', 99)]:
     param(n, k, d)
 
 states = []
@@ -188,7 +192,12 @@ for s in ['Locomotion', 'CrouchLoco'] + STAND_ONESHOTS + CROUCH_ONESHOTS:
     go(s, 'Jump', 0.08, [cond('Jump', IF)], offset=0.15)
     go(s, 'Fall', 0.25, [cond('Airborne', IF)])
 go('Jump', 'Fall', 0.2, exit_time=0.85)
+# Light landings (a hop on the flat lands at ~5.5 m/s) blend straight back into the gait; heavy ones (a drop of
+# about a metre and a half) play the recovery.
+HEAVY_LAND = 7.0
+go('Jump', 'Locomotion', 0.15, [cond('Grounded', IF), cond('LandImpact', 'less', HEAVY_LAND)], exit_time=0.3)
 go('Jump', 'Land', 0.1, [cond('Grounded', IF)], exit_time=0.3)
+go('Fall', 'Locomotion', 0.15, [cond('Grounded', IF), cond('LandImpact', 'less', HEAVY_LAND)])
 go('Fall', 'Land', 0.1, [cond('Grounded', IF)])
 go('Land', 'Locomotion', 0.2, [cond('Speed', 'greater', 0.5)], exit_time=0.15)
 go('Land', 'Locomotion', 0.3, exit_time=0.5)

@@ -2140,12 +2140,27 @@ void TestFirstPersonWeaponWizard() {
 }
 
 // The standard body locomotion graph (tools/gen_body_locomotion.py): the builder gives the reference (28 states,
-// 38 parameters, 211 transitions), passes the lint and the body contract, and its clips are filled by role.
+// 39 parameters, 213 transitions), passes the lint and the body contract, and its clips are filled by role.
 void TestFirstPersonBodyController() {
     const std::vector<std::string> roles = FPBody::LocomotionRoles();
     CHECK(roles.size() > 40 && std::find(roles.begin(), roles.end(), std::string("Loco_Walk_Fwd")) != roles.end());
     AnimatorController c = FPBody::BuildLocomotionController([](const std::string& r) { return "clips/AM_" + r + ".fbx"; });
-    CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 38 && c.Layers[0].Transitions.size() == 211);
+    CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 39 && c.Layers[0].Transitions.size() == 213);
+    // Landings: a light one (LandImpact under 7 m/s) goes straight back to the gait, ahead of the heavy recovery clip;
+    // unset (the 99 default) it is always heavy.
+    for (const char* from : {"Fall", "Jump"}) {
+        int light = -1, heavy = -1;
+        for (int i = 0; i < (int)c.Layers[0].Transitions.size(); ++i) {
+            const auto& t = c.Layers[0].Transitions[i];
+            if (t.From != from) continue;
+            if (light < 0 && t.To == "Locomotion" && t.Conditions.size() == 2 &&
+                t.Conditions[1].Param == "LandImpact" && t.Conditions[1].Mode == AnimatorController::Op::Less &&
+                std::abs(t.Conditions[1].Threshold - 7.0f) < 1e-4f) light = i;
+            if (heavy < 0 && t.To == "Land") heavy = i;
+        }
+        CHECK(light >= 0 && heavy > light);
+    }
+    for (const auto& p : c.Parameters) if (p.Name == "LandImpact") CHECK(p.Default > 7.0f);
     // The gait plays at PlayRate (the body's, so the feet keep up with a player faster than the clips).
     CHECK(c.Layers[0].States[c.Layers[0].FindState("Locomotion")].SpeedParam == "PlayRate" &&
           c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam == "PlayRate");
@@ -2184,7 +2199,7 @@ void TestFirstPersonBodyController() {
     // Round trip through the file format, then the checks: nothing to report.
     AnimatorController back;
     CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
-    CHECK(back.Layers[0].Transitions.size() == 211 &&
+    CHECK(back.Layers[0].Transitions.size() == 213 &&
           back.Layers[0].States[back.Layers[0].FindState("Stop")].Distance == DM::Remaining);
     int problems = 0;
     for (const auto& i : AnimatorLint::Check(c)) problems += i.Severity != AnimatorLint::Level::Info;
@@ -2431,6 +2446,8 @@ void TestFirstPersonBodyTuning() {
           near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) &&
           near(body.StairEase, 0.2f) && near(body.AirborneDelay, 0.15f));
     CHECK(near(ctrl.JumpBufferTime, 0.12f) && near(ctrl.CoyoteTime, 0.10f));
+    // Walk is the default gait (the walk clips' speed), Shift the jog (the jog clips').
+    CHECK(near(body.WalkSpeed, 1.53f) && near(body.RunSpeed, 3.26f) && body.WalkSpeed < body.RunSpeed);
     for (const RegisteredComponent& rc : ComponentRegistry::All()) {
         const bool isBody = std::string(rc.Meta.Name) == "First Person Body", isCtrl = std::string(rc.Meta.Name) == "First Person Controller";
         if (!isBody && !isCtrl) continue;

@@ -260,8 +260,9 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                 if (!npcTest->Action().empty()) firstPersonPresentation.TriggerAction(npcTest->Action());
             }
             // No lean key: aiming at a corner peeks around it (the presentation's corner peek).
-            firstPersonPresentation.Tick(gameDt, player.Velocity,
-                                         (gameHasInput && InputMap::GetButton("Sprint")) || (npcTest && player.ScriptedMove && player.ScriptSprint),
+            // Shift is the jog, and the gun stays up through it: the arms never take the lowered sprint. The jog's
+            // pace shows in the walk layer's rate and the bob blending toward its jog settings by speed.
+            firstPersonPresentation.Tick(gameDt, player.Velocity, false,
                                          (weaponInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()), 0.0f,
                                          player.Grounded);
             // This frame's recoil on the view (Tick just worked it out), not last frame's.
@@ -518,7 +519,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             fi.Feet = glm::vec3(foot[0], foot[1], foot[2]);
         }
         fi.Grounded = player.Grounded;
-        fi.Sprinting = !player.AimHeld && !player.SprintBlocked && (gameHasInput && InputMap::GetButton("Sprint"));
+        fi.Sprinting = !player.Crouched && gameHasInput && InputMap::GetButton("Sprint"); // the jog's steps
         fi.Crouched = player.Crouched;
         fi.Jumped = player.Jumped;
         fi.HaveFootHeights = firstPersonBody.FootHeights(world, fi.FootHeight); // steps on the body's touch-downs

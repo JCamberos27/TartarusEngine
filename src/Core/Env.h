@@ -43,7 +43,7 @@
     X(NpcTestRoom, "NPC_TEST_ROOM", Str, "--npc-test: Apartment room (302bed|303living|303bed2)")                     \
     X(NpcTestSeconds, "NPC_TEST_SECONDS", Float, "--npc-test: run length override")                                   \
     X(NpcTestRecord, "NPC_TEST_RECORD", Str, "--npc-test: record frames to this folder")                              \
-    X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs without outfits")                                   \
+    X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs (and undress the player's body) without outfits")                                   \
     X(NpcTestDoorsOnly, "NPC_TEST_DOORS_ONLY", Str, "--npc-test doors: only doors whose name contains this")          \
     X(NpcTestDoorsTrace, "NPC_TEST_DOORS_TRACE", Flag, "--npc-test doors: trace")                                     \
     X(NpcTestRoamPoints, "NPC_TEST_ROAM_POINTS", List, "--npc-test roam: 'x y z;...' points to walk")                 \

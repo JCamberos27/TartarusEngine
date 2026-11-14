@@ -57,6 +57,7 @@ inline constexpr const char* kStepY = "StepY";
 inline constexpr const char* kFidget = "Fidget";                   // Trigger: an idle fidget
 inline constexpr const char* kFidgetIndex = "FidgetIndex";         // Float: which (an integer)
 inline constexpr const char* kSprintRate = "SprintRate";           // Float: the sprint loop's play rate
+inline constexpr const char* kLandImpact = "LandImpact";           // Float: m/s fallen at the last touch-down (light vs heavy land)
 inline constexpr float kSprintClipSpeed = 4.25f;                   // m/s the sprint clip (AM_Loco_Run_Fast_01) travels
 // Optional: how much faster than authored the gait plays (the Locomotion state's speed parameter), so the
 // feet keep up with a player moving faster than the clips travel (Player Run / Sprint Speed). 1 = authored.

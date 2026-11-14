@@ -448,7 +448,7 @@ void NpcTest::RevolverAfter(const Player& player) {
     std::printf("[NpcTest] revolver: cylinder over the six hip shots %.0f deg\n", R.HipTurn);
     Check(std::abs(std::abs(R.HipTurn) - 360.0f) < 30.0f, "the cylinder turns one chamber per hip shot (6 x 60 = 360 deg)");
     Check(R.WorstBack > -5.0f, "the cylinder never steps backwards while firing");
-    Check(R.SprintState == "Sprint", "the arms sprint");
+    Check(R.SprintState != "Sprint" && !R.SprintState.empty(), "the gun stays up at a jog (Shift)");
     Check(R.ShotDirs.size() == 8 && yawMax - yawMin > 1.0f, "the hip kicks vary side to side shot to shot (over 1 deg)");
     Check(R.FingerCurl > 0.001f && R.FingerCurl < 0.03f, "the trigger finger curls on the hip shots");
     Check(R.ShotsSeen == 8 && R.ShotsLit == R.ShotsSeen, "the muzzle light comes on for every shot");

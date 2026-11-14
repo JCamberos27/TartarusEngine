@@ -1,4 +1,4 @@
-// --npc-test stopsteps: the player in Apartment Hallway's 301 living room walks and sprints along the room and stops, again and
+// --npc-test stopsteps: the player in Apartment Hallway's 301 living room walks and jogs (Shift) along the room and stops, again and
 // again, and every footstep heard is counted: while moving, and in the 2.5 s after each stop (the body settling into idle).
 // A stop should sound like one foot coming to rest at most, never a little shuffle of steps.
 #include "NpcTest.h"
@@ -8,15 +8,15 @@
 #include <cstdio>
 
 namespace {
-// The legs: how long, the forward input (+1 forward / -1 back, 0 = stand), sprinting.
+// The legs: how long, the forward input (+1 forward / -1 back, 0 = stand), Shift (the jog).
 struct Leg { float Seconds, Move; bool Sprint; const char* Name; };
 const Leg kLegs[] = {
     {1.5f, 0.0f, false, "idle"},
     {2.4f, 1.0f, false, "walk"},   {2.5f, 0.0f, false, "stop after walk"},
     {2.4f, -1.0f, false, "walk back"}, {2.5f, 0.0f, false, "stop after walk back"},
-    {1.1f, 1.0f, true, "sprint"},  {2.5f, 0.0f, false, "stop after sprint"},
-    {1.1f, -1.0f, true, "sprint back"}, {2.5f, 0.0f, false, "stop after sprint back"},
-    {0.6f, 1.0f, false, "short walk"}, {2.5f, 0.0f, false, "stop after short walk"},
+    {1.1f, 1.0f, true, "jog"},  {2.5f, 0.0f, false, "stop after jog"},
+    {1.1f, -1.0f, true, "jog back"}, {2.5f, 0.0f, false, "stop after jog back"},
+    {1.0f, 1.0f, false, "short walk"}, {2.5f, 0.0f, false, "stop after short walk"},
 };
 constexpr int kLegCount = (int)(sizeof(kLegs) / sizeof(kLegs[0]));
 const glm::vec3 kStart(-8.1f, 0.02f, -8.9f); // 301 living room, its south end; the run goes north (+Z) and back
@@ -48,8 +48,10 @@ void NpcTest::StopStepsDrive(Player& player, float dt, float& wantYaw, float& wa
     // Steps heard since the last frame go to the leg that is on now.
     const int now = FoleyAudio::Get().StepsPlayed();
     if (now > m_SSSteps) {
-        m_SSLegSteps[leg] += now - m_SSSteps;
-        std::printf("[StopSteps] %.2f s  %-24s step (%d this leg)\n", m_SSClock, kLegs[leg].Name, m_SSLegSteps[leg]);
+        // A foot already on its way down when the keys let go (within 0.15 s) is the gait's last stride, not the stop's.
+        const int to = leg > 0 && t < 0.15f && kLegs[leg].Move == 0.0f && kLegs[leg - 1].Move != 0.0f ? leg - 1 : leg;
+        m_SSLegSteps[to] += now - m_SSSteps;
+        std::printf("[StopSteps] %.2f s  %-24s step (%d this leg)\n", m_SSClock, kLegs[to].Name, m_SSLegSteps[to]);
     }
     m_SSSteps = now;
 }

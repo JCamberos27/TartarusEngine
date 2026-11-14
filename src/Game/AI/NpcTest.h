@@ -100,7 +100,7 @@ public:
     const std::string& Action() const { return m_Action; }
     std::string m_Action;
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver" || m_Scenario == "stopsteps"; } // After() even in a scene with no squad
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no squad
     bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
@@ -260,6 +260,13 @@ private:
     float m_SSClock = 0.0f;
     int m_SSSteps = 0;
     int m_SSLegSteps[16] = {};
+    // locomotion (NpcTest_Locomotion.cpp): every gait of the player's own body, watched from the side
+    static float LocomotionSeconds();
+    void LocomotionDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    void Locomotion(const Player& player, float now);
+    bool m_LPlaced = false;
+    float m_LClock = 0.0f;
+    glm::vec2 m_LDropAt{0.0f};
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {
         std::string Name;

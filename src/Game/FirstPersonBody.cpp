@@ -831,11 +831,14 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     // then play faster to keep pace (Tick's PlayRate).
     m_RunSpeed = std::max(cfg.RunSpeed, 0.01f);
     m_PlayerRunSpeed = cfg.PlayerRunSpeed > 0.0f ? cfg.PlayerRunSpeed : m_RunSpeed;
-    m_PlayerSprintSpeed = std::max(cfg.PlayerSprintSpeed > 0.0f ? cfg.PlayerSprintSpeed : std::max(cfg.SprintSpeed, 0.01f), 0.01f);
+    // Walk is the default gait and Shift the jog: the capsule tops out at the run (jog) speed, so the sprint
+    // (BodyLocomotion's wish above the run) never plays. The walk keeps the jog's ratio of player to clip speed.
+    m_PlayerSprintSpeed = m_PlayerRunSpeed;
+    m_PlayerWalkSpeed = std::clamp(cfg.WalkSpeed, 0.01f, m_RunSpeed) * m_PlayerRunSpeed / m_RunSpeed;
     m_CrouchHeight = cfg.CrouchHeight;
     m_CrouchSpeed = cfg.CrouchSpeed;
-    player.MoveSpeed = m_PlayerRunSpeed;
-    player.SprintMultiplier = m_PlayerSprintSpeed / m_PlayerRunSpeed;
+    player.MoveSpeed = m_PlayerWalkSpeed;
+    player.SprintMultiplier = m_PlayerRunSpeed / m_PlayerWalkSpeed;
 
     Log::Info("First Person Body: '" + (reg.all_of<NameComponent>(body) ? reg.get<NameComponent>(body).Name : std::string("body")) +
               "' is the player's body - " + std::to_string(pieces.size()) + " pieces, " + std::to_string(shadowOnly) +
@@ -1002,7 +1005,8 @@ void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     m_CameraApplied = glm::vec3(0.0f);
     player.MaxYawRate = 0.0f;
     player.CrouchHeight = IsActive() ? m_CrouchHeight : 0.0f;
-    player.CrouchSpeedMultiplier = m_CrouchSpeed;
+    // Crouch Speed is a fraction of the run (jog); the capsule's base is the walk.
+    player.CrouchSpeedMultiplier = m_CrouchSpeed * (m_PlayerWalkSpeed > 0.0f ? m_PlayerRunSpeed / m_PlayerWalkSpeed : 1.0f);
     if (!IsActive()) return;
     if (m_Still) {
         // Aiming is free within the turn threshold either side of the body; the limit is on the turn
@@ -1228,6 +1232,9 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     ac.SetFloat(FPBody::kStartDistance,f.StartDistance);ac.SetFloat(FPBody::kStopDistance,f.StopDistance);ac.SetFloat(FPBody::kPivotDistance,f.PivotDistance);ac.SetFloat(FPBody::kSprintRate,f.SprintRate);
     const char* triggers[]{FPBody::kCrouchDown,FPBody::kCrouchUp,FPBody::kStart,FPBody::kStop,FPBody::kStopRun,FPBody::kJump,FPBody::kPivot,FPBody::kStep,FPBody::kFidget};for(int i=0;i<9;++i)if(f.Triggers&(1<<i))fireTrigger(ac,triggers[i]);
     ac.SetFloat(FPBody::kMoveX,m_Move.x);ac.SetFloat(FPBody::kMoveY,m_Move.y);ac.SetFloat(FPBody::kSpeed,glm::length(m_Move));ac.SetBool(FPBody::kSprint,f.Sprint!=0);ac.SetBool(FPBody::kGrounded,player.Grounded);ac.SetBool(FPBody::kCrouched,player.Crouched);ac.SetBool(FPBody::kAirborne,f.Airborne!=0);
+    // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
+    if(!player.Grounded)m_FallSpeed=std::max(0.0f,-player.Velocity.y);
+    ac.SetFloat(FPBody::kLandImpact,m_FallSpeed);
 
     // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
     {

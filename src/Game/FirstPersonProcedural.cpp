@@ -991,7 +991,11 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const float speed = glm::length(glm::vec2(in.Velocity.x, in.Velocity.z));
     const float ease = 1.0f - std::exp(-dt * std::max(b.Ease, 0.0f));
     m_BobWeight += ((b.Enabled ? std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) : 0.0f) - m_BobWeight) * ease;
-    m_BobSprint += ((in.Sprinting ? 1.0f : 0.0f) - m_BobSprint) * ease;
+    // The "sprint" bob and stride are the fast gait's: a sprint, or (the player's Shift) the jog, blended in by
+    // speed between the walk and the fast gait's speed.
+    const float fastGait = in.Sprinting ? 1.0f
+        : in.SprintSpeed > in.WalkSpeed + 0.05f ? std::clamp((speed - in.WalkSpeed) / (in.SprintSpeed - in.WalkSpeed), 0.0f, 1.0f) : 0.0f;
+    m_BobSprint += (fastGait - m_BobSprint) * ease;
     const float stride = std::max(b.WalkStride + (b.SprintStride - b.WalkStride) * m_BobSprint, 0.01f);
     m_BobPhase = std::fmod(m_BobPhase + speed * dt / stride, 1.0f);
     const glm::vec3 bob = (b.Walk.Evaluate(m_BobPhase) * (1.0f - m_BobSprint) + b.Sprint.Evaluate(m_BobPhase) * m_BobSprint) *
