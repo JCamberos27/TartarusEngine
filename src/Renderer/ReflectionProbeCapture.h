@@ -43,6 +43,9 @@ public:
     void Step(IblProbe& ibl, ReflectionProbeArray& probes, const std::function<void(const RenderFrameContext&)>& draw);
     // Every capturing probe again (the Inspector's Recapture button). Static so the editor needs no handle.
     static void RequestRecapture();
+    // Only the capturing probes whose volume holds `p` (else the nearest one): a light switched in one room retakes
+    // that room's reflections, not the whole house's.
+    static void RequestRecaptureAt(const glm::vec3& p);
 
     int ReadyCount() const;
     int SlotCount() const { return (int)m_Slots.size(); }

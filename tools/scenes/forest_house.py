@@ -456,6 +456,49 @@ def open_sealed_doors(pk, notes):
     notes['sealed doors opened'] = fixed
 
 
+def clear_walls(pk, notes):
+    """A real house has a ceiling light per room and a wall light only where it earns its place: every sconce goes,
+    the bathroom lights stay only over a mirror, and of the tubes only the kitchen's one under its wall cabinets stays.
+    The pack's own dead switch goes too: each room has one working switch by its door (house_lights.py).
+    They hang on their own (no back box to leave behind), so the wall is clean where they were."""
+    props = [e for e in pk.props() if e['id'] not in pk.gone]
+    mirrors = [pk.world(e['id'])[0] for e in props if stem(e).startswith('Mirror')]
+    cabinets = [pk.world(e['id'])[0] for e in props if stem(e).startswith('Kitcabinet_upper')]
+    tubes = [e for e in props if stem(e) == 'Lamp_wall_fluorescent']
+    keep_tube = min((e for e in tubes if pk.world(e['id'])[0][1] > 1.0),
+                    key=lambda e: min((math.dist(pk.world(e['id'])[0], c) for c in cabinets), default=9.0), default=None)
+    n = 0
+    for e in props:
+        s, p = stem(e), pk.world(e['id'])[0]
+        if s in ('Lamp_wall_chan', 'Lightswitch') or (s == 'Lamp_wall_fluorescent' and e is not keep_tube) or \
+                (s == 'Lamp_wall_toilet' and not any(math.hypot(p[0] - m[0], p[2] - m[2]) < 0.7 for m in mirrors)):
+            pk.remove(e['id'])
+            n += 1
+    notes['wall fittings taken down'] = n
+
+
+def ease_side_door(pk, notes):
+    """The side door's latch jamb (its wall's 'Collider 2') stood 2.5 cm into the opening, so brushing past the latch
+    side slowed the player to half speed (the doors test's latch graze): it is trimmed back to the opening's edge."""
+    leaf = next((e for e in pk.ents if e.get('Openable') and pk.by[e['parentId']]['name'] == 'Door_exterior_white'), None)
+    if leaf is None:
+        return
+    lp, _ = pk.world(leaf['id'])
+    for e in pk.ents:
+        par = pk.by.get(e['parentId'])
+        if not par or par['name'] != 'Wall_1st_3x_door_B' or not e['name'].endswith('Collider 2') or not e.get('collider'):
+            continue
+        p, _ = pk.world(e['id'])
+        c = e['collider']
+        c.setdefault('center', [0.0, 0.0, 0.0])
+        x0 = p[0] + c['center'][0] - c['halfExtents'][0]
+        if abs(p[2] - lp[2]) > 0.3 or not (0.0 < x0 - lp[0] < 1.2):
+            continue
+        c['center'][0] = round(c['center'][0] + 0.0125, 5)
+        c['halfExtents'][0] = round(c['halfExtents'][0] - 0.0125, 5)
+        notes['side door jamb eased'] = 1
+
+
 def floor_the_stairwell(pk, notes):
     """Without its basement the pack's cellar stairwell, behind the ground-floor door under the stairs, is a hole down
     to the forest floor: it gets a floor of the hall's boards (a 3 x 5 tile, the same as the ones round it) and is a
@@ -810,6 +853,134 @@ def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
             if fit.near_wall(x, z, y, 0.35) or rng.random() < 0.2:
                 leaf(x, z, y, round(rng.uniform(0.45, 0.75), 2))
     notes['leaves blown in'] = n
+    store_room(s, lay, pk, notes)
+    stories(s, lay, pk, rng, g, placed, notes)
+    over_the_fireplace(s, lay, pk, notes)
+
+
+FRAME_Y = 2.15      # the middle of the moulded panel on the master bedroom's chimney breast, above its floor
+
+
+def over_the_fireplace(s, lay, pk, notes):
+    """The master bedroom's chimney breast has a moulded panel above the mantel made for a picture, and the pack left
+    it empty (a frame round nothing): a painting hangs in it, flat on the breast's face (the model's front, local
+    +Z at 1.166)."""
+    for e in pk.props():
+        if stem(e) != 'Fireplace_withwall' or e['id'] in pk.gone:
+            continue
+        pos, rot = pk.world(e['id'])
+        if pos[1] < 3.0:
+            continue                    # the living room's already has its long painting
+        off = qrot(rot, (0.0, FRAME_Y, 0.86))
+        g = s.empty('Over The Fireplace', lay, (0, 0, 0), static=True)
+        s.stamp(PROPS_IN + 'Painting_wide_A.prefab', g, (round(pos[0] + off[0], 4), round(pos[1] + off[1], 4),
+                                                         round(pos[2] + off[2], 4)), yaw=round(yaw_of(rot), 2), scale=1.18)
+        notes['painting over the fireplace'] = 1
+
+
+ALLEY = 'assets/Environments/ModularCityAlleyPack/Prefabs/Prefabs_Props/'
+BEDROOM = 'assets/Furniture/Bedroom/Models/'
+GARAGE = 'assets/Furniture/Garage/Models/'
+
+
+def wall_face(fit, x, z, y, dx, dz, reach=3.0):
+    """The first wall face from (x, z) along (dx, dz), at height y: the point just short of it, or None."""
+    for k_ in range(1, int(reach / 0.01)):
+        px, pz = x + dx * k_ * 0.01, z + dz * k_ * 0.01
+        probe = hf.Box([px, y, pz], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [0.004, 0.05, 0.004])
+        if any(hf.overlap(probe, s_) for s_ in fit.structure):
+            return px - dx * 0.01, pz - dz * 0.01
+    return None
+
+
+def store_room(s, lay, pk, notes):
+    """The old cellar stairwell under the stairs, floored over, is the house's store room: shelving along its back
+    wall, boxes stacked at its end, paint cans by the door - what a family puts away and nobody came back for."""
+    fit = pk.fit
+    y = FLOOR_1
+    cx, cz = -37.35, -5.3                       # the room's middle (floor_the_stairwell's hole)
+    west = wall_face(fit, cx, cz, y + 1.0, -1, 0)
+    north = wall_face(fit, cx, cz, y + 1.0, 0, -1)
+    east = wall_face(fit, cx, cz, y + 1.0, 1, 0)
+    if not (west and north and east):
+        return
+    g = s.empty('Store Room', lay, (0, 0, 0), static=True)
+    placed = []
+    n = 0
+    # two shelving units, backs to the west wall (their back is local -Z: yaw 90 turns it to -X)
+    for z, path in ((-6.55, 'Garage_shelf_with_props_A'), (-5.0, 'Garage_shelf_with_props_B')):
+        n += lay_down(s, fit, g, PROPS_IN + path + '.prefab', west[0] + 0.26, z, y, 90.0, (0.0, 0.0), 1.0, placed)
+    # boxes against the north wall, one on another
+    for x, path, yaw in ((-37.6, 'Garage_plastic_box', 0.0), (-36.95, 'Garage_cardboardbox', 8.0),
+                         (-36.5, 'Garage_cardboardbox', -6.0)):
+        if lay_down(s, fit, g, PROPS_IN + path + '.prefab', x, north[1] + 0.24, y, yaw, (0.0, 0.0), 1.0, placed):
+            n += 1
+            if path == 'Garage_plastic_box':      # a second crate on the first
+                b = placed[-1]
+                s.stamp(PROPS_IN + 'Garage_cardboardbox.prefab', g, (round(x + 0.03, 3), round(b.yhi() + 0.001, 4),
+                                                                      round(north[1] + 0.24, 3)), yaw=-4.0)
+                n += 1
+    # paint cans and a bag by the east wall
+    for z, path, yaw in ((-6.9, 'Garage_paintbucket', 0.0), (-6.68, 'Garage_paintbucket', 40.0),
+                         (-6.8, 'Garage_paintbucket', 75.0), (-6.2, 'Garage_paperbag', 15.0)):
+        x = east[0] - (0.12 if 'bucket' in path else 0.16)
+        n += lay_down(s, fit, g, PROPS_IN + path + '.prefab', x, z, y, yaw, (0.0, 0.0), 1.0, placed)
+    notes['store room pieces'] = n
+
+
+def stories(s, lay, pk, rng, g, placed, notes):
+    """Where the rubbish tells something: someone slept on the living room floor by the candles - a mattress dragged
+    against the wall, a pillow, newspapers; and the kitchen was picked over, its plates and glasses on the floor
+    in front of the sink."""
+    fit = pk.fit
+    y = FLOOR_1
+    n = 0
+    couch = next((e for e in pk.props() if e['name'].startswith('Couch_3seat') and e['id'] not in pk.gone), None)
+    if couch:
+        cp, _ = pk.world(couch['id'])
+        # the nearest free stretch of floor by a wall in the living room, long enough for a mattress
+        rooms_ = house_lights.named_rooms(fit, floor_rects(pk), sys.modules[__name__])
+        cells = [(x, z) for r in rooms_ if r['name'] == 'living room' for x, z in r['cells']]
+        cells = [c for c in cells[::2] if fit.near_wall(c[0], c[1], y, 0.8) and not fit.near_wall(c[0], c[1], y, 0.42)]
+        cells.sort(key=lambda c: math.hypot(c[0] - cp[0], c[1] - cp[2]))
+        for mx, mz in cells[:400]:
+            yaw = 0.0 if fit.near_wall(mx, mz + 0.75, y, 0.1) or fit.near_wall(mx, mz - 0.75, y, 0.1) else 90.0
+            if not lay_down(s, fit, g, ALLEY + 'Bed_Mattress.prefab', mx, mz, y, yaw + rng.uniform(-5, 5), (0.0, 0.0),
+                            1.0, placed):
+                continue
+            m = placed[-1]
+            top = m.yhi()
+            mx, mz = m.c[0], m.c[2]
+            ext = [sum(abs(m.h[i] * m.ax[i][k]) for i in range(3)) for k in (0, 2)]
+            ax = (1, 0) if ext[0] >= ext[1] else (0, 1)          # its long side, in the world
+            px, pz = mx + ax[0] * 0.7, mz + ax[1] * 0.7
+            s.stamp(BEDROOM + 'Bed_Pillow_A.prefab', g, (round(px, 3), round(top + 0.001, 4), round(pz, 3)),
+                    yaw=round(rng.uniform(-20, 20) + (90.0 if ax == (1, 0) else 0.0), 1))
+            side = (ax[1], ax[0])
+            for k_ in range(3):
+                lay_down(s, fit, g, PROPS_IN + 'Newspaper.prefab', mx + side[0] * (0.75 + 0.25 * k_) - ax[0] * 0.3 * k_,
+                         mz + side[1] * (0.75 + 0.25 * k_) - ax[1] * 0.3 * k_, y, rng.uniform(0, 360), (0.0, 0.0), 1.0,
+                         placed)
+            lay_down(s, fit, g, PROPS_IN + 'KP_glass_black.prefab', mx - ax[0] * 1.2, mz - ax[1] * 1.2, y,
+                     rng.uniform(0, 360), LIE['side'], 1.0, placed)
+            n += 1
+            break
+    sink = next((e for e in pk.props() if fh_stem(e).startswith('Kitcabinet_low_1') and 'sink' in fh_stem(e)
+                 and pk.world(e['id'])[0][1] < 3.0 and e['id'] not in pk.gone), None)
+    if sink:
+        sp, sr = pk.world(sink['id'])
+        fwd = qrot(sr, (0, 0, 1))
+        for k_ in range(9):
+            d, side = rng.uniform(0.55, 1.1), rng.uniform(-0.6, 0.6)
+            x, z = sp[0] + fwd[0] * d - fwd[2] * side, sp[2] + fwd[2] * d + fwd[0] * side
+            path, how = rng.choice(((PROPS_IN + 'KP_plate.prefab', 'up'), (PROPS_IN + 'KP_glass_black.prefab', 'side'),
+                                    (PROPS_IN + 'KP_coffee_mug.prefab', 'side'), (PROPS_IN + 'KP_cookiebox.prefab', 'side')))
+            n += lay_down(s, fit, g, path, x, z, y, rng.uniform(0, 360), LIE[how], 1.0, placed)
+    notes['story pieces'] = n
+
+
+def fh_stem(e):
+    return stem(e)
 
 
 # Decals (docs/DECALS.md): a fixed handful of maps so the house stays well inside the decal texture budget. The plaster
@@ -1024,7 +1195,7 @@ def grime(s, lay, pk, rng, notes):
     notes['decals'] = n
 
 
-RED_I, PORCH_I = 4.5, 3.2
+RED_I, PORCH_I = 1.6, 1.3
 # Shadow slots the engine hands to the shadow-capable lights nearest the player each frame. They are cached (a face
 # redraws only when something moving is in it), so a still room costs next to nothing once it has drawn.
 POINT_SHADOWS = 4
@@ -1037,7 +1208,7 @@ def lights(s, lay, pk, repo, notes):
     # The master bedroom, upstairs at the front: its ceiling fitting holds a bare red bulb.
     red = next(e for e in pk.named(r'Lamp_bedroom$'))
     red['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
-                                                emissiveColor=[1.0, 0.06, 0.03], emissiveStrength=6.0)}]
+                                                emissiveColor=[1.0, 0.012, 0.006], emissiveStrength=2.2)}]
     red['castShadows'] = 0      # the bulb hangs in it: its own shade would print a dark disc on the ceiling round it
     pk.wiring = house_lights.wire(s, lay, pk, repo, sys.modules[__name__], notes)
     g = pk.wiring.g
@@ -1073,27 +1244,33 @@ def porch_light(s, lay, notes, pk=None):
     """The two lamps either side of the front door, on the porch circuit, with its switch inside by the door; the
     left bulb is on its way out (it stutters). On from the start, as the house has always been seen."""
     g = s.empty('Porch Light', lay, (0, 0, 0), static=True)
+    w = getattr(pk, 'wiring', None) if pk else None
+    # The lamp's back plate is its local XY plane at z = 0 and the lamp stands out along +Z: yaw +90 turns +Z out of
+    # the front wall (pack +X), its plate flat on the siding's face.
     for z in (-1.018, 2.891):       # where the pack's demo street had them, either side of the door
-        r = s.stamp(PROPS_OUT + 'Lamp_wall_original.prefab', g, (-31.04, 2.316, z), yaw=-90.0)
+        x = -31.04
+        if w:
+            f = w.face((-31.04, z), (1.0, 0.0), 2.316, reach=0.8)
+            x = f[0] if f else x
+        r = s.stamp(PROPS_OUT + 'Lamp_wall_original.prefab', g, (round(x, 4), 2.316, z), yaw=90.0)
         for m in s.models:
             if m['parentId'] == r:
-                m['Light Circuit'] = {'Circuit': 'Porch', 'Glow': 1.6}
+                m['Light Circuit'] = {'Circuit': 'Porch', 'Glow': 0.8}
                 m['static'] = False
-        s.light(f'Porch Bulb {"L" if z < 0 else "R"}', g, (-30.75, 2.45, z), intensity=PORCH_I, rng=8.0,
+        s.light(f'Porch Bulb {"L" if z < 0 else "R"}', g, (round(x + 0.14, 4), 2.40, z), intensity=PORCH_I, rng=7.0,
                 kelvin=2300.0, shadows=z < 0)
         e = s.empties[-1]
         e['Light']['Volumetric Intensity'] = 1.0        # outdoors: its glow in the night air
         e['Light Circuit'] = {'Circuit': 'Porch', 'Glow': 0.0}
+        # out on the porch and the yard, never in through the front wall
+        e['Light'].update({'Bounds': True, 'Bounds Center': [round(x + 4.0, 3), 2.0, round(z, 3)],
+                           'Bounds Size': [8.0, 6.0, 12.0], 'Bounds Fade': 0.05})
         if z < 0:
             e.update(k.light_flicker(Mode=0, MinInterval=2.5, MaxInterval=9.0, Depth=1.0, Seed=5))
-    w = getattr(pk, 'wiring', None) if pk else None
     if w:
-        door = next(e for e in pk.ents if e.get('Openable') and pk.by[e['parentId']]['name'].startswith('Door_exterior_paneled'))
-        dp, _ = pk.world(door['id'])
-        cells = next((c for c in house_lights.rooms(pk.fit, floor_rects(pk), FLOOR_1)
-                      if any(abs(x - (dp[0] - 0.6)) < 0.3 and abs(z_ - dp[2]) < 0.6 for x, z_ in c)), None)
-        if cells:
-            w.place_switch('Porch', (dp[0] - 0.4, dp[2]), FLOOR_1, True, cells)
+        hall = w.by_room.get('entrance hall')
+        if hall:
+            w.place_plate('Porch', hall, ('door', 'Door_exterior_paneled'), FLOOR_1, True, spacing=0.085)
     notes['porch lights'] = 2
 
 
@@ -1132,6 +1309,8 @@ def add_house(s, root, repo, pack_path, notes):
                                   emissiveStrength=0.0))
     open_sealed_doors(pk, notes)
     floor_the_stairwell(pk, notes)
+    clear_walls(pk, notes)
+    ease_side_door(pk, notes)
     broken = trash_house(pk, rng, notes)
     house = s.empty('Abandoned House', root, HOUSE_AT, yaw=HOUSE_YAW, static=True)
     lay = s.empty('Pack Layout', house, (-PACK_C[0], -PACK_C[1], -PACK_C[2]), static=True)

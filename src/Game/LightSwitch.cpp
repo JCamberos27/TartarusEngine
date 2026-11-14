@@ -7,6 +7,7 @@
 #include "World.h"
 
 #include <glm/gtc/quaternion.hpp>
+#include <algorithm>
 #include <unordered_map>
 
 namespace LightSwitch {
@@ -33,7 +34,18 @@ void StartCircuitPiece(World& world, entt::entity e, LightCircuitComponent& c) {
     if (!r || c.Glow <= 0.0f) return;
     c.OnMaterials.clear();
     c.OffMaterials.clear();
-    for (const auto& m : r->Materials) {
+    // Every submesh, not only the overridden ones: a fitting placed straight from its model has no override slots at
+    // all (it draws the model's imported materials), so a glowing submesh gets one here, made from what it imported.
+    const int slots = std::max((int)r->Materials.size(), r->ModelRef ? r->ModelRef->MeshCount() : 0);
+    bool any = false;
+    for (int i = 0; i < slots; ++i) {
+        std::shared_ptr<MaterialAsset> m = i < (int)r->Materials.size() ? r->Materials[i] : nullptr;
+        if (!m && r->ModelRef && i < r->ModelRef->MeshCount()) {
+            auto imported = std::make_shared<MaterialAsset>();
+            imported->Mat = r->ModelRef->MeshMaterial(i);
+            if (Glows(imported)) m = imported;
+        }
+        any = any || Glows(m);
         c.OnMaterials.push_back(WithGlow(m, c.Glow));
         if (Glows(m)) {
             auto off = std::make_shared<MaterialAsset>(*m);
@@ -42,6 +54,10 @@ void StartCircuitPiece(World& world, entt::entity e, LightCircuitComponent& c) {
         } else {
             c.OffMaterials.push_back(m);
         }
+    }
+    if (!any) { // nothing on it glows: leave its materials alone
+        c.OnMaterials.clear();
+        c.OffMaterials.clear();
     }
 }
 
@@ -184,8 +200,15 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
     const std::string circuit = s.Circuit, sound = on ? s.OnSound : s.OffSound;
     Set(world, circuit, on);
     Openable::PlaySound(sound, glm::vec3(world.GetCachedWorldTransform(e)[3]));
-    // The rooms' reflections were captured with the old lighting: retake them (spread over a few frames, ~6 a probe).
-    ReflectionProbeCapture::RequestRecapture();
+    // The room's reflections were captured with the old lighting: retake the probes round the circuit's lights (spread
+    // over a few frames, ~6 a probe), not every probe in the scene.
+    bool any = false;
+    for (auto le : world.Registry.view<LightCircuitComponent, LightComponent>()) {
+        if (world.Registry.get<LightCircuitComponent>(le).Circuit != circuit) continue;
+        ReflectionProbeCapture::RequestRecaptureAt(glm::vec3(world.GetCachedWorldTransform(le)[3]));
+        any = true;
+    }
+    if (!any) ReflectionProbeCapture::RequestRecaptureAt(glm::vec3(world.GetCachedWorldTransform(e)[3]));
 }
 
 void SetAll(World& world, bool on) {

@@ -54,6 +54,7 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
     m_MemReportDir = Env::Str(Env::Var::MemReport);
     m_OpenAll = Env::Flag(Env::Var::OpenAll);
     m_LightsMode = Env::IsSet(Env::Var::LightsOn) ? (Env::Flag(Env::Var::LightsOn) ? 1 : 0) : -1;
+    m_LightsOnly = Env::Str(Env::Var::LightsOnly);
 
     if (opt.smokeTestMode) {
         // Scene source: explicit --smoke-test <dir> arg, else the engine's committed
@@ -223,7 +224,14 @@ void SmokeHarness::ShotCameraFrame() {
     Camera& editorCamera = m_Ctx.editorCamera;
     Framebuffer& sceneFramebuffer = m_Ctx.sceneFramebuffer;
     if (m_OpenAll && m_FramesRendered == 1) Openable::SetAll(m_Ctx.world, 1.0f);
-    if (m_FramesRendered == 1 && m_LightsMode >= 0) {
+    if (m_FramesRendered == 1 && !m_LightsOnly.empty()) {
+        LightSwitch::SetAll(m_Ctx.world, false);
+        std::stringstream names(m_LightsOnly);
+        std::string circuit;
+        while (std::getline(names, circuit, ';'))
+            if (!circuit.empty() && !LightSwitch::Set(m_Ctx.world, circuit, true))
+                Log::Warn("Smoke shots: no light circuit '" + circuit + "'");
+    } else if (m_FramesRendered == 1 && m_LightsMode >= 0) {
         if (m_LightsMode == 1) LightSwitch::SetAll(m_Ctx.world, true);
         else LightSwitch::Update(m_Ctx.world, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), false);
     }

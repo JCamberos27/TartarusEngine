@@ -39,6 +39,10 @@ LightBuffer::GpuLight LightBuffer::Pack(const glm::vec4& positionType, const glm
     l.ColorRange   = colorRange;
     l.DirCutoff    = dirCutoff;
     l.Params       = glm::vec4(paramX, paramY, LayerBits(excludedLayers), volumetric < 0.0f ? 0.0f : volumetric);
+    l.BoxX = glm::vec4(1, 0, 0, 0);
+    l.BoxY = glm::vec4(0, 1, 0, 0);
+    l.BoxZ = glm::vec4(0, 0, 1, 0);
+    l.BoxHalf = glm::vec4(0.0f, 0.0f, 0.0f, -1.0f);
     return l;
 }
 
@@ -72,6 +76,17 @@ void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, 
     // Params.y = spot shadow slot, -1 = none (#119)
     m_Lights.push_back(Pack(glm::vec4(posWorld, (float)Type::Spot), glm::vec4(colorLinear * intensity, range),
                             glm::vec4(d, cosOuter), cosInner, (float)shadowSlot, excludedLayers, volumetric));
+}
+
+void LightBuffer::BoundLast(const glm::mat3& axes, const glm::vec3& centre, const glm::vec3& half, float fade) {
+    if ((int)m_Lights.size() <= m_DirectionalCount) return;
+    GpuLight& l = m_Lights.back();
+    glm::vec4* rows[3] = {&l.BoxX, &l.BoxY, &l.BoxZ};
+    for (int i = 0; i < 3; ++i) {
+        const glm::vec3 a = glm::length(axes[i]) > 1e-8f ? glm::normalize(axes[i]) : glm::vec3(i == 0, i == 1, i == 2);
+        *rows[i] = glm::vec4(a, -glm::dot(a, centre));
+    }
+    l.BoxHalf = glm::vec4(glm::max(half, glm::vec3(1e-3f)), fade > 1e-3f ? fade : 1e-3f);
 }
 
 void LightBuffer::SortLocalNearestFirst(const glm::vec3& eye) {

@@ -2,7 +2,7 @@
 layout(local_size_x = 64) in;
 
 struct AABB  { vec4 mn; vec4 mx; };
-struct Light { vec4 PositionType; vec4 ColorRange; vec4 DirCutoff; vec4 Params; };
+struct Light { vec4 PositionType; vec4 ColorRange; vec4 DirCutoff; vec4 Params; vec4 BoxX; vec4 BoxY; vec4 BoxZ; vec4 BoxHalf; };
 // Per-cluster range into the global index list (#208): replaces the old bare per-cluster count
 // at a fixed slot.
 struct ClusterRange { uint offset; uint count; };
@@ -74,12 +74,16 @@ const uint MAX_PER_CLUSTER = 64u;
 shared vec4 sPosRange[TILE]; // view-space position, range (< 0: not clustered - a directional)
 shared vec4 sDirCos[TILE];   // view-space aim, outer cone cos (> 1: a point light, no cone test)
 shared uint sMask[TILE * MASK_WORDS];
+shared vec4 sBoxC[TILE];     // the light's bounds as a view-space box: centre, half extents (w < 0: unbounded)
+shared vec4 sBoxE[TILE];
 
 bool tileLightHitsCluster(uint t, vec3 mn, vec3 mx) {
     float r = sPosRange[t].w;
     if (r < 0.0) return false;
     vec3 pv = sPosRange[t].xyz;
     if (sqDistPointAABB(pv, mn, mx) > r * r) return false;  // sphere test: cheap first reject
+    if (sBoxE[t].w >= 0.0 && any(greaterThan(abs(sBoxC[t].xyz - 0.5 * (mn + mx)), sBoxE[t].xyz + 0.5 * (mx - mn))))
+        return false; // outside its bounds (its room)
     float cosOuter = sDirCos[t].w;
     if (cosOuter <= 1.0) { // spot: narrow further with a cone test
         vec3  sphereCenter = 0.5 * (mn + mx);
@@ -109,6 +113,17 @@ void main() {
             sPosRange[lid] = vec4(pv, type == 0 ? -1.0 : uLights[i].ColorRange.a);
             sDirCos[lid] = type == 2 ? vec4(normalize(mat3(uView) * uLights[i].DirCutoff.xyz), uLights[i].DirCutoff.w)
                                      : vec4(0.0, 0.0, 0.0, 2.0);
+            vec4 h = uLights[i].BoxHalf;
+            sBoxE[lid] = vec4(0.0, 0.0, 0.0, -1.0);
+            if (h.w >= 0.0) {
+                // World box: the rows are its unit axes (w = -axis . centre); then its view-space bounding box.
+                vec3 ax = uLights[i].BoxX.xyz, ay = uLights[i].BoxY.xyz, az = uLights[i].BoxZ.xyz;
+                vec3 c = -(ax * uLights[i].BoxX.w + ay * uLights[i].BoxY.w + az * uLights[i].BoxZ.w);
+                vec3 e = abs(ax) * h.x + abs(ay) * h.y + abs(az) * h.z; // world half extents
+                mat3 v = mat3(uView);
+                sBoxC[lid] = vec4((uView * vec4(c, 1.0)).xyz, 0.0);
+                sBoxE[lid] = vec4(abs(v[0]) * e.x + abs(v[1]) * e.y + abs(v[2]) * e.z, 0.0);
+            }
         }
         barrier();
         if (live) {

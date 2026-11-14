@@ -140,12 +140,13 @@ void main() {
             uint cl = clusterIndex();
             uint off = uClusterRange[cl].offset, count = uClusterRange[cl].count;
             for (uint j = 0u; j < count; ++j) {
-                Light lt = uLights[uClusterLightIndices[off + j]];
+                uint li = uClusterLightIndices[off + j];
+                Light lt = uLights[li];
                 vec3 toL = lt.PositionType.xyz - vWorld;
                 float d = length(toL);
                 float t = d / max(lt.ColorRange.a, 1e-4);
                 float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-                lit += albedo * lt.ColorRange.rgb * (window * window / (1.0 + d * d)) * 0.5 / PI;
+                lit += albedo * lt.ColorRange.rgb * (window * window / (1.0 + d * d) * LightBoxFade(li, vWorld)) * 0.5 / PI;
             }
         }
         lit += albedo * (uIBLEnabled == 1 ? texture(uIrradianceMap, vec3(0.0, 1.0, 0.0)).rgb * uIBLIntensity : vec3(0.05));

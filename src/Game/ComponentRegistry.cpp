@@ -1386,6 +1386,15 @@ void RegisterEngineComponents() {
             { "Volumetric Intensity", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, VolumetricIntensity), 0.02f,
               "How much this light scatters into the volumetric fog (Lighting > Volumetric Fog):\n"
               "its shafts and the glow around it. 1 = matched to Intensity, 0 = none.", 0.0f, 16.0f },
+            { "Bounds", T::Bool, TARTARUS_REFLECT_FIELD(LightComponent, BoundsEnabled), 0.0f,
+              "Keep this light inside a box (in the parent's space): nothing outside it is lit,\n"
+              "so a room's light never shows through walls, floors or ceilings." },
+            { "Bounds Center", T::Vec3, TARTARUS_REFLECT_FIELD(LightComponent, BoundsCenter), 0.05f,
+              "The box's centre, in the parent's space." },
+            { "Bounds Size", T::Vec3, TARTARUS_REFLECT_FIELD(LightComponent, BoundsSize), 0.05f,
+              "The box's full size along the parent's axes." },
+            { "Bounds Fade", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, BoundsFade), 0.01f,
+              "Metres inside each face over which the light fades to nothing.", 0.0f, 2.0f },
             // #203 - drawn as a layer checklist by DrawReflectedComponentExtra("Light").
             { "Culling Mask", T::Int, TARTARUS_REFLECT_FIELD(LightComponent, CullingMask), 0.0f,
               "Which layers this light illuminates." },
@@ -1423,6 +1432,9 @@ void RegisterEngineComponents() {
         F("Shadow Update Mode").EnumLabels = "Dynamic\0" "Static (bake once)\0" "Off\0";
         F("Shadow Update Mode").EnumCount = 3;
         F("Culling Mask").EditorHidden = true;
+        for (const char* b : { "Bounds", "Bounds Center", "Bounds Size", "Bounds Fade" }) {
+            F(b).VisibleIfField = "Type"; F(b).VisibleIfValue = 2; F(b).VisibleIfNot = true;
+        }
         Register<LightComponent>(std::move(m));
     }
 

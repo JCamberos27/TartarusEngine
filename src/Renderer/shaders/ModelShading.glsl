@@ -128,12 +128,24 @@ struct Light {
     vec4 ColorRange;   // rgb = colour * intensity; a = range in metres (point/spot)
     vec4 DirCutoff;    // xyz = normalized aim direction (spot/directional); w = spot outer-cone cos (-1 = none)
     vec4 Params;       // x = spot inner-cone cos; y = shadow slot; z = excluded-layer bits (#203); w reserved
+    vec4 BoxX, BoxY, BoxZ; // light bounds: rows world -> box (xyz = unit axis, w = -dot(axis, centre))
+    vec4 BoxHalf;          // xyz = half extents; w = fade metres (< 0: unbounded)
 };
+
 layout(std430, binding = 0) readonly buffer LightBuffer {
     uint uLightCount;
     uint uDirectionalCount; // directional lights are packed at the front of uLights[] (#188)
     Light uLights[];
 };
+// The light's bounds (Light component > Bounds) at world point p: 1 well inside the box, falling to 0 at its faces.
+float LightBoxFade(uint i, vec3 p) {
+    vec4 h = uLights[i].BoxHalf;
+    if (h.w < 0.0) return 1.0;
+    vec3 q = vec3(dot(uLights[i].BoxX.xyz, p) + uLights[i].BoxX.w, dot(uLights[i].BoxY.xyz, p) + uLights[i].BoxY.w,
+                  dot(uLights[i].BoxZ.xyz, p) + uLights[i].BoxZ.w);
+    vec3 in3 = h.xyz - abs(q);
+    return clamp(min(in3.x, min(in3.y, in3.z)) / h.w, 0.0, 1.0);
+}
 
 // #203 - lighting layers. uObjectLayerBit is 1 << this object's layer (0 = unfiltered, for
 // draws that never set it); a light skips objects whose bit is in its excluded-layer set.
@@ -692,13 +704,15 @@ bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) {
     float range = lt.ColorRange.a;
     float dist2 = dot(toLight, toLight);
     if (dist2 > range * range) return false; // out of reach: before the square root
+    float boxFade = LightBoxFade(i, vWorldPos); // outside its room: before the shadow fetch
+    if (boxFade <= 0.0) return false;
     float dist = sqrt(dist2);
     L = toLight / max(dist, 1e-4);
 
     // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
     float t = dist / max(range, 1e-4);
     float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist * dist);
+    float atten = window * window / (1.0 + dist * dist) * boxFade;
 
     if (type == 2) {
         float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)

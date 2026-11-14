@@ -425,6 +425,14 @@ struct LightComponent {
     // VolumetricEnabled): 1 = physically matched to its Intensity, 0 = no shafts or glow from it.
     float VolumetricIntensity = 1.0f;
 
+    // Point/Spot: a box (in the light's parent space) the light stays inside, so a room's light never shows through its
+    // walls, floor or ceiling, shadowed or not. The light fades to nothing over BoundsFade metres inside each face, and
+    // the cluster cull skips every froxel outside the box (fewer lights per froxel, not more work).
+    bool BoundsEnabled = false;
+    glm::vec3 BoundsCenter{0.0f};
+    glm::vec3 BoundsSize{4.0f, 3.0f, 4.0f}; // full extents along the parent's axes
+    float BoundsFade = 0.15f;
+
     // Per-light shadow tuning. Always present (not a separate ECS component) so every light can be
     // authored with shadow settings recorded even when it isn't currently casting. `Enabled`
     // replaces the old `CastShadows` bool; the legacy `"castShadows"` scene key still loads into

@@ -8,6 +8,7 @@
 #include "../Core/Paths.h"
 #include "../Core/Log.h"
 #include "AssetLibrary.h"
+#include <cmath>
 #include <filesystem>
 #include <json.hpp>
 
@@ -89,9 +90,54 @@ void LightSwitchCircuit() {
     w.RebuildWorldTransformCache();
     CHECK(!w.Registry.all_of<InactiveTag>(light) && w.Registry.get<LightSwitchComponent>(sw).On);
 }
+
+// A fitting placed straight from its model has no material slots: it draws its imported materials. The circuit must
+// still take their glow out when off (the house's sconces kept glowing because only override slots were swapped).
+void LightSwitchImportedGlow() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        Log::Info("LightSwitchImportedGlow: no test model - skipped.");
+        return;
+    }
+    // Its own copy of the model, so the imported material can glow without touching the shared one.
+    ModelImportSettings settings;
+    const auto model = Model::ImportDeferred(path, settings);
+    CHECK(model != nullptr && model->MeshCount() > 0);
+    if (!model || model->MeshCount() == 0) return;
+    const Material saved = model->MeshMaterial(0);
+    model->MeshMaterial(0).EmissiveColor = glm::vec3(1.0f, 0.8f, 0.6f);
+    model->MeshMaterial(0).EmissiveStrength = 3.0f;
+    World w;
+    const entt::entity fitting = w.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Sconce");
+    auto& r = w.Registry.get_or_emplace<RenderableComponent>(fitting);
+    r.Materials.clear(); // no overrides: the imported material draws
+    auto& c = w.Registry.emplace<LightCircuitComponent>(fitting);
+    c.Circuit = "Hall";
+    c.Glow = 0.5f;
+    auto& s = w.Registry.emplace<LightSwitchComponent>(fitting);
+    s.Circuit = "Hall";
+    s.StartOn = false;
+    w.RebuildWorldTransformCache();
+
+    // What the renderer draws for submesh 0: the slot if set, else the imported material.
+    const auto drawn = [&]() -> float {
+        const auto& slots = w.Registry.get<RenderableComponent>(fitting).Materials;
+        const Material& m = !slots.empty() && slots[0] ? slots[0]->Mat : model->MeshMaterial(0);
+        return glm::length(m.EmissiveColor * m.EmissiveStrength);
+    };
+    LightSwitch::Update(w, glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0, 0, -1), false); // starts: off
+    CHECK(drawn() == 0.0f);
+    LightSwitch::Set(w, "Hall", true);
+    CHECK(std::abs(drawn() - 0.5f * 3.0f * glm::length(glm::vec3(1.0f, 0.8f, 0.6f))) < 1e-4f);
+    LightSwitch::Set(w, "Hall", false);
+    CHECK(drawn() == 0.0f);
+    CHECK(model->MeshMaterial(0).EmissiveStrength == 3.0f); // the model's own material is never touched
+    model->MeshMaterial(0) = saved;
+}
 } // namespace
 
 void RegisterLightSwitchTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"LightSwitch: scene blocks load and save", LightSwitchSceneBlocks});
     tests.push_back({"LightSwitch: start state, Interact flips the light and the fitting's glow", LightSwitchCircuit});
+    tests.push_back({"LightSwitch: a fitting drawing its imported materials loses its glow when off", LightSwitchImportedGlow});
 }
