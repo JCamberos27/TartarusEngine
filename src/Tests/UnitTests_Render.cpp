@@ -11,6 +11,9 @@
 #include "../Renderer/LightBuffer.h"
 #include "../Renderer/TemporalAA.h"
 #include "../Renderer/ReflectionProbeCapture.h"
+#include "../Renderer/GIData.h"
+#include "../Renderer/GIVolumes.h"
+#include "../Game/LightSwitch.h"
 #include "../Game/SceneSerializer.h"
 #include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
@@ -583,7 +586,200 @@ void ProbeCaptureAndPuddleSsr() {
     CHECK(probes == 1);
 }
 
+// GI: L1 SH projection of known environments through the cube texels the baker reads back.
+void GISphericalHarmonics() {
+    constexpr int kSize = 16;
+    constexpr float kPi = 3.14159265f;
+    // The faces cover the sphere once, each face's centre texel looks down its axis.
+    float total = 0.0f;
+    for (int y = 0; y < kSize; ++y)
+        for (int x = 0; x < kSize; ++x) total += GI::CubeTexelSolidAngle(x, y, kSize);
+    CHECK(std::abs(total * 6.0f - 4.0f * kPi) < 1e-3f);
+    const glm::vec3 axes[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    for (int f = 0; f < 6; ++f) {
+        const glm::vec3 d = GI::CubeTexelDir(f, kSize / 2, kSize / 2, kSize);
+        CHECK(glm::dot(d, axes[f]) > 0.99f);
+    }
+    // GL's face convention: +X's texel row 0 looks up (+Y is -t), +Y's row 0 looks to -Z, +Z's column 0 to -X.
+    CHECK(GI::CubeTexelDir(0, kSize / 2, 0, kSize).y > 0.5f);
+    CHECK(GI::CubeTexelDir(2, kSize / 2, 0, kSize).z < -0.5f);
+    CHECK(GI::CubeTexelDir(4, 0, kSize / 2, kSize).x < -0.5f);
+
+    auto project = [&](auto radiance) {
+        GI::Projector p;
+        for (int f = 0; f < 6; ++f)
+            for (int y = 0; y < kSize; ++y)
+                for (int x = 0; x < kSize; ++x) {
+                    const glm::vec3 d = GI::CubeTexelDir(f, x, y, kSize);
+                    p.Add(d, radiance(d), GI::CubeTexelSolidAngle(x, y, kSize));
+                }
+        return p.Finish();
+    };
+    // A uniform environment of radiance L reads L for every normal (the sky irradiance cube's convention).
+    const GI::ProbeSH flat = project([](const glm::vec3&) { return glm::vec3(1.0f, 2.0f, 3.0f); });
+    for (const glm::vec3& n : axes) CHECK(glm::length(GI::Evaluate(flat, n) - glm::vec3(1, 2, 3)) < 2e-3f);
+    // A cosine lobe about +Z (radiance max(0, d.z)): L1 gives E/pi = 1/4 + 1/3 n.z, so 7/12 facing it, 1/4 side-on,
+    // nothing facing away.
+    const GI::ProbeSH lobe = project([](const glm::vec3& d) { return glm::vec3(std::max(d.z, 0.0f)); });
+    CHECK(std::abs(GI::Evaluate(lobe, {0, 0, 1}).x - 7.0f / 12.0f) < 0.01f);
+    CHECK(std::abs(GI::Evaluate(lobe, {1, 0, 0}).x - 0.25f) < 0.01f);
+    CHECK(GI::Evaluate(lobe, {0, 0, -1}).x == 0.0f);
+    CHECK(GI::Evaluate(lobe, {0, 0, 1}).y == GI::Evaluate(lobe, {0, 0, 1}).x);
+}
+
+// A synthetic bake: probes lit by the analytic falloff of a point at the box's +X end. Grid, lookup, fade, file
+// round trip, the invalid-probe fill and the GIVolumes gather with circuit weights.
+void GIVolumeLookup() {
+    // Box, grid and fade.
+    const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(2, 1, -3)), glm::radians(90.0f), glm::vec3(0, 1, 0));
+    const GI::Box box = GI::Box::FromTransform(xf, glm::vec3(4, 3, 4));
+    CHECK(glm::length(box.Half - glm::vec3(2, 1.5f, 2)) < 1e-5f);
+    CHECK(GI::GridDims(box.Half, 0.5f) == glm::ivec3(9, 7, 9));
+    CHECK(GI::GridDims(glm::vec3(0.1f), 0.5f) == glm::ivec3(2));
+    CHECK(glm::length(box.ToWorld(box.ToLocal({3, 0.5f, -2})) - glm::vec3(3, 0.5f, -2)) < 1e-5f);
+    CHECK(box.Fade({2, 1, -3}, 0.3f) == 1.0f);                 // centre
+    CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) > 0.45f);   // half way through the fade (local x is world -z)
+    CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) < 0.55f);
+    CHECK(box.Fade({2, 1, -3 + 2.5f}, 0.3f) == 0.0f);          // outside
+    const glm::ivec3 dims = GI::GridDims(box.Half, 0.5f);
+    CHECK(glm::length(GI::ProbeLocal({0, 0, 0}, dims, box.Half) + box.Half) < 1e-5f);
+    CHECK(glm::length(GI::ProbeLocal(dims - 1, dims, box.Half) - box.Half) < 1e-5f);
+
+    GI::VolumeBake vb;
+    vb.Name = "Living";
+    vb.Bounds = box;
+    vb.Dims = dims;
+    GI::Layer lamp{"Living Lamp", {}}, outside{"", {}};
+    for (int z = 0; z < dims.z; ++z)
+        for (int y = 0; y < dims.y; ++y)
+            for (int x = 0; x < dims.x; ++x) {
+                const glm::vec3 q = GI::ProbeLocal({x, y, z}, dims, box.Half);
+                const float e = 1.0f / (1.0f + glm::dot(q - glm::vec3(2, 0, 0), q - glm::vec3(2, 0, 0)));
+                GI::ProbeSH sh;
+                for (int c = 0; c < 3; ++c) sh.c[c] = glm::vec4(e, 0, 0, 0);
+                lamp.Probes.push_back(sh);
+                GI::ProbeSH o;
+                for (int c = 0; c < 3; ++c) o.c[c] = glm::vec4(0.1f, 0, 0.05f, 0);
+                outside.Probes.push_back(o);
+            }
+    vb.Layers = {lamp, outside};
+    // Trilinear between probes: on a probe exactly its value, between two the mean (DC only, so any normal).
+    const glm::vec3 p0 = GI::ProbeLocal({8, 3, 4}, dims, box.Half), p1 = GI::ProbeLocal({7, 3, 4}, dims, box.Half);
+    const float e0 = vb.Layers[0].Probes[GI::ProbeIndex({8, 3, 4}, dims)].c[0].x;
+    const float e1 = vb.Layers[0].Probes[GI::ProbeIndex({7, 3, 4}, dims)].c[0].x;
+    CHECK(std::abs(vb.Sample(0, p0, {0, 1, 0}).x - e0) < 1e-5f);
+    CHECK(std::abs(vb.Sample(0, (p0 + p1) * 0.5f, {0, 1, 0}).x - 0.5f * (e0 + e1)) < 1e-5f);
+    CHECK(vb.Sample(0, p0, {0, 1, 0}).x > vb.Sample(0, -p0, {0, 1, 0}).x); // brighter by the light
+
+    // File round trip (16-bit floats: within half precision).
+    GI::BakeFile file;
+    file.Volumes.push_back(vb);
+    GI::BakeFile back;
+    const auto bytes = GI::Serialize(file);
+    CHECK(bytes.size() > (std::size_t)dims.x * dims.y * dims.z * 24 * 2);
+    CHECK(GI::Deserialize(back, bytes.data(), bytes.size()));
+    CHECK(back.Volumes.size() == 1 && back.Find("Living") && back.Volumes[0].Dims == dims);
+    CHECK(back.Volumes[0].Layers.size() == 2 && back.Volumes[0].Layers[1].Circuit.empty());
+    CHECK(std::abs(back.Volumes[0].Layers[0].Probes[5].c[1].x - lamp.Probes[5].c[1].x) < 1e-3f);
+    CHECK(!GI::Deserialize(back, bytes.data(), bytes.size() / 2)); // truncated
+    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_gi_test.gi").string();
+    CHECK(GI::Save(file, path));
+    const auto cached = GI::Cached(path);
+    CHECK(cached && cached->Find("Living"));
+    CHECK(GI::Cached(path) == cached); // unchanged on disk: the same load
+    std::filesystem::remove(path);
+    GI::ClearCache();
+
+    // Invalid probes (inside a wall) take their valid neighbours' light.
+    {
+        const glm::ivec3 d(3, 1, 1);
+        std::vector<GI::ProbeSH> pr(3);
+        pr[0].c[0].x = 1.0f; pr[1].c[0].x = -5.0f; pr[2].c[0].x = 3.0f;
+        GI::FillInvalid(pr, {true, false, true}, d);
+        CHECK(std::abs(pr[1].c[0].x - 2.0f) < 1e-6f);
+        std::vector<GI::ProbeSH> chain(4);
+        chain[0].c[2].x = 4.0f;
+        GI::FillInvalid(chain, {true, false, false, false}, glm::ivec3(4, 1, 1));
+        CHECK(std::abs(chain[3].c[2].x - 4.0f) < 1e-6f); // spreads until every reachable probe is filled
+    }
+    CHECK((GI::SplitCircuits(" Living ; Hall,,Living;") == std::vector<std::string>{"Living", "Hall"}));
+
+    // Atlas packing: rows along x up to the width, then along z.
+    glm::ivec3 atlas;
+    const auto org = GIVolumes::Pack({{9, 7, 27}, {9, 7, 27}, {5, 4, 12}}, 16, atlas);
+    CHECK(org[0] == glm::ivec3(0, 0, 0) && org[1] == glm::ivec3(0, 0, 27) && org[2] == glm::ivec3(9, 0, 27));
+    CHECK(atlas == glm::ivec3(14, 7, 54));
+
+    // The runtime: a GI Volume baked with a circuit layer and an Outside layer; the circuit's weight follows its lights.
+    World world;
+    const entt::entity vol = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(vol);
+    world.Registry.emplace<NameComponent>(vol, NameComponent{"Living"});
+    auto& gc = world.Registry.emplace<GIVolumeComponent>(vol);
+    gc.Size = glm::vec3(4, 3, 4);
+    gc.Circuits = "Living Lamp";
+    const entt::entity lampE = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(lampE);
+    world.Registry.emplace<LightComponent>(lampE);
+    world.Registry.emplace<LightCircuitComponent>(lampE).Circuit = "Living Lamp";
+    world.Registry.emplace<LightSwitchComponent>(world.Registry.create()).Circuit = "Living Lamp";
+    world.RebuildWorldTransformCache();
+    CHECK(GIVolumes::CircuitWeights(world).at("Living Lamp") == 1.0f);
+
+    GI::BakeFile synth;
+    GI::VolumeBake sv = vb;
+    sv.Bounds = GI::Box::FromTransform(glm::mat4(1.0f), gc.Size);
+    synth.Volumes.push_back(sv);
+    GIVolumes gi;
+    gi.SetOverride(std::make_shared<GI::BakeFile>(synth));
+    gi.Gather(world);
+    CHECK(gi.Count() == 1 && gi.Volumes()[0].ReplacesSky);
+    CHECK(gi.Volumes()[0].Weights == (std::vector<float>{1.0f, 1.0f}));
+    float fade = 0.0f;
+    const glm::vec3 lit = gi.SampleCPU({1.5f, 0, 0}, {0, 1, 0}, &fade);
+    CHECK(fade == 1.0f && lit.x > 0.1f);
+    // Switched off (Play's switch, LightSwitch::Set): only the Outside layer is left.
+    LightSwitch::SetAll(world, false);
+    CHECK(GIVolumes::CircuitWeights(world).at("Living Lamp") == 0.0f);
+    gi.Gather(world);
+    CHECK(gi.Volumes()[0].Weights == (std::vector<float>{0.0f, 1.0f}));
+    const glm::vec3 dark = gi.SampleCPU({1.5f, 0, 0}, {0, 1, 0});
+    CHECK(std::abs(dark.x - 0.15f) < 1e-4f && dark.x < lit.x); // the Outside: 0.1 + 0.05 n.y
+    LightSwitch::SetAll(world, true);
+    gi.Gather(world);
+    CHECK(gi.Volumes()[0].Weights[0] == 1.0f);
+    // Solo (the baker's bounce two): only the named circuit shines.
+    const std::string outsideName;
+    gi.SetSolo(&outsideName);
+    gi.Gather(world);
+    CHECK(gi.Volumes()[0].Weights == (std::vector<float>{0.0f, 1.0f}));
+    gi.SetSolo(nullptr);
+    // Outside the box, or a grid that no longer matches the bake: nothing.
+    gi.Gather(world);
+    float outFade = 1.0f;
+    CHECK(gi.SampleCPU({0, 0, 3.0f}, {0, 1, 0}, &outFade) == glm::vec3(0.0f) && outFade == 0.0f);
+    gc.Spacing = 0.25f;
+    gi.Gather(world);
+    CHECK(gi.Count() == 0);
+
+    // The component saves and loads.
+    gc.Spacing = 0.5f;
+    gc.BakeFile = "scenes/Test.gi";
+    gc.Outside = true;
+    AssetLibrary assets;
+    World reloaded;
+    CHECK(SceneSerializer::LoadFromString(reloaded, assets, SceneSerializer::SaveToString(world)));
+    int n = 0;
+    for (auto [e, g] : reloaded.Registry.view<const GIVolumeComponent>().each()) {
+        ++n;
+        CHECK(g.Circuits == "Living Lamp" && g.BakeFile == "scenes/Test.gi" && g.Outside && g.Size == glm::vec3(4, 3, 4));
+    }
+    CHECK(n == 1);
+}
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
+    tests.push_back({"GI: volume lookup, bake file, weights follow circuits", GIVolumeLookup});
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});

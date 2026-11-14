@@ -1474,6 +1474,21 @@ struct ReflectionProbeComponent {
     bool CaptureScene{true};
 };
 
+// Baked diffuse bounce light for a room (GIData.h, GIVolumes.h): an oriented box of Size (local, x the transform's
+// scale) holding a grid of probes about Spacing apart. `--bake-gi` renders each probe's surroundings once per layer -
+// one per circuit in Circuits, plus the Outside (moon, sun and sky) when Outside is on - into BakeFile. At runtime each
+// layer is weighted by whether its circuit's lights are on and added to the ambient light, fading out over Fade metres
+// at the box faces; with an Outside layer the volume replaces the sky's ambient inside it.
+struct GIVolumeComponent {
+    glm::vec3 Size{4.0f, 3.0f, 4.0f};
+    float Spacing = 0.5f;    // metres between probes
+    float Fade = 0.05f;      // metres over which it fades at the faces (like a light's Bounds Fade: the walls sit just inside)
+    float Intensity = 1.0f;  // scales the baked light
+    std::string Circuits;    // ';'-separated light circuits to bake a layer each for
+    bool Outside = false;    // also bake the moon, sun and sky through the windows (always on)
+    std::string BakeFile;    // project-relative .gi written by --bake-gi; this volume's data is found by its name
+};
+
 // Clustered PBR decal (docs/DECALS.md). Projects a .decal asset along the entity's local -Z
 // (into the surface) through a box of Size metres. Per-instance values multiply / override the
 // asset's defaults; Seed drives rotation, scale and flip jitter plus the atlas frame when

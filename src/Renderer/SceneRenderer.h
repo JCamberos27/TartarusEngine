@@ -19,6 +19,7 @@ void ResetVariantDrawCounts();
 class World;
 class Model;
 struct Frustum;
+struct AABB;
 struct RenderableComponent;
 
 // The one culling walk every pass shares (the camera view, the SSAO pre-pass, the sun and local shadow gathers):
@@ -34,6 +35,7 @@ struct VisibilityQuery {
     bool SkipPlayerBody = false;     // PlayerBodyTag pieces left out
     bool SkipTransparent = false;    // a transparent first material slot left out
     const Frustum* Cull = nullptr;   // when set, anything with bounds outside it is left out
+    const AABB* Within = nullptr;    // when set, anything with bounds missing this box is left out (GI bake: the house)
     // Small-object culling: when SizeCullEye is set, anything whose bounding sphere, seen from there, is shorter than
     // MinScreenHeight of the viewport is left out. Only camera views set it (the main view and the SSAO pre-pass);
     // the shadow passes leave it unset, so a culled prop still casts.
@@ -81,6 +83,7 @@ class SpotShadowMap;
 class PointShadowMap;
 class IblProbe;
 class ReflectionProbeArray;
+class GIVolumes;
 class LightBuffer;
 class ClusterGrid;
 class DecalSystem;
@@ -109,6 +112,7 @@ struct SceneRenderInputs {
     PointShadowMap*      pointShadow    = nullptr;
     IblProbe*            iblProbe       = nullptr;
     ReflectionProbeArray* probeArray    = nullptr;
+    GIVolumes*            giVolumes     = nullptr; // baked GI (null = none)
     LightBuffer*         lightBuffer    = nullptr;
     ClusterGrid*         clusterGrid    = nullptr;
     // Clustered decals (docs/DECALS.md): gathered per view in RenderScene and binned by the cluster

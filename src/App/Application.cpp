@@ -90,6 +90,8 @@
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
 #include "ReflectionProbeCapture.h" // probes that capture the room around them
+#include "GIVolumes.h"              // baked GI volumes
+#include "GIBaker.h"                // --bake-gi
 #include "OutfitSystem.h"          // character outfits: skin hidden under clothing
 #include "Ssao.h"                  // PR15: depth pre-pass + screen-space ambient occlusion
 #include "RenderFrameContext.h"    // audit #359 — per-viewport scene-draw inputs
@@ -218,8 +220,10 @@ int Application::Run() {
     // (audit BUG-102).
     m_Headless = opt.smokeTestMode || opt.editorTestsMode;
     if (opt.editorTestsMode && !PrepareEditorTestsProfile(opt)) return 1;
-    CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty()); // #148: no crash dialog on an unattended run
-    if (!opt.editorShotDir.empty() && !PrepareEditorShotProfile(opt)) return 1;
+    const bool giBakeMode = opt.mode == LaunchMode::BakeGI;
+    CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty() && !giBakeMode); // #148: no crash dialog on an unattended run
+    // --editor-shot and --bake-gi run on a copy of the user's prefs, so the run's window, camera and last scene stay its own.
+    if ((!opt.editorShotDir.empty() || giBakeMode) && !PrepareEditorShotProfile(opt)) return 1;
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
     // stderr line, dialog) can be checked: av | overflow | abort | purecall | invalidparam | terminate.
@@ -265,6 +269,7 @@ int Application::Run() {
 // AudioEngine::Init so audio and PhysX go down last, and only the splash and the window are declared before it.
 int Application::RunSession() {
     const LaunchOptions& opt = m_Opt;
+    const bool giBakeMode = opt.mode == LaunchMode::BakeGI;
     const char* argv0 = m_Argv0;
     const bool& headless = m_Headless;
     const bool& playerMode = m_PlayerMode;
@@ -374,6 +379,12 @@ int Application::RunSession() {
         ReflectionProbeArray probeArray;
         // Room captures for the probes with Capture Scene on: rendered + prefiltered a face per frame, never per frame.
         ReflectionProbeCapture probeCapture;
+        // Baked GI (GI Volumes): the atlas + UBO of every baked volume, the layer weights from the circuits' state.
+        GIVolumes giVolumes;
+        // --bake-gi: made once the scene has settled (the sky's IBL baked, the probes captured), stepped every frame.
+        std::unique_ptr<GIBaker> giBaker;
+        int giBakeWait = 0, giBakeExit = 0;
+        bool giBakeDone = false;
         // PR15: SSAO — depth pre-pass FBO + compute + blur shaders (all scene-view only)
         Ssao ssao;
         // #158: every vertex+fragment program above and below re-compiles itself when one of its
@@ -685,6 +696,11 @@ int Application::RunSession() {
                 scenePath = last;
             if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
             if (opt.weaponLabMode) scenePath = EnginePaths::Resolve("tests/scenes/WeaponLab.json");
+            if (giBakeMode) {
+                std::error_code bakeEc;
+                scenePath = std::filesystem::exists(opt.bakeGiScene, bakeEc) ? std::filesystem::absolute(opt.bakeGiScene, bakeEc).string()
+                                                                             : ProjectPaths::Resolve(opt.bakeGiScene);
+            }
         }
         AssetLibrary assets;
         if (npcTest) // --npc-test revolver: the cases on the ground
@@ -741,7 +757,7 @@ int Application::RunSession() {
         // just from opening it for a read-only check (audit #77). Ordinary interactive startup keeps
         // the existing "upgrade once" behavior.
         bool sceneLoaded = loadStartupScene && !scenePath.empty() &&
-                           SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless && !playerMode);
+                           SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless && !playerMode && !giBakeMode);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
         }
@@ -1701,6 +1717,7 @@ int Application::RunSession() {
                 PROFILE_SCOPE("Probe Gather");
                 probeArray.Update(world);
                 probeCapture.Sync(probeArray, iblProbe.IsValid(), glfwGetTime());
+                giVolumes.Update(world);
             }
 
             // audit #359 pass 2: the ~330-line drawScene lambda that used to live here is now
@@ -1719,6 +1736,7 @@ int Application::RunSession() {
             sceneInputs.pointShadow        = &pointShadowMap;
             sceneInputs.iblProbe           = &iblProbe;
             sceneInputs.probeArray         = &probeArray;
+            sceneInputs.giVolumes          = &giVolumes;
             sceneInputs.lightBuffer        = &lightBuffer;
             sceneInputs.clusterGrid        = &clusterGrid;
             sceneInputs.decals             = &decalSystem;
@@ -1806,6 +1824,39 @@ int Application::RunSession() {
 
             // Reflection probe room captures (ReflectionProbeCapture): this frame's share - at most one cube face
             // rendered and one prefiltered - before any view draws, so the views see the frame's finished layers.
+            if (giBakeMode && !giBakeDone) {
+                PROFILE_SCOPE("GI Bake");
+                if (!giBaker) {
+                    if (++giBakeWait >= 30 && iblProbe.IsValid() && !probeCapture.Busy()) {
+                        giBaker = std::make_unique<GIBaker>();
+                        GIBaker::Options bo;
+                        bo.Only = opt.bakeGiOnly;
+                        if (const std::string e = Env::Str(Env::Var::GiBakeEmissive); !e.empty()) bo.Emissive = std::stof(e);
+                        if (const std::string b = Env::Str(Env::Var::GiBakeBounces); !b.empty()) bo.Bounces = std::stoi(b);
+                        if (!giBaker->Begin(world, bo)) {
+                            std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
+                            giBakeExit = 1;
+                            giBakeDone = true;
+                        }
+                    } else if (giBakeWait > 3000) {
+                        std::cerr << "--bake-gi: the scene never settled" << std::endl;
+                        giBakeExit = 1;
+                        giBakeDone = true;
+                    }
+                } else if (giBaker->Step(world, giVolumes, [&](const RenderFrameContext& c) { viewPipeline.DrawScene(viewIn, c, nullptr); },
+                                         [&](const glm::vec3& p) { editorCamera.Position = p; })) {
+                    if (giBaker->Failed()) std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
+                    giBakeExit = giBaker->Failed() ? 1 : 0;
+                    giBakeDone = true;
+                }
+                if (giBakeDone) {
+                    exitApproved = true;
+                    window.SetShouldClose(true);
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+            }
             if (probeCapture.Busy()) {
                 PROFILE_SCOPE("Probe Capture");
                 PROFILE_GPU_SCOPE("Probe Capture");
@@ -2438,6 +2489,13 @@ int Application::RunSession() {
             return allPassed ? 0 : 1;
         }
 
+        if (giBakeMode) { // nothing from this run is saved back: the bake wrote its .gi files
+            editor.Shutdown();
+            editorModule.Shutdown();
+            AppAudioMuter::Shutdown();
+            EditorSound::Shutdown();
+            return giBakeExit;
+        }
         // Closing mid-play would otherwise auto-save the transient play state — revert to the
         // snapshot first, same as pressing Stop.
         if (playing) editor.OnExitPlayMode(world, assets);

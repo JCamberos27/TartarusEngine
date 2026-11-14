@@ -229,6 +229,7 @@ uniform float uIBLSpecularMaxLod;        // kSpecularMips - 1
 layout(binding = 11) uniform samplerCube uIrradianceMap;
 layout(binding = 12) uniform samplerCube uPrefilteredMap;
 layout(binding = 13) uniform sampler2D uBrdfLut;
+#include "GIVolumes.glsl"
 
 // PR14 — Reflection probes: parallax box projection (#ifdef _REFLECTION_PROBES; zero-keyword: dead code)
 #ifdef _REFLECTION_PROBES
