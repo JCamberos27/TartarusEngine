@@ -7970,6 +7970,80 @@
   "dofMaxBlur": 8.0,
   "empties": [
     {
+      "id": 109217,
+      "name": "Audio",
+      "order": 109217,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Foley Audio": {
+        "Crouch Stride Scale": 0.800000011920929,
+        "Crouch Volume": 0.550000011920929,
+        "Default Surface": "grass",
+        "Enabled": true,
+        "Foot Contact Height": 0.019999999552965164,
+        "Foot Lift Height": 0.05000000074505806,
+        "Foot Lift Moving": 0.02500000037252903,
+        "Footwear": "Boots",
+        "Jump Volume": 1.0,
+        "Land Full Speed": 9.0,
+        "Land Heavy Speed": 6.0,
+        "Land Min Speed": 2.5,
+        "Land Volume": 1.0,
+        "Min Step Speed": 0.6000000238418579,
+        "NPC Footwear": "Boots",
+        "NPC Step Max Distance": 28.0,
+        "NPC Step Min Distance": 2.5,
+        "NPC Step Volume": 1.0,
+        "Pitch Max": 1.059999942779541,
+        "Pitch Min": 0.9399999976158142,
+        "Run Speed": 4.5,
+        "Run Volume": 1.0,
+        "Step Stride Scale": 1.0,
+        "Steps From Feet": true,
+        "Surface Table": "concrete=rock,stone,walkway;wood=log,stump,porch,stair;grass=grass,forest,moss,leaf,litter,soil,dirt,mud,ground;gravel=gravel,driveway;wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,sand",
+        "Volume": 1.0,
+        "Volume Jitter dB": 1.0,
+        "Walk Volume": 1.0
+      },
+      "id": 109218,
+      "name": "Foley",
+      "order": 109218,
+      "parentId": 109217,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
       "Light": {
         "Angular Size": 0.5299999713897705,
         "Cast Shadows": true,

@@ -32,6 +32,12 @@
 
 namespace {
 
+// The Forest scene's Foley Audio Surface Table (project/scenes/Forest.json); keep the two in step.
+constexpr const char* kForestSurfaceTable =
+    "concrete=rock,stone,walkway;wood=log,stump,porch,stair;grass=grass,forest,moss,leaf,litter,soil,dirt,mud,ground;"
+    "gravel=gravel,driveway;wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;"
+    "water=water,puddle;concrete=concrete,asphalt,tile,sand";
+
 // Records every voice instead of playing it; a voice plays until Age() runs its life out or it is stopped.
 struct FakeBackend : SoundBackend {
     struct V {
@@ -671,6 +677,23 @@ void TestFoleyRules() {
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Assets/Materials/WoodPlank.physicmaterial", "concrete") == "wood");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Metal Grate 02", "concrete") == "metal");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Red CARPET", "concrete") == "carpet");
+    // Outdoor surfaces with their own takes (Generic Footwear): grass and gravel; dirt and sand stay concrete.
+    CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Field Ground Grass", "concrete") == "grass");
+    CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Gravel Path", "concrete") == "gravel");
+    CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Dirt Mound", "concrete") == "concrete");
+    // The Forest's table (Forest.json Foley Audio): forest floor and scans are grass, the driveway gravel, rocks concrete
+    // even when mossy, the house and porch wood.
+    {
+        const std::string forest = kForestSurfaceTable;
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Forest Floor", "grass") == "grass");
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Forest_ground_scan_var2_Collider", "grass") == "grass");
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Road_driveway_piece", "grass") == "gravel");
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Road_walkway_piece", "grass") == "concrete");
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Mossy_Rock_var3_Collider", "grass") == "concrete");
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Floor_3x_5x (stairwell fill)", "grass") == "wood");
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Porch_4x (2)", "grass") == "wood");
+        CHECK(FoleyAudio::SurfaceFromName(forest, "Mossy_log_var2_Collider", "grass") == "wood");
+    }
     // Footwear picks the step takes' category: boots step_<surface>, barefoot barefoot_<surface> (the boots' where one is missing).
     CHECK(FoleyAudio::StepCategory("wood", 0) == "step_wood");
     CHECK(FoleyAudio::StepCategory("wood", 1) == "barefoot_wood");
