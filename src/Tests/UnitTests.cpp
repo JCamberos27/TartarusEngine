@@ -6170,6 +6170,7 @@ int RunUnitTests(const char* filter) {
     { void RegisterWorldTextTests(UnitTestSupport::TestList&); RegisterWorldTextTests(tests); } // UnitTests_WorldText.cpp
     { void RegisterOpenableTests(UnitTestSupport::TestList&); RegisterOpenableTests(tests); } // UnitTests_Openable.cpp
     { void RegisterLightSwitchTests(UnitTestSupport::TestList&); RegisterLightSwitchTests(tests); } // UnitTests_LightSwitch.cpp
+    { void RegisterCinematicTests(UnitTestSupport::TestList&); RegisterCinematicTests(tests); } // UnitTests_Cinematic.cpp
     RegisterCharacterMoverTests(tests); // UnitTests_CharacterMover.cpp
     RegisterEngineTests(tests);
     { void RegisterGameplayTests(UnitTestSupport::TestList&); RegisterGameplayTests(tests); }

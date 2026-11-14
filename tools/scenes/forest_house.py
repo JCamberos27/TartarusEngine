@@ -1196,6 +1196,7 @@ def grime(s, lay, pk, rng, notes):
 
 
 RED_I, PORCH_I = 1.6, 1.3
+RED_GLOW, RED_GLOW_S = (1.0, 0.012, 0.006), 2.2   # a red fitting's glass: the bulb's, and the master bedroom's lamps
 # Shadow slots the engine hands to the shadow-capable lights nearest the player each frame. They are cached (a face
 # redraws only when something moving is in it), so a still room costs next to nothing once it has drawn.
 POINT_SHADOWS = 4
@@ -1208,7 +1209,7 @@ def lights(s, lay, pk, repo, notes):
     # The master bedroom, upstairs at the front: its ceiling fitting holds a bare red bulb.
     red = next(e for e in pk.named(r'Lamp_bedroom$'))
     red['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
-                                                emissiveColor=[1.0, 0.012, 0.006], emissiveStrength=2.2)}]
+                                                emissiveColor=list(RED_GLOW), emissiveStrength=RED_GLOW_S)}]
     red['castShadows'] = 0      # the bulb hangs in it: its own shade would print a dark disc on the ceiling round it
     pk.wiring = house_lights.wire(s, lay, pk, repo, sys.modules[__name__], notes)
     g = pk.wiring.g

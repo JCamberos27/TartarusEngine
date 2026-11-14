@@ -2,6 +2,7 @@
 
 #include "gl.h"
 #include "Core/Env.h"
+#include "Tests/Cinematic.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -26,6 +27,7 @@ struct State {
     int    w = 0, h = 0;
     std::vector<unsigned char> pixels;
     long long written = 0;
+    bool clockOnly = false;
 };
 State s_State;
 
@@ -38,18 +40,19 @@ bool Active() {
         s.out = Env::Str(Env::Var::MotionDemo);
         s.ffmpeg = Env::Str(Env::Var::Ffmpeg);
         s.active = !s.out.empty() && !s.ffmpeg.empty();
+        s.clockOnly = !s.active && Cinematic::Active(); // a cinematic steps the same 1/60 s clock
     }
     return s.active;
 }
 
 void PinClock() {
-    if (!Active()) return;
+    if (!Active() && !s_State.clockOnly) return;
     glfwSetTime(1.0 + (double)s_State.frame * kFrame);
     ++s_State.frame;
 }
 
 void PinImGuiDelta() {
-    if (Active()) ImGui::GetIO().DeltaTime = (float)kFrame;
+    if (Active() || s_State.clockOnly) ImGui::GetIO().DeltaTime = (float)kFrame;
 }
 
 void StartRecording(int width, int height) {

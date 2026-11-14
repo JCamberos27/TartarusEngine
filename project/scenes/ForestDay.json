@@ -379524,10 +379524,10 @@
         "Cast Shadows": false,
         "Color": [
           1.0,
-          0.86,
-          0.7
+          0.035,
+          0.02
         ],
-        "ColorTempK": 2700.0,
+        "ColorTempK": 0.0,
         "Culling Mask": -1,
         "Intensity": 0.35,
         "Range": 2.2,
@@ -379644,10 +379644,10 @@
         "Cast Shadows": false,
         "Color": [
           1.0,
-          0.86,
-          0.7
+          0.035,
+          0.02
         ],
-        "ColorTempK": 2700.0,
+        "ColorTempK": 0.0,
         "Culling Mask": -1,
         "Intensity": 0.35,
         "Range": 2.2,
@@ -379824,10 +379824,10 @@
         "Cast Shadows": false,
         "Color": [
           1.0,
-          0.86,
-          0.7
+          0.035,
+          0.02
         ],
-        "ColorTempK": 2700.0,
+        "ColorTempK": 0.0,
         "Culling Mask": -1,
         "Intensity": 0.5,
         "Range": 2.6,
@@ -919834,6 +919834,53 @@
       },
       "castShadows": 0,
       "id": 106381,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_BaseColor_rgb.tga",
+              "pathGuid": "42a49b570b941088"
+            },
+            "aoMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_AO100.png",
+              "pathGuid": "572ec30afe931e40"
+            },
+            "baseColor": [
+              0.8971,
+              0.8971,
+              0.8971
+            ],
+            "emissiveColor": [
+              1.0,
+              0.012,
+              0.006
+            ],
+            "emissiveMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_Emissive_rgb.tga",
+              "pathGuid": "da82e9f161573c5c"
+            },
+            "emissiveStrength": 2.2,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_Metallic.png",
+              "pathGuid": "ad7bdf6728f39638"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_Normal_rgb.tga",
+              "pathGuid": "2ff6fd6282f12806"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_Roughness100.png",
+              "pathGuid": "206a55dd5777630b"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
       "name": "Lamp_table_B",
       "order": 106381,
       "parentId": 106373,
@@ -921746,6 +921793,53 @@
       },
       "castShadows": 0,
       "id": 106446,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_BaseColor_rgb.tga",
+              "pathGuid": "42a49b570b941088"
+            },
+            "aoMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_AO100.png",
+              "pathGuid": "572ec30afe931e40"
+            },
+            "baseColor": [
+              0.8971,
+              0.8971,
+              0.8971
+            ],
+            "emissiveColor": [
+              1.0,
+              0.012,
+              0.006
+            ],
+            "emissiveMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_Emissive_rgb.tga",
+              "pathGuid": "da82e9f161573c5c"
+            },
+            "emissiveStrength": 2.2,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_Metallic.png",
+              "pathGuid": "ad7bdf6728f39638"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_Normal_rgb.tga",
+              "pathGuid": "2ff6fd6282f12806"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_Roughness100.png",
+              "pathGuid": "206a55dd5777630b"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
       "name": "Lamp_table_B (1)",
       "order": 106446,
       "parentId": 106373,
@@ -930600,6 +930694,53 @@
         "shape": 0
       },
       "id": 106744,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_BaseColor_rgb.tga",
+              "pathGuid": "42a49b570b941088"
+            },
+            "aoMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_AO100.png",
+              "pathGuid": "572ec30afe931e40"
+            },
+            "baseColor": [
+              0.8971,
+              0.8971,
+              0.8971
+            ],
+            "emissiveColor": [
+              1.0,
+              0.012,
+              0.006
+            ],
+            "emissiveMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_Emissive_rgb.tga",
+              "pathGuid": "da82e9f161573c5c"
+            },
+            "emissiveStrength": 2.2,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_Metallic.png",
+              "pathGuid": "ad7bdf6728f39638"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_Normal_rgb.tga",
+              "pathGuid": "2ff6fd6282f12806"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Lamps_House_MaskMap_Roughness100.png",
+              "pathGuid": "206a55dd5777630b"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
       "name": "Lamp_stand",
       "order": 106744,
       "parentId": 106373,

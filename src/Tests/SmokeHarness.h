@@ -72,6 +72,7 @@ private:
     void LoadScene();
     void PlayProbeCycle();
     void ShotCameraFrame();
+    void CinematicFrame();
     void PoseShotFrame();
     void PerfFrame();
     void ScoreScene();
@@ -112,6 +113,7 @@ private:
     int m_PlayCycles = 0;
 
     // Across scenes, as the function-local statics they came from were.
+    bool m_Cinematic = false;     // TARTARUS_CINEMATIC: this run records the camera path (Tests/Cinematic.h)
     int m_ShotHold = 0;           // frames the current capture has waited for decal textures to stream in
     bool m_Sampling = false;      // --npc-test --perf-sample's profile is running
     int m_CombatPlayFrame = 0;    // the combat bench's maximized Play frames so far
