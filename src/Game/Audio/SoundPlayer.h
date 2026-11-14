@@ -71,6 +71,11 @@ public:
         float OverridePitchMin = 1.0f, OverridePitchMax = 1.0f, OverrideJitterDb = 0.0f;
         bool OverrideDistance = false;
         float OverrideMinDistance = 2.0f, OverrideMaxDistance = 40.0f;
+        // >= 0: play this variant (index into the set's files, wrapped) instead of the round robin's pick.
+        int Variant = -1;
+        // The caller drives the voice's low-pass (Backend().SetOcclusion) and position itself: the voice gets the filter but is not
+        // tracked for occlusion, portals or air absorption (the ambience bed's speakers).
+        bool ManualFilter = false;
     };
     struct Played {
         bool Started = false;   // a voice started (false: no files, or the engine is down)

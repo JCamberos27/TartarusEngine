@@ -7970,6 +7970,38 @@
   "dofMaxBlur": 8.0,
   "empties": [
     {
+      "Ambience Bed": {
+        "Enabled": true,
+        "Fade In": 3.0,
+        "Height": 2.0,
+        "Indoor Cutoff Hz": 900.0,
+        "Indoor Gain dB": -12.0,
+        "Radius": 15.0,
+        "Sound": "snd.amb.night_field",
+        "Volume": 1.0
+      },
+      "id": 109219,
+      "name": "Night Bed",
+      "order": 109219,
+      "parentId": 109217,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
       "id": 109217,
       "name": "Audio",
       "order": 109217,

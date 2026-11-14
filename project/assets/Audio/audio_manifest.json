@@ -178,6 +178,114 @@
    "mix_db": -19.23
   },
   {
+   "file": "Ambience/night_field_1.wav",
+   "key": "snd.amb.night_field",
+   "layer": "ambience",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.99,
+   "lufs_m_max": -32.75,
+   "true_peak_dbtp": -24.88,
+   "length_s": 36.0,
+   "peak_ms": 9850.4,
+   "sources": [
+    {
+     "file": "amb/AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav",
+     "start": 2.0,
+     "end": 41.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 1.5,
+   "variant": 1,
+   "loop": true,
+   "class": "night_field",
+   "source": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav@2.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -18.48
+  },
+  {
+   "file": "Ambience/night_field_2.wav",
+   "key": "snd.amb.night_field",
+   "layer": "ambience",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.15,
+   "lufs_m_max": -32.4,
+   "true_peak_dbtp": -23.73,
+   "length_s": 36.0,
+   "peak_ms": 26652.1,
+   "sources": [
+    {
+     "file": "amb/AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav",
+     "start": 47.0,
+     "end": 86.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 2.0,
+   "variant": 2,
+   "loop": true,
+   "class": "night_field",
+   "source": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav@47.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -18.83
+  },
+  {
+   "file": "Ambience/night_field_3.wav",
+   "key": "snd.amb.night_field",
+   "layer": "ambience",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.39,
+   "lufs_m_max": -32.29,
+   "true_peak_dbtp": -24.44,
+   "length_s": 36.0,
+   "peak_ms": 7848.2,
+   "sources": [
+    {
+     "file": "amb/AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav",
+     "start": 92.0,
+     "end": 131.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 34.5,
+   "variant": 3,
+   "loop": true,
+   "class": "night_field",
+   "source": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav@92.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -18.94
+  },
+  {
+   "file": "Ambience/night_field_4.wav",
+   "key": "snd.amb.night_field",
+   "layer": "ambience",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -34.73,
+   "lufs_m_max": -33.8,
+   "true_peak_dbtp": -25.55,
+   "length_s": 36.0,
+   "peak_ms": 27621.5,
+   "sources": [
+    {
+     "file": "amb/AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav",
+     "start": 137.0,
+     "end": 176.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 15.4,
+   "variant": 4,
+   "loop": true,
+   "class": "night_field",
+   "source": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav@137.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -17.43
+  },
+  {
    "file": "Ambience/night_open_1.wav",
    "key": "snd.amb.night_open",
    "layer": "ambience",

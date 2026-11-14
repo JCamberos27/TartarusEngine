@@ -2049,6 +2049,20 @@ struct ReverbBusComponent {
     float MasterLookaheadMs = 1.5f;
     float MasterReleaseMs = 80.0f;
 };
+// A quad ambience bed (Game/Audio/AmbienceBed): the Sound's variants as looping 3D voices on four speakers Radius from the listener at
+// fixed compass points (north +Z, east +X, south, west, one variant each). They follow the listener's position but not its turning,
+// so the bed stays put in the world while your head turns through it. Indoors (the share of the mix the listener's indoor Reverb
+// Zones claim) it drops by Indoor Gain dB and darkens to Indoor Cutoff Hz. One per scene (the first counts).
+struct AmbienceBedComponent {
+    bool Enabled = true;
+    std::string Sound = "snd.amb.night_field"; // a sound key whose variants are the speakers' loops
+    float Volume = 1.0f;               // linear, on top of the sound's mix_db
+    float Radius = 15.0f;              // metres from the listener
+    float Height = 2.0f;               // metres above the listener
+    float FadeIn = 3.0f;               // seconds from silence when Play starts
+    float IndoorGainDb = -12.0f;
+    float IndoorCutoffHz = 900.0f;
+};
 // The dynamic mix (Game/Audio/AudioMix): ducking under loud events, the aim-down-sights focus, air absorption with distance, the
 // master bus's glue compressor and trim. One per scene (the first counts); a scene without one plays these defaults. The Audio
 // panel (Window > Audio) edits the live values and can write them back here.

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AmbienceBed.h"
 #include "AudioEngine.h"
 #include "AudioMix.h"
 #include "EnvironmentProbe.h"
@@ -174,6 +175,7 @@ public:
     const std::vector<AmbienceDebug>& Ambience() const { return m_Reverb.Ambience(); }
     // What the editor's Audio panel shows: the zones at the listener (the last Update).
     const ReverbZoneMix& ListenerMix() const { return m_Reverb.ListenerMix(); }
+    const AmbienceBed& Bed() const { return m_Bed; }
     // The settings the listener's probe reads the space by: the default gun's, else any profile's, else the defaults.
     EnvironmentSettings ReverbEnvironment() const;
     // A set by exact key (filled from the manifest on first use): the impact, casing and flyby sets use this; `init` runs once
@@ -227,6 +229,7 @@ private:
     int TailVoices(const WeaponAudioProfile& p) const;
     EnvironmentProbe m_Probe;
     WeaponReverb m_Reverb{*this};
+    AmbienceBed m_Bed;                 // the scene's Ambience Bed (the first one), off without one
     ReverbZones m_Zones;
     SpaceMix m_LastSpace;
     ReverbBusComponent m_Bus;

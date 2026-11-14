@@ -236,6 +236,7 @@ void WeaponAudio::Reset(SoundBackend* backend, std::uint32_t seed, bool recordHi
     m_Manifest = SoundManifest{};
     m_Reverb.Reset();
     m_Reverb.CacheClassIrs(m_Manifest);
+    m_Bed.Start(AmbienceBedComponent{false});
     m_LastTail = -1e9;
     m_Probe = EnvironmentProbe{};
     m_LastSpace = SpaceMix{};
@@ -314,6 +315,8 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
         const entt::entity e = *first.begin();
         m_Mix = world.Registry.get<AudioMixComponent>(e);
     }
+    if (const auto first = world.Registry.view<AmbienceBedComponent>(); first.begin() != first.end()) // the first one counts
+        m_Bed.Start(world.Registry.get<AmbienceBedComponent>(*first.begin()));
     m_Player.SetReferenceLufs(m_Manifest.HasReference, m_Manifest.ReferenceLufs);
     m_World = &world;
     InstallRouting();
@@ -384,6 +387,7 @@ void WeaponAudio::Stop() {
                     m_PathCalls ? m_PathMicros / m_PathCalls : 0.0, m_Refreshes, m_Refreshes ? m_RefreshMicros / m_Refreshes : 0.0, (int)m_Zones.Portals().size(),
                     (int)m_Zones.Zones().size());
     m_Reverb.StopAmbience();
+    m_Bed.Stop(m_Player);
     m_Player.StopAll();
     m_Player.SetBlockedFn(nullptr); // (a test's line-of-sight function must not outlive its locals)
     m_Player.SetPathFn(nullptr);
@@ -416,6 +420,19 @@ void WeaponAudio::Update(float dt) {
     m_Ducker.Update(dt);
     m_Player.Update(dt);
     m_Reverb.Update(dt, m_Listener);
+    if (m_Bed.Active()) {
+        SoundSet* bed = KeySet(m_Bed.Settings().Sound, [](SoundSet& s) {
+            s.Loop = true;
+            s.Bus = AudioEngine::Bus::Ambient;
+            s.MaxVoices = AmbienceBed::kSpeakers;
+            s.StealFadeTime = 0.0f;
+            s.ReverbSend = 0.0f;               // the bed already holds its space
+            s.Occlusion = 0;
+            s.PitchMin = s.PitchMax = 1.0f;
+            s.VolumeJitterDb = 0.0f;
+        });
+        m_Bed.Update(dt, m_Listener, AmbienceBed::IndoorShare(m_Reverb.ListenerMix(), m_Zones), m_Player, bed);
+    }
 }
 
 SoundPlayer::VoicePath WeaponAudio::PathFor(const glm::vec3& listener, const glm::vec3& source) {
