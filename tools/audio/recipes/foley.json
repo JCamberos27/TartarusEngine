@@ -315,5 +315,12 @@
    "Water",
    "Wood"
   ]
+ },
+ "generic_steps": {
+  "_doc": "Outdoor surfaces the Boots library has no takes for: Ocular Stride Generic Footwear (src Raw\\Audio\\Footsteps\\Generic Footwear, TARTARUS_FOOTSTEPS_SRC) -> Foley/step_<surface>, played for boots too. Counts and loudness come from steps.",
+  "surfaces": [
+   "Grass",
+   "Gravel"
+  ]
  }
 }

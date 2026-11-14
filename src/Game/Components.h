@@ -1917,7 +1917,7 @@ struct FoleyAudioComponent {
     int Footwear = 0;
     int NpcFootwear = 0;
     std::string DefaultSurface = "concrete";
-    std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
+    std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;grass=grass;gravel=gravel;concrete=concrete,asphalt,tile,stone,dirt,soil,sand";
 };
 // A designer-placed space for sound: inside the volume the shots' tail is the Tail Class's, the runtime reverb convolves with the
 // zone's impulse response and the zone's ambience bed fades in; all crossfaded over Fade Distance at the edge. A shot in no zone falls

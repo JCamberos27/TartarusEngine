@@ -16,6 +16,9 @@ SRC_ROOT = os.environ.get("TARTARUS_AUDIO_SRC", r"C:\tb\audio-src")
 TSP = os.path.join(SRC_ROOT, "tsp", "Tactical Shooter Pack")
 BOOTS = os.path.join(SRC_ROOT, "boots", "Boots")
 BAREFOOT = os.path.join(SRC_ROOT, "barefoot", "Barefoot and Socks")   # Ocular Stride, the same library as the boots
+# Ocular Stride Generic Footwear (grass, gravel): the Drive's "Raw/Audio/Footsteps", next to audio-src.
+GENERIC = os.path.join(os.environ.get("TARTARUS_FOOTSTEPS_SRC",
+                                      os.path.join(os.path.dirname(os.path.normpath(SRC_ROOT)), "Footsteps")), "Generic Footwear")
 
 
 # ----------------------------------------------------------------------------------------------------------- io

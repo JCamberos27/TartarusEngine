@@ -7,6 +7,7 @@ Categories: weapon (ads_in ads_out equip unequip firemode), move (jump land_ligh
 step_<surface> (walk run land) in boots, barefoot_<surface> (walk run land) barefoot.
 
   --only barefoot   rebuilds just the barefoot steps (Foley/barefoot_*), leaving every other file as it is.
+  --only generic    rebuilds just the Generic Footwear outdoor steps (Foley/step_grass, step_gravel).
 """
 import sys
 import glob
@@ -100,7 +101,8 @@ def pick_steps(x, n, dur, isolated_gap, seed, lo_db=-4.5):
 
 
 # Footwear -> (library folder, the word before the take's name in its file names, foley category prefix).
-FOOTWEAR = {"boots": (lambda: adsp.BOOTS, "Boots", "step_"), "barefoot": (lambda: adsp.BAREFOOT, "Socks", "barefoot_")}
+FOOTWEAR = {"boots": (lambda: adsp.BOOTS, "Boots", "step_"), "barefoot": (lambda: adsp.BAREFOOT, "Socks", "barefoot_"),
+            "generic": (lambda: adsp.GENERIC, "Generic Footwear", "step_")}   # outdoor surfaces the Boots library lacks
 
 
 def surf_files(surface, kind, footwear="boots"):
@@ -175,9 +177,15 @@ def land_heavy(v):
 def main():
     cfg = json.load(open(os.path.join(abuild.HERE, "recipes", "foley.json")))
     entries = []
-    if "--only" in sys.argv and sys.argv[sys.argv.index("--only") + 1] == "barefoot":
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
+    if only == "barefoot":
         build_steps(cfg, entries, "barefoot")
         print("manifest files:", abuild.update_manifest(entries, ["Foley/barefoot_"]))
+        return
+    if only == "generic":
+        build_steps(cfg, entries, "generic")
+        prefixes = [f"Foley/step_{s.lower()}/" for s in cfg["generic_steps"]["surfaces"]]
+        print("manifest files:", abuild.update_manifest(entries, prefixes))
         return
     for cat, elems in cfg["one_shots"].items():
         for elem, variants in elems.items():
@@ -197,6 +205,7 @@ def main():
                 print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
     build_steps(cfg, entries)
     build_steps(cfg, entries, "barefoot")
+    build_steps(cfg, entries, "generic")
     print("manifest files:", abuild.update_manifest(entries, ["Foley/"]))
 
 
