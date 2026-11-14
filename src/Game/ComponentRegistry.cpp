@@ -2760,6 +2760,25 @@ void RegisterEngineComponents() {
     }
     {
         ReflectComponent m;
+        m.Name = "Ambience Bed"; m.Icon = ICON_FA_TREE; m.Category = "Audio";
+        m.Tooltip = "A quad ambience bed: the Sound's variants loop on four speakers round the listener at fixed compass points (they follow\n"
+                    "your position, not your turning, so the bed stays put while your head turns through it). Indoors (the listener's indoor\n"
+                    "Reverb Zones) it drops and darkens. One per scene (the first counts).";
+        using A = AmbienceBedComponent;
+        m.Fields = {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(A, Enabled), 0.0f, "" },
+            { "Sound", T::String, TARTARUS_REFLECT_FIELD(A, Sound), 0.0f, "A sound key (e.g. snd.amb.night_field): its variants are the north, east, south and west loops." },
+            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(A, Volume), 0.01f, "Linear, on top of the sound's mix level.", 0.0f, 4.0f },
+            { "Radius", T::Float, TARTARUS_REFLECT_FIELD(A, Radius), 0.1f, "Metres from the listener to each speaker.", 1.0f, 100.0f },
+            { "Height", T::Float, TARTARUS_REFLECT_FIELD(A, Height), 0.1f, "Metres above the listener.", -10.0f, 30.0f },
+            { "Fade In", T::Float, TARTARUS_REFLECT_FIELD(A, FadeIn), 0.05f, "Seconds from silence when Play starts.", 0.0f, 30.0f },
+            { "Indoor Gain dB", T::Float, TARTARUS_REFLECT_FIELD(A, IndoorGainDb), 0.5f, "Fully inside indoor Reverb Zones.", -60.0f, 0.0f },
+            { "Indoor Cutoff Hz", T::Float, TARTARUS_REFLECT_FIELD(A, IndoorCutoffHz), 25.0f, "The low-pass fully inside indoor Reverb Zones.", 100.0f, 20000.0f },
+        };
+        Register<AmbienceBedComponent>(std::move(m));
+    }
+    {
+        ReflectComponent m;
         m.Name = "Weapon Audio"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
         m.Tooltip = "One gun's report and gear sounds (add one per gun; Gun is its key prefix, e.g. ak or 870).\n"
                     "A gun with none uses the built-in defaults. Animator events named snd.<gun>.<element> play the set of that key.";

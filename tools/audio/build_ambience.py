@@ -7,8 +7,9 @@ Sources live in C:\\tb\\audio-src\\amb (never committed).
 
   --only night_open,night_wind   rebuilds just those classes, leaving every other file as it is.
 
-Per class: "mono" (a 3D emitter's loop: one channel), "select" ("steadiest", the default: no events; "liveliest": the stretch whose
-loudness moves most, e.g. wind with its gusts). Per layer: "hp_hz" / "lp_hz" filters on top of the 20 Hz high-pass.
+Per class: "loop_s" / "xfade_s" (override the file's), "mono" (a 3D emitter's loop: one channel), "select" ("steadiest", the default: no events; "liveliest": the stretch whose
+loudness moves most, e.g. wind with its gusts). Per layer: "hp_hz" / "lp_hz" filters on top of the 20 Hz high-pass; "at_s" a fixed
+start (seconds) instead of the automatic pick.
 """
 import json
 import os
@@ -70,20 +71,23 @@ def loop_of(x, start, loop_n, xf_n, hp_hz=None, lp_hz=None):
 
 def main():
     cfg = json.load(open(os.path.join(abuild.HERE, "recipes", "ambience.json")))
-    loop_n, xf_n = int(cfg["loop_s"] * SR), int(cfg["xfade_s"] * SR)
     only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
     entries = []
     for cls, c in cfg["classes"].items():
         if only and cls not in only:
             continue
         lively = c.get("select", "steadiest") == "liveliest"
+        loop_n, xf_n = int(c.get("loop_s", cfg["loop_s"]) * SR), int(c.get("xfade_s", cfg["xfade_s"]) * SR)
         for n, v in enumerate(c["variants"], 1):
             adsp.take_uses()
             parts, notes = [], []
             for l in v["layers"]:
                 x = src(l["src"])
-                picks = steadiest(x, loop_n + xf_n, l.get("pick", 0) + 1, liveliest=lively)
-                st = picks[min(l.get("pick", 0), len(picks) - 1)]
+                if "at_s" in l:                                   # a fixed start: distinct cuts of one source for several speakers
+                    st = int(l["at_s"] * SR)
+                else:
+                    picks = steadiest(x, loop_n + xf_n, l.get("pick", 0) + 1, liveliest=lively)
+                    st = picks[min(l.get("pick", 0), len(picks) - 1)]
                 y = loop_of(x, st, loop_n, xf_n, l.get("hp_hz"), l.get("lp_hz"))
                 parts.append(adsp.gain_db(y, l.get("gain_db", 0.0)))
                 notes.append(f"{l['src']}@{st / SR:.1f}s")

@@ -103,7 +103,9 @@ SoundPlayer::Played SoundPlayer::Play(const SoundSet& set, const Request& req) {
     // Round robin: a random variant, never the one that just played.
     const int n = (int)set.Files.size();
     int idx = 0;
-    if (n > 1) {
+    if (req.Variant >= 0) {
+        idx = req.Variant % n;
+    } else if (n > 1) {
         if (set.NoImmediateRepeat && pool.LastIndex >= 0 && pool.LastIndex < n) {
             idx = (int)(Rand01() * (float)(n - 1)) % (n - 1);
             if (idx >= pool.LastIndex) ++idx;
@@ -177,7 +179,7 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     if (m_Routing) rt = m_Routing(set.Key);
     v.ReverbSend = set.ReverbSend >= 0.0f ? set.ReverbSend : rt.Send;
     const bool occ = v.Spatial && m_Occ.Enabled && !set.Loop && (set.Occlusion < 0 ? rt.Occlusion : set.Occlusion > 0);
-    v.Occlusion = occ || (v.Spatial && m_Occ.AirEnabled); // the low-pass carries the air absorption too
+    v.Occlusion = occ || (v.Spatial && m_Occ.AirEnabled) || req.ManualFilter; // the low-pass carries the air absorption too
     float occAmount = 0.0f;
     VoicePath vp;
     if (occ && m_Path) {
@@ -209,7 +211,7 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
         }
         m_Ducker->Key(db);
     }
-    if (out.Started && v.Occlusion) {
+    if (out.Started && v.Occlusion && !req.ManualFilter) {
         Tracked t;
         t.Handle = out.Handle;
         t.Pos = req.Position;

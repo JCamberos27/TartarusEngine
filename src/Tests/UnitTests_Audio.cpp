@@ -1,5 +1,6 @@
 #include "UnitTestSupport.h"
 
+#include "../Game/Audio/AmbienceBed.h"
 #include "../Game/Audio/FoleyAudio.h"
 #include "../Game/Audio/EnvironmentProbe.h"
 #include "../Game/Audio/ImpactAudio.h"
@@ -669,6 +670,69 @@ void TestFoleyFootstepCadence() {
         CHECK(rebound.Update(ground,dt,ft.FootLiftMoving,ft.FootContactHeight)==1);
     }
     WeaponAudio::Get().Stop();
+}
+
+void TestAmbienceBed() {
+    // Speakers at fixed compass points round the listener: north +Z, east +X, south, west.
+    CHECK(AmbienceBed::SpeakerOffset(0, 15.0f, 2.0f) == glm::vec3(0.0f, 2.0f, 15.0f));
+    CHECK(AmbienceBed::SpeakerOffset(1, 15.0f, 2.0f) == glm::vec3(15.0f, 2.0f, 0.0f));
+    CHECK(AmbienceBed::SpeakerOffset(2, 15.0f, 2.0f) == glm::vec3(0.0f, 2.0f, -15.0f));
+    CHECK(AmbienceBed::SpeakerOffset(3, 15.0f, 2.0f) == glm::vec3(-15.0f, 2.0f, 0.0f));
+    // Indoors: the share indoor zones claim; outdoor zones and no zone count nothing.
+    ReverbZoneVolume room, yard;
+    room.Shape = yard.Shape = 1;
+    room.Radius = 5.0f;
+    room.FadeDistance = 0.0f;
+    room.Class = SpaceClass::IndoorSmall;
+    room.Priority = 1;
+    yard.Radius = 50.0f;
+    yard.FadeDistance = 0.0f;
+    yard.Class = SpaceClass::OutdoorOpen;
+    ReverbZones zones;
+    zones.Set({yard, room});
+    CHECK(std::fabs(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(0.0f)), zones) - 1.0f) < 1e-4f);
+    CHECK(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(20.0f, 0.0f, 0.0f)), zones) == 0.0f);
+    CHECK(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(200.0f, 0.0f, 0.0f)), zones) == 0.0f);
+    AmbienceBedComponent c;
+    CHECK(std::fabs(AmbienceBed::IndoorGain(c, 0.0f) - 1.0f) < 1e-6f && std::fabs(AmbienceBed::IndoorGain(c, 1.0f) - std::pow(10.0f, -0.6f)) < 1e-5f);
+    CHECK(std::fabs(AmbienceBed::IndoorCutoff(c, 0.0f) - 20000.0f) < 1.0f && std::fabs(AmbienceBed::IndoorCutoff(c, 1.0f) - 900.0f) < 1.0f);
+    const float half = AmbienceBed::IndoorCutoff(c, 0.5f);
+    CHECK(std::fabs(half - std::sqrt(20000.0f * 900.0f)) < 1.0f); // log-interpolated
+
+    // Runtime: one variant per speaker, looping on the Ambient bus, filtered, following the listener; fading in; muffled indoors.
+    FakeBackend fb;
+    SoundPlayer player(&fb);
+    SoundSet set = MakeSet("snd.amb.test_bed", {"n.wav", "e.wav", "s.wav", "w.wav"}, 4);
+    set.Loop = true;
+    set.Bus = AudioEngine::Bus::Ambient;
+    c.FadeIn = 1.0f;
+    AmbienceBed bed;
+    bed.Start(c);
+    CHECK(bed.Active());
+    glm::vec3 l(10.0f, 0.0f, -3.0f);
+    bed.Update(0.5f, l, 0.0f, player, &set);
+    CHECK(fb.Live() == 4);
+    const char* order[4] = {"n.wav", "e.wav", "s.wav", "w.wav"};
+    for (int i = 0; i < 4; ++i) {
+        const FakeBackend::V& v = fb.Voices[(size_t)i];
+        CHECK(v.Voice.File == order[i] && v.Voice.Loop && v.Voice.Spatial && v.Voice.Occlusion && v.Voice.Bus == AudioEngine::Bus::Ambient);
+        CHECK(std::fabs(v.Volume - v.Voice.Volume * 0.5f) < 1e-5f); // half way through the fade-in
+    }
+    CHECK(fb.Positions.back().second == l + AmbienceBed::SpeakerOffset(3, c.Radius, c.Height));
+    l += glm::vec3(3.0f, 0.0f, 4.0f);
+    bed.Update(0.6f, l, 1.0f, player, &set);
+    CHECK(fb.Live() == 4 && fb.Voices.size() == 4); // the same voices, moved
+    CHECK(fb.Positions.back().second == l + AmbienceBed::SpeakerOffset(3, c.Radius, c.Height));
+    CHECK(std::fabs(fb.Occlusion.back().second - 900.0f) < 1.0f);
+    CHECK(std::fabs(fb.Voices[0].Volume - fb.Voices[0].Voice.Volume * std::pow(10.0f, -0.6f)) < 1e-5f); // faded in, indoors
+    bed.Stop(player);
+    CHECK(fb.Live() == 0 && !bed.Active());
+    // Off, or no sound: nothing plays.
+    AmbienceBedComponent off;
+    off.Enabled = false;
+    bed.Start(off);
+    bed.Update(0.1f, l, 0.0f, player, &set);
+    CHECK(fb.Voices.size() == 4);
 }
 
 void TestFoleyRules() {
@@ -3325,6 +3389,7 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AudioManifestGroupsVariants", TestAudioManifestGroupsVariants});
     tests.push_back({"FoleyFootstepCadence", TestFoleyFootstepCadence});
     tests.push_back({"FoleyRules", TestFoleyRules});
+    tests.push_back({"AmbienceBed", TestAmbienceBed});
     tests.push_back({"FoleyLandingAndJump", TestFoleyLandingAndJump});
     tests.push_back({"EnvironmentClassifier", TestEnvironmentClassifier});
     tests.push_back({"EnvironmentCrossfadeWeights", TestEnvironmentCrossfadeWeights});
