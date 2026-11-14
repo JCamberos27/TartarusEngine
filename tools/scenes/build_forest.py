@@ -1134,13 +1134,14 @@ def house(s, root, repo, H):
     """The abandoned house and its yard (forest_house.py), on the lot cleared for it."""
     notes = {'pruned from the lot': prune_lot(s, root)}
     s.data['maxPointShadows'] = max(s.data.get('maxPointShadows', 0), fh.POINT_SHADOWS)
+    s.data['maxSpotShadows'] = max(s.data.get('maxSpotShadows', 0), fh.SPOT_SHADOWS)
     here = os.path.dirname(os.path.abspath(__file__))
     pk, lay, broken, rng = fh.add_house(s, root, repo, os.path.join(here, 'forest_house_pack.json'), notes)
     litter = DEBRIS[17:18]    # dry leaves only indoors: nothing green, no branches or needle clumps
     fh.dress_inside(s, lay, pk, rng, broken, litter, notes)
     fh.grime(s, lay, pk, rng, notes)
     fh.lights(s, lay, pk, repo, notes)
-    fh.porch_light(s, lay, notes)
+    fh.porch_light(s, lay, notes, pk)
     fh.reflection_probes(s, root)
     notes['quiet shadows'] = fh.quiet_shadows(s, next(e['id'] for e in s.empties if e['name'] == 'Abandoned House'))
     fh.add_yard(s, root, repo, H, {'yard': FERN_SPECIES[0] + FERN_SPECIES[1] + GROUND_COVER[3:9] + WILD_GRASS + FLOWERS,

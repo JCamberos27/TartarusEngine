@@ -1253,7 +1253,7 @@ struct LightSwitchComponent {
     std::string Circuit;      // the circuit it works
     bool StartOn = false;     // the circuit's state when Play starts (the first switch on it found decides)
     std::string Rocker;       // a child's name that tips over when it flips (empty = none)
-    float RockerAngle = 14.0f; // degrees the rocker tips either way, about its local X
+    float RockerAngle = 14.0f; // degrees the rocker tips either way, about its local Z (across the plate)
     std::string OnSound;      // ';'-separated audio variants
     std::string OffSound;
 

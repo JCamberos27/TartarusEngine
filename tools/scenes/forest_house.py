@@ -20,7 +20,10 @@ import math
 import random
 import re
 
+import sys
+
 import house_fit as hf
+import house_lights
 import scene_kit as k
 
 PACK = 'assets/Environments/SuburbNeighborhoodHousePack/'
@@ -192,6 +195,7 @@ class Fit:
             hi = [ctr[i] + he[i] for i in range(3)]
             self.structure.append(hf.Box.of(pos, rot, self.wscale(e['id']), lo, hi, tag=e['name']))
         self.boxes = {i: self.prop_boxes(i) for i in self.props if i not in pk.gone}
+        self.floors = floor_rects(pk)
         self.zones = self.door_zones()
         self.clutter_zones = self.door_zones(wide=True)
         # pairs that already touch in the pack's own layout (a chair tucked under its table): left as they are
@@ -305,8 +309,11 @@ class Fit:
         return riders
 
     def clear(self, i, boxes, ignore=(), zones=True, margin=0.008, nested=True):
-        """Can prop `i` stand as `boxes`? Not into the walls, other furniture, or a doorway it wasn't already in. With
-        `nested`, a piece the pack had it tucked into (a chair under its table) may stay as deep, no deeper."""
+        """Can prop `i` stand as `boxes`? Not into the walls, other furniture, or a doorway it wasn't already in, and
+        all of it over the house's floors (a lamp knocked over by a wall can't fall through it). With `nested`, a piece
+        the pack had it tucked into (a chair under its table) may stay as deep, no deeper."""
+        if not self.over_floor(boxes):
+            return False
         for b in boxes:
             for s in self.structure:
                 if hf.overlap(b, s, margin):
@@ -344,6 +351,16 @@ class Fit:
                     return False
             if any(hf.overlap(b, o, margin) for o in others):
                 return False
+        return True
+
+    def over_floor(self, boxes):
+        """Every corner of `boxes` over a floor tile of the storey they stand on."""
+        for b in boxes:
+            y = b.ylo()
+            for x, z in b.xz():
+                if not any(r[0] - 0.05 <= x <= r[1] + 0.05 and r[2] - 0.05 <= z <= r[3] + 0.05 and abs(r[4] - y) < 1.2
+                           for r in self.floors):
+                    return False
         return True
 
     def near_corner(self, x, z, y, d):
@@ -496,11 +513,10 @@ def trash_house(pk, rng, notes):
         n_open += o.get('Start Open', False)
     notes['doors left open'] = n_open
 
-    # The power's off: every fitting dark (lights() relights the ones still burning), screens dead.
+    # The screens are dead; the fittings keep their lit materials - their circuits (house_lights.py) take the glow
+    # out while they're switched off.
     for e in pk.ents:
-        if e['kind'] == 'models' and stem(e).startswith(LAMPS_OFF):
-            e['materials'] = [dict(OFF)]
-        elif e['kind'] == 'models' and stem(e).startswith('D_'):
+        if e['kind'] == 'models' and stem(e).startswith('D_'):
             e['materials'] = [{'embedded': dict(DEAD_SCREEN)}]
 
     # No basement under this house: its pipes go.
@@ -1008,13 +1024,23 @@ def grime(s, lay, pk, rng, notes):
     notes['decals'] = n
 
 
-RED_I, PORCH_I = 4.5, 4.0
-POINT_SHADOWS = 2     # the red bulb's and the porch bulb's cube shadows
+RED_I, PORCH_I = 4.5, 3.2
+# Shadow slots the engine hands to the shadow-capable lights nearest the player each frame. They are cached (a face
+# redraws only when something moving is in it), so a still room costs next to nothing once it has drawn.
+POINT_SHADOWS = 4
+SPOT_SHADOWS = 6
 
 
 def lights(s, lay, pk, repo, notes):
-    """What still lights the house. Indoor lights scatter nothing into the fog (no fog indoors)."""
-    g = s.empty('House Lights', lay, (0, 0, 0), static=True)
+    """What lights the house: every fitting and lamp on its circuit, with switches (house_lights.py), and the candles
+    left burning in the living room (no switch). Indoor lights scatter nothing into the fog (no fog indoors)."""
+    # The master bedroom, upstairs at the front: its ceiling fitting holds a bare red bulb.
+    red = next(e for e in pk.named(r'Lamp_bedroom$'))
+    red['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
+                                                emissiveColor=[1.0, 0.06, 0.03], emissiveStrength=6.0)}]
+    red['castShadows'] = 0      # the bulb hangs in it: its own shade would print a dark disc on the ceiling round it
+    pk.wiring = house_lights.wire(s, lay, pk, repo, sys.modules[__name__], notes)
+    g = pk.wiring.g
 
     def lamp(name, pos, **kw):
         i = s.light(name, g, pos, **kw)
@@ -1022,32 +1048,7 @@ def lights(s, lay, pk, repo, notes):
         e['Light']['Volumetric Intensity'] = 0.0
         return i, e
 
-    # Every light here comes out of something you can see: a fitting, a tube, candles. Nothing fills the dark rooms;
-    # the sun or the moon through the windows does that.
-    # The master bedroom, upstairs at the front: one bare red bulb in the ceiling fitting lighting the whole room,
-    # ceiling included, with cube shadows (the bed's, through the window onto the yard), the bulb stuttering now and
-    # then.
-    fit = next(e for e in pk.named(r'Lamp_bedroom$'))
-    fit['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
-                                                emissiveColor=[1.0, 0.06, 0.03], emissiveStrength=6.0)}]
-    fit['castShadows'] = 0      # the bulb hangs in it: its own shade would print a dark disc on the ceiling round it
-    fx, fy, fz = pk.world(fit['id'])[0]
-    _, e = lamp('Red Bulb', (fx, fy - 0.25, fz), intensity=RED_I, rng=7.0, color=RED, shadows=True, softness=1.4)
-    e.update(k.light_flicker(Mode=0, MinInterval=7.0, MaxInterval=20.0, Depth=0.85, Seed=31))
-
-    # The kitchen's fluorescent tube, dying.
-    tube = next(e for e in pk.named(r'Lamp_wall_fluorescent$') if pk.world(e['id'])[0][1] > 1.0)
-    tube.pop('materials', None)         # its own, lit material
-    (tx, ty, tz), trot = pk.world(tube['id'])
-    tb = pk.fit.B.get(tube.get('path', ''))
-    if tb:      # the tube's own middle, a hand off the wall it hangs on
-        box = hf.Box.of((tx, ty, tz), trot, (1, 1, 1), tb[0], tb[1])
-        tx, ty, tz = box.c
-    _, e = lamp('Kitchen Tube', (tx, ty - 0.05, tz), intensity=3.2, rng=6.0, color=(0.82, 0.93, 1.0))
-    e.update(k.light_flicker(Mode=0, MinInterval=1.5, MaxInterval=6.0, Depth=1.0, Seed=7))
-
-    # Candles burned down on the living room floor, by the couch: someone's been here.
-    # In front of the couch, clear of everything; the glow sits on the flames.
+    # Candles burned down on the living room floor, in front of the couch: someone's been here.
     couch = next(e for e in pk.props() if e['name'].startswith('Couch_3seat'))
     cb = pk.fit.boxes[couch['id']][0]
     front = qrot(pk.world(couch['id'])[1], (0, 0, 1))
@@ -1059,7 +1060,6 @@ def lights(s, lay, pk, repo, notes):
         for name, ox, oz, yaw in (('LP_candle_triple', 0.0, 0.0, 30.0), ('LP_candle_single', 0.22, 0.12, 0.0),
                                   ('LP_candle_small', -0.18, 0.16, 0.0)):
             lay_down(s, pk.fit, g, PROPS_IN + name + '.prefab', bx + ox, bz + oz, FLOOR_1, yaw, (0.0, 0.0), 1.0, lit)
-    n = 0
     if lit:
         mx = sum(b.c[0] for b in lit) / len(lit)
         mz = sum(b.c[2] for b in lit) / len(lit)
@@ -1067,24 +1067,34 @@ def lights(s, lay, pk, repo, notes):
         _, e = lamp('Candle Glow', (round(mx, 3), round(top + 0.04, 3), round(mz, 3)), intensity=1.5, rng=5.0,
                     color=(1.0, 0.55, 0.22))
         e.update(k.light_flicker(Mode=2, MinInterval=0.1, MaxInterval=0.4, Depth=0.25, Seed=11))
-        n = 1
-    notes['house lights'] = 2 + n
 
 
-def porch_light(s, lay, notes):
-    """The lamp by the front door, its bulb on its way out (the other one is dead)."""
+def porch_light(s, lay, notes, pk=None):
+    """The two lamps either side of the front door, on the porch circuit, with its switch inside by the door; the
+    left bulb is on its way out (it stutters). On from the start, as the house has always been seen."""
     g = s.empty('Porch Light', lay, (0, 0, 0), static=True)
     for z in (-1.018, 2.891):       # where the pack's demo street had them, either side of the door
         r = s.stamp(PROPS_OUT + 'Lamp_wall_original.prefab', g, (-31.04, 2.316, z), yaw=-90.0)
-        if z > 0:
-            for m in s.models:
-                if m['parentId'] == r:
-                    m['materials'] = [dict(OFF_OUT)]
-    s.light('Porch Bulb', g, (-30.75, 2.45, -1.018), intensity=PORCH_I, rng=8.0, kelvin=2300.0, shadows=True)
-    e = s.empties[-1]
-    e['Light']['Volumetric Intensity'] = 1.0        # outdoors: its glow in the night air
-    e.update(k.light_flicker(Mode=0, MinInterval=2.5, MaxInterval=9.0, Depth=1.0, Seed=5))
-    notes['porch light'] = 1
+        for m in s.models:
+            if m['parentId'] == r:
+                m['Light Circuit'] = {'Circuit': 'Porch', 'Glow': 1.6}
+                m['static'] = False
+        s.light(f'Porch Bulb {"L" if z < 0 else "R"}', g, (-30.75, 2.45, z), intensity=PORCH_I, rng=8.0,
+                kelvin=2300.0, shadows=z < 0)
+        e = s.empties[-1]
+        e['Light']['Volumetric Intensity'] = 1.0        # outdoors: its glow in the night air
+        e['Light Circuit'] = {'Circuit': 'Porch', 'Glow': 0.0}
+        if z < 0:
+            e.update(k.light_flicker(Mode=0, MinInterval=2.5, MaxInterval=9.0, Depth=1.0, Seed=5))
+    w = getattr(pk, 'wiring', None) if pk else None
+    if w:
+        door = next(e for e in pk.ents if e.get('Openable') and pk.by[e['parentId']]['name'].startswith('Door_exterior_paneled'))
+        dp, _ = pk.world(door['id'])
+        cells = next((c for c in house_lights.rooms(pk.fit, floor_rects(pk), FLOOR_1)
+                      if any(abs(x - (dp[0] - 0.6)) < 0.3 and abs(z_ - dp[2]) < 0.6 for x, z_ in c)), None)
+        if cells:
+            w.place_switch('Porch', (dp[0] - 0.4, dp[2]), FLOOR_1, True, cells)
+    notes['porch lights'] = 2
 
 
 # Small and flat things that cast no shadow worth its cost (the Forest's shadow pass): the rubbish, the books, the blown-in
@@ -1137,6 +1147,7 @@ def add_house(s, root, repo, pack_path, notes):
         c['id'] = c['order'] = remap[e['id']]
         c['parentId'] = remap.get(e['parentId'], lay)
         getattr(s, kind).append(c)
+    pk.remap = remap
     return pk, lay, broken, rng
 
 

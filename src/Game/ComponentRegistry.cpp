@@ -409,7 +409,7 @@ void RegisterEngineComponents() {
             { "Rocker", T::String, TARTARUS_REFLECT_FIELD(LightSwitchComponent, Rocker), 0.0f,
               "A child's name that tips over when the switch flips (empty = none)." },
             { "Rocker Angle", T::Float, TARTARUS_REFLECT_FIELD(LightSwitchComponent, RockerAngle), 0.5f,
-              "Degrees the rocker tips either way, about its local X.", 0.0f, 45.0f },
+              "Degrees the rocker tips either way, about its local Z (across the plate).", 0.0f, 45.0f },
             { "On Sound", T::String, TARTARUS_REFLECT_FIELD(LightSwitchComponent, OnSound), 0.0f,
               "Audio assets played when it turns on; ';'-separated variants." },
             { "Off Sound", T::String, TARTARUS_REFLECT_FIELD(LightSwitchComponent, OffSound), 0.0f,

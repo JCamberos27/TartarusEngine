@@ -3,6 +3,7 @@
 #include "MaterialAsset.h"
 #include "Model.h"
 #include "Openable.h"
+#include "ReflectionProbeCapture.h"
 #include "World.h"
 
 #include <glm/gtc/quaternion.hpp>
@@ -70,7 +71,7 @@ void PoseRocker(World& world, LightSwitchComponent& s) {
     if (s.RockerEntity == entt::null || !world.Registry.valid(s.RockerEntity)) return;
     auto* t = world.Registry.try_get<TransformComponent>(s.RockerEntity);
     if (!t) return;
-    t->Rotation = s.RockerBase * glm::angleAxis(glm::radians(s.On ? -s.RockerAngle : s.RockerAngle), glm::vec3(1, 0, 0));
+    t->Rotation = s.RockerBase * glm::angleAxis(glm::radians(s.On ? -s.RockerAngle : s.RockerAngle), glm::vec3(0, 0, 1));
 }
 
 // Starts whatever hasn't started; a circuit's first-found switch decides the state it starts in.
@@ -183,6 +184,8 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
     const std::string circuit = s.Circuit, sound = on ? s.OnSound : s.OffSound;
     Set(world, circuit, on);
     Openable::PlaySound(sound, glm::vec3(world.GetCachedWorldTransform(e)[3]));
+    // The rooms' reflections were captured with the old lighting: retake them (spread over a few frames, ~6 a probe).
+    ReflectionProbeCapture::RequestRecapture();
 }
 
 void SetAll(World& world, bool on) {
