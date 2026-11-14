@@ -431,7 +431,9 @@ void WeaponAudio::Update(float dt) {
             s.PitchMin = s.PitchMax = 1.0f;
             s.VolumeJitterDb = 0.0f;
         });
-        m_Bed.Update(dt, m_Listener, AmbienceBed::IndoorShare(m_Reverb.ListenerMix(), m_Zones), m_Player, bed);
+        const float indoor = AmbienceBed::IndoorShare(m_Reverb.ListenerMix(), m_Zones) *
+                             (1.0f - AmbienceBed::DoorRelief(m_Zones, m_Listener, m_Bed.Settings().DoorReach));
+        m_Bed.Update(dt, m_Listener, indoor, m_Player, bed);
     }
 }
 

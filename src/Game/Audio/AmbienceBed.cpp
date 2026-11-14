@@ -24,6 +24,21 @@ float AmbienceBed::IndoorShare(const ReverbZoneMix& mix, const ReverbZones& zone
     return std::clamp(share, 0.0f, 1.0f);
 }
 
+float AmbienceBed::DoorRelief(const ReverbZones& zones, const glm::vec3& listener, float reach) {
+    if (reach <= 0.0f) return 0.0f;
+    const auto outside = [&](unsigned room) {
+        const ReverbZoneVolume* z = zones.ZoneOfRoom(room);
+        return !z || z->Class == SpaceClass::OutdoorOpen || z->Class == SpaceClass::OutdoorUrban;
+    };
+    float best = 0.0f;
+    for (const ReverbPortalVolume& p : zones.Portals()) {
+        if (p.Open <= 0.0f || outside(p.RoomA) == outside(p.RoomB)) continue; // only a way between indoors and out
+        const float near = 1.0f - glm::length(listener - p.Center) / reach;
+        if (near > 0.0f) best = std::max(best, std::clamp(p.Open, 0.0f, 1.0f) * near);
+    }
+    return best;
+}
+
 float AmbienceBed::IndoorGain(const AmbienceBedComponent& c, float share) {
     return std::pow(10.0f, std::clamp(share, 0.0f, 1.0f) * std::min(c.IndoorGainDb, 0.0f) / 20.0f);
 }
@@ -38,6 +53,7 @@ void AmbienceBed::Start(const AmbienceBedComponent& c) {
     m_On = c.Enabled && !c.Sound.empty();
     m_Level = c.FadeIn > 0.0f ? 0.0f : 1.0f;
     m_SentCutoff = 20000.0f;
+    m_Indoor = -1.0f;
     for (int i = 0; i < kSpeakers; ++i) {
         m_Handle[i] = AudioEngine::InvalidHandle;
         m_Base[i] = 0.0f;
@@ -49,8 +65,15 @@ void AmbienceBed::Update(float dt, const glm::vec3& listener, float indoorShare,
     set->Distance = DistanceModel{}; // the speakers keep one distance: the manifest's distance model must not roll them off
     SoundBackend& be = player.Backend();
     m_Level = m_C.FadeIn > 0.0f ? std::min(1.0f, m_Level + std::max(dt, 0.0f) / m_C.FadeIn) : 1.0f;
-    const float gain = m_Level * IndoorGain(m_C, indoorShare);
-    const float cutoff = IndoorCutoff(m_C, indoorShare);
+    const float target = std::clamp(indoorShare, 0.0f, 1.0f);
+    if (m_Indoor < 0.0f || m_C.Glide <= 0.0f) {
+        m_Indoor = target;
+    } else {
+        const float step = std::max(dt, 0.0f) / m_C.Glide;
+        m_Indoor += std::clamp(target - m_Indoor, -step, step);
+    }
+    const float gain = m_Level * IndoorGain(m_C, m_Indoor);
+    const float cutoff = IndoorCutoff(m_C, m_Indoor);
     const bool sendCut = std::fabs(std::log(cutoff / m_SentCutoff)) > 0.02f || (cutoff >= 19999.0f) != (m_SentCutoff >= 19999.0f);
     for (int i = 0; i < kSpeakers; ++i) {
         const glm::vec3 pos = listener + SpeakerOffset(i, m_C.Radius, m_C.Height);

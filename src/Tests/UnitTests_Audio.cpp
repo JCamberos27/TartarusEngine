@@ -675,69 +675,6 @@ void TestFoleyFootstepCadence() {
     WeaponAudio::Get().Stop();
 }
 
-void TestAmbienceBed() {
-    // Speakers at fixed compass points round the listener: north +Z, east +X, south, west.
-    CHECK(AmbienceBed::SpeakerOffset(0, 15.0f, 2.0f) == glm::vec3(0.0f, 2.0f, 15.0f));
-    CHECK(AmbienceBed::SpeakerOffset(1, 15.0f, 2.0f) == glm::vec3(15.0f, 2.0f, 0.0f));
-    CHECK(AmbienceBed::SpeakerOffset(2, 15.0f, 2.0f) == glm::vec3(0.0f, 2.0f, -15.0f));
-    CHECK(AmbienceBed::SpeakerOffset(3, 15.0f, 2.0f) == glm::vec3(-15.0f, 2.0f, 0.0f));
-    // Indoors: the share indoor zones claim; outdoor zones and no zone count nothing.
-    ReverbZoneVolume room, yard;
-    room.Shape = yard.Shape = 1;
-    room.Radius = 5.0f;
-    room.FadeDistance = 0.0f;
-    room.Class = SpaceClass::IndoorSmall;
-    room.Priority = 1;
-    yard.Radius = 50.0f;
-    yard.FadeDistance = 0.0f;
-    yard.Class = SpaceClass::OutdoorOpen;
-    ReverbZones zones;
-    zones.Set({yard, room});
-    CHECK(std::fabs(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(0.0f)), zones) - 1.0f) < 1e-4f);
-    CHECK(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(20.0f, 0.0f, 0.0f)), zones) == 0.0f);
-    CHECK(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(200.0f, 0.0f, 0.0f)), zones) == 0.0f);
-    AmbienceBedComponent c;
-    CHECK(std::fabs(AmbienceBed::IndoorGain(c, 0.0f) - 1.0f) < 1e-6f && std::fabs(AmbienceBed::IndoorGain(c, 1.0f) - std::pow(10.0f, -0.6f)) < 1e-5f);
-    CHECK(std::fabs(AmbienceBed::IndoorCutoff(c, 0.0f) - 20000.0f) < 1.0f && std::fabs(AmbienceBed::IndoorCutoff(c, 1.0f) - 900.0f) < 1.0f);
-    const float half = AmbienceBed::IndoorCutoff(c, 0.5f);
-    CHECK(std::fabs(half - std::sqrt(20000.0f * 900.0f)) < 1.0f); // log-interpolated
-
-    // Runtime: one variant per speaker, looping on the Ambient bus, filtered, following the listener; fading in; muffled indoors.
-    FakeBackend fb;
-    SoundPlayer player(&fb);
-    SoundSet set = MakeSet("snd.amb.test_bed", {"n.wav", "e.wav", "s.wav", "w.wav"}, 4);
-    set.Loop = true;
-    set.Bus = AudioEngine::Bus::Ambient;
-    c.FadeIn = 1.0f;
-    AmbienceBed bed;
-    bed.Start(c);
-    CHECK(bed.Active());
-    glm::vec3 l(10.0f, 0.0f, -3.0f);
-    bed.Update(0.5f, l, 0.0f, player, &set);
-    CHECK(fb.Live() == 4);
-    const char* order[4] = {"n.wav", "e.wav", "s.wav", "w.wav"};
-    for (int i = 0; i < 4; ++i) {
-        const FakeBackend::V& v = fb.Voices[(size_t)i];
-        CHECK(v.Voice.File == order[i] && v.Voice.Loop && v.Voice.Spatial && v.Voice.Occlusion && v.Voice.Bus == AudioEngine::Bus::Ambient);
-        CHECK(std::fabs(v.Volume - v.Voice.Volume * 0.5f) < 1e-5f); // half way through the fade-in
-    }
-    CHECK(fb.Positions.back().second == l + AmbienceBed::SpeakerOffset(3, c.Radius, c.Height));
-    l += glm::vec3(3.0f, 0.0f, 4.0f);
-    bed.Update(0.6f, l, 1.0f, player, &set);
-    CHECK(fb.Live() == 4 && fb.Voices.size() == 4); // the same voices, moved
-    CHECK(fb.Positions.back().second == l + AmbienceBed::SpeakerOffset(3, c.Radius, c.Height));
-    CHECK(std::fabs(fb.Occlusion.back().second - 900.0f) < 1.0f);
-    CHECK(std::fabs(fb.Voices[0].Volume - fb.Voices[0].Voice.Volume * std::pow(10.0f, -0.6f)) < 1e-5f); // faded in, indoors
-    bed.Stop(player);
-    CHECK(fb.Live() == 0 && !bed.Active());
-    // Off, or no sound: nothing plays.
-    AmbienceBedComponent off;
-    off.Enabled = false;
-    bed.Start(off);
-    bed.Update(0.1f, l, 0.0f, player, &set);
-    CHECK(fb.Voices.size() == 4);
-}
-
 void TestForestSceneAudio() {
     // The Forest's Audio group as saved (project/scenes/Forest.json), loaded on its own: the surface table the Foley rules test
     // checks, the night bed, the outdoor and house zones, and the two exterior doors' portals following their doors.
@@ -765,7 +702,8 @@ void TestForestSceneAudio() {
     }
     for (const entt::entity e : world.Registry.view<AmbienceBedComponent>()) {
         const AmbienceBedComponent& b = world.Registry.get<AmbienceBedComponent>(e);
-        CHECK(b.Enabled && b.Sound == "snd.amb.night_field" && b.Radius == 15.0f && b.IndoorGainDb == -12.0f && b.IndoorCutoffHz == 900.0f);
+        CHECK(b.Enabled && b.Sound == "snd.amb.night_field" && b.Radius == 15.0f && b.IndoorGainDb == -10.0f && b.IndoorCutoffHz == 4000.0f &&
+              b.Glide == 1.5f && b.DoorReach == 4.0f);
         ++beds;
     }
     for (const entt::entity e : world.Registry.view<ReverbZoneComponent>()) {
@@ -1809,6 +1747,100 @@ entt::entity MakePortal(World& world, const glm::vec3& at, float yawDeg, float o
     p.Extents = glm::vec3(1.0f, 1.2f, 0.1f);
     p.OpenAmount = open;
     return e;
+}
+
+void TestAmbienceBed() {
+    // Speakers at fixed compass points round the listener: north +Z, east +X, south, west.
+    CHECK(AmbienceBed::SpeakerOffset(0, 15.0f, 2.0f) == glm::vec3(0.0f, 2.0f, 15.0f));
+    CHECK(AmbienceBed::SpeakerOffset(1, 15.0f, 2.0f) == glm::vec3(15.0f, 2.0f, 0.0f));
+    CHECK(AmbienceBed::SpeakerOffset(2, 15.0f, 2.0f) == glm::vec3(0.0f, 2.0f, -15.0f));
+    CHECK(AmbienceBed::SpeakerOffset(3, 15.0f, 2.0f) == glm::vec3(-15.0f, 2.0f, 0.0f));
+    // Indoors: the share indoor zones claim; outdoor zones and no zone count nothing.
+    ReverbZoneVolume room, yard;
+    room.Shape = yard.Shape = 1;
+    room.Radius = 5.0f;
+    room.FadeDistance = 0.0f;
+    room.Class = SpaceClass::IndoorSmall;
+    room.Priority = 1;
+    yard.Radius = 50.0f;
+    yard.FadeDistance = 0.0f;
+    yard.Class = SpaceClass::OutdoorOpen;
+    ReverbZones zones;
+    zones.Set({yard, room});
+    CHECK(std::fabs(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(0.0f)), zones) - 1.0f) < 1e-4f);
+    CHECK(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(20.0f, 0.0f, 0.0f)), zones) == 0.0f);
+    CHECK(AmbienceBed::IndoorShare(zones.Mix(glm::vec3(200.0f, 0.0f, 0.0f)), zones) == 0.0f);
+    AmbienceBedComponent c;
+    CHECK(std::fabs(AmbienceBed::IndoorGain(c, 0.0f) - 1.0f) < 1e-6f && std::fabs(AmbienceBed::IndoorGain(c, 1.0f) - std::pow(10.0f, -0.5f)) < 1e-5f);
+    CHECK(std::fabs(AmbienceBed::IndoorCutoff(c, 0.0f) - 20000.0f) < 1.0f && std::fabs(AmbienceBed::IndoorCutoff(c, 1.0f) - 4000.0f) < 1.0f);
+    const float half = AmbienceBed::IndoorCutoff(c, 0.5f);
+    CHECK(std::fabs(half - std::sqrt(20000.0f * 4000.0f)) < 1.0f); // log-interpolated
+    // The crickets must survive indoors: the default cutoff stays above the bed's band (2.5 kHz and up).
+    CHECK(c.IndoorCutoffHz >= 2500.0f && c.IndoorGainDb > -20.0f);
+
+    // Runtime: one variant per speaker, looping on the Ambient bus, filtered, following the listener; fading in; muffled indoors.
+    FakeBackend fb;
+    SoundPlayer player(&fb);
+    SoundSet set = MakeSet("snd.amb.test_bed", {"n.wav", "e.wav", "s.wav", "w.wav"}, 4);
+    set.Loop = true;
+    set.Bus = AudioEngine::Bus::Ambient;
+    c.FadeIn = 1.0f;
+    c.Glide = 0.0f; // (the glide has its own checks below)
+    AmbienceBed bed;
+    bed.Start(c);
+    CHECK(bed.Active());
+    glm::vec3 l(10.0f, 0.0f, -3.0f);
+    bed.Update(0.5f, l, 0.0f, player, &set);
+    CHECK(fb.Live() == 4);
+    const char* order[4] = {"n.wav", "e.wav", "s.wav", "w.wav"};
+    for (int i = 0; i < 4; ++i) {
+        const FakeBackend::V& v = fb.Voices[(size_t)i];
+        CHECK(v.Voice.File == order[i] && v.Voice.Loop && v.Voice.Spatial && v.Voice.Occlusion && v.Voice.Bus == AudioEngine::Bus::Ambient);
+        CHECK(std::fabs(v.Volume - v.Voice.Volume * 0.5f) < 1e-5f); // half way through the fade-in
+    }
+    CHECK(fb.Positions.back().second == l + AmbienceBed::SpeakerOffset(3, c.Radius, c.Height));
+    l += glm::vec3(3.0f, 0.0f, 4.0f);
+    bed.Update(0.6f, l, 1.0f, player, &set);
+    CHECK(fb.Live() == 4 && fb.Voices.size() == 4); // the same voices, moved
+    CHECK(fb.Positions.back().second == l + AmbienceBed::SpeakerOffset(3, c.Radius, c.Height));
+    CHECK(std::fabs(fb.Occlusion.back().second - 4000.0f) < 1.0f);
+    CHECK(std::fabs(fb.Voices[0].Volume - fb.Voices[0].Voice.Volume * std::pow(10.0f, -0.5f)) < 1e-5f); // faded in, indoors
+    bed.Stop(player);
+    CHECK(fb.Live() == 0 && !bed.Active());
+    // Glide: the first frame takes the target, then the indoor amount moves at most dt / Glide a frame - no snap at a doorway.
+    c.Glide = 1.5f;
+    bed.Start(c);
+    bed.Update(0.1f, l, 0.0f, player, &set);
+    CHECK(bed.Indoor() == 0.0f);
+    bed.Update(0.3f, l, 1.0f, player, &set);
+    CHECK(std::fabs(bed.Indoor() - 0.2f) < 1e-5f);
+    for (int i = 0; i < 20; ++i) bed.Update(0.1f, l, 1.0f, player, &set);
+    CHECK(bed.Indoor() == 1.0f);
+    bed.Update(0.75f, l, 0.0f, player, &set);
+    CHECK(std::fabs(bed.Indoor() - 0.5f) < 1e-5f);
+    bed.Stop(player);
+    // Door relief: an open portal between an indoor zone and the outside opens the bed by its open amount and nearness.
+    {
+        World world;
+        MakeZone(world, glm::vec3(0.0f, 0.0f, 6.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.0f), "House");
+        const entt::entity door = MakePortal(world, glm::vec3(0.0f, 0.0f, 0.5f), 0.0f, 1.0f); // in the house's wall at z = 1
+        ReverbZones z2;
+        z2.Build(world);
+        CHECK(z2.Portals().size() == 1);
+        CHECK(std::fabs(AmbienceBed::DoorRelief(z2, glm::vec3(0.0f, 0.0f, 2.5f), 4.0f) - 0.5f) < 1e-4f); // 2 m in: half open
+        CHECK(AmbienceBed::DoorRelief(z2, glm::vec3(0.0f, 0.0f, 9.0f), 4.0f) == 0.0f);                   // deep inside
+        CHECK(AmbienceBed::DoorRelief(z2, glm::vec3(0.0f, 0.0f, 2.5f), 0.0f) == 0.0f);                   // off
+        world.Registry.get<ReverbPortalComponent>(door).OpenAmount = 0.0f;
+        z2.Refresh(world);
+        CHECK(AmbienceBed::DoorRelief(z2, glm::vec3(0.0f, 0.0f, 2.5f), 4.0f) == 0.0f);                   // shut
+    }
+    // Off, or no sound: nothing plays.
+    AmbienceBedComponent off;
+    off.Enabled = false;
+    const size_t started = fb.Voices.size();
+    bed.Start(off);
+    bed.Update(0.1f, l, 0.0f, player, &set);
+    CHECK(fb.Voices.size() == started);
 }
 
 void TestPortalFollowsItsDoor() {

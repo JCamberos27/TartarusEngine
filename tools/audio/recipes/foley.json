@@ -321,6 +321,15 @@
   "surfaces": [
    "Grass",
    "Gravel"
-  ]
+  ],
+  "thud": {
+   "_doc": "Grass alone is a soft rustle with no heel: under each grass step the onset of an Ocular Boots carpet step (a dull, padded footfall), low-passed at lp_hz, its peak gain_db under the step's: the 150-1500 Hz body the grass takes lack. The grass itself is high-passed at step_hp_hz (its takes carry sub-50 Hz handling rumble).",
+   "surfaces": ["Grass"],
+   "src": "Carpet",
+   "lp_hz": 1200,
+   "hp_hz": 120,
+   "gain_db": 0.0,
+   "step_hp_hz": 80
+  }
  }
 }
