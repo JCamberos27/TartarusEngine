@@ -86,9 +86,11 @@ public:
 private:
     void Rebuild();
     void WriteUbo();
+    void Remix();   // each volume's brick = its layers x this frame's weights, re-uploaded when its weights change
 
     std::vector<Volume> m_Volumes;
-    std::vector<glm::ivec3> m_BrickOrigin; // per volume x layer, flattened in m_Volumes order
+    std::vector<glm::ivec3> m_BrickOrigin; // per volume
+    std::vector<std::vector<float>> m_Mixed; // the weights each volume's brick was last mixed with
     std::string m_AtlasKey;
     unsigned int m_Atlas = 0;
     unsigned int m_Ubo = 0;
