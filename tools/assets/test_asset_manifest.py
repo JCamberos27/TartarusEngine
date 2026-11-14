@@ -2,6 +2,8 @@ import contextlib
 import csv
 import hashlib
 import io
+import shutil
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -66,6 +68,67 @@ class AssetVerifyTests(unittest.TestCase):
             self._folder(repo, extra_git=True)
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(asset_manifest.verify(str(repo), True), 0)
+
+
+POWERSHELL = shutil.which('powershell') or shutil.which('pwsh')
+
+
+@unittest.skipUnless(POWERSHELL, 'fetch-assets.ps1 needs PowerShell')
+class FetchAssetsTests(unittest.TestCase):
+    """fetch-assets.ps1 updates same-size files whose sha256 changed, but only from a Drive copy that matches the CSV."""
+
+    def _run(self, repo, *args):
+        out = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                              str(repo / 'tools/assets/fetch-assets.ps1'), *args],
+                             capture_output=True, text=True, timeout=120)
+        return out.returncode, out.stdout + out.stderr
+
+    def test_same_size_rehash_updates_only_from_matching_drive_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, drive = root / 'repo', root / 'Tartarus Assets'
+            (repo / 'tools/assets').mkdir(parents=True)
+            (repo / '.git').mkdir()
+            shutil.copy(Path(__file__).with_name('fetch-assets.ps1'), repo / 'tools/assets/fetch-assets.ps1')
+            files = {  # name: (CSV content, checkout content or None, Drive content)
+                'added.wav': (b'AAAA', None, b'AAAA'),
+                'recooked.wav': (b'NEW!', b'OLD!', b'NEW!'),
+                'drive_stale.wav': (b'NEW!', b'OLD!', b'OLD!'),
+                'current.wav': (b'SAME', b'SAME', b'SAME'),
+            }
+            (repo / 'project/assets/Audio').mkdir(parents=True)
+            (drive / 'Used/project/assets/Audio').mkdir(parents=True)
+            with (repo / 'project/external_assets.csv').open('w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['path', 'size', 'sha256'])
+                for name, (want, have, on_drive) in files.items():
+                    writer.writerow(['assets/Audio/' + name, len(want), hashlib.sha256(want).hexdigest()])
+                    if have is not None:
+                        (repo / 'project/assets/Audio' / name).write_bytes(have)
+                    (drive / 'Used/project/assets/Audio' / name).write_bytes(on_drive)
+
+            code, out = self._run(repo, '-Source', str(drive))
+            self.assertEqual(code, 1, out)  # drive_stale.wav is still wrong
+            self.assertIn('1 copied (missing), 1 updated (different size or sha256), 1 already current', out)
+            self.assertIn("not copied (Drive copy doesn't match the CSV)  assets/Audio/drive_stale.wav", out)
+            self.assertIn('changed    assets/Audio/drive_stale.wav', out)
+            audio = repo / 'project/assets/Audio'
+            self.assertEqual((audio / 'added.wav').read_bytes(), b'AAAA')
+            self.assertEqual((audio / 'recooked.wav').read_bytes(), b'NEW!')
+            self.assertEqual((audio / 'drive_stale.wav').read_bytes(), b'OLD!')
+            self.assertEqual(list(audio.glob('*.fetchpart')), [])
+
+            # Hashes are cached in .git: a second check hashes nothing, and -SizeOnly ignores content.
+            code, out = self._run(repo, '-VerifyOnly')
+            self.assertEqual(code, 1, out)
+            self.assertIn('1 the same size but a different sha256 (0 hashed, the rest cached)', out)
+            (audio / 'drive_stale.wav').write_bytes(b'NEW!')  # new mtime and content: rehashed
+            code, out = self._run(repo, '-VerifyOnly')
+            self.assertEqual(code, 0, out)
+            self.assertIn('(1 hashed, the rest cached)', out)
+            (audio / 'current.wav').write_bytes(b'XXXX')
+            code, out = self._run(repo, '-VerifyOnly', '-SizeOnly')
+            self.assertEqual(code, 0, out)
 
 
 if __name__ == '__main__':
