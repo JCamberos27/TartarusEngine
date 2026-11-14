@@ -59,7 +59,9 @@ def main():
         memo[i] = res
         return res
     # one model per fitting: the topmost glowing piece under each circuit's fitting
-    lit = [e for e in d['models'] if e.get('Light Circuit', {}).get('Glow', 0) > 0]
+    # (a lit switch's toggle glows the other way round - while its circuit is off - and is left out here)
+    lit = [e for e in d['models'] if e.get('Light Circuit', {}).get('Glow', 0) > 0
+           and not e['Light Circuit'].get('Glow When Off')]
     tops = {}
     for e in lit:
         top = e

@@ -11,7 +11,7 @@
 # books kicked against the walls, leaves blown in; the plaster cracked off the door and window corners, along the wall
 # heads and across the ceilings, a leak's stain here and there. Every piece is fitted by its measured shape
 # (house_fit.py): nothing in a wall, in another piece or in a doorway, and every door opens all the way. The power is mostly out: a dying porch light, a stuttering fluorescent tube in
-# the kitchen, candles left burning in the living room, and the master bedroom upstairs, at the front, lit red.
+# the kitchen, burned-down candles on the living room floor, and the master bedroom upstairs, at the front, lit red.
 #
 # Interior work is authored in the pack's space and parented under the house's 'Pack Layout'; the yard in world
 # metres. Every random choice comes from its own seeded stream, so a rebuild gives the same house.
@@ -1203,8 +1203,8 @@ SPOT_SHADOWS = 6
 
 
 def lights(s, lay, pk, repo, notes):
-    """What lights the house: every fitting and lamp on its circuit, with switches (house_lights.py), and the candles
-    left burning in the living room (no switch). Indoor lights scatter nothing into the fog (no fog indoors)."""
+    """What lights the house: every fitting and lamp on its circuit, with switches (house_lights.py). The candles on
+    the living room floor are burned out and give no light. Indoor lights scatter nothing into the fog (no fog indoors)."""
     # The master bedroom, upstairs at the front: its ceiling fitting holds a bare red bulb.
     red = next(e for e in pk.named(r'Lamp_bedroom$'))
     red['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
@@ -1231,13 +1231,7 @@ def lights(s, lay, pk, repo, notes):
         for name, ox, oz, yaw in (('LP_candle_triple', 0.0, 0.0, 30.0), ('LP_candle_single', 0.22, 0.12, 0.0),
                                   ('LP_candle_small', -0.18, 0.16, 0.0)):
             lay_down(s, pk.fit, g, PROPS_IN + name + '.prefab', bx + ox, bz + oz, FLOOR_1, yaw, (0.0, 0.0), 1.0, lit)
-    if lit:
-        mx = sum(b.c[0] for b in lit) / len(lit)
-        mz = sum(b.c[2] for b in lit) / len(lit)
-        top = max(b.yhi() for b in lit)
-        _, e = lamp('Candle Glow', (round(mx, 3), round(top + 0.04, 3), round(mz, 3)), intensity=1.5, rng=5.0,
-                    color=(1.0, 0.55, 0.22))
-        e.update(k.light_flicker(Mode=2, MinInterval=0.1, MaxInterval=0.4, Depth=0.25, Seed=11))
+    # (burned out: the candles give no light - they have no flame)
 
 
 def porch_light(s, lay, notes, pk=None):

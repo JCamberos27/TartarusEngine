@@ -14,9 +14,14 @@ import scene_kit as k
 
 SWITCH_MODELS = 'assets/Props/Electrical/Models/'
 SWITCH_H = 1.15                 # the switch's middle above the floor
+SWITCH_OFF = 0.17               # ... and past the opening's edge (the jamb's face), along the wall: clear of the trim
 CLUSTER = 2.7                   # ceiling fittings closer than this share a circuit
 MAX_DISCS = 4                   # a cluster of flush discs bigger than this is split
 CLICK = 'assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav'
+# The toggle is a lit one (an old illuminated switch): a dim warm orange while its room is dark, out once the light is
+# on, so a switch can be found in a black room.
+ROCKER_MAT = 'assets/Props/Electrical/Materials/M_Light_Switch_White.mat'
+ROCKER_GLOW = dict(emissiveColor=[1.0, 0.33, 0.07], emissiveStrength=0.08)
 
 # kind: the light; at: where on the fitting it sits ('below' its underside, 'shade' inside the shade near the top,
 # 'face' in front of a wall light); drop: metres below that point; I / R / K: intensity, range, colour temperature;
@@ -211,7 +216,8 @@ class Wiring:
 
     def place_plate(self, circuit, room, how, floor, start_on, spacing=0.12):
         """One wall switch for `circuit` in `room`: ('door', name) beside that door on its latch side (inside the
-        room), ('open', other room) beside the archway into it, ('near', (x, z)) on the nearest wall. Flush on the
+        room), ('open', other room) beside the archway into it, ('at', ((x, z), n)) on the wall behind that point seen
+        from n (beside an archway's jamb), ('near', (x, z)) on the nearest wall. Flush on the
         wall at SWITCH_H, clear of trim, furniture, pictures and other switches."""
         kind, arg = how
         y = floor + SWITCH_H
@@ -237,11 +243,36 @@ class Wiring:
                 toward = 1.0 if (cx_ - c[0]) * along[0] + (cz_ - c[1]) * along[1] > 0 else -1.0
                 sides = ((toward, 0.0), (-toward, 0.5))
             for sgn, pen in sides:
-                for off in (0.2, 0.26, 0.33, 0.42):
-                    q = (c[0] + along[0] * sgn * (hw + off), c[1] + along[1] * sgn * (hw + off))
+                d_ = (along[0] * sgn, along[1] * sgn)
+                edge = None             # the jamb's face: the first wall from the doorway's middle that way
+                for k_ in range(10, 160):        # across the wall's thickness: a leaf may hang at either face
+                    t = k_ * 0.005
+                    if any(self.in_wall(c[0] + d_[0] * t + thr[0] * u, y, c[1] + d_[1] * t + thr[1] * u, r=0.0)
+                           for u in (0.0, -0.06, 0.06, -0.12, 0.12)):
+                        edge = t
+                        break
+                if edge is None:
+                    continue
+                for extra in (0.0, 0.05, 0.1):
+                    off = edge + SWITCH_OFF + extra
+                    q = (c[0] + d_[0] * off, c[1] + d_[1] * off)
                     f = self.face(q, n, y)
                     if f and inside(f[0] + n[0] * 0.15, f[1] + n[1] * 0.15):
-                        cands.append((pen + off, f[0], f[1], n[0], n[1]))
+                        cands.append((pen + extra, f[0], f[1], n[0], n[1]))
+        elif kind == 'edge':
+            (ex, ez), d_, n = arg
+            for extra in (0.0, 0.05, 0.1):
+                off = SWITCH_OFF + extra
+                f = self.face((ex + d_[0] * off, ez + d_[1] * off), n, y, reach=0.3)
+                if f:
+                    cands.append((extra, f[0], f[1], n[0], n[1]))
+        elif kind == 'at':
+            (px, pz), n = arg
+            for slide in (0.0, 0.06, -0.06, 0.12, -0.12):
+                q = (px - n[1] * slide, pz + n[0] * slide)
+                f = self.face(q, n, y, reach=0.3)
+                if f:
+                    cands.append((abs(slide), f[0], f[1], n[0], n[1]))
         else:
             px, pz = arg
             for ang in range(0, 360, 90):
@@ -256,13 +287,14 @@ class Wiring:
                                 cands.append((d_ + abs(slide), g[0], g[1], -dx, -dz))
                         break
         cands.sort()
+        own = arg if kind == 'door' else None     # beside its own door's latch jamb: never in that door's swing
         for _, px, pz, nx, nz in cands:
-            if self.clear(px, y, pz, nx, nz, spacing):
+            if self.clear(px, y, pz, nx, nz, spacing, own):
                 return self.build_switch(circuit, (px, y, pz), (nx, nz), start_on)
         self.unplaced.append((circuit, how))
         return None
 
-    def clear(self, px, y, pz, nx, nz, spacing=0.12):
+    def clear(self, px, y, pz, nx, nz, spacing=0.12, own=None):
         """In front: a reach's depth free of furniture; on the wall: no window, picture, trim or other switch."""
         plate = hf.Box([px, y, pz], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [0.07, 0.1, 0.07])
         fx, fz = px + nx * 0.35, pz + nz * 0.35
@@ -274,7 +306,7 @@ class Wiring:
             if a[0] - 0.07 < px < a[1] + 0.07 and a[4] - 0.07 < pz < a[5] + 0.07:
                 return False
         for z in self.fit.zones:
-            if z.hits(plate) and not z.name.startswith('Stair'):
+            if z.hits(plate) and not z.name.startswith('Stair') and z.name != own:
                 return False
         for (sx, sy, sz) in self.switches:
             if math.hypot(px - sx, pz - sz) < spacing and abs(y - sy) < 0.2:
@@ -296,7 +328,9 @@ class Wiring:
         rid = s._next()
         rocker = {'id': rid, 'order': rid, 'parentId': pid, 'name': 'Rocker', 'position': [0.0, 0.0, 0.0],
                   'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0], 'path': rocker_path,
-                  'pathGuid': guid(self.repo, rocker_path), 'static': False, 'castShadows': 0}
+                  'pathGuid': guid(self.repo, rocker_path), 'static': False, 'castShadows': 0,
+                  'materials': [{'embedded': k.from_mat(self.repo, ROCKER_MAT, **ROCKER_GLOW)}],
+                  'Light Circuit': {'Circuit': circuit, 'Glow': 1.0, 'Glow When Off': True}}
         s.models += [plate, rocker]
         self.switches.append(pos)
         return plate
@@ -500,8 +534,10 @@ def clusters(points, gap):
 # The circuits, room by room: (circuit, on at the start, its switches). A switch is ('door', door name) by that door
 # on its latch side, ('open', room) by the archway into that room, or ('near', (x, z)) on the wall nearest that point.
 ROOM_CIRCUITS = {
-    'kitchen-dining': ('Kitchen', False, [('near', (-35.25, -1.0))]),          # off the hall, by the stairs' foot
-    'living room': ('Living room', False, [('open', 'entrance hall')]),
+    # archways ('edge': the opening's edge, the way along the wall from it, the way into the room), the same rule as
+    # the doors: inside the room, on the wall beside the opening, SWITCH_OFF past its edge
+    'kitchen-dining': ('Kitchen', False, [('edge', ((-35.79, -7.86), (-1.0, 0.0), (0.0, -1.0)))]),
+    'living room': ('Living room', False, [('edge', ((-34.05, 3.98), (0.0, 1.0), (-1.0, 0.0)))]),
     'entrance hall': ('Hall', False, [('door', 'Door_exterior_paneled')]),
     'downstairs bathroom': ('Downstairs bathroom', False, [('door', 'Door_interior')]),
     'master bedroom': ('Master bedroom', True, [('door', 'Door_interior (2)')]),
@@ -512,7 +548,10 @@ ROOM_CIRCUITS = {
     'landing': ('Stairs', False, []),
 }
 # The stairs' two-way switch: at the foot (the ground floor's corridor) and at the top (the landing).
-STAIR_SWITCHES = [('kitchen-dining', ('near', (-37.4, -1.2))), ('landing', ('near', (-38.4, 6.0)))]
+# The stairs' two ends, the same rule: at the foot, inside the stair hall through the double archway, beside its
+# edge; at the top, on the landing's wall beside the last step.
+STAIR_SWITCHES = [('kitchen-dining', ('edge', ((-34.05, 0.36), (0.0, -1.0), (-1.0, 0.0)))),
+                  ('landing', ('edge', ((-38.61, 5.85), (0.0, 1.0), (1.0, 0.0))))]
 # The stairwell, two storeys tall with no floor of its own: its lights' bounds (pack x0, x1, z0, z1).
 STAIRWELL = (-38.75, -34.95, -0.95, 4.9)
 # Fittings that no longer work (pack ids): blown bulbs, a cut wire. They show their unlit shade and give no light.
@@ -522,7 +561,8 @@ DEAD = {1047, 1174, 996,    # the master bedroom's flush discs: only the red bul
 FILL_I = 0.16               # a room's bounce fill: x the sum of its own lights' intensities
 FILL_MIN_AREA = 12.0        # rooms smaller than this get none (their fitting reaches every corner)
 DISC_GAP = 2.0              # flush discs closer than this share one light...
-DISC_SKIP = 1.5             # ... and a group with a chandelier or pendant this near gives none (it only glows)
+DISC_SKIP = 2.6             # ... and a group with a chandelier or pendant this near gives none (it only glows)
+DISC_SKIP_IN = {'kitchen-dining': 1.5}   # the kitchen's counter run needs its own light beside the pendants
 # The entrance hall had only sconces: two flush discs down its middle (pack x, z), like the rest of the house's.
 HALL_DISCS = [(-33.0, -4.0), (-33.0, 1.2)]
 DISC_PREFAB = 'assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Props_interior/Lamp_ceiling_circle.prefab'
@@ -630,7 +670,7 @@ def wire(s, lay, pk, repo, fh, notes):
         for g in groups:
             cx = sum(p[0] for p in g) / len(g)
             cz = sum(p[1] for p in g) / len(g)
-            if any(math.hypot(p[0] - cx, p[2] - cz) < DISC_SKIP for _, p in mains):
+            if any(math.hypot(p[0] - cx, p[2] - cz) < DISC_SKIP_IN.get(rname, DISC_SKIP) for _, p in mains):
                 continue
             f = FIT['Lamp_ceiling_circle']
             spread = max(math.hypot(p[0] - cx, p[1] - cz) for p in g)

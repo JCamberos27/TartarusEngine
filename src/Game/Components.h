@@ -1249,6 +1249,7 @@ struct OpenableComponent {
 struct LightCircuitComponent {
     std::string Circuit;     // the circuit's name; a Light Switch with the same name works it
     float Glow = 1.0f;       // models: the emission kept when on, x their materials' own (0 = leave them alone)
+    bool GlowWhenOff = false; // models: glow while the circuit is OFF instead (a lit switch's toggle, found in the dark)
 
     // Runtime, never serialized.
     bool Started = false;

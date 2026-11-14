@@ -110,7 +110,13 @@ void StartAll(World& world) {
             auto& c = v.get<LightCircuitComponent>(e);
             if (c.Started) continue;
             StartCircuitPiece(world, e, c);
-            start.emplace(c.Circuit, true); // a circuit nobody switches stays as authored: on
+            // a piece joining a running circuit takes its state; a circuit nobody switches stays as authored: on
+            bool running = false;
+            for (auto se : world.Registry.view<LightSwitchComponent>()) {
+                const auto& s = world.Registry.get<LightSwitchComponent>(se);
+                if (s.Started && s.Circuit == c.Circuit) { running = true; break; }
+            }
+            start.emplace(c.Circuit, running ? IsOn(world, c.Circuit) : true);
             any = true;
         }
     }
@@ -135,7 +141,7 @@ bool Set(World& world, const std::string& circuit, bool on) {
         if (!c.Started || c.Circuit != circuit) continue;
         found = true;
         if (auto* r = world.Registry.try_get<RenderableComponent>(e); r && !c.OnMaterials.empty()) {
-            r->Materials = on ? c.OnMaterials : c.OffMaterials;
+            r->Materials = on != c.GlowWhenOff ? c.OnMaterials : c.OffMaterials; // a lit toggle glows while it's off
         } else if (world.Registry.all_of<LightComponent>(e)) {
             const bool off = world.Registry.all_of<DeactivatedTag>(e);
             if (on && off) { world.Registry.remove<DeactivatedTag>(e); changed = true; }

@@ -392,6 +392,9 @@ void RegisterEngineComponents() {
             { "Glow", T::Float, TARTARUS_REFLECT_FIELD(LightCircuitComponent, Glow), 0.05f,
               "Models: their materials' emission when on, as a multiple of what the materials have (0 = leave the "
               "materials alone).", 0.0f, 20.0f },
+            { "Glow When Off", T::Bool, TARTARUS_REFLECT_FIELD(LightCircuitComponent, GlowWhenOff), 0.0f,
+              "Models: glow while the circuit is off and go dark when it's on - a lit switch's toggle, easy to find "
+              "in a dark room." },
         };
         Register<LightCircuitComponent>(std::move(m));
     }

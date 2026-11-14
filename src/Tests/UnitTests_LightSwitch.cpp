@@ -132,6 +132,25 @@ void LightSwitchImportedGlow() {
     LightSwitch::Set(w, "Hall", false);
     CHECK(drawn() == 0.0f);
     CHECK(model->MeshMaterial(0).EmissiveStrength == 3.0f); // the model's own material is never touched
+
+    // A lit switch's toggle: Glow When Off glows while the circuit is off, and goes dark when it's on.
+    const entt::entity toggle = w.CreateModelEntity(model, glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Toggle");
+    w.Registry.get_or_emplace<RenderableComponent>(toggle).Materials.clear();
+    auto& tc = w.Registry.emplace<LightCircuitComponent>(toggle);
+    tc.Circuit = "Hall";
+    tc.GlowWhenOff = true;
+    w.RebuildWorldTransformCache();
+    const auto toggleGlow = [&]() -> float {
+        const auto& slots = w.Registry.get<RenderableComponent>(toggle).Materials;
+        const Material& m = !slots.empty() && slots[0] ? slots[0]->Mat : model->MeshMaterial(0);
+        return glm::length(m.EmissiveColor * m.EmissiveStrength);
+    };
+    LightSwitch::Update(w, glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0, 0, -1), false); // starts the new piece: Hall is off
+    CHECK(toggleGlow() > 0.0f);
+    LightSwitch::Set(w, "Hall", true);
+    CHECK(toggleGlow() == 0.0f);
+    LightSwitch::Set(w, "Hall", false);
+    CHECK(toggleGlow() > 0.0f);
     model->MeshMaterial(0) = saved;
 }
 } // namespace
