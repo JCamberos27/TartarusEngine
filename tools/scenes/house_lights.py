@@ -577,6 +577,7 @@ DISC_SKIP = 2.6             # ... and a group with a chandelier or pendant this 
 DISC_SKIP_IN = {'kitchen-dining': 1.5}   # the kitchen's counter run needs its own light beside the pendants
 # The entrance hall had only sconces: two flush discs down its middle (pack x, z), like the rest of the house's.
 HALL_DISCS = [(-33.0, -4.0), (-33.0, 1.2)]
+LAMP_MAT = 'assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat'
 DISC_PREFAB = 'assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Props_interior/Lamp_ceiling_circle.prefab'
 
 
@@ -819,7 +820,15 @@ def wire(s, lay, pk, repo, fh, notes):
             # the kitchen's tube under the wall cabinets, dying: on from the start, stuttering
             e['Light Switch']['Start On'] = True
             extra = k.light_flicker(Mode=0, MinInterval=1.5, MaxInterval=6.0, Depth=1.0, Seed=7)
-        lit(f'{st} {circuit}', pos, f, circuit, room, extra=extra)
+        # the master bedroom's lamps burn red like its bulb: a red light, and the shade glowing red
+        red_room = room is not None and room['name'] == 'master bedroom'
+        if red_room:
+            for j in w.subtree(i):
+                m = w.scene_of(j)
+                if m is not None and 'path' in m:
+                    m['materials'] = [{'embedded': k.from_mat(repo, LAMP_MAT, emissiveColor=list(fh.RED_GLOW),
+                                                              emissiveStrength=fh.RED_GLOW_S)}]
+        lit(f'{st} {circuit}', pos, f, circuit, room, extra=extra, color=fh.RED if red_room else None)
     notes.update({'circuits': n_circuits, 'house lights': w.n_lights, 'shadow-capable': w.n_shadow,
                   'switches': len(w.switches), 'switch spills': w.n_spill,
                   'dead fittings': w.n_dead})
