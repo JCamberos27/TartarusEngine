@@ -2658,6 +2658,7 @@ void RegisterEngineComponents() {
             { "Diffraction Cutoff", T::Float, TARTARUS_REFLECT_FIELD(P, DiffractionCutoff), 10.0f, "Hz of the low-pass at Diffraction Max Angle (a sound bending hard round the opening is muffled).", 100.0f, 20000.0f },
             { "Diffraction Max Angle", T::Float, TARTARUS_REFLECT_FIELD(P, DiffractionMaxAngle), 1.0f, "Degrees of bend (the angle between the way in and the way out) at which the loss is full.", 5.0f, 180.0f },
             { "Diffraction Gain dB", T::Float, TARTARUS_REFLECT_FIELD(P, DiffractionGainDb), 0.5f, "Gain at that bend.", -60.0f, 0.0f },
+            { "Door", T::String, TARTARUS_REFLECT_FIELD(P, Door), 0.0f, "Name of an Openable entity (the door in this opening): in Play how far it is open is the Open Amount. Empty: Open Amount as set." },
         };
         m.Fields[2].Slider = true; m.Fields[2].Format = "%.2f";
         Register<ReverbPortalComponent>(std::move(m));

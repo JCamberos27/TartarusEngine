@@ -18,7 +18,8 @@ bool Same(const ReverbZoneComponent& a, const ReverbZoneComponent& b) {
 bool Same(const ReverbPortalComponent& a, const ReverbPortalComponent& b) {
     return a.Enabled == b.Enabled && a.Extents == b.Extents && a.OpenAmount == b.OpenAmount && a.RoomA == b.RoomA && a.RoomB == b.RoomB &&
            a.ProbeDistance == b.ProbeDistance && a.ClosedGainDb == b.ClosedGainDb && a.ClosedCutoff == b.ClosedCutoff &&
-           a.DiffractionCutoff == b.DiffractionCutoff && a.DiffractionMaxAngle == b.DiffractionMaxAngle && a.DiffractionGainDb == b.DiffractionGainDb;
+           a.DiffractionCutoff == b.DiffractionCutoff && a.DiffractionMaxAngle == b.DiffractionMaxAngle && a.DiffractionGainDb == b.DiffractionGainDb &&
+           a.Door == b.Door;
 }
 
 const std::string& NameOf(const World& world, entt::entity e) {
@@ -61,6 +62,22 @@ void ApplyPortalParams(ReverbPortalVolume& v, const ReverbPortalComponent& c) {
     v.DiffractionMaxAngle = std::max(c.DiffractionMaxAngle, 1.0f);
     v.DiffractionGainDb = c.DiffractionGainDb;
     v.Src = c;
+}
+
+// The Openable named `door` (none: the null entity).
+unsigned FindDoor(const World& world, const std::string& door) {
+    if (door.empty()) return 0xFFFFFFFFu;
+    for (const entt::entity e : world.Registry.view<const OpenableComponent>())
+        if (NameOf(world, e) == door) return (unsigned)e;
+    return 0xFFFFFFFFu;
+}
+
+// How open the portal's door is now (0 shut .. 1 open), or -1 with no door (or one not started yet: its first Play frame).
+float DoorOpen(const World& world, unsigned door) {
+    const auto e = static_cast<entt::entity>(door);
+    if (door == 0xFFFFFFFFu || !world.Registry.valid(e)) return -1.0f;
+    const auto* o = world.Registry.try_get<OpenableComponent>(e);
+    return o && o->Started ? std::clamp(o->Progress, 0.0f, 1.0f) : -1.0f;
 }
 
 void PlacePortal(ReverbPortalVolume& v, const glm::mat4& m, entt::entity e) {
@@ -162,6 +179,8 @@ void ReverbZones::Build(const World& world) {
         if (!c.Enabled) continue;
         ReverbPortalVolume v;
         ApplyPortalParams(v, c);
+        v.DoorEntity = FindDoor(world, c.Door);
+        if (const float d = DoorOpen(world, v.DoorEntity); d >= 0.0f) v.Open = d;
         PlacePortal(v, world.GetCachedWorldTransform(e), e);
         ResolveRooms(v, &world);
         m_PortalIndex.emplace(v.Entity, (int)m_Portals.size());
@@ -202,8 +221,13 @@ bool ReverbZones::Refresh(const World& world) {
                 const bool rooms = moved || zonesMoved || c.RoomA != v->Src.RoomA || c.RoomB != v->Src.RoomB || c.ProbeDistance != v->Src.ProbeDistance ||
                                    c.Extents != v->Src.Extents;
                 ApplyPortalParams(*v, c);
+                if (edited) v->DoorEntity = FindDoor(world, c.Door);
+                if (const float d = DoorOpen(world, v->DoorEntity); d >= 0.0f) v->Open = d;
                 if (moved) PlacePortal(*v, m, e);
                 if (rooms) ResolveRooms(*v, &world);
+                changed = true;
+            } else if (const float d = DoorOpen(world, v->DoorEntity); d >= 0.0f && std::fabs(d - v->Open) > 0.005f) {
+                v->Open = d; // the door swung: only how much the opening lets through changes
                 changed = true;
             }
         }

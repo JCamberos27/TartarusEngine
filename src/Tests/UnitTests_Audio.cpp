@@ -16,6 +16,9 @@
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
+#include "Paths.h"
+
+#include <json.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -733,6 +736,56 @@ void TestAmbienceBed() {
     bed.Start(off);
     bed.Update(0.1f, l, 0.0f, player, &set);
     CHECK(fb.Voices.size() == 4);
+}
+
+void TestForestSceneAudio() {
+    // The Forest's Audio group as saved (project/scenes/Forest.json), loaded on its own: the surface table the Foley rules test
+    // checks, the night bed, the outdoor and house zones, and the two exterior doors' portals following their doors.
+    const std::filesystem::path path = ProjectPaths::Resolve("scenes/Forest.json");
+    if (!std::filesystem::exists(path)) return;
+    std::ifstream in(path, std::ios::binary);
+    const nlohmann::json scene = nlohmann::json::parse(in, nullptr, false);
+    CHECK(!scene.is_discarded() && scene.contains("empties"));
+    if (scene.is_discarded() || !scene.contains("empties")) return;
+    long long audio = -2;
+    for (const auto& e : scene["empties"])
+        if (e.value("name", std::string()) == "Audio" && e.value("parentId", 0LL) == -1) audio = e.value("id", -2LL);
+    CHECK(audio >= 0);
+    nlohmann::json mini = {{"formatVersion", scene.value("formatVersion", 4)}, {"empties", nlohmann::json::array()}};
+    for (const auto& e : scene["empties"])
+        if (e.value("id", -3LL) == audio || e.value("parentId", -3LL) == audio) mini["empties"].push_back(e);
+    World world;
+    AssetLibrary assets;
+    CHECK(SceneSerializer::LoadFromString(world, assets, mini.dump()));
+    int foley = 0, beds = 0, indoor = 0, outdoor = 0, portals = 0;
+    for (const entt::entity e : world.Registry.view<FoleyAudioComponent>()) {
+        const FoleyAudioComponent& f = world.Registry.get<FoleyAudioComponent>(e);
+        CHECK(f.SurfaceTable == kForestSurfaceTable && f.DefaultSurface == "grass");
+        ++foley;
+    }
+    for (const entt::entity e : world.Registry.view<AmbienceBedComponent>()) {
+        const AmbienceBedComponent& b = world.Registry.get<AmbienceBedComponent>(e);
+        CHECK(b.Enabled && b.Sound == "snd.amb.night_field" && b.Radius == 15.0f && b.IndoorGainDb == -12.0f && b.IndoorCutoffHz == 900.0f);
+        ++beds;
+    }
+    for (const entt::entity e : world.Registry.view<ReverbZoneComponent>()) {
+        const ReverbZoneComponent& z = world.Registry.get<ReverbZoneComponent>(e);
+        CHECK(z.Ambience.empty()); // no room tone: the house hears the muffled night bed only
+        if (z.TailClass == (int)SpaceClass::OutdoorOpen) {
+            CHECK(z.Priority == 0 && z.ReverbMode == 0 && z.Extents.x >= 100.0f && z.Extents.z >= 100.0f); // the class's forest IR and tails
+            ++outdoor;
+        } else {
+            CHECK(z.TailClass == (int)SpaceClass::IndoorSmall && z.Priority > 0 && z.ReverbMode == 1);
+            CHECK(z.Ir == "assets/Audio/IR/tavern_1.wav" || z.Ir == "assets/Audio/IR/apartment_1.wav");
+            ++indoor;
+        }
+    }
+    for (const entt::entity e : world.Registry.view<ReverbPortalComponent>()) {
+        const ReverbPortalComponent& p = world.Registry.get<ReverbPortalComponent>(e);
+        CHECK(p.Door == "Door_exterior_paneled_mesh" || p.Door == "Door_exterior_white_mesh");
+        ++portals;
+    }
+    CHECK(foley == 1 && beds == 1 && outdoor == 1 && indoor == 5 && portals == 2);
 }
 
 void TestFoleyRules() {
@@ -1756,6 +1809,33 @@ entt::entity MakePortal(World& world, const glm::vec3& at, float yawDeg, float o
     p.Extents = glm::vec3(1.0f, 1.2f, 0.1f);
     p.OpenAmount = open;
     return e;
+}
+
+void TestPortalFollowsItsDoor() {
+    // A portal naming an Openable takes how far that door is open as its Open Amount, every Refresh, once the door has started.
+    World world;
+    MakeZone(world, glm::vec3(0.0f, 0.0f, -6.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.0f), "Room");
+    const entt::entity portal = MakePortal(world, glm::vec3(0.0f), 0.0f, 0.25f);
+    world.Registry.get<ReverbPortalComponent>(portal).Door = "Front Door";
+    const entt::entity door = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(door);
+    world.Registry.emplace<NameComponent>(door).Name = "Front Door";
+    OpenableComponent& o = world.Registry.emplace<OpenableComponent>(door);
+    ReverbZones zones;
+    zones.Build(world);
+    CHECK(zones.Portals().size() == 1 && zones.Portals()[0].DoorEntity == (unsigned)door);
+    CHECK(std::fabs(zones.Portals()[0].Open - 0.25f) < 1e-6f); // not started yet: Open Amount as set
+    o.Started = true;
+    o.Progress = 0.35f;
+    CHECK(zones.Refresh(world) && std::fabs(zones.Portals()[0].Open - 0.35f) < 1e-6f);
+    CHECK(!zones.Refresh(world)); // the door holds still: nothing to do
+    o.Progress = 0.0f;
+    CHECK(zones.Refresh(world) && zones.Portals()[0].Open == 0.0f); // shut
+    o.Progress = 1.0f;
+    CHECK(zones.Refresh(world) && zones.Portals()[0].Open == 1.0f);
+    // No such door: the portal keeps its own Open Amount.
+    world.Registry.get<ReverbPortalComponent>(portal).Door = "Nowhere";
+    CHECK(zones.Refresh(world) && zones.Portals()[0].DoorEntity == 0xFFFFFFFFu && std::fabs(zones.Portals()[0].Open - 0.25f) < 1e-6f);
 }
 
 void TestZonesMoveAtRuntime() {
@@ -3389,6 +3469,7 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AudioManifestGroupsVariants", TestAudioManifestGroupsVariants});
     tests.push_back({"FoleyFootstepCadence", TestFoleyFootstepCadence});
     tests.push_back({"FoleyRules", TestFoleyRules});
+    tests.push_back({"ForestSceneAudio", TestForestSceneAudio});
     tests.push_back({"AmbienceBed", TestAmbienceBed});
     tests.push_back({"FoleyLandingAndJump", TestFoleyLandingAndJump});
     tests.push_back({"EnvironmentClassifier", TestEnvironmentClassifier});
@@ -3407,6 +3488,7 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ImpactSurfaceMappingAndFlesh", TestImpactSurfaceMappingAndFlesh});
     tests.push_back({"FlybyRadiusAndNoDoubling", TestFlybyRadiusAndNoDoubling});
     tests.push_back({"ZonesMoveAtRuntime", TestZonesMoveAtRuntime});
+    tests.push_back({"PortalFollowsItsDoor", TestPortalFollowsItsDoor});
     tests.push_back({"PortalPathsAndLoss", TestPortalPathsAndLoss});
     tests.push_back({"PortalVoicesAndFallback", TestPortalVoicesAndFallback});
     tests.push_back({"ConvolverUnitImpulseAndPartitionBoundaries", TestConvolverUnitImpulseAndPartitionBoundaries});

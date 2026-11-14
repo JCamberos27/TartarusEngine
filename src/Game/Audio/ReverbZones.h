@@ -71,6 +71,7 @@ struct ReverbPortalVolume {
     float ClosedGainDb = -30.0f, ClosedCutoff = 500.0f, DiffractionCutoff = 2500.0f, DiffractionMaxAngle = 120.0f, DiffractionGainDb = -6.0f;
     unsigned RoomA = kNoRoom, RoomB = kNoRoom; // zone entities on the -Normal / +Normal side (kNoRoom = outside)
     unsigned Entity = 0xFFFFFFFFu;
+    unsigned DoorEntity = 0xFFFFFFFFu; // the Openable named by Src.Door (none: Open is Src.OpenAmount)
     glm::mat4 Placed{1.0f};
     ReverbPortalComponent Src;
 
