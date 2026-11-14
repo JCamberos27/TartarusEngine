@@ -56,6 +56,9 @@ def main():
                 c['parentId'] = top_old['parentId'] if e['id'] == top_new['id'] else remap[e['parentId']]
                 d[key].append(c)
         moved[name] = (len(gone), len(keep))
+    # the shadow slots the house's lights need (the scene's own sky, fog and grade stay as they are)
+    d['maxPointShadows'] = max(d.get('maxPointShadows', 0), built.data.get('maxPointShadows', 0))
+    d['maxSpotShadows'] = max(d.get('maxSpotShadows', 0), built.data.get('maxSpotShadows', 0))
     # the grass's density mask: the lawn round the house follows the walk and the driveway
     grass_new = next(e for _, e in new if 'Grass Area' in e)
     for key in keys:

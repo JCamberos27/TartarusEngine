@@ -19,6 +19,7 @@
 
 namespace {
 std::atomic<bool> s_RecaptureAll{false};
+std::vector<glm::vec3> s_RecaptureAt; // main thread only (Play and the editor both run Sync there)
 
 bool SameVolume(const ReflectionProbeCapture::Volume& a, const ReflectionProbeCapture::Volume& b) {
     const glm::vec3 dc = glm::abs(a.Center - b.Center), dh = glm::abs(a.HalfSize - b.HalfSize);
@@ -49,6 +50,9 @@ void ReflectionProbeCapture::Release() {
 }
 
 void ReflectionProbeCapture::RequestRecapture() { s_RecaptureAll = true; }
+void ReflectionProbeCapture::RequestRecaptureAt(const glm::vec3& p) {
+    if (s_RecaptureAt.size() < 64) s_RecaptureAt.push_back(p);
+}
 
 bool ReflectionProbeCapture::Busy() const { return m_Cap.Slot >= 0 || m_Pre.Slot >= 0 || !m_Queue.empty(); }
 
@@ -120,6 +124,27 @@ void ReflectionProbeCapture::Sync(ReflectionProbeArray& probes, bool environment
         for (int i = 0; i < (int)m_Slots.size(); ++i)
             if (std::find(m_Queue.begin(), m_Queue.end(), i) == m_Queue.end()) m_Queue.push_back(i);
     }
+    for (const glm::vec3& p : s_RecaptureAt) {
+        int nearest = -1;
+        float best = 1e30f;
+        bool any = false;
+        for (int i = 0; i < (int)m_Slots.size(); ++i) {
+            const Volume& v = m_Slots[i].Vol;
+            const glm::vec3 d = glm::abs(p - v.Center) - v.HalfSize;
+            const float out = glm::length(glm::max(d, glm::vec3(0.0f)));
+            if (out <= 0.0f) {
+                any = true;
+                if (std::find(m_Queue.begin(), m_Queue.end(), i) == m_Queue.end()) m_Queue.push_back(i);
+            } else if (out < best) {
+                best = out;
+                nearest = i;
+            }
+        }
+        if (!any && nearest >= 0 && best < 4.0f &&
+            std::find(m_Queue.begin(), m_Queue.end(), nearest) == m_Queue.end())
+            m_Queue.push_back(nearest);
+    }
+    s_RecaptureAt.clear();
 
     std::vector<Volume> have;
     have.reserve(m_Slots.size());

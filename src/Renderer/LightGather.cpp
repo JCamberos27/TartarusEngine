@@ -13,6 +13,22 @@
 
 namespace {
 const entt::entity kTorchSlotKey = static_cast<entt::entity>(0xFFFFFFF0u); // the flashlight's own key (not an entity)
+
+// The light's Bounds box (authored in its parent's space) into world space, on the light just added.
+void BoundLight(LightBuffer& buffer, World& world, entt::entity e, const LightComponent& lc) {
+    glm::mat4 parent(1.0f);
+    if (const auto* h = world.Registry.try_get<HierarchyComponent>(e); h && h->Parent != entt::null)
+        parent = world.GetCachedWorldTransform(h->Parent);
+    glm::mat3 axes;
+    glm::vec3 half;
+    for (int i = 0; i < 3; ++i) {
+        const glm::vec3 col(parent[i]);
+        const float s = glm::length(col);
+        axes[i] = s > 1e-8f ? col / s : glm::vec3(i == 0, i == 1, i == 2);
+        half[i] = 0.5f * std::abs(lc.BoundsSize[i]) * (s > 1e-8f ? s : 1.0f);
+    }
+    buffer.BoundLast(axes, glm::vec3(parent * glm::vec4(lc.BoundsCenter, 1.0f)), half, lc.BoundsFade);
+}
 }
 
 LightGather::StableSlots::StableSlots() { for (auto& o : Owner) o = entt::null; }
@@ -203,6 +219,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
             }
             lightBuffer.AddSpot(pos, aim, lc.Color, localIntensity, lc.Range, cosOuter, cosInner, slot,
                                 ~(std::uint32_t)lc.CullingMask, lc.VolumetricIntensity); // #203
+            if (lc.BoundsEnabled) BoundLight(lightBuffer, world, e, lc);
         } else {
             int slot = -1;
             if (const auto it = m_PointSlotOf.find(e); it != m_PointSlotOf.end()) {
@@ -217,6 +234,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
             }
             lightBuffer.AddPoint(pos, lc.Color, localIntensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
                                  lc.VolumetricIntensity); // #203
+            if (lc.BoundsEnabled) BoundLight(lightBuffer, world, e, lc);
         }
     }
     // Prefab Mode has a render-only sun when the prefab owns no directional light. There is no helper entity to

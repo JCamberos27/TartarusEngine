@@ -193,6 +193,11 @@ def rest_lift(lo, hi, rot, scale=(1.0, 1.0, 1.0)):
     return -b.ylo()
 
 
+# Prefab folders from outside the house pack that the house is dressed with (the store room, the squatter's corner).
+EXTRA_PREFAB_DIRS = ['assets/Environments/ModularCityAlleyPack/Prefabs/Prefabs_Props', 'assets/Furniture/Bedroom/Models']
+EXTRA_PREFABS = ('Bed_Mattress.prefab', 'Bed_Pillow_A.prefab')     # of those, the ones it uses
+
+
 def measure(repo, exe=None):
     """Run the engine's --scene-bounds over every model in the house pack and every prefab the house dresses with."""
     exe = exe or next((p for p in (os.path.join(repo, 'build', 'Release', 'TartarusEngine.exe'),
@@ -216,8 +221,9 @@ def measure(repo, exe=None):
     scene = os.path.join(tmp, 'house_models.json')
     with open(scene, 'w', encoding='utf-8') as f:
         json.dump({'formatVersion': 4, 'boxes': [], 'empties': [], 'models': models}, f)
-    pack = 'project/assets/Environments/SuburbNeighborhoodHousePack/Prefabs/'
-    dirs = [os.path.join(repo, pack + d) for d in ('Props_interior', 'Props_exterior', 'Ground')]
+    pack = 'assets/Environments/SuburbNeighborhoodHousePack/Prefabs/'
+    folders = [pack + d for d in ('Props_interior', 'Props_exterior', 'Ground')] + EXTRA_PREFAB_DIRS
+    dirs = [os.path.join(repo, 'project', d) for d in folders]
     out = os.path.join(tmp, 'out')
     env = dict(os.environ, TARTARUS_HIDDEN='1', TARTARUS_MUTE='1')
     r = subprocess.run([exe, '--project', os.path.join(repo, 'project'), '--scene-bounds', scene] + dirs + ['--out', out],
@@ -230,13 +236,13 @@ def measure(repo, exe=None):
             if e.get('min'):
                 i = int(e['path'].split('/')[-1][1:])
                 result[models[i]['path']] = [[round(v, 4) for v in e['min']], [round(v, 4) for v in e['max']]]
-    for d in ('Props_interior', 'Props_exterior', 'Ground'):
-        with open(os.path.join(out, 'prefabs', d + '.json'), encoding='utf-8') as f:
+    for d in folders:
+        with open(os.path.join(out, 'prefabs', os.path.basename(d) + '.json'), encoding='utf-8') as f:
             data = json.load(f)
         for name, pre in (data.get('prefabs') or {}).items():
             u = pre.get('union') or {}
-            if u.get('min'):
-                key = 'assets/Environments/SuburbNeighborhoodHousePack/Prefabs/' + d + '/' + os.path.basename(name)
+            if u.get('min') and (d not in EXTRA_PREFAB_DIRS or os.path.basename(name) in EXTRA_PREFABS):
+                key = d + '/' + os.path.basename(name)
                 result[key] = [[round(v, 4) for v in u['min']], [round(v, 4) for v in u['max']]]
     with open(BOUNDS_FILE, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(dict(sorted(result.items())), f, indent=0, separators=(',', ':'))

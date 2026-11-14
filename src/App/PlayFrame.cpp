@@ -49,6 +49,7 @@
 #include "InputMap.h"
 #include "Model.h"
 #include "Openable.h"
+#include "LightSwitch.h"
 #include "ParticleSystem.h"
 #include "PhysicsWorld.h"
 #include "PlaySession.h"
@@ -148,10 +149,18 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         };
         if (playUsesPlayer) devSpawner.Update(dc);
     }
-    // Doors, drawers and lids (Openable): Interact opens the one under the crosshair; all of them move.
-    Openable::Update(world, player.Cam.Position, player.Cam.Front(),
-                     gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact"),
-                     gameDt);
+    // Doors, drawers and lids (Openable) and light switches / lamps (LightSwitch): Interact works whichever of them is
+    // nearest under the crosshair; the openables all move.
+    {
+        const bool interact = gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact");
+        float doorAt = 1e30f, switchAt = 1e30f;
+        if (interact) {
+            if (Openable::Pick(world, player.Cam.Position, player.Cam.Front(), &doorAt) == entt::null) doorAt = 1e30f;
+            if (LightSwitch::Pick(world, player.Cam.Position, player.Cam.Front(), &switchAt) == entt::null) switchAt = 1e30f;
+        }
+        Openable::Update(world, player.Cam.Position, player.Cam.Front(), interact && doorAt <= switchAt, gameDt);
+        LightSwitch::Update(world, player.Cam.Position, player.Cam.Front(), interact && switchAt < doorAt);
+    }
     // G = explosion shockwave at the player. A separate physics *debug/test* tool
     // (not part of the gravity gun above) — stays behind Gizmos > Physics debug input.
     if (gameHasInput && playUsesPlayer && EditorSettings::Get().PhysicsDebugInput) {

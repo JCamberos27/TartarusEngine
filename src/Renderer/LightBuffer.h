@@ -24,7 +24,7 @@
 // non-directional ones by type (#188).
 class LightBuffer {
 public:
-    // Forward path cap. Raised once clustered culling is in; 256 * 64B = 16 KB, trivial.
+    // Forward path cap. Raised once clustered culling is in; 256 * 128B = 32 KB, trivial.
     static constexpr int kMaxLights = 256;
 
     enum class Type : int { Directional = 0, Point = 1, Spot = 2 };
@@ -53,6 +53,11 @@ public:
     void AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
                  float intensity, float range, float cosOuter, float cosInner, int shadowSlot = -1,
                  std::uint32_t excludedLayers = 0, float volumetric = 1.0f);
+
+    // Keeps the light just added (a point or spot) inside an oriented box: `axes` its unit axes (world), `centre` and
+    // `half` its centre and half extents (world metres), fading to nothing over `fade` metres inside each face. The
+    // cluster cull skips froxels outside the box; the shaders end the light at its faces (walls, floors, ceilings).
+    void BoundLast(const glm::mat3& axes, const glm::vec3& centre, const glm::vec3& half, float fade);
 
     // Orders the point/spot lights nearest-first (by the gap from `eye` to each light's range sphere), so a froxel
     // over the cluster cull's per-cluster cap (ClusterCull.comp.glsl MAX_PER_CLUSTER) keeps the near lights and
@@ -101,6 +106,8 @@ private:
         glm::vec4 Params;       // x = spot inner-cone cos; y = shadow slot (-1 none, set later);
                                 // z = excluded-layer bits (#203, reinterpreted as uint);
                                 // w = volumetric fog multiplier (VolumetricFog)
+        glm::vec4 BoxX, BoxY, BoxZ; // light bounds: rows world -> box (xyz = unit axis, w = -dot(axis, centre))
+        glm::vec4 BoxHalf;          // xyz = half extents; w = fade metres (< 0: unbounded)
     };
 
     std::vector<GpuLight> m_Lights;

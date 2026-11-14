@@ -42,6 +42,8 @@ struct Light {
     vec4 ColorRange;   // rgb = colour * intensity; a = range
     vec4 DirCutoff;    // xyz = aim; w = spot outer cos
     vec4 Params;       // x = spot inner cos; y = shadow slot; z = excluded layers; w = volumetric intensity
+    vec4 BoxX, BoxY, BoxZ; // light bounds (LightBuffer::BoundLast)
+    vec4 BoxHalf;          // xyz = half extents; w = fade (< 0: unbounded)
 };
 layout(std430, binding = 0) readonly buffer LightBuffer {
     uint uLightCount;
@@ -138,6 +140,11 @@ vec3 PointSpotScatter(uint i, vec3 p, vec3 V) {
     float t = dist / max(range, 1e-4);
     float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
     float atten = window * window / (1.0 + dist2);
+    if (lt.BoxHalf.w >= 0.0) {
+        vec3 q = vec3(dot(lt.BoxX.xyz, p) + lt.BoxX.w, dot(lt.BoxY.xyz, p) + lt.BoxY.w, dot(lt.BoxZ.xyz, p) + lt.BoxZ.w);
+        vec3 in3 = lt.BoxHalf.xyz - abs(q);
+        atten *= clamp(min(in3.x, min(in3.y, in3.z)) / lt.BoxHalf.w, 0.0, 1.0);
+    }
     if (int(lt.PositionType.w) == 2) {
         float cosAngle = dot(-lt.DirCutoff.xyz, L);
         float outerCos = lt.DirCutoff.w;

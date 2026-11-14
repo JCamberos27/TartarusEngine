@@ -1356,11 +1356,15 @@ void RegisterTests() {
         MoveToItem(Header("Light")), Wait(2),
         Key(ImGuiKey_E, ImGuiMod_Shift), WaitSeconds(0.3),
         Expect("isolated Light", [](Ctx&) {
-            const int l = SectionOpen("Light"), a = SectionOpen("Audio Source"), t = SectionOpen("Transform");
-            return l == 1 && a == 0 && t == 0 ? std::string()
-                : "Light=" + std::to_string(l) + " Audio=" + std::to_string(a) + " Transform=" + std::to_string(t);
+            const int l = SectionOpen("Light"), t = SectionOpen("Transform");
+            return l == 1 && t == 0 ? std::string() : "Light=" + std::to_string(l) + " Transform=" + std::to_string(t);
         }),
-        MoveToItem(Header("Light")), Wait(2),
+        InspReveal(Header("Audio Source")), // below the open Light, off screen in a short Inspector
+        Expect("... and Audio Source collapsed", [](Ctx&) {
+            const int a = SectionOpen("Audio Source");
+            return a == 0 ? std::string() : "Audio=" + std::to_string(a);
+        }),
+        InspReveal(Header("Light")), MoveToItem(Header("Light")), Wait(2),
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),
         ExpectTrue("all collapsed", [](Ctx&) { return SectionOpen("Light") == 0 && SectionOpen("Transform") == 0; }),
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),

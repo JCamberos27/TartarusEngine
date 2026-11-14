@@ -13,8 +13,6 @@
 #include <sstream>
 
 namespace Openable {
-namespace {
-using Kind = OpenableComponent::MotionKind;
 
 // One of `files` (';'-separated audio assets) at `pos`, pitch jittered a little so repeats don't sound stamped.
 void PlaySound(const std::string& files, const glm::vec3& pos) {
@@ -36,6 +34,9 @@ void PlaySound(const std::string& files, const glm::vec3& pos) {
     r.Position = pos;
     wa.Player().Play(set, r);
 }
+
+namespace {
+using Kind = OpenableComponent::MotionKind;
 
 constexpr float kBounceBack = 0.15f; // of the full travel: how far a part that meets somebody eases back
 
@@ -212,6 +213,34 @@ float RayBox(const glm::mat4& xform, const glm::vec3& lo, const glm::vec3& hi, c
     return std::max(t0, 0.0f); // from inside the box: right here
 }
 
+bool Unblocked(World& world, const glm::vec3& eye, const glm::vec3& dir, entt::entity target, float dist) {
+    // Whatever solid the ray meets first is the part, its body, or no nearer than it (a cabinet's collider is a box
+    // around its doors).
+    const float o3[3] = {eye.x, eye.y, eye.z}, d3[3] = {dir.x, dir.y, dir.z};
+    RaycastHit hit;
+    return !(PhysicsWorld::Raycast(o3, d3, dist, hit) && hit.Distance + 0.15f < dist &&
+             !IsSelfOrAncestor(world, target, static_cast<entt::entity>(hit.Entity)));
+}
+
+entt::entity Pick(World& world, const glm::vec3& eye, const glm::vec3& forward, float* outDist) {
+    auto view = world.Registry.view<OpenableComponent, TransformComponent, RenderableComponent>(entt::exclude<InactiveTag>);
+    const glm::vec3 dir = glm::normalize(forward);
+    entt::entity best = entt::null;
+    float bestDist = kReach;
+    for (auto e : view) {
+        const auto& r = view.get<RenderableComponent>(e);
+        if (!r.ModelRef || !view.get<OpenableComponent>(e).Started) continue;
+        const float d = RayBox(world.GetCachedWorldTransform(e), r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax(), eye, dir);
+        if (d >= 0.0f && d < bestDist) {
+            best = e;
+            bestDist = d;
+        }
+    }
+    if (best == entt::null || !Unblocked(world, eye, dir, best, bestDist)) return entt::null;
+    if (outDist) *outDist = bestDist;
+    return best;
+}
+
 void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool interact, float dt) {
     auto view = world.Registry.view<OpenableComponent, TransformComponent, RenderableComponent>(entt::exclude<InactiveTag>);
     for (auto e : view) {
@@ -220,30 +249,12 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
         if (!o.Started && r.ModelRef) Start(world, e, o, view.get<TransformComponent>(e), *r.ModelRef);
     }
     if (interact) {
-        const glm::vec3 dir = glm::normalize(forward);
-        entt::entity best = entt::null;
-        float bestDist = kReach;
-        for (auto e : view) {
-            const auto& r = view.get<RenderableComponent>(e);
-            if (!r.ModelRef) continue;
-            const float d = RayBox(world.GetCachedWorldTransform(e), r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax(), eye, dir);
-            if (d >= 0.0f && d < bestDist) {
-                best = e;
-                bestDist = d;
-            }
-        }
+        float dist = 0.0f;
+        const entt::entity best = Pick(world, eye, forward, &dist);
         if (best != entt::null) {
-            // Not through a wall: whatever solid the ray meets first is the part, its body, or no nearer than it
-            // (a cabinet's collider is a box around its doors).
-            const float o3[3] = {eye.x, eye.y, eye.z}, d3[3] = {dir.x, dir.y, dir.z};
-            RaycastHit hit;
-            const bool blocked = PhysicsWorld::Raycast(o3, d3, bestDist, hit) && hit.Distance + 0.15f < bestDist &&
-                                 !IsSelfOrAncestor(world, best, static_cast<entt::entity>(hit.Entity));
-            if (!blocked) {
-                auto& o = view.get<OpenableComponent>(best);
-                if (o.Target > 0.5f) o.Target = 0.0f;
-                else Open(world, best);
-            }
+            auto& o = view.get<OpenableComponent>(best);
+            if (o.Target > 0.5f) o.Target = 0.0f;
+            else Open(world, best);
         }
     }
     for (auto e : view) {

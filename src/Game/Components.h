@@ -425,6 +425,14 @@ struct LightComponent {
     // VolumetricEnabled): 1 = physically matched to its Intensity, 0 = no shafts or glow from it.
     float VolumetricIntensity = 1.0f;
 
+    // Point/Spot: a box (in the light's parent space) the light stays inside, so a room's light never shows through its
+    // walls, floor or ceiling, shadowed or not. The light fades to nothing over BoundsFade metres inside each face, and
+    // the cluster cull skips every froxel outside the box (fewer lights per froxel, not more work).
+    bool BoundsEnabled = false;
+    glm::vec3 BoundsCenter{0.0f};
+    glm::vec3 BoundsSize{4.0f, 3.0f, 4.0f}; // full extents along the parent's axes
+    float BoundsFade = 0.15f;
+
     // Per-light shadow tuning. Always present (not a separate ECS component) so every light can be
     // authored with shadow settings recorded even when it isn't currently casting. `Enabled`
     // replaces the old `CastShadows` bool; the legacy `"castShadows"` scene key still loads into
@@ -1234,6 +1242,35 @@ struct OpenableComponent {
     float Target = 0.0f;
     float ResolvedAmount = 0.0f; // Amount, or the motion's usual amount for this model
     glm::vec3 PoseMin{0.0f}, PoseMax{0.0f}; // the box it turns about: its box collider, else the model's bounds
+};
+
+// A light, a fitting or a lamp on a circuit (Game/LightSwitch.h): every Light on the circuit goes dark and every model
+// on it loses its glow (its materials' emission) when the circuit is off. Play only; Play -> Stop restores the scene.
+struct LightCircuitComponent {
+    std::string Circuit;     // the circuit's name; a Light Switch with the same name works it
+    float Glow = 1.0f;       // models: the emission kept when on, x their materials' own (0 = leave them alone)
+    bool GlowWhenOff = false; // models: glow while the circuit is OFF instead (a lit switch's toggle, found in the dark)
+
+    // Runtime, never serialized.
+    bool Started = false;
+    std::vector<std::shared_ptr<MaterialAsset>> OnMaterials, OffMaterials;
+};
+
+// Works a circuit with Interact (E): a wall switch (its Rocker child flips) or a lamp's own body. Every switch on the same
+// circuit flips together. Play only.
+struct LightSwitchComponent {
+    std::string Circuit;      // the circuit it works
+    bool StartOn = false;     // the circuit's state when Play starts (the first switch on it found decides)
+    std::string Rocker;       // a child's name that tips over when it flips (empty = none)
+    float RockerAngle = 14.0f; // degrees the rocker tips either way, about its local Z (across the plate)
+    std::string OnSound;      // ';'-separated audio variants
+    std::string OffSound;
+
+    // Runtime, never serialized.
+    bool Started = false;
+    bool On = false;
+    entt::entity RockerEntity = entt::null;
+    glm::quat RockerBase{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 // Drives the Light on its entity: a fluorescent tube that stutters now and then, a TV screen's
