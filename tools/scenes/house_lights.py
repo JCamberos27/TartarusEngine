@@ -561,17 +561,10 @@ DEAD = {1047, 1174, 996,    # the master bedroom's flush discs: only the red bul
         1226}               # under the stairs
 FILL_I = 0.16               # a room's bounce fill: x the sum of its own lights' intensities
 FILL_MIN_AREA = 12.0        # rooms smaller than this get none (their fitting reaches every corner)
-# A room's switch must be lit once its light is on. The room's light boxes are found from the walls' collision shapes,
-# which stand a few cm proud of the plaster, so first every box of the circuit that holds the room in front of the
-# switch is pushed SWITCH_WALL into the switch's wall. Then the light the circuit's lights put on the wall there
-# (sum of I x range window x the wall's cosine / d^2, a spot only inside its cone) must be at least SWITCH_LUX - the hall's, where the
-# plate reads plainly. Short of it, a faint 'Spill' light under the ceiling a pace into the room makes up the rest:
-# the room's light reaching its entrance (a passage, a corner the fitting's range stops short of).
+# A room's switch sits in its room's light: the room's light boxes are found from the walls' collision shapes, which
+# stand a few cm proud of the plaster, so every box of the circuit that holds the room in front of a switch is pushed
+# SWITCH_WALL into the switch's wall (else the light faded out just short of it).
 SWITCH_WALL = 0.05
-SWITCH_LUX = 0.04
-SPILL_IN = 1.0              # the spill light: this far into the room from the switch ...
-SPILL_DROP = 0.3            # ... this far under the ceiling
-SPILL_R = 3.0
 DISC_GAP = 2.0              # flush discs closer than this share one light...
 DISC_SKIP = 2.6             # ... and a group with a chandelier or pendant this near gives none (it only glows)
 DISC_SKIP_IN = {'kitchen-dining': 1.5}   # the kitchen's counter run needs its own light beside the pendants
@@ -591,7 +584,6 @@ def wire(s, lay, pk, repo, fh, notes):
     w.unplaced = []
     w.plates = []
     w.n_dead = 0
-    w.n_spill = 0
     by_circuit = {}
     w.circuit_I = {}
     fittings = {}
@@ -633,26 +625,8 @@ def wire(s, lay, pk, repo, fh, notes):
         c, sz = L['Bounds Center'], L['Bounds Size']
         return all(abs(q[a] - c[a]) <= sz[a] / 2 for a in range(3))
 
-    def lux_at(circuit, q, n):
-        """Roughly how much light the circuit's lights put on a wall at point q (pack space) facing n (x, z)."""
-        tot = 0.0
-        for e, p in by_circuit.get(circuit, []):
-            L = e['Light']
-            if not inside(L, q):
-                continue
-            v = [q[a] - p[a] for a in range(3)]
-            d = max(math.sqrt(sum(x * x for x in v)), 0.3)
-            if d >= L['Range']:
-                continue
-            if L['Type'] == 'Spot' and -v[1] / d < math.cos(math.radians(L['Spot Angle'] / 2)):
-                continue        # outside a down-spot's cone
-            facing = max(0.0, -(v[0] * n[0] + v[2] * n[1]) / d)     # the wall turned to the light (cosine)
-            tot += L['Intensity'] * (1.0 - (d / L['Range']) ** 4) ** 2 / (d * d) * facing
-        return tot
-
     def light_switch(circuit, room, n_before):
-        """The plates just placed for `circuit`: their wall inside the room's light boxes, and a spill light where
-        the room's light still leaves them dark."""
+        """The plates just placed for `circuit`: their wall inside the room's light boxes."""
         for _, (px, py, pz), (nx, nz) in w.plates[n_before:]:
             a = 0 if abs(nx) > abs(nz) else 2          # the wall's normal axis (walls are axis-aligned)
             sgn = (nx if a == 0 else nz) > 0
@@ -670,24 +644,6 @@ def wire(s, lay, pk, repo, fh, notes):
                     hi = face
                 L['Bounds Center'][a] = round((lo + hi) / 2, 3)
                 L['Bounds Size'][a] = round(hi - lo, 3)
-            have = lux_at(circuit, (px + nx * 0.02, py, pz + nz * 0.02), (nx, nz))
-            if have >= SWITCH_LUX * 0.75 or not by_circuit.get(circuit):     # near enough: no light for a sliver
-                continue
-            sp = (px + nx * SPILL_IN, room['ceil'] - SPILL_DROP, pz + nz * SPILL_IN)
-            d = math.dist(sp, (px, py, pz))
-            need = (SWITCH_LUX - have) * d * d / (1.0 - (d / SPILL_R) ** 4) ** 2 / (SPILL_IN / d)
-            src = max(by_circuit[circuit], key=lambda ep: ep[0]['Light']['Intensity'])[0]['Light']
-            red_ = src.get('ColorTempK', 0.0) == 0.0 and src['Color'][1] < 0.5
-            e = lit(f'Spill {circuit}', sp, dict(FIT['Lamp_ceiling_circle'], shadow=False, spot=None), circuit, room,
-                    intensity=round(need, 3), rng=SPILL_R, color=fh.RED if red_ else None,
-                    kelvin=None if red_ else 3000.0)
-            L = e['Light']                               # its own box reaches the switch's wall too
-            lo = L['Bounds Center'][a] - L['Bounds Size'][a] / 2
-            hi = L['Bounds Center'][a] + L['Bounds Size'][a] / 2
-            lo, hi = (min(lo, face), hi) if sgn else (lo, max(hi, face))
-            L['Bounds Center'][a] = round((lo + hi) / 2, 3)
-            L['Bounds Size'][a] = round(hi - lo, 3)
-            w.n_spill += 1
 
     in_room = {}
     for i, st in fittings.items():
@@ -830,8 +786,7 @@ def wire(s, lay, pk, repo, fh, notes):
                                                               emissiveStrength=fh.RED_GLOW_S)}]
         lit(f'{st} {circuit}', pos, f, circuit, room, extra=extra, color=fh.RED if red_room else None)
     notes.update({'circuits': n_circuits, 'house lights': w.n_lights, 'shadow-capable': w.n_shadow,
-                  'switches': len(w.switches), 'switch spills': w.n_spill,
-                  'dead fittings': w.n_dead})
+                  'switches': len(w.switches), 'dead fittings': w.n_dead})
     if w.unplaced:
         notes['unplaced switches'] = w.unplaced
     return w
