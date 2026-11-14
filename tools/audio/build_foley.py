@@ -152,6 +152,9 @@ def build_steps(cfg, entries, footwear="boots"):
                     a0 = max(0, on - int(0.004 * SR))
                     s = adsp.fade(adsp.cut(x, a0, a0 + int(0.30 * SR)), int(0.001 * SR), int(0.1 * SR))
                     jobs[kind].append((s, p.replace("\\", "/").split("/")[-1], adsp.take_uses()))
+        th = st.get("thud") if footwear == "generic" else None
+        if th and surface in th["surfaces"]:
+            add_thud(jobs, th)
         for kind, lst in jobs.items():
             tgt = st[kind]["target_lufs"]
             for n, (s, note, uses) in enumerate(lst, 1):
@@ -161,6 +164,32 @@ def build_steps(cfg, entries, footwear="boots"):
                                  "footwear": footwear}, sources=uses)
                 entries.append(e)
                 print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
+
+
+def add_thud(jobs, th):
+    """Weight under a soft surface's steps: the onset of a real boot step on a dull surface (the Boots library's `src` single steps),
+    low-passed at lp_hz, its peak gain_db under the step's, laid at the step's own onset. The rustle stays on top; the heel lands."""
+    files = surf_files(th["src"], f"{th['src']} Single Step", "boots")
+    if not files:
+        raise FileNotFoundError(f"thud: no Boots {th['src']} single steps")
+    k = 0
+    for kind, lst in jobs.items():
+        for n, (s, note, uses) in enumerate(lst):
+            f = files[k % len(files)]
+            k += 1
+            x = adsp.load(f)
+            on = adsp.find_onset(x, 0.05, back_ms=50, fwd_ms=200, frac=0.25, hp=60)
+            a0 = max(0, on - int(0.004 * SR))
+            t = adsp.filt(adsp.cut(x, a0, a0 + len(s)), "lp", float(th["lp_hz"]), order=4)
+            if th.get("hp_hz"):
+                t = adsp.filt(t, "hp", float(th["hp_hz"]), order=4)   # the body, not the room's rumble
+            t = adsp.fade(t, int(0.001 * SR), int(min(0.12, len(t) / SR * 0.5) * SR))
+            t = t * (np.abs(s).max() / (np.abs(t).max() + 1e-9)) * 10 ** (th["gain_db"] / 20.0)
+            y = np.array(s, dtype=np.float32, copy=True)
+            if th.get("step_hp_hz"):
+                y = adsp.filt(y, "hp", float(th["step_hp_hz"]), order=2)
+            y[:len(t)] += t[:len(y)]
+            lst[n] = (y, f"{note} + {os.path.basename(f)} (thud)", uses + adsp.take_uses())
 
 
 def land_heavy(v):

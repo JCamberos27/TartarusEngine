@@ -8275,10 +8275,12 @@
     {
       "Ambience Bed": {
         "Enabled": true,
+        "Door Reach": 4.0,
         "Fade In": 3.0,
+        "Glide": 1.5,
         "Height": 2.0,
-        "Indoor Cutoff Hz": 900.0,
-        "Indoor Gain dB": -12.0,
+        "Indoor Cutoff Hz": 4000.0,
+        "Indoor Gain dB": -10.0,
         "Radius": 15.0,
         "Sound": "snd.amb.night_field",
         "Volume": 1.0
@@ -942348,7 +942350,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -942469,7 +942471,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -942680,7 +942682,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -942801,7 +942803,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -942922,7 +942924,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -943043,7 +943045,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -943164,7 +943166,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -943285,7 +943287,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -943406,7 +943408,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -943527,7 +943529,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -943786,7 +943788,7 @@
               0.07
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.08,
+            "emissiveStrength": 0.6,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {

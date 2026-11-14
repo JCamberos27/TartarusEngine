@@ -2775,6 +2775,8 @@ void RegisterEngineComponents() {
             { "Fade In", T::Float, TARTARUS_REFLECT_FIELD(A, FadeIn), 0.05f, "Seconds from silence when Play starts.", 0.0f, 30.0f },
             { "Indoor Gain dB", T::Float, TARTARUS_REFLECT_FIELD(A, IndoorGainDb), 0.5f, "Fully inside indoor Reverb Zones.", -60.0f, 0.0f },
             { "Indoor Cutoff Hz", T::Float, TARTARUS_REFLECT_FIELD(A, IndoorCutoffHz), 25.0f, "The low-pass fully inside indoor Reverb Zones.", 100.0f, 20000.0f },
+            { "Glide", T::Float, TARTARUS_REFLECT_FIELD(A, Glide), 0.05f, "Seconds for the indoor muffling to go all the way in or out (no snap at a doorway).", 0.0f, 10.0f },
+            { "Door Reach", T::Float, TARTARUS_REFLECT_FIELD(A, DoorReach), 0.1f, "Metres from an open portal to the outside at which the bed starts to open back up (0 = off).", 0.0f, 20.0f },
         };
         Register<AmbienceBedComponent>(std::move(m));
     }
