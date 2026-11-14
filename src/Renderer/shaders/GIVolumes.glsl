@@ -2,7 +2,7 @@
 // volume x layer as a brick of a 3D atlas on unit 28 - nx x ny x 3nz texels, the R, G and B channels' cosine-convolved
 // L1 SH (vec4: DC, then the world-axis linear band) one slab after another along z. A layer's weight is its circuit's
 // state this frame (the Outside's is always 1). uGIEnabled == 0 (the GL default: preview renderers, no bake) skips it.
-#define GI_MAX_VOLUMES 32
+#define GI_MAX_VOLUMES 64
 #define GI_MAX_LAYERS 4
 struct GIVolume {
     vec4 BoxX, BoxY, BoxZ; // world -> box rows: xyz unit axis, w = -dot(axis, centre)
@@ -18,6 +18,10 @@ layout(std140, binding = 4) uniform GIBlock {
 };
 layout(binding = 28) uniform sampler3D uGIAtlas;
 uniform int uGIEnabled;
+uniform int uGIMaskLo;      // the volumes this draw can touch (bit i = volume i), bits 0-31 ...
+uniform int uGIMaskHi;      // ... and 32-63; set per draw
+uniform vec3 uGIBoundsMin;  // every volume's AABB together: pixels outside it skip GI at once
+uniform vec3 uGIBoundsMax;
 // --bake-gi's captures (GIBaker): emission scaled by uGIBakeEmissive, one-sided back faces marked (alpha 0).
 uniform int uGIBake;
 uniform float uGIBakeEmissive;
@@ -31,9 +35,14 @@ vec3 SampleGI(vec3 p, vec3 n, out float fade, out float replaceSky) {
     float wSum = 0.0, skySum = 0.0;
     fade = 0.0;
     replaceSky = 0.0;
-    if (uGIEnabled != 1) return sum;
-    int count = min(uGICount.x, GI_MAX_VOLUMES);
-    for (int v = 0; v < count; ++v) {
+    if (uGIEnabled != 1 || (uGIMaskLo == 0 && uGIMaskHi == 0)) return sum;
+    if (any(lessThan(p, uGIBoundsMin)) || any(greaterThan(p, uGIBoundsMax))) return sum;
+    uint lo = uint(uGIMaskLo), hi = uint(uGIMaskHi);
+    while (lo != 0u || hi != 0u) {
+        int v;
+        if (lo != 0u) { v = findLSB(lo); lo &= lo - 1u; }
+        else { v = 32 + findLSB(hi); hi &= hi - 1u; }
+        if (v >= uGICount.x) break;
         // A little off the surface along its normal: a wall's own probes sit in or behind it.
         vec3 pb = p + n * uGIVolumes[v].Params.z;
         vec3 q = vec3(dot(uGIVolumes[v].BoxX.xyz, pb) + uGIVolumes[v].BoxX.w,

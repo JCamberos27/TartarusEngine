@@ -896,6 +896,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // OutfitHideTag::Visible: the piece's triangles not covered entirely, drawn instead of its own.
         const VisibleIndexBuffer* Visible = nullptr;
         float LayerPull = 0.0f; // OutfitLayerTag: drawn this many metres nearer the camera (depth only)
+        std::uint64_t GIMask = ~0ull; // the GI Volumes its bounds touch (GIVolumes::MaskFor), uGIMask per draw
         // Skinned or a rigidbody: drawn after the static world. Blood stains take only to the static world
         // (Affect Dynamic off), so a character walking through a pool or a crate on a stain covers it.
         bool Dynamic = false;
@@ -1054,6 +1055,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.StaticReceiver = staticReceiver;
+            item.GIMask = in.giVolumes ? (validBounds ? in.giVolumes->MaskFor(vis.WorldMin, vis.WorldMax) : in.giVolumes->AllMask()) : 0ull;
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
             item.LodFade = world.LodFadeOf(entity);
@@ -1093,6 +1095,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.WorldMin = vis.WorldMin;
             item.WorldMax = vis.WorldMax;
             item.Bounded = validBounds;
+            item.GIMask = in.giVolumes ? (validBounds ? in.giVolumes->MaskFor(vis.WorldMin, vis.WorldMax) : in.giVolumes->AllMask()) : 0ull;
             item.Normal = vis.Normal;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
@@ -1227,6 +1230,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uInstanced", instanceBase >= 0 ? instanceMode : 0);
         if (instanceBase >= 0) prog.SetInt("uInstanceBase", instanceBase);
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
+        if (in.giVolumes) GIVolumes::SetMask(prog, probeItem->GIMask);
         prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
         prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
         prog.SetInt("uDecalStatic", probeItem->StaticReceiver ? 1 : 0);
@@ -1432,14 +1436,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
             seed ^= (std::uint64_t)it.Pass | ((std::uint64_t)it.DoubleSided << 4) | ((std::uint64_t)it.ReceiveShadows << 5) |
                     ((std::uint64_t)it.NoSsao << 6) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
-                    ((std::uint64_t)probeKey(i) << 32);
+                    ((std::uint64_t)probeKey(i) << 32) ^ ((std::uint64_t)it.GIMask * 0xC2B2AE3D27D4EB4Full);
             return HashSlots(*it.Slots, seed);
         },
         [&](std::uint32_t a, std::uint32_t b) {
             const DrawItem& x = drawList[a];
             const DrawItem& y = drawList[b];
             return x.Ref->ImportId() == y.Ref->ImportId() && x.Pass == y.Pass && x.DoubleSided == y.DoubleSided && x.ReceiveShadows == y.ReceiveShadows &&
-                   x.NoSsao == y.NoSsao && x.LayerBit == y.LayerBit && probeKey(a) == probeKey(b) && SameSlots(*x.Slots, *y.Slots);
+                   x.NoSsao == y.NoSsao && x.LayerBit == y.LayerBit && probeKey(a) == probeKey(b) && x.GIMask == y.GIMask && SameSlots(*x.Slots, *y.Slots);
         },
         opaqueGroups);
     groupScope.reset();
@@ -1596,7 +1600,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         instanceBase = 0; // uInstanced on; each command's baseInstance is its group's
         instanceMode = hizCulled ? 2 : 1;
         // Everything the per-draw hook reads for a batch's lead (batchable leads have no hiding, fade, pull or blood).
-        perDrawKey = t.Object ^ ((std::uint64_t)instanceMode << 32) ^ ((std::uint64_t)FloatBits(lead.NearHideWidth) << 13);
+        perDrawKey = t.Object ^ ((std::uint64_t)instanceMode << 32) ^ ((std::uint64_t)FloatBits(lead.NearHideWidth) << 13) ^
+                     ((std::uint64_t)lead.GIMask * 0x9E3779B97F4A7C15ull);
         perDrawKeyed = true;
         if (lead.Ref->DrawMeshIndirect(modelShader, t.Mesh, *lead.Slots, selectProgram, perDraw, lead.DoubleSided,
                                        IndirectBuffer::Offset(b.First), (int)b.Count))

@@ -111,6 +111,7 @@ void GIVolumes::Update(const World& world) {
         m_AtlasKey = key;
         Rebuild();
     }
+    Remix();
     WriteUbo();
 }
 
@@ -119,7 +120,12 @@ void GIVolumes::Gather(const World& world) {
     auto view = world.Registry.view<const TransformComponent, const GIVolumeComponent>();
     for (auto [e, tc, gv] : view.each()) {
         if (world.Registry.any_of<InactiveTag, DeactivatedTag>(e)) continue;
-        if ((int)vols.size() >= kMaxVolumes) break;
+        if ((int)vols.size() >= kMaxVolumes) {
+            static bool warned = false;
+            if (!warned) Log::Warn("[GI] more than " + std::to_string(kMaxVolumes) + " GI Volumes: the rest get no GI");
+            warned = true;
+            break;
+        }
         Volume v;
         v.Name = NameOf(world, e);
         v.Bounds = GI::Box::FromTransform(world.GetCachedWorldTransform(e), gv.Size);
@@ -135,6 +141,16 @@ void GIVolumes::Gather(const World& world) {
             v.Layers.push_back(l);
             if (v.Bake->Layers[l].Circuit.empty()) v.ReplacesSky = true;
         }
+        v.WorldMin = glm::vec3(1e30f);
+        v.WorldMax = glm::vec3(-1e30f);
+        for (int c = 0; c < 8; ++c) {
+            const glm::vec3 q((c & 1) ? v.Bounds.Half.x : -v.Bounds.Half.x, (c & 2) ? v.Bounds.Half.y : -v.Bounds.Half.y,
+                              (c & 4) ? v.Bounds.Half.z : -v.Bounds.Half.z);
+            v.WorldMin = glm::min(v.WorldMin, v.Bounds.ToWorld(q));
+            v.WorldMax = glm::max(v.WorldMax, v.Bounds.ToWorld(q));
+        }
+        v.WorldMin -= glm::vec3(0.25f * v.Spacing);
+        v.WorldMax += glm::vec3(0.25f * v.Spacing);
         vols.push_back(std::move(v));
     }
 
@@ -152,6 +168,28 @@ void GIVolumes::Gather(const World& world) {
         }
     }
     m_Volumes = std::move(vols);
+    m_AllMin = glm::vec3(1e30f);
+    m_AllMax = glm::vec3(-1e30f);
+    for (const auto& v : m_Volumes) {
+        m_AllMin = glm::min(m_AllMin, v.WorldMin);
+        m_AllMax = glm::max(m_AllMax, v.WorldMax);
+    }
+}
+
+void GIVolumes::SetMask(Shader& program, std::uint64_t mask) {
+    program.SetInt("uGIMaskLo", (int)(std::uint32_t)mask);
+    program.SetInt("uGIMaskHi", (int)(std::uint32_t)(mask >> 32));
+}
+
+std::uint64_t GIVolumes::MaskFor(const glm::vec3& mn, const glm::vec3& mx) const {
+    std::uint64_t m = 0;
+    for (std::size_t i = 0; i < m_Volumes.size() && i < 64; ++i) {
+        const Volume& v = m_Volumes[i];
+        if (mn.x <= v.WorldMax.x && mx.x >= v.WorldMin.x && mn.y <= v.WorldMax.y && mx.y >= v.WorldMin.y &&
+            mn.z <= v.WorldMax.z && mx.z >= v.WorldMin.z)
+            m |= 1ull << i;
+    }
+    return m;
 }
 
 void GIVolumes::Rebuild() {
@@ -164,9 +202,10 @@ void GIVolumes::Rebuild() {
     m_AtlasSize = glm::ivec3(0);
     if (m_Volumes.empty()) return;
 
+    // One brick per volume: its layers mixed by their circuits' weights (Remix), so a pixel reads three texels a
+    // volume however many circuits light it - reading every layer cost the living room's 10 volumes x 4 layers.
     std::vector<glm::ivec3> sizes;
-    for (const auto& v : m_Volumes)
-        for (std::size_t l = 0; l < v.Layers.size(); ++l) sizes.push_back({v.Dims.x, v.Dims.y, 3 * v.Dims.z});
+    for (const auto& v : m_Volumes) sizes.push_back({v.Dims.x, v.Dims.y, 3 * v.Dims.z});
     const GLint max3d = 2048; // GL_MAX_3D_TEXTURE_SIZE's guaranteed minimum on GL 4.3+
     m_BrickOrigin = Pack(sizes, std::min(512, (int)max3d), m_AtlasSize);
     if (m_AtlasSize.z > max3d || m_AtlasSize.y > max3d) {
@@ -176,66 +215,72 @@ void GIVolumes::Rebuild() {
         m_BrickOrigin.clear();
         return;
     }
-
-    std::vector<std::uint16_t> texels((std::size_t)m_AtlasSize.x * m_AtlasSize.y * m_AtlasSize.z * 4, 0);
-    auto put = [&](const glm::ivec3& t, const glm::vec4& v) {
-        const std::size_t i = (((std::size_t)t.z * m_AtlasSize.y + t.y) * m_AtlasSize.x + t.x) * 4;
-        for (int k = 0; k < 4; ++k) texels[i + k] = glm::packHalf1x16(v[k]);
-    };
-    int brick = 0;
-    for (const auto& v : m_Volumes)
-        for (int l : v.Layers) {
-            const glm::ivec3 o = m_BrickOrigin[brick++];
-            const auto& probes = v.Bake->Layers[l].Probes;
-            for (int z = 0; z < v.Dims.z; ++z)
-                for (int y = 0; y < v.Dims.y; ++y)
-                    for (int x = 0; x < v.Dims.x; ++x) {
-                        const GI::ProbeSH& sh = probes[GI::ProbeIndex({x, y, z}, v.Dims)];
-                        for (int c = 0; c < 3; ++c) put(o + glm::ivec3(x, y, z + c * v.Dims.z), sh.c[c]);
-                    }
-        }
-
+    m_Mixed.assign(m_Volumes.size(), {});
+    const std::size_t texelCount = (std::size_t)m_AtlasSize.x * m_AtlasSize.y * m_AtlasSize.z;
     glCreateTextures(GL_TEXTURE_3D, 1, &m_Atlas);
     glTextureStorage3D(m_Atlas, 1, GL_RGBA16F, m_AtlasSize.x, m_AtlasSize.y, m_AtlasSize.z);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTextureSubImage3D(m_Atlas, 0, 0, 0, 0, m_AtlasSize.x, m_AtlasSize.y, m_AtlasSize.z, GL_RGBA, GL_HALF_FLOAT,
-                        texels.data());
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTextureParameteri(m_Atlas, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_Atlas, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(m_Atlas, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(m_Atlas, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTextureParameteri(m_Atlas, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    GpuMemTrack::Set(GpuMemTrack::Key("GI atlas", this), texels.size() * sizeof(std::uint16_t));
+    GpuMemTrack::Set(GpuMemTrack::Key("GI atlas", this), texelCount * 4 * sizeof(std::uint16_t));
     Log::Info("[GI] atlas " + std::to_string(m_AtlasSize.x) + "x" + std::to_string(m_AtlasSize.y) + "x" +
-              std::to_string(m_AtlasSize.z) + ", " + std::to_string(m_Volumes.size()) + " volumes, " +
-              std::to_string(brick) + " bricks");
+              std::to_string(m_AtlasSize.z) + ", " + std::to_string(m_Volumes.size()) + " volumes");
+}
+
+void GIVolumes::Remix() {
+    if (!m_Atlas || m_Mixed.size() != m_Volumes.size()) return;
+    std::vector<std::uint16_t> buf;
+    for (std::size_t i = 0; i < m_Volumes.size(); ++i) {
+        const Volume& v = m_Volumes[i];
+        if (m_Mixed[i] == v.Weights) continue; // a switch flip remixes only the volumes its circuit reaches
+        m_Mixed[i] = v.Weights;
+        const std::size_t n = (std::size_t)v.Dims.x * v.Dims.y * v.Dims.z;
+        buf.assign(n * 3 * 4, 0);
+        for (int z = 0; z < v.Dims.z; ++z)
+            for (int y = 0; y < v.Dims.y; ++y)
+                for (int x = 0; x < v.Dims.x; ++x) {
+                    const int p = GI::ProbeIndex({x, y, z}, v.Dims);
+                    GI::ProbeSH sum;
+                    for (std::size_t l = 0; l < v.Layers.size(); ++l)
+                        if (v.Weights[l] > 0.0f)
+                            for (int c = 0; c < 3; ++c) sum.c[c] += v.Bake->Layers[v.Layers[l]].Probes[p].c[c] * v.Weights[l];
+                    for (int c = 0; c < 3; ++c) {
+                        // brick layout: x, y, then z with the R, G, B slabs one after another
+                        const std::size_t t = (((std::size_t)(z + c * v.Dims.z) * v.Dims.y + y) * v.Dims.x + x) * 4;
+                        for (int k = 0; k < 4; ++k) buf[t + k] = glm::packHalf1x16(sum.c[c][k]);
+                    }
+                }
+        const glm::ivec3 o = m_BrickOrigin[i];
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTextureSubImage3D(m_Atlas, 0, o.x, o.y, o.z, v.Dims.x, v.Dims.y, 3 * v.Dims.z, GL_RGBA, GL_HALF_FLOAT, buf.data());
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    }
 }
 
 void GIVolumes::WriteUbo() {
     GpuBlock b{};
     b.Count = glm::ivec4((m_Enabled && m_Atlas) ? (int)m_Volumes.size() : 0, 0, 0, 0);
     b.AtlasInv = glm::vec4(1.0f / glm::vec3(glm::max(m_AtlasSize, glm::ivec3(1))), 0.0f);
-    int brick = 0;
     for (std::size_t i = 0; i < m_Volumes.size(); ++i) {
         const Volume& v = m_Volumes[i];
         GpuVolume& g = b.V[i];
         glm::vec4* rows[3] = {&g.BoxX, &g.BoxY, &g.BoxZ};
         for (int a = 0; a < 3; ++a) *rows[a] = glm::vec4(v.Bounds.Axis[a], -glm::dot(v.Bounds.Axis[a], v.Bounds.Center));
         g.HalfFade = glm::vec4(v.Bounds.Half, v.Fade);
-        g.Dims = glm::vec4(glm::vec3(v.Dims), (float)v.Layers.size());
+        bool lit = false; // every layer dark (a room with its lights off and no Outside): the volume adds nothing
+        for (float w : v.Weights) lit = lit || w > 0.0f;
+        g.Dims = glm::vec4(glm::vec3(v.Dims), lit ? 1.0f : 0.0f); // the layers are mixed into one brick
         g.Params = glm::vec4(v.Intensity, v.ReplacesSky ? 1.0f : 0.0f, 0.25f * v.Spacing, 0.0f);
-        for (std::size_t l = 0; l < v.Layers.size(); ++l) {
-            const glm::ivec3 o = brick < (int)m_BrickOrigin.size() ? m_BrickOrigin[brick] : glm::ivec3(0);
-            g.Brick[l] = glm::vec4(glm::vec3(o), v.Weights[l]);
-            ++brick;
-        }
+        const glm::ivec3 o = i < m_BrickOrigin.size() ? m_BrickOrigin[i] : glm::ivec3(0);
+        g.Brick[0] = glm::vec4(glm::vec3(o), 1.0f);
     }
     if (!m_Ubo) {
         glCreateBuffers(1, &m_Ubo);
         glNamedBufferData(m_Ubo, sizeof(GpuBlock), nullptr, GL_DYNAMIC_DRAW);
     }
-    // Only what is used, and only when it changed (a switch flip, a moved volume).
+    // Only what is used, and only when it changed (a moved or new volume; a switch flip is Remix's).
     const std::size_t bytes = 32 + 160 * std::max<std::size_t>(m_Volumes.size(), 1);
     const float* f = reinterpret_cast<const float*>(&b);
     if (m_LastUbo.size() == bytes / 4 && std::memcmp(m_LastUbo.data(), f, bytes) == 0) return;
@@ -246,6 +291,10 @@ void GIVolumes::WriteUbo() {
 void GIVolumes::Bind(Shader& program) const {
     const bool on = m_Enabled && m_Atlas && !m_Volumes.empty();
     program.SetInt("uGIEnabled", on ? 1 : 0);
+    // Draws that don't set their own mask (grass, fur, impostors) test every volume, behind the quick reject.
+    SetMask(program, AllMask());
+    program.SetVec3("uGIBoundsMin", m_AllMin);
+    program.SetVec3("uGIBoundsMax", m_AllMax);
     glBindTextureUnit(kUnit, m_Atlas ? m_Atlas : DefaultTextures::Volume());
     if (m_Ubo) glBindBufferBase(GL_UNIFORM_BUFFER, kUboBinding, m_Ubo);
 }

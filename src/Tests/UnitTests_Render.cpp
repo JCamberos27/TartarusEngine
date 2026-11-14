@@ -762,6 +762,37 @@ void GIVolumeLookup() {
     gi.Gather(world);
     CHECK(gi.Count() == 0);
 
+    // More volumes than 32 (the Forest house has 46): every one is kept, and a draw's mask reaches the high ones.
+    {
+        World many;
+        GI::BakeFile mf;
+        for (int i = 0; i < 46; ++i) {
+            const entt::entity e = many.Registry.create();
+            auto& t = many.Registry.emplace<TransformComponent>(e);
+            t.Position = glm::vec3(10.0f * i, 0.0f, 0.0f);
+            const std::string nm = "V" + std::to_string(i);
+            many.Registry.emplace<NameComponent>(e, NameComponent{nm});
+            auto& c = many.Registry.emplace<GIVolumeComponent>(e);
+            c.Size = glm::vec3(4, 3, 4);
+            GI::VolumeBake b = sv;
+            b.Name = nm;
+            b.Bounds.Center = t.Position;
+            mf.Volumes.push_back(b);
+        }
+        many.RebuildWorldTransformCache();
+        GIVolumes g;
+        g.SetOverride(std::make_shared<GI::BakeFile>(mf));
+        g.Gather(many);
+        CHECK(g.Count() == 46);
+        const std::uint64_t m = g.MaskFor(glm::vec3(449, 0, 0), glm::vec3(451, 1, 1)); // only V45 is there
+        CHECK(m != 0 && (m & (m - 1)) == 0);
+        int bit = 0;
+        while (!((m >> bit) & 1ull)) ++bit;
+        CHECK(g.Volumes()[bit].Name == "V45");
+        CHECK(g.MaskFor(glm::vec3(-1000), glm::vec3(1000)) == g.AllMask());
+        CHECK(g.AllMask() == (1ull << 46) - 1ull);
+    }
+
     // The component saves and loads.
     gc.Spacing = 0.5f;
     gc.BakeFile = "scenes/Test.gi";

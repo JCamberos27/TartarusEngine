@@ -377958,15 +377958,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -29.66,
+          -32.98,
           2.038,
-          -11.64
+          -11.58
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          4.72,
+          11.36,
           2.815,
-          7.48
+          7.6
         ],
         "Cast Shadows": true,
         "Color": [
@@ -377977,7 +377977,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 1.1,
-        "Range": 4.6,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378018,15 +378018,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -35.32,
+          -32.98,
           2.038,
-          -12.48
+          -11.58
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          6.68,
+          11.36,
           2.815,
-          5.8
+          7.6
         ],
         "Cast Shadows": true,
         "Color": [
@@ -378037,7 +378037,7 @@
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
         "Intensity": 1.68,
-        "Range": 3.3005383337954672,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378078,15 +378078,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -35.32,
+          -32.98,
           2.038,
-          -12.48
+          -11.58
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          6.68,
+          11.36,
           2.815,
-          5.8
+          7.6
         ],
         "Cast Shadows": false,
         "Color": [
@@ -378097,7 +378097,7 @@
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
         "Intensity": 1.2800000000000002,
-        "Range": 4.676699999999999,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378138,15 +378138,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -35.32,
+          -32.98,
           2.038,
-          -12.48
+          -11.58
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          6.68,
+          11.36,
           2.815,
-          5.8
+          7.6
         ],
         "Cast Shadows": false,
         "Color": [
@@ -378157,7 +378157,7 @@
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
         "Intensity": 1.2800000000000002,
-        "Range": 4.500741999999998,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378198,15 +378198,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -29.66,
+          -32.98,
           2.038,
-          -11.64
+          -11.58
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          4.72,
+          11.36,
           2.815,
-          7.48
+          7.6
         ],
         "Cast Shadows": false,
         "Color": [
@@ -378217,7 +378217,7 @@
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
         "Intensity": 1.2800000000000002,
-        "Range": 4.5019064,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378258,73 +378258,13 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -35.32,
-          2.038,
-          -12.48
-        ],
-        "Bounds Fade": 0.05,
-        "Bounds Size": [
-          6.68,
-          2.815,
-          5.8
-        ],
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.86,
-          0.7
-        ],
-        "ColorTempK": 3000.0,
-        "Culling Mask": -1,
-        "Intensity": 1.059,
-        "Range": 5.07,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.3,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
-      },
-      "Light Circuit": {
-        "Circuit": "Kitchen",
-        "Glow": 0.0
-      },
-      "id": 107467,
-      "name": "Bounce Kitchen",
-      "order": 107467,
-      "parentId": 107461,
-      "position": [
-        -33.95,
-        2.695,
-        -11.59
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.53,
-        "Bounds": true,
-        "Bounds Center": [
-          -34.92,
+          -33.32,
           2.038,
           10.615
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          7.48,
+          10.68,
           2.815,
           5.67
         ],
@@ -378337,7 +378277,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 1.1,
-        "Range": 4.6,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378378,15 +378318,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -33.47,
+          -33.32,
           2.038,
-          10.25
+          10.615
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          10.38,
+          10.68,
           2.815,
-          4.54
+          5.67
         ],
         "Cast Shadows": true,
         "Color": [
@@ -378397,7 +378337,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 1.1,
-        "Range": 4.6,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378420,66 +378360,6 @@
         -29.7588,
         2.4724,
         9.9462
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.53,
-        "Bounds": true,
-        "Bounds Center": [
-          -34.92,
-          2.038,
-          10.615
-        ],
-        "Bounds Fade": 0.05,
-        "Bounds Size": [
-          7.48,
-          2.815,
-          5.67
-        ],
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.86,
-          0.7
-        ],
-        "ColorTempK": 3000.0,
-        "Culling Mask": -1,
-        "Intensity": 0.352,
-        "Range": 5.49,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.3,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
-      },
-      "Light Circuit": {
-        "Circuit": "Living room",
-        "Glow": 0.0
-      },
-      "id": 107472,
-      "name": "Bounce Living room",
-      "order": 107472,
-      "parentId": 107461,
-      "position": [
-        -34.92,
-        2.695,
-        10.615
       ],
       "rotation": [
         0.0,
@@ -378521,15 +378401,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -32.545,
+          -32.6,
           2.038,
-          -4.95
+          -2.035
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          2.73,
+          2.84,
           2.815,
-          4.94
+          10.77
         ],
         "Cast Shadows": false,
         "Color": [
@@ -378540,7 +378420,7 @@
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
         "Intensity": 0.8,
-        "Range": 3.6,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378604,15 +378484,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -32.55,
+          -32.6,
           2.038,
-          0.665
+          -2.035
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          2.74,
+          2.84,
           2.815,
-          5.37
+          10.77
         ],
         "Cast Shadows": false,
         "Color": [
@@ -378623,7 +378503,7 @@
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
         "Intensity": 0.8,
-        "Range": 3.6,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378664,66 +378544,6 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -32.48,
-          2.038,
-          -2.035
-        ],
-        "Bounds Fade": 0.05,
-        "Bounds Size": [
-          2.6,
-          2.815,
-          10.77
-        ],
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.86,
-          0.7
-        ],
-        "ColorTempK": 3000.0,
-        "Culling Mask": -1,
-        "Intensity": 0.256,
-        "Range": 6.34,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.3,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
-      },
-      "Light Circuit": {
-        "Circuit": "Hall",
-        "Glow": 0.0
-      },
-      "id": 107481,
-      "name": "Bounce Hall",
-      "order": 107481,
-      "parentId": 107461,
-      "position": [
-        -32.48,
-        2.695,
-        -2.035
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.53,
-        "Bounds": true,
-        "Bounds Center": [
           -32.541,
           2.038,
           5.13
@@ -378743,7 +378563,7 @@
         "ColorTempK": 3400.0,
         "Culling Mask": -1,
         "Intensity": 0.35,
-        "Range": 2.2,
+        "Range": 3.88,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378851,73 +378671,13 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -32.98,
-          4.947,
-          -9.944
-        ],
-        "Bounds Fade": 0.05,
-        "Bounds Size": [
-          11.36,
-          2.815,
-          4.272
-        ],
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.035,
-          0.02
-        ],
-        "ColorTempK": 0.0,
-        "Culling Mask": -1,
-        "Intensity": 0.256,
-        "Range": 6.86,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.3,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
-      },
-      "Light Circuit": {
-        "Circuit": "Master bedroom",
-        "Glow": 0.0
-      },
-      "id": 107488,
-      "name": "Bounce Master bedroom",
-      "order": 107488,
-      "parentId": 107461,
-      "position": [
-        -32.98,
-        5.605,
-        -9.98
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.53,
-        "Bounds": true,
-        "Bounds Center": [
-          -36.875,
+          -36.81,
           4.947,
           -3.8
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          3.57,
+          3.7,
           2.815,
           7.84
         ],
@@ -378930,7 +378690,7 @@
         "ColorTempK": 2900.0,
         "Culling Mask": -1,
         "Intensity": 0.85,
-        "Range": 4.2,
+        "Range": 5.5,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -378953,66 +378713,6 @@
         -36.5894,
         6.041,
         -3.5327
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.53,
-        "Bounds": true,
-        "Bounds Center": [
-          -36.875,
-          4.947,
-          -3.8
-        ],
-        "Bounds Fade": 0.05,
-        "Bounds Size": [
-          3.57,
-          2.815,
-          7.84
-        ],
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.86,
-          0.7
-        ],
-        "ColorTempK": 3000.0,
-        "Culling Mask": -1,
-        "Intensity": 0.136,
-        "Range": 5.11,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.3,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
-      },
-      "Light Circuit": {
-        "Circuit": "Den",
-        "Glow": 0.0
-      },
-      "id": 107492,
-      "name": "Bounce Den",
-      "order": 107492,
-      "parentId": 107461,
-      "position": [
-        -36.875,
-        5.605,
-        -3.8
       ],
       "rotation": [
         0.0,
@@ -379091,15 +378791,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -33.03,
+          -33.05,
           4.947,
-          -6.25
+          -5.1
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          3.7,
+          3.74,
           2.815,
-          2.74
+          5.24
         ],
         "Cast Shadows": false,
         "Color": [
@@ -379110,7 +378810,7 @@
         "ColorTempK": 3400.0,
         "Culling Mask": -1,
         "Intensity": 0.5075,
-        "Range": 2.2,
+        "Range": 5.57,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379151,66 +378851,6 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -33.426,
-          4.947,
-          -5.05
-        ],
-        "Bounds Fade": 0.05,
-        "Bounds Size": [
-          2.892,
-          2.815,
-          5.14
-        ],
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.86,
-          0.7
-        ],
-        "ColorTempK": 3000.0,
-        "Culling Mask": -1,
-        "Intensity": 0.248,
-        "Range": 3.71,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.3,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
-      },
-      "Light Circuit": {
-        "Circuit": "Upstairs bathroom",
-        "Glow": 0.0
-      },
-      "id": 107497,
-      "name": "Bounce Upstairs bathroom",
-      "order": 107497,
-      "parentId": 107461,
-      "position": [
-        -33.35,
-        5.605,
-        -5.05
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.53,
-        "Bounds": true,
-        "Bounds Center": [
           -33.75,
           4.947,
           10.895
@@ -379230,7 +378870,7 @@
         "ColorTempK": 2900.0,
         "Culling Mask": -1,
         "Intensity": 0.85,
-        "Range": 4.2,
+        "Range": 4.99,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379271,66 +378911,6 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -33.75,
-          4.947,
-          10.895
-        ],
-        "Bounds Fade": 0.05,
-        "Bounds Size": [
-          5.14,
-          2.815,
-          5.23
-        ],
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.86,
-          0.7
-        ],
-        "ColorTempK": 3000.0,
-        "Culling Mask": -1,
-        "Intensity": 0.136,
-        "Range": 4.47,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.3,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
-      },
-      "Light Circuit": {
-        "Circuit": "Child's bedroom",
-        "Glow": 0.0
-      },
-      "id": 107501,
-      "name": "Bounce Child's bedroom",
-      "order": 107501,
-      "parentId": 107461,
-      "position": [
-        -33.75,
-        5.605,
-        10.895
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.53,
-        "Bounds": true,
-        "Bounds Center": [
           -33.38,
           4.947,
           2.345
@@ -379350,7 +378930,7 @@
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
         "Intensity": 1.52,
-        "Range": 4.254300865288288,
+        "Range": 4.57,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379410,7 +378990,7 @@
         "ColorTempK": 2900.0,
         "Culling Mask": -1,
         "Intensity": 0.85,
-        "Range": 4.2,
+        "Range": 7.69,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379470,7 +379050,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 0.5,
-        "Range": 2.6,
+        "Range": 4.5,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379530,7 +379110,7 @@
         "ColorTempK": 0.0,
         "Culling Mask": -1,
         "Intensity": 0.35,
-        "Range": 2.2,
+        "Range": 7.33,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379590,7 +379170,7 @@
         "ColorTempK": 3200.0,
         "Culling Mask": -1,
         "Intensity": 0.45,
-        "Range": 1.8,
+        "Range": 7.02,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379650,7 +379230,7 @@
         "ColorTempK": 0.0,
         "Culling Mask": -1,
         "Intensity": 0.35,
-        "Range": 2.2,
+        "Range": 7.67,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379691,15 +379271,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -33.47,
+          -33.32,
           2.038,
-          10.25
+          10.615
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          10.38,
+          10.68,
           2.815,
-          4.54
+          5.67
         ],
         "Cast Shadows": false,
         "Color": [
@@ -379710,7 +379290,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 0.35,
-        "Range": 2.2,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379770,7 +379350,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 0.35,
-        "Range": 2.2,
+        "Range": 6.89,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379830,7 +379410,7 @@
         "ColorTempK": 0.0,
         "Culling Mask": -1,
         "Intensity": 0.5,
-        "Range": 2.6,
+        "Range": 7.57,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379871,15 +379451,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -35.32,
+          -32.98,
           2.038,
-          -12.48
+          -11.58
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          6.68,
+          11.36,
           2.815,
-          5.8
+          7.6
         ],
         "Cast Shadows": false,
         "Color": [
@@ -379890,7 +379470,7 @@
         "ColorTempK": 4300.0,
         "Culling Mask": -1,
         "Intensity": 0.6,
-        "Range": 2.6,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379938,15 +379518,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -29.66,
+          -32.98,
           2.038,
-          -11.64
+          -11.58
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          4.72,
+          11.36,
           2.815,
-          7.48
+          7.6
         ],
         "Cast Shadows": false,
         "Color": [
@@ -379957,7 +379537,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 0.5,
-        "Range": 2.6,
+        "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -379998,15 +379578,15 @@
         "Angular Size": 0.53,
         "Bounds": true,
         "Bounds Center": [
-          -36.39,
+          -36.37,
           4.947,
-          6.85
+          6.4
         ],
         "Bounds Fade": 0.05,
         "Bounds Size": [
-          4.54,
+          4.58,
           2.815,
-          2.14
+          3.04
         ],
         "Cast Shadows": false,
         "Color": [
@@ -380017,7 +379597,7 @@
         "ColorTempK": 2700.0,
         "Culling Mask": -1,
         "Intensity": 0.5,
-        "Range": 2.6,
+        "Range": 5.05,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
@@ -397144,6 +396724,1616 @@
         -3e-06,
         -0.000309,
         0.999954
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          7.48,
+          2.815,
+          5.67
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109171,
+      "name": "GI living room 1",
+      "order": 109171,
+      "parentId": 107461,
+      "position": [
+        -34.92,
+        2.038,
+        10.615
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          4.67,
+          2.815,
+          1.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109172,
+      "name": "GI living room 2",
+      "order": 109172,
+      "parentId": 107461,
+      "position": [
+        -36.325,
+        2.038,
+        7.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.54,
+          2.815,
+          2.24
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109173,
+      "name": "GI living room 3",
+      "order": 109173,
+      "parentId": 107461,
+      "position": [
+        -36.35,
+        2.038,
+        5.9
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.04,
+          2.815,
+          4.49
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109174,
+      "name": "GI living room 4",
+      "order": 109174,
+      "parentId": 107461,
+      "position": [
+        -29.8,
+        2.038,
+        10.225
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Downstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.94,
+          2.815,
+          1.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109175,
+      "name": "GI living room 5",
+      "order": 109175,
+      "parentId": 107461,
+      "position": [
+        -34.25,
+        2.038,
+        5.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15;Downstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.03,
+          2.815,
+          1.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109176,
+      "name": "GI living room 6",
+      "order": 109176,
+      "parentId": 107461,
+      "position": [
+        -34.505,
+        2.038,
+        4.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.68,
+          2.815,
+          1.97
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109177,
+      "name": "GI living room 7",
+      "order": 109177,
+      "parentId": 107461,
+      "position": [
+        -38.32,
+        2.038,
+        5.765
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.73,
+          2.815,
+          0.97
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109178,
+      "name": "GI living room 8",
+      "order": 109178,
+      "parentId": 107461,
+      "position": [
+        -34.355,
+        2.038,
+        6.265
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15;Downstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.9,
+          2.815,
+          0.54
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109179,
+      "name": "GI living room 9",
+      "order": 109179,
+      "parentId": 107461,
+      "position": [
+        -34.57,
+        2.038,
+        3.75
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.44,
+          2.815,
+          1.0
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109180,
+      "name": "GI living room 10",
+      "order": 109180,
+      "parentId": 107461,
+      "position": [
+        -28.2,
+        2.038,
+        10.59
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.73,
+          2.815,
+          4.84
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109181,
+      "name": "GI stair storeroom",
+      "order": 109181,
+      "parentId": 107461,
+      "position": [
+        -37.295,
+        2.038,
+        -5.3
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          4.72,
+          2.815,
+          7.48
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109182,
+      "name": "GI kitchen-dining 1",
+      "order": 109182,
+      "parentId": 107461,
+      "position": [
+        -29.66,
+        2.038,
+        -11.64
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          6.78,
+          2.815,
+          1.84
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109183,
+      "name": "GI kitchen-dining 2",
+      "order": 109183,
+      "parentId": 107461,
+      "position": [
+        -35.27,
+        2.038,
+        -8.7
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.94,
+          2.815,
+          5.9
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109184,
+      "name": "GI kitchen-dining 3",
+      "order": 109184,
+      "parentId": 107461,
+      "position": [
+        -33.95,
+        2.038,
+        -12.43
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.86,
+          2.815,
+          2.14
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109185,
+      "name": "GI kitchen-dining 4",
+      "order": 109185,
+      "parentId": 107461,
+      "position": [
+        -34.92,
+        2.038,
+        -6.85
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.73,
+          2.815,
+          3.54
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109186,
+      "name": "GI kitchen-dining 5",
+      "order": 109186,
+      "parentId": 107461,
+      "position": [
+        -34.855,
+        2.038,
+        -4.15
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          4.58,
+          2.815,
+          2.64
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109187,
+      "name": "GI kitchen-dining 6",
+      "order": 109187,
+      "parentId": 107461,
+      "position": [
+        -36.37,
+        2.038,
+        -1.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.78,
+          2.815,
+          5.9
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109188,
+      "name": "GI kitchen-dining 7",
+      "order": 109188,
+      "parentId": 107461,
+      "position": [
+        -37.27,
+        2.038,
+        -12.43
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.14,
+          2.815,
+          0.54
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109189,
+      "name": "GI kitchen-dining 8",
+      "order": 109189,
+      "parentId": 107461,
+      "position": [
+        -37.35,
+        2.038,
+        -2.65
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.34,
+          2.815,
+          0.49
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109190,
+      "name": "GI kitchen-dining 9",
+      "order": 109190,
+      "parentId": 107461,
+      "position": [
+        -36.25,
+        2.038,
+        -2.625
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.34,
+          2.815,
+          1.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109191,
+      "name": "GI kitchen-dining 10",
+      "order": 109191,
+      "parentId": 107461,
+      "position": [
+        -33.95,
+        2.038,
+        -5.82
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Downstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.64,
+          2.815,
+          3.38
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109192,
+      "name": "GI downstairs bathroom 1",
+      "order": 109192,
+      "parentId": 107461,
+      "position": [
+        -32.5,
+        2.038,
+        5.13
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Downstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.25,
+          2.815,
+          1.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109193,
+      "name": "GI downstairs bathroom 2",
+      "order": 109193,
+      "parentId": 107461,
+      "position": [
+        -32.695,
+        2.038,
+        7.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Hall",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.74,
+          2.815,
+          5.37
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109194,
+      "name": "GI entrance hall 1",
+      "order": 109194,
+      "parentId": 107461,
+      "position": [
+        -32.55,
+        2.038,
+        0.665
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Hall",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.64,
+          2.815,
+          5.54
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109195,
+      "name": "GI entrance hall 2",
+      "order": 109195,
+      "parentId": 107461,
+      "position": [
+        -32.5,
+        2.038,
+        -4.65
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Hall;Living room",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.24,
+          2.815,
+          2.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109196,
+      "name": "GI entrance hall 3",
+      "order": 109196,
+      "parentId": 107461,
+      "position": [
+        -34.4,
+        2.038,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Hall;Living room",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.03,
+          2.815,
+          1.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109197,
+      "name": "GI entrance hall 4",
+      "order": 109197,
+      "parentId": 107461,
+      "position": [
+        -34.505,
+        2.038,
+        2.9
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Hall;Kitchen",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.34,
+          2.815,
+          1.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109198,
+      "name": "GI entrance hall 5",
+      "order": 109198,
+      "parentId": 107461,
+      "position": [
+        -33.85,
+        2.038,
+        -5.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Hall",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.44,
+          2.815,
+          1.11
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109199,
+      "name": "GI entrance hall 6",
+      "order": 109199,
+      "parentId": 107461,
+      "position": [
+        -31.1,
+        2.038,
+        0.005
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Child's bedroom;Lamp_stand 10;Lamp_wall_desk 12",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          5.14,
+          2.815,
+          5.23
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109200,
+      "name": "GI child's bedroom 1",
+      "order": 109200,
+      "parentId": 107461,
+      "position": [
+        -33.75,
+        4.947,
+        10.895
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Child's bedroom;Lamp_stand 10",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.73,
+          2.815,
+          1.1
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109201,
+      "name": "GI child's bedroom 2",
+      "order": 109201,
+      "parentId": 107461,
+      "position": [
+        -32.545,
+        4.947,
+        7.87
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Den",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.63,
+          2.815,
+          3.44
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109202,
+      "name": "GI upstairs den 1",
+      "order": 109202,
+      "parentId": 107461,
+      "position": [
+        -36.775,
+        4.947,
+        -6.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Den",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.58,
+          2.815,
+          4.54
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109203,
+      "name": "GI upstairs den 2",
+      "order": 109203,
+      "parentId": 107461,
+      "position": [
+        -36.87,
+        4.947,
+        -2.15
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Master bedroom;Lamp_table_B 11;Lamp_table_B 13",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          5.62,
+          2.815,
+          6.12
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109204,
+      "name": "GI master bedroom 1",
+      "order": 109204,
+      "parentId": 107461,
+      "position": [
+        -30.11,
+        4.947,
+        -10.96
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Master bedroom;Lamp_table_B 11;Lamp_table_B 13",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.74,
+          2.815,
+          4.3
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109205,
+      "name": "GI master bedroom 2",
+      "order": 109205,
+      "parentId": 107461,
+      "position": [
+        -33.65,
+        4.947,
+        -9.93
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Master bedroom;Lamp_table_B 11;Lamp_table_B 13",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          4.28,
+          2.815,
+          4.2
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109206,
+      "name": "GI master bedroom 3",
+      "order": 109206,
+      "parentId": 107461,
+      "position": [
+        -36.52,
+        4.947,
+        -9.98
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Stairs;Lamp_floor 20",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          4.58,
+          2.815,
+          3.04
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109207,
+      "name": "GI landing",
+      "order": 109207,
+      "parentId": 107461,
+      "position": [
+        -36.37,
+        4.947,
+        6.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Stairs",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.0,
+          2.815,
+          4.93
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109208,
+      "name": "GI upstairs hall",
+      "order": 109208,
+      "parentId": 107461,
+      "position": [
+        -33.38,
+        4.947,
+        2.345
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Upstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.54,
+          2.815,
+          3.84
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109209,
+      "name": "GI upstairs bathroom 1",
+      "order": 109209,
+      "parentId": 107461,
+      "position": [
+        -33.65,
+        4.947,
+        -5.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Upstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.44,
+          2.815,
+          1.54
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109210,
+      "name": "GI upstairs bathroom 2",
+      "order": 109210,
+      "parentId": 107461,
+      "position": [
+        -33.0,
+        4.947,
+        -3.25
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Upstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.34,
+          2.815,
+          2.73
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109211,
+      "name": "GI upstairs bathroom 3",
+      "order": 109211,
+      "parentId": 107461,
+      "position": [
+        -31.85,
+        4.947,
+        -6.255
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Upstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.24,
+          2.815,
+          1.12
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109212,
+      "name": "GI upstairs bathroom 4",
+      "order": 109212,
+      "parentId": 107461,
+      "position": [
+        -32.3,
+        4.947,
+        -2.06
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Upstairs bathroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          1.27,
+          2.815,
+          0.93
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109213,
+      "name": "GI upstairs bathroom 5",
+      "order": 109213,
+      "parentId": 107461,
+      "position": [
+        -31.885,
+        4.947,
+        -4.345
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Master bedroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          5.64,
+          2.815,
+          3.21
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109214,
+      "name": "GI box room",
+      "order": 109214,
+      "parentId": 107461,
+      "position": [
+        -35.84,
+        4.947,
+        -13.775
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Child's bedroom",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.24,
+          2.815,
+          3.79
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109215,
+      "name": "GI closet room",
+      "order": 109215,
+      "parentId": 107461,
+      "position": [
+        -37.54,
+        4.947,
+        10.185
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Stairs",
+        "Fade": 0.05,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          3.8,
+          5.725,
+          5.85
+        ],
+        "Spacing": 0.5
+      },
+      "id": 109216,
+      "name": "GI stairwell",
+      "order": 109216,
+      "parentId": 107461,
+      "position": [
+        -36.85,
+        3.492,
+        1.975
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
