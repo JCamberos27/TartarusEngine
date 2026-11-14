@@ -15015,6 +15015,34 @@
    "mix_db": 0.0
   },
   {
+   "file": "IR/tavern_1.wav",
+   "key": "ir.tavern",
+   "layer": "ir",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.59,
+   "lufs_m_max": -21.55,
+   "true_peak_dbtp": -2.09,
+   "length_s": 0.603,
+   "peak_ms": 0.8,
+   "sources": [
+    {
+     "file": "ir/EchoThiefImpulseResponseLibrary/EchoThiefImpulseResponseLibrary/Miscellaneous/HartwellTavern.wav",
+     "start": 0.003,
+     "end": 0.607,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.8,
+   "variant": 1,
+   "site": "Hartwell Tavern (historic wooden tavern; the Forest house's ground floor)",
+   "rt60_s": 0.42,
+   "predelay_ms": 3.0,
+   "truncated": false,
+   "license": "EchoThief Impulse Response Library (c) Dr. Chris Warren, SDSU: free to use for derivative artistic work such as convolution reverb; any other use needs permission (cwarren@sdsu.edu); not authorized for AI training",
+   "mix_db": 0.0
+  },
+  {
    "file": "Impacts/concrete_1.wav",
    "key": "snd.impact.concrete",
    "layer": "impact",

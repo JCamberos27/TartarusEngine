@@ -2001,6 +2001,7 @@ struct ReverbPortalComponent {
     float DiffractionCutoff = 2500.0f; // Hz of the low-pass at Diffraction Max Angle
     float DiffractionMaxAngle = 120.0f; // degrees of bend at which the diffraction loss is full
     float DiffractionGainDb = -6.0f;   // gain at that bend
+    std::string Door;                  // name of an Openable entity: in Play its opening (0 shut .. 1 open) is the Open Amount
 };
 // The runtime reverb bus (Audio/ConvolutionReverb, wired in AudioEngine): what each category of sound sends into it, the calibrated wet
 // level of each kind of space, how the reverb follows the listener's space (Reverb Zones, else the raycast probe), the listener-side

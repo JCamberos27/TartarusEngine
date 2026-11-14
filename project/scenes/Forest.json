@@ -7970,6 +7970,309 @@
   "dofMaxBlur": 8.0,
   "empties": [
     {
+      "Reverb Zone": {
+        "Enabled": true,
+        "Extents": [
+          120.0,
+          40.0,
+          120.0
+        ],
+        "Fade Distance": 0.0,
+        "Priority": 0,
+        "Shape": "Box",
+        "Tail Class": "Outdoor Open"
+      },
+      "id": 109220,
+      "name": "Forest Outdoors",
+      "order": 109220,
+      "parentId": 109217,
+      "position": [
+        0.0,
+        10.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Enabled": true,
+        "Extents": [
+          3.88,
+          1.45,
+          5.82
+        ],
+        "Fade Distance": 0.4,
+        "HF Damping dB": 2.0,
+        "IR": "assets/Audio/IR/tavern_1.wav",
+        "Low Cut (Hz)": 100.0,
+        "Pre-Delay ms": 3.0,
+        "Priority": 2,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.4,
+        "Wet dB": -6.0
+      },
+      "id": 109221,
+      "name": "House Ground West",
+      "order": 109221,
+      "parentId": 109217,
+      "position": [
+        -10.64,
+        1.65,
+        25.98
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Enabled": true,
+        "Extents": [
+          10.67,
+          1.45,
+          3.88
+        ],
+        "Fade Distance": 0.4,
+        "HF Damping dB": 2.0,
+        "IR": "assets/Audio/IR/tavern_1.wav",
+        "Low Cut (Hz)": 100.0,
+        "Pre-Delay ms": 3.0,
+        "Priority": 2,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.4,
+        "Wet dB": -6.0
+      },
+      "id": 109222,
+      "name": "House Ground Main",
+      "order": 109222,
+      "parentId": 109217,
+      "position": [
+        3.91,
+        1.65,
+        27.92
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Enabled": true,
+        "Extents": [
+          2.425,
+          1.45,
+          1.455
+        ],
+        "Fade Distance": 0.4,
+        "HF Damping dB": 2.0,
+        "IR": "assets/Audio/IR/tavern_1.wav",
+        "Low Cut (Hz)": 100.0,
+        "Pre-Delay ms": 3.0,
+        "Priority": 2,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.4,
+        "Wet dB": -6.0
+      },
+      "id": 109223,
+      "name": "House Ground East Bay",
+      "order": 109223,
+      "parentId": 109217,
+      "position": [
+        11.185,
+        1.65,
+        22.585
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Enabled": true,
+        "Extents": [
+          3.88,
+          1.4,
+          5.82
+        ],
+        "Fade Distance": 0.4,
+        "HF Damping dB": 2.0,
+        "IR": "assets/Audio/IR/apartment_1.wav",
+        "Low Cut (Hz)": 100.0,
+        "Pre-Delay ms": 3.0,
+        "Priority": 2,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.4,
+        "Wet dB": -6.0
+      },
+      "id": 109224,
+      "name": "House Upstairs West",
+      "order": 109224,
+      "parentId": 109217,
+      "position": [
+        -10.64,
+        4.5,
+        25.98
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Enabled": true,
+        "Extents": [
+          10.61,
+          1.4,
+          3.88
+        ],
+        "Fade Distance": 0.4,
+        "HF Damping dB": 2.0,
+        "IR": "assets/Audio/IR/apartment_1.wav",
+        "Low Cut (Hz)": 100.0,
+        "Pre-Delay ms": 3.0,
+        "Priority": 2,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.4,
+        "Wet dB": -6.0
+      },
+      "id": 109225,
+      "name": "House Upstairs Main",
+      "order": 109225,
+      "parentId": 109217,
+      "position": [
+        3.85,
+        4.5,
+        27.92
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Portal": {
+        "Door": "Door_exterior_paneled_mesh",
+        "Enabled": true,
+        "Extents": [
+          0.5,
+          1.05,
+          0.15
+        ],
+        "Open Amount": 1.0
+      },
+      "id": 109226,
+      "name": "Front Door Portal",
+      "order": 109226,
+      "parentId": 109217,
+      "position": [
+        1.0,
+        1.26,
+        24.04
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Portal": {
+        "Door": "Door_exterior_white_mesh",
+        "Enabled": true,
+        "Extents": [
+          0.5,
+          1.05,
+          0.15
+        ],
+        "Open Amount": 1.0
+      },
+      "id": 109227,
+      "name": "East Door Portal",
+      "order": 109227,
+      "parentId": 109217,
+      "position": [
+        14.58,
+        1.26,
+        25.98
+      ],
+      "rotation": [
+        0.0,
+        0.70710678,
+        0.0,
+        0.70710678
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
       "Ambience Bed": {
         "Enabled": true,
         "Fade In": 3.0,
