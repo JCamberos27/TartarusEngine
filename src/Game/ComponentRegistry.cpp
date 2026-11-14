@@ -2873,6 +2873,9 @@ void RegisterEngineComponents() {
             { "Foot Lift Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftHeight), 0.005f, "Standing (below Min Step Speed): m a foot must rise above its planted height before its next touch-down counts. Weight shifts below this are silent.", 0.01f, 0.3f },
             { "Foot Lift Moving", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftMoving), 0.005f, "The same while moving: lower, so a walk's first, shuffling stride still steps.", 0.005f, 0.3f },
             { "Foot Contact Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootContactHeight), 0.005f, "m above its planted height at which a lowering foot counts as down: higher = the step a little earlier.", 0.0f, 0.2f },
+            { "Settle Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, SettleVolume), 0.01f, "Coming to a stop: the one settling step's volume (the feet planting after it are silent).", 0.0f, 1.5f },
+            { "Settle Quiet", T::Float, TARTARUS_REFLECT_FIELD(Fo, SettleQuiet), 0.05f, "Seconds stood with both feet still after a stop before steps on the spot (turning) sound again.", 0.0f, 5.0f },
+            { "Min Step Interval", T::Float, TARTARUS_REFLECT_FIELD(Fo, MinStepInterval), 0.01f, "Two touch-downs closer than this (s) are one footstep.", 0.0f, 0.5f },
             { "Jump Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, JumpVolume), 0.01f, "Gain of the jump.", 0.0f, 2.0f },
             { "Land Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandVolume), 0.01f, "Gain of a landing at Land Full Speed.", 0.0f, 2.0f },
             { "Land Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandMinSpeed), 0.05f, "m/s of fall below which a landing is silent.", 0.0f, 30.0f },
@@ -2892,7 +2895,7 @@ void RegisterEngineComponents() {
             {"Footwear", "Footsteps"}, {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
             {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
             {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"}, {"Steps From Feet", "Footsteps"}, {"Foot Lift Height", "Footsteps"}, {"Foot Lift Moving", "Footsteps"},
-            {"Foot Contact Height", "Footsteps"},
+            {"Foot Contact Height", "Footsteps"}, {"Settle Volume", "Footsteps"}, {"Settle Quiet", "Footsteps"}, {"Min Step Interval", "Footsteps"},
             {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
             
             {"NPC Footwear", "NPC Footsteps"}, {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};

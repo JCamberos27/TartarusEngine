@@ -100,7 +100,7 @@ public:
     const std::string& Action() const { return m_Action; }
     std::string m_Action;
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver"; } // After() even in a scene with no squad
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver" || m_Scenario == "stopsteps"; } // After() even in a scene with no squad
     bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
@@ -252,6 +252,14 @@ private:
     bool m_SReady = false, m_SDone = false, m_SShotTilt = false;
     void Decals(World& world, NpcDirector& npcs, float now); // NpcTest_Decals.cpp
     void DecalsDrive(Player& player, float& wantYaw, float& wantPitch);
+    // stopsteps (NpcTest_StopSteps.cpp)
+    static float StopStepsSeconds();
+    void StopStepsDrive(Player& player, float dt, float& wantYaw, float& wantPitch);
+    void StopSteps(const Player& player, float now);
+    bool m_SSPlaced = false;
+    float m_SSClock = 0.0f;
+    int m_SSSteps = 0;
+    int m_SSLegSteps[16] = {};
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {
         std::string Name;
