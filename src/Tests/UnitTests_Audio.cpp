@@ -726,6 +726,77 @@ void TestForestSceneAudio() {
     CHECK(foley == 1 && beds == 1 && outdoor == 1 && indoor == 5 && portals == 2);
 }
 
+void TestFoleyStopSettles() {
+    // Walking, then stopping: the body plants its feet a few times settling into idle. Heard: one soft settle step, not a shuffle.
+    World world;
+    FakeBackend be;
+    WeaponAudio::Get().StartForTest("", &be);
+    FoleyAudio& fo = FoleyAudio::Get();
+    FoleyAudioComponent t = FoleyAudioComponent{};
+    fo.StartForTest(t);
+    const float dt = 1.0f / 60.0f;
+    FoleyPlayerInput in;
+    in.HaveFootHeights = true;
+    // One foot's swing: up to 0.08 m and back down over `secs`, the other planted.
+    auto swing = [&](int foot, float secs, float speed) {
+        in.Velocity = glm::vec3(speed, 0.0f, 0.0f);
+        const int frames = std::max(2, (int)(secs / dt));
+        for (int i = 0; i <= frames; ++i) {
+            const float u = (float)i / (float)frames;
+            in.FootHeight[foot] = 0.08f * std::sin(u * 3.14159265f);
+            in.FootHeight[1 - foot] = 0.0f;
+            fo.UpdatePlayer(world, dt, in);
+        }
+        in.FootHeight[foot] = 0.0f;
+    };
+    auto stand = [&](float secs) {
+        in.Velocity = glm::vec3(0.0f);
+        in.FootHeight[0] = in.FootHeight[1] = 0.0f;
+        for (float x = 0.0f; x < secs; x += dt) fo.UpdatePlayer(world, dt, in);
+    };
+    stand(0.3f);
+    for (int i = 0; i < 6; ++i) swing(i & 1, 0.4f, 1.6f);   // walking: a step per swing
+    const int walked = fo.StepsPlayed();
+    CHECK(walked >= 5);
+    const size_t voicesBefore = be.Voices.size();
+    // Stopping: three quick settling touch-downs, the last two 0.1 s apart.
+    swing(0, 0.2f, 0.0f);
+    swing(1, 0.1f, 0.0f);
+    swing(0, 0.1f, 0.0f);
+    stand(0.3f);
+    CHECK(fo.StepsPlayed() - walked == 1);
+    // The settle step is the soft one.
+    if (be.Voices.size() > voicesBefore) {
+        float walkVol = 0.0f;
+        for (size_t i = 0; i < voicesBefore; ++i) walkVol = std::max(walkVol, be.Voices[i].Voice.Volume);
+        CHECK(be.Voices.back().Voice.Volume < walkVol * 0.8f);
+    }
+    // Stood still a while, a step on the spot (turning) sounds again, at full volume.
+    stand(1.0f);
+    const int settled = fo.StepsPlayed();
+    swing(1, 0.4f, 0.0f);
+    CHECK(fo.StepsPlayed() - settled == 1);
+    // Moving again: steps as before; a run then a stop: again one settle step.
+    for (int i = 0; i < 4; ++i) swing(i & 1, 0.25f, 5.0f);
+    const int ran = fo.StepsPlayed();
+    swing(0, 0.15f, 0.0f);
+    swing(1, 0.15f, 0.0f);
+    stand(0.3f);
+    CHECK(fo.StepsPlayed() - ran == 1);
+    // Both feet planting in the same instant are one footfall.
+    fo.StartForTest(t);
+    stand(1.0f);
+    in.Velocity = glm::vec3(1.6f, 0.0f, 0.0f);
+    for (int i = 0; i <= 20; ++i) {
+        const float h = 0.08f * std::sin((float)i / 20.0f * 3.14159265f);
+        in.FootHeight[0] = in.FootHeight[1] = h;
+        fo.UpdatePlayer(world, dt, in);
+    }
+    CHECK(fo.StepsPlayed() == 1);
+    fo.Stop();
+    WeaponAudio::Get().Stop();
+}
+
 void TestFoleyRules() {
     FoleyAudioComponent t=FoleyAudioComponent{};
     // Surfaces by the ground's material / tag / name, in table order, case-insensitive; the default otherwise.
@@ -3502,6 +3573,7 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AudioManifestGroupsVariants", TestAudioManifestGroupsVariants});
     tests.push_back({"FoleyFootstepCadence", TestFoleyFootstepCadence});
     tests.push_back({"FoleyRules", TestFoleyRules});
+    tests.push_back({"FoleyStopSettles", TestFoleyStopSettles});
     tests.push_back({"ForestSceneAudio", TestForestSceneAudio});
     tests.push_back({"AmbienceBed", TestAmbienceBed});
     tests.push_back({"FoleyLandingAndJump", TestFoleyLandingAndJump});

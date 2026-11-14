@@ -1904,6 +1904,12 @@ struct FoleyAudioComponent {
     float FootLiftHeight = 0.05f;
     float FootLiftMoving = 0.025f;
     float FootContactHeight = 0.02f;
+    // Coming to a stop: the body settling into idle plants its feet a few times. Below Min Step Speed after moving, the first
+    // touch-down plays at Settle Volume and the rest are silent, until moving again or Settle Quiet seconds with both feet still
+    // (then turning on the spot steps again). Two touch-downs closer than Min Step Interval are one sound.
+    float SettleVolume = 0.6f;
+    float SettleQuiet = 0.6f;
+    float MinStepInterval = 0.18f;
     float JumpVolume = 1.0f;
     float LandVolume = 1.0f;
     float LandMinSpeed = 2.5f;

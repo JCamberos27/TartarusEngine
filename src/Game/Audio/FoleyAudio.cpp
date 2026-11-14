@@ -159,6 +159,8 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
     const bool fromFeet = m_T.StepsFromFeet && in.HaveFootHeights;
     if (!in.Grounded || !fromFeet) m_Feet.Reset();
     int n = 0;
+    float settle = 1.0f;
+    m_SinceStep += dt;
     if (in.Grounded && fromFeet) {
         // The body's own feet: a step each time one touches down, at any speed (turning on the spot steps too).
         const int down = m_Feet.Update(in.FootHeight, dt, LiftHeight(m_T, speed), m_T.FootContactHeight);
@@ -166,6 +168,30 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
         if (m_StepListener)
             for (int f = 0; f < 2; ++f)
                 if (down & (1 << f)) m_StepListener(-1, in.Feet, in.Velocity, f);
+        // What is heard (the footprints above keep every foot): both feet planting together, or within Min Step Interval, is one
+        // footfall; a stop is one soft settle step, then the body settling into idle is silent.
+        const bool moving = speed >= m_T.MinStepSpeed;
+        if (moving) {
+            m_StopState = 0;
+        } else if (m_WasMoving) {
+            m_StopState = 1;
+            m_StillFor = 0.0f;
+        }
+        if (n > 0 && m_SinceStep < m_T.MinStepInterval) n = 0;
+        n = std::min(n, 1);
+        if (n > 0 && !moving && m_StopState == 1) {
+            settle = m_T.SettleVolume;
+            m_StopState = 2;
+        } else if (n > 0 && !moving && m_StopState == 2) {
+            n = 0; // still settling into idle
+        }
+        if (n > 0) m_SinceStep = 0.0f;
+        if (!moving && m_StopState != 0) {
+            const bool still = !m_Feet.Lifted[0] && !m_Feet.Lifted[1] && (down == 0);
+            m_StillFor = still ? m_StillFor + dt : 0.0f;
+            if (m_StopState == 2 && m_StillFor >= m_T.SettleQuiet) m_StopState = 0; // settled: steps on the spot sound again
+        }
+        m_WasMoving = moving;
     } else if (in.Grounded && speed >= m_T.MinStepSpeed) {
         n = m_Stepper.Advance(speed * dt, StepDistance(m_T, in));
         if (m_StepListener)
@@ -176,7 +202,7 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
         const char* element = in.Crouched ? "crouch" : run ? "run" : "walk";
         const float gain = in.Crouched ? m_T.CrouchVolume : run ? m_T.RunVolume : m_T.WalkVolume;
         const std::string surface = StepCategory(SurfaceAt(world, in.Feet), m_T.Footwear);
-        for (int i = 0; i < n; ++i) Play(surface, element, gain, true, in.Feet);
+        for (int i = 0; i < n; ++i) Play(surface, element, gain * settle, true, in.Feet);
         m_Steps += n;
     }
     // FOLEY_FEET_LOG=1: the feet the steps are read from, a line a frame (time, heights, planted heights, swinging, steps, speed).

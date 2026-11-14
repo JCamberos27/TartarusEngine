@@ -78,7 +78,7 @@ public:
     static float LiftHeight(const FoleyAudioComponent& t, float speed) { return speed >= t.MinStepSpeed ? t.FootLiftMoving : t.FootLiftHeight; }
     const FoleyAudioComponent& Tuning() const { return m_T; }
     void SetTuning(const FoleyAudioComponent& t) { m_T = t; }
-    void StartForTest(const FoleyAudioComponent& t) { m_T = t; m_Active = true; m_Stepper.Reset(); m_Feet.Reset(); m_PrevGrounded = true; m_PrevVy = 0.0f; m_Steps = 0; m_NpcSteppers.clear(); m_NpcFeet.clear(); }
+    void StartForTest(const FoleyAudioComponent& t) { m_T = t; m_Active = true; m_Stepper.Reset(); m_Feet.Reset(); m_PrevGrounded = true; m_PrevVy = 0.0f; m_Steps = 0; m_NpcSteppers.clear(); m_NpcFeet.clear(); m_StopState = 0; m_WasMoving = false; m_SinceStep = 1.0f; m_StillFor = 0.0f; }
 
     // --- pure rules (unit-tested) ---
     // The first surface in `table` ("wood=wood,plank;metal=metal") with a word in `name` (case-insensitive), else `fallback`.
@@ -109,6 +109,10 @@ private:
     int m_Steps = 0;
     StepListener m_StepListener;
     bool m_PlayerFoot = false; // alternates when the steps come from distance
+    // Coming to a stop (the feet path): 0 normal, 1 just stopped (the next touch-down is the soft settle), 2 settling (silent).
+    int m_StopState = 0;
+    bool m_WasMoving = false;
+    float m_SinceStep = 1.0f, m_StillFor = 0.0f;
     SurfaceLookup m_Surfaces;
     void Play(const std::string& surface, const std::string& element, float gain, bool at2D, const glm::vec3& pos);
 };
