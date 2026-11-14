@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -11,6 +13,7 @@
 #include "Camera.h"
 #include "ColliderGizmo.h"
 #include "Components.h"
+#include "Core/Env.h"
 #include "EditorSettings.h"
 #include "EditorTheme.h" // grid axis colours (GridColors)
 #include "FKeyRow.h"
@@ -274,8 +277,16 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     if (available.x < 1.0f || available.y < 1.0f) {
         available = {(float)windowW, (float)windowH};
     }
-    const int scW = std::max((int)available.x, 1);
-    const int scH = std::max((int)available.y, 1);
+    int scW = std::max((int)available.x, 1);
+    int scH = std::max((int)available.y, 1);
+    // TARTARUS_SHOT_SIZE=WxH: the harness's shots and cinematics render the Scene view at that size, whatever the
+    // (hidden) window's layout leaves it
+    static const glm::ivec2 shotSize = [] {
+        int w = 0, h = 0;
+        const std::string s = Env::Str(Env::Var::ShotSize);
+        return !s.empty() && sscanf_s(s.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0 ? glm::ivec2(w, h) : glm::ivec2(0);
+    }();
+    if (shotSize.x > 0) { scW = shotSize.x; scH = shotSize.y; }
 
     sceneFramebuffer.Resize(scW, scH);
     float sceneAspect = (float)scW / (float)scH;

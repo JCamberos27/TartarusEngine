@@ -20,6 +20,7 @@
 #include "SamplingProfiler.h"
 #include "SceneRenderer.h"
 #include "SceneSerializer.h"
+#include "Tests/Cinematic.h"
 #include "Tests/FrameCapture.h"
 #include "Tests/SmokeChecks.h"
 #include "Window.h"
@@ -48,8 +49,14 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
                 m_ShotCameras.push_back(c);
         }
     }
+    if (Cinematic::Active() && !opt.smokeShotsDir.empty()) {
+        std::string error;
+        m_Cinematic = Cinematic::Load(Env::Str(Env::Var::Cinematic), error);
+        if (!m_Cinematic) Log::Error("Cinematic: " + error);
+    }
     m_ShotCameraStart = Env::IsSet(Env::Var::ShotStart) ? std::max(1, Env::Int(Env::Var::ShotStart, 0)) : 40;
     m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * PerfBench::kPhaseFrames
+                  : m_Cinematic ? Cinematic::Warmup() + (int)(Cinematic::Duration() * 60.0f) + 2
                   : !m_ShotCameras.empty() ? m_ShotCameraStart + kShotCameraSettle * (int)m_ShotCameras.size() + 1 : 100;
     m_MemReportDir = Env::Str(Env::Var::MemReport);
     m_OpenAll = Env::Flag(Env::Var::OpenAll);
@@ -269,6 +276,38 @@ void SmokeHarness::ShotCameraFrame() {
     if (Env::IsSet(Env::Var::ShotFov)) editorCamera.Fov = Env::Float(Env::Var::ShotFov, editorCamera.Fov);
 }
 
+// TARTARUS_CINEMATIC: the camera path. Warm-up frames hold the first key (and wait for streaming); then each frame
+// is written to the video and the next frame's pose and light cues are set, 1/60 s on.
+void SmokeHarness::CinematicFrame() {
+    Camera& cam = m_Ctx.editorCamera;
+    Framebuffer& fb = m_Ctx.sceneFramebuffer;
+    if (m_FramesRendered == 1) {
+        m_ShotHold = 0;
+        LightSwitch::Update(m_Ctx.world, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), false); // circuits as they start
+    }
+    const int r = m_FramesRendered - Cinematic::Warmup(); // the frame just drawn: video frame r (time r / 60)
+    if (r == 0 && (m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0) && m_ShotHold < 3000) {
+        ++m_ShotHold;
+        --m_FramesRendered; // not before everything has streamed in
+    } else if (r >= 0 && fb.IsValid()) {
+        if (r == 0) Cinematic::Start(m_Opt.smokeShotsDir, fb.Width(), fb.Height());
+        Cinematic::Write(FrameCapture::GrabTopDown(fb.Handle(), fb.Width(), fb.Height()));
+        if (r >= (int)(Cinematic::Duration() * 60.0f)) Cinematic::Finish();
+    }
+    const float next = std::max(0, r + 1) / 60.0f;
+    for (Cinematic::LightCue& c : Cinematic::Lights()) {
+        if (c.Done || c.T > next) continue;
+        c.Done = true;
+        if (c.Circuit == "*") LightSwitch::SetAll(m_Ctx.world, c.On);
+        else if (!LightSwitch::Set(m_Ctx.world, c.Circuit, c.On)) Log::Warn("Cinematic: no light circuit '" + c.Circuit + "'");
+    }
+    const Cinematic::Pose p = Cinematic::Evaluate(Cinematic::Keys(), next);
+    cam.Position = p.Pos;
+    cam.Yaw = p.Yaw;
+    cam.Pitch = p.Pitch;
+    cam.Fov = p.Fov;
+}
+
 // --smoke-shots: the three fixed poses.
 void SmokeHarness::PoseShotFrame() {
     Camera& editorCamera = m_Ctx.editorCamera;
@@ -331,6 +370,7 @@ void SmokeHarness::PerfFrame() {
 }
 
 void SmokeHarness::ScoreScene() {
+    if (m_Cinematic) Cinematic::Finish(); // a run cut short still leaves a playable file
     NpcTest* npcTest = m_Ctx.npcTest;
     int newErrors    = GLDebug::ErrorCount() - m_BaselineGlErrors;
     int newLogErrors = Log::CountOf(LogLevel::Error) - m_BaselineLogErrors;
@@ -389,7 +429,9 @@ void SmokeHarness::EndFrame() {
     NpcTest* npcTest = m_Ctx.npcTest;
     Camera& editorCamera = m_Ctx.editorCamera;
     ++m_FramesRendered;
-    if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !m_ShotCameras.empty()) {
+    if (m_Cinematic && !opt.perfBenchMode) {
+        CinematicFrame();
+    } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !m_ShotCameras.empty()) {
         ShotCameraFrame();
     } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode) {
         PoseShotFrame();

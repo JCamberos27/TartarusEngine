@@ -25,6 +25,8 @@
     X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'x y z yaw pitch;...' camera poses to capture")      \
     X(ShotStart, "TARTARUS_SHOT_START", Int, "--smoke-shots: frame of the first shot-camera capture (default 40)")    \
     X(ShotFov, "TARTARUS_SHOT_FOV", Float, "--smoke-shots: Scene-view FOV for shot cameras")                          \
+    X(ShotSize, "TARTARUS_SHOT_SIZE", Str, "--smoke-shots / cinematic: Scene-view render size WxH")                    \
+    X(Cinematic, "TARTARUS_CINEMATIC", Str, "--smoke-shots: fly a camera path json, record it at 60 fps")              \
     X(EditorTestInstance, "TARTARUS_EDITOR_TEST_INSTANCE", Str, "--editor-tests: scratch folder suffix")              \
     X(EditorTestScale, "TARTARUS_EDITOR_TEST_SCALE", Float, "--editor-tests: UI scale override")                      \
     X(EditorTestSize, "TARTARUS_EDITOR_TEST_SIZE", Str, "--editor-tests: window size WxH")                            \
