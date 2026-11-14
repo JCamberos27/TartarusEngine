@@ -57,8 +57,12 @@ float WrapDeg(float a) {
     return a;
 }
 
+// The standing pace's ease up from a halt and down into a stop (s), as the player's Ground Accel / Decel Time; a stop ends this
+// short of its goal (m).
+constexpr float kStartTime = 0.12f, kStopTime = 0.15f, kArriveSlack = 0.05f;
+
 float SpeedFor(Gait g, bool crouch) {
-    if (crouch) return g == Gait::Still ? 0.0f : 1.9f;
+    if (crouch) return g == Gait::Still ? 0.0f : 1.4f; // the crouched walk clips' pace (1.355), as the player body's
     switch (g) {
     case Gait::Still: return 0.0f;
     case Gait::Walk: return 1.5f;
@@ -805,6 +809,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
                 else if (m_Now < n.LimpUntil) speed *= m_Cfg.LimpSpeedScale; // a bad leg
                 if (m_Now < n.StaggerUntil) speed *= 0.2f;              // reeling from a heavy hit
                 m_Crowd.SetMaxSpeed(n.Agent, speed);
+                n.PaceSpeed = speed;
             } else if (n.HasGoal) {
                 m_Crowd.Stop(n.Agent);
                 n.HasGoal = false;
@@ -1316,6 +1321,32 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
             }
         }
     }
+    // Standing, the pace is the player body's: the gait's own speed right up to where its stop begins, then a stop the length of
+    // the body's stop clip (an ease over kStopTime, as the player's Ground Decel Time) - not the crowd's long creep in at a
+    // fraction of the pace and a halt in a frame; from a halt, an ease up to pace. The crowd keeps the way (its path, the
+    // avoidance). The body's wish goes with it: the pace toward the goal, nothing once the stop has begun.
+    glm::vec3 wish(0.0f);
+    if (!n.Prone && !n.Dying) {
+        const glm::vec3 flatVel(n.Velocity.x, 0.0f, n.Velocity.z);
+        const float cur = glm::length(flatVel), crowd = glm::length(want);
+        glm::vec3 dir = crowd > 0.05f ? want / crowd : cur > 0.05f ? flatVel / cur : glm::vec3(0.0f);
+        float target = n.Intent.Move && crowd > 0.05f ? n.PaceSpeed : 0.0f;
+        bool braking = target <= 0.0f;
+        if (target > 0.0f && n.Agent >= 0) {
+            glm::vec3 corner = m_Crowd.NextCorner(n.Agent) - n.Intent.MoveTarget;
+            const float remain = glm::length(glm::vec2(n.Intent.MoveTarget.x - n.Feet.x, n.Intent.MoveTarget.z - n.Feet.z));
+            if (glm::length(glm::vec2(corner.x, corner.z)) < 0.3f) { // the last leg of the route: the stop is on it
+                const float stopAt = std::max(0.0f, remain - kArriveSlack) / kStopTime;
+                if (stopAt < target) { target = stopAt; braking = true; }
+            } else {
+                target = std::min(target, std::max(crowd, 0.5f * n.PaceSpeed)); // round a corner the crowd eases the pace a little
+            }
+        }
+        const float tau = target > cur ? kStartTime : kStopTime;
+        const float pace = target + (cur - target) * std::exp(-dt / tau);
+        want = dir * (pace < 0.02f ? 0.0f : pace);
+        if (!braking) wish = dir * n.PaceSpeed;
+    }
     n.FallSpeed -= m_Cfg.FallGravity * dt;
     glm::vec3 disp = (want + n.PushVel) * dt + glm::vec3(0.0f, n.FallSpeed * dt, 0.0f);
     if (n.Prone || n.Dying) disp += n.Body.FallTravel(); // a collapse carries him forward
@@ -1323,6 +1354,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     const float d[3] = {disp.x, disp.y, disp.z};
     const unsigned hit = PhysicsWorld::MoveNpcCharacter(n.Cct, d, dt);
     if (hit & PhysicsWorld::CC_DOWN) n.FallSpeed = -1.0f;
+    n.OnFloor = (hit & PhysicsWorld::CC_DOWN) != 0;
     float feet[3], r = 0.0f, cyl = 0.0f;
     if (PhysicsWorld::GetNpcCapsule(n.Cct, feet, &r, &cyl)) {
         const glm::vec3 f(feet[0], feet[1], feet[2]);
@@ -1350,6 +1382,13 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     NpcBodyInput in;
     in.Feet = n.Feet;
     in.Velocity = n.Velocity;
+    in.Wish = wish;
+    in.Grounded = n.OnFloor;
+    in.FallSpeed = std::max(0.0f, -n.FallSpeed);
+    in.JogSpeed = SpeedFor(Gait::Jog, false);
+    in.RunSpeed = SpeedFor(Gait::Run, false);
+    in.AccelTime = kStartTime;
+    in.DecelTime = kStopTime;
     const glm::vec3 face = n.Intent.Aim ? n.Intent.AimPoint : n.Intent.LookPoint;
     in.FacingYaw = NpcYawOf(face - n.Feet, n.Body.Yaw());
     in.HoldFacing = n.Intent.FaceAim;

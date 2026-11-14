@@ -12,6 +12,7 @@
 
 #include "Animation.h"       // LocalTRS
 #include "FirstPersonBody.h" // FirstPersonArmShapeLink
+#include "GameFrames.h"      // Gameplay::BodyMotionFrame
 
 class Camera;
 class Model;
@@ -88,6 +89,13 @@ struct NpcHoldSettings {
 struct NpcBodyInput {
     glm::vec3 Feet{0.0f};          // the capsule's foot position
     glm::vec3 Velocity{0.0f};      // how the capsule moved (m/s, world)
+    glm::vec3 Wish{0.0f};          // where the AI is going and at what pace (m/s, world, flat); zero once its stop has begun
+    bool Grounded = true;          // the capsule on the floor (else falling)
+    float FallSpeed = 0.0f;        // m/s down while falling (the landing's impact)
+    float JogSpeed = 3.2f;         // the AI's jog and run paces (m/s): the blend tree's jog and sprint
+    float RunSpeed = 4.7f;
+    float AccelTime = 0.12f;       // seconds the capsule eases up to pace / down to a stop (the stop clip's distance matching)
+    float DecelTime = 0.15f;
     float FacingYaw = 0.0f;        // the heading the body should have (radians, model +Z = sin/cos)
     bool HoldFacing = false;       // face FacingYaw even while moving (strafing); else face the travel
     glm::vec3 AimPoint{0.0f};      // what the spine and gun aim at (world)
@@ -220,6 +228,8 @@ private:
     // Starts, stops, fidgets and the gait's rate trim (Tick).
     float m_RateTrim = 1.0f, m_StartDistance = 0.0f, m_MoveFor = 0.0f, m_FidgetNext = 0.0f;
     glm::vec2 m_LastDir{0.0f, 1.0f};
+    Gameplay::BodyMotionFrame m_Loco{}; // standing: the player body's locomotion state (BodyLocomotion), kept frame to frame
+    float m_FallSpeed = 0.0f;           // m/s down at the last airborne frame: the next landing's impact
     bool m_WasMoving = false, m_LastSprint = false;
     std::uint32_t m_Random = 0;
     float NextRandom() {

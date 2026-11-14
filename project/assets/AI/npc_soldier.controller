@@ -192,6 +192,11 @@
       "default": 1.0
     },
     {
+      "name": "LandImpact",
+      "type": "float",
+      "default": 99.0
+    },
+    {
       "name": "Hit",
       "type": "trigger",
       "default": 0.0
@@ -2492,6 +2497,25 @@
         },
         {
           "from": "Jump",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Grounded",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "LandImpact",
+              "threshold": 7.0
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.3
+        },
+        {
+          "from": "Jump",
           "to": "Land",
           "duration": 0.1,
           "conditions": [
@@ -2503,6 +2527,25 @@
           ],
           "hasExitTime": true,
           "exitTime": 0.3
+        },
+        {
+          "from": "Fall",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Grounded",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "LandImpact",
+              "threshold": 7.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
         },
         {
           "from": "Fall",

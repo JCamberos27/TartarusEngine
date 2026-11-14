@@ -267,6 +267,15 @@ private:
     bool m_LPlaced = false;
     float m_LClock = 0.0f;
     glm::vec2 m_LDropAt{0.0f};
+    // npcloco (NpcTest_NpcLoco.cpp): a soldier through the same gaits, brain off, watched from the side
+    static float NpcLocoSeconds();
+    void NpcLocoDrive(Player& player, float& wantYaw, float& wantPitch);
+    void NpcLoco(World& world, NpcDirector& npcs, float now);
+    void NpcLocoReport();
+    bool m_NLPlaced = false;
+    std::string m_NLProbe;
+    int m_NLLeg = 0;
+    float m_NLStart = 0.0f, m_NLArrived = -1.0f, m_NLPrev = 0.0f;
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {
         std::string Name;
