@@ -8406,6 +8406,162 @@
    "mix_db": -11.23
   },
   {
+   "file": "Foley/door/switch_off_1.wav",
+   "key": "snd.foley.door.switch_off",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.87,
+   "lufs_m_max": -33.83,
+   "true_peak_dbtp": -11.44,
+   "length_s": 0.25,
+   "peak_ms": 6.4,
+   "sources": [
+    {
+     "file": "doors/361371__dr19__light-switch-flick-on-off.wav",
+     "start": 2.296,
+     "end": 2.546,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.2,
+   "element": "switch_off",
+   "category": "door",
+   "variant": 1,
+   "source": "361371@2.25",
+   "mix_db": -9.41
+  },
+  {
+   "file": "Foley/door/switch_off_2.wav",
+   "key": "snd.foley.door.switch_off",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.69,
+   "lufs_m_max": -33.64,
+   "true_peak_dbtp": -12.22,
+   "length_s": 0.25,
+   "peak_ms": 9.5,
+   "sources": [
+    {
+     "file": "doors/361371__dr19__light-switch-flick-on-off.wav",
+     "start": 6.575,
+     "end": 6.825,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.3,
+   "element": "switch_off",
+   "category": "door",
+   "variant": 2,
+   "source": "361371@6.53",
+   "mix_db": -9.59
+  },
+  {
+   "file": "Foley/door/switch_off_3.wav",
+   "key": "snd.foley.door.switch_off",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.61,
+   "lufs_m_max": -33.57,
+   "true_peak_dbtp": -11.7,
+   "length_s": 0.25,
+   "peak_ms": 4.5,
+   "sources": [
+    {
+     "file": "doors/361371__dr19__light-switch-flick-on-off.wav",
+     "start": 10.478,
+     "end": 10.728,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.4,
+   "element": "switch_off",
+   "category": "door",
+   "variant": 3,
+   "source": "361371@10.43",
+   "mix_db": -9.64
+  },
+  {
+   "file": "Foley/door/switch_on_1.wav",
+   "key": "snd.foley.door.switch_on",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -34.99,
+   "lufs_m_max": -34.95,
+   "true_peak_dbtp": -11.6,
+   "length_s": 0.25,
+   "peak_ms": 10.3,
+   "sources": [
+    {
+     "file": "doors/361371__dr19__light-switch-flick-on-off.wav",
+     "start": 1.01,
+     "end": 1.26,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.7,
+   "element": "switch_on",
+   "category": "door",
+   "variant": 1,
+   "source": "361371@0.97",
+   "mix_db": -8.28
+  },
+  {
+   "file": "Foley/door/switch_on_2.wav",
+   "key": "snd.foley.door.switch_on",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.71,
+   "lufs_m_max": -33.67,
+   "true_peak_dbtp": -10.24,
+   "length_s": 0.25,
+   "peak_ms": 9.5,
+   "sources": [
+    {
+     "file": "doors/361371__dr19__light-switch-flick-on-off.wav",
+     "start": 4.114,
+     "end": 4.364,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "switch_on",
+   "category": "door",
+   "variant": 2,
+   "source": "361371@4.07",
+   "mix_db": -9.47
+  },
+  {
+   "file": "Foley/door/switch_on_3.wav",
+   "key": "snd.foley.door.switch_on",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -33.52,
+   "lufs_m_max": -33.48,
+   "true_peak_dbtp": -10.04,
+   "length_s": 0.25,
+   "peak_ms": 11.6,
+   "sources": [
+    {
+     "file": "doors/361371__dr19__light-switch-flick-on-off.wav",
+     "start": 7.616,
+     "end": 7.866,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 10.8,
+   "element": "switch_on",
+   "category": "door",
+   "variant": 3,
+   "source": "361371@7.58",
+   "mix_db": -9.75
+  },
+  {
    "file": "Foley/move/jump_1.wav",
    "key": "snd.foley.move.jump",
    "layer": "foley",
@@ -10762,82 +10918,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -5.26,
+   "true_peak_dbtp": -4.8,
    "length_s": 0.45,
-   "peak_ms": 13.4,
+   "peak_ms": 21.8,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 01_Ocular_Stride.wav",
      "start": 0.05,
      "end": 0.5,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
-     "start": 0.029,
-     "end": 0.479,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 10.1,
-   "element": "land",
-   "category": "step_grass",
-   "variant": 1,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 01_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -10.22
-  },
-  {
-   "file": "Foley/step_grass/land_2.wav",
-   "key": "snd.foley.step_grass.land",
-   "layer": "foley",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -21.04,
-   "lufs_m_max": -21.0,
-   "true_peak_dbtp": -1.91,
-   "length_s": 0.45,
-   "peak_ms": 9.1,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 02_Ocular_Stride.wav",
-     "start": 0.064,
-     "end": 0.514,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
-     "start": 0.026,
-     "end": 0.438,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 6.8,
-   "element": "land",
-   "category": "step_grass",
-   "variant": 2,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 02_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -10.31
-  },
-  {
-   "file": "Foley/step_grass/land_3.wav",
-   "key": "snd.foley.step_grass.land",
-   "layer": "foley",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -21.04,
-   "lufs_m_max": -21.0,
-   "true_peak_dbtp": -4.71,
-   "length_s": 0.45,
-   "peak_ms": 6.5,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 03_Ocular_Stride.wav",
-     "start": 0.024,
-     "end": 0.474,
      "pitch_st": 0.0
     },
     {
@@ -10847,31 +10935,31 @@
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 5.9,
+   "anchor_ms": 12.1,
    "element": "land",
    "category": "step_grass",
-   "variant": 3,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 03_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "variant": 1,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 01_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
-   "mix_db": -10.24
+   "mix_db": -10.23
   },
   {
-   "file": "Foley/step_grass/land_4.wav",
+   "file": "Foley/step_grass/land_2.wav",
    "key": "snd.foley.step_grass.land",
    "layer": "foley",
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -3.06,
+   "true_peak_dbtp": -3.0,
    "length_s": 0.45,
-   "peak_ms": 14.2,
+   "peak_ms": 9.7,
    "sources": [
     {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 04_Ocular_Stride.wav",
-     "start": 0.057,
-     "end": 0.507,
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 02_Ocular_Stride.wav",
+     "start": 0.064,
+     "end": 0.514,
      "pitch_st": 0.0
     },
     {
@@ -10881,31 +10969,31 @@
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 6.4,
+   "anchor_ms": 6.2,
    "element": "land",
    "category": "step_grass",
-   "variant": 4,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 04_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "variant": 2,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 02_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
    "mix_db": -10.23
   },
   {
-   "file": "Foley/step_grass/land_5.wav",
+   "file": "Foley/step_grass/land_3.wav",
    "key": "snd.foley.step_grass.land",
    "layer": "foley",
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -5.57,
+   "true_peak_dbtp": -4.63,
    "length_s": 0.45,
    "peak_ms": 48.1,
    "sources": [
     {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 05_Ocular_Stride.wav",
-     "start": 0.032,
-     "end": 0.482,
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 03_Ocular_Stride.wav",
+     "start": 0.024,
+     "end": 0.474,
      "pitch_st": 0.0
     },
     {
@@ -10915,14 +11003,82 @@
      "pitch_st": 0.0
     }
    ],
+   "anchor_ms": 5.2,
+   "element": "land",
+   "category": "step_grass",
+   "variant": 3,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 03_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -10.09
+  },
+  {
+   "file": "Foley/step_grass/land_4.wav",
+   "key": "snd.foley.step_grass.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -6.13,
+   "length_s": 0.45,
+   "peak_ms": 20.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 04_Ocular_Stride.wav",
+     "start": 0.057,
+     "end": 0.507,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.479,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.2,
+   "element": "land",
+   "category": "step_grass",
+   "variant": 4,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 04_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -10.21
+  },
+  {
+   "file": "Foley/step_grass/land_5.wav",
+   "key": "snd.foley.step_grass.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.15,
+   "length_s": 0.45,
+   "peak_ms": 13.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Stomp 05_Ocular_Stride.wav",
+     "start": 0.032,
+     "end": 0.482,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.438,
+     "pitch_st": 0.0
+    }
+   ],
    "anchor_ms": 7.8,
    "element": "land",
    "category": "step_grass",
    "variant": 5,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 05_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Stomp 05_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
-   "mix_db": -10.07
+   "mix_db": -10.25
   },
   {
    "file": "Foley/step_grass/run_1.wav",
@@ -10932,14 +11088,218 @@
    "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -6.85,
+   "true_peak_dbtp": -3.23,
    "length_s": 0.28,
-   "peak_ms": 9.1,
+   "peak_ms": 9.4,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 2.279,
-     "end": 2.559,
+     "start": 1.69,
+     "end": 1.97,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.306,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.2,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 1,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@1.70s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.29
+  },
+  {
+   "file": "Foley/step_grass/run_10.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.8,
+   "length_s": 0.28,
+   "peak_ms": 17.0,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 15.674,
+     "end": 15.954,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.309,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 8.6,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 10,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@15.69s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.23
+  },
+  {
+   "file": "Foley/step_grass/run_11.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.33,
+   "length_s": 0.28,
+   "peak_ms": 9.2,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 16.858,
+     "end": 17.138,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.306,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.9,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 11,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@16.87s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.27
+  },
+  {
+   "file": "Foley/step_grass/run_12.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.19,
+   "length_s": 0.28,
+   "peak_ms": 20.8,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 17.393,
+     "end": 17.673,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.059,
+     "end": 0.339,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 13.1,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 12,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@17.41s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.23
+  },
+  {
+   "file": "Foley/step_grass/run_13.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.63,
+   "length_s": 0.28,
+   "peak_ms": 15.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 21.377,
+     "end": 21.657,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.307,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.8,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 13,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@21.40s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.23
+  },
+  {
+   "file": "Foley/step_grass/run_14.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.16,
+   "length_s": 0.28,
+   "peak_ms": 48.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 23.097,
+     "end": 23.377,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav",
+     "start": 0.036,
+     "end": 0.316,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 14.8,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 14,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@23.12s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.05
+  },
+  {
+   "file": "Foley/step_grass/run_15.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -7.57,
+   "length_s": 0.28,
+   "peak_ms": 20.5,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 25.121,
+     "end": 25.401,
      "pitch_st": 0.0
     },
     {
@@ -10952,28 +11312,130 @@
    "anchor_ms": 5.5,
    "element": "run",
    "category": "step_grass",
-   "variant": 1,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@2.29s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "variant": 15,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@25.13s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
-   "mix_db": -11.21
+   "mix_db": -11.22
   },
   {
-   "file": "Foley/step_grass/run_10.wav",
+   "file": "Foley/step_grass/run_16.wav",
    "key": "snd.foley.step_grass.run",
    "layer": "step",
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -6.86,
+   "true_peak_dbtp": -2.87,
+   "length_s": 0.28,
+   "peak_ms": 13.2,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 25.699,
+     "end": 25.979,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.306,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 16,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@25.71s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.29
+  },
+  {
+   "file": "Foley/step_grass/run_2.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.59,
+   "length_s": 0.28,
+   "peak_ms": 20.8,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 2.569,
+     "end": 2.849,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.059,
+     "end": 0.339,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.5,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 2,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@2.59s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.25
+  },
+  {
+   "file": "Foley/step_grass/run_3.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.78,
+   "length_s": 0.28,
+   "peak_ms": 9.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 3.394,
+     "end": 3.674,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.307,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.4,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 3,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@3.41s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.23
+  },
+  {
+   "file": "Foley/step_grass/run_4.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.95,
    "length_s": 0.28,
    "peak_ms": 48.2,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 21.678,
-     "end": 21.958,
+     "start": 4.831,
+     "end": 5.111,
      "pitch_st": 0.0
     },
     {
@@ -10983,17 +11445,51 @@
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 10.8,
+   "anchor_ms": 14.9,
    "element": "run",
    "category": "step_grass",
-   "variant": 10,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@21.70s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "variant": 4,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@4.85s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
-   "mix_db": -11.13
+   "mix_db": -11.09
   },
   {
-   "file": "Foley/step_grass/run_2.wav",
+   "file": "Foley/step_grass/run_5.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.64,
+   "length_s": 0.28,
+   "peak_ms": 16.7,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 6.565,
+     "end": 6.845,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.309,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 14.8,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 5,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@6.58s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.21
+  },
+  {
+   "file": "Foley/step_grass/run_6.wav",
    "key": "snd.foley.step_grass.run",
    "layer": "step",
    "channels": 2,
@@ -11020,147 +11516,11 @@
    "anchor_ms": 12.6,
    "element": "run",
    "category": "step_grass",
-   "variant": 2,
+   "variant": 6,
    "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@9.42s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
    "mix_db": -11.29
-  },
-  {
-   "file": "Foley/step_grass/run_3.wav",
-   "key": "snd.foley.step_grass.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -5.15,
-   "length_s": 0.28,
-   "peak_ms": 21.7,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 10.847,
-     "end": 11.127,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
-     "start": 0.059,
-     "end": 0.339,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 13.2,
-   "element": "run",
-   "category": "step_grass",
-   "variant": 3,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@10.87s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -11.24
-  },
-  {
-   "file": "Foley/step_grass/run_4.wav",
-   "key": "snd.foley.step_grass.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -3.41,
-   "length_s": 0.28,
-   "peak_ms": 13.3,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 12.585,
-     "end": 12.865,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
-     "start": 0.027,
-     "end": 0.307,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 8.3,
-   "element": "run",
-   "category": "step_grass",
-   "variant": 4,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@12.61s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -11.25
-  },
-  {
-   "file": "Foley/step_grass/run_5.wav",
-   "key": "snd.foley.step_grass.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -5.75,
-   "length_s": 0.28,
-   "peak_ms": 48.1,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 15.674,
-     "end": 15.954,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav",
-     "start": 0.036,
-     "end": 0.316,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 15.2,
-   "element": "run",
-   "category": "step_grass",
-   "variant": 5,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@15.69s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -11.11
-  },
-  {
-   "file": "Foley/step_grass/run_6.wav",
-   "key": "snd.foley.step_grass.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -7.05,
-   "length_s": 0.28,
-   "peak_ms": 9.1,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 16.858,
-     "end": 17.138,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
-     "start": 0.029,
-     "end": 0.309,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 8.0,
-   "element": "run",
-   "category": "step_grass",
-   "variant": 6,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@16.87s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -11.2
   },
   {
    "file": "Foley/step_grass/run_7.wav",
@@ -11170,48 +11530,14 @@
    "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -1.52,
+   "true_peak_dbtp": -5.65,
    "length_s": 0.28,
-   "peak_ms": 13.2,
+   "peak_ms": 20.8,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 17.975,
-     "end": 18.255,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
-     "start": 0.026,
-     "end": 0.306,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 12.6,
-   "element": "run",
-   "category": "step_grass",
-   "variant": 7,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@18.00s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -11.3
-  },
-  {
-   "file": "Foley/step_grass/run_8.wav",
-   "key": "snd.foley.step_grass.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -5.85,
-   "length_s": 0.28,
-   "peak_ms": 21.6,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 18.268,
-     "end": 18.548,
+     "start": 9.69,
+     "end": 9.97,
      "pitch_st": 0.0
     },
     {
@@ -11221,31 +11547,31 @@
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 13.2,
+   "anchor_ms": 13.1,
    "element": "run",
    "category": "step_grass",
-   "variant": 8,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@18.29s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "variant": 7,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@9.71s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
    "mix_db": -11.24
   },
   {
-   "file": "Foley/step_grass/run_9.wav",
+   "file": "Foley/step_grass/run_8.wav",
    "key": "snd.foley.step_grass.run",
    "layer": "step",
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -4.01,
+   "true_peak_dbtp": -3.95,
    "length_s": 0.28,
-   "peak_ms": 10.0,
+   "peak_ms": 9.4,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
-     "start": 20.842,
-     "end": 21.122,
+     "start": 10.003,
+     "end": 10.283,
      "pitch_st": 0.0
     },
     {
@@ -11255,14 +11581,48 @@
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 6.3,
+   "anchor_ms": 4.4,
+   "element": "run",
+   "category": "step_grass",
+   "variant": 8,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@10.02s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -11.23
+  },
+  {
+   "file": "Foley/step_grass/run_9.wav",
+   "key": "snd.foley.step_grass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.37,
+   "length_s": 0.28,
+   "peak_ms": 48.2,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav",
+     "start": 10.593,
+     "end": 10.873,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav",
+     "start": 0.036,
+     "end": 0.316,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.1,
    "element": "run",
    "category": "step_grass",
    "variant": 9,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@20.86s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Grass Sequence_Ocular_Stride.wav@10.61s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
-   "mix_db": -11.21
+   "mix_db": -11.04
   },
   {
    "file": "Foley/step_grass/walk_1.wav",
@@ -11272,14 +11632,14 @@
    "sample_rate": 48000,
    "lufs_i": -24.04,
    "lufs_m_max": -24.0,
-   "true_peak_dbtp": -7.98,
+   "true_peak_dbtp": -8.8,
    "length_s": 0.34,
-   "peak_ms": 22.6,
+   "peak_ms": 16.7,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
-     "start": 18.687,
-     "end": 19.027,
+     "start": 0.658,
+     "end": 0.998,
      "pitch_st": 0.0
     },
     {
@@ -11289,133 +11649,31 @@
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 12.3,
+   "anchor_ms": 12.5,
    "element": "walk",
    "category": "step_grass",
    "variant": 1,
-   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@18.71s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@0.69s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
-   "mix_db": -13.23
+   "mix_db": -13.02
   },
   {
-   "file": "Foley/step_grass/walk_2.wav",
+   "file": "Foley/step_grass/walk_10.wav",
    "key": "snd.foley.step_grass.walk",
    "layer": "step",
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -24.04,
    "lufs_m_max": -24.0,
-   "true_peak_dbtp": -5.94,
+   "true_peak_dbtp": -8.2,
    "length_s": 0.34,
-   "peak_ms": 13.7,
+   "peak_ms": 48.1,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
-     "start": 20.002,
-     "end": 20.342,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
-     "start": 0.026,
-     "end": 0.366,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 11.4,
-   "element": "walk",
-   "category": "step_grass",
-   "variant": 2,
-   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@20.02s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -13.15
-  },
-  {
-   "file": "Foley/step_grass/walk_3.wav",
-   "key": "snd.foley.step_grass.walk",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -24.04,
-   "lufs_m_max": -24.0,
-   "true_peak_dbtp": -7.94,
-   "length_s": 0.34,
-   "peak_ms": 17.4,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 01_Ocular_Stride.wav",
-     "start": 0.047,
-     "end": 0.387,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
-     "start": 0.059,
-     "end": 0.399,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 13.1,
-   "element": "walk",
-   "category": "step_grass",
-   "variant": 3,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 01_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -13.37
-  },
-  {
-   "file": "Foley/step_grass/walk_4.wav",
-   "key": "snd.foley.step_grass.walk",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -24.04,
-   "lufs_m_max": -24.0,
-   "true_peak_dbtp": -7.02,
-   "length_s": 0.34,
-   "peak_ms": 10.0,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 02_Ocular_Stride.wav",
-     "start": 0.055,
-     "end": 0.395,
-     "pitch_st": 0.0
-    },
-    {
-     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
-     "start": 0.027,
-     "end": 0.367,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 6.3,
-   "element": "walk",
-   "category": "step_grass",
-   "variant": 4,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 02_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
-   "surface": "grass",
-   "footwear": "generic",
-   "mix_db": -13.31
-  },
-  {
-   "file": "Foley/step_grass/walk_5.wav",
-   "key": "snd.foley.step_grass.walk",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -24.04,
-   "lufs_m_max": -24.0,
-   "true_peak_dbtp": -7.81,
-   "length_s": 0.34,
-   "peak_ms": 17.4,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 03_Ocular_Stride.wav",
-     "start": 0.057,
-     "end": 0.397,
+     "start": 16.11,
+     "end": 16.45,
      "pitch_st": 0.0
     },
     {
@@ -11425,14 +11683,660 @@
      "pitch_st": 0.0
     }
    ],
+   "anchor_ms": 4.5,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 10,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@16.20s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.15
+  },
+  {
+   "file": "Foley/step_grass/walk_11.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.13,
+   "length_s": 0.34,
+   "peak_ms": 16.8,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 18.037,
+     "end": 18.377,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.369,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 14.9,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 11,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@18.07s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.42
+  },
+  {
+   "file": "Foley/step_grass/walk_12.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.02,
+   "length_s": 0.34,
+   "peak_ms": 13.3,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 22.052,
+     "end": 22.392,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.366,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 14.1,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 12,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@22.07s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -12.95
+  },
+  {
+   "file": "Foley/step_grass/walk_13.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.84,
+   "length_s": 0.34,
+   "peak_ms": 20.7,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 23.361,
+     "end": 23.701,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.059,
+     "end": 0.399,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 20.7,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 13,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@23.40s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.59
+  },
+  {
+   "file": "Foley/step_grass/walk_14.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.87,
+   "length_s": 0.34,
+   "peak_ms": 17.9,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 24.049,
+     "end": 24.389,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.367,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.2,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 14,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@24.07s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -12.87
+  },
+  {
+   "file": "Foley/step_grass/walk_15.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -9.93,
+   "length_s": 0.34,
+   "peak_ms": 44.6,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 26.046,
+     "end": 26.386,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav",
+     "start": 0.036,
+     "end": 0.376,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 16.0,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 15,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@26.08s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/step_grass/walk_16.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.32,
+   "length_s": 0.34,
+   "peak_ms": 18.8,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 26.74,
+     "end": 27.08,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.369,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 16,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@26.76s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.2
+  },
+  {
+   "file": "Foley/step_grass/walk_17.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.44,
+   "length_s": 0.34,
+   "peak_ms": 13.8,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 01_Ocular_Stride.wav",
+     "start": 0.047,
+     "end": 0.387,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.366,
+     "pitch_st": 0.0
+    }
+   ],
    "anchor_ms": 13.9,
    "element": "walk",
    "category": "step_grass",
-   "variant": 5,
-   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 03_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "variant": 17,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 01_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
    "surface": "grass",
    "footwear": "generic",
-   "mix_db": -13.22
+   "mix_db": -13.72
+  },
+  {
+   "file": "Foley/step_grass/walk_18.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.72,
+   "length_s": 0.34,
+   "peak_ms": 9.2,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 02_Ocular_Stride.wav",
+     "start": 0.055,
+     "end": 0.395,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.059,
+     "end": 0.399,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.3,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 18,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 02_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.61
+  },
+  {
+   "file": "Foley/step_grass/walk_19.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.99,
+   "length_s": 0.34,
+   "peak_ms": 18.0,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 03_Ocular_Stride.wav",
+     "start": 0.057,
+     "end": 0.397,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.367,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.1,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 19,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 03_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.66
+  },
+  {
+   "file": "Foley/step_grass/walk_2.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.45,
+   "length_s": 0.34,
+   "peak_ms": 13.3,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 1.35,
+     "end": 1.69,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.366,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 2,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@1.36s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -12.57
+  },
+  {
+   "file": "Foley/step_grass/walk_20.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.41,
+   "length_s": 0.34,
+   "peak_ms": 48.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 04_Ocular_Stride.wav",
+     "start": 0.104,
+     "end": 0.444,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav",
+     "start": 0.036,
+     "end": 0.376,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 20,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 04_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.44
+  },
+  {
+   "file": "Foley/step_grass/walk_21.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.58,
+   "length_s": 0.34,
+   "peak_ms": 22.5,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Grass Single Step 05_Ocular_Stride.wav",
+     "start": 0.041,
+     "end": 0.381,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.369,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 12.2,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 21,
+   "source": "FEETHmn_GENERIC-Generic Footwear Grass Single Step 05_Ocular_Stride.wav + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.63
+  },
+  {
+   "file": "Foley/step_grass/walk_3.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.57,
+   "length_s": 0.34,
+   "peak_ms": 20.6,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 4.045,
+     "end": 4.385,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.059,
+     "end": 0.399,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 13.3,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 3,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@4.10s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.48
+  },
+  {
+   "file": "Foley/step_grass/walk_4.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.96,
+   "length_s": 0.34,
+   "peak_ms": 10.5,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 5.354,
+     "end": 5.694,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.367,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.1,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 4,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@5.38s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.03
+  },
+  {
+   "file": "Foley/step_grass/walk_5.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.21,
+   "length_s": 0.34,
+   "peak_ms": 48.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 7.38,
+     "end": 7.72,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav",
+     "start": 0.036,
+     "end": 0.376,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 17.4,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 5,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@7.41s + FEETHmn_BOOTS-Boots Carpet Single Step 05_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.49
+  },
+  {
+   "file": "Foley/step_grass/walk_6.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.8,
+   "length_s": 0.34,
+   "peak_ms": 20.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 8.659,
+     "end": 8.999,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.369,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 6,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@8.67s + FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.06
+  },
+  {
+   "file": "Foley/step_grass/walk_7.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.02,
+   "length_s": 0.34,
+   "peak_ms": 13.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 10.74,
+     "end": 11.08,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.026,
+     "end": 0.366,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 14.0,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 7,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@10.76s + FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -12.7
+  },
+  {
+   "file": "Foley/step_grass/walk_8.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -9.19,
+   "length_s": 0.34,
+   "peak_ms": 22.0,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 12.66,
+     "end": 13.0,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.059,
+     "end": 0.399,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 8,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@12.67s + FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -12.83
+  },
+  {
+   "file": "Foley/step_grass/walk_9.wav",
+   "key": "snd.foley.step_grass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.09,
+   "length_s": 0.34,
+   "peak_ms": 14.5,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Grass/FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav",
+     "start": 14.048,
+     "end": 14.388,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.367,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.0,
+   "element": "walk",
+   "category": "step_grass",
+   "variant": 9,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Grass Sequence_Ocular_Stride.wav@14.07s + FEETHmn_BOOTS-Boots Carpet Single Step 04_Ocular_Stride.wav (thud)",
+   "surface": "grass",
+   "footwear": "generic",
+   "mix_db": -13.65
   },
   {
    "file": "Foley/step_gravel/land_1.wav",
@@ -11580,62 +12484,6 @@
    "layer": "step",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -24.11,
-   "lufs_m_max": -24.06,
-   "true_peak_dbtp": -2.69,
-   "length_s": 0.28,
-   "peak_ms": 15.8,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 0.856,
-     "end": 1.136,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 15.7,
-   "element": "run",
-   "category": "step_gravel",
-   "variant": 1,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@0.88s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -9.21
-  },
-  {
-   "file": "Foley/step_gravel/run_10.wav",
-   "key": "snd.foley.step_gravel.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -5.19,
-   "length_s": 0.28,
-   "peak_ms": 9.0,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 20.015,
-     "end": 20.295,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 4.5,
-   "element": "run",
-   "category": "step_gravel",
-   "variant": 10,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@20.03s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -11.22
-  },
-  {
-   "file": "Foley/step_gravel/run_2.wav",
-   "key": "snd.foley.step_gravel.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
    "true_peak_dbtp": -2.94,
@@ -11652,182 +12500,42 @@
    "anchor_ms": 44.4,
    "element": "run",
    "category": "step_gravel",
-   "variant": 2,
+   "variant": 1,
    "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@1.73s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -11.27
+   "mix_db": -11.39
   },
   {
-   "file": "Foley/step_gravel/run_3.wav",
+   "file": "Foley/step_gravel/run_10.wav",
    "key": "snd.foley.step_gravel.run",
    "layer": "step",
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -1.17,
-   "length_s": 0.28,
-   "peak_ms": 25.7,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 6.011,
-     "end": 6.291,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 6.6,
-   "element": "run",
-   "category": "step_gravel",
-   "variant": 3,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@6.02s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -11.26
-  },
-  {
-   "file": "Foley/step_gravel/run_4.wav",
-   "key": "snd.foley.step_gravel.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -5.84,
-   "length_s": 0.28,
-   "peak_ms": 8.0,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 6.61,
-     "end": 6.89,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 7.8,
-   "element": "run",
-   "category": "step_gravel",
-   "variant": 4,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@6.62s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -11.04
-  },
-  {
-   "file": "Foley/step_gravel/run_5.wav",
-   "key": "snd.foley.step_gravel.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -2.4,
-   "length_s": 0.28,
-   "peak_ms": 36.7,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 8.015,
-     "end": 8.295,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 36.6,
-   "element": "run",
-   "category": "step_gravel",
-   "variant": 5,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@8.10s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -11.18
-  },
-  {
-   "file": "Foley/step_gravel/run_6.wav",
-   "key": "snd.foley.step_gravel.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -1.82,
-   "length_s": 0.28,
-   "peak_ms": 36.3,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 9.427,
-     "end": 9.707,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 35.5,
-   "element": "run",
-   "category": "step_gravel",
-   "variant": 6,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@9.47s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -11.23
-  },
-  {
-   "file": "Foley/step_gravel/run_7.wav",
-   "key": "snd.foley.step_gravel.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -3.04,
-   "length_s": 0.28,
-   "peak_ms": 17.1,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 13.724,
-     "end": 14.004,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 5.6,
-   "element": "run",
-   "category": "step_gravel",
-   "variant": 7,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@13.74s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -11.28
-  },
-  {
-   "file": "Foley/step_gravel/run_8.wav",
-   "key": "snd.foley.step_gravel.run",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -22.04,
-   "lufs_m_max": -22.0,
-   "true_peak_dbtp": -2.74,
+   "true_peak_dbtp": -4.41,
    "length_s": 0.28,
    "peak_ms": 40.5,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
-     "start": 17.41,
-     "end": 17.69,
+     "start": 15.691,
+     "end": 15.971,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 5.4,
+   "anchor_ms": 4.4,
    "element": "run",
    "category": "step_gravel",
-   "variant": 8,
-   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@17.45s",
+   "variant": 10,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@15.73s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -10.74
+   "mix_db": -10.98
   },
   {
-   "file": "Foley/step_gravel/run_9.wav",
+   "file": "Foley/step_gravel/run_11.wav",
    "key": "snd.foley.step_gravel.run",
    "layer": "step",
    "channels": 2,
@@ -11848,11 +12556,375 @@
    "anchor_ms": 15.5,
    "element": "run",
    "category": "step_gravel",
-   "variant": 9,
+   "variant": 11,
    "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@17.75s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -10.87
+   "mix_db": -11.0
+  },
+  {
+   "file": "Foley/step_gravel/run_12.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.82,
+   "length_s": 0.28,
+   "peak_ms": 37.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 19.17,
+     "end": 19.45,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 12.6,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 12,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@19.21s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.15
+  },
+  {
+   "file": "Foley/step_gravel/run_13.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.4,
+   "length_s": 0.28,
+   "peak_ms": 32.3,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 22.863,
+     "end": 23.143,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 13,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@22.87s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.4
+  },
+  {
+   "file": "Foley/step_gravel/run_14.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.85,
+   "length_s": 0.28,
+   "peak_ms": 16.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 24.895,
+     "end": 25.175,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 16.3,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 14,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@24.95s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.33
+  },
+  {
+   "file": "Foley/step_gravel/run_15.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.28,
+   "lufs_m_max": -24.24,
+   "true_peak_dbtp": -1.36,
+   "length_s": 0.28,
+   "peak_ms": 21.3,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 26.312,
+     "end": 26.592,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.7,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 15,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@26.32s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -9.16
+  },
+  {
+   "file": "Foley/step_gravel/run_16.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.28,
+   "peak_ms": 55.2,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 27.707,
+     "end": 27.987,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 54.8,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 16,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@27.77s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -10.55
+  },
+  {
+   "file": "Foley/step_gravel/run_2.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.11,
+   "length_s": 0.28,
+   "peak_ms": 36.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 3.708,
+     "end": 3.988,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.6,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 2,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@3.75s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.37
+  },
+  {
+   "file": "Foley/step_gravel/run_3.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.59,
+   "length_s": 0.28,
+   "peak_ms": 8.0,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 5.422,
+     "end": 5.702,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.8,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 3,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@5.49s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.3
+  },
+  {
+   "file": "Foley/step_gravel/run_4.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.01,
+   "length_s": 0.28,
+   "peak_ms": 17.5,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 5.708,
+     "end": 5.988,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 16.5,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 4,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@5.73s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.11
+  },
+  {
+   "file": "Foley/step_gravel/run_5.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.84,
+   "length_s": 0.28,
+   "peak_ms": 8.0,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 6.61,
+     "end": 6.89,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.8,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 5,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@6.62s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.17
+  },
+  {
+   "file": "Foley/step_gravel/run_6.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.36,
+   "length_s": 0.28,
+   "peak_ms": 32.9,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 10.3,
+     "end": 10.58,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 18.4,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 6,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@10.34s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -9.96
+  },
+  {
+   "file": "Foley/step_gravel/run_7.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.06,
+   "length_s": 0.28,
+   "peak_ms": 52.7,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 12.577,
+     "end": 12.857,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 52.1,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 7,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@12.64s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.1
+  },
+  {
+   "file": "Foley/step_gravel/run_8.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.91,
+   "length_s": 0.28,
+   "peak_ms": 29.3,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 13.41,
+     "end": 13.69,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 29.0,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 8,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@13.45s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.37
+  },
+  {
+   "file": "Foley/step_gravel/run_9.wav",
+   "key": "snd.foley.step_gravel.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.59,
+   "lufs_m_max": -24.55,
+   "true_peak_dbtp": -3.36,
+   "length_s": 0.28,
+   "peak_ms": 55.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav",
+     "start": 14.598,
+     "end": 14.877,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 54.9,
+   "element": "run",
+   "category": "step_gravel",
+   "variant": 9,
+   "source": "FEETHmn_GENERIC-Generic Footwear Run Gravel Sequence_Ocular_Stride.wav@14.68s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -8.74
   },
   {
    "file": "Foley/step_gravel/walk_1.wav",
@@ -11880,10 +12952,234 @@
    "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@1.36s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.26
+   "mix_db": -13.28
   },
   {
    "file": "Foley/step_gravel/walk_10.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.72,
+   "length_s": 0.34,
+   "peak_ms": 47.6,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 16.62,
+     "end": 16.96,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 47.5,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 10,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@16.67s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -11.58
+  },
+  {
+   "file": "Foley/step_gravel/walk_11.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.15,
+   "length_s": 0.34,
+   "peak_ms": 22.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 20.643,
+     "end": 20.983,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 11,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@20.67s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.31
+  },
+  {
+   "file": "Foley/step_gravel/walk_12.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.69,
+   "length_s": 0.34,
+   "peak_ms": 82.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 21.31,
+     "end": 21.65,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 47.3,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 12,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@21.40s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -12.94
+  },
+  {
+   "file": "Foley/step_gravel/walk_13.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.13,
+   "length_s": 0.34,
+   "peak_ms": 20.9,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 22.808,
+     "end": 23.148,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 12.5,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 13,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@22.83s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/step_gravel/walk_14.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.97,
+   "length_s": 0.34,
+   "peak_ms": 52.3,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 24.643,
+     "end": 24.983,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.3,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 14,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@24.70s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.32
+  },
+  {
+   "file": "Foley/step_gravel/walk_15.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.45,
+   "length_s": 0.34,
+   "peak_ms": 21.4,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 25.462,
+     "end": 25.802,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 13.0,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 15,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@25.48s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.22
+  },
+  {
+   "file": "Foley/step_gravel/walk_16.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.17,
+   "length_s": 0.34,
+   "peak_ms": 40.5,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 26.001,
+     "end": 26.341,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.4,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 16,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@26.04s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.04
+  },
+  {
+   "file": "Foley/step_gravel/walk_17.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.29,
+   "length_s": 0.34,
+   "peak_ms": 46.0,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Gravel Single Step 01_Ocular_Stride.wav",
+     "start": 0.001,
+     "end": 0.341,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.3,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 17,
+   "source": "FEETHmn_GENERIC-Generic Footwear Gravel Single Step 01_Ocular_Stride.wav",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.16
+  },
+  {
+   "file": "Foley/step_gravel/walk_18.wav",
    "key": "snd.foley.step_gravel.walk",
    "layer": "step",
    "channels": 2,
@@ -11904,14 +13200,14 @@
    "anchor_ms": 32.5,
    "element": "walk",
    "category": "step_gravel",
-   "variant": 10,
+   "variant": 18,
    "source": "FEETHmn_GENERIC-Generic Footwear Gravel Single Step 02_Ocular_Stride.wav",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.26
+   "mix_db": -13.28
   },
   {
-   "file": "Foley/step_gravel/walk_11.wav",
+   "file": "Foley/step_gravel/walk_19.wav",
    "key": "snd.foley.step_gravel.walk",
    "layer": "step",
    "channels": 2,
@@ -11932,11 +13228,11 @@
    "anchor_ms": 4.1,
    "element": "walk",
    "category": "step_gravel",
-   "variant": 11,
+   "variant": 19,
    "source": "FEETHmn_GENERIC-Generic Footwear Gravel Single Step 03_Ocular_Stride.wav",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.23
+   "mix_db": -13.25
   },
   {
    "file": "Foley/step_gravel/walk_2.wav",
@@ -11964,10 +13260,94 @@
    "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@2.05s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.27
+   "mix_db": -13.29
+  },
+  {
+   "file": "Foley/step_gravel/walk_20.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.01,
+   "length_s": 0.34,
+   "peak_ms": 14.1,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Gravel Single Step 04_Ocular_Stride.wav",
+     "start": 0.075,
+     "end": 0.415,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.9,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 20,
+   "source": "FEETHmn_GENERIC-Generic Footwear Gravel Single Step 04_Ocular_Stride.wav",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.31
+  },
+  {
+   "file": "Foley/step_gravel/walk_21.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.35,
+   "length_s": 0.34,
+   "peak_ms": 17.6,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Gravel Single Step 05_Ocular_Stride.wav",
+     "start": 0.021,
+     "end": 0.361,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.1,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 21,
+   "source": "FEETHmn_GENERIC-Generic Footwear Gravel Single Step 05_Ocular_Stride.wav",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.32
   },
   {
    "file": "Foley/step_gravel/walk_3.wav",
+   "key": "snd.foley.step_gravel.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.12,
+   "length_s": 0.34,
+   "peak_ms": 17.6,
+   "sources": [
+    {
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 5.33,
+     "end": 5.67,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.1,
+   "element": "walk",
+   "category": "step_gravel",
+   "variant": 3,
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@5.35s",
+   "surface": "gravel",
+   "footwear": "generic",
+   "mix_db": -13.29
+  },
+  {
+   "file": "Foley/step_gravel/walk_4.wav",
    "key": "snd.foley.step_gravel.walk",
    "layer": "step",
    "channels": 2,
@@ -11988,39 +13368,11 @@
    "anchor_ms": 52.4,
    "element": "walk",
    "category": "step_gravel",
-   "variant": 3,
+   "variant": 4,
    "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@6.76s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.15
-  },
-  {
-   "file": "Foley/step_gravel/walk_4.wav",
-   "key": "snd.foley.step_gravel.walk",
-   "layer": "step",
-   "channels": 2,
-   "sample_rate": 48000,
-   "lufs_i": -24.04,
-   "lufs_m_max": -24.0,
-   "true_peak_dbtp": -6.67,
-   "length_s": 0.34,
-   "peak_ms": 19.3,
-   "sources": [
-    {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
-     "start": 18.035,
-     "end": 18.375,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 18.5,
-   "element": "walk",
-   "category": "step_gravel",
-   "variant": 4,
-   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@18.06s",
-   "surface": "gravel",
-   "footwear": "generic",
-   "mix_db": -12.63
+   "mix_db": -13.18
   },
   {
    "file": "Foley/step_gravel/walk_5.wav",
@@ -12030,25 +13382,25 @@
    "sample_rate": 48000,
    "lufs_i": -24.04,
    "lufs_m_max": -24.0,
-   "true_peak_dbtp": -6.05,
+   "true_peak_dbtp": -4.05,
    "length_s": 0.34,
-   "peak_ms": 42.3,
+   "peak_ms": 30.2,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
-     "start": 18.704,
-     "end": 19.044,
+     "start": 7.313,
+     "end": 7.653,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 11.3,
+   "anchor_ms": 26.2,
    "element": "walk",
    "category": "step_gravel",
    "variant": 5,
-   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@18.72s",
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@7.35s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -12.96
+   "mix_db": -12.59
   },
   {
    "file": "Foley/step_gravel/walk_6.wav",
@@ -12058,25 +13410,25 @@
    "sample_rate": 48000,
    "lufs_i": -24.04,
    "lufs_m_max": -24.0,
-   "true_peak_dbtp": -7.34,
+   "true_peak_dbtp": -5.54,
    "length_s": 0.34,
-   "peak_ms": 22.9,
+   "peak_ms": 71.1,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
-     "start": 20.031,
-     "end": 20.371,
+     "start": 8.62,
+     "end": 8.96,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 15.8,
+   "anchor_ms": 47.2,
    "element": "walk",
    "category": "step_gravel",
    "variant": 6,
-   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@20.06s",
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@8.70s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.3
+   "mix_db": -13.14
   },
   {
    "file": "Foley/step_gravel/walk_7.wav",
@@ -12084,27 +13436,27 @@
    "layer": "step",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -24.04,
-   "lufs_m_max": -24.0,
-   "true_peak_dbtp": -6.74,
+   "lufs_i": -25.85,
+   "lufs_m_max": -25.81,
+   "true_peak_dbtp": -2.54,
    "length_s": 0.34,
-   "peak_ms": 38.5,
+   "peak_ms": 5.2,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
-     "start": 23.997,
-     "end": 24.337,
+     "start": 9.509,
+     "end": 9.849,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 37.9,
+   "anchor_ms": 5.0,
    "element": "walk",
    "category": "step_gravel",
    "variant": 7,
-   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@24.05s",
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@9.52s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.25
+   "mix_db": -11.5
   },
   {
    "file": "Foley/step_gravel/walk_8.wav",
@@ -12114,25 +13466,25 @@
    "sample_rate": 48000,
    "lufs_i": -24.04,
    "lufs_m_max": -24.0,
-   "true_peak_dbtp": -5.17,
+   "true_peak_dbtp": -8.72,
    "length_s": 0.34,
-   "peak_ms": 40.5,
+   "peak_ms": 46.0,
    "sources": [
     {
      "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
-     "start": 26.001,
-     "end": 26.341,
+     "start": 10.0,
+     "end": 10.34,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 4.4,
+   "anchor_ms": 11.3,
    "element": "walk",
    "category": "step_gravel",
    "variant": 8,
-   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@26.04s",
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@10.05s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.02
+   "mix_db": -12.27
   },
   {
    "file": "Foley/step_gravel/walk_9.wav",
@@ -12142,25 +13494,25 @@
    "sample_rate": 48000,
    "lufs_i": -24.04,
    "lufs_m_max": -24.0,
-   "true_peak_dbtp": -8.29,
+   "true_peak_dbtp": -6.21,
    "length_s": 0.34,
-   "peak_ms": 46.0,
+   "peak_ms": 60.7,
    "sources": [
     {
-     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Gravel Single Step 01_Ocular_Stride.wav",
-     "start": 0.001,
-     "end": 0.341,
+     "file": "../Footsteps/Generic Footwear/Gravel/FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav",
+     "start": 10.709,
+     "end": 11.049,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 11.3,
+   "anchor_ms": 4.3,
    "element": "walk",
    "category": "step_gravel",
    "variant": 9,
-   "source": "FEETHmn_GENERIC-Generic Footwear Gravel Single Step 01_Ocular_Stride.wav",
+   "source": "FEETHmn_GENERIC-Generic Footwear Walk Gravel Sequence_Ocular_Stride.wav@10.77s",
    "surface": "gravel",
    "footwear": "generic",
-   "mix_db": -13.14
+   "mix_db": -13.15
   },
   {
    "file": "Foley/step_metal/land_1.wav",

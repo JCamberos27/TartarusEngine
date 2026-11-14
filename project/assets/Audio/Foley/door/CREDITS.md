@@ -9,8 +9,8 @@ The source recordings, as downloaded on 2026-10-20, are on the shared Drive at `
 `TARTARUS_AUDIO_SRC` to `Raw\Audio\audio-src` to rebuild). Format: 48 kHz, 16-bit, mono; each element is levelled to
 -24 LUFS-M max like the `step_wood` takes, and `recipes/mix.json` (`levels.door`) sets the playback level.
 
-Credits line: "Door sounds from Freesound (CC0) by SpliceSound, HowardV, EpicWizard, steeltowngaming, kyles, TRP and
-MarcusGraham325."
+Credits line: "Door and light switch sounds from Freesound (CC0) by SpliceSound, HowardV, EpicWizard, steeltowngaming,
+kyles, TRP, MarcusGraham325 and dr19."
 
 ## Sources
 
@@ -25,6 +25,7 @@ MarcusGraham325."
 | 345312 | [Cottage Door Handles - Assorted Opening, Rattling and Closing](https://freesound.org/people/EpicWizard/sounds/345312/) | EpicWizard | CC0 1.0 | rattle |
 | 577273 | [Door rattles, wood, 2011](https://freesound.org/people/TRP/sounds/577273/) | TRP | CC0 1.0 | rattle |
 | 330829 | [Door Handle Rattling](https://freesound.org/people/MarcusGraham325/sounds/330829/) | MarcusGraham325 | CC0 1.0 | rattle |
+| 361371 | [light switch flick on off](https://freesound.org/people/dr19/sounds/361371/) | dr19 | CC0 1.0 | switch_on, switch_off (the Light Switch components; downloaded 2026-11-14) |
 
 Downloaded too but not used (kept on the Drive with the rest, all CC0 1.0): 505957 jedg "Door open close latch",
 352328 / 352329 / 352330 MadMaxSFX "Wood Door Squeak" / "Wood Door Close with Metal Latch 01, 02" (noisy floor),
@@ -51,3 +52,9 @@ Downloaded too but not used (kept on the Drive with the rest, all CC0 1.0): 5059
 | `rattle_2.wav` | `snd.foley.door.rattle` | 1.34 s | `345312` 8.24-9.64 s |
 | `rattle_3.wav` | `snd.foley.door.rattle` | 1.40 s | `577273` 2.17-3.57 s |
 | `rattle_4.wav` | `snd.foley.door.rattle` | 1.40 s | `330829` 0.81-2.21 s |
+| `switch_off_1.wav` | `snd.foley.door.switch_off` | 0.25 s | `361371` 2.30-2.55 s |
+| `switch_off_2.wav` | `snd.foley.door.switch_off` | 0.25 s | `361371` 6.58-6.83 s |
+| `switch_off_3.wav` | `snd.foley.door.switch_off` | 0.25 s | `361371` 10.48-10.73 s |
+| `switch_on_1.wav` | `snd.foley.door.switch_on` | 0.25 s | `361371` 1.01-1.26 s |
+| `switch_on_2.wav` | `snd.foley.door.switch_on` | 0.25 s | `361371` 4.11-4.36 s |
+| `switch_on_3.wav` | `snd.foley.door.switch_on` | 0.25 s | `361371` 7.62-7.87 s |

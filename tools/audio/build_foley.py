@@ -77,14 +77,15 @@ def diverse_steps(x, peaks, n, dur, seed):
     return sorted(chosen)
 
 
-def pick_steps(x, n, dur, isolated_gap, seed, lo_db=-4.5):
-    """Cut n isolated, similar-level footsteps out of a long walk/run sequence."""
+def pick_steps(x, n, dur, isolated_gap, seed, lo_db=-4.5, rel_median=False):
+    """Cut n isolated, similar-level footsteps out of a long walk/run sequence. lo_db is against the loudest step, or with
+    rel_median against the median one (a take with one hard step otherwise leaves only a handful: finish() levels them anyway)."""
     m = adsp.to_mono(x)
     h = np.abs(signal.sosfilt(signal.butter(2, 150, "hp", fs=SR, output="sos"), m))
     env = signal.sosfilt(*[signal.butter(2, 60, "lp", fs=SR, output="sos")], h)
     env = np.maximum(env, 0)
-    pk, _ = signal.find_peaks(env, height=0.2 * env.max(), distance=int(0.2 * SR))
-    lv = 20 * np.log10(env[pk] / env.max())
+    pk, _ = signal.find_peaks(env, height=(0.1 if rel_median else 0.2) * env.max(), distance=int(0.2 * SR))
+    lv = 20 * np.log10(env[pk] / (np.median(env[pk]) if rel_median else env.max()))
     good = []
     for i in range(1, len(pk) - 1):
         if (pk[i] - pk[i - 1]) / SR >= isolated_gap and (pk[i + 1] - pk[i]) / SR >= isolated_gap * 0.7 and lv[i] >= lo_db:
@@ -126,7 +127,9 @@ def build_steps(cfg, entries, footwear="boots"):
         if seqW:
             x = adsp.load(seqW[0])
             adsp.take_uses()
-            for s, t, u in pick_steps(x, st["walk"]["seq_variants"], st["walk"]["dur"], 0.55, surface + "w"):
+            w = st["walk"]
+            for s, t, u in pick_steps(x, w["seq_variants"], w["dur"], w.get("gap", 0.55), surface + "w", w.get("lo_db", -4.5),
+                                      w.get("rel_median", False)):
                 jobs["walk"].append((s, f"{os.path.basename(seqW[0])}@{t:.2f}s", u))
         for f in singles[:st["walk"]["single_variants"]]:
             x = adsp.load(f)
@@ -136,7 +139,9 @@ def build_steps(cfg, entries, footwear="boots"):
             jobs["walk"].append((s, os.path.basename(f), adsp.take_uses()))
         if seqR:
             x = adsp.load(seqR[0])
-            for s, t, u in pick_steps(x, st["run"]["seq_variants"], st["run"]["dur"], 0.22, surface + "r", lo_db=-6.0):
+            r = st["run"]
+            for s, t, u in pick_steps(x, r["seq_variants"], r["dur"], r.get("gap", 0.22), surface + "r", r.get("lo_db", -6.0),
+                                      r.get("rel_median", False)):
                 jobs["run"].append((s, f"{os.path.basename(seqR[0])}@{t:.2f}s", u))
         for f in stomps[:st["land"]["stomp_variants"]]:
             x = adsp.load(f)

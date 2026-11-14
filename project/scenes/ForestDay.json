@@ -919193,8 +919193,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_stand 10",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -919406,8 +919406,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_table_B 11",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -921057,8 +921057,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_wall_desk 12",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -921365,8 +921365,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_table_B 13",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -922407,8 +922407,8 @@
     {
       "Light Switch": {
         "Circuit": "Lamp_stand 14",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -925325,8 +925325,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_table_A 15",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -926863,8 +926863,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_table_A 16",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -930251,8 +930251,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_stand 17",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -930656,8 +930656,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_wall_fluorescent 18",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": true
@@ -933690,8 +933690,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_stand 19",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -933863,8 +933863,8 @@
       },
       "Light Switch": {
         "Circuit": "Lamp_floor 20",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
         "Start On": false
@@ -940676,8 +940676,8 @@
     {
       "Light Switch": {
         "Circuit": "Kitchen",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -940797,8 +940797,8 @@
     {
       "Light Switch": {
         "Circuit": "Living room",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -941008,8 +941008,8 @@
     {
       "Light Switch": {
         "Circuit": "Hall",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -941129,8 +941129,8 @@
     {
       "Light Switch": {
         "Circuit": "Downstairs bathroom",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -941250,8 +941250,8 @@
     {
       "Light Switch": {
         "Circuit": "Master bedroom",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": true
@@ -941371,8 +941371,8 @@
     {
       "Light Switch": {
         "Circuit": "Den",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -941492,8 +941492,8 @@
     {
       "Light Switch": {
         "Circuit": "Upstairs bathroom",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -941613,8 +941613,8 @@
     {
       "Light Switch": {
         "Circuit": "Child's bedroom",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -941734,8 +941734,8 @@
     {
       "Light Switch": {
         "Circuit": "Stairs",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -941855,8 +941855,8 @@
     {
       "Light Switch": {
         "Circuit": "Stairs",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": false
@@ -942114,8 +942114,8 @@
     {
       "Light Switch": {
         "Circuit": "Porch",
-        "Off Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
-        "On Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
         "Start On": true
