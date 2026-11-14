@@ -17,7 +17,8 @@ SWITCH_H = 1.15                 # the switch's middle above the floor
 SWITCH_OFF = 0.17               # ... and past the opening's edge (the jamb's face), along the wall: clear of the trim
 CLUSTER = 2.7                   # ceiling fittings closer than this share a circuit
 MAX_DISCS = 4                   # a cluster of flush discs bigger than this is split
-CLICK = 'assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav'
+CLICK_ON = 'assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav'   # a wall switch flicked (dr19, Freesound CC0), softened
+CLICK_OFF = 'assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav'
 # The toggle is a lit one (an old illuminated switch): a dim warm orange while its room is dark, out once the light is
 # on, so a switch can be found in a black room.
 ROCKER_MAT = 'assets/Props/Electrical/Materials/M_Light_Switch_White.mat'
@@ -324,7 +325,7 @@ class Wiring:
                  'collider': {'center': [0.005, 0.0, 0.0], 'friction': 0.6, 'halfExtents': [0.005, 0.057, 0.035],
                               'isTrigger': False, 'shape': 0},
                  'Light Switch': {'Circuit': circuit, 'Start On': start_on, 'Rocker': 'Rocker', 'Rocker Angle': 12.0,
-                                  'On Sound': CLICK, 'Off Sound': CLICK}}
+                                  'On Sound': CLICK_ON, 'Off Sound': CLICK_OFF}}
         rid = s._next()
         rocker = {'id': rid, 'order': rid, 'parentId': pid, 'name': 'Rocker', 'position': [0.0, 0.0, 0.0],
                   'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0], 'path': rocker_path,
@@ -764,7 +765,7 @@ def wire(s, lay, pk, repo, fh, notes):
         circuit = f'{st} {n_circuits:02d}'
         f = FIT[st]
         e['Light Switch'] = {'Circuit': circuit, 'Start On': False, 'Rocker': '', 'Rocker Angle': 0.0,
-                             'On Sound': CLICK, 'Off Sound': CLICK}
+                             'On Sound': CLICK_ON, 'Off Sound': CLICK_OFF}
         if not upright(i):
             dead(i)
             continue

@@ -108,7 +108,9 @@
       "open": -20.0,
       "close": -15.0,
       "latch": -19.0,
-      "rattle": -20.0
+      "rattle": -20.0,
+      "switch_on": -28.0,
+      "switch_off": -28.0
     },
     "casing": -26.0,
     "ui": {

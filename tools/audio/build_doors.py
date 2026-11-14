@@ -33,6 +33,8 @@ def layer(L, hp_default):
     a0 = max(0, a + on - int(0.004 * SR))
     s = adsp.cut(x, a0, a0 + int(L["dur"] * SR))
     s = adsp.filt(s, "hp", L.get("hp_hz", hp_default))
+    if L.get("lp_hz"):
+        s = adsp.filt(s, "lp", float(L["lp_hz"]))
     return adsp.fade(s, int(0.001 * SR), 0)
 
 
@@ -58,7 +60,7 @@ def main():
             fo = cfg.get("fade_out_ms", {}).get(elem)
             if fo:
                 y = adsp.fade(y, 0, int(min(fo * 0.001, 0.4 * len(y) / SR) * SR))
-            y = abuild.finish(y, "foley", target=cfg["target_lufs_m"])
+            y = abuild.finish(y, "foley", target=cfg.get("element_target_lufs_m", {}).get(elem, cfg["target_lufs_m"]))
             note = " + ".join(f"{L['src'].split('__')[0]}@{L['t']:.2f}" for L in v)
             e = abuild.emit(f"Foley/door/{elem}_{n}.wav", y, f"snd.foley.door.{elem}", "foley",
                             {"element": elem, "category": "door", "variant": n, "source": note}, mono=True, sources=uses)
