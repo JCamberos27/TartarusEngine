@@ -54,6 +54,10 @@ public:
     // when it starts; left to the first round fired (ShellCasings::Spawn), the FBX import stalls that frame for up to a second.
     static void WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet);
     static void WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set);
+    // A slot not in hand at Play start: its weapon and arms models, their material overrides and its spent cases into the
+    // asset cache. Left to the first draw, the weapon's FBX and its 4K maps load on that frame (the .38: ~0.3 s warm,
+    // seconds with its textures uncooked).
+    static void WarmSlotAssets(AssetLibrary& assets, const std::string& animationSet);
     void PreloadClips(AssetLibrary& assets); // every slot's clip files, imported clip-only in parallel (Play start)
     // Where rounds go instead of down the zeroed bore: from the muzzle toward `point` (pellets
     // spread about that line). Null = the bore, as the player's do. Copied.

@@ -160,8 +160,8 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_WalkSpeed = config.MoveSpeed;
     m_SprintSpeed = config.MoveSpeed * config.SprintMultiplier;
     m_EyeRadius = config.EyeRadius;
-    // The other slots' spent cases too (StartSet warms its own): a swap to the other gun mustn't stall on its first round.
-    for (size_t i = 1; i < m_SlotSets.size(); ++i) WarmEjectAssets(assets, m_SlotSets[i]);
+    // The other slots' guns too (StartSet loads its own): a swap mustn't stall on the draw or on the first round.
+    for (size_t i = 1; i < m_SlotSets.size(); ++i) WarmSlotAssets(assets, m_SlotSets[i]);
     PreloadClips(assets);
     return StartSet(world, assets, 0, false);
 }
@@ -214,6 +214,16 @@ void FirstPersonPresentation::PreloadClips(AssetLibrary& assets) {
 void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet) {
     FirstPersonAnimationSet set;
     if (FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(animationSet), set, nullptr)) WarmEjectAssets(assets, set);
+}
+
+void FirstPersonPresentation::WarmSlotAssets(AssetLibrary& assets, const std::string& animationSet) {
+    FirstPersonAnimationSet set;
+    if (!FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(animationSet), set, nullptr)) return;
+    for (const std::string* model : {&set.ArmsModel, &set.WeaponModel})
+        if (!model->empty()) assets.LoadModel(ProjectPaths::Resolve(*model));
+    for (const auto* overrides : {&set.ArmsMaterials, &set.WeaponMaterials})
+        for (const auto& [name, matPath] : *overrides) assets.LoadMaterial(ProjectPaths::Resolve(matPath));
+    WarmEjectAssets(assets, set);
 }
 
 void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set) {
