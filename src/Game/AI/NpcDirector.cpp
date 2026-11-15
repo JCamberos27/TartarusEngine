@@ -308,9 +308,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         s.Skill = std::clamp(c.Skill, 0.0f, 1.0f);
         s.Brain = std::clamp(c.Brain, 0, 1);
         s.OutfitSeed = std::clamp(c.OutfitSeed, 0, 100000);
-        // NPC_TEST_BARE=1 (--npc-test): every soldier bare, the animation and the skinning seen without clothing.
-        static const bool allBare = Env::Flag(Env::Var::NpcTestBare);
-        s.Bare = c.Bare || allBare;
+        s.Bare = true; // every NPC spawns undressed (Spawn)
         const auto* order = reg.try_get<OrderComponent>(e);
         found.push_back({order ? order->Value : (int)entt::to_integral(e), s});
     }
@@ -539,8 +537,9 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (TestDummies && !dev) {
         sp.Brain = 1;
         sp.Weapon = spawnIndex == 1 ? 3 : 0;
-        sp.Bare = spawnIndex != 1;
     }
+    // Every NPC spawns undressed - the bare body, no clothing - whatever its spawn point or the scene asks for.
+    sp.Bare = true;
     PROFILE_SCOPE("AI Spawn");
     const auto spawnT0 = std::chrono::steady_clock::now();
     auto since = [&]() { return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - spawnT0).count(); };

@@ -73,6 +73,7 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
     m_NLPrev = now;
     npcs.Frozen = true;
     npcs.HoldFire = true;
+    npcs.FootIKEverywhere = true; // the Scene view watches his feet wherever the player looks
     Npc* probe = nullptr;
     for (const auto& up : npcs.Npcs()) {
         if (!up || up->Dead) continue;

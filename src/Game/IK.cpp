@@ -714,11 +714,17 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
     const float up = height - f.Floor;
     f.Prev = anim;
     f.Have = true;
-    const auto letGo = [&] { f.Locked = false; f.ReleaseFrom = f.Offset; f.ReleaseTime = 0.0f; };
+    const auto letGo = [&](bool step) {
+        f.Locked = false;
+        f.ReleaseFrom = glm::vec3(f.Offset.x, 0.0f, f.Offset.z);
+        f.ReleaseTime = 0.0f;
+        f.Lift = step ? std::min(set.StepHeight * glm::length(f.ReleaseFrom), set.StepMax) : 0.0f;
+    };
+    const bool stepping = f.Lift > 0.0f && f.ReleaseTime < set.Release; // a step plants again only once it is over
     if (!set.Enabled) {
-        if (f.Locked) letGo();
+        if (f.Locked) letGo(false);
     } else if (!f.Locked) {
-        if (seen && up < set.Height && speed < set.Speed) { // (a first frame has no speed yet)
+        if (seen && !stepping && up < set.Height && speed < set.Speed) { // (a first frame has no speed yet)
             // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
             f.Locked = true;
             f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
@@ -726,7 +732,8 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
         }
     } else {
         const float drift = glm::length(glm::vec2(f.Pin.x - anim.x, f.Pin.z - anim.z));
-        if (up > set.Lift || drift > set.MaxDrift) letGo();
+        if (up > set.Lift) letGo(false);
+        else if (drift > set.MaxDrift) letGo(true);
     }
     if (f.Locked) {
         f.Time += dt;
@@ -735,6 +742,8 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
         f.ReleaseTime += dt;
         const float k = std::clamp(f.ReleaseTime / std::max(set.Release, 1e-3f), 0.0f, 1.0f);
         f.Offset = f.ReleaseFrom * (1.0f - k * k * (3.0f - 2.0f * k));
+        if (f.Lift > 0.0f) f.Offset.y = f.Lift * std::sin(3.14159265f * k); // the step's arc
+        if (k >= 1.0f) f.Lift = 0.0f;
     }
     return f.Offset;
 }

@@ -834,7 +834,7 @@ struct FirstPersonBodyComponent {
     bool FootLockEnabled = true; // Foot Lock
     float FootLockHeight = 0.02f; // Foot Lock Height (m over the foot's lowest)
     float FootLockLift = 0.045f; // Foot Lock Lift (m over the foot's lowest: lets go)
-    float FootLockSpeed = 1.0f; // Foot Lock Speed (m/s the animated foot may move and still plant)
+    float FootLockSpeed = 2.0f; // Foot Lock Speed (m/s the animated foot may move and still plant)
     float FootLockDrift = 0.25f; // Foot Lock Drift (m the animation may wander before the foot lets go)
     float FootLockRelease = 0.2f; // Foot Lock Release (s a let-go foot takes to catch up)
     float FootPlantedHeight = 0.05f; // Foot Planted Height

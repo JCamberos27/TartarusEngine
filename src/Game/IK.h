@@ -226,16 +226,20 @@ private:
 // A planted foot stays where it landed in the world, whatever the clips and the capsule disagree on (a blend's stride
 // against the capsule's speed, a body turning on the spot, a start or stop's travel, a crossfade between two gaits).
 // A foot plants when it is down - within Height of its own lowest point - and its animated foot barely moves over the
-// ground (under Speed m/s: a swinging foot passing low never plants). It lets go when it lifts, or when the animation has
-// wandered MaxDrift metres from it; the lag it built up is then eased out over Release seconds (smoothstep), so the
-// foot catches up through its swing instead of popping. The same lock runs on the player's body and on the soldiers.
+// ground (under Speed m/s: a swinging foot passing low never plants). It lets go when it lifts, and the lag it built up is
+// eased out over Release seconds (smoothstep), so the foot catches up through its swing instead of popping. When the
+// animation wanders MaxDrift metres from a foot that is still down (a turn on the spot ending part way through a step,
+// a stance that changes under a planted foot), the foot steps there: it lifts in an arc (StepHeight a metre of the way,
+// at most StepMax) while it catches up, and plants again only once it has. The player's body and the soldiers alike.
 struct FootLockSettings {
     bool Enabled = true;
     float Height = 0.02f;   // m over the foot's own lowest height that still counts as down
     float Lift = 0.045f;    // m over it that lets go (the heel rolling up onto the toe stays planted under this)
-    float Speed = 1.0f;     // m/s the animated foot may move over the ground and still plant
+    float Speed = 2.0f;     // m/s the animated foot may move over the ground and still plant
     float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go
     float Release = 0.2f;   // s a released foot takes to catch up with the animation
+    float StepHeight = 0.3f; // a let-go foot that was still down lifts this much per metre it has to go...
+    float StepMax = 0.08f;   // ... at most this (m)
 };
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& body);
 class FootLock {
@@ -243,7 +247,7 @@ public:
     void Reset() { *this = FootLock{}; }
     void ResetFoot(int s) { m_Foot[s] = Foot{}; }
     // One foot, one frame. `anim`: the animated foot (world). `height`: its height over the capsule's ground (m). Returns
-    // the horizontal world offset that puts the foot where it should be drawn (zero for a free foot).
+    // the world offset that puts the foot where it should be drawn: horizontal, plus a step's lift (zero for a free foot).
     glm::vec3 Step(int s, const FootLockSettings& set, const glm::vec3& anim, float height, float dt);
     bool Locked(int s) const { return m_Foot[s].Locked; }
     glm::vec3 Pinned(int s) const { return m_Foot[s].Pin; }
@@ -259,6 +263,7 @@ private:
         glm::vec3 ReleaseFrom{0.0f};
         float ReleaseTime = 1e9f;  // seconds since the last let-go
         float Time = 0.0f;         // seconds locked
+        float Lift = 0.0f;         // a step's arc height (m; 0 = the foot lifted on its own)
     };
     Foot m_Foot[2];
 };
