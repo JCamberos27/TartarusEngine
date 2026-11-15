@@ -3,6 +3,7 @@
 #include "Editor/GameModuleBuild.h"
 
 #include "App/LaunchOptions.h"
+#include "Core/Env.h"
 #include "AssetLibrary.h"
 #include "BloodRenderer.h"
 #include "BulletHoles.h"
@@ -108,7 +109,7 @@ void PlaySession::Start() {
     // Bare Body (debug): every item off, so the wardrobe dresses the character in its
     // own body parts - the animation and skinning seen without clothing. Undone by Stop like the above.
     for (auto [e, outfit] : m_World.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
-        if (!outfit.BareBody) continue;
+        if (!outfit.BareBody && !Env::Flag(Env::Var::NpcTestBare)) continue; // (an --npc-test's NPC_TEST_BARE: the player's body too)
         if (OutfitSystem::Pieces(m_World, e).empty()) OutfitSystem::AdoptExisting(m_World, m_Assets, e);
         Wardrobe::Request bare = OutfitSystem::CurrentRequest(m_World, e);
         bare.Items.clear();

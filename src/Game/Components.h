@@ -672,7 +672,8 @@ struct FirstPersonBodyComponent {
     // (the clips only animate). Between: a blend - heavier and more grounded toward 0.
     float Responsiveness = 0.0f;
     float ParamSmoothing = 0.12f;  // seconds the MoveX / MoveY parameters take to follow the input
-    float RunSpeed = 3.26f;        // m/s asked of the blend tree when moving (the jog clips' speed)
+    float WalkSpeed = 1.53f;       // m/s asked of the blend tree when walking - the default gait (the walk clips' speed)
+    float RunSpeed = 3.26f;        // ... and with Shift held: the jog (the jog clips' speed)
     float SprintSpeed = 4.72f;     // ... and while sprinting (the run clip's)
     // The capsule's own run / sprint speeds when they differ from the clips' (0 = the clips' Run /
     // Sprint Speed). With Responsiveness up, the gait clips then play faster to keep pace.

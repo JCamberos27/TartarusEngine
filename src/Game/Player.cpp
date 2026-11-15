@@ -25,9 +25,10 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     dt = std::max(0.0f, dt);
     glm::vec2 move(ScriptedMove ? ScriptMove.x : (readInput ? InputMap::GetAxis("Horizontal") : 0.0f),
                    ScriptedMove ? ScriptMove.y : (readInput ? InputMap::GetAxis("Vertical") : 0.0f));
-    const bool sprintKey = !SprintBlocked && (ScriptedMove ? ScriptSprint : (readInput && InputMap::GetButton("Sprint")));
+    // The jog key (Sprint button). Reloads, inspects and melee no longer hold it back: the gun stays up at a jog.
+    const bool sprintKey = ScriptedMove ? ScriptSprint : (readInput && InputMap::GetButton("Sprint"));
     const bool crouchKey = ScriptedMove ? ScriptCrouch : (readInput && InputMap::GetButton("Crouch"));
-    const bool jumpDown = readInput && InputMap::GetButtonDown("Jump");
+    const bool jumpDown = ScriptedMove ? ScriptJump : (readInput && InputMap::GetButtonDown("Jump"));
     LookDeltaInput = glm::vec2(0);
     YawDropped = 0.0f;
     if (readInput) {
@@ -78,7 +79,8 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         if (std::abs(CrouchBlend - goal) < 1e-4f && std::abs(CrouchBlendRate) < 1e-3f) { CrouchBlend = goal; CrouchBlendRate = 0.0f; }
     }
     const float eye = EyeHeight * (1.0f - CrouchBlend * (1.0f - std::clamp(CrouchHeight / std::max(0.1f, Size.y), 0.0f, 1.0f)) * (CrouchHeight > 0.0f ? 1.0f : 0.0f));
-    const bool sprint = !Crouched && !AimHeld && sprintKey;
+    // Shift (the Sprint button) is the jog: the gun stays up, so aiming doesn't cancel it.
+    const bool sprint = !Crouched && sprintKey;
     wish *= MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
     WishVelocity = wish;
     // A sprint clip can keep contributing fast root travel during its exit fade.
@@ -91,8 +93,8 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     const bool wasGrounded = Grounded;
     Jumped = false;
     m_SinceGrounded = wasGrounded ? 0.0f : m_SinceGrounded + dt;
-    m_JumpBuffer = readInput && jumpDown ? JumpBufferTime : std::max(0.0f, m_JumpBuffer - dt);
-    if (readInput && m_JumpBuffer > 0.0f && (wasGrounded || m_SinceGrounded < CoyoteTime) && Velocity.y <= 0.1f) {
+    m_JumpBuffer = jumpDown ? JumpBufferTime : std::max(0.0f, m_JumpBuffer - dt);
+    if (m_JumpBuffer > 0.0f && (wasGrounded || m_SinceGrounded < CoyoteTime) && Velocity.y <= 0.1f) {
         const bool canStand = !Crouched || (hasCharacter && PhysicsWorld::CharacterFitsAt(stand));
         if (canStand) {
             if (Crouched) { PhysicsWorld::ResizeCharacter(stand); Crouched = false; }

@@ -367,6 +367,8 @@ private:
     float m_RunSpeed = 0.0f;       // the blend tree's (the clips') run speed
     float m_PlayerRunSpeed = 0.0f; // the capsule's run / sprint speeds (Player Run / Sprint Speed, else the clips')
     float m_PlayerSprintSpeed = 0.0f;
+    float m_PlayerWalkSpeed = 0.0f; // the capsule's walk (the default gait); Shift is the jog (m_PlayerRunSpeed)
+    float m_FallSpeed = 0.0f;       // m/s down at the last airborne frame: the next landing's impact
     float m_Responsiveness = 0.0f; // the component's, from the last Tick
 };
 

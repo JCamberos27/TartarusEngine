@@ -82,6 +82,7 @@ public:
     bool AimHeld = false; // weapon aim intent blocks sprint without consuming the held sprint input
     bool SprintBlocked = false; // reload / mag check / inspect / melee suspension; the held/scripted sprint intent remains available
     bool ScriptCrouch = false; // ... and Crouch
+    bool ScriptJump = false;   // ... and a Jump press (this frame)
 
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
     // but ignores mouse-look / WASD / jump — used while the game runs inside the docked Game

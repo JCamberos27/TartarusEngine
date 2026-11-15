@@ -97,8 +97,8 @@
   "recoilProfileGuid": "805d73c7082b4107",
   "procedural": {
     "bob": {
-      "walkStride": 3.2,
-      "sprintStride": 4.3,
+      "walkStride": 1.6,
+      "sprintStride": 3.2,
       "walkFullSpeed": 4.0
     },
     "recoil": {
@@ -921,8 +921,8 @@
         "frequency": 1.4
       },
       "sprintBob": [
-        0.012,
-        0.5
+        0.02,
+        0.2
       ],
       "strafeRoll": 0.2,
       "walkBob": [
