@@ -93,7 +93,7 @@
     },
     {
       "name": "body foley",
-      "match": "^snd\\.(foley\\.(move|spider|door)|body_fall)\\.?",
+      "match": "^snd\\.(foley\\.(move|door)|body_fall)\\.?",
       "hp": 50,
       "gate": true
     },

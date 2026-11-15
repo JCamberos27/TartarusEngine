@@ -202,7 +202,6 @@ enum class Event : uint8_t {
     FKeyCycleBack,     // ...Shift: steps back
     FKeyOff,           // ...lands back on its default (Shaded, Off, Post FX on)
     SpawnNpc,          // F9
-    SpawnSpider,       // F10
     SpawnItem,         // F11
     ClearSpawns,       // F12
     // Asset Library (docs/PROJECT_ASSETS.md)

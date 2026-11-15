@@ -32,7 +32,7 @@ enum Kind : int { kHuman = 0, kIchor = 1, kKinds = 2 };
 
 // A person's: exactly the constants above.
 constexpr Look Human{Fresh, Dried, Thin, Mist, Subsurface, RoughFresh, RoughPool, RoughDried, RoughSpray, RoughSprite, RoughCloth, 0.55f, 1.0f};
-// A spider's ichor: a pale yellow-green, a little translucent while it's fresh (the film lets the surface through,
+// A creature's ichor: a pale yellow-green, a little translucent while it's fresh (the film lets the surface through,
 // the spray lets the light through), drying to a dull olive crust.
 constexpr Look Ichor{{0.42f, 0.52f, 0.075f},   // fresh
                      {0.075f, 0.085f, 0.014f}, // dried: olive

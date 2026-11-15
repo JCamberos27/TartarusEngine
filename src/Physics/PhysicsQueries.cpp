@@ -315,20 +315,6 @@ bool RaycastSolid(const float origin[3], const float dir[3], float maxDistance, 
     return true;
 }
 
-bool RaycastStatic(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit) {
-    outHit = RaycastHit{};
-    PxVec3 d;
-    if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
-    LayerQueryFilter lf = MakeFilter(f);
-    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::ePREFILTER);
-    PxRaycastBuffer buf;
-    if (!g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &lf) ||
-        !buf.hasBlock)
-        return false;
-    FillHit(buf.block, outHit);
-    return true;
-}
-
 int RaycastAll(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
                RaycastHit* out, int maxHits) {
     PxVec3 d;
@@ -403,16 +389,6 @@ int OverlapSphereFiltered(const float center[3], float radius, const QueryFilter
     if (radius <= 0.0f) return 0;
     return OverlapFiltered(PxSphereGeometry(radius), PxTransform(PxVec3(center[0], center[1], center[2])),
                            f, out, maxEntities);
-}
-
-bool OverlapSphereStatic(const float center[3], float radius, const QueryFilter& f) {
-    if (!g_State || !g_State->scene || radius <= 0.0f) return false;
-    PxOverlapHit hits[8];
-    PxOverlapBuffer buf(hits, 8);
-    LayerQueryFilter lf = MakeFilter(f, /*touchMode=*/true);
-    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::ePREFILTER | PxQueryFlag::eNO_BLOCK);
-    g_State->scene->overlap(PxSphereGeometry(radius), PxTransform(PxVec3(center[0], center[1], center[2])), buf, fd, &lf);
-    return buf.getNbTouches() > 0;
 }
 
 int OverlapBox(const float center[3], const float halfExtents[3], const float rotation[4], const QueryFilter& f,

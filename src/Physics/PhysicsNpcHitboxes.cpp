@@ -41,7 +41,6 @@ int MakeHitboxes(PxRigidActor* capsule, std::uint32_t entity, const HitCapsule* 
             if (b) b->release();
             for (PxRigidDynamic* made : h.Bodies) {
                 s.hitboxActors.erase(made);
-                s.bodyHitboxActors.erase(made);
                 made->release();
             }
             h.Bodies.clear();
@@ -58,7 +57,6 @@ int MakeHitboxes(PxRigidActor* capsule, std::uint32_t entity, const HitCapsule* 
         s.scene->addActor(*b);
         h.Bodies.push_back(b);
         s.hitboxActors.insert(b);
-        if (!capsule) s.bodyHitboxActors.insert(b);
     }
     h.Active = true;
     ShadowCapsule(h, true);
@@ -81,11 +79,6 @@ int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
     PxRigidActor* capsule = NpcActor(owner);
     if (!g_State || !g_State->scene || !capsule || !parts || count <= 0) return -1;
     return MakeHitboxes(capsule, UserDataToEntity(capsule->userData), parts, count);
-}
-
-int CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count) {
-    if (!g_State || !g_State->scene || !parts || count <= 0) return -1;
-    return MakeHitboxes(nullptr, entity, parts, count);
 }
 
 void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count) {
@@ -120,7 +113,7 @@ void HitboxDebugLines(std::vector<float>& out) {
     };
     for (const auto& h : g_State->hitboxes) {
         if (!h.Active) continue;
-        const PxVec3 col = h.Capsule ? PxVec3(1.0f, 0.55f, 0.15f) : PxVec3(1.0f, 0.25f, 0.85f);
+        const PxVec3 col(1.0f, 0.55f, 0.15f);
         for (const PxRigidDynamic* b : h.Bodies) {
             PxShape* sh = nullptr;
             if (!b || b->getShapes(&sh, 1) != 1 || !sh || sh->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
@@ -150,7 +143,6 @@ void DestroyNpcHitboxes(int id) {
         if (b) {
             if (g_State->playerGround == b) g_State->playerGround = nullptr;
             g_State->hitboxActors.erase(b);
-            g_State->bodyHitboxActors.erase(b);
             b->release();
         }
     h.Bodies.clear();

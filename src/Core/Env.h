@@ -51,7 +51,6 @@
     X(NpcTestRoamTrace, "NPC_TEST_ROAM_TRACE", Flag, "--npc-test roam: trace feet")                                   \
     X(DecalStress, "TARTARUS_DECAL_STRESS", Flag, "--npc-test: decal stress mode")                                    \
     /* Traces and probes */                                                                                             \
-    X(SpiderTrace, "TARTARUS_SPIDER_TRACE", Flag, "trace spider AI, movement and ragdolls")                           \
     X(FoleyFeetLog, "FOLEY_FEET_LOG", Flag, "trace footstep foley")                                                    \
     X(MoverTrace, "MOVER_TRACE", Flag, "unit tests: trace the character mover")                                       \
     X(FootSlideProbe, "TARTARUS_FOOT_SLIDE_PROBE", Int, "IK foot-slide probe: 1 on, 0 off, unset = default")          \

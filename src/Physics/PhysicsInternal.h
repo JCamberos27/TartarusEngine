@@ -293,9 +293,6 @@ struct PhysicsState {
     };
     std::vector<Hitboxes> hitboxes;
     std::unordered_set<const PxRigidActor*> hitboxActors;
-    // Of those, a creature body's (CreateBodyHitboxes: a spider's, with no capsule): for shots only - they never push or
-    // block a character's mover.
-    std::unordered_set<const PxRigidActor*> bodyHitboxActors;
     std::unordered_map<const PxRigidActor*, int> hitboxedCapsules;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;

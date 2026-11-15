@@ -563,7 +563,7 @@ void BloodFx::SpawnFloorDecals(const BloodPresetDef& preset, const glm::mat4& pr
 void BloodFx::OnFleshHit(const Hit& hit) {
     if (!Config.Enabled || Config.Gore <= 0) return;
     EnsureHooks();
-    // Everything this hit throws is the body's own blood (a spider's ichor); a person's again once it returns.
+    // Everything this hit throws is the body's own blood (a creature's ichor); a person's again once it returns.
     struct PaletteScope {
         int& Slot;
         PaletteScope(int& slot, int palette) : Slot(slot) { Slot = palette; }

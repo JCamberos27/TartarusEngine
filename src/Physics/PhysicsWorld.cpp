@@ -78,8 +78,6 @@ PhysicsState::~PhysicsState() {
 } // namespace PhysicsWorld::detail
 
 namespace {
-std::uint64_t g_SimulationGeneration=0;
-
 constexpr float kDefaultFixedStep = 1.0f / 60.0f;
 } // namespace
 
@@ -200,7 +198,6 @@ void Create(const World& world) {
     }
 
     g_State = s;
-    ++g_SimulationGeneration;
     Log::Info("PhysX world created (" + std::to_string(g_Core->workers) + " worker threads).");
 
     BuildActors(*s, world);
@@ -211,7 +208,6 @@ void Destroy() {
     if (!g_State) return;
     PhysicsState* s = g_State;
     g_State = nullptr; // clear first so a re-entrant Step() during teardown is a no-op
-    ++g_SimulationGeneration;
 
     // ~PhysicsState releases in reverse construction order: the joints, the ragdolls' PhysX objects, then the scene
     // (which drops every actor/shape it owns). The core (physics, dispatcher, materials, cooked meshes) stays up for the
@@ -232,5 +228,4 @@ bool IsActive() {
     return g_State != nullptr;
 }
 
-std::uint64_t SimulationGeneration() {return g_SimulationGeneration;}
 } // namespace PhysicsWorld

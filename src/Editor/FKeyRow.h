@@ -23,7 +23,7 @@ bool PostFxOff();
 // end of its cycle) override Normals / Cascades / Mip.
 int DebugViewFor(int shadingIndex);
 
-// The pill: "F10" | "Spider" | "Hunter (Passive)"; `step` of `count` draws the cycle's dots (count 0: none).
+// The pill: "F9" | "NPC" | "Training Dummy"; `step` of `count` draws the cycle's dots (count 0: none).
 // A new press replaces the one showing and pops again.
 void Show(const char* key, const std::string& title, const std::string& value, int step = 0, int count = 0);
 // A pill that stays up while something loads ("Dressing... 3/7"): `value` changes in place, no pop. Release ends it

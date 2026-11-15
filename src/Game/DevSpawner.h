@@ -8,12 +8,10 @@
 class World;
 class AssetLibrary;
 class NpcDirector;
-class SpiderSystem;
-class SpiderDamage;
 class FirstPersonPresentation;
 class NpcDroppedWeapon;
 
-// F9-F12 in Play (FKeyRow.h): F9 a soldier, F10 a spider, F11 an item, each at the crosshair and facing the player; Shift
+// F9-F12 in Play (FKeyRow.h): F9 a soldier, F11 an item, each at the crosshair and facing the player; Shift
 // picks the next variant without spawning. F12 takes away everything they made, corpses included. The items are real
 // things on the floor: a gun or an ammo box the player picks up with Interact (E), or a physics crate.
 class DevSpawner {
@@ -22,8 +20,6 @@ public:
         World* WorldPtr = nullptr;
         AssetLibrary* Assets = nullptr;
         NpcDirector* Npcs = nullptr;
-        SpiderSystem* Spiders = nullptr;
-        SpiderDamage* SpiderHurt = nullptr; // F12 takes a spider's hitboxes and ragdoll down before its entity
         FirstPersonPresentation* Gun = nullptr; // the player's weapons: what a pickup gives
         glm::vec3 Eye{0.0f}, Front{0.0f, 0.0f, -1.0f};
         float Dt = 0.0f;
@@ -49,16 +45,15 @@ private:
         entt::entity Prop = entt::null; // the ammo box
     };
     void SpawnNpc(const Context& c);
-    void SpawnSpider(const Context& c);
     void SpawnItem(const Context& c);
     void Clear(const Context& c);
     void Pickups(const Context& c);
     bool Place(const Context& c, glm::vec3& at, float& yawDeg) const;
     void Warm(const Context& c);
     int m_Warmed = 0; // how many of this Play's spawn prefabs have been warmed (Warm: one a frame)
-    int m_Npc = 0, m_Spider = 0, m_Item = 0;
+    int m_Npc = 0, m_Item = 0;
     bool m_WaitSquad = false; // started the soldiers this press: spawn once their navmesh is up
     std::vector<int> m_NpcIds;
-    std::vector<entt::entity> m_SpiderIds, m_Props;
+    std::vector<entt::entity> m_Props;
     std::vector<Pickup> m_Pickups;
 };

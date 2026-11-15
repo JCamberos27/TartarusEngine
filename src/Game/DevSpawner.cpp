@@ -1,7 +1,5 @@
 #include "DevSpawner.h"
 #include "AI/NpcDirector.h"
-#include "Creatures/SpiderSystem.h"
-#include "Creatures/SpiderDamage.h"
 #include "Npc/NpcDroppedWeapon.h"
 #include "FirstPersonPresentation.h"
 #include "Components.h"
@@ -34,11 +32,9 @@ const NpcVariant kNpcs[] = {
     {"Soldier Unarmed", 0, 3, false}, {"Soldier Unarmed (Passive)", 0, 3, true},
     {"Training Dummy", 1, 3, false},
 };
-const char* kSpiders[] = {"Hunter", "Hunter (Passive)", "Scripted", "Swarm x5"};
 const char* kItems[] = {"AK", "Shotgun", "Ammo Box", "Physics Crate"};
 constexpr int kNpcCount = (int)(sizeof(kNpcs) / sizeof(kNpcs[0]));
-constexpr int kSpiderCount = 4, kItemCount = 4;
-const char* kSpiderPrefab = "assets/Characters/Spider/Spider.json";
+constexpr int kItemCount = 4;
 
 bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDist, glm::vec3& point, glm::vec3& normal) {
     RaycastHit h;
@@ -76,7 +72,7 @@ entt::entity Box(World& world, AssetLibrary& assets, const glm::vec3& at, const 
 DevSpawner::DevSpawner() = default;
 DevSpawner::~DevSpawner() = default;
 
-// The models and materials a prefab (or scene fragment) names, started loading in the background: the first F9 / F10 /
+// The models and materials a prefab (or scene fragment) names, started loading in the background: the first F9 /
 // F11 of a Play then finds them in memory instead of importing them on the spot.
 void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
     std::ifstream in(std::filesystem::u8path(ProjectPaths::Resolve(rel)));
@@ -96,8 +92,8 @@ void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
 
 void DevSpawner::Warm(const Context& c) {
     const SquadSettingsComponent squad = c.Npcs ? c.Npcs->Settings() : SquadSettingsComponent{};
-    const std::string prefabs[] = {kSpiderPrefab, squad.BodyPrefab, squad.RiflePrefab, squad.ShotgunPrefab};
-    if (m_Warmed < 4 && !prefabs[m_Warmed].empty()) WarmPrefab(*c.Assets, prefabs[m_Warmed]);
+    const std::string prefabs[] = {squad.BodyPrefab, squad.RiflePrefab, squad.ShotgunPrefab};
+    if (m_Warmed < 3 && !prefabs[m_Warmed].empty()) WarmPrefab(*c.Assets, prefabs[m_Warmed]);
     ++m_Warmed;
 }
 
@@ -126,7 +122,7 @@ bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
 
 void DevSpawner::Update(const Context& c) {
     if (!c.WorldPtr || !c.Assets) return;
-    if (m_Warmed < 4) Warm(c); // one prefab a frame
+    if (m_Warmed < 3) Warm(c); // one prefab a frame
     // The first F9 in a scene with no NPC Spawn started the soldiers: their navmesh is up after a Think.
     if (m_WaitSquad && c.Npcs && c.Npcs->Started()) { m_WaitSquad = false; SpawnNpc(c); }
     if (c.Keys) {
@@ -138,10 +134,8 @@ void DevSpawner::Update(const Context& c) {
         static const char* npcNames[kNpcCount];
         for (int i = 0; i < kNpcCount; ++i) npcNames[i] = kNpcs[i].Name;
         if (Shortcuts::TriggeredGlfw("fkey.nextNpc")) variant(m_Npc, kNpcCount, "F9", "NPC", npcNames);
-        if (Shortcuts::TriggeredGlfw("fkey.nextSpider")) variant(m_Spider, kSpiderCount, "F10", "Spider", kSpiders);
         if (Shortcuts::TriggeredGlfw("fkey.nextItem")) variant(m_Item, kItemCount, "F11", "Item", kItems);
         if (Shortcuts::TriggeredGlfw("fkey.spawnNpc")) SpawnNpc(c);
-        if (Shortcuts::TriggeredGlfw("fkey.spawnSpider")) SpawnSpider(c);
         if (Shortcuts::TriggeredGlfw("fkey.spawnItem")) SpawnItem(c);
         if (Shortcuts::TriggeredGlfw("fkey.clearSpawns")) Clear(c);
     }
@@ -175,40 +169,6 @@ void DevSpawner::SpawnNpc(const Context& c) {
     m_NpcIds.push_back(idx);
     EditorSound::Play(EditorSound::Event::SpawnNpc);
     FKeyRow::Show("F9", "NPC", v.Name, m_Npc, kNpcCount);
-}
-
-void DevSpawner::SpawnSpider(const Context& c) {
-    if (!c.Spiders) return;
-    glm::vec3 at;
-    float yaw = 0.0f;
-    Place(c, at, yaw);
-    const int count = m_Spider == 3 ? 5 : 1;
-    int made = 0;
-    for (int i = 0; i < count; ++i) {
-        // A swarm: a ring a metre across around the spot.
-        const float a = 6.2831853f * (float)i / (float)count;
-        const glm::vec3 p = at + (count > 1 ? glm::vec3(std::cos(a), 0.0f, std::sin(a)) * 0.9f : glm::vec3(0.0f)) + glm::vec3(0.0f, 0.15f, 0.0f);
-        const entt::entity e = c.Spiders->Spawn(*c.WorldPtr, *c.Assets, kSpiderPrefab, p,
-                                                glm::angleAxis(glm::radians(yaw), glm::vec3(0.0f, 1.0f, 0.0f)));
-        if (e == entt::null) continue;
-        if (auto* sc = c.WorldPtr->Registry.try_get<SpiderComponent>(e)) {
-            sc->Brain = m_Spider == 2 ? 1 : 0;
-            sc->Passive = m_Spider == 1;
-        }
-        m_SpiderIds.push_back(e);
-        ++made;
-        char msg[160];
-        std::snprintf(msg, sizeof msg, "F10: %s spider at (%.2f, %.2f, %.2f), aimed from (%.2f, %.2f, %.2f).", kSpiders[m_Spider], p.x, p.y, p.z,
-                      c.Eye.x, c.Eye.y, c.Eye.z);
-        Log::Info(msg);
-    }
-    if (made == 0) {
-        FKeyRow::Show("F10", "Spider", "Couldn't spawn");
-        EditorSound::Play(EditorSound::Event::Blocked);
-        return;
-    }
-    EditorSound::Play(EditorSound::Event::SpawnSpider);
-    FKeyRow::Show("F10", "Spider", kSpiders[m_Spider], m_Spider, kSpiderCount);
 }
 
 void DevSpawner::SpawnItem(const Context& c) {
@@ -282,13 +242,7 @@ void DevSpawner::Clear(const Context& c) {
     if (c.Npcs)
         for (int idx : m_NpcIds)
             if (const Npc* npc = c.Npcs->Find(idx); npc && npc->DevSpawned) c.Npcs->Remove(world, idx); // the slot may be a squad soldier's now
-    for (entt::entity e : m_SpiderIds) {
-        if (!world.Registry.valid(e)) continue;
-        if (c.SpiderHurt) c.SpiderHurt->Forget(e);
-        world.DestroyEntityAndChildren(e);
-    }
     m_NpcIds.clear();
-    m_SpiderIds.clear();
     m_WaitSquad = false;
     Stop(world);
     EditorSound::Play(EditorSound::Event::ClearSpawns);
@@ -297,7 +251,6 @@ void DevSpawner::Clear(const Context& c) {
 
 void DevSpawner::Stop(World& world) {
     m_NpcIds.clear();
-    m_SpiderIds.clear();
     m_WaitSquad = false;
     for (Pickup& p : m_Pickups) {
         if (p.Gun) p.Gun->Stop(world);
@@ -312,12 +265,11 @@ void DevSpawner::Stop(World& world) {
 void DevSpawner::Forget() {
     m_Warmed = 0;
     m_NpcIds.clear();
-    m_SpiderIds.clear();
     m_Props.clear();
     m_Pickups.clear();
     m_WaitSquad = false;
 }
 
 int DevSpawner::Spawned() const {
-    return (int)(m_NpcIds.size() + m_SpiderIds.size() + m_Props.size() + m_Pickups.size());
+    return (int)(m_NpcIds.size() + m_Props.size() + m_Pickups.size());
 }

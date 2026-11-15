@@ -6,6 +6,7 @@
 #include "Combat/FxSprites.h"
 #include "Combat/ImpactFx.h"
 #include "BloodRenderer.h"
+#include "BloodPalette.h"
 #include "GameModuleAPI.h"
 #include "KnifeFxImport.h"
 
@@ -1219,8 +1220,30 @@ void Test_KnifeFx_Library() {
 }
 } // namespace
 
+// The blood palette: a person's is exactly what it was before palettes were per body (the constants every stain and
+// spray was drawn with), palette 0 is a person's, and anything unknown falls back to it; the ichor (a second palette) is yellow-green.
+void Test_Blood_PaletteHumanUnchanged() {
+    const BloodPalette::Look& h = BloodPalette::Of(BloodPalette::kHuman);
+    auto same = [](const glm::vec3& a, float x, float y, float z) { return a.x == x && a.y == y && a.z == z; };
+    CHECK(same(h.Fresh, 0.16f, 0.006f, 0.005f));
+    CHECK(same(h.Dried, 0.045f, 0.014f, 0.010f));
+    CHECK(same(h.Thin, 0.20f, 0.0075f, 0.006f));
+    CHECK(same(h.Mist, 0.09f, 0.0034f, 0.0028f));
+    CHECK(same(h.Subsurface, 0.34f, 0.010f, 0.007f));
+    CHECK(h.RoughFresh == 0.38f && h.RoughPool == 0.32f && h.RoughDried == 0.75f && h.RoughSpray == 0.28f && h.RoughSprite == 0.30f &&
+          h.RoughCloth == 0.35f);
+    CHECK(h.Thickness == 0.55f && h.FilmOpacity == 1.0f); // the spray's thickness the renderer always set; stains fully covering
+    CHECK(same(BloodPalette::Human.Fresh, 0.16f, 0.006f, 0.005f) && same(BloodPalette::Fresh, 0.16f, 0.006f, 0.005f));
+    CHECK(&BloodPalette::Of(-1) == &BloodPalette::Of(0) && &BloodPalette::Of(57) == &BloodPalette::Of(0));
+    const BloodPalette::Look& i = BloodPalette::Of(BloodPalette::kIchor);
+    CHECK(i.Fresh.g > i.Fresh.r && i.Fresh.r > 3.0f * i.Fresh.b); // yellow-green
+    CHECK(i.Dried.g < i.Fresh.g * 0.3f);                           // darker dried: olive
+    CHECK(i.FilmOpacity < 1.0f);                                    // a little translucent
+}
+
 void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::HalfAndOct", Test_Blood_HalfAndOct});
+    tests.push_back({"Blood::PaletteHumanUnchanged", Test_Blood_PaletteHumanUnchanged});
     tests.push_back({"Blood::ExrZipsRoundTrip", Test_Blood_ExrZipsRoundTrip});
     tests.push_back({"Blood::VatBuild", Test_Blood_VatBuild});
     tests.push_back({"Blood::FbxUVs", Test_Blood_FbxUVs});

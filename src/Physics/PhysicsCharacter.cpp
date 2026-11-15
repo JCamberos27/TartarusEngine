@@ -185,8 +185,6 @@ struct PhysxMoverWorld : IMoverWorld {
             if (actor == W->Self || (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
             if (W->SelfEntity != 0xFFFFFFFFu && actor && UserDataToEntity(actor->userData) == W->SelfEntity) return PxQueryHitType::eNONE;
             if (W->PassRagdolls && IsRagdollPart(shape->getSimulationFilterData())) return PxQueryHitType::eNONE;
-            // A spider's hitboxes: a biting spider against the player's legs slid them away every frame it held there.
-            if (actor && W->S.bodyHitboxActors.count(actor)) return PxQueryHitType::eNONE;
             const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
             if (!((W->Mask >> layer) & 1u)) return PxQueryHitType::eNONE;
             return Touch ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
