@@ -991,9 +991,6 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const float speed = glm::length(glm::vec2(in.Velocity.x, in.Velocity.z));
     const float ease = 1.0f - std::exp(-dt * std::max(b.Ease, 0.0f));
     m_BobWeight += ((b.Enabled ? std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) : 0.0f) - m_BobWeight) * ease;
-    // The camera's bob is its own: it was tied to the gun bob's switch, and with that retired (the walk clip's layer does the
-    // gun) the view never bobbed at all.
-    m_CamBobWeight += (std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) - m_CamBobWeight) * ease;
     // The "sprint" bob and stride are the fast gait's: a sprint, or (the player's Shift) the jog, blended in by
     // speed between the walk and the fast gait's speed.
     const float fastGait = in.Sprinting ? 1.0f
@@ -1066,7 +1063,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     // The camera: head bob on the gun bob's stride, a roll into strafes, a dip on landing.
     if (cm.Enabled) {
         const float camScale = adsMix(1.0f, cm.AdsScale);
-        const glm::vec2 amp = (cm.WalkBob * (1.0f - m_BobSprint) + cm.SprintBob * m_BobSprint) * m_CamBobWeight * camScale;
+        const glm::vec2 amp = (cm.WalkBob * (1.0f - m_BobSprint) + cm.SprintBob * m_BobSprint) * m_BobWeight * camScale;
         const float tau = glm::two_pi<float>();
         pose.CameraOffset.y -= amp.x * 0.5f * (1.0f - std::cos(2.0f * tau * m_BobPhase)); // down on each footfall
         pose.CameraRoll += amp.y * std::sin(tau * m_BobPhase);

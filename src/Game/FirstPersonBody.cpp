@@ -351,7 +351,7 @@ void FirstPersonGaitPhase::Update(int downs, float dt) {
         const float target = (downs & 1) ? 0.0f : 0.5f; // both at once (a landing): the left's
         if (SinceStep > 0.15f && SinceStep < 1.2f) { // a step's worth since the last: the rate is a half cycle in that
             const float r = 0.5f / SinceStep;
-            Rate = Locked && Rate > 0.0f ? Rate + (r - Rate) * 0.5f : r;
+            Rate = Locked && Rate > 0.0f ? Rate + (r - Rate) * 0.25f : r; // a step's timing varies: averaged over a few
         }
         float e = target - (Phase + Error);
         e -= std::floor(e + 0.5f); // (-0.5, 0.5]
@@ -360,8 +360,10 @@ void FirstPersonGaitPhase::Update(int downs, float dt) {
         Locked = true;
     }
     if (SinceStep > 1.5f) { Locked = false; Rate = 0.0f; Error = 0.0f; }
-    // Taken up over about a sixth of a second, never faster than one and a half cycles a second on top of the rate.
-    const float take = std::clamp(Error * std::min(1.0f, dt * 6.0f), -1.5f * dt, 1.5f * dt);
+    // Taken up over about half a second, never more than a third faster or slower than the rate: a hard catch-up speeds the
+    // clip that follows it up and down at every plant, and that reads as a shake.
+    const float most = std::max(0.3f * Rate, 0.1f) * dt;
+    const float take = std::clamp(Error * std::min(1.0f, dt * 2.0f), -most, most);
     Error -= take;
     Phase += Rate * dt + take;
     Phase -= std::floor(Phase);

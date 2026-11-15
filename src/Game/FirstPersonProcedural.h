@@ -528,7 +528,6 @@ private:
     bool m_WasGrounded = true;
     float m_AirVy = 0.0f;              // vertical speed last frame in the air
     float m_BobWeight = 0.0f, m_BobSprint = 0.0f, m_BobPhase = 0.0f;
-    float m_CamBobWeight = 0.0f; // the camera bob's own (Camera Motion, whether or not the gun bob is on)
     float m_BreathPhase = 0.0f;
     float m_Ads = 0.0f;            // 0..1 linear, eased by Aim.Blend
     Spring3 m_Lean;                // x: the head's lean (-1..1), y: the gun's roll lag (-1..1)
