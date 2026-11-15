@@ -23,6 +23,8 @@ struct LabLeg {
     bool Place;     // put back at the start of the lane in its last 0.3 s (stationary legs)
     glm::vec2 At;
     const char* Name;
+    float Yaw = 90.0f; // the view (degrees; 90 = +Z, down the lane): both bodies face it - a change is a turn
+    bool Aim = true;   // the dummy aims along it (else carries the gun at the hip and only looks)
 };
 const LabLeg kLab[] = {
     {1.5f, {0, 0}, false, true, {0.0f, -20.0f}, "idle"},
@@ -38,6 +40,13 @@ const LabLeg kLab[] = {
     {2.0f, {0, 0}, false, false, {}, "stop after strafe left"},
     {4.0f, {0, -1}, true, false, {}, "jog back"},
     {2.0f, {0, 0}, false, false, {}, "stop after jog back"},
+    // Turns on the spot and a turning start, gun at the hip and aimed: the heading - and the gun and the arms on it - come
+    // round with the turn clips.
+    {2.5f, {0, 0}, false, false, {}, "turn left 90 (hip)", 180.0f, false},
+    {3.0f, {0, 0}, false, false, {}, "turn round 180 (hip)", 0.0f, false},
+    {2.5f, {0, 0}, false, false, {}, "turn right 90 (aiming)", 270.0f, true},
+    {3.0f, {0, 1}, false, false, {}, "turning start 180 (hip)", 90.0f, false},
+    {2.5f, {0, 0}, false, false, {}, "stop after turning start", 90.0f, false},
 };
 constexpr int kLabCount = (int)(sizeof(kLab) / sizeof(kLab[0]));
 std::FILE* g_Trace = nullptr;
@@ -67,7 +76,11 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
         place(kLab[0].At);
         m_LabPlaced = true;
     }
-    wantYaw = player.Cam.Yaw = 90.0f; // +Z, down the lane
+    {
+        float into = 0.0f;
+        const int leg = LabLegAt(m_LabClock, into);
+        wantYaw = player.Cam.Yaw = leg < kLabCount ? kLab[leg].Yaw : 90.0f; // 90: +Z, down the lane
+    }
     wantPitch = -2.0f;
     const float before = m_LabClock;
     m_LabClock += dt;
@@ -112,11 +125,13 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
                      bd.HandGap[0], bd.HandGap[1], weapon.CurrentState().c_str());
     }
 
-    // The Scene view: square to the player's right, 4 m off, following it down the lane at chest height.
+    // The Scene view: off the pair's front quarter (the player and the dummy 3 m to its side both in shot, neither hiding the
+    // other), following them down the lane at chest height.
     const glm::vec3 feet = player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
-    const glm::vec3 want(feet.x - 4.0f, feet.y + 1.1f, feet.z);
+    const glm::vec3 mid = feet + glm::vec3(1.5f, 0.0f, 0.0f);
+    const glm::vec3 want(mid.x - 2.8f, feet.y + 1.3f, mid.z + 2.8f);
     m_CamPos = m_HaveCam ? m_CamPos + (want - m_CamPos) * std::min(1.0f, dt * 5.0f) : want;
-    const glm::vec3 look = glm::normalize(feet + glm::vec3(0.0f, 0.9f, 0.0f) - m_CamPos);
+    const glm::vec3 look = glm::normalize(mid + glm::vec3(0.0f, 0.8f, 0.0f) - m_CamPos);
     m_CamYaw = glm::degrees(std::atan2(look.z, look.x));
     m_CamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
     m_HaveCam = true;
@@ -144,9 +159,11 @@ void NpcTest::LabLoco(World& world, NpcDirector& npcs, const Player& player, flo
         const glm::vec3 lead = moving ? glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z) * 0.6f : glm::vec3(0.0f);
         in.MoveTarget = there + lead;
         in.Pace = leg < kLabCount && kLab[leg].Jog ? Gait::Jog : Gait::Walk;
-        in.Aim = true;
+        const float yaw = glm::radians(leg < kLabCount ? kLab[leg].Yaw : 90.0f);
+        const glm::vec3 view(std::cos(yaw), 0.0f, std::sin(yaw));
+        in.Aim = leg >= kLabCount || kLab[leg].Aim;
         in.FaceAim = true;
-        in.AimPoint = n.Feet + glm::vec3(0.0f, 1.45f, 20.0f);
+        in.AimPoint = n.Feet + glm::vec3(0.0f, 1.45f, 0.0f) + view * 20.0f;
         in.LookPoint = in.AimPoint;
         n.Intent = in;
     }

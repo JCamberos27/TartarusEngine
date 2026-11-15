@@ -1468,7 +1468,9 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
         YawPitchOf(glm::vec3(std::sin(chest), 0.0f, std::cos(chest)), wantYaw, wantPitch);
         wantPitch = lookPitch;
     }
-    const float omega = 9.0f + 7.0f * n.Skill;
+    // (At the hip the gun is carried by the chest: it comes round with the body - a turn on the spot swung the hips and
+    // left the gun, and the arms on it, trailing - rather than lagging like an aim settling on a target.)
+    const float omega = (9.0f + 7.0f * n.Skill) * (aimGun || n.Reloading ? 1.0f : 2.5f);
     const float dy = WrapDeg(wantYaw - n.AimYaw), dp = wantPitch - n.AimPitch;
     n.AimYawRate += (omega * omega * dy - 2.0f * omega * n.AimYawRate) * dt;
     n.AimPitchRate += (omega * omega * dp - 2.0f * omega * n.AimPitchRate) * dt;

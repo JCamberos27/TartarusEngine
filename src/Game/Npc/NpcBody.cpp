@@ -244,6 +244,11 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     const glm::vec3 flat(in.Velocity.x, 0.0f, in.Velocity.z);
     const float speed = glm::length(flat);
     if (!m_HaveYaw) { m_Yaw = in.FacingYaw; m_HaveYaw = true; }
+    // Standing, the clips' turns are read out of the pose (DeltaYaw) and turn the body, as the player body's driver: a turn on
+    // the spot or a turning start swings the heading - and with it the gun and the arms holding it. Left in the pose, the
+    // hips and legs came round while the heading (and so the gun, and the arms on it) stayed put. On the floor the crawl's
+    // turns stay in the pose (its own pivots steer it).
+    ac.RootMotion.Rotation = !(in.Prone || in.Dying);
     if (in.Prone || in.Dying) {
         TickWounded(ac, in, flat, speed, dt);
         world.SetWorldPose(m_Root, m_Feet, YawRotation(m_Yaw));
