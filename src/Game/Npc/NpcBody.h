@@ -307,6 +307,7 @@ private:
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
     IK::FootSlide m_Slide;
     IK::FootLock m_Lock;
+    float m_LockYaw = 0.0f; // last frame's heading (FootPass: how fast the body turns)
     float m_FootWeight = 0.0f, m_FootOffset[2] = {0.0f, 0.0f};
     glm::vec3 m_FootNormal[2] = {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
     bool m_HaveFootGround = false;

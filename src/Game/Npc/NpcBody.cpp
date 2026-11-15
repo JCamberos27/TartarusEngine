@@ -536,9 +536,14 @@ void NpcBody::FootPass(float dt) {
     // crawling (the legs drag) - the director turns foot IK off there.
     glm::vec3 shift[2];
     bool held = false;
+    const float yawRate = dt > 1e-5f ? FirstPersonBodyWrapAngle(m_Yaw - m_LockYaw) / dt : 0.0f;
+    m_LockYaw = m_Yaw;
+    // (Swinging round on the move only: a turn on the spot's clip steps its own feet.)
+    const bool travelling = !m_Turning && glm::length(glm::vec2(m_In.Velocity.x, m_In.Velocity.z)) > 0.3f;
+    const IK::FootLockSettings lockSet = IK::FootLockTurning(m_Set.FootLock, travelling ? yawRate : 0.0f);
     for (int s = 0; s < 2; ++s) {
         const glm::vec3 anim = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f)) + slide.Shift[s];
-        const glm::vec3 lock = m_Lock.Step(s, m_Set.FootLock, anim, anim.y - m_Feet.y, dt);
+        const glm::vec3 lock = m_Lock.Step(s, lockSet, anim, anim.y - m_Feet.y, dt);
         shift[s] = slide.Shift[s] + lock;
         held = held || glm::dot(shift[s], shift[s]) > 1e-8f;
     }

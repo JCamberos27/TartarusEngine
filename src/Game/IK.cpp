@@ -724,7 +724,9 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
     if (!set.Enabled) {
         if (f.Locked) letGo(false);
     } else if (!f.Locked) {
-        if (seen && !stepping && up < set.Height && speed < set.Speed) { // (a first frame has no speed yet)
+        // (Flat on the floor it plants however fast its animation moves: a body swinging round fast carries a planted foot
+        // round faster than Speed, and a swinging foot never gets this low.)
+        if (seen && !stepping && up < set.Height && (speed < set.Speed || up < 0.008f)) { // (a first frame has no speed yet)
             // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
             f.Locked = true;
             f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
@@ -746,6 +748,12 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
         if (k >= 1.0f) f.Lift = 0.0f;
     }
     return f.Offset;
+}
+
+FootLockSettings FootLockTurning(FootLockSettings set, float yawRate) {
+    const float k = std::clamp((std::abs(yawRate) - glm::radians(90.0f)) / glm::radians(180.0f), 0.0f, 1.0f);
+    set.MaxDrift += (std::min(set.MaxDrift, 0.1f) - set.MaxDrift) * k;
+    return set;
 }
 
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& b) {

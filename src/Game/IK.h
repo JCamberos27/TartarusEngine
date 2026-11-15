@@ -242,6 +242,9 @@ struct FootLockSettings {
     float StepMax = 0.08f;   // ... at most this (m)
 };
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& body);
+// The lock for a body turning `yawRate` radians a second: past 90 degrees a second the leash shortens (to 10 cm by 270), so
+// the feet take quick small pivot steps as the hips come round instead of being held until the legs splay and twist.
+FootLockSettings FootLockTurning(FootLockSettings set, float yawRate);
 class FootLock {
 public:
     void Reset() { *this = FootLock{}; }

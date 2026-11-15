@@ -1753,6 +1753,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet and the plain foot lock below.
     IK::FootSlideSettings slideSet = IK::FootSlideFrom(cfg);
     const bool yawSteady = !m_Turning && std::abs(FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw)) < glm::radians(2.0f);
+    const float yawRate = dt > 1e-5f ? FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw) / dt : 0.0f;
     m_FootYaw = m_Yaw;
     const bool correctStride = yawSteady && glm::length(m_GroundVelocity)>0.1f;
     if (!correctStride) {
@@ -1787,7 +1788,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> where it is drawn
     // Foot lock: a planted foot stays where it landed in the world - walking, turning on the spot, starting and stopping
     // alike - and catches up through its swing once it lifts (IK::FootLock). The pin, when on, has already held it.
-    IK::FootLockSettings lockSet = IK::FootLockFrom(cfg);
+    // (Swinging round on the move only: a turn on the spot's clip steps its own feet.)
+    IK::FootLockSettings lockSet = IK::FootLockTurning(IK::FootLockFrom(cfg), m_Turning || glm::length(m_GroundVelocity) < 0.3f ? 0.0f : yawRate);
     if (slideSet.PinEnabled) lockSet.Enabled = false;
     for (int s = 0; s < 2; ++s) {
         const glm::vec3 footWorld = footAnim[s] + slide.Shift[s]; // the stride-warped foot (pinned, below, when the pin is on)
