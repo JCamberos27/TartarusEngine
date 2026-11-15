@@ -170,6 +170,9 @@ public:
     bool Signalling() const { return m_SignalWeight > 0.05f; }
 
     float Yaw() const { return m_Yaw; }
+    // Where the chest faces (radians): the heading plus the spine's twist toward the aim or the look - what a gun carried at
+    // the hip points along.
+    float ChestYaw() const { return m_Yaw + m_AimTwist; }
     bool Turning() const { return m_Turning; }
     glm::vec3 Eye() const { return m_Eye; }               // world, after LateUpdate
     glm::vec3 Feet() const { return m_Feet; }
@@ -304,6 +307,7 @@ private:
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
     IK::FootSlide m_Slide;
     IK::FootLock m_Lock;
+    float m_LockYaw = 0.0f; // last frame's heading (FootPass: how fast the body turns)
     float m_FootWeight = 0.0f, m_FootOffset[2] = {0.0f, 0.0f};
     glm::vec3 m_FootNormal[2] = {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
     bool m_HaveFootGround = false;

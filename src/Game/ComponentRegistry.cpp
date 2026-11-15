@@ -257,7 +257,7 @@ void RegisterEngineComponents() {
             { "Brain", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Brain), 0.0f,
               "Squad AI, or a Training Dummy that just stands there and takes hits (it can still go down wounded)." },
             { "Bare", T::Bool, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Bare), 0.0f,
-              "No outfit: the soldier spawns as the bare body." },
+              "No outfit: the soldier spawns as the bare body. (For now every NPC spawns bare, whatever this says.)" },
         };
         m.Fields[0].EnumLabels = "AKS-74U\0Remington 870\0Random\0None\0"; m.Fields[0].EnumCount = 4;
         m.Fields[2].Slider = true; m.Fields[2].Format = "%.2f";

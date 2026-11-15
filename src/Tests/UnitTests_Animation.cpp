@@ -552,13 +552,14 @@ void TestFootLockHoldsAndReleases() {
 void TestFootLockIgnoresSwingAndLetsGoOnDrift() {
     IK::FootLockSettings set;
     const float dt = 1.0f / 60.0f;
-    { // a swinging foot passing low, fast, never plants
+    { // a swinging foot passing low (1.2 cm over where it plants: within Height, off the floor), fast, never plants
         IK::FootLock lock;
         glm::vec3 anim(0.0f, 0.08f, 0.0f);
         lock.Step(0, set, anim, 0.08f, dt);
+        anim.y = 0.092f;
         for (int i = 0; i < 10; ++i) {
             anim.z += 4.0f * dt;
-            lock.Step(0, set, anim, 0.08f, dt);
+            lock.Step(0, set, anim, anim.y, dt);
             CHECK(!lock.Locked(0));
         }
     }

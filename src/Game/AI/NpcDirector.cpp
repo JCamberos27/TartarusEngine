@@ -308,9 +308,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         s.Skill = std::clamp(c.Skill, 0.0f, 1.0f);
         s.Brain = std::clamp(c.Brain, 0, 1);
         s.OutfitSeed = std::clamp(c.OutfitSeed, 0, 100000);
-        // NPC_TEST_BARE=1 (--npc-test): every soldier bare, the animation and the skinning seen without clothing.
-        static const bool allBare = Env::Flag(Env::Var::NpcTestBare);
-        s.Bare = c.Bare || allBare;
+        s.Bare = true; // every NPC spawns undressed (Spawn)
         const auto* order = reg.try_get<OrderComponent>(e);
         found.push_back({order ? order->Value : (int)entt::to_integral(e), s});
     }
@@ -539,8 +537,9 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (TestDummies && !dev) {
         sp.Brain = 1;
         sp.Weapon = spawnIndex == 1 ? 3 : 0;
-        sp.Bare = spawnIndex != 1;
     }
+    // Every NPC spawns undressed - the bare body, no clothing - whatever its spawn point or the scene asks for.
+    sp.Bare = true;
     PROFILE_SCOPE("AI Spawn");
     const auto spawnT0 = std::chrono::steady_clock::now();
     auto since = [&]() { return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - spawnT0).count(); };
@@ -1465,11 +1464,15 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
         // (what it looks at only nods it a little). A pitched-down "low ready" was the soldiers' own pose: the weapon
         // clips are authored level, and an idle regrip played under it threw the gun 9 cm up and back.
         const float lookPitch = std::clamp(wantPitch, -15.0f, 10.0f);
-        const float chest = n.Body.Yaw();
+        // (The chest as it is twisted toward the look, not the heading: held to the heading, the gun stayed put while the
+        // chest turned to look - up to 34 degrees - and the arms crossed over and the off hand came away from it.)
+        const float chest = n.Body.ChestYaw();
         YawPitchOf(glm::vec3(std::sin(chest), 0.0f, std::cos(chest)), wantYaw, wantPitch);
         wantPitch = lookPitch;
     }
-    const float omega = 9.0f + 7.0f * n.Skill;
+    // (At the hip the gun is carried by the chest: it comes round with the body - a turn on the spot swung the hips and
+    // left the gun, and the arms on it, trailing - rather than lagging like an aim settling on a target.)
+    const float omega = (9.0f + 7.0f * n.Skill) * (aimGun || n.Reloading ? 1.0f : 2.5f);
     const float dy = WrapDeg(wantYaw - n.AimYaw), dp = wantPitch - n.AimPitch;
     n.AimYawRate += (omega * omega * dy - 2.0f * omega * n.AimYawRate) * dt;
     n.AimPitchRate += (omega * omega * dp - 2.0f * omega * n.AimPitchRate) * dt;
