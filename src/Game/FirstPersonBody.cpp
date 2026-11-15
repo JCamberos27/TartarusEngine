@@ -344,28 +344,42 @@ bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees) {
     return thresholdDegrees > 0.0f && std::abs(offset) > glm::radians(thresholdDegrees);
 }
 
-void FirstPersonGaitPhase::Update(int downs, float dt) {
+void FirstPersonGaitPhase::Update(float spread, float lift, bool moving, float dt) {
     dt = std::max(dt, 0.0f);
-    SinceStep += dt;
-    if (downs) {
-        const float target = (downs & 1) ? 0.0f : 0.5f; // both at once (a landing): the left's
-        if (SinceStep > 0.15f && SinceStep < 1.2f) { // a step's worth since the last: the rate is a half cycle in that
-            const float r = 0.5f / SinceStep;
-            Rate = Locked && Rate > 0.0f ? Rate + (r - Rate) * 0.25f : r; // a step's timing varies: averaged over a few
+    auto wrap = [](float v) { return v - std::floor(v + 0.5f); }; // (-0.5, 0.5]
+    Still = moving ? 0.0f : Still + dt;
+    if (Still > 1.0f) { Locked = false; Rate = 0.0f; PrevAngle = -1.0f; Reading = 0.0f; }
+    if (moving && dt > 0.0f) {
+        const float k = std::min(1.0f, dt * 1.5f); // the signals' size, over the last second or so
+        SpreadAmp = std::max(0.02f, SpreadAmp + (std::abs(spread) * 1.5708f - SpreadAmp) * k);
+        LiftAmp = std::max(0.01f, LiftAmp + (std::abs(lift) * 1.5708f - LiftAmp) * k);
+        const float x = spread / SpreadAmp, y = -lift / LiftAmp; // the left foot ahead, then the right lifting
+        if (x * x + y * y > 0.09f) { // round the loop, not crossing its middle
+            float angle = std::atan2(y, x) / 6.28318531f;
+            angle -= std::floor(angle);
+            if (PrevAngle >= 0.0f) {
+                const float d = wrap(angle - PrevAngle);
+                if (d > -0.02f && d < 0.2f) {
+                    // The loop isn't a true circle - the angle runs faster and slower within a stride - so the rate is its
+                    // average over about a second (from the first reading, quicker).
+                    const float r = std::max(d, 0.0f) / dt;
+                    Rate += (r - Rate) * std::min(1.0f, dt * (Reading < 0.6f ? 5.0f : 1.0f));
+                }
+            }
+            PrevAngle = angle;
+            Reading += dt;
+            // Followed once the rate has settled (until then the weapon's clips keep their own clock).
+            if (Rate > 0.2f && Reading > 0.4f) {
+                // Onto the reading, taken up over most of a second and never more than a fifth off the rate: the phase
+                // keeps the steady rate and drifts onto the feet, rather than following the angle's own unevenness.
+                const float error = wrap(angle - Phase - Rate * dt);
+                const float most = std::max(0.2f * Rate, 0.1f) * dt;
+                Phase += Locked ? std::clamp(error * std::min(1.0f, dt * 1.5f), -most, most) : error; // (locking: straight onto it)
+                Locked = true;
+            }
         }
-        float e = target - (Phase + Error);
-        e -= std::floor(e + 0.5f); // (-0.5, 0.5]
-        Error += e;
-        SinceStep = 0.0f;
-        Locked = true;
     }
-    if (SinceStep > 1.5f) { Locked = false; Rate = 0.0f; Error = 0.0f; }
-    // Taken up over about half a second, never more than a third faster or slower than the rate: a hard catch-up speeds the
-    // clip that follows it up and down at every plant, and that reads as a shake.
-    const float most = std::max(0.3f * Rate, 0.1f) * dt;
-    const float take = std::clamp(Error * std::min(1.0f, dt * 2.0f), -most, most);
-    Error -= take;
-    Phase += Rate * dt + take;
+    Phase += Rate * dt;
     Phase -= std::floor(Phase);
 }
 
@@ -1260,18 +1274,18 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
     if(!player.Grounded)m_FallSpeed=std::max(0.0f,-player.Velocity.y);
     ac.SetFloat(FPBody::kLandImpact,m_FallSpeed);
-    // The gait's phase, from the feet's touch-downs (as the footsteps hear them).
+    // The gait's phase, read off the feet (their spread along the travel against their height difference).
     {
-        float h[2];
-        int downs = 0;
-        if (player.Grounded && FootHeights(world, h)) {
-            static const FoleyAudioComponent kFoley{};
-            const float speed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
-            downs = m_GaitFeet.Update(h, dt, speed >= kFoley.MinStepSpeed ? kFoley.FootLiftMoving : kFoley.FootLiftHeight, kFoley.FootContactHeight);
+        glm::vec3 feet[2];
+        const glm::vec2 move = FirstPersonBodyLocalMove(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), m_Yaw);
+        const float speed = glm::length(move);
+        if (player.Grounded && speed > 0.3f && FootPoints(world, feet)) {
+            const glm::vec2 dir = move / speed;
+            const glm::vec3 d = feet[0] - feet[1]; // driver model space (the body's frame: kRight, up, kForward)
+            m_Gait.Update(glm::dot(d, kRight) * dir.x + glm::dot(d, kForward) * dir.y, d.y, true, dt);
         } else {
-            m_GaitFeet.Reset();
+            m_Gait.Update(0.0f, 0.0f, false, dt);
         }
-        m_Gait.Update(downs, dt);
     }
 
     // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
@@ -1535,6 +1549,20 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
 // Puts each foot on the ground under it: a ray down from the animated foot gives how far the ground
 // is above / below the capsule's, the pelvis drops to the lower foot, and the legs are re-solved to
 // the offset feet (tilted toward the ground while planted). On every piece so they stay one skeleton.
+bool FirstPersonBody::FootPoints(const World& world, glm::vec3 (&out)[2]) const {
+    const auto& reg = world.Registry;
+    if (!IsActive() || !reg.valid(m_Body) || !reg.valid(m_Driver)) return false;
+    const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
+    if (!rc || !rc->ModelRef) return false;
+    const float scale = std::max(reg.get<TransformComponent>(m_Body).Scale.y, 1e-3f);
+    for (int s = 0; s < 2; ++s) {
+        glm::mat4 n(1.0f);
+        if (!rc->ModelRef->NodeTransform(Bone(FPBody::kBoneFoot[s]), n)) return false;
+        out[s] = scale * glm::vec3(n[3]);
+    }
+    return true;
+}
+
 bool FirstPersonBody::FootHeights(const World& world, float (&out)[2]) const {
     const auto& reg = world.Registry;
     if (!IsActive() || !reg.valid(m_Body) || !reg.valid(m_Driver)) return false;
