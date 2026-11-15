@@ -307,11 +307,11 @@ glm::vec3 FirstPersonBodyRigEyeToShoulders(const glm::mat4& rigWorld, const glm:
     return glm::vec3(glm::dot(fromEye, cam.Right()), glm::dot(fromEye, cam.Up()), glm::dot(fromEye, cam.Front()));
 }
 
-void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, float headBob,
+void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, glm::vec3 headBob,
                                     float smoothing, float eyeSlack, float slackSeconds, float dt) {
     if (!have) { slow = eased = animated; have = true; }
     slow += (animated - slow) * FirstPersonBodyFollow(dt, 0.5f);
-    const glm::vec3 target = slow + (animated - slow) * std::clamp(headBob, 0.0f, 1.0f);
+    const glm::vec3 target = slow + (animated - slow) * glm::clamp(headBob, glm::vec3(0.0f), glm::vec3(1.0f)); // per axis (body frame)
     eased += (target - eased) * FirstPersonBodyFollow(dt, smoothing);
     const glm::vec3 gap = animated - eased;
     if (const float gapLen = glm::length(gap); gapLen > eyeSlack) {
@@ -342,6 +342,31 @@ float FirstPersonBodyWrapAngle(float radians) {
 
 bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees) {
     return thresholdDegrees > 0.0f && std::abs(offset) > glm::radians(thresholdDegrees);
+}
+
+void FirstPersonGaitPhase::Update(int downs, float dt) {
+    dt = std::max(dt, 0.0f);
+    SinceStep += dt;
+    if (downs) {
+        const float target = (downs & 1) ? 0.0f : 0.5f; // both at once (a landing): the left's
+        if (SinceStep > 0.15f && SinceStep < 1.2f) { // a step's worth since the last: the rate is a half cycle in that
+            const float r = 0.5f / SinceStep;
+            Rate = Locked && Rate > 0.0f ? Rate + (r - Rate) * 0.25f : r; // a step's timing varies: averaged over a few
+        }
+        float e = target - (Phase + Error);
+        e -= std::floor(e + 0.5f); // (-0.5, 0.5]
+        Error += e;
+        SinceStep = 0.0f;
+        Locked = true;
+    }
+    if (SinceStep > 1.5f) { Locked = false; Rate = 0.0f; Error = 0.0f; }
+    // Taken up over about half a second, never more than a third faster or slower than the rate: a hard catch-up speeds the
+    // clip that follows it up and down at every plant, and that reads as a shake.
+    const float most = std::max(0.3f * Rate, 0.1f) * dt;
+    const float take = std::clamp(Error * std::min(1.0f, dt * 2.0f), -most, most);
+    Error -= take;
+    Phase += Rate * dt + take;
+    Phase -= std::floor(Phase);
 }
 
 float FirstPersonBodyClipSpeed(float speed, float playerRun, float playerSprint, float clipRun, float clipSprint) {
@@ -1235,6 +1260,19 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
     if(!player.Grounded)m_FallSpeed=std::max(0.0f,-player.Velocity.y);
     ac.SetFloat(FPBody::kLandImpact,m_FallSpeed);
+    // The gait's phase, from the feet's touch-downs (as the footsteps hear them).
+    {
+        float h[2];
+        int downs = 0;
+        if (player.Grounded && FootHeights(world, h)) {
+            static const FoleyAudioComponent kFoley{};
+            const float speed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
+            downs = m_GaitFeet.Update(h, dt, speed >= kFoley.MinStepSpeed ? kFoley.FootLiftMoving : kFoley.FootLiftHeight, kFoley.FootContactHeight);
+        } else {
+            m_GaitFeet.Reset();
+        }
+        m_Gait.Update(downs, dt);
+    }
 
     // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
     {
@@ -1451,7 +1489,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
             // Past the slack the eye is pulled back in fast (40 ms) rather than snapped to it: snapped, its speed jumped
             // in one frame - a kink felt as a jolt when the body crouched or stood on the move.
-            FirstPersonBodyFollowShoulders(m_ShouldersSlow, m_Shoulders, m_HaveShoulders, shouldersAnimated, cfg.HeadBob,
+            FirstPersonBodyFollowShoulders(m_ShouldersSlow, m_Shoulders, m_HaveShoulders, shouldersAnimated,
+                                           glm::vec3(cfg.HeadBobSide, cfg.HeadBob, cfg.HeadBob),
                                            cfg.CameraSmoothing, cfg.EyeSlack, 0.04f, dt);
             BodyDebug::Info().EyeSlack = glm::length(shouldersAnimated - m_Shoulders);
             // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
@@ -1485,6 +1524,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         BodyDebug::Line(shoulders, eyeWorld, glm::vec4(1.0f, 0.3f, 1.0f, 0.7f));
     }
     m_CameraApplied = eyeWorld - camera.Position;
+    BodyDebug::Info().EyeApplied = m_CameraApplied;
     camera.Position = eyeWorld;
     // Arm Steadiness holds the shoulders in this frame: it moves with the eye and the chest's pitch, so
     // only the gait's sway shows in it (the rig's own frame pitches with the view, the chest less).

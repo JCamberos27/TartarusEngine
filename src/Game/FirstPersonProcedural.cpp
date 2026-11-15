@@ -997,7 +997,16 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         : in.SprintSpeed > in.WalkSpeed + 0.05f ? std::clamp((speed - in.WalkSpeed) / (in.SprintSpeed - in.WalkSpeed), 0.0f, 1.0f) : 0.0f;
     m_BobSprint += (fastGait - m_BobSprint) * ease;
     const float stride = std::max(b.WalkStride + (b.SprintStride - b.WalkStride) * m_BobSprint, 0.01f);
-    m_BobPhase = std::fmod(m_BobPhase + speed * dt / stride, 1.0f);
+    if (in.HaveGaitPhase && in.GaitPhase >= 0.0f) {
+        // On the feet: the bob's footfalls (its phases 0.25 and 0.75, where the dip bottoms out) a beat after the plants, as
+        // the weight comes onto the leg. Eased across, so taking the body's clock never jumps the bob.
+        float d = in.GaitPhase + 0.2f - m_BobPhase;
+        d -= std::floor(d + 0.5f);
+        m_BobPhase += d * std::min(1.0f, dt * 10.0f);
+        m_BobPhase -= std::floor(m_BobPhase);
+    } else {
+        m_BobPhase = std::fmod(m_BobPhase + speed * dt / stride, 1.0f);
+    }
     const glm::vec3 bob = (b.Walk.Evaluate(m_BobPhase) * (1.0f - m_BobSprint) + b.Sprint.Evaluate(m_BobPhase) * m_BobSprint) *
                           m_BobWeight * adsMix(b.HipScale, b.AdsScale);
     pose.Position += glm::vec3(bob.x, bob.y, 0.0f);

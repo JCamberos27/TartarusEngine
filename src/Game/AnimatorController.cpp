@@ -293,6 +293,9 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
                         : mode == "pivot"     ? State::DistanceMode::Pivot
                                               : State::DistanceMode::Traveled;
         }
+        st.PhaseParam = Str(s, "phaseParam");
+        st.PhaseOffset = Num(s, "phaseOffset", 0.0f);
+        st.PhaseCycles = Num(s, "phaseCycles", 1.0f);
         st.Loop = Flag(s, "loop", true);
         st.RootMotion = Flag(s, "rootMotion", true);
         st.Priority = (int)Num(s, "priority", 0.0f);
@@ -425,6 +428,11 @@ std::string AnimatorController::ToJsonString() const {
                 static const char* kModes[] = {"traveled", "remaining", "pivot"};
                 st["distanceParam"] = s.DistanceParam;
                 st["distanceMode"] = kModes[(int)s.Distance];
+            }
+            if (!s.PhaseParam.empty()) {
+                st["phaseParam"] = s.PhaseParam;
+                st["phaseOffset"] = s.PhaseOffset;
+                st["phaseCycles"] = s.PhaseCycles;
             }
             if (s.Priority != 0) st["priority"] = s.Priority;
             if (!s.RootMotion) st["rootMotion"] = false;
@@ -714,6 +722,16 @@ float AnimatorDistanceToPhase(const std::vector<float>& curve, float turnaround,
     return 1.0f;
 }
 
+float AnimatorPhaseStep(float before, float want01, bool first) {
+    want01 -= std::floor(want01);
+    const float base = std::floor(before), frac = before - base;
+    if (first) return base + want01;
+    float d = want01 - frac;
+    if (d > 0.5f) d -= 1.0f;
+    else if (d <= -0.5f) d += 1.0f;
+    return before + std::max(d, -0.05f);
+}
+
 float AnimatorDistanceStep(float before, float want, float natural, bool first) {
     if (first) return std::max(before, want);
     if (want <= before) return before + natural; // the travel says nothing new (stopped, or done): the clock plays on
@@ -781,6 +799,13 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
                 const float want = distancePhase(li, it.State, s.Distance, ParamValue(ac.Params, s.DistanceParam, 0.0f));
                 if (want >= 0.0f) {
                     it.Phase = AnimatorDistanceStep(before, want, natural, !it.Matched);
+                    it.Matched = true;
+                }
+            }
+            if (!s.PhaseParam.empty() && s.Loop) {
+                const float raw = ParamValue(ac.Params, s.PhaseParam, -1.0f); // negative: no phase to follow, the clock runs it
+                if (raw >= 0.0f) {
+                    it.Phase = AnimatorPhaseStep(before, raw * s.PhaseCycles + s.PhaseOffset, !it.Matched);
                     it.Matched = true;
                 }
             }

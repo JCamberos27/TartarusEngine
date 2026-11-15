@@ -3763,6 +3763,36 @@ void TestFirstPersonAnimationSet() {
 
 // The shotgun options (Remington 870): pellets and spread, a per-round reload, a pump worked after every
 // round, and a mount with a translation - parsed, written back, and defaulting to the plain rifle's.
+
+// Phase matching (a weapon's walk sway on the body's feet): the loop follows the parameter without running back, and the gait
+// tracker locks onto alternating plants at their cadence and eases onto each without a jump.
+void TestGaitPhaseSync() {
+    auto near = [](float a, float b, float e = 1e-3f) { return std::abs(a - b) <= e; };
+    CHECK(near(AnimatorPhaseStep(3.2f, 0.7f, true), 3.7f));
+    CHECK(near(AnimatorPhaseStep(3.2f, 0.25f, false), 3.25f));
+    CHECK(near(AnimatorPhaseStep(3.95f, 0.05f, false), 4.05f)); // across the wrap, forward
+    CHECK(near(AnimatorPhaseStep(3.5f, 0.3f, false), 3.45f));   // never back more than 0.05
+    FirstPersonGaitPhase g;
+    const float dt = 1.0f / 60.0f, step = 0.3f; // a plant every 0.3 s: 1.67 cycles a second
+    float t = 0.0f, nextStep = 0.0f, worstJump = 0.0f, prev = 0.0f;
+    int foot = 0;
+    for (int i = 0; i < 600; ++i, t += dt) {
+        int downs = 0;
+        if (t >= nextStep) { downs = 1 << foot; foot ^= 1; nextStep += step; }
+        g.Update(downs, dt);
+        if (i > 0) { float d = g.Phase - prev; d -= std::floor(d + 0.5f); worstJump = std::max(worstJump, std::abs(d)); }
+        prev = g.Phase;
+    }
+    CHECK(g.Locked && near(g.Rate, 0.5f / step, 0.02f));
+    CHECK(worstJump < 0.06f); // ~ the rate's own 0.028 a frame: never a pop
+    // At a plant the phase is on it (the left's 0, the right's 0.5).
+    float e = g.Phase - (foot == 1 ? 0.0f : 0.5f) - (t - (nextStep - step)) * g.Rate; // (foot: the next to plant)
+    e -= std::floor(e + 0.5f);
+    CHECK(std::abs(e) < 0.05f);
+    for (int i = 0; i < 120; ++i) g.Update(0, dt); // stood: unlocks after 1.5 s
+    CHECK(!g.Locked);
+}
+
 void TestAKAdditiveWalking() {
     // The distributable sample omits Weapons. Source checkouts still gate the authored graph.
     if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
@@ -3785,11 +3815,15 @@ void TestAKAdditiveWalking() {
         const auto& base=c.Layers[0].States[c.Layers[0].FindState(name)];
         CHECK(base.Speed==0 && base.MotionFor(0).Clip.find("Idle.fbx")!=std::string::npos);
     }
-    std::vector<AnimatorParam> p={{"Sprint",2,1},{"Speed",0,4},{"Equipped",2,1}};
+    std::vector<AnimatorParam> p={{"Sprint",2,1},{"Speed",0,4},{"Equipped",2,1},{"Jog",2,0}};
     const auto dest=[&](const char* name,float phase) {
         const int t=c.PickTransition(1,l.FindState(name),phase,p);
         return t<0?std::string():l.Transitions[t].To;
     };
+    // The jog (Shift) takes the locomotion layer's run clip too, without Sprint (the base layer stays ready to fire), and keeps it.
+    p[0].Value=0; p[3].Value=1;
+    CHECK(dest("Walk",0.3f)=="IdleToSprint" && dest("Sprint",0.3f).empty() && dest("SprintToIdle",0.5f)=="IdleToSprint");
+    p[0].Value=1; p[3].Value=0;
     CHECK(dest("Idle",0.3f)=="IdleToSprint");
     CHECK(dest("Walk",0.3f)=="IdleToSprint");
     CHECK(dest("IdleToSprint",0.5f).empty());
@@ -6126,6 +6160,7 @@ int RunUnitTests(const char* filter) {
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonShotgunSet", TestFirstPersonShotgunSet},
         {"AK additive ADS walking", TestAKAdditiveWalking},
+        {"Gait phase sync", TestGaitPhaseSync},
         {"Sprint transition additive walk", TestSprintTransitionWalk},
         {"RemingtonController", TestRemingtonController},
         {"Revolver38Assets", TestRevolver38Assets},

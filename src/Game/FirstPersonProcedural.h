@@ -433,6 +433,9 @@ struct WeaponProceduralPose {
 };
 
 struct WeaponProceduralInput {
+    // The body's gait phase (0 = left foot down, 0.5 = right): the bob dips on the feet's own plants instead of a stride guess.
+    bool HaveGaitPhase = false;
+    float GaitPhase = 0.0f;
     float Dt = 0.0f;
     glm::vec2 LookRate{0.0f};      // degrees/second of view turn (yaw right +, pitch up +)
     glm::vec3 Velocity{0.0f};      // camera frame, m/s (horizontal plane)

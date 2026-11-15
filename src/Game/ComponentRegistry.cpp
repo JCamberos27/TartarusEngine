@@ -819,6 +819,9 @@ void RegisterEngineComponents() {
             { "Head Bob", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBob), 0.01f,
               "How much of the head's own motion the camera follows: 0 = steady at the head's standing\n"
               "height, 1 = locked to the head bone.", 0.0f, 1.0f },
+            { "Head Bob Side", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBobSide), 0.01f,
+              "How much of the shoulders' side-to-side sway the camera follows (the gait rocks them each stride).\n"
+              "Low keeps the view steady sideways while it still bobs with the steps (Head Bob).", 0.0f, 1.0f },
             { "Camera Smoothing", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraSmoothing), 0.005f,
               "Seconds of smoothing on the head's motion (in the body's frame, so it never lags behind).", 0.0f, 0.5f },
             { "Hidden Parts", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HiddenParts), 0.0f,
@@ -1160,7 +1163,7 @@ void RegisterEngineComponents() {
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
-                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Head Bob", "Camera"}, {"Camera Smoothing", "Camera"},
+                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Head Bob", "Camera"}, {"Head Bob Side", "Camera"}, {"Camera Smoothing", "Camera"},
                 {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"}, {"Grip Inset", "Arms"}, {"Finger Curl Extra", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},

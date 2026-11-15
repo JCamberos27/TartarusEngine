@@ -694,6 +694,9 @@ struct FirstPersonBodyComponent {
     // How much of the head's own motion (bob, sway, lean) the camera follows: 0 = it rides at
     // the head's standing height, steady; 1 = locked to the head bone.
     float HeadBob = 0.5f;
+    // ... and of its side-to-side sway: the gait rocks the shoulders a few centimetres each stride, and a view that follows it
+    // rocks with it (a first-person view bobs with the steps but stays steady side to side).
+    float HeadBobSide = 0.15f;
     float CameraSmoothing = 0.06f; // seconds; smooths the head motion in the body's frame
     // Pieces that cast a shadow but aren't drawn in first person, comma separated: a child is
     // hidden when its name contains one of these (case-insensitive). The camera is in the head.

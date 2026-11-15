@@ -61,6 +61,7 @@ struct LegStats {
     int SpeedN = 0;
     float PeakFall = 0.0f;
     bool ArmsSprint = false;
+    int GaitFrames = 0, GaitLocked = 0; // moving on the ground: frames, and frames the weapon had the feet's phase
     std::set<std::string> States;
 };
 LegStats g_Stats[kLegCount];
@@ -120,6 +121,10 @@ void NpcTest::LocomotionDrive(Player& player, FirstPersonPresentation& weapon, f
         ++s.SpeedN;
     }
     if (!player.Grounded) s.PeakFall = std::max(s.PeakFall, -player.Velocity.y);
+    if ((L.Move.x != 0.0f || L.Move.y != 0.0f) && into > 1.0f && player.Grounded && L.Jump < 0.0f) {
+        ++s.GaitFrames;
+        s.GaitLocked += weapon.HaveGaitPhase() ? 1 : 0;
+    }
     const BodyDebug::Snapshot& d = BodyDebug::Info();
     if (d.Valid && !d.AnimatorState.empty() && s.States.insert(d.AnimatorState).second)
         std::printf("[Locomotion] %6.2f s  %-24s body -> %s\n", m_LClock, L.Name, d.AnimatorState.c_str());
@@ -170,4 +175,9 @@ void NpcTest::Locomotion(const Player& player, float now) {
     Check(g_Stats[18].PeakFall > 7.0f && visited(18, "Land"), "a drop lands heavy (" + std::to_string(g_Stats[18].PeakFall) + " m/s)");
     Check(visited(19, "CrouchDown") || visited(19, "CrouchLoco"), "the crouch plays its own states");
     Check(speed(20) > 0.5f && speed(20) < 1.6f, "the crouched walk (" + std::to_string(speed(20)) + " m/s)");
+    for (int i : {1, 3, 5, 9, 13, 20}) {
+        const LegStats& s = g_Stats[i];
+        const float share = s.GaitFrames ? (float)s.GaitLocked / (float)s.GaitFrames : 0.0f;
+        Check(share > 0.9f, std::string(kLegs[i].Name) + ": the weapon sway on the feet's phase (" + std::to_string(int(share * 100)) + "%)");
+    }
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Audio/FoleyAudio.h" // FootContactDetector (the gait phase)
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -91,6 +92,18 @@ private:
     std::map<const Model*, Rig> m_Rigs;
 };
 
+// A gait's phase locked to the feet: 0 at a left foot plant, 0.5 at a right, running at the rate of the last steps between them
+// and eased onto each plant (never jumped, so whatever follows it never pops).
+struct FirstPersonGaitPhase {
+    float Phase = 0.0f;
+    float Rate = 0.0f;      // cycles a second
+    float Error = 0.0f;     // still to take up (cycles)
+    float SinceStep = 10.0f;
+    bool Locked = false;    // a plant seen within the last 1.5 s
+    // `downs`: bit 0 the left foot touched down this update, bit 1 the right.
+    void Update(int downs, float dt);
+};
+
 class FirstPersonBody {
 public:
     // Finds the scene's First Person Body and takes it over. False (and every call below a
@@ -162,6 +175,9 @@ public:
     // Each foot's height above the body's feet as last posed (m; [0] left, [1] right), for the footsteps
     // (FoleyAudio). False with no body or no foot bones.
     bool FootHeights(const World& world, float (&out)[2]) const;
+    // The gait's phase from the body's own foot plants (0 = the left foot down, 0.5 = the right), what the weapon's walk and
+    // run sway and the view bob follow so they dip on the footfalls. False until the feet have planted.
+    bool GaitPhase(float& phase) const { phase = m_Gait.Phase; return IsActive() && m_Gait.Locked; }
     float Yaw() const { return m_Yaw; }     // body heading, radians about +Y (model +Z faces the view)
     float Twist() const { return m_Twist; } // view heading minus body heading, radians
 
@@ -369,6 +385,8 @@ private:
     float m_PlayerSprintSpeed = 0.0f;
     float m_PlayerWalkSpeed = 0.0f; // the capsule's walk (the default gait); Shift is the jog (m_PlayerRunSpeed)
     float m_FallSpeed = 0.0f;       // m/s down at the last airborne frame: the next landing's impact
+    FirstPersonGaitPhase m_Gait;
+    FootContactDetector m_GaitFeet;
     float m_Responsiveness = 0.0f; // the component's, from the last Tick
 };
 
@@ -508,7 +526,7 @@ glm::vec3 FirstPersonBodyRigEyeToShoulders(const glm::mat4& rigWorld, const glm:
 // The shoulders the eye hangs off (model space), a step on: `slow` follows the clips' `animated` shoulders over half a
 // second, `eased` follows Head Bob of their motion about it over `smoothing` seconds and never trails them by more than
 // `eyeSlack` - pulled back in over `slackSeconds`, or snapped there at 0. `have` false starts both on `animated`.
-void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, float headBob,
+void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, glm::vec3 headBob,
                                     float smoothing, float eyeSlack, float slackSeconds, float dt);
 // Armed Eye Offset (the body's frame: x right, y up, z forward) in model space, by how much of it applies at `pitchRadians`.
 glm::vec3 FirstPersonBodyArmedEyeOffset(const glm::vec3& offset, float pitchRadians);

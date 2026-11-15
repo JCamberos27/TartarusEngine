@@ -89,7 +89,7 @@ public:
     const std::string& ShotName() const { return m_Shot; }
     // NPC_TEST_RECORD=<dir>: every other frame of both views goes there as JPEGs (for a video).
     const std::string& RecordDir() const { return m_RecordDir; }
-    int RecordStep() const { return m_Scenario == "flame" ? 1 : 2; } // every frame for the muzzle flame
+    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -276,6 +276,13 @@ private:
     std::string m_NLProbe;
     int m_NLLeg = 0;
     float m_NLStart = 0.0f, m_NLArrived = -1.0f, m_NLPrev = 0.0f;
+    // labloco (NpcTest_LabLoco.cpp): LocomotionLab's lane, the player and the dummy side by side, traced and recorded every frame
+    static float LabLocoSeconds();
+    void LabLocoDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    void LabLoco(World& world, NpcDirector& npcs, const Player& player, float now);
+    bool m_LabPlaced = false;
+    float m_LabClock = 0.0f;
+    int m_LabFrame = 0;
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {
         std::string Name;
