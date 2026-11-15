@@ -993,7 +993,8 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     m_BobWeight += ((b.Enabled ? std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) : 0.0f) - m_BobWeight) * ease;
     // The camera's bob is its own: tied to the gun bob's switch, it never ran with that retired (the walk clip's layer moves
     // the gun).
-    m_CamBobWeight += (std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) - m_CamBobWeight) * ease;
+    // Full from a walk's pace up (Walk Bob at a walk, blending to Sprint Bob at the jog), easing in from a standstill.
+    m_CamBobWeight += (std::min(speed / std::max(in.WalkSpeed * 0.9f, 0.5f), 1.0f) - m_CamBobWeight) * ease;
     // The "sprint" bob and stride are the fast gait's: a sprint, or (the player's Shift) the jog, blended in by
     // speed between the walk and the fast gait's speed.
     const float fastGait = in.Sprinting ? 1.0f
