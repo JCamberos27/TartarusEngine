@@ -266,8 +266,10 @@ float AnimatorDistanceToPhase(const std::vector<float>& curve, float turnaround,
 // frame in the state jumps straight to `want`.
 float AnimatorDistanceStep(float before, float want, float natural, bool first);
 // Phase matching's step for a loop: from `before` (passes, any size) to the nearest time whose fraction is want01, never back
-// by more than 0.05 of a pass; `first` jumps straight there.
-float AnimatorPhaseStep(float before, float want01, bool first);
+// by more than 0.05 of a pass. Not yet `matched` (the phase only now came, the loop mid-way on its own clock), it runs at up
+// to half again or half its `natural` step until it is there - a catch-up, not a jump - and is matched from then on; entering
+// the state (`before` near 0) it starts there.
+float AnimatorPhaseStep(float before, float want01, float natural, bool& matched);
 
 // Advances one component's state machines by `dt` without touching any model: transitions,
 // crossfade stacks, phases, events and the base-layer state fields. `stateLength(layer, state)`

@@ -722,13 +722,17 @@ float AnimatorDistanceToPhase(const std::vector<float>& curve, float turnaround,
     return 1.0f;
 }
 
-float AnimatorPhaseStep(float before, float want01, bool first) {
+float AnimatorPhaseStep(float before, float want01, float natural, bool& matched) {
     want01 -= std::floor(want01);
     const float base = std::floor(before), frac = before - base;
-    if (first) return base + want01;
+    if (!matched && before < 0.02f) { matched = true; return base + want01; }
     float d = want01 - frac;
     if (d > 0.5f) d -= 1.0f;
     else if (d <= -0.5f) d += 1.0f;
+    if (!matched) {
+        if (std::abs(d - natural) <= 0.5f * natural + 1e-4f) matched = true; // within this frame's reach: on it
+        else return before + natural + std::clamp(d - natural, -0.5f * natural, 0.5f * natural);
+    }
     return before + std::max(d, -0.05f);
 }
 
@@ -804,10 +808,8 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
             }
             if (!s.PhaseParam.empty() && s.Loop) {
                 const float raw = ParamValue(ac.Params, s.PhaseParam, -1.0f); // negative: no phase to follow, the clock runs it
-                if (raw >= 0.0f) {
-                    it.Phase = AnimatorPhaseStep(before, raw * s.PhaseCycles + s.PhaseOffset, !it.Matched);
-                    it.Matched = true;
-                }
+                if (raw >= 0.0f) it.Phase = AnimatorPhaseStep(before, raw * s.PhaseCycles + s.PhaseOffset, natural, it.Matched);
+                else it.Matched = false; // the phase gone: back on the clock, and caught up again when it returns
             }
             if (k + 1 == rt.Stack.size()) CrossEvents(s, before, it.Phase, ac.FiredEvents);
             if (it.Fade < 1.0f)

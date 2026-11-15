@@ -3765,31 +3765,39 @@ void TestFirstPersonAnimationSet() {
 // round, and a mount with a translation - parsed, written back, and defaulting to the plain rifle's.
 
 // Phase matching (a weapon's walk sway on the body's feet): the loop follows the parameter without running back, and the gait
-// tracker locks onto alternating plants at their cadence and eases onto each without a jump.
+// tracker reads the feet's phase at their pace without a jump.
 void TestGaitPhaseSync() {
     auto near = [](float a, float b, float e = 1e-3f) { return std::abs(a - b) <= e; };
-    CHECK(near(AnimatorPhaseStep(3.2f, 0.7f, true), 3.7f));
-    CHECK(near(AnimatorPhaseStep(3.2f, 0.25f, false), 3.25f));
-    CHECK(near(AnimatorPhaseStep(3.95f, 0.05f, false), 4.05f)); // across the wrap, forward
-    CHECK(near(AnimatorPhaseStep(3.5f, 0.3f, false), 3.45f));   // never back more than 0.05
+    bool m = false;
+    CHECK(near(AnimatorPhaseStep(0.0f, 0.7f, 0.02f, m), 0.7f) && m); // entering: straight there
+    m = true;
+    CHECK(near(AnimatorPhaseStep(3.2f, 0.25f, 0.02f, m), 3.25f));
+    CHECK(near(AnimatorPhaseStep(3.95f, 0.05f, 0.02f, m), 4.05f)); // across the wrap, forward
+    CHECK(near(AnimatorPhaseStep(3.5f, 0.3f, 0.02f, m), 3.45f));   // never back more than 0.05
+    m = false; // mid-way on its own clock when the phase comes: caught up at most half again its step, never jumped
+    CHECK(near(AnimatorPhaseStep(3.2f, 0.7f, 0.02f, m), 3.23f) && !m);
+    CHECK(near(AnimatorPhaseStep(3.2f, 0.215f, 0.02f, m), 3.215f) && m);
+    // The feet's spread and lift over a stride (the left ahead at 0, the right lifting after it), at 1.3 strides a second with
+    // a step's timing a little uneven: the phase runs at that rate, steadily, and sits on the feet.
     FirstPersonGaitPhase g;
-    const float dt = 1.0f / 60.0f, step = 0.3f; // a plant every 0.3 s: 1.67 cycles a second
-    float t = 0.0f, nextStep = 0.0f, worstJump = 0.0f, prev = 0.0f;
-    int foot = 0;
+    const float dt = 1.0f / 60.0f, rate = 1.3f;
+    float t = 0.0f, worstJump = 0.0f, prev = 0.0f, truth = 0.0f, minRate = 10.0f, maxRate = 0.0f;
+    bool wasLocked = false;
     for (int i = 0; i < 600; ++i, t += dt) {
-        int downs = 0;
-        if (t >= nextStep) { downs = 1 << foot; foot ^= 1; nextStep += step; }
-        g.Update(downs, dt);
-        if (i > 0) { float d = g.Phase - prev; d -= std::floor(d + 0.5f); worstJump = std::max(worstJump, std::abs(d)); }
+        truth += rate * dt * (1.0f + 0.15f * std::sin(t * 7.3f)); // uneven steps
+        const float a = 6.28318531f * truth;
+        g.Update(0.3f * std::cos(a), -0.08f * std::sin(a), true, dt);
+        if (i > 0 && wasLocked) { float d = g.Phase - prev; d -= std::floor(d + 0.5f); worstJump = std::max(worstJump, std::abs(d)); }
         prev = g.Phase;
+        wasLocked = g.Locked; // (locking it goes straight onto the reading; the clips that follow catch up to it)
+        if (i > 240) { minRate = std::min(minRate, g.Rate); maxRate = std::max(maxRate, g.Rate); }
     }
-    CHECK(g.Locked && near(g.Rate, 0.5f / step, 0.02f));
-    CHECK(worstJump < 0.06f); // ~ the rate's own 0.028 a frame: never a pop
-    // At a plant the phase is on it (the left's 0, the right's 0.5).
-    float e = g.Phase - (foot == 1 ? 0.0f : 0.5f) - (t - (nextStep - step)) * g.Rate; // (foot: the next to plant)
+    CHECK(g.Locked && minRate > rate * 0.85f && maxRate < rate * 1.15f);
+    CHECK(worstJump < 0.04f); // ~ the rate's 0.022 a frame: never a pop
+    float e = g.Phase - truth;
     e -= std::floor(e + 0.5f);
-    CHECK(std::abs(e) < 0.05f);
-    for (int i = 0; i < 120; ++i) g.Update(0, dt); // stood: unlocks after 1.5 s
+    CHECK(std::abs(e) < 0.06f);
+    for (int i = 0; i < 90; ++i) g.Update(0.0f, 0.0f, false, dt); // stood: lets go after a second
     CHECK(!g.Locked);
 }
 

@@ -92,16 +92,23 @@ private:
     std::map<const Model*, Rig> m_Rigs;
 };
 
-// A gait's phase locked to the feet: 0 at a left foot plant, 0.5 at a right, running at the rate of the last steps between them
-// and eased onto each plant (never jumped, so whatever follows it never pops).
+// A gait's phase read off the feet, every frame: 0 as the left foot reaches its furthest ahead (its heel strike), 0.5 the right.
+// Over a stride the feet's spread along the travel and their height difference trace a loop a quarter cycle apart - the
+// angle round it is the phase. Nothing to detect or miss (counting plants, a missed or doubled one halved or doubled the
+// rate for steps on end), it runs at the legs' own pace whatever clip they play, and it turns back the right way walking
+// backwards or sideways (the spread is measured along the travel). Followed by a smoothed rate and an eased catch-up, so
+// whatever follows it never jerks.
 struct FirstPersonGaitPhase {
     float Phase = 0.0f;
-    float Rate = 0.0f;      // cycles a second
-    float Error = 0.0f;     // still to take up (cycles)
-    float SinceStep = 10.0f;
-    bool Locked = false;    // a plant seen within the last 1.5 s
-    // `downs`: bit 0 the left foot touched down this update, bit 1 the right.
-    void Update(int downs, float dt);
+    float Rate = 0.0f;       // cycles a second
+    bool Locked = false;     // moving, with a steady reading
+    float SpreadAmp = 0.1f;  // the running size of each signal (m), to read them as a circle
+    float LiftAmp = 0.05f;
+    float PrevAngle = -1.0f;
+    float Still = 0.0f;      // seconds not moving
+    float Reading = 0.0f;    // seconds of readings since moving off (the first are taken quickly)
+    // `spread`: (left foot - right foot) along the travel (m); `lift`: left foot height - right's (m).
+    void Update(float spread, float lift, bool moving, float dt);
 };
 
 class FirstPersonBody {
@@ -175,6 +182,7 @@ public:
     // Each foot's height above the body's feet as last posed (m; [0] left, [1] right), for the footsteps
     // (FoleyAudio). False with no body or no foot bones.
     bool FootHeights(const World& world, float (&out)[2]) const;
+    bool FootPoints(const World& world, glm::vec3 (&out)[2]) const; // the feet in the driver's model space (x right, y up, z forward)
     // The gait's phase from the body's own foot plants (0 = the left foot down, 0.5 = the right), what the weapon's walk and
     // run sway and the view bob follow so they dip on the footfalls. False until the feet have planted.
     bool GaitPhase(float& phase) const { phase = m_Gait.Phase; return IsActive() && m_Gait.Locked; }
@@ -386,7 +394,6 @@ private:
     float m_PlayerWalkSpeed = 0.0f; // the capsule's walk (the default gait); Shift is the jog (m_PlayerRunSpeed)
     float m_FallSpeed = 0.0f;       // m/s down at the last airborne frame: the next landing's impact
     FirstPersonGaitPhase m_Gait;
-    FootContactDetector m_GaitFeet;
     float m_Responsiveness = 0.0f; // the component's, from the last Tick
 };
 
