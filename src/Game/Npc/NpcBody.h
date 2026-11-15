@@ -170,6 +170,9 @@ public:
     bool Signalling() const { return m_SignalWeight > 0.05f; }
 
     float Yaw() const { return m_Yaw; }
+    // Where the chest faces (radians): the heading plus the spine's twist toward the aim or the look - what a gun carried at
+    // the hip points along.
+    float ChestYaw() const { return m_Yaw + m_AimTwist; }
     bool Turning() const { return m_Turning; }
     glm::vec3 Eye() const { return m_Eye; }               // world, after LateUpdate
     glm::vec3 Feet() const { return m_Feet; }

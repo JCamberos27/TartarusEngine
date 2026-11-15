@@ -79,7 +79,11 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
     {
         float into = 0.0f;
         const int leg = LabLegAt(m_LabClock, into);
-        wantYaw = player.Cam.Yaw = leg < kLabCount ? kLab[leg].Yaw : 90.0f; // 90: +Z, down the lane
+        // Turned as a hand on the mouse turns it (360 degrees a second), not snapped round in a frame.
+        const float to = leg < kLabCount ? kLab[leg].Yaw : 90.0f; // 90: +Z, down the lane
+        float d = std::fmod(to - player.Cam.Yaw + 540.0f, 360.0f) - 180.0f;
+        d = std::clamp(d, -360.0f * dt, 360.0f * dt);
+        wantYaw = player.Cam.Yaw = player.Cam.Yaw + d;
     }
     wantPitch = -2.0f;
     const float before = m_LabClock;
@@ -159,7 +163,7 @@ void NpcTest::LabLoco(World& world, NpcDirector& npcs, const Player& player, flo
         const glm::vec3 lead = moving ? glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z) * 0.6f : glm::vec3(0.0f);
         in.MoveTarget = there + lead;
         in.Pace = leg < kLabCount && kLab[leg].Jog ? Gait::Jog : Gait::Walk;
-        const float yaw = glm::radians(leg < kLabCount ? kLab[leg].Yaw : 90.0f);
+        const float yaw = glm::radians(player.Cam.Yaw); // where the player looks: the two turn together
         const glm::vec3 view(std::cos(yaw), 0.0f, std::sin(yaw));
         in.Aim = leg >= kLabCount || kLab[leg].Aim;
         in.FaceAim = true;

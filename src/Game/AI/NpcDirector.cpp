@@ -1464,7 +1464,9 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
         // (what it looks at only nods it a little). A pitched-down "low ready" was the soldiers' own pose: the weapon
         // clips are authored level, and an idle regrip played under it threw the gun 9 cm up and back.
         const float lookPitch = std::clamp(wantPitch, -15.0f, 10.0f);
-        const float chest = n.Body.Yaw();
+        // (The chest as it is twisted toward the look, not the heading: held to the heading, the gun stayed put while the
+        // chest turned to look - up to 34 degrees - and the arms crossed over and the off hand came away from it.)
+        const float chest = n.Body.ChestYaw();
         YawPitchOf(glm::vec3(std::sin(chest), 0.0f, std::cos(chest)), wantYaw, wantPitch);
         wantPitch = lookPitch;
     }
