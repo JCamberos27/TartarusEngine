@@ -265,6 +265,7 @@ namespace FirstPersonAnimatorContract {
 // Parameters the driver sets every frame.
 inline constexpr const char* kSpeed = "Speed";       // Float, planar m/s
 inline constexpr const char* kSprint = "Sprint";     // Bool, sprint held
+inline constexpr const char* kJog = "Jog";           // Bool, the jog (Shift): the run clip in the locomotion layer only, weighted down
 inline constexpr const char* kAim = "Aim";           // Bool, aim held
 inline constexpr const char* kEquipped = "Equipped"; // Bool, weapon wanted in hand
 inline constexpr const char* kAmmo = "Ammo";         // Int, rounds in the magazine

@@ -3785,11 +3785,15 @@ void TestAKAdditiveWalking() {
         const auto& base=c.Layers[0].States[c.Layers[0].FindState(name)];
         CHECK(base.Speed==0 && base.MotionFor(0).Clip.find("Idle.fbx")!=std::string::npos);
     }
-    std::vector<AnimatorParam> p={{"Sprint",2,1},{"Speed",0,4},{"Equipped",2,1}};
+    std::vector<AnimatorParam> p={{"Sprint",2,1},{"Speed",0,4},{"Equipped",2,1},{"Jog",2,0}};
     const auto dest=[&](const char* name,float phase) {
         const int t=c.PickTransition(1,l.FindState(name),phase,p);
         return t<0?std::string():l.Transitions[t].To;
     };
+    // The jog (Shift) takes the locomotion layer's run clip too, without Sprint (the base layer stays ready to fire), and keeps it.
+    p[0].Value=0; p[3].Value=1;
+    CHECK(dest("Walk",0.3f)=="IdleToSprint" && dest("Sprint",0.3f).empty() && dest("SprintToIdle",0.5f)=="IdleToSprint");
+    p[0].Value=1; p[3].Value=0;
     CHECK(dest("Idle",0.3f)=="IdleToSprint");
     CHECK(dest("Walk",0.3f)=="IdleToSprint");
     CHECK(dest("IdleToSprint",0.5f).empty());

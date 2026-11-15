@@ -262,6 +262,8 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             // No lean key: aiming at a corner peeks around it (the presentation's corner peek).
             // Shift is the jog, and the gun stays up through it: the arms never take the lowered sprint. The jog's
             // pace shows in the walk layer's rate and the bob blending toward its jog settings by speed.
+            firstPersonPresentation.SetJogging(!player.Crouched && ((gameHasInput && InputMap::GetButton("Sprint")) ||
+                                                                 (npcTest && player.ScriptedMove && player.ScriptSprint)));
             firstPersonPresentation.Tick(gameDt, player.Velocity, false,
                                          (weaponInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()), 0.0f,
                                          player.Grounded);
