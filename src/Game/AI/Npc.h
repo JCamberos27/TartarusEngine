@@ -63,6 +63,8 @@ struct NpcIntent {
 
 struct Npc {
     int Index = -1;
+    float PaceSpeed = 0.0f; // m/s the gait asks (the crowd's max speed): the standing pace (NpcDirector::Move)
+    bool OnFloor = true;    // the capsule touched the floor this frame
     entt::entity Root = entt::null;
     PhysicsWorld::CharacterId Cct = PhysicsWorld::kNoCharacter;
     int Agent = -1;                // crowd agent
