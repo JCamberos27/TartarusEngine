@@ -921,8 +921,8 @@
         "frequency": 1.4
       },
       "sprintBob": [
-        0.02,
-        0.2
+        0.028,
+        0.45
       ],
       "strafeRoll": 0.2,
       "walkBob": [
