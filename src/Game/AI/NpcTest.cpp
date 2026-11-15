@@ -83,11 +83,6 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "decals") m_Duration = 52.0f;
     if (m_Scenario == "doors") m_Duration = 300.0f; // (done once the route is walked)
     if (m_Scenario == "roam") m_Duration = 420.0f;  // (done once the route is walked)
-    if (m_Scenario == "spider") m_Duration = 150.0f; // (done once the route is crawled)
-    if (m_Scenario == "spiderhunt") m_Duration = 75.0f;
-    if (m_Scenario == "spiderplay") m_Duration = 75.0f;
-    if (m_Scenario == "spiderdoor") m_Duration = 45.0f;
-    if (m_Scenario == "spiderdeath") m_Duration = 60.0f; // (done once the last body has settled)
     if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (Env::IsSet(Env::Var::NpcTestSeconds)) m_Duration = std::max(5.0f, Env::Float(Env::Var::NpcTestSeconds, 0.0f));
     if (Env::IsSet(Env::Var::NpcTestRecord)) m_RecordDir = Env::Str(Env::Var::NpcTestRecord);
@@ -232,10 +227,6 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "npcloco") NpcLocoDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "labloco") LabLocoDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "roam") RoamDrive(player, dt, wantYaw, wantPitch);
-    if (m_Scenario == "spiderhunt") SpiderHuntDrive(player, vitals, wantYaw, wantPitch);
-    if (m_Scenario == "spiderplay") SpiderPlayDrive(player, weapon, dt, wantYaw, wantPitch);
-    if (m_Scenario == "spiderdoor") SpiderDoorDrive(player, weapon, wantYaw, wantPitch);
-    if (m_Scenario == "spider" || m_Scenario == "spiderdeath") SpiderWatchDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "fight") {
         // Shoot whoever is in sight: the nearest soldier with a clear line to its chest.
         const Npc* target = nullptr;
@@ -422,26 +413,6 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "roam") {
         Roam(world, player);
-        return;
-    }
-    if (m_Scenario == "spider") {
-        SpiderRoute(world);
-        return;
-    }
-    if (m_Scenario == "spiderhunt") {
-        SpiderHunt(world);
-        return;
-    }
-    if (m_Scenario == "spiderplay") {
-        SpiderPlay(world);
-        return;
-    }
-    if (m_Scenario == "spiderdoor") {
-        SpiderDoor(world);
-        return;
-    }
-    if (m_Scenario == "spiderdeath") {
-        SpiderDeath(world);
         return;
     }
     if (m_Scenario == "feet") {

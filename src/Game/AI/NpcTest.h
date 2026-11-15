@@ -16,8 +16,6 @@ class NavMesh;
 struct Npc;
 class Player;
 class PlayerVitals;
-class SpiderSystem;
-class SpiderDamage;
 class BloodFx;
 class World;
 
@@ -100,8 +98,8 @@ public:
     const std::string& Action() const { return m_Action; }
     std::string m_Action;
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -144,18 +142,6 @@ public:
     // An NPC's can: a character stood at `feet` facing `yawDeg` (0 = +Z) sprays `piece` through
     // SprayCanAction::ForCharacter (from its hand, along its facing).
     std::function<bool(const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds)> SprayNpc;
-    // --npc-test spider: a spider put in the scene at `pos` facing `yawDeg` (its root entity; 0xFFFFFFFF when it won't
-    // build), and the system running it (NpcTest_Spider.cpp).
-    std::function<std::uint32_t(const glm::vec3& pos, float yawDeg)> SpawnSpider;
-    SpiderSystem* Spiders = nullptr;
-    // --npc-test spiderhunt: the same, but a hunter (its own AI) rather than a scripted spider.
-    std::function<std::uint32_t(const glm::vec3& pos, float yawDeg)> SpawnHunter;
-    // --npc-test spiderdeath: a round of `damage` (x `pellets`) fired from `from` along `dir` down the host's player-round
-    // path (what it strikes: a spider's hitboxes take the damage and throw the ichor; anything else, a hole). Returns the
-    // entity struck (0xFFFFFFFF: a miss) and, for a spider, whether it was claimed as one.
-    std::function<std::uint32_t(const glm::vec3& from, const glm::vec3& dir, float damage, int pellets, bool& spider)> ShootSpider;
-    const SpiderDamage* SpiderHurt = nullptr;
-    const BloodFx* BloodFxView = nullptr;
 
 private:
     void Check(bool ok, const std::string& what);
@@ -194,64 +180,6 @@ private:
         std::vector<std::pair<std::string, float>> States; // each body state as it began (s after the hit)
     };
     void TrackWound(World& world, const Npc& n, WoundTrack& w, float now, float dt, bool motion);
-    // spider (NpcTest_Spider.cpp): one spider sent round Apartment 301's living room - floor, wall, ceiling, wall,
-    // floor - each leg of the route measured
-    struct SpiderLeg {
-        std::string Name;
-        glm::vec3 Goal{0.0f};
-        bool Run = false, Arrived = false, Fell = false;
-        float Clock = 0.0f, WorstGap = 0.0f, WorstTip = 0.0f, WorstSlide = 0.0f, SumTip = 0.0f;
-        int Frames = 0, StepsAtStart = 0;
-    };
-    void SpiderRoute(World& world);
-    // spider / spiderdeath: the player stood in 301's doorway, looking at what the Scene view is on (m_WatchAt)
-    void SpiderWatchDrive(Player& player, float& wantYaw, float& wantPitch);
-    glm::vec3 m_WatchAt{0.0f};
-    bool m_HaveWatch = false, m_WatchPlaced = false;
-    // spiderplay (NpcTest_SpiderPlay.cpp): editor Play - hunters left alone go up unaware; the player comes in and shoots
-    void SpiderPlay(World& world);
-    void SpiderPlayDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
-    std::vector<std::uint32_t> m_PRoots;
-    float m_PClock = 0.0f, m_PShotAt = -1.0f, m_PFirstAttackAt = -1.0f, m_PRoomShotAt = -1.0f, m_PRoomAttackAt = -1.0f;
-    int m_PStage = 0, m_PAwareEarly = 0, m_PUnder = 0, m_PAmmoStart = 0, m_PAmmoSpent = 0, m_PRoomAmmo = 0, m_PRoomSpent = 0;
-    int m_PAttacksBefore = -1, m_PReachable = 0, m_PVoid = 0, m_PAbove = 0, m_POutside = 0, m_PBarriers = 0;
-    bool m_PReached[3] = {false, false, false};
-    bool m_POutSaid[3] = {false, false, false};
-    bool m_PPlaced = false, m_PEntered = false, m_PHaveAim = false, m_PPerchedAll = false, m_PNavSame = false, m_PDone = false;
-    bool m_PDown[3] = {false, false, false};
-    glm::vec3 m_PAim{0.0f};
-    // spiderdoor (NpcTest_SpiderDoor.cpp): a hunter behind 301's shut front door pushes it open to reach the player
-    void SpiderDoor(World& world);
-    void SpiderDoorDrive(Player& player, FirstPersonPresentation& weapon, float& wantYaw, float& wantPitch);
-    std::uint32_t m_SDDoor = 0xFFFFFFFFu, m_SDRoot = 0xFFFFFFFFu;
-    float m_SDClock = 0.0f, m_SDWidth = 0.0f, m_SDOpenedAt = -1.0f, m_SDReachedAt = -1.0f, m_SDWorstStuck = 0.0f;
-    int m_SDStage = 0, m_SDAmmoStart = -1, m_SDAmmoSpent = 0, m_SDSwept = 0, m_SDOutside = 0, m_SDPushes = 0, m_SDAttacks = 0;
-    bool m_SDReady = false, m_SDPlaced = false, m_SDShutAtStart = false, m_SDDone = false;
-    glm::vec3 m_SDHinge{0.0f}, m_SDToLatch{0.0f}, m_SDSwing{0.0f}, m_SDStand{0.0f};
-    std::string m_PNavWhy;
-    // spiderhunt (NpcTest_SpiderHunt.cpp): hunters let loose on the player in 301's living room
-    void SpiderHunt(World& world);
-    void SpiderHuntDrive(Player& player, PlayerVitals& vitals, float& wantYaw, float& wantPitch);
-    std::vector<std::uint32_t> m_HRoots;
-    float m_HClock = 0.0f, m_HMaxDrift = 0.0f; // m_HMaxDrift: the farthest the hits moved the player in any one second
-    bool m_HEverAware = false;
-    std::vector<glm::vec2> m_HTrail;           // the player's last second of positions (over the floor)
-    int m_HCeilFrames[4] = {0, 0, 0, 0};       // frames each hunter spent up on the ceiling                            // the corner of the room the player walks to next
-    int m_HStage = 0, m_HMaxAttackers = 0, m_HFellThrough = 0;
-    bool m_HPlaced = false, m_HDone = false, m_HDropShot = false, m_HPounceShot = false, m_HBiteShot = false;
-    void SpiderSetUp(World& world);
-    // Every spider scenario's jank report and bar (pops, snaps, stutter, clipping, legs, decisions, physics, cost).
-    void SpiderJank(const char* test);
-    // spiderdeath (NpcTest_SpiderDeath.cpp): spiders shot in 301's living room - a leg, the abdomen, the head; one killed
-    // on the ceiling, one knocked off a wall
-    struct SpiderDeathRun;
-    std::shared_ptr<SpiderDeathRun> m_SD;
-    void SpiderDeath(World& world);
-    std::uint32_t m_SRoot = 0xFFFFFFFFu;
-    std::vector<SpiderLeg> m_SLegs;
-    int m_SLeg = 0, m_SWorstRays = 0;
-    float m_SClock = 0.0f, m_SSettle = 0.0f;
-    bool m_SReady = false, m_SDone = false, m_SShotTilt = false;
     void Decals(World& world, NpcDirector& npcs, float now); // NpcTest_Decals.cpp
     void DecalsDrive(Player& player, float& wantYaw, float& wantPitch);
     // stopsteps (NpcTest_StopSteps.cpp)

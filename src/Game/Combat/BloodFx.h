@@ -48,7 +48,7 @@ public:
         int Pellets = 1;
         glm::vec3 Origin{0.0f};  // the shooter's muzzle
         bool ByPlayer = false;   // the player fired: at point blank it comes back onto the gun and hands
-        int Palette = 0;         // what the body bleeds (BloodPalette::Kind): a person's, a spider's ichor
+        int Palette = 0;         // what the body bleeds (BloodPalette::Kind): a person's, a creature's ichor
     };
 
     // How hard a hit is, ~1 for a rifle round at combat range: its damage (a shotgun's pellets arrive as one

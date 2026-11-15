@@ -310,8 +310,6 @@ void BuildDefaultTable() {
     Register("fkey.postFx",       "Post FX On / Off",             Ctx_App, Chord{});
     Register("fkey.spawnNpc",     "F-Row: Spawn NPC",             Ctx_App, K(ImGuiKey_F9));
     Register("fkey.nextNpc",      "F-Row: Next NPC Variant",      Ctx_App, Sk(ImGuiKey_F9));
-    Register("fkey.spawnSpider",  "F-Row: Spawn Spider",          Ctx_App, K(ImGuiKey_F10));
-    Register("fkey.nextSpider",   "F-Row: Next Spider Variant",   Ctx_App, Sk(ImGuiKey_F10));
     Register("fkey.spawnItem",    "F-Row: Drop Item",             Ctx_App, K(ImGuiKey_F11));
     Register("fkey.nextItem",     "F-Row: Next Item",             Ctx_App, Sk(ImGuiKey_F11));
     Register("fkey.clearSpawns",  "F-Row: Clear Spawned",         Ctx_App, K(ImGuiKey_F12));

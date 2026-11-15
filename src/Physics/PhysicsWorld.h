@@ -134,7 +134,7 @@ int BoxOverlapsCharacters(const float centre[3], const float halfExtents[3], con
 // spherical joint at `Anchor` (world) lets it swing and twist within its limits (exactly: the chain never stretches). The parts
 // collide with the world and with each other (never parent and child; a pair that overlaps in the pose it is built in only
 // once it has come apart), and report `entity` when queries or contacts hit them. At most kMaxRagdollParts parts (one bit
-// each in IgnoreMask and the collision filter's mask: a spider's eight three-segment legs, thorax and abdomen fit).
+// each in IgnoreMask and the collision filter's mask).
 constexpr int kMaxRagdollParts = 32;
 struct RagdollPart {
     int Parent = -1;
@@ -182,8 +182,6 @@ struct RagdollParams {
     float StabilizationThreshold = -1.0f;
     // The flesh over the capsules (m): contacts rest this far out, so the skinned mesh lies on the floor rather than in it.
     float SkinOffset = 0.0f;
-    // Speculative CCD on every part: contacts found ahead of a fast step (a small body dropped from a ceiling, thin legs).
-    bool SpeculativeCCD = false;
     // Gravity on the body, as a multiple of the scene's (> 1: it reads heavier at game scale).
     float GravityScale = 1.0f;
     // The parts collide with each other (off: only with the world).
@@ -203,7 +201,6 @@ bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular);
 // Puts every part to sleep now (a body that has come to rest stays so until something hits it: RagdollImpulse wakes it).
 void RagdollSleep(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
-void RagdollAddSpin(int ragdoll, const float angular[3]); // a turn (rad/s, world) added to the whole body about its centre of mass
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
 bool RagdollAsleep(int ragdoll);
 // At rest long enough to have been frozen (its parts a static copy, out of the solver until something hits it).
@@ -254,13 +251,11 @@ struct HitCapsule {
     float HalfLength = 0.1f, Radius = 0.05f;
 };
 int  CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count);
-// The same for a body with no character capsule (a spider): the capsules report `entity`, and there is nothing to shadow.
-int  CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count);
 void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count); // poses only (Position / Rotation)
 void SetNpcHitboxesActive(int id, bool active);                      // false: the capsule answers queries again
 void DestroyNpcHitboxes(int id);
 // The F6 Hitboxes overlay: each active hitbox capsule as lines (its axis and two end rings), appended to `out` at 7 floats
-// per vertex (xyz rgba), two vertices per line. Soldiers' in orange, creature bodies' in magenta.
+// per vertex (xyz rgba), two vertices per line. Soldiers' in orange.
 void HitboxDebugLines(std::vector<float>& out);
 
 // A ray against body parts only - the hitboxes of living characters and the parts of ragdolls - for which part of
@@ -320,7 +315,6 @@ bool GetBodyState(unsigned entity, BodyState& out);
 
 // This frame's solid-contact transitions; same copy/return convention as GetTriggerEvents.
 int GetContactEvents(ContactEvent* out, int maxEvents);
-std::uint64_t SimulationGeneration(); // changes when the active simulation is replaced
 
 // --- Shape queries (#185 PR 9) --------------------------------------------------------
 bool SphereCast(const float origin[3], const float dir[3], float radius, float maxDistance,
@@ -351,10 +345,6 @@ bool BoxCast(const float center[3], const float halfExtents[3], const float rota
 bool CapsuleCast(const float point1[3], const float point2[3], float radius, const float dir[3],
                  float maxDistance, const QueryFilter& f, RaycastHit& outHit);
 int  OverlapSphereFiltered(const float center[3], float radius, const QueryFilter& f, unsigned* out, int maxEntities);
-// RaycastSolid / an overlap test against static colliders only - the world CollectStaticGeometry(.., false) returns: for
-// bakes from that geometry, so a door, the player or a spider wherever it happens to be at the bake isn't baked in.
-bool RaycastStatic(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit);
-bool OverlapSphereStatic(const float center[3], float radius, const QueryFilter& f);
 int  OverlapBox(const float center[3], const float halfExtents[3], const float rotation[4], const QueryFilter& f,
                 unsigned* out, int maxEntities);
 

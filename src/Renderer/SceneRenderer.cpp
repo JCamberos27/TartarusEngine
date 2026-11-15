@@ -1261,7 +1261,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uBloodSplatCount", bloodCount);
         if (bloodCount > 0) {
             prog.SetInt("uBloodSplatFirst", bloodFirst);
-            glm::vec4 fresh, dried; // the body's own palette (a spider's ichor), a person's by default
+            glm::vec4 fresh, dried; // the body's own palette (a creature's ichor), a person's by default
             BloodRenderer::Get().SplatLook(probeItem->Entity, fresh, dried);
             prog.SetVec4("uBloodFresh", fresh);
             prog.SetVec4("uBloodDried", dried);

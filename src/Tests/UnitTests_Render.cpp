@@ -509,7 +509,7 @@ void FurMaterialRoundTrip() {
     ma.Mat.Fur.Gravity = 0.5f;
     ma.Mat.Fur.Tint = glm::vec3(0.9f, 0.8f, 0.7f);
     ma.Mat.Fur.Rim = 0.6f;
-    ma.FurMaskPath = "assets/Characters/Spider/Textures/T_Spider_FurMask.png";
+    ma.FurMaskPath = "assets/Textures/T_Fur_Mask.png"; // any path: only the string round-trips
     CHECK(ma.Save());
     const auto back = MaterialAsset::Load(ma.Path);
     CHECK(back != nullptr);

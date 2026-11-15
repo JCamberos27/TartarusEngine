@@ -32,8 +32,6 @@
 #include "CombatWiring.h"
 #include "Components.h"
 #include "Core/Env.h"
-#include "Creatures/SpiderDamage.h"
-#include "Creatures/SpiderSystem.h"
 #include "DevPanel.h"
 #include "DevSpawner.h"
 #include "EditorLayer.h"
@@ -64,8 +62,6 @@
 #include "World.h"
 
 PlayFrame::PlayFrame() {
-#pragma warning(suppress : 4996)
-    m_TraceSpiderHits = Env::Flag(Env::Var::SpiderTrace);
 }
 
 bool PlayFrame::GravityGunLive(const PlayFrameInputs& in) {
@@ -89,8 +85,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     NpcTest* const npcTest = in.npcTest;
     NpcTest::BloodView& npcTestBlood = *in.npcTestBlood;
     NpcDirector& npcDirector = *in.npcDirector;
-    SpiderSystem& spiders = *in.spiders;
-    SpiderDamage& spiderDamage = *in.spiderDamage;
     DevSpawner& devSpawner = *in.devSpawner;
     DevPanel& devPanel = *in.devPanel;
     CombatFx& combatFx = *in.combatFx;
@@ -134,8 +128,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         dc.WorldPtr = &world;
         dc.Assets = &assets;
         dc.Npcs = &npcDirector;
-        dc.Spiders = &spiders;
-        dc.SpiderHurt = &spiderDamage;
         dc.Gun = &firstPersonPresentation;
         dc.Eye = player.Cam.Position;
         dc.Front = player.Cam.Front();
@@ -337,44 +329,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         editor.UpdatePlayModeAudio(world, gameDt,
             listener != entt::null ? glm::vec3(world.ComposeWorldTransform(listener)[3]) : gameCam->Position);
     }
-    // The spiders move over the surfaces before the animators pose them; the hunters among them go after
-    // the player, and what their bites and pounces do lands on the player now.
-    {
-        SpiderSystem::Target prey;
-        prey.Valid = playUsesPlayer && PhysicsWorld::HasCharacter() && !devPanel.Invisible;
-        if (prey.Valid) {
-            float foot[3], r = 0.3f, cyl = 0.6f;
-            PhysicsWorld::GetCharacterCapsule(foot, &r, &cyl);
-            prey.Feet = glm::vec3(foot[0], foot[1], foot[2]);
-            prey.Radius = r;
-            prey.Eye = player.Cam.Position;
-            prey.Velocity = player.Velocity;
-            prey.Dead = playerVitals.IsDead();
-            prey.Loud = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)) > player.MoveSpeed * 1.1f;
-        }
-        spiders.Think(world, assets, gameDt, &prey);
-        for (const SpiderSystem::PlayerHit& h : spiders.TakePlayerHits()) {
-            const float before = playerVitals.Health();
-            playerVitals.ApplyDamage(h.Amount, h.Source);
-            // The shove: along the ground, up to its speed - a bite on a player already reeling back doesn't add
-            // to it, so a flurry staggers them rather than throwing them across the level.
-            const glm::vec3 wasGoing = player.Velocity;
-            player.Velocity = SpiderSystem::Shove(player.Velocity, h.Push);
-            const bool traceHits = m_TraceSpiderHits;
-            if (traceHits)
-                std::printf("[Spider] hit the player at %.2f %.2f: %s, push %.2f %.2f, ground speed %.2f -> %.2f, grounded %d, decel %.2f s, air %.2f s\n",
-                            player.Cam.Position.x, player.Cam.Position.z, h.Pounce ? "pounce" : "bite/drop", h.Push.x,
-                            h.Push.z, glm::length(glm::vec2(wasGoing.x, wasGoing.z)),
-                            glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)), (int)player.Grounded,
-                            player.GroundDecelTime, player.AirAccelTime);
-            // The jolt: the view knocked up and aside, harder for a pounce.
-            const float side = glm::dot(glm::normalize(glm::vec3(h.Push.x, 0.0f, h.Push.z) + glm::vec3(1e-4f, 0.0f, 0.0f)),
-                                        player.Cam.Right());
-            player.Cam.Pitch += h.Pounce ? 9.0f : 5.0f;
-            player.Cam.Yaw += (side >= 0.0f ? 1.0f : -1.0f) * (h.Pounce ? 7.0f : 4.0f);
-            if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, prey.Eye, true, 0.8f);
-        }
-    }
     // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
     // pose, and the play-mode snapshot restores everything this touched on Stop.
     UpdateAnimators(world, gameDt);
@@ -384,9 +338,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     PROFILE_SCOPE("Animator Controllers");
     UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
     }
-    // The spiders' legs onto this frame's footholds, over the pose their animators just gave them.
-    spiders.LatePose(world, gameDt);
-    spiderDamage.LateUpdate(world, spiders, gameDt); // flinches, hitboxes, the dead onto their ragdolls
     // The arms are posed now (clips + IK): seat the gun in this frame's hands.
     if (playUsesPlayer) {
         PROFILE_SCOPE("First Person IK");
@@ -425,15 +376,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         // This frame's rounds, down the bore from the muzzle: a hole where each struck.
         PROFILE_SCOPE("Player Shots + Impacts");
         for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
-            if (SpiderDamage::Result sr; spiderDamage.OnHit(world, spiders, hit.Entity, hit.Point, hit.Origin, hit.Direction,
-                                                             firstPersonPresentation.Set().Gameplay, hit.Pellets, sr)) {
-                bloodFx.OnFleshHit(SpiderDamage::Blood(sr)); // ichor, not a hole in the wall behind it
-                if (sr.Living) {
-                    playerVitals.MarkHit(sr.Killed, sr.Zone == Spider::PartZone::Head);
-                    combatFx.Play(sr.Killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
-                }
-                continue;
-            }
             if (npcDirector.Active()) {
                 bool killed = false, head = false, aliveWhenHit = false;
                 if (npcDirector.OnPlayerHit(world, hit.Entity, hit.Point, hit.Origin, hit.Direction,
@@ -452,7 +394,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
         for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
             if (npcDirector.Active()) npcDirector.OnPlayerShotLine(t.Origin, t.End);
-            if (t.FirstPellet) spiders.HearShot(t.Origin);
             if (t.FirstPellet)
                 combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
                               t.Origin, t.End, true, false, 0, firstPersonPresentation.MuzzleEffects());

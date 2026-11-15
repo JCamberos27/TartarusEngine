@@ -41,8 +41,6 @@
 #include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
 #include "SceneSerializer.h"
-#include "Creatures/SpiderSystem.h"
-#include "Creatures/SpiderDamage.h"
 #include "AnimationSystem.h"
 #include "ParticleSystem.h"
 #include "AnimatorController.h"
@@ -328,8 +326,8 @@ int Application::RunSession() {
 
         AudioEngine::Init();
         // The session-lifetime audio + PhysX cores (#167) go down last, on every exit path (including exceptions):
-        // declared before every local below, so it is destroyed after all of them (NPC ragdolls, the player, the world
-        // and the spiders may still release PhysX / audio objects in their own destructors).
+        // declared before every local below, so it is destroyed after all of them (NPC ragdolls, the player and the world
+        // may still release PhysX / audio objects in their own destructors).
         struct CoreShutdownGuard {
             ~CoreShutdownGuard() { AudioEngine::Shutdown(); PhysicsWorld::Shutdown(); }
         } coreShutdownGuard;
@@ -476,8 +474,6 @@ int Application::RunSession() {
         WeaponFxRenderer weaponFx;  // the weapon's laser beam / spot and the bullet holes
         BulletHoleList bulletHoles; // where this Play's rounds struck
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
-        SpiderSystem spiders;       // the enemy spiders (Spider components): bodies on any surface, legs by IK
-        SpiderDamage spiderDamage;  // ... their hitboxes, wounds, ichor and deaths (Creatures/SpiderDamage.h)
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
@@ -493,7 +489,6 @@ int Application::RunSession() {
             cw.player = &player;
             cw.firstPersonPresentation = &firstPersonPresentation;
             cw.npcDirector = &npcDirector;
-            cw.spiderDamage = &spiderDamage;
             cw.combatFx = &combatFx;
             cw.bloodFx = &bloodFx;
             cw.impactFx = &impactFx;
@@ -507,7 +502,7 @@ int Application::RunSession() {
         PlayerVitals playerVitals;  // the player's health in Play
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // dev tools in Play (no default keys)
-        DevSpawner devSpawner;      // F9-F12: soldiers, spiders and items at the crosshair
+        DevSpawner devSpawner;      // F9-F12: soldiers and items at the crosshair
         PlayerLook playerLook;      // F7 / F8: the player's look and clothes, kept between Plays
         PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
         ShellCasings shellCasings;  // the spent cases on the ground
@@ -531,19 +526,14 @@ int Application::RunSession() {
         auto gravityGunLive = [&] {
             return playGravityGun && !(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped());
         };
-        // F6 Nav: the soldiers' navmesh edges (green) and the spiders' surface graph near the player (cyan), 7 floats a vertex.
-        // Built once per navmesh / when the player has moved, not every frame: the edges are static, and the graph's
-        // neighbourhood only changes as the player walks (capped, so a dense graph can't flood the HUD).
+        // F6 Nav: the soldiers' navmesh edges (green), 7 floats a vertex. Built once per navmesh, not every frame: the edges are static.
         auto navDebugLines = [&](std::vector<float>& out) {
             auto line = [](std::vector<float>& o, const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {
                 const float v[14] = {a.x, a.y, a.z, c.r, c.g, c.b, c.a, b.x, b.y, b.z, c.r, c.g, c.b, c.a};
                 o.insert(o.end(), v, v + 14);
             };
-            static std::vector<float> meshLines, graphLines;
+            static std::vector<float> meshLines;
             static int meshPolys = -1;
-            static const Spider::SurfaceGraph* graphFor = nullptr;
-            static int graphNodes = -1;
-            static glm::vec3 graphAt(1e9f);
             const NavMesh& nav = npcDirector.Nav();
             if (nav.PolyCount() != meshPolys) {
                 meshPolys = nav.PolyCount();
@@ -553,26 +543,7 @@ int Application::RunSession() {
                 const glm::vec3 lift(0.0f, 0.05f, 0.0f);
                 for (const NavMesh::Edge& e : edges) line(meshLines, e.A + lift, e.B + lift, glm::vec4(0.35f, 1.0f, 0.45f, 0.85f));
             }
-            const Spider::SurfaceGraph& g = spiders.Nav();
-            if (g.Empty()) graphLines.clear();
-            else if (&g != graphFor || g.NodeCount() != graphNodes || glm::length(player.Cam.Position - graphAt) > 0.75f) {
-                graphFor = &g;
-                graphNodes = g.NodeCount();
-                graphAt = player.Cam.Position;
-                graphLines.clear();
-                static std::vector<int> nearNodes;
-                nearNodes.clear();
-                g.NodesNear(player.Cam.Position, 10.0f, nearNodes);
-                constexpr size_t kMaxGraphLines = 4000;
-                for (int i : nearNodes) {
-                    for (int k = g.FirstLink(i); k < g.FirstLink(i + 1) && graphLines.size() < kMaxGraphLines * 14; ++k) {
-                        const int j = g.Neighbour(k);
-                        if (j > i) line(graphLines, g.Pos(i), g.Pos(j), glm::vec4(0.3f, 0.85f, 1.0f, 0.6f));
-                    }
-                }
-            }
             out.insert(out.end(), meshLines.begin(), meshLines.end());
-            out.insert(out.end(), graphLines.begin(), graphLines.end());
         };
         // The text-and-shapes combat HUD (ammo, kill feed, radio subtitles, awareness chevrons, AI overlay) for one view.
         auto drawCombatHud = [&](unsigned fbo, int w, int h, const glm::mat4& v, const glm::mat4& p) {
@@ -714,38 +685,6 @@ int Application::RunSession() {
                 v.Saved = r.Saved; v.SavedElapsed = r.SavedElapsed;
                 v.Sounds = sprayCans.SoundsPlayed(); v.Hissing = sprayCans.Hissing();
                 v.RuntimeDecals = DecalSystem::Current() ? DecalSystem::Current()->RuntimeCount() : 0;
-            };
-            // --npc-test spider: a spider put in the scene, and the system that runs it
-            auto spawnSpider = [&](const glm::vec3& pos, float yawDeg, int brain) {
-                const entt::entity e = spiders.Spawn(world, assets, "assets/Characters/Spider/Spider.json", pos,
-                                                     glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f)));
-                if (auto* sc = e != entt::null ? world.Registry.try_get<SpiderComponent>(e) : nullptr) sc->Brain = brain;
-                return (std::uint32_t)entt::to_integral(e);
-            };
-            npcTest->SpawnSpider = [spawnSpider](const glm::vec3& pos, float yawDeg) { return spawnSpider(pos, yawDeg, 1); }; // scripted
-            // --npc-test spiderhunt: a hunter (its own AI)
-            npcTest->SpawnHunter = [spawnSpider](const glm::vec3& pos, float yawDeg) { return spawnSpider(pos, yawDeg, 0); };
-            npcTest->Spiders = &spiders;
-            spiders.MeasureJank = true; // the jank counters' extra probes (feet, floating)
-            npcTest->SpiderHurt = &spiderDamage;
-            npcTest->BloodFxView = &bloodFx;
-            npcTest->ShootSpider = [&](const glm::vec3& from, const glm::vec3& dir, float damage, int pellets, bool& spider) {
-                spider = false;
-                const float o[3] = {from.x, from.y, from.z}, d[3] = {dir.x, dir.y, dir.z};
-                QueryFilter f;
-                f.HitTriggers = 0;
-                RaycastHit h;
-                if (!PhysicsWorld::RaycastFiltered(o, d, 20.0f, f, h) || !h.Hit) return 0xFFFFFFFFu;
-                const glm::vec3 p(h.Point[0], h.Point[1], h.Point[2]), n(h.Normal[0], h.Normal[1], h.Normal[2]);
-                SpiderDamage::Result sr; // the player-round path's: a spider takes it, anything else gets a hole
-                if (spiderDamage.OnHit(world, spiders, h.Entity, p, from, dir, damage, pellets, sr)) {
-                    spider = true;
-                    bloodFx.OnFleshHit(SpiderDamage::Blood(sr));
-                    return h.Entity;
-                }
-                combatFx.Impact(world, h.Entity, p);
-                combatWiring.WorldImpact(h.Entity, p, n, dir, 0.0027f);
-                return h.Entity;
             };
         }
 
@@ -1472,8 +1411,6 @@ int Application::RunSession() {
             playIn.npcTest = npcTest.get();
             playIn.npcTestBlood = &npcTestBlood;
             playIn.npcDirector = &npcDirector;
-            playIn.spiders = &spiders;
-            playIn.spiderDamage = &spiderDamage;
             playIn.devSpawner = &devSpawner;
             playIn.devPanel = &devPanel;
             playIn.combatFx = &combatFx;

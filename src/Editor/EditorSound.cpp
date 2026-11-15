@@ -203,7 +203,6 @@ const EventInfo kEvents[kEventCount] = {
     {"FKeyCycleBack",    Category::PlayMode,      0.0f,  40.0f, 0.0f,  true},
     {"FKeyOff",          Category::PlayMode,      0.0f,  40.0f, 0.0f,  true},
     {"SpawnNpc",         Category::PlayMode,      0.0f,  60.0f, 0.03f, true},
-    {"SpawnSpider",      Category::PlayMode,      0.0f,  60.0f, 0.04f, true},
     {"SpawnItem",        Category::PlayMode,      0.0f,  60.0f, 0.02f, true},
     {"ClearSpawns",      Category::PlayMode,      0.0f, 200.0f, 0.0f,  true},
     {"ModularSnap",      Category::Tools,        -2.0f,  90.0f, 0.03f, false, false, "SnapGround"},

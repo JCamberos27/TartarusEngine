@@ -25,8 +25,6 @@ class ImpactFx;
 class Player;
 class PlayerVitals;
 class ShellCasings;
-class SpiderDamage;
-class SpiderSystem;
 class SprayCanSystem;
 struct StillModelCache;
 struct PlayState;
@@ -67,8 +65,6 @@ struct PlayFrameInputs {
 
     // The enemies, the dev tools and combat's effects
     NpcDirector* npcDirector = nullptr;
-    SpiderSystem* spiders = nullptr;
-    SpiderDamage* spiderDamage = nullptr;
     DevSpawner* devSpawner = nullptr;
     DevPanel* devPanel = nullptr;
     CombatFx* combatFx = nullptr;
@@ -83,7 +79,7 @@ struct PlayFrameInputs {
 };
 
 // Play's per-frame simulation: the gravity gun and dev spawns, the physics step, the player and first-person update,
-// the enemy AI and spiders, the animators, first-person IK, the player's shots and their impacts, shell casings, the
+// the enemy AI, the animators, first-person IK, the player's shots and their impacts, shell casings, the
 // squad's impacts and flesh hits, combat FX and foley, blood, and the player's vitals. Then, every frame, the game
 // module's tick, particles and the models' animation advance.
 class PlayFrame {
@@ -107,5 +103,4 @@ private:
     float m_NpcTestBloodGpuSum = 0.0f;                 // --npc-test blood: the blood sprays' GPU time
     int m_NpcTestBloodGpuFrames = 0;
     std::vector<BulletHoleList::Placed> m_PlacedHoles; // --npc-test blood: the holes resolved, reused frame to frame
-    bool m_TraceSpiderHits = false;                    // TARTARUS_SPIDER_TRACE: log each spider hit on the player
 };

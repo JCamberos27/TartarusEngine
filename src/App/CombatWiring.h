@@ -13,7 +13,6 @@ class ImpactFx;
 class NpcDirector;
 class NpcTest;
 class Player;
-class SpiderDamage;
 class SprayCanSystem;
 class World;
 
@@ -24,7 +23,6 @@ struct CombatWiringInputs {
     Player* player = nullptr;
     FirstPersonPresentation* firstPersonPresentation = nullptr;
     NpcDirector* npcDirector = nullptr;
-    SpiderDamage* spiderDamage = nullptr;
     CombatFx* combatFx = nullptr;
     BloodFx* bloodFx = nullptr;
     ImpactFx* impactFx = nullptr;
@@ -36,7 +34,7 @@ struct CombatWiringInputs {
 };
 
 // Play's combat hooked together once at start-up: the FX sharing the flipbook sprites, the blood's lookups into the
-// soldiers, spiders, props and the player's own body and gun, the footstep listener behind bloody footprints, the
+// soldiers, props and the player's own body and gun, the footstep listener behind bloody footprints, the
 // Blood Lab's crosshair actions, and the --npc-test blood / decal / spray hooks.
 class CombatWiring {
 public:

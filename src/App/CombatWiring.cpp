@@ -17,7 +17,6 @@
 #include "Combat/FxSprites.h"
 #include "Combat/ImpactFx.h"
 #include "Components.h"
-#include "Creatures/SpiderDamage.h"
 #include "FirstPersonPresentation.h"
 #include "GameModuleAPI.h" // QueryFilter / RaycastHit, kPlayerEntity
 #include "KnifeFxLibrary.h"
@@ -206,7 +205,6 @@ void CombatWiring::Wire(const CombatWiringInputs& in) {
     });
     m_StepListener = true; // dropped in the destructor, before the blood and the player are destroyed
     bloodFx.SetBodyLookup([in](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
-        if (in.spiderDamage->BodyCentre(*in.world, entity, centre)) return true;
         for (const auto& n : in.npcDirector->Npcs()) {
             if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
             // The middle of the body: pelvis toward chest (its pool spreads from under there).
@@ -274,7 +272,6 @@ void CombatWiring::Wire(const CombatWiringInputs& in) {
             (void)m;
             return !out.Members.empty();
         }
-        if (in.spiderDamage->Owns(entity)) return in.spiderDamage->SplatSpace(world, entity, part, point, out);
         const entt::entity e = static_cast<entt::entity>(entity);
         if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
         out.Group = entity;
@@ -313,7 +310,6 @@ void CombatWiring::Wire(const CombatWiringInputs& in) {
         if (group == kPlayerEntity) return true;
         for (const auto& n : in.npcDirector->Npcs())
             if (n && (unsigned)entt::to_integral(n->Root) == group) return true;
-        if (in.spiderDamage->Owns(group)) return true;
         const entt::entity e = static_cast<entt::entity>(group);
         if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
         out.push_back(group);
