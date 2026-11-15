@@ -307,11 +307,11 @@ glm::vec3 FirstPersonBodyRigEyeToShoulders(const glm::mat4& rigWorld, const glm:
     return glm::vec3(glm::dot(fromEye, cam.Right()), glm::dot(fromEye, cam.Up()), glm::dot(fromEye, cam.Front()));
 }
 
-void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, float headBob,
+void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, glm::vec3 headBob,
                                     float smoothing, float eyeSlack, float slackSeconds, float dt) {
     if (!have) { slow = eased = animated; have = true; }
     slow += (animated - slow) * FirstPersonBodyFollow(dt, 0.5f);
-    const glm::vec3 target = slow + (animated - slow) * std::clamp(headBob, 0.0f, 1.0f);
+    const glm::vec3 target = slow + (animated - slow) * glm::clamp(headBob, glm::vec3(0.0f), glm::vec3(1.0f)); // per axis (body frame)
     eased += (target - eased) * FirstPersonBodyFollow(dt, smoothing);
     const glm::vec3 gap = animated - eased;
     if (const float gapLen = glm::length(gap); gapLen > eyeSlack) {
@@ -1487,7 +1487,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
             // Past the slack the eye is pulled back in fast (40 ms) rather than snapped to it: snapped, its speed jumped
             // in one frame - a kink felt as a jolt when the body crouched or stood on the move.
-            FirstPersonBodyFollowShoulders(m_ShouldersSlow, m_Shoulders, m_HaveShoulders, shouldersAnimated, cfg.HeadBob,
+            FirstPersonBodyFollowShoulders(m_ShouldersSlow, m_Shoulders, m_HaveShoulders, shouldersAnimated,
+                                           glm::vec3(cfg.HeadBobSide, cfg.HeadBob, cfg.HeadBob),
                                            cfg.CameraSmoothing, cfg.EyeSlack, 0.04f, dt);
             BodyDebug::Info().EyeSlack = glm::length(shouldersAnimated - m_Shoulders);
             // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
@@ -1521,6 +1522,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         BodyDebug::Line(shoulders, eyeWorld, glm::vec4(1.0f, 0.3f, 1.0f, 0.7f));
     }
     m_CameraApplied = eyeWorld - camera.Position;
+    BodyDebug::Info().EyeApplied = m_CameraApplied;
     camera.Position = eyeWorld;
     // Arm Steadiness holds the shoulders in this frame: it moves with the eye and the chest's pitch, so
     // only the gait's sway shows in it (the rig's own frame pitches with the view, the chest less).

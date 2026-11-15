@@ -74,6 +74,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "stopsteps") m_Duration = StopStepsSeconds();
     if (m_Scenario == "locomotion") m_Duration = LocomotionSeconds();
     if (m_Scenario == "npcloco") m_Duration = NpcLocoSeconds();
+    if (m_Scenario == "labloco") m_Duration = LabLocoSeconds();
     if (m_Scenario == "reload") m_Duration = 28.0f;
     if (m_Scenario == "flame") m_Duration = 14.0f;
     if (m_Scenario == "revolver") m_Duration = 116.0f;
@@ -217,6 +218,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "stopsteps") StopStepsDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "locomotion") LocomotionDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "npcloco") NpcLocoDrive(player, wantYaw, wantPitch);
+    if (m_Scenario == "labloco") LabLocoDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "roam") RoamDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "spiderhunt") SpiderHuntDrive(player, vitals, wantYaw, wantPitch);
     if (m_Scenario == "spiderplay") SpiderPlayDrive(player, weapon, dt, wantYaw, wantPitch);
@@ -400,6 +402,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "npcloco") {
         NpcLoco(world, npcs, now);
+        return;
+    }
+    if (m_Scenario == "labloco") {
+        LabLoco(world, npcs, player, now);
         return;
     }
     if (m_Scenario == "roam") {

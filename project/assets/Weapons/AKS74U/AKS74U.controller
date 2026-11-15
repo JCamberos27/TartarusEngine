@@ -1595,11 +1595,6 @@
               "mode": "ifNot",
               "param": "Sprint",
               "threshold": 0.0
-            },
-            {
-              "mode": "ifNot",
-              "param": "Jog",
-              "threshold": 0.0
             }
           ],
           "duration": 0.15,
@@ -1635,11 +1630,6 @@
             {
               "mode": "ifNot",
               "param": "Sprint",
-              "threshold": 0.0
-            },
-            {
-              "mode": "ifNot",
-              "param": "Jog",
               "threshold": 0.0
             }
           ],
@@ -1731,63 +1721,6 @@
           "fromAny": true,
           "hasExitTime": false,
           "to": "Off"
-        },
-        {
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jog",
-              "threshold": 0.0
-            },
-            {
-              "mode": "greater",
-              "param": "Speed",
-              "threshold": 0.05
-            }
-          ],
-          "duration": 0.25,
-          "exitTime": 0.9,
-          "from": "Idle",
-          "hasExitTime": false,
-          "to": "IdleToSprint"
-        },
-        {
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jog",
-              "threshold": 0.0
-            },
-            {
-              "mode": "greater",
-              "param": "Speed",
-              "threshold": 0.05
-            }
-          ],
-          "duration": 0.25,
-          "exitTime": 0.9,
-          "from": "Walk",
-          "hasExitTime": false,
-          "to": "IdleToSprint"
-        },
-        {
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jog",
-              "threshold": 0.0
-            },
-            {
-              "mode": "greater",
-              "param": "Speed",
-              "threshold": 0.05
-            }
-          ],
-          "duration": 0.1,
-          "exitTime": 0.9,
-          "from": "SprintToIdle",
-          "hasExitTime": false,
-          "to": "IdleToSprint"
         }
       ],
       "weight": 1.0
@@ -1972,11 +1905,6 @@
       "default": 0.0,
       "name": "Fidget",
       "type": "trigger"
-    },
-    {
-      "default": 0.0,
-      "name": "Jog",
-      "type": "bool"
     },
     {
       "default": -1.0,

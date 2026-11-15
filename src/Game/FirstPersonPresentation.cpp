@@ -1847,7 +1847,6 @@ Gameplay::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float d
 bool FirstPersonPresentation::Fire() {
     const auto f=RunGameplay(1);
     if(f.Commands&2) CommitShot((f.Tags&16)!=0,true);
-    if(f.Result) m_JogHold=0.5f; // shooting from a jog: the arms settle to the ready pose for a moment
     return f.Result!=0;
 }
 
@@ -2033,29 +2032,9 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
                     : (aiming ? 1.0f : 0.0f);
     m_TickDt = dt;
     m_OpticBlendElapsed += std::max(0.0f, dt);
-    // The jog (Shift): the locomotion layer's run clip (arm pump and bounce) at kJogArms of its strength over the gun-up pose,
-    // so the gun stays up and ready; off while aiming, in a reload / inspect / melee, and for a moment after a shot.
-    {
-        constexpr float kJogArms = 0.4f;
-        m_JogHold = std::max(0.0f, m_JogHold - dt);
-        const bool jog = m_Jogging && m_Equipped && !aiming && !ActionBlocksSprint() && m_JogHold <= 0.0f && planarSpeed > 0.5f;
-        ac->SetBool(K::kJog, jog);
-        // The walk / run sway's clock: the body's feet (negative - none - leaves the clips on their own).
-        ac->SetFloat(K::kGaitPhase, m_HaveGait ? m_GaitPhase : -1.0f);
-        bool runClip = false;
-        if (m_Controller)
-            for (size_t i = 0; i < m_Controller->Layers.size() && i < ac->Layers.size(); ++i) {
-                if (m_Controller->Layers[i].Name != "Weapon Locomotion" || ac->Layers[i].Stack.empty()) continue;
-                const int st = ac->Layers[i].Stack.back().State;
-                if (st >= 0 && st < (int)m_Controller->Layers[i].States.size()) {
-                    const std::string& n = m_Controller->Layers[i].States[st].Name;
-                    runClip = n == "IdleToSprint" || n == "Sprint" || n == "SprintToIdle";
-                }
-            }
-        const float want = runClip && !sprinting ? kJogArms : 1.0f;
-        m_JogWeight += (want - m_JogWeight) * (1.0f - std::exp(-dt / 0.12f));
-    }
-    ac->SetFloat("LayerWeight:Weapon Locomotion",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold)*m_JogWeight);
+    // The walk / run sway's clock: the body's feet (negative - none - leaves the clips on their own).
+    ac->SetFloat(K::kGaitPhase, m_HaveGait ? m_GaitPhase : -1.0f);
+    ac->SetFloat("LayerWeight:Weapon Locomotion",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     ac->SetFloat("LayerWeight:Weapon Walk",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way

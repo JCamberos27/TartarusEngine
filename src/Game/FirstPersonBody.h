@@ -526,7 +526,7 @@ glm::vec3 FirstPersonBodyRigEyeToShoulders(const glm::mat4& rigWorld, const glm:
 // The shoulders the eye hangs off (model space), a step on: `slow` follows the clips' `animated` shoulders over half a
 // second, `eased` follows Head Bob of their motion about it over `smoothing` seconds and never trails them by more than
 // `eyeSlack` - pulled back in over `slackSeconds`, or snapped there at 0. `have` false starts both on `animated`.
-void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, float headBob,
+void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, glm::vec3 headBob,
                                     float smoothing, float eyeSlack, float slackSeconds, float dt);
 // Armed Eye Offset (the body's frame: x right, y up, z forward) in model space, by how much of it applies at `pitchRadians`.
 glm::vec3 FirstPersonBodyArmedEyeOffset(const glm::vec3& offset, float pitchRadians);

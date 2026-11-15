@@ -88,6 +88,7 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
                                                           : opt.npcTestScenario == "blood" ? "tests/scenes/BloodTest.json"
                                                           : opt.npcTestScenario == "ragdoll" ? "tests/scenes/RagdollTest.json"
                                                           : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
+                                                          : opt.npcTestScenario == "labloco" ? "tests/scenes/LocomotionLab.json"
                                                           : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "tests/scenes/Apartment Hallway.json"
                                                           : opt.npcTestScenario == "locomotion" || opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" || opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" || opt.npcTestScenario == "spiderdoor" ? "tests/scenes/Apartment Hallway.json"
                                                                                        : "tests/scenes/Arena.json"));

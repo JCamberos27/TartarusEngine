@@ -232,7 +232,7 @@ glm::vec3 NpcBody::WeaponEye(const World& world, entt::entity armsRig, const std
     const glm::vec3 shouldersNow = glm::vec3(glm::inverse(rootW) * glm::vec4(0.5f * (sl + sr), 1.0f)); // model space
     const glm::vec3 toRest = shouldersNow - m_ShouldersAnimated;
     // (Past Eye Slack snapped back, where the player's camera eases back in.)
-    FirstPersonBodyFollowShoulders(m_ShouldersSlow, m_Shoulders, m_HaveShoulders, m_ShouldersAnimated, m_Set.HeadBob, m_Set.CameraSmoothing,
+    FirstPersonBodyFollowShoulders(m_ShouldersSlow, m_Shoulders, m_HaveShoulders, m_ShouldersAnimated, glm::vec3(m_Set.HeadBob), m_Set.CameraSmoothing,
                                    m_Set.EyeSlack, 0.0f, dt);
     // Armed Eye Offset: the rig's camera sits lower against its shoulders than an eye does; lifted back up looking level
     // (without it the gun rode ~10 cm low, into the chest, and a reload's keep-out shoved it down to the belt).
