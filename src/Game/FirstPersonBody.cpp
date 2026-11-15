@@ -344,6 +344,29 @@ bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees) {
     return thresholdDegrees > 0.0f && std::abs(offset) > glm::radians(thresholdDegrees);
 }
 
+void FirstPersonGaitPhase::Update(int downs, float dt) {
+    dt = std::max(dt, 0.0f);
+    SinceStep += dt;
+    if (downs) {
+        const float target = (downs & 1) ? 0.0f : 0.5f; // both at once (a landing): the left's
+        if (SinceStep > 0.15f && SinceStep < 1.2f) { // a step's worth since the last: the rate is a half cycle in that
+            const float r = 0.5f / SinceStep;
+            Rate = Locked && Rate > 0.0f ? Rate + (r - Rate) * 0.5f : r;
+        }
+        float e = target - (Phase + Error);
+        e -= std::floor(e + 0.5f); // (-0.5, 0.5]
+        Error += e;
+        SinceStep = 0.0f;
+        Locked = true;
+    }
+    if (SinceStep > 1.5f) { Locked = false; Rate = 0.0f; Error = 0.0f; }
+    // Taken up over about a sixth of a second, never faster than one and a half cycles a second on top of the rate.
+    const float take = std::clamp(Error * std::min(1.0f, dt * 6.0f), -1.5f * dt, 1.5f * dt);
+    Error -= take;
+    Phase += Rate * dt + take;
+    Phase -= std::floor(Phase);
+}
+
 float FirstPersonBodyClipSpeed(float speed, float playerRun, float playerSprint, float clipRun, float clipSprint) {
     speed = std::max(speed, 0.0f);
     playerRun = std::max(playerRun, 0.01f);
@@ -1235,6 +1258,19 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
     if(!player.Grounded)m_FallSpeed=std::max(0.0f,-player.Velocity.y);
     ac.SetFloat(FPBody::kLandImpact,m_FallSpeed);
+    // The gait's phase, from the feet's touch-downs (as the footsteps hear them).
+    {
+        float h[2];
+        int downs = 0;
+        if (player.Grounded && FootHeights(world, h)) {
+            static const FoleyAudioComponent kFoley{};
+            const float speed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
+            downs = m_GaitFeet.Update(h, dt, speed >= kFoley.MinStepSpeed ? kFoley.FootLiftMoving : kFoley.FootLiftHeight, kFoley.FootContactHeight);
+        } else {
+            m_GaitFeet.Reset();
+        }
+        m_Gait.Update(downs, dt);
+    }
 
     // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
     {

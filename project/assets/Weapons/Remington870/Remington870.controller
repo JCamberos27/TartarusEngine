@@ -1648,7 +1648,10 @@
             0.0
           ],
           "speed": 1.0,
-          "speedParam": "SprintRate"
+          "speedParam": "SprintRate",
+          "phaseParam": "GaitPhase",
+          "phaseOffset": 0.04,
+          "phaseCycles": 1.0
         },
         {
           "loop": false,
@@ -2169,7 +2172,10 @@
           "speedParam": "WalkRate",
           "tags": [
             "Ready"
-          ]
+          ],
+          "phaseParam": "GaitPhase",
+          "phaseOffset": 0.04,
+          "phaseCycles": 1.0
         },
         {
           "name": "Off",
@@ -2328,6 +2334,11 @@
       "default": 0.0,
       "name": "Jog",
       "type": "bool"
+    },
+    {
+      "default": -1.0,
+      "name": "GaitPhase",
+      "type": "float"
     }
   ],
   "tracks": [

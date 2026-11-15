@@ -182,6 +182,9 @@ public:
     void SetLocomotionSpeeds(float walk, float sprint) { m_WalkSpeed = walk; m_SprintSpeed = sprint; }
     // The player jogging (Shift held, moving): the arms take part of the run clip with the gun kept up (Tick).
     void SetJogging(bool jogging) { m_Jogging = jogging; }
+    // The body's gait phase (FirstPersonBody::GaitPhase): the weapon's walk / run sway and the bob follow the feet with it.
+    void SetGaitPhase(bool have, float phase) { m_HaveGait = have; m_GaitPhase = phase; }
+    bool HaveGaitPhase() const { return m_HaveGait; }
     // 0..1 how crouched the player is, for WeaponAimSettings::Crouch* (call before Tick; default 0).
     void SetCrouch(float crouch) { m_Crouch = crouch; }
     // Where the barrel points (world space): down the bore from the muzzle to the first surface.
@@ -436,6 +439,8 @@ private:
     float m_SinceShot = 1e3f;     // seconds since a round left
     float m_PlanarSpeed = 0.0f;   // the player's, from the last Tick
     bool m_Jogging = false;       // SetJogging
+    bool m_HaveGait = false;      // SetGaitPhase
+    float m_GaitPhase = 0.0f;
     float m_JogHold = 0.0f;       // s the jog arms stay off after a shot
     float m_JogWeight = 1.0f;     // the locomotion layer's weight, eased (kJogArms while its run clip plays at a jog)
     glm::vec3 m_Muzzle{0.0f}, m_BoreDir{0.0f, 0.0f, -1.0f}; // world, from the last PlaceRigs

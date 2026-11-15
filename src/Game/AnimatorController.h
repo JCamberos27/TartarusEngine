@@ -112,6 +112,13 @@ struct AnimatorController {
         enum class DistanceMode { Traveled = 0, Remaining = 1, Pivot = 2 };
         std::string DistanceParam;
         DistanceMode Distance = DistanceMode::Traveled;
+        // Phase matching (looping states): with PhaseParam set, the loop's time follows that Float parameter (a 0..1 cycle,
+        // e.g. the body's gait - 0 at a left foot plant, 0.5 at the right; negative = none, the clock runs it) instead of the clock: time = PhaseCycles x it +
+        // PhaseOffset (wrapped), so a weapon's walk sway dips on the footfalls whatever the pace. It never runs backwards
+        // by more than a sliver; entering the state it starts in step.
+        std::string PhaseParam;
+        float PhaseOffset = 0.0f;
+        float PhaseCycles = 1.0f;
         std::vector<std::string> Tags;
         std::vector<Event> Events;
         glm::vec2 Position{0.0f};    // Animator window graph position
@@ -258,6 +265,9 @@ float AnimatorDistanceToPhase(const std::vector<float>& curve, float turnaround,
 // 3x the clock's natural step `natural`; with `want` not ahead (no travel to match) the clock's own step. The first
 // frame in the state jumps straight to `want`.
 float AnimatorDistanceStep(float before, float want, float natural, bool first);
+// Phase matching's step for a loop: from `before` (passes, any size) to the nearest time whose fraction is want01, never back
+// by more than 0.05 of a pass; `first` jumps straight there.
+float AnimatorPhaseStep(float before, float want01, bool first);
 
 // Advances one component's state machines by `dt` without touching any model: transitions,
 // crossfade stacks, phases, events and the base-layer state fields. `stateLength(layer, state)`

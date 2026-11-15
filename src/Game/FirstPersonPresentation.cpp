@@ -2040,6 +2040,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
         m_JogHold = std::max(0.0f, m_JogHold - dt);
         const bool jog = m_Jogging && m_Equipped && !aiming && !ActionBlocksSprint() && m_JogHold <= 0.0f && planarSpeed > 0.5f;
         ac->SetBool(K::kJog, jog);
+        // The walk / run sway's clock: the body's feet (negative - none - leaves the clips on their own).
+        ac->SetFloat(K::kGaitPhase, m_HaveGait ? m_GaitPhase : -1.0f);
         bool runClip = false;
         if (m_Controller)
             for (size_t i = 0; i < m_Controller->Layers.size() && i < ac->Layers.size(); ++i) {
@@ -2138,6 +2140,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.Lean = m_Equipped ? std::clamp(lean + m_PeekLean, -1.0f, 1.0f) : 0.0f;
     in.WalkSpeed = m_WalkSpeed;
     in.SprintSpeed = m_SprintSpeed;
+    in.HaveGaitPhase = m_HaveGait;
+    in.GaitPhase = m_GaitPhase;
     in.StateName = &ac->StateName;
     in.StateTags = &ac->StateTags;
     const WeaponProceduralPose& pose = m_Procedural.Update(m_Set.Procedural, in);
