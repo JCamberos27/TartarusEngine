@@ -192,6 +192,11 @@
       "default": 1.0
     },
     {
+      "name": "StartOff",
+      "type": "bool",
+      "default": 0.0
+    },
+    {
       "name": "LandImpact",
       "type": "float",
       "default": 99.0
@@ -2795,6 +2800,96 @@
         },
         {
           "from": "Turn",
+          "to": "StartTurnL",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartTurn",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "StartTurnR",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "StartTurn",
+              "threshold": -0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "StartRun",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 1.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "Start",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "StartWalk",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
           "to": "Locomotion",
           "duration": 0.25,
           "conditions": [
@@ -3134,6 +3229,20 @@
         },
         {
           "from": "StartWalk",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
           "to": "Sprint",
           "duration": 0.3,
           "conditions": [
@@ -3269,6 +3378,20 @@
         },
         {
           "from": "Start",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
           "to": "Sprint",
           "duration": 0.3,
           "conditions": [
@@ -3404,6 +3527,20 @@
         },
         {
           "from": "StartRun",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
           "to": "Sprint",
           "duration": 0.3,
           "conditions": [
@@ -3539,6 +3676,20 @@
         },
         {
           "from": "StartTurnL",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
           "to": "Sprint",
           "duration": 0.3,
           "conditions": [
@@ -3666,6 +3817,20 @@
             {
               "mode": "ifNot",
               "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
               "threshold": 0.0
             }
           ],
@@ -4199,6 +4364,58 @@
         },
         {
           "from": "CrouchTurn",
+          "to": "CrouchStartTurnL",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartTurn",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchTurn",
+          "to": "CrouchStartTurnR",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "StartTurn",
+              "threshold": -0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchTurn",
+          "to": "CrouchStart",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchTurn",
           "to": "CrouchLoco",
           "duration": 0.25,
           "conditions": [
@@ -4350,6 +4567,20 @@
         {
           "from": "CrouchStart",
           "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "CrouchLoco",
           "duration": 0.25,
           "conditions": [],
           "hasExitTime": true,
@@ -4400,6 +4631,20 @@
         {
           "from": "CrouchStartTurnL",
           "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "CrouchLoco",
           "duration": 0.25,
           "conditions": [],
           "hasExitTime": true,
@@ -4441,6 +4686,20 @@
             {
               "mode": "ifNot",
               "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StartOff",
               "threshold": 0.0
             }
           ],

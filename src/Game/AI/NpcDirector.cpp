@@ -60,6 +60,7 @@ float WrapDeg(float a) {
 // The standing pace's ease up from a halt and down into a stop (s), as the player's Ground Accel / Decel Time; a stop ends this
 // short of its goal (m).
 constexpr float kStartTime = 0.12f, kStopTime = 0.15f, kArriveSlack = 0.05f;
+constexpr float kTravelTurnRate = 300.0f; // degrees/s the travel direction may swing standing (Move)
 
 float SpeedFor(Gait g, bool crouch) {
     if (crouch) return g == Gait::Still ? 0.0f : 1.4f; // the crouched walk clips' pace (1.355), as the player body's
@@ -378,6 +379,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
         m_HoldSettings.Spine = fpb.Spine; // per-bone spine weights and limits
         m_HoldSettings.FootSlide = IK::FootSlideFrom(fpb); // foot pinning and stride warping
+        m_HoldSettings.FootLock = IK::FootLockFrom(fpb);   // planted feet held in the world
     }
     m_Active = true;
     m_Started = false;
@@ -1330,6 +1332,16 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
         const glm::vec3 flatVel(n.Velocity.x, 0.0f, n.Velocity.z);
         const float cur = glm::length(flatVel), crowd = glm::length(want);
         glm::vec3 dir = crowd > 0.05f ? want / crowd : cur > 0.05f ? flatVel / cur : glm::vec3(0.0f);
+        // On the move the way it goes swings round at a body's pace, not in a frame (a path corner, the crowd's arrival
+        // shuffle): the legs can't follow a snap, and the planted feet skated with it.
+        if (cur > 0.3f && glm::dot(dir, dir) > 0.25f) {
+            const glm::vec3 was = flatVel / cur;
+            const float turn = std::atan2(was.x * dir.z - was.z * dir.x, glm::dot(was, dir)), most = glm::radians(kTravelTurnRate) * dt;
+            if (std::abs(turn) > most) {
+                const float a = std::copysign(most, turn), c = std::cos(a), s = std::sin(a);
+                dir = glm::vec3(was.x * c - was.z * s, 0.0f, was.x * s + was.z * c);
+            }
+        }
         float target = n.Intent.Move && crowd > 0.05f ? n.PaceSpeed : 0.0f;
         bool braking = target <= 0.0f;
         if (target > 0.0f && n.Agent >= 0) {
@@ -1663,6 +1675,7 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         SubTimer timer(*this, SubBody);
         n.Body.LateUpdate(world, dt, armed ? &n.WeaponCam : nullptr);
     }
+    if (glm::vec3 feet[2]; IK::FootSlideMeterOn() && n.Body.FootWorld(feet)) IK::FootSlideMeterFor(n.Name).Step(feet, n.Feet.y, dt);
     n.Eye = n.Body.Eye();
     if (!armed) {
         n.Body.HoldWeapon(world, entt::null, entt::null, nullptr, n.WeaponCam, dt, false);

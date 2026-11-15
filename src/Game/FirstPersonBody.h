@@ -291,9 +291,9 @@ private:
     glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity (foot slide correction)
     IK::FootSlide m_Slide;                      // foot pinning + stride warping (off by default)
     IK::FootSlideOutput m_AppliedSlide;
-    bool m_FootPlanted[2] = {false, false};     // foot lock: pinned in the world while planted
-    glm::vec3 m_FootLock[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
-    float m_FootLockWeight[2] = {0.0f, 0.0f};
+    IK::FootLock m_Lock;                        // planted feet held in the world
+    std::string m_LastState;                    // the driver's state last frame
+    bool m_TurnFade = false;                    // a turn on the spot fading back to its loop (a start may cut in)
     float m_FootYaw = 0.0f;
     float m_FootOffset[2] = {0.0f, 0.0f};                 // ground under each foot minus the capsule's, smoothed
     glm::vec3 m_FootNormal[2] = {glm::vec3(0, 1, 0), glm::vec3(0, 1, 0)};

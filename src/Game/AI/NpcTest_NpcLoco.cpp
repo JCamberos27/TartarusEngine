@@ -6,6 +6,7 @@
 #include "NpcTest.h"
 #include "NpcDirector.h"
 #include "Player.h"
+#include "IK.h"
 #include "PhysicsWorld.h"
 #include <algorithm>
 #include <cmath>
@@ -90,6 +91,8 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
         return;
     }
     Npc& n = *probe;
+    IK::SetFootSlideMeterOn(true);
+    if (m_SlideBodies.empty()) m_SlideBodies.push_back(n.Name);
     const NLeg& L = kNLegs[m_NLLeg];
     const glm::vec3 to(L.To.x, n.Feet.y, L.To.z);
     const bool there = Flat(n.Feet, to) < 0.35f;
@@ -119,6 +122,7 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
         g_LastState = state;
     }
     if ((m_NLArrived >= 0.0f && now - m_NLArrived >= L.Hold) || legTime > 12.0f) {
+        SlideLeg(L.Name);
         ++m_NLLeg;
         m_NLStart = now;
         m_NLArrived = -1.0f;

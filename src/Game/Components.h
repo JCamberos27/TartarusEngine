@@ -830,7 +830,13 @@ struct FirstPersonBodyComponent {
     float StopDebounce = 0.05f; // Stop Debounce
     float StopRunForward = 0.7f; // Stop Run Forward
     float AirborneDelay = 0.15f; // Airborne Delay
-    float FootLockDrift = 0.12f; // Foot Lock Drift
+    // Foot lock (IK::FootLock): a planted foot held in the world; the player body and the soldiers
+    bool FootLockEnabled = true; // Foot Lock
+    float FootLockHeight = 0.02f; // Foot Lock Height (m over the foot's lowest)
+    float FootLockLift = 0.045f; // Foot Lock Lift (m over the foot's lowest: lets go)
+    float FootLockSpeed = 1.0f; // Foot Lock Speed (m/s the animated foot may move and still plant)
+    float FootLockDrift = 0.25f; // Foot Lock Drift (m the animation may wander before the foot lets go)
+    float FootLockRelease = 0.2f; // Foot Lock Release (s a let-go foot takes to catch up)
     float FootPlantedHeight = 0.05f; // Foot Planted Height
     float FootRayUp = 0.5f; // Foot Ray Up
     float FootRayLength = 1.0f; // Foot Ray Length
@@ -840,8 +846,6 @@ struct FirstPersonBodyComponent {
     float FootNormalEase = 0.08f; // Foot Normal Ease
     float FootIKFade = 0.1f; // Foot IK Fade
     float FootTiltMax = 25.0f; // Foot Tilt Max
-    float FootLockEaseIn = 0.04f; // Foot Lock Ease In
-    float FootLockEaseOut = 0.08f; // Foot Lock Ease Out
     float StairEase = 0.2f; // Stair Ease
     // --- Arm IK (Player body: elbow tracking and clearance) ---
     float ElbowEase = 0.06f; // Elbow Ease

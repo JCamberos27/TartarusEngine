@@ -159,6 +159,8 @@ public:
 
 private:
     void Check(bool ok, const std::string& what);
+    // The foot slide meters' totals since the last call, one line a body ("[Slide] <leg> ..."), then cleared.
+    void SlideLeg(const std::string& leg);
     void PrintCosts(const NpcDirector& npcs) const;
     void Pose(World& world, NpcDirector& npcs, float now);
     void Deaths(World& world, NpcDirector& npcs, float now);
@@ -282,6 +284,7 @@ private:
     void LabLoco(World& world, NpcDirector& npcs, const Player& player, float now);
     bool m_LabPlaced = false;
     float m_LabClock = 0.0f;
+    std::vector<std::string> m_SlideBodies; // the NPCs SlideLeg reports on
     int m_LabFrame = 0;
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {

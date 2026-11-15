@@ -1,4 +1,5 @@
 #include "NpcTest.h"
+#include "IK.h"
 #include "World.h"
 
 #include "Combat/CombatFx.h"
@@ -131,6 +132,17 @@ void NpcTest::PrintCosts(const NpcDirector& npcs) const {
                 t.Max, l.Avg(), l.Max, t.Avg() + l.Avg());
     for (int i = 0; i < NpcDirector::SubCount; ++i)
         std::printf("[NpcTest]   %-12s avg %.3f  max %.3f\n", NpcDirector::SubName(i), npcs.SubCost(i).Avg(), npcs.SubCost(i).Max);
+}
+
+void NpcTest::SlideLeg(const std::string& leg) {
+    static const char* const kWho[] = {"player"};
+    std::vector<std::string> who(std::begin(kWho), std::end(kWho));
+    for (const std::string& n : m_SlideBodies) who.push_back(n);
+    for (const std::string& n : who) {
+        const IK::FootSlideMeterTotals t = IK::FootSlideMeterFor(n).TakeTotals();
+        if (t.Plants == 0) continue;
+        std::printf("[Slide] %-26s %-10s %2d plants, drift mean %4.1f cm, worst %5.1f cm\n", leg.c_str(), n.c_str(), t.Plants, t.MeanCm(), t.MaxDrift * 100.0f);
+    }
 }
 
 void NpcTest::Check(bool ok, const std::string& what) {

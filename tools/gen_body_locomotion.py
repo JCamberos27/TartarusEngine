@@ -45,6 +45,9 @@ for n, k, d in [
         # Idle variety: which fidget (an index into the Fidget / CrouchFidget trees).
         ('Fidget', 'trigger', 0), ('FidgetIndex', 'float', 0),
         ('SprintRate', 'float', 1),
+        # The travel has swung well off the way a start pushes off (the path bent, the input turned): the start gives
+        # way to the gait loop, whose blend follows any direction, instead of walking its feet off the capsule's line.
+        ('StartOff', 'bool', 0),
         # m/s the body was falling at when it touched down (held until the next fall). Under HEAVY_LAND the
         # landing is light: straight back to the gait, the camera dip and the gun's kick carry the weight; at or
         # over it the recovery clip plays. Default high, so a driver that never sets it always plays the clip.
@@ -254,6 +257,9 @@ def pivots(src, crouched):
 
 # Standing gait.
 go('Locomotion', 'Turn', 0.15, [cond('Turning', IF)])
+# Moving off part way round a turn on the spot: a start (a turning one for what is left of the turn), not the loop
+# fading up from a stand while the capsule is already going.
+starts('Turn', False)
 go('Turn', 'Locomotion', 0.25, [cond('Turning', NOT)])
 starts('Locomotion', False)
 stops('Locomotion', False)
@@ -268,6 +274,7 @@ for s in ('StartWalk', 'Start', 'StartRun', 'StartTurnL', 'StartTurnR'):
     stops(s, False)
     pivots(s, False)
     go(s, 'Locomotion', 0.15, [cond('Moving', NOT)])
+    go(s, 'Locomotion', 0.2, [cond('StartOff', IF)])
     go(s, 'Sprint', 0.3, [cond('Sprint', IF), cond('MoveY', 'greater', 3.9)], exit_time=0.5)
     go(s, 'Locomotion', 0.25, exit_time=0.62 if 'Turn' in s else 0.5)
 # A stop gives way to moving again at once (the input leads); else it settles into the idle.
@@ -292,6 +299,7 @@ go('Fidget', 'Locomotion', 0.45, exit_time=0.9)
 
 # Crouched gait.
 go('CrouchLoco', 'CrouchTurn', 0.15, [cond('Turning', IF)])
+starts('CrouchTurn', True)
 go('CrouchTurn', 'CrouchLoco', 0.25, [cond('Turning', NOT)])
 starts('CrouchLoco', True)
 stops('CrouchLoco', True)
@@ -301,6 +309,7 @@ for s in ('CrouchStart', 'CrouchStartTurnL', 'CrouchStartTurnR'):
     stops(s, True)
     pivots(s, True)
     go(s, 'CrouchLoco', 0.15, [cond('Moving', NOT)])
+    go(s, 'CrouchLoco', 0.2, [cond('StartOff', IF)])
     go(s, 'CrouchLoco', 0.25, exit_time=0.62 if 'Turn' in s else 0.45)
 go('CrouchStop', 'CrouchLoco', 0.2, [cond('Moving', IF)])
 go('CrouchStop', 'CrouchLoco', 0.3, exit_time=0.92)

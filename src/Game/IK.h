@@ -222,11 +222,83 @@ private:
     glm::vec3 m_PlantStart[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     float m_Slide[2] = {0.0f, 0.0f};
 };
+// ---- foot locking ----
+// A planted foot stays where it landed in the world, whatever the clips and the capsule disagree on (a blend's stride
+// against the capsule's speed, a body turning on the spot, a start or stop's travel, a crossfade between two gaits).
+// A foot plants when it is down - within Height of its own lowest point - and its animated foot barely moves over the
+// ground (under Speed m/s: a swinging foot passing low never plants). It lets go when it lifts, or when the animation has
+// wandered MaxDrift metres from it; the lag it built up is then eased out over Release seconds (smoothstep), so the
+// foot catches up through its swing instead of popping. The same lock runs on the player's body and on the soldiers.
+struct FootLockSettings {
+    bool Enabled = true;
+    float Height = 0.02f;   // m over the foot's own lowest height that still counts as down
+    float Lift = 0.045f;    // m over it that lets go (the heel rolling up onto the toe stays planted under this)
+    float Speed = 1.0f;     // m/s the animated foot may move over the ground and still plant
+    float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go
+    float Release = 0.2f;   // s a released foot takes to catch up with the animation
+};
+FootLockSettings FootLockFrom(const FirstPersonBodyComponent& body);
+class FootLock {
+public:
+    void Reset() { *this = FootLock{}; }
+    void ResetFoot(int s) { m_Foot[s] = Foot{}; }
+    // One foot, one frame. `anim`: the animated foot (world). `height`: its height over the capsule's ground (m). Returns
+    // the horizontal world offset that puts the foot where it should be drawn (zero for a free foot).
+    glm::vec3 Step(int s, const FootLockSettings& set, const glm::vec3& anim, float height, float dt);
+    bool Locked(int s) const { return m_Foot[s].Locked; }
+    glm::vec3 Pinned(int s) const { return m_Foot[s].Pin; }
+    float LockedTime(int s) const { return m_Foot[s].Time; }
+    glm::vec3 Offset(int s) const { return m_Foot[s].Offset; }
+private:
+    struct Foot {
+        bool Have = false, Locked = false;
+        glm::vec3 Prev{0.0f};      // last frame's animated foot
+        float Floor = 0.0f;        // its lowest height (creeping up)
+        glm::vec3 Pin{0.0f};       // where a locked foot is held
+        glm::vec3 Offset{0.0f};    // what is applied (horizontal)
+        glm::vec3 ReleaseFrom{0.0f};
+        float ReleaseTime = 1e9f;  // seconds since the last let-go
+        float Time = 0.0f;         // seconds locked
+    };
+    Foot m_Foot[2];
+};
+
 FootSlideSettings FootSlideFrom(const FirstPersonBodyComponent& body);
 // The measurement hook for --npc-test: TARTARUS_FOOT_SLIDE_PROBE=0 logs the planted feet's drift with the layers as
 // the scene sets them, =1 also forces both layers on at weight 1 (for the before / after); unset = off (-1).
 int FootSlideProbeMode();
 // Adds `stats` to the running window of `who` and prints it (mean / max drift per plant, cm) every 1.5 s of wall time.
 void FootSlideProbeLog(const char* who, FootSlideStats& stats, float speed, float clipSpeed, float scale);
+
+// The foot slide the eye sees: each frame the FINAL feet (after every IK pass, in the world) are watched; a foot within
+// ContactHeight of its own lowest height is on the ground, and every centimetre it moves sideways while there is slide.
+// Unlike FootSlideStats it runs in every state - turns on the spot, starts, stops, crossfades - and never changes the pose.
+struct FootSlideMeterTotals {
+    int Plants = 0;             // contacts that lasted 0.1 s or more
+    float SumDrift = 0.0f;      // metres: each plant's furthest drift from where it settled, summed
+    float MaxDrift = 0.0f;      // metres: the worst plant's
+    float ContactTime = 0.0f;   // seconds of foot-on-ground (both feet summed)
+    float MeanCm() const { return Plants ? SumDrift * 100.0f / (float)Plants : 0.0f; }
+};
+class FootSlideMeter {
+public:
+    float ContactHeight = 0.015f; // m over the foot's own lowest height
+    // `ground`: the capsule's feet height (world y). `foot`: each final foot bone (world).
+    void Step(const glm::vec3 (&foot)[2], float ground, float dt);
+    void Reset() { *this = FootSlideMeter{}; }
+    FootSlideMeterTotals Total; // since the last TakeTotals
+    FootSlideMeterTotals TakeTotals() { FootSlideMeterTotals t = Total; Total = {}; return t; }
+private:
+    bool m_Have = false;
+    float m_Floor[2] = {0.0f, 0.0f};
+    int m_Frames[2] = {0, 0};      // frames on the ground this contact
+    float m_Time[2] = {0.0f, 0.0f};
+    glm::vec2 m_Start[2] = {glm::vec2(0.0f), glm::vec2(0.0f)};
+    float m_Drift[2] = {0.0f, 0.0f};
+};
+// The meters the --npc-test scenarios read (one per body: "player", or an NPC's name). Only fed while a test asks for them.
+bool FootSlideMeterOn();
+void SetFootSlideMeterOn(bool on);
+FootSlideMeter& FootSlideMeterFor(const std::string& who);
 
 } // namespace IK

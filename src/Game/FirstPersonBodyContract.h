@@ -57,6 +57,7 @@ inline constexpr const char* kStepY = "StepY";
 inline constexpr const char* kFidget = "Fidget";                   // Trigger: an idle fidget
 inline constexpr const char* kFidgetIndex = "FidgetIndex";         // Float: which (an integer)
 inline constexpr const char* kSprintRate = "SprintRate";           // Float: the sprint loop's play rate
+inline constexpr const char* kStartOff = "StartOff";               // Bool: the travel swung off the start's push-off (to the loop)
 inline constexpr const char* kLandImpact = "LandImpact";           // Float: m/s fallen at the last touch-down (light vs heavy land)
 inline constexpr float kSprintClipSpeed = 4.25f;                   // m/s the sprint clip (AM_Loco_Run_Fast_01) travels
 // Optional: how much faster than authored the gait plays (the Locomotion state's speed parameter), so the
@@ -70,6 +71,10 @@ inline constexpr const char* kStateFall = "Fall";
 inline constexpr const char* kStateLand = "Land";
 inline constexpr const char* kStateTurn = "Turn";
 inline constexpr const char* kStateCrouchTurn = "CrouchTurn";
+// A turn on the spot fading back into its loop: a start may cut in (the loop's idle under the fade is no pose to keep).
+inline bool TurnFadeToLoop(const std::string& from, const std::string& to) {
+    return (from == kStateTurn || from == kStateCrouchTurn) && (to == kStateLocomotion || to == "CrouchLoco");
+}
 inline constexpr const char* kStateStart = "Start";
 inline constexpr const char* kStateStop = "Stop";
 inline constexpr const char* kStateStopRun = "StopRun";

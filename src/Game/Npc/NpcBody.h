@@ -84,6 +84,7 @@ struct NpcHoldSettings {
     float FootNormalEase = 0.08f;    // seconds: ground normal easing
     float FootIKFade = 0.15f;        // seconds: foot IK enable/disable easing
     IK::FootSlideSettings FootSlide; // foot pinning + stride warping (off by default; the player body's settings)
+    IK::FootLockSettings FootLock;   // planted feet held in the world (the player body's settings)
 };
 
 struct NpcBodyInput {
@@ -152,6 +153,7 @@ public:
     // Each foot's height above the capsule's feet as last posed (m; [0] left, [1] right), for the footsteps. False when
     // the driver has no foot bones.
     bool FootHeights(float (&out)[2]) const;
+    bool FootWorld(glm::vec3 (&out)[2]) const; // each final foot bone, world (after the foot passes)
     bool Sprinting() const { return m_In.Sprint; } // this frame's gait (NpcBodyInput::Sprint)
     // Wounded and going down (ProneDrop / InjuredDrop): how far the collapse's clip carried him last frame (world, m), which the
     // capsule takes so he falls forward as captured rather than straight down on the spot.
@@ -227,6 +229,12 @@ private:
     float m_StillTime = 0.0f;
     // Starts, stops, fidgets and the gait's rate trim (Tick).
     float m_RateTrim = 1.0f, m_StartDistance = 0.0f, m_MoveFor = 0.0f, m_FidgetNext = 0.0f;
+    // Orientation warp (FootPass): radians the legs are turned so the clips' travel runs along the capsule's; the spine
+    // turns back by as much, so the chest and the aim never see it. The two travels, smoothed over a stride, in the body's frame.
+    float m_Warp = 0.0f;
+    std::string m_LastState; // the animator's state last frame
+    bool m_TurnFade = false; // a turn on the spot fading back to its loop (a start may cut in)
+    glm::vec2 m_WarpClip{0.0f}, m_WarpCapsule{0.0f};
     glm::vec2 m_LastDir{0.0f, 1.0f};
     Gameplay::BodyMotionFrame m_Loco{}; // standing: the player body's locomotion state (BodyLocomotion), kept frame to frame
     float m_FallSpeed = 0.0f;           // m/s down at the last airborne frame: the next landing's impact
@@ -295,6 +303,7 @@ private:
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
     IK::FootSlide m_Slide;
+    IK::FootLock m_Lock;
     float m_FootWeight = 0.0f, m_FootOffset[2] = {0.0f, 0.0f};
     glm::vec3 m_FootNormal[2] = {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
     bool m_HaveFootGround = false;

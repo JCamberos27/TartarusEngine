@@ -2145,7 +2145,7 @@ void TestFirstPersonBodyController() {
     const std::vector<std::string> roles = FPBody::LocomotionRoles();
     CHECK(roles.size() > 40 && std::find(roles.begin(), roles.end(), std::string("Loco_Walk_Fwd")) != roles.end());
     AnimatorController c = FPBody::BuildLocomotionController([](const std::string& r) { return "clips/AM_" + r + ".fbx"; });
-    CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 39 && c.Layers[0].Transitions.size() == 213);
+    CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 40 && c.Layers[0].Transitions.size() == 229);
     // Landings: a light one (LandImpact under 7 m/s) goes straight back to the gait, ahead of the heavy recovery clip;
     // unset (the 99 default) it is always heavy.
     for (const char* from : {"Fall", "Jump"}) {
@@ -2199,7 +2199,7 @@ void TestFirstPersonBodyController() {
     // Round trip through the file format, then the checks: nothing to report.
     AnimatorController back;
     CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
-    CHECK(back.Layers[0].Transitions.size() == 213 &&
+    CHECK(back.Layers[0].Transitions.size() == 229 &&
           back.Layers[0].States[back.Layers[0].FindState("Stop")].Distance == DM::Remaining);
     int problems = 0;
     for (const auto& i : AnimatorLint::Check(c)) problems += i.Severity != AnimatorLint::Level::Info;
@@ -2442,7 +2442,7 @@ void TestFirstPersonBodyTuning() {
           near(body.TurnTimeout, 4.0f) && near(body.TurnMoveEase, 0.08f));
     CHECK(near(body.StartIdleTime, 0.25f) && near(body.StartMaxMove, 0.6f) && near(body.StopMinRunTime, 0.6f) && near(body.StopMinRunTimeCrouched, 0.7f) &&
           near(body.StopMinSpeed, 1.2f) && near(body.StopMinSpeedCrouched, 0.6f) && near(body.StopDebounce, 0.05f) && near(body.StopRunForward, 0.7f));
-    CHECK(near(body.FootLockDrift, 0.12f) && near(body.FootPlantedHeight, 0.05f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
+    CHECK(near(body.FootLockDrift, 0.25f) && body.FootLockEnabled && near(body.FootLockRelease, 0.2f) && near(body.FootPlantedHeight, 0.05f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
           near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) &&
           near(body.StairEase, 0.2f) && near(body.AirborneDelay, 0.15f));
     CHECK(near(ctrl.JumpBufferTime, 0.12f) && near(ctrl.CoyoteTime, 0.10f));

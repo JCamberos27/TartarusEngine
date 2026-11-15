@@ -1029,8 +1029,23 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Airborne Delay", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, AirborneDelay), 0.01f,
               "Seconds off the ground before the controller's Airborne parameter is set (a step down a stair isn't a fall).", 0.0f, 1.0f });
         m.Fields.back().Group = "Locomotion (advanced)";
+        m.Fields.push_back({ "Foot Lock", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockEnabled), 0.0f,
+              "A planted foot is held where it landed in the world (the player body and the soldiers), so the feet never skate when the clips and the capsule disagree - in a turn on the spot, a start or a stop as well as the walk.", 0.0f, 0.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Lock Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockHeight), 0.002f,
+              "A foot plants once it is within this (metres) of its own lowest point...", 0.0f, 0.2f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Lock Lift", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockLift), 0.002f,
+              "... and lets go once it rises this far (metres) over it (the heel rolling up onto the toe stays planted under this).", 0.0f, 0.3f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Lock Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockSpeed), 0.05f,
+              "A foot only plants while its animation moves over the ground slower than this (m/s): a swinging foot passing low never does.", 0.0f, 5.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Foot Lock Drift", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockDrift), 0.005f,
-              "A planted foot is pinned where it landed; if the animation and the capsule's travel drift this far apart (metres) it plants again where the animation is.", 0.01f, 1.0f });
+              "A planted foot lets go when the animation has wandered this far (metres) from it; it then catches up over Foot Lock Release.", 0.01f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Lock Release", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockRelease), 0.005f,
+              "Seconds a let-go foot takes to catch up with its animation (eased, so it never pops).", 0.005f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Foot Planted Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPlantedHeight), 0.005f,
               "The animated foot counts as planted (pinned to the ground) while it is lower than this (metres).", 0.0f, 0.3f });
@@ -1058,12 +1073,6 @@ void RegisterEngineComponents() {
         m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Foot Tilt Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootTiltMax), 1.0f,
               "The most (degrees) a planted foot tilts to lie on a slope.", 0.0f, 60.0f });
-        m.Fields.back().Group = "Foot IK (advanced)";
-        m.Fields.push_back({ "Foot Lock Ease In", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockEaseIn), 0.005f,
-              "Seconds a foot takes to be pinned once it is planted.", 0.005f, 1.0f });
-        m.Fields.back().Group = "Foot IK (advanced)";
-        m.Fields.push_back({ "Foot Lock Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockEaseOut), 0.005f,
-              "Seconds a foot takes to be released once it lifts.", 0.005f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Stair Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairEase), 0.005f,
               "How softly (seconds) the body - and the camera on it - takes stairs: it follows the ground's ramp under the travel, and its hips the lower foot, on a smooth spring (0.03 s when Foot IK is off).", 0.005f, 1.0f });

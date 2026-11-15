@@ -1229,7 +1229,10 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // Mid-crossfade (crouching on the move, a stop easing out) nothing new starts on top, nor does one still pending from
     // the frame the fade began: the fade would be cut short and the view jolt with it (a crouch into a crouched start
     // dropped the eye 33 cm in 0.08 s). The loop picks up the move.
-    if(ac.InTransition){f.Triggers&=~(Gameplay::kBodyStart|Gameplay::kBodyPivot|Gameplay::kBodyFidget);for(const char* t:{FPBody::kStart,FPBody::kPivot,FPBody::kFidget})ac.ResetTrigger(t);}
+    // (Not a turn on the spot fading back to the loop: moving off then is a start, else the loop fades up behind the capsule.)
+    if(ac.StateName!=m_LastState){m_TurnFade=ac.InTransition&&FPBody::TurnFadeToLoop(m_LastState,ac.StateName);m_LastState=ac.StateName;}
+    if(!ac.InTransition)m_TurnFade=false;
+    if(ac.InTransition&&!m_TurnFade){f.Triggers&=~(Gameplay::kBodyStart|Gameplay::kBodyPivot|Gameplay::kBodyFidget);for(const char* t:{FPBody::kStart,FPBody::kPivot,FPBody::kFidget})ac.ResetTrigger(t);}
     m_Loco.StartDistance=f.StartDistance;m_Loco.PivotDistance=f.PivotDistance;m_Loco.PivotTravel=f.PivotTravel;m_Loco.MoveDistance=f.MoveDistance;
     m_Loco.FidgetTime=f.FidgetTime;m_Loco.FidgetNext=f.FidgetNext;m_Loco.FidgetIndex=f.FidgetIndex;
     m_Loco.StartGait=f.StartGait;m_Loco.StopGait=f.StopGait;m_Loco.PivotGait=f.PivotGait;m_Loco.StartTurn=f.StartTurn;m_Loco.StartTurnAmount=f.StartTurnAmount;
@@ -1268,7 +1271,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         m_RateTrim += (trim - m_RateTrim) * Follow(dt, 0.15f);
         ac.SetFloat(FPBody::kPlayRate, f.PlayRate * m_RateTrim);
     }
-    ac.SetFloat(FPBody::kStartDistance,f.StartDistance);ac.SetFloat(FPBody::kStopDistance,f.StopDistance);ac.SetFloat(FPBody::kPivotDistance,f.PivotDistance);ac.SetFloat(FPBody::kSprintRate,f.SprintRate);
+    ac.SetFloat(FPBody::kStartDistance,f.StartDistance);ac.SetFloat(FPBody::kStopDistance,f.StopDistance);ac.SetFloat(FPBody::kPivotDistance,f.PivotDistance);ac.SetFloat(FPBody::kSprintRate,f.SprintRate);ac.SetBool(FPBody::kStartOff,f.StartOff!=0);
     const char* triggers[]{FPBody::kCrouchDown,FPBody::kCrouchUp,FPBody::kStart,FPBody::kStop,FPBody::kStopRun,FPBody::kJump,FPBody::kPivot,FPBody::kStep,FPBody::kFidget};for(int i=0;i<9;++i)if(f.Triggers&(1<<i))fireTrigger(ac,triggers[i]);
     ac.SetFloat(FPBody::kMoveX,m_Move.x);ac.SetFloat(FPBody::kMoveY,m_Move.y);ac.SetFloat(FPBody::kSpeed,glm::length(m_Move));ac.SetBool(FPBody::kSprint,f.Sprint!=0);ac.SetBool(FPBody::kGrounded,player.Grounded);ac.SetBool(FPBody::kCrouched,player.Crouched);ac.SetBool(FPBody::kAirborne,f.Airborne!=0);
     // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
@@ -1349,6 +1352,17 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     {
     PROFILE_SCOPE("FPB foot IK");
     ApplyFootIK(world, cfg, dt); // the pelvis and legs first: everything after reads the final pose
+    }
+    if (IK::FootSlideMeterOn()) { // the feet as drawn (a visible piece that has them), for the --npc-test slide meter
+        const float scale = std::max(reg.get<TransformComponent>(m_Body).Scale.y, 1e-3f);
+        for (const auto& mp : m_Models) {
+            glm::mat4 n0(1.0f), n1(1.0f);
+            if (!mp || !mp->NodeTransform(Bone(FPBody::kBoneFoot[0]), n0) || !mp->NodeTransform(Bone(FPBody::kBoneFoot[1]), n1)) continue;
+            const glm::quat yaw = YawRotation(m_Yaw);
+            const glm::vec3 feet[2] = {m_Feet + yaw * (scale * glm::vec3(n0[3])), m_Feet + yaw * (scale * glm::vec3(n1[3]))};
+            IK::FootSlideMeterFor("player").Step(feet, m_Feet.y, dt);
+            break;
+        }
     }
     PROFILE_SCOPE("FPB spine + shoulders");
 
@@ -1713,8 +1727,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     if (m_FootWeight < 1e-3f) {
         m_HaveFootGround = false;
         m_HaveFoot = false;
-        m_FootPlanted[0] = m_FootPlanted[1] = false;
-        m_FootLockWeight[0] = m_FootLockWeight[1] = 0.0f;
+        m_Lock.Reset();
         m_Slide.Reset();
         m_AppliedSlide={};
         return;
@@ -1745,7 +1758,6 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     if (!correctStride) {
         m_Slide.Reset();
         slideSet.PinEnabled=slideSet.StrideEnabled=false;
-        m_FootPlanted[0]=m_FootPlanted[1]=false;
     }
     const int probe = IK::FootSlideProbeMode();
     if (probe == 1 && correctStride) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
@@ -1772,27 +1784,20 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     }
     m_AppliedSlide=IK::SmoothFootSlideOutput(m_AppliedSlide,slide,dt,correctStride?0.03f:cfg.FootPinRelease);
     slide=m_AppliedSlide;
-    glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> pinned foot
-    // No pinning while the body turns on the spot (the feet must step) or the heading swings.
+    glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> where it is drawn
+    // Foot lock: a planted foot stays where it landed in the world - walking, turning on the spot, starting and stopping
+    // alike - and catches up through its swing once it lifts (IK::FootLock). The pin, when on, has already held it.
+    IK::FootLockSettings lockSet = IK::FootLockFrom(cfg);
+    if (slideSet.PinEnabled) lockSet.Enabled = false;
     for (int s = 0; s < 2; ++s) {
         const glm::vec3 footWorld = footAnim[s] + slide.Shift[s]; // the stride-warped foot (pinned, below, when the pin is on)
         animHeight[s] = footWorld.y - m_Feet.y;
-        // Foot lock: a planted foot stays where it landed instead of sliding when the animation and the
-        // capsule's travel disagree a little; it lets go when the foot lifts or the mismatch gets big.
-        const bool planted = animHeight[s] < cfg.FootPlantedHeight && correctStride && !slideSet.PinEnabled; // the pin replaces the plain lock
-        if (planted) {
-            if (!m_FootPlanted[s]) { m_FootPlanted[s] = true; m_FootLock[s] = footWorld; }
-            const glm::vec3 drift(footWorld.x - m_FootLock[s].x, 0.0f, footWorld.z - m_FootLock[s].z);
-            if (glm::dot(drift, drift) > cfg.FootLockDrift * cfg.FootLockDrift) m_FootLock[s] = footWorld; // too far: plant again here
-        } else {
-            m_FootPlanted[s] = false;
-        }
-        m_FootLockWeight[s] += ((m_FootPlanted[s] ? 1.0f : 0.0f) - m_FootLockWeight[s]) * Follow(dt, m_FootPlanted[s] ? cfg.FootLockEaseIn : cfg.FootLockEaseOut);
-        lockShift[s] = glm::vec3(m_FootLock[s].x - footWorld.x, 0.0f, m_FootLock[s].z - footWorld.z) * (m_FootLockWeight[s] * m_FootWeight) +
-                       slide.Shift[s] * m_FootWeight;
+        const glm::vec3 held = m_Lock.Step(s, lockSet, footWorld, animHeight[s], dt);
+        lockShift[s] = (held + slide.Shift[s]) * m_FootWeight;
+        const glm::vec3 drawn = footWorld + held; // the ground is read under the foot as drawn
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
-        const float origin[3] = {footWorld.x, footWorld.y + cfg.FootRayUp, footWorld.z};
+        const float origin[3] = {drawn.x, drawn.y + cfg.FootRayUp, drawn.z};
         const float down[3] = {0.0f, -1.0f, 0.0f};
         QueryFilter filter;
         filter.HitTriggers = 0;
@@ -1808,8 +1813,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             const glm::vec3 to = rayHit ? glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]) : from + glm::vec3(0.0f, -cfg.FootRayLength, 0.0f);
             BodyDebug::Line(from, to, rayHit ? glm::vec4(0.3f, 1.0f, 0.4f, 1.0f) : glm::vec4(1.0f, 0.3f, 0.3f, 1.0f)); // the ground ray
             if (rayHit) BodyDebug::Cross(to, 0.04f, glm::vec4(0.3f, 1.0f, 0.4f, 1.0f));
-            BodyDebug::Cross(footWorld, 0.05f, m_FootPlanted[s] ? glm::vec4(0.3f, 1.0f, 0.4f, 1.0f) : glm::vec4(1.0f, 0.4f, 0.3f, 1.0f)); // the animated foot: green planted
-            if (m_FootPlanted[s]) BodyDebug::Cross(m_FootLock[s], 0.03f, glm::vec4(0.3f, 0.9f, 1.0f, 1.0f));                            // where it is pinned
+            BodyDebug::Cross(footWorld, 0.05f, m_Lock.Locked(s) ? glm::vec4(0.3f, 1.0f, 0.4f, 1.0f) : glm::vec4(1.0f, 0.4f, 0.3f, 1.0f)); // the animated foot: green planted
+            if (m_Lock.Locked(s)) BodyDebug::Cross(m_Lock.Pinned(s), 0.03f, glm::vec4(0.3f, 0.9f, 1.0f, 1.0f));                         // where it is held
         }
         if (!m_HaveFoot) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; }
         m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, cfg.FootOffsetEase);
@@ -1819,7 +1824,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     {
         BodyDebug::Snapshot& d = BodyDebug::Info();
         d.FootWeight = m_FootWeight;
-        for (int s = 0; s < 2; ++s) { d.FootOffset[s] = m_FootOffset[s]; d.FootPlanted[s] = m_FootPlanted[s]; d.FootLock[s] = m_FootLockWeight[s]; }
+        for (int s = 0; s < 2; ++s) { d.FootOffset[s] = m_FootOffset[s]; d.FootPlanted[s] = m_Lock.Locked(s); d.FootLock[s] = m_Lock.Locked(s) ? 1.0f : 0.0f; }
     }
 
     // The hips over the lower foot: the body's height spring takes it (in Tick, next frame), so the whole body - and

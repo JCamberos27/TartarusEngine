@@ -69,6 +69,7 @@ float NpcYawOf(const glm::vec3& dir, float fallback) {
     return std::atan2(dir.x, dir.z);
 }
 
+constexpr float kWarpMax = 60.0f; // degrees the orientation warp may turn the legs
 float NpcSpineTwist(float offset, float maxTwist) {
     return std::clamp(FirstPersonBodyWrapAngle(offset), -maxTwist, maxTwist);
 }
@@ -221,6 +222,17 @@ bool NpcBody::FootHeights(float (&out)[2]) const {
     return true;
 }
 
+bool NpcBody::FootWorld(glm::vec3 (&out)[2]) const {
+    if (!IsActive() || !m_DriverModel) return false;
+    const glm::mat4 root = RootWorld();
+    for (int s = 0; s < 2; ++s) {
+        glm::mat4 g(1.0f);
+        if (m_DriverLeg[s][2] < 0 || !m_DriverModel->NodeTransformAt(m_DriverLeg[s][2], g)) return false;
+        out[s] = glm::vec3(root * g[3]);
+    }
+    return true;
+}
+
 void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     if (!IsActive() || m_PoseExternal) return;
     auto& reg = world.Registry;
@@ -298,7 +310,13 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     f.Random = NextRandom();
     GameRules::UpdateBodyMotion(f);
     // Mid-crossfade nothing new starts on top (as the player body: the fade would be cut short).
-    if (ac.InTransition) {
+    // (Not a turn on the spot fading back to the loop: moving off then is a start, else the loop fades up behind the capsule.)
+    if (ac.StateName != m_LastState) {
+        m_TurnFade = ac.InTransition && FPBody::TurnFadeToLoop(m_LastState, ac.StateName);
+        m_LastState = ac.StateName;
+    }
+    if (!ac.InTransition) m_TurnFade = false;
+    if (ac.InTransition && !m_TurnFade) {
         f.Triggers &= ~(Gameplay::kBodyStart | Gameplay::kBodyPivot | Gameplay::kBodyFidget);
         for (const char* t : {FPBody::kStart, FPBody::kPivot, FPBody::kFidget}) ac.ResetTrigger(t);
     }
@@ -356,10 +374,31 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
         m_RateTrim += (trim - m_RateTrim) * Follow(dt, 0.15f);
     }
     ac.SetFloat(FPBody::kPlayRate, f.PlayRate * m_RateTrim);
+    // Orientation warp: a start, stop or gait blend whose clips travel off the way the capsule goes (a back-pedal start
+    // whose root drifts right while the path bends left, the blend between two cardinal strafes) skates the feet sideways.
+    // The legs are turned onto the capsule's travel (at most kWarpMax) and the spine turned back (FootPass). Not in a turn
+    // on the spot, a turning start or a pivot (the travels cross there by design), nor at a crawl.
+    {
+        const float c = std::cos(m_Yaw), sn = std::sin(m_Yaw);
+        const auto local = [&](const glm::vec3& v) { return glm::vec2(-v.x * c + v.z * sn, v.x * sn + v.z * c); };
+        const glm::vec2 clipV = dt > 1e-5f ? local(glm::vec3(ac.RootMotion.DeltaPosition.x, 0.0f, ac.RootMotion.DeltaPosition.z) / dt) : glm::vec2(0.0f);
+        const float k = Follow(dt, 0.2f);
+        m_WarpClip += (clipV - m_WarpClip) * k;
+        m_WarpCapsule += (local(flat) - m_WarpCapsule) * k;
+        const bool gait = (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco) || ac.HasTag(FPBody::kTagStart) ||
+                           ac.HasTag(FPBody::kTagStop)) && !ac.HasTag(FPBody::kTagStartTurn) && !ac.HasTag(FPBody::kTagPivot) && !m_Turning && in.Grounded;
+        float want = 0.0f;
+        if (gait && glm::length(m_WarpClip) > 0.4f && glm::length(m_WarpCapsule) > 0.4f) {
+            const float a = FirstPersonBodyWrapAngle(std::atan2(m_WarpCapsule.x, m_WarpCapsule.y) - std::atan2(m_WarpClip.x, m_WarpClip.y));
+            want = std::clamp(a, -glm::radians(kWarpMax), glm::radians(kWarpMax));
+        }
+        m_Warp += (want - m_Warp) * Follow(dt, 0.12f);
+    }
     ac.SetFloat(FPBody::kStartDistance, f.StartDistance);
     ac.SetFloat(FPBody::kStopDistance, f.StopDistance);
     ac.SetFloat(FPBody::kPivotDistance, f.PivotDistance);
     ac.SetFloat(FPBody::kSprintRate, f.SprintRate);
+    ac.SetBool(FPBody::kStartOff, f.StartOff != 0);
     const char* triggers[]{FPBody::kCrouchDown, FPBody::kCrouchUp, FPBody::kStart, FPBody::kStop, FPBody::kStopRun,
                            FPBody::kJump, FPBody::kPivot, FPBody::kStep, FPBody::kFidget};
     for (int i = 0; i < 9; ++i)
@@ -443,6 +482,7 @@ void NpcBody::FootPass(float dt) {
     if (m_FootWeight < 1e-3f || !rigged) {
         m_HaveFootGround = false;
         m_Slide.Reset();
+        m_Lock.Reset();
         return;
     }
     Model& m = *m_DriverModel;
@@ -450,6 +490,17 @@ void NpcBody::FootPass(float dt) {
     pose = m.AppliedLocalPose();
     if ((int)pose.size() != m.NodeCount()) return;
     IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+    // The orientation warp (Tick): the pelvis - legs and all - turned about the vertical onto the capsule's travel, the
+    // first spine bone turned back, so only the hips and legs move. A local-right angle is a turn toward -X in the model.
+    bool warped = false;
+    if (std::abs(m_Warp) > 1e-3f && m_DriverSpineCount > 0) {
+        const float w = m_Warp * m_FootWeight;
+        const glm::quat turn = glm::angleAxis(-w, glm::vec3(0.0f, 1.0f, 0.0f));
+        IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f), turn, IK::Position(m_Globals[(size_t)m_DriverPelvis]));
+        const int spine = m_DriverSpine[0];
+        IK::OffsetBone(pose, m_DriverParents, m_Globals, spine, glm::vec3(0.0f), glm::inverse(turn), IK::Position(m_Globals[(size_t)spine]));
+        warped = true;
+    }
     const glm::mat4 rootW = RootWorld();
     const glm::mat3 toModel3 = glm::transpose(glm::mat3(rootW)); // a yaw: its inverse is its transpose
     float animHeight[2];
@@ -476,8 +527,18 @@ void NpcBody::FootPass(float dt) {
         slide = m_Slide.Step(slideSet, sin, !slideOn);
         if (probe >= 0) IK::FootSlideProbeLog("npc", m_Slide.Stats, glm::length(glm::vec2(sin.Velocity.x, sin.Velocity.z)), m_Slide.ClipSpeed(), m_Slide.Scale());
     }
+    // Foot lock: a planted foot held where it landed in the world, as the player body's (IK::FootLock). Not while prone or
+    // crawling (the legs drag) - the director turns foot IK off there.
+    glm::vec3 shift[2];
+    bool held = false;
     for (int s = 0; s < 2; ++s) {
-        const glm::vec3 foot = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f)) + slide.Shift[s];
+        const glm::vec3 anim = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f)) + slide.Shift[s];
+        const glm::vec3 lock = m_Lock.Step(s, m_Set.FootLock, anim, anim.y - m_Feet.y, dt);
+        shift[s] = slide.Shift[s] + lock;
+        held = held || glm::dot(shift[s], shift[s]) > 1e-8f;
+    }
+    for (int s = 0; s < 2; ++s) {
+        const glm::vec3 foot = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f)) + shift[s];
         animHeight[s] = foot.y - m_Feet.y;
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
@@ -497,13 +558,16 @@ void NpcBody::FootPass(float dt) {
     m_HaveFootGround = true;
     const bool flat = std::abs(m_FootOffset[0]) < 0.004f && std::abs(m_FootOffset[1]) < 0.004f && m_FootNormal[0].y > 0.999f &&
                       m_FootNormal[1].y > 0.999f;
-    if (flat && !slideOn) return; // the clips' own feet are right
+    if (flat && !slideOn && !held) { // the clips' own feet are right
+        if (warped) { m.ApplyLocalPose(pose); SyncLower(); }
+        return;
+    }
     const float w = m_FootWeight;
     const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], m_Set.FootIKMaxDrop, m_Set.FootIKPelvisRaise) - slide.PelvisDrop) * w;
     IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f, pelvisDelta, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
     for (int s = 0; s < 2; ++s) {
         const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
-        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f) + toModel3 * slide.Shift[s] * w;
+        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f) + toModel3 * shift[s] * w;
         // A planted foot lies on its slope; one swinging through the air keeps the clip's angle.
         const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
         const glm::vec3 normal = toModel3 * m_FootNormal[s];
