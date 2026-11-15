@@ -664,6 +664,92 @@ void FootSlideProbeLog(const char* who, FootSlideStats& stats, float speed, floa
     w.Sum.Clear();
 }
 
+void FootSlideMeter::Step(const glm::vec3 (&foot)[2], float ground, float dt) {
+    if (dt <= 1e-5f) return;
+    for (int s = 0; s < 2; ++s) {
+        const float h = foot[s].y - ground;
+        // Each foot's own lowest height (the ankle stands a few cm up when the foot is flat), creeping up slowly so a crouch
+        // or a first frame in the air does not stick - slowly enough that a swinging foot passing low is not taken for a plant.
+        m_Floor[s] = m_Have ? std::min(m_Floor[s] + 0.01f * dt, h) : h;
+        const bool contact = h - m_Floor[s] < ContactHeight;
+        const glm::vec2 at(foot[s].x, foot[s].z);
+        if (contact) {
+            // The first two frames are the heel coming down; the plant is judged from where it settles.
+            if (++m_Frames[s] == 3) { m_Start[s] = at; m_Drift[s] = 0.0f; m_Time[s] = 0.0f; }
+            if (m_Frames[s] >= 3) {
+                m_Drift[s] = std::max(m_Drift[s], glm::length(at - m_Start[s]));
+                m_Time[s] += dt;
+                Total.ContactTime += dt;
+            }
+        } else {
+            if (m_Frames[s] >= 3 && m_Time[s] >= 0.1f && m_Drift[s] < 1.0f) { // (a teleport is not a slide)
+                ++Total.Plants;
+                Total.SumDrift += m_Drift[s];
+                Total.MaxDrift = std::max(Total.MaxDrift, m_Drift[s]);
+            }
+            m_Frames[s] = 0;
+        }
+    }
+    m_Have = true;
+}
+
+namespace {
+bool& MeterFlag() { static bool on = false; return on; }
+} // namespace
+bool FootSlideMeterOn() { return MeterFlag(); }
+void SetFootSlideMeterOn(bool on) { MeterFlag() = on; }
+FootSlideMeter& FootSlideMeterFor(const std::string& who) {
+    static std::map<std::string, FootSlideMeter> meters;
+    return meters[who];
+}
+
+glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& anim, float height, float dt) {
+    Foot& f = m_Foot[s];
+    if (dt <= 1e-5f) return f.Offset;
+    const glm::vec2 moved(anim.x - f.Prev.x, anim.z - f.Prev.z);
+    if (f.Have && glm::dot(moved, moved) > 1.0f) f = Foot{}; // a teleport: start over
+    const bool seen = f.Have;
+    const float speed = f.Have ? glm::length(moved) / dt : 0.0f;
+    f.Floor = f.Have ? std::min(f.Floor + 0.01f * dt, height) : height;
+    const float up = height - f.Floor;
+    f.Prev = anim;
+    f.Have = true;
+    const auto letGo = [&] { f.Locked = false; f.ReleaseFrom = f.Offset; f.ReleaseTime = 0.0f; };
+    if (!set.Enabled) {
+        if (f.Locked) letGo();
+    } else if (!f.Locked) {
+        if (seen && up < set.Height && speed < set.Speed) { // (a first frame has no speed yet)
+            // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
+            f.Locked = true;
+            f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
+            f.Time = 0.0f;
+        }
+    } else {
+        const float drift = glm::length(glm::vec2(f.Pin.x - anim.x, f.Pin.z - anim.z));
+        if (up > set.Lift || drift > set.MaxDrift) letGo();
+    }
+    if (f.Locked) {
+        f.Time += dt;
+        f.Offset = glm::vec3(f.Pin.x - anim.x, 0.0f, f.Pin.z - anim.z);
+    } else {
+        f.ReleaseTime += dt;
+        const float k = std::clamp(f.ReleaseTime / std::max(set.Release, 1e-3f), 0.0f, 1.0f);
+        f.Offset = f.ReleaseFrom * (1.0f - k * k * (3.0f - 2.0f * k));
+    }
+    return f.Offset;
+}
+
+FootLockSettings FootLockFrom(const FirstPersonBodyComponent& b) {
+    FootLockSettings s;
+    s.Enabled = b.FootLockEnabled;
+    s.Height = b.FootLockHeight;
+    s.Lift = b.FootLockLift;
+    s.Speed = b.FootLockSpeed;
+    s.MaxDrift = b.FootLockDrift;
+    s.Release = b.FootLockRelease;
+    return s;
+}
+
 FootSlideSettings FootSlideFrom(const FirstPersonBodyComponent& b) {
     FootSlideSettings s;
     s.PinEnabled = b.FootPinEnabled;

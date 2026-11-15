@@ -93,6 +93,7 @@ struct BodyMotionFrame {
     float SprintClip{};
     float MoveDistance{};
     std::int32_t Triggers{};
+    std::int32_t StartOff{}; // out: a start (not a turning one) whose travel has swung over StartOffAngle off its push-off
 };
 struct WeaponFrame {
     float Dt{};

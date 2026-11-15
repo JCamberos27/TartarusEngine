@@ -17,6 +17,7 @@ constexpr float PivotMinSpeed = 1.0f, PivotMinSpeedCrouched = .6f; // clip m/s t
 constexpr float StepMaxTime = .3f;       // a tap shorter than this is a step, not a start and a stop
 constexpr float SprintWarpMax = 50;      // degrees the legs turn into a diagonal sprint (the torso keeps the view)
 constexpr float FidgetMin = 10, FidgetMax = 20;
+constexpr float StartOffAngle = 60;      // degrees the travel may swing off a start's push-off before it gives way to the loop
 
 glm::vec3 V(const Vec3& v) { return {v.x, v.y, v.z}; }
 Vec3 V(const glm::vec3& v) { return {v.x, v.y, v.z}; }
@@ -47,7 +48,7 @@ float DistanceToTurn(float v, float target, float tau) {
 }
 
 void Update(BodyMotionFrame& f) {
-    f.Triggers = 0; f.SetTurnAngle = 0;
+    f.Triggers = 0; f.SetTurnAngle = 0; f.StartOff = 0;
     const glm::vec3 velocity = V(f.Velocity), wishVelocity = V(f.WishVelocity);
     const glm::vec3 moving(velocity.x, 0, velocity.z); const float responsiveness = std::clamp(f.Responsiveness, 0.0f, 1.0f);
     const glm::vec3 wishWorld(wishVelocity.x, 0, wishVelocity.z); const float wishSpeed = glm::length(wishWorld);
@@ -75,7 +76,7 @@ void Update(BodyMotionFrame& f) {
     else if (f.Turning) {
         f.TurnTime += f.Dt;
         if (f.IsTurn || f.IsCrouchTurn) { const float step = f.RootYaw * Rad; f.Yaw += step; f.TurnDone += step; }
-        offset = Wrap(faceYaw - f.Yaw); const bool clipDone = f.TurnTime > f.TurnMinTime && (!f.IsTurn || f.StateTime >= .97f);
+        offset = Wrap(faceYaw - f.Yaw); const bool clipDone = f.TurnTime > f.TurnMinTime && (!(f.IsTurn || f.IsCrouchTurn) || f.StateTime >= .97f);
         if (!still || std::abs(offset) < f.TurnEndAngle * Rad || clipDone || f.TurnTime > f.TurnTimeout) f.Turning = 0;
     } else if (still) {
         // A turn on the spot is never under 45 degrees of clip: each side's smallest, so the sides never mix.
@@ -87,14 +88,17 @@ void Update(BodyMotionFrame& f) {
         // A start that turns: the body takes the clip's own yaw, up to where it should face.
         const float step = f.RootYaw * Rad;
         if (Sign(step) == Sign(offset)) f.Yaw += std::copysign(std::min(std::abs(step), std::abs(offset)), step);
-    } else f.Yaw += offset * Follow(f.Dt, f.TurnMoveEase);
+    } else if (!(f.IsStop && !f.Moving)) f.Yaw += offset * Follow(f.Dt, f.TurnMoveEase);
+    // (A stop's feet are planting: the body holds its heading through it - swung round, the planted feet would skate round
+    // with it - and a turn still owed plays on the spot once it is stood. The lag clamp below still bounds it.)
     if (f.TurnThreshold > 0 && !f.IsStartTurn) {
         const float lag = Wrap(faceYaw - f.Yaw), max = std::max(f.TurnThreshold + f.TurnLagMargin, f.TurnLagFloor) * Rad;
         if (std::abs(lag) > max) f.Yaw = faceYaw - std::copysign(max, lag);
     }
     f.Yaw = Wrap(f.Yaw); f.Twist = Wrap(f.ViewYaw - f.Yaw);
     const glm::vec3 wish = Local(wishVelocity, f.Yaw); const float wishLen = glm::length(wish); f.Moving = wishLen > .1f;
-    const bool idling = f.IsLocomotion || f.IsCrouchLoco || f.IsStep || f.IsFidget;
+    // (A turn on the spot too: moving off part way round it starts - turning for what is left - rather than fading the loop up.)
+    const bool idling = f.IsLocomotion || f.IsCrouchLoco || f.IsStep || f.IsFidget || f.IsTurn || f.IsCrouchTurn;
     const bool plain = f.StartStopClips && f.Grounded && idling && !f.Turning;
     const bool going = f.StartStopClips && f.Grounded && !f.Turning && (f.IsLocomotion || f.IsCrouchLoco || f.IsStart || f.IsPivot || f.IsSprint);
     if (f.StartStopClips && f.Grounded && !f.Moving && glm::length(move) < .4f && f.Crouched != f.WasCrouched) {
@@ -122,6 +126,12 @@ void Update(BodyMotionFrame& f) {
         if (going && !f.IsPivot && moveClip > pivotMin && glm::dot(dir, move / moveClip) < -.5f) {
             f.PivotDir = V(move / moveClip); f.PivotGait = Gait(moveClip, false); f.PivotReversed = 0; f.PivotTravel = 0;
             f.Triggers |= kBodyPivot;
+        }
+        // A start pushes off one way for the length of its clip; when the travel swings well off it (the path bends, the
+        // input turns) its feet would walk off the capsule's line - the loop, whose blend follows any direction, takes over.
+        if (f.IsStart && !f.IsStartTurn && !(f.Triggers & kBodyStart)) {
+            const glm::vec3 pushed = V(f.StartDir);
+            if (glm::dot(pushed, pushed) > .25f && glm::dot(dir, glm::normalize(pushed)) < std::cos(StartOffAngle * Rad)) f.StartOff = 1;
         }
         f.LastDir = V(dir); f.LastSprint = sprint; f.IdleTime = 0; f.MoveTime += f.Dt; f.MoveDistance += movingSpeed * f.Dt;
     } else {

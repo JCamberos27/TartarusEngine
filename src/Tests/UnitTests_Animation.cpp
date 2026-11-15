@@ -517,6 +517,91 @@ void TestStrideScaleMath() {
     CHECK(IK::StrideWarpPelvisDrop(0.9f, 0.4f, 1.3f, 0.0f) == 0.0f);
 }
 
+void TestFootLockHoldsAndReleases() {
+    // A planted foot whose animation creeps 0.3 m/s over the ground (a stride shorter than the capsule's travel) is held
+    // where it landed; lifted, it catches up smoothly - no frame jumps more than its swing would.
+    IK::FootLockSettings set;
+    IK::FootLock lock;
+    const float dt = 1.0f / 60.0f;
+    glm::vec3 anim(0.0f, 0.08f, 0.0f), first(0.0f);
+    lock.Step(0, set, anim, anim.y, dt); // first sight: no speed yet, nothing planted
+    CHECK(!lock.Locked(0));
+    for (int i = 0; i < 30; ++i) {
+        anim.z += 0.3f * dt;
+        const glm::vec3 drawn = anim + lock.Step(0, set, anim, anim.y, dt);
+        if (i == 0) first = drawn;
+        CHECK(lock.Locked(0));
+        CHECK(glm::length(glm::vec2(drawn.x - first.x, drawn.z - first.z)) < 1e-4f);
+    }
+    float lastGap = glm::length(lock.Offset(0)), lastZ = first.z;
+    CHECK(lastGap > 0.1f);
+    for (int i = 0; i < 30; ++i) { // lifted
+        anim.y += i == 0 ? 0.05f : 0.01f; // off the ground past Lift
+        anim.z += 0.3f * dt;
+        const glm::vec3 drawn = anim + lock.Step(0, set, anim, anim.y, dt);
+        CHECK(!lock.Locked(0));
+        const float gap = glm::length(lock.Offset(0));
+        CHECK(gap <= lastGap + 1e-6f);                // only ever closes
+        CHECK(std::abs(drawn.z - lastZ) < 0.03f);     // no pop
+        lastGap = gap;
+        lastZ = drawn.z;
+    }
+    CHECK(lastGap < 1e-4f); // caught up within Release
+}
+
+void TestFootLockIgnoresSwingAndLetsGoOnDrift() {
+    IK::FootLockSettings set;
+    const float dt = 1.0f / 60.0f;
+    { // a swinging foot passing low, fast, never plants
+        IK::FootLock lock;
+        glm::vec3 anim(0.0f, 0.08f, 0.0f);
+        lock.Step(0, set, anim, 0.08f, dt);
+        for (int i = 0; i < 10; ++i) {
+            anim.z += 4.0f * dt;
+            lock.Step(0, set, anim, 0.08f, dt);
+            CHECK(!lock.Locked(0));
+        }
+    }
+    { // the animation wanders off a planted foot: past MaxDrift it lets go rather than stretch the leg
+        IK::FootLock lock;
+        glm::vec3 anim(0.0f, 0.08f, 0.0f);
+        bool let = false;
+        for (int i = 0; i < 120 && !let; ++i) {
+            anim.x += 0.8f * dt;
+            lock.Step(0, set, anim, 0.08f, dt);
+            let = i > 0 && !lock.Locked(0);
+            CHECK(glm::length(lock.Offset(0)) <= set.MaxDrift + 0.02f);
+        }
+        CHECK(let);
+    }
+    { // off: nothing moves
+        IK::FootLockSettings off;
+        off.Enabled = false;
+        IK::FootLock lock;
+        const glm::vec3 o = lock.Step(0, off, glm::vec3(0.0f, 0.08f, 0.0f), 0.08f, dt);
+        CHECK(o == glm::vec3(0.0f) && !lock.Locked(0));
+    }
+    FirstPersonBodyComponent body;
+    CHECK(IK::FootLockFrom(body).Enabled && std::abs(IK::FootLockFrom(body).MaxDrift - body.FootLockDrift) < 1e-6f);
+}
+
+void TestFootSlideMeterCountsPlants() {
+    IK::FootSlideMeter m;
+    const float dt = 1.0f / 60.0f;
+    glm::vec3 feet[2] = {glm::vec3(0.0f, 0.08f, 0.0f), glm::vec3(0.3f, 0.3f, 0.0f)};
+    for (int i = 0; i < 30; ++i) m.Step(feet, 0.0f, dt); // foot 0 planted, still
+    feet[0].y = 0.3f;
+    m.Step(feet, 0.0f, dt);
+    feet[0] = glm::vec3(1.0f, 0.08f, 0.0f);
+    for (int i = 0; i < 30; ++i) { feet[0].z += 0.5f * dt; m.Step(feet, 0.0f, dt); } // planted, sliding 0.5 m/s
+    feet[0].y = 0.3f;
+    m.Step(feet, 0.0f, dt);
+    const IK::FootSlideMeterTotals t = m.TakeTotals();
+    CHECK(t.Plants == 2);
+    CHECK(t.MaxDrift > 0.18f && t.MaxDrift < 0.26f);   // ~0.5 m/s for the 27 settled frames
+    CHECK(t.MeanCm() > 9.0f && t.MeanCm() < 13.0f);    // the still plant counts 0
+}
+
 void TestFootSlideDefaultsOff() {
     IK::FootSlideSettings off;
     CHECK(!off.Active());
@@ -947,4 +1032,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Foot slide correction defaults off (identical pose)", TestFootSlideDefaultsOff});
     tests.push_back({"Foot pin holds planted feet (slide cm per plant)", TestFootSlidePinHoldsPlantedFeet});
     tests.push_back({"Stride warp matches the ground speed within its limits", TestStrideWarpMatchesGroundSpeed});
+    tests.push_back({"Foot lock holds a planted foot and lets it catch up smoothly", TestFootLockHoldsAndReleases});
+    tests.push_back({"Foot lock ignores a swinging foot and lets go past its drift", TestFootLockIgnoresSwingAndLetsGoOnDrift});
+    tests.push_back({"Foot slide meter counts plants and their drift", TestFootSlideMeterCountsPlants});
 }

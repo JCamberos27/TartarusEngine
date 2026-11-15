@@ -7,6 +7,7 @@
 #include "BodyDebugDraw.h"
 #include "FirstPersonPresentation.h"
 #include "NpcDirector.h"
+#include "IK.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
 #include <algorithm>
@@ -73,6 +74,8 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
     float into = 0.0f, intoBefore = 0.0f;
     const int leg = LabLegAt(m_LabClock, into);
     const int legBefore = LabLegAt(before, intoBefore);
+    IK::SetFootSlideMeterOn(true);
+    if (legBefore != leg && legBefore < kLabCount) SlideLeg(kLab[legBefore].Name);
     if (leg >= kLabCount) {
         if (g_Trace) { std::fclose(g_Trace); g_Trace = nullptr; }
         return;
@@ -124,12 +127,14 @@ void NpcTest::LabLoco(World& world, NpcDirector& npcs, const Player& player, flo
     (void)now;
     npcs.Frozen = true;
     npcs.HoldFire = true;
+    npcs.FootIKEverywhere = true; // the dummy is off the player's screen, but the Scene view watches its feet
     // The dummy keeps pace 3 m to the player's left (-X; the lane faces +Z), at the player's gait.
     float into = 0.0f;
     const int leg = LabLegAt(m_LabClock, into);
     for (const auto& up : npcs.Npcs()) {
         if (!up || up->Dead) continue;
         Npc& n = *up;
+        if (std::find(m_SlideBodies.begin(), m_SlideBodies.end(), n.Name) == m_SlideBodies.end()) m_SlideBodies.push_back(n.Name);
         const glm::vec3 feet = player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
         const glm::vec3 there(feet.x + 3.0f, n.Feet.y, feet.z);
         NpcIntent in;
