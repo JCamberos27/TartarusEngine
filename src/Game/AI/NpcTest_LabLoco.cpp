@@ -1,5 +1,5 @@
 // --npc-test labloco: tests/scenes/LocomotionLab.json, the open grid floor. The player walks, jogs, back-pedals and strafes down
-// the lane, stopping between each; the bare dummy soldier keeps pace 3 m to its left at the same gait (the same driver, side by
+// the lane, stopping between each; the bare dummy keeps pace 3 m to its left at the same gait (the same driver, side by
 // side). Recorded every frame (NPC_TEST_RECORD): the first-person view, and the Scene view square to the player's side. With
 // NPC_TEST_RECORD set it also writes trace.csv there: per frame, the gait phase, the camera's bob and roll and where the gun
 // sits in the view - the numbers behind what the frames show.
@@ -24,7 +24,7 @@ struct LabLeg {
     glm::vec2 At;
     const char* Name;
     float Yaw = 90.0f; // the view (degrees; 90 = +Z, down the lane): both bodies face it - a change is a turn
-    bool Aim = true;   // the dummy aims along it (else carries the gun at the hip and only looks)
+    bool Aim = true;   // the player aims along it (the dummy only looks)
 };
 const LabLeg kLab[] = {
     {1.5f, {0, 0}, false, true, {0.0f, -20.0f}, "idle"},
@@ -144,8 +144,6 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
 void NpcTest::LabLoco(World& world, NpcDirector& npcs, const Player& player, float now) {
     (void)world;
     (void)now;
-    npcs.Frozen = true;
-    npcs.HoldFire = true;
     npcs.FootIKEverywhere = true; // the dummy is off the player's screen, but the Scene view watches its feet
     // The dummy keeps pace 3 m to the player's left (-X; the lane faces +Z), at the player's gait.
     float into = 0.0f;
@@ -156,20 +154,17 @@ void NpcTest::LabLoco(World& world, NpcDirector& npcs, const Player& player, flo
         if (std::find(m_SlideBodies.begin(), m_SlideBodies.end(), n.Name) == m_SlideBodies.end()) m_SlideBodies.push_back(n.Name);
         const glm::vec3 feet = player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
         const glm::vec3 there(feet.x + 3.0f, n.Feet.y, feet.z);
-        NpcIntent in;
+        n.Roam = false;
         const bool moving = leg < kLabCount && (kLab[leg].Move.x != 0.0f || kLab[leg].Move.y != 0.0f);
-        in.Move = glm::length(glm::vec2(there.x - n.Feet.x, there.z - n.Feet.z)) > (moving ? 0.1f : 0.6f);
+        const bool move = glm::length(glm::vec2(there.x - n.Feet.x, there.z - n.Feet.z)) > (moving ? 0.1f : 0.6f);
         // Ahead of it along the player's travel, so it keeps up rather than trails.
         const glm::vec3 lead = moving ? glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z) * 0.6f : glm::vec3(0.0f);
-        in.MoveTarget = there + lead;
-        in.Pace = leg < kLabCount && kLab[leg].Jog ? Gait::Jog : Gait::Walk;
+        const Gait pace = leg < kLabCount && kLab[leg].Jog ? Gait::Jog : Gait::Walk;
+        if (move) npcs.ScriptedMove(n.Index, there + lead, pace);
+        else npcs.EndScriptedMove(n.Index);
         const float yaw = glm::radians(player.Cam.Yaw); // where the player looks: the two turn together
         const glm::vec3 view(std::cos(yaw), 0.0f, std::sin(yaw));
-        in.Aim = leg >= kLabCount || kLab[leg].Aim;
-        in.FaceAim = true;
-        in.AimPoint = n.Feet + glm::vec3(0.0f, 1.45f, 0.0f) + view * 20.0f;
-        in.LookPoint = in.AimPoint;
-        n.Intent = in;
+        n.LookPoint = n.Feet + glm::vec3(0.0f, 1.45f, 0.0f) + view * 20.0f;
     }
     if (m_LabClock >= LabLocoSeconds() && !m_Done) {
         m_Done = true;

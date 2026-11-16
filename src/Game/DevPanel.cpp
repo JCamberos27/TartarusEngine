@@ -11,13 +11,11 @@
 #include <algorithm>
 
 void DevPanel::Reset(PlayerVitals& vitals, NpcDirector& npcs) {
+    (void)npcs;
     Open = false;
     InfiniteAmmo = false;
-    Invisible = false;
     AiOverlay = false;
     vitals.GodMode = false;
-    npcs.Frozen = false;
-    npcs.HoldFire = false;
 }
 
 int DevPanel::KillAll(World& world, NpcDirector& npcs) {
@@ -31,13 +29,15 @@ int DevPanel::KillAll(World& world, NpcDirector& npcs) {
 }
 
 int DevPanel::RespawnSquad(World& world, AssetLibrary& assets, NpcDirector& npcs) {
-    int alive = 0;
-    for (const auto& up : npcs.Npcs()) if (up && !up->Dead) ++alive;
     const int spawns = (int)npcs.SpawnPoints().size();
     if (spawns <= 0) return 0;
     int made = 0;
-    for (int i = 0; alive + made < npcs.SquadSize() && i < npcs.SquadSize() * 2; ++i)
-        if (npcs.Spawn(world, assets, i % spawns) >= 0) ++made;
+    // Every spawn point that has no living dummy of its own gets one.
+    for (int i = 0; i < spawns; ++i) {
+        bool has = false;
+        for (const auto& up : npcs.Npcs()) has = has || (up && !up->Dead && up->SpawnIndex == i);
+        if (!has && npcs.Spawn(world, assets, i) >= 0) ++made;
+    }
     return made;
 }
 
@@ -54,25 +54,19 @@ void DevPanel::Draw(const Context& c) {
     ImGui::SeparatorText("Player");
     ImGui::Checkbox("God mode", &c.Vitals->GodMode);
     ImGui::Checkbox("Infinite ammo", &InfiniteAmmo);
-    ImGui::Checkbox("Invisible to AI", &Invisible);
-    ImGui::SeparatorText("Squad");
-    ImGui::Checkbox("Freeze AI", &d.Frozen);
-    ImGui::Checkbox("AI holds fire", &d.HoldFire);
-    float difficulty = d.Difficulty();
-    if (ImGui::SliderFloat("Difficulty", &difficulty, 0.25f, 3.0f, "%.2f")) d.SetDifficulty(difficulty);
+    ImGui::SeparatorText("Dummies");
     if (ImGui::Button("Kill all") && c.WorldPtr) KillAll(*c.WorldPtr, d);
     ImGui::SameLine();
-    if (ImGui::Button("Respawn squad") && c.WorldPtr && c.Assets) {
+    if (ImGui::Button("Respawn all") && c.WorldPtr && c.Assets) {
         KillAll(*c.WorldPtr, d);
         RespawnSquad(*c.WorldPtr, *c.Assets, d);
     }
-    int alive = 0, known = 0;
+    int alive = 0;
     for (const auto& up : d.Npcs()) {
         if (!up || up->Dead) continue;
         ++alive;
-        if (up->Mem.Known) ++known;
     }
-    ImGui::Text("%d alive, %d in combat", alive, known);
+    ImGui::Text("%d alive", alive);
     ImGui::SeparatorText("World");
     float scale = Time::TimeScale();
     if (ImGui::SliderFloat("Time scale", &scale, 0.05f, 2.0f, "%.2f")) Time::SetTimeScale(scale);
@@ -83,6 +77,6 @@ void DevPanel::Draw(const Context& c) {
     }
     ImGui::Checkbox("AI debug overlay", &AiOverlay);
     if (c.BloodLab) ImGui::Checkbox("Blood Lab", c.BloodLab);
-    ImGui::TextDisabled("F7 panel   F8 god mode   F9 AI overlay");
+    ImGui::TextDisabled("F7 panel   F8 god mode");
     ImGui::End();
 }

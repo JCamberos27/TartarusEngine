@@ -850,11 +850,8 @@
       ]
     },
     {
-      "Dropped Weapon Settings": {
-        "Lifetime": 20.0
-      },
       "id": 25,
-      "name": "AI Director",
+      "name": "Dummy Settings",
       "order": 25,
       "parentId": 24,
       "position": [
@@ -873,12 +870,9 @@
         1,
         1
       ],
-      "Squad Settings": {
-        "Difficulty": 1.0,
-        "NPC Damage Scale": 0.45,
+      "Dummy Settings": {
         "Respawn": false,
         "Respawn Delay": 8.0,
-        "Squad Size": 12,
         "Corpse Time": 20.0,
         "Max Corpses": 16,
         "Unseen Time": 3.0
@@ -886,7 +880,7 @@
     },
     {
       "id": 26,
-      "name": "Enemy Spawn 1 - Open (bare)",
+      "name": "Dummy Spawn 1 - Open (bare)",
       "order": 26,
       "parentId": 24,
       "position": [
@@ -905,18 +899,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": true
+        "Bare": true,
+        "Roam": false
       }
     },
     {
       "id": 27,
-      "name": "Enemy Spawn 2 - AK (dressed)",
+      "name": "Dummy Spawn 2 - AK (dressed)",
       "order": 27,
       "parentId": 24,
       "position": [
@@ -935,18 +926,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": false
+        "Bare": false,
+        "Roam": false
       }
     },
     {
       "id": 28,
-      "name": "Enemy Spawn 3 - Remington (dressed)",
+      "name": "Dummy Spawn 3 - Remington (dressed)",
       "order": 28,
       "parentId": 24,
       "position": [
@@ -965,18 +953,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "Remington 870",
-        "Bare": false
+        "Bare": false,
+        "Roam": false
       }
     },
     {
       "id": 29,
-      "name": "Enemy Spawn 4 - Crate (dressed)",
+      "name": "Dummy Spawn 4 - Crate (dressed)",
       "order": 29,
       "parentId": 24,
       "position": [
@@ -995,18 +980,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": false
+        "Bare": false,
+        "Roam": false
       }
     },
     {
       "id": 30,
-      "name": "Enemy Spawn 5 - Stairs (bare)",
+      "name": "Dummy Spawn 5 - Stairs (bare)",
       "order": 30,
       "parentId": 24,
       "position": [
@@ -1025,18 +1007,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": true
+        "Bare": true,
+        "Roam": false
       }
     },
     {
       "id": 31,
-      "name": "Enemy Spawn 6 - Ledge (bare)",
+      "name": "Dummy Spawn 6 - Ledge (bare)",
       "order": 31,
       "parentId": 24,
       "position": [
@@ -1055,18 +1034,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": true
+        "Bare": true,
+        "Roam": false
       }
     },
     {
       "id": 32,
-      "name": "Enemy Spawn 7 - Wall (bare)",
+      "name": "Dummy Spawn 7 - Wall (bare)",
       "order": 32,
       "parentId": 24,
       "position": [
@@ -1085,18 +1061,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": true
+        "Bare": true,
+        "Roam": false
       }
     },
     {
       "id": 33,
-      "name": "Enemy Spawn 8 - Sprinter (bare)",
+      "name": "Dummy Spawn 8 - Sprinter (bare)",
       "order": 33,
       "parentId": 24,
       "position": [
@@ -1115,18 +1088,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": true
+        "Bare": true,
+        "Roam": false
       }
     },
     {
       "id": 34,
-      "name": "Enemy Spawn 9 - Jogger (dressed)",
+      "name": "Dummy Spawn 9 - Jogger (dressed)",
       "order": 34,
       "parentId": 24,
       "position": [
@@ -1145,18 +1115,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "Remington 870",
-        "Bare": false
+        "Bare": false,
+        "Roam": false
       }
     },
     {
       "id": 35,
-      "name": "Enemy Spawn 10 - Strafer (bare)",
+      "name": "Dummy Spawn 10 - Strafer (bare)",
       "order": 35,
       "parentId": 24,
       "position": [
@@ -1175,18 +1142,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": true
+        "Bare": true,
+        "Roam": false
       }
     },
     {
       "id": 36,
-      "name": "Enemy Spawn 11 - Pile A (dressed)",
+      "name": "Dummy Spawn 11 - Pile A (dressed)",
       "order": 36,
       "parentId": 24,
       "position": [
@@ -1205,18 +1169,15 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": false
+        "Bare": false,
+        "Roam": false
       }
     },
     {
       "id": 37,
-      "name": "Enemy Spawn 12 - Pile B (bare)",
+      "name": "Dummy Spawn 12 - Pile B (bare)",
       "order": 37,
       "parentId": 24,
       "position": [
@@ -1235,13 +1196,10 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Training Dummy",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.5,
-        "Squad": 0,
-        "Weapon": "AKS-74U",
-        "Bare": true
+        "Bare": true,
+        "Roam": false
       }
     }
   ],

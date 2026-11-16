@@ -72,7 +72,7 @@ ZOUT = HALL + D       # outside wall lines z = +-ZOUT
 HALL_WINDOWS = [('v', 0.0, 0.0), ('v', L, 0.0)]   # an end window each end of the corridor (world axis/line/centre)
 
 TUBE_K, BULB_K = 4000.0, 2700.0
-TEST_ROOM = 'Apartment 301/Living Room'   # the wounded-animation test room (its soldiers come from NpcTest::AddSceneSquad)
+TEST_ROOM = 'Apartment 301/Living Room'   # the NPC / animation test room (its dummies come from NpcTest)
 NORTH_TARGET = (0.74, 0.42, 0.52)   # where the moon should hang (direction to it): 35 deg south of east, 25 deg up
 
 

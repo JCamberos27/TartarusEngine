@@ -1774,7 +1774,7 @@
     },
     {
       "id": 39,
-      "name": "AI Director",
+      "name": "Dummy Settings",
       "order": 39,
       "parentId": 38,
       "position": [
@@ -1793,17 +1793,14 @@
         1,
         1
       ],
-      "Squad Settings": {
-        "Difficulty": 1.0,
-        "NPC Damage Scale": 0.45,
+      "Dummy Settings": {
         "Respawn": false,
-        "Respawn Delay": 8.0,
-        "Squad Size": 4
+        "Respawn Delay": 8.0
       }
     },
     {
       "id": 40,
-      "name": "Enemy Spawn 1",
+      "name": "Dummy Spawn 1",
       "order": 40,
       "parentId": 38,
       "position": [
@@ -1822,17 +1819,14 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": false
       }
     },
     {
       "id": 41,
-      "name": "Enemy Spawn 2",
+      "name": "Dummy Spawn 2",
       "order": 41,
       "parentId": 38,
       "position": [
@@ -1851,17 +1845,14 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 1,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": false
       }
     },
     {
       "id": 42,
-      "name": "Enemy Spawn 3",
+      "name": "Dummy Spawn 3",
       "order": 42,
       "parentId": 38,
       "position": [
@@ -1880,17 +1871,14 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 2,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "Remington 870"
+        "Roam": false
       }
     },
     {
       "id": 43,
-      "name": "Enemy Spawn 4",
+      "name": "Dummy Spawn 4",
       "order": 43,
       "parentId": 38,
       "position": [
@@ -1909,12 +1897,9 @@
         1,
         1
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 3,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": false
       }
     }
   ],

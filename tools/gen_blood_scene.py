@@ -1,5 +1,5 @@
 # Generates tests/scenes/BloodTest.json: a small range for the volumetric blood.
-# A line of four soldiers stands with a wall close behind them (exit sprays and wall spatter), one under a
+# A line of four dummies stands with a wall close behind them (exit sprays and wall spatter), one under a
 # low ceiling (spray clipped against it, ceiling drips), one beside a staircase (blood down the steps)
 # and one by a stack of loose physics crates (blood on moving props). The player (Player Spawn and its
 # whole Player Body subtree), the Sun and the sky / post settings are copied from the Sandbox, as
@@ -146,15 +146,14 @@ ents['empties'].append({'Reflection Probe': {'Importance': 0.5, 'Size': [16.0, 6
 copy_tree(spawn_id, -1, position=[-1.0, 0.1, 1.0], rotation=quat_euler(yaw=180))
 enemies = group('Enemies')
 i = nid()
-ents['empties'].append({'id': i, 'name': 'AI Director', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -5.0],
+ents['empties'].append({'id': i, 'name': 'Dummy Settings', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -5.0],
                         'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
-                        'Squad Settings': {'Squad Size': 4, 'Respawn': False, 'Respawn Delay': 8.0, 'Difficulty': 1.0,
-                                           'NPC Damage Scale': 0.45}})
+                        'Dummy Settings': {'Respawn': False, 'Respawn Delay': 8.0}})
 for k, (x, weapon) in enumerate([(-4.5, 'AKS-74U'), (-1.5, 'AKS-74U'), (1.5, 'Remington 870'), (4.5, 'AKS-74U')]):
     i = nid()
-    ents['empties'].append({'id': i, 'name': f'Enemy Spawn {k + 1}', 'order': i, 'parentId': enemies,
+    ents['empties'].append({'id': i, 'name': f'Dummy Spawn {k + 1}', 'order': i, 'parentId': enemies,
                             'position': [float(x), 0.1, -4.5], 'rotation': quat_euler(yaw=0), 'scale': [1, 1, 1],
-                            'NPC Spawn': {'Weapon': weapon, 'Squad': 0, 'Skill': 0.6, 'Outfit Seed': k, 'Brain': 'Squad AI'}})
+                            'Dummy Spawn': {'Outfit Seed': k, 'Roam': False}})
 
 for k in ('boxes', 'empties', 'models'):
     scene[k] = ents[k]

@@ -79,15 +79,13 @@ void NpcTest::DecalsDrive(Player& player, float& wantYaw, float& wantPitch) {
     wantPitch = spray ? -5.0f : -10.0f;
 }
 
-void NpcTest::Decals(World& world, NpcDirector& npcs, float) {
+void NpcTest::Decals(World& world, NpcDirector&, float) {
     (void)world;
-    // Its own clock: the hallway may have no squad, and the director's clock only runs with one.
+    // Its own clock: the hallway may have no dummies, and the director's clock only runs with them.
     // (The host steps Play by a fixed 1/60 s under --npc-test.)
     m_KClock += 1.0f / 60.0f;
     const float now = m_KClock;
     m_Time = now;
-    npcs.HoldFire = true;
-    npcs.Frozen = true;
     m_Shot.clear();
     if (Stress() && now >= kFireAt && m_KStressFrame < 16) {
         const int f = m_KStressFrame++;

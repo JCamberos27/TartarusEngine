@@ -1588,19 +1588,19 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
         if (ready) s_Ready.insert(readyKey);
         return ready;
     };
-    // The enemy squad's soldiers are built at Play from Soldier.json: their controller's clips are loaded too, or the
-    // first soldier spawned stalls its frame on them.
+    // The training dummies are built at Play from their body prefab: its controllers' clips are loaded too, or the first
+    // dummy spawned stalls its frame on them.
     if (!world.Registry.view<NpcSpawnComponent>().empty()) {
         static std::vector<std::string> s_SoldierControllers;
         static std::string s_Path;auto path=SquadSettingsComponent{}.BodyPrefab;
-        // The first active squad's body prefab (a loop that always breaks is C4702 in Debug).
+        // The first active Dummy Settings' body prefab (a loop that always breaks is C4702 in Debug).
         const auto squads = world.Registry.view<SquadSettingsComponent>(entt::exclude<InactiveTag>);
         if (squads.begin() != squads.end()) path = world.Registry.get<SquadSettingsComponent>(*squads.begin()).BodyPrefab;
         if(s_Path!=path){
             s_Path=path;s_SoldierControllers.clear();
             std::ifstream in(fs::u8path(ProjectPaths::Resolve(path)),std::ios::binary);
             const json doc = json::parse(in, nullptr, /*allow_exceptions=*/false);
-            // Every "Controller" string anywhere in the prefab: the soldier's pieces each carry one.
+            // Every "Controller" string anywhere in the prefab: the body's pieces each carry one.
             const std::function<void(const json&)> collect = [&](const json& j) {
                 if (j.is_object()) {
                     for (auto it = j.begin(); it != j.end(); ++it) {

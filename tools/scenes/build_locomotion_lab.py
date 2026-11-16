@@ -40,18 +40,18 @@ for i in range(10):
     box('Stair %02d' % (i + 1), (8.0, h / 2.0, 4.0 + 0.35 * i), (2.0, h, 0.35))
 box('Platform 2.5m', (8.0, 1.25, 9.5), (4.0, 2.5, 4.0))
 
-# A bare soldier, a training dummy (stands, takes hits) - --npc-test drives it.
-spawn = {'id': next_id, 'name': 'Dummy Soldier', 'order': next_order, 'parentId': -1, 'position': [-3.0, 0.0, 14.0],
+# A bare training dummy (stands, takes hits) - --npc-test drives it.
+spawn = {'id': next_id, 'name': 'Dummy', 'order': next_order, 'parentId': -1, 'position': [-3.0, 0.0, 14.0],
          'rotation': [0.0, 1.0, 0.0, 0.0], 'scale': [1.0, 1.0, 1.0],
-         'NPC Spawn': {'Bare': True, 'Brain': 'Training Dummy', 'Outfit Seed': 1, 'Skill': 0.5, 'Squad': 0, 'Weapon': 'AKS-74U'}}
+         'Dummy Spawn': {'Bare': True, 'Outfit Seed': 1, 'Roam': True}}
 next_id += 1
 next_order += 1
 j['empties'].append(spawn)
 
-# One soldier, never respawned: the lab is for watching it move, not a fight.
-squad = {'id': next_id, 'name': 'Lab Squad Settings', 'order': next_order, 'parentId': -1, 'position': [0.0, 0.0, 0.0],
+# One dummy, never respawned: the lab is for watching it move, not a fight.
+squad = {'id': next_id, 'name': 'Lab Dummy Settings', 'order': next_order, 'parentId': -1, 'position': [0.0, 0.0, 0.0],
          'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0],
-         'Squad Settings': {'Squad Size': 1, 'Respawn': False, 'Respawn Delay': 3.0, 'Difficulty': 1.0}}
+         'Dummy Settings': {'Respawn': False, 'Respawn Delay': 3.0}}
 next_id += 1
 next_order += 1
 j['empties'].append(squad)

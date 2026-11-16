@@ -221,10 +221,11 @@ void PlaySession::Start() {
         vitals.RespawnDelay = fp.RespawnDelay;
         vitals.SpawnProtection = fp.SpawnProtection;
         m_PlayerVitals.Reset(vitals);
-        // The enemy squad, when the scene has NPC Spawns.
-        if (m_NpcTest) m_NpcTest->AddSceneSquad(m_World, m_Assets);
-        const bool squadStarted = m_NpcDirector.Start(m_World, m_Assets, &fp);
-        if (m_NpcTest) std::printf("[NpcTest] squad %s (%zu spawn points)\n", squadStarted ? "started" : "not started", m_NpcDirector.SpawnPoints().size());
+        // The training dummies, when the scene has Dummy Spawns.
+        if (m_NpcTest) m_NpcTest->Assets = &m_Assets;
+        // (--npc-test npcloco: a scene with no Dummy Spawn, its one dummy put down by the test.)
+        const bool squadStarted = m_NpcDirector.Start(m_World, m_Assets, m_NpcTest && m_NpcTest->StartsEmptyDirector());
+        if (m_NpcTest) std::printf("[NpcTest] dummies %s (%zu spawn points)\n", squadStarted ? "started" : "not started", m_NpcDirector.SpawnPoints().size());
         if (squadStarted) {
             m_DevPanel.Reset(m_PlayerVitals, m_NpcDirector);
             m_CombatHud.Reset();
@@ -235,8 +236,8 @@ void PlaySession::Start() {
                 m_CombatFx.SetAudioLog((std::filesystem::path(m_NpcTest->RecordDir()) / "audio.txt").string());
             }
         }
-        // Play-mode audio (the guns' report layers, gear sounds, foley) and the muzzle effects don't wait for a squad:
-        // a scene with no NPC Spawns has the player's gun too.
+        // Play-mode audio (the guns' report layers, gear sounds, foley) and the muzzle effects don't wait for the dummies:
+        // a scene with no Dummy Spawns has the player's gun too.
         if (!m_CombatFx.Active()) {
             m_CombatFx.Start(m_World);
         }

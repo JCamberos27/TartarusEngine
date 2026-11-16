@@ -1,5 +1,5 @@
 # 310: the family. Mum, dad and a young kid; a lived-in, faithful, slightly worn home, everyone asleep but the TV.
-# The player starts by their front door and the Combine squad is already inside.
+# The player starts by their front door and training dummies stand in the rooms.
 import json
 import math
 
@@ -342,24 +342,21 @@ def player(b):
     root.update({'position': [12.25, 0.1, 4.8], 'rotation': k.yaw_quat(90.0)})
 
 def npcs(b):
-    # The Sandbox's Combine squad, moved in: the director (squad rules) and four soldiers in the rooms off the hall, each on
-    # the clearest patch of floor in its room and facing the front door. Respawn stays on, so the flat refills. All of
-    # them under one top-level Enemies group (at the origin, so the positions stay world ones), like the other scenes.
+    # Four training dummies in the rooms off the hall, each on the clearest patch of floor in its room and facing the
+    # front door, plus the dummy settings (respawn stays on, so the flat refills). All of them under one top-level
+    # Enemies group (at the origin, so the positions stay world ones), like the other scenes.
     enemies = b.s.empty('Enemies')
-    director = b.from_sandbox('AI Director')
-    director.update({'parentId': enemies, 'position': [6.5, 0.0, 7.0]})
-    spawn = next(e for e in b._sandbox['empties'] if e['name'] == 'Enemy Spawn 1')
+    settings = b.from_sandbox('Dummy Settings')
+    settings.update({'parentId': enemies, 'position': [6.5, 0.0, 7.0]})
     door = (12.25, 4.8)
-    for n, (room, weapon, skill) in enumerate((('Living Room', 0, 0.6), ('Kitchen', 1, 0.55),
-                                               ('Master Bedroom', 0, 0.65), ('Bedroom 2', 0, 0.6)), 1):
+    for n, room in enumerate(('Living Room', 'Kitchen', 'Master Bedroom', 'Bedroom 2'), 1):
         (x, z), _ = b.clear_spot(room)
-        e = json.loads(json.dumps(spawn))
         i = b.s._next()
-        e['NPC Spawn'].update({'Weapon': ('AKS-74U', 'Remington 870')[weapon], 'Skill': skill, 'Outfit Seed': n})
         yaw = math.degrees(math.atan2(door[0] - x, door[1] - z))
-        e.update({'id': i, 'order': i, 'parentId': enemies, 'name': f'Enemy Spawn {n} ({room})',
-                  'position': [round(x, 3), 0.1, round(z, 3)], 'rotation': k.yaw_quat(yaw)})
-        b.s.empties.append(e)
+        b.s.empties.append({'id': i, 'order': i, 'parentId': enemies, 'name': f'Dummy Spawn {n} ({room})',
+                            'position': [round(x, 3), 0.1, round(z, 3)], 'rotation': k.yaw_quat(yaw),
+                            'scale': [1.0, 1.0, 1.0],
+                            'Dummy Spawn': {'Outfit Seed': n, 'Roam': True}})
 
 def furnish(b):
     for f in (living, kitchen, master, ensuite, bedroom2, kids, bathroom, laundry, hall):

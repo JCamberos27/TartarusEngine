@@ -84,14 +84,12 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         }
         std::sort(m_ScenePaths.begin(), m_ScenePaths.end());
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
-            m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario == "sandbox" ? "tests/scenes/Arena.json"
+            m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" ? "tests/scenes/LocomotionLab.json"
                                                           : opt.npcTestScenario == "blood" ? "tests/scenes/BloodTest.json"
                                                           : opt.npcTestScenario == "ragdoll" ? "tests/scenes/RagdollTest.json"
                                                           : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
-                                                          : opt.npcTestScenario == "labloco" ? "tests/scenes/LocomotionLab.json"
-                                                          : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "tests/scenes/Apartment Hallway.json"
                                                           : opt.npcTestScenario == "locomotion" || opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" || opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" ? "tests/scenes/Apartment Hallway.json"
-                                                                                       : "tests/scenes/Arena.json"));
+                                                                                       : "tests/scenes/Arena.json")); // (deaths, feet, flame: the Arena)
 #pragma warning(suppress : 4996)
         if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) { // e.g. doors in the Forest
             // A test scene (tests/scenes/) by that name first, else the project's scenes/.
@@ -338,9 +336,8 @@ void SmokeHarness::PerfFrame() {
     const bool& playing = m_Ctx.playing;
     const bool& playMaximized = m_Ctx.playMaximized;
     const LaunchOptions& opt = m_Opt;
-    // --perf-bench <scene> --npc-test <scenario>: the combat bench - the scripted fight in the Game view,
-    // maximized, every Play frame measured (stutters included: TARTARUS_PERF_WARMUP frames skipped, 100 by
-    // default), one report when the fight is over.
+    // --perf-bench <scene> --npc-test <scenario>: the scripted run in the Game view, maximized, every Play frame
+    // measured (stutters included: TARTARUS_PERF_WARMUP frames skipped, 100 by default), one report when it is over.
     if (opt.perfBenchMode && npcTest) {
         const double frameMs = m_Perf.TakeFrameMs();
         if (playing && !playMaximized) m_Ctx.setMaximized(true);
@@ -457,7 +454,7 @@ void SmokeHarness::EndFrame() {
             editorCamera.Pitch = pitch;
         }
     }
-    // --npc-test --perf-sample: a CPU profile of the fight itself (the squad up and shooting).
+    // --npc-test --perf-sample: a CPU profile of the scripted run itself.
     if (npcTest && opt.perfSample) {
         if (m_FramesRendered == 900) { SamplingProfiler::Start(); m_Sampling = true; }
         if (m_Sampling && (m_FramesRendered >= m_FrameBudget - 1 || npcTest->Done())) {

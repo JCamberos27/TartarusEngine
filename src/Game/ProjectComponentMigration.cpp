@@ -14,8 +14,8 @@ using Json=nlohmann::json;
 struct Definition { const char* Class; const char* Component; };
 constexpr Definition kDefinitions[]={
     {"Tartarus.Gameplay.PlayerDefinition","First Person Controller"},
-    {"Tartarus.Gameplay.NpcDefinition","NPC Spawn"},
-    {"Tartarus.Gameplay.SquadDefinition","Squad Settings"},
+    {"Tartarus.Gameplay.NpcDefinition","Dummy Spawn"},
+    {"Tartarus.Gameplay.SquadDefinition","Dummy Settings"},
     {"Tartarus.Gameplay.EffectsDefinition","FX & HUD Settings"},
     {"Tartarus.Gameplay.WeaponAudioDefinition","Weapon Audio"},
     {"Tartarus.Gameplay.FoleyDefinition","Foley Audio"},
@@ -30,8 +30,6 @@ constexpr Definition kDefinitions[]={
 // C# field names that are not the native label with its spaces taken out.
 constexpr std::pair<const char*,const char*> kRenamed[]={
     {"KillY","Kill Height"},{"StickLookDegPerSec","Stick Look Deg/Sec"},
-    {"CoverSpacing","Cover Sample Spacing"},{"CoverKneeHeight","Low Cover Height"},
-    {"CoverHeadHeight","High Cover Height"},{"CoverStep","Cover Peek Step"},
     {"EnvTailGainOutdoorOpen","Env Gain Outdoor Open"},{"EnvTailGainOutdoorUrban","Env Gain Outdoor Urban"},
     {"EnvTailGainIndoorSmall","Env Gain Indoor Small"},{"EnvTailGainIndoorLarge","Env Gain Indoor Large"},
 };
@@ -40,7 +38,7 @@ const Definition* Find(const std::string& className) {
     for(const auto& d:kDefinitions)if(className==d.Class)return &d;
     return nullptr;
 }
-// "Bleed-Out Time", "Volume Jitter dB" and "BleedOutTime", "VolumeJitterDb" all compare as one name.
+// "Volume Jitter dB" and "VolumeJitterDb" all compare as one name.
 std::string Folded(const char* name) {
     std::string out;
     for(const char* c=name;*c;++c)if(std::isalnum((unsigned char)*c))out+=(char)std::tolower((unsigned char)*c);

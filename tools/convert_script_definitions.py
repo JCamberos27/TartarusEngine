@@ -1,7 +1,7 @@
 """Convert C# definition script slots in scenes and prefabs back to their native component blocks.
 
 The project's PlayerDefinition, NpcDefinition, SquadDefinition, WeaponDefinition, attachment, audio and
-effects scripts are native components again (First Person Controller, NPC Spawn, ...). This rewrites a
+effects scripts are native components again (First Person Controller, Dummy Spawn, ...). This rewrites a
 file's "C# Script" slots of those classes as the native blocks the editor saves, and drops the slots.
 GUIDs are kept. Pass files or directories; --apply saves, otherwise it only reports.
 
@@ -16,8 +16,8 @@ from pathlib import Path
 
 CLASS_TO_COMPONENT = {
     "Tartarus.Gameplay.PlayerDefinition": "First Person Controller",
-    "Tartarus.Gameplay.NpcDefinition": "NPC Spawn",
-    "Tartarus.Gameplay.SquadDefinition": "Squad Settings",
+    "Tartarus.Gameplay.NpcDefinition": "Dummy Spawn",
+    "Tartarus.Gameplay.SquadDefinition": "Dummy Settings",
     "Tartarus.Gameplay.EffectsDefinition": "FX & HUD Settings",
     "Tartarus.Gameplay.WeaponAudioDefinition": "Weapon Audio",
     "Tartarus.Gameplay.FoleyDefinition": "Foley Audio",
@@ -39,16 +39,12 @@ NATIVE_FIELDS = {
         "Secondary Animation Set", "View Model Offset", "Camera Bone", "View Model Rotation", "View Model Scale", "View Model FOV",
         "Max Health", "Regen Delay", "Regen Rate", "Respawn Delay", "Spawn Protection",
     ],
-    "NPC Spawn": [
-        "Weapon", "Squad", "Skill", "Outfit Seed", "Brain", "Bare",
+    "Dummy Spawn": [
+        "Outfit Seed", "Bare", "Roam",
     ],
-    "Squad Settings": [
-        "Squad Size", "Respawn", "Respawn Delay", "Difficulty", "NPC Damage Scale", "Heavy Hit Damage",
-        "Stagger Time", "Bleed-Out Time", "Crawl Speed", "Limp Speed Scale", "Limp Time", "Corpse Time",
-        "Max Corpses", "Unseen Time", "Fall Gravity", "Melee Damage", "Melee Time", "Melee Hit Time",
-        "Hitbox Range", "Foot IK Range", "Mesh Check Range", "Cover Sample Spacing", "Cover Reach", "Low Cover Height",
-        "High Cover Height", "Cover Peek Step", "Body Prefab", "Rifle Prefab", "Shotgun Prefab", "Rifle Animation Set",
-        "Shotgun Animation Set",
+    "Dummy Settings": [
+        "Respawn", "Respawn Delay", "Heavy Hit Damage", "Stagger Time", "Corpse Time", "Max Corpses", "Unseen Time",
+        "Fall Gravity", "Hitbox Range", "Foot IK Range", "Body Prefab",
     ],
     "FX & HUD Settings": [
         "Flash Time", "Player Flash Scale", "Flame Glow", "Muzzle Style", "Flame Scale", "Beam Range",
@@ -104,16 +100,12 @@ NATIVE_FIELDS = {
 # C# field names that are not the native label with its spaces taken out.
 RENAMED = {
     "KillY": "Kill Height", "StickLookDegPerSec": "Stick Look Deg/Sec",
-    "CoverSpacing": "Cover Sample Spacing", "CoverKneeHeight": "Low Cover Height",
-    "CoverHeadHeight": "High Cover Height", "CoverStep": "Cover Peek Step",
     "EnvTailGainOutdoorOpen": "Env Gain Outdoor Open", "EnvTailGainOutdoorUrban": "Env Gain Outdoor Urban",
     "EnvTailGainIndoorSmall": "Env Gain Indoor Small", "EnvTailGainIndoorLarge": "Env Gain Indoor Large",
 }
 VECTORS = {"View Model Offset", "View Model Rotation", "Light Color", "Flame Color", "Sight Origin", "Sight Direction"}
 # Enums are saved as their label, the way the editor writes them.
 ENUMS = {
-    ("NPC Spawn", "Weapon"): ["AKS-74U", "Remington 870", "Random"],
-    ("NPC Spawn", "Brain"): ["Squad AI", "Training Dummy"],
     ("Weapon Definition", "Reload"): ["Magazine", "Per Round"],
 }
 

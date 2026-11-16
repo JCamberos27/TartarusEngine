@@ -108,15 +108,13 @@ struct SimEventCallback : PxSimulationEventCallback {
 // (#185 PR 7), kills pairs the layer matrix disables (#185 PR 8; word1 of each shape's filter
 // data is its layer 0-31, constantBlock is ProjectSettings' 32-word mask, #150), and asks for CCD
 // contact detection so a body with the eENABLE_CCD flag actually sweeps (#185 PR 9).
-// word1 above the layer (its low five bits): a character's shape that passes through ragdolls (SetNpcPassesRagdolls).
-constexpr PxU32 kPassRagdolls = 1u << 30;
 // word1 of a ragdoll's parts: it started in or on another body, and passes the other ragdolls (not its own parts, not the world)
 // until it is clear of them (UpdateBodyPasses).
 constexpr PxU32 kPassBodies = 1u << 29;
 // A ragdoll's own part (word2: its id + 1, the part 0..31 above), not an object told to ignore one (slot kRagdollIgnorerSlot).
 constexpr PxU32 kRagdollIgnorerSlot = 32u;
 inline bool IsRagdollPart(const PxFilterData& f) { return (f.word2 & 0xFFFFu) != 0u && ((f.word2 >> 16) & 63u) < kRagdollIgnorerSlot; }
-// An object told to ignore the ragdoll in `slot` (IgnoreRagdollParts / IgnoreRagdollForNpc).
+// An object told to ignore the ragdoll in `slot` (IgnoreRagdollParts).
 inline bool IgnoresRagdollSlot(const PxFilterData& f, int slot) {
     return (f.word2 & 0xFFFFu) == (PxU32)slot + 1u && ((f.word2 >> 16) & 63u) == kRagdollIgnorerSlot;
 }
@@ -206,7 +204,6 @@ struct PhysicsState {
     struct NpcCharacter {
         std::uint32_t entity = 0xFFFFFFFFu;
         std::uint16_t Gen = 0; // the slot's generation (see MakeHandle); kept when the slot is freed
-        bool passRagdolls = false;
         std::unique_ptr<CharacterBody> body;
         bool Used() const { return body != nullptr; }
         PxRigidActor* Actor() const { return body ? static_cast<PxRigidActor*>(body->Actor) : nullptr; }

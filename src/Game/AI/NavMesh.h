@@ -17,7 +17,7 @@ class dtQueryFilter;
 // Where the enemy AI can walk: a Recast navigation mesh built from the scene's solid geometry
 // (PhysicsWorld::CollectStaticGeometry) when Play starts, and Detour queries on it - paths, the
 // nearest walkable point, straight-line walkability, and the mesh's open edges (where walls and
-// cover stand, for CoverSystem). No PhysX or GL in here, so it builds and runs in unit tests.
+// cover stand). No PhysX or GL in here, so it builds and runs in unit tests.
 struct NavBuildSettings {
     float CellSize = 0.1f;       // metres, horizontal voxel size
     float CellHeight = 0.1f;     // metres, vertical

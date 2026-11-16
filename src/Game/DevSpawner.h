@@ -9,9 +9,8 @@ class World;
 class AssetLibrary;
 class NpcDirector;
 class FirstPersonPresentation;
-class NpcDroppedWeapon;
 
-// F9-F12 in Play (FKeyRow.h): F9 a soldier, F11 an item, each at the crosshair and facing the player; Shift
+// F9-F12 in Play (FKeyRow.h): F9 a training dummy, F11 an item, each at the crosshair and facing the player; Shift
 // picks the next variant without spawning. F12 takes away everything they made, corpses included. The items are real
 // things on the floor: a gun or an ammo box the player picks up with Interact (E), or a physics crate.
 class DevSpawner {
@@ -25,7 +24,7 @@ public:
         float Dt = 0.0f;
         bool Keys = false;     // the F-row may act (Play, the game has input, not typing)
         bool Interact = false; // Interact pressed this frame
-        // Starts the soldiers in a scene with no NPC Spawn (NpcDirector::Start allowEmpty); false when it can't.
+        // Starts the dummies in a scene with no Dummy Spawn (NpcDirector::Start allowEmpty); false when it can't.
         std::function<bool()> StartSquad;
     };
     DevSpawner();
@@ -40,8 +39,6 @@ public:
 
 private:
     struct Pickup {
-        int Kind = 0; // 0 AK, 1 Shotgun, 2 Ammo
-        std::unique_ptr<NpcDroppedWeapon> Gun;
         entt::entity Prop = entt::null; // the ammo box
     };
     void SpawnNpc(const Context& c);
@@ -52,7 +49,7 @@ private:
     void Warm(const Context& c);
     int m_Warmed = 0; // how many of this Play's spawn prefabs have been warmed (Warm: one a frame)
     int m_Npc = 0, m_Item = 0;
-    bool m_WaitSquad = false; // started the soldiers this press: spawn once their navmesh is up
+    bool m_WaitSquad = false; // started the dummies this press: spawn once their navmesh is up
     std::vector<int> m_NpcIds;
     std::vector<entt::entity> m_Props;
     std::vector<Pickup> m_Pickups;

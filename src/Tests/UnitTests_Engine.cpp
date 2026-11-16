@@ -145,13 +145,12 @@ static void Test_CombatHud_KillFeedAndDevReset() {
     CHECK(hud.Kills() == 0 && hud.FeedRows() == 0);
 
     DevPanel panel;
-    panel.Open = panel.InfiniteAmmo = panel.Invisible = panel.AiOverlay = true;
+    panel.Open = panel.InfiniteAmmo = panel.AiOverlay = true;
     PlayerVitals vitals;
     vitals.GodMode = true;
-    npcs.Frozen = npcs.HoldFire = true;
     panel.Reset(vitals, npcs);
-    CHECK(!panel.Open && !panel.InfiniteAmmo && !panel.Invisible && !panel.AiOverlay);
-    CHECK(!vitals.GodMode && !npcs.Frozen && !npcs.HoldFire);
+    CHECK(!panel.Open && !panel.InfiniteAmmo && !panel.AiOverlay);
+    CHECK(!vitals.GodMode);
 }
 
 static glm::mat4 RandomAffine(std::mt19937& rng) {

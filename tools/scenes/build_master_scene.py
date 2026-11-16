@@ -366,8 +366,8 @@ def npc_bay(s):
     s.block('NPC Pad', x0, x0 + 12, 0.0, 0.02, z0, z0 + 10, collider=False)
     s.header('NPC BAY  ·  training dummies', x0 + 6, 2.6, z0 + 1.0, 0.3)
     for i in range(3):
-        s.empty(f'Dummy Spawn {i + 1}', -1, (x0 + 3.0 + i * 3.0, 0.0, z0 + 4.0), yaw=90.0, **{'NPC Spawn': {
-            'Brain': 'Training Dummy', 'Outfit Seed': i + 1, 'Skill': 0.5, 'Squad': 1, 'Weapon': 'AKS-74U', 'Bare': True}})
+        s.empty(f'Dummy Spawn {i + 1}', -1, (x0 + 3.0 + i * 3.0, 0.0, z0 + 4.0), yaw=90.0, **{'Dummy Spawn': {
+            'Outfit Seed': i + 1, 'Bare': True, 'Roam': True}})
     s.pole(x0 - 1.0, z0 + 4.0)
     s.light('NPC Bay Fill', -1, (x0 + 6.0, 4.0, z0 + 8.0), intensity=10.0, rng=14.0, kelvin=5600.0)
 

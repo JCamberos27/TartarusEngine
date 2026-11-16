@@ -3045,7 +3045,7 @@
     },
     {
       "id": 61,
-      "name": "AI Director",
+      "name": "Dummy Settings",
       "order": 60,
       "parentId": 10,
       "position": [
@@ -3064,12 +3064,9 @@
         1.0,
         1.0
       ],
-      "Squad Settings": {
-        "Difficulty": 1.0,
-        "NPC Damage Scale": 0.44999998807907104,
+      "Dummy Settings": {
         "Respawn": false,
-        "Respawn Delay": 8.0,
-        "Squad Size": 2
+        "Respawn Delay": 8.0
       }
     },
     {
@@ -3094,12 +3091,9 @@
         1.0,
         1.0
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": true
       }
     },
     {
@@ -3124,12 +3118,9 @@
         1.0,
         1.0
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": true
       }
     },
     {
@@ -3154,12 +3145,9 @@
         1.0,
         1.0
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 1,
-        "Weapon": "AKS-74U"
+        "Roam": true
       }
     },
     {
@@ -3184,12 +3172,9 @@
         1.0,
         1.0
       ],
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 1,
-        "Weapon": "AKS-74U"
+        "Roam": true
       }
     },
     {

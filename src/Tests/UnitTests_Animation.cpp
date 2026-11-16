@@ -31,11 +31,6 @@ void TestFirstPersonBodyNpcTunablesRoundTrip() {
     set.NpcTurnThreshold = 71.0f;
     set.NpcMoveEase = 0.17f;
     set.NpcFaceEase = 0.13f;
-    set.NpcMaxTwist = 55.0f;
-    set.NpcAimLean = 7.0f;
-    set.NpcAimLeanCrouched = 17.0f;
-    set.NpcReadyLeanCrouched = 31.0f;
-    set.NpcCowerHunch = 27.0f;
     set.NpcHeadMaxYaw = 61.0f;
     set.NpcHeadMaxPitch = 33.0f;
     set.NpcFootIKMaxDrop = 0.41f;
@@ -59,11 +54,6 @@ void TestFirstPersonBodyNpcTunablesRoundTrip() {
     CHECK(got.NpcTurnThreshold == set.NpcTurnThreshold);
     CHECK(got.NpcMoveEase == set.NpcMoveEase);
     CHECK(got.NpcFaceEase == set.NpcFaceEase);
-    CHECK(got.NpcMaxTwist == set.NpcMaxTwist);
-    CHECK(got.NpcAimLean == set.NpcAimLean);
-    CHECK(got.NpcAimLeanCrouched == set.NpcAimLeanCrouched);
-    CHECK(got.NpcReadyLeanCrouched == set.NpcReadyLeanCrouched);
-    CHECK(got.NpcCowerHunch == set.NpcCowerHunch);
     CHECK(got.NpcHeadMaxYaw == set.NpcHeadMaxYaw);
     CHECK(got.NpcHeadMaxPitch == set.NpcHeadMaxPitch);
     CHECK(got.NpcFootIKMaxDrop == set.NpcFootIKMaxDrop);

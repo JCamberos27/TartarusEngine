@@ -492,7 +492,7 @@ float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, cons
                                       const glm::vec3& hand, float clearance, float maxAngle, float step, float prefer = 0.0f);
 // The arms rig's arm shapes onto `pose` of model `m` (rotations of every node under the clavicles, the body
 // keeping its bone lengths), by `weight`; the clavicles themselves by `weight * clavicleWeight`. What the
-// player's arms take before reaching the rig's hands - also the enemy soldiers' (NpcBody::HoldWeapon).
+// player's arms take before reaching the rig's hands.
 void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose,
                                  const std::vector<int>& parents, float clavicleWeight);
 // The same with the body / rig node pairs worked out once (FirstPersonBodyArmShapeLinks), for a body that holds the
@@ -507,8 +507,8 @@ glm::vec3 FirstPersonBodyPalmDirection(const Model& rig, const glm::mat4& rigWor
 void FirstPersonBodyCurlFingers(const Model& m, std::vector<LocalTRS>& pose, float degrees);
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
-// The arm solve's steps the player's body (FirstPersonBody::LateUpdate) and the soldiers' (NpcBody::WeaponEye /
-// HoldWeapon) share. Where the two have come to differ, the difference is a parameter, each keeping its own.
+// The arm solve's steps (FirstPersonBody::LateUpdate), kept as free functions for reuse; where callers differ, the
+// difference is a parameter.
 // Frame-rate independent approach toward a target over `seconds`: the share of the way to go this step. 1 (a snap) at
 // `snapBelow` seconds or less.
 float FirstPersonBodyFollow(float dt, float seconds, float snapBelow = 1e-4f);

@@ -1,5 +1,5 @@
 # Generates tests/scenes/Arena.json: a walled 64 x 64 m combat arena with cover, for testing the
-# player's weapons against the enemy squad. The player (Player Spawn with its weapons and the whole
+# player's weapons against the training dummies. The player (Player Spawn with its weapons and the whole
 # Player Body / outfit subtree), the Sun and the sky / post settings are copied from the Sandbox so
 # the arena plays exactly like it; everything else is built here. Re-running overwrites hand edits.
 # Usage: python tools/gen_arena_scene.py <repo root>
@@ -212,18 +212,17 @@ crates('Tower South', 18, 7.5, [(0, 0, 0), (0, 0, 1)], trench)
 copy_tree(spawn_id, -1, position=[0.0, 0.1, HALF - 4.0], rotation=quat_euler(yaw=180))
 enemies = group('Enemies')
 i = nid()
-ents['empties'].append({'id': i, 'name': 'AI Director', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -HALF + 2.0],
+ents['empties'].append({'id': i, 'name': 'Dummy Settings', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -HALF + 2.0],
                         'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
-                        'Squad Settings': {'Squad Size': 4, 'Respawn': True, 'Respawn Delay': 8.0, 'Difficulty': 1.0,
-                                           'NPC Damage Scale': 0.45}})
+                        'Dummy Settings': {'Respawn': True, 'Respawn Delay': 8.0}})
 # Facing +Z (yaw 0), toward the player's end. Two shotguns among the rifles.
 for k, (x, weapon, skill) in enumerate([(-20, 'AKS-74U', 0.6), (-10, 'Remington 870', 0.55), (0, 'AKS-74U', 0.7),
                                         (10, 'AKS-74U', 0.6), (20, 'Remington 870', 0.55)]):
     i = nid()
-    ents['empties'].append({'id': i, 'name': f'Enemy Spawn {k + 1}', 'order': i, 'parentId': enemies,
+    ents['empties'].append({'id': i, 'name': f'Dummy Spawn {k + 1}', 'order': i, 'parentId': enemies,
                             'position': [float(x), 0.1, -HALF + 5.0], 'rotation': quat_euler(yaw=0),
                             'scale': [1, 1, 1],
-                            'NPC Spawn': {'Weapon': weapon, 'Squad': 0, 'Skill': skill, 'Outfit Seed': 0, 'Brain': 'Squad AI'}})
+                            'Dummy Spawn': {'Outfit Seed': 0, 'Roam': True}})
 
 for k in ('boxes', 'empties', 'models'):
     scene[k] = ents[k]
