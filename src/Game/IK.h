@@ -85,7 +85,9 @@ struct TwoBoneHint {
     float MaxLimbScale = 1.0f;
     // Model-space bend axis (the way cross(root->end, root->mid) turns for a correctly bent limb) taken in place of the
     // pose's own by BendAxisWeight: near straight the pose's bend plane is rounding noise, and a knee bent out of a straight
-    // leg would go a different way each frame. 0 = the pose's own.
+    // leg would go a different way each frame. Before the solve the limb swings rigidly about its root->end line by
+    // BendAxisWeight of the angle from its own bend plane to this one (the end stays put, so the result is continuous in
+    // the weight and still lands on the target). 0 = the pose's own.
     glm::vec3 BendAxis{0.0f};
     float BendAxisWeight = 0.0f;
 };

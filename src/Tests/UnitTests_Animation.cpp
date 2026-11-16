@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 
 // Unit tests for animation poses and IK. Add a function per test and list it below.
 
@@ -187,6 +188,106 @@ void TestTwoBoneHintStopsElbowFlip() {
     CHECK(IK::Position(gh[2]).z > 0.0f && IK::Position(gh[2]).z < IK::Position(g[2]).z);
 }
 
+namespace {
+// root -> hip (1 up) -> knee -> ankle, 0.45 + 0.45, the knee bent `bendDeg` toward `planeDeg` about +Y from +Z (the toes);
+// the ankle hangs straight under the hip.
+struct BentLeg {
+    IK::Pose pose{4};
+    std::vector<int> parents{-1, 0, 1, 2};
+    std::vector<glm::mat4> g;
+    glm::vec3 KneeSide; // the way the knee bulges
+    BentLeg(float bendDeg, float planeDeg) {
+        KneeSide = glm::vec3(std::sin(glm::radians(planeDeg)), 0.0f, std::cos(glm::radians(planeDeg)));
+        const glm::vec3 k = glm::normalize(glm::cross(glm::vec3(0.0f, -1.0f, 0.0f), KneeSide));
+        pose[1].T = glm::vec3(0.0f, 1.0f, 0.0f);
+        pose[1].R = glm::angleAxis(glm::radians(bendDeg) * 0.5f, k);
+        pose[2].T = glm::vec3(0.0f, -0.45f, 0.0f);
+        pose[2].R = glm::angleAxis(-glm::radians(bendDeg), k);
+        pose[3].T = glm::vec3(0.0f, -0.45f, 0.0f);
+        IK::ComputeGlobals(pose, parents, g);
+    }
+    glm::vec3 Hip() const { return IK::Position(g[1]); }
+    glm::vec3 Ankle() const { return IK::Position(g[3]); }
+};
+// Signed angle (degrees) from `from` to `to` about unit `n`, both seen square to it.
+float SignedDegAbout(const glm::vec3& from, const glm::vec3& to, const glm::vec3& n) {
+    const glm::vec3 f = from - n * glm::dot(from, n), t = to - n * glm::dot(to, n);
+    return glm::degrees(std::atan2(glm::dot(glm::cross(f, t), n), glm::dot(f, t)));
+}
+// Solves the leg onto `target` with the knee steered toward the toes (+Z) by `bendWeight`, as NpcBody's legs do.
+std::vector<glm::mat4> SolveBentLeg(const BentLeg& leg, const glm::vec3& target, float bendWeight) {
+    IK::TwoBoneHint h;
+    h.BendAxis = glm::cross(leg.Ankle() - leg.Hip(), glm::vec3(0.0f, 0.0f, 1.0f));
+    h.BendAxisWeight = bendWeight;
+    IK::Pose p = leg.pose;
+    std::vector<glm::mat4> g = leg.g;
+    CHECK(IK::SolveTwoBone(p, leg.parents, g, 1, 2, 3, target, nullptr, 1.0f, 0.0f, &h));
+    return g;
+}
+float KneeDeg(const std::vector<glm::mat4>& g) {
+    const glm::vec3 a = IK::Position(g[1]), b = IK::Position(g[2]), c = IK::Position(g[3]);
+    return glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(a - b), glm::normalize(c - b)), -1.0f, 1.0f)));
+}
+} // namespace
+
+// The BendAxis hint (NpcBody's near-straight legs) turns the knee's plane without costing the reach: the end still lands on
+// the target, the knee angle is the triangle's, and the result is continuous in the weight (a tiny weight is a tiny change).
+void TestTwoBoneBendAxisReachesTarget() {
+    float worstReach = 0.0f, worstKnee = 0.0f, worstJump = 0.0f;
+    for (const float bend : {4.0f, 0.5f})
+        for (const float plane : {90.0f, 180.0f}) {
+            const BentLeg leg(bend, plane);
+            const glm::vec3 a = leg.Hip();
+            const glm::vec3 down = glm::normalize(leg.Ankle() - a);
+            for (const glm::vec3& target : {a + down * 0.8f, a + glm::vec3(0.05f, -0.78f, 0.12f)}) {
+                const float lat = glm::length(target - a);
+                const float wantKnee = glm::degrees(std::acos(std::clamp((lat * lat - 2.0f * 0.45f * 0.45f) / (-2.0f * 0.45f * 0.45f), -1.0f, 1.0f)));
+                std::vector<glm::mat4> byWeight[3];
+                const float weights[3] = {1.0f, 0.001f, 0.0f};
+                for (int k = 0; k < 3; ++k) {
+                    byWeight[k] = SolveBentLeg(leg, target, weights[k]);
+                    worstReach = std::max(worstReach, glm::length(IK::Position(byWeight[k][3]) - target));
+                    worstKnee = std::max(worstKnee, std::fabs(KneeDeg(byWeight[k]) - wantKnee));
+                }
+                // Whole weight: the knee is out toward the toes.
+                const glm::vec3 n = glm::normalize(IK::Position(byWeight[0][3]) - a);
+                const glm::vec3 side = IK::Position(byWeight[0][2]) - a;
+                CHECK(glm::dot(glm::normalize(side - n * glm::dot(side, n)), glm::vec3(0.0f, 0.0f, 1.0f)) > 0.95f);
+                if (glm::length(target - (a + down * 0.8f)) < 1e-6f) // straight down the leg: no swing, the plane is exactly the wanted one
+                    CHECK(std::fabs(SignedDegAbout(side, glm::vec3(0.0f, 0.0f, 1.0f), n)) < 0.5f);
+                // A thousandth of the weight is (within a millimetre) none of it.
+                for (int j = 2; j <= 3; ++j)
+                    worstJump = std::max(worstJump, glm::length(IK::Position(byWeight[1][j]) - IK::Position(byWeight[2][j])));
+            }
+        }
+    std::printf("[anim] bend-axis hint: worst reach miss %.3f mm, knee angle off %.4f deg, w 0.001 vs 0 %.3f mm\n",
+                worstReach * 1000.0f, worstKnee, worstJump * 1000.0f);
+    CHECK(worstReach < 1e-3f);
+    CHECK(worstKnee < 0.05f);
+    CHECK(worstJump < 1e-3f);
+
+    // Swept 0..1 the knee turns smoothly from its own side toward the toes, the weight's share of the way, and the end
+    // never leaves the target.
+    for (const float plane : {90.0f, 150.0f}) {
+        const BentLeg leg(4.0f, plane);
+        const glm::vec3 a = leg.Hip();
+        const glm::vec3 n = glm::normalize(leg.Ankle() - a);
+        const glm::vec3 target = a + n * 0.8f;
+        const float whole = SignedDegAbout(leg.KneeSide, glm::vec3(0.0f, 0.0f, 1.0f), n);
+        float worstTurn = 0.0f, worstMiss = 0.0f;
+        for (int i = 0; i <= 20; ++i) {
+            const float w = (float)i / 20.0f;
+            const std::vector<glm::mat4> g = SolveBentLeg(leg, target, w);
+            worstMiss = std::max(worstMiss, glm::length(IK::Position(g[3]) - target));
+            worstTurn = std::max(worstTurn, std::fabs(SignedDegAbout(leg.KneeSide, IK::Position(g[2]) - a, n) - w * whole));
+        }
+        std::printf("[anim] bend-axis sweep, plane %.0f deg: knee turn off its share by %.3f deg, reach miss %.3f mm\n", plane,
+                    worstTurn, worstMiss * 1000.0f);
+        CHECK(worstMiss < 1e-3f);
+        CHECK(worstTurn < 0.5f);
+    }
+}
+
 void TestTwoBoneMaxLimbScale() {
     const HintArm arm;
     const glm::vec3 a = IK::Position(arm.g[1]);
@@ -253,6 +354,109 @@ void TestLimbGripOffsetMovesHand() {
     std::vector<glm::mat4> g = arm.g;
     CHECK(IK::SolveTwoBone(p, arm.parents, g, 1, 2, 3, IK::Position(goal), nullptr, 1.0f));
     CHECK(glm::length(IK::Position(g[3]) - (glm::vec3(target[3]) + glm::vec3(0.0f, 0.1f, 0.0f))) < 1e-3f);
+}
+
+// An IK Rig at part weight (the procedural IK weight fading in or out) moves the gun by that share of its offset; the hand
+// that keeps its animated grip must go with the gun all the way, not the same share again (that left it off the gun by
+// w(1-w) of the move: 1.35 cm here at 0.5). Weight 0 is the animated pose, untouched.
+void TestApplyRigPartialWeightKeepsHandOnGun() {
+    // ApplyRig reads only the node hierarchy off the model: Root (a triangle, so it imports) -> Shoulder -> Elbow -> Hand,
+    // Root -> Gun. The transforms are the test's own pose below.
+    std::error_code ec;
+    const std::filesystem::path dir = std::filesystem::temp_directory_path(ec) / "TartarusIkRigTest";
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path file = dir / "ik_rig_arm.gltf";
+    {
+        std::ofstream out(file, std::ios::binary | std::ios::trunc);
+        out << R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],
+"nodes":[{"name":"Root","mesh":0,"children":[1,4]},{"name":"Shoulder","children":[2]},{"name":"Elbow","children":[3]},
+{"name":"Hand"},{"name":"Gun"}],
+"meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}],
+"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[1,1,0]}],
+"bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36}],
+"buffers":[{"byteLength":36,"uri":"data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}]})";
+    }
+    const auto model = Model::ImportDeferred(file.string(), ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    const int shoulder = model->NodeIndex("Shoulder"), elbow = model->NodeIndex("Elbow"), hand = model->NodeIndex("Hand"),
+              gunNode = model->NodeIndex("Gun");
+    CHECK(shoulder >= 0 && elbow >= 0 && hand >= 0 && gunNode >= 0);
+    if (shoulder < 0 || elbow < 0 || hand < 0 || gunNode < 0) return;
+    std::vector<int> parents(model->NodeCount());
+    for (int i = 0; i < model->NodeCount(); ++i) parents[i] = model->NodeParent(i);
+
+    // The animated pose: a bent arm, the gun a little off the hand (the grip), every other node at identity.
+    IK::Pose animated(model->NodeCount(), LocalTRS{});
+    animated[shoulder].T = glm::vec3(0.0f, 1.5f, 0.0f);
+    animated[shoulder].R = glm::angleAxis(-0.4f, glm::vec3(0.0f, 1.0f, 0.0f));
+    animated[elbow].T = glm::vec3(0.3f, 0.0f, 0.0f);
+    animated[elbow].R = glm::angleAxis(0.9f, glm::vec3(0.0f, 0.0f, 1.0f));
+    animated[hand].T = glm::vec3(0.28f, 0.0f, 0.0f);
+    std::vector<glm::mat4> g0;
+    IK::ComputeGlobals(animated, parents, g0);
+    const glm::mat4 grip = glm::translate(glm::mat4(1.0f), glm::vec3(0.02f, -0.01f, 0.03f)) *
+                           glm::mat4_cast(glm::angleAxis(0.3f, glm::vec3(1.0f, 0.0f, 0.0f))); // hand in the gun's frame
+    const glm::mat4 gun0 = g0[hand] * glm::inverse(grip);
+    animated[gunNode].T = IK::Position(gun0);
+    animated[gunNode].R = IK::Rotation(gun0);
+    IK::ComputeGlobals(animated, parents, g0);
+    const glm::mat4 relative = glm::inverse(g0[gunNode]) * g0[hand];
+
+    IKRigComponent rig;
+    rig.LimbA.Enabled = true;
+    rig.LimbA.Upper = "Shoulder";
+    rig.LimbA.Lower = "Elbow";
+    rig.LimbA.End = "Hand";
+    rig.LimbA.Target = "Gun";
+    rig.LimbA.KeepAnimatedOffset = true;
+    rig.LimbA.MatchRotation = true;
+    IKBoneOffset off;
+    off.Bone = "Gun";
+    off.Position = glm::vec3(0.0f, 0.02f, 0.05f);
+    off.Rotation = glm::angleAxis(0.15f, glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)));
+    rig.Offsets.push_back(off);
+
+    // gap (m) and turn (deg) between the hand and where the animated grip puts it on the gun as it now stands.
+    const auto solve = [&](float weight, const glm::vec3& gripPosition, float& gap, float& turn, float& gunMoved) {
+        rig.Weight = weight;
+        rig.LimbA.GripPosition = gripPosition;
+        IK::Pose p = animated;
+        IK::ApplyRig(rig, *model, p);
+        std::vector<glm::mat4> g;
+        IK::ComputeGlobals(p, parents, g);
+        const glm::mat4 want = g[gunNode] * glm::translate(glm::mat4(1.0f), gripPosition) * relative;
+        gap = glm::length(IK::Position(g[hand]) - IK::Position(want));
+        turn = glm::degrees(glm::angle(glm::normalize(glm::inverse(IK::Rotation(want)) * IK::Rotation(g[hand]))));
+        if (turn > 180.0f) turn = 360.0f - turn;
+        gunMoved = glm::length(IK::Position(g[gunNode]) - IK::Position(g0[gunNode]));
+    };
+    float gap = 0.0f, turn = 0.0f, moved = 0.0f;
+    for (const float weight : {0.25f, 0.5f, 0.75f, 1.0f}) {
+        solve(weight, glm::vec3(0.0f), gap, turn, moved);
+        std::printf("[anim] IK rig weight %.2f: gun moved %.2f cm, hand off it %.3f mm, turned %.3f deg\n", weight, moved * 100.0f,
+                    gap * 1000.0f, turn);
+        CHECK(moved > 0.02f * weight);
+        CHECK(gap < 1e-3f);
+        CHECK(turn < 0.1f);
+    }
+    // A grip offset is blended by the weight: whole at 1, next to nothing at a tiny weight (no jump as the rig fades in).
+    const glm::vec3 gripOffset(0.03f, 0.0f, 0.0f);
+    solve(1.0f, gripOffset, gap, turn, moved);
+    CHECK(gap < 1e-3f && turn < 0.1f);
+    solve(1e-4f, glm::vec3(0.0f), gap, turn, moved);
+    CHECK(gap < 1e-4f);
+    solve(1e-4f, gripOffset, gap, turn, moved);
+    CHECK(std::fabs(gap - glm::length(gripOffset)) < 1e-4f); // the hand has taken next to none of the offset
+    // Weight 0: the animated pose, exactly.
+    rig.Weight = 0.0f;
+    rig.LimbA.GripPosition = gripOffset;
+    IK::Pose p = animated;
+    IK::ApplyRig(rig, *model, p);
+    bool same = true;
+    for (size_t i = 0; i < p.size(); ++i) same = same && p[i].T == animated[i].T && p[i].R == animated[i].R && p[i].S == animated[i].S;
+    CHECK(same);
+    std::filesystem::remove_all(dir, ec);
 }
 
 void TestWeaponIkHandOffsetsRoundTrip() {
@@ -1009,9 +1213,11 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Foot tilt limiting", TestFootTiltLimiting});
     tests.push_back({"Two-bone hint defaults keep the old solve", TestTwoBoneHintDefaultsKeepOldSolve});
     tests.push_back({"Two-bone pole hint stops the elbow flip", TestTwoBoneHintStopsElbowFlip});
+    tests.push_back({"Two-bone bend axis hint still reaches the target", TestTwoBoneBendAxisReachesTarget});
     tests.push_back({"Two-bone max limb scale caps the reach", TestTwoBoneMaxLimbScale});
     tests.push_back({"Spine distribution defaults to the even spread", TestSpineDistributionDefaultsEven});
     tests.push_back({"Limb grip offset moves the hand", TestLimbGripOffsetMovesHand});
+    tests.push_back({"IK rig at part weight keeps the hand on the gun", TestApplyRigPartialWeightKeepsHandOnGun});
     tests.push_back({"Weapon IK hand offsets round-trip", TestWeaponIkHandOffsetsRoundTrip});
     tests.push_back({"Clip weight curves sample and scale the IK layers", TestClipWeightCurveSamplingAndLayerScaling});
     tests.push_back({"Clip IK curve and the IKOff tag combine", TestClipCurveAndIKOffTagCombine});

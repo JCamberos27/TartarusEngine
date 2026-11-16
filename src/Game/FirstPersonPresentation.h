@@ -229,6 +229,10 @@ public:
     const std::string& CurrentState() const;
     const std::string& LastError() const { return m_LastError; }
     const WeaponProceduralPose& ProceduralPose() const { return m_Procedural.Pose(); }
+    // Diagnostics: the position offset (world) the view punch / lean / bob put on the camera this frame - zero
+    // once RemoveViewKick has taken it off - and the ADS hold (0..1; stays 0 holstered).
+    glm::vec3 ViewKickOffset() const { return m_KickApplied ? m_KickOffset : glm::vec3(0.0f); }
+    float AdsHold() const { return m_AdsHold; }
     // The weapon definition this is running, and whether IK carries the procedural motion (the
     // arms rig has the gun bone and both arm chains) or the whole view model does.
     const FirstPersonAnimationSet& Set() const { return m_Set; }

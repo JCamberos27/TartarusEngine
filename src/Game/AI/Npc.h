@@ -55,6 +55,9 @@ struct Npc {
     int Lod = 1;
     bool Animate = true;            // this frame runs the animators and the late pose
     float LateDt = 0.0f;            // time since the late pose last ran (frames skipped by the LOD)
+    // The last late pose's finished pose (foot IK, look, flinch: as drawn), LateDt old; a kill's ragdoll takes its limbs' velocity
+    // from it (NpcDirector::Kill). Valid false until the first late pose.
+    NpcRagdoll::BoneSnapshot LastPose;
     float SpawnedAt = 0.0f;
     float PlayerDist = 0.0f;
     bool OnScreen = true;

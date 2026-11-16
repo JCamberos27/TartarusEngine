@@ -24,7 +24,7 @@ class World;
 //
 // Frame order:
 //   Tick         before the animators: heading, parameters, triggers
-//   LateUpdate   after them: foot IK, the look, the pose onto every piece; the eye
+//   LateUpdate   after them: a hit flinch's kick, foot IK, the look, the pose onto every piece; the eye
 
 // The body's tuning: the player's First Person Body numbers, copied from the scene's player by NpcDirector.
 struct NpcHoldSettings {
@@ -73,7 +73,12 @@ public:
 
     void Tick(World& world, const NpcBodyInput& in, float dt);
     void SetHoldSettings(const NpcHoldSettings& s) { m_Set = s; }
-    void LateUpdate(World& world, float dt);
+    // A kick added to the driver's animated pose before the foot pass (the hit flinch, NpcFlinch::ApplyPose): `pose` and its
+    // model-space `globals` (the body's root frame) are current on entry and must be on return. The foot pass then keeps the
+    // planted feet where the clip has them, and the driver's pose carries the kick to every other piece.
+    using PoseKick = std::function<void(const Model& driver, std::vector<LocalTRS>& pose, const std::vector<int>& parents,
+                                        std::vector<glm::mat4>& globals)>;
+    void LateUpdate(World& world, float dt, const PoseKick& kick = nullptr);
 
     // Each foot's height above the capsule's feet as last posed (m; [0] left, [1] right), for the footsteps. False when
     // the driver has no foot bones.
@@ -105,6 +110,11 @@ public:
     // The pose is the ragdoll's from now on: Tick / LateUpdate stop touching the pose.
     void SetPoseOwnedElsewhere(bool owned) { m_PoseExternal = owned; }
     bool PoseOwnedElsewhere() const { return m_PoseExternal; }
+    // (Tests) The gait loop's rate trim, the clips' travel speed it was last worked out from (m/s), and the time (s) the root
+    // motion read by the last Tick covered (0: a frame the animation LOD held - no motion, nothing updated).
+    float RateTrim() const { return m_RateTrim; }
+    float ClipTravel() const { return m_ClipTravel; }
+    float RootMotionDt() const { return m_RootMotionDt; }
 
 private:
     glm::mat4 RootWorld() const;
@@ -122,6 +132,10 @@ private:
     glm::vec2 m_Move{0.0f};
     bool m_Turning = false;
     float m_RateTrim = 1.0f; // the gait loop's rate trim (Tick)
+    float m_ClipTravel = 0.0f; // m/s the clips travelled over the last root motion read
+    // The time the animator's root motion covers (Tick): the animation LOD holds frames (no motion, its SkippedTime counting) and
+    // the next update advances by all of it at once. Worked out from the last Tick's dt and the SkippedTime it saw.
+    float m_RootMotionDt = 0.0f, m_PrevTickDt = 0.0f, m_PrevSkipped = 0.0f;
     // Orientation warp (FootPass): radians the legs are turned so the clips' travel runs along the capsule's; the spine
     // turns back by as much. The two travels, smoothed over a stride, in the body's frame.
     float m_Warp = 0.0f;
@@ -151,7 +165,8 @@ private:
     // `stepFor(divisor)` = the turn one spine bone takes (the whole turn / divisor); see IK::ChainDivisors.
     void OffsetSpine(const std::function<glm::quat(float)>& stepFor); // m_Pose / m_Globals already hold the driver's pose and its globals
     // Feet onto uneven ground (LateUpdate, first): the pelvis drops to the lower foot's ground, the legs reach theirs.
-    void FootPass(float dt);
+    // `kick` (LateUpdate's) goes onto the pose first; a foot planted in the clip is solved back to where the clip has it.
+    void FootPass(float dt, const PoseKick& kick);
     void SyncLower(); // the driver's pelvis and legs onto every other piece
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot

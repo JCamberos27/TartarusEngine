@@ -110,7 +110,8 @@ public:
     std::uint64_t NavHash() const { return m_NavHash; }
     int ReusedBodies() const { return m_Reused; }                  // spawns that took a pooled body
     // The dummy dies this frame; its ragdoll starts after this frame's late pose (so it takes the pose it died in), the
-    // shove on part `part` (-1: the part nearest `point`).
+    // shove on part `part` (-1: the part nearest `point`). The limbs' own velocity is that pose against the last late pose's
+    // (Npc::LastPose), whenever in the frame the kill comes.
     void Kill(World& world, Npc& npc, const glm::vec3& dir, const glm::vec3& point, float shove = 40.0f, int part = -1);
     // Tests: dummy `index` heads for `target` at `pace` whatever its roam wants; EndScriptedMove hands it back. Cleared when it dies.
     void ScriptedMove(int index, const glm::vec3& target, Gait pace = Gait::Walk) { m_Scripted[index] = {target, pace}; }
@@ -135,7 +136,7 @@ public:
 
 private:
     bool LateStart(World& world, AssetLibrary& assets);
-    void Roam(Npc& n);
+    void Roam(Npc& n, float dt);
     void Move(World& world, Npc& n, float dt);
     // `part`: the hitbox part struck (NpcRagdoll's order), -1 when unknown (the capsule: only the zone is known).
     void ApplyDamage(World& world, Npc& n, float amount, HitZone zone, const glm::vec3& point, const glm::vec3& dir, int part = -1);

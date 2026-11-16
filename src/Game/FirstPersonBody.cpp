@@ -8,6 +8,7 @@
 #include "BodyDebugDraw.h"
 #include "AnimatorController.h"
 #include "FirstPersonBodyContract.h"
+#include "FirstPersonAnimation.h" // FirstPersonAnimatorContract::kTagHidden: the arms rig hidden (unarmed)
 
 #include "Camera.h"
 #include "Components.h"
@@ -151,7 +152,10 @@ void FirstPersonBodyCurlFingers(const Model& m, std::vector<LocalTRS>& pose, flo
     for (int i = 0; i < (int)pose.size(); ++i) {
         const std::string& n = m.NodeName(i);
         if (!(n.rfind("index_0", 0) == 0 || n.rfind("middle_0", 0) == 0 || n.rfind("ring_0", 0) == 0 || n.rfind("pinky_0", 0) == 0)) continue;
-        const glm::quat delta = glm::inverse(bind[(size_t)i].R) * pose[(size_t)i].R;
+        glm::quat delta = glm::inverse(bind[(size_t)i].R) * pose[(size_t)i].R;
+        // The short way round: q and -q are one rotation, but glm::angle of a negative-w quat reads it as the long way
+        // (a slight curl came out past 175 degrees and was skipped, or curled backwards).
+        if (delta.w < 0.0f) delta = -delta;
         const float angle = glm::angle(delta);
         if (angle < glm::radians(5.0f) || angle > glm::radians(175.0f)) continue; // no clear curl to follow
         pose[(size_t)i].R = glm::normalize(bind[(size_t)i].R * glm::angleAxis(angle + glm::radians(degrees), glm::axis(delta)));
@@ -1063,6 +1067,10 @@ void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
 
 void FirstPersonBody::Tick(World& world, const Player& player, const Camera& camera, float dt) {
     if (!IsActive()) return;
+    // The player's own eye, before the presentation's view punch goes on (FirstPersonPresentation::Update): whatever
+    // is on the camera past this by LateUpdate is that punch (LateUpdate keeps it).
+    m_CameraBase = camera.Position;
+    m_HaveCameraBase = true;
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) { m_Body = entt::null; return; }
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
@@ -1277,14 +1285,15 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
     if(!player.Grounded)m_FallSpeed=std::max(0.0f,-player.Velocity.y);
     ac.SetFloat(FPBody::kLandImpact,m_FallSpeed);
-    // The gait's phase, read off the feet (their spread along the travel against their height difference).
+    // The gait's phase, read off the feet (their spread along the travel against their height difference) - the clips'
+    // feet as LateUpdate had them before foot IK: after it, stairs and slopes lift one foot over the other and skew the
+    // phase (the bob and the weapon's sway dipped off the footfalls on stairs).
     {
-        glm::vec3 feet[2];
         const glm::vec2 move = FirstPersonBodyLocalMove(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), m_Yaw);
         const float speed = glm::length(move);
-        if (player.Grounded && speed > 0.3f && FootPoints(world, feet)) {
+        if (player.Grounded && speed > 0.3f && m_HaveGaitFeet) {
             const glm::vec2 dir = move / speed;
-            const glm::vec3 d = feet[0] - feet[1]; // driver model space (the body's frame: kRight, up, kForward)
+            const glm::vec3 d = m_GaitFeet[0] - m_GaitFeet[1]; // driver model space (the body's frame: kRight, up, kForward)
             m_Gait.Update(glm::dot(d, kRight) * dir.x + glm::dot(d, kForward) * dir.y, d.y, true, dt);
         } else {
             m_Gait.Update(0.0f, 0.0f, false, dt);
@@ -1344,11 +1353,37 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
     m_RootVelocity = dt > 0.0f && !m_Turning ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
+    // The presentation's view punch on the camera this frame (Update / RefreshViewKick put it on after Tick): the walk
+    // bob, landing dip, lean and ADS camera share. It stays on - the camera goes to the body's eye plus this, below.
+    const glm::vec3 viewKick = m_HaveCameraBase ? camera.Position - m_CameraBase : glm::vec3(0.0f);
+    m_HaveCameraBase = false; // this frame's Tick's only
+
+    // This frame's Weapon Arms weight, before anything here reads it - the eye most of all. (Set only in ArmsLateUpdate,
+    // a draw's first frame put the eye where the unarmed one is while the arms took the rig's hands: a pop.) The rig as
+    // ArmsLateUpdate will find it: hidden by the arms animator's Hidden tag as of this frame's update, which
+    // FirstPersonPresentation::LateUpdate (after this) turns into its InactiveTag.
+    {
+        bool follow = cfg.WeaponArms && m_ViewModelFovOk && weaponArms != entt::null && reg.valid(weaponArms) &&
+                      reg.all_of<RenderableComponent>(weaponArms);
+        if (follow) {
+            if (reg.all_of<InactiveTag>(weaponArms) && !reg.all_of<DeactivatedTag>(weaponArms)) follow = false; // off for another reason
+            else if (const auto* armsAc = reg.try_get<AnimatorControllerComponent>(weaponArms))
+                follow = !armsAc->HasTag(FirstPersonAnimatorContract::kTagHidden);
+            else follow = !reg.all_of<InactiveTag>(weaponArms);
+        }
+        m_ArmsWeightPrev = m_ArmsWeight;
+        if (follow) m_ArmsWeight = 1.0f;
+        else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
+        m_ArmsWeightEased = true;
+        m_EyeArmsWeight = m_ArmsWeight;
+    }
 
     {
     PROFILE_SCOPE("FPB spine stability");
     ApplySpineStability(cfg.SpineStability, ac);
     }
+    // The clips' feet, before foot IK moves them: what next Tick reads the gait's phase off.
+    m_HaveGaitFeet = FootPoints(world, m_GaitFeet);
     {
     PROFILE_SCOPE("FPB foot IK");
     ApplyFootIK(world, cfg, dt); // the pelvis and legs first: everything after reads the final pose
@@ -1468,13 +1503,16 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     if (!haveHead) return;
 
     // The camera into the head: smoothed in the body's own frame, so it never trails the move.
-    // The bob is the clips' head motion; what the chest's tilt does to the head goes on in full,
-    // so the shoulders stay the same distance from the eye as the view pitches.
+    // What the chest's tilt does to the head goes on in full, so the shoulders stay the same distance from the eye as
+    // the view pitches. The head bob is procedural (the weapon's Camera Motion: a dip on each footfall, the landing's -
+    // the view punch kept on top below), so the eye takes none of the clips' own bob: it follows the head's slow
+    // average (its standing height, a crouch, a stop's lean), trailing the head by at most Eye Slack and pulled back
+    // in over 40 ms past it - as the armed eye follows the shoulders. (Head Bob / Head Bob Side no longer apply.)
     glm::vec3 tilt(0.0f);
     if (model->NodeTransform(model->NodeName(m_HeadNode), head)) tilt = glm::vec3(head[3]) - headAnimated;
-    const glm::vec3 target = FirstPersonBodyEye(m_RestHead, headAnimated, cfg.HeadBob, cfg.CameraOffset);
-    if (!m_HaveEye) { m_Eye = target; m_HaveEye = true; }
-    m_Eye += (target - m_Eye) * Follow(dt, cfg.CameraSmoothing);
+    FirstPersonBodyFollowShoulders(m_HeadSlow, m_HeadEased, m_HaveEye, headAnimated, glm::vec3(0.0f), cfg.CameraSmoothing,
+                                   cfg.EyeSlack, 0.04f, dt);
+    m_Eye = FirstPersonBodyEye(m_RestHead, m_HeadEased, 1.0f, cfg.CameraOffset);
 
     const auto& t = reg.get<TransformComponent>(m_Body);
     const glm::quat yaw = YawRotation(m_Yaw);
@@ -1509,17 +1547,16 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
 
             const glm::vec3 shoulders = shouldersNow();
             const glm::vec3 toRest = shoulders - shouldersAnimated; // the chest's tilt at the shoulders
-            // The eye follows Head Bob of the shoulders' motion about their slow average - not about
-            // the bind pose, whose shoulders sit elsewhere than the standing pose's, which would put
-            // the shoulders (and so the hands' reach) that far off.
+            // The eye follows the shoulders' slow average, none of their motion about it (the bob is the
+            // procedural camera's) - not the bind pose, whose shoulders sit elsewhere than the standing
+            // pose's, which would put the shoulders (and so the hands' reach) that far off.
             // The eye may trail or under-follow the shoulders by only Eye Slack: a clip that throws the
             // shoulders about (a stop pulling the body back) would otherwise carry them out of the
             // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
             // Past the slack the eye is pulled back in fast (40 ms) rather than snapped to it: snapped, its speed jumped
             // in one frame - a kink felt as a jolt when the body crouched or stood on the move.
             FirstPersonBodyFollowShoulders(m_ShouldersSlow, m_Shoulders, m_HaveShoulders, shouldersAnimated,
-                                           glm::vec3(cfg.HeadBobSide, cfg.HeadBob, cfg.HeadBob),
-                                           cfg.CameraSmoothing, cfg.EyeSlack, 0.04f, dt);
+                                           glm::vec3(0.0f), cfg.CameraSmoothing, cfg.EyeSlack, 0.04f, dt);
             BodyDebug::Info().EyeSlack = glm::length(shouldersAnimated - m_Shoulders);
             // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
             // support arm is never at full stretch (a straight arm jumps at every small motion).
@@ -1545,18 +1582,62 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // rides at the head bone (the skull's base, over the neck), so straight down it looked into the
     // torso's neck opening: the torso was seen from inside (culled away) and the legs through it.
     eyeWorld += flat * (cfg.LookDownPush * FirstPersonBodyLookDown(viewPitch, cfg.LookDownStart));
+    // The lean (a corner peek): the kick's sideways step is the head swinging over on the hips, and the arms rig - placed
+    // off the camera - swings with it. The eye alone moving would put the rig's hands up to 30 cm off the body's
+    // shoulders and a hand off the gun, so the spine leans the same way: the shoulders (and the head) go over with the
+    // view and the arms reach the gun from there. Rolled about the view's flat forward, after the eye is worked out (the
+    // camera is the unleaned eye plus the whole kick), sized so the shoulders' midpoint moves sideways as far as the kick
+    // does: estimated off the spine's length, measured, trimmed once (the spine's spread and limits set the pivot). The
+    // kick's drop and the rest (bob, landing dip, ADS camera share) stay on the camera alone - centimetres, which Arm
+    // Steadiness (held in the camera's frame, below) and the elbows take up.
+    m_LeanWanted = m_LeanShoulders = 0.0f;
+    {
+        glm::vec3 flatRight = camera.Right();
+        flatRight.y = 0.0f;
+        const float len = glm::length(flatRight);
+        const float side = len > 1e-4f ? glm::dot(viewKick, flatRight / len) : 0.0f;
+        m_LeanWanted = side;
+        glm::mat4 root(1.0f);
+        if (std::abs(side) > 1e-3f && haveShoulders && model->NodeTransform(Bone(FPBody::kBoneSpine[0]), root)) {
+            const glm::vec3 rightModel = glm::inverse(yaw) * (flatRight / len);
+            // About up x right: turning a point above the pivot by a positive angle carries it toward rightModel.
+            const glm::vec3 axis = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), rightModel));
+            const float scale = std::max(t.Scale.x, 1e-3f);
+            const float want = side / scale;
+            const glm::vec3 start = shouldersNow();
+            const float lever = glm::length(start - glm::vec3(root[3]));
+            if (lever > 0.05f) {
+                float moved = 0.0f;
+                for (int pass = 0; pass < 2; ++pass) {
+                    const float angle = std::asin(std::clamp((want - moved) / lever, -0.9f, 0.9f));
+                    if (std::abs(angle) < 1e-4f) break;
+                    ApplySpineRotation(glm::angleAxis(angle, axis));
+                    moved = glm::dot(shouldersNow() - start, rightModel);
+                }
+                m_LeanShoulders = moved * scale;
+            }
+        }
+    }
     if (BodyDebug::Enabled()) {
         const glm::vec3 shoulders = m_Feet + yaw * (t.Scale * m_Shoulders);
         BodyDebug::Cross(eyeWorld, 0.04f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));       // the camera
         BodyDebug::Cross(shoulders, 0.04f, glm::vec4(1.0f, 0.3f, 1.0f, 1.0f));      // the shoulders the eye is anchored to
         BodyDebug::Line(shoulders, eyeWorld, glm::vec4(1.0f, 0.3f, 1.0f, 0.7f));
     }
-    m_CameraApplied = eyeWorld - camera.Position;
+    // The camera: the body's eye with the view punch kept on top. What this adds is measured from the camera as it came
+    // in (the player's own eye + the kick), so it is the eye less the player's own eye: next frame RemoveViewKick takes
+    // the kick off and BeforePlayerMove this, and the camera is the player's own eye again - nothing accumulates.
+    m_BodyEye = eyeWorld;
+    BodyDebug::Info().BodyEye = eyeWorld;
+    m_ViewKick = viewKick;
+    const glm::vec3 cameraIn = camera.Position;
+    camera.Position = eyeWorld + viewKick;
+    m_CameraApplied = camera.Position - cameraIn;
     BodyDebug::Info().EyeApplied = m_CameraApplied;
-    camera.Position = eyeWorld;
-    // Arm Steadiness holds the shoulders in this frame: it moves with the eye and the chest's pitch, so
-    // only the gait's sway shows in it (the rig's own frame pitches with the view, the chest less).
-    m_ChestView = glm::mat4(glm::vec4(chestRight, 0.0f), glm::vec4(chestUp, 0.0f), glm::vec4(chestFront, 0.0f), glm::vec4(eyeWorld, 1.0f));
+    // Arm Steadiness holds the shoulders in this frame: it moves with the camera (the eye, the bob, the lean - the arms
+    // rig hangs off it) and the chest's pitch, so only the gait's sway shows in it (the rig's own frame pitches with the
+    // view, the chest less).
+    m_ChestView = glm::mat4(glm::vec4(chestRight, 0.0f), glm::vec4(chestUp, 0.0f), glm::vec4(chestFront, 0.0f), glm::vec4(camera.Position, 1.0f));
     m_HaveChestView = true;
 }
 
@@ -1860,6 +1941,9 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             glm::quat footRot = IK::Rotation(globals[foot]);
             const glm::vec3 axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), normal);
             if (angle > 1e-4f && glm::dot(axis, axis) > 1e-8f) footRot = glm::angleAxis(angle, glm::normalize(axis)) * footRot;
+            const float legLen = glm::length(IK::Position(globals[calf]) - IK::Position(globals[thigh])) +
+                                 glm::length(IK::Position(globals[foot]) - IK::Position(globals[calf]));
+            if (legLen > 1e-5f) BodyDebug::Info().LegReach[s] = glm::length(target - IK::Position(globals[thigh])) / legLen;
             // Flat ground and nothing pinned: leave the clip's own pose alone.
             if (glm::length(target - IK::Position(globals[foot])) < 5e-4f && angle < 1e-3f) continue;
             IK::SolveTwoBone(pose, parents, globals, thigh, calf, foot, target, &footRot, 1.0f);
@@ -2137,6 +2221,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     const bool follow = haveRig && !reg.all_of<InactiveTag>(weaponArms);
     // Drawn, the arms take the rig's hands from the first frame: eased in, the draw (and Play's first
     // frames) would show the hands out of the idle pose while the gun is already up. Only off eases.
+    // LateUpdate already set this frame's weight (so the eye used it, not last frame's): re-decided here from where it
+    // started the frame, with this rig's own state - the same unless LateUpdate's guess at it was off.
+    m_ViewModelFovOk = viewModelFov > 0.0f;
+    if (m_ArmsWeightEased) m_ArmsWeight = m_ArmsWeightPrev;
+    m_ArmsWeightEased = false;
     if (follow) m_ArmsWeight = 1.0f;
     else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
     const bool viewModelArms = follow;

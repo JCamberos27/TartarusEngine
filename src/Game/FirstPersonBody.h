@@ -194,6 +194,22 @@ public:
     // The root motion's horizontal velocity (world, m/s) from the last LateUpdate.
     glm::vec3 RootVelocity() const { return m_RootVelocity; }
 
+    // Diagnostics of the last LateUpdate's camera (world). The camera ends at BodyEye() + ViewKick(): the body's eye
+    // (head / shoulders, no procedural motion), plus what the presentation's view punch put on it this frame (walk bob,
+    // landing dip, lean, ADS camera share - FirstPersonPresentation::ViewKickOffset), kept rather than overwritten.
+    glm::vec3 BodyEye() const { return m_BodyEye; }
+    glm::vec3 ViewKick() const { return m_ViewKick; }
+    // The lean: the kick's sideways part (m, + = the view's right) and how far the spine's lean carried the
+    // shoulders that way (m, world) - the two match within the spine's limits, so the hands stay on the gun.
+    float LeanWanted() const { return m_LeanWanted; }
+    float LeanShoulders() const { return m_LeanShoulders; }
+    // Weapon Arms' weight: now, and as LateUpdate's eye used it (the same frame's: equal but for a holster's first frame).
+    float ArmsWeight() const { return m_ArmsWeight; }
+    float EyeArmsWeight() const { return m_EyeArmsWeight; }
+    // The clips' feet before foot IK (driver model space), which the gait phase is read off. False until posed.
+    bool GaitFeet(glm::vec3 (&out)[2]) const { out[0] = m_GaitFeet[0]; out[1] = m_GaitFeet[1]; return m_HaveGaitFeet; }
+    float GaitRate() const { return m_Gait.Rate; } // the gait phase's cycles a second
+
 private:
     void Fail(const std::string& message);
     void ApplySpineStability(float weight, const AnimatorControllerComponent& animator);
@@ -250,7 +266,7 @@ private:
     bool m_HaveShoulderAnchor[2] = {false, false};
     glm::vec3 m_ElbowAim[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // Weapon Arms: where each elbow heads, in m_ChestView's frame (eased)
     bool m_HaveElbowAim[2] = {false, false};
-    glm::mat4 m_ChestView{1.0f};     // LateUpdate's eye, facing the view's heading at the chest's pitch (columns: right, up, front, eye)
+    glm::mat4 m_ChestView{1.0f};     // LateUpdate's camera (eye + view punch), facing the view's heading at the chest's pitch (columns: right, up, front, camera)
     bool m_HaveChestView = false;
     glm::vec3 m_RigEyeToShoulders{0.0f};          // rig: camera bone to its shoulders, in the camera's frame (smoothed)
     bool m_HaveRigOffset = false;
@@ -381,6 +397,17 @@ private:
     bool m_WorldHaveElbowAim[2] = {false, false};
     float m_WorldElbowClear[2] = {0.0f, 0.0f}; // Elbow Clearance: each world elbow's swing out of the torso (radians, eased)
     glm::vec3 m_CameraApplied{0.0f}; // what LateUpdate added to the camera (BeforePlayerMove takes it off)
+    glm::vec3 m_CameraBase{0.0f};    // the player's own eye at Tick (no body, no view punch): LateUpdate's kick is off it
+    bool m_HaveCameraBase = false;
+    glm::vec3 m_BodyEye{0.0f}, m_ViewKick{0.0f}; // LateUpdate's eye and the presentation's kick on top (diagnostics)
+    float m_LeanWanted = 0.0f, m_LeanShoulders = 0.0f; // the lean's side step and the spine's share of it (diagnostics)
+    glm::vec3 m_HeadSlow{0.0f}, m_HeadEased{0.0f}; // unarmed: the clips' head, a slow average and the eye's follow of it
+    float m_EyeArmsWeight = 0.0f;    // m_ArmsWeight as LateUpdate's eye used it
+    float m_ArmsWeightPrev = 0.0f;   // ... and before LateUpdate eased it (ArmsLateUpdate re-decides from it)
+    bool m_ArmsWeightEased = false;  // LateUpdate has eased m_ArmsWeight this frame
+    bool m_ViewModelFovOk = true;    // the last ArmsLateUpdate had a view-model FOV (LateUpdate's guess at the rig)
+    glm::vec3 m_GaitFeet[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // the clips' feet before foot IK (driver model space)
+    bool m_HaveGaitFeet = false;
     glm::vec3 m_Feet{0.0f};
     float m_Yaw = 0.0f;           // body heading, radians about +Y (model +Z faces the view)
     glm::vec2 m_Move{0.0f};

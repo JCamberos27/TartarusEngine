@@ -31,6 +31,7 @@ constexpr float kRadius = kNpcCapsuleRadius;
 constexpr float kStandCyl = 0.6f;    // capsule 1.8 m standing
 constexpr float kRoamRadius = 7.0f;  // m round its post a roaming dummy wanders
 constexpr float kArrived = 0.55f;    // m from its goal it counts as there
+constexpr float kGlanceRate = 0.48f; // glances a second a standing dummy takes (Roam; the old 0.008 a frame at 60 fps)
 
 unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 
@@ -474,7 +475,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
             n.Health = h->Current; n.MaxHealth = h->Max;
             if (h->Current <= 0.0f) { Kill(world, n, {0, 0, 1}, n.Feet, 0); continue; }
         }
-        Roam(n);
+        Roam(n, dt);
         if (const auto it = m_Scripted.find(n.Index); it != m_Scripted.end()) { // a test's order
             n.WantMove = true;
             n.MoveTarget = it->second.first;
@@ -517,7 +518,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
 
 // A roaming dummy wanders round its post: it stands a few seconds, looking about now and then, walks to a random reachable
 // point within kRoamRadius, and stands again. Stuck on the way (or too long getting there), it gives that point up.
-void NpcDirector::Roam(Npc& n) {
+void NpcDirector::Roam(Npc& n, float dt) {
     std::uniform_real_distribution<float> unit(0.0f, 1.0f);
     if (!n.Roam || n.Agent < 0) {
         n.WantMove = false;
@@ -538,8 +539,8 @@ void NpcDirector::Roam(Npc& n) {
                 n.IdleUntil = m_Now + 0.5f;
             }
         }
-        // Now and then a glance somewhere new; otherwise the look holds.
-        if (unit(m_Rng) < 0.008f) {
+        // Now and then a glance somewhere new (about one every two seconds, whatever the frame rate); otherwise the look holds.
+        if (unit(m_Rng) < kGlanceRate * dt) {
             const float a = unit(m_Rng) * 6.283f;
             n.LookPoint = n.Eye + glm::vec3(std::cos(a), -0.1f, std::sin(a)) * 8.0f;
         }
@@ -647,9 +648,9 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
                 // One last animated frame, then the ragdoll takes the pose the body died in.
                 n.LateDt += dt;
                 if (n.Animate) { // (a held frame has no fresh pose to solve on: the ragdoll takes the one it has)
+                    // (The flinch of the rounds before stays on that pose - LatePose kicks it - and the ragdoll takes it from there.)
                     LatePose(world, n, n.LateDt);
-                    // The flinch of the rounds that killed it stays on that pose, and the ragdoll takes it from there.
-                    if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end() && it->second.Active(m_Now)) it->second.Apply(n.Body, m_Now);
+                    // The pose it was hit in (Kill: the last late pose's, n.LastPose) is n.LateDt older than this one.
                     m_DeathBones[n.Index].Dt = n.LateDt;
                     n.LateDt = 0.0f;
                 }
@@ -674,16 +675,15 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
         }
         const float lateDt = n.LateDt;
         n.LateDt = 0.0f;
+        if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end() && !it->second.Active(m_Now)) m_Flinch.erase(it); // settled
         LatePose(world, n, lateDt);
         // Footsteps on the posed feet's touch-downs.
         if (float feet[2]; n.Body.FootHeights(feet))
             FoleyAudio::Get().NpcFeet(world, n.Index, n.Feet, feet, n.Body.Sprinting(), glm::length(glm::vec2(n.Velocity.x, n.Velocity.z)), lateDt);
         UpdateHitboxes(n, p, /*posed=*/true);
-        // The hit flinch goes on after the hitboxes took their pose: visual only.
-        if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end()) {
-            if (it->second.Active(m_Now)) it->second.Apply(n.Body, m_Now);
-            else m_Flinch.erase(it);
-        }
+        // The finished pose, as drawn (the flinch in it): a kill before the next late pose - a round of the player's, which comes
+        // after this frame's animators - takes it as the pose the body had a frame (n.LateDt) before it died (Kill).
+        NpcRagdoll::Capture(n.Body, n.LastPose);
         if (TrackDeathPop) {
             static const char* kBones[3] = {"head", "hand_l", "foot_l"};
             n.HaveLastBones = true;
@@ -694,11 +694,21 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
     FlushCosts(false);
 }
 
-// The dummy's late pose: foot IK, the look, the pose onto every piece; the eye.
+// The dummy's late pose: a hit flinch's kick, foot IK, the look, the pose onto every piece; the eye.
+// The flinch goes on the driver before its foot pass (NpcBody::LateUpdate): a leg hit bends the knee over a planted foot instead of
+// sliding it, and the driver's pose carries the kick to every piece (one skeleton: the arms piece kicks with the torso).
 void NpcDirector::LatePose(World& world, Npc& n, float dt) {
     {
         SubTimer timer(*this, SubBody);
-        n.Body.LateUpdate(world, dt);
+        NpcBody::PoseKick kick;
+        if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end() && it->second.Active(m_Now)) {
+            const NpcFlinch* flinch = &it->second;
+            const float now = m_Now;
+            kick = [flinch, now](const Model& m, std::vector<LocalTRS>& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals) {
+                flinch->ApplyPose(m, pose, parents, globals, now);
+            };
+        }
+        n.Body.LateUpdate(world, dt, kick);
     }
     if (glm::vec3 feet[2]; IK::FootSlideMeterOn() && n.Body.FootWorld(feet)) IK::FootSlideMeterFor(n.Name).Step(feet, n.Feet.y, dt);
     n.Eye = n.Body.Eye();
@@ -853,7 +863,11 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     // The body goes down in this frame's late pose (LateUpdate -> FinishDeath): the animators run one more frame, so the ragdoll
     // starts from the pose it was seen in.
     n.DeathPending = true;
-    NpcRagdoll::Capture(n.Body, m_DeathBones[n.Index].Bones); // last frame's pose, for the limbs' velocity
+    // For the limbs' velocity: the last late pose's finished pose (LateUpdate's n.LastPose), not the bones as they are now - a
+    // player's round lands after this frame's animators, when the bones already hold this frame's clip pose without its foot IK,
+    // look and flinch. Its age (Dt) is set with the dying frame's late pose; none (Valid false, a dummy killed before it was ever
+    // posed): every part takes the body's velocity.
+    m_DeathBones[n.Index].Bones = n.LastPose;
     m_DeathBones[n.Index].Dt = 0.0f;
     n.DeathDir = glm::length(dir) > 1e-4f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
     n.DeathPoint = point;
@@ -871,8 +885,8 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     n.Body.SetPoseOwnedElsewhere(true);
     n.FallSoundAt = m_Now + 0.45f;
     n.Ragdoll = std::make_unique<NpcRagdoll>();
-    // The bones' velocity: the pose they had when the dummy was hit (last frame's, before the animators moved on) against the
-    // dying frame's, over the real time between (a held frame has no new pose: no relative motion, just the body's).
+    // The bones' velocity: the finished pose of the late pose before the dummy died (Kill: n.LastPose) against the dying frame's,
+    // over the real time between (LOD-held frames included; a held dying frame has no new pose: no relative motion, just the body's).
     if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart, &m_RagdollCfg, &m_DeathBones[n.Index].Bones,
                           m_DeathBones[n.Index].Dt)) {
         n.Ragdoll.reset();

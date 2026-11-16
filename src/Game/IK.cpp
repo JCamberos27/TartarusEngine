@@ -203,22 +203,34 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
     const float baBc1 = std::acos(std::clamp((lat * lat - lab * lab - lcb * lcb) / (-2.0f * lab * lcb), -1.0f, 1.0f));
 
     // The bend plane is the one the pose already has; a dead-straight limb picks any.
+    const glm::vec3 acDir = glm::normalize(ac);
     glm::vec3 axis = glm::cross(ac, b - a);
-    axis = glm::length(axis) > 1e-8f ? glm::normalize(axis) : Perpendicular(glm::normalize(ac));
+    const bool bent = glm::length(axis) > 1e-8f;
+    axis = bent ? glm::normalize(axis) : Perpendicular(acDir);
+    glm::quat ga = Rotation(globals[upper]);
+    glm::quat gb = Rotation(globals[lower]);
     if (hint && hint->BendAxisWeight > 0.0f) {
-        // Kept square to the limb (a bend about anything else isn't a bend), then turned toward from the pose's own, on
-        // the same side (a near-straight pose's side is as much noise as its plane).
-        glm::vec3 want = hint->BendAxis - glm::normalize(ac) * glm::dot(hint->BendAxis, glm::normalize(ac));
+        // Kept square to the limb (a bend about anything else isn't a bend). The limb is first swung rigidly about its
+        // root->end line, so its own bend plane turns BendAxisWeight of the way to the wanted one (the end stays put, the
+        // triangle keeps its angles), and the solve below then bends it in that plane as in any other pose. (Bending by
+        // the pose's angles about some other axis neither reaches the target nor keeps the knee's angle.)
+        glm::vec3 want = hint->BendAxis - acDir * glm::dot(hint->BendAxis, acDir);
         if (glm::length(want) > 1e-6f) {
             want = glm::normalize(want);
-            const glm::vec3 own = glm::dot(axis, want) < 0.0f ? -axis : axis;
-            const glm::vec3 mixed = glm::mix(own, want, std::clamp(hint->BendAxisWeight, 0.0f, 1.0f));
-            if (glm::length(mixed) > 1e-6f) axis = glm::normalize(mixed);
+            if (bent) {
+                const float turn = std::atan2(glm::dot(glm::cross(axis, want), acDir), glm::dot(axis, want)) *
+                                   std::clamp(hint->BendAxisWeight, 0.0f, 1.0f);
+                const glm::quat qs = glm::angleAxis(turn, acDir);
+                b = a + qs * (b - a);
+                ga = glm::normalize(qs * ga);
+                gb = glm::normalize(qs * gb);
+                axis = glm::normalize(qs * axis);
+            } else {
+                axis = want; // dead straight: no plane of its own to turn from (and no swing needed to change it)
+            }
         }
     }
 
-    const glm::quat ga = Rotation(globals[upper]);
-    const glm::quat gb = Rotation(globals[lower]);
     // Both bends turn about the same axis, so they commute: the upper bone's bend leaves the
     // direction a->c unchanged, and one swing about a then carries c onto the target.
     const glm::quat q0 = glm::angleAxis(acAb1 - acAb0, axis);
@@ -365,6 +377,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
         const IKLimb* Settings;
         int Upper, Lower, End, Target;
         glm::mat4 Relative{1.0f};
+        glm::mat4 Carried{1.0f}; // the end relative to its target in this pose, before the offsets: where it rides along
     };
     Limb limbs[2];
     int limbCount = 0;
@@ -374,6 +387,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
                   model.NodeIndex(l->Target)};
         if (limb.Upper < 0 || limb.Lower < 0 || limb.End < 0 || limb.Target < 0) continue;
         if (l->KeepAnimatedOffset) {
+            limb.Carried = glm::inverse(globals[limb.Target]) * globals[limb.End];
             limb.Relative = glm::inverse(grip[limb.Target]) * grip[limb.End];
             if (hold) {
                 // Held hand: the held pose's grip; free hand: its animated grip; in between, a mix.
@@ -417,8 +431,23 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
         const Limb& limb = limbs[n];
         const glm::mat4 goal = LimbGoal(globals[limb.Target], limb.Relative, limb.Settings->KeepAnimatedOffset, limb.Settings->GoalMove,
                                         limb.Settings->GripPosition, limb.Settings->GripRotation);
-        const glm::quat goalRot = Rotation(goal);
+        glm::vec3 goalPos = Position(goal);
+        glm::quat goalRot = Rotation(goal);
         const IKLimb& ls = *limb.Settings;
+        float limbWeight = ls.Weight * std::clamp(ls.CurveWeight, 0.0f, 1.0f);
+        if (ls.KeepAnimatedOffset) {
+            // The offsets above already moved the target by the rig's weight; a hand that keeps its grip goes with all of
+            // that move (a solve weighted by it again took the hand only w*w of the way: off the gun by w(1-w) of the
+            // move). What the rig weight blends is the goal: from the end riding rigidly with its target (exactly the
+            // animated end at weight 0) to the full goal - the grip offset, GoalMove and a grip read from another pose.
+            if (w < 1.0f) {
+                const glm::mat4 carried = globals[limb.Target] * limb.Carried;
+                goalPos = glm::mix(Position(carried), goalPos, w);
+                goalRot = glm::normalize(glm::slerp(Rotation(carried), goalRot, w));
+            }
+        } else {
+            limbWeight *= w; // reaching for the target itself: the rig weight is how far
+        }
         TwoBoneHint hint;
         const bool hinted = ls.HintWeight > 0.0f || ls.MaxLimbScale > 1.0f;
         if (hinted) {
@@ -430,8 +459,8 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
                 hint.HavePole = true;
             }
         }
-        SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, Position(goal),
-                     ls.MatchRotation ? &goalRot : nullptr, ls.Weight * std::clamp(ls.CurveWeight, 0.0f, 1.0f) * w, ls.Swivel * w, hinted ? &hint : nullptr);
+        SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, goalPos,
+                     ls.MatchRotation ? &goalRot : nullptr, limbWeight, ls.Swivel * w, hinted ? &hint : nullptr);
     }
 }
 

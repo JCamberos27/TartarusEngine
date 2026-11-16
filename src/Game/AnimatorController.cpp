@@ -1398,7 +1398,9 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
         auto& ac = view.get<AnimatorControllerComponent>(e);
         if (world.Registry.all_of<InactiveTag>(e) && !ac.UpdateWhenInactive) continue;
         if (ac.SkipUpdate) {
-            // Held this frame (animation LOD): the pose stays, the time is kept for the next update.
+            // Held this frame (animation LOD): the pose stays, the time is kept for the next update. The root motion is zero, and
+            // the next update's covers dt + SkippedTime at once: a reader dividing it by its own frame's dt must use that instead
+            // (NpcBody::Tick works it out from SkippedTime, which is > 0 exactly after a held frame).
             ac.SkippedTime += dt;
             ac.RootMotion.DeltaPosition = glm::vec3(0.0f);
             ac.RootMotion.DeltaYaw = 0.0f;
@@ -1505,6 +1507,7 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
                 !world.Registry.all_of<IKRigComponent>(r.E) && CopyDriverPose(*driverModel, *r.M)) {
                 r.AC->RootMotion.DeltaPosition = glm::vec3(0.0f);
                 r.AC->RootMotion.DeltaYaw = 0.0f;
+                r.AC->SkippedTime = 0.0f; // (posed this frame, as the driver: nothing held any more)
                 continue;
             }
             RootMotionOptions& rmo = r.AC->RootMotion;

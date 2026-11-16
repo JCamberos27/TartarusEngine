@@ -2038,9 +2038,12 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetBool("AimWalk", aiming && m_Equipped && walkIntent); // compatibility for older ADS-only controllers
     const float aimBlendTime=m_Set.Procedural.Aim.BlendTime;
     ac->SetFloat("TransitionDuration:"+(m_Set.Ads.ReferenceState.empty()?std::string("Aim"):m_Set.Ads.ReferenceState),aimBlendTime);
+    // Gated on a gun in hand, as the procedural's in.Ads is: holstered with aim held, the ADS hold (the carried pose, the
+    // optic's correction, the locomotion layers' ADS scale) must not ease in on the empty hands.
+    const bool adsHeld = aiming && m_Equipped;
     m_AdsHold = aimBlendTime > 0.0f
-                    ? std::clamp(m_AdsHold + (aiming ? dt : -dt) / aimBlendTime, 0.0f, 1.0f)
-                    : (aiming ? 1.0f : 0.0f);
+                    ? std::clamp(m_AdsHold + (adsHeld ? dt : -dt) / aimBlendTime, 0.0f, 1.0f)
+                    : (adsHeld ? 1.0f : 0.0f);
     m_TickDt = dt;
     m_OpticBlendElapsed += std::max(0.0f, dt);
     // The jog (Shift): the locomotion layer's run clip, as authored, on the feet's phase (GaitPhase); off while aiming, in a

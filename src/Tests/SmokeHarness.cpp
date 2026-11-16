@@ -90,6 +90,9 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
                                                           : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
                                                           : opt.npcTestScenario == "locomotion" || opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" || opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" ? "tests/scenes/Apartment Hallway.json"
                                                                                        : "tests/scenes/Arena.json")); // (deaths, feet, flame: the Arena)
+        // testbed: the animation overhaul's clean scene, a project scene (tools/scenes/build_anim_testbed.py), not a tests/ one.
+        if (opt.npcTestMode && opt.smokeScenesDirArg.empty() && opt.npcTestScenario == "testbed")
+            m_ScenePaths.assign(1, ProjectPaths::Resolve("scenes/AnimTestbed.json"));
 #pragma warning(suppress : 4996)
         if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) { // e.g. doors in the Forest
             // A test scene (tests/scenes/) by that name first, else the project's scenes/.
