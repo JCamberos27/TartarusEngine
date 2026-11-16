@@ -20,24 +20,20 @@ namespace PhysicsWorld { struct RagdollPart; struct RagdollParams; }
 // toward a target pose, whose strength decays per region to a small residual (legs first, then spine, neck and arms) and whose target
 // goes from the pose the body died in to a procedural collapse (hips and knees fold, the spine curls, the arms brace or drop) and on to a
 // relaxed lying pose (legs extend, hips and arms relax: a body does not end frozen kneeling). The collapse is shaped by the way the body
-// falls: the leg on the side it falls toward buckles first, a back fall sits and folds the knees less, the arms reach toward the fall, the
-// hand of the struck side goes to a torso wound for a moment; a head kill has none of that, it goes limp. The struck joint is weak from the
+// falls: the leg on the side it falls toward buckles first, a back fall sits and folds the knees less, the arms reach toward the fall;
+// a head kill has none of that, it goes limp. The struck joint is weak from the
 // start (it takes the round), the legs start at a partial strength and hold it a beat (the body is carried by the round and topples along
 // the shot, not straight down). Once its parts slow, the body settles: damping, friction and joint friction ramp up and, at rest, it is put
 // to sleep; a round into it wakes it and loosens it a moment (Poke). Pure physics and settings (no GL, no body): the tests drive it on a bare ragdoll.
 class NpcRagdollMotor {
 public:
     enum class Group { Legs, Spine, Neck, Arms };
-    // How the body is going down, in its own axes: the fall's direction, which way the round came, which arm reaches for the wound.
+    // How the body is going down, in its own axes: the fall's direction and which way the round came.
     struct Fall {
         float Fwd = 1.0f;          // the fall's horizontal direction along the body's forward: 1 = falls forward .. -1 = falls back
         float Lat = 0.0f;          // ... and toward its left (+1) or right (-1)
         float Bias = 0.0f;         // this body's own lean (-1..1, from its ragdoll id): which leg gives first when the fall is straight on
         bool Head = false;         // a head kill: no reactions, limp at once
-        int WoundSide = 0;         // a torso hit: the arm that goes to the wound (+1 left, -1 right; 0 none) ...
-        bool WoundFront = true;    // ... and whether the round entered the front (else the back)
-        int WeakLeg = -1;          // a living body shot down by a leg: that leg (0 left, 1 right) gives at once, whole (the struck joint's weakness)
-        bool Prone = false;        // killed already down on the floor (crawling): no collapse to make, a flinch and then slack, flat
         bool HaveNeutral = false;
         glm::quat Neutral[32];     // (PhysicsWorld::kMaxRagdollParts) each joint's rotation from the death pose back to its neutral (straight limb, upright spine); needs the joint frames
         Fall();
@@ -45,12 +41,9 @@ public:
     // Starts powering ragdoll `id`, built from `parts` (BuildParts: the joints' frames) in a body whose axes are `root`'s (x left,
     // y up, z forward). `fallDir`: the way the body is going to fall (the round's, or the body's momentum; world, need not be level,
     // zero: forward); `hitPart`: the part the round struck (-1 none); `point` / `shot`: where the round struck (world) and its direction
-    // (a zero shot: no wound reaction). `cfg` is copied. `weakLeg` (0 left, 1 right; -1 none): a living body shot down by that leg.
+    // (a zero shot: no reaction to it). `cfg` is copied.
     void Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart, const RagdollSettingsComponent& cfg,
-               const glm::vec3& point = glm::vec3(0.0f), const glm::vec3& shot = glm::vec3(0.0f), int weakLeg = -1);
-    // The settings from now on (a living body going down that dies on the way: the death's own settle, sleep and tone take over; the
-    // curves keep their clock, so nothing jumps).
-    void SetSettings(const RagdollSettingsComponent& cfg);
+               const glm::vec3& point = glm::vec3(0.0f), const glm::vec3& shot = glm::vec3(0.0f));
     // Once per frame (`dt` seconds): the drives' strengths and targets, the settle, the rest.
     void Update(float dt);
     // Something shoved the body: the settle and the sleep start over.
@@ -69,8 +62,6 @@ public:
     // The body is about to rest kneeling, curled up or propped and its legs are pushing it toward the lying pose (see Rest Pelvis Max).
     bool Pushing() const { return m_Push; }
     const Fall& FallState() const { return m_Fall; }
-    // The body was already lying on the floor when it died (a crawler finished off): see Fall::Prone.
-    void SetProne() { m_Fall.Prone = true; }
 
     static Group GroupOf(int part);
     static bool IsHeadHit(int hitPart);
@@ -86,14 +77,12 @@ public:
     static float CollapseFlexion(const RagdollSettingsComponent& cfg, int part, const Fall& fall);
     static float CollapseFlexion(const RagdollSettingsComponent& cfg, int part, bool forward);
     // The drive target (the joint frame's rotation from the pose it was built in) of `part` at `t` seconds: the collapse pose (the arms'
-    // brace, the wound grab layered on), going over to the lying pose.
+    // brace), going over to the lying pose.
     static glm::quat TargetAt(const RagdollSettingsComponent& cfg, int part, float t, const Fall& fall);
     static glm::quat TargetAt(const RagdollSettingsComponent& cfg, int part, float t, bool forward);
     // How far the target has gone from the collapse to the lying pose (0..1) and the strength that holds it (0..Relax Tone) at `t`.
     static float RelaxAmount(const RagdollSettingsComponent& cfg, float t);
     static float RelaxStrength(const RagdollSettingsComponent& cfg, float t);
-    // How much of the wound grab is on at `t` (0..Wound Grab Weight): up quick, held for Wound Grab Time, then let go.
-    static float WoundGrab(const RagdollSettingsComponent& cfg, const Fall& fall, float t);
 
 private:
     bool Lying() const;   // the pelvis and chest low, the knees and hips not folded past the Rest limits
@@ -133,20 +122,9 @@ public:
     // `cfg`: the scene's Ragdoll Settings (null: the defaults).
     // `prev` / `prevDt`: the bones as they were `prevDt` seconds before the pose the body is in now (Capture), for each part's own
     // velocity (null: all parts move with `velocity`).
-    // `wound` (optional): the body is alive, shot down by a leg (NpcDirector's wound fall): it falls along Wound::FallDir (forward and
-    // toward the hurt leg, rather than along its momentum), that leg gives at once, and the chest is toppled that way by Wound::Push (m/s).
     struct BoneSnapshot;
-    struct Wound {
-        glm::vec3 FallDir{0.0f}; // world; zero: the momentum's, as a death
-        int Leg = -1;            // 0 left, 1 right
-        float Push = 0.0f;       // m/s on the chest, neck and head along FallDir
-    };
-    bool ProneDeath = false; // set before Start: the soldier died lying on the floor (Fall::Prone)
     bool Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart = -1,
-               const RagdollSettingsComponent* cfg = nullptr, const BoneSnapshot* prev = nullptr, float prevDt = 0.0f, const Wound* wound = nullptr);
-    // A living body down as a ragdoll (Start with a Wound) is killed: from now on it is a corpse under `cfg` (the death's settings), and the
-    // round that did it (`dir`, `damage` at `point` on part `part`) shoves it as one into a corpse would. The same ragdoll: nothing pops.
-    void Die(int part, const glm::vec3& dir, float damage, const glm::vec3& point, const RagdollSettingsComponent& cfg);
+               const RagdollSettingsComponent* cfg = nullptr, const BoneSnapshot* prev = nullptr, float prevDt = 0.0f);
     // The fastest part's speed (m/s) and spin (rad/s); false without a ragdoll.
     bool Motion(float& linear, float& angular) const;
     void Stop();
@@ -162,8 +140,6 @@ public:
     // A round (or anything) shoves part `part` by `impulse` (N s) at `point` (world): wakes it, and the pose is
     // rewritten from now on.
     void Shove(int part, const glm::vec3& impulse, const glm::vec3& point);
-    // The settled body loosens for `seconds` (no damping or friction ramped up, nothing put to sleep): for an effort to move it.
-    void Loosen(float seconds) { m_Settled = false; if (m_Powered) m_Motor.Poke(seconds); }
     // A round into the corpse: part `part` is struck along `dir` at `point` (world) by a round of `damage`: a point impulse on that part
     // (Corpse Shot Base + Per Damage, in m/s, capped by Corpse Shot Max Speed, times the part's mass), the body wakes and stays loose for
     // Corpse Wake Time, then settles and sleeps again. Returns the speed given.
@@ -205,10 +181,8 @@ public:
     // The death's shove and (with a `motor`: Powered Ragdoll) its muscles, on ragdoll `id` built from `parts` / `partWorld` (BuildParts) in
     // a body of axes `root`: `impulse` (N s) at `point` (world) on part `hitPart` (-1: the nearest), the body going `velocity`. Returns
     // the part struck. Start does this; it is exposed so the tests can kill a bare ragdoll.
-    // `wound`: a living body going down (see Start).
     static int Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4* partWorld, const glm::mat4& root, const glm::vec3& velocity,
-                      const glm::vec3& impulse, const glm::vec3& point, int hitPart, const RagdollSettingsComponent& cfg, NpcRagdollMotor* motor,
-                      const Wound* wound = nullptr);
+                      const glm::vec3& impulse, const glm::vec3& point, int hitPart, const RagdollSettingsComponent& cfg, NpcRagdollMotor* motor);
     // Part `part`'s mass under `cfg` (null: the default).
     static float PartMass(const RagdollSettingsComponent* cfg, int part);
 

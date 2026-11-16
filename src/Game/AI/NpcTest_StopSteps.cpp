@@ -59,7 +59,7 @@ void NpcTest::StopStepsDrive(Player& player, float dt, float& wantYaw, float& wa
 void NpcTest::StopSteps(const Player& player, float now) {
     (void)player;
     (void)now;
-    if (m_SSClock < StopStepsSeconds() || m_Done) return; // (its own clock: no soldiers here to run the director's)
+    if (m_SSClock < StopStepsSeconds() || m_Done) return; // (its own clock: no dummies here to run the director's)
     m_Done = true;
     std::printf("[StopSteps] steps per leg:\n");
     for (int i = 0; i < kLegCount; ++i) std::printf("[StopSteps]   %-24s %d\n", kLegs[i].Name, m_SSLegSteps[i]);

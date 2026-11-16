@@ -1,8 +1,7 @@
-# Runs NPC test scenarios several times each and reports every check's pass rate: one run of a test whose
-# fight plays out differently each time (aptfight) can't tell a fix from noise.
-#   python tools/npc_test_runs.py <engine exe> <scenario[@room]>... [--runs N] [--parallel N] [--logs DIR] [--visible]
-# A scenario may carry a room for aptwounds (NPC_TEST_ROOM), e.g. aptwounds@303bed2. Runs go hidden and muted
-# unless --visible (then muted only). At most 4 engines at once (VRAM). Exit code 1 if any check ever failed.
+# Runs NPC test scenarios several times each and reports every check's pass rate: one run of a noisy test
+# (npcloco, deaths) can't tell a fix from noise.
+#   python tools/npc_test_runs.py <engine exe> <scenario>... [--runs N] [--parallel N] [--logs DIR] [--visible]
+# Runs go hidden and muted unless --visible (then muted only). At most 4 engines at once (VRAM). Exit code 1 if any check ever failed.
 import argparse
 import os
 import re
@@ -20,14 +19,12 @@ def check_name(text):
     return re.sub(r'\s*\([^()]*\)\s*$', '', text).strip()
 
 
-def run_one(exe, workdir, scenario, room, log, visible):
+def run_one(exe, workdir, scenario, log, visible):
     env = dict(os.environ, TARTARUS_MUTE='1')
     if visible:
         env.pop('TARTARUS_HIDDEN', None)
     else:
         env['TARTARUS_HIDDEN'] = '1'
-    if room:
-        env['NPC_TEST_ROOM'] = room
     with open(log, 'w', encoding='utf-8', errors='replace') as out:
         subprocess.run([exe, '--npc-test', scenario], cwd=workdir, env=env, stdout=out, stderr=subprocess.STDOUT)
     checks, finished = OrderedDict(), None
@@ -56,12 +53,11 @@ def main():
     workdir = os.path.abspath(os.path.join(os.path.dirname(exe), '..', '..'))  # <repo>/b/Release/TartarusEngine.exe
     os.makedirs(a.logs, exist_ok=True)
     jobs = []
-    for spec in a.scenarios:
-        scenario, _, room = spec.partition('@')
+    for scenario in a.scenarios:
         for k in range(a.runs):
-            jobs.append((spec, scenario, room, os.path.join(a.logs, f"{spec.replace('@', '_')}_{k + 1}.log")))
+            jobs.append((scenario, os.path.join(a.logs, f"{scenario}_{k + 1}.log")))
     with ThreadPoolExecutor(max_workers=max(1, min(a.parallel, 4))) as pool:
-        results = list(pool.map(lambda j: (j[0], j[3], run_one(exe, workdir, j[1], j[2], j[3], a.visible)), jobs))
+        results = list(pool.map(lambda j: (j[0], j[1], run_one(exe, workdir, j[0], j[1], a.visible)), jobs))
 
     failed = False
     for spec in a.scenarios:

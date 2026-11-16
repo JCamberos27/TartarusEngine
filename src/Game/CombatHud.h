@@ -11,9 +11,7 @@
 class NpcDirector;
 
 // Everything the combat HUD draws with text and shapes: the ammo counter (bottom right), the kill feed and streak banner (top right /
-// top centre), awareness chevrons round the
-// crosshair for soldiers that are suspicious but not yet fighting, a GOD tag, and the AI debug overlay
-// (the director's lines and a label per soldier). One HudText batch, one draw call.
+// top centre), a GOD tag, and the AI debug overlay (the director's lines and a label per dummy). One HudText batch, one draw call.
 struct CombatHudInput {
     unsigned Fbo = 0;
     int Width = 0, Height = 0;
@@ -43,7 +41,7 @@ public:
     static bool FeedExpired(const FxHudSettingsComponent& s, float age) { return age > s.FeedLife; }
     // Forgets the feed and the streak (a new Play).
     void Reset();
-    // The player's round killed `entity` (a soldier of `npcs`).
+    // The player's round killed `entity` (a dummy of `npcs`).
     void OnKill(const NpcDirector& npcs, unsigned entity, bool head);
     // Draws the frame into `in.Fbo`.
     void Draw(const CombatHudInput& in, NpcDirector& npcs);
@@ -56,7 +54,6 @@ private:
 
     void DrawAmmo(const CombatHudInput& in);
     void DrawFeed(const CombatHudInput& in, float now);
-    void DrawAwareness(const CombatHudInput& in, const NpcDirector& npcs);
     void DrawDebug(const CombatHudInput& in, const NpcDirector& npcs);
     void DrawLines(const CombatHudInput& in, const std::vector<float>& lines); // world lines, clipped to the near plane
     bool Project(const CombatHudInput& in, const glm::vec3& p, glm::vec2& out) const;

@@ -6,22 +6,20 @@ class NpcDirector;
 class PlayerVitals;
 class World;
 
-// The Play-mode dev overlay (an ImGui window, F7) for testing the enemy squad: god mode, infinite ammo,
-// freeze the AI, hold fire, invisible to the AI, difficulty, time scale, kill all / respawn the squad
-// and the AI debug overlay. State only: main.cpp feeds the flags into the frame (ammo refill, the
-// player's snapshot, the HUD's overlay switch).
+// The Play-mode dev overlay (an ImGui window, F7) for testing with the training dummies: god mode, infinite ammo,
+// time scale, kill all / respawn the dummies, and the AI debug overlay. State only: the host feeds the flags into the frame
+// (ammo refill, the HUD's overlay switch).
 //
-// Hotkeys (Play, with an enemy squad): F7 the panel, F8 god mode, F9 the AI debug overlay.
+// Hotkeys (Play, with dummies; no default keys): the panel, god mode, the AI debug overlay.
 class DevPanel {
 public:
     bool Open = false;
     bool InfiniteAmmo = false;
-    bool Invisible = false;      // the AI can't see or hear the player
-    bool AiOverlay = false;      // lines and labels over the squad
+    bool AiOverlay = false;      // each dummy's goal and a label over it
 
     // A new Play: everything back to normal.
     void Reset(PlayerVitals& vitals, NpcDirector& npcs);
-    // F7 the panel, F8 god mode, F9 the AI overlay: call once per Play frame.
+    // F7 the panel, F8 god mode: call once per Play frame.
 
     struct Context {
         World* WorldPtr = nullptr;
@@ -35,5 +33,5 @@ public:
 
     // The panel's buttons, callable from tests.
     static int KillAll(World& world, NpcDirector& npcs);                    // returns how many were killed
-    static int RespawnSquad(World& world, AssetLibrary& assets, NpcDirector& npcs); // fills the squad back up; returns how many spawned
+    static int RespawnSquad(World& world, AssetLibrary& assets, NpcDirector& npcs); // a dummy at every spawn that has none; returns how many spawned
 };

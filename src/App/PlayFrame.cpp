@@ -108,8 +108,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     glm::vec3& deathCamOffset = play.DeathCamOffset;
     float& deathCamRoll = play.DeathCamRoll;
     PlayerSnapshot& playerSnap = m_PlayerSnap;
-    int& playerAmmoSeen = m_PlayerAmmoSeen;
-    int& playerSlotSeen = m_PlayerSlotSeen;
     int& bigHeadshots = m_BigHeadshots;
     float& npcTestBloodGpuSum = m_NpcTestBloodGpuSum;
     int& npcTestBloodGpuFrames = m_NpcTestBloodGpuFrames;
@@ -137,7 +135,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         dc.StartSquad = [&]() {
             auto fps = world.Registry.view<FirstPersonControllerComponent>();
             const FirstPersonControllerComponent* fp = fps.begin() != fps.end() ? &fps.get<FirstPersonControllerComponent>(*fps.begin()) : nullptr;
-            return fp && npcDirector.Start(world, assets, fp, /*allowEmpty=*/true);
+            return fp && npcDirector.Start(world, assets, /*allowEmpty=*/true);
         };
         if (playUsesPlayer) devSpawner.Update(dc);
     }
@@ -269,10 +267,9 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         }
         player.Cam.Fov = firstPersonPresentation.WorldFov(playBaseFov);
     }
-    // The enemy squad (scenes with NPC Spawns): they see the player as they are after this
-    // move, and decide, move and aim before the animators pose everyone.
+    // The training dummies (scenes with Dummy Spawns): they wander and move before the animators pose everyone.
     if (npcDirector.Active()) {
-        PROFILE_SCOPE("Enemy AI");
+        PROFILE_SCOPE("Dummies");
         playerSnap = PlayerSnapshot{};
         playerSnap.Valid = playUsesPlayer && PhysicsWorld::HasCharacter();
         if (playerSnap.Valid) {
@@ -284,25 +281,9 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             playerSnap.Eye = player.Cam.Position;
             playerSnap.Velocity = player.Velocity;
             playerSnap.Forward = player.Cam.Front();
-            playerSnap.Crouched = player.Crouched;
-            playerSnap.Dead = playerVitals.IsDead();
-            playerSnap.Health = playerVitals.Health01();
-            playerSnap.Sprinting = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)) > player.MoveSpeed * 1.1f;
-            if (firstPersonPresentation.IsActive()) {
-                const int ammo = firstPersonPresentation.Ammo(), slot = firstPersonPresentation.Slot();
-                playerSnap.Fired = slot == playerSlotSeen && playerAmmoSeen >= 0 && ammo < playerAmmoSeen;
-                playerAmmoSeen = ammo;
-                playerSlotSeen = slot;
-                playerSnap.Reloading = firstPersonPresentation.IsReloading();
-            }
         }
-        if (devPanel.Invisible) playerSnap.Valid = false; // dev panel: the squad can't see or hear the player
         npcDirector.Think(world, assets, gameDt, playerSnap);
-        if (devPanel.InfiniteAmmo && firstPersonPresentation.IsActive()) {
-            firstPersonPresentation.SetAmmo(firstPersonPresentation.MagazineSize());
-            playerAmmoSeen = firstPersonPresentation.Ammo();
-        }
-
+        if (devPanel.InfiniteAmmo && firstPersonPresentation.IsActive()) firstPersonPresentation.SetAmmo(firstPersonPresentation.MagazineSize());
     }
     // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
     // against wherever the player is looking from, updated after the move so the
@@ -385,15 +366,14 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                         combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
                     }
                     if (killed) combatHud.OnKill(npcDirector, hit.Entity, head);
-                    continue; // a soldier, not a wall: no hole
+                    continue; // a dummy, not a wall: no hole
                 }
             }
             combatFx.Impact(world, hit.Entity, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]));
             worldImpact(hit.Entity, hit.Point, hit.Normal, glm::vec3(hit.Direction[0], hit.Direction[1], hit.Direction[2]), hit.HoleRadius);
         }
-        // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
+        // Every pellet's line: the report.
         for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
-            if (npcDirector.Active()) npcDirector.OnPlayerShotLine(t.Origin, t.End);
             if (t.FirstPellet)
                 combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
                               t.Origin, t.End, true, false, 0, firstPersonPresentation.MuzzleEffects());
@@ -412,23 +392,12 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         shellCasings.Update(world, gameDt, player.Cam, player.Cam.Position);
         }
     }
-    // The enemy squad's late pose: spines aimed, guns placed on their eye cameras, hands
-    // onto the guns, this frame's rounds fired. Then what they hit.
+    // The dummies' late pose (foot IK, the look, the hitboxes on the bones), then what the player's rounds did to them.
     if (npcDirector.Active()) {
-        PROFILE_SCOPE("Enemy AI Late");
+        PROFILE_SCOPE("Dummies Late");
         npcDirector.LateUpdate(world, gameDt, playerSnap);
-        PROFILE_SCOPE("AI Impacts + Flesh Hits");
-        for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts()) {
-            combatFx.Impact(world, imp.Entity, glm::vec3(imp.Point[0], imp.Point[1], imp.Point[2]));
-            worldImpact(imp.Entity, imp.Point, imp.Normal, -glm::vec3(imp.Normal[0], imp.Normal[1], imp.Normal[2]), imp.Radius);
-        }
-        for (const CasingSpawn& spawn : npcDirector.TakeEjections()) shellCasings.Spawn(world, assets, spawn);
-        for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
-            const float before = playerVitals.Health();
-            playerVitals.ApplyDamage(e.Amount, e.SourcePos);
-            if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
-        }
-        // Every round that went into a body this frame - theirs and the player's - bleeds.
+        PROFILE_SCOPE("Dummy Flesh Hits");
+        // Every round that went into a dummy this frame bleeds.
         for (const NpcDirector::FleshHit& f : npcDirector.TakeFleshHits()) {
             BloodFx::Hit h;
             h.Point = f.Point;
@@ -538,7 +507,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             playerVitals.Respawned();
             firstPersonPresentation.RefillAmmo();
             firstPersonPresentation.SetEquipped(true);
-            npcDirector.OnPlayerRespawned();
         }
         // Dead: the view sinks to the floor and rolls over, on the camera only (taken off
         // again at the top of the next frame).

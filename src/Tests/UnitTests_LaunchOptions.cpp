@@ -22,8 +22,8 @@ void Test_LaunchOptions_Modes() {
     CHECK(Parse({"--perf-bench", "a.json", "--perf-res", "1280x720", "--perf-sample"}, o, err));
     CHECK(o.mode == LaunchMode::PerfBench && o.smokeTestMode && o.perfBenchMode && o.perfSample);
     CHECK(o.smokeScenesDirArg == "a.json" && o.perfResW == 1280 && o.perfResH == 720);
-    CHECK(Parse({"--npc-test", "fight", "--smoke-shots", "out"}, o, err));
-    CHECK(o.mode == LaunchMode::NpcTest && o.smokeTestMode && o.npcTestScenario == "fight" && o.smokeShotsDir == "out");
+    CHECK(Parse({"--npc-test", "labloco", "--smoke-shots", "out"}, o, err));
+    CHECK(o.mode == LaunchMode::NpcTest && o.smokeTestMode && o.npcTestScenario == "labloco" && o.smokeShotsDir == "out");
     CHECK(Parse({"--smoke-test", "--smoke-shots", "out"}, o, err) && o.smokeScenesDirArg.empty());
     CHECK(Parse({"--unit-tests", "Env"}, o, err) && o.mode == LaunchMode::UnitTests && o.unitTestsFilter == "Env");
     CHECK(Parse({"--help"}, o, err) && o.mode == LaunchMode::Help);

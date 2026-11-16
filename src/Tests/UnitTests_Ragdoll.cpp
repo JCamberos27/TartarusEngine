@@ -26,7 +26,6 @@
 #include <string>
 #include "GameModuleAPI.h" // BodyState
 #include "Npc/NpcBody.h"
-#include "Npc/NpcDroppedWeapon.h"
 
 // Unit tests for ragdolls, NPC death and NPC physics. Add a function per test and list it below.
 
@@ -405,7 +404,7 @@ void TestRagdollAndSquadSettingsRoundTrip() {
     auto& rag = world.Registry.emplace<RagdollSettingsComponent>(e);
     rag.DriveFade = 0.9f; rag.CalfFlexMax = 100.0f; rag.PelvisMass = 20.0f; rag.AnatomicalLimits = false; rag.SolverPosIters = 30; rag.CorpseShotBase = 3.0f;
     auto& squad = world.Registry.emplace<SquadSettingsComponent>(e);
-    squad.HeavyHitDamage = 77.0f; squad.CoverReach = 1.25f; squad.MeleeTime = 0.8f; squad.FallGravity = 9.81f; squad.CorpseTime = 99.0f; squad.HitboxRange = 30.0f;
+    squad.HeavyHitDamage = 77.0f; squad.StaggerTime = 0.8f; squad.RespawnDelay = 4.0f; squad.FallGravity = 9.81f; squad.CorpseTime = 99.0f; squad.HitboxRange = 30.0f;
     const std::string json = SceneSerializer::SaveToString(world, assets);
     World back;
     AssetLibrary assets2;
@@ -417,23 +416,36 @@ void TestRagdollAndSquadSettingsRoundTrip() {
         seen = true;
         CHECK(r.DriveFade == 0.9f && r.CalfFlexMax == 100.0f && r.PelvisMass == 20.0f && !r.AnatomicalLimits && r.SolverPosIters == 30 && r.CorpseShotBase == 3.0f);
         CHECK(r.ThighFlexMax == RagdollSettingsComponent().ThighFlexMax); // untouched fields keep their defaults
-        CHECK(s && s->HeavyHitDamage == 77.0f && s->CoverReach == 1.25f && s->MeleeTime == 0.8f && s->FallGravity == 9.81f && s->CorpseTime == 99.0f && s->HitboxRange == 30.0f);
+        CHECK(s && s->HeavyHitDamage == 77.0f && s->StaggerTime == 0.8f && s->RespawnDelay == 4.0f && s->FallGravity == 9.81f && s->CorpseTime == 99.0f && s->HitboxRange == 30.0f);
     }
     CHECK(seen);
-    // A scene saved before these fields existed: Squad Settings with only the old ones.
+    // A scene saved before these fields existed (and before the rename to Dummy Settings): the old "Squad Settings" key.
     World old;
     AssetLibrary assets3;
     const std::string oldJson = std::string(R"({"formatVersion":3,"empties":[{"name":"S","id":1,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1],)") +
-                                R"("Squad Settings":{"Squad Size":3}}]})";
+                                R"("Squad Settings":{"Heavy Hit Damage":55}}]})";
     CHECK(SceneSerializer::LoadFromString(old, assets3, oldJson));
     // Whatever the key spelling, an entity that has the component carries the original values in the fields it doesn't name.
     int oldFound = 0;
     for (entt::entity b : old.Registry.view<SquadSettingsComponent>()) {
         const auto& s = old.Registry.get<SquadSettingsComponent>(b);
         ++oldFound;
-        CHECK(s.SquadSize == 3 && s.HeavyHitDamage == 40.0f && s.CorpseTime == 180.0f && s.MaxCorpses == 12 && s.UnseenTime == 3.0f && s.CoverStep == 0.8f && s.FallGravity == 18.0f);
+        CHECK(s.HeavyHitDamage == 55.0f && s.CorpseTime == 180.0f && s.MaxCorpses == 12 && s.UnseenTime == 3.0f && s.FallGravity == 18.0f);
     }
     CHECK(oldFound == 1);
+    // The old "NPC Spawn" key still loads into the Dummy Spawn component; Roam wasn't there, so it defaults to true.
+    World oldSpawn;
+    AssetLibrary assets4;
+    const std::string spawnJson = std::string(R"({"formatVersion":3,"empties":[{"name":"P","id":1,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1],)") +
+                                  R"("NPC Spawn":{"Outfit Seed":7}}]})";
+    CHECK(SceneSerializer::LoadFromString(oldSpawn, assets4, spawnJson));
+    int spawnFound = 0;
+    for (entt::entity b : oldSpawn.Registry.view<NpcSpawnComponent>()) {
+        const auto& sp = oldSpawn.Registry.get<NpcSpawnComponent>(b);
+        ++spawnFound;
+        CHECK(sp.OutfitSeed == 7 && sp.Roam && !sp.Bare);
+    }
+    CHECK(spawnFound == 1);
 }
 
 // The director takes the scene's settings (and the defaults without any).
@@ -441,15 +453,15 @@ void TestNpcDirectorReadsSettings() {
     NpcDirector director;
     World world;
     director.ApplySettings(world.Registry);
-    CHECK(director.Settings().HeavyHitDamage == 40.0f && director.Settings().BleedOutTime == 20.0f && director.Settings().CoverReach == 0.85f);
+    CHECK(director.Settings().HeavyHitDamage == 40.0f && director.Settings().StaggerTime == 0.4f && director.Settings().Respawn);
     CHECK(director.RagdollSettings().DriveStiffness == 700.0f && director.RagdollSettings().AnatomicalLimits);
     const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Rules");
     auto& sq = world.Registry.emplace<SquadSettingsComponent>(e);
-    sq.HeavyHitDamage = 12.0f; sq.CorpseTime = 3.0f; sq.Difficulty = 1.5f;
+    sq.HeavyHitDamage = 12.0f; sq.CorpseTime = 3.0f; sq.StaggerTime = 1.5f;
     world.Registry.emplace<RagdollSettingsComponent>(e).DriveStiffness = 123.0f;
     director.ApplySettings(world.Registry);
     CHECK(director.Settings().HeavyHitDamage == 12.0f && director.Settings().CorpseTime == 3.0f);
-    CHECK(director.Difficulty() == 1.5f);
+    CHECK(director.Settings().StaggerTime == 1.5f);
     CHECK(director.RagdollSettings().DriveStiffness == 123.0f);
     world.Registry.clear();
     director.ApplySettings(world.Registry); // gone again: back to the defaults
@@ -822,28 +834,8 @@ void TestPoweredRagdollDeathsAgainstPassive() {
     std::printf("[UnitTest] worst past range: standing %.1f deg (%s %d), running %.1f deg (%s %d)\n", ns.Worst.JointOver,
                 ns.Worst.JointOverPart >= 0 ? NpcRagdollDefOf(ns.Worst.JointOverPart).Bone : "-", ns.Worst.JointOverAxis, nr.Worst.JointOver,
                 nr.Worst.JointOverPart >= 0 ? NpcRagdollDefOf(nr.Worst.JointOverPart).Bone : "-", nr.Worst.JointOverAxis);
-    CHECK(ns.Worst.JointOver < 12.0f && nr.Worst.JointOver < 12.0f);
-}
-
-// A soldier dies holding his rifle up (the arms start far from hanging), or falls back across a crate: no joint is forced past its
-// range on the way down (a shoulder or a wrist twisted round by the floor or the crate's edge).
-void TestRagdollArmedDeathsStayInRange() {
-    const RagdollSettingsComponent cfg;
-    const KillCase cases[] = {
-        {"aim chest front", 1, {0, 0, -1}, {0, 0, 0}, true},  {"aim head side", 2, {1, 0, 0}, {0, 0, 0}, true},
-        {"aim chest back", 1, {0, 0, 1}, {0, 0, 0}, true},    {"aim thigh front", 7, {0, 0, -1}, {0, 0, 0}, true},
-        {"aim run side", 1, {1, 0, 0}, {0, 0, 4}, true},      {"aim crate chest", 1, {0, 0, -1}, {0, 0, 0}, true, true},
-        {"aim crate head", 2, {0, 0, -1}, {0, 0, 0}, true, true}, {"crate chest", 1, {0, 0, -1}, {0, 0, 0}, false, true},
-    };
-    float worst = 0.0f;
-    for (const KillCase& kc : cases) {
-        const KillStats k = KillOnAFloor(cfg, kc);
-        CHECK(k.Finite);
-        std::printf("[UnitTest]   %-16s past range %4.1f deg (%s %d), settle %4.2f s, pelvis %4.2f m\n", kc.Name, k.JointOver,
-                    k.JointOverPart >= 0 ? NpcRagdollDefOf(k.JointOverPart).Bone : "-", k.JointOverAxis, k.SettleTime, k.PelvisY);
-        worst = std::max(worst, k.JointOver);
-    }
-    CHECK(worst < 12.0f);
+    // (Running, 15: with no hand going to the wound on a torso hit, a free wrist can land under the body a degree or so past 12.)
+    CHECK(ns.Worst.JointOver < 12.0f && nr.Worst.JointOver < 15.0f);
 }
 
 // The muscles' strength: legs start partial and hold a beat, then each region decays in its own time (legs first, then spine, neck and arms)
@@ -1088,7 +1080,7 @@ RagdollSettingsComponent RevampCfg() {
     RagdollSettingsComponent c;
     c.RelaxTone = 0.0f; c.RestFixTime = 0.0f;
     c.BuckleAsymmetry = 0.0f; c.BuckleLead = 0.0f; c.BackKneeScale = 1.0f; c.BackHipScale = 1.0f;
-    c.BraceWeight = 0.0f; c.WoundGrabWeight = 0.0f; c.HeadTuckWeight = 0.0f;
+    c.BraceWeight = 0.0f; c.HeadTuckWeight = 0.0f;
     return c;
 }
 
@@ -1253,16 +1245,14 @@ void TestRagdollKneesBuckleWithTheShot() {
     CHECK(now.MeanFall < 35.0f && now.WorstFall < 60.0f); // and the body still goes down along the shot
 }
 
-// Reactions: while the body is conscious its arms reach toward the fall (forward, back or out to the side) and, on a torso hit, the struck side's
-// hand goes to the wound; the head tucks forward when it falls back. A head kill has none of it and goes limp sooner.
+// Reactions: while the body is conscious its arms reach toward the fall (forward, back or out to the side); the head tucks forward when it falls back. A head kill has none of it and goes limp sooner.
 void TestRagdollReactionsLayerTheTarget() {
     using M = NpcRagdollMotor;
     const RagdollSettingsComponent c;
-    const int kUpperArmL = 3, kForearmL = 4, kUpperArmR = 5, kNeck = NpcRagdoll::kNeck, kHead = 2;
-    M::Fall fwd, back, head, wound;
+    const int kUpperArmL = 3, kUpperArmR = 5, kNeck = NpcRagdoll::kNeck, kHead = 2;
+    M::Fall fwd, back, head;
     back.Fwd = -1.0f;
     head.Head = true;
-    wound.WoundSide = 1; // the left hand
     // Arms: forward on a forward fall, back on a back fall, none on a head kill.
     CHECK(M::CollapseFlexion(c, kUpperArmL, fwd) > 0.9f * c.ShoulderCollapse && M::CollapseFlexion(c, kUpperArmL, back) < -0.1f * c.ShoulderCollapse);
     CHECK(M::CollapseFlexion(c, kUpperArmL, head) == 0.0f);
@@ -1283,22 +1273,14 @@ void TestRagdollReactionsLayerTheTarget() {
     M::Fall headBack = back;
     headBack.Head = true;
     CHECK(M::CollapseFlexion(c, kNeck, headBack) == 0.0f && M::CollapseFlexion(c, kHead, headBack) == 0.0f);
-    // The wound grab: up quickly, held, let go within Wound Grab Time + 0.3 s; only the struck side's arm; none on a head kill or with weight 0.
-    CHECK(M::WoundGrab(c, wound, 0.0f) == 0.0f && M::WoundGrab(c, wound, 0.3f * c.WoundGrabTime) > 0.9f * c.WoundGrabWeight);
-    CHECK(M::WoundGrab(c, wound, c.WoundGrabTime + 0.4f) < 1e-4f && M::WoundGrab(c, fwd, 0.2f) == 0.0f && M::WoundGrab(c, head, 0.2f) == 0.0f);
-    const float armHit = glm::degrees(AngleBetween(M::TargetAt(c, kUpperArmL, 0.25f, wound), M::TargetAt(c, kUpperArmL, 0.25f, fwd)));
-    const float armOther = glm::degrees(AngleBetween(M::TargetAt(c, kUpperArmR, 0.25f, wound), M::TargetAt(c, kUpperArmR, 0.25f, fwd)));
-    const float elbow = glm::degrees(AngleBetween(M::TargetAt(c, kForearmL, 0.25f, wound), M::TargetAt(c, kForearmL, 0.25f, fwd)));
-    CHECK(armHit > 0.5f * c.WoundShoulder && armOther < 1e-3f && elbow > 0.5f * c.WoundElbow);
     // A head kill goes limp: the arms and neck let go in Head Kill Limp of the time; the legs are the same.
     CHECK(M::PartStrength(c, kUpperArmL, 0.35f, kHead) < 0.6f * M::PartStrength(c, kUpperArmL, 0.35f, 1) && M::PartStrength(c, kNeck, 0.35f, kHead) < M::PartStrength(c, kNeck, 0.35f, 1));
     CHECK(M::IsHeadHit(kHead) && !M::IsHeadHit(1) && M::PartStrength(c, 7, 0.4f, kHead) == M::PartStrength(c, 7, 0.4f, -1));
     // In the physics: a body shot in the chest from its right falls toward its left and both hands go that way (the lateral swing; the forward and back
-    // reach are in the targets above); shot in the chest from the front, the struck-side hand is at the chest. (A bare ragdoll in the standing pose, the
-    // same body both times, the layer on against off.)
-    const KillCase fallsLeft{"chest from the right", 1, {1, 0, 0}, {0, 0, 0}}, shotInFront{"chest from the front", 1, {0, 0, -1}, {0, 0, 0}};
+    // reach are in the targets above). (A bare ragdoll in the standing pose, the same body both times, the layer on against off.)
+    const KillCase fallsLeft{"chest from the right", 1, {1, 0, 0}, {0, 0, 0}};
     RagdollSettingsComponent off = c;
-    off.BraceWeight = 0.0f; off.WoundGrabWeight = 0.0f;
+    off.BraceWeight = 0.0f;
     const auto reachOn = KillPositions(c, fallsLeft, {0.45f}), reachOff = KillPositions(off, fallsLeft, {0.45f});
     if (reachOn.empty()) return; // no physics
     auto reach = [&](const std::vector<glm::vec3>& p) {
@@ -1306,13 +1288,6 @@ void TestRagdollReactionsLayerTheTarget() {
     };
     std::printf("[UnitTest] hands toward the fall (left) from the pelvis at 0.45 s: brace off %.2f m, on %.2f m\n", reach(reachOff[0]), reach(reachOn[0]));
     CHECK(reach(reachOn[0]) > reach(reachOff[0]) + 0.03f);
-    NpcRagdollMotor::Fall fall;
-    const auto gripOn = KillPositions(c, shotInFront, {0.3f}, &fall), gripOff = KillPositions(off, shotInFront, {0.3f});
-    CHECK(fall.WoundSide != 0 && fall.WoundFront && !fall.Head);
-    const int hand = fall.WoundSide > 0 ? NpcRagdoll::kHandL : NpcRagdoll::kHandR;
-    auto toWound = [&](const std::vector<glm::vec3>& p) { return glm::length(p[(size_t)hand] - p[1]); };
-    std::printf("[UnitTest] struck-side hand to the chest at 0.3 s: wound grab off %.2f m, on %.2f m\n", toWound(gripOff[0]), toWound(gripOn[0]));
-    CHECK(toWound(gripOn[0]) < toWound(gripOff[0]) - 0.05f);
 }
 
 // A round into a corpse: a point impulse on the part struck (capped), the body wakes and stays loose a moment so that part visibly reacts (more
@@ -1394,7 +1369,7 @@ void TestRagdollLyingFieldsRoundTrip() {
     const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Rules");
     auto& rag = world.Registry.emplace<RagdollSettingsComponent>(e);
     rag.RelaxTone = 0.31f; rag.RelaxTime = 0.77f; rag.RestFixTime = 0.9f; rag.LyingKnee = 17.0f; rag.BuckleAsymmetry = 0.2f; rag.BackKneeScale = 0.6f;
-    rag.BraceWeight = 0.4f; rag.WoundGrabWeight = 0.3f; rag.HeadTuckWeight = 0.5f; rag.HeadKillLimp = 0.7f; rag.CorpseWakeTime = 0.9f; rag.CorpseShotMaxSpeed = 2.5f;
+    rag.BraceWeight = 0.4f; rag.HeadTuckWeight = 0.5f; rag.HeadKillLimp = 0.7f; rag.CorpseWakeTime = 0.9f; rag.CorpseShotMaxSpeed = 2.5f;
     const std::string json = SceneSerializer::SaveToString(world, assets);
     World back;
     AssetLibrary assets2;
@@ -1404,7 +1379,7 @@ void TestRagdollLyingFieldsRoundTrip() {
         const auto& r = back.Registry.get<RagdollSettingsComponent>(b);
         ++seen;
         CHECK(r.RelaxTone == 0.31f && r.RelaxTime == 0.77f && r.RestFixTime == 0.9f && r.LyingKnee == 17.0f && r.BuckleAsymmetry == 0.2f && r.BackKneeScale == 0.6f);
-        CHECK(r.BraceWeight == 0.4f && r.WoundGrabWeight == 0.3f && r.HeadTuckWeight == 0.5f && r.HeadKillLimp == 0.7f && r.CorpseWakeTime == 0.9f && r.CorpseShotMaxSpeed == 2.5f);
+        CHECK(r.BraceWeight == 0.4f && r.HeadTuckWeight == 0.5f && r.HeadKillLimp == 0.7f && r.CorpseWakeTime == 0.9f && r.CorpseShotMaxSpeed == 2.5f);
         CHECK(r.LyingHip == RagdollSettingsComponent().LyingHip && r.RestPelvisMax == RagdollSettingsComponent().RestPelvisMax);
     }
     CHECK(seen == 1);
@@ -1420,153 +1395,6 @@ void TestRagdollLyingFieldsRoundTrip() {
         CHECK(r.ToneResidual == 0.1f && r.RelaxTone == RagdollSettingsComponent().RelaxTone && r.BraceWeight == RagdollSettingsComponent().BraceWeight);
     }
     CHECK(found == 1);
-}
-
-// ---- gear on death: the dropped weapon (Npc/NpcDroppedWeapon) ----
-
-// A world with a floor whose top is at `top`, physics up.
-entt::entity GearFloor(World& world, float top) {
-    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, top - 0.5f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-    ColliderComponent col;
-    col.Kind = ColliderComponent::Shape::Box;
-    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-    world.Registry.emplace<ColliderComponent>(floorE, col);
-    world.SyncActiveInHierarchy();
-    world.RebuildWorldTransformCache();
-    PhysicsWorld::Create(world);
-    return floorE;
-}
-
-// The gun leaves the hands at the hands' velocity (plus a capped share of the round's impulse): a body from the first step.
-void TestDroppedWeaponTakesTheHandsVelocity() {
-    World world;
-    GearFloor(world, -100.0f);
-    if (!PhysicsWorld::IsActive()) return;
-    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.2f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
-    DroppedWeaponSettingsComponent cfg;
-    cfg.Spin = 0.0f;
-    cfg.ImpulseShare = 0.0f;
-    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(3.0f, 0.0f, -2.0f), glm::vec3(0.0f), cfg);
-    CHECK(drop && drop->Built());
-    for (int k = 0; k < 4; ++k) { drop->Update(world, 1.0f / 60.0f); PhysicsWorld::Step(1.0f / 60.0f, world, {}); }
-    BodyState s;
-    CHECK(PhysicsWorld::GetBodyState((unsigned)entt::to_integral(drop->Entity()), s) && s.Valid);
-    CHECK(std::abs(s.Velocity[0] - 3.0f) < 0.3f && std::abs(s.Velocity[2] + 2.0f) < 0.3f); // the hands' velocity, not zero
-    drop->Stop(world);
-    // The round's share: along its line, capped by Max Shot Speed.
-    cfg.ImpulseShare = 0.2f;
-    cfg.MaxShotSpeed = 1.5f;
-    auto shot = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 100.0f), cfg);
-    CHECK(shot && std::abs(shot->StartVelocity().z - 1.5f) < 1e-4f && std::abs(shot->StartVelocity().x) < 1e-4f);
-    shot->Stop(world);
-    cfg.MaxShotSpeed = 50.0f;
-    auto soft = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 35.0f), cfg);
-    CHECK(soft && std::abs(soft->StartVelocity().z - 0.2f * 35.0f / cfg.Mass) < 1e-3f);
-    soft->Stop(world);
-    PhysicsWorld::Destroy();
-}
-
-// Thrown over a floor, the gun comes down, tumbles on and comes to rest (asleep) lying on it, not through it.
-void TestDroppedWeaponSettlesAndSleeps() {
-    World world;
-    GearFloor(world, 0.0f);
-    if (!PhysicsWorld::IsActive()) return;
-    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.3f, 0.0f), glm::vec3(0.0f, 30.0f, 0.0f), glm::vec3(1.0f), "Gun");
-    const DroppedWeaponSettingsComponent cfg; // the defaults: delay, spin, damping
-    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(2.0f, 0.5f, 1.0f), glm::vec3(0.0f, 0.0f, 20.0f), cfg);
-    CHECK(drop && !drop->Asleep());
-    float sleptAt = -1.0f;
-    float lowest = 1e9f;
-    for (int k = 0; k < 60 * 8; ++k) {
-        drop->Update(world, 1.0f / 60.0f);
-        PhysicsWorld::Step(1.0f / 60.0f, world, {});
-        lowest = std::min(lowest, world.WorldSpaceTransform(drop->Entity()).Position.y);
-        if (sleptAt < 0.0f && drop->Asleep()) sleptAt = (float)k / 60.0f;
-    }
-    const glm::vec3 at = world.WorldSpaceTransform(drop->Entity()).Position;
-    std::printf("[UnitTest] dropped gun asleep after %.2f s at (%.2f %.2f %.2f), lowest %.3f\n", sleptAt, at.x, at.y, at.z, lowest);
-    CHECK(sleptAt > 0.2f && sleptAt < 6.0f && drop->Asleep()); // it fell and rested
-    CHECK(at.y > -0.02f && at.y < 0.3f && lowest > -0.05f);    // on the floor, never through it
-    CHECK(at.x > 0.5f);                                        // it travelled with the hands
-    drop->Stop(world);
-    PhysicsWorld::Destroy();
-}
-
-// Stop removes the entity and its body (the director decides when: see the persistence test); off in the settings, nothing drops.
-void TestDroppedWeaponGoesWithTheCorpse() {
-    World world;
-    GearFloor(world, 0.0f);
-    if (!PhysicsWorld::IsActive()) return;
-    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
-    DroppedWeaponSettingsComponent cfg;
-    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg);
-    CHECK(drop);
-    const entt::entity e = drop->Entity();
-    PhysicsWorld::Step(1.0f / 60.0f, world, {});
-    BodyState s;
-    CHECK(world.Registry.valid(e) && PhysicsWorld::GetBodyState((unsigned)entt::to_integral(e), s) && s.Valid);
-    drop->Stop(world);
-    PhysicsWorld::Step(1.0f / 60.0f, world, {});
-    CHECK(!world.Registry.valid(e) && !(PhysicsWorld::GetBodyState((unsigned)entt::to_integral(e), s) && s.Valid));
-    CHECK(world.Registry.valid(gun)); // the weapon presentation's own entity is its own to stop
-    // Off: no drop. A hidden (holstered) gun: no drop.
-    cfg.Enabled = false;
-    CHECK(!NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg));
-    cfg.Enabled = true;
-    world.Registry.emplace<DeactivatedTag>(gun);
-    CHECK(!NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg));
-    PhysicsWorld::Destroy();
-}
-
-// Dropping the gun releases the body's weapon hold (the arms are the ragdoll's); the body tracks the gun's velocity for the drop.
-void TestDroppedWeaponReleasesTheHold() {
-    World world;
-    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
-    NpcBody body;
-    CHECK(!body.WeaponReleased());
-    auto drop = NpcDroppedWeapon::Drop(world, body, gun, glm::vec3(0.0f));
-    CHECK(body.WeaponReleased() && drop);
-    if (drop) drop->Stop(world);
-    // The same with no gun to drop (the hold still lets go).
-    NpcBody bare;
-    CHECK(!NpcDroppedWeapon::Drop(world, bare, entt::null, glm::vec3(0.0f)) && bare.WeaponReleased());
-    // The gun's velocity, from the positions it was seen at.
-    NpcBody mover;
-    CHECK(glm::length(mover.GunVelocity()) == 0.0f);
-    for (int k = 0; k < 30; ++k) mover.TrackGun(glm::vec3(5.0f * (float)k / 60.0f, 1.0f, 0.0f), 1.0f / 60.0f);
-    CHECK(std::abs(mover.GunVelocity().x - 5.0f) < 0.3f && std::abs(mover.GunVelocity().y) < 1e-3f);
-    // A bound: it is also what the drop gets.
-    NpcBody fast;
-    for (int k = 0; k < 30; ++k) fast.TrackGun(glm::vec3(5.0f * (float)k / 60.0f, 1.0f, 0.0f), 1.0f / 60.0f);
-    auto moving = NpcDroppedWeapon::Drop(world, fast, gun, glm::vec3(0.0f));
-    CHECK(moving && std::abs(moving->StartVelocity().x - fast.GunVelocity().x) < 1e-4f);
-    if (moving) moving->Stop(world);
-}
-
-// The settings: defaults without the component, the scene's when there is one, and they survive a save.
-void TestDroppedWeaponSettings() {
-    World none;
-    const DroppedWeaponSettingsComponent d;
-    const DroppedWeaponSettingsComponent got = NpcDroppedWeapon::SettingsIn(none);
-    CHECK(got.Enabled && got.Mass == d.Mass && got.ImpulseShare == d.ImpulseShare && got.Lifetime >= 120.0f && got.HullCollider);
-    CHECK(d.Mass > 2.0f && d.Mass < 6.0f && d.Bounciness < 0.3f);
-    World world;
-    AssetLibrary assets;
-    const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Rules");
-    auto& c = world.Registry.emplace<DroppedWeaponSettingsComponent>(e);
-    c.Enabled = false; c.Mass = 2.5f; c.ImpulseShare = 0.4f; c.Lifetime = 30.0f; c.ReleaseDelayMax = 0.2f;
-    CHECK(!NpcDroppedWeapon::SettingsIn(world).Enabled && NpcDroppedWeapon::SettingsIn(world).Mass == 2.5f);
-    const std::string json = SceneSerializer::SaveToString(world, assets);
-    World back;
-    AssetLibrary assets2;
-    CHECK(SceneSerializer::LoadFromString(back, assets2, json));
-    int seen = 0;
-    for (entt::entity b : back.Registry.view<DroppedWeaponSettingsComponent>()) {
-        const auto& r = back.Registry.get<DroppedWeaponSettingsComponent>(b);
-        ++seen;
-        CHECK(!r.Enabled && r.Mass == 2.5f && r.ImpulseShare == 0.4f && r.Lifetime == 30.0f && r.ReleaseDelayMax == 0.2f && r.Friction == d.Friction);
-    }
-    CHECK(seen == 1);
 }
 
 // --- The articulation ragdoll ----------------------------------------------------------------------------------------------
@@ -1796,157 +1624,6 @@ void TestRagdollHasWeight() {
     PhysicsWorld::Destroy();
 }
 
-// The dead hand keeps the gun a moment (it rides the falling arm), then lets go; it passes only the parts it started inside of,
-// each until it is clear, and comes to rest on the floor, not inside the body.
-void TestDroppedWeaponGripAndRelease() {
-    World world;
-    FlatFloor(world);
-    if (!PhysicsWorld::IsActive()) return;
-    RagdollSettingsComponent rcfg;
-    PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
-    glm::mat4 partWorld[NpcRagdoll::kRagParts];
-    CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(0.0f), rcfg, parts, partWorld));
-    const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(rcfg);
-    const int id = PhysicsWorld::CreateRagdoll(4365u, parts, NpcRagdoll::kRagParts, &prm);
-    CHECK(id >= 0);
-    if (id < 0) { PhysicsWorld::Destroy(); return; }
-    // A rifle-sized box in the right hand, pointing forward.
-    const glm::vec3 hand(partWorld[NpcRagdoll::kHandR][3]);
-    const entt::entity gun = world.CreateEmptyEntity(hand + glm::vec3(0.0f, 0.0f, 0.15f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
-    DroppedWeaponSettingsComponent cfg;
-    cfg.ReleaseDelayMin = cfg.ReleaseDelayMax = 0.25f;
-    cfg.Spin = 0.0f;
-    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg);
-    CHECK(drop && drop->ReleaseDelay() == 0.25f);
-    if (!drop) { PhysicsWorld::Destroy(); return; }
-    NpcRagdollMotor motor;
-    NpcRagdoll::Launch(id, parts, partWorld, glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -50.0f), glm::vec3(partWorld[1][3]), 1, rcfg, &motor);
-    drop->SetOwner(id, NpcRagdoll::kHandR);
-    bool heldEarly = false, handsIgnored = false, released = false;
-    float worstHandGap = 0.0f, releasedAt = -1.0f, clearAt = -1.0f;
-    const float dt = 1.0f / 60.0f;
-    for (int k = 0; k < 60 * 6; ++k) {
-        PhysicsWorld::Step(dt, world, {});
-        motor.Update(dt);
-        drop->Update(world, dt);
-        const float t = (float)(k + 1) * dt;
-        if (drop->Held()) {
-            if (t < 0.2f) heldEarly = true;
-            if (drop->IgnoredParts() & (1u << NpcRagdoll::kHandR)) handsIgnored = true;
-            // It rides the hand: the gun's origin keeps its distance from the hand part.
-            glm::vec3 hp;
-            PartQuat(id, NpcRagdoll::kHandR, &hp);
-            worstHandGap = std::max(worstHandGap, glm::length(drop->Position(world) - hp));
-        }
-        if (!released && drop->Released()) { released = true; releasedAt = t; }
-        if (released && clearAt < 0.0f && drop->IgnoredParts() == 0u) clearAt = t;
-    }
-    std::printf("[UnitTest] gun: released at %.2f s, clear of the body at %.2f s, %.1f cm from the hand while held, %s\n", releasedAt, clearAt,
-                worstHandGap * 100.0f, drop->Asleep() ? "asleep" : "moving");
-    CHECK(heldEarly && handsIgnored);
-    CHECK(released && releasedAt > 0.2f && releasedAt < 0.4f);
-    CHECK(worstHandGap < 0.35f);
-    CHECK(clearAt > 0.0f);
-    CHECK(drop->Asleep());
-    const glm::vec3 at = drop->Position(world);
-    CHECK(at.y > -0.02f && at.y < 0.25f);
-    CHECK(PhysicsWorld::RagdollPartsOverlapping((unsigned)entt::to_integral(drop->Entity()), id, 0xFFFFu, -0.015f) == 0u);
-    drop->Stop(world);
-    PhysicsWorld::DestroyRagdoll(id);
-    PhysicsWorld::Destroy();
-}
-
-// A body put to sleep takes what has come to rest on it along (its gun across its chest): put to sleep against a body still awake,
-// it would be woken by the next step, and the two would keep each other awake for good.
-void TestRagdollSleepsWithWhatRestsOnIt() {
-    World world;
-    FlatFloor(world);
-    if (!PhysicsWorld::IsActive()) return;
-    RagdollSettingsComponent cfg;
-    PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
-    // Lying on its back, just over the floor.
-    const glm::mat4 root = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.2f, 0.0f)) * glm::mat4_cast(glm::angleAxis(glm::radians(-90.0f), glm::vec3(1, 0, 0)));
-    auto bone = [&](const char* n, glm::vec3& out) {
-        glm::vec3 b;
-        if (!StandingBone(n, b)) return false;
-        out = glm::vec3(root * glm::vec4(b - glm::vec3(0.0f, 1.0f, 0.0f), 1.0f));
-        return true;
-    };
-    CHECK(NpcRagdoll::BuildParts(bone, root, glm::vec3(0.0f), cfg, parts));
-    const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
-    const int id = PhysicsWorld::CreateRagdoll(4366u, parts, NpcRagdoll::kRagParts, &prm);
-    CHECK(id >= 0);
-    if (id < 0) { PhysicsWorld::Destroy(); return; }
-    glm::vec3 chest;
-    PartQuat(id, 1, &chest);
-    const entt::entity gun = world.CreateEmptyEntity(chest + glm::vec3(0.0f, 0.3f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
-    DroppedWeaponSettingsComponent gcfg;
-    gcfg.Spin = 0.0f;
-    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), gcfg);
-    CHECK(drop != nullptr);
-    if (!drop) { PhysicsWorld::DestroyRagdoll(id); PhysicsWorld::Destroy(); return; }
-    const float dt = 1.0f / 60.0f;
-    for (int k = 0; k < 120; ++k) { PhysicsWorld::Step(dt, world, {}); drop->Update(world, dt); }
-    const unsigned gunId = (unsigned)entt::to_integral(drop->Entity());
-    CHECK(PhysicsWorld::RagdollPartsOverlapping(gunId, id, 0xFFFFu, 0.04f) != 0u); // it lies on the body
-    PhysicsWorld::RagdollSleep(id);
-    CHECK(drop->Asleep()); // asleep with it, at once
-    for (int k = 0; k < 60; ++k) { PhysicsWorld::Step(dt, world, {}); drop->Update(world, dt); }
-    CHECK(PhysicsWorld::RagdollAsleep(id) && drop->Asleep()); // and both stay so
-    drop->Stop(world);
-    PhysicsWorld::DestroyRagdoll(id);
-    PhysicsWorld::Destroy();
-}
-
-// A soldier shot down with his rifle: the gun ends on his arm or chest, and the two still come to rest and sleep (the body's own
-// motor deciding it), whatever way he falls.
-void TestRagdollAndItsGunComeToRest() {
-    const RagdollSettingsComponent rcfg;
-    const glm::vec3 shots[] = {{0, 0, -1}, {0, 0, 1}, {1, 0, 0}, {-1, 0, 0}};
-    int asleep = 0, n = 0;
-    for (const glm::vec3& shot : shots) {
-        World world;
-        FlatFloor(world);
-        if (!PhysicsWorld::IsActive()) return;
-        PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
-        glm::mat4 partWorld[NpcRagdoll::kRagParts];
-        CHECK(NpcRagdoll::BuildParts(AimingBone, glm::mat4(1.0f), glm::vec3(0.0f), rcfg, parts, partWorld));
-        const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(rcfg);
-        const int id = PhysicsWorld::CreateRagdoll(4367u, parts, NpcRagdoll::kRagParts, &prm);
-        if (id < 0) { PhysicsWorld::Destroy(); continue; }
-        // The rifle along the aim, its grip at the right hand.
-        const glm::vec3 hand(partWorld[NpcRagdoll::kHandR][3]);
-        const entt::entity gun = world.CreateEmptyEntity(hand + glm::vec3(0.0f, 0.0f, 0.2f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
-        auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), DroppedWeaponSettingsComponent(), (unsigned)(n * 7 + 1));
-        NpcRagdollMotor motor;
-        NpcRagdoll::Launch(id, parts, partWorld, glm::mat4(1.0f), glm::vec3(0.0f), shot * 50.0f, glm::vec3(partWorld[1][3]), 1, rcfg, &motor);
-        if (drop) drop->SetOwner(id, NpcRagdoll::kHandR);
-        float sleptAt = -1.0f;
-        const float dt = 1.0f / 60.0f;
-        for (int k = 0; k < 60 * 7; ++k) {
-            PhysicsWorld::Step(dt, world, {});
-            motor.Update(dt);
-            if (drop) drop->Update(world, dt);
-            const bool both = PhysicsWorld::RagdollAsleep(id) && (!drop || drop->Asleep());
-            if (both && sleptAt < 0.0f) sleptAt = (float)(k + 1) * dt;
-            if (!both) sleptAt = -1.0f;
-        }
-        float lin = 0.0f, ang = 0.0f;
-        PhysicsWorld::RagdollMotion(id, &lin, &ang);
-        BodyState gs;
-        const bool g = drop && PhysicsWorld::GetBodyState((unsigned)entt::to_integral(drop->Entity()), gs);
-        std::printf("[UnitTest]   shot (%.0f %.0f %.0f): body %s (%.3f m/s %.2f rad/s), gun %s at %.2f m (%.3f m/s), both asleep from %.2f s\n", shot.x, shot.y, shot.z,
-                    PhysicsWorld::RagdollAsleep(id) ? "asleep" : "moving", lin, ang, drop && drop->Asleep() ? "asleep" : "moving", drop ? drop->Position(world).y : -1.0f,
-                    g ? glm::length(glm::vec3(gs.Velocity[0], gs.Velocity[1], gs.Velocity[2])) : -1.0f, sleptAt);
-        asleep += sleptAt > 0.0f ? 1 : 0;
-        ++n;
-        if (drop) drop->Stop(world);
-        PhysicsWorld::DestroyRagdoll(id);
-        PhysicsWorld::Destroy();
-    }
-    CHECK(asleep == n);
-}
-
 } // namespace
 
 void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
@@ -1964,7 +1641,6 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollNewFieldsRoundTrip", TestRagdollNewFieldsRoundTrip});
     tests.push_back({"NavBoundaryEdgesMergeQuickly", TestNavBoundaryEdgesMergeQuickly});
     tests.push_back({"PoweredRagdollDeathsAgainstPassive", TestPoweredRagdollDeathsAgainstPassive});
-    tests.push_back({"RagdollArmedDeathsStayInRange", TestRagdollArmedDeathsStayInRange});
     tests.push_back({"RagdollMuscleToneCurves", TestRagdollMuscleToneCurves});
     tests.push_back({"RagdollMusclesFoldTheKnees", TestRagdollMusclesFoldTheKnees});
     tests.push_back({"RagdollSettlesAndSleeps", TestRagdollSettlesAndSleeps});
@@ -1975,16 +1651,8 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollReactionsLayerTheTarget", TestRagdollReactionsLayerTheTarget});
     tests.push_back({"RagdollCorpseHitReacts", TestRagdollCorpseHitReacts});
     tests.push_back({"RagdollLyingFieldsRoundTrip", TestRagdollLyingFieldsRoundTrip});
-    tests.push_back({"DroppedWeaponTakesTheHandsVelocity", TestDroppedWeaponTakesTheHandsVelocity});
-    tests.push_back({"DroppedWeaponSettlesAndSleeps", TestDroppedWeaponSettlesAndSleeps});
-    tests.push_back({"DroppedWeaponGoesWithTheCorpse", TestDroppedWeaponGoesWithTheCorpse});
-    tests.push_back({"DroppedWeaponReleasesTheHold", TestDroppedWeaponReleasesTheHold});
-    tests.push_back({"DroppedWeaponSettings", TestDroppedWeaponSettings});
     tests.push_back({"RagdollJointAxesFollowTheTarget", TestRagdollJointAxesFollowTheTarget});
     tests.push_back({"RagdollPartsCollideWithEachOther", TestRagdollPartsCollideWithEachOther});
     tests.push_back({"RagdollSkinKeepsItOnTheFloor", TestRagdollSkinKeepsItOnTheFloor});
     tests.push_back({"RagdollHasWeight", TestRagdollHasWeight});
-    tests.push_back({"DroppedWeaponGripAndRelease", TestDroppedWeaponGripAndRelease});
-    tests.push_back({"RagdollSleepsWithWhatRestsOnIt", TestRagdollSleepsWithWhatRestsOnIt});
-    tests.push_back({"RagdollAndItsGunComeToRest", TestRagdollAndItsGunComeToRest});
 }

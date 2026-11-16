@@ -198,99 +198,57 @@ void RegisterEngineComponents() {
     });
     {
         ReflectComponent m;
-        m.Name = "NPC Spawn"; m.Icon = ICON_FA_PERSON_RIFLE; m.Category = "AI";
-        m.Tooltip = "An enemy soldier appears here in Play, facing this object's forward. The squad is built\n"
-                    "from these spawns (see Squad Settings); replacements come back at the one farthest\n"
-                    "out of the player's sight.";
+        m.Name = "Dummy Spawn"; m.Icon = ICON_FA_PERSON; m.Category = "AI";
+        m.LegacyKeys = {"NPC Spawn"};
+        m.Tooltip = "A training dummy appears here in Play, facing this object's forward: unarmed, it wanders the\n"
+                    "navigation mesh near here (Roam), flinches when shot, bleeds, and dies into a ragdoll.";
         m.Fields = {
-            { "Weapon", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Weapon), 0.0f, "What the soldier carries (None: unarmed)." },
-            { "Squad", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Squad), 1.0f,
-              "Soldiers with the same Squad share what they know and fight together.", 0.0f, 16.0f },
-            { "Skill", T::Float, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Skill), 0.01f,
-              "0 = green (slow, inaccurate, timid) .. 1 = veteran.", 0.0f, 1.0f },
             { "Outfit Seed", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, OutfitSeed), 1.0f,
               "Which random outfit. 0 = a different one every Play.", 0.0f, 100000.0f },
-            { "Brain", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Brain), 0.0f,
-              "Squad AI, or a Training Dummy that just stands there and takes hits (it can still go down wounded)." },
             { "Bare", T::Bool, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Bare), 0.0f,
-              "No outfit: the soldier spawns as the bare body. (For now every NPC spawns bare, whatever this says.)" },
+              "No outfit: the dummy spawns as the bare body. (For now every dummy spawns bare, whatever this says.)" },
+            { "Roam", T::Bool, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Roam), 0.0f,
+              "Wander the navigation mesh near the spawn. Off: stand where placed." },
         };
-        m.Fields[0].EnumLabels = "AKS-74U\0Remington 870\0Random\0None\0"; m.Fields[0].EnumCount = 4;
-        m.Fields[2].Slider = true; m.Fields[2].Format = "%.2f";
-        m.Fields[4].EnumLabels = "Squad AI\0Training Dummy\0"; m.Fields[4].EnumCount = 2;
         Register<NpcSpawnComponent>(std::move(m));
     }
-    Register<SquadSettingsComponent>({
-        "Squad Settings", ICON_FA_USERS,
-        "The enemy squad's rules for this scene (the first Squad Settings counts).",
-        "AI",
-        {
-            { "Squad Size", T::Int, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, SquadSize), 1.0f,
-              "Enemies alive at once.", 0.0f, 16.0f },
+    {
+        ReflectComponent m;
+        m.Name = "Dummy Settings"; m.Icon = ICON_FA_USERS; m.Category = "AI";
+        m.LegacyKeys = {"Squad Settings"};
+        m.Tooltip = "The training dummies' rules for this scene (the first Dummy Settings counts).";
+        m.Fields = {
             { "Respawn", T::Bool, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, Respawn), 0.0f,
-              "Replace enemies that die." },
+              "A dummy that dies comes back at its spawn." },
             { "Respawn Delay", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, RespawnDelay), 0.1f,
-              "Seconds before a dead enemy's replacement appears.", 0.0f, 120.0f },
-            { "Difficulty", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, Difficulty), 0.01f,
-              "Scales the enemies' accuracy and reaction speed.", 0.25f, 2.0f },
-            { "NPC Damage Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, NpcDamageScale), 0.01f,
-              "Enemy rounds do this much of their weapon's damage to the player.", 0.0f, 4.0f },
+              "Seconds before a dead dummy comes back.", 0.0f, 120.0f },
             { "Heavy Hit Damage", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, HeavyHitDamage), 0.5f,
-              "A single hit of at least this much damage (from the player) staggers the enemy.", 0.0f, 500.0f },
+              "A single hit of at least this much damage staggers the dummy.", 0.0f, 500.0f },
             { "Stagger Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, StaggerTime), 0.01f,
-              "Seconds an enemy's aim is paused after a heavy hit.", 0.0f, 5.0f },
-            { "Bleed-Out Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, BleedOutTime), 0.5f,
-              "A gut-shot (dying) enemy dies this many seconds after going down. One crawling on its belly crawls on until it is finished off.", 0.0f, 300.0f },
-            { "Crawl Speed", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CrawlSpeed), 0.01f,
-              "A wounded enemy crawls at this speed (m/s).", 0.0f, 5.0f },
-            { "Limp Speed Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, LimpSpeedScale), 0.01f,
-              "A leg-shot enemy moves at this fraction of its normal speed.", 0.05f, 1.0f },
-            { "Limp Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, LimpTime), 0.1f,
-              "Seconds a leg wound slows an enemy.", 0.0f, 120.0f },
+              "Seconds a heavy hit slows the dummy.", 0.0f, 5.0f },
             { "Corpse Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CorpseTime), 0.5f,
-              "Seconds a dead enemy's body stays before it is removed.", 0.0f, 600.0f },
+              "Seconds a dead dummy's body stays before it is removed.", 0.0f, 600.0f },
             { "Max Corpses", T::Int, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MaxCorpses), 1.0f,
               "Most bodies kept at once; past it the oldest is removed.", 1.0f, 64.0f },
             { "Unseen Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, UnseenTime), 0.1f,
               "Seconds a body must be out of the player's sight before it can be removed.", 0.0f, 600.0f },
             { "Fall Gravity", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, FallGravity), 0.1f,
-              "Gravity (m/s^2) on an enemy that steps off a ledge. Ragdolls use the physics world's gravity.", 0.0f, 60.0f },
-            { "Melee Damage", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeDamage), 0.5f,
-              "Damage of a rifle-butt strike at the player (scaled by Difficulty, 0.5 to 1.5).", 0.0f, 500.0f },
-            { "Melee Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeTime), 0.01f,
-              "A strike's length, wind-up to recovery (seconds).", 0.1f, 3.0f },
-            { "Melee Hit Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeHitTime), 0.01f,
-              "The blow lands this many seconds into the strike.", 0.0f, 3.0f },
+              "Gravity (m/s^2) on a dummy that steps off a ledge. Ragdolls use the physics world's gravity.", 0.0f, 60.0f },
             { "Hitbox Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, HitboxRange), 1.0f,
-              "Enemies further than this from the player (m) keep only their movement capsule, no per-bone hitboxes.", 5.0f, 500.0f },
+              "Dummies further than this from the player (m) keep only their movement capsule, no per-bone hitboxes.", 5.0f, 500.0f },
             { "Foot IK Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, FootIKRange), 0.5f,
-              "Enemies this close (m) and in view put their feet on uneven ground.", 0.0f, 200.0f },
-            { "Mesh Check Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeshCheckRange), 0.5f,
-              "Within this distance (m) the weapon hold checks the gun and elbows against the drawn body.", 0.0f, 100.0f },
-            { "Cover Sample Spacing", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverSpacing), 0.05f,
-              "Metres between cover samples along a navigation-mesh edge.", 0.3f, 4.0f },
-            { "Cover Reach", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverReach), 0.05f,
-              "How far beyond the edge something must stand to count as cover (m).", 0.2f, 3.0f },
-            { "Low Cover Height", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverKneeHeight), 0.05f,
-              "Probe height for low cover (m): something solid here means crouch-behind cover.", 0.2f, 1.5f },
-            { "High Cover Height", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverHeadHeight), 0.05f,
-              "Probe height for high cover (m): solid here too means stand-behind cover.", 0.8f, 2.5f },
-            { "Cover Peek Step", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverStep), 0.05f,
-              "High cover: how far along the wall an enemy steps to peek round the end (m).", 0.2f, 3.0f },
+              "Dummies this close (m) and in view put their feet on uneven ground.", 0.0f, 200.0f },
             { "Body Prefab", T::String, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, BodyPrefab), 0.0f,
-              "The soldier body every enemy is built from (.json)." },
-            { "Rifle Prefab", T::String, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, RiflePrefab), 0.0f,
-              "Weapon prefab of the rifle loadout." },
-            { "Shotgun Prefab", T::String, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, ShotgunPrefab), 0.0f,
-              "Weapon prefab of the shotgun loadout." },
-            { "Rifle Animation Set", T::String, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, RifleAnimationSet), 0.0f,
-              "Animation set (.fpsanim) of the rifle loadout." },
-            { "Shotgun Animation Set", T::String, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, ShotgunAnimationSet), 0.0f,
-              "Animation set (.fpsanim) of the shotgun loadout." },
-        },
-    });
-    for (ReflectField& f : Storage().back().Meta.Fields)
-        if (std::strstr(f.Name, "Prefab") || std::strstr(f.Name, "Animation Set")) { f.Group = "Content"; f.AssetPath = true; }
+              "The body every dummy is built from (.json)." },
+        };
+        for (ReflectField& f : m.Fields) {
+            if (std::strcmp(f.Name, "Body Prefab") == 0) { f.Group = "Content"; f.AssetPath = true; }
+            else if (std::strstr(f.Name, "Hit") == f.Name || std::strcmp(f.Name, "Stagger Time") == 0) f.Group = std::strcmp(f.Name, "Hitbox Range") == 0 ? "Distances / LOD" : "Damage / Stagger";
+            else if (std::strcmp(f.Name, "Foot IK Range") == 0) f.Group = "Distances / LOD";
+            else if (std::strstr(f.Name, "Corpse") || std::strcmp(f.Name, "Unseen Time") == 0 || std::strcmp(f.Name, "Fall Gravity") == 0) f.Group = "Corpses";
+        }
+        Register<SquadSettingsComponent>(std::move(m));
+    }
     // Migrated from hand-coded serialization/Inspector code onto reflection (#184). Previously
     // this component had runtime behaviour (TransformControllerSystem, in TartarusGame.dll) but
     // no Inspector section or Add Component entry at all — a violation of rule 2 at the top of
@@ -1047,21 +1005,6 @@ void RegisterEngineComponents() {
         m.Fields.back().Group = "NPC Body";
         m.Fields.push_back({ "NPC Face Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFaceEase), 0.005f,
               "NPCs: seconds the body heading takes to ease toward the movement direction while walking.", 0.005f, 1.0f });
-        m.Fields.back().Group = "NPC Body";
-        m.Fields.push_back({ "NPC Max Twist", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcMaxTwist), 1.0f,
-              "NPCs: the most (degrees) the spine twists to aim past the legs' heading.", 0.0f, 120.0f });
-        m.Fields.back().Group = "NPC Body";
-        m.Fields.push_back({ "NPC Aim Lean", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcAimLean), 0.5f,
-              "NPCs: degrees the torso leans forward when aiming standing.", 0.0f, 45.0f });
-        m.Fields.back().Group = "NPC Body";
-        m.Fields.push_back({ "NPC Aim Lean Crouched", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcAimLeanCrouched), 0.5f,
-              "NPCs: degrees the torso leans forward when aiming crouched.", 0.0f, 60.0f });
-        m.Fields.back().Group = "NPC Body";
-        m.Fields.push_back({ "NPC Ready Lean Crouched", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcReadyLeanCrouched), 0.5f,
-              "NPCs: degrees the torso leans forward at low ready, crouched.", 0.0f, 60.0f });
-        m.Fields.back().Group = "NPC Body";
-        m.Fields.push_back({ "NPC Cower Hunch", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcCowerHunch), 0.5f,
-              "NPCs: degrees the spine curls forward when ducking for cover.", 0.0f, 60.0f });
         m.Fields.back().Group = "NPC Body";
         m.Fields.push_back({ "NPC Head Max Yaw", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcHeadMaxYaw), 1.0f,
               "NPCs: the most (degrees) the head turns left or right past the chest to look at a target.", 0.0f, 120.0f });
@@ -2448,27 +2391,10 @@ void RegisterEngineComponents() {
                 { "Directional Fall", "Back Fall Hip Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BackHipScale), 0.02f, "Hip fold of a body falling straight back, as a multiple of Hip Flexion (the legs go forward as it sits).", 0.5f, 3.0f },
                 { "Reactions", "Brace Weight", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BraceWeight), 0.02f, "The arms reach toward the fall (forward, back, or out to the side), scaled by this. 0 = they keep the pose they died in. A head kill never braces.", 0.0f, 1.0f },
                 { "Reactions", "Brace Sideways", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BraceLateral), 0.5f, "Degrees the arms swing toward a sideways fall (before Brace Weight).", 0.0f, 90.0f },
-                { "Reactions", "Wound Grab Weight", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundGrabWeight), 0.02f, "On a torso hit the hand on the struck side goes to the wound for a moment, scaled by this. 0 = off.", 0.0f, 1.0f },
-                { "Reactions", "Wound Grab Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundGrabTime), 0.02f, "Seconds the hand stays at the wound before the arm lets go.", 0.05f, 3.0f },
-                { "Reactions", "Wound Shoulder", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundShoulder), 0.5f, "Degrees the shoulder lifts the hand toward the wound.", 0.0f, 120.0f },
-                { "Reactions", "Wound Elbow", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundElbow), 0.5f, "Degrees the elbow bends taking the hand to the wound.", 0.0f, 140.0f },
                 { "Reactions", "Head Tuck Weight", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadTuckWeight), 0.02f, "The head tucks forward as the body falls back (Neck Tuck degrees, scaled by this). A head kill does not tuck.", 0.0f, 1.0f },
                 { "Reactions", "Head Kill Limp", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadKillLimp), 0.02f, "A head kill: the arms' and neck's muscle times (Tone Time) are scaled by this, so the body goes limp at once. 1 = no different from a body kill.", 0.05f, 1.0f },
                 { "Corpse Hits", "Corpse Wake Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseWakeTime), 0.02f, "Seconds a body at rest stays loose (no settling, joint friction low) after a round hits it, so the limb the round struck visibly reacts before the body settles and sleeps again.", 0.0f, 3.0f },
                 { "Corpse Hits", "Corpse Shot Max Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseShotMaxSpeed), 0.1f, "The most speed (m/s) a round adds to the part it struck on a body at rest, however heavy the round.", 0.5f, 20.0f },
-                { "Wound Fall", "Wound Fall Leg Strength", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallLegStrength), 0.02f, "A soldier shot down by a leg falls as a powered ragdoll: the hurt leg gives at once (Hit Weakness), the other holds at this strength fraction for Wound Fall Leg Hold, then gives too.", 0.0f, 1.0f },
-                { "Wound Fall", "Wound Fall Leg Hold", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallLegHold), 0.01f, "Seconds the good leg holds before it gives.", 0.0f, 2.0f },
-                { "Wound Fall", "Wound Fall Push", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallPush), 0.05f, "m/s of topple on the chest, forward and toward the hurt leg: he goes down over the leg that gave (the round's own shove is added).", 0.0f, 5.0f },
-                { "Wound Fall", "Wound Fall Tone", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallTone), 0.005f, "Strength fraction a living body keeps while it is down (a dead one keeps the Tone Residual).", 0.0f, 0.5f },
-                { "Wound Fall", "Wound Recover Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRecoverSpeed), 0.01f, "Down (pelvis or chest on the ground) and every part slower than this (m/s): the body blends back into the animated prone pose.", 0.05f, 3.0f },
-                { "Wound Fall", "Wound Recover Min Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRecoverMinTime), 0.05f, "Seconds after the hit before the body may take the animated pose back (the limbs slump first).", 0.2f, 5.0f },
-                { "Wound Fall", "Wound Recover Max Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRecoverMaxTime), 0.05f, "The longest the fall may take: still moving after this (draped over something), it takes the pose back anyway.", 0.5f, 10.0f },
-                { "Wound Fall", "Wound Blend Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundBlendTime), 0.02f, "Seconds every bone blends from where the fall left it to the animated prone pose.", 0.05f, 2.0f },
-                { "Wound Fall", "Wound Blend Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundBlendSpeed), 0.05f, "The fastest (m/s) a hand, foot or the head moves blending in: a limb the fall left further from the prone pose than that allows takes longer (up to 2.5x Wound Blend Time), drawn in rather than whipped.", 0.5f, 10.0f },
-                { "Wound Fall", "Wound Face Up", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFaceUp), 0.02f, "Landed with his chest and pelvis facing up past this (the up share of their front): on his back - he rolls himself over onto his belly (Wound Roll Impulse) before he crawls.", -1.0f, 1.0f },
-                { "Wound Fall", "Wound Roll Impulse", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollImpulse), 1.0f, "On his back after the fall, the heave (N s) under his far shoulder and hip that rolls him onto his belly, over the good leg. 0 = he lies on his back where he fell.", 0.0f, 200.0f },
-                { "Wound Fall", "Wound Roll Tries", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollTries), 1.0f, "How many heaves he makes (each a third harder) before the animated pose turns him over instead (Wound Roll Blend Time).", 0.0f, 10.0f },
-                { "Wound Fall", "Wound Roll Blend Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollBlendTime), 0.05f, "Every heave spent and still on his back: seconds the animated pose takes to turn him from how he lies onto his belly, into the crawl. 0 = he lies on his back where he fell.", 0.0f, 3.0f },
             };
             for (const R2& r : rows2) {
                 m.Fields.push_back({ r.Label, T::Float, r.Ptr, r.Step, r.Tip, r.Lo, r.Hi });
@@ -2477,80 +2403,8 @@ void RegisterEngineComponents() {
         }
         Register<RagdollSettingsComponent>(std::move(m));
     }
-    for (RegisteredComponent& rc : Storage())
-        if (std::strcmp(rc.Meta.Name, "Squad Settings") == 0)
-            for (ReflectField& f : rc.Meta.Fields) {
-                if (std::strcmp(f.Name, "Heavy Hit Damage") == 0) f.Group = "Damage / Stagger";
-                if (std::strcmp(f.Name, "Stagger Time") == 0) f.Group = "Damage / Stagger";
-                if (std::strcmp(f.Name, "Bleed-Out Time") == 0) f.Group = "Wounded";
-                if (std::strcmp(f.Name, "Crawl Speed") == 0) f.Group = "Wounded";
-                if (std::strcmp(f.Name, "Limp Speed Scale") == 0) f.Group = "Wounded";
-                if (std::strcmp(f.Name, "Limp Time") == 0) f.Group = "Wounded";
-                if (std::strcmp(f.Name, "Corpse Time") == 0) f.Group = "Corpses";
-                if (std::strcmp(f.Name, "Fall Gravity") == 0) f.Group = "Corpses";
-                if (std::strcmp(f.Name, "Max Corpses") == 0) f.Group = "Corpses";
-                if (std::strcmp(f.Name, "Unseen Time") == 0) f.Group = "Corpses";
-                if (std::strcmp(f.Name, "Melee Damage") == 0) f.Group = "Melee";
-                if (std::strcmp(f.Name, "Melee Time") == 0) f.Group = "Melee";
-                if (std::strcmp(f.Name, "Melee Hit Time") == 0) f.Group = "Melee";
-                if (std::strcmp(f.Name, "Hitbox Range") == 0) f.Group = "Distances / LOD";
-                if (std::strcmp(f.Name, "Foot IK Range") == 0) f.Group = "Distances / LOD";
-                if (std::strcmp(f.Name, "Mesh Check Range") == 0) f.Group = "Distances / LOD";
-                if (std::strcmp(f.Name, "Cover Sample Spacing") == 0) f.Group = "Cover";
-                if (std::strcmp(f.Name, "Cover Reach") == 0) f.Group = "Cover";
-                if (std::strcmp(f.Name, "Low Cover Height") == 0) f.Group = "Cover";
-                if (std::strcmp(f.Name, "High Cover Height") == 0) f.Group = "Cover";
-                if (std::strcmp(f.Name, "Cover Peek Step") == 0) f.Group = "Cover";
-            }
     // ---- end lane R ----
     // ---- lane R-gear ----
-    {
-        ReflectComponent m;
-        m.Name = "Dropped Weapon Settings"; m.Icon = ICON_FA_GUN; m.Category = "AI";
-        m.Tooltip = "The gun a soldier drops when he dies: its own physics body, thrown from the hands and tumbling to rest (the first Dropped Weapon Settings in the scene counts).";
-        m.Fields = {
-            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Enabled), 0.0f,
-              "The gun leaves the dead soldier's hands and lies where it falls. Off: it vanishes with him." },
-            { "Mass", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Mass), 0.1f,
-              "Kilograms.", 0.5f, 20.0f },
-            { "Impulse Share", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, ImpulseShare), 0.01f,
-              "The share of the killing round's impulse the gun takes (its speed gain = share x impulse / mass).", 0.0f, 1.0f },
-            { "Max Shot Speed", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, MaxShotSpeed), 0.1f,
-              "Metres per second: the most speed the round adds to the gun.", 0.0f, 30.0f },
-            { "Spin", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Spin), 0.05f,
-              "Tumble: radians per second of spin for each metre per second the gun leaves the hands at (0 = no spin).", 0.0f, 10.0f },
-            { "Max Spin", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, MaxSpin), 0.1f,
-              "Radians per second.", 0.0f, 40.0f },
-            { "Release Delay Min", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, ReleaseDelayMin), 0.01f,
-              "The dead hand keeps its grip a moment and the gun rides the falling arm: at least this long (seconds; each death picks between Min and Max).", 0.0f, 2.0f },
-            { "Release Delay Max", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, ReleaseDelayMax), 0.01f,
-              "At most this long (seconds) before the fingers let go. 0 for both: it leaves the hands at once.", 0.0f, 2.0f },
-            { "Grip Break Force", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, GripBreakForce), 10.0f,
-              "Newtons: the gun is torn out of the hand sooner when it is loaded past this (it strikes the floor, the body lands on it).", 0.0f, 10000.0f },
-            { "Owner Ignore Time", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, OwnerIgnoreTime), 0.01f,
-              "Seconds after the release the gun still passes the dead soldier's hands. Any part it started inside of (an arm across the chest) it passes until it is clear of it.", 0.0f, 2.0f },
-            { "Hull Collider", T::Bool, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, HullCollider), 0.0f,
-              "The gun collides as a convex hull of its own mesh, so it lies on its side as the model does. Off: its bounding box." },
-            { "Friction", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Friction), 0.01f,
-              "Static and dynamic friction against the world.", 0.0f, 3.0f },
-            { "Bounciness", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Bounciness), 0.01f,
-              "Restitution (0 = dead stop, 1 = no energy lost).", 0.0f, 1.0f },
-            { "Linear Damping", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, LinearDamping), 0.01f,
-              "Per-second velocity bleed.", 0.0f, 10.0f },
-            { "Angular Damping", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, AngularDamping), 0.01f,
-              "Per-second spin bleed (higher settles sooner).", 0.0f, 10.0f },
-            { "Lifetime", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Lifetime), 1.0f,
-              "Seconds the gun lies at least. After that it goes once it has been out of the player's sight for the Squad Settings' Unseen Time (never while seen). 0 = it goes with its corpse.", 0.0f, 3600.0f },
-        };
-        for (ReflectField& f : m.Fields) {
-            if (std::strcmp(f.Name, "Enabled") == 0 || std::strcmp(f.Name, "Lifetime") == 0) f.Group = "Drop";
-            else if (std::strcmp(f.Name, "Mass") == 0 || std::strcmp(f.Name, "Impulse Share") == 0 || std::strcmp(f.Name, "Max Shot Speed") == 0 ||
-                     std::strcmp(f.Name, "Spin") == 0 || std::strcmp(f.Name, "Max Spin") == 0) f.Group = "Throw";
-            else if (std::strstr(f.Name, "Release") || std::strstr(f.Name, "Grip") || std::strstr(f.Name, "Owner")) f.Group = "Release";
-            else f.Group = "Body Physics";
-        }
-        Register<DroppedWeaponSettingsComponent>(std::move(m));
-    }
     // ---- end lane R-gear ----
     // ---- lane S ----
 

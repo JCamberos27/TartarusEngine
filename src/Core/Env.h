@@ -40,7 +40,6 @@
     X(Ffmpeg, "TARTARUS_FFMPEG", Str, "MotionDemo: ffmpeg.exe path")                                                  \
     /* NPC tests */                                                                                                     \
     X(NpcTestScene, "NPC_TEST_SCENE", Str, "--npc-test: scene name (tests/scenes/, else scenes/) instead of the default")             \
-    X(NpcTestRoom, "NPC_TEST_ROOM", Str, "--npc-test: Apartment room (302bed|303living|303bed2)")                     \
     X(NpcTestSeconds, "NPC_TEST_SECONDS", Float, "--npc-test: run length override")                                   \
     X(NpcTestRecord, "NPC_TEST_RECORD", Str, "--npc-test: record frames to this folder")                              \
     X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs (and undress the player's body) without outfits")                                   \

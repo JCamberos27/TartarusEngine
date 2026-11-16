@@ -174,7 +174,6 @@ struct PhysxMoverWorld : IMoverWorld {
     PxU32 Mask = 0xFFFFFFFFu;
     // A soldier's: everything of his own entity (his hitboxes), and the dead while he crawls over them.
     std::uint32_t SelfEntity = 0xFFFFFFFFu;
-    bool PassRagdolls = false;
     PhysxMoverWorld(PhysicsState& s, const PxRigidActor* self, PxU32 mask) : S(s), Self(self), Mask(mask) {}
 
     struct Filter : PxQueryFilterCallback {
@@ -184,7 +183,6 @@ struct PhysxMoverWorld : IMoverWorld {
         PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor, PxHitFlags&) override {
             if (actor == W->Self || (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
             if (W->SelfEntity != 0xFFFFFFFFu && actor && UserDataToEntity(actor->userData) == W->SelfEntity) return PxQueryHitType::eNONE;
-            if (W->PassRagdolls && IsRagdollPart(shape->getSimulationFilterData())) return PxQueryHitType::eNONE;
             const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
             if (!((W->Mask >> layer) & 1u)) return PxQueryHitType::eNONE;
             return Touch ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
@@ -466,43 +464,13 @@ void DestroyNpcCharacter(CharacterId id) {
     n->Gen = gen;
 }
 
-bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
-    PxRigidActor* a = NpcActor(id);
-    if (!a) return false;
-    const bool on = ValidRagdoll(ragdoll);
-    std::vector<PxShape*> shapes = ShapesOf(*a);
-    for (PxShape* sh : shapes) {
-        PxFilterData f = sh->getSimulationFilterData();
-        // As IgnoreRagdollParts: the ignorer slot of the ragdoll's own numbering, every part's bit in the mask.
-        f.word2 = on ? (((PxU32)HandleSlot(ragdoll) + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
-        f.word3 = on ? 0xFFFFFFFFu : 0u;
-        sh->setSimulationFilterData(f);
-    }
-    if (a->getScene()) g_State->scene->resetFiltering(*a);
-    return true;
-}
-
-void SetNpcPassesRagdolls(CharacterId id, bool on) {
-    PxRigidActor* a = NpcActor(id);
-    if (!a || NpcSlot(id)->passRagdolls == on) return;
-    NpcSlot(id)->passRagdolls = on;
-    std::vector<PxShape*> shapes = ShapesOf(*a);
-    for (PxShape* sh : shapes) {
-        PxFilterData f = sh->getSimulationFilterData();
-        f.word1 = on ? (f.word1 | kPassRagdolls) : (f.word1 & ~kPassRagdolls);
-        sh->setSimulationFilterData(f);
-    }
-    if (a->getScene()) g_State->scene->resetFiltering(*a);
-}
-
 unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
     NpcCharacter* n = NpcSlot(id);
     if (!n || !(dt > 0.0f) || !std::isfinite(dt) || !FiniteVec3(disp)) return 0; // a NaN move is dropped: the feet stay at the last good ones
     if (CharacterBody* b = n->body.get()) {
-        // The same collision-matrix row, his own hitboxes and (crawling) the dead skipped, as the Default layer's body.
+        // The same collision-matrix row, his own hitboxes skipped, as the Default layer's body.
         PhysxMoverWorld w(*g_State, b->Actor, ProjectSettings::Physics().LayerCollisionMask[0]);
         w.SelfEntity = n->entity;
-        w.PassRagdolls = n->passRagdolls;
         const glm::vec3 delta(disp[0], disp[1], disp[2]);
         // Walking keeps to the floor down steps and slopes; anything going up is left to his own gravity.
         const bool snap = b->Grounded && delta.y <= 0.0f;

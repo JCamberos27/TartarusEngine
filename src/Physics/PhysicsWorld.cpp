@@ -10,9 +10,6 @@ PxFilterFlags EngineFilterShader(
         const PxU32 la = filterData0.word1 & 31u, lb = filterData1.word1 & 31u;
         if (((mask[la] >> lb) & 1u) == 0u) return PxFilterFlag::eKILL;
     }
-    // A character passing through the dead (word1's kPassRagdolls bit: SetNpcPassesRagdolls) against a ragdoll's part.
-    if (((filterData0.word1 & kPassRagdolls) && IsRagdollPart(filterData1)) || ((filterData1.word1 & kPassRagdolls) && IsRagdollPart(filterData0)))
-        return PxFilterFlag::eKILL;
     // The parts of one ragdoll (word2: its id + 1 in the low half, the part in the high half) collide with each other unless
     // either one's word3 has the other's bit: parent and child, a pair that overlapped when the body was built (until it
     // separates), a gun with the hand that held it.

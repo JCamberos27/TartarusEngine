@@ -1,9 +1,9 @@
-# Generates the enemy soldier's body and its Animator Controller from the player's:
+# Generates the training dummy's body and its Animator Controller from the player's:
 #   project/assets/AI/Soldier.json             - an entity fragment (the scene format): a root with the
 #                                                Character Outfit and the Quantum outfit pieces, copied from
 #                                                the Sandbox's Player Body without its First Person Body
-#   project/assets/AI/npc_soldier.controller   - fps_body_locomotion.controller plus what an NPC needs on top
-# NpcSpawner stamps the fragment out once per soldier. Re-run after changing the player's outfit or the
+#   project/assets/AI/npc_soldier.controller   - fps_body_locomotion.controller plus the Hit React layer on top
+# NpcSpawner stamps the fragment out once per dummy. Re-run after changing the player's outfit or the
 # body's controller. Usage: python tools/gen_npc_soldier.py <repo root>
 import copy
 import json
@@ -43,84 +43,6 @@ bumps = [('AM_Stand_React_Bump_Light_Front', 0.0, -1.0), ('AM_Stand_React_Bump_L
 for name, _, _ in bumps:
     if not os.path.exists(os.path.join(proj, MOCAP, 'React_Bump', name + '.fbx')):
         fail(f'missing clip React_Bump/{name}.fbx')
-# Wounded (NpcDirector::BecomeWounded, NpcBody::TickWounded). The clips are the MC Sample pack's (Raw\Animations\MoCap Central - Sample Pack),
-# played as authored, in place (the capsule leads), each loop at the rate its own travel matches the capsule's (PlayRate) and
-# the starts and stops distance-matched, as the standing locomotion. Cut by their .meta Clip Trims; one trim per file, so a take
-# used for several states is in the project once per state, under the state's name.
-#
-# Shot down by a leg: GoProne collapses him clutching his belly onto the floor (ProneDrop: the collapse without its first
-# standing second or the roll onto his side at the end; a leg shot falls as a ragdoll instead and blends straight into ProneIdle),
-# then he lies still (ProneIdle: the prone pose the stand-to-prone clip settles in, played once and held - its quarter-second
-# trim doesn't loop clean, the hands jumped at every wrap - the same as the crawl's first frame) or crawls on his belly:
-# ProneCrawlStart (the take's frames 8-60)
-# into ProneCrawl (one arm cycle, frames 60-113, 0.68 m/s) and ProneCrawlStop (113-182) back to still. He never gets up.
-#
-# Gut-shot: GoDying - the gun gone - doubled over clutching the wound (InjuredIdle), a few steps forward the same way
-# (InjuredWalkStart, InjuredWalk at 0.68 m/s, InjuredWalkStop: their ends are the idle's and the walk's own poses), then
-# Collapse: down to his knees and over onto his side (InjuredDrop, the whole collapse) to lie there (InjuredLying).
-param('GoProne', 'trigger')
-param('GoDying', 'trigger')
-param('Collapse', 'trigger')
-clips = {'ProneDrop': 'Injured/AM_InjuredBelly_DropToFloor', 'ProneIdle': 'ProneCrawl/AM_Stand_Trans_ProneCrawl',
-         'ProneCrawlStart': 'ProneCrawl/AM_ProneCrawl_Start', 'ProneCrawl': 'ProneCrawl/AM_ProneCrawl_CrawlStartStop_Fwd',
-         'ProneCrawlStop': 'ProneCrawl/AM_ProneCrawl_Stop',
-         'InjuredIdle': 'Injured/AM_InjuredBelly_Idle_01', 'InjuredWalkStart': 'Injured/AM_InjuredBelly_Loco_Walk_Fwd_Start',
-         'InjuredWalk': 'Injured/AM_InjuredBelly_Loco_Walk_Fwd', 'InjuredWalkStop': 'Injured/AM_InjuredBelly_Loco_Walk_Fwd_Stop',
-         'InjuredDrop': 'Injured/AM_InjuredBelly_DropToFloor_Lie', 'InjuredLying': 'Injured/AM_InjuredBelly_DropToFloor_Loop'}
-for name in clips.values():
-    if not os.path.exists(os.path.join(proj, MOCAP, name + '.fbx')):
-        fail(f'missing clip {name}.fbx')
-base = ctrl['layers'][0]
-base['states'] = [s for s in base['states'] if s['name'] not in clips]
-base['transitions'] = [t for t in base['transitions'] if t.get('from') not in clips and t.get('to') not in clips]
-
-def state(name, x, y, loop, tags, **extra):
-    st = {'name': name, 'loop': loop, 'speed': 1.0, 'position': [x, y], 'tags': tags,
-          'motions': {'main': {'clip': MOCAP + clips[name] + '.fbx'}}}
-    st.update(extra)
-    return st
-
-def go(frm, to, duration, conditions=(), exit_time=None, **extra):
-    t = {'from': frm, 'to': to, 'duration': duration,
-         'conditions': [{'mode': m, 'param': p, 'threshold': 0.0} for m, p in conditions],
-         'hasExitTime': exit_time is not None, 'exitTime': 1.0 if exit_time is None else exit_time}
-    t.update(extra)
-    return t
-
-start = {'distanceParam': 'StartDistance', 'distanceMode': 'traveled'}
-stop = {'distanceParam': 'StopDistance', 'distanceMode': 'remaining'}
-base['states'] += [
-    state('ProneDrop', 0.0, 600.0, False, ['Prone']),
-    state('ProneIdle', 260.0, 600.0, False, ['Prone']),
-    state('ProneCrawlStart', 520.0, 520.0, False, ['Prone'], **start),
-    state('ProneCrawl', 780.0, 600.0, True, ['Prone'], speedParam='PlayRate'),
-    state('ProneCrawlStop', 520.0, 680.0, False, ['Prone'], **stop),
-    state('InjuredIdle', 260.0, 840.0, True, ['Dying']),
-    state('InjuredWalkStart', 520.0, 760.0, False, ['Dying'], **start),
-    state('InjuredWalk', 780.0, 840.0, True, ['Dying'], speedParam='PlayRate'),
-    state('InjuredWalkStop', 520.0, 920.0, False, ['Dying'], **stop),
-    state('InjuredDrop', 1040.0, 840.0, False, ['Dying']),
-    state('InjuredLying', 1300.0, 840.0, True, ['Dying']),
-]
-base['transitions'] += [
-    go('Any', 'ProneDrop', 0.3, [('if', 'GoProne')], canTransitionToSelf=False, interruptible=False),
-    go('ProneDrop', 'ProneIdle', 0.5, exit_time=0.92),
-    go('ProneIdle', 'ProneCrawlStart', 0.3, [('if', 'Moving')]),
-    go('ProneCrawlStart', 'ProneCrawlStop', 0.3, [('ifNot', 'Moving')]),
-    go('ProneCrawlStart', 'ProneCrawl', 0.2, exit_time=0.97),
-    go('ProneCrawl', 'ProneCrawlStop', 0.3, [('ifNot', 'Moving')]),
-    go('ProneCrawlStop', 'ProneCrawlStart', 0.3, [('if', 'Moving')]),
-    go('ProneCrawlStop', 'ProneIdle', 0.3, exit_time=0.95),
-    go('Any', 'InjuredIdle', 0.35, [('if', 'GoDying')], canTransitionToSelf=False, interruptible=False),
-    go('Any', 'InjuredDrop', 0.3, [('if', 'Collapse')], canTransitionToSelf=False, interruptible=False),
-    go('InjuredIdle', 'InjuredWalkStart', 0.25, [('if', 'Moving')]),
-    go('InjuredWalkStart', 'InjuredWalkStop', 0.25, [('ifNot', 'Moving')]),
-    go('InjuredWalkStart', 'InjuredWalk', 0.15, exit_time=0.97),
-    go('InjuredWalk', 'InjuredWalkStop', 0.25, [('ifNot', 'Moving')]),
-    go('InjuredWalkStop', 'InjuredWalkStart', 0.25, [('if', 'Moving')]),
-    go('InjuredWalkStop', 'InjuredIdle', 0.25, exit_time=0.95),
-    go('InjuredDrop', 'InjuredLying', 0.4, exit_time=0.96),
-]
 ctrl['layers'] = [l for l in ctrl['layers'] if l.get('name') != 'Hit React']
 ctrl['layers'].append({
     'name': 'Hit React',

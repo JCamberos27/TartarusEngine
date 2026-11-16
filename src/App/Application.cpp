@@ -110,7 +110,7 @@
 #include "SprayCan.h"           // Decals P4: the gameplay spray can (F6 in Play)
 #include "Audio/AudioTest.h" // --audio-test
 #include "ShellCasings.h"
-#include "AI/NpcDirector.h"     // the enemy squad
+#include "AI/NpcDirector.h"     // the training dummies
 #include "Combat/CombatFx.h"
 #include "Combat/BloodFx.h"
 #include "AI/Npc.h"
@@ -473,7 +473,7 @@ int Application::RunSession() {
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
         WeaponFxRenderer weaponFx;  // the weapon's laser beam / spot and the bullet holes
         BulletHoleList bulletHoles; // where this Play's rounds struck
-        NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
+        NpcDirector npcDirector;    // the training dummies, in scenes with Dummy Spawns
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
@@ -502,7 +502,7 @@ int Application::RunSession() {
         PlayerVitals playerVitals;  // the player's health in Play
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // dev tools in Play (no default keys)
-        DevSpawner devSpawner;      // F9-F12: soldiers and items at the crosshair
+        DevSpawner devSpawner;      // F9-F12: dummies and items at the crosshair
         PlayerLook playerLook;      // F7 / F8: the player's look and clothes, kept between Plays
         PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
         ShellCasings shellCasings;  // the spent cases on the ground
@@ -526,7 +526,7 @@ int Application::RunSession() {
         auto gravityGunLive = [&] {
             return playGravityGun && !(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped());
         };
-        // F6 Nav: the soldiers' navmesh edges (green), 7 floats a vertex. Built once per navmesh, not every frame: the edges are static.
+        // F6 Nav: the dummies' navmesh edges (green), 7 floats a vertex. Built once per navmesh, not every frame: the edges are static.
         auto navDebugLines = [&](std::vector<float>& out) {
             auto line = [](std::vector<float>& o, const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {
                 const float v[14] = {a.x, a.y, a.z, c.r, c.g, c.b, c.a, b.x, b.y, b.z, c.r, c.g, c.b, c.a};
@@ -566,7 +566,7 @@ int Application::RunSession() {
             }
             in.God = playerVitals.GodMode;
             in.InfiniteAmmo = devPanel.InfiniteAmmo;
-            in.AiOverlay = devPanel.AiOverlay || FKeyRow::CurrentOverlay() == FKeyRow::OverlayAi || (npcTest && npcTest->WantsAiOverlay());
+            in.AiOverlay = devPanel.AiOverlay || FKeyRow::CurrentOverlay() == FKeyRow::OverlayAi;
             // F6 Nav / Hitboxes: world lines the HUD projects like the AI overlay's.
             static std::vector<float> fRowLines;
             fRowLines.clear();
@@ -1187,7 +1187,7 @@ int Application::RunSession() {
             // F5-F8: the F-row's view states (FKeyRow.h), in any mode.
             if (devKeys && !editor.ScriptIDEHasKeyboardFocus()) FKeyRow::PollViews(editor, playing);
             if (playing && playUsesPlayer) playerLook.Update(world, assets, devKeys && !editor.ScriptIDEHasKeyboardFocus());
-            // Play with an enemy squad: the dev panel, god mode and the AI debug overlay (DevPanel.h; no default keys).
+            // Play with dummies: the dev panel, god mode and the AI debug overlay (DevPanel.h; no default keys).
             if (devKeys && playing && playUsesPlayer && npcDirector.Active()) {
                 const bool wasOpen=devPanel.Open,wasGod=playerVitals.GodMode,wasAiOverlay=devPanel.AiOverlay;
                 if (Shortcuts::TriggeredGlfw("dev.panel")) devPanel.Open = !devPanel.Open;

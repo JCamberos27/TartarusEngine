@@ -1,5 +1,5 @@
-// --npc-test npcloco: a soldier in Apartment Hallway's 301 living room goes through the gaits the player's body has - walk
-// forward, back-pedal and both strafes (aiming), the jog out and back, a crouched walk - stopping between each, its brain off.
+// --npc-test npcloco: a dummy (spawned here, roaming off) in Apartment Hallway's 301 living room goes through the gaits - walk
+// forward, back and both sideways (it faces its travel), the jog out and back - stopping between each (ScriptedMove).
 // The Scene view watches it from the side (record with NPC_TEST_RECORD; NPC_TEST_BARE undresses it). Checked per leg: the
 // top speed, the start and stop clips, and that the body doesn't chatter between states (a start or a stop retriggered
 // while it's going one way).
@@ -19,22 +19,18 @@ struct NLeg {
     const char* Name;
     glm::vec3 To;  // where to (world, flat); the home for a stand
     Gait Pace;
-    bool Aim;      // aim north the whole leg (strafes and the back-pedal face it)
-    bool Crouch;
     float Hold;    // seconds stood once there
 };
 const NLeg kNLegs[] = {
-    {"go home", kHome, Gait::Walk, false, false, 2.5f},
-    {"walk forward", {-8.1f, 0.0f, -4.7f}, Gait::Walk, false, false, 2.0f},
-    {"walk back (aiming)", kHome, Gait::Walk, true, false, 2.0f},
-    {"walk strafe right (aiming)", {-10.0f, 0.0f, -8.9f}, Gait::Walk, true, false, 2.0f},
-    {"walk strafe left (aiming)", {-6.3f, 0.0f, -8.9f}, Gait::Walk, true, false, 2.0f},
-    {"walk to home", kHome, Gait::Walk, false, false, 2.0f},
-    {"jog forward", {-8.1f, 0.0f, -4.6f}, Gait::Jog, false, false, 2.0f},
-    {"jog back (turns)", kHome, Gait::Jog, false, false, 2.0f},
-    {"crouch", kHome, Gait::Walk, false, true, 1.5f},
-    {"crouch walk", {-8.1f, 0.0f, -5.0f}, Gait::Walk, false, true, 2.0f},
-    {"stand", {-8.1f, 0.0f, -5.0f}, Gait::Walk, false, false, 2.0f},
+    {"go home", kHome, Gait::Walk, 2.5f},
+    {"walk forward", {-8.1f, 0.0f, -4.7f}, Gait::Walk, 2.0f},
+    {"walk back", kHome, Gait::Walk, 2.0f},
+    {"walk right", {-10.0f, 0.0f, -8.9f}, Gait::Walk, 2.0f},
+    {"walk left", {-6.3f, 0.0f, -8.9f}, Gait::Walk, 2.0f},
+    {"walk to home", kHome, Gait::Walk, 2.0f},
+    {"jog forward", {-8.1f, 0.0f, -4.6f}, Gait::Jog, 2.0f},
+    {"jog back (turns)", kHome, Gait::Jog, 2.0f},
+    {"stand", {-8.1f, 0.0f, -5.0f}, Gait::Walk, 2.0f},
 };
 constexpr int kNLegCount = (int)(sizeof(kNLegs) / sizeof(kNLegs[0]));
 static_assert(kNLegCount <= 16, "per-leg arrays");
@@ -71,22 +67,15 @@ void NpcTest::NpcLocoDrive(Player& player, float& wantYaw, float& wantPitch) {
 void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
     const float dt = std::max(0.0f, now - m_NLPrev);
     m_NLPrev = now;
-    npcs.Frozen = true;
-    npcs.HoldFire = true;
     npcs.FootIKEverywhere = true; // the Scene view watches his feet wherever the player looks
-    Npc* probe = nullptr;
-    for (const auto& up : npcs.Npcs()) {
-        if (!up || up->Dead) continue;
-        if (m_NLProbe.empty() && now > 0.5f) m_NLProbe = up->Name;
-        if (up->Name == m_NLProbe) probe = up.get();
-        else { // the other one stands easy in the far corner
-            up->Intent = NpcIntent{};
-            up->Intent.Move = Flat(up->Feet, {-10.1f, 0.0f, -4.4f}) > 0.4f;
-            up->Intent.MoveTarget = glm::vec3(-10.1f, up->Feet.y, -4.4f);
-            up->Intent.Pace = Gait::Walk;
-            up->Intent.LookPoint = up->Feet + glm::vec3(1.0f, 1.6f, -1.0f);
-        }
+    // The dummy: one, put in 301's living room by SpawnAt once the director's navigation mesh is up (roaming off).
+    if (m_NLProbe.empty() && now > 0.5f && Assets) {
+        const int index = npcs.SpawnAt(world, *Assets, glm::vec3(-8.1f, 0.0f, -7.0f), 0.0f, false);
+        if (Npc* spawned = index >= 0 ? npcs.Find(index) : nullptr) m_NLProbe = spawned->Name;
     }
+    Npc* probe = nullptr;
+    for (const auto& up : npcs.Npcs())
+        if (up && !up->Dead && !m_NLProbe.empty() && up->Name == m_NLProbe) probe = up.get();
     if (!probe || now < 1.0f || m_NLLeg >= kNLegCount) {
         if (m_NLLeg >= kNLegCount && !m_Done) NpcLocoReport();
         return;
@@ -98,17 +87,10 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
     const glm::vec3 to(L.To.x, n.Feet.y, L.To.z);
     const bool there = Flat(n.Feet, to) < 0.35f;
     if (there && m_NLArrived < 0.0f) m_NLArrived = now;
-    NpcIntent in;
-    in.Move = !there || m_NLArrived < 0.0f;
-    in.MoveTarget = to;
-    in.Pace = L.Pace;
-    in.Crouch = L.Crouch;
-    const glm::vec3 north = n.Feet + glm::vec3(0.0f, L.Crouch ? 0.95f : 1.45f, 12.0f);
-    in.Aim = L.Aim;
-    in.FaceAim = L.Aim;
-    in.AimPoint = north;
-    in.LookPoint = L.Aim ? north : n.Feet + glm::vec3(0.0f, 1.6f, 0.0f) + (to - n.Feet) * 2.0f + glm::vec3(0.0f, 0.0f, 0.01f);
-    n.Intent = in;
+    n.Roam = false;
+    if (!there || m_NLArrived < 0.0f) npcs.ScriptedMove(n.Index, to, L.Pace);
+    else npcs.EndScriptedMove(n.Index);
+    n.LookPoint = n.Feet + glm::vec3(0.0f, 1.6f, 0.0f) + (to - n.Feet) * 2.0f + glm::vec3(0.0f, 0.0f, 0.01f);
 
     NLegStats& s = g_N[m_NLLeg];
     const float legTime = now - m_NLStart;
@@ -150,12 +132,12 @@ void NpcTest::NpcLocoReport() {
         std::printf("[NpcLoco] %-28s speed %.2f m/s  starts %d  stops %d  states: %s\n", kNLegs[i].Name, speed(i), g_N[i].Starts,
                     g_N[i].Stops, states.c_str());
     }
-    Check(m_NLLeg >= kNLegCount, "the soldier went through every leg");
+    Check(m_NLLeg >= kNLegCount, "the dummy went through every leg");
     for (int i = 1; i < kNLegCount; ++i) {
         const NLeg& L = kNLegs[i];
         const bool moves = Flat(L.To, kNLegs[i - 1].To) > 0.5f;
         if (!moves) continue;
-        const float lo = L.Crouch ? 0.8f : L.Pace == Gait::Jog ? 2.7f : 1.2f, hi = L.Crouch ? 2.2f : L.Pace == Gait::Jog ? 3.7f : 1.9f;
+        const float lo = L.Pace == Gait::Jog ? 2.7f : 1.2f, hi = L.Pace == Gait::Jog ? 3.7f : 1.9f;
         Check(speed(i) > lo && speed(i) < hi, std::string(L.Name) + ": top speed " + std::to_string(speed(i)) + " m/s");
         Check(g_N[i].Starts <= 1, std::string(L.Name) + ": one start at most (" + std::to_string(g_N[i].Starts) + ")");
         Check(g_N[i].Stops <= 1, std::string(L.Name) + ": one stop at most (" + std::to_string(g_N[i].Stops) + ")");

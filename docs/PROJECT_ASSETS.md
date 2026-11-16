@@ -34,7 +34,7 @@ graphs, clips, import settings, or prefab identities. File extensions now remain
 visible so several assets named AKS74U are distinguishable.
 
 Body controllers live under `assets/Animations/Controllers`, motion capture under
-`assets/Animations/Mocap`, and NPC controllers under `assets/AI`. Engine, editor
+`assets/Animations/Mocap`, and the training-dummy controller under `assets/AI`. Engine, editor
 and gameplay code is under `src/` (see [Gameplay code](GAMEPLAY_CODE.md)). Scenes, screenshots, and custom shaders
 remain under `project/scenes`, `project/screenshots`, and `project/shaders`.
 

@@ -4980,9 +4980,6 @@
         "Look Down Start": 0.0,
         "Max Play Rate": 1.5,
         "Max Turn Rate": 0.0,
-        "NPC Aim Lean": 5.729578018188477,
-        "NPC Aim Lean Crouched": 12.605072021484375,
-        "NPC Cower Hunch": 20.05352210998535,
         "NPC Face Ease": 0.09000000357627869,
         "NPC Foot IK Fade": 0.15000000596046448,
         "NPC Foot IK Max Drop": 0.3499999940395355,
@@ -4993,9 +4990,7 @@
         "NPC Foot Offset Ease": 0.05000000074505806,
         "NPC Head Max Pitch": 34.37746810913086,
         "NPC Head Max Yaw": 68.75493621826172,
-        "NPC Max Twist": 68.75493621826172,
         "NPC Move Ease": 0.10000000149011612,
-        "NPC Ready Lean Crouched": 22.918312072753906,
         "NPC Turn Threshold": 65.89014434814453,
         "Near Hide": 0.10000000149011612,
         "Parameter Smoothing": 0.11999999731779099,
@@ -5104,7 +5099,7 @@
     },
     {
       "id": 97,
-      "name": "AI Director",
+      "name": "Dummy Settings",
       "order": 97,
       "parentId": 96,
       "position": [
@@ -5128,36 +5123,20 @@
         "fill": 0,
         "icon": "brain"
       },
-      "Squad Settings": {
-        "Bleed-Out Time": 20.0,
-        "Corpse Time": 14.0,
-        "Cover Peek Step": 0.800000011920929,
-        "Cover Reach": 0.8500000238418579,
-        "Cover Sample Spacing": 0.8999999761581421,
-        "Crawl Speed": 0.85,
-        "Difficulty": 1.0,
-        "Fall Gravity": 18.0,
-        "Foot IK Range": 25.0,
-        "Heavy Hit Damage": 40.0,
-        "High Cover Height": 1.5499999523162842,
-        "Hitbox Range": 60.0,
-        "Limp Speed Scale": 0.6000000238418579,
-        "Limp Time": 6.0,
-        "Low Cover Height": 0.8500000238418579,
-        "Melee Damage": 25.0,
-        "Melee Hit Time": 0.2199999988079071,
-        "Melee Time": 0.550000011920929,
-        "Mesh Check Range": 12.0,
-        "NPC Damage Scale": 0.44999998807907104,
+      "Dummy Settings": {
         "Respawn": true,
         "Respawn Delay": 8.0,
-        "Squad Size": 4,
-        "Stagger Time": 0.4000000059604645
+        "Heavy Hit Damage": 40.0,
+        "Stagger Time": 0.4000000059604645,
+        "Corpse Time": 14.0,
+        "Fall Gravity": 18.0,
+        "Hitbox Range": 60.0,
+        "Foot IK Range": 25.0
       }
     },
     {
       "id": 98,
-      "name": "Enemy Spawn 1",
+      "name": "Dummy Spawn 1",
       "order": 98,
       "parentId": 96,
       "position": [
@@ -5181,17 +5160,14 @@
         "fill": 0,
         "icon": "location-dot"
       },
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.6000000238418579,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": true
       }
     },
     {
       "id": 99,
-      "name": "Enemy Spawn 2",
+      "name": "Dummy Spawn 2",
       "order": 99,
       "parentId": 96,
       "position": [
@@ -5215,17 +5191,14 @@
         "fill": 0,
         "icon": "location-dot"
       },
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.550000011920929,
-        "Squad": 0,
-        "Weapon": "Remington 870"
+        "Roam": true
       }
     },
     {
       "id": 100,
-      "name": "Enemy Spawn 3",
+      "name": "Dummy Spawn 3",
       "order": 100,
       "parentId": 96,
       "position": [
@@ -5249,17 +5222,14 @@
         "fill": 0,
         "icon": "location-dot"
       },
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.699999988079071,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": true
       }
     },
     {
       "id": 101,
-      "name": "Enemy Spawn 4",
+      "name": "Dummy Spawn 4",
       "order": 101,
       "parentId": 96,
       "position": [
@@ -5283,17 +5253,14 @@
         "fill": 0,
         "icon": "location-dot"
       },
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.6000000238418579,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
+        "Roam": true
       }
     },
     {
       "id": 102,
-      "name": "Enemy Spawn 5",
+      "name": "Dummy Spawn 5",
       "order": 102,
       "parentId": 96,
       "position": [
@@ -5317,12 +5284,9 @@
         "fill": 0,
         "icon": "location-dot"
       },
-      "NPC Spawn": {
-        "Brain": "Squad AI",
+      "Dummy Spawn": {
         "Outfit Seed": 0,
-        "Skill": 0.550000011920929,
-        "Squad": 0,
-        "Weapon": "Remington 870"
+        "Roam": true
       }
     }
   ],

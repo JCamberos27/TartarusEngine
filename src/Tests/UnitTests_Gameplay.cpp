@@ -182,9 +182,11 @@ void TestScriptDefinitionConversion() {
     CHECK(weapon.at("Light Color")==Json::array({.2,.4,.6}) && weapon.at("Light Intensity")==27 && weapon.at("Smoke")==false);
     CHECK(node.at("Optic Attachment").at("Aim Point")=="Sight" && node.at("Grip Attachment").at("Enabled")==false);
     // A definition that was the only script removes the C# component entirely.
-    Json only={{"C# Script",{{"Class","Tartarus.Gameplay.SquadDefinition"},{"Fields JSON",R"({"SquadSize":6,"CoverSpacing":1.2})"},{"Enabled",true}}}};
+    Json only={{"C# Script",{{"Class","Tartarus.Gameplay.SquadDefinition"},{"Fields JSON",R"({"HeavyHitDamage":55,"CorpseTime":90})"},{"Enabled",true}}}};
     CHECK(ConvertScriptDefinitions(only));
-    CHECK(!only.contains("C# Script") && only.at("Squad Settings").at("Squad Size")==6 && only.at("Squad Settings").at("Cover Sample Spacing")==1.2);
+    // (the converted block carries the component's name, or its old key when the migration table still uses that)
+    const Json& rules=only.contains("Dummy Settings")?only.at("Dummy Settings"):only.at("Squad Settings");
+    CHECK(!only.contains("C# Script") && rules.at("Heavy Hit Damage")==55 && rules.at("Corpse Time")==90);
     // Older snapshots convert on read and save as native components.
     Json legacy=node;legacy.erase("Weapon Definition");legacy.erase("Optic Attachment");legacy.erase("Grip Attachment");
     legacy["C# Script"]["Scripts"]=Json::array({{{"id",11},{"class","Tartarus.Gameplay.WeaponDefinition"},{"fields",weaponFields},{"enabled",true}}}).dump();
@@ -372,11 +374,11 @@ void TestProjectLocomotion() {
 }
 void TestProjectNpcConfiguration() {
     using namespace Gameplay;using Json=nlohmann::json;
-    // Scenes saved while NPC Spawn and Squad Settings were C# definitions read back as the native components.
+    // Scenes saved while the spawn and squad rules were C# definitions read back as the native Dummy Spawn / Dummy Settings components.
     Json legacy={{"id",0},{"name","NPC config"},
         {"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Enabled",false},{"Fields JSON","{}"},{"Next Script ID",9},{"Scripts",Json::array({
-            {{"id",7},{"class","Tartarus.Gameplay.NpcDefinition"},{"fields",{{"Weapon",1},{"Brain",1},{"Skill",.7},{"Squad",2}}},{"enabled",true}},
-            {{"id",8},{"class","Tartarus.Gameplay.SquadDefinition"},{"fields",{{"SquadSize",6},{"NpcDamageScale",.8},{"CoverSpacing",1.2},{"CoverKneeHeight",.75}}},{"enabled",true}}}).dump()}}}};
+            {{"id",7},{"class","Tartarus.Gameplay.NpcDefinition"},{"fields",{{"OutfitSeed",5},{"Bare",true},{"Roam",false}}},{"enabled",true}},
+            {{"id",8},{"class","Tartarus.Gameplay.SquadDefinition"},{"fields",{{"HeavyHitDamage",55},{"CorpseTime",90},{"MaxCorpses",7},{"RespawnDelay",2.5}}},{"enabled",true}}}).dump()}}}};
     World world;AssetLibrary assets;
     CHECK(SceneSerializer::LoadFromString(world,assets,Json{{"formatVersion",4},{"empties",Json::array({legacy})}}.dump()));
     auto converted=world.Registry.view<NpcSpawnComponent,SquadSettingsComponent>();
@@ -385,19 +387,20 @@ void TestProjectNpcConfiguration() {
     const auto entity=converted.front();
     const auto& spawn=world.Registry.get<NpcSpawnComponent>(entity);
     const auto& squad=world.Registry.get<SquadSettingsComponent>(entity);
-    CHECK(spawn.Weapon==1 && spawn.Brain==1 && std::abs(spawn.Skill-.7f)<1e-6f && spawn.Squad==2);
-    CHECK(squad.SquadSize==6 && std::abs(squad.NpcDamageScale-.8f)<1e-6f && std::abs(squad.CoverSpacing-1.2f)<1e-6f && std::abs(squad.CoverKneeHeight-.75f)<1e-6f);
+    CHECK(spawn.OutfitSeed==5 && spawn.Bare && !spawn.Roam);
+    CHECK(std::abs(squad.HeavyHitDamage-55.f)<1e-6f && std::abs(squad.CorpseTime-90.f)<1e-6f && squad.MaxCorpses==7 && std::abs(squad.RespawnDelay-2.5f)<1e-6f);
     const auto snapshot=SceneSerializer::SaveToString(world);
     CHECK(snapshot.find("NpcDefinition")==std::string::npos && snapshot.find("SquadDefinition")==std::string::npos);
     World restored;CHECK(SceneSerializer::LoadFromString(restored,assets,snapshot));
     const auto views=restored.Registry.view<NpcSpawnComponent,SquadSettingsComponent>();CHECK(views.begin()!=views.end());
     if(views.begin()!=views.end()) {
-        CHECK(views.get<NpcSpawnComponent>(views.front()).Squad==2);
-        CHECK(std::abs(views.get<SquadSettingsComponent>(views.front()).NpcDamageScale-.8f)<1e-6f);
+        CHECK(views.get<NpcSpawnComponent>(views.front()).OutfitSeed==5);
+        CHECK(std::abs(views.get<SquadSettingsComponent>(views.front()).HeavyHitDamage-55.f)<1e-6f);
     }
     const SquadSettingsComponent defaults;
-    CHECK(defaults.SquadSize==4 && defaults.Difficulty==1 && defaults.NpcDamageScale==.45f);
-    CHECK(defaults.BodyPrefab=="assets/AI/Soldier.json" && !defaults.RiflePrefab.empty());
+    const NpcSpawnComponent spawnDefaults;
+    CHECK(defaults.Respawn && defaults.HeavyHitDamage==40.f && spawnDefaults.Roam && !spawnDefaults.Bare && spawnDefaults.OutfitSeed==0);
+    CHECK(!defaults.BodyPrefab.empty());
 }
 void TestLightFlickerMigration() {
     using namespace Gameplay;using Json=nlohmann::json;

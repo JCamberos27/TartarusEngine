@@ -856,11 +856,6 @@ struct FirstPersonBodyComponent {
     float NpcMoveEase = 0.1f; // NPC Move Ease (seconds; blend tree parameter easing)
     float NpcFaceEase = 0.09f; // NPC Face Ease (seconds; heading easing while moving)
     // NPC spine and body aim
-    float NpcMaxTwist = glm::degrees(1.2f); // NPC Max Twist (degrees; spine twists toward aim)
-    float NpcAimLean = glm::degrees(0.1f); // NPC Aim Lean (degrees; torso forward lean aiming, standing)
-    float NpcAimLeanCrouched = glm::degrees(0.22f); // NPC Aim Lean Crouched (degrees; ~13 deg)
-    float NpcReadyLeanCrouched = glm::degrees(0.4f); // NPC Ready Lean Crouched (degrees; ~23 deg, low ready stance)
-    float NpcCowerHunch = glm::degrees(0.35f); // NPC Cower Hunch (degrees; spine curls forward ducking)
     // NPC head look
     float NpcHeadMaxYaw = glm::degrees(1.2f); // NPC Head Max Yaw (degrees; ~70 deg head turns past chest)
     float NpcHeadMaxPitch = glm::degrees(0.6f); // NPC Head Max Pitch (degrees; ~35 deg nod up/down)
@@ -1311,49 +1306,27 @@ struct HealthComponent {
     float Current = -1.0f; // < 0 = not started yet (reads as Max)
 };
 
-// Where an enemy soldier appears in Play (Npc/NpcSpawner.h). The enemy squad is built from these.
+// Where a training dummy appears in Play (NpcDirector), facing this object's forward: an unarmed body that wanders
+// the navigation mesh, flinches when shot, bleeds, and dies into a ragdoll.
 struct NpcSpawnComponent {
-    int Weapon = 0;        // 0 = AKS-74U, 1 = Remington 870, 2 = either, picked at random
-    int Squad = 0;         // NPCs with the same Squad fight together
-    float Skill = 0.5f;    // 0 (green) .. 1 (veteran): reaction, accuracy, aggression
     int OutfitSeed = 0;    // 0 = a random outfit each Play
-    int Brain = 0;         // 0 = the squad AI, 1 = a training dummy (stands still, takes hits)
     bool Bare = false;     // no outfit: the bare body
+    bool Roam = true;      // wanders the navigation mesh near its spawn (off: stands where it was placed)
 };
 
-// The fight's rules, on any object in the scene (the first one counts).
+// The dummies' rules, on any object in the scene (the first one counts).
 struct SquadSettingsComponent {
-    int SquadSize = 4;
-    float RespawnDelay = 8.0f;
-    float Difficulty = 1.0f;
-    float NpcDamageScale = 0.45f;
     bool Respawn = true;
+    float RespawnDelay = 8.0f;
     float HeavyHitDamage = 40.0f;
     float StaggerTime = 0.4f;
-    float BleedOutTime = 20.0f;
-    float CrawlSpeed = 0.85f;    // m/s: a desperate crawl, the loop (its own pace ~0.55) played up to 1.6x by its PlayRate trim
-    float LimpSpeedScale = 0.6f;
-    float LimpTime = 6.0f;
     float CorpseTime = 180.0f;
     int MaxCorpses = 12;
     float UnseenTime = 3.0f;
     float FallGravity = 18.0f;
-    float MeleeDamage = 25.0f;
-    float MeleeTime = 0.55f;
-    float MeleeHitTime = 0.22f;
     float HitboxRange = 60.0f;
     float FootIKRange = 25.0f;
-    float MeshCheckRange = 12.0f;
-    float CoverSpacing = 0.9f;
-    float CoverReach = 0.85f;
-    float CoverKneeHeight = 0.85f;
-    float CoverHeadHeight = 1.55f;
-    float CoverStep = 0.8f;
     std::string BodyPrefab = "assets/AI/Soldier.json";
-    std::string RiflePrefab = "assets/Weapons/AKS74U/AKS74U.prefab";
-    std::string ShotgunPrefab = "assets/Weapons/Remington870/Remington870.prefab";
-    std::string RifleAnimationSet = "assets/Weapons/AKS74U/AKS74U.fpsanim";
-    std::string ShotgunAnimationSet = "assets/Weapons/Remington870/Remington870.fpsanim";
 };
 
 // Present only on entities that are parented, or that have at least one child â€” an entity with
@@ -1764,56 +1737,14 @@ struct RagdollSettingsComponent {
     // Reactions: layers on the drive target while the body is still conscious (a head kill has none and goes limp at once).
     float BraceWeight = 1.0f;          // 0..1: arms reach toward the fall (the Shoulder Brace and Brace Sideways below, scaled by this)
     float BraceLateral = 30.0f;        // degrees the arms swing toward a sideways fall
-    float WoundGrabWeight = 0.8f;      // 0..1: on a torso hit the struck side's hand goes to the wound for a moment
-    float WoundGrabTime = 0.5f;        // seconds it stays there before the arm lets go
-    float WoundShoulder = 50.0f;       // degrees the shoulder lifts the hand to the wound
-    float WoundElbow = 85.0f;          // degrees the elbow bends doing so
     float HeadTuckWeight = 1.0f;       // 0..1: the head tucks forward as the body falls back (Neck Tuck degrees, scaled)
     float HeadKillLimp = 0.4f;         // a head kill: the arms' and neck's tone times are scaled by this (0.4 = they let go in under half the time)
     // Corpse hits: a round into a body at rest.
     float CorpseWakeTime = 0.45f;      // seconds the body stays loose (no settling) after a round, so the limb the round struck visibly reacts
     float CorpseShotMaxSpeed = 4.0f;   // m/s: the most a round adds to the struck part, whatever the damage
-    // Wound fall: a soldier shot down by a leg (alive) goes down as a powered ragdoll - the hurt leg gives at once, the other holds a
-    // beat, the arms brace - and once down and slow his body blends from where it lies into the animated prone pose (NpcDirector).
-    float WoundFallLegStrength = 0.6f; // the good leg's strength fraction while it holds (the hurt one takes Hit Weakness at once)
-    float WoundFallLegHold = 0.22f;    // seconds the good leg holds before it gives too
-    float WoundFallPush = 1.3f;        // m/s: the topple forward and toward the hurt leg, on the chest (a body going down over a leg that gave)
-    float WoundFallTone = 0.08f;       // the strength fraction a living body keeps while down (a dead one keeps Tone Residual)
-    float WoundRecoverSpeed = 0.45f;   // m/s: down and every part slower than this, he takes the pose back
-    float WoundRecoverMinTime = 0.9f;  // seconds after the hit before he may (the limbs slump first) ...
-    float WoundRecoverMaxTime = 2.5f;  // ... and the longest the fall may take (draped over something, he takes it back anyway)
-    float WoundBlendTime = 0.5f;       // seconds every bone blends from where the fall left it to the animated prone pose ...
-    float WoundBlendSpeed = 1.8f;      // ... or longer (up to 2.5x) for a limb with further to go: m/s its hand or foot moves at most
-    float WoundFaceUp = 0.3f;          // the chest's and pelvis's front facing up past this (the up share of the normal): on his back ...
-    float WoundRollImpulse = 120.0f;   // ... he rolls himself over onto his belly: N s of twist across his chest and hips (0: he lies there)
-    float WoundRollTries = 2.0f;       // ... at most this many heaves (each a third harder) ...
-    float WoundRollBlendTime = 1.0f;   // ... then, still on his back, the animated pose turns him over onto his belly in this long
 };
 // ---- end lane R ----
 // ---- lane R-gear ----
-// The gun a soldier drops when he dies (Npc/NpcDroppedWeapon): its own simulated body, tumbling to rest. On any object in the scene
-// (the first one counts); without one the NPCs use these same defaults.
-struct DroppedWeaponSettingsComponent {
-    bool Enabled = true;               // the gun leaves the hands and lies where it falls (off: it vanishes with the soldier, as before)
-    float Mass = 3.5f;                 // kg
-    float ImpulseShare = 0.15f;        // the share of the killing round's impulse the gun takes (velocity change = share x impulse / mass)
-    float MaxShotSpeed = 5.0f;         // m/s: the most speed the round can add
-    float Spin = 0.5f;                 // tumble: rad/s of spin per m/s of speed leaving the hands (0 = none)
-    float MaxSpin = 8.0f;              // rad/s
-    // The release: the dead hand keeps its grip a moment (a random time between the two, seconds), the gun riding the falling arm,
-    // then lets go (or sooner, torn out by more than Grip Break Force, newtons). It never passes through its owner: it ignores only the
-    // parts it starts inside of (the hands, an arm across the chest) until it is clear of each, and the hands for Owner Ignore Time after.
-    float ReleaseDelayMin = 0.05f;
-    float ReleaseDelayMax = 0.3f;
-    float GripBreakForce = 600.0f;
-    float OwnerIgnoreTime = 0.15f;
-    bool HullCollider = true;          // a convex hull of the gun's own mesh (off: its bounding box)
-    float Friction = 0.7f;
-    float Bounciness = 0.1f;           // restitution
-    float LinearDamping = 0.1f;
-    float AngularDamping = 0.6f;
-    float Lifetime = 180.0f;           // seconds the gun lies at least; after that it goes once it has been out of the player's sight a while (Squad Settings' corpse rules; 0 = with the corpse)
-};
 // ---- end lane R-gear ----
 // ---- lane S ----
 // One gun's audio tuning (Game/Audio/WeaponAudio): add one per gun, Gun naming it ("ak", "870"); a gun with none uses these

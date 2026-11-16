@@ -1,6 +1,5 @@
 #include "DevSpawner.h"
 #include "AI/NpcDirector.h"
-#include "Npc/NpcDroppedWeapon.h"
 #include "FirstPersonPresentation.h"
 #include "Components.h"
 #include "World.h"
@@ -25,16 +24,11 @@
 
 namespace {
 
-struct NpcVariant { const char* Name; int Brain, Weapon; bool Passive; };
-const NpcVariant kNpcs[] = {
-    {"Soldier AK", 0, 0, false},      {"Soldier AK (Passive)", 0, 0, true},
-    {"Soldier Shotgun", 0, 1, false}, {"Soldier Shotgun (Passive)", 0, 1, true},
-    {"Soldier Unarmed", 0, 3, false}, {"Soldier Unarmed (Passive)", 0, 3, true},
-    {"Training Dummy", 1, 3, false},
-};
-const char* kItems[] = {"AK", "Shotgun", "Ammo Box", "Physics Crate"};
+struct NpcVariant { const char* Name; bool Roam; };
+const NpcVariant kNpcs[] = {{"Dummy", true}, {"Dummy (Standing)", false}};
+const char* kItems[] = {"Ammo Box", "Physics Crate"};
 constexpr int kNpcCount = (int)(sizeof(kNpcs) / sizeof(kNpcs[0]));
-constexpr int kItemCount = 4;
+constexpr int kItemCount = 2;
 
 bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDist, glm::vec3& point, glm::vec3& normal) {
     RaycastHit h;
@@ -43,18 +37,6 @@ bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDist, glm::vec3& 
     point = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
     normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
     return true;
-}
-
-// The soldier's prefab copied onto its own body, as a soldier's dead hand lets it go.
-std::unique_ptr<NpcDroppedWeapon> DropGun(World& world, AssetLibrary& assets, const std::string& prefab, const glm::vec3& at) {
-    const entt::entity tmp = SceneSerializer::InstantiatePrefab(world, assets, ProjectPaths::Resolve(prefab));
-    if (tmp == entt::null) return nullptr;
-    if (auto* t = world.Registry.try_get<TransformComponent>(tmp)) { t->Position = at; t->Rotation = glm::quat(glm::radians(glm::vec3(0.0f, 0.0f, 90.0f))); } // lying on its side
-    DroppedWeaponSettingsComponent cfg = NpcDroppedWeapon::SettingsIn(world);
-    cfg.Lifetime = 0.0f;
-    auto gun = NpcDroppedWeapon::DropAt(world, tmp, glm::vec3(0.0f), glm::vec3(0.0f), cfg);
-    world.DestroyEntityAndChildren(tmp);
-    return gun;
 }
 
 entt::entity Box(World& world, AssetLibrary& assets, const glm::vec3& at, const glm::vec3& size, float mass, const char* name) {
@@ -92,8 +74,7 @@ void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
 
 void DevSpawner::Warm(const Context& c) {
     const SquadSettingsComponent squad = c.Npcs ? c.Npcs->Settings() : SquadSettingsComponent{};
-    const std::string prefabs[] = {squad.BodyPrefab, squad.RiflePrefab, squad.ShotgunPrefab};
-    if (m_Warmed < 3 && !prefabs[m_Warmed].empty()) WarmPrefab(*c.Assets, prefabs[m_Warmed]);
+    if (m_Warmed < 1 && !squad.BodyPrefab.empty()) WarmPrefab(*c.Assets, squad.BodyPrefab);
     ++m_Warmed;
 }
 
@@ -122,8 +103,8 @@ bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
 
 void DevSpawner::Update(const Context& c) {
     if (!c.WorldPtr || !c.Assets) return;
-    if (m_Warmed < 3) Warm(c); // one prefab a frame
-    // The first F9 in a scene with no NPC Spawn started the soldiers: their navmesh is up after a Think.
+    if (m_Warmed < 1) Warm(c);
+    // The first F9 in a scene with no Dummy Spawn started the dummies: their navmesh is up after a Think.
     if (m_WaitSquad && c.Npcs && c.Npcs->Started()) { m_WaitSquad = false; SpawnNpc(c); }
     if (c.Keys) {
         auto variant = [&](int& cur, int count, const char* key, const char* title, const char* const* names) {
@@ -133,7 +114,7 @@ void DevSpawner::Update(const Context& c) {
         };
         static const char* npcNames[kNpcCount];
         for (int i = 0; i < kNpcCount; ++i) npcNames[i] = kNpcs[i].Name;
-        if (Shortcuts::TriggeredGlfw("fkey.nextNpc")) variant(m_Npc, kNpcCount, "F9", "NPC", npcNames);
+        if (Shortcuts::TriggeredGlfw("fkey.nextNpc")) variant(m_Npc, kNpcCount, "F9", "Dummy", npcNames);
         if (Shortcuts::TriggeredGlfw("fkey.nextItem")) variant(m_Item, kItemCount, "F11", "Item", kItems);
         if (Shortcuts::TriggeredGlfw("fkey.spawnNpc")) SpawnNpc(c);
         if (Shortcuts::TriggeredGlfw("fkey.spawnItem")) SpawnItem(c);
@@ -146,12 +127,12 @@ void DevSpawner::SpawnNpc(const Context& c) {
     const NpcVariant& v = kNpcs[m_Npc];
     if (!c.Npcs) return;
     if (!c.Npcs->Active()) {
-        // No NPC Spawn here: start the soldiers on this press (a one-off navmesh build, cached after).
+        // No Dummy Spawn here: start the dummies on this press (a one-off navmesh build, cached after).
         if (c.StartSquad && c.StartSquad()) {
             m_WaitSquad = true;
-            FKeyRow::Show("F9", "NPC", "Building the navmesh...");
+            FKeyRow::Show("F9", "Dummy", "Building the navmesh...");
         } else {
-            FKeyRow::Show("F9", "NPC", "Can't start soldiers here");
+            FKeyRow::Show("F9", "Dummy", "Can't start dummies here");
             EditorSound::Play(EditorSound::Event::Blocked);
         }
         return;
@@ -160,15 +141,15 @@ void DevSpawner::SpawnNpc(const Context& c) {
     glm::vec3 at;
     float yaw = 0.0f;
     Place(c, at, yaw);
-    const int idx = c.Npcs->SpawnAt(*c.WorldPtr, *c.Assets, at, yaw, v.Brain, v.Weapon, v.Passive);
+    const int idx = c.Npcs->SpawnAt(*c.WorldPtr, *c.Assets, at, yaw, v.Roam);
     if (idx < 0) {
-        FKeyRow::Show("F9", "NPC", "No room there");
+        FKeyRow::Show("F9", "Dummy", "No room there");
         EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
     m_NpcIds.push_back(idx);
     EditorSound::Play(EditorSound::Event::SpawnNpc);
-    FKeyRow::Show("F9", "NPC", v.Name, m_Npc, kNpcCount);
+    FKeyRow::Show("F9", "Dummy", v.Name, m_Npc, kNpcCount);
 }
 
 void DevSpawner::SpawnItem(const Context& c) {
@@ -177,17 +158,9 @@ void DevSpawner::SpawnItem(const Context& c) {
     float yaw = 0.0f;
     Place(c, at, yaw);
     const glm::vec3 drop = at + glm::vec3(0.0f, 0.35f, 0.0f);
-    const SquadSettingsComponent squad = c.Npcs ? c.Npcs->Settings() : SquadSettingsComponent{};
     bool ok = true;
-    if (m_Item <= 1) {
+    if (m_Item == 0) {
         Pickup p;
-        p.Kind = m_Item;
-        p.Gun = DropGun(world, *c.Assets, m_Item == 0 ? squad.RiflePrefab : squad.ShotgunPrefab, drop);
-        ok = p.Gun != nullptr;
-        if (ok) m_Pickups.push_back(std::move(p));
-    } else if (m_Item == 2) {
-        Pickup p;
-        p.Kind = 2;
         p.Prop = Box(world, *c.Assets, drop, glm::vec3(0.35f, 0.2f, 0.25f), 4.0f, "[Runtime] Ammo Box");
         m_Pickups.push_back(std::move(p));
     } else {
@@ -204,8 +177,6 @@ void DevSpawner::SpawnItem(const Context& c) {
 
 void DevSpawner::Pickups(const Context& c) {
     World& world = *c.WorldPtr;
-    for (Pickup& p : m_Pickups)
-        if (p.Gun) p.Gun->Update(world, c.Dt);
     if (!c.Interact || m_Pickups.empty()) return;
     // The one under the crosshair: nearest the view ray, within reach.
     const glm::vec3 f = glm::normalize(c.Front);
@@ -214,8 +185,7 @@ void DevSpawner::Pickups(const Context& c) {
     for (int i = 0; i < (int)m_Pickups.size(); ++i) {
         const Pickup& p = m_Pickups[(size_t)i];
         glm::vec3 pos;
-        if (p.Gun) pos = p.Gun->Position(world);
-        else if (const auto* t = world.Registry.valid(p.Prop) ? world.Registry.try_get<TransformComponent>(p.Prop) : nullptr) pos = t->Position;
+        if (const auto* t = world.Registry.valid(p.Prop) ? world.Registry.try_get<TransformComponent>(p.Prop) : nullptr) pos = t->Position;
         else continue;
         const float along = glm::dot(pos - c.Eye, f);
         if (along < 0.0f || along > 2.6f) continue;
@@ -224,12 +194,8 @@ void DevSpawner::Pickups(const Context& c) {
     }
     if (best < 0) return;
     Pickup& p = m_Pickups[(size_t)best];
-    const char* what = p.Kind == 0 ? "AK" : p.Kind == 1 ? "Shotgun" : "Ammo";
-    if (c.Gun && c.Gun->IsActive()) {
-        if (p.Kind <= 1 && p.Kind < c.Gun->SlotCount()) c.Gun->SelectSlot(p.Kind);
-        c.Gun->RefillAmmo();
-    }
-    if (p.Gun) p.Gun->Stop(world);
+    const char* what = "Ammo";
+    if (c.Gun && c.Gun->IsActive()) c.Gun->RefillAmmo();
     if (world.Registry.valid(p.Prop)) world.DestroyEntityAndChildren(p.Prop);
     m_Pickups.erase(m_Pickups.begin() + best);
     EditorSound::Play(EditorSound::Event::SpawnItem, -1.0f, 1.25f);
@@ -241,7 +207,7 @@ void DevSpawner::Clear(const Context& c) {
     const int n = Spawned();
     if (c.Npcs)
         for (int idx : m_NpcIds)
-            if (const Npc* npc = c.Npcs->Find(idx); npc && npc->DevSpawned) c.Npcs->Remove(world, idx); // the slot may be a squad soldier's now
+            if (const Npc* npc = c.Npcs->Find(idx); npc && npc->DevSpawned) c.Npcs->Remove(world, idx); // the slot may be a scene dummy's now
     m_NpcIds.clear();
     m_WaitSquad = false;
     Stop(world);
@@ -252,10 +218,8 @@ void DevSpawner::Clear(const Context& c) {
 void DevSpawner::Stop(World& world) {
     m_NpcIds.clear();
     m_WaitSquad = false;
-    for (Pickup& p : m_Pickups) {
-        if (p.Gun) p.Gun->Stop(world);
+    for (Pickup& p : m_Pickups)
         if (world.Registry.valid(p.Prop)) world.DestroyEntityAndChildren(p.Prop);
-    }
     m_Pickups.clear();
     for (entt::entity e : m_Props)
         if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);

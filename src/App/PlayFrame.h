@@ -97,8 +97,7 @@ private:
     // live only while the weapon is holstered (2 / scroll / Holster), off while it's in hand.
     static bool GravityGunLive(const PlayFrameInputs& in);
 
-    PlayerSnapshot m_PlayerSnap;                       // what the squad sees of the player this frame
-    int m_PlayerAmmoSeen = -1, m_PlayerSlotSeen = -1;  // for "the player fired this frame"
+    PlayerSnapshot m_PlayerSnap;                       // the player this frame, for the dummies
     int m_BigHeadshots = 0;                            // big headshot kills (the gore sound), for --npc-test blood
     float m_NpcTestBloodGpuSum = 0.0f;                 // --npc-test blood: the blood sprays' GPU time
     int m_NpcTestBloodGpuFrames = 0;

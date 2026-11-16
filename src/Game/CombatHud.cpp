@@ -117,31 +117,6 @@ void CombatHud::DrawFeed(const CombatHudInput& in, float now) {
     }
 }
 
-void CombatHud::DrawAwareness(const CombatHudInput& in, const NpcDirector& npcs) {
-    const float s = m_Text.Scale();
-    const glm::vec2 centre((float)in.Width * 0.5f, (float)in.Height * 0.5f);
-    const float radius = 150.0f * s;
-    for (const auto& up : npcs.Npcs()) {
-        if (!up || up->Dead || up->Mem.Known) continue;
-        const float aw = std::clamp(up->Mem.Awareness, 0.0f, 1.0f);
-        if (aw < 0.04f) continue;
-        const float ang = DamageIndicatorAngle(in.CamPos, in.CamYawDeg, up->Feet);
-        const glm::vec2 pos = centre + glm::vec2(std::sin(ang), -std::cos(ang)) * radius;
-        const glm::vec3 white(0.95f), yellow(1.0f, 0.85f, 0.2f), red(1.0f, 0.2f, 0.1f);
-        const glm::vec3 c = aw < 0.5f ? glm::mix(white, yellow, aw / 0.5f) : glm::mix(yellow, red, (aw - 0.5f) / 0.5f);
-        // The chevron's two strokes: a dim full outline, filled from the wing tips toward the point.
-        const float size = 26.0f * s, thick = 4.0f * s;
-        const glm::vec2 fwd(std::sin(ang), -std::cos(ang)), side(-fwd.y, fwd.x);
-        const glm::vec2 tip = pos + fwd * size * 0.5f;
-        const glm::vec2 wing[2] = {pos - fwd * size * 0.5f + side * size * 0.6f, pos - fwd * size * 0.5f - side * size * 0.6f};
-        for (const glm::vec2& w : wing) {
-            m_Text.Line(w, tip, thick + 2.0f * s, glm::vec4(0.0f, 0.0f, 0.0f, 0.45f));
-            m_Text.Line(w, tip, thick, glm::vec4(0.9f, 0.9f, 0.9f, 0.22f));
-            m_Text.Line(w, w + (tip - w) * aw, thick, glm::vec4(c, 0.95f));
-        }
-    }
-}
-
 void CombatHud::DrawLines(const CombatHudInput& in, const std::vector<float>& lines) {
     const float s = m_Text.Scale();
     const float kNear = 0.05f, maxDist2 = 80.0f * 80.0f;
@@ -162,35 +137,28 @@ void CombatHud::DrawLines(const CombatHudInput& in, const std::vector<float>& li
 
 void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
     const float s = m_Text.Scale();
-    // The director's lines (cover points, sight lines, goals, tokens), clipped to the near plane.
+    // The director's lines (each dummy's look and goal), clipped to the near plane.
     m_Lines.clear();
     npcs.DebugLines(m_Lines);
     DrawLines(in, m_Lines);
-    // A label over each soldier's head.
+    // A label over each dummy's head.
     for (const auto& up : npcs.Npcs()) {
         if (!up || up->Dead) continue;
         const Npc& n = *up;
-        const glm::vec3 head = n.Feet + glm::vec3(0.0f, n.Crouched ? 1.5f : 2.05f, 0.0f);
+        const glm::vec3 head = n.Feet + glm::vec3(0.0f, 2.05f, 0.0f);
         if (glm::length(head - in.CamPos) > 70.0f) continue;
         glm::vec2 p;
         if (!Project(in, head, p)) continue;
-        char l1[96], l2[128], l3[128];
-        std::snprintf(l1, sizeof l1, "%s  %s  %s  HP %.0f", n.Name.c_str(), BehaviourName(n.Doing), RoleName(n.Role), n.Health);
-        std::snprintf(l2, sizeof l2, "%s", n.Why.c_str());
-        std::snprintf(l3, sizeof l3, "aw %.2f %s%s  sup %.2f%s%s%s", n.Mem.Awareness, n.Mem.Known ? "KNOWN " : "", n.Mem.Visible ? "SEES " : "", n.Suppression,
-                      n.HasAttackToken ? "  ATK" : "", n.HasFlankToken ? "  FLK" : "", n.HasPushToken ? "  PSH" : "");
+        char l1[96];
+        std::snprintf(l1, sizeof l1, "%s  HP %.0f  %s", n.Name.c_str(), n.Health, n.WantMove ? "walking" : n.Roam ? "standing about" : "standing");
         const float size = 15.0f;
-        const float w = std::max({m_Text.Measure(l1, size), m_Text.Measure(l2, size), m_Text.Measure(l3, size)});
-        const float lh = m_Text.LineHeight(size);
-        const float h = lh * 3.0f + 6.0f * s;
+        const float w = m_Text.Measure(l1, size);
+        const float h = m_Text.LineHeight(size) + 6.0f * s;
         const float x = p.x, y = p.y - h - 6.0f * s;
-        const glm::vec3 tint = n.Mem.Visible ? glm::vec3(1.0f, 0.35f, 0.3f) : n.Mem.Known ? glm::vec3(1.0f, 0.75f, 0.2f)
-                                                                                     : n.Mem.Awareness > 0.04f ? glm::vec3(1.0f, 0.95f, 0.4f) : glm::vec3(0.7f, 1.0f, 0.7f);
+        const glm::vec3 tint(0.7f, 1.0f, 0.7f);
         m_Text.Rect(x - w * 0.5f - 5.0f * s, y - 2.0f * s, w + 10.0f * s, h, glm::vec4(0.0f, 0.0f, 0.0f, 0.55f));
         m_Text.Rect(x - w * 0.5f - 5.0f * s, y - 2.0f * s, 3.0f * s, h, glm::vec4(tint, 0.95f));
         m_Text.Text(x, y, l1, size, glm::vec4(tint, 1.0f), HudText::Align::Center, false);
-        m_Text.Text(x, y + lh, l2, size, glm::vec4(0.85f, 0.85f, 0.85f, 1.0f), HudText::Align::Center, false);
-        m_Text.Text(x, y + lh * 2.0f, l3, size, glm::vec4(0.7f, 0.85f, 1.0f, 1.0f), HudText::Align::Center, false);
     }
     m_Text.Text(40.0f * s, 40.0f * s, "AI DEBUG (F6)", 18.0f, glm::vec4(0.55f, 0.9f, 1.0f, 0.9f));
 }
@@ -207,7 +175,6 @@ void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
     if constexpr (kPlayerHud) {
         if (!in.PlayerDead) {
             if (in.Armed && in.Magazine > 0) DrawAmmo(in);
-            DrawAwareness(in, npcs);
             if (in.God) m_Text.Text(40.0f * s, (float)in.Height - 50.0f * s - 34.0f * s, "GOD MODE", 24.0f, glm::vec4(1.0f, 0.82f, 0.25f, 0.95f));
         }
         DrawFeed(in, now);

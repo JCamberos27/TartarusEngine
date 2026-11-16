@@ -11,71 +11,30 @@
 #include <vector>
 
 #include "Animation.h"       // LocalTRS
-#include "FirstPersonBody.h" // FirstPersonArmShapeLink
+#include "FirstPersonBody.h" // IK::SpineDistribution, the foot slide / lock settings
 #include "GameFrames.h"      // Gameplay::BodyMotionFrame
 
-class Camera;
 class Model;
 class World;
-struct FirstPersonWorldGunInput;
 
-// How well a soldier holds its gun this frame (NpcBody::MeasureHold; --npc-test pose). Gaps are metres
-// (negative = not measured): the gun (butt to muzzle) to the drawn head / neck / hood and to the drawn
-// torso, each elbow to the torso, each hand to the arms rig's (off the gun when it can't reach).
-struct NpcHoldReport {
-    float GunHead = -1.0f, GunTorso = -1.0f;
-    float Elbow[2] = {-1.0f, -1.0f};
-    float Hand[2] = {-1.0f, -1.0f};
-    float Shift = 0.0f;          // how far the gun was moved off where the rig holds it
-    float CheekTilt = 0.0f;      // degrees the head tilted onto the stock
-    glm::vec3 EyeFromHead{0.0f}; // the weapon's eye off the head bone (body frame: x left, y up, z forward), m
-};
-
-// An enemy soldier's body: the Quantum outfit pieces under one root (assets/AI/Soldier.json), on the
-// npc_soldier controller (the player body's locomotion plus a flinch layer). Capsule-led: the AI moves
-// the capsule and this turns that into the controller's parameters, stands the body on the capsule's
-// feet, turns it on the spot with the turn clips, and afterwards bends the finished pose - the spine
-// toward what it aims at, the head toward what it looks at, the hands onto the weapon rig's.
+// A dummy's body: the outfit pieces under one root (assets/AI/Soldier.json), on the npc_soldier controller (the player
+// body's locomotion plus a flinch layer). Capsule-led: the director moves the capsule and this turns that into the
+// controller's parameters, stands the body on the capsule's feet, turns it on the spot with the turn clips, and afterwards
+// bends the finished pose - the feet onto the ground, the chest and head toward what it looks at.
 //
 // Frame order:
 //   Tick         before the animators: heading, parameters, triggers
-//   LateUpdate   after them: spine aim and lean, head look; the eye for the weapon's camera
-//   WeaponEye    before the weapon places its rig: where its camera goes (off the shoulders)
-//   HoldWeapon   after it: the gun clear of the body, arms onto its hands, the pose onto every piece
+//   LateUpdate   after them: foot IK, the look, the pose onto every piece; the eye
 
-// The weapon hold's tuning: the player's First Person Body numbers (the same body, the same rigs), copied
-// from the scene's player by NpcDirector; these defaults are the Arena player's.
+// The body's tuning: the player's First Person Body numbers, copied from the scene's player by NpcDirector.
 struct NpcHoldSettings {
-    float ClavicleFollow = 0.35f;    // how much of the rig's collarbone swing the body takes
-    float ShoulderMaxAngle = 25.0f;  // degrees a collarbone may turn (shrug)
-    float ShrugStart = 0.98f;        // a hand further than this share of the arm's length: the shoulder shrugs
-    float ShrugMax = 0.12f;          // ... by at most this (m)
-    float ReachLeanMax = 15.0f;      // degrees the chest leans for a hand still out of reach
-    float ElbowClearance = 0.06f;    // m: elbows swing out of the drawn torso by this
-    float GripInset = 0.0f;          // m: each hand toward its palm (a fleshless hand), FirstPersonBodyComponent's
-    float FingerCurlExtra = 0.0f;    // degrees more curl per finger joint, ditto
-    float ReachSlack = 0.04f;        // m: the shoulders a little nearer the gun than the rig's
-    float ShoulderLineMatch = 1.0f;  // the chest takes the rig's bladed stance
-    float SpineAim = 0.6f, SpineAimDown = 0.9f; // the share of the aim's pitch the chest takes (up / down)
-    // The weapon's eye off the shoulders, as the player's camera is (FirstPersonBody::LateUpdate).
-    glm::vec3 ArmedEyeOffset{0.0f, 0.10f, 0.04f}; // the eye lifted off the rig's (model: right, up, forward), looking level
-    float HeadBob = 0.5f;            // the share of the shoulders' motion about their slow average the eye follows
-    float CameraSmoothing = 0.06f;   // seconds
-    float EyeSlack = 0.035f;         // m the eye may trail the shoulders by
-    float LookDownPush = 0.0f, LookDownStart = 0.0f; // looking down, the eye comes forward over the chest
-    // NPC body tuning (Tick, LateUpdate, FootPass)
     float TurnThreshold = 1.15f;     // radians: a still body further off than this turns on the spot
     float MoveEase = 0.1f;           // seconds: blend tree parameter easing
     float FaceEase = 0.09f;          // seconds: heading easing while moving
     IK::SpineDistribution Spine;     // how the spine's turns are shared over spine_01..05 (default: even)
-    float MaxTwist = 1.2f;           // radians: spine twists toward aim
-    float AimLean = 0.1f;            // radians: torso forward lean aiming, standing
-    float AimLeanCrouched = 0.22f;   // radians: torso lean aiming, crouched (~13 deg)
-    float ReadyLeanCrouched = 0.4f;  // radians: torso lean at low ready, crouched (~23 deg)
-    float CowerHunch = 0.35f;        // radians: spine curls forward ducking (~20 deg)
     float HeadMaxYaw = 1.2f;         // radians: head turns past chest (~70 deg)
     float HeadMaxPitch = 0.6f;       // radians: head nods up/down (~35 deg)
-    // NPC foot IK
+    // Foot IK
     float FootIKMaxDrop = 0.35f;     // m: pelvis drops to lower foot
     float FootIKMaxRaise = 0.35f;    // m: pelvis rises to higher foot
     float FootIKPelvisRaise = 0.08f; // m: pelvis height adjustment limit
@@ -90,30 +49,19 @@ struct NpcHoldSettings {
 struct NpcBodyInput {
     glm::vec3 Feet{0.0f};          // the capsule's foot position
     glm::vec3 Velocity{0.0f};      // how the capsule moved (m/s, world)
-    glm::vec3 Wish{0.0f};          // where the AI is going and at what pace (m/s, world, flat); zero once its stop has begun
+    glm::vec3 Wish{0.0f};          // where it is going and at what pace (m/s, world, flat); zero once its stop has begun
     bool Grounded = true;          // the capsule on the floor (else falling)
     float FallSpeed = 0.0f;        // m/s down while falling (the landing's impact)
-    float JogSpeed = 3.2f;         // the AI's jog and run paces (m/s): the blend tree's jog and sprint
+    float JogSpeed = 3.2f;         // the jog and run paces (m/s): the blend tree's jog and sprint
     float RunSpeed = 4.7f;
     float AccelTime = 0.12f;       // seconds the capsule eases up to pace / down to a stop (the stop clip's distance matching)
     float DecelTime = 0.15f;
-    float FacingYaw = 0.0f;        // the heading the body should have (radians, model +Z = sin/cos)
-    bool HoldFacing = false;       // face FacingYaw even while moving (strafing); else face the travel
-    glm::vec3 AimPoint{0.0f};      // what the spine and gun aim at (world)
-    bool Aiming = false;           // false: the spine doesn't aim (running, at the hip)
+    float FacingYaw = 0.0f;        // the heading the body should have standing (radians, model +Z = sin/cos)
+    bool HoldFacing = false;       // face FacingYaw even while moving; else face the travel
     glm::vec3 LookPoint{0.0f};     // what the head looks at
     bool Crouched = false;
     bool Sprint = false;
-    float Lean = 0.0f;             // -1 (left) .. 1 (right), a peek round cover
-    float Cower = 0.0f;            // 0..1: ducking from rounds cracking past (hunched, head down)
     bool FootIK = false;           // feet onto uneven ground (near the player: two rays and a leg solve a frame)
-    bool Prone = false;            // shot down: collapses (ProneDrop), then crawls on its belly (ProneCrawl); never gets up
-    int HurtLeg = -1;              // prone: the leg that was hit (0 left, 1 right) is dragged behind; -1 none
-    bool Dying = false;            // gut-shot, unarmed: clutches the wound (InjuredIdle), staggers forward (InjuredWalk) ...
-    bool Collapse = false;         // ... and, once this is set, goes down (InjuredDrop) to lie there (InjuredLying)
-    bool Pivot = false;            // prone, his hands at a wall: he hauls himself round on the spot, quicker than a crawl turns
-    glm::vec3 Steer{0.0f};         // prone: where the crawl wants to head (world, flat; zero: no turn). The capsule goes where the
-                                   // body points, so the body turns toward this rather than after the travel
 };
 
 class NpcBody {
@@ -125,54 +73,19 @@ public:
 
     void Tick(World& world, const NpcBodyInput& in, float dt);
     void SetHoldSettings(const NpcHoldSettings& s) { m_Set = s; }
-    // The drawn surfaces' lookup tables (shared by every soldier wearing a piece) built now, with the rest of a spawn's
-    // work, rather than on the first close look in the middle of a fight.
-    void WarmHoldTables(const World& world);
-    // `weaponCam` (optional): the weapon's camera with this frame's aim (its position is set later, by
-    // WeaponEye). Armed, the chest takes the arms rig's stance against it (its shoulder line).
-    void LateUpdate(World& world, float dt, const Camera* weaponCam = nullptr);
+    void LateUpdate(World& world, float dt);
 
-    // Holding the weapon - the player's world body's solve (FirstPersonBody::ArmsLateUpdate), for a soldier:
-    //
-    // WeaponEye, before the weapon places its rig: where the weapon's camera goes. Hung off the body's
-    // shoulders as the rig's camera is off the rig's (the player's shoulder lock), so the rig's hands land
-    // within the body's reach - not at the head bone with the whole rig dragged into the shoulder after.
-    glm::vec3 WeaponEye(const World& world, entt::entity armsRig, const std::string& cameraBone, const Camera& cam, float dt);
-    // HoldWeapon, after it: the gun (rig and weapon together) into the right shoulder pocket while
-    // shouldered and pushed clear of the neck, head and (unshouldered) torso - spheres, and with
-    // `meshChecks` the drawn surfaces; then every piece's arms onto the rig's hands (the rig's arm shapes,
-    // collarbone shrug, chest lean for a far hand, elbows in the rig's bend plane and swung clear of the
-    // torso, fingers); then the head onto the stock on the sights. Returns the gun's shift (world).
-    // `gun` null (holstered, no weapon): the arms go back to the clips' pose. With `thirdPersonRig` (the weapon's 3P clips'
-    // pose) the hands, fingers and elbows are its grip on the gun at `gunSocket` rather than the rig's.
-    glm::vec3 HoldWeapon(World& world, entt::entity armsRig, entt::entity weapon, const FirstPersonWorldGunInput* gun, const Camera& cam,
-                         float dt, bool meshChecks, const Model* thirdPersonRig = nullptr, const std::string& gunSocket = {});
-    NpcHoldReport MeasureHold(const World& world, entt::entity armsRig, const glm::vec3& butt, const glm::vec3& muzzle) const;
-    const NpcHoldReport& LastHold() const { return m_Hold; }
-    glm::vec3 GunShift() const { return m_GunShift; } // the gun off where the rig holds it (world)
     // Each foot's height above the capsule's feet as last posed (m; [0] left, [1] right), for the footsteps. False when
     // the driver has no foot bones.
     bool FootHeights(float (&out)[2]) const;
-    bool FootWorld(glm::vec3 (&out)[2]) const; // each final foot bone, world (after the foot passes)
+    bool FootWorld(glm::vec3 (&out)[2]) const; // each final foot bone, world (after the foot pass)
     bool Sprinting() const { return m_In.Sprint; } // this frame's gait (NpcBodyInput::Sprint)
-    // Wounded and going down (ProneDrop / InjuredDrop): how far the collapse's clip carried him last frame (world, m), which the
-    // capsule takes so he falls forward as captured rather than straight down on the spot.
-    glm::vec3 FallTravel() const { return m_FallTravel; }
 
     // A hit: the upper body flinches away along `dirWorld` (the round's travel).
     // `point` / `part` (a hitbox part, see NpcRagdoll) steer it by where the round struck; both optional.
     void Flinch(World& world, const glm::vec3& dirWorld, const glm::vec3* point = nullptr, int part = -1);
-    // A hand signal with an order: the support hand leaves the gun and points along `dirWorld` for `seconds`.
-    // 0..1: the support hand is off the gun (a reload, a gun check) - its elbow then follows the clips, not hung under the gun.
-    void SetFreeHand(float weight) { m_FreeHand = weight; }
-    void Signal(const glm::vec3& dirWorld, float seconds = 0.9f) { m_SignalDir = dirWorld; m_SignalLeft = seconds; }
-    void CancelSignal() { m_SignalLeft = 0.0f; }
-    bool Signalling() const { return m_SignalWeight > 0.05f; }
 
     float Yaw() const { return m_Yaw; }
-    // Where the chest faces (radians): the heading plus the spine's twist toward the aim or the look - what a gun carried at
-    // the hip points along.
-    float ChestYaw() const { return m_Yaw + m_AimTwist; }
     bool Turning() const { return m_Turning; }
     glm::vec3 Eye() const { return m_Eye; }               // world, after LateUpdate
     glm::vec3 Feet() const { return m_Feet; }
@@ -186,29 +99,12 @@ public:
     // The entity of every piece (for hit tests, the ragdoll).
     const std::vector<entt::entity>& Pieces() const { return m_Pieces; }
     entt::entity Driver() const { return m_Driver; }
-    // The driver's current state name and the animator's root speed, for the debug overlay.
+    // The driver's current state name, for the debug overlay.
     std::string StateName(const World& world) const;
     std::string AnimDebug(const World& world) const; // (tests) the base layer's crossfade stack and its last transition
     // The pose is the ragdoll's from now on: Tick / LateUpdate stop touching the pose.
     void SetPoseOwnedElsewhere(bool owned) { m_PoseExternal = owned; }
     bool PoseOwnedElsewhere() const { return m_PoseExternal; }
-    // Shot down by a leg and going down as a ragdoll (the wound fall): the collapse clip (ProneDrop) is not to play - his first
-    // prone Tick must not fire GoProne. False gives it back (the ragdoll could not start: the clip it is).
-    void SkipCollapseClip(bool skip) { m_WasProne = skip; }
-    // The wound fall is over and he lies on his belly: the body takes its pose back from the ragdoll. The root goes to `feet` facing
-    // `yaw` (radians), every piece's pose as the ragdoll left it is kept (re-rooted there), the animator starts in `state` (the
-    // prone idle), and every bone blends from the kept pose to the animated one (LateUpdate, last): over `blendTime` seconds, or
-    // longer for a limb that has further to go than it could at `limbSpeed` (m/s, its fastest; an arm flung out by the fall is drawn
-    // back in, it doesn't whip). Call with the pose still the ragdoll's (before it stops); takes the pose back (SetPoseOwnedElsewhere(false)).
-    bool BeginRecover(World& world, const glm::vec3& feet, float yaw, float blendTime, float limbSpeed, const char* state);
-    bool Recovering() const { return m_RecoverAge >= 0.0f; }
-    // The weapon leaves the hands (NpcDroppedWeapon): the hold's solve stops for good - the arms are the ragdoll's.
-    void ReleaseWeaponHold();
-    bool WeaponReleased() const { return m_WeaponReleased; }
-    // The gun's world velocity (m/s), from the position HoldWeapon was given each frame (smoothed over a few frames): a
-    // dropped gun leaves the hand at it. TrackGun is HoldWeapon's per-frame step, exposed for tests.
-    void TrackGun(const glm::vec3& position, float dt);
-    glm::vec3 GunVelocity() const { return m_GunVelocity; }
 
 private:
     glm::mat4 RootWorld() const;
@@ -219,89 +115,43 @@ private:
     std::vector<std::shared_ptr<Model>> m_Models;       // per piece (index-matched)
     std::shared_ptr<Model> m_DriverModel;
     bool m_PoseExternal = false;
-    bool m_WeaponReleased = false;                           // the gun has been let go (ReleaseWeaponHold)
-    glm::vec3 m_GunPrev{0.0f}, m_GunVelocity{0.0f};          // the gun's last position (world) and its smoothed velocity
-    bool m_HaveGunPrev = false;
 
     glm::vec3 m_Feet{0.0f};
     float m_Yaw = 0.0f;
     bool m_HaveYaw = false;
     glm::vec2 m_Move{0.0f};
     bool m_Turning = false;
-    float m_TurnTime = 0.0f;
-    float m_StillTime = 0.0f;
-    // Starts, stops, fidgets and the gait's rate trim (Tick).
-    float m_RateTrim = 1.0f, m_StartDistance = 0.0f, m_MoveFor = 0.0f, m_FidgetNext = 0.0f;
+    float m_RateTrim = 1.0f; // the gait loop's rate trim (Tick)
     // Orientation warp (FootPass): radians the legs are turned so the clips' travel runs along the capsule's; the spine
-    // turns back by as much, so the chest and the aim never see it. The two travels, smoothed over a stride, in the body's frame.
+    // turns back by as much. The two travels, smoothed over a stride, in the body's frame.
     float m_Warp = 0.0f;
     std::string m_LastState; // the animator's state last frame
     bool m_TurnFade = false; // a turn on the spot fading back to its loop (a start may cut in)
     glm::vec2 m_WarpClip{0.0f}, m_WarpCapsule{0.0f};
     glm::vec2 m_LastDir{0.0f, 1.0f};
-    Gameplay::BodyMotionFrame m_Loco{}; // standing: the player body's locomotion state (BodyLocomotion), kept frame to frame
+    Gameplay::BodyMotionFrame m_Loco{}; // the player body's locomotion state (BodyLocomotion), kept frame to frame
     float m_FallSpeed = 0.0f;           // m/s down at the last airborne frame: the next landing's impact
-    bool m_WasMoving = false, m_LastSprint = false;
     std::uint32_t m_Random = 0;
     float NextRandom() {
-        if (!m_Random) m_Random = (std::uint32_t)(reinterpret_cast<std::uintptr_t>(this) >> 4) | 1u; // each soldier its own
+        if (!m_Random) m_Random = (std::uint32_t)(reinterpret_cast<std::uintptr_t>(this) >> 4) | 1u; // each body its own
         m_Random ^= m_Random << 13; m_Random ^= m_Random >> 17; m_Random ^= m_Random << 5;
         return (float)(m_Random >> 8) / 16777216.0f;
     }
-    FirstPersonArmTwist m_ArmTwist;
-    bool m_WasCrouched = false;
-    // Aim, sprung: the spine's pitch and twist (radians) with their rates, and the lean (eased).
-    float m_AimPitch = 0.0f, m_AimTwist = 0.0f, m_Lean = 0.0f, m_AimWeight = 0.0f;
-    float m_AimPitchRate = 0.0f, m_AimTwistRate = 0.0f;
-    // The head's own look (radians, relative to the chest), sprung, and the cower (eased).
+    // The look: the chest's twist toward it, and the head's own turn past the chest (radians), sprung.
+    float m_LookTwist = 0.0f, m_LookTwistRate = 0.0f;
     float m_HeadYaw = 0.0f, m_HeadPitch = 0.0f, m_HeadYawRate = 0.0f, m_HeadPitchRate = 0.0f;
-    float m_Cower = 0.0f;
-    int m_DriverNeck = -1, m_DriverNeck2 = -1, m_DriverHead = -1;
-    float m_Straighten = 0.0f;   // radians the aiming torso is brought up from the clips' lean (eased)
+    int m_DriverNeck = -1, m_DriverHead = -1;
     NpcBodyInput m_In;
     glm::vec3 m_Eye{0.0f};
 
-    // The weapon hold (NpcWeaponHold.cpp).
     NpcHoldSettings m_Set;
-    void RotateSpine(const glm::quat& modelDelta); // spread down the driver's spine (SyncPieces passes it on)
-    // The pose passes (spine aim, shoulder line, arms onto the gun, cheek weld) solve on the driver alone; this
-    // gives every other piece that draws the upper body the driver's rotations and stabilized spine offsets (one skeleton: the pieces'
-    // own solves came out the same, at several times the cost). Called whenever a piece is read or drawn next.
+    // The pose passes solve on the driver alone; this gives every other piece that draws the upper body the driver's
+    // rotations and stabilized spine offsets (one skeleton).
     void SyncPieces();
     // `stepFor(divisor)` = the turn one spine bone takes (the whole turn / divisor); see IK::ChainDivisors.
     void OffsetSpine(const std::function<glm::quat(float)>& stepFor); // m_Pose / m_Globals already hold the driver's pose and its globals
     // Feet onto uneven ground (LateUpdate, first): the pelvis drops to the lower foot's ground, the legs reach theirs.
     void FootPass(float dt);
-    // Prone with a hurt leg (LateUpdate): that leg eased toward the bind pose's (straight, behind the prone body) and
-    // swung down onto the floor, the crawl clip's own bend in the other.
-    void DragLegPass(const World& world, float dt);
-    float m_Drag = 0.0f;         // 0..1, eased in once the crawl starts
-    float m_DragLag = 0.0f, m_DragLagRate = 0.0f; // the dragged leg trailing the body's turns (radians, sprung)
-    float m_DragPrevYaw = 0.0f;
-    bool m_WasProne = false, m_WasDying = false, m_WasCollapse = false;
-    // Wounded on the ground (prone or dying): the scripted states' own Tick (no turn clips, starts or stops of the standing
-    // locomotion; the clips' speed matched to the capsule's).
-    void TickWounded(AnimatorControllerComponent& ac, const NpcBodyInput& in, const glm::vec3& flat, float speed, float dt);
-    float m_Breath = 0.0f;       // seconds wounded (the breathing slows)
-    glm::vec3 m_FallTravel{0.0f}; // FallTravel()
-    float m_MoveHold = 0.0f;      // wounded: seconds the Moving flag stays on after the body last moved (no start-stop flicker)
-    float m_BreathPhase = 0.0f, m_BreathWeight = 0.0f; // lying gut-shot: the breathing (LateUpdate)
-    // The gun let go of while alive (shot down by a leg): the arms ease from the pose that held it to the clips' over a
-    // moment (LateUpdate) instead of snapping off it.
-    std::vector<LocalTRS> m_ReleasePose;
-    std::vector<int> m_ArmNodes; // the driver's clavicles and everything under them
-    float m_ReleaseBlend = 0.0f;
-    // Up off the ragdoll (BeginRecover): every piece's pose as the fall left it (in the new root's frame), blended out of on top of
-    // everything LateUpdate does - each region (the trunk and head, each arm from its collarbone, each leg from its hip) on its own
-    // time, timed on the first animated frame by how far its ends (head and pelvis, hand, foot) have to go.
-    enum { kRecoverTrunk, kRecoverArmL, kRecoverArmR, kRecoverLegL, kRecoverLegR, kRecoverGroups };
-    std::vector<std::vector<LocalTRS>> m_RecoverPose;
-    std::vector<std::vector<unsigned char>> m_RecoverGroup; // per piece, per node: its region
-    float m_RecoverAge = -1.0f;                             // seconds since BeginRecover (< 0: not recovering)
-    float m_RecoverTime = 0.5f, m_RecoverSpeed = 1.8f;
-    float m_RecoverGroupTime[kRecoverGroups] = {};
-    bool m_RecoverTimed = false;
-    void RecoverPass(float dt);
     void SyncLower(); // the driver's pelvis and legs onto every other piece
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
@@ -319,68 +169,20 @@ private:
     int m_DriverSpineSlot[5] = {0, 1, 2, 3, 4}; // the chain slot (spine_0N - 1) of each found bone, for the Spine distribution
     // Scratch.
     std::vector<glm::mat4> m_Globals;
-    std::vector<LocalTRS> m_Pose, m_BindScratch;
-    // What the hold reads every frame, looked up once per rig (by name, they cost a hash each): the rig's finger nodes and
-    // the driver's matching ones, the driver / rig node pairs for the arm shapes, and the driver's arm and chest bones.
-    struct FingerNode { int Node; int Hand; std::string Name; int Driver; };
-    std::vector<FingerNode> m_FingerList;
-    const Model* m_FingerRig = nullptr;
-    int m_FingerNodes = 0;
-    std::vector<FirstPersonArmShapeLink> m_ArmLinks;
-    struct ArmBones { int Upper[2] = {-1, -1}, Lower[2] = {-1, -1}, Hand[2] = {-1, -1}, Clav[2] = {-1, -1}, Chest = -1; };
-    ArmBones m_DriverArm;
-    std::vector<int> m_PieceParents; // scratch: a piece other than the driver's parents
-    enum class Region { Head, Torso };
-    struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[MAX_BONE_INFLUENCE]; float Weight[MAX_BONE_INFLUENCE]; };
-    struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
-    struct SkinTables { RegionSkin Head, Torso; };
-    // Per piece. The tables depend only on the mesh data, which every soldier wearing the piece shares: built once.
-    struct PieceSkin { const Model* M = nullptr; std::shared_ptr<const SkinTables> T; bool Built = false; };
-    mutable std::vector<PieceSkin> m_Skins;                 // per piece
-    // The drawn neck / head / hood, or pelvis / spine (a hoodie), skinned to world as posed now.
-    void SkinnedRegion(const World& world, Region region, std::vector<glm::vec3>& out) const;
-    std::vector<glm::vec3> m_HeadPoints, m_TorsoPoints, m_TorsoScratch;
-    int m_ArmsIndex = -1;
+    std::vector<LocalTRS> m_Pose;
     // Per piece: what of the skeleton it draws - anything the spine moves (kSkinsSpine), the arms (kSkinsArms), the
-    // neck and head (kSkinsNeck). A piece that draws none of what a pass moves is left out of it (legs, shoes):
-    // the driver always takes every pass (its bones are what is read back).
+    // neck and head (kSkinsNeck). A piece that draws none of what a pass moves is left out of it (legs, shoes).
     enum : unsigned { kSkinsSpine = 1u, kSkinsArms = 2u, kSkinsNeck = 4u };
     std::vector<unsigned> m_PieceSkins;
     bool PieceTakes(size_t k, unsigned what) const {
         return k >= m_PieceSkins.size() || m_Pieces[k] == m_Driver || (m_PieceSkins[k] & what) != 0u;
     }
-    int ArmsPiece() const;                                   // the "Arms" piece (index), else the driver's
-    glm::vec3 m_RigEyeToShoulders{0.0f};                     // the rig's shoulders off its camera (camera frame), slow
-    bool m_HaveRigOffset = false;
-    // The shoulders' midpoint (model space) as the clips have them (before LateUpdate's spine passes), and the eased
-    // copy the eye hangs off - the player's camera's (Head Bob of the motion about a slow average, Eye Slack at most).
-    glm::vec3 m_ShouldersAnimated{0.0f}, m_ShouldersSlow{0.0f}, m_Shoulders{0.0f};
-    bool m_HaveShouldersAnimated = false, m_HaveShoulders = false;
-    glm::vec3 m_RigShoulderLine{0.0f};                       // the rig's left-from-right upper arm (camera frame)
-    bool m_HaveRigLine = false;
-    glm::vec3 m_GunShift{0.0f};                              // eased
-    float m_ElbowClear[2] = {0.0f, 0.0f};                    // eased elbow swivels (radians)
-    glm::vec3 m_ElbowAim[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // where each elbow heads (camera frame), eased
-    bool m_HaveElbowAim[2] = {false, false};
-    float m_ArmsWeight = 0.0f;
-    float m_CheekWeld = 0.0f;
-    glm::vec3 m_SignalDir{0.0f};                              // world
-    float m_SignalLeft = 0.0f, m_SignalWeight = 0.0f;
-    float m_FreeHand = 0.0f;                                 // SetFreeHand
-    glm::vec3 m_HandTarget[2]{};                             // HoldWeapon's hand targets this frame (world): the grip the arms reach for
-    bool m_HaveHandTarget[2] = {false, false};
-    unsigned m_HoldFrame = 0;
-    int m_HoldStagger = 0;                                   // which of every three frames this one checks the mesh
-    glm::vec3 m_MeshPush{0.0f};                              // the gun's push out of the drawn head / torso, last checked
-    float m_ElbowWant[2] = {0.0f, 0.0f};                     // the elbows' clearing swivels, last checked
-    float m_WeldShare = 1.0f;                                // how much of the cheek weld clears the gun, last checked
-    NpcHoldReport m_Hold;
 };
 
 // --- the maths, exposed for tests ---------------------------------------------------------------
 // Heading (radians, model +Z) of a flat direction; `fallback` when it has no length.
 float NpcYawOf(const glm::vec3& dir, float fallback);
-// Where to put the spine's twist (radians, + = toward model +X): `offset` (aim heading minus body
+// Where to put the spine's twist (radians, + = toward model +X): `offset` (look heading minus body
 // heading, wrapped) clamped to +-maxTwist.
 float NpcSpineTwist(float offset, float maxTwist);
 // Whether a still body `offset` radians off where it should face turns on the spot.
