@@ -155,6 +155,7 @@ private:
     void SyncLower(); // the driver's pelvis and legs onto every other piece
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
+    int m_DriverBall[2] = {-1, -1}; // the ball of each foot (where the toes point)
     IK::FootSlide m_Slide;
     IK::FootLock m_Lock;
     float m_LockYaw = 0.0f; // last frame's heading (FootPass: how fast the body turns)

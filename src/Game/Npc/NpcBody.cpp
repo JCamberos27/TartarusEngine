@@ -34,7 +34,8 @@ void Spring(float& x, float& rate, float target, float omega, float zeta, float 
 
 glm::quat YawRotation(float yaw) { return glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)); }
 
-constexpr float kSlideTurnRate = 400.0f; // degrees a second: the feet sliding round behind a facing past the spine's twist
+constexpr float kSlideTurnRate = 200.0f; // degrees a second: the feet sliding round behind a facing past the spine's twist
+constexpr float kMoveTurnRate = 240.0f;  // degrees a second: the most the heading swings on the move outside a turn clip
 
 
 } // namespace
@@ -81,6 +82,10 @@ bool NpcBody::Start(World& world, entt::entity root) {
         ac.Driver = e == m_Driver ? entt::null : m_Driver;
         ac.CopyDriverPose = e != m_Driver; // one skeleton: sample the clips once, on the torso
         ac.RootMotion.Mode = (int)RootMotionMode::InPlace;
+        // Every piece takes the turn clips' yaw out of its pose as the torso does (Tick): a piece that samples the clips
+        // itself (the first-person arms: its rig doesn't rest as the torso's, so it can't copy it) otherwise keeps the
+        // clip's turn on top of the body's own and swings its arms off the torso through every turn.
+        ac.RootMotion.Rotation = true;
     }
     m_Root = root;
     // The body stands where its root was put (the spawn) until its first Tick says otherwise: a replacement spawned after the
@@ -121,6 +126,7 @@ bool NpcBody::Start(World& world, entt::entity root) {
             m_DriverLeg[s][0] = d.NodeIndex(FPBody::kBoneThigh[s]);
             m_DriverLeg[s][1] = d.NodeIndex(FPBody::kBoneCalf[s]);
             m_DriverLeg[s][2] = d.NodeIndex(FPBody::kBoneFoot[s]);
+            m_DriverBall[s] = d.NodeIndex(s == 0 ? "ball_l" : "ball_r");
         }
         std::vector<char> lower((size_t)d.NodeCount(), 0);
         if (m_DriverPelvis >= 0) lower[(size_t)m_DriverPelvis] = 1;
@@ -158,7 +164,10 @@ bool NpcBody::Start(World& world, entt::entity root) {
 }
 
 void NpcBody::Stop() {
+    // The tuning stays (SetHoldSettings comes before Start, which stops first): only the body's state starts over.
+    const NpcHoldSettings set = m_Set;
     *this = NpcBody{};
+    m_Set = set;
 }
 
 glm::mat4 NpcBody::RootWorld() const {
@@ -274,9 +283,11 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     {
         float yaw = f.Yaw;
         const float step = FirstPersonBodyWrapAngle(yaw - m_Yaw);
-        if (!f.Moving && !f.Turning) {
-            // Stood: never swung faster than the feet can slide round.
-            const float most = glm::radians(kSlideTurnRate) * dt;
+        // A turn clip (on the spot, or a turning start) swings the heading by its own yaw. Otherwise it is never swung faster
+        // than the feet can slide round (stood) or a walker turns (moving): moving off toward a goal behind, the locomotion's
+        // lag clamp would whip it most of the way round in one frame before the turning start took over.
+        if (!f.Turning && !f.IsStartTurn) {
+            const float most = glm::radians(f.Moving ? kMoveTurnRate : kSlideTurnRate) * dt;
             yaw = m_Yaw + std::clamp(step, -most, most);
         }
         m_Yaw = FirstPersonBodyWrapAngle(yaw);
@@ -465,7 +476,19 @@ void NpcBody::FootPass(float dt) {
     IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f, pelvisDelta, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
     for (int s = 0; s < 2; ++s) {
         const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
-        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f) + toModel3 * shift[s] * w;
+        glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f) + toModel3 * shift[s] * w;
+        // Never past the leg's reach: a held foot the hips have walked on from (the clip's own leg already near straight)
+        // asks for more leg than there is, and the knee solve snaps the shin through it - a twitch. Held at the reach (or the
+        // clip's own stretch, if that is longer), the foot gives a little instead.
+        {
+            const glm::vec3 hip = IK::Position(m_Globals[(size_t)thigh]);
+            const float leg = glm::length(IK::Position(m_Globals[(size_t)calf]) - hip) +
+                              glm::length(IK::Position(m_Globals[(size_t)foot]) - IK::Position(m_Globals[(size_t)calf]));
+            const float most = std::max(0.98f * leg, glm::length(IK::Position(m_Globals[(size_t)foot]) - hip));
+            const glm::vec3 d = target - hip;
+            const float len = glm::length(d);
+            if (len > most && len > 1e-5f) target = hip + d * (most / len);
+        }
         // A planted foot lies on its slope; one swinging through the air keeps the clip's angle.
         const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
         const glm::vec3 normal = toModel3 * m_FootNormal[s];
@@ -473,7 +496,26 @@ void NpcBody::FootPass(float dt) {
         glm::quat footRot = IK::Rotation(m_Globals[(size_t)foot]);
         const glm::vec3 axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), normal);
         if (angle > 1e-4f && glm::dot(axis, axis) > 1e-8f) footRot = glm::angleAxis(angle, glm::normalize(axis)) * footRot;
-        IK::SolveTwoBone(pose, m_DriverParents, m_Globals, thigh, calf, foot, target, &footRot, 1.0f);
+        // A leg the clip has (nearly) straight has no bend plane of its own: bent by the solve, its knee would go whichever
+        // way that frame's rounding said - forward one frame, sideways the next (a twitch). Near straight, it bends toward
+        // the toes.
+        IK::TwoBoneHint hint;
+        {
+            const glm::vec3 hip = IK::Position(m_Globals[(size_t)thigh]), knee = IK::Position(m_Globals[(size_t)calf]),
+                            ankle = IK::Position(m_Globals[(size_t)foot]);
+            const float leg = glm::length(knee - hip) + glm::length(ankle - knee);
+            const float straight = leg > 1e-4f ? glm::length(ankle - hip) / leg : 0.0f;
+            const float u = std::clamp((straight - 0.97f) / 0.025f, 0.0f, 1.0f);
+            glm::vec3 toes(0.0f, 0.0f, 1.0f); // the model faces +Z
+            if (m_DriverBall[s] >= 0) {
+                const glm::vec3 d = IK::Position(m_Globals[(size_t)m_DriverBall[s]]) - ankle;
+                if (d.x * d.x + d.z * d.z > 1e-6f) toes = glm::normalize(glm::vec3(d.x, 0.0f, d.z));
+            }
+            // (The knee out toward the toes: cross(hip->ankle, hip->knee) for a knee bulging that way.)
+            hint.BendAxis = glm::cross(ankle - hip, toes);
+            hint.BendAxisWeight = u * u * (3.0f - 2.0f * u);
+        }
+        IK::SolveTwoBone(pose, m_DriverParents, m_Globals, thigh, calf, foot, target, &footRot, 1.0f, 0.0f, &hint);
     }
     m.ApplyLocalPose(pose);
     SyncLower();
@@ -556,7 +598,11 @@ void NpcBody::LateUpdate(World& world, float dt) {
             }
         }
     }
-    if (m_PiecesStale) SyncPieces();
+    // Every frame, not only after a pass of ours moved the driver: a piece whose rig doesn't rest as the torso's (the
+    // first-person arms, under an extra Armature node) can't copy the torso's pose and samples the clips on its own, and
+    // that drifts off the torso (its shoulders 30-40 cm out on the move). The torso's pose is the one skeleton.
+    SyncLower();
+    SyncPieces();
     glm::mat4 head(1.0f);
     m_Eye = m_DriverModel->NodeTransform("head", head) ? glm::vec3(rootW * head[3]) : m_Feet + glm::vec3(0.0f, 1.62f, 0.0f);
 }

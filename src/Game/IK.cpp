@@ -205,6 +205,17 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
     // The bend plane is the one the pose already has; a dead-straight limb picks any.
     glm::vec3 axis = glm::cross(ac, b - a);
     axis = glm::length(axis) > 1e-8f ? glm::normalize(axis) : Perpendicular(glm::normalize(ac));
+    if (hint && hint->BendAxisWeight > 0.0f) {
+        // Kept square to the limb (a bend about anything else isn't a bend), then turned toward from the pose's own, on
+        // the same side (a near-straight pose's side is as much noise as its plane).
+        glm::vec3 want = hint->BendAxis - glm::normalize(ac) * glm::dot(hint->BendAxis, glm::normalize(ac));
+        if (glm::length(want) > 1e-6f) {
+            want = glm::normalize(want);
+            const glm::vec3 own = glm::dot(axis, want) < 0.0f ? -axis : axis;
+            const glm::vec3 mixed = glm::mix(own, want, std::clamp(hint->BendAxisWeight, 0.0f, 1.0f));
+            if (glm::length(mixed) > 1e-6f) axis = glm::normalize(mixed);
+        }
+    }
 
     const glm::quat ga = Rotation(globals[upper]);
     const glm::quat gb = Rotation(globals[lower]);

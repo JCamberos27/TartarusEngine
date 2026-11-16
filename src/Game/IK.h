@@ -83,6 +83,11 @@ struct TwoBoneHint {
     glm::vec3 HintOffset{0.0f};
     // The longest the limb may stretch toward an out-of-reach target, x its authored length. 1 = no stretch.
     float MaxLimbScale = 1.0f;
+    // Model-space bend axis (the way cross(root->end, root->mid) turns for a correctly bent limb) taken in place of the
+    // pose's own by BendAxisWeight: near straight the pose's bend plane is rounding noise, and a knee bent out of a straight
+    // leg would go a different way each frame. 0 = the pose's own.
+    glm::vec3 BendAxis{0.0f};
+    float BendAxisWeight = 0.0f;
 };
 bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,
                   int upper, int lower, int end, const glm::vec3& targetPos, const glm::quat* targetRot,
