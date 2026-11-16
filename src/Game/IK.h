@@ -155,32 +155,46 @@ std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& mo
 // A planted foot stays where it landed in the world, whatever the clips and the capsule disagree on (a blend's stride
 // against the capsule's speed, a body turning on the spot, a start or stop's travel, a crossfade between two gaits).
 // A foot plants when it is down - within Height of its own lowest point - and its animated foot barely moves over the
-// ground (under Speed m/s: a swinging foot passing low never plants). It lets go when it lifts, and the lag it built up is
-// eased out over Release seconds (smoothstep), so the foot catches up through its swing instead of popping. When the
-// animation wanders MaxDrift metres from a foot that is still down (a turn on the spot ending part way through a step,
-// a stance that changes under a planted foot), the foot steps there: it lifts in an arc (StepHeight a metre of the way,
-// at most StepMax) while it catches up, and plants again only once it has. The player's body and the soldiers alike.
+// ground (under Speed m/s: a swinging foot passing low never plants). That speed leaves the body's own turn out: it is the
+// root's travel plus the foot's move in the body (the clip's), so a foot the clip holds still plants however fast the body
+// is swung round (its world speed is the turn rate times its distance from the root - 4 m/s at 600 degrees a second).
+// It lets go when it lifts, and the lag it built up is eased out over Release seconds (smoothstep), so the foot catches up
+// through its swing instead of popping. When holding it would take more than Reach of the leg (Overreach: the hips have
+// walked or climbed on from it), or - a safety - the animation wanders MaxDrift metres from it while it is still down, the
+// foot steps there: it lifts in an arc (StepHeight a metre of the way, at most StepMax) while it catches up, and plants
+// again only once it has. The player's body and the soldiers alike.
 struct FootLockSettings {
     bool Enabled = true;
     float Height = 0.02f;   // m over the foot's own lowest height that still counts as down
     float Lift = 0.045f;    // m over it that lets go (the heel rolling up onto the toe stays planted under this)
-    float Speed = 2.0f;     // m/s the animated foot may move over the ground and still plant
-    float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go
+    float Speed = 2.0f;     // m/s the animated foot may move over the ground (the body's turn left out) and still plant
+    float Reach = 0.98f;    // x the leg's length (hip to held foot) past which a planted foot lets go and steps
+    float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go (a safety: Reach goes first)
     float Release = 0.2f;   // s a released foot takes to catch up with the animation
     float StepHeight = 0.3f; // a let-go foot that was still down lifts this much per metre it has to go...
     float StepMax = 0.08f;   // ... at most this (m)
 };
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& body);
-// The lock for a body turning `yawRate` radians a second: past 90 degrees a second the leash shortens (to 10 cm by 270), so
-// the feet take quick small pivot steps as the hips come round instead of being held until the legs splay and twist.
-FootLockSettings FootLockTurning(FootLockSettings set, float yawRate);
+// The leg's goal never asks for more than `most` x `length` from `root` (a two-bone chain asked past its reach snaps
+// straight and its knee flips through): up to `knee` x length it is left alone; past that it is drawn in along the
+// root->target line, easing (continuous, no corner) toward `most` without ever reaching it. The player's legs and the
+// soldiers' alike.
+glm::vec3 ClampReach(const glm::vec3& root, const glm::vec3& target, float length, float knee = 0.98f, float most = 0.995f);
 class FootLock {
 public:
     void Reset() { *this = FootLock{}; }
     void ResetFoot(int s) { m_Foot[s] = Foot{}; }
-    // One foot, one frame. `anim`: the animated foot (world). `height`: its height over the capsule's ground (m). Returns
-    // the world offset that puts the foot where it should be drawn: horizontal, plus a step's lift (zero for a free foot).
-    glm::vec3 Step(int s, const FootLockSettings& set, const glm::vec3& anim, float height, float dt);
+    // One foot, one frame. The animated foot is `root` + `facing` * `local`: `root` the body's root on the ground (world),
+    // `facing` its heading, `local` the clip's foot relative to it (the model's space, scaled to metres). `height`: the
+    // foot's height over the capsule's ground (m). Returns the world offset that puts the foot where it should be drawn:
+    // horizontal, plus a step's lift (zero for a free foot).
+    glm::vec3 Step(int s, const FootLockSettings& set, const glm::vec3& root, const glm::quat& facing, const glm::vec3& local,
+                   float height, float dt);
+    // After Step, once the leg's goal is known: `reach` is the hip-to-goal distance with the foot held, `own` without
+    // (the clip's own), both x the leg's length, the hip where it stands after the pelvis has dropped. Past Reach - and
+    // past what the clip itself asks, so a leg the clip has near straight is not let go for nothing - a planted foot lets
+    // go and steps (its lag eased out from the next Step). Returns whether it let go.
+    bool Overreach(int s, const FootLockSettings& set, float reach, float own);
     bool Locked(int s) const { return m_Foot[s].Locked; }
     glm::vec3 Pinned(int s) const { return m_Foot[s].Pin; }
     float LockedTime(int s) const { return m_Foot[s].Time; }
@@ -188,7 +202,10 @@ public:
 private:
     struct Foot {
         bool Have = false, Locked = false;
-        glm::vec3 Prev{0.0f};      // last frame's animated foot
+        glm::vec3 Prev{0.0f};      // last frame's animated foot (world)
+        glm::vec3 PrevRoot{0.0f};  // ... its body's root
+        glm::quat PrevFacing{1.0f, 0.0f, 0.0f, 0.0f}; // ... and heading
+        glm::vec3 PrevLocal{0.0f}; // ... and the foot in the body
         float Floor = 0.0f;        // its lowest height (creeping up)
         glm::vec3 Pin{0.0f};       // where a locked foot is held
         glm::vec3 Offset{0.0f};    // what is applied (horizontal)
@@ -197,6 +214,7 @@ private:
         float Time = 0.0f;         // seconds locked
         float Lift = 0.0f;         // a step's arc height (m; 0 = the foot lifted on its own)
     };
+    static void LetGo(Foot& f, const FootLockSettings& set, bool step);
     Foot m_Foot[2];
 };
 

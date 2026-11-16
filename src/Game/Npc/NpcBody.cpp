@@ -1,6 +1,7 @@
 #include "NpcBody.h"
 
 #include "AnimatorController.h"      // AnimatorCrossfadeWeight
+#include "BodyLocomotion.h"          // BodyLocomotion::LoopPlayRate
 #include "Components.h"
 #include "FirstPersonBody.h"         // FirstPersonBodyWrapAngle / Follow / FootPelvis
 #include "FirstPersonBodyContract.h" // FPBody:: parameter, state and bone names
@@ -322,18 +323,12 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
         ac.SetFloat(FPBody::kStepY, f.StepDir.y);
     }
     if (f.Triggers & Gameplay::kBodyFidget) ac.SetFloat(FPBody::kFidgetIndex, f.FidgetIndex);
-    // The gait loop at the rate its clips travel at the capsule's speed (a blend's shared cycle runs a walk slow), as the
-    // player body's. The clips' travel is over the time their motion covers (several frames' after an LOD hold), and a held
-    // frame (no motion) leaves the trim as it was.
-    if (rmDt > 1e-5f) {
-        const bool loop = !ac.InTransition && (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco));
-        const float travel = glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z)) / rmDt;
-        m_ClipTravel = travel;
-        float trim = 1.0f;
-        if (loop && travel > 0.3f && speed > 0.3f) trim = std::clamp(m_RateTrim * speed / travel, 0.8f, 1.5f);
-        m_RateTrim += (trim - m_RateTrim) * Follow(rmDt, 0.15f);
-    }
-    ac.SetFloat(FPBody::kPlayRate, f.PlayRate * m_RateTrim);
+    // The gait loop's rate, as the player body's: the capsule's speed over what the loop's clips travel at this frame's blend
+    // (MoveX / MoveY set first), open loop - nothing read back from the animator, so an LOD-held frame changes nothing.
+    ac.SetFloat(FPBody::kMoveX, f.Move.x);
+    ac.SetFloat(FPBody::kMoveY, f.Move.y);
+    ac.SetFloat(FPBody::kPlayRate, BodyLocomotion::LoopPlayRate(speed, FirstPersonBodyLoopTravel(world, m_Driver, FPBody::kStateLocomotion),
+                                                                f.Responsiveness, f.MaxPlayRate));
     // Orientation warp: a start, stop or gait blend whose clips travel off the way the capsule goes (a back-pedal start
     // whose root drifts right while the path bends left, the blend between two cardinal strafes) skates the feet sideways.
     // The legs are turned onto the capsule's travel (at most kWarpMax) and the spine turned back (FootPass). Not in a turn
@@ -391,7 +386,6 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     if (m_FootWeight < 1e-3f || !rigged) {
         m_HaveFootGround = false;
         m_Lock.Reset();
-        m_LockYaw = m_Yaw; // (the turn rate read when the feet come back is a frame's, not the whole time they were off)
         if (kick) { // no foot pass (far off, out of view): the kick goes on as it is
             pose = m.AppliedLocalPose();
             if ((int)pose.size() == m.NodeCount()) {
@@ -446,14 +440,10 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     // Foot lock: a planted foot held where it landed in the world, as the player body's (IK::FootLock).
     glm::vec3 shift[2];
     bool held = false;
-    const float yawRate = dt > 1e-5f ? FirstPersonBodyWrapAngle(m_Yaw - m_LockYaw) / dt : 0.0f;
-    m_LockYaw = m_Yaw;
-    // (Swinging round on the move only: a turn on the spot's clip steps its own feet.)
-    const bool travelling = !m_Turning && glm::length(glm::vec2(m_In.Velocity.x, m_In.Velocity.z)) > 0.3f;
-    const IK::FootLockSettings lockSet = IK::FootLockTurning(m_Set.FootLock, travelling ? yawRate : 0.0f);
+    const glm::quat facing = YawRotation(m_Yaw); // (rootW's turn)
     for (int s = 0; s < 2; ++s) {
         const glm::vec3 anim = glm::vec3(rootW * glm::vec4(animFoot(s), 1.0f));
-        shift[s] = m_Lock.Step(s, lockSet, anim, anim.y - m_Feet.y, dt);
+        shift[s] = m_Lock.Step(s, m_Set.FootLock, m_Feet, facing, animFoot(s), anim.y - m_Feet.y, dt);
         held = held || glm::dot(shift[s], shift[s]) > 1e-8f;
     }
     for (int s = 0; s < 2; ++s) {
@@ -486,19 +476,19 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f, pelvisDelta, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
     for (int s = 0; s < 2; ++s) {
         const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
-        glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) - kickFoot[s] * w + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f) +
-                           toModel3 * shift[s] * w;
-        // Never past the leg's reach: a held foot the hips have walked on from (the clip's own leg already near straight)
-        // asks for more leg than there is, and the knee solve snaps the shin through it - a twitch. Held at the reach (or the
-        // clip's own stretch, if that is longer), the foot gives a little instead.
+        const glm::vec3 own = IK::Position(m_Globals[(size_t)foot]) - kickFoot[s] * w + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f);
+        glm::vec3 target = own + toModel3 * shift[s] * w;
+        // A held foot the hips have walked on from lets go and steps once its leg would need more than the lock's Reach
+        // (IK::FootLock::Overreach; the hip as the pelvis now stands); and the leg is never asked for more than it has
+        // (IK::ClampReach, as the player's): this frame's goal gives a little toward the hip instead of the knee snapping straight.
         {
             const glm::vec3 hip = IK::Position(m_Globals[(size_t)thigh]);
             const float leg = glm::length(IK::Position(m_Globals[(size_t)calf]) - hip) +
                               glm::length(IK::Position(m_Globals[(size_t)foot]) - IK::Position(m_Globals[(size_t)calf]));
-            const float most = std::max(0.98f * leg, glm::length(IK::Position(m_Globals[(size_t)foot]) - hip));
-            const glm::vec3 d = target - hip;
-            const float len = glm::length(d);
-            if (len > most && len > 1e-5f) target = hip + d * (most / len);
+            if (leg > 1e-5f) {
+                m_Lock.Overreach(s, m_Set.FootLock, glm::length(target - hip) / leg, glm::length(own - hip) / leg);
+                target = IK::ClampReach(hip, target, leg);
+            }
         }
         // A planted foot lies on its slope; one swinging through the air keeps the clip's angle.
         const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);

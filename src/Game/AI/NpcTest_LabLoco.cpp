@@ -103,10 +103,10 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
     if (L.Place && into >= L.Seconds - 0.3f && (legBefore != leg || intoBefore < L.Seconds - 0.3f)) place(L.At);
 
     // The trace: what the eye and the gun do, frame by frame.
-    if (!g_Trace && !RecordDir().empty()) {
+    if (!g_Trace && !TraceDir().empty()) {
         std::error_code ec;
-        std::filesystem::create_directories(RecordDir(), ec);
-        if (fopen_s(&g_Trace, (std::filesystem::path(RecordDir()) / "trace.csv").string().c_str(), "w") != 0) g_Trace = nullptr;
+        std::filesystem::create_directories(TraceDir(), ec);
+        if (fopen_s(&g_Trace, (std::filesystem::path(TraceDir()) / "trace.csv").string().c_str(), "w") != 0) g_Trace = nullptr;
         if (g_Trace)
             std::fprintf(g_Trace, "frame,t,leg,speed,gait_ok,gait,eye_y,cam_off_y,cam_roll,gun_x,gun_y,gun_z,gun_pitch,gun_yaw,gun_roll,"
                                   "muzzle_x,muzzle_y,muzzle_z,eye_x,eye_y2,eye_z,hand_gap_l,hand_gap_r,state\n");

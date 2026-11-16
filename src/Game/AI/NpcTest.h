@@ -76,6 +76,8 @@ public:
     const std::string& ShotName() const { return m_Shot; }
     // NPC_TEST_RECORD=<dir>: every other frame of both views goes there as JPEGs (for a video).
     const std::string& RecordDir() const { return m_RecordDir; }
+    // Where a scenario's trace.csv goes: NPC_TEST_TRACE=<dir> (the trace alone, no frames - fast), else NPC_TEST_RECORD's.
+    const std::string& TraceDir() const { return m_TraceDir; }
     int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
@@ -288,7 +290,7 @@ private:
     glm::vec3 m_CamPos{0.0f};
     float m_CamYaw = 0.0f, m_CamPitch = 0.0f;
     bool m_HaveCam = false;
-    std::string m_RecordDir;
+    std::string m_RecordDir, m_TraceDir;
     bool m_Firing = false;
     float m_FireHold = 0.0f;
     float m_AimErr = -1.0f;

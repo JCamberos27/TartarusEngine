@@ -515,30 +515,37 @@ FootSlideMeter& FootSlideMeterFor(const std::string& who) {
     return meters[who];
 }
 
-glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& anim, float height, float dt) {
+void FootLock::LetGo(Foot& f, const FootLockSettings& set, bool step) {
+    f.Locked = false;
+    f.ReleaseFrom = glm::vec3(f.Offset.x, 0.0f, f.Offset.z);
+    f.ReleaseTime = 0.0f;
+    f.Lift = step ? std::min(set.StepHeight * glm::length(f.ReleaseFrom), set.StepMax) : 0.0f;
+}
+
+glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& root, const glm::quat& facing, const glm::vec3& local,
+                         float height, float dt) {
     Foot& f = m_Foot[s];
     if (dt <= 1e-5f) return f.Offset;
-    const glm::vec2 moved(anim.x - f.Prev.x, anim.z - f.Prev.z);
-    if (f.Have && glm::dot(moved, moved) > 1.0f) f = Foot{}; // a teleport: start over
+    const glm::vec3 anim = root + facing * local;
+    if (f.Have && glm::length(glm::vec2(anim.x - f.Prev.x, anim.z - f.Prev.z)) > 1.0f) f = Foot{}; // a teleport: start over
     const bool seen = f.Have;
-    const float speed = f.Have ? glm::length(moved) / dt : 0.0f;
-    f.Floor = f.Have ? std::min(f.Floor + 0.01f * dt, height) : height;
+    // How fast the animated foot moves over the ground, the body's own turn left out: the root's travel, plus the foot's
+    // move in the body at last frame's heading. A foot the clip holds still reads the capsule's travel against the clip's
+    // (about nothing) however fast the body swings round; a swinging foot reads its swing.
+    const glm::vec3 moved = (root - f.PrevRoot) + f.PrevFacing * (local - f.PrevLocal);
+    const float speed = seen ? glm::length(glm::vec2(moved.x, moved.z)) / dt : 0.0f;
+    f.Floor = seen ? std::min(f.Floor + 0.01f * dt, height) : height;
     const float up = height - f.Floor;
     f.Prev = anim;
+    f.PrevRoot = root;
+    f.PrevFacing = facing;
+    f.PrevLocal = local;
     f.Have = true;
-    const auto letGo = [&](bool step) {
-        f.Locked = false;
-        f.ReleaseFrom = glm::vec3(f.Offset.x, 0.0f, f.Offset.z);
-        f.ReleaseTime = 0.0f;
-        f.Lift = step ? std::min(set.StepHeight * glm::length(f.ReleaseFrom), set.StepMax) : 0.0f;
-    };
     const bool stepping = f.Lift > 0.0f && f.ReleaseTime < set.Release; // a step plants again only once it is over
     if (!set.Enabled) {
-        if (f.Locked) letGo(false);
+        if (f.Locked) LetGo(f, set, false);
     } else if (!f.Locked) {
-        // (Flat on the floor it plants however fast its animation moves: a body swinging round fast carries a planted foot
-        // round faster than Speed, and a swinging foot never gets this low.)
-        if (seen && !stepping && up < set.Height && (speed < set.Speed || up < 0.008f)) { // (a first frame has no speed yet)
+        if (seen && !stepping && up < set.Height && speed < set.Speed) { // (a first frame has no speed yet)
             // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
             f.Locked = true;
             f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
@@ -546,8 +553,8 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
         }
     } else {
         const float drift = glm::length(glm::vec2(f.Pin.x - anim.x, f.Pin.z - anim.z));
-        if (up > set.Lift) letGo(false);
-        else if (drift > set.MaxDrift) letGo(true);
+        if (up > set.Lift) LetGo(f, set, false);
+        else if (drift > set.MaxDrift) LetGo(f, set, true);
     }
     if (f.Locked) {
         f.Time += dt;
@@ -562,10 +569,23 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
     return f.Offset;
 }
 
-FootLockSettings FootLockTurning(FootLockSettings set, float yawRate) {
-    const float k = std::clamp((std::abs(yawRate) - glm::radians(90.0f)) / glm::radians(180.0f), 0.0f, 1.0f);
-    set.MaxDrift += (std::min(set.MaxDrift, 0.1f) - set.MaxDrift) * k;
-    return set;
+bool FootLock::Overreach(int s, const FootLockSettings& set, float reach, float own) {
+    Foot& f = m_Foot[s];
+    // (A hundredth over the clip's own: a held foot that has not moved off its animation is not what stretches the leg.)
+    if (!f.Locked || reach <= std::max(set.Reach, own + 0.01f)) return false;
+    LetGo(f, set, true);
+    return true;
+}
+
+glm::vec3 ClampReach(const glm::vec3& root, const glm::vec3& target, float length, float knee, float most) {
+    const glm::vec3 d = target - root;
+    const float len = glm::length(d);
+    const float from = knee * length;
+    if (length <= 1e-5f || len <= from || len <= 1e-6f) return target;
+    // Past `knee` the reach follows from + room * (1 - e^-(over / room)): slope 1 where it starts, flattening onto from + room.
+    const float room = std::max((most - knee) * length, 0.0f);
+    const float r = room > 1e-6f ? from + room * (1.0f - std::exp(-(len - from) / room)) : from;
+    return root + d * (r / len);
 }
 
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& b) {

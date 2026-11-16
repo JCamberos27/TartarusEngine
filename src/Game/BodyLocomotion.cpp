@@ -48,6 +48,14 @@ float DistanceToTurn(float v, float target, float tau) {
     return std::max(0.0f, v * tau - target * tau * std::log(1 + v / target));
 }
 
+float LoopPlayRate(float capsuleSpeed, float loopTravel, float responsiveness, float maxRate) {
+    constexpr float MinTravel = .05f, Fade = .3f, MinRate = .5f; // m/s, m/s, x authored
+    if (!(loopTravel > MinTravel) || !(capsuleSpeed > 0)) return 1;
+    const float rate = std::clamp(capsuleSpeed / loopTravel, MinRate, std::max(maxRate, 1.0f));
+    const float fade = std::min(std::min(capsuleSpeed, loopTravel) / Fade, 1.0f);
+    return 1 + (rate - 1) * fade * std::clamp(responsiveness, 0.0f, 1.0f);
+}
+
 void Update(BodyMotionFrame& f) {
     f.Triggers = 0; f.SetTurnAngle = 0; f.StartOff = 0;
     const glm::vec3 velocity = V(f.Velocity), wishVelocity = V(f.WishVelocity);
@@ -63,9 +71,7 @@ void Update(BodyMotionFrame& f) {
     }
     const glm::vec3 a = AsClip(wishVelocity, f), b = AsClip(moving, f);
     const glm::vec3 target = a + (b - a) * responsiveness;
-    const float clip = ClipSpeed(movingSpeed, f);
-    f.PlayRate = clip > .05f ? 1 + (std::clamp(movingSpeed / clip, 1.0f, std::max(f.MaxPlayRate, 1.0f)) - 1) *
-                                   std::min(clip / .5f, 1.0f) * (sprint ? 1 : responsiveness) : 1;
+    // (The gait loop's PlayRate is LoopPlayRate's: the body works it out from the loop's own clips.)
     f.SprintRate = f.SprintClip > .1f ? std::clamp(movingSpeed / f.SprintClip, .8f, 1.5f) : 1;
     const bool hold = f.StartStopClips && glm::length(target) < .01f && f.IdleTime < f.StopDebounce &&
                       glm::length(move) > (f.Crouched ? f.StopMinSpeedCrouched : f.StopMinSpeed);

@@ -730,8 +730,6 @@ void RegisterEngineComponents() {
               "frame: X right, Y up, Z forward, metres) so the chest and collar stay out of view. The gun doesn't move on\n"
               "screen; the body sits lower under it, and the hands reach further. Too much and a hand comes off the gun.\n"
               "Applies near level; it eases out looking up or down (gone by 60 degrees), where it isn't needed." },
-            { "Camera Smoothing", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraSmoothing), 0.005f,
-              "Seconds of smoothing on the head's motion (in the body's frame, so it never lags behind).", 0.0f, 0.5f },
             { "Hidden Parts", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HiddenParts), 0.0f,
               "Body pieces that cast a shadow but aren't drawn in first person, comma separated: a child\n"
               "is hidden when its name contains one of these. The camera sits in the head." },
@@ -943,10 +941,10 @@ void RegisterEngineComponents() {
               "... and lets go once it rises this far (metres) over it (the heel rolling up onto the toe stays planted under this).", 0.0f, 0.3f });
         m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Foot Lock Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockSpeed), 0.05f,
-              "A foot only plants while its animation moves over the ground slower than this (m/s): a swinging foot passing low never does.", 0.0f, 5.0f });
+              "A foot only plants while its animation moves over the ground slower than this (m/s) - the body's own turn left out, so a foot the clip holds still plants however fast the body swings round: a swinging foot passing low never does.", 0.0f, 5.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Foot Lock Drift", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockDrift), 0.005f,
-              "A planted foot lets go when the animation has wandered this far (metres) from it; it then catches up over Foot Lock Release.", 0.01f, 1.0f });
+              "A planted foot lets go and steps once its leg would need more than 98% of its length to stay on it, or - a safety - when the animation has wandered this far (metres) from it; it then catches up over Foot Lock Release.", 0.01f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Foot Lock Release", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockRelease), 0.005f,
               "Seconds a let-go foot takes to catch up with its animation (eased, so it never pops).", 0.005f, 1.0f });
@@ -1028,7 +1026,7 @@ void RegisterEngineComponents() {
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
-                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Camera Smoothing", "Camera"},
+                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"},
                 {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"}, {"Grip Inset", "Arms"}, {"Finger Curl Extra", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},

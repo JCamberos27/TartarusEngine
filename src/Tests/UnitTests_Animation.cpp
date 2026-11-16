@@ -616,6 +616,13 @@ void TestControllerClipFilesForPrefetch() {
 
 } // namespace
 
+namespace {
+// One foot on a body standing still at the origin, facing +Z: the foot in the body is the foot in the world.
+glm::vec3 StepStill(IK::FootLock& lock, const IK::FootLockSettings& set, const glm::vec3& anim, float height, float dt) {
+    return lock.Step(0, set, glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), anim, height, dt);
+}
+} // namespace
+
 void TestFootLockHoldsAndReleases() {
     // A planted foot whose animation creeps 0.3 m/s over the ground (a stride shorter than the capsule's travel) is held
     // where it landed; lifted, it catches up smoothly - no frame jumps more than its swing would.
@@ -623,11 +630,11 @@ void TestFootLockHoldsAndReleases() {
     IK::FootLock lock;
     const float dt = 1.0f / 60.0f;
     glm::vec3 anim(0.0f, 0.08f, 0.0f), first(0.0f);
-    lock.Step(0, set, anim, anim.y, dt); // first sight: no speed yet, nothing planted
+    StepStill(lock, set, anim, anim.y, dt); // first sight: no speed yet, nothing planted
     CHECK(!lock.Locked(0));
     for (int i = 0; i < 30; ++i) {
         anim.z += 0.3f * dt;
-        const glm::vec3 drawn = anim + lock.Step(0, set, anim, anim.y, dt);
+        const glm::vec3 drawn = anim + StepStill(lock, set, anim, anim.y, dt);
         if (i == 0) first = drawn;
         CHECK(lock.Locked(0));
         CHECK(glm::length(glm::vec2(drawn.x - first.x, drawn.z - first.z)) < 1e-4f);
@@ -637,7 +644,7 @@ void TestFootLockHoldsAndReleases() {
     for (int i = 0; i < 30; ++i) { // lifted
         anim.y += i == 0 ? 0.05f : 0.01f; // off the ground past Lift
         anim.z += 0.3f * dt;
-        const glm::vec3 drawn = anim + lock.Step(0, set, anim, anim.y, dt);
+        const glm::vec3 drawn = anim + StepStill(lock, set, anim, anim.y, dt);
         CHECK(!lock.Locked(0));
         const float gap = glm::length(lock.Offset(0));
         CHECK(gap <= lastGap + 1e-6f);                // only ever closes
@@ -654,21 +661,21 @@ void TestFootLockIgnoresSwingAndLetsGoOnDrift() {
     { // a swinging foot passing low (1.2 cm over where it plants: within Height, off the floor), fast, never plants
         IK::FootLock lock;
         glm::vec3 anim(0.0f, 0.08f, 0.0f);
-        lock.Step(0, set, anim, 0.08f, dt);
+        StepStill(lock, set, anim, 0.08f, dt);
         anim.y = 0.092f;
         for (int i = 0; i < 10; ++i) {
             anim.z += 4.0f * dt;
-            lock.Step(0, set, anim, anim.y, dt);
+            StepStill(lock, set, anim, anim.y, dt);
             CHECK(!lock.Locked(0));
         }
     }
-    { // the animation wanders off a planted foot: past MaxDrift it lets go rather than stretch the leg
+    { // the animation wanders off a planted foot: past MaxDrift (the safety leash) it lets go rather than stretch the leg
         IK::FootLock lock;
         glm::vec3 anim(0.0f, 0.08f, 0.0f);
         bool let = false;
         for (int i = 0; i < 120 && !let; ++i) {
             anim.x += 0.8f * dt;
-            lock.Step(0, set, anim, 0.08f, dt);
+            StepStill(lock, set, anim, 0.08f, dt);
             let = i > 0 && !lock.Locked(0);
             CHECK(glm::length(lock.Offset(0)) <= set.MaxDrift + 0.02f);
         }
@@ -678,11 +685,99 @@ void TestFootLockIgnoresSwingAndLetsGoOnDrift() {
         IK::FootLockSettings off;
         off.Enabled = false;
         IK::FootLock lock;
-        const glm::vec3 o = lock.Step(0, off, glm::vec3(0.0f, 0.08f, 0.0f), 0.08f, dt);
+        const glm::vec3 o = StepStill(lock, off, glm::vec3(0.0f, 0.08f, 0.0f), 0.08f, dt);
         CHECK(o == glm::vec3(0.0f) && !lock.Locked(0));
     }
     FirstPersonBodyComponent body;
     CHECK(IK::FootLockFrom(body).Enabled && std::abs(IK::FootLockFrom(body).MaxDrift - body.FootLockDrift) < 1e-6f);
+}
+
+void TestFootLockPlantsWhileTheBodyTurns() {
+    // The body swings round 180 degrees a second, its clip's foot still in it (0.32 m from the root): the foot's world speed
+    // is ~1 m/s, twice the tight Speed set here, but the turn is the body's, so the foot plants and stays where it landed.
+    IK::FootLockSettings set;
+    set.Speed = 0.5f;
+    const float dt = 1.0f / 60.0f;
+    const glm::vec3 root(1.0f, 0.0f, 2.0f), local(0.3f, 0.08f, 0.1f);
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    IK::FootLock lock;
+    float yaw = 0.0f;
+    glm::vec3 first(0.0f);
+    for (int i = 0; i < 12; ++i) { // 36 degrees round: inside the leash
+        const glm::quat facing = glm::angleAxis(yaw, up);
+        const glm::vec3 drawn = root + facing * local + lock.Step(0, set, root, facing, local, local.y, dt);
+        if (i == 0) {
+            CHECK(!lock.Locked(0)); // (a first frame has no speed yet)
+        } else {
+            CHECK(lock.Locked(0));
+            if (i == 1) first = drawn;
+            CHECK(glm::length(drawn - first) < 1e-4f);
+        }
+        yaw += glm::radians(180.0f) * dt;
+    }
+    // The same sweep made by the clip (the foot moving in a body that does not turn) is a foot moving: it never plants.
+    IK::FootLock swept;
+    yaw = 0.0f;
+    for (int i = 0; i < 12; ++i) {
+        swept.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::angleAxis(yaw, up) * local, local.y, dt);
+        CHECK(!swept.Locked(0));
+        yaw += glm::radians(180.0f) * dt;
+    }
+}
+
+void TestFootLockLetsGoAtReach() {
+    IK::FootLockSettings set;
+    const float dt = 1.0f / 60.0f;
+    const glm::quat facing(1.0f, 0.0f, 0.0f, 0.0f);
+    const glm::vec3 local(0.0f, 0.08f, 0.0f); // the clip's foot, down and still in the body
+    glm::vec3 root(0.0f);
+    IK::FootLock lock;
+    lock.Step(0, set, root, facing, local, local.y, dt);
+    for (int i = 0; i < 6; ++i) { // the body walks on 1 m/s faster than the clip: the planted foot is held behind
+        root.z += 1.0f * dt;
+        lock.Step(0, set, root, facing, local, local.y, dt);
+    }
+    CHECK(lock.Locked(0));
+    CHECK(!lock.Overreach(0, set, 0.97f, 0.90f));  // within Reach: held
+    CHECK(!lock.Overreach(0, set, 0.99f, 0.985f)); // the clip's own leg near straight, the hold adding next to nothing: held
+    CHECK(lock.Locked(0));
+    CHECK(lock.Overreach(0, set, 0.981f, 0.90f));  // past Reach because of the hold: lets go
+    CHECK(!lock.Locked(0));
+    CHECK(!lock.Overreach(0, set, 1.2f, 0.90f));   // (a free foot has nothing to let go)
+    // ... and steps: the lag only ever closes, the foot lifts in an arc on the way, and it plants again only once it is there.
+    float lastGap = glm::length(glm::vec2(lock.Offset(0).x, lock.Offset(0).z));
+    CHECK(lastGap > 0.05f);
+    bool lifted = false;
+    const int frames = (int)std::ceil(set.Release / dt) + 2;
+    for (int i = 0; i < frames; ++i) { // the body stopped, the clip's foot still down
+        const glm::vec3 o = lock.Step(0, set, root, facing, local, local.y, dt);
+        const float gap = glm::length(glm::vec2(o.x, o.z));
+        if (i < frames - 3) CHECK(!lock.Locked(0));
+        CHECK(gap <= lastGap + 1e-6f);
+        lifted = lifted || o.y > 0.005f;
+        lastGap = gap;
+    }
+    CHECK(lifted);
+    CHECK(lastGap < 1e-4f);
+}
+
+void TestClampReachNeverStretchesTheLeg() {
+    const glm::vec3 hip(0.1f, 0.9f, -0.2f);
+    const float leg = 0.85f;
+    const glm::vec3 dir = glm::normalize(glm::vec3(0.2f, -1.0f, 0.3f));
+    CHECK(glm::length(IK::ClampReach(hip, hip + dir * 0.7f, leg) - (hip + dir * 0.7f)) < 1e-6f); // within reach: as asked
+    float last = 0.0f;
+    for (int i = 0; i <= 200; ++i) {
+        const float asked = leg * (0.9f + 0.01f * (float)i); // 0.9 .. 2.9 x the leg
+        const glm::vec3 t = IK::ClampReach(hip, hip + dir * asked, leg);
+        const float got = glm::length(t - hip);
+        CHECK(got <= 0.995f * leg + 1e-5f);                        // never past the clamp
+        CHECK(glm::length(glm::normalize(t - hip) - dir) < 1e-4f); // drawn in along the hip->target line
+        CHECK(got >= last - 1e-6f);                                // asked for more, never given less
+        CHECK(i == 0 || got - last <= 0.01f * leg + 1e-5f);        // no jump
+        last = got;
+    }
+    CHECK(last > 0.99f * leg); // it still reaches for it
 }
 
 void TestFootSlideMeterCountsPlants() {
@@ -1044,5 +1139,8 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Controller clip files for the editor prefetch", TestControllerClipFilesForPrefetch});
     tests.push_back({"Foot lock holds a planted foot and lets it catch up smoothly", TestFootLockHoldsAndReleases});
     tests.push_back({"Foot lock ignores a swinging foot and lets go past its drift", TestFootLockIgnoresSwingAndLetsGoOnDrift});
+    tests.push_back({"Foot lock plants a still clip foot while the body turns 180 deg/s", TestFootLockPlantsWhileTheBodyTurns});
+    tests.push_back({"Foot lock lets go and steps past 0.98 of the leg", TestFootLockLetsGoAtReach});
+    tests.push_back({"Clamp reach never asks a leg for more than 0.995 of it", TestClampReachNeverStretchesTheLeg});
     tests.push_back({"Foot slide meter counts plants and their drift", TestFootSlideMeterCountsPlants});
 }

@@ -39,6 +39,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
     if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (Env::IsSet(Env::Var::NpcTestSeconds)) m_Duration = std::max(5.0f, Env::Float(Env::Var::NpcTestSeconds, 0.0f));
     if (Env::IsSet(Env::Var::NpcTestRecord)) m_RecordDir = Env::Str(Env::Var::NpcTestRecord);
+    m_TraceDir = Env::IsSet(Env::Var::NpcTestTrace) ? Env::Str(Env::Var::NpcTestTrace) : m_RecordDir;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
 }
 

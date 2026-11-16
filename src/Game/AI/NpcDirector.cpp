@@ -38,7 +38,6 @@ unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 // The standing pace's ease up from a halt and down into a stop (s), as the player's Ground Accel / Decel Time; a stop ends this
 // short of its goal (m).
 constexpr float kStartTime = 0.12f, kStopTime = 0.15f, kArriveSlack = 0.05f;
-constexpr float kNpcFootLockDrift = 0.12f; // m a dummy's planted foot may be left behind before it lets go (the player's is 0.25)
 constexpr float kTravelTurnRate = 140.0f; // degrees/s the travel direction may swing (Move): a walker's arc round a corner, not a whip
 
 float SpeedFor(Gait g) {
@@ -176,9 +175,6 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, bool allowEmpty) {
         m_HoldSettings.Spine = fpb.Spine; // per-bone spine weights and limits
         m_HoldSettings.FootLock = IK::FootLockFrom(fpb);   // planted feet held in the world
     }
-    // A dummy's planted feet on a shorter leash than the player's (seen from outside, a foot held 25 cm behind a walking body
-    // straightens its leg past reach): it lets go and steps while the knee still bends.
-    m_HoldSettings.FootLock.MaxDrift = std::min(m_HoldSettings.FootLock.MaxDrift, kNpcFootLockDrift);
     m_Active = true;
     m_Started = false;
     m_Now = 0.0f;

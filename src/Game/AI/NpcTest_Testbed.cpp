@@ -1,7 +1,9 @@
 // --npc-test testbed: project/scenes/AnimTestbed.json (tools/scenes/build_anim_testbed.py), the animation overhaul's own
 // scene. It measures only what the overhaul fixes, so the owner can re-run it after every phase:
 //   A  the lane: walk, stop, jog, stop - the procedural bob reaching the screen (the camera off the body's eye), the gait
-//      phase never stepping back, the planted feet's drift (the foot slide meter, logged)
+//      phase never stepping back, the gait loop's clips travelling at the capsule's speed (within 5%), the planted feet's
+//      drift (the foot slide meter, logged), the eye's frame-to-frame jitter (logged)
+//   A, B armed: the player's hands on the rig's (< 1 cm) and the world twin's on the world gun's grip (< 2 cm)
 //   B  the cover wall's edge, aimed at: the corner peek moves the camera out sideways and both hands stay on the gun
 //   C  the normal and the steep stairs up, the 15 degree ramp down: the gait phase, the legs' reach, the eye's overshoot over
 //      each step edge (logged)
@@ -10,8 +12,11 @@
 //   F  the standing dummy killed by a chest shot while idle (the ragdoll's inherited part velocities), then the respawned one
 //      shot in the thigh (its planted feet kept through the flinch)
 // Per-check PASS / FAIL lines; a check whose value needs an accessor that isn't there yet prints SKIP (not counted) and names
-// it. With NPC_TEST_RECORD set, trace.csv there: every frame's numbers behind the checks.
+// it. With NPC_TEST_RECORD set, trace.csv there: every frame's numbers behind the checks (NPC_TEST_TRACE=<dir>: the trace
+// alone, no frames - much faster). TESTBED_PARTS=<letters> (e.g. C, AC) runs only those parts: the other parts' legs and
+// checks are skipped, the dummies' (E, F) too unless named.
 #include "NpcTest.h"
+#include "Core/Env.h"
 #include "BodyDebugDraw.h"
 #include "Components.h"
 #include "FirstPersonBodyContract.h"
@@ -88,9 +93,21 @@ constexpr float kNpcBudget = 40.0f; // seconds the dummies' part may take
 
 const glm::vec3 kStandingSpawn(-5.0f, 0.0f, 14.0f);
 
+// TESTBED_PARTS: the parts that run (all when unset).
+bool TbPartOn(char part) {
+    static const std::string parts = Env::IsSet(Env::Var::TestbedParts) ? Env::Str(Env::Var::TestbedParts) : std::string();
+    return parts.empty() || parts.find(part) != std::string::npos || parts.find((char)(part - 'A' + 'a')) != std::string::npos;
+}
+bool TbDummiesOn() { return TbPartOn('E') || TbPartOn('F'); }
+// A leg runs when its part does; the watch leg always does (the player's checks are made as it starts).
+bool TbLegOn(int leg) { return leg == kWatchLeg || TbPartOn((char)('A' + (int)kTb[leg].Of)); }
+
 int TbLegAt(float t, float& into) {
     int leg = 0;
-    while (leg < kWatchLeg && t >= kTb[leg].Seconds) t -= kTb[leg++].Seconds;
+    while (leg < kWatchLeg && (!TbLegOn(leg) || t >= kTb[leg].Seconds)) {
+        if (TbLegOn(leg)) t -= kTb[leg].Seconds;
+        ++leg;
+    }
     into = t;
     return leg;
 }
@@ -120,7 +137,7 @@ struct NpcTest::TestbedRun {
         float ResidMin = 1e9f, ResidMax = -1e9f, CamMin = 1e9f, CamMax = -1e9f, ProcMin = 1e9f, ProcMax = -1e9f;
         int ResidFrames = 0;
         float CamRelMax = -1e9f;      // the camera off the capsule's eye, the whole leg
-        float LegReachMax = 0.0f;
+        float LegReachMax = 0.0f, ClampPullMax = 0.0f; // reach foot IK asked for; m the reach clamp moved a foot
         bool HaveReach = false;
         // step edges (C): the capsule's feet jumping up a step, the eye's highest over the flat walk's in the 0.4 s after
         int StepEdges = 0, Overshoots = 0;
@@ -133,6 +150,20 @@ struct NpcTest::TestbedRun {
             if (EdgePeak > 0.01f) ++Overshoots;
         }
         float FootYStart = 0.0f, FootYEnd = 0.0f;
+        // Armed (the arms' weight on): the player's hands off the rig's, the other pieces' (the arm solve copied onto them),
+        // the world twin's off the world gun's grip - the worst of the leg.
+        int HandFrames = 0, TwinFrames = 0;
+        float HandGapMax = 0.0f, PieceGapMax = 0.0f, TwinGapMax = 0.0f;
+        // The eye's jitter, steady part of a move: each frame's second difference (x[n] - 2 x[n-1] + x[n-2]) of the camera off
+        // the body's eye (the procedural kick) and of the body's eye off the capsule's (the eye's own anchor and filters), m.
+        glm::vec3 KickPrev[2]{}, EyePrev[2]{};
+        int JitterSeen = 0, JitterFrames = 0;
+        double KickJ2 = 0.0, EyeJ2 = 0.0;
+        float KickJMax = 0.0f, EyeJMax = 0.0f;
+        // The steady gait loop (A, from 1 s in, in the Locomotion state): the clips' root travel (BodyDebug RootSpeed: the
+        // driver's RootMotion.DeltaPosition, world metres, over its frame's dt) and the capsule's speed, summed per frame.
+        double LoopClip = 0.0, LoopCapsule = 0.0;
+        int LoopFrames = 0;
     };
     LegStats Legs[32];
     float FlatCamMax = 0.0f; // A walk's highest camera off the capsule's eye (steady)
@@ -162,6 +193,8 @@ struct NpcTest::TestbedRun {
     float StartTurnSteps = 0.0f;    // the StartTurn parameter while a start-turn state played (45 degree steps, + left)
     bool SawStartTurn = false;
     std::string LastNpcState, NpcStates;
+    double NpcLoopClip = 0.0, NpcLoopCapsule = 0.0; // its gait loop's clip travel and capsule speed (m/s, summed per frame; logged)
+    int NpcLoopFrames = 0;
     // F
     std::string Killed;
     int KilledIndex = -1;
@@ -175,8 +208,9 @@ struct NpcTest::TestbedRun {
 
 float NpcTest::TestbedSeconds() {
     float t = 0.0f;
-    for (int i = 0; i < kWatchLeg; ++i) t += kTb[i].Seconds;
-    return t + kNpcBudget;
+    for (int i = 0; i < kWatchLeg; ++i)
+        if (TbLegOn(i)) t += kTb[i].Seconds;
+    return t + (TbDummiesOn() ? kNpcBudget : 1.0f);
 }
 
 void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch) {
@@ -279,9 +313,46 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             s.ProcMin = std::min(s.ProcMin, procY);
             s.ProcMax = std::max(s.ProcMax, procY);
             if (haveBodyEye) { s.ResidMin = std::min(s.ResidMin, residY); s.ResidMax = std::max(s.ResidMax, residY); ++s.ResidFrames; }
+            if (haveBodyEye) {
+                const glm::vec3 kick = cam - bodyEye, eye = bodyEye - capsuleEye;
+                if (s.JitterSeen >= 2) {
+                    const float k2 = glm::length(kick - 2.0f * s.KickPrev[0] + s.KickPrev[1]);
+                    const float e2 = glm::length(eye - 2.0f * s.EyePrev[0] + s.EyePrev[1]);
+                    s.KickJ2 += (double)k2 * k2;
+                    s.EyeJ2 += (double)e2 * e2;
+                    s.KickJMax = std::max(s.KickJMax, k2);
+                    s.EyeJMax = std::max(s.EyeJMax, e2);
+                    ++s.JitterFrames;
+                }
+                s.KickPrev[1] = s.KickPrev[0];
+                s.KickPrev[0] = kick;
+                s.EyePrev[1] = s.EyePrev[0];
+                s.EyePrev[0] = eye;
+                ++s.JitterSeen;
+            }
+            // The clips' travel against the capsule's, in the loop only (not a start still playing out or a fade).
+            if (L.Of == TbPart::A && bd.Valid && bd.AnimatorState == FPBody::kStateLocomotion) {
+                s.LoopClip += bd.RootSpeed;
+                s.LoopCapsule += glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
+                ++s.LoopFrames;
+            }
         }
         s.CamRelMax = std::max(s.CamRelMax, camRelY);
-        if (haveReach && L.Of == TbPart::C) { s.HaveReach = true; s.LegReachMax = std::max({s.LegReachMax, reachL, reachR}); }
+        // Armed through the walk, the jog and the corner peek: both bodies' hands on their guns.
+        if (((L.Of == TbPart::A && L.Moving()) || L.Aim) && bd.ArmsWeight > 0.99f) {
+            ++s.HandFrames;
+            s.HandGapMax = std::max({s.HandGapMax, bd.HandGap[0], bd.HandGap[1]});
+            s.PieceGapMax = std::max(s.PieceGapMax, bd.PieceHandGap);
+            if (bd.TwinHandGap[0] >= 0.0f || bd.TwinHandGap[1] >= 0.0f) {
+                ++s.TwinFrames;
+                s.TwinGapMax = std::max({s.TwinGapMax, bd.TwinHandGap[0], bd.TwinHandGap[1]});
+            }
+        }
+        if (haveReach && (L.Of == TbPart::C || L.Of == TbPart::A) && L.Moving()) {
+            s.HaveReach = true;
+            s.LegReachMax = std::max({s.LegReachMax, reachL, reachR});
+            s.ClampPullMax = std::max({s.ClampPullMax, bd.ClampPull[0], bd.ClampPull[1]});
+        }
         // Step edges: the capsule's feet up a step in a frame; the eye's highest over the flat walk's for the next 0.4 s.
         if (L.Of == TbPart::C && L.Moving()) {
             if (s.HavePrevFoot && foot[1] - s.PrevFootY > 0.03f) {
@@ -344,6 +415,8 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             ++R.Skipped;
             std::printf("[NpcTest] SKIP %s (needs %s)\n", what.c_str(), accessor);
         };
+        const bool partA = TbPartOn('A'), partB = TbPartOn('B'), partC = TbPartOn('C'), partD = TbPartOn('D');
+        if (partA) {
         // A: the bob on the screen.
         for (const char* name : {"A walk", "A jog"}) {
             const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
@@ -361,42 +434,92 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                 skip("A: the procedural bob reaches the screen (camera off the body's eye > 5 mm at walk)", "BodyDebug::Snapshot::BodyEye");
             }
         }
+        }
         auto gaitCheck = [&](const char* name) {
             const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
             std::printf("[Testbed] %-26s gait phase: %d frames read, %d back, worst %.4f cycles\n", name, s.GaitFrames, s.GaitBack, s.GaitWorstBack);
             Check(s.GaitFrames > 20 && s.GaitBack == 0, std::string(name) + ": the gait phase never steps back (" + std::to_string(s.GaitBack) +
                                                             " of " + std::to_string(s.GaitFrames) + " frames, worst " + std::to_string(s.GaitWorstBack) + ")");
         };
+        if (partA) {
         gaitCheck("A walk");
         gaitCheck("A jog");
+        // A: the gait loop's clips travel at the capsule's speed - PlayRate alone matching them (no closed-loop trim).
+        for (const char* name : {"A walk", "A jog"}) {
+            const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
+            const double ratio = s.LoopCapsule > 1e-3 ? s.LoopClip / s.LoopCapsule : 0.0;
+            std::printf("[Testbed] %-6s loop travel: clips %.3f m/s, capsule %.3f m/s (ratio %.3f, %d frames)\n", name,
+                        s.LoopFrames ? s.LoopClip / s.LoopFrames : 0.0, s.LoopFrames ? s.LoopCapsule / s.LoopFrames : 0.0, ratio, s.LoopFrames);
+            Check(s.LoopFrames > 30 && std::fabs(ratio - 1.0) <= 0.05,
+                  std::string(name) + ": the gait loop's clips travel at the capsule's speed (ratio " + std::to_string(ratio) + " over " +
+                      std::to_string(s.LoopFrames) + " steady frames, within 5%)");
+        }
+        // A: the eye's jitter at a steady walk and jog - logged until a baseline sets its threshold.
+        for (const char* name : {"A walk", "A jog"}) {
+            const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
+            const double n = s.JitterFrames > 0 ? (double)s.JitterFrames : 1.0;
+            std::printf("[Testbed] %-6s eye jitter (frame-to-frame second difference, steady, %d frames): camera off the body's eye rms %.3f mm, "
+                        "max %.3f mm; body's eye off the capsule's rms %.3f mm, max %.3f mm (logged, not checked)\n", name, s.JitterFrames,
+                        std::sqrt(s.KickJ2 / n) * 1000.0, s.KickJMax * 1000.0f, std::sqrt(s.EyeJ2 / n) * 1000.0, s.EyeJMax * 1000.0f);
+        }
+        }
+        // A, B: armed, the player's hands on the rig's (< 1 cm) and the world twin's on the world gun's grip (< 2 cm).
+        for (const char* name : {"A walk", "A jog", "B aim (corner peek)"}) {
+            if (!TbPartOn(name[0])) continue;
+            const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
+            std::printf("[Testbed] %-20s hands (%d armed frames): player %.2f mm, other pieces %.2f mm, world twin %s at worst\n", name,
+                        s.HandFrames, s.HandGapMax * 1000.0f, s.PieceGapMax * 1000.0f,
+                        s.TwinFrames ? (std::to_string(s.TwinGapMax * 1000.0f) + " mm").c_str() : "n/a");
+            if (s.HandFrames == 0) {
+                skip(std::string(name) + ": the hands on the gun (no armed frames)", "the weapon drawn in this leg");
+                continue;
+            }
+            Check(s.HandGapMax < 0.01f, std::string(name) + ": the player's hands stay on the rig's (" + std::to_string(s.HandGapMax * 1000.0f) +
+                                            " mm at worst, < 10 mm)");
+            if (s.TwinFrames > 0)
+                Check(s.TwinGapMax < 0.02f, std::string(name) + ": the world twin's hands stay on the world gun (" +
+                                                std::to_string(s.TwinGapMax * 1000.0f) + " mm at worst, < 20 mm)");
+            else
+                skip(std::string(name) + ": the world twin's hands on the world gun", "split poses (Weapon Arms' world twins)");
+        }
         // B: the corner peek.
+        if (partB) {
         std::printf("[Testbed] B lean: camera %.3f m sideways at most (base %.3f m); hands while out (%d frames) L %.1f mm, R %.1f mm\n", R.LeanPeak,
                     R.LeanBase, R.LeanGapFrames, R.LeanGap[0] * 1000.0f, R.LeanGap[1] * 1000.0f);
         Check(R.LeanPeak > 0.15f, "B: aiming at the cover's edge peeks round it - the camera " + std::to_string(R.LeanPeak) + " m sideways (> 0.15 m)");
         Check(R.LeanGapFrames > 0 && R.LeanGap[0] < 0.01f && R.LeanGap[1] < 0.01f,
               "B: leaned out, both hands stay on the gun (L " + std::to_string(R.LeanGap[0] * 1000.0f) + " mm, R " + std::to_string(R.LeanGap[1] * 1000.0f) +
                   " mm, < 10 mm)");
+        }
         // C: stairs and the ramp.
         for (const char* name : {"C climb normal stairs", "C climb steep stairs", "C walk down 15deg ramp"}) {
+            if (!partC) break;
             TestbedRun::LegStats& s = R.Legs[legIndex(name)];
             s.CloseEdge();
             gaitCheck(name);
             std::printf("[Testbed] %-26s feet %.2f -> %.2f m; %d step edges, eye over the flat walk's highest by %.1f cm at worst, %d edge(s) over 1 cm "
                         "(logged, not checked)\n", name, s.FootYStart, s.FootYEnd, s.StepEdges, s.StepEdges ? s.WorstOvershoot * 100.0f : 0.0f, s.Overshoots);
-            if (s.HaveReach)
-                Check(s.LegReachMax <= 0.999f, std::string(name) + ": no leg past 0.999 of its length (" + std::to_string(s.LegReachMax) + ")");
-            else
-                skip(std::string(name) + ": no leg past 0.999 of its length", "BodyDebug::Snapshot::LegReach[2]");
         }
+        // The legs: foot IK never asks for much more than the leg has (the lock lets go by reach), so the reach clamp
+        // never has to drag a foot visibly off where it should be.
+        for (const char* name : {"A walk", "A jog", "C climb normal stairs", "C climb steep stairs", "C walk down 15deg ramp"}) {
+            if (!TbPartOn(name[0])) continue;
+            const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
+            if (!s.HaveReach) { skip(std::string(name) + ": the reach clamp moves no foot more than 1 cm", "BodyDebug::Snapshot::ClampPull"); continue; }
+            std::printf("[Testbed] %-26s legs: reach asked %.3f at most, clamp pulled a foot %.1f mm at most\n", name, s.LegReachMax, s.ClampPullMax * 1000.0f);
+            Check(s.ClampPullMax < 0.01f, std::string(name) + ": the reach clamp moves no foot more than 1 cm (" + std::to_string(s.ClampPullMax * 1000.0f) + " mm)");
+        }
+        if (partC)
         Check(R.Legs[legIndex("C stop on normal platform")].FootYEnd > 1.3f && R.Legs[legIndex("C stop on steep platform")].FootYEnd > 2.3f,
               "C setup: the player went up both flights (normal " + std::to_string(R.Legs[legIndex("C stop on normal platform")].FootYEnd) + " m, steep " +
                   std::to_string(R.Legs[legIndex("C stop on steep platform")].FootYEnd) + " m)");
         // D: holster and draw.
+        if (partD)
         std::printf("[Testbed] D fade: %d frames (arms weight down to %.2f); hands off the rig's L %.2f mm, R %.2f mm at worst\n", R.FadeFrames,
                     R.FadeWeightMin, R.FadeGap[0] * 1000.0f, R.FadeGap[1] * 1000.0f);
         // (Logged only: holstered, the body's arms let go of the rig on purpose. The rig's own hands-on-gun through its IK fade is
         // the unit test "IK rig at part weight keeps the hand on the gun".)
-        R.Stage = 1;
+        R.Stage = TbDummiesOn() ? 1 : 7; // (the dummies' part left out: done)
         R.StageAt = now;
     }
 
@@ -472,6 +595,13 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                 const float steps = ac->GetFloat(FPBody::kStartTurn);
                 if (std::fabs(steps) > std::fabs(R.StartTurnSteps)) R.StartTurnSteps = steps;
             }
+            // Its loop's clip travel against its capsule (the frames with root motion: an LOD hold has none).
+            const float rmDt = n->Body.RootMotionDt();
+            if (ac->CurrentState() == FPBody::kStateLocomotion && !ac->InTransition && rmDt > 1e-5f) {
+                R.NpcLoopClip += glm::length(glm::vec2(ac->RootMotion.DeltaPosition.x, ac->RootMotion.DeltaPosition.z)) / rmDt;
+                R.NpcLoopCapsule += glm::length(glm::vec2(n->Velocity.x, n->Velocity.z));
+                ++R.NpcLoopFrames;
+            }
             if (ac->CurrentState() != R.LastNpcState) {
                 std::printf("[Testbed] %6.2f s  E %s -> %s  (yaw %.0f, %.2f m/s)\n", inStage, R.LastNpcState.c_str(), ac->CurrentState().c_str(), yaw,
                             glm::length(glm::vec2(n->Velocity.x, n->Velocity.z)));
@@ -484,6 +614,9 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             std::printf("[Testbed] E: states %s; StartTurn %.2f (%.0f deg); heading reached at %.2f s; body yaw rate %.0f deg/s at most%s\n",
                         R.NpcStates.c_str(), R.StartTurnSteps, R.StartTurnSteps * 45.0f, R.ReachedAt, R.MaxYawRate,
                         "");
+            std::printf("[Testbed] E: its gait loop's clips %.3f m/s, capsule %.3f m/s (ratio %.3f, %d frames; logged, not checked)\n",
+                        R.NpcLoopFrames ? R.NpcLoopClip / R.NpcLoopFrames : 0.0, R.NpcLoopFrames ? R.NpcLoopCapsule / R.NpcLoopFrames : 0.0,
+                        R.NpcLoopCapsule > 1e-3 ? R.NpcLoopClip / R.NpcLoopCapsule : 0.0, R.NpcLoopFrames);
             Check(R.SawStartTurn && std::fabs(R.StartTurnSteps) * 45.0f >= 157.5f,
                   "E: setting off 180 degrees behind it, the start turn chosen covers ~180 degrees (" + std::to_string(R.StartTurnSteps * 45.0f) + ")");
             Check(R.ReachedAt >= 0.0f && R.ReachedAt <= 1.2f,
@@ -571,14 +704,16 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     }
 
     // --- trace.csv ---
-    if (!R.Trace && !RecordDir().empty()) {
+    if (!R.Trace && !TraceDir().empty()) {
         std::error_code ec;
-        std::filesystem::create_directories(RecordDir(), ec);
-        if (fopen_s(&R.Trace, (std::filesystem::path(RecordDir()) / "trace.csv").string().c_str(), "w") != 0) R.Trace = nullptr;
+        std::filesystem::create_directories(TraceDir(), ec);
+        if (fopen_s(&R.Trace, (std::filesystem::path(TraceDir()) / "trace.csv").string().c_str(), "w") != 0) R.Trace = nullptr;
         if (R.Trace)
             std::fprintf(R.Trace, "frame,t,leg,leg_t,speed,gait_ok,gait,cam_x,cam_y,cam_z,foot_y,cam_rel_y,cam_side,body_eye_ok,cam_off_body_eye_y,"
                                   "proc_cam_off_y,hand_gap_l,hand_gap_r,arms_weight,leg_reach_ok,leg_reach_l,leg_reach_r,weapon_state,"
-                                  "npc_stage,npc_yaw,npc_speed,npc_state\n");
+                                  "npc_stage,npc_yaw,npc_speed,npc_state,piece_hand_gap,twin_hand_gap_l,twin_hand_gap_r,body_eye_x,body_eye_y,body_eye_z,"
+                                  "foot_off_l,foot_off_r,step_off,planted_l,planted_r,lock_shift_l,lock_shift_r,reach_free_l,reach_free_r,"
+                                  "clamp_pull_l,clamp_pull_r,anim_h_l,anim_h_r,body_yaw,drawn_lx,drawn_ly,drawn_lz,drawn_rx,drawn_ry,drawn_rz\n");
     }
     if (R.Trace) {
         float npcYaw = 0.0f, npcSpeed = 0.0f;
@@ -588,10 +723,17 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             npcSpeed = glm::length(glm::vec2(n->Velocity.x, n->Velocity.z));
             npcState = n->Body.StateName(world);
         }
-        std::fprintf(R.Trace, "%d,%.4f,%d,%.4f,%.3f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%.5f,%.5f,%.5f,%.5f,%.3f,%d,%.4f,%.4f,%s,%d,%.2f,%.3f,%s\n", R.Frame++,
+        std::fprintf(R.Trace, "%d,%.4f,%d,%.4f,%.3f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%.5f,%.5f,%.5f,%.5f,%.3f,%d,%.4f,%.4f,%s,%d,%.2f,%.3f,%s,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,", R.Frame++,
                      now, leg, R.Into, glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)), (int)gaitOk, gait, cam.x, cam.y, cam.z, foot[1], camRelY,
                      camSide, (int)haveBodyEye, residY, procY, bd.HandGap[0], bd.HandGap[1], bd.ArmsWeight, (int)haveReach, reachL, reachR, weaponState.c_str(),
-                     R.Stage, npcYaw, npcSpeed, npcState.c_str());
+                     R.Stage, npcYaw, npcSpeed, npcState.c_str(), bd.PieceHandGap, bd.TwinHandGap[0], bd.TwinHandGap[1], bodyEye.x, bodyEye.y,
+                     bodyEye.z);
+        // The foot IK behind the leg checks: each foot's ground off the body's base, the body's off the capsule's, the lock
+        // (planted, how far it moves the foot), the reach asked without the lock, the clamp's pull, the clip's foot height.
+        std::fprintf(R.Trace, "%.5f,%.5f,%.5f,%d,%d,%.5f,%.5f,%.4f,%.4f,%.5f,%.5f,%.4f,%.4f,%.2f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n", bd.FootOffset[0], bd.FootOffset[1], bd.StepOffset,
+                     (int)bd.FootPlanted[0], (int)bd.FootPlanted[1], bd.LockShift[0], bd.LockShift[1], bd.ReachFree[0], bd.ReachFree[1],
+                     bd.ClampPull[0], bd.ClampPull[1], bd.AnimHeight[0], bd.AnimHeight[1], bd.BodyYawDeg,
+                     bd.DrawnFoot[0].x, bd.DrawnFoot[0].y, bd.DrawnFoot[0].z, bd.DrawnFoot[1].x, bd.DrawnFoot[1].y, bd.DrawnFoot[1].z);
     }
 
     // --- the Scene view: off the player's front quarter on its legs; side on to the standing dummy for E and F ---

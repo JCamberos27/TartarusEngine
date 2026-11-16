@@ -386,6 +386,13 @@ void TestProjectLocomotion() {
     BodyLocomotion::Update(body);CHECK((body.Triggers&256) && body.FidgetIndex>=0 && body.FidgetIndex<=1 && body.FidgetTime==0);
     body.Triggers=0;body.Busy=1;body.FidgetNext=1;body.FidgetTime=.995f;BodyLocomotion::Update(body);CHECK(!(body.Triggers&256) && body.FidgetTime==0);
     body={};body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.Crouched=1;BodyLocomotion::Update(body);CHECK(body.Triggers==1 && body.WasCrouched);
+    // The gait loop's rate is the capsule's speed over its clips' travel at the blend: a walk under its clips' pace with the
+    // idle in the blend (1.0 m/s asked, 0.75 travelled) speeds up, the jog backward past the back clips' 2.26 m/s too, at most
+    // Max Play Rate; standing, or with the clips moving the capsule (responsiveness 0), it is the authored rate.
+    CHECK(std::abs(BodyLocomotion::LoopPlayRate(1.0f,.75f,1,1.5f)-1.0f/.75f)<1e-4f);
+    CHECK(std::abs(BodyLocomotion::LoopPlayRate(3.26f,2.26f,1,1.5f)-3.26f/2.26f)<1e-4f && BodyLocomotion::LoopPlayRate(3.26f,1.5f,1,1.5f)==1.5f);
+    CHECK(BodyLocomotion::LoopPlayRate(0,0,1,1.5f)==1 && BodyLocomotion::LoopPlayRate(1.0f,.75f,0,1.5f)==1 && BodyLocomotion::LoopPlayRate(1.0f,-1,1,1.5f)==1);
+    CHECK(std::abs(BodyLocomotion::LoopPlayRate(.15f,.12f,1,1.5f)-(1+(.15f/.12f-1)*.4f))<1e-4f); // eased in toward a standstill
 }
 void TestProjectNpcConfiguration() {
     using namespace Gameplay;using Json=nlohmann::json;

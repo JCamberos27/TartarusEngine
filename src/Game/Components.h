@@ -691,7 +691,6 @@ struct FirstPersonBodyComponent {
     // All of it within 25 degrees of level; none past 60 up or down (the chest under the eye looking down, the
     // support hand past its reach looking up), eased between.
     glm::vec3 ArmedEyeOffset{0.0f, 0.10f, 0.04f}; // Armed Eye Offset
-    float CameraSmoothing = 0.06f; // seconds; smooths the head motion in the body's frame
     // Pieces that cast a shadow but aren't drawn in first person, comma separated: a child is
     // hidden when its name contains one of these (case-insensitive). The camera is in the head.
     std::string HiddenParts = "Head";
@@ -824,8 +823,8 @@ struct FirstPersonBodyComponent {
     bool FootLockEnabled = true; // Foot Lock
     float FootLockHeight = 0.02f; // Foot Lock Height (m over the foot's lowest)
     float FootLockLift = 0.045f; // Foot Lock Lift (m over the foot's lowest: lets go)
-    float FootLockSpeed = 2.0f; // Foot Lock Speed (m/s the animated foot may move and still plant)
-    float FootLockDrift = 0.25f; // Foot Lock Drift (m the animation may wander before the foot lets go)
+    float FootLockSpeed = 2.0f; // Foot Lock Speed (m/s the animated foot may move over the ground, the body's turn left out, and still plant)
+    float FootLockDrift = 0.25f; // Foot Lock Drift (m the animation may wander before the foot lets go: a safety, the leg's reach goes first)
     float FootLockRelease = 0.2f; // Foot Lock Release (s a let-go foot takes to catch up)
     float FootRayUp = 0.5f; // Foot Ray Up
     float FootRayLength = 1.0f; // Foot Ray Length

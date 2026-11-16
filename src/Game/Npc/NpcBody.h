@@ -102,10 +102,7 @@ public:
     // The pose is the ragdoll's from now on: Tick / LateUpdate stop touching the pose.
     void SetPoseOwnedElsewhere(bool owned) { m_PoseExternal = owned; }
     bool PoseOwnedElsewhere() const { return m_PoseExternal; }
-    // (Tests) The gait loop's rate trim, the clips' travel speed it was last worked out from (m/s), and the time (s) the root
-    // motion read by the last Tick covered (0: a frame the animation LOD held - no motion, nothing updated).
-    float RateTrim() const { return m_RateTrim; }
-    float ClipTravel() const { return m_ClipTravel; }
+    // (Tests) The time (s) the root motion read by the last Tick covered (0: a frame the animation LOD held - no motion).
     float RootMotionDt() const { return m_RootMotionDt; }
 
 private:
@@ -122,8 +119,6 @@ private:
     float m_Yaw = 0.0f;
     bool m_HaveYaw = false;
     bool m_Turning = false;
-    float m_RateTrim = 1.0f; // the gait loop's rate trim (Tick)
-    float m_ClipTravel = 0.0f; // m/s the clips travelled over the last root motion read
     // The time the animator's root motion covers (Tick): the animation LOD holds frames (no motion, its SkippedTime counting) and
     // the next update advances by all of it at once. Worked out from the last Tick's dt and the SkippedTime it saw.
     float m_RootMotionDt = 0.0f, m_PrevTickDt = 0.0f, m_PrevSkipped = 0.0f;
@@ -162,7 +157,6 @@ private:
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
     int m_DriverBall[2] = {-1, -1}; // the ball of each foot (where the toes point)
     IK::FootLock m_Lock;
-    float m_LockYaw = 0.0f; // last frame's heading (FootPass: how fast the body turns)
     float m_FootWeight = 0.0f, m_FootOffset[2] = {0.0f, 0.0f};
     glm::vec3 m_FootNormal[2] = {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
     bool m_HaveFootGround = false;

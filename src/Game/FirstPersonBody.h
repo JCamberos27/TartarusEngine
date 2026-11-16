@@ -139,32 +139,25 @@ public:
     // `camera` (optional) is the view it's drawn from: the Scene overlay's frustum and the eye distances.
     //
     // Split poses (Weapon Arms): the body's pieces are what the player's own camera shows. Each piece has a world
-    // twin - the same model, its own pose - which every other view and every shadow shows. Both play the same
-    // animations (the locomotion clips, the weapon's arm clips through the rig's hands); the twins only skip Spine
-    // Stability, which steadies the player's own camera. The twins hold the gun third-person: the rig's hands and the
-    // world gun carried by `thirdPersonGun` (the rig's model space; FirstPersonPresentation::ThirdPersonGunCorrection),
-    // then seated on the twin's shoulder by `gun`'s shoulder lock (FirstPersonGunSeat) and the head welded onto the stock.
-    // With `thirdPersonRig` (the 3P clips' pose, FirstPersonPresentation::ThirdPersonArms) the twins also take its grip on
-    // the gun at `gunSocket` - the hands, fingers and elbows - instead of the first-person rig's. With `handAnchor` the free
-    // hand's trip off the gun (a reload's pouch, the shells) is held to the twin's chest, not the gun (CarriedMove).
+    // twin - the same model, its own pose - which every other view and every shadow shows. The twins are the same body
+    // (the pieces' pose as LateUpdate left it) and take the same arm solve; only the targets differ: the world gun's hold.
+    // That is the first-person gun moved by `thirdPersonGun` (the rig's model space; FirstPersonPresentation::
+    // ThirdPersonGunCorrection: the 3P clips' gun against the 1P clips'), and with `thirdPersonRig` (the 3P clips' pose,
+    // FirstPersonPresentation::ThirdPersonArms) its grip on the gun at `gunSocket` - the hands, fingers and elbows -
+    // instead of the first-person rig's. `gun` and `handAnchor` are no longer read (the shoulder lock, cheek weld and
+    // hand anchor are gone); kept so the caller needn't change.
     void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr,
                         const glm::mat4& thirdPersonGun = glm::mat4(1.0f), const FirstPersonWorldGunInput* gun = nullptr,
                         const Model* thirdPersonRig = nullptr, const std::string& gunSocket = {},
                         const FirstPersonHandAnchor* handAnchor = nullptr);
     bool SplitPoses() const { return !m_Twins.empty(); }
-    // The hand anchor's move this frame (rigid, world): from riding the world gun to riding the twin's chest; the free
-    // hand's share of it; and where that hand was before it (on the gun, world). What the hand holds - the magazine, a
-    // shell - goes with it (FirstPersonPresentation::PlaceWorldWeapon).
-    const glm::mat4& CarriedMove() const { return m_CarriedMove; }
-    float TwinAnchorWeight() const { return m_TwinAnchorWeight; }
-    const glm::vec3& CarriedHand() const { return m_CarriedHand; }
-    // The shoulder lock's move of the world gun this frame (world), and the world head's cheek weld (degrees, weight).
-    glm::vec3 WorldGunShift() const { return m_WorldGunShift; }
-    float WorldHeadTilt() const { return m_WorldHeadTiltDeg; }
-    float WorldHeadTiltWeight() const { return m_WorldHeadTiltWeight; }
-    // Where the world gun is off the first-person one this frame (rigid, world): the third-person hold, the world
-    // body's chest from the player's own (Spine Stability steadies only the latter), then the shoulder lock. Identity
-    // with no split.
+    // The hand anchor's move (FirstPersonPresentation::PlaceWorldWeapon): none - the world hand carries what it holds
+    // straight off the gun, and PlaceWorldWeapon's `holdingHand` puts a part in it on the solved world hand.
+    glm::mat4 CarriedMove() const { return glm::mat4(1.0f); }
+    float TwinAnchorWeight() const { return 0.0f; }
+    glm::vec3 CarriedHand() const { return glm::vec3(0.0f); }
+    // Where the world gun is off the first-person one this frame (rigid, world): the third-person hold. Identity with no
+    // split.
     const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }
     // What the hands are doing, for the idle fidgets: a gun held (the ready stance's own fidgets) and busy with it
     // (aiming, or just fired: no fidget). Set each frame before Tick.
@@ -222,14 +215,6 @@ private:
         int Clips[2] = {-2, -2}; // rebuilt if an idle clip becomes available after startup
     };
     std::map<const Model*, SpineReference> m_SpineReferences;
-    // Spine Stability steadies the player's own view only. Per piece, this frame's spine locals as the clips had them
-    // (Authored) and as stabilized (Stabilized); SyncTwins gives the world twins the authored spine plus whatever the
-    // later passes (spine aim, twist, shoulder line) added, so every other view sees the whole gait.
-    struct StabilizedSpine {
-        std::vector<int> Bones;
-        std::vector<LocalTRS> Authored, Stabilized;
-    };
-    std::vector<StabilizedSpine> m_StabilizedSpine; // in step with m_Models; empty Bones = not stabilized this frame
     void ApplySpineAim(const Camera& camera, float amount, float twist);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);
@@ -242,9 +227,8 @@ private:
                      const std::vector<std::shared_ptr<Model>>* models = nullptr, const IK::SpineDistribution* dist = nullptr);
     IK::SpineDistribution m_Spine; // the body component's Spine fields, as of the last update
     void MakeTwins(World& world);
-    // Each twin onto its piece: transform, and the pose as posed so far. `authoredSpine`: the clips' own spine
-    // (the third-person hold layers its stance and aim on it), else theirs plus what the passes after added.
-    void SyncTwins(World& world, bool authoredSpine = false);
+    // Each twin onto its piece: transform, and the pose as posed so far (one body: the twins differ only in the arms).
+    void SyncTwins(World& world);
     // Rigid head wear's twins (a balaclava, glasses) onto the head twin's head bone, once the twins are posed.
     void PlaceHeadAttachedTwins(World& world);
     void ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt);
@@ -253,14 +237,10 @@ private:
     entt::entity m_Driver = entt::null; // the piece whose Animator Controller runs the body
     std::vector<std::shared_ptr<Model>> m_Models; // every piece's model (Stop un-hides their bones)
     std::vector<entt::entity> m_Pieces;           // ... and its entity, in step with m_Models
-    float m_StanceYaw = 0.0f;                     // the view's usual heading off the world shoulders (their blade), radians
-    bool m_HaveStanceYaw = false;
-    float m_ActionHold = 0.0f;                    // 0..1 (eased Action): the world gun pitched with the chest, not the view
-    float m_ArmsWeight = 0.0f;                    // 0..1: how much the arms follow the weapon's
+    float m_ArmsWeight = 0.0f;                   // 0..1: how much the arms follow the weapon's
     std::map<std::string, std::string> m_BoneMap; // the Bone Map, parsed at Start
     int m_ShoulderNode[2] = {-1, -1};             // upperarm_l / upperarm_r on the driver
-    glm::vec3 m_ShouldersSlow{0.0f};              // their midpoint in model space, a slow average (the standing height)
-    glm::vec3 m_Shoulders{0.0f};                  // ... the part of the clips' motion the eye follows, smoothed
+    glm::vec3 m_Shoulders{0.0f};                  // their midpoint in model space as the eye follows it (FirstPersonBodyFollowShoulders)
     bool m_HaveShoulders = false;
     glm::vec3 m_ShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // Arm Steadiness: each upper arm in m_ChestView's frame (slow)
     bool m_HaveShoulderAnchor[2] = {false, false};
@@ -284,7 +264,7 @@ private:
     glm::vec2 m_LastDir{0.0f, 1.0f}; // the last move direction (body frame) and whether it was a sprint
     bool m_LastSprint = false;
     bool m_Grounded = false;       // at the last Tick
-    glm::vec3 m_ArmedEyeDelta{0.0f}; // the shoulder-anchored eye minus the head's, in the body's frame (slow)
+    glm::vec3 m_ArmedEyeDelta{0.0f}; // the shoulder-anchored eye minus the head's, in the body's frame (as of the last armed frame)
     bool m_HaveArmedEye = false;
     entt::entity m_PoseSource = entt::null; // the arms rig while it carries PoseSourceTag (not drawn, no shadow)
     // The arms pieces hidden while they ease off a holstered gun, each with its RenderableComponent::CastShadows before that.
@@ -308,7 +288,6 @@ private:
     IK::FootLock m_Lock;                        // planted feet held in the world
     std::string m_LastState;                    // the driver's state last frame
     bool m_TurnFade = false;                    // a turn on the spot fading back to its loop (a start may cut in)
-    float m_FootYaw = 0.0f;
     float m_FootOffset[2] = {0.0f, 0.0f};                 // ground under each foot minus the capsule's, smoothed
     glm::vec3 m_FootNormal[2] = {glm::vec3(0, 1, 0), glm::vec3(0, 1, 0)};
     float m_MoveTime = 0.0f;       // seconds of move input in a row (a tap is not a run to stop from)
@@ -322,7 +301,6 @@ private:
         glm::vec2 PivotDir{0.0f, 1.0f}, StepDir{0.0f, 1.0f};
         bool PivotReversed = false;
     } m_Loco;
-    float m_RateTrim = 1.0f;       // the gait loop's play rate trim (its clips' travel onto the capsule's)
     bool m_Armed = false, m_Busy = false; // a gun in hand; aiming or just fired (SetHands)
     std::uint32_t m_Random = 0x9E3779B9u;
     bool m_Still = false;          // standing still at the last Tick (the view's turn is then limited)
@@ -339,21 +317,11 @@ private:
     // Split poses: each piece's world twin (m_Twins[k] for m_Pieces[k]) and its model instance.
     std::vector<entt::entity> m_Twins;
     std::vector<std::shared_ptr<Model>> m_TwinModels;
-    // The drawn body's surface by region, whatever the outfit: every vertex of the world twins (else the pieces)
-    // skinned mostly to the neck / head (a hood, a collar, the face - the world gun's mesh keep-out) or to the
-    // pelvis / spine (a hoodie's body - the elbows' keep-out; thinned to a few thousand). Per model, (mesh,
-    // vertex) pairs found once; SkinnedPoints skins them to world space as posed now, with each one's piece.
-    enum class BodyRegion { Head, Torso };
-    // Each chosen vertex as SkinnedPoints needs it every frame: bind position and its influences with
-    // weights already normalized, bones as indices into the few this region uses (Bones).
-    struct RegionSkinPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[MAX_BONE_INFLUENCE]; float Weight[MAX_BONE_INFLUENCE]; };
-    struct RegionSkin { std::vector<int> Bones; std::vector<RegionSkinPoint> Points; };
-    mutable std::map<const Model*, RegionSkin> m_HeadVerts, m_TorsoVerts;
     // Per model: does it skin anything the arms' solve moves (under its top spine bone or the clavicles)?
     // Legs, feet and rigid pieces don't, so the solve leaves them be (nothing of theirs it moves is drawn).
     std::map<const Model*, bool> m_SkinsUpperBody;
     // The body / arms-rig node pairs CopyArmShape works out by name, per (piece model, rig): the same pairs every
-    // frame, so found once. Keyed by model addresses and node counts; cleared at Stop like m_HeadVerts.
+    // frame, so found once. Keyed by model addresses and node counts; cleared at Stop.
     struct ArmShapeCache { const Model* Body; const Model* Rig; int BodyNodes, RigNodes; std::vector<FirstPersonArmShapeLink> Links; };
     std::vector<ArmShapeCache> m_ArmShapeCache;
     void CopyArmShapeCached(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose, const std::vector<int>& parents,
@@ -362,30 +330,9 @@ private:
     // The same question for any set of roots (a chain's bones), cached by the chain's first name.
     std::map<std::pair<const Model*, std::string>, bool> m_SkinsUnder;
     bool SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key);
-    void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
-    std::vector<glm::vec3> m_TorsoPointBuffer; // ArmsLateUpdate's, kept so the frame doesn't allocate
-    std::vector<glm::vec3> m_HeadPointBuffer;  // the world head as skinned for the world gun's seat and the cheek weld
-    std::vector<glm::vec3> m_HeadScratch;      // the head turned by the cheek weld, checked against the gun
-    glm::vec3 m_WorldGunShift{0.0f};           // the shoulder lock's move of the world gun (world)
-    glm::vec3 m_WorldGunShiftLocal{0.0f};      // ... eased in the world body's own frame, so a turn doesn't leave it behind
-    // The twin's hand anchor: where the 3P clips' frame sits on its chest holding at the hip looking level (learned, for
-    // `m_AnchorClips`), the free hand's action (eased), and this frame's move and shares.
-    glm::mat4 m_ChestFromClips{1.0f};
-    bool m_HaveChestFromClips = false;
-    const Model* m_AnchorClips = nullptr;
-    float m_FreeHand = 0.0f;
-    bool m_FreeHandWasOff = false; // this hold on the body has had the hand off its grip (the levelling then leaves with it)
-    float m_HoldDroop = 0.0f; // the world gun's bore below the view with both hands on it (radians), learned
-    bool m_HaveHoldDroop = false;
-    glm::mat4 m_CarriedMove{1.0f};
-    float m_TwinAnchorWeight = 0.0f;
-    float m_TwinAnchorRate = 0.0f; // its ease's speed (per s)
-    glm::vec3 m_CarriedHand{0.0f};
-    float m_WorldHeadTiltDeg = 0.0f, m_WorldHeadTiltWeight = 0.0f; // the cheek weld as last applied (diagnostics)
-    float m_TwinHandGap[2] = {0.0f, 0.0f};
+    float m_TwinHandGap[2] = {0.0f, 0.0f}; // m each world hand ended up off the world gun's grip (the twins' solve)
     FirstPersonArmTwist m_ArmTwist;
-    float m_WristRoll[2] = {0.0f, 0.0f}, m_WristResidual[2] = {0.0f, 0.0f}; // the world body's, degrees (diagnostics)
-    void ArmTwist(const std::vector<std::shared_ptr<Model>>& models, bool twins);
+    void ArmTwist(const std::vector<std::shared_ptr<Model>>& models);
     glm::mat4 m_WorldGunDelta{1.0f};
     // The twins' own Arm Steadiness / elbow state (the pieces' is m_ShoulderAnchor ... m_ElbowAim).
     glm::vec3 m_WorldShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
@@ -397,7 +344,7 @@ private:
     bool m_HaveCameraBase = false;
     glm::vec3 m_BodyEye{0.0f}, m_ViewKick{0.0f}; // LateUpdate's eye and the presentation's kick on top (diagnostics)
     float m_LeanWanted = 0.0f, m_LeanShoulders = 0.0f; // the lean's side step and the spine's share of it (diagnostics)
-    glm::vec3 m_HeadSlow{0.0f}, m_HeadEased{0.0f}; // unarmed: the clips' head, a slow average and the eye's follow of it
+    glm::vec3 m_HeadEased{0.0f}; // unarmed: the clips' head as the eye follows it (FirstPersonBodyFollowShoulders)
     float m_EyeArmsWeight = 0.0f;    // m_ArmsWeight as LateUpdate's eye used it
     float m_ArmsWeightPrev = 0.0f;   // ... and before LateUpdate eased it (ArmsLateUpdate re-decides from it)
     bool m_ArmsWeightEased = false;  // LateUpdate has eased m_ArmsWeight this frame
@@ -429,6 +376,11 @@ float FirstPersonBodyYaw(const glm::vec3& front, float fallback = 0.0f);
 float FirstPersonBodyWrapAngle(float radians);
 // A world velocity in the frame of a body at heading `yaw`: x = to its right, y = forward.
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
+// m/s (world, flat) the gait loop `stateName` on the body's driver carries the body at PlayRate 1 and the controller's
+// current parameters: its clips' root travel as the phase-synced blend plays them (each child covers its whole clip in a
+// cycle as long as the children's weighted mean length), times the state's speed and the driver's world scale. The open-loop
+// half of BodyLocomotion::LoopPlayRate. < 0 when it can't be read (no controller, state, root bone or attached clip).
+float FirstPersonBodyLoopTravel(const World& world, entt::entity driver, const char* stateName);
 // The eye in model space: the head's standing position, plus `bob` of the head's motion away
 // from it, plus `offset` given in the body's frame (x right, y up, z forward).
 // How far the pelvis moves (metres, + up) to put the feet on ground `offL` / `offR` above the
@@ -462,28 +414,10 @@ struct FirstPersonGunSeatBody {
 // How far the world gun moves off `gun.ButtWorld` / `gun.ForwardWorld` to sit on `body`: its butt into the right shoulder
 // pocket by Shouldered; out of the neck and hood keep-outs; out of the drawn head (and, by Torso Keep Out, the torso) by
 // Mesh Clearance; at most Max Shift. The mesh part is written to `meshPush` when points were given, and `cachedMeshPush`
-// stands in for it when not (a caller skinning every few frames). The player's world body and the soldiers both use it.
+// stands in for it when not (a caller skinning every few frames). (No caller since the soldiers went and the player's world
+// body took the 3P clips' hold as it is; kept, with its unit test, until those are retired together.)
 glm::vec3 FirstPersonGunSeat(const FirstPersonWorldGunInput& gun, const FirstPersonGunSeatBody& body, glm::vec3* meshPush = nullptr,
                              const glm::vec3* cachedMeshPush = nullptr);
-// The world bodies' support elbow (the player's world body and the soldiers): how far it turns from the clips' bend plane
-// to hanging under the gun while the hand is on it. The first-person clips wing that elbow out to the side, for the camera.
-constexpr float kFirstPersonSupportHang = 0.6f;
-// The player's world body, the free hand off the gun (a reload, a mag check): the share of the view's pitch the world gun
-// gives up, about its butt. Looking up or down it comes that far back toward level, so the hand works on it in front of
-// the chest instead of overhead or at the feet. The aim comes back as the hand does.
-constexpr float kFirstPersonFreeHandLevel = 0.5f;
-// The player's world body, shouldered and standing: its chest turned this many degrees further side-on (the support shoulder forward)
-// than the first-person stance, the head turned back to the view. Square to the gun, the support arm reached nearly
-// straight down the handguard; bladed, the gun's shoulder goes back and the support one forward, and the elbow bends.
-constexpr float kFirstPersonTwinBlade = 10.0f;
-// The player's world body, crouched on the sights: its spine pitched back this many degrees (the head forward by the same,
-// so it stays on the view), the gun going with the shoulder. The crouch clips hunch the torso far over the knees; held so
-// on the sights the head was out over the gun, the stock in front of the face and the arms out straight.
-constexpr float kFirstPersonCrouchAimUpright = 35.0f;
-// The player's world body, the free hand off the gun (the pouch, the shells): the first-person clips' reach is placed from an
-// eye this far (metres) ahead of the hips, over them and facing their way - a body square to its view, as the clips were
-// authored for - not from the real eye, out over the gun of a body standing side-on to it.
-constexpr float kFirstPersonSquareEyeAhead = 0.25f;
 // The hand anchor's share for something `distance` off the gun's box: 0 within `nearDist`, 1 from `farDist`, smoothstep between.
 float FirstPersonAnchorWeight(float distance, float nearDist, float farDist);
 // `m` (any frame, scale kept) moved `weight` of the way by the rigid world move `move`: its origin along the straight line,
@@ -513,8 +447,6 @@ void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& lin
 float FirstPersonBodyFollow(float dt, float seconds, float snapBelow = 1e-4f);
 // A rotation's angle, radians (0..pi).
 float FirstPersonBodyAngleOf(const glm::quat& q);
-// `q` limited to `maxAngle` (radians), then `weight` of it (0..1).
-glm::quat FirstPersonBodyLimitTurn(const glm::quat& q, float maxAngle, float weight);
 // The collarbone turned about its inner end so the upper arm heads for `want` (model space), by at most `maxAngle` -
 // never slid, which stretched the skin between neck and shoulder. Returns the turn made (model space).
 glm::quat FirstPersonBodyTurnClavicle(std::vector<LocalTRS>& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,
@@ -529,23 +461,15 @@ bool FirstPersonBodyReachLean(const std::vector<glm::mat4>& globals, const int (
 // transform), in the view's frame (x right, y up, z forward).
 glm::vec3 FirstPersonBodyRigEyeToShoulders(const glm::mat4& rigWorld, const glm::mat4& upperL, const glm::mat4& upperR,
                                            const glm::mat4& cameraBone, const Camera& cam);
-// The shoulders the eye hangs off (model space), a step on: `slow` follows the clips' `animated` shoulders over half a
-// second, `eased` follows `headBob` (per axis) of their motion about it over `smoothing` seconds and never trails them by more than
-// `eyeSlack` - pulled back in over `slackSeconds`, or snapped there at 0. `have` false starts both on `animated`.
-void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, glm::vec3 headBob,
-                                    float smoothing, float eyeSlack, float slackSeconds, float dt);
+// Seconds the eye's anchor (the shoulders armed, the head unarmed) takes to follow the clips': the one smoothing on it.
+// The walk's sway and bob stay out of the view (the bob is the procedural camera's); a crouch, a stop's lean come through.
+constexpr float kFirstPersonEyeFollowSeconds = 0.5f;
+// The shoulders (or head) the eye hangs off (model space), a step on: `eased` follows the clips' `animated` over
+// kFirstPersonEyeFollowSeconds and never trails them by more than `eyeSlack` - pulled back in over `slackSeconds`, or
+// snapped there at 0 (the arms' reach: past it a hand comes off the gun). `have` false starts it on `animated`.
+void FirstPersonBodyFollowShoulders(glm::vec3& eased, bool& have, const glm::vec3& animated, float eyeSlack, float slackSeconds, float dt);
 // Armed Eye Offset (the body's frame: x right, y up, z forward) in model space, by how much of it applies at `pitchRadians`.
 glm::vec3 FirstPersonBodyArmedEyeOffset(const glm::vec3& offset, float pitchRadians);
-// The largest share (0..1) of a move that `clears` says is clear: 1 when all of it is, else found in six halvings.
-template <class Clears> float FirstPersonBodyLargestClearShare(Clears&& clears) {
-    if (clears(1.0f)) return 1.0f;
-    float lo = 0.0f, hi = 1.0f;
-    for (int it = 0; it < 6; ++it) {
-        const float mid = 0.5f * (lo + hi);
-        (clears(mid) ? lo : hi) = mid;
-    }
-    return lo;
-}
 // FirstPersonBodyArmShapeLinks' core, by node index: `rigOf(i)` is body node i's counterpart in the rig (-1 none),
 // `clavicles` the body's two collarbone nodes (-1 none). The nodes under a clavicle (parents come first), in order.
 void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],
