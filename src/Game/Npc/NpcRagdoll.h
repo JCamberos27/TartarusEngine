@@ -146,6 +146,10 @@ public:
     float HitCorpse(int part, const glm::vec3& dir, float damage, const glm::vec3& point, const RagdollSettingsComponent& cfg);
     // Part `part`'s centre (world), as last stepped.
     glm::vec3 PartPosition(int part) const;
+    // (Tests) What Start gave the parts on top of the body's velocity: the fastest part's own speed (m/s) and spin (rad/s) from
+    // the two poses (InheritVelocity), 0 without a previous pose.
+    float StartLimbSpeed() const { return m_StartLimbSpeed; }
+    float StartLimbSpin() const { return m_StartLimbSpin; }
     // The drive's strength now (the strongest region's), 1 at the moment of death to 0 once faded.
     float DriveLeft() const { return m_Drive; }
     // How the drives fade: seconds from death to limp (the default; a Ragdoll Settings overrides it, see DriveFadeTime).
@@ -223,6 +227,7 @@ private:
     float m_PartFade[kRagParts];        // per part: seconds to limp
     float m_DistalDamping = 0.0f;    // the hands' and feet's joint damping floor
     float m_Stiffness = 700.0f, m_Damping = 60.0f; // the drives' strength, from the settings
+    float m_StartLimbSpeed = 0.0f, m_StartLimbSpin = 0.0f; // (tests) see StartLimbSpeed
     // Scratch, reused every frame.
     std::vector<glm::mat4> m_Globals;
     std::vector<LocalTRS> m_Pose;
@@ -256,8 +261,8 @@ NpcPartShape NpcPartShapeOf(const NpcPartDef& def, const glm::vec3& a, const glm
 
 // A soldier hit but not killed: the struck region's bones are kicked along the round (a rotation about each bone's own joint,
 // axis = bone x round direction, so its far end goes where the round did) and a critically damped spring brings them back within
-// the Ragdoll Settings' Flinch Duration. It is added to the animated pose after the late pose and the hitboxes (so aim, eye and
-// hitboxes never see it), on top of the animator's own hit reaction; scaled by damage and by the region (a head or an arm kicks
+// the Ragdoll Settings' Flinch Duration. It is added to the driver's animated pose before the foot pass (the planted feet stay put,
+// the look and the hitboxes are posed on top of it), on top of the animator's own hit reaction; scaled by damage and by the region (a head or an arm kicks
 // further than the chest), and several rounds in a row add up to a cap. Pure maths (Hit, Rotations) apart from Apply.
 class NpcFlinch {
 public:
@@ -272,8 +277,11 @@ public:
     bool Active(float now) const;
     // Each bone's rotation vector (rad, root space) at `now`.
     void Rotations(float now, glm::vec3 out[kBones]) const;
-    // Adds them to every piece's applied pose (once per fresh pose: a held pose already has the last frame's).
-    void Apply(NpcBody& body, float now) const;
+    // Adds them to one skeleton's pose: `pose` and its model-space `globals` (the body's root frame) current on entry, and still
+    // current on return. Done once, on the driver, before the foot pass (NpcBody::LateUpdate's kick): the foot IK keeps planted
+    // feet where they were, and the driver's pose carries it to every other piece (one skeleton, one frame).
+    void ApplyPose(const Model& m, std::vector<LocalTRS>& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,
+                   float now) const;
     int Count() const { return (int)m_Kicks.size(); }
     // 0 at the hit, 1 at the peak (a fifth of the duration in), ~0.06 at `duration`, ~0 well after.
     static float Curve(float age, float duration);

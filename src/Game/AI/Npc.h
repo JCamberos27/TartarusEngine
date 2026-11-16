@@ -46,7 +46,6 @@ struct Npc {
     float DiedAt = 0.0f;
     float UnseenSince = -1.0f;      // a corpse: since when the player hasn't seen it (-1: in sight now)
     float LastHurt = -1e9f;
-    glm::vec3 LastHurtFrom{0.0f};
     int Hits = 0;
     float StaggerUntil = 0.0f;      // a heavy hit: slowed until then ...
     glm::vec3 PushVel{0.0f};        // ... and shoved back along the round (m/s, decays)
@@ -55,6 +54,9 @@ struct Npc {
     int Lod = 1;
     bool Animate = true;            // this frame runs the animators and the late pose
     float LateDt = 0.0f;            // time since the late pose last ran (frames skipped by the LOD)
+    // The last late pose's finished pose (foot IK, look, flinch: as drawn), LateDt old; a kill's ragdoll takes its limbs' velocity
+    // from it (NpcDirector::Kill). Valid false until the first late pose.
+    NpcRagdoll::BoneSnapshot LastPose;
     float SpawnedAt = 0.0f;
     float PlayerDist = 0.0f;
     bool OnScreen = true;

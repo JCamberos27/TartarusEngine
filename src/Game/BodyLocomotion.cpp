@@ -18,6 +18,7 @@ constexpr float StepMaxTime = .3f;       // a tap shorter than this is a step, n
 constexpr float SprintWarpMax = 50;      // degrees the legs turn into a diagonal sprint (the torso keeps the view)
 constexpr float FidgetMin = 10, FidgetMax = 20;
 constexpr float StartOffAngle = 60;      // degrees the travel may swing off a start's push-off before it gives way to the loop
+constexpr float TurnTailTime = .25f;     // seconds a turn on the spot's clip fades out to the loop once it is over (its transition's)
 
 glm::vec3 V(const Vec3& v) { return {v.x, v.y, v.z}; }
 Vec3 V(const glm::vec3& v) { return {v.x, v.y, v.z}; }
@@ -47,6 +48,14 @@ float DistanceToTurn(float v, float target, float tau) {
     return std::max(0.0f, v * tau - target * tau * std::log(1 + v / target));
 }
 
+float LoopPlayRate(float capsuleSpeed, float loopTravel, float responsiveness, float maxRate) {
+    constexpr float MinTravel = .05f, Fade = .3f, MinRate = .5f; // m/s, m/s, x authored
+    if (!(loopTravel > MinTravel) || !(capsuleSpeed > 0)) return 1;
+    const float rate = std::clamp(capsuleSpeed / loopTravel, MinRate, std::max(maxRate, 1.0f));
+    const float fade = std::min(std::min(capsuleSpeed, loopTravel) / Fade, 1.0f);
+    return 1 + (rate - 1) * fade * std::clamp(responsiveness, 0.0f, 1.0f);
+}
+
 void Update(BodyMotionFrame& f) {
     f.Triggers = 0; f.SetTurnAngle = 0; f.StartOff = 0;
     const glm::vec3 velocity = V(f.Velocity), wishVelocity = V(f.WishVelocity);
@@ -62,22 +71,43 @@ void Update(BodyMotionFrame& f) {
     }
     const glm::vec3 a = AsClip(wishVelocity, f), b = AsClip(moving, f);
     const glm::vec3 target = a + (b - a) * responsiveness;
-    const float clip = ClipSpeed(movingSpeed, f);
-    f.PlayRate = clip > .05f ? 1 + (std::clamp(movingSpeed / clip, 1.0f, std::max(f.MaxPlayRate, 1.0f)) - 1) *
-                                   std::min(clip / .5f, 1.0f) * (sprint ? 1 : responsiveness) : 1;
+    // (The gait loop's PlayRate is LoopPlayRate's: the body works it out from the loop's own clips.)
     f.SprintRate = f.SprintClip > .1f ? std::clamp(movingSpeed / f.SprintClip, .8f, 1.5f) : 1;
     const bool hold = f.StartStopClips && glm::length(target) < .01f && f.IdleTime < f.StopDebounce &&
                       glm::length(move) > (f.Crouched ? f.StopMinSpeedCrouched : f.StopMinSpeed);
     if (!hold) move += (target - move) * Follow(f.Dt, f.ParamSmoothing);
     f.AirTime = f.Grounded ? 0 : f.AirTime + f.Dt;
     const bool still = f.Grounded && wishSpeed < .1f && glm::length(move) < .2f; f.Still = still && f.TurnThreshold > 0;
+    // (A turn on the spot too: moving off part way round it starts - turning for what is left - rather than fading the loop up.)
+    const bool idling = f.IsLocomotion || f.IsCrouchLoco || f.IsStep || f.IsFidget || f.IsTurn || f.IsCrouchTurn;
+    // A start this frame, and whether it turns the body, are decided from the heading the body has - not one already eased
+    // toward the view and clamped to its lag: a goal straight behind, eased a little and clamped to the 90 degree lag, picked
+    // a 90 degree turning start for a 180 degree turn. On that frame the heading is left alone; the clip's yaw turns it.
+    // (Moving, the body is never still, so a turn on the spot below always ends this frame: no !Turning needed here.)
+    const bool starting = f.StartStopClips && f.Grounded && wishSpeed > .1f && idling && f.IdleTime >= f.StartIdleTime &&
+                          glm::length(move) < f.StartMaxMove;
+    const float travel = Wrap(Heading(wishWorld) - faceYaw);
+    const auto startTurns = [&](float lag) {
+        return starting && std::abs(lag) > StartTurnMin * Rad && std::abs(travel) < StartTurnTravel * Rad;
+    };
     float offset = Wrap(faceYaw - f.Yaw);
+    // A turn on the spot's clip still playing out once the turn is over - its state not yet left, or fading out to the loop
+    // (TurnTailTime, counted up to 0 in TurnTime) - still turns the body by its yaw, up to where it should face: stripped, the
+    // feet would twist round under a body that has stopped. (Never with the turn's own yaw below: that runs only while Turning.)
+    if (!f.Turning) {
+        if (f.TurnThreshold > 0 && (f.IsTurn || f.IsCrouchTurn || (f.TurnTime < 0 && (f.IsLocomotion || f.IsCrouchLoco)))) {
+            const float step = f.RootYaw * Rad;
+            if (Sign(step) == Sign(offset)) f.Yaw += std::copysign(std::min(std::abs(step), std::abs(offset)), step);
+            offset = Wrap(faceYaw - f.Yaw);
+        }
+        f.TurnTime = std::min(f.TurnTime + f.Dt, 0.0f);
+    }
     if (f.TurnThreshold <= 0) { f.Yaw = faceYaw; f.Turning = 0; }
     else if (f.Turning) {
         f.TurnTime += f.Dt;
         if (f.IsTurn || f.IsCrouchTurn) { const float step = f.RootYaw * Rad; f.Yaw += step; f.TurnDone += step; }
         offset = Wrap(faceYaw - f.Yaw); const bool clipDone = f.TurnTime > f.TurnMinTime && (!(f.IsTurn || f.IsCrouchTurn) || f.StateTime >= .97f);
-        if (!still || std::abs(offset) < f.TurnEndAngle * Rad || clipDone || f.TurnTime > f.TurnTimeout) f.Turning = 0;
+        if (!still || std::abs(offset) < f.TurnEndAngle * Rad || clipDone || f.TurnTime > f.TurnTimeout) { f.Turning = 0; f.TurnTime = -TurnTailTime; }
     } else if (still) {
         // A turn on the spot is never under 45 degrees of clip: each side's smallest, so the sides never mix.
         if (std::abs(offset) > f.TurnThreshold * Rad) {
@@ -88,18 +118,15 @@ void Update(BodyMotionFrame& f) {
         // A start that turns: the body takes the clip's own yaw, up to where it should face.
         const float step = f.RootYaw * Rad;
         if (Sign(step) == Sign(offset)) f.Yaw += std::copysign(std::min(std::abs(step), std::abs(offset)), step);
-    } else if (!(f.IsStop && !f.Moving)) f.Yaw += offset * Follow(f.Dt, f.TurnMoveEase);
+    } else if (!(f.IsStop && !f.Moving) && !startTurns(offset)) f.Yaw += offset * Follow(f.Dt, f.TurnMoveEase);
     // (A stop's feet are planting: the body holds its heading through it - swung round, the planted feet would skate round
     // with it - and a turn still owed plays on the spot once it is stood. The lag clamp below still bounds it.)
-    if (f.TurnThreshold > 0 && !f.IsStartTurn) {
+    if (f.TurnThreshold > 0 && !f.IsStartTurn && !startTurns(Wrap(faceYaw - f.Yaw))) {
         const float lag = Wrap(faceYaw - f.Yaw), max = std::max(f.TurnThreshold + f.TurnLagMargin, f.TurnLagFloor) * Rad;
         if (std::abs(lag) > max) f.Yaw = faceYaw - std::copysign(max, lag);
     }
     f.Yaw = Wrap(f.Yaw); f.Twist = Wrap(f.ViewYaw - f.Yaw);
     const glm::vec3 wish = Local(wishVelocity, f.Yaw); const float wishLen = glm::length(wish); f.Moving = wishLen > .1f;
-    // (A turn on the spot too: moving off part way round it starts - turning for what is left - rather than fading the loop up.)
-    const bool idling = f.IsLocomotion || f.IsCrouchLoco || f.IsStep || f.IsFidget || f.IsTurn || f.IsCrouchTurn;
-    const bool plain = f.StartStopClips && f.Grounded && idling && !f.Turning;
     const bool going = f.StartStopClips && f.Grounded && !f.Turning && (f.IsLocomotion || f.IsCrouchLoco || f.IsStart || f.IsPivot || f.IsSprint);
     if (f.StartStopClips && f.Grounded && !f.Moving && glm::length(move) < .4f && f.Crouched != f.WasCrouched) {
         if (f.Crouched && f.IsLocomotion) f.Triggers |= kBodyCrouchDown;
@@ -109,12 +136,12 @@ void Update(BodyMotionFrame& f) {
     const float moveClip = glm::length(move);
     if (f.Moving) {
         const glm::vec3 dir = wish / wishLen;
-        if (plain && f.IdleTime >= f.StartIdleTime && moveClip < f.StartMaxMove) {
+        if (starting) {
             f.StartDir = V(dir); f.StartGait = Gait(ClipSpeed(wishSpeed, f), sprint); f.StartTurn = 0; f.StartTurnAmount = 1;
             // Moving off toward where the body should face but isn't yet (the view whipped round, or a new
-            // heading): a start that turns it on the way.
-            const float lag = Wrap(faceYaw - f.Yaw), travel = Wrap(Heading(wishWorld) - faceYaw);
-            if (std::abs(lag) > StartTurnMin * Rad && std::abs(travel) < StartTurnTravel * Rad) {
+            // heading): a start that turns it on the way. (Its heading was left as it came in, above.)
+            const float lag = Wrap(faceYaw - f.Yaw);
+            if (startTurns(lag)) {
                 float amount = std::clamp(std::abs(lag) / (45 * Rad), 1.0f, 4.0f);
                 if (f.Crouched) amount = std::nearbyint(amount); // half to even, as the original rounding did
                 f.StartTurn = std::copysign(amount, lag); f.StartTurnAmount = amount;

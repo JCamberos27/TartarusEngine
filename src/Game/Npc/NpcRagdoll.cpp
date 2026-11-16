@@ -732,6 +732,7 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
     glm::mat4 partWorld[kRagParts];
     if (!BuildParts([&](const char* name, glm::vec3& out) { return name && body.BoneWorld(name, out); }, root, velocity, cfg, parts, partWorld))
         return false;
+    m_StartLimbSpeed = m_StartLimbSpin = 0.0f;
     if (prev && prev->Valid) { // each part's own motion: its pose against the one before, both in the body's (fixed) root frame
         auto before = [&](const char* name, glm::vec3& out) {
             for (int k = 0; k < kSnapBones; ++k)
@@ -741,6 +742,12 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
         PhysicsWorld::RagdollPart prevParts[kRagParts];
         glm::mat4 prevWorld[kRagParts];
         if (BuildParts(before, root, velocity, cfg, prevParts, prevWorld)) InheritVelocity(prevWorld, partWorld, prevDt, cfg, parts);
+        for (int i = 0; i < kRagParts; ++i) { // (tests) what each part took on top of the body's velocity
+            const glm::vec3 v(parts[i].Velocity[0] - velocity.x, parts[i].Velocity[1] - velocity.y, parts[i].Velocity[2] - velocity.z);
+            const glm::vec3 w(parts[i].AngularVelocity[0], parts[i].AngularVelocity[1], parts[i].AngularVelocity[2]);
+            m_StartLimbSpeed = std::max(m_StartLimbSpeed, glm::length(v));
+            m_StartLimbSpin = std::max(m_StartLimbSpin, glm::length(w));
+        }
     }
     const PhysicsWorld::RagdollParams bodyParams = BodyParams(cfg);
     m_Id = PhysicsWorld::CreateRagdoll((unsigned)entt::to_integral(body.Root()), parts, kRagParts, &bodyParams);
@@ -1010,31 +1017,22 @@ void NpcFlinch::Rotations(float now, glm::vec3 out[kBones]) const {
     }
 }
 
-void NpcFlinch::Apply(NpcBody& body, float now) const {
+void NpcFlinch::ApplyPose(const Model& m, std::vector<LocalTRS>& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,
+                          float now) const {
+    if ((int)pose.size() != m.NodeCount() || parents.size() != pose.size() || globals.size() != pose.size()) return;
     glm::vec3 rot[kBones];
     Rotations(now, rot);
-    thread_local std::vector<int> parents;
-    thread_local std::vector<glm::mat4> globals;
-    thread_local std::vector<LocalTRS> pose;
     struct Item { int Node; glm::quat Q; };
-    std::vector<Item> items;
-    for (const auto& mp : body.Models()) {
-        Model& m = *mp;
-        pose = m.AppliedLocalPose();
-        if ((int)pose.size() != m.NodeCount()) continue;
-        items.clear();
-        for (int i = 0; i < kBones; ++i) {
-            const float l = glm::length(rot[i]);
-            if (l < 1e-5f) continue;
-            const int node = m.NodeIndex(kFlinchBones[i]);
-            if (node >= 0) items.push_back({node, glm::angleAxis(l, rot[i] / l)});
-        }
-        if (items.empty()) continue;
-        std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.Node < b.Node; }); // parents first
-        parents.resize(pose.size());
-        for (int i = 0; i < (int)pose.size(); ++i) parents[(size_t)i] = m.NodeParent(i);
-        IK::ComputeGlobals(pose, parents, globals);
-        for (const Item& it : items) IK::OffsetBone(pose, parents, globals, it.Node, glm::vec3(0.0f), it.Q, IK::Position(globals[(size_t)it.Node]));
-        m.ApplyLocalPose(pose);
+    Item items[kBones];
+    int count = 0;
+    for (int i = 0; i < kBones; ++i) {
+        const float l = glm::length(rot[i]);
+        if (l < 1e-5f) continue;
+        const int node = m.NodeIndex(kFlinchBones[i]);
+        if (node >= 0) items[count++] = {node, glm::angleAxis(l, rot[i] / l)};
     }
+    std::sort(items, items + count, [](const Item& a, const Item& b) { return a.Node < b.Node; }); // parents first
+    // (OffsetBone refreshes everything under the bone it moves: the globals stay current for the next, and for the caller.)
+    for (int k = 0; k < count; ++k)
+        IK::OffsetBone(pose, parents, globals, items[k].Node, glm::vec3(0.0f), items[k].Q, IK::Position(globals[(size_t)items[k].Node]));
 }

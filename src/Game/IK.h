@@ -85,7 +85,9 @@ struct TwoBoneHint {
     float MaxLimbScale = 1.0f;
     // Model-space bend axis (the way cross(root->end, root->mid) turns for a correctly bent limb) taken in place of the
     // pose's own by BendAxisWeight: near straight the pose's bend plane is rounding noise, and a knee bent out of a straight
-    // leg would go a different way each frame. 0 = the pose's own.
+    // leg would go a different way each frame. Before the solve the limb swings rigidly about its root->end line by
+    // BendAxisWeight of the angle from its own bend plane to this one (the end stays put, so the result is continuous in
+    // the weight and still lands on the target). 0 = the pose's own.
     glm::vec3 BendAxis{0.0f};
     float BendAxisWeight = 0.0f;
 };
@@ -149,105 +151,51 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
 // for the Inspector's warning. Empty when the rig can run as set up.
 std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& model);
 
-// ---- foot slide correction ----
-// Two layers on top of the authored locomotion, both off by default, both weighted 0..1. Stride warping scales the
-// pelvis-relative foot offsets along the travel so the feet cover the ground at the capsule's real speed (blend-tree
-// speeds, speed multipliers, crouch speed) instead of the clip's authored one, and lowers the pelvis for the longer
-// reach; foot pinning then holds each planted foot where it landed (the leg re-solved by the caller) and releases it
-// with a short blend. The same step runs for the player's body and for NPCs.
-struct FootSlideSettings {
-    bool PinEnabled = false;
-    float PinWeight = 1.0f;      // 0..1
-    float PinRelease = 0.06f;    // seconds the pin takes to let go once the foot lifts (it takes half that to grab)
-    float PinMaxDrift = 0.25f;   // metres a pinned foot may lag the body before the pin is dragged along (a leash)
-    bool StrideEnabled = false;
-    float StrideWeight = 1.0f;   // 0..1
-    float StrideMin = 0.75f;     // the stride is never scaled below / above these
-    float StrideMax = 1.35f;
-    float PelvisAdjust = 1.0f;   // 0..1: how much of the pelvis drop a longer stride needs is applied
-    bool Active() const { return PinEnabled || StrideEnabled; }
-};
-struct FootSlideInput {
-    glm::vec3 Feet{0.0f};        // the capsule's foot position (world)
-    glm::vec3 Velocity{0.0f};    // the capsule's velocity (world; only the horizontal part is read)
-    glm::vec3 Foot[2];           // each animated foot (world)
-    float Height[2] = {0, 0};    // each animated foot's height over the capsule's feet (m)
-    glm::vec3 Pelvis{0.0f};      // the animated pelvis (world)
-    float LegLength = 0.9f;      // thigh + calf (m), for the pelvis drop
-    float PlantHeight = 0.05f;   // a foot within this of its own lowest height counts as planted (m)
-    float ClipSpeed = -1.0f;     // the playing gait's own ground speed when the animator knows it (m/s); < 0 = estimate it from the feet
-    float Dt = 0.0f;
-};
-struct FootSlideOutput {
-    glm::vec3 Shift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> where the leg should reach
-    float PelvisDrop = 0.0f;                                  // metres, >= 0
-    float Scale = 1.0f;                                       // the stride scale applied
-};
-
-FootSlideOutput SmoothFootSlideOutput(const FootSlideOutput& current,const FootSlideOutput& target,float dt,float ease);
-// The planted feet's drift while they are planted, per plant (cm in the log): what the correction is judged by.
-struct FootSlideStats {
-    int Plants = 0;
-    float SumSlide = 0.0f, MaxSlide = 0.0f; // metres
-    void Clear() { *this = FootSlideStats{}; }
-};
-// groundSpeed / clipSpeed clamped to [lo, hi]; 1 when either is too small to mean anything (standing, turning, no estimate).
-float StrideScale(float groundSpeed, float clipSpeed, float lo, float hi);
-// How far the pelvis sinks (m, >= 0) when a foot at `reach` metres along the travel reaches `scale` times as far on a leg of `legLength`.
-float StrideWarpPelvisDrop(float legLength, float reach, float scale, float adjust);
-
-class FootSlide {
-public:
-    void Reset() { *this = FootSlide{}; }
-    // One frame. `measureOnly`: report the stats without changing anything (both layers off).
-    FootSlideOutput Step(const FootSlideSettings& set, const FootSlideInput& in, bool measureOnly = false);
-    bool Planted(int s) const { return m_Planted[s]; }
-    float ClipSpeed() const { return m_ClipSpeed; } // the estimated authored ground speed of the playing clips (m/s; < 0 = none yet)
-    float Scale() const { return m_Scale; }
-    FootSlideStats Stats;
-private:
-    bool m_Planted[2] = {false, false};
-    float m_PlantTime[2] = {0.0f, 0.0f};
-    glm::vec3 m_Lock[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
-    float m_PinWeight[2] = {0.0f, 0.0f};
-    glm::vec2 m_PrevRel[2] = {glm::vec2(0.0f), glm::vec2(0.0f)};
-    bool m_HavePrev = false;
-    float m_Floor[2] = {0.0f, 0.0f}; // each foot's lowest animated height (the ankle over the ground when flat)
-    float m_ClipSpeed = -1.0f;
-    float m_Scale = 1.0f;
-    glm::vec3 m_PlantStart[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
-    float m_Slide[2] = {0.0f, 0.0f};
-};
 // ---- foot locking ----
 // A planted foot stays where it landed in the world, whatever the clips and the capsule disagree on (a blend's stride
 // against the capsule's speed, a body turning on the spot, a start or stop's travel, a crossfade between two gaits).
 // A foot plants when it is down - within Height of its own lowest point - and its animated foot barely moves over the
-// ground (under Speed m/s: a swinging foot passing low never plants). It lets go when it lifts, and the lag it built up is
-// eased out over Release seconds (smoothstep), so the foot catches up through its swing instead of popping. When the
-// animation wanders MaxDrift metres from a foot that is still down (a turn on the spot ending part way through a step,
-// a stance that changes under a planted foot), the foot steps there: it lifts in an arc (StepHeight a metre of the way,
-// at most StepMax) while it catches up, and plants again only once it has. The player's body and the soldiers alike.
+// ground (under Speed m/s: a swinging foot passing low never plants). That speed leaves the body's own turn out: it is the
+// root's travel plus the foot's move in the body (the clip's), so a foot the clip holds still plants however fast the body
+// is swung round (its world speed is the turn rate times its distance from the root - 4 m/s at 600 degrees a second).
+// It lets go when it lifts, and the lag it built up is eased out over Release seconds (smoothstep), so the foot catches up
+// through its swing instead of popping. When holding it would take more than Reach of the leg (Overreach: the hips have
+// walked or climbed on from it), or - a safety - the animation wanders MaxDrift metres from it while it is still down, the
+// foot steps there: it lifts in an arc (StepHeight a metre of the way, at most StepMax) while it catches up, and plants
+// again only once it has. The player's body and the soldiers alike.
 struct FootLockSettings {
     bool Enabled = true;
     float Height = 0.02f;   // m over the foot's own lowest height that still counts as down
     float Lift = 0.045f;    // m over it that lets go (the heel rolling up onto the toe stays planted under this)
-    float Speed = 2.0f;     // m/s the animated foot may move over the ground and still plant
-    float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go
+    float Speed = 2.0f;     // m/s the animated foot may move over the ground (the body's turn left out) and still plant
+    float FlatHeight = 0.008f; // m over its lowest under which a foot the clip slides plants at any speed (the root's under Speed)
+    float Reach = 0.98f;    // x the leg's length (hip to held foot) past which a planted foot lets go and steps
+    float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go (a safety: Reach goes first)
     float Release = 0.2f;   // s a released foot takes to catch up with the animation
     float StepHeight = 0.3f; // a let-go foot that was still down lifts this much per metre it has to go...
     float StepMax = 0.08f;   // ... at most this (m)
 };
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& body);
-// The lock for a body turning `yawRate` radians a second: past 90 degrees a second the leash shortens (to 10 cm by 270), so
-// the feet take quick small pivot steps as the hips come round instead of being held until the legs splay and twist.
-FootLockSettings FootLockTurning(FootLockSettings set, float yawRate);
+// The leg's goal never asks for more than `most` x `length` from `root` (a two-bone chain asked past its reach snaps
+// straight and its knee flips through): up to `knee` x length it is left alone; past that it is drawn in along the
+// root->target line, easing (continuous, no corner) toward `most` without ever reaching it. The player's legs and the
+// soldiers' alike.
+glm::vec3 ClampReach(const glm::vec3& root, const glm::vec3& target, float length, float knee = 0.98f, float most = 0.995f);
 class FootLock {
 public:
     void Reset() { *this = FootLock{}; }
     void ResetFoot(int s) { m_Foot[s] = Foot{}; }
-    // One foot, one frame. `anim`: the animated foot (world). `height`: its height over the capsule's ground (m). Returns
-    // the world offset that puts the foot where it should be drawn: horizontal, plus a step's lift (zero for a free foot).
-    glm::vec3 Step(int s, const FootLockSettings& set, const glm::vec3& anim, float height, float dt);
+    // One foot, one frame. The animated foot is `root` + `facing` * `local`: `root` the body's root on the ground (world),
+    // `facing` its heading, `local` the clip's foot relative to it (the model's space, scaled to metres). `height`: the
+    // foot's height over the capsule's ground (m). Returns the world offset that puts the foot where it should be drawn:
+    // horizontal, plus a step's lift (zero for a free foot).
+    glm::vec3 Step(int s, const FootLockSettings& set, const glm::vec3& root, const glm::quat& facing, const glm::vec3& local,
+                   float height, float dt);
+    // After Step, once the leg's goal is known: `reach` is the hip-to-goal distance with the foot held, `own` without
+    // (the clip's own), both x the leg's length, the hip where it stands after the pelvis has dropped. Past Reach - and
+    // past what the clip itself asks, so a leg the clip has near straight is not let go for nothing - a planted foot lets
+    // go and steps (its lag eased out from the next Step). Returns whether it let go.
+    bool Overreach(int s, const FootLockSettings& set, float reach, float own);
     bool Locked(int s) const { return m_Foot[s].Locked; }
     glm::vec3 Pinned(int s) const { return m_Foot[s].Pin; }
     float LockedTime(int s) const { return m_Foot[s].Time; }
@@ -255,7 +203,10 @@ public:
 private:
     struct Foot {
         bool Have = false, Locked = false;
-        glm::vec3 Prev{0.0f};      // last frame's animated foot
+        glm::vec3 Prev{0.0f};      // last frame's animated foot (world)
+        glm::vec3 PrevRoot{0.0f};  // ... its body's root
+        glm::quat PrevFacing{1.0f, 0.0f, 0.0f, 0.0f}; // ... and heading
+        glm::vec3 PrevLocal{0.0f}; // ... and the foot in the body
         float Floor = 0.0f;        // its lowest height (creeping up)
         glm::vec3 Pin{0.0f};       // where a locked foot is held
         glm::vec3 Offset{0.0f};    // what is applied (horizontal)
@@ -264,19 +215,13 @@ private:
         float Time = 0.0f;         // seconds locked
         float Lift = 0.0f;         // a step's arc height (m; 0 = the foot lifted on its own)
     };
+    static void LetGo(Foot& f, const FootLockSettings& set, bool step);
     Foot m_Foot[2];
 };
 
-FootSlideSettings FootSlideFrom(const FirstPersonBodyComponent& body);
-// The measurement hook for --npc-test: TARTARUS_FOOT_SLIDE_PROBE=0 logs the planted feet's drift with the layers as
-// the scene sets them, =1 also forces both layers on at weight 1 (for the before / after); unset = off (-1).
-int FootSlideProbeMode();
-// Adds `stats` to the running window of `who` and prints it (mean / max drift per plant, cm) every 1.5 s of wall time.
-void FootSlideProbeLog(const char* who, FootSlideStats& stats, float speed, float clipSpeed, float scale);
-
 // The foot slide the eye sees: each frame the FINAL feet (after every IK pass, in the world) are watched; a foot within
 // ContactHeight of its own lowest height is on the ground, and every centimetre it moves sideways while there is slide.
-// Unlike FootSlideStats it runs in every state - turns on the spot, starts, stops, crossfades - and never changes the pose.
+// It runs in every state - turns on the spot, starts, stops, crossfades - and never changes the pose.
 struct FootSlideMeterTotals {
     int Plants = 0;             // contacts that lasted 0.1 s or more
     float SumDrift = 0.0f;      // metres: each plant's furthest drift from where it settled, summed

@@ -691,13 +691,6 @@ struct FirstPersonBodyComponent {
     // All of it within 25 degrees of level; none past 60 up or down (the chest under the eye looking down, the
     // support hand past its reach looking up), eased between.
     glm::vec3 ArmedEyeOffset{0.0f, 0.10f, 0.04f}; // Armed Eye Offset
-    // How much of the head's own motion (bob, sway, lean) the camera follows: 0 = it rides at
-    // the head's standing height, steady; 1 = locked to the head bone.
-    float HeadBob = 0.5f;
-    // ... and of its side-to-side sway: the gait rocks the shoulders a few centimetres each stride, and a view that follows it
-    // rocks with it (a first-person view bobs with the steps but stays steady side to side).
-    float HeadBobSide = 0.15f;
-    float CameraSmoothing = 0.06f; // seconds; smooths the head motion in the body's frame
     // Pieces that cast a shadow but aren't drawn in first person, comma separated: a child is
     // hidden when its name contains one of these (case-insensitive). The camera is in the head.
     std::string HiddenParts = "Head";
@@ -789,10 +782,6 @@ struct FirstPersonBodyComponent {
     float ArmSteadiness = 1.0f; // Arm Steadiness
     float ArmSteadyTime = 0.5f; // Arm Steady Time
     float ArmSteadyMax = 0.04f; // Arm Steady Max
-    // Split poses: each world elbow swings out about its shoulder-to-hand line (the hand stays on the gun) until
-    // the arm around it is this far (metres, the sleeve's thickness) from the drawn torso. A view-model rig tucks
-    // its elbows to a narrower body than this one; in its bend plane they went into the chest. 0 = off.
-    float ElbowClearance = 0.06f; // Elbow Clearance
     // Looking down, the eye moves this far (metres) forward over the chest, eased in from Look Down Start
     // degrees below level to straight down - the head pitching at the neck. Keeps the camera out of the torso.
     float LookDownPush = 0.0f; // Look Down Push
@@ -834,10 +823,9 @@ struct FirstPersonBodyComponent {
     bool FootLockEnabled = true; // Foot Lock
     float FootLockHeight = 0.02f; // Foot Lock Height (m over the foot's lowest)
     float FootLockLift = 0.045f; // Foot Lock Lift (m over the foot's lowest: lets go)
-    float FootLockSpeed = 2.0f; // Foot Lock Speed (m/s the animated foot may move and still plant)
-    float FootLockDrift = 0.25f; // Foot Lock Drift (m the animation may wander before the foot lets go)
+    float FootLockSpeed = 2.0f; // Foot Lock Speed (m/s the animated foot may move over the ground, the body's turn left out, and still plant)
+    float FootLockDrift = 0.25f; // Foot Lock Drift (m the animation may wander before the foot lets go: a safety, the leg's reach goes first)
     float FootLockRelease = 0.2f; // Foot Lock Release (s a let-go foot takes to catch up)
-    float FootPlantedHeight = 0.05f; // Foot Planted Height
     float FootRayUp = 0.5f; // Foot Ray Up
     float FootRayLength = 1.0f; // Foot Ray Length
     float FootMaxRaise = 0.25f; // Foot Max Raise
@@ -853,7 +841,6 @@ struct FirstPersonBodyComponent {
     // --- NPC body tuning (copied to NPC soldiers from the scene's player body) ---
     // NPC body heading and turns
     float NpcTurnThreshold = glm::degrees(1.15f); // NPC Turn Threshold (degrees; ~66 deg body can lag before turning on the spot)
-    float NpcMoveEase = 0.1f; // NPC Move Ease (seconds; blend tree parameter easing)
     float NpcFaceEase = 0.09f; // NPC Face Ease (seconds; heading easing while moving)
     // NPC spine and body aim
     // NPC head look
@@ -867,18 +854,6 @@ struct FirstPersonBodyComponent {
     float NpcFootOffsetEase = 0.05f; // NPC Foot Offset Ease (seconds; vertical foot adjustment easing)
     float NpcFootNormalEase = 0.08f; // NPC Foot Normal Ease (seconds; ground normal easing)
     float NpcFootIKFade = 0.15f; // NPC Foot IK Fade (seconds; foot IK enable/disable easing)
-    // ---- lane A ----
-    // Foot slide correction (docs/CAS_PARITY.md #8); both layers off by default, NPCs use the same numbers
-    bool FootPinEnabled = false; // Foot Pin Enabled
-    float FootPinWeight = 1.0f; // Foot Pin Weight
-    float FootPinRelease = 0.06f; // Foot Pin Release (seconds)
-    float FootPinMaxDrift = 0.25f; // Foot Pin Max Drift (metres)
-    bool StrideWarpEnabled = false; // Stride Warp Enabled
-    float StrideWarpWeight = 1.0f; // Stride Warp Weight
-    float StrideScaleMin = 0.75f; // Stride Scale Min
-    float StrideScaleMax = 1.35f; // Stride Scale Max
-    float StridePelvisAdjust = 1.0f; // Stride Pelvis Adjust
-    // ---- end lane A ----
 };
 
 // A character dressed from a wardrobe (docs/CHARACTER_OUTFITS.md): put it on the body's root. Its children

@@ -156,41 +156,18 @@ struct RecoilAsset {
     bool SaveFile(const std::string& path) const;
 };
 
+// The weapon sway is the SwayModifier port (SwayModifier.h), applied by the presentation on the arms rig's IK pass.
 struct WeaponSwaySettings {
     bool Enabled = true;
-    bool UnityPort = true;
+    bool UnityPort = true; // always true: the pre-port sway is gone (still read by the Inspector and the .fpsanim writer)
     SwayModifierSettings Unity;
-    // Legacy embedded definitions retain these fields until upgraded. New definitions and
-    // the Inspector use the source modifier settings above.
-    // Look sway: the gun lags behind the view. Per 100 degrees/second of turn.
-    float LookRotation = 1.2f;     // degrees
-    float LookPosition = 0.004f;   // metres
-    float MaxRotation = 4.0f;      // degrees
-    float MaxPosition = 0.02f;     // metres
-    // Move sway: the gun trails against movement and tilts into strafes. Per m/s.
-    float MovePosition = 0.0015f;  // metres
-    float MoveRoll = 0.45f;        // degrees
-    float AdsScale = 0.25f;
-    FirstPersonSpring Spring{6.0f, 0.55f};
-    // Hz the look rate is low-passed at before it drives the sway: mouse input is ragged frame
-    // to frame, and the raw rate made the gun buzz. 0 = raw. The Max limits are soft (the sway
-    // eases into them rather than stopping dead).
-    float LookSmoothing = 16.0f;
-    // Free-aim dead zone (CAS Sway): the view turns inside a zone before the gun follows - the gun holds its
-    // line while the view turns up to FreeAimZone degrees (yaw, pitch) off it, then is carried along at the
-    // edge; it comes back to centre at FreeAimReturn degrees/second once the view stops turning. 0 = off.
-    glm::vec2 FreeAimZone{0.0f};
-    float FreeAimReturn = 30.0f;   // degrees/second
-    float FreeAimAdsScale = 0.0f;  // the zone with the sights up, as a fraction (0: the sights stay on the view)
 };
 
-// One step of the free-aim offset (degrees, yaw/pitch of the view relative to the gun's line): the view's turn
-// `lookDelta` (degrees) adds to it, clamped to +-`zone` per axis; with `returning` it eases back to 0 at
-// `returnSpeed` degrees/second. A zero zone gives 0. Exposed for tests.
-glm::vec2 StepFreeAim(glm::vec2 offset, glm::vec2 lookDelta, glm::vec2 zone, float returnSpeed, bool returning, float dt);
-
+// The gun bob itself is retired (weapon locomotion comes from the additive animation layer); its stride, sprint stride and
+// ease still clock the camera bob (WeaponCameraMotionSettings). Enabled and the curves are kept for the Inspector and
+// for round-tripping the .fpsanim, and do nothing at runtime.
 struct WeaponBobSettings {
-    bool Enabled = false; // retired: weapon locomotion comes from the additive animation layer
+    bool Enabled = false;
     // One cycle = one stride (two steps). Curves keyed over 0..1 of a cycle: side, up (metres),
     // roll (degrees).
     float WalkStride = 2.4f;       // metres per cycle
@@ -437,7 +414,6 @@ struct WeaponProceduralInput {
     bool HaveGaitPhase = false;
     float GaitPhase = 0.0f;
     float Dt = 0.0f;
-    glm::vec2 LookRate{0.0f};      // degrees/second of view turn (yaw right +, pitch up +)
     glm::vec3 Velocity{0.0f};      // camera frame, m/s (horizontal plane)
     float VerticalVelocity = 0.0f; // m/s, + up
     bool Grounded = true;
@@ -514,21 +490,19 @@ private:
     float m_BoltTime = 1e9f;
     float m_Trauma = 0.0f;            // camera shake, 0..1
     float m_ShakeTime = 0.0f;         // noise clock (cycles)
-    Spring3 m_RecoilRot, m_RecoilPos, m_SwayRot, m_SwayPos, m_Camera;
+    Spring3 m_RecoilRot, m_RecoilPos, m_Camera;
     Spring3 m_JumpRot, m_JumpPos;      // air lag + landing kick
     Spring3 m_CamMotion;               // landing dip (y), nod (x), strafe roll (z)
     Spring3 m_Punch;                   // per-round camera roll (x), FOV pulse (y)
     Spring3 m_Obstruct;                // retract (x), tuck (y), faces up (z)
     Spring3 m_ObstructSide;            // aside: -1 (on the left) .. 1 (on the right), in x
-    glm::vec2 m_Look{0.0f};            // low-passed look rate
     float m_DriftTime = 0.0f;
     float m_Exertion = 0.0f;           // 0..1
-    glm::vec2 m_FreeAim{0.0f};         // free-aim offset, degrees (yaw, pitch)
     float m_CrouchAds = 0.0f;          // smoothed crouch input for the ADS pose
     bool m_WasGrounded = true;
     float m_AirVy = 0.0f;              // vertical speed last frame in the air
-    float m_BobWeight = 0.0f, m_BobSprint = 0.0f, m_BobPhase = 0.0f;
-    float m_CamBobWeight = 0.0f; // the camera bob's own (Camera Motion), whether or not the gun bob is on
+    float m_BobSprint = 0.0f, m_BobPhase = 0.0f;
+    float m_CamBobWeight = 0.0f; // the camera bob's weight (Camera Motion)
     float m_BreathPhase = 0.0f;
     float m_Ads = 0.0f;            // 0..1 linear, eased by Aim.Blend
     Spring3 m_Lean;                // x: the head's lean (-1..1), y: the gun's roll lag (-1..1)

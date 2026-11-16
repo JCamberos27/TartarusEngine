@@ -29,11 +29,20 @@ struct Snapshot {
     float FootLock[2] = {0, 0};   // 0..1: how firmly each foot is pinned
     float StepOffset = 0.0f;      // m the body is off the capsule's height (stair easing)
     float ArmsWeight = 0.0f;      // 0..1: how much the body's arms follow the weapon rig
-    float WorldGunShift = 0.0f;   // m the world gun sits off the first-person one (split poses)
     float EyeSlack = 0.0f;        // m the eye is off the shoulders' motion (bounded by Eye Slack)
     glm::vec3 EyeApplied{0.0f};   // m the body moved the camera this frame, world (head height, bob, sway)
+    glm::vec3 BodyEye{0.0f};      // world: the body's eye, before the procedural camera offsets (bob, lean, landing)
+    float LegReach[2] = {0, 0};   // each leg's hip-to-foot distance foot IK asks for (before the reach clamp), of the leg's length
+    float ClampPull[2] = {0, 0};  // m the reach clamp moved each foot off where the lock / ground wanted it
+    float ReachFree[2] = {0, 0};  // LegReach without the foot lock's shift (the clip's foot on its ground only)
+    float LockShift[2] = {0, 0};  // m the foot lock moves each foot sideways off its animation
+    float AnimHeight[2] = {0, 0}; // m each animated foot stands over the body's base
+    float BodyYawDeg = 0.0f;      // the body's heading (degrees)
+    glm::vec3 DrawnFoot[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world: each foot as drawn after foot IK
     float Reach[2] = {0, 0};          // each hand's distance from its shoulder, of the arm's length (before any shoulder move)
     float HandGap[2] = {0, 0};        // m each of the body's hands ends up from the rig's (off the gun when > ~1 cm)
+    float PieceHandGap = 0.0f;        // m the worst hand of the other pieces (the arms' solve copied onto them) from the rig's
+    float TwinHandGap[2] = {-1, -1};  // m each world twin's hand from the world gun's grip; -1 = no twins solved this frame
     float ShoulderGap[2] = {0, 0};    // m between each body shoulder and the arms rig's
     float RigBlade = 0.0f, ChestBlade = 0.0f; // degrees the rig's / the chest's shoulder line is turned off the view (+ = left forward)
     float ReachLean = 0.0f;           // degrees the chest leans toward an out-of-reach hand (Reach Lean Max)

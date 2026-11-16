@@ -2,15 +2,12 @@
 
 #include "Components.h"
 #include "Model.h"
-#include "Core/Env.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <limits>
@@ -203,22 +200,34 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
     const float baBc1 = std::acos(std::clamp((lat * lat - lab * lab - lcb * lcb) / (-2.0f * lab * lcb), -1.0f, 1.0f));
 
     // The bend plane is the one the pose already has; a dead-straight limb picks any.
+    const glm::vec3 acDir = glm::normalize(ac);
     glm::vec3 axis = glm::cross(ac, b - a);
-    axis = glm::length(axis) > 1e-8f ? glm::normalize(axis) : Perpendicular(glm::normalize(ac));
+    const bool bent = glm::length(axis) > 1e-8f;
+    axis = bent ? glm::normalize(axis) : Perpendicular(acDir);
+    glm::quat ga = Rotation(globals[upper]);
+    glm::quat gb = Rotation(globals[lower]);
     if (hint && hint->BendAxisWeight > 0.0f) {
-        // Kept square to the limb (a bend about anything else isn't a bend), then turned toward from the pose's own, on
-        // the same side (a near-straight pose's side is as much noise as its plane).
-        glm::vec3 want = hint->BendAxis - glm::normalize(ac) * glm::dot(hint->BendAxis, glm::normalize(ac));
+        // Kept square to the limb (a bend about anything else isn't a bend). The limb is first swung rigidly about its
+        // root->end line, so its own bend plane turns BendAxisWeight of the way to the wanted one (the end stays put, the
+        // triangle keeps its angles), and the solve below then bends it in that plane as in any other pose. (Bending by
+        // the pose's angles about some other axis neither reaches the target nor keeps the knee's angle.)
+        glm::vec3 want = hint->BendAxis - acDir * glm::dot(hint->BendAxis, acDir);
         if (glm::length(want) > 1e-6f) {
             want = glm::normalize(want);
-            const glm::vec3 own = glm::dot(axis, want) < 0.0f ? -axis : axis;
-            const glm::vec3 mixed = glm::mix(own, want, std::clamp(hint->BendAxisWeight, 0.0f, 1.0f));
-            if (glm::length(mixed) > 1e-6f) axis = glm::normalize(mixed);
+            if (bent) {
+                const float turn = std::atan2(glm::dot(glm::cross(axis, want), acDir), glm::dot(axis, want)) *
+                                   std::clamp(hint->BendAxisWeight, 0.0f, 1.0f);
+                const glm::quat qs = glm::angleAxis(turn, acDir);
+                b = a + qs * (b - a);
+                ga = glm::normalize(qs * ga);
+                gb = glm::normalize(qs * gb);
+                axis = glm::normalize(qs * axis);
+            } else {
+                axis = want; // dead straight: no plane of its own to turn from (and no swing needed to change it)
+            }
         }
     }
 
-    const glm::quat ga = Rotation(globals[upper]);
-    const glm::quat gb = Rotation(globals[lower]);
     // Both bends turn about the same axis, so they commute: the upper bone's bend leaves the
     // direction a->c unchanged, and one swing about a then carries c onto the target.
     const glm::quat q0 = glm::angleAxis(acAb1 - acAb0, axis);
@@ -365,6 +374,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
         const IKLimb* Settings;
         int Upper, Lower, End, Target;
         glm::mat4 Relative{1.0f};
+        glm::mat4 Carried{1.0f}; // the end relative to its target in this pose, before the offsets: where it rides along
     };
     Limb limbs[2];
     int limbCount = 0;
@@ -374,6 +384,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
                   model.NodeIndex(l->Target)};
         if (limb.Upper < 0 || limb.Lower < 0 || limb.End < 0 || limb.Target < 0) continue;
         if (l->KeepAnimatedOffset) {
+            limb.Carried = glm::inverse(globals[limb.Target]) * globals[limb.End];
             limb.Relative = glm::inverse(grip[limb.Target]) * grip[limb.End];
             if (hold) {
                 // Held hand: the held pose's grip; free hand: its animated grip; in between, a mix.
@@ -417,8 +428,23 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
         const Limb& limb = limbs[n];
         const glm::mat4 goal = LimbGoal(globals[limb.Target], limb.Relative, limb.Settings->KeepAnimatedOffset, limb.Settings->GoalMove,
                                         limb.Settings->GripPosition, limb.Settings->GripRotation);
-        const glm::quat goalRot = Rotation(goal);
+        glm::vec3 goalPos = Position(goal);
+        glm::quat goalRot = Rotation(goal);
         const IKLimb& ls = *limb.Settings;
+        float limbWeight = ls.Weight * std::clamp(ls.CurveWeight, 0.0f, 1.0f);
+        if (ls.KeepAnimatedOffset) {
+            // The offsets above already moved the target by the rig's weight; a hand that keeps its grip goes with all of
+            // that move (a solve weighted by it again took the hand only w*w of the way: off the gun by w(1-w) of the
+            // move). What the rig weight blends is the goal: from the end riding rigidly with its target (exactly the
+            // animated end at weight 0) to the full goal - the grip offset, GoalMove and a grip read from another pose.
+            if (w < 1.0f) {
+                const glm::mat4 carried = globals[limb.Target] * limb.Carried;
+                goalPos = glm::mix(Position(carried), goalPos, w);
+                goalRot = glm::normalize(glm::slerp(Rotation(carried), goalRot, w));
+            }
+        } else {
+            limbWeight *= w; // reaching for the target itself: the rig weight is how far
+        }
         TwoBoneHint hint;
         const bool hinted = ls.HintWeight > 0.0f || ls.MaxLimbScale > 1.0f;
         if (hinted) {
@@ -430,8 +456,8 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
                 hint.HavePole = true;
             }
         }
-        SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, Position(goal),
-                     ls.MatchRotation ? &goalRot : nullptr, ls.Weight * std::clamp(ls.CurveWeight, 0.0f, 1.0f) * w, ls.Swivel * w, hinted ? &hint : nullptr);
+        SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, goalPos,
+                     ls.MatchRotation ? &goalRot : nullptr, limbWeight, ls.Swivel * w, hinted ? &hint : nullptr);
     }
 }
 
@@ -448,158 +474,6 @@ std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& mo
     }
     if (rig.LookAtEnabled) { need(rig.LookAtBone); need(rig.LookAtTarget); }
     return missing;
-}
-
-// ---- foot slide correction ----
-namespace {
-float FollowK(float dt, float seconds) { return seconds > 1e-4f ? 1.0f - std::exp(-dt / seconds) : 1.0f; }
-} // namespace
-
-FootSlideOutput SmoothFootSlideOutput(const FootSlideOutput& current,const FootSlideOutput& target,float dt,float ease) {
-    const float alpha=dt>0?FollowK(dt,std::max(ease,0.03f)):0.0f;
-    FootSlideOutput out;
-    for(int s=0;s<2;++s) out.Shift[s]=glm::mix(current.Shift[s],target.Shift[s],alpha);
-    out.PelvisDrop=glm::mix(current.PelvisDrop,target.PelvisDrop,alpha);
-    out.Scale=glm::mix(current.Scale,target.Scale,alpha);
-    return out;
-}
-
-float StrideScale(float groundSpeed, float clipSpeed, float lo, float hi) {
-    if (groundSpeed < 0.25f || clipSpeed < 0.3f) return 1.0f;
-    if (lo > hi) std::swap(lo, hi);
-    return std::clamp(groundSpeed / clipSpeed, lo, hi);
-}
-
-float StrideWarpPelvisDrop(float legLength, float reach, float scale, float adjust) {
-    if (scale <= 1.0f || legLength < 1e-3f) return 0.0f;
-    const float L2 = legLength * legLength;
-    const float d0 = std::min(std::abs(reach), legLength * 0.98f);
-    const float d1 = std::min(d0 * scale, legLength * 0.98f);
-    const float drop = std::sqrt(std::max(L2 - d0 * d0, 0.0f)) - std::sqrt(std::max(L2 - d1 * d1, 0.0f));
-    return std::clamp(drop, 0.0f, 0.15f) * std::clamp(adjust, 0.0f, 1.0f);
-}
-
-FootSlideOutput FootSlide::Step(const FootSlideSettings& set, const FootSlideInput& in, bool measureOnly) {
-    FootSlideOutput out;
-    const float dt = in.Dt;
-    if (dt <= 1e-5f) return out;
-    const glm::vec2 vel(in.Velocity.x, in.Velocity.z);
-    const float speed = glm::length(vel);
-    // An idle pose has no stride to correct. Discard old walking pins rather than
-    // pulling the new stance back to a previous step's world position.
-    if (speed < 0.1f) { Reset(); return out; }
-    const glm::vec2 dir = speed > 1e-3f ? vel / speed : glm::vec2(0.0f, 1.0f);
-    glm::vec2 rel[2];
-    for (int s = 0; s < 2; ++s) rel[s] = glm::vec2(in.Foot[s].x - in.Feet.x, in.Foot[s].z - in.Feet.z);
-
-    // The ankle bone sits a few cm over the ground even when the foot is flat on it, so a plant is judged against each foot's own
-    // lowest height (it creeps up slowly so a rig change or a first frame in the air does not stick).
-    float height[2];
-    for (int s = 0; s < 2; ++s) {
-        m_Floor[s] = m_HavePrev ? std::min(m_Floor[s] + 0.03f * dt, in.Height[s]) : in.Height[s];
-        height[s] = in.Height[s] - m_Floor[s];
-    }
-    // The clips' own ground speed: a planted foot slides back along the travel at it, in the capsule's frame.
-    if (m_HavePrev) {
-        float sample = 0.0f;
-        int n = 0;
-        for (int s = 0; s < 2; ++s)
-            if (m_Planted[s] && height[s] < in.PlantHeight && m_PlantTime[s] > 0.04f) {
-                sample += -glm::dot((rel[s] - m_PrevRel[s]) / dt, dir);
-                ++n;
-            }
-        if (n > 0 && speed > 0.25f) {
-            sample /= (float)n;
-            if (sample > 0.2f && sample < 12.0f) m_ClipSpeed = m_ClipSpeed < 0.0f ? sample : m_ClipSpeed + (sample - m_ClipSpeed) * FollowK(dt, 0.12f);
-        }
-    }
-    for (int s = 0; s < 2; ++s) m_PrevRel[s] = rel[s];
-    m_HavePrev = true;
-    // Known from the animator (a gait loop's blended travel at its play rate): exact where the feet's roll fools the estimate
-    // (a crouch walk's read 25% slow, and the stride was stretched to match).
-    if (in.ClipSpeed > 0.05f) m_ClipSpeed = in.ClipSpeed;
-
-    const bool warp = set.StrideEnabled && !measureOnly;
-    const float target = warp ? StrideScale(speed, m_ClipSpeed, set.StrideMin, set.StrideMax) : 1.0f;
-    m_Scale += (target - m_Scale) * FollowK(dt, 0.1f);
-    const float k = 1.0f + (m_Scale - 1.0f) * std::clamp(set.StrideWeight, 0.0f, 1.0f);
-    out.Scale = k;
-
-    float reach = 0.0f;
-    glm::vec3 warped[2];
-    for (int s = 0; s < 2; ++s) {
-        warped[s] = in.Foot[s];
-        if (std::abs(k - 1.0f) < 1e-5f) continue;
-        const glm::vec2 relP(in.Foot[s].x - in.Pelvis.x, in.Foot[s].z - in.Pelvis.z);
-        const float along = glm::dot(relP, dir);
-        reach = std::max(reach, std::abs(along));
-        warped[s].x += dir.x * along * (k - 1.0f);
-        warped[s].z += dir.y * along * (k - 1.0f);
-    }
-    if (warp) out.PelvisDrop = StrideWarpPelvisDrop(in.LegLength, reach, k, set.PelvisAdjust);
-
-    const bool pin = set.PinEnabled && !measureOnly;
-    for (int s = 0; s < 2; ++s) {
-        const bool planted = height[s] < in.PlantHeight;
-        glm::vec3 fin = warped[s];
-        if (planted) {
-            if (!m_Planted[s]) { m_Planted[s] = true; m_PlantTime[s] = 0.0f; m_Lock[s] = warped[s]; m_Slide[s] = 0.0f; m_PlantStart[s] = glm::vec3(-1e9f); }
-            m_PlantTime[s] += dt;
-            // The leash: a pin that lags too far is dragged along rather than snapping.
-            const glm::vec2 lag(m_Lock[s].x - warped[s].x, m_Lock[s].z - warped[s].z);
-            const float len = glm::length(lag);
-            const float maxDrift = std::max(set.PinMaxDrift, 0.01f);
-            if (len > maxDrift) m_Lock[s] = glm::vec3(warped[s].x + lag.x / len * maxDrift, warped[s].y, warped[s].z + lag.y / len * maxDrift);
-        } else if (m_Planted[s]) {
-            m_Planted[s] = false;
-            if (m_PlantTime[s] > 0.08f) { // a real plant, not a chatter at the threshold
-                ++Stats.Plants;
-                Stats.SumSlide += m_Slide[s];
-                Stats.MaxSlide = std::max(Stats.MaxSlide, m_Slide[s]);
-            }
-        }
-        if (pin) {
-            m_PinWeight[s] += ((planted ? 1.0f : 0.0f) - m_PinWeight[s]) * FollowK(dt, planted ? set.PinRelease * 0.5f : set.PinRelease);
-            // Lifting off, the pin lets go with the foot's height too, so a swinging foot is never dragged back.
-            const float lift = 1.0f - std::clamp((height[s] - in.PlantHeight) / std::max(in.PlantHeight, 1e-3f), 0.0f, 1.0f);
-            const float w = m_PinWeight[s] * lift * std::clamp(set.PinWeight, 0.0f, 1.0f);
-            fin.x += (m_Lock[s].x - warped[s].x) * w;
-            fin.z += (m_Lock[s].z - warped[s].z) * w;
-        } else {
-            m_PinWeight[s] = 0.0f;
-        }
-        out.Shift[s] = glm::vec3(fin.x - in.Foot[s].x, 0.0f, fin.z - in.Foot[s].z);
-        if (planted && m_PlantTime[s] > 0.04f) { // measured once the pin has taken hold
-            if (m_PlantStart[s].x < -1e8f) m_PlantStart[s] = fin;
-            m_Slide[s] = std::max(m_Slide[s], std::hypot(fin.x - m_PlantStart[s].x, fin.z - m_PlantStart[s].z));
-        }
-    }
-    return out;
-}
-
-int FootSlideProbeMode() {
-    static const int mode = [] {
-        if (!Env::IsSet(Env::Var::FootSlideProbe)) return -1;
-        return Env::Int(Env::Var::FootSlideProbe, 0) != 0 ? 1 : 0;
-    }();
-    return mode;
-}
-
-void FootSlideProbeLog(const char* who, FootSlideStats& stats, float speed, float clipSpeed, float scale) {
-    struct Window { FootSlideStats Sum; std::chrono::steady_clock::time_point Last = std::chrono::steady_clock::now(); };
-    static std::map<std::string, Window> windows;
-    Window& w = windows[who];
-    w.Sum.Plants += stats.Plants;
-    w.Sum.SumSlide += stats.SumSlide;
-    w.Sum.MaxSlide = std::max(w.Sum.MaxSlide, stats.MaxSlide);
-    stats.Clear();
-    const auto now = std::chrono::steady_clock::now();
-    if (std::chrono::duration<float>(now - w.Last).count() < 1.5f) return;
-    w.Last = now;
-    if (w.Sum.Plants > 0)
-        std::printf("[FootSlide] %s probe=%d speed %.2f m/s clip %.2f scale %.2f: %d plants, drift mean %.1f cm max %.1f cm\n", who, FootSlideProbeMode(), speed, clipSpeed, scale,
-                    w.Sum.Plants, w.Sum.SumSlide / w.Sum.Plants * 100.0f, w.Sum.MaxSlide * 100.0f);
-    w.Sum.Clear();
 }
 
 void FootSlideMeter::Step(const glm::vec3 (&foot)[2], float ground, float dt) {
@@ -641,30 +515,42 @@ FootSlideMeter& FootSlideMeterFor(const std::string& who) {
     return meters[who];
 }
 
-glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& anim, float height, float dt) {
+void FootLock::LetGo(Foot& f, const FootLockSettings& set, bool step) {
+    f.Locked = false;
+    f.ReleaseFrom = glm::vec3(f.Offset.x, 0.0f, f.Offset.z);
+    f.ReleaseTime = 0.0f;
+    f.Lift = step ? std::min(set.StepHeight * glm::length(f.ReleaseFrom), set.StepMax) : 0.0f;
+}
+
+glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& root, const glm::quat& facing, const glm::vec3& local,
+                         float height, float dt) {
     Foot& f = m_Foot[s];
     if (dt <= 1e-5f) return f.Offset;
-    const glm::vec2 moved(anim.x - f.Prev.x, anim.z - f.Prev.z);
-    if (f.Have && glm::dot(moved, moved) > 1.0f) f = Foot{}; // a teleport: start over
+    const glm::vec3 anim = root + facing * local;
+    if (f.Have && glm::length(glm::vec2(anim.x - f.Prev.x, anim.z - f.Prev.z)) > 1.0f) f = Foot{}; // a teleport: start over
     const bool seen = f.Have;
-    const float speed = f.Have ? glm::length(moved) / dt : 0.0f;
-    f.Floor = f.Have ? std::min(f.Floor + 0.01f * dt, height) : height;
+    // How fast the animated foot moves over the ground, the body's own turn left out: the root's travel, plus the foot's
+    // move in the body at last frame's heading. A foot the clip holds still reads the capsule's travel against the clip's
+    // (about nothing) however fast the body swings round; a swinging foot reads its swing.
+    const glm::vec3 moved = (root - f.PrevRoot) + f.PrevFacing * (local - f.PrevLocal);
+    const float speed = seen ? glm::length(glm::vec2(moved.x, moved.z)) / dt : 0.0f;
+    const float rootSpeed = seen ? glm::length(glm::vec2(root.x - f.PrevRoot.x, root.z - f.PrevRoot.z)) / dt : 0.0f;
+    f.Floor = seen ? std::min(f.Floor + 0.01f * dt, height) : height;
     const float up = height - f.Floor;
     f.Prev = anim;
+    f.PrevRoot = root;
+    f.PrevFacing = facing;
+    f.PrevLocal = local;
     f.Have = true;
-    const auto letGo = [&](bool step) {
-        f.Locked = false;
-        f.ReleaseFrom = glm::vec3(f.Offset.x, 0.0f, f.Offset.z);
-        f.ReleaseTime = 0.0f;
-        f.Lift = step ? std::min(set.StepHeight * glm::length(f.ReleaseFrom), set.StepMax) : 0.0f;
-    };
     const bool stepping = f.Lift > 0.0f && f.ReleaseTime < set.Release; // a step plants again only once it is over
     if (!set.Enabled) {
-        if (f.Locked) letGo(false);
+        if (f.Locked) LetGo(f, set, false);
     } else if (!f.Locked) {
-        // (Flat on the floor it plants however fast its animation moves: a body swinging round fast carries a planted foot
-        // round faster than Speed, and a swinging foot never gets this low.)
-        if (seen && !stepping && up < set.Height && (speed < set.Speed || up < 0.008f)) { // (a first frame has no speed yet)
+        // Flat on the floor (within FlatHeight), a foot the clip itself slides plants however fast it slides: a turn on
+        // the spot lands its step sliding at ~2 m/s. Only the clip's slide - a foot the capsule carries that fast is
+        // a swing, held to Speed.
+        const bool flat = up < set.FlatHeight && rootSpeed < set.Speed;
+        if (seen && !stepping && up < set.Height && (speed < set.Speed || flat)) { // (a first frame has no speed yet)
             // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
             f.Locked = true;
             f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
@@ -672,8 +558,8 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
         }
     } else {
         const float drift = glm::length(glm::vec2(f.Pin.x - anim.x, f.Pin.z - anim.z));
-        if (up > set.Lift) letGo(false);
-        else if (drift > set.MaxDrift) letGo(true);
+        if (up > set.Lift) LetGo(f, set, false);
+        else if (drift > set.MaxDrift) LetGo(f, set, true);
     }
     if (f.Locked) {
         f.Time += dt;
@@ -688,10 +574,24 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& an
     return f.Offset;
 }
 
-FootLockSettings FootLockTurning(FootLockSettings set, float yawRate) {
-    const float k = std::clamp((std::abs(yawRate) - glm::radians(90.0f)) / glm::radians(180.0f), 0.0f, 1.0f);
-    set.MaxDrift += (std::min(set.MaxDrift, 0.1f) - set.MaxDrift) * k;
-    return set;
+bool FootLock::Overreach(int s, const FootLockSettings& set, float reach, float own) {
+    Foot& f = m_Foot[s];
+    // (A hundredth over the clip's own: a held foot that has not moved off its animation is not what stretches the leg -
+    // but never past the whole leg, where the reach clamp would have to drag it.)
+    if (!f.Locked || reach <= std::max(set.Reach, std::min(own + 0.01f, 1.0f))) return false;
+    LetGo(f, set, true);
+    return true;
+}
+
+glm::vec3 ClampReach(const glm::vec3& root, const glm::vec3& target, float length, float knee, float most) {
+    const glm::vec3 d = target - root;
+    const float len = glm::length(d);
+    const float from = knee * length;
+    if (length <= 1e-5f || len <= from || len <= 1e-6f) return target;
+    // Past `knee` the reach follows from + room * (1 - e^-(over / room)): slope 1 where it starts, flattening onto from + room.
+    const float room = std::max((most - knee) * length, 0.0f);
+    const float r = room > 1e-6f ? from + room * (1.0f - std::exp(-(len - from) / room)) : from;
+    return root + d * (r / len);
 }
 
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& b) {
@@ -702,20 +602,6 @@ FootLockSettings FootLockFrom(const FirstPersonBodyComponent& b) {
     s.Speed = b.FootLockSpeed;
     s.MaxDrift = b.FootLockDrift;
     s.Release = b.FootLockRelease;
-    return s;
-}
-
-FootSlideSettings FootSlideFrom(const FirstPersonBodyComponent& b) {
-    FootSlideSettings s;
-    s.PinEnabled = b.FootPinEnabled;
-    s.PinWeight = b.FootPinWeight;
-    s.PinRelease = b.FootPinRelease;
-    s.PinMaxDrift = b.FootPinMaxDrift;
-    s.StrideEnabled = b.StrideWarpEnabled;
-    s.StrideWeight = b.StrideWarpWeight;
-    s.StrideMin = b.StrideScaleMin;
-    s.StrideMax = b.StrideScaleMax;
-    s.PelvisAdjust = b.StridePelvisAdjust;
     return s;
 }
 

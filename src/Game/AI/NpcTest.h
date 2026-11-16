@@ -52,6 +52,11 @@ class World;
 //            (NpcTest_Doors.cpp)
 //   npcloco  a dummy through the gaits in Apartment 301, watched from the side (NpcTest_NpcLoco.cpp)
 //   roam, locomotion, stopsteps: the player's own walking (NpcTest_Roam / _Locomotion / _StopSteps.cpp)
+//   testbed  project/scenes/AnimTestbed.json (tools/scenes/build_anim_testbed.py): only what the animation overhaul fixes, re-run
+//            after every phase (NpcTest_Testbed.cpp) - the player's bob reaching the screen and the gait phase on the lane, the
+//            corner peek's lean with the hands on the gun, stairs and a ramp (gait phase, leg reach, the eye's overshoot), the
+//            hands through holster / draw; the standing dummy's 180-degree start turn, its ragdoll's inherited velocity and a
+//            flinch that keeps its planted feet. NPC_TEST_RECORD: the frames and trace.csv
 class NpcTest {
 public:
     explicit NpcTest(const std::string& scenario);
@@ -71,7 +76,9 @@ public:
     const std::string& ShotName() const { return m_Shot; }
     // NPC_TEST_RECORD=<dir>: every other frame of both views goes there as JPEGs (for a video).
     const std::string& RecordDir() const { return m_RecordDir; }
-    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" ? 1 : 2; } // every frame for the muzzle flame
+    // Where a scenario's trace.csv goes: NPC_TEST_TRACE=<dir> (the trace alone, no frames - fast), else NPC_TEST_RECORD's.
+    const std::string& TraceDir() const { return m_TraceDir; }
+    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -169,6 +176,12 @@ private:
     float m_LabClock = 0.0f;
     std::vector<std::string> m_SlideBodies; // the NPCs SlideLeg reports on
     int m_LabFrame = 0;
+    // testbed (NpcTest_Testbed.cpp): the animation overhaul's measurements in AnimTestbed.json
+    static float TestbedSeconds();
+    void TestbedDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    void Testbed(World& world, NpcDirector& npcs, const Player& player, float now);
+    struct TestbedRun;
+    std::shared_ptr<TestbedRun> m_Tb;
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {
         std::string Name;
@@ -277,7 +290,7 @@ private:
     glm::vec3 m_CamPos{0.0f};
     float m_CamYaw = 0.0f, m_CamPitch = 0.0f;
     bool m_HaveCam = false;
-    std::string m_RecordDir;
+    std::string m_RecordDir, m_TraceDir;
     bool m_Firing = false;
     float m_FireHold = 0.0f;
     float m_AimErr = -1.0f;

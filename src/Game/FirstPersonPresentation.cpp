@@ -36,51 +36,21 @@
 
 namespace {
 
-// A weapon sound (an animator's snd.* event, or a gear sound like ads_in / dry_fire / equip): 2D on the player's own
-// gun, 3D at the world gun for everyone else's. `name` is a full key (snd.ak.mag_out) or an element (ads_in).
-void WeaponSound(const FirstPersonPresentation& p, const std::filesystem::path& setFile, bool ownerView, const std::string& name) {
+// A weapon sound (an animator's snd.* event, or a gear sound like ads_in / dry_fire / equip), 2D on the player's own
+// gun. `name` is a full key (snd.ak.mag_out) or an element (ads_in).
+void WeaponSound(const std::filesystem::path& setFile, const std::string& name) {
     WeaponAudio& wa = WeaponAudio::Get();
     if (!wa.Active()) return;
-    glm::vec3 fp(0.0f), world(0.0f), bore(0.0f, 0.0f, -1.0f);
-    if (!ownerView) p.MuzzleFrames(fp, world, bore);
-    wa.PlayEvent(name, WeaponAudioGunId(setFile.string()), world, ownerView);
+    wa.PlayEvent(name, WeaponAudioGunId(setFile.string()), glm::vec3(0.0f), true);
 }
 
 // The shared gear rattle of putting a weapon up / away (snd.foley.weapon.equip / unequip) - only for a gun without draw /
 // holster takes of its own: those play from its Draw / Holster clips, and with both a weapon switch stacked four sounds
 // (rattle, holster, rattle, draw).
-void GearSound(const FirstPersonPresentation& p, const std::filesystem::path& setFile, bool ownerView, bool equip) {
+void GearSound(const std::filesystem::path& setFile, bool equip) {
     WeaponAudio& wa = WeaponAudio::Get();
     if (!wa.Active() || wa.HasEventFiles(WeaponAudioGunId(setFile.string()), equip ? "draw" : "holster")) return;
-    WeaponSound(p, setFile, ownerView, equip ? "equip" : "unequip");
-}
-
-// What a weapon's setup measures from its assets alone - the bolt's stroke, the barrel found along it, the ADS carry -
-// kept per weapon definition (and its file's time) for the presentations without an owner view (enemy soldiers'
-// guns): each spawn reuses the first's instead of sampling clips and scanning the mesh again (~2 ms a spawn). The
-// player's own weapon always measures, so its Inspector reports and hot reload stay live.
-struct SharedSetup {
-    std::filesystem::file_time_type Time{};
-    FirstPersonAnimationSet Set;
-    // The recoil and camera shake profiles the set loaded (they are their own files): the set is reused only while they
-    // are unchanged too.
-    std::filesystem::file_time_type RecoilTime{}, ShakeTime{};
-    bool HaveBolt = false;
-    glm::vec3 BoltStroke{0.0f};
-    bool HaveBarrel = false, BarrelDetected = false;
-    glm::vec3 BarrelOrigin{0.0f}, BarrelDirection{0.0f};
-    bool HaveAds = false;
-    AdsCarryResult Ads;
-};
-std::unordered_map<std::string, SharedSetup>& SharedSetups() {
-    static std::unordered_map<std::string, SharedSetup> s;
-    return s;
-}
-// The entry for `setFile` as of `time` (a changed file starts it afresh).
-SharedSetup& SharedSetupFor(const std::string& setFile, std::filesystem::file_time_type time) {
-    SharedSetup& s = SharedSetups()[setFile];
-    if (s.Time != time) s = SharedSetup{time};
-    return s;
+    WeaponSound(setFile, equip ? "equip" : "unequip");
 }
 
 } // namespace
@@ -122,13 +92,7 @@ void FirstPersonPresentation::SetError(const std::string& message) {
 
 bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
                                     const FirstPersonControllerComponent& config) {
-    return Start(world, assets, config, Options{});
-}
-
-bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
-                                    const FirstPersonControllerComponent& config, const Options& options) {
     Stop(world);
-    m_Options = options;
     m_LastError.clear();
     int configuredSlot=0;
     for (auto slot : {std::pair<const std::string*,const std::string*>{&config.PrimaryWeaponPrefab,&config.AnimationSet},
@@ -171,7 +135,7 @@ void FirstPersonPresentation::PreloadClips(AssetLibrary& assets) {
     // Imported one by one as whole models on this thread they were most of Play's start (~18 s); clip-only, all at
     // once on worker threads, before the first set attaches them.
     const auto start = std::chrono::steady_clock::now();
-    // Each set's clips once per version of its file (an enemy's gun starts on every spawn; its clips are loaded by then).
+    // Each set's clips once per version of its file.
     static std::unordered_map<std::string, std::filesystem::file_time_type> s_Preloaded;
     std::vector<std::string> files;
     for (const std::string& setRef : m_SlotSets) {
@@ -259,25 +223,9 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
         std::error_code ec;
         m_SetFileTime = std::filesystem::last_write_time(m_SetFile, ec);
     }
-    // An enemy's gun takes the definition parsed for the last one (the same file, unchanged since).
-    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
-    auto profileTime = [](const std::string& ref) {
-        std::error_code ec;
-        return ref.empty() ? std::filesystem::file_time_type{} : std::filesystem::last_write_time(ProjectPaths::Resolve(ref), ec);
-    };
-    if (shared && !shared->Set.Controller.empty() && shared->RecoilTime == profileTime(shared->Set.RecoilProfile) &&
-        shared->ShakeTime == profileTime(shared->Set.CameraShakeProfile)) {
-        m_Set = shared->Set;
-    } else {
-        if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
-            SetError("could not load '" + animationSet + "': " + m_LastError);
-            return false;
-        }
-        if (shared) {
-            shared->Set = m_Set;
-            shared->RecoilTime = profileTime(m_Set.RecoilProfile);
-            shared->ShakeTime = profileTime(m_Set.CameraShakeProfile);
-        }
+    if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
+        SetError("could not load '" + animationSet + "': " + m_LastError);
+        return false;
     }
     if(!m_SlotPrefabs[slot].empty() && !Gameplay::ResolveWeaponGameplay(m_SlotPrefabs[slot],m_Set.Gameplay,m_LastError)) {
         SetError(m_LastError);return false;
@@ -343,10 +291,8 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
         renderable.ReceiveShadows = e == m_Weapon;
         // Routes them into the renderer's view-model sub-pass (own FOV, depth cleared) rather
         // than the world pass. Runtime-only tag: these entities are created here and destroyed
-        // by Stop(), so it never reaches a scene file. Without the owner's view (an NPC's gun) the
-        // weapon is plain world geometry and the arms rig only a pose source for the body's hands.
-        if (m_Options.OwnerView) world.Registry.emplace_or_replace<ViewModelTag>(e);
-        else if (e == m_Arms) world.Registry.emplace_or_replace<PoseSourceTag>(e);
+        // by Stop(), so it never reaches a scene file.
+        world.Registry.emplace_or_replace<ViewModelTag>(e);
     }
     // .fpsanim material overrides: every submesh whose imported material has the listed name.
     auto applyMaterials = [&](entt::entity e, const std::vector<std::pair<std::string, std::string>>& overrides) {
@@ -449,8 +395,6 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
     m_Procedural.Reset();
     m_CameraShake.Reset(); m_ShakePose={};
     m_Procedural.Seed(m_Rng()); // a fresh recoil pattern every Play, not the same one each time
-    m_Set.Procedural.Bob.Enabled=false;
-    m_Set.Procedural.Sway.UnityPort=true;
     m_UsesIK = SetupIK();
     SetupSway();
     SetupBolt(assets, *ctrl);
@@ -525,7 +469,6 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_HaveSwayMoveInput=false;
     m_HaveLook = false;
     m_HavePlayerLookBaseline = false;
-    m_PlayerLookDelta = glm::vec2(0.0f);
     m_SetFile.clear();
     m_ReloadPoll = 0.0f;
     m_AdsHold = 0.0f;
@@ -561,7 +504,7 @@ void FirstPersonPresentation::SetupWeaponParticles() {
         const auto e = descendants[i];
         if (const auto* h = world.Registry.try_get<HierarchyComponent>(e))
             descendants.insert(descendants.end(), h->Children.begin(), h->Children.end());
-        if (m_Options.OwnerView) world.Registry.emplace_or_replace<ViewModelTag>(e);
+        world.Registry.emplace_or_replace<ViewModelTag>(e);
         if (world.Registry.valid(m_WorldWeapon)) world.Registry.emplace_or_replace<OwnerViewOnlyTag>(e);
     }
     m_WeaponAttachmentEntities = std::move(descendants);
@@ -744,10 +687,7 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
         SetupMuzzle(-1);
         return;
     }
-    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
-    if (shared && shared->HaveBolt) {
-        m_BoltStroke = shared->BoltStroke;
-    } else {
+    {
         std::vector<int> parents(m_WeaponModel->NodeCount());
         for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
         std::vector<LocalTRS> pose;
@@ -761,7 +701,6 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
             if (k == 0) start = at;
             else if (glm::length(at - start) > glm::length(m_BoltStroke)) m_BoltStroke = at - start;
         }
-        if (shared) { shared->HaveBolt = true; shared->BoltStroke = m_BoltStroke; }
     }
     SetupMuzzle(bolt);
     if (r.BoltCycle <= 0.0f) return;
@@ -810,15 +749,7 @@ void FirstPersonPresentation::SetupAdsCarry() {
     in.Rig = m_UsesIK && m_World ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
     in.AdsOffset = kAdsOffset;
     in.ProceduralOffset = kProceduralOffset;
-    // An enemy's gun reuses the carry measured for the first (the same clips, attached in the same order).
-    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
-    if (shared && shared->HaveAds) {
-        m_AdsCarry = shared->Ads;
-        SetupHandAnchor();
-        return;
-    }
     m_AdsCarry = BuildAdsCarry(in);
-    if (shared) { shared->HaveAds = true; shared->Ads = m_AdsCarry; }
     PublishAdsCarryReport(m_SetFile.u8string(), m_AdsCarry.Report);
     for (const std::string& w : m_AdsCarry.Report.Warnings) Log::Warn("First-person ADS: " + w);
     for (const auto& e : m_AdsCarry.Report.Entries)
@@ -1036,14 +967,7 @@ void FirstPersonPresentation::SetupMuzzle(int bolt) {
     m_HaveMuzzle = false;
     m_Barrel.Detected = m_Barrel.HasMuzzle = false;
     m_Barrel.Problem.clear();
-    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
-    const bool measured = shared && shared->HaveBarrel && bolt >= 0;
-    if (measured) {
-        m_Barrel.Detected = shared->BarrelDetected;
-        m_Barrel.DetectedOrigin = shared->BarrelOrigin;
-        m_Barrel.DetectedDirection = shared->BarrelDirection;
-    }
-    if (!measured && m_WeaponModel && bolt >= 0 && glm::length(m_BoltStroke) >= 1e-5f) {
+    if (m_WeaponModel && bolt >= 0 && glm::length(m_BoltStroke) >= 1e-5f) {
         std::vector<int> parents(m_WeaponModel->NodeCount());
         for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
         const int root = m_WeaponModel->NodeIndex(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot);
@@ -1079,12 +1003,6 @@ void FirstPersonPresentation::SetupMuzzle(int bolt) {
             std::snprintf(msg, sizeof msg, "First-person: bolt stroke %.1f, muzzle %.1f ahead of the bolt (model units x100).",
                           stroke * 100.0f, tip * 100.0f);
             Log::Info(msg);
-        }
-        if (shared) {
-            shared->HaveBarrel = true;
-            shared->BarrelDetected = m_Barrel.Detected;
-            shared->BarrelOrigin = m_Barrel.DetectedOrigin;
-            shared->BarrelDirection = m_Barrel.DetectedDirection;
         }
     }
     const FirstPersonMuzzleSettings& mz = m_Set.Muzzle;
@@ -1526,7 +1444,7 @@ void FirstPersonPresentation::WriteIK() {
     const WeaponProceduralPose& p = m_Procedural.Pose();
     const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
     const glm::quat Ci = glm::inverse(C);
-    rig->SwayEnabled=m_Set.Procedural.Sway.UnityPort && m_Set.Procedural.Sway.Enabled;
+    rig->SwayEnabled=m_Set.Procedural.Sway.Enabled;
     rig->SwaySettings=m_Set.Procedural.Sway.Unity;
     rig->SwayBeforeOffset=m_UsesIK?kProceduralOffset:0;
     rig->SwayModelToComponent=C;
@@ -1687,8 +1605,6 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
         m_Set.Procedural.Recoil.BoltCycle != fresh.Procedural.Recoil.BoltCycle;
     if (m_Set.RecoilProfile != fresh.RecoilProfile) m_Procedural.Reset();
     m_Set.Procedural = fresh.Procedural;
-    m_Set.Procedural.Bob.Enabled=false;
-    m_Set.Procedural.Sway.UnityPort=true;
     m_Set.RecoilProfile = fresh.RecoilProfile;
     m_Set.RecoilProfileGuid = fresh.RecoilProfileGuid;
     m_Set.HipFireClip = fresh.HipFireClip;
@@ -1845,7 +1761,7 @@ Gameplay::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float d
     m_ReloadDown=f.ReloadWasDown!=0;
     m_ReloadFired=f.ReloadHoldFired!=0;
     if(f.Commands&8) { m_Procedural.EndBurst(); m_Procedural.SetFiring(false); }
-    if(f.Commands&1) WeaponSound(*this,m_SetFile,m_Options.OwnerView,"dry_fire");
+    if(f.Commands&1) WeaponSound(m_SetFile, "dry_fire");
     if(f.Commands&4) ac->SetTrigger(K::kFire);
     if(f.Commands&16) ac->SetTrigger(K::kCycle);
     if(f.Commands&32) ac->SetTrigger(K::kFidget);
@@ -1866,7 +1782,7 @@ void FirstPersonPresentation::CommitShot(bool ads, bool cycleBolt) {
         m_Set.Gameplay.BurstRounds > 1 ? RecoilFireMode::Burst : RecoilFireMode::Semi;
     m_Procedural.OnShot(m_Set.Procedural, ads, cycleBolt, m_Set.Gameplay.RoundsPerMinute, mode,
                         Time::UnscaledTimeSinceStartup(), Time::DeltaTime());
-    if(m_Options.OwnerView && !m_Set.CameraShakeProfile.empty()) m_CameraShake.Trigger(m_Set.CameraShake,ads);
+    if(!m_Set.CameraShakeProfile.empty()) m_CameraShake.Trigger(m_Set.CameraShake,ads);
     RunGameplay(2);
     ShotImpact();
 
@@ -1927,7 +1843,7 @@ Gameplay::WeaponLoadoutFrame FirstPersonPresentation::RunLoadout(int operation,i
     GameRules::UpdateWeaponLoadout(f);
     m_PendingSlot=f.Pending;m_Ammo=f.Ammo;m_Chambered=f.Chambered!=0;m_CycleWait=f.CycleWait;m_BurstRemaining=f.Burst;
     if(f.Commands&2){m_Procedural.EndBurst();m_Procedural.SetFiring(false);}
-    if(f.Commands&8)GearSound(*this,m_SetFile,m_Options.OwnerView,f.Equipped!=0);
+    if(f.Commands&8)GearSound(m_SetFile, f.Equipped!=0);
     m_Equipped=f.Equipped!=0;
     if(f.Commands&4)if(auto* ac=Animator()){ac->SetBool(K::kEquipped,m_Equipped);if(operation==3)ac->SetInt(K::kAmmo,m_Ammo);}
     return f;
@@ -1964,14 +1880,14 @@ void FirstPersonPresentation::SwapToPendingSlot() {
     }
     m_WalkSpeed = walk;
     m_SprintSpeed = sprint;
-    GearSound(*this, m_SetFile, m_Options.OwnerView, true); // (StartSet has the gun in hand already: SetEquipped sees no change)
+    GearSound(m_SetFile, true); // (StartSet has the gun in hand already: SetEquipped sees no change)
     SetEquipped(true);
 }
 
 void FirstPersonPresentation::ToggleFireMode() {
     if(!IsActive()||!m_Equipped) return;
     const auto f=RunGameplay(6);
-    if(f.Result) WeaponSound(*this,m_SetFile,m_Options.OwnerView,"firemode");
+    if(f.Result) WeaponSound(m_SetFile, "firemode");
     Log::Info(std::string("Fire mode: ")+(m_FullAuto?"Full-Auto":"Semi-Auto"));
 }
 
@@ -2016,7 +1932,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
         SwapToPendingSlot();
         return;
     }
-    if (m_Options.HotReload && LiveReload::Enabled()) ReloadIfChanged(dt);
+    if (LiveReload::Enabled()) ReloadIfChanged(dt);
     RunGameplay(7,dt);
     const FirstPersonWeaponGameplay& g=m_Set.Gameplay;
     const float planarSpeed=glm::length(glm::vec2(velocity.x,velocity.z));
@@ -2025,8 +1941,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetBool(K::kSprint, sprinting);
     // The aim press drives the corner peek, even up against cover; tucked off a wall with no
     // peek to lean out on, the sights can't come up.
-    if (aiming != m_Aiming && m_Equipped && !ac->HasTag(K::kTagHidden)) WeaponSound(*this, m_SetFile, m_Options.OwnerView, aiming ? "ads_in" : "ads_out");
-    if (m_Options.OwnerView) WeaponAudio::Get().SetFocus(aiming && m_Equipped); // the mix's focus: the world comes forward down the sights
+    if (aiming != m_Aiming && m_Equipped && !ac->HasTag(K::kTagHidden)) WeaponSound(m_SetFile, aiming ? "ads_in" : "ads_out");
+    WeaponAudio::Get().SetFocus(aiming && m_Equipped); // the mix's focus: the world comes forward down the sights
     m_Aiming = aiming;
     if (WallBlocked() && m_PeekSide == 0) aiming = false;
     ac->SetBool(K::kAim, aiming);
@@ -2038,34 +1954,24 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetBool("AimWalk", aiming && m_Equipped && walkIntent); // compatibility for older ADS-only controllers
     const float aimBlendTime=m_Set.Procedural.Aim.BlendTime;
     ac->SetFloat("TransitionDuration:"+(m_Set.Ads.ReferenceState.empty()?std::string("Aim"):m_Set.Ads.ReferenceState),aimBlendTime);
+    // Gated on a gun in hand, as the procedural's in.Ads is: holstered with aim held, the ADS hold (the carried pose, the
+    // optic's correction, the locomotion layers' ADS scale) must not ease in on the empty hands.
+    const bool adsHeld = aiming && m_Equipped;
     m_AdsHold = aimBlendTime > 0.0f
-                    ? std::clamp(m_AdsHold + (aiming ? dt : -dt) / aimBlendTime, 0.0f, 1.0f)
-                    : (aiming ? 1.0f : 0.0f);
+                    ? std::clamp(m_AdsHold + (adsHeld ? dt : -dt) / aimBlendTime, 0.0f, 1.0f)
+                    : (adsHeld ? 1.0f : 0.0f);
     m_TickDt = dt;
     m_OpticBlendElapsed += std::max(0.0f, dt);
     // The jog (Shift): the locomotion layer's run clip, as authored, on the feet's phase (GaitPhase); off while aiming, in a
     // reload / inspect / melee, and for a moment after a shot, so the gun comes up to fire.
     {
-        constexpr float kJogArms = 1.0f; // the run clip as authored
         m_JogHold = std::max(0.0f, m_JogHold - dt);
         const bool jog = m_Jogging && m_Equipped && !aiming && !ActionBlocksSprint() && m_JogHold <= 0.0f && planarSpeed > 0.5f;
         ac->SetBool(K::kJog, jog);
         // The walk / run sway's clock: the body's feet (negative - none - leaves the clips on their own).
         ac->SetFloat(K::kGaitPhase, m_HaveGait ? m_GaitPhase : -1.0f);
-        bool runClip = false;
-        if (m_Controller)
-            for (size_t i = 0; i < m_Controller->Layers.size() && i < ac->Layers.size(); ++i) {
-                if (m_Controller->Layers[i].Name != "Weapon Locomotion" || ac->Layers[i].Stack.empty()) continue;
-                const int st = ac->Layers[i].Stack.back().State;
-                if (st >= 0 && st < (int)m_Controller->Layers[i].States.size()) {
-                    const std::string& n = m_Controller->Layers[i].States[st].Name;
-                    runClip = n == "IdleToSprint" || n == "Sprint" || n == "SprintToIdle";
-                }
-            }
-        const float want = runClip && !sprinting ? kJogArms : 1.0f;
-        m_JogWeight += (want - m_JogWeight) * (1.0f - std::exp(-dt / 0.12f));
     }
-    ac->SetFloat("LayerWeight:Weapon Locomotion",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold)*m_JogWeight);
+    ac->SetFloat("LayerWeight:Weapon Locomotion",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     ac->SetFloat("LayerWeight:Weapon Walk",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
@@ -2128,10 +2034,6 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     // The procedural stack, fed from what the controller is doing and how the camera moved.
     WeaponProceduralInput in;
     in.Dt = dt;
-    if (m_HaveLook && dt > 0.0f) {
-        in.LookRate = glm::vec2(m_PlayerLookDelta.y, m_PlayerLookDelta.x) / dt;
-        m_PlayerLookDelta = glm::vec2(0.0f);
-    }
     m_PrevLookYaw = m_LookYaw;
     m_PrevLookPitch = m_LookPitch;
     in.Velocity = glm::vec3(glm::dot(velocity, m_FlatRight), 0.0f, -glm::dot(velocity, m_FlatForward));
@@ -2158,7 +2060,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     m_ShakePose=m_CameraShake.Update(dt);
     ac->SetFloat(K::kWalkRate, pose.WalkRate);
     ac->SetFloat(K::kSprintRate, pose.SprintRate);
-    if (m_Set.Procedural.Sway.UnityPort && m_Set.Procedural.Sway.Enabled && m_ArmsModel) {
+    if (m_Set.Procedural.Sway.Enabled && m_ArmsModel) {
         glm::vec2 move=m_SwayMoveInput;
         if (!m_HaveSwayMoveInput) {
             move={in.Velocity.x,-in.Velocity.z};
@@ -2197,7 +2099,6 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     if (m_HavePlayerLookBaseline) {
         const glm::vec2 delta(camera.Pitch - m_PlayerLookBaseline.x,
                              std::remainder(camera.Yaw - m_PlayerLookBaseline.y, 360.0f));
-        m_PlayerLookDelta += delta;
         controllerInput = delta;
     }
     if (m_Set.Procedural.Recoil.UnityPort && m_HaveRawLookInput) controllerInput=m_RawLookInput;
@@ -2216,7 +2117,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         m_FlatForward = glm::length(f) > 1e-5f ? glm::normalize(f) : glm::vec3(0.0f, 0.0f, -1.0f);
         m_FlatRight = glm::normalize(glm::cross(m_FlatForward, glm::vec3(0.0f, 1.0f, 0.0f)));
     }
-    if (m_Options.CornerPeek) UpdateCornerPeek(camera);
+    UpdateCornerPeek(camera);
     // Aim climb: unlike the punch below it stays - the player has to pull it back down.
     {
         const glm::vec2 climb = m_Procedural.ConsumeAimKick();
@@ -2275,7 +2176,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         RunGameplay(8,0.0f,false,false,(ac->EventFired(K::kEventRefill)?1:0)|(ac->EventFired(K::kEventLoadRound)?2:0));
         // The audio the controller's states carry: events named snd.<gun>.<element> (see docs/AUDIO.md) play that set.
         for (const std::string& e : ac->FiredEvents)
-            if (e.rfind("snd.", 0) == 0) WeaponSound(*this, m_SetFile, m_Options.OwnerView, e);
+            if (e.rfind("snd.", 0) == 0) WeaponSound(m_SetFile, e);
         ac->FiredEvents.clear();
         // Triggers live for exactly one controller update: an input the controller refused
         // (fire during a reload, say) is dropped rather than firing late.
@@ -2404,7 +2305,7 @@ void FirstPersonPresentation::LateUpdate(World& world, Camera& camera) {
     // otherwise render visible, in Holstered's pose (Holster's first frame).
     ApplyHidden(world);
     Camera placementCamera=camera;
-    if(m_Options.OwnerView && m_ArmsModel && m_Controller && m_Assets) {
+    if(m_ArmsModel && m_Controller && m_Assets) {
         CameraEffectPose action;
         if(const auto* ac=Animator())
             action=AnimatorActionCamera(*m_ArmsModel,m_WeaponModel.get(),*m_Assets,*m_Controller,*ac,
@@ -2526,7 +2427,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
                   "' bone; placing the view model's root on the camera instead.");
     }
     position += cameraRotation * (m_Offset + procPosition);
-    if (m_Options.OwnerView) position += cameraRotation * m_Set.ViewPosition;
+    position += cameraRotation * m_Set.ViewPosition;
 
     // The hip carry (Aim.HipPosition / HipRotation): the whole rig, arms and gun together, turned
     // about the gun socket and moved in the camera's frame, by how far the sights are down. Rigid,
@@ -2549,15 +2450,6 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
         position = pivot + turn * (position - pivot) + cameraRotation * (aim.HipPosition * hip);
         rigRotation = NormalizeRotation(turn * rigRotation);
     }
-    // Without the owner's view (an enemy's gun) the rig is only the source of a body's hands and of the gun, both seen
-    // in third person: the whole rig is carried by the third-person hold, which the gun's socket then follows.
-    //     world(x) = position + rigRotation * scale * (C.R x + C.T)
-    if (!m_Options.OwnerView) {
-        const glm::mat4 c = ThirdPersonGunCorrection();
-        position += rigRotation * (m_Scale * glm::vec3(c[3]));
-        rigRotation = NormalizeRotation(rigRotation * QuaternionFromMatrix(c));
-    }
-
     world.SetWorldPose(m_Arms, position, rigRotation);
     world.Registry.get<TransformComponent>(m_Arms).Scale = glm::vec3(m_Scale);
     m_ArmsWorld = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rigRotation) * glm::scale(glm::mat4(1.0f), glm::vec3(m_Scale));

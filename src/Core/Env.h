@@ -42,6 +42,8 @@
     X(NpcTestScene, "NPC_TEST_SCENE", Str, "--npc-test: scene name (tests/scenes/, else scenes/) instead of the default")             \
     X(NpcTestSeconds, "NPC_TEST_SECONDS", Float, "--npc-test: run length override")                                   \
     X(NpcTestRecord, "NPC_TEST_RECORD", Str, "--npc-test: record frames to this folder")                              \
+    X(NpcTestTrace, "NPC_TEST_TRACE", Str, "--npc-test: write trace.csv to this folder (no frames; NPC_TEST_RECORD writes both)") \
+    X(TestbedParts, "TESTBED_PARTS", Str, "--npc-test testbed: only these parts (letters A-F, e.g. C or AC)")       \
     X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs (and undress the player's body) without outfits")                                   \
     X(NpcTestDoorsOnly, "NPC_TEST_DOORS_ONLY", Str, "--npc-test doors: only doors whose name contains this")          \
     X(NpcTestDoorsTrace, "NPC_TEST_DOORS_TRACE", Flag, "--npc-test doors: trace")                                     \
@@ -52,7 +54,6 @@
     /* Traces and probes */                                                                                             \
     X(FoleyFeetLog, "FOLEY_FEET_LOG", Flag, "trace footstep foley")                                                    \
     X(MoverTrace, "MOVER_TRACE", Flag, "unit tests: trace the character mover")                                       \
-    X(FootSlideProbe, "TARTARUS_FOOT_SLIDE_PROBE", Int, "IK foot-slide probe: 1 on, 0 off, unset = default")          \
     X(PumpTrace, "TARTARUS_PUMP_TRACE", Flag, "trace the asset library pump")                                         \
     X(ProbeLog, "TARTARUS_PROBE_LOG", Flag, "log reflection probe captures")                                          \
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \

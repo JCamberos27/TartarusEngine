@@ -102,11 +102,6 @@ float MoveToward(float from, float to, float step) {
 
 // Eases into +-limit instead of stopping dead at it: ~linear well below, never past it.
 float SoftLimit(float v, float limit) { return limit > 0.0f ? limit * std::tanh(v / limit) : 0.0f; }
-glm::vec3 SoftLimit(const glm::vec3& v, float limit) { return {SoftLimit(v.x, limit), SoftLimit(v.y, limit), SoftLimit(v.z, limit)}; }
-glm::vec3 SoftLimitLength(const glm::vec3& v, float limit) {
-    const float len = glm::length(v);
-    return len > 1e-9f ? v * (SoftLimit(len, limit) / len) : v;
-}
 
 // --- JSON ------------------------------------------------------------------------------------
 
@@ -317,15 +312,8 @@ json WeaponProceduralSettings::ToJson() const {
         {"cameraRoll", r.CameraRoll}, {"fovPunch", r.FovPunch}, {"punchSpring", SpringJson(r.PunchSpring)},
     };
     if (r.UnityPort) j["recoil"]["recoilAnimData"] = r.Unity.ToJson();
-    const auto& w = Sway;
-    j["sway"] = {
-        {"enabled", w.Enabled}, {"lookRotation", w.LookRotation}, {"lookPosition", w.LookPosition},
-        {"maxRotation", w.MaxRotation}, {"maxPosition", w.MaxPosition},
-        {"movePosition", w.MovePosition}, {"moveRoll", w.MoveRoll}, {"adsScale", w.AdsScale},
-        {"spring", SpringJson(w.Spring)}, {"lookSmoothing", w.LookSmoothing},
-        {"freeAimZone", Vec(w.FreeAimZone)}, {"freeAimReturn", w.FreeAimReturn}, {"freeAimAdsScale", w.FreeAimAdsScale},
-    };
-    if (w.UnityPort) { j["sway"]=SwayModifierToJson(w.Unity); j["sway"]["enabled"]=w.Enabled; }
+    j["sway"] = SwayModifierToJson(Sway.Unity);
+    j["sway"]["enabled"] = Sway.Enabled;
     const auto& b = Bob;
     j["bob"] = {
         {"enabled", b.Enabled}, {"walkStride", b.WalkStride}, {"sprintStride", b.SprintStride},
@@ -477,24 +465,8 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("fovPunch", o.FovPunch);
         r.Spring("punchSpring", o.PunchSpring);
     });
-    root.Object("sway", [&](Reader& r) {
-        auto& o = s.Sway;
-        r.Bool("enabled", o.Enabled);
-        if (j.at("sway").contains("aimingSway")) return;
-        o.UnityPort=false;
-        r.Number("lookRotation", o.LookRotation);
-        r.Number("lookPosition", o.LookPosition);
-        r.Number("maxRotation", o.MaxRotation);
-        r.Number("maxPosition", o.MaxPosition);
-        r.Number("movePosition", o.MovePosition);
-        r.Number("moveRoll", o.MoveRoll);
-        r.Number("adsScale", o.AdsScale);
-        r.Spring("spring", o.Spring);
-        r.Number("lookSmoothing", o.LookSmoothing);
-        r.Vector("freeAimZone", o.FreeAimZone);
-        r.Number("freeAimReturn", o.FreeAimReturn);
-        r.Number("freeAimAdsScale", o.FreeAimAdsScale);
-    });
+    // A pre-port sway block (lookRotation, ...) keeps only its "enabled": its other keys are ignored.
+    root.Object("sway", [&](Reader& r) { r.Bool("enabled", s.Sway.Enabled); });
     root.Object("bob", [&](Reader& r) {
         auto& o = s.Bob;
         r.Bool("enabled", o.Enabled);
@@ -644,7 +616,6 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     if (!root.Ok) return false;
     if (const auto it=j.find("sway"); it!=j.end() && it->is_object() && it->contains("aimingSway")) {
         if (!SwayModifierFromJson(*it,s.Sway.Unity,error)) return false;
-        s.Sway.UnityPort=true;
     }
     if (j.contains("recoil") && j["recoil"].contains("recoilAnimData")) {
         if (!RecoilAnimData::FromJson(j["recoil"]["recoilAnimData"],s.Recoil.Unity,error)) return false;
@@ -659,8 +630,7 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     if (!positive(s.Recoil.Duration, "recoil.duration") || !positive(s.Bob.WalkStride, "bob.walkStride") ||
         !positive(s.Bob.SprintStride, "bob.sprintStride") || !positive(s.Bob.WalkFullSpeed, "bob.walkFullSpeed") ||
         !positive(s.Breath.Period, "breath.period") ||
-        !positive(s.Recoil.Smoothing.Frequency, "recoil.smoothing.frequency") ||
-        !positive(s.Sway.Spring.Frequency, "sway.spring.frequency"))
+        !positive(s.Recoil.Smoothing.Frequency, "recoil.smoothing.frequency"))
         return false;
     if (!(s.Locomotion.WalkReference >= 0.0f) || !(s.Locomotion.SprintReference >= 0.0f)) {
         if (error) *error = "'procedural.locomotion' references must be 0 (the player's speed) or positive";
@@ -807,17 +777,6 @@ IKCurveWeights SampleIKCurves(const WeaponIKSettings& ik, const AnimatorControll
     return w;
 }
 
-glm::vec2 StepFreeAim(glm::vec2 offset, glm::vec2 lookDelta, glm::vec2 zone, float returnSpeed, bool returning,
-                      float dt) {
-    zone = glm::max(zone, glm::vec2(0.0f));
-    offset = glm::clamp(offset + lookDelta, -zone, zone);
-    if (returning && returnSpeed > 0.0f) {
-        const float len = glm::length(offset), step = returnSpeed * dt;
-        offset = len <= step ? glm::vec2(0.0f) : offset * ((len - step) / len);
-    }
-    return offset;
-}
-
 const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProceduralSettings& s,
                                                           const WeaponProceduralInput& in) {
     const float dt = std::clamp(std::isfinite(in.Dt) ? in.Dt : 0.0f, 0.0f, 0.1f);
@@ -950,50 +909,13 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
                               : 0.5f + 0.5f * std::cos(glm::pi<float>() * (u - 0.35f) / 0.65f);
     }
 
-    // Sway: the gun lags behind a turn and trails against movement.
-    const auto& w = s.Sway;
-    glm::vec3 swayRot(0.0f), swayPos(0.0f);
-    // Mouse input is ragged frame to frame: low-pass the rate so the gun glides instead of buzzing.
-    if (!w.UnityPort) {
-        m_Look = w.LookSmoothing > 0.0f
-                     ? m_Look + (in.LookRate - m_Look) * (1.0f - std::exp(-glm::two_pi<float>() * w.LookSmoothing * dt))
-                     : in.LookRate;
-        // Free aim: the gun holds its line while the view turns inside the zone (raw rate: the zone is in
-        // degrees actually turned).
-        glm::vec3 freeAimRot(0.0f);
-        {
-            const glm::vec2 zone = w.Enabled ? glm::max(w.FreeAimZone, glm::vec2(0.0f)) * adsMix(1.0f, w.FreeAimAdsScale)
-                                             : glm::vec2(0.0f);
-            const bool still = glm::length(in.LookRate) < 2.0f; // degrees/second: the view has stopped
-            m_FreeAim = StepFreeAim(m_FreeAim, in.LookRate * dt, zone, w.FreeAimReturn, still, dt);
-            freeAimRot = glm::vec3(-m_FreeAim.y, m_FreeAim.x, 0.0f); // the gun lags the turn, like the look sway
-        }
-        if (w.Enabled) {
-            const glm::vec2 look = m_Look / 100.0f;
-            swayRot = glm::vec3(-look.y, look.x, -0.5f * look.x) * w.LookRotation;
-            swayPos = glm::vec3(-look.x, -look.y, 0.0f) * w.LookPosition;
-            swayPos += glm::vec3(-in.Velocity.x, 0.0f, -in.Velocity.z) * w.MovePosition;
-            swayRot.z += -in.Velocity.x * w.MoveRoll;
-            swayRot = SoftLimit(swayRot, w.MaxRotation);
-            swayPos = SoftLimitLength(swayPos, w.MaxPosition);
-            const float scale = adsMix(1.0f, w.AdsScale);
-            swayRot *= scale;
-            swayPos *= scale;
-        }
-        m_SwayRot.Step(swayRot, dt, w.Spring);
-        m_SwayPos.Step(swayPos, dt, w.Spring);
-        pose.Rotation += m_SwayRot.X + freeAimRot;
-        pose.Position += m_SwayPos.X;
-    } // Legacy sway. The Unity modifier applies its ordered transforms before arm IK.
-
-    // Bob: phase-locked to distance travelled, so it never slides against the footsteps.
+    // (Sway is the SwayModifier port, applied by the presentation on the arms rig before arm IK.)
+    // The bob's clock: phase-locked to distance travelled (or the feet), so the camera bob never slides against the
+    // footsteps. The gun bob itself is retired (the walk clip's layer moves the gun).
     const auto& b = s.Bob;
     const float speed = glm::length(glm::vec2(in.Velocity.x, in.Velocity.z));
     const float ease = 1.0f - std::exp(-dt * std::max(b.Ease, 0.0f));
-    m_BobWeight += ((b.Enabled ? std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) : 0.0f) - m_BobWeight) * ease;
-    // The camera's bob is its own: tied to the gun bob's switch, it never ran with that retired (the walk clip's layer moves
-    // the gun).
-    // Full from a walk's pace up (Walk Bob at a walk, blending to Sprint Bob at the jog), easing in from a standstill.
+    // The camera bob: full from a walk's pace up (Walk Bob at a walk, blending to Sprint Bob at the jog), easing in from a standstill.
     m_CamBobWeight += (std::min(speed / std::max(in.WalkSpeed * 0.9f, 0.5f), 1.0f) - m_CamBobWeight) * ease;
     // The "sprint" bob and stride are the fast gait's: a sprint, or (the player's Shift) the jog, blended in by
     // speed between the walk and the fast gait's speed.
@@ -1011,10 +933,6 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     } else {
         m_BobPhase = std::fmod(m_BobPhase + speed * dt / stride, 1.0f);
     }
-    const glm::vec3 bob = (b.Walk.Evaluate(m_BobPhase) * (1.0f - m_BobSprint) + b.Sprint.Evaluate(m_BobPhase) * m_BobSprint) *
-                          m_BobWeight * adsMix(b.HipScale, b.AdsScale);
-    pose.Position += glm::vec3(bob.x, bob.y, 0.0f);
-    pose.Rotation.z += bob.z;
 
     // Breathing: a slow idle drift, calmer with sights up.
     const auto& br = s.Breath;

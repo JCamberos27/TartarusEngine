@@ -349,13 +349,28 @@ void TestProjectLocomotion() {
     BodyLocomotion::Update(body);CHECK(body.Turning && body.SetTurnAngle && std::abs(body.TurnAngle-100)<.01f);
     body.IsTurn=1;body.IsLocomotion=0;body.Dt=.11f;body.RootYaw=60;body.StateTime=.4f;BodyLocomotion::Update(body);CHECK(body.Turning && std::abs(body.Yaw-glm::radians(60.0f))<.001f);
     body.RootYaw=30;BodyLocomotion::Update(body);CHECK(!body.Turning && std::abs(body.TurnDone-glm::radians(90.0f))<.001f);
+    // The turn is over 10 degrees short (inside TurnEndAngle) but its clip fades out to the loop: its yaw still turns the
+    // body toward the view - never the other way, never past it - and, the fade over, the loop's does not.
+    body.IsTurn=0;body.IsLocomotion=1;body.RootYaw=3;BodyLocomotion::Update(body);CHECK(!body.Turning && std::abs(body.Yaw-glm::radians(93.0f))<1e-4f);
+    body.RootYaw=-3;BodyLocomotion::Update(body);CHECK(std::abs(body.Yaw-glm::radians(93.0f))<1e-4f);
+    body.RootYaw=10;BodyLocomotion::Update(body);CHECK(std::abs(body.Yaw-glm::radians(100.0f))<1e-4f);
+    body.ViewYaw=glm::radians(110.0f);body.RootYaw=3;BodyLocomotion::Update(body);CHECK(std::abs(body.Yaw-glm::radians(100.0f))<1e-4f);
+    // Still in the Turn state after Turning dropped: the same, 3 degrees toward the view, then up to it and no further.
+    body.IsTurn=1;body.IsLocomotion=0;BodyLocomotion::Update(body);CHECK(!body.Turning && std::abs(body.Yaw-glm::radians(103.0f))<1e-4f);
+    body.RootYaw=10;BodyLocomotion::Update(body);CHECK(!body.Turning && std::abs(body.Yaw-glm::radians(110.0f))<1e-4f);
     body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.IdleTime=2;body.StartIdleTime=.5f;body.StartMaxMove=.7f;body.ParamSmoothing=.2f;body.PlayerRunSpeed=4;body.PlayerSprintSpeed=6;body.RunSpeed=3.264f;body.ClipSprint=4.736f;body.WishVelocity={0,0,4};body.MaxPlayRate=2;
     BodyLocomotion::Update(body);CHECK((body.Triggers&4) && body.StartDir.y==1 && body.Moving);
     CHECK(body.StartTurn==0 && body.StartGait==1);
-    // Moving off toward a view the body lags by ~90 degrees: a start that turns it, to the left, ~2 steps of 45.
+    // Moving off toward a view the body lags by 100 degrees: a start that turns it, to the left, 100/45 = 2.22 steps of 45,
+    // the heading left as it is for the clip to turn.
     body.Triggers=0;body.IdleTime=2;body.Move={};body.TurnThreshold=30;body.TurnLagFloor=90;body.TurnMoveEase=.08f;body.ViewYaw=glm::radians(100.0f);
     body.WishVelocity={4*std::sin(glm::radians(100.0f)),0,4*std::cos(glm::radians(100.0f))};
-    BodyLocomotion::Update(body);CHECK((body.Triggers&4) && body.StartTurn>1.8f && body.StartTurn<2.3f && body.StartTurnAmount==body.StartTurn);
+    BodyLocomotion::Update(body);CHECK((body.Triggers&4) && body.StartTurn>1.8f && body.StartTurn<2.3f && body.StartTurnAmount==body.StartTurn && std::abs(body.Yaw)<1e-6f);
+    // A goal straight behind (the Dummy's tuning, at 60 Hz): the whole 180 degree turning start, not the 90 the eased and
+    // lag-clamped heading made of it, and the heading untouched on the frame it starts.
+    body.Triggers=0;body.IdleTime=2;body.Move={};body.Dt=1/60.0f;body.TurnThreshold=65.9f;body.TurnLagMargin=5;body.TurnMoveEase=.09f;
+    body.ViewYaw=3.14159265358979f;body.WishVelocity={0,0,-4};
+    BodyLocomotion::Update(body);CHECK((body.Triggers&4) && std::abs(body.StartTurn)>=3.8f && body.StartTurnAmount>=3.8f && std::abs(body.Yaw)<1e-6f);
     // Jogging forward, the input reverses: a pivot from the forward travel (the jog's).
     body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.PlayerRunSpeed=4;body.RunSpeed=3.264f;body.ParamSmoothing=.2f;body.Move={0,3,0};body.WishVelocity={0,0,-4};
     BodyLocomotion::Update(body);CHECK((body.Triggers&64) && body.PivotDir.y>.99f && body.PivotGait==1);
@@ -371,6 +386,13 @@ void TestProjectLocomotion() {
     BodyLocomotion::Update(body);CHECK((body.Triggers&256) && body.FidgetIndex>=0 && body.FidgetIndex<=1 && body.FidgetTime==0);
     body.Triggers=0;body.Busy=1;body.FidgetNext=1;body.FidgetTime=.995f;BodyLocomotion::Update(body);CHECK(!(body.Triggers&256) && body.FidgetTime==0);
     body={};body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.Crouched=1;BodyLocomotion::Update(body);CHECK(body.Triggers==1 && body.WasCrouched);
+    // The gait loop's rate is the capsule's speed over its clips' travel at the blend: a walk under its clips' pace with the
+    // idle in the blend (1.0 m/s asked, 0.75 travelled) speeds up, the jog backward past the back clips' 2.26 m/s too, at most
+    // Max Play Rate; standing, or with the clips moving the capsule (responsiveness 0), it is the authored rate.
+    CHECK(std::abs(BodyLocomotion::LoopPlayRate(1.0f,.75f,1,1.5f)-1.0f/.75f)<1e-4f);
+    CHECK(std::abs(BodyLocomotion::LoopPlayRate(3.26f,2.26f,1,1.5f)-3.26f/2.26f)<1e-4f && BodyLocomotion::LoopPlayRate(3.26f,1.5f,1,1.5f)==1.5f);
+    CHECK(BodyLocomotion::LoopPlayRate(0,0,1,1.5f)==1 && BodyLocomotion::LoopPlayRate(1.0f,.75f,0,1.5f)==1 && BodyLocomotion::LoopPlayRate(1.0f,-1,1,1.5f)==1);
+    CHECK(std::abs(BodyLocomotion::LoopPlayRate(.15f,.12f,1,1.5f)-(1+(.15f/.12f-1)*.4f))<1e-4f); // eased in toward a standstill
 }
 void TestProjectNpcConfiguration() {
     using namespace Gameplay;using Json=nlohmann::json;

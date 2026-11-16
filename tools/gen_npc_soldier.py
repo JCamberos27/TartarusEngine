@@ -2,7 +2,8 @@
 #   project/assets/AI/Soldier.json             - an entity fragment (the scene format): a root with the
 #                                                Character Outfit and the Quantum outfit pieces, copied from
 #                                                the Sandbox's Player Body without its First Person Body
-#   project/assets/AI/npc_soldier.controller   - fps_body_locomotion.controller plus the Hit React layer on top
+#   project/assets/AI/npc_soldier.controller   - fps_body_locomotion.controller less what a dummy never plays (crouch,
+#                                                jump, armed fidgets), its given-up starts eased out slower
 # NpcSpawner stamps the fragment out once per dummy. Re-run after changing the player's outfit or the
 # body's controller. Usage: python tools/gen_npc_soldier.py <repo root>
 import copy
@@ -24,50 +25,25 @@ def fail(msg):
 
 # --- the controller ---------------------------------------------------------------------------------
 ctrl = json.load(open(os.path.join(proj, BODY_CONTROLLER), encoding='utf-8'))
-params = {p['name'] for p in ctrl['parameters']}
-
-def param(name, kind, default=0.0):
-    if name not in params:
-        ctrl['parameters'].append({'name': name, 'type': kind, 'default': default})
-        params.add(name)
-
-MOCAP = 'assets/Animations/Mocap/RootMotion/'
-# Flinch: a light bump from the side the round came from, added over whatever the body is doing (HitX
-# right, HitY forward: where the hit pushes the body). Upper body only, so the feet keep their step.
-param('Hit', 'trigger')
-param('HitX', 'float', 0.0)
-param('HitY', 'float', -1.0)
-bumps = [('AM_Stand_React_Bump_Light_Front', 0.0, -1.0), ('AM_Stand_React_Bump_Light_Back', 0.0, 1.0),
-         ('AM_Stand_React_Bump_Light_Front_Left', 0.7, -0.7), ('AM_Stand_React_Bump_Light_Front_Right', -0.7, -0.7),
-         ('AM_Stand_React_Bump_Light_Back_Left', 0.7, 0.7), ('AM_Stand_React_Bump_Light_Back_Right', -0.7, 0.7)]
-for name, _, _ in bumps:
-    if not os.path.exists(os.path.join(proj, MOCAP, 'React_Bump', name + '.fbx')):
-        fail(f'missing clip React_Bump/{name}.fbx')
-ctrl['layers'] = [l for l in ctrl['layers'] if l.get('name') != 'Hit React']
-ctrl['layers'].append({
-    'name': 'Hit React',
-    'weight': 0.8,
-    'blending': 'additive',
-    'maskInclude': ['spine_01'],
-    'defaultState': 'None',
-    'states': [
-        {'name': 'None', 'loop': True, 'speed': 1.0, 'position': [0.0, 0.0], 'tags': []},
-        {'name': 'Flinch', 'loop': False, 'speed': 1.3, 'position': [0.0, 120.0], 'tags': ['Hit'],
-         'motions': {'main': {'blendParam': 'HitX', 'blendParamY': 'HitY', 'children': [
-             {'clip': MOCAP + 'React_Bump/' + n + '.fbx', 'threshold': x, 'thresholdY': y, 'speed': 1.0}
-             for n, x, y in bumps]}}},
-    ],
-    'transitions': [
-        {'from': 'Any', 'to': 'Flinch', 'duration': 0.06, 'conditions': [{'mode': 'if', 'param': 'Hit', 'threshold': 0.0}],
-         'hasExitTime': False, 'exitTime': 1.0, 'canTransitionToSelf': True},
-        {'from': 'Flinch', 'to': 'None', 'duration': 0.25, 'conditions': [], 'hasExitTime': True, 'exitTime': 0.8},
-    ],
-})
+# What a dummy never does is left out: it never crouches (no crouch half), never jumps (Jump; falling off a ledge still
+# plays Fall and Land) and is unarmed (the fidget blend's armed idles, FidgetIndex 0 and 1, are never picked).
+# NpcBody::Tick keeps Crouched and Jumped at 0. The flinch is procedural (NpcFlinch on the pose), not a layer here.
+base = ctrl['layers'][0]
+gone = {st['name'] for st in base['states'] if 'Crouch' in st.get('tags', []) or st['name'] == 'Jump'}
+base['states'] = [st for st in base['states'] if st['name'] not in gone]
+base['transitions'] = [t for t in base['transitions'] if t.get('from') not in gone and t.get('to') not in gone]
+for st in base['states']:
+    if st['name'] == 'Fidget':
+        main = st['motions']['main']
+        main['children'] = [c for c in main['children'] if c['threshold'] >= 2.0]
+if base.get('defaultState') in gone: fail('the base layer starts in a state a dummy never uses')
+unused = {'Crouched', 'CrouchDown', 'CrouchUp', 'Jump'}
+ctrl['parameters'] = [p for p in ctrl['parameters'] if p['name'] not in unused]
 # A start (or a turn on the spot) given up mid-step - he no longer wants to move - eases out over 0.3 s, not the player's 0.15:
 # a soldier's goal flips far more often than a player's stick, and caught with a foot up, the quick fade swung it 20 cm a frame.
 for t in ctrl['layers'][0]['transitions']:
     frm = t.get('from') or ''
-    if (frm.startswith('Start') or frm.startswith('CrouchStart')) and t.get('to') in ('Locomotion', 'CrouchLoco') and \
+    if frm.startswith('Start') and t.get('to') == 'Locomotion' and \
             [(c['param'], c['mode']) for c in t.get('conditions', [])] == [('Moving', 'ifNot')]:
         t['duration'] = max(t.get('duration', 0.0), 0.3)
 with open(os.path.join(proj, NPC_CONTROLLER), 'w', encoding='utf-8', newline='\n') as f:

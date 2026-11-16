@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 
 // Unit tests for animation poses and IK. Add a function per test and list it below.
 
@@ -29,7 +30,6 @@ void TestFirstPersonBodyNpcTunablesRoundTrip() {
     set.ElbowEase = 0.11f;
     set.ElbowMaxRate = 321.0f;
     set.NpcTurnThreshold = 71.0f;
-    set.NpcMoveEase = 0.17f;
     set.NpcFaceEase = 0.13f;
     set.NpcHeadMaxYaw = 61.0f;
     set.NpcHeadMaxPitch = 33.0f;
@@ -52,7 +52,6 @@ void TestFirstPersonBodyNpcTunablesRoundTrip() {
     CHECK(got.ElbowEase == set.ElbowEase);
     CHECK(got.ElbowMaxRate == set.ElbowMaxRate);
     CHECK(got.NpcTurnThreshold == set.NpcTurnThreshold);
-    CHECK(got.NpcMoveEase == set.NpcMoveEase);
     CHECK(got.NpcFaceEase == set.NpcFaceEase);
     CHECK(got.NpcHeadMaxYaw == set.NpcHeadMaxYaw);
     CHECK(got.NpcHeadMaxPitch == set.NpcHeadMaxPitch);
@@ -63,20 +62,6 @@ void TestFirstPersonBodyNpcTunablesRoundTrip() {
     CHECK(got.NpcFootOffsetEase == set.NpcFootOffsetEase);
     CHECK(got.NpcFootNormalEase == set.NpcFootNormalEase);
     CHECK(got.NpcFootIKFade == set.NpcFootIKFade);
-}
-
-void TestNpcTurnThresholdAffectsTurning() {
-    // Verify that changing NpcTurnThreshold affects NpcShouldTurn decision
-    float offset = 1.3f; // ~74 degrees, should turn with default threshold
-
-    // Default threshold is 1.15f, offset of 1.3f should trigger a turn
-    CHECK(NpcShouldTurn(offset, 1.15f) == true);
-
-    // Higher threshold (1.5f) should not trigger with same offset
-    CHECK(NpcShouldTurn(offset, 1.5f) == false);
-
-    // Smaller offset should not turn
-    CHECK(NpcShouldTurn(0.8f, 1.15f) == false);
 }
 
 void TestNpcSpineTwistClamping() {
@@ -187,6 +172,106 @@ void TestTwoBoneHintStopsElbowFlip() {
     CHECK(IK::Position(gh[2]).z > 0.0f && IK::Position(gh[2]).z < IK::Position(g[2]).z);
 }
 
+namespace {
+// root -> hip (1 up) -> knee -> ankle, 0.45 + 0.45, the knee bent `bendDeg` toward `planeDeg` about +Y from +Z (the toes);
+// the ankle hangs straight under the hip.
+struct BentLeg {
+    IK::Pose pose{4};
+    std::vector<int> parents{-1, 0, 1, 2};
+    std::vector<glm::mat4> g;
+    glm::vec3 KneeSide; // the way the knee bulges
+    BentLeg(float bendDeg, float planeDeg) {
+        KneeSide = glm::vec3(std::sin(glm::radians(planeDeg)), 0.0f, std::cos(glm::radians(planeDeg)));
+        const glm::vec3 k = glm::normalize(glm::cross(glm::vec3(0.0f, -1.0f, 0.0f), KneeSide));
+        pose[1].T = glm::vec3(0.0f, 1.0f, 0.0f);
+        pose[1].R = glm::angleAxis(glm::radians(bendDeg) * 0.5f, k);
+        pose[2].T = glm::vec3(0.0f, -0.45f, 0.0f);
+        pose[2].R = glm::angleAxis(-glm::radians(bendDeg), k);
+        pose[3].T = glm::vec3(0.0f, -0.45f, 0.0f);
+        IK::ComputeGlobals(pose, parents, g);
+    }
+    glm::vec3 Hip() const { return IK::Position(g[1]); }
+    glm::vec3 Ankle() const { return IK::Position(g[3]); }
+};
+// Signed angle (degrees) from `from` to `to` about unit `n`, both seen square to it.
+float SignedDegAbout(const glm::vec3& from, const glm::vec3& to, const glm::vec3& n) {
+    const glm::vec3 f = from - n * glm::dot(from, n), t = to - n * glm::dot(to, n);
+    return glm::degrees(std::atan2(glm::dot(glm::cross(f, t), n), glm::dot(f, t)));
+}
+// Solves the leg onto `target` with the knee steered toward the toes (+Z) by `bendWeight`, as NpcBody's legs do.
+std::vector<glm::mat4> SolveBentLeg(const BentLeg& leg, const glm::vec3& target, float bendWeight) {
+    IK::TwoBoneHint h;
+    h.BendAxis = glm::cross(leg.Ankle() - leg.Hip(), glm::vec3(0.0f, 0.0f, 1.0f));
+    h.BendAxisWeight = bendWeight;
+    IK::Pose p = leg.pose;
+    std::vector<glm::mat4> g = leg.g;
+    CHECK(IK::SolveTwoBone(p, leg.parents, g, 1, 2, 3, target, nullptr, 1.0f, 0.0f, &h));
+    return g;
+}
+float KneeDeg(const std::vector<glm::mat4>& g) {
+    const glm::vec3 a = IK::Position(g[1]), b = IK::Position(g[2]), c = IK::Position(g[3]);
+    return glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(a - b), glm::normalize(c - b)), -1.0f, 1.0f)));
+}
+} // namespace
+
+// The BendAxis hint (NpcBody's near-straight legs) turns the knee's plane without costing the reach: the end still lands on
+// the target, the knee angle is the triangle's, and the result is continuous in the weight (a tiny weight is a tiny change).
+void TestTwoBoneBendAxisReachesTarget() {
+    float worstReach = 0.0f, worstKnee = 0.0f, worstJump = 0.0f;
+    for (const float bend : {4.0f, 0.5f})
+        for (const float plane : {90.0f, 180.0f}) {
+            const BentLeg leg(bend, plane);
+            const glm::vec3 a = leg.Hip();
+            const glm::vec3 down = glm::normalize(leg.Ankle() - a);
+            for (const glm::vec3& target : {a + down * 0.8f, a + glm::vec3(0.05f, -0.78f, 0.12f)}) {
+                const float lat = glm::length(target - a);
+                const float wantKnee = glm::degrees(std::acos(std::clamp((lat * lat - 2.0f * 0.45f * 0.45f) / (-2.0f * 0.45f * 0.45f), -1.0f, 1.0f)));
+                std::vector<glm::mat4> byWeight[3];
+                const float weights[3] = {1.0f, 0.001f, 0.0f};
+                for (int k = 0; k < 3; ++k) {
+                    byWeight[k] = SolveBentLeg(leg, target, weights[k]);
+                    worstReach = std::max(worstReach, glm::length(IK::Position(byWeight[k][3]) - target));
+                    worstKnee = std::max(worstKnee, std::fabs(KneeDeg(byWeight[k]) - wantKnee));
+                }
+                // Whole weight: the knee is out toward the toes.
+                const glm::vec3 n = glm::normalize(IK::Position(byWeight[0][3]) - a);
+                const glm::vec3 side = IK::Position(byWeight[0][2]) - a;
+                CHECK(glm::dot(glm::normalize(side - n * glm::dot(side, n)), glm::vec3(0.0f, 0.0f, 1.0f)) > 0.95f);
+                if (glm::length(target - (a + down * 0.8f)) < 1e-6f) // straight down the leg: no swing, the plane is exactly the wanted one
+                    CHECK(std::fabs(SignedDegAbout(side, glm::vec3(0.0f, 0.0f, 1.0f), n)) < 0.5f);
+                // A thousandth of the weight is (within a millimetre) none of it.
+                for (int j = 2; j <= 3; ++j)
+                    worstJump = std::max(worstJump, glm::length(IK::Position(byWeight[1][j]) - IK::Position(byWeight[2][j])));
+            }
+        }
+    std::printf("[anim] bend-axis hint: worst reach miss %.3f mm, knee angle off %.4f deg, w 0.001 vs 0 %.3f mm\n",
+                worstReach * 1000.0f, worstKnee, worstJump * 1000.0f);
+    CHECK(worstReach < 1e-3f);
+    CHECK(worstKnee < 0.05f);
+    CHECK(worstJump < 1e-3f);
+
+    // Swept 0..1 the knee turns smoothly from its own side toward the toes, the weight's share of the way, and the end
+    // never leaves the target.
+    for (const float plane : {90.0f, 150.0f}) {
+        const BentLeg leg(4.0f, plane);
+        const glm::vec3 a = leg.Hip();
+        const glm::vec3 n = glm::normalize(leg.Ankle() - a);
+        const glm::vec3 target = a + n * 0.8f;
+        const float whole = SignedDegAbout(leg.KneeSide, glm::vec3(0.0f, 0.0f, 1.0f), n);
+        float worstTurn = 0.0f, worstMiss = 0.0f;
+        for (int i = 0; i <= 20; ++i) {
+            const float w = (float)i / 20.0f;
+            const std::vector<glm::mat4> g = SolveBentLeg(leg, target, w);
+            worstMiss = std::max(worstMiss, glm::length(IK::Position(g[3]) - target));
+            worstTurn = std::max(worstTurn, std::fabs(SignedDegAbout(leg.KneeSide, IK::Position(g[2]) - a, n) - w * whole));
+        }
+        std::printf("[anim] bend-axis sweep, plane %.0f deg: knee turn off its share by %.3f deg, reach miss %.3f mm\n", plane,
+                    worstTurn, worstMiss * 1000.0f);
+        CHECK(worstMiss < 1e-3f);
+        CHECK(worstTurn < 0.5f);
+    }
+}
+
 void TestTwoBoneMaxLimbScale() {
     const HintArm arm;
     const glm::vec3 a = IK::Position(arm.g[1]);
@@ -253,6 +338,109 @@ void TestLimbGripOffsetMovesHand() {
     std::vector<glm::mat4> g = arm.g;
     CHECK(IK::SolveTwoBone(p, arm.parents, g, 1, 2, 3, IK::Position(goal), nullptr, 1.0f));
     CHECK(glm::length(IK::Position(g[3]) - (glm::vec3(target[3]) + glm::vec3(0.0f, 0.1f, 0.0f))) < 1e-3f);
+}
+
+// An IK Rig at part weight (the procedural IK weight fading in or out) moves the gun by that share of its offset; the hand
+// that keeps its animated grip must go with the gun all the way, not the same share again (that left it off the gun by
+// w(1-w) of the move: 1.35 cm here at 0.5). Weight 0 is the animated pose, untouched.
+void TestApplyRigPartialWeightKeepsHandOnGun() {
+    // ApplyRig reads only the node hierarchy off the model: Root (a triangle, so it imports) -> Shoulder -> Elbow -> Hand,
+    // Root -> Gun. The transforms are the test's own pose below.
+    std::error_code ec;
+    const std::filesystem::path dir = std::filesystem::temp_directory_path(ec) / "TartarusIkRigTest";
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path file = dir / "ik_rig_arm.gltf";
+    {
+        std::ofstream out(file, std::ios::binary | std::ios::trunc);
+        out << R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],
+"nodes":[{"name":"Root","mesh":0,"children":[1,4]},{"name":"Shoulder","children":[2]},{"name":"Elbow","children":[3]},
+{"name":"Hand"},{"name":"Gun"}],
+"meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}],
+"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[1,1,0]}],
+"bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36}],
+"buffers":[{"byteLength":36,"uri":"data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}]})";
+    }
+    const auto model = Model::ImportDeferred(file.string(), ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    const int shoulder = model->NodeIndex("Shoulder"), elbow = model->NodeIndex("Elbow"), hand = model->NodeIndex("Hand"),
+              gunNode = model->NodeIndex("Gun");
+    CHECK(shoulder >= 0 && elbow >= 0 && hand >= 0 && gunNode >= 0);
+    if (shoulder < 0 || elbow < 0 || hand < 0 || gunNode < 0) return;
+    std::vector<int> parents(model->NodeCount());
+    for (int i = 0; i < model->NodeCount(); ++i) parents[i] = model->NodeParent(i);
+
+    // The animated pose: a bent arm, the gun a little off the hand (the grip), every other node at identity.
+    IK::Pose animated(model->NodeCount(), LocalTRS{});
+    animated[shoulder].T = glm::vec3(0.0f, 1.5f, 0.0f);
+    animated[shoulder].R = glm::angleAxis(-0.4f, glm::vec3(0.0f, 1.0f, 0.0f));
+    animated[elbow].T = glm::vec3(0.3f, 0.0f, 0.0f);
+    animated[elbow].R = glm::angleAxis(0.9f, glm::vec3(0.0f, 0.0f, 1.0f));
+    animated[hand].T = glm::vec3(0.28f, 0.0f, 0.0f);
+    std::vector<glm::mat4> g0;
+    IK::ComputeGlobals(animated, parents, g0);
+    const glm::mat4 grip = glm::translate(glm::mat4(1.0f), glm::vec3(0.02f, -0.01f, 0.03f)) *
+                           glm::mat4_cast(glm::angleAxis(0.3f, glm::vec3(1.0f, 0.0f, 0.0f))); // hand in the gun's frame
+    const glm::mat4 gun0 = g0[hand] * glm::inverse(grip);
+    animated[gunNode].T = IK::Position(gun0);
+    animated[gunNode].R = IK::Rotation(gun0);
+    IK::ComputeGlobals(animated, parents, g0);
+    const glm::mat4 relative = glm::inverse(g0[gunNode]) * g0[hand];
+
+    IKRigComponent rig;
+    rig.LimbA.Enabled = true;
+    rig.LimbA.Upper = "Shoulder";
+    rig.LimbA.Lower = "Elbow";
+    rig.LimbA.End = "Hand";
+    rig.LimbA.Target = "Gun";
+    rig.LimbA.KeepAnimatedOffset = true;
+    rig.LimbA.MatchRotation = true;
+    IKBoneOffset off;
+    off.Bone = "Gun";
+    off.Position = glm::vec3(0.0f, 0.02f, 0.05f);
+    off.Rotation = glm::angleAxis(0.15f, glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)));
+    rig.Offsets.push_back(off);
+
+    // gap (m) and turn (deg) between the hand and where the animated grip puts it on the gun as it now stands.
+    const auto solve = [&](float weight, const glm::vec3& gripPosition, float& gap, float& turn, float& gunMoved) {
+        rig.Weight = weight;
+        rig.LimbA.GripPosition = gripPosition;
+        IK::Pose p = animated;
+        IK::ApplyRig(rig, *model, p);
+        std::vector<glm::mat4> g;
+        IK::ComputeGlobals(p, parents, g);
+        const glm::mat4 want = g[gunNode] * glm::translate(glm::mat4(1.0f), gripPosition) * relative;
+        gap = glm::length(IK::Position(g[hand]) - IK::Position(want));
+        turn = glm::degrees(glm::angle(glm::normalize(glm::inverse(IK::Rotation(want)) * IK::Rotation(g[hand]))));
+        if (turn > 180.0f) turn = 360.0f - turn;
+        gunMoved = glm::length(IK::Position(g[gunNode]) - IK::Position(g0[gunNode]));
+    };
+    float gap = 0.0f, turn = 0.0f, moved = 0.0f;
+    for (const float weight : {0.25f, 0.5f, 0.75f, 1.0f}) {
+        solve(weight, glm::vec3(0.0f), gap, turn, moved);
+        std::printf("[anim] IK rig weight %.2f: gun moved %.2f cm, hand off it %.3f mm, turned %.3f deg\n", weight, moved * 100.0f,
+                    gap * 1000.0f, turn);
+        CHECK(moved > 0.02f * weight);
+        CHECK(gap < 1e-3f);
+        CHECK(turn < 0.1f);
+    }
+    // A grip offset is blended by the weight: whole at 1, next to nothing at a tiny weight (no jump as the rig fades in).
+    const glm::vec3 gripOffset(0.03f, 0.0f, 0.0f);
+    solve(1.0f, gripOffset, gap, turn, moved);
+    CHECK(gap < 1e-3f && turn < 0.1f);
+    solve(1e-4f, glm::vec3(0.0f), gap, turn, moved);
+    CHECK(gap < 1e-4f);
+    solve(1e-4f, gripOffset, gap, turn, moved);
+    CHECK(std::fabs(gap - glm::length(gripOffset)) < 1e-4f); // the hand has taken next to none of the offset
+    // Weight 0: the animated pose, exactly.
+    rig.Weight = 0.0f;
+    rig.LimbA.GripPosition = gripOffset;
+    IK::Pose p = animated;
+    IK::ApplyRig(rig, *model, p);
+    bool same = true;
+    for (size_t i = 0; i < p.size(); ++i) same = same && p[i].T == animated[i].T && p[i].R == animated[i].R && p[i].S == animated[i].S;
+    CHECK(same);
+    std::filesystem::remove_all(dir, ec);
 }
 
 void TestWeaponIkHandOffsetsRoundTrip() {
@@ -330,42 +518,6 @@ void TestClipCurveAndIKOffTagCombine() {
     CHECK(back.IK.CurveLeftHand == "Left" && !back.IK.UseClipCurves && back.IK.CurveAll == "IK");
 }
 
-void TestFreeAimDeadZoneMath() {
-    const glm::vec2 zone(4.0f, 2.0f);
-    glm::vec2 o(0.0f);
-    o = StepFreeAim(o, glm::vec2(3.0f, 0.0f), zone, 30.0f, false, 0.016f);
-    CHECK(o == glm::vec2(3.0f, 0.0f));                  // inside the zone: the view turned, the gun held
-    o = StepFreeAim(o, glm::vec2(5.0f, 5.0f), zone, 30.0f, false, 0.016f);
-    CHECK(o == zone);                                   // past it the offset stops at the edge: the gun follows
-    o = StepFreeAim(o, glm::vec2(-1.0f, 0.0f), zone, 30.0f, true, 0.016f);
-    CHECK(glm::length(o) < glm::length(zone) - 0.4f);   // stopped: returns at ~30 deg/s
-    for (int i = 0; i < 20; ++i) o = StepFreeAim(o, glm::vec2(0.0f), zone, 30.0f, true, 0.016f);
-    CHECK(o == glm::vec2(0.0f));
-    CHECK(StepFreeAim(glm::vec2(1.0f), glm::vec2(9.0f), glm::vec2(0.0f), 30.0f, false, 0.016f) == glm::vec2(0.0f)); // off
-
-    // In the stack: the zone fully taken up by a steady turn adds its degrees of lag to the gun's yaw.
-    auto pose = [&](glm::vec2 zoneSetting) {
-        WeaponProceduralSettings s = WeaponProceduralSettings::Defaults();
-        s.Sway.FreeAimZone = zoneSetting;
-        s.Sway.UnityPort = false;
-        WeaponProceduralState st;
-        WeaponProceduralInput in;
-        in.Dt = 1.0f / 60.0f;
-        in.LookRate = glm::vec2(20.0f, 0.0f);
-        WeaponProceduralPose p;
-        for (int i = 0; i < 30; ++i) p = st.Update(s, in);
-        return p;
-    };
-    const WeaponProceduralPose off = pose(glm::vec2(0.0f)), on = pose(glm::vec2(3.0f, 3.0f));
-    CHECK(std::fabs((on.Rotation.y - off.Rotation.y) - 3.0f) < 0.05f);
-    WeaponProceduralSettings k = WeaponProceduralSettings::Defaults(), back;
-    k.Sway.FreeAimZone = glm::vec2(2.0f, 1.0f);
-    k.Sway.FreeAimReturn = 12.0f;
-    k.Sway.UnityPort = false;
-    CHECK(WeaponProceduralSettings::FromJson(k.ToJson(), back, nullptr));
-    CHECK(back.Sway.FreeAimZone == k.Sway.FreeAimZone && back.Sway.FreeAimReturn == 12.0f);
-}
-
 void TestAdsBlendPieces() {
     // Additive 1 = the old behaviour: pose + offset * ads.
     const glm::vec3 pose(1.0f, 2.0f, 3.0f), off(0.1f, 0.0f, -0.2f);
@@ -440,39 +592,7 @@ static void TestArmShapeLinksMatchNameWalk() {
     }
 }
 
-// ---- foot slide correction (stride warp + foot pin) ----
 namespace {
-// A treadmill gait: each foot plants for 0.4 s sliding back at `clipSpeed` in the capsule's frame, then swings forward; the capsule
-// travels at `groundSpeed`. Returns the mean planted-foot drift (m) over the plants after a 2 s warm-up; `last` = the final output.
-float FootSlideSim(const IK::FootSlideSettings& set, float clipSpeed, float groundSpeed, IK::FootSlideStats* stats = nullptr, IK::FootSlideOutput* last = nullptr, float ankle = 0.0f) {
-    IK::FootSlide fs;
-    const float dt = 1.0f / 120.0f;
-    const float stance = 0.4f, half = 0.8f * 0.5f;
-    float z = 0.0f;
-    for (int f = 0; f < 120 * 8; ++f) {
-        const float t = f * dt;
-        if (t >= 2.0f && f == (int)(2.0f / dt)) fs.Stats.Clear();
-        z += groundSpeed * dt;
-        IK::FootSlideInput in;
-        in.Feet = glm::vec3(0.0f, 0.0f, z);
-        in.Velocity = glm::vec3(0.0f, 0.0f, groundSpeed);
-        in.Dt = dt;
-        in.Pelvis = in.Feet + glm::vec3(0.0f, 1.0f, 0.0f);
-        for (int s = 0; s < 2; ++s) {
-            const float ph = std::fmod(t + s * half, 2.0f * half);
-            float rel, h;
-            if (ph < stance) { rel = 0.5f * clipSpeed * stance - clipSpeed * ph; h = 0.0f; }
-            else { const float u = (ph - stance) / (2.0f * half - stance); rel = -0.5f * clipSpeed * stance + clipSpeed * stance * u; h = 0.15f * std::sqrt(std::sin(3.14159265f * u)); } // lifts off quickly, like a heel-off
-            h += ankle; // the ankle bone rides a few cm over the sole
-            in.Foot[s] = in.Feet + glm::vec3(0.0f, h, rel);
-            in.Height[s] = h;
-        }
-        const IK::FootSlideOutput o = fs.Step(set, in, !set.Active());
-        if (last) *last = o;
-    }
-    if (stats) *stats = fs.Stats;
-    return fs.Stats.Plants > 0 ? fs.Stats.SumSlide / fs.Stats.Plants : -1.0f;
-}
 // ---- lane A round 6 ----
 // The clip files a controller reaches are what the editor prefetches: each file once, no "#clip" suffix, no
 // own clips, blend-tree children included (a missing one is the 1 s first-Play-frame hitch).
@@ -496,16 +616,12 @@ void TestControllerClipFilesForPrefetch() {
 
 } // namespace
 
-void TestStrideScaleMath() {
-    CHECK(std::abs(IK::StrideScale(3.0f, 2.0f, 0.75f, 1.35f) - 1.35f) < 1e-5f);  // clamped high
-    CHECK(std::abs(IK::StrideScale(1.0f, 2.0f, 0.75f, 1.35f) - 0.75f) < 1e-5f);  // clamped low
-    CHECK(std::abs(IK::StrideScale(2.2f, 2.0f, 0.75f, 1.35f) - 1.1f) < 1e-5f);   // in range: the ratio
-    CHECK(IK::StrideScale(0.1f, 2.0f, 0.75f, 1.35f) == 1.0f && IK::StrideScale(2.0f, 0.0f, 0.75f, 1.35f) == 1.0f); // standing / no estimate
-    CHECK(IK::StrideWarpPelvisDrop(0.9f, 0.4f, 1.0f, 1.0f) == 0.0f && IK::StrideWarpPelvisDrop(0.9f, 0.4f, 0.8f, 1.0f) == 0.0f);
-    const float drop = IK::StrideWarpPelvisDrop(0.9f, 0.4f, 1.3f, 1.0f);
-    CHECK(drop > 0.005f && drop <= 0.15f);
-    CHECK(IK::StrideWarpPelvisDrop(0.9f, 0.4f, 1.3f, 0.0f) == 0.0f);
+namespace {
+// One foot on a body standing still at the origin, facing +Z: the foot in the body is the foot in the world.
+glm::vec3 StepStill(IK::FootLock& lock, const IK::FootLockSettings& set, const glm::vec3& anim, float height, float dt) {
+    return lock.Step(0, set, glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), anim, height, dt);
 }
+} // namespace
 
 void TestFootLockHoldsAndReleases() {
     // A planted foot whose animation creeps 0.3 m/s over the ground (a stride shorter than the capsule's travel) is held
@@ -514,11 +630,11 @@ void TestFootLockHoldsAndReleases() {
     IK::FootLock lock;
     const float dt = 1.0f / 60.0f;
     glm::vec3 anim(0.0f, 0.08f, 0.0f), first(0.0f);
-    lock.Step(0, set, anim, anim.y, dt); // first sight: no speed yet, nothing planted
+    StepStill(lock, set, anim, anim.y, dt); // first sight: no speed yet, nothing planted
     CHECK(!lock.Locked(0));
     for (int i = 0; i < 30; ++i) {
         anim.z += 0.3f * dt;
-        const glm::vec3 drawn = anim + lock.Step(0, set, anim, anim.y, dt);
+        const glm::vec3 drawn = anim + StepStill(lock, set, anim, anim.y, dt);
         if (i == 0) first = drawn;
         CHECK(lock.Locked(0));
         CHECK(glm::length(glm::vec2(drawn.x - first.x, drawn.z - first.z)) < 1e-4f);
@@ -528,7 +644,7 @@ void TestFootLockHoldsAndReleases() {
     for (int i = 0; i < 30; ++i) { // lifted
         anim.y += i == 0 ? 0.05f : 0.01f; // off the ground past Lift
         anim.z += 0.3f * dt;
-        const glm::vec3 drawn = anim + lock.Step(0, set, anim, anim.y, dt);
+        const glm::vec3 drawn = anim + StepStill(lock, set, anim, anim.y, dt);
         CHECK(!lock.Locked(0));
         const float gap = glm::length(lock.Offset(0));
         CHECK(gap <= lastGap + 1e-6f);                // only ever closes
@@ -545,21 +661,21 @@ void TestFootLockIgnoresSwingAndLetsGoOnDrift() {
     { // a swinging foot passing low (1.2 cm over where it plants: within Height, off the floor), fast, never plants
         IK::FootLock lock;
         glm::vec3 anim(0.0f, 0.08f, 0.0f);
-        lock.Step(0, set, anim, 0.08f, dt);
+        StepStill(lock, set, anim, 0.08f, dt);
         anim.y = 0.092f;
         for (int i = 0; i < 10; ++i) {
             anim.z += 4.0f * dt;
-            lock.Step(0, set, anim, anim.y, dt);
+            StepStill(lock, set, anim, anim.y, dt);
             CHECK(!lock.Locked(0));
         }
     }
-    { // the animation wanders off a planted foot: past MaxDrift it lets go rather than stretch the leg
+    { // the animation wanders off a planted foot: past MaxDrift (the safety leash) it lets go rather than stretch the leg
         IK::FootLock lock;
         glm::vec3 anim(0.0f, 0.08f, 0.0f);
         bool let = false;
         for (int i = 0; i < 120 && !let; ++i) {
             anim.x += 0.8f * dt;
-            lock.Step(0, set, anim, 0.08f, dt);
+            StepStill(lock, set, anim, 0.08f, dt);
             let = i > 0 && !lock.Locked(0);
             CHECK(glm::length(lock.Offset(0)) <= set.MaxDrift + 0.02f);
         }
@@ -569,11 +685,121 @@ void TestFootLockIgnoresSwingAndLetsGoOnDrift() {
         IK::FootLockSettings off;
         off.Enabled = false;
         IK::FootLock lock;
-        const glm::vec3 o = lock.Step(0, off, glm::vec3(0.0f, 0.08f, 0.0f), 0.08f, dt);
+        const glm::vec3 o = StepStill(lock, off, glm::vec3(0.0f, 0.08f, 0.0f), 0.08f, dt);
         CHECK(o == glm::vec3(0.0f) && !lock.Locked(0));
     }
     FirstPersonBodyComponent body;
     CHECK(IK::FootLockFrom(body).Enabled && std::abs(IK::FootLockFrom(body).MaxDrift - body.FootLockDrift) < 1e-6f);
+}
+
+void TestFootLockPlantsWhileTheBodyTurns() {
+    // The body swings round 180 degrees a second, its clip's foot still in it (0.32 m from the root): the foot's world speed
+    // is ~1 m/s, twice the tight Speed set here, but the turn is the body's, so the foot plants and stays where it landed.
+    IK::FootLockSettings set;
+    set.Speed = 0.5f;
+    const float dt = 1.0f / 60.0f;
+    const glm::vec3 root(1.0f, 0.0f, 2.0f), local(0.3f, 0.08f, 0.1f);
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    IK::FootLock lock;
+    float yaw = 0.0f;
+    glm::vec3 first(0.0f);
+    for (int i = 0; i < 12; ++i) { // 36 degrees round: inside the leash
+        const glm::quat facing = glm::angleAxis(yaw, up);
+        const glm::vec3 drawn = root + facing * local + lock.Step(0, set, root, facing, local, local.y, dt);
+        if (i == 0) {
+            CHECK(!lock.Locked(0)); // (a first frame has no speed yet)
+        } else {
+            CHECK(lock.Locked(0));
+            if (i == 1) first = drawn;
+            CHECK(glm::length(drawn - first) < 1e-4f);
+        }
+        yaw += glm::radians(180.0f) * dt;
+    }
+    // The same sweep made by the clip (the foot moving in a body that does not turn) off the floor - 1.2 cm up, within
+    // Height but over FlatHeight - is a foot moving: it never plants.
+    IK::FootLock swept;
+    yaw = 0.0f;
+    swept.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), local, local.y, dt); // its floor
+    for (int i = 0; i < 12; ++i) {
+        yaw += glm::radians(180.0f) * dt;
+        const glm::vec3 at = glm::angleAxis(yaw, up) * local + glm::vec3(0.0f, 0.012f, 0.0f);
+        swept.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), at, at.y, dt);
+        CHECK(!swept.Locked(0));
+    }
+    // Flat on the floor, the clip sliding the foot (a crossfade into a stop) plants however fast it slides, and holds.
+    IK::FootLock slid;
+    yaw = 0.0f;
+    glm::vec3 held(0.0f);
+    for (int i = 0; i < 12; ++i) {
+        const glm::vec3 at = glm::angleAxis(yaw, up) * local;
+        const glm::vec3 drawn = root + at + slid.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), at, at.y, dt);
+        if (i == 1) held = drawn;
+        if (i >= 1) { CHECK(slid.Locked(0)); CHECK(glm::length(drawn - held) < 1e-4f); }
+        yaw += glm::radians(180.0f) * dt;
+    }
+    // ... but not a foot the capsule carries that fast (a swing passing low): the root's own travel is held to Speed.
+    IK::FootLock carried;
+    glm::vec3 r = root;
+    for (int i = 0; i < 12; ++i) {
+        carried.Step(0, set, r, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), local, local.y, dt);
+        CHECK(!carried.Locked(0));
+        r.z += 1.0f * dt;
+    }
+}
+
+void TestFootLockLetsGoAtReach() {
+    IK::FootLockSettings set;
+    const float dt = 1.0f / 60.0f;
+    const glm::quat facing(1.0f, 0.0f, 0.0f, 0.0f);
+    const glm::vec3 local(0.0f, 0.08f, 0.0f); // the clip's foot, down and still in the body
+    glm::vec3 root(0.0f);
+    IK::FootLock lock;
+    lock.Step(0, set, root, facing, local, local.y, dt);
+    for (int i = 0; i < 6; ++i) { // the body walks on 1 m/s faster than the clip: the planted foot is held behind
+        root.z += 1.0f * dt;
+        lock.Step(0, set, root, facing, local, local.y, dt);
+    }
+    CHECK(lock.Locked(0));
+    CHECK(!lock.Overreach(0, set, 0.97f, 0.90f));  // within Reach: held
+    CHECK(!lock.Overreach(0, set, 0.99f, 0.985f)); // the clip's own leg near straight, the hold adding next to nothing: held
+    CHECK(lock.Locked(0));
+    CHECK(lock.Overreach(0, set, 0.981f, 0.90f));  // past Reach because of the hold: lets go
+    CHECK(!lock.Locked(0));
+    CHECK(!lock.Overreach(0, set, 1.2f, 0.90f));   // (a free foot has nothing to let go)
+    // ... and steps: the lag only ever closes, the foot lifts in an arc on the way, and it plants again only once it is there.
+    float lastGap = glm::length(glm::vec2(lock.Offset(0).x, lock.Offset(0).z));
+    CHECK(lastGap > 0.05f);
+    bool lifted = false;
+    const int frames = (int)std::ceil(set.Release / dt) + 2;
+    for (int i = 0; i < frames; ++i) { // the body stopped, the clip's foot still down
+        const glm::vec3 o = lock.Step(0, set, root, facing, local, local.y, dt);
+        const float gap = glm::length(glm::vec2(o.x, o.z));
+        if (i < frames - 3) CHECK(!lock.Locked(0));
+        CHECK(gap <= lastGap + 1e-6f);
+        lifted = lifted || o.y > 0.005f;
+        lastGap = gap;
+    }
+    CHECK(lifted);
+    CHECK(lastGap < 1e-4f);
+}
+
+void TestClampReachNeverStretchesTheLeg() {
+    const glm::vec3 hip(0.1f, 0.9f, -0.2f);
+    const float leg = 0.85f;
+    const glm::vec3 dir = glm::normalize(glm::vec3(0.2f, -1.0f, 0.3f));
+    CHECK(glm::length(IK::ClampReach(hip, hip + dir * 0.7f, leg) - (hip + dir * 0.7f)) < 1e-6f); // within reach: as asked
+    float last = 0.0f;
+    for (int i = 0; i <= 200; ++i) {
+        const float asked = leg * (0.9f + 0.01f * (float)i); // 0.9 .. 2.9 x the leg
+        const glm::vec3 t = IK::ClampReach(hip, hip + dir * asked, leg);
+        const float got = glm::length(t - hip);
+        CHECK(got <= 0.995f * leg + 1e-5f);                        // never past the clamp
+        CHECK(glm::length(glm::normalize(t - hip) - dir) < 1e-4f); // drawn in along the hip->target line
+        CHECK(got >= last - 1e-6f);                                // asked for more, never given less
+        CHECK(i == 0 || got - last <= 0.01f * leg + 1e-5f);        // no jump
+        last = got;
+    }
+    CHECK(last > 0.99f * leg); // it still reaches for it
 }
 
 void TestFootSlideMeterCountsPlants() {
@@ -591,92 +817,6 @@ void TestFootSlideMeterCountsPlants() {
     CHECK(t.Plants == 2);
     CHECK(t.MaxDrift > 0.18f && t.MaxDrift < 0.26f);   // ~0.5 m/s for the 27 settled frames
     CHECK(t.MeanCm() > 9.0f && t.MeanCm() < 13.0f);    // the still plant counts 0
-}
-
-void TestFootSlideDefaultsOff() {
-    IK::FootSlideSettings off;
-    CHECK(!off.Active());
-    FirstPersonBodyComponent body;
-    CHECK(!body.FootPinEnabled && !body.StrideWarpEnabled && !IK::FootSlideFrom(body).Active());
-    IK::FootSlideOutput o;
-    FootSlideSim(off, 2.0f, 3.0f, nullptr, &o);
-    CHECK(o.Shift[0] == glm::vec3(0.0f) && o.Shift[1] == glm::vec3(0.0f) && o.PelvisDrop == 0.0f && o.Scale == 1.0f); // the pose is the clips'
-}
-
-void TestFootSlidePinHoldsPlantedFeet() {
-    IK::FootSlideOutput previous;
-    previous.Shift[0]=glm::vec3(0.2f,0,0);
-    previous.PelvisDrop=0.05f;
-    const auto release=IK::SmoothFootSlideOutput(previous,{},1.0f/60.0f,0.06f);
-    CHECK(release.Shift[0].x>0.1f && release.Shift[0].x<0.2f);
-    CHECK(release.PelvisDrop>0 && release.PelvisDrop<previous.PelvisDrop);
-    auto split=IK::SmoothFootSlideOutput(previous,{},1.0f/120.0f,0.06f);
-    split=IK::SmoothFootSlideOutput(split,{},1.0f/120.0f,0.06f);
-    CHECK(glm::length(split.Shift[0]-release.Shift[0])<1e-6f);
-    IK::FootSlide idle;
-    IK::FootSlideSettings active;
-    active.PinEnabled=active.StrideEnabled=true;
-    IK::FootSlideInput input;
-    input.Dt=1.0f/60.0f;
-    input.Velocity=glm::vec3(0,0,2);
-    input.Foot[0]=glm::vec3(-0.1f,0,0);
-    input.Foot[1]=glm::vec3(0.1f,0,0);
-    idle.Step(active,input);
-    input.Velocity=glm::vec3(0);
-    input.Foot[0].z+=0.2f;
-    input.Foot[1].z+=0.2f;
-    const auto stopped=idle.Step(active,input);
-    CHECK(stopped.Shift[0]==glm::vec3(0) && stopped.Shift[1]==glm::vec3(0));
-    CHECK(stopped.PelvisDrop==0 && stopped.Scale==1);
-    IK::FootSlideStats base, pin, warp, both;
-    IK::FootSlideSettings set;
-    const float slideOff = FootSlideSim(set, 2.0f, 2.4f, &base);
-    CHECK(base.Plants >= 6 && slideOff > 0.12f);          // plants are detected; the clips' feet slide ~16 cm a plant
-    set.PinEnabled = true;
-    const float slidePin = FootSlideSim(set, 2.0f, 2.4f, &pin);
-    CHECK(slidePin < 0.03f && pin.Plants == base.Plants); // pinned within the leash: held
-    IK::FootSlideSettings w;
-    w.StrideEnabled = true;
-    const float slideWarp = FootSlideSim(w, 2.0f, 2.4f, &warp);
-    CHECK(slideWarp < slideOff * 0.4f);                   // the stride matched to the ground speed: most of it gone
-    w.PinEnabled = true;
-    const float slideBoth = FootSlideSim(w, 2.0f, 2.4f, &both);
-    std::printf("[FootSlide] unit sim (clip 2.0, ground 2.4 m/s) drift per plant: clips %.1f cm, pin %.1f cm (%d/%d plants), warp %.1f cm, both %.1f cm\n", slideOff * 100, slidePin * 100, pin.Plants, base.Plants, slideWarp * 100, slideBoth * 100);
-    CHECK(slideBoth < 0.02f);
-    // A mismatch beyond the leash: the pin is dragged along, never further behind than Pin Max Drift.
-    IK::FootSlideSettings leash;
-    leash.PinEnabled = true;
-    leash.PinMaxDrift = 0.1f;
-    const float slideLeash = FootSlideSim(leash, 2.0f, 4.0f);
-    CHECK(slideLeash > 0.05f && slideLeash < FootSlideSim(IK::FootSlideSettings{}, 2.0f, 4.0f));
-    // The ankle bone rides 7 cm over the ground even planted: plants are still found, judged against each foot's own lowest height.
-    IK::FootSlideStats ankleStats;
-    IK::FootSlideSettings ap;
-    ap.PinEnabled = true;
-    CHECK(FootSlideSim(ap, 2.0f, 2.4f, &ankleStats, nullptr, 0.07f) < 0.03f && ankleStats.Plants == base.Plants);
-    // Weight 0 = the clips' feet.
-    IK::FootSlideSettings z;
-    z.PinEnabled = true;
-    z.PinWeight = 0.0f;
-    CHECK(std::abs(FootSlideSim(z, 2.0f, 2.4f) - slideOff) < 0.005f);
-}
-
-void TestStrideWarpMatchesGroundSpeed() {
-    IK::FootSlideSettings w;
-    w.StrideEnabled = true;
-    IK::FootSlideOutput o;
-    FootSlideSim(w, 2.0f, 2.6f, nullptr, &o);
-    CHECK(o.Scale > 1.25f && o.Scale <= 1.35f + 1e-4f);   // ~1.3 for 2.6 over 2.0
-    CHECK(o.PelvisDrop > 0.0f);
-    FootSlideSim(w, 2.0f, 5.0f, nullptr, &o);
-    CHECK(o.Scale <= 1.35f + 1e-4f);                      // clamped
-    w.StrideMax = 1.1f;
-    FootSlideSim(w, 2.0f, 5.0f, nullptr, &o);
-    CHECK(o.Scale <= 1.1f + 1e-4f);                       // the limit is tunable
-    w.StrideMax = 1.35f;
-    w.StrideWeight = 0.0f;
-    FootSlideSim(w, 2.0f, 2.6f, nullptr, &o);
-    CHECK(std::abs(o.Scale - 1.0f) < 1e-4f);
 }
 
 void TestAdsReloadPreservesAdditiveLocomotion() {
@@ -1004,26 +1144,25 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Action camera and firing shake",TestCameraEffects});
     tests.push_back({"ADS reload preserves additive locomotion",TestAdsReloadPreservesAdditiveLocomotion});
     tests.push_back({"FirstPersonBody NPC tunables save/load round-trip", TestFirstPersonBodyNpcTunablesRoundTrip});
-    tests.push_back({"NPC turn threshold affects turning", TestNpcTurnThresholdAffectsTurning});
     tests.push_back({"NPC spine twist clamping", TestNpcSpineTwistClamping});
     tests.push_back({"Foot tilt limiting", TestFootTiltLimiting});
     tests.push_back({"Two-bone hint defaults keep the old solve", TestTwoBoneHintDefaultsKeepOldSolve});
     tests.push_back({"Two-bone pole hint stops the elbow flip", TestTwoBoneHintStopsElbowFlip});
+    tests.push_back({"Two-bone bend axis hint still reaches the target", TestTwoBoneBendAxisReachesTarget});
     tests.push_back({"Two-bone max limb scale caps the reach", TestTwoBoneMaxLimbScale});
     tests.push_back({"Spine distribution defaults to the even spread", TestSpineDistributionDefaultsEven});
     tests.push_back({"Limb grip offset moves the hand", TestLimbGripOffsetMovesHand});
+    tests.push_back({"IK rig at part weight keeps the hand on the gun", TestApplyRigPartialWeightKeepsHandOnGun});
     tests.push_back({"Weapon IK hand offsets round-trip", TestWeaponIkHandOffsetsRoundTrip});
     tests.push_back({"Clip weight curves sample and scale the IK layers", TestClipWeightCurveSamplingAndLayerScaling});
     tests.push_back({"Clip IK curve and the IKOff tag combine", TestClipCurveAndIKOffTagCombine});
-    tests.push_back({"Free-aim dead zone", TestFreeAimDeadZoneMath});
     tests.push_back({"ADS blend pieces: additive, crouch, camera share", TestAdsBlendPieces});
     tests.push_back({"Arm-shape links match the per-frame name walk", TestArmShapeLinksMatchNameWalk});
     tests.push_back({"Controller clip files for the editor prefetch", TestControllerClipFilesForPrefetch});
-    tests.push_back({"Stride scale and pelvis drop math", TestStrideScaleMath});
-    tests.push_back({"Foot slide correction defaults off (identical pose)", TestFootSlideDefaultsOff});
-    tests.push_back({"Foot pin holds planted feet (slide cm per plant)", TestFootSlidePinHoldsPlantedFeet});
-    tests.push_back({"Stride warp matches the ground speed within its limits", TestStrideWarpMatchesGroundSpeed});
     tests.push_back({"Foot lock holds a planted foot and lets it catch up smoothly", TestFootLockHoldsAndReleases});
     tests.push_back({"Foot lock ignores a swinging foot and lets go past its drift", TestFootLockIgnoresSwingAndLetsGoOnDrift});
+    tests.push_back({"Foot lock plants a still clip foot while the body turns 180 deg/s", TestFootLockPlantsWhileTheBodyTurns});
+    tests.push_back({"Foot lock lets go and steps past 0.98 of the leg", TestFootLockLetsGoAtReach});
+    tests.push_back({"Clamp reach never asks a leg for more than 0.995 of it", TestClampReachNeverStretchesTheLeg});
     tests.push_back({"Foot slide meter counts plants and their drift", TestFootSlideMeterCountsPlants});
 }
