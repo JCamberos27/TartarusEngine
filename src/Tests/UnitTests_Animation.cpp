@@ -715,13 +715,35 @@ void TestFootLockPlantsWhileTheBodyTurns() {
         }
         yaw += glm::radians(180.0f) * dt;
     }
-    // The same sweep made by the clip (the foot moving in a body that does not turn) is a foot moving: it never plants.
+    // The same sweep made by the clip (the foot moving in a body that does not turn) off the floor - 1.2 cm up, within
+    // Height but over FlatHeight - is a foot moving: it never plants.
     IK::FootLock swept;
     yaw = 0.0f;
+    swept.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), local, local.y, dt); // its floor
     for (int i = 0; i < 12; ++i) {
-        swept.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::angleAxis(yaw, up) * local, local.y, dt);
-        CHECK(!swept.Locked(0));
         yaw += glm::radians(180.0f) * dt;
+        const glm::vec3 at = glm::angleAxis(yaw, up) * local + glm::vec3(0.0f, 0.012f, 0.0f);
+        swept.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), at, at.y, dt);
+        CHECK(!swept.Locked(0));
+    }
+    // Flat on the floor, the clip sliding the foot (a crossfade into a stop) plants however fast it slides, and holds.
+    IK::FootLock slid;
+    yaw = 0.0f;
+    glm::vec3 held(0.0f);
+    for (int i = 0; i < 12; ++i) {
+        const glm::vec3 at = glm::angleAxis(yaw, up) * local;
+        const glm::vec3 drawn = root + at + slid.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), at, at.y, dt);
+        if (i == 1) held = drawn;
+        if (i >= 1) { CHECK(slid.Locked(0)); CHECK(glm::length(drawn - held) < 1e-4f); }
+        yaw += glm::radians(180.0f) * dt;
+    }
+    // ... but not a foot the capsule carries that fast (a swing passing low): the root's own travel is held to Speed.
+    IK::FootLock carried;
+    glm::vec3 r = root;
+    for (int i = 0; i < 12; ++i) {
+        carried.Step(0, set, r, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), local, local.y, dt);
+        CHECK(!carried.Locked(0));
+        r.z += 1.0f * dt;
     }
 }
 

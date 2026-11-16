@@ -534,6 +534,7 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
     // (about nothing) however fast the body swings round; a swinging foot reads its swing.
     const glm::vec3 moved = (root - f.PrevRoot) + f.PrevFacing * (local - f.PrevLocal);
     const float speed = seen ? glm::length(glm::vec2(moved.x, moved.z)) / dt : 0.0f;
+    const float rootSpeed = seen ? glm::length(glm::vec2(root.x - f.PrevRoot.x, root.z - f.PrevRoot.z)) / dt : 0.0f;
     f.Floor = seen ? std::min(f.Floor + 0.01f * dt, height) : height;
     const float up = height - f.Floor;
     f.Prev = anim;
@@ -545,7 +546,11 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
     if (!set.Enabled) {
         if (f.Locked) LetGo(f, set, false);
     } else if (!f.Locked) {
-        if (seen && !stepping && up < set.Height && speed < set.Speed) { // (a first frame has no speed yet)
+        // Flat on the floor (within FlatHeight), a foot the clip itself slides plants however fast it slides: a turn on
+        // the spot lands its step sliding at ~2 m/s. Only the clip's slide - a foot the capsule carries that fast is
+        // a swing, held to Speed.
+        const bool flat = up < set.FlatHeight && rootSpeed < set.Speed;
+        if (seen && !stepping && up < set.Height && (speed < set.Speed || flat)) { // (a first frame has no speed yet)
             // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
             f.Locked = true;
             f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
@@ -571,8 +576,9 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
 
 bool FootLock::Overreach(int s, const FootLockSettings& set, float reach, float own) {
     Foot& f = m_Foot[s];
-    // (A hundredth over the clip's own: a held foot that has not moved off its animation is not what stretches the leg.)
-    if (!f.Locked || reach <= std::max(set.Reach, own + 0.01f)) return false;
+    // (A hundredth over the clip's own: a held foot that has not moved off its animation is not what stretches the leg -
+    // but never past the whole leg, where the reach clamp would have to drag it.)
+    if (!f.Locked || reach <= std::max(set.Reach, std::min(own + 0.01f, 1.0f))) return false;
     LetGo(f, set, true);
     return true;
 }

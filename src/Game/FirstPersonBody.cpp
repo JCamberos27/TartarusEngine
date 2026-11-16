@@ -1615,6 +1615,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     IK::ComputeGlobals(driverPose, parents, globals);
 
     const float maxDrop = std::max(cfg.FootIKMaxDrop, 0.0f);
+    const float capsuleY = m_Feet.y - m_StepOffset;
     float animHeight[2];
     glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> where it is drawn
     // Foot lock: a planted foot stays where it landed in the world - walking, turning on the spot, starting and stopping
@@ -1627,7 +1628,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         const glm::vec3 held = m_Lock.Step(s, lockSet, m_Feet, yaw, footLocal, animHeight[s], dt);
         lockShift[s] = held * m_FootWeight;
         const glm::vec3 drawn = footWorld + held; // the ground is read under the foot as drawn
-        float offset = 0.0f;
+        float offset = 0.0f, ground = 0.0f; // the ground off the body's base, and off the capsule's
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
         const float origin[3] = {drawn.x, drawn.y + cfg.FootRayUp, drawn.z};
         const float down[3] = {0.0f, -1.0f, 0.0f};
@@ -1637,6 +1638,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         const bool rayHit = PhysicsWorld::RaycastSolid(origin, down, cfg.FootRayLength, filter, hit) && hit.Hit;
         if (rayHit) {
             offset = std::clamp(hit.Point[1] - m_Feet.y, -maxDrop, cfg.FootMaxRaise);
+            ground = std::clamp(hit.Point[1] - capsuleY, -1.0f, 1.0f);
             normal = glm::normalize(glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]));
             if (normal.y < 0.5f) normal = glm::vec3(0.0f, 1.0f, 0.0f); // a wall, not a floor
         }
@@ -1648,8 +1650,9 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             BodyDebug::Cross(footWorld, 0.05f, m_Lock.Locked(s) ? glm::vec4(0.3f, 1.0f, 0.4f, 1.0f) : glm::vec4(1.0f, 0.4f, 0.3f, 1.0f)); // the animated foot: green planted
             if (m_Lock.Locked(s)) BodyDebug::Cross(m_Lock.Pinned(s), 0.03f, glm::vec4(0.3f, 0.9f, 1.0f, 1.0f));                         // where it is held
         }
-        if (!m_HaveFoot) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; }
+        if (!m_HaveFoot) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; m_FootGround[s] = ground; }
         m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, cfg.FootOffsetEase);
+        m_FootGround[s] += (ground - m_FootGround[s]) * Follow(dt, cfg.FootOffsetEase);
         m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, cfg.FootNormalEase));
     }
     m_HaveFoot = true;
@@ -1660,11 +1663,32 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     }
 
     // The hips over the lower foot: the body's height spring takes it (in Tick, next frame), so the whole body - and
-    // the camera on it - drops smoothly. Each foot's ground off the capsule's (the body stands m_StepOffset off it).
-    for (int s = 0; s < 2; ++s) m_FootGround[s] = m_FootOffset[s] + m_StepOffset;
+    // the camera on it - drops smoothly. Each foot's ground is read off the capsule's, not the body's: off the body's,
+    // it moved as the body (and the camera) moved toward it - a loop through the spring.
     m_HaveFootGround = true;
     static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};
     const glm::quat yawInverse = glm::inverse(yaw);
+    // How far each foot is lowered: to its ground, but never further than its leg reaches straight down over where it is
+    // drawn (the lock's Reach of the leg, read off the driver). The body drops at most ~0.35 m under the capsule; a foot
+    // over ground lower than that (the trailing foot down a stair, a swing over a ramp) stops where the leg ends - a hair
+    // over the ground - instead of asking the reach clamp to drag it off its line. A foot let go and still catching up
+    // with its clip (the lock's lag easing out, the clip's leg near straight) lifts that little more on its way; a held
+    // foot is never lifted off its ground (Overreach lets it go instead), nor a free one off the clip's own.
+    float legOffset[2] = {m_FootOffset[0], m_FootOffset[1]};
+    for (int s = 0; s < 2; ++s) {
+        const int thigh = drv.NodeIndex(Bone(kLegs[s][0])), calf = drv.NodeIndex(Bone(kLegs[s][1]));
+        if (thigh < 0 || calf < 0) continue;
+        const bool catchingUp = !m_Lock.Locked(s) && glm::dot(lockShift[s], lockShift[s]) > 1e-8f;
+        if (legOffset[s] >= 0.0f && !catchingUp) continue;
+        const glm::vec3 hip = IK::Position(globals[thigh]), knee = IK::Position(globals[calf]), foot = IK::Position(globals[footNode[s]]);
+        const float reach = lockSet.Reach * (glm::length(knee - hip) + glm::length(foot - knee));
+        const glm::vec3 drawn = foot + yawInverse * glm::vec3(lockShift[s].x, 0.0f, lockShift[s].z) / scale;
+        const glm::vec2 across(drawn.x - hip.x, drawn.z - hip.z);
+        const float down = std::sqrt(std::max(reach * reach - glm::dot(across, across), 0.0f)); // the leg's reach below the hip
+        float lowest = (hip.y - down - foot.y) * scale;                                         // m the foot may go down
+        if (!catchingUp) lowest = std::min(lowest, 0.0f);
+        legOffset[s] = std::max(legOffset[s], lowest);
+    }
     // A held foot the hips have walked or climbed on from lets go and steps once its leg would need more than the lock's
     // Reach (IK::FootLock::Overreach), read off the driver (`globals` are still its) with the goal the legs get below.
     for (int s = 0; s < 2; ++s) {
@@ -1673,7 +1697,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         const glm::vec3 hip = IK::Position(globals[thigh]), knee = IK::Position(globals[calf]), foot = IK::Position(globals[footNode[s]]);
         const float leg = glm::length(knee - hip) + glm::length(foot - knee);
         if (leg <= 1e-5f) continue;
-        const glm::vec3 own = foot + glm::vec3(0.0f, m_FootOffset[s] * m_FootWeight / scale, 0.0f); // the clip's foot on the ground
+        const glm::vec3 own = foot + glm::vec3(0.0f, legOffset[s] * m_FootWeight / scale, 0.0f); // the clip's foot on the ground
         m_Lock.Overreach(s, lockSet, glm::length(own + yawInverse * lockShift[s] / scale - hip) / leg, glm::length(own - hip) / leg);
     }
     for (const auto& mp : m_Models) {
@@ -1692,7 +1716,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             const float legLen = glm::length(IK::Position(globals[calf]) - hip) + glm::length(IK::Position(globals[foot]) - IK::Position(globals[calf]));
             // Never more than the leg has (IK::ClampReach): the frame a held foot lets go for reach, and any stair or slope
             // that asks for more, the foot gives a little toward the hip instead of the knee snapping straight.
-            const glm::vec3 wanted = IK::Position(globals[foot]) + glm::vec3(0.0f, m_FootOffset[s] * m_FootWeight / scale, 0.0f) +
+            const glm::vec3 wanted = IK::Position(globals[foot]) + glm::vec3(0.0f, legOffset[s] * m_FootWeight / scale, 0.0f) +
                                      yawInverse * lockShift[s] / scale;
             const glm::vec3 target = IK::ClampReach(hip, wanted, legLen);
             // The foot lies on the ground while it is planted: its own rotation tilted to the normal.

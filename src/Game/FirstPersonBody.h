@@ -280,7 +280,7 @@ private:
     float m_BodyY = 0.0f, m_BodyVy = 0.0f; // the body's feet height (world) and its rate
     bool m_HaveBodyY = false;
     float m_StepOffset = 0.0f;     // ... off the capsule's (m_BodyY - the capsule's foot)
-    float m_FootGround[2] = {0.0f, 0.0f}; // each foot's ground off the capsule's (foot IK, last frame)
+    float m_FootGround[2] = {0.0f, 0.0f}; // each foot's ground off the capsule's, smoothed (foot IK, last frame)
     bool m_HaveFootGround = false;
     float m_LastCapsuleY = 0.0f;
     bool m_HaveCapsule = false;

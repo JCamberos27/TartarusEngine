@@ -168,6 +168,7 @@ struct FootLockSettings {
     float Height = 0.02f;   // m over the foot's own lowest height that still counts as down
     float Lift = 0.045f;    // m over it that lets go (the heel rolling up onto the toe stays planted under this)
     float Speed = 2.0f;     // m/s the animated foot may move over the ground (the body's turn left out) and still plant
+    float FlatHeight = 0.008f; // m over its lowest under which a foot the clip slides plants at any speed (the root's under Speed)
     float Reach = 0.98f;    // x the leg's length (hip to held foot) past which a planted foot lets go and steps
     float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go (a safety: Reach goes first)
     float Release = 0.2f;   // s a released foot takes to catch up with the animation
