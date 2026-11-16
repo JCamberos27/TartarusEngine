@@ -82,12 +82,9 @@ public:
     // Dummy `index` has hit-flinch kicks still settling (for tests).
     bool FlinchActive(int index) const { const auto it = m_Flinch.find(index); return it != m_Flinch.end() && it->second.Active(m_Now); }
     const NavMesh& Nav() const { return m_Nav; }
-    const NavCrowd& Crowd() const { return m_Crowd; }
     CombatFx* Fx = nullptr;    // flesh hits and body falls (optional; the host owns it)
     bool FootIKEverywhere = false;     // feet onto the ground at any distance and out of view (tests)
     float Now() const { return m_Now; }
-    float LastThinkMs() const { return m_ThinkMs; }
-    float LastLateMs() const { return m_LateMs; }
     // Per-sub-system CPU time (ms per frame), for the profiler and --npc-test: Think's move, LateUpdate's body / ragdolls /
     // hitboxes. Averages skip the first two seconds.
     enum Sub { SubMove, SubBody, SubRagdoll, SubHitbox, SubCount };
@@ -108,7 +105,6 @@ public:
     // The navmesh's cache file and its input hash (after the first Think): F6 Nav shows it again outside Play.
     const std::string& NavCachePath() const { return m_NavCachePath; }
     std::uint64_t NavHash() const { return m_NavHash; }
-    int ReusedBodies() const { return m_Reused; }                  // spawns that took a pooled body
     // The dummy dies this frame; its ragdoll starts after this frame's late pose (so it takes the pose it died in), the
     // shove on part `part` (-1: the part nearest `point`). The limbs' own velocity is that pose against the last late pose's
     // (Npc::LastPose), whenever in the frame the kill comes.
@@ -118,9 +114,6 @@ public:
     void EndScriptedMove(int index) { m_Scripted.erase(index); }
     bool TrackDeathPop = false;        // record the bones' last animated pose so the ragdoll's first frame can be compared
     bool NoLod = false;                // every dummy animates every frame (tests)
-    // Tests: where the crowd has dummy `n`'s agent, and the corner it steers for.
-    glm::vec3 AgentPosition(const Npc& n) const { return n.Agent >= 0 ? m_Crowd.Position(n.Agent) : glm::vec3(0.0f); }
-    glm::vec3 AgentCorner(const Npc& n) const { return n.Agent >= 0 ? m_Crowd.NextCorner(n.Agent) : glm::vec3(0.0f); }
 
     struct SpawnPoint {
         glm::vec3 Pos{0.0f};
@@ -171,7 +164,6 @@ private:
     struct DummyBody;
     std::unordered_map<entt::entity, std::shared_ptr<DummyBody>> m_Bodies; // per dummy, living or lying, by root
     std::vector<std::shared_ptr<DummyBody>> m_Pool;                        // hidden, ready for the next spawn
-    int m_Reused = 0;
     std::shared_ptr<DummyBody> BuildBody(World& world, AssetLibrary& assets); // from the body prefab; null on failure
     struct PendingRespawn { float At; int SpawnIndex; };
     std::vector<PendingRespawn> m_RespawnTimers;

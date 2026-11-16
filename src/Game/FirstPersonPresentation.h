@@ -39,17 +39,7 @@ struct FirstPersonControllerComponent;
 // and lean go on the play camera (ApplyViewKick / RemoveViewKick).
 class FirstPersonPresentation {
 public:
-    // How the rigs are used. The defaults are the player's. An NPC (Npc/NpcWeapon.h) carries the
-    // same weapon on a virtual camera at its eyes: OwnerView off draws the gun as ordinary world
-    // geometry and the arms rig not at all (the NPC's body takes its hands), HotReload off skips
-    // polling the .fpsanim, CornerPeek off leaves leaning to the AI.
-    struct Options {
-        bool OwnerView = true;
-        bool HotReload = true;
-        bool CornerPeek = true;
-    };
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config);
-    bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config, const Options& options);
     // The spent cases' mesh and material of `animationSet` (a .fpsanim) into the asset cache. Every slot's are warmed
     // when it starts; left to the first round fired (ShellCasings::Spawn), the FBX import stalls that frame for up to a second.
     static void WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet);
@@ -437,7 +427,6 @@ private:
     bool m_AimHit = false;        // the bore ray met a surface within range
     std::vector<ShotHit> m_ShotHits;
     std::vector<ShotTrace> m_ShotTraces;
-    Options m_Options;
     bool m_HasShotTarget = false;
     glm::vec3 m_ShotTarget{0.0f};
     // The sight line measured in Play (weapon root space), for a weapon without a saved one.
@@ -451,7 +440,6 @@ private:
     bool m_HaveGait = false;      // SetGaitPhase
     float m_GaitPhase = 0.0f;
     float m_JogHold = 0.0f;       // s the jog arms stay off after a shot
-    float m_JogWeight = 1.0f;     // the locomotion layer's weight, eased (kJogArms while its run clip plays at a jog)
     glm::vec3 m_Muzzle{0.0f}, m_BoreDir{0.0f, 0.0f, -1.0f}; // world, from the last PlaceRigs
     // Actions carried onto the sights while aiming (FirstPersonAdsCarry.h).
     AdsCarryResult m_AdsCarry;
@@ -514,7 +502,7 @@ private:
     std::filesystem::file_time_type m_ShakeFileTime{};
     CameraShakeState m_CameraShake;
     CameraEffectPose m_ShakePose;
-    glm::vec2 m_PlayerLookBaseline{0.0f}, m_PlayerLookDelta{0.0f}; // pitch, yaw
+    glm::vec2 m_PlayerLookBaseline{0.0f}; // pitch, yaw
     glm::vec2 m_RawLookInput{0.0f};
     glm::vec2 m_SwayLookInput{0.0f}, m_SwayMoveInput{0.0f};
     bool m_HaveSwayMoveInput=false;

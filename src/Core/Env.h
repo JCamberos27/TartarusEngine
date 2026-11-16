@@ -52,7 +52,6 @@
     /* Traces and probes */                                                                                             \
     X(FoleyFeetLog, "FOLEY_FEET_LOG", Flag, "trace footstep foley")                                                    \
     X(MoverTrace, "MOVER_TRACE", Flag, "unit tests: trace the character mover")                                       \
-    X(FootSlideProbe, "TARTARUS_FOOT_SLIDE_PROBE", Int, "IK foot-slide probe: 1 on, 0 off, unset = default")          \
     X(PumpTrace, "TARTARUS_PUMP_TRACE", Flag, "trace the asset library pump")                                         \
     X(ProbeLog, "TARTARUS_PROBE_LOG", Flag, "log reflection probe captures")                                          \
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \

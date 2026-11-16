@@ -2,7 +2,7 @@
 
 #include "AnimatorController.h"      // AnimatorCrossfadeWeight
 #include "Components.h"
-#include "FirstPersonBody.h"         // FirstPersonBodyLocalMove / WrapAngle
+#include "FirstPersonBody.h"         // FirstPersonBodyWrapAngle / Follow / FootPelvis
 #include "FirstPersonBodyContract.h" // FPBody:: parameter, state and bone names
 #include "GameModuleAPI.h"           // RaycastHit, QueryFilter (the foot pass)
 #include "GameCommands.h"            // Gameplay::kBody* triggers
@@ -50,10 +50,6 @@ float NpcSpineTwist(float offset, float maxTwist) {
     return std::clamp(FirstPersonBodyWrapAngle(offset), -maxTwist, maxTwist);
 }
 
-bool NpcShouldTurn(float offset, float thresholdRadians) {
-    return std::abs(FirstPersonBodyWrapAngle(offset)) > thresholdRadians;
-}
-
 bool NpcBody::Start(World& world, entt::entity root) {
     Stop();
     auto& reg = world.Registry;
@@ -89,8 +85,8 @@ bool NpcBody::Start(World& world, entt::entity root) {
     }
     m_Root = root;
     // The body stands where its root was put (the spawn) until its first Tick says otherwise: a replacement spawned after the
-    // frame's moves is posed (LateUpdate) before it ever ticks, and from the default origin its eye, gun, hands and hitboxes came
-    // out metres off for that frame - the gun drawn at the world's origin, the arms reaching for it.
+    // frame's moves is posed (LateUpdate) before it ever ticks, and from the default origin its eye, hands and hitboxes came
+    // out metres off for that frame.
     {
         const glm::mat4 w = world.ComposeWorldTransform(root);
         m_Feet = glm::vec3(w[3]);
@@ -212,9 +208,8 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     const glm::vec3 flat(in.Velocity.x, 0.0f, in.Velocity.z);
     const float speed = glm::length(flat);
     if (!m_HaveYaw) { m_Yaw = in.FacingYaw; m_HaveYaw = true; }
-    // The clips' turns are read out of the pose (DeltaYaw) and turn the body, as the player body's driver: a turn on the spot
-    // or a turning start swings the heading.
-    ac.RootMotion.Rotation = true;
+    // The clips' turns are read out of the pose (DeltaYaw, RootMotion.Rotation set by Start) and turn the body, as the player
+    // body's driver: a turn on the spot or a turning start swings the heading.
     // The player's body's own locomotion (BodyLocomotion, through GameRules as FirstPersonBody runs it) on the AI's
     // capsule - the same starts, stops, pivots, steps, turns, gait blend and landings, tuned as the player body's defaults. The
     // wish is the AI's: the gait's pace toward the goal, nothing once its stop has begun (NpcDirector::Move), so the stop clip
@@ -226,7 +221,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     f.Velocity = {in.Velocity.x, in.Velocity.y, in.Velocity.z};
     f.WishVelocity = {wish.x, 0.0f, wish.z};
     f.Dt = dt;
-    f.ViewYaw = in.HoldFacing || wishSpeed < 0.1f ? in.FacingYaw : NpcYawOf(wish, m_Yaw); // facing: as asked when still, else the way it goes
+    f.ViewYaw = wishSpeed < 0.1f ? in.FacingYaw : NpcYawOf(wish, m_Yaw); // facing: as asked when still, else the way it goes
     f.Yaw = m_Yaw;
     f.RootYaw = ac.RootMotion.DeltaYaw;
     f.StateTime = ac.StateTime;
@@ -235,7 +230,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     f.RunSpeed = kTune.RunSpeed;
     f.ClipSprint = kTune.SprintSpeed;
     f.Grounded = in.Grounded;
-    f.Crouched = in.Crouched;
+    f.Crouched = 0; // never crouches or jumps: its controller has no crouch half and no jump (tools/gen_npc_soldier.py)
     f.Jumped = 0;
     f.Responsiveness = 1.0f; // in place: the capsule leads, the clips keep pace
     f.MaxPlayRate = kTune.MaxPlayRate;
@@ -298,11 +293,8 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
         }
         m_Yaw = FirstPersonBodyWrapAngle(yaw);
         f.Yaw = m_Yaw;
-        f.Twist = FirstPersonBodyWrapAngle(f.ViewYaw - m_Yaw);
     }
     m_Turning = f.Turning != 0;
-    m_Move = glm::vec2(f.Move.x, f.Move.y);
-    m_LastDir = glm::vec2(f.LastDir.x, f.LastDir.y);
     world.SetWorldPose(m_Root, m_Feet, YawRotation(m_Yaw));
 
     if (f.SetTurnAngle) ac.SetFloat(FPBody::kTurnAngle, f.TurnAngle);
@@ -345,7 +337,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     // Orientation warp: a start, stop or gait blend whose clips travel off the way the capsule goes (a back-pedal start
     // whose root drifts right while the path bends left, the blend between two cardinal strafes) skates the feet sideways.
     // The legs are turned onto the capsule's travel (at most kWarpMax) and the spine turned back (FootPass). Not in a turn
-    // on the spot, a turning start or a pivot (the travels cross there by design), nor at a crawl.
+    // on the spot, a turning start or a pivot (the travels cross there by design), nor below 0.4 m/s (no travel to read).
     // (The two travels are smoothed together, on the frames that have the clips' motion, over the time it covers.)
     {
         const float c = std::cos(m_Yaw), sn = std::sin(m_Yaw);
@@ -380,13 +372,12 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     ac.SetBool(FPBody::kSprint, f.Sprint != 0);
     ac.SetBool(FPBody::kGrounded, in.Grounded);
     ac.SetBool(FPBody::kAirborne, f.Airborne != 0);
-    ac.SetBool(FPBody::kCrouched, in.Crouched);
     // Light vs heavy landing, as the player body's: the fall speed of the last airborne frame.
     if (!in.Grounded) m_FallSpeed = std::max(0.0f, in.FallSpeed);
     ac.SetFloat(FPBody::kLandImpact, m_FallSpeed);
 }
 
-// Feet on uneven ground - a ramp, stairs, a slope - for a soldier near the player: a ray down under each animated foot,
+// Feet on uneven ground - a ramp, stairs, a slope - for a dummy near the player: a ray down under each animated foot,
 // the pelvis dropped to the lower foot's ground, both legs re-solved to theirs, a planted foot tilted to its slope (the
 // player body's foot IK, without its foot lock). Solved on the driver and handed to the other pieces; flat ground costs
 // only the two rays. A hit flinch's `kick` goes on first, and a foot the clip has planted is solved back to where the clip has
@@ -399,7 +390,6 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     IK::Pose& pose = m_Pose;
     if (m_FootWeight < 1e-3f || !rigged) {
         m_HaveFootGround = false;
-        m_Slide.Reset();
         m_Lock.Reset();
         m_LockYaw = m_Yaw; // (the turn rate read when the feet come back is a frame's, not the whole time they were off)
         if (kick) { // no foot pass (far off, out of view): the kick goes on as it is
@@ -430,7 +420,7 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     const glm::mat3 toModel3 = glm::transpose(glm::mat3(rootW)); // a yaw: its inverse is its transpose
     // The kick (after the warp, so the upper body's turn back has happened and the kick's root-space axes hold for it). What it
     // moved each foot (model space), in proportion to how planted the clip has that foot, is taken back off the foot every step
-    // below reads - slide, lock, ground ray, target - so the lock never sees it and the leg solve puts the foot back.
+    // below reads - lock, ground ray, target - so the lock never sees it and the leg solve puts the foot back.
     // (The foot's turn the same: a planted foot keeps the clip's angle on the ground.)
     glm::vec3 kickFoot[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     glm::quat unkickedRot[2] = {glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f)};
@@ -453,31 +443,7 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     }
     const auto animFoot = [&](int s) { return IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]) - kickFoot[s]; }; // model space
     float animHeight[2];
-    // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet.
-    IK::FootSlideSettings slideSet = m_Set.FootSlide;
-    const int probe = IK::FootSlideProbeMode();
-    if (probe == 1) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
-    const bool slideOn = slideSet.Active();
-    IK::FootSlideOutput slide;
-    if (slideOn || probe >= 0) {
-        const float unit = glm::length(glm::vec3(rootW[0]));
-        IK::FootSlideInput sin;
-        sin.Feet = m_Feet;
-        sin.Velocity = glm::vec3(m_In.Velocity.x, 0.0f, m_In.Velocity.z);
-        sin.PlantHeight = 0.05f;
-        sin.Dt = dt;
-        for (int s = 0; s < 2; ++s) {
-            sin.Foot[s] = glm::vec3(rootW * glm::vec4(animFoot(s), 1.0f));
-            sin.Height[s] = sin.Foot[s].y - m_Feet.y;
-        }
-        sin.Pelvis = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverPelvis]), 1.0f));
-        sin.LegLength = unit * (glm::length(IK::Position(m_Globals[(size_t)m_DriverLeg[0][0]]) - IK::Position(m_Globals[(size_t)m_DriverLeg[0][1]])) +
-                                glm::length(IK::Position(m_Globals[(size_t)m_DriverLeg[0][1]]) - IK::Position(m_Globals[(size_t)m_DriverLeg[0][2]])));
-        slide = m_Slide.Step(slideSet, sin, !slideOn);
-        if (probe >= 0) IK::FootSlideProbeLog("npc", m_Slide.Stats, glm::length(glm::vec2(sin.Velocity.x, sin.Velocity.z)), m_Slide.ClipSpeed(), m_Slide.Scale());
-    }
-    // Foot lock: a planted foot held where it landed in the world, as the player body's (IK::FootLock). Not while prone or
-    // crawling (the legs drag) - the director turns foot IK off there.
+    // Foot lock: a planted foot held where it landed in the world, as the player body's (IK::FootLock).
     glm::vec3 shift[2];
     bool held = false;
     const float yawRate = dt > 1e-5f ? FirstPersonBodyWrapAngle(m_Yaw - m_LockYaw) / dt : 0.0f;
@@ -486,9 +452,8 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     const bool travelling = !m_Turning && glm::length(glm::vec2(m_In.Velocity.x, m_In.Velocity.z)) > 0.3f;
     const IK::FootLockSettings lockSet = IK::FootLockTurning(m_Set.FootLock, travelling ? yawRate : 0.0f);
     for (int s = 0; s < 2; ++s) {
-        const glm::vec3 anim = glm::vec3(rootW * glm::vec4(animFoot(s), 1.0f)) + slide.Shift[s];
-        const glm::vec3 lock = m_Lock.Step(s, lockSet, anim, anim.y - m_Feet.y, dt);
-        shift[s] = slide.Shift[s] + lock;
+        const glm::vec3 anim = glm::vec3(rootW * glm::vec4(animFoot(s), 1.0f));
+        shift[s] = m_Lock.Step(s, lockSet, anim, anim.y - m_Feet.y, dt);
         held = held || glm::dot(shift[s], shift[s]) > 1e-8f;
     }
     for (int s = 0; s < 2; ++s) {
@@ -512,12 +477,12 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     m_HaveFootGround = true;
     const bool flat = std::abs(m_FootOffset[0]) < 0.004f && std::abs(m_FootOffset[1]) < 0.004f && m_FootNormal[0].y > 0.999f &&
                       m_FootNormal[1].y > 0.999f;
-    if (flat && !slideOn && !held && !legsKicked) { // the clips' own feet are right
+    if (flat && !held && !legsKicked) { // the clips' own feet are right
         if (warped || kicked) { m.ApplyLocalPose(pose); SyncLower(); }
         return;
     }
     const float w = m_FootWeight;
-    const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], m_Set.FootIKMaxDrop, m_Set.FootIKPelvisRaise) - slide.PelvisDrop) * w;
+    const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], m_Set.FootIKMaxDrop, m_Set.FootIKPelvisRaise)) * w;
     IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f, pelvisDelta, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
     for (int s = 0; s < 2; ++s) {
         const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
@@ -610,7 +575,6 @@ void NpcBody::LateUpdate(World& world, float dt, const PoseKick& kick) {
             IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
             OffsetSpine([&](float d) { return glm::angleAxis(m_LookTwist / d, glm::vec3(0, 1, 0)); });
             m.ApplyLocalPose(pose);
-            m_PiecesStale = true;
         }
     }
     // The head's own look past where the chest faces, split between the neck and the head so the turn bends rather than
@@ -641,7 +605,6 @@ void NpcBody::LateUpdate(World& world, float dt, const PoseKick& kick) {
                 IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverNeck, glm::vec3(0.0f), neckShare, IK::Position(m_Globals[(size_t)m_DriverNeck]));
                 IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverHead, glm::vec3(0.0f), headShare, IK::Position(m_Globals[(size_t)m_DriverHead]));
                 m_DriverModel->ApplyLocalPose(pose);
-                m_PiecesStale = true;
             }
         }
     }
@@ -655,7 +618,6 @@ void NpcBody::LateUpdate(World& world, float dt, const PoseKick& kick) {
 }
 
 void NpcBody::SyncPieces() {
-    m_PiecesStale = false;
     if (!m_DriverModel) return;
     const auto& src = m_DriverModel->AppliedLocalPose();
     if ((int)src.size() != m_DriverModel->NodeCount()) return;
@@ -701,25 +663,6 @@ void NpcBody::OffsetSpine(const std::function<glm::quat(float)>& stepFor) {
         if (k + 1 < m_DriverSpineCount) IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, b, m_DriverSpine[k + 1]);
     }
     if (m_DriverSpineCount > 0) IK::RefreshGlobals(m_Pose, m_DriverParents, m_Globals, m_DriverSpine[0]);
-}
-
-void NpcBody::Flinch(World& world, const glm::vec3& dirWorld, const glm::vec3* point, int part) {
-    if (!IsActive() || m_PoseExternal || !world.Registry.valid(m_Driver)) return;
-    auto& ac = world.Registry.get<AnimatorControllerComponent>(m_Driver);
-    glm::vec2 push = FirstPersonBodyLocalMove(glm::vec3(dirWorld.x, 0.0f, dirWorld.z), m_Yaw);
-    if (glm::length(push) < 1e-4f) push = glm::vec2(0.0f, -1.0f);
-    push = glm::normalize(push);
-    // Where it struck steers it too: an arm hit swings that shoulder back (the side the hit was on), a leg hit buckles
-    // the stance (more along the body's length); a head or chest hit goes with the round's own line.
-    if (point && part >= 0) {
-        const glm::vec2 off = FirstPersonBodyLocalMove(glm::vec3(point->x - m_Feet.x, 0.0f, point->z - m_Feet.z), m_Yaw);
-        if (part >= 3 && part <= 6 && std::abs(off.x) > 1e-3f) push.x += std::copysign(0.7f, off.x);
-        else if (part >= 7) push.y += push.y >= 0.0f ? 0.5f : -0.5f;
-        push = glm::normalize(push);
-    }
-    ac.SetFloat("HitX", push.x);
-    ac.SetFloat("HitY", push.y);
-    ac.SetTrigger("Hit");
 }
 
 bool NpcBody::BoneWorld(const World& world, const std::string& bone, glm::vec3& out) const {

@@ -2441,7 +2441,7 @@ void TestFirstPersonBodyTuning() {
           near(body.TurnTimeout, 4.0f) && near(body.TurnMoveEase, 0.08f));
     CHECK(near(body.StartIdleTime, 0.25f) && near(body.StartMaxMove, 0.6f) && near(body.StopMinRunTime, 0.6f) && near(body.StopMinRunTimeCrouched, 0.7f) &&
           near(body.StopMinSpeed, 1.2f) && near(body.StopMinSpeedCrouched, 0.6f) && near(body.StopDebounce, 0.05f) && near(body.StopRunForward, 0.7f));
-    CHECK(near(body.FootLockDrift, 0.25f) && body.FootLockEnabled && near(body.FootLockRelease, 0.2f) && near(body.FootPlantedHeight, 0.05f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
+    CHECK(near(body.FootLockDrift, 0.25f) && body.FootLockEnabled && near(body.FootLockRelease, 0.2f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
           near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) &&
           near(body.StairEase, 0.2f) && near(body.AirborneDelay, 0.15f));
     CHECK(near(ctrl.JumpBufferTime, 0.12f) && near(ctrl.CoyoteTime, 0.10f));
@@ -2534,17 +2534,6 @@ void TestBlendTree2D() {
     // Facing +Z (yaw 0): right is -X, as the mannequin's own frame.
     lm = FirstPersonBodyLocalMove(glm::vec3(-1.0f, 0.0f, 1.0f), 0.0f);
     CHECK(near(lm.x, 1.0f) && near(lm.y, 1.0f));
-    // A player faster than the clips: its run is the jog's speed, its sprint the run clip's, linear between;
-    // unset (the clips' own speeds) it is the speed itself.
-    CHECK(near(FirstPersonBodyClipSpeed(4.5f, 4.5f, 6.8f, 3.264f, 4.736f), 3.264f));
-    CHECK(near(FirstPersonBodyClipSpeed(6.8f, 4.5f, 6.8f, 3.264f, 4.736f), 4.736f));
-    CHECK(near(FirstPersonBodyClipSpeed(2.25f, 4.5f, 6.8f, 3.264f, 4.736f), 1.632f));
-    CHECK(near(FirstPersonBodyClipSpeed(4.0f, 3.26f, 4.72f, 3.26f, 4.72f), 4.0f) && near(FirstPersonBodyClipSpeed(1.0f, 3.26f, 4.72f, 3.26f, 4.72f), 1.0f));
-    // ... and its gait plays that much faster, within Max Play Rate, none of it under root motion or standing.
-    CHECK(near(FirstPersonBodyPlayRate(4.5f, 3.264f, 1.0f, 1.5f), 4.5f / 3.264f));
-    CHECK(near(FirstPersonBodyPlayRate(9.0f, 3.0f, 1.0f, 1.5f), 1.5f));
-    CHECK(near(FirstPersonBodyPlayRate(4.5f, 3.264f, 0.0f, 1.5f), 1.0f) && near(FirstPersonBodyPlayRate(0.0f, 0.0f, 1.0f, 1.5f), 1.0f));
-    CHECK(near(FirstPersonBodyPlayRate(3.0f, 3.0f, 1.0f, 1.5f), 1.0f)); // the clips' own speed: as authored
     // The eye: steady at the standing head with no bob, following it fully at 1, offset in the
     // body's frame (x right = model -X).
     const glm::vec3 rest(0.0f, 1.6f, 0.0f), head(0.02f, 1.55f, 0.1f);
@@ -2555,11 +2544,9 @@ void TestBlendTree2D() {
     eye = FirstPersonBodyEye(rest, head, 0.5f, glm::vec3(0.0f));
     CHECK(near(eye.y, 1.575f) && near(eye.z, 0.05f));
 
-    // Turn in place: angles wrap to (-pi, pi]; the body turns once the view is past the threshold.
+    // Angles wrap to (-pi, pi].
     CHECK(near(FirstPersonBodyWrapAngle(3.5f), 3.5f - 6.2831853f) && near(FirstPersonBodyWrapAngle(-3.5f), -3.5f + 6.2831853f));
     CHECK(near(FirstPersonBodyWrapAngle(0.4f), 0.4f) && near(FirstPersonBodyWrapAngle(6.2831853f + 0.4f), 0.4f));
-    CHECK(!FirstPersonBodyShouldTurn(glm::radians(40.0f), 55.0f) && FirstPersonBodyShouldTurn(glm::radians(-60.0f), 55.0f));
-    CHECK(!FirstPersonBodyShouldTurn(glm::radians(170.0f), 0.0f)); // 0 = always faces the view
 
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
@@ -2605,57 +2592,6 @@ void TestBlendTree2D() {
         CHECK(FirstPersonBodyClearPush({}, a, b, down, 0.05f, 0.3f, 0.01f) == 0.0f);        // nothing to clear
         CHECK(FirstPersonBodyClearPush(headPoints, a, b, down, 0.0f, 0.3f, 0.01f) == 0.0f);       // off
     }
-    // Elbow Clearance: an arm reaching straight ahead with its elbow 20 cm under the line, on a torso point. It swings
-    // about the shoulder-hand line until 6 cm clear - 20 degrees at 5-degree steps (a 6.9 cm chord) - the side asked for first.
-    {
-        const glm::vec3 shoulder(0.0f), elbow(0.0f, -0.2f, -0.25f), hand(0.0f, 0.0f, -0.5f);
-        const std::vector<glm::vec3> torso = {elbow};
-        CHECK(FirstPersonBodyElbowGap(torso, shoulder, elbow, hand) < 1e-5f);
-        CHECK(FirstPersonBodyElbowGap({}, shoulder, elbow, hand) > 1e3f);
-        const float swing = FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.06f, glm::radians(90.0f), glm::radians(5.0f));
-        CHECK(std::fabs(std::fabs(swing) - glm::radians(20.0f)) < 1e-3f);
-        CHECK(FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.06f, glm::radians(90.0f), glm::radians(5.0f), -1.0f) < 0.0f);
-        CHECK(FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.06f, glm::radians(90.0f), glm::radians(5.0f), 1.0f) > 0.0f);
-        const glm::vec3 swung = shoulder + glm::angleAxis(swing, glm::vec3(0.0f, 0.0f, -1.0f)) * (elbow - shoulder);
-        CHECK(FirstPersonBodyElbowGap(torso, shoulder, swung, hand) >= 0.06f);             // really clear, the hand where it was
-        CHECK(FirstPersonBodyElbowClearSwivel({glm::vec3(1.0f, 0.0f, 0.0f)}, shoulder, elbow, hand, 0.06f, 1.5f, 0.1f) == 0.0f); // already clear
-        CHECK(FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.0f, 1.5f, 0.1f) == 0.0f);                          // off
-    }
-    // The swivel search only measures the points its swing can come near: the angle it picks is the one a
-    // search measuring every point picks, over random arms in a random cloud.
-    {
-        std::uint32_t seed = 12345u;
-        auto rnd = [&](float lo, float hi) { seed = seed * 1664525u + 1013904223u; return lo + (hi - lo) * float(seed >> 8) / 16777216.0f; };
-        auto rndVec = [&](float r) { return glm::vec3(rnd(-r, r), rnd(-r, r), rnd(-r, r)); };
-        int same = 0, cases = 0;
-        for (int trial = 0; trial < 200; ++trial) {
-            const glm::vec3 shoulder = rndVec(0.1f), hand = shoulder + glm::vec3(rnd(-0.2f, 0.2f), rnd(-0.2f, 0.1f), rnd(-0.6f, -0.3f));
-            const glm::vec3 elbow = (shoulder + hand) * 0.5f + rndVec(0.15f);
-            std::vector<glm::vec3> cloud(400);
-            for (glm::vec3& p : cloud) p = (shoulder + hand) * 0.5f + rndVec(0.35f);
-            const float clearance = rnd(0.02f, 0.08f), prefer = rnd(-1.0f, 1.0f);
-            const float maxAngle = glm::radians(90.0f), step = glm::radians(5.0f);
-            // Every point, every angle, in the search's order.
-            const glm::vec3 axis = glm::normalize(hand - shoulder);
-            auto gapAt = [&](float angle) {
-                return FirstPersonBodyElbowGap(cloud, shoulder, shoulder + glm::angleAxis(angle, axis) * (elbow - shoulder), hand);
-            };
-            float expect = 0.0f;
-            if (const float here = gapAt(0.0f); here < clearance) {
-                float bestGap = here;
-                bool done = false;
-                for (float a = step; a <= maxAngle + 1e-5f && !done; a += step)
-                    for (const float s : {prefer < 0.0f ? -a : a, prefer < 0.0f ? a : -a}) {
-                        const float g = gapAt(s);
-                        if (g >= clearance) { expect = s; done = true; break; }
-                        if (g > bestGap) { bestGap = g; expect = s; }
-                    }
-            }
-            ++cases;
-            same += FirstPersonBodyElbowClearSwivel(cloud, shoulder, elbow, hand, clearance, maxAngle, step, prefer) == expect;
-        }
-        CHECK(same == cases);
-    }
     // The look-down push: none at or above its start, all of it straight down, rising as a sine between.
     CHECK(near(FirstPersonBodyLookDown(0.0f, 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(30.0f), 25.0f), 0.0f));
     CHECK(near(FirstPersonBodyLookDown(glm::radians(-25.0f), 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(-90.0f), 25.0f), 1.0f));
@@ -2697,10 +2633,6 @@ void TestBlendTree2D() {
     }
     // The spine's share of the pitch: Spine Aim up, Spine Aim Down down.
     CHECK(near(FirstPersonBodySpineAim(glm::radians(30.0f), 0.6f, 0.9f), 0.6f) && near(FirstPersonBodySpineAim(glm::radians(-30.0f), 0.6f, 0.9f), 0.9f));
-    // Armed, the world torso leans no further than 0.2 rad plus its share of the view's pitch down (less looking up).
-    CHECK(near(FirstPersonBodyAimLeanMost(0.0f, 0.9f), 0.2f));
-    CHECK(near(FirstPersonBodyAimLeanMost(glm::radians(-30.0f), 0.9f), 0.2f + glm::radians(30.0f) * 0.9f));
-    CHECK(FirstPersonBodyAimLeanMost(glm::radians(30.0f), 0.6f) < 0.2f && FirstPersonBodyAimLeanMost(glm::radians(-89.0f), 1.0f) <= 1.2f);
 }
 
 // Character outfits: a small wardrobe's items are classified from their folders, and the rules
@@ -4986,7 +4918,6 @@ void TestWeaponProcedural() {
     WeaponProceduralSettings untouched = defaults;
     CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"recoil":{"duration":0}})"), untouched, &error));
     CHECK(error.find("duration") != std::string::npos);
-    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"sway":{"lookRotation":"big"}})"), untouched, &error));
     CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"bob":{"walk":{"x":[[0,"a"]]}}})"), untouched, &error));
     CHECK(untouched.Recoil.Duration == defaults.Recoil.Duration); // a bad load changes nothing
     // Partial blocks keep everything they don't name.
@@ -5071,21 +5002,6 @@ void TestWeaponProcedural() {
         CHECK(st.ActiveShots() == 0);
     }
 
-    // Sway: turning right, the gun lags (yaws left of the view) and settles when the turn stops.
-    {
-        WeaponProceduralSettings sw = s;
-        sw.Sway.Enabled = true;
-        sw.Sway.UnityPort = false;
-        WeaponProceduralState st;
-        WeaponProceduralInput in;
-        in.LookRate = glm::vec2(200.0f, 0.0f);
-        const WeaponProceduralPose turning = run(st, sw, in, 0.5f);
-        CHECK(turning.Rotation.y > 0.5f && turning.Position.x < 0.0f);
-        CHECK(turning.Rotation.y <= sw.Sway.MaxRotation * 1.5f);
-        const WeaponProceduralPose settled = run(st, sw, {}, 3.0f);
-        CHECK(std::fabs(settled.Rotation.y) < 0.02f);
-    }
-
     // Per-state offsets blend in on a state name or a tag, and back out.
     {
         WeaponProceduralSettings so = s;
@@ -5130,22 +5046,6 @@ void TestWeaponProcedural() {
         CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 0.6f) < 1e-4f);
         in.IKOff = false;
         CHECK(run(st, k, in, 0.5f).IKWeight == 1.0f);
-    }
-
-    // Bob follows the stride and scales with speed; standing still, it fades away.
-    {
-        WeaponProceduralSettings b = s;
-        b.Bob.Enabled = true;
-        b.Bob.HipScale = 1.0f;
-        WeaponProceduralState st;
-        WeaponProceduralInput in;
-        in.Velocity = glm::vec3(0.0f, 0.0f, -3.5f);
-        in.Dt = 1.0f / 120.0f;
-        float maxSide = 0.0f;
-        for (int f = 0; f < 480; ++f) maxSide = std::max(maxSide, std::fabs(st.Update(b, in).Position.x));
-        CHECK(maxSide > 0.002f && maxSide < 0.0035f);
-        in.Velocity = glm::vec3(0.0f);
-        CHECK(std::fabs(run(st, b, in, 2.0f).Position.x) < 1e-4f);
     }
 
     // Values the Inspector can produce mid-edit never break the stack: zero lengths stay finite,
@@ -5257,7 +5157,6 @@ void TestWeaponProcedural() {
 
         // Head bob and strafe roll: only while moving on the ground.
         WeaponProceduralSettings fb = f;
-        fb.Bob.Enabled = true;
         WeaponProceduralState cam;
         WeaponProceduralInput walk;
         walk.Velocity = glm::vec3(3.0f, 0.0f, 0.0f);
@@ -5275,7 +5174,7 @@ void TestWeaponProcedural() {
         // Exertion: breathing gets bigger after a sprint, and recovers.
         WeaponProceduralSettings b = f;
         b.Breath.Enabled = true;
-        b.Bob.Enabled = b.CameraMotion.Enabled = false;
+        b.CameraMotion.Enabled = false;
         auto breathSpan = [&](WeaponProceduralState& bs, WeaponProceduralInput in2) {
             float lo = 1e9f, hi = -1e9f;
             for (int i = 0; i < 600; ++i) {
@@ -5304,16 +5203,6 @@ void TestWeaponProcedural() {
         }
         CHECK(peakFov > pr.Recoil.FovPunch * pr.Recoil.HipScale * 0.3f && peakRoll > 0.03f);
         CHECK(std::fabs(run(ps, pr, still, 2.0f).FovKick) < 1e-3f);
-
-        // Sway eases into its limit instead of passing it, however hard the flick.
-        WeaponProceduralSettings sw = f;
-        sw.Sway.Enabled = true;
-        sw.Sway.UnityPort = false;
-        WeaponProceduralState ss;
-        WeaponProceduralInput flick;
-        flick.LookRate = glm::vec2(5000.0f, 0.0f);
-        const WeaponProceduralPose swung = run(ss, sw, flick, 1.0f);
-        CHECK(std::fabs(swung.Rotation.y) <= sw.Sway.MaxRotation + 1e-3f && std::fabs(swung.Rotation.y) > sw.Sway.MaxRotation * 0.9f);
 
         // Lean: the head arcs over (slides Offset, drops a little, rolls Angle); the gun's roll
         // lags behind it early on.
@@ -5350,14 +5239,11 @@ void TestWeaponProcedural() {
         edited.Obstruction.Reach = 1.1f;
         edited.Breath.ExertionScale = 3.0f;
         edited.Recoil.FovPunch = -0.4f;
-        edited.Sway.LookSmoothing = 9.0f;
-        edited.Sway.UnityPort = false;
         WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
         std::string err;
         CHECK(WeaponProceduralSettings::FromJson(edited.ToJson(), back, &err));
         CHECK(back.Jump.LandPitch == 2.5f && back.CameraMotion.SprintBob == glm::vec2(0.02f, 0.9f) &&
-              back.Obstruction.Reach == 1.1f && back.Breath.ExertionScale == 3.0f && back.Recoil.FovPunch == -0.4f &&
-              back.Sway.LookSmoothing == 9.0f);
+              back.Obstruction.Reach == 1.1f && back.Breath.ExertionScale == 3.0f && back.Recoil.FovPunch == -0.4f);
     }
 }
 

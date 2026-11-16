@@ -32,7 +32,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdio>
-#include <emmintrin.h> // SSE2: the elbow-gap point loop
 #include <sstream>
 
 namespace {
@@ -328,10 +327,6 @@ glm::vec3 FirstPersonBodyArmedEyeOffset(const glm::vec3& offset, float pitchRadi
     return (kRight * offset.x + glm::vec3(0.0f, offset.y, 0.0f) + kForward * offset.z) * FirstPersonBodyArmedEyeLift(pitchRadians);
 }
 
-float FirstPersonBodyAimLeanMost(float pitchRadians, float spineShare) {
-    return std::clamp(0.2f - pitchRadians * std::clamp(spineShare, 0.0f, 1.0f), -0.3f, 1.2f);
-}
-
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown) {
     return std::clamp(pitchRadians < 0.0f ? spineAimDown : spineAim, 0.0f, 1.0f);
 }
@@ -342,10 +337,6 @@ float FirstPersonBodyWrapAngle(float radians) {
     if (radians > 3.14159265359f) radians -= twoPi;
     else if (radians <= -3.14159265359f) radians += twoPi;
     return radians;
-}
-
-bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees) {
-    return thresholdDegrees > 0.0f && std::abs(offset) > glm::radians(thresholdDegrees);
 }
 
 void FirstPersonGaitPhase::Update(float spread, float lift, bool moving, float dt) {
@@ -385,21 +376,6 @@ void FirstPersonGaitPhase::Update(float spread, float lift, bool moving, float d
     }
     Phase += Rate * dt;
     Phase -= std::floor(Phase);
-}
-
-float FirstPersonBodyClipSpeed(float speed, float playerRun, float playerSprint, float clipRun, float clipSprint) {
-    speed = std::max(speed, 0.0f);
-    playerRun = std::max(playerRun, 0.01f);
-    if (speed <= playerRun || playerSprint <= playerRun + 1e-3f) return speed * clipRun / playerRun;
-    return clipRun + (speed - playerRun) * (clipSprint - clipRun) / (playerSprint - playerRun);
-}
-
-float FirstPersonBodyPlayRate(float speed, float clipSpeed, float responsiveness, float maxRate) {
-    if (!(clipSpeed > 0.05f)) return 1.0f; // standing: idle plays as authored
-    const float rate = std::clamp(speed / clipSpeed, 1.0f, std::max(maxRate, 1.0f));
-    // Eased in over the first half metre a second, so setting off doesn't hurry the idle's last moments.
-    const float moving = std::min(clipSpeed / 0.5f, 1.0f);
-    return 1.0f + (rate - 1.0f) * moving * std::clamp(responsiveness, 0.0f, 1.0f);
 }
 
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw) {
@@ -493,112 +469,6 @@ glm::vec3 FirstPersonGunSeat(const FirstPersonWorldGunInput& gun, const FirstPer
     }
     if (const float len = glm::length(shift); len > gun.MaxShift && len > 1e-6f) shift *= gun.MaxShift / len;
     return shift;
-}
-
-namespace {
-// The elbow-gap points as structure-of-arrays, padded to a multiple of 4 with far-off dummies, for
-// the SSE loop below: the swivel search measures a few thousand torso points at up to 37 angles.
-struct PointsSoA {
-    std::vector<float> X, Y, Z;
-    void Assign(const glm::vec3* p, size_t n) {
-        const size_t padded = (n + 3) & ~size_t(3);
-        X.resize(padded); Y.resize(padded); Z.resize(padded);
-        for (size_t i = 0; i < n; ++i) { X[i] = p[i].x; Y[i] = p[i].y; Z[i] = p[i].z; }
-        for (size_t i = n; i < padded; ++i) X[i] = Y[i] = Z[i] = 1e15f; // never nearest
-    }
-};
-
-// The squared distance of four points to the segment s0 -> s0 + d, in the scalar code's operation
-// order (glm's dot is (x + y) + z, no fused multiply-add), so each lane is bit-identical to it.
-inline __m128 SegDist2(__m128 px, __m128 py, __m128 pz, const glm::vec3& s0, const glm::vec3& d, float dd) {
-    const __m128 dx = _mm_set1_ps(d.x), dy = _mm_set1_ps(d.y), dz = _mm_set1_ps(d.z);
-    const __m128 sx = _mm_set1_ps(s0.x), sy = _mm_set1_ps(s0.y), sz = _mm_set1_ps(s0.z);
-    const __m128 dot = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_sub_ps(px, sx), dx), _mm_mul_ps(_mm_sub_ps(py, sy), dy)),
-                                  _mm_mul_ps(_mm_sub_ps(pz, sz), dz));
-    const __m128 t = _mm_min_ps(_mm_max_ps(_mm_div_ps(dot, _mm_set1_ps(dd)), _mm_setzero_ps()), _mm_set1_ps(1.0f));
-    const __m128 ex = _mm_sub_ps(px, _mm_add_ps(sx, _mm_mul_ps(dx, t)));
-    const __m128 ey = _mm_sub_ps(py, _mm_add_ps(sy, _mm_mul_ps(dy, t)));
-    const __m128 ez = _mm_sub_ps(pz, _mm_add_ps(sz, _mm_mul_ps(dz, t)));
-    return _mm_add_ps(_mm_add_ps(_mm_mul_ps(ex, ex), _mm_mul_ps(ey, ey)), _mm_mul_ps(ez, ez));
-}
-
-// Squared elbow gap (see FirstPersonBodyElbowGapAbove), stopping once it is at most floor2.
-float ElbowGap2(const PointsSoA& pts, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand, float floor2) {
-    const glm::vec3 a = shoulder + (elbow - shoulder) * 0.5f, c = elbow + (hand - elbow) * 0.5f;
-    const glm::vec3 d0 = elbow - a, d1 = c - elbow;
-    const float dd0 = std::max(glm::dot(d0, d0), 1e-9f), dd1 = std::max(glm::dot(d1, d1), 1e-9f);
-    __m128 best = _mm_set1_ps(1e18f);
-    for (size_t i = 0; i < pts.X.size(); i += 4) {
-        const __m128 px = _mm_loadu_ps(&pts.X[i]), py = _mm_loadu_ps(&pts.Y[i]), pz = _mm_loadu_ps(&pts.Z[i]);
-        best = _mm_min_ps(best, _mm_min_ps(SegDist2(px, py, pz, a, d0, dd0), SegDist2(px, py, pz, elbow, d1, dd1)));
-        if (floor2 >= 0.0f && _mm_movemask_ps(_mm_cmple_ps(best, _mm_set1_ps(floor2)))) break;
-    }
-    alignas(16) float lanes[4];
-    _mm_store_ps(lanes, best);
-    return std::min(std::min(lanes[0], lanes[1]), std::min(lanes[2], lanes[3]));
-}
-} // namespace
-
-float FirstPersonBodyElbowGap(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand) {
-    return FirstPersonBodyElbowGapAbove(points, shoulder, elbow, hand, -1.0f);
-}
-
-float FirstPersonBodyElbowGapAbove(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
-                                   const glm::vec3& hand, float floor) {
-    // Stops as soon as the gap is known to be at most `floor` (a point that close): the search only
-    // asks whether an angle beats the best so far.
-    thread_local PointsSoA soa;
-    soa.Assign(points.data(), points.size());
-    return std::sqrt(ElbowGap2(soa, shoulder, elbow, hand, floor >= 0.0f ? floor * floor : -1.0f));
-}
-
-float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
-                                      const glm::vec3& hand, float clearance, float maxAngle, float step, float prefer) {
-    if (clearance <= 0.0f || points.empty() || maxAngle <= 0.0f) return 0.0f;
-    const glm::vec3 line = hand - shoulder;
-    if (glm::dot(line, line) < 1e-8f) return 0.0f;
-    const glm::vec3 axis = glm::normalize(line);
-    // Only what can come near the arm. The gap is measured to the arm's middle (halfway up the upper
-    // arm, the elbow, halfway down the forearm), and the swivel turns it about the shoulder-to-hand
-    // line, so at any angle each of its points sits between the midpoints' distances along that line
-    // and between half and all of the elbow's distance from it. A point farther than the clearance
-    // outside that slab or that ring can't bring any angle's gap under the clearance - and only gaps
-    // under it are compared. The margin covers rounding.
-    const glm::vec3 toElbow = elbow - shoulder;
-    const float elbowAlong = glm::dot(toElbow, axis), handAlong = glm::dot(line, axis);
-    const float radial = glm::length(toElbow - axis * elbowAlong);
-    const float margin = clearance + 1e-3f;
-    const float alongLo = std::min({elbowAlong * 0.5f, elbowAlong, (elbowAlong + handAlong) * 0.5f}) - margin;
-    const float alongHi = std::max({elbowAlong * 0.5f, elbowAlong, (elbowAlong + handAlong) * 0.5f}) + margin;
-    const float ringIn = std::max(radial * 0.5f - margin, 0.0f), ringOut = radial + margin;
-    const float ringIn2 = ringIn > 0.0f ? ringIn * ringIn : -1.0f, ringOut2 = ringOut * ringOut;
-    thread_local std::vector<glm::vec3> nearby;
-    nearby.clear();
-    for (const glm::vec3& p : points) {
-        const glm::vec3 d = p - shoulder;
-        const float along = glm::dot(d, axis);
-        if (along < alongLo || along > alongHi) continue;
-        const float off2 = glm::dot(d, d) - along * along;
-        if (off2 >= ringIn2 && off2 <= ringOut2) nearby.push_back(p);
-    }
-    thread_local PointsSoA soa;
-    soa.Assign(nearby.data(), nearby.size());
-    auto gapAt = [&](float angle, float floor) {
-        const glm::vec3 e = shoulder + glm::angleAxis(angle, axis) * (elbow - shoulder);
-        return std::sqrt(ElbowGap2(soa, shoulder, e, hand, floor >= 0.0f ? floor * floor : -1.0f));
-    };
-    const float here = gapAt(0.0f, -1.0f);
-    if (here >= clearance) return 0.0f;
-    step = std::max(step, glm::radians(1.0f));
-    float best = 0.0f, bestGap = here;
-    for (float a = step; a <= maxAngle + 1e-5f; a += step)
-        for (const float s : {prefer < 0.0f ? -a : a, prefer < 0.0f ? a : -a}) {
-            // A gap at most bestGap (< clearance) changes nothing below, so its scan may stop there.
-            const float g = gapAt(s, bestGap);
-            if (g >= clearance) return s;
-            if (g > bestGap) { bestGap = g; best = s; }
-        }
-    return best;
 }
 
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise) {
@@ -1160,10 +1030,10 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     }
     m_ViewYaw = FirstPersonBodyYaw(camera.Front(), m_ViewYaw);
     if (!m_HaveHeading) { m_Yaw = m_ViewYaw; m_HaveHeading = true; }
-    world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
     auto fireTrigger = [&](AnimatorControllerComponent& a, const char* name) { a.SetTrigger(name); m_LastTrigger = name; m_SinceTrigger = 0.0f; };
 
-    if(!reg.valid(m_Driver)){m_Body=entt::null;return;}
+    // (The body is posed once the locomotion has set this frame's heading, below; without a driver, as it stands.)
+    if(!reg.valid(m_Driver)){world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));m_Body=entt::null;return;}
     auto& ac=reg.get<AnimatorControllerComponent>(m_Driver);
     Gameplay::BodyMotionFrame f;
     f.Velocity={player.Velocity.x,player.Velocity.y,player.Velocity.z};
@@ -1264,16 +1134,12 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     if(f.Triggers&Gameplay::kBodyPivot){ac.SetFloat(FPBody::kPivotX,f.PivotDir.x);ac.SetFloat(FPBody::kPivotY,f.PivotDir.y);ac.SetFloat(FPBody::kPivotGait,f.PivotGait);}
     if(f.Triggers&Gameplay::kBodyStep){ac.SetFloat(FPBody::kStepX,f.StepDir.x);ac.SetFloat(FPBody::kStepY,f.StepDir.y);}
     if(f.Triggers&Gameplay::kBodyFidget)ac.SetFloat(FPBody::kFidgetIndex,f.FidgetIndex);
-    // The gait loop's own ground speed (stride warp's reference): what the animator's clips travelled last frame, exactly as
-    // played (blend, play rate, length). Only in a settled loop; a start, stop or fade is left to the feet's estimate.
     // Rate trim: a blend's clips share one cycle, so a walk blended with the idle's long loop plays slow and its feet fall
     // behind the capsule. The loop's rate is eased until what its clips travel is what the capsule travels.
     {
         const bool loop = !ac.InTransition && (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco));
         const float travel = dt > 1e-5f ? glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z)) / dt : 0.0f;
         const float capsule = glm::length(glm::vec2(m_GroundVelocity.x, m_GroundVelocity.z));
-        const bool sprinting = ac.InState(FPBody::kStateSprint) && !ac.InTransition;
-        m_GaitClipSpeed = (loop || sprinting) && travel > 0.1f ? travel : -1.0f;
         float trim = 1.0f;
         if (loop && travel > 0.3f && capsule > 0.3f && m_Grounded) trim = std::clamp(m_RateTrim * capsule / travel, kRateTrimMin, kRateTrimMax);
         m_RateTrim += (trim - m_RateTrim) * Follow(dt, 0.15f);
@@ -1507,7 +1373,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // the view pitches. The head bob is procedural (the weapon's Camera Motion: a dip on each footfall, the landing's -
     // the view punch kept on top below), so the eye takes none of the clips' own bob: it follows the head's slow
     // average (its standing height, a crouch, a stop's lean), trailing the head by at most Eye Slack and pulled back
-    // in over 40 ms past it - as the armed eye follows the shoulders. (Head Bob / Head Bob Side no longer apply.)
+    // in over 40 ms past it - as the armed eye follows the shoulders.
     glm::vec3 tilt(0.0f);
     if (model->NodeTransform(model->NodeName(m_HeadNode), head)) tilt = glm::vec3(head[3]) - headAnimated;
     FirstPersonBodyFollowShoulders(m_HeadSlow, m_HeadEased, m_HaveEye, headAnimated, glm::vec3(0.0f), cfg.CameraSmoothing,
@@ -1809,8 +1675,6 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         m_HaveFootGround = false;
         m_HaveFoot = false;
         m_Lock.Reset();
-        m_Slide.Reset();
-        m_AppliedSlide={};
         return;
     }
     const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
@@ -1831,52 +1695,18 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 
     const float maxDrop = std::max(cfg.FootIKMaxDrop, 0.0f);
     float animHeight[2];
-    // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet and the plain foot lock below.
-    IK::FootSlideSettings slideSet = IK::FootSlideFrom(cfg);
-    const bool yawSteady = !m_Turning && std::abs(FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw)) < glm::radians(2.0f);
     const float yawRate = dt > 1e-5f ? FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw) / dt : 0.0f;
     m_FootYaw = m_Yaw;
-    const bool correctStride = yawSteady && glm::length(m_GroundVelocity)>0.1f;
-    if (!correctStride) {
-        m_Slide.Reset();
-        slideSet.PinEnabled=slideSet.StrideEnabled=false;
-    }
-    const int probe = IK::FootSlideProbeMode();
-    if (probe == 1 && correctStride) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
-    const bool slideOn = slideSet.Active();
-    IK::FootSlideOutput slide;
-    glm::vec3 footAnim[2];
-    for (int s = 0; s < 2; ++s) footAnim[s] = m_Feet + yaw * (scale * IK::Position(globals[footNode[s]]));
-    if (slideOn || probe >= 0) {
-        IK::FootSlideInput in;
-        in.Feet = m_Feet;
-        in.Velocity = m_GroundVelocity;
-        in.PlantHeight = cfg.FootPlantedHeight;
-        in.Dt = dt;
-        in.ClipSpeed = m_GaitClipSpeed;
-        for (int s = 0; s < 2; ++s) { in.Foot[s] = footAnim[s]; in.Height[s] = footAnim[s].y - m_Feet.y; }
-        const int pelvisNode = drv.NodeIndex(Bone(FPBody::kBonePelvis));
-        const int thighNode = drv.NodeIndex(Bone(FPBody::kBoneThigh[0])), calfNode = drv.NodeIndex(Bone(FPBody::kBoneCalf[0]));
-        in.Pelvis = pelvisNode >= 0 ? m_Feet + yaw * (scale * IK::Position(globals[pelvisNode])) : m_Feet + glm::vec3(0.0f, 1.0f, 0.0f);
-        if (thighNode >= 0 && calfNode >= 0)
-            in.LegLength = scale * (glm::length(IK::Position(globals[thighNode]) - IK::Position(globals[calfNode])) +
-                                    glm::length(IK::Position(globals[calfNode]) - IK::Position(globals[footNode[0]])));
-        slide = m_Slide.Step(slideSet, in, !slideOn);
-        if (probe >= 0) IK::FootSlideProbeLog("player", m_Slide.Stats, glm::length(m_GroundVelocity), m_Slide.ClipSpeed(), m_Slide.Scale());
-    }
-    m_AppliedSlide=IK::SmoothFootSlideOutput(m_AppliedSlide,slide,dt,correctStride?0.03f:cfg.FootPinRelease);
-    slide=m_AppliedSlide;
     glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> where it is drawn
     // Foot lock: a planted foot stays where it landed in the world - walking, turning on the spot, starting and stopping
-    // alike - and catches up through its swing once it lifts (IK::FootLock). The pin, when on, has already held it.
+    // alike - and catches up through its swing once it lifts (IK::FootLock).
     // (Swinging round on the move only: a turn on the spot's clip steps its own feet.)
     IK::FootLockSettings lockSet = IK::FootLockTurning(IK::FootLockFrom(cfg), m_Turning || glm::length(m_GroundVelocity) < 0.3f ? 0.0f : yawRate);
-    if (slideSet.PinEnabled) lockSet.Enabled = false;
     for (int s = 0; s < 2; ++s) {
-        const glm::vec3 footWorld = footAnim[s] + slide.Shift[s]; // the stride-warped foot (pinned, below, when the pin is on)
+        const glm::vec3 footWorld = m_Feet + yaw * (scale * IK::Position(globals[footNode[s]])); // the animated foot
         animHeight[s] = footWorld.y - m_Feet.y;
         const glm::vec3 held = m_Lock.Step(s, lockSet, footWorld, animHeight[s], dt);
-        lockShift[s] = (held + slide.Shift[s]) * m_FootWeight;
+        lockShift[s] = held * m_FootWeight;
         const glm::vec3 drawn = footWorld + held; // the ground is read under the foot as drawn
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
@@ -1914,7 +1744,6 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     // the camera on it - drops smoothly. Each foot's ground off the capsule's (the body stands m_StepOffset off it).
     for (int s = 0; s < 2; ++s) m_FootGround[s] = m_FootOffset[s] + m_StepOffset;
     m_HaveFootGround = true;
-    const float pelvisDelta = -slide.PelvisDrop * m_FootWeight;
     static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};
     const glm::quat yawInverse = glm::inverse(yaw);
     for (const auto& mp : m_Models) {
@@ -1926,13 +1755,11 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
         IK::ComputeGlobals(pose, parents, globals);
-        IK::OffsetBone(pose, parents, globals, pelvis, glm::vec3(0.0f, pelvisDelta / scale, 0.0f),
-                       glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
         for (int s = 0; s < 2; ++s) {
             const int thigh = m.NodeIndex(Bone(kLegs[s][0])), calf = m.NodeIndex(Bone(kLegs[s][1])), foot = m.NodeIndex(Bone(kLegs[s][2]));
             if (thigh < 0 || calf < 0 || foot < 0) continue;
             const glm::vec3 target = IK::Position(globals[foot]) +
-                                     glm::vec3(0.0f, (m_FootOffset[s] * m_FootWeight - pelvisDelta) / scale, 0.0f) +
+                                     glm::vec3(0.0f, m_FootOffset[s] * m_FootWeight / scale, 0.0f) +
                                      yawInverse * lockShift[s] / scale;
             // The foot lies on the ground while it is planted: its own rotation tilted to the normal.
             const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
@@ -2267,7 +2094,6 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         m_HaveElbowAim[0] = m_HaveElbowAim[1] = false;
         m_WorldHaveShoulderAnchor[0] = m_WorldHaveShoulderAnchor[1] = false;
         m_WorldHaveElbowAim[0] = m_WorldHaveElbowAim[1] = false;
-        m_WorldElbowClear[0] = m_WorldElbowClear[1] = 0.0f;
         m_WorldGunDelta = glm::mat4(1.0f);
         m_WorldGunShift = m_WorldGunShiftLocal = glm::vec3(0.0f);
         m_FreeHand = m_TwinAnchorWeight = 0.0f;
@@ -2526,24 +2352,6 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                                 IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, c, &keep, 1.0f, swivel * steady * bodyTrust);
                             }
                         }
-                    }
-                }
-                // Elbow Clearance (the world twins only - the player's own view shows the rig's pose): the rig tucks
-                // its elbows to a narrower body, and in its bend plane they went into this one's chest. Each elbow
-                // swings out about its shoulder-to-hand line until the arm around it clears the drawn torso; the
-                // hand stays on the gun. Worked out on the source piece, eased (in fast, out slower), given to all.
-                if (!debug && cfg.ElbowClearance > 0.0f && !m_TorsoPointBuffer.empty()) {
-                    if (isSource) {
-                        PROFILE_SCOPE("FPB elbow swivel search");
-                        auto at = [&](int node) { return glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[node]), 1.0f)); };
-                        const float want = FirstPersonBodyElbowClearSwivel(m_TorsoPointBuffer, at(upper), at(lower), at(hand), cfg.ElbowClearance,
-                                                                           glm::radians(90.0f), glm::radians(5.0f), m_WorldElbowClear[s]);
-                        const float ease = std::abs(want) > std::abs(m_WorldElbowClear[s]) ? 0.03f : 0.15f;
-                        m_WorldElbowClear[s] += (want - m_WorldElbowClear[s]) * Follow(dt, ease);
-                    }
-                    if (std::abs(m_WorldElbowClear[s]) > 1e-4f) {
-                        const glm::quat keep = IK::Rotation(globals[hand]);
-                        IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, IK::Position(globals[hand]), &keep, 1.0f, m_WorldElbowClear[s]);
                     }
                 }
             }
@@ -2887,7 +2695,6 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         if (!anchoring) m_TwinAnchorWeight = m_TwinAnchorRate = 0.0f;
         anchorFrame = chestDelta * anchorFrame; // the shoulders are held on the chest, wherever the hold puts the gun
         anchorInverse = glm::inverse(anchorFrame);
-        m_TorsoPointBuffer.clear();
         solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
         ArmTwist(m_TwinModels, true);
         // The world head onto the stock (the cheek weld, on the sights): the neck tilts it toward where the eye is for the

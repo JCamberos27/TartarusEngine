@@ -1204,7 +1204,7 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
         }
         const float layerWeight=AnimatorLayerWeight(ctrl,ac,li);
         if (layerWeight <= 0.0f) continue;
-        // A layer resting in an empty state (the hit reaction between hits) has nothing to add: no sampling at all.
+        // A layer resting in an empty state (an overlay between its moves) has nothing to add: no sampling at all.
         if (LayerIsIdle(L, rt, track)) continue;
         const std::vector<float>& mask = CachedLayerMask(L, model);
         if (L.Mode == AnimatorController::Blending::Override) {

@@ -730,12 +730,6 @@ void RegisterEngineComponents() {
               "frame: X right, Y up, Z forward, metres) so the chest and collar stay out of view. The gun doesn't move on\n"
               "screen; the body sits lower under it, and the hands reach further. Too much and a hand comes off the gun.\n"
               "Applies near level; it eases out looking up or down (gone by 60 degrees), where it isn't needed." },
-            { "Head Bob", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBob), 0.01f,
-              "How much of the head's own motion the camera follows: 0 = steady at the head's standing\n"
-              "height, 1 = locked to the head bone.", 0.0f, 1.0f },
-            { "Head Bob Side", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBobSide), 0.01f,
-              "How much of the shoulders' side-to-side sway the camera follows (the gait rocks them each stride).\n"
-              "Low keeps the view steady sideways while it still bobs with the steps (Head Bob).", 0.0f, 1.0f },
             { "Camera Smoothing", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraSmoothing), 0.005f,
               "Seconds of smoothing on the head's motion (in the body's frame, so it never lags behind).", 0.0f, 0.5f },
             { "Hidden Parts", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HiddenParts), 0.0f,
@@ -862,10 +856,6 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Arm Steady Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmSteadyMax), 0.005f,
               "The most (metres) a shoulder is held off where the body's pose puts it; past this it is carried along.", 0.0f, 0.3f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
-        m.Fields.push_back({ "Elbow Clearance", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowClearance), 0.005f,
-              "Split poses: how far (metres) each elbow, in every view but the player's own, keeps from the drawn torso. It swings out\n"
-              "about the shoulder-to-hand line, so the hand stays on the gun. The rig tucks its elbows to a narrower body. 0 = off.", 0.0f, 0.2f });
-        m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Look Down Push", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LookDownPush), 0.005f,
               "Looking down, the eye comes this far (metres) forward over the chest. It moves the gun with it, away from the shoulders,\n"
               "so it costs the arms their reach - prefer Spine Aim Down. Straight down gets all of it. 0 = off.", 0.0f, 0.4f });
@@ -961,9 +951,6 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Foot Lock Release", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockRelease), 0.005f,
               "Seconds a let-go foot takes to catch up with its animation (eased, so it never pops).", 0.005f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
-        m.Fields.push_back({ "Foot Planted Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPlantedHeight), 0.005f,
-              "The animated foot counts as planted (pinned to the ground) while it is lower than this (metres).", 0.0f, 0.3f });
-        m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Foot Ray Up", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootRayUp), 0.05f,
               "The ground ray under each foot starts this far (metres) above the animated foot.", 0.0f, 2.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
@@ -1000,9 +987,6 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "NPC Turn Threshold", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcTurnThreshold), 1.0f,
               "NPCs: a still body this many degrees off its aim turns on the spot. NPCs copy this from the scene's player body when Play starts.", 0.0f, 180.0f });
         m.Fields.back().Group = "NPC Body";
-        m.Fields.push_back({ "NPC Move Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcMoveEase), 0.005f,
-              "NPCs: seconds the locomotion blend tree's speed and direction take to follow the movement.", 0.005f, 1.0f });
-        m.Fields.back().Group = "NPC Body";
         m.Fields.push_back({ "NPC Face Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFaceEase), 0.005f,
               "NPCs: seconds the body heading takes to ease toward the movement direction while walking.", 0.005f, 1.0f });
         m.Fields.back().Group = "NPC Body";
@@ -1034,33 +1018,6 @@ void RegisterEngineComponents() {
               "NPCs: seconds foot IK takes to fade in and out.", 0.005f, 1.0f });
         m.Fields.back().Group = "NPC Foot IK";
         // ---- lane A ----
-        m.Fields.push_back({ "Foot Pin Enabled", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinEnabled), 0.0f,
-              "Holds each planted foot where it landed while the body moves past it, so the feet stop sliding in sprints, strafes and turns; the leg is re-solved to the pinned foot. Off = the clips' own feet. NPCs use the same settings." });
-        m.Fields.back().Group = "Foot Pinning";
-        m.Fields.push_back({ "Foot Pin Weight", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinWeight), 0.05f,
-              "How much of the pin is applied (0 = the clips' feet, 1 = fully pinned).", 0.0f, 1.0f });
-        m.Fields.back().Group = "Foot Pinning";
-        m.Fields.push_back({ "Foot Pin Release", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinRelease), 0.005f,
-              "Seconds the pin takes to let go once the foot lifts (it grabs in half that).", 0.005f, 0.5f });
-        m.Fields.back().Group = "Foot Pinning";
-        m.Fields.push_back({ "Foot Pin Max Drift", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinMaxDrift), 0.01f,
-              "Metres a pinned foot may lag behind the body before the pin is dragged along with it (a leash, so the leg never overstretches).", 0.02f, 0.8f });
-        m.Fields.back().Group = "Foot Pinning";
-        m.Fields.push_back({ "Stride Warp Enabled", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideWarpEnabled), 0.0f,
-              "Scales the stride (the feet's offsets from the pelvis along the travel) so the feet cover the ground at the capsule's real speed when it differs from the clips' (blend-tree speeds, speed multipliers, crouch speed). Off = the clips' own stride." });
-        m.Fields.back().Group = "Stride Warping";
-        m.Fields.push_back({ "Stride Warp Weight", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideWarpWeight), 0.05f,
-              "How much of the warp is applied (0 = the clips' stride, 1 = fully matched to the ground speed).", 0.0f, 1.0f });
-        m.Fields.back().Group = "Stride Warping";
-        m.Fields.push_back({ "Stride Scale Min", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideScaleMin), 0.01f,
-              "The stride is never shortened below this multiple of the clip's.", 0.3f, 1.0f });
-        m.Fields.back().Group = "Stride Warping";
-        m.Fields.push_back({ "Stride Scale Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideScaleMax), 0.01f,
-              "The stride is never lengthened beyond this multiple of the clip's.", 1.0f, 2.0f });
-        m.Fields.back().Group = "Stride Warping";
-        m.Fields.push_back({ "Stride Pelvis Adjust", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StridePelvisAdjust), 0.05f,
-              "How much the pelvis sinks for a longer stride so the legs do not overstretch (0 = not at all, 1 = the full amount).", 0.0f, 1.0f });
-        m.Fields.back().Group = "Stride Warping";
         m.Fields.push_back({ "Grip Inset", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, GripInset), 0.001f,
               "Metres each hand moves toward its palm while holding a gun: for a body with no flesh on its hands (a skeleton),\n"
               "whose bones sit short of where the rig's skinned palm meets the gun. 0 for a skinned body.", 0.0f, 0.05f });
@@ -1071,7 +1028,7 @@ void RegisterEngineComponents() {
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
-                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Head Bob", "Camera"}, {"Head Bob Side", "Camera"}, {"Camera Smoothing", "Camera"},
+                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Camera Smoothing", "Camera"},
                 {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"}, {"Grip Inset", "Arms"}, {"Finger Curl Extra", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},

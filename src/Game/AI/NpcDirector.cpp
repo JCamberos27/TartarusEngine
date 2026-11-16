@@ -163,7 +163,6 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, bool allowEmpty) {
     if (auto bodies = world.Registry.view<FirstPersonBodyComponent>(); bodies.begin() != bodies.end()) {
         const auto& fpb = bodies.get<FirstPersonBodyComponent>(*bodies.begin());
         m_HoldSettings.TurnThreshold = glm::radians(fpb.NpcTurnThreshold); // degrees in the component
-        m_HoldSettings.MoveEase = fpb.NpcMoveEase;
         m_HoldSettings.FaceEase = fpb.NpcFaceEase;
         m_HoldSettings.HeadMaxYaw = glm::radians(fpb.NpcHeadMaxYaw);
         m_HoldSettings.HeadMaxPitch = glm::radians(fpb.NpcHeadMaxPitch);
@@ -175,7 +174,6 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, bool allowEmpty) {
         m_HoldSettings.FootNormalEase = fpb.NpcFootNormalEase;
         m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
         m_HoldSettings.Spine = fpb.Spine; // per-bone spine weights and limits
-        m_HoldSettings.FootSlide = IK::FootSlideFrom(fpb); // foot pinning and stride warping
         m_HoldSettings.FootLock = IK::FootLockFrom(fpb);   // planted feet held in the world
     }
     // A dummy's planted feet on a shorter leash than the player's (seen from outside, a foot held 25 cm behind a walking body
@@ -335,7 +333,6 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
         for (const auto& [e, ac] : built->Animators)
             if (reg.valid(e)) reg.emplace_or_replace<AnimatorControllerComponent>(e, ac);
         SetTreeActive(world, built->Root, true);
-        ++m_Reused;
     } else if (!(built = BuildBody(world, assets))) {
         return -1;
     } else if (sp.Bare) {
@@ -826,7 +823,6 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
     }
     n.Health -= amount;
     n.LastHurt = m_Now;
-    n.LastHurtFrom = -dir;
     ++n.Hits;
     if (health) health->Current = std::max(0.0f, n.Health);
     // Dead: out of health, or a head shot that is enough.
@@ -834,8 +830,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         Kill(world, n, dir, point, 30.0f + 0.4f * amount, part);
         return;
     }
-    // It flinches the way it was hit (where it was hit) ...
-    n.Body.Flinch(world, dir, &point, part);
+    // It flinches the way it was hit (where it was hit: a procedural kick on the pose, LatePose) ...
     if (m_RagdollCfg.HitFlinch && part >= 0) m_Flinch[n.Index].Hit(n.Body, part, dir, amount, m_Now, m_RagdollCfg); // a kick on the struck region
     // ... and a heavy hit slows it a beat and shoves it back along the round.
     if (amount >= m_Cfg.HeavyHitDamage) {

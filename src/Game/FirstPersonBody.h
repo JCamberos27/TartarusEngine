@@ -304,9 +304,7 @@ private:
     bool m_HaveFootGround = false;
     float m_LastCapsuleY = 0.0f;
     bool m_HaveCapsule = false;
-    glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity (foot slide correction)
-    IK::FootSlide m_Slide;                      // foot pinning + stride warping (off by default)
-    IK::FootSlideOutput m_AppliedSlide;
+    glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity
     IK::FootLock m_Lock;                        // planted feet held in the world
     std::string m_LastState;                    // the driver's state last frame
     bool m_TurnFade = false;                    // a turn on the spot fading back to its loop (a start may cut in)
@@ -325,7 +323,6 @@ private:
         bool PivotReversed = false;
     } m_Loco;
     float m_RateTrim = 1.0f;       // the gait loop's play rate trim (its clips' travel onto the capsule's)
-    float m_GaitClipSpeed = -1.0f; // the gait loop's own travel (m/s) for stride warp; < 0 = not in a settled loop
     bool m_Armed = false, m_Busy = false; // a gun in hand; aiming or just fired (SetHands)
     std::uint32_t m_Random = 0x9E3779B9u;
     bool m_Still = false;          // standing still at the last Tick (the view's turn is then limited)
@@ -395,7 +392,6 @@ private:
     bool m_WorldHaveShoulderAnchor[2] = {false, false};
     glm::vec3 m_WorldElbowAim[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     bool m_WorldHaveElbowAim[2] = {false, false};
-    float m_WorldElbowClear[2] = {0.0f, 0.0f}; // Elbow Clearance: each world elbow's swing out of the torso (radians, eased)
     glm::vec3 m_CameraApplied{0.0f}; // what LateUpdate added to the camera (BeforePlayerMove takes it off)
     glm::vec3 m_CameraBase{0.0f};    // the player's own eye at Tick (no body, no view punch): LateUpdate's kick is off it
     bool m_HaveCameraBase = false;
@@ -431,16 +427,8 @@ private:
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback = 0.0f);
 // An angle wrapped to (-pi, pi].
 float FirstPersonBodyWrapAngle(float radians);
-// Whether a body standing still, `offset` radians off the view, starts turning on the spot.
-bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees);
 // A world velocity in the frame of a body at heading `yaw`: x = to its right, y = forward.
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
-// A player speed (m/s) as the blend tree's: 0..playerRun maps onto 0..clipRun (the jog clips' speed),
-// playerRun..playerSprint onto clipRun..clipSprint (the run clip's), beyond scaled on as sprint.
-float FirstPersonBodyClipSpeed(float speed, float playerRun, float playerSprint, float clipRun, float clipSprint);
-// How much faster than authored the gait clips play so their feet keep up with the capsule:
-// speed over its clip speed, within [1, maxRate], and none of it at responsiveness 0 (root motion).
-float FirstPersonBodyPlayRate(float speed, float clipSpeed, float responsiveness, float maxRate);
 // The eye in model space: the head's standing position, plus `bob` of the head's motion away
 // from it, plus `offset` given in the body's frame (x right, y up, z forward).
 // How far the pelvis moves (metres, + up) to put the feet on ground `offL` / `offR` above the
@@ -459,10 +447,6 @@ glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm
 float FirstPersonBodyArmedEyeLift(float pitchRadians);
 // The share of the view's pitch the spine takes: Spine Aim looking up, Spine Aim Down looking down.
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
-// Armed, the furthest forward the world body's torso leans (radians, pelvis to neck, + = forward): a slight lean
-// (0.2) plus `spineShare` of the view's pitch down (less looking up). The clips' deeper leans (the crouch walk's
-// hunch) are brought up to it.
-float FirstPersonBodyAimLeanMost(float pitchRadians, float spineShare);
 // How far segment `a`-`b` must move along unit `dir` for every one of `points` to be at least `clearance` from it:
 // the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
 float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,
@@ -505,18 +489,6 @@ float FirstPersonAnchorWeight(float distance, float nearDist, float farDist);
 // `m` (any frame, scale kept) moved `weight` of the way by the rigid world move `move`: its origin along the straight line,
 // its turn by slerp. 0 = `m`, 1 = `move` * `m`.
 glm::mat4 FirstPersonPartialMove(const glm::mat4& move, const glm::mat4& m, float weight);
-// How close `points` come to an elbow: the arm from half-way down the upper arm (`shoulder` to `elbow`), through
-// the elbow, to half-way down the forearm (to `hand`). A large number when there are no points.
-float FirstPersonBodyElbowGap(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand);
-// The same, but free to stop early with any value <= floor once the gap is known to be at most `floor`.
-float FirstPersonBodyElbowGapAbove(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
-                                   const glm::vec3& hand, float floor);
-// The swivel (radians, about the shoulder-to-hand line, right-handed) that takes the elbow at least `clearance`
-// from every one of `points`, the hand staying put: the smallest of +-step, +-2 step ... up to `maxAngle`, and
-// where none clears, the one that comes clearest. 0 when the elbow is already clear. At each size the side of
-// prefer (the last frame's swivel) is tried first, so an elbow that clears either way doesn't flip.
-float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
-                                      const glm::vec3& hand, float clearance, float maxAngle, float step, float prefer = 0.0f);
 // The arms rig's arm shapes onto `pose` of model `m` (rotations of every node under the clavicles, the body
 // keeping its bone lengths), by `weight`; the clavicles themselves by `weight * clavicleWeight`. What the
 // player's arms take before reaching the rig's hands.
@@ -558,7 +530,7 @@ bool FirstPersonBodyReachLean(const std::vector<glm::mat4>& globals, const int (
 glm::vec3 FirstPersonBodyRigEyeToShoulders(const glm::mat4& rigWorld, const glm::mat4& upperL, const glm::mat4& upperR,
                                            const glm::mat4& cameraBone, const Camera& cam);
 // The shoulders the eye hangs off (model space), a step on: `slow` follows the clips' `animated` shoulders over half a
-// second, `eased` follows Head Bob of their motion about it over `smoothing` seconds and never trails them by more than
+// second, `eased` follows `headBob` (per axis) of their motion about it over `smoothing` seconds and never trails them by more than
 // `eyeSlack` - pulled back in over `slackSeconds`, or snapped there at 0. `have` false starts both on `animated`.
 void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, glm::vec3 headBob,
                                     float smoothing, float eyeSlack, float slackSeconds, float dt);
