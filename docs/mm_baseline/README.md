@@ -41,14 +41,11 @@ Only `testbed` and `labloco` write a trace. The other scenarios log their metric
   rendered frames, which includes loading, so it is only a rough figure.
 - **Eye jitter:** `testbed` A, logged rather than checked.
 
-## Known failures at capture time (not locomotion; don't re-run for them)
+## Known failures at capture time (not locomotion; both fixed since)
 
-- **Every scenario logs `[error]` lines** for two zero-filled local asset files:
-  - `project/assets/Audio/Ambience/worklight_hum_1.wav`
-  - `project/assets/Characters/Spider/Textures/T_Spider_AO.png`
-
-  Every byte is 0, and the sha256 doesn't match `project/external_assets.csv`. They need restoring from the asset
-  Drive, which is the owner's call. Until then, runs end in "N new log error(s)": pass
-  `-AllowErrors 'worklight_hum_1\.wav|T_Spider_AO\.png'` to `mm_smoke.ps1` to show them as `PASS*`.
-- **`feet` fails 2 of 6** ("the dummy stands on the ramp (across / uphill)"). The scenario is stale: Arena.json has no
-  ramps at its spawn points, so the dummy is measured at y = 0.02. Its other 4 checks pass.
+- **Every scenario logged `[error]` lines** for two zero-filled local asset files: `worklight_hum_1.wav` and
+  `T_Spider_AO.png`. That is why the logs show "N new log error(s)". Both were restored from the Drive the same day,
+  hash-checked against `project/external_assets.csv`.
+- **`feet` failed 2 of 6** ("the dummy stands on the ramp (across / uphill)"). This was a test bug: the teleport onto the
+  ramp didn't reset the director's velocity, so the dummy slid off the ramp across the Arena. It is fixed in
+  `NpcTest::Feet` (6/6). The `feet` numbers here are from before the fix.

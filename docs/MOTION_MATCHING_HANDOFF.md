@@ -125,14 +125,14 @@ skeleton). Then delete the legacy locomotion graphs, logic and clips.
   stdout and stderr per run, a pass/fail table, and exit 1 on any failure.
   - Options: `-Runs`, `-TraceDir`, `-PerfBench`, `-UnitFilter`, `-SkipBuild/-SkipUnit/-SkipSmoke`, `-Sound`,
     `-TimeoutMinutes`, `-LogDir`.
-  - `-AllowErrors <regex>` turns a run that failed only on matching log errors into `PASS*`. It is opt-in, for the two
-    broken local assets (see Open issues).
+  - `-AllowErrors <regex>` turns a run that failed only on matching log errors into `PASS*`. It is opt-in, for a local
+    asset known to be broken.
   - Logs go to `work\mm_smoke\<timestamp>\`. Traces always go to `<LogDir>\traces` unless `-TraceDir` says
     otherwise: `labloco`'s one check counts traced frames, so it fails without a trace folder.
 - `tools/mm/baseline_summary.py`: turns an `mm_smoke` log folder into `logs/`, `traces/`, `metrics.json` and
   `SUMMARY.md`. Run it on a later phase's output to compare with the baseline.
 - `docs/mm_baseline/`: the legacy baseline. See its `README.md` and `SUMMARY.md`. Headline numbers:
-  - **Checks:** testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, labloco 1/1, feet 4/6 (stale).
+  - **Checks:** testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, labloco 1/1, feet 4/6 (a test bug, fixed since: 6/6).
   - **Clip vs capsule speed** (testbed A): walk 0.9986, jog 1.0000.
   - **Foot slide:**
     - player: ≤ 0.1 cm worst on testbed's legs; labloco's stops after a strafe right or a jog back are 5.3 and 26.5 cm;
@@ -200,10 +200,9 @@ New `src/Game/MotionMatching/`:
     Record it under Open issues instead.
   - When a run fails, diagnose it before running again. Repeat a run only to check for flakiness.
 - Commands (PowerShell):
-  - Everything: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 testbed npcloco locomotion stopsteps
-    labloco -PerfBench tests\perf-scenes\perf_stress.json -AllowErrors 'worklight_hum_1\.wav|T_Spider_AO\.png'`
-    - It leaves out `feet`, which is stale (see Open issues); add it back once it's fixed.
-    - Add `-AllowErrors` only while the two broken assets are unrestored.
+  - Everything: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 testbed npcloco locomotion stopsteps feet
+    labloco -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
+    asset you know is broken, and say so under Open issues.
   - Compare with the baseline: add `-TraceDir <dir>` to `mm_smoke.ps1`, then
     `python tools/mm/baseline_summary.py <log dir> <out dir> --traces <dir>`; diff `SUMMARY.md` and `metrics.json`
     against `docs/mm_baseline/`.
@@ -257,16 +256,16 @@ New `src/Game/MotionMatching/`:
 - `_FO` (idles) and `_M_L` (one jump) suffixes are undefined. They are tagged idle and jump; the owner should look at
   them in `mmview`.
 - Pack-Manny vs Quantum rest pose and bone lengths: not yet compared (Phase 2).
-- **Two zero-filled local assets** make every scenario log `[error]`s, so its `[SmokeTest]` line says FAIL:
-  - `project/assets/Audio/Ambience/worklight_hum_1.wav`
-  - `project/assets/Characters/Spider/Textures/T_Spider_AO.png`
-
-  Every byte is 0, and the sha256 doesn't match `external_assets.csv`. They need restoring from the Drive, which is the
-  **owner's call** (no Drive access was used). Until then, pass `-AllowErrors 'worklight_hum_1\.wav|T_Spider_AO\.png'`.
-  Smoke has 20/21 scenes clean; `smoke_play_controller` fails on the wav alone.
-- **`feet` is stale.** Its two "the dummy stands on the ramp" checks fail because Arena.json has no ramps at its spawn
-  points (the dummy is measured at y = 0.02). This predates Phase 1. Fix the scene or the spawn points before Phase 5
-  ports it.
+- *Resolved 2026-11-16:* two zero-filled local assets, `project/assets/Audio/Ambience/worklight_hum_1.wav` and
+  `project/assets/Characters/Spider/Textures/T_Spider_AO.png`.
+  - Every byte was 0, so every run logged `[error]`s; they were what made the baseline runs `PASS*`.
+  - Restored from the Drive's `Used\project\assets\...`, after checking the sha256 against `external_assets.csv`.
+  - A scan of all 11,632 asset files found no others.
+- *Resolved 2026-11-16:* `feet` failed its two ramp checks. The cause was a test bug, not the scene.
+  - `feet` teleported the dummy with `SetNpcFootPosition` but left the director's `Feet` and `Velocity` alone.
+  - The director read the jump as a speed of hundreds of m/s and slid the dummy off the ramp and across the Arena.
+  - `NpcTest::Feet` now resets that state; the run is 6/6.
+  - The baseline's `feet` numbers in `docs/mm_baseline/` predate this fix.
 - Npc-scenario frame cost (`fps=` / ms per frame) includes scene loading and the model imports during the run, so it
   is only a rough figure. `perf_stress` is the frame-cost baseline. If Phase 5 needs per-scenario frame cost, add a
   steady-state window (for example, after the first 2 s of Play) to the summary line.
@@ -279,9 +278,14 @@ New `src/Game/MotionMatching/`:
 
 ## Phase 2: first steps
 
-1. Branch `dev/mm-phase2` from `dev/mm-phase1`.
-2. **Ask the owner** before reading or writing the Drive. The raw pack is needed locally, under a folder named by a new
-   `Env.h` variable (for example `TARTARUS_MM_SOURCE`).
+1. Branch `dev/mm-phase2` from `dev/mm-phase1`, in the main checkout. The licensed assets and `build\` exist only
+   there, so a separate worktree can't run the engine. C: has little free space; put big scratch output on D:.
+2. The pack is already on this machine. Read it through a new `Env.h` variable (for example `TARTARUS_MM_SOURCE`); never
+   hard-code the path.
+   - `D:\Jacob\JCamberos\Manny_Mocap_Export\`: `anims\` (139 FBX, 4.47 GB), `rig\SKM_Manny.fbx`, `manifest.json`.
+   - The pack's raw source data, with fingers, is in `D:\Jacob\JCamberos\Downloads\raw_source__data\`.
+   - The owner has OK'd Drive access. The Drive (`G:\My Drive\Tartarus Assets`) is nearly full, so ask before writing
+     the archive there.
 3. Diff the rest pose and bone lengths: pack `rig/SKM_Manny.fbx` against `Quantum_Body_Full.fbx`, through `Model`.
    Report any core bone that differs by more than 2%.
 4. Write `RootSynth` with unit tests on synthetic clips (a pelvis on a sine path, turning in place) before touching
@@ -310,4 +314,8 @@ New `src/Game/MotionMatching/`:
     - labloco failed for lack of a trace folder. Fixed in the script (traces now default to `<LogDir>\traces`), and
       its one re-run was `PASS*`.
     - testbed spent 1642 frames without focus and still passed 29/29.
-  - Found the two zero-filled assets and the stale `feet` scene (see Open issues).
+  - Afterwards:
+    - restored the two zero-filled assets from the Drive (hash-checked);
+    - fixed the `feet` teleport bug (6/6, no log errors);
+    - found the pack on D:.
+  - Found the two zero-filled assets and the `feet` failure; both are resolved (see Open issues).
