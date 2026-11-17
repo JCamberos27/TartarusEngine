@@ -320,6 +320,7 @@ int Application::RunSession() {
         // GL context + loader are live now. No-op unless a Debug build or TARTARUS_GL_DEBUG=1.
         GLDebug::Init();
         Input::Init(window.Handle());
+        Input::SetIgnoreDevices(opt.smokeTestMode); // smoke / npc / perf: focus coming and going changes nothing
         window.SetCursorLocked(true);
         // Placement (last session's rect, or maximized) is applied once EditorSettings has
         // loaded, below - the window stays hidden until the first frame either way (#143).
@@ -1072,8 +1073,10 @@ int Application::RunSession() {
             // effect on the very next frame. SetVSync only touches the driver on an actual change.
             // A hidden run (TARTARUS_HIDDEN) has no display to wait for: with the screen asleep, a synced swap held each frame
             // for half a second and an NPC test crawled at 2 fps. (Harness runs step a fixed 1/60 s, so only the speed changes.)
+            // TARTARUS_UNLOCKED_FPS: the same for a visible test run, so it goes as fast as the machine allows.
             static const bool hiddenRun = Env::Flag(Env::Var::Hidden);
-            if (const int wantVSync = opt.perfBenchMode || hiddenRun ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+            static const bool unlockedFps = Env::Flag(Env::Var::UnlockedFps);
+            if (const int wantVSync = opt.perfBenchMode || hiddenRun || unlockedFps ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
                 wantVSync != appliedVSyncMode) {
                 appliedVSyncMode = wantVSync;
                 window.SetVSync(appliedVSyncMode);
@@ -1226,7 +1229,9 @@ int Application::RunSession() {
                 // Safety net: if the window loses focus while the game has grabbed the cursor
                 // (alt-tab, a notification steals focus), release it — otherwise you can come
                 // back to a captured view with a hidden cursor and no obvious way out.
-                if (gameInputEngaged && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED)) {
+                // Not in a smoke / npc / perf run: nobody is at the keyboard, and the visible window losing focus to
+                // whatever the person watching clicks must not change the run.
+                if (!opt.smokeTestMode && gameInputEngaged && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED)) {
                     gameInputEngaged = false;
                     setPlayCursorLocked(false);
                 }
@@ -2172,8 +2177,9 @@ int Application::RunSession() {
                 gameView.SetFrameState(gameViewStats, playing, gameInputEngaged,
                                        /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
                 // Click inside the running Game view (while it doesn't yet own input) captures
-                // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).
-                if (playing && !playMaximized && gameView.ConsumeEngageClick()) {
+                // the cursor for the player. Esc / Stop release it (handled above / in stopPlay). Not in a smoke / npc /
+                // perf run: its input is scripted (Input::SetIgnoreDevices), so a click there would only trap the cursor.
+                if (playing && !playMaximized && gameView.ConsumeEngageClick() && !opt.smokeTestMode) {
                     gameInputEngaged = true;
                     setPlayCursorLocked(true);
                 }
@@ -2351,8 +2357,10 @@ int Application::RunSession() {
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
             // #143: in the background and not playing, hold to the (lower) Background FPS too.
-            int fpsCap = opt.perfBenchMode ? 0 : EditorSettings::Get().FpsLimit;
-            const int bgCap = EditorSettings::Get().UnfocusedFpsLimit;
+            // TARTARUS_UNLOCKED_FPS: no cap at all, the background one included.
+            static const bool uncapped = Env::Flag(Env::Var::UnlockedFps);
+            int fpsCap = opt.perfBenchMode || uncapped ? 0 : EditorSettings::Get().FpsLimit;
+            const int bgCap = uncapped ? 0 : EditorSettings::Get().UnfocusedFpsLimit;
             if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
                 fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
             Time::LimitFps(fpsCap);

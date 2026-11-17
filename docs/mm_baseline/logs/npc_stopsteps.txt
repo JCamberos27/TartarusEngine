@@ -1,0 +1,94 @@
+[NpcTest] scenario 'stopsteps', 22.5 s
+[SmokeTest] Found 1 scene(s) under build\Release\assets\test-scenes
+[SmokeTest] Loading tests\scenes\Apartment Hallway.json
+[SmokeTest]   undo round-trip OK (1596 entities, 275 models, 103 textures, 27 materials)
+[SmokeTest]   model SM_Balaclava_Crime.fbx bounds (-0.10087,1.48343,-0.0896608)-(0.0991287,1.80978,0.146014) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model SKM_Shoes_Classic.fbx bounds (-0.216127,-0.00108113,-0.0699572)-(0.216144,0.104735,0.239035) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model SKM_Pants_Classic.fbx bounds (-0.19547,0.0612464,-0.113785)-(0.195195,1.09447,0.164061) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Feet_Shoes.fbx bounds (-0.18939,0.0412677,-0.0571187)-(0.189631,0.101517,0.0710999) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Arms_FP.fbx bounds (-0.554032,0.893856,-0.107699)-(0.553876,1.49888,0.280937) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Young_Head.fbx bounds (-0.128742,1.47966,-0.0861971)-(0.129673,1.80606,0.143353) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Torso.fbx bounds (-0.287943,1.04052,-0.128772)-(0.285624,1.53172,0.147285) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Lamp_Ceiling_B.fbx bounds (-0.132785,-0.033936,-0.132823)-(0.132757,-0.00028017,0.132719) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Lamp_Ceiling_A.fbx bounds (-0.149131,-0.148402,-0.149375)-(0.149516,-0.000174199,0.149272) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Lamp_Fluorescent_A.fbx bounds (-0.103667,-0.0500572,-0.509799)-(0.103174,0.000495109,0.509695) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Window_Tall_Fake.fbx bounds (-0.432528,5.98714e-05,-0.0125)-(0.433423,1.53902,0.0121596) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Op_1_Leaf_Interior.fbx bounds (-0.411859,0.00679697,-0.090738)-(0.401266,2.00005,0.0920166) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Op_1_Frame_Interior.fbx bounds (-0.489044,4.79492e-05,-0.0464015)-(0.489044,2.08137,0.108696) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Number_6.fbx bounds (-0.0295165,-0.000366092,-0.00259351)-(0.0293424,0.0856385,0.00343216) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Number_0.fbx bounds (-0.0295165,-0.000366211,-0.00259351)-(0.0293424,0.0856385,0.00343216) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Number_3.fbx bounds (-0.0295165,-0.000366092,-0.00259351)-(0.0293424,0.0856385,0.00343216) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Op_1_Leaf.fbx bounds (-0.411859,0.00679697,-0.090738)-(0.401266,2.00005,0.0920166) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Op_1_Frame.fbx bounds (-0.489044,4.79492e-05,-0.0670619)-(0.489044,2.08137,0.108696) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Number_5.fbx bounds (-0.0295165,-0.000366092,-0.00259351)-(0.0293424,0.0856385,0.00343216) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Number_4.fbx bounds (-0.0295165,-0.000366092,-0.00259351)-(0.0293424,0.0856385,0.00343216) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Number_2.fbx bounds (-0.0295165,-0.000366092,-0.00259351)-(0.0293424,0.0856385,0.00343216) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Door_Number_1.fbx bounds (-0.0295165,-0.000366092,-0.00259351)-(0.0293424,0.0856385,0.00343216) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Plane_1m.obj bounds (-0.5,-0.5,0)-(0.5,0.5,0) albedoMap=no uv=1,1+0,0
+[NpcTest] -> Play
+[NpcTest] dummies not started (0 spawn points)
+[StopSteps] 1.75 s  walk                     step (1 this leg)
+[StopSteps] 2.23 s  walk                     step (2 this leg)
+[StopSteps] 2.62 s  walk                     step (3 this leg)
+[StopSteps] 2.83 s  walk                     step (4 this leg)
+[StopSteps] 3.25 s  walk                     step (5 this leg)
+[StopSteps] 3.63 s  walk                     step (6 this leg)
+[StopSteps] 4.23 s  stop after walk          step (1 this leg)
+[StopSteps] 6.77 s  walk back                step (1 this leg)
+[StopSteps] 7.08 s  walk back                step (2 this leg)
+[StopSteps] 7.47 s  walk back                step (3 this leg)
+[StopSteps] 7.80 s  walk back                step (4 this leg)
+[StopSteps] 8.18 s  walk back                step (5 this leg)
+[StopSteps] 8.50 s  walk back                step (6 this leg)
+[StopSteps] 8.90 s  walk back                step (7 this leg)
+[DecalPerf] frames 600, prepares 1181: prepare 0.8999 ms/frame, submit 0.0004 ms/frame, median 0.6044, p99 6.6058, max 11.400 ms (frame 32), frames over 1 ms 104, over 4 ms 14, dropouts 0
+[DecalPerf]   worst after the first 60 frames: 1.724 ms (frame 193, prepare 1.723) 1.627 ms (frame 316, prepare 1.627) 1.574 ms (frame 84, prepare 1.574) 1.534 ms (frame 421, prepare 1.534) 1.490 ms (frame 210, prepare 1.489) 1.468 ms (frame 436, prepare 1.468)
+[StopSteps] 11.63 s  jog                      step (1 this leg)
+[StopSteps] 11.88 s  jog                      step (2 this leg)
+[StopSteps] 12.08 s  jog                      step (3 this leg)
+[StopSteps] 12.47 s  jog                      step (4 this leg)
+[StopSteps] 12.87 s  stop after jog           step (1 this leg)
+[StopSteps] 15.25 s  jog back                 step (1 this leg)
+[StopSteps] 15.43 s  jog back                 step (2 this leg)
+[StopSteps] 15.82 s  jog back                 step (3 this leg)
+[StopSteps] 16.07 s  jog back                 step (4 this leg)
+[StopSteps] 16.32 s  stop after jog back      step (1 this leg)
+[StopSteps] 18.75 s  short walk               step (1 this leg)
+[StopSteps] 19.23 s  short walk               step (2 this leg)
+[StopSteps] 19.62 s  short walk               step (3 this leg)
+[DecalPerf] frames 1200, prepares 2381: prepare 0.7630 ms/frame, submit 0.0004 ms/frame, median 0.5730, p99 4.5969, max 11.400 ms (frame 32), frames over 1 ms 127, over 4 ms 14, dropouts 0
+[DecalPerf]   worst after the first 60 frames: 1.724 ms (frame 193, prepare 1.723) 1.627 ms (frame 316, prepare 1.627) 1.574 ms (frame 84, prepare 1.574) 1.534 ms (frame 421, prepare 1.534) 1.490 ms (frame 210, prepare 1.489) 1.468 ms (frame 436, prepare 1.468)
+[StopSteps] 19.83 s  stop after short walk    step (1 this leg)
+[StopSteps] steps per leg:
+[StopSteps]   idle                     0
+[StopSteps]   walk                     6
+[StopSteps]   stop after walk          1
+[StopSteps]   walk back                7
+[StopSteps]   stop after walk back     0
+[StopSteps]   jog                      4
+[StopSteps]   stop after jog           1
+[StopSteps]   jog back                 4
+[StopSteps]   stop after jog back      1
+[StopSteps]   short walk               3
+[StopSteps]   stop after short walk    1
+[NpcTest] PASS walk: steps while moving
+[NpcTest] PASS stop after walk: at most one settling step
+[NpcTest] PASS walk back: steps while moving
+[NpcTest] PASS stop after walk back: at most one settling step
+[NpcTest] PASS jog: steps while moving
+[NpcTest] PASS stop after jog: at most one settling step
+[NpcTest] PASS jog back: steps while moving
+[NpcTest] PASS stop after jog back: at most one settling step
+[NpcTest] PASS short walk: steps while moving
+[NpcTest] PASS stop after short walk: at most one settling step
+[NpcTest] 10 checks, 0 failure(s)
+[SmokeTest] FAIL  Apartment Hallway.json  frames=21600 rendered=1372 wall=15.9s fps=86 unfocused=0 loadOk=1 newGlErrors=0 newLogErrors=5 drawCalls=66  variants: 0x30000000=121477 0x70000000=110 0x00=70590  cause: 5 new log error(s); 
+[SmokeTest] ==== Summary ====
+[SmokeTest] FAIL  Apartment Hallway.json  frames=21600 loadOk=1 newGlErrors=0 newLogErrors=5 drawCalls=66  cause: 5 new log error(s); 
+[SmokeTest] 1 scene(s) - FAILURES DETECTED
+[DecalPerf] frames 1371, prepares 2725: prepare 0.7393 ms/frame, submit 0.0004 ms/frame, median 0.5590, p99 4.4993, max 11.400 ms (frame 32), frames over 1 ms 135, over 4 ms 14, dropouts 0
+[DecalPerf]   worst after the first 60 frames: 1.724 ms (frame 193, prepare 1.723) 1.627 ms (frame 316, prepare 1.627) 1.574 ms (frame 84, prepare 1.574) 1.534 ms (frame 421, prepare 1.534) 1.490 ms (frame 210, prepare 1.489) 1.468 ms (frame 436, prepare 1.468)
+
+stderr: [error] Audio: failed to load sound 'project/assets/Audio/Ambience/worklight_hum_1.wav'.
+stderr: [error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'.
+stderr: [error] Texture: failed to load 'project/assets/Characters/Spider/Textures/T_Spider_AO.png'.

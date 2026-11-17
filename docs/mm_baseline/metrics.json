@@ -1,0 +1,580 @@
+[
+ {
+  "run": "npc_feet",
+  "errors": [
+   "[error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'."
+  ],
+  "scenario": "feet",
+  "result": "FAIL",
+  "rendered": 561,
+  "wall_s": 8.8,
+  "fps": 64,
+  "ms_per_frame": 15.69,
+  "unfocused": 0,
+  "cause": "1 new log error(s); 2 of 6 npc check(s) failed;",
+  "checks": 6,
+  "failed": [
+   "the dummy stands on the ramp (across)",
+   "the dummy stands on the ramp (uphill)"
+  ],
+  "slide": [],
+  "clip_speed_ratio": [],
+  "top_speed": [],
+  "eye_jitter": []
+ },
+ {
+  "run": "npc_labloco",
+  "errors": [
+   "[error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'."
+  ],
+  "scenario": "labloco",
+  "result": "FAIL",
+  "rendered": 3172,
+  "wall_s": 20.7,
+  "fps": 153,
+  "ms_per_frame": 6.53,
+  "unfocused": 0,
+  "cause": "1 new log error(s);",
+  "checks": 1,
+  "failed": [],
+  "slide": [
+   {
+    "phase": "idle",
+    "actor": "Dummy 1",
+    "plants": 4,
+    "mean_cm": 5.3,
+    "worst_cm": 19.0
+   },
+   {
+    "phase": "walk forward",
+    "actor": "player",
+    "plants": 13,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "walk forward",
+    "actor": "Dummy 1",
+    "plants": 11,
+    "mean_cm": 0.1,
+    "worst_cm": 0.2
+   },
+   {
+    "phase": "stop after walk",
+    "actor": "player",
+    "plants": 2,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "stop after walk",
+    "actor": "Dummy 1",
+    "plants": 4,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "jog forward",
+    "actor": "player",
+    "plants": 9,
+    "mean_cm": 0.0,
+    "worst_cm": 0.0
+   },
+   {
+    "phase": "jog forward",
+    "actor": "Dummy 1",
+    "plants": 9,
+    "mean_cm": 0.0,
+    "worst_cm": 0.0
+   },
+   {
+    "phase": "stop after jog",
+    "actor": "player",
+    "plants": 2,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "stop after jog",
+    "actor": "Dummy 1",
+    "plants": 2,
+    "mean_cm": 0.6,
+    "worst_cm": 1.1
+   },
+   {
+    "phase": "walk back",
+    "actor": "player",
+    "plants": 9,
+    "mean_cm": 0.1,
+    "worst_cm": 0.3
+   },
+   {
+    "phase": "walk back",
+    "actor": "Dummy 1",
+    "plants": 9,
+    "mean_cm": 1.0,
+    "worst_cm": 6.9
+   },
+   {
+    "phase": "stop after walk back",
+    "actor": "player",
+    "plants": 1,
+    "mean_cm": 0.2,
+    "worst_cm": 0.2
+   },
+   {
+    "phase": "stop after walk back",
+    "actor": "Dummy 1",
+    "plants": 3,
+    "mean_cm": 0.6,
+    "worst_cm": 1.3
+   },
+   {
+    "phase": "strafe right",
+    "actor": "player",
+    "plants": 8,
+    "mean_cm": 0.1,
+    "worst_cm": 0.3
+   },
+   {
+    "phase": "strafe right",
+    "actor": "Dummy 1",
+    "plants": 6,
+    "mean_cm": 0.1,
+    "worst_cm": 0.6
+   },
+   {
+    "phase": "stop after strafe right",
+    "actor": "player",
+    "plants": 1,
+    "mean_cm": 5.3,
+    "worst_cm": 5.3
+   },
+   {
+    "phase": "stop after strafe right",
+    "actor": "Dummy 1",
+    "plants": 2,
+    "mean_cm": 0.0,
+    "worst_cm": 0.0
+   },
+   {
+    "phase": "strafe left",
+    "actor": "player",
+    "plants": 8,
+    "mean_cm": 0.1,
+    "worst_cm": 0.4
+   },
+   {
+    "phase": "strafe left",
+    "actor": "Dummy 1",
+    "plants": 7,
+    "mean_cm": 3.1,
+    "worst_cm": 18.6
+   },
+   {
+    "phase": "stop after strafe left",
+    "actor": "player",
+    "plants": 1,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "stop after strafe left",
+    "actor": "Dummy 1",
+    "plants": 2,
+    "mean_cm": 0.0,
+    "worst_cm": 0.0
+   },
+   {
+    "phase": "jog back",
+    "actor": "player",
+    "plants": 5,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "jog back",
+    "actor": "Dummy 1",
+    "plants": 8,
+    "mean_cm": 5.6,
+    "worst_cm": 22.0
+   },
+   {
+    "phase": "stop after jog back",
+    "actor": "player",
+    "plants": 1,
+    "mean_cm": 26.5,
+    "worst_cm": 26.5
+   },
+   {
+    "phase": "stop after jog back",
+    "actor": "Dummy 1",
+    "plants": 2,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "turn left 90 (hip)",
+    "actor": "player",
+    "plants": 3,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "turn left 90 (hip)",
+    "actor": "Dummy 1",
+    "plants": 1,
+    "mean_cm": 10.7,
+    "worst_cm": 10.7
+   },
+   {
+    "phase": "turn round 180 (hip)",
+    "actor": "player",
+    "plants": 4,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "turn round 180 (hip)",
+    "actor": "Dummy 1",
+    "plants": 4,
+    "mean_cm": 1.1,
+    "worst_cm": 3.8
+   },
+   {
+    "phase": "turn right 90 (aiming)",
+    "actor": "player",
+    "plants": 4,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "turn right 90 (aiming)",
+    "actor": "Dummy 1",
+    "plants": 4,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "turning start 180 (hip)",
+    "actor": "player",
+    "plants": 7,
+    "mean_cm": 0.3,
+    "worst_cm": 2.0
+   },
+   {
+    "phase": "turning start 180 (hip)",
+    "actor": "Dummy 1",
+    "plants": 7,
+    "mean_cm": 0.3,
+    "worst_cm": 2.2
+   },
+   {
+    "phase": "stop after turning start",
+    "actor": "player",
+    "plants": 2,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "stop after turning start",
+    "actor": "Dummy 1",
+    "plants": 1,
+    "mean_cm": 0.0,
+    "worst_cm": 0.0
+   }
+  ],
+  "clip_speed_ratio": [],
+  "top_speed": [],
+  "eye_jitter": []
+ },
+ {
+  "run": "npc_locomotion",
+  "errors": [
+   "[error] Audio: failed to load sound 'project/assets/Audio/Ambience/worklight_hum_1.wav'.",
+   "[error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'.",
+   "[error] Texture: failed to load 'project/assets/Characters/Spider/Textures/T_Spider_AO.png'."
+  ],
+  "scenario": "locomotion",
+  "result": "FAIL",
+  "rendered": 2890,
+  "wall_s": 26.7,
+  "fps": 108,
+  "ms_per_frame": 9.24,
+  "unfocused": 0,
+  "cause": "5 new log error(s);",
+  "checks": 20,
+  "failed": [],
+  "slide": [],
+  "clip_speed_ratio": [],
+  "top_speed": [],
+  "eye_jitter": []
+ },
+ {
+  "run": "npc_npcloco",
+  "errors": [
+   "[error] Audio: failed to load sound 'project/assets/Audio/Ambience/worklight_hum_1.wav'.",
+   "[error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'.",
+   "[error] Texture: failed to load 'project/assets/Characters/Spider/Textures/T_Spider_AO.png'."
+  ],
+  "scenario": "npcloco",
+  "result": "FAIL",
+  "rendered": 2176,
+  "wall_s": 21.7,
+  "fps": 100,
+  "ms_per_frame": 9.97,
+  "unfocused": 0,
+  "cause": "5 new log error(s);",
+  "checks": 33,
+  "failed": [],
+  "slide": [
+   {
+    "phase": "go home",
+    "actor": "Dummy 1",
+    "plants": 3,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "walk forward",
+    "actor": "Dummy 1",
+    "plants": 7,
+    "mean_cm": 0.9,
+    "worst_cm": 5.3
+   },
+   {
+    "phase": "walk back",
+    "actor": "Dummy 1",
+    "plants": 7,
+    "mean_cm": 2.7,
+    "worst_cm": 11.5
+   },
+   {
+    "phase": "walk right",
+    "actor": "Dummy 1",
+    "plants": 4,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "walk left",
+    "actor": "Dummy 1",
+    "plants": 6,
+    "mean_cm": 1.2,
+    "worst_cm": 6.4
+   },
+   {
+    "phase": "walk to home",
+    "actor": "Dummy 1",
+    "plants": 5,
+    "mean_cm": 0.2,
+    "worst_cm": 1.0
+   },
+   {
+    "phase": "jog forward",
+    "actor": "Dummy 1",
+    "plants": 9,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "jog back (turns)",
+    "actor": "Dummy 1",
+    "plants": 4,
+    "mean_cm": 5.4,
+    "worst_cm": 21.5
+   },
+   {
+    "phase": "stand",
+    "actor": "Dummy 1",
+    "plants": 6,
+    "mean_cm": 0.1,
+    "worst_cm": 0.5
+   }
+  ],
+  "clip_speed_ratio": [],
+  "top_speed": [
+   {
+    "leg": "walk forward",
+    "speed": 1.500005
+   },
+   {
+    "leg": "walk back",
+    "speed": 1.499999
+   },
+   {
+    "leg": "walk right",
+    "speed": 1.499815
+   },
+   {
+    "leg": "walk left",
+    "speed": 1.50001
+   },
+   {
+    "leg": "walk to home",
+    "speed": 1.499582
+   },
+   {
+    "leg": "jog forward",
+    "speed": 3.199936
+   },
+   {
+    "leg": "jog back (turns)",
+    "speed": 3.199931
+   },
+   {
+    "leg": "stand",
+    "speed": 1.499953
+   }
+  ],
+  "eye_jitter": []
+ },
+ {
+  "run": "npc_stopsteps",
+  "errors": [
+   "[error] Audio: failed to load sound 'project/assets/Audio/Ambience/worklight_hum_1.wav'.",
+   "[error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'.",
+   "[error] Texture: failed to load 'project/assets/Characters/Spider/Textures/T_Spider_AO.png'."
+  ],
+  "scenario": "stopsteps",
+  "result": "FAIL",
+  "rendered": 1372,
+  "wall_s": 15.9,
+  "fps": 86,
+  "ms_per_frame": 11.59,
+  "unfocused": 0,
+  "cause": "5 new log error(s);",
+  "checks": 10,
+  "failed": [],
+  "slide": [],
+  "clip_speed_ratio": [],
+  "top_speed": [],
+  "eye_jitter": []
+ },
+ {
+  "run": "npc_testbed",
+  "errors": [
+   "[error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'."
+  ],
+  "scenario": "testbed",
+  "result": "FAIL",
+  "rendered": 3508,
+  "wall_s": 23.2,
+  "fps": 151,
+  "ms_per_frame": 6.61,
+  "unfocused": 0,
+  "cause": "1 new log error(s);",
+  "checks": 29,
+  "failed": [],
+  "slide": [
+   {
+    "phase": "A walk",
+    "actor": "player",
+    "plants": 9,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "A jog",
+    "actor": "player",
+    "plants": 6,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "C climb normal stairs",
+    "actor": "player",
+    "plants": 4,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "C climb steep stairs",
+    "actor": "player",
+    "plants": 4,
+    "mean_cm": 0.1,
+    "worst_cm": 0.1
+   },
+   {
+    "phase": "C walk down 15deg ramp",
+    "actor": "player",
+    "plants": 6,
+    "mean_cm": 0.0,
+    "worst_cm": 0.1
+   }
+  ],
+  "clip_speed_ratio": [
+   {
+    "leg": "A walk",
+    "ratio": 0.998649,
+    "frames": 179
+   },
+   {
+    "leg": "A jog",
+    "ratio": 1.0,
+    "frames": 150
+   }
+  ],
+  "top_speed": [],
+  "eye_jitter": [
+   {
+    "leg": "A walk",
+    "cam_rms_mm": 0.248,
+    "cam_max_mm": 0.481,
+    "eye_rms_mm": 0.095,
+    "eye_max_mm": 0.425
+   },
+   {
+    "leg": "A jog",
+    "cam_rms_mm": 0.734,
+    "cam_max_mm": 1.53,
+    "eye_rms_mm": 0.245,
+    "eye_max_mm": 0.785
+   }
+  ]
+ },
+ {
+  "run": "perf",
+  "errors": [],
+  "scenario": "perf",
+  "result": "PASS",
+  "rendered": 1800,
+  "wall_s": 12.0,
+  "fps": 150,
+  "ms_per_frame": 6.67,
+  "unfocused": 0,
+  "cause": "",
+  "checks": 0,
+  "failed": [],
+  "slide": [],
+  "clip_speed_ratio": [],
+  "top_speed": [],
+  "eye_jitter": [],
+  "perf": {
+   "edit": {
+    "avg_ms": 2.932,
+    "worst_ms": 5.058,
+    "frames": 500,
+    "p50_ms": 2.87,
+    "p95_ms": 3.44,
+    "p99_ms": 4.06
+   },
+   "play": {
+    "avg_ms": 6.002,
+    "worst_ms": 9.025,
+    "frames": 500,
+    "p50_ms": 5.65,
+    "p95_ms": 6.73,
+    "p99_ms": 6.85
+   },
+   "play-max": {
+    "avg_ms": 7.382,
+    "worst_ms": 9.96,
+    "frames": 500,
+    "p50_ms": 7.44,
+    "p95_ms": 7.68,
+    "p99_ms": 8.57
+   }
+  }
+ }
+]

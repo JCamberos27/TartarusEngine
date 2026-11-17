@@ -1,0 +1,281 @@
+[SmokeTest] Found 1 scene(s) under tests\perf-scenes\perf_stress.json
+[SmokeTest] WARNING: GL debug output could not be enabled on this context - newGlErrors will read 0.
+[SmokeTest] Loading tests\perf-scenes\perf_stress.json
+[SmokeTest]   undo round-trip OK (1034 entities, 0 models, 3 textures, 1 materials)
+[PerfBench] perf_stress.json (edit)  frames=500  avg=2.932 ms (341.1 fps)  worst=5.058 ms  draws=14 tris=13296  window=1920x1080
+[PerfBench]   ended at engine frame 600
+[PerfBench]   textures=3  4.0 MiB on the GPU
+[PerfBench]   CPU Scene View Render                  avg=   1.089 ms  max=   2.679 ms
+[PerfBench]   CPU Editor UI Build                    avg=   1.088 ms  max=   2.056 ms
+[PerfBench]   CPU UI Editor Draw                     avg=   0.707 ms  max=   1.465 ms
+[PerfBench]   CPU Scene Draw                         avg=   0.432 ms  max=   1.361 ms
+[PerfBench]   CPU UI Module Draw                     avg=   0.374 ms  max=   0.750 ms
+[PerfBench]   CPU Sun Shadow Pass                    avg=   0.316 ms  max=   0.799 ms
+[PerfBench]   CPU Decal Prepare                      avg=   0.280 ms  max=   0.697 ms
+[PerfBench]   CPU Sun: Draw Casters                  avg=   0.224 ms  max=   0.613 ms
+[PerfBench]   CPU Local Shadow Gather                avg=   0.153 ms  max=   0.369 ms
+[PerfBench]   CPU Swap Buffers                       avg=   0.115 ms  max=   0.880 ms
+[PerfBench]   CPU Scene: Depth Pre-pass              avg=   0.087 ms  max=   0.274 ms
+[PerfBench]   CPU UI Hierarchy Tree                  avg=   0.065 ms  max=   0.204 ms
+[PerfBench]   CPU Gather Visible                     avg=   0.062 ms  max=   0.119 ms
+[PerfBench]   CPU ImGui Render                       avg=   0.060 ms  max=   0.172 ms
+[PerfBench]   CPU UI Asset Grid                      avg=   0.059 ms  max=   0.169 ms
+[PerfBench]   CPU Sun: Sort + Masks                  avg=   0.059 ms  max=   0.098 ms
+[PerfBench]   CPU Spot Shadow Pass                   avg=   0.055 ms  max=   0.095 ms
+[PerfBench]   CPU Particles                          avg=   0.039 ms  max=   0.199 ms
+[PerfBench]   CPU Scene: Build Batches               avg=   0.035 ms  max=   0.061 ms
+[PerfBench]   CPU UI Inspector Body                  avg=   0.034 ms  max=   0.077 ms
+[PerfBench]   CPU Sun: Fit + Gather                  avg=   0.031 ms  max=   0.116 ms
+[PerfBench]   CPU Point Shadow Pass                  avg=   0.023 ms  max=   0.043 ms
+[PerfBench]   CPU Outfits + Transform Cache          avg=   0.020 ms  max=   0.116 ms
+[PerfBench]   CPU Transform Cache                    avg=   0.018 ms  max=   0.114 ms
+[PerfBench]   CPU Scene: Group Instances             avg=   0.017 ms  max=   0.048 ms
+[PerfBench]   CPU Scene: Opaque                      avg=   0.015 ms  max=   0.048 ms
+[PerfBench]   CPU Probe Gather                       avg=   0.006 ms  max=   0.032 ms
+[PerfBench]   CPU Sky Atmosphere (frame)             avg=   0.006 ms  max=   0.019 ms
+[PerfBench]   CPU Volumetric Clouds                  avg=   0.005 ms  max=   0.023 ms
+[PerfBench]   CPU UI Post Module                     avg=   0.004 ms  max=   0.013 ms
+[PerfBench]   CPU Asset Pump + Outfit Hiding         avg=   0.004 ms  max=   0.020 ms
+[PerfBench]   CPU Animation Update                   avg=   0.003 ms  max=   0.027 ms
+[PerfBench]   CPU Asset Pump                         avg=   0.002 ms  max=   0.019 ms
+[PerfBench]   CPU Sky Atmosphere                     avg=   0.002 ms  max=   0.018 ms
+[PerfBench]   CPU Sky Draw                           avg=   0.002 ms  max=   0.016 ms
+[PerfBench]   CPU Cloud Shadows                      avg=   0.001 ms  max=   0.005 ms
+[PerfBench]   CPU Game Module Tick                   avg=   0.001 ms  max=   0.109 ms
+[PerfBench]   CPU Sun: Grass                         avg=   0.001 ms  max=   0.010 ms
+[PerfBench]   CPU Pre-Skin                           avg=   0.001 ms  max=   0.004 ms
+[PerfBench]   CPU Upload Fences                      avg=   0.001 ms  max=   0.004 ms
+[PerfBench]   CPU Clip Prefetch                      avg=   0.001 ms  max=   0.003 ms
+[PerfBench]   CPU LOD Select                         avg=   0.001 ms  max=   0.002 ms
+[PerfBench]   CPU Outfit Attachments                 avg=   0.001 ms  max=   0.003 ms
+[PerfBench]   CPU Outfit Pending                     avg=   0.001 ms  max=   0.003 ms
+[PerfBench]   CPU Terrain Sync                       avg=   0.001 ms  max=   0.003 ms
+[PerfBench]   CPU Outfit Hiding                      avg=   0.000 ms  max=   0.002 ms
+[PerfBench]   GPU Scene View Render                  avg=   2.661 ms  max=   2.890 ms
+[PerfBench]   GPU Scene Draw                         avg=   1.510 ms  max=   1.719 ms
+[PerfBench]   GPU Opaque                             avg=   0.901 ms  max=   0.944 ms
+[PerfBench]   GPU Volumetric Fog                     avg=   0.607 ms  max=   0.749 ms
+[PerfBench]   GPU Depth Pre-pass                     avg=   0.380 ms  max=   0.567 ms
+[PerfBench]   GPU Volumetric Clouds                  avg=   0.262 ms  max=   0.287 ms
+[PerfBench]   GPU Transparent                        avg=   0.200 ms  max=   0.374 ms
+[PerfBench]   GPU Sun Shadow Pass                    avg=   0.191 ms  max=   0.371 ms
+[PerfBench]   GPU Sky Atmosphere (frame)             avg=   0.134 ms  max=   0.304 ms
+[PerfBench]   GPU Cluster Cull                       avg=   0.104 ms  max=   0.282 ms
+[PerfBench]   GPU Sky Atmosphere                     avg=   0.095 ms  max=   0.283 ms
+[PerfBench]   GPU SSAO Depth From Pre-pass           avg=   0.088 ms  max=   0.280 ms
+[PerfBench]   GPU ImGui Render                       avg=   0.055 ms  max=   0.067 ms
+[PerfBench]   GPU SSAO Compute + Blur                avg=   0.049 ms  max=   0.247 ms
+[PerfBench]   GPU Bloom                              avg=   0.047 ms  max=   0.057 ms
+[PerfBench]   GPU Decal Cull                         avg=   0.046 ms  max=   0.218 ms
+[PerfBench]   GPU SSAO Depth Blit                    avg=   0.032 ms  max=   0.229 ms
+[PerfBench]   GPU Tonemap                            avg=   0.025 ms  max=   0.034 ms
+[PerfBench]   GPU Sky Draw                           avg=   0.019 ms  max=   0.030 ms
+[PerfBench]   GPU Spot Shadow Pass                   avg=   0.001 ms  max=   0.002 ms
+[PerfBench]   GPU Pre-Skin                           avg=   0.001 ms  max=   0.003 ms
+[PerfBench]   GPU Point Shadow Pass                  avg=   0.001 ms  max=   0.002 ms
+[PerfBench] edit frame ms: p50=2.87 p95=3.44 p99=4.06 p99.9=5.06 max=5.06  hitches(>2x p50)=0 (>33ms)=0 of 500
+[PerfBench] edit after 2 s frame ms: p50=2.81 p95=3.44 p99=3.56 p99.9=3.70 max=3.70  hitches(>2x p50)=0 (>33ms)=0 of 380
+[PerfBench]   worst frame 155 5.06 ms: Scene View Render 2.68, Editor UI Build 1.51, Scene Draw 1.36, UI Editor Draw 0.82, UI Module Draw 0.69, Decal Prepare 0.65, Sun Shadow Pass 0.54, Sun: Draw Casters 0.40, Scene: Depth Pre-pass 0.27
+[PerfBench]   worst frame 159 4.96 ms: Editor UI Build 2.06, Scene View Render 1.73, UI Editor Draw 1.47, Scene Draw 0.73, Sun Shadow Pass 0.58, UI Module Draw 0.58, Sun: Draw Casters 0.46, Decal Prepare 0.33
+[PerfBench]   worst frame 198 4.25 ms: Scene View Render 1.97, Editor UI Build 1.46, UI Editor Draw 0.93, Sun Shadow Pass 0.68, Scene Draw 0.64, Sun: Draw Casters 0.52, Decal Prepare 0.52, UI Module Draw 0.51
+[PerfBench]   worst frame 160 4.24 ms: Editor UI Build 1.95, Scene View Render 1.47, UI Editor Draw 1.23, UI Module Draw 0.72, Scene Draw 0.61, Sun Shadow Pass 0.44, Decal Prepare 0.33, Sun: Draw Casters 0.33
+[PerfBench]   worst frame 161 4.12 ms: Editor UI Build 1.81, Scene View Render 1.30, UI Editor Draw 1.26, Scene Draw 0.59, UI Module Draw 0.55, Sun Shadow Pass 0.36, Decal Prepare 0.28
+[PerfBench]   worst frame 157 4.06 ms: Scene View Render 1.98, Editor UI Build 1.19, UI Editor Draw 0.77, Sun Shadow Pass 0.73, Decal Prepare 0.70, Sun: Draw Casters 0.59, Scene Draw 0.48, UI Module Draw 0.40
+[PerfBench]   worst frame 402 3.70 ms: Scene View Render 1.25, Editor UI Build 1.23, UI Editor Draw 0.93, Scene Draw 0.67, UI Module Draw 0.30, Local Shadow Gather 0.28, Sun Shadow Pass 0.28
+[PerfBench]   worst frame 310 3.68 ms: Scene View Render 1.84, Editor UI Build 1.25, UI Editor Draw 0.70, Sun Shadow Pass 0.64, Decal Prepare 0.58, UI Module Draw 0.54, Scene Draw 0.54, Sun: Draw Casters 0.49
+[PerfBench]   worst frame 158 3.62 ms: Editor UI Build 1.23, Scene View Render 1.17, UI Editor Draw 0.78, Scene Draw 0.56, UI Module Draw 0.43, Sun Shadow Pass 0.30
+[PerfBench]   worst frame 217 3.58 ms: Scene View Render 1.58, Editor UI Build 1.12, UI Editor Draw 0.72, Sun Shadow Pass 0.69, Scene Draw 0.53, Sun: Draw Casters 0.52, UI Module Draw 0.39, Local Shadow Gather 0.29, Decal Prepare 0.29
+[PerfBench]   worst frame 307 3.57 ms: Scene View Render 1.72, Editor UI Build 1.20, UI Editor Draw 0.69, Decal Prepare 0.69, Sun Shadow Pass 0.54, UI Module Draw 0.49, Sun: Draw Casters 0.45, Scene Draw 0.43
+[PerfBench]   worst frame 271 3.57 ms: Editor UI Build 1.13, Scene View Render 1.09, UI Editor Draw 0.68, Scene Draw 0.47, UI Module Draw 0.43, Sun Shadow Pass 0.30, Decal Prepare 0.27
+[DecalPerf] frames 600, prepares 607: prepare 0.2809 ms/frame, submit 0.0000 ms/frame, median 0.2290, p99 0.6595, max 0.916 ms (frame 1), frames over 1 ms 0, over 4 ms 0, dropouts 0
+[DecalPerf]   worst after the first 60 frames: 0.695 ms (frame 157, prepare 0.695) 0.686 ms (frame 307, prepare 0.686) 0.672 ms (frame 498, prepare 0.672) 0.660 ms (frame 166, prepare 0.660) 0.645 ms (frame 155, prepare 0.645) 0.621 ms (frame 183, prepare 0.621)
+[PerfBench] perf_stress.json (play)  frames=500  avg=6.002 ms (166.6 fps)  worst=9.025 ms  draws=14 tris=13296  window=1920x1080
+[PerfBench]   ended at engine frame 1200
+[PerfBench]   textures=3  4.0 MiB on the GPU
+[PerfBench]   CPU Swap Buffers                       avg=   3.570 ms  max=   4.699 ms
+[PerfBench]   CPU Game View Render                   avg=   1.208 ms  max=   1.954 ms
+[PerfBench]   CPU Scene Draw                         avg=   0.642 ms  max=   1.315 ms
+[PerfBench]   CPU Editor UI Build                    avg=   0.475 ms  max=   0.785 ms
+[PerfBench]   CPU UI Module Draw                     avg=   0.385 ms  max=   0.683 ms
+[PerfBench]   CPU Decal Prepare                      avg=   0.294 ms  max=   0.960 ms
+[PerfBench]   CPU Sun Shadow Pass                    avg=   0.228 ms  max=   0.609 ms
+[PerfBench]   CPU Sun: Draw Casters                  avg=   0.147 ms  max=   0.487 ms
+[PerfBench]   CPU Scene: Depth Pre-pass              avg=   0.112 ms  max=   0.301 ms
+[PerfBench]   CPU Local Shadow Gather                avg=   0.107 ms  max=   0.221 ms
+[PerfBench]   CPU ImGui Render                       avg=   0.104 ms  max=   0.320 ms
+[PerfBench]   CPU UI Editor Draw                     avg=   0.084 ms  max=   0.138 ms
+[PerfBench]   CPU Physics Step                       avg=   0.083 ms  max=   0.261 ms
+[PerfBench]   CPU Spot Shadow Pass                   avg=   0.081 ms  max=   0.149 ms
+[PerfBench]   CPU Sun: Sort + Masks                  avg=   0.057 ms  max=   0.101 ms
+[PerfBench]   CPU UI Hierarchy Tree                  avg=   0.054 ms  max=   0.107 ms
+[PerfBench]   CPU Gather Visible                     avg=   0.051 ms  max=   0.103 ms
+[PerfBench]   CPU Point Shadow Pass                  avg=   0.050 ms  max=   0.181 ms
+[PerfBench]   CPU Scene: Build Batches               avg=   0.047 ms  max=   0.124 ms
+[PerfBench]   CPU Particles                          avg=   0.031 ms  max=   0.104 ms
+[PerfBench]   CPU UI Inspector Body                  avg=   0.027 ms  max=   0.063 ms
+[PerfBench]   CPU UI Asset Grid                      avg=   0.026 ms  max=   0.052 ms
+[PerfBench]   CPU Sun: Fit + Gather                  avg=   0.022 ms  max=   0.059 ms
+[PerfBench]   CPU Scene: Group Instances             avg=   0.022 ms  max=   0.079 ms
+[PerfBench]   CPU Scene: Opaque                      avg=   0.019 ms  max=   0.042 ms
+[PerfBench]   CPU Outfits + Transform Cache          avg=   0.015 ms  max=   0.036 ms
+[PerfBench]   CPU Transform Cache                    avg=   0.014 ms  max=   0.034 ms
+[PerfBench]   CPU IBL Bake (Sky)                     avg=   0.013 ms  max=   6.520 ms
+[PerfBench]   CPU Game Module Tick                   avg=   0.012 ms  max=   0.120 ms
+[PerfBench]   CPU Volumetric Clouds                  avg=   0.008 ms  max=   0.031 ms
+[PerfBench]   CPU Blood                              avg=   0.005 ms  max=   0.020 ms
+[PerfBench]   CPU Probe Gather                       avg=   0.004 ms  max=   0.019 ms
+[PerfBench]   CPU Sky Atmosphere (frame)             avg=   0.004 ms  max=   0.007 ms
+[PerfBench]   CPU UI Post Module                     avg=   0.003 ms  max=   0.007 ms
+[PerfBench]   CPU Sky Draw                           avg=   0.002 ms  max=   0.025 ms
+[PerfBench]   CPU Asset Pump + Outfit Hiding         avg=   0.002 ms  max=   0.016 ms
+[PerfBench]   CPU Animation Update                   avg=   0.002 ms  max=   0.016 ms
+[PerfBench]   CPU Sky Atmosphere                     avg=   0.002 ms  max=   0.015 ms
+[PerfBench]   CPU Animators                          avg=   0.002 ms  max=   0.018 ms
+[PerfBench]   CPU Asset Pump                         avg=   0.001 ms  max=   0.015 ms
+[PerfBench]   CPU Animator Controllers               avg=   0.001 ms  max=   0.017 ms
+[PerfBench]   CPU Sun: Grass                         avg=   0.001 ms  max=   0.003 ms
+[PerfBench]   CPU Cloud Shadows                      avg=   0.001 ms  max=   0.001 ms
+[PerfBench]   CPU LOD Select                         avg=   0.001 ms  max=   0.001 ms
+[PerfBench]   CPU Pre-Skin                           avg=   0.001 ms  max=   0.002 ms
+[PerfBench]   CPU Upload Fences                      avg=   0.001 ms  max=   0.002 ms
+[PerfBench]   CPU Outfit Attachments                 avg=   0.000 ms  max=   0.001 ms
+[PerfBench]   CPU Outfit Pending                     avg=   0.000 ms  max=   0.002 ms
+[PerfBench]   CPU Combat FX + Foley                  avg=   0.000 ms  max=   0.016 ms
+[PerfBench]   CPU Terrain Sync                       avg=   0.000 ms  max=   0.001 ms
+[PerfBench]   CPU Clip Prefetch                      avg=   0.000 ms  max=   0.001 ms
+[PerfBench]   CPU Outfit Hiding                      avg=   0.000 ms  max=   0.001 ms
+[PerfBench]   CPU Sky Environment Capture            avg=   0.000 ms  max=   0.001 ms
+[PerfBench]   GPU Game View Render                   avg=   2.415 ms  max=   2.568 ms
+[PerfBench]   GPU Spot Shadow Pass                   avg=   2.226 ms  max=   2.370 ms
+[PerfBench]   GPU Scene Draw                         avg=   1.499 ms  max=   1.607 ms
+[PerfBench]   GPU Point Shadow Pass                  avg=   1.148 ms  max=   1.225 ms
+[PerfBench]   GPU Opaque                             avg=   0.907 ms  max=   0.942 ms
+[PerfBench]   GPU Volumetric Fog                     avg=   0.498 ms  max=   0.521 ms
+[PerfBench]   GPU Depth Pre-pass                     avg=   0.356 ms  max=   0.389 ms
+[PerfBench]   GPU Volumetric Clouds                  avg=   0.262 ms  max=   0.295 ms
+[PerfBench]   GPU Transparent                        avg=   0.208 ms  max=   0.267 ms
+[PerfBench]   GPU Sun Shadow Pass                    avg=   0.157 ms  max=   0.182 ms
+[PerfBench]   GPU Sky Atmosphere (frame)             avg=   0.122 ms  max=   0.469 ms
+[PerfBench]   GPU Sky Atmosphere                     avg=   0.078 ms  max=   0.091 ms
+[PerfBench]   GPU Cluster Cull                       avg=   0.073 ms  max=   0.092 ms
+[PerfBench]   GPU SSAO Depth From Pre-pass           avg=   0.071 ms  max=   0.088 ms
+[PerfBench]   GPU ImGui Render                       avg=   0.061 ms  max=   0.074 ms
+[PerfBench]   GPU Bloom (Game)                       avg=   0.048 ms  max=   0.061 ms
+[PerfBench]   GPU SSAO Compute + Blur                avg=   0.046 ms  max=   0.055 ms
+[PerfBench]   GPU Decal Cull                         avg=   0.036 ms  max=   0.056 ms
+[PerfBench]   GPU Tonemap                            avg=   0.025 ms  max=   0.036 ms
+[PerfBench]   GPU SSAO Depth Blit                    avg=   0.022 ms  max=   0.038 ms
+[PerfBench]   GPU Sky Draw                           avg=   0.020 ms  max=   0.043 ms
+[PerfBench]   GPU IBL Bake (Sky)                     avg=   0.008 ms  max=   0.527 ms
+[PerfBench]   GPU Pre-Skin                           avg=   0.001 ms  max=   0.011 ms
+[PerfBench] play frame ms: p50=5.65 p95=6.73 p99=6.85 p99.9=9.02 max=9.02  hitches(>2x p50)=0 (>33ms)=0 of 500
+[PerfBench] play after 2 s frame ms: p50=5.62 p95=6.72 p99=6.81 p99.9=9.02 max=9.02  hitches(>2x p50)=0 (>33ms)=0 of 380
+[PerfBench]   worst frame 304 9.02 ms: IBL Bake (Sky) 6.52, Game View Render 1.12, Editor UI Build 0.72, UI Module Draw 0.62, Sun Shadow Pass 0.43, Scene Draw 0.39, Sun: Draw Casters 0.30, Decal Prepare 0.26
+[PerfBench]   worst frame 153 6.92 ms: Game View Render 1.17, Scene Draw 0.65, Editor UI Build 0.47, UI Module Draw 0.39, Decal Prepare 0.26
+[PerfBench]   worst frame 171 6.91 ms: Game View Render 1.28, Scene Draw 0.70, Editor UI Build 0.46, UI Module Draw 0.37, Decal Prepare 0.30
+[PerfBench]   worst frame 163 6.90 ms: Game View Render 1.18, Scene Draw 0.69, Editor UI Build 0.48, UI Module Draw 0.38
+[PerfBench]   worst frame 261 6.86 ms: Game View Render 1.08, Scene Draw 0.58, Editor UI Build 0.48, UI Module Draw 0.39, Decal Prepare 0.25
+[PerfBench]   worst frame 253 6.85 ms: Game View Render 1.34, Scene Draw 0.77, Editor UI Build 0.46, UI Module Draw 0.37, Decal Prepare 0.28
+[PerfBench]   worst frame 271 6.82 ms: Game View Render 1.10, Scene Draw 0.61, Editor UI Build 0.50, UI Module Draw 0.41
+[PerfBench]   worst frame 450 6.81 ms: Game View Render 1.02, Scene Draw 0.53, Editor UI Build 0.45, UI Module Draw 0.37
+[PerfBench]   worst frame 140 6.81 ms: Game View Render 1.15, Scene Draw 0.61, Editor UI Build 0.45, UI Module Draw 0.37, Decal Prepare 0.29
+[PerfBench]   worst frame 255 6.80 ms: Game View Render 1.15, Scene Draw 0.62, Editor UI Build 0.50, UI Module Draw 0.41, Decal Prepare 0.25, Sun Shadow Pass 0.25
+[PerfBench]   worst frame 155 6.80 ms: Game View Render 1.62, Scene Draw 1.11, Editor UI Build 0.47, UI Module Draw 0.38, Scene: Depth Pre-pass 0.28
+[PerfBench]   worst frame 468 6.78 ms: Game View Render 1.28, Scene Draw 0.71, Editor UI Build 0.51, UI Module Draw 0.41, Decal Prepare 0.28
+[DecalPerf] frames 1200, prepares 1208: prepare 0.2906 ms/frame, submit 0.0002 ms/frame, median 0.2444, p99 0.7182, max 0.960 ms (frame 1194), frames over 1 ms 0, over 4 ms 0, dropouts 0
+[DecalPerf]   worst after the first 60 frames: 0.960 ms (frame 1194, prepare 0.959) 0.828 ms (frame 1025, prepare 0.828) 0.819 ms (frame 849, prepare 0.818) 0.790 ms (frame 618, prepare 0.790) 0.777 ms (frame 1115, prepare 0.777) 0.775 ms (frame 691, prepare 0.775)
+[PerfBench] perf_stress.json (play-max)  frames=500  avg=7.382 ms (135.5 fps)  worst=9.960 ms  draws=14 tris=13176  window=1920x1080
+[PerfBench]   ended at engine frame 1800
+[PerfBench]   textures=3  4.0 MiB on the GPU
+[PerfBench]   CPU Swap Buffers                       avg=   5.901 ms  max=   7.358 ms
+[PerfBench]   CPU Game View Render                   avg=   0.875 ms  max=   1.842 ms
+[PerfBench]   CPU Scene Draw                         avg=   0.389 ms  max=   0.974 ms
+[PerfBench]   CPU Decal Prepare                      avg=   0.249 ms  max=   0.604 ms
+[PerfBench]   CPU Sun Shadow Pass                    avg=   0.208 ms  max=   0.336 ms
+[PerfBench]   CPU Sun: Draw Casters                  avg=   0.133 ms  max=   0.246 ms
+[PerfBench]   CPU Local Shadow Gather                avg=   0.107 ms  max=   0.216 ms
+[PerfBench]   CPU Physics Step                       avg=   0.094 ms  max=   0.295 ms
+[PerfBench]   CPU Spot Shadow Pass                   avg=   0.082 ms  max=   0.179 ms
+[PerfBench]   CPU Scene: Depth Pre-pass              avg=   0.071 ms  max=   0.164 ms
+[PerfBench]   CPU Sun: Sort + Masks                  avg=   0.054 ms  max=   0.090 ms
+[PerfBench]   CPU Point Shadow Pass                  avg=   0.050 ms  max=   0.124 ms
+[PerfBench]   CPU Gather Visible                     avg=   0.039 ms  max=   0.058 ms
+[PerfBench]   CPU Scene: Build Batches               avg=   0.033 ms  max=   0.067 ms
+[PerfBench]   CPU Particles                          avg=   0.031 ms  max=   0.054 ms
+[PerfBench]   CPU Sun: Fit + Gather                  avg=   0.020 ms  max=   0.039 ms
+[PerfBench]   CPU IBL Bake (Sky)                     avg=   0.016 ms  max=   8.214 ms
+[PerfBench]   CPU Scene: Group Instances             avg=   0.016 ms  max=   0.046 ms
+[PerfBench]   CPU Outfits + Transform Cache          avg=   0.016 ms  max=   0.049 ms
+[PerfBench]   CPU Transform Cache                    avg=   0.015 ms  max=   0.048 ms
+[PerfBench]   CPU Game Module Tick                   avg=   0.013 ms  max=   0.131 ms
+[PerfBench]   CPU Scene: Opaque                      avg=   0.013 ms  max=   0.034 ms
+[PerfBench]   CPU ImGui Render                       avg=   0.012 ms  max=   0.060 ms
+[PerfBench]   CPU Editor UI Build                    avg=   0.007 ms  max=   0.080 ms
+[PerfBench]   CPU Probe Gather                       avg=   0.004 ms  max=   0.008 ms
+[PerfBench]   CPU Blood                              avg=   0.004 ms  max=   0.025 ms
+[PerfBench]   CPU Volumetric Clouds                  avg=   0.004 ms  max=   0.011 ms
+[PerfBench]   CPU UI Post Module                     avg=   0.004 ms  max=   0.013 ms
+[PerfBench]   CPU Sky Atmosphere (frame)             avg=   0.004 ms  max=   0.020 ms
+[PerfBench]   CPU Asset Pump + Outfit Hiding         avg=   0.002 ms  max=   0.027 ms
+[PerfBench]   CPU Animation Update                   avg=   0.002 ms  max=   0.037 ms
+[PerfBench]   CPU Animators                          avg=   0.002 ms  max=   0.017 ms
+[PerfBench]   CPU Sky Atmosphere                     avg=   0.002 ms  max=   0.003 ms
+[PerfBench]   CPU Sky Draw                           avg=   0.001 ms  max=   0.004 ms
+[PerfBench]   CPU Asset Pump                         avg=   0.001 ms  max=   0.026 ms
+[PerfBench]   CPU Animator Controllers               avg=   0.001 ms  max=   0.017 ms
+[PerfBench]   CPU Cloud Shadows                      avg=   0.001 ms  max=   0.014 ms
+[PerfBench]   CPU Pre-Skin                           avg=   0.001 ms  max=   0.002 ms
+[PerfBench]   CPU LOD Select                         avg=   0.001 ms  max=   0.001 ms
+[PerfBench]   CPU Sun: Grass                         avg=   0.001 ms  max=   0.002 ms
+[PerfBench]   CPU Upload Fences                      avg=   0.001 ms  max=   0.002 ms
+[PerfBench]   CPU Outfit Attachments                 avg=   0.000 ms  max=   0.002 ms
+[PerfBench]   CPU Outfit Pending                     avg=   0.000 ms  max=   0.002 ms
+[PerfBench]   CPU Clip Prefetch                      avg=   0.000 ms  max=   0.011 ms
+[PerfBench]   CPU Terrain Sync                       avg=   0.000 ms  max=   0.001 ms
+[PerfBench]   CPU Outfit Hiding                      avg=   0.000 ms  max=   0.024 ms
+[PerfBench]   CPU Combat FX + Foley                  avg=   0.000 ms  max=   0.014 ms
+[PerfBench]   CPU UI Module Draw                     avg=   0.000 ms  max=   0.000 ms
+[PerfBench]   CPU Sky Environment Capture            avg=   0.000 ms  max=   0.001 ms
+[PerfBench]   GPU Game View Render                   avg=   3.852 ms  max=   3.935 ms
+[PerfBench]   GPU Scene Draw                         avg=   2.783 ms  max=   2.828 ms
+[PerfBench]   GPU Spot Shadow Pass                   avg=   2.235 ms  max=   2.361 ms
+[PerfBench]   GPU Opaque                             avg=   1.812 ms  max=   1.864 ms
+[PerfBench]   GPU Point Shadow Pass                  avg=   1.146 ms  max=   1.215 ms
+[PerfBench]   GPU Depth Pre-pass                     avg=   0.552 ms  max=   0.575 ms
+[PerfBench]   GPU Volumetric Fog                     avg=   0.512 ms  max=   0.532 ms
+[PerfBench]   GPU Volumetric Clouds                  avg=   0.366 ms  max=   0.390 ms
+[PerfBench]   GPU Transparent                        avg=   0.343 ms  max=   0.372 ms
+[PerfBench]   GPU Sun Shadow Pass                    avg=   0.166 ms  max=   0.193 ms
+[PerfBench]   GPU SSAO Depth From Pre-pass           avg=   0.153 ms  max=   0.166 ms
+[PerfBench]   GPU Sky Atmosphere (frame)             avg=   0.122 ms  max=   0.450 ms
+[PerfBench]   GPU SSAO Compute + Blur                avg=   0.108 ms  max=   0.121 ms
+[PerfBench]   GPU Bloom (Game)                       avg=   0.078 ms  max=   0.088 ms
+[PerfBench]   GPU Sky Atmosphere                     avg=   0.077 ms  max=   0.093 ms
+[PerfBench]   GPU Cluster Cull                       avg=   0.073 ms  max=   0.084 ms
+[PerfBench]   GPU Sky Draw                           avg=   0.059 ms  max=   0.066 ms
+[PerfBench]   GPU Tonemap                            avg=   0.053 ms  max=   0.074 ms
+[PerfBench]   GPU SSAO Depth Blit                    avg=   0.040 ms  max=   0.053 ms
+[PerfBench]   GPU Decal Cull                         avg=   0.036 ms  max=   0.047 ms
+[PerfBench]   GPU IBL Bake (Sky)                     avg=   0.008 ms  max=   0.516 ms
+[PerfBench]   GPU ImGui Render                       avg=   0.001 ms  max=   0.008 ms
+[PerfBench]   GPU Pre-Skin                           avg=   0.001 ms  max=   0.006 ms
+[PerfBench] play-max frame ms: p50=7.44 p95=7.68 p99=8.57 p99.9=9.96 max=9.96  hitches(>2x p50)=0 (>33ms)=0 of 500
+[PerfBench] play-max after 2 s frame ms: p50=7.43 p95=7.67 p99=7.97 p99.9=9.96 max=9.96  hitches(>2x p50)=0 (>33ms)=0 of 380
+[PerfBench]   worst frame 301 9.96 ms: IBL Bake (Sky) 8.21, Game View Render 1.13, Scene Draw 0.65
+[PerfBench]   worst frame 112 8.63 ms: Game View Render 0.85, Scene Draw 0.37
+[PerfBench]   worst frame 102 8.63 ms: Game View Render 0.81, Scene Draw 0.36
+[PerfBench]   worst frame 158 8.59 ms: Game View Render 0.81, Scene Draw 0.36
+[PerfBench]   worst frame 190 8.58 ms: Game View Render 0.79, Scene Draw 0.35
+[PerfBench]   worst frame 192 8.57 ms: Game View Render 0.83, Scene Draw 0.40
+[PerfBench]   worst frame 150 8.57 ms: Game View Render 0.82, Scene Draw 0.36
+[PerfBench]   worst frame 224 8.53 ms: Game View Render 0.86, Scene Draw 0.37, Decal Prepare 0.26
+[PerfBench]   worst frame 305 8.52 ms: Game View Render 0.85, Scene Draw 0.41
+[PerfBench]   worst frame 309 8.47 ms: Game View Render 0.81, Scene Draw 0.37
+[PerfBench]   worst frame 348 7.97 ms: Game View Render 0.87, Scene Draw 0.36, Decal Prepare 0.27
+[PerfBench]   worst frame 589 7.79 ms: Game View Render 0.81, Scene Draw 0.36
+[SmokeTest] PASS  perf_stress.json  frames=1800 rendered=1800 wall=12.0s fps=150 unfocused=0 loadOk=1 newGlErrors=0 newLogErrors=0 drawCalls=14  variants: 0x30000010=14400 0x70000010=12 0x00=9035
+[SmokeTest] ==== Summary ====
+[SmokeTest] PASS  perf_stress.json  frames=1800 loadOk=1 newGlErrors=0 newLogErrors=0 drawCalls=14
+[SmokeTest] 1 scene(s) - ALL PASSED
+[DecalPerf] frames 1799, prepares 1808: prepare 0.2763 ms/frame, submit 0.0003 ms/frame, median 0.2436, p99 0.7021, max 0.960 ms (frame 1194), frames over 1 ms 0, over 4 ms 0, dropouts 0
+[DecalPerf]   worst after the first 60 frames: 0.960 ms (frame 1194, prepare 0.959) 0.828 ms (frame 1025, prepare 0.828) 0.819 ms (frame 849, prepare 0.818) 0.790 ms (frame 618, prepare 0.790) 0.777 ms (frame 1115, prepare 0.777) 0.775 ms (frame 691, prepare 0.775)

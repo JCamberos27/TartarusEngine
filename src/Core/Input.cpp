@@ -12,6 +12,7 @@ bool Input::s_FirstMouse = true;
 bool Input::s_PrevKeys[512] = {};
 static bool s_CurKeys[512] = {};
 static bool s_SimKeys[512] = {}; // SimulateKeyTap: down for the next Update() only
+static bool s_IgnoreDevices = false; // SetIgnoreDevices: a harness run
 static constexpr int kMouseButtons = 8; // GLFW_MOUSE_BUTTON_1 .. GLFW_MOUSE_BUTTON_LAST
 static bool s_CurButtons[kMouseButtons] = {};
 static bool s_PrevButtons[kMouseButtons] = {};
@@ -89,7 +90,9 @@ void Input::Update() {
 
     // #145 - unfocused: everything reads as up (and releases on the frame focus is lost), so a
     // key or button held while switching away can't stay stuck down for the game or the editor.
-    const bool focused = glfwGetWindowAttrib(s_Window, GLFW_FOCUSED) == GLFW_TRUE;
+    // A harness run (SetIgnoreDevices) reads the same either way: as if unfocused, always.
+    const bool focused = !s_IgnoreDevices && glfwGetWindowAttrib(s_Window, GLFW_FOCUSED) == GLFW_TRUE;
+    if (s_IgnoreDevices) s_DeltaX = s_DeltaY = s_ScrollY = 0.0;
 
     // Only GLFW_KEY_SPACE (32) .. GLFW_KEY_LAST (348) are valid arguments to glfwGetKey — any
     // code outside that range raises GLFW_INVALID_VALUE (previously silent; now caught by the
@@ -122,6 +125,8 @@ void Input::Update() {
     ApplyStickDeadZone(s_PadAxes[GLFW_GAMEPAD_AXIS_LEFT_X], s_PadAxes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
     ApplyStickDeadZone(s_PadAxes[GLFW_GAMEPAD_AXIS_RIGHT_X], s_PadAxes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
 }
+
+void Input::SetIgnoreDevices(bool ignore) { s_IgnoreDevices = ignore; }
 
 // #145 - reads the per-frame snapshot, like IsKeyPressed (it used to query live GLFW state, so
 // the two could disagree within a frame).

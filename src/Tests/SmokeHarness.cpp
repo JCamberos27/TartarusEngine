@@ -30,6 +30,8 @@
 // sscanf, as main.cpp read it (the file-wide warning off there).
 #pragma warning(disable: 4996)
 
+#include <GLFW/glfw3.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -144,6 +146,9 @@ void SmokeHarness::LoadScene() {
     if (m_SceneLoadOk)
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
     m_FramesRendered = 0;
+    m_SceneStartSeconds = glfwGetTime();
+    m_WallFrames = 0;
+    m_UnfocusedFrames = 0;
     m_SceneActive = true;
     SceneRendererDebug::ResetVariantDrawCounts(); // #354 per-scene variant tally
     m_PlayScene = path.find("smoke_play") != std::string::npos;
@@ -408,9 +413,15 @@ void SmokeHarness::ScoreScene() {
         std::snprintf(vbuf, sizeof(vbuf), " 0x%02x=%llu", key, (unsigned long long)n);
         variants += vbuf;
     }
+    // Wall time and frame rate: the frame cost of a run at unlocked FPS (TARTARUS_UNLOCKED_FPS), and how many of its
+    // frames the window spent without focus.
+    const double wall = std::max(1e-6, glfwGetTime() - m_SceneStartSeconds);
+    char timing[96];
+    std::snprintf(timing, sizeof(timing), " rendered=%d wall=%.1fs fps=%.0f unfocused=%d", m_WallFrames, wall, m_WallFrames / wall,
+                  m_UnfocusedFrames);
     std::cout << "[SmokeTest] " << (pass ? "PASS" : "FAIL") << "  "
               << std::filesystem::path(path).filename().string()
-              << "  frames=" << m_FramesRendered
+              << "  frames=" << m_FramesRendered << timing
               << " loadOk=" << (m_SceneLoadOk ? 1 : 0)
               << " newGlErrors=" << newErrors
               << " newLogErrors=" << newLogErrors
@@ -430,6 +441,8 @@ void SmokeHarness::EndFrame() {
     NpcTest* npcTest = m_Ctx.npcTest;
     Camera& editorCamera = m_Ctx.editorCamera;
     ++m_FramesRendered;
+    ++m_WallFrames;
+    if (glfwGetWindowAttrib(m_Ctx.window.Handle(), GLFW_FOCUSED) == 0) ++m_UnfocusedFrames;
     if (m_Cinematic && !opt.perfBenchMode) {
         CinematicFrame();
     } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !m_ShotCameras.empty()) {

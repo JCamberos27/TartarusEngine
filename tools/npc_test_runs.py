@@ -1,7 +1,7 @@
 # Runs NPC test scenarios several times each and reports every check's pass rate: one run of a noisy test
 # (npcloco, deaths) can't tell a fix from noise.
 #   python tools/npc_test_runs.py <engine exe> <scenario>... [--runs N] [--parallel N] [--logs DIR] [--visible]
-# Runs go hidden and muted unless --visible (then muted only). At most 4 engines at once (VRAM). Exit code 1 if any check ever failed.
+# Runs go hidden and muted unless --visible (then muted only), always at unlocked FPS. At most 4 engines at once (VRAM). Exit code 1 if any check ever failed.
 import argparse
 import os
 import re
@@ -20,7 +20,7 @@ def check_name(text):
 
 
 def run_one(exe, workdir, scenario, log, visible):
-    env = dict(os.environ, TARTARUS_MUTE='1')
+    env = dict(os.environ, TARTARUS_MUTE='1', TARTARUS_UNLOCKED_FPS='1')  # no VSync / FPS cap: game time is a fixed 1/60 s step
     if visible:
         env.pop('TARTARUS_HIDDEN', None)
     else:

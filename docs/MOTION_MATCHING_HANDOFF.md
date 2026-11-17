@@ -10,8 +10,8 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 | Phase | Branch | State |
 |---|---|---|
 | 0. Analysis and roadmap | `dev/mm-phase1` | **Done** (2026-11-17) |
-| 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Next** |
-| 2. Motion bake pipeline and root generation | `dev/mm-phase2` | Pending |
+| 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
+| 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Next** |
 | 3. Motion matching runtime | `dev/mm-phase3` | Pending |
 | 4. First-person player integration (unarmed) | `dev/mm-phase4` | Pending |
 | 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
@@ -85,7 +85,7 @@ skeleton). Then delete the legacy locomotion graphs, logic and clips.
 
 ## Phase plan
 
-### Phase 1: Test infrastructure and legacy baseline (next)
+### Phase 1: Test infrastructure and legacy baseline (done)
 - **Unlocked FPS.** Add `TARTARUS_UNLOCKED_FPS` to the `src/Core/Env.h` table and read it through `Env::`. It forces
   VSync off and the FPS cap to 0 whatever the editor prefs say, at `src/App/Application.cpp` ~1076 (VSync) and ~2354
   (FPS cap).
@@ -103,6 +103,41 @@ skeleton). Then delete the legacy locomotion graphs, logic and clips.
   - Later phases must match or beat them.
 
 **Done when:** the infrastructure works visibly at unlocked FPS and the baseline is saved.
+
+**What landed (2026-11-16):**
+- `TARTARUS_UNLOCKED_FPS` (`Env.h`), read in `Application.cpp`. It turns VSync off, sets the FPS cap to 0 and drops
+  the background cap, whatever the prefs say. `tools/npc_test_runs.py` sets it too.
+- Focus. Smoke, npc and perf runs (`opt.smokeTestMode`) call `Input::SetIgnoreDevices(true)`: keyboard, mouse and
+  gamepad read nothing, focused or not (`SimulateKeyTap` still works). Focus loss no longer releases the game input, and
+  a click in the Game view no longer captures the cursor. Scripted input (`Player::ScriptMove`, `NpcTest` triggers)
+  never needed focus.
+  - Code review found no other path where focus pauses Play in a harness run: the iconify sleep, the background FPS
+    cap and the reimport-on-focus are all `!headless`.
+  - The stall `WEAPON_REVOLVER38.md` describes was most likely VSync and the driver throttling an unfocused window,
+    which unlocked FPS removes.
+  - Measured: the smoke run lost focus for 16 of its 21 scenes (`unfocused=100`), and they all passed, except
+    `smoke_play_controller` on the known bad wav. The final pass's `testbed` (it drives the player) spent 1642 frames
+    unfocused and passed 29/29.
+- The `[SmokeTest] PASS|FAIL` per-scene line gained `rendered=N wall=Xs fps=N unfocused=N` (`SmokeHarness.cpp`): the
+  real frame count, wall time, frame rate, and frames spent without focus.
+- `tools/mm_smoke.ps1`: build, then `--unit-tests`, `--smoke-test tests\smoke-scenes`, the npc scenarios given, and an
+  optional `--perf-bench`. Every run is visible, with unlocked FPS, `Start-Process -PassThru` + `WaitForExit()`,
+  stdout and stderr per run, a pass/fail table, and exit 1 on any failure.
+  - Options: `-Runs`, `-TraceDir`, `-PerfBench`, `-UnitFilter`, `-SkipBuild/-SkipUnit/-SkipSmoke`, `-Sound`,
+    `-TimeoutMinutes`, `-LogDir`.
+  - `-AllowErrors <regex>` turns a run that failed only on matching log errors into `PASS*`. It is opt-in, for the two
+    broken local assets (see Open issues).
+  - Logs go to `work\mm_smoke\<timestamp>\`. Traces always go to `<LogDir>\traces` unless `-TraceDir` says
+    otherwise: `labloco`'s one check counts traced frames, so it fails without a trace folder.
+- `tools/mm/baseline_summary.py`: turns an `mm_smoke` log folder into `logs/`, `traces/`, `metrics.json` and
+  `SUMMARY.md`. Run it on a later phase's output to compare with the baseline.
+- `docs/mm_baseline/`: the legacy baseline. See its `README.md` and `SUMMARY.md`. Headline numbers:
+  - **Checks:** testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, labloco 1/1, feet 4/6 (stale).
+  - **Clip vs capsule speed** (testbed A): walk 0.9986, jog 1.0000.
+  - **Foot slide:**
+    - player: ≤ 0.1 cm worst on testbed's legs; labloco's stops after a strafe right or a jog back are 5.3 and 26.5 cm;
+    - dummy: worst 19–22 cm (labloco idle, strafe left, jog back; npcloco jog back 21.5 cm).
+  - **Frame cost** (`perf_stress`, p50): edit 2.87 ms, play 5.65 ms, play-max 7.44 ms.
 
 ### Phase 2: Motion bake pipeline and root generation
 New `src/Game/MotionMatching/`:
@@ -156,13 +191,29 @@ New `src/Game/MotionMatching/`:
 - Tests always run **visible**: never set `TARTARUS_HIDDEN`, and keep `--visible` on `tools/npc_test_runs.py`.
 - Tests always run with **unlocked FPS**: `TARTARUS_UNLOCKED_FPS=1`, from Phase 1 on. Game time stays on the fixed
   1/60 s step, so results don't depend on frame rate.
+- **Test budget** (the owner's rule: don't over-test):
+  - While working, run only the scenario or unit filter that the change touches.
+  - Run the full `tools/mm_smoke.ps1` pass once, at the end of the phase. Use 3 runs (`-Runs 3`, or
+    `npc_test_runs.py --runs 3`) only for scenarios known to be noisy, such as `npcloco`.
+  - Re-capture `docs/mm_baseline/` only if legacy locomotion code changed.
+  - Never re-run a failure whose cause is known and that a re-run can't fix (a broken local asset, a stale scenario).
+    Record it under Open issues instead.
+  - When a run fails, diagnose it before running again. Repeat a run only to check for flakiness.
 - Commands (PowerShell):
+  - Everything: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 testbed npcloco locomotion stopsteps
+    labloco -PerfBench tests\perf-scenes\perf_stress.json -AllowErrors 'worklight_hum_1\.wav|T_Spider_AO\.png'`
+    - It leaves out `feet`, which is stale (see Open issues); add it back once it's fixed.
+    - Add `-AllowErrors` only while the two broken assets are unrestored.
+  - Compare with the baseline: add `-TraceDir <dir>` to `mm_smoke.ps1`, then
+    `python tools/mm/baseline_summary.py <log dir> <out dir> --traces <dir>`; diff `SUMMARY.md` and `metrics.json`
+    against `docs/mm_baseline/`.
   - Build: `cmake --build build --config Release --parallel`
   - Unit tests: `build\Release\TartarusEngine.exe --unit-tests "<filter>"`
   - Smoke test: `build\Release\TartarusEngine.exe --smoke-test tests\smoke-scenes`
   - Scenarios: `python tools/npc_test_runs.py build\Release\TartarusEngine.exe <scenarios> --runs 3 --visible`
 - How results are reported:
-  - `[SmokeTest] PASS|FAIL` and `[NpcTest] PASS|FAIL` lines;
+  - `[SmokeTest] PASS|FAIL` lines (with `rendered= wall= fps= unfocused=`) and `[NpcTest] PASS|FAIL` lines;
+  - the engine's `[error]` lines go to stderr (`<run>.stderr.log` under `mm_smoke`);
   - the logs are in `Headless.log`;
   - exit code 0 means everything passed.
 
@@ -199,12 +250,44 @@ New `src/Game/MotionMatching/`:
 - `src/Tests/UnitTests_Animation.cpp`.
 - Launch flags: `src/App/LaunchOptions.cpp`.
 - Env vars: `src/Core/Env.h`. Every env var must be listed there.
+- Tools: `tools/mm_smoke.ps1`, `tools/mm/baseline_summary.py`, `tools/npc_test_runs.py`; baseline in `docs/mm_baseline/`.
 
 ## Open issues
 
 - `_FO` (idles) and `_M_L` (one jump) suffixes are undefined. They are tagged idle and jump; the owner should look at
   them in `mmview`.
 - Pack-Manny vs Quantum rest pose and bone lengths: not yet compared (Phase 2).
+- **Two zero-filled local assets** make every scenario log `[error]`s, so its `[SmokeTest]` line says FAIL:
+  - `project/assets/Audio/Ambience/worklight_hum_1.wav`
+  - `project/assets/Characters/Spider/Textures/T_Spider_AO.png`
+
+  Every byte is 0, and the sha256 doesn't match `external_assets.csv`. They need restoring from the Drive, which is the
+  **owner's call** (no Drive access was used). Until then, pass `-AllowErrors 'worklight_hum_1\.wav|T_Spider_AO\.png'`.
+  Smoke has 20/21 scenes clean; `smoke_play_controller` fails on the wav alone.
+- **`feet` is stale.** Its two "the dummy stands on the ramp" checks fail because Arena.json has no ramps at its spawn
+  points (the dummy is measured at y = 0.02). This predates Phase 1. Fix the scene or the spawn points before Phase 5
+  ports it.
+- Npc-scenario frame cost (`fps=` / ms per frame) includes scene loading and the model imports during the run, so it
+  is only a rough figure. `perf_stress` is the frame-cost baseline. If Phase 5 needs per-scenario frame cost, add a
+  steady-state window (for example, after the first 2 s of Play) to the summary line.
+- Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
+  (`[NpcLoco]`, `[Locomotion]`, `[StopSteps]`, `[Slide]`).
+- The baseline is one run per scenario. Re-runs were cut short on purpose. For noise bands, use
+  `tools/npc_test_runs.py --runs 3`, but only if a later comparison is borderline.
+- A forced focus steal (Notepad launched from a background job) did not take focus: Windows' foreground lock. Focus
+  loss was checked through natural focus changes during the smoke run instead.
+
+## Phase 2: first steps
+
+1. Branch `dev/mm-phase2` from `dev/mm-phase1`.
+2. **Ask the owner** before reading or writing the Drive. The raw pack is needed locally, under a folder named by a new
+   `Env.h` variable (for example `TARTARUS_MM_SOURCE`).
+3. Diff the rest pose and bone lengths: pack `rig/SKM_Manny.fbx` against `Quantum_Body_Full.fbx`, through `Model`.
+   Report any core bone that differs by more than 2%.
+4. Write `RootSynth` with unit tests on synthetic clips (a pelvis on a sine path, turning in place) before touching
+   real takes.
+5. Add the `--bake-motion` mode next to `--bake-gi` in `LaunchOptions.cpp`, then `MotionBake` and `MotionClipStream`.
+6. Add the `mmview` scenario. Verify with `mm_smoke.ps1 mmview -SkipSmoke` plus the unit tests, and one full pass at the end.
 
 ## Session log
 
@@ -213,3 +296,18 @@ New `src/Game/MotionMatching/`:
   - Settled the roadmap and the decisions above.
   - Created this doc and `docs/MOCAP_EXPORT_FINDINGS.md`.
   - No code changes.
+- **2026-11-16, Phase 1:**
+  - Added `TARTARUS_UNLOCKED_FPS`, harness input that ignores focus (`Input::SetIgnoreDevices`), and per-scene
+    timing on the `[SmokeTest]` line.
+  - Added `tools/mm_smoke.ps1` and `tools/mm/baseline_summary.py`; `npc_test_runs.py` now uses unlocked FPS.
+  - Captured the legacy baseline into `docs/mm_baseline/`.
+  - Verified with visible runs at unlocked FPS: unit 51375 checks, 0 failures; smoke 20/21 (the bad wav); all npc
+    checks pass except `feet`'s stale two; up to 433 fps on light scenes.
+  - Final full `mm_smoke.ps1` pass:
+    - build and unit tests PASS; perf PASS (edit 3.18 ms, play 6.03 ms);
+    - smoke, testbed, npcloco, locomotion and stopsteps `PASS*` (only the two broken assets' log errors);
+    - feet FAIL (stale);
+    - labloco failed for lack of a trace folder. Fixed in the script (traces now default to `<LogDir>\traces`), and
+      its one re-run was `PASS*`.
+    - testbed spent 1642 frames without focus and still passed 29/29.
+  - Found the two zero-filled assets and the stale `feet` scene (see Open issues).

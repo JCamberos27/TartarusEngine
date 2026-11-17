@@ -100,6 +100,9 @@ private:
     std::vector<Result> m_Results;
     size_t m_SceneIndex = 0;
     int m_FramesRendered = 0;
+    double m_SceneStartSeconds = 0.0; // glfwGetTime() at the scene's load: its wall time and fps in the summary line
+    int m_WallFrames = 0;             // frames really rendered (an npc test that is done jumps m_FramesRendered ahead)
+    int m_UnfocusedFrames = 0;        // frames the visible window spent without focus (they must change nothing)
     int m_BaselineGlErrors = 0;
     int m_BaselineLogErrors = 0;
     bool m_SceneActive = false;
