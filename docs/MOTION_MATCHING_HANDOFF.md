@@ -11,7 +11,7 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 |---|---|---|
 | 0. Analysis and roadmap | `dev/mm-phase1` | **Done** (2026-11-17) |
 | 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
-| 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16), owner sign-off on the `mmview` recording pending |
+| 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16; owner signed off on the `mmview` recording) |
 | 3. Motion matching runtime | `dev/mm-phase3` | **Next** |
 | 4. First-person player integration (unarmed) | `dev/mm-phase4` | Pending |
 | 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
@@ -241,7 +241,8 @@ New `src/Game/MotionMatching/`:
   21/21, testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, perf
   edit 3.65 ms / play 6.01 ms (baseline 2.87 / 5.65 p50; Phase 1's own final pass was 3.18 / 6.03 - legacy
   locomotion is untouched, so this is run-to-run noise, not a regression to chase).
-- Recording for the owner: `work\mm_view\mmview_phase2.mp4` (Game view left, Scene view right; `frames_to_video.py`).
+- Recording: `work\mm_view\mmview_phase2.mp4` (Game view left, Scene view right; `frames_to_video.py`). **The owner
+  signed off on it (2026-11-16)**, which closes Phase 2.
 
 ### Phase 3: Motion matching runtime
 - `MotionDatabase`.
@@ -356,7 +357,6 @@ New `src/Game/MotionMatching/`:
 
 ## Open issues
 
-- **Owner sign-off on the `mmview` recording** (`work\mm_view\mmview_phase2.mp4`) is still to come; it closes Phase 2.
 - `_FO` is still unexplained (the info sheet just calls those takes idle variations); `_M_L` = medium and large jumps.
   Both are in the `mmview` playlist for the owner to look at.
 - **The root keeps most of the stride's side-to-side sway.** The decided σ 0.10 s passes ~82 % of a 1 Hz sway
