@@ -24,6 +24,7 @@
 
 #include "MotionDatabase.h"
 
+#include <array>
 #include <cstdint>
 
 struct MotionSearchParams {
@@ -35,6 +36,11 @@ struct MotionSearchParams {
     std::uint8_t Require = 0;
     std::uint8_t Forbid = MotionLabel::Airborne;
     int DesiredGait = -1; // -1: no gait cost
+    // Frames recently shown, never candidates (MotionMatcher's reselect history: [first, last] global frames, padded). Jumping
+    // back into what just played is a rewind - the same snippet again, a stutter (the idle's 0.41 s hand loop, Phase 4).
+    static constexpr int kMaxAvoid = 8;
+    std::array<std::int64_t, 2 * kMaxAvoid> Avoid{};
+    int AvoidCount = 0;
 };
 
 struct MotionSearchResult {
@@ -70,6 +76,10 @@ struct MotionSearchSchedule {
     float Interval = 0.1f;       // s
     float VelocityChange = 0.5f; // m/s of desired velocity since the last search
     float FacingChangeDeg = 20.0f;
+    // Held: no search on the timer (the input or filter changing, or the frame running out, still search). Standing idle the
+    // input is constant and the playing take's continuation is known: re-asked every Interval, the search could only pick
+    // the stillest frame again and again (Phase 4, the idle's rewind loop).
+    bool Hold = false;
     // Call once per update; true when a search is due now (then it resets). `filterKey`: anything that identifies the
     // filter (Require/Forbid/DesiredGait packed), a change searches at once. `outOfFrames`: the playing frame can't go on.
     bool Tick(float dt, const glm::vec3& desiredVelocity, float desiredYaw, std::uint32_t filterKey, bool outOfFrames);

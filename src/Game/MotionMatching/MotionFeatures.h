@@ -42,6 +42,10 @@ enum Flag : std::uint8_t {
     NoSearch = 16,
     ContactL = 32,
     ContactR = 64,
+    // Runtime only (MotionDatabase::Build, from the take's tags - never baked): a frame of an idle take (tag "idle"). Standing
+    // still the player searches only these: over the whole database the stillest 1 s was a jump take's stance before its
+    // step, matched again every 2 s (Phase 4, play test 4).
+    IdleTake = 128,
 };
 const char* GaitName(int g);
 } // namespace MotionLabel

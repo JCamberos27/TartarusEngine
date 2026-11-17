@@ -112,6 +112,17 @@ bool MotionDatabase::Build(std::string* error) {
                 ++m_Glitches;
             }
     }
+    // The idle takes (tag "idle" in the clip's ';'-separated tags): MotionLabel::IdleTake.
+    for (const auto& clip : m_Stream.Clips()) {
+        bool idle = false;
+        for (size_t at = 0; at <= clip.Tags.size() && !idle;) {
+            const size_t end = std::min(clip.Tags.find(';', at), clip.Tags.size());
+            idle = clip.Tags.compare(at, end - at, "idle") == 0;
+            at = end + 1;
+        }
+        if (idle)
+            for (std::uint32_t k = 0; k < clip.Count; ++k) m_Feat.AddFlags(clip.First + k, MotionLabel::IdleTake);
+    }
     // Per-group scale: the mean of the group's standard deviations.
     m_Mean.assign(m_Feat.Mean().begin(), m_Feat.Mean().end());
     m_Scale.assign(kDims, 1.0f);

@@ -95,6 +95,16 @@ private:
 };
 
 // A gait's phase read off the feet, every frame: 0 as the left foot reaches its furthest ahead (its heel strike), 0.5 the right.
+// The slow part of an angle (radians): two exponential followers in a row, each with time constant `seconds` - passes a
+// lean or a heading held for a while and holds back the gait's per-step swing (at frequency f the swing passes
+// 1 / (1 + (2 pi f seconds)^2)). Angles wrap: the input is taken the short way round from where the filter is.
+struct FirstPersonSlowAngle {
+    float A = 0.0f, B = 0.0f;
+    bool Have = false;
+    float Update(float x, float dt, float seconds);
+    void Reset() { Have = false; }
+};
+
 // Over a stride the feet's spread along the travel and their height difference trace a loop a quarter cycle apart - the
 // angle round it is the phase. Nothing to detect or miss (counting plants, a missed or doubled one halved or doubled the
 // rate for steps on end), it runs at the legs' own pace whatever clip they play, and it turns back the right way walking
@@ -220,8 +230,11 @@ private:
     bool m_HaveMmView = false;
     float m_MmRunScale = 1.0f;    // the run slowed in turns (of the run's speed)
     float m_MmSpineWeight = 1.0f; // Spine Stability's share under motion matching: eased out through the airborne segment
+    // Under motion matching Spine Stability and Spine Twist correct the chest's slow lean and heading, not its per-step
+    // motion (the owner: "the lower spine is grounded and the torso isn't getting the same motions").
+    FirstPersonSlowAngle m_MmLeanSlow, m_MmChestYawSlow;
     void Fail(const std::string& message);
-    void ApplySpineStability(float weight, const AnimatorControllerComponent& animator);
+    void ApplySpineStability(float weight, const AnimatorControllerComponent& animator, float dt);
     std::string m_SpineIdleClip[2]; // standing / crouched reference from the locomotion controller
     float m_SpineCrouch = 0.0f, m_SpineCrouchDrop = 0.0f;
     struct SpineReference {
@@ -255,6 +268,12 @@ private:
     // The chest's (spine_05's) turn off the bind pose, model space; false without the bones. Pitch + forward, roll + left.
     bool ChestTurn(glm::quat& out) const;
     float ChestPitchDeg() const;
+    // The trunk now (BodyDebug::Snapshot::TrunkDeg's layout): pelvis, chest, chest against pelvis - yaw / roll / pitch each.
+    bool TrunkAngles(float (&out)[9]) const;
+    // The matcher's pose as posed (before every layer after it), per stream bone, for BodyDebug::LayerDeg.
+    void CaptureMmClip();
+    std::vector<int> m_MmLayerNodes; // the driver's node per stream bone (-1: none)
+    std::vector<glm::quat> m_MmClipRot;
     // The rest of the posture metrics (BodyDebug), on the pose as drawn and the camera where it ends up.
     void PostureMetrics(const World& world, const Camera& camera, float dt);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.

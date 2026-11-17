@@ -72,16 +72,40 @@ struct SharedMotionDatabase {
     struct Loop {
         bool Valid = false;
         std::uint32_t First = 0, Last = 0; // frames: play First..Last, wrap back to First
-        float Speed = 0.0f;                // its mean root speed (m/s)
-        float Seam = 0.0f;                 // the seam's cost (sum of bone angles, rad, + feet / pelvis velocity)
+        float Speed = 0.0f;                // its mean root speed as shown (m/s)
+        float Score = 0.0f;                // FindSprintLoop's cost (lower is better)
+        float SeamDeg = 0.0f, DriftPct = 0.0f, StepSpeedPct = 0.0f, StepTimePct = 0.0f; // its terms (for the log)
         std::string Clip;
-        // A crossfade loop: over its first Overlap frames the stride plays the frames past its end (where the wrap came
-        // from), blending into its own start - continuous in pose and velocity at the wrap. (No stride in the pack is
-        // steady - every one is mid speed-up or slow-down, 4-17 deg per bone off its start - so a correction spread
-        // linearly over the whole cycle shifted its average pose: the chest 8 deg, the feet out of reach.)
-        static constexpr int kOverlap = 16; // (0.27 s: a sprint's strides differ stride to stride, the arms most)
-        // `pose` at `frame` + `frac` blended with the frames past the end while within the overlap.
+        // The wrap is closed by an offset (offset inertialization): after it the stride plays its own start with the seam's
+        // difference - the end pose against the start pose, and their velocities' difference - added on and decaying as a
+        // critically damped spring (half-life kSeamHalflife). Continuous in pose and velocity at the wrap, and only the
+        // stride's own frames ever play.
+        // (The crossfade before it played the frames *past* the stride's end over the first 16 frames after every wrap. The
+        // pack's sprints are dashes in a 9 m room: past the stride the actor is braking - 4.42 -> 3.48 m/s over those 16
+        // frames - so every cycle began with a stop: the owner's "the sprint does a stop every few steps". Before the stride
+        // it is still speeding up; no stride in the pack has steady running on either side. A correction spread linearly over
+        // the whole cycle, tried first, shifted its average pose: the chest 8 deg, the feet out of reach.)
+        static constexpr float kSeamHalflife = 0.1f; // s (~0.35 s to settle; the stride is ~0.6 s)
+        // The seam offset's share of its start (`pos`) and of its start velocity (`vel`, s) `t` seconds after the wrap.
+        static void SeamDecay(float t, float& pos, float& vel);
+        // `pose` at loop frame `frame` + `frac`, after a wrap: the seam's decaying offset added (nothing once it has settled).
         void Close(const MotionDatabase& db, std::uint32_t frame, float frac, MotionPose& pose) const;
+        // The root speed of the pose shown at `frame` + `frac` (m/s; `wrapped`: Close() applies): what speed warping must
+        // divide by. The raw frames' speed jumps at the wrap while the pose shown doesn't - warped by the raw speed the play
+        // rate stepped every stride (a hitch in the limbs' tempo with no pop in the pose).
+        float ShownSpeed(std::uint32_t frame, float frac, bool wrapped) const;
+        // Makes this the loop First..Last of `db` (Last + 2 must be in the same take: the hold past the end): the per-frame
+        // speeds, the seam, Speed and Clip. FindSprintLoop's pick, or a test's.
+        void SetSpan(const MotionDatabase& db, std::uint32_t first, std::uint32_t last);
+
+    private:
+        float SeamTime(std::uint32_t frame, float frac) const { return ((float)(frame - First) + frac) / Fps; }
+        float Fps = 60.0f;
+        std::vector<float> Speeds;                 // per loop frame (First..Last), the root speed
+        std::vector<glm::vec3> SeamRot, SeamSpin; // per stream bone: the end's rotation off the start's (scaled angle-axis,
+                                                   // in the parent's frame) and their angular velocities' difference (rad/s)
+        glm::vec3 SeamPelvis{0.0f}, SeamPelvisVel{0.0f};
+        float SeamSpeed = 0.0f, SeamSpeedRate = 0.0f;
     } SprintLoop;
     static Loop FindSprintLoop(const MotionDatabase& db);
     // Loads `<base>.mmanim` / `.mmdb` once per process (kept while anything holds it). Null (with `error`) when missing.
@@ -112,8 +136,20 @@ public:
         // are all one style - a deep, high-knee sneak, hunched over (the owner: "crouch still looks off"). false: those
         // takes (Require Crouch). TARTARUS_MM_CROUCH=walk|pack overrides it at Start.
         bool CrouchFromWalk = true;
-        float SprintLoopEnter = 0.85f, SprintLoopExit = 0.55f; // of the run speed: the capsule's speed to start / leave it
+        // The loop starts above SprintLoopEnter of the run speed. It leaves on intent - Shift released, the move off ahead, a
+        // crouch, a jump, a reversal (the capsule's velocity over SprintLoopReverse radians off the heading) - or when the
+        // capsule is blocked (under SprintLoopBlocked of the run speed for SprintLoopBlockedSeconds: a wall). Not on a speed
+        // dip: turning with the mouse the capsule's velocity cuts the corner (in the owner's recording 4.4 -> 1.5 m/s with the
+        // old turn slowdown), and leaving on speed dropped the sprint into the pack's starts and stops - "a stop" mid-sprint.
+        float SprintLoopEnter = 0.85f, SprintLoopBlocked = 0.3f, SprintLoopBlockedSeconds = 0.2f, SprintLoopReverse = 1.745f;
         float SprintLoopSettle = 0.15f, SprintLoopSettleRate = 1.571f; // s the heading turns under this (rad/s, 90 deg/s) first
+        // Standing idle (MotionMatcher::Idle): below this capsule speed (m/s) on an Idle frame, the take plays on while its
+        // root 1 s on stays within IdleTravel (m; the pack's idles move it under 0.17 m in a second, p97) and its facing within
+        // IdleTurn (rad) - a sanity bound only: standing still the heading follows the take's root turn (the feet stay planted)
+        // and the Turn Threshold turns the body back to the view. (At the Turn Threshold's 30 deg, Stand_Idle_LookAround - its
+        // root half the shoulder line, past 30 deg in a second on 22 % of its frames - re-searched every 0.8 s.)
+        float IdleSpeed = 0.1f, IdleTravel = 0.25f, IdleTurn = 1.571f;
+        int IdleRunway = 180; // frames (3 s) an idle candidate plays before its labels change
     };
     struct Input {
         float Dt = 0.0f;
@@ -154,6 +190,8 @@ public:
     // gait table's run.
     static constexpr float kSprintOfLoop = 0.95f;
     float SprintSpeed() const;
+    // The sprint loop carries the run (it needs no curved-run data: the heading turns it).
+    bool HasSprintLoop() const { return m_Shared && m_Shared->SprintLoop.Valid && Config.SprintLoop; }
     float TurnInPlaceRate() const { return m_Shared ? m_Shared->TurnInPlaceRate : 0.0f; }
     const GaitSpeedTable& Gaits() const { return m_Shared ? m_Shared->Gaits : m_NoGaits; }
     const MotionDatabase* Database() const { return m_Shared ? &m_Shared->Db : nullptr; }
@@ -185,6 +223,9 @@ private:
     bool m_HaveYaw = false, m_Still = true, m_Turning = false;
     Air m_Air = Air::None;
     bool m_Looping = false; // playing the sprint loop
+    bool m_LoopWrapped = false; // ... and it has wrapped since it was entered (the seam's offset applies)
+    float m_LoopBlocked = 0.0f; // s the capsule has been under SprintLoopBlocked of the run speed while looping
+    int m_LoopExits = 0;        // loop exits since Start (MmPlayerDebug)
     float m_HeadingSettled = 0.0f; // s the heading has turned slower than SprintLoopSettleRate
     float m_AirTime = 0.0f, m_LandTimer = 0.0f, m_AirRate = 1.0f;
     std::uint32_t m_AirLast = 0;
@@ -204,6 +245,9 @@ struct Snapshot {
     bool Crouch = false, Sprint = false, Airborne = false, Locked = false, Still = false, Turning = false, Looping = false;
     bool Searched = false, Jumped = false;
     int Searches = 0, Jumps = 0, ForcedByInput = 0, ForcedByEnd = 0;
+    bool Idle = false;   // MotionMatcher::Idle this update
+    int IdleRefits = 0;  // idle searches because the continuation stopped fitting (since Start)
+    int LoopExits = 0;   // sprint loop exits (since Start)
     float LastCost = 0.0f, PlayingCost = 0.0f; // the last search: the winner's cost, the playing frame's (-1: it didn't pass)
     double SearchMsAvg = 0.0, SearchMsMax = 0.0;
     float PlayRate = 1.0f, AnimSpeed = 0.0f, CapsuleSpeed = 0.0f;

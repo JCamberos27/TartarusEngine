@@ -52,16 +52,23 @@ bool BoxMayPass(const MotionDatabase::Box& b, const MotionSearchParams& p) {
     return (b.FlagOr & p.Require) == p.Require && (b.FlagAnd & forbid) == 0;
 }
 
-// Frames of the playing clip near the playing frame are not candidates (they'd just be the same motion, a step off).
+// Frames of the playing clip near the playing frame are not candidates (they'd just be the same motion, a step off), nor
+// are the frames recently shown (MotionSearchParams::Avoid).
 struct Skip {
     std::int64_t Current = -1, From = 0, To = -1; // [From, To] skipped
-    Skip(const MotionDatabase& db, std::int64_t current, int near) : Current(current) {
+    const MotionSearchParams& P;
+    Skip(const MotionDatabase& db, std::int64_t current, const MotionSearchParams& p) : Current(current), P(p) {
         if (current < 0 || current >= (std::int64_t)db.FrameCount()) { Current = -1; return; }
         const auto& c = db.Clip(db.ClipOf((std::uint32_t)current));
-        From = std::max<std::int64_t>(c.First, current - near);
-        To = std::min<std::int64_t>((std::int64_t)c.First + c.Count - 1, current + near);
+        From = std::max<std::int64_t>(c.First, current - p.IgnoreNear);
+        To = std::min<std::int64_t>((std::int64_t)c.First + c.Count - 1, current + p.IgnoreNear);
     }
-    bool operator()(std::int64_t i) const { return i == Current || (i >= From && i <= To); }
+    bool operator()(std::int64_t i) const {
+        if (i == Current || (i >= From && i <= To)) return true;
+        for (int k = 0; k < P.AvoidCount && k < MotionSearchParams::kMaxAvoid; ++k)
+            if (i >= P.Avoid[(size_t)(2 * k)] && i <= P.Avoid[(size_t)(2 * k + 1)]) return true;
+        return false;
+    }
 };
 
 MotionSearchResult Start(const MotionDatabase& db, const float* query, const MotionSearchParams& p, std::int64_t current) {
@@ -102,7 +109,7 @@ MotionSearchResult MotionSearch::SearchBrute(const MotionDatabase& db, const flo
     MotionSearchResult r = Start(db, query, p, current);
     float w[kDims];
     DimWeights(p, w);
-    const Skip skip(db, current, p.IgnoreNear);
+    const Skip skip(db, current, p);
     for (std::uint32_t i = 0; i < db.FrameCount(); ++i) {
         if (skip(i) || !Passes(db.Flags(i), p) || db.Runway(i) < p.MinRunway) continue;
         ++r.FramesScored;
@@ -122,7 +129,7 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
     MotionSearchResult r = Start(db, query, p, current);
     float w[kDims];
     DimWeights(p, w);
-    const Skip skip(db, current, p.IgnoreNear);
+    const Skip skip(db, current, p);
     const auto& large = db.LargeBoxes();
     const auto& small = db.SmallBoxes();
     const std::uint32_t n = db.FrameCount();
@@ -160,7 +167,7 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
 bool MotionSearchSchedule::Tick(float dt, const glm::vec3& desiredVelocity, float desiredYaw, std::uint32_t filterKey,
                                 bool outOfFrames) {
     m_Timer += dt;
-    bool due = m_First || m_Timer >= Interval - 1e-4f;
+    bool due = m_First || (!Hold && m_Timer >= Interval - 1e-4f);
     if (!due && outOfFrames) {
         due = true;
         ++ForcedByEnd;

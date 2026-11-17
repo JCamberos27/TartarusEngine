@@ -672,6 +672,12 @@ struct FirstPersonBodyComponent {
     // 0 = the legacy locomotion Animator Controller, 1 = motion matching (Manny.mmanim / .mmdb; the capsule moves on the
     // input at the mocap's gait speeds). TARTARUS_LOCOMOTION_SOURCE (legacy | mm) overrides it.
     int LocomotionSource = 0;
+    // Motion matching A/B switches (temporary, for judging the pose in Play; Phase 6 removes them with LocomotionSource):
+    // MmPostLayers off draws the matcher's pose with foot IK (and the crouch's hips) only - no Spine Stability, Spine Aim /
+    // Twist, head cap, arm hang, relaxed arms, hands-from-eye or wall lean; MmSprintLoop off matches the sprint on the
+    // pack's run fragments instead of looping one stride.
+    bool MmPostLayers = true;
+    bool MmSprintLoop = true;
     // 0 = the capsule moves exactly as the clips travel (root motion), 1 = as the input asks
     // (the clips only animate). Between: a blend - heavier and more grounded toward 0.
     float Responsiveness = 0.0f;

@@ -538,7 +538,7 @@ void TestPlayerHooks() {
     m.HoldFrame = walk.First + 80;
     for (int i = 0; i < 30; ++i) m.Update(dt, in);
     CHECK(m.Frame() == walk.First + 80); // held there
-    m.ForceFrame(walk.First + 150, dt);
+    m.ForceFrame(walk.First + 150);
     m.Update(dt, in);
     CHECK(m.Jumps == 1 && m.JumpedThisUpdate() == false && m.Inertializer.Blending());
     m.Locked = false;
@@ -561,6 +561,118 @@ void TestPlayerHooks() {
     const float diag = PlayerGaitSpeed(g, {std::sin(0.4363f), std::cos(0.4363f)}, 1); // 25 degrees off: halfway
     CHECK(std::fabs(diag - 0.5f * (3.91f + 1.32f)) < 0.01f);
     CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, 0.0f}, 0) - 1.27f) < 1e-4f);
+}
+
+// In Play the frame time varies (the npc tests run a fixed 1/60 s). A jump's dead blend must carry the velocity the output
+// had - its last two poses over the time between them - whatever this update's dt is: right after a frame-time change it
+// used this update's dt, scaling the carried velocity by their ratio (a hitch's long frame then a short one: 8x, into the
+// clamp - a lurch at the jump; the other way the limb stalled). The output's angular velocity is checked across a forced
+// jump to nearly the same pose (the frame 2 on, so the blend's pull toward it is small) for both orders.
+void TestDeadBlendFrameTime() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    const auto& walk = db.Clip(db.Stream().FindClip("Walk_Straight"));
+    const float dtLong = 1.0f / 30.0f, dtShort = 1.0f / 240.0f;
+    MotionMatcher::Input in;
+    const auto speedOf = [](const MotionPose& a, const MotionPose& b, float dt) { // the thighs' (bones 1, 2) faster angular speed
+        return std::max(MotionMath::QuatAngle(a.Rot[1], b.Rot[1]), MotionMath::QuatAngle(a.Rot[2], b.Rot[2])) / dt;
+    };
+    for (int order = 0; order < 2; ++order) {
+        const float before = order == 0 ? dtShort : dtLong, after = order == 0 ? dtLong : dtShort;
+        // Mid-swing (the synthetic thighs peak at 0.4 x 2 pi x 1.6 = 4 rad/s). (Before the fix the first order carried 1/8
+        // of the velocity - the limb stalled, ~0.2 of it after the jump - and the second order 8x, into the 4 pi clamp.)
+        MotionMatcher m;
+        m.Reset(&db, walk.First + 60);
+        m.Locked = true;
+        m.Update(dtLong, in);
+        for (int i = 0; i < 4; ++i) m.Update(dtLong, in);
+        MotionPose prev = m.Pose();
+        m.Update(before, in);
+        const MotionPose last = m.Pose();
+        const float vBefore = speedOf(prev, last, before);
+        m.ForceFrame(m.Frame() + 2);
+        m.Update(after, in);
+        const float vAfter = speedOf(last, m.Pose(), after);
+        std::printf("[MotionMatching] dead blend over a frame-time change (%.4f s then %.4f s): %.2f rad/s before the jump, %.2f after\n",
+                    before, after, vBefore, vAfter);
+        CHECK(vBefore > 1.0f); // (moving: a carried velocity to check)
+        // (The source's velocity decays over the update - half-life 0.05 s: ~0.8 of it over a 1/30 s update.)
+        CHECK(vAfter > 0.65f * vBefore && vAfter < 1.25f * vBefore);
+    }
+}
+
+// The sprint loop's wrap, closed by the seam's decaying offset: continuous in pose and in the pose's velocity from the loop's
+// last frame to its first, the speed speed warping divides by continuous too, and the offset settled before the next wrap.
+// The span is deliberately not a whole cycle of the synthetic legs (37.5 frames), so the seam is large (~0.3 rad), and the take
+// speeds up (the raw speed jumps at the wrap).
+void TestSprintLoopWrap() {
+    TakeSpec ramp{"Run_Ramp", "run;loop", 300, 3.8f};
+    ramp.SpeedEnd = 4.8f;
+    MotionDatabase db;
+    CHECK(Adopt(db, Build({ramp})));
+    const auto& clip = db.Clip(0);
+    SharedMotionDatabase::Loop loop;
+    loop.SetSpan(db, clip.First + 100, clip.First + 130);
+    CHECK(loop.Valid);
+    if (!loop.Valid) return;
+    const auto raw = [&](std::uint32_t f, float frac) { MotionPose p; db.SamplePose(f, frac, p); return p; };
+    const auto shown = [&](std::uint32_t f, float frac) { MotionPose p = raw(f, frac); loop.Close(db, f, frac, p); return p; };
+    // The speed.
+    const float rawFirst = FirstPersonBodyMotion::RootSpeed(db, loop.First), rawLast = FirstPersonBodyMotion::RootSpeed(db, loop.Last);
+    const float shownLast = loop.ShownSpeed(loop.Last, 0.0f, false), shownFirst = loop.ShownSpeed(loop.First, 0.0f, true);
+    CHECK(std::fabs(rawLast - rawFirst) > 0.05f);     // the frames themselves jump ...
+    CHECK(std::fabs(shownLast - shownFirst) < 1e-4f); // ... the speed shown doesn't
+    // The pose: at the seam exactly, and half a frame on (the fraction carries over the wrap).
+    const float seam = PoseAngle(raw(loop.Last, 0.0f), raw(loop.First, 0.0f));
+    const float atSeam = PoseAngle(raw(loop.Last, 0.0f), shown(loop.First, 0.0f));
+    const float half = PoseAngle(raw(loop.Last, 0.5f), shown(loop.First, 0.5f));
+    // The velocity: the step across the wrap against the step into it (half a frame each).
+    const float into = PoseAngle(raw(loop.Last - 1, 0.5f), raw(loop.Last, 0.0f));
+    const float across = PoseAngle(raw(loop.Last, 0.0f), shown(loop.First, 0.5f));
+    // Settled by the next wrap: what the offset still adds at the loop's last frame.
+    const float left = PoseAngle(raw(loop.Last, 0.0f), shown(loop.Last, 0.0f));
+    std::printf("[MotionMatching] sprint loop wrap: seam %.3f rad, shown at the seam %.5f, half a frame on %.4f; step into the wrap %.4f, "
+                "across %.4f; left at the next wrap %.5f; speed raw %.3f -> %.3f, shown %.3f -> %.3f m/s\n",
+                seam, atSeam, half, into, across, left, rawLast, rawFirst, shownLast, shownFirst);
+    CHECK(seam > 0.1f);                                   // a real seam to close
+    CHECK(atSeam < 1e-4f);                                // continuous in pose
+    CHECK(half < 0.1f * seam);                            // (to first order, half a frame on)
+    CHECK(std::fabs(across - into) < 0.35f * into + 1e-3f); // continuous in velocity
+    CHECK(left < 0.01f * seam);                           // settled before the next wrap
+}
+
+// Play test 4: the reselect history (MotionSearchParams::Avoid) is never matched - not even a frame's own self-match - and
+// the box search still equals brute force with it; a held schedule (standing idle) never searches on the timer, but still on
+// an input change and when the frame runs out.
+void TestReselectAndIdleHold() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    const auto& walk = db.Clip(db.Stream().FindClip("Walk_Straight"));
+    int ok = 0;
+    for (std::uint32_t f = walk.First + 40; f < walk.First + 200; f += 20) {
+        float q[27];
+        FrameQuery(db, f, q);
+        MotionSearchParams p;
+        p.Avoid[0] = (std::int64_t)f - 30;
+        p.Avoid[1] = (std::int64_t)f + 30;
+        p.AvoidCount = 1;
+        const MotionSearchResult a = MotionSearch::Search(db, q, p), b = MotionSearch::SearchBrute(db, q, p);
+        const bool outside = a.Frame < p.Avoid[0] || a.Frame > p.Avoid[1];
+        ok += outside && a.Frame == b.Frame && a.Cost == b.Cost && MotionSearch::Search(db, q, MotionSearchParams{}).Frame == (std::int64_t)f;
+    }
+    CHECK(ok == 8);
+    MotionSearchSchedule s;
+    const float dt = 1.0f / 60.0f;
+    CHECK(s.Tick(dt, glm::vec3(0.0f), 0.0f, 1, false)); // the first update searches
+    s.Hold = true;
+    int timer = 0;
+    for (int i = 0; i < 120; ++i) timer += s.Tick(dt, glm::vec3(0.0f), 0.0f, 1, false);
+    CHECK(timer == 0);                                       // 2 s held: no timer searches
+    CHECK(s.Tick(dt, glm::vec3(0.0f), 0.0f, 1, true));       // the frame running out
+    CHECK(s.Tick(dt, glm::vec3(1.0f, 0.0f, 0.0f), 0.0f, 1, false)); // an input change
+    s.Hold = false;
+    for (int i = 0; i < 6; ++i) timer += s.Tick(dt, glm::vec3(1.0f, 0.0f, 0.0f), 0.0f, 1, false);
+    CHECK(timer == 1); // released: the timer again (0.1 s)
 }
 
 // The cooked Manny database: the boxes agree with brute force and search fast. SKIPs without a bake.
@@ -681,5 +793,8 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: matcher end to end", TestMatcherEndToEnd});
     tests.push_back({"Motion matching: player hooks (play rate, lock, gait speeds)", TestPlayerHooks});
     tests.push_back({"Motion matching: player exclusions and the capped aim", TestPlayerExclusionsAndAimCap});
+    tests.push_back({"Motion matching: dead blend across a frame-time change", TestDeadBlendFrameTime});
+    tests.push_back({"Motion matching: sprint loop wrap (pose and shown speed)", TestSprintLoopWrap});
+    tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
 }

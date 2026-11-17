@@ -63,6 +63,9 @@ struct TbLeg {
     float SweepDeg = 0.0f;            // M: the view sweeps this many degrees either side of Yaw (a player looking about) ...
     float SweepHz = 0.0f;             // ... this many times a second
     float FlickAt = -1.0f;            // M: the view flicks 180 degrees (in 0.15 s) this many seconds into the leg (-1: none)
+    // M: the view wanders like a player's mouse - yaw and pitch (degrees, amplitude) driven by sums of incommensurate sines
+    // (0.3-2.7 Hz; deterministic). Yaw 25 peaks near 150 deg/s (the owner sprints moving the mouse everywhere).
+    float WanderYaw = 0.0f, WanderPitch = 0.0f;
     // S (mmstress): the move alternates with Move2 every AltPeriod s; the crouch toggles every CrouchPeriod s; a jump every
     // JumpEvery s (0: none).
     glm::vec2 Move2 = glm::vec2(0.0f);
@@ -87,6 +90,12 @@ TbLeg TbMSweep(const char* name, float seconds, glm::vec2 move, bool sprint, flo
 TbLeg TbMPitch(const char* name, float seconds, glm::vec2 move, bool sprint, float pitch, float yaw = 90.0f) {
     TbLeg l = TbM(name, seconds, move, sprint, false, yaw);
     l.Pitch = pitch;
+    return l;
+}
+TbLeg TbMWander(const char* name, float seconds, bool sprint, float wanderYaw, float wanderPitch) {
+    TbLeg l = TbM(name, seconds, {0, 1}, sprint, false, 90.0f);
+    l.WanderYaw = wanderYaw;
+    l.WanderPitch = wanderPitch;
     return l;
 }
 TbLeg TbMFlick(const char* name, float seconds, bool sprint, float yaw, float flickAt) {
@@ -183,6 +192,16 @@ const TbLeg kTb[] = {
     TbM("M stop after run flick", 1.5f, {0, 0}, false, false, 270.0f),
     TbMFlick("M walk flick 180", 4.0f, false, 270.0f, 2.0f),
     TbM("M stop after walk flick", 1.5f, {0, 0}, false, false, 90.0f),
+    // The owner's play test 4 (2026-11-17): standing, the hands jerked back and forth and no idle played (a rewind loop);
+    // sprinting with the mouse moving everywhere, the sprint stopped in turns and looked goofy. A long idle, then sprints
+    // with the view wandering like a mouse - hard, and small jitter only.
+    TbM("M settle for idle", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbM("M idle", 6.0f, {0, 0}, false, false, 90.0f),
+    TbMWander("M run random look", 4.0f, true, 25.0f, 35.0f),
+    TbM("M stop after random look", 1.5f, {0, 0}, false, false, 90.0f),
+    TbM("M settle for mouse noise", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbMWander("M run mouse noise", 3.0f, true, 2.5f, 2.5f),
+    TbM("M stop after mouse noise", 1.5f, {0, 0}, false, false, 90.0f),
     // S (mmstress): the motion matching player under abuse.
     TbS("S settle", 1.0f, {0, 0}, false, 90.0f, true, kMStart),
     TbSAlt("S zig-zag walk", 4.0f, {-0.7f, 0.7f}, {0.7f, 0.7f}, 0.4f, false),
@@ -317,6 +336,15 @@ struct NpcTest::TestbedRun {
         // roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the view,
         // with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
         std::vector<float> ChestClip, ChestStable, Chest, ChestRoll, Head, HeadWorld, HandOver, HandEye, YawRate, Pelvis, PelvisClip;
+        std::vector<float> TrunkClip[9], Trunk[9]; // BodyDebug's trunk angles (pelvis, chest, chest vs pelvis), clip and drawn
+        std::vector<std::vector<float>> Layer;      // per stream bone, BodyDebug::LayerDeg over the steady part
+        // Play test 4: rewinds (a jump, off the sprint loop, back to a frame shown in the last second), the longest stretch
+        // of one take without a jump (s), steady frames in idle mode, idle refits and loop exits over the leg, steady frames
+        // with the play rate pinned at the warp's floor, the capsule's slowest, the view's and the body's turn rates (deg/s).
+        int Rewinds = 0, IdleFrames = 0, RatePinned = 0;
+        float RunNow = 0.0f, RunLongest = 0.0f, SpeedMin = 99.0f;
+        int IdleRefits0 = -1, IdleRefits = 0, LoopExits0 = -1, LoopExits = 0;
+        std::vector<float> ViewRate;
         int HandView = 0, HandHigh = 0, Crossed = 0;
         int Looping = 0; // steady frames on the sprint loop
         std::vector<float> StepAll; // mmstress: the worst bone's turn every frame (deg), the leg's whole length
@@ -330,6 +358,9 @@ struct NpcTest::TestbedRun {
     };
     MmStats Mm[128];
     int MmCrossLogs = 0;
+    std::vector<std::pair<std::uint32_t, float>> MmShown; // frames shown in the last second (frame, clock): the rewind check
+    float MmPrevViewYaw = 0.0f;
+    bool MmHaveViewYaw = false;
     int MmCrouchWrong = 0, MmAirborneGround = 0, MmFrames = 0, MmPosed = 0, MmBigSteps = 0;
     bool Jumped[128] = {};
     int JumpSlot[128] = {};
@@ -428,8 +459,12 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
         const float u = std::clamp((into - L.FlickAt) / 0.15f, 0.0f, 1.0f);
         flick = 180.0f * u * u * (3.0f - 2.0f * u);
     }
-    wantYaw = player.Cam.Yaw = L.Yaw + L.ViewTurn * into + L.SweepDeg * std::sin(2.0f * 3.14159265f * L.SweepHz * into) + flick;
-    wantPitch = L.Pitch;
+    const float tau = 2.0f * 3.14159265f;
+    const float wanderYaw = L.WanderYaw * (0.55f * std::sin(tau * 0.43f * into + 0.3f) + 0.30f * std::sin(tau * 1.1f * into + 1.7f) +
+                                           0.15f * std::sin(tau * 2.7f * into + 4.1f));
+    const float wanderPitch = L.WanderPitch * (0.6f * std::sin(tau * 0.31f * into + 2.0f) + 0.4f * std::sin(tau * 0.9f * into + 0.5f));
+    wantYaw = player.Cam.Yaw = L.Yaw + L.ViewTurn * into + L.SweepDeg * std::sin(tau * L.SweepHz * into) + flick + wanderYaw;
+    wantPitch = L.Pitch + wanderPitch;
 }
 
 void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, float now) {
@@ -970,6 +1005,10 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         q.ChestStable.push_back(bd.ChestPitchStableDeg);
         q.Chest.push_back(bd.ChestPitchDeg);
         q.ChestRoll.push_back(bd.ChestRollDeg);
+        for (int k = 0; k < 9; ++k) {
+            q.TrunkClip[k].push_back(bd.TrunkClipDeg[k]);
+            q.Trunk[k].push_back(bd.TrunkDeg[k]);
+        }
         q.Head.push_back(bd.HeadPitchDeg);
         q.HeadWorld.push_back(bd.HeadWorldPitchDeg);
         q.Pelvis.push_back(bd.PelvisHeight);
@@ -1005,6 +1044,33 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
     q.EndYawOff = std::fabs(bd.ViewOffsetDeg);
     q.YawRateMax = std::max(q.YawRateMax, std::fabs(mm.YawRate));
     if (mm.Jumped) ++q.Jumps;
+    // Rewinds: a jump (not onto the sprint loop) to within 2 frames of a frame shown in the last second.
+    if (mm.Jumped && !mm.Looping)
+        for (const auto& s : R.MmShown)
+            if (R.Clock - s.second <= 1.0f && std::abs((long long)s.first - (long long)mm.Frame) <= 2) {
+                ++q.Rewinds;
+                if (q.Rewinds <= 3) std::printf("[MmIdle] %6.2f s %-24s rewind: jump back to %s @ frame %u, shown %.2f s ago\n", R.Clock, kTb[leg].Name,
+                                                mm.Clip.c_str(), mm.Frame, R.Clock - s.second);
+                break;
+            }
+    R.MmShown.push_back({mm.Frame, R.Clock});
+    size_t old = 0;
+    while (old < R.MmShown.size() && R.Clock - R.MmShown[old].second > 1.0f) ++old;
+    R.MmShown.erase(R.MmShown.begin(), R.MmShown.begin() + (std::ptrdiff_t)old);
+    q.RunNow = mm.Jumped ? 0.0f : q.RunNow + 1.0f / 60.0f;
+    q.RunLongest = std::max(q.RunLongest, q.RunNow);
+    if (q.IdleRefits0 < 0) { q.IdleRefits0 = mm.IdleRefits; q.LoopExits0 = mm.LoopExits; }
+    q.IdleRefits = mm.IdleRefits - q.IdleRefits0;
+    q.LoopExits = mm.LoopExits - q.LoopExits0;
+    {
+        const float yaw = player.Cam.Yaw;
+        if (R.MmHaveViewYaw) {
+            float d = std::fmod(yaw - R.MmPrevViewYaw + 540.0f, 360.0f) - 180.0f;
+            q.ViewRate.push_back(std::fabs(d) * 60.0f);
+        }
+        R.MmPrevViewYaw = yaw;
+        R.MmHaveViewYaw = true;
+    }
     if (q.Searches0 < 0) { q.Searches0 = mm.Searches; q.ByInput0 = mm.ForcedByInput; q.ByEnd0 = mm.ForcedByEnd; }
     q.Searches = mm.Searches - q.Searches0;
     q.ByInput = mm.ForcedByInput - q.ByInput0;
@@ -1045,6 +1111,13 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         q.Speed.push_back(mm.CapsuleSpeed);
         q.RateMin = std::min(q.RateMin, mm.PlayRate);
         q.RateMax = std::max(q.RateMax, mm.PlayRate);
+        if (mm.PlayRate <= 0.801f) ++q.RatePinned;
+        q.SpeedMin = std::min(q.SpeedMin, mm.CapsuleSpeed);
+        if (mm.Idle) ++q.IdleFrames;
+        if (bd.LayerBones && bd.LayerDeg.size() == bd.LayerBones->size()) {
+            q.Layer.resize(bd.LayerDeg.size());
+            for (size_t k = 0; k < bd.LayerDeg.size(); ++k) q.Layer[k].push_back(bd.LayerDeg[k]);
+        }
         for (int s = 0; s < 2; ++s) {
             q.FootHMin[s] = std::min(q.FootHMin[s], bd.AnimHeight[s]);
             q.FootHMax[s] = std::max(q.FootHMax[s], bd.AnimHeight[s]);
@@ -1146,9 +1219,13 @@ void NpcTest::MmPlayerChecks() {
     }
     Check(R.MmFrames > 0 && R.MmPosed == R.MmFrames, "mmplayer: motion matching poses the body every frame (" + std::to_string(R.MmPosed) + " of " +
                                                          std::to_string(R.MmFrames) + ")");
-    const float rate = (float)mm.Searches / std::max(1e-3f, R.Clock);
-    std::snprintf(b, sizeof b, "mmplayer: the matcher searched %d times in %.1f s (%.1f per second; none while a jump plays locked), between 7 and 20",
-                  mm.Searches, R.Clock, rate);
+    // (Standing idle the timer is held - MotionMatcher::Idle - and the sprint loop plays locked, so the rate is over the
+    // time out of both.)
+    float heldSeconds = 0.0f;
+    for (int i = 0; i < kWatchLeg; ++i) heldSeconds += (R.Mm[i].IdleFrames + R.Mm[i].Looping) / 60.0f;
+    const float rate = (float)mm.Searches / std::max(1e-3f, R.Clock - heldSeconds);
+    std::snprintf(b, sizeof b, "mmplayer: the matcher searched %d times in %.1f s out of idle and the sprint loop (%.1f per second; none while "
+                               "a jump plays locked), between 7 and 20", mm.Searches, R.Clock - heldSeconds, rate);
     Check(rate >= 7.0f && rate <= 20.0f, b);
     std::snprintf(b, sizeof b, "mmplayer: searches avg %.3f ms, max %.3f ms; avg under 1 ms", mm.SearchMsAvg, mm.SearchMsMax);
     Check(mm.SearchMsAvg < 1.0, b);
@@ -1188,7 +1265,7 @@ void NpcTest::MmPlayerChecks() {
                                    "Strafe-labelled %.0f %%)", name, 100.0f * share, q.Steady, q.Steady ? 100.0f * q.StrafeFlag / q.Steady : 0.0f);
         Check(q.Steady > 20 && share >= 0.5f, b);
     }
-    // Sprint is the run gait; the run slows through a turn.
+    // Sprint is the run gait; the run carries through a turn.
     {
         const TestbedRun::MmStats& q = R.Mm[legIndex("M run")];
         const float share = q.Steady ? (float)q.GaitAtLeast[2] / (float)q.Steady : 0.0f;
@@ -1286,8 +1363,89 @@ void NpcTest::MmPlayerChecks() {
                     pct(q.Head, 0.0f), median(q.HeadWorld), pct(q.HeadWorld, 0.0f), pct(q.HandEye, 0.0f), 100.0f * q.HandHigh / n, pct(q.HandOver, 1.0f), 100.0f * q.HandView / n, 100.0f * q.Crossed / n,
                     q.FeetGapMin, pct(q.YawRate, 1.0f), median(q.PelvisClip), median(q.Pelvis));
     }
+    // The trunk's motion per step (the owner: "the lower spine is grounded and the torso isn't getting the same motions"): each
+    // angle's swing (p95 - p5, deg, steady part) as the clip poses it / as drawn - the pelvis, the chest, and the chest against
+    // the pelvis (the lower spine's own bend). Drawn well under the clip: something between the clip and the screen damps it.
+    std::printf("[MmTrunk] %-28s %17s %17s %17s %17s %17s %17s %17s %17s %17s\n", "leg (swing clip/drawn)", "pelvis yaw", "pelvis roll",
+                "pelvis pitch", "chest yaw", "chest roll", "chest pitch", "rel yaw", "rel roll", "rel pitch");
+    for (int i = 0; i < kWatchLeg; ++i) {
+        if (!TbLegOn(i)) continue;
+        const TestbedRun::MmStats& q = R.Mm[i];
+        if (q.Trunk[0].size() < 20) continue;
+        const auto swing = [&](const std::vector<float>& v) { return pct(v, 0.95f) - pct(v, 0.05f); };
+        std::printf("[MmTrunk] %-28s", kTb[i].Name);
+        for (int k = 0; k < 9; ++k) std::printf("     %5.1f / %5.1f", swing(q.TrunkClip[k]), swing(q.Trunk[k]));
+        std::printf("\n");
+    }
+    // Play test 4 (2026-11-17). Standing: idle mode's share, jumps a second, searches (idle refits), rewinds, the longest run
+    // of one take. Sprinting: the loop's share and exits, the capsule's speed, the play rate (and how often pinned at the
+    // warp's 0.8 floor), the view's and the body's turn rates (p99), the chest's pitch swing.
+    std::printf("[MmIdle] %-28s %6s %7s %8s %7s %7s %9s\n", "leg", "idle%", "jumps/s", "searches", "refits", "rewinds", "longest s");
+    std::printf("[MmSprint] %-26s %6s %5s %10s %10s %8s %9s %9s %10s\n", "leg", "loop%", "exits", "m/s min/avg", "rate", "pinned%",
+                "view/s", "body/s", "chest p95-5");
+    for (int i = 0; i < kWatchLeg; ++i) {
+        if (!TbLegOn(i)) continue;
+        const TestbedRun::MmStats& q = R.Mm[i];
+        if (q.Steady < 10) continue;
+        const float n = (float)q.Steady;
+        if (!kTb[i].Moving())
+            std::printf("[MmIdle] %-28s %6.0f %7.2f %8d %7d %7d %9.2f\n", kTb[i].Name, 100.0f * q.IdleFrames / n,
+                        q.Jumps / std::max(0.1f, kTb[i].Seconds), q.Searches, q.IdleRefits, q.Rewinds, q.RunLongest);
+        else if (kTb[i].Jog)
+            std::printf("[MmSprint] %-26s %6.0f %5d %4.2f/%4.2f %4.2f-%4.2f %8.0f %9.0f %9.0f %10.1f\n", kTb[i].Name, 100.0f * q.Looping / n,
+                        q.LoopExits, q.SpeedMin, mean(q.Speed), q.RateMin, q.RateMax, 100.0f * q.RatePinned / n, pct(q.ViewRate, 0.99f),
+                        pct(q.YawRate, 0.99f), pct(q.Chest, 0.95f) - pct(q.Chest, 0.05f));
+    }
+    // What the layers after the pose do to it: per leg, the stream bones the drawn pose moves most off the matcher's (mean /
+    // p95 deg over the steady part).
+    const std::vector<std::string>* layerBones = BodyDebug::Info().LayerBones;
+    for (const char* name : {"A walk", "M run", "M run random look", "M run mouse noise", "M idle", "M crouch walk"}) {
+        const int li = legIndex(name);
+        if (!TbPartOn(name[0]) || !layerBones || R.Mm[li].Layer.size() != layerBones->size()) continue;
+        const auto& L = R.Mm[li].Layer;
+        std::vector<std::pair<float, size_t>> order;
+        for (size_t k = 0; k < L.size(); ++k) order.push_back({mean(L[k]), k});
+        std::sort(order.begin(), order.end(), [](const auto& x, const auto& y) { return x.first > y.first; });
+        std::printf("[MmLayers] %-22s", name);
+        for (size_t k = 0; k < order.size() && k < 8; ++k)
+            std::printf("  %s %.1f/%.1f", (*layerBones)[order[k].second].c_str(), order[k].first, pct(L[order[k].second], 0.95f));
+        std::printf("\n");
+    }
     // The owner's play test 2 (2026-11-17), measured against the controller on this course (Phase 4 handoff). Under MM only.
     if (mm.Valid) {
+        // Play test 4: standing idle plays its takes on - no rewind loop (the hands' 0.41 s back and forth), few jumps, a
+        // take held over a second; and nowhere does a jump go back to what was shown in the last second.
+        if (TbPartOn('M')) {
+            const TestbedRun::MmStats& q = R.Mm[legIndex("M idle")];
+            const float n = (float)std::max(1, q.Steady), jumps = q.Jumps / kTb[legIndex("M idle")].Seconds;
+            std::snprintf(b, sizeof b, "M idle: the idle plays on - idle mode %.0f %% of the leg (>= 80), %.2f jumps/s (<= 0.3), %d rewinds, "
+                                       "the longest stretch of one take %.1f s (>= 1)", 100.0f * q.IdleFrames / n, jumps, q.Rewinds, q.RunLongest);
+            Check(q.Steady > 100 && q.IdleFrames >= 0.8f * n && jumps <= 0.3f && q.Rewinds == 0 && q.RunLongest >= 1.0f, b);
+        }
+        {
+            int rewinds = 0;
+            for (int i = 0; i < kWatchLeg; ++i) rewinds += R.Mm[i].Rewinds;
+            std::snprintf(b, sizeof b, "mmplayer: no jump goes back to a frame shown in the last second (the reselect history) - %d", rewinds);
+            Check(rewinds == 0, b);
+        }
+        // 0. The torso moves with the hips (the owner: "the lower spine is grounded and the torso isn't getting the same
+        //    motions"): drawn, the chest's per-step counter-rotation against the pelvis keeps 0.8-1.25 of the clip's, and its
+        //    pitch bob at least 0.6 (Spine Stability stands the slow lean up, which takes some of the pitch range with it).
+        //    Before: running 0.53 / 0.75, the crouch walk 0.28 / 0.20.
+        for (const char* name : {"A walk", "M run", "M crouch walk", "M walk back"}) {
+            if (!TbPartOn(name[0])) continue;
+            const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
+            if (q.Trunk[0].size() < 20) continue;
+            const auto swing = [&](const std::vector<float>& v) { return pct(v, 0.95f) - pct(v, 0.05f); };
+            const float yaw = swing(q.Trunk[6]) / std::max(swing(q.TrunkClip[6]), 1e-3f);
+            const float bob = swing(q.Trunk[5]) / std::max(swing(q.TrunkClip[5]), 1e-3f);
+            // (Crouched, Spine Stability stands 0.8 of the slow lean up - kMmCrouchLeanKept 0.2 - against 0.5 standing: more of
+            // the pitch's range goes with it.)
+            const float bobMin = std::string(name).find("crouch") != std::string::npos ? 0.5f : 0.6f;
+            std::snprintf(b, sizeof b, "%s: the torso moves with the hips - the chest's swing against the pelvis %.2f of the clip's "
+                                       "(0.8-1.25), its pitch bob %.2f (>= %.1f)", name, yaw, bob, bobMin);
+            Check(yaw >= 0.8f && yaw <= 1.25f && bob >= bobMin, b);
+        }
         // 1. Running, the head isn't thrown back: its own pitch (off the bind pose, + chin down) no further back than -10 deg
         //    (before: the chest stood up under a head the clip had 30 deg back - about -23).
         for (const char* name : {"A jog", "M run", "M run looking about"}) {

@@ -63,6 +63,13 @@ constexpr float kWallHeadGap = 0.08f, kWallHeadRadius = 0.12f; // m (KeepHeadOff
 constexpr float kHandEyeMin = 0.30f, kHandEyeSoft = 0.06f; // m (KeepHandsFromEye)
 constexpr float kMmFootReleaseYawRate = 240.0f; // deg/s (MM foot lock)
 constexpr float kMmChestTwistMax = 60.0f;       // deg: under MM, unarmed, the chest turns at most this far off the hips toward the view
+// Under MM, Spine Stability and Spine Twist act on the chest's slow lean and heading (FirstPersonSlowAngle, these time
+// constants per stage). The gait's per-step motion passes: the chest's pitch bob is at the step rate (walk ~1.8 Hz, run ~3.2:
+// 11 / 4 % of it reaches the correction) and its counter-rotation against the hips at the stride rate (walk ~0.9 Hz, run
+// ~1.6: 11 / 4 %; at 0.35 s the walk's 20 % came back phase-lagged and swung the shoulders 34 % past the clip's). The view's
+// own turn isn't filtered - a flick still leads with the chest at once. Standing, the heading follows faster (no stride to
+// keep; a turn on the spot leads with the chest).
+constexpr float kMmLeanSeconds = 0.25f, kMmChestYawSeconds = 0.5f, kMmChestYawStillSeconds = 0.08f;
 constexpr const char* kBoneNeck = "neck_01"; // (MM spine stability: keeps its clip orientation)
 constexpr glm::vec3 kRight{-1.0f, 0.0f, 0.0f};
 
@@ -363,6 +370,18 @@ float FirstPersonBodyWrapAngle(float radians) {
     return radians;
 }
 
+float FirstPersonSlowAngle::Update(float x, float dt, float seconds) {
+    if (!Have) {
+        A = B = x;
+        Have = true;
+        return B;
+    }
+    const float k = seconds > 1e-5f ? 1.0f - std::exp(-std::max(dt, 0.0f) / seconds) : 1.0f;
+    A += FirstPersonBodyWrapAngle(x - A) * k;
+    B += FirstPersonBodyWrapAngle(A - B) * k;
+    return B;
+}
+
 void FirstPersonGaitPhase::Update(float spread, float lift, bool moving, float dt) {
     dt = std::max(dt, 0.0f);
     auto wrap = [](float v) { return v - std::floor(v + 0.5f); }; // (-0.5, 0.5]
@@ -622,6 +641,8 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     else
         m_RestHead = glm::vec3(model.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, m_HeadNode)[3]);
     m_HaveBindPosture = false;
+    m_MmLeanSlow.Reset();
+    m_MmChestYawSlow.Reset();
     if (const int pelvisNode = model.NodeIndex(Bone(FPBody::kBonePelvis)); pelvisNode >= 0) {
         const glm::mat4 bp = model.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, pelvisNode);
         m_RestPelvisY = bp[3].y;
@@ -1345,6 +1366,7 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     ac.SkipUpdate = true; // the whole group (the pieces follow the driver): FirstPersonBodyMotion::Pose poses them
     ac.SkippedTime = 0.0f;
     m_RootVelocity = glm::vec3(0.0f);
+    m_Mm.Config.SprintLoop = cfg.MmSprintLoop; // (the A/B switch, live)
 
     // The view's turn rate: the run slows in turns (the pack never runs fast on a curve - its run circles are 2-2.75 m/s):
     // at most kRunLateral m/s^2 sideways, down to the jog-strafe speed.
@@ -1356,9 +1378,12 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
         // (3 m/s^2 down to the jog strafe's 1.32 m/s, the run fell into the pack's stops and starts at every turn - the owner's
         // "it does a stop which disturbs the flow". The sprint loop carries the run through a turn: 6 m/s^2, never under
         // kRunTurnFloor of the run, above where the loop hands back to matching.)
+        // With the sprint loop there is no slowdown: the loop needs no curved-run data (the heading turns it), and slowing for
+        // the view's turn rate is what dropped the sprint off the loop - mouse-steering in the owner's recording took the
+        // capsule 4.4 -> 1.5 m/s (the slowdown plus the velocity cutting the corner), into the pack's starts and stops.
         constexpr float kRunLateral = 6.0f, kRunTurnFloor = 0.65f;
         const float run = std::max(m_MmSpeeds.Forward[1], 0.01f);
-        m_MmRunScale = m_MmViewRate > 1e-3f ? std::clamp(kRunLateral / m_MmViewRate / run, kRunTurnFloor, 1.0f) : 1.0f;
+        m_MmRunScale = m_Mm.HasSprintLoop() || m_MmViewRate <= 1e-3f ? 1.0f : std::clamp(kRunLateral / m_MmViewRate / run, kRunTurnFloor, 1.0f);
     }
 
     FirstPersonBodyMotion::Input in;
@@ -1459,7 +1484,10 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
     m_RootVelocity = dt > 0.0f && !m_Turning && !m_Mm.Active() ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
     // Motion matching: this step's pose onto every piece (the controller's update was held), before anything reads it.
-    if (m_Mm.Active()) m_Mm.Pose(m_Models);
+    if (m_Mm.Active()) {
+        m_Mm.Pose(m_Models);
+        CaptureMmClip();
+    }
     // The presentation's view punch on the camera this frame (Update / RefreshViewKick put it on after Tick): the walk
     // bob, landing dip, lean and ADS camera share. It stays on - the camera goes to the body's eye plus this, below.
     const glm::vec3 viewKick = m_HaveCameraBase ? camera.Position - m_CameraBase : glm::vec3(0.0f);
@@ -1486,12 +1514,16 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     }
 
     BodyDebug::Info().ChestPitchClipDeg = ChestPitchDeg();
+    TrunkAngles(BodyDebug::Info().TrunkClipDeg);
     if (const Model* drv = DriverModel(); drv)
         if (glm::mat4 pv(1.0f); drv->NodeTransform(Bone(FPBody::kBonePelvis), pv)) BodyDebug::Info().PelvisHeightClip = pv[3].y;
+    // The A/B switch (FirstPersonBodyComponent::MmPostLayers): off, motion matching's pose is drawn with foot IK and the
+    // crouch's hips only.
+    const bool mmLayers = !m_Mm.Active() || cfg.MmPostLayers;
     {
     PROFILE_SCOPE("FPB spine stability");
     if (m_Mm.Active() && m_Mm.CrouchFromWalk()) LowerCrouch(kWalkCrouchDrop * m_RestPelvisY * std::clamp(m_SpineCrouch, 0.0f, 1.0f) * m_MmSpineWeight);
-    ApplySpineStability(cfg.SpineStability, ac);
+    if (mmLayers) ApplySpineStability(cfg.SpineStability, ac, dt);
     if (m_Mm.Active() && !m_Mm.CrouchFromWalk()) RaiseCrouch(std::clamp(m_SpineCrouch, 0.0f, 1.0f) * m_MmSpineWeight);
     }
     BodyDebug::Info().ChestPitchStableDeg = ChestPitchDeg();
@@ -1514,7 +1546,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             break;
         }
     }
-    if (m_Mm.Active()) KeepHeadOffWalls(world, dt);
+    if (m_Mm.Active() && mmLayers) KeepHeadOffWalls(world, dt);
     PROFILE_SCOPE("FPB spine + shoulders");
 
     // The chest follows the view's pitch first, so the head (and the camera on it) and the
@@ -1578,7 +1610,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     BodyDebug::Info().ViewPitchDeg = glm::degrees(viewPitch);
     // The pitch only: the chest's heading (Spine Twist, or the rig's stance) is closed-loop below, measured off the
     // shoulders - the clips' own spine yaw is in it, so an open-loop twist here was only ever a first guess.
-    if (spineAim > 0.0f) {
+    if (mmLayers && spineAim > 0.0f) {
         // Arm Hang, unarmed (armed, the arms take the rig's pose and reach the gun: ArmsLateUpdate).
         const float hang = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
         thread_local std::vector<ArmHangPose> arms;
@@ -1591,7 +1623,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     }
     // Looking down standing still, unarmed (the owner: "it looks kinda awkward during idle when you look down"): the arms
     // ease to the reference's relaxed hang - the idle's own arms, carried by the chest's pitch, floated up in front.
-    if (m_Mm.Active() && viewPitch < 0.0f) {
+    if (m_Mm.Active() && mmLayers && viewPitch < 0.0f) {
         const float down = glm::smoothstep(glm::radians(kLookDownArmsFrom), glm::radians(kLookDownArmsFull), -viewPitch);
         const float pace = glm::smoothstep(0.1f, 0.8f, glm::length(m_Move)); // eased out as a walk starts
         const float w = down * (kLookDownArmsStill + (kLookDownArmsMoving - kLookDownArmsStill) * pace) *
@@ -1641,16 +1673,20 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // the view's, measured off the shoulder line - one pass, about the model's up, so the line's heading lands exactly
     // (every bone's share turns about the same axis; short of it only where the spine's per-bone limits stop it). Off it,
     // one shoulder sits further from the view than the other.
-    if (cfg.SpineTwist > 0.0f && !matched) {
+    if (mmLayers && cfg.SpineTwist > 0.0f && !matched) {
         glm::vec3 l, r;
         shoulderPair(l, r);
         const glm::vec3 across = l - r; // model +X (the mannequin's left) when the chest faces forward
         if (across.x * across.x + across.z * across.z > 1e-6f) {
-            const float chestYaw = std::atan2(-across.z, across.x); // rotating +X about +Y by t gives z = -sin t
+            float chestYaw = std::atan2(-across.z, across.x); // rotating +X about +Y by t gives z = -sin t
             // Under MM a flick of the view leaves the heading behind for a moment (its turn rate is capped): the chest leads
             // only so far - twisted the whole way round, the spine wrung.
             const float lim = glm::radians(kMmChestTwistMax);
             const float twistWanted = m_Mm.Active() && m_ArmsWeight < 0.5f ? std::clamp(m_Twist, -lim, lim) : m_Twist;
+            // Under MM the chest's slow heading is turned to the view, not its every frame: the gait's counter-rotation of the
+            // shoulders against the hips stays (re-aimed every frame, Spine Twist 1 held the shoulder line square to the view
+            // over hips swinging 16 deg a stride).
+            if (m_Mm.Active()) chestYaw = m_MmChestYawSlow.Update(chestYaw, dt, m_Still ? kMmChestYawStillSeconds : kMmChestYawSeconds);
             const float error = FirstPersonBodyWrapAngle(twistWanted - chestYaw);
             if (std::abs(error) > 0.002f) ApplySpineAim(camera, 0.0f, error * std::min(cfg.SpineTwist, 1.0f));
         }
@@ -1796,7 +1832,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     m_HaveChestView = true;
     {
         const float unarmed = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
-        if (unarmed > 1e-3f) KeepHandsFromEye(glm::inverse(yaw) * (camera.Position - m_Feet) / std::max(t.Scale.y, 1e-3f), unarmed);
+        if (mmLayers && unarmed > 1e-3f) KeepHandsFromEye(glm::inverse(yaw) * (camera.Position - m_Feet) / std::max(t.Scale.y, 1e-3f), unarmed);
     }
     PostureMetrics(world, camera, dt);
 }
@@ -2022,8 +2058,10 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 
 // Model-space masking cancels the gait's motion all the way up from the pelvis. A fixed idle
 // reference keeps the chest stable without filtering (and lagging) the player's view aim.
-void FirstPersonBody::ApplySpineStability(float weight, const AnimatorControllerComponent& animator) {
+void FirstPersonBody::ApplySpineStability(float weight, const AnimatorControllerComponent& animator, float dt) {
     weight = std::clamp(weight, 0.0f, 1.0f);
+    // Under MM, the chest's slow lean as the clip has it (followed every frame, the airborne segment included).
+    const float leanSlow = m_Mm.Active() && m_HaveBindPosture ? m_MmLeanSlow.Update(glm::radians(ChestPitchDeg()), dt, kMmLeanSeconds) : 0.0f;
     // Under motion matching the reference is the database's own idle (FirstPersonBodyMotion::ReferencePose), its weight
     // eased out through a jump. Without it the pack's lean stayed in the chest (28 degrees running) and the spine's aim at a
     // view looking down bent the body over on top of it: 46 degrees running, against the controller's 16 (Phase 4).
@@ -2109,9 +2147,41 @@ void FirstPersonBody::ApplySpineStability(float weight, const AnimatorController
             IK::ComputeGlobals(pose, ref.Parents, before);
         }
         const std::vector<glm::mat4> noCrouch;
-        FPBody::BlendLocomotionSpine(pose, ref.Parents, ref.SpineNodes, ref.Globals[0],
-                                   ref.Clips[1] >= 0 || ref.Clips[1] == -3 ? ref.Globals[1] : noCrouch,
-                                   m_SpineCrouch, m_Mm.Active() ? weight * (1.0f - kMmLeanKept) : weight, m_SpineCrouchDrop);
+        const bool haveCrouchRef = ref.Clips[1] >= 0 || ref.Clips[1] == -3;
+        if (!m_Mm.Active()) {
+            FPBody::BlendLocomotionSpine(pose, ref.Parents, ref.SpineNodes, ref.Globals[0], haveCrouchRef ? ref.Globals[1] : noCrouch,
+                                         m_SpineCrouch, weight, m_SpineCrouchDrop);
+        } else if (const int chest = ref.SpineNodes[4]; chest >= 0 && m_HaveBindPosture && ref.Globals[0].size() == pose.size()) {
+            // Motion matching: only the slow lean is stood up (1 - kMmLeanKept of the way from the clip's toward the reference's,
+            // the reference crouched as crouched), as one pitch spread evenly over spine_01..05 about each bone - the gait's
+            // per-step motion of the chest over the hips (its bob, its counter-rotation, its roll) is the clip's. (Pulling
+            // spine_01..05 toward the fixed idle in model space - the legacy controller's Spine Stability - cancelled half of
+            // that motion with the lean: the hips moved, the chest above them held still - the owner's "lower spine grounded,
+            // the torso not getting the same motions". Measured: the chest's per-step yaw 22.5 -> 10.9 deg running, its pitch
+            // bob 14.3 -> 7.2 walking.)
+            const auto pitchOf = [&](const glm::mat4& g) {
+                const glm::vec3 up = IK::Rotation(g) * (glm::inverse(m_BindChest) * glm::vec3(0.0f, 1.0f, 0.0f));
+                return std::atan2(glm::dot(up, kForward), up.y);
+            };
+            float target = pitchOf(ref.Globals[0][(size_t)chest]);
+            if (haveCrouchRef && ref.Globals[1].size() == pose.size())
+                target = glm::mix(target, pitchOf(ref.Globals[1][(size_t)chest]), std::clamp(m_SpineCrouch, 0.0f, 1.0f));
+            const float lean = (1.0f - kMmLeanKept) * weight * FirstPersonBodyWrapAngle(target - leanSlow);
+            int spine = 0;
+            for (int i : ref.SpineNodes) spine += i >= 0;
+            if (std::fabs(lean) > 1e-5f && spine > 0) {
+                thread_local std::vector<glm::mat4> g;
+                g = before;
+                const glm::quat step = glm::angleAxis(lean / (float)spine, glm::vec3(1.0f, 0.0f, 0.0f)); // + about +X: forward
+                int prev = -1;
+                for (int i : ref.SpineNodes) {
+                    if (i < 0) continue;
+                    if (prev >= 0) IK::RefreshPath(pose, ref.Parents, g, prev, i);
+                    IK::OffsetBoneOnly(pose, ref.Parents, g, i, glm::vec3(0.0f), step, IK::Position(g[(size_t)i]));
+                    prev = i;
+                }
+            }
+        }
         if (m_Mm.Active()) {
             thread_local std::vector<glm::mat4> after;
             IK::ComputeGlobals(pose, ref.Parents, after);
@@ -2447,6 +2517,41 @@ float FirstPersonBody::ChestPitchDeg() const {
     return glm::degrees(std::atan2(glm::dot(up, kForward), up.y));
 }
 
+void FirstPersonBody::CaptureMmClip() {
+    const Model* m = DriverModel();
+    const MotionDatabase* db = m_Mm.Database();
+    if (!m || !db) return;
+    const auto& bones = db->Stream().Bones();
+    if (m_MmLayerNodes.size() != bones.size()) {
+        m_MmLayerNodes.assign(bones.size(), -1);
+        for (size_t i = 0; i < bones.size(); ++i) m_MmLayerNodes[i] = m->NodeIndex(bones[i]);
+    }
+    const IK::Pose& pose = m->AppliedLocalPose();
+    m_MmClipRot.resize(bones.size());
+    for (size_t i = 0; i < bones.size(); ++i) {
+        const int n = m_MmLayerNodes[i];
+        m_MmClipRot[i] = n >= 0 && n < (int)pose.size() ? pose[(size_t)n].R : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    }
+}
+
+bool FirstPersonBody::TrunkAngles(float (&out)[9]) const {
+    const Model* m = DriverModel();
+    glm::mat4 p(1.0f);
+    glm::quat chest;
+    if (!m || !m_HaveBindPosture || !ChestTurn(chest) || !m->NodeTransform(Bone(FPBody::kBonePelvis), p)) return false;
+    const glm::quat pelvis = glm::normalize(IK::Rotation(p) * glm::inverse(m_BindPelvis));
+    const auto angles = [](const glm::quat& q, float* o) { // yaw (+ toward the body's right), roll (+ toward its left), pitch (+ forward)
+        const glm::vec3 f = q * kForward, u = q * glm::vec3(0.0f, 1.0f, 0.0f);
+        o[0] = glm::degrees(std::atan2(glm::dot(f, kRight), glm::dot(f, kForward)));
+        o[1] = glm::degrees(std::atan2(glm::dot(u, -kRight), u.y));
+        o[2] = glm::degrees(std::atan2(glm::dot(u, kForward), u.y));
+    };
+    angles(pelvis, out);
+    angles(chest, out + 3);
+    angles(glm::normalize(glm::inverse(pelvis) * chest), out + 6);
+    return true;
+}
+
 void FirstPersonBody::PostureMetrics(const World& world, const Camera& camera, float dt) {
     BodyDebug::Snapshot& d = BodyDebug::Info();
     if (dt > 0.0f && m_HaveMetricYaw) d.BodyYawRateDeg = glm::degrees(FirstPersonBodyWrapAngle(m_Yaw - m_MetricYaw)) / dt;
@@ -2454,6 +2559,16 @@ void FirstPersonBody::PostureMetrics(const World& world, const Camera& camera, f
     m_HaveMetricYaw = true;
     const Model* m = DriverModel();
     if (!m || !world.Registry.valid(m_Body)) return;
+    TrunkAngles(d.TrunkDeg);
+    if (m_Mm.Active() && m_MmClipRot.size() == m_MmLayerNodes.size() && m_Mm.Database()) {
+        const IK::Pose& pose = m->AppliedLocalPose();
+        d.LayerDeg.resize(m_MmLayerNodes.size());
+        for (size_t i = 0; i < m_MmLayerNodes.size(); ++i) {
+            const int n = m_MmLayerNodes[i];
+            d.LayerDeg[i] = n >= 0 && n < (int)pose.size() ? glm::degrees(MotionMath::QuatAngle(m_MmClipRot[i], pose[(size_t)n].R)) : 0.0f;
+        }
+        d.LayerBones = &m_Mm.Database()->Stream().Bones();
+    }
     glm::quat chest;
     if (ChestTurn(chest)) {
         const glm::vec3 up = chest * glm::vec3(0.0f, 1.0f, 0.0f);

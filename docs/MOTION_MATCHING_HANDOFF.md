@@ -13,7 +13,7 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 | 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
 | 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16; owner signed off on the `mmview` recording) |
 | 3. Motion matching runtime | `dev/mm-phase3` | **Done** (2026-11-16) |
-| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **In progress** (play tests 2 and 3 fixed - posture, the sprint loop (crossfaded), the crouch from the walk, idle look-down arms, the head off walls; `mmstress` added; full pass all PASS; the owner's play test next - "Phase 4: next steps") |
+| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **In progress** (play tests 2 and 3 fixed - posture, the sprint loop (crossfaded), the crouch from the walk, idle look-down arms, the head off walls; `mmstress` added; session 3's audit: variable-frame-time dead blend, the loop's tempo and stride; the owner's play test next - "Phase 4: next steps") |
 | 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
 | 6. Legacy cleanup and final verification | `dev/mm-phase6` | Pending |
 
@@ -644,6 +644,134 @@ looking down standing still look awkward ("the hand motions while walking or run
 - Stress findings, judged fine: the zig-zag's crossover steps (13 % of frames, 11 cm), the strafe circle's (16 %), the wall
   push's search churn (3.7 jumps/s while the capsule is pinned), a teleport onto the ramp playing a turn on the spot.
 
+**Session 3 (2026-11-17): audit - frame time, the sprint loop's tempo and stride.** Measured before changing anything; the
+scratch scripts parse `Manny.mmanim` / `.mmdb` directly (formats in their headers).
+- **Every MM test ran at a fixed 1/60 s; the owner plays at a variable frame time.** `Application.cpp` gives npc-test mode
+  exactly 1/60 s and Play `Time::DeltaTime()`. The posture layers all ease with `exp(-dt / tau)` (frame-rate independent);
+  one thing was not:
+  - **The dead blend's carried velocity** (`MotionMatcher`): a jump took the last two output poses' difference over *this*
+    update's dt, but they were one update apart - the previous dt. At any frame-time change (a hitch, the frame after it,
+    uneven pacing) the carried velocity was scaled by the ratio: after a short frame a long one stalled the limbs (1/8 at
+    240 -> 30 fps), the other way it ran 8x into the 4 pi rad/s clamp (a lurch at the jump). Now `BeginBlend` uses the time
+    between those two poses (`m_OutInterval`). `ForceFrame` / `LoopTo` lost their `dt` (unused or wrong).
+- **The sprint loop's tempo stepped every stride.** Speed warping divided by the *raw* frame's root speed; at the wrap the
+  raw frame jumps from the stride's end to its start (4.49 -> 4.76 m/s on the old stride) while the pose shown - the
+  crossfade - doesn't. So the play rate stepped ~6 % every 0.62 s: a hitch in the limbs' tempo with no pop in the pose. Now
+  the warp divides by the speed of the pose shown (`Loop::ShownSpeed`: the crossfade's blend of the two speeds, by the same
+  weight `Close` blends the poses with; continuous over the wrap).
+  - *Considered and rejected:* warping by a wider (stride-long) speed window everywhere. A planted foot's speed against the
+    root is the root's instantaneous speed, so the short window is what keeps the feet planted; a wide one trades the walk's
+    tempo wobble (+-20 % root surge at sigma 0.10 s) for foot slide.
+- **The loop's stride, re-picked on steadiness** (`FindSprintLoop`). Measured: the stride in use
+  (`Run_CardLong_noStops_Take001` @ 6.25 s) had the pack's best seam (5.4 deg) but **slowed 4.8 % across the stride**
+  (4.91 -> 4.49 m/s in its last 8 frames) with **its two steps 2.4 % apart in speed** - looped every 0.6 s, a slowing,
+  uneven stride. The crossfade hides any of the pack's seams (5-9 deg); nothing hides drift or asymmetry. The score is now in
+  comparable units: seam deg + 2 x the feet / pelvis features (as before) + the speed's linear drift across the stride, % +
+  the steps' mean speeds apart, % + their durations apart, % (a stride needs its right touchdown between). Picked:
+  **`Run_Loop_Take001` @ 19.80 s** - seam 6.6 deg, drift 1.0 %, steps 0.3 % / 2.7 % apart (old score 8.55 vs the old pick's
+  7.48; new 12.16 vs 16.59; runner-up 14.52). The sprint is the loop's mean shown speed x 0.95.
+- **`EnterAir` with no airborne match** (an edge: a database without jumps) left the state `Rising` with a stale
+  `m_AirLast`: the landing then forced the matcher to an earlier jump's frame (or frame 0). Now it stays on the ground.
+- **Unit tests** (+2): "dead blend across a frame-time change" (1/240 then 1/30 s and the reverse: the output's angular
+  velocity carries across a forced jump within 0.65-1.25x) and "sprint loop wrap" (on a speeding-up synthetic take: the raw
+  speed jumps at the wrap, the shown speed and the closed pose don't; smooth through the overlap). `Loop::SetSpan` builds a
+  loop's shown-speed table (the picker's and the test's).
+- **Results** (`mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"`, `D:\mm_phase4\session3_run1`): unit 1812
+  checks, 0 failures; **mmplayer 57/57**. The engine picked the predicted stride (`sprint loop: Run_Loop_Take001 @
+  19.80-20.42 s, 4.63 m/s shown, score 12.16`); the sprint is now **4.40 m/s** (was 4.57). Against the last run on the old
+  stride (`D:\mm_phase4\s10_loop2`), same course:
+  - straight sprint: foot slide worst 0.8 -> 0.5 cm, run turning 1.6 -> 0.9; loop 100 %, 0.3 / 0.0 jumps/s (unchanged);
+    pose step max 23.7 deg = its p99 22.7 (no spike at the wrap; the stride's limbs move more per frame than the old one's 17);
+  - single worst plants up on transient legs: run flick 1.9 -> 9.8 cm, run looking about 11.0 -> 16.2, run + jump 0.2 ->
+    2.2 (loop entries / exits on a different stride; the foot lock's job - watch them);
+  - **the style changed** - read this before judging: chest lean in the clip 27 -> 38 deg (drawn 24 -> 32), pelvis 0.92 ->
+    0.84 of standing, head down 8 -> 18 deg world, hand in view running looking down 9 -> 21 %. The new stride runs lower and
+    leans in. It is the pack's *typical* sprint: its pelvis (0.879 of the source's standing) is exactly the median of the 15
+    candidate strides; the old one was the outlier (+6.2 %), upright because it was slowing down (a runner rises as they
+    brake).
+  - (A before / after video was made for the owner, then deleted at the owner's request: the owner tests in the editor.)
+- At a fixed 1/60 s the dead-blend fix is a no-op (the interval is the dt), so the course numbers above are the loop's alone.
+- `mmstress` on the new loop (`D:\mm_phase4\session3_stress`): **16/16**, worst bone step 24.4 deg (sprint reversals; was
+  19.8, the limit 45).
+
+**Session 3, play test 4 (the owner's recording, 2026-11-17 11:28: idle hands jerking, sprint goofy).** Reviewed frame by
+frame (Scene view, 0.1 s):
+- **Idle: a rewind loop.** The hands' motion came in bursts every 0.41 s. While standing, the query is constant and the
+  timer searched every 0.1 s, so the stillest moment won again as soon as `IgnoreNear` let it back in. Fixed:
+  - **Idle mode** (`MotionMatcher::Idle`, `MotionSearchSchedule::Hold`): standing still on an Idle frame (capsule under
+    0.1 m/s, not turning in place), no timer search. A search runs only on an input or filter change, on the frame running
+    out, or when the continuation stops fitting (root travel over 0.25 m in 1 s, facing over 90 deg).
+  - **Idle takes only** (`MotionLabel::IdleTake`, runtime, from the tag "idle") with a 3 s runway. Over the whole database
+    the stillest second was `Stand_Jump_360`'s stance, picked again every 2.2 s.
+  - **Facing bound 90 deg, not the Turn Threshold.** The pack's idles move the root under 0.17 m/s (p97), but
+    `Stand_Idle_LookAround` turns its root over 30 deg within 1 s on 22 % of its frames (its facing is half the shoulder
+    line). Standing, the heading follows that turn and the Turn Threshold brings the body back.
+  - **A reselect history everywhere** (`MotionSearchParams::Avoid`): frames shown in the last second, padded by 10, are
+    never candidates.
+  - Result (`M idle`, 6 s): 1 jump, one take held 3.8 s, 0 rewinds anywhere on the course.
+- **Sprint turning: the loop collapsed.** Mouse turns took the capsule 4.4 -> 1.5 m/s (the view-rate slowdown
+  `m_MmRunScale`, plus the velocity cutting the corner), below the loop's exit, into the pack's starts and stops. Fixed:
+  no slowdown while the sprint loop carries the run; the loop exits on intent (Shift, ahead, crouch, air, a reversal over
+  100 deg) or when blocked (under 0.3 of the run speed for 0.2 s), not on a speed dip. `M run random look` (view wandering
+  +-25 deg yaw, peaks ~150 deg/s, +-35 deg pitch): on the loop 100 %, 0 exits, speed 4.47-4.50 m/s, the warp never pinned.
+- **Still open, measured** (step 3, after the owner's A/B):
+  - **Mouse yaw swings the whole body** (heading follows the view: body yaw p99 129 deg/s), so the planted feet skate:
+    `M run random look` slide worst 50.8 cm, mean 7.5 (straight 1.0).
+  - **Mouse pitch nods the torso** (Spine Aim): chest pitch swing 44 deg against 20 straight.
+  - `[MmLayers]` (new; per stream bone, drawn vs matched, mean / p95 deg): running, `neck_01` 16 / 23 (the head-down cap
+    and the neck's world restore), upper arms 5 (10 / 19 with the random look).
+- **A/B switches for the owner** (`FirstPersonBodyComponent`, Inspector, live in Play; temporary): "MM Post Layers" (off:
+  the matcher's pose with foot IK only) and "MM Sprint Loop" (off: matching on the run fragments).
+- New mmplayer legs: `M idle`, `M run random look`, `M run mouse noise`. New tables `[MmIdle]`, `[MmSprint]`, `[MmLayers]`.
+  Checks 63 (idle holds, no rewinds; the search-rate check now excludes idle and loop time).
+- Unit test: "reselect history and the idle hold". Unit 1821 checks, 0 failures; mmplayer 63/63 (`D:\mm_phase4\pt4_run4`).
+
+**Session 3, "why does the sprint do a stop every few steps?" (the owner).** The loop's crossfade. For the first 16 frames
+(0.27 s) after every wrap it played the frames *past* the stride's end, blending into the stride's start - and past the end
+the pack's actor is braking (a dash in a 9 m room): 4.42 -> 3.48 m/s over those 16 frames on the current stride (4.49 -> 3.69
+on the one before; every candidate the same), the crossfade's weight on them over half for the first 8. So every cycle
+(~0.6 s, two steps) began with a brake and recovered. Before the stride the actor is still speeding up (3.90 -> 4.55); no
+candidate has steady running on either side (weighted by what the crossfade shows, the best is 3-5 % off speed, the
+current pick 12.5 % after / 7.8 % before) - so no re-pick or side swap fixes it, only lessens it.
+- **Fixed: the wrap is closed by an offset, not by borrowed frames** (offset inertialization, `Loop::Close` / `SeamDecay`).
+  After a wrap the stride plays its own start with the seam's difference added - each bone's end rotation off its start
+  (scaled angle-axis) and their angular velocities' difference, the pelvis likewise - decaying as a critically damped spring
+  (half-life 0.1 s; 0.2 % left at the next wrap). Continuous in pose and velocity; only the stride's own frames ever play.
+  The shown speed (speed warping's divisor) carries the same offset. The offset applies only after a wrap (`m_LoopWrapped`;
+  the crossfade also bent the loop's entry, which is already dead-blended). The picker no longer needs 16 frames past the
+  stride (2, for the hold).
+- Unit test rewritten: a 0.43 rad seam closes exactly (0.00000 rad at the wrap), the step across the wrap 0.0327 rad against
+  0.0320 into it, 0.5 % of the seam left at the next wrap (a 30-frame span; 0.2 % on the real 37-frame stride), the shown
+  speed continuous.
+- `mmplayer` 61/61 (`D:\mm_phase4\seam1`, against `trunk_mm3` before): straight sprint pelvis pitch swing per cycle 21.2 ->
+  15.3 deg and yaw 15.9 -> 14.4 (the brake's dip gone), pose step max 23.7 -> 23.2 (no spike at the wrap), loop 100 %, 0.3
+  jumps/s; slide worst 0.5 -> 1.0 cm. **Watch:** run + jump's landing back into the sprint slid 8.5 cm worst / 3.3 mean (was
+  2.2 / 0.7; 4 plants) - the transient legs have swung run to run all session (the flick 1.9 / 9.8 / 8.5 cm with unrelated
+  changes), but this one has only gone up.
+
+**Session 3, the trunk (the owner, relayed: "weird shit in the hips/lower spine - feels like the lower spine is grounded and
+the torso isn't getting the same motions").** Measured first: `[MmTrunk]` (new, `mmplayer`) - per leg the per-step swing
+(p95 - p5, deg) of the pelvis's, the chest's and the chest-against-pelvis yaw / roll / pitch, as the clip poses them and as
+drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
+- **Confirmed, two causes.** The pelvis was drawn as the clip had it; the chest above it lost half its per-step motion -
+  running its yaw swing 22.5 -> 10.9 deg (against the pelvis 19.4 -> 10.2), walking its pitch bob 14.3 -> 7.2, the crouch walk
+  its yaw 14.2 -> 1.7 and bob 16.0 -> 3.2, walking back its yaw 10.7 -> 2.7:
+  - **Spine Stability** (MM path) pulled spine_01-05's model-space position and rotation halfway toward a fixed idle frame
+    (`BlendLocomotionSpine`, the legacy controller's - its own comment: it "cancels inherited pelvis motion too"). That
+    removed the lean it was meant to, and half of every per-step motion with it.
+  - **Spine Twist** (1 on the testbed, unarmed) re-aimed the shoulder line at the view *every frame*, holding it square over
+    hips that swing ~16 deg a stride - the extra yaw loss running.
+- **Fixed (MM only; the legacy path is untouched):**
+  - Spine Stability stands up only the chest's **slow lean**: a two-pole low-pass of the clip's chest pitch
+    (`FirstPersonSlowAngle`, 0.25 s per pole: 11 % of a walk's step bob, 4 % of a run's reaches it), corrected by
+    `1 - kMmLeanKept` of the way to the reference's (crouched as crouched), as one pitch spread evenly over spine_01-05. The
+    neck and upper arms still get the clip's world orientation back, the crouch arm hang and the head-down cap are as before.
+  - Spine Twist turns the chest's **slow heading** to the view (low-pass 0.5 s moving, 0.08 s standing; the view's target
+    isn't filtered, so a flick still leads with the chest). At 0.35 s the walk's stride-rate leftover came back phase-lagged
+    and swung the shoulders 34 % past the clip's.
+- New `mmplayer` check (58 now): walk, run, crouch walk, walk back - the chest's swing against the pelvis 0.8-1.25 of the
+  clip's, its pitch bob >= 0.6 (the slow lean's removal takes some of the pitch range).
+
 ### Phase 5: NPCs (unarmed)
 - MM in `NpcBody::Tick` (~195–380), with one shared database.
 - Trajectories from navmesh corners, plus LOD.
@@ -660,6 +788,9 @@ looking down standing still look awkward ("the hand motions while walking or run
 ## Test protocol (every phase)
 
 - Tests always run **visible**: never set `TARTARUS_HIDDEN`, and keep `--visible` on `tools/npc_test_runs.py`.
+- **No footage** (the owner, 2026-11-17: "We don't need to waste time recording footage for something I can test"): don't
+  set `NPC_TEST_RECORD` or render before/after videos. Verify with the checks and measurements; the owner plays it in the
+  editor. Record only when the owner asks.
 - Tests always run with **unlocked FPS**: `TARTARUS_UNLOCKED_FPS=1`, from Phase 1 on. Game time stays on the fixed
   1/60 s step, so results don't depend on frame rate.
 - **Test budget** (the owner's rule: don't over-test):
@@ -812,6 +943,13 @@ looking down standing still look awkward ("the hand motions while walking or run
     them 0.30 m from the eye. Owner to judge.
   - **The chest's aim caps** (20 up / 35 down) are unarmed only; armed keeps the full aim for the arms rig's reach.
   - **The jog (1.85 m/s) has no key** (Shift is the run): an owner decision if a walk / jog / run split is wanted.
+  - **No harness run exercises a variable frame time** (session 3): npc-test mode is pinned to 1/60 s. The dead-blend bug
+    it hid is fixed and unit-tested; a jittered-dt mode for `mmplayer` would need its per-frame thresholds (pose step,
+    jumps/s, the recording's every-other-frame) made per-second first.
+  - **`SharedMotionDatabase::Get` is first-caller-wins** (session 3): the rig-based exclusions (hands up, bent over, crossed)
+    run only on the load that passes a rig, and the database is cached by path alone. Today only the player loads it. Phase
+    5: decide the NPCs' rules, then make the exclusion policy part of the cache key or always apply it - otherwise whichever
+    of the player or an NPC loads first decides for both.
 - Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
   (`[NpcLoco]`, `[Locomotion]`, `[StopSteps]`, `[Slide]`).
 - The baseline is one run per scenario. Re-runs were cut short on purpose. For noise bands, use
@@ -821,10 +959,27 @@ looking down standing still look awkward ("the hand motions while walking or run
 
 ## Phase 4: next steps (continue on `dev/mm-phase4`)
 
+**START HERE (2026-11-17, end of session 3): the strip-back.** The owner's verdict after play test 4: the sprint was a
+patched-together fake (one dash stride looped; the pack has no sprint), and the motion matching path carries other
+patches: a synthetic crouch, Spine Stability and the fixes it needed, spin caps. The approved plan removes them all and
+plays the pack's mocap as captured:
+- Shift = the jog at its natural pace;
+- the pack's own crouch;
+- the simulation / character facing model;
+- Spine Aim fading while moving;
+- additive Spine Twist.
+
+**Read the plan first:** `C:\Users\Jacob\Desktop\MM_STRIPBACK_PLAN.md`. It holds the full inventory with a verdict per
+item, three stages (the owner plays each), the tests to delete and add, and verification. Owner bar: AAA, no Frankenstein
+work, no footage (the owner tests in the editor). The notes below predate it; where they conflict, the plan wins.
+
 Play test 2's problems are fixed, measured against legacy and checked (`mmplayer` 56/56, full pass all PASS). Left:
 
-0. **The sprint still doesn't look right to the owner** (2026-11-17, after the re-picked stride). Uncommitted work on this
-   branch (everything since e2dda7f2 - see "What landed in session 2" and after); commit it as WIP first. Root cause, measured:
+0. **Session 3 changed the sprint** (the tempo step at every wrap is gone; the stride is the pack's steadiest, typical one -
+   lower and leaning in, and its wrap no longer brakes; see "Session 3"). The owner plays it in the editor. If
+   the upright look is preferred over steadiness, the honest options are below (an upright stride in this pack is a slowing
+   one). The notes from before session 3:
+   **The sprint still didn't look right to the owner** (2026-11-17, after the re-picked stride). Root cause, measured:
    the pack has **no cruising sprint** - only 15 full fast straight strides, each 5-12 deg per bone off its start, no two
    alike - so any single looped stride repeats one take's quirks every 0.6 s, and every one is a dash (speeding up or slowing
    down). Options to weigh with the owner before more tuning:
@@ -839,8 +994,8 @@ Play test 2's problems are fixed, measured against legacy and checked (`mmplayer
    `build\Release\TartarusEngine.exe`, open `project/scenes/AnimTestbed.json`, Play, holster the weapon; the editor locks the
    exe - `taskkill` it before building). Review any play-test video as before (contact sheets every 0.5 s, the worst stretches
    every 0.1 s; list everything wrong before fixing).
-2. Fix what that finds, re-run `tools\mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"`; re-record with
-   `NPC_TEST_RECORD=D:\...` + `tools/mm/frames_to_video.py <dir> <out.mp4> --fps 30 --scale 0.75`.
+2. Fix what that finds, re-run `tools\mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"` (no recording - the
+   owner plays it; see the test protocol).
 3. When the owner is happy: mark Phase 4 done and commit (the full pass above is current unless code changes again).
 
 ## Phase 5: first steps
@@ -968,3 +1123,19 @@ Play test 2's problems are fixed, measured against legacy and checked (`mmplayer
     swing damped; reviewed on contact sheets.
   - Visible runs through `mm_smoke.ps1`: ~10 `mmplayer` runs while working (three recorded), one legacy measurement run,
     then the full pass, all PASS.
+- **2026-11-17, Phase 4 (session 3, audit):**
+  - Read the runtime end to end; measured the stream directly before changing anything (one hypothesis - widen the warp's
+    speed window - was measured and rejected: it would trade tempo wobble for foot slide).
+  - Fixed: the dead blend's velocity under a variable frame time (every harness run is fixed 1/60 s, Play is not); the
+    sprint loop's play-rate step at every wrap; the loop's stride (steady and symmetric, not the best seam); `EnterAir`'s
+    stale state with no jump found. +2 unit tests.
+  - Logged two latent issues for later (no variable-dt harness run; `SharedMotionDatabase::Get` first-caller-wins).
+  - One recorded `mmplayer` run (57/57) plus the MM unit filter; no full pass (only MM code changed; legacy untouched).
+  - Later in the session:
+    - the trunk fix (a teammate session's relayed report);
+    - the loop seam offset (the "stop every few steps");
+    - play test 4's idle rewind loop (idle mode, idle takes only, the reselect history) and the sprint-turn collapse;
+    - A/B switches and the `[MmTrunk]` / `[MmIdle]` / `[MmSprint]` / `[MmLayers]` metrics.
+  - Last: `mmplayer` 63/63, unit 1821 checks.
+  - The owner then judged the sprint a fake (still goofy with every layer off). Root cause: the pack has no sprint. The
+    strip-back plan was approved; see "Phase 4: next steps". Recordings stopped at the owner's request.
