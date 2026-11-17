@@ -705,11 +705,11 @@ void RegisterEngineComponents() {
               "Temporary (motion matching overhaul): 0 = the locomotion Animator Controller, 1 = motion matching\n"
               "(the cooked Manny database; speeds from its gait table). TARTARUS_LOCOMOTION_SOURCE overrides it.", 0.0f, 1.0f },
             { "MM Post Layers", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MmPostLayers), 0.0f,
-              "Temporary A/B switch (motion matching): off draws the matcher's pose with foot IK only - no Spine Stability,\n"
-              "Spine Aim / Twist, head cap, arm hang, relaxed arms, hands-from-eye or wall lean. Flip it in Play.", 0.0f, 0.0f },
-            { "MM Sprint Loop", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MmSprintLoop), 0.0f,
-              "Temporary A/B switch (motion matching): off, the sprint is matched on the pack's run fragments instead of\n"
-              "looping one stride. Flip it in Play.", 0.0f, 0.0f },
+              "Temporary A/B switch (motion matching): off draws the matcher's pose with foot IK only - no Spine Aim /\n"
+              "Twist, arm hang or hands-from-eye. Flip it in Play.", 0.0f, 0.0f },
+            { "MM Head Ride", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MmHeadRide), 0.01f,
+              "Motion matching, unarmed: how much of the mocap head's own motion the camera rides. 0 = its slow average\n"
+              "(the stabilized camera, within Eye Slack); 1 = the head as captured (the jog's bob and sway). Live in Play.", 0.0f, 1.0f },
             { "Responsiveness", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Responsiveness), 0.01f,
               "How the player moves: 0 = exactly as the clips travel (root motion - weighty, feet planted),\n"
               "1 = as the input asks (snappy; the clips only animate). In between blends the two.", 0.0f, 1.0f },

@@ -52,6 +52,8 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
             if (std::abs(after) > reach) { YawDropped = std::abs(after) - reach; Cam.Yaw = YawFreeCenter + std::copysign(reach, after); }
         }
     }
+    // A body's look-down limit, whatever turned the view (the mouse, the stick, a script).
+    Cam.Pitch = std::max(Cam.Pitch, std::max(MinPitch, -89.0f));
     const float yaw = glm::radians(Cam.Yaw);
     const glm::vec3 forward(std::cos(yaw), 0.0f, std::sin(yaw)), right(-std::sin(yaw), 0.0f, std::cos(yaw));
     glm::vec3 wish = right * move.x + forward * move.y;

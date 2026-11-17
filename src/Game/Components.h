@@ -673,11 +673,11 @@ struct FirstPersonBodyComponent {
     // input at the mocap's gait speeds). TARTARUS_LOCOMOTION_SOURCE (legacy | mm) overrides it.
     int LocomotionSource = 0;
     // Motion matching A/B switches (temporary, for judging the pose in Play; Phase 6 removes them with LocomotionSource):
-    // MmPostLayers off draws the matcher's pose with foot IK (and the crouch's hips) only - no Spine Stability, Spine Aim /
-    // Twist, head cap, arm hang, relaxed arms, hands-from-eye or wall lean; MmSprintLoop off matches the sprint on the
-    // pack's run fragments instead of looping one stride.
+    // MmPostLayers off draws the matcher's pose with foot IK only - no Spine Aim / Twist, arm hang or hands-from-eye.
     bool MmPostLayers = true;
-    bool MmSprintLoop = true;
+    // Motion matching, unarmed: how much of the mocap head's own motion the eye rides (0 = its slow average, within Eye Slack -
+    // the stabilized camera; 1 = the head as captured: the jog's bob and sway). Armed, the eye stays the rig's.
+    float MmHeadRide = 1.0f;
     // 0 = the capsule moves exactly as the clips travel (root motion), 1 = as the input asks
     // (the clips only animate). Between: a blend - heavier and more grounded toward 0.
     float Responsiveness = 0.0f;
@@ -745,8 +745,9 @@ struct FirstPersonBodyComponent {
     // Unarmed, the most (degrees) the spine's aim pitches the chest looking up / down, eased in (0 = no limit). Past it the
     // view pitches at the neck alone: unlimited, a look straight up arched the body back like a limbo and a look straight
     // down folded it over (the owner's play test 2, Phase 4). Armed, the arms rig needs the full aim to reach the gun.
-    float SpineAimMaxUp = 0.0f;
-    float SpineAimMaxDown = 0.0f;
+    // (Defaults: the values tuned on AnimTestbed - a scene that didn't save them got no cap, the fold back.)
+    float SpineAimMaxUp = 20.0f;
+    float SpineAimMaxDown = 25.0f;
     // Armed, how far the chest takes the arms rig's stance (its shoulder line, e.g. bladed with the
     // support shoulder forward) rather than squaring to the view: 1 = the rig's, so both hands reach.
     float ShoulderLineMatch = 1.0f;

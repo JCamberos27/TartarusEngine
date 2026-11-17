@@ -1,7 +1,6 @@
 ﻿#include "FirstPersonBodyMotion.h"
 
 #include "Animation.h"
-#include "Core/Env.h"
 #include "Core/Paths.h"
 #include "Model.h"
 #include "MotionMatching/MotionBake.h"
@@ -65,166 +64,6 @@ std::vector<float> SharedMotionDatabase::HandOverShoulder(const MotionDatabase& 
     return out;
 }
 
-void SharedMotionDatabase::Loop::SeamDecay(float t, float& pos, float& vel) {
-    // A critically damped spring toward 0 from x0 with velocity v0: x(t) = e^(-y t) ((1 + y t) x0 + t v0), y = 2 ln 2 / halflife.
-    const float y = 2.0f * 0.69314718f / kSeamHalflife, e = std::exp(-y * std::max(t, 0.0f));
-    pos = e * (1.0f + y * t);
-    vel = e * t;
-}
-
-void SharedMotionDatabase::Loop::Close(const MotionDatabase& db, std::uint32_t frame, float frac, MotionPose& pose) const {
-    (void)db;
-    if (!Valid || frame < First || frame > Last) return;
-    const float t = SeamTime(frame, frac);
-    if (t > 8.0f * kSeamHalflife) return; // settled (under 0.1 % of the seam)
-    float a, b;
-    SeamDecay(t, a, b);
-    for (size_t k = 0; k < pose.Rot.size() && k < SeamRot.size(); ++k)
-        pose.Rot[k] = glm::normalize(InertializationMath::FromScaledAngleAxis(a * SeamRot[k] + b * SeamSpin[k]) * pose.Rot[k]);
-    pose.Pelvis += a * SeamPelvis + b * SeamPelvisVel;
-}
-
-float SharedMotionDatabase::Loop::ShownSpeed(std::uint32_t frame, float frac, bool wrapped) const {
-    if (!Valid || Speeds.empty() || frame < First || frame > Last) return Speed;
-    const size_t i = frame - First, j = std::min(i + 1, Speeds.size() - 1);
-    float s = Speeds[i] + (Speeds[j] - Speeds[i]) * std::clamp(frac, 0.0f, 1.0f);
-    if (wrapped) {
-        float a, b;
-        SeamDecay(SeamTime(frame, frac), a, b);
-        s += a * SeamSpeed + b * SeamSpeedRate;
-    }
-    return s;
-}
-
-SharedMotionDatabase::Loop SharedMotionDatabase::FindSprintLoop(const MotionDatabase& db) {
-    // One full stride, cut on the gait's phase: from a left-foot touchdown to the next (the ContactL label's rising edge),
-    // with the right touchdown between (two steps), fast, straight and searchable throughout. (The first picker compared
-    // bones and velocities over any 0.5-0.95 s window: it cut a stride 3 frames short in a sprint start, the right foot 21 cm
-    // off at the seam - a hitch every stride.)
-    //
-    // Scored, in comparable units (degrees and percent):
-    //   - the seam: the bones' mean angle (deg) and 2 x the feet / pelvis features (positions and velocities, in their
-    //     group's std) between the stride's first frame and its last (the next left touchdown);
-    //   - its drift: the speed's linear trend across the stride, % of its mean (a dash speeding up or slowing down);
-    //   - its asymmetry: the two steps' mean speeds apart, and their durations apart, % (a limp).
-    // The seam's offset hides the seam (any of the pack's are 5-9 deg); nothing hides a stride that slows down or limps, which
-    // the loop then repeats every 0.6 s. (Scored on the seam with the speed change as a small extra - 3 per m/s - the pick
-    // was Run_CardLong_noStops_Take001 @ 6.25 s: the best seam, 5.4 deg, but slowing 4.8 % across the stride with its
-    // steps 2.4 % apart - the owner: "the sprint still doesn't look right". The steady strides' seams are 1-2 deg worse.)
-    Loop best;
-    const std::uint32_t n = db.FrameCount();
-    if (n < 2) return best;
-    const float fps = db.Fps();
-    std::vector<char> ok(n, 0);
-    std::vector<float> speed(n, 0.0f);
-    for (std::uint32_t f = 0; f < n; ++f) {
-        speed[f] = FirstPersonBodyMotion::RootSpeed(db, f);
-        const std::uint8_t fl = db.Flags(f);
-        if (fl & (MotionSearch::kAlwaysForbid | MotionLabel::Crouch | MotionLabel::Airborne | MotionLabel::Strafe)) continue;
-        if (db.Gait(f) < MotionLabel::Jog || speed[f] < 3.0f || speed[f] > 5.0f) continue;
-        if (std::fabs(FirstPersonBodyMotion::RootYawRate(db, f)) > 25.0f * kPi / 180.0f) continue;
-        ok[f] = 1;
-    }
-    const auto rising = [&](std::uint32_t f, std::uint8_t flag) {
-        return f > 0 && (db.Flags(f) & flag) && !(db.Flags(f - 1) & flag) && db.ClipOf(f) == db.ClipOf(f - 1);
-    };
-    std::vector<std::uint32_t> touch;
-    for (std::uint32_t f = 1; f < n; ++f)
-        if (rising(f, MotionLabel::ContactL)) touch.push_back(f);
-    const int nb = (int)db.Stream().Bones().size();
-    const std::uint32_t minLen = (std::uint32_t)std::lround(0.45f * fps), maxLen = (std::uint32_t)std::lround(0.95f * fps);
-    for (size_t i = 0; i + 1 < touch.size(); ++i) {
-        const std::uint32_t a = touch[i], b = touch[i + 1];
-        if (db.ClipOf(a) != db.ClipOf(b) || b - a < minLen || b - a > maxLen) continue;
-        if (b + 2 >= n || db.ClipOf(b + 2) != db.ClipOf(a)) continue; // (the hold past the end)
-        bool all = true;
-        for (std::uint32_t f = a; f <= b && all; ++f) all = ok[f] != 0;
-        if (!all) continue;
-        std::uint32_t mid = 0; // the right touchdown: the second step's start
-        for (std::uint32_t f = a + 1; f < b && !mid; ++f)
-            if (rising(f, MotionLabel::ContactR)) mid = f;
-        if (!mid) continue;
-        // The seam.
-        float angle = 0.0f;
-        for (int k = 0; k < nb; ++k) angle += MotionMath::QuatAngle(db.Stream().Rotation(a, k), db.Stream().Rotation(b, k));
-        angle = angle / (float)std::max(nb, 1) * 180.0f / kPi;
-        const auto ra = db.Raw(a), rb = db.Raw(b);
-        float feat = 0.0f;
-        for (int d = 0; d < 15; ++d) feat += std::fabs(ra[(size_t)d] - rb[(size_t)d]) / std::max(db.Scale(d), 1e-3f);
-        feat /= 15.0f;
-        // The speed: its mean and least-squares trend across the stride, and each step's mean.
-        const float count = (float)(b - a + 1), tMean = 0.5f * (float)(b - a);
-        float mean = 0.0f;
-        for (std::uint32_t f = a; f <= b; ++f) mean += speed[f];
-        mean /= count;
-        float sxy = 0.0f, sxx = 0.0f;
-        for (std::uint32_t f = a; f <= b; ++f) {
-            const float t = (float)(f - a) - tMean;
-            sxy += t * (speed[f] - mean);
-            sxx += t * t;
-        }
-        const float drift = sxx > 0.0f ? std::fabs(sxy / sxx) * (float)(b - a) : 0.0f; // m/s across the stride
-        float step1 = 0.0f, step2 = 0.0f;
-        for (std::uint32_t f = a; f < mid; ++f) step1 += speed[f];
-        for (std::uint32_t f = mid; f <= b; ++f) step2 += speed[f];
-        step1 /= (float)(mid - a);
-        step2 /= (float)(b - mid + 1);
-        const float pct = 100.0f / std::max(mean, 0.1f);
-        const float driftPct = drift * pct, stepSpeedPct = std::fabs(step1 - step2) * pct;
-        const float stepTimePct = 100.0f * std::fabs((float)(mid - a) - (float)(b - mid)) / (float)(b - a);
-        const float cost = angle + 2.0f * feat + driftPct + stepSpeedPct + stepTimePct;
-        if (!best.Valid || cost < best.Score) {
-            best.Valid = true;
-            best.First = a;
-            best.Last = b;
-            best.Score = cost;
-            best.SeamDeg = angle;
-            best.DriftPct = driftPct;
-            best.StepSpeedPct = stepSpeedPct;
-            best.StepTimePct = stepTimePct;
-        }
-    }
-    if (best.Valid) best.SetSpan(db, best.First, best.Last);
-    return best;
-}
-
-void SharedMotionDatabase::Loop::SetSpan(const MotionDatabase& db, std::uint32_t first, std::uint32_t last) {
-    Valid = first + 1 < last && last + 2 < db.FrameCount() && db.ClipOf(first) == db.ClipOf(last + 2);
-    First = first;
-    Last = last;
-    Speeds.clear();
-    SeamRot.clear();
-    SeamSpin.clear();
-    SeamPelvis = SeamPelvisVel = glm::vec3(0.0f);
-    SeamSpeed = SeamSpeedRate = Speed = 0.0f;
-    Clip.clear();
-    if (!Valid) return;
-    Fps = db.Fps();
-    Speeds.resize(Last - First + 1);
-    float sum = 0.0f;
-    for (std::uint32_t f = First; f <= Last; ++f) sum += Speeds[f - First] = FirstPersonBodyMotion::RootSpeed(db, f);
-    Speed = sum / (float)Speeds.size();
-    // The seam: the end (arriving: Last - 1 -> Last) against the start (leaving: First -> First + 1).
-    const MotionClipStream& s = db.Stream();
-    const float dt = 1.0f / Fps;
-    const int nb = (int)s.Bones().size();
-    SeamRot.resize((size_t)nb);
-    SeamSpin.resize((size_t)nb);
-    for (int k = 0; k < nb; ++k) {
-        const glm::quat end = s.Rotation(Last, k), start = s.Rotation(First, k);
-        SeamRot[(size_t)k] = InertializationMath::ToScaledAngleAxis(end * glm::conjugate(start));
-        SeamSpin[(size_t)k] = InertializationMath::AngularVelocity(s.Rotation(Last - 1, k), end, dt) -
-                              InertializationMath::AngularVelocity(start, s.Rotation(First + 1, k), dt);
-    }
-    SeamPelvis = s.Pelvis(Last) - s.Pelvis(First);
-    SeamPelvisVel = (s.Pelvis(Last) - s.Pelvis(Last - 1) - (s.Pelvis(First + 1) - s.Pelvis(First))) / dt;
-    const float* v = Speeds.data();
-    const size_t n = Speeds.size();
-    SeamSpeed = v[n - 1] - v[0];
-    SeamSpeedRate = ((v[n - 1] - v[n - 2]) - (v[1] - v[0])) / dt;
-    Clip = db.Clip(db.ClipOf(First)).Name;
-}
-
 std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std::string& base, std::string* error, const Model* rig) {
     static std::mutex s_Lock;
     static std::map<std::string, std::weak_ptr<const SharedMotionDatabase>> s_Loaded;
@@ -256,6 +95,7 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
         std::printf("[MotionMatching] standing feet gap (left - right, root space): x %.3f m, z %.3f m - the %s axis\n", mx, mz, axis == 0 ? "x" : "z");
         int raw = 0, searchable = 0, hist[5] = {0, 0, 0, 0, 0};
         const float edges[5] = {-0.15f, -0.10f, -0.05f, 0.0f, 0.05f};
+        std::vector<std::uint8_t> why(d.FrameCount(), 0); // per frame: 1 a hand over its shoulder, 2 bent over, 4 legs crossed
         for (std::uint32_t f = 0; f < d.FrameCount(); ++f) {
             if (d.Flags(f) & (MotionSearch::kAlwaysForbid | MotionLabel::Airborne)) continue;
             ++searchable;
@@ -269,15 +109,100 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
                 crossed = sign * (r[(size_t)axis] - r[(size_t)axis + 3]) < -kCrossedFeet;
                 if (crossed) ++shared->CrossedFrames;
             }
-            if (over[f] <= kHandsUpMargin && !bent && !crossed) continue;
-            ++raw;
-            const auto& clip = d.Clip(d.ClipOf(f));
-            const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)f - kHandsUpPad);
-            const std::uint32_t to = std::min<std::uint32_t>(clip.First + clip.Count - 1, f + (std::uint32_t)kHandsUpPad);
-            for (std::uint32_t j = from; j <= to; ++j) bad[j] = 1;
+            why[f] = (std::uint8_t)((over[f] > kHandsUpMargin ? 1 : 0) | (bent ? 2 : 0) | (crossed ? 4 : 0));
+            raw += why[f] != 0;
         }
-        for (std::uint32_t f = 0; f < d.FrameCount(); ++f) // (airborne frames stay: the jumps play locked)
-            if (d.Flags(f) & MotionLabel::Airborne) bad[f] = 0;
+        // Each run of such frames is excluded as a whole gesture: widened back to where its measure (the higher hand's height
+        // for a hand, the chest's tilt bent over) was last at the take's rest level - where the gesture began - and on to where
+        // it is back there (at most kGestureMax frames either way), then padded. Excluding only the frames over the line cut an
+        // idle's gesture in the middle: the take played the hand's rise, ran into the excluded frames, was forced to search
+        // and jumped back to the arms at rest (the owner, 2026-11-17: "they play half way through and snap back").
+        std::vector<float> handRest((int)d.Stream().Clips().size(), 0.0f), tiltRest((int)d.Stream().Clips().size(), 0.0f);
+        for (int c = 0; c < (int)d.Stream().Clips().size(); ++c) {
+            const auto& clip = d.Clip(c);
+            std::vector<float> h(over.begin() + clip.First, over.begin() + clip.First + clip.Count);
+            std::vector<float> t(tilt.begin() + clip.First, tilt.begin() + clip.First + clip.Count);
+            handRest[(size_t)c] = med(h);
+            tiltRest[(size_t)c] = med(t);
+        }
+        const auto exclude = [&](bool widen, std::vector<char>& out) {
+            out.assign(d.FrameCount(), 0);
+            for (std::uint32_t f = 0; f < d.FrameCount();) {
+                if (!why[f]) { ++f; continue; }
+                const int c = d.ClipOf(f);
+                const auto& clip = d.Clip(c);
+                const std::uint32_t last = clip.First + clip.Count - 1;
+                std::uint32_t a = f, b = f;
+                std::uint8_t kind = 0;
+                while (b + 1 <= last && why[b + 1]) kind |= why[b++];
+                kind |= why[b];
+                if (widen) {
+                    const auto arc = [&](const std::vector<float>& m, float rest, float tol, std::uint32_t& from, std::uint32_t& to) {
+                        std::uint32_t x = a, y = b;
+                        while (x > clip.First && a - x < (std::uint32_t)kGestureMax && m[x] > rest + tol && m[x - 1] < m[x] + 0.25f * tol) --x;
+                        while (y < last && y - b < (std::uint32_t)kGestureMax && m[y] > rest + tol && m[y + 1] < m[y] + 0.25f * tol) ++y;
+                        from = std::min(from, x);
+                        to = std::max(to, y);
+                    };
+                    std::uint32_t from = a, to = b;
+                    if (kind & 1) arc(over, handRest[(size_t)c], kGestureHandRest, from, to);
+                    if (kind & 2) arc(tilt, tiltRest[(size_t)c], kGestureTiltRest, from, to);
+                    a = from;
+                    b = to;
+                }
+                const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)a - kHandsUpPad);
+                const std::uint32_t to = std::min<std::uint32_t>(last, b + (std::uint32_t)kHandsUpPad);
+                for (std::uint32_t j = from; j <= to; ++j) out[j] = 1;
+                f = b + 1;
+            }
+            for (std::uint32_t g = 0; g < d.FrameCount(); ++g) // (airborne frames stay: the jumps play locked)
+                if (d.Flags(g) & MotionLabel::Airborne) out[g] = 0;
+        };
+        std::vector<char> narrow;
+        exclude(false, narrow);
+        exclude(true, bad);
+        // The idle takes, measured both ways: an excluded stretch entered mid-gesture is one whose frame before it has the hand
+        // over kGestureHandRest above the take's rest (or the chest over kGestureTiltRest past it) - a forced jump from there is
+        // a visible snap back.
+        const auto cuts = [&](const std::vector<char>& ex, int& runs, int& mid, std::uint32_t& frames) {
+            runs = mid = 0;
+            frames = 0;
+            for (int c = 0; c < (int)d.Stream().Clips().size(); ++c) {
+                const auto& clip = d.Clip(c);
+                if (!(d.Flags(clip.First + clip.Count / 2) & MotionLabel::IdleTake)) continue;
+                for (std::uint32_t f = clip.First + 1; f < clip.First + clip.Count; ++f) {
+                    frames += ex[f] != 0;
+                    if (!ex[f] || ex[f - 1] || (d.Flags(f - 1) & MotionSearch::kAlwaysForbid)) continue;
+                    ++runs;
+                    mid += over[f - 1] > handRest[(size_t)c] + kGestureHandRest || tilt[f - 1] > tiltRest[(size_t)c] + kGestureTiltRest;
+                }
+            }
+        };
+        int runsN, midN, runsW, midW;
+        std::uint32_t framesN, framesW;
+        cuts(narrow, runsN, midN, framesN);
+        cuts(bad, runsW, midW, framesW);
+        shared->IdleGestureCuts = midW;
+        std::printf("[MotionMatching] idle takes: %d excluded stretches, %d entered mid-gesture, %u frames (the frames over the line only); "
+                    "%d, %d, %u (the whole gesture)\n", runsN, midN, framesN, runsW, midW, framesW);
+        for (int c = 0; c < (int)d.Stream().Clips().size(); ++c) {
+            const auto& clip = d.Clip(c);
+            if (!(d.Flags(clip.First + clip.Count / 2) & MotionLabel::IdleTake)) continue;
+            std::string line;
+            for (std::uint32_t f = clip.First; f < clip.First + clip.Count; ++f) {
+                if (!bad[f] || (f > clip.First && bad[f - 1])) continue;
+                std::uint32_t e = f;
+                std::uint8_t kind = 0;
+                while (e + 1 < clip.First + clip.Count && bad[e + 1]) kind |= why[e++];
+                kind |= why[e];
+                char s[96];
+                std::snprintf(s, sizeof s, " %.2f-%.2f s (%s)", d.SecondsInClip(f), d.SecondsInClip(e),
+                              (kind & 1) && (kind & 2) ? "hand, bent" : (kind & 1) ? "hand" : (kind & 2) ? "bent" : "pad");
+                line += s;
+                f = e;
+            }
+            if (!line.empty()) std::printf("[MotionMatching]   %s (%.1f s):%s\n", clip.Name.c_str(), clip.Count / d.Fps(), line.c_str());
+        }
         shared->HandsUpFrames = shared->Db.ExcludeFrames(bad);
         std::printf("[MotionMatching] hands over the shoulders, bent over or legs crossed: %d of %d searchable frames (%u bent over %.0f deg, %u crossed %.2f m; %u excluded with the pads); "
                     "share over -0.15/-0.10/-0.05/0/+0.05 m: %.1f/%.1f/%.1f/%.1f/%.1f %%\n", raw, searchable, shared->BentOverFrames, kBentOverDeg, shared->CrossedFrames, kCrossedFeet,
@@ -301,52 +226,21 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
         std::sort(rates.begin(), rates.end());
         shared->TurnInPlaceRate = rates[(size_t)(0.75f * (float)(rates.size() - 1))];
     }
-    const int idle = db.Stream().FindClip("Stand_Idle_Neutral_Take001");
-    shared->IdleFrame = idle >= 0 ? db.Clip(idle).First + 60 : 0;
-    const int crouchIdle = db.Stream().FindClip("Crouch_Idles_Take001");
-    shared->CrouchIdleFrame = crouchIdle >= 0 ? db.Clip(crouchIdle).First + 60 : shared->IdleFrame;
-    // With the rig's chest tilts: each reference is its take's typical pose - the searchable idle frame (crouched for the
-    // crouch) whose chest tilt is the take's median. (A fixed second in, the crouched reference could be the actor still
-    // standing: Spine Stability then stood every crouch's chest up toward it - the owner's "goofy" crouch.)
-    if (!tilt.empty()) {
-        const auto pick = [&](int clip, bool crouched, std::uint32_t& out) {
-            if (clip < 0) return;
-            std::vector<std::pair<float, std::uint32_t>> v;
-            const auto& c = db.Clip(clip);
-            for (std::uint32_t f = c.First; f < c.First + c.Count; ++f) {
-                const std::uint8_t fl = db.Flags(f);
-                if (db.Gait(f) != MotionLabel::Idle || (fl & MotionSearch::kAlwaysForbid) || ((fl & MotionLabel::Crouch) != 0) != crouched) continue;
-                v.push_back({tilt[f], f});
-            }
-            if (v.empty()) return;
-            std::nth_element(v.begin(), v.begin() + (std::ptrdiff_t)(v.size() / 2), v.end());
-            std::printf("[MotionMatching] Spine Stability's %s reference: %s @ %.1f s, chest tilt %.1f deg (the take's median of %zu "
-                        "frames; was @ 1.0 s, %.1f deg)\n", crouched ? "crouched" : "standing", c.Name.c_str(),
-                        db.SecondsInClip(v[v.size() / 2].second), v[v.size() / 2].first, v.size(), tilt[out]);
-            out = v[v.size() / 2].second;
-        };
-        pick(idle, false, shared->IdleFrame);
-        pick(crouchIdle, true, shared->CrouchIdleFrame);
+    // The start: the first searchable standing frame of an idle take (MotionLabel::IdleTake), as captured.
+    for (std::uint32_t f = 0; f < db.FrameCount(); ++f) {
+        const std::uint8_t fl = db.Flags(f);
+        if (!(fl & MotionLabel::IdleTake) || db.Gait(f) != MotionLabel::Idle ||
+            (fl & (MotionSearch::kAlwaysForbid | MotionLabel::Crouch | MotionLabel::Airborne)))
+            continue;
+        shared->StartFrame = f;
+        std::printf("[MotionMatching] start frame: %s @ %.2f s\n", db.Clip(db.ClipOf(f)).Name.c_str(), db.SecondsInClip(f));
+        break;
     }
-    shared->SprintLoop = FindSprintLoop(db);
-    if (shared->SprintLoop.Valid)
-        std::printf("[MotionMatching] sprint loop: %s @ %.2f-%.2f s (%u frames), %.2f m/s, score %.2f (seam %.1f deg, drift %.1f %%, "
-                    "steps %.1f %% speed / %.1f %% time apart)\n", shared->SprintLoop.Clip.c_str(),
-                    db.SecondsInClip(shared->SprintLoop.First), db.SecondsInClip(shared->SprintLoop.Last),
-                    shared->SprintLoop.Last - shared->SprintLoop.First, shared->SprintLoop.Speed, shared->SprintLoop.Score,
-                    shared->SprintLoop.SeamDeg, shared->SprintLoop.DriftPct, shared->SprintLoop.StepSpeedPct, shared->SprintLoop.StepTimePct);
-    else
-        std::printf("[MotionMatching] sprint loop: none found (the sprint matches as before)\n");
     s_Loaded[base] = shared;
     return shared;
 }
 
 // --- the body's motion -----------------------------------------------------------------------------------------------
-
-float FirstPersonBodyMotion::SprintSpeed() const {
-    if (!m_Shared) return 0.0f;
-    return m_Shared->SprintLoop.Valid && Config.SprintLoop ? kSprintOfLoop * m_Shared->SprintLoop.Speed : m_Shared->Gaits.Run;
-}
 
 float FirstPersonBodyMotion::RootSpeed(const MotionDatabase& db, std::uint32_t frame) {
     const auto& c = db.Clip(db.ClipOf(frame));
@@ -366,7 +260,6 @@ float FirstPersonBodyMotion::RootYawRate(const MotionDatabase& db, std::uint32_t
 
 bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& models, size_t driver, std::string& error) {
     Stop();
-    if (Env::IsSet(Env::Var::MmCrouch)) Config.CrouchFromWalk = Env::Str(Env::Var::MmCrouch) != "pack";
     std::string err;
     auto shared = SharedMotionDatabase::Get(ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny"), &err,
                                             driver < models.size() ? models[driver].get() : nullptr);
@@ -402,12 +295,9 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         m_BindPose.push_back(std::move(bind));
     }
     m_Shared = shared;
-    m_Matcher.Reset(&m_Shared->Db, m_Shared->IdleFrame);
+    m_Matcher.Reset(&m_Shared->Db, m_Shared->StartFrame);
     m_HaveYaw = false;
     m_Air = Air::None;
-    m_Looping = false;
-    m_LoopBlocked = 0.0f;
-    m_LoopExits = 0;
     m_WarpRate = 1.0f;
     MmPlayerDebug::Info() = MmPlayerDebug::Snapshot{};
     return true;
@@ -482,20 +372,13 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
         if (!m_Turning) m_DesiredYaw = yaw + Wrap(m_DesiredYaw - yaw) * (1.0f - Toward(dt, 0.05f)); // settles on the heading
     }
 
-    // The filters: crouch, the gait (sprint: the run, pulled harder).
-    // (Crouched from the walk, the matcher plays standing frames - the body lowers them; `crouched` is still the player's.)
-    const bool crouched = in.Crouched;
-    const bool crouch = crouched && !Config.CrouchFromWalk;
+    // The filters: crouch (the pack's crouch takes) and the gait. Shift is the jog in every direction: the capsule moves at
+    // the gait table's jog (or jog strafe, slower than the walk/jog midpoint - hence the gait named, not read off the speed).
+    const bool crouch = in.Crouched;
     int gait = m_Shared->Gaits.GaitFor(wishSpeed, crouch);
-    // Sprint is the run gait while Shift is held and the move heads along the view - slowed in a turn too (the gait is in
-    // the schedule's filter key: flipping between run and jog as a look about slowed the run forced searches every sweep).
-    // A sprint sideways is the jog strafe's speed (the pack has no run strafes): its gait follows its speed.
-    const bool ahead = wishSpeed > 0.1f && std::fabs(Wrap(MotionMath::YawOf(wish) - in.ViewYaw)) < 50.0f * kPi / 180.0f;
-    if (in.Sprint && !crouched && ahead) gait = MotionLabel::Run;
-    const bool runPace = wishSpeed > 0.5f * (m_Shared->Gaits.Jog + m_Shared->Gaits.Run);
+    if (in.Sprint && !crouch && gait != MotionLabel::Idle) gait = MotionLabel::Jog;
     MotionSearchParams params;
     params.DesiredGait = gait;
-    if (gait == MotionLabel::Run && runPace) params.GaitWeight *= 2.0f; // (slowed in a turn, the trajectory decides)
     params.TransitionCost = Config.TransitionCost;
     // No dead ends: crouched, the jumps' deep landings (a few frames of Crouch before the actor stands) won the search,
     // played into a standing frame at once and forced another search - every frame (the crouch legs, 30-50 jumps a second).
@@ -561,55 +444,16 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
         }
     }
 
-    // Speed warping: the matched frame plays at the capsule's pace (within MinWarp..MaxWarp). On the sprint loop, by the speed
-    // of the pose it shows (with the seam's offset, continuous over the wrap).
-    const SharedMotionDatabase::Loop& loop = m_Shared->SprintLoop;
-    m_AnimSpeed = m_Looping ? loop.ShownSpeed(m_Matcher.Frame(), m_Matcher.Frac(), m_LoopWrapped) : RootSpeed(db, m_Matcher.Frame());
+    // Speed warping: the matched frame plays at the capsule's pace (within MinWarp..MaxWarp).
+    m_AnimSpeed = RootSpeed(db, m_Matcher.Frame());
     float rate = 1.0f;
     if (m_AnimSpeed > 0.3f && m_CapsuleSpeed > 0.3f) rate = std::clamp(m_CapsuleSpeed / m_AnimSpeed, Config.MinWarp, Config.MaxWarp);
     m_WarpRate += (rate - m_WarpRate) * Toward(dt, 0.08f);
-    m_HeadingSettled = std::fabs(m_YawRate) < Config.SprintLoopSettleRate ? m_HeadingSettled + dt : 0.0f;
-    // The sprint loop: sprinting ahead at speed, the loop plays locked (the heading still follows the view); a start, a stop,
-    // a reversal (the capsule's speed drops), a jump or a crouch hands back to matching.
-    const float runSpeed = std::max(SprintSpeed(), 0.1f);
-    const bool sprinting = loop.Valid && Config.SprintLoop && in.Sprint && !crouched && ahead && in.Grounded && m_Air == Air::None;
-    m_LoopBlocked = m_Looping && m_CapsuleSpeed < Config.SprintLoopBlocked * runSpeed ? m_LoopBlocked + dt : 0.0f;
-    const bool reversed = m_CapsuleSpeed > 0.5f && std::fabs(Wrap(MotionMath::YawOf(vel) - yaw)) > Config.SprintLoopReverse;
-    if (m_Looping && (!sprinting || reversed || m_LoopBlocked >= Config.SprintLoopBlockedSeconds)) {
-        m_Looping = false;
-        ++m_LoopExits;
-        m_Matcher.AdjustTarget = nullptr;
-        if (m_Air == Air::None) { // (a jump owns the lock it just took)
-            m_Matcher.Locked = false;
-            m_Matcher.HoldFrame = -1;
-        }
-    } else if (!m_Looping && sprinting && m_CapsuleSpeed > Config.SprintLoopEnter * runSpeed && m_HeadingSettled >= Config.SprintLoopSettle) {
-        // (Only once the heading has settled: entered out of a reversal's pivot, the dead blend carried the pivot's crossing
-        // legs into the stride for 0.2 s.)
-        // In at the loop frame whose feet are most like the pose now (the stride's phase).
-        const auto here = db.Raw(m_Matcher.Frame());
-        std::uint32_t enter = loop.First;
-        float bestCost = 1e30f;
-        for (std::uint32_t f = loop.First; f < loop.Last; ++f) {
-            const auto r = db.Raw(f);
-            float c = 0.0f;
-            for (int d = 0; d < 15; ++d) c += (here[(size_t)d] - r[(size_t)d]) * (here[(size_t)d] - r[(size_t)d]) / (db.Scale(d) * db.Scale(d));
-            if (c < bestCost) { bestCost = c; enter = f; }
-        }
-        m_Looping = true;
-        m_LoopWrapped = false; // (entered by a dead blend: the seam's offset only follows a wrap)
-        m_Matcher.ForceFrame(enter);
-        m_Matcher.Locked = true;
-        m_Matcher.HoldFrame = loop.Last + 2; // (past the end: the wrap below keeps the frame's fraction)
-        m_Matcher.AdjustTarget = [this](std::uint32_t f, float frac, MotionPose& p) {
-            if (m_LoopWrapped) m_Shared->SprintLoop.Close(m_Shared->Db, f, frac, p);
-        };
-    }
     m_Matcher.SearchParams = params;
     m_Matcher.ForcedPoseWeight = Config.ForcedPoseWeight;
     // Standing idle: the playing take plays on while its continuation fits (MotionMatcher::Idle). Only once the body has
     // truly stopped on an idle frame: as the stick is released the capsule is still slowing, and the stop is searched.
-    m_Matcher.Idle = m_Still && !m_Turning && !m_Looping && m_Air == Air::None && in.Grounded && m_CapsuleSpeed < Config.IdleSpeed &&
+    m_Matcher.Idle = m_Still && !m_Turning && m_Air == Air::None && in.Grounded && m_CapsuleSpeed < Config.IdleSpeed &&
                      db.Gait(m_Matcher.Frame()) == MotionLabel::Idle;
     m_Matcher.IdleTravel = Config.IdleTravel;
     m_Matcher.IdleTurn = Config.IdleTurn;
@@ -623,13 +467,6 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     }
     m_Matcher.PlayRate = m_Air == Air::Rising ? m_AirRate : m_Air == Air::None ? m_WarpRate : 1.0f;
     m_Matcher.Update(dt, q);
-    if (m_Looping && m_Matcher.Frame() >= loop.Last) {
-        // Closed, the end is the start: the wrap re-poses the same pose there - the start plus the seam's offset (the frame's
-        // fraction kept).
-        m_LoopWrapped = true;
-        m_Matcher.LoopTo(loop.First + (m_Matcher.Frame() - loop.Last));
-        m_Matcher.Repose();
-    }
 
     // Orientation warping. Standing still (a turn on the spot) the heading turns as the matched frame's root does, plus a
     // spring toward the facing wanted. Moving, it only follows the view (a short spring): the clip's own turn added on top
@@ -658,10 +495,10 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     d.Sprint = in.Sprint;
     d.Airborne = m_Air != Air::None;
     d.Locked = m.Locked;
-    d.Looping = m_Looping;
     d.Idle = m.Idle;
     d.IdleRefits = m.IdleRefits;
-    d.LoopExits = m_LoopExits;
+    d.ForcedByExcluded = m.ForcedByExcluded;
+    d.IdleGestureCuts = m_Shared->IdleGestureCuts;
     d.Still = m_Still;
     d.Turning = m_Turning;
     d.Searched = m.SearchedThisUpdate();
@@ -728,15 +565,6 @@ void FirstPersonBodyMotion::Pose(const std::vector<std::shared_ptr<Model>>& mode
         MotionMatcher::WritePose(m_Matcher.Pose(), stream, m_Bind[k], m_Scratch);
         models[k]->ApplyLocalPose(m_Scratch);
     }
-}
-
-bool FirstPersonBodyMotion::ReferencePose(size_t piece, bool crouched, std::vector<LocalTRS>& out) const {
-    if (!m_Shared || piece >= m_Bind.size() || m_BindPose[piece].empty()) return false;
-    MotionPose p;
-    m_Shared->Db.SamplePose(crouched ? m_Shared->CrouchIdleFrame : m_Shared->IdleFrame, 0.0f, p);
-    out = m_BindPose[piece];
-    MotionMatcher::WritePose(p, m_Shared->Db.Stream(), m_Bind[piece], out);
-    return true;
 }
 
 namespace MmPlayerDebug {

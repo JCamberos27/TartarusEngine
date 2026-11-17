@@ -553,13 +553,13 @@ void TestPlayerHooks() {
     Player::DirectionalSpeeds g;
     g.Active = true;
     g.Forward[0] = 1.27f; g.Strafe[0] = 1.14f;
-    g.Forward[1] = 3.91f; g.Strafe[1] = 1.32f;
+    g.Forward[1] = 1.85f; g.Strafe[1] = 1.32f; // Shift: the jog
     g.Forward[2] = 0.79f; g.Strafe[2] = 0.76f;
     CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, 1.0f}, 0) - 1.27f) < 1e-4f);  // ahead
-    CHECK(std::fabs(PlayerGaitSpeed(g, {1.0f, 0.0f}, 1) - 1.32f) < 1e-4f);  // the run's strafe: the jog strafe
+    CHECK(std::fabs(PlayerGaitSpeed(g, {1.0f, 0.0f}, 1) - 1.32f) < 1e-4f);  // the jog strafe
     CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, -1.0f}, 2) - 0.76f) < 1e-4f); // backwards: a strafe
     const float diag = PlayerGaitSpeed(g, {std::sin(0.4363f), std::cos(0.4363f)}, 1); // 25 degrees off: halfway
-    CHECK(std::fabs(diag - 0.5f * (3.91f + 1.32f)) < 0.01f);
+    CHECK(std::fabs(diag - 0.5f * (1.85f + 1.32f)) < 0.01f);
     CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, 0.0f}, 0) - 1.27f) < 1e-4f);
 }
 
@@ -599,46 +599,6 @@ void TestDeadBlendFrameTime() {
         // (The source's velocity decays over the update - half-life 0.05 s: ~0.8 of it over a 1/30 s update.)
         CHECK(vAfter > 0.65f * vBefore && vAfter < 1.25f * vBefore);
     }
-}
-
-// The sprint loop's wrap, closed by the seam's decaying offset: continuous in pose and in the pose's velocity from the loop's
-// last frame to its first, the speed speed warping divides by continuous too, and the offset settled before the next wrap.
-// The span is deliberately not a whole cycle of the synthetic legs (37.5 frames), so the seam is large (~0.3 rad), and the take
-// speeds up (the raw speed jumps at the wrap).
-void TestSprintLoopWrap() {
-    TakeSpec ramp{"Run_Ramp", "run;loop", 300, 3.8f};
-    ramp.SpeedEnd = 4.8f;
-    MotionDatabase db;
-    CHECK(Adopt(db, Build({ramp})));
-    const auto& clip = db.Clip(0);
-    SharedMotionDatabase::Loop loop;
-    loop.SetSpan(db, clip.First + 100, clip.First + 130);
-    CHECK(loop.Valid);
-    if (!loop.Valid) return;
-    const auto raw = [&](std::uint32_t f, float frac) { MotionPose p; db.SamplePose(f, frac, p); return p; };
-    const auto shown = [&](std::uint32_t f, float frac) { MotionPose p = raw(f, frac); loop.Close(db, f, frac, p); return p; };
-    // The speed.
-    const float rawFirst = FirstPersonBodyMotion::RootSpeed(db, loop.First), rawLast = FirstPersonBodyMotion::RootSpeed(db, loop.Last);
-    const float shownLast = loop.ShownSpeed(loop.Last, 0.0f, false), shownFirst = loop.ShownSpeed(loop.First, 0.0f, true);
-    CHECK(std::fabs(rawLast - rawFirst) > 0.05f);     // the frames themselves jump ...
-    CHECK(std::fabs(shownLast - shownFirst) < 1e-4f); // ... the speed shown doesn't
-    // The pose: at the seam exactly, and half a frame on (the fraction carries over the wrap).
-    const float seam = PoseAngle(raw(loop.Last, 0.0f), raw(loop.First, 0.0f));
-    const float atSeam = PoseAngle(raw(loop.Last, 0.0f), shown(loop.First, 0.0f));
-    const float half = PoseAngle(raw(loop.Last, 0.5f), shown(loop.First, 0.5f));
-    // The velocity: the step across the wrap against the step into it (half a frame each).
-    const float into = PoseAngle(raw(loop.Last - 1, 0.5f), raw(loop.Last, 0.0f));
-    const float across = PoseAngle(raw(loop.Last, 0.0f), shown(loop.First, 0.5f));
-    // Settled by the next wrap: what the offset still adds at the loop's last frame.
-    const float left = PoseAngle(raw(loop.Last, 0.0f), shown(loop.Last, 0.0f));
-    std::printf("[MotionMatching] sprint loop wrap: seam %.3f rad, shown at the seam %.5f, half a frame on %.4f; step into the wrap %.4f, "
-                "across %.4f; left at the next wrap %.5f; speed raw %.3f -> %.3f, shown %.3f -> %.3f m/s\n",
-                seam, atSeam, half, into, across, left, rawLast, rawFirst, shownLast, shownFirst);
-    CHECK(seam > 0.1f);                                   // a real seam to close
-    CHECK(atSeam < 1e-4f);                                // continuous in pose
-    CHECK(half < 0.1f * seam);                            // (to first order, half a frame on)
-    CHECK(std::fabs(across - into) < 0.35f * into + 1e-3f); // continuous in velocity
-    CHECK(left < 0.01f * seam);                           // settled before the next wrap
 }
 
 // Play test 4: the reselect history (MotionSearchParams::Avoid) is never matched - not even a frame's own self-match - and
@@ -777,6 +737,24 @@ void TestPlayerExclusionsAndAimCap() {
         prev = chest;
     }
     CHECK(monotonic); // the chest never stops dead or turns back as the view goes on down
+
+    // Under motion matching the aim fades with speed (the owner, 2026-11-17: the torso bends standing; moving, the head
+    // looks and the body moves as captured): all of it standing, none by the walk/jog midpoint, never rising with speed.
+    const float from = 0.1f, to = 0.5f * (1.27f + 1.85f);
+    CHECK(FirstPersonBodyMmAimFade(0.0f, from, to) == 1.0f);
+    CHECK(FirstPersonBodyMmAimFade(from, from, to) == 1.0f);
+    CHECK(FirstPersonBodyMmAimFade(to, from, to) == 0.0f);
+    CHECK(FirstPersonBodyMmAimFade(1.85f, from, to) == 0.0f);  // the jog
+    CHECK(FirstPersonBodyMmAimFade(1.27f, from, to) <= 0.25f); // the walk keeps at most a quarter
+    CHECK(FirstPersonBodyMmAimFade(0.5f, 1.0f, 1.0f) == 1.0f && FirstPersonBodyMmAimFade(1.5f, 1.0f, 1.0f) == 0.0f); // degenerate
+    float last = 2.0f;
+    bool falls = true;
+    for (int k = 0; k <= 40; ++k) {
+        const float f = FirstPersonBodyMmAimFade(0.05f * (float)k, from, to);
+        falls = falls && f <= last && f >= 0.0f && f <= 1.0f;
+        last = f;
+    }
+    CHECK(falls);
 }
 
 } // namespace
@@ -792,9 +770,8 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: query root space", TestQueryConvention});
     tests.push_back({"Motion matching: matcher end to end", TestMatcherEndToEnd});
     tests.push_back({"Motion matching: player hooks (play rate, lock, gait speeds)", TestPlayerHooks});
-    tests.push_back({"Motion matching: player exclusions and the capped aim", TestPlayerExclusionsAndAimCap});
+    tests.push_back({"Motion matching: player exclusions, the capped aim and its fade", TestPlayerExclusionsAndAimCap});
     tests.push_back({"Motion matching: dead blend across a frame-time change", TestDeadBlendFrameTime});
-    tests.push_back({"Motion matching: sprint loop wrap (pose and shown speed)", TestSprintLoopWrap});
     tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
 }

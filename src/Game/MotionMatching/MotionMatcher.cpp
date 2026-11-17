@@ -51,7 +51,7 @@ void MotionMatcher::Reset(const MotionDatabase* db, std::uint32_t frame) {
     m_Last = MotionSearchResult{};
     Schedule.Reset();
     Inertializer.Reset();
-    Searches = Jumps = IdleRefits = 0;
+    Searches = Jumps = IdleRefits = ForcedByExcluded = 0;
     SearchMsTotal = SearchMsMax = 0.0;
     SearchMs.clear();
     m_ShownCount = 0;
@@ -108,6 +108,7 @@ void MotionMatcher::Update(float dt, const Input& in) {
         ++IdleRefits;
     }
     if (!Locked && Schedule.Tick(dt, in.DesiredVelocity, in.DesiredYaw, key, outOfFrames || refit)) {
+        if (outOfFrames && (db.Flags(m_Frame) & MotionLabel::Excluded)) ++ForcedByExcluded;
         const auto pose = db.Raw(m_Frame);
         for (int d = 0; d < 15; ++d) m_QueryRaw[d] = pose[d];
         TrajectoryFeatures(in, db.Stream().RestYaw, m_QueryRaw + 15);
@@ -175,28 +176,9 @@ void MotionMatcher::ForceFrame(std::uint32_t frame) {
     m_Frac = 0.0f;
 }
 
-void MotionMatcher::LoopTo(std::uint32_t frame) {
-    if (!m_Db || !m_Db->Loaded()) return;
-    frame = std::min(frame, m_Db->FrameCount() - 1);
-    if (frame != m_Frame) {
-        EndRun();
-        m_RunFirst = frame;
-    }
-    m_Frame = frame;
-}
-
-void MotionMatcher::Repose() {
-    if (!m_Db || !m_Db->Loaded() || !m_HaveOut) return;
-    // The pose this update put out was the loop's end; its start is the same pose - only the target moves, so the dead
-    // blend (if one is running) carries on unchanged.
-    m_Db->SamplePose(m_Frame, m_Frac, m_Target);
-    if (AdjustTarget) AdjustTarget(m_Frame, m_Frac, m_Target);
-}
-
 void MotionMatcher::PoseAndBlend(float dt) {
     const MotionDatabase& db = *m_Db;
     db.SamplePose(m_Frame, m_Frac, m_Target);
-    if (AdjustTarget) AdjustTarget(m_Frame, m_Frac, m_Target);
     if (!m_HaveOut) {
         m_Out = m_Prev = m_Target;
         m_HaveOut = true;

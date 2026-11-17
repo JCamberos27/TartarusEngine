@@ -42,6 +42,9 @@ public:
     // Inside the range, and back toward it, the view is free. 0 = unlimited. Set before each Update;
     // the turn beyond the limit is dropped.
     float MaxYawRate = 0.0f;
+    // The steepest the view may look down (degrees, Camera::Pitch), set before each Update by a body keeping its own neck
+    // opening out of the view (FirstPersonBody); -89 = only the camera's own clamp.
+    float MinPitch = -89.0f;
     float YawDropped = 0.0f; // out, per Update: the view turn (degrees) MaxYawRate dropped
     glm::vec2 LookDeltaInput{0.0f}; // pitch/yaw degrees before camera clamps, mouse + stick
     glm::vec2 MoveInput{0.0f}; // right/forward action axes, before speed, acceleration and collisions

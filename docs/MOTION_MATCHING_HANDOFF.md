@@ -973,6 +973,60 @@ plays the pack's mocap as captured:
 item, three stages (the owner plays each), the tests to delete and add, and verification. Owner bar: AAA, no Frankenstein
 work, no footage (the owner tests in the editor). The notes below predate it; where they conflict, the plan wins.
 
+**Stage 1 (honest gaits) is in the working tree, not committed; the owner's play test is next** (2026-11-17, session 4):
+- Removed: the sprint loop (and the matcher's loop hooks), the run gait for Shift, the run-in-turns slowdown, the crouch
+  from the walk, `RaiseCrouch`, Spine Stability's MM branch (lean pull, neck/arm restore, crouch arm hang, head cap),
+  `RelaxArms`, `KeepHeadOffWalls`, the reference poses, `MM Sprint Loop`, `TARTARUS_MM_CROUCH`. Spine Stability is
+  legacy-only now. The matcher starts on the first searchable standing idle-take frame (`SharedMotionDatabase::StartFrame`).
+- Shift = the jog (gait table 1.85 m/s ahead, 1.32 strafing; the gait is asked as Jog in every direction). Crouch = Require
+  Crouch on the pack's takes at 0.79 / 0.76 m/s. Spine Aim fades with speed under MM, unarmed
+  (`FirstPersonBodyMmAimFade`: 1 to 0.1 m/s, 0 at the walk/jog midpoint).
+- Tests: the loop checks, the head-pitch running check, the wall head-clearance gate and `TestSprintLoopWrap` are gone;
+  the M "run" legs are "jog" legs; new jog, crouch, aim-fade and wall-stop checks, the `[MmCrouch]` and `[MmJog]` tables,
+  and an aim-fade unit test. `S settle at wall` starts 4.85 m off the wall (reached at the jog).
+- Measured: unit 1819 checks pass; `mmplayer` 62/64; `mmstress` 15/16. The wall: stop frames 0.2 s after the capsule is
+  blocked; the head clears the wall by 10 cm (no patch). The three failures are the Stage 2 items:
+  - `M jog` trunk: the chest's yaw against the pelvis 1.36 of the clip's (0.8-1.25): Spine Twist's closed loop (chest
+    yaw swing 9.1 -> 17.9 deg); the sprint loop's stride hid it. Stage 2's additive twist.
+  - `M idle` 0.50 jumps/s (<= 0.3) and `S long idle` 24 deg off the view (< 20): the LookAround idle take turns the body
+    with its root; past the 30 deg threshold the turn back forces searches. Stage 2's facing model.
+- The crouched eye (`[MmCrouch]`, body eye on the head against the capsule's crouched eye): the crouch walk -1.4 cm, the
+  crouch strafe -12.6 cm, the crouch idle -25.8 cm. The moving crouch fills the capsule, so Crouch Height was left as is
+  (lowering it to the idle would put the crouch walk's head through the capsule top). The owner left it to us: kept.
+- The owner's play test of Stage 1: "much better"; some idles "play half way through and snap back to the arms at rest".
+  Cause, measured: the player's exclusions (a hand over its shoulder, bent over) removed only the frames over the line, so
+  an idle take played the hand's rise, ran into the excluded frames, was forced to search and jumped to arms at rest - 5
+  of the idle takes' 6 excluded stretches were entered with the hand over 5 cm above the take's rest. Fix: each run is
+  excluded as its whole gesture (widened back and on while the hand / the chest's tilt is over the take's rest by 5 cm /
+  5 deg, at most 2 s, then padded): 0 of 6 entered mid-gesture (an `mmplayer` check). Excluded frames 20083 -> 31477 of
+  267059. New: `MotionMatcher::ForcedByExcluded`, the `[MmIdle]` "excluded" column, `S long idle` 20 s (one take 17.4 s).
+  `mmplayer` 63/65 (the same two Stage 2 failures), `mmstress` 16/16.
+- Then: "when I look all the way down I can see through my body". Measured with a new ray grid (`InsideProbe`: 336 view
+  rays cast at the drawn body's triangles, the camera pass's hides applied; a ray whose first hit is a back face sees the
+  inside): jogging and looking straight down, 110 rays (92 % of frames) saw into the torso, at the bottom of the screen -
+  through the neck opening (the head is a Hidden Part). On the move the chest no longer bends with the view (Stage 1's
+  Spine Aim fade), so the eye stayed over the opening. Legacy: 6 rays (the underpants' waistband). The near plane is 5 cm,
+  so not a near-plane slice (checked first). Fix, a camera rule (`FirstPersonBody::EyeBodyPush`): looking down, the eye
+  moves forward (flat, eased) only as far as it takes for the torso's neck rim (its open border round the neck, found once
+  from the mesh) to leave the view while the eye is above it, and for the upper torso to stay 3 cm past the near plane.
+  After: 3 rays jogging straight down (the waistband; up to 8 cm push), 2 walking, 0 standing (no push); legacy ~0.
+  The camera probe now also runs unarmed, and counts its hides inside the view; `[MmLookDown]` and a look-down check
+  (nearest body past the near plane, <= 10 inside rays) on the five look-down legs.
+- Then: "still clips a little jogging" and the camera felt stiff. Measured (`[MmEye]`): the stabilized eye (the head's slow
+  average within Eye Slack) kept 2.5 cm of the jog's 7.5 cm head bob. New **MM Head Ride** (component, 0-1, default 1;
+  MM unarmed only): the eye rides the mocap head's own motion - the eye's bob is now the head's (7.5 cm jogging, 10 on
+  A jog). The look-down push now snaps in (eased, it trailed the bobbing eye): jogging straight down, 0 torso rays; the
+  residual <= 3 rays are the underpants' waistband (legacy 6) - a clothing gap, not the neck.
+- Then: the owner asked to remove the procedural camera bob under the head ride and, still seeing the chest/neck, to limit
+  looking down. Done:
+  - `WeaponProceduralInput::CameraBobScale` = 1 - `FirstPersonBody::HeadRide()` (PlayFrame): riding the head, the camera
+    bobs as the head does, nothing on top (an `A` check per mode: MM < 1 mm, legacy still > 5 mm - 7.5).
+  - The look-down limit (`Player::MinPitch`, set in `BeforePlayerMove` under MM, applied after any view turn): each frame
+    the steepest pitch some push (now at most 10 cm) clears, bisected, held over a stride (0.6 s), eased; never above -45.
+    The testbed's straight-down legs now ask -89 (the camera's clamp), not -85. Jogging straight down: limit p50 -88,
+    worst -84.5 deg, push up to 7 cm, 0 inside rays; walking and standing: no limit, 0 rays.
+  - `mmplayer` 68/70 (the two Stage 2 failures), `mmstress` 16/16, legacy `testbed` 29/29.
+
 Play test 2's problems are fixed, measured against legacy and checked (`mmplayer` 56/56, full pass all PASS). Left:
 
 0. **Session 3 changed the sprint** (the tempo step at every wrap is gone; the stride is the pack's steadiest, typical one -

@@ -48,8 +48,7 @@ struct Snapshot {
     bool HandInView[2] = {false, false};
     float FeetGap = 0.0f;       // m: left foot minus right along the body's left (< 0: the legs are crossed)
     float BodyYawRateDeg = 0.0f; // the body's heading's turn rate (deg/s)
-    float WallHeadGap = 9.0f;  // m the head's sphere clears the wall ahead by (< 0: in it; 9 = no wall)
-    float WallLeanDeg = 0.0f;   // deg the spine is tipped back off a wall ahead (KeepHeadOffWalls)
+    float MmAimFade = 1.0f;     // motion matching: the share of Spine Aim kept at this speed (FirstPersonBodyMmAimFade)
     float PelvisHeight = 0.0f, PelvisHeightClip = 0.0f; // m over the body's base: as drawn, and as the clip had it
     float FootWeight = 0.0f;      // 0..1: how much foot IK is on
     float FootOffset[2] = {0, 0}; // ground under each foot minus the capsule's (m)
@@ -57,6 +56,7 @@ struct Snapshot {
     float FootLock[2] = {0, 0};   // 0..1: how firmly each foot is pinned
     float StepOffset = 0.0f;      // m the body is off the capsule's height (stair easing)
     float ArmsWeight = 0.0f;      // 0..1: how much the body's arms follow the weapon rig
+    float HeadHeight = 0.0f;      // m the clip's head bone over the body's base (before the chest's aim)
     float EyeSlack = 0.0f;        // m the eye is off the shoulders' motion (bounded by Eye Slack)
     glm::vec3 EyeApplied{0.0f};   // m the body moved the camera this frame, world (head height, bob, sway)
     glm::vec3 BodyEye{0.0f};      // world: the body's eye, before the procedural camera offsets (bob, lean, landing)
@@ -80,11 +80,25 @@ struct Snapshot {
     // The mesh is a few cm thicker than the bone line.
     float EyeToUpperArmRig[2] = {0, 0}, EyeToUpperArmBody[2] = {0, 0};
     float NearPlane = 0.0f;
+    float EyeBodyPush = 0.0f;
+    int NeckRimPoints = 0;
+    float LookLimitDeg = -89.0f;  // the look-down limit (Player::MinPitch under motion matching)
+    float HeadRide = 0.0f;        // FirstPersonBody::HeadRide (the procedural camera bob is off by this share)        // the torso's neck opening's rim vertices EyeBodyPush keeps out of the view     // m the eye is moved forward to keep the upper torso past the near plane (EyeBodyPush)
     // FirstPersonBody's camera probe (overlay on): the piece the camera sees nearest the eye, how far ahead
     // (along the view) and the bone that mostly moves that spot; which pass draws it.
     std::string ProbePiece, ProbeBone;
     float ProbeDepth = 0.0f;
     bool ProbeViewModel = false;
+    // ... and the camera pass's hides that fall inside the view (vertices past the near plane, in the frustum): each is a
+    // cut in the body you can see into - the Near Hide (body / clothing), the collar mask, a Camera Hidden Bone's collapse
+    // point, the hidden head (Head Bones, or a Hidden Part's vertices).
+    int ProbeCutNear = 0, ProbeCutCollar = 0, ProbeCutBones = 0, ProbeCutHead = 0;
+    // ... and (ProbeRequested only) a grid of view rays cast at the drawn body's triangles: how many there are, how many hit
+    // the body, and how many hit a back face first - the inside of the body, seen through an opening ("see through my
+    // body"); the piece and bone most of those hit. -1: not measured this frame.
+    int ProbeRays = -1, ProbeRayHits = 0, ProbeInsideRays = 0;
+    std::string ProbeInsideWhat;
+    glm::vec2 ProbeInsideAt{0.0f}; // ... and where on the screen, on average (-1..1, + right / up)
     std::string LastTrigger;      // the last start / stop / crouch / jump trigger the body fired
     float LastTriggerAgo = 0.0f;  // seconds since
 };
@@ -96,6 +110,8 @@ inline Snapshot& Info() { static Snapshot s; return s; }
 // The Scene viewport's overlay toggle (set every frame from the editor settings while playing).
 inline void SetEnabled(bool on) { EnabledFlag() = on; if (!on) Verts().clear(); }
 inline bool Enabled() { return EnabledFlag(); }
+// The camera probe alone, without the overlay (--npc-test measures with it): costs ~4.5 ms a frame while on.
+inline bool& ProbeRequested() { static bool v = false; return v; }
 inline void Clear() { Verts().clear(); }
 
 inline void Line(const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {

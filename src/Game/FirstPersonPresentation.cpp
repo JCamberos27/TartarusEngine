@@ -2053,6 +2053,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.WalkSpeed = m_WalkSpeed;
     in.SprintSpeed = m_SprintSpeed;
     in.HaveGaitPhase = m_HaveGait;
+    in.CameraBobScale = m_CameraBobScale;
     in.GaitPhase = m_GaitPhase;
     in.StateName = &ac->StateName;
     in.StateTags = &ac->StateTags;

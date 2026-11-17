@@ -91,7 +91,6 @@
     X(AssetRoot, "TARTARUS_ASSET_ROOT", Str, "engine asset folder override")                                          \
     X(MmSource, "TARTARUS_MM_SOURCE", Str, "--bake-motion: the mocap pack folder (anims, rig, manifest.json)")        \
     X(LocomotionSource, "TARTARUS_LOCOMOTION_SOURCE", Str, "the player body's locomotion: legacy | mm (overrides the component)") \
-    X(MmCrouch, "TARTARUS_MM_CROUCH", Str, "the player's crouch under motion matching: walk (a lowered walk; default) | pack (the pack's crouch takes)") \
     X(AudioCapture, "AUDIO_CAPTURE", Str, "write the audio output to this WAV file")                                  \
     X(LocalAppData, "LOCALAPPDATA", Str, "(Windows) user data root")
 
