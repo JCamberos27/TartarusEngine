@@ -52,6 +52,8 @@ class World;
 //            (NpcTest_Doors.cpp)
 //   npcloco  a dummy through the gaits in Apartment 301, watched from the side (NpcTest_NpcLoco.cpp)
 //   roam, locomotion, stopsteps: the player's own walking (NpcTest_Roam / _Locomotion / _StopSteps.cpp)
+//   mmview   motion matching, Phase 2 (NpcTest_MmView.cpp, LocomotionLab): the baked takes (Manny.mmanim) checked offline on
+//            the Quantum rig, then a playlist played on a bare Quantum body with the generated root drawn; SKIPs when unbaked
 //   testbed  project/scenes/AnimTestbed.json (tools/scenes/build_anim_testbed.py): only what the animation overhaul fixes, re-run
 //            after every phase (NpcTest_Testbed.cpp) - the player's bob reaching the screen and the gait phase on the lane, the
 //            corner peek's lean with the hands on the gun, stairs and a ramp (gait phase, leg reach, the eye's overshoot), the
@@ -78,7 +80,7 @@ public:
     const std::string& RecordDir() const { return m_RecordDir; }
     // Where a scenario's trace.csv goes: NPC_TEST_TRACE=<dir> (the trace alone, no frames - fast), else NPC_TEST_RECORD's.
     const std::string& TraceDir() const { return m_TraceDir; }
-    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" ? 1 : 2; } // every frame for the muzzle flame
+    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" || m_Scenario == "mmview" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -88,8 +90,10 @@ public:
     // A weapon action trigger this frame (Inspect, MagCheck, Melee); the host applies it after the weapon's Update.
     const std::string& Action() const { return m_Action; }
     std::string m_Action;
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no dummies
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
+    // World lines the host draws over the Game view (mmview: the generated root, the hips' facing, the ankles).
+    void DebugLines(std::vector<float>& out) const;
+    bool RunsWithoutSquad() const { return m_Scenario == "mmview" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no dummies
+    bool WantsCleanViews() const { return m_Scenario == "mmview" || m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -176,6 +180,13 @@ private:
     float m_LabClock = 0.0f;
     std::vector<std::string> m_SlideBodies; // the NPCs SlideLeg reports on
     int m_LabFrame = 0;
+    // mmview (NpcTest_MmView.cpp): the baked motion matching takes on a Quantum body, the generated root drawn, the bake checked
+    static float MmViewSeconds();
+    void MmViewDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    void MmView(World& world);
+    void MmViewValidate();
+    struct MmViewRun;
+    std::shared_ptr<MmViewRun> m_Mm;
     // testbed (NpcTest_Testbed.cpp): the animation overhaul's measurements in AnimTestbed.json
     static float TestbedSeconds();
     void TestbedDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);

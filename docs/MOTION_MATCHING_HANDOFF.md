@@ -11,8 +11,8 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 |---|---|---|
 | 0. Analysis and roadmap | `dev/mm-phase1` | **Done** (2026-11-17) |
 | 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
-| 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Next** |
-| 3. Motion matching runtime | `dev/mm-phase3` | Pending |
+| 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16), owner sign-off on the `mmview` recording pending |
+| 3. Motion matching runtime | `dev/mm-phase3` | **Next** |
 | 4. First-person player integration (unarmed) | `dev/mm-phase4` | Pending |
 | 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
 | 6. Legacy cleanup and final verification | `dev/mm-phase6` | Pending |
@@ -151,6 +151,98 @@ New `src/Game/MotionMatching/`:
 
 **Done when:** the bake fits its budgets, `mmview` passes visibly, and the owner has signed off on a recording.
 
+**What landed (2026-11-16):**
+- **`src/Game/MotionMatching/`** (no engine dependencies beyond `Model`; the math is header-only and unit-tested):
+  - `MotionMath.h`: Gaussian smoothing with edge padding, yaw unwrap, smallest-three 48-bit quaternions (worst error
+    1.0e-4 rad), a float-safe `QuatAngle`.
+  - `RootSynth.{h,cpp}`: the root, as decided (pelvis on the ground, σ 0.10 s; 0.5 hips + 0.5 shoulder-line facing,
+    σ 0.25 s), plus `Validate` (yaw jitter, facing vs hips, path wobble, foot slide, largest frame step) and `Contacts`.
+    - Edges: **mirror-padded through the edge's trend value** (a point mirror, `v[-k] = 2 E - v[k]`, with E the trend
+      line through two 1 s window means at the edge). A plain mirror flattens the speed at a cut; a point mirror
+      through the edge sample leaves the edge unsmoothed (the unit tests caught both).
+    - **The bake generates the root over 2 s more of the take on each side of the trim, then cuts.** Padding at a
+      budget cut through a turnaround ran the root 1.3 m off the pelvis (a 0.22 m frame step in
+      `Run_CardLong_noStops_R`); now padding only stands in at a take's own ends, inside the 1 s trims.
+  - `MotionClipStream.{h,cpp}`: the `.mmanim` pose stream (format in the header): per frame the root (x, z, yaw),
+    the pelvis translation under it and one packed rotation per bone; one static rotation per finger bone; the clip
+    table (name, tags, first frame, count, source start). `Bind` (by name, pelvis height ratio), `SamplePose` (nlerp
+    between frames), `RootAt`, `RootMatrixAt`.
+  - `MotionFeatures.{h,cpp}`: the `.mmdb` (format in the header): 27 features per frame in the frame's root space
+    (both ankles' position and velocity, pelvis velocity, the root at +20/+40/+60 frames and its facing there) with
+    their mean and standard deviation, and per-frame labels: gait, `Crouch`, `Strafe`, `Airborne`, `Excluded` (prone),
+    `NoSearch` (the last 60 frames of a take), `ContactL/R`.
+  - `MotionBake.{h,cpp}`: `--bake-motion <file.mmconfig> [--match <text>] [--out <prefix>]`, an early CLI tool (no
+    window or GL). Takes are imported clip-only through `Model` on 4 worker threads; the rig diff runs first; the
+    feet are rebuilt from the quantized stream on the *target* rig and compared with the source (worst 0.01 cm); the
+    files are read back and timed. It fails on a budget overrun or a failed take. Report: `work/mm_bake/<name>.report.json`.
+- **`TARTARUS_MM_SOURCE`** (`Env.h`): the pack folder (`anims\`, `rig\`, `manifest.json`). Nothing else reads the pack.
+- **`project/assets/Animations/MotionMatching/Manny.mmconfig`** (committed: our own config, not licensed data): the
+  bones, statics, RootSynth params (`byTag: snakes → yawSigma 0.15`), label thresholds, budgets. Paths are
+  project-relative. The cooked `Manny.mmanim` / `Manny.mmdb` are git-ignored (`.gitignore`), not yet on the Drive
+  (`Used\` registration is Phase 3).
+- **Drive archive** (owner-approved, 2026-11-16): `Raw\Animations\Quantum Stage - Motion Matching Library\` (10.4 GB,
+  692 files, sizes and sample SHA-256s checked): `Manny Export\` (`anims\`, `rig\`, `manifest.json`, the findings
+  and the UE export script - point `TARTARUS_MM_SOURCE` here on another machine), `Raw Source Data\` (the pack's own
+  data, with fingers), `Docs\` (info sheet, readme). `_INFO.md`, a `Raw\SOURCES.md` row, a `Raw\CHANGELOG.md`
+  entry and a "Fab Standard License" section in `Licenses\README.md` were added. The Drive has ~144 GB free (the
+  "nearly full" note was C:'s space); its local cache is on D:.
+- **`tools/mm/gen_takes.py` → `tools/mm/takes.csv`** (139 rows, 82 included, 1.27 h): `_S` left out (tagged
+  `exaggerated`), dodges and strolls left out of v1, 1 s trimmed off each end, and a seconds budget per pattern
+  (Take001 first): walk/jog/run 90 s, crouch 70 s, stand 75 s, idles/steps/jumps 60 s, transitions 120 s, accel 240 s.
+  Tags: the group, the pattern kind, `forward` (loop, circles, snakes: the facing check), and the suffixes (`fo`,
+  `ml`, `fixed`). Tagging is from the names plus the pack's **info sheet** (a PDF, `Docs\` in the Drive archive;
+  its facts are copied into the script's `SHEET` table): `_S` = exaggerated, `_M_L` = medium and large jumps,
+  `Stand_to_Walk_Take002` is exaggerated though not named `_S` (now left out), `Crouch_Strafe_Star_Take001` is an
+  incomplete pattern (kept). `_FO` it doesn't explain.
+- **Rig diff** (pack `rig/SKM_Manny.fbx` vs `Quantum_Body_Full.fbx`, in each rig's `root` frame): **the 41 core bones
+  match** - worst length 0.002 %, worst rest rotation 0.04°, nothing missing; pelvis 0.9590 m on both (scale 1.0000).
+  No action needed. (Quantum carries the Z-up → Y-up turn on its `root` node; the pack's animation files carry it
+  nowhere - identity `RootNode`. The stream lives in the `root` node's frame, so both play the same.)
+- **Core bones: 41, not ~65.** Pelvis, spine 01-05, neck 01-02, head, and per side clavicle, upper arm + 2 twists,
+  lower arm + 2 twists, hand, thigh + 2 twists, calf + 2 twists, foot, ball. Dropped: the UE IK bones (`ik_foot_*`,
+  `ik_hand_*` hang off `root`, which the bake replaces, and nothing in the engine reads them), `interaction`,
+  `center_of_mass`, the correctives/helpers (`*_in/_out/_fwd/_bck`, `twistCor`, `bicep/tricep`, `pec`, `latissimus`,
+  `wrist_*`, `scap`). Fingers: 38 static bones posed from the middle of `Stand_Idle_Neutral_Take001`.
+- **Labels, calibrated on the pack** (`Manny.mmconfig` `labels`):
+  - gait from root speed: idle < 0.3, walk < 1.6, jog < 2.9, run above (m/s). The pack is slow - a 9 m capture
+    area: straight walks ~1.25 m/s (p90 1.5), straight jogs ~1.7-1.8 (p90 2.0-2.3), runs peak 4.5-5.2.
+  - crouch: pelvis under 0.84 × standing (0.806 m) and slower than a jog (a run's lean drops the pelvis to ~0.81).
+  - prone (`Excluded`): pelvis under 0.20 m (only `Transitions_stationary`, down to 0.08 m; the deepest crouches sit
+    at 0.30).
+  - airborne: the lower ankle over 0.18 m **and** the pelvis 0.02 m over standing, 4+ frames. The ankles alone can't
+    tell a hop from a run's flight (both ~0.25 m); the pelvis can (runs ≤ 0.97 m, jumps ≥ 1.00 m).
+- **`--npc-test mmview`** (`NpcTest_MmView.cpp`, LocomotionLab's south-west quarter, no squad needed):
+  - Loads `Manny.mmanim`/`.mmdb` (SKIP when not baked) and validates **every** frame on the Quantum rig (0.6 s): the
+    budgets; all 41 + 38 bones bind; the root never steps over 0.15 m; forward takes' facing p95 under 20°; yaw
+    jitter under 300; the planted feet rebuilt from the stream slide within 0.5 cm/s of the take's own (the
+    `.mmdb`'s source feet); the `.mmdb` foot features match the rebuilt feet within 1 cm; labels fit (runs have run
+    or jog frames, both big jumps airborne frames, crouch takes a third crouched, idles 95 % idle).
+  - Then plays 10 takes × 7 s on a bare Quantum body, re-centred, the player unarmed and turning to follow it, the
+    Scene view following from three-quarters. Drawn (Game view): the root's path (grey behind, yellow 1 s ahead), its
+    facing (green), the hips' facing (red), the ankles (blue planted, white not), a cyan tick while airborne.
+    `TARTARUS_MMVIEW_CLIPS='Name[@start];...'` picks the takes. Records every frame with `NPC_TEST_RECORD`.
+  - The Game view draws `NpcTest::DebugLines` through the combat HUD's line pass (`Application.cpp`).
+- **`tools/mm/frames_to_video.py`**: an `NPC_TEST_RECORD` folder → one MP4 (both views side by side; OpenCV, no ffmpeg).
+- **Unit tests** (`UnitTests_MotionMatching.cpp`, filter `"Motion matching"`, 9 tests): smoothing/unwrap/packing; RootSynth on
+  a swaying diagonal walk and a 720° turn in place (through ±180°); contacts and slide; the stream and feature files
+  round-tripped (corrupt files refused) and bound by name; labels and features on synthetic takes; `takes.csv`.
+  Two need licensed files and SKIP without them: the rig diff (`TARTARUS_MM_SOURCE`) and the cooked budgets.
+
+**Results (2026-11-16):**
+- Bake: 82 takes, 275,269 frames (1.27 h), 41 bones + 38 static; **poses 70.9 MB (150), features 28.9 MB (40), load
+  0.15 s (2)**; 30 s on 4 workers (import ~100 s of CPU in all). Foot rebuild worst 0.01 cm. Forward takes' facing p95:
+  median 8.7°, worst 14.2° (`Run_Loop_Take001`). Yaw jitter: median 72, worst 250 (`Run_Snakes`, on its σ 0.15 s).
+  Frame steps: worst 0.086 m (a 5.2 m/s run). Labels: idle 113k / walk 139k / jog 19k / run 4.6k frames; crouch
+  40k, strafe 32k, airborne 739, excluded (prone) 1.1k.
+- `mmview`: 12/12 (budgets; 41/41 + 38/38 bones bound; step 0.086 m; facing 14.2°; jitter 250; slide gap 0.18 cm/s
+  vs the take's own, whose worst is 15.6 cm/s of heel-to-toe roll; features vs rebuilt feet 0.012 cm; labels).
+- Final full pass (`mm_smoke.ps1 testbed npcloco locomotion stopsteps feet labloco mmview -PerfBench
+  tests\perf-scenes\perf_stress.json`, `work\mm_smoke\20261116-223524`): **all PASS** - unit 51638 checks, smoke
+  21/21, testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, perf
+  edit 3.65 ms / play 6.01 ms (baseline 2.87 / 5.65 p50; Phase 1's own final pass was 3.18 / 6.03 - legacy
+  locomotion is untouched, so this is run-to-run noise, not a regression to chase).
+- Recording for the owner: `work\mm_view\mmview_phase2.mp4` (Game view left, Scene view right; `frames_to_video.py`).
+
 ### Phase 3: Motion matching runtime
 - `MotionDatabase`.
 - `MotionSearch`: 16- and 64-frame AABB boxes, label filters, searches every ~0.1 s or on input changes,
@@ -201,7 +293,7 @@ New `src/Game/MotionMatching/`:
   - When a run fails, diagnose it before running again. Repeat a run only to check for flakiness.
 - Commands (PowerShell):
   - Everything: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 testbed npcloco locomotion stopsteps feet
-    labloco -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
+    labloco mmview -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
     asset you know is broken, and say so under Open issues.
   - Compare with the baseline: add `-TraceDir <dir>` to `mm_smoke.ps1`, then
     `python tools/mm/baseline_summary.py <log dir> <out dir> --traces <dir>`; diff `SUMMARY.md` and `metrics.json`
@@ -243,6 +335,17 @@ New `src/Game/MotionMatching/`:
 **Frame order** (`src/App/PlayFrame.cpp`): `Player::Update` → `firstPersonBody.Tick` → `npcDirector.Think` →
 `UpdateAnimatorControllers` → `firstPersonBody.LateUpdate` → presentation → `npcDirector.LateUpdate`.
 
+**Motion matching** (Phase 2+)
+- `src/Game/MotionMatching/`: `MotionMath.h`, `RootSynth`, `MotionClipStream` (`.mmanim`), `MotionFeatures` (`.mmdb`),
+  `MotionBake` (`--bake-motion`, wired in `src/App/CliTools.cpp` and `LaunchOptions.cpp`).
+- `project/assets/Animations/MotionMatching/Manny.mmconfig`; cooked `Manny.mmanim` / `Manny.mmdb` beside it (git-ignored).
+- `tools/mm/gen_takes.py` → `tools/mm/takes.csv`; `tools/mm/frames_to_video.py`.
+- `src/Game/AI/NpcTest_MmView.cpp` (`--npc-test mmview`); `src/Tests/UnitTests_MotionMatching.cpp`.
+- Bake: `set TARTARUS_MM_SOURCE=D:\Jacob\JCamberos\Manny_Mocap_Export` then
+  `build\Release\TartarusEngine.exe --bake-motion assets/Animations/MotionMatching/Manny.mmconfig` (30 s, 4 workers;
+  `--match <text>` bakes some takes, `--out <prefix>` writes elsewhere - use D: for scratch).
+- Takes list: `python tools/mm/gen_takes.py` (reads `TARTARUS_MM_SOURCE`'s `manifest.json`).
+
 **Tests**
 - `src/Tests/SmokeHarness.cpp`: the scenario-to-scene map at ~86–101.
 - `src/Game/AI/NpcTest*.cpp`.
@@ -253,9 +356,23 @@ New `src/Game/MotionMatching/`:
 
 ## Open issues
 
-- `_FO` (idles) and `_M_L` (one jump) suffixes are undefined. They are tagged idle and jump; the owner should look at
-  them in `mmview`.
-- Pack-Manny vs Quantum rest pose and bone lengths: not yet compared (Phase 2).
+- **Owner sign-off on the `mmview` recording** (`work\mm_view\mmview_phase2.mp4`) is still to come; it closes Phase 2.
+- `_FO` is still unexplained (the info sheet just calls those takes idle variations); `_M_L` = medium and large jumps.
+  Both are in the `mmview` playlist for the owner to look at.
+- **The root keeps most of the stride's side-to-side sway.** The decided σ 0.10 s passes ~82 % of a 1 Hz sway
+  (`exp(-(2π f σ)²/2)`; the unit test measures 3.3 of 4 cm). `RootValidation::PathWobble` (stride band, RMS) reads
+  walk 4.5, jog 6.3, run 10.5 cm median on the pack (sharp card turns are in that band too). Phase 3: if the
+  trajectory features or the drawn path look noisy, raise `posSigma` per tag in `Manny.mmconfig` and rebake (30 s).
+- Yaw jitter has no spec number: `mmview` fails over 300 (the worst take is 250). A regression guard, not a quality bar.
+- Gait labels from speed alone overlap: a jog through a turn is slower than a straight walk's peak. Phase 3 should use
+  them as soft costs or for reporting, not hard filters (speed is in the features anyway).
+- The UE IK bones are not streamed (see "Core bones: 41"). If a later phase needs `ik_foot_*`, they must be rebuilt
+  under the generated root, not copied.
+- Foot contacts use the ankle (low and under 0.6 m/s), so they include heel-to-toe roll: absolute "slide" reads
+  5-15 cm/s on clean mocap. Phase 4's foot lock may want ball-of-foot contacts too.
+- `Crouch_Strafe_Star_Take001` is an incomplete pattern (info sheet); it's in, at 28 s.
+- The cooked files aren't in `Used\` or `project/external_assets.csv` yet (Phase 3, as planned).
+- *Resolved 2026-11-16:* pack-Manny vs Quantum rest pose and bone lengths: the 41 core bones match (worst 0.002 %).
 - *Resolved 2026-11-16:* two zero-filled local assets, `project/assets/Audio/Ambience/worklight_hum_1.wav` and
   `project/assets/Characters/Spider/Textures/T_Spider_AO.png`.
   - Every byte was 0, so every run logged `[error]`s; they were what made the baseline runs `PASS*`.
@@ -276,7 +393,24 @@ New `src/Game/MotionMatching/`:
 - A forced focus steal (Notepad launched from a background job) did not take focus: Windows' foreground lock. Focus
   loss was checked through natural focus changes during the smoke run instead.
 
-## Phase 2: first steps
+## Phase 3: first steps
+
+1. Branch `dev/mm-phase3` from `dev/mm-phase2`, in the main checkout (licensed assets and `build\` only exist there).
+   Big scratch output on D:.
+2. Bake first if the cooked files are missing: `set TARTARUS_MM_SOURCE=D:\Jacob\JCamberos\Manny_Mocap_Export`, then
+   `build\Release\TartarusEngine.exe --bake-motion assets/Animations/MotionMatching/Manny.mmconfig` (30 s). The pack
+   is also on the Drive (`Raw\Animations\Quantum Stage - Motion Matching Library\Manny Export`).
+3. `MotionDatabase` loads `Manny.mmanim` + `Manny.mmdb` (`MotionClipStream::Load`, `MotionFeatureSet::Load`); normalize
+   with the stored mean/std; never match `NoSearch` or `Excluded` frames.
+4. `MotionSearch` over the 27 features (layout in `MotionFeatures.h`), with feature-group weights; the gait labels as
+   soft costs (they overlap); `Airborne` frames only through the label-locked jump segments.
+5. The gait speed table from this bake (`work/mm_bake/Manny.report.json`, `speedP50` / the takes' straight parts): walk
+   ~1.25 m/s, jog ~1.8-2.0, run 4.5-5.
+6. `Inertialization` and `TrajectoryPredictor`, then `--npc-test mmdb`. Reuse `mmview`'s FK and line drawing
+   (`NpcTest_MmView.cpp`, `NpcTest::DebugLines`) for the debug draw.
+7. Register `Manny.mmanim` / `.mmdb` in `Used\` and `project/external_assets.csv` (`tools/assets/asset_manifest.py`).
+
+## Phase 2: first steps (done)
 
 1. Branch `dev/mm-phase2` from `dev/mm-phase1`, in the main checkout. The licensed assets and `build\` exist only
    there, so a separate worktree can't run the engine. C: has little free space; put big scratch output on D:.
@@ -319,3 +453,19 @@ New `src/Game/MotionMatching/`:
     - fixed the `feet` teleport bug (6/6, no log errors);
     - found the pack on D:.
   - Found the two zero-filled assets and the `feet` failure; both are resolved (see Open issues).
+- **2026-11-16, Phase 2:**
+  - Added `src/Game/MotionMatching/` (`MotionMath.h`, `RootSynth`, `MotionClipStream`, `MotionFeatures`, `MotionBake`),
+    `--bake-motion`, `TARTARUS_MM_SOURCE`, `Manny.mmconfig`, `tools/mm/gen_takes.py` + `takes.csv`,
+    `tools/mm/frames_to_video.py`, `--npc-test mmview` (+ `TARTARUS_MMVIEW_CLIPS`, `NpcTest::DebugLines` drawn by the
+    combat HUD), 9 unit tests.
+  - The rig diff: the 41 core bones match. The bake fits every budget by a wide margin (71 / 29 MB, 0.15 s).
+  - The unit tests caught three things before the real takes did: `acos`-based quaternion angles can't resolve
+    under 7e-4 rad in float; a point mirror through the edge sample leaves the edge unsmoothed; σ 0.10 s keeps most
+    of the stride sway (kept as decided, reported).
+  - `mmview` caught two: a root running 1.3 m off the pelvis at budget cuts (fixed: the root is generated over 2 s
+    past each trim), and a slide limit set on the mocap's own heel roll (replaced by rebuilt vs source).
+  - Calibrated the labels on the pack (gait speeds, crouch with speed, prone at 0.20 m, airborne with the pelvis).
+  - Read the pack's info sheet: `_M_L`, and `Stand_to_Walk_Take002` is exaggerated (now left out).
+  - Archived the pack on the Drive (owner-approved), with its `_INFO.md`, index, changelog and license entries.
+  - Visible runs only, through `mm_smoke.ps1`: the unit filter and `mmview` while working, then one full pass, all
+    PASS. One `mmview` re-run was a recording overlapped by a Drive copy (frames dropped; re-recorded for the owner).

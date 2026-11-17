@@ -5996,6 +5996,7 @@ int RunUnitTests(const char* filter) {
     RegisterRagdollTests(tests);
     RegisterLaunchOptionsTests(tests);
     RegisterAnimationTests(tests);
+    { void RegisterMotionMatchingTests(UnitTestSupport::TestList&); RegisterMotionMatchingTests(tests); } // UnitTests_MotionMatching.cpp
     RegisterEditorTests(tests);
     RegisterEnhancerTests(tests);
     RegisterRecoilPortTests(tests);

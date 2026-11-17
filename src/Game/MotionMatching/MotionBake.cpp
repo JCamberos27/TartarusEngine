@@ -1,0 +1,740 @@
+#include "MotionBake.h"
+
+#include "MotionClipStream.h"
+#include "MotionMath.h"
+
+#include "Core/Env.h"
+#include "Core/Paths.h"
+#include "Model.h"
+
+#include <glm/gtc/matrix_transform.hpp>
+#include <json.hpp>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <mutex>
+#include <sstream>
+#include <thread>
+
+namespace fs = std::filesystem;
+using nlohmann::json;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Config and takes
+
+namespace {
+
+std::string ResolveProjectPath(const std::string& p) {
+    if (p.empty()) return p;
+    const fs::path path(p);
+    if (path.is_absolute()) return path.lexically_normal().string();
+    return fs::path(ProjectPaths::Resolve(p)).lexically_normal().string();
+}
+
+RootSynthParams ReadParams(const json& j, RootSynthParams p) {
+    if (!j.is_object()) return p;
+    p.PosSigma = j.value("posSigma", p.PosSigma);
+    p.YawSigma = j.value("yawSigma", p.YawSigma);
+    p.HipsWeight = j.value("hipsWeight", p.HipsWeight);
+    return p;
+}
+
+std::vector<std::string> SplitTags(const std::string& s) {
+    std::vector<std::string> out;
+    std::stringstream ss(s);
+    std::string t;
+    while (std::getline(ss, t, ';'))
+        if (!t.empty()) out.push_back(t);
+    return out;
+}
+
+double Now() {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+glm::quat RotationOf(const glm::mat4& m) {
+    glm::mat3 r(m);
+    for (int c = 0; c < 3; ++c) r[c] = glm::normalize(r[c]);
+    return glm::normalize(glm::quat_cast(r));
+}
+
+} // namespace
+
+bool MotionBakeConfig::Load(const std::string& path, std::string& error) {
+    Path = path;
+    std::ifstream in(path);
+    if (!in) {
+        error = "cannot read " + path;
+        return false;
+    }
+    const json j = json::parse(in, nullptr, false);
+    if (!j.is_object()) {
+        error = path + ": not a JSON object";
+        return false;
+    }
+    if (j.contains("source") && j["source"].is_object()) {
+        SourceAnims = j["source"].value("anims", SourceAnims);
+        SourceRig = j["source"].value("rig", SourceRig);
+    }
+    Takes = ResolveProjectPath(j.value("takes", std::string("../tools/mm/takes.csv")));
+    TargetRig = ResolveProjectPath(j.value("targetRig", std::string()));
+    Output = ResolveProjectPath(j.value("output", std::string()));
+    Fps = j.value("fps", Fps);
+    Workers = std::max(1, j.value("workers", Workers));
+    if (j.contains("bones") && j["bones"].is_array())
+        for (const auto& b : j["bones"])
+            if (b.is_string()) Bones.push_back(b.get<std::string>());
+    if (j.contains("staticBones") && j["staticBones"].is_array())
+        for (const auto& b : j["staticBones"])
+            if (b.is_string()) StaticBonePrefixes.push_back(b.get<std::string>());
+    StaticPoseFrom = j.value("staticPoseFrom", std::string());
+    if (j.contains("rootSynth") && j["rootSynth"].is_object()) {
+        const json& r = j["rootSynth"];
+        if (r.contains("default")) RootDefault = ReadParams(r["default"], RootDefault);
+        if (r.contains("byTag") && r["byTag"].is_object())
+            for (auto it = r["byTag"].begin(); it != r["byTag"].end(); ++it) RootByTag[it.key()] = ReadParams(it.value(), RootDefault);
+    }
+    if (j.contains("labels") && j["labels"].is_object()) {
+        const json& l = j["labels"];
+        if (l.contains("trajFrames") && l["trajFrames"].is_array() && l["trajFrames"].size() == 3)
+            for (int k = 0; k < 3; ++k) Labels.TrajFrames[k] = l["trajFrames"][(size_t)k].get<int>();
+        if (l.contains("gaitSpeeds") && l["gaitSpeeds"].is_array() && l["gaitSpeeds"].size() == 3)
+            for (int k = 0; k < 3; ++k) Labels.GaitSpeeds[k] = l["gaitSpeeds"][(size_t)k].get<float>();
+        Labels.CrouchRatio = l.value("crouchRatio", Labels.CrouchRatio);
+        Labels.ProneHeight = l.value("proneHeight", Labels.ProneHeight);
+        Labels.StrafeAngleDeg = l.value("strafeAngleDeg", Labels.StrafeAngleDeg);
+        Labels.StrafeMinSpeed = l.value("strafeMinSpeed", Labels.StrafeMinSpeed);
+        Labels.AirFootHeight = l.value("airFootHeight", Labels.AirFootHeight);
+        Labels.AirMinFrames = l.value("airMinFrames", Labels.AirMinFrames);
+        Labels.AirPelvisRise = l.value("airPelvisRise", Labels.AirPelvisRise);
+        Labels.ContactHeight = l.value("contactHeight", Labels.ContactHeight);
+        Labels.ContactSpeed = l.value("contactSpeed", Labels.ContactSpeed);
+    }
+    if (j.contains("budgets") && j["budgets"].is_object()) {
+        BudgetPoseMB = j["budgets"].value("poseMB", BudgetPoseMB);
+        BudgetFeatureMB = j["budgets"].value("featureMB", BudgetFeatureMB);
+        BudgetLoadSeconds = j["budgets"].value("loadSeconds", BudgetLoadSeconds);
+    }
+    if (j.contains("validation") && j["validation"].is_object()) {
+        const json& v = j["validation"];
+        FacingP95Deg = v.value("facingP95Deg", FacingP95Deg);
+        YawJitterMax = v.value("yawJitter", YawJitterMax);
+        RigLengthPct = v.value("rigLengthPct", RigLengthPct);
+        ReconstructCm = v.value("reconstructCm", ReconstructCm);
+    }
+    if (Bones.empty() || Output.empty() || TargetRig.empty()) {
+        error = path + ": needs bones, output and targetRig";
+        return false;
+    }
+    if (std::find(Bones.begin(), Bones.end(), "pelvis") == Bones.end()) {
+        error = path + ": the bones must include pelvis";
+        return false;
+    }
+    return true;
+}
+
+RootSynthParams MotionBakeConfig::ParamsFor(const std::vector<std::string>& tags) const {
+    for (const std::string& t : tags)
+        if (auto it = RootByTag.find(t); it != RootByTag.end()) return it->second;
+    return RootDefault;
+}
+
+bool MotionTake::HasTag(const std::string& t) const { return std::find(Tags.begin(), Tags.end(), t) != Tags.end(); }
+
+std::string MotionTake::TagString() const {
+    std::string s;
+    for (const std::string& t : Tags) s += (s.empty() ? "" : ";") + t;
+    return s;
+}
+
+namespace MotionBake {
+
+std::string SourceDir(const MotionBakeConfig& cfg) {
+    (void)cfg;
+    const std::string dir = Env::Str(Env::Var::MmSource);
+    std::error_code ec;
+    return !dir.empty() && fs::is_directory(dir, ec) ? dir : std::string();
+}
+
+bool ReadTakes(const std::string& csvPath, std::vector<MotionTake>& out, std::string& error) {
+    std::ifstream in(csvPath);
+    if (!in) {
+        error = "cannot read " + csvPath;
+        return false;
+    }
+    std::string line;
+    std::vector<std::string> header;
+    const auto split = [](const std::string& s) {
+        std::vector<std::string> f;
+        std::string cur;
+        for (char c : s) {
+            if (c == ',') { f.push_back(cur); cur.clear(); }
+            else if (c != '\r') cur += c;
+        }
+        f.push_back(cur);
+        return f;
+    };
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        const std::vector<std::string> f = split(line);
+        if (header.empty()) {
+            header = f;
+            continue;
+        }
+        const auto col = [&](const char* name) -> std::string {
+            for (size_t i = 0; i < header.size() && i < f.size(); ++i)
+                if (header[i] == name) return f[i];
+            return {};
+        };
+        MotionTake t;
+        t.Name = col("name");
+        if (t.Name.empty()) continue;
+        t.Group = col("group");
+        t.Pattern = col("pattern");
+        t.Seconds = (float)std::atof(col("seconds").c_str());
+        t.Include = col("include") == "1";
+        t.TrimStart = (float)std::atof(col("trim_start").c_str());
+        t.TrimEnd = (float)std::atof(col("trim_end").c_str());
+        t.Tags = SplitTags(col("tags"));
+        out.push_back(std::move(t));
+    }
+    if (header.empty() || std::find(header.begin(), header.end(), "name") == header.end()) {
+        error = csvPath + ": no header with a name column";
+        return false;
+    }
+    return true;
+}
+
+void RootSpaceGlobals(const Model& model, const std::vector<LocalTRS>& pose, int rootNode, std::vector<glm::mat4>& out) {
+    const int n = model.NodeCount();
+    out.resize((size_t)n);
+    for (int i = 0; i < n; ++i) {
+        const int p = model.NodeParent(i);
+        const glm::mat4 local = pose[(size_t)i].ToMatrix();
+        out[(size_t)i] = p >= 0 ? AffineMul(out[(size_t)p], local) : local;
+    }
+    if (rootNode < 0) return;
+    const glm::mat4 inv = glm::inverse(out[(size_t)rootNode]);
+    for (int i = 0; i < n; ++i) out[(size_t)i] = AffineMul(inv, out[(size_t)i]);
+}
+
+std::vector<BoneDiff> RigDiff(const Model& source, const Model& target, const std::vector<std::string>& bones) {
+    std::vector<LocalTRS> sp, tp;
+    source.BindLocalPose(sp);
+    target.BindLocalPose(tp);
+    std::vector<glm::mat4> sg, tg;
+    RootSpaceGlobals(source, sp, source.NodeIndex("root"), sg);
+    RootSpaceGlobals(target, tp, target.NodeIndex("root"), tg);
+    std::vector<BoneDiff> out;
+    for (const std::string& b : bones) {
+        BoneDiff d;
+        d.Name = b;
+        const int si = source.NodeIndex(b), ti = target.NodeIndex(b);
+        d.InSource = si >= 0;
+        d.InTarget = ti >= 0;
+        if (si >= 0) d.LengthSource = glm::length(sp[(size_t)si].T);
+        if (ti >= 0) d.LengthTarget = glm::length(tp[(size_t)ti].T);
+        if (si >= 0 && ti >= 0) {
+            d.LengthPct = d.LengthSource > 1e-4f ? std::fabs(d.LengthTarget - d.LengthSource) / d.LengthSource * 100.0f
+                                                 : (d.LengthTarget > 1e-4f ? 100.0f : 0.0f);
+            d.RestAngleDeg = MotionMath::QuatAngle(sp[(size_t)si].R, tp[(size_t)ti].R) * 180.0f / MotionMath::kPi;
+            d.PositionCm = glm::length(glm::vec3(sg[(size_t)si][3]) - glm::vec3(tg[(size_t)ti][3])) * 100.0f;
+        }
+        out.push_back(d);
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The bake
+
+namespace {
+
+ModelImportSettings ClipOnlySettings() {
+    ModelImportSettings s;
+    s.AnimationOnly = true;
+    s.ImportNormals = false;
+    s.MaterialImportMode = ModelImportSettings::MaterialMode::None;
+    return s;
+}
+
+// What every take shares (read-only while the workers run).
+struct BakeContext {
+    const MotionBakeConfig* Cfg = nullptr;
+    std::string AnimsDir;
+    const Model* Target = nullptr;
+    glm::mat4 C{1.0f}, CInv{1.0f};   // the target's `root` node in its model space (the Z-up -> Y-up turn), and inverse
+    float RestYaw = 0.0f;
+    float Side = 1.0f;                // -1 when the rig's _r bones sit on its left (never seen; checked anyway)
+    std::vector<std::string> StaticBones;
+    // The target's node per streamed bone, its pelvis, its feet, its bind pose.
+    std::vector<int> TargetNodes;
+    int TargetPelvis = -1, TargetFoot[2] = {-1, -1};
+    std::vector<LocalTRS> TargetBind;
+    float PelvisScale = 1.0f;
+};
+
+struct TakeResult {
+    bool Ok = false;
+    std::string Error;
+    MotionTake Take;
+    float SourceStart = 0.0f, TakeSeconds = 0.0f;
+    std::vector<MotionClipStream::RootSample> Root;
+    RootTrack Track;
+    std::vector<glm::vec3> PelvisT;
+    std::vector<glm::quat> Rot; // frames x bones
+    MotionClipFrames Frames;
+    std::vector<glm::vec3> HipsRight;
+    RootValidation Raw;          // the generated root, the source's own feet
+    RootValidation Rebuilt;      // the feet rebuilt from the quantized stream on the target rig, placed by the root
+    float RebuildMaxCm = 0.0f;   // worst distance between a source foot and its rebuild
+    float SpeedP50 = 0.0f, PelvisP50 = 0.0f, AnkleP05 = 0.0f;
+    int Labelled[4] = {0, 0, 0, 0};
+    std::vector<glm::quat> StaticRot;
+    double ImportSeconds = 0.0, BakeSeconds = 0.0;
+};
+
+float Percentile(std::vector<float> v, float p) {
+    if (v.empty()) return 0.0f;
+    std::sort(v.begin(), v.end());
+    return v[std::min(v.size() - 1, (size_t)(p * (double)v.size()))];
+}
+
+TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantStatics) {
+    TakeResult r;
+    r.Take = take;
+    const MotionBakeConfig& cfg = *ctx.Cfg;
+    const std::string path = (fs::path(ctx.AnimsDir) / (take.Name + ".fbx")).string();
+    std::error_code ec;
+    if (!fs::exists(path, ec)) {
+        r.Error = "missing " + path;
+        return r;
+    }
+    const double t0 = Now();
+    Model m(path, ClipOnlySettings());
+    r.ImportSeconds = Now() - t0;
+    if (m.AnimationCount() < 1) {
+        r.Error = "no clip in " + path;
+        return r;
+    }
+    const float fps = cfg.Fps;
+    const float len = m.AnimationLength(0);
+    const int total = (int)std::floor(len * fps + 1e-3f) + 1;
+    const int first = std::clamp((int)std::lround(take.TrimStart * fps), 0, total - 1);
+    const int last = take.TrimEnd > 0.0f ? std::clamp((int)std::lround(take.TrimEnd * fps), first, total - 1) : total - 1;
+    const int n = last - first + 1;
+    if (n < (int)fps) {
+        r.Error = "under a second left after the trim";
+        return r;
+    }
+    r.SourceStart = (float)first / fps;
+    r.TakeSeconds = len;
+
+    const int root = m.NodeIndex("root"), pelvis = m.NodeIndex("pelvis");
+    const int thigh[2] = {m.NodeIndex("thigh_l"), m.NodeIndex("thigh_r")};
+    const int clav[2] = {m.NodeIndex("clavicle_l"), m.NodeIndex("clavicle_r")};
+    const int foot[2] = {m.NodeIndex("foot_l"), m.NodeIndex("foot_r")};
+    if (root < 0 || pelvis < 0 || thigh[0] < 0 || thigh[1] < 0 || clav[0] < 0 || clav[1] < 0 || foot[0] < 0 || foot[1] < 0) {
+        r.Error = "missing root / pelvis / thighs / clavicles / feet";
+        return r;
+    }
+    if (m.NodeParent(pelvis) != root) {
+        r.Error = "pelvis is not a child of root";
+        return r;
+    }
+    const size_t nb = cfg.Bones.size();
+    std::vector<int> src(nb);
+    int pelvisBone = -1;
+    for (size_t b = 0; b < nb; ++b) {
+        src[b] = m.NodeIndex(cfg.Bones[b]);
+        if (src[b] < 0) {
+            r.Error = "missing bone " + cfg.Bones[b];
+            return r;
+        }
+        if (cfg.Bones[b] == "pelvis") pelvisBone = (int)b;
+    }
+    std::vector<int> statics;
+    if (wantStatics)
+        for (const std::string& s : ctx.StaticBones) statics.push_back(m.NodeIndex(s));
+
+    // 1. Sample every frame: the bones' local rotations and the model-space points the root is made from. The root is
+    // generated over up to kMargin more of the take each side of the trim, then cut to it: a trim that ends mid-run
+    // (the pattern budgets cut takes anywhere) is then smoothed with the frames that really follow it, and the edge
+    // padding (MotionMath::MirrorPad) only ever stands in at the take's own ends - inside the trims, where the actor
+    // settles. (Padding at a cut through a turnaround ran the root a metre off the pelvis.)
+    const int margin = (int)std::lround(2.0f * fps);
+    const int extFirst = std::max(0, first - margin), extLast = std::min(total - 1, last + margin);
+    const int ne = extLast - extFirst + 1, head = first - extFirst;
+    RootSynthInput in;
+    in.Fps = fps;
+    in.Pelvis.resize((size_t)ne);
+    in.HipsRight.resize((size_t)ne);
+    in.ShoulderRight.resize((size_t)ne);
+    r.Frames.Fps = fps;
+    r.Frames.RestYaw = ctx.RestYaw;
+    r.Frames.Pelvis.resize((size_t)ne);
+    for (int k = 0; k < 2; ++k) r.Frames.Foot[k].resize((size_t)ne);
+    r.Rot.resize((size_t)ne * nb);
+    std::vector<glm::mat4> pelvisRootSpace((size_t)ne);
+    std::vector<LocalTRS> pose;
+    std::vector<glm::mat4> g;
+    for (int f = 0; f < ne; ++f) {
+        const float t = std::min(len, (float)(extFirst + f) / fps);
+        m.SampleLocalPose(0, t, AnimationWrapMode::ClampForever, pose);
+        RootSpaceGlobals(m, pose, root, g);
+        const auto P = [&](int node) { return glm::vec3(ctx.C * g[(size_t)node][3]); };
+        in.Pelvis[(size_t)f] = r.Frames.Pelvis[(size_t)f] = P(pelvis);
+        in.HipsRight[(size_t)f] = (P(thigh[1]) - P(thigh[0])) * ctx.Side;
+        in.ShoulderRight[(size_t)f] = (P(clav[1]) - P(clav[0])) * ctx.Side;
+        for (int k = 0; k < 2; ++k) r.Frames.Foot[k][(size_t)f] = P(foot[k]);
+        for (size_t b = 0; b < nb; ++b) r.Rot[(size_t)f * nb + b] = glm::normalize(pose[(size_t)src[b]].R);
+        pelvisRootSpace[(size_t)f] = g[(size_t)pelvis];
+        if (wantStatics && f == head + n / 2) {
+            r.StaticRot.resize(statics.size());
+            for (size_t s = 0; s < statics.size(); ++s)
+                r.StaticRot[s] = statics[s] >= 0 ? glm::normalize(pose[(size_t)statics[s]].R) : glm::quat(1, 0, 0, 0);
+        }
+    }
+
+    // 2. The root, then the pelvis re-expressed under it (in the `root` node's frame, which is its parent).
+    r.Track = RootSynth::Generate(in, cfg.ParamsFor(take.Tags));
+    // Cut everything to the trim.
+    const auto cut = [&](auto& v, size_t per) {
+        v.erase(v.begin() + (long)((size_t)(head + n) * per), v.end());
+        v.erase(v.begin(), v.begin() + (long)((size_t)head * per));
+    };
+    cut(in.Pelvis, 1);
+    cut(in.HipsRight, 1);
+    cut(in.ShoulderRight, 1);
+    cut(r.Frames.Pelvis, 1);
+    cut(r.Frames.Foot[0], 1);
+    cut(r.Frames.Foot[1], 1);
+    cut(r.Rot, nb);
+    cut(pelvisRootSpace, 1);
+    cut(r.Track.Position, 1);
+    cut(r.Track.Yaw, 1);
+    r.HipsRight = in.HipsRight;
+    r.Root.resize((size_t)n);
+    r.PelvisT.resize((size_t)n);
+    for (int f = 0; f < n; ++f) {
+        r.Root[(size_t)f].Position = r.Track.Position[(size_t)f];
+        r.Root[(size_t)f].Yaw = r.Track.Yaw[(size_t)f];
+        const glm::mat4 R = RootSynth::RootMatrix(r.Track.Position[(size_t)f], r.Track.Yaw[(size_t)f], ctx.RestYaw);
+        const glm::mat4 local = ctx.CInv * glm::inverse(R) * ctx.C * pelvisRootSpace[(size_t)f];
+        r.PelvisT[(size_t)f] = glm::vec3(local[3]);
+        if (pelvisBone >= 0) r.Rot[(size_t)f * nb + (size_t)pelvisBone] = RotationOf(local);
+    }
+
+    // 3. Validation: the root against the source's hips and feet...
+    std::vector<char> contacts[2];
+    for (int k = 0; k < 2; ++k)
+        contacts[k] = RootSynth::Contacts(r.Frames.Foot[k], fps, cfg.Labels.ContactHeight, cfg.Labels.ContactSpeed);
+    r.Raw = RootSynth::Validate(r.Track, fps, in.HipsRight, r.Frames.Foot, contacts);
+    // ...and the feet rebuilt the way the stream will play: quantized rotations on the target rig, the pelvis scaled,
+    // placed by the root. They must land on the source's feet (and so plant where it planted).
+    std::vector<glm::vec3> rebuilt[2];
+    for (int k = 0; k < 2; ++k) rebuilt[k].resize((size_t)n);
+    std::vector<LocalTRS> tpose = ctx.TargetBind;
+    std::vector<glm::mat4> tg;
+    for (int f = 0; f < n; ++f) {
+        for (size_t b = 0; b < nb; ++b)
+            if (ctx.TargetNodes[b] >= 0)
+                tpose[(size_t)ctx.TargetNodes[b]].R = MotionMath::UnpackQuat(MotionMath::PackQuat(r.Rot[(size_t)f * nb + b]));
+        if (ctx.TargetPelvis >= 0) tpose[(size_t)ctx.TargetPelvis].T = r.PelvisT[(size_t)f] * ctx.PelvisScale;
+        RootSpaceGlobals(*ctx.Target, tpose, -1, tg); // the target's own model space
+        const glm::mat4 R = RootSynth::RootMatrix(r.Track.Position[(size_t)f], r.Track.Yaw[(size_t)f], ctx.RestYaw);
+        for (int k = 0; k < 2; ++k) {
+            if (ctx.TargetFoot[k] < 0) continue;
+            rebuilt[k][(size_t)f] = glm::vec3(R * tg[(size_t)ctx.TargetFoot[k]][3]);
+            r.RebuildMaxCm = std::max(r.RebuildMaxCm, glm::length(rebuilt[k][(size_t)f] - r.Frames.Foot[k][(size_t)f]) * 100.0f);
+        }
+    }
+    r.Rebuilt = RootSynth::Validate(r.Track, fps, in.HipsRight, rebuilt, contacts);
+
+    // Numbers the label thresholds are tuned from.
+    std::vector<float> speed((size_t)n), pelvisH((size_t)n), ankle((size_t)n);
+    for (int f = 0; f < n; ++f) {
+        const int a = std::max(0, f - 1), b = std::min(n - 1, f + 1);
+        speed[(size_t)f] = glm::length(r.Track.Position[(size_t)b] - r.Track.Position[(size_t)a]) * fps / (float)std::max(1, b - a);
+        pelvisH[(size_t)f] = r.Frames.Pelvis[(size_t)f].y;
+        ankle[(size_t)f] = std::min(r.Frames.Foot[0][(size_t)f].y, r.Frames.Foot[1][(size_t)f].y);
+    }
+    r.SpeedP50 = Percentile(speed, 0.5f);
+    r.PelvisP50 = Percentile(pelvisH, 0.5f);
+    r.AnkleP05 = Percentile(ankle, 0.05f);
+    r.BakeSeconds = Now() - t0 - r.ImportSeconds;
+    r.Ok = true;
+    return r;
+}
+
+std::string Mb(size_t bytes) {
+    char b[32];
+    std::snprintf(b, sizeof b, "%.1f MB", (double)bytes / (1024.0 * 1024.0));
+    return b;
+}
+
+} // namespace
+
+int Run(const std::string& configPath, const std::string& match, const std::string& outOverride) {
+    const double start = Now();
+    MotionBakeConfig cfg;
+    std::string error;
+    const std::string cfgPath = ResolveProjectPath(configPath);
+    std::error_code ec;
+    if (!cfg.Load(fs::exists(configPath, ec) ? configPath : cfgPath, error)) {
+        std::cerr << "[MotionBake] ERROR: " << error << std::endl;
+        return 2;
+    }
+    if (!outOverride.empty()) cfg.Output = fs::absolute(outOverride).lexically_normal().string();
+    const std::string source = SourceDir(cfg);
+    if (source.empty()) {
+        std::cerr << "[MotionBake] ERROR: TARTARUS_MM_SOURCE is not set to the mocap pack's folder (anims\\, rig\\)" << std::endl;
+        return 2;
+    }
+    std::vector<MotionTake> all, takes;
+    if (!ReadTakes(cfg.Takes, all, error)) {
+        std::cerr << "[MotionBake] ERROR: " << error << std::endl;
+        return 2;
+    }
+    for (const MotionTake& t : all)
+        if (t.Include && (match.empty() || t.Name.find(match) != std::string::npos)) takes.push_back(t);
+    std::printf("[MotionBake] %s: %zu of %zu takes, source %s\n", fs::path(cfg.Path).filename().string().c_str(), takes.size(),
+                all.size(), source.c_str());
+    if (takes.empty()) {
+        std::cerr << "[MotionBake] ERROR: no takes to bake" << std::endl;
+        return 2;
+    }
+
+    // The two rigs: the pack's and the one the stream plays on.
+    const std::string sourceRigPath = (fs::path(source) / cfg.SourceRig).string();
+    if (!fs::exists(sourceRigPath, ec) || !fs::exists(cfg.TargetRig, ec)) {
+        std::cerr << "[MotionBake] ERROR: missing rig " << (fs::exists(sourceRigPath, ec) ? cfg.TargetRig : sourceRigPath) << std::endl;
+        return 2;
+    }
+    Model sourceRig(sourceRigPath, ClipOnlySettings());
+    Model targetRig(cfg.TargetRig, ClipOnlySettings());
+    const int targetRoot = targetRig.NodeIndex("root");
+    if (targetRoot < 0 || sourceRig.NodeIndex("root") < 0) {
+        std::cerr << "[MotionBake] ERROR: a rig has no root node" << std::endl;
+        return 2;
+    }
+
+    // Rig diff (rest pose and bone lengths, in each rig's root frame).
+    json report;
+    json diffJ = json::array();
+    int overLength = 0, missing = 0;
+    std::printf("[MotionBake] rig diff: %s vs %s (bone length, rest angle, rest position)\n", cfg.SourceRig.c_str(),
+                fs::path(cfg.TargetRig).filename().string().c_str());
+    for (const BoneDiff& d : RigDiff(sourceRig, targetRig, cfg.Bones)) {
+        const bool over = d.LengthPct > cfg.RigLengthPct;
+        overLength += over ? 1 : 0;
+        missing += d.InSource && d.InTarget ? 0 : 1;
+        if (over || !d.InSource || !d.InTarget || d.RestAngleDeg > 1.0f || d.PositionCm > 1.0f)
+            std::printf("[MotionBake]   %-24s %s len %.4f -> %.4f (%.2f%%) rest %.2f deg pos %.2f cm%s\n", d.Name.c_str(),
+                        d.InSource && d.InTarget ? "" : "MISSING", d.LengthSource, d.LengthTarget, d.LengthPct, d.RestAngleDeg,
+                        d.PositionCm, over ? "  OVER" : "");
+        diffJ.push_back({{"bone", d.Name}, {"inSource", d.InSource}, {"inTarget", d.InTarget}, {"lengthSource", d.LengthSource},
+                         {"lengthTarget", d.LengthTarget}, {"lengthPct", d.LengthPct}, {"restAngleDeg", d.RestAngleDeg},
+                         {"positionCm", d.PositionCm}});
+    }
+    float worstPct = 0.0f, worstAngle = 0.0f;
+    for (const auto& d : diffJ) {
+        worstPct = std::max(worstPct, d["lengthPct"].get<float>());
+        worstAngle = std::max(worstAngle, d["restAngleDeg"].get<float>());
+    }
+    std::printf("[MotionBake] rig diff: %zu core bones, %d over %.1f%% length, %d missing, worst length %.3f%%, worst rest angle %.3f deg\n",
+                cfg.Bones.size(), overLength, cfg.RigLengthPct, missing, worstPct, worstAngle);
+    report["rigDiff"] = diffJ;
+
+    BakeContext ctx;
+    ctx.Cfg = &cfg;
+    ctx.AnimsDir = (fs::path(source) / cfg.SourceAnims).string();
+    ctx.Target = &targetRig;
+    targetRig.BindLocalPose(ctx.TargetBind);
+    {
+        std::vector<glm::mat4> tg;
+        RootSpaceGlobals(targetRig, ctx.TargetBind, -1, tg);
+        ctx.C = tg[(size_t)targetRoot];
+        ctx.CInv = glm::inverse(ctx.C);
+        const auto P = [&](const char* n) {
+            const int i = targetRig.NodeIndex(n);
+            return i >= 0 ? glm::vec3(tg[(size_t)i][3]) : glm::vec3(0.0f);
+        };
+        // The rest facing, and which side the _r bones are on: up x (thigh_l -> thigh_r) must agree with the feet
+        // (ankle -> ball).
+        const glm::vec3 right = P("thigh_r") - P("thigh_l");
+        const glm::vec3 toes = (P("ball_l") - P("foot_l")) + (P("ball_r") - P("foot_r"));
+        glm::vec3 fwd = RootSynth::ForwardFromRight(right);
+        if (glm::dot(fwd, glm::vec3(toes.x, 0.0f, toes.z)) < 0.0f) {
+            ctx.Side = -1.0f;
+            fwd = -fwd;
+            std::printf("[MotionBake] note: the rig's _r bones sit on its left; facing taken the other way\n");
+        }
+        ctx.RestYaw = MotionMath::YawOf(fwd);
+        ctx.TargetPelvis = targetRig.NodeIndex("pelvis");
+        ctx.TargetFoot[0] = targetRig.NodeIndex("foot_l");
+        ctx.TargetFoot[1] = targetRig.NodeIndex("foot_r");
+        const float targetPelvisH = ctx.TargetPelvis >= 0 ? tg[(size_t)ctx.TargetPelvis][3].y : 0.0f;
+        std::vector<LocalTRS> sb;
+        std::vector<glm::mat4> sg;
+        sourceRig.BindLocalPose(sb);
+        RootSpaceGlobals(sourceRig, sb, sourceRig.NodeIndex("root"), sg);
+        const int sp = sourceRig.NodeIndex("pelvis");
+        const float sourcePelvisH = sp >= 0 ? (ctx.C * sg[(size_t)sp][3]).y : 0.0f;
+        ctx.PelvisScale = sourcePelvisH > 1e-3f && targetPelvisH > 1e-3f ? targetPelvisH / sourcePelvisH : 1.0f;
+        cfg.Labels.StandingPelvis = sourcePelvisH;
+        std::printf("[MotionBake] rest facing %.1f deg (0 = +Z), pelvis %.4f m (source) / %.4f m (target), scale %.4f\n",
+                    ctx.RestYaw * 180.0f / MotionMath::kPi, sourcePelvisH, targetPelvisH, ctx.PelvisScale);
+        report["restYawDeg"] = ctx.RestYaw * 180.0f / MotionMath::kPi;
+        report["sourcePelvisHeight"] = sourcePelvisH;
+        report["targetPelvisHeight"] = targetPelvisH;
+    }
+    for (const std::string& b : cfg.Bones) ctx.TargetNodes.push_back(targetRig.NodeIndex(b));
+    for (int i = 0; i < sourceRig.NodeCount(); ++i) {
+        const std::string& n = sourceRig.NodeName(i);
+        if (std::find(cfg.Bones.begin(), cfg.Bones.end(), n) != cfg.Bones.end()) continue;
+        for (const std::string& p : cfg.StaticBonePrefixes)
+            if (n.rfind(p, 0) == 0) {
+                ctx.StaticBones.push_back(n);
+                break;
+            }
+    }
+
+    // The takes, on worker threads (the FBX import is most of the time), kept in takes.csv order.
+    std::string staticFrom = cfg.StaticPoseFrom;
+    if (std::none_of(takes.begin(), takes.end(), [&](const MotionTake& t) { return t.Name == staticFrom; }))
+        staticFrom = takes.front().Name;
+    std::vector<TakeResult> results(takes.size());
+    std::atomic<size_t> next{0};
+    std::atomic<int> done{0};
+    std::mutex printLock;
+    const int workers = std::min<int>((int)takes.size(), std::max(1, cfg.Workers));
+    std::vector<std::thread> pool;
+    for (int w = 0; w < workers; ++w)
+        pool.emplace_back([&] {
+            for (size_t i = next++; i < takes.size(); i = next++) {
+                results[i] = BakeTake(ctx, takes[i], takes[i].Name == staticFrom);
+                const TakeResult& r = results[i];
+                std::lock_guard<std::mutex> lock(printLock);
+                const int d = ++done;
+                if (!r.Ok) std::printf("[MotionBake] %3d/%zu FAILED %s: %s\n", d, takes.size(), takes[i].Name.c_str(), r.Error.c_str());
+                else
+                    std::printf("[MotionBake] %3d/%zu %-46s %6zu frames  import %5.1f s  bake %4.1f s  speed %.2f  facing p95 %5.1f  jitter %6.1f  rebuild %.2f cm\n",
+                                d, takes.size(), takes[i].Name.c_str(), r.Root.size(), r.ImportSeconds, r.BakeSeconds, r.SpeedP50,
+                                r.Raw.FacingP95, r.Raw.YawJitter, r.RebuildMaxCm);
+                std::fflush(stdout);
+            }
+        });
+    for (std::thread& t : pool) t.join();
+
+    // Assemble.
+    MotionClipStream stream;
+    stream.Reset(cfg.Fps, cfg.Bones);
+    stream.RestYaw = ctx.RestYaw;
+    stream.SourcePelvisHeight = cfg.Labels.StandingPelvis;
+    MotionFeatureSet features;
+    int failed = 0;
+    json takesJ = json::array();
+    float worstFacing = 0.0f, worstJitter = 0.0f, worstRebuild = 0.0f;
+    std::string worstFacingAt, worstJitterAt, worstRebuildAt;
+    for (const TakeResult& r : results) {
+        if (!r.Ok) {
+            ++failed;
+            takesJ.push_back({{"name", r.Take.Name}, {"error", r.Error}});
+            continue;
+        }
+        if (r.Take.Name == staticFrom && !r.StaticRot.empty())
+            for (size_t s = 0; s < ctx.StaticBones.size(); ++s) stream.Statics.push_back({ctx.StaticBones[s], r.StaticRot[s]});
+        MotionClipStream::Clip c;
+        c.Name = r.Take.Name;
+        c.Tags = r.Take.TagString();
+        c.SourceStart = r.SourceStart;
+        stream.AddClip(c, r.Root, r.PelvisT, r.Rot);
+        const std::uint32_t before = features.FrameCount();
+        features.AddClip(r.Take.Name, r.Frames, r.Track, cfg.Labels);
+        int gaits[4] = {0, 0, 0, 0}, crouch = 0, strafe = 0, air = 0, excluded = 0;
+        for (std::uint32_t f = before; f < features.FrameCount(); ++f) {
+            ++gaits[std::min<int>(3, features.Gait(f))];
+            const std::uint8_t fl = features.Flags(f);
+            crouch += fl & MotionLabel::Crouch ? 1 : 0;
+            strafe += fl & MotionLabel::Strafe ? 1 : 0;
+            air += fl & MotionLabel::Airborne ? 1 : 0;
+            excluded += fl & MotionLabel::Excluded ? 1 : 0;
+        }
+        const bool forward = r.Take.HasTag("forward");
+        if (forward && r.Raw.FacingP95 > worstFacing) { worstFacing = r.Raw.FacingP95; worstFacingAt = r.Take.Name; }
+        if (r.Raw.YawJitter > worstJitter) { worstJitter = r.Raw.YawJitter; worstJitterAt = r.Take.Name; }
+        if (r.RebuildMaxCm > worstRebuild) { worstRebuild = r.RebuildMaxCm; worstRebuildAt = r.Take.Name; }
+        takesJ.push_back({{"name", r.Take.Name}, {"tags", r.Take.TagString()}, {"frames", r.Root.size()},
+                          {"sourceStart", r.SourceStart}, {"takeSeconds", r.TakeSeconds}, {"importSeconds", r.ImportSeconds},
+                          {"speedP50", r.SpeedP50}, {"speedMax", r.Raw.SpeedMax}, {"stepMaxM", r.Raw.StepMax},
+                          {"pelvisP50", r.PelvisP50}, {"ankleP05", r.AnkleP05},
+                          {"yawJitter", r.Raw.YawJitter}, {"pathWobbleCm", r.Raw.PathWobble}, {"yawRateMax", r.Raw.YawRateMax},
+                          {"facingP95", r.Raw.FacingP95}, {"facingMax", r.Raw.FacingMax}, {"forward", forward},
+                          {"footSlideCmS", {r.Raw.FootSlide[0], r.Raw.FootSlide[1]}},
+                          {"rebuiltFootSlideCmS", {r.Rebuilt.FootSlide[0], r.Rebuilt.FootSlide[1]}},
+                          {"contactFrames", {r.Raw.ContactFrames[0], r.Raw.ContactFrames[1]}},
+                          {"rebuildMaxCm", r.RebuildMaxCm},
+                          {"gaitFrames", {gaits[0], gaits[1], gaits[2], gaits[3]}}, {"crouchFrames", crouch},
+                          {"strafeFrames", strafe}, {"airborneFrames", air}, {"excludedFrames", excluded}});
+    }
+    features.Finish();
+    report["takes"] = takesJ;
+
+    // Write, then time a load of both files the way the runtime will.
+    fs::create_directories(fs::path(cfg.Output).parent_path(), ec);
+    const std::string animPath = cfg.Output + ".mmanim", dbPath = cfg.Output + ".mmdb";
+    if (!stream.Save(animPath, &error) || !features.Save(dbPath, &error)) {
+        std::cerr << "[MotionBake] ERROR: " << error << std::endl;
+        return 1;
+    }
+    const double l0 = Now();
+    MotionClipStream check;
+    MotionFeatureSet checkDb;
+    const bool loaded = check.Load(animPath, &error) && checkDb.Load(dbPath, &error);
+    const double loadSeconds = Now() - l0;
+    if (!loaded) {
+        std::cerr << "[MotionBake] ERROR: reading back: " << error << std::endl;
+        return 1;
+    }
+
+    const double poseMB = (double)stream.PoseBytes() / (1024.0 * 1024.0), featMB = (double)features.Bytes() / (1024.0 * 1024.0);
+    const double hours = (double)stream.FrameCount() / cfg.Fps / 3600.0;
+    const bool poseOk = poseMB <= cfg.BudgetPoseMB, featOk = featMB <= cfg.BudgetFeatureMB,
+               loadOk = loadSeconds <= cfg.BudgetLoadSeconds;
+    std::printf("[MotionBake] %zu clips, %u frames (%.2f h), %zu bones streamed, %zu static\n", stream.Clips().size(),
+                stream.FrameCount(), hours, cfg.Bones.size(), stream.Statics.size());
+    std::printf("[MotionBake] budget: poses %.1f / %.0f MB %s, features %.1f / %.0f MB %s, load %.2f / %.1f s %s\n", poseMB,
+                cfg.BudgetPoseMB, poseOk ? "OK" : "OVER", featMB, cfg.BudgetFeatureMB, featOk ? "OK" : "OVER", loadSeconds,
+                cfg.BudgetLoadSeconds, loadOk ? "OK" : "OVER");
+    std::printf("[MotionBake] worst: forward facing p95 %.1f deg (%s), yaw jitter %.1f (%s), foot rebuild %.2f cm (%s)\n",
+                worstFacing, worstFacingAt.c_str(), worstJitter, worstJitterAt.c_str(), worstRebuild, worstRebuildAt.c_str());
+    std::printf("[MotionBake] wrote %s (%s) and %s (%s) in %.0f s\n", animPath.c_str(), Mb((size_t)fs::file_size(animPath, ec)).c_str(),
+                dbPath.c_str(), Mb((size_t)fs::file_size(dbPath, ec)).c_str(), Now() - start);
+    report["config"] = cfg.Path;
+    report["clips"] = stream.Clips().size();
+    report["frames"] = stream.FrameCount();
+    report["hours"] = hours;
+    report["poseMB"] = poseMB;
+    report["featureMB"] = featMB;
+    report["loadSeconds"] = loadSeconds;
+    report["failed"] = failed;
+    report["seconds"] = Now() - start;
+    const fs::path reportDir = fs::path(ProjectPaths::Root()).parent_path() / "work" / "mm_bake";
+    fs::create_directories(reportDir, ec);
+    const fs::path reportPath = reportDir / (fs::path(cfg.Output).filename().string() + ".report.json");
+    std::ofstream(reportPath) << report.dump(1);
+    std::printf("[MotionBake] report %s\n", reportPath.string().c_str());
+    const bool ok = failed == 0 && poseOk && featOk && loadOk;
+    std::printf("[MotionBake] %s\n", ok ? "PASS" : "FAIL");
+    std::fflush(stdout);
+    return ok ? 0 : 1;
+}
+
+} // namespace MotionBake

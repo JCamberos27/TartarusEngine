@@ -573,6 +573,7 @@ int Application::RunSession() {
             fRowLines.clear();
             if (FKeyRow::CurrentOverlay() == FKeyRow::OverlayNav) navDebugLines(fRowLines);
             else if (FKeyRow::CurrentOverlay() == FKeyRow::OverlayHitboxes) PhysicsWorld::HitboxDebugLines(fRowLines);
+            if (npcTest) npcTest->DebugLines(fRowLines); // --npc-test mmview: the generated root
             in.Lines = fRowLines.empty() ? nullptr : &fRowLines;
             combatHud.Draw(in, npcDirector);
         };

@@ -7,6 +7,7 @@
 #include "CrashHandler.h"
 #include "Core/Paths.h"
 #include "Game/Audio/AudioTest.h"
+#include "Game/MotionMatching/MotionBake.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
 #include "Components.h"
@@ -372,6 +373,11 @@ int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
         case LaunchMode::BakeImpostors:
             CrashHandler::SetInteractive(false);
             return BakeImpostors(opt.inputs, opt.sceneBoundsOut, opt.bakeMatch, argv0);
+        // The motion matching bake (CPU only: the takes' clip-only imports, no GL).
+        case LaunchMode::BakeMotion:
+            CrashHandler::SetInteractive(false);
+            EnginePaths::Init(argv0); // ProjectPaths (the .mmconfig's paths) finds project/ from the exe
+            return MotionBake::Run(opt.bakeMotionConfig, opt.bakeMatch, opt.sceneBoundsOut);
         // The audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
         case LaunchMode::AudioTest: return RunAudioTest(opt.audioTestScene, opt.audioTestReport);
         default: return -1;
