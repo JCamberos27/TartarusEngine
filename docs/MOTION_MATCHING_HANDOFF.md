@@ -351,7 +351,7 @@ registered.
   issues).
 - The ledge: 154 sweep hits, the 0.3 m sphere never inside it (closest gap 0.000 m) while it slides along the face.
 - Final full pass (`mm_smoke.ps1 testbed npcloco locomotion stopsteps feet labloco mmview mmdb -PerfBench
-  tests\perf-scenes\perf_stress.json`, `work\mm_smoke61116-232610`): **all PASS** - unit 52240 checks, smoke 21/21,
+  tests\perf-scenes\perf_stress.json`, `work\mm_smoke\20261116-232610`): **all PASS** - unit 52240 checks, smoke 21/21,
   testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18
   (171 fps), perf edit 3.15 ms / play 6.02 ms (Phase 2: 3.65 / 6.01; legacy locomotion untouched).
 
