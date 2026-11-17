@@ -31,6 +31,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
     if (m_Scenario == "labloco") m_Duration = LabLocoSeconds();
     if (m_Scenario == "testbed") m_Duration = TestbedSeconds();
     if (m_Scenario == "mmview") m_Duration = MmViewSeconds();
+    if (m_Scenario == "mmdb") m_Duration = MmDbSeconds();
     if (m_Scenario == "flame") m_Duration = 14.0f;
     if (m_Scenario == "revolver") m_Duration = 116.0f;
     if (m_Scenario == "blood") m_Duration = 44.0f;
@@ -92,6 +93,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "testbed") TestbedDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "roam") RoamDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "mmview") MmViewDrive(player, weapon, dt, wantYaw, wantPitch);
+    if (m_Scenario == "mmdb") MmDbDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "flame") {
         // The muzzle flame: the AK's single shots from the hip (1-3.5 s), then bursts on the sights
         // (4-7 s); then the second slot (the Remington): shots from the hip (8.5-10.5 s), then on the
@@ -186,6 +188,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "mmview") {
         MmView(world);
+        return;
+    }
+    if (m_Scenario == "mmdb") {
+        MmDb(world);
         return;
     }
     if (m_Scenario == "feet") {

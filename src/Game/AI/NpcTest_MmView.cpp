@@ -404,4 +404,5 @@ void NpcTest::MmView(World& world) {
 
 void NpcTest::DebugLines(std::vector<float>& out) const {
     if (m_Mm) out.insert(out.end(), m_Mm->Lines.begin(), m_Mm->Lines.end());
+    MmDbLines(out); // NpcTest_MmDb.cpp
 }

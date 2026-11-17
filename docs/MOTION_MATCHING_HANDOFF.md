@@ -12,8 +12,8 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 | 0. Analysis and roadmap | `dev/mm-phase1` | **Done** (2026-11-17) |
 | 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
 | 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16; owner signed off on the `mmview` recording) |
-| 3. Motion matching runtime | `dev/mm-phase3` | **Next** |
-| 4. First-person player integration (unarmed) | `dev/mm-phase4` | Pending |
+| 3. Motion matching runtime | `dev/mm-phase3` | **Done** (2026-11-16) |
+| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **Next** |
 | 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
 | 6. Legacy cleanup and final verification | `dev/mm-phase6` | Pending |
 
@@ -256,6 +256,105 @@ New `src/Game/MotionMatching/`:
 - Unit tests.
 - Register the cooked assets in `Used\` and `external_assets.csv`.
 
+**Done when:** the runtime pieces and their unit tests exist, `--npc-test mmdb` passes visibly, and the cooked assets are
+registered.
+
+**What landed (2026-11-16):**
+- **`src/Game/MotionMatching/`**, all pure (no Model, no GL) and unit-tested on synthetic takes:
+  - `MotionDatabase.{h,cpp}`: loads `Manny.mmanim` + `Manny.mmdb` together, checks them against each other (frames,
+    clips), normalizes the 27 features per group (`(x - mean) / groupStd`, the group's std = the mean of its dims'
+    std), builds the 16- and 64-frame AABBs (with each box's flag OR/AND and gait range) and the frame → clip map. It
+    keeps only the normalized features (`Raw()` denormalizes; `MotionFeatureSet::ReleaseFeatureData`): poses 70.9 MB,
+    features 34.4 MB, load 0.2 s.
+  - `MotionSearch.{h,cpp}`: cost = Σ groupWeight × (q − x)² (weights foot pos 0.75, foot vel 1, pelvis vel 1, traj
+    pos 1, traj dir 1.5, applied at search time) + a soft gait cost (0.5 per gait step from the desired one: the gait
+    labels overlap) + an optional transition cost. Filters: `Require`/`Forbid` flags; `Excluded` and `NoSearch` always
+    forbidden, `Airborne` by default (jumps will be label-locked playback), `Crouch` required or forbidden by the
+    host. The boxes skip on their lower bound and their flags; a frame's sum stops once it can't win. **The answer is
+    exactly brute force's** (`SearchBrute`; same per-dim terms in the same order, so the bound never exceeds a
+    frame's cost even in float). Ties: frames in ascending order, strictly lower cost wins, the playing frame wins a
+    tie. Frames of the playing clip within `IgnoreNear` (20) of the playing frame are skipped.
+    `MotionSearchSchedule`: every 0.1 s, at once on an input change (desired velocity by 0.5 m/s, facing by 20°, the
+    filter), or when the playing frame can't go on.
+  - `Inertialization.{h,cpp}`: **dead blending** (Holden 2023). At a jump the shown pose and its velocity (per bone
+    angular velocity, the pelvis's linear velocity, from the last two output poses; clamped at 4π rad/s and 6 m/s)
+    are extrapolated with the velocity decaying (half-life 0.05 s), and the output cross-fades into the new animation
+    over 0.2 s with a smoothstep. A jump mid-blend starts from the screen.
+  - `TrajectoryPredictor.{h,cpp}`: closed-form critically damped springs (Holden's "simple spring damper"): velocity
+    toward the desired one (half-life 0.2 s), facing toward the desired yaw (0.15 s, the short way round).
+    **Collision-aware**: the path is swept 20 steps per second through a host callback; a hit stops the move at the
+    contact, slides the rest along the surface, and drops the velocity, acceleration and desired velocity's part into
+    it for the rest of the prediction. `Predict(..., goalTurnRate)` keeps the goal turning through the prediction (a
+    stick held into a curve; Phase 5's navmesh corners). `Update` is the simulated character (`mmdb`'s capsule).
+  - `MotionMatcher.{h,cpp}`: the loop on one character - play on, search on the schedule (query = the playing frame's
+    pose features + the desired trajectory turned into root space with `RootSynth::RootMatrix`), jump, dead-blend,
+    sample the pose (`MotionPose`: stream-bone rotations + pelvis). **A playing frame that fails the filter forces a
+    search before it is shown** (an actor standing up out of a crouch, a jump's flight, `NoSearch` near a take's end).
+    `WritePose` binds it onto a rig.
+  - `MotionGait.{h,cpp}`: **the gait speed table**, measured from the database by leg plateaus (below).
+  - `MotionDebugDraw.{h,cpp}`: HUD lines (`NpcTest::DebugLines` format): a root-space trajectory placed at a character
+    (desired or matched), predictor states, the root, the feet (blue planted).
+- **`--npc-test mmdb`** (`src/Game/AI/NpcTest_MmDb.cpp`, LocomotionLab, ~77 s, SKIP when unbaked):
+  - Offline: load and budgets; 1000 searches timed, the first 200 against brute force; 200 self-matches (cost 0) and
+    repeats (same frame); the gait table; left/right coverage (frames per gait turning/strafing each way, and
+    trajectory-only queries for left and right turns at 45 and 90 °/s and strafes, per gait).
+  - Live (visible): a bare Quantum body driven by `MotionMatcher`, `TrajectoryPredictor` as its capsule (sphere casts
+    against the solid world), through idle, walk, walk circles left/right, stop, strafes left/right, jog circles, run
+    circles, stop, a crouch circle, crouch idle, stand, and a walk at the 1 m ledge ~39° off its normal. Drawn: the
+    predicted path (grey), the desired trajectory (yellow), the matched frame's (magenta), the root (green), the feet;
+    a magenta tick over the head at each jump. Checked: ~10 searches/s and their time, jumps blended, the crouch filter
+    held, never airborne, the trajectory error per segment, the slide along the ledge (no penetration).
+- **Unit tests** (`src/Tests/UnitTests_MotionMatchingRuntime.cpp`, filter `"Motion matching"`, 10 tests on a synthetic
+  13-take database with a non-zero rest yaw): database build and boxes; box search = brute force over 400 mixed
+  queries (and prunes > 2x); filters and ties (duplicate takes, Excluded/NoSearch/Airborne never matched, crouch
+  require/forbid, the gait cost's pull, IgnoreNear); the schedule; dead blending (continuity, ends on the target, no
+  pops, chained jumps, the velocity clamp); springs (prediction = simulation, no overshoot, the short way round, a
+  wall: the prediction runs along it); the gait table (synthetic legs); the query's root-space convention (a frame's
+  own future gives back its features exactly); the matcher end to end (walk, then a left turn); the cooked database
+  (box = brute, SKIPs unbaked).
+- **The cooked assets are registered**: `Manny.mmanim` / `Manny.mmdb` rows in `project/external_assets.csv` (only
+  those two rows - see Open issues on `build`), both files copied to the Drive's `Used\project\assets\Animations\
+  MotionMatching\` and hash-checked, the CSV copied there, a line in `Raw\CHANGELOG.md`. `asset_manifest.py verify`
+  on `Used`: 8025 listed, 0 missing, 0 different. `check_git_assets.py` passes.
+
+**The gait speed table** (`GaitSpeedTable::Measure`, the current bake; `kMeasured` defaults in `MotionGait.h`):
+- The pack's takes cross a 9 m capture area, so a take is legs (speed up, cruise, slow down, turn round). A leg: at
+  least 1 s moving forward over 0.5 m/s, turning under 20 °/s (over ±0.25 s), not strafing or airborne, crouched only
+  in crouch takes. Its plateau: its best 0.5 s mean speed. The table: the median plateau per take group; for run,
+  only legs whose plateau is labelled Run (the rest are the walk-backs between sprints).
+- **walk 1.27 m/s** (68 legs, p25-p75 1.16-1.40), **jog 1.85** (61 legs, 1.53-2.11), **run 3.91** (17 legs,
+  3.71-4.25, max 4.99), **crouch-walk 0.79** (27 legs, 0.74-0.87).
+- **Strafes are slower** (same rule on Strafe frames): walk 1.14 (26 legs), jog 1.32 (37), crouch 0.76 (8); run has no
+  strafe takes (4 stray legs, 1.11).
+- Per-frame percentiles don't work: the runs barely cruise (43 steady frames above 2.9 m/s in the whole bake), so the
+  handoff's earlier "run 4.5-5" was the peaks, not a cruise.
+
+**Left/right coverage** (`mmdb`; + = left):
+- Searchable moving frames turning each way (facing at +1 s over 15° off): walk 30869 / 29867 (0.97), jog 5997 / 5794
+  (0.97), run 1177 / 1549 (0.76), crouch 3652 / 3521 (0.96). Strafing: walk 6336 / 8159 (0.78), jog 707 / 353 (0.50),
+  run 85 / 39, crouch 1030 / 1052 (0.98).
+- Trajectory-only queries, error of the best match at +1 s, left / right: walk turn 45 0.07 / 0.04 m, turn 90 0.08 /
+  0.14, strafe 0.18 / 0.09; jog 0.07 / 0.15, 0.21 / 0.25, strafe 0.09 / 0.13; crouch 0.10 / 0.13, 0.20 / 0.16, strafe
+  0.26 / 0.22; run 0.57 / 0.44, 0.92 / 0.81 (no data that fast on a curve). Worst left/right gap on walk/jog/crouch:
+  0.09 m (walk strafe).
+- **Verdict: no mirroring needed for v1.** Turns are balanced within 4 % on walk, jog and crouch, and left and right
+  match equally well. The thin spots (jog strafes 2:1, run anything) are thin on both sides, which mirroring wouldn't fix.
+
+**Results (2026-11-16):**
+- Search over 275,269 frames: **avg 0.41 ms, p99 0.96, max 2.0** (brute force 5.3 ms; 1410 frames scored per search);
+  0 of 200 differ from brute force; 200/200 self-matches; 200/200 repeats identical. Live: 742 searches in 74 s (10.0
+  per second; 2 on input changes, 2 at a take's end), avg 0.33 ms, p99 1.06, max 2.6.
+- Jumps: 145 in the course; the pose's step at a jump avg 4.9° (worst 10.6°) against the raw jump's 27.9° (worst
+  124°); a normal frame's p99 is 20.3°.
+- Trajectory error at +1 s, median per segment: walk 0.15 m, walk circles 0.15, strafes 0.22-0.27, jog circles
+  0.09-0.19, crouch circle 0.21, idles 0.00-0.06, the ledge walk 0.07; **run circles 0.87-1.06 m and 20-24°** (see Open
+  issues).
+- The ledge: 154 sweep hits, the 0.3 m sphere never inside it (closest gap 0.000 m) while it slides along the face.
+- Final full pass (`mm_smoke.ps1 testbed npcloco locomotion stopsteps feet labloco mmview mmdb -PerfBench
+  tests\perf-scenes\perf_stress.json`, `work\mm_smoke61116-232610`): **all PASS** - unit 52240 checks, smoke 21/21,
+  testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18
+  (171 fps), perf edit 3.15 ms / play 6.02 ms (Phase 2: 3.65 / 6.01; legacy locomotion untouched).
+
 ### Phase 4: First-person player (unarmed)
 - MM becomes the pose source in `FirstPersonBody`, with retuned speeds, warping and a root clamped to the capsule.
 - Turn-in-place feeds `MaxYawRate`. Crouch and sprint are label filters. The airborne segment is added.
@@ -294,7 +393,7 @@ New `src/Game/MotionMatching/`:
   - When a run fails, diagnose it before running again. Repeat a run only to check for flakiness.
 - Commands (PowerShell):
   - Everything: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 testbed npcloco locomotion stopsteps feet
-    labloco mmview -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
+    labloco mmview mmdb -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
     asset you know is broken, and say so under Open issues.
   - Compare with the baseline: add `-TraceDir <dir>` to `mm_smoke.ps1`, then
     `python tools/mm/baseline_summary.py <log dir> <out dir> --traces <dir>`; diff `SUMMARY.md` and `metrics.json`
@@ -342,6 +441,11 @@ New `src/Game/MotionMatching/`:
 - `project/assets/Animations/MotionMatching/Manny.mmconfig`; cooked `Manny.mmanim` / `Manny.mmdb` beside it (git-ignored).
 - `tools/mm/gen_takes.py` → `tools/mm/takes.csv`; `tools/mm/frames_to_video.py`.
 - `src/Game/AI/NpcTest_MmView.cpp` (`--npc-test mmview`); `src/Tests/UnitTests_MotionMatching.cpp`.
+- Runtime (Phase 3): `MotionDatabase`, `MotionSearch` (+ `MotionSearchSchedule`), `Inertialization`, `TrajectoryPredictor`,
+  `MotionMatcher`, `MotionGait` (`GaitSpeedTable`), `MotionDebugDraw`; `src/Game/AI/NpcTest_MmDb.cpp` (`--npc-test mmdb`;
+  `NpcTest::MmDbLines` feeds `DebugLines`); `src/Tests/UnitTests_MotionMatchingRuntime.cpp`.
+- Run the runtime: `tools\mm_smoke.ps1 mmdb -SkipSmoke -UnitFilter "Motion matching"` (build, the MM unit tests,
+  `mmdb`: ~2 min).
 - Bake: `set TARTARUS_MM_SOURCE=D:\Jacob\JCamberos\Manny_Mocap_Export` then
   `build\Release\TartarusEngine.exe --bake-motion assets/Animations/MotionMatching/Manny.mmconfig` (30 s, 4 workers;
   `--match <text>` bakes some takes, `--out <prefix>` writes elsewhere - use D: for scratch).
@@ -371,7 +475,25 @@ New `src/Game/MotionMatching/`:
 - Foot contacts use the ankle (low and under 0.6 m/s), so they include heel-to-toe roll: absolute "slide" reads
   5-15 cm/s on clean mocap. Phase 4's foot lock may want ball-of-foot contacts too.
 - `Crouch_Strafe_Star_Take001` is an incomplete pattern (info sheet); it's in, at 28 s.
-- The cooked files aren't in `Used\` or `project/external_assets.csv` yet (Phase 3, as planned).
+- *Resolved 2026-11-16:* the cooked `Manny.mmanim` / `.mmdb` are in `Used\` and `project/external_assets.csv`.
+- **`asset_manifest.py build` picks up local, uncommitted work.** In this checkout it also listed the owner's ignored
+  `AKS74U/Attachments/` binaries and `scenes/SeedMesh_Mossy_Cedrus_Forest_Mossy_forest_trail.json` (111 MB), and moved
+  one row (`Light_Switches.fbx`, the committed file isn't strictly sorted there). Phase 3 added only its two rows to the
+  committed CSV, and exported only those two files (the full `export` would also hash all 15 GB on the Drive). That
+  SeedMesh scene is already on the Drive's `Used\scenes\` but not in the CSV (`verify`: 1 unlisted) - the owner's.
+- **Run:** the pack's runs barely cruise (17 sprint legs; 43 steady frames over 2.9 m/s) and never run fast on a curve
+  (its run circles are 2-2.75 m/s). At the table's 3.91 m/s, `mmdb`'s run circles (60 °/s) match 0.9-1.1 m and 20-24°
+  off at +1 s. Phase 4: cap the player's turn rate at run speed (or slow the run in turns), and choose run 3.9 m/s
+  (the plateau) or something nearer the 4.5-5 peaks with speed warping.
+- **Strafes are slower than forward** (walk 1.14 vs 1.27, jog 1.32 vs 1.85, crouch 0.76 vs 0.79), there are no run
+  strafes, and jog strafes are 2:1 left (707 / 353 frames). Crouch strafes (8 legs) match 0.22-0.26 m off at +1 s, both
+  sides. Phase 4 retunes strafe speeds from `GaitSpeedTable::Strafe` and doesn't strafe at run.
+- The search weights and the dead-blend times are Holden's defaults, not tuned on this pack. Tune them in Phase 4 on
+  the player with recordings, not on numbers alone.
+- The query's pose part is the playing frame's own features, not the blended output's. While a dead blend runs they
+  differ for 0.2 s; standard practice, but a candidate if Phase 4 sees jumps chain.
+- One crouched frame (`Stand_Jump_360_M_L_Take001` @ 11.4 s, a landing) is the best crouch-strafe-right match: the
+  crouch label also covers deep landings. Harmless while jumps are label-locked; watch it in Phase 4.
 - *Resolved 2026-11-16:* pack-Manny vs Quantum rest pose and bone lengths: the 41 core bones match (worst 0.002 %).
 - *Resolved 2026-11-16:* two zero-filled local assets, `project/assets/Audio/Ambience/worklight_hum_1.wav` and
   `project/assets/Characters/Spider/Textures/T_Spider_AO.png`.
@@ -393,7 +515,29 @@ New `src/Game/MotionMatching/`:
 - A forced focus steal (Notepad launched from a background job) did not take focus: Windows' foreground lock. Focus
   loss was checked through natural focus changes during the smoke run instead.
 
-## Phase 3: first steps
+## Phase 4: first steps
+
+1. Branch `dev/mm-phase4` from `dev/mm-phase3`, in the main checkout (licensed assets and `build\` only exist there).
+   The cooked database is on the Drive's `Used\` now (`fetch-assets.ps1`), or rebake (30 s).
+2. Read `FirstPersonBody::Tick` and the parameter block (~1162), `BodyLocomotion` (`LoopPlayRate`), `Player.cpp` and
+   `CharacterMover.cpp`: where the legacy controller's pose enters, and what reads the gait phase, foot heights and
+   `FootIK`.
+3. Add `LocomotionSource {Legacy, MotionMatching}` (temporary setting). In MM mode, one `MotionDatabase` (shared, loaded
+   once) and a `MotionMatcher` on the body; the capsule is the simulated character: feed `TrajectoryPredictor` from the
+   player's input (the stick as the desired velocity at `GaitSpeedTable` speeds, strafes at `StrafeFor`), with its
+   `Sweep` on the capsule's own cast, and keep `TrajectoryPredictor::State` in step with the capsule (or predict from
+   the capsule's position and velocity each frame).
+4. Retune the player's walk / jog / run / crouch speeds to the table (walk 1.27, jog 1.85, run 3.91, crouch 0.79;
+   strafes 1.14 / 1.32 / 0.76) and decide the run's turn-rate cap (Open issues: Run).
+5. Orientation and speed warping in place of `LoopPlayRate`; the root clamped to the capsule; turn-in-place feeding
+   `MaxYawRate`; crouch as `Require`/`Forbid Crouch`; sprint as the run gait.
+6. Keep feeding gait phase (camera bob, `PlayFrame.cpp:257`), per-foot heights and `FootIK` - the feet's contact flags
+   and positions are in the matched frame's features (`MotionDatabase::Raw`: dims 0-5, flags ContactL/R).
+7. The airborne segment: label-locked playback of the baked jump frames (`Require Airborne` is how to find them) with
+   inertialization in and out.
+8. `--npc-test mmplayer`, plus testbed parts A and C; reuse `MotionDebugDraw` and `mmdb`'s course. Record for the owner.
+
+## Phase 3: first steps (done)
 
 1. Branch `dev/mm-phase3` from `dev/mm-phase2`, in the main checkout (licensed assets and `build\` only exist there).
    Big scratch output on D:.
@@ -469,3 +613,17 @@ New `src/Game/MotionMatching/`:
   - Archived the pack on the Drive (owner-approved), with its `_INFO.md`, index, changelog and license entries.
   - Visible runs only, through `mm_smoke.ps1`: the unit filter and `mmview` while working, then one full pass, all
     PASS. One `mmview` re-run was a recording overlapped by a Drive copy (frames dropped; re-recorded for the owner).
+- **2026-11-16, Phase 3:**
+  - Added the runtime (`MotionDatabase`, `MotionSearch` + schedule, `Inertialization`, `TrajectoryPredictor`,
+    `MotionMatcher`, `MotionGait`, `MotionDebugDraw`), `--npc-test mmdb`, 10 unit tests; registered the cooked files.
+  - Box search: exactly brute force's answer, 0.41 ms avg on 275k frames (brute 5.3 ms). Dead blending cuts a jump's
+    pop from 28° to 5° avg. Left/right turns are balanced (ratios 0.96-0.97): no mirroring for v1.
+  - Gait table by leg plateaus: walk 1.27, jog 1.85, run 3.91, crouch 0.79 m/s; strafes slower. Per-frame percentiles
+    were tried first and gave run 2.8 m/s (the runs' walk-backs).
+  - `mmdb`'s first run (14/18) caught: the matcher playing into frames the filter refuses between searches (crouch 5,
+    airborne 15; fixed: such a frame forces a search), strafe queries at forward speed (the pack's strafes are slower;
+    the table measures them now), and a wall metric that ignored the ledge's corners (now sphere-to-box). It also
+    showed the runtime holding the features twice (63 MB > 40; now normalized only, 34 MB). The crouch-strafe miss
+    (both sides, 1-5 cm over) became a reported row, left/right symmetry stays gated.
+  - Visible runs only, through `mm_smoke.ps1`: the unit filter and `mmdb` while working (4 runs), then one full pass,
+    all PASS.

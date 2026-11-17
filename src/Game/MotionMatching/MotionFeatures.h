@@ -96,6 +96,9 @@ public:
     const std::vector<float>& Mean() const { return m_Mean; }
     const std::vector<float>& Std() const { return m_Std; }
     size_t Bytes() const { return m_Data.size() * sizeof(float) + m_Gait.size() + m_Flags.size(); }
+    // Frees the feature values (labels, clips and statistics stay): MotionDatabase keeps its own normalized copy, so the
+    // runtime holds the features once (the budget). Features() must not be called after.
+    void ReleaseFeatureData() { std::vector<float>().swap(m_Data); }
     int TrajFrames[3] = {20, 40, 60};
 
 private:
