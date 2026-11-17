@@ -31,6 +31,7 @@ struct MotionSearchParams {
     float GaitWeight = 0.5f;     // per gait step away from the desired one
     float TransitionCost = 0.0f; // added to every candidate but the frame playing
     int IgnoreNear = 20;         // frames of the playing clip within this many of the playing frame are not candidates
+    int MinRunway = 0;           // candidates (not the playing frame) need this many frames under the same labels (Runway)
     std::uint8_t Require = 0;
     std::uint8_t Forbid = MotionLabel::Airborne;
     int DesiredGait = -1; // -1: no gait cost

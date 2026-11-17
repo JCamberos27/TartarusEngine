@@ -51,6 +51,17 @@ public:
     float CrouchHeight = 0.0f;
     float CrouchSpeedMultiplier = 0.45f;
     bool Crouched = false;
+    // Per-gait speeds by direction (a motion matching body, FirstPersonBody: the mocap's gait table). When Active, the
+    // move's speed is Forward[g] heading along the view and Strafe[g] from StrafeAngle degrees off it (sideways and
+    // backwards; smoothstep between), g = 0 the default gait, 1 with Sprint held, 2 crouched - in place of MoveSpeed,
+    // SprintMultiplier and CrouchSpeedMultiplier. Set before each Update.
+    struct DirectionalSpeeds {
+        bool Active = false;
+        float Forward[3] = {0.0f, 0.0f, 0.0f};
+        float Strafe[3] = {0.0f, 0.0f, 0.0f};
+        float StrafeAngle = 50.0f;
+    } GaitSpeeds;
+    bool Sprinting = false; // out, per Update: the sprint (jog) key counted this frame
     // A jump pressed this long before landing still happens on landing, and one pressed this long
     // after stepping off an edge still counts (seconds).
     float JumpBufferTime = 0.12f;
@@ -97,6 +108,10 @@ glm::vec3 PlayerClipVelocity(const glm::vec3& v, const glm::vec3* walls, int cou
 // accelTime (speeding up) or decelTime (slowing down or turning away), so it is the same at any frame
 // rate. A time of 0 snaps to the target.
 glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime);
+
+// Player::DirectionalSpeeds' speed for a move `local` (x right, y forward, as Player::MoveInput) in gait `gait` (0 default,
+// 1 sprint, 2 crouched): Forward along the view, Strafe from StrafeAngle off it, smoothstep between.
+float PlayerGaitSpeed(const Player::DirectionalSpeeds& s, const glm::vec2& local, int gait);
 
 // Sprint travel follows input speed in every direction, independent of clip root distance.
 glm::vec3 PlayerMovementTarget(const glm::vec3& wish, const glm::vec3& rootVelocity, float rootWeight, bool sprint);

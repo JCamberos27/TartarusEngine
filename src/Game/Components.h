@@ -668,6 +668,10 @@ struct FirstPersonControllerComponent {
 // movement as parameters (MoveX / MoveY / Speed / Sprint / Grounded / Airborne / Jump), and the
 // clips' root motion walks the player's capsule. The play camera sits in the body's head.
 struct FirstPersonBodyComponent {
+    // Where the body's locomotion pose comes from (temporary, docs/MOTION_MATCHING_HANDOFF.md Phase 4; FirstPersonBodyMotion.h):
+    // 0 = the legacy locomotion Animator Controller, 1 = motion matching (Manny.mmanim / .mmdb; the capsule moves on the
+    // input at the mocap's gait speeds). TARTARUS_LOCOMOTION_SOURCE (legacy | mm) overrides it.
+    int LocomotionSource = 0;
     // 0 = the capsule moves exactly as the clips travel (root motion), 1 = as the input asks
     // (the clips only animate). Between: a blend - heavier and more grounded toward 0.
     float Responsiveness = 0.0f;

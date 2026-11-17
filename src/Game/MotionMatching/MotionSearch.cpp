@@ -104,7 +104,7 @@ MotionSearchResult MotionSearch::SearchBrute(const MotionDatabase& db, const flo
     DimWeights(p, w);
     const Skip skip(db, current, p.IgnoreNear);
     for (std::uint32_t i = 0; i < db.FrameCount(); ++i) {
-        if (skip(i) || !Passes(db.Flags(i), p)) continue;
+        if (skip(i) || !Passes(db.Flags(i), p) || db.Runway(i) < p.MinRunway) continue;
         ++r.FramesScored;
         const float c = Distance(query, db.Normalized(i), w, kInf) + GaitCost(p, db.Gait(i)) + p.TransitionCost;
         if (c < r.Cost) {
@@ -140,7 +140,7 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
             const std::uint32_t from = (std::uint32_t)S * MotionDatabase::kSmallBox;
             const std::uint32_t to = std::min(n, from + (std::uint32_t)MotionDatabase::kSmallBox);
             for (std::uint32_t i = from; i < to; ++i) {
-                if (skip(i) || !Passes(db.Flags(i), p)) continue;
+                if (skip(i) || !Passes(db.Flags(i), p) || db.Runway(i) < p.MinRunway) continue;
                 ++r.FramesScored;
                 const float d = Distance(query, db.Normalized(i), w, r.Cost);
                 if (d >= r.Cost) continue; // (the extra costs are >= 0)

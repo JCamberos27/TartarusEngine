@@ -17,6 +17,7 @@
 #include "Components.h"
 #include "Core/Env.h"
 #include "Core/Paths.h"
+#include "FirstPersonBodyMotion.h"
 #include "FirstPersonPresentation.h"
 #include "Model.h"
 #include "PhysicsWorld.h"
@@ -405,4 +406,8 @@ void NpcTest::MmView(World& world) {
 void NpcTest::DebugLines(std::vector<float>& out) const {
     if (m_Mm) out.insert(out.end(), m_Mm->Lines.begin(), m_Mm->Lines.end());
     MmDbLines(out); // NpcTest_MmDb.cpp
+    if (m_Scenario == "mmplayer") { // the player's matcher (FirstPersonBodyMotion)
+        const auto& lines = MmPlayerDebug::Info().Lines;
+        out.insert(out.end(), lines.begin(), lines.end());
+    }
 }

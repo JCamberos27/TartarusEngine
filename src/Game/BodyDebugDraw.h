@@ -23,6 +23,12 @@ struct Snapshot {
     float IdleTime = 0.0f, MoveTime = 0.0f;
     float MoveSpeed = 0.0f;       // |MoveX, MoveY|
     float RootSpeed = 0.0f;       // m/s the clips carry the capsule
+    // The torso's forward bend (deg, + = forward): pelvis to spine_05 off the vertical, in the body's frame - as the clips
+    // (or motion matching) pose it, and as drawn after the spine's aim at the view; and the view's pitch (deg, + = up).
+    float ClipBendDeg = 0.0f, TorsoBendDeg = 0.0f, ViewPitchDeg = 0.0f;
+    // The upper arms off straight down (deg, the worse of the two, body frame): as the spine's pitch at the view leaves them,
+    // and as drawn (unarmed, Arm Hang turns them back to hang).
+    float ArmDownAimDeg = 0.0f, ArmDownDeg = 0.0f;
     float FootWeight = 0.0f;      // 0..1: how much foot IK is on
     float FootOffset[2] = {0, 0}; // ground under each foot minus the capsule's (m)
     bool FootPlanted[2] = {false, false};

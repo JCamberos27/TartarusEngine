@@ -12,6 +12,8 @@
 #include "../Game/MotionMatching/MotionSearch.h"
 #include "../Game/MotionMatching/RootSynth.h"
 #include "../Game/MotionMatching/TrajectoryPredictor.h"
+#include "../Game/FirstPersonBodyMotion.h"
+#include "../Game/Player.h"
 
 #include "Core/Paths.h"
 
@@ -515,6 +517,51 @@ void TestMatcherEndToEnd() {
     CHECK(worstStep < 0.25f); // the jumps are blended (the synthetic legs swing 0.4 rad each way)
 }
 
+// Phase 4's hooks: the matcher's play rate (speed warping), its locked playback with a hold frame and a forced jump (the
+// airborne segment), a frame's own root speed, and the player's per-gait speeds by direction.
+void TestPlayerHooks() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    const auto& walk = db.Clip(db.Stream().FindClip("Walk_Straight"));
+    const float dt = 1.0f / 60.0f;
+    MotionMatcher::Input in;
+    MotionMatcher m;
+    m.Reset(&db, walk.First + 10);
+    m.Locked = true;
+    m.PlayRate = 2.0f;
+    m.Update(dt, in); // the first update poses where it is
+    for (int i = 0; i < 30; ++i) m.Update(dt, in);
+    CHECK(std::abs((int)m.Frame() - (int)(walk.First + 70)) <= 1); // 30 updates at twice the rate: 60 frames on
+    CHECK(m.Searches == 0);              // locked: never searched
+    m.PlayRate = 1.0f;
+    m.HoldFrame = walk.First + 80;
+    for (int i = 0; i < 30; ++i) m.Update(dt, in);
+    CHECK(m.Frame() == walk.First + 80); // held there
+    m.ForceFrame(walk.First + 150, dt);
+    m.Update(dt, in);
+    CHECK(m.Jumps == 1 && m.JumpedThisUpdate() == false && m.Inertializer.Blending());
+    m.Locked = false;
+    m.HoldFrame = -1;
+    m.SearchParams.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
+    m.Update(dt, in);
+    CHECK(m.Searches == 1); // unlocked: the schedule searches at once
+    const float speed = FirstPersonBodyMotion::RootSpeed(db, walk.First + 120);
+    CHECK(std::fabs(speed - 1.3f) < 0.05f);
+    CHECK(std::fabs(FirstPersonBodyMotion::RootYawRate(db, walk.First + 120)) < 1e-3f);
+
+    Player::DirectionalSpeeds g;
+    g.Active = true;
+    g.Forward[0] = 1.27f; g.Strafe[0] = 1.14f;
+    g.Forward[1] = 3.91f; g.Strafe[1] = 1.32f;
+    g.Forward[2] = 0.79f; g.Strafe[2] = 0.76f;
+    CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, 1.0f}, 0) - 1.27f) < 1e-4f);  // ahead
+    CHECK(std::fabs(PlayerGaitSpeed(g, {1.0f, 0.0f}, 1) - 1.32f) < 1e-4f);  // the run's strafe: the jog strafe
+    CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, -1.0f}, 2) - 0.76f) < 1e-4f); // backwards: a strafe
+    const float diag = PlayerGaitSpeed(g, {std::sin(0.4363f), std::cos(0.4363f)}, 1); // 25 degrees off: halfway
+    CHECK(std::fabs(diag - 0.5f * (3.91f + 1.32f)) < 0.01f);
+    CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, 0.0f}, 0) - 1.27f) < 1e-4f);
+}
+
 // The cooked Manny database: the boxes agree with brute force and search fast. SKIPs without a bake.
 void TestCookedDatabaseSearch() {
     const char* name = "Motion matching: cooked database search";
@@ -565,5 +612,6 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: gait speed table", TestGaitTable});
     tests.push_back({"Motion matching: query root space", TestQueryConvention});
     tests.push_back({"Motion matching: matcher end to end", TestMatcherEndToEnd});
+    tests.push_back({"Motion matching: player hooks (play rate, lock, gait speeds)", TestPlayerHooks});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
 }

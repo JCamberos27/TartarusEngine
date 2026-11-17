@@ -57,6 +57,10 @@ class World;
 //   mmdb     motion matching, Phase 3 (NpcTest_MmDb.cpp, LocomotionLab): the runtime database's search (time, boxes vs brute
 //            force, self-match, determinism), left/right coverage per gait, the gait speed table; then a Quantum body driven
 //            by MotionMatcher + TrajectoryPredictor through a scripted course, desired and matched trajectories drawn
+//   mmplayer motion matching, Phase 4 (NpcTest_Testbed.cpp, AnimTestbed.json): the player's body on motion matching
+//            (TARTARUS_LOCOMOTION_SOURCE=mm), unarmed, through the testbed's parts A and C and its own part M - strafes and
+//            backwards, the crouch, turning on the spot, the run (straight, turning, strafing), jumps: the label filters, the
+//            speed warping, the root on the capsule, the airborne segment, the gait phase, foot IK; SKIPs when unbaked
 //   testbed  project/scenes/AnimTestbed.json (tools/scenes/build_anim_testbed.py): only what the animation overhaul fixes, re-run
 //            after every phase (NpcTest_Testbed.cpp) - the player's bob reaching the screen and the gait phase on the lane, the
 //            corner peek's lean with the hands on the gun, stairs and a ramp (gait phase, leg reach, the eye's overshoot), the
@@ -83,7 +87,7 @@ public:
     const std::string& RecordDir() const { return m_RecordDir; }
     // Where a scenario's trace.csv goes: NPC_TEST_TRACE=<dir> (the trace alone, no frames - fast), else NPC_TEST_RECORD's.
     const std::string& TraceDir() const { return m_TraceDir; }
-    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" || m_Scenario == "mmview" || m_Scenario == "mmdb" ? 1 : 2; } // every frame for the muzzle flame
+    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmview" || m_Scenario == "mmdb" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -203,6 +207,9 @@ private:
     static float TestbedSeconds();
     void TestbedDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
     void Testbed(World& world, NpcDirector& npcs, const Player& player, float now);
+    // mmplayer (NpcTest_Testbed.cpp): the testbed's parts A and C plus part M on the motion matching body
+    void MmPlayerFrame(World& world, const Player& player, int leg, const float (&foot)[3]);
+    void MmPlayerChecks();
     struct TestbedRun;
     std::shared_ptr<TestbedRun> m_Tb;
     // doors (NpcTest_Doors.cpp)

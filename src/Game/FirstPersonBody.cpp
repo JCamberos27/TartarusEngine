@@ -12,6 +12,7 @@
 
 #include "Camera.h"
 #include "Components.h"
+#include "Core/Env.h"
 #include "GameModuleAPI.h"
 #include "IK.h"
 #include "Log.h"
@@ -742,6 +743,35 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     m_CrouchSpeed = cfg.CrouchSpeed;
     player.MoveSpeed = m_PlayerWalkSpeed;
     player.SprintMultiplier = m_PlayerRunSpeed / m_PlayerWalkSpeed;
+    player.GaitSpeeds.Active = false;
+
+    // Motion matching (Locomotion Source): the pose from the database, the capsule at the mocap's gait speeds - walk by
+    // default, the run with Shift (sprint is the run gait), the crouch-walk crouched; strafes (and backwards) at the
+    // pack's strafe speeds, the run's at the jog's (the pack has no run strafes).
+    if (SourceFor(cfg) == LocomotionSource::MotionMatching) {
+        size_t driverIndex = 0;
+        for (size_t k = 0; k < m_Pieces.size(); ++k)
+            if (m_Pieces[k] == m_Driver) driverIndex = k;
+        std::string error;
+        if (!m_Mm.Start(m_Models, driverIndex, error)) {
+            Log::Warn("First Person Body: Locomotion Source is Motion Matching, but " + error + " - the locomotion controller plays instead.");
+        } else {
+            const GaitSpeedTable& g = m_Mm.Gaits();
+            m_MmSpeeds.Active = true;
+            m_MmSpeeds.Forward[0] = g.Walk;
+            m_MmSpeeds.Forward[1] = g.Run;
+            m_MmSpeeds.Forward[2] = g.CrouchWalk;
+            m_MmSpeeds.Strafe[0] = g.StrafeFor(MotionLabel::Walk, false);
+            m_MmSpeeds.Strafe[1] = g.StrafeFor(MotionLabel::Jog, false);
+            m_MmSpeeds.Strafe[2] = g.StrafeFor(MotionLabel::Walk, true);
+            player.GaitSpeeds = m_MmSpeeds;
+            char b[256];
+            std::snprintf(b, sizeof b, "walk %.2f / run %.2f / crouch %.2f m/s, strafes %.2f / %.2f / %.2f, turn in place %.0f deg/s",
+                          g.Walk, g.Run, g.CrouchWalk, m_MmSpeeds.Strafe[0], m_MmSpeeds.Strafe[1], m_MmSpeeds.Strafe[2],
+                          glm::degrees(m_Mm.TurnInPlaceRate()));
+            Log::Info(std::string("First Person Body: motion matching - ") + b + ".");
+        }
+    }
 
     Log::Info("First Person Body: '" + (reg.all_of<NameComponent>(body) ? reg.get<NameComponent>(body).Name : std::string("body")) +
               "' is the player's body - " + std::to_string(pieces.size()) + " pieces, " + std::to_string(shadowOnly) +
@@ -768,7 +798,20 @@ void FirstPersonBody::Stop(World& world) {
         if (world.Registry.valid(e)) world.Registry.remove<PlayerBodyTag, OwnerViewOnlyTag>(e);
     for (entt::entity e : m_Twins)
         if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+    if (m_Mm.Active() && m_Driver != entt::null && world.Registry.valid(m_Driver))
+        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Driver)) ac->SkipUpdate = false; // the controller back
+    m_Mm.Stop();
     *this = FirstPersonBody{};
+}
+
+LocomotionSource FirstPersonBody::SourceFor(const FirstPersonBodyComponent& cfg) {
+    if (Env::IsSet(Env::Var::LocomotionSource)) {
+        std::string s = Env::Str(Env::Var::LocomotionSource);
+        for (char& c : s) c = (char)std::tolower((unsigned char)c);
+        return s == "mm" || s == "1" || s == "motionmatching" || s == "motion matching" ? LocomotionSource::MotionMatching
+                                                                                       : LocomotionSource::Legacy;
+    }
+    return cfg.LocomotionSource == 1 ? LocomotionSource::MotionMatching : LocomotionSource::Legacy;
 }
 
 // A world twin per piece: the same model (an instance: its own pose), materials, shadows and outfit hiding,
@@ -938,7 +981,25 @@ void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     player.CrouchHeight = IsActive() ? m_CrouchHeight : 0.0f;
     // Crouch Speed is a fraction of the run (jog); the capsule's base is the walk.
     player.CrouchSpeedMultiplier = m_CrouchSpeed * (m_PlayerWalkSpeed > 0.0f ? m_PlayerRunSpeed / m_PlayerWalkSpeed : 1.0f);
+    player.GaitSpeeds.Active = false;
     if (!IsActive()) return;
+    if (m_Mm.Active()) {
+        // Capsule-led: the input moves the capsule (at the gait table's speeds), never the clips.
+        player.RootMotionVelocity = glm::vec3(0.0f);
+        player.RootMotionWeight = 0.0f;
+        player.GaitSpeeds = m_MmSpeeds;
+        player.GaitSpeeds.Forward[1] = std::max(m_MmSpeeds.Forward[1] * m_MmRunScale, m_MmSpeeds.Strafe[1]); // the run, slowed in turns
+        if (m_Still && m_TurnThreshold > 0.0f) {
+            // Turning on the spot: the view turns no faster than the database's turn-in-place clips do (and Max Turn Rate,
+            // when set) beyond the threshold, as with the controller's turn clips.
+            float rate = glm::degrees(m_Mm.TurnInPlaceRate());
+            if (m_MaxTurnRate > 0.0f) rate = rate > 0.0f ? std::min(rate, m_MaxTurnRate) : m_MaxTurnRate;
+            player.MaxYawRate = rate;
+            player.YawFreeCenter = 90.0f - glm::degrees(m_Yaw);
+            player.YawFreeRange = m_TurnThreshold;
+        }
+        return;
+    }
     if (m_Still) {
         // Aiming is free within the turn threshold either side of the body; the limit is on the turn
         // beyond it, which is what the feet have to step round to (the body's yaw is atan2(x, z) of the
@@ -1048,6 +1109,10 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     }
     m_ViewYaw = FirstPersonBodyYaw(camera.Front(), m_ViewYaw);
     if (!m_HaveHeading) { m_Yaw = m_ViewYaw; m_HaveHeading = true; }
+    if (m_Mm.Active() && reg.valid(m_Driver)) {
+        TickMotionMatching(world, player, cfg, dt);
+        return;
+    }
     auto fireTrigger = [&](AnimatorControllerComponent& a, const char* name) { a.SetTrigger(name); m_LastTrigger = name; m_SinceTrigger = 0.0f; };
 
     // (The body is posed once the locomotion has set this frame's heading, below; without a driver, as it stands.)
@@ -1167,20 +1232,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
     if(!player.Grounded)m_FallSpeed=std::max(0.0f,-player.Velocity.y);
     ac.SetFloat(FPBody::kLandImpact,m_FallSpeed);
-    // The gait's phase, read off the feet (their spread along the travel against their height difference) - the clips'
-    // feet as LateUpdate had them before foot IK: after it, stairs and slopes lift one foot over the other and skew the
-    // phase (the bob and the weapon's sway dipped off the footfalls on stairs).
-    {
-        const glm::vec2 move = FirstPersonBodyLocalMove(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), m_Yaw);
-        const float speed = glm::length(move);
-        if (player.Grounded && speed > 0.3f && m_HaveGaitFeet) {
-            const glm::vec2 dir = move / speed;
-            const glm::vec3 d = m_GaitFeet[0] - m_GaitFeet[1]; // driver model space (the body's frame: kRight, up, kForward)
-            m_Gait.Update(glm::dot(d, kRight) * dir.x + glm::dot(d, kForward) * dir.y, d.y, true, dt);
-        } else {
-            m_Gait.Update(0.0f, 0.0f, false, dt);
-        }
-    }
+    UpdateGaitPhase(player, dt);
 
     // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
     {
@@ -1223,6 +1275,124 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     }
 }
 
+// The gait's phase, read off the feet (their spread along the travel against their height difference) - the clips'
+// feet as LateUpdate had them before foot IK: after it, stairs and slopes lift one foot over the other and skew the
+// phase (the bob and the weapon's sway dipped off the footfalls on stairs).
+void FirstPersonBody::UpdateGaitPhase(const Player& player, float dt) {
+    const glm::vec2 move = FirstPersonBodyLocalMove(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), m_Yaw);
+    const float speed = glm::length(move);
+    if (player.Grounded && speed > 0.3f && m_HaveGaitFeet) {
+        const glm::vec2 dir = move / speed;
+        const glm::vec3 d = m_GaitFeet[0] - m_GaitFeet[1]; // driver model space (the body's frame: kRight, up, kForward)
+        m_Gait.Update(glm::dot(d, kRight) * dir.x + glm::dot(d, kForward) * dir.y, d.y, true, dt);
+    } else {
+        m_Gait.Update(0.0f, 0.0f, false, dt);
+    }
+}
+
+// Motion matching (FirstPersonBodyMotion): the locomotion controller is held (its update skipped, the pose ours); the
+// matcher runs on the capsule's state and turns the heading; the body stands at the capsule's feet (the root clamped there).
+void FirstPersonBody::TickMotionMatching(World& world, const Player& player, const FirstPersonBodyComponent& cfg, float dt) {
+    auto& reg = world.Registry;
+    auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
+    ac.SkipUpdate = true; // the whole group (the pieces follow the driver): FirstPersonBodyMotion::Pose poses them
+    ac.SkippedTime = 0.0f;
+    m_RootVelocity = glm::vec3(0.0f);
+
+    // The view's turn rate: the run slows in turns (the pack never runs fast on a curve - its run circles are 2-2.75 m/s):
+    // at most kRunLateral m/s^2 sideways, down to the jog-strafe speed.
+    if (dt > 0.0f) {
+        const float rate = m_HaveMmView ? std::fabs(FirstPersonBodyWrapAngle(m_ViewYaw - m_MmViewYaw)) / dt : 0.0f;
+        m_MmViewRate += (rate - m_MmViewRate) * (1.0f - std::exp(-dt / 0.15f));
+        m_MmViewYaw = m_ViewYaw;
+        m_HaveMmView = true;
+        constexpr float kRunLateral = 3.0f;
+        const float run = std::max(m_MmSpeeds.Forward[1], 0.01f);
+        m_MmRunScale = m_MmViewRate > 1e-3f ? std::clamp(kRunLateral / m_MmViewRate / run, 0.0f, 1.0f) : 1.0f;
+    }
+
+    FirstPersonBodyMotion::Input in;
+    in.Dt = dt;
+    in.Feet = m_Feet - glm::vec3(0.0f, m_StepOffset, 0.0f); // the capsule's own feet
+    in.Velocity = player.Velocity;
+    in.Wish = player.WishVelocity;
+    in.ViewYaw = m_ViewYaw;
+    in.Grounded = player.Grounded;
+    in.Crouched = player.Crouched;
+    in.Sprint = player.Sprinting;
+    in.Jumped = player.Jumped;
+    in.JumpSpeed = player.JumpSpeed;
+    in.Gravity = player.Gravity;
+    in.TurnThreshold = glm::radians(std::max(cfg.TurnThreshold, 0.0f));
+    in.TurnEndAngle = glm::radians(std::max(cfg.TurnEndAngle, 0.0f));
+    // The capsule's approach (an exponential, time constant GroundAccelTime) as the predictor's spring.
+    in.VelocityHalflife = player.GroundAccelTime > 0.0f ? player.GroundAccelTime * 0.6931f : 0.05f;
+    const float radius = std::max(0.05f, player.Size.x * 0.5f);
+    in.Sweep = [radius](const glm::vec3& from, const glm::vec3& to, glm::vec3& stopAt, glm::vec3& normal) {
+        glm::vec3 d = to - from;
+        d.y = 0.0f;
+        const float len = glm::length(d);
+        if (len < 1e-6f) return false;
+        d /= len;
+        // A wall, not a stair: a sphere just over the capsule's step and another at head height both stop within half a
+        // metre of each other. (One sphere at knee height read every riser of the steep stairs as a wall, and one over the
+        // step height read the flight's later risers a second ahead: the predicted path stopped, and the matcher played
+        // idle or slow frames on the climb.) Low obstacles - a 1 m ledge - aren't predicted; the capsule still stops there.
+        const glm::vec3 o = from + glm::vec3(0.0f, 0.4f + radius, 0.0f), head = from + glm::vec3(0.0f, 1.5f, 0.0f);
+        QueryFilter f;
+        f.HitTriggers = 0;
+        RaycastHit hit, high;
+        if (!PhysicsWorld::SphereCastSolid(&o.x, &d.x, radius, len, f, hit) || !hit.Hit) return false;
+        if (std::fabs(hit.Normal[1]) > 0.7f) return false; // a floor or ramp, not a wall
+        if (!PhysicsWorld::SphereCastSolid(&head.x, &d.x, radius, len, f, high) || !high.Hit || high.Distance > hit.Distance + 0.5f) return false;
+        stopAt = from + d * std::max(0.0f, hit.Distance - 0.01f);
+        normal = glm::vec3(hit.Normal[0], 0.0f, hit.Normal[2]);
+        return true;
+    };
+    m_Mm.Tick(in, m_Yaw);
+
+    m_Twist = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
+    m_MmSpineWeight += ((m_Mm.Airborne() ? 0.0f : 1.0f) - m_MmSpineWeight) * (1.0f - std::exp(-dt / 0.15f));
+    m_Still = m_Mm.Still();
+    m_Turning = m_Mm.Turning();
+    m_TurnThreshold = cfg.TurnThreshold;
+    m_MaxTurnRate = cfg.MaxTurnRate;
+    m_Grounded = player.Grounded;
+    m_InLand = false;
+    m_Move = FirstPersonBodyLocalMove(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), m_Yaw);
+    m_IdleTime = m_Still ? m_IdleTime + dt : 0.0f;
+    m_MoveTime = m_Still ? 0.0f : m_MoveTime + dt;
+    m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
+    if (!player.Grounded) m_FallSpeed = std::max(0.0f, -player.Velocity.y);
+    world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
+    UpdateGaitPhase(player, dt);
+
+    BodyDebug::Snapshot& d = BodyDebug::Info();
+    d.Valid = true;
+    d.AnimatorState = FPBody::kStateMotionMatching;
+    d.StateTime = 0.0f;
+    d.Turning = m_Turning;
+    d.BodyYawDeg = glm::degrees(m_Yaw);
+    d.ViewOffsetDeg = glm::degrees(FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw));
+    d.TwistDeg = glm::degrees(m_Twist);
+    d.Still = m_Still;
+    d.IdleTime = m_IdleTime;
+    d.MoveTime = m_MoveTime;
+    d.MoveSpeed = glm::length(m_Move);
+    // The clips' travel as shown: the matched frame's own root speed at the play rate it is warped to.
+    d.RootSpeed = m_Mm.Airborne() ? 0.0f : m_Mm.AnimSpeed() * m_Mm.PlayRate();
+    d.StepOffset = m_StepOffset;
+    d.ArmsWeight = m_ArmsWeight;
+    d.LastTrigger = m_Mm.Airborne() ? "Airborne (MM)" : std::string();
+    d.LastTriggerAgo = 0.0f;
+    if (BodyDebug::Enabled()) {
+        const glm::vec3 base = m_Feet + glm::vec3(0.0f, 0.03f, 0.0f);
+        const auto heading = [&](float yaw) { return glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw)); };
+        BodyDebug::Arrow(base, base + heading(m_Yaw) * 0.9f, glm::vec4(1.0f, 0.85f, 0.2f, 1.0f));
+        BodyDebug::Arrow(base, base + heading(m_ViewYaw) * 0.9f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+    }
+}
+
 void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::entity weaponArms,
                                  const std::string& rigCameraBone) {
     if (!IsActive()) return;
@@ -1235,7 +1405,9 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     const auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
-    m_RootVelocity = dt > 0.0f && !m_Turning ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
+    m_RootVelocity = dt > 0.0f && !m_Turning && !m_Mm.Active() ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
+    // Motion matching: this step's pose onto every piece (the controller's update was held), before anything reads it.
+    if (m_Mm.Active()) m_Mm.Pose(m_Models);
     // The presentation's view punch on the camera this frame (Update / RefreshViewKick put it on after Tick): the walk
     // bob, landing dip, lean and ADS camera share. It stays on - the camera goes to the body's eye plus this, below.
     const glm::vec3 viewKick = m_HaveCameraBase ? camera.Position - m_CameraBase : glm::vec3(0.0f);
@@ -1333,9 +1505,29 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const glm::vec3 shouldersAnimated = shouldersNow();
     const float viewPitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f));
     const float spineAim = FirstPersonBodySpineAim(viewPitch, cfg.SpineAim, cfg.SpineAimDown);
+    // The torso's forward bend (BodyDebug): pelvis to the top spine bone off the vertical, in the driver's model space.
+    const auto torsoBend = [&]() {
+        glm::mat4 p(1.0f), c(1.0f);
+        if (!model || !model->NodeTransform(Bone(FPBody::kBonePelvis), p) || !model->NodeTransform(Bone(FPBody::kBoneSpine[4]), c)) return 0.0f;
+        const glm::vec3 d = glm::vec3(c[3]) - glm::vec3(p[3]);
+        return glm::degrees(std::atan2(glm::dot(d, kForward), d.y));
+    };
+    BodyDebug::Info().ClipBendDeg = torsoBend();
+    BodyDebug::Info().ViewPitchDeg = glm::degrees(viewPitch);
     // The pitch only: the chest's heading (Spine Twist, or the rig's stance) is closed-loop below, measured off the
     // shoulders - the clips' own spine yaw is in it, so an open-loop twist here was only ever a first guess.
-    if (spineAim > 0.0f) ApplySpineAim(camera, spineAim, 0.0f);
+    if (spineAim > 0.0f) {
+        // Arm Hang, unarmed (armed, the arms take the rig's pose and reach the gun: ArmsLateUpdate).
+        const float hang = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+        thread_local std::vector<ArmHangPose> arms;
+        if (hang > 1e-3f) CaptureArms(arms);
+        ApplySpineAim(camera, spineAim, 0.0f);
+        BodyDebug::Info().ArmDownAimDeg = ArmDownDeg();
+        if (hang > 1e-3f) HangArms(arms, hang);
+    } else {
+        BodyDebug::Info().ArmDownAimDeg = ArmDownDeg();
+    }
+    BodyDebug::Info().ArmDownDeg = ArmDownDeg();
     // Armed, the chest takes the arms rig's stance: its shoulder line, measured against the camera. The
     // rig is authored bladed (the left shoulder ~13 cm ahead of the right, ~20 degrees): squared to the
     // view, the body's left shoulder sat ~7 cm behind the rig's, and the support hand came off the gun.
@@ -1505,6 +1697,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             }
         }
     }
+    BodyDebug::Info().TorsoBendDeg = torsoBend();
     if (BodyDebug::Enabled()) {
         const glm::vec3 shoulders = m_Feet + yaw * (t.Scale * m_Shoulders);
         BodyDebug::Cross(eyeWorld, 0.04f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));       // the camera
@@ -1589,8 +1782,9 @@ bool FirstPersonBody::BoneWorldMatrix(const World& world, const std::string& sta
 
 void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt) {
     auto& reg = world.Registry;
-    const bool on = cfg.FootIK && m_Grounded && PhysicsWorld::HasCharacter() && reg.valid(m_Driver) &&
-                    !reg.get<AnimatorControllerComponent>(m_Driver).HasTag(FPBody::kTagAirborne);
+    const bool airborne = m_Mm.Active() ? m_Mm.Airborne()
+                                        : reg.valid(m_Driver) && reg.get<AnimatorControllerComponent>(m_Driver).HasTag(FPBody::kTagAirborne);
+    const bool on = cfg.FootIK && m_Grounded && PhysicsWorld::HasCharacter() && reg.valid(m_Driver) && !airborne;
     m_FootWeight += ((on ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, cfg.FootIKFade);
     if (m_FootWeight < 1e-3f) {
         m_HaveFootGround = false;
@@ -1743,7 +1937,10 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 // reference keeps the chest stable without filtering (and lagging) the player's view aim.
 void FirstPersonBody::ApplySpineStability(float weight, const AnimatorControllerComponent& animator) {
     weight = std::clamp(weight, 0.0f, 1.0f);
-    if (weight > 0.0f) weight *= FPBody::LocomotionSpineWeight(animator, m_SpineCrouch);
+    // Under motion matching the reference is the database's own idle (FirstPersonBodyMotion::ReferencePose), its weight
+    // eased out through a jump. Without it the pack's lean stayed in the chest (28 degrees running) and the spine's aim at a
+    // view looking down bent the body over on top of it: 46 degrees running, against the controller's 16 (Phase 4).
+    if (weight > 0.0f) weight *= m_Mm.Active() ? m_MmSpineWeight : FPBody::LocomotionSpineWeight(animator, m_SpineCrouch);
     if (weight <= 1e-5f) return;
     for (size_t k = 0; k < m_Models.size(); ++k) {
         if (!m_Models[k]) continue;
@@ -1765,6 +1962,14 @@ void FirstPersonBody::ApplySpineStability(float weight, const AnimatorController
         if (ref.Bones.empty()) continue;
         if ((k >= m_Pieces.size() || m_Pieces[k] != m_Driver) && !SkinsUnder(m, ref.Bones, FPBody::kBoneSpine[0])) continue;
         for (int s = 0; s < 2; ++s) {
+            if (m_Mm.Active()) {
+                constexpr int kMmReference = -3; // (Clips[s]: the motion matching reference is built)
+                IK::Pose idle;
+                if (ref.Clips[s] == kMmReference || !m_Mm.ReferencePose(k, s == 1, idle) || idle.size() != pose.size()) continue;
+                IK::ComputeGlobals(idle, ref.Parents, ref.Globals[s]);
+                ref.Clips[s] = kMmReference;
+                continue;
+            }
             int clip = m_SpineIdleClip[s].empty() ? -1 : m.FindClipByRef(m_SpineIdleClip[s]);
             if (clip < 0 && !m_SpineIdleClip[s].empty()) clip = m.FindAnimation(m_SpineIdleClip[s]);
             if (ref.Clips[s] == clip) continue;
@@ -1775,10 +1980,72 @@ void FirstPersonBody::ApplySpineStability(float weight, const AnimatorController
         }
         const std::vector<glm::mat4> noCrouch;
         FPBody::BlendLocomotionSpine(pose, ref.Parents, ref.SpineNodes, ref.Globals[0],
-                                   ref.Clips[1] >= 0 ? ref.Globals[1] : noCrouch,
+                                   ref.Clips[1] >= 0 || ref.Clips[1] == -3 ? ref.Globals[1] : noCrouch,
                                    m_SpineCrouch, weight, m_SpineCrouchDrop);
         m.ApplyLocalPose(pose);
     }
+}
+
+void FirstPersonBody::CaptureArms(std::vector<ArmHangPose>& out) const {
+    thread_local std::vector<int> parents;
+    thread_local std::vector<glm::mat4> globals;
+    out.assign(m_Models.size(), ArmHangPose{});
+    for (size_t k = 0; k < m_Models.size(); ++k) {
+        if (!m_Models[k]) continue;
+        const Model& m = *m_Models[k];
+        const IK::Pose& pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        parents.resize(pose.size());
+        for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
+        IK::ComputeGlobals(pose, parents, globals);
+        for (int s = 0; s < 2; ++s)
+            if (const int u = m.NodeIndex(Bone(FPBody::kBoneUpperArm[s])); u >= 0) {
+                out[k].Rot[s] = IK::Rotation(globals[(size_t)u]);
+                out[k].Have[s] = true;
+            }
+    }
+}
+
+void FirstPersonBody::HangArms(const std::vector<ArmHangPose>& saved, float weight) {
+    thread_local std::vector<int> parents;
+    thread_local std::vector<glm::mat4> globals;
+    thread_local IK::Pose pose;
+    for (size_t k = 0; k < m_Models.size() && k < saved.size(); ++k) {
+        if (!m_Models[k] || !(saved[k].Have[0] || saved[k].Have[1])) continue;
+        Model& m = *m_Models[k];
+        pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        parents.resize(pose.size());
+        for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
+        IK::ComputeGlobals(pose, parents, globals);
+        bool changed = false;
+        for (int s = 0; s < 2; ++s) {
+            const int u = m.NodeIndex(Bone(FPBody::kBoneUpperArm[s]));
+            if (u < 0 || !saved[k].Have[s] || parents[(size_t)u] < 0) continue;
+            const glm::quat now = IK::Rotation(globals[(size_t)u]);
+            const glm::quat want = glm::slerp(now, saved[k].Rot[s], std::clamp(weight, 0.0f, 1.0f));
+            const glm::quat parent = IK::Rotation(globals[(size_t)parents[(size_t)u]]);
+            pose[(size_t)u].R = glm::normalize(glm::inverse(parent) * want);
+            changed = true;
+        }
+        if (changed) m.ApplyLocalPose(pose);
+    }
+}
+
+float FirstPersonBody::ArmDownDeg() const {
+    const Model* m = nullptr;
+    for (size_t k = 0; k < m_Pieces.size() && k < m_Models.size(); ++k)
+        if (m_Pieces[k] == m_Driver) m = m_Models[k].get();
+    if (!m) return 0.0f;
+    float worst = 0.0f;
+    for (int s = 0; s < 2; ++s) {
+        glm::mat4 u(1.0f), l(1.0f);
+        if (!m->NodeTransform(Bone(FPBody::kBoneUpperArm[s]), u) || !m->NodeTransform(Bone(FPBody::kBoneLowerArm[s]), l)) continue;
+        const glm::vec3 d = glm::vec3(l[3]) - glm::vec3(u[3]);
+        if (glm::length(d) < 1e-5f) continue;
+        worst = std::max(worst, glm::degrees(std::acos(std::clamp(-glm::normalize(d).y, -1.0f, 1.0f))));
+    }
+    return worst;
 }
 
 // Tilts the spine by `amount` of the camera's pitch and twists it by `twist` radians, spread evenly over spine_01..spine_05 (pitch about

@@ -71,6 +71,23 @@ public:
     std::uint32_t ClipEnd(std::uint32_t frame) const;
     std::uint8_t Flags(std::uint32_t frame) const { return m_Feat.Flags(frame); }
     std::uint8_t Gait(std::uint32_t frame) const { return m_Feat.Gait(frame); }
+    // How many frames from `frame` on (itself included, at most 65535) its take keeps the labels a filter can refuse
+    // (Crouch, Airborne, Excluded, NoSearch) as they are here: a candidate with a short runway is a dead end - it plays
+    // into a refused frame at once, forcing another search (MotionSearchParams::MinRunway).
+    static constexpr std::uint8_t kRunwayMask = 1 | 4 | 8 | 16; // MotionLabel::Crouch | Airborne | Excluded | NoSearch
+    std::uint16_t Runway(std::uint32_t frame) const { return m_Runway[frame]; }
+    // Glitches in the capture: a frame where a stream bone turns more than kGlitchDegrees to the next (at 60 fps; the pack's
+    // fastest real motion, its runs' p99.9, is ~30) - twist flips up to 180 degrees on the thighs and feet, a forearm
+    // swinging 60 degrees in a frame. Build marks them and kGlitchPad frames either side Excluded: never matched, and
+    // playing into one forces a search before it is shown.
+    static constexpr float kGlitchDegrees = 35.0f;
+    static constexpr int kGlitchPad = 3;
+    std::uint32_t GlitchFrames() const { return m_Glitches; } // frames Build excluded for glitches (the pads included)
+    // The way down to prone and back up: the baked Excluded (prone) frames are padded by this many seconds either side.
+    // Unpadded, a crouched frame on its way down to prone won the crouch search, and its pose (feet 0.7 m behind, the
+    // pelvis dropping) kept matching more of the same until the body was stuck there (Phase 4, the crouch legs).
+    static constexpr float kProneApproachSeconds = 1.0f;
+    std::uint32_t ProneApproachFrames() const { return m_ProneApproach; }
 
     // Normalized features (kDims floats) of a frame, and the normalization itself. The raw values are not kept (the
     // features budget): Raw() denormalizes.
@@ -104,6 +121,8 @@ private:
     MotionFeatureSet m_Feat;
     std::uint32_t m_Frames = 0;
     std::vector<int> m_ClipOf;
+    std::vector<std::uint16_t> m_Runway;
+    std::uint32_t m_Glitches = 0, m_ProneApproach = 0;
     std::vector<float> m_Norm, m_Mean, m_Scale;
     std::vector<Box> m_Small, m_Large;
     double m_LoadSeconds = 0.0;

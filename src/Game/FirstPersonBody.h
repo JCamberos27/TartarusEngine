@@ -6,8 +6,10 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "FirstPersonBodyContract.h"
+#include "FirstPersonBodyMotion.h" // the motion matching pose source (Locomotion Source)
 #include "IK.h" // IK::SpineDistribution
 #include "ModelVertex.h" // MAX_BONE_INFLUENCE
+#include "Player.h" // Player::DirectionalSpeeds
 
 #include <cstdint>
 #include <functional>
@@ -202,8 +204,22 @@ public:
     // The clips' feet before foot IK (driver model space), which the gait phase is read off. False until posed.
     bool GaitFeet(glm::vec3 (&out)[2]) const { out[0] = m_GaitFeet[0]; out[1] = m_GaitFeet[1]; return m_HaveGaitFeet; }
     float GaitRate() const { return m_Gait.Rate; } // the gait phase's cycles a second
+    // Locomotion Source = Motion Matching took (the database loaded and bound): the pose comes from FirstPersonBodyMotion.
+    bool MotionMatching() const { return m_Mm.Active(); }
+    const FirstPersonBodyMotion& Motion() const { return m_Mm; }
+    // The source a body component asks for, after TARTARUS_LOCOMOTION_SOURCE (legacy | mm).
+    static LocomotionSource SourceFor(const FirstPersonBodyComponent& cfg);
 
 private:
+    // Motion matching's Tick (after the body's feet and the view's heading are worked out).
+    void TickMotionMatching(World& world, const Player& player, const FirstPersonBodyComponent& cfg, float dt);
+    void UpdateGaitPhase(const Player& player, float dt);
+    FirstPersonBodyMotion m_Mm;
+    Player::DirectionalSpeeds m_MmSpeeds; // the gait table's speeds, for the capsule (BeforePlayerMove)
+    float m_MmViewYaw = 0.0f, m_MmViewRate = 0.0f; // the view's heading last Tick and its turn rate (smoothed, rad/s)
+    bool m_HaveMmView = false;
+    float m_MmRunScale = 1.0f;    // the run slowed in turns (of the run's speed)
+    float m_MmSpineWeight = 1.0f; // Spine Stability's share under motion matching: eased out through the airborne segment
     void Fail(const std::string& message);
     void ApplySpineStability(float weight, const AnimatorControllerComponent& animator);
     std::string m_SpineIdleClip[2]; // standing / crouched reference from the locomotion controller
@@ -216,6 +232,13 @@ private:
     };
     std::map<const Model*, SpineReference> m_SpineReferences;
     void ApplySpineAim(const Camera& camera, float amount, float twist);
+    // Arm Hang (unarmed): the spine's pitch at the view carried the arms round with the chest - looking down they swung
+    // back, stiff, behind a body bent over. Each piece's upper arms' model-space rotations are taken before the pitch and
+    // turned back `weight` of the way after it, so the arms keep hanging as the chest bends.
+    struct ArmHangPose { glm::quat Rot[2]; bool Have[2] = {false, false}; };
+    void CaptureArms(std::vector<ArmHangPose>& out) const;
+    void HangArms(const std::vector<ArmHangPose>& saved, float weight);
+    float ArmDownDeg() const; // the driver's upper arms off straight down (deg, the worse; BodyDebug)
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);
     // The spine's per-bone turn, applied bone by bone on every piece. `stepFor(divisor)` gives the turn a bone takes:

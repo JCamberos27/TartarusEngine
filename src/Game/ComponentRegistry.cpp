@@ -701,6 +701,9 @@ void RegisterEngineComponents() {
                     "in its head. Put it on the body's root; its children are the pieces (head, torso, legs,\n"
                     "feet or clothing), and the first one with an Animator Controller drives the rest.";
         m.Fields = {
+            { "Locomotion Source", T::Int, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LocomotionSource), 1.0f,
+              "Temporary (motion matching overhaul): 0 = the locomotion Animator Controller, 1 = motion matching\n"
+              "(the cooked Manny database; speeds from its gait table). TARTARUS_LOCOMOTION_SOURCE overrides it.", 0.0f, 1.0f },
             { "Responsiveness", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Responsiveness), 0.01f,
               "How the player moves: 0 = exactly as the clips travel (root motion - weighty, feet planted),\n"
               "1 = as the input asks (snappy; the clips only animate). In between blends the two.", 0.0f, 1.0f },

@@ -37,8 +37,22 @@ public:
         float DesiredYaw = 0.0f;
     };
 
+    // Speed warping (Phase 4): the database plays at this rate (the advance only; the search schedule and the dead
+    // blend keep real time). 1 = as captured.
+    float PlayRate = 1.0f;
+    // Label-locked playback (Phase 4's airborne segment): no searches; the playing frame plays on to HoldFrame (when
+    // >= 0) or its take's end and holds there.
+    bool Locked = false;
+    // A forced search (the filter changed, or the playing frame can't go on) weighs the pose features (feet, pelvis velocity)
+    // by this: the playing pose has no continuation, so the trajectory picks and the dead blend hides the pose change. At 1
+    // an odd pose (a jump's deep landing) kept matching odd poses after a crouch (Phase 4). 1 = always the same weights.
+    float ForcedPoseWeight = 1.0f;
+    std::int64_t HoldFrame = -1;
+
     void Reset(const MotionDatabase* db, std::uint32_t frame);
     void Update(float dt, const Input& in);
+    // Jumps to `frame` now, dead-blending from what is on screen (the airborne segment's entry and exit).
+    void ForceFrame(std::uint32_t frame, float dt);
 
     const MotionPose& Pose() const { return m_Out; }
     const MotionPose& Target() const { return m_Target; } // the database's pose this update (before the blend)
@@ -64,6 +78,7 @@ public:
                           std::vector<LocalTRS>& out);
 
 private:
+    void PoseAndBlend(float dt);
     const MotionDatabase* m_Db = nullptr;
     std::uint32_t m_Frame = 0;
     float m_Frac = 0.0f;
@@ -71,4 +86,5 @@ private:
     bool m_HaveOut = false, m_Searched = false, m_Jumped = false;
     MotionSearchResult m_Last;
     float m_QueryRaw[MotionDatabase::kDims] = {};
+    std::uint32_t m_LastKey = 0xFFFFFFFFu;
 };

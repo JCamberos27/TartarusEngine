@@ -66,6 +66,8 @@ inline constexpr const char* kPlayRate = "PlayRate";
 
 // States the body watches by name.
 inline constexpr const char* kStateLocomotion = "Locomotion";
+// Not a controller state: what BodyDebug reports while motion matching poses the body (Locomotion Source).
+inline constexpr const char* kStateMotionMatching = "MotionMatching";
 inline constexpr const char* kStateJump = "Jump";
 inline constexpr const char* kStateFall = "Fall";
 inline constexpr const char* kStateLand = "Land";

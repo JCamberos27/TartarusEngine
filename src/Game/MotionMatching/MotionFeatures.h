@@ -92,6 +92,7 @@ public:
     const float* Features(std::uint32_t frame) const { return m_Data.data() + (size_t)frame * kDims; }
     std::uint8_t Gait(std::uint32_t frame) const { return m_Gait[frame]; }
     std::uint8_t Flags(std::uint32_t frame) const { return m_Flags[frame]; }
+    void AddFlags(std::uint32_t frame, std::uint8_t flags) { m_Flags[frame] |= flags; } // (MotionDatabase: glitches excluded)
     const std::vector<Clip>& Clips() const { return m_Clips; }
     const std::vector<float>& Mean() const { return m_Mean; }
     const std::vector<float>& Std() const { return m_Std; }

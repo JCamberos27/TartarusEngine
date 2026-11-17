@@ -50,6 +50,8 @@ public:
     void Predict(const glm::vec3& desiredVelocity, float desiredYaw, const float* times, int count, TrajectoryState* out,
                  float goalTurnRate = 0.0f) const;
     const TrajectoryState& State() const { return m_State; }
+    // Puts the simulated character where a host's own simulation has it (Phase 4: the player's capsule, each frame).
+    void SetState(const TrajectoryState& s) { m_State = s; }
     int Hits() const { return m_Hits; } // collisions the simulated character met (Update)
 
     // The closed-form springs (exposed for the tests).

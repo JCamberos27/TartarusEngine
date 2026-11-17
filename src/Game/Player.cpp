@@ -81,7 +81,9 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     const float eye = EyeHeight * (1.0f - CrouchBlend * (1.0f - std::clamp(CrouchHeight / std::max(0.1f, Size.y), 0.0f, 1.0f)) * (CrouchHeight > 0.0f ? 1.0f : 0.0f));
     // Shift (the Sprint button) is the jog: the gun stays up, so aiming doesn't cancel it.
     const bool sprint = !Crouched && sprintKey;
-    wish *= MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
+    Sprinting = sprint;
+    if (GaitSpeeds.Active) wish *= PlayerGaitSpeed(GaitSpeeds, MoveInput, Crouched ? 2 : sprint ? 1 : 0);
+    else wish *= MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
     WishVelocity = wish;
     // A sprint clip can keep contributing fast root travel during its exit fade.
     // While reloading, walk input owns travel so that residual cannot keep us sprinting.
@@ -131,6 +133,16 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         Velocity = glm::vec3(0.0f);
         StepEase = StepEaseRate = 0.0f;
     }
+}
+
+float PlayerGaitSpeed(const Player::DirectionalSpeeds& s, const glm::vec2& local, int gait) {
+    gait = std::clamp(gait, 0, 2);
+    const float len = glm::length(local);
+    if (len < 1e-5f) return s.Forward[gait];
+    const float off = glm::degrees(std::acos(std::clamp(local.y / len, -1.0f, 1.0f))); // 0 ahead .. 180 behind
+    const float t = std::clamp(off / std::max(s.StrafeAngle, 1.0f), 0.0f, 1.0f);
+    const float w = t * t * (3.0f - 2.0f * t);
+    return s.Forward[gait] + (s.Strafe[gait] - s.Forward[gait]) * w;
 }
 
 glm::vec3 PlayerClipVelocity(const glm::vec3& v, const glm::vec3* walls, int count) {

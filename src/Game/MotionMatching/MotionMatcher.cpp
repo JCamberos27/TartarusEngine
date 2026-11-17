@@ -59,10 +59,11 @@ void MotionMatcher::Update(float dt, const Input& in) {
     if (!m_Db || !m_Db->Loaded()) return;
     const MotionDatabase& db = *m_Db;
 
-    // Play on.
+    // Play on (at PlayRate: speed warping).
     if (m_HaveOut) {
-        m_Frac += dt * db.Fps();
-        const std::uint32_t end = db.ClipEnd(m_Frame);
+        m_Frac += dt * std::max(PlayRate, 0.0f) * db.Fps();
+        std::uint32_t end = db.ClipEnd(m_Frame);
+        if (Locked && HoldFrame >= (std::int64_t)m_Frame && HoldFrame < (std::int64_t)end) end = (std::uint32_t)HoldFrame;
         while (m_Frac >= 1.0f && m_Frame < end) {
             ++m_Frame;
             m_Frac -= 1.0f;
@@ -70,20 +71,25 @@ void MotionMatcher::Update(float dt, const Input& in) {
         if (m_Frame >= end) m_Frac = 0.0f;
     }
 
-    // Search.
+    // Search (never while Locked: the airborne segment plays its own frames).
     // Search at once when the playing frame can't go on: the take ends, or it played into frames the filter refuses
     // (NoSearch near the end, an actor standing up out of a crouch, a jump's flight) - such a frame is never shown.
     const bool outOfFrames = !MotionSearch::Passes(db.Flags(m_Frame), SearchParams) || m_Frame >= db.ClipEnd(m_Frame);
     const std::uint32_t key = (std::uint32_t)SearchParams.Require | ((std::uint32_t)SearchParams.Forbid << 8) |
                               ((std::uint32_t)(SearchParams.DesiredGait + 1) << 16);
-    if (Schedule.Tick(dt, in.DesiredVelocity, in.DesiredYaw, key, outOfFrames)) {
+    if (Locked) Schedule.Reset(); // the first update after the lock searches at once
+    if (!Locked && Schedule.Tick(dt, in.DesiredVelocity, in.DesiredYaw, key, outOfFrames)) {
         const auto pose = db.Raw(m_Frame);
         for (int d = 0; d < 15; ++d) m_QueryRaw[d] = pose[d];
         TrajectoryFeatures(in, db.Stream().RestYaw, m_QueryRaw + 15);
         float q[MotionDatabase::kDims];
         db.Normalize(m_QueryRaw, q);
         const auto t0 = std::chrono::steady_clock::now();
-        m_Last = MotionSearch::Search(db, q, SearchParams, (std::int64_t)m_Frame);
+        MotionSearchParams params = SearchParams;
+        if ((outOfFrames || key != m_LastKey) && ForcedPoseWeight != 1.0f)
+            for (int g : {MotionFeature::FootPos, MotionFeature::FootVel, MotionFeature::PelvisVel}) params.GroupWeight[g] *= ForcedPoseWeight;
+        m_LastKey = key;
+        m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         ++Searches;
         SearchMsTotal += ms;
@@ -100,6 +106,24 @@ void MotionMatcher::Update(float dt, const Input& in) {
     }
 
     // Pose.
+    PoseAndBlend(dt);
+}
+
+void MotionMatcher::ForceFrame(std::uint32_t frame, float dt) {
+    m_Searched = false;
+    if (!m_Db || !m_Db->Loaded()) return;
+    frame = std::min(frame, m_Db->FrameCount() - 1);
+    if (m_HaveOut && frame != m_Frame) {
+        Inertializer.Transition(m_Prev, m_Out, dt > 0.0f ? dt : 1.0f / 60.0f);
+        m_Jumped = true;
+        ++Jumps;
+    }
+    m_Frame = frame;
+    m_Frac = 0.0f;
+}
+
+void MotionMatcher::PoseAndBlend(float dt) {
+    const MotionDatabase& db = *m_Db;
     db.SamplePose(m_Frame, m_Frac, m_Target);
     if (!m_HaveOut) {
         m_Out = m_Prev = m_Target;

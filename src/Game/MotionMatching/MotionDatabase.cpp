@@ -64,6 +64,62 @@ bool MotionDatabase::Build(std::string* error) {
     }
     for (std::uint32_t i = 0; i < n; ++i)
         if (m_ClipOf[i] < 0) return fail("frame " + std::to_string(i) + " is in no clip");
+    // The approach to prone (kProneApproachSeconds), then glitches (kGlitchDegrees): excluded before the runway and the
+    // boxes see the flags.
+    m_ProneApproach = 0;
+    {
+        const int pad = (int)std::lround(kProneApproachSeconds * m_Stream.Fps());
+        std::vector<char> near(n, 0);
+        for (const auto& clip : m_Stream.Clips())
+            for (std::uint32_t k = 0; k < clip.Count; ++k) {
+                const std::uint32_t i = clip.First + k;
+                if (!(m_Feat.Flags(i) & MotionLabel::Excluded)) continue;
+                const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)i - pad);
+                const std::uint32_t to = std::min<std::uint32_t>(clip.First + clip.Count - 1, i + (std::uint32_t)pad);
+                for (std::uint32_t j = from; j <= to; ++j) near[j] = 1;
+            }
+        for (std::uint32_t i = 0; i < n; ++i)
+            if (near[i] && !(m_Feat.Flags(i) & MotionLabel::Excluded)) {
+                m_Feat.AddFlags(i, MotionLabel::Excluded);
+                ++m_ProneApproach;
+            }
+    }
+    m_Glitches = 0;
+    {
+        const float limit = kGlitchDegrees * 3.14159265f / 180.0f * 60.0f / std::max(1.0f, m_Stream.Fps());
+        const int nb = (int)m_Stream.Bones().size();
+        std::vector<char> bad(n, 0);
+        std::vector<glm::quat> prev((size_t)nb), cur((size_t)nb);
+        for (const auto& clip : m_Stream.Clips()) {
+            for (int b = 0; b < nb; ++b) prev[(size_t)b] = m_Stream.Rotation(clip.First, b);
+            for (std::uint32_t k = 1; k < clip.Count; ++k) {
+                const std::uint32_t i = clip.First + k;
+                bool glitch = false;
+                for (int b = 0; b < nb; ++b) {
+                    cur[(size_t)b] = m_Stream.Rotation(i, b);
+                    glitch = glitch || MotionMath::QuatAngle(prev[(size_t)b], cur[(size_t)b]) > limit;
+                }
+                std::swap(prev, cur);
+                if (!glitch) continue;
+                const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)i - 1 - kGlitchPad);
+                const std::uint32_t to = std::min<std::uint32_t>(clip.First + clip.Count - 1, i + (std::uint32_t)kGlitchPad);
+                for (std::uint32_t j = from; j <= to; ++j) bad[j] = 1;
+            }
+        }
+        for (std::uint32_t i = 0; i < n; ++i)
+            if (bad[i] && !(m_Feat.Flags(i) & MotionLabel::Excluded)) {
+                m_Feat.AddFlags(i, MotionLabel::Excluded);
+                ++m_Glitches;
+            }
+    }
+    // The runway: back from each take's end, how long the filterable labels stay as they are.
+    m_Runway.assign(n, 1);
+    for (const auto& clip : m_Stream.Clips())
+        for (std::uint32_t k = clip.Count; k-- > 1;) {
+            const std::uint32_t i = clip.First + k - 1;
+            if ((m_Feat.Flags(i) & kRunwayMask) == (m_Feat.Flags(i + 1) & kRunwayMask))
+                m_Runway[i] = (std::uint16_t)std::min<int>(65535, m_Runway[i + 1] + 1);
+        }
 
     // Per-group scale: the mean of the group's standard deviations.
     m_Mean.assign(m_Feat.Mean().begin(), m_Feat.Mean().end());
@@ -154,5 +210,5 @@ std::array<float, MotionDatabase::kDims> MotionDatabase::Raw(std::uint32_t frame
 
 size_t MotionDatabase::FeatureBytes() const {
     return m_Feat.Bytes() + m_Norm.size() * sizeof(float) + (m_Small.size() + m_Large.size()) * sizeof(Box) +
-           m_ClipOf.size() * sizeof(int);
+           m_ClipOf.size() * sizeof(int) + m_Runway.size() * sizeof(std::uint16_t);
 }
