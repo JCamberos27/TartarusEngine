@@ -4043,6 +4043,8 @@
         "Shrug Start": 0.9800000190734863,
         "Spine Aim": 0.6000000238418579,
         "Spine Aim Down": 0.8999999761581421,
+        "Spine Aim Max Down": 25.0,
+        "Spine Aim Max Up": 20.0,
         "Spine Max Angle 1": 0.0,
         "Spine Max Angle 2": 0.0,
         "Spine Max Angle 3": 0.0,

@@ -2011,10 +2011,20 @@ int Application::RunSession() {
             };
             bool gameTabVisible = editorUIVisible && gameView.IsVisible();
             GameViewStats gameViewStats{};
-            if (gameTabVisible || playMaxLocked) {
+            // NPC_TEST_RECORD: the Game view renders (and is recorded) every Play frame whether or not its tab is showing. Gated on
+            // the tab alone, the mmplayer recording caught 152 of ~4000 frames (Phase 4): the tab reported hidden most of the run.
+            // The size is the last one the tab had, so every recorded frame is the same size.
+            const bool recordingGame = npcTest && playing && !npcTest->RecordDir().empty();
+            if (gameTabVisible || playMaxLocked || recordingGame) {
                 PROFILE_SCOPE("Game View Render");
                 PROFILE_GPU_SCOPE("Game View Render");
                 ImVec2 available = gameTabVisible ? gameView.GetLastAvailableRegion() : ImVec2(0.0f, 0.0f);
+                static ImVec2 recordSize(0.0f, 0.0f);
+                if (recordingGame) {
+                    if (available.x >= 1.0f && available.y >= 1.0f) recordSize = available;
+                    else if (recordSize.x >= 1.0f && recordSize.y >= 1.0f) available = recordSize;
+                    else available = recordSize = ImVec2(1280.0f, 720.0f);
+                }
                 if (available.x < 1.0f || available.y < 1.0f) {
                     available = ImVec2((float)window.GetWidth(), (float)window.GetHeight());
                 }

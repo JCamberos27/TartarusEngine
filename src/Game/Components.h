@@ -736,6 +736,11 @@ struct FirstPersonBodyComponent {
     // The same looking down. Armed, the eye hangs off the shoulders as the arms rig's does, so looking
     // down it comes over the chest only as far as the chest pitches with it.
     float SpineAimDown = 0.9f;
+    // Unarmed, the most (degrees) the spine's aim pitches the chest looking up / down, eased in (0 = no limit). Past it the
+    // view pitches at the neck alone: unlimited, a look straight up arched the body back like a limbo and a look straight
+    // down folded it over (the owner's play test 2, Phase 4). Armed, the arms rig needs the full aim to reach the gun.
+    float SpineAimMaxUp = 0.0f;
+    float SpineAimMaxDown = 0.0f;
     // Armed, how far the chest takes the arms rig's stance (its shoulder line, e.g. bladed with the
     // support shoulder forward) rather than squaring to the view: 1 = the rig's, so both hands reach.
     float ShoulderLineMatch = 1.0f;

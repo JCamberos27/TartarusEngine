@@ -13,7 +13,7 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 | 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
 | 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16; owner signed off on the `mmview` recording) |
 | 3. Motion matching runtime | `dev/mm-phase3` | **Done** (2026-11-16) |
-| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **In progress** (works, all tests pass; the owner's play test found posture and turning problems - "Phase 4: next steps") |
+| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **In progress** (play tests 2 and 3 fixed - posture, the sprint loop (crossfaded), the crouch from the walk, idle look-down arms, the head off walls; `mmstress` added; full pass all PASS; the owner's play test next - "Phase 4: next steps") |
 | 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
 | 6. Legacy cleanup and final verification | `dev/mm-phase6` | Pending |
 
@@ -475,7 +475,7 @@ registered.
   - Fixed by the runway, the prone pad and the forced pose weight: now 1.2-1.5 jumps/s, on the `Crouch_*` takes.
 - **Run pose pops** (52 deg/frame on a forearm): capture glitches, now excluded; run pose step p99 44 -> 19 deg.
 
-**The owner's play test 2 (2026-11-17 08:04, 23 s; to fix next - see "Phase 4: next steps"):**
+**The owner's play test 2 (2026-11-17 08:04, 23 s; fixed in session 2 - below):**
 1. **Running posture** (0-2.4, 5.2-5.7, 8-9 s): the chest upright, the head thrown back (chin at the sky), the fists
    swinging up to the face, the knees pumping high - it reads as prancing.
    - Cause: Spine Stability (`FPBody::BlendLocomotionSpine`) sets spine_01-05 to the idle's *model-space* rotation. The
@@ -497,6 +497,152 @@ registered.
 5. **Legs crossing or knock-kneed** in turns of the view while moving (4.0, 9.0, 11.4-11.9, 13.0 s). Probably 4's cause.
 6. **Hands in the first-person view all the time, unarmed** (0.0, 1.5, 2.5, 6.0, 11-12, 21 s). Mostly 1, 3 and 4.
 7. Minor: the head is tilted back walking too (part of 1). Idle looks fine.
+
+**What landed in session 2 (2026-11-17; play test 2's problems):**
+- **Metrics** (`BodyDebug::Snapshot`, filled by `FirstPersonBody::PostureMetrics` and in `LateUpdate`; all body frame, against
+  the bind pose): the chest's pitch from spine_05's *orientation* as the clip has it, after Spine Stability and as drawn
+  (`ChestPitchClipDeg` / `ChestPitchStableDeg` / `ChestPitchDeg`), its roll, the head's pitch against the chest and on its
+  own (`HeadPitchDeg`, `HeadWorldPitchDeg`), each hand's height over its shoulder, its distance to the camera and whether it
+  is in the view, the feet's sideways gap (< 0: crossed), the body's yaw rate. `mmplayer` logs them per leg (`[MmPosture]`).
+- **New part M legs:** walk / run looking up 60 and 85 deg, run looking straight down (-85), a 180 deg view flick running
+  and walking (`TbLeg::FlickAt`; 0.15 s smoothstep). 71 legs now (the per-leg arrays are 96).
+- **A - the lean** (`ApplySpineStability`, MM only): Spine Stability blends the spine toward the reference by
+  `1 - kMmLeanKept` (0.5, + 0.25 toward a sprint) and then gives **`neck_01` and both upper arms back the world orientation
+  the clip had** - the trunk stands up under them, so the head and the arm swing no longer tip back with it. Sprinting, the
+  upper arms' swing is damped 40 % toward the reference's (relative to the chest; `kMmSprintArmDamp`, from 2 to 3.6 m/s).
+- **The references** (`SharedMotionDatabase::Get`): Spine Stability's standing / crouched references are now the median-tilt
+  idle frame of `Stand_Idle_Neutral_Take001` / `Crouch_Idles_Take001` (crouched and searchable). The old "1 s in" crouched
+  frame was the actor still standing (chest tilt 9.4 deg against the take's 33.4): every crouch stood its chest up on bent
+  knees - the owner's "goofy" crouch.
+- **B - the aim's caps:** `Spine Aim Max Up` / `Spine Aim Max Down` (degrees, `FirstPersonBodyComponent`, Inspector "Arms";
+  0 = no cap; AnimTestbed 20 / 35). `FirstPersonBodyCappedSpineAim`: `max * tanh(aim / max)`, by the unarmed share (armed,
+  the arms rig needs the full aim to reach the gun). No pelvis hinge: `SpineDistribution::PelvisAlpha` turns the pelvis
+  *after* foot IK, which would swing the planted legs - the caps alone stopped the fold.
+- **C - turning on the move:** the heading turns at most 450 deg/s while moving (`Settings::MaxMovingYawRate`); under MM
+  the chest leads the view by at most 60 deg (`kMmChestTwistMax`, unarmed); over 240 deg/s of heading turn the foot lock
+  holds nothing (`IK::FootLock::ResetFoot` each frame - a let-go foot's world offset easing out still crossed the legs).
+- **Frames excluded at load for the player** (`MotionDatabase::ExcludeFrames` re-indexes the runway and boxes; the rig's FK
+  per frame in `SharedMotionDatabase::HandOverShoulder`, ~0.1 s):
+  - a hand over its shoulder by more than -0.02 m (the run takes' ends, catching breath with the hands on the head);
+  - standing, under 1 m/s, the chest tilted over 30 deg (the same ends, bent over with the hands on the knees - it won
+    the idle searches);
+  - walk or faster, not strafing, the ankles crossed over 0.10 m (the snakes' and turnarounds' crossover steps - a flick
+    matched them);
+  - airborne frames stay (the jumps play locked); +-6 frames padded. 13975 raw frames, 20083 with the pads (7.5 %).
+- **D - hands near the camera** (`KeepHandsFromEye`, unarmed): each hand at least 0.30 m from the eye (soft max over 0.06 m),
+  the arm re-solved with `IK::SolveTwoBone`, the hand's orientation kept. Running looking down, the swing brought a hand to
+  0.18 m.
+- **Recording:** `NPC_TEST_RECORD` rendered the Game view only while its tab counted as visible - the old run caught 152 of
+  ~4000 frames. It now renders and records every Play frame, at the tab's last size (`Application.cpp`). `mmplayer` records
+  every other frame (30 fps; a full recorded run ~3.5 min).
+- **Checks:** `mmplayer` 45 -> 56: the head not thrown back running, no hand over its shoulder on more than 5 % of a leg, no
+  hand within 0.25 m of the eye, the chest's aim within its caps looking straight up / down (walk, run, standing), the
+  flicks (turn rate, arms, feet). The old look-down torso-bend check now measures the bend the view adds over the gait's own.
+- **Unit test** "Motion matching: player exclusions and the capped aim": `ExcludeFrames` (flags, runway, box = brute, never
+  matched) and `FirstPersonBodyCappedSpineAim`.
+
+**Results (session 2), the same course on both sources** (`[MmPosture]`; legacy = `TARTARUS_LOCOMOTION_SOURCE=legacy`;
+chest and head in degrees off the bind pose, + forward / chin down):
+
+| | legacy | MM before | MM now |
+|---|---|---|---|
+| Run: chest drawn / head (own pitch) | 21 / -6 vs chest | 7 / about -23 (head -30 vs chest) | 31 / +16 |
+| Run: hand over shoulder, highest | -0.22 m | +0.11 m (7 % of frames) | -0.23 m (0 %) |
+| Crouch walk: chest drawn | 74 | 25 (reference standing) | 50 |
+| Look straight down standing / running: chest's aim | +77 / +77 | +77 / +77 | +34 / +34 |
+| Look straight up walking / running: chest's aim | -48 / -48 | -51 / -51 | -20 / -20 |
+| Nearest hand to the eye (any leg) | - | 0.18 m | 0.31 m |
+| Hand over shoulder, worst leg | - | 100 % ("stand up", "stop after flick") | 0 % |
+| Run flick: body turn rate, feet crossed, worst cross | 1762 deg/s, 4 %, 2 cm | 1437 deg/s, 0 %, 0 cm (arms up 9 %) | 450 deg/s, 2 %, 5 cm |
+
+- **Full pass** (`mm_smoke.ps1 testbed npcloco locomotion stopsteps feet labloco mmview mmdb mmplayer -PerfBench
+  tests\perf-scenes\perf_stress.json`, `D:\mm_phase4\fullpass`): **all PASS** - unit 53186 checks, smoke 21/21, testbed
+  29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18, mmplayer 56/56
+  (5.56 ms/frame, 180 fps), perf edit 3.11 / play 6.03 ms (Phase 3: 3.15 / 6.02).
+- **Baseline comparison** (`baseline_summary.py` -> `D:\mm_phase4\summary2`): every legacy number is unchanged (foot slide,
+  clip speeds, checks); the baseline's broken-asset log errors are gone; frame costs within noise.
+- **Recording for the owner:** `D:\mm_phase4\mmplayer_phase4.mp4` (Scene view left, Game view right, 30 fps).
+- Visual review (contact sheets of the recordings, 0.1 s): the run leans with a compact swing; the crouch walk is hunched,
+  hands by the knees; looking down the body bends a little and the arms hang; looking up there is no arch; the flick turns
+  without the arms going up.
+
+**The owner's play test 3 (2026-11-17 09:21, 16 s; fixed):** the sprint "limps" and its arms look weird; turning while
+sprinting "does a stop which disturbs the flow". Contact sheets: the turns at 1.9-2.9 and 7.9-8.3 s sank almost to a kneel
+and drove off in a sprint start; the straight sprint was uneven stride to stride.
+- **Cause: the pack has no sustained straight sprint** (a 9 m capture area): every straight run over 3.2 m/s is a 1-2.5 s
+  fragment between a start and a stop (`Run_CardLong` 2.5 s, `Run_Loop` 1.9 s, the `AccelerationDeceleration` takes 1-2.5 s;
+  only `Run_Circles` runs on, at 2.6-3.0 m/s, curving). Held at 3.91 m/s the matcher stitched fragments of three takes, ~3
+  jumps a second (the limp); the run slowing in turns (to the jog strafe's 1.32 m/s) fell into their stops and starts.
+- **The sprint loop** (`SharedMotionDatabase::FindSprintLoop`, `FirstPersonBodyMotion::Tick`): at load, the cleanest steady
+  straight stride - frames searchable, standing, 3.2-4.8 m/s, turning under 25 deg/s, speed within 0.6 m/s, 0.5-0.95 s long,
+  the seam (sum of the 41 bones' angles + feet / pelvis velocity + pelvis height) smallest. This bake: **`Run_Loop_Take001`
+  4.63-5.23 s, 36 frames, 4.38 m/s, seam 3.99**. Sprinting ahead, grounded, the capsule over 0.85 of the run speed and the
+  heading settled (under 90 deg/s for 0.15 s - entered out of a reversal's pivot, the dead blend carried crossing legs into
+  it), the loop plays locked from the frame whose features match the pose now; its end wraps to its start
+  (`MotionMatcher::LoopTo`: dead-blended, not a jump); speed warping as before. Out under 0.55 of the run speed, off the
+  sprint, crouched or airborne (a jump keeps its own lock). The foot lock resets as it starts.
+- **Turns:** the run slows at most 6 m/s^2 sideways (was 3) and never under 0.65 of the run speed (was the jog strafe's
+  1.32 m/s), so a turn stays on the loop.
+- **Arms:** the 40 % sprint arm damping is off (`kMmSprintArmDamp` 0) - toward the idle's hang relative to a leaning chest it
+  swept the arms back stiff; the loop's own swing is used.
+- **The head:** at most 15 deg chin down (`kMmHeadDownMax`, taken out at `neck_01`): the loop's runner stares at the ground.
+- **Results** (`mmplayer` 57/57): `M run` on the loop 100 %, 0.3 jumps/s (was 3.0); `M run turning` 3.90 m/s against 3.91
+  straight, 100 % on the loop, no jumps; the run flick's feet never cross (gap +1 cm; was 7 %, 19 cm on loop entry); run
+  head 17 deg (was 38 with the loop, before the limit).
+- New checks: the straight sprint on the loop >= 80 % at <= 1 jump/s; the sprint carries through a 60 deg/s turn (>= 85 % of
+  the straight speed, on the loop); the head -10..20 deg running; a jump's landing may resume on the loop.
+
+**The owner, after play test 3 (2026-11-17):** "the sprint loop doesn't seem seamless", "crouch still looks off", the arms
+looking down standing still look awkward ("the hand motions while walking or running are fine"), then "stress test it".
+- **The loop, crossfaded** (`SharedMotionDatabase::Loop::Close`, `MotionMatcher::AdjustTarget` / `LoopTo` / `Repose`): no
+  stride in the pack is steady - the best cycle is 3.9 deg per bone (mean) off its start, a thigh 17 deg (every stride in a
+  9 m capture is mid speed-up or slow-down). First a correction spread linearly over the cycle (the end = the start exactly):
+  it shifted the cycle's average pose (the chest +8 deg, a foot out of reach - testbed A's reach check failed). Now a
+  crossfade loop: over the stride's first 12 frames (0.2 s) the frames past its end blend into its start; the wrap is
+  continuous in pose and velocity, the cycle otherwise untouched (no dead blend at the wrap; the hold runs 2 frames past
+  the end so the wrap keeps its fraction). Run pose step p99 19.8 -> 17.8 deg, no spike at the wrap.
+- **The loop's stride, re-picked** (the owner: "are you sure the sprint is correct?"): measured, the first loop was a sprint
+  *start* (`Run_Loop_Take001` 4.63 s - the runner at 0.3 m/s 1.1 s before), cut 3 frames short of its real stride (0.60 s
+  against ~0.64) with the right foot 21 cm off at the seam (a hitch every stride), and slowed to 0.88x. `FindSprintLoop` now
+  cuts on the gait's phase (a left touchdown - the `ContactL` rising edge - to the next), scores the seam on the bones' mean
+  angle (deg) + 2 x the feet / pelvis features (positions and velocities, in their std) + 3 x the speed change across it.
+  The pack has 15 such strides (fast, straight, searchable); every one is 5-12 deg per bone off its start (an arm up to
+  30-80) - no stride repeats. Picked: **`Run_CardLong_noStops_Take001` 6.25-6.87 s, 37 frames, 4.81 m/s** (the top of a long
+  dash). Crossfade 16 frames (0.27 s). **The sprint's speed is now the loop's x 0.95 (4.57 m/s; was the gait table's 3.91)**
+  so it plays near its natural rate (`FirstPersonBodyMotion::SprintSpeed`) - an owner call to keep or revert.
+- The wall check now measures the head's clearance (`BodyDebug::WallHeadGap`): 7.4 cm at least with this stride.
+- **The crouch is the walk, lowered** (`FirstPersonBodyMotion::Settings::CrouchFromWalk`, default; `TARTARUS_MM_CROUCH=pack`
+  for the pack's crouch takes): every crouch take in the pack is one style - a deep, high-knee sneak, hunched over. Tried
+  first: Spine Stability's crouched reference (it was the actor still standing - fixed to the median crouched idle), the hips
+  raised to 0.65-0.72 of standing, the pelvis's forward tilt taken out (0.35-0.6), a chest hinge to 25 deg, the arms to the
+  standing hang - the walk stayed a sneak (knees to the chest). Now crouched the matcher plays standing frames (the walk,
+  strafes, idles, turns), `FirstPersonBody::LowerCrouch` drops the hips 0.27 of the standing pelvis height and re-solves the
+  legs to the walk's feet (knees forward: `TwoBoneHint::BendAxis`), and the crouched reference is the standing one lowered
+  as much with the chest hinged to 25 deg. Crouch pace 0.85 of the walk (1.08 m/s; the walk's data runs out under ~1 m/s),
+  strafe 0.85 of the walk strafe. Crouch walk: pelvis 0.68 m, chest 25 deg, pose step p99 8 deg (the pack crouch ~19).
+  The pack path keeps its fixes (`RaiseCrouch`: hips to 0.72, pelvis un-tilt 0.35; the median crouched reference).
+- **Idle look-down arms** (`RelaxArms`): standing still, looking down past 15 deg (full at 60), the arms go to the standing
+  reference's relaxed hang (upper arms in the model, elbows and wrists local), eased out as a walk starts; on the move the
+  arms keep their motion (the owner). `Spine Aim Max Down` 35 -> 25 (AnimTestbed): standing, people look down with the neck,
+  and at 35 the hanging arms dangled in front of the legs, in view.
+- **The head off walls** (`KeepHeadOffWalls`, MM): the stress test sprinted into a wall - the capsule stops at it, but the
+  gait's lean carried the chest and head ~0.3 m ahead of the capsule, into the wall (the camera stayed out). A sphere cast
+  ahead at head height; the spine tips back (spine_01-05, eased in 30 ms, out 120 ms) to keep the head 8 cm off.
+- **`--npc-test mmstress`** (part S of the testbed course, `TESTBED_PARTS=S`, ~71 s, 30 legs): a zig-zag walk (diagonals
+  flipping every 0.4 s), stop-start walking and sprinting, crouch toggling on the move, jump spam at a sprint, 360 deg/s view
+  spins walking and sprinting, sprint reversals, a strafe circle, a sprint into a wall, up stairs and down the ramp, an 8 s
+  idle, a crouch mid-sprint, a crouched jump. 16 checks: posed every frame, every pose finite, no pop (no bone over 45 deg in
+  a frame - worst 19.8), no hand over its shoulder (> 5 %), the crouch filter and airborne segment hold, the root on the
+  capsule, every stop ends within 20 deg of the view, the spine tips back at the wall, search avg < 1 ms and max < 5 ms (0.39
+  / 1.4). Per-leg table `[MmStress]`. `TbLeg` gained `Move2` / `AltPeriod` / `CrouchPeriod` / `JumpEvery`; the per-leg arrays
+  are 128.
+- **Full pass** (`mm_smoke.ps1 testbed npcloco locomotion stopsteps feet labloco mmview mmdb mmplayer mmstress -PerfBench
+  tests\perf-scenes\perf_stress.json`, `D:\mm_phase4\fullpass2`): **all PASS** - unit 53187 checks, smoke 21/21, testbed
+  29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18, mmplayer 57/57
+  (179 fps), mmstress 16/16, perf edit 3.08 / play 6.03 ms. Baseline (`D:\mm_phase4\summary3`): 71 of 77 rows identical; the
+  6 others differ only by the baseline's broken-asset log errors (gone) and frame cost within noise.
+- Stress findings, judged fine: the zig-zag's crossover steps (13 % of frames, 11 cm), the strafe circle's (16 %), the wall
+  push's search churn (3.7 jumps/s while the capsule is pinned), a teleport onto the ramp playing a turn on the spot.
 
 ### Phase 5: NPCs (unarmed)
 - MM in `NpcBody::Tick` (~195–380), with one shared database.
@@ -526,7 +672,7 @@ registered.
   - When a run fails, diagnose it before running again. Repeat a run only to check for flakiness.
 - Commands (PowerShell):
   - Everything: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 testbed npcloco locomotion stopsteps feet
-    labloco mmview mmdb mmplayer -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
+    labloco mmview mmdb mmplayer mmstress -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
     asset you know is broken, and say so under Open issues.
   - Compare with the baseline: add `-TraceDir <dir>` to `mm_smoke.ps1`, then
     `python tools/mm/baseline_summary.py <log dir> <out dir> --traces <dir>`; diff `SUMMARY.md` and `metrics.json`
@@ -656,8 +802,15 @@ registered.
   - **A ~1 m ledge** is no longer in the player's predicted path (the two-height sweep).
   - **Crouch-strafe matching** passes at 50 % sideways frames - thin data (8 legs).
   - **Two first plants slide** (A walk 7 cm, crouch walk 12 cm).
-  - **`--npc-test mmplayer` records poorly:** the `NPC_TEST_RECORD` run caught 152 frames (2.5 s) - check `RecordStep`
-    and the record path before relying on it for sign-off videos.
+  - *Resolved (session 2):* `--npc-test mmplayer` recorded only while the Game tab counted as visible (152 frames); it
+    now records every frame of Play.
+  - **The player's exclusions are the player's rules** (hands up, bent over, crossed legs: `SharedMotionDatabase::Get`
+    with a rig). Phase 5's NPCs share the database: decide whether they want the same (they likely do).
+  - **The run flick still crosses the feet briefly** (2 % of its frames, 5 cm; legacy 4 %, 2 cm): the matched turnaround's
+    pivot. The heading cap (450 deg/s) is a feel choice - the owner may want it faster or slower.
+  - **Hands in the view looking straight down** (100 % standing, 58 % running) is natural (they hang at your sides); D keeps
+    them 0.30 m from the eye. Owner to judge.
+  - **The chest's aim caps** (20 up / 35 down) are unarmed only; armed keeps the full aim for the arms rig's reach.
   - **The jog (1.85 m/s) has no key** (Shift is the run): an owner decision if a walk / jog / run split is wanted.
 - Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
   (`[NpcLoco]`, `[Locomotion]`, `[StopSteps]`, `[Slide]`).
@@ -668,45 +821,38 @@ registered.
 
 ## Phase 4: next steps (continue on `dev/mm-phase4`)
 
-Phase 4 runs; what's left is how it looks (the owner's play test 2, under "What landed so far"), then the full pass, the
-recordings and the sign-off. Before changing anything, measure each problem against the controller on the same course
-(`TARTARUS_LOCOMOTION_SOURCE=legacy` + `--npc-test mmplayer`).
+Play test 2's problems are fixed, measured against legacy and checked (`mmplayer` 56/56, full pass all PASS). Left:
 
-1. **New metrics** (`BodyDebug` / `MmPlayerDebug`, logged per leg in `[MmPlayer]`):
-   - the chest's pitch from spine_05's *orientation* (not the pelvis -> spine_05 position);
-   - the head's pitch against the chest;
-   - each hand's height against its shoulder, and its distance to the eye;
-   - feet crossing (left foot right of the right one, body frame);
-   - the body's yaw rate.
-   **New part M legs:** run and walk looking up 60 / 85 deg; run looking 85 deg down; a 180 deg view flick running and
-   walking.
-2. **A - Cancel the lean instead of overwriting the spine** (fixes 1, most of 6 and 7). Under MM, in place of
-   `BlendLocomotionSpine`'s "set the spine to idle":
-   - measure the clip chest's pitch and roll off the idle reference's;
-   - turn the spine chain back by stability x that, keeping ~25 % so a run still leans, through `ApplySpineRotation` /
-     `RotateChain`;
-   - the neck, head and arms are its children, so they come round with it; keep the sway damping.
-   Check: running looking level, the head within ~15 deg of the chest and hands above the shoulders under 5 % of frames.
-3. **B - Bound the spine's aim; hinge at the hips** (fixes 2, 3).
-   - New `Spine Aim Max Up` / `Spine Aim Max Down` (degrees, eased, about 20 / 35), applied in `ApplySpineAim`. The
-     per-bone `MaxAngle` also limits the twist.
-   - Part of the look-down goes to the pelvis (`SpineDistribution::PelvisAlpha`), with flatter spine weights.
-   - Keep the eye out of the torso (Look Down Push).
-   Check the chest's pitch within the caps, and the arms (Arm Hang) still hanging.
-4. **C - Turning while moving** (fixes 4, 5).
-   - Cap the body's heading rate while moving (~450 deg/s, `FirstPersonBodyMotion::Settings`): Spine Twist turns the chest
-     to the view first.
-   - Let the foot lock release a planted foot when the heading turns fast.
-   - Log what a flick matches. If it's a few `Transitions_*` / `Stand_to_*_360` stretches with arms raised, penalize
-     hands-above-shoulders frames at `MotionDatabase::Build` (like the glitches), not whole takes.
-   Check: no crossed feet, and arms raised under 5 % of a flick's frames.
-5. **D - Hands near the camera** (6), only if still bad after A-C: unarmed, keep each hand >= ~0.25 m below / away from
-   the eye with a soft `IK::SolveTwoBone` nudge.
-6. Re-run the full pass, compare with `docs/mm_baseline/`, record `mmplayer` for the owner (fix the short recording first;
-   `tools/mm/frames_to_video.py`), relaunch the editor on MM for a play test, update this doc, commit.
+0. **The sprint still doesn't look right to the owner** (2026-11-17, after the re-picked stride). Uncommitted work on this
+   branch (everything since e2dda7f2 - see "What landed in session 2" and after); commit it as WIP first. Root cause, measured:
+   the pack has **no cruising sprint** - only 15 full fast straight strides, each 5-12 deg per bone off its start, no two
+   alike - so any single looped stride repeats one take's quirks every 0.6 s, and every one is a dash (speeding up or slowing
+   down). Options to weigh with the owner before more tuning:
+   - a **mirror-symmetric cycle**: one clean step plus its left/right mirror, crossfaded (needs a bone mirror map; the pack's
+     names are `_l` / `_r`);
+   - a **two-stride loop** or a short *pool* of the best strides, cycled, so it doesn't repeat one take's quirk;
+   - **data**: a dedicated sprint loop (buy / capture) - the cleanest fix;
+   - drop the loop, keep matching the fragments, and accept some stitching (the owner called that "limping").
+   Watch it in the owner's video first (contact sheets every 0.1 s on a straight sprint) and name what reads wrong before
+   changing anything. Also an owner call: the sprint speed (4.57 m/s now, the loop's x 0.95; was 3.91).
+1. **The owner's play test** - no sign-off videos (the owner tests in the editor and reports; `set TARTARUS_LOCOMOTION_SOURCE=mm`,
+   `build\Release\TartarusEngine.exe`, open `project/scenes/AnimTestbed.json`, Play, holster the weapon; the editor locks the
+   exe - `taskkill` it before building). Review any play-test video as before (contact sheets every 0.5 s, the worst stretches
+   every 0.1 s; list everything wrong before fixing).
+2. Fix what that finds, re-run `tools\mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"`; re-record with
+   `NPC_TEST_RECORD=D:\...` + `tools/mm/frames_to_video.py <dir> <out.mp4> --fps 30 --scale 0.75`.
+3. When the owner is happy: mark Phase 4 done and commit (the full pass above is current unless code changes again).
 
-**Play test:** `set TARTARUS_LOCOMOTION_SOURCE=mm` then `build\Release\TartarusEngine.exe`, open
-`project/scenes/AnimTestbed.json`, Play, holster the weapon. The editor locks the exe: close it (`taskkill`) before building.
+## Phase 5: first steps
+
+1. Branch `dev/mm-phase5` from `dev/mm-phase4`, in the main checkout (licensed assets and `build\` only exist there).
+2. `NpcBody::Tick` (~195-380): a `FirstPersonBodyMotion`-like driver per NPC on `SharedMotionDatabase::Get(..., rig)` (one
+   database; decide on the player's exclusions), the trajectory from the navmesh path's corners (`TrajectoryPredictor::Predict`
+   with `goalTurnRate`), LOD (search less often far away, or play on).
+3. Start from the player's `FirstPersonBodyMotion::Settings` (TransitionCost 0.25, MinRunway 8, ForcedPoseWeight 0.25) and
+   Spine Stability's MM path (lean kept, neck / arms keep their world orientation).
+4. Port `npcloco`, `locomotion`, `stopsteps`, `roam`, `labloco`, testbed E and F to MM; add the `[MmPosture]` metrics for the
+   dummy; measure against the legacy baseline first.
 
 ## Phase 3: first steps (done)
 
@@ -810,7 +956,15 @@ recordings and the sign-off. Before changing anything, measure each problem agai
     - measured against legacy;
     - Spine Stability now runs under MM with the database's idle reference;
     - then Arm Hang, for the stiff arms.
-  - The owner's play test 2 found seven posture / turning problems, analysed under Phase 4 and planned in "Phase 4: next
-    steps". Not fixed yet.
+  - The owner's play test 2 found seven posture / turning problems, analysed under Phase 4.
   - The owner asked to continue in a new session. Committed as work in progress; the full pass wasn't re-run after the
     play-test fixes.
+- **2026-11-17, Phase 4 (session 2):**
+  - Added the posture metrics and the new legs; measured MM and legacy on the same course before changing anything.
+  - Fixed A (the lean: neck and arms keep the clip's world orientation), B (aim caps), C (turn cap, chest twist limit, feet
+    free in a fast turn), D (hands off the eye); excluded hands-up, bent-over and crossed-leg frames for the player; fixed the
+    crouched reference (it was standing) and the short recording.
+  - The owner, mid-session: "the sprint and crouch look goofy" - the crouch's reference, more lean kept, the sprint's arm
+    swing damped; reviewed on contact sheets.
+  - Visible runs through `mm_smoke.ps1`: ~10 `mmplayer` runs while working (three recorded), one legacy measurement run,
+    then the full pass, all PASS.

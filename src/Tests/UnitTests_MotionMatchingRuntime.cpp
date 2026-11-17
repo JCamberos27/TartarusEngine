@@ -12,6 +12,7 @@
 #include "../Game/MotionMatching/MotionSearch.h"
 #include "../Game/MotionMatching/RootSynth.h"
 #include "../Game/MotionMatching/TrajectoryPredictor.h"
+#include "../Game/FirstPersonBody.h"
 #include "../Game/FirstPersonBodyMotion.h"
 #include "../Game/Player.h"
 
@@ -600,6 +601,72 @@ void TestCookedDatabaseSearch() {
     CHECK(boxMs < bruteMs);
 }
 
+// Phase 4, the owner's play test 2: frames the player's own pose rules exclude after the build (hands up, bent over, legs
+// crossed) are never matched, the boxes and the runway follow, and the box search is still exactly brute force's; and the
+// spine's aim at the view, capped (unarmed).
+void TestPlayerExclusionsAndAimCap() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    const std::uint32_t n = db.FrameCount();
+    std::vector<char> bad(n, 0);
+    for (std::uint32_t f = 0; f < n; ++f) bad[f] = (f / 50) % 4 == 1; // every fourth run of 50 frames
+    std::uint32_t already = 0, want = 0;
+    for (std::uint32_t f = 0; f < n; ++f) {
+        if (!bad[f]) continue;
+        ++want;
+        if (db.Flags(f) & MotionLabel::Excluded) ++already;
+    }
+    CHECK(db.ExcludeFrames(bad) == want - already);
+    CHECK(db.ExcludeFrames(bad) == 0); // nothing new the second time
+    for (std::uint32_t f = 0; f < n; ++f)
+        if (bad[f]) CHECK((db.Flags(f) & MotionLabel::Excluded) != 0);
+    // The runway stops at an excluded run: a frame just before one has at most the frames to it.
+    int runwayOk = 0, runwaySeen = 0;
+    for (std::uint32_t f = 1; f + 1 < n; ++f)
+        if (!bad[f] && !(db.Flags(f) & MotionLabel::Excluded) && bad[f + 1] && db.ClipOf(f) == db.ClipOf(f + 1)) {
+            ++runwaySeen;
+            if (db.Runway(f) <= 1) ++runwayOk;
+        }
+    CHECK(runwaySeen > 0 && runwayOk == runwaySeen);
+    std::mt19937 rng(5);
+    std::uniform_int_distribution<std::uint32_t> frame(0, n - 1);
+    std::normal_distribution<float> noise(0.0f, 0.3f);
+    int mismatches = 0, excludedHits = 0;
+    for (int k = 0; k < 200; ++k) {
+        float q[27];
+        FrameQuery(db, frame(rng), q);
+        for (float& x : q) x += noise(rng);
+        MotionSearchParams p;
+        if (k % 2) p.DesiredGait = MotionLabel::Walk;
+        const MotionSearchResult a = MotionSearch::Search(db, q, p);
+        const MotionSearchResult b = MotionSearch::SearchBrute(db, q, p);
+        if (a.Frame != b.Frame || a.Cost != b.Cost) ++mismatches;
+        if (a.Frame >= 0 && bad[(size_t)a.Frame]) ++excludedHits;
+    }
+    CHECK(mismatches == 0);
+    CHECK(excludedHits == 0);
+
+    // The capped aim: no cap or no weight leaves it; small pitches nearly linear; big ones flatten under the cap; both signs.
+    const float r = kPi / 180.0f;
+    CHECK(FirstPersonBodyCappedSpineAim(85.0f * r, 0.6f, 0.0f, 1.0f) == 0.6f);
+    CHECK(FirstPersonBodyCappedSpineAim(85.0f * r, 0.6f, 20.0f * r, 0.0f) == 0.6f);
+    CHECK(std::abs(5.0f * FirstPersonBodyCappedSpineAim(5.0f * r, 0.6f, 20.0f * r, 1.0f) - 3.0f) < 0.05f);
+    const float up = 85.0f * FirstPersonBodyCappedSpineAim(85.0f * r, 0.6f, 20.0f * r, 1.0f);
+    CHECK(up > 19.0f && up < 20.0f);
+    const float down = -85.0f * FirstPersonBodyCappedSpineAim(-85.0f * r, 0.9f, 35.0f * r, 1.0f);
+    CHECK(down < -33.0f && down > -35.0f);
+    const float half = FirstPersonBodyCappedSpineAim(85.0f * r, 0.6f, 20.0f * r, 0.5f);
+    CHECK(std::abs(half - 0.5f * (0.6f + up / 85.0f)) < 1e-4f);
+    float prev = 0.0f;
+    bool monotonic = true;
+    for (int d = 1; d <= 90; ++d) {
+        const float chest = (float)d * FirstPersonBodyCappedSpineAim((float)d * r, 0.9f, 35.0f * r, 1.0f);
+        monotonic = monotonic && chest >= prev;
+        prev = chest;
+    }
+    CHECK(monotonic); // the chest never stops dead or turns back as the view goes on down
+}
+
 } // namespace
 
 void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
@@ -613,5 +680,6 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: query root space", TestQueryConvention});
     tests.push_back({"Motion matching: matcher end to end", TestMatcherEndToEnd});
     tests.push_back({"Motion matching: player hooks (play rate, lock, gait speeds)", TestPlayerHooks});
+    tests.push_back({"Motion matching: player exclusions and the capped aim", TestPlayerExclusionsAndAimCap});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
 }

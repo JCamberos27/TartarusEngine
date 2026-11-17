@@ -87,7 +87,7 @@ public:
     const std::string& RecordDir() const { return m_RecordDir; }
     // Where a scenario's trace.csv goes: NPC_TEST_TRACE=<dir> (the trace alone, no frames - fast), else NPC_TEST_RECORD's.
     const std::string& TraceDir() const { return m_TraceDir; }
-    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmview" || m_Scenario == "mmdb" ? 1 : 2; } // every frame for the muzzle flame
+    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" || m_Scenario == "mmview" || m_Scenario == "mmdb" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -210,6 +210,7 @@ private:
     // mmplayer (NpcTest_Testbed.cpp): the testbed's parts A and C plus part M on the motion matching body
     void MmPlayerFrame(World& world, const Player& player, int leg, const float (&foot)[3]);
     void MmPlayerChecks();
+    void MmStressChecks();
     struct TestbedRun;
     std::shared_ptr<TestbedRun> m_Tb;
     // doors (NpcTest_Doors.cpp)

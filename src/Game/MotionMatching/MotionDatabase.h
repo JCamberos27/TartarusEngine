@@ -82,6 +82,9 @@ public:
     // playing into one forces a search before it is shown.
     static constexpr float kGlitchDegrees = 35.0f;
     static constexpr int kGlitchPad = 3;
+    // Marks more frames Excluded (a host's own pose rules, e.g. the player's hands-up frames) and rebuilds the runway and
+    // the boxes. Returns how many frames it newly excluded.
+    std::uint32_t ExcludeFrames(const std::vector<char>& bad);
     std::uint32_t GlitchFrames() const { return m_Glitches; } // frames Build excluded for glitches (the pads included)
     // The way down to prone and back up: the baked Excluded (prone) frames are padded by this many seconds either side.
     // Unpadded, a crouched frame on its way down to prone won the crouch search, and its pose (feet 0.7 m behind, the
@@ -116,6 +119,7 @@ public:
 
 private:
     bool Build(std::string* error);
+    void Index(); // the runway and the boxes, from the flags
 
     MotionClipStream m_Stream;
     MotionFeatureSet m_Feat;

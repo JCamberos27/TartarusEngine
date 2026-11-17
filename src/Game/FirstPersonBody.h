@@ -237,8 +237,26 @@ private:
     // turned back `weight` of the way after it, so the arms keep hanging as the chest bends.
     struct ArmHangPose { glm::quat Rot[2]; bool Have[2] = {false, false}; };
     void CaptureArms(std::vector<ArmHangPose>& out) const;
+    // MM crouch: the hips up to kMmCrouchPelvisMin of the standing height, the legs re-solved to the clip's feet (every piece).
+    void RaiseCrouch(float weight);
+    // Crouched from the walk: the hips `drop` (model space) lower, the legs re-solved to the walk's feet, knees ahead.
+    void LowerCrouch(float drop);
+    // The arms by `weight` toward the standing reference's relaxed hang (upper arms in the model, elbows and wrists local).
+    void RelaxArms(float weight);
+    // MM: the spine tipped back so the head stays off a wall ahead (the gait's lean carries it past the capsule).
+    void KeepHeadOffWalls(World& world, float dt);
+    float m_WallLean = 0.0f; // rad
     void HangArms(const std::vector<ArmHangPose>& saved, float weight);
     float ArmDownDeg() const; // the driver's upper arms off straight down (deg, the worse; BodyDebug)
+    // Unarmed: each hand is kept at least kHandEyeMin (eased) from the eye (model space), the arm re-solved (two-bone IK,
+    // the hand's orientation kept), by `weight`. Running looking down, the swing brought a hand up to the lens.
+    void KeepHandsFromEye(const glm::vec3& eyeModel, float weight);
+    const Model* DriverModel() const;
+    // The chest's (spine_05's) turn off the bind pose, model space; false without the bones. Pitch + forward, roll + left.
+    bool ChestTurn(glm::quat& out) const;
+    float ChestPitchDeg() const;
+    // The rest of the posture metrics (BodyDebug), on the pose as drawn and the camera where it ends up.
+    void PostureMetrics(const World& world, const Camera& camera, float dt);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);
     // The spine's per-bone turn, applied bone by bone on every piece. `stepFor(divisor)` gives the turn a bone takes:
@@ -335,6 +353,16 @@ private:
     float m_Twist = 0.0f;          // view heading minus body heading, radians, wrapped
     int m_HeadNode = -1;
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
+    // Posture metrics (BodyDebug): spine_05's and the head's model-space rotations in the bind pose; the heading last frame.
+    glm::quat m_BindChest{1.0f, 0.0f, 0.0f, 0.0f}, m_BindHead{1.0f, 0.0f, 0.0f, 0.0f};
+    bool m_HaveBindPosture = false;
+    float m_RestPelvisY = 0.0f; // the pelvis's height in the bind pose (model space)
+    glm::quat m_BindPelvis{1.0f, 0.0f, 0.0f, 0.0f}; // its rotation there
+    float m_StandPelvisTilt = 0.0f; // rad: the standing reference's pelvis tilt off the bind pose (forward +)
+    float m_MetricYaw = 0.0f;
+    bool m_HaveMetricYaw = false;
+    float m_MmYawRate = 0.0f; // rad/s: the heading's turn this step (motion matching)
+    bool m_MmWasLooping = false; // the sprint loop was playing at the last foot IK
     glm::vec3 m_Eye{0.0f};        // the smoothed eye, model space
     bool m_HaveEye = false;
     // Split poses: each piece's world twin (m_Twins[k] for m_Pieces[k]) and its model instance.
@@ -422,6 +450,8 @@ glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm
 float FirstPersonBodyArmedEyeLift(float pitchRadians);
 // The share of the view's pitch the spine takes: Spine Aim looking up, Spine Aim Down looking down.
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
+// The spine's aim with the chest's pitch capped at `maxRadians` (eased in; 0 = no cap), by `weight` (the unarmed share).
+float FirstPersonBodyCappedSpineAim(float pitchRadians, float spineAim, float maxRadians, float weight);
 // How far segment `a`-`b` must move along unit `dir` for every one of `points` to be at least `clearance` from it:
 // the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
 float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,

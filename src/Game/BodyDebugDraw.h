@@ -29,6 +29,21 @@ struct Snapshot {
     // The upper arms off straight down (deg, the worse of the two, body frame): as the spine's pitch at the view leaves them,
     // and as drawn (unarmed, Arm Hang turns them back to hang).
     float ArmDownAimDeg = 0.0f, ArmDownDeg = 0.0f;
+    // Posture (Phase 4, the owner's play test 2), from the bones' orientations against the bind pose, body frame:
+    // the chest's pitch (spine_05's up off the vertical, deg, + = forward) as the clip has it, after Spine Stability
+    // (before the aim at the view) and as drawn; its roll (+ = toward the body's left); the head's pitch against the
+    // chest (+ = chin down, - = thrown back).
+    float ChestPitchClipDeg = 0.0f, ChestPitchStableDeg = 0.0f, ChestPitchDeg = 0.0f, ChestRollDeg = 0.0f, HeadPitchDeg = 0.0f;
+    float HeadWorldPitchDeg = 0.0f; // the head's own pitch off the bind pose, body frame (+ = chin down)
+    // Each hand (l, r): its height over its shoulder (upper arm bone, m, + = above), its distance to the camera (m), and
+    // whether it is in the view (within 35 deg of the camera's forward and 0.8 m).
+    float HandOverShoulder[2] = {0, 0}, HandToEye[2] = {0, 0};
+    bool HandInView[2] = {false, false};
+    float FeetGap = 0.0f;       // m: left foot minus right along the body's left (< 0: the legs are crossed)
+    float BodyYawRateDeg = 0.0f; // the body's heading's turn rate (deg/s)
+    float WallHeadGap = 9.0f;  // m the head's sphere clears the wall ahead by (< 0: in it; 9 = no wall)
+    float WallLeanDeg = 0.0f;   // deg the spine is tipped back off a wall ahead (KeepHeadOffWalls)
+    float PelvisHeight = 0.0f, PelvisHeightClip = 0.0f; // m over the body's base: as drawn, and as the clip had it
     float FootWeight = 0.0f;      // 0..1: how much foot IK is on
     float FootOffset[2] = {0, 0}; // ground under each foot minus the capsule's (m)
     bool FootPlanted[2] = {false, false};

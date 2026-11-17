@@ -44,7 +44,7 @@ bool LegReachOf(const BodyDebug::Snapshot& s, float& l, float& r) { l = s.LegRea
 bool SpreadOf(const NpcRagdoll& r, float& out) { out = r.StartLimbSpeed(); return true; }
 
 // --- the player's legs (Drive) ---
-enum class TbPart : unsigned char { A, B, C, D, M, Watch };
+enum class TbPart : unsigned char { A, B, C, D, M, S, Watch };
 struct TbLeg {
     const char* Name;
     float Seconds;
@@ -62,6 +62,11 @@ struct TbLeg {
     float JumpAt = -1.0f;             // M: a jump pressed this many seconds into the leg (-1: none)
     float SweepDeg = 0.0f;            // M: the view sweeps this many degrees either side of Yaw (a player looking about) ...
     float SweepHz = 0.0f;             // ... this many times a second
+    float FlickAt = -1.0f;            // M: the view flicks 180 degrees (in 0.15 s) this many seconds into the leg (-1: none)
+    // S (mmstress): the move alternates with Move2 every AltPeriod s; the crouch toggles every CrouchPeriod s; a jump every
+    // JumpEvery s (0: none).
+    glm::vec2 Move2 = glm::vec2(0.0f);
+    float AltPeriod = 0.0f, CrouchPeriod = 0.0f, JumpEvery = 0.0f;
     bool Moving() const { return Move.x != 0.0f || Move.y != 0.0f; }
 };
 // Part M (--npc-test mmplayer only): motion matching's own legs, behind the lane's start (z < 0: open ground).
@@ -79,12 +84,28 @@ TbLeg TbMSweep(const char* name, float seconds, glm::vec2 move, bool sprint, flo
     l.SweepHz = sweepHz;
     return l;
 }
-TbLeg TbMPitch(const char* name, float seconds, glm::vec2 move, bool sprint, float pitch) {
-    TbLeg l = TbM(name, seconds, move, sprint, false, 90.0f);
+TbLeg TbMPitch(const char* name, float seconds, glm::vec2 move, bool sprint, float pitch, float yaw = 90.0f) {
+    TbLeg l = TbM(name, seconds, move, sprint, false, yaw);
     l.Pitch = pitch;
     return l;
 }
+TbLeg TbMFlick(const char* name, float seconds, bool sprint, float yaw, float flickAt) {
+    TbLeg l = TbM(name, seconds, {0, 1}, sprint, false, yaw);
+    l.FlickAt = flickAt;
+    return l;
+}
 const glm::vec3 kMStart(0.0f, 0.05f, -24.0f);
+// Part S (--npc-test mmstress): abuse - inputs flipping faster than a stride, spinning views, walls, stairs at a sprint.
+TbLeg TbS(const char* name, float seconds, glm::vec2 move, bool sprint, float yaw = 90.0f, bool place = false, glm::vec3 at = glm::vec3(0.0f)) {
+    TbLeg l{name, seconds, TbPart::S, move, sprint, place, at, yaw};
+    return l;
+}
+TbLeg TbSAlt(const char* name, float seconds, glm::vec2 move, glm::vec2 move2, float period, bool sprint) {
+    TbLeg l = TbS(name, seconds, move, sprint);
+    l.Move2 = move2;
+    l.AltPeriod = period;
+    return l;
+}
 // Walk is the body's Run Speed (3.26 m/s), the jog its Sprint Speed (4.72).
 const TbLeg kTb[] = {
     {"A settle", 1.5f, TbPart::A, {0, 0}, false, true, {0.0f, 0.05f, 0.0f}},
@@ -147,12 +168,58 @@ const TbLeg kTb[] = {
     TbMPitch("M walk looking down", 3.0f, {0, 1}, false, -60.0f),
     TbMPitch("M run looking down", 3.0f, {0, 1}, true, -60.0f),
     TbM("M stop after look down", 1.5f, {0, 0}, false, false, 90.0f),
+    // The owner's play test 2 (2026-11-17): looking up the body arched back like a limbo; looking straight down running the
+    // upper body folded; a 180 degree flick of the view running threw the arms up and knocked the knees.
+    TbM("M settle for look up", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbMPitch("M walk looking up", 2.5f, {0, 1}, false, 60.0f),
+    TbMPitch("M walk looking straight up", 2.5f, {0, 1}, false, 85.0f),
+    TbMPitch("M run looking up", 2.5f, {0, 1}, true, 60.0f),
+    TbM("M stop after run up", 1.0f, {0, 0}, false, false, 270.0f),
+    TbMPitch("M run looking straight up", 2.5f, {0, 1}, true, 85.0f, 270.0f),
+    TbMPitch("M run looking straight down", 2.5f, {0, 1}, true, -85.0f, 270.0f),
+    TbM("M stop after look up", 1.5f, {0, 0}, false, false, 270.0f),
+    TbM("M settle for flicks", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbMFlick("M run flick 180", 4.0f, true, 90.0f, 2.0f),
+    TbM("M stop after run flick", 1.5f, {0, 0}, false, false, 270.0f),
+    TbMFlick("M walk flick 180", 4.0f, false, 270.0f, 2.0f),
+    TbM("M stop after walk flick", 1.5f, {0, 0}, false, false, 90.0f),
+    // S (mmstress): the motion matching player under abuse.
+    TbS("S settle", 1.0f, {0, 0}, false, 90.0f, true, kMStart),
+    TbSAlt("S zig-zag walk", 4.0f, {-0.7f, 0.7f}, {0.7f, 0.7f}, 0.4f, false),
+    TbSAlt("S stop-start walk", 3.6f, {0, 1}, {0, 0}, 0.3f, false),
+    TbS("S settle 2", 1.0f, {0, 0}, false, 90.0f, true, kMStart),
+    TbSAlt("S stop-start sprint", 4.0f, {0, 1}, {0, 0}, 0.5f, true),
+    [] { TbLeg l = TbS("S crouch toggling walk", 4.0f, {0, 1}, false); l.CrouchPeriod = 0.4f; return l; }(),
+    TbS("S settle 3", 1.0f, {0, 0}, false, 90.0f, true, kMStart),
+    [] { TbLeg l = TbS("S sprint jump spam", 4.0f, {0, 1}, true); l.JumpEvery = 0.6f; return l; }(),
+    TbS("S stop after jumps", 1.0f, {0, 0}, false),
+    [] { TbLeg l = TbS("S view spin walk", 3.0f, {0, 1}, false); l.ViewTurn = 360.0f; return l; }(),
+    [] { TbLeg l = TbS("S view spin sprint", 3.0f, {0, 1}, true); l.ViewTurn = 360.0f; return l; }(),
+    TbS("S settle 4", 1.0f, {0, 0}, false, 90.0f, true, kMStart),
+    TbSAlt("S sprint reversals", 4.0f, {0, 1}, {0, -1}, 0.8f, true),
+    [] { TbLeg l = TbS("S strafe circle", 4.0f, {1, 0}, false); l.ViewTurn = 90.0f; return l; }(),
+    TbS("S stop after circle", 1.5f, {0, 0}, false),
+    TbS("S settle at wall", 1.0f, {0, 0}, false, 90.0f, true, {3.7f, 0.05f, 16.0f}),
+    TbS("S sprint into wall", 3.5f, {0, 1}, true),
+    TbS("S stop at wall", 1.0f, {0, 0}, false),
+    TbS("S settle at stairs", 1.0f, {0, 0}, false, 90.0f, true, {7.0f, 0.05f, -2.5f}),
+    TbS("S sprint up stairs", 3.5f, {0, 1}, true),
+    TbS("S stop on stairs", 1.5f, {0, 0}, false),
+    TbS("S settle for idle", 1.0f, {0, 0}, false, 90.0f, true, kMStart),
+    TbS("S long idle", 8.0f, {0, 0}, false),
+    TbS("S sprint for crouch", 2.0f, {0, 1}, true),
+    [] { TbLeg l = TbS("S crouch mid-sprint", 2.0f, {0, 1}, true); l.Crouch = true; return l; }(),
+    [] { TbLeg l = TbS("S crouched jump", 1.5f, {0, 0}, false); l.Crouch = true; l.JumpAt = 0.3f; return l; }(),
+    TbS("S stand after crouch", 1.0f, {0, 0}, false),
+    TbS("S settle on ramp", 1.0f, {0, 0}, false, 270.0f, true, {-7.0f, 1.6f, 12.0f}),
+    TbS("S sprint down ramp", 2.0f, {0, 1}, true, 270.0f),
+    TbS("S stop after ramp", 1.5f, {0, 0}, false, 270.0f),
     // The dummies' part: the player stands 6 m off the standing dummy (its hitboxes on), looking at it.
     {"EF watch", 1e6f, TbPart::Watch, {0, 0}, false, true, {-1.5f, 0.05f, 9.0f}, 125.0f, -8.0f},
 };
 constexpr int kTbCount = (int)(sizeof(kTb) / sizeof(kTb[0]));
 constexpr int kWatchLeg = kTbCount - 1;
-static_assert(kTbCount <= 64, "per-leg arrays");
+static_assert(kTbCount <= 128, "per-leg arrays");
 constexpr float kNpcBudget = 40.0f; // seconds the dummies' part may take
 
 const glm::vec3 kStandingSpawn(-5.0f, 0.0f, 14.0f);
@@ -160,12 +227,14 @@ const glm::vec3 kStandingSpawn(-5.0f, 0.0f, 14.0f);
 // TESTBED_PARTS: the parts that run (all when unset).
 bool TbPartOn(char part) {
     static const std::string parts = Env::IsSet(Env::Var::TestbedParts) ? Env::Str(Env::Var::TestbedParts) : std::string();
-    if (part == 'M' && parts.empty()) return false; // motion matching's own legs: mmplayer (TESTBED_PARTS ACM) only
+    if ((part == 'M' || part == 'S') && parts.empty()) return false; // motion matching's own legs: mmplayer (ACM) / mmstress (S) only
     return parts.empty() || parts.find(part) != std::string::npos || parts.find((char)(part - 'A' + 'a')) != std::string::npos;
 }
 bool TbDummiesOn() { return TbPartOn('E') || TbPartOn('F'); }
 // A leg runs when its part does; the watch leg always does (the player's checks are made as it starts).
-bool TbLegOn(int leg) { return leg == kWatchLeg || TbPartOn(kTb[leg].Of == TbPart::M ? 'M' : (char)('A' + (int)kTb[leg].Of)); }
+bool TbLegOn(int leg) {
+    return leg == kWatchLeg || TbPartOn(kTb[leg].Of == TbPart::M ? 'M' : kTb[leg].Of == TbPart::S ? 'S' : (char)('A' + (int)kTb[leg].Of));
+}
 
 int TbLegAt(float t, float& into) {
     int leg = 0;
@@ -230,7 +299,7 @@ struct NpcTest::TestbedRun {
         double LoopClip = 0.0, LoopCapsule = 0.0;
         int LoopFrames = 0;
     };
-    LegStats Legs[64];
+    LegStats Legs[128];
     // mmplayer (part M and every leg under motion matching), per leg: steady frames (from 0.5 s in, grounded), the matched
     // frames' labels, the play rate and the raw (unwarped) clip speed against the capsule's, the body's root off the capsule.
     struct MmStats {
@@ -244,13 +313,26 @@ struct NpcTest::TestbedRun {
         float ViewOffMax = 0.0f;             // the body's heading off the view, at most (deg), the steady part
         std::vector<float> Bend, ClipBend, Pitch; // the torso's bend as drawn and as posed, the view's pitch (deg), steady
         std::vector<float> ArmAim, Arm;            // the upper arms off straight down: as the aim left them, as drawn (deg)
-        bool EndAirborne = false, EndLocked = false;
+        // Posture (BodyDebug, the steady part): the chest's pitch as the clip has it, after Spine Stability and drawn; its
+        // roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the view,
+        // with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
+        std::vector<float> ChestClip, ChestStable, Chest, ChestRoll, Head, HeadWorld, HandOver, HandEye, YawRate, Pelvis, PelvisClip;
+        int HandView = 0, HandHigh = 0, Crossed = 0;
+        int Looping = 0; // steady frames on the sprint loop
+        std::vector<float> StepAll; // mmstress: the worst bone's turn every frame (deg), the leg's whole length
+        int NonFinite = 0;          // frames whose pose step wasn't a number
+        float WallLeanMax = 0.0f;   // deg (KeepHeadOffWalls)
+        float WallGapMin = 9.0f;    // m: the head's clearance to a wall ahead, at least
+        float FeetGapMin = 9.0f;
+        bool EndAirborne = false, EndLocked = false, EndLooping = false;
         float EndYawOff = 0.0f;
         float FootHMin[2] = {9.0f, 9.0f}, FootHMax[2] = {-9.0f, -9.0f};
     };
-    MmStats Mm[64];
+    MmStats Mm[128];
+    int MmCrossLogs = 0;
     int MmCrouchWrong = 0, MmAirborneGround = 0, MmFrames = 0, MmPosed = 0, MmBigSteps = 0;
-    bool Jumped[64] = {};
+    bool Jumped[128] = {};
+    int JumpSlot[128] = {};
     float FlatCamMax = 0.0f; // A walk's highest camera off the capsule's eye (steady)
     bool HaveFlat = false;
     bool ResidMissing = false, ReachMissing = false;
@@ -320,21 +402,33 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
         }
         if (L.Equip == 0) weapon.SetEquipped(false);
         if (L.Equip == 1) weapon.SetEquipped(true);
-        if (m_Scenario == "mmplayer") weapon.SetEquipped(false); // Phase 4 is verified unarmed
+        if (m_Scenario == "mmplayer" || m_Scenario == "mmstress") weapon.SetEquipped(false); // Phase 4 is verified unarmed
     }
     R.PrevLeg = leg;
     R.Leg = leg;
     R.Into = into;
-    player.ScriptMove = L.Move;
+    player.ScriptMove = L.AltPeriod > 0.0f && std::fmod(into, 2.0f * L.AltPeriod) >= L.AltPeriod ? L.Move2 : L.Move;
     player.ScriptSprint = L.Jog;
-    player.ScriptCrouch = L.Crouch;
+    player.ScriptCrouch = L.CrouchPeriod > 0.0f ? std::fmod(into, 2.0f * L.CrouchPeriod) >= L.CrouchPeriod : L.Crouch;
+    if (L.JumpEvery > 0.0f) {
+        const int slot = (int)(into / L.JumpEvery);
+        if (slot != R.JumpSlot[leg]) {
+            R.JumpSlot[leg] = slot;
+            if (slot > 0) player.ScriptJump = true;
+        }
+    }
     if (L.JumpAt >= 0.0f && into >= L.JumpAt && !R.Jumped[leg]) {
         player.ScriptJump = true;
         R.Jumped[leg] = true;
     }
     if (L.Aim) m_Target = "testbed"; // sights up: aiming at cover peeks round it
     else m_Target.clear();
-    wantYaw = player.Cam.Yaw = L.Yaw + L.ViewTurn * into + L.SweepDeg * std::sin(2.0f * 3.14159265f * L.SweepHz * into);
+    float flick = 0.0f;
+    if (L.FlickAt >= 0.0f) {
+        const float u = std::clamp((into - L.FlickAt) / 0.15f, 0.0f, 1.0f);
+        flick = 180.0f * u * u * (3.0f - 2.0f * u);
+    }
+    wantYaw = player.Cam.Yaw = L.Yaw + L.ViewTurn * into + L.SweepDeg * std::sin(2.0f * 3.14159265f * L.SweepHz * into) + flick;
     wantPitch = L.Pitch;
 }
 
@@ -385,7 +479,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
         if (s.Frames == 0) s.FootYStart = foot[1];
         s.FootYEnd = foot[1];
         ++s.Frames;
-        if (m_Scenario == "mmplayer") MmPlayerFrame(world, player, leg, foot);
+        if (m_Scenario == "mmplayer" || m_Scenario == "mmstress") MmPlayerFrame(world, player, leg, foot);
         // The gait phase never steps back (wrapped; a hair of noise allowed).
         if (L.Moving() && gaitOk) {
             if (s.HavePrevGait) {
@@ -614,6 +708,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
         // (Logged only: holstered, the body's arms let go of the rig on purpose. The rig's own hands-on-gun through its IK fade is
         // the unit test "IK rig at part weight keeps the hand on the gun".)
         if (m_Scenario == "mmplayer") MmPlayerChecks();
+        if (m_Scenario == "mmstress") MmStressChecks();
         R.Stage = TbDummiesOn() ? 1 : 7; // (the dummies' part left out: done)
         R.StageAt = now;
     }
@@ -871,6 +966,25 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         q.Pitch.push_back(bd.ViewPitchDeg);
         q.ArmAim.push_back(bd.ArmDownAimDeg);
         q.Arm.push_back(bd.ArmDownDeg);
+        q.ChestClip.push_back(bd.ChestPitchClipDeg);
+        q.ChestStable.push_back(bd.ChestPitchStableDeg);
+        q.Chest.push_back(bd.ChestPitchDeg);
+        q.ChestRoll.push_back(bd.ChestRollDeg);
+        q.Head.push_back(bd.HeadPitchDeg);
+        q.HeadWorld.push_back(bd.HeadWorldPitchDeg);
+        q.Pelvis.push_back(bd.PelvisHeight);
+        q.PelvisClip.push_back(bd.PelvisHeightClip);
+        q.HandEye.push_back(std::min(bd.HandToEye[0], bd.HandToEye[1]));
+        q.HandOver.push_back(std::max(bd.HandOverShoulder[0], bd.HandOverShoulder[1]));
+        q.YawRate.push_back(std::fabs(bd.BodyYawRateDeg));
+        if (bd.HandInView[0] || bd.HandInView[1]) ++q.HandView;
+        if (bd.HandOverShoulder[0] > 0.0f || bd.HandOverShoulder[1] > 0.0f) ++q.HandHigh;
+        if (bd.FeetGap < 0.0f) ++q.Crossed;
+        q.FeetGapMin = std::min(q.FeetGapMin, bd.FeetGap);
+        if (bd.FeetGap < -0.05f && std::string(kTb[leg].Name).find("flick") != std::string::npos && ++R.MmCrossLogs <= 24)
+            std::printf("[MmPosture] %6.2f s %-20s feet crossed %.2f m: playing %s @ %u (gait %d), body yaw rate %.0f deg/s, view off %.0f, planted %d/%d\n",
+                        R.Clock, kTb[leg].Name, bd.FeetGap, mm.Clip.c_str(), mm.Frame, mm.Gait, bd.BodyYawRateDeg, bd.ViewOffsetDeg,
+                        (int)bd.FootPlanted[0], (int)bd.FootPlanted[1]);
     }
     if (!mm.Valid) return;
     const bool crouchFlag = (mm.Flags & MotionLabel::Crouch) != 0;
@@ -881,8 +995,13 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         if (mm.Locked) ++q.AirLocked;
         if (mm.Flags & MotionLabel::Airborne) ++q.AirFlagged;
     }
+    q.WallLeanMax = std::max(q.WallLeanMax, bd.WallLeanDeg);
+    q.WallGapMin = std::min(q.WallGapMin, bd.WallHeadGap);
+    if (std::isfinite(mm.PoseStepDeg)) q.StepAll.push_back(mm.PoseStepDeg);
+    else ++q.NonFinite;
     q.EndAirborne = mm.Airborne;
     q.EndLocked = mm.Locked;
+    q.EndLooping = mm.Looping;
     q.EndYawOff = std::fabs(bd.ViewOffsetDeg);
     q.YawRateMax = std::max(q.YawRateMax, std::fabs(mm.YawRate));
     if (mm.Jumped) ++q.Jumps;
@@ -913,6 +1032,7 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
     if (R.Into >= 0.5f && player.Grounded && !mm.Airborne) {
         ++q.Steady;
         if (mm.Flags & MotionLabel::Strafe) ++q.StrafeFlag;
+        if (mm.Looping) ++q.Looping;
         q.PoseStep.push_back(mm.PoseStepDeg);
         if (mm.PoseStepDeg > 30.0f && ++R.MmBigSteps <= 12)
             std::printf("[MmPlayer] %6.2f s %-24s pose step %.1f deg on %s, playing %s @ frame %u (rate %.2f%s)\n", R.Clock, kTb[leg].Name,
@@ -930,6 +1050,68 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
             q.FootHMax[s] = std::max(q.FootHMax[s], bd.AnimHeight[s]);
         }
     }
+}
+
+// --npc-test mmstress: part S under motion matching. Per leg (logged): jumps a second, the worst bone's turn per frame
+// (p50 / p99 / max, the whole leg), hands over the shoulders, feet crossed, the heading off the view at the end. Checked:
+// matching poses every frame, no non-finite pose, no pop (a bone turning over 45 deg in a frame), no hand over its shoulder
+// on more than 5 % of a leg, the crouch filter and the airborne segment hold, the root on the capsule, the search's time,
+// and every stop ends with the heading within 20 deg of the view.
+void NpcTest::MmStressChecks() {
+    TestbedRun& R = *m_Tb;
+    const MmPlayerDebug::Snapshot& mm = MmPlayerDebug::Info();
+    auto pct = [](std::vector<float> v, float p) {
+        if (v.empty()) return 0.0f;
+        std::sort(v.begin(), v.end());
+        return v[std::min(v.size() - 1, (size_t)std::lround(p * (float)(v.size() - 1)))];
+    };
+    char b[400];
+    std::printf("[MmStress] %-26s %7s %8s %8s %8s %8s %8s %9s %8s %6s\n", "leg", "jumps/s", "step p50", "step p99", "step max", "hand>sh%",
+                "crossed%", "gap min", "end off", "loop%");
+    int pops = 0, nonFinite = 0;
+    float worstStep = 0.0f, worstHigh = 0.0f, rootOff = 0.0f;
+    std::string worstStepLeg, worstHighLeg;
+    for (int i = 0; i < kWatchLeg; ++i) {
+        if (!TbLegOn(i) || kTb[i].Of != TbPart::S) continue;
+        const TestbedRun::MmStats& q = R.Mm[i];
+        const float n = (float)std::max<size_t>(1, q.Chest.size());
+        std::printf("[MmStress] %-26s %7.1f %8.2f %8.2f %8.2f %8.0f %8.0f %9.3f %8.1f %6.0f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
+                    pct(q.StepAll, 0.5f), pct(q.StepAll, 0.99f), pct(q.StepAll, 1.0f), 100.0f * q.HandHigh / n, 100.0f * q.Crossed / n,
+                    q.FeetGapMin, q.EndYawOff, q.Steady ? 100.0f * q.Looping / q.Steady : 0.0f);
+        for (float s : q.StepAll) pops += s > 45.0f;
+        nonFinite += q.NonFinite;
+        if (pct(q.StepAll, 1.0f) > worstStep) { worstStep = pct(q.StepAll, 1.0f); worstStepLeg = kTb[i].Name; }
+        if (q.HandHigh / n > worstHigh) { worstHigh = q.HandHigh / n; worstHighLeg = kTb[i].Name; }
+        rootOff = std::max(rootOff, q.RootOffsetMax);
+        if (!kTb[i].Moving() && !kTb[i].Place && i > 0) {
+            std::snprintf(b, sizeof b, "%s: the heading settles on the view after the abuse (%.1f deg off at the end, < 20)", kTb[i].Name, q.EndYawOff);
+            Check(q.EndYawOff < 20.0f, b);
+        }
+    }
+    Check(R.MmFrames > 0 && R.MmPosed == R.MmFrames, "mmstress: motion matching poses the body every frame (" + std::to_string(R.MmPosed) + " of " +
+                                                         std::to_string(R.MmFrames) + ")");
+    std::snprintf(b, sizeof b, "mmstress: every pose finite (%d frames not) and no pop - %d frames with a bone turning over 45 deg (worst %.1f, %s)",
+                  nonFinite, pops, worstStep, worstStepLeg.c_str());
+    Check(nonFinite == 0 && pops == 0, b);
+    std::snprintf(b, sizeof b, "mmstress: a hand over its shoulder on at most %.0f %% of a leg (%s), <= 5 %%", 100.0f * worstHigh,
+                  worstHighLeg.empty() ? "none" : worstHighLeg.c_str());
+    Check(worstHigh <= 0.05f, b);
+    Check(R.MmCrouchWrong == 0, "mmstress: the crouch filter holds through the toggling (" + std::to_string(R.MmCrouchWrong) + " wrong)");
+    Check(R.MmAirborneGround == 0, "mmstress: airborne frames only in a jump's segment (" + std::to_string(R.MmAirborneGround) + " outside)");
+    std::snprintf(b, sizeof b, "mmstress: the root stays on the capsule (%.1f mm, < 10)", rootOff * 1000.0f);
+    Check(rootOff < 0.01f, b);
+    {
+        // Sprinting into the wall the spine tips back off it (the lean put the head ~0.3 m into the wall).
+        int wall = 0;
+        for (int i = 0; i < kWatchLeg; ++i)
+            if (std::string(kTb[i].Name) == "S sprint into wall") wall = i;
+        std::snprintf(b, sizeof b, "S sprint into wall: the head stays out of the wall - its clearance at least %.3f m (>= -0.02; the spine "
+                                   "tipped back up to %.1f deg); the wall was reached (clearance measured: %s)", R.Mm[wall].WallGapMin,
+                      R.Mm[wall].WallLeanMax, R.Mm[wall].WallGapMin < 1.0f ? "yes" : "no");
+        Check(R.Mm[wall].WallGapMin < 1.0f && R.Mm[wall].WallGapMin >= -0.02f, b);
+    }
+    std::snprintf(b, sizeof b, "mmstress: searches avg %.3f ms (< 1), max %.3f ms (< 5)", mm.SearchMsAvg, mm.SearchMsMax);
+    Check(mm.SearchMsAvg < 1.0 && mm.SearchMsMax < 5.0, b);
 }
 
 void NpcTest::MmPlayerChecks() {
@@ -1013,10 +1195,16 @@ void NpcTest::MmPlayerChecks() {
         std::snprintf(b, sizeof b, "M run: sprinting plays jog-or-faster frames (%.0f %% of %d steady frames, >= 60 %%) at %.2f m/s", 100.0f * share,
                       q.Steady, mean(q.Speed));
         Check(q.Steady > 20 && share >= 0.6f, b);
+        // The sprint loop (the pack has no sustained straight sprint; stitched, it limped): a straight sprint plays it, and
+        // a 60 deg/s turn stays on it at speed - no stop and restart (the owner's play test 3).
+        std::snprintf(b, sizeof b, "M run: the sprint plays the sprint loop (%.0f %% of %d steady frames, >= 80 %%), %.1f jumps a second (<= 1)",
+                      q.Steady ? 100.0f * q.Looping / q.Steady : 0.0f, q.Steady, q.Jumps / std::max(0.1f, kTb[legIndex("M run")].Seconds));
+        Check(q.Steady > 20 && q.Looping >= 0.8f * q.Steady && q.Jumps <= 1.0f * kTb[legIndex("M run")].Seconds, b);
         const TestbedRun::MmStats& t = R.Mm[legIndex("M run turning")];
-        std::snprintf(b, sizeof b, "M run turning: the run slows through a 60 deg/s turn (%.2f m/s against the straight run's %.2f)", mean(t.Speed),
-                      mean(q.Speed));
-        Check(t.Steady > 20 && mean(t.Speed) < 0.9f * mean(q.Speed), b);
+        std::snprintf(b, sizeof b, "M run turning: the sprint carries through a 60 deg/s turn - %.2f m/s against the straight run's %.2f (>= 85 %%), "
+                                   "on the loop %.0f %% of %d steady frames (>= 80 %%)", mean(t.Speed), mean(q.Speed),
+                      t.Steady ? 100.0f * t.Looping / t.Steady : 0.0f, t.Steady);
+        Check(t.Steady > 20 && mean(t.Speed) >= 0.85f * mean(q.Speed) && t.Looping >= 0.8f * t.Steady, b);
     }
     // Turning on the spot.
     {
@@ -1034,13 +1222,14 @@ void NpcTest::MmPlayerChecks() {
         std::sort(v.begin(), v.end());
         return v[std::min(v.size() - 1, (size_t)std::lround(p * (float)(v.size() - 1)))];
     };
-    std::printf("[MmPlayer] %-26s %6s %9s %9s %9s %11s %9s %8s %6s\n", "leg", "jumps/s", "step p50", "step p99", "step max", "view off max",
-                "searches", "by input", "by end");
+    std::printf("[MmPlayer] %-26s %6s %9s %9s %9s %11s %9s %8s %6s %6s\n", "leg", "jumps/s", "step p50", "step p99", "step max", "view off max",
+                "searches", "by input", "by end", "loop%");
     for (int i = 0; i < kWatchLeg; ++i) {
         if (!TbLegOn(i) || !kTb[i].Moving()) continue;
         const TestbedRun::MmStats& q = R.Mm[i];
-        std::printf("[MmPlayer] %-26s %6.1f %9.2f %9.2f %9.2f %11.1f %9d %8d %6d\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
-                    pct(q.PoseStep, 0.5f), pct(q.PoseStep, 0.99f), pct(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd);
+        std::printf("[MmPlayer] %-26s %6.1f %9.2f %9.2f %9.2f %11.1f %9d %8d %6d %6.0f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
+                    pct(q.PoseStep, 0.5f), pct(q.PoseStep, 0.99f), pct(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd,
+                    q.Steady ? 100.0f * q.Looping / q.Steady : 0.0f);
     }
     for (const auto& pair : {std::make_pair("M walk looking about", TbPartOn('A') ? "A walk" : "M crouch walk"),
                              std::make_pair("M run looking about", "M run")}) {
@@ -1064,12 +1253,14 @@ void NpcTest::MmPlayerChecks() {
                     pct(q.Bend, 1.0f), median(q.ArmAim), median(q.Arm), pct(q.Arm, 1.0f));
     }
     // Looking 60 degrees down the torso bends no further than on the locomotion controller (measured 2026-11-17: legacy
-    // median 16-27, worst 27 degrees; motion matching before Spine Stability took it, running 46 and 61).
+    // median 16-27, worst 27 degrees; motion matching before Spine Stability took it, running 46 and 61): the bend the view
+    // adds over the gait's own (as posed, before the aim) - the sprint keeps its lean on purpose (Phase 4, play test 2).
     for (const char* name : {"M look down standing", "M walk looking down", "M run looking down"}) {
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-        std::snprintf(b, sizeof b, "%s: the body doesn't fold at the waist - the torso bends %.1f deg (median; worst %.1f) with the view 60 deg "
-                                   "down, <= 30 (worst <= 40)", name, median(q.Bend), pct(q.Bend, 1.0f));
-        Check(q.Bend.size() > 20 && median(q.Bend) <= 30.0f && pct(q.Bend, 1.0f) <= 40.0f, b);
+        const float added = median(q.Bend) - median(q.ClipBend), worst = pct(q.Bend, 1.0f) - median(q.ClipBend);
+        std::snprintf(b, sizeof b, "%s: the body doesn't fold at the waist - the view 60 deg down bends the torso %.1f deg more than the gait's "
+                                   "own %.1f (median; worst %.1f), <= 30 (worst <= 40)", name, added, median(q.ClipBend), worst);
+        Check(q.Bend.size() > 20 && added <= 30.0f && worst <= 40.0f, b);
     }
     // ... and the arms hang (unarmed) rather than swinging back with the chest: looking down standing, the upper arms as far
     // off straight down as looking level (A walk's median at most, plus 10 degrees).
@@ -1080,13 +1271,76 @@ void NpcTest::MmPlayerChecks() {
                                    "%.1f; looking level %.1f): within 10 of level", name, median(q.Arm), median(q.ArmAim), median(level.Arm));
         Check(q.Arm.size() > 20 && median(q.Arm) <= median(level.Arm) + 10.0f, b);
     }
+    // Posture (the owner's play test 2): every leg's chest, head, hands, feet and turn rate (steady part), logged.
+    std::printf("[MmPosture] %-28s %6s %16s %13s %10s %11s %10s %12s %8s %8s %8s %7s %8s %8s %17s\n", "leg", "pitch", "chest clip/stab", "chest drawn", "roll max",
+                "head p50/min", "head world", "eye-hand min", "hand>sh", "hand max", "in view", "crossed", "gap min", "yaw/s max", "pelvis clip/drawn");
+    for (int i = 0; i < kWatchLeg; ++i) {
+        if (!TbLegOn(i)) continue;
+        const TestbedRun::MmStats& q = R.Mm[i];
+        if (q.Chest.empty()) continue;
+        const float n = (float)q.Chest.size();
+        float rollMax = 0.0f;
+        for (float r : q.ChestRoll) rollMax = std::max(rollMax, std::fabs(r));
+        std::printf("[MmPosture] %-28s %6.0f %7.1f/%7.1f %6.1f/%6.1f %10.1f %5.1f/%5.1f %5.1f/%4.1f %12.2f %7.0f%% %8.2f %7.0f%% %6.0f%% %8.3f %8.0f %8.2f/%5.2f\n", kTb[i].Name,
+                    median(q.Pitch), median(q.ChestClip), median(q.ChestStable), median(q.Chest), pct(q.Chest, 1.0f), rollMax, median(q.Head),
+                    pct(q.Head, 0.0f), median(q.HeadWorld), pct(q.HeadWorld, 0.0f), pct(q.HandEye, 0.0f), 100.0f * q.HandHigh / n, pct(q.HandOver, 1.0f), 100.0f * q.HandView / n, 100.0f * q.Crossed / n,
+                    q.FeetGapMin, pct(q.YawRate, 1.0f), median(q.PelvisClip), median(q.Pelvis));
+    }
+    // The owner's play test 2 (2026-11-17), measured against the controller on this course (Phase 4 handoff). Under MM only.
+    if (mm.Valid) {
+        // 1. Running, the head isn't thrown back: its own pitch (off the bind pose, + chin down) no further back than -10 deg
+        //    (before: the chest stood up under a head the clip had 30 deg back - about -23).
+        for (const char* name : {"A jog", "M run", "M run looking about"}) {
+            if (!TbPartOn(name[0])) continue;
+            const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
+            std::snprintf(b, sizeof b, "%s: the head isn't thrown back or staring down running - its pitch %.1f deg (median; + = chin down), "
+                                       "-10..20", name, median(q.HeadWorld));
+            Check(q.HeadWorld.size() > 20 && median(q.HeadWorld) >= -10.0f && median(q.HeadWorld) <= 20.0f, b);
+        }
+        // 2. No hand over its shoulder (fists at the face, arms flung up) on more than 5 % of any leg's frames, and none within
+        //    0.25 m of the eye (D: KeepHandsFromEye keeps 0.30).
+        int worstLeg = -1;
+        float worstHigh = 0.0f, worstEye = 9.0f;
+        int eyeLeg = -1;
+        for (int i = 0; i < kWatchLeg; ++i) {
+            if (!TbLegOn(i)) continue;
+            const TestbedRun::MmStats& q = R.Mm[i];
+            if (q.Chest.empty()) continue;
+            const float high = (float)q.HandHigh / (float)q.Chest.size();
+            if (high > worstHigh) { worstHigh = high; worstLeg = i; }
+            const float eye = pct(q.HandEye, 0.0f);
+            if (eye < worstEye) { worstEye = eye; eyeLeg = i; }
+        }
+        std::snprintf(b, sizeof b, "mmplayer: a hand over its shoulder on at most %.0f %% of a leg's frames (%s), <= 5 %%", 100.0f * worstHigh,
+                      worstLeg >= 0 ? kTb[worstLeg].Name : "none");
+        Check(worstHigh <= 0.05f, b);
+        std::snprintf(b, sizeof b, "mmplayer: no hand nearer the eye than %.2f m (%s), >= 0.25", worstEye, eyeLeg >= 0 ? kTb[eyeLeg].Name : "none");
+        Check(worstEye >= 0.25f, b);
+        // 3. The spine's aim at the view stays within its caps (unarmed: Spine Aim Max Up 20 / Down 25, eased): the chest as
+        //    drawn off where Spine Stability left it. (Uncapped: -40 / +76 deg - a limbo, a fold.)
+        for (const char* name : {"M look straight down", "M run looking straight down", "M walk looking straight up", "M run looking straight up"}) {
+            const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
+            const float aim = median(q.Chest) - median(q.ChestStable);
+            std::snprintf(b, sizeof b, "%s: the chest pitches %.1f deg with the view (median), within the caps (-21..+26)", name, aim);
+            Check(q.Chest.size() > 20 && aim >= -21.0f && aim <= 26.0f, b);
+        }
+        // 4. A 180 deg flick of the view on the move: the body turns at most 450 deg/s (was ~1440), the arms stay down, and
+        //    the feet barely cross (running, before the crossed-legs exclusion: 10 % of the frames, 31 cm; legacy 4 %, 2 cm).
+        for (const char* name : {"M run flick 180", "M walk flick 180"}) {
+            const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
+            const float crossed = q.Chest.empty() ? 0.0f : (float)q.Crossed / (float)q.Chest.size();
+            std::snprintf(b, sizeof b, "%s: the body turns at most %.0f deg/s (<= 460), hands over the shoulders %d frames, feet crossed on %.0f %% "
+                                       "(<= 5) by at most %.2f m (<= 0.10)", name, pct(q.YawRate, 1.0f), q.HandHigh, 100.0f * crossed, -q.FeetGapMin);
+            Check(q.Chest.size() > 20 && pct(q.YawRate, 1.0f) <= 460.0f && q.HandHigh == 0 && crossed <= 0.05f && q.FeetGapMin >= -0.10f, b);
+        }
+    }
     // Jumps: the airborne segment plays locked, then matching takes over.
     for (const char* name : {"M jump standing", "M run and jump"}) {
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
         std::snprintf(b, sizeof b, "%s: the airborne segment plays label-locked (%d airborne frames, %d locked, %d on airborne-labelled frames) "
-                                   "and matching resumes after the landing (%s)", name, q.AirFrames, q.AirLocked, q.AirFlagged,
-                      !q.EndAirborne && !q.EndLocked ? "yes" : "no");
-        Check(q.AirFrames > 10 && q.AirLocked > 10 && q.AirFlagged > 0 && !q.EndAirborne && !q.EndLocked, b);
+                                   "and matching (or the sprint loop) resumes after the landing (%s)", name, q.AirFrames, q.AirLocked, q.AirFlagged,
+                      !q.EndAirborne && (!q.EndLocked || q.EndLooping) ? "yes" : "no");
+        Check(q.AirFrames > 10 && q.AirLocked > 10 && q.AirFlagged > 0 && !q.EndAirborne && (!q.EndLocked || q.EndLooping), b);
     }
     // The footsteps' per-foot heights are still fed (each foot lifts and plants walking).
     if (TbPartOn('A')) {

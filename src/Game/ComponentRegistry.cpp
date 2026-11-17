@@ -749,6 +749,11 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Spine Aim Down", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimDown), 0.01f,
               "Spine Aim for looking down. Armed, the camera hangs off the shoulders as the arms rig's does, so it clears the\n"
               "chest looking down only as far as the chest pitches with the view: lower it and the torso may be seen from inside.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Spine Aim Max Up", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimMaxUp), 0.5f,
+              "Unarmed: the most (degrees) the chest pitches back with the view looking up, eased in. Past it only the head\n"
+              "looks further. 0 = no limit. (Armed the arms need the full aim to reach the gun.)", 0.0f, 90.0f });
+        m.Fields.push_back({ "Spine Aim Max Down", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimMaxDown), 0.5f,
+              "Unarmed: the most (degrees) the chest pitches forward with the view looking down, eased in. 0 = no limit.", 0.0f, 90.0f });
         m.Fields.push_back({ "Spine Stability", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineStability), 0.01f,
               "Controls lower-body motion reaching the spine, including inherited pelvis sway. Pelvis keeps the full lower-body pose.\n"
               "0 = authored gait; 1 = 10% gait at spine 1, 5% at spine 2, none at spine 3-5. Applies to player and NPCs.\n"
@@ -1030,7 +1035,7 @@ void RegisterEngineComponents() {
         {
             static const std::pair<const char*, const char*> kGroups[] = {
                 {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"},
-                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"}, {"Grip Inset", "Arms"}, {"Finger Curl Extra", "Arms"},
+                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Spine Aim Max Up", "Arms"}, {"Spine Aim Max Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"}, {"Grip Inset", "Arms"}, {"Finger Curl Extra", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},
                 {"Foot IK", "Foot IK"}, {"Foot IK Max Drop", "Foot IK"}, {"Bone Map", "Camera"}, {"Start Stop Clips", "Locomotion"},

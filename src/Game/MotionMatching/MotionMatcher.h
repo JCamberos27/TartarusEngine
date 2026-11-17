@@ -17,6 +17,7 @@
 #include "MotionSearch.h"
 
 #include <array>
+#include <functional>
 #include <vector>
 
 struct LocalTRS;
@@ -53,6 +54,13 @@ public:
     void Update(float dt, const Input& in);
     // Jumps to `frame` now, dead-blending from what is on screen (the airborne segment's entry and exit).
     void ForceFrame(std::uint32_t frame, float dt);
+    // A loop's wrap (Phase 4, the sprint loop): back to `frame`, keeping the fraction, dead-blended over the seam but not
+    // counted as a jump (the seam is chosen to match).
+    void LoopTo(std::uint32_t frame, float dt);
+    // Re-samples this update's target at the (moved) frame and puts it out as is: a closed loop's wrap.
+    void Repose();
+    // Applied to each sampled frame before blending (null: none) - the sprint loop's closing correction.
+    std::function<void(std::uint32_t frame, float frac, MotionPose& pose)> AdjustTarget;
 
     const MotionPose& Pose() const { return m_Out; }
     const MotionPose& Target() const { return m_Target; } // the database's pose this update (before the blend)

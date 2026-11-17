@@ -29,12 +29,12 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
     if (m_Scenario == "locomotion") m_Duration = LocomotionSeconds();
     if (m_Scenario == "npcloco") m_Duration = NpcLocoSeconds();
     if (m_Scenario == "labloco") m_Duration = LabLocoSeconds();
-    if (m_Scenario == "mmplayer") {
+    if (m_Scenario == "mmplayer" || m_Scenario == "mmstress") {
         // The testbed's player parts on the motion matching body (set before Play starts the body).
         if (!Env::IsSet(Env::Var::LocomotionSource)) Env::Set(Env::Var::LocomotionSource, "mm"); // (=legacy: the same course on the controller)
-        Env::Set(Env::Var::TestbedParts, "ACM");
+        Env::Set(Env::Var::TestbedParts, m_Scenario == "mmstress" ? "S" : "ACM");
     }
-    if (m_Scenario == "testbed" || m_Scenario == "mmplayer") m_Duration = TestbedSeconds();
+    if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") m_Duration = TestbedSeconds();
     if (m_Scenario == "mmview") m_Duration = MmViewSeconds();
     if (m_Scenario == "mmdb") m_Duration = MmDbSeconds();
     if (m_Scenario == "flame") m_Duration = 14.0f;
@@ -95,7 +95,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "locomotion") LocomotionDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "npcloco") NpcLocoDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "labloco") LabLocoDrive(player, weapon, dt, wantYaw, wantPitch);
-    if (m_Scenario == "testbed" || m_Scenario == "mmplayer") TestbedDrive(player, weapon, dt, wantYaw, wantPitch);
+    if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") TestbedDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "roam") RoamDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "mmview") MmViewDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "mmdb") MmDbDrive(player, weapon, dt, wantYaw, wantPitch);
@@ -183,7 +183,7 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         LabLoco(world, npcs, player, now);
         return;
     }
-    if (m_Scenario == "testbed" || m_Scenario == "mmplayer") {
+    if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") {
         Testbed(world, npcs, player, now);
         return;
     }

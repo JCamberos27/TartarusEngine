@@ -112,15 +112,6 @@ bool MotionDatabase::Build(std::string* error) {
                 ++m_Glitches;
             }
     }
-    // The runway: back from each take's end, how long the filterable labels stay as they are.
-    m_Runway.assign(n, 1);
-    for (const auto& clip : m_Stream.Clips())
-        for (std::uint32_t k = clip.Count; k-- > 1;) {
-            const std::uint32_t i = clip.First + k - 1;
-            if ((m_Feat.Flags(i) & kRunwayMask) == (m_Feat.Flags(i + 1) & kRunwayMask))
-                m_Runway[i] = (std::uint16_t)std::min<int>(65535, m_Runway[i + 1] + 1);
-        }
-
     // Per-group scale: the mean of the group's standard deviations.
     m_Mean.assign(m_Feat.Mean().begin(), m_Feat.Mean().end());
     m_Scale.assign(kDims, 1.0f);
@@ -134,6 +125,23 @@ bool MotionDatabase::Build(std::string* error) {
     m_Norm.resize((size_t)n * kDims);
     for (std::uint32_t i = 0; i < n; ++i) Normalize(m_Feat.Features(i), m_Norm.data() + (size_t)i * kDims);
     m_Feat.ReleaseFeatureData();
+
+    m_Frames = n;
+    Index();
+    return true;
+}
+
+void MotionDatabase::Index() {
+    const std::uint32_t n = m_Frames;
+    // The runway: back from each take's end, how long the filterable labels stay as they are.
+    m_Runway.assign(n, 1);
+    for (const auto& clip : m_Stream.Clips())
+        for (std::uint32_t k = clip.Count; k-- > 1;) {
+            const std::uint32_t i = clip.First + k - 1;
+            if ((m_Feat.Flags(i) & kRunwayMask) == (m_Feat.Flags(i + 1) & kRunwayMask))
+                m_Runway[i] = (std::uint16_t)std::min<int>(65535, m_Runway[i + 1] + 1);
+        }
+
 
     // Boxes: blocks of 16 and 64 frames over the whole database (a block may straddle two clips; the bounds stay valid).
     const auto boxes = [&](int size, std::vector<Box>& out) {
@@ -158,8 +166,17 @@ bool MotionDatabase::Build(std::string* error) {
     };
     boxes(kSmallBox, m_Small);
     boxes(kLargeBox, m_Large);
-    m_Frames = n;
-    return true;
+}
+
+std::uint32_t MotionDatabase::ExcludeFrames(const std::vector<char>& bad) {
+    std::uint32_t added = 0;
+    for (std::uint32_t i = 0; i < m_Frames && i < (std::uint32_t)bad.size(); ++i)
+        if (bad[i] && !(m_Feat.Flags(i) & MotionLabel::Excluded)) {
+            m_Feat.AddFlags(i, MotionLabel::Excluded);
+            ++added;
+        }
+    if (added) Index();
+    return added;
 }
 
 std::uint32_t MotionDatabase::ClipEnd(std::uint32_t frame) const {

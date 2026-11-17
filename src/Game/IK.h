@@ -196,6 +196,8 @@ public:
     // past what the clip itself asks, so a leg the clip has near straight is not let go for nothing - a planted foot lets
     // go and steps (its lag eased out from the next Step). Returns whether it let go.
     bool Overreach(int s, const FootLockSettings& set, float reach, float own);
+    // Lets a planted foot go now (it steps to catch up): the body turning faster than the lock can follow.
+    void Release(int s, const FootLockSettings& set) { if (m_Foot[s].Locked) LetGo(m_Foot[s], set, true); }
     bool Locked(int s) const { return m_Foot[s].Locked; }
     glm::vec3 Pinned(int s) const { return m_Foot[s].Pin; }
     float LockedTime(int s) const { return m_Foot[s].Time; }
