@@ -81,7 +81,9 @@ shots, a partial reload, six hip shots, a full reload, inspect, mag check, melee
 and 870 fired and reloaded, the slots switched and one scroll notch. It saves 49 named frames of the Scene and
 Game views and runs 19 checks: ammo, ejections by model, the cases at rest, hammer and trigger travel,
 one chamber per hip shot with no backwards spin, the actions and sprint playing, each slot keeping its ammo.
-Leave `TARTARUS_HIDDEN=1` on: a visible window that loses focus pauses Play and the run stalls. The run's
+Since the motion matching Phase 1, harness runs ignore the keyboard, mouse and focus (`Input::SetIgnoreDevices`), and
+`TARTARUS_UNLOCKED_FPS=1` takes VSync and the FPS cap off, so a visible run (`tools/mm_smoke.ps1 revolver -SkipUnit
+-SkipSmoke`) shouldn't stall when it loses focus. That hasn't been confirmed on this scenario yet. The run's
 summary says FAIL only for 4 log errors that predate the revolver (`T_Spider_AO.png`, `worklight_hum_1.wav`).
 
 ## Open items

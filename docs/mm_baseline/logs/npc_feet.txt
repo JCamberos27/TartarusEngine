@@ -1,0 +1,33 @@
+[NpcTest] scenario 'feet', 10 s
+[SmokeTest] Found 1 scene(s) under build\Release\assets\test-scenes
+[SmokeTest] Loading tests\scenes\Arena.json
+[SmokeTest]   undo round-trip OK (103 entities, 146 models, 79 textures, 36 materials)
+[SmokeTest]   model SKM_Socks.fbx bounds (-0.190087,0.0467472,-0.0653764)-(0.189929,0.237614,0.0641001) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model SKM_Sneakers.fbx bounds (-0.223321,-0.00586076,-0.0762834)-(0.223316,0.129395,0.223146) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model SKM_Sport_Pants.fbx bounds (-0.224804,0.102664,-0.111152)-(0.221238,1.09748,0.155762) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model SKM_Hoodie_Hood_Up.fbx bounds (-0.513456,0.915933,-0.14898)-(0.513602,1.82802,0.193645) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model SM_Balaclava_Crime.fbx bounds (-0.10087,1.48343,-0.0896608)-(0.0991287,1.80978,0.146014) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Arms_FP.fbx bounds (-0.554032,0.893856,-0.107699)-(0.553876,1.49888,0.280937) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Young_Head.fbx bounds (-0.128742,1.47966,-0.0861971)-(0.129673,1.80606,0.143353) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Feet_Shoes.fbx bounds (-0.18939,0.0412677,-0.0571187)-(0.189631,0.101517,0.0710999) albedoMap=no uv=1,1+0,0
+[SmokeTest]   model Quantum_Torso.fbx bounds (-0.287943,1.04052,-0.128772)-(0.285624,1.53172,0.147285) albedoMap=no uv=1,1+0,0
+[NpcTest] -> Play
+[NpcTest] dummies started (5 spawn points)
+[NpcTest] feet flat   at (-20.00, 0.02, -27.00): left 8.7 cm, right 8.5 cm over the ground
+[NpcTest] PASS the feet were measured on the flat
+[NpcTest] feet across at (31.70, 0.02, -0.47): left 8.7 cm, right 8.5 cm over the ground
+[NpcTest] FAIL the dummy stands on the ramp (across)
+[NpcTest] PASS both feet on the ramp's surface, across (within 4 cm of the flat's 9 cm)
+[NpcTest] feet uphill at (-31.71, 0.02, -31.70): left 8.7 cm, right 8.5 cm over the ground
+[NpcTest] FAIL the dummy stands on the ramp (uphill)
+[NpcTest] PASS both feet on the ramp's surface, uphill (within 4 cm of the flat's 9 cm)
+[NpcTest] PASS every stage ran
+[NpcTest] 6 checks, 2 failure(s)
+[SmokeTest] FAIL  Arena.json  frames=21600 rendered=561 wall=8.8s fps=64 unfocused=0 loadOk=1 newGlErrors=0 newLogErrors=1 drawCalls=142  variants: 0xf0000000=66504 0x00=3665  cause: 1 new log error(s); 2 of 6 npc check(s) failed; 
+[SmokeTest] ==== Summary ====
+[SmokeTest] FAIL  Arena.json  frames=21600 loadOk=1 newGlErrors=0 newLogErrors=1 drawCalls=142  cause: 1 new log error(s); 2 of 6 npc check(s) failed; 
+[SmokeTest] 1 scene(s) - FAILURES DETECTED
+[DecalPerf] frames 560, prepares 1109: prepare 0.0049 ms/frame, submit 0.0006 ms/frame, median 0.0048, p99 0.0152, max 0.082 ms (frame 1), frames over 1 ms 0, over 4 ms 0, dropouts 0
+[DecalPerf]   worst after the first 60 frames: 0.016 ms (frame 117, prepare 0.016) 0.016 ms (frame 427, prepare 0.015) 0.016 ms (frame 330, prepare 0.015) 0.014 ms (frame 89, prepare 0.013) 0.013 ms (frame 152, prepare 0.013) 0.012 ms (frame 253, prepare 0.011)
+
+stderr: [error] Audio: failed to preload 'project/assets/Audio/Ambience/worklight_hum_1.wav'.

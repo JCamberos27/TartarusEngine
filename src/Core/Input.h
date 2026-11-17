@@ -17,6 +17,10 @@ public:
     // Test hook (--editor-tests): the next Update() reads `key` as down for that one frame, even
     // with the window unfocused, so the editor smoke tests can press main-loop keys (F1..F4).
     static void SimulateKeyTap(int key);
+    // Smoke / npc / perf runs: the keyboard, mouse and gamepad read nothing, focused or not (SimulateKeyTap still
+    // works). Their window is visible, so focus comes and goes with whatever the person watching clicks; this way it
+    // can't change the run.
+    static void SetIgnoreDevices(bool ignore);
 
     static bool IsMouseButtonDown(int button);
     static bool IsMouseButtonPressed(int button);  // frame the button went down

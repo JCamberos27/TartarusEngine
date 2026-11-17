@@ -497,6 +497,12 @@ void NpcTest::Feet(NpcDirector& npcs, float now) {
             m_FStage = s;
             const float p[3] = {kRampCentre.x, kRampCentre.y, kRampCentre.z};
             PhysicsWorld::SetNpcFootPosition(n->Cct, p);
+            // The director's own state goes with it: it reads the jump as a speed otherwise (metres in a frame) and eases
+            // the pace down from there, sliding the dummy off the ramp and across the Arena before the measurement.
+            n->Feet = kRampCentre;
+            n->Velocity = glm::vec3(0.0f);
+            n->PushVel = glm::vec3(0.0f);
+            n->FallSpeed = 0.0f;
         }
     }
     const Stage& cur = kStages[std::max(m_FStage, 0)];

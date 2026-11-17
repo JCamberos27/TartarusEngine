@@ -15,6 +15,7 @@
     /* Harness runs */                                                                                                  \
     X(Hidden, "TARTARUS_HIDDEN", Flag, "keep the window hidden during harness runs")                                  \
     X(Mute, "TARTARUS_MUTE", Flag, "start with the master bus muted")                                                 \
+    X(UnlockedFps, "TARTARUS_UNLOCKED_FPS", Flag, "VSync off and no FPS cap, whatever the prefs say (test runs)")     \
     X(WeaponLab, "TARTARUS_WEAPON_LAB", Flag, "same as --weapon-lab (run-weapon-lab.cmd)")                            \
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
