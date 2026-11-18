@@ -1,4 +1,5 @@
-# Motion matching overhaul: turns a tools/mm_smoke.ps1 log folder into a comparable baseline (docs/mm_baseline/).
+# Motion matching overhaul: turns a tools/mm_smoke.ps1 log folder into a comparable summary, to diff two runs (the legacy baseline
+# it first made, docs/mm_baseline/, went with the legacy locomotion).
 #
 #   python tools/mm/baseline_summary.py <mm_smoke log dir> <out dir> [--traces <mm_smoke trace dir>]
 #
