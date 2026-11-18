@@ -1072,9 +1072,10 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
     of the player or an NPC loads first decides for both.
 - **Open (2026-11-18), from "The player's failing checks":**
   - *Fixed (`dev/mm-bake-roll`):* the bake's twist-flip repair left bones rolled between clips - "The bake's twist roll".
-    **The rebaked `Manny.mmanim` / `.mmdb` are not on the Drive or in the main checkout yet** (the worktree's own copy, and
-    `D:\Jacob\mm_scratch\rollfix4\`, sha256 `ddc2b5e8...` / `73cb3d5a...`). `project/external_assets.csv`'s two rows were
-    already stale before it (74 / 30 MB: an older bake) - update them with the upload.
+    **Installed in the main checkout (2026-11-18, the owner's go-ahead after `-Full`); not on the Drive yet** (sha256
+    `ddc2b5e8...` / `73cb3d5a...`; the database before it backed up at `D:\Jacob\mm_scratch\db_before_rollfix\`, `954d8fc0...` /
+    `a860475b...`). `project/external_assets.csv`'s two rows were already stale before it (74 / 30 MB: an older bake) -
+    update them with the Drive's `Used\` export (`tools/assets/asset_manifest.py`; the owner's OK first).
   - **`A jog` 2.6 jumps/s** (the pack's short jog straights), **the looking-about jump rates** (tight turns at a walk / jog),
     **`M strafe right (walk)` 0.72** (the walk-right strafes' trajectory direction fit) - reported, limits unchanged.
 - Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
@@ -1506,12 +1507,17 @@ The repair now:
   70 left as captured (their reading was ambiguous; frames still over 35 deg a frame, excluded at load, 216 -> 204).
 Unit tests: the chain riding a thigh flip with the knee bent, and a flip over three frames (57 deg each) and back.
 
-**Rebaked** (`--bake-motion`, 55 s; budgets: poses 178.1 / 200 MB, features 26.9 / 40, load 0.33 / 2 s) into the worktree only
-(the main checkout's database is hard-linked into other worktrees: unlinked here first, not overwritten). `-Quick mmview mmdb`
+**Rebaked** (`--bake-motion`, 55 s; budgets: poses 178.1 / 200 MB, features 26.9 / 40, load 0.33 / 2 s) into the worktree
+(the main checkout's database is hard-linked into other worktrees: unlinked here first, not overwritten), then - `-Full` as
+before - installed in the main checkout (its own files: the other worktrees keep the old ones; its build loads it, the cooked
+search 0 mismatches, load 1.30 s). `-Quick mmview mmdb`
 on it (`-Parallel 1`): unit 53,891 / 0 failures; mmplayer 97/101 (the same four), mmstress 16/16, mmview 12/12, mmdb 18/18.
 Against the old database, the 84 mmplayer legs: pose step p99 mean 7.84 -> 7.65 deg, trajectory error 0.163 -> 0.159 m, jumps
 172.3 -> 173.8 a second summed (`M settle for flicks` +2, a placement leg); `M crouch idle` p99 14.9 -> 7.8; mmstress
 `S stop-start walk` p99 22.4 -> 9.8, worst 22.8 -> 10.8 deg (the blend between rolled calves gone).
+`-Full` on it (`-Parallel 1`), against the old database's: the same results - all pass but mmplayer's four and npcloco's `walk
+left` (2.40 jumps/s, unchanged); the dummies' pose step p99 walk right 8.20 -> 7.42, walk to home 8.56 -> 7.27, walk back 7.77 ->
+7.53 deg (its jumps 1.33 -> 2.00 a second, within its 2.3).
 
 ## Phase 5: first steps (done - see above)
 
@@ -1675,4 +1681,4 @@ Against the old database, the 84 mmplayer legs: pose step p99 mean 7.84 -> 7.65 
 - **2026-11-18, the bake's twist roll (`dev/mm-bake-roll`):** `RepairGlitches` finds flips as runs, lets a riding chain ride
   back, pairs each flip with its flip back and keeps a bone's correction only if it rolls the bone no further; a `rolled` bake
   report. Rolled bone-frames 43,181 -> 861 (3,357 as captured). Rebaked into the worktree; `-Quick mmview mmdb` as before or
-  better. Not yet on the Drive or in the main checkout.
+  better; `-Full` the same results. Installed in the main checkout (the old one backed up on D:); not on the Drive.
