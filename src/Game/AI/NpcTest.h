@@ -44,10 +44,10 @@ class World;
 //            high three-quarter, ground level), and checked every frame: no part of a body inside another (self-collision),
 //            none inside the ground, no joint past its range, the body asleep in time; then the corpses stay while looked at and
 //            go once the view turns away
-//   decals   (tests/scenes/Apartment Hallway.json) rounds and blood put on a corridor wall and floor at fixed spots, shot from
+//   decals   (tests/scenes/DoorsLab.json) rounds and blood put on a corridor wall and floor at fixed spots, shot from
 //            fixed Scene-view cameras: the before/after of bullet holes and blood moving to the clustered decals
 //            (NpcTest_Decals.cpp, docs/DECALS.md)
-//   doors    (tests/scenes/Apartment Hallway.json, no dummies) every door opened and the player walked through each one five ways -
+//   doors    (tests/scenes/DoorsLab.json, no dummies) every door opened and the player walked through each one five ways -
 //            straight, grazing the hinge jamb, grazing the latch jamb, strafing, sprinting on a diagonal - each pass measured:
 //            through in time, the speed kept within half a metre of the wall, time stuck, frames inside anything
 //            (NpcTest_Doors.cpp)
@@ -224,7 +224,7 @@ private:
         glm::vec3 Centre{0.0f};  // the opening's middle, on the floor in the wall's plane
         glm::vec3 Normal{0.0f};  // through the opening (the leaf's +Z)
         glm::vec3 Along{0.0f};   // along the wall, toward the latch side
-        float Half = 0.46f;      // half the opening's width (Apartment Hallway's 0.92 m)
+        float Half = 0.46f;      // half the opening's width (the apartment's 0.92 m, DoorsLab's doors too)
         bool Pack = false;       // an imported pack's door: its runs stop short of the furniture either side (DoorsPassSetUp)
         float Thick = 0.0f;      // the leaf's thickness (a pack door)
         float Swing = 1.0f;      // the side of the wall it opens to: +1 along Normal, -1 back (Swing Back)

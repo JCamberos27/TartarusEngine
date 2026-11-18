@@ -1,6 +1,14 @@
-// --npc-test doors: the player walked through every door of Apartment Hallway, all of them open - straight, grazing either
-// jamb, strafing and sprinting on a diagonal - and measured on each pass: how long it took, how much of the asked-for speed
+// --npc-test doors: the player walked through every door of DoorsLab, all of them open - straight, grazing either jamb,
+// strafing and sprinting on a diagonal - and measured on each pass: how long it took, how much of the asked-for speed
 // survived within half a metre of the wall, how long it was stuck, and whether the capsule ever ended up inside anything.
+// DoorsLab (tools/scenes/build_doors_lab.py, out of the Apartment Hallway 2026-11-18) has the apartment's doors - Door_Op_1
+// front and interior frames and leaves, the same 0.92 m openings in 15 cm walls, hinged and swung the same way - six of
+// them (one on the upper floor) where the hallway had eighteen: 30 passes and 3 shut checks, where it ran 90 and 3. The
+// scene's player is LocomotionLab's (Ground Accel / Decel 0.08 / 0.10 s, where the hallway's was 0.12 / 0.15) with the
+// hallway's 0.22 m capsule: the standard 0.30 grazing the hinge jamb keeps 0.14 of its speed (build_doors_lab.py). The passes'
+// times and speeds aren't comparable with the hallway's.
+// The speed is judged against the speed asked for (the player's wish): under motion matching that's the gait's speed for the
+// stick, not Move Speed - against Move Speed a clean straight pass read 0.83 (3.3 of 4.0 m/s), in the hallway as here.
 #include "NpcTest.h"
 #include "Components.h"
 #include "GameModuleAPI.h"
@@ -51,7 +59,7 @@ void NpcTest::DoorsSetUp(World& world) {
         d.Normal = Flat(glm::vec3(m[2]));
         d.Along = Flat(glm::vec3(m[0])); // toward the latch side (a left hinge's pin is at local -X)
         d.Centre = glm::vec3(m[3]) + d.Normal * kDoorWallZ;
-        d.Centre.y = 0.0f;
+        // (y: the leaf's origin, on its own floor - the hallway's are all at 0, DoorsLab's 201 Front Door on the upper floor)
         d.Leaf = (std::uint32_t)entt::to_integral(e);
         m_DDoors.push_back(d);
     }
@@ -234,7 +242,10 @@ void NpcTest::Doors(World& world, const Player& player) {
         r.Time += dt;
         const float along = glm::dot(feet - d.Centre, r.Dir);
         const glm::vec3 v = (feet - r.Prev) / dt;
-        const float speed = glm::length(glm::vec2(v.x, v.z)), ratio = speed / std::max(r.Speed, 0.01f);
+        // Against the speed asked for: the player's wish (motion matching's gait speed for the stick - a walk forward asks
+        // ~3.3 m/s, not Move Speed's 4.0), else Move Speed (x Sprint Multiplier) when nothing is asked yet.
+        const float asked = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z));
+        const float speed = glm::length(glm::vec2(v.x, v.z)), ratio = speed / std::max(asked > 0.1f ? asked : r.Speed, 0.01f);
         // Judged once up to speed (past the accel ramp) and near the wall.
         // (A pack run can start inside kNear, short of a room's furniture: its first steps up to speed don't count.)
         if (std::abs(along) <= kNear && (!d.Pack || r.Time > 0.3f)) r.MinRatio = std::min(r.MinRatio, ratio);

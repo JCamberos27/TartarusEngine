@@ -1278,8 +1278,18 @@ MB, 1,596 objects); they now run on `tests/scenes/LocomotionLab.json`'s open flo
 `kCourse` (-15, -17) - clear of labloco's lane, the ledge and the stairs - every leg the same distances as in 301 (`CourseAt`,
 `SmokeHarness.cpp`'s scene map). npcloco: 108 s wall at 73 fps (was 273 s at 10 fps three runs at once in the apartment). Every
 scenario of the motion matching pass is now on a light test scene: LocomotionLab (labloco, mmview, mmdb, npcloco, locomotion,
-stopsteps), AnimTestbed (115 KB: testbed, mmplayer, mmstress), Arena (169 KB: feet). Still in the apartment and not in this
-pass: `roam`, `doors`, `decals` - they test the building itself (its doors, its navigability, decals on its walls).
+stopsteps), AnimTestbed (115 KB: testbed, mmplayer, mmstress), Arena (169 KB: feet). The last three, `roam`, `doors` and
+`decals` (they test the building: its doors, its navigability, decals on its walls), moved too (2026-11-18) to
+`tests/scenes/DoorsLab.json` (`tools/scenes/build_doors_lab.py`, 116 KB, 74 objects): six of the apartment's doors (front and
+interior, one on a 1.5 m upper floor up a stair) off a corridor kept at the hallway's coordinates, so the decal spots and
+cameras are unchanged. Nothing goes to Apartment Hallway any more. One at a time: roam 44 s wall at 106 fps (12/12 legs,
+the stairs leg included), doors 48 s at 121 fps (30/30 passes, 3/3 shut checks), decals 55 s at 75 fps (15/15).
+- DoorsLab's player is LocomotionLab's but for the apartment's 0.22 m capsule: at the standard 0.30 every hinge-jamb graze
+  keeps 0.14 of its speed (doors asks 0.5); at 0.22, 0.59.
+- `doors` judged its speed against Move Speed (4.0); motion matching asks the gait's speed (a walk forward 3.3 m/s), so a
+  clean straight pass read 0.83 against the 0.85 asked - it failed in the hallway on this branch too. It now judges against
+  the player's wish (the speed asked for), the limits unchanged.
+- `DoorsSetUp` kept every door on y = 0 (the hallway's one floor); a door's centre is now on its leaf's own floor.
 - **The tuning moved with it.** A scenario runs the scene's own player: LocomotionLab's (= AnimTestbed's, where the owner
   play-tests and mmplayer runs) is Ground Accel / Decel 0.08 / 0.10 s, capsule radius 0.30, its own spine weights; the
   apartment's (= the Forest's) 0.12 / 0.15 s, 0.22. So the three moved scenarios' numbers aren't comparable with
