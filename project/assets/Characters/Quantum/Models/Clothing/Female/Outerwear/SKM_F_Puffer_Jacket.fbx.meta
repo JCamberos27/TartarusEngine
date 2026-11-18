@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear",
+  "guid": "c308b4d7600eb553",
+  "materialRemap": {
+    "MI_Puffer_Jacket_Bege": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Puffer_Jacket/M_Puffer_Jacket_Beige.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

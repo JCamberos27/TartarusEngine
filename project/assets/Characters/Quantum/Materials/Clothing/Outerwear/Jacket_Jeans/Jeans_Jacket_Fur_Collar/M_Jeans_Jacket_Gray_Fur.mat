@@ -1,10 +1,11 @@
 {
+  "alphaCutoff": 0.3333,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Jeans_Jacket_Gray_Fur",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_Jeans_Jacket_Fur_Occlusion.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_Jeans_Jacket_Gray_Fur_BaseColor.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_M_Jeans_Jacket_Fur_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_M_Jeans_Jacket_Fur_Grey_BaseColor_D.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +19,22 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_Jeans_Jacket_Fur_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_M_Jeans_Jacket_Fur_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_M_Jeans_Jacket_Fur_Normal_D.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/T_Jeans_Jacket_Fur_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
+  "renderQueue": 1,
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "5b09cc89ecd31ff7",
-    "_AlbedoMap": "a2bb0df2c8d589b9",
-    "_NormalMap": "1728e8c9c12afea7",
-    "_RoughnessMap": "d6847b6c5b4cfe28"
+    "_AOMap": "5d3280f1bbafc6d4",
+    "_AlbedoMap": "2be087d66174a424",
+    "_MetallicRoughnessMap": "5d3280f1bbafc6d4",
+    "_NormalMap": "fa72d937aa0f280a"
   }
 }

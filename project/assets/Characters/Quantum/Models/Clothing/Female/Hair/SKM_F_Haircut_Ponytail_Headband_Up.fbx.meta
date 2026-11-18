@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
+  "guid": "899d6e757b078ac1",
+  "materialRemap": {
+    "MI_F_Haircut_Ponytail": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Ponytail/M_F_Haircut_Ponytail.mat",
+    "MI_Headband_Red_Pattern": "assets/Characters/Quantum/Materials/Hair/F_Headband_Haircut_Braids/M_Headband_Red_Pattern.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

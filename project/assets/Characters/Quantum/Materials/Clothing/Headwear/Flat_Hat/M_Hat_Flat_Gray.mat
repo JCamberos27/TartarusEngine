@@ -1,0 +1,39 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Hat_Flat_Gray",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Flat_Hat/T_Flat_Hat_Grey_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Flat_Hat/T_Flat_Hat_Grey_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Flat_Hat/T_Flat_Hat_Grey_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Flat_Hat/T_Flat_Hat_Grey_Normal.png",
+    "_NormalStrength": 0.30000001192092896,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "9fd8974ec8b68d60",
+    "_AlbedoMap": "326087e0c8a70c35",
+    "_MetallicRoughnessMap": "9fd8974ec8b68d60",
+    "_NormalMap": "829f543b16b318ba"
+  }
+}

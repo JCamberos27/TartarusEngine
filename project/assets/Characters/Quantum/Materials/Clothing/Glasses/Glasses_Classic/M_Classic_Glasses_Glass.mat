@@ -1,9 +1,10 @@
 {
+  "alphaCutoff": 0.3333,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Classic_Glasses_Glass",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic/T_Classic_Glasses_Glass_Occlusion.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic/T_Classic_Glasses_Glass_OcclusionRoughnessMetallic.png",
     "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic/T_Classic_Glasses_Glass_BaseColor.png",
     "_BaseColor": [
       1.0,
@@ -20,18 +21,20 @@
     "_EmissiveStrength": 1.0,
     "_Metallic": 0.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic/T_Classic_Glasses_Glass_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic/T_Classic_Glasses_Glass_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic/T_Classic_Glasses_Glass_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic/T_Classic_Glasses_Glass_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
+  "renderQueue": 1,
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "6a5410cc6581de44",
+    "_AOMap": "01a08ad8f4f6121f",
     "_AlbedoMap": "4f6d7c812b5d5138",
-    "_NormalMap": "7f9b86d907646062",
-    "_RoughnessMap": "1f64d31ffe14bee1"
+    "_MetallicRoughnessMap": "01a08ad8f4f6121f",
+    "_NormalMap": "c969dca0cc542907"
   }
 }

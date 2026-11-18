@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
+  "guid": "fdd8bf314284439f",
+  "materialRemap": {
+    "MI_F_Haircut_Half_Up": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Half_Up/M_F_Haircut_Half_Up.mat",
+    "MI_F_Haircut_Ponytail": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Ponytail/M_F_Haircut_Ponytail.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

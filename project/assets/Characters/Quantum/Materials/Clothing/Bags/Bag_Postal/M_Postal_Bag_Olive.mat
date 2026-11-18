@@ -1,10 +1,11 @@
 {
+  "alphaCutoff": 0.3333,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Postal_Bag_Olive",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_Occlusion.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_Olive_BaseColor.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_Olive_BaseColor_D.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +19,22 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_Normal_D.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Bag_Postal/T_Postal_Bag_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
+  "renderQueue": 1,
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "cca1eea08d809728",
-    "_AlbedoMap": "5e046e9c08a25190",
-    "_NormalMap": "9d79c7f62f90cca6",
-    "_RoughnessMap": "ee07695484110027"
+    "_AOMap": "d66cbc7390cce94a",
+    "_AlbedoMap": "1b6d512694a5c8f7",
+    "_MetallicRoughnessMap": "d66cbc7390cce94a",
+    "_NormalMap": "9edff6f9e89068e3"
   }
 }

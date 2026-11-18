@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Bags",
+  "guid": "b5c27b06922f0b53",
+  "materialRemap": {
+    "MI_F_Backpack_Casual_Bege": "assets/Characters/Quantum/Materials/Clothing/Bags/Backpack_Casual/M_F_Backpack_Casual_Beige.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

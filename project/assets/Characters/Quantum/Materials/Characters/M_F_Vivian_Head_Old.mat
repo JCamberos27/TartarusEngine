@@ -3,12 +3,12 @@
   "matVersion": 2,
   "name": "M_F_Vivian_Head_Old",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_F_Vivian_Basemesh_Head_Old_Occlusion.1001.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_F_Vivian_Basemesh_Head_Old_BaseColor.1001.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_Vivian_Basemesh_Old_Head_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_Vivian_Basemesh_Old_Head_BaseColor.png",
     "_BaseColor": [
-      1.0,
-      1.0,
-      1.0
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_F_Vivian_Basemesh_Head_Old_Unity_Normal.1001.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_Vivian_Basemesh_Old_Head_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_Vivian_Basemesh_Old_Head_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Female/Old/Head/T_F_Vivian_Basemesh_Head_Old_Roughness.1001.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "3418ffdab69c6e2d",
-    "_AlbedoMap": "326aec239bfc3d36",
-    "_NormalMap": "0cc3deb55d4e955e",
-    "_RoughnessMap": "5466c24c15439866"
+    "_AOMap": "f8d625fcf66c41c4",
+    "_AlbedoMap": "eb5ac049da7de392",
+    "_MetallicRoughnessMap": "f8d625fcf66c41c4",
+    "_NormalMap": "395d66a48be117e9"
   }
 }

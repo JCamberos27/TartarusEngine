@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
+  "guid": "331fe557f2d97bd9",
+  "materialRemap": {
+    "MI_Shirt_Classic_Black": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_Classic/M_Shirt_Classic_Black.mat",
+    "MI_Tie_Black": "assets/Characters/Quantum/Materials/Clothing/Accessories/Tie/M_Tie_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

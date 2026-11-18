@@ -76,9 +76,10 @@ std::vector<std::string> Folders(const std::string& path) {
     return out;
 }
 
-// A hat's name as a haircut suffix: "SKM_F_Hat_Warm" -> "Hat_Warm".
+// A model's name without the pack's mesh prefix: "SKM_F_Hat_Warm" -> "Hat_Warm" (a hat's name as a haircut suffix).
+// A static (SM_) cut or hat and a skinned (SKM_) one compare equal this way: SM_F_Beret fits SKM_F_Haircut_Bobcut.
 std::string HatToken(const std::string& stem) {
-    for (const char* p : {"SKM_F_", "SKM_", "SM_"})
+    for (const char* p : {"SKM_F_", "SM_F_", "SKM_", "SM_"})
         if (StartsWithI(stem, p)) return stem.substr(std::string(p).size());
     return stem;
 }
@@ -335,13 +336,18 @@ void MarkVariants(const Wardrobe& w, std::vector<Item>& items) {
             return i.Sex == like.Sex && i.Slot == like.Slot && IEquals(i.Stem, stem);
         });
     };
+    auto hasCut = [&](const Item& like, const std::string& bare) { // by name without the mesh prefix
+        return std::any_of(items.begin(), items.end(), [&](const Item& i) {
+            return i.Sex == like.Sex && i.Slot == like.Slot && IEquals(HatToken(i.Stem), bare);
+        });
+    };
     for (auto& it : items) {
         it.Variant = false;
         if (it.Slot == w.HairSlot)
             for (const auto& hat : items)
                 if (hat.Sex == it.Sex && hat.Slot == w.HatSlot) {
-                    const std::string t = "_" + HatToken(hat.Stem);
-                    if (EndsWithI(it.Stem, t) && has(it, it.Stem.substr(0, it.Stem.size() - t.size()))) { it.Variant = true; break; }
+                    const std::string t = "_" + HatToken(hat.Stem), bare = HatToken(it.Stem);
+                    if (EndsWithI(bare, t) && hasCut(it, bare.substr(0, bare.size() - t.size()))) { it.Variant = true; break; }
                 }
         for (const auto& rule : w.Pairs)
             if (it.Slot == rule.Slot && EndsWithI(it.Stem, rule.Suffix) &&
@@ -392,31 +398,42 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         }
     }
 
-    // A hat takes the haircut cut for it (Bobcut + Cap -> Bobcut_Cap); without it, the plain cut.
+    // A hat takes the haircut cut for it (Bobcut + Cap -> Bobcut_Cap); without it, the plain cut. Cuts are
+    // compared without their mesh prefix, so a static cut (SM_F_) fits a skinned one's name and back.
     if (auto hair = chosen.find(w.HairSlot); hair != chosen.end()) {
-        std::vector<std::string> tokens;
+        std::vector<const Item*> hats;
         for (const auto& it : catalog)
-            if (it.Sex == request.Sex && it.Slot == w.HatSlot) tokens.push_back(HatToken(it.Stem));
-        std::sort(tokens.begin(), tokens.end(), [](const std::string& a, const std::string& b) { return a.size() > b.size(); });
-        std::string base = hair->second->Stem;
-        for (const auto& t : tokens)
-            if (EndsWithI(base, "_" + t)) { base = base.substr(0, base.size() - t.size() - 1); break; }
-        std::string desired = base;
-        if (auto hat = chosen.find(w.HatSlot); hat != chosen.end()) {
-            const std::string fitted = base + "_" + HatToken(hat->second->Stem);
-            if (find(w.HairSlot, [&](const Item& i) { return IEquals(i.Stem, fitted); })) desired = fitted;
-        }
-        if (!IEquals(desired, hair->second->Stem))
-            if (const Item* alt = find(w.HairSlot, [&](const Item& i) { return IEquals(i.Stem, desired); })) {
-                result.Notes.push_back(hair->second->Name + " -> " + alt->Name);
-                hair->second = alt;
-            }
+            if (it.Sex == request.Sex && it.Slot == w.HatSlot) hats.push_back(&it);
+        std::stable_sort(hats.begin(), hats.end(),
+                         [](const Item* a, const Item* b) { return HatToken(a->Stem).size() > HatToken(b->Stem).size(); });
         // A fitted cut that carries the hat itself (the pack's Bobcut_Cap has the cap in it): the hat goes.
         auto builtIn = [&](const Item& cut, const Item& hat) {
             return std::any_of(w.Excludes.begin(), w.Excludes.end(), [&](const ExcludeRule& e) {
                 return !e.Soft && Matches(e.A, cut) && Matches(e.B, hat);
             });
         };
+        std::string base = HatToken(hair->second->Stem);
+        const Item* fittedTo = nullptr; // the hat the asked-for cut is fitted to (null: a plain cut)
+        for (const Item* h : hats) {
+            const std::string t = "_" + HatToken(h->Stem);
+            if (EndsWithI(base, t)) { base = base.substr(0, base.size() - t.size()); fittedTo = h; break; }
+        }
+        auto cut = [&](const std::string& bare) -> const Item* {
+            if (IEquals(HatToken(hair->second->Stem), bare)) return hair->second; // the one asked for, before a namesake
+            return find(w.HairSlot, [&](const Item& i) { return IEquals(HatToken(i.Stem), bare); });
+        };
+        const Item* desired = cut(base);
+        if (auto hat = chosen.find(w.HatSlot); hat != chosen.end()) {
+            if (const Item* fitted = cut(base + "_" + HatToken(hat->second->Stem))) desired = fitted;
+        } else if (fittedTo && builtIn(*hair->second, *fittedTo)) {
+            // No hat asked for, but the cut is the hat too: an outfit read back from its pieces (the hat went into
+            // the cut) keeps it.
+            desired = hair->second;
+        }
+        if (desired && desired != hair->second) {
+            result.Notes.push_back(hair->second->Name + " -> " + desired->Name);
+            hair->second = desired;
+        }
         if (auto hat = chosen.find(w.HatSlot); hat != chosen.end() && builtIn(*hair->second, *hat->second)) {
             result.Notes.push_back(hair->second->Name + " has the " + hat->second->Name + " built in");
             chosen.erase(hat);
@@ -615,7 +632,8 @@ Request Randomize(const Wardrobe& w, const std::vector<Item>& catalog, const Req
 int DefaultLayer(const std::string& slot) {
     static const std::pair<const char*, int> layers[] = {
         {"Shoes", 2}, {"Pants", 3}, {"Top", 4}, {"Outerwear", 6}, {"Collar", 7}, {"Bag", 8}, {"Wrist L", 8},
-        {"Wrist R", 8}, {"Hair", 9}, {"Beard", 9}, {"Glasses", 9}, {"Hat", 10},
+        {"Wrist R", 8}, {"Hair", 9}, {"Beard", 9}, {"FacialHair", 9}, {"Glasses", 9}, {"Hat", 10}, {"Headwear", 10},
+        {"Headphones", 11},
     };
     for (const auto& [name, layer] : layers)
         if (IEquals(slot, name)) return layer;
@@ -623,8 +641,8 @@ int DefaultLayer(const std::string& slot) {
 }
 
 bool DefaultHides(const std::string& slot) {
-    return !IEquals(slot, "Hair") && !IEquals(slot, "Beard") && !IEquals(slot, "Glasses") && !IEquals(slot, "Wrist L") &&
-           !IEquals(slot, "Wrist R");
+    return !IEquals(slot, "Hair") && !IEquals(slot, "Beard") && !IEquals(slot, "FacialHair") && !IEquals(slot, "Glasses") &&
+           !IEquals(slot, "Wrist L") && !IEquals(slot, "Wrist R");
 }
 
 Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& itemPath, bool bodyPart) {

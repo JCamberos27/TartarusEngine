@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
+  "guid": "fd5b03b319af3d35",
+  "materialRemap": {
+    "MI_Headphones_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Headphones/M_Headphones_Beige.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

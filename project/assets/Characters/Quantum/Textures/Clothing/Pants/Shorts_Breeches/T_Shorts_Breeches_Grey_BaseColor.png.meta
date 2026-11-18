@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Pants/Shorts_Breeches",
+  "guid": "79a676cb37b61f9b",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": true,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

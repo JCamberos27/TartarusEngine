@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Hat_Ushanka_Green",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Hat_Ushanka/T_Hat_Ushanka_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Hat_Ushanka/T_Hat_Ushanka_Green_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Hat_Ushanka/T_Hat_Ushanka_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Hat_Ushanka/T_Hat_Ushanka_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "d8bb1daee268f159",
+    "_AlbedoMap": "a4099ded6cae8a00",
+    "_MetallicRoughnessMap": "d8bb1daee268f159",
+    "_NormalMap": "a7f468ec730c2800"
+  }
+}

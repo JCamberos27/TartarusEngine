@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Headwear",
+  "guid": "0bffe91db9b1f94f",
+  "materialRemap": {
+    "MI_Hat_Up": "assets/Characters/Quantum/Materials/Clothing/Headwear/Hat_Up/M_Hat_Up.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

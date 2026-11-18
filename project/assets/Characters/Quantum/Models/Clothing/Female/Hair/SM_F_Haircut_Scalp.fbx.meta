@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
+  "guid": "58cebce0cb362872",
+  "materialRemap": {
+    "Fbx Default Material": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Coat/Fabric/M_Coat_Fabric_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

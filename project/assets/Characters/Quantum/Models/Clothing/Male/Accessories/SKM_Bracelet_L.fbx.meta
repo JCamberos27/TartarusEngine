@@ -2,7 +2,7 @@
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Accessories",
   "guid": "0917a8dfb28d9e50",
   "materialRemap": {
-    "M_Bracelet": "assets/Characters/Quantum/Materials/Clothing/Accessories/F_Bracelet/M_Bracelet.mat"
+    "MI_F_Bracelet": "assets/Characters/Quantum/Materials/Clothing/Accessories/F_Bracelet/M_Bracelet.mat"
   },
   "metaVersion": 1,
   "type": "model"

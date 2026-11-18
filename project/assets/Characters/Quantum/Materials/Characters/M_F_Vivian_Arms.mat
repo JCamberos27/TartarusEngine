@@ -3,12 +3,12 @@
   "matVersion": 2,
   "name": "M_F_Vivian_Arms",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_F_Vivian_Basemesh_Arms_Occlusion.1003.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_F_Vivian_Basemesh_Arms_BaseColor.1003.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_Vivian_Basemesh_Arms_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_Vivian_Basemesh_Arms_BaseColor_1003.png",
     "_BaseColor": [
-      1.0,
-      1.0,
-      1.0
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_F_Vivian_Basemesh_Arms_Unity_Normal.1003.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_Vivian_Basemesh_Arms_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_Vivian_Basemesh_Arms_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_F_Vivian_Basemesh_Arms_Roughness.1003.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "2787b8f26372e3f5",
-    "_AlbedoMap": "21bb97dd0d94faf2",
-    "_NormalMap": "b9b2d6a860128d87",
-    "_RoughnessMap": "68d8c7a89948a617"
+    "_AOMap": "552cca131890b255",
+    "_AlbedoMap": "7c23de9c61652c78",
+    "_MetallicRoughnessMap": "552cca131890b255",
+    "_NormalMap": "a4b3b58976c7424d"
   }
 }

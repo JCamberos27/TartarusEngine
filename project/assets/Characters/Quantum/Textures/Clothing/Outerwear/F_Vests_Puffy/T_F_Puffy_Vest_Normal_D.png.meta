@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Vests_Puffy",
+  "guid": "db0d12c01d9effc5",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

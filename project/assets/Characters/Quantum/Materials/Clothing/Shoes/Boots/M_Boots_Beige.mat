@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Boots_Beige",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Boots/T_Shorts_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Boots/T_Boot_Bege_Base_color.png",
+    "_BaseColor": [
+      0.4959999918937683,
+      0.4959999918937683,
+      0.4959999918937683
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Boots/T_Shorts_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Boots/T_Shorts_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "ca1296097e341c34",
+    "_AlbedoMap": "e272755ec2469c50",
+    "_MetallicRoughnessMap": "ca1296097e341c34",
+    "_NormalMap": "d2a9e45137d09d83"
+  }
+}

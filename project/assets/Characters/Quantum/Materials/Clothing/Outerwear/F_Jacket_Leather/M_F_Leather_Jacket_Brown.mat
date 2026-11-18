@@ -1,10 +1,11 @@
 {
+  "alphaCutoff": 0.3333,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_F_Leather_Jacket_Brown",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_Occlusion.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_Brown_BaseColor.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_Brown_BaseColor_Baked.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +19,22 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_Unity_Normal.png",
-    "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_Roughness.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Jacket_Leather/T_F_Leather_Jacket_Normal_D.png",
+    "_Roughness": 0.8500000238418579,
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
+  "renderQueue": 1,
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "ba691e0777f3ab14",
-    "_AlbedoMap": "e308ba928f281af7",
-    "_NormalMap": "7b09a52d608bc48b",
-    "_RoughnessMap": "c847911c7b06b469"
+    "_AOMap": "23674f2e3bf1a049",
+    "_AlbedoMap": "a9f0230be5039e0c",
+    "_MetallicRoughnessMap": "23674f2e3bf1a049",
+    "_NormalMap": "d3d8c034d8c8ea1a"
   }
 }

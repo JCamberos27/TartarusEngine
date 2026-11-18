@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hair",
+  "guid": "40cb5b324090bcd9",
+  "materialRemap": {
+    "MI_Hair_Long": "assets/Characters/Quantum/Materials/Hair/Hair_Long/M_Hair_Long.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

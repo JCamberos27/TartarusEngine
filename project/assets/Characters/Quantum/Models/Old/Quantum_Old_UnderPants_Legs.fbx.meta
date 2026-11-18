@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Old",
+  "guid": "17e6bb8dbcbe7e21",
+  "materialRemap": {
+    "MI_Quantum_Old_Body": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body_Old.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

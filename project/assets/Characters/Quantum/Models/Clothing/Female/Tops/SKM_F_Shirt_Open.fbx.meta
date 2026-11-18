@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Tops",
+  "guid": "52142cffba20abb4",
+  "materialRemap": {
+    "MI_F_Tank_Top_Gray": "assets/Characters/Quantum/Materials/Clothing/Tops/F_Tank_Top/M_F_Tank_Top_Gray.mat",
+    "MI_Shirt_Open_Blue": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_Hawaiian/Shirt_Open_Blue_Green/M_Shirt_Open_Blue.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

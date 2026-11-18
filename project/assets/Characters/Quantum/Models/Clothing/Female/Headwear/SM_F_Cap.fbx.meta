@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
+  "guid": "fa684a6a1f15b55f",
+  "materialRemap": {
+    "MI_Cap_Gray": "assets/Characters/Quantum/Materials/Clothing/Headwear/Cap/M_Cap_Gray.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

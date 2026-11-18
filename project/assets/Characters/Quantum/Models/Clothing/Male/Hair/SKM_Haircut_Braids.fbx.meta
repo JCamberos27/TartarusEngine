@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hair",
+  "guid": "87cda703c536aad1",
+  "materialRemap": {
+    "MI_F_Haircut_Braids": "assets/Characters/Quantum/Materials/Hair/Haircut_Braids/M_F_Haircut_Braids.mat",
+    "M_F_Haircut_Braids": "assets/Characters/Quantum/Materials/Hair/Haircut_Braids/M_F_Haircut_Braids_Material.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

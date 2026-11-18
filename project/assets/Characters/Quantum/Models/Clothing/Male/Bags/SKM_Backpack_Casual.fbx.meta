@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Bags",
+  "guid": "d79d8b4eec2dfabf",
+  "materialRemap": {
+    "MI_F_Backpack_Casual_Orange": "assets/Characters/Quantum/Materials/Clothing/Bags/Backpack_Casual/M_F_Backpack_Casual_Orange.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

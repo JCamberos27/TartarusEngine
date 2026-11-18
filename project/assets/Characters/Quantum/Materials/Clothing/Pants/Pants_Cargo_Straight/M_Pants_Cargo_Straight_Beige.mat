@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Pants_Cargo_Straight_Beige",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo_Straight/T_Pants_Cargo_Straight_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo_Straight/T_Pants_Cargo_Straight_Bege_BaseColor_D.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo_Straight/T_Pants_Cargo_Straight_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo_Straight/T_Pants_Cargo_Straight_Normal_D.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "f9f9ba7c0d60ca83",
+    "_AlbedoMap": "ad937a574fffe27f",
+    "_MetallicRoughnessMap": "f9f9ba7c0d60ca83",
+    "_NormalMap": "0b57e528d577b760"
+  }
+}

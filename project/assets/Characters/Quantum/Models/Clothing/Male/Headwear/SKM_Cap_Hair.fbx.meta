@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Headwear",
+  "guid": "0cccc766d6310eb2",
+  "materialRemap": {
+    "MI_Cap_Logo": "assets/Characters/Quantum/Materials/Clothing/Headwear/Cap/M_Cap_Logo.mat",
+    "MI_Hair_Long": "assets/Characters/Quantum/Materials/Hair/Hair_Long/M_Hair_Long.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

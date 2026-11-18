@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Afro",
+  "guid": "91251642f8925b49",
+  "materialRemap": {
+    "MI_Quantum_Body_Afro": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body_Afro.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

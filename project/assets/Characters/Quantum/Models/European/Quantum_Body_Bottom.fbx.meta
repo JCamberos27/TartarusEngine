@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/European",
+  "guid": "9dda93405eb3f2f2",
+  "materialRemap": {
+    "MI_Quantum_Body": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

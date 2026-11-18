@@ -3,12 +3,12 @@
   "matVersion": 2,
   "name": "M_TShirt_Tucked_White_Print",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_Occlusion.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_BaseColor.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_BaseColor_D.png",
     "_BaseColor": [
-      1.0,
-      1.0,
-      1.0
+      0.8159999847412109,
+      0.8159999847412109,
+      0.8159999847412109
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_Normal_D.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt_Tucked/T_TShirt_Tucked_White_Print_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "d9d29ef7bce8b806",
-    "_AlbedoMap": "3f1756672f2bdbfc",
-    "_NormalMap": "4fa05e022cf6ad64",
-    "_RoughnessMap": "33d8c34312359d51"
+    "_AOMap": "1484fcd06c955d98",
+    "_AlbedoMap": "1091acf226b6019d",
+    "_MetallicRoughnessMap": "1484fcd06c955d98",
+    "_NormalMap": "d950a94430b389cc"
   }
 }

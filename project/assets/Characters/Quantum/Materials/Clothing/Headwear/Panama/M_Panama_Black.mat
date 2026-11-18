@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Panama_Black",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Panama/T_Panama_ORM.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Panama/T_Panama_Black_BC.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Panama/T_Panama_ORM.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Panama/T_Panama_N.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "7c2fab815b879abf",
+    "_AlbedoMap": "573491771a4bbed7",
+    "_MetallicRoughnessMap": "7c2fab815b879abf",
+    "_NormalMap": "b0b6e0dba2e153b6"
+  }
+}

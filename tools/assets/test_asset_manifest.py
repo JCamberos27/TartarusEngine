@@ -70,6 +70,60 @@ class AssetVerifyTests(unittest.TestCase):
                 self.assertEqual(asset_manifest.verify(str(repo), True), 0)
 
 
+GIT = shutil.which('git')
+
+
+@unittest.skipUnless(GIT, 'prune needs git')
+class AssetPruneTests(unittest.TestCase):
+    """prune lists ignored payloads the CSV doesn't list (a retired pack file still on disk) and deletes them only
+    with --apply; listed payloads, tracked files, .meta files and local leftovers are never touched."""
+
+    def test_prune_dry_run_then_apply(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run([GIT, 'init', '-q', str(repo)], check=True)
+            (repo / '.gitignore').write_text('project/assets/**/*.png\nproject/assets/**/*.bak\n')
+            pack = repo / 'project/assets/Characters/Pack'
+            (pack / 'Old').mkdir(parents=True)
+            files = {
+                'Listed.png': b'keep',          # in the CSV
+                'Old/Retired.png': b'gone',     # ignored, not in the CSV: stale
+                'Old/Retired.png.meta': b'{}',  # not ignored: git's business, never pruned
+                'Old/Notes.png.bak': b'x',      # ignored leftover, not a payload
+                'Readme.txt': b'tracked',       # not ignored
+            }
+            for name, data in files.items():
+                (pack / name).write_bytes(data)
+            (repo / 'project/assets/Other.png').write_bytes(b'outside the folder')
+            with (repo / 'project/external_assets.csv').open('w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['path', 'size', 'sha256'])
+                # The CSV spells folders in git's case; a different case on disk is still the listed file.
+                writer.writerow(['assets/Characters/pack/Listed.png', 4, hashlib.sha256(b'keep').hexdigest()])
+
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                stale = asset_manifest.prune(str(repo), 'project/assets/Characters/Pack')
+            self.assertEqual(stale, ['project/assets/Characters/Pack/Old/Retired.png'])
+            self.assertIn('dry run', out.getvalue())
+            self.assertTrue((pack / 'Old/Retired.png').exists())
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                asset_manifest.prune(str(repo), str(pack), apply=True)  # an absolute folder works too
+            self.assertFalse((pack / 'Old/Retired.png').exists())
+            for name in ('Listed.png', 'Old/Retired.png.meta', 'Old/Notes.png.bak', 'Readme.txt'):
+                self.assertTrue((pack / name).exists(), name)
+            self.assertTrue((repo / 'project/assets/Other.png').exists())
+
+    def test_prune_refuses_a_folder_outside_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / 'project').mkdir()
+            (repo / 'project/external_assets.csv').write_text('path,size,sha256\n')
+            with self.assertRaises(SystemExit):
+                asset_manifest.prune(str(repo), 'tools')
+
+
 POWERSHELL = shutil.which('powershell') or shutil.which('pwsh')
 
 

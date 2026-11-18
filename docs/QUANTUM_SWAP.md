@@ -1,0 +1,139 @@
+# Quantum swap: partial Unity-version pack → complete Modular Casual Bundle
+
+Working log for replacing `project/assets/Characters/Quantum` with the complete Quantum Modular Casual Bundle
+(male + female "Vivian"), exported from Unreal to `D:\Jacob\JCamberos\Quantum - Modular Casual Bundle\`
+(`Export\`, `manifest.json`, `AUDIT_REPORT.md`). The full plan is `Quantum_Swap_Plan.md` (owner's Desktop).
+Branch: `dev/quantum-swap`.
+
+## Phase 0 results (2026-11-18)
+
+All checks ran through the engine's own importer (`TartarusEngine.exe --model-nodes` / `--model-report`, Assimp
+5.4.3), comparing the current repo file with the new export.
+
+### Rig: PASS. Body, heads and races are swapped, not kept
+
+| Pair (old → new) | Bones | Worst world-space difference | Bounds / bind |
+|---|---|---|---|
+| `European/Quantum_Body_Full` → `SKM_Quantum_Body_Full` (the motion-matching target rig) | 353 = 353, same names | 0.003 mm, 0.0001° | identical; pelvis 0.959 m, hands ±0.478 |
+| `European/Quantum_Torso` → `SKM_Quantum_Torso` | 353 = 353 | 0.000 mm | identical |
+| `European/Quantum_Head` → `SKM_Quantum_Head` | same bones | 0.000 mm | identical |
+| `Afro/Quantum_Torso_Afro` → `SKM_Quantum_Torso_Afro` | same | 0.000 mm | identical |
+| `Female/.../SKM_F_Vivian_Body` → `SKM_Vivian_Body` | 163 bones, same | 0.001 mm | identical; pelvis 0.987 m |
+| `Female/.../SKM_F_Vivian_Head` → `SKM_Vivian_Head` | same | 0.001 mm | identical |
+| `SKM_Hoodie`, `SKM_Jeans` → `SKM_Hoodie_Black`, `SKM_Jeans` | same | 0.002 mm (`weapon_l/r` differ by 90°; unused, unweighted) | identical |
+| Female pants, sneakers, legs vs new Vivian body | same | 0.001 mm | identical |
+
+**Two differences to watch:**
+
+1. **Node layout.** The UE export wraps the skeleton in an extra node: `RootNode → <MeshName> → root`, where the old
+   file had `RootNode → root`. The 90° axis rotation is on `RootNode` instead of on `root`, so `root`'s local transform is identity now.
+   World-space poses are identical. Phase 3 confirms motion matching is unaffected (`--unit-tests` rig diff,
+   `--npc-test mmview`, `--npc-test mmdb`, `tools/mm_smoke.ps1`).
+2. **Female hoodie.** The new `SKM_F_Hoodie_*` binds its *leg and finger* bones in a different rest pose than Vivian's body:
+   up to 25 mm on the legs and 54 mm on the fingers. The hoodie isn't weighted to those bones, so it renders the same. Spine,
+   arms and neck match. Female trousers and shoes match exactly. Any garment flagged by a bone-diff check gets a visual check
+   in Phase 1.
+
+### Axis and scale: no settings needed
+
+New FBX files import with the same size, bounds and bind as the old ones with **no** `.meta` `upAxis`/`rootTransform`/`globalScale`
+changes. Assimp's GlobalScale handles the cm units.
+
+### Geometry differences (expected)
+
+- The new body/head files carry the eye, teeth and lacrimal sub-meshes as separate materials (11 slots on `SKM_Quantum_Body_Full`).
+  The old head already had them.
+- Vertex counts are within a few vertices on clothing (UE splits seams slightly differently). Heads have +1-3% vertices.
+- No morph targets are imported, same as today. The face-rig heads carry up to 852 in the FBX; the engine ignores them.
+
+### Materials
+
+- 465 exported material JSONs. **393 use `M_Quantum_Master_Material`** with exactly BaseColor + Normal + ORM (R = AO,
+  G = roughness, B = metal). They map to `.mat` as `_AlbedoMap`, `_NormalMap` + `_NormalFlipY`, and `_MetallicRoughnessMap` + `_AOMap`.
+- The master material is **Masked + two-sided**.
+- `Brightness` varies from 0.09 to 5.0 (107 MIs; most 0.7-1.0). `Saturation` is set on 31 MIs and `Contrast` on 13; those
+  need a baked albedo.
+- 30 hair MIs (`M_Hair_Master`, `M_F_Hair_Master`) plus facial hair: colour comes from `RootColor`/`TipColor` **parameters**
+  over a `T_Root` gradient, with an `Alpha` mask. They need a baked albedo-with-alpha.
+- Eyes, teeth, lacrimal and cartilage use MetaHuman-style shaders. **The engine's existing eye/teeth/brow materials are kept.**
+- Every exported BaseColor PNG is RGBA (Unreal always writes alpha). The importer keeps alpha only where it isn't fully opaque.
+
+### FBX material names: every materialRemap is regenerated
+
+The engine matches `materialRemap` keys on the FBX's material names (`AssetLibrary::ApplyMaterialRemap`).
+- The old Unity-era FBX files used the **slot** names (`M_Hoodie1`, `M_Quantum_Body`).
+- The UE exporter names each FBX material after the **material assigned** to the slot: `SKM_Hoodie_Black` gives `MI_Hoodie_Black`, `SKM_Quantum_Body_Full` gives `MI_Quantum_Body`.
+- When two slots share one material, the later one gets `_<slot index>` (`MI_EyeRefractive_Inst_4`).
+- A slot with no material gets `Fbx Default Material`. That's 55 meshes, mostly the headwear `SM_` ones, whose colour UE sets elsewhere, so their colourway is inferred by name.
+
+The real names of all 1,075 exported FBX files are cached in `tools/quantum/casual_bundle/fbx_materials.json`.
+
+### Other findings
+
+- `SKM_Vivan_Head_FaceRig` has more than 512 bones (the engine's `MAX_BONES`). The face-rig heads are skipped; the regular heads replace the old ones.
+- `.gitignore:81` and `asset_manifest.py` `EXCLUDE_PREFIXES` drop `Textures/Clothing/Hats/` (hats were removed in #501). New headwear uses `Headwear/` folders instead.
+- Wardrobe clothing is found by **folder scan**, so 26 kept items (Inboots pants, `SKM_Boots_Socks`, `Quantum_Arms.fbx`...) have no explicit reference anywhere. The map lists them as `keep-old` rows so the retirement scan can't drop them.
+- Already broken today: the wardrobe's `SM_Glasses_Aviator` override and 6 `project/settings.json` `assetFolders` entries that don't exist.
+
+### Skins: the pack is complete
+
+The UE pack has male skins for European, Afro, Asian, **Old** (European/Old) and Young, and female skins for European, Afro and Old (head).
+So no skin textures need keeping from the old copy.
+
+## Phase 1: import done (2026-11-18)
+
+`python tools/quantum/import_casual_bundle.py --apply`: **0 problems.**
+
+- **Written:**
+  - 211 meshes (105 replaced at their old paths, GUIDs kept; 106 new);
+  - 411 materials (263 replaced, 148 new);
+  - 639 textures (561 cooked, 78 baked: hair colours, plus saturation/contrast/colour-correction albedos).
+- **Retired:** 502 old files (Unity-era maps, the misfiled `Boots_Classic`/`Flip_Flops` copies, sweater mats now `Hoodie_Sweater` colourways, duplicate colour names).
+- **`project/external_assets.csv`:** 7,732 → 7,943 rows (480 removed, 691 added, 159 changed), +1.49 GB.
+- **Kept** (`keep-old` in the map): the keep-list plus every Unity-only clothing item with no Casual Bundle equivalent (`SKM_Boots`, `SKM_F_Boots`, `SKM_F_Bomber`...) and its colourways.
+- **Not importable** (9 headwear meshes): their UE materials point at another Quantum pack, and the export has no textures for them. They are the beret, cowboy hat, top goggles, bandana, headband, front headband, micro headphones, female panama (SM), and bobcut + beret. Listed in `last_import.json` `not_importable`.
+- **Engine limits handled:**
+  - Glasses lenses and the female scalp are translucent in UE; they are rebuilt opaque or cut-out from their textures, like the old mats.
+  - Roughness Intensity above 1 is capped (2 headphone mats).
+- **Pre-swap backup** (repo Quantum folder + CSV): `D:\Jacob\JCamberos\_backup_old_quantum\` on the first computer.
+
+`tools/quantum/audit_quantum_assets.py` after the import: 110 notes, none blocking.
+- 15 "FBX material not remapped": FBX material entries with no geometry, which Assimp drops; every drawn material is remapped. The two team arm/hand exports carry them from before the swap.
+- 55 "maxTextureSize" and 35 "texture no material uses": old textures still kept alive by scene `library*` lists. They go in Phase 3, when those lists are cleaned and the import is re-run.
+- 5 "material nothing uses": Unity-only colourways of kept items.
+
+## Phase 1: importer
+
+`tools/quantum/import_casual_bundle.py` (driver) + `tools/quantum/casual_bundle/`:
+
+| Module | Job |
+|---|---|
+| `common.py` | Paths, caps, GUID/JSON helpers, the mapping-table schema (`MapRow`) |
+| `build_map.py` | Generates `tools/quantum/casual_bundle_map.csv`: every UE mesh/material/texture → item group → repo path → action |
+| `materials.py` | UE material JSON → engine `.mat` |
+| `textures.py` | Cook PNG (cap, alpha, BMP → PNG, saturation/contrast and hair bakes) + `.png.meta` |
+| `metas.py` | Model `.meta`: GUID kept, `materialRemap` regenerated from the FBX's real material names |
+| `refs.py` | Reference scan: what's retired, which references dangle |
+| `csvrows.py` | `project/external_assets.csv` row swap + the retired-Used list for the Drive |
+
+## Phase 2: engine (2026-11-18)
+
+The outfit system uses the whole pack; `docs/CHARACTER_OUTFITS.md` describes it.
+
+- `Quantum.wardrobe`: new slots Hair, FacialHair (male only), Headwear (`hatSlot`) and Headphones (Headwear models
+  moved by item overrides), all head-attached (shadow-only in first person). Rules: fitted hat cuts picked and
+  carrying their hat, cuts/hats with hair, hats or glasses of their own, hoods (incl. both winter jackets) clear the
+  hair and keep only under-hood headwear, the balaclava takes the head items off, crests don't go under hats,
+  `Shirt_Tie` formal/tucked/long-sleeved, rolled-up sleeves keep the arms. Races: Old's own torso/feet/underpants/
+  shoe feet, Afro's shoe feet, Tattooed/Ornaments (male) and Make-up/Tattoo L/R/L+R (female), not random. Stale
+  `SM_Glasses_Aviator` override removed; `SM_F_Haircut_Scalp` hidden (no material in the pack).
+- Race-fitted items: not needed. The map folded every `_Afro` clothing variant into its base mesh as a colour
+  variant: the meshes are identical and only the skin slot's material differs (`MI_Quantum_Body_Afro` vs
+  `MI_Quantum_Body`), which the race's skin suffix already swaps (`Wardrobe::SkinMaterialFor`).
+- Code: `Wardrobe::Resolve`/`MarkVariants` compare cuts without the mesh prefix and know `SM_F_` hats; a fitted cut
+  that carries its hat stays when no hat is asked for (an outfit read back from its pieces); default layers for
+  FacialHair/Headwear/Headphones. First person, coverage and the editor needed no change (data-driven).
+- `--unit-tests`: 55212 checks, 3 failures, all `OutfitEdgeBandPosed` (the new `SKM_Shirt_Hawaii` over the kept
+  `Quantum_Arms_FP` leaves 132/346/562 hidden arm vertices out from under the sleeve at 20/35/50 degrees). The
+  pre-Phase-2 build fails the same way on the new assets: it comes from the import (Phase 3: check the shirt's
+  sleeve weights, or the test's posing with the new `RootNode -> <Mesh> -> root` layout).

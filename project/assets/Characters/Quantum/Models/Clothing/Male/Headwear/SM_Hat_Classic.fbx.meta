@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Headwear",
+  "guid": "d4f024043a72f650",
+  "materialRemap": {
+    "MI_Hat_Classic": "assets/Characters/Quantum/Materials/Clothing/Headwear/Hat_Classic/M_Hat_Classic.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

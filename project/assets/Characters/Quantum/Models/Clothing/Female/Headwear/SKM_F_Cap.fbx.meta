@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
+  "guid": "a69eb60d8d8487ff",
+  "materialRemap": {
+    "MI_Cap_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Cap/M_Cap_Beige.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

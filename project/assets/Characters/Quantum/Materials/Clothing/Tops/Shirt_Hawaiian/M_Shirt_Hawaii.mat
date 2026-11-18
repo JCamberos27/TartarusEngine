@@ -1,0 +1,39 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Shirt_Hawaii",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_Hawaiian/T_Hawaii_Shirt_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_Hawaiian/T_Hawaii_Shirt_Red_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_Hawaiian/T_Hawaii_Shirt_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_Hawaiian/T_Hawaii_Shirt_Normal.png",
+    "_NormalStrength": 0.699999988079071,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "9d2bd867d6eb35b2",
+    "_AlbedoMap": "dbd95e96b9106c2e",
+    "_MetallicRoughnessMap": "9d2bd867d6eb35b2",
+    "_NormalMap": "4232fc5a8daa93b9"
+  }
+}

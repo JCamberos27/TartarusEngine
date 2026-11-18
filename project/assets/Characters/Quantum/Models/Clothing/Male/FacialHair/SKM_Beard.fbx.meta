@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/FacialHair",
+  "guid": "2173bdc9f2a72826",
+  "materialRemap": {
+    "MI_Beard": "assets/Characters/Quantum/Materials/FacialHair/Beard/M_Beard.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

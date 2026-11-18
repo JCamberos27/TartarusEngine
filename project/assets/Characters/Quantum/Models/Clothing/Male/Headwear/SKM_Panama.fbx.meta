@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Headwear",
+  "guid": "a361f66890017af2",
+  "materialRemap": {
+    "MI_Panama_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Panama/M_Panama_Beige.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

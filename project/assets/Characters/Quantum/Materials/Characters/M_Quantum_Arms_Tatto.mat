@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Quantum_Arms_Tatto",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Tatto_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Tatto_BaseColor.png",
+    "_BaseColor": [
+      0.75,
+      0.75,
+      0.75
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Tatto_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Tatto_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "21be5568aab521e4",
+    "_AlbedoMap": "47bd1dbfd5d18665",
+    "_MetallicRoughnessMap": "21be5568aab521e4",
+    "_NormalMap": "6d8cd7d3a7c20219"
+  }
+}

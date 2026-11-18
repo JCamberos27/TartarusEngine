@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Warm_Hat_Gray",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Warm_Hat/T_Warm_Hat_ORM.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Warm_Hat/T_Warm_Hat_Gray_BC.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Warm_Hat/T_Warm_Hat_ORM.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Warm_Hat/T_Warm_Hat_N.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "e38f9e3f41bafa0d",
+    "_AlbedoMap": "9cb6c6ba5552d8f6",
+    "_MetallicRoughnessMap": "e38f9e3f41bafa0d",
+    "_NormalMap": "9ef6a09dc76bc3db"
+  }
+}

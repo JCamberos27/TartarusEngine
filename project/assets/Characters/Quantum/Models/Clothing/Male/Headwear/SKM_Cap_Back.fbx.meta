@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Headwear",
+  "guid": "4e7abf304d291274",
+  "materialRemap": {
+    "MI_Cap_Black_Logo": "assets/Characters/Quantum/Materials/Clothing/Headwear/Cap/M_Cap_Black_Logo.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

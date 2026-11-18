@@ -1,0 +1,19 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Female/Body/Parts",
+  "guid": "bebab29b15f634f3",
+  "materialRemap": {
+    "MI_F_EyeRefractive_Inst": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Green.mat",
+    "MI_F_EyeRefractive_Inst_5": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Green.mat",
+    "MI_F_FaceHair_Inst": "assets/Characters/Quantum/Materials/Characters/M_F_Brows_Lashes.mat",
+    "MI_F_Vivian_Arms": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Arms.mat",
+    "MI_F_Vivian_Body": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Body.mat",
+    "MI_F_Vivian_Head": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Head.mat",
+    "MI_F_lacrimal_fluid_Inst": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
+    "MI_F_lacrimal_fluid_Inst_9": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat",
+    "M_F_Cartilage": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat",
+    "M_F_EyeOcclusion": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
+    "M_F_Teeth": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
