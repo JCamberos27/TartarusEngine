@@ -479,5 +479,5 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         return reg.all_of<AnimatorControllerComponent>(kv.second);
     });
     if (!animated)
-        ImGui::TextColored(WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  No piece has an Animator Controller - the body won't animate.");
+        ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  No piece has an Animator Controller: only motion matching (the player's body, the dummies) animates it.");
 }

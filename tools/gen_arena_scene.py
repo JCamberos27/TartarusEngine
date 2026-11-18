@@ -14,7 +14,6 @@ sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__))
 
 AK = 'assets/Weapons/AKS74U/AKS74U.fpsanim'
 REMINGTON = 'assets/Weapons/Remington870/Remington870.fpsanim'
-BODY_CONTROLLER = 'assets/Animations/Controllers/fps_body_locomotion.controller'
 
 # Scene-wide settings (sky, post, shadows, fog...) come over as-is; the asset library lists don't.
 SKIP_KEYS = {'boxes', 'empties', 'models', 'libraryMaterials', 'libraryModels', 'libraryPrefabs',
@@ -80,9 +79,9 @@ b = src[body[0]][1]
 if 'Character Outfit' not in b or 'First Person Body' not in b: fail('Player Body lacks Character Outfit / First Person Body')
 pieces = [e for i, (_, e) in src.items() if e.get('parentId') == body[0]]
 if len(pieces) != 9: fail(f'Player Body has {len(pieces)} pieces, expected 9')
+# (Motion matching poses the body, Phase 6: a piece carries no Animator Controller.)
 for p in pieces:
-    ctrl = path_of(p.get('Animator Controller', {}).get('Controller'))
-    if ctrl != BODY_CONTROLLER: fail(f'body piece "{p["name"]}" is not on {BODY_CONTROLLER}')
+    if 'Animator Controller' in p: fail(f'body piece "{p["name"]}" still has an Animator Controller (the legacy locomotion is gone)')
 
 # --- helpers --------------------------------------------------------------------------------------
 def quat_euler(pitch=0.0, yaw=0.0, roll=0.0):

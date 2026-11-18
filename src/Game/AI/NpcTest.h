@@ -52,16 +52,16 @@ class World;
 //            through in time, the speed kept within half a metre of the wall, time stuck, frames inside anything
 //            (NpcTest_Doors.cpp)
 //   npcloco  a dummy through the gaits on LocomotionLab's floor, watched from the side (NpcTest_NpcLoco.cpp)
-//   npcperf  a dozen roaming dummies on LocomotionLab at every LOD tier: the director's cost per dummy and the frame time, on
-//            either locomotion source (NpcTest_NpcPerf.cpp)
-//   roam, locomotion, stopsteps: the player's own walking (NpcTest_Roam / _Locomotion / _StopSteps.cpp)
+//   npcperf  a dozen roaming dummies on LocomotionLab at every LOD tier: the director's cost per dummy and the frame time
+//            (NpcTest_NpcPerf.cpp)
+//   roam, stopsteps: the player's own walking (NpcTest_Roam / _StopSteps.cpp); mmplayer covers the gaits (locomotion retired, Phase 6)
 //   mmview   motion matching, Phase 2 (NpcTest_MmView.cpp, LocomotionLab): the baked takes (Manny.mmanim) checked offline on
 //            the Quantum rig, then a playlist played on a bare Quantum body with the generated root drawn; SKIPs when unbaked
 //   mmdb     motion matching, Phase 3 (NpcTest_MmDb.cpp, LocomotionLab): the runtime database's search (time, boxes vs brute
 //            force, self-match, determinism), left/right coverage per gait, the gait speed table; then a Quantum body driven
 //            by MotionMatcher + TrajectoryPredictor through a scripted course, desired and matched trajectories drawn
 //   mmplayer motion matching, Phase 4 (NpcTest_Testbed.cpp, AnimTestbed.json): the player's body on motion matching
-//            (TARTARUS_LOCOMOTION_SOURCE=mm), unarmed, through the testbed's parts A and C and its own part M - strafes and
+//            unarmed, through the testbed's parts A and C and its own part M - strafes and
 //            backwards, the crouch, turning on the spot, the run (straight, turning, strafing), jumps: the label filters, the
 //            speed warping, the root on the capsule, the airborne segment, the gait phase, foot IK; SKIPs when unbaked
 //   testbed  project/scenes/AnimTestbed.json (tools/scenes/build_anim_testbed.py): only what the animation overhaul fixes, re-run
@@ -102,7 +102,7 @@ public:
     std::string m_Action;
     // World lines the host draws over the Game view (mmview: the generated root, the hips' facing, the ankles).
     void DebugLines(std::vector<float>& out) const;
-    bool RunsWithoutSquad() const { return m_Scenario == "mmview" || m_Scenario == "mmdb" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no dummies
+    bool RunsWithoutSquad() const { return m_Scenario == "mmview" || m_Scenario == "mmdb" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps"; } // After() even in a scene with no dummies
     bool WantsCleanViews() const { return m_Scenario == "mmview" || m_Scenario == "mmdb" || m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
@@ -166,14 +166,7 @@ private:
     float m_SSClock = 0.0f;
     int m_SSSteps = 0;
     int m_SSLegSteps[16] = {};
-    // locomotion (NpcTest_Locomotion.cpp): every gait of the player's own body, watched from the side
-    static float LocomotionSeconds();
-    void LocomotionDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
-    void Locomotion(const Player& player, float now);
-    bool m_LPlaced = false;
-    float m_LClock = 0.0f;
-    glm::vec2 m_LDropAt{0.0f};
-    // npcperf (NpcTest_NpcPerf.cpp): what a dozen roaming dummies cost, on either locomotion source
+    // npcperf (NpcTest_NpcPerf.cpp): what a dozen roaming dummies cost
     static float NpcPerfSeconds();
     void NpcPerfDrive(Player& player, float& wantYaw, float& wantPitch);
     void NpcPerf(World& world, NpcDirector& npcs, float now);

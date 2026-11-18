@@ -6,7 +6,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "FirstPersonBodyContract.h"
-#include "FirstPersonBodyMotion.h" // the motion matching pose source (Locomotion Source)
+#include "FirstPersonBodyMotion.h" // the motion matching pose source
 #include "IK.h" // IK::SpineDistribution
 #include "ModelVertex.h" // MAX_BONE_INFLUENCE
 #include "Player.h" // Player::DirectionalSpeeds
@@ -205,13 +205,11 @@ public:
     // The clips' feet before foot IK (driver model space), which the gait phase is read off. False until posed.
     bool GaitFeet(glm::vec3 (&out)[2]) const { out[0] = m_GaitFeet[0]; out[1] = m_GaitFeet[1]; return m_HaveGaitFeet; }
     float GaitRate() const { return m_Gait.Rate; } // the gait phase's cycles a second
-    // Locomotion Source = Motion Matching took (the database loaded and bound): the pose comes from FirstPersonBodyMotion.
+    // Motion matching took (the database loaded and bound): the pose comes from FirstPersonBodyMotion.
     bool MotionMatching() const { return m_Mm.Active(); }
     // How much of the mocap head's own motion the eye rides (0..1): the presentation drops that share of its camera bob.
     float HeadRide() const { return m_HeadRide; }
     const FirstPersonBodyMotion& Motion() const { return m_Mm; }
-    // The source a body component asks for, after TARTARUS_LOCOMOTION_SOURCE (legacy | mm).
-    static LocomotionSource SourceFor(const FirstPersonBodyComponent& cfg);
 
 private:
     // Motion matching's Tick (after the body's feet and the view's heading are worked out).
@@ -221,8 +219,6 @@ private:
     Player::DirectionalSpeeds m_MmSpeeds; // the gait table's speeds, for the capsule (BeforePlayerMove)
     void Fail(const std::string& message);
     // Legacy only (motion matching plays the mocap's own lean).
-    void ApplySpineStability(float weight, const AnimatorControllerComponent& animator);
-    std::string m_SpineIdleClip[2]; // standing / crouched reference from the locomotion controller
     float m_SpineCrouch = 0.0f, m_SpineCrouchDrop = 0.0f;
     struct SpineReference {
         std::vector<int> Parents, Bones;
@@ -439,11 +435,6 @@ float FirstPersonBodyYaw(const glm::vec3& front, float fallback = 0.0f);
 float FirstPersonBodyWrapAngle(float radians);
 // A world velocity in the frame of a body at heading `yaw`: x = to its right, y = forward.
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
-// m/s (world, flat) the gait loop `stateName` on the body's driver carries the body at PlayRate 1 and the controller's
-// current parameters: its clips' root travel as the phase-synced blend plays them (each child covers its whole clip in a
-// cycle as long as the children's weighted mean length), times the state's speed and the driver's world scale. The open-loop
-// half of BodyLocomotion::LoopPlayRate. < 0 when it can't be read (no controller, state, root bone or attached clip).
-float FirstPersonBodyLoopTravel(const World& world, entt::entity driver, const char* stateName);
 // The eye in model space: the head's standing position, plus `bob` of the head's motion away
 // from it, plus `offset` given in the body's frame (x right, y up, z forward).
 // How far the pelvis moves (metres, + up) to put the feet on ground `offL` / `offR` above the

@@ -397177,18 +397177,6 @@
   "maxSpotShadows": 8,
   "models": [
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -397235,18 +397223,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 3,
         "Item": {
@@ -397317,18 +397293,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -397367,18 +397331,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -397417,18 +397369,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {
@@ -397467,18 +397407,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {

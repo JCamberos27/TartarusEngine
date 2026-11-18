@@ -2,10 +2,9 @@
 // LocomotionLab's open floor (a light test scene); the player stands still at its south end looking north (+Z), and
 // kPerfDummies dummies roam round posts spread in front of it (near, 25 m off, past 50 m) and behind it, so every animation LOD
 // tier runs: every frame (near and in view), every second frame (past 25 m), every fourth (past 50 m or out of view).
-// Run it on each locomotion source - TARTARUS_LOCOMOTION_SOURCE=legacy | mm - and compare: the director's think (the AI and,
-// on motion matching, nothing of the pose) and late (the pose: the animators' output or the matcher, foot pass, look) per frame
-// and per dummy, and the frame's wall time. Logged as [NpcPerf]; checked: every dummy spawned and roaming, and (motion
-// matching) every dummy's matcher stepping as its LOD tier says.
+// Reported: the director's think (the AI) and late (the pose: the matcher, foot pass, look) per frame and per dummy, and the
+// frame's wall time. (Phase 5 measured it against the legacy controller too: docs/MOTION_MATCHING_HANDOFF.md.) Logged as [NpcPerf]; checked: every dummy spawned and roaming, and every
+// dummy's matcher stepping as its LOD tier says.
 #include "NpcTest.h"
 #include "NpcDirector.h"
 #include "Player.h"

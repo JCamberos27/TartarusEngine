@@ -1,6 +1,4 @@
 #include "GameFrames.h"
-#include "GameCommands.h"
-#include "BodyLocomotion.h"
 #include "GameRules.h"
 #include <stdexcept>
 #include "FirstPersonBody.h"
@@ -592,23 +590,23 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     if (const auto* h = reg.try_get<HierarchyComponent>(body))
         for (entt::entity child : h->Children)
             if (reg.valid(child) && !reg.all_of<InactiveTag>(child) && rigged(child)) pieces.push_back(child);
-    // The first piece with an Animator Controller drives; the others follow it.
-    for (entt::entity e : pieces)
-        if (reg.all_of<AnimatorControllerComponent>(e)) { m_Driver = e; break; }
     if (pieces.empty()) { Fail("needs rigged body pieces (the object's own model, or child objects with models)."); return false; }
+    // The driver: the first piece with the whole skeleton (the pelvis, the head, a hand - the torso), whose pose motion matching
+    // solves; the others follow it. (Before Phase 6: the first piece with an Animator Controller.)
+    m_BoneMap = FPBody::ParseBoneMap(cfg.BoneMap);
+    for (entt::entity e : pieces) {
+        const Model& m = *reg.get<RenderableComponent>(e).ModelRef;
+        if (m.NodeIndex(Bone(FPBody::kBonePelvis)) >= 0 && m.NodeIndex(Bone(cfg.HeadBone)) >= 0 && m.NodeIndex(Bone(FPBody::kBoneHand[1])) >= 0) {
+            m_Driver = e;
+            break;
+        }
+    }
     if (m_Driver == entt::null) {
-        Fail("needs an Animator Controller on one of its pieces (e.g. assets/Animations/Controllers/fps_body_locomotion.controller).");
+        Fail("needs a piece with the whole skeleton (the pelvis, the head and the hands: the torso).");
         return false;
     }
     m_Body = body;
     if (const auto* outfit = reg.try_get<CharacterOutfitComponent>(body)) m_OutfitVersion = outfit->Version;
-
-    // The clips' travel comes out of the pose and is handed to the Player - never applied to
-    // an object: this class places the body itself. Turns stay in the pose: the view owns the yaw.
-    auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
-    ac.RootMotion.Mode = (int)RootMotionMode::InPlace;
-    ac.RootMotion.Rotation = true; // the turn clips' yaw is read (DeltaYaw) to turn the body; the pose stays facing forward
-    ac.RootMotion.Vertical = false;
 
     Model& model = *reg.get<RenderableComponent>(m_Driver).ModelRef;
     m_HeadNode = model.NodeIndex(cfg.HeadBone);
@@ -631,22 +629,6 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     }
     m_HaveMetricYaw = false;
 
-    m_BoneMap = FPBody::ParseBoneMap(cfg.BoneMap);
-    if (const auto ctrl = GetAnimatorController(ac.Controller); ctrl && !ctrl->Layers.empty()) {
-        const int track = ctrl->TrackIndex(ac.Track);
-        const char* states[2] = {FPBody::kStateLocomotion, FPBody::kStateCrouchLoco};
-        for (int s = 0; s < 2; ++s) {
-            const int state = ctrl->Layers[0].FindState(states[s]);
-            if (state < 0) continue;
-            const auto& motion = ctrl->Layers[0].States[state].MotionFor(track);
-            m_SpineIdleClip[s] = motion.Clip;
-            float nearest = 1e30f;
-            for (const auto& child : motion.Children) {
-                const float distance = child.Threshold * child.Threshold + child.ThresholdY * child.ThresholdY;
-                if (distance < nearest) { nearest = distance; m_SpineIdleClip[s] = child.Clip; }
-            }
-        }
-    }
     m_ShoulderNode[0] = model.NodeIndex(Bone(FPBody::kBoneUpperArm[0]));
     m_ShoulderNode[1] = model.NodeIndex(Bone(FPBody::kBoneUpperArm[1]));
 
@@ -745,17 +727,6 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         }
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
-        if (e != m_Driver)
-            if (auto* pac = reg.try_get<AnimatorControllerComponent>(e)) {
-                pac->Driver = m_Driver;
-                // The same root-motion handling as the driver's, or the pieces' poses part company
-                // (a stripped turn on one, the turn left in the pose on another).
-                const auto& dm = reg.get<AnimatorControllerComponent>(m_Driver).RootMotion;
-                pac->RootMotion.Mode = dm.Mode;
-                pac->RootMotion.Bone = dm.Bone;
-                pac->RootMotion.Rotation = dm.Rotation;
-                pac->RootMotion.Vertical = dm.Vertical;
-            }
         // A hidden piece is only left out of the camera's own view (the camera is inside the head - and so
         // is whatever an outfit hangs on it: hair, a hat, glasses). Its shadow, the Scene view and other
         // views keep it.
@@ -778,7 +749,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     m_RunSpeed = std::max(cfg.RunSpeed, 0.01f);
     m_PlayerRunSpeed = cfg.PlayerRunSpeed > 0.0f ? cfg.PlayerRunSpeed : m_RunSpeed;
     // Walk is the default gait and Shift the jog: the capsule tops out at the run (jog) speed, so the sprint
-    // (BodyLocomotion's wish above the run) never plays. The walk keeps the jog's ratio of player to clip speed.
+    // never plays. The walk keeps the jog's ratio of player to clip speed. (Motion matching sets the gait speeds below.)
     m_PlayerSprintSpeed = m_PlayerRunSpeed;
     m_PlayerWalkSpeed = std::clamp(cfg.WalkSpeed, 0.01f, m_RunSpeed) * m_PlayerRunSpeed / m_RunSpeed;
     m_CrouchHeight = cfg.CrouchHeight;
@@ -787,17 +758,20 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     player.SprintMultiplier = m_PlayerRunSpeed / m_PlayerWalkSpeed;
     player.GaitSpeeds.Active = false;
 
-    // Motion matching (Locomotion Source): the pose from the database, the capsule at the mocap's gait speeds as captured -
+    // Motion matching: the pose from the database, the capsule at the mocap's gait speeds as captured -
     // walk by default, the jog with Shift, the pack's crouch-walk crouched; strafes (and backwards) at the pack's strafe
     // speeds. (The pack has no sustained sprint: an asset gap, docs/MOTION_MATCHING_HANDOFF.md.)
-    if (SourceFor(cfg) == LocomotionSource::MotionMatching) {
+    {
         size_t driverIndex = 0;
         for (size_t k = 0; k < m_Pieces.size(); ++k)
             if (m_Pieces[k] == m_Driver) driverIndex = k;
         std::string error;
         m_Mm.SetDebug(&MmPlayerDebug::Info()); // the player's (the Inspector, --npc-test mmplayer)
         if (!m_Mm.Start(m_Models, driverIndex, error)) {
-            Log::Warn("First Person Body: Locomotion Source is Motion Matching, but " + error + " - the locomotion controller plays instead.");
+            // (CI has no licensed assets: no body there - a warning, never an error.)
+            Fail(error + " - the body is off.");
+            m_Body = entt::null;
+            return false;
         } else {
             const GaitSpeedTable& g = m_Mm.Gaits();
             m_MmSpeeds.Active = true;
@@ -856,20 +830,8 @@ void FirstPersonBody::Stop(World& world) {
         if (world.Registry.valid(e)) world.Registry.remove<PlayerBodyTag, OwnerViewOnlyTag>(e);
     for (entt::entity e : m_Twins)
         if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
-    if (m_Mm.Active() && m_Driver != entt::null && world.Registry.valid(m_Driver))
-        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Driver)) ac->SkipUpdate = false; // the controller back
     m_Mm.Stop();
     *this = FirstPersonBody{};
-}
-
-LocomotionSource FirstPersonBody::SourceFor(const FirstPersonBodyComponent& cfg) {
-    if (Env::IsSet(Env::Var::LocomotionSource)) {
-        std::string s = Env::Str(Env::Var::LocomotionSource);
-        for (char& c : s) c = (char)std::tolower((unsigned char)c);
-        return s == "mm" || s == "1" || s == "motionmatching" || s == "motion matching" ? LocomotionSource::MotionMatching
-                                                                                       : LocomotionSource::Legacy;
-    }
-    return cfg.LocomotionSource == 1 ? LocomotionSource::MotionMatching : LocomotionSource::Legacy;
 }
 
 // A world twin per piece: the same model (an instance: its own pose), materials, shadows and outfit hiding,
@@ -983,55 +945,6 @@ void FirstPersonBody::PlaceHeadAttachedTwins(World& world) {
     }
 }
 
-float FirstPersonBodyLoopTravel(const World& world, entt::entity driver, const char* stateName) {
-    const auto& reg = world.Registry;
-    if (!reg.valid(driver)) return -1.0f;
-    const auto* ac = reg.try_get<AnimatorControllerComponent>(driver);
-    const auto* rc = reg.try_get<RenderableComponent>(driver);
-    if (!ac || !rc || !rc->ModelRef || ac->RootMotion.ResolvedBone < 0) return -1.0f;
-    const auto ctrl = GetAnimatorController(ac->Controller);
-    if (!ctrl || ctrl->Layers.empty()) return -1.0f;
-    const int si = ctrl->Layers[0].FindState(stateName);
-    if (si < 0) return -1.0f;
-    const AnimatorController::State& st = ctrl->Layers[0].States[si];
-    const AnimatorController::Motion& m = st.MotionFor(ctrl->TrackIndex(ac->Track));
-    const Model& model = *rc->ModelRef;
-    RootMotionSettings rms;
-    rms.Rotation = ac->RootMotion.Rotation;
-    rms.Vertical = false;
-    // A clip's length and its root's travel over one pass (model space, flat); 0 when it isn't attached (yet).
-    const auto pass = [&](const std::string& ref, glm::vec2& travel) {
-        const int c = ref.empty() ? -1 : model.FindAnimation(ref);
-        const float len = c >= 0 ? model.AnimationLength(c) : 0.0f;
-        if (!(len > 0.0f)) return 0.0f;
-        const glm::vec3 t =
-            model.ClipRootMotion(c, 0.0f, len, AnimationWrapMode::ClampForever, ac->RootMotion.ResolvedBone, rms).Translation;
-        travel = glm::vec2(t.x, t.z);
-        return len;
-    };
-    glm::vec2 travel(0.0f);
-    float len = 0.0f;
-    if (!m.IsBlendTree()) {
-        len = pass(m.Clip, travel);
-    } else {
-        // Phase-synced, as AnimatorController plays it: one cycle as long as the children's weighted mean length, in which
-        // each child covers its whole clip - and its whole travel.
-        const std::vector<float> w = AnimatorMotionWeights(m, ac->Params);
-        for (size_t i = 0; i < m.Children.size() && i < w.size(); ++i) {
-            if (w[i] <= 0.0f) continue;
-            glm::vec2 t(0.0f);
-            const float l = pass(m.Children[i].Clip, t);
-            if (l <= 0.0f) continue;
-            len += w[i] * l / std::max(std::abs(m.Children[i].Speed), 1e-3f);
-            travel += w[i] * t;
-        }
-    }
-    if (!(len > 1e-4f)) return -1.0f;
-    // Model space to world: the driver's scale (its own and its parents').
-    const float scale = glm::length(glm::vec3(world.GetCachedWorldTransform(driver)[0]));
-    return glm::length(travel) / len * std::max(st.Speed, 0.0f) * scale;
-}
-
 void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     camera.Position -= m_CameraApplied;
     m_CameraApplied = glm::vec3(0.0f);
@@ -1042,7 +955,7 @@ void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     player.CrouchSpeedMultiplier = m_CrouchSpeed * (m_PlayerWalkSpeed > 0.0f ? m_PlayerRunSpeed / m_PlayerWalkSpeed : 1.0f);
     player.GaitSpeeds.Active = false;
     if (!IsActive()) return;
-    if (m_Mm.Active()) {
+    {
         // Capsule-led: the input moves the capsule (at the gait table's speeds), never the clips.
         player.RootMotionVelocity = glm::vec3(0.0f);
         player.RootMotionWeight = 0.0f;
@@ -1056,20 +969,7 @@ void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
             player.YawFreeCenter = 90.0f - glm::degrees(m_Yaw);
             player.YawFreeRange = m_TurnThreshold;
         }
-        return;
     }
-    if (m_Still) {
-        // Aiming is free within the turn threshold either side of the body; the limit is on the turn
-        // beyond it, which is what the feet have to step round to (the body's yaw is atan2(x, z) of the
-        // view, and Camera::Yaw is measured from +X toward +Z: 90 degrees minus it).
-        player.MaxYawRate = m_MaxTurnRate;
-        player.YawFreeCenter = 90.0f - glm::degrees(m_Yaw);
-        player.YawFreeRange = m_TurnThreshold;
-    }
-    // Airborne, the input steers (there is no travel in a fall clip to follow).
-    player.RootMotionVelocity = m_RootVelocity;
-    // The landing clip's own travel would stop a running player dead: while it plays, the input steers.
-    player.RootMotionWeight = player.Grounded && !m_InLand ? 1.0f - std::clamp(m_Responsiveness, 0.0f, 1.0f) : 0.0f;
 }
 
 void FirstPersonBody::Tick(World& world, const Player& player, const Camera& camera, float dt) {
@@ -1167,170 +1067,8 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     }
     m_ViewYaw = FirstPersonBodyYaw(camera.Front(), m_ViewYaw);
     if (!m_HaveHeading) { m_Yaw = m_ViewYaw; m_HaveHeading = true; }
-    if (m_Mm.Active() && reg.valid(m_Driver)) {
-        TickMotionMatching(world, player, cfg, dt);
-        return;
-    }
-    auto fireTrigger = [&](AnimatorControllerComponent& a, const char* name) { a.SetTrigger(name); m_LastTrigger = name; m_SinceTrigger = 0.0f; };
-
-    // (The body is posed once the locomotion has set this frame's heading, below; without a driver, as it stands.)
-    if(!reg.valid(m_Driver)){world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));m_Body=entt::null;return;}
-    auto& ac=reg.get<AnimatorControllerComponent>(m_Driver);
-    Gameplay::BodyMotionFrame f;
-    f.Velocity={player.Velocity.x,player.Velocity.y,player.Velocity.z};
-    f.WishVelocity={player.WishVelocity.x,player.WishVelocity.y,player.WishVelocity.z};
-    f.Move={m_Move.x,m_Move.y,0};
-    f.LastDir={m_LastDir.x,m_LastDir.y,0};
-    f.Dt=dt;
-    f.ViewYaw=m_ViewYaw;
-    f.Yaw=m_Yaw;
-    f.Twist=m_Twist;
-    f.AirTime=m_AirTime;
-    f.IdleTime=m_IdleTime;
-    f.MoveTime=m_MoveTime;
-    f.TurnTime=m_TurnTime;
-    f.TurnDone=m_TurnDone;
-    f.RootYaw=ac.RootMotion.DeltaYaw;
-    f.StateTime=ac.StateTime;
-    f.PlayerRunSpeed=m_PlayerRunSpeed;
-    f.PlayerSprintSpeed=m_PlayerSprintSpeed;
-    f.RunSpeed=m_RunSpeed;
-    f.ClipSprint=std::max(cfg.SprintSpeed,.01f);
-    f.Grounded=player.Grounded;
-    f.Crouched=player.Crouched;
-    f.WasCrouched=m_WasCrouched;
-    f.Turning=m_Turning;
-    f.Jumped=player.Jumped;
-    f.LastSprint=m_LastSprint;
-    f.Responsiveness=cfg.Responsiveness;
-    f.MaxPlayRate=cfg.MaxPlayRate;
-    f.ParamSmoothing=cfg.ParamSmoothing;
-    f.TurnThreshold=cfg.TurnThreshold;
-    f.TurnMinTime=cfg.TurnMinTime;
-    f.TurnEndAngle=cfg.TurnEndAngle;
-    f.TurnTimeout=cfg.TurnTimeout;
-    f.TurnMoveEase=cfg.TurnMoveEase;
-    f.TurnLagMargin=cfg.TurnLagMargin;
-    f.TurnLagFloor=cfg.TurnLagFloor;
-    f.StopDebounce=cfg.StopDebounce;
-    f.StartIdleTime=cfg.StartIdleTime;
-    f.StartMaxMove=cfg.StartMaxMove;
-    f.StopMinRunTimeCrouched=cfg.StopMinRunTimeCrouched;
-    f.StopMinRunTime=cfg.StopMinRunTime;
-    f.StopMinSpeedCrouched=cfg.StopMinSpeedCrouched;
-    f.StopMinSpeed=cfg.StopMinSpeed;
-    f.StopRunForward=cfg.StopRunForward;
-    f.AirborneDelay=cfg.AirborneDelay;
-    f.StartStopClips=cfg.StartStopClips;
-    f.IsTurn=ac.InState(FPBody::kStateTurn);
-    f.IsCrouchTurn=ac.InState(FPBody::kStateCrouchTurn);
-    f.IsLocomotion=ac.InState(FPBody::kStateLocomotion);
-    f.IsCrouchLoco=ac.InState(FPBody::kStateCrouchLoco);
-    f.IsStart=ac.HasTag(FPBody::kTagStart);
-    f.IsStartTurn=ac.HasTag(FPBody::kTagStartTurn);
-    f.IsStop=ac.HasTag(FPBody::kTagStop);
-    f.IsPivot=ac.HasTag(FPBody::kTagPivot);
-    f.IsStep=ac.HasTag(FPBody::kTagStep);
-    f.IsFidget=ac.HasTag(FPBody::kTagFidget);
-    f.IsSprint=ac.InState(FPBody::kStateSprint);
-    f.AccelTime=player.GroundAccelTime;
-    f.DecelTime=player.GroundDecelTime;
-    f.SprintClip=FPBody::kSprintClipSpeed;
-    f.Armed=m_Armed;
-    f.Busy=m_Busy;
-    m_Random^=m_Random<<13;m_Random^=m_Random>>17;m_Random^=m_Random<<5;
-    f.Random=(float)(m_Random>>8)/16777216.0f;
-    f.StartDistance=m_Loco.StartDistance;f.PivotDistance=m_Loco.PivotDistance;f.PivotTravel=m_Loco.PivotTravel;f.MoveDistance=m_Loco.MoveDistance;
-    f.FidgetTime=m_Loco.FidgetTime;f.FidgetNext=m_Loco.FidgetNext;f.FidgetIndex=m_Loco.FidgetIndex;
-    f.StartGait=m_Loco.StartGait;f.StopGait=m_Loco.StopGait;f.PivotGait=m_Loco.PivotGait;f.StartTurn=m_Loco.StartTurn;f.StartTurnAmount=m_Loco.StartTurnAmount;
-    f.PivotDir={m_Loco.PivotDir.x,m_Loco.PivotDir.y,0};f.StepDir={m_Loco.StepDir.x,m_Loco.StepDir.y,0};f.PivotReversed=m_Loco.PivotReversed;
-    GameRules::UpdateBodyMotion(f);
-    // Mid-crossfade (crouching on the move, a stop easing out) nothing new starts on top, nor does one still pending from
-    // the frame the fade began: the fade would be cut short and the view jolt with it (a crouch into a crouched start
-    // dropped the eye 33 cm in 0.08 s). The loop picks up the move.
-    // (Not a turn on the spot fading back to the loop: moving off then is a start, else the loop fades up behind the capsule.)
-    if(ac.StateName!=m_LastState){m_TurnFade=ac.InTransition&&FPBody::TurnFadeToLoop(m_LastState,ac.StateName);m_LastState=ac.StateName;}
-    if(!ac.InTransition)m_TurnFade=false;
-    if(ac.InTransition&&!m_TurnFade){f.Triggers&=~(Gameplay::kBodyStart|Gameplay::kBodyPivot|Gameplay::kBodyFidget);for(const char* t:{FPBody::kStart,FPBody::kPivot,FPBody::kFidget})ac.ResetTrigger(t);}
-    m_Loco.StartDistance=f.StartDistance;m_Loco.PivotDistance=f.PivotDistance;m_Loco.PivotTravel=f.PivotTravel;m_Loco.MoveDistance=f.MoveDistance;
-    m_Loco.FidgetTime=f.FidgetTime;m_Loco.FidgetNext=f.FidgetNext;m_Loco.FidgetIndex=f.FidgetIndex;
-    m_Loco.StartGait=f.StartGait;m_Loco.StopGait=f.StopGait;m_Loco.PivotGait=f.PivotGait;m_Loco.StartTurn=f.StartTurn;m_Loco.StartTurnAmount=f.StartTurnAmount;
-    m_Loco.PivotDir={f.PivotDir.x,f.PivotDir.y};m_Loco.StepDir={f.StepDir.x,f.StepDir.y};m_Loco.PivotReversed=f.PivotReversed;
-    m_Yaw=f.Yaw;
-    m_Twist=f.Twist;
-    m_AirTime=f.AirTime;
-    m_IdleTime=f.IdleTime;
-    m_MoveTime=f.MoveTime;
-    m_TurnTime=f.TurnTime;
-    m_TurnDone=f.TurnDone;
-    m_WasCrouched=f.WasCrouched;
-    m_Turning=f.Turning;
-    m_LastSprint=f.LastSprint;
-    m_Still=f.Still;
-    m_Move={f.Move.x,f.Move.y};m_LastDir={f.LastDir.x,f.LastDir.y};m_Grounded=player.Grounded;m_InLand=ac.InState(FPBody::kStateLand);m_MaxTurnRate=cfg.MaxTurnRate;m_TurnThreshold=cfg.TurnThreshold;
-    world.SetWorldPose(m_Body,m_Feet,YawRotation(m_Yaw));
-    if(f.SetTurnAngle)ac.SetFloat(FPBody::kTurnAngle,f.TurnAngle);ac.SetBool(FPBody::kTurning,f.Turning!=0);ac.SetBool(FPBody::kMoving,f.Moving!=0);
-    if(f.Triggers&Gameplay::kBodyStart){ac.SetFloat(FPBody::kStartX,f.StartDir.x);ac.SetFloat(FPBody::kStartY,f.StartDir.y);ac.SetFloat(FPBody::kStartGait,f.StartGait);ac.SetFloat(FPBody::kStartTurn,f.StartTurn);ac.SetFloat(FPBody::kStartTurnAmount,f.StartTurnAmount);}
-    if(f.Triggers&(Gameplay::kBodyStop|Gameplay::kBodyStopRun)){ac.SetFloat(FPBody::kStopX,f.StopDir.x);ac.SetFloat(FPBody::kStopY,f.StopDir.y);ac.SetFloat(FPBody::kStopGait,f.StopGait);}
-    if(f.Triggers&Gameplay::kBodyPivot){ac.SetFloat(FPBody::kPivotX,f.PivotDir.x);ac.SetFloat(FPBody::kPivotY,f.PivotDir.y);ac.SetFloat(FPBody::kPivotGait,f.PivotGait);}
-    if(f.Triggers&Gameplay::kBodyStep){ac.SetFloat(FPBody::kStepX,f.StepDir.x);ac.SetFloat(FPBody::kStepY,f.StepDir.y);}
-    if(f.Triggers&Gameplay::kBodyFidget)ac.SetFloat(FPBody::kFidgetIndex,f.FidgetIndex);
-    // The gait loop's rate: the capsule's speed over what the loop's clips travel at this frame's blend (MoveX / MoveY set
-    // first, so it is the blend the animator plays) - the one speed match, open loop (BodyLocomotion::LoopPlayRate).
-    {
-        ac.SetFloat(FPBody::kMoveX, m_Move.x);
-        ac.SetFloat(FPBody::kMoveY, m_Move.y);
-        const float travel = FirstPersonBodyLoopTravel(world, m_Driver, player.Crouched ? FPBody::kStateCrouchLoco : FPBody::kStateLocomotion);
-        const float capsule = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
-        ac.SetFloat(FPBody::kPlayRate, BodyLocomotion::LoopPlayRate(capsule, travel, cfg.Responsiveness, cfg.MaxPlayRate));
-    }
-    ac.SetFloat(FPBody::kStartDistance,f.StartDistance);ac.SetFloat(FPBody::kStopDistance,f.StopDistance);ac.SetFloat(FPBody::kPivotDistance,f.PivotDistance);ac.SetFloat(FPBody::kSprintRate,f.SprintRate);ac.SetBool(FPBody::kStartOff,f.StartOff!=0);
-    const char* triggers[]{FPBody::kCrouchDown,FPBody::kCrouchUp,FPBody::kStart,FPBody::kStop,FPBody::kStopRun,FPBody::kJump,FPBody::kPivot,FPBody::kStep,FPBody::kFidget};for(int i=0;i<9;++i)if(f.Triggers&(1<<i))fireTrigger(ac,triggers[i]);
-    ac.SetFloat(FPBody::kMoveX,m_Move.x);ac.SetFloat(FPBody::kMoveY,m_Move.y);ac.SetFloat(FPBody::kSpeed,glm::length(m_Move));ac.SetBool(FPBody::kSprint,f.Sprint!=0);ac.SetBool(FPBody::kGrounded,player.Grounded);ac.SetBool(FPBody::kCrouched,player.Crouched);ac.SetBool(FPBody::kAirborne,f.Airborne!=0);
-    // Light vs heavy landing: the fall speed of the last airborne frame (the landing frame's is already zeroed).
-    if(!player.Grounded)m_FallSpeed=std::max(0.0f,-player.Velocity.y);
-    ac.SetFloat(FPBody::kLandImpact,m_FallSpeed);
-    UpdateGaitPhase(player, dt);
-
-    // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
-    {
-        BodyDebug::Snapshot& d = BodyDebug::Info();
-        d.Valid = true;
-        d.AnimatorState = ac.StateName;
-        d.StateTime = ac.StateTime;
-        d.Turning = m_Turning;
-        d.BodyYawDeg = glm::degrees(m_Yaw);
-        d.ViewOffsetDeg = glm::degrees(FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw));
-        d.TwistDeg = glm::degrees(m_Twist);
-        d.Still = m_Still;
-        d.IdleTime = m_IdleTime;
-        d.MoveTime = m_MoveTime;
-        d.MoveSpeed = glm::length(m_Move);
-        d.RootSpeed = glm::length(m_RootVelocity);
-        d.StepOffset = m_StepOffset;
-        d.ArmsWeight = m_ArmsWeight;
-        d.LastTrigger = m_LastTrigger;
-        d.LastTriggerAgo = m_SinceTrigger;
-        if (BodyDebug::Enabled()) {
-            const glm::vec3 base = m_Feet + glm::vec3(0.0f, 0.03f, 0.0f);
-            const auto heading = [&](float yaw) { return glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw)); };
-            BodyDebug::Arrow(base, base + heading(m_Yaw) * 0.9f, glm::vec4(1.0f, 0.85f, 0.2f, 1.0f));      // the body's heading
-            BodyDebug::Arrow(base, base + heading(m_ViewYaw) * 0.9f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));   // where the view faces
-            if (cfg.TurnThreshold > 0.0f) {                                                                // the turn threshold wedge
-                const float t = glm::radians(cfg.TurnThreshold);
-                const glm::vec4 wedge(1.0f, 0.55f, 0.15f, 0.9f);
-                BodyDebug::Line(base, base + heading(m_Yaw + t) * 1.0f, wedge);
-                BodyDebug::Line(base, base + heading(m_Yaw - t) * 1.0f, wedge);
-                for (int i = 0; i < 12; ++i)
-                    BodyDebug::Line(base + heading(m_Yaw - t + 2.0f * t * (float)i / 12.0f) * 1.0f,
-                                    base + heading(m_Yaw - t + 2.0f * t * (float)(i + 1) / 12.0f) * 1.0f, wedge);
-            }
-            if (glm::length(m_RootVelocity) > 0.05f)                                                       // what the clips carry the capsule at
-                BodyDebug::Arrow(base + glm::vec3(0.0f, 0.1f, 0.0f), base + glm::vec3(0.0f, 0.1f, 0.0f) + m_RootVelocity * 0.4f, glm::vec4(0.2f, 0.9f, 1.0f, 1.0f));
-            if (std::abs(m_StepOffset) > 0.005f)                                                           // a stair being eased out
-                BodyDebug::Line(base, base + glm::vec3(0.0f, m_StepOffset, 0.0f), glm::vec4(1.0f, 0.2f, 0.8f, 1.0f));
-        }
-    }
+    if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
+    TickMotionMatching(world, player, cfg, dt);
 }
 
 // The gait's phase, read off the feet (their spread along the travel against their height difference) - the clips'
@@ -1348,13 +1086,13 @@ void FirstPersonBody::UpdateGaitPhase(const Player& player, float dt) {
     }
 }
 
-// Motion matching (FirstPersonBodyMotion): the locomotion controller is held (its update skipped, the pose ours); the
+// Motion matching (FirstPersonBodyMotion): the pose is the matcher's (any Animator Controller left on a piece is held); the
 // matcher runs on the capsule's state and turns the heading; the body stands at the capsule's feet (the root clamped there).
 void FirstPersonBody::TickMotionMatching(World& world, const Player& player, const FirstPersonBodyComponent& cfg, float dt) {
     auto& reg = world.Registry;
-    auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
-    ac.SkipUpdate = true; // the whole group (the pieces follow the driver): FirstPersonBodyMotion::Pose poses them
-    ac.SkippedTime = 0.0f;
+    // (A piece that still carries an Animator Controller - a scene from before Phase 6 - is held: the matcher poses every piece.)
+    for (entt::entity e : m_Pieces)
+        if (auto* ac = reg.valid(e) ? reg.try_get<AnimatorControllerComponent>(e) : nullptr) { ac->SkipUpdate = true; ac->SkippedTime = 0.0f; }
     m_RootVelocity = glm::vec3(0.0f);
 
     FirstPersonBodyMotion::Input in;
@@ -1453,9 +1191,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
 
     // This step's root motion, for the capsule's next move.
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
-    const auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
-    const glm::vec3 d = ac.RootMotion.DeltaPosition;
-    m_RootVelocity = dt > 0.0f && !m_Turning && !m_Mm.Active() ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
+    m_RootVelocity = glm::vec3(0.0f); // capsule-led: no clip travel
     // Motion matching: this step's pose onto every piece (the controller's update was held), before anything reads it.
     if (m_Mm.Active()) {
         m_Mm.Pose(m_Models);
@@ -1491,12 +1227,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     if (const Model* drv = DriverModel(); drv)
         if (glm::mat4 pv(1.0f); drv->NodeTransform(Bone(FPBody::kBonePelvis), pv)) BodyDebug::Info().PelvisHeightClip = pv[3].y;
     // The A/B switch (FirstPersonBodyComponent::MmPostLayers): off, motion matching's pose is drawn with foot IK only.
-    const bool mmLayers = !m_Mm.Active() || cfg.MmPostLayers;
-    {
-    PROFILE_SCOPE("FPB spine stability");
-    // Legacy only: motion matching's pose is the mocap's, its lean as captured (the strip-back, 2026-11-17).
-    if (!m_Mm.Active()) ApplySpineStability(cfg.SpineStability, ac);
-    }
+    const bool mmLayers = cfg.MmPostLayers;
     BodyDebug::Info().ChestPitchStableDeg = ChestPitchDeg();
     // The clips' feet, before foot IK moves them: what next Tick reads the gait's phase off.
     m_HaveGaitFeet = FootPoints(world, m_GaitFeet);
@@ -1645,7 +1376,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // the view's, measured off the shoulder line - one pass, about the model's up, so the line's heading lands exactly
     // (every bone's share turns about the same axis; short of it only where the spine's per-bone limits stop it). Off it,
     // one shoulder sits further from the view than the other.
-    if (mmLayers && cfg.SpineTwist > 0.0f && !matched && m_Mm.Active()) {
+    if (mmLayers && cfg.SpineTwist > 0.0f && !matched) {
         // Motion matching: an additive yaw - the view off the character facing (which turns as the mocap turns), capped,
         // spread over the spine - on top of the clip's chest. Not a closed loop: the gait's own counter-rotation of the
         // shoulders against the hips passes untouched (re-aimed every frame, the shoulder line was held square to the view:
@@ -1676,7 +1407,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     FirstPersonBodyFollowShoulders(m_HeadEased, m_HaveEye, headAnimated, cfg.EyeSlack, 0.04f, dt);
     // Motion matching, unarmed: the eye rides the mocap head's own motion by MM Head Ride (the owner, 2026-11-17: the
     // stabilized eye over a body bobbing as captured felt stiff, and the neck rose into the view at every jogging step).
-    const float headRide = m_Mm.Active() ? std::clamp(cfg.MmHeadRide, 0.0f, 1.0f) * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f)) : 0.0f;
+    const float headRide = std::clamp(cfg.MmHeadRide, 0.0f, 1.0f) * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f));
     m_HeadRide = headRide;
     BodyDebug::Info().HeadRide = headRide;
     m_Eye = FirstPersonBodyEye(m_RestHead, glm::mix(m_HeadEased, headAnimated, headRide), 1.0f, cfg.CameraOffset);
@@ -1758,7 +1489,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         const float share = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
         float limit = -89.0f;
         const float want = viewPitch < glm::radians(-10.0f) && share > 1e-3f ? share * EyeBodyPush(world, camera, eyeWorld, flat, limit) : 0.0f;
-        if (!m_Mm.Active() || share < 0.5f) limit = -89.0f;
+        if (share < 0.5f) limit = -89.0f;
         m_LookLimitAge += dt;
         if (limit >= m_LookLimitHeld || m_LookLimitAge > kLookLimitHold) {
             m_LookLimitHeld = limit;
@@ -1898,8 +1629,7 @@ bool FirstPersonBody::BoneWorldMatrix(const World& world, const std::string& sta
 
 void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt) {
     auto& reg = world.Registry;
-    const bool airborne = m_Mm.Active() ? m_Mm.Airborne()
-                                        : reg.valid(m_Driver) && reg.get<AnimatorControllerComponent>(m_Driver).HasTag(FPBody::kTagAirborne);
+    const bool airborne = m_Mm.Airborne();
     const bool on = cfg.FootIK && m_Grounded && PhysicsWorld::HasCharacter() && reg.valid(m_Driver) && !airborne;
     m_FootWeight += ((on ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, cfg.FootIKFade);
     if (m_FootWeight < 1e-3f) {
@@ -1943,7 +1673,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     lockSet.Release = MmTune("FootLock.Release", lockSet.Release);
     lockSet.StepHeight = MmTune("FootLock.StepHeight", lockSet.StepHeight);
     lockSet.StepMax = MmTune("FootLock.StepMax", lockSet.StepMax);
-    const bool pivot = m_Mm.Active();
+    const bool pivot = true; // (motion matching: a planted foot pivots with the body's turn)
     lockSet.StepForTravel = pivot;
     const int ballNode[2] = {drv.NodeIndex(Bone(FPBody::kBoneBall[0])), drv.NodeIndex(Bone(FPBody::kBoneBall[1]))};
     for (int s = 0; s < 2; ++s) {
@@ -2065,49 +1795,6 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             if (glm::length(target - IK::Position(globals[foot])) < 5e-4f && angle < 1e-3f) continue;
             IK::SolveTwoBone(pose, parents, globals, thigh, calf, foot, target, &footRot, 1.0f);
         }
-        m.ApplyLocalPose(pose);
-    }
-}
-
-// Model-space masking cancels the gait's motion all the way up from the pelvis. A fixed idle
-// reference keeps the chest stable without filtering (and lagging) the player's view aim. Legacy only: under motion
-// matching the pose is the mocap's, its lean as captured (the strip-back, 2026-11-17).
-void FirstPersonBody::ApplySpineStability(float weight, const AnimatorControllerComponent& animator) {
-    weight = std::clamp(weight, 0.0f, 1.0f);
-    if (weight > 0.0f) weight *= FPBody::LocomotionSpineWeight(animator, m_SpineCrouch);
-    if (weight <= 1e-5f) return;
-    for (size_t k = 0; k < m_Models.size(); ++k) {
-        if (!m_Models[k]) continue;
-        Model& m = *m_Models[k];
-        IK::Pose pose = m.AppliedLocalPose();
-        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        auto& ref = m_SpineReferences[&m];
-        if (ref.Parents.size() != pose.size()) {
-            ref = SpineReference{};
-            ref.Parents.resize(pose.size());
-            for (int i = 0; i < m.NodeCount(); ++i) ref.Parents[i] = m.NodeParent(i);
-            for (size_t slot = 0; slot < ref.SpineNodes.size(); ++slot) {
-                const int i = m.NodeIndex(Bone(FPBody::kBoneSpine[slot]));
-                ref.SpineNodes[slot] = i;
-                if (i >= 0) ref.Bones.push_back(i);
-            }
-            std::sort(ref.Bones.begin(), ref.Bones.end()); // SetGlobals requires parents first
-        }
-        if (ref.Bones.empty()) continue;
-        if ((k >= m_Pieces.size() || m_Pieces[k] != m_Driver) && !SkinsUnder(m, ref.Bones, FPBody::kBoneSpine[0])) continue;
-        for (int s = 0; s < 2; ++s) {
-            int clip = m_SpineIdleClip[s].empty() ? -1 : m.FindClipByRef(m_SpineIdleClip[s]);
-            if (clip < 0 && !m_SpineIdleClip[s].empty()) clip = m.FindAnimation(m_SpineIdleClip[s]);
-            if (ref.Clips[s] == clip) continue;
-            IK::Pose idle;
-            m.SampleLocalPose(clip, 0.0f, AnimationWrapMode::ClampForever, idle);
-            IK::ComputeGlobals(idle, ref.Parents, ref.Globals[s]);
-            ref.Clips[s] = clip;
-        }
-        const std::vector<glm::mat4> noCrouch;
-        const bool haveCrouchRef = ref.Clips[1] >= 0;
-        FPBody::BlendLocomotionSpine(pose, ref.Parents, ref.SpineNodes, ref.Globals[0], haveCrouchRef ? ref.Globals[1] : noCrouch,
-                                     m_SpineCrouch, weight, m_SpineCrouchDrop);
         m.ApplyLocalPose(pose);
     }
 }

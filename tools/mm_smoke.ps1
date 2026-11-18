@@ -7,8 +7,7 @@
 # Presets (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration"):
 #   -Quick  unit, mmplayer, mmstress (~3-4 min): the check before committing motion matching work. Scenarios named after it
 #           are added - `-Quick mmview mmdb` when the bake or the database changed.
-#   -Full   the whole pass: unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview, mmdb, mmplayer, npcloco_mm,
-#           npcperf, npcperf_mm,
+#   -Full   the whole pass: unit, smoke, testbed, npcloco, stopsteps, feet, labloco, mmview, mmdb, mmplayer, npcperf,
 #           mmstress and the perf bench (tests\perf-scenes\perf_stress.json). Once per PR, before merging. The six old-locomotion
 #           scenarios (testbed .. labloco) otherwise run only when a change touches what they share (foot IK, Player,
 #           FirstPersonBody's legacy path); Phase 6 retires them.
@@ -66,8 +65,7 @@ if ($Quick) {
 }
 if ($Full) {
     $SkipUnit = $false; $SkipSmoke = $false
-    $all12 = @('testbed', 'npcloco', 'locomotion', 'stopsteps', 'feet', 'labloco', 'mmview', 'mmdb', 'mmplayer', 'mmstress', 'npcloco_mm',
-               'npcperf', 'npcperf_mm')
+    $all12 = @('testbed', 'npcloco', 'stopsteps', 'feet', 'labloco', 'mmview', 'mmdb', 'mmplayer', 'mmstress', 'npcperf')
     $Scenarios = $all12 + @($Scenarios | Where-Object { $_ -notin $all12 })
     if (-not $PerfBench) { $PerfBench = 'tests\perf-scenes\perf_stress.json' }
 }
@@ -188,9 +186,7 @@ foreach ($scenario in $Scenarios) {
             New-Item -ItemType Directory -Force -Path $dir | Out-Null
             $envs['NPC_TEST_TRACE'] = $dir
         }
-        # A `_mm` suffix: the scenario with the dummies (and the player) on motion matching - TARTARUS_LOCOMOTION_SOURCE=mm.
         $engineScenario = $scenario
-        if ($scenario -like '*_mm') { $engineScenario = $scenario.Substring(0, $scenario.Length - 3); $envs['TARTARUS_LOCOMOTION_SOURCE'] = 'mm' }
         # (Timed runs alone: mmdb times the search, npcperf the dummies' cost and the frame.)
         Add-Step $name @('--npc-test', $engineScenario) $envs 'npc' ($engineScenario -eq 'mmdb' -or $engineScenario -eq 'npcperf')
     }

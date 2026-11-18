@@ -4850,9 +4850,19 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             for (entt::entity child : h->Children)
                 if (registry.valid(child) && rigged(child)) pieces.push_back(child);
         in.HasPieces = !pieces.empty();
+        // The driver: the piece with the whole skeleton (FirstPersonBody::Start picks the same), named through the Bone Map.
         entt::entity driver = entt::null;
-        for (entt::entity e : pieces)
-            if (registry.all_of<AnimatorControllerComponent>(e)) { driver = e; break; }
+        {
+            const auto map = FPBody::ParseBoneMap(cfg->BoneMap);
+            const auto bone = [&](const std::string& b) { const auto it = map.find(b); return it != map.end() ? it->second : b; };
+            for (entt::entity e : pieces) {
+                const Model& m = *registry.get<RenderableComponent>(e).ModelRef;
+                if (m.NodeIndex(bone(FPBody::kBonePelvis)) >= 0 && m.NodeIndex(bone(cfg->HeadBone)) >= 0 && m.NodeIndex(bone(FPBody::kBoneHand[1])) >= 0) {
+                    driver = e;
+                    break;
+                }
+            }
+        }
         in.HasDriverPiece = driver != entt::null;
         for (entt::entity e : pieces)
             if (const auto* n = registry.try_get<NameComponent>(e)) in.PieceNames.push_back(n->Name);
@@ -4862,10 +4872,10 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         static bool s_ctrlLoaded = false;
         static double s_ctrlAt = -10.0;
         Model* driverModel = nullptr;
-        if (driver != entt::null) {
-            const auto& ac = registry.get<AnimatorControllerComponent>(driver);
+        if (driver != entt::null) driverModel = registry.get<RenderableComponent>(driver).ModelRef.get();
+        if (const auto* acp = driver != entt::null ? registry.try_get<AnimatorControllerComponent>(driver) : nullptr) {
+            const auto& ac = *acp;
             in.ControllerSet = !ac.Controller.empty();
-            driverModel = registry.get<RenderableComponent>(driver).ModelRef.get();
             const double now = ImGui::GetTime();
             if (in.ControllerSet && (ac.Controller != s_ctrlPath || now - s_ctrlAt > 0.5)) {
                 s_ctrlPath = ac.Controller;

@@ -11,12 +11,12 @@ native components on read (`src/Game/ProjectComponentMigration.cpp`).
 | Player movement and stance | `src/Game/Player.{h,cpp}` |
 | Weapon fire, reload, ADS and inspect rules | `src/Game/WeaponRules.{h,cpp}` (pure functions over `WeaponFrame` / `WeaponLoadoutFrame`) |
 | Weapon presentation, shots and effects | `src/Game/FirstPersonPresentation.cpp`, `MuzzleEffects.h`, `Combat/` |
-| First-person body locomotion | `src/Game/BodyLocomotion.{h,cpp}` (pure function over `BodyMotionFrame`), `FirstPersonBody*.cpp` |
+| First-person body and NPC locomotion | motion matching: `src/Game/FirstPersonBodyMotion.{h,cpp}`, `src/Game/MotionMatching/`, `FirstPersonBody*.cpp`, `Npc/NpcBody.cpp` ([Motion Matching](MOTION_MATCHING.md)) |
 | Weapon prefabs and attachments | `src/Game/WeaponPrefab.{h,cpp}`, `WeaponAttachments.h` |
 | Frame structs shared by the rules | `src/Game/GameFrames.h` |
 | Reloadable systems | `src/Game/GameModule.cpp`, `TransformControllerSystem.cpp`, `LightFlickerSystem.cpp` |
 
-`WeaponRules` and `BodyLocomotion` take one frame struct in and write their results back into it,
+`WeaponRules` takes one frame struct in and writes its results back into it,
 with no engine state of their own. That keeps them easy to unit test
 (`src/Tests/UnitTests_Gameplay.cpp`) and easy to move into the reloadable module later.
 
@@ -37,8 +37,9 @@ Two DLLs are rebuilt and reloaded while the editor runs:
 
 * **TartarusGame**: gameplay systems ticked while playing. `GameModule.cpp` calls each system's
   update. Today that is the Transform Controller and Light Flicker systems. It also carries the
-  weapon and body rules (`WeaponRules.cpp`, `BodyLocomotion.cpp`): the engine calls the module's
-  copies through `GameRules.h`, so tuning fire, reload or locomotion logic reloads mid-Play too.
+  weapon rules (`WeaponRules.cpp`): the engine calls the module's copies through `GameRules.h`, so
+  tuning fire or reload logic reloads mid-Play too. (The body's `BodyLocomotion` rules went with the
+  legacy locomotion: motion matching poses the body, API v14.)
 * **TartarusEditor**: editor panels and tools (`src/Editor/EditorModule*.cpp`).
 
 Edit their sources in the [Script IDE](SCRIPT_IDE.md) or any other editor, then save in the IDE,

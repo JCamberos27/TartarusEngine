@@ -40,20 +40,11 @@ unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 constexpr float kStartTime = 0.12f, kStopTime = 0.15f, kArriveSlack = 0.05f;
 constexpr float kTravelTurnRate = 140.0f; // degrees/s the travel direction may swing (Move): a walker's arc round a corner, not a whip
 
-float SpeedFor(Gait g) {
-    switch (g) {
-    case Gait::Still: return 0.0f;
-    case Gait::Walk: return 1.5f;
-    case Gait::Jog: return 3.2f;
-    case Gait::Run: return 4.7f;
-    }
-    return 1.5f;
-}
 
-// A body on motion matching moves at the database's measured gait speeds (the speeds decision: the capsule at the mocap's own
-// pace, only small warping): the walk, the jog, and for the run the sprint style (the old jog set: the pack has no sustained run).
+// A dummy moves at the database's measured gait speeds (the speeds decision: the capsule at the mocap's own pace, only small
+// warping): the walk, the jog, and for the run the sprint style (the old jog set: the pack has no sustained run). (Without the
+// database - CI - the gait table's defaults, the same numbers.)
 float SpeedFor(Gait g, const NpcBody& body) {
-    if (!body.MotionMatching()) return SpeedFor(g);
     const GaitSpeedTable& t = body.Motion().Gaits();
     switch (g) {
     case Gait::Still: return 0.0f;
@@ -192,11 +183,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, bool allowEmpty) {
         m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
         m_HoldSettings.Spine = fpb.Spine; // per-bone spine weights and limits
         m_HoldSettings.FootLock = IK::FootLockFrom(fpb);   // planted feet held in the world
-        m_HoldSettings.MotionMatching = FirstPersonBody::SourceFor(fpb) == LocomotionSource::MotionMatching;
-    } else {
-        m_HoldSettings.MotionMatching = FirstPersonBody::SourceFor(FirstPersonBodyComponent{}) == LocomotionSource::MotionMatching;
     }
-    Log::Info(std::string("Dummies: locomotion from ") + (m_HoldSettings.MotionMatching ? "motion matching." : "the npc_soldier controller."));
     m_Active = true;
     m_Started = false;
     m_Now = 0.0f;
@@ -641,19 +628,15 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.Wish = wish;
     in.Grounded = n.OnFloor;
     in.FallSpeed = std::max(0.0f, -n.FallSpeed);
-    in.JogSpeed = SpeedFor(Gait::Jog);
-    in.RunSpeed = SpeedFor(Gait::Run);
     in.AccelTime = kStartTime;
     in.DecelTime = kStopTime;
     in.FacingYaw = NpcYawOf(n.LookPoint - n.Feet, n.Body.Yaw());
     in.LookPoint = n.LookPoint;
     in.Sprint = n.Pace == Gait::Run && n.WantMove;
     in.FootIK = FootIKEverywhere || (n.PlayerDist < m_Cfg.FootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen
-    if (n.Body.MotionMatching()) {
-        in.Style = StyleFor(n.Pace);
-        // The trajectory follows the route's corners (the crowd's), not the straight wish - while it goes on, not once it stops.
-        if (n.WantMove && n.Agent >= 0 && glm::dot(wish, wish) > 1e-4f) in.PathCount = m_Crowd.Corners(n.Agent, in.Path, 4, &in.PathArrives);
-    }
+    in.Style = StyleFor(n.Pace);
+    // The trajectory follows the route's corners (the crowd's), not the straight wish - while it goes on, not once it stops.
+    if (n.WantMove && n.Agent >= 0 && glm::dot(wish, wish) > 1e-4f) in.PathCount = m_Crowd.Corners(n.Agent, in.Path, 4, &in.PathArrives);
     n.Body.Tick(world, in, dt);
 }
 
@@ -754,8 +737,9 @@ void NpcDirector::UpdateLod(World& world, Npc& n, const PlayerSnapshot& p) {
     n.OnScreen = onScreen;
     const bool busy = m_Now - n.LastHurt < 0.5f || m_Now - n.SpawnedAt < 0.5f;
     n.Animate = busy || lod == 1 || ((m_Frame + n.Index) % lod) == 0;
-    // (Motion matching: the controllers are always held - the matcher poses the body, stepping on the frames posed - LatePose.)
-    const bool held = !n.Animate || n.Body.MotionMatching();
+    // (Any Animator Controller left on a piece - a prefab from before Phase 6 - is always held: the matcher poses the body, stepping
+    // on the frames posed - LatePose.)
+    const bool held = true;
     for (entt::entity e : n.Body.Pieces())
         if (e != entt::null && world.Registry.valid(e))
             if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = held;

@@ -28,13 +28,11 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
     if (m_Scenario == "deaths") m_Duration = 70.0f;
     if (m_Scenario == "feet") m_Duration = 10.0f;
     if (m_Scenario == "stopsteps") m_Duration = StopStepsSeconds();
-    if (m_Scenario == "locomotion") m_Duration = LocomotionSeconds();
     if (m_Scenario == "npcloco") m_Duration = NpcLocoSeconds();
     if (m_Scenario == "npcperf") m_Duration = NpcPerfSeconds();
     if (m_Scenario == "labloco") m_Duration = LabLocoSeconds();
     if (m_Scenario == "mmplayer" || m_Scenario == "mmstress") {
-        // The testbed's player parts on the motion matching body (set before Play starts the body).
-        if (!Env::IsSet(Env::Var::LocomotionSource)) Env::Set(Env::Var::LocomotionSource, "mm"); // (=legacy: the same course on the controller)
+        // The testbed's player parts.
         Env::Set(Env::Var::TestbedParts, m_Scenario == "mmstress" ? "S" : "ACM");
     }
     if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") {
@@ -124,7 +122,6 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "decals") DecalsDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "doors") DoorsDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "stopsteps") StopStepsDrive(player, dt, wantYaw, wantPitch);
-    if (m_Scenario == "locomotion") LocomotionDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "npcloco") NpcLocoDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "npcperf") NpcPerfDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "labloco") LabLocoDrive(player, weapon, dt, wantYaw, wantPitch);
@@ -202,10 +199,6 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "stopsteps") {
         StopSteps(player, now);
-        return;
-    }
-    if (m_Scenario == "locomotion") {
-        Locomotion(player, now);
         return;
     }
     if (m_Scenario == "npcloco") {
