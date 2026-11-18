@@ -1286,10 +1286,10 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
                     "by end %d\n", R.Clock, kTb[leg].Name, mm.Clip.c_str(), mm.Frame, mm.Flags, mm.Gait, mm.LastCost, mm.PlayingCost, q.Searches,
                     q.ByInput, q.ByEnd);
     // The root clamped to the capsule: the body's root (its entity) on the capsule's feet, horizontally.
-    for (auto e : world.Registry.view<FirstPersonBodyComponent>()) {
-        const glm::vec3 at(world.ComposeWorldTransform(e)[3]);
+    // (The first body only: a loop that breaks at once leaves its increment unreachable - C4702, an error in Debug.)
+    if (const auto bodies = world.Registry.view<FirstPersonBodyComponent>(); bodies.begin() != bodies.end()) {
+        const glm::vec3 at(world.ComposeWorldTransform(*bodies.begin())[3]);
         q.RootOffsetMax = std::max(q.RootOffsetMax, std::hypot(at.x - foot[0], at.z - foot[2]));
-        break;
     }
     if (R.Into >= 0.5f && player.Grounded && !mm.Airborne) {
         ++q.Steady;
