@@ -1622,9 +1622,12 @@ data (8 takes) sits near ties - the extra jump is worth 0.12 of cost (5.93 again
 it; a fix belongs with the crouch strafe data, not here.
 
 `-Quick mmview mmdb` on it (`-Parallel 1`): unit 53,903 / 0 failures; mmplayer 97/101 (`A jog`, the two looking-about jump
-rates, `M crouch strafe right`), mmstress 16/16, mmview 12/12, mmdb 18/18. **Rebaked into the worktree only**
-(`D:\Jacob\mm_scratch\mirror\`, sha256 `bbfa0bbd...` / `3d77e47b...`): the main checkout and the Drive keep the database
-before it until the owner says otherwise; `project/external_assets.csv` is left at that one's hashes.
+rates, `M crouch strafe right`), mmstress 16/16, mmview 12/12, mmdb 18/18. **Installed in the main checkout and on the Drive**
+(the owner's go-ahead; sha256 `bbfa0bbd...` / `3d77e47b...`, 194,080,116 / 29,166,619 bytes): the main checkout's build loads it
+(511,582 frames, the cooked search 0 mismatches, load 1.41 s); the Drive's `Used\` copied, its CSV's two rows changed byte-exact,
+`verify` 8025 listed / 0 missing / 0 different (1 unlisted: the SeedMesh scene); a `Raw\CHANGELOG.md` entry; `project/
+external_assets.csv`'s two rows. The twist-roll database before it: `D:\Jacob\mm_scratch\rollfix4\`; the Drive's CSV and
+changelog before it: `D:\Jacob\mm_scratch\drive_before_mirror\`.
 
 ## Phase 5: first steps (done - see above)
 
@@ -1791,4 +1794,4 @@ before it until the owner says otherwise; `project/external_assets.csv` is left 
   better; `-Full` the same results. Installed in the main checkout and on the Drive's `Used\` (the CSV's two rows; the old files backed up on D:).
 - **2026-11-18, strafe right walk (`dev/mm-strafe-right`):** the walk's strafe takes mirrored (`MIRROR_GROUPS`): `M strafe right
   (walk)` 0.72 -> 0.95; `M crouch strafe right` 2.0 -> 2.5 jumps/s (fails its 2.3 - adopted on the owner's call; the database's
-  normalization shift, the crouch strafe's thin data). Rebaked into the worktree only.
+  normalization shift, the crouch strafe's thin data). Installed in the main checkout and on the Drive.
