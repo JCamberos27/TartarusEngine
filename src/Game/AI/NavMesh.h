@@ -120,6 +120,8 @@ public:
     float RemainingDistance(int agent) const;
     // The next corner the agent steers for (its position when none).
     glm::vec3 NextCorner(int agent) const;
+    // The corners the agent steers through (at most `max`, in order; the last is the target once the path reaches it - `reachesTarget`).
+    int Corners(int agent, glm::vec3* out, int max, bool* reachesTarget = nullptr) const;
     // Debug: the agent's target state (dtCrowd's DT_CROWDAGENT_TARGET_*, -1 none) and corner count.
     int TargetState(int agent, int* corners = nullptr) const;
 

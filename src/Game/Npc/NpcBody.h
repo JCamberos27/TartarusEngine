@@ -42,6 +42,10 @@ struct NpcHoldSettings {
     float FootNormalEase = 0.08f;    // seconds: ground normal easing
     float FootIKFade = 0.15f;        // seconds: foot IK enable/disable easing
     IK::FootLockSettings FootLock;   // planted feet held in the world (the player body's settings)
+    // The pose from motion matching (the player's database and driver, FirstPersonBodyMotion) instead of the npc_soldier
+    // controller: the player's Locomotion Source (FirstPersonBody::SourceFor - TARTARUS_LOCOMOTION_SOURCE overrides it). Temporary,
+    // until Phase 6 removes the controller path (docs/MOTION_MATCHING_HANDOFF.md, Phase 5).
+    bool MotionMatching = false;
 };
 
 struct NpcBodyInput {
@@ -58,6 +62,11 @@ struct NpcBodyInput {
     glm::vec3 LookPoint{0.0f};     // what the head looks at
     bool Sprint = false;           // running (the footsteps' stride and sound)
     bool FootIK = false;           // feet onto uneven ground (near the player: two rays and a leg solve a frame)
+    // Motion matching only:
+    int Style = MotionLabel::StyleWalk; // the style the gait asks for (walk, jog; the run is the sprint style)
+    glm::vec3 Path[4]{};                // the navmesh path's next corners (world), for the trajectory; none: straight down the wish
+    int PathCount = 0;
+    bool PathArrives = false;           // the last corner is the goal (the stop is on it)
 };
 
 class NpcBody {
@@ -105,8 +114,18 @@ public:
     // (Tests) The time (s) the root motion read by the last Tick covered (0: a frame the animation LOD held - no motion).
     float RootMotionDt() const { return m_RootMotionDt; }
 
+    // Motion matching took (NpcHoldSettings::MotionMatching, the database loaded and bound): the pose is the matcher's, the
+    // controllers are held. Its gait speeds are what the capsule should move at.
+    bool MotionMatching() const { return m_MmActive; }
+    const FirstPersonBodyMotion& Motion() const { return m_Mm; }
+    const MmPlayerDebug::Snapshot& MmDebug() const { return m_MmDebug; } // the last matcher update's (as the player's MmPlayerDebug)
+    int MmUpdates() const { return m_MmUpdates; } // matcher updates since Start (the animation LOD holds some frames: fewer than frames)
+
 private:
     glm::mat4 RootWorld() const;
+    // Motion matching's step (LateUpdate, before the foot pass): the matcher over `dt` (the frames the LOD held included), the
+    // heading from it, the pose onto every piece.
+    void StepMotionMatching(World& world, float dt);
 
     entt::entity m_Root = entt::null;
     entt::entity m_Driver = entt::null;
@@ -142,6 +161,10 @@ private:
     int m_DriverNeck = -1, m_DriverHead = -1;
     NpcBodyInput m_In;
     glm::vec3 m_Eye{0.0f};
+    FirstPersonBodyMotion m_Mm;
+    MmPlayerDebug::Snapshot m_MmDebug;
+    bool m_MmActive = false;
+    int m_MmUpdates = 0;
 
     NpcHoldSettings m_Set;
     // The pose passes solve on the driver alone; this gives every other piece that draws the upper body the driver's

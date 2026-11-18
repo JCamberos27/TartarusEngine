@@ -1,4 +1,4 @@
-// --npc-test locomotion: the player's own first-person body in Apartment Hallway's 301 living room goes through every
+// --npc-test locomotion: the player's own first-person body on LocomotionLab's open floor goes through every
 // gait - walk (the default) forward, back and both strafes, the jog (Shift) forward, back and on a diagonal, a hop on
 // the spot, a hop on the move, a drop from height, the crouch and a crouched walk - stopping in between. The Scene view
 // watches the body from the side (record it with NPC_TEST_RECORD; NPC_TEST_BARE undresses it to see the mesh).
@@ -26,28 +26,34 @@ struct Leg {
     glm::vec2 At;
     const char* Name;
 };
+// The course's home on tests/scenes/LocomotionLab.json's open floor (moved out of Apartment Hallway's 301 living room,
+// 2026-11-18 - the owner: no testing in the apartments, a light test scene; the legs keep their 301 distances, measured from
+// its south end): clear of labloco's lane (x 0..3), the ledge (-6, 8) and the stairs (8, 4..11).
+constexpr glm::vec2 kCourse(-15.0f, -17.0f);
+inline glm::vec3 CourseAt(float x, float z, float y = 0.0f) { return glm::vec3(kCourse.x + x, y, kCourse.y + z); }
 constexpr glm::vec2 kNo(0.0f);
+constexpr glm::vec2 At(float x, float z) { return glm::vec2(kCourse.x + x, kCourse.y + z); }
 const float kD = 0.70710678f;
 const Leg kLegs[] = {
-    {1.5f, {0, 0}, false, false, -1, 0, true, {-8.1f, -9.0f}, "idle"},
+    {1.5f, {0, 0}, false, false, -1, 0, true, At(0.0f, -0.1f), "idle"},
     {3.0f, {0, 1}, false, false, -1, 0, false, kNo, "walk forward"},
     {2.0f, {0, 0}, false, false, -1, 0, false, kNo, "stop after walk"},
     {3.0f, {0, -1}, false, false, -1, 0, false, kNo, "walk back"},
-    {2.0f, {0, 0}, false, false, -1, 0, true, {-6.3f, -6.7f}, "stop after walk back"},
+    {2.0f, {0, 0}, false, false, -1, 0, true, At(1.8f, 2.2f), "stop after walk back"},
     {2.0f, {1, 0}, false, false, -1, 0, false, kNo, "walk strafe right"},
     {2.0f, {0, 0}, false, false, -1, 0, false, kNo, "stop after strafe right"},
     {2.0f, {-1, 0}, false, false, -1, 0, false, kNo, "walk strafe left"},
-    {2.0f, {0, 0}, false, false, -1, 0, true, {-8.1f, -9.1f}, "stop after strafe left"},
+    {2.0f, {0, 0}, false, false, -1, 0, true, At(0.0f, -0.2f), "stop after strafe left"},
     {1.3f, {0, 1}, true, false, -1, 0, false, kNo, "jog forward"},
     {2.0f, {0, 0}, false, false, -1, 0, false, kNo, "stop after jog"},
     {1.3f, {0, -1}, true, false, -1, 0, false, kNo, "jog back"},
-    {2.0f, {0, 0}, false, false, -1, 0, true, {-6.1f, -9.0f}, "stop after jog back"},
+    {2.0f, {0, 0}, false, false, -1, 0, true, At(2.0f, -0.1f), "stop after jog back"},
     {1.4f, {kD, kD}, true, false, -1, 0, false, kNo, "jog diagonal"},
-    {2.0f, {0, 0}, false, false, -1, 0, true, {-8.1f, -8.8f}, "stop after diagonal"},
+    {2.0f, {0, 0}, false, false, -1, 0, true, At(0.0f, 0.1f), "stop after diagonal"},
     {1.8f, {0, 0}, false, false, 0.2f, 0, false, kNo, "hop on the spot"},
     {2.2f, {0, 1}, false, false, 0.8f, 0, false, kNo, "walk and hop"},
-    {2.0f, {0, 0}, false, false, -1, 0, true, {-8.1f, -7.0f}, "stop after hop"},
-    {2.6f, {0, 0}, false, false, -1, 0.7f, true, {-8.1f, -9.0f}, "drop"},
+    {2.0f, {0, 0}, false, false, -1, 0, true, At(0.0f, 1.9f), "stop after hop"},
+    {2.6f, {0, 0}, false, false, -1, 0.7f, true, At(0.0f, -0.1f), "drop"},
     {2.2f, {0, 0}, false, true, -1, 0, false, kNo, "crouch"},
     {3.0f, {0, 1}, false, true, -1, 0, false, kNo, "crouch walk"},
     {2.0f, {0, 0}, false, true, -1, 0, false, kNo, "crouch stop"},
@@ -130,10 +136,9 @@ void NpcTest::LocomotionDrive(Player& player, FirstPersonPresentation& weapon, f
         std::printf("[Locomotion] %6.2f s  %-24s body -> %s\n", m_LClock, L.Name, d.AnimatorState.c_str());
     if (weapon.IsActive() && weapon.CurrentState() == "Sprint") s.ArmsSprint = true;
 
-    // The Scene view: square to the body's side, a couple of metres off (the room is 5 m across), following it down
-    // the room, at chest height.
+    // The Scene view: square to the body's side, a couple of metres off, following it down the course, at chest height.
     const glm::vec3 feet = player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
-    const float side = feet.x < -8.1f ? -5.75f : -10.45f;
+    const float side = feet.x < kCourse.x ? kCourse.x + 2.35f : kCourse.x - 2.35f;
     const glm::vec3 want(side, feet.y + 1.05f, feet.z);
     if (!m_HaveCam || std::abs(m_CamPos.x - want.x) > 1.0f) m_CamPos = want;
     else m_CamPos += (want - m_CamPos) * std::min(1.0f, dt * 4.0f);

@@ -341,7 +341,7 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
     m_HaveYaw = false;
     m_Air = Air::None;
     m_WarpRate = 1.0f;
-    MmPlayerDebug::Info() = MmPlayerDebug::Snapshot{};
+    if (m_Debug) *m_Debug = MmPlayerDebug::Snapshot{};
     return true;
 }
 
@@ -351,7 +351,7 @@ void FirstPersonBodyMotion::Stop() {
     m_BindPose.clear();
     m_Lines.clear();
     m_Matcher = MotionMatcher{};
-    MmPlayerDebug::Info() = MmPlayerDebug::Snapshot{};
+    if (m_Debug) *m_Debug = MmPlayerDebug::Snapshot{};
 }
 
 void FirstPersonBodyMotion::EnterAir(const Input& in, const MotionMatcher::Input& query) {
@@ -461,7 +461,16 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     m_Predictor.SetState(now);
     const auto ts = db.TrajSeconds();
     TrajectoryState future[3];
-    m_Predictor.Predict(wish, m_DesiredYaw, ts.data(), 3, future);
+    if (in.Path && in.PathCount > 0 && !m_Still) {
+        TrajectoryPredictor::PathGoal path;
+        path.Points = in.Path;
+        path.Count = in.PathCount;
+        path.Speed = wishSpeed;
+        path.ArriveTime = in.ArriveTime;
+        m_Predictor.PredictAlong(path, m_DesiredYaw, ts.data(), 3, future);
+    } else {
+        m_Predictor.Predict(wish, m_DesiredYaw, ts.data(), 3, future);
+    }
     // The query in the character's frame (where the playing frame's own features are), its trajectory the simulation's.
     MotionMatcher::Input q;
     q.Position = now.Position;
@@ -542,8 +551,9 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     }
     m_YawRate = Wrap(yaw - prevYaw) / dt;
 
-    // Diagnostics.
-    MmPlayerDebug::Snapshot& d = MmPlayerDebug::Info();
+    // Diagnostics (none kept: SetDebug's null).
+    if (!m_Debug) return;
+    MmPlayerDebug::Snapshot& d = *m_Debug;
     const MotionMatcher& m = m_Matcher;
     d.Valid = true;
     d.Frame = m.Frame();

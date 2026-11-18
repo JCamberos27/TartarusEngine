@@ -97,3 +97,46 @@ void TrajectoryPredictor::Predict(const glm::vec3& desiredVelocity, float desire
         out[k] = s;
     }
 }
+
+void TrajectoryPredictor::PredictAlong(const PathGoal& path, float desiredYaw, const float* times, int count, TrajectoryState* out) const {
+    TrajectoryState s = m_State;
+    float goalYaw = desiredYaw;
+    int next = 0;
+    const float step = 1.0f / (float)std::max(1, Params.SubSteps);
+    float t = 0.0f;
+    // Each point's way in (from the one before it; the first from where the character stands): a point is passed once the
+    // character is beyond it along that way, or within Reached of it. Past the last one the move is over - the goal velocity
+    // nothing, the facing held. (Steering at a point already passed turned the predicted facing round 180 degrees as the
+    // spring carried the character over the goal: the walks' ends searched against a trajectory facing back, 3-4 jumps a second.)
+    glm::vec3 from = s.Position;
+    bool done = path.Count <= 0;
+    for (int k = 0; k < count; ++k) {
+        while (t < times[k] - 1e-6f) {
+            const float dt = std::min(step, times[k] - t);
+            glm::vec3 goal(0.0f);
+            while (!done) {
+                const glm::vec3 p = path.Points[next];
+                glm::vec3 to = p - s.Position, in = p - from;
+                to.y = in.y = 0.0f;
+                const float d = glm::length(to);
+                const bool last = next == path.Count - 1;
+                if (d < (last ? 0.02f : path.Reached) || glm::dot(to, in) <= 0.0f) {
+                    from = p;
+                    if (last) done = true;
+                    else ++next;
+                    continue;
+                }
+                float speed = path.Speed;
+                if (last && path.ArriveTime > 0.0f) speed = std::min(speed, d / path.ArriveTime);
+                if (speed > 1e-4f) {
+                    goal = to / d * speed;
+                    goalYaw = MotionMath::YawOf(to);
+                }
+                break;
+            }
+            Step(s, goal, goalYaw, dt, nullptr);
+            t += dt;
+        }
+        out[k] = s;
+    }
+}

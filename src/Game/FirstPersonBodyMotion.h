@@ -48,6 +48,7 @@
 
 class Model;
 struct LocalTRS;
+namespace MmPlayerDebug { struct Snapshot; }
 
 // Experiment knobs (TARTARUS_MM_TUNE="Key=value,..."): the value for `key` when the variable sets it, else `fallback`. Read at
 // startup in .cpp files, so an experiment needs no rebuild (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration"). The keys are
@@ -133,9 +134,18 @@ public:
         float TurnEndAngle = 0.0f;  // radians: a turn on the spot ends this close to the view
         float VelocityHalflife = 0.2f; // s: how the capsule's speed follows the wish (the predictor's spring)
         TrajectoryPredictor::SweepFn Sweep; // the capsule's cast (empty: none)
+        // A route to follow (Phase 5, the NPCs: the navmesh path's corners, world): moving, the trajectory is predicted along
+        // it at the wish's speed, facing the travel (TrajectoryPredictor::PredictAlong), not straight down the wish. Empty: the wish.
+        const glm::vec3* Path = nullptr;
+        int PathCount = 0;
+        float ArriveTime = 0.0f; // s: the path's last point is the goal, its stop eased over this (0: it isn't)
     };
 
     Settings Config;
+
+    // Where this body's diagnostics go (Start / Stop clear it; Tick fills it): the player's is MmPlayerDebug::Info() (FirstPersonBody
+    // sets it), an NPC's its own. Null: none kept (and no debug lines drawn).
+    void SetDebug(MmPlayerDebug::Snapshot* d) { m_Debug = d; }
 
     // Binds the stream to every piece (the driver's pelvis height sets the translation scale for all). False (with
     // `error`) when the database or a binding is missing.
@@ -191,6 +201,7 @@ private:
     MotionPose m_LastOut; // the last update's output pose (the pose-step metric)
     std::vector<float> m_Lines;
     float m_GroupWeight[MotionFeature::GroupCount] = {}; // the search's feature weights (MotionSearchParams' defaults, or MmTune's)
+    MmPlayerDebug::Snapshot* m_Debug = nullptr;
 };
 
 // What the player's motion matching did this frame, for the Inspector and --npc-test mmplayer (like BodyDebug).

@@ -13,8 +13,8 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 | 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
 | 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16; owner signed off on the `mmview` recording) |
 | 3. Motion matching runtime | `dev/mm-phase3` | **Done** (2026-11-16) |
-| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **In progress** (the strip-back and the full-library plan, Steps 0-4: the whole pack baked with styles, fingers, repairs and mirrors; the query asks for a style; open: the foot lock's release-and-drag when the body turns faster than the clip - "Phase 4: next steps") |
-| 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
+| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **Done** (2026-11-18; merged in #820; the owner play-tested the merged build: "its fine". Open items carried over, not blocking: "Phase 4: next steps") |
+| 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | **Done** (2026-11-18; #823. The dummies on the player's database and driver, path trajectories, LOD; npcloco and testbed E ported; npcperf - "Phase 5: NPCs on motion matching") |
 | 6. Legacy cleanup and final verification | `dev/mm-phase6` | Pending |
 
 ## Goal
@@ -889,10 +889,13 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
 | Iterate | `mm_smoke.ps1 mmplayer -SkipUnit -SkipSmoke -Legs "..."` | the legs in question | every change while working (~30 s) |
 | Quick | `mm_smoke.ps1 -Quick` | unit, mmplayer, mmstress | before committing motion matching work (~1.5 min engine runs + the build) |
 | Quick + bake | `mm_smoke.ps1 -Quick mmview mmdb` | + the stream and database checks | when the bake or the database changed |
-| Full | `mm_smoke.ps1 -Full` | unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview, mmdb, mmplayer, mmstress, perf bench (`tests\perf-scenes\perf_stress.json`) | once per PR, before merging |
+| Full | `mm_smoke.ps1 -Full` | unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview, mmdb, mmplayer, mmstress, npcloco_mm, npcperf, npcperf_mm, perf bench (`tests\perf-scenes\perf_stress.json`) | once per PR, before merging |
 
 - **The six old-locomotion scenarios** (testbed, npcloco, locomotion, stopsteps, feet, labloco) run only in `-Full`, or when a
   change touches code they share (foot IK, `Player`, `FirstPersonBody`'s legacy path). Phase 6 retires them.
+- **One script at a time** (2026-11-18): three `mm_smoke.ps1` at once ran six engines (1.4-4.5 GB each) and left 0.3 GB of 32 free -
+  everything swapped, and the unit tests' load-time budget failed on it (2.01 s against 2; 0.49 s alone). `-Parallel` already
+  runs up to three engines; don't stack scripts.
 - **In parallel:** the script runs up to `-Parallel` (default 3) engine runs at once; the timing checks (`mmdb`'s search time,
   the perf bench) run alone. Runs are deterministic under load: the same legs alone and two at once gave identical logs
   (2026-11-17), since every run steps a fixed 1/60 s. `-Parallel 1` runs one at a time, in order.
@@ -951,6 +954,9 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
 
 **NPCs**
 - `src/Game/Npc/NpcBody.{h,cpp}` and `src/Game/AI/NpcDirector.cpp`.
+- Motion matching (Phase 5): `NpcBody::StepMotionMatching` / `MmDebug`, `NpcHoldSettings::MotionMatching`, `SpeedFor(Gait, NpcBody)`
+  and `StyleFor` (NpcDirector.cpp), `NavCrowd::Corners`, `TrajectoryPredictor::PredictAlong`; the checks in `NpcTest_NpcLoco.cpp`
+  (`[NpcLoco] MM`) and `NpcTest_Testbed.cpp` (part E, `EMm`).
 - `project/assets/AI/Soldier.json`, `tools/gen_npc_soldier.py`.
 
 **Legacy graphs**
@@ -1238,7 +1244,108 @@ Left (2026-11-17, after Step 4):
 3. No sign-off videos: the owner plays it (`set TARTARUS_LOCOMOTION_SOURCE=mm`, `build\Release\TartarusEngine.exe`; the
    editor starts on the Forest - open `scenes/AnimTestbed.json` - and locks the exe: close it before building).
 
-## Phase 5: first steps
+## Phase 5: NPCs on motion matching (done)
+
+The open items below carry over; none blocks Phase 6.
+
+**Phase 4 signed off** (2026-11-18): the owner play-tested the build #820 merged (`TARTARUS_LOCOMOTION_SOURCE=mm`, AnimTestbed):
+"its fine". Its open items (the jog's jump rate, the looking-about legs, `M strafe right (walk)` 0.72, `M sprint back` 5.0 cm, the
+`S stop-start walk` pop, the lighter trajectory weights experiment) carry over; none blocks Phase 5.
+
+**What landed (session 1, 2026-11-18; branched from `dev/mm-headless` - #822's test speed-ups):**
+- **One switch for everyone.** The dummies follow the player's Locomotion Source (`NpcHoldSettings::MotionMatching`, set by
+  `NpcDirector` from the scene's First Person Body through `FirstPersonBody::SourceFor` - `TARTARUS_LOCOMOTION_SOURCE` overrides
+  it; no body in the scene: the variable alone). Logged `Dummies: locomotion from motion matching.` Phase 6 removes it with the rest.
+- **The player's driver, per dummy** (`NpcBody::m_Mm`, a `FirstPersonBodyMotion`): the same database (`SharedMotionDatabase::Get`
+  with the dummy's driver rig - the same exclusions as the player; cached per rig file), the same Settings and `MmTune` knobs.
+  `FirstPersonBodyMotion::SetDebug` says where a body's diagnostics go: the player's `MmPlayerDebug::Info()` (FirstPersonBody sets
+  it), each dummy its own `NpcBody::MmDebug()` - before, any second driver would have overwritten the player's snapshot.
+- **`NpcBody`**: `Start` binds the stream and holds every piece's controller (`SkipUpdate`; `NpcDirector::UpdateLod` keeps them
+  held); `Tick` only stands the body on the capsule; `LateUpdate` steps the matcher (`StepMotionMatching`) then runs the foot pass,
+  look and piece sync as before (no orientation warp: the facing is the matcher's). The facing wanted is the travel's while
+  moving, the look's standing (the Turn Threshold, as the player's). The style: walk / jog, and the run is the sprint style.
+- **LOD = play on**: a frame the animation LOD holds doesn't step the matcher; the next posed frame steps it over the whole held
+  time (`LatePose`'s accumulated dt) - far dummies search a quarter as often for free.
+- **Speeds** (the decision): a motion matching dummy's pace is the database's gait table (`SpeedFor(Gait, NpcBody)`): walk 1.26,
+  jog 1.81, run = sprint 3.26 m/s (were 1.5 / 3.2 / 4.7).
+- **The trajectory follows the route** (`NavCrowd::Corners` -> `NpcBodyInput::Path`; `TrajectoryPredictor::PredictAlong`): the
+  desired velocity steers for each next corner at the pace, eased to a stop on the goal (`ArriveTime` = the director's stop time),
+  the facing the way it steers. A point counts as passed once the character is beyond it along its way in: steering at a passed
+  goal (the spring carries the prediction over it) turned the predicted facing 180 deg - the walks' ends jumped 3-4 times a
+  second (with it: walk forward 11 jumps -> 6). `TARTARUS_MM_TUNE=NpcPath=0` predicts straight down the wish instead (the A/B).
+- **Cost:** one dummy's matcher, foot pass and look 1.9 % of an npcloco frame (`--perf-sample`); the search 0.3 %.
+
+**Out of the apartments** (the owner, 2026-11-18: "We should not be testing anything in those apartments ... move all the testing
+to a test scene, where it's light to run"). `npcloco`, `locomotion` and `stopsteps` ran in Apartment Hallway's 301 living room (2.9
+MB, 1,596 objects); they now run on `tests/scenes/LocomotionLab.json`'s open floor (78 KB, 29 objects), the course at
+`kCourse` (-15, -17) - clear of labloco's lane, the ledge and the stairs - every leg the same distances as in 301 (`CourseAt`,
+`SmokeHarness.cpp`'s scene map). npcloco: 108 s wall at 73 fps (was 273 s at 10 fps three runs at once in the apartment). Every
+scenario of the motion matching pass is now on a light test scene: LocomotionLab (labloco, mmview, mmdb, npcloco, locomotion,
+stopsteps), AnimTestbed (115 KB: testbed, mmplayer, mmstress), Arena (169 KB: feet). Still in the apartment and not in this
+pass: `roam`, `doors`, `decals` - they test the building itself (its doors, its navigability, decals on its walls).
+- **The tuning moved with it.** A scenario runs the scene's own player: LocomotionLab's (= AnimTestbed's, where the owner
+  play-tests and mmplayer runs) is Ground Accel / Decel 0.08 / 0.10 s, capsule radius 0.30, its own spine weights; the
+  apartment's (= the Forest's) 0.12 / 0.15 s, 0.22. So the three moved scenarios' numbers aren't comparable with
+  `docs/mm_baseline/` (captured in 301); re-capture only if legacy locomotion code changes (the protocol).
+- **The moved courses, legacy** (2026-11-18): npcloco 33/33, locomotion 20/20; stopsteps 9/10 - `stop after jog: at most one
+  settling step` hears 2 (12.57 and 12.78 s; 301 heard 1): the lab's harder brake (0.10 s), not a code change. Recorded, not loosened.
+
+**The tests ported** (run with `TARTARUS_LOCOMOTION_SOURCE=mm`; on legacy they check what they did):
+- `npcloco`: per leg, the top speed against the gait table (within 15 %); jumps a second while cruising (at 90 % of the pace,
+  0.5 s on from setting off; rated with 1 s of it or more) within 1.5x + 0.5 of the player's `A walk` (1.2); pose step p99 within
+  1.5x + 1 of its 7.75 deg; the style asked for on >= 80 % of the cruising frames; the leg ending on a standing idle frame.
+  `[NpcLoco] MM` per leg, `[NpcLocoJump]` per jump (why the search ran).
+- testbed E: no start-turn clip to choose - the turn is the mocap's when the matched clips' own root turn is >= 50 % of the heading's
+  (measured 98 %: -176 of -181 deg); reaching the travel in 1.2 s and no snap as before. F (the ragdoll, the flinch) unchanged.
+- `stopsteps` (10/10 on the lab) and `labloco` pass on motion matching as they are; `roam` passed too (3/3, in the apartment,
+  before the move - it stays there, out of this pass).
+- `locomotion` is the player's legacy clips (Shift's jog clip, the crouch states, the landings): `mmplayer` covers the player on
+  motion matching; it stays a legacy scenario until Phase 6 retires it.
+
+**Results on the lab floor (motion matching, 2026-11-18):** npcloco 38/39, stopsteps 10/10; testbed E/F 7/7 (on AnimTestbed);
+roam and labloco passed before the move (labloco's scene didn't change). `-Quick` after it: unit 53,967 checks, 0 failures
+(the database loads in 0.49 s); mmplayer 93/101 and mmstress 15/16 - the same failing checks with the same numbers as before
+Phase 5 (the player is untouched).
+
+| npcloco leg | top / pace m/s | cruising jumps/s | pose step p99 | style | ends on idle |
+|---|---|---|---|---|---|
+| walk forward | 1.26 / 1.26 | 1.20 | 7.42 | 100 % | yes |
+| walk back | 1.26 / 1.26 | 1.21 | 7.77 | 100 % | yes |
+| walk right | 1.26 / 1.26 | (0.8 s: not rated) | 8.20 | 100 % | yes |
+| walk left | 1.26 / 1.26 | **2.40** (limit 2.30: fails) | 7.84 | 100 % | yes |
+| walk to home | 1.26 / 1.26 | (0.6 s: not rated) | 8.56 | 100 % | yes |
+| jog forward | 1.80 / 1.81 | 1.13 | 9.42 | 100 % | yes |
+| jog back (turns) | 1.81 / 1.81 | 1.75 | 10.23 | 100 % | yes |
+| stand | 1.26 / 1.26 | 1.73 | 8.49 | 100 % | yes |
+
+**Open (Phase 5):**
+1. `walk left`'s cruising jumps (2.40/s, 5 in 2.1 s): hops between walk takes every 0.2-0.5 s (`[NpcLocoJump]`, costs 0.6-1.4
+   against the playing 0.6-1.2). Reported, not loosened.
+2. The starts: the director's capsule reaches pace in ~0.3 s (`kStartTime` 0.12 s), faster than the pack's starts, so the first
+   match is a mid-walk frame (cost 3.5-5.6) and a start take comes in 0.5 s later. The same capsule-led choice as the player's.
+3. The first leg (`go home`, unchecked: the dummy's first move from its spawn) slides a planted foot up to 42 cm.
+4. Not done: `[MmPosture]`-style metrics for the dummy beyond npcloco's.
+
+**The dummies' cost** (`--npc-test npcperf`, `NpcTest_NpcPerf.cpp`, 2026-11-18): LocomotionLab, the player still at (0, -25)
+looking north, 12 dummies roaming round posts near, 25-50 m off and behind (13 with the scene's own) - every LOD tier runs.
+Measured 32 s each, alone (`-Parallel 1`):
+
+| | legacy | motion matching |
+|---|---|---|
+| frame ms avg / p95 / p99 / max | 7.68 / 8.57 / 9.14 / 15.5 | **7.00 / 7.97 / 8.59 / 10.6** |
+| director think (AI) ms | 0.23 | 0.10 |
+| director late (the pose) ms, max | 0.48, 1.28 | 1.24, 3.58 |
+| dummy-frames at LOD 1 / 2 / 4 | 24 / 46 / 29 % | 33 / 52 / 16 % |
+
+The director's own pose step costs more (the matcher, ~0.14 ms a step with the foot pass and look), but the frame is ~0.7 ms
+faster: the dummies' animator controllers no longer run (`UpdateAnimatorControllers`, outside the director's timer). The matcher
+steps exactly as the LOD tiers say (15,595 steps against 15,604), 8.0 searches a dummy a second. (The roaming isn't the same on
+both sources - the LOD shares differ - so it's a fair comparison, not an identical one.) The baseline's perf bench
+(`perf_stress.json`, no dummies) is unchanged: p50 7.38 / p95 7.70 / p99 8.47 ms against 7.44 / 7.68 / 8.57.
+- `mm_smoke.ps1`: a `_mm` suffix runs a scenario on motion matching (`npcloco_mm`, `npcperf_mm`); `-Full` now adds `npcloco_mm`,
+  `npcperf` and `npcperf_mm`, npcperf alone (timed, like mmdb). `npcloco_mm` alone: 31.8 s at 130 fps.
+
+## Phase 5: first steps (done - see above)
 
 1. Branch `dev/mm-phase5` from `dev/mm-phase4`, in the main checkout (licensed assets and `build\` only exist there).
 2. `NpcBody::Tick` (~195-380): a `FirstPersonBodyMotion`-like driver per NPC on `SharedMotionDatabase::Get(..., rig)` (one

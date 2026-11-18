@@ -49,6 +49,17 @@ public:
     // held into a curve, a path bending round a corner); 0 holds them.
     void Predict(const glm::vec3& desiredVelocity, float desiredYaw, const float* times, int count, TrajectoryState* out,
                  float goalTurnRate = 0.0f) const;
+    // A route to follow (the NPCs' navmesh corners, Phase 5).
+    struct PathGoal {
+        const glm::vec3* Points = nullptr; // world, in order; the first is the next corner
+        int Count = 0;
+        float Speed = 0.0f;       // m/s along it
+        float ArriveTime = 0.0f;  // s: >0, the last point is the goal - the speed eases to a stop on it (distance / ArriveTime)
+        float Reached = 0.3f;     // m: a corner this close (flat) is passed and the next one steered for
+    };
+    // As Predict, but the desired velocity steers for the path's next point each step (at Speed, eased into the goal), and
+    // the desired facing is the way it steers (the last facing held once there is nowhere left to go).
+    void PredictAlong(const PathGoal& path, float desiredYaw, const float* times, int count, TrajectoryState* out) const;
     const TrajectoryState& State() const { return m_State; }
     // Puts the simulated character where a host's own simulation has it (Phase 4: the player's capsule, each frame).
     void SetState(const TrajectoryState& s) { m_State = s; }

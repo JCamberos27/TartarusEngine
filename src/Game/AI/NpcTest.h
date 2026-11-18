@@ -51,7 +51,9 @@ class World;
 //            straight, grazing the hinge jamb, grazing the latch jamb, strafing, sprinting on a diagonal - each pass measured:
 //            through in time, the speed kept within half a metre of the wall, time stuck, frames inside anything
 //            (NpcTest_Doors.cpp)
-//   npcloco  a dummy through the gaits in Apartment 301, watched from the side (NpcTest_NpcLoco.cpp)
+//   npcloco  a dummy through the gaits on LocomotionLab's floor, watched from the side (NpcTest_NpcLoco.cpp)
+//   npcperf  a dozen roaming dummies on LocomotionLab at every LOD tier: the director's cost per dummy and the frame time, on
+//            either locomotion source (NpcTest_NpcPerf.cpp)
 //   roam, locomotion, stopsteps: the player's own walking (NpcTest_Roam / _Locomotion / _StopSteps.cpp)
 //   mmview   motion matching, Phase 2 (NpcTest_MmView.cpp, LocomotionLab): the baked takes (Manny.mmanim) checked offline on
 //            the Quantum rig, then a playlist played on a bare Quantum body with the generated root drawn; SKIPs when unbaked
@@ -171,6 +173,10 @@ private:
     bool m_LPlaced = false;
     float m_LClock = 0.0f;
     glm::vec2 m_LDropAt{0.0f};
+    // npcperf (NpcTest_NpcPerf.cpp): what a dozen roaming dummies cost, on either locomotion source
+    static float NpcPerfSeconds();
+    void NpcPerfDrive(Player& player, float& wantYaw, float& wantPitch);
+    void NpcPerf(World& world, NpcDirector& npcs, float now);
     // npcloco (NpcTest_NpcLoco.cpp): a dummy through the same gaits, watched from the side
     static float NpcLocoSeconds();
     void NpcLocoDrive(Player& player, float& wantYaw, float& wantPitch);

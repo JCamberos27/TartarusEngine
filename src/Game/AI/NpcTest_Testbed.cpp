@@ -508,6 +508,10 @@ struct NpcTest::TestbedRun {
     std::string LastNpcState, NpcStates;
     double NpcLoopClip = 0.0, NpcLoopCapsule = 0.0; // its gait loop's clip travel and capsule speed (m/s, summed per frame; logged)
     int NpcLoopFrames = 0;
+    // E on motion matching: the heading's turn (signed, summed a frame at a time) and the matched clips' own root turn in it.
+    bool EMm = false;
+    int EMmUpdates = 0;
+    double HeadingTurnDeg = 0.0, ClipTurnDeg = 0.0;
     // F
     std::string Killed;
     int KilledIndex = -1;
@@ -956,9 +960,24 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             const float rate = std::fabs(WrapDeg(yaw - R.PrevYaw)) / dt;
             R.MaxYawRate = std::max(R.MaxYawRate, rate);
         }
+        R.HeadingTurnDeg += WrapDeg(yaw - R.PrevYaw);
         R.PrevYaw = yaw;
+        if (n->Body.MotionMatching()) {
+            R.EMm = true;
+            if (n->Body.MmUpdates() != R.EMmUpdates) {
+                R.EMmUpdates = n->Body.MmUpdates();
+                const MmPlayerDebug::Snapshot& mm = n->Body.MmDebug();
+                R.ClipTurnDeg += glm::degrees(mm.ClipTurn);
+                if (mm.Clip != R.LastNpcState) {
+                    std::printf("[Testbed] %6.2f s  E %s -> %s  (yaw %.0f, %.2f m/s)\n", inStage, R.LastNpcState.c_str(), mm.Clip.c_str(), yaw,
+                                glm::length(glm::vec2(n->Velocity.x, n->Velocity.z)));
+                    R.LastNpcState = mm.Clip;
+                    R.NpcStates += (R.NpcStates.empty() ? "" : " > ") + mm.Clip;
+                }
+            }
+        }
         if (R.ReachedAt < 0.0f && std::fabs(WrapDeg(yaw - R.TravelYaw)) < 15.0f) R.ReachedAt = inStage;
-        if (const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(n->Body.Driver())) {
+        if (const auto* ac = R.EMm ? nullptr : world.Registry.try_get<AnimatorControllerComponent>(n->Body.Driver())) {
             if (ac->HasTag(FPBody::kTagStartTurn)) {
                 R.SawStartTurn = true;
                 const float steps = ac->GetFloat(FPBody::kStartTurn);
@@ -986,8 +1005,19 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             std::printf("[Testbed] E: its gait loop's clips %.3f m/s, capsule %.3f m/s (ratio %.3f, %d frames; logged, not checked)\n",
                         R.NpcLoopFrames ? R.NpcLoopClip / R.NpcLoopFrames : 0.0, R.NpcLoopFrames ? R.NpcLoopCapsule / R.NpcLoopFrames : 0.0,
                         R.NpcLoopCapsule > 1e-3 ? R.NpcLoopClip / R.NpcLoopCapsule : 0.0, R.NpcLoopFrames);
-            Check(R.SawStartTurn && std::fabs(R.StartTurnSteps) * 45.0f >= 157.5f,
-                  "E: setting off 180 degrees behind it, the start turn chosen covers ~180 degrees (" + std::to_string(R.StartTurnSteps * 45.0f) + ")");
+            if (R.EMm) {
+                // Motion matching: no start-turn clip to choose - the turn is the mocap's when the matched clips' own root turn
+                // carries most of the heading's (the character facing follows the clip; the pull toward the simulation does the rest).
+                const double share = std::fabs(R.HeadingTurnDeg) > 1.0 ? R.ClipTurnDeg / R.HeadingTurnDeg : 0.0;
+                std::printf("[Testbed] E: MM heading turned %.0f deg, the clips' own root turn %.0f deg (%.0f %%)\n", R.HeadingTurnDeg, R.ClipTurnDeg,
+                            100.0 * share);
+                Check(std::fabs(R.HeadingTurnDeg) >= 150.0 && share >= 0.5,
+                      "E: setting off 180 degrees behind it, the turn is the mocap's (the clips' root turn " + std::to_string(100.0 * share) +
+                          " % of the heading's " + std::to_string(R.HeadingTurnDeg) + " deg, >= 50 %)");
+            } else {
+                Check(R.SawStartTurn && std::fabs(R.StartTurnSteps) * 45.0f >= 157.5f,
+                      "E: setting off 180 degrees behind it, the start turn chosen covers ~180 degrees (" + std::to_string(R.StartTurnSteps * 45.0f) + ")");
+            }
             Check(R.ReachedAt >= 0.0f && R.ReachedAt <= 1.2f,
                   "E: its heading reaches the travel (within 15 degrees) in 1.2 s (" + std::to_string(R.ReachedAt) + " s)");
             // No snap: the turn clips peak near 480 deg/s (8 deg a frame at 60 Hz); a heading snapped by a clamp is a single frame's jump.

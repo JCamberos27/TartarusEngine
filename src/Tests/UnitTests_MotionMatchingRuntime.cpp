@@ -903,6 +903,48 @@ void TestPlayerExclusionsAndAimCap() {
     CHECK(falls);
 }
 
+
+// TrajectoryPredictor::PredictAlong (the NPCs' route, Phase 5): round a corner and into the goal. What matters: the facing ends
+// the last leg's way, never the 180 deg turn back a passed goal used to give (the npcloco walks' ends: 3-4 jumps a second); the
+// corner is steered round, not driven through; the move slows into the goal. Measured (2026-11-18): at 1 s (0.666, 0.612),
+// 0.23 m/s, yaw 73 deg - the velocity spring carries it ~7 cm past the goal as the director's capsule's own ease carries it to
+// within 5 cm of it; at 1/3 s already 1.7 cm round toward +X. The limits are those with a margin.
+void TestPredictAlong() {
+    TrajectoryPredictor tp;
+    tp.Params.VelocityHalflife = 0.08f;
+    tp.Params.FacingHalflife = 0.27f;
+    TrajectoryState start;
+    start.Velocity = glm::vec3(0.0f, 0.0f, 1.26f); // walking +Z (yaw 0)
+    tp.SetState(start);
+    const glm::vec3 pts[2] = {glm::vec3(0.0f, 0.0f, 0.6f), glm::vec3(0.6f, 0.0f, 0.6f)}; // a corner, then the goal 0.6 m to its +X
+    TrajectoryPredictor::PathGoal path;
+    path.Points = pts;
+    path.Count = 2;
+    path.Speed = 1.26f;
+    path.ArriveTime = 0.15f;
+    const float times[3] = {1.0f / 3.0f, 2.0f / 3.0f, 1.0f};
+    TrajectoryState out[3];
+    tp.PredictAlong(path, 0.0f, times, 3, out);
+    for (int k = 0; k < 3; ++k) // (the route as predicted: what the limits below were measured on)
+        std::printf("[PredictAlong] t %.2f pos (%.3f, %.3f) vel (%.3f, %.3f) yaw %.1f deg\n", times[k], out[k].Position.x, out[k].Position.z, out[k].Velocity.x, out[k].Velocity.z, out[k].Yaw * 57.2958f);
+    const glm::vec3 end = out[2].Position;
+    CHECK(glm::length(glm::vec2(end.x - 0.6f, end.z - 0.6f)) < 0.12f); // at the goal (its spring's carry past it)
+    // Facing the last leg's way (+X: yaw +pi/2) and still turning toward it - not back along it.
+    CHECK(out[2].Yaw > out[1].Yaw && std::fabs(MotionMath::WrapPi(out[2].Yaw - 1.5707963f)) < 0.5f);
+    CHECK(glm::length(out[2].Velocity) < 0.4f);                           // slowing into it (from 1.26)
+    CHECK(out[0].Position.x > 0.005f && out[1].Position.x > 0.25f);       // round the corner, not through it
+    // Past the last point there is nowhere left to go: standing on it, the prediction stays (no 180 deg turn back to it).
+    TrajectoryState there;
+    there.Position = glm::vec3(0.61f, 0.0f, 0.6f);
+    there.Yaw = 1.5707963f;
+    tp.SetState(there);
+    const glm::vec3 goalOnly[1] = {pts[1]};
+    path.Points = goalOnly;
+    path.Count = 1;
+    tp.PredictAlong(path, 1.5707963f, times, 3, out);
+    CHECK(std::fabs(MotionMath::WrapPi(out[2].Yaw - 1.5707963f)) < 0.05f);
+    CHECK(glm::length(out[2].Position - there.Position) < 0.02f);
+}
 } // namespace
 
 void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
@@ -915,6 +957,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: search schedule", TestSearchSchedule});
     tests.push_back({"Motion matching: dead blending", TestInertialization});
     tests.push_back({"Motion matching: trajectory springs and collision", TestTrajectoryPredictor});
+    tests.push_back({"Motion matching: trajectory along a route (NPCs)", TestPredictAlong});
     tests.push_back({"Motion matching: gait speed table", TestGaitTable});
     tests.push_back({"Motion matching: query root space", TestQueryConvention});
     tests.push_back({"Motion matching: matcher end to end", TestMatcherEndToEnd});

@@ -795,6 +795,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         for (size_t k = 0; k < m_Pieces.size(); ++k)
             if (m_Pieces[k] == m_Driver) driverIndex = k;
         std::string error;
+        m_Mm.SetDebug(&MmPlayerDebug::Info()); // the player's (the Inspector, --npc-test mmplayer)
         if (!m_Mm.Start(m_Models, driverIndex, error)) {
             Log::Warn("First Person Body: Locomotion Source is Motion Matching, but " + error + " - the locomotion controller plays instead.");
         } else {

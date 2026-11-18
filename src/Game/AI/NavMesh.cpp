@@ -602,6 +602,20 @@ int NavCrowd::TargetState(int agent, int* corners) const {
     return (int)ag->targetState;
 }
 
+int NavCrowd::Corners(int agent, glm::vec3* out, int max, bool* reachesTarget) const {
+    if (reachesTarget) *reachesTarget = false;
+    if (!m_Crowd || agent < 0) return 0;
+    const dtCrowdAgent* ag = m_Crowd->getAgent(agent);
+    if (!ag || !ag->active || ag->targetState == DT_CROWDAGENT_TARGET_NONE) return 0;
+    const int n = std::min(ag->ncorners, max);
+    for (int i = 0; i < n; ++i) out[i] = V(&ag->cornerVerts[i * 3]);
+    if (reachesTarget && n > 0 && n == ag->ncorners) {
+        const glm::vec3 t = V(ag->targetPos), c = out[n - 1];
+        *reachesTarget = glm::length(glm::vec2(t.x - c.x, t.z - c.z)) < 0.05f;
+    }
+    return n;
+}
+
 glm::vec3 NavCrowd::NextCorner(int agent) const {
     if (!m_Crowd || agent < 0) return glm::vec3(0.0f);
     const dtCrowdAgent* ag = m_Crowd->getAgent(agent);

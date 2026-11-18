@@ -50,6 +50,24 @@ float SpeedFor(Gait g) {
     return 1.5f;
 }
 
+// A body on motion matching moves at the database's measured gait speeds (the speeds decision: the capsule at the mocap's own
+// pace, only small warping): the walk, the jog, and for the run the sprint style (the old jog set: the pack has no sustained run).
+float SpeedFor(Gait g, const NpcBody& body) {
+    if (!body.MotionMatching()) return SpeedFor(g);
+    const GaitSpeedTable& t = body.Motion().Gaits();
+    switch (g) {
+    case Gait::Still: return 0.0f;
+    case Gait::Walk: return t.Walk;
+    case Gait::Jog: return t.Jog;
+    case Gait::Run: return t.Legs[5] > 0 ? t.Sprint : t.Jog;
+    }
+    return t.Walk;
+}
+
+int StyleFor(Gait g) {
+    return g == Gait::Jog ? (int)MotionLabel::StyleJog : g == Gait::Run ? (int)MotionLabel::StyleSprint : (int)MotionLabel::StyleWalk;
+}
+
 // A dummy's tree shown or hidden: its own checkbox on the root, the derived flag on everything under it (set here rather
 // than by World::SyncActiveInHierarchy, which walks the whole scene).
 void SetTreeActive(World& world, entt::entity root, bool active) {
@@ -174,7 +192,11 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, bool allowEmpty) {
         m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
         m_HoldSettings.Spine = fpb.Spine; // per-bone spine weights and limits
         m_HoldSettings.FootLock = IK::FootLockFrom(fpb);   // planted feet held in the world
+        m_HoldSettings.MotionMatching = FirstPersonBody::SourceFor(fpb) == LocomotionSource::MotionMatching;
+    } else {
+        m_HoldSettings.MotionMatching = FirstPersonBody::SourceFor(FirstPersonBodyComponent{}) == LocomotionSource::MotionMatching;
     }
+    Log::Info(std::string("Dummies: locomotion from ") + (m_HoldSettings.MotionMatching ? "motion matching." : "the npc_soldier controller."));
     m_Active = true;
     m_Started = false;
     m_Now = 0.0f;
@@ -483,7 +505,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
                         n.HasGoal = true;
                     }
                 }
-                float speed = SpeedFor(n.Pace);
+                float speed = SpeedFor(n.Pace, n.Body);
                 if (m_Now < n.StaggerUntil) speed *= 0.2f; // reeling from a heavy hit
                 m_Crowd.SetMaxSpeed(n.Agent, speed);
                 n.PaceSpeed = speed;
@@ -627,6 +649,11 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.LookPoint = n.LookPoint;
     in.Sprint = n.Pace == Gait::Run && n.WantMove;
     in.FootIK = FootIKEverywhere || (n.PlayerDist < m_Cfg.FootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen
+    if (n.Body.MotionMatching()) {
+        in.Style = StyleFor(n.Pace);
+        // The trajectory follows the route's corners (the crowd's), not the straight wish - while it goes on, not once it stops.
+        if (n.WantMove && n.Agent >= 0 && glm::dot(wish, wish) > 1e-4f) in.PathCount = m_Crowd.Corners(n.Agent, in.Path, 4, &in.PathArrives);
+    }
     n.Body.Tick(world, in, dt);
 }
 
@@ -727,9 +754,11 @@ void NpcDirector::UpdateLod(World& world, Npc& n, const PlayerSnapshot& p) {
     n.OnScreen = onScreen;
     const bool busy = m_Now - n.LastHurt < 0.5f || m_Now - n.SpawnedAt < 0.5f;
     n.Animate = busy || lod == 1 || ((m_Frame + n.Index) % lod) == 0;
+    // (Motion matching: the controllers are always held - the matcher poses the body, stepping on the frames posed - LatePose.)
+    const bool held = !n.Animate || n.Body.MotionMatching();
     for (entt::entity e : n.Body.Pieces())
         if (e != entt::null && world.Registry.valid(e))
-            if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = !n.Animate;
+            if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = held;
 }
 
 // The per-bone hitboxes follow the skeleton for dummies within Hitbox Range of the player (made on first need, off beyond

@@ -10,6 +10,7 @@
 #include "GameFrames.h"              // Gameplay::BodyMotionFrame (the standing locomotion)
 #include "GameRules.h"               // GameRules::UpdateBodyMotion
 #include "IK.h"
+#include "Log.h"
 #include "Model.h"
 #include "PhysicsWorld.h"
 #include "World.h"
@@ -157,6 +158,17 @@ bool NpcBody::Start(World& world, entt::entity root) {
         if (skinsUnder({"neck_01"})) f |= kSkinsNeck;
         m_PieceSkins[k] = f;
     }
+    // Motion matching: the player's database and driver; the controllers held (NpcDirector::UpdateLod keeps them held).
+    if (m_Set.MotionMatching) {
+        m_Mm.SetDebug(&m_MmDebug);
+        std::string error;
+        if (m_Mm.Start(m_Models, (size_t)m_DriverIndex, error)) {
+            m_MmActive = true;
+            for (entt::entity e : m_Pieces) reg.get<AnimatorControllerComponent>(e).SkipUpdate = true;
+        } else {
+            Log::Warn("Dummies: Locomotion Source is Motion Matching, but " + error + " - the npc_soldier controller plays instead.");
+        }
+    }
     return true;
 }
 
@@ -198,6 +210,15 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     if (!reg.valid(m_Driver) || !reg.valid(m_Root) || !reg.all_of<AnimatorControllerComponent>(m_Driver)) return;
     m_In = in;
     m_Feet = in.Feet;
+    // Motion matching: the body stands on the capsule at its heading; the matcher steps in LateUpdate (StepMotionMatching), on the
+    // frames the animation LOD poses, over the time since its last step.
+    if (m_MmActive) {
+        if (!m_HaveYaw) { m_Yaw = in.FacingYaw; m_HaveYaw = true; }
+        m_RootMotionDt = 0.0f;
+        m_Warp = 0.0f;
+        world.SetWorldPose(m_Root, m_Feet, YawRotation(m_Yaw));
+        return;
+    }
     auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
     // The time the root motion read below covers. The animators ran after the last Tick, by its dt plus whatever the LOD had held
     // before it (the SkippedTime that Tick saw) - or not at all (held: SkippedTime counting, the motion zero).
@@ -542,8 +563,8 @@ void NpcBody::SyncLower() {
 }
 
 void NpcBody::LateUpdate(World& world, float dt, const PoseKick& kick) {
-    (void)world;
     if (!IsActive() || m_PoseExternal || !m_DriverModel) return;
+    if (m_MmActive) StepMotionMatching(world, dt);
     FootPass(dt, kick);
     const glm::mat4 rootW = RootWorld();
     // The look, measured from the chest: a twist toward it (not while turning on the spot), sprung.
@@ -605,6 +626,35 @@ void NpcBody::LateUpdate(World& world, float dt, const PoseKick& kick) {
     SyncPieces();
     glm::mat4 head(1.0f);
     m_Eye = m_DriverModel->NodeTransform("head", head) ? glm::vec3(rootW * head[3]) : m_Feet + glm::vec3(0.0f, 1.62f, 0.0f);
+}
+
+void NpcBody::StepMotionMatching(World& world, float dt) {
+    if (!(dt > 0.0f)) return;
+    static const FirstPersonBodyComponent kTune{};
+    FirstPersonBodyMotion::Input mi;
+    mi.Dt = dt;
+    mi.Feet = m_In.Feet;
+    mi.Velocity = m_In.Velocity;
+    mi.Wish = glm::vec3(m_In.Wish.x, 0.0f, m_In.Wish.z);
+    // The facing wanted: the way it goes while moving; standing, as asked (the look), past the Turn Threshold.
+    mi.ViewYaw = glm::length(mi.Wish) > 0.1f ? NpcYawOf(mi.Wish, m_Yaw) : m_In.FacingYaw;
+    mi.Grounded = m_In.Grounded;
+    mi.Sprint = m_In.Sprint;
+    mi.Style = m_In.Style;
+    mi.TurnThreshold = m_Set.TurnThreshold;
+    mi.TurnEndAngle = glm::radians(std::max(kTune.TurnEndAngle, 0.0f));
+    // The capsule's ease to pace (an exponential, time constant AccelTime) as the predictor's spring - as the player's.
+    mi.VelocityHalflife = std::max(m_In.AccelTime, 0.02f) * 0.6931f;
+    // (MmTune NpcPath=0: the trajectory straight down the wish instead of along the corners - the A/B.)
+    static const bool kPath = MmTune("NpcPath", 1.0f) != 0.0f;
+    mi.Path = m_In.Path;
+    mi.PathCount = kPath ? std::clamp(m_In.PathCount, 0, 4) : 0;
+    mi.ArriveTime = m_In.PathArrives ? std::max(m_In.DecelTime, 0.05f) : 0.0f;
+    m_Mm.Tick(mi, m_Yaw);
+    m_Turning = m_Mm.Turning();
+    ++m_MmUpdates;
+    world.SetWorldPose(m_Root, m_Feet, YawRotation(m_Yaw));
+    m_Mm.Pose(m_Models);
 }
 
 void NpcBody::SyncPieces() {
@@ -670,6 +720,12 @@ bool NpcBody::BoneWorld(const std::string& bone, glm::vec3& out) const {
 
 std::string NpcBody::AnimDebug(const World& world) const {
     if (m_PoseExternal || m_Driver == entt::null || !world.Registry.valid(m_Driver)) return "-";
+    if (m_MmActive) {
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "%s f%u rate %.2f searches %d jumps %d", m_MmDebug.Clip.c_str(), m_MmDebug.Frame, m_MmDebug.PlayRate,
+                      m_MmDebug.Searches, m_MmDebug.Jumps);
+        return buf;
+    }
     const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Driver);
     if (!ac || ac->Layers.empty()) return "-";
     char buf[96];
@@ -689,6 +745,7 @@ std::string NpcBody::AnimDebug(const World& world) const {
 std::string NpcBody::StateName(const World& world) const {
     if (m_PoseExternal) return "ragdoll"; // (alive and going down, or dead: the physics has the pose)
     if (m_Driver == entt::null || !world.Registry.valid(m_Driver)) return {};
+    if (m_MmActive) return FPBody::kStateMotionMatching;
     const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Driver); // gone once ragdolled
     return ac ? ac->StateName : std::string("ragdoll");
 }
