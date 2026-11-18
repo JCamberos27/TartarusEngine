@@ -101,9 +101,9 @@ const FlagDef kFlags[] = {
     {"--weapon-lab", Arity::None, "", false, kNoMode, kGuiModes,
      [](LaunchOptions& o, const std::string&) { o.weaponLabMode = true; },
      "the WeaponLab scene with the Weapon Lab panel"},
-    {"--perf-sample", Arity::None, "", false, kNoMode, Bit(LaunchMode::PerfBench),
+    {"--perf-sample", Arity::None, "", false, kNoMode, Bit(LaunchMode::PerfBench) | Bit(LaunchMode::NpcTest),
      [](LaunchOptions& o, const std::string&) { o.perfSample = true; },
-     "add a sampling CPU profile of each phase"},
+     "add a sampling CPU profile of each phase (--npc-test: of the scripted run, from its 900th frame)"},
     {"--perf-res", Arity::Required, "WxH", false, kNoMode,
      Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests),
      [](LaunchOptions& o, const std::string& v) {

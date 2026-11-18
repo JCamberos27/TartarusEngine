@@ -882,36 +882,57 @@ drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
 
 ## Fast iteration (keep current)
 
-The full course and the full pass are for final verification only. Iterate on a subset of legs, in parallel, without
-rebuilding for tuning values.
+Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
 
+| Tier | Command | What | When |
+|---|---|---|---|
+| Iterate | `mm_smoke.ps1 mmplayer -SkipUnit -SkipSmoke -Legs "..."` | the legs in question | every change while working (~30 s) |
+| Quick | `mm_smoke.ps1 -Quick` | unit, mmplayer, mmstress | before committing motion matching work (~1.5 min engine runs + the build) |
+| Quick + bake | `mm_smoke.ps1 -Quick mmview mmdb` | + the stream and database checks | when the bake or the database changed |
+| Full | `mm_smoke.ps1 -Full` | unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview, mmdb, mmplayer, mmstress, perf bench (`tests\perf-scenes\perf_stress.json`) | once per PR, before merging |
+
+- **The six old-locomotion scenarios** (testbed, npcloco, locomotion, stopsteps, feet, labloco) run only in `-Full`, or when a
+  change touches code they share (foot IK, `Player`, `FirstPersonBody`'s legacy path). Phase 6 retires them.
+- **In parallel:** the script runs up to `-Parallel` (default 3) engine runs at once; the timing checks (`mmdb`'s search time,
+  the perf bench) run alone. Runs are deterministic under load: the same legs alone and two at once gave identical logs
+  (2026-11-17), since every run steps a fixed 1/60 s. `-Parallel 1` runs one at a time, in order.
 - **A subset of legs:** `TARTARUS_TESTBED_LEGS` (comma-separated, `*` wildcards) on testbed / mmplayer / mmstress, or
-  `tools\mm_smoke.ps1 -Legs`. Each matching leg runs with the legs of its part from the last placement (settle) leg before
-  it, so it starts as on the whole course. A check that names a leg that didn't run - its own, or a reference leg like
-  `(A walk ...)` - is skipped and logged `[NpcTest] SKIP (leg filter: ...)`; a part with no leg running skips its setup checks, and the
-  whole-course checks (`mmplayer: ...`, `mmstress: ...`, `testbed: ...` - averages over every leg) are skipped under a filter.
+  `-Legs`. Each matching leg runs with the legs of its part from the last placement (settle) leg before it, so it starts as on
+  the whole course. A check that names a leg that didn't run - its own, or a reference leg like `(A walk ...)` - is skipped and
+  logged `[NpcTest] SKIP (leg filter: ...)`; a part with no leg running skips its setup checks, and the whole-course checks
+  (`mmplayer: ...`, `mmstress: ...`, `testbed: ...` - averages over every leg) are skipped under a filter.
   Example: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 mmplayer -SkipUnit -SkipSmoke -Legs "M sprint*,M stop after sprint*,M jog,M jog turning"`
 - **Tuning without a rebuild:** `TARTARUS_MM_TUNE="Key=value,..."` overrides at startup (`MmTune`, FirstPersonBodyMotion.cpp;
   logged `[MmTune]`). Keys: `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife MaxFacingOffset TransitionCost MinRunway
   ForcedPoseWeight SprintCharacterFacingHalflife BlendTime DecayHalflife W.FootPos W.FootVel W.PelvisVel W.TrajPos W.TrajDir
   FootLock.Height FootLock.Lift FootLock.Speed FootLock.Reach FootLock.MaxDrift FootLock.Release FootLock.StepHeight
   FootLock.StepMax`. A new knob is one more `MmTune("Key", default)` call in a .cpp; an adopted value goes into the header
-  default once, at the end.
-- **In parallel:** 2-3 `mm_smoke.ps1` runs at once, each with its own `-LogDir` (and `-SkipBuild`), on one build with a
-  different `TARTARUS_MM_TUNE` each (`Start-Job`, or separate terminals). For experiments that differ in code,
-  `tools\mm_exp.ps1 -Name <exp>` copies the runnable build (build\Release without .pdb/.lib/.exp, ~64 MB: the game code is in
-  TartarusGame.dll beside the exe) to `work\exp\<exp>\`; run it with `-Exe work\exp\<exp>\TartarusEngine.exe` while the main
-  build compiles the next one. (`-Exe` was silently ignored until 2026-11-17 - PowerShell's names ignore case, so the script's
-  own `$exe` was the parameter - every run used build\Release; fixed.)
+  default once, at the end. Several tunings at once: one `mm_smoke.ps1` per value, each with its own `-LogDir` and
+  `TARTARUS_MM_TUNE` (`Start-Job`).
+- **Code experiments side by side:** `tools\mm_exp.ps1 -Name <exp>` copies the runnable build (build\Release without
+  .pdb/.lib/.exp, ~64 MB: the game code is in TartarusGame.dll beside the exe) to `work\exp\<exp>\`; run it with
+  `-Exe work\exp\<exp>\TartarusEngine.exe` while the main build compiles the next one. (`-Exe` was silently ignored until
+  2026-11-17 - PowerShell's names ignore case, so the script's own `$exe` was the parameter; fixed.)
 - **Slow rebuilds:** the widely included headers - `IK.h`, `FirstPersonBody.h`, `FirstPersonBodyMotion.h`, `MotionSearch.h`,
   `MotionDatabase.h`, `MotionFeatures.h`, `Player.h`, `Components.h`, `Core/Env.h` - rebuild most of the engine. Put experiment
   knobs in .cpp files or `MmTune`, not in their defaults.
-- **Measured (2026-11-17):** full mmplayer ~110 s (~2 min, ~95 legs, rendered); a header edit's rebuild ~4.5-5 min (281 s);
-  a .cpp-only rebuild ~20 s (23 s); a leg-filtered mmplayer (a few legs) 32 s, the sprint legs with their jog counterparts ~100 s; two filtered runs in
-  parallel 38 s together.
-- **Next (when tuning comes back round):** a headless fixed-timestep mode for mmplayer / mmstress (no window, the simulation as
-  fast as the CPU allows); the offline matcher replay Step 4 of the full-library plan called for (recorded inputs through the
-  matcher and the capsule maths, scored in seconds, for parameter sweeps).
+- **Measured (2026-11-17):**
+  - a header edit's rebuild 2.5-5 min (148-281 s); a .cpp-only rebuild ~20 s;
+  - a leg-filtered mmplayer (a few legs) ~30 s;
+  - `-Quick`: 95 s of engine runs at `-Parallel 3` (206 s before the probe fix below) + the build;
+  - the full pass, one run at a time: 14 min including a 3.6 min build.
+- **Tried and dropped: skipping the drawing.** Drawing only every 8th frame of mmplayer + mmstress (`-Parallel 2`) took
+  115 s against 131 s drawing every frame (~12 %; mmplayer 105 -> 120 fps), with identical check results: the time is the
+  simulation, not the drawing.
+- **The camera probe, binned (adopted).** A CPU profile of an mmplayer slice (`--npc-test mmplayer --perf-sample`: a sampling
+  profile from the run's 900th frame, `[PerfSample]` lines) put 66.5 % in `FirstPersonBody::InsideProbe` - on the five
+  look-down legs, every one of 336 view rays tested against every body triangle in view (~0.2 s a probe, every third frame).
+  Each triangle is now binned by its screen footprint, so a ray tests only those that can cover its grid point (one reaching
+  behind the eye: every ray). Verified against the brute force inside every probe of the look-down legs: 67,200 rays, every
+  nearest hit the same, and all 10,633 triangle crossings (5,243 of them the far side's back faces) in the ray's cell; the
+  `-Quick` logs' 1,281 result lines identical. The look-down legs 83 -> 35 s; `-Quick`'s engine runs 206 -> 95 s.
+- **Later:** the offline matcher replay Step 4 of the full-library plan called for (recorded inputs through the matcher and
+  the capsule maths, scored in seconds, for parameter sweeps).
 
 ## Code map (where things are)
 

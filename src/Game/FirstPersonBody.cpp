@@ -3186,6 +3186,39 @@ void FirstPersonBody::InsideProbe(World& world, const Camera& camera) {
         }
     }
     constexpr int kW = 24, kH = 14;
+    // Each ray tests only the triangles whose screen footprint holds its grid point: a triangle wholly in front of the eye
+    // projects to the triangle of its projected corners, so a ray through screen point (sx, sy) can only hit one whose
+    // projected box holds it; one reaching behind the eye is tested by every ray. Each cell keeps the triangles' order, so the
+    // nearest hit (and a tie) is the brute force's. (Brute force - every ray against every triangle - was two thirds of an
+    // mmplayer run's CPU: ~0.2 s a probe on the look-down legs.)
+    thread_local std::vector<std::vector<int>> cells;
+    cells.resize((size_t)kW * kH);
+    for (auto& c : cells) c.clear();
+    {
+        const float toX = 1.0f / (tanHalf * kAspect), toY = 1.0f / tanHalf;
+        for (int ti = 0; ti < (int)tris.size(); ++ti) {
+            const Tri& t = tris[(size_t)ti];
+            float lo[2] = {1e9f, 1e9f}, hi[2] = {-1e9f, -1e9f};
+            bool behind = false;
+            for (const glm::vec3& v : {t.A, t.B, t.C}) {
+                const glm::vec3 d = v - eye;
+                const float z = glm::dot(d, f);
+                if (z <= 1e-4f) { behind = true; break; }
+                const float px = glm::dot(d, r) / z * toX, py = glm::dot(d, u) / z * toY; // -1..1 across the grid
+                lo[0] = std::min(lo[0], px); hi[0] = std::max(hi[0], px);
+                lo[1] = std::min(lo[1], py); hi[1] = std::max(hi[1], py);
+            }
+            // Grid point x sits at screen ((x + 0.5) / kW * 2 - 1): the points inside [lo, hi] (widened a hair, so rounding never
+            // drops a triangle whose edge runs through a grid point - a wider box only adds rays that miss).
+            for (int a = 0; a < 2; ++a) { lo[a] -= 1e-3f; hi[a] += 1e-3f; }
+            const int x0 = behind ? 0 : std::max(0, (int)std::ceil((lo[0] + 1.0f) * 0.5f * kW - 0.5f));
+            const int x1 = behind ? kW - 1 : std::min(kW - 1, (int)std::floor((hi[0] + 1.0f) * 0.5f * kW - 0.5f));
+            const int y0 = behind ? 0 : std::max(0, (int)std::ceil((lo[1] + 1.0f) * 0.5f * kH - 0.5f));
+            const int y1 = behind ? kH - 1 : std::min(kH - 1, (int)std::floor((hi[1] + 1.0f) * 0.5f * kH - 0.5f));
+            for (int y = y0; y <= y1; ++y)
+                for (int x = x0; x <= x1; ++x) cells[(size_t)y * kW + x].push_back(ti);
+        }
+    }
     int hits = 0, inside = 0;
     float sumX = 0.0f, sumY = 0.0f; // where on the screen the inside is seen (-1..1, + right / up)
     std::map<std::pair<int, int>, int> what;
@@ -3197,7 +3230,8 @@ void FirstPersonBody::InsideProbe(World& world, const Camera& camera) {
             float bestT = 1e9f;
             const Tri* bestTri = nullptr;
             bool back = false;
-            for (const Tri& t : tris) {
+            for (const int ti : cells[(size_t)y * kW + x]) {
+                const Tri& t = tris[(size_t)ti];
                 // Moller-Trumbore, both sides.
                 const glm::vec3 e1 = t.B - t.A, e2 = t.C - t.A, p = glm::cross(dir, e2);
                 const float det = glm::dot(e1, p);
