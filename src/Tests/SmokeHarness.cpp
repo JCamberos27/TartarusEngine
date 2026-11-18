@@ -86,11 +86,13 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         }
         std::sort(m_ScenePaths.begin(), m_ScenePaths.end());
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
-            m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" || opt.npcTestScenario == "mmview" || opt.npcTestScenario == "mmdb" ? "tests/scenes/LocomotionLab.json"
+            m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" || opt.npcTestScenario == "mmview" || opt.npcTestScenario == "mmdb" ||
+                                                                  opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "locomotion" || opt.npcTestScenario == "stopsteps"
+                                                              ? "tests/scenes/LocomotionLab.json" // (npcloco, locomotion, stopsteps: out of the apartments, 2026-11-18)
                                                           : opt.npcTestScenario == "blood" ? "tests/scenes/BloodTest.json"
                                                           : opt.npcTestScenario == "ragdoll" ? "tests/scenes/RagdollTest.json"
                                                           : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
-                                                          : opt.npcTestScenario == "locomotion" || opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" || opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" ? "tests/scenes/Apartment Hallway.json"
+                                                          : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" ? "tests/scenes/Apartment Hallway.json"
                                                                                        : "tests/scenes/Arena.json")); // (deaths, feet, flame: the Arena)
         // testbed: the animation overhaul's clean scene, a project scene (tools/scenes/build_anim_testbed.py), not a tests/ one.
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty() && (opt.npcTestScenario == "testbed" || opt.npcTestScenario == "mmplayer" || opt.npcTestScenario == "mmstress"))
