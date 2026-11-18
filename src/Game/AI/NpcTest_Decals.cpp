@@ -1,5 +1,9 @@
-// --npc-test decals (NpcTest.h): bullet holes and blood put at fixed spots on the Apartment Hallway's corridor (the north
-// wall by apartment 304 and the floor in front of it), then shot from fixed Scene-view cameras. Everything is placed by
+// --npc-test decals (NpcTest.h): bullet holes and blood put at fixed spots on DoorsLab's corridor (the north wall and the
+// floor in front of it), then shot from fixed Scene-view cameras. DoorsLab (tools/scenes/build_doors_lab.py, out of the
+// apartments 2026-11-18) keeps the Apartment Hallway's corridor where it was - the same 2 m between wall faces at z = +-1.0,
+// the west end's face at x = -10.45 - so every spot and camera below is the hallway's, unchanged; only the surfaces differ
+// (plain plaster-coloured boxes on the grid floor, open to the sky, where the hallway had its dressed corridor under a
+// ceiling), so the shots aren't comparable with ones taken in the hallway. Everything is placed by
 // the script on the fixed 60 Hz step, so two builds shoot the same picture: the before / after of the blood and bullet
 // holes moving onto the clustered decals (docs/DECALS.md). Then the spray can (Decals P4): the player and an NPC spray
 // two pieces on to the south wall; checked half-way (part on, the hiss going) and done (whole, saved with the game state).
@@ -18,7 +22,7 @@
 #include <cstdlib>
 
 namespace {
-// The corridor's north wall face (z = +1, solid from x -10.45 to -6.36) and the floor in front of it.
+// The corridor's north wall face (z = +1, solid from x -10.45 to -3.96, 101 Front Door's jamb) and the floor in front of it.
 constexpr float kWallZ = 0.995f;
 const glm::vec3 kPlayerFeet(-9.95f, 0.02f, -0.5f); // off to the west, out of the cameras' view
 constexpr float kFireAt = 2.0f;
@@ -81,7 +85,7 @@ void NpcTest::DecalsDrive(Player& player, float& wantYaw, float& wantPitch) {
 
 void NpcTest::Decals(World& world, NpcDirector&, float) {
     (void)world;
-    // Its own clock: the hallway may have no dummies, and the director's clock only runs with them.
+    // Its own clock: the scene may have no dummies (DoorsLab has none), and the director's clock only runs with them.
     // (The host steps Play by a fixed 1/60 s under --npc-test.)
     m_KClock += 1.0f / 60.0f;
     const float now = m_KClock;

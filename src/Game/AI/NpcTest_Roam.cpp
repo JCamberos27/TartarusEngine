@@ -1,7 +1,10 @@
 // --npc-test roam: the player walked the scene's rooms - every door the doors scenario finds, a point 0.8 m either side of
 // it, visited nearest-first along the navigation mesh (so upstairs by the stairs) with all the doors open - and measured on
 // each leg: whether he got there, how long he was stuck (under a quarter of his walking speed), and whether he fell (half a
-// metre under the route). The scene's navigability measured, not guessed: NPC_TEST_SCENE picks it (Apartment Hallway by default).
+// metre under the route). The scene's navigability measured, not guessed: NPC_TEST_SCENE picks it (DoorsLab by default:
+// tools/scenes/build_doors_lab.py, out of the Apartment Hallway 2026-11-18). DoorsLab's six doors give 12 waypoints where the
+// hallway's eighteen gave 36, and its upper floor (1.5 m up a stair outside, 201 Front Door) adds the stairs legs the
+// single-storey hallway never had; the player is LocomotionLab's with the hallway's 0.22 m capsule (build_doors_lab.py).
 #include "NpcTest.h"
 #include "NavMesh.h"
 #include "PhysicsWorld.h"

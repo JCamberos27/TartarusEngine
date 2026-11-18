@@ -316,7 +316,8 @@ pass (a depth-reconstructing box draw with its own atlases on units 28/29 and SS
 - **Mesh splats.** Blood on characters stays in bind space (`BloodSplatCover` in `ModelFragment.glsl`).
   It reads the same blood-set maps from the shared decal arrays by slot and layer, outside the clustered list.
 - **Tests.** Unit tests: `--unit-tests "Decal runtime"`. The before/after harness:
-  `--npc-test decals --smoke-shots <dir>`, which runs in the Apartment Hallway and shoots fixed cameras
+  `--npc-test decals --smoke-shots <dir>`, which runs in `tests/scenes/DoorsLab.json` (the hallway's corridor walls at
+  the hallway's coordinates, `tools/scenes/build_doors_lab.py`; out of the Apartment Hallway 2026-11-18) and shoots fixed cameras
   of the rounds and the stains, then the spray can (`docs/GRAFFITI_DESIGNER.md`).
 
 ## Corridor wear

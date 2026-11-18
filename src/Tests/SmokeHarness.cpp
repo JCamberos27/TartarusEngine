@@ -93,7 +93,8 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
                                                           : opt.npcTestScenario == "blood" ? "tests/scenes/BloodTest.json"
                                                           : opt.npcTestScenario == "ragdoll" ? "tests/scenes/RagdollTest.json"
                                                           : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
-                                                          : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" ? "tests/scenes/Apartment Hallway.json"
+                                                          : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam"
+                                                              ? "tests/scenes/DoorsLab.json" // (out of the apartments too, 2026-11-18: tools/scenes/build_doors_lab.py)
                                                                                        : "tests/scenes/Arena.json")); // (deaths, feet, flame: the Arena)
         // testbed: the animation overhaul's clean scene, a project scene (tools/scenes/build_anim_testbed.py), not a tests/ one.
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty() && (opt.npcTestScenario == "testbed" || opt.npcTestScenario == "mmplayer" || opt.npcTestScenario == "mmstress"))
