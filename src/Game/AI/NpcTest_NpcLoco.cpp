@@ -219,5 +219,21 @@ void NpcTest::NpcLocoReport() {
             Check(s.Cruise > 0 && style >= 80.0f, std::string(L.Name) + ": cruising plays the style asked for (" + std::to_string(style) + " %)");
             Check(s.EndGait == MotionLabel::Idle, std::string(L.Name) + ": stops on a standing idle frame (" + s.EndClip + ")");
         }
+        // The planted feet hold (IK::FootSlideMeter, judged from where each plant settles), on the legs that need their own check:
+        // - `go home`, the first move from the spawn (a turn round from where it was put; not rated above). It read 42 cm before the
+        //   meter judged from the settle: the start's low first step (2-3 cm over the floor the spawn's idle stance left) was
+        //   counted from mid-swing; the foot itself held still once down. Its limit: 1.5x walk forward's worst plant (1.0 cm on
+        //   the settled meter, 2026-11-18), as it was set first (1.5x walk forward's 8.1 cm on the old meter).
+        // - `walk right` / `walk left`, which set off 90-180 deg behind themselves and turn on the spot first (NpcDirector's turn
+        //   first): 4.2 / 3.5 cm with it (1.3 / 0.6 without). Their limit: 1.5x the worst plant of the other walk legs (stand's
+        //   3.1 cm, 2026-11-18).
+        struct SlideLimit { const char* Leg; float Limit; };
+        static const SlideLimit kSlide[] = {{"go home", 0.015f}, {"walk right", 0.0465f}, {"walk left", 0.0465f}};
+        for (const SlideLimit& sl : kSlide) {
+            const auto it = m_SlideWorstNpc.find(sl.Leg);
+            const float worst = it != m_SlideWorstNpc.end() ? it->second : -1.0f;
+            Check(worst >= 0.0f && worst <= sl.Limit, std::string(sl.Leg) + ": the worst planted foot slides " + std::to_string(worst * 100.0f) +
+                                                          " cm (<= " + std::to_string(sl.Limit * 100.0f) + ")");
+        }
     }
 }

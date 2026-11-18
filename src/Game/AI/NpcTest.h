@@ -187,6 +187,7 @@ private:
     float m_LabClock = 0.0f;
     std::vector<std::string> m_SlideBodies; // the NPCs SlideLeg reports on
     std::map<std::string, float> m_SlideWorstPlayer; // SlideLeg: the player's worst plant drift per leg (m)
+    std::map<std::string, float> m_SlideWorstNpc;    // SlideLeg: the worst plant drift per leg of the NPCs it reports on (m)
     std::map<std::string, float> m_SlideContactPlayer; // ... the lesser of its ankle's and its ball's (a pivot is not a slide)
     std::vector<std::string> m_SkipLegs; // legs that didn't run (TestbedLegsOff): a check naming one is skipped, not failed
     int m_LabFrame = 0;
