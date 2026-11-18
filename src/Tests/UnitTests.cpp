@@ -793,6 +793,93 @@ void TestLodImpostor() {
     ImpostorLibrary::TestOverride(-1, 0.0f);
 }
 
+// Opening another scene: the editor keeps its World and the scene loader clears the registry in place, so nothing of
+// the outgoing scene's LOD state may outlive it. A scene with no LOD groups at all used to keep the outgoing scene's
+// records: every group then standing on its impostor stayed listed by ForEachImpostor, and ImpostorRenderer drew it
+// at the origin (its group gone, GetCachedWorldTransform answers identity) - a Forest tree standing in AnimTestbed.
+void TestLodImpostorSceneSwitch() {
+    ImpostorLibrary::TestOverride(0, 10.0f);
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    const glm::vec3 eye(0.0f, 0.0f, 12.0f); // past the 10 m start: a 4 m group on LOD 2 shows its impostor
+    std::string forest, testbed, grove;
+    {
+        // "Forest": a LOD group, three levels under it.
+        World a;
+        AssetLibrary assets;
+        const entt::entity group = a.CreateEmptyEntity(zero, zero, one, "Tree");
+        a.Registry.emplace<LODGroupComponent>(group).Size = 4.0f;
+        for (int i = 0; i < 3; ++i) a.SetParent(a.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i)), group);
+        forest = SceneSerializer::SaveToString(a, assets);
+        // "Grove": the same group further off, and a second one - a scene with groups of its own.
+        a.Registry.get<TransformComponent>(group).Position = glm::vec3(5.0f, 0.0f, 0.0f);
+        const entt::entity other = a.CreateEmptyEntity(glm::vec3(-5.0f, 0.0f, 0.0f), zero, one, "Tree 2");
+        a.Registry.emplace<LODGroupComponent>(other).Size = 4.0f;
+        for (int i = 0; i < 3; ++i) a.SetParent(a.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i)), other);
+        grove = SceneSerializer::SaveToString(a, assets);
+    }
+    {
+        // "AnimTestbed": no LOD group anywhere.
+        World b;
+        AssetLibrary assets;
+        b.CreateEmptyEntity(zero, zero, one, "Lane Post");
+        b.CreateEmptyEntity(glm::vec3(2.0f, 0.0f, 0.0f), zero, one, "Ledge");
+        testbed = SceneSerializer::SaveToString(b, assets);
+    }
+    World world; // one World and one library across the switches, as the editor's
+    AssetLibrary assets;
+    // What ImpostorRenderer would draw this view: each listed group's count, and how many are not this scene's groups.
+    int listed = 0, foreign = 0;
+    auto view = [&]() {
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(eye, proj);
+        listed = foreign = 0;
+        world.ForEachImpostor([&](entt::entity g, int, float) {
+            ++listed;
+            foreign += !world.Registry.valid(g) || !world.Registry.all_of<LODGroupComponent>(g);
+        });
+    };
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    view();
+    CHECK(listed == 1 && foreign == 0); // the Forest's tree, on its impostor
+    CHECK(SceneSerializer::LoadFromString(world, assets, testbed));
+    view();
+    std::printf("[UnitTest] LodImpostorSceneSwitch: after the switch to a scene with no LOD groups, %d impostor(s) "
+                "listed, %d of them not this scene's\n", listed, foreign);
+    CHECK(listed == 0 && foreign == 0); // nothing of the Forest's left to draw
+    CHECK(world.Registry.view<LodCulledTag>().empty());
+    // Back, and on to a scene with groups of its own: only its own, each once.
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    view();
+    CHECK(listed == 1 && foreign == 0);
+    CHECK(SceneSerializer::LoadFromString(world, assets, grove));
+    view();
+    CHECK(listed == 2 && foreign == 0);
+    // The smooth views (a fade under way when the scene goes) leave nothing behind either.
+    world.LodSmooth = true;
+    world.LodClockOverride = 100.0;
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj); // LOD 2
+    world.LodClockOverride += 1.0;
+    view();                                            // and over to the impostor: a cross-fade begins
+    CHECK(listed == 1 && foreign == 0);
+    CHECK(SceneSerializer::LoadFromString(world, assets, testbed));
+    view();
+    CHECK(listed == 0 && foreign == 0);
+    // The same in one scene: the last LOD group deleted while it stands on its impostor.
+    world.LodSmooth = false;
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    view();
+    CHECK(listed == 1 && foreign == 0);
+    for (entt::entity g : std::vector<entt::entity>(world.Registry.view<LODGroupComponent>().begin(),
+                                                    world.Registry.view<LODGroupComponent>().end()))
+        world.DestroyEntityAndChildren(g);
+    view();
+    CHECK(listed == 0 && foreign == 0);
+    ImpostorLibrary::TestOverride(-1, 0.0f);
+}
+
 // LodSmooth cross-fades end: one still view finishes its fade, and two views that disagree on a group's level (the
 // Scene and Game views, every frame) don't keep restarting it - each frame used to begin a fresh fade, so the plants
 // stayed dithered for as long as both views were up.
@@ -5966,6 +6053,7 @@ int RunUnitTests(const char* filter) {
         {"LodGroup", TestLodGroup},
         {"LodFadeCompletes", TestLodFadeCompletes},
         {"LodImpostor", TestLodImpostor},
+        {"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch},
         {"NearestEuler", TestNearestEuler},
         {"QuaternionTransformStorage", TestQuaternionTransformStorage},
         {"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis},
