@@ -197,7 +197,8 @@ Measured on the full-pack audit (`docs/mm_audit.md`, 2026-11-17). Each is a capt
     otherwise: `labloco`'s one check counts traced frames, so it fails without a trace folder.
 - `tools/mm/baseline_summary.py`: turns an `mm_smoke` log folder into `logs/`, `traces/`, `metrics.json` and
   `SUMMARY.md`. Run it on a later phase's output to compare with the baseline.
-- `docs/mm_baseline/`: the legacy baseline. See its `README.md` and `SUMMARY.md`. Headline numbers:
+- `docs/mm_baseline/`: the legacy baseline (removed after Phase 6 with the legacy locomotion; it's in git history before
+  that). Headline numbers:
   - **Checks:** testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, labloco 1/1, feet 4/6 (a test bug, fixed since: 6/6).
   - **Clip vs capsule speed** (testbed A): walk 0.9986, jog 1.0000.
   - **Foot slide:**
@@ -864,7 +865,6 @@ drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
   - While working, run only the scenario or unit filter that the change touches.
   - Run the full `tools/mm_smoke.ps1` pass once, at the end of the phase. Use 3 runs (`-Runs 3`, or
     `npc_test_runs.py --runs 3`) only for scenarios known to be noisy, such as `npcloco`.
-  - Re-capture `docs/mm_baseline/` only if legacy locomotion code changed.
   - Never re-run a failure whose cause is known and that a re-run can't fix (a broken local asset, a stale scenario).
     Record it under Open issues instead.
   - When a run fails, diagnose it before running again. Repeat a run only to check for flakiness.
@@ -872,9 +872,9 @@ drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
   - Everything: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 testbed npcloco locomotion stopsteps feet
     labloco mmview mmdb mmplayer mmstress -PerfBench tests\perf-scenes\perf_stress.json`. It should be all PASS. Use `-AllowErrors` only for a local
     asset you know is broken, and say so under Open issues.
-  - Compare with the baseline: add `-TraceDir <dir>` to `mm_smoke.ps1`, then
-    `python tools/mm/baseline_summary.py <log dir> <out dir> --traces <dir>`; diff `SUMMARY.md` and `metrics.json`
-    against `docs/mm_baseline/`.
+  - Compare two runs: add `-TraceDir <dir>` to `mm_smoke.ps1`, then
+    `python tools/mm/baseline_summary.py <log dir> <out dir> --traces <dir>` on each; diff their `SUMMARY.md` and
+    `metrics.json`. (The legacy baseline in `docs/mm_baseline/` went with the legacy locomotion.)
   - Build: `cmake --build build --config Release --parallel`
   - Unit tests: `build\Release\TartarusEngine.exe --unit-tests "<filter>"`
   - Smoke test: `build\Release\TartarusEngine.exe --smoke-test tests\smoke-scenes`
@@ -994,7 +994,7 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
 - `src/Tests/UnitTests_Animation.cpp`.
 - Launch flags: `src/App/LaunchOptions.cpp`.
 - Env vars: `src/Core/Env.h`. Every env var must be listed there.
-- Tools: `tools/mm_smoke.ps1`, `tools/mm/baseline_summary.py`, `tools/npc_test_runs.py`; baseline in `docs/mm_baseline/`.
+- Tools: `tools/mm_smoke.ps1`, `tools/mm/baseline_summary.py` (a run's summary, to compare two runs), `tools/npc_test_runs.py`.
 
 ## Open issues
 
