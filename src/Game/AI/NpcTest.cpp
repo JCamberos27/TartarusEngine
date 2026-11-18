@@ -30,6 +30,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
     if (m_Scenario == "stopsteps") m_Duration = StopStepsSeconds();
     if (m_Scenario == "locomotion") m_Duration = LocomotionSeconds();
     if (m_Scenario == "npcloco") m_Duration = NpcLocoSeconds();
+    if (m_Scenario == "npcperf") m_Duration = NpcPerfSeconds();
     if (m_Scenario == "labloco") m_Duration = LabLocoSeconds();
     if (m_Scenario == "mmplayer" || m_Scenario == "mmstress") {
         // The testbed's player parts on the motion matching body (set before Play starts the body).
@@ -125,6 +126,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "stopsteps") StopStepsDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "locomotion") LocomotionDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "npcloco") NpcLocoDrive(player, wantYaw, wantPitch);
+    if (m_Scenario == "npcperf") NpcPerfDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "labloco") LabLocoDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") TestbedDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "roam") RoamDrive(player, dt, wantYaw, wantPitch);
@@ -208,6 +210,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "npcloco") {
         NpcLoco(world, npcs, now);
+        return;
+    }
+    if (m_Scenario == "npcperf") {
+        NpcPerf(world, npcs, now);
         return;
     }
     if (m_Scenario == "labloco") {

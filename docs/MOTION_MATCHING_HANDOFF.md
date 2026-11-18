@@ -889,7 +889,7 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
 | Iterate | `mm_smoke.ps1 mmplayer -SkipUnit -SkipSmoke -Legs "..."` | the legs in question | every change while working (~30 s) |
 | Quick | `mm_smoke.ps1 -Quick` | unit, mmplayer, mmstress | before committing motion matching work (~1.5 min engine runs + the build) |
 | Quick + bake | `mm_smoke.ps1 -Quick mmview mmdb` | + the stream and database checks | when the bake or the database changed |
-| Full | `mm_smoke.ps1 -Full` | unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview, mmdb, mmplayer, mmstress, perf bench (`tests\perf-scenes\perf_stress.json`) | once per PR, before merging |
+| Full | `mm_smoke.ps1 -Full` | unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview, mmdb, mmplayer, mmstress, npcloco_mm, npcperf, npcperf_mm, perf bench (`tests\perf-scenes\perf_stress.json`) | once per PR, before merging |
 
 - **The six old-locomotion scenarios** (testbed, npcloco, locomotion, stopsteps, feet, labloco) run only in `-Full`, or when a
   change touches code they share (foot IK, `Player`, `FirstPersonBody`'s legacy path). Phase 6 retires them.
@@ -1322,8 +1322,27 @@ Phase 5 (the player is untouched).
 2. The starts: the director's capsule reaches pace in ~0.3 s (`kStartTime` 0.12 s), faster than the pack's starts, so the first
    match is a mid-walk frame (cost 3.5-5.6) and a start take comes in 0.5 s later. The same capsule-led choice as the player's.
 3. The first leg (`go home`, unchecked: the dummy's first move from its spawn) slides a planted foot up to 42 cm.
-4. Not yet done: `[MmPosture]`-style metrics for the dummy beyond npcloco's, the perf bench with many dummies on motion matching
-   against the baseline, and the owner's play test (dummies follow `TARTARUS_LOCOMOTION_SOURCE=mm` in the editor too).
+4. Not yet done: `[MmPosture]`-style metrics for the dummy beyond npcloco's, and the owner's play test (dummies follow
+   `TARTARUS_LOCOMOTION_SOURCE=mm` in the editor too).
+
+**The dummies' cost** (`--npc-test npcperf`, `NpcTest_NpcPerf.cpp`, 2026-11-18): LocomotionLab, the player still at (0, -25)
+looking north, 12 dummies roaming round posts near, 25-50 m off and behind (13 with the scene's own) - every LOD tier runs.
+Measured 32 s each, alone (`-Parallel 1`):
+
+| | legacy | motion matching |
+|---|---|---|
+| frame ms avg / p95 / p99 / max | 7.68 / 8.57 / 9.14 / 15.5 | **7.00 / 7.97 / 8.59 / 10.6** |
+| director think (AI) ms | 0.23 | 0.10 |
+| director late (the pose) ms, max | 0.48, 1.28 | 1.24, 3.58 |
+| dummy-frames at LOD 1 / 2 / 4 | 24 / 46 / 29 % | 33 / 52 / 16 % |
+
+The director's own pose step costs more (the matcher, ~0.14 ms a step with the foot pass and look), but the frame is ~0.7 ms
+faster: the dummies' animator controllers no longer run (`UpdateAnimatorControllers`, outside the director's timer). The matcher
+steps exactly as the LOD tiers say (15,595 steps against 15,604), 8.0 searches a dummy a second. (The roaming isn't the same on
+both sources - the LOD shares differ - so it's a fair comparison, not an identical one.) The baseline's perf bench
+(`perf_stress.json`, no dummies) is unchanged: p50 7.38 / p95 7.70 / p99 8.47 ms against 7.44 / 7.68 / 8.57.
+- `mm_smoke.ps1`: a `_mm` suffix runs a scenario on motion matching (`npcloco_mm`, `npcperf_mm`); `-Full` now adds `npcloco_mm`,
+  `npcperf` and `npcperf_mm`, npcperf alone (timed, like mmdb). `npcloco_mm` alone: 31.8 s at 130 fps.
 
 ## Phase 5: first steps (done - see above)
 
