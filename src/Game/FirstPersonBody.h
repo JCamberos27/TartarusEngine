@@ -6,8 +6,10 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "FirstPersonBodyContract.h"
+#include "FirstPersonBodyMotion.h" // the motion matching pose source (Locomotion Source)
 #include "IK.h" // IK::SpineDistribution
 #include "ModelVertex.h" // MAX_BONE_INFLUENCE
+#include "Player.h" // Player::DirectionalSpeeds
 
 #include <cstdint>
 #include <functional>
@@ -93,6 +95,7 @@ private:
 };
 
 // A gait's phase read off the feet, every frame: 0 as the left foot reaches its furthest ahead (its heel strike), 0.5 the right.
+
 // Over a stride the feet's spread along the travel and their height difference trace a loop a quarter cycle apart - the
 // angle round it is the phase. Nothing to detect or miss (counting plants, a missed or doubled one halved or doubled the
 // rate for steps on end), it runs at the legs' own pace whatever clip they play, and it turns back the right way walking
@@ -202,9 +205,22 @@ public:
     // The clips' feet before foot IK (driver model space), which the gait phase is read off. False until posed.
     bool GaitFeet(glm::vec3 (&out)[2]) const { out[0] = m_GaitFeet[0]; out[1] = m_GaitFeet[1]; return m_HaveGaitFeet; }
     float GaitRate() const { return m_Gait.Rate; } // the gait phase's cycles a second
+    // Locomotion Source = Motion Matching took (the database loaded and bound): the pose comes from FirstPersonBodyMotion.
+    bool MotionMatching() const { return m_Mm.Active(); }
+    // How much of the mocap head's own motion the eye rides (0..1): the presentation drops that share of its camera bob.
+    float HeadRide() const { return m_HeadRide; }
+    const FirstPersonBodyMotion& Motion() const { return m_Mm; }
+    // The source a body component asks for, after TARTARUS_LOCOMOTION_SOURCE (legacy | mm).
+    static LocomotionSource SourceFor(const FirstPersonBodyComponent& cfg);
 
 private:
+    // Motion matching's Tick (after the body's feet and the view's heading are worked out).
+    void TickMotionMatching(World& world, const Player& player, const FirstPersonBodyComponent& cfg, float dt);
+    void UpdateGaitPhase(const Player& player, float dt);
+    FirstPersonBodyMotion m_Mm;
+    Player::DirectionalSpeeds m_MmSpeeds; // the gait table's speeds, for the capsule (BeforePlayerMove)
     void Fail(const std::string& message);
+    // Legacy only (motion matching plays the mocap's own lean).
     void ApplySpineStability(float weight, const AnimatorControllerComponent& animator);
     std::string m_SpineIdleClip[2]; // standing / crouched reference from the locomotion controller
     float m_SpineCrouch = 0.0f, m_SpineCrouchDrop = 0.0f;
@@ -216,6 +232,28 @@ private:
     };
     std::map<const Model*, SpineReference> m_SpineReferences;
     void ApplySpineAim(const Camera& camera, float amount, float twist);
+    // Arm Hang (unarmed): the spine's pitch at the view carried the arms round with the chest - looking down they swung
+    // back, stiff, behind a body bent over. Each piece's upper arms' model-space rotations are taken before the pitch and
+    // turned back `weight` of the way after it, so the arms keep hanging as the chest bends.
+    struct ArmHangPose { glm::quat Rot[2]; bool Have[2] = {false, false}; };
+    void CaptureArms(std::vector<ArmHangPose>& out) const;
+    void HangArms(const std::vector<ArmHangPose>& saved, float weight);
+    float ArmDownDeg() const; // the driver's upper arms off straight down (deg, the worse; BodyDebug)
+    // Unarmed: each hand is kept at least kHandEyeMin (eased) from the eye (model space), the arm re-solved (two-bone IK,
+    // the hand's orientation kept), by `weight`. Running looking down, the swing brought a hand up to the lens.
+    void KeepHandsFromEye(const glm::vec3& eyeModel, float weight);
+    const Model* DriverModel() const;
+    // The chest's (spine_05's) turn off the bind pose, model space; false without the bones. Pitch + forward, roll + left.
+    bool ChestTurn(glm::quat& out) const;
+    float ChestPitchDeg() const;
+    // The trunk now (BodyDebug::Snapshot::TrunkDeg's layout): pelvis, chest, chest against pelvis - yaw / roll / pitch each.
+    bool TrunkAngles(float (&out)[9]) const;
+    // The matcher's pose as posed (before every layer after it), per stream bone, for BodyDebug::LayerDeg.
+    void CaptureMmClip();
+    std::vector<int> m_MmLayerNodes; // the driver's node per stream bone (-1: none)
+    std::vector<glm::quat> m_MmClipRot;
+    // The rest of the posture metrics (BodyDebug), on the pose as drawn and the camera where it ends up.
+    void PostureMetrics(const World& world, const Camera& camera, float dt);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);
     // The spine's per-bone turn, applied bone by bone on every piece. `stepFor(divisor)` gives the turn a bone takes:
@@ -255,6 +293,25 @@ private:
     std::vector<entt::entity> m_ArmsTagged;       // pieces given the ViewModelTag
     float m_ProbeLogTimer = 0.0f, m_ProbeLogged = 1e9f; // CameraProbe's log throttle
     void CameraProbe(World& world, const Camera& camera, float viewModelFov, float dt);
+    // The probe's ray grid (BodyDebug::ProbeInsideRays): the world pass's drawn body triangles, the view's rays.
+    void InsideProbe(World& world, const Camera& camera);
+    int m_InsideProbeTick = 0;
+    // Looking down, the eye moves forward (along `flat`, the view's flat forward; 5 mm steps up to kEyeBodyPushMax) as far as
+    // it takes for the body not to be seen open: the torso's neck opening (its open border round the neck - the head is a
+    // Hidden Part) out of the view while the eye is above it, and the drawn upper torso (vertices on spine_03..neck_01) at
+    // least kEyeBodyClearance past the near plane. Returns the push. (Under motion matching the chest no longer bends toward
+    // the view on the move: jogging and looking straight down, the eye looked into the neck - "I can see through my body".)
+    // `lookLimitDeg`: the steepest pitch (Camera::Pitch, -89..kLookLimitHighest) from which the eye, pushed, sees neither.
+    float EyeBodyPush(World& world, const Camera& camera, const glm::vec3& eye, const glm::vec3& flat, float& lookLimitDeg);
+    // The look-down limit (Player::MinPitch, set in BeforePlayerMove): the steepest pitch held over kLookLimitHold s (a stride
+    // - it rises and falls with the bob), eased.
+    float m_LookLimit = -89.0f, m_LookLimitHeld = -89.0f, m_LookLimitAge = 0.0f;
+    float m_HeadRide = 0.0f; // this frame's share of the mocap head the eye rides (MM Head Ride x unarmed)
+    struct EyeClearPoint { size_t Piece; int Mesh; std::uint32_t Vertex; bool Rim; };
+    std::vector<EyeClearPoint> m_EyeClearPoints;
+    int m_NeckNode = -1, m_HeadRimNode = -1; // the driver's neck_01 / head (the opening's axis, posed)
+    bool m_EyeClearBuilt = false;
+    float m_EyeClear = 0.0f; // m the eye is moved forward by it (eased)
     std::string m_LastError;
     int m_OutfitVersion = 0;       // CharacterOutfitComponent::Version at Start
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
@@ -312,6 +369,12 @@ private:
     float m_Twist = 0.0f;          // view heading minus body heading, radians, wrapped
     int m_HeadNode = -1;
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
+    // Posture metrics (BodyDebug): spine_05's and the head's model-space rotations in the bind pose; the heading last frame.
+    glm::quat m_BindChest{1.0f, 0.0f, 0.0f, 0.0f}, m_BindHead{1.0f, 0.0f, 0.0f, 0.0f};
+    bool m_HaveBindPosture = false;
+    glm::quat m_BindPelvis{1.0f, 0.0f, 0.0f, 0.0f}; // the pelvis's rotation in the bind pose (model space)
+    float m_MetricYaw = 0.0f;
+    bool m_HaveMetricYaw = false;
     glm::vec3 m_Eye{0.0f};        // the smoothed eye, model space
     bool m_HaveEye = false;
     // Split poses: each piece's world twin (m_Twins[k] for m_Pieces[k]) and its model instance.
@@ -399,6 +462,10 @@ glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm
 float FirstPersonBodyArmedEyeLift(float pitchRadians);
 // The share of the view's pitch the spine takes: Spine Aim looking up, Spine Aim Down looking down.
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
+// The spine's aim with the chest's pitch capped at `maxRadians` (eased in; 0 = no cap), by `weight` (the unarmed share).
+float FirstPersonBodyCappedSpineAim(float pitchRadians, float spineAim, float maxRadians, float weight);
+// Motion matching: the share of Spine Aim kept at capsule speed `speed` (m/s) - 1 up to `from`, eased to 0 at `to`.
+float FirstPersonBodyMmAimFade(float speed, float from, float to);
 // How far segment `a`-`b` must move along unit `dir` for every one of `points` to be at least `clearance` from it:
 // the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
 float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,

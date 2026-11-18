@@ -256,6 +256,8 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                 float gait = 0.0f;
                 const bool haveGait = firstPersonBody.GaitPhase(gait);
                 firstPersonPresentation.SetGaitPhase(haveGait, gait);
+                // Riding the mocap head (MM Head Ride), the camera bobs as captured: no procedural bob on top.
+                firstPersonPresentation.SetCameraBobScale(1.0f - firstPersonBody.HeadRide());
             }
             firstPersonPresentation.SetJogging(!player.Crouched && ((gameHasInput && InputMap::GetButton("Sprint")) ||
                                                                  (npcTest && player.ScriptedMove && player.ScriptSprint)));

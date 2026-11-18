@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 
 #include <glm/glm.hpp>
@@ -52,6 +53,15 @@ class World;
 //            (NpcTest_Doors.cpp)
 //   npcloco  a dummy through the gaits in Apartment 301, watched from the side (NpcTest_NpcLoco.cpp)
 //   roam, locomotion, stopsteps: the player's own walking (NpcTest_Roam / _Locomotion / _StopSteps.cpp)
+//   mmview   motion matching, Phase 2 (NpcTest_MmView.cpp, LocomotionLab): the baked takes (Manny.mmanim) checked offline on
+//            the Quantum rig, then a playlist played on a bare Quantum body with the generated root drawn; SKIPs when unbaked
+//   mmdb     motion matching, Phase 3 (NpcTest_MmDb.cpp, LocomotionLab): the runtime database's search (time, boxes vs brute
+//            force, self-match, determinism), left/right coverage per gait, the gait speed table; then a Quantum body driven
+//            by MotionMatcher + TrajectoryPredictor through a scripted course, desired and matched trajectories drawn
+//   mmplayer motion matching, Phase 4 (NpcTest_Testbed.cpp, AnimTestbed.json): the player's body on motion matching
+//            (TARTARUS_LOCOMOTION_SOURCE=mm), unarmed, through the testbed's parts A and C and its own part M - strafes and
+//            backwards, the crouch, turning on the spot, the run (straight, turning, strafing), jumps: the label filters, the
+//            speed warping, the root on the capsule, the airborne segment, the gait phase, foot IK; SKIPs when unbaked
 //   testbed  project/scenes/AnimTestbed.json (tools/scenes/build_anim_testbed.py): only what the animation overhaul fixes, re-run
 //            after every phase (NpcTest_Testbed.cpp) - the player's bob reaching the screen and the gait phase on the lane, the
 //            corner peek's lean with the hands on the gun, stairs and a ramp (gait phase, leg reach, the eye's overshoot), the
@@ -78,7 +88,7 @@ public:
     const std::string& RecordDir() const { return m_RecordDir; }
     // Where a scenario's trace.csv goes: NPC_TEST_TRACE=<dir> (the trace alone, no frames - fast), else NPC_TEST_RECORD's.
     const std::string& TraceDir() const { return m_TraceDir; }
-    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" ? 1 : 2; } // every frame for the muzzle flame
+    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" || m_Scenario == "mmview" || m_Scenario == "mmdb" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -88,8 +98,10 @@ public:
     // A weapon action trigger this frame (Inspect, MagCheck, Melee); the host applies it after the weapon's Update.
     const std::string& Action() const { return m_Action; }
     std::string m_Action;
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no dummies
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
+    // World lines the host draws over the Game view (mmview: the generated root, the hips' facing, the ankles).
+    void DebugLines(std::vector<float>& out) const;
+    bool RunsWithoutSquad() const { return m_Scenario == "mmview" || m_Scenario == "mmdb" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps" || m_Scenario == "locomotion"; } // After() even in a scene with no dummies
+    bool WantsCleanViews() const { return m_Scenario == "mmview" || m_Scenario == "mmdb" || m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -175,11 +187,36 @@ private:
     bool m_LabPlaced = false;
     float m_LabClock = 0.0f;
     std::vector<std::string> m_SlideBodies; // the NPCs SlideLeg reports on
+    std::map<std::string, float> m_SlideWorstPlayer; // SlideLeg: the player's worst plant drift per leg (m)
+    std::map<std::string, float> m_SlideContactPlayer; // ... the lesser of its ankle's and its ball's (a pivot is not a slide)
+    std::vector<std::string> m_SkipLegs; // legs that didn't run (TestbedLegsOff): a check naming one is skipped, not failed
     int m_LabFrame = 0;
+    // mmview (NpcTest_MmView.cpp): the baked motion matching takes on a Quantum body, the generated root drawn, the bake checked
+    static float MmViewSeconds();
+    void MmViewDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    void MmView(World& world);
+    void MmViewValidate();
+    struct MmViewRun;
+    std::shared_ptr<MmViewRun> m_Mm;
+    // mmdb (NpcTest_MmDb.cpp): the motion matching runtime - search speed and correctness, left/right coverage, the gait
+    // table, then a Quantum body driven by MotionMatcher through a scripted walk/jog/run/crouch course with debug draw
+    static float MmDbSeconds();
+    void MmDbDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    void MmDb(World& world);
+    void MmDbOffline();
+    void MmDbLines(std::vector<float>& out) const;
+    struct MmDbRun;
+    std::shared_ptr<MmDbRun> m_MmDb;
     // testbed (NpcTest_Testbed.cpp): the animation overhaul's measurements in AnimTestbed.json
     static float TestbedSeconds();
+    // TARTARUS_TESTBED_LEGS: the course's legs that won't run (empty: the whole course) - Check skips a check naming one.
+    static std::vector<std::string> TestbedLegsOff();
     void TestbedDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
     void Testbed(World& world, NpcDirector& npcs, const Player& player, float now);
+    // mmplayer (NpcTest_Testbed.cpp): the testbed's parts A and C plus part M on the motion matching body
+    void MmPlayerFrame(World& world, const Player& player, int leg, const float (&foot)[3]);
+    void MmPlayerChecks();
+    void MmStressChecks();
     struct TestbedRun;
     std::shared_ptr<TestbedRun> m_Tb;
     // doors (NpcTest_Doors.cpp)

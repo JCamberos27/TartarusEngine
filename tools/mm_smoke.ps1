@@ -2,7 +2,13 @@
 #
 #   powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 [scenario ...] [-Runs N] [-PerfBench <scene.json>]
 #       [-TraceDir <dir>] [-UnitFilter <filter>] [-AllowErrors <regex>] [-SkipBuild] [-SkipUnit] [-SkipSmoke] [-Sound]
-#       [-TimeoutMinutes N]
+#       [-TimeoutMinutes N] [-Legs <names>] [-Exe <path>] [-LogDir <dir>]
+#
+# -Legs: only these legs of testbed / mmplayer / mmstress (TARTARUS_TESTBED_LEGS: comma-separated, * wildcards; each runs from
+#   its part's last placement leg), e.g. -Legs "M sprint*,M jog,A walk". Checks naming a leg that didn't run are skipped.
+#   The fast loop for experiments; the whole course is for the final pass (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration").
+# -Exe: run this engine build instead of build\Release\TartarusEngine.exe (implies -SkipBuild) - copy the exe to a folder per
+#   experiment and run 2-3 scripts at once, each with its own -LogDir (the copy runs from the repo, as the original does).
 #
 # Builds Release, then runs, in order and one at a time:
 #   1. --unit-tests [UnitFilter]
@@ -30,12 +36,16 @@ param(
     [switch]$SkipSmoke,
     [switch]$Sound,
     [int]$TimeoutMinutes = 30,
-    [string]$LogDir = ''
+    [string]$LogDir = '',
+    [string]$Legs = '',
+    [string]$Exe = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$exe = Join-Path $repo 'build\Release\TartarusEngine.exe'
+# (Not "$exe": PowerShell's names ignore case, so it would be the -Exe parameter itself, always set.)
+$engineExe = Join-Path $repo 'build\Release\TartarusEngine.exe'
+if ($Exe) { $engineExe = (Resolve-Path $Exe).Path; $SkipBuild = $true }
 if (-not $LogDir) { $LogDir = Join-Path $repo ('work\mm_smoke\' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $LogDir = (Resolve-Path $LogDir).Path
@@ -85,7 +95,7 @@ function Invoke-Engine([string]$name, [string[]]$engineArgs, [hashtable]$extraEn
     $timedOut = $false
     try {
         $quoted = $engineArgs | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }
-        $p = Start-Process -FilePath $exe -ArgumentList $quoted -WorkingDirectory $repo -PassThru `
+        $p = Start-Process -FilePath $engineExe -ArgumentList $quoted -WorkingDirectory $repo -PassThru `
             -RedirectStandardOutput $log -RedirectStandardError $err
         $null = $p.Handle # keeps ExitCode readable after the process is gone
         if (-not $p.WaitForExit($TimeoutMinutes * 60 * 1000)) {
@@ -124,7 +134,7 @@ if (-not $SkipBuild) {
         exit 1
     }
 }
-if (-not (Test-Path $exe)) { Write-Host "No engine at $exe" -ForegroundColor Red; exit 1 }
+if (-not (Test-Path $engineExe)) { Write-Host "No engine at $engineExe" -ForegroundColor Red; exit 1 }
 
 # Unit tests.
 if (-not $SkipUnit) {
@@ -156,6 +166,7 @@ foreach ($scenario in $Scenarios) {
     for ($k = 1; $k -le $Runs; ++$k) {
         $name = if ($Runs -gt 1) { "npc_${scenario}_$k" } else { "npc_$scenario" }
         $envs = @{}
+        if ($Legs) { $envs['TARTARUS_TESTBED_LEGS'] = $Legs }
         if ($TraceDir) {
             $dir = Join-Path $TraceDir $(if ($Runs -gt 1) { "${scenario}_$k" } else { $scenario })
             New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -167,6 +178,8 @@ foreach ($scenario in $Scenarios) {
         $summary = $r.Lines | Where-Object { $_ -match '^\[SmokeTest\] (PASS|FAIL)  .* wall=' } | Select-Object -Last 1
         $ok = $r.Exit -eq 0 -and $summary -match '^\[SmokeTest\] PASS' -and $bad.Count -eq 0 -and -not $r.TimedOut
         $detail = if ($r.TimedOut) { 'timed out' } else { "$($checks.Count - $bad.Count)/$($checks.Count) checks" }
+        $skipped = @($r.Lines | Where-Object { $_ -match '^\[NpcTest\] SKIP ' }).Count
+        if ($skipped -gt 0) { $detail += " ($skipped skipped)" }
         if ($summary -match '(fps=\d+ unfocused=\d+)') { $detail += "  $($Matches[1])" }
         if ($summary -match 'cause: (.*)$') { $detail += "; $($Matches[1])" }
         if ($bad.Count) { $detail += '; ' + (($bad | Select-Object -First 3 | ForEach-Object { $_ -replace '^\[NpcTest\] FAIL ', '' }) -join '; ') }

@@ -1,0 +1,37 @@
+{
+  "_doc": "The full-pack audit bake (tools/mm/audit.py, docs/mm_audit.md): Manny.mmconfig's settings on every take (gen_takes.py --audit), no budgets, into work/mm_audit/. Never shipped or loaded by the game. Paths are project-relative.",
+  "source": { "anims": "anims", "rig": "rig/SKM_Manny.fbx" },
+  "takes": "../work/mm_audit/takes_audit.csv",
+  "targetRig": "assets/Characters/Quantum/Models/European/Quantum_Body_Full.fbx",
+  "output": "../work/mm_audit/MannyAudit",
+  "fps": 60,
+  "workers": 4,
+  "bones": [
+    "pelvis", "spine_01", "spine_02", "spine_03", "spine_04", "spine_05", "neck_01", "neck_02", "head",
+    "clavicle_l", "upperarm_l", "upperarm_twist_01_l", "upperarm_twist_02_l", "lowerarm_l", "lowerarm_twist_01_l", "lowerarm_twist_02_l", "hand_l",
+    "clavicle_r", "upperarm_r", "upperarm_twist_01_r", "upperarm_twist_02_r", "lowerarm_r", "lowerarm_twist_01_r", "lowerarm_twist_02_r", "hand_r",
+    "thigh_l", "thigh_twist_01_l", "thigh_twist_02_l", "calf_l", "calf_twist_01_l", "calf_twist_02_l", "foot_l", "ball_l",
+    "thigh_r", "thigh_twist_01_r", "thigh_twist_02_r", "calf_r", "calf_twist_01_r", "calf_twist_02_r", "foot_r", "ball_r"
+  ],
+  "staticBones": ["thumb_", "index_", "middle_", "ring_", "pinky_"],
+  "staticPoseFrom": "Stand_Idle_Neutral_Take001",
+  "rootSynth": {
+    "default": { "posSigma": 0.10, "yawSigma": 0.25, "hipsWeight": 0.5 },
+    "byTag": { "snakes": { "yawSigma": 0.15 } }
+  },
+  "labels": {
+    "trajFrames": [20, 40, 60],
+    "gaitSpeeds": [0.3, 1.6, 2.9],
+    "crouchRatio": 0.84,
+    "proneHeight": 0.20,
+    "strafeAngleDeg": 50,
+    "strafeMinSpeed": 0.5,
+    "airFootHeight": 0.18,
+    "airPelvisRise": 0.02,
+    "airMinFrames": 4,
+    "contactHeight": 0.15,
+    "contactSpeed": 0.6
+  },
+  "budgets": { "poseMB": 4000, "featureMB": 4000, "loadSeconds": 60.0 },
+  "validation": { "facingP95Deg": 20, "yawJitter": 300, "rigLengthPct": 2.0, "reconstructCm": 1.0 }
+}

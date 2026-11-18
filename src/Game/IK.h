@@ -174,6 +174,11 @@ struct FootLockSettings {
     float Release = 0.2f;   // s a released foot takes to catch up with the animation
     float StepHeight = 0.3f; // a let-go foot that was still down lifts this much per metre it has to go...
     float StepMax = 0.08f;   // ... at most this (m)
+    // The metres it has to go: its lag when let go, plus - with StepForTravel - the way the animation carries the foot over
+    // the ground through the step (its speed, the body's turn included, x Release). Without it a foot let go as the body
+    // turned over it measured a 5 cm lag, lifted 1.5 cm, and was carried 24 cm round with the turn, skimming the floor
+    // (the motion matching body's 180 deg walk flick, 2026-11-17).
+    bool StepForTravel = false;
 };
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& body);
 // The leg's goal never asks for more than `most` x `length` from `root` (a two-bone chain asked past its reach snaps
@@ -189,13 +194,22 @@ public:
     // `facing` its heading, `local` the clip's foot relative to it (the model's space, scaled to metres). `height`: the
     // foot's height over the capsule's ground (m). Returns the world offset that puts the foot where it should be drawn:
     // horizontal, plus a step's lift (zero for a free foot).
+    // `ball` (optional, the motion matching body): the forefoot, as `local`, and its height. A planted foot is held at the
+    // heel (the ankle) from the strike, as without it; once the ball is down too the hold passes to the ball - at the offset
+    // it has, so nothing moves - and the foot lets go when the ball lifts, not the heel. The body turning over a held foot
+    // then swivels it on its ball, as a stance foot pivots, instead of sweeping its toes over the floor; the heel rising
+    // onto the toe stays held until the toe leaves. A foot is down when its heel or its ball is: one planted on its ball (the
+    // heel up - a jog's start, a stance shifting weight) is held at the ball from the first frame.
     glm::vec3 Step(int s, const FootLockSettings& set, const glm::vec3& root, const glm::quat& facing, const glm::vec3& local,
-                   float height, float dt);
+                   float height, float dt, const glm::vec3* ball = nullptr, float ballHeight = 0.0f);
+    bool OnBall(int s) const { return m_Foot[s].OnBall; }
     // After Step, once the leg's goal is known: `reach` is the hip-to-goal distance with the foot held, `own` without
     // (the clip's own), both x the leg's length, the hip where it stands after the pelvis has dropped. Past Reach - and
     // past what the clip itself asks, so a leg the clip has near straight is not let go for nothing - a planted foot lets
     // go and steps (its lag eased out from the next Step). Returns whether it let go.
     bool Overreach(int s, const FootLockSettings& set, float reach, float own);
+    // Lets a planted foot go now (it steps to catch up): the body turning faster than the lock can follow.
+    void Release(int s, const FootLockSettings& set) { if (m_Foot[s].Locked) LetGo(m_Foot[s], set, true); }
     bool Locked(int s) const { return m_Foot[s].Locked; }
     glm::vec3 Pinned(int s) const { return m_Foot[s].Pin; }
     float LockedTime(int s) const { return m_Foot[s].Time; }
@@ -214,6 +228,12 @@ private:
         float ReleaseTime = 1e9f;  // seconds since the last let-go
         float Time = 0.0f;         // seconds locked
         float Lift = 0.0f;         // a step's arc height (m; 0 = the foot lifted on its own)
+        float AnimSpeed = 0.0f;    // m/s the animated foot moves over the ground, the body's turn included (last Step)
+        bool OnBall = false;       // held at the ball (Step's `ball`), not the heel
+        glm::vec3 BallPin{0.0f};   // where the ball is held
+        float BallFloor = 0.0f;    // the ball's lowest height (creeping up, as Floor)
+        bool HaveBall = false;
+        glm::vec3 PrevBallLocal{0.0f}; // last frame's ball in the body
     };
     static void LetGo(Foot& f, const FootLockSettings& set, bool step);
     Foot m_Foot[2];
@@ -226,14 +246,18 @@ struct FootSlideMeterTotals {
     int Plants = 0;             // contacts that lasted 0.1 s or more
     float SumDrift = 0.0f;      // metres: each plant's furthest drift from where it settled, summed
     float MaxDrift = 0.0f;      // metres: the worst plant's
+    // With the balls given (Step's `ball`): per plant the lesser of the ankle's drift and the ball's - a foot pivoting on its
+    // heel or on its ball is turning, not sliding (a slide moves both). 0 when no balls were given.
+    float SumContactDrift = 0.0f, MaxContactDrift = 0.0f;
+    float MeanContactCm() const { return Plants ? SumContactDrift * 100.0f / (float)Plants : 0.0f; }
     float ContactTime = 0.0f;   // seconds of foot-on-ground (both feet summed)
     float MeanCm() const { return Plants ? SumDrift * 100.0f / (float)Plants : 0.0f; }
 };
 class FootSlideMeter {
 public:
     float ContactHeight = 0.015f; // m over the foot's own lowest height
-    // `ground`: the capsule's feet height (world y). `foot`: each final foot bone (world).
-    void Step(const glm::vec3 (&foot)[2], float ground, float dt);
+    // `ground`: the capsule's feet height (world y). `foot`: each final foot bone (world); `ball` (optional): each final ball.
+    void Step(const glm::vec3 (&foot)[2], float ground, float dt, const glm::vec3 (*ball)[2] = nullptr);
     void Reset() { *this = FootSlideMeter{}; }
     FootSlideMeterTotals Total; // since the last TakeTotals
     FootSlideMeterTotals TakeTotals() { FootSlideMeterTotals t = Total; Total = {}; return t; }
@@ -244,6 +268,9 @@ private:
     float m_Time[2] = {0.0f, 0.0f};
     glm::vec2 m_Start[2] = {glm::vec2(0.0f), glm::vec2(0.0f)};
     float m_Drift[2] = {0.0f, 0.0f};
+    glm::vec2 m_BallStart[2] = {glm::vec2(0.0f), glm::vec2(0.0f)};
+    float m_BallDrift[2] = {0.0f, 0.0f};
+    bool m_Balls = false;
 };
 // The meters the --npc-test scenarios read (one per body: "player", or an NPC's name). Only fed while a test asks for them.
 bool FootSlideMeterOn();

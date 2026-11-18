@@ -44,7 +44,10 @@
     X(NpcTestSeconds, "NPC_TEST_SECONDS", Float, "--npc-test: run length override")                                   \
     X(NpcTestRecord, "NPC_TEST_RECORD", Str, "--npc-test: record frames to this folder")                              \
     X(NpcTestTrace, "NPC_TEST_TRACE", Str, "--npc-test: write trace.csv to this folder (no frames; NPC_TEST_RECORD writes both)") \
+    X(MmViewClips, "TARTARUS_MMVIEW_CLIPS", Str, "--npc-test mmview: the takes to play, 'Name[@start s];...'")          \
     X(TestbedParts, "TESTBED_PARTS", Str, "--npc-test testbed: only these parts (letters A-F, e.g. C or AC)")       \
+    X(MmTune, "TARTARUS_MM_TUNE", Str, "motion matching experiments: tuning overrides read at startup, 'Key=value,...' (MmTune in FirstPersonBodyMotion.cpp lists the keys) - no rebuild") \
+    X(TestbedLegs, "TARTARUS_TESTBED_LEGS", Str, "--npc-test testbed/mmplayer/mmstress: only the legs matching these comma-separated names (* wildcards), each from its part's last placement leg; checks naming a leg that didn't run are skipped") \
     X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs (and undress the player's body) without outfits")                                   \
     X(NpcTestDoorsOnly, "NPC_TEST_DOORS_ONLY", Str, "--npc-test doors: only doors whose name contains this")          \
     X(NpcTestDoorsTrace, "NPC_TEST_DOORS_TRACE", Flag, "--npc-test doors: trace")                                     \
@@ -88,6 +91,8 @@
     X(NoUiThrottle, "TARTARUS_NO_UI_THROTTLE", Flag, "disable the asset browser UI throttle")                         \
     /* Paths and audio */                                                                                               \
     X(AssetRoot, "TARTARUS_ASSET_ROOT", Str, "engine asset folder override")                                          \
+    X(MmSource, "TARTARUS_MM_SOURCE", Str, "--bake-motion: the mocap pack folder (anims, rig, manifest.json)")        \
+    X(LocomotionSource, "TARTARUS_LOCOMOTION_SOURCE", Str, "the player body's locomotion: legacy | mm (overrides the component)") \
     X(AudioCapture, "AUDIO_CAPTURE", Str, "write the audio output to this WAV file")                                  \
     X(LocalAppData, "LOCALAPPDATA", Str, "(Windows) user data root")
 

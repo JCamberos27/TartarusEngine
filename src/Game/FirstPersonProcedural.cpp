@@ -985,7 +985,8 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     // The camera: head bob on the gun bob's stride, a roll into strafes, a dip on landing.
     if (cm.Enabled) {
         const float camScale = adsMix(1.0f, cm.AdsScale);
-        const glm::vec2 amp = (cm.WalkBob * (1.0f - m_BobSprint) + cm.SprintBob * m_BobSprint) * m_CamBobWeight * camScale;
+        const glm::vec2 amp = (cm.WalkBob * (1.0f - m_BobSprint) + cm.SprintBob * m_BobSprint) * m_CamBobWeight * camScale *
+                              std::clamp(in.CameraBobScale, 0.0f, 1.0f);
         const float tau = glm::two_pi<float>();
         pose.CameraOffset.y -= amp.x * 0.5f * (1.0f - std::cos(2.0f * tau * m_BobPhase)); // down on each footfall
         pose.CameraRoll += amp.y * std::sin(tau * m_BobPhase);

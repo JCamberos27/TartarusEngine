@@ -66,6 +66,8 @@ inline constexpr const char* kPlayRate = "PlayRate";
 
 // States the body watches by name.
 inline constexpr const char* kStateLocomotion = "Locomotion";
+// Not a controller state: what BodyDebug reports while motion matching poses the body (Locomotion Source).
+inline constexpr const char* kStateMotionMatching = "MotionMatching";
 inline constexpr const char* kStateJump = "Jump";
 inline constexpr const char* kStateFall = "Fall";
 inline constexpr const char* kStateLand = "Land";
@@ -113,6 +115,7 @@ inline constexpr const char* kBoneClavicle[2] = {"clavicle_l", "clavicle_r"};
 inline constexpr const char* kBoneThigh[2] = {"thigh_l", "thigh_r"};
 inline constexpr const char* kBoneCalf[2] = {"calf_l", "calf_r"};
 inline constexpr const char* kBoneFoot[2] = {"foot_l", "foot_r"};
+inline constexpr const char* kBoneBall[2] = {"ball_l", "ball_r"}; // the forefoot: where a motion matching body's planted foot pivots
 
 // A Bone Map turns the standard (UE5 mannequin) bone names into a rig's own: "hand_l = LeftHand, foot_l = LeftFoot".
 // Entries are separated by commas or new lines; unlisted bones keep their standard name.

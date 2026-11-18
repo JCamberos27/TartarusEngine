@@ -23,6 +23,7 @@ enum class LaunchMode {
     BakeImpostors, // --bake-impostors <scene.json>... --out <dir> [--match <text>]
     AudioTest,    // --audio-test [scene] [--report <file>]
     BakeGI,       // --bake-gi <scene.json> [--gi-only <name>]
+    BakeMotion,   // --bake-motion <file.mmconfig> [--match <text>] [--out <prefix>]
     CrashTest,    // --crash-test <kind> [--crash-dialog]
     Help,         // --help
 };
@@ -55,6 +56,7 @@ struct LaunchOptions {
     std::string unitTestsFilter;    // --unit-tests [filter]
     std::string audioTestScene;     // --audio-test [scene]
     std::string bakeGiScene;        // --bake-gi <scene.json>: bake its GI Volumes (GIBaker), write their .gi, exit
+    std::string bakeMotionConfig;   // --bake-motion <file.mmconfig>: the motion matching bake (MotionBake), exit
     std::string crashTestKind;      // --crash-test <av|overflow|abort|purecall|invalidparam|terminate>
     std::vector<std::string> inputs; // --model-report / --model-nodes / --scene-bounds inputs
 
@@ -75,8 +77,8 @@ struct LaunchOptions {
     std::string crashTestInEditor;
     // --crash-dialog (crash-test, editor with --crash-test-in-editor): show the crash dialog anyway.
     bool crashDialog = false;
-    std::string sceneBoundsOut;   // --out <dir> (scene-bounds, bake-impostors)
-    std::string bakeMatch;        // --match <text> (bake-impostors): the model path the LOD 0s must draw
+    std::string sceneBoundsOut;   // --out <dir> (scene-bounds, bake-impostors); --out <prefix> (bake-motion): the output files
+    std::string bakeMatch;        // --match <text> (bake-impostors): the model path the LOD 0s must draw; (bake-motion) the takes
     std::string audioTestReport;  // --report <file> (audio-test)
     std::string bakeGiOnly;       // --gi-only <name> (bake-gi): only the volumes whose name contains it
     // --project <dir> (any mode): open that project folder instead of the one next to the exe. Applied by the parse.

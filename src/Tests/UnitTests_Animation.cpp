@@ -819,6 +819,112 @@ void TestFootSlideMeterCountsPlants() {
     CHECK(t.MeanCm() > 9.0f && t.MeanCm() < 13.0f);    // the still plant counts 0
 }
 
+// A pivot is not a slide: a foot turning on its ball (or its heel) has a contact drift of ~0; a foot sliding moves both.
+void TestFootSlideMeterContactPoint() {
+    IK::FootSlideMeter m;
+    const float dt = 1.0f / 60.0f;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 ballAt(0.0f, 0.03f, 0.0f), toAnkle(0.0f, 0.05f, -0.14f); // the ankle 14 cm behind the ball
+    glm::vec3 feet[2], balls[2];
+    feet[1] = balls[1] = glm::vec3(0.4f, 0.4f, 0.0f); // the other foot in the air
+    // Pivoting 90 degrees on the ball over 0.5 s: the ankle swings 20 cm round, the ball stays.
+    for (int i = 0; i <= 30; ++i) {
+        const glm::quat r = glm::angleAxis(glm::radians(90.0f) * (float)i / 30.0f, up);
+        balls[0] = ballAt;
+        feet[0] = ballAt + r * toAnkle;
+        m.Step(feet, 0.0f, dt, &balls);
+    }
+    feet[0].y = balls[0].y = 0.4f;
+    m.Step(feet, 0.0f, dt, &balls);
+    IK::FootSlideMeterTotals t = m.TakeTotals();
+    CHECK(t.Plants == 1 && t.MaxDrift > 0.15f && t.MaxContactDrift < 1e-4f);
+    // Sliding 15 cm: both move.
+    for (int i = 0; i <= 30; ++i) {
+        balls[0] = ballAt + glm::vec3(0.005f * (float)i, 0.0f, 0.0f);
+        feet[0] = balls[0] + toAnkle;
+        m.Step(feet, 0.0f, dt, &balls);
+    }
+    feet[0].y = balls[0].y = 0.4f;
+    m.Step(feet, 0.0f, dt, &balls);
+    t = m.TakeTotals();
+    CHECK(t.Plants == 1 && t.MaxContactDrift > 0.12f && std::abs(t.MaxContactDrift - t.MaxDrift) < 1e-5f);
+}
+
+// StepForTravel: a foot let go while the animation carries it fast over the ground (the body turning over it) lifts for the
+// whole way - not for its small lag alone - and clears the floor from its first frame.
+void TestFootLockStepsForTravel() {
+    const float dt = 1.0f / 60.0f;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f), root(0.0f), local(0.25f, 0.08f, 0.1f);
+    float peak[2] = {0.0f, 0.0f}, second[2] = {0.0f, 0.0f};
+    for (int k = 0; k < 2; ++k) {
+        IK::FootLockSettings set;
+        set.StepForTravel = k == 1;
+        IK::FootLock lock;
+        float yaw = 0.0f;
+        for (int i = 0; i < 4; ++i) { // planted while the body swings 300 deg/s (a few frames: a small lag, as on the course)
+            lock.Step(0, set, root, glm::angleAxis(yaw, up), local, local.y, dt);
+            yaw += glm::radians(300.0f) * dt;
+        }
+        CHECK(lock.Locked(0));
+        lock.Release(0, set);
+        for (int i = 0; i < 12; ++i) {
+            const glm::vec3 o = lock.Step(0, set, root, glm::angleAxis(yaw, up), local, local.y, dt);
+            if (i == 1) second[k] = o.y;
+            peak[k] = std::max(peak[k], o.y);
+            yaw += glm::radians(300.0f) * dt;
+        }
+    }
+    std::printf("[UnitTest] step lift on release while turning: %.1f cm without travel, %.1f cm with (2nd frame %.1f / %.1f cm)\n",
+                100.0f * peak[0], 100.0f * peak[1], 100.0f * second[0], 100.0f * second[1]);
+    CHECK(peak[1] > 2.0f * peak[0] && peak[1] <= IK::FootLockSettings{}.StepMax + 1e-5f);
+    CHECK(second[1] > 0.015f); // off the floor (the slide meter's 1.5 cm) by its second frame
+}
+
+// Heel then ball: the strike holds the heel; the ball coming down takes the hold over without moving the foot; the body
+// turning swivels the foot on its held ball; the heel rising stays held; the toe leaving lets go.
+void TestFootLockHeelThenBall() {
+    IK::FootLockSettings set;
+    const float dt = 1.0f / 60.0f;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f), root(0.0f);
+    IK::FootLock lock;
+    // The clip's foot in the body: the ankle 0.08 up, the ball 0.14 m ahead of it; the toe lifted 3 cm at the strike.
+    glm::vec3 ankle(0.1f, 0.08f, 0.0f), ball(0.1f, 0.06f, 0.14f);
+    const auto step = [&](float yaw) {
+        const glm::quat q = glm::angleAxis(yaw, up);
+        return lock.Step(0, set, root, q, ankle, ankle.y, dt, &ball, ball.y);
+    };
+    step(0.0f);
+    step(0.0f);
+    CHECK(lock.Locked(0) && !lock.OnBall(0)); // the heel struck
+    ball.y = 0.03f;                           // the forefoot comes down
+    step(0.0f);
+    step(0.0f);
+    CHECK(lock.Locked(0) && lock.OnBall(0));
+    // The body turns 40 degrees over it: the ball, as drawn (the clip's ball + the offset), stays where it was held.
+    glm::vec3 heldBall(0.0f);
+    for (int i = 0; i <= 20; ++i) {
+        const float yaw = glm::radians(2.0f * (float)i);
+        const glm::vec3 o = step(yaw);
+        const glm::vec3 drawnBall = glm::angleAxis(yaw, up) * ball + o;
+        if (i == 0) heldBall = drawnBall;
+        CHECK(glm::length(glm::vec2(drawnBall.x - heldBall.x, drawnBall.z - heldBall.z)) < 1e-4f);
+    }
+    // The heel rises 8 cm (past Lift for the ankle), the toe still down: held.
+    ankle.y = 0.16f;
+    step(glm::radians(40.0f));
+    CHECK(lock.Locked(0) && lock.OnBall(0));
+    // The toe leaves: let go.
+    ball.y = 0.03f + set.Lift + 0.01f;
+    step(glm::radians(40.0f));
+    CHECK(!lock.Locked(0) && !lock.OnBall(0));
+    // A foot that comes down on its ball, the heel 3 cm up (a jog's start): planted at the ball from its first frame.
+    IK::FootLock tiptoe;
+    const glm::vec3 heelUp(0.1f, 0.11f, 0.0f), toe(0.1f, 0.03f, 0.14f);
+    tiptoe.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), heelUp, 0.08f, dt, &toe, 0.03f); // its floors: heel 8 cm, ball 3 cm
+    tiptoe.Step(0, set, root, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), heelUp, heelUp.y, dt, &toe, toe.y);
+    CHECK(tiptoe.Locked(0) && tiptoe.OnBall(0));
+}
+
 void TestAdsReloadPreservesAdditiveLocomotion() {
     IK::Pose reload(2),aim(2),reference(2),walk(2);
     reload[0].T=glm::vec3(0,0,0.4f);
@@ -1165,4 +1271,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Foot lock lets go and steps past 0.98 of the leg", TestFootLockLetsGoAtReach});
     tests.push_back({"Clamp reach never asks a leg for more than 0.995 of it", TestClampReachNeverStretchesTheLeg});
     tests.push_back({"Foot slide meter counts plants and their drift", TestFootSlideMeterCountsPlants});
+    tests.push_back({"Foot slide meter: a pivot on the ball is not a slide", TestFootSlideMeterContactPoint});
+    tests.push_back({"Foot lock steps clear over the way a turn carries the foot", TestFootLockStepsForTravel});
+    tests.push_back({"Foot lock holds the heel, then pivots on the ball", TestFootLockHeelThenBall});
 }

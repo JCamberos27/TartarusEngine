@@ -23,12 +23,41 @@ struct Snapshot {
     float IdleTime = 0.0f, MoveTime = 0.0f;
     float MoveSpeed = 0.0f;       // |MoveX, MoveY|
     float RootSpeed = 0.0f;       // m/s the clips carry the capsule
+    // The torso's forward bend (deg, + = forward): pelvis to spine_05 off the vertical, in the body's frame - as the clips
+    // (or motion matching) pose it, and as drawn after the spine's aim at the view; and the view's pitch (deg, + = up).
+    float ClipBendDeg = 0.0f, TorsoBendDeg = 0.0f, ViewPitchDeg = 0.0f;
+    // The upper arms off straight down (deg, the worse of the two, body frame): as the spine's pitch at the view leaves them,
+    // and as drawn (unarmed, Arm Hang turns them back to hang).
+    float ArmDownAimDeg = 0.0f, ArmDownDeg = 0.0f;
+    // Posture (Phase 4, the owner's play test 2), from the bones' orientations against the bind pose, body frame:
+    // the chest's pitch (spine_05's up off the vertical, deg, + = forward) as the clip has it, after Spine Stability
+    // (before the aim at the view) and as drawn; its roll (+ = toward the body's left); the head's pitch against the
+    // chest (+ = chin down, - = thrown back).
+    float ChestPitchClipDeg = 0.0f, ChestPitchStableDeg = 0.0f, ChestPitchDeg = 0.0f, ChestRollDeg = 0.0f, HeadPitchDeg = 0.0f;
+    float HeadWorldPitchDeg = 0.0f; // the head's own pitch off the bind pose, body frame (+ = chin down)
+    // The trunk's motion (deg, body frame, off the bind pose; FirstPersonBody::TrunkAngles): the pelvis's yaw / roll / pitch,
+    // the chest's (spine_05), and the chest's against the pelvis - as the clip poses it (before Spine Stability) and as drawn.
+    float TrunkClipDeg[9] = {}, TrunkDeg[9] = {};
+    // Under motion matching, per stream bone: how far the drawn local rotation is off the matcher's (deg) - what everything
+    // after the pose (Spine Stability, the aim, the arms' layers, foot IK) did to it. Names in LayerBones (the stream's).
+    std::vector<float> LayerDeg;
+    const std::vector<std::string>* LayerBones = nullptr;
+    // Each hand (l, r): its height over its shoulder (upper arm bone, m, + = above), its distance to the camera (m), and
+    // whether it is in the view (within 35 deg of the camera's forward and 0.8 m).
+    float HandOverShoulder[2] = {0, 0}, HandToEye[2] = {0, 0};
+    float HandEyePush[2] = {0, 0}; // m: how far KeepHandsFromEye moved each hand out from the eye this frame (0: it didn't)
+    bool HandInView[2] = {false, false};
+    float FeetGap = 0.0f;       // m: left foot minus right along the body's left (< 0: the legs are crossed)
+    float BodyYawRateDeg = 0.0f; // the body's heading's turn rate (deg/s)
+    float MmAimFade = 1.0f;     // motion matching: the share of Spine Aim kept at this speed (FirstPersonBodyMmAimFade)
+    float PelvisHeight = 0.0f, PelvisHeightClip = 0.0f; // m over the body's base: as drawn, and as the clip had it
     float FootWeight = 0.0f;      // 0..1: how much foot IK is on
     float FootOffset[2] = {0, 0}; // ground under each foot minus the capsule's (m)
     bool FootPlanted[2] = {false, false};
     float FootLock[2] = {0, 0};   // 0..1: how firmly each foot is pinned
     float StepOffset = 0.0f;      // m the body is off the capsule's height (stair easing)
     float ArmsWeight = 0.0f;      // 0..1: how much the body's arms follow the weapon rig
+    float HeadHeight = 0.0f;      // m the clip's head bone over the body's base (before the chest's aim)
     float EyeSlack = 0.0f;        // m the eye is off the shoulders' motion (bounded by Eye Slack)
     glm::vec3 EyeApplied{0.0f};   // m the body moved the camera this frame, world (head height, bob, sway)
     glm::vec3 BodyEye{0.0f};      // world: the body's eye, before the procedural camera offsets (bob, lean, landing)
@@ -52,11 +81,25 @@ struct Snapshot {
     // The mesh is a few cm thicker than the bone line.
     float EyeToUpperArmRig[2] = {0, 0}, EyeToUpperArmBody[2] = {0, 0};
     float NearPlane = 0.0f;
+    float EyeBodyPush = 0.0f;
+    int NeckRimPoints = 0;
+    float LookLimitDeg = -89.0f;  // the look-down limit (Player::MinPitch under motion matching)
+    float HeadRide = 0.0f;        // FirstPersonBody::HeadRide (the procedural camera bob is off by this share)        // the torso's neck opening's rim vertices EyeBodyPush keeps out of the view     // m the eye is moved forward to keep the upper torso past the near plane (EyeBodyPush)
     // FirstPersonBody's camera probe (overlay on): the piece the camera sees nearest the eye, how far ahead
     // (along the view) and the bone that mostly moves that spot; which pass draws it.
     std::string ProbePiece, ProbeBone;
     float ProbeDepth = 0.0f;
     bool ProbeViewModel = false;
+    // ... and the camera pass's hides that fall inside the view (vertices past the near plane, in the frustum): each is a
+    // cut in the body you can see into - the Near Hide (body / clothing), the collar mask, a Camera Hidden Bone's collapse
+    // point, the hidden head (Head Bones, or a Hidden Part's vertices).
+    int ProbeCutNear = 0, ProbeCutCollar = 0, ProbeCutBones = 0, ProbeCutHead = 0;
+    // ... and (ProbeRequested only) a grid of view rays cast at the drawn body's triangles: how many there are, how many hit
+    // the body, and how many hit a back face first - the inside of the body, seen through an opening ("see through my
+    // body"); the piece and bone most of those hit. -1: not measured this frame.
+    int ProbeRays = -1, ProbeRayHits = 0, ProbeInsideRays = 0;
+    std::string ProbeInsideWhat;
+    glm::vec2 ProbeInsideAt{0.0f}; // ... and where on the screen, on average (-1..1, + right / up)
     std::string LastTrigger;      // the last start / stop / crouch / jump trigger the body fired
     float LastTriggerAgo = 0.0f;  // seconds since
 };
@@ -68,6 +111,8 @@ inline Snapshot& Info() { static Snapshot s; return s; }
 // The Scene viewport's overlay toggle (set every frame from the editor settings while playing).
 inline void SetEnabled(bool on) { EnabledFlag() = on; if (!on) Verts().clear(); }
 inline bool Enabled() { return EnabledFlag(); }
+// The camera probe alone, without the overlay (--npc-test measures with it): costs ~4.5 ms a frame while on.
+inline bool& ProbeRequested() { static bool v = false; return v; }
 inline void Clear() { Verts().clear(); }
 
 inline void Line(const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {

@@ -76,6 +76,9 @@ std::vector<Action> Defaults() {
         act("Vertical",   GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_UP,    GLFW_KEY_DOWN, kNone, GLFW_GAMEPAD_AXIS_LEFT_Y, true),
         act("Jump",   GLFW_KEY_SPACE,      kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_A,          kNone, false),
         act("Sprint", GLFW_KEY_LEFT_SHIFT, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_LEFT_THUMB, kNone, false),
+        // Held: the stroll (a motion matching body's slow walk; on a gamepad a partial stick does it - Player::StrollStick).
+        // Not Left Alt: that is Fire2's (aim) alternate key.
+        act("Walk",   GLFW_KEY_CAPS_LOCK,  kNone, kNone, kNone, kNone, kNone, false),
         act("Fire1",  kMouseBase + 0, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, kNone, false),
         act("Fire2",  kMouseBase + 1, kNone, GLFW_KEY_LEFT_ALT,     kNone, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,  kNone, false),
         act("Crouch", GLFW_KEY_LEFT_CONTROL, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_RIGHT_THUMB, kNone, false),

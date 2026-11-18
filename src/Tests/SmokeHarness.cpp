@@ -86,14 +86,14 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         }
         std::sort(m_ScenePaths.begin(), m_ScenePaths.end());
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
-            m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" ? "tests/scenes/LocomotionLab.json"
+            m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" || opt.npcTestScenario == "mmview" || opt.npcTestScenario == "mmdb" ? "tests/scenes/LocomotionLab.json"
                                                           : opt.npcTestScenario == "blood" ? "tests/scenes/BloodTest.json"
                                                           : opt.npcTestScenario == "ragdoll" ? "tests/scenes/RagdollTest.json"
                                                           : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
                                                           : opt.npcTestScenario == "locomotion" || opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" || opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" ? "tests/scenes/Apartment Hallway.json"
                                                                                        : "tests/scenes/Arena.json")); // (deaths, feet, flame: the Arena)
         // testbed: the animation overhaul's clean scene, a project scene (tools/scenes/build_anim_testbed.py), not a tests/ one.
-        if (opt.npcTestMode && opt.smokeScenesDirArg.empty() && opt.npcTestScenario == "testbed")
+        if (opt.npcTestMode && opt.smokeScenesDirArg.empty() && (opt.npcTestScenario == "testbed" || opt.npcTestScenario == "mmplayer" || opt.npcTestScenario == "mmstress"))
             m_ScenePaths.assign(1, ProjectPaths::Resolve("scenes/AnimTestbed.json"));
 #pragma warning(suppress : 4996)
         if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) { // e.g. doors in the Forest
