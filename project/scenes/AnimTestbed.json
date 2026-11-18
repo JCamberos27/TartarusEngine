@@ -472,38 +472,6 @@
       "pathGuid": "120c50e778307a32"
     },
     {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx",
-      "pathGuid": "2f725c6d0ecc731b"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Left.fbx",
-      "pathGuid": "52c90411529c91c3"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Right.fbx",
-      "pathGuid": "93bc5b9065345d9e"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Left.fbx",
-      "pathGuid": "f39adef33b72b5e1"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Right.fbx",
-      "pathGuid": "fa653474f4c4cc71"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd.fbx",
-      "pathGuid": "c0adf8ca675de297"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Left.fbx",
-      "pathGuid": "d9bba94a847fc1fe"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Right.fbx",
-      "pathGuid": "f9f0f26c140addb8"
-    },
-    {
       "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd.fbx",
       "pathGuid": "b34ad32375c7191b"
     },
@@ -534,54 +502,6 @@
     {
       "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Right.fbx",
       "pathGuid": "7e9963070bcd70f7"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx",
-      "pathGuid": "6ffa5affd5def353"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump.fbx",
-      "pathGuid": "d50e5115458fb134"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Fall_Loop.fbx",
-      "pathGuid": "0cb61f754798296f"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Land_Recovery.fbx",
-      "pathGuid": "149625c5c5d35512"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R180.fbx",
-      "pathGuid": "4685634606e07d4e"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R135.fbx",
-      "pathGuid": "aa3fbc64fad3f8b5"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R090.fbx",
-      "pathGuid": "9cb7124f15924003"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R045.fbx",
-      "pathGuid": "931eadf7c2b109a6"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L045.fbx",
-      "pathGuid": "17e8a43d4fd11432"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L090.fbx",
-      "pathGuid": "df03b6fd87d5fc7e"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L135.fbx",
-      "pathGuid": "8a41eb401d24b425"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L180.fbx",
-      "pathGuid": "c24904de04270a8f"
     },
     {
       "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Start.fbx",
@@ -616,118 +536,6 @@
       "pathGuid": "73d93f603830af9d"
     },
     {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd_Stop.fbx",
-      "pathGuid": "5d75ec66936312c5"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_01.fbx",
-      "pathGuid": "5bbbc16c5a7e53cb"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx",
-      "pathGuid": "15acb8dbcc868cd2"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Left.fbx",
-      "pathGuid": "263c5ce0379edfa8"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Right.fbx",
-      "pathGuid": "b667084faf565701"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left.fbx",
-      "pathGuid": "1a9d5c1c02701f5e"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right.fbx",
-      "pathGuid": "7e7b97b9e1892026"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd.fbx",
-      "pathGuid": "1b5d05a364c08afd"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Left.fbx",
-      "pathGuid": "64ef3a056ff93ce0"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Right.fbx",
-      "pathGuid": "4b6dc3b6f1e41038"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R180.fbx",
-      "pathGuid": "52b24811ec0f0372"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R135.fbx",
-      "pathGuid": "219732f3629879ea"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R090.fbx",
-      "pathGuid": "f3f461f6ff4e9dfb"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R045.fbx",
-      "pathGuid": "ef42cbd093a44da7"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L045.fbx",
-      "pathGuid": "59c12678a0458cf5"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L090.fbx",
-      "pathGuid": "1ba9e255270bd6ad"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L135.fbx",
-      "pathGuid": "99bd3ca75283494a"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L180.fbx",
-      "pathGuid": "85205c3b409224e3"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Stand_Idle_Trans_Crouch_02.fbx",
-      "pathGuid": "8c9fdfb2ae24e5ba"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Trans_Stand_01.fbx",
-      "pathGuid": "6c94a5f0977ea438"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Start.fbx",
-      "pathGuid": "3c06fc15fecbb0a6"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Start.fbx",
-      "pathGuid": "783db248a2970435"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Start.fbx",
-      "pathGuid": "7b1209d617221eb0"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Start.fbx",
-      "pathGuid": "405245ef1bf03807"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Stop.fbx",
-      "pathGuid": "a01f53ceb2de0fd6"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Stop.fbx",
-      "pathGuid": "ff6a62f304227a31"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Stop.fbx",
-      "pathGuid": "9f701734f074f557"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Stop.fbx",
-      "pathGuid": "932102775d75aa9e"
-    },
-    {
       "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Front.fbx",
       "pathGuid": "393b3205c05192f0"
     },
@@ -750,14 +558,6 @@
     {
       "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Back_Right.fbx",
       "pathGuid": "4f552cc17a7ea031"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Start.fbx",
-      "pathGuid": "30f5c2cc48e2b44a"
-    },
-    {
-      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Stop.fbx",
-      "pathGuid": "a8ea8223a81536da"
     },
     {
       "path": "assets/Weapons/Remington870/Shell_12ga.fbx",
@@ -4185,18 +3985,6 @@
   ],
   "models": [
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -4243,18 +4031,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -4293,18 +4069,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 3,
         "Item": {
@@ -4375,18 +4139,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -4425,18 +4177,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 2,
         "Item": {
@@ -4475,18 +4215,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {
@@ -4525,18 +4253,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {
@@ -4575,18 +4291,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {
@@ -4625,18 +4329,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": {
-          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
-          "pathGuid": "f00ced2b8e9ec387"
-        },
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {

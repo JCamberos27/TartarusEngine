@@ -38,15 +38,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -93,15 +84,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -140,15 +122,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 3,
         "Item": {
@@ -219,15 +192,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
@@ -266,15 +230,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 2,
         "Item": {
@@ -313,15 +268,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {
@@ -360,15 +306,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {
@@ -407,15 +344,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {
@@ -454,15 +382,6 @@
       ]
     },
     {
-      "Animator Controller": {
-        "Controller": "assets/AI/npc_soldier.controller",
-        "Speed": 1.0,
-        "Track": "",
-        "rootMotion": "In Place",
-        "rootMotionBone": "",
-        "rootMotionRotation": false,
-        "rootMotionVertical": false
-      },
       "Outfit Piece": {
         "Flags": 0,
         "Item": {

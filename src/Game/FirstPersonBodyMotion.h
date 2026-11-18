@@ -3,7 +3,7 @@
 // The first-person body's motion matching pose source (docs/MOTION_MATCHING_HANDOFF.md, Phase 4).
 //
 // FirstPersonBody keeps everything it did around the pose - the capsule-led placement, the stair spring, foot IK and
-// the foot lock, the eye, the gait phase, the arms - and, with Locomotion Source = Motion Matching, takes the pose from
+// the foot lock, the eye, the gait phase, the arms - and takes the pose from
 // here instead of its locomotion Animator Controller (whose update it then holds: AnimatorControllerComponent::SkipUpdate).
 //
 //   - One database for every body (SharedMotionDatabase: loaded once, Phase 5's NPCs share it), a MotionMatcher on the body.
@@ -18,7 +18,7 @@
 //     body turns as the mocap turns - its feet stay planted through a turn. One model standing, moving and in the air.
 //   - Movement stays capsule-led. The pose's root is clamped to the capsule (the body stands at its feet; the animation's
 //     own travel is never applied). Speed warping: the database plays at capsule speed / the matched frame's root speed
-//     (within MinWarp..MaxWarp) in place of BodyLocomotion::LoopPlayRate. The search schedule watches the move in the
+//     (within MinWarp..MaxWarp) - in place of the legacy controller's loop play rate. The search schedule watches the move in the
 //     view's frame.
 //   - Turn in place: standing still the heading holds until the view is Turn Threshold off it, then the body turns to it
 //     (the database's turn-on-the-spot frames, found by the trajectory's facing); TurnInPlaceRate() (measured off the
@@ -54,9 +54,6 @@ namespace MmPlayerDebug { struct Snapshot; }
 // startup in .cpp files, so an experiment needs no rebuild (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration"). The keys are
 // listed where they are read (FirstPersonBodyMotion::Start, FirstPersonBody::ApplyFootIK, SharedMotionDatabase::Get).
 float MmTune(const char* key, float fallback);
-
-// FirstPersonBodyComponent::LocomotionSource (temporary, until Phase 6 removes the legacy path).
-enum class LocomotionSource : int { Legacy = 0, MotionMatching = 1 };
 
 // A cooked database shared by every character that plays it, with what is measured off it once.
 struct SharedMotionDatabase {

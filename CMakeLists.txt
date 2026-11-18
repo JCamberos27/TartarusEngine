@@ -65,7 +65,6 @@ set(TARTARUS_GAME_MODULE_ONLY_SOURCES
 )
 set(TARTARUS_GAME_SHARED_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/WeaponRules.cpp
-  ${CMAKE_SOURCE_DIR}/src/Game/BodyLocomotion.cpp
 )
 set(TARTARUS_EDITOR_MODULE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp

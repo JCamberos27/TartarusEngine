@@ -19,6 +19,9 @@ Run `python tools/assets/check_git_assets.py` before committing or pushing.
 [Gameplay code](GAMEPLAY_CODE.md): where player, weapon and body code lives, components, and
 hot-reloading the game and editor modules. Everything is native C++.
 
+[Motion Matching](MOTION_MATCHING.md): how the player's body and the NPC dummies are posed from the mocap database - the
+data, the bake, the runtime, tuning and tests ([the overhaul's handoff](MOTION_MATCHING_HANDOFF.md) has its history).
+
 ## Related engine systems
 
 * [Project assets](PROJECT_ASSETS.md): folder layout, weapon files, and duplicate consolidation.

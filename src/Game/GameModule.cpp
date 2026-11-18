@@ -1,5 +1,4 @@
 #include "GameModuleAPI.h"
-#include "BodyLocomotion.h"
 #include "WeaponRules.h"
 #include "TransformControllerSystem.h"
 #include "LightFlickerSystem.h"
@@ -27,11 +26,10 @@ const GameModuleAPI kAPI{
     /*SaveState=*/nullptr,
     /*FixedUpdate=*/nullptr,
     // The first-person rules: the engine calls these instead of its built-in copies, so editing
-    // WeaponRules.cpp or BodyLocomotion.cpp reloads like the systems above.
+    // WeaponRules.cpp reloads like the systems above.
     Gameplay::FramesLayout(),
     &WeaponRules::Update,
     &WeaponRules::UpdateLoadout,
-    &BodyLocomotion::Update,
 };
 
 } // namespace

@@ -12,7 +12,6 @@
 
 #include "Animation.h"       // LocalTRS
 #include "FirstPersonBody.h" // IK::SpineDistribution, the foot lock settings
-#include "GameFrames.h"      // Gameplay::BodyMotionFrame
 
 class Model;
 class World;
@@ -42,10 +41,6 @@ struct NpcHoldSettings {
     float FootNormalEase = 0.08f;    // seconds: ground normal easing
     float FootIKFade = 0.15f;        // seconds: foot IK enable/disable easing
     IK::FootLockSettings FootLock;   // planted feet held in the world (the player body's settings)
-    // The pose from motion matching (the player's database and driver, FirstPersonBodyMotion) instead of the npc_soldier
-    // controller: the player's Locomotion Source (FirstPersonBody::SourceFor - TARTARUS_LOCOMOTION_SOURCE overrides it). Temporary,
-    // until Phase 6 removes the controller path (docs/MOTION_MATCHING_HANDOFF.md, Phase 5).
-    bool MotionMatching = false;
 };
 
 struct NpcBodyInput {
@@ -54,15 +49,12 @@ struct NpcBodyInput {
     glm::vec3 Wish{0.0f};          // where it is going and at what pace (m/s, world, flat); zero once its stop has begun
     bool Grounded = true;          // the capsule on the floor (else falling)
     float FallSpeed = 0.0f;        // m/s down while falling (the landing's impact)
-    float JogSpeed = 3.2f;         // the jog and run paces (m/s): the blend tree's jog and sprint
-    float RunSpeed = 4.7f;
     float AccelTime = 0.12f;       // seconds the capsule eases up to pace / down to a stop (the stop clip's distance matching)
     float DecelTime = 0.15f;
     float FacingYaw = 0.0f;        // the heading the body should have standing (radians, model +Z = sin/cos); moving, it faces the travel
     glm::vec3 LookPoint{0.0f};     // what the head looks at
     bool Sprint = false;           // running (the footsteps' stride and sound)
     bool FootIK = false;           // feet onto uneven ground (near the player: two rays and a leg solve a frame)
-    // Motion matching only:
     int Style = MotionLabel::StyleWalk; // the style the gait asks for (walk, jog; the run is the sprint style)
     glm::vec3 Path[4]{};                // the navmesh path's next corners (world), for the trajectory; none: straight down the wish
     int PathCount = 0;
@@ -111,11 +103,8 @@ public:
     // The pose is the ragdoll's from now on: Tick / LateUpdate stop touching the pose.
     void SetPoseOwnedElsewhere(bool owned) { m_PoseExternal = owned; }
     bool PoseOwnedElsewhere() const { return m_PoseExternal; }
-    // (Tests) The time (s) the root motion read by the last Tick covered (0: a frame the animation LOD held - no motion).
-    float RootMotionDt() const { return m_RootMotionDt; }
-
-    // Motion matching took (NpcHoldSettings::MotionMatching, the database loaded and bound): the pose is the matcher's, the
-    // controllers are held. Its gait speeds are what the capsule should move at.
+    // Motion matching took (the database loaded and bound - not in CI, which has no licensed assets: the body stands in its bind
+    // pose). Its gait speeds are what the capsule should move at.
     bool MotionMatching() const { return m_MmActive; }
     const FirstPersonBodyMotion& Motion() const { return m_Mm; }
     const MmPlayerDebug::Snapshot& MmDebug() const { return m_MmDebug; } // the last matcher update's (as the player's MmPlayerDebug)
@@ -138,23 +127,6 @@ private:
     float m_Yaw = 0.0f;
     bool m_HaveYaw = false;
     bool m_Turning = false;
-    // The time the animator's root motion covers (Tick): the animation LOD holds frames (no motion, its SkippedTime counting) and
-    // the next update advances by all of it at once. Worked out from the last Tick's dt and the SkippedTime it saw.
-    float m_RootMotionDt = 0.0f, m_PrevTickDt = 0.0f, m_PrevSkipped = 0.0f;
-    // Orientation warp (FootPass): radians the legs are turned so the clips' travel runs along the capsule's; the spine
-    // turns back by as much. The two travels, smoothed over a stride, in the body's frame.
-    float m_Warp = 0.0f;
-    std::string m_LastState; // the animator's state last frame
-    bool m_TurnFade = false; // a turn on the spot fading back to its loop (a start may cut in)
-    glm::vec2 m_WarpClip{0.0f}, m_WarpCapsule{0.0f};
-    Gameplay::BodyMotionFrame m_Loco{}; // the player body's locomotion state (BodyLocomotion), kept frame to frame
-    float m_FallSpeed = 0.0f;           // m/s down at the last airborne frame: the next landing's impact
-    std::uint32_t m_Random = 0;
-    float NextRandom() {
-        if (!m_Random) m_Random = (std::uint32_t)(reinterpret_cast<std::uintptr_t>(this) >> 4) | 1u; // each body its own
-        m_Random ^= m_Random << 13; m_Random ^= m_Random >> 17; m_Random ^= m_Random << 5;
-        return (float)(m_Random >> 8) / 16777216.0f;
-    }
     // The look: the chest's twist toward it, and the head's own turn past the chest (radians), sprung.
     float m_LookTwist = 0.0f, m_LookTwistRate = 0.0f;
     float m_HeadYaw = 0.0f, m_HeadPitch = 0.0f, m_HeadYawRate = 0.0f, m_HeadPitchRate = 0.0f;

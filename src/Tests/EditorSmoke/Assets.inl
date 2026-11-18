@@ -428,7 +428,7 @@ void RegisterAssetsTests() {
     }
 
     // ------------------------------------------------------------------ the grid's background menu
-    Add("assets: New Folder + rename, Create Material / Animator Controller / Recoil / Camera Shake / Body Locomotion", Cat({
+    Add("assets: New Folder + rename, Create Material / Animator Controller / Recoil / Camera Shake", Cat({
         {FreshScene(), Wait(2)},
         EnsureScratch(),
         {Navigate(kFolder), Wait(4), UntilListed("Smoke Tex.png"),
@@ -471,12 +471,10 @@ void RegisterAssetsTests() {
         BackgroundMenu("Create Camera Shake"),
         {Until("New Camera Shake.camerashake written", [](Ctx&) { return FileExists(DirFile("New Camera Shake.camerashake")); }, 60),
          ExpectTrue("and selected", [](Ctx& c) { return Leaf(X::AssetKey(c.E)) == "New Camera Shake.camerashake"; })},
-        BackgroundMenu("Create Body Locomotion Controller"),
-        {Until("Body Locomotion.controller written", [](Ctx&) { return FileExists(DirFile("Body Locomotion.controller")); }, 60),
-         Do("close the Animator", [](Ctx& c) { AX::ShowAnimator(c.E) = false; }), Wait(3),
-         // The new files show up in the folder without a manual refresh.
+        // (Create Body Locomotion Controller went with the legacy locomotion, motion matching Phase 6.)
+        {// The new files show up in the folder without a manual refresh.
          UntilListed("New Animator Controller.controller", 300), UntilListed("New Recoil.recoil", 300),
-         UntilListed("New Camera Shake.camerashake", 300), UntilListed("Body Locomotion.controller", 300),
+         UntilListed("New Camera Shake.camerashake", 300),
          Shot("created", {kAssets})},
     }));
 

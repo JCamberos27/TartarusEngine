@@ -977,36 +977,12 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             }
         }
         if (R.ReachedAt < 0.0f && std::fabs(WrapDeg(yaw - R.TravelYaw)) < 15.0f) R.ReachedAt = inStage;
-        if (const auto* ac = R.EMm ? nullptr : world.Registry.try_get<AnimatorControllerComponent>(n->Body.Driver())) {
-            if (ac->HasTag(FPBody::kTagStartTurn)) {
-                R.SawStartTurn = true;
-                const float steps = ac->GetFloat(FPBody::kStartTurn);
-                if (std::fabs(steps) > std::fabs(R.StartTurnSteps)) R.StartTurnSteps = steps;
-            }
-            // Its loop's clip travel against its capsule (the frames with root motion: an LOD hold has none).
-            const float rmDt = n->Body.RootMotionDt();
-            if (ac->CurrentState() == FPBody::kStateLocomotion && !ac->InTransition && rmDt > 1e-5f) {
-                R.NpcLoopClip += glm::length(glm::vec2(ac->RootMotion.DeltaPosition.x, ac->RootMotion.DeltaPosition.z)) / rmDt;
-                R.NpcLoopCapsule += glm::length(glm::vec2(n->Velocity.x, n->Velocity.z));
-                ++R.NpcLoopFrames;
-            }
-            if (ac->CurrentState() != R.LastNpcState) {
-                std::printf("[Testbed] %6.2f s  E %s -> %s  (yaw %.0f, %.2f m/s)\n", inStage, R.LastNpcState.c_str(), ac->CurrentState().c_str(), yaw,
-                            glm::length(glm::vec2(n->Velocity.x, n->Velocity.z)));
-                R.LastNpcState = ac->CurrentState();
-                R.NpcStates += (R.NpcStates.empty() ? "" : " > ") + R.LastNpcState;
-            }
-        }
         if ((there && inStage > 1.5f) || inStage > 5.0f) {
             npcs.EndScriptedMove(n->Index);
-            std::printf("[Testbed] E: states %s; StartTurn %.2f (%.0f deg); heading reached at %.2f s; body yaw rate %.0f deg/s at most%s\n",
-                        R.NpcStates.c_str(), R.StartTurnSteps, R.StartTurnSteps * 45.0f, R.ReachedAt, R.MaxYawRate,
-                        "");
-            std::printf("[Testbed] E: its gait loop's clips %.3f m/s, capsule %.3f m/s (ratio %.3f, %d frames; logged, not checked)\n",
-                        R.NpcLoopFrames ? R.NpcLoopClip / R.NpcLoopFrames : 0.0, R.NpcLoopFrames ? R.NpcLoopCapsule / R.NpcLoopFrames : 0.0,
-                        R.NpcLoopCapsule > 1e-3 ? R.NpcLoopClip / R.NpcLoopCapsule : 0.0, R.NpcLoopFrames);
-            if (R.EMm) {
-                // Motion matching: no start-turn clip to choose - the turn is the mocap's when the matched clips' own root turn
+            std::printf("[Testbed] E: clips %s; heading reached at %.2f s; body yaw rate %.0f deg/s at most\n", R.NpcStates.c_str(), R.ReachedAt,
+                        R.MaxYawRate);
+            {
+                // No start-turn clip to choose (motion matching): the turn is the mocap's when the matched clips' own root turn
                 // carries most of the heading's (the character facing follows the clip; the pull toward the simulation does the rest).
                 const double share = std::fabs(R.HeadingTurnDeg) > 1.0 ? R.ClipTurnDeg / R.HeadingTurnDeg : 0.0;
                 std::printf("[Testbed] E: MM heading turned %.0f deg, the clips' own root turn %.0f deg (%.0f %%)\n", R.HeadingTurnDeg, R.ClipTurnDeg,
@@ -1014,9 +990,6 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                 Check(std::fabs(R.HeadingTurnDeg) >= 150.0 && share >= 0.5,
                       "E: setting off 180 degrees behind it, the turn is the mocap's (the clips' root turn " + std::to_string(100.0 * share) +
                           " % of the heading's " + std::to_string(R.HeadingTurnDeg) + " deg, >= 50 %)");
-            } else {
-                Check(R.SawStartTurn && std::fabs(R.StartTurnSteps) * 45.0f >= 157.5f,
-                      "E: setting off 180 degrees behind it, the start turn chosen covers ~180 degrees (" + std::to_string(R.StartTurnSteps * 45.0f) + ")");
             }
             Check(R.ReachedAt >= 0.0f && R.ReachedAt <= 1.2f,
                   "E: its heading reaches the travel (within 15 degrees) in 1.2 s (" + std::to_string(R.ReachedAt) + " s)");
@@ -1156,8 +1129,8 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
 }
 
 // --- mmplayer: the player's body on motion matching (docs/MOTION_MATCHING_HANDOFF.md, Phase 4) ------------------------
-// The testbed's parts A and C with Locomotion Source = Motion Matching, plus part M (strafes, the crouch, turning on the
-// spot, the run, jumps), unarmed (TESTBED_PARTS=ACM, TARTARUS_LOCOMOTION_SOURCE=mm: set by the NpcTest constructor). Every
+// The testbed's parts A and C, plus part M (strafes, the crouch, turning on the
+// spot, the run, jumps), unarmed (TESTBED_PARTS=ACM: set by the NpcTest constructor). Every
 // frame: the matched frame's labels against the filters, the speed warping, the root against the capsule; checked once
 // the player's legs are through (MmPlayerChecks).
 void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const float (&foot)[3]) {
@@ -1168,7 +1141,7 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
     ++q.Frames;
     ++R.MmFrames;
     if (bd.Valid && bd.AnimatorState == FPBody::kStateMotionMatching) ++R.MmPosed;
-    // The torso's bend (any locomotion source: TARTARUS_LOCOMOTION_SOURCE=legacy runs the same course on the controller).
+    // The torso's bend.
     if (R.Into >= 0.5f && player.Grounded && bd.Valid) {
         q.Bend.push_back(bd.TorsoBendDeg);
         q.ClipBend.push_back(bd.ClipBendDeg);

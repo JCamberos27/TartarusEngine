@@ -66,7 +66,7 @@ inline constexpr const char* kPlayRate = "PlayRate";
 
 // States the body watches by name.
 inline constexpr const char* kStateLocomotion = "Locomotion";
-// Not a controller state: what BodyDebug reports while motion matching poses the body (Locomotion Source).
+// Not a controller state: what BodyDebug reports while motion matching poses the body.
 inline constexpr const char* kStateMotionMatching = "MotionMatching";
 inline constexpr const char* kStateJump = "Jump";
 inline constexpr const char* kStateFall = "Fall";
@@ -100,14 +100,6 @@ inline constexpr const char* kTagAirborne = "Airborne";
 inline constexpr const char* kBonePelvis = "pelvis";
 inline constexpr const char* kBoneSpine[5] = {"spine_01", "spine_02", "spine_03", "spine_04", "spine_05"};
 
-// Crossfade weight of gait/turn/start/stop states; actions retain their authored motion.
-// Updates crouch to the gait's actual standing/crouched crossfade when available.
-float LocomotionSpineWeight(const AnimatorControllerComponent& animator, float& crouch);
-// Model-space lower-body retention: 10% at spine_01, 5% at spine_02, none above.
-// Pelvis and legs are never targeted. Stability 0 keeps the authored gait.
-void BlendLocomotionSpine(IK::Pose& pose, const std::vector<int>& parents, const std::array<int, 5>& bones,
-                         const std::vector<glm::mat4>& stand, const std::vector<glm::mat4>& crouch,
-                         float crouchWeight, float stability, float crouchDrop = 0.0f);
 inline constexpr const char* kBoneUpperArm[2] = {"upperarm_l", "upperarm_r"};
 inline constexpr const char* kBoneLowerArm[2] = {"lowerarm_l", "lowerarm_r"};
 inline constexpr const char* kBoneHand[2] = {"hand_l", "hand_r"};
@@ -165,8 +157,9 @@ struct Check {
 struct ValidationInput {
     const FirstPersonBodyComponent* Config = nullptr;
     bool HasPieces = false;                // rigged pieces under the body root
-    bool HasDriverPiece = false;           // one with an Animator Controller
-    const AnimatorController* Controller = nullptr; // the driver's controller, loaded (null = not loaded)
+    bool HasDriverPiece = false;           // one with the whole skeleton (the pelvis, the head, a hand): motion matching's driver
+    // Optional (motion matching needs no controller since Phase 6): a controller on the driver, whose parameters are then checked.
+    const AnimatorController* Controller = nullptr; // the driver's controller, loaded (null = none / not loaded)
     bool ControllerSet = false;            // the driver piece names a controller path
     std::function<bool(const std::string&)> HasBone; // on the driver's model (empty = skip bone checks)
     std::vector<std::string> PieceNames;   // names of the pieces (for Arms Piece / Hidden Parts matching)
@@ -181,16 +174,5 @@ bool IsArmsPiece(const FirstPersonBodyComponent& cfg, const std::string& pieceNa
 std::vector<Check> Validate(const ValidationInput& in);
 // The worst severity in a result (Ok when empty).
 Severity Worst(const std::vector<Check>& checks);
-
-// The standard locomotion graph (the reference project/assets/Animations/Controllers/fps_body_locomotion.controller): its
-// 14 states, 20 parameters and 63 tuned transitions (start / stop offsets, exit times, crossfades), one
-// "main" track. Clips are named by role - the reference clip's file name without the "AM_" prefix, e.g.
-// "Loco_Walk_Fwd" - and `clipForRole` gives the path for each (empty = none yet, for the Animator to fill).
-AnimatorController BuildLocomotionController(const std::function<std::string(const std::string&)>& clipForRole);
-// Every role the graph uses, in graph order.
-std::vector<std::string> LocomotionRoles();
-// The file among `files` whose name (minus a leading "AM_" and the extension) equals `role`, case
-// insensitively; "" when none does.
-std::string PickLocomotionClip(const std::string& role, const std::vector<std::string>& files);
 
 } // namespace FPBody

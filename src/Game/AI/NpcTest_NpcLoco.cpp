@@ -190,8 +190,9 @@ void NpcTest::NpcLocoReport() {
                     g_N[i].Stops, states.c_str());
     }
     Check(m_NLLeg >= kNLegCount, "the dummy went through every leg");
-    if (g_Mm) {
-        // Motion matching (Phase 5): the clip checks become the matcher's. The limits are mmplayer's, against the player's own walk
+    Check(g_Mm, "the dummy's pose is motion matching's (the database baked)");
+    {
+        // Motion matching (Phase 5): the clip checks became the matcher's. The limits are mmplayer's, against the player's own walk
         // on the same database (`A walk`, docs/MOTION_MATCHING_HANDOFF.md: 1.2 jumps a second, pose step p99 7.75 deg): jumps while
         // cruising within 1.5x + 0.5 (rated on a leg with 1 s of it or more), pose steps on the move within 1.5x + 1; the style asked for on >= 80 % of the cruising frames; the capsule at the
         // database's gait speed (within 15 %: the director's pace); and each leg ends on a standing idle frame (the stop played).
@@ -218,16 +219,5 @@ void NpcTest::NpcLocoReport() {
             Check(s.Cruise > 0 && style >= 80.0f, std::string(L.Name) + ": cruising plays the style asked for (" + std::to_string(style) + " %)");
             Check(s.EndGait == MotionLabel::Idle, std::string(L.Name) + ": stops on a standing idle frame (" + s.EndClip + ")");
         }
-        return;
-    }
-    for (int i = 1; i < kNLegCount; ++i) {
-        const NLeg& L = kNLegs[i];
-        const bool moves = Flat(L.To, kNLegs[i - 1].To) > 0.5f;
-        if (!moves) continue;
-        const float lo = L.Pace == Gait::Jog ? 2.7f : 1.2f, hi = L.Pace == Gait::Jog ? 3.7f : 1.9f;
-        Check(speed(i) > lo && speed(i) < hi, std::string(L.Name) + ": top speed " + std::to_string(speed(i)) + " m/s");
-        Check(g_N[i].Starts <= 1, std::string(L.Name) + ": one start at most (" + std::to_string(g_N[i].Starts) + ")");
-        Check(g_N[i].Stops <= 1, std::string(L.Name) + ": one stop at most (" + std::to_string(g_N[i].Stops) + ")");
-        Check(g_N[i].Stops == 1, std::string(L.Name) + ": stops with a stop clip");
     }
 }

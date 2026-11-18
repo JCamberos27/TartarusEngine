@@ -699,11 +699,8 @@ void RegisterEngineComponents() {
                     "view, its Animator Controller gets the movement as parameters (MoveX, MoveY, Speed, Sprint,\n"
                     "Grounded, Airborne, Jump), and the clips' root motion walks the player. The camera sits\n"
                     "in its head. Put it on the body's root; its children are the pieces (head, torso, legs,\n"
-                    "feet or clothing), and the first one with an Animator Controller drives the rest.";
+                    "feet or clothing); motion matching poses the one with the whole skeleton (the torso), the rest follow it.";
         m.Fields = {
-            { "Locomotion Source", T::Int, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LocomotionSource), 1.0f,
-              "Temporary (motion matching overhaul): 0 = the locomotion Animator Controller, 1 = motion matching\n"
-              "(the cooked Manny database; speeds from its gait table). TARTARUS_LOCOMOTION_SOURCE overrides it.", 0.0f, 1.0f },
             { "MM Post Layers", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MmPostLayers), 0.0f,
               "Temporary A/B switch (motion matching): off draws the matcher's pose with foot IK only - no Spine Aim /\n"
               "Twist, arm hang or hands-from-eye. Flip it in Play.", 0.0f, 0.0f },

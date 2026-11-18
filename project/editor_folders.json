@@ -68,10 +68,6 @@
       "color": "#B052EB",
       "icon": "crosshairs"
     },
-    "assets/sky": {
-      "color": "#526AEB",
-      "icon": "cloud-sun"
-    },
     "scripts": {
       "color": "#9B6CF2",
       "icon": "code"

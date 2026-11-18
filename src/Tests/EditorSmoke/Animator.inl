@@ -5,7 +5,7 @@
 // and the selection panel. The graph draws its nodes and arrows straight onto the draw list, so the
 // tests work out where a state or an arrow is from the window's pan / zoom and the canvas's own
 // InvisibleButton, then click there like a user.
-//  - project/assets/AI/npc_soldier.controller is opened, framed, browsed (states selected, every
+//  - project/assets/AI/Spider.controller is opened, framed, browsed (states selected, every
 //    left tab shown) and shot, but never edited: the window saves every edit straight to the file,
 //    so the test checks the file is byte-for-byte unchanged afterwards (and puts it back if not).
 //  - a scratch controller (a copy of what Assets > Create Animator Controller writes) gets the
@@ -27,7 +27,7 @@ namespace fs = std::filesystem;
 using AA = EditorSmokeAccess_Animator;
 
 const char* kAnimator = "###Animator";
-const char* kSoldierRel = "assets/AI/npc_soldier.controller";
+const char* kSoldierRel = "assets/Characters/Spider/Spider.controller"; // a real controller, read-only (npc_soldier went with Phase 6)
 const char* kScratchRel = "editor-smoke-scratch-animator/Smoke.controller";
 std::string ScratchDir() { return ProjectPaths::Resolve("editor-smoke-scratch-animator"); }
 
@@ -207,7 +207,7 @@ void RegisterAnimatorTests() {
     // ---------------------------------------------------------------- npc_soldier, read-only
     {
         auto original = std::make_shared<std::string>();
-        Add("animator: npc_soldier.controller opens, frames, selects, shows its tabs; the file is untouched", Cat({
+        Add("animator: Spider.controller opens, frames, selects, shows its tabs; the file is untouched", Cat({
             {FreshScene(), Wait(2),
              Do("note the file", [original](Ctx&) {
                  *original = ReadBytes(ProjectPaths::Resolve(kSoldierRel));
@@ -243,7 +243,7 @@ void RegisterAnimatorTests() {
                  const std::string now = ReadBytes(ProjectPaths::Resolve(kSoldierRel));
                  if (now == *original) return std::string();
                  std::ofstream(fs::u8path(ProjectPaths::Resolve(kSoldierRel)), std::ios::binary) << *original; // put it back
-                 return std::string("the Animator rewrote npc_soldier.controller (restored)");
+                 return std::string("the Animator rewrote Spider.controller (restored)");
              })},
         }));
     }

@@ -2225,164 +2225,6 @@ void TestFirstPersonWeaponWizard() {
     CHECK(BuildFirstPersonController(set).Layers[0].FindState("Fire") >= 0);
 }
 
-// The standard body locomotion graph (tools/gen_body_locomotion.py): the builder gives the reference (28 states,
-// 39 parameters, 213 transitions), passes the lint and the body contract, and its clips are filled by role.
-void TestFirstPersonBodyController() {
-    const std::vector<std::string> roles = FPBody::LocomotionRoles();
-    CHECK(roles.size() > 40 && std::find(roles.begin(), roles.end(), std::string("Loco_Walk_Fwd")) != roles.end());
-    AnimatorController c = FPBody::BuildLocomotionController([](const std::string& r) { return "clips/AM_" + r + ".fbx"; });
-    CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 40 && c.Layers[0].Transitions.size() == 229);
-    // Landings: a light one (LandImpact under 7 m/s) goes straight back to the gait, ahead of the heavy recovery clip;
-    // unset (the 99 default) it is always heavy.
-    for (const char* from : {"Fall", "Jump"}) {
-        int light = -1, heavy = -1;
-        for (int i = 0; i < (int)c.Layers[0].Transitions.size(); ++i) {
-            const auto& t = c.Layers[0].Transitions[i];
-            if (t.From != from) continue;
-            if (light < 0 && t.To == "Locomotion" && t.Conditions.size() == 2 &&
-                t.Conditions[1].Param == "LandImpact" && t.Conditions[1].Mode == AnimatorController::Op::Less &&
-                std::abs(t.Conditions[1].Threshold - 7.0f) < 1e-4f) light = i;
-            if (heavy < 0 && t.To == "Land") heavy = i;
-        }
-        CHECK(light >= 0 && heavy > light);
-    }
-    for (const auto& p : c.Parameters) if (p.Name == "LandImpact") CHECK(p.Default > 7.0f);
-    // The gait plays at PlayRate (the body's, so the feet keep up with a player faster than the clips).
-    CHECK(c.Layers[0].States[c.Layers[0].FindState("Locomotion")].SpeedParam == "PlayRate" &&
-          c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam == "PlayRate");
-    CHECK(c.Layers[0].DefaultState == "Locomotion" && c.Layers[0].FindState("CrouchStop") >= 0);
-    // The starts, stops and pivots are distance matched to the capsule's travel; the loops aren't.
-    using DM = AnimatorController::State::DistanceMode;
-    const auto& states = c.Layers[0].States;
-    auto matched = [&](const char* name, const char* param, DM mode) {
-        const int i = c.Layers[0].FindState(name);
-        return i >= 0 && states[i].DistanceParam == param && states[i].Distance == mode && !states[i].Loop;
-    };
-    CHECK(matched("Start", "StartDistance", DM::Traveled) && matched("StartTurnL", "StartDistance", DM::Traveled) &&
-          matched("Stop", "StopDistance", DM::Remaining) && matched("StopWalk", "StopDistance", DM::Remaining) &&
-          matched("PivotJog", "PivotDistance", DM::Pivot) && matched("CrouchPivot", "PivotDistance", DM::Pivot));
-    CHECK(states[c.Layers[0].FindState("Locomotion")].DistanceParam.empty());
-    // A turning start's tree holds one side's clips only (each leads with that side's foot), so the sides never
-    // blend into each other; nor do the turns on the spot, whose angle the body keeps at 45 or more.
-    for (const char* side : {"L", "R"})
-        for (const char* name : {"StartTurn", "CrouchStartTurn"}) {
-            const auto& m = states[c.Layers[0].FindState(std::string(name) + side)].Motions[0];
-            bool own = m.Children.size() >= 4;
-            for (const auto& ch : m.Children) own = own && ch.Clip.find(std::string("_Start_Turn_") + side) != std::string::npos;
-            CHECK(own);
-        }
-    // Fidgets: one clip per whole index (the gun's ready stance at 0 and 1).
-    const auto& fidget = states[c.Layers[0].FindState("Fidget")].Motions[0];
-    for (int i = 0; i < (int)fidget.Children.size(); ++i) {
-        AnimatorParam p{"FidgetIndex", (int)AnimatorController::ParamType::Float, (float)i};
-        const auto w = AnimatorMotionWeights(fidget, {p});
-        CHECK(std::abs(w[i] - 1.0f) < 1e-5f);
-    }
-    CHECK(fidget.Children[0].Clip.find("Ready_Idle_02") != std::string::npos);
-    const auto& loco = c.Layers[0].States[c.Layers[0].FindState("Locomotion")].Motions[0];
-    CHECK(loco.Is2D() && loco.Children.size() == 18 && loco.Children[9].Clip == "clips/AM_Loco_Jog_Fwd.fbx" &&
-          std::abs(loco.Children[9].ThresholdY - 3.264f) < 1e-4f);
-    // Round trip through the file format, then the checks: nothing to report.
-    AnimatorController back;
-    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
-    CHECK(back.Layers[0].Transitions.size() == 229 &&
-          back.Layers[0].States[back.Layers[0].FindState("Stop")].Distance == DM::Remaining);
-    int problems = 0;
-    for (const auto& i : AnimatorLint::Check(c)) problems += i.Severity != AnimatorLint::Level::Info;
-    CHECK(problems == 0);
-    FirstPersonBodyComponent all;
-    all.TurnThreshold = 55.0f; all.StartStopClips = true; all.CrouchHeight = 1.2f; all.FootIK = true; all.WeaponArms = true;
-    FPBody::ValidationInput in;
-    in.Config = &all;
-    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
-    in.Controller = &c;
-    for (const auto& k : FPBody::Validate(in)) CHECK(k.Level != FPBody::Severity::Warning && k.Level != FPBody::Severity::Error);
-    // Role matching: "Loco_Walk_Fwd" is that file, not the Fwd_Left one.
-    CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx", "a/AM_Loco_Walk_Fwd.fbx"}) == "a/AM_Loco_Walk_Fwd.fbx");
-    CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx"}).empty());
-}
-
-// Lower-body animation reaches only the first two spine bones while the pelvis stays authored.
-void TestFirstPersonBodySpineBlend() {
-    // A swinging pelvis carries every spine bone even when their local rotations are neutral.
-    // Verify the resulting model-space pose, including untouched pelvis and leg transforms.
-    const std::vector<int> parents = {-1, 0, 1, 2, 3, 4, 5, 1, 7};
-    const std::array<int, 5> bones = {2, 3, 4, 5, 6};
-    IK::Pose idle(9);
-    idle[1].T = glm::vec3(0.0f, 0.9f, 0.0f);
-    for (int i = 2; i <= 6; ++i) idle[i].T = glm::vec3(0.0f, 0.12f, 0.0f);
-    idle[7].T = glm::vec3(0.1f, -0.4f, 0.0f);
-    idle[8].T = glm::vec3(0.0f, -0.4f, 0.0f);
-    std::vector<glm::mat4> stand;
-    IK::ComputeGlobals(idle, parents, stand);
-    IK::Pose gait = idle;
-    gait[1].T += glm::vec3(0.08f, -0.03f, 0.02f);
-    gait[1].R = glm::angleAxis(0.4f, glm::vec3(0, 0, 1));
-    gait[7].R = glm::angleAxis(0.6f, glm::vec3(1, 0, 0));
-    std::vector<glm::mat4> before, after;
-    IK::ComputeGlobals(gait, parents, before);
-    IK::Pose masked = gait;
-    FPBody::BlendLocomotionSpine(masked, parents, bones, stand, {}, 0.0f, 1.0f);
-    IK::ComputeGlobals(masked, parents, after);
-    for (int node : {0, 1, 7, 8}) {
-        CHECK(glm::length(masked[node].T - gait[node].T) < 1e-6f);
-        CHECK(std::abs(glm::dot(masked[node].R, gait[node].R)) > 1.0f - 1e-6f);
-        CHECK(glm::length(IK::Position(after[node]) - IK::Position(before[node])) < 1e-5f);
-        CHECK(std::abs(glm::dot(IK::Rotation(after[node]), IK::Rotation(before[node]))) > 1.0f - 1e-5f);
-    }
-    for (size_t slot = 0; slot < bones.size(); ++slot) {
-        const int node = bones[slot];
-        const float retained = slot == 0 ? 0.10f : slot == 1 ? 0.05f : 0.0f;
-        CHECK(glm::length(IK::Position(after[node]) - glm::mix(IK::Position(stand[node]), IK::Position(before[node]), retained)) < 1e-5f);
-        const glm::quat want = glm::angleAxis(0.4f * retained, glm::vec3(0, 0, 1));
-        CHECK(std::abs(glm::dot(IK::Rotation(after[node]), want)) > 1.0f - 1e-5f);
-    }
-    IK::Pose unmasked = gait;
-    FPBody::BlendLocomotionSpine(unmasked, parents, bones, stand, {}, 0.0f, 0.0f);
-    CHECK(glm::length(unmasked[2].T - gait[2].T) < 1e-6f && std::abs(glm::dot(unmasked[2].R, gait[2].R)) > 1.0f - 1e-6f);
-    // Missing spine_01 must not turn spine_02's retention into the first bone's 10%.
-    masked = gait;
-    FPBody::BlendLocomotionSpine(masked, parents, {-1, 3, 4, 5, 6}, stand, {}, 0.0f, 1.0f);
-    IK::ComputeGlobals(masked, parents, after);
-    CHECK(std::abs(glm::dot(IK::Rotation(after[3]), glm::angleAxis(0.02f, glm::vec3(0, 0, 1)))) > 1.0f - 1e-5f);
-    // Crouch reference crossfades in model space without pulling the animated pelvis to idle.
-    IK::Pose crouched = idle;
-    crouched[1].T.y -= 0.3f;
-    std::vector<glm::mat4> crouch;
-    IK::ComputeGlobals(crouched, parents, crouch);
-    masked = gait;
-    FPBody::BlendLocomotionSpine(masked, parents, bones, stand, crouch, 0.5f, 1.0f);
-    IK::ComputeGlobals(masked, parents, after);
-    CHECK(glm::length(IK::Position(after[6]) - glm::mix(IK::Position(stand[6]), IK::Position(crouch[6]), 0.5f)) < 1e-5f);
-    CHECK(glm::length(masked[1].T - gait[1].T) < 1e-6f);
-    // Real controller stacks: crouch fades smoothly; actions and flinches stay authored.
-    auto ctrl = FPBody::BuildLocomotionController([](const std::string& role) { return role; });
-    ctrl.Layers.emplace_back();
-    AnimatorController::State none, flinch;
-    none.Name = "None";
-    flinch.Name = "Flinch"; flinch.Tags = {"Hit"};
-    ctrl.Layers[1].States = {none, flinch};
-    ctrl.Layers[1].DefaultState = "None";
-    const auto path = TempDir() / "spine-blend.controller";
-    CHECK(ctrl.SaveFile(path.string()));
-    AnimatorControllerComponent ac;
-    ac.Controller = path.string();
-    ac.Layers.resize(2);
-    const int loco = ctrl.Layers[0].FindState("Locomotion"), crouchedState = ctrl.Layers[0].FindState("CrouchLoco");
-    float crouchWeight = 0.0f;
-    ac.Layers[0].Stack = {{loco, 0.0f, 1.0f}, {crouchedState, 0.0f, 0.5f}};
-    ac.Layers[1].Stack = {{0, 0.0f, 1.0f}};
-    CHECK(std::abs(FPBody::LocomotionSpineWeight(ac, crouchWeight) - 1.0f) < 1e-5f);
-    CHECK(std::abs(crouchWeight - 0.5f) < 1e-5f);
-    ac.Layers[0].Stack = {{ctrl.Layers[0].FindState("Jump"), 0.0f, 1.0f}};
-    CHECK(FPBody::LocomotionSpineWeight(ac, crouchWeight) == 0.0f);
-    ac.Layers[0].Stack = {{loco, 0.0f, 1.0f}};
-    ac.Layers[1].Stack = {{0, 0.0f, 1.0f}, {1, 0.0f, 0.5f}};
-    CHECK(std::abs(FPBody::LocomotionSpineWeight(ac, crouchWeight) - 0.5f) < 1e-5f);
-    ac.Layers[1].Stack = {{1, 0.0f, 1.0f}};
-    CHECK(FPBody::LocomotionSpineWeight(ac, crouchWeight) == 0.0f);
-}
-
 // A foot near the contact threshold chatters: the debounce fills short gaps and drops short blips (cyclic).
 void TestClipContactDebounce() {
     auto run = [](const char* bits, int minRun) {
@@ -3303,7 +3145,8 @@ void TestFirstPersonBodyValidate() {
         return false;
     };
     std::vector<FPBody::Check> r = FPBody::Validate(in);
-    CHECK(FPBody::Worst(r) == FPBody::Severity::Info && count(r, FPBody::Severity::Warning) == 0); // only the root-motion note
+    // Nothing to report (the root-motion note went with the legacy controller path, Phase 6).
+    CHECK(count(r, FPBody::Severity::Error) == 0 && count(r, FPBody::Severity::Warning) == 0);
 
     // A missing parameter, state, bone, tag and piece are each named.
     AnimatorController broken = full;
@@ -6023,8 +5866,6 @@ int RunUnitTests(const char* filter) {
         {"ClipTrim", TestClipTrim},
         {"FirstPersonBodyBoneMap", TestFirstPersonBodyBoneMap},
         {"ClipContactDebounce", TestClipContactDebounce},
-        {"FirstPersonBodyController", TestFirstPersonBodyController},
-        {"FirstPersonBodySpineBlend", TestFirstPersonBodySpineBlend},
         {"FirstPersonWeaponWizard", TestFirstPersonWeaponWizard},
         {"AnimatorLint", TestAnimatorLint},
         {"BlendTree2D", TestBlendTree2D},

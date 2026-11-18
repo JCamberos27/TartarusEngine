@@ -75,7 +75,7 @@ void EditorShot::BeforeUi(EditorLayer& editor, World& world) {
         else if (view == "lighting") { editor.CloseSettingsWindow(); editor.SetShowLighting(true); }
         else if (view == "animator") {
             editor.SetShowLighting(false);
-            editor.OpenAnimatorWindow("assets/Animations/Controllers/fps_body_locomotion.controller");
+            editor.OpenAnimatorWindow("assets/Characters/Spider/Spider.controller"); // (fps_body_locomotion went with Phase 6)
         }
         else if (view == "settings-sounds") { editor.SetShowAnimator(false); editor.OpenSettingsCategory(false, 7); }
         else if (view == "sound-board") { editor.CloseSettingsWindow(); editor.SetShowSoundBoard(true); focus("###SoundBoard"); }

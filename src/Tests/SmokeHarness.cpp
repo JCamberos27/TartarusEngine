@@ -87,9 +87,9 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         std::sort(m_ScenePaths.begin(), m_ScenePaths.end());
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
             m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" || opt.npcTestScenario == "mmview" || opt.npcTestScenario == "mmdb" ||
-                                                                  opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "locomotion" || opt.npcTestScenario == "stopsteps" ||
+                                                                  opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" ||
                                                                   opt.npcTestScenario == "npcperf"
-                                                              ? "tests/scenes/LocomotionLab.json" // (npcloco, locomotion, stopsteps: out of the apartments, 2026-11-18)
+                                                              ? "tests/scenes/LocomotionLab.json" // (npcloco, stopsteps: out of the apartments, 2026-11-18)
                                                           : opt.npcTestScenario == "blood" ? "tests/scenes/BloodTest.json"
                                                           : opt.npcTestScenario == "ragdoll" ? "tests/scenes/RagdollTest.json"
                                                           : opt.npcTestScenario == "revolver" ? "tests/scenes/WeaponLab.json"
