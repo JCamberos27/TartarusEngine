@@ -392,37 +392,151 @@ RepairStats RepairGlitches(const std::vector<int>& parents, const std::vector<Lo
             hasAxis[i] = 1;
         }
     }
-    // 1. Twist flips. Each bone's world rotation is untouched by its ancestors' unrolling (the children take the inverse), so
-    // every bone is judged on its captured world rotation and its own correction so far.
+    const float rolled = kRolledDeg * MotionMath::kPi / 180.0f;
+    const auto countRolled = [&](std::vector<int>& out) {
+        out.assign(n, 0);
+        for (size_t i = 0; i < n; ++i)
+            if (hasAxis[i])
+                for (size_t f = 0; f < frames; ++f)
+                    out[i] += std::fabs(MotionMath::TwistAngle(glm::inverse(bind[i].R) * poses[f][i].R, axis[i])) > rolled ? 1 : 0;
+    };
+    countRolled(st.RolledBefore);
+    // 1. Twist flips, bone by bone (parents first), each judged on its world rotation as repaired so far. A flip is a run of
+    // frames each turning the bone over kFlipStepDeg about its axis (no limb twists that fast), together over kFlipDeg - one
+    // frame (the solver's 170-180 deg flips) or a few (60-90 deg each: one frame's threshold missed them, so a flip and its
+    // flip back were unrolled one way only and the roll stayed to the clip's end). The run's twist is taken out frame by
+    // frame - no jump left in its place - one of two ways, by what the capture did to the bone's children over it:
+    //   - they counter-rotated (their local rotations turned with it: their world rotations, and every joint, unchanged - a
+    //     pure twist of the bone): the bone is turned back about its axis and the children take the inverse;
+    //   - they rode along (the chain below flipped with it): the bone is turned back and the children ride back with it.
+    //     Counter-rotating them here too (before 2026-11-18) left the roll on the child, to be caught - or, its axis turned
+    //     off the parent's by a bent knee, missed - at the flip back.
+    // Measured on the pack (`rolled`: bone-frames whose twist is over kRolledDeg off the bind): 3,357 as captured; 43,181
+    // after the old repair (`Transitions_Movement_Take001`'s calf ~130 deg off for the rest of the clip).
     const std::vector<int> order = TopoOrder(parents);
     const float flip = kFlipDeg * MotionMath::kPi / 180.0f;
-    std::vector<glm::quat> prevG(n), curG(n);
-    std::vector<float> corr(n, 0.0f);
-    std::vector<std::vector<std::pair<size_t, float>>> apply(frames); // per frame: (bone, correction) where non-zero
-    for (size_t f = 0; f < frames; ++f) {
-        for (int i : order) {
-            const int p = parents[(size_t)i];
-            curG[(size_t)i] = p >= 0 ? curG[(size_t)p] * poses[f][(size_t)i].R : poses[f][(size_t)i].R;
+    const float fast = kFlipStepDeg * MotionMath::kPi / 180.0f * 60.0f / std::max(1.0f, fps);
+    std::vector<std::vector<glm::quat>> world(n);           // per bone, per frame: the repaired world rotation
+    std::vector<float> compAt(frames * n, 0.0f), turnAt(frames * n, 0.0f); // per frame and bone: the children's share, the bone's turn
+    std::vector<float> d(frames, 0.0f);
+    for (int ii : order) {
+        const size_t i = (size_t)ii;
+        const int p = parents[i];
+        std::vector<glm::quat>& G = world[i];
+        G.resize(frames);
+        for (size_t f = 0; f < frames; ++f) { // without its own turn
+            glm::quat r = poses[f][i].R;
+            if (p >= 0 && compAt[f * n + (size_t)p] != 0.0f) r = glm::inverse(glm::angleAxis(compAt[f * n + (size_t)p], axis[(size_t)p])) * r;
+            G[f] = p >= 0 ? world[(size_t)p][f] * r : r;
         }
-        for (size_t i = 0; i < n && f > 0; ++i) {
-            if (!hasAxis[i]) continue;
-            const glm::quat c = glm::angleAxis(corr[i], axis[i]);
-            const float tw = MotionMath::TwistAngle(glm::inverse(prevG[i] * c) * (curG[i] * c), axis[i]);
-            if (std::fabs(tw) > flip) {
-                corr[i] -= tw;
-                ++st.Flips;
+        if (!hasAxis[i]) continue;
+        // (A twist about the bone's own axis on the right doesn't change the twist between frames: the steps are its own turn's.)
+        for (size_t f = 1; f < frames; ++f) d[f] = MotionMath::TwistAngle(glm::inverse(G[f - 1]) * G[f], axis[i]);
+        const auto wrap = [](float a) { return MotionMath::WrapPi(a); };
+        // The flips: runs of fast frames, together over kFlipDeg.
+        struct Flip { size_t A, E; float Sum; bool Rode; };
+        std::vector<Flip> flips;
+        for (size_t f = 1; f < frames;) {
+            if (std::fabs(d[f]) <= fast) { ++f; continue; }
+            size_t e = f;
+            float sum = 0.0f;
+            while (e < frames && std::fabs(d[e]) > fast && (e == f || (d[e] > 0.0f) == (d[f] > 0.0f))) sum += d[e++];
+            if (std::fabs(sum) > flip) {
+                bool rode = true; // the children's local rotations over the run
+                for (int ch : children[i])
+                    if (MotionMath::QuatAngle(poses[f - 1][(size_t)ch].R, poses[e - 1][(size_t)ch].R) > 0.5f * std::fabs(sum)) rode = false;
+                flips.push_back({f, e, sum, rode});
+            }
+            f = e;
+        }
+        st.Flips += (int)flips.size(); // (less any dropped below: FlipsDropped)
+        // Each flip paired with the next one back: both runs' twist taken out, and what they don't cancel (a flip of 154 deg
+        // undone by one of 110) spread over the frames between - after the pair the bone is its capture's again, so no
+        // offset is left to run on to the clip's end. A flip with none back (the take starts or ends flipped): unrolled
+        // toward the side that ends nearer the bind (the children as the flip had them: riding along, or counter-rotating).
+        std::vector<float> turn(frames, 0.0f), compv(frames, 0.0f);
+        const auto twistOffBind = [&](size_t from, size_t to) { // median, of the bone's local as it stands (its parent's share applied)
+            std::vector<float> t;
+            for (size_t f = from; f < to; f += 2) {
+                glm::quat r = poses[f][i].R;
+                if (p >= 0 && compAt[f * n + (size_t)p] != 0.0f) r = glm::inverse(glm::angleAxis(compAt[f * n + (size_t)p], axis[(size_t)p])) * r;
+                t.push_back(MotionMath::TwistAngle(glm::inverse(bind[i].R) * r, axis[i]));
+            }
+            if (t.empty()) return 0.0f;
+            std::nth_element(t.begin(), t.begin() + (std::ptrdiff_t)(t.size() / 2), t.end());
+            return t[t.size() / 2];
+        };
+        for (size_t k = 0; k < flips.size(); ++k) {
+            const Flip& A = flips[k];
+            std::vector<float> removed(frames, 0.0f);
+            size_t last = frames; // the pair's end (exclusive), or the clip's
+            // (Paired when together they make no flip - modulo a whole turn: near 180 deg the sign is a toss-up, and a -175 deg
+            // flip is often undone by a -170.)
+            if (k + 1 < flips.size() && std::fabs(wrap(A.Sum + flips[k + 1].Sum)) < flip) {
+                const Flip& B = flips[k + 1];
+                for (size_t f = A.A; f < A.E; ++f) removed[f] = d[f];
+                for (size_t f = B.A; f < B.E; ++f) removed[f] = d[f];
+                const float left = wrap(A.Sum + B.Sum); // put back between them (the whole turns left over are no rotation)
+                if (B.A > A.E)
+                    for (size_t f = A.E; f < B.A; ++f) removed[f] = -left / (float)(B.A - A.E);
+                else
+                    for (size_t f = B.A; f < B.E; ++f) removed[f] -= left / (float)(B.E - B.A);
+                last = B.E;
+                ++k;
+            } else {
+                for (size_t f = A.A; f < A.E; ++f) removed[f] = d[f];
+            }
+            float acc = 0.0f;
+            for (size_t f = A.A; f < frames; ++f) {
+                if (f < last) acc -= removed[f];
+                else if (last < frames) break; // (a pair: nothing after it)
+                turn[f] += acc;
+                if (!A.Rode) compv[f] += acc;
+            }
+            if (last == frames) { // unpaired: forward (the rest turned back), or backward (what came before turned to it)?
+                const float before = twistOffBind(0, A.A), after = twistOffBind(A.E, frames);
+                if (std::fabs(wrap(before + A.Sum)) < std::fabs(wrap(after - A.Sum)))
+                    for (size_t f = 0; f < frames; ++f) { // the whole take turned by the flip: what came before it turned to it
+                        turn[f] += A.Sum;
+                        if (!A.Rode) compv[f] += A.Sum;
+                    }
             }
         }
-        for (size_t i = 0; i < n; ++i)
-            if (hasAxis[i] && std::fabs(corr[i]) > 1e-6f) apply[f].push_back({i, corr[i]});
-        std::swap(prevG, curG);
-    }
-    for (size_t f = 0; f < frames; ++f)
-        for (const auto& [i, c] : apply[f]) {
-            const glm::quat t = glm::angleAxis(c, axis[i]);
-            poses[f][i].R = glm::normalize(poses[f][i].R * t);
-            for (int ch : children[i]) poses[f][(size_t)ch].R = glm::normalize(glm::inverse(t) * poses[f][(size_t)ch].R);
+        // Kept only if it leaves the bone no more rolled (over kRolledDeg off the bind's twist) than it was without it - the
+        // flips the capture shows can't always be read (near 180 deg the twist's sign is a toss-up; a toe's flip and its flip
+        // back read -112 and -105), and a correction read wrong runs on, rolled, to the next one.
+        int with = 0, without = 0;
+        for (size_t f = 0; f < frames; ++f) {
+            glm::quat r = poses[f][i].R;
+            if (p >= 0 && compAt[f * n + (size_t)p] != 0.0f) r = glm::inverse(glm::angleAxis(compAt[f * n + (size_t)p], axis[(size_t)p])) * r;
+            const glm::quat rb = glm::inverse(bind[i].R) * r;
+            without += std::fabs(MotionMath::TwistAngle(rb, axis[i])) > rolled ? 1 : 0;
+            with += std::fabs(MotionMath::TwistAngle(rb * glm::angleAxis(turn[f], axis[i]), axis[i])) > rolled ? 1 : 0;
         }
+        if (with > without) {
+            st.FlipsDropped += (int)flips.size();
+            std::fill(turn.begin(), turn.end(), 0.0f);
+            std::fill(compv.begin(), compv.end(), 0.0f);
+        }
+        for (size_t f = 0; f < frames; ++f) {
+            compAt[f * n + i] = compv[f];
+            turnAt[f * n + i] = turn[f];
+        }
+        for (size_t f = 0; f < frames; ++f)
+            if (turnAt[f * n + i] != 0.0f) G[f] = G[f] * glm::angleAxis(turnAt[f * n + i], axis[i]);
+    }
+    for (size_t f = 0; f < frames; ++f) {
+        const std::vector<LocalTRS> was = poses[f];
+        for (size_t i = 0; i < n; ++i) {
+            glm::quat r = was[i].R;
+            const int p = parents[i];
+            const bool byParent = p >= 0 && compAt[f * n + (size_t)p] != 0.0f, own = turnAt[f * n + i] != 0.0f;
+            if (!byParent && !own) continue; // (untouched: bit for bit)
+            if (byParent) r = glm::inverse(glm::angleAxis(compAt[f * n + (size_t)p], axis[(size_t)p])) * r;
+            if (own) r = r * glm::angleAxis(turnAt[f * n + i], axis[i]);
+            poses[f][i].R = glm::normalize(r);
+        }
+    }
     // 2. Spikes, on the (unrolled) local rotations.
     const float limit = kSpikeDeg * MotionMath::kPi / 180.0f * 60.0f / std::max(1.0f, fps);
     const float back = kSpikeReturnDeg * MotionMath::kPi / 180.0f;
@@ -443,6 +557,7 @@ RepairStats RepairGlitches(const std::vector<int>& parents, const std::vector<Lo
             }
         }
     }
+    countRolled(st.RolledAfter);
     return st;
 }
 
@@ -498,6 +613,7 @@ struct TakeResult {
     std::vector<glm::quat> FingerRot; // frames x StaticBones, when the take animates its fingers (HasFingers)
     bool HasFingers = false;
     RepairStats Repair;
+    std::vector<std::string> NodeNames; // (the take's nodes: RepairStats' per-node counts)
     int GlitchFrames = 0;     // frames still over kGlitchDegrees on a streamed bone after the repair (excluded at load)
     glm::vec3 MirrorNormal{0.0f};
     // The finger bones (the config's staticBones, not streamed): how far each turns over the trimmed take (deg, off its
@@ -649,6 +765,7 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
         for (int s : src) repair[(size_t)s] = 1;
         for (int s : fingers) repair[(size_t)s] = 1;
         r.Repair = RepairGlitches(parents, bind, repair, fps, poses);
+        r.NodeNames = names;
         if (take.Mirrored()) {
             const MirrorRig mr = BuildMirror(names, parents, bind, root);
             r.MirrorNormal = mr.Normal;
@@ -975,6 +1092,7 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
         if (r.Ok && r.Take.Name == staticFrom && !r.StaticRot.empty())
             for (size_t s = 0; s < ctx.StaticBones.size(); ++s) stream.Statics.push_back({ctx.StaticBones[s], r.StaticRot[s]});
     RepairStats repaired;
+    int rolledBoneFrames[2] = {0, 0}, rolledClipBones = 0;
     int residualGlitches = 0, fingerClips = 0;
     std::uint32_t fingerFrames = 0;
     for (const TakeResult& r : results) {
@@ -992,9 +1110,21 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
         fingerClips += fingers ? 1 : 0;
         fingerFrames += fingers ? (std::uint32_t)r.Root.size() : 0u;
         repaired.Flips += r.Repair.Flips;
+        repaired.FlipsDropped += r.Repair.FlipsDropped;
         repaired.Spikes += r.Repair.Spikes;
         repaired.SpikeFrames += r.Repair.SpikeFrames;
         residualGlitches += r.GlitchFrames;
+        json rolledJ = json::object();
+        for (size_t i = 0; i < r.Repair.RolledAfter.size(); ++i) {
+            const int before = i < r.Repair.RolledBefore.size() ? r.Repair.RolledBefore[i] : 0, after = r.Repair.RolledAfter[i];
+            if (before == 0 && after == 0) continue;
+            rolledJ[r.NodeNames[i]] = {before, after};
+            rolledBoneFrames[0] += before;
+            rolledBoneFrames[1] += after;
+            if (after > 0) ++rolledClipBones;
+            std::printf("[MotionBake]   %s %s: twist over %.0f deg off the bind on %d frames as captured, %d repaired (of %zu)\n",
+                        r.Take.Name.c_str(), r.NodeNames[i].c_str(), kRolledDeg, before, after, r.Root.size());
+        }
         const std::uint32_t before = features.FrameCount();
         features.AddClip(r.Take.Name, r.Frames, r.Track, cfg.Labels, MotionClipIntent::FromTags(c.Tags));
         int gaits[4] = {0, 0, 0, 0}, crouch = 0, strafe = 0, air = 0, excluded = 0;
@@ -1027,8 +1157,9 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
                           {"fingerBones", r.FingerBones}, {"fingerBonesMoving", r.FingerBonesMoving}, {"fingerRangeDeg", r.FingerRangeDeg},
                           {"hasFingers", fingers}, {"source", r.Take.File()}, {"mirrored", r.Take.Mirrored()},
                           {"styleFrames", {styles[0], styles[1], styles[2], styles[3], styles[4], styles[5], styles[6]}},
-                          {"twistFlipsUnrolled", r.Repair.Flips}, {"spikesRepaired", r.Repair.Spikes},
-                          {"spikeFramesRepaired", r.Repair.SpikeFrames}, {"glitchFramesLeft", r.GlitchFrames}});
+                          {"twistFlipsUnrolled", r.Repair.Flips - r.Repair.FlipsDropped}, {"spikesRepaired", r.Repair.Spikes},
+                          {"spikeFramesRepaired", r.Repair.SpikeFrames}, {"glitchFramesLeft", r.GlitchFrames},
+                          {"rolledFrames", rolledJ}});
         if (r.Take.Mirrored())
             takesJ.back()["mirrorNormal"] = {r.MirrorNormal.x, r.MirrorNormal.y, r.MirrorNormal.z};
     }
@@ -1050,10 +1181,15 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
         std::printf("\n");
         report["featureQuantization"] = qj;
     }
-    std::printf("[MotionBake] repair: %d twist flips unrolled, %d spikes slerped across (%d bone-frames); %d frames still over %.0f deg "
-                "(excluded at load)\n", repaired.Flips, repaired.Spikes, repaired.SpikeFrames, residualGlitches, MotionDatabase::kGlitchDegrees);
+    std::printf("[MotionBake] repair: %d twist flips unrolled (%d more left as captured: unrolled, they rolled the bone off the bind), "
+                "%d spikes slerped across (%d bone-frames); %d frames still over %.0f deg (excluded at load)\n", repaired.Flips - repaired.FlipsDropped,
+                repaired.FlipsDropped, repaired.Spikes, repaired.SpikeFrames, residualGlitches, MotionDatabase::kGlitchDegrees);
     std::printf("[MotionBake] fingers: %d clips animate them (%u frames, %s)\n", fingerClips, fingerFrames, Mb(stream.FingerBytes()).c_str());
-    report["twistFlipsUnrolled"] = repaired.Flips;
+    std::printf("[MotionBake] rolled: %d bone-frames twisted over %.0f deg off the bind as captured, %d after the repair (%d clip-bones)\n",
+                rolledBoneFrames[0], kRolledDeg, rolledBoneFrames[1], rolledClipBones);
+    report["rolledBoneFrames"] = {rolledBoneFrames[0], rolledBoneFrames[1]};
+    report["twistFlipsUnrolled"] = repaired.Flips - repaired.FlipsDropped;
+    report["twistFlipsLeft"] = repaired.FlipsDropped;
     report["spikesRepaired"] = repaired.Spikes;
     report["glitchFramesLeft"] = residualGlitches;
     report["fingerClips"] = fingerClips;

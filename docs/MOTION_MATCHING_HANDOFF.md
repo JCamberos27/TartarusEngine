@@ -1075,9 +1075,14 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
     5: decide the NPCs' rules, then make the exclusion policy part of the cache key or always apply it - otherwise whichever
     of the player or an NPC loads first decides for both.
 - **Open (2026-11-18), from "The player's failing checks":**
-  - **The bake's twist-flip repair leaves bones rolled between clips** (`RepairGlitches` never unwinds): `Transitions_Movement_Take001`'s
-    `calf_l` ~130 deg off the other takes' about the shin. The dead blend no longer pops on it; a rebake should bring each
-    repaired clip's roll back toward the bind (then a new `Manny.mmanim` / `.mmdb` on the Drive).
+  - *Fixed (`dev/mm-bake-roll`):* the bake's twist-flip repair left bones rolled between clips - "The bake's twist roll".
+    **Installed in the main checkout and on the Drive (2026-11-18, the owner's go-ahead)**: sha256 `ddc2b5e8...` /
+    `73cb3d5a...`, in `Used\project\assets\Animations\MotionMatching\`; only their two rows changed in
+    `project/external_assets.csv` and in the Drive's copy (which still lists the legacy clips Phase 6 kept on the Drive - not
+    overwritten by the repo's; its two rows end in LF, the rest CRLF: edit it byte-exact). `asset_manifest.py verify` on
+    `Used`: 8025 listed, 0 missing, 0 different (1 unlisted: the SeedMesh scene, as before). A line in `Raw\CHANGELOG.md`.
+    Backups on D: - the main checkout's database before it `D:\Jacob\mm_scratch\db_before_rollfix\`, the Drive's
+    2026-11-16 files, CSV and changelog `D:\Jacob\mm_scratch\drive_before_rollfix\` (with `SHA256SUMS`).
   - **`A jog` 2.6 jumps/s** (the pack's short jog straights), **the looking-about jump rates** (tight turns at a walk / jog),
     **`M strafe right (walk)` 0.72** (the walk-right strafes' trajectory direction fit) - reported, limits unchanged.
 - Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
@@ -1487,12 +1492,8 @@ hemisphere is now chosen once against the source when the blend starts, the targ
 (`m_Goal`), and the slerp follows the signs (`InertializationMath::SlerpAsSigned`; under 180 apart it is `glm::slerp`, so
 every other blend is bit-identical: `mmplayer`'s whole log unchanged). Unit test: a target turning across 180 mid-blend steps
 at most 22.7 deg a frame (the old blend: 114.2, failing it).
-- *Why two takes' calves are ~180 apart (open, the bake):* `MotionBake::RepairGlitches` unrolls a twist flip by turning the bone
-  back about its axis from the flip on - and never unwinds it. A clip can keep a bone rolled against every other clip:
-  `Transitions_Movement_Take001`'s `calf_l` is near the bind for its first 10 % and ~130 deg off it after (`calf_twist_02_l` and
-  `foot_l` counter-rolled - joints unmoved). Within the clip it plays continuously; a blend into or out of it turns the shin
-  about itself. Fixing the data means a rebake (each repaired clip's roll brought back toward the bind, or the flip unrolled
-  the other way when the clip starts flipped) and a new database on the Drive: not done here.
+- *Why two takes' calves were ~180 apart:* the bake's twist-flip repair rolled them - fixed and rebaked, "The bake's twist
+  roll" below.
 
 **The sprint back: the lock's floor** (`IK::FootLock`). After the sprint, the left foot's floor was the sprint's planted ankle
 (6.0 cm: the legacy jog set plants ~3 cm lower than the pack); the standing idle's ankle 9.1 cm read 2.6 cm up (Height 2 cm),
@@ -1548,6 +1549,46 @@ breakdown at the leg's searches.
 (`-DFETCHCONTENT_SOURCE_DIR_<NAME>=C:/Users/Jacob/Desktop/TartarusEngine/build/_deps/<name>-src` for glfw glm assimp entt imgui
 imguizmo imanim meshoptimizer recastnavigation); the licensed assets can be hard-linked in (no disk). 43 forest files there
 exceed MAX_PATH under `.claude\worktrees\...` and log errors at load (`-AllowErrors 'SeedMesh_Mossy_Cedrus_Forest'`).
+
+## The bake's twist roll (2026-11-18, `dev/mm-bake-roll`)
+
+`MotionBake::RepairGlitches` now leaves no bone more rolled than the capture had it. Measured with a new bake report (`rolled`:
+per repaired bone, the frames whose twist about its own axis is over 90 deg off the bind - no calf, thigh or forearm twists
+that far; per take in `[MotionBake]` lines and the report's `rolledFrames`):
+
+| | rolled bone-frames |
+|---|---|
+| as captured | 3,357 |
+| the old repair | **43,181** (35 clip-bones: `Transitions_Movement_Take001`'s calf 1 -> 1,218 frames, `Crouch_Loop`'s 1 -> 4,804, ...) |
+| the new repair | **861** (18; every bone at or under its capture: `Crouch_Idles`' thigh 1,608 -> 0, `Crouch_Loop`'s 475 -> 1) |
+
+Why the old one rolled them, from a per-flip log: in these takes the solver rolls a thigh about its axis with the chain below
+**riding along** (the calf's local rotation unchanged). The repair counter-rotated the calf as for a pure twist, leaving the
+roll on it; the calf's own flip was caught going in, but going out - about the thigh's axis, the knee bent - its twist part
+read under 90 deg and was missed, so the correction ran on to the clip's end. And flips aren't always one frame (-27 then -175;
+-140 then -30), nor symmetric (-154 in, +110 out), and near 180 deg the twist's sign is a toss-up (-175 undone by -170).
+The repair now:
+- **finds a flip as a run** of frames each over `kFlipStepDeg` (30 deg at 60 fps - no limb twists 1,800 deg/s) adding past 90;
+- **classifies it** by the children's local rotations over the run: counter-rotated (a pure twist: children take the inverse,
+  joints unmoved, as before) or **rode along** (the bone is turned back and the chain rides back with it);
+- **pairs it with the flip back** (modulo a whole turn) and spreads what the two don't cancel over the frames between, so after
+  the pair the bone is its capture's again - no offset left to run on; an unpaired flip (a take starting or ending flipped)
+  is unrolled toward the side nearer the bind;
+- **keeps a bone's correction only if it leaves the bone no more rolled** than without it (parents first): 60 flips unrolled,
+  70 left as captured (their reading was ambiguous; frames still over 35 deg a frame, excluded at load, 216 -> 204).
+Unit tests: the chain riding a thigh flip with the knee bent, and a flip over three frames (57 deg each) and back.
+
+**Rebaked** (`--bake-motion`, 55 s; budgets: poses 178.1 / 200 MB, features 26.9 / 40, load 0.33 / 2 s) into the worktree
+(the main checkout's database is hard-linked into other worktrees: unlinked here first, not overwritten), then - `-Full` as
+before - installed in the main checkout (its own files: the other worktrees keep the old ones; its build loads it, the cooked
+search 0 mismatches, load 1.30 s). `-Quick mmview mmdb`
+on it (`-Parallel 1`): unit 53,891 / 0 failures; mmplayer 97/101 (the same four), mmstress 16/16, mmview 12/12, mmdb 18/18.
+Against the old database, the 84 mmplayer legs: pose step p99 mean 7.84 -> 7.65 deg, trajectory error 0.163 -> 0.159 m, jumps
+172.3 -> 173.8 a second summed (`M settle for flicks` +2, a placement leg); `M crouch idle` p99 14.9 -> 7.8; mmstress
+`S stop-start walk` p99 22.4 -> 9.8, worst 22.8 -> 10.8 deg (the blend between rolled calves gone).
+`-Full` on it (`-Parallel 1`), against the old database's: the same results - all pass but mmplayer's four and npcloco's `walk
+left` (2.40 jumps/s, unchanged); the dummies' pose step p99 walk right 8.20 -> 7.42, walk to home 8.56 -> 7.27, walk back 7.77 ->
+7.53 deg (its jumps 1.33 -> 2.00 a second, within its 2.3).
 
 ## Phase 5: first steps (done - see above)
 
@@ -1708,3 +1749,7 @@ exceed MAX_PATH under `.claude\worktrees\...` and log errors at load (`-AllowErr
   - `-Quick`: unit 53,887 / 0 failures; `mmplayer` 97/101 (the jog rate, two looking-about jump rates, strafe right walk:
     explained), `mmstress` 16/16.
   - `-Full`: all pass but `mmplayer`'s four and `npcloco`'s `walk left` 2.40 jumps/s (Phase 5's open item, unchanged).
+- **2026-11-18, the bake's twist roll (`dev/mm-bake-roll`):** `RepairGlitches` finds flips as runs, lets a riding chain ride
+  back, pairs each flip with its flip back and keeps a bone's correction only if it rolls the bone no further; a `rolled` bake
+  report. Rolled bone-frames 43,181 -> 861 (3,357 as captured). Rebaked into the worktree; `-Quick mmview mmdb` as before or
+  better; `-Full` the same results. Installed in the main checkout and on the Drive's `Used\` (the CSV's two rows; the old files backed up on D:).
