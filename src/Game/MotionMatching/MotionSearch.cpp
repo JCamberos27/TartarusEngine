@@ -15,6 +15,24 @@ void DimWeights(const MotionSearchParams& p, float* w) {
     for (int d = 0; d < kDims; ++d) w[d] = std::max(0.0f, p.GroupWeight[MotionFeature::GroupOf(d)]);
 }
 
+// The query and the weights in the database's 16-bit space: (q - QB) / QA, w QA^2 (see MotionSearch.h).
+struct QuantQuery {
+    float Q[kDims], W[kDims];
+    QuantQuery(const MotionDatabase& db, const float* query, const MotionSearchParams& p) {
+        DimWeights(p, W);
+        for (int d = 0; d < kDims; ++d) {
+            const float a = db.QA(d);
+            Q[d] = (query[d] - db.QB(d)) / a;
+            W[d] *= a * a;
+        }
+    }
+};
+
+// A box can hold a frame of the style asked for.
+bool BoxMayHaveStyle(const MotionDatabase::Box& b, const MotionSearchParams& p) {
+    return p.DesiredStyle < 0 || (b.Styles & (1u << std::min(p.DesiredStyle, 7))) != 0;
+}
+
 float GaitCost(const MotionSearchParams& p, int gait) {
     return p.DesiredGait < 0 ? 0.0f : p.GaitWeight * (float)std::abs(gait - p.DesiredGait);
 }
@@ -27,29 +45,31 @@ float GaitCostBound(const MotionSearchParams& p, int lo, int hi) {
 }
 
 // Weighted squared distance, stopping once it reaches `stop` (the sum so far is returned, already >= stop).
-inline float Distance(const float* q, const float* x, const float* w, float stop) {
+inline float Distance(const QuantQuery& q, const std::int16_t* x, float stop) {
     float c = 0.0f;
     for (int d = 0; d < kDims; ++d) {
-        const float e = q[d] - x[d];
-        c += w[d] * e * e;
+        const float e = q.Q[d] - (float)x[d];
+        c += q.W[d] * e * e;
         if (c >= stop) return c;
     }
     return c;
 }
 
-// The query's weighted squared distance to a box (0 along dims where the query is inside it).
-inline float BoxDistance(const float* q, const MotionDatabase::Box& b, const float* w) {
+// The query's weighted squared distance to a box (0 along dims where the query is inside it). Per dim it is a frame's term
+// with the frame's value moved to the box's nearest face (float subtraction is monotonic): never above any frame's.
+inline float BoxDistance(const QuantQuery& q, const MotionDatabase::Box& b) {
     float c = 0.0f;
     for (int d = 0; d < kDims; ++d) {
-        const float e = q[d] < b.Min[d] ? b.Min[d] - q[d] : q[d] > b.Max[d] ? q[d] - b.Max[d] : 0.0f;
-        c += w[d] * e * e;
+        const float lo = (float)b.Min[d], hi = (float)b.Max[d];
+        const float e = q.Q[d] < lo ? q.Q[d] - lo : q.Q[d] > hi ? q.Q[d] - hi : 0.0f;
+        c += q.W[d] * e * e;
     }
     return c;
 }
 
 bool BoxMayPass(const MotionDatabase::Box& b, const MotionSearchParams& p) {
     const std::uint8_t forbid = (std::uint8_t)(p.Forbid | MotionSearch::kAlwaysForbid);
-    return (b.FlagOr & p.Require) == p.Require && (b.FlagAnd & forbid) == 0;
+    return (b.FlagOr & p.Require) == p.Require && (b.FlagAnd & forbid) == 0 && BoxMayHaveStyle(b, p);
 }
 
 // Frames of the playing clip near the playing frame are not candidates (they'd just be the same motion, a step off), nor
@@ -90,6 +110,8 @@ bool MotionSearch::Passes(std::uint8_t flags, const MotionSearchParams& p) {
     return (flags & p.Require) == p.Require && (flags & (p.Forbid | kAlwaysForbid)) == 0;
 }
 
+bool MotionSearch::PassesStyle(std::uint8_t style, const MotionSearchParams& p) { return p.DesiredStyle < 0 || style == p.DesiredStyle; }
+
 void MotionSearch::BuildQuery(const MotionDatabase& db, const float* poseRaw15, const float* trajRaw12, float* out) {
     float raw[kDims];
     for (int d = 0; d < 15; ++d) raw[d] = poseRaw15[d];
@@ -98,22 +120,20 @@ void MotionSearch::BuildQuery(const MotionDatabase& db, const float* poseRaw15, 
 }
 
 float MotionSearch::Cost(const MotionDatabase& db, const float* query, std::uint32_t frame, const MotionSearchParams& p) {
-    if (frame >= db.FrameCount() || !Passes(db.Flags(frame), p)) return kInf;
-    float w[kDims];
-    DimWeights(p, w);
-    return Distance(query, db.Normalized(frame), w, kInf) + GaitCost(p, db.Gait(frame));
+    if (frame >= db.FrameCount() || !Passes(db.Flags(frame), p) || !PassesStyle(db.Style(frame), p)) return kInf;
+    const QuantQuery q(db, query, p);
+    return Distance(q, db.Quantized(frame), kInf) + GaitCost(p, db.Gait(frame));
 }
 
 MotionSearchResult MotionSearch::SearchBrute(const MotionDatabase& db, const float* query, const MotionSearchParams& p,
                                              std::int64_t current) {
     MotionSearchResult r = Start(db, query, p, current);
-    float w[kDims];
-    DimWeights(p, w);
+    const QuantQuery q(db, query, p);
     const Skip skip(db, current, p);
     for (std::uint32_t i = 0; i < db.FrameCount(); ++i) {
-        if (skip(i) || !Passes(db.Flags(i), p) || db.Runway(i) < p.MinRunway) continue;
+        if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway) continue;
         ++r.FramesScored;
-        const float c = Distance(query, db.Normalized(i), w, kInf) + GaitCost(p, db.Gait(i)) + p.TransitionCost;
+        const float c = Distance(q, db.Quantized(i), kInf) + GaitCost(p, db.Gait(i)) + p.TransitionCost;
         if (c < r.Cost) {
             r.Cost = c;
             r.Frame = i;
@@ -127,8 +147,7 @@ MotionSearchResult MotionSearch::SearchBrute(const MotionDatabase& db, const flo
 MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* query, const MotionSearchParams& p,
                                         std::int64_t current) {
     MotionSearchResult r = Start(db, query, p, current);
-    float w[kDims];
-    DimWeights(p, w);
+    const QuantQuery q(db, query, p);
     const Skip skip(db, current, p);
     const auto& large = db.LargeBoxes();
     const auto& small = db.SmallBoxes();
@@ -137,19 +156,19 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
     for (size_t L = 0; L < large.size(); ++L) {
         const MotionDatabase::Box& lb = large[L];
         if (!BoxMayPass(lb, p)) continue;
-        if (BoxDistance(query, lb, w) + GaitCostBound(p, lb.GaitMin, lb.GaitMax) + p.TransitionCost >= r.Cost) continue;
+        if (BoxDistance(q, lb) + GaitCostBound(p, lb.GaitMin, lb.GaitMax) + p.TransitionCost >= r.Cost) continue;
         ++r.LargeBoxesVisited;
         for (size_t S = L * kPer; S < std::min(small.size(), (L + 1) * kPer); ++S) {
             const MotionDatabase::Box& sb = small[S];
             if (!BoxMayPass(sb, p)) continue;
-            if (BoxDistance(query, sb, w) + GaitCostBound(p, sb.GaitMin, sb.GaitMax) + p.TransitionCost >= r.Cost) continue;
+            if (BoxDistance(q, sb) + GaitCostBound(p, sb.GaitMin, sb.GaitMax) + p.TransitionCost >= r.Cost) continue;
             ++r.SmallBoxesVisited;
             const std::uint32_t from = (std::uint32_t)S * MotionDatabase::kSmallBox;
             const std::uint32_t to = std::min(n, from + (std::uint32_t)MotionDatabase::kSmallBox);
             for (std::uint32_t i = from; i < to; ++i) {
-                if (skip(i) || !Passes(db.Flags(i), p) || db.Runway(i) < p.MinRunway) continue;
+                if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway) continue;
                 ++r.FramesScored;
-                const float d = Distance(query, db.Normalized(i), w, r.Cost);
+                const float d = Distance(q, db.Quantized(i), r.Cost);
                 if (d >= r.Cost) continue; // (the extra costs are >= 0)
                 const float c = d + GaitCost(p, db.Gait(i)) + p.TransitionCost;
                 if (c < r.Cost) {

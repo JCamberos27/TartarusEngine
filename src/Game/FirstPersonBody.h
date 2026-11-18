@@ -95,15 +95,6 @@ private:
 };
 
 // A gait's phase read off the feet, every frame: 0 as the left foot reaches its furthest ahead (its heel strike), 0.5 the right.
-// The slow part of an angle (radians): two exponential followers in a row, each with time constant `seconds` - passes a
-// lean or a heading held for a while and holds back the gait's per-step swing (at frequency f the swing passes
-// 1 / (1 + (2 pi f seconds)^2)). Angles wrap: the input is taken the short way round from where the filter is.
-struct FirstPersonSlowAngle {
-    float A = 0.0f, B = 0.0f;
-    bool Have = false;
-    float Update(float x, float dt, float seconds);
-    void Reset() { Have = false; }
-};
 
 // Over a stride the feet's spread along the travel and their height difference trace a loop a quarter cycle apart - the
 // angle round it is the phase. Nothing to detect or miss (counting plants, a missed or doubled one halved or doubled the
@@ -228,9 +219,6 @@ private:
     void UpdateGaitPhase(const Player& player, float dt);
     FirstPersonBodyMotion m_Mm;
     Player::DirectionalSpeeds m_MmSpeeds; // the gait table's speeds, for the capsule (BeforePlayerMove)
-    // Under motion matching Spine Twist corrects the chest's slow heading, not its per-step motion (the owner: "the lower
-    // spine is grounded and the torso isn't getting the same motions").
-    FirstPersonSlowAngle m_MmChestYawSlow;
     void Fail(const std::string& message);
     // Legacy only (motion matching plays the mocap's own lean).
     void ApplySpineStability(float weight, const AnimatorControllerComponent& animator);
@@ -387,7 +375,6 @@ private:
     glm::quat m_BindPelvis{1.0f, 0.0f, 0.0f, 0.0f}; // the pelvis's rotation in the bind pose (model space)
     float m_MetricYaw = 0.0f;
     bool m_HaveMetricYaw = false;
-    float m_MmYawRate = 0.0f; // rad/s: the heading's turn this step (motion matching)
     glm::vec3 m_Eye{0.0f};        // the smoothed eye, model space
     bool m_HaveEye = false;
     // Split poses: each piece's world twin (m_Twins[k] for m_Pieces[k]) and its model instance.

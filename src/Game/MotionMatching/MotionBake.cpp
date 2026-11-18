@@ -1,6 +1,7 @@
 #include "MotionBake.h"
 
 #include "MotionClipStream.h"
+#include "MotionDatabase.h"
 #include "MotionMath.h"
 
 #include "Core/Env.h"
@@ -115,6 +116,11 @@ bool MotionBakeConfig::Load(const std::string& path, std::string& error) {
         Labels.AirPelvisRise = l.value("airPelvisRise", Labels.AirPelvisRise);
         Labels.ContactHeight = l.value("contactHeight", Labels.ContactHeight);
         Labels.ContactSpeed = l.value("contactSpeed", Labels.ContactSpeed);
+        if (l.contains("styleSpeeds") && l["styleSpeeds"].is_object())
+            for (auto it = l["styleSpeeds"].begin(); it != l["styleSpeeds"].end(); ++it)
+                if (const int st = MotionLabel::StyleFromName(it.key()); st >= 0 && it.value().is_number())
+                    Labels.StyleSpeeds[st] = it.value().get<float>();
+        Labels.StyleWindowSeconds = l.value("styleWindowSeconds", Labels.StyleWindowSeconds);
     }
     if (j.contains("budgets") && j["budgets"].is_object()) {
         BudgetPoseMB = j["budgets"].value("poseMB", BudgetPoseMB);
@@ -195,6 +201,8 @@ bool ReadTakes(const std::string& csvPath, std::vector<MotionTake>& out, std::st
         MotionTake t;
         t.Name = col("name");
         if (t.Name.empty()) continue;
+        t.Source = col("source");
+        if (t.Source == t.Name) t.Source.clear();
         t.Group = col("group");
         t.Pattern = col("pattern");
         t.Seconds = (float)std::atof(col("seconds").c_str());
@@ -251,6 +259,192 @@ std::vector<BoneDiff> RigDiff(const Model& source, const Model& target, const st
     return out;
 }
 
+namespace {
+// Nodes ordered parents first.
+std::vector<int> TopoOrder(const std::vector<int>& parents) {
+    const int n = (int)parents.size();
+    std::vector<int> order, state((size_t)n, 0);
+    order.reserve((size_t)n);
+    std::vector<int> stack;
+    for (int i = 0; i < n; ++i) {
+        for (int k = i; k >= 0 && state[(size_t)k] == 0; k = parents[(size_t)k]) {
+            stack.push_back(k);
+            state[(size_t)k] = 1;
+        }
+        while (!stack.empty()) {
+            order.push_back(stack.back());
+            stack.pop_back();
+        }
+    }
+    return order;
+}
+
+std::string MirrorName(const std::string& n) {
+    if (n.size() > 2 && n.compare(n.size() - 2, 2, "_l") == 0) return n.substr(0, n.size() - 2) + "_r";
+    if (n.size() > 2 && n.compare(n.size() - 2, 2, "_r") == 0) return n.substr(0, n.size() - 2) + "_l";
+    return n;
+}
+} // namespace
+
+void Globals(const std::vector<int>& parents, const std::vector<LocalTRS>& pose, std::vector<glm::mat4>& out) {
+    out.assign(parents.size(), glm::mat4(1.0f));
+    for (int i : TopoOrder(parents)) {
+        const int p = parents[(size_t)i];
+        out[(size_t)i] = p >= 0 ? AffineMul(out[(size_t)p], pose[(size_t)i].ToMatrix()) : pose[(size_t)i].ToMatrix();
+    }
+}
+
+MirrorRig BuildMirror(const std::vector<std::string>& names, const std::vector<int>& parents, const std::vector<LocalTRS>& bind,
+                      int root) {
+    MirrorRig r;
+    const size_t n = names.size();
+    r.Parent = parents;
+    r.Root = root;
+    r.Mirror.resize(n);
+    r.Below.assign(n, 0);
+    for (size_t i = 0; i < n; ++i) {
+        r.Mirror[i] = (int)i;
+        const std::string m = MirrorName(names[i]);
+        if (m != names[i])
+            for (size_t k = 0; k < n; ++k)
+                if (names[k] == m) r.Mirror[i] = (int)k;
+        for (int p = parents[i]; p >= 0; p = parents[(size_t)p])
+            if (p == root) r.Below[i] = 1;
+    }
+    std::vector<glm::mat4> g;
+    Globals(parents, bind, g);
+    const glm::mat4 inv = root >= 0 ? glm::inverse(g[(size_t)root]) : glm::mat4(1.0f);
+    for (glm::mat4& m : g) m = inv * m;
+    const auto find = [&](const char* s) {
+        for (size_t k = 0; k < n; ++k)
+            if (names[k] == s) return (int)k;
+        return -1;
+    };
+    const int tl = find("thigh_l"), tr = find("thigh_r");
+    if (tl >= 0 && tr >= 0) {
+        glm::vec3 d = glm::vec3(g[(size_t)tr][3]) - glm::vec3(g[(size_t)tl][3]);
+        if (glm::length(d) > 1e-6f) {
+            d = glm::normalize(d);
+            // On an axis (the rig is built square to its root): exactly that axis.
+            for (int a = 0; a < 3; ++a)
+                if (std::fabs(d[a]) > 0.9998f) d = glm::vec3(a == 0 ? 1.0f : 0.0f, a == 1 ? 1.0f : 0.0f, a == 2 ? 1.0f : 0.0f) * std::copysign(1.0f, d[a]);
+            r.Normal = d;
+        }
+    }
+    const glm::mat3 m3 = glm::mat3(1.0f) - 2.0f * glm::outerProduct(r.Normal, r.Normal);
+    r.M = glm::mat4(m3);
+    r.Correction.assign(n, glm::mat4(1.0f));
+    for (size_t i = 0; i < n; ++i)
+        if (r.Below[i] || (int)i == root) r.Correction[i] = glm::inverse(r.M * g[(size_t)r.Mirror[i]] * r.M) * g[i];
+    return r;
+}
+
+void MirrorPose(const MirrorRig& rig, std::vector<LocalTRS>& pose) {
+    const size_t n = pose.size();
+    if (rig.Root < 0 || rig.Parent.size() != n) return;
+    std::vector<glm::mat4> g;
+    Globals(rig.Parent, pose, g);
+    const glm::mat4 inv = glm::inverse(g[(size_t)rig.Root]);
+    for (glm::mat4& m : g) m = inv * m; // the root node's frame
+    std::vector<glm::mat4> out(n, glm::mat4(1.0f));
+    for (size_t i = 0; i < n; ++i)
+        if (rig.Below[i]) out[i] = rig.M * g[(size_t)rig.Mirror[i]] * rig.M * rig.Correction[i];
+    for (size_t i = 0; i < n; ++i) {
+        if (!rig.Below[i]) continue;
+        const int p = rig.Parent[i];
+        const glm::mat4 parent = p == rig.Root ? glm::mat4(1.0f) : out[(size_t)p];
+        const glm::mat4 local = glm::inverse(parent) * out[i];
+        glm::mat3 r(local);
+        for (int c = 0; c < 3; ++c) r[c] = glm::normalize(r[c]);
+        pose[i].R = glm::normalize(glm::quat_cast(r));
+        pose[i].T = glm::vec3(local[3]);
+    }
+}
+
+RepairStats RepairGlitches(const std::vector<int>& parents, const std::vector<LocalTRS>& bind, const std::vector<char>& repair, float fps,
+                           std::vector<std::vector<LocalTRS>>& poses) {
+    RepairStats st;
+    const size_t n = parents.size(), frames = poses.size();
+    if (frames < 2 || bind.size() != n || repair.size() != n) return st;
+    std::vector<std::vector<int>> children(n);
+    for (size_t i = 0; i < n; ++i)
+        if (parents[i] >= 0) children[(size_t)parents[i]].push_back((int)i);
+    // The long axis per repaired bone (local frame), where it has one.
+    std::vector<glm::vec3> axis(n, glm::vec3(0.0f));
+    std::vector<char> hasAxis(n, 0);
+    for (size_t i = 0; i < n; ++i) {
+        if (!repair[i]) continue;
+        if (!children[i].empty()) {
+            const glm::vec3 first = bind[(size_t)children[i][0]].T;
+            if (glm::length(first) < 1e-5f) continue;
+            const glm::vec3 a = glm::normalize(first);
+            bool line = true;
+            for (int c : children[i]) {
+                const glm::vec3 t = bind[(size_t)c].T;
+                line = line && (glm::length(t) < 1e-5f || std::fabs(glm::dot(glm::normalize(t), a)) > 0.95f);
+            }
+            if (!line) continue;
+            axis[i] = a;
+            hasAxis[i] = 1;
+        } else if (glm::length(bind[i].T) > 1e-5f) {
+            axis[i] = glm::normalize(glm::inverse(bind[i].R) * bind[i].T);
+            hasAxis[i] = 1;
+        }
+    }
+    // 1. Twist flips. Each bone's world rotation is untouched by its ancestors' unrolling (the children take the inverse), so
+    // every bone is judged on its captured world rotation and its own correction so far.
+    const std::vector<int> order = TopoOrder(parents);
+    const float flip = kFlipDeg * MotionMath::kPi / 180.0f;
+    std::vector<glm::quat> prevG(n), curG(n);
+    std::vector<float> corr(n, 0.0f);
+    std::vector<std::vector<std::pair<size_t, float>>> apply(frames); // per frame: (bone, correction) where non-zero
+    for (size_t f = 0; f < frames; ++f) {
+        for (int i : order) {
+            const int p = parents[(size_t)i];
+            curG[(size_t)i] = p >= 0 ? curG[(size_t)p] * poses[f][(size_t)i].R : poses[f][(size_t)i].R;
+        }
+        for (size_t i = 0; i < n && f > 0; ++i) {
+            if (!hasAxis[i]) continue;
+            const glm::quat c = glm::angleAxis(corr[i], axis[i]);
+            const float tw = MotionMath::TwistAngle(glm::inverse(prevG[i] * c) * (curG[i] * c), axis[i]);
+            if (std::fabs(tw) > flip) {
+                corr[i] -= tw;
+                ++st.Flips;
+            }
+        }
+        for (size_t i = 0; i < n; ++i)
+            if (hasAxis[i] && std::fabs(corr[i]) > 1e-6f) apply[f].push_back({i, corr[i]});
+        std::swap(prevG, curG);
+    }
+    for (size_t f = 0; f < frames; ++f)
+        for (const auto& [i, c] : apply[f]) {
+            const glm::quat t = glm::angleAxis(c, axis[i]);
+            poses[f][i].R = glm::normalize(poses[f][i].R * t);
+            for (int ch : children[i]) poses[f][(size_t)ch].R = glm::normalize(glm::inverse(t) * poses[f][(size_t)ch].R);
+        }
+    // 2. Spikes, on the (unrolled) local rotations.
+    const float limit = kSpikeDeg * MotionMath::kPi / 180.0f * 60.0f / std::max(1.0f, fps);
+    const float back = kSpikeReturnDeg * MotionMath::kPi / 180.0f;
+    for (size_t i = 0; i < n; ++i) {
+        if (!repair[i]) continue;
+        for (size_t f = 1; f < frames; ++f) {
+            const glm::quat a = poses[f - 1][i].R;
+            if (MotionMath::QuatAngle(a, poses[f][i].R) <= limit) continue;
+            for (size_t k = f + 1; k < frames && k <= f + (size_t)kSpikeMaxFrames; ++k) {
+                if (MotionMath::QuatAngle(a, poses[k][i].R) >= back) continue;
+                glm::quat b = poses[k][i].R;
+                if (glm::dot(a, b) < 0.0f) b = -b;
+                for (size_t j = f; j < k; ++j) poses[j][i].R = glm::slerp(a, b, (float)(j - (f - 1)) / (float)(k - (f - 1)));
+                ++st.Spikes;
+                st.SpikeFrames += (int)(k - f);
+                f = k;
+                break;
+            }
+        }
+    }
+    return st;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // The bake
 
@@ -278,6 +472,9 @@ struct BakeContext {
     int TargetPelvis = -1, TargetFoot[2] = {-1, -1};
     std::vector<LocalTRS> TargetBind;
     float PelvisScale = 1.0f;
+    // The pack rig's rest pose by node name: the mirror's rest correction and the repair's bone axes (a take's own nodes'
+    // defaults are whatever its export left there).
+    std::map<std::string, LocalTRS> SourceBind;
 };
 
 struct TakeResult {
@@ -297,8 +494,18 @@ struct TakeResult {
     float SpeedP50 = 0.0f, PelvisP50 = 0.0f, AnkleP05 = 0.0f;
     int Labelled[4] = {0, 0, 0, 0};
     std::vector<glm::quat> StaticRot;
+    std::vector<glm::quat> FingerRot; // frames x StaticBones, when the take animates its fingers (HasFingers)
+    bool HasFingers = false;
+    RepairStats Repair;
+    int GlitchFrames = 0;     // frames still over kGlitchDegrees on a streamed bone after the repair (excluded at load)
+    glm::vec3 MirrorNormal{0.0f};
+    // The finger bones (the config's staticBones, not streamed): how far each turns over the trimmed take (deg, off its
+    // first sampled rotation, every 6th frame) - whether the take animates them (111 of the pack's 139 have finger data).
+    int FingerBones = 0, FingerBonesMoving = 0; // ... and how many turn over kFingerMovingDeg
+    float FingerRangeDeg = 0.0f;                // the most any turns
     double ImportSeconds = 0.0, BakeSeconds = 0.0;
 };
+constexpr float kFingerMovingDeg = 5.0f;
 
 float Percentile(std::vector<float> v, float p) {
     if (v.empty()) return 0.0f;
@@ -310,7 +517,7 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
     TakeResult r;
     r.Take = take;
     const MotionBakeConfig& cfg = *ctx.Cfg;
-    const std::string path = (fs::path(ctx.AnimsDir) / (take.Name + ".fbx")).string();
+    const std::string path = (fs::path(ctx.AnimsDir) / (take.File() + ".fbx")).string();
     std::error_code ec;
     if (!fs::exists(path, ec)) {
         r.Error = "missing " + path;
@@ -359,9 +566,19 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
         }
         if (cfg.Bones[b] == "pelvis") pelvisBone = (int)b;
     }
+    // The finger bones in the stream's order (its Statics), -1 where the take lacks one.
     std::vector<int> statics;
-    if (wantStatics)
-        for (const std::string& s : ctx.StaticBones) statics.push_back(m.NodeIndex(s));
+    bool allFingers = !ctx.StaticBones.empty();
+    for (const std::string& s : ctx.StaticBones) {
+        statics.push_back(m.NodeIndex(s));
+        allFingers = allFingers && statics.back() >= 0;
+    }
+    std::vector<int> fingers;
+    for (const std::string& s : ctx.StaticBones)
+        if (const int i = m.NodeIndex(s); i >= 0) fingers.push_back(i);
+    std::vector<glm::quat> fingerFirst(fingers.size());
+    std::vector<float> fingerRange(fingers.size(), 0.0f);
+    bool haveFingerFirst = false;
 
     // 1. Sample every frame: the bones' local rotations and the model-space points the root is made from. The root is
     // generated over up to kMargin more of the take each side of the trim, then cut to it: a trim that ends mid-run
@@ -382,11 +599,34 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
     for (int k = 0; k < 2; ++k) r.Frames.Foot[k].resize((size_t)ne);
     r.Rot.resize((size_t)ne * nb);
     std::vector<glm::mat4> pelvisRootSpace((size_t)ne);
-    std::vector<LocalTRS> pose;
+    std::vector<std::vector<LocalTRS>> poses((size_t)ne);
+    for (int f = 0; f < ne; ++f) m.SampleLocalPose(0, std::min(len, (float)(extFirst + f) / fps), AnimationWrapMode::ClampForever, poses[(size_t)f]);
+    {
+        // The take's skeleton, with the pack rig's rest pose where it has the node.
+        const int nn = m.NodeCount();
+        std::vector<int> parents((size_t)nn);
+        std::vector<std::string> names((size_t)nn);
+        std::vector<LocalTRS> bind;
+        m.BindLocalPose(bind);
+        for (int i = 0; i < nn; ++i) {
+            parents[(size_t)i] = m.NodeParent(i);
+            names[(size_t)i] = m.NodeName(i);
+            if (auto it = ctx.SourceBind.find(names[(size_t)i]); it != ctx.SourceBind.end()) bind[(size_t)i] = it->second;
+        }
+        // Repair first (the capture as shot), then mirror.
+        std::vector<char> repair((size_t)nn, 0);
+        for (int s : src) repair[(size_t)s] = 1;
+        for (int s : fingers) repair[(size_t)s] = 1;
+        r.Repair = RepairGlitches(parents, bind, repair, fps, poses);
+        if (take.Mirrored()) {
+            const MirrorRig mr = BuildMirror(names, parents, bind, root);
+            r.MirrorNormal = mr.Normal;
+            for (auto& p : poses) MirrorPose(mr, p);
+        }
+    }
     std::vector<glm::mat4> g;
     for (int f = 0; f < ne; ++f) {
-        const float t = std::min(len, (float)(extFirst + f) / fps);
-        m.SampleLocalPose(0, t, AnimationWrapMode::ClampForever, pose);
+        const std::vector<LocalTRS>& pose = poses[(size_t)f];
         RootSpaceGlobals(m, pose, root, g);
         const auto P = [&](int node) { return glm::vec3(ctx.C * g[(size_t)node][3]); };
         in.Pelvis[(size_t)f] = r.Frames.Pelvis[(size_t)f] = P(pelvis);
@@ -395,6 +635,16 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
         for (int k = 0; k < 2; ++k) r.Frames.Foot[k][(size_t)f] = P(foot[k]);
         for (size_t b = 0; b < nb; ++b) r.Rot[(size_t)f * nb + b] = glm::normalize(pose[(size_t)src[b]].R);
         pelvisRootSpace[(size_t)f] = g[(size_t)pelvis];
+        if (allFingers && f >= head && f < head + n)
+            for (int s : statics) r.FingerRot.push_back(glm::normalize(pose[(size_t)s].R));
+        if (f >= head && f < head + n && (f - head) % 6 == 0) {
+            for (size_t k = 0; k < fingers.size(); ++k) {
+                const glm::quat q = glm::normalize(pose[(size_t)fingers[k]].R);
+                if (!haveFingerFirst) fingerFirst[k] = q;
+                else fingerRange[k] = std::max(fingerRange[k], MotionMath::QuatAngle(fingerFirst[k], q) * 180.0f / MotionMath::kPi);
+            }
+            haveFingerFirst = true;
+        }
         if (wantStatics && f == head + n / 2) {
             r.StaticRot.resize(statics.size());
             for (size_t s = 0; s < statics.size(); ++s)
@@ -464,6 +714,24 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
         speed[(size_t)f] = glm::length(r.Track.Position[(size_t)b] - r.Track.Position[(size_t)a]) * fps / (float)std::max(1, b - a);
         pelvisH[(size_t)f] = r.Frames.Pelvis[(size_t)f].y;
         ankle[(size_t)f] = std::min(r.Frames.Foot[0][(size_t)f].y, r.Frames.Foot[1][(size_t)f].y);
+    }
+    r.FingerBones = (int)fingers.size();
+    for (float a : fingerRange) {
+        r.FingerRangeDeg = std::max(r.FingerRangeDeg, a);
+        r.FingerBonesMoving += a > kFingerMovingDeg ? 1 : 0;
+    }
+    // A take whose fingers never move holds the export's default there, not a captured hand: it plays the relaxed pose.
+    r.HasFingers = allFingers && r.FingerBonesMoving > 0;
+    if (!r.HasFingers) std::vector<glm::quat>().swap(r.FingerRot);
+    // What the repair left: frames with a streamed bone over the load-time glitch limit (MotionDatabase::kGlitchDegrees).
+    {
+        const float limit = MotionDatabase::kGlitchDegrees * MotionMath::kPi / 180.0f * 60.0f / std::max(1.0f, fps);
+        for (int f = 1; f < n; ++f) {
+            bool bad = false;
+            for (size_t b = 0; b < nb && !bad; ++b)
+                bad = MotionMath::QuatAngle(r.Rot[(size_t)(f - 1) * nb + b], r.Rot[(size_t)f * nb + b]) > limit;
+            r.GlitchFrames += bad ? 1 : 0;
+        }
     }
     r.SpeedP50 = Percentile(speed, 0.5f);
     r.PelvisP50 = Percentile(pelvisH, 0.5f);
@@ -596,6 +864,11 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
         report["targetPelvisHeight"] = targetPelvisH;
     }
     for (const std::string& b : cfg.Bones) ctx.TargetNodes.push_back(targetRig.NodeIndex(b));
+    {
+        std::vector<LocalTRS> sb;
+        sourceRig.BindLocalPose(sb);
+        for (int i = 0; i < sourceRig.NodeCount(); ++i) ctx.SourceBind[sourceRig.NodeName(i)] = sb[(size_t)i];
+    }
     for (int i = 0; i < sourceRig.NodeCount(); ++i) {
         const std::string& n = sourceRig.NodeName(i);
         if (std::find(cfg.Bones.begin(), cfg.Bones.end(), n) != cfg.Bones.end()) continue;
@@ -643,23 +916,37 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
     json takesJ = json::array();
     float worstFacing = 0.0f, worstJitter = 0.0f, worstRebuild = 0.0f;
     std::string worstFacingAt, worstJitterAt, worstRebuildAt;
+    // The relaxed finger pose first: the finger tracks are stored in its order.
+    for (const TakeResult& r : results)
+        if (r.Ok && r.Take.Name == staticFrom && !r.StaticRot.empty())
+            for (size_t s = 0; s < ctx.StaticBones.size(); ++s) stream.Statics.push_back({ctx.StaticBones[s], r.StaticRot[s]});
+    RepairStats repaired;
+    int residualGlitches = 0, fingerClips = 0;
+    std::uint32_t fingerFrames = 0;
     for (const TakeResult& r : results) {
         if (!r.Ok) {
             ++failed;
             takesJ.push_back({{"name", r.Take.Name}, {"error", r.Error}});
             continue;
         }
-        if (r.Take.Name == staticFrom && !r.StaticRot.empty())
-            for (size_t s = 0; s < ctx.StaticBones.size(); ++s) stream.Statics.push_back({ctx.StaticBones[s], r.StaticRot[s]});
         MotionClipStream::Clip c;
         c.Name = r.Take.Name;
         c.Tags = r.Take.TagString();
         c.SourceStart = r.SourceStart;
-        stream.AddClip(c, r.Root, r.PelvisT, r.Rot);
+        const bool fingers = r.HasFingers && r.FingerRot.size() == r.Root.size() * stream.Statics.size();
+        stream.AddClip(c, r.Root, r.PelvisT, r.Rot, fingers ? &r.FingerRot : nullptr);
+        fingerClips += fingers ? 1 : 0;
+        fingerFrames += fingers ? (std::uint32_t)r.Root.size() : 0u;
+        repaired.Flips += r.Repair.Flips;
+        repaired.Spikes += r.Repair.Spikes;
+        repaired.SpikeFrames += r.Repair.SpikeFrames;
+        residualGlitches += r.GlitchFrames;
         const std::uint32_t before = features.FrameCount();
-        features.AddClip(r.Take.Name, r.Frames, r.Track, cfg.Labels);
+        features.AddClip(r.Take.Name, r.Frames, r.Track, cfg.Labels, MotionClipIntent::FromTags(c.Tags));
         int gaits[4] = {0, 0, 0, 0}, crouch = 0, strafe = 0, air = 0, excluded = 0;
+        int styles[MotionLabel::StyleCount] = {};
         for (std::uint32_t f = before; f < features.FrameCount(); ++f) {
+            ++styles[std::min<int>(MotionLabel::StyleCount - 1, features.Style(f))];
             ++gaits[std::min<int>(3, features.Gait(f))];
             const std::uint8_t fl = features.Flags(f);
             crouch += fl & MotionLabel::Crouch ? 1 : 0;
@@ -682,10 +969,41 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
                           {"contactFrames", {r.Raw.ContactFrames[0], r.Raw.ContactFrames[1]}},
                           {"rebuildMaxCm", r.RebuildMaxCm},
                           {"gaitFrames", {gaits[0], gaits[1], gaits[2], gaits[3]}}, {"crouchFrames", crouch},
-                          {"strafeFrames", strafe}, {"airborneFrames", air}, {"excludedFrames", excluded}});
+                          {"strafeFrames", strafe}, {"airborneFrames", air}, {"excludedFrames", excluded},
+                          {"fingerBones", r.FingerBones}, {"fingerBonesMoving", r.FingerBonesMoving}, {"fingerRangeDeg", r.FingerRangeDeg},
+                          {"hasFingers", fingers}, {"source", r.Take.File()}, {"mirrored", r.Take.Mirrored()},
+                          {"styleFrames", {styles[0], styles[1], styles[2], styles[3], styles[4], styles[5]}},
+                          {"twistFlipsUnrolled", r.Repair.Flips}, {"spikesRepaired", r.Repair.Spikes},
+                          {"spikeFramesRepaired", r.Repair.SpikeFrames}, {"glitchFramesLeft", r.GlitchFrames}});
+        if (r.Take.Mirrored())
+            takesJ.back()["mirrorNormal"] = {r.MirrorNormal.x, r.MirrorNormal.y, r.MirrorNormal.z};
     }
     features.Finish();
     report["takes"] = takesJ;
+    // The 16-bit features' worst error per group, in the group's normalization units (MotionDatabase's scale).
+    {
+        json qj = json::object();
+        std::printf("[MotionBake] feature quantization, worst error per group (normalized):");
+        for (int gi = 0; gi < MotionFeature::GroupCount; ++gi) {
+            const int a = MotionFeature::kGroupFirst[gi], b = MotionFeature::kGroupFirst[gi + 1];
+            float scale = 0.0f, worst = 0.0f;
+            for (int d = a; d < b; ++d) scale += features.Std()[(size_t)d];
+            scale = std::max(1e-4f, scale / (float)(b - a));
+            for (int d = a; d < b; ++d) worst = std::max(worst, features.QError()[(size_t)d] / scale);
+            qj[MotionFeature::GroupName(gi)] = worst;
+            std::printf(" %s %.2e", MotionFeature::GroupName(gi), worst);
+        }
+        std::printf("\n");
+        report["featureQuantization"] = qj;
+    }
+    std::printf("[MotionBake] repair: %d twist flips unrolled, %d spikes slerped across (%d bone-frames); %d frames still over %.0f deg "
+                "(excluded at load)\n", repaired.Flips, repaired.Spikes, repaired.SpikeFrames, residualGlitches, MotionDatabase::kGlitchDegrees);
+    std::printf("[MotionBake] fingers: %d clips animate them (%u frames, %s)\n", fingerClips, fingerFrames, Mb(stream.FingerBytes()).c_str());
+    report["twistFlipsUnrolled"] = repaired.Flips;
+    report["spikesRepaired"] = repaired.Spikes;
+    report["glitchFramesLeft"] = residualGlitches;
+    report["fingerClips"] = fingerClips;
+    report["fingerMB"] = (double)stream.FingerBytes() / (1024.0 * 1024.0);
 
     // Write, then time a load of both files the way the runtime will.
     fs::create_directories(fs::path(cfg.Output).parent_path(), ec);

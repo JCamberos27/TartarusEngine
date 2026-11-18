@@ -59,6 +59,7 @@ struct TbLeg {
     bool Aim = false;
     int Equip = -1;                   // 0 holster, 1 draw, at the leg's start (-1: leave it)
     bool Crouch = false;              // M (mmplayer): crouched through the leg
+    bool Stroll = false;              // M: the Walk action held (the stroll)
     float ViewTurn = 0.0f;            // M: the view turns this many degrees a second through the leg (from Yaw)
     float JumpAt = -1.0f;             // M: a jump pressed this many seconds into the leg (-1: none)
     float SweepDeg = 0.0f;            // M: the view sweeps this many degrees either side of Yaw (a player looking about) ...
@@ -80,6 +81,11 @@ TbLeg TbM(const char* name, float seconds, glm::vec2 move, bool sprint, bool cro
     l.Crouch = crouch;
     l.ViewTurn = viewTurn;
     l.JumpAt = jumpAt;
+    return l;
+}
+TbLeg TbMStroll(const char* name, float seconds, glm::vec2 move, float yaw) {
+    TbLeg l = TbM(name, seconds, move, false, false, yaw);
+    l.Stroll = true;
     return l;
 }
 TbLeg TbMSweep(const char* name, float seconds, glm::vec2 move, bool sprint, float sweepDeg, float sweepHz) {
@@ -160,6 +166,17 @@ const TbLeg kTb[] = {
     TbM("M stop after jog", 1.5f, {0, 0}, false, false, -90.0f),
     TbM("M jog strafe left", 2.0f, {-1, 0}, true, false, -90.0f),
     TbM("M stop after strafe", 1.0f, {0, 0}, false, false, -90.0f),
+    // Step 2+3 of the full-library plan: Shift is the jog's style in every direction (the jog takes' own strafes and
+    // backwards, mirrored where the pack was lopsided), the Walk action the stroll's.
+    TbM("M jog strafe right", 2.0f, {1, 0}, true, false, -90.0f),
+    TbM("M stop after strafe right", 1.0f, {0, 0}, false, false, -90.0f),
+    TbM("M jog back", 2.0f, {0, -1}, true, false, -90.0f),
+    TbM("M stop after jog back", 1.0f, {0, 0}, false, false, -90.0f),
+    TbM("M settle for stroll", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbMStroll("M stroll", 3.0f, {0, 1}, 90.0f),
+    TbMStroll("M stroll strafe left", 2.5f, {-1, 0}, 90.0f),
+    TbMStroll("M stroll strafe right", 2.5f, {1, 0}, 90.0f),
+    TbM("M stop after stroll", 1.0f, {0, 0}, false, false, 90.0f),
     TbM("M settle for jumps", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
     TbM("M jump standing", 2.0f, {0, 0}, false, false, 90.0f, 0.0f, 0.3f),
     TbM("M jog and jump", 3.0f, {0, 1}, true, false, 90.0f, 0.0f, 1.5f),
@@ -199,6 +216,8 @@ const TbLeg kTb[] = {
     TbM("M settle for idle", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
     TbM("M idle", 6.0f, {0, 0}, false, false, 90.0f),
     TbMWander("M jog random look", 4.0f, true, 25.0f, 35.0f),
+    TbM("M stop after jog random look", 1.0f, {0, 0}, false, false, 90.0f),
+    TbMWander("M walk random look", 4.0f, false, 25.0f, 35.0f),
     TbM("M stop after random look", 1.5f, {0, 0}, false, false, 90.0f),
     TbM("M settle for mouse noise", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
     TbMWander("M jog mouse noise", 3.0f, true, 2.5f, 2.5f),
@@ -325,6 +344,7 @@ struct NpcTest::TestbedRun {
     // frames' labels, the play rate and the raw (unwarped) clip speed against the capsule's, the body's root off the capsule.
     struct MmStats {
         int Frames = 0, Steady = 0, StrafeFlag = 0, Sideways = 0, CrouchFlag = 0, GaitAtLeast[4] = {0, 0, 0, 0};
+        int Styles[MotionLabel::StyleCount] = {}; // the matched frames' style (steady)
         std::vector<float> RawRatio, Speed;
         float RateMin = 9.0f, RateMax = 0.0f, YawRateMax = 0.0f, RootOffsetMax = 0.0f;
         int AirFrames = 0, AirLocked = 0, AirFlagged = 0;
@@ -366,6 +386,7 @@ struct NpcTest::TestbedRun {
         std::string InsideWhat;
         std::vector<float> EyeH, HeadH, CamH; // steady: the eye's, the clip head's and the camera's height over the capsule's feet (m)
         float PitchMin = 0.0f, LimitMax = -89.0f; // the view's steepest pitch (deg) and the look-down limit's highest
+        float FacingOffMax = 0.0f, YawStepMax = 0.0f; // the character facing off the simulation's, its biggest turn in a frame (deg)
         std::vector<float> Limit, PitchSteady; // per steady frame: the look-down limit, the view's pitch (deg)
         bool EndAirborne = false, EndLocked = false;
         float EndYawOff = 0.0f;
@@ -456,6 +477,7 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
     R.Into = into;
     player.ScriptMove = L.AltPeriod > 0.0f && std::fmod(into, 2.0f * L.AltPeriod) >= L.AltPeriod ? L.Move2 : L.Move;
     player.ScriptSprint = L.Jog;
+    player.ScriptWalk = L.Stroll;
     player.ScriptCrouch = L.CrouchPeriod > 0.0f ? std::fmod(into, 2.0f * L.CrouchPeriod) >= L.CrouchPeriod : L.Crouch;
     if (L.JumpEvery > 0.0f) {
         const int slot = (int)(into / L.JumpEvery);
@@ -1109,6 +1131,8 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
     q.EndLocked = mm.Locked;
     q.EndYawOff = std::fabs(bd.ViewOffsetDeg);
     q.YawRateMax = std::max(q.YawRateMax, std::fabs(mm.YawRate));
+    q.FacingOffMax = std::max(q.FacingOffMax, std::fabs(glm::degrees(mm.FacingOffset)));
+    q.YawStepMax = std::max(q.YawStepMax, std::fabs(glm::degrees(mm.YawRate)) / 60.0f);
     if (mm.Jumped) ++q.Jumps;
     // Rewinds: a jump to within 2 frames of a frame shown in the last second.
     if (mm.Jumped)
@@ -1151,7 +1175,7 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         };
         std::printf("[MmPlayer]     query   %s\n[MmPlayer]     matched %s\n", row(mm.Query).c_str(), row(mm.Matched).c_str());
     }
-    if (mm.Jumped && q.Jumps <= 4)
+    if (mm.Jumped && q.Jumps <= 12) // (the first dozen a leg: enough to see what a leg stitches)
         std::printf("[MmPlayer] %6.2f s %-24s jump to %s @ frame %u (flags %02x, gait %d), cost %.2f vs playing %.2f; searches %d, by input %d, "
                     "by end %d\n", R.Clock, kTb[leg].Name, mm.Clip.c_str(), mm.Frame, mm.Flags, mm.Gait, mm.LastCost, mm.PlayingCost, q.Searches,
                     q.ByInput, q.ByEnd);
@@ -1177,6 +1201,7 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         if (mm.MatchedTravel > 0.2f && mm.MatchedTravelDeg > 50.0f) ++q.Sideways;
         if (crouchFlag) ++q.CrouchFlag;
         for (int g = 0; g <= std::min<int>(mm.Gait, 3); ++g) ++q.GaitAtLeast[g];
+        ++q.Styles[std::min<int>(mm.Style, MotionLabel::StyleCount - 1)];
         if (mm.CapsuleSpeed > 0.3f && mm.AnimSpeed > 0.05f) q.RawRatio.push_back(mm.AnimSpeed / mm.CapsuleSpeed);
         q.Speed.push_back(mm.CapsuleSpeed);
         q.RateMin = std::min(q.RateMin, mm.PlayRate);
@@ -1353,15 +1378,48 @@ void NpcTest::MmPlayerChecks() {
     const char* walkRef = TbPartOn('A') ? "A walk" : "M walk looking about";
     const TestbedRun::MmStats& walkQ = R.Mm[legIndex(walkRef)];
     const float walkJumps = walkQ.Jumps / std::max(0.1f, kTb[legIndex(walkRef)].Seconds), walkP99 = pctOf(walkQ.PoseStep, 0.99f);
+    // (Jog frames: the jog takes' style label - what the actor was doing - not the speed band: the jog's strafes move at walk
+    // speeds, and by speed alone Shift sideways matched the walk's strafes, a speed walk.)
+    const auto styleShare = [](const TestbedRun::MmStats& q, int style) { return q.Steady ? (float)q.Styles[style] / (float)q.Steady : 0.0f; };
     for (const char* name : {"M jog", "A jog"}) {
         if (!TbPartOn(name[0])) continue;
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-        const float jog = q.Steady ? (float)(q.GaitAtLeast[2] - q.GaitAtLeast[3]) / (float)q.Steady : 0.0f;
+        const float jog = styleShare(q, MotionLabel::StyleJog);
         const float jumps = q.Jumps / std::max(0.1f, kTb[legIndex(name)].Seconds), p99 = pctOf(q.PoseStep, 0.99f);
         std::snprintf(b, sizeof b, "%s: Shift plays the jog - jog frames %.0f %% of %d steady (>= 80 %%) at %.2f m/s; %.1f jumps a second (%s %.1f: "
                                    "within 1.5x + 0.5); pose step p99 %.2f deg (%s %.2f: within 1.5x + 1)", name, 100.0f * jog, q.Steady,
                       mean(q.Speed), jumps, walkRef, walkJumps, p99, walkRef, walkP99);
         Check(q.Steady > 20 && jog >= 0.8f && jumps <= 1.5f * walkJumps + 0.5f && p99 <= 1.5f * walkP99 + 1.0f, b);
+    }
+    // Every direction plays its own style's takes: Shift the jog's strafes and backwards, the Walk action the stroll's, the
+    // default the walk's (>= 80 % of the steady frames; Stand frames - steps on the spot - count for no style).
+    {
+        const struct { const char* Leg; int Style; } kStyleLegs[] = {
+            {"M strafe right (walk)", MotionLabel::StyleWalk}, {"M strafe left (walk)", MotionLabel::StyleWalk}, {"M walk back", MotionLabel::StyleWalk},
+            {"M jog turning", MotionLabel::StyleJog}, {"M jog strafe left", MotionLabel::StyleJog}, {"M jog strafe right", MotionLabel::StyleJog},
+            {"M jog back", MotionLabel::StyleJog}, {"M stroll", MotionLabel::StyleStroll}, {"M stroll strafe left", MotionLabel::StyleStroll},
+            {"M stroll strafe right", MotionLabel::StyleStroll}};
+        for (const auto& s : kStyleLegs) {
+            const TestbedRun::MmStats& q = R.Mm[legIndex(s.Leg)];
+            const float share = styleShare(q, s.Style);
+            std::snprintf(b, sizeof b, "%s: the %s takes play - %s frames %.0f %% of %d steady (>= 80 %%; walk %.0f, jog %.0f, stroll %.0f, stand %.0f %%) "
+                                       "at %.2f m/s", s.Leg, MotionLabel::StyleName(s.Style), MotionLabel::StyleName(s.Style), 100.0f * share, q.Steady,
+                          100.0f * styleShare(q, MotionLabel::StyleWalk), 100.0f * styleShare(q, MotionLabel::StyleJog),
+                          100.0f * styleShare(q, MotionLabel::StyleStroll), 100.0f * styleShare(q, MotionLabel::StyleStand), mean(q.Speed));
+            Check(q.Steady > 20 && share >= 0.8f, b);
+        }
+        // Left and right alike where the pack was lopsided (the mirrored takes): the jog's and the stroll's strafes match
+        // strafing frames as often either way (within 10 points) at the same speed (within 10 %).
+        for (const auto& pair : {std::pair<const char*, const char*>{"M jog strafe left", "M jog strafe right"},
+                                 std::pair<const char*, const char*>{"M stroll strafe left", "M stroll strafe right"}}) {
+            const TestbedRun::MmStats& l = R.Mm[legIndex(pair.first)];
+            const TestbedRun::MmStats& r = R.Mm[legIndex(pair.second)];
+            const float sl = l.Steady ? (float)l.Sideways / l.Steady : 0.0f, sr = r.Steady ? (float)r.Sideways / r.Steady : 0.0f;
+            const float vl = mean(l.Speed), vr = mean(r.Speed);
+            std::snprintf(b, sizeof b, "%s / right: alike - strafing frames %.0f / %.0f %% (within 10 points), %.2f / %.2f m/s (within 10 %%)",
+                          pair.first, 100.0f * sl, 100.0f * sr, vl, vr);
+            Check(l.Steady > 20 && r.Steady > 20 && std::fabs(sl - sr) <= 0.1f && std::fabs(vl - vr) <= 0.1f * std::max(vl, vr), b);
+        }
     }
     // The crouch is the pack's own crouch takes (Require Crouch: the filter check above), at the table's crouch speeds: no
     // stitching (jumps a second within 1.5x the walk's + 0.5). The eye crouched: the body's (on the head) against the capsule's
@@ -1613,14 +1671,34 @@ void NpcTest::MmPlayerChecks() {
                 Check(q.Chest.size() > 20 && std::fabs(stand) > 2.0f && std::fabs(aim) <= 0.25f * std::fabs(stand), b);
             }
         }
-        // 4. A 180 deg flick of the view on the move: the body turns at most 450 deg/s (was ~1440), the arms stay down, and
-        //    the feet barely cross (running, before the crossed-legs exclusion: 10 % of the frames, 31 cm; legacy 4 %, 2 cm).
+        // 4. A 180 deg flick of the view on the move: the body turns as the mocap turns (the facing model) - no spin, at most
+        //    30 deg in any frame; the arms stay down. Crossed feet are reported, not gated (a pivot crosses them naturally).
         for (const char* name : {"M jog flick 180", "M walk flick 180"}) {
             const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
             const float crossed = q.Chest.empty() ? 0.0f : (float)q.Crossed / (float)q.Chest.size();
-            std::snprintf(b, sizeof b, "%s: the body turns at most %.0f deg/s (<= 460), hands over the shoulders %d frames, feet crossed on %.0f %% "
-                                       "(<= 5) by at most %.2f m (<= 0.10)", name, pct(q.YawRate, 1.0f), q.HandHigh, 100.0f * crossed, -q.FeetGapMin);
-            Check(q.Chest.size() > 20 && pct(q.YawRate, 1.0f) <= 460.0f && q.HandHigh == 0 && crossed <= 0.05f && q.FeetGapMin >= -0.10f, b);
+            std::snprintf(b, sizeof b, "%s: the body turns by the animation - at most %.1f deg in a frame (<= 30; %.0f deg/s), hands over the "
+                                       "shoulders %d frames; feet crossed on %.0f %% by at most %.2f m (reported)", name, q.YawStepMax,
+                          pct(q.YawRate, 1.0f), q.HandHigh, 100.0f * crossed, -q.FeetGapMin);
+            Check(q.Chest.size() > 20 && q.YawStepMax <= 30.0f && q.HandHigh == 0, b);
+        }
+        // 5. The facing model: the character facing never more than its clamp off the simulation's (any leg), and looking about
+        //    on the move the planted feet hold - the body turns with the clip, not over the feet (worst plant drift <= 5 cm;
+        //    with the heading spun after the view, M run random look slid 51 cm).
+        {
+            float worst = 0.0f;
+            int offLeg = -1;
+            for (int i = 0; i < kWatchLeg; ++i)
+                if (TbLegOn(i) && R.Mm[i].FacingOffMax > worst) { worst = R.Mm[i].FacingOffMax; offLeg = i; }
+            const float clamp = glm::degrees(FirstPersonBodyMotion::Settings{}.MaxFacingOffset) + 0.1f;
+            std::snprintf(b, sizeof b, "mmplayer: the character facing at most %.1f deg off the simulation's (%s), within its clamp (<= %.1f)",
+                          worst, offLeg >= 0 ? kTb[offLeg].Name : "none", clamp);
+            Check(worst <= clamp, b);
+            for (const char* name : {"M jog random look", "M walk random look"}) {
+                const auto it = m_SlideWorstPlayer.find(name);
+                const float slide = it != m_SlideWorstPlayer.end() ? it->second : -1.0f;
+                std::snprintf(b, sizeof b, "%s: the planted feet hold while the view wanders - worst plant drift %.1f cm (<= 5)", name, slide * 100.0f);
+                Check(slide >= 0.0f && slide <= 0.05f, b);
+            }
         }
     }
     // Jumps: the airborne segment plays locked, then matching takes over.

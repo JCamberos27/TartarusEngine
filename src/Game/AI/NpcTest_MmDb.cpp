@@ -199,7 +199,8 @@ void NpcTest::MmDbOffline() {
     std::uint64_t scored = 0;
     for (int k = 0; k < 1000; ++k) {
         float q[27];
-        std::memcpy(q, db.Normalized(searchable[pick(rng)]), sizeof q);
+        const auto picked = db.Normalized(searchable[pick(rng)]);
+        std::memcpy(q, picked.data(), sizeof q);
         for (float& x : q) x += noise(rng);
         MotionSearchParams p;
         if (k % 4 == 1) p.Forbid |= MotionLabel::Crouch;
@@ -235,9 +236,10 @@ void NpcTest::MmDbOffline() {
         const std::uint32_t f = searchable[pick(rng)];
         MotionSearchParams p;
         p.Forbid = MotionLabel::Airborne; // (the default: `searchable` passes it)
-        const MotionSearchResult a = MotionSearch::Search(db, db.Normalized(f), p);
+        const auto self = db.Normalized(f);
+        const MotionSearchResult a = MotionSearch::Search(db, self.data(), p);
         if (a.Frame < 0 || a.Cost > 1e-6f) ++selfMiss;
-        const MotionSearchResult c = MotionSearch::Search(db, db.Normalized(f), p);
+        const MotionSearchResult c = MotionSearch::Search(db, self.data(), p);
         if (c.Frame != a.Frame || c.Cost != a.Cost) ++nondet;
     }
     Check(selfMiss == 0, "every searchable frame finds itself (cost 0): " + std::to_string(selfMiss) + " of 200 don't");
@@ -386,10 +388,12 @@ void NpcTest::MmDb(World& world) {
         const bool loaded = r.Db.Load(base, &err);
         char b[256];
         const double poseMB = (double)r.Db.PoseBytes() / 1048576.0, featMB = (double)r.Db.FeatureBytes() / 1048576.0;
-        std::snprintf(b, sizeof b, "the database loads within the budgets: %u frames, %zu clips, poses %.1f MB (150), features "
-                      "(normalized, labels, boxes) %.1f MB (40), %.2f s (2)%s%s", r.Db.FrameCount(), r.Db.Stream().Clips().size(), poseMB,
-                      featMB, r.Db.LoadSeconds(), loaded ? "" : ": ", loaded ? "" : err.c_str());
-        Check(loaded && r.Db.LoadSeconds() < 2.0 && poseMB <= 150.0 && featMB <= 40.0, b);
+        // (The caps are the bake's own: Manny.mmconfig's budgets.)
+        std::snprintf(b, sizeof b, "the database loads within the budgets: %u frames, %zu clips, poses %.1f MB (%.0f), features "
+                      "(16-bit, labels, boxes) %.1f MB (%.0f), %.2f s (%.1f)%s%s", r.Db.FrameCount(), r.Db.Stream().Clips().size(), poseMB,
+                      cfg.BudgetPoseMB, featMB, cfg.BudgetFeatureMB, r.Db.LoadSeconds(), cfg.BudgetLoadSeconds, loaded ? "" : ": ",
+                      loaded ? "" : err.c_str());
+        Check(loaded && r.Db.LoadSeconds() < cfg.BudgetLoadSeconds && poseMB <= cfg.BudgetPoseMB && featMB <= cfg.BudgetFeatureMB, b);
         if (!loaded) { m_Done = true; return; }
         const auto v0 = std::chrono::steady_clock::now();
         MmDbOffline();

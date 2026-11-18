@@ -28,6 +28,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     // The jog key (Sprint button). Reloads, inspects and melee no longer hold it back: the gun stays up at a jog.
     const bool sprintKey = ScriptedMove ? ScriptSprint : (readInput && InputMap::GetButton("Sprint"));
     const bool crouchKey = ScriptedMove ? ScriptCrouch : (readInput && InputMap::GetButton("Crouch"));
+    const bool walkKey = ScriptedMove ? ScriptWalk : (readInput && InputMap::GetButton("Walk"));
     const bool jumpDown = ScriptedMove ? ScriptJump : (readInput && InputMap::GetButtonDown("Jump"));
     LookDeltaInput = glm::vec2(0);
     YawDropped = 0.0f;
@@ -84,8 +85,17 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     // Shift (the Sprint button) is the jog: the gun stays up, so aiming doesn't cancel it.
     const bool sprint = !Crouched && sprintKey;
     Sprinting = sprint;
-    if (GaitSpeeds.Active) wish *= PlayerGaitSpeed(GaitSpeeds, MoveInput, Crouched ? 2 : sprint ? 1 : 0);
-    else wish *= MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
+    Gait = Crouched ? 2 : sprint ? 1 : 0;
+    if (GaitSpeeds.Active) {
+        // The stick picks the gait (see DirectionalSpeeds): the stroll under StrollStick or with Walk held, then the gait's
+        // own speed in the stick's direction.
+        const float stick = glm::length(MoveInput);
+        if (Gait == 0 && GaitSpeeds.Forward[3] > 0.0f && stick > 1e-4f && (walkKey || stick < StrollStick)) Gait = 3;
+        if (stick > 1e-4f) wish /= stick;
+        wish *= PlayerGaitSpeed(GaitSpeeds, MoveInput, Gait);
+    } else {
+        wish *= MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
+    }
     WishVelocity = wish;
     // A sprint clip can keep contributing fast root travel during its exit fade.
     // While reloading, walk input owns travel so that residual cannot keep us sprinting.
@@ -138,13 +148,16 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
 }
 
 float PlayerGaitSpeed(const Player::DirectionalSpeeds& s, const glm::vec2& local, int gait) {
-    gait = std::clamp(gait, 0, 2);
+    gait = std::clamp(gait, 0, 3);
     const float len = glm::length(local);
     if (len < 1e-5f) return s.Forward[gait];
     const float off = glm::degrees(std::acos(std::clamp(local.y / len, -1.0f, 1.0f))); // 0 ahead .. 180 behind
     const float t = std::clamp(off / std::max(s.StrafeAngle, 1.0f), 0.0f, 1.0f);
     const float w = t * t * (3.0f - 2.0f * t);
-    return s.Forward[gait] + (s.Strafe[gait] - s.Forward[gait]) * w;
+    const float side = s.Forward[gait] + (s.Strafe[gait] - s.Forward[gait]) * w;
+    const float back = s.Back[gait] > 0.0f ? s.Back[gait] : s.Strafe[gait];
+    const float u = std::clamp((off - 90.0f) / 90.0f, 0.0f, 1.0f);
+    return side + (back - s.Strafe[gait]) * u * u * (3.0f - 2.0f * u);
 }
 
 glm::vec3 PlayerClipVelocity(const glm::vec3& v, const glm::vec3* walls, int count) {

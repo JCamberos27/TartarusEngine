@@ -1027,6 +1027,59 @@ work, no footage (the owner tests in the editor). The notes below predate it; wh
     worst -84.5 deg, push up to 7 cm, 0 inside rays; walking and standing: no limit, 0 rays.
   - `mmplayer` 68/70 (the two Stage 2 failures), `mmstress` 16/16, legacy `testbed` 29/29.
 
+**The full-library plan (2026-11-17, approved; `C:\Users\Jacob\.claude\plans\https-docs-google-com-spreadsheets-d-1sz-velvety-salamander.md`):**
+use the whole pack, as designed. Owner decisions: compress then raise the caps; stroll; a run only if the data holds one;
+animate fingers (unarmed); mirror only where the audit finds a gap.
+- **Step 0, the audit (done):** `gen_takes.py --audit`, `tools/mm/audit.mmconfig` (every take, no budgets, into
+  `work/mm_audit/`), `tools/mm/audit.py` -> `docs/mm_audit.md`. The bake now reports per-take finger motion. Findings:
+  - all 139 takes bake (626k frames, 2.90 h, 161 MB poses / 66 MB features - the whole pack, uncompressed);
+  - **no run**: the longest time anywhere at >= 3.5 m/s is 1.6 s / 5 steps, always a dash's peak (rises, brakes) - the run
+    stays an asset gap;
+  - steady speeds: stroll 0.69, walk 1.17, jog 1.87 forward / ~1.2-1.3 sideways and back, crouch 0.74 m/s;
+  - mirror stroll (left/right 1.85 apart) and jog (1.40); walk, crouch, stand balanced;
+  - jog takes are mostly speed-labelled walk (36.7k walk / 14.7k jog frames): the case for a style label;
+  - 111 takes animate fingers; glitches: 520 jumps / 63 spikes (mostly toes, run starts); the Airborne label catches the
+    jog's flight phases (671 frames in 19 non-jump takes).
+- **Step 1, Stage 2's facing model (done, owner play test next):** simulation facing (spring to the facing wanted; standing
+  and not turning it is the character's) / character facing (the clip's root turn, pulled to the simulation, clamped) -
+  `FirstPersonBodyMotion::StepCharacterFacing`; Holden's demo values (0.27 s, 0.2 s, 90 deg - 0.12 / 0.15 / 45 measured
+  6.4 jumps/s looking about). Spine Twist additive under MM. Deleted: the 450 deg/s cap, the foot-lock reset, the
+  crossed-legs exclusion, `FirstPersonSlowAngle`. Results: `M jog` trunk 1.36 -> 0.96, `M idle` 0.50 -> 0.17 jumps/s
+  (100 % idle mode), random-look slide 51 cm -> 0.8 / 1.7 cm, flicks <= 5.6 deg/frame. New: `M walk random look`, the
+  facing / slide checks, a facing unit test. Left: looking about re-matches 5.2-5.6 a second (gate 3.7-5.0; pose steps
+  and slide fine) - the curvy walk/jog data (Walk Snakes T2-5, Jog Freestyle T2/3) is budget-cut today: Step 2.
+- **Steps 2 + 3, the bake rebuilt and the runtime asking for styles (done, owner play test next):**
+  - **Curation** (`gen_takes.py`): every take whole (1 s trims) but the exaggerated `_S` takes and the dodges; the jog's
+    and the stroll's strafes again mirrored (`<take>_Mirror`, `source` column, tag `mirrored`). 120 clips, **2.23 h**
+    (was 1.27 h). The audit's redundancy found nothing worth cutting.
+  - **Formats** (version 2): `.mmanim` adds per-clip finger tracks (38 bones, 32-bit smallest-three, worst 0.21 deg;
+    `HasFingers` = the take moves a finger over 5 deg - 93 clips; others play the relaxed pose); `.mmdb` stores the features
+    as 16-bit integers (worst error 3e-4 of a std; the search runs on them, `QuantQuery`, exactly as brute force) and a
+    **style** byte per frame. Caps (`Manny.mmconfig`): poses 200 MB (174.9 used, 51 of it fingers), features 40 (26.2),
+    load 2 s (files 0.28 s, database build 1.2 s, search 0.83 ms avg).
+  - **Style label** (`MotionClipIntent::FromTags`): the take's intent - its group, or `style=` tags for starts (Stand_to_Jog:
+    jog), the accelerations and transitions (several, per frame by stride-averaged speed; a start takes the cruise it
+    reaches, a stop the one it leaves) and the run takes (walk + run: their walk-backs are walk). Jog frames 8.3k -> 103k.
+  - **Airborne** only in jump takes (the jog's flights pass any physical test the hops pass): 0 outside them (was 671).
+  - **Repair in the bake** (`MotionBake::RepairGlitches`): 191 twist flips unrolled (joints unmoved), 352 spikes slerped;
+    216 frames left for the load-time exclusion. **Mirroring** (`MirrorPose`, rest-corrected): the mirrored takes
+    rebuild on the Quantum rig within 0.02 cm.
+  - **Runtime**: moving, the query's style is a **filter** (a soft cost of 1 lost to strafe costs of 3-15: the walk's strafes
+    played the jog's); standing, any style. Shift = jog everywhere, **Walk action = stroll** (default key Caps Lock - Left
+    Alt is Fire2's alternate; a gamepad stick under 0.6 strolls), crouch = crouch. Speeds per style and direction
+    (`GaitSpeedTable` sideways / backwards apart; `Player::DirectionalSpeeds::Back`): stroll 0.79 / 0.59 / 0.77, walk
+    1.26 / 1.17 / 1.10, jog 1.81 / 1.38 / 1.47, crouch 0.80 / 0.79 / 0.74 m/s. Fingers stream through the dead blend
+    (`MotionPose::Fingers`); armed, the arms rig's copy takes the hands as before. `SharedMotionDatabase::CacheKey`: a
+    rig's load and a rig-less one are cached apart.
+  - **Gesture exclusion** (the full idle takes): the excluded stretch's padded ends walk out to the rest level on both the
+    hand and the chest measure - mid-gesture cuts 0 (2 before the fix).
+  - Checks: unit 2496/2496; `mmdb` 18/18, `mmview` 12/12, `mmstress` 16/16, legacy `testbed` 29/29; `mmplayer` 82/85
+    with new legs (jog strafe right, jog back, stroll forward / left / right) - every style leg plays its own takes 100 %,
+    left and right alike. Failing, reported: **the jog re-matches 2.6-2.7 times a second** (unchanged from before; the gate
+    is relative to the walk, which improved to 1.2) - the pack's jog straights are short (9 m room: 1.4 s steady at
+    most), so it hops between jog takes; **walk looking about 7.4 jumps/s** (pose steps p99 7.5 deg, better than the
+    straight walk's) - Step 4's weight tuning.
+
 Play test 2's problems are fixed, measured against legacy and checked (`mmplayer` 56/56, full pass all PASS). Left:
 
 0. **Session 3 changed the sprint** (the tempo step at every wrap is gone; the stride is the pack's steadiest, typical one -

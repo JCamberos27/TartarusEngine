@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 
 #include <glm/glm.hpp>
@@ -186,6 +187,7 @@ private:
     bool m_LabPlaced = false;
     float m_LabClock = 0.0f;
     std::vector<std::string> m_SlideBodies; // the NPCs SlideLeg reports on
+    std::map<std::string, float> m_SlideWorstPlayer; // SlideLeg: the player's worst plant drift per leg (m)
     int m_LabFrame = 0;
     // mmview (NpcTest_MmView.cpp): the baked motion matching takes on a Quantum body, the generated root drawn, the bake checked
     static float MmViewSeconds();

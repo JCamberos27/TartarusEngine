@@ -6,7 +6,14 @@
 // soft gait cost GaitWeight * |gait - desired gait| (the gait labels overlap - a jog through a turn is slower than a
 // walk's peak - so they bias, they don't filter), plus TransitionCost for any frame but the one already playing.
 //
-// Filters (hard): a frame is a candidate only if it has every Require flag and none of the Forbid flags. Excluded and
+// The database's features are 16-bit (MotionDatabase::Quantized): the query is mapped into their space once per search
+// (q' = (q - QB) / QA, the weights times QA^2), so every frame and box costs the same per-dim terms, as integers turned to
+// floats - the cost is the normalized distance, and the boxes' bound stays exact.
+//
+// Filters (hard): a frame is a candidate only if it has every Require flag and none of the Forbid flags, and - when a
+// style is asked for (DesiredStyle) - is of that style (MotionLabel::Style: what the actor was doing). The style is a filter,
+// not a cost: the pack covers every style it has with its own strafes, starts, stops and turns, and as a bias it lost to the
+// trajectory - a strafe's costs run 3-15, and at a weight of 1 the walk's strafes played the jog's (Step 2's first run). Excluded and
 // NoSearch are always forbidden; Airborne is forbidden by default (the airborne segments are label-locked playback,
 // not search). Crouch is a filter (Require it to crouch, Forbid it to stand).
 //
@@ -36,6 +43,7 @@ struct MotionSearchParams {
     std::uint8_t Require = 0;
     std::uint8_t Forbid = MotionLabel::Airborne;
     int DesiredGait = -1; // -1: no gait cost
+    int DesiredStyle = -1; // MotionLabel::Style: only frames of it are candidates; -1: any
     // Frames recently shown, never candidates (MotionMatcher's reselect history: [first, last] global frames, padded). Jumping
     // back into what just played is a rewind - the same snippet again, a stutter (the idle's 0.41 s hand loop, Phase 4).
     static constexpr int kMaxAvoid = 8;
@@ -63,6 +71,7 @@ void BuildQuery(const MotionDatabase& db, const float* poseRaw15, const float* t
 // A frame's cost under `p` (no early out); +inf when it doesn't pass the filter.
 float Cost(const MotionDatabase& db, const float* query, std::uint32_t frame, const MotionSearchParams& p);
 bool Passes(std::uint8_t flags, const MotionSearchParams& p);
+bool PassesStyle(std::uint8_t style, const MotionSearchParams& p);
 
 // `current`: the frame playing (-1 if none): it competes as itself (no TransitionCost) and its clip's neighbours within
 // IgnoreNear are skipped.

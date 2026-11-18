@@ -66,6 +66,7 @@ void NpcTest::SlideLeg(const std::string& leg) {
     for (const std::string& n : who) {
         const IK::FootSlideMeterTotals t = IK::FootSlideMeterFor(n).TakeTotals();
         if (t.Plants == 0) continue;
+        if (n == "player") m_SlideWorstPlayer[leg] = t.MaxDrift;
         std::printf("[Slide] %-26s %-10s %2d plants, drift mean %4.1f cm, worst %5.1f cm\n", leg.c_str(), n.c_str(), t.Plants, t.MeanCm(), t.MaxDrift * 100.0f);
     }
 }

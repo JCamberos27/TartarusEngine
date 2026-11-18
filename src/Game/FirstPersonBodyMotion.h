@@ -7,19 +7,28 @@
 // here instead of its locomotion Animator Controller (whose update it then holds: AnimatorControllerComponent::SkipUpdate).
 //
 //   - One database for every body (SharedMotionDatabase: loaded once, Phase 5's NPCs share it), a MotionMatcher on the body.
-//   - The capsule is the simulated character: each frame the TrajectoryPredictor is put where the capsule is (position,
-//     velocity, the body's heading) and predicts from the player's wish velocity and facing (with the capsule's sweep).
+//   - The capsule is the simulated character's position: each frame the TrajectoryPredictor is put where the capsule is
+//     (position, velocity) with the simulation facing, and predicts from the player's wish velocity and facing (with the
+//     capsule's sweep).
+//   - Facing (Holden, "Code vs Data Driven Displacement"): a simulation facing - a critically damped spring toward the
+//     facing wanted (the view while moving; the Turn Threshold logic standing; SimFacingHalflife) - is what the trajectory
+//     is predicted from; the character facing (the drawn body's heading) turns as the matched clip's root turns, and is
+//     pulled toward the simulation (CharacterFacingHalflife), never more than MaxFacingOffset off it. The query is in the
+//     character's frame, its trajectory the simulation's: a clip's own turn never feeds back into what is asked, and the
+//     body turns as the mocap turns - its feet stay planted through a turn. One model standing, moving and in the air.
 //   - Movement stays capsule-led. The pose's root is clamped to the capsule (the body stands at its feet; the animation's
 //     own travel is never applied). Speed warping: the database plays at capsule speed / the matched frame's root speed
-//     (within MinWarp..MaxWarp) in place of BodyLocomotion::LoopPlayRate. Orientation warping: moving, the heading follows
-//     the view on a short spring (nothing of the clip's turn); standing still, it turns with the matched frame's root turn
-//     plus a spring toward the facing wanted (Turn Threshold). The search schedule watches the move in the view's frame.
+//     (within MinWarp..MaxWarp) in place of BodyLocomotion::LoopPlayRate. The search schedule watches the move in the
+//     view's frame.
 //   - Turn in place: standing still the heading holds until the view is Turn Threshold off it, then the body turns to it
 //     (the database's turn-on-the-spot frames, found by the trajectory's facing); TurnInPlaceRate() (measured off the
 //     database) is what FirstPersonBody gives Player::MaxYawRate.
-//   - Crouch is a label filter: crouched, Require Crouch - the pack's own crouch takes, as captured (standing, Forbid it).
-//     Shift is the jog, at its natural pace (the gait table's): the pack, shot in a 9 m room, has no sustained sprint -
-//     an asset gap, not something faked here (docs/MOTION_MATCHING_HANDOFF.md, "Asset gaps").
+//   - The query asks for a style (MotionLabel::Style: what the actor was doing - the bake's label from the take's intent),
+//     not a speed band: walk by default, the jog with Shift, the stroll with the Walk action (or a partial stick), crouch
+//     crouched - in every direction, so a Shift strafe plays the jog takes' own strafes at their own speed. Standing still it
+//     asks for the idle gait and no style. Crouch is also a label filter: crouched, Require Crouch - the pack's own crouch
+//     takes, as captured (standing, Forbid it). The jog is the fastest: the pack, shot in a 9 m room, has no sustained
+//     sprint - an asset gap, not something faked here (docs/MOTION_MATCHING_HANDOFF.md, "Asset gaps").
 //   - Airborne: label-locked playback of a baked jump (Require Airborne finds it; the segment plays from its take-off,
 //     time-warped to the jump's flight, and holds its last airborne frame until landing), dead-blended in and out.
 //
@@ -60,20 +69,19 @@ struct SharedMotionDatabase {
     static constexpr float kBentOverDeg = 30.0f;
     static constexpr float kBentOverSpeed = 1.0f;
     std::uint32_t BentOverFrames = 0; // (raw, before the pads)
-    // ... and a moving frame (walk or faster, not strafing - strafes cross over on purpose) whose ankles cross more than this
-    // (m, the left one that far right of the right one, root space): the snakes' and the turnarounds' crossover steps,
-    // which a 180 flick of the view matched - the legs crossed 30 cm (the owner's play test 2, "knock-kneed").
-    static constexpr float kCrossedFeet = 0.10f;
-    std::uint32_t CrossedFrames = 0; // (raw)
-    // Each excluded run is widened to its whole gesture (Get): back and on while the measure is over the take's rest by more
-    // than kGestureHandRest (m, the higher hand over its shoulder) or kGestureTiltRest (deg, the chest's tilt), at most
-    // kGestureMax frames either way.
+    // Each excluded run is widened to its whole gesture (Get): its ends, padded, walk out until the frame beyond is at the
+    // take's rest on both measures - neither over it by more than kGestureHandRest (m, the higher hand over its shoulder) nor
+    // kGestureTiltRest (deg, the chest's tilt) - at most kGestureMax frames further.
     static constexpr float kGestureHandRest = 0.05f, kGestureTiltRest = 5.0f;
     static constexpr int kGestureMax = 120;
     int IdleGestureCuts = -1; // the idle takes' excluded stretches entered mid-gesture (Get; -1: not measured - no rig)
-    // Loads `<base>.mmanim` / `.mmdb` once per process (kept while anything holds it). Null (with `error`) when missing.
-    // `rig` (the body's driver): the hands-up frames are measured on it and excluded (on first load only).
+    // Loads `<base>.mmanim` / `.mmdb` once per process per exclusion policy (kept while anything holds it). Null (with
+    // `error`) when missing. `rig` (the body's driver): the hands-up frames are measured on it and excluded - a load with a rig
+    // and one without are different databases (their excluded frames differ), so each is cached under its own key: the
+    // base and the rig's file (none: no rig). (The first caller's policy used to win for everyone.)
     static std::shared_ptr<const SharedMotionDatabase> Get(const std::string& base, std::string* error = nullptr, const Model* rig = nullptr);
+    // The cache key Get files a load under: the base and the rig's file (`hasRig` false: none).
+    static std::string CacheKey(const std::string& base, bool hasRig, const std::string& rigPath);
     // Per frame, the higher hand's height over its shoulder (upper arm bone), m, model space of `rig`.
     // ... and (chestTilt) the chest's tilt off its bind pose's upright (deg).
     static std::vector<float> HandOverShoulder(const MotionDatabase& db, const Model& rig, std::vector<float>* chestTilt = nullptr);
@@ -83,11 +91,12 @@ class FirstPersonBodyMotion {
 public:
     struct Settings {
         float MinWarp = 0.8f, MaxWarp = 1.25f; // speed warping's play rate limits
-        float MovingFacingHalflife = 0.03f;    // s: the heading's spring toward the view while moving (no clip turn added)
-        float MaxMovingYawRate = 7.854f;       // rad/s (450 deg/s): the heading's fastest turn while moving - a 180 flick of the
-                                               // view takes 0.4 s, the chest leading (Spine Twist), not a spin over planted feet
-        float TurnFacingHalflife = 0.30f;      // s: ... turning on the spot (on top of the clips' own turn)
-        float AirFacingHalflife = 0.30f;
+        // (Holden's demo values, "Code vs Data Driven Displacement": simulation rotation 0.27 s, adjustment 0.2 s, clamp 90 deg.
+        // At 0.12 / 0.15 / 45 deg the simulation turned with every sweep of the view faster than the walk data turns: the
+        // matcher hopped between poor turning candidates - 6.4 jumps a second looking about, against 2 walking straight.)
+        float SimFacingHalflife = 0.27f;       // s: the simulation facing's spring toward the facing wanted (responsiveness)
+        float CharacterFacingHalflife = 0.2f;  // s: the character facing's pull toward the simulation's (on top of the clip's turn)
+        float MaxFacingOffset = 1.5708f;       // rad (90 deg): the character facing at most this far off the simulation's
         float TakeoffSeconds = 0.12f;          // a jump's segment starts this far before its first airborne frame
         float LandSeconds = 0.25f;             // ... and plays this far past its last before searching again
         float AirDelay = 0.12f;                // s off the ground (no jump) before a fall plays the segment
@@ -109,6 +118,7 @@ public:
         glm::vec3 Wish{0.0f};      // the move asked for (world, horizontal, m/s)
         float ViewYaw = 0.0f;      // radians, MotionMath::YawOf convention (0 = +Z)
         bool Grounded = true, Crouched = false, Sprint = false, Jumped = false;
+        int Style = MotionLabel::StyleWalk; // the style asked for while moving (crouched: StyleCrouch regardless)
         float JumpSpeed = 5.5f, Gravity = -18.0f;
         float TurnThreshold = 0.0f; // radians: standing still, the heading holds within this of the view (0: always faces it)
         float TurnEndAngle = 0.0f;  // radians: a turn on the spot ends this close to the view
@@ -144,6 +154,9 @@ public:
     // the root (green), the matched frame's feet.
     const std::vector<float>& Lines() const { return m_Lines; }
 
+    // One step of the character facing: `yaw` turned by the matched clip's own root turn (`clipTurn`, radians), pulled
+    // toward the simulation facing `simYaw` (CharacterFacingHalflife), then clamped to MaxFacingOffset off it.
+    static float StepCharacterFacing(float yaw, float clipTurn, float simYaw, const Settings& cfg, float dt);
     // The root speed (m/s) and turn rate (rad/s) a database frame's root has, as captured (over +-5 frames in its take).
     static float RootSpeed(const MotionDatabase& db, std::uint32_t frame);
     static float RootYawRate(const MotionDatabase& db, std::uint32_t frame);
@@ -159,7 +172,8 @@ private:
     std::vector<MotionClipStream::Binding> m_Bind; // per piece
     std::vector<std::vector<LocalTRS>> m_BindPose;
     std::vector<LocalTRS> m_Scratch;
-    float m_DesiredYaw = 0.0f, m_YawRate = 0.0f;
+    float m_DesiredYaw = 0.0f, m_YawRate = 0.0f;  // the facing wanted; the character facing's turn rate (rad/s)
+    float m_SimYaw = 0.0f, m_SimYawRate = 0.0f;   // the simulation facing and its rate
     bool m_HaveYaw = false, m_Still = true, m_Turning = false;
     Air m_Air = Air::None;
     float m_AirTime = 0.0f, m_LandTimer = 0.0f, m_AirRate = 1.0f;
@@ -177,6 +191,7 @@ struct Snapshot {
     std::string Clip;
     std::uint8_t Flags = 0, Gait = 0;
     int DesiredGait = -1;
+    int DesiredStyle = -1, Style = 0; // the style asked for (-1: none, standing still) and the matched frame's
     bool Crouch = false, Sprint = false, Airborne = false, Locked = false, Still = false, Turning = false;
     bool Searched = false, Jumped = false;
     int Searches = 0, Jumps = 0, ForcedByInput = 0, ForcedByEnd = 0;
@@ -188,6 +203,9 @@ struct Snapshot {
     double SearchMsAvg = 0.0, SearchMsMax = 0.0;
     float PlayRate = 1.0f, AnimSpeed = 0.0f, CapsuleSpeed = 0.0f;
     float Yaw = 0.0f, DesiredYaw = 0.0f, YawRate = 0.0f, TurnInPlaceRate = 0.0f;
+    float SimYaw = 0.0f;       // the simulation facing (radians)
+    float FacingOffset = 0.0f; // the character facing off the simulation's (radians, wrapped)
+    float ClipTurn = 0.0f;     // the matched clip's own root turn this update (radians)
     float TrajErr = 0.0f;   // the last search: the matched frame's root at +1 s off the wanted one (m)
     float PoseStepDeg = 0.0f; // the worst stream bone's turn between this output pose and the last (deg) ...
     std::string PoseStepBone; // ... and which bone

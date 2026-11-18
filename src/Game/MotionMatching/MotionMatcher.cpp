@@ -35,9 +35,11 @@ void MotionMatcher::WritePose(const MotionPose& pose, const MotionClipStream& st
         const int node = b.Nodes[i];
         if (node >= 0 && node < (int)out.size()) out[(size_t)node].R = pose.Rot[i];
     }
+    // The fingers: the pose's (the clip's track, or the relaxed pose), dead-blended with the rest.
+    const bool fingers = pose.Fingers.size() == stream.Statics.size();
     for (size_t i = 0; i < stream.Statics.size() && i < b.StaticNodes.size(); ++i) {
         const int node = b.StaticNodes[i];
-        if (node >= 0 && node < (int)out.size()) out[(size_t)node].R = stream.Statics[i].Rotation;
+        if (node >= 0 && node < (int)out.size()) out[(size_t)node].R = fingers ? pose.Fingers[i] : stream.Statics[i].Rotation;
     }
     if (b.Pelvis >= 0 && b.Pelvis < (int)out.size()) out[(size_t)b.Pelvis].T = pose.Pelvis * b.PelvisScale;
 }
@@ -99,7 +101,7 @@ void MotionMatcher::Update(float dt, const Input& in) {
     // (NoSearch near the end, an actor standing up out of a crouch, a jump's flight) - such a frame is never shown.
     const bool outOfFrames = !MotionSearch::Passes(db.Flags(m_Frame), SearchParams) || m_Frame >= db.ClipEnd(m_Frame);
     const std::uint32_t key = (std::uint32_t)SearchParams.Require | ((std::uint32_t)SearchParams.Forbid << 8) |
-                              ((std::uint32_t)(SearchParams.DesiredGait + 1) << 16);
+                              ((std::uint32_t)(SearchParams.DesiredGait + 1) << 16) | ((std::uint32_t)(SearchParams.DesiredStyle + 1) << 24);
     if (Locked) Schedule.Reset(); // the first update after the lock searches at once
     Schedule.Hold = Idle;
     bool refit = false;

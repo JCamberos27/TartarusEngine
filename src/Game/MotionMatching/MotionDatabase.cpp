@@ -39,7 +39,6 @@ bool MotionDatabase::Build(std::string* error) {
     m_Frames = 0;
     const auto fail = [&](const std::string& why) {
         if (error) *error = why;
-        m_Norm.clear();
         m_Small.clear();
         m_Large.clear();
         m_ClipOf.clear();
@@ -56,6 +55,7 @@ bool MotionDatabase::Build(std::string* error) {
             return fail("clip " + std::to_string(c) + " differs between the stream and the features (" + a.Name + ")");
     }
     if (m_Feat.Mean().size() != (size_t)kDims || m_Feat.Std().size() != (size_t)kDims) return fail("the features have no statistics");
+    if (!m_Feat.Quantized()) return fail("the features aren't finished (MotionFeatureSet::Finish)");
 
     m_ClipOf.assign(n, -1);
     for (size_t c = 0; c < m_Stream.Clips().size(); ++c) {
@@ -133,9 +133,12 @@ bool MotionDatabase::Build(std::string* error) {
         s = std::max(1e-4f, s / (float)(b - a));
         for (int d = a; d < b; ++d) m_Scale[(size_t)d] = s;
     }
-    m_Norm.resize((size_t)n * kDims);
-    for (std::uint32_t i = 0; i < n; ++i) Normalize(m_Feat.Features(i), m_Norm.data() + (size_t)i * kDims);
-    m_Feat.ReleaseFeatureData();
+    m_QA.assign(kDims, 1.0f);
+    m_QB.assign(kDims, 0.0f);
+    for (int d = 0; d < kDims; ++d) {
+        m_QA[(size_t)d] = m_Feat.QScale(d) / m_Scale[(size_t)d];
+        m_QB[(size_t)d] = (m_Feat.QOffset(d) - m_Mean[(size_t)d]) / m_Scale[(size_t)d];
+    }
 
     m_Frames = n;
     Index();
@@ -159,11 +162,11 @@ void MotionDatabase::Index() {
         out.assign((n + (std::uint32_t)size - 1) / (std::uint32_t)size, Box{});
         for (size_t b = 0; b < out.size(); ++b) {
             Box& box = out[b];
-            std::fill(std::begin(box.Min), std::end(box.Min), 1e30f);
-            std::fill(std::begin(box.Max), std::end(box.Max), -1e30f);
+            std::fill(std::begin(box.Min), std::end(box.Min), (std::int16_t)32767);
+            std::fill(std::begin(box.Max), std::end(box.Max), (std::int16_t)-32767);
             const std::uint32_t from = (std::uint32_t)b * (std::uint32_t)size, to = std::min(n, from + (std::uint32_t)size);
             for (std::uint32_t i = from; i < to; ++i) {
-                const float* x = Normalized(i);
+                const std::int16_t* x = Quantized(i);
                 for (int d = 0; d < kDims; ++d) {
                     box.Min[d] = std::min(box.Min[d], x[d]);
                     box.Max[d] = std::max(box.Max[d], x[d]);
@@ -172,6 +175,7 @@ void MotionDatabase::Index() {
                 box.FlagAnd &= Flags(i);
                 box.GaitMin = std::min(box.GaitMin, Gait(i));
                 box.GaitMax = std::max(box.GaitMax, Gait(i));
+                box.Styles |= (std::uint8_t)(1u << std::min<int>(Style(i), 7));
             }
         }
     };
@@ -213,6 +217,19 @@ void MotionDatabase::SamplePose(std::uint32_t frame, float frac, MotionPose& out
     frame = std::min(frame, m_Frames - 1);
     const std::uint32_t next = std::min(frame + 1, ClipEnd(frame));
     frac = next == frame ? 0.0f : std::clamp(frac, 0.0f, 1.0f);
+    const int clip = ClipOf(frame);
+    const size_t nf = m_Stream.Statics.size();
+    out.Fingers.resize(nf);
+    for (size_t k = 0; k < nf; ++k) {
+        const glm::quat a = m_Stream.FingerRotation(clip, frame, (int)k);
+        if (frac <= 1e-4f || !m_Stream.HasFingers(clip)) {
+            out.Fingers[k] = a;
+            continue;
+        }
+        glm::quat q = m_Stream.FingerRotation(clip, next, (int)k);
+        if (glm::dot(a, q) < 0.0f) q = -q;
+        out.Fingers[k] = glm::normalize(a * (1.0f - frac) + q * frac);
+    }
     for (size_t b = 0; b < nb; ++b) {
         const glm::quat a = m_Stream.Rotation(frame, (int)b);
         if (frac <= 1e-4f) {
@@ -232,11 +249,18 @@ std::array<float, 3> MotionDatabase::TrajSeconds() const {
 
 std::array<float, MotionDatabase::kDims> MotionDatabase::Raw(std::uint32_t frame) const {
     std::array<float, kDims> out{};
-    Denormalize(Normalized(frame), out.data());
+    m_Feat.Decode(frame, out.data());
+    return out;
+}
+
+std::array<float, MotionDatabase::kDims> MotionDatabase::Normalized(std::uint32_t frame) const {
+    std::array<float, kDims> out{};
+    const std::int16_t* q = Quantized(frame);
+    for (int d = 0; d < kDims; ++d) out[(size_t)d] = (float)q[d] * m_QA[(size_t)d] + m_QB[(size_t)d];
     return out;
 }
 
 size_t MotionDatabase::FeatureBytes() const {
-    return m_Feat.Bytes() + m_Norm.size() * sizeof(float) + (m_Small.size() + m_Large.size()) * sizeof(Box) +
-           m_ClipOf.size() * sizeof(int) + m_Runway.size() * sizeof(std::uint16_t);
+    return m_Feat.Bytes() + (m_Small.size() + m_Large.size()) * sizeof(Box) + m_ClipOf.size() * sizeof(int) +
+           m_Runway.size() * sizeof(std::uint16_t);
 }

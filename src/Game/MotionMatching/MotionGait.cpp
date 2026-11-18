@@ -19,11 +19,28 @@ float Percentile(std::vector<float> v, float p) {
 }
 } // namespace
 
+int GaitSpeedTable::GroupOf(int style) {
+    switch (style) {
+        case MotionLabel::StyleWalk: return 0;
+        case MotionLabel::StyleJog: return 1;
+        case MotionLabel::StyleRun: return 2;
+        case MotionLabel::StyleCrouch: return 3;
+        case MotionLabel::StyleStroll: return 4;
+        default: return -1;
+    }
+}
+
+int GaitSpeedTable::StyleOf(int group) {
+    static const int k[kGroups] = {MotionLabel::StyleWalk, MotionLabel::StyleJog, MotionLabel::StyleRun, MotionLabel::StyleCrouch,
+                                   MotionLabel::StyleStroll};
+    return group >= 0 && group < kGroups ? k[group] : MotionLabel::StyleStand;
+}
+
 GaitSpeedTable GaitSpeedTable::Measure(const MotionDatabase& db) {
     GaitSpeedTable t;
     if (!db.Loaded()) return t;
-    static const char* const kGroup[4] = {"walk", "jog", "run", "crouch"};
-    std::vector<float> plateaus[4], strafes[4];
+    std::vector<float> plateaus[kGroups], strafes[kGroups], backs[kGroups];
+    const float backCos = std::cos(kBackDeg * MotionMath::kPi / 180.0f);
     const float fps = db.Fps();
     const int h = 3;                                          // speed over +-3 frames
     const int w = std::max(1, (int)std::lround(0.25f * fps)); // yaw rate over +-0.25 s
@@ -31,25 +48,32 @@ GaitSpeedTable GaitSpeedTable::Measure(const MotionDatabase& db) {
     const int win = std::max(1, (int)std::lround(kWindowSeconds * fps));
     const float maxRate = kLegYawRateDeg * MotionMath::kPi / 180.0f;
     for (const auto& clip : db.Stream().Clips()) {
-        const std::string first = clip.Tags.substr(0, clip.Tags.find(';'));
-        int g = -1;
-        for (int k = 0; k < 4; ++k)
-            if (first == kGroup[k]) g = k;
         const int n = (int)clip.Count;
-        if (g < 0 || n < 2 * w + minLeg) continue;
+        if (n < 2 * w + minLeg) continue;
+        for (int g = 0; g < kGroups; ++g) {
+        const int style = StyleOf(g);
         std::vector<float> speed((size_t)n, 0.0f);
-        std::vector<char> ok((size_t)n, 0), side((size_t)n, 0);
+        std::vector<char> ok((size_t)n, 0), side((size_t)n, 0), back((size_t)n, 0);
         const auto root = [&](int i) { return db.Stream().Root(clip.First + (std::uint32_t)i); };
+        bool any = false;
         for (int i = std::max(h, w); i + std::max(h, w) < n; ++i) {
+            const std::uint32_t at = clip.First + (std::uint32_t)i;
+            if (db.Style(at) != style) continue;
             speed[(size_t)i] = glm::length(root(i + h).Position - root(i - h).Position) * fps / (2.0f * (float)h);
             const float rate = std::fabs(root(i + w).Yaw - root(i - w).Yaw) * fps / (2.0f * (float)w);
-            const std::uint8_t f = db.Flags(clip.First + (std::uint32_t)i);
+            const std::uint8_t f = db.Flags(at);
             const bool crouched = (f & MotionLabel::Crouch) != 0;
             const bool base = rate < maxRate && speed[(size_t)i] > 0.5f && !(f & MotionLabel::Airborne) && crouched == (g == 3);
             ok[(size_t)i] = base && !(f & MotionLabel::Strafe);
-            side[(size_t)i] = base && (f & MotionLabel::Strafe);
+            glm::vec3 travel = root(i + h).Position - root(i - h).Position;
+            travel.y = 0.0f;
+            const bool backwards = glm::length(travel) > 1e-5f && glm::dot(glm::normalize(travel), MotionMath::YawDir(root(i).Yaw)) <= backCos;
+            side[(size_t)i] = base && (f & MotionLabel::Strafe) && !backwards;
+            back[(size_t)i] = base && (f & MotionLabel::Strafe) && backwards;
+            any = any || base;
         }
-        const auto legs = [&](const std::vector<char>& in, bool strafe) {
+        if (!any) continue;
+        const auto legs = [&](const std::vector<char>& in, std::vector<float>* out) {
         for (int i = 0; i < n;) {
             if (!in[(size_t)i]) { ++i; continue; }
             int j = i;
@@ -65,17 +89,18 @@ GaitSpeedTable GaitSpeedTable::Measure(const MotionDatabase& db) {
                         bestAt = k - win / 2;
                     }
                 }
-                // A run take's walk-backs between sprints are not runs.
-                if (strafe) strafes[g].push_back(best);
-                else if (g != 2 || db.Gait(clip.First + (std::uint32_t)bestAt) == MotionLabel::Run) plateaus[g].push_back(best);
+                (void)bestAt;
+                out[g].push_back(best);
             }
             i = j;
         }
         };
-        legs(ok, false);
-        legs(side, true);
+        legs(ok, plateaus);
+        legs(side, strafes);
+        legs(back, backs);
+        }
     }
-    for (int g = 0; g < 4; ++g) {
+    for (int g = 0; g < kGroups; ++g) {
         t.Legs[g] = (int)plateaus[g].size();
         t.P25[g] = Percentile(plateaus[g], 0.25f);
         t.P50[g] = Percentile(plateaus[g], 0.50f);
@@ -86,9 +111,12 @@ GaitSpeedTable GaitSpeedTable::Measure(const MotionDatabase& db) {
     if (t.Legs[1]) t.Jog = t.P50[1];
     if (t.Legs[2]) t.Run = t.P50[2];
     if (t.Legs[3]) t.CrouchWalk = t.P50[3];
-    for (int g = 0; g < 4; ++g) {
+    if (t.Legs[4]) t.Stroll = t.P50[4];
+    for (int g = 0; g < kGroups; ++g) {
         t.StrafeLegs[g] = (int)strafes[g].size();
         t.Strafe[g] = Percentile(strafes[g], 0.5f);
+        t.BackLegs[g] = (int)backs[g].size();
+        t.Back[g] = Percentile(backs[g], 0.5f);
     }
     return t;
 }
@@ -107,6 +135,32 @@ float GaitSpeedTable::StrafeFor(int gait, bool crouch) const {
     return 0.75f * SpeedFor(gait, false);
 }
 
+float GaitSpeedTable::StyleSpeed(int style) const {
+    switch (style) {
+        case MotionLabel::StyleStroll: return Stroll;
+        case MotionLabel::StyleWalk: return Walk;
+        case MotionLabel::StyleJog: return Jog;
+        case MotionLabel::StyleRun: return Run;
+        case MotionLabel::StyleCrouch: return CrouchWalk;
+        default: return 0.0f;
+    }
+}
+
+float GaitSpeedTable::StyleStrafe(int style) const {
+    const int g = GroupOf(style);
+    if (g < 0) return 0.0f;
+    if (Strafe[g] > 0.0f) return Strafe[g];
+    if (style == MotionLabel::StyleCrouch) return StrafeFor(MotionLabel::Walk, true);
+    if (style == MotionLabel::StyleStroll) return 0.75f * Stroll;
+    return StrafeFor(style == MotionLabel::StyleWalk ? MotionLabel::Walk : style == MotionLabel::StyleJog ? MotionLabel::Jog : MotionLabel::Run, false);
+}
+
+float GaitSpeedTable::StyleBack(int style) const {
+    const int g = GroupOf(style);
+    if (g < 0) return 0.0f;
+    return Back[g] > 0.0f ? Back[g] : StyleStrafe(style);
+}
+
 int GaitSpeedTable::GaitFor(float speed, bool crouch) const {
     if (speed < 0.5f * (crouch ? CrouchWalk : Walk)) return MotionLabel::Idle;
     if (crouch) return MotionLabel::Walk;
@@ -116,13 +170,15 @@ int GaitSpeedTable::GaitFor(float speed, bool crouch) const {
 }
 
 std::string GaitSpeedTable::Describe() const {
-    char b[768];
+    char b[1400];
     std::snprintf(b, sizeof b,
-                  "walk %.2f (legs %d, p25/50/75 %.2f/%.2f/%.2f, max %.2f), jog %.2f (%d, %.2f/%.2f/%.2f, %.2f), "
-                  "run %.2f (%d, %.2f/%.2f/%.2f, %.2f), crouch %.2f (%d, %.2f/%.2f/%.2f, %.2f) m/s; strafe walk %.2f (%d legs), "
-                  "jog %.2f (%d), run %.2f (%d), crouch %.2f (%d) m/s",
-                  Walk, Legs[0], P25[0], P50[0], P75[0], Max[0], Jog, Legs[1], P25[1], P50[1], P75[1], Max[1], Run, Legs[2], P25[2],
-                  P50[2], P75[2], Max[2], CrouchWalk, Legs[3], P25[3], P50[3], P75[3], Max[3], Strafe[0], StrafeLegs[0], Strafe[1],
-                  StrafeLegs[1], Strafe[2], StrafeLegs[2], Strafe[3], StrafeLegs[3]);
+                  "stroll %.2f (legs %d, p25/50/75 %.2f/%.2f/%.2f, max %.2f), walk %.2f (%d, %.2f/%.2f/%.2f, %.2f), "
+                  "jog %.2f (%d, %.2f/%.2f/%.2f, %.2f), run %.2f (%d, %.2f/%.2f/%.2f, %.2f), crouch %.2f (%d, %.2f/%.2f/%.2f, %.2f) m/s; "
+                  "sideways stroll %.2f (%d legs), walk %.2f (%d), jog %.2f (%d), run %.2f (%d), crouch %.2f (%d) m/s; "
+                  "backwards stroll %.2f (%d), walk %.2f (%d), jog %.2f (%d), run %.2f (%d), crouch %.2f (%d) m/s",
+                  Stroll, Legs[4], P25[4], P50[4], P75[4], Max[4], Walk, Legs[0], P25[0], P50[0], P75[0], Max[0], Jog, Legs[1], P25[1],
+                  P50[1], P75[1], Max[1], Run, Legs[2], P25[2], P50[2], P75[2], Max[2], CrouchWalk, Legs[3], P25[3], P50[3], P75[3], Max[3],
+                  Strafe[4], StrafeLegs[4], Strafe[0], StrafeLegs[0], Strafe[1], StrafeLegs[1], Strafe[2], StrafeLegs[2], Strafe[3],
+                  StrafeLegs[3], Back[4], BackLegs[4], Back[0], BackLegs[0], Back[1], BackLegs[1], Back[2], BackLegs[2], Back[3], BackLegs[3]);
     return b;
 }

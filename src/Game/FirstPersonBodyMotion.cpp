@@ -64,11 +64,16 @@ std::vector<float> SharedMotionDatabase::HandOverShoulder(const MotionDatabase& 
     return out;
 }
 
+std::string SharedMotionDatabase::CacheKey(const std::string& base, bool hasRig, const std::string& rigPath) {
+    return base + "|" + (hasRig ? "rig:" + rigPath : std::string("no rig"));
+}
+
 std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std::string& base, std::string* error, const Model* rig) {
     static std::mutex s_Lock;
     static std::map<std::string, std::weak_ptr<const SharedMotionDatabase>> s_Loaded;
     std::lock_guard<std::mutex> lock(s_Lock);
-    if (auto live = s_Loaded[base].lock()) return live;
+    const std::string key = CacheKey(base, rig != nullptr, rig ? rig->Path() : std::string());
+    if (auto live = s_Loaded[key].lock()) return live;
     auto shared = std::make_shared<SharedMotionDatabase>();
     if (!shared->Db.Load(base, error)) return nullptr;
     std::vector<float> tilt;
@@ -76,26 +81,14 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
         const std::vector<float> over = HandOverShoulder(shared->Db, *rig, &tilt);
         const MotionDatabase& d = shared->Db;
         std::vector<char> bad(d.FrameCount(), 0);
-        // The ankles' sideways gap in root space: the axis (x or z) and its sign from the standing idles (left minus right).
-        std::vector<float> gapX, gapZ;
-        for (std::uint32_t f = 0; f < d.FrameCount(); f += 7)
-            if (d.Gait(f) == MotionLabel::Idle && !(d.Flags(f) & (MotionLabel::Crouch | MotionSearch::kAlwaysForbid))) {
-                const auto r = d.Raw(f);
-                gapX.push_back(r[0] - r[3]);
-                gapZ.push_back(r[2] - r[5]);
-            }
         const auto med = [](std::vector<float> v) {
             if (v.empty()) return 0.0f;
             std::nth_element(v.begin(), v.begin() + (std::ptrdiff_t)(v.size() / 2), v.end());
             return v[v.size() / 2];
         };
-        const float mx = med(gapX), mz = med(gapZ);
-        const int axis = std::fabs(mx) >= std::fabs(mz) ? 0 : 2;
-        const float sign = (axis == 0 ? mx : mz) >= 0.0f ? 1.0f : -1.0f;
-        std::printf("[MotionMatching] standing feet gap (left - right, root space): x %.3f m, z %.3f m - the %s axis\n", mx, mz, axis == 0 ? "x" : "z");
         int raw = 0, searchable = 0, hist[5] = {0, 0, 0, 0, 0};
         const float edges[5] = {-0.15f, -0.10f, -0.05f, 0.0f, 0.05f};
-        std::vector<std::uint8_t> why(d.FrameCount(), 0); // per frame: 1 a hand over its shoulder, 2 bent over, 4 legs crossed
+        std::vector<std::uint8_t> why(d.FrameCount(), 0); // per frame: 1 a hand over its shoulder, 2 bent over
         for (std::uint32_t f = 0; f < d.FrameCount(); ++f) {
             if (d.Flags(f) & (MotionSearch::kAlwaysForbid | MotionLabel::Airborne)) continue;
             ++searchable;
@@ -103,13 +96,7 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
             const bool bent = !(d.Flags(f) & MotionLabel::Crouch) && tilt[f] > kBentOverDeg &&
                               FirstPersonBodyMotion::RootSpeed(d, f) < kBentOverSpeed;
             if (bent) ++shared->BentOverFrames;
-            bool crossed = false;
-            if (d.Gait(f) >= MotionLabel::Walk && !(d.Flags(f) & MotionLabel::Strafe)) {
-                const auto r = d.Raw(f);
-                crossed = sign * (r[(size_t)axis] - r[(size_t)axis + 3]) < -kCrossedFeet;
-                if (crossed) ++shared->CrossedFrames;
-            }
-            why[f] = (std::uint8_t)((over[f] > kHandsUpMargin ? 1 : 0) | (bent ? 2 : 0) | (crossed ? 4 : 0));
+            why[f] = (std::uint8_t)((over[f] > kHandsUpMargin ? 1 : 0) | (bent ? 2 : 0));
             raw += why[f] != 0;
         }
         // Each run of such frames is excluded as a whole gesture: widened back to where its measure (the higher hand's height
@@ -136,22 +123,21 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
                 std::uint8_t kind = 0;
                 while (b + 1 <= last && why[b + 1]) kind |= why[b++];
                 kind |= why[b];
+                (void)kind;
+                std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)a - kHandsUpPad);
+                std::uint32_t to = std::min<std::uint32_t>(last, b + (std::uint32_t)kHandsUpPad);
                 if (widen) {
-                    const auto arc = [&](const std::vector<float>& m, float rest, float tol, std::uint32_t& from, std::uint32_t& to) {
-                        std::uint32_t x = a, y = b;
-                        while (x > clip.First && a - x < (std::uint32_t)kGestureMax && m[x] > rest + tol && m[x - 1] < m[x] + 0.25f * tol) --x;
-                        while (y < last && y - b < (std::uint32_t)kGestureMax && m[y] > rest + tol && m[y + 1] < m[y] + 0.25f * tol) ++y;
-                        from = std::min(from, x);
-                        to = std::max(to, y);
+                    // The whole gesture - the hand and the chest together: the stretch's ends (padded) walk out until the frame
+                    // beyond each is at the take's rest level on both measures (at most kGestureMax frames further). Widening
+                    // each measure from the line only, the pad could land the end in an earlier lean of the chest: entered
+                    // mid-gesture.
+                    const auto elevated = [&](std::uint32_t i) {
+                        return over[i] > handRest[(size_t)c] + kGestureHandRest || tilt[i] > tiltRest[(size_t)c] + kGestureTiltRest;
                     };
-                    std::uint32_t from = a, to = b;
-                    if (kind & 1) arc(over, handRest[(size_t)c], kGestureHandRest, from, to);
-                    if (kind & 2) arc(tilt, tiltRest[(size_t)c], kGestureTiltRest, from, to);
-                    a = from;
-                    b = to;
+                    const std::uint32_t reach = (std::uint32_t)(kGestureMax + kHandsUpPad);
+                    while (from > clip.First && a - from < reach && elevated(from - 1)) --from;
+                    while (to < last && to - b < reach && elevated(to + 1)) ++to;
                 }
-                const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)a - kHandsUpPad);
-                const std::uint32_t to = std::min<std::uint32_t>(last, b + (std::uint32_t)kHandsUpPad);
                 for (std::uint32_t j = from; j <= to; ++j) out[j] = 1;
                 f = b + 1;
             }
@@ -195,17 +181,23 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
                 std::uint8_t kind = 0;
                 while (e + 1 < clip.First + clip.Count && bad[e + 1]) kind |= why[e++];
                 kind |= why[e];
-                char s[96];
-                std::snprintf(s, sizeof s, " %.2f-%.2f s (%s)", d.SecondsInClip(f), d.SecondsInClip(e),
-                              (kind & 1) && (kind & 2) ? "hand, bent" : (kind & 1) ? "hand" : (kind & 2) ? "bent" : "pad");
+                char s[256];
+                const bool mid = f > clip.First && !(d.Flags(f - 1) & MotionSearch::kAlwaysForbid) &&
+                                 (over[f - 1] > handRest[(size_t)c] + kGestureHandRest || tilt[f - 1] > tiltRest[(size_t)c] + kGestureTiltRest);
+                char note[160] = "";
+                if (mid)
+                    std::snprintf(note, sizeof note, ", entered mid-gesture: before it the hand %+.3f m (rest %+.3f), the chest %.1f deg (rest %.1f)",
+                                  over[f - 1], handRest[(size_t)c], tilt[f - 1], tiltRest[(size_t)c]);
+                std::snprintf(s, sizeof s, " %.2f-%.2f s (%s%s)", d.SecondsInClip(f), d.SecondsInClip(e),
+                              (kind & 1) && (kind & 2) ? "hand, bent" : (kind & 1) ? "hand" : (kind & 2) ? "bent" : "pad", note);
                 line += s;
                 f = e;
             }
             if (!line.empty()) std::printf("[MotionMatching]   %s (%.1f s):%s\n", clip.Name.c_str(), clip.Count / d.Fps(), line.c_str());
         }
         shared->HandsUpFrames = shared->Db.ExcludeFrames(bad);
-        std::printf("[MotionMatching] hands over the shoulders, bent over or legs crossed: %d of %d searchable frames (%u bent over %.0f deg, %u crossed %.2f m; %u excluded with the pads); "
-                    "share over -0.15/-0.10/-0.05/0/+0.05 m: %.1f/%.1f/%.1f/%.1f/%.1f %%\n", raw, searchable, shared->BentOverFrames, kBentOverDeg, shared->CrossedFrames, kCrossedFeet,
+        std::printf("[MotionMatching] hands over the shoulders or bent over: %d of %d searchable frames (%u bent over %.0f deg; %u excluded with the pads); "
+                    "share over -0.15/-0.10/-0.05/0/+0.05 m: %.1f/%.1f/%.1f/%.1f/%.1f %%\n", raw, searchable, shared->BentOverFrames, kBentOverDeg,
                     shared->HandsUpFrames, 100.0f * hist[0] / std::max(1, searchable), 100.0f * hist[1] / std::max(1, searchable),
                     100.0f * hist[2] / std::max(1, searchable), 100.0f * hist[3] / std::max(1, searchable), 100.0f * hist[4] / std::max(1, searchable));
     }
@@ -236,11 +228,19 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
         std::printf("[MotionMatching] start frame: %s @ %.2f s\n", db.Clip(db.ClipOf(f)).Name.c_str(), db.SecondsInClip(f));
         break;
     }
-    s_Loaded[base] = shared;
+    s_Loaded[key] = shared;
     return shared;
 }
 
 // --- the body's motion -----------------------------------------------------------------------------------------------
+
+float FirstPersonBodyMotion::StepCharacterFacing(float yaw, float clipTurn, float simYaw, const Settings& cfg, float dt) {
+    yaw += clipTurn;
+    yaw += Wrap(simYaw - yaw) * Toward(dt, cfg.CharacterFacingHalflife);
+    const float off = Wrap(yaw - simYaw);
+    if (std::fabs(off) > cfg.MaxFacingOffset) yaw = simYaw + std::copysign(cfg.MaxFacingOffset, off);
+    return Wrap(yaw);
+}
 
 float FirstPersonBodyMotion::RootSpeed(const MotionDatabase& db, std::uint32_t frame) {
     const auto& c = db.Clip(db.ClipOf(frame));
@@ -355,11 +355,15 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     const glm::vec3 vel(in.Velocity.x, 0.0f, in.Velocity.z);
     m_CapsuleSpeed = glm::length(vel);
 
-    // The facing wanted: the view's while moving; standing still the heading holds until the view is Turn Threshold off
-    // it, then turns to it (and stops Turn End Angle short).
+    // The facing wanted: the view's while moving; standing still the body holds its facing until the view is Turn
+    // Threshold off it, then turns to it (and stops Turn End Angle short).
     m_Still = wishSpeed < 0.1f;
     const float twist = Wrap(in.ViewYaw - yaw);
-    if (!m_HaveYaw) { m_DesiredYaw = yaw; m_HaveYaw = true; }
+    if (!m_HaveYaw) {
+        m_DesiredYaw = m_SimYaw = yaw;
+        m_SimYawRate = 0.0f;
+        m_HaveYaw = true;
+    }
     if (!m_Still || in.TurnThreshold <= 0.0f) {
         m_DesiredYaw = in.ViewYaw;
         m_Turning = false;
@@ -369,16 +373,16 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
             m_DesiredYaw = in.ViewYaw;
             if (std::fabs(twist) < std::max(in.TurnEndAngle, 2.0f * kPi / 180.0f)) m_Turning = false;
         }
-        if (!m_Turning) m_DesiredYaw = yaw + Wrap(m_DesiredYaw - yaw) * (1.0f - Toward(dt, 0.05f)); // settles on the heading
     }
 
-    // The filters: crouch (the pack's crouch takes) and the gait. Shift is the jog in every direction: the capsule moves at
-    // the gait table's jog (or jog strafe, slower than the walk/jog midpoint - hence the gait named, not read off the speed).
+    // The filters: crouch (the pack's crouch takes), and what is asked for - standing still the idle gait, moving the style
+    // (in every direction: the capsule moves at the style's own speed, strafes at its strafe speed - Player::GaitSpeeds).
     const bool crouch = in.Crouched;
-    int gait = m_Shared->Gaits.GaitFor(wishSpeed, crouch);
-    if (in.Sprint && !crouch && gait != MotionLabel::Idle) gait = MotionLabel::Jog;
+    const int style = crouch ? (int)MotionLabel::StyleCrouch : std::clamp(in.Style, (int)MotionLabel::StyleStroll, (int)MotionLabel::StyleRun);
+    const int gait = m_Still ? (int)MotionLabel::Idle : -1;
     MotionSearchParams params;
     params.DesiredGait = gait;
+    params.DesiredStyle = m_Still ? -1 : style;
     params.TransitionCost = Config.TransitionCost;
     // No dead ends: crouched, the jumps' deep landings (a few frames of Crouch before the actor stands) won the search,
     // played into a standing frame at once and forced another search - every frame (the crouch legs, 30-50 jumps a second).
@@ -390,19 +394,32 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     if (crouch) params.Require = MotionLabel::Crouch;
     else params.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
 
-    // The trajectory, from the capsule as it is now.
+    // The simulation facing: a critically damped spring toward the facing wanted - except standing still and not turning,
+    // where it is the character's (data-driven: an idle take turns the body as captured, and the trajectory asks for that).
+    // (With no Turn Threshold the body always faces the view, standing too.)
+    if (m_Still && !m_Turning && in.TurnThreshold > 0.0f && m_Air == Air::None) {
+        m_SimYaw = yaw;
+        m_SimYawRate = m_YawRate;
+        m_DesiredYaw = yaw;
+    } else {
+        const float goal = m_SimYaw + Wrap(m_DesiredYaw - m_SimYaw);
+        TrajectoryPredictor::SpringScalar(m_SimYaw, m_SimYawRate, goal, Config.SimFacingHalflife, dt);
+        m_SimYaw = Wrap(m_SimYaw);
+    }
+    // The trajectory: the capsule as it is now, with the simulation facing.
     TrajectoryState now;
     now.Position = glm::vec3(in.Feet.x, in.Feet.y, in.Feet.z);
     now.Velocity = vel;
-    now.Yaw = yaw;
-    now.YawRate = m_YawRate;
+    now.Yaw = m_SimYaw;
+    now.YawRate = m_SimYawRate;
     m_Predictor.Params.VelocityHalflife = std::max(in.VelocityHalflife, 0.02f);
-    m_Predictor.Params.FacingHalflife = m_Still ? Config.TurnFacingHalflife : Config.MovingFacingHalflife;
+    m_Predictor.Params.FacingHalflife = Config.SimFacingHalflife;
     m_Predictor.Sweep = in.Sweep;
     m_Predictor.SetState(now);
     const auto ts = db.TrajSeconds();
     TrajectoryState future[3];
     m_Predictor.Predict(wish, m_DesiredYaw, ts.data(), 3, future);
+    // The query in the character's frame (where the playing frame's own features are), its trajectory the simulation's.
     MotionMatcher::Input q;
     q.Position = now.Position;
     q.Yaw = yaw;
@@ -415,7 +432,7 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     // every sweep forced searches: 6-8 jumps a second looking about), the facing wanted standing still (a turn on the spot).
     // (Its speed the gait's own: the run slowing in a turn isn't a new input - looking about at a run, every sweep's slowdown
     // forced searches.)
-    const glm::vec3 nominal = wishSpeed > 0.1f ? wish / wishSpeed * m_Shared->Gaits.SpeedFor(gait, crouch) : glm::vec3(0.0f);
+    const glm::vec3 nominal = wishSpeed > 0.1f ? wish / wishSpeed * m_Shared->Gaits.StyleSpeed(style) : glm::vec3(0.0f);
     // (The trajectory itself keeps the real speed: the predictor's goal is `wish`.)
     q.DesiredVelocity = m_Still ? wish : glm::angleAxis(-in.ViewYaw, glm::vec3(0.0f, 1.0f, 0.0f)) * nominal;
     q.DesiredYaw = m_Still ? m_DesiredYaw : 0.0f;
@@ -468,18 +485,11 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     m_Matcher.PlayRate = m_Air == Air::Rising ? m_AirRate : m_Air == Air::None ? m_WarpRate : 1.0f;
     m_Matcher.Update(dt, q);
 
-    // Orientation warping. Standing still (a turn on the spot) the heading turns as the matched frame's root does, plus a
-    // spring toward the facing wanted. Moving, it only follows the view (a short spring): the clip's own turn added on top
-    // fed back - a turning clip carried the heading past the view, the next query asked to turn back, and the body lunged
-    // from one turning clip to the other whenever the view moved (the owner's play test, 2026-11-17).
-    const float animTurn = m_Still && m_Air == Air::None ? RootYawRate(db, m_Matcher.Frame()) * m_Matcher.PlayRate * dt : 0.0f;
-    yaw += animTurn;
-    const float halflife = m_Air != Air::None ? Config.AirFacingHalflife : m_Still ? Config.TurnFacingHalflife : Config.MovingFacingHalflife;
-    float turn = Wrap(m_DesiredYaw - yaw) * Toward(dt, halflife);
-    if (!m_Still && m_Air == Air::None && Config.MaxMovingYawRate > 0.0f)
-        turn = std::clamp(turn, -Config.MaxMovingYawRate * dt, Config.MaxMovingYawRate * dt);
-    yaw += turn;
-    yaw = Wrap(yaw);
+    // The character facing: the matched clip's own root turn, then pulled toward the simulation facing and clamped off it.
+    // (Before, moving, the heading followed the view on a 0.03 s spring with none of the clip's turn, the query built from
+    // it: a flick spun the body over planted feet - a 51 cm skate - and needed a 450 deg/s cap and foot-lock resets.)
+    const float clipTurn = RootYawRate(db, m_Matcher.Frame()) * m_Matcher.PlayRate * dt;
+    yaw = StepCharacterFacing(yaw, clipTurn, m_SimYaw, Config, dt);
     m_YawRate = Wrap(yaw - prevYaw) / dt;
 
     // Diagnostics.
@@ -491,6 +501,8 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     d.Flags = db.Flags(m.Frame());
     d.Gait = db.Gait(m.Frame());
     d.DesiredGait = gait;
+    d.DesiredStyle = params.DesiredStyle;
+    d.Style = db.Style(m.Frame());
     d.Crouch = crouch;
     d.Sprint = in.Sprint;
     d.Airborne = m_Air != Air::None;
@@ -517,6 +529,9 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     d.Yaw = yaw;
     d.DesiredYaw = m_DesiredYaw;
     d.YawRate = m_YawRate;
+    d.SimYaw = m_SimYaw;
+    d.FacingOffset = Wrap(yaw - m_SimYaw);
+    d.ClipTurn = clipTurn;
     d.TurnInPlaceRate = m_Shared->TurnInPlaceRate;
     {
         const auto raw = db.Raw(m.Frame()); // where the matched frame's root is 1 s on, in its own root space (+Z ahead)

@@ -15,8 +15,10 @@
 #include "Core/Paths.h"
 #include "Model.h"
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -312,12 +314,14 @@ void TestFeaturesAndLabels() {
     }
     MotionFeatureConfig cfg;
     MotionFeatureSet db;
-    db.AddClip("Synthetic", fr, root, cfg);
+    db.AddClip("Synthetic", fr, root, cfg, MotionClipIntent::FromTags("walk;card"));
     for (glm::vec3& p : fr.Pelvis) p.y = 0.6f;
-    db.AddClip("Crouched", fr, root, cfg);
+    db.AddClip("Crouched", fr, root, cfg, MotionClipIntent::FromTags("crouch;card"));
     db.Finish();
     CHECK(db.FrameCount() == 720 && db.Clips().size() == 2 && db.Clips()[1].First == 360);
-    const float* f = db.Features(30);
+    CHECK(db.Style(30) == MotionLabel::StyleWalk && db.Style(390) == MotionLabel::StyleCrouch);
+    float f[MotionFeatureSet::kDims];
+    db.Decode(30, f); // (16-bit: within a 65534th of each dimension's range)
     CHECK(std::fabs(f[0] - 0.1f) < 1e-4f && std::fabs(f[1] - 0.09f) < 1e-4f); // left foot, root space
     CHECK(std::fabs(f[14] - 1.5f) < 1e-3f);                                        // pelvis velocity forward
     CHECK(std::fabs(f[19]) < 1e-4f && std::fabs(f[20] - 1.5f) < 1e-3f);           // root at +60 frames: 1.5 m ahead
@@ -334,8 +338,239 @@ void TestFeaturesAndLabels() {
     MotionFeatureSet l;
     CHECK(l.Load(path, &err));
     CHECK(l.FrameCount() == 720 && l.Clips()[1].Name == "Crouched" && l.TrajFrames[2] == 60);
-    CHECK(l.Features(30)[20] == f[20] && l.Flags(250) == db.Flags(250) && l.Mean()[20] == db.Mean()[20]);
+    float lf[MotionFeatureSet::kDims];
+    l.Decode(30, lf);
+    CHECK(lf[20] == f[20] && l.Flags(250) == db.Flags(250) && l.Mean()[20] == db.Mean()[20] && l.Style(390) == db.Style(390));
     CHECK(l.Std()[0] > 0.0f);
+}
+
+// The finger tracks (32-bit smallest-three): within 0.3 deg of the rotation packed, every way round.
+void TestPackQuat32() {
+    std::mt19937 rng(77);
+    std::normal_distribution<float> n(0.0f, 1.0f);
+    float worst = 0.0f;
+    for (int k = 0; k < 20000; ++k) {
+        glm::quat q = glm::normalize(glm::quat(n(rng), n(rng), n(rng), n(rng)));
+        if (k % 4 == 0) q = -q;
+        worst = std::max(worst, MotionMath::QuatAngle(q, MotionMath::UnpackQuat32(MotionMath::PackQuat32(q))));
+    }
+    std::printf("[MotionMatching] 32-bit quaternion: worst error %.3f deg over 20000\n", worst * kDeg);
+    CHECK(worst * kDeg < 0.3f);
+    CHECK(MotionMath::QuatAngle(glm::quat(1, 0, 0, 0), MotionMath::UnpackQuat32(MotionMath::PackQuat32(glm::quat(1, 0, 0, 0)))) * kDeg < 0.3f);
+    // The twist about an axis: the swing-twist decomposition's.
+    const glm::vec3 x(1, 0, 0);
+    CHECK(std::fabs(MotionMath::TwistAngle(glm::angleAxis(0.7f, x), x) - 0.7f) < 1e-5f);
+    CHECK(std::fabs(MotionMath::TwistAngle(glm::angleAxis(0.7f, glm::vec3(0, 0, 1)), x)) < 1e-5f);
+    const float both = MotionMath::TwistAngle(glm::angleAxis(0.4f, glm::vec3(0, 1, 0)) * glm::angleAxis(-2.9f, x), x);
+    CHECK(std::fabs(both + 2.9f) < 0.05f);
+}
+
+// A clip with finger tracks plays them, one without plays the relaxed pose; they survive the file.
+void TestFingerTracks() {
+    MotionClipStream s;
+    s.Reset(60.0f, {"pelvis"});
+    s.Statics.push_back({"index_01_l", glm::angleAxis(0.4f, glm::vec3(0, 0, 1))});
+    s.Statics.push_back({"thumb_01_r", glm::angleAxis(-0.2f, glm::vec3(1, 0, 0))});
+    std::vector<MotionClipStream::RootSample> root(60);
+    std::vector<glm::vec3> pelvis(60, glm::vec3(0.0f, 0.95f, 0.0f));
+    std::vector<glm::quat> rot(60, glm::quat(1, 0, 0, 0)), fingers;
+    for (int i = 0; i < 60; ++i) {
+        fingers.push_back(glm::angleAxis(0.02f * (float)i, glm::vec3(0, 0, 1)));
+        fingers.push_back(glm::angleAxis(-0.01f * (float)i, glm::normalize(glm::vec3(1, 1, 0))));
+    }
+    s.AddClip({"Hands", "stand;idle", 0, 0, 0.0f}, root, pelvis, rot, &fingers);
+    s.AddClip({"NoHands", "walk", 0, 0, 0.0f}, root, pelvis, rot);
+    CHECK(s.HasFingers(0) && !s.HasFingers(1) && s.FingerBytes() == 60u * 2u * 4u);
+    CHECK(s.PoseBytes() == 120u * (12u + 12u + 6u) + 60u * 2u * 4u);
+    CHECK(s.ClipAt(0) == 0 && s.ClipAt(59) == 0 && s.ClipAt(60) == 1 && s.ClipAt(119) == 1 && s.ClipAt(120) == -1);
+    const std::string path = (MmTemp() / "fingers.mmanim").string();
+    std::string err;
+    CHECK(s.Save(path, &err));
+    MotionClipStream l;
+    CHECK(l.Load(path, &err));
+    CHECK(l.HasFingers(0) && !l.HasFingers(1));
+    float worst = 0.0f;
+    for (int i = 0; i < 60; ++i)
+        for (int k = 0; k < 2; ++k) worst = std::max(worst, MotionMath::QuatAngle(l.FingerRotation(0, (std::uint32_t)i, k), fingers[(size_t)(2 * i + k)]));
+    CHECK(worst * kDeg < 0.3f);
+    CHECK(MotionMath::QuatAngle(l.FingerRotation(1, 75, 0), s.Statics[0].Rotation) < 1e-6f);
+    // Posing: the track where there is one, the relaxed pose where not.
+    const std::vector<std::string> nodes = {"pelvis", "index_01_l", "thumb_01_r"};
+    const MotionClipStream::Binding b = l.BindNames(nodes, 0, 0.95f);
+    std::vector<LocalTRS> pose(nodes.size());
+    l.FramePose(30, b, pose);
+    CHECK(MotionMath::QuatAngle(pose[1].R, fingers[60]) * kDeg < 0.3f && MotionMath::QuatAngle(pose[2].R, fingers[61]) * kDeg < 0.3f);
+    l.SamplePose(0, 30.5f / 60.0f, b, pose);
+    CHECK(MotionMath::QuatAngle(pose[1].R, glm::angleAxis(0.02f * 30.5f, glm::vec3(0, 0, 1))) * kDeg < 0.3f);
+    l.FramePose(90, b, pose);
+    CHECK(MotionMath::QuatAngle(pose[1].R, s.Statics[0].Rotation) < 1e-6f && MotionMath::QuatAngle(pose[2].R, s.Statics[1].Rotation) < 1e-6f);
+}
+
+// What a take was shot for: its tags name its styles and whether its flights are jumps.
+MotionClipFrames StyleFrames(const std::vector<float>& speed, RootTrack& root, int liftFrom = -1, int liftTo = -1) {
+    MotionClipFrames fr;
+    fr.Fps = 60.0f;
+    glm::vec3 p(0.0f);
+    for (size_t i = 0; i < speed.size(); ++i) {
+        if (i > 0) p.z += speed[i] / 60.0f;
+        root.Position.push_back(p);
+        root.Yaw.push_back(0.0f);
+        const bool lift = (int)i >= liftFrom && (int)i < liftTo;
+        fr.Pelvis.push_back(p + glm::vec3(0.0f, lift ? 1.1f : 0.95f, 0.0f));
+        fr.Foot[0].push_back(p + glm::vec3(0.1f, lift ? 0.3f : 0.09f, 0.0f));
+        fr.Foot[1].push_back(p + glm::vec3(-0.1f, lift ? 0.3f : 0.09f, 0.0f));
+    }
+    return fr;
+}
+
+void TestStyleIntent() {
+    using L = MotionLabel::Style;
+    const auto styles = [](const char* tags) { return MotionClipIntent::FromTags(tags).Styles; };
+    CHECK(styles("walk;card") == std::vector<int>{L::StyleWalk});
+    CHECK(styles("stroll;strafe;mirrored") == std::vector<int>{L::StyleStroll});
+    CHECK((styles("run;loop;forward") == std::vector<int>{L::StyleWalk, L::StyleRun}));
+    CHECK(styles("stand;start;fixed;style=jog") == std::vector<int>{L::StyleJog});
+    CHECK((styles("accelerationdeceleration;accel;style=walk+jog+run") == std::vector<int>{L::StyleWalk, L::StyleJog, L::StyleRun}));
+    CHECK(styles("stand;idle").empty() && styles("transitions;transition").empty());
+    CHECK(MotionClipIntent::FromTags("stand;jump").Jump && !MotionClipIntent::FromTags("jog;card").Jump);
+
+    // A mixed take: standing, a walk, a run, a stop - each frame the nearest of its styles' cruise speeds to its
+    // stride-averaged speed; the standing before takes the walk's, the stop the run's.
+    std::vector<float> speed;
+    for (int i = 0; i < 60; ++i) speed.push_back(0.0f);
+    for (int i = 0; i < 180; ++i) speed.push_back(1.17f);
+    for (int i = 0; i < 180; ++i) speed.push_back(3.9f);
+    for (int i = 0; i < 90; ++i) speed.push_back(0.0f);
+    RootTrack root;
+    const MotionClipFrames fr = StyleFrames(speed, root);
+    MotionFeatureConfig cfg;
+    MotionFeatureSet set;
+    set.AddClip("Mixed", fr, root, cfg, MotionClipIntent::FromTags("run;loop"));
+    CHECK(set.Style(10) == L::StyleWalk && set.Style(150) == L::StyleWalk && set.Style(330) == L::StyleRun && set.Style(500) == L::StyleRun);
+    set.AddClip("OneStyle", fr, root, cfg, MotionClipIntent::FromTags("jog;card"));
+    bool allJog = true;
+    for (std::uint32_t f = 510; f < set.FrameCount(); ++f) allJog = allJog && set.Style(f) == L::StyleJog;
+    CHECK(allJog);
+
+    // Airborne: a flight is a jump only in a jump take (a stride's flight passes the same test).
+    std::vector<float> still(240, 0.0f);
+    RootTrack r2;
+    const MotionClipFrames hop = StyleFrames(still, r2, 100, 130);
+    MotionFeatureSet air;
+    air.AddClip("JogFlight", hop, r2, cfg, MotionClipIntent::FromTags("jog;card"));
+    air.AddClip("Jump", hop, r2, cfg, MotionClipIntent::FromTags("stand;jump"));
+    CHECK(!(air.Flags(110) & MotionLabel::Airborne) && (air.Flags(240 + 110) & MotionLabel::Airborne));
+}
+
+// Twist flips unrolled (the joints stay put), spikes slerped across, the rest left alone.
+void TestGlitchRepair() {
+    // root -> thigh -> calf -> foot, each child along its parent's +X (the bones' long axes).
+    const std::vector<int> parents = {-1, 0, 1, 2};
+    std::vector<LocalTRS> bind(4);
+    bind[1].T = glm::vec3(0.1f, 0.0f, 0.0f);
+    bind[2].T = glm::vec3(0.45f, 0.0f, 0.0f);
+    bind[3].T = glm::vec3(0.42f, 0.0f, 0.0f);
+    const int frames = 160;
+    std::vector<std::vector<LocalTRS>> clean((size_t)frames, bind);
+    for (int f = 0; f < frames; ++f) {
+        const float t = (float)f / 60.0f;
+        clean[(size_t)f][1].R = glm::angleAxis(0.5f * std::sin(5.0f * t), glm::vec3(0, 0, 1)) * glm::angleAxis(0.1f * t, glm::vec3(1, 0, 0));
+        clean[(size_t)f][2].R = glm::angleAxis(0.4f + 0.3f * std::sin(5.0f * t), glm::vec3(0, 0, 1));
+        clean[(size_t)f][3].R = glm::angleAxis(0.2f * std::cos(5.0f * t), glm::vec3(0, 1, 0));
+    }
+    std::vector<std::vector<LocalTRS>> poses = clean;
+    // The thigh flips 172 deg about its own axis for frames 40-89, the child taking the inverse (the world pose the same);
+    // the calf alone flips for 100-119; the foot spikes 60 deg for frames 130-132.
+    const glm::quat flip = glm::angleAxis(3.0f, glm::vec3(1, 0, 0));
+    for (int f = 40; f < 90; ++f) {
+        poses[(size_t)f][1].R = poses[(size_t)f][1].R * flip;
+        poses[(size_t)f][2].R = glm::inverse(flip) * poses[(size_t)f][2].R;
+    }
+    for (int f = 100; f < 120; ++f) {
+        poses[(size_t)f][2].R = poses[(size_t)f][2].R * flip;
+        poses[(size_t)f][3].R = glm::inverse(flip) * poses[(size_t)f][3].R;
+    }
+    for (int f = 130; f < 133; ++f) poses[(size_t)f][3].R = poses[(size_t)f][3].R * glm::angleAxis(1.05f, glm::vec3(0, 1, 0));
+    const std::vector<char> repair = {0, 1, 1, 1};
+    const MotionBake::RepairStats st = MotionBake::RepairGlitches(parents, bind, repair, 60.0f, poses);
+    std::printf("[MotionMatching] repair: %d twist flips, %d spikes (%d frames)\n", st.Flips, st.Spikes, st.SpikeFrames);
+    CHECK(st.Flips == 4 && st.Spikes == 1 && st.SpikeFrames == 3);
+    float worst = 0.0f, worstPos = 0.0f;
+    std::vector<glm::mat4> a, b;
+    for (int f = 0; f < frames; ++f) {
+        if (f >= 129 && f <= 133) continue; // the spike: slerped, not the original
+        for (int i = 1; i < 4; ++i) worst = std::max(worst, MotionMath::QuatAngle(poses[(size_t)f][(size_t)i].R, clean[(size_t)f][(size_t)i].R));
+        MotionBake::Globals(parents, poses[(size_t)f], a);
+        MotionBake::Globals(parents, clean[(size_t)f], b);
+        worstPos = std::max(worstPos, glm::length(glm::vec3(a[3][3]) - glm::vec3(b[3][3])));
+    }
+    std::printf("[MotionMatching] repair: worst rotation off the clean take %.3f deg, foot %.4f mm\n", worst * kDeg, worstPos * 1000.0f);
+    CHECK(worst * kDeg < 1.0f && worstPos < 1e-4f);
+    // The spike: back between its neighbours (within the motion of 5 frames).
+    for (int f = 130; f < 133; ++f) CHECK(MotionMath::QuatAngle(poses[(size_t)f][3].R, clean[(size_t)f][3].R) * kDeg < 3.0f);
+    // Clean data comes back unchanged.
+    std::vector<std::vector<LocalTRS>> again = clean;
+    const MotionBake::RepairStats none = MotionBake::RepairGlitches(parents, bind, repair, 60.0f, again);
+    CHECK(none.Flips == 0 && none.Spikes == 0);
+    for (int f = 0; f < frames; ++f)
+        for (int i = 1; i < 4; ++i) CHECK(again[(size_t)f][(size_t)i].R == clean[(size_t)f][(size_t)i].R);
+}
+
+// Mirroring: the rest pose mirrors to itself (though the right side's bone axes are turned), twice is the identity, and a
+// mirrored foot is where the other foot was, reflected.
+void TestMirrorPose() {
+    const std::vector<std::string> names = {"root", "pelvis", "thigh_l", "foot_l", "thigh_r", "foot_r", "spine_01"};
+    const std::vector<int> parents = {-1, 0, 1, 2, 1, 4, 1};
+    // The left leg's rest, in the root frame (Z up, the character facing +Y, its left at +X); the right leg its reflection
+    // with the bones' axes turned 180 deg about their X (as on the Manny rig).
+    const glm::mat4 M = glm::mat4(glm::mat3(glm::vec3(-1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1)));
+    const glm::mat4 F = glm::mat4_cast(glm::angleAxis(kPi, glm::vec3(1, 0, 0)));
+    std::vector<glm::mat4> g(7, glm::mat4(1.0f));
+    g[1] = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0.95f));
+    g[2] = glm::translate(glm::mat4(1.0f), glm::vec3(0.1f, 0, 0.9f)) * glm::mat4_cast(glm::angleAxis(0.5f * kPi, glm::vec3(0, 1, 0)));
+    g[3] = g[2] * glm::translate(glm::mat4(1.0f), glm::vec3(0.85f, 0, 0)) * glm::mat4_cast(glm::angleAxis(-0.4f, glm::vec3(0, 0, 1)));
+    g[4] = M * g[2] * M * F;
+    g[5] = M * g[3] * M * F;
+    g[6] = g[1] * glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0.1f));
+    std::vector<LocalTRS> bind(7);
+    for (int i = 1; i < 7; ++i) {
+        const glm::mat4 local = glm::inverse(g[(size_t)parents[(size_t)i]]) * g[(size_t)i];
+        bind[(size_t)i].T = glm::vec3(local[3]);
+        bind[(size_t)i].R = glm::normalize(glm::quat_cast(glm::mat3(local)));
+    }
+    const MotionBake::MirrorRig rig = MotionBake::BuildMirror(names, parents, bind, 0);
+    CHECK(std::fabs(std::fabs(rig.Normal.x) - 1.0f) < 1e-6f && rig.Mirror[2] == 4 && rig.Mirror[5] == 3 && rig.Mirror[6] == 6);
+    std::vector<LocalTRS> rest = bind;
+    MotionBake::MirrorPose(rig, rest);
+    float worst = 0.0f;
+    for (int i = 1; i < 7; ++i) worst = std::max(worst, MotionMath::QuatAngle(rest[(size_t)i].R, bind[(size_t)i].R));
+    CHECK(worst < 1e-4f);
+    // A posed frame.
+    std::vector<LocalTRS> pose = bind;
+    pose[1].T += glm::vec3(0.03f, 0.2f, -0.05f);
+    pose[1].R = glm::angleAxis(0.3f, glm::normalize(glm::vec3(0.2f, 0.4f, 1.0f)));
+    pose[2].R = pose[2].R * glm::angleAxis(0.6f, glm::normalize(glm::vec3(0, 1, 0.3f)));
+    pose[3].R = pose[3].R * glm::angleAxis(-0.5f, glm::vec3(0, 0, 1));
+    pose[4].R = pose[4].R * glm::angleAxis(-0.2f, glm::vec3(0, 1, 0));
+    pose[6].R = glm::angleAxis(0.25f, glm::vec3(0, 0, 1));
+    std::vector<LocalTRS> m = pose;
+    MotionBake::MirrorPose(rig, m);
+    std::vector<glm::mat4> gp, gm;
+    MotionBake::Globals(parents, pose, gp);
+    MotionBake::Globals(parents, m, gm);
+    const float footL = glm::length(glm::vec3(gm[3][3]) - glm::vec3(M * gp[5][3]));
+    const float footR = glm::length(glm::vec3(gm[5][3]) - glm::vec3(M * gp[3][3]));
+    const float pelvis = glm::length(glm::vec3(gm[1][3]) - glm::vec3(M * gp[1][3]));
+    CHECK(footL < 1e-5f && footR < 1e-5f && pelvis < 1e-5f);
+    std::vector<LocalTRS> twice = m;
+    MotionBake::MirrorPose(rig, twice);
+    worst = 0.0f;
+    float worstT = 0.0f;
+    for (int i = 1; i < 7; ++i) {
+        worst = std::max(worst, MotionMath::QuatAngle(twice[(size_t)i].R, pose[(size_t)i].R));
+        worstT = std::max(worstT, glm::length(twice[(size_t)i].T - pose[(size_t)i].T));
+    }
+    CHECK(worst < 1e-4f && worstT < 1e-5f);
 }
 
 void TestTakesCsv() {
@@ -352,17 +587,29 @@ void TestTakesCsv() {
         CHECK(t[0].TrimEnd == 91.0f && t[0].HasTag("forward") && t[1].HasTag("exaggerated"));
         CHECK(t[0].TagString() == "walk;loop;forward");
     }
-    // The repo's own list parses and leaves the exaggerated takes out.
+    // A mirrored row names its source take.
+    std::ofstream(p) << "name,source,group,include,trim_start,trim_end,tags\n"
+                        "Jog_Strafe_Star_Take001_Mirror,Jog_Strafe_Star_Take001,Jog,1,1.000,0.000,jog;strafe;mirrored\n";
+    std::vector<MotionTake> mt;
+    CHECK(MotionBake::ReadTakes(p.string(), mt, err) && mt.size() == 1);
+    if (mt.size() == 1) CHECK(mt[0].Mirrored() && mt[0].File() == "Jog_Strafe_Star_Take001" && mt[0].Name == "Jog_Strafe_Star_Take001_Mirror");
+    // The repo's own list parses: the exaggerated takes and the dodges out, every other take in, each mirror naming a take
+    // that is in.
     const std::string repo = ProjectPaths::Resolve("../tools/mm/takes.csv");
     std::vector<MotionTake> all;
     if (!fs::exists(repo)) return Skip("takes.csv", "tools/mm/takes.csv not found");
     CHECK(MotionBake::ReadTakes(repo, all, err));
-    int included = 0;
+    int included = 0, mirrors = 0;
     for (const MotionTake& m : all) {
         included += m.Include ? 1 : 0;
-        if (m.HasTag("exaggerated")) CHECK(!m.Include);
+        if (m.HasTag("exaggerated") || m.HasTag("dodge")) CHECK(!m.Include);
+        else CHECK(m.Include);
+        if (!m.Mirrored()) continue;
+        ++mirrors;
+        const bool sourceIn = std::any_of(all.begin(), all.end(), [&](const MotionTake& o) { return o.Name == m.File() && o.Include; });
+        CHECK(sourceIn && m.HasTag("strafe"));
     }
-    CHECK(all.size() == 139 && included > 50);
+    CHECK(all.size() > 139 && included > 100 && mirrors > 0);
 }
 
 // Needs the pack (TARTARUS_MM_SOURCE) and the Quantum body: the rest pose and bone lengths of the core bones agree.
@@ -408,7 +655,10 @@ void TestCookedStreamBudgets() {
     std::printf("[MotionMatching] cooked: %zu clips, %u frames, poses %.1f MB, features %.1f MB, load %.2f s\n", s.Clips().size(),
                 s.FrameCount(), poseMB, featMB, secs);
     CHECK(s.FrameCount() == db.FrameCount() && s.Clips().size() == db.Clips().size());
-    CHECK(poseMB <= 150.0 && featMB <= 40.0 && secs <= 2.0);
+    // The caps are the bake's own (Manny.mmconfig).
+    MotionBakeConfig cfg;
+    CHECK(cfg.Load(ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny.mmconfig"), err));
+    CHECK(poseMB <= cfg.BudgetPoseMB && featMB <= cfg.BudgetFeatureMB && secs <= cfg.BudgetLoadSeconds);
 }
 
 } // namespace
@@ -421,6 +671,11 @@ void RegisterMotionMatchingTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: pose stream round trip and binding", TestClipStreamRoundTrip});
     tests.push_back({"Motion matching: features and labels", TestFeaturesAndLabels});
     tests.push_back({"Motion matching: takes.csv", TestTakesCsv});
+    tests.push_back({"Motion matching: 32-bit quaternions and twist angles", TestPackQuat32});
+    tests.push_back({"Motion matching: finger tracks", TestFingerTracks});
+    tests.push_back({"Motion matching: style and jump intent", TestStyleIntent});
+    tests.push_back({"Motion matching: glitch repair (twist flips, spikes)", TestGlitchRepair});
+    tests.push_back({"Motion matching: mirrored poses", TestMirrorPose});
     tests.push_back({"Motion matching: pack rig vs Quantum rest pose", TestRigDiffWithPack});
     tests.push_back({"Motion matching: cooked stream budgets", TestCookedStreamBudgets});
 }

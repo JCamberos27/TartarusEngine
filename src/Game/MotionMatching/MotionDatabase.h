@@ -6,9 +6,11 @@
 //   - the 27 features normalized per group: (x - mean[d]) / groupStd, where groupStd is the mean of the group's
 //     per-feature standard deviations (a group's dimensions keep their relative scale, and no one group outweighs
 //     another just by having more dimensions or bigger units). The group weights are applied at search time.
-//   - the AABBs of the normalized features over blocks of 16 and of 64 frames (Holden's "bounding volume hierarchy" for
-//     motion matching), with each block's OR and AND of the frame flags and its gait range, so a search skips a whole
-//     block when its lower bound can't beat the best so far or no frame in it can pass the label filter.
+//     The features stay as the file's 16-bit integers (MotionFeatureSet): normalized = q * QA(d) + QB(d), one affine map
+//     per dimension, so nothing is re-quantized and only the 16-bit copy is held. MotionSearch searches the integers.
+//   - the AABBs of the features (16-bit) over blocks of 16 and of 64 frames (Holden's "bounding volume hierarchy" for
+//     motion matching), with each block's OR and AND of the frame flags, its gait range and its styles, so a search skips
+//     a whole block when its lower bound can't beat the best so far or no frame in it can pass the label filter.
 //   - which clip each frame is in.
 // Frames flagged Excluded (prone) or NoSearch (the last 60 frames of a take) are never matched (MotionSearch).
 //
@@ -36,9 +38,11 @@ inline int GroupOf(int dim) {
 }
 } // namespace MotionFeature
 
-// One pose of the stream: each stream bone's local rotation and the pelvis translation (source scale, under the root).
+// One pose of the stream: each stream bone's local rotation and the pelvis translation (source scale, under the root), and
+// the finger bones' (MotionClipStream::Statics order: the clip's track, or the relaxed pose).
 struct MotionPose {
     std::vector<glm::quat> Rot;
+    std::vector<glm::quat> Fingers;
     glm::vec3 Pelvis{0.0f};
 };
 
@@ -49,9 +53,10 @@ public:
     static constexpr int kLargeBox = 64;
 
     struct Box {
-        float Min[kDims], Max[kDims];
+        std::int16_t Min[kDims], Max[kDims]; // the features' 16-bit values (MotionFeatureSet::Quantized)
         std::uint8_t FlagOr = 0, FlagAnd = 0xFF;
         std::uint8_t GaitMin = 255, GaitMax = 0;
+        std::uint8_t Styles = 0; // bit (1 << MotionLabel::Style) per style in the block
     };
 
     // Loads `<base>.mmanim` and `<base>.mmdb`. False (with `error`) when either is missing or corrupt, or they disagree.
@@ -71,6 +76,7 @@ public:
     std::uint32_t ClipEnd(std::uint32_t frame) const;
     std::uint8_t Flags(std::uint32_t frame) const { return m_Feat.Flags(frame); }
     std::uint8_t Gait(std::uint32_t frame) const { return m_Feat.Gait(frame); }
+    std::uint8_t Style(std::uint32_t frame) const { return m_Feat.Style(frame); }
     // How many frames from `frame` on (itself included, at most 65535) its take keeps the labels a filter can refuse
     // (Crouch, Airborne, Excluded, NoSearch) as they are here: a candidate with a short runway is a dead end - it plays
     // into a refused frame at once, forcing another search (MotionSearchParams::MinRunway).
@@ -92,14 +98,17 @@ public:
     static constexpr float kProneApproachSeconds = 1.0f;
     std::uint32_t ProneApproachFrames() const { return m_ProneApproach; }
 
-    // Normalized features (kDims floats) of a frame, and the normalization itself. The raw values are not kept (the
-    // features budget): Raw() denormalizes.
-    const float* Normalized(std::uint32_t frame) const { return m_Norm.data() + (size_t)frame * kDims; }
+    // A frame's normalized features (kDims floats) and its raw ones, decoded from the 16-bit values; the normalization.
+    std::array<float, kDims> Normalized(std::uint32_t frame) const;
     std::array<float, kDims> Raw(std::uint32_t frame) const;
     void Normalize(const float* raw, float* out) const;
     void Denormalize(const float* norm, float* out) const;
     float Mean(int d) const { return m_Mean[(size_t)d]; }
     float Scale(int d) const { return m_Scale[(size_t)d]; } // the group's std that dimension d is divided by
+    // The 16-bit features (kDims per frame) and their map to the normalized space: normalized = q * QA(d) + QB(d).
+    const std::int16_t* Quantized(std::uint32_t frame) const { return m_Feat.Quantized(frame); }
+    float QA(int d) const { return m_QA[(size_t)d]; }
+    float QB(int d) const { return m_QB[(size_t)d]; }
 
     const std::vector<Box>& SmallBoxes() const { return m_Small; }
     const std::vector<Box>& LargeBoxes() const { return m_Large; }
@@ -127,7 +136,7 @@ private:
     std::vector<int> m_ClipOf;
     std::vector<std::uint16_t> m_Runway;
     std::uint32_t m_Glitches = 0, m_ProneApproach = 0;
-    std::vector<float> m_Norm, m_Mean, m_Scale;
+    std::vector<float> m_Mean, m_Scale, m_QA, m_QB;
     std::vector<Box> m_Small, m_Large;
     double m_LoadSeconds = 0.0;
 };

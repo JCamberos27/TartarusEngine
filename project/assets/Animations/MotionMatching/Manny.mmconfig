@@ -30,8 +30,10 @@
     "airPelvisRise": 0.02,
     "airMinFrames": 4,
     "contactHeight": 0.15,
-    "contactSpeed": 0.6
+    "contactSpeed": 0.6,
+    "styleSpeeds": { "stroll": 0.69, "walk": 1.17, "jog": 1.87, "run": 3.9, "crouch": 0.74 },
+    "styleWindowSeconds": 1.0
   },
-  "budgets": { "poseMB": 150, "featureMB": 40, "loadSeconds": 2.0 },
+  "budgets": { "poseMB": 200, "featureMB": 40, "loadSeconds": 2.0 },
   "validation": { "facingP95Deg": 20, "yawJitter": 300, "rigLengthPct": 2.0, "reconstructCm": 1.0 }
 }

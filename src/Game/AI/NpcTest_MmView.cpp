@@ -174,7 +174,9 @@ void NpcTest::MmViewValidate() {
             for (int k = 0; k < 2; ++k) {
                 const glm::vec3 local(g[(size_t)r.Foot[k]][3]); // the body under its root: the root's own space
                 feet[k][i] = glm::vec3(R * glm::vec4(local, 1.0f));
-                const float* ft = db.Features(f) + 3 * k;
+                float fb[MotionFeatureSet::kDims];
+                db.Decode(f, fb);
+                const float* ft = fb + 3 * k;
                 feat = std::max(feat, glm::length(local - glm::vec3(ft[0], ft[1], ft[2])) * 100.0f);
                 source[k][i] = glm::vec3(R * glm::vec4(ft[0], ft[1], ft[2], 1.0f));
             }
@@ -261,9 +263,11 @@ void NpcTest::MmView(World& world) {
         if (!loaded) { m_Done = true; return; }
         const double poseMB = (double)r.Stream.PoseBytes() / 1048576.0, featMB = (double)r.Db.Bytes() / 1048576.0;
         char b[256];
-        std::snprintf(b, sizeof b, "budgets: %zu clips, %.2f h, poses %.1f MB (150), features %.1f MB (40), load %.2f s (2)",
-                      r.Stream.Clips().size(), (double)r.Stream.FrameCount() / r.Stream.Fps() / 3600.0, poseMB, featMB, secs);
-        Check(poseMB <= 150.0 && featMB <= 40.0 && secs <= 2.0, b);
+        // (The caps are the bake's own: Manny.mmconfig's budgets.)
+        std::snprintf(b, sizeof b, "budgets: %zu clips, %.2f h, poses %.1f MB (%.0f), features %.1f MB (%.0f), load %.2f s (%.1f)",
+                      r.Stream.Clips().size(), (double)r.Stream.FrameCount() / r.Stream.Fps() / 3600.0, poseMB, cfg.BudgetPoseMB, featMB,
+                      cfg.BudgetFeatureMB, secs, cfg.BudgetLoadSeconds);
+        Check(poseMB <= cfg.BudgetPoseMB && featMB <= cfg.BudgetFeatureMB && secs <= cfg.BudgetLoadSeconds, b);
         Check(r.Stream.FrameCount() == r.Db.FrameCount() && r.Stream.Clips().size() == r.Db.Clips().size(),
               "the stream and the features cover the same frames");
 

@@ -42,13 +42,7 @@ namespace {
 // Model space: the Quantum / UE mannequin family faces +Z with +Y up, so its right is -X.
 constexpr glm::vec3 kForward{0.0f, 0.0f, 1.0f};
 constexpr float kHandEyeMin = 0.30f, kHandEyeSoft = 0.06f; // m (KeepHandsFromEye)
-constexpr float kMmFootReleaseYawRate = 240.0f; // deg/s (MM foot lock)
-constexpr float kMmChestTwistMax = 60.0f;       // deg: under MM, unarmed, the chest turns at most this far off the hips toward the view
-// Under MM, Spine Twist acts on the chest's slow heading (FirstPersonSlowAngle, these time constants per stage). The gait's
-// counter-rotation against the hips passes (at the stride rate, walk ~0.9 Hz; at 0.35 s the walk's 20 % came back
-// phase-lagged and swung the shoulders 34 % past the clip's). The view's own turn isn't filtered - a flick still leads with
-// the chest at once. Standing, the heading follows faster (no stride to keep; a turn on the spot leads with the chest).
-constexpr float kMmChestYawSeconds = 0.5f, kMmChestYawStillSeconds = 0.08f;
+constexpr float kMmChestTwistMax = 60.0f;       // deg: under MM, the chest's twist toward the view at most this far off the body
 // MM Spine Aim (the owner, 2026-11-17: looking up or down the torso bends standing; moving, the head looks and the body runs
 // as captured): the chest's share of the view's pitch, full below kMmAimFadeFrom m/s, gone by the walk/jog midpoint.
 constexpr float kMmAimFadeFrom = 0.1f;
@@ -364,18 +358,6 @@ float FirstPersonBodyWrapAngle(float radians) {
     return radians;
 }
 
-float FirstPersonSlowAngle::Update(float x, float dt, float seconds) {
-    if (!Have) {
-        A = B = x;
-        Have = true;
-        return B;
-    }
-    const float k = seconds > 1e-5f ? 1.0f - std::exp(-std::max(dt, 0.0f) / seconds) : 1.0f;
-    A += FirstPersonBodyWrapAngle(x - A) * k;
-    B += FirstPersonBodyWrapAngle(A - B) * k;
-    return B;
-}
-
 void FirstPersonGaitPhase::Update(float spread, float lift, bool moving, float dt) {
     dt = std::max(dt, 0.0f);
     auto wrap = [](float v) { return v - std::floor(v + 0.5f); }; // (-0.5, 0.5]
@@ -635,7 +617,6 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     else
         m_RestHead = glm::vec3(model.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, m_HeadNode)[3]);
     m_HaveBindPosture = false;
-    m_MmChestYawSlow.Reset();
     m_EyeClearBuilt = false;
     m_EyeClearPoints.clear();
     m_EyeClear = 0.0f;
@@ -822,14 +803,24 @@ bool FirstPersonBody::Start(World& world, Player& player) {
             m_MmSpeeds.Forward[0] = g.Walk;
             m_MmSpeeds.Forward[1] = g.Jog;
             m_MmSpeeds.Forward[2] = g.CrouchWalk;
-            m_MmSpeeds.Strafe[0] = g.StrafeFor(MotionLabel::Walk, false);
-            m_MmSpeeds.Strafe[1] = g.StrafeFor(MotionLabel::Jog, false);
-            m_MmSpeeds.Strafe[2] = g.StrafeFor(MotionLabel::Walk, true);
+            // Sideways and backwards apart (the walk's sideways takes are slower than its walk backwards).
+            const int slotStyle[4] = {MotionLabel::StyleWalk, MotionLabel::StyleJog, MotionLabel::StyleCrouch, MotionLabel::StyleStroll};
+            for (int k = 0; k < 3; ++k) {
+                m_MmSpeeds.Strafe[k] = g.StyleStrafe(slotStyle[k]);
+                m_MmSpeeds.Back[k] = g.StyleBack(slotStyle[k]);
+            }
+            // The stroll: the Walk action, or a partial stick (Player::StrollStick).
+            m_MmSpeeds.Forward[3] = g.Legs[4] > 0 ? g.Stroll : 0.0f;
+            m_MmSpeeds.Strafe[3] = g.Legs[4] > 0 ? g.StyleStrafe(MotionLabel::StyleStroll) : 0.0f;
+            m_MmSpeeds.Back[3] = g.Legs[4] > 0 ? g.StyleBack(MotionLabel::StyleStroll) : 0.0f;
             player.GaitSpeeds = m_MmSpeeds;
-            char b[256];
-            std::snprintf(b, sizeof b, "walk %.2f / jog %.2f / crouch %.2f m/s, strafes %.2f / %.2f / %.2f, turn in place %.0f deg/s",
-                          g.Walk, m_MmSpeeds.Forward[1], m_MmSpeeds.Forward[2], m_MmSpeeds.Strafe[0], m_MmSpeeds.Strafe[1], m_MmSpeeds.Strafe[2],
-                          glm::degrees(m_Mm.TurnInPlaceRate()));
+            char b[400];
+            std::snprintf(b, sizeof b,
+                          "stroll %.2f / walk %.2f / jog %.2f / crouch %.2f m/s, sideways %.2f / %.2f / %.2f / %.2f, backwards %.2f / %.2f / "
+                          "%.2f / %.2f, turn in place %.0f deg/s",
+                          m_MmSpeeds.Forward[3], g.Walk, m_MmSpeeds.Forward[1], m_MmSpeeds.Forward[2], m_MmSpeeds.Strafe[3],
+                          m_MmSpeeds.Strafe[0], m_MmSpeeds.Strafe[1], m_MmSpeeds.Strafe[2], m_MmSpeeds.Back[3], m_MmSpeeds.Back[0],
+                          m_MmSpeeds.Back[1], m_MmSpeeds.Back[2], glm::degrees(m_Mm.TurnInPlaceRate()));
             Log::Info(std::string("First Person Body: motion matching - ") + b + ".");
         }
     }
@@ -1369,6 +1360,8 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     in.Grounded = player.Grounded;
     in.Crouched = player.Crouched;
     in.Sprint = player.Sprinting;
+    // The style asked for: the gait slot the capsule moves in (Player::DirectionalSpeeds).
+    in.Style = player.Gait == 1 ? MotionLabel::StyleJog : player.Gait == 3 ? MotionLabel::StyleStroll : MotionLabel::StyleWalk;
     in.Jumped = player.Jumped;
     in.JumpSpeed = player.JumpSpeed;
     in.Gravity = player.Gravity;
@@ -1398,9 +1391,7 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
         normal = glm::vec3(hit.Normal[0], 0.0f, hit.Normal[2]);
         return true;
     };
-    const float yawBefore = m_Yaw;
     m_Mm.Tick(in, m_Yaw);
-    m_MmYawRate = dt > 0.0f ? FirstPersonBodyWrapAngle(m_Yaw - yawBefore) / dt : 0.0f;
 
     m_Twist = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
     m_Still = m_Mm.Still();
@@ -1642,21 +1633,21 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // the view's, measured off the shoulder line - one pass, about the model's up, so the line's heading lands exactly
     // (every bone's share turns about the same axis; short of it only where the spine's per-bone limits stop it). Off it,
     // one shoulder sits further from the view than the other.
-    if (mmLayers && cfg.SpineTwist > 0.0f && !matched) {
+    if (mmLayers && cfg.SpineTwist > 0.0f && !matched && m_Mm.Active()) {
+        // Motion matching: an additive yaw - the view off the character facing (which turns as the mocap turns), capped,
+        // spread over the spine - on top of the clip's chest. Not a closed loop: the gait's own counter-rotation of the
+        // shoulders against the hips passes untouched (re-aimed every frame, the shoulder line was held square to the view:
+        // the jog's chest swung 1.36x the clip's against the pelvis).
+        const float lim = glm::radians(kMmChestTwistMax);
+        const float twist = std::clamp(m_Twist, -lim, lim) * std::min(cfg.SpineTwist, 1.0f);
+        if (std::abs(twist) > 0.002f) ApplySpineAim(camera, 0.0f, twist);
+    } else if (mmLayers && cfg.SpineTwist > 0.0f && !matched) {
         glm::vec3 l, r;
         shoulderPair(l, r);
         const glm::vec3 across = l - r; // model +X (the mannequin's left) when the chest faces forward
         if (across.x * across.x + across.z * across.z > 1e-6f) {
-            float chestYaw = std::atan2(-across.z, across.x); // rotating +X about +Y by t gives z = -sin t
-            // Under MM a flick of the view leaves the heading behind for a moment (its turn rate is capped): the chest leads
-            // only so far - twisted the whole way round, the spine wrung.
-            const float lim = glm::radians(kMmChestTwistMax);
-            const float twistWanted = m_Mm.Active() && m_ArmsWeight < 0.5f ? std::clamp(m_Twist, -lim, lim) : m_Twist;
-            // Under MM the chest's slow heading is turned to the view, not its every frame: the gait's counter-rotation of the
-            // shoulders against the hips stays (re-aimed every frame, Spine Twist 1 held the shoulder line square to the view
-            // over hips swinging 16 deg a stride).
-            if (m_Mm.Active()) chestYaw = m_MmChestYawSlow.Update(chestYaw, dt, m_Still ? kMmChestYawStillSeconds : kMmChestYawSeconds);
-            const float error = FirstPersonBodyWrapAngle(twistWanted - chestYaw);
+            const float chestYaw = std::atan2(-across.z, across.x); // rotating +X about +Y by t gives z = -sin t
+            const float error = FirstPersonBodyWrapAngle(m_Twist - chestYaw);
             if (std::abs(error) > 0.002f) ApplySpineAim(camera, 0.0f, error * std::min(cfg.SpineTwist, 1.0f));
         }
     }
@@ -1928,10 +1919,6 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     // alike - and catches up through its swing once it lifts, or steps once the leg can no longer reach it (IK::FootLock).
     const IK::FootLockSettings lockSet = IK::FootLockFrom(cfg);
     for (int s = 0; s < 2; ++s) {
-        // Motion matching: while the heading swings round faster than a foot can stay planted under it (a flick of the view
-        // on the move) the feet follow the clip, nothing held: a held foot - or one let go, its world offset easing out -
-        // stayed where it was while the hips turned over it, and the legs crossed 26 cm (the owner's play test 2).
-        if (m_Mm.Active() && std::fabs(m_MmYawRate) > glm::radians(kMmFootReleaseYawRate)) m_Lock.ResetFoot(s);
         const glm::vec3 footLocal = scale * IK::Position(globals[footNode[s]]); // the clip's foot, in the body
         const glm::vec3 footWorld = m_Feet + yaw * footLocal;                   // the animated foot
         animHeight[s] = footWorld.y - m_Feet.y;

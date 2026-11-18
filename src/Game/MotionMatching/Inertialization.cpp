@@ -33,12 +33,15 @@ float IM::Smoothstep(float x) {
 }
 
 void Inertialization::Transition(const MotionPose& previous, const MotionPose& last, float dt) {
-    const size_t n = last.Rot.size();
+    m_Bones = last.Rot.size();
+    const size_t n = m_Bones + last.Fingers.size();
     m_Rot = last.Rot;
+    m_Rot.insert(m_Rot.end(), last.Fingers.begin(), last.Fingers.end());
     m_AngVel.assign(n, glm::vec3(0.0f));
-    if (previous.Rot.size() == n && dt > 1e-6f) {
+    if (previous.Rot.size() == m_Bones && previous.Fingers.size() == last.Fingers.size() && dt > 1e-6f) {
         for (size_t i = 0; i < n; ++i) {
-            glm::vec3 w = IM::AngularVelocity(previous.Rot[i], last.Rot[i], dt);
+            const glm::quat& a = i < m_Bones ? previous.Rot[i] : previous.Fingers[i - m_Bones];
+            glm::vec3 w = IM::AngularVelocity(a, m_Rot[i], dt);
             const float m = glm::length(w);
             if (m > Params.MaxAngularVelocity) w *= Params.MaxAngularVelocity / m;
             m_AngVel[i] = w;
@@ -59,7 +62,7 @@ float Inertialization::BlendWeight() const {
 }
 
 void Inertialization::Update(float dt, const MotionPose& target, MotionPose& out) {
-    if (!m_Active || m_Rot.size() != target.Rot.size()) {
+    if (!m_Active || m_Bones != target.Rot.size() || m_Rot.size() != m_Bones + target.Fingers.size()) {
         m_Active = false;
         out = target;
         return;
@@ -79,7 +82,11 @@ void Inertialization::Update(float dt, const MotionPose& target, MotionPose& out
     m_Time += dt;
     const float a = BlendWeight();
     out.Rot.resize(target.Rot.size());
-    for (size_t i = 0; i < m_Rot.size(); ++i) out.Rot[i] = glm::slerp(m_Rot[i], glm::dot(m_Rot[i], target.Rot[i]) < 0.0f ? -target.Rot[i] : target.Rot[i], a);
+    out.Fingers.resize(target.Fingers.size());
+    for (size_t i = 0; i < m_Rot.size(); ++i) {
+        const glm::quat& t = i < m_Bones ? target.Rot[i] : target.Fingers[i - m_Bones];
+        (i < m_Bones ? out.Rot[i] : out.Fingers[i - m_Bones]) = glm::slerp(m_Rot[i], glm::dot(m_Rot[i], t) < 0.0f ? -t : t, a);
+    }
     out.Pelvis = glm::mix(m_Pelvis, target.Pelvis, a);
     if (m_Time >= Params.BlendTime) m_Active = false;
 }

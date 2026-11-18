@@ -11,7 +11,8 @@
 //   - a jump mid-blend starts from what's on screen (the last output), so chained jumps stay continuous
 //   - the extrapolated angular velocity is clamped (MaxAngularVelocity), so a noisy last frame can't spin a bone
 //
-// Pure math on MotionPose (stream-bone rotations + the pelvis translation): unit-tested on synthetic poses.
+// Pure math on MotionPose (stream-bone rotations, the fingers', the pelvis translation): unit-tested on synthetic poses. The
+// fingers blend like the other bones - a jump into a clip without finger data (the relaxed pose) eases into it too.
 
 #include "MotionDatabase.h"
 
@@ -38,8 +39,10 @@ public:
 private:
     bool m_Active = false;
     float m_Time = 0.0f;
+    // The stream bones then the fingers (MotionPose::Rot, then MotionPose::Fingers).
     std::vector<glm::quat> m_Rot;
     std::vector<glm::vec3> m_AngVel; // scaled angle-axis per second, in the bone's parent space
+    size_t m_Bones = 0;
     glm::vec3 m_Pelvis{0.0f}, m_PelvisVel{0.0f};
 };
 

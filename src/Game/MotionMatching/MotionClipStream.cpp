@@ -79,16 +79,23 @@ void MotionClipStream::Reset(float fps, const std::vector<std::string>& bones) {
     m_Root.clear();
     m_Pelvis.clear();
     m_Rot.clear();
+    m_Finger.clear();
     Statics.clear();
 }
 
 void MotionClipStream::AddClip(const Clip& info, const std::vector<RootSample>& root, const std::vector<glm::vec3>& pelvis,
-                               const std::vector<glm::quat>& rotations) {
+                               const std::vector<glm::quat>& rotations, const std::vector<glm::quat>* fingers) {
     const size_t n = root.size(), nb = m_Bones.size();
     if (pelvis.size() != n || rotations.size() != n * nb || n == 0) return;
     Clip c = info;
     c.First = (std::uint32_t)m_Root.size();
     c.Count = (std::uint32_t)n;
+    c.FingerFirst = kNoFingers;
+    if (fingers && !fingers->empty() && !Statics.empty() && fingers->size() == n * Statics.size()) {
+        c.FingerFirst = (std::uint32_t)(m_Finger.size() / Statics.size());
+        m_Finger.reserve(m_Finger.size() + fingers->size());
+        for (const glm::quat& q : *fingers) m_Finger.push_back(MotionMath::PackQuat32(q));
+    }
     m_Clips.push_back(c);
     m_Root.insert(m_Root.end(), root.begin(), root.end());
     m_Pelvis.insert(m_Pelvis.end(), pelvis.begin(), pelvis.end());
@@ -118,11 +125,14 @@ bool MotionClipStream::Save(const std::string& path, std::string* error) const {
         o.Put(c.First);
         o.Put(c.Count);
         o.Put(c.SourceStart);
+        o.Put(c.FingerFirst);
     }
     o.B.reserve(o.B.size() + PoseBytes());
     for (const RootSample& r : m_Root) { o.Put(r.Position.x); o.Put(r.Position.z); o.Put(r.Yaw); }
     o.Raw(m_Pelvis.data(), m_Pelvis.size() * sizeof(glm::vec3));
     o.Raw(m_Rot.data(), m_Rot.size() * sizeof(MotionMath::PackedQuat));
+    o.Put((std::uint32_t)(Statics.empty() ? 0 : m_Finger.size() / Statics.size()));
+    o.Raw(m_Finger.data(), m_Finger.size() * sizeof(std::uint32_t));
     if (!WriteWhole(path, o.B)) {
         if (error) *error = "cannot write " + path;
         return false;
@@ -165,6 +175,7 @@ bool MotionClipStream::Load(const std::string& path, std::string* error) {
         c.First = in.Get<std::uint32_t>();
         c.Count = in.Get<std::uint32_t>();
         c.SourceStart = in.Get<float>();
+        c.FingerFirst = in.Get<std::uint32_t>();
     }
     m_Root.resize(frames);
     for (RootSample& r : m_Root) {
@@ -177,8 +188,15 @@ bool MotionClipStream::Load(const std::string& path, std::string* error) {
     in.Raw(m_Pelvis.data(), m_Pelvis.size() * sizeof(glm::vec3));
     m_Rot.resize((size_t)frames * bones);
     in.Raw(m_Rot.data(), m_Rot.size() * sizeof(MotionMath::PackedQuat));
+    const std::uint32_t fingerFrames = in.Get<std::uint32_t>();
+    m_Finger.resize((size_t)fingerFrames * statics);
+    in.Raw(m_Finger.data(), m_Finger.size() * sizeof(std::uint32_t));
     bool clipsOk = true;
-    for (const Clip& c : m_Clips) clipsOk = clipsOk && c.Count > 0 && (size_t)c.First + c.Count <= frames;
+    for (const Clip& c : m_Clips) {
+        clipsOk = clipsOk && c.Count > 0 && (size_t)c.First + c.Count <= frames;
+        if (c.FingerFirst != kNoFingers) clipsOk = clipsOk && statics > 0 && (size_t)c.FingerFirst + c.Count <= fingerFrames;
+    }
+    for (size_t k = 1; k < m_Clips.size(); ++k) clipsOk = clipsOk && m_Clips[k].First >= m_Clips[k - 1].First + m_Clips[k - 1].Count;
     if (!in.Ok || in.At != buf.size() || !clipsOk) {
         if (error) *error = path + ": truncated or corrupt";
         Reset(60.0f, {});
@@ -206,7 +224,16 @@ float MotionClipStream::ClipSeconds(int clip) const {
 
 size_t MotionClipStream::PoseBytes() const {
     return m_Root.size() * 3 * sizeof(float) + m_Pelvis.size() * sizeof(glm::vec3) +
-           m_Rot.size() * sizeof(MotionMath::PackedQuat);
+           m_Rot.size() * sizeof(MotionMath::PackedQuat) + FingerBytes();
+}
+
+int MotionClipStream::ClipAt(std::uint32_t frame) const {
+    // The clips lie back to back in order (AddClip, and Load checks it).
+    const auto it = std::upper_bound(m_Clips.begin(), m_Clips.end(), frame,
+                                     [](std::uint32_t f, const Clip& c) { return f < c.First; });
+    if (it == m_Clips.begin()) return -1;
+    const Clip& c = *(it - 1);
+    return frame < c.First + c.Count ? (int)(it - 1 - m_Clips.begin()) : -1;
 }
 
 MotionClipStream::RootSample MotionClipStream::RootAt(int clip, float seconds) const {
@@ -261,9 +288,10 @@ void MotionClipStream::FramePose(std::uint32_t frame, const Binding& binding, st
         const int node = binding.Nodes[i];
         if (node >= 0 && node < (int)pose.size()) pose[(size_t)node].R = Rotation(frame, (int)i);
     }
+    const int clip = ClipAt(frame);
     for (size_t i = 0; i < Statics.size() && i < binding.StaticNodes.size(); ++i) {
         const int node = binding.StaticNodes[i];
-        if (node >= 0 && node < (int)pose.size()) pose[(size_t)node].R = Statics[i].Rotation;
+        if (node >= 0 && node < (int)pose.size()) pose[(size_t)node].R = FingerRotation(clip, frame, (int)i);
     }
     if (binding.Pelvis >= 0 && binding.Pelvis < (int)pose.size()) pose[(size_t)binding.Pelvis].T = m_Pelvis[frame] * binding.PelvisScale;
 }
@@ -286,6 +314,15 @@ void MotionClipStream::SamplePose(int clip, float seconds, const Binding& bindin
         if (glm::dot(a, b) < 0.0f) b = -b;
         pose[(size_t)node].R = glm::normalize(a * (1.0f - t) + b * t);
     }
+    if (HasFingers(clip))
+        for (size_t i = 0; i < Statics.size() && i < binding.StaticNodes.size(); ++i) {
+            const int node = binding.StaticNodes[i];
+            if (node < 0 || node >= (int)pose.size()) continue;
+            const glm::quat a = FingerRotation(clip, g0, (int)i);
+            glm::quat b = FingerRotation(clip, g1, (int)i);
+            if (glm::dot(a, b) < 0.0f) b = -b;
+            pose[(size_t)node].R = glm::normalize(a * (1.0f - t) + b * t);
+        }
     if (binding.Pelvis >= 0 && binding.Pelvis < (int)pose.size())
         pose[(size_t)binding.Pelvis].T = glm::mix(m_Pelvis[g0], m_Pelvis[g1], t) * binding.PelvisScale;
 }

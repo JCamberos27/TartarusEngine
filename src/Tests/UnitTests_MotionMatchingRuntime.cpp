@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
 #include <random>
 
 namespace {
@@ -50,7 +51,7 @@ struct SynthDb {
     MotionFeatureSet Feat;
 };
 
-SynthDb Build(const std::vector<TakeSpec>& takes) {
+SynthDb Build(const std::vector<TakeSpec>& takes, bool finish = true) {
     SynthDb s;
     s.Stream.Reset(kFps, {"pelvis", "thigh_l", "thigh_r"});
     s.Stream.SourcePelvisHeight = 0.95f;
@@ -98,10 +99,10 @@ SynthDb Build(const std::vector<TakeSpec>& takes) {
             rot.push_back(glm::angleAxis(0.4f * std::sin(phase), glm::vec3(1, 0, 0)));
             rot.push_back(glm::angleAxis(-0.4f * std::sin(phase), glm::vec3(1, 0, 0)));
         }
-        s.Feat.AddClip(t.Name, fr, root, cfg);
+        s.Feat.AddClip(t.Name, fr, root, cfg, MotionClipIntent::FromTags(t.Tags));
         s.Stream.AddClip({t.Name, t.Tags, 0, 0, 0.0f}, rs, pelvisLocal, rot);
     }
-    s.Feat.Finish();
+    if (finish) s.Feat.Finish();
     return s;
 }
 
@@ -146,7 +147,8 @@ void FrameQuery(const MotionDatabase& db, std::uint32_t f, float* q) {
 void TestDatabaseBuild() {
     MotionDatabase db;
     SynthDb src = Build(StandardTakes());
-    const std::vector<float> raw500(src.Feat.Features(500), src.Feat.Features(500) + MotionDatabase::kDims);
+    std::vector<float> raw500(MotionDatabase::kDims);
+    src.Feat.Decode(500, raw500.data());
     CHECK(Adopt(db, std::move(src)));
     CHECK(db.FrameCount() > 3000 && db.Stream().Clips().size() == 13);
     // Boxes cover every frame and bound it.
@@ -156,7 +158,7 @@ void TestDatabaseBuild() {
         const auto& b = db.SmallBoxes()[i / 16];
         const auto& L = db.LargeBoxes()[i / 64];
         for (int d = 0; d < MotionDatabase::kDims; ++d) {
-            const float x = db.Normalized(i)[d];
+            const std::int16_t x = db.Quantized(i)[d];
             inside = inside && x >= b.Min[d] && x <= b.Max[d] && x >= L.Min[d] && x <= L.Max[d];
         }
         inside = inside && (b.FlagOr & db.Flags(i)) == db.Flags(i) && (b.FlagAnd & db.Flags(i)) == b.FlagAnd;
@@ -167,7 +169,8 @@ void TestDatabaseBuild() {
     float worst = 0.0f;
     for (int d = 0; d < 27; ++d) worst = std::max(worst, std::fabs(r[(size_t)d] - raw500[(size_t)d]));
     CHECK(worst < 1e-4f);
-    CHECK(db.Features().Bytes() < (size_t)db.FrameCount() * 4); // the raw copy is gone
+    // The features are held once, as 16-bit values (no float copy).
+    CHECK(db.Features().Bytes() == (size_t)db.FrameCount() * (MotionDatabase::kDims * 2 + 3));
     CHECK(db.Scale(15) == db.Scale(20) && db.Scale(0) == db.Scale(5));
     // A mismatched pair is refused.
     SynthDb a = Build(StandardTakes());
@@ -223,6 +226,102 @@ void TestSearchMatchesBruteForce() {
     CHECK(scoredBox * 2 < scoredBrute); // the boxes prune
 }
 
+// The 16-bit features: the search on them finds the float features' best frame, or one whose float cost is within the
+// quantization's reach of it.
+void TestQuantizedSearch() {
+    SynthDb src = Build(StandardTakes(), false);
+    std::vector<float> raw((size_t)src.Feat.FrameCount() * MotionDatabase::kDims);
+    for (std::uint32_t f = 0; f < src.Feat.FrameCount(); ++f) src.Feat.Decode(f, raw.data() + (size_t)f * MotionDatabase::kDims);
+    src.Feat.Finish();
+    float worstQ = 0.0f;
+    for (int d = 0; d < MotionDatabase::kDims; ++d) worstQ = std::max(worstQ, src.Feat.QError()[(size_t)d] / src.Feat.Std()[(size_t)d]);
+    MotionDatabase db;
+    CHECK(Adopt(db, std::move(src)));
+    CHECK(worstQ < 1e-3f);
+    std::mt19937 rng(99);
+    std::uniform_int_distribution<std::uint32_t> frame(0, db.FrameCount() - 1);
+    std::normal_distribution<float> noise(0.0f, 0.3f);
+    int differ = 0;
+    float worstGap = 0.0f;
+    for (int k = 0; k < 300; ++k) {
+        float q[27];
+        FrameQuery(db, frame(rng), q);
+        for (float& x : q) x += noise(rng);
+        MotionSearchParams p;
+        const MotionSearchResult r = MotionSearch::Search(db, q, p);
+        // Float brute force on the exact features, the same filter and weights.
+        float best = 1e30f, atQuant = 1e30f;
+        std::int64_t bestAt = -1;
+        for (std::uint32_t i = 0; i < db.FrameCount(); ++i) {
+            if (!MotionSearch::Passes(db.Flags(i), p)) continue;
+            float n[27], c = 0.0f;
+            db.Normalize(raw.data() + (size_t)i * MotionDatabase::kDims, n);
+            for (int d = 0; d < 27; ++d) c += p.GroupWeight[MotionFeature::GroupOf(d)] * (q[d] - n[d]) * (q[d] - n[d]);
+            if (c < best) { best = c; bestAt = i; }
+            if ((std::int64_t)i == r.Frame) atQuant = c;
+        }
+        differ += bestAt != r.Frame ? 1 : 0;
+        worstGap = std::max(worstGap, atQuant - best);
+    }
+    std::printf("[MotionMatching] 16-bit features: worst error %.2e std; search vs float brute force: %d of 300 differ, worst float-cost gap %.2e\n",
+                worstQ, differ, worstGap);
+    CHECK(worstGap < 1e-3f);
+}
+
+// The style filter: asked for one style, only its frames are candidates - exactly as brute force.
+void TestStyleSearch() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    const int walk = db.Stream().FindClip("Walk_Straight"), jog = db.Stream().FindClip("Jog_Straight");
+    CHECK(db.Style(db.Clip(walk).First + 50) == MotionLabel::StyleWalk && db.Style(db.Clip(jog).First + 50) == MotionLabel::StyleJog);
+    CHECK(db.Style(db.Clip(db.Stream().FindClip("Stand_Idle")).First + 50) == MotionLabel::StyleStand);
+    CHECK(db.Style(db.Clip(db.Stream().FindClip("Run_Straight")).First + 100) == MotionLabel::StyleRun);
+    float q[27];
+    FrameQuery(db, db.Clip(walk).First + 100, q);
+    MotionSearchParams p;
+    p.Forbid = MotionLabel::Crouch | MotionLabel::Airborne;
+    MotionSearchResult r = MotionSearch::Search(db, q, p);
+    CHECK(r.Frame >= 0 && db.Style((std::uint32_t)r.Frame) == MotionLabel::StyleWalk);
+    p.DesiredStyle = MotionLabel::StyleJog;
+    r = MotionSearch::Search(db, q, p);
+    CHECK(r.Frame >= 0 && db.Style((std::uint32_t)r.Frame) == MotionLabel::StyleJog);
+    CHECK(MotionSearch::Cost(db, q, db.Clip(walk).First + 100, p) == std::numeric_limits<float>::infinity());
+    // ... exactly as brute force, for any style asked.
+    std::mt19937 rng(5);
+    std::uniform_int_distribution<std::uint32_t> frame(0, db.FrameCount() - 1);
+    int mismatches = 0;
+    for (int k = 0; k < 200; ++k) {
+        FrameQuery(db, frame(rng), q);
+        MotionSearchParams s;
+        s.DesiredStyle = k % MotionLabel::StyleCount;
+        const MotionSearchResult a = MotionSearch::Search(db, q, s), b = MotionSearch::SearchBrute(db, q, s);
+        mismatches += a.Frame != b.Frame || a.Cost != b.Cost ? 1 : 0;
+    }
+    CHECK(mismatches == 0);
+}
+
+// The fingers dead-blend with the rest: from what was shown to the new clip's, over the blend time.
+void TestFingersDeadBlend() {
+    Inertialization in;
+    in.Params.BlendTime = 0.2f;
+    MotionPose a, b, target;
+    a.Rot = b.Rot = target.Rot = {glm::quat(1, 0, 0, 0)};
+    a.Fingers = {glm::angleAxis(0.30f, glm::vec3(0, 0, 1))};
+    b.Fingers = {glm::angleAxis(0.31f, glm::vec3(0, 0, 1))};
+    target.Fingers = {glm::angleAxis(-0.5f, glm::vec3(0, 0, 1))};
+    in.Transition(a, b, 1.0f / 60.0f);
+    MotionPose out;
+    in.Update(1.0f / 60.0f, target, out);
+    CHECK(out.Fingers.size() == 1 && MotionMath::QuatAngle(out.Fingers[0], b.Fingers[0]) < 0.05f); // starts where it was
+    for (int k = 0; k < 20; ++k) in.Update(1.0f / 60.0f, target, out);
+    CHECK(!in.Blending() && MotionMath::QuatAngle(out.Fingers[0], target.Fingers[0]) < 1e-5f);
+    // The cache key: a load with a rig (its hands-up frames excluded) and one without are different databases.
+    const std::string base = "assets/Animations/MotionMatching/Manny";
+    CHECK(SharedMotionDatabase::CacheKey(base, false, "") != SharedMotionDatabase::CacheKey(base, true, "body.fbx"));
+    CHECK(SharedMotionDatabase::CacheKey(base, true, "a.fbx") != SharedMotionDatabase::CacheKey(base, true, "b.fbx"));
+    CHECK(SharedMotionDatabase::CacheKey(base, true, "a.fbx") == SharedMotionDatabase::CacheKey(base, true, "a.fbx"));
+}
+
 void TestSearchFiltersAndTies() {
     // Duplicate takes: identical frames in two clips.
     std::vector<TakeSpec> takes = StandardTakes();
@@ -235,15 +334,16 @@ void TestSearchFiltersAndTies() {
     const auto& orig = db.Clip(0);
     float q[27];
     // A query equal to a frame of the copy finds a frame of the original (the lower indices: the copy's frames are
-    // bit-identical to the original's, so only the visiting order can choose) - every time.
+    // bit-identical to the original's, so only the visiting order can choose) - every time. (The cost is the query's round
+    // trip through the 16-bit features' map: not quite 0.)
     FrameQuery(db, copy.First + 100, q);
     MotionSearchParams p;
     const MotionSearchResult a = MotionSearch::Search(db, q, p);
-    CHECK(a.Frame >= (std::int64_t)orig.First && a.Frame < (std::int64_t)(orig.First + orig.Count) && a.Cost == 0.0f);
+    CHECK(a.Frame >= (std::int64_t)orig.First && a.Frame < (std::int64_t)(orig.First + orig.Count) && a.Cost < 1e-6f);
     for (int k = 0; k < 5; ++k) CHECK(MotionSearch::Search(db, q, p).Frame == a.Frame);
     // Playing the copy's frame: it's as good as the original, so it stays (the playing frame wins a tie).
     const MotionSearchResult stay = MotionSearch::Search(db, q, p, copy.First + 100);
-    CHECK(stay.Frame == (std::int64_t)copy.First + 100 && !stay.Switched && stay.CurrentCost == 0.0f);
+    CHECK(stay.Frame == (std::int64_t)copy.First + 100 && !stay.Switched && stay.CurrentCost < 1e-6f);
     // Excluded, NoSearch and (by default) Airborne frames are never matched, even by their own features.
     for (std::uint32_t i = 0; i < db.FrameCount(); i += 7) {
         const std::uint8_t f = db.Flags(i);
@@ -561,6 +661,49 @@ void TestPlayerHooks() {
     const float diag = PlayerGaitSpeed(g, {std::sin(0.4363f), std::cos(0.4363f)}, 1); // 25 degrees off: halfway
     CHECK(std::fabs(diag - 0.5f * (1.85f + 1.32f)) < 0.01f);
     CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, 0.0f}, 0) - 1.27f) < 1e-4f);
+    // Backwards apart from sideways: straight back is Back, sideways still Strafe, between a smoothstep.
+    g.Back[0] = 1.06f;
+    g.Strafe[0] = 0.90f;
+    CHECK(std::fabs(PlayerGaitSpeed(g, {0.0f, -1.0f}, 0) - 1.06f) < 1e-4f);
+    CHECK(std::fabs(PlayerGaitSpeed(g, {1.0f, 0.0f}, 0) - 0.90f) < 1e-4f);
+    const float backDiag = PlayerGaitSpeed(g, {std::sin(2.356f), std::cos(2.356f)}, 0); // 135 degrees off
+    CHECK(std::fabs(backDiag - 0.98f) < 0.01f);
+}
+
+// The facing model (Stage 2): the character facing turns by the clip's own root turn, is pulled toward the simulation facing
+// and is clamped off it; the simulation facing is a spring toward the facing wanted that nothing of the character feeds.
+void TestFacingModel() {
+    FirstPersonBodyMotion::Settings cfg;
+    const float dt = 1.0f / 60.0f;
+    // Converges: no clip turn, the character starts 34 deg off the simulation and settles onto it.
+    float yaw = 0.6f;
+    for (int i = 0; i < 120; ++i) yaw = FirstPersonBodyMotion::StepCharacterFacing(yaw, 0.0f, 0.0f, cfg, dt); // (10 half-lives)
+    CHECK(std::fabs(yaw) < 0.01f);
+    // The clamp holds: a clip turning hard one way never takes the character past MaxFacingOffset.
+    yaw = 0.0f;
+    float worst = 0.0f;
+    for (int i = 0; i < 60; ++i) {
+        yaw = FirstPersonBodyMotion::StepCharacterFacing(yaw, 0.2f, 0.0f, cfg, dt);
+        worst = std::max(worst, std::fabs(yaw));
+    }
+    CHECK(worst <= cfg.MaxFacingOffset + 1e-5f);
+    // A clip turning with the simulation leaves no lag: the simulation turning at 2 rad/s, the clip turning the same.
+    yaw = 0.0f;
+    float sim = 0.0f;
+    for (int i = 0; i < 120; ++i) {
+        sim += 2.0f * dt;
+        yaw = FirstPersonBodyMotion::StepCharacterFacing(yaw, 2.0f * dt, MotionMath::WrapPi(sim), cfg, dt);
+    }
+    CHECK(std::fabs(MotionMath::WrapPi(yaw - sim)) < 1e-3f);
+    // No feedback: the simulation facing is a spring toward the facing wanted alone - whatever the character's clips do.
+    float s0 = 0.0f, r0 = 0.0f, s1 = 0.0f, r1 = 0.0f, c = 0.0f;
+    for (int i = 0; i < 90; ++i) {
+        TrajectoryPredictor::SpringScalar(s0, r0, 1.5f, cfg.SimFacingHalflife, dt);
+        c = FirstPersonBodyMotion::StepCharacterFacing(c, (i % 2 ? 0.3f : -0.3f), s1, cfg, dt); // a wildly turning clip
+        TrajectoryPredictor::SpringScalar(s1, r1, 1.5f, cfg.SimFacingHalflife, dt);
+    }
+    CHECK(s0 == s1 && r0 == r1);
+    CHECK(std::fabs(s0 - 1.5f) < 0.01f);
 }
 
 // In Play the frame time varies (the npc tests run a fixed 1/60 s). A jump's dead blend must carry the velocity the output
@@ -618,7 +761,10 @@ void TestReselectAndIdleHold() {
         p.AvoidCount = 1;
         const MotionSearchResult a = MotionSearch::Search(db, q, p), b = MotionSearch::SearchBrute(db, q, p);
         const bool outside = a.Frame < p.Avoid[0] || a.Frame > p.Avoid[1];
-        ok += outside && a.Frame == b.Frame && a.Cost == b.Cost && MotionSearch::Search(db, q, MotionSearchParams{}).Frame == (std::int64_t)f;
+        // (Unavoided it finds an exact match: the frame, or a stride of the synthetic walk 75 frames off whose 16-bit features
+        // are the same.)
+        const MotionSearchResult unavoided = MotionSearch::Search(db, q, MotionSearchParams{});
+        ok += outside && a.Frame == b.Frame && a.Cost == b.Cost && unavoided.Cost < 1e-6f && (unavoided.Frame - (std::int64_t)f) % 75 == 0;
     }
     CHECK(ok == 8);
     MotionSearchSchedule s;
@@ -763,6 +909,9 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: database build and boxes", TestDatabaseBuild});
     tests.push_back({"Motion matching: search matches brute force", TestSearchMatchesBruteForce});
     tests.push_back({"Motion matching: search filters and ties", TestSearchFiltersAndTies});
+    tests.push_back({"Motion matching: 16-bit features against float", TestQuantizedSearch});
+    tests.push_back({"Motion matching: the style cost", TestStyleSearch});
+    tests.push_back({"Motion matching: fingers in the dead blend, the database cache key", TestFingersDeadBlend});
     tests.push_back({"Motion matching: search schedule", TestSearchSchedule});
     tests.push_back({"Motion matching: dead blending", TestInertialization});
     tests.push_back({"Motion matching: trajectory springs and collision", TestTrajectoryPredictor});
@@ -772,6 +921,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: player hooks (play rate, lock, gait speeds)", TestPlayerHooks});
     tests.push_back({"Motion matching: player exclusions, the capped aim and its fade", TestPlayerExclusionsAndAimCap});
     tests.push_back({"Motion matching: dead blend across a frame-time change", TestDeadBlendFrameTime});
+    tests.push_back({"Motion matching: the facing model (simulation and character)", TestFacingModel});
     tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
 }

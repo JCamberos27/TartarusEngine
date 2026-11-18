@@ -55,15 +55,20 @@ public:
     float CrouchSpeedMultiplier = 0.45f;
     bool Crouched = false;
     // Per-gait speeds by direction (a motion matching body, FirstPersonBody: the mocap's gait table). When Active, the
-    // move's speed is Forward[g] heading along the view and Strafe[g] from StrafeAngle degrees off it (sideways and
-    // backwards; smoothstep between), g = 0 the default gait, 1 with Sprint held, 2 crouched - in place of MoveSpeed,
-    // SprintMultiplier and CrouchSpeedMultiplier. Set before each Update.
+    // move's speed is Forward[g] heading along the view, Strafe[g] from StrafeAngle degrees off it to sideways, and Back[g]
+    // straight back (smoothsteps between; Back 0: the strafe speed), g = 0 the default gait (walk), 1 with Sprint held (the jog), 2 crouched, 3 the stroll
+    // (the Walk action held, or a stick under StrollStick; 0 speeds: none) - in place of MoveSpeed, SprintMultiplier and
+    // CrouchSpeedMultiplier. The stick picks the gait, not the speed: the body plays a gait's mocap at its own pace, so a
+    // partial stick between two gaits would ask for a speed no take moves at. Set before each Update.
     struct DirectionalSpeeds {
         bool Active = false;
-        float Forward[3] = {0.0f, 0.0f, 0.0f};
-        float Strafe[3] = {0.0f, 0.0f, 0.0f};
+        float Forward[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        float Strafe[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        float Back[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         float StrafeAngle = 50.0f;
     } GaitSpeeds;
+    float StrollStick = 0.6f; // a move stick under this (past its dead zone, 0..1) strolls (GaitSpeeds.Active only)
+    int Gait = 0;             // out, per Update: the gait slot moved in (GaitSpeeds' index)
     bool Sprinting = false; // out, per Update: the sprint (jog) key counted this frame
     // A jump pressed this long before landing still happens on landing, and one pressed this long
     // after stepping off an edge still counts (seconds).
@@ -96,6 +101,7 @@ public:
     bool AimHeld = false; // weapon aim intent blocks sprint without consuming the held sprint input
     bool SprintBlocked = false; // reload / mag check / inspect / melee suspension; the held/scripted sprint intent remains available
     bool ScriptCrouch = false; // ... and Crouch
+    bool ScriptWalk = false;   // ... and Walk (the stroll)
     bool ScriptJump = false;   // ... and a Jump press (this frame)
 
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
@@ -113,7 +119,8 @@ glm::vec3 PlayerClipVelocity(const glm::vec3& v, const glm::vec3* walls, int cou
 glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime);
 
 // Player::DirectionalSpeeds' speed for a move `local` (x right, y forward, as Player::MoveInput) in gait `gait` (0 default,
-// 1 sprint, 2 crouched): Forward along the view, Strafe from StrafeAngle off it, smoothstep between.
+// 1 sprint, 2 crouched, 3 stroll): Forward along the view, Strafe from StrafeAngle off it to sideways, Back straight back
+// (smoothsteps between).
 float PlayerGaitSpeed(const Player::DirectionalSpeeds& s, const glm::vec2& local, int gait);
 
 // Sprint travel follows input speed in every direction, independent of clip root distance.

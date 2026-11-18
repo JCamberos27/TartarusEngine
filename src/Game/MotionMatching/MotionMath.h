@@ -140,6 +140,46 @@ inline glm::quat UnpackQuat(const PackedQuat& p) {
     return glm::normalize(glm::quat(c[3], c[0], c[1], c[2]));
 }
 
+// --- Smallest-three in 32 bits (the finger tracks) -------------------------------------------------------------------
+// The same scheme in one word: the dropped component's index in the top 2 bits, the other three in 10 bits each. Worst-case
+// error about 0.14 degrees (a step of 1.4/1023 per component) - under the fingers' 0.3 degree budget, at two thirds of the
+// 48-bit size.
+inline std::uint32_t PackQuat32(glm::quat q) {
+    float c[4] = {q.x, q.y, q.z, q.w};
+    int big = 0;
+    for (int i = 1; i < 4; ++i)
+        if (std::fabs(c[i]) > std::fabs(c[big])) big = i;
+    const float sign = c[big] < 0.0f ? -1.0f : 1.0f;
+    std::uint32_t out = (std::uint32_t)big << 30;
+    for (int i = 0, k = 0; i < 4; ++i) {
+        if (i == big) continue;
+        const float t = (std::clamp(c[i] * sign, -kSqrtHalf, kSqrtHalf) + kSqrtHalf) / (2.0f * kSqrtHalf);
+        out |= (std::uint32_t)std::lround(std::clamp(t, 0.0f, 1.0f) * 1023.0f) << (20 - 10 * k);
+        ++k;
+    }
+    return out;
+}
+
+inline glm::quat UnpackQuat32(std::uint32_t p) {
+    const int big = (int)(p >> 30);
+    float c[4];
+    float sq = 0.0f;
+    for (int i = 0, k = 0; i < 4; ++i) {
+        if (i == big) continue;
+        c[i] = (float)((p >> (20 - 10 * k)) & 1023u) / 1023.0f * (2.0f * kSqrtHalf) - kSqrtHalf;
+        sq += c[i] * c[i];
+        ++k;
+    }
+    c[big] = std::sqrt(std::max(0.0f, 1.0f - sq));
+    return glm::normalize(glm::quat(c[3], c[0], c[1], c[2]));
+}
+
+// The angle (radians, in (-pi, pi]) of q's twist about the unit `axis`: the swing-twist decomposition's twist part.
+inline float TwistAngle(glm::quat q, const glm::vec3& axis) {
+    if (q.w < 0.0f) q = -q;
+    return 2.0f * std::atan2(glm::dot(glm::vec3(q.x, q.y, q.z), axis), q.w);
+}
+
 // The shortest-arc angle between two rotations (radians). From the relative rotation's axis part, not acos of the dot:
 // acos near 1 can't resolve anything under ~7e-4 rad in float.
 inline float QuatAngle(const glm::quat& a, const glm::quat& b) {
