@@ -472,6 +472,32 @@ void TestInertialization() {
     in.Transition(prev, spin, dt);
     in.Update(dt, spin, out);
     CHECK(MotionMath::QuatAngle(out.Rot[0], spin.Rot[0]) <= in.Params.MaxAngularVelocity * dt + 1e-3f);
+    // Source and target about 180 degrees apart, the target turning across that line mid-blend (mmstress, 2026-11-18: two
+    // takes' calves rolled ~130 deg apart about the shin, a 114 deg one-frame pop): the blend keeps the way it started - no
+    // frame steps more than the blend's own pace over the half turn.
+    {
+        Inertialization flip;
+        MotionPose a, b, o;
+        a.Rot = {glm::quat(1, 0, 0, 0)};
+        b.Rot = {glm::angleAxis(glm::radians(178.0f), glm::vec3(0, 1, 0))};
+        flip.Transition(a, a, dt);
+        float worst = 0.0f;
+        MotionPose was = a;
+        for (int f = 0; f < 15 && (f == 0 || flip.Blending()); ++f) {
+            MotionPose t = a;
+            t.Rot[0] = glm::angleAxis(glm::radians(178.0f + 0.5f * (float)f), glm::vec3(0, 1, 0)); // crosses 180 at f 4
+            flip.Update(dt, t, o);
+            worst = std::max(worst, PoseAngle(was, o));
+            was = o;
+            b = t;
+        }
+        // (smoothstep's steepest is 1.5x its mean: 185 deg over 12 frames peaks ~23 deg a frame)
+        std::printf("[MotionMatching] dead blend across 180 deg: worst step %.1f deg (re-choosing the short way each frame, as before: 114)\n",
+                    glm::degrees(worst));
+        CHECK(glm::degrees(worst) < 30.0f);
+        CHECK(PoseAngle(o, b) < 1e-4f); // and it still lands on the target
+        CHECK(MotionMath::QuatAngle(InertializationMath::SlerpAsSigned(qa, qb, 0.5f), glm::slerp(qa, qb, 0.5f)) < 1e-6f); // the short way: glm's
+    }
 }
 
 void TestTrajectoryPredictor() {

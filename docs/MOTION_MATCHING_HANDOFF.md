@@ -134,6 +134,7 @@ Measured on the full-pack audit (`docs/mm_audit.md`, 2026-11-17). Each is a capt
     on their own); `mmstress` one pop (114.5 deg, `S stop-start walk`). Not yet split into new and old; the looking-about and
     jog-rate checks failed before this session too. Runs are deterministic: the same legs alone and two at once give
     identical logs, so parallel runs are safe.
+    *2026-11-18 (after Phase 6):* five of the nine fixed, four explained - "The player's failing checks" below.
 - **Long straight jogs.** The jog's steady forward stretches last at most 1.4 s (3 steps): a long straight jog re-matches
   between takes 2.6-2.7 times a second (pose steps stay smooth: p99 10.6 deg).
 - **Tight turns at a walk.** Sweeping the view +-50 deg at 0.5 Hz while walking (a 157 deg/s turn) finds no walk take turning
@@ -909,7 +910,7 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
   logged `[MmTune]`). Keys: `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife MaxFacingOffset TransitionCost MinRunway
   ForcedPoseWeight SprintCharacterFacingHalflife BlendTime DecayHalflife W.FootPos W.FootVel W.PelvisVel W.TrajPos W.TrajDir
   FootLock.Height FootLock.Lift FootLock.Speed FootLock.Reach FootLock.MaxDrift FootLock.Release FootLock.StepHeight
-  FootLock.StepMax`. A new knob is one more `MmTune("Key", default)` call in a .cpp; an adopted value goes into the header
+  FootLock.StepMax FootLock.RestFloor`. A new knob is one more `MmTune("Key", default)` call in a .cpp; an adopted value goes into the header
   default once, at the end. Several tunings at once: one `mm_smoke.ps1` per value, each with its own `-LogDir` and
   `TARTARUS_MM_TUNE` (`Start-Job`).
 - **Code experiments side by side:** `tools\mm_exp.ps1 -Name <exp>` copies the runnable build (build\Release without
@@ -1069,6 +1070,12 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
     run only on the load that passes a rig, and the database is cached by path alone. Today only the player loads it. Phase
     5: decide the NPCs' rules, then make the exclusion policy part of the cache key or always apply it - otherwise whichever
     of the player or an NPC loads first decides for both.
+- **Open (2026-11-18), from "The player's failing checks":**
+  - **The bake's twist-flip repair leaves bones rolled between clips** (`RepairGlitches` never unwinds): `Transitions_Movement_Take001`'s
+    `calf_l` ~130 deg off the other takes' about the shin. The dead blend no longer pops on it; a rebake should bring each
+    repaired clip's roll back toward the bind (then a new `Manny.mmanim` / `.mmdb` on the Drive).
+  - **`A jog` 2.6 jumps/s** (the pack's short jog straights), **the looking-about jump rates** (tight turns at a walk / jog),
+    **`M strafe right (walk)` 0.72** (the walk-right strafes' trajectory direction fit) - reported, limits unchanged.
 - Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
   (`[NpcLoco]`, `[Locomotion]`, `[StopSteps]`, `[Slide]`).
 - The baseline is one run per scenario. Re-runs were cut short on purpose. For noise bands, use
@@ -1236,6 +1243,8 @@ Left (2026-11-17, after Step 4):
    0.2 s while it is still down. Options: a planted foot that pivots on its ball with the body's turn (and steps when the
    leg runs out) instead of sliding; or the turn stepped by the data (the walk's turn-on-the-spot / pivot frames, searched
    for when the body is turning faster than the walk turns). Not tuning: every matching parameter moved it both ways.
+   *2026-11-18:* the remaining 7.8-22.6 cm on the whole course were the slide meter reading the swing's end as a plant - fixed
+   in the meter; the sprint back's 5.0 cm was the lock's floor (`RestFloor`). See "The player's failing checks".
 2. **The owner's play test** of Step 4 (the defaults are unchanged; what changed is measurement) - then Phase 4's sign-off
    and Phase 5 (NPCs on the same database; `SharedMotionDatabase::CacheKey` keeps a rig-less load apart).
 3. No sign-off videos: the owner plays it (`set TARTARUS_LOCOMOTION_SOURCE=mm`, `build\Release\TartarusEngine.exe`; the
@@ -1388,6 +1397,100 @@ The owner approved the delete list on 2026-11-18, with all three options taken: 
   - 12 `assetFolders` entries in `project/settings.json`.
   - `tools/gen_arena_scene.py` now checks that a body piece has no controller.
 
+## The player's failing checks (2026-11-18, after Phase 6; `dev/mm-player-fixes`)
+
+The nine checks Phase 4 left failing (`mmplayer` 93/101, `mmstress` 15/16), each fixed or explained. Measured on the whole
+course, one engine at a time; every number below is from a deterministic run (the same build and tuning give the same log).
+
+| check | before | after | how |
+|---|---|---|---|
+| `mmstress`: no pop (`S stop-start walk`) | 2 frames, 114.5 deg (`calf_l`) | 0, worst 22.8 | dead blend keeps its hemisphere |
+| `M sprint back`: feet hold | 5.0 cm | 0.6 | `FootLockSettings::RestFloor` |
+| `M walk looking about`: feet hold | 22.6 cm | 2.1 | the slide meter judges a plant from where it settles |
+| `M jog looking about`: feet hold | 8.9 cm | 2.7 | the meter (the rest floor alone: 9.6) |
+| `M jog random look`: feet hold | 7.8 cm | 1.9 | the meter |
+| `A jog`: jumps/s | 2.6 (limit 2.3) | 2.6 | explained: the data (below) |
+| `M walk looking about`: jumps/s | 7.6 (limit 2.8) | 7.6 | explained: tight turns at a walk, an asset gap |
+| `M jog looking about`: jumps/s | 4.8 (limit 4.45) | 4.8 | as above, at a jog |
+| `M strafe right (walk)`: clip / capsule speed | 0.72 (0.8-1.25) | 0.72 | explained: the trajectory direction's fit (below) |
+
+`-Quick` after it (`-Parallel 1`): unit 53,887 checks, 0 failures; `mmplayer` 97/101 (the four explained), `mmstress` 16/16.
+Every check that passed before still passes. No limit was changed.
+`-Full` (`-Parallel 1`, 513 s of engine runs): unit, smoke 20/21 (`smoke_decals` only for the worktree's long-path log errors),
+testbed 29/29, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18, mmstress 16/16, npcperf 4/4, the perf bench
+(edit 3.24 / play 6.10 ms) all pass; mmplayer 97/101 (the four above); npcloco 39/40 - `walk left` 2.40 jumps/s cruising, Phase
+5's open item 1 with the same number (the dummies' matching, untouched here).
+
+**The pop: the dead blend re-chose the short way every frame** (`Inertialization::Update`). A probe on the frame (the playing
+frame, the blend weight, the data's own steps) put it on neither the data (`calf_l` 0.1-3 deg a frame there) nor a jump:
+mid-blend, the output stood (1 - w) x 180 deg off the target (w 0.74: 46.7 deg; w 0.38: 112.1) - the source and the target
+~180 deg apart, and `glm::slerp(source, dot < 0 ? -t : t, w)` flipping to the other side the frame they crossed 180. The
+hemisphere is now chosen once against the source when the blend starts, the target's sign kept continuous frame to frame
+(`m_Goal`), and the slerp follows the signs (`InertializationMath::SlerpAsSigned`; under 180 apart it is `glm::slerp`, so
+every other blend is bit-identical: `mmplayer`'s whole log unchanged). Unit test: a target turning across 180 mid-blend steps
+at most 22.7 deg a frame (the old blend: 114.2, failing it).
+- *Why two takes' calves are ~180 apart (open, the bake):* `MotionBake::RepairGlitches` unrolls a twist flip by turning the bone
+  back about its axis from the flip on - and never unwinds it. A clip can keep a bone rolled against every other clip:
+  `Transitions_Movement_Take001`'s `calf_l` is near the bind for its first 10 % and ~130 deg off it after (`calf_twist_02_l` and
+  `foot_l` counter-rolled - joints unmoved). Within the clip it plays continuously; a blend into or out of it turns the shin
+  about itself. Fixing the data means a rebake (each repaired clip's roll brought back toward the bind, or the flip unrolled
+  the other way when the clip starts flipped) and a new database on the Drive: not done here.
+
+**The sprint back: the lock's floor** (`IK::FootLock`). After the sprint, the left foot's floor was the sprint's planted ankle
+(6.0 cm: the legacy jog set plants ~3 cm lower than the pack); the standing idle's ankle 9.1 cm read 2.6 cm up (Height 2 cm),
+so the standing foot wasn't held for 1.5 s (the floor creeps 1 cm/s) and crept 4.5 cm, then 0.5 more as the sprint back began.
+`FootLockSettings::RestFloor` (the player; `TARTARUS_MM_TUNE=FootLock.RestFloor=0` turns it off): a foot at rest near the
+ground (under Lift, moving under 0.3 m/s, up or down under 0.05 m/s, for 0.1 s) is down where it is - its floor and its
+ball's raised to it. (`FootLock.Height` 3 / 3.5 cm also fixed it - 2.1 / 0.3 cm - but made the jog look-about legs worse.)
+The dummies' foot pass is unchanged (off by default).
+
+**The looking-about slides: the meter read a swing as a plant** (`IK::FootSlideMeter`). Probed per plant (the meter's floor
+at the contact's start, its heights, the foot's top speed): every one of the six plants over 5 cm on the course entered the
+contact band 0.6-1.1 cm over the meter's floor, went on down another 1.7-2.5 cm, and moved at 2.3-3.5 m/s inside it - the
+swing's last 0.1-0.2 s. The floor had crept up from an earlier, higher plant (the ankle's height at a plant differs by 2 cm
+between takes), and the meter's own rule - "the first two frames are the heel coming down; the plant is judged from where
+it settles" - assumed the landing took two frames. The lock was right not to hold it (over its 2 m/s plant speed: a swing).
+Now the plant is judged from where it settles: the first frame within `SettleHeight` (5 mm) of the contact's lowest height.
+A foot that slides once it is down counts in full (unit test: a 20 cm slide after the landing reads 20.2 cm); the old
+measure is still logged on every `[Slide]` line ("from first contact, the swing's end in: ankle / heel-or-ball"). It changes
+every slide number on every scenario only downward; the other scenarios weren't re-run (`-Full` is once per PR).
+- Before it, the foot-lock side was checked first: the held foot of the 22.6 cm "plant" moved 3.5 cm while held (its ball
+  pivot), and the hold ended by Overreach with the step lifting it clear - the lock did what it should.
+
+**The jog's jump rate: the data.** All 9 of `A jog`'s jumps (3.5 s) are voluntary - none forced by the input or a take
+running out - each a hop worth 0.15-0.25 of cost, as the playing take's continuation drifts from 0.6 to 1.4 nearing the end
+of its straight stretch (the pack's longest steady jog stretch is 1.4 s: the 9 m room). The lighter trajectory weights, on
+the whole course (the Phase 4 lead - 4.0 -> 1.7 a second on the jog's turns - was one leg):
+
+| `TARTARUS_MM_TUNE` | `A jog` jumps/s | fails | what broke |
+|---|---|---|---|
+| (defaults) | 2.6 | 8 | - |
+| `W.TrajPos=0.5,W.TrajDir=1.0` | 2.3 (the walk 1.5: its limit loosened to 2.75) | 5 | steep-stairs reach clamp 10.2 mm, sprint turning feet 21.7 cm, stroll strafes lopsided |
+| `W.TrajPos=0.5` | 2.9 | 6 | walk flick 180 feet 21.6 cm |
+| `W.TrajPos=0.75,W.TrajDir=1.25` | 2.0 | 8 | crouch strafe right 3.0 jumps/s, stroll strafes lopsided, walk random look feet 22.6 cm |
+
+None is better on balance (each breaks checks that pass); the defaults stay. The jog gate is relative to the walk's rate, so
+a variant that makes the walk jumpier loosens it - compare the jog's own number.
+
+**Looking about: the jump rates.** Walking 7.6 a second, jogging 4.8 (the pose steps pass: p99 8.48 / 11.53 against limits
+12.6 / 16.8). The view sweeping +-50 deg at 0.5 Hz turns the body at up to ~120 deg/s; the pack has no walk turning that hard
+("Asset gaps": tight turns at a walk), so the search hops between partial matches. The turn-on-the-spot frames (the other
+option Phase 4 named) are standing turns and are filtered out while moving (the style filter); stepping the turn with them
+would be a new feature, not done.
+
+**`M strafe right (walk)`: the trajectory direction's fit.** The pack's walk strafes are balanced (searchable sideways frames
+3,648 / 3,044 either way, median 0.85 / 0.80 m/s), and strafe left run alone from standing passes (0.94): it isn't the data's
+amount nor the start. Strafe right matches the run takes' slow walk-backs (`Run_Snakes`, `Run_CardLong_noStops_R`, costs 8-13,
+trajectory error 0.67 m against strafe left's 0.37) over the walk strafe takes. A lighter trajectory direction while strafing
+(x0.5 / x0.67) fixes it (0.82 / 0.81) but breaks `M crouch strafe right` (2.5 jumps/s) and the stroll strafes' symmetry - not
+adopted. Next: find which of the walk-right strafe takes' facing drifts (their direction mismatch) - a per-candidate cost
+breakdown at the leg's searches.
+
+**Tooling found on the way:** a fresh worktree configures in 15 s with the main checkout's dependency sources
+(`-DFETCHCONTENT_SOURCE_DIR_<NAME>=C:/Users/Jacob/Desktop/TartarusEngine/build/_deps/<name>-src` for glfw glm assimp entt imgui
+imguizmo imanim meshoptimizer recastnavigation); the licensed assets can be hard-linked in (no disk). 43 forest files there
+exceed MAX_PATH under `.claude\worktrees\...` and log errors at load (`-AllowErrors 'SeedMesh_Mossy_Cedrus_Forest'`).
+
 ## Phase 5: first steps (done - see above)
 
 1. Branch `dev/mm-phase5` from `dev/mm-phase4`, in the main checkout (licensed assets and `build\` only exist there).
@@ -1537,3 +1640,13 @@ The owner approved the delete list on 2026-11-18, with all three options taken: 
     gone. `mm_smoke.ps1 -Exe` fixed.
   - `mmplayer` sprint legs: all pass but `M sprint turning`'s foot slide (8.8 cm, <= 5). The owner's play test: "the sprint
     works great". No full pass yet; nothing committed.
+- **2026-11-18, the player's failing checks (after Phase 6, `dev/mm-player-fixes`):**
+  - The dead blend keeps the hemisphere it started on (`Inertialization`, `SlerpAsSigned`): the `mmstress` pop 114.5 -> 22.8 deg.
+  - `FootLockSettings::RestFloor` (the player): a foot at rest near the ground is down - `M sprint back` 5.0 -> 0.6 cm.
+  - `FootSlideMeter` judges a plant from where it settles (`SettleHeight`; the old measure still logged as `FromContact`): the
+    looking-about legs' 7.8-22.6 cm were the swing's end - now 1.9-2.7.
+  - Measured and not adopted: lighter trajectory weights (three on the whole course), `FootLock.Height` 3 / 3.5 cm, a lighter
+    trajectory direction while strafing. Unit tests: the dead blend across 180 deg, the meter settling.
+  - `-Quick`: unit 53,887 / 0 failures; `mmplayer` 97/101 (the jog rate, two looking-about jump rates, strafe right walk:
+    explained), `mmstress` 16/16.
+  - `-Full`: all pass but `mmplayer`'s four and `npcloco`'s `walk left` 2.40 jumps/s (Phase 5's open item, unchanged).

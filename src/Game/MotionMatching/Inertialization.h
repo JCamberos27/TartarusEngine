@@ -42,6 +42,12 @@ private:
     // The stream bones then the fingers (MotionPose::Rot, then MotionPose::Fingers).
     std::vector<glm::quat> m_Rot;
     std::vector<glm::vec3> m_AngVel; // scaled angle-axis per second, in the bone's parent space
+    // The target as last blended into, its sign kept continuous from the blend's start (the hemisphere chosen then, against
+    // the source): a bone whose source and target drift across 180 degrees apart mid-blend keeps going the way it went,
+    // where re-choosing the shortest way every frame jumped to the other side - (1 - weight) x 180 degrees in one frame
+    // (mmstress, S stop-start walk: calf_l 114 deg, between two takes whose calves the bake's flip repair left rolled
+    // ~130 deg apart about the shin).
+    std::vector<glm::quat> m_Goal;
     size_t m_Bones = 0;
     glm::vec3 m_Pelvis{0.0f}, m_PelvisVel{0.0f};
 };
@@ -53,4 +59,7 @@ glm::vec3 ToScaledAngleAxis(const glm::quat& q);
 // The angular velocity (parent space) taking `a` to `b` in `dt`: b = FromScaledAngleAxis(w * dt) * a.
 glm::vec3 AngularVelocity(const glm::quat& a, const glm::quat& b, float dt);
 float Smoothstep(float x);
+// Spherical interpolation along the arc from `a` to `b` as signed - no switch to the shorter way when dot(a, b) < 0 (the
+// caller picks the hemisphere). `b` within a hair of `-a` (the same rotation a full turn round) is taken as `-b`.
+glm::quat SlerpAsSigned(const glm::quat& a, const glm::quat& b, float t);
 } // namespace InertializationMath

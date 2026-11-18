@@ -487,24 +487,42 @@ void FootSlideMeter::Step(const glm::vec3 (&foot)[2], float ground, float dt, co
         const bool contact = h - m_Floor[s] < ContactHeight;
         const glm::vec2 at(foot[s].x, foot[s].z);
         if (contact) {
-            // The first two frames are the heel coming down; the plant is judged from where it settles.
             const glm::vec2 ballAt = ball ? glm::vec2((*ball)[s].x, (*ball)[s].z) : at;
-            if (++m_Frames[s] == 3) { m_Start[s] = at; m_Drift[s] = 0.0f; m_Time[s] = 0.0f; m_BallStart[s] = ballAt; m_BallDrift[s] = 0.0f; }
-            if (m_Frames[s] >= 3) {
-                m_Drift[s] = std::max(m_Drift[s], glm::length(at - m_Start[s]));
-                m_BallDrift[s] = std::max(m_BallDrift[s], glm::length(ballAt - m_BallStart[s]));
+            if (++m_Frames[s] == 3) { m_Time[s] = 0.0f; m_Run[s].clear(); }
+            if (m_Frames[s] >= 3) { // (the first two frames are the heel coming down)
+                m_Run[s].push_back({at, ballAt, h});
                 m_Time[s] += dt;
                 Total.ContactTime += dt;
             }
         } else {
-            if (m_Frames[s] >= 3 && m_Time[s] >= 0.1f && m_Drift[s] < 1.0f) { // (a teleport is not a slide)
-                ++Total.Plants;
-                Total.SumDrift += m_Drift[s];
-                Total.MaxDrift = std::max(Total.MaxDrift, m_Drift[s]);
-                if (m_Balls) {
-                    const float least = std::min(m_Drift[s], m_BallDrift[s]);
-                    Total.SumContactDrift += least;
-                    Total.MaxContactDrift = std::max(Total.MaxContactDrift, least);
+            if (m_Frames[s] >= 3 && m_Time[s] >= 0.1f) {
+                // The plant is judged from where it settles: the first frame within SettleHeight of the contact's lowest. The
+                // foot can enter the contact band still coming down - the floor creeps up from an earlier, higher plant (another
+                // take's stance), and the swing's last 0.1-0.2 s (2.3-3.5 m/s, 1.7-2.5 cm over where it lands) read as up to
+                // 22.6 cm of slide (mmplayer, the looking-about legs, 2026-11-18). A foot that slides once it is down counts in
+                // full, as before; the drift from the contact's first frames is still logged (`FromContact`).
+                float low = 9.0f;
+                for (const RunFrame& r : m_Run[s]) low = std::min(low, r.H);
+                size_t k = 0;
+                while (k + 1 < m_Run[s].size() && m_Run[s][k].H > low + SettleHeight) ++k;
+                float drift = 0.0f, ballDrift = 0.0f, rawDrift = 0.0f, rawBall = 0.0f;
+                for (size_t j = 0; j < m_Run[s].size(); ++j) {
+                    rawDrift = std::max(rawDrift, glm::length(m_Run[s][j].At - m_Run[s][0].At));
+                    rawBall = std::max(rawBall, glm::length(m_Run[s][j].Ball - m_Run[s][0].Ball));
+                    if (j < k) continue;
+                    drift = std::max(drift, glm::length(m_Run[s][j].At - m_Run[s][k].At));
+                    ballDrift = std::max(ballDrift, glm::length(m_Run[s][j].Ball - m_Run[s][k].Ball));
+                }
+                if (rawDrift < 1.0f) { // (a teleport is not a slide)
+                    ++Total.Plants;
+                    Total.SumDrift += drift;
+                    Total.MaxDrift = std::max(Total.MaxDrift, drift);
+                    Total.FromContact.MaxDrift = std::max(Total.FromContact.MaxDrift, rawDrift);
+                    if (m_Balls) {
+                        Total.SumContactDrift += std::min(drift, ballDrift);
+                        Total.MaxContactDrift = std::max(Total.MaxContactDrift, std::min(drift, ballDrift));
+                        Total.FromContact.MaxContactDrift = std::max(Total.FromContact.MaxContactDrift, std::min(rawDrift, rawBall));
+                    }
                 }
             }
             m_Frames[s] = 0;
@@ -547,9 +565,17 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
     const float rootSpeed = seen ? glm::length(glm::vec2(root.x - f.PrevRoot.x, root.z - f.PrevRoot.z)) / dt : 0.0f;
     f.AnimSpeed = seen ? glm::length(glm::vec2(anim.x - f.Prev.x, anim.z - f.Prev.z)) / dt : 0.0f;
     f.Floor = seen ? std::min(f.Floor + 0.01f * dt, height) : height;
-    const float up = height - f.Floor;
     const glm::vec3 animBall = ball ? root + facing * *ball : anim;
     f.BallFloor = ball && f.HaveBall && seen ? std::min(f.BallFloor + 0.01f * dt, ballHeight) : ballHeight;
+    // At rest near the ground: down where it is (FootLockSettings::RestFloor).
+    const float rise = seen ? (height - f.PrevHeight) / dt : 0.0f;
+    f.PrevHeight = height;
+    f.Rest = set.RestFloor && seen && speed < set.RestSpeed && std::fabs(rise) < set.RestRise && height - f.Floor < set.Lift ? f.Rest + dt : 0.0f;
+    if (f.Rest >= set.RestTime) {
+        f.Floor = std::max(f.Floor, height);
+        if (ball && ballHeight - f.BallFloor < set.Lift) f.BallFloor = std::max(f.BallFloor, ballHeight); // (the foot at rest: its ball too)
+    }
+    const float up = height - f.Floor;
     f.HaveBall = ball != nullptr;
     const float ballUp = ball ? ballHeight - f.BallFloor : up;
     // ... and the ball's own speed over the ground (the same way), for a foot planted on its ball.

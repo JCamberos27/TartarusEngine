@@ -75,8 +75,9 @@ void NpcTest::SlideLeg(const std::string& leg) {
             m_SlideWorstPlayer[leg] = t.MaxDrift;
             m_SlideContactPlayer[leg] = t.MaxContactDrift;
         }
-        std::printf("[Slide] %-26s %-10s %2d plants, drift mean %4.1f cm, worst %5.1f cm; contact (heel or ball) mean %4.1f, worst %5.1f cm\n",
-                    leg.c_str(), n.c_str(), t.Plants, t.MeanCm(), t.MaxDrift * 100.0f, t.MeanContactCm(), t.MaxContactDrift * 100.0f);
+        std::printf("[Slide] %-26s %-10s %2d plants, drift mean %4.1f cm, worst %5.1f cm; contact (heel or ball) mean %4.1f, worst %5.1f cm "
+                    "(from first contact, the swing's end in: %.1f / %.1f)\n", leg.c_str(), n.c_str(), t.Plants, t.MeanCm(), t.MaxDrift * 100.0f,
+                    t.MeanContactCm(), t.MaxContactDrift * 100.0f, t.FromContact.MaxDrift * 100.0f, t.FromContact.MaxContactDrift * 100.0f);
     }
 }
 
