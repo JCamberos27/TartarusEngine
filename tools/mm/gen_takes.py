@@ -154,7 +154,8 @@ def main():
     if not a.audit:
         for clip in LEGACY_LOOP_CLIPS + LEGACY_ONE_SHOTS:
             loop = LEGACY_LOOPS if clip in LEGACY_LOOP_CLIPS else 0
-            tags = ['sprint', 'rootmotion', 'style=sprint'] + (['loop', 'forward'] if clip == 'Fwd' else ['loop'] if loop else [])
+            tags = ['sprint', 'rootmotion', 'style=sprint'] + (['loop', 'forward'] if clip == 'Fwd' else ['loop'] if loop else []) + \
+                   (['strafe'] if clip in ('Left', 'Right') else [])
             rows.append(dict(name='Legacy_Jog_' + clip, source=f'{LEGACY_DIR}/AM_Loco_Jog_{clip}', group='Sprint',
                              pattern='Legacy_Jog_' + clip, take=1, seconds=0.0, frames=0, exaggerated=False, tags=tags,
                              include=0 if clip in LEGACY_OUT else 1, trim_start=0.0, trim_end=0.0, loop=loop,

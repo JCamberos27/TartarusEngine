@@ -606,7 +606,8 @@ void TestTakesCsv() {
         else CHECK(m.Include);
         if (!m.Mirrored()) continue;
         ++mirrors;
-        const bool sourceIn = std::any_of(all.begin(), all.end(), [&](const MotionTake& o) { return o.Name == m.File() && o.Include; });
+        // (Its source: the unmirrored row baked from the same file - a pack take by name, a project clip by its path.)
+        const bool sourceIn = std::any_of(all.begin(), all.end(), [&](const MotionTake& o) { return !o.Mirrored() && o.File() == m.File() && o.Include; });
         CHECK(sourceIn && m.HasTag("strafe"));
     }
     CHECK(all.size() > 139 && included > 100 && mirrors > 0);
