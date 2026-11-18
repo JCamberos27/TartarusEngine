@@ -1072,10 +1072,13 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
     of the player or an NPC loads first decides for both.
 - **Open (2026-11-18), from "The player's failing checks":**
   - *Fixed (`dev/mm-bake-roll`):* the bake's twist-flip repair left bones rolled between clips - "The bake's twist roll".
-    **Installed in the main checkout (2026-11-18, the owner's go-ahead after `-Full`); not on the Drive yet** (sha256
-    `ddc2b5e8...` / `73cb3d5a...`; the database before it backed up at `D:\Jacob\mm_scratch\db_before_rollfix\`, `954d8fc0...` /
-    `a860475b...`). `project/external_assets.csv`'s two rows were already stale before it (74 / 30 MB: an older bake) -
-    update them with the Drive's `Used\` export (`tools/assets/asset_manifest.py`; the owner's OK first).
+    **Installed in the main checkout and on the Drive (2026-11-18, the owner's go-ahead)**: sha256 `ddc2b5e8...` /
+    `73cb3d5a...`, in `Used\project\assets\Animations\MotionMatching\`; only their two rows changed in
+    `project/external_assets.csv` and in the Drive's copy (which still lists the legacy clips Phase 6 kept on the Drive - not
+    overwritten by the repo's; its two rows end in LF, the rest CRLF: edit it byte-exact). `asset_manifest.py verify` on
+    `Used`: 8025 listed, 0 missing, 0 different (1 unlisted: the SeedMesh scene, as before). A line in `Raw\CHANGELOG.md`.
+    Backups on D: - the main checkout's database before it `D:\Jacob\mm_scratch\db_before_rollfix\`, the Drive's
+    2026-11-16 files, CSV and changelog `D:\Jacob\mm_scratch\drive_before_rollfix\` (with `SHA256SUMS`).
   - **`A jog` 2.6 jumps/s** (the pack's short jog straights), **the looking-about jump rates** (tight turns at a walk / jog),
     **`M strafe right (walk)` 0.72** (the walk-right strafes' trajectory direction fit) - reported, limits unchanged.
 - Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
@@ -1681,4 +1684,4 @@ left` (2.40 jumps/s, unchanged); the dummies' pose step p99 walk right 8.20 -> 7
 - **2026-11-18, the bake's twist roll (`dev/mm-bake-roll`):** `RepairGlitches` finds flips as runs, lets a riding chain ride
   back, pairs each flip with its flip back and keeps a bone's correction only if it rolls the bone no further; a `rolled` bake
   report. Rolled bone-frames 43,181 -> 861 (3,357 as captured). Rebaked into the worktree; `-Quick mmview mmdb` as before or
-  better; `-Full` the same results. Installed in the main checkout (the old one backed up on D:); not on the Drive.
+  better; `-Full` the same results. Installed in the main checkout and on the Drive's `Used\` (the CSV's two rows; the old files backed up on D:).
