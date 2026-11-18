@@ -156,14 +156,22 @@ void World::SetLodCulled(entt::entity e, bool culled) {
 void World::ClearLod() {
     Registry.clear<LodCulledTag>();
     std::fill(m_LodCulledOwner.begin(), m_LodCulledOwner.end(), entt::null);
+    // The records go with the tags: ForEachImpostor lists from them, and a record whose group is gone draws its
+    // impostor at the origin (GetCachedWorldTransform of a dead entity is identity).
+    m_LodImpostors = false;
+    std::fill(m_LodFadeOwner.begin(), m_LodFadeOwner.end(), entt::null);
+    m_LodFading.clear();
+    m_LodState.clear();
+    std::fill(m_LodIndex.begin(), m_LodIndex.end(), ~0u);
     m_LodValid = false;
 }
 
 int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     auto groups = Registry.view<LODGroupComponent, HierarchyComponent>();
     if (groups.begin() == groups.end()) {
-        if (!Registry.view<LodCulledTag>().empty()) ClearLod();
-        m_LodValid = false;
+        // No groups left (the last one deleted, or a scene without any opened - the loader clears the registry in
+        // place, tags and all, so the tags alone don't tell): forget the last pass, records included.
+        if (m_LodValid || !m_LodState.empty() || !Registry.view<LodCulledTag>().empty()) ClearLod();
         return 0;
     }
     // Incremental (perf): each group remembers the level it last tagged for, and a call only re-tags the groups whose
@@ -373,13 +381,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     auto pass = [&]() -> bool {
         evaluated = 0;
         if (full) {
-            m_LodImpostors = false;
-            Registry.clear<LodCulledTag>();
-            std::fill(m_LodCulledOwner.begin(), m_LodCulledOwner.end(), entt::null);
-            std::fill(m_LodFadeOwner.begin(), m_LodFadeOwner.end(), entt::null);
-            m_LodFading.clear();
-            m_LodState.clear();
-            std::fill(m_LodIndex.begin(), m_LodIndex.end(), ~0u);
+            ClearLod(); // m_LodValid is set again once this pass is done
         } else if (m_LodCentreStamp != m_TransformCacheStamp || m_TransformCacheStamp == 0) {
             // Only what the transform cache moved since the records were measured, when it can say.
             const bool patch = m_TransformCacheStamp != 0 && m_LodCentreStamp == m_PrevTransformCacheStamp &&

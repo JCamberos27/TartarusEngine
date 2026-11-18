@@ -250,7 +250,7 @@ public:
             if (st.Impostor >= 0 && (st.Active == kLodImpostor || st.FadeFrom == kLodImpostor))
                 f(st.Group, (int)st.Impostor, st.ImpostorFade);
     }
-    // Removes every LodCulledTag.
+    // Removes every LodCulledTag and forgets the last ApplyLod (its records, impostors and cross-fades).
     void ClearLod();
     // Whether ApplyLod tagged `e` LodCulledTag: the same answer as the tag, read from a flat per-slot table (the
     // visibility gathers ask for every renderable, several times a frame).
