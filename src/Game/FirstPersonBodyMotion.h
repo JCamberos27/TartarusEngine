@@ -101,6 +101,10 @@ public:
         // matcher hopped between poor turning candidates - 6.4 jumps a second looking about, against 2 walking straight.)
         float SimFacingHalflife = 0.27f;       // s: the simulation facing's spring toward the facing wanted (responsiveness)
         float CharacterFacingHalflife = 0.2f;  // s: the character facing's pull toward the simulation's (on top of the clip's turn)
+        // ... while a sprint frame plays: the sprint set (the old locomotion's jog) has no curved runs, so its turns are steered -
+        // the forward loop plays on while the facing follows. Measured on `M sprint turning` (60 deg/s): at 0.2, 2.25 jumps/s,
+        // 17 % cruising, the planted feet sliding 16.7 cm (turning starts stitched); at 0.08, 0.5 jumps/s, 100 %, 2.3 cm.
+        float SprintCharacterFacingHalflife = 0.08f;
         float MaxFacingOffset = 1.5708f;       // rad (90 deg): the character facing at most this far off the simulation's
         float TakeoffSeconds = 0.12f;          // a jump's segment starts this far before its first airborne frame
         float LandSeconds = 0.25f;             // ... and plays this far past its last before searching again

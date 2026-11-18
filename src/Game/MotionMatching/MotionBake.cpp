@@ -691,6 +691,23 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
 
     // 2. The root, then the pelvis re-expressed under it (in the `root` node's frame, which is its parent).
     r.Track = RootSynth::Generate(in, cfg.ParamsFor(take.Tags));
+    // A root motion clip carries its own root - the path and facing an animator authored for the capsule - so that is the root,
+    // not one generated from the hips. Measured on the old jog set (2026-11-17): generated, the loops, starts, stops and pivots
+    // wobbled 9-173 deg/s^2 (authored: 0), and the side clips faced the hips' twist toward the travel - the strafe loops 44 and
+    // 57 deg off ahead, the diagonals 21 - so a strafe matched nothing well. The path: the root bone on the ground. The facing:
+    // the root bone's own ahead (its turn since the clip's start: it starts facing the rig's rest ahead, ctx.RestYaw - the
+    // straight clips' hips agree within 2 deg, the turning starts' within 7).
+    if (take.RootMotion()) {
+        const glm::mat3 C3(ctx.C), CInv3(ctx.CInv);
+        for (int f = 0; f < ne; ++f) {
+            const glm::vec3 p = glm::vec3(ctx.C * rootFromStart[(size_t)f][3]);
+            r.Track.Position[(size_t)f] = glm::vec3(p.x, 0.0f, p.z);
+            const glm::vec3 ahead = C3 * glm::mat3(rootFromStart[(size_t)f]) * CInv3 * MotionMath::YawDir(ctx.RestYaw);
+            float t = MotionMath::YawOf(glm::vec3(ahead.x, 0.0f, ahead.z));
+            if (f > 0) t = r.Track.Yaw[(size_t)f - 1] + std::remainder(t - r.Track.Yaw[(size_t)f - 1], 2.0f * MotionMath::kPi); // unwrapped
+            r.Track.Yaw[(size_t)f] = t;
+        }
+    }
     // Cut everything to the trim.
     const auto cut = [&](auto& v, size_t per) {
         v.erase(v.begin() + (long)((size_t)(head + n) * per), v.end());

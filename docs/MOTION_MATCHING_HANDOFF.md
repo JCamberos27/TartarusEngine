@@ -112,14 +112,28 @@ Measured on the full-pack audit (`docs/mm_audit.md`, 2026-11-17). Each is a capt
   - **Controls (Left Shift):** held from standing, the pack's jog; **pressed while moving, the sprint** - held while Shift is
     held and the stick moves (`Player::SprintHeld`, gait slot 4 at the sprint style's measured speeds); letting go, stopping
     or crouching ends it.
-  - **Measured** (`mmplayer` sprint legs, `[MmSprint]`; each against its jog counterpart: jumps within 1.5x + 0.5, pose step
-    p99 within 1.15x + 1 of the leg's own away from jumps - the sprint's limbs move further a frame than the jog's - feet
-    <= 5 cm): straight 0.4 jumps/s (one loop 4.4 s), slide 1.4 cm; from a jog 0.5, 0.3 cm; back 0.7, 0.9 cm; strafes 2.7-3.3
-    jumps/s, 2.9 cm; all sprint style 100 %, 3.30 m/s forward, 2.33 sideways and back. **Fails:** `M sprint turning` (view 60
-    deg/s) - 2.5 jumps/s (the jog's own turning leg 4.0) but the planted feet slide 8.8 cm (5.4-8.9 across runs). The set has
-    no curved runs: the body's turn comes from the facing pull, not the clip. Faster facing springs (`CharacterFacingHalflife`
-    0.08; with `SimFacingHalflife` 0.12) traded the slide for more jumps and less cruising - the defaults stay. The owner's
-    play test found it good; revisit only if hard turns at a sprint look off.
+  - **The authored root** (after the owner's play test, from the full pass): the set's clips carry their own root (the
+    capsule an animator moved), so the bake takes it (`MotionBake.cpp`, `RootMotion`) instead of generating one from the hips.
+    Generated, the side clips faced the hips' twist toward the travel - the strafe loops 44 and 57 deg off ahead, the diagonals
+    21 - and wobbled 9-173 deg/s^2 (authored: 0); the authored root bone starts facing the rig's rest ahead (the straight
+    clips' hips agree within 2 deg). The turning starts' sharp authored turns read 200-530 on mmview's wobble measure, a
+    deliberate turn: that check now covers generated roots only and reports the authored ones.
+  - **Turning is steered** (`Settings::SprintCharacterFacingHalflife` 0.08 s while a sprint frame plays; 0.2 otherwise): the
+    set has no curved runs, so the forward loop plays on while the facing follows. (Before the authored root, the turn "held"
+    by playing the right-strafe loop whose facing the hips had rotated 57 deg - a sideways run standing in for a curve.)
+    `M sprint turning` (60 deg/s): 2.25 jumps/s, 17 % cruising, 16.7 cm slide at 0.2 -> 1.0 jumps/s, 91 %, 2.2 cm.
+  - **Measured** (full `mmplayer`, `[MmSprint]`; each leg against its jog counterpart: jumps within 1.5x + 0.5, pose step p99
+    within 1.15x + 1 of the leg's own away from jumps - the sprint's limbs move further a frame than the jog's - feet <= 5 cm):
+    straight 0.4 jumps/s (one loop 4.5 s), 0.9 cm; from a jog 0.5, 0.0 cm; turning 1.0, 2.2 cm; strafes 0.7 / 1.0, 0.1 / 0.5
+    cm, 100 % cruising (were 2.7-3.3 jumps/s); back 0.7 jumps/s, **5.0 cm** (just over: fails). Sprint style 100 % on every
+    leg; 3.27 m/s forward, 2.53 sideways, 2.18 back.
+  - **The full pass after it** (2026-11-17): unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview,
+    mmdb, perf pass. Still failing: `mmplayer` 8 checks - `M sprint back` (5.0 cm), the jog's jump rates (`A jog` 2.6/s),
+    `M strafe right (walk)` clip/capsule speed 0.72, and the looking-about legs (walk and jog jumps/s and pose steps; feet
+    7.8-22.6 cm on `M walk looking about`, `M jog looking about`, `M jog random look` in the full course - 1.4-3.8 cm when run
+    on their own); `mmstress` one pop (114.5 deg, `S stop-start walk`). Not yet split into new and old; the looking-about and
+    jog-rate checks failed before this session too. Runs are deterministic: the same legs alone and two at once give
+    identical logs, so parallel runs are safe.
 - **Long straight jogs.** The jog's steady forward stretches last at most 1.4 s (3 steps): a long straight jog re-matches
   between takes 2.6-2.7 times a second (pose steps stay smooth: p99 10.6 deg).
 - **Tight turns at a walk.** Sweeping the view +-50 deg at 0.5 Hz while walking (a 157 deg/s turn) finds no walk take turning
@@ -879,7 +893,7 @@ rebuilding for tuning values.
   Example: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 mmplayer -SkipUnit -SkipSmoke -Legs "M sprint*,M stop after sprint*,M jog,M jog turning"`
 - **Tuning without a rebuild:** `TARTARUS_MM_TUNE="Key=value,..."` overrides at startup (`MmTune`, FirstPersonBodyMotion.cpp;
   logged `[MmTune]`). Keys: `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife MaxFacingOffset TransitionCost MinRunway
-  ForcedPoseWeight BlendTime DecayHalflife W.FootPos W.FootVel W.PelvisVel W.TrajPos W.TrajDir
+  ForcedPoseWeight SprintCharacterFacingHalflife BlendTime DecayHalflife W.FootPos W.FootVel W.PelvisVel W.TrajPos W.TrajDir
   FootLock.Height FootLock.Lift FootLock.Speed FootLock.Reach FootLock.MaxDrift FootLock.Release FootLock.StepHeight
   FootLock.StepMax`. A new knob is one more `MmTune("Key", default)` call in a .cpp; an adopted value goes into the header
   default once, at the end.

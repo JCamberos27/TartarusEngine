@@ -149,6 +149,8 @@ void NpcTest::MmViewValidate() {
     std::printf("[MmView] %-46s %6s %6s %6s %7s %6s %6s %6s %7s  %s\n", "clip", "frames", "step", "fac95", "jitter", "wobble",
                 "slideL", "slideR", "featCm", "gait i/w/j/r crouch strafe air");
     float worstStep = 0.0f, worstFacing = 0.0f, worstJitter = 0.0f, worstSlide = 0.0f, worstFeat = 0.0f, worstSlideGap = 0.0f;
+    float worstAuthoredJitter = 0.0f;
+    std::string worstAuthoredJitterAt;
     std::string worstStepAt, worstFacingAt, worstJitterAt, worstSlideAt, worstFeatAt, worstSlideGapAt;
     int labelFails = 0;
     std::vector<glm::mat4> g;
@@ -200,7 +202,12 @@ void NpcTest::MmViewValidate() {
                     strafe, air, forward ? "  forward" : "");
         if (step > worstStep) { worstStep = step; worstStepAt = clip.Name; }
         if (forward && v.FacingP95 > worstFacing) { worstFacing = v.FacingP95; worstFacingAt = clip.Name; }
-        if (v.YawJitter > worstJitter) { worstJitter = v.YawJitter; worstJitterAt = clip.Name; }
+        // (The wobble check is on the roots the bake generates from the hips; a root motion clip's root is the animator's own - the
+        // old jog set's sharp authored turning starts read 200-530 on this measure, a deliberate turn, not a wobble. Reported.)
+        const bool authoredRoot = (";" + clip.Tags + ";").find(";rootmotion;") != std::string::npos;
+        if (authoredRoot) {
+            if (v.YawJitter > worstAuthoredJitter) { worstAuthoredJitter = v.YawJitter; worstAuthoredJitterAt = clip.Name; }
+        } else if (v.YawJitter > worstJitter) { worstJitter = v.YawJitter; worstJitterAt = clip.Name; }
         if (slide > worstSlide) { worstSlide = slide; worstSlideAt = clip.Name; }
         if (slideGap > worstSlideGap) { worstSlideGap = slideGap; worstSlideGapAt = clip.Name; }
         if (feat > worstFeat) { worstFeat = feat; worstFeatAt = clip.Name; }
@@ -222,7 +229,8 @@ void NpcTest::MmViewValidate() {
     std::snprintf(b, sizeof b, "the root faces where the hips do on forward takes: worst p95 %.1f deg (%s), under 20", worstFacing,
                   worstFacingAt.c_str());
     Check(worstFacing < 20.0f, b);
-    std::snprintf(b, sizeof b, "the root's yaw doesn't wobble: worst jitter %.0f (%s), under 300", worstJitter, worstJitterAt.c_str());
+    std::snprintf(b, sizeof b, "the generated root's yaw doesn't wobble: worst jitter %.0f (%s), under 300 (authored roots: worst %.0f, %s)",
+                  worstJitter, worstJitterAt.c_str(), worstAuthoredJitter, worstAuthoredJitterAt.empty() ? "none" : worstAuthoredJitterAt.c_str());
     Check(worstJitter < 300.0f, b);
     // The planted feet, rebuilt from the stream on the Quantum rig and placed by the root, slide no more than the take's
     // own feet (the .mmdb's, from the source rig) - the mocap's own heel-to-toe roll under the contact rule is ~5-15 cm/s.

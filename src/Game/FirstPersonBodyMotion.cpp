@@ -326,6 +326,7 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         c.MaxWarp = MmTune("MaxWarp", c.MaxWarp);
         c.SimFacingHalflife = MmTune("SimFacingHalflife", c.SimFacingHalflife);
         c.CharacterFacingHalflife = MmTune("CharacterFacingHalflife", c.CharacterFacingHalflife);
+        c.SprintCharacterFacingHalflife = MmTune("SprintCharacterFacingHalflife", c.SprintCharacterFacingHalflife);
         c.MaxFacingOffset = MmTune("MaxFacingOffset", c.MaxFacingOffset);
         c.TransitionCost = MmTune("TransitionCost", c.TransitionCost);
         c.MinRunway = (int)MmTune("MinRunway", (float)c.MinRunway);
@@ -532,7 +533,13 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     // (Before, moving, the heading followed the view on a 0.03 s spring with none of the clip's turn, the query built from
     // it: a flick spun the body over planted feet - a 51 cm skate - and needed a 450 deg/s cap and foot-lock resets.)
     const float clipTurn = RootYawRate(db, m_Matcher.Frame()) * m_Matcher.PlayRate * dt;
-    yaw = StepCharacterFacing(yaw, clipTurn, m_SimYaw, Config, dt);
+    if (db.Style(m_Matcher.Frame()) == MotionLabel::StyleSprint) { // (steered: Settings::SprintCharacterFacingHalflife)
+        Settings steered = Config;
+        steered.CharacterFacingHalflife = Config.SprintCharacterFacingHalflife;
+        yaw = StepCharacterFacing(yaw, clipTurn, m_SimYaw, steered, dt);
+    } else {
+        yaw = StepCharacterFacing(yaw, clipTurn, m_SimYaw, Config, dt);
+    }
     m_YawRate = Wrap(yaw - prevYaw) / dt;
 
     // Diagnostics.
