@@ -23,10 +23,10 @@
 class MotionDatabase;
 
 struct GaitSpeedTable {
-    // Per group: 0 walk, 1 jog, 2 run, 3 crouch, 4 stroll (the order the table always had, stroll added).
-    static constexpr int kGroups = 5;
-    float Walk = 1.27f, Jog = 1.85f, Run = 3.91f, CrouchWalk = 0.79f, Stroll = 0.69f; // m/s
-    int Legs[kGroups] = {0, 0, 0, 0, 0};
+    // Per group: 0 walk, 1 jog, 2 run, 3 crouch, 4 stroll, 5 sprint (the order the table always had, stroll and sprint added).
+    static constexpr int kGroups = 6;
+    float Walk = 1.27f, Jog = 1.85f, Run = 3.91f, CrouchWalk = 0.79f, Stroll = 0.69f, Sprint = 3.26f; // m/s
+    int Legs[kGroups] = {0, 0, 0, 0, 0, 0};
     float P25[kGroups] = {}, P50[kGroups] = {}, P75[kGroups] = {}, Max[kGroups] = {};
     float Strafe[kGroups] = {}; // m/s, median sideways strafe-leg plateau per group (0: none measured)
     int StrafeLegs[kGroups] = {};

@@ -52,9 +52,14 @@ struct MotionBakeConfig {
 // One row of tools/mm/takes.csv.
 struct MotionTake {
     std::string Name;
-    std::string Source; // the pack's take (its .fbx) when the row is another view of it (a mirror); empty: Name
+    std::string Source; // the pack's take (its .fbx) when the row is another view of it (a mirror); empty: Name. With a '/',
+                        // a project path (no extension): a clip outside the pack (the old locomotion's jog, 2026-11-17)
     const std::string& File() const { return Source.empty() ? Name : Source; }
     bool Mirrored() const { return HasTag("mirrored"); }
+    // A clip that carries its travel on the `root` bone (root motion - the old locomotion's): the body is taken against the root
+    // bone's place at the clip's start, not its moving one (whose travel the pack's takes don't have).
+    bool RootMotion() const { return HasTag("rootmotion"); }
+    int Loop = 0; // > 1: a loop clip, played this many times over (its root's travel carried from cycle to cycle)
     std::string Group, Pattern;
     float Seconds = 0.0f;
     bool Include = false;

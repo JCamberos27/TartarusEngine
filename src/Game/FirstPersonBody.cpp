@@ -813,6 +813,11 @@ bool FirstPersonBody::Start(World& world, Player& player) {
             m_MmSpeeds.Forward[3] = g.Legs[4] > 0 ? g.Stroll : 0.0f;
             m_MmSpeeds.Strafe[3] = g.Legs[4] > 0 ? g.StyleStrafe(MotionLabel::StyleStroll) : 0.0f;
             m_MmSpeeds.Back[3] = g.Legs[4] > 0 ? g.StyleBack(MotionLabel::StyleStroll) : 0.0f;
+            // The sprint: slot 4 (a press of Sprint while moving, held - Player::SprintHeld), at the sprint style's measured speeds
+            // (the old locomotion's jog loop: docs/MOTION_MATCHING_HANDOFF.md, "Asset gaps").
+            m_MmSpeeds.Forward[4] = g.Legs[5] > 0 ? g.Sprint : 0.0f;
+            m_MmSpeeds.Strafe[4] = g.Legs[5] > 0 ? g.StyleStrafe(MotionLabel::StyleSprint) : 0.0f;
+            m_MmSpeeds.Back[4] = g.Legs[5] > 0 ? g.StyleBack(MotionLabel::StyleSprint) : 0.0f;
             player.GaitSpeeds = m_MmSpeeds;
             char b[400];
             std::snprintf(b, sizeof b,
@@ -1361,7 +1366,10 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     in.Crouched = player.Crouched;
     in.Sprint = player.Sprinting;
     // The style asked for: the gait slot the capsule moves in (Player::DirectionalSpeeds).
-    in.Style = player.Gait == 1 ? MotionLabel::StyleJog : player.Gait == 3 ? MotionLabel::StyleStroll : MotionLabel::StyleWalk;
+    in.Style = player.Gait == 1   ? MotionLabel::StyleJog
+               : player.Gait == 3 ? MotionLabel::StyleStroll
+               : player.Gait == 4 ? MotionLabel::StyleSprint
+                                  : MotionLabel::StyleWalk;
     in.Jumped = player.Jumped;
     in.JumpSpeed = player.JumpSpeed;
     in.Gravity = player.Gravity;
@@ -1498,11 +1506,14 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     if (IK::FootSlideMeterOn()) { // the feet as drawn (a visible piece that has them), for the --npc-test slide meter
         const float scale = std::max(reg.get<TransformComponent>(m_Body).Scale.y, 1e-3f);
         for (const auto& mp : m_Models) {
-            glm::mat4 n0(1.0f), n1(1.0f);
+            glm::mat4 n0(1.0f), n1(1.0f), b0(1.0f), b1(1.0f);
             if (!mp || !mp->NodeTransform(Bone(FPBody::kBoneFoot[0]), n0) || !mp->NodeTransform(Bone(FPBody::kBoneFoot[1]), n1)) continue;
             const glm::quat yaw = YawRotation(m_Yaw);
             const glm::vec3 feet[2] = {m_Feet + yaw * (scale * glm::vec3(n0[3])), m_Feet + yaw * (scale * glm::vec3(n1[3]))};
-            IK::FootSlideMeterFor("player").Step(feet, m_Feet.y, dt);
+            // The balls too: a foot pivoting on its ball (or heel) is turning, not sliding (FootSlideMeterTotals::MaxContactDrift).
+            const bool balls = mp->NodeTransform(Bone(FPBody::kBoneBall[0]), b0) && mp->NodeTransform(Bone(FPBody::kBoneBall[1]), b1);
+            const glm::vec3 ball[2] = {m_Feet + yaw * (scale * glm::vec3(b0[3])), m_Feet + yaw * (scale * glm::vec3(b1[3]))};
+            IK::FootSlideMeterFor("player").Step(feet, m_Feet.y, dt, balls ? &ball : nullptr);
             BodyDebug::Info().DrawnFoot[0] = feet[0];
             BodyDebug::Info().DrawnFoot[1] = feet[1];
             break;
@@ -1819,6 +1830,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     m_HaveChestView = true;
     {
         const float unarmed = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+        BodyDebug::Info().HandEyePush[0] = BodyDebug::Info().HandEyePush[1] = 0.0f;
         if (mmLayers && unarmed > 1e-3f) KeepHandsFromEye(glm::inverse(yaw) * (camera.Position - m_Feet) / std::max(t.Scale.y, 1e-3f), unarmed);
     }
     PostureMetrics(world, camera, dt);
@@ -1917,12 +1929,32 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> where it is drawn
     // Foot lock: a planted foot stays where it landed in the world - walking, turning on the spot, starting and stopping
     // alike - and catches up through its swing once it lifts, or steps once the leg can no longer reach it (IK::FootLock).
-    const IK::FootLockSettings lockSet = IK::FootLockFrom(cfg);
+    // Motion matching: the lock holds the ball of the foot, not the ankle - the body turning over a planted foot (faster than
+    // the clip turns: the facing's pull toward the view) swivels it on its ball, as a foot pivots, instead of sweeping its
+    // toes over the floor; and a foot let go steps clear over the way the turn carries it (FootLockSettings::StepForTravel).
+    IK::FootLockSettings lockSet = IK::FootLockFrom(cfg);
+    // Experiment knobs (MmTune: FootLock.<field>).
+    lockSet.Height = MmTune("FootLock.Height", lockSet.Height);
+    lockSet.Lift = MmTune("FootLock.Lift", lockSet.Lift);
+    lockSet.Speed = MmTune("FootLock.Speed", lockSet.Speed);
+    lockSet.Reach = MmTune("FootLock.Reach", lockSet.Reach);
+    lockSet.MaxDrift = MmTune("FootLock.MaxDrift", lockSet.MaxDrift);
+    lockSet.Release = MmTune("FootLock.Release", lockSet.Release);
+    lockSet.StepHeight = MmTune("FootLock.StepHeight", lockSet.StepHeight);
+    lockSet.StepMax = MmTune("FootLock.StepMax", lockSet.StepMax);
+    const bool pivot = m_Mm.Active();
+    lockSet.StepForTravel = pivot;
+    const int ballNode[2] = {drv.NodeIndex(Bone(FPBody::kBoneBall[0])), drv.NodeIndex(Bone(FPBody::kBoneBall[1]))};
     for (int s = 0; s < 2; ++s) {
         const glm::vec3 footLocal = scale * IK::Position(globals[footNode[s]]); // the clip's foot, in the body
         const glm::vec3 footWorld = m_Feet + yaw * footLocal;                   // the animated foot
         animHeight[s] = footWorld.y - m_Feet.y;
-        const glm::vec3 held = m_Lock.Step(s, lockSet, m_Feet, yaw, footLocal, animHeight[s], dt);
+        // The heel from the strike, then the ball once it is down (IK::FootLock::Step's `ball`). The offset moves the whole
+        // foot, its rotation the clip's, so the held point stays put either way.
+        const bool ball = pivot && ballNode[s] >= 0;
+        const glm::vec3 ballLocal = ball ? scale * IK::Position(globals[ballNode[s]]) : glm::vec3(0.0f);
+        const float ballHeight = ball ? (m_Feet + yaw * ballLocal).y - m_Feet.y : 0.0f;
+        const glm::vec3 held = m_Lock.Step(s, lockSet, m_Feet, yaw, footLocal, animHeight[s], dt, ball ? &ballLocal : nullptr, ballHeight);
         lockShift[s] = held * m_FootWeight;
         const glm::vec3 drawn = footWorld + held; // the ground is read under the foot as drawn
         float offset = 0.0f, ground = 0.0f; // the ground off the body's base, and off the capsule's
@@ -2146,6 +2178,7 @@ void FirstPersonBody::KeepHandsFromEye(const glm::vec3& eyeModel, float weight) 
         if (want - dist < 1e-4f) continue;
         target[s] = eyeModel + d / dist * want;
         push[s] = true;
+        BodyDebug::Info().HandEyePush[s] = (want - dist) * std::clamp(weight, 0.0f, 1.0f); // (model units: metres on the body)
     }
     if (!push[0] && !push[1]) return;
     for (const auto& mp : m_Models) {

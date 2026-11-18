@@ -49,6 +49,11 @@
 class Model;
 struct LocalTRS;
 
+// Experiment knobs (TARTARUS_MM_TUNE="Key=value,..."): the value for `key` when the variable sets it, else `fallback`. Read at
+// startup in .cpp files, so an experiment needs no rebuild (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration"). The keys are
+// listed where they are read (FirstPersonBodyMotion::Start, FirstPersonBody::ApplyFootIK, SharedMotionDatabase::Get).
+float MmTune(const char* key, float fallback);
+
 // FirstPersonBodyComponent::LocomotionSource (temporary, until Phase 6 removes the legacy path).
 enum class LocomotionSource : int { Legacy = 0, MotionMatching = 1 };
 
@@ -102,7 +107,7 @@ public:
         float AirDelay = 0.12f;                // s off the ground (no jump) before a fall plays the segment
         float TransitionCost = 0.25f;          // a candidate must beat the playing frame by this much (typical costs 0.6-1.0)
         int MinRunway = 8;                     // frames a candidate must play before its labels change (no dead ends)
-        float ForcedPoseWeight = 0.25f;        // MotionMatcher::ForcedPoseWeight
+        float ForcedPoseWeight = 0.25f;        // MotionMatcher::ForcedPoseWeight (Stage 3: at 1.0 the stops jumped 46.3 / s against 40.7, the crouch 5.1 against 4.9)
         // Standing idle (MotionMatcher::Idle): below this capsule speed (m/s) on an Idle frame, the take plays on while its
         // root 1 s on stays within IdleTravel (m; the pack's idles move it under 0.17 m in a second, p97) and its facing within
         // IdleTurn (rad) - a sanity bound only: standing still the heading follows the take's root turn (the feet stay planted)
@@ -181,6 +186,7 @@ private:
     float m_WarpRate = 1.0f, m_AnimSpeed = 0.0f, m_CapsuleSpeed = 0.0f;
     MotionPose m_LastOut; // the last update's output pose (the pose-step metric)
     std::vector<float> m_Lines;
+    float m_GroupWeight[MotionFeature::GroupCount] = {}; // the search's feature weights (MotionSearchParams' defaults, or MmTune's)
 };
 
 // What the player's motion matching did this frame, for the Inspector and --npc-test mmplayer (like BodyDebug).
@@ -211,6 +217,7 @@ struct Snapshot {
     std::string PoseStepBone; // ... and which bone
     float Query[27] = {}, Matched[27] = {}; // the last search's raw query and the matched frame's raw features
     float MatchedTravel = 0.0f, MatchedTravelDeg = 0.0f; // the matched frame's root 1 s on: how far, and how far off ahead (deg)
+    float MatchedAccel = 0.0f; // the matched frame's root acceleration over +-0.5 s in its take (m/s^2): cruising, or a dash's rise / brake
     float RootOffset = 0.0f; // the drawn body's root off the capsule's feet (m, horizontal): the clamp keeps it 0
     std::vector<float> Lines; // FirstPersonBodyMotion::Lines() (the mmplayer scenario draws them)
 };

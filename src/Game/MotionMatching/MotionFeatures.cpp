@@ -25,6 +25,7 @@ const char* MotionLabel::StyleName(int s) {
         case StyleWalk: return "walk";
         case StyleJog: return "jog";
         case StyleRun: return "run";
+        case StyleSprint: return "sprint";
         case StyleCrouch: return "crouch";
         default: return "?";
     }

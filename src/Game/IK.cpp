@@ -476,8 +476,9 @@ std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& mo
     return missing;
 }
 
-void FootSlideMeter::Step(const glm::vec3 (&foot)[2], float ground, float dt) {
+void FootSlideMeter::Step(const glm::vec3 (&foot)[2], float ground, float dt, const glm::vec3 (*ball)[2]) {
     if (dt <= 1e-5f) return;
+    m_Balls = ball != nullptr;
     for (int s = 0; s < 2; ++s) {
         const float h = foot[s].y - ground;
         // Each foot's own lowest height (the ankle stands a few cm up when the foot is flat), creeping up slowly so a crouch
@@ -487,9 +488,11 @@ void FootSlideMeter::Step(const glm::vec3 (&foot)[2], float ground, float dt) {
         const glm::vec2 at(foot[s].x, foot[s].z);
         if (contact) {
             // The first two frames are the heel coming down; the plant is judged from where it settles.
-            if (++m_Frames[s] == 3) { m_Start[s] = at; m_Drift[s] = 0.0f; m_Time[s] = 0.0f; }
+            const glm::vec2 ballAt = ball ? glm::vec2((*ball)[s].x, (*ball)[s].z) : at;
+            if (++m_Frames[s] == 3) { m_Start[s] = at; m_Drift[s] = 0.0f; m_Time[s] = 0.0f; m_BallStart[s] = ballAt; m_BallDrift[s] = 0.0f; }
             if (m_Frames[s] >= 3) {
                 m_Drift[s] = std::max(m_Drift[s], glm::length(at - m_Start[s]));
+                m_BallDrift[s] = std::max(m_BallDrift[s], glm::length(ballAt - m_BallStart[s]));
                 m_Time[s] += dt;
                 Total.ContactTime += dt;
             }
@@ -498,6 +501,11 @@ void FootSlideMeter::Step(const glm::vec3 (&foot)[2], float ground, float dt) {
                 ++Total.Plants;
                 Total.SumDrift += m_Drift[s];
                 Total.MaxDrift = std::max(Total.MaxDrift, m_Drift[s]);
+                if (m_Balls) {
+                    const float least = std::min(m_Drift[s], m_BallDrift[s]);
+                    Total.SumContactDrift += least;
+                    Total.MaxContactDrift = std::max(Total.MaxContactDrift, least);
+                }
             }
             m_Frames[s] = 0;
         }
@@ -517,13 +525,15 @@ FootSlideMeter& FootSlideMeterFor(const std::string& who) {
 
 void FootLock::LetGo(Foot& f, const FootLockSettings& set, bool step) {
     f.Locked = false;
+    f.OnBall = false;
     f.ReleaseFrom = glm::vec3(f.Offset.x, 0.0f, f.Offset.z);
     f.ReleaseTime = 0.0f;
-    f.Lift = step ? std::min(set.StepHeight * glm::length(f.ReleaseFrom), set.StepMax) : 0.0f;
+    const float travel = glm::length(f.ReleaseFrom) + (set.StepForTravel ? f.AnimSpeed * set.Release : 0.0f);
+    f.Lift = step ? std::min(set.StepHeight * travel, set.StepMax) : 0.0f;
 }
 
 glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& root, const glm::quat& facing, const glm::vec3& local,
-                         float height, float dt) {
+                         float height, float dt, const glm::vec3* ball, float ballHeight) {
     Foot& f = m_Foot[s];
     if (dt <= 1e-5f) return f.Offset;
     const glm::vec3 anim = root + facing * local;
@@ -535,8 +545,20 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
     const glm::vec3 moved = (root - f.PrevRoot) + f.PrevFacing * (local - f.PrevLocal);
     const float speed = seen ? glm::length(glm::vec2(moved.x, moved.z)) / dt : 0.0f;
     const float rootSpeed = seen ? glm::length(glm::vec2(root.x - f.PrevRoot.x, root.z - f.PrevRoot.z)) / dt : 0.0f;
+    f.AnimSpeed = seen ? glm::length(glm::vec2(anim.x - f.Prev.x, anim.z - f.Prev.z)) / dt : 0.0f;
     f.Floor = seen ? std::min(f.Floor + 0.01f * dt, height) : height;
     const float up = height - f.Floor;
+    const glm::vec3 animBall = ball ? root + facing * *ball : anim;
+    f.BallFloor = ball && f.HaveBall && seen ? std::min(f.BallFloor + 0.01f * dt, ballHeight) : ballHeight;
+    f.HaveBall = ball != nullptr;
+    const float ballUp = ball ? ballHeight - f.BallFloor : up;
+    // ... and the ball's own speed over the ground (the same way), for a foot planted on its ball.
+    float ballSpeed = speed;
+    if (ball) {
+        const glm::vec3 ballMoved = (root - f.PrevRoot) + f.PrevFacing * (*ball - f.PrevBallLocal);
+        ballSpeed = seen ? glm::length(glm::vec2(ballMoved.x, ballMoved.z)) / dt : 0.0f;
+        f.PrevBallLocal = *ball;
+    }
     f.Prev = anim;
     f.PrevRoot = root;
     f.PrevFacing = facing;
@@ -550,20 +572,32 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
         // the spot lands its step sliding at ~2 m/s. Only the clip's slide - a foot the capsule carries that fast is
         // a swing, held to Speed.
         const bool flat = up < set.FlatHeight && rootSpeed < set.Speed;
-        if (seen && !stepping && up < set.Height && (speed < set.Speed || flat)) { // (a first frame has no speed yet)
+        const bool heel = up < set.Height && (speed < set.Speed || flat);
+        const bool onBall = ball && !heel && ballUp < set.Height && (ballSpeed < set.Speed || (ballUp < set.FlatHeight && rootSpeed < set.Speed));
+        if (seen && !stepping && (heel || onBall)) { // (a first frame has no speed yet)
             // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
             f.Locked = true;
+            f.OnBall = onBall;
             f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
+            f.BallPin = glm::vec3(animBall.x + f.Offset.x, animBall.y, animBall.z + f.Offset.z);
             f.Time = 0.0f;
         }
     } else {
-        const float drift = glm::length(glm::vec2(f.Pin.x - anim.x, f.Pin.z - anim.z));
-        if (up > set.Lift) LetGo(f, set, false);
+        // The ball down too: the hold passes to it, where it is drawn now (the offset unchanged). (Waiting until it is flat -
+        // FlatHeight - measured no better: the straight legs' drift the same, the turns' a little worse.)
+        if (ball && !f.OnBall && ballUp < set.Height) {
+            f.OnBall = true;
+            f.BallPin = glm::vec3(animBall.x + f.Offset.x, animBall.y, animBall.z + f.Offset.z);
+        }
+        const float drift = f.OnBall ? glm::length(glm::vec2(f.BallPin.x - animBall.x, f.BallPin.z - animBall.z))
+                                     : glm::length(glm::vec2(f.Pin.x - anim.x, f.Pin.z - anim.z));
+        if ((f.OnBall ? ballUp : up) > set.Lift) LetGo(f, set, false);
         else if (drift > set.MaxDrift) LetGo(f, set, true);
     }
     if (f.Locked) {
         f.Time += dt;
-        f.Offset = glm::vec3(f.Pin.x - anim.x, 0.0f, f.Pin.z - anim.z);
+        f.Offset = f.OnBall ? glm::vec3(f.BallPin.x - animBall.x, 0.0f, f.BallPin.z - animBall.z)
+                            : glm::vec3(f.Pin.x - anim.x, 0.0f, f.Pin.z - anim.z);
     } else {
         f.ReleaseTime += dt;
         const float k = std::clamp(f.ReleaseTime / std::max(set.Release, 1e-3f), 0.0f, 1.0f);

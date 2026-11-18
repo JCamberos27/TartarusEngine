@@ -1,6 +1,7 @@
 ﻿#include "FirstPersonBodyMotion.h"
 
 #include "Animation.h"
+#include "Core/Env.h"
 #include "Core/Paths.h"
 #include "Model.h"
 #include "MotionMatching/MotionBake.h"
@@ -11,8 +12,29 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <map>
 #include <mutex>
+
+float MmTune(const char* key, float fallback) {
+    static const std::map<std::string, float> values = [] {
+        std::map<std::string, float> out;
+        if (!Env::IsSet(Env::Var::MmTune)) return out;
+        const std::string list = Env::Str(Env::Var::MmTune);
+        for (size_t at = 0; at <= list.size();) {
+            const size_t end = std::min(list.find(',', at), list.size());
+            const std::string item = list.substr(at, end - at);
+            const size_t eq = item.find('=');
+            if (eq != std::string::npos) out[item.substr(0, eq)] = (float)std::atof(item.c_str() + eq + 1);
+            at = end + 1;
+        }
+        for (const auto& [k, v] : out) std::printf("[MmTune] %s = %g\n", k.c_str(), v);
+        return out;
+    }();
+    const auto it = values.find(key);
+    return it != values.end() ? it->second : fallback;
+}
 
 namespace {
 constexpr float kPi = 3.14159265358979f;
@@ -251,6 +273,7 @@ float FirstPersonBodyMotion::RootSpeed(const MotionDatabase& db, std::uint32_t f
     return glm::length(d) * db.Fps() / (float)(b - a);
 }
 
+
 float FirstPersonBodyMotion::RootYawRate(const MotionDatabase& db, std::uint32_t frame) {
     const auto& c = db.Clip(db.ClipOf(frame));
     const std::uint32_t a = std::max(c.First, frame >= 5 ? frame - 5 : 0u), b = std::min(c.First + c.Count - 1, frame + 5);
@@ -296,6 +319,24 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
     }
     m_Shared = shared;
     m_Matcher.Reset(&m_Shared->Db, m_Shared->StartFrame);
+    // Experiment knobs (MmTune; keys as named here).
+    {
+        Settings& c = Config;
+        c.MinWarp = MmTune("MinWarp", c.MinWarp);
+        c.MaxWarp = MmTune("MaxWarp", c.MaxWarp);
+        c.SimFacingHalflife = MmTune("SimFacingHalflife", c.SimFacingHalflife);
+        c.CharacterFacingHalflife = MmTune("CharacterFacingHalflife", c.CharacterFacingHalflife);
+        c.MaxFacingOffset = MmTune("MaxFacingOffset", c.MaxFacingOffset);
+        c.TransitionCost = MmTune("TransitionCost", c.TransitionCost);
+        c.MinRunway = (int)MmTune("MinRunway", (float)c.MinRunway);
+        c.ForcedPoseWeight = MmTune("ForcedPoseWeight", c.ForcedPoseWeight);
+        auto& ip = m_Matcher.Inertializer.Params;
+        ip.BlendTime = MmTune("BlendTime", ip.BlendTime);
+        ip.DecayHalflife = MmTune("DecayHalflife", ip.DecayHalflife);
+        static const char* const kW[MotionFeature::GroupCount] = {"W.FootPos", "W.FootVel", "W.PelvisVel", "W.TrajPos", "W.TrajDir"};
+        const MotionSearchParams defaults;
+        for (int g = 0; g < MotionFeature::GroupCount; ++g) m_GroupWeight[g] = MmTune(kW[g], defaults.GroupWeight[g]);
+    }
     m_HaveYaw = false;
     m_Air = Air::None;
     m_WarpRate = 1.0f;
@@ -378,9 +419,10 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     // The filters: crouch (the pack's crouch takes), and what is asked for - standing still the idle gait, moving the style
     // (in every direction: the capsule moves at the style's own speed, strafes at its strafe speed - Player::GaitSpeeds).
     const bool crouch = in.Crouched;
-    const int style = crouch ? (int)MotionLabel::StyleCrouch : std::clamp(in.Style, (int)MotionLabel::StyleStroll, (int)MotionLabel::StyleRun);
+    const int style = crouch ? (int)MotionLabel::StyleCrouch : std::clamp(in.Style, (int)MotionLabel::StyleStroll, (int)MotionLabel::StyleSprint);
     const int gait = m_Still ? (int)MotionLabel::Idle : -1;
     MotionSearchParams params;
+    for (int g = 0; g < MotionFeature::GroupCount; ++g) params.GroupWeight[g] = m_GroupWeight[g];
     params.DesiredGait = gait;
     params.DesiredStyle = m_Still ? -1 : style;
     params.TransitionCost = Config.TransitionCost;
@@ -461,6 +503,7 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
         }
     }
 
+
     // Speed warping: the matched frame plays at the capsule's pace (within MinWarp..MaxWarp).
     m_AnimSpeed = RootSpeed(db, m_Matcher.Frame());
     float rate = 1.0f;
@@ -538,6 +581,11 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
         const float x = raw[15 + 4], z = raw[15 + 5];
         d.MatchedTravel = std::hypot(x, z);
         d.MatchedTravelDeg = d.MatchedTravel > 1e-4f ? std::fabs(std::atan2(x, z)) * 180.0f / kPi : 0.0f;
+        const auto& clip = db.Clip(db.ClipOf(m.Frame()));
+        const std::uint32_t half = (std::uint32_t)std::lround(0.5f * db.Fps());
+        const std::uint32_t a = std::max(clip.First, m.Frame() >= half ? m.Frame() - half : 0u);
+        const std::uint32_t b = std::min(clip.First + clip.Count - 1, m.Frame() + half);
+        d.MatchedAccel = b > a ? (RootSpeed(db, b) - RootSpeed(db, a)) * db.Fps() / (float)(b - a) : 0.0f;
     }
     d.PoseStepDeg = 0.0f;
     for (size_t i = 0; i < m.Pose().Rot.size() && i < m_LastOut.Rot.size(); ++i) {

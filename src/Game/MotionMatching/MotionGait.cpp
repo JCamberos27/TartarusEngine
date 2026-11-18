@@ -26,13 +26,14 @@ int GaitSpeedTable::GroupOf(int style) {
         case MotionLabel::StyleRun: return 2;
         case MotionLabel::StyleCrouch: return 3;
         case MotionLabel::StyleStroll: return 4;
+        case MotionLabel::StyleSprint: return 5;
         default: return -1;
     }
 }
 
 int GaitSpeedTable::StyleOf(int group) {
     static const int k[kGroups] = {MotionLabel::StyleWalk, MotionLabel::StyleJog, MotionLabel::StyleRun, MotionLabel::StyleCrouch,
-                                   MotionLabel::StyleStroll};
+                                   MotionLabel::StyleStroll, MotionLabel::StyleSprint};
     return group >= 0 && group < kGroups ? k[group] : MotionLabel::StyleStand;
 }
 
@@ -112,6 +113,7 @@ GaitSpeedTable GaitSpeedTable::Measure(const MotionDatabase& db) {
     if (t.Legs[2]) t.Run = t.P50[2];
     if (t.Legs[3]) t.CrouchWalk = t.P50[3];
     if (t.Legs[4]) t.Stroll = t.P50[4];
+    if (t.Legs[5]) t.Sprint = t.P50[5];
     for (int g = 0; g < kGroups; ++g) {
         t.StrafeLegs[g] = (int)strafes[g].size();
         t.Strafe[g] = Percentile(strafes[g], 0.5f);
@@ -142,6 +144,7 @@ float GaitSpeedTable::StyleSpeed(int style) const {
         case MotionLabel::StyleJog: return Jog;
         case MotionLabel::StyleRun: return Run;
         case MotionLabel::StyleCrouch: return CrouchWalk;
+        case MotionLabel::StyleSprint: return Sprint;
         default: return 0.0f;
     }
 }
@@ -180,5 +183,8 @@ std::string GaitSpeedTable::Describe() const {
                   P50[1], P75[1], Max[1], Run, Legs[2], P25[2], P50[2], P75[2], Max[2], CrouchWalk, Legs[3], P25[3], P50[3], P75[3], Max[3],
                   Strafe[4], StrafeLegs[4], Strafe[0], StrafeLegs[0], Strafe[1], StrafeLegs[1], Strafe[2], StrafeLegs[2], Strafe[3],
                   StrafeLegs[3], Back[4], BackLegs[4], Back[0], BackLegs[0], Back[1], BackLegs[1], Back[2], BackLegs[2], Back[3], BackLegs[3]);
-    return b;
+    char sprint[160];
+    std::snprintf(sprint, sizeof sprint, "; sprint %.2f (%d legs, p25/50/75 %.2f/%.2f/%.2f), sideways %.2f (%d), backwards %.2f (%d) m/s", Sprint,
+                  Legs[5], P25[5], P50[5], P75[5], Strafe[5], StrafeLegs[5], Back[5], BackLegs[5]);
+    return std::string(b) + sprint;
 }

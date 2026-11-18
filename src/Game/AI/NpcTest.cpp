@@ -1,4 +1,6 @@
 #include "NpcTest.h"
+#include <algorithm>
+#include <cctype>
 #include "IK.h"
 #include "World.h"
 
@@ -34,7 +36,11 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
         if (!Env::IsSet(Env::Var::LocomotionSource)) Env::Set(Env::Var::LocomotionSource, "mm"); // (=legacy: the same course on the controller)
         Env::Set(Env::Var::TestbedParts, m_Scenario == "mmstress" ? "S" : "ACM");
     }
-    if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") m_Duration = TestbedSeconds();
+    if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") {
+        m_Duration = TestbedSeconds();
+        m_SkipLegs = TestbedLegsOff();
+        if (!m_SkipLegs.empty()) std::printf("[NpcTest] leg filter '%s': %zu legs left out\n", Env::Str(Env::Var::TestbedLegs).c_str(), m_SkipLegs.size());
+    }
     if (m_Scenario == "mmview") m_Duration = MmViewSeconds();
     if (m_Scenario == "mmdb") m_Duration = MmDbSeconds();
     if (m_Scenario == "flame") m_Duration = 14.0f;
@@ -66,12 +72,36 @@ void NpcTest::SlideLeg(const std::string& leg) {
     for (const std::string& n : who) {
         const IK::FootSlideMeterTotals t = IK::FootSlideMeterFor(n).TakeTotals();
         if (t.Plants == 0) continue;
-        if (n == "player") m_SlideWorstPlayer[leg] = t.MaxDrift;
-        std::printf("[Slide] %-26s %-10s %2d plants, drift mean %4.1f cm, worst %5.1f cm\n", leg.c_str(), n.c_str(), t.Plants, t.MeanCm(), t.MaxDrift * 100.0f);
+        if (n == "player") {
+            m_SlideWorstPlayer[leg] = t.MaxDrift;
+            m_SlideContactPlayer[leg] = t.MaxContactDrift;
+        }
+        std::printf("[Slide] %-26s %-10s %2d plants, drift mean %4.1f cm, worst %5.1f cm; contact (heel or ball) mean %4.1f, worst %5.1f cm\n",
+                    leg.c_str(), n.c_str(), t.Plants, t.MeanCm(), t.MaxDrift * 100.0f, t.MeanContactCm(), t.MaxContactDrift * 100.0f);
     }
 }
 
 void NpcTest::Check(bool ok, const std::string& what) {
+    // A leg filter: a check naming a leg that didn't run (itself, or a leg it is measured against) is skipped. Names are matched
+    // longest first, so "M jog" doesn't match inside "M jog turning".
+    if (!m_SkipLegs.empty()) {
+        static std::vector<std::string> sorted;
+        if (sorted.empty()) {
+            sorted = m_SkipLegs;
+            std::sort(sorted.begin(), sorted.end(), [](const std::string& a, const std::string& b) { return a.size() > b.size(); });
+        }
+        for (const std::string& off : sorted)
+            for (size_t at = what.find(off); at != std::string::npos; at = what.find(off, at + 1)) {
+                const size_t end = at + off.size();
+                const bool whole = (at == 0 || !std::isalnum((unsigned char)what[at - 1])) &&
+                                   (end >= what.size() || !(std::isalnum((unsigned char)what[end]) ||
+                                                            (what[end] == ' ' && end + 1 < what.size() && std::isalpha((unsigned char)what[end + 1]) &&
+                                                             what.compare(end, 2, " (") != 0)));
+                if (!whole) continue;
+                std::cout << "[NpcTest] SKIP (leg filter: '" << off << "' didn't run) " << what << std::endl;
+                return;
+            }
+    }
     ++m_Checks;
     if (!ok) ++m_Failures;
     std::cout << "[NpcTest] " << (ok ? "PASS " : "FAIL ") << what << std::endl;

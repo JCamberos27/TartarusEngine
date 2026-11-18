@@ -202,6 +202,7 @@ bool ReadTakes(const std::string& csvPath, std::vector<MotionTake>& out, std::st
         t.Name = col("name");
         if (t.Name.empty()) continue;
         t.Source = col("source");
+        t.Loop = std::atoi(col("loop").c_str());
         if (t.Source == t.Name) t.Source.clear();
         t.Group = col("group");
         t.Pattern = col("pattern");
@@ -517,7 +518,8 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
     TakeResult r;
     r.Take = take;
     const MotionBakeConfig& cfg = *ctx.Cfg;
-    const std::string path = (fs::path(ctx.AnimsDir) / (take.File() + ".fbx")).string();
+    const std::string path = take.File().find('/') != std::string::npos ? ResolveProjectPath(take.File() + ".fbx")
+                                                                           : (fs::path(ctx.AnimsDir) / (take.File() + ".fbx")).string();
     std::error_code ec;
     if (!fs::exists(path, ec)) {
         r.Error = "missing " + path;
@@ -531,7 +533,9 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
         return r;
     }
     const float fps = cfg.Fps;
-    const float len = m.AnimationLength(0);
+    const float clipLen = m.AnimationLength(0);
+    const int loops = std::max(1, take.Loop);
+    const float len = clipLen * (float)loops; // a loop's cycles back to back
     const int total = (int)std::floor(len * fps + 1e-3f) + 1;
     const int first = std::clamp((int)std::lround(take.TrimStart * fps), 0, total - 1);
     const int last = take.TrimEnd > 0.0f ? std::clamp((int)std::lround(take.TrimEnd * fps), first, total - 1) : total - 1;
@@ -542,6 +546,11 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
     }
     r.SourceStart = (float)first / fps;
     r.TakeSeconds = len;
+    // Where in the clip, and which cycle, a time of the (looped) take is.
+    const auto clipTime = [&](float t, int& cycle) {
+        cycle = loops > 1 ? std::min(loops - 1, (int)std::floor(t / clipLen)) : 0;
+        return std::clamp(t - (float)cycle * clipLen, 0.0f, clipLen);
+    };
 
     const int root = m.NodeIndex("root"), pelvis = m.NodeIndex("pelvis");
     const int thigh[2] = {m.NodeIndex("thigh_l"), m.NodeIndex("thigh_r")};
@@ -600,7 +609,29 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
     r.Rot.resize((size_t)ne * nb);
     std::vector<glm::mat4> pelvisRootSpace((size_t)ne);
     std::vector<std::vector<LocalTRS>> poses((size_t)ne);
-    for (int f = 0; f < ne; ++f) m.SampleLocalPose(0, std::min(len, (float)(extFirst + f) / fps), AnimationWrapMode::ClampForever, poses[(size_t)f]);
+    std::vector<int> cycleOf((size_t)ne, 0);
+    for (int f = 0; f < ne; ++f)
+        m.SampleLocalPose(0, clipTime(std::min(len, (float)(extFirst + f) / fps), cycleOf[(size_t)f]), AnimationWrapMode::ClampForever,
+                          poses[(size_t)f]);
+    // Root motion: the root bone's place against its place at the clip's start (model space, from each frame's own pose), and its
+    // travel over one cycle - a loop's later cycles carry on from where the earlier ones left it.
+    std::vector<glm::mat4> rootFromStart((size_t)ne, glm::mat4(1.0f));
+    if (take.RootMotion()) {
+        std::vector<LocalTRS> p0, p1;
+        std::vector<glm::mat4> gm;
+        m.SampleLocalPose(0, 0.0f, AnimationWrapMode::ClampForever, p0);
+        RootSpaceGlobals(m, p0, -1, gm);
+        const glm::mat4 start = gm[(size_t)root], startInv = glm::inverse(start);
+        m.SampleLocalPose(0, clipLen, AnimationWrapMode::ClampForever, p1);
+        RootSpaceGlobals(m, p1, -1, gm);
+        const glm::mat4 cycle = startInv * gm[(size_t)root];
+        for (int f = 0; f < ne; ++f) {
+            RootSpaceGlobals(m, poses[(size_t)f], -1, gm);
+            glm::mat4 carried(1.0f);
+            for (int k = 0; k < cycleOf[(size_t)f]; ++k) carried = carried * cycle;
+            rootFromStart[(size_t)f] = carried * startInv * gm[(size_t)root];
+        }
+    }
     {
         // The take's skeleton, with the pack rig's rest pose where it has the node.
         const int nn = m.NodeCount();
@@ -622,12 +653,18 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
             const MirrorRig mr = BuildMirror(names, parents, bind, root);
             r.MirrorNormal = mr.Normal;
             for (auto& p : poses) MirrorPose(mr, p);
+            // ... and a root motion clip's travel with it: reflected through the same plane (the start's root frame is the frame
+            // the plane is in), so world = (M R M)(M g M K) - the whole take's mirror image.
+            if (take.RootMotion())
+                for (glm::mat4& x : rootFromStart) x = mr.M * x * mr.M;
         }
     }
     std::vector<glm::mat4> g;
     for (int f = 0; f < ne; ++f) {
         const std::vector<LocalTRS>& pose = poses[(size_t)f];
         RootSpaceGlobals(m, pose, root, g);
+        if (take.RootMotion())
+            for (glm::mat4& x : g) x = rootFromStart[(size_t)f] * x;
         const auto P = [&](int node) { return glm::vec3(ctx.C * g[(size_t)node][3]); };
         in.Pelvis[(size_t)f] = r.Frames.Pelvis[(size_t)f] = P(pelvis);
         in.HipsRight[(size_t)f] = (P(thigh[1]) - P(thigh[0])) * ctx.Side;
@@ -972,7 +1009,7 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
                           {"strafeFrames", strafe}, {"airborneFrames", air}, {"excludedFrames", excluded},
                           {"fingerBones", r.FingerBones}, {"fingerBonesMoving", r.FingerBonesMoving}, {"fingerRangeDeg", r.FingerRangeDeg},
                           {"hasFingers", fingers}, {"source", r.Take.File()}, {"mirrored", r.Take.Mirrored()},
-                          {"styleFrames", {styles[0], styles[1], styles[2], styles[3], styles[4], styles[5]}},
+                          {"styleFrames", {styles[0], styles[1], styles[2], styles[3], styles[4], styles[5], styles[6]}},
                           {"twistFlipsUnrolled", r.Repair.Flips}, {"spikesRepaired", r.Repair.Spikes},
                           {"spikeFramesRepaired", r.Repair.SpikeFrames}, {"glitchFramesLeft", r.GlitchFrames}});
         if (r.Take.Mirrored())

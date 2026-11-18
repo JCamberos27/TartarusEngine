@@ -13,7 +13,7 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 | 1. Test infrastructure and legacy baseline | `dev/mm-phase1` | **Done** (2026-11-16) |
 | 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16; owner signed off on the `mmview` recording) |
 | 3. Motion matching runtime | `dev/mm-phase3` | **Done** (2026-11-16) |
-| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **In progress** (play tests 2 and 3 fixed - posture, the sprint loop (crossfaded), the crouch from the walk, idle look-down arms, the head off walls; `mmstress` added; session 3's audit: variable-frame-time dead blend, the loop's tempo and stride; the owner's play test next - "Phase 4: next steps") |
+| 4. First-person player integration (unarmed) | `dev/mm-phase4` | **In progress** (the strip-back and the full-library plan, Steps 0-4: the whole pack baked with styles, fingers, repairs and mirrors; the query asks for a style; open: the foot lock's release-and-drag when the body turns faster than the clip - "Phase 4: next steps") |
 | 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | Pending |
 | 6. Legacy cleanup and final verification | `dev/mm-phase6` | Pending |
 
@@ -78,10 +78,57 @@ skeleton). Then delete the legacy locomotion graphs, logic and clips.
    - strafe from facing versus travel direction;
    - airborne from foot contacts;
    - prone frames are excluded.
-5. **Mirroring is not in v1.** Phase 3 reports left/right coverage. If mirroring is needed, it is done as feature
-   rows plus mirroring at sample time.
-6. **Budgets.** At most 150 MB of pose memory (smallest-three 16-bit rotations, 60 fps), at most 40 MB of features, and
-   at most 2 s to load. The curated database is about 1.2 to 1.5 h. The bake fails when a budget is exceeded.
+5. **Mirroring where the audit finds the pack lopsided** (revised 2026-11-17, the full-library plan): the jog's and the
+   stroll's strafes (left / right steady seconds 1.40 and 1.85 apart; `docs/mm_audit.md`) are baked a second time
+   mirrored, as takes of their own (`MotionBake::MirrorPose`, rest-corrected) - real pose data, not sample-time mirroring:
+   ~7 min, and no runtime path for virtual frames.
+6. **Budgets** (revised 2026-11-17, the owner: compress, then raise the caps): at most 200 MB of pose memory (smallest-three
+   16-bit body rotations, 32-bit finger tracks, 60 fps), at most 40 MB of features (16-bit), at most 2 s to load - the
+   caps live in `Manny.mmconfig` and every check reads them there. The database is the whole pack but the exaggerated
+   takes and the dodges: 2.23 h (174.9 MB poses, 51 of it fingers; 26.2 MB features). The bake fails over a cap.
+
+## Asset gaps (the pack doesn't have it; not faked)
+
+Measured on the full-pack audit (`docs/mm_audit.md`, 2026-11-17). Each is a capture to buy or shoot, not a runtime trick:
+- **A sustained run / sprint (in the pack).** The pack was shot in a 9 m room: the longest time anywhere at >= 3.5 m/s is
+  1.6 s / 5 steps, always a dash (it rises to a peak and brakes); the gate (6 steady strides at 3.5 m/s) fails 0 of 12.
+  Two attempts on the pack's own data, both measured and retired (2026-11-17):
+  - **Phase A, a held sprint** (the run style at 3.93 m/s, searched like any gait): pose step p99 22.4 deg (gate 12.6), 40 %
+    of frames cruising (gate 70), the longest take 0.58 s - stitched dash fragments. Not a gait.
+  - **Phase B, the sprint burst** (one of the pack's 77 dashes played whole, locked, the capsule at the clip's own speed and
+    heading): 0 jumps inside a dash, slide 0.0-1.8 cm, but 2-3 s a burst at best (the dashes run 1.1-4.1 s). The owner, after
+    the longest-dash preference: "still extremely short". Removed entirely (the dashes, `StartBurst`/`EndBurst`, `DashSpeed`,
+    `Player::RunAllowed` / `RunFollowsExactly` / `RunHeading`, the cooldown, the `[MmBurst]` logs and their MmTune keys).
+  - **The sprint now: the old locomotion's jog set** (the owner's call, 2026-11-17; "the sprint works great"). The legacy
+    `assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_*` clips (3.26 m/s forward; a looped set with starts,
+    stops, pivots and turning starts - the "full blast run" set was not used, the owner judged it poor) are baked into the
+    database as their own style, **`sprint`** (`MotionLabel::StyleSprint`, gait table group 5). `gen_takes.py` lists them
+    (`LEGACY_*`): 28 clips, the 8 direction loops played 12 times over (`loop` column; the root's travel carried cycle to
+    cycle), tagged `rootmotion` (their travel is on the `root` bone: the bake takes the body against the root's place at the
+    clip's start, `MotionTake::RootMotion`). The side loops differ - Left 2.30 m/s, Right 2.96 - so a strafe either way had one
+    of them out of its warp range (strafe right slid 31 cm, 3.3 jumps/s): both are also baked mirrored (`LEGACY_MIRROR`; the
+    bake now mirrors a root motion clip's travel too, `M R M`). 30 rows; the database 2.29 h, poses 178.6 / 200 MB, load 0.32 s.
+    Pelvis height 0.915 against the pack's 0.928; feet rebuilt within 0.23 cm.
+  - **Controls (Left Shift):** held from standing, the pack's jog; **pressed while moving, the sprint** - held while Shift is
+    held and the stick moves (`Player::SprintHeld`, gait slot 4 at the sprint style's measured speeds); letting go, stopping
+    or crouching ends it.
+  - **Measured** (`mmplayer` sprint legs, `[MmSprint]`; each against its jog counterpart: jumps within 1.5x + 0.5, pose step
+    p99 within 1.15x + 1 of the leg's own away from jumps - the sprint's limbs move further a frame than the jog's - feet
+    <= 5 cm): straight 0.4 jumps/s (one loop 4.4 s), slide 1.4 cm; from a jog 0.5, 0.3 cm; back 0.7, 0.9 cm; strafes 2.7-3.3
+    jumps/s, 2.9 cm; all sprint style 100 %, 3.30 m/s forward, 2.33 sideways and back. **Fails:** `M sprint turning` (view 60
+    deg/s) - 2.5 jumps/s (the jog's own turning leg 4.0) but the planted feet slide 8.8 cm (5.4-8.9 across runs). The set has
+    no curved runs: the body's turn comes from the facing pull, not the clip. Faster facing springs (`CharacterFacingHalflife`
+    0.08; with `SimFacingHalflife` 0.12) traded the slide for more jumps and less cruising - the defaults stay. The owner's
+    play test found it good; revisit only if hard turns at a sprint look off.
+- **Long straight jogs.** The jog's steady forward stretches last at most 1.4 s (3 steps): a long straight jog re-matches
+  between takes 2.6-2.7 times a second (pose steps stay smooth: p99 10.6 deg).
+- **Tight turns at a walk.** Sweeping the view +-50 deg at 0.5 Hz while walking (a 157 deg/s turn) finds no walk take turning
+  that hard (best costs 4-5); the jog takes' card turnarounds covered it before the style label.
+- **Running jumps.** Every jump in the pack starts from standing (`Stand_Jump_*`): a jump on the move plays a standing jump's
+  flight under the moving capsule, and lands with the take's in-place landing skipped.
+- **Prone.** Only inside `Transitions_stationary` (on the way down and up); prone frames are excluded.
+- **Dodges.** In the pack (`Stand_Dodge_360`), left out by the owner's choice.
+- **Exaggerated styles** (`_S`, 0.75 h): kept tagged for a later style variant.
 
 ## Phase plan
 
@@ -781,7 +828,8 @@ drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
 ### Phase 6: Legacy cleanup and final verification
 - Delete only after a reference grep, and only after the owner approves the delete list (repo and Drive `Used\`).
 - Remove the legacy body/NPC controllers, their generators, the legacy `BodyLocomotion` triggers and `LoopPlayRate`,
-  `LocomotionSource`, and the legacy locomotion mocap.
+  `LocomotionSource`, and the legacy locomotion mocap - **except `Locomotion_V2/AM_Jog/`**: the motion matching sprint is baked
+  from it (`tools/mm/gen_takes.py`, `LEGACY_*`; see "Asset gaps").
 - Docs: `docs/MOTION_MATCHING.md`.
 - Final full run of `mm_smoke.ps1`.
 
@@ -817,6 +865,39 @@ drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
   - the engine's `[error]` lines go to stderr (`<run>.stderr.log` under `mm_smoke`);
   - the logs are in `Headless.log`;
   - exit code 0 means everything passed.
+
+## Fast iteration (keep current)
+
+The full course and the full pass are for final verification only. Iterate on a subset of legs, in parallel, without
+rebuilding for tuning values.
+
+- **A subset of legs:** `TARTARUS_TESTBED_LEGS` (comma-separated, `*` wildcards) on testbed / mmplayer / mmstress, or
+  `tools\mm_smoke.ps1 -Legs`. Each matching leg runs with the legs of its part from the last placement (settle) leg before
+  it, so it starts as on the whole course. A check that names a leg that didn't run - its own, or a reference leg like
+  `(A walk ...)` - is skipped and logged `[NpcTest] SKIP (leg filter: ...)`; a part with no leg running skips its setup checks, and the
+  whole-course checks (`mmplayer: ...`, `mmstress: ...`, `testbed: ...` - averages over every leg) are skipped under a filter.
+  Example: `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 mmplayer -SkipUnit -SkipSmoke -Legs "M sprint*,M stop after sprint*,M jog,M jog turning"`
+- **Tuning without a rebuild:** `TARTARUS_MM_TUNE="Key=value,..."` overrides at startup (`MmTune`, FirstPersonBodyMotion.cpp;
+  logged `[MmTune]`). Keys: `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife MaxFacingOffset TransitionCost MinRunway
+  ForcedPoseWeight BlendTime DecayHalflife W.FootPos W.FootVel W.PelvisVel W.TrajPos W.TrajDir
+  FootLock.Height FootLock.Lift FootLock.Speed FootLock.Reach FootLock.MaxDrift FootLock.Release FootLock.StepHeight
+  FootLock.StepMax`. A new knob is one more `MmTune("Key", default)` call in a .cpp; an adopted value goes into the header
+  default once, at the end.
+- **In parallel:** 2-3 `mm_smoke.ps1` runs at once, each with its own `-LogDir` (and `-SkipBuild`), on one build with a
+  different `TARTARUS_MM_TUNE` each (`Start-Job`, or separate terminals). For experiments that differ in code,
+  `tools\mm_exp.ps1 -Name <exp>` copies the runnable build (build\Release without .pdb/.lib/.exp, ~64 MB: the game code is in
+  TartarusGame.dll beside the exe) to `work\exp\<exp>\`; run it with `-Exe work\exp\<exp>\TartarusEngine.exe` while the main
+  build compiles the next one. (`-Exe` was silently ignored until 2026-11-17 - PowerShell's names ignore case, so the script's
+  own `$exe` was the parameter - every run used build\Release; fixed.)
+- **Slow rebuilds:** the widely included headers - `IK.h`, `FirstPersonBody.h`, `FirstPersonBodyMotion.h`, `MotionSearch.h`,
+  `MotionDatabase.h`, `MotionFeatures.h`, `Player.h`, `Components.h`, `Core/Env.h` - rebuild most of the engine. Put experiment
+  knobs in .cpp files or `MmTune`, not in their defaults.
+- **Measured (2026-11-17):** full mmplayer ~110 s (~2 min, ~95 legs, rendered); a header edit's rebuild ~4.5-5 min (281 s);
+  a .cpp-only rebuild ~20 s (23 s); a leg-filtered mmplayer (a few legs) 32 s, the sprint legs with their jog counterparts ~100 s; two filtered runs in
+  parallel 38 s together.
+- **Next (when tuning comes back round):** a headless fixed-timestep mode for mmplayer / mmstress (no window, the simulation as
+  fast as the CPU allows); the offline matcher replay Step 4 of the full-library plan called for (recorded inputs through the
+  matcher and the capsule maths, scored in seconds, for parameter sweeps).
 
 ## Code map (where things are)
 
@@ -1079,31 +1160,48 @@ animate fingers (unarmed); mirror only where the audit finds a gap.
     is relative to the walk, which improved to 1.2) - the pack's jog straights are short (9 m room: 1.4 s steady at
     most), so it hops between jog takes; **walk looking about 7.4 jumps/s** (pose steps p99 7.5 deg, better than the
     straight walk's) - Step 4's weight tuning.
+- **Step 4, Stage 3's review and the tuning (done):** measured on `mmplayer` (deterministic run to run: two runs gave
+  identical numbers), one change at a time against the committed defaults (`work/mm_smoke/s4_*`):
+  - `KeepHandsFromEye` **stays**: it moves a hand on 1537 of 7387 steady frames (21 %), up to 8.1 cm (the crouch walk;
+    jogs ~1-3 cm) - the data still brings hands to the eye (`[MmHands]` logs it; `BodyDebug::HandEyePush`).
+  - `ForcedPoseWeight` **stays 0.25**: at 1.0 the stop legs re-match 46.3 a second (summed) against 40.7, the crouch 5.1
+    against 4.9 (its pose steps fell 10.3 -> 6.5 deg, the stops' rose 4.7 -> 5.7).
+  - The tuning, against the baseline (moving legs: 81.5 jumps/s summed, pose step p99 10.47 deg, trajectory error 0.168 m):
+    | change | jumps/s | p99 | traj err | what broke |
+    |---|---|---|---|---|
+    | character facing pull 0.2 -> 0.35 s | 81.8 | 10.57 | 0.176 | jog flick slide 0 -> 45.6 cm (the 90 deg clamp drags), stairs reach |
+    | trajDir weight 1.5 -> 1.0 | 72.7 | 10.53 | 0.164 | the idle (0.83 jumps/s), the stroll strafes lopsided, look-about slide 31 cm |
+    | transition cost 0.25 -> 0.4 | 74.1 | 10.53 | 0.184 | walk flick slide 44.8 cm, the stroll strafes lopsided |
+    | dead blend 0.2 -> 0.3 s | 81.5 | 9.60 | 0.168 | walk random look slide 0.2 -> 76.7 cm |
+    None is better on balance: the defaults stay (Holden's). The worst foot slide swings 0.2 -> 77 cm on a small change -
+    single events, where the foot lock lets a planted foot go (Reach 0.98 / MaxDrift 0.25 m) as the body turns over it
+    faster than the clip turns, and drags it 0.2 s back to the animation. That is a foot-lock question, not a matching one
+    (next steps).
+  - Dead code: grep-clean (no sprint loop, run scale, crouch-from-walk, release-yaw reset or slow chest yaw left).
+  - New logs: `[MmHands]`; the per-leg table lists every leg, with the median trajectory error.
+- **The foot pivot (2026-11-17, the owner's pick):** the planted foot's lock (`IK::FootLock::Step`'s `ball`, motion matching
+  only) holds the heel from the strike, then the ball once it is down (at the offset it has: nothing moves), and lets go when
+  the toe leaves; a foot coming down on its ball is held there from the first frame. A foot let go steps clear over the way
+  the turn carries it (`FootLockSettings::StepForTravel`: its lag plus the animation's speed x Release; a 5 cm lag lifted
+  1.5 cm and skimmed 24 cm). Measured as the slide of the less moving of heel and ball (`FootSlideMeterTotals::MaxContactDrift`:
+  a pivot on either is not a slide), worst plant, before -> after: walk flick 180 38.4 -> 1.7 cm, walk looking about
+  18.8 -> 2.1, jog looking about 0.0 -> 1.6, walk random look 0.2 -> 4.3, jog random look 0.1 -> 1.8, jog flick 0.0 -> 0.0;
+  the straight legs gain ~1-2 cm (the heel rolling as the hold passes to the ball), all within 5. Checked now on all six
+  turning legs (<= 5 cm). (Rotating the body about the planted foot instead was ruled out: up to 28 cm off the capsule,
+  and the camera stays on the capsule.)
 
-Play test 2's problems are fixed, measured against legacy and checked (`mmplayer` 56/56, full pass all PASS). Left:
+Left (2026-11-17, after Step 4):
 
-0. **Session 3 changed the sprint** (the tempo step at every wrap is gone; the stride is the pack's steadiest, typical one -
-   lower and leaning in, and its wrap no longer brakes; see "Session 3"). The owner plays it in the editor. If
-   the upright look is preferred over steadiness, the honest options are below (an upright stride in this pack is a slowing
-   one). The notes from before session 3:
-   **The sprint still didn't look right to the owner** (2026-11-17, after the re-picked stride). Root cause, measured:
-   the pack has **no cruising sprint** - only 15 full fast straight strides, each 5-12 deg per bone off its start, no two
-   alike - so any single looped stride repeats one take's quirks every 0.6 s, and every one is a dash (speeding up or slowing
-   down). Options to weigh with the owner before more tuning:
-   - a **mirror-symmetric cycle**: one clean step plus its left/right mirror, crossfaded (needs a bone mirror map; the pack's
-     names are `_l` / `_r`);
-   - a **two-stride loop** or a short *pool* of the best strides, cycled, so it doesn't repeat one take's quirk;
-   - **data**: a dedicated sprint loop (buy / capture) - the cleanest fix;
-   - drop the loop, keep matching the fragments, and accept some stitching (the owner called that "limping").
-   Watch it in the owner's video first (contact sheets every 0.1 s on a straight sprint) and name what reads wrong before
-   changing anything. Also an owner call: the sprint speed (4.57 m/s now, the loop's x 0.95; was 3.91).
-1. **The owner's play test** - no sign-off videos (the owner tests in the editor and reports; `set TARTARUS_LOCOMOTION_SOURCE=mm`,
-   `build\Release\TartarusEngine.exe`, open `project/scenes/AnimTestbed.json`, Play, holster the weapon; the editor locks the
-   exe - `taskkill` it before building). Review any play-test video as before (contact sheets every 0.5 s, the worst stretches
-   every 0.1 s; list everything wrong before fixing).
-2. Fix what that finds, re-run `tools\mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"` (no recording - the
-   owner plays it; see the test protocol).
-3. When the owner is happy: mark Phase 4 done and commit (the full pass above is current unless code changes again).
+1. **The foot slide when the body turns faster than the clip** (the owner's call on the approach). Walking while sweeping
+   the view slides a planted foot up to 19 cm (0.1 before the style label - the jog takes turned it), a 180 deg walk flick
+   up to 38 cm (20 before). Cause, measured: the foot lock releases a planted foot past Reach / MaxDrift and drags it back over
+   0.2 s while it is still down. Options: a planted foot that pivots on its ball with the body's turn (and steps when the
+   leg runs out) instead of sliding; or the turn stepped by the data (the walk's turn-on-the-spot / pivot frames, searched
+   for when the body is turning faster than the walk turns). Not tuning: every matching parameter moved it both ways.
+2. **The owner's play test** of Step 4 (the defaults are unchanged; what changed is measurement) - then Phase 4's sign-off
+   and Phase 5 (NPCs on the same database; `SharedMotionDatabase::CacheKey` keeps a rig-less load apart).
+3. No sign-off videos: the owner plays it (`set TARTARUS_LOCOMOTION_SOURCE=mm`, `build\Release\TartarusEngine.exe`; the
+   editor starts on the Forest - open `scenes/AnimTestbed.json` - and locks the exe: close it before building).
 
 ## Phase 5: first steps
 
@@ -1246,3 +1344,11 @@ Play test 2's problems are fixed, measured against legacy and checked (`mmplayer
   - Last: `mmplayer` 63/63, unit 1821 checks.
   - The owner then judged the sprint a fake (still goofy with every layer off). Root cause: the pack has no sprint. The
     strip-back plan was approved; see "Phase 4: next steps". Recordings stopped at the owner's request.
+- **2026-11-17, Phase 4 (the sprint):**
+  - Phase A (the held run) and Phase B (the dash burst) on the pack's data, measured, then retired at the owner's word
+    ("still extremely short").
+  - The sprint is now the old locomotion's jog set, baked as the `sprint` style: project-path, root motion and looped takes in
+    the bake; the side loops mirrored (the bake mirrors root travel); Left Shift pressed while moving, held. The burst code is
+    gone. `mm_smoke.ps1 -Exe` fixed.
+  - `mmplayer` sprint legs: all pass but `M sprint turning`'s foot slide (8.8 cm, <= 5). The owner's play test: "the sprint
+    works great". No full pass yet; nothing committed.

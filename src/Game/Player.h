@@ -62,13 +62,14 @@ public:
     // partial stick between two gaits would ask for a speed no take moves at. Set before each Update.
     struct DirectionalSpeeds {
         bool Active = false;
-        float Forward[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        float Strafe[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        float Back[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        float Forward[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        float Strafe[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        float Back[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
         float StrafeAngle = 50.0f;
     } GaitSpeeds;
     float StrollStick = 0.6f; // a move stick under this (past its dead zone, 0..1) strolls (GaitSpeeds.Active only)
     int Gait = 0;             // out, per Update: the gait slot moved in (GaitSpeeds' index)
+    bool SprintHeld = false;  // out: a sprint under way (a press of Sprint while moving, the key still held)
     bool Sprinting = false; // out, per Update: the sprint (jog) key counted this frame
     // A jump pressed this long before landing still happens on landing, and one pressed this long
     // after stepping off an edge still counts (seconds).
@@ -102,6 +103,10 @@ public:
     bool SprintBlocked = false; // reload / mag check / inspect / melee suspension; the held/scripted sprint intent remains available
     bool ScriptCrouch = false; // ... and Crouch
     bool ScriptWalk = false;   // ... and Walk (the stroll)
+    // ... and the sprint (gait slot 4, GaitSpeeds' Forward[4]: a motion matching body's held sprint), held - the player asks with
+    // a press of Sprint (Left Shift) while moving and keeps it while the key is held (docs/MOTION_MATCHING_HANDOFF.md, "Asset
+    // gaps": the sprint).
+    bool ScriptRun = false;
     bool ScriptJump = false;   // ... and a Jump press (this frame)
 
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)

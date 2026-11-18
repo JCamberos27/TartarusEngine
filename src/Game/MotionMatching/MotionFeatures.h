@@ -61,7 +61,9 @@ enum Flag : std::uint8_t {
 const char* GaitName(int g);
 // What the actor was doing (the take's intent). Stand: not a locomotion style (idles, turns and steps on the spot, jumps,
 // repositions) - a search asking for a style doesn't charge it.
-enum Style : std::uint8_t { StyleStand = 0, StyleStroll, StyleWalk, StyleJog, StyleRun, StyleCrouch, StyleCount };
+// Sprint: the held fast run - the old locomotion's jog loop and its starts, stops and turns (not the pack's: its runs are
+// dashes, docs/MOTION_MATCHING_HANDOFF.md "Asset gaps").
+enum Style : std::uint8_t { StyleStand = 0, StyleStroll, StyleWalk, StyleJog, StyleRun, StyleCrouch, StyleSprint, StyleCount };
 const char* StyleName(int s);
 int StyleFromName(const std::string& name); // -1: none
 } // namespace MotionLabel
@@ -91,7 +93,7 @@ struct MotionFeatureConfig {
     float StandingPelvis = 0.96f;              // m, the source rig's pelvis at rest
     // m/s, the styles' cruise speeds (docs/mm_audit.md, steady forward p50; run: its dashes' plateau): a mixed take's
     // frames take the nearest of its styles'.
-    float StyleSpeeds[MotionLabel::StyleCount] = {0.0f, 0.69f, 1.17f, 1.87f, 3.9f, 0.74f};
+    float StyleSpeeds[MotionLabel::StyleCount] = {0.0f, 0.69f, 1.17f, 1.87f, 3.9f, 0.74f, 3.26f};
     float StyleWindowSeconds = 1.0f;           // the speed is averaged over this (a stride), so a step's sway doesn't flip it
 };
 

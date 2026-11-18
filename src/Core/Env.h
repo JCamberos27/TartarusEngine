@@ -46,6 +46,8 @@
     X(NpcTestTrace, "NPC_TEST_TRACE", Str, "--npc-test: write trace.csv to this folder (no frames; NPC_TEST_RECORD writes both)") \
     X(MmViewClips, "TARTARUS_MMVIEW_CLIPS", Str, "--npc-test mmview: the takes to play, 'Name[@start s];...'")          \
     X(TestbedParts, "TESTBED_PARTS", Str, "--npc-test testbed: only these parts (letters A-F, e.g. C or AC)")       \
+    X(MmTune, "TARTARUS_MM_TUNE", Str, "motion matching experiments: tuning overrides read at startup, 'Key=value,...' (MmTune in FirstPersonBodyMotion.cpp lists the keys) - no rebuild") \
+    X(TestbedLegs, "TARTARUS_TESTBED_LEGS", Str, "--npc-test testbed/mmplayer/mmstress: only the legs matching these comma-separated names (* wildcards), each from its part's last placement leg; checks naming a leg that didn't run are skipped") \
     X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs (and undress the player's body) without outfits")                                   \
     X(NpcTestDoorsOnly, "NPC_TEST_DOORS_ONLY", Str, "--npc-test doors: only doors whose name contains this")          \
     X(NpcTestDoorsTrace, "NPC_TEST_DOORS_TRACE", Flag, "--npc-test doors: trace")                                     \

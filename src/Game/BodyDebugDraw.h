@@ -45,6 +45,7 @@ struct Snapshot {
     // Each hand (l, r): its height over its shoulder (upper arm bone, m, + = above), its distance to the camera (m), and
     // whether it is in the view (within 35 deg of the camera's forward and 0.8 m).
     float HandOverShoulder[2] = {0, 0}, HandToEye[2] = {0, 0};
+    float HandEyePush[2] = {0, 0}; // m: how far KeepHandsFromEye moved each hand out from the eye this frame (0: it didn't)
     bool HandInView[2] = {false, false};
     float FeetGap = 0.0f;       // m: left foot minus right along the body's left (< 0: the legs are crossed)
     float BodyYawRateDeg = 0.0f; // the body's heading's turn rate (deg/s)

@@ -60,6 +60,7 @@ struct TbLeg {
     int Equip = -1;                   // 0 holster, 1 draw, at the leg's start (-1: leave it)
     bool Crouch = false;              // M (mmplayer): crouched through the leg
     bool Stroll = false;              // M: the Walk action held (the stroll)
+    bool Run = false;                 // M: the sprint asked for and held (Player::ScriptRun)
     float ViewTurn = 0.0f;            // M: the view turns this many degrees a second through the leg (from Yaw)
     float JumpAt = -1.0f;             // M: a jump pressed this many seconds into the leg (-1: none)
     float SweepDeg = 0.0f;            // M: the view sweeps this many degrees either side of Yaw (a player looking about) ...
@@ -86,6 +87,11 @@ TbLeg TbM(const char* name, float seconds, glm::vec2 move, bool sprint, bool cro
 TbLeg TbMStroll(const char* name, float seconds, glm::vec2 move, float yaw) {
     TbLeg l = TbM(name, seconds, move, false, false, yaw);
     l.Stroll = true;
+    return l;
+}
+TbLeg TbMRun(const char* name, float seconds, float yaw, float viewTurn = 0.0f, glm::vec2 move = {0, 1}) {
+    TbLeg l = TbM(name, seconds, move, true, false, yaw, viewTurn); // (Shift held too, as the player holds it)
+    l.Run = true;
     return l;
 }
 TbLeg TbMSweep(const char* name, float seconds, glm::vec2 move, bool sprint, float sweepDeg, float sweepHz) {
@@ -222,6 +228,25 @@ const TbLeg kTb[] = {
     TbM("M settle for mouse noise", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
     TbMWander("M jog mouse noise", 3.0f, true, 2.5f, 2.5f),
     TbM("M stop after mouse noise", 1.5f, {0, 0}, false, false, 90.0f),
+    // The sprint (the sprint style - the old locomotion's jog set - asked for and held, Shift held): from standing, with the
+    // view turning 60 deg a second, from a jog (the usual way in), and sideways and backwards (its own strafe and back loops).
+    TbM("M settle for sprint", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbMRun("M sprint", 5.0f, 90.0f),
+    TbM("M stop after sprint", 2.0f, {0, 0}, false, false, 90.0f),
+    TbM("M settle for sprint turning", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbMRun("M sprint turning", 4.0f, 90.0f, 60.0f),
+    TbM("M stop after sprint turning", 2.0f, {0, 0}, false, false, 330.0f),
+    TbM("M settle for sprint from jog", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbM("M jog before sprint", 2.0f, {0, 1}, true, false, 90.0f),
+    TbMRun("M sprint from jog", 4.0f, 90.0f),
+    TbM("M stop after sprint from jog", 2.0f, {0, 0}, false, false, 90.0f),
+    TbM("M settle for sprint strafes", 1.0f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
+    TbMRun("M sprint strafe left", 3.0f, 90.0f, 0.0f, {-1, 0}),
+    TbM("M stop after sprint strafe left", 1.5f, {0, 0}, false, false, 90.0f),
+    TbMRun("M sprint strafe right", 3.0f, 90.0f, 0.0f, {1, 0}),
+    TbM("M stop after sprint strafe right", 1.5f, {0, 0}, false, false, 90.0f),
+    TbMRun("M sprint back", 3.0f, 90.0f, 0.0f, {0, -1}),
+    TbM("M stop after sprint back", 1.5f, {0, 0}, false, false, 90.0f),
     // S (mmstress): the motion matching player under abuse.
     TbS("S settle", 1.0f, {0, 0}, false, 90.0f, true, kMStart),
     TbSAlt("S zig-zag walk", 4.0f, {-0.7f, 0.7f}, {0.7f, 0.7f}, 0.4f, false),
@@ -258,7 +283,8 @@ const TbLeg kTb[] = {
 };
 constexpr int kTbCount = (int)(sizeof(kTb) / sizeof(kTb[0]));
 constexpr int kWatchLeg = kTbCount - 1;
-static_assert(kTbCount <= 128, "per-leg arrays");
+constexpr int kTbMaxLegs = 160; // the per-leg arrays
+static_assert(kTbCount <= kTbMaxLegs, "per-leg arrays");
 constexpr float kNpcBudget = 40.0f; // seconds the dummies' part may take
 
 const glm::vec3 kStandingSpawn(-5.0f, 0.0f, 14.0f);
@@ -271,8 +297,53 @@ bool TbPartOn(char part) {
 }
 bool TbDummiesOn() { return TbPartOn('E') || TbPartOn('F'); }
 // A leg runs when its part does; the watch leg always does (the player's checks are made as it starts).
+// TARTARUS_TESTBED_LEGS: '*' matches any run of characters.
+bool TbNameMatches(const char* name, const std::string& pattern) {
+    const std::string n(name);
+    std::vector<std::vector<char>> m(n.size() + 1, std::vector<char>(pattern.size() + 1, 0));
+    m[0][0] = 1;
+    for (size_t j = 1; j <= pattern.size(); ++j) m[0][j] = pattern[j - 1] == '*' && m[0][j - 1];
+    for (size_t i = 1; i <= n.size(); ++i)
+        for (size_t j = 1; j <= pattern.size(); ++j)
+            m[i][j] = pattern[j - 1] == '*' ? (m[i - 1][j] || m[i][j - 1]) : (pattern[j - 1] == n[i - 1] && m[i - 1][j - 1]);
+    return m[n.size()][pattern.size()] != 0;
+}
+bool TbLegPartOn(int leg) {
+    return TbPartOn(kTb[leg].Of == TbPart::M ? 'M' : kTb[leg].Of == TbPart::S ? 'S' : (char)('A' + (int)kTb[leg].Of));
+}
+// The legs the filter keeps: each match, and the legs of its part from the last placement leg before it (a settle that puts
+// the body where the leg starts) - so a leg starts as it does on the whole course.
+const std::vector<char>& TbFilter() {
+    static std::vector<char> keep;
+    static bool built = false;
+    if (built) return keep;
+    built = true;
+    if (!Env::IsSet(Env::Var::TestbedLegs)) return keep;
+    std::vector<std::string> patterns;
+    const std::string list = Env::Str(Env::Var::TestbedLegs);
+    for (size_t at = 0; at <= list.size();) {
+        size_t end = std::min(list.find(',', at), list.size());
+        std::string p = list.substr(at, end - at);
+        while (!p.empty() && p.front() == ' ') p.erase(p.begin());
+        while (!p.empty() && p.back() == ' ') p.pop_back();
+        if (!p.empty()) patterns.push_back(p);
+        at = end + 1;
+    }
+    keep.assign((size_t)kTbCount, 0);
+    for (int i = 0; i < kWatchLeg; ++i) {
+        bool hit = false;
+        for (const std::string& p : patterns) hit = hit || TbNameMatches(kTb[i].Name, p);
+        if (!hit) continue;
+        int from = i;
+        while (from > 0 && !kTb[from].Place && kTb[from - 1].Of == kTb[i].Of) --from;
+        for (int k = from; k <= i; ++k) keep[(size_t)k] = 1;
+    }
+    return keep;
+}
 bool TbLegOn(int leg) {
-    return leg == kWatchLeg || TbPartOn(kTb[leg].Of == TbPart::M ? 'M' : kTb[leg].Of == TbPart::S ? 'S' : (char)('A' + (int)kTb[leg].Of));
+    if (leg == kWatchLeg) return true;
+    const std::vector<char>& keep = TbFilter();
+    return TbLegPartOn(leg) && (keep.empty() || keep[(size_t)leg]);
 }
 
 int TbLegAt(float t, float& into) {
@@ -339,18 +410,24 @@ struct NpcTest::TestbedRun {
         double LoopClip = 0.0, LoopCapsule = 0.0;
         int LoopFrames = 0;
     };
-    LegStats Legs[128];
+    LegStats Legs[kTbMaxLegs];
     // mmplayer (part M and every leg under motion matching), per leg: steady frames (from 0.5 s in, grounded), the matched
     // frames' labels, the play rate and the raw (unwarped) clip speed against the capsule's, the body's root off the capsule.
     struct MmStats {
         int Frames = 0, Steady = 0, StrafeFlag = 0, Sideways = 0, CrouchFlag = 0, GaitAtLeast[4] = {0, 0, 0, 0};
         int Styles[MotionLabel::StyleCount] = {}; // the matched frames' style (steady)
+        int Cruising = 0;                        // steady frames whose matched frame cruises (|root accel| <= 1 m/s^2 over +-0.5 s)
         std::vector<float> RawRatio, Speed;
+        // The pose step on frames over 0.25 s from the last jump (past the dead blend): the motion as it plays, the reference a
+        // leg's pops are measured against at any speed.
+        std::vector<float> PoseStepPlaying;
+        float SinceJump = 9.0f;
         float RateMin = 9.0f, RateMax = 0.0f, YawRateMax = 0.0f, RootOffsetMax = 0.0f;
         int AirFrames = 0, AirLocked = 0, AirFlagged = 0;
         int Jumps = 0;                       // the matcher's jumps in the leg
         int Searches0 = -1, ByInput0 = 0, ByEnd0 = 0, Searches = 0, ByInput = 0, ByEnd = 0; // the schedule over the leg
         std::vector<float> PoseStep;         // the output pose's worst bone turn per frame (deg), the steady part
+        std::vector<float> TrajErr;          // per search: the matched frame's root 1 s on off the wanted one (m)
         float ViewOffMax = 0.0f;             // the body's heading off the view, at most (deg), the steady part
         std::vector<float> Bend, ClipBend, Pitch; // the torso's bend as drawn and as posed, the view's pitch (deg), steady
         std::vector<float> ArmAim, Arm;            // the upper arms off straight down: as the aim left them, as drawn (deg)
@@ -358,6 +435,7 @@ struct NpcTest::TestbedRun {
         // roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the view,
         // with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
         std::vector<float> ChestClip, ChestStable, Chest, ChestRoll, Head, HeadWorld, HandOver, HandEye, YawRate, Pelvis, PelvisClip;
+        int HandPushFrames = 0; float HandPushMax = 0.0f; // KeepHandsFromEye: frames it moved a hand, the most (m)
         std::vector<float> TrunkClip[9], Trunk[9]; // BodyDebug's trunk angles (pelvis, chest, chest vs pelvis), clip and drawn
         std::vector<std::vector<float>> Layer;      // per stream bone, BodyDebug::LayerDeg over the steady part
         // Play test 4: rewinds (a jump back to a frame shown in the last second), the longest stretch of one take without a
@@ -392,15 +470,15 @@ struct NpcTest::TestbedRun {
         float EndYawOff = 0.0f;
         float FootHMin[2] = {9.0f, 9.0f}, FootHMax[2] = {-9.0f, -9.0f};
     };
-    MmStats Mm[128];
+    MmStats Mm[kTbMaxLegs];
     int MmCrossLogs = 0;
     int NeckRimPoints = 0; // BodyDebug::NeckRimPoints (the look-down legs)
     std::vector<std::pair<std::uint32_t, float>> MmShown; // frames shown in the last second (frame, clock): the rewind check
     float MmPrevViewYaw = 0.0f;
     bool MmHaveViewYaw = false;
     int MmCrouchWrong = 0, MmAirborneGround = 0, MmFrames = 0, MmPosed = 0, MmBigSteps = 0;
-    bool Jumped[128] = {};
-    int JumpSlot[128] = {};
+    bool Jumped[kTbMaxLegs] = {};
+    int JumpSlot[kTbMaxLegs] = {};
     float FlatCamMax = 0.0f; // A walk's highest camera off the capsule's eye (steady)
     bool HaveFlat = false;
     bool ResidMissing = false, ReachMissing = false;
@@ -441,6 +519,26 @@ struct NpcTest::TestbedRun {
     int Skipped = 0;
 };
 
+std::vector<std::string> NpcTest::TestbedLegsOff() {
+    std::vector<std::string> off;
+    if (TbFilter().empty()) return off;
+    for (int i = 0; i < kWatchLeg; ++i)
+        if (!TbLegOn(i)) off.push_back(kTb[i].Name);
+    // A part none of whose legs run: its setup checks ("C setup: ...") are skipped too.
+    for (const char part : {'A', 'B', 'C', 'D', 'M', 'S'}) {
+        bool any = false, all = true;
+        for (int i = 0; i < kWatchLeg; ++i)
+            if (kTb[i].Name[0] == part && kTb[i].Name[1] == ' ') {
+                any = true;
+                all = all && !TbLegOn(i);
+            }
+        if (any && all) off.push_back(std::string(1, part) + " setup");
+    }
+    // And the whole-course checks ("mmplayer: ...", averages over every leg): a subset's mix of legs isn't the course's.
+    for (const char* course : {"mmplayer", "mmstress", "testbed"}) off.push_back(course);
+    return off;
+}
+
 float NpcTest::TestbedSeconds() {
     float t = 0.0f;
     for (int i = 0; i < kWatchLeg; ++i)
@@ -478,6 +576,7 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
     player.ScriptMove = L.AltPeriod > 0.0f && std::fmod(into, 2.0f * L.AltPeriod) >= L.AltPeriod ? L.Move2 : L.Move;
     player.ScriptSprint = L.Jog;
     player.ScriptWalk = L.Stroll;
+    player.ScriptRun = L.Run;
     player.ScriptCrouch = L.CrouchPeriod > 0.0f ? std::fmod(into, 2.0f * L.CrouchPeriod) >= L.CrouchPeriod : L.Crouch;
     if (L.JumpEvery > 0.0f) {
         const int slot = (int)(into / L.JumpEvery);
@@ -1059,6 +1158,11 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         q.Pelvis.push_back(bd.PelvisHeight);
         q.PelvisClip.push_back(bd.PelvisHeightClip);
         q.HandEye.push_back(std::min(bd.HandToEye[0], bd.HandToEye[1]));
+        {
+            const float push = std::max(bd.HandEyePush[0], bd.HandEyePush[1]);
+            q.HandPushFrames += push > 0.001f ? 1 : 0;
+            q.HandPushMax = std::max(q.HandPushMax, push);
+        }
         q.EyeH.push_back(bd.BodyEye.y - foot[1]);
         q.CamH.push_back(player.Cam.Position.y - foot[1]);
         q.PitchMin = std::min(q.PitchMin, player.Cam.Pitch);
@@ -1134,6 +1238,8 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
     q.FacingOffMax = std::max(q.FacingOffMax, std::fabs(glm::degrees(mm.FacingOffset)));
     q.YawStepMax = std::max(q.YawStepMax, std::fabs(glm::degrees(mm.YawRate)) / 60.0f);
     if (mm.Jumped) ++q.Jumps;
+    q.SinceJump = mm.Jumped ? 0.0f : q.SinceJump + 1.0f / 60.0f;
+    if (mm.Searched) q.TrajErr.push_back(mm.TrajErr);
     // Rewinds: a jump to within 2 frames of a frame shown in the last second.
     if (mm.Jumped)
         for (const auto& s : R.MmShown)
@@ -1194,6 +1300,7 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
             q.EyeCapsule.push_back(player.EyeHeight * crouchShare);
         }
         q.PoseStep.push_back(mm.PoseStepDeg);
+        if (q.SinceJump > 0.25f) q.PoseStepPlaying.push_back(mm.PoseStepDeg);
         if (mm.PoseStepDeg > 30.0f && ++R.MmBigSteps <= 12)
             std::printf("[MmPlayer] %6.2f s %-24s pose step %.1f deg on %s, playing %s @ frame %u (rate %.2f%s)\n", R.Clock, kTb[leg].Name,
                         mm.PoseStepDeg, mm.PoseStepBone.c_str(), mm.Clip.c_str(), mm.Frame, mm.PlayRate, mm.Jumped ? ", a jump" : "");
@@ -1202,6 +1309,7 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         if (crouchFlag) ++q.CrouchFlag;
         for (int g = 0; g <= std::min<int>(mm.Gait, 3); ++g) ++q.GaitAtLeast[g];
         ++q.Styles[std::min<int>(mm.Style, MotionLabel::StyleCount - 1)];
+        q.Cruising += std::fabs(mm.MatchedAccel) <= 1.0f ? 1 : 0;
         if (mm.CapsuleSpeed > 0.3f && mm.AnimSpeed > 0.05f) q.RawRatio.push_back(mm.AnimSpeed / mm.CapsuleSpeed);
         q.Speed.push_back(mm.CapsuleSpeed);
         q.RateMin = std::min(q.RateMin, mm.PlayRate);
@@ -1367,7 +1475,7 @@ void NpcTest::MmPlayerChecks() {
                                    "Strafe-labelled %.0f %%)", name, 100.0f * share, q.Steady, q.Steady ? 100.0f * q.StrafeFlag / q.Steady : 0.0f);
         Check(q.Steady > 20 && share >= 0.5f, b);
     }
-    // Shift is the jog, as captured (the pack has no sustained sprint: an asset gap): the jog gait plays, at its natural pace,
+    // Shift is the jog, as captured (a press of it while moving, held, the sprint - checked below): the jog gait plays, at its natural pace,
     // as cleanly as the walk - no stitching (jumps a second within 1.5x the walk's + 0.5) and the pose's frame-to-frame turn
     // like the walk's (p99 within 1.5x + 1 deg).
     auto pctOf = [](std::vector<float> v, float p) {
@@ -1398,14 +1506,18 @@ void NpcTest::MmPlayerChecks() {
             {"M strafe right (walk)", MotionLabel::StyleWalk}, {"M strafe left (walk)", MotionLabel::StyleWalk}, {"M walk back", MotionLabel::StyleWalk},
             {"M jog turning", MotionLabel::StyleJog}, {"M jog strafe left", MotionLabel::StyleJog}, {"M jog strafe right", MotionLabel::StyleJog},
             {"M jog back", MotionLabel::StyleJog}, {"M stroll", MotionLabel::StyleStroll}, {"M stroll strafe left", MotionLabel::StyleStroll},
-            {"M stroll strafe right", MotionLabel::StyleStroll}};
+            {"M stroll strafe right", MotionLabel::StyleStroll}, {"M sprint", MotionLabel::StyleSprint},
+            {"M sprint turning", MotionLabel::StyleSprint}, {"M sprint from jog", MotionLabel::StyleSprint},
+            {"M sprint strafe left", MotionLabel::StyleSprint}, {"M sprint strafe right", MotionLabel::StyleSprint},
+            {"M sprint back", MotionLabel::StyleSprint}};
         for (const auto& s : kStyleLegs) {
             const TestbedRun::MmStats& q = R.Mm[legIndex(s.Leg)];
             const float share = styleShare(q, s.Style);
-            std::snprintf(b, sizeof b, "%s: the %s takes play - %s frames %.0f %% of %d steady (>= 80 %%; walk %.0f, jog %.0f, stroll %.0f, stand %.0f %%) "
-                                       "at %.2f m/s", s.Leg, MotionLabel::StyleName(s.Style), MotionLabel::StyleName(s.Style), 100.0f * share, q.Steady,
-                          100.0f * styleShare(q, MotionLabel::StyleWalk), 100.0f * styleShare(q, MotionLabel::StyleJog),
-                          100.0f * styleShare(q, MotionLabel::StyleStroll), 100.0f * styleShare(q, MotionLabel::StyleStand), mean(q.Speed));
+            std::snprintf(b, sizeof b, "%s: the %s takes play - %s frames %.0f %% of %d steady (>= 80 %%; walk %.0f, jog %.0f, stroll %.0f, sprint %.0f, "
+                                       "stand %.0f %%) at %.2f m/s", s.Leg, MotionLabel::StyleName(s.Style), MotionLabel::StyleName(s.Style), 100.0f * share,
+                          q.Steady, 100.0f * styleShare(q, MotionLabel::StyleWalk), 100.0f * styleShare(q, MotionLabel::StyleJog),
+                          100.0f * styleShare(q, MotionLabel::StyleStroll), 100.0f * styleShare(q, MotionLabel::StyleSprint),
+                          100.0f * styleShare(q, MotionLabel::StyleStand), mean(q.Speed));
             Check(q.Steady > 20 && share >= 0.8f, b);
         }
         // Left and right alike where the pack was lopsided (the mirrored takes): the jog's and the stroll's strafes match
@@ -1450,13 +1562,14 @@ void NpcTest::MmPlayerChecks() {
         std::sort(v.begin(), v.end());
         return v[std::min(v.size() - 1, (size_t)std::lround(p * (float)(v.size() - 1)))];
     };
-    std::printf("[MmPlayer] %-26s %6s %9s %9s %9s %11s %9s %8s %6s\n", "leg", "jumps/s", "step p50", "step p99", "step max", "view off max",
-                "searches", "by input", "by end");
+    std::printf("[MmPlayer] %-26s %6s %9s %9s %9s %11s %9s %8s %6s %9s\n", "leg", "jumps/s", "step p50", "step p99", "step max", "view off max",
+                "searches", "by input", "by end", "traj err");
     for (int i = 0; i < kWatchLeg; ++i) {
-        if (!TbLegOn(i) || !kTb[i].Moving()) continue;
+        if (!TbLegOn(i)) continue; // (every leg: the stops too - Stage 3 compares them)
         const TestbedRun::MmStats& q = R.Mm[i];
-        std::printf("[MmPlayer] %-26s %6.1f %9.2f %9.2f %9.2f %11.1f %9d %8d %6d\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
-                    pct(q.PoseStep, 0.5f), pct(q.PoseStep, 0.99f), pct(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd);
+        std::printf("[MmPlayer] %-26s %6.1f %9.2f %9.2f %9.2f %11.1f %9d %8d %6d %9.3f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
+                    pct(q.PoseStep, 0.5f), pct(q.PoseStep, 0.99f), pct(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd,
+                    pct(q.TrajErr, 0.5f));
     }
     for (const auto& pair : {std::make_pair("M walk looking about", TbPartOn('A') ? "A walk" : "M crouch walk"),
                              std::make_pair("M jog looking about", "M jog")}) {
@@ -1645,6 +1758,26 @@ void NpcTest::MmPlayerChecks() {
             const float eye = pct(q.HandEye, 0.0f);
             if (eye < worstEye) { worstEye = eye; eyeLeg = i; }
         }
+        // (Logged: how often KeepHandsFromEye still moves a hand - Stage 3 keeps it only if it engages.)
+        {
+            int frames = 0, pushed = 0;
+            float most = 0.0f;
+            std::string where;
+            for (int i = 0; i < kWatchLeg; ++i) {
+                if (!TbLegOn(i)) continue;
+                const TestbedRun::MmStats& q = R.Mm[i];
+                frames += (int)q.Chest.size();
+                pushed += q.HandPushFrames;
+                most = std::max(most, q.HandPushMax);
+                if (q.HandPushFrames > 0) {
+                    char s[96];
+                    std::snprintf(s, sizeof s, " %s %d (%.1f cm)", kTb[i].Name, q.HandPushFrames, 100.0f * q.HandPushMax);
+                    where += s;
+                }
+            }
+            std::printf("[MmHands] KeepHandsFromEye moved a hand on %d of %d steady frames, at most %.1f cm;%s\n", pushed, frames, 100.0f * most,
+                        where.empty() ? " no leg" : where.c_str());
+        }
         std::snprintf(b, sizeof b, "mmplayer: a hand over its shoulder on at most %.0f %% of a leg's frames (%s), <= 5 %%", 100.0f * worstHigh,
                       worstLeg >= 0 ? kTb[worstLeg].Name : "none");
         Check(worstHigh <= 0.05f, b);
@@ -1693,12 +1826,53 @@ void NpcTest::MmPlayerChecks() {
             std::snprintf(b, sizeof b, "mmplayer: the character facing at most %.1f deg off the simulation's (%s), within its clamp (<= %.1f)",
                           worst, offLeg >= 0 ? kTb[offLeg].Name : "none", clamp);
             Check(worst <= clamp, b);
-            for (const char* name : {"M jog random look", "M walk random look"}) {
-                const auto it = m_SlideWorstPlayer.find(name);
-                const float slide = it != m_SlideWorstPlayer.end() ? it->second : -1.0f;
-                std::snprintf(b, sizeof b, "%s: the planted feet hold while the view wanders - worst plant drift %.1f cm (<= 5)", name, slide * 100.0f);
+            // The planted feet hold - or pivot - while the view turns the body faster than the clip turns: the worst plant's drift
+            // of the less moving of its heel and its ball (a foot swivelling on either is turning, not sliding), <= 5 cm.
+            for (const char* name : {"M jog random look", "M walk random look", "M walk looking about", "M jog looking about", "M walk flick 180",
+                                     "M jog flick 180"}) {
+                const auto it = m_SlideContactPlayer.find(name);
+                const auto ankle = m_SlideWorstPlayer.find(name);
+                const float slide = it != m_SlideContactPlayer.end() ? it->second : -1.0f;
+                std::snprintf(b, sizeof b, "%s: the planted feet hold while the view turns the body - worst plant drift %.1f cm at the heel or "
+                                           "ball (<= 5; the ankle %.1f)", name, slide * 100.0f,
+                              ankle != m_SlideWorstPlayer.end() ? ankle->second * 100.0f : -1.0f);
                 Check(slide >= 0.0f && slide <= 0.05f, b);
             }
+        }
+    }
+    // The sprint (2026-11-17): the old locomotion's jog set as the sprint style (the pack's runs are dashes - Phase A, the held run,
+    // and Phase B, the dash played whole, both measured and retired: docs/MOTION_MATCHING_HANDOFF.md, "Asset gaps"). Each sprint
+    // leg against its jog counterpart: no more stitching (jumps a second within 1.5x + 0.5); no pops beyond its own motion (pose
+    // step p99 within 1.15x + 1 deg of the leg's own away from jumps - the sprint's limbs move further a frame than the jog's, so
+    // the jog's steps are no reference); and the planted feet hold (heel or ball <= 5 cm). The style share is checked above.
+    if (TbPartOn('M')) {
+        const auto medianOf = [&](const std::vector<float>& v) { return pctOf(v, 0.5f); };
+        std::printf("[MmSprint] %-24s %8s %8s %8s %9s %10s %9s %9s %8s %9s\n", "leg", "sprint %", "m/s", "jumps/s", "longest s",
+                    "slide cm", "step p99", "play p99", "cruise %", "raw/caps");
+        for (const char* name : {"M sprint", "M sprint turning", "M sprint from jog", "M sprint strafe left", "M sprint strafe right",
+                                 "M sprint back", "M stop after sprint", "M jog", "M jog turning"}) {
+            const int i = legIndex(name);
+            const TestbedRun::MmStats& q = R.Mm[i];
+            const auto it = m_SlideContactPlayer.find(name);
+            std::printf("[MmSprint] %-24s %8.0f %8.2f %8.2f %9.2f %10.1f %9.2f %9.2f %8.0f %9.2f\n", name,
+                        100.0f * styleShare(q, MotionLabel::StyleSprint), mean(q.Speed), q.Jumps / std::max(0.1f, kTb[i].Seconds), q.RunLongest,
+                        it != m_SlideContactPlayer.end() ? it->second * 100.0f : -1.0f, pctOf(q.PoseStep, 0.99f), pctOf(q.PoseStepPlaying, 0.99f),
+                        q.Steady ? 100.0f * (float)q.Cruising / (float)q.Steady : 0.0f, medianOf(q.RawRatio));
+        }
+        const struct { const char* Leg; const char* Jog; } kSprintLegs[] = {
+            {"M sprint", "M jog"}, {"M sprint turning", "M jog turning"}, {"M sprint from jog", "M jog"},
+            {"M sprint strafe left", "M jog strafe left"}, {"M sprint strafe right", "M jog strafe right"}, {"M sprint back", "M jog back"}};
+        for (const auto& l : kSprintLegs) {
+            const int i = legIndex(l.Leg), k = legIndex(l.Jog);
+            const TestbedRun::MmStats& q = R.Mm[i];
+            const auto it = m_SlideContactPlayer.find(l.Leg);
+            const float slide = it != m_SlideContactPlayer.end() ? it->second * 100.0f : -1.0f;
+            const float p99 = pctOf(q.PoseStep, 0.99f), play = pctOf(q.PoseStepPlaying, 0.99f);
+            const float jumps = q.Jumps / std::max(0.1f, kTb[i].Seconds), jogJumps = R.Mm[k].Jumps / std::max(0.1f, kTb[k].Seconds);
+            std::snprintf(b, sizeof b, "%s: the sprint plays cleanly - %.1f jumps a second (%s %.1f: within 1.5x + 0.5), pose step p99 %.2f deg "
+                                       "(its own away from jumps %.2f: within 1.15x + 1); feet hold %.1f cm at the heel or ball (<= 5); %.2f m/s",
+                          l.Leg, jumps, l.Jog, jogJumps, p99, play, slide, mean(q.Speed));
+            Check(jumps <= 1.5f * jogJumps + 0.5f && p99 <= 1.15f * play + 1.0f && slide >= 0.0f && slide <= 5.0f, b);
         }
     }
     // Jumps: the airborne segment plays locked, then matching takes over.

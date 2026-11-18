@@ -188,6 +188,8 @@ private:
     float m_LabClock = 0.0f;
     std::vector<std::string> m_SlideBodies; // the NPCs SlideLeg reports on
     std::map<std::string, float> m_SlideWorstPlayer; // SlideLeg: the player's worst plant drift per leg (m)
+    std::map<std::string, float> m_SlideContactPlayer; // ... the lesser of its ankle's and its ball's (a pivot is not a slide)
+    std::vector<std::string> m_SkipLegs; // legs that didn't run (TestbedLegsOff): a check naming one is skipped, not failed
     int m_LabFrame = 0;
     // mmview (NpcTest_MmView.cpp): the baked motion matching takes on a Quantum body, the generated root drawn, the bake checked
     static float MmViewSeconds();
@@ -207,6 +209,8 @@ private:
     std::shared_ptr<MmDbRun> m_MmDb;
     // testbed (NpcTest_Testbed.cpp): the animation overhaul's measurements in AnimTestbed.json
     static float TestbedSeconds();
+    // TARTARUS_TESTBED_LEGS: the course's legs that won't run (empty: the whole course) - Check skips a check naming one.
+    static std::vector<std::string> TestbedLegsOff();
     void TestbedDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
     void Testbed(World& world, NpcDirector& npcs, const Player& player, float now);
     // mmplayer (NpcTest_Testbed.cpp): the testbed's parts A and C plus part M on the motion matching body
