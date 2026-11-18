@@ -117,21 +117,30 @@ void MirrorPose(const MirrorRig& rig, std::vector<LocalTRS>& pose);
 
 // --- Glitch repair --------------------------------------------------------------------------------------------------------
 // The capture's glitches (docs/mm_audit.md: 583 bone-frames over 35 deg in a frame), repaired in the bake rather than cut:
-//   - twist flips: a bone turning over kFlipDeg about its own long axis in one frame (the solver's 170-180 deg flips of the
-//     thighs, calves and feet; the chain below flips with it, and the flip often stays for seconds). Unrolled: the bone is
-//     turned back about its axis by the flip, its children's local rotations take the inverse (their world rotations, and
-//     every joint position, are unchanged). The axis is the direction to the bone's children (only bones whose children
+//   - twist flips: a bone turning over kFlipDeg about its own long axis in a frame or a run of fast frames (kFlipStepDeg; the
+//     solver's 170-180 deg flips of the thighs, calves and feet, often staying for seconds). Unrolled - each paired with its
+//     flip back, so no offset outlives it - the bone turned back about its axis, and its children either taking the inverse
+//     (they counter-rotated in the capture: every joint unchanged) or riding back with it (the chain below flipped with it).
+//     Kept only where it leaves the bone no more rolled off the bind than it was (`RolledBefore` / `RolledAfter`; details at
+//     RepairGlitches). The axis is the direction to the bone's children (only bones whose children
 //     all lie along one line), or for a leaf the direction it comes in from its parent.
 //   - spikes: a bone over kSpikeDeg in a frame (at 60 fps) that is back within kSpikeReturnDeg of where it was in at most
 //     kSpikeMaxFrames frames - slerped across.
 // What is neither stays as captured; MotionDatabase excludes it at load (kGlitchDegrees).
 inline constexpr float kFlipDeg = 90.0f, kSpikeDeg = 35.0f, kSpikeReturnDeg = 10.0f;
+inline constexpr float kFlipStepDeg = 30.0f; // a flip's frames each turn the bone over this about its axis (at 60 fps)
 inline constexpr int kSpikeMaxFrames = 6;
 struct RepairStats {
-    int Flips = 0;       // twist flips unrolled (bone events)
+    int Flips = 0;       // twist flips found (bone events) ...
+    int FlipsDropped = 0; // ... of them left as captured: unrolling them would have left the bone more rolled off the bind
     int Spikes = 0;      // spikes slerped across (bone events) ...
     int SpikeFrames = 0; // ... and the bone-frames they covered
+    // Per node (the repaired bones with a long axis): frames whose twist about the axis is over kRolledDeg off the bind's,
+    // in the capture as read and after the repair. (A calf, a thigh or a forearm never twists that far: such frames are a
+    // roll the solver or the repair left on the bone.)
+    std::vector<int> RolledBefore, RolledAfter;
 };
+inline constexpr float kRolledDeg = 90.0f;
 // `poses`: frames x nodes, local; `repair`: per node, whether to repair it (the streamed and finger bones).
 RepairStats RepairGlitches(const std::vector<int>& parents, const std::vector<LocalTRS>& bind, const std::vector<char>& repair, float fps,
                            std::vector<std::vector<LocalTRS>>& poses);

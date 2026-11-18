@@ -514,6 +514,39 @@ void TestGlitchRepair() {
     CHECK(none.Flips == 0 && none.Spikes == 0);
     for (int f = 0; f < frames; ++f)
         for (int i = 1; i < 4; ++i) CHECK(again[(size_t)f][(size_t)i].R == clean[(size_t)f][(size_t)i].R);
+    CHECK(none.RolledAfter == none.RolledBefore);
+    // The whole leg flipping with the thigh - the calf and the foot riding along (their local rotations untouched), the knee
+    // bent 23-40 deg - for frames 40-89: the thigh is turned back and the leg rides back with it. (Counter-rotating the calf, as
+    // for a pure twist, left it rolled: the flip back, about the thigh's axis, read as a twist of the bent calf under 90 deg -
+    // the pack's Transitions_Movement takes, 2026-11-18.)
+    {
+        std::vector<std::vector<LocalTRS>> leg = clean;
+        for (int f = 40; f < 90; ++f) leg[(size_t)f][1].R = leg[(size_t)f][1].R * flip;
+        const MotionBake::RepairStats rs = MotionBake::RepairGlitches(parents, bind, repair, 60.0f, leg);
+        float off = 0.0f;
+        for (int f = 0; f < frames; ++f)
+            for (int i = 1; i < 4; ++i) off = std::max(off, MotionMath::QuatAngle(leg[(size_t)f][(size_t)i].R, clean[(size_t)f][(size_t)i].R));
+        std::printf("[MotionMatching] repair, the leg riding the thigh's flip: %d flips, worst rotation off the clean take %.3f deg; "
+                    "rolled calf frames %d as captured, %d repaired\n", rs.Flips, off * kDeg, rs.RolledBefore[2], rs.RolledAfter[2]);
+        CHECK(rs.Flips == 2 && off * kDeg < 1.0f);
+        CHECK(rs.RolledAfter[1] == 0 && rs.RolledAfter[2] == 0 && rs.RolledAfter[3] == 0);
+    }
+    // A flip over three frames (57 deg each - no one frame over kFlipDeg) and back the same way, the calf counter-rotating:
+    // both caught (one frame's threshold caught neither), the thigh back on the clean take throughout.
+    {
+        std::vector<std::vector<LocalTRS>> slow = clean;
+        for (int f = 40; f < 93; ++f) {
+            const float k = f < 43 ? (float)(f - 39) / 3.0f : f < 90 ? 1.0f : (float)(92 - f) / 3.0f;
+            const glm::quat part = glm::angleAxis(3.0f * k, glm::vec3(1, 0, 0));
+            slow[(size_t)f][1].R = slow[(size_t)f][1].R * part;
+            slow[(size_t)f][2].R = glm::inverse(part) * slow[(size_t)f][2].R;
+        }
+        const MotionBake::RepairStats rs = MotionBake::RepairGlitches(parents, bind, repair, 60.0f, slow);
+        float off = 0.0f;
+        for (int f = 0; f < frames; ++f) off = std::max(off, MotionMath::QuatAngle(slow[(size_t)f][1].R, clean[(size_t)f][1].R));
+        std::printf("[MotionMatching] repair, a flip over three frames: %d flips, the thigh's worst off the clean take %.3f deg\n", rs.Flips, off * kDeg);
+        CHECK(rs.Flips == 2 && off * kDeg < 1.0f && rs.RolledAfter[1] == 0 && rs.RolledAfter[2] == 0);
+    }
 }
 
 // Mirroring: the rest pose mirrors to itself (though the right side's bone axes are turned), twice is the identity, and a
