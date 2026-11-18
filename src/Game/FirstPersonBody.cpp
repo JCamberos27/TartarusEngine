@@ -1675,6 +1675,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     lockSet.StepMax = MmTune("FootLock.StepMax", lockSet.StepMax);
     const bool pivot = true; // (motion matching: a planted foot pivots with the body's turn)
     lockSet.StepForTravel = pivot;
+    lockSet.RestFloor = MmTune("FootLock.RestFloor", 1.0f) > 0.0f; // (a foot at rest near the ground is down: IK::FootLockSettings)
     const int ballNode[2] = {drv.NodeIndex(Bone(FPBody::kBoneBall[0])), drv.NodeIndex(Bone(FPBody::kBoneBall[1]))};
     for (int s = 0; s < 2; ++s) {
         const glm::vec3 footLocal = scale * IK::Position(globals[footNode[s]]); // the clip's foot, in the body

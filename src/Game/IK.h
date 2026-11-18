@@ -179,6 +179,13 @@ struct FootLockSettings {
     // turned over it measured a 5 cm lag, lifted 1.5 cm, and was carried 24 cm round with the turn, skimming the floor
     // (the motion matching body's 180 deg walk flick, 2026-11-17).
     bool StepForTravel = false;
+    // A foot at rest near the ground - under Lift over its floor, moving under RestSpeed over the ground (the body's turn left
+    // out) and up or down under RestRise, for RestTime - is down where it is: its floor (and its ball's) is raised to it.
+    // Without it the floor only creeps up (1 cm/s) from the lowest the foot has been: after the sprint (the legacy jog set
+    // plants its ankle 3 cm lower than the pack's idles) a standing foot read 2.6 cm up, wasn't held for 1.5 s and crept 4.5 cm
+    // (mmplayer, M sprint back, 2026-11-18).
+    bool RestFloor = false;
+    static constexpr float RestSpeed = 0.3f, RestRise = 0.05f, RestTime = 0.1f;
 };
 FootLockSettings FootLockFrom(const FirstPersonBodyComponent& body);
 // The leg's goal never asks for more than `most` x `length` from `root` (a two-bone chain asked past its reach snaps
@@ -234,6 +241,8 @@ private:
         float BallFloor = 0.0f;    // the ball's lowest height (creeping up, as Floor)
         bool HaveBall = false;
         glm::vec3 PrevBallLocal{0.0f}; // last frame's ball in the body
+        float PrevHeight = 0.0f;   // last frame's height (FootLockSettings::RestFloor)
+        float Rest = 0.0f;         // seconds at rest near the ground
     };
     static void LetGo(Foot& f, const FootLockSettings& set, bool step);
     Foot m_Foot[2];
@@ -251,11 +260,14 @@ struct FootSlideMeterTotals {
     float SumContactDrift = 0.0f, MaxContactDrift = 0.0f;
     float MeanContactCm() const { return Plants ? SumContactDrift * 100.0f / (float)Plants : 0.0f; }
     float ContactTime = 0.0f;   // seconds of foot-on-ground (both feet summed)
+    // The worst plants measured from the contact's third frame instead (before 2026-11-18): the swing's end counted too.
+    struct { float MaxDrift = 0.0f, MaxContactDrift = 0.0f; } FromContact;
     float MeanCm() const { return Plants ? SumDrift * 100.0f / (float)Plants : 0.0f; }
 };
 class FootSlideMeter {
 public:
     float ContactHeight = 0.015f; // m over the foot's own lowest height
+    float SettleHeight = 0.005f;  // m over the contact's lowest: where a plant has settled (its drift is measured from there)
     // `ground`: the capsule's feet height (world y). `foot`: each final foot bone (world); `ball` (optional): each final ball.
     void Step(const glm::vec3 (&foot)[2], float ground, float dt, const glm::vec3 (*ball)[2] = nullptr);
     void Reset() { *this = FootSlideMeter{}; }
@@ -266,10 +278,8 @@ private:
     float m_Floor[2] = {0.0f, 0.0f};
     int m_Frames[2] = {0, 0};      // frames on the ground this contact
     float m_Time[2] = {0.0f, 0.0f};
-    glm::vec2 m_Start[2] = {glm::vec2(0.0f), glm::vec2(0.0f)};
-    float m_Drift[2] = {0.0f, 0.0f};
-    glm::vec2 m_BallStart[2] = {glm::vec2(0.0f), glm::vec2(0.0f)};
-    float m_BallDrift[2] = {0.0f, 0.0f};
+    struct RunFrame { glm::vec2 At, Ball; float H; };
+    std::vector<RunFrame> m_Run[2]; // this contact's frames from the third
     bool m_Balls = false;
 };
 // The meters the --npc-test scenarios read (one per body: "player", or an NPC's name). Only fed while a test asks for them.

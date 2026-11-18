@@ -32,6 +32,16 @@ float IM::Smoothstep(float x) {
     return x * x * (3.0f - 2.0f * x);
 }
 
+glm::quat IM::SlerpAsSigned(const glm::quat& a, const glm::quat& bIn, float t) {
+    glm::quat b = bIn;
+    float c = glm::dot(a, b);
+    if (c < -0.9999f) { b = -b; c = -c; } // the same rotation a turn round: no spin through a full turn
+    if (c >= 0.0f) return glm::slerp(a, b, t); // (the shorter way is this way: glm's, as before)
+    const float theta = std::acos(std::clamp(c, -1.0f, 1.0f));
+    const float s = std::sin(theta);
+    return glm::normalize(a * (std::sin((1.0f - t) * theta) / s) + b * (std::sin(t * theta) / s));
+}
+
 void Inertialization::Transition(const MotionPose& previous, const MotionPose& last, float dt) {
     m_Bones = last.Rot.size();
     const size_t n = m_Bones + last.Fingers.size();
@@ -53,6 +63,7 @@ void Inertialization::Transition(const MotionPose& previous, const MotionPose& l
         m_PelvisVel = glm::vec3(0.0f);
     }
     m_Pelvis = last.Pelvis;
+    m_Goal.clear(); // (the hemisphere is chosen on the first Update, against the source)
     m_Time = 0.0f;
     m_Active = Params.BlendTime > 1e-4f;
 }
@@ -83,9 +94,14 @@ void Inertialization::Update(float dt, const MotionPose& target, MotionPose& out
     const float a = BlendWeight();
     out.Rot.resize(target.Rot.size());
     out.Fingers.resize(target.Fingers.size());
+    const bool first = m_Goal.size() != m_Rot.size();
+    if (first) m_Goal.resize(m_Rot.size());
     for (size_t i = 0; i < m_Rot.size(); ++i) {
-        const glm::quat& t = i < m_Bones ? target.Rot[i] : target.Fingers[i - m_Bones];
-        (i < m_Bones ? out.Rot[i] : out.Fingers[i - m_Bones]) = glm::slerp(m_Rot[i], glm::dot(m_Rot[i], t) < 0.0f ? -t : t, a);
+        glm::quat t = i < m_Bones ? target.Rot[i] : target.Fingers[i - m_Bones];
+        // The hemisphere: the shorter way from the source at the start, then the target's sign kept continuous.
+        if (glm::dot(first ? m_Rot[i] : m_Goal[i], t) < 0.0f) t = -t;
+        m_Goal[i] = t;
+        (i < m_Bones ? out.Rot[i] : out.Fingers[i - m_Bones]) = IM::SlerpAsSigned(m_Rot[i], t, a);
     }
     out.Pelvis = glm::mix(m_Pelvis, target.Pelvis, a);
     if (m_Time >= Params.BlendTime) m_Active = false;

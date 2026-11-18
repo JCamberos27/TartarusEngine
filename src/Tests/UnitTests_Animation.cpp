@@ -850,6 +850,40 @@ void TestFootSlideMeterContactPoint() {
     CHECK(t.Plants == 1 && t.MaxContactDrift > 0.12f && std::abs(t.MaxContactDrift - t.MaxDrift) < 1e-5f);
 }
 
+// A foot entering the contact band still coming down - the swing's end, 2 cm over where it lands and moving up to 3 m/s (the
+// floor crept up from an earlier, higher plant) - is judged from where it settles: the swing's ~10 cm don't count, a slide
+// after it does (mmplayer's looking-about legs, 2026-11-18: 22.6 cm read off a swing).
+void TestFootSlideMeterSettles() {
+    const float dt = 1.0f / 60.0f;
+    for (int slide = 0; slide < 2; ++slide) {
+        IK::FootSlideMeter m;
+        glm::vec3 feet[2] = {glm::vec3(0.0f, 0.10f, 0.0f), glm::vec3(0.4f, 0.4f, 0.0f)};
+        for (int i = 0; i < 20; ++i) m.Step(feet, 0.0f, dt); // an earlier plant, its ankle at 10 cm
+        feet[0].y = 0.3f;
+        for (int i = 0; i < 30; ++i) m.Step(feet, 0.0f, dt); // the swing (the floor creeps up 0.5 cm)
+        m.TakeTotals(); // (the earlier plant)
+        feet[0] = glm::vec3(1.0f, 0.10f, 0.0f);
+        for (int i = 0; i < 12; ++i) { // coming down 2 cm into its plant, slowing from 3 m/s
+            feet[0].z += 3.0f * dt * (1.0f - (float)i / 12.0f);
+            feet[0].y -= 0.02f / 12.0f;
+            m.Step(feet, 0.0f, dt);
+        }
+        for (int i = 0; i < 30; ++i) { // down - still, or sliding 0.4 m/s (20 cm)
+            if (slide) feet[0].x += 0.4f * dt;
+            m.Step(feet, 0.0f, dt);
+        }
+        feet[0].y = 0.3f;
+        m.Step(feet, 0.0f, dt);
+        const IK::FootSlideMeterTotals t = m.TakeTotals();
+        std::printf("[FootSlideMeter] settling%s: drift %.1f cm (from first contact %.1f)\n", slide ? ", then sliding" : "", t.MaxDrift * 100.0f,
+                    t.FromContact.MaxDrift * 100.0f);
+        CHECK(t.Plants == 1 && t.FromContact.MaxDrift > 0.08f);
+        // (the landing's last few millimetres count: here 2.5 cm, the foot still sliding in at 0.75 m/s)
+        if (slide) CHECK(t.MaxDrift > 0.18f && t.MaxDrift < 0.23f);
+        else CHECK(t.MaxDrift < 0.03f);
+    }
+}
+
 // StepForTravel: a foot let go while the animation carries it fast over the ground (the body turning over it) lifts for the
 // whole way - not for its small lag alone - and clears the floor from its first frame.
 void TestFootLockStepsForTravel() {
@@ -1272,6 +1306,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Clamp reach never asks a leg for more than 0.995 of it", TestClampReachNeverStretchesTheLeg});
     tests.push_back({"Foot slide meter counts plants and their drift", TestFootSlideMeterCountsPlants});
     tests.push_back({"Foot slide meter: a pivot on the ball is not a slide", TestFootSlideMeterContactPoint});
+    tests.push_back({"Foot slide meter: a plant is judged from where it settles", TestFootSlideMeterSettles});
     tests.push_back({"Foot lock steps clear over the way a turn carries the foot", TestFootLockStepsForTravel});
     tests.push_back({"Foot lock holds the heel, then pivots on the ball", TestFootLockHeelThenBall});
 }
