@@ -143,11 +143,17 @@ Walk_Snakes_Take003,,Walk,Walk_Snakes,3,38.583,2315,1,1.000,37.583,0,walk;snakes
 Walk_Snakes_Take004,,Walk,Walk_Snakes,4,50.550,3033,1,1.000,49.550,0,walk;snakes;forward,
 Walk_Snakes_Take005,,Walk,Walk_Snakes,5,58.550,3513,1,1.000,57.550,0,walk;snakes;forward,
 Walk_Strafe_Diamond_Take001,,Walk,Walk_Strafe_Diamond,1,35.900,2154,1,1.000,34.900,0,walk;strafe,
+Walk_Strafe_Diamond_Take001_Mirror,Walk_Strafe_Diamond_Take001,Walk,Walk_Strafe_Diamond,1,35.900,2154,1,1.000,34.900,0,walk;strafe;mirrored,mirrored: the walk strafes matched poorly to the right
 Walk_Strafe_Square_Take001,,Walk,Walk_Strafe_Square,1,58.867,3532,1,1.000,57.867,0,walk;strafe,
+Walk_Strafe_Square_Take001_Mirror,Walk_Strafe_Square_Take001,Walk,Walk_Strafe_Square,1,58.867,3532,1,1.000,57.867,0,walk;strafe;mirrored,mirrored: the walk strafes matched poorly to the right
 Walk_Strafe_Square_L_Take001,,Walk,Walk_Strafe_Square_L,1,37.667,2260,1,1.000,36.667,0,walk;strafe,
+Walk_Strafe_Square_L_Take001_Mirror,Walk_Strafe_Square_L_Take001,Walk,Walk_Strafe_Square_L,1,37.667,2260,1,1.000,36.667,0,walk;strafe;mirrored,mirrored: the walk strafes matched poorly to the right
 Walk_Strafe_Square_R_Take001,,Walk,Walk_Strafe_Square_R,1,42.183,2531,1,1.000,41.183,0,walk;strafe,
+Walk_Strafe_Square_R_Take001_Mirror,Walk_Strafe_Square_R_Take001,Walk,Walk_Strafe_Square_R,1,42.183,2531,1,1.000,41.183,0,walk;strafe;mirrored,mirrored: the walk strafes matched poorly to the right
 Walk_Strafe_Star_Take001,,Walk,Walk_Strafe_Star,1,60.383,3623,1,1.000,59.383,0,walk;strafe,
+Walk_Strafe_Star_Take001_Mirror,Walk_Strafe_Star_Take001,Walk,Walk_Strafe_Star,1,60.383,3623,1,1.000,59.383,0,walk;strafe;mirrored,mirrored: the walk strafes matched poorly to the right
 Walk_Strafe_Star_Take002,,Walk,Walk_Strafe_Star,2,66.267,3976,1,1.000,65.267,0,walk;strafe,
+Walk_Strafe_Star_Take002_Mirror,Walk_Strafe_Star_Take002,Walk,Walk_Strafe_Star,2,66.267,3976,1,1.000,65.267,0,walk;strafe;mirrored,mirrored: the walk strafes matched poorly to the right
 Legacy_Jog_Fwd,assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd,Sprint,Legacy_Jog_Fwd,1,0.000,0,1,0.000,0.000,12,sprint;rootmotion;style=sprint;loop;forward,the old locomotion's jog: the held sprint
 Legacy_Jog_Fwd_Left,assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Left,Sprint,Legacy_Jog_Fwd_Left,1,0.000,0,1,0.000,0.000,12,sprint;rootmotion;style=sprint;loop,the old locomotion's jog: the held sprint
 Legacy_Jog_Fwd_Right,assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Right,Sprint,Legacy_Jog_Fwd_Right,1,0.000,0,1,0.000,0.000,12,sprint;rootmotion;style=sprint;loop,the old locomotion's jog: the held sprint

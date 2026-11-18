@@ -13,8 +13,10 @@ Curation (docs/MOTION_MATCHING_HANDOFF.md, decision 4 and decision 6; the measur
   kept 37 s of 152 - and the strolls were left out. The audit found no cruise redundant enough to drop - its steady
   windows' nearest neighbour in another take is mostly over 1.0 in normalized features - so nothing is cut.)
 - The mirrored takes: the strafes of the styles the audit found lopsided (left against right steady seconds more than
-  1.25 apart: the stroll's and the jog's strafes) are baked a second time, mirrored left for right (a row named
-  `<take>_Mirror`, `source` the take, tagged `mirrored`; MotionBake::MirrorPose).
+  1.25 apart: the stroll's and the jog's strafes), and the walk's (2026-11-18: balanced in seconds, but strafing right
+  matched poorly - the walk's right strafes drift forward and turn 17-37 deg a second; costs 5-10 against the left's 4-6,
+  `M strafe right (walk)`'s clips at 0.72 of the capsule's pace) are baked a second time, mirrored left for right (a row
+  named `<take>_Mirror`, `source` the take, tagged `mirrored`; MotionBake::MirrorPose).
 Per-frame labels (gait, style, crouch, strafe, airborne, prone) are computed by the bake, not here; the tags here are per
 take: the group, the pattern's kind (idle, turn, jump, start, strafe, loop, circles, snakes, card, stops, transition,
 accel), `forward` (takes that walk forward along curves: loop, circles, snakes - the root's facing is checked on these),
@@ -38,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TRIM = 1.0  # seconds off each end of a take
 
 # The mirrored takes (docs/mm_audit.md, "Left / right balance"): the strafes of these groups.
-MIRROR_GROUPS = ('Stroll', 'Jog')
+MIRROR_GROUPS = ('Stroll', 'Jog', 'Walk')
 
 # The sprint (2026-11-17, the owner's call): the pack has no held run - its runs are dashes - so the held fast gait is the old
 # locomotion's jog (3.26 m/s), a looped set with starts, stops, pivots and turning starts. Project clips (no pack), their travel
@@ -147,7 +149,8 @@ def main():
         r['include'] = 1
         if r['group'] in MIRROR_GROUPS and 'strafe' in r['tags']:
             m = dict(r, name=r['name'] + '_Mirror', source=r['name'], tags=r['tags'] + ['mirrored'],
-                     notes='mirrored: the audit found the ' + r['group'].lower() + ' strafes lopsided')
+                     notes='mirrored: the walk strafes matched poorly to the right' if r['group'] == 'Walk'
+                     else 'mirrored: the audit found the ' + r['group'].lower() + ' strafes lopsided')
             mirrored.append(m)
     rows += mirrored
     rows.sort(key=lambda r: (r['group'], r['pattern'], r['exaggerated'], r['take'], r['name']))

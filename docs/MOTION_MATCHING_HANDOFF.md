@@ -1083,8 +1083,10 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
     `Used`: 8025 listed, 0 missing, 0 different (1 unlisted: the SeedMesh scene, as before). A line in `Raw\CHANGELOG.md`.
     Backups on D: - the main checkout's database before it `D:\Jacob\mm_scratch\db_before_rollfix\`, the Drive's
     2026-11-16 files, CSV and changelog `D:\Jacob\mm_scratch\drive_before_rollfix\` (with `SHA256SUMS`).
-  - **`A jog` 2.6 jumps/s** (the pack's short jog straights), **the looking-about jump rates** (tight turns at a walk / jog),
-    **`M strafe right (walk)` 0.72** (the walk-right strafes' trajectory direction fit) - reported, limits unchanged.
+  - **`A jog` 2.6 jumps/s** (the pack's short jog straights) and **the looking-about jump rates** (tight turns at a walk / jog)
+    - reported, limits unchanged.
+  - *Fixed:* `M strafe right (walk)` 0.72 -> 0.95, by mirroring the walk's strafes - at the cost of **`M crouch strafe right`
+    2.0 -> 2.5 jumps/s** (limit 2.3: fails; the owner's call) - "`M strafe right (walk)`: the walk's strafes mirrored".
 - Only `testbed` and `labloco` write `NPC_TEST_TRACE`. `npcloco`, `locomotion` and `stopsteps` log their metrics
   (`[NpcLoco]`, `[Locomotion]`, `[StopSteps]`, `[Slide]`).
 - The baseline is one run per scenario. Re-runs were cut short on purpose. For noise bands, use
@@ -1590,6 +1592,40 @@ Against the old database, the 84 mmplayer legs: pose step p99 mean 7.84 -> 7.65 
 left` (2.40 jumps/s, unchanged); the dummies' pose step p99 walk right 8.20 -> 7.42, walk to home 8.56 -> 7.27, walk back 7.77 ->
 7.53 deg (its jumps 1.33 -> 2.00 a second, within its 2.3).
 
+## `M strafe right (walk)`: the walk's strafes mirrored (2026-11-18, `dev/mm-strafe-right`)
+
+**Cause, from a per-candidate cost probe** at the leg's searches (each group's share of the best candidate per clip): the query
+asks for 1.16 m/s straight right; the walk's strafe takes going right reach 0.57-1.02 m in that second, drift 0.2-0.6 m forward
+and turn 17-37 deg - the trajectory's position terms cost them 3-7, the best candidates 5-10 against strafing left's 4-6. So the
+leg lands on whichever poor match is nearest, and depends on how it starts: alone (from `M settle`) 0.85, on the course 0.72
+(the run takes' walk-backs). The pack's walk strafes are balanced in seconds (3,648 / 3,044 sideways frames, 0.85 / 0.80 m/s
+median), so the audit hadn't flagged them; the fit is what's lopsided.
+
+**Fix: the walk's strafe takes are mirrored**, as the stroll's and the jog's are (`gen_takes.py` `MIRROR_GROUPS`; six
+`Walk_Strafe_*_Mirror` rows in `takes.csv`). 156 clips; poses 185.1 / 200 MB, features 27.8 / 40, load 0.32 s. The gait table
+is unchanged (walk sideways 1.17 m/s). On the whole course, against the database before it (`rollfix4`):
+
+| | before | mirrored |
+|---|---|---|
+| `M strafe right (walk)` clip / capsule (0.8-1.25) | 0.72 (fail) | **0.95** |
+| `M strafe left (walk)` | 0.93 | 0.92 |
+| `M walk looking about` jumps/s | 7.6 | 6.6 (still over its 2.8) |
+| `M crouch walk` jumps/s | 1.2 | 0.4 |
+| `M crouch strafe right` jumps/s (limit 2.3) | 2.0 | **2.5 (fails)** |
+| `M jog looking about` jumps/s | 4.8 | 5.5 (failing before) |
+| all legs: jumps/s summed, pose step p99 mean, trajectory error | 173.8, 7.65, 0.159 | 173.5, 7.76, 0.152 |
+
+**Adopted with one regression, the owner's call (2026-11-18): `M crouch strafe right` 2.0 -> 2.5 jumps a second** (4 -> 5 in
+its 2 s; limit unchanged). Not the course's history: the crouch legs run alone give the same 2.0 / 2.5. The database normalizes
+each feature group by its spread over every frame, so 18k more frames shift every cost a little, and the crouch strafe's thin
+data (8 takes) sits near ties - the extra jump is worth 0.12 of cost (5.93 against 6.05). Any addition to the database can tip
+it; a fix belongs with the crouch strafe data, not here.
+
+`-Quick mmview mmdb` on it (`-Parallel 1`): unit 53,903 / 0 failures; mmplayer 97/101 (`A jog`, the two looking-about jump
+rates, `M crouch strafe right`), mmstress 16/16, mmview 12/12, mmdb 18/18. **Rebaked into the worktree only**
+(`D:\Jacob\mm_scratch\mirror\`, sha256 `bbfa0bbd...` / `3d77e47b...`): the main checkout and the Drive keep the database
+before it until the owner says otherwise; `project/external_assets.csv` is left at that one's hashes.
+
 ## Phase 5: first steps (done - see above)
 
 1. Branch `dev/mm-phase5` from `dev/mm-phase4`, in the main checkout (licensed assets and `build\` only exist there).
@@ -1753,3 +1789,6 @@ left` (2.40 jumps/s, unchanged); the dummies' pose step p99 walk right 8.20 -> 7
   back, pairs each flip with its flip back and keeps a bone's correction only if it rolls the bone no further; a `rolled` bake
   report. Rolled bone-frames 43,181 -> 861 (3,357 as captured). Rebaked into the worktree; `-Quick mmview mmdb` as before or
   better; `-Full` the same results. Installed in the main checkout and on the Drive's `Used\` (the CSV's two rows; the old files backed up on D:).
+- **2026-11-18, strafe right walk (`dev/mm-strafe-right`):** the walk's strafe takes mirrored (`MIRROR_GROUPS`): `M strafe right
+  (walk)` 0.72 -> 0.95; `M crouch strafe right` 2.0 -> 2.5 jumps/s (fails its 2.3 - adopted on the owner's call; the database's
+  normalization shift, the crouch strafe's thin data). Rebaked into the worktree only.
