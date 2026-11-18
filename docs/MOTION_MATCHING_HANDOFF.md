@@ -1406,6 +1406,10 @@ course, one engine at a time; every number below is from a deterministic run (th
 
 `-Quick` after it (`-Parallel 1`): unit 53,887 checks, 0 failures; `mmplayer` 97/101 (the four explained), `mmstress` 16/16.
 Every check that passed before still passes. No limit was changed.
+`-Full` (`-Parallel 1`, 513 s of engine runs): unit, smoke 20/21 (`smoke_decals` only for the worktree's long-path log errors),
+testbed 29/29, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18, mmstress 16/16, npcperf 4/4, the perf bench
+(edit 3.24 / play 6.10 ms) all pass; mmplayer 97/101 (the four above); npcloco 39/40 - `walk left` 2.40 jumps/s cruising, Phase
+5's open item 1 with the same number (the dummies' matching, untouched here).
 
 **The pop: the dead blend re-chose the short way every frame** (`Inertialization::Update`). A probe on the frame (the playing
 frame, the blend weight, the data's own steps) put it on neither the data (`calf_l` 0.1-3 deg a frame there) nor a jump:
@@ -1635,3 +1639,4 @@ exceed MAX_PATH under `.claude\worktrees\...` and log errors at load (`-AllowErr
     trajectory direction while strafing. Unit tests: the dead blend across 180 deg, the meter settling.
   - `-Quick`: unit 53,887 / 0 failures; `mmplayer` 97/101 (the jog rate, two looking-about jump rates, strafe right walk:
     explained), `mmstress` 16/16.
+  - `-Full`: all pass but `mmplayer`'s four and `npcloco`'s `walk left` 2.40 jumps/s (Phase 5's open item, unchanged).
