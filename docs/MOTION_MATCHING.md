@@ -45,6 +45,8 @@ locomotion graphs, and its decisions, measurements and history, is in [`MOTION_M
 - **The dummies** (`NpcBody::StepMotionMatching`): the same driver and database.
   - **Speeds:** the director moves the capsule at the gait table's walk, jog, and sprint (for a run).
   - **Trajectory:** follows the crowd's route corners.
+  - **Turn first:** setting off from a stand more than 90 deg behind itself, a dummy turns on the spot before its capsule moves
+    (until within its Turn Threshold): the one exception to capsule-led movement (the handoff's Phase 5, open item 1).
   - **LOD:** the animation LOD holds frames, and a held frame doesn't step the matcher. The next posed frame steps it over the
     whole held time, so a far dummy searches a quarter as often.
   - **After the matcher:** the foot pass, the look and the piece sync run as before.

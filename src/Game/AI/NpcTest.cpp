@@ -74,6 +74,8 @@ void NpcTest::SlideLeg(const std::string& leg) {
         if (n == "player") {
             m_SlideWorstPlayer[leg] = t.MaxDrift;
             m_SlideContactPlayer[leg] = t.MaxContactDrift;
+        } else {
+            m_SlideWorstNpc[leg] = std::max(m_SlideWorstNpc[leg], t.MaxDrift);
         }
         std::printf("[Slide] %-26s %-10s %2d plants, drift mean %4.1f cm, worst %5.1f cm; contact (heel or ball) mean %4.1f, worst %5.1f cm "
                     "(from first contact, the swing's end in: %.1f / %.1f)\n", leg.c_str(), n.c_str(), t.Plants, t.MeanCm(), t.MaxDrift * 100.0f,

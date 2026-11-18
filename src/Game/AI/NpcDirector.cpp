@@ -39,6 +39,17 @@ unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 // short of its goal (m).
 constexpr float kStartTime = 0.12f, kStopTime = 0.15f, kArriveSlack = 0.05f;
 constexpr float kTravelTurnRate = 140.0f; // degrees/s the travel direction may swing (Move): a walker's arc round a corner, not a whip
+// Turn first (the owner, 2026-11-18: "Turn first" - a narrow exception to "movement stays capsule-led", for these starts only):
+// a dummy setting off from a stand with its way more than kTurnFirstOver behind its facing is held while its body turns on the
+// spot, and sets off (the usual kStartTime ease) once the body is within its Turn Threshold of the way (what a standing body
+// accepts without turning; the start takes turn the rest), or after kTurnFirstMost at the latest. Led by the capsule, the
+// 170-180 deg start turned the body at a walking pace for a second: its tail, still 20 deg off 0.7 s in, re-searched the start
+// takes (npcloco `walk left`: 2.40 jumps a second cruising against 2.30). Only for a body on motion matching (a body in its bind
+// pose never turns). Measured on npcloco: released within 66 deg (the Turn Threshold) or 60, every leg passes; at 50 walk back's
+// pose step p99 is 22.9 deg, at 30 walk forward and left jump 2.40/s, at 10 go home's turn slides a foot 21 cm (on the old slide meter).
+// The spot turn's own match is still poor (a jog take's standing frame): the handoff's Phase 5 open item 1.
+constexpr float kTurnFirstOver = 90.0f, kTurnFirstMost = 2.0f; // degrees, s
+constexpr float kTurnFirstFrom = 0.3f; // m/s: a start is from below this
 
 
 // A dummy moves at the database's measured gait speeds (the speeds decision: the capsule at the mocap's own pace, only small
@@ -586,6 +597,18 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
             }
         }
         float target = n.WantMove && crowd > 0.05f ? n.PaceSpeed : 0.0f;
+        // Turn first: held (no pace, no wish) while the body turns on the spot to the way it is going.
+        if (target > 0.0f && n.Body.MotionMatching() && (n.TurningFirst || cur < kTurnFirstFrom)) {
+            const float off = std::abs(std::remainder(NpcYawOf(dir, n.Body.Yaw()) - n.Body.Yaw(), 6.2831853f));
+            if (!n.TurningFirst && off > glm::radians(kTurnFirstOver)) { n.TurningFirst = true; n.TurnFirstTime = 0.0f; }
+            if (n.TurningFirst) {
+                n.TurnFirstTime += dt;
+                if (off < m_HoldSettings.TurnThreshold || n.TurnFirstTime > kTurnFirstMost) n.TurningFirst = false;
+            }
+        } else {
+            n.TurningFirst = false;
+        }
+        if (n.TurningFirst) target = 0.0f;
         bool braking = target <= 0.0f;
         if (target > 0.0f && n.Agent >= 0) {
             glm::vec3 corner = m_Crowd.NextCorner(n.Agent) - n.MoveTarget;
@@ -631,6 +654,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.AccelTime = kStartTime;
     in.DecelTime = kStopTime;
     in.FacingYaw = NpcYawOf(n.LookPoint - n.Feet, n.Body.Yaw());
+    if (n.TurningFirst) in.FacingYaw = NpcYawOf(m_Crowd.Velocity(n.Agent), in.FacingYaw); // turning first: to the way it is going
     in.LookPoint = n.LookPoint;
     in.Sprint = n.Pace == Gait::Run && n.WantMove;
     in.FootIK = FootIKEverywhere || (n.PlayerDist < m_Cfg.FootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen

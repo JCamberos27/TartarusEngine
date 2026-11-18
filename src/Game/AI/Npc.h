@@ -82,6 +82,8 @@ struct Npc {
     float IdleUntil = 0.0f;         // standing about until then
     float RoamSince = 0.0f;         // set off for MoveTarget then
     float BlockedTime = 0.0f;       // moving but not getting anywhere
+    bool TurningFirst = false;      // setting off behind itself: held while the body turns on the spot (NpcDirector::Move)
+    float TurnFirstTime = 0.0f;     // ... for this long
 };
 
 // Dummies are named "Dummy <n>": n is the number in the kill feed.

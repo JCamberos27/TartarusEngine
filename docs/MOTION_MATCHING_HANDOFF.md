@@ -34,6 +34,10 @@ skeleton). Then delete the legacy locomotion graphs, logic and clips.
   small speed warping is kept.
 - **Movement stays capsule-led.** MM picks the pose. Orientation and speed warping replace `LoopPlayRate`. The camera
   stays anchored to the capsule.
+  - **One narrow exception (the owner, 2026-11-18: "Turn first"):** a dummy setting off from a stand with its way more than
+    90 deg behind its facing is held while its body turns on the spot, and sets off (the usual `kStartTime` ease) once the
+    body is within its Turn Threshold of the way (2 s at most). Those starts only - the player, and every other dummy start,
+    stay capsule-led. Why and the measurements: Phase 5 open item 1.
 - **Airborne.** Jump, fall and land are label-locked MM segment playback from the baked jump frames, with
   inertialization. There is no `.controller` for it.
 - **Exaggerated takes (`_S`) are excluded** from the database, but kept tagged for later.
@@ -1335,12 +1339,66 @@ Phase 5 (the player is untouched).
 | stand | 1.26 / 1.26 | 1.73 | 8.49 | 100 % | yes |
 
 **Open (Phase 5):**
-1. `walk left`'s cruising jumps (2.40/s, 5 in 2.1 s): hops between walk takes every 0.2-0.5 s (`[NpcLocoJump]`, costs 0.6-1.4
-   against the playing 0.6-1.2). Reported, not loosened.
+1. `walk left`'s cruising jumps (2.40/s, 5 in 2.1 s; limit 2.30). **Measured (2026-11-18, a per-step trace of the leg; runs
+   are deterministic):** not the crowd - its velocity direction is 90.2 deg flat for the whole leg, the route one corner (the
+   goal), no input-forced search while cruising (the 0.1 s timer only). The five: 19.12 and 19.32 s are the tail of the 170 deg
+   start turn (the capsule at pace from ~0.3 s, the body still 21 and 6 deg off its travel 0.7-0.9 s in, on the 0.27 s
+   simulation facing spring); 20.12 s is the start take picked at the turn's end (`Stand_to_Walk_Fixed` f315492) running into
+   its own slow-down 0.8 s on (its +1 s travel 1.25 -> 0.93 m); 20.62 / 20.82 s are the stop's look-ahead (the goal inside the
+   trajectory's second: the query's +1 s travel 1.18 -> 0.70 m while the capsule is still at pace). `walk back` has the same two
+   turn-tail jumps and one look-ahead in a 2.5 s window (1.21/s); `walk left`'s 2.1 s is the shortest rated window, so 5 fail
+   where 4 pass. An NPC-only `SimFacingHalflife` sweep only moves the failure (0.2: jog back 2.33; 0.15: all pass but walk
+   forward 1.60, stand's slide 15 cm; 0.12: walk back 2.42, jog back 2.33) - not a fix. **The cause is the capsule-led start**
+   (item 2): put to the owner - (A) turn on the spot first when the route starts over ~90 deg behind, or (B) start the cruise
+   window once the body faces its travel. **The owner chose A ("Turn first"); done (2026-11-18):** `NpcDirector::Move`
+   (`kTurnFirstOver` 90 deg, `Npc::TurningFirst`): the capsule held (no pace, no wish) and the body's facing asked for the way,
+   so it turns on the spot (the Turn Threshold path); it sets off once within the Turn Threshold (66 deg - what a standing body
+   accepts without turning; the start takes turn the rest), or after 2 s. Only for a body on motion matching. The release
+   angle matters (npcloco, one run each): 66 and 60 deg pass every leg; 50 - walk back's pose step p99 22.9 deg; 30 - walk
+   forward and left 2.40/s (the straight cruise then hops between walk takes on 0.03-0.2 margins); 10 - go home's spot turn
+   slides a foot 21 cm (on the old slide meter; see item 3). **npcloco 43/43 (2.30 kept; on #826's settled slide meter):**
+
+   | leg | cruising jumps/s (without turn first) | pose step p99 | worst plant cm (without) |
+   |---|---|---|---|
+   | go home | (not rated) | - | 0.1 (4.1) |
+   | walk forward | 1.20 (1.20) | 8.55 | 1.0 (1.0) |
+   | walk back | 2.01 (1.21) | 9.32 | 1.2 (3.1) |
+   | walk right | (0.8 s: not rated) | 10.28 | **3.5** (0.6) |
+   | walk left | **1.44** (2.40) | 9.66 | **4.2** (1.3) |
+   | walk to home | (0.6 s: not rated) | 8.99 | 0.0 (18.7) |
+   | jog forward | 0.57 (1.13) | 10.61 | 0.0 (6.7) |
+   | jog back (turns) | 0.00 (1.75) | 8.63 | 2.6 (1.0) |
+   | stand | 1.29 (1.73) | 8.11 | 3.1 (2.5) |
+
+   Cruising, all rated legs: 15 jumps in 12.9 s (1.16/s), against 20 (1.55/s). testbed E (the 180 deg set-off) still passes:
+   the heading reaches the travel in 0.83 s (0.80 before; <= 1.2), the clips' own turn 92 % (98 %), 267 deg/s at most; F
+   unchanged. **New checks:** `walk right` / `walk left`'s worst plant <= 4.65 cm (1.5x the other walk legs' worst, stand's 3.1).
+   **Open - the spot turn:** its first match is a jog take's standing frame (`Jog_Card_noStops_Freestyle_Take002` f89932, cost
+   3.7, then `Jog_Snakes_Take002`), and walk left / right plant 4.2 / 3.5 cm against 1.3 / 0.6 without it. Tried (2026-11-18,
+   npcloco and testbed E, one run each), not taken:
+   - (2) Only the standing takes during the turn (`MotionLabel::StyleStand`: it plays `Stand_Turn_360`, cost 6-7), released at
+     45 deg (the smallest turn the `_360` start takes cover): npcloco 41/41, E 0.83 s, the walk legs <= 1.3 cm - but the spot
+     turn itself drags a planted foot: stand 10.2, jog back 13.1, jog forward 8.6 cm (2.5 / 1.0 / 6.7 without turn first), and
+     testbed F's ragdoll starts 0.28 m/s off the idle body (0.07; limit 0.3). Released at 66 deg instead, jog back's jumps
+     2.33/s; at the body's own turn end (8 deg), jog back 2.33/s (straight-jog hops on 0.01-0.03 margins - the pack's short
+     steady jogs, the same gap as the player's `A jog` 2.6/s); 10 / 20 / 40 deg passed, with the slides moving between legs.
+   - (3) (2) with the facing asked turning no faster than the pack's turn-in-place rate (99 deg/s, as the player's view on the
+     spot): testbed E fails - 1.33 s against 1.2 - and go home slides 21.8 cm. The dummy asking its whole turn at once (the
+     trajectory outrunning every captured turn, the facing's pull swinging the body over its planted feet) is what drags the
+     foot in (2).
 2. The starts: the director's capsule reaches pace in ~0.3 s (`kStartTime` 0.12 s), faster than the pack's starts, so the first
    match is a mid-walk frame (cost 3.5-5.6) and a start take comes in 0.5 s later. The same capsule-led choice as the player's.
-3. The first leg (`go home`, unchecked: the dummy's first move from its spawn) slides a planted foot up to 42 cm.
+3. ~~The first leg (`go home`) slides a planted foot up to 42 cm.~~ **It was the meter (2026-11-18).** The 42 cm "plant" is the
+   left foot's start step - 0.56 m in 0.17 s, its ankle 8.9-9.6 cm up - then planted dead still (0.1 cm) at 6.5-6.8 cm.
+   `IK::FootSlideMeter` takes a foot within 1.5 cm of its own lowest height for a contact; on the first leg that floor was still
+   the spawn idle's ankle (7.6-8.0 cm), so the swing counted from mid-swing and its travel as drift. `walk back` plays the same
+   start and its 8.2 cm was the swing's tail. Not the spawn facing, the first matcher step or the foot lock. #826's meter (a
+   plant judged from where it settles - the same flaw, found on the player's looking-about legs) reads it 4.1 cm without turn
+   first, 0.1 with. New npcloco check: `go home`'s worst plant <= 1.5 cm (1.5x walk forward's 1.0 on that meter, as the limit
+   was first set: 1.5x walk forward's 8.1 on the old one).
 4. Not done: `[MmPosture]`-style metrics for the dummy beyond npcloco's.
+5. Seen in passing: without turn first, `walk to home` (unchecked, a 0.6 s cruise) drags a planted foot 18.7 cm (settled
+   still, then dragged - a real slide, the settled meter too); with turn first its start differs and it reads 0.0.
 
 **The dummies' cost** (`--npc-test npcperf`, `NpcTest_NpcPerf.cpp`, 2026-11-18): LocomotionLab, the player still at (0, -25)
 looking north, 12 dummies roaming round posts near, 25-50 m off and behind (13 with the scene's own) - every LOD tier runs.
