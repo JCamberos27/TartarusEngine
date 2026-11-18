@@ -14,7 +14,7 @@ Reference: [`MOCAP_EXPORT_FINDINGS.md`](MOCAP_EXPORT_FINDINGS.md), the verified 
 | 2. Motion bake pipeline and root generation | `dev/mm-phase2` | **Done** (2026-11-16; owner signed off on the `mmview` recording) |
 | 3. Motion matching runtime | `dev/mm-phase3` | **Done** (2026-11-16) |
 | 4. First-person player integration (unarmed) | `dev/mm-phase4` | **Done** (2026-11-18; merged in #820; the owner play-tested the merged build: "its fine". Open items carried over, not blocking: "Phase 4: next steps") |
-| 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | **Done** (2026-11-18; #823; the owner play-tested the dummies in AnimTestbed: "Looks fine". The dummies on the player's database and driver, path trajectories, LOD; npcloco and testbed E ported; npcperf - "Phase 5: NPCs on motion matching") |
+| 5. NPC / dummy integration (unarmed) | `dev/mm-phase5` | **Done** (2026-11-18; #823. The dummies on the player's database and driver, path trajectories, LOD; npcloco and testbed E ported; npcperf - "Phase 5: NPCs on motion matching") |
 | 6. Legacy cleanup and final verification | `dev/mm-phase6` | Pending |
 
 ## Goal
@@ -1246,8 +1246,7 @@ Left (2026-11-17, after Step 4):
 
 ## Phase 5: NPCs on motion matching (done)
 
-**Phase 5 signed off** (2026-11-18): the owner play-tested the dummies on motion matching in AnimTestbed (the editor with
-`TARTARUS_LOCOMOTION_SOURCE=mm`): "Looks fine". The open items below carry over; none blocks Phase 6.
+The open items below carry over; none blocks Phase 6.
 
 **Phase 4 signed off** (2026-11-18): the owner play-tested the build #820 merged (`TARTARUS_LOCOMOTION_SOURCE=mm`, AnimTestbed):
 "its fine". Its open items (the jog's jump rate, the looking-about legs, `M strafe right (walk)` 0.72, `M sprint back` 5.0 cm, the
@@ -1325,7 +1324,7 @@ Phase 5 (the player is untouched).
 2. The starts: the director's capsule reaches pace in ~0.3 s (`kStartTime` 0.12 s), faster than the pack's starts, so the first
    match is a mid-walk frame (cost 3.5-5.6) and a start take comes in 0.5 s later. The same capsule-led choice as the player's.
 3. The first leg (`go home`, unchecked: the dummy's first move from its spawn) slides a planted foot up to 42 cm.
-4. Not done: `[MmPosture]`-style metrics for the dummy beyond npcloco's. (The owner's play test: done, "Looks fine".)
+4. Not done: `[MmPosture]`-style metrics for the dummy beyond npcloco's.
 
 **The dummies' cost** (`--npc-test npcperf`, `NpcTest_NpcPerf.cpp`, 2026-11-18): LocomotionLab, the player still at (0, -25)
 looking north, 12 dummies roaming round posts near, 25-50 m off and behind (13 with the scene's own) - every LOD tier runs.
