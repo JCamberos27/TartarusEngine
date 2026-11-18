@@ -887,7 +887,7 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
 | Tier | Command | What | When |
 |---|---|---|---|
 | Iterate | `mm_smoke.ps1 mmplayer -SkipUnit -SkipSmoke -Legs "..."` | the legs in question | every change while working (~30 s) |
-| Quick | `mm_smoke.ps1 -Quick` | unit, mmplayer, mmstress | before committing motion matching work (~3.5 min engine runs + the build) |
+| Quick | `mm_smoke.ps1 -Quick` | unit, mmplayer, mmstress | before committing motion matching work (~1.5 min engine runs + the build) |
 | Quick + bake | `mm_smoke.ps1 -Quick mmview mmdb` | + the stream and database checks | when the bake or the database changed |
 | Full | `mm_smoke.ps1 -Full` | unit, smoke, testbed, npcloco, locomotion, stopsteps, feet, labloco, mmview, mmdb, mmplayer, mmstress, perf bench (`tests\perf-scenes\perf_stress.json`) | once per PR, before merging |
 
@@ -919,15 +919,18 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
 - **Measured (2026-11-17):**
   - a header edit's rebuild 2.5-5 min (148-281 s); a .cpp-only rebuild ~20 s;
   - a leg-filtered mmplayer (a few legs) ~30 s;
-  - `-Quick`: 206 s of engine runs at `-Parallel 3` (mmplayer 205 s of it, slowed from ~120 s alone by the load) + the build;
+  - `-Quick`: 95 s of engine runs at `-Parallel 3` (206 s before the probe fix below) + the build;
   - the full pass, one run at a time: 14 min including a 3.6 min build.
 - **Tried and dropped: skipping the drawing.** Drawing only every 8th frame of mmplayer + mmstress (`-Parallel 2`) took
   115 s against 131 s drawing every frame (~12 %; mmplayer 105 -> 120 fps), with identical check results: the time is the
-  simulation, not the drawing. A CPU profile of an mmplayer slice (`--npc-test` with `--perf-sample`, which the option parser
-  then had to be told to allow) put 66.5 % in `FirstPersonBody::InsideProbe` - the camera probe's every-view-ray against
-  every-triangle test on the five look-down legs (~0.2 s a probe, every third frame). Binning the triangles by their
-  screen footprint would give the same hits for a fraction of the cost; drafted but not verified or adopted
-  (`work\probe_binning.patch`, local only).
+  simulation, not the drawing.
+- **The camera probe, binned (adopted).** A CPU profile of an mmplayer slice (`--npc-test mmplayer --perf-sample`: a sampling
+  profile from the run's 900th frame, `[PerfSample]` lines) put 66.5 % in `FirstPersonBody::InsideProbe` - on the five
+  look-down legs, every one of 336 view rays tested against every body triangle in view (~0.2 s a probe, every third frame).
+  Each triangle is now binned by its screen footprint, so a ray tests only those that can cover its grid point (one reaching
+  behind the eye: every ray). Verified against the brute force inside every probe of the look-down legs: 67,200 rays, every
+  nearest hit the same, and all 10,633 triangle crossings (5,243 of them the far side's back faces) in the ray's cell; the
+  `-Quick` logs' 1,281 result lines identical. The look-down legs 83 -> 35 s; `-Quick`'s engine runs 206 -> 95 s.
 - **Later:** the offline matcher replay Step 4 of the full-library plan called for (recorded inputs through the matcher and
   the capsule maths, scored in seconds, for parameter sweeps).
 
