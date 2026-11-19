@@ -130,8 +130,13 @@ bool EnsureCore() {
         Log::Warn("PhysX: OmniPVD runtime unavailable (PVDRuntime_64.dll missing) — no .ovd capture.");
     }
 #endif
-    c->physics = PxCreatePhysics(PX_PHYSICS_VERSION, *c->foundation, PxTolerancesScale(),
-                                 /*trackOutstandingAllocations=*/true, pvdArg, omniArg);
+    // Tracking every allocation is only for the visual debuggers' memory views; it costs a lookup per PhysX alloc/free.
+#if defined(TARTARUS_PHYSX_PVD) || defined(TARTARUS_PHYSX_OMNIPVD)
+    constexpr bool kTrackAllocations = true;
+#else
+    constexpr bool kTrackAllocations = false;
+#endif
+    c->physics = PxCreatePhysics(PX_PHYSICS_VERSION, *c->foundation, PxTolerancesScale(), kTrackAllocations, pvdArg, omniArg);
     if (!c->physics) {
         Log::Error("PhysX: PxCreatePhysics failed — physics disabled for this Play session.");
         delete c; // ~PhysicsCore releases the PVD pieces, then the foundation (physics is null)

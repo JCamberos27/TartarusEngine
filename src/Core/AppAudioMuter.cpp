@@ -239,7 +239,7 @@ void Run() {
 
 void Configure(const std::vector<std::string>& exeNames) {
     std::lock_guard<std::mutex> lk(g.M);
-    g.Names = exeNames;
+    if (g.Names != exeNames) g.Names = exeNames; // (called every editor frame: no copy while the list is unchanged)
 }
 
 void SetMuted(bool muted) {

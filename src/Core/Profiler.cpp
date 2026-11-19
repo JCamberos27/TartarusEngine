@@ -5,6 +5,9 @@
 namespace {
 std::vector<Profiler::Entry> g_CurrentFrame;
 std::vector<Profiler::Entry> g_LastFrame;
+// The entries used this frame. g_CurrentFrame keeps the slots (and their names' buffers) of the frame before last, so a
+// frame's samples overwrite them in place instead of building a string each: a long scope name allocated every frame.
+size_t g_CurrentCount = 0;
 
 // #147 - GPU scopes are timed with GL_TIMESTAMP pairs, not GL_TIME_ELAPSED: elapsed-time queries
 // can't nest (a nested scope made the outer one's glBeginQuery an error), timestamps can. Each
@@ -67,8 +70,9 @@ bool TryReadBack(GpuFrame& f) {
 
 void Profiler::BeginFrame() {
     // Swapped, not moved: the moved-from list lost its capacity and regrew from empty every frame.
+    g_CurrentFrame.resize(g_CurrentCount); // (exactly this frame's entries go out)
     std::swap(g_LastFrame, g_CurrentFrame);
-    g_CurrentFrame.clear();
+    g_CurrentCount = 0;
     ++g_GpuFrameSerial;
 
     if (!glQueryCounter || !glGetQueryObjectiv || !glGetQueryObjectui64v) return;
@@ -86,13 +90,22 @@ void Profiler::BeginFrame() {
     next.Pending = false;
 }
 
-void Profiler::PushSample(const std::string& name, float milliseconds) {
-    g_CurrentFrame.push_back({name, milliseconds});
+namespace {
+template <typename Name> void Push(const Name& name, float milliseconds) {
+    if (g_CurrentCount < g_CurrentFrame.size()) {
+        Profiler::Entry& e = g_CurrentFrame[g_CurrentCount];
+        e.Name.assign(name);
+        e.Milliseconds = milliseconds;
+    } else {
+        g_CurrentFrame.push_back({std::string(name), milliseconds});
+    }
+    ++g_CurrentCount;
 }
+} // namespace
 
-void Profiler::PushSample(const char* name, float milliseconds) {
-    g_CurrentFrame.push_back({std::string(name), milliseconds});
-}
+void Profiler::PushSample(const std::string& name, float milliseconds) { Push(name, milliseconds); }
+
+void Profiler::PushSample(const char* name, float milliseconds) { Push(name, milliseconds); }
 
 const std::vector<Profiler::Entry>& Profiler::GetLastFrame() {
     return g_LastFrame;
