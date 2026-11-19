@@ -300,7 +300,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Skipped in unlit/wireframe modes where SSAO has no visual effect.
-    const bool sceneSsaoFromPrepass = SsaoPrepass(in, t, world.SsaoEnabled && !sceneUnlit, scW, scH, sceneViewMat,
+    const bool sceneSsaoFromPrepass = SsaoPrepass(in, t, world.SsaoEnabled && !sceneUnlit && !sceneWireframe, scW, scH, sceneViewMat,
                                                   sceneDrawProj, /*editorView=*/true, "SSAO Depth Pre-pass");
 
     EditorLayer::RenderStats sceneStats;

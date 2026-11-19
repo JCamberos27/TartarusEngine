@@ -443,7 +443,9 @@ void SkyAtmosphere::CaptureEnvironment(const SkySettings& s, ViewResources& fv) 
     m_Clouds.BindNoise();
     m_EnvShader->Bind();
     m_EnvShader->SetInt("uSize", kEnvSize);
-    m_EnvShader->SetInt("uClouds", s.CloudsEnabled && s.CloudCoverage > 0.0f ? 1 : 0);
+    // The same clouds the view draws (RenderClouds): the main layer and/or the cirrus, so a cirrus-only sky shows
+    // in the ambient light and the reflections too.
+    m_EnvShader->SetInt("uClouds", s.CloudsEnabled && (s.CloudCoverage > 0.0f || s.CirrusCoverage > 0.0f) ? 1 : 0);
     glBindImageTexture(0, m_EnvCube, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     m_EnvShader->DispatchCompute(Groups(kEnvSize, 8), Groups(kEnvSize, 8), 6);
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
