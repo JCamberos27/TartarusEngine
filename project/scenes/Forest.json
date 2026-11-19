@@ -920721,7 +920721,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -920934,7 +920934,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "id": 106381,
@@ -922585,7 +922585,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "id": 106436,
@@ -922893,7 +922893,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "id": 106446,
@@ -923935,7 +923935,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "collider": {
         "center": [
@@ -926853,7 +926853,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -928391,7 +928391,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -931779,7 +931779,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -935218,7 +935218,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -935391,7 +935391,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "",
         "Rocker Angle": 0.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -942204,7 +942204,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -942325,7 +942325,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -942536,7 +942536,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -942657,7 +942657,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -942899,7 +942899,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -943020,7 +943020,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -943141,7 +943141,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -943262,7 +943262,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
@@ -943383,7 +943383,7 @@
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
         "Rocker": "Rocker",
         "Rocker Angle": 12.0,
-        "Start On": false
+        "Start On": true
       },
       "castShadows": 0,
       "collider": {
