@@ -110,7 +110,7 @@ void MaterialPreviewRenderer::EnsureResources(int width, int height) {
         m_Fallback = std::make_unique<Shader>(ShaderLibrary::ReadFile("ModelVertex.glsl"),
                                               ShaderLibrary::ReadFile("ModelFragment.glsl"),
                                               "MaterialPreview");
-        m_Backdrop = std::make_unique<Shader>(ShaderLibrary::ReadFile("ChannelPreview.vert.glsl"),
+        m_Backdrop = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                               ShaderLibrary::ReadFile("MaterialPreviewBackdrop.frag.glsl"),
                                               "MaterialPreviewBackdrop");
         static const char* kKinds[] = { "sphere", "cube", "cylinder", "donut", "plane" };

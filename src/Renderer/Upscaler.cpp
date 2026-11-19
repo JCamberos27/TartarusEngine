@@ -31,9 +31,9 @@ bool Upscaler::EnsureCreated() {
     if (m_Failed) return false;
     if (m_Upscale) return true;
     try {
-        m_Rcas = std::make_unique<Shader>(ShaderLibrary::ReadFile("ChannelPreview.vert.glsl"),
+        m_Rcas = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                           ShaderLibrary::ReadFile("Rcas.frag.glsl"), "Rcas");
-        m_Upscale = std::make_unique<Shader>(ShaderLibrary::ReadFile("ChannelPreview.vert.glsl"),
+        m_Upscale = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                              ShaderLibrary::ReadFile("Upscale.frag.glsl"), "Upscale");
     } catch (const std::exception& e) {
         Log::Error(std::string("Upscaler: ") + e.what());

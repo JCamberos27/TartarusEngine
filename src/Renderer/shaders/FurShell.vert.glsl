@@ -17,6 +17,7 @@ uniform mat4 uView;
 uniform mat4 uProj;
 uniform int uUseSkinning; // 0 none, 1 the palette, 2 pre-skinned (see ModelVertex.glsl)
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
+#include "Skin.glsl" // SkinPalette
 #include "SkinnedVertex.glsl"
 layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
 uniform int uSkinBase;
@@ -39,13 +40,7 @@ void main() {
         localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
         localNormal = UnpackUnitOct(uSkinned[s + 3u]);
     } else if (uUseSkinning == 1) {
-        int ids[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
-        float ws[8] = float[8](aWeights.x, aWeights.y, aWeights.z, aWeights.w, aWeights2.x, aWeights2.y, aWeights2.z, aWeights2.w);
-        mat4 skin = mat4(0.0);
-        float total = 0.0;
-        for (int i = 0; i < 8; ++i)
-            if (ids[i] >= 0) { skin += uBones[clamp(ids[i], 0, uBones.length() - 1)] * ws[i]; total += ws[i]; }
-        if (total <= 0.0001) skin = mat4(1.0);
+        mat4 skin = SkinPalette();
         localPos = skin * localPos;
         localNormal = mat3(skin) * aNormal;
     }

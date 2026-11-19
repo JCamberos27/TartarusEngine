@@ -418,9 +418,9 @@ private:
     // source files (or an #include) changes on disk - editor only, see the main loop. The
     // guard drops the raw pointers before these locals are destroyed (it is declared after the last shader
     // it covers, so it is destroyed first).
-    Shader ssaoComputeShader{ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+    Shader ssaoComputeShader{ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                              ShaderLibrary::ReadFile("Ssao.frag.glsl")};
-    Shader ssaoBlurShader{ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+    Shader ssaoBlurShader{ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                           ShaderLibrary::ReadFile("SsaoBlur.frag.glsl")};
     // PR16: Bloom — soft-knee threshold + 5-level downsample/upsample mip pyramid.
     // Separate Scene/Game instances: both viewports can render in the same frame (Scene tab
@@ -428,11 +428,11 @@ private:
     // Resize() every frame. The three shaders are stateless GLSL programs, safely shared.
     Bloom bloom;
     Bloom gameBloom;
-    Shader bloomThreshShader{ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+    Shader bloomThreshShader{ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                              ShaderLibrary::ReadFile("BloomThreshold.frag.glsl")};
-    Shader bloomDownsampleShader{ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+    Shader bloomDownsampleShader{ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                  ShaderLibrary::ReadFile("BloomDownsample.frag.glsl")};
-    Shader bloomUpsampleShader{ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+    Shader bloomUpsampleShader{ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                ShaderLibrary::ReadFile("BloomUpsample.frag.glsl")};
     struct ShaderHotReloadGuard { ~ShaderHotReloadGuard() { ShaderLibrary::ClearHotReload(); } } shaderHotReloadGuard;
     Step step19{[&] {
@@ -451,19 +451,19 @@ private:
         ShaderLibrary::RegisterForHotReload(localShadowShader, "ShadowDepth.vert.glsl", "ShadowDepthLocal.frag.glsl");
     }};
     Step step24{[&] {
-        ShaderLibrary::RegisterForHotReload(ssaoComputeShader, "Tonemapper.vert.glsl", "Ssao.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(ssaoComputeShader, "Fullscreen.vert.glsl", "Ssao.frag.glsl");
     }};
     Step step25{[&] {
-        ShaderLibrary::RegisterForHotReload(ssaoBlurShader, "Tonemapper.vert.glsl", "SsaoBlur.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(ssaoBlurShader, "Fullscreen.vert.glsl", "SsaoBlur.frag.glsl");
     }};
     Step step26{[&] {
-        ShaderLibrary::RegisterForHotReload(bloomThreshShader, "Tonemapper.vert.glsl", "BloomThreshold.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(bloomThreshShader, "Fullscreen.vert.glsl", "BloomThreshold.frag.glsl");
     }};
     Step step27{[&] {
-        ShaderLibrary::RegisterForHotReload(bloomDownsampleShader, "Tonemapper.vert.glsl", "BloomDownsample.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(bloomDownsampleShader, "Fullscreen.vert.glsl", "BloomDownsample.frag.glsl");
     }};
     Step step28{[&] {
-        ShaderLibrary::RegisterForHotReload(bloomUpsampleShader, "Tonemapper.vert.glsl", "BloomUpsample.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(bloomUpsampleShader, "Fullscreen.vert.glsl", "BloomUpsample.frag.glsl");
     }};
     // Same reasoning as gameBloom above — SSAO needs its own depth pre-pass FBO per viewport.
     Ssao gameSsao;

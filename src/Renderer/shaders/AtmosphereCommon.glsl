@@ -370,11 +370,11 @@ vec3 Hash33(vec3 p3) {
     p3 += dot(p3, p3.yxz + 33.33);
     return fract((p3.xxy + p3.yxx) * p3.zyx);
 }
+#include "Noise.glsl" // Ign
 // Interleaved gradient noise (Jimenez 2014): a cheap per-pixel dither that hides banding and,
 // offset per frame, feeds temporal accumulation.
 float InterleavedGradientNoise(vec2 pixel, float frame) {
-    pixel += 5.588238 * mod(frame, 64.0);
-    return fract(52.9829189 * fract(0.06711056 * pixel.x + 0.00583715 * pixel.y));
+    return Ign(pixel + 5.588238 * mod(frame, 64.0));
 }
 
 #endif // ATMOSPHERE_COMMON_GLSL

@@ -17,7 +17,7 @@ uniform mat4 uPrevViewProj;   // last frame, unjittered
 uniform vec2 uJitterUv;       // this frame's jitter in UV
 uniform vec2 uTexel;
 
-vec3 ToWork(vec3 c) { c = max(c, vec3(0.0)); return c / (1.0 + max(c.r, max(c.g, c.b))); }
+#include "TaaWork.glsl"
 vec3 RgbToYCoCg(vec3 c) {
     return vec3(0.25 * c.r + 0.5 * c.g + 0.25 * c.b, 0.5 * c.r - 0.5 * c.b, -0.25 * c.r + 0.5 * c.g - 0.25 * c.b);
 }

@@ -52,8 +52,6 @@ flat out vec4 vRot;
 flat out float vScale;
 flat out float vFade;
 
-vec3 QRot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
-
 void main() {
     ImpostorInstance inst = uImpostors[gl_BaseInstance + gl_InstanceID];
     int set = int(inst.Set.x + 0.5);
@@ -65,7 +63,7 @@ void main() {
     vec4 q = inst.Rotation;
     vec4 qi = vec4(-q.xyz, q.w);
     precise vec3 toViewer = uOrtho == 1 ? uOrthoToViewer : normalize(uEye - C);
-    precise vec3 vo = QRot(qi, toViewer);
+    precise vec3 vo = ImpostorQRot(qi, toViewer);
     // The frames: the hemi-octahedral grid cell the view falls in, split along its diagonal, blended barycentrically.
     // Seen from below the horizon, the horizon's frames.
     vec3 vh = vec3(vo.x, max(vo.y, 0.0), vo.z);
@@ -115,7 +113,7 @@ void main() {
     for (int k = 0; k < 8; ++k) {
         vec3 b = vec3((k & 1) != 0 ? boxMax.x : boxMin.x, (k & 2) != 0 ? boxMax.y : boxMin.y,
                       (k & 4) != 0 ? boxMax.z : boxMin.z);
-        precise vec3 w = C + QRot(q, b * s);
+        precise vec3 w = C + ImpostorQRot(q, b * s);
         if (uOrtho != 1) { // along the ray from the eye, onto the card's plane
             precise vec3 dir = w - uEye;
             precise float den = dot(dir, toViewer);
@@ -127,8 +125,8 @@ void main() {
     }
     vec2 corner = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1));
     precise vec3 P = Pc + right * mix(lo.x, hi.x, corner.x) + up * mix(lo.y, hi.y, corner.y);
-    vObj = QRot(qi, P - C) / s;
-    vRay = uOrtho == 1 ? -vo : vObj - QRot(qi, uEye - C) / s;
+    vObj = ImpostorQRot(qi, P - C) / s;
+    vRay = uOrtho == 1 ? -vo : vObj - ImpostorQRot(qi, uEye - C) / s;
 
     // Sway: the canopy shears with the gust, as FoliageWindOffsetAt bends the tree (its height mask on the group's own
     // height, the offset in metres). The atlas lookup above stays with the still card.
