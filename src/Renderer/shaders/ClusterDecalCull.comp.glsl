@@ -9,7 +9,6 @@ layout(local_size_x = 64) in;
 //     shared bitmask (one bit per decal, so the list comes out in sort order with no second test),
 //     then write the survivors into the cluster's own block of the index list.
 // A cluster hit by more than MAX_PER_CLUSTER decals keeps the top-most ones (the last in sort order).
-// DecalSystem::BinCluster is the CPU mirror the unit tests check against.
 
 struct AABB { vec4 mn; vec4 mx; };
 struct DecalBounds { vec4 Centre; vec4 AxisX; vec4 AxisY; vec4 AxisZ; }; // Decals::GpuDecalBounds

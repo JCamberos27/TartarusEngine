@@ -348,13 +348,12 @@ struct DecalSystem::VisItem {
     std::uint32_t Ref; // m_ViewGpu / m_ViewBounds
 };
 
-namespace {
-bool VisLess(const std::uint64_t ak, std::uint32_t as, std::uint32_t aq, std::uint64_t bk, std::uint32_t bs, std::uint32_t bq) {
+bool DecalSystem::DrawOrderLess(std::uint64_t ak, std::uint32_t as, std::uint32_t aq, std::uint64_t bk, std::uint32_t bs,
+                                std::uint32_t bq) {
     if (ak != bk) return ak < bk;
     if (as != bs) return as < bs;
     return aq < bq;
 }
-} // namespace
 
 DecalSystem::DecalSystem() : m_Textures(std::make_unique<DecalTextureArrays>()) { s_Active = this; }
 
@@ -615,7 +614,7 @@ void DecalSystem::DeriveRuntime() {
     for (uint32_t i = 0; i < (uint32_t)total; ++i) m_RuntimeOrder[i] = i;
     std::sort(m_RuntimeOrder.begin(), m_RuntimeOrder.end(), [&](uint32_t a, uint32_t b) {
         const RuntimeExtra &x = m_RuntimeExtra[a], &y = m_RuntimeExtra[b];
-        return VisLess(x.SortKey, x.SortSeed, a, y.SortKey, y.SortSeed, b);
+        return DrawOrderLess(x.SortKey, x.SortSeed, a, y.SortKey, y.SortSeed, b);
     });
 }
 
@@ -691,36 +690,6 @@ glm::mat4 DecalSystem::VariationFor(int seed, float rotJitterDeg, float scaleJit
 int DecalSystem::FrameFor(int seed, int frames) {
     if (frames <= 1) return 0;
     return (int)(Hash32((uint32_t)seed * 4u + 0u) % (uint32_t)frames);
-}
-
-void DecalSystem::SortDeterministic(std::vector<DecalInstance>& v) {
-    std::stable_sort(v.begin(), v.end(), [](const DecalInstance& a, const DecalInstance& b) {
-        return a.SortKey != b.SortKey ? a.SortKey < b.SortKey : a.SortSeed < b.SortSeed;
-    });
-}
-
-bool DecalSystem::OverlapsAabb(const Decals::GpuDecalBounds& b, const glm::vec3& mn, const glm::vec3& mx) {
-    const glm::vec3 bc = 0.5f * (mn + mx), bh = 0.5f * (mx - mn);
-    const glm::vec3 axes[3] = {glm::vec3(b.AxisX), glm::vec3(b.AxisY), glm::vec3(b.AxisZ)};
-    const glm::vec3 d = glm::vec3(b.Centre) - bc;
-    const glm::vec3 ext = glm::abs(axes[0]) + glm::abs(axes[1]) + glm::abs(axes[2]);
-    for (int i = 0; i < 3; ++i)
-        if (std::abs(d[i]) > ext[i] + bh[i]) return false;
-    for (const glm::vec3& a : axes) {
-        const float len = glm::length(a);
-        if (len < 1e-6f) continue;
-        const glm::vec3 n = a / len;
-        if (std::abs(glm::dot(d, n)) > len + glm::dot(bh, glm::abs(n))) return false;
-    }
-    return true;
-}
-
-void DecalSystem::BinCluster(const std::vector<Decals::GpuDecalBounds>& bounds, const glm::vec3& mn, const glm::vec3& mx,
-                             int cap, std::vector<uint32_t>& out) {
-    out.clear();
-    for (uint32_t i = 0; i < (uint32_t)bounds.size(); ++i)
-        if (OverlapsAabb(bounds[i], mn, mx)) out.push_back(i);
-    if ((int)out.size() > cap) out.erase(out.begin(), out.end() - cap);
 }
 
 // ---- the frame ------------------------------------------------------------------------------------
@@ -834,7 +803,7 @@ void DecalSystem::RefreshStatic(World& world) {
         for (auto& [id, s] : m_Static)
             if (s->Asset) m_StaticSorted.push_back(s.get());
         std::sort(m_StaticSorted.begin(), m_StaticSorted.end(), [](const StaticDecal* a, const StaticDecal* b) {
-            return a->SortKey != b->SortKey ? a->SortKey < b->SortKey : a->SortSeed < b->SortSeed;
+            return DrawOrderLess(a->SortKey, a->SortSeed, a->Entity, b->SortKey, b->SortSeed, b->Entity);
         });
     }
 }
@@ -1018,7 +987,7 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
 
     // One draw order: the three runs (each already in order) merged - the components first on a tie, then
     // the ghost, then the runtime decals, as the stable sort over the gather order had them.
-    auto less = [](const VisItem& a, const VisItem& b) { return VisLess(a.Key, a.Seed, a.Seq, b.Key, b.Seed, b.Seq); };
+    auto less = [](const VisItem& a, const VisItem& b) { return DrawOrderLess(a.Key, a.Seed, a.Seq, b.Key, b.Seed, b.Seq); };
     if (ghostEnd > staticCount && m_Vis.size() > ghostEnd) { // the ghost into the runtime run
         size_t at = ghostEnd;
         while (at < m_Vis.size() && less(m_Vis[at], m_Vis[staticCount])) ++at;
