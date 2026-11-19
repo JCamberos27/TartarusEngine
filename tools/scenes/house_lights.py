@@ -5,8 +5,8 @@
 #
 # Every light is held to its room by the engine's light bounds (Light > Bounds: the room's box, out to the walls' faces),
 # so nothing shows through a wall, floor or ceiling, shadowed or not; each bigger lit room also gets a faint, unshadowed
-# bounce fill on the same circuit, so ceilings and corners aren't black. Everything starts off but what burned before:
-# the red bulb in the master bedroom, the dying kitchen tube and the porch lamps (the candles have no switch).
+# bounce fill on the same circuit, so ceilings and corners aren't black. Every working light starts on (the dead
+# fittings stay dark, the kitchen tube still stutters, the master bedroom still burns red); the switches still work.
 import math
 
 import house_fit as hf
@@ -538,16 +538,16 @@ def clusters(points, gap):
 ROOM_CIRCUITS = {
     # archways ('edge': the opening's edge, the way along the wall from it, the way into the room), the same rule as
     # the doors: inside the room, on the wall beside the opening, SWITCH_OFF past its edge
-    'kitchen-dining': ('Kitchen', False, [('edge', ((-35.79, -7.86), (-1.0, 0.0), (0.0, -1.0)))]),
-    'living room': ('Living room', False, [('edge', ((-34.05, 3.98), (0.0, 1.0), (-1.0, 0.0)))]),
-    'entrance hall': ('Hall', False, [('door', 'Door_exterior_paneled')]),
-    'downstairs bathroom': ('Downstairs bathroom', False, [('door', 'Door_interior')]),
+    'kitchen-dining': ('Kitchen', True, [('edge', ((-35.79, -7.86), (-1.0, 0.0), (0.0, -1.0)))]),
+    'living room': ('Living room', True, [('edge', ((-34.05, 3.98), (0.0, 1.0), (-1.0, 0.0)))]),
+    'entrance hall': ('Hall', True, [('door', 'Door_exterior_paneled')]),
+    'downstairs bathroom': ('Downstairs bathroom', True, [('door', 'Door_interior')]),
     'master bedroom': ('Master bedroom', True, [('door', 'Door_interior (2)')]),
-    'upstairs den': ('Den', False, [('door', 'Door_interior (2)')]),
-    'upstairs bathroom': ('Upstairs bathroom', False, [('door', 'Door_interior (3)')]),
-    "child's bedroom": ("Child's bedroom", False, [('door', 'Door_interior (7)')]),
-    'upstairs hall': ('Stairs', False, []),
-    'landing': ('Stairs', False, []),
+    'upstairs den': ('Den', True, [('door', 'Door_interior (2)')]),
+    'upstairs bathroom': ('Upstairs bathroom', True, [('door', 'Door_interior (3)')]),
+    "child's bedroom": ("Child's bedroom", True, [('door', 'Door_interior (7)')]),
+    'upstairs hall': ('Stairs', True, []),
+    'landing': ('Stairs', True, []),
 }
 # The stairs' two-way switch: at the foot (the ground floor's corridor) and at the top (the landing).
 # The stairs' two ends, the same rule: at the foot, inside the stair hall through the double archway, beside its
@@ -764,7 +764,7 @@ def wire(s, lay, pk, repo, fh, notes):
         n_circuits += 1
         circuit = f'{st} {n_circuits:02d}'
         f = FIT[st]
-        e['Light Switch'] = {'Circuit': circuit, 'Start On': False, 'Rocker': '', 'Rocker Angle': 0.0,
+        e['Light Switch'] = {'Circuit': circuit, 'Start On': True, 'Rocker': '', 'Rocker Angle': 0.0,
                              'On Sound': CLICK_ON, 'Off Sound': CLICK_OFF}
         if not upright(i):
             dead(i)
