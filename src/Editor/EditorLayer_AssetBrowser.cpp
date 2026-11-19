@@ -320,57 +320,19 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     const std::uint64_t cacheKey = ThumbnailCache::DependencyKey(path, deps);
     std::vector<unsigned char> cachedPixels;
     if (ThumbnailCache::Load(path, kSize, cacheKey, cachedPixels)) {
-        glGenTextures(1, &dst);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, cachedPixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        GLStateCache::Invalidate(); // raw glBindTexture above — see the matching note below
+        dst = AssetThumbnailLoader::MakeTexture(kSize, cachedPixels.data());
+        GLStateCache::Invalidate(); // raw glBindTexture
     } else {
         const float dist = ModelPreviewRenderer::ComputeFramingDistance(model);
         std::vector<std::shared_ptr<MaterialAsset>> slots;
         if (m_AssetsPtr && !remap.empty()) m_AssetsPtr->ApplyMaterialRemap(model, slots);
         const unsigned int src = m_ThumbnailPreview.Render(model, 0.7f, 0.5f, dist, kSize, kSize, slots);
 
-        glGenTextures(1, &dst);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        // Copy the shared preview render into `dst` via a scratch read-FBO. Predates the 4.6
-        // upgrade (4.3+ has glCopyImageSubData) but glCopyTexSubImage2D from a bound READ
-        // framebuffer works fine and is already loaded, so it's kept as-is.
-        GLint prevRead = 0, prevDraw = 0;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
-        if (!m_ThumbnailBlitFbo) glGenFramebuffers(1, &m_ThumbnailBlitFbo);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ThumbnailBlitFbo);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src, 0);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, kSize, kSize);
-
-        // Phase 5 item 9 — persist what was just rendered, so the NEXT launch is a cache hit.
-        // glGetTexImage isn't in this codebase's trimmed GL loader (extern/glloader/gl.h); read
-        // via glReadPixels from `src` instead, while it's still the bound READ_FRAMEBUFFER
-        // attachment above — the exact same pixels glCopyTexSubImage2D just copied into `dst`.
-        std::vector<unsigned char> freshPixels((size_t)kSize * kSize * 4);
-        glReadPixels(0, 0, kSize, kSize, GL_RGBA, GL_UNSIGNED_BYTE, freshPixels.data());
+        // Copied out of the shared preview target, and persisted so the NEXT launch is a cache hit
+        // (Phase 5 item 9); CopyPreviewTexture resyncs GLStateCache (audit GL-202).
+        std::vector<unsigned char> freshPixels;
+        CopyPreviewTexture(src, dst, kSize, &freshPixels);
         ThumbnailCache::SaveAsync(path, kSize, cacheKey, std::move(freshPixels)); // encode + write off the UI thread
-
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
-
-        // The preview render plus the raw glBindTexture calls above never went through
-        // GLStateCache; resync it so a later Texture::Bind() on the same unit isn't skipped as
-        // falsely-redundant (audit GL-202: the "call Invalidate() after every raw-GL pass" rule
-        // this path was missing).
-        GLStateCache::Invalidate();
     }
 
     m_ThumbnailLRU.push_front(path);
@@ -392,15 +354,7 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
 }
 
 void EditorLayer::CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut) {
-    if (!dst) {
-        glGenTextures(1, &dst);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    }
+    if (!dst) dst = AssetThumbnailLoader::MakeTexture(size, nullptr);
     GLint prevRead = 0, prevDraw = 0;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
@@ -455,13 +409,7 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
     std::vector<unsigned char> pixels;
     // First sight this session: a cached PNG whose dependencies are unchanged is the same image.
     if (fresh && ThumbnailCache::Load(path, kSize, diskKey, pixels)) {
-        glGenTextures(1, &entry.Tex);
-        glBindTexture(GL_TEXTURE_2D, entry.Tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        entry.Tex = AssetThumbnailLoader::MakeTexture(kSize, pixels.data());
         GLStateCache::Invalidate();
         entry.DiskKey = diskKey;
     } else {

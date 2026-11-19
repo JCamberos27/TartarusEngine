@@ -47,6 +47,9 @@ public:
     void Invalidate(const std::string& path);
     // Frees every GL texture (needs the GL context). Work still queued finishes, unused.
     void Clear();
+    // A size x size RGBA8 texture for a thumbnail, linear and clamped; `pixels` may be null (filled later).
+    // Binds it with raw GL: the caller invalidates GLStateCache.
+    static unsigned int MakeTexture(int size, const unsigned char* pixels);
 
 private:
     struct Job { std::string Path; Source From; unsigned Ticket; };
