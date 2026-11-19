@@ -37,8 +37,16 @@ void main() {
         vec3 ambTop, ambBottom;
         CloudAmbientColors(ambTop, ambBottom);
         // A cube face spans 90 degrees over uSize texels.
-        CloudResult c = MarchClouds(cam, dir, 24, 3, 0.5, false, 2.0 / float(uSize), ambTop, ambBottom);
-        L = L * c.transmittance + c.radiance * uAtmRadii.z;
+        const float pixelAngle = 2.0 / float(uSize);
+        CloudResult c;
+        c.radiance = vec3(0.0);
+        c.transmittance = 1.0;
+        if (uCloudLayer.w > 0.001) c = MarchClouds(cam, dir, 24, 3, 0.5, false, pixelAngle, ambTop, ambBottom);
+        // The cirrus sheet, composited as CloudRaymarch.comp does: above the main layer, or below it from above.
+        vec4 cirrus = CirrusLayer(cam, dir, uCloudLightIllum.rgb, ambTop, pixelAngle);
+        bool cirrusBehind = length(cam) < uAtmRadii.x + uCloudMisc.z;
+        vec3 radiance = cirrusBehind ? c.radiance + c.transmittance * cirrus.rgb : cirrus.rgb + cirrus.a * c.radiance;
+        L = L * (c.transmittance * cirrus.a) + radiance * uAtmRadii.z;
     }
     imageStore(uOut, id, vec4(min(L, vec3(500.0)), 1.0));
 }
