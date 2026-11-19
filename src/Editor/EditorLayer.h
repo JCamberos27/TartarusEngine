@@ -2446,6 +2446,14 @@ public:
     bool DecalGhostPreview(const DecalComponent*& comp, glm::mat4& world) const;
     void DrawDecalLibraryPanel(World& world);
 private:
+    // DrawDecalLibraryPanel's parts, top to bottom.
+    void DrawDecalStrip(DecalEditorState& ed);
+    void DrawDecalBrushPopover(DecalEditorState& ed);
+    void DrawDecalGrimePopover(World& world, DecalEditorState& ed);
+    void DrawDecalPaletteStrip(DecalEditorState& ed);
+    void DrawDecalSearchRow(DecalEditorState& ed);
+    void DrawDecalCategoryTree(DecalEditorState& ed);
+    void DrawDecalTiles(DecalEditorState& ed, bool animate);
     // The Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md; EditorLayer_GraffitiDesigner.cpp):
     // the panel editing one .graffiti recipe (layers, canvas, tools, bake), and spraying straight onto
     // a wall in the Scene view. The state lives in GraffitiDesigner (defined in that file).
