@@ -91,7 +91,19 @@ private:
     std::vector<Volume> m_Volumes;
     std::vector<glm::ivec3> m_BrickOrigin; // per volume
     std::vector<std::vector<float>> m_Mixed; // the weights each volume's brick was last mixed with
-    std::string m_AtlasKey;
+    // What the atlas was built from (each volume's name, bake, grid and layer count): compared field by field each
+    // frame, into reused storage (the old key was a string of to_string pieces rebuilt every frame).
+    struct AtlasKeyEntry {
+        std::string Name;
+        const void* Bake = nullptr;
+        glm::ivec3 Dims{0};
+        std::size_t Layers = 0;
+        bool operator==(const AtlasKeyEntry& o) const {
+            return Bake == o.Bake && Dims == o.Dims && Layers == o.Layers && Name == o.Name;
+        }
+    };
+    std::vector<AtlasKeyEntry> m_AtlasKey, m_AtlasKeyScratch;
+    std::unordered_map<std::string, std::string> m_BakePaths; // GI Volume BakeFile -> ProjectPaths::Resolve (asked per volume per frame)
     unsigned int m_Atlas = 0;
     unsigned int m_Ubo = 0;
     glm::ivec3 m_AtlasSize{0};

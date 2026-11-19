@@ -220,21 +220,19 @@ bool ImpostorRenderer::Build(const World& world, int buckets,
     m_Lists.resize((std::size_t)buckets);
     for (auto& l : m_Lists) l.clear();
     std::size_t total = 0;
+    const float gust = Material::Wind().Strength;
     world.ForEachImpostor([&](entt::entity g, int set, float fade) {
         if (set < 0 || set >= (int)sets.size()) return;
         const ImpostorSet& s = sets[set];
         const glm::mat4 m = world.GetCachedWorldTransform(g);
         const float scale = glm::length(glm::vec3(m[1])); // the bake's copies scale uniformly
         if (!(scale > 1e-6f)) return;
-        glm::vec3 lo(1e30f), hi(-1e30f);
-        for (int c = 0; c < 8; ++c) {
-            const glm::vec3 corner((c & 1) ? s.BoundsMax.x : s.BoundsMin.x, (c & 2) ? s.BoundsMax.y : s.BoundsMin.y,
-                                   (c & 4) ? s.BoundsMax.z : s.BoundsMin.z);
-            const glm::vec3 w = glm::vec3(m * glm::vec4(corner, 1.0f));
-            lo = glm::min(lo, w);
-            hi = glm::max(hi, w);
-        }
-        const float lean = HiZCuller::FoliageSway(s.WindBend, Material::Wind().Strength); // the card's lean at a full gust
+        // The world box of the set's bounds: centre transformed, half-extent through |M| (the 8 corners' min / max).
+        const glm::vec3 c = glm::vec3(m * glm::vec4(0.5f * (s.BoundsMin + s.BoundsMax), 1.0f));
+        const glm::vec3 e = 0.5f * (s.BoundsMax - s.BoundsMin);
+        const glm::vec3 ext = glm::abs(glm::vec3(m[0])) * e.x + glm::abs(glm::vec3(m[1])) * e.y + glm::abs(glm::vec3(m[2])) * e.z;
+        const glm::vec3 lo = c - ext, hi = c + ext;
+        const float lean = HiZCuller::FoliageSway(s.WindBend, gust); // the card's lean at a full gust
         const glm::vec3 sway(lean, 0.0f, lean);
         const unsigned in = keep(lo - sway, hi + sway);
         if (!in) return;

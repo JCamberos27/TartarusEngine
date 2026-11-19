@@ -14,6 +14,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/packing.hpp>
+#include <array>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -199,12 +200,19 @@ constexpr uint32_t kGhostEntity = 0xFFFFFFFFu, kRuntimeEntity = 0xFFFFFFFFu;
 
 namespace DecalPerf {
 namespace {
+constexpr std::size_t kWindow = 600; // frames per periodic line
+constexpr std::size_t kWorst = 6;    // worst frames listed (after the first 60: the scene's load and first decodes)
+struct Worst {
+    float Total = 0.0f, Prepare = 0.0f;
+    std::uint64_t Frame = 0;
+};
 struct State {
     std::uint64_t Frame = ~0ull;
     double FramePrepare = 0.0, FrameSubmit = 0.0;
-    std::vector<float> Totals; // per frame: prepare + submit (ms)
-    std::vector<std::uint64_t> FrameNos;
-    std::vector<float> Prepares; // per frame: the prepare part
+    std::vector<float> Totals; // per frame: prepare + submit (ms); 4 bytes a frame, sorted only by the final Report
+    std::vector<float> Scratch; // one window's copy for its percentiles (reused)
+    std::size_t WindowStart = 0; // the first frame of the window the next periodic line covers
+    std::array<Worst, kWorst> Worsts{}; // kept as frames close, largest first
     double SumPrepare = 0.0, SumSubmit = 0.0, MaxTotal = 0.0;
     std::uint64_t MaxFrame = 0, Calls = 0, Dropouts = 0;
 };
@@ -215,13 +223,43 @@ State& S() {
 long long NowNs() {
     return (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
+// One "[DecalPerf]" line over Totals[from, end): the sums are the run's (frames, prepares, ms/frame), the
+// percentiles and over-1/4-ms counts the range's.
+void Print(const char* label, std::size_t from) {
+    State& s = S();
+    if (from >= s.Totals.size()) return;
+    std::vector<float>& t = s.Scratch;
+    t.assign(s.Totals.begin() + (std::ptrdiff_t)from, s.Totals.end());
+    std::sort(t.begin(), t.end());
+    const double n = (double)s.Totals.size();
+    std::printf("[DecalPerf] %sframes %zu, prepares %llu: prepare %.4f ms/frame, submit %.4f ms/frame, median %.4f, p99 %.4f, "
+                "max %.3f ms (frame %llu), frames over 1 ms %d, over 4 ms %d, dropouts %llu
+",
+                label, s.Totals.size(), (unsigned long long)s.Calls, s.SumPrepare / n, s.SumSubmit / n, t[t.size() / 2],
+                t[std::min(t.size() - 1, (size_t)((double)t.size() * 0.99))], s.MaxTotal, (unsigned long long)s.MaxFrame,
+                (int)(t.end() - std::upper_bound(t.begin(), t.end(), 1.0f)),
+                (int)(t.end() - std::upper_bound(t.begin(), t.end(), 4.0f)), (unsigned long long)s.Dropouts);
+    if (s.Worsts[0].Total > 0.0f) {
+        std::printf("[DecalPerf]   worst after the first 60 frames:");
+        for (const Worst& w : s.Worsts)
+            if (w.Total > 0.0f) std::printf(" %.3f ms (frame %llu, prepare %.3f)", w.Total, (unsigned long long)w.Frame, w.Prepare);
+        std::printf("
+");
+    }
+    std::fflush(stdout);
+}
 void Close() {
     State& s = S();
     if (s.Frame == ~0ull) return;
     const double total = s.FramePrepare + s.FrameSubmit;
+    if (s.Totals.size() >= 60) { // keep the worst few as they come (no history walk at report time)
+        auto at = std::find_if(s.Worsts.begin(), s.Worsts.end(), [&](const Worst& w) { return (float)total > w.Total; });
+        if (at != s.Worsts.end()) {
+            std::move_backward(at, s.Worsts.end() - 1, s.Worsts.end());
+            *at = {(float)total, (float)s.FramePrepare, s.Frame};
+        }
+    }
     s.Totals.push_back((float)total);
-    s.FrameNos.push_back(s.Frame);
-    s.Prepares.push_back((float)s.FramePrepare);
     s.SumPrepare += s.FramePrepare;
     s.SumSubmit += s.FrameSubmit;
     if (total > s.MaxTotal) {
@@ -236,7 +274,10 @@ void Roll() {
     if (f == s.Frame) return;
     Close();
     s.Frame = f;
-    if (!s.Totals.empty() && s.Totals.size() % 600 == 0) Report();
+    if (s.Totals.size() - s.WindowStart >= kWindow) { // the last window's percentiles: a 600-entry sort, not the run's
+        Print("last 600: ", s.WindowStart);
+        s.WindowStart = s.Totals.size();
+    }
 }
 } // namespace
 
@@ -250,33 +291,7 @@ void AddSubmit(double ms) {
     S().FrameSubmit += ms;
 }
 void AddDropout() { ++S().Dropouts; }
-void Report() {
-    const State& s = S();
-    if (s.Totals.empty()) return;
-    std::vector<float> t = s.Totals;
-    std::sort(t.begin(), t.end());
-    const double n = (double)t.size();
-    std::printf("[DecalPerf] frames %zu, prepares %llu: prepare %.4f ms/frame, submit %.4f ms/frame, median %.4f, p99 %.4f, "
-                "max %.3f ms (frame %llu), frames over 1 ms %d, over 4 ms %d, dropouts %llu\n",
-                t.size(), (unsigned long long)s.Calls, s.SumPrepare / n, s.SumSubmit / n, t[t.size() / 2],
-                t[std::min(t.size() - 1, (size_t)(n * 0.99))], s.MaxTotal, (unsigned long long)s.MaxFrame,
-                (int)(t.end() - std::upper_bound(t.begin(), t.end(), 1.0f)),
-                (int)(t.end() - std::upper_bound(t.begin(), t.end(), 4.0f)), (unsigned long long)s.Dropouts);
-    // The worst frames after the first 60 (the scene's load and first decodes): the hitches in play.
-    std::vector<size_t> worst;
-    for (size_t i = 60; i < s.Totals.size(); ++i) worst.push_back(i);
-    const size_t k = std::min<size_t>(6, worst.size());
-    std::partial_sort(worst.begin(), worst.begin() + (std::ptrdiff_t)k, worst.end(),
-                      [&](size_t a, size_t b) { return s.Totals[a] > s.Totals[b]; });
-    if (k > 0) {
-        std::printf("[DecalPerf]   worst after the first 60 frames:");
-        for (size_t i = 0; i < k; ++i)
-            std::printf(" %.3f ms (frame %llu, prepare %.3f)", s.Totals[worst[i]], (unsigned long long)s.FrameNos[worst[i]],
-                        s.Prepares[worst[i]]);
-        std::printf("\n");
-    }
-    std::fflush(stdout);
-}
+void Report() { Print("", 0); }
 SubmitScope::SubmitScope() : Start(NowNs()) {}
 SubmitScope::~SubmitScope() { AddSubmit((double)(NowNs() - Start) * 1e-6); }
 } // namespace DecalPerf

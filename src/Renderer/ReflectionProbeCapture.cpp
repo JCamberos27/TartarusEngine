@@ -114,8 +114,10 @@ void ReflectionProbeCapture::EnsureCaptureCubes() {
 }
 
 void ReflectionProbeCapture::Sync(ReflectionProbeArray& probes, bool environmentReady, double nowSeconds) {
-    std::vector<Volume> want;
-    std::vector<int> slotOf(probes.Count(), -1);
+    std::vector<Volume>& want = m_Want;
+    std::vector<int>& slotOf = m_SlotOf;
+    want.clear();
+    slotOf.assign((std::size_t)probes.Count(), -1);
     for (int i = 0; i < probes.Count(); ++i) {
         const ReflectionProbeArray::ProbeVolume v = probes.Volume(i);
         if (!v.Capture) continue;
@@ -149,8 +151,8 @@ void ReflectionProbeCapture::Sync(ReflectionProbeArray& probes, bool environment
     }
     s_RecaptureAt.clear();
 
-    std::vector<Volume> have;
-    have.reserve(m_Slots.size());
+    std::vector<Volume>& have = m_Have;
+    have.clear();
     for (const Slot& s : m_Slots) have.push_back(s.Vol);
     if (!SameVolumes(have, want)) {
         if (!SameVolumes(m_Pending, want)) {

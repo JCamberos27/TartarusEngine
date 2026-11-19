@@ -204,7 +204,11 @@ void HudText::Flush(unsigned int dstFbo) {
     glBindTexture(GL_TEXTURE_2D, m_Atlas);
     glBindVertexArray(m_VAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(m_Verts.size() * sizeof(Vertex)), m_Verts.data(), GL_DYNAMIC_DRAW);
+    if (m_Verts.size() > m_VboCapacity) { // re-specifying the store every Flush waited on the threaded driver
+        m_VboCapacity = std::max<std::size_t>(m_Verts.size() * 2, 1024);
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(m_VboCapacity * sizeof(Vertex)), nullptr, GL_DYNAMIC_DRAW);
+    }
+    glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(m_Verts.size() * sizeof(Vertex)), m_Verts.data());
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)m_Verts.size());
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);

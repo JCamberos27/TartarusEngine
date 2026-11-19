@@ -433,9 +433,18 @@ public:
     // A key for sub-mesh `index`'s render state in the opaque pass (its shader's, plus Double Sided): meshes with the
     // same key draw under the same GL state.
     std::uint64_t MeshStateKey(int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots, bool forceDoubleSided) const;
+    // The pass's cull / depth / blend state as a run of DrawMeshIndirect calls found it: read with glGet once for the
+    // run instead of once per draw that overrides it (a double-sided material). A caller that changes one of these
+    // between calls updates it here too.
+    struct DrawPassState {
+        bool Saved = false;
+        bool CullEnabled = true, BlendEnabled = false, DepthMask = true;
+        int CullFace = 0x0405 /* GL_BACK */, DepthFunc = 0x0201 /* GL_LESS */;
+        int BlendSrcRgb = 1, BlendDstRgb = 0, BlendSrcA = 1, BlendDstA = 0;
+    };
     bool DrawMeshIndirect(Shader& fallback, int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                           const ProgramSelector& selectProgram, const std::function<void(Shader&)>& onProgramBound,
-                          bool forceDoubleSided, const void* indirect, int drawCount);
+                          bool forceDoubleSided, const void* indirect, int drawCount, DrawPassState* passState = nullptr);
 
     // Shell fur (FurRenderer): binds the model's skin (this frame's pre-skinned vertices or its bone palette) and
     // `xform` on `prog` the way DrawSelected does, then draws each opaque sub-mesh whose material has fur on as

@@ -1489,10 +1489,11 @@ void Model::ReadAnimations(const aiScene* scene) {
             clip.Channels.push_back(std::move(bac));
         }
         // #113 — resolve node -> channel once here, not by name per node per frame.
+        // (NodeLookup holds each name's first node, as the old nested scan matched.)
         clip.NodeChannel.assign(m_D->Nodes.size(), -1);
         for (int c = 0; c < (int)clip.Channels.size(); ++c)
-            for (int n = 0; n < (int)m_D->Nodes.size(); ++n)
-                if (m_D->Nodes[n].Name == clip.Channels[c].BoneName) { clip.NodeChannel[n] = c; break; }
+            if (const auto it = m_D->NodeLookup.find(clip.Channels[c].BoneName); it != m_D->NodeLookup.end())
+                clip.NodeChannel[it->second] = c;
         m_D->Animations.push_back(std::move(clip));
     }
 }
@@ -1854,7 +1855,7 @@ void Model::EvaluatePose() {
                 local = LocalTRS::Blend(a, b, w).ToMatrix();
             }
         }
-        m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
+        m_NodeGlobals[i] = n.Parent >= 0 ? AffineMul(m_NodeGlobals[n.Parent], local) : local;
         if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
         if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = AffineMul(AffineMul(m_D->GlobalInverseTransform, m_NodeGlobals[i]), n.BoneOffset);
     }
@@ -2746,10 +2747,14 @@ namespace {
 // for a glGet or a state change.
 class ShaderStateScope {
 public:
+    // `shared`: a pass state read once for a run of draws (Model::DrawPassState); otherwise this scope's own.
+    explicit ShaderStateScope(Model::DrawPassState* shared = nullptr) : m_S(shared ? shared : &m_Own) {}
+    ShaderStateScope(const ShaderStateScope&) = delete;
+    ShaderStateScope& operator=(const ShaderStateScope&) = delete;
     void Apply(const ShaderRenderState* st) {
         const bool want = st && st->AffectsDraw();
         if (!want) { Restore(); return; }
-        if (!m_Saved) Save();
+        if (!m_S->Saved) Save();
         Restore(); // start from the pass state, so fields this shader leaves unset aren't stale
         if (st->Cull == ShaderRenderState::CullMode::Off) glDisable(GL_CULL_FACE);
         else if (st->Cull != ShaderRenderState::CullMode::Unset) {
@@ -2771,35 +2776,35 @@ public:
     }
     void Restore() {
         if (!m_Dirty) return;
-        m_CullEnabled ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
-        glCullFace((GLenum)m_CullFace);
-        glDepthMask(m_DepthMask);
-        glDepthFunc((GLenum)m_DepthFunc);
-        m_BlendEnabled ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
-        glBlendFuncSeparate((GLenum)m_BlendSrcRgb, (GLenum)m_BlendDstRgb, (GLenum)m_BlendSrcA, (GLenum)m_BlendDstA);
+        const Model::DrawPassState& s = *m_S;
+        s.CullEnabled ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
+        glCullFace((GLenum)s.CullFace);
+        glDepthMask(s.DepthMask ? GL_TRUE : GL_FALSE);
+        glDepthFunc((GLenum)s.DepthFunc);
+        s.BlendEnabled ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
+        glBlendFuncSeparate((GLenum)s.BlendSrcRgb, (GLenum)s.BlendDstRgb, (GLenum)s.BlendSrcA, (GLenum)s.BlendDstA);
         m_Dirty = false;
     }
     ~ShaderStateScope() { Restore(); }
 private:
     void Save() {
-        m_CullEnabled = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
-        glGetIntegerv(GL_CULL_FACE_MODE, &m_CullFace);
+        Model::DrawPassState& s = *m_S;
+        s.CullEnabled = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
+        glGetIntegerv(GL_CULL_FACE_MODE, &s.CullFace);
         GLint depthMask = GL_TRUE;
         glGetIntegerv(GL_DEPTH_WRITEMASK, &depthMask);
-        m_DepthMask = depthMask ? GL_TRUE : GL_FALSE;
-        glGetIntegerv(GL_DEPTH_FUNC, &m_DepthFunc);
-        m_BlendEnabled = glIsEnabled(GL_BLEND) == GL_TRUE;
-        glGetIntegerv(GL_BLEND_SRC_RGB, &m_BlendSrcRgb);
-        glGetIntegerv(GL_BLEND_DST_RGB, &m_BlendDstRgb);
-        glGetIntegerv(GL_BLEND_SRC_ALPHA, &m_BlendSrcA);
-        glGetIntegerv(GL_BLEND_DST_ALPHA, &m_BlendDstA);
-        m_Saved = true;
+        s.DepthMask = depthMask != 0;
+        glGetIntegerv(GL_DEPTH_FUNC, &s.DepthFunc);
+        s.BlendEnabled = glIsEnabled(GL_BLEND) == GL_TRUE;
+        glGetIntegerv(GL_BLEND_SRC_RGB, &s.BlendSrcRgb);
+        glGetIntegerv(GL_BLEND_DST_RGB, &s.BlendDstRgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &s.BlendSrcA);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &s.BlendDstA);
+        s.Saved = true;
     }
-    bool m_Saved = false, m_Dirty = false;
-    bool m_CullEnabled = true, m_BlendEnabled = false;
-    GLint m_CullFace = GL_BACK, m_DepthFunc = GL_LESS;
-    GLboolean m_DepthMask = GL_TRUE;
-    GLint m_BlendSrcRgb = GL_ONE, m_BlendDstRgb = GL_ZERO, m_BlendSrcA = GL_ONE, m_BlendDstA = GL_ZERO;
+    Model::DrawPassState m_Own;
+    Model::DrawPassState* m_S;
+    bool m_Dirty = false;
 };
 
 const ShaderRenderState* SlotRenderState(const std::vector<std::shared_ptr<MaterialAsset>>& slots, int i) {
@@ -2998,12 +3003,12 @@ std::uint64_t Model::MeshStateKey(int i, const std::vector<std::shared_ptr<Mater
 
 bool Model::DrawMeshIndirect(Shader& fallback, int i, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                              const ProgramSelector& selectProgram, const std::function<void(Shader&)>& onProgramBound,
-                             bool forceDoubleSided, const void* indirect, int drawCount) {
+                             bool forceDoubleSided, const void* indirect, int drawCount, DrawPassState* passState) {
     const bool hasSlot = i < (int)slots.size() && slots[i];
     if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) return false;
     const ModelMesh& mesh = *m_D->Meshes[i];
     if (!mesh.ArenaRange().Page) return false;
-    ShaderStateScope stateScope; // #104
+    ShaderStateScope stateScope(passState); // #104
     const Material& mat = hasSlot ? slots[i]->Mat : mesh.Mat;
     stateScope.Apply(EffectiveRenderState(slots, i, mat, forceDoubleSided));
     Shader* prog = &fallback;

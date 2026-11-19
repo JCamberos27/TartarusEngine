@@ -54,6 +54,7 @@ void GIVolumes::Release() {
     if (m_Ubo) glDeleteBuffers(1, &m_Ubo);
     m_Atlas = m_Ubo = 0;
     m_AtlasKey.clear();
+    m_BakePaths.clear();
     m_LastUbo.clear();
 }
 
@@ -104,15 +105,17 @@ void GIVolumes::Update(const World& world) {
     Gather(world);
 
     // The atlas: rebuilt when the baked data or the grids change (keyed by file identity, name and dims).
-    std::string key;
-    for (const auto& v : m_Volumes) {
-        key += v.Name;
-        key += '|';
-        key += std::to_string((std::uintptr_t)v.Bake) + ':' + std::to_string(v.Dims.x) + 'x' + std::to_string(v.Dims.y) +
-               'x' + std::to_string(v.Dims.z) + '/' + std::to_string(v.Layers.size()) + ';';
+    std::vector<AtlasKeyEntry>& key = m_AtlasKeyScratch;
+    key.resize(m_Volumes.size());
+    for (std::size_t i = 0; i < m_Volumes.size(); ++i) {
+        const Volume& v = m_Volumes[i];
+        key[i].Name.assign(v.Name);
+        key[i].Bake = v.Bake;
+        key[i].Dims = v.Dims;
+        key[i].Layers = v.Layers.size();
     }
     if (key != m_AtlasKey) {
-        m_AtlasKey = key;
+        m_AtlasKey.swap(key);
         Rebuild();
     }
     Remix();
@@ -120,6 +123,11 @@ void GIVolumes::Update(const World& world) {
 }
 
 void GIVolumes::Gather(const World& world) {
+    auto ResolvedBake = [this](const std::string& rel) -> const std::string& {
+        auto it = m_BakePaths.find(rel);
+        if (it == m_BakePaths.end()) it = m_BakePaths.emplace(rel, ProjectPaths::Resolve(rel)).first;
+        return it->second;
+    };
     std::vector<Volume> vols;
     auto view = world.Registry.view<const TransformComponent, const GIVolumeComponent>();
     for (auto [e, tc, gv] : view.each()) {
@@ -138,7 +146,7 @@ void GIVolumes::Gather(const World& world) {
         v.Fade = std::max(gv.Fade, 0.0f);
         v.Intensity = std::max(gv.Intensity, 0.0f);
         v.File = m_Override ? m_Override
-                            : (gv.BakeFile.empty() ? nullptr : GI::Cached(ProjectPaths::Resolve(gv.BakeFile)));
+                            : (gv.BakeFile.empty() ? nullptr : GI::Cached(ResolvedBake(gv.BakeFile)));
         v.Bake = v.File ? v.File->Find(v.Name) : nullptr;
         if (!v.Bake || v.Bake->Dims != v.Dims) continue; // not baked, or baked for another grid: re-bake
         for (int l = 0; l < (int)v.Bake->Layers.size() && (int)v.Layers.size() < kMaxLayers; ++l) {

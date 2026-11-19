@@ -263,7 +263,9 @@ int WorldTextRenderer::Draw(World& world, const glm::mat4& view, const glm::mat4
         right *= t.Size;
         up *= t.Size;
 
-        const std::string key = t.Text + char('0' + std::clamp(t.Align, 0, 2));
+        static std::string key; // reused: no string built per label per frame once it has grown
+        key.assign(t.Text);
+        key.push_back(char('0' + std::clamp(t.Align, 0, 2)));
         auto it = layouts.find(key);
         if (it == layouts.end()) {
             Cached c;

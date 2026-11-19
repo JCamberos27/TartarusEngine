@@ -59,7 +59,7 @@ struct RuntimeDecal {
 // CPU cost counters for the decal path (the before / after of the optimisation pass): Prepare's time and the
 // runtime systems' submit time (blood, bullet holes), summed per frame, and dropouts - a component decal drawn
 // in one of the last two Prepares that is in view again but has no resident slot (it would flash off).
-// "[DecalPerf]" lines go to stdout every 600 frames and when the DecalSystem goes.
+// "[DecalPerf]" lines go to stdout every 600 frames (that window's percentiles) and when the DecalSystem goes (the run's).
 namespace DecalPerf {
 void AddPrepare(double ms);
 void AddSubmit(double ms);
