@@ -78,6 +78,12 @@ struct AssetGridCell {
     // Listed in external_assets.csv but not on disk: a Drive file this checkout hasn't fetched.
     // Shown greyed; dragging it is refused (run tools/assets/fetch-assets.ps1).
     bool unfetched = false;
+    // The file's size / modified time, stat'ed once per list build (Date/Size sort, Details view)
+    // rather than every frame. Filled by StatAssetGridCell; zero / "-" when there is no file.
+    mutable bool statted = false;
+    mutable unsigned long long fileSize = 0;
+    mutable long long modifiedTicks = 0;
+    mutable std::string sizeText, modifiedText;
 };
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect

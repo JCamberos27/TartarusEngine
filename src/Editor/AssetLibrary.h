@@ -357,6 +357,15 @@ private:
     // The folders project/settings.json keeps: the ones it listed plus the ones made in the browser.
     // Folders found from where files sit on disk (AddFolderPath) are in m_Folders only (#14).
     std::vector<std::string> m_SavedFolders;
+    // Case-insensitive lookup into m_Folders (lower-cased path -> first index), so AddFolderPath on a
+    // scan landing is O(1) per file instead of a walk of every folder. Rebuilt lazily after a rename
+    // or delete (FolderIndexDirty); AddFolderPath / CreateFolder keep it current as they append.
+    std::unordered_map<std::string, size_t> m_FolderIndex;
+    bool m_FolderIndexValid = false;
+    void FolderIndexDirty() { m_FolderIndexValid = false; }
+    const std::string* FindFolderNoCase(const std::string& path);
+    bool HasFolder(const std::string& path);
+    void AppendFolder(const std::string& path);
 
     std::map<std::string, TextureImportSettings> m_TextureSettings;
     std::map<std::string, ModelImportSettings> m_ModelSettings;
