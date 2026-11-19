@@ -2292,7 +2292,7 @@ private:
     char m_HierStyleIconSearch[64] = {};
     void HandleHierarchyHoverKeys(World& world);
     // Per-scene user-state key: the scene's GUID, else its path ("" for an untitled scene).
-    std::string CurrentSceneKey() const;
+    const std::string& CurrentSceneKey() const; // worked out once per frame
     entt::entity FindEntityByOrder(const World& world, int order) const;
     // vHierarchy D key: new objects created without an explicit parent land under it.
     entt::entity ResolveDefaultParent(const World& world) const;
