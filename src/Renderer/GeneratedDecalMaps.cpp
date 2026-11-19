@@ -4,7 +4,7 @@
 #include "Log.h"
 #include "Core/Paths.h"
 
-#include <stb_image_write.h>
+#include "PngWrite.h"
 
 #include <algorithm>
 #include <chrono>
@@ -27,9 +27,7 @@ std::string GeneratedDecalMaps::MapPath(const std::string& key, const char* map)
 namespace {
 bool WritePng(const std::string& path, int w, int h, int comp, const std::vector<uint8_t>& px) {
     std::string bytes;
-    stbi_write_png_to_func([](void* ctx, void* data, int size) { static_cast<std::string*>(ctx)->append((const char*)data, (size_t)size); },
-                           &bytes, w, h, comp, px.data(), w * comp);
-    return !bytes.empty() && AtomicFile::WriteBytes(fs::u8path(path), bytes, true);
+    return PngWrite::Encode(bytes, w, h, comp, px.data(), w * comp) && AtomicFile::WriteBytes(fs::u8path(path), bytes, true);
 }
 bool Exists(const std::string& p) {
     std::error_code ec;

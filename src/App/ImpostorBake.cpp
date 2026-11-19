@@ -18,7 +18,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <json.hpp>
-#include <stb_image_write.h>
+#include "PngWrite.h"
 
 #include <algorithm>
 #include <cmath>
@@ -141,8 +141,7 @@ void Dilate(std::vector<Tile*> tiles, const std::vector<float>& cov) {
 }
 
 bool WritePng(const std::filesystem::path& file, int size, const std::vector<unsigned char>& rgba) {
-    stbi_write_png_compression_level = 9;
-    return stbi_write_png(file.string().c_str(), size, size, 4, rgba.data(), size * 4) != 0;
+    return PngWrite::ToFile(file.u8string(), size, size, 4, rgba.data(), size * 4, 9);
 }
 
 } // namespace

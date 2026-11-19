@@ -26,7 +26,7 @@
 
 // stb_image_write.h's own sprintf() use, and entt's deprecated storage::in_use() (the entity counts, as main.cpp reads them).
 #pragma warning(disable: 4996)
-#include <stb_image_write.h>
+#include "PngWrite.h"
 
 #include <algorithm>
 #include <cmath>
@@ -68,7 +68,7 @@ void ProjectSync(EditorLayer& editor, World& world, AssetLibrary& assets) {
     const std::string b = (dir / "sub" / "c.png").string(); // then moved to a subfolder
     unsigned char px[4 * 4 * 4];
     for (int i = 0; i < 64; ++i) px[i] = (unsigned char)(i * 4);
-    stbi_write_png(a.c_str(), 4, 4, 4, px, 16);
+    PngWrite::ToFile(std::filesystem::path(a).u8string(), 4, 4, 4, px, 16);
     const bool added = pump([&] { return !assets.FindListed(a).empty(); });
     const AssetGuid guidA = AssetDatabase::GuidForPath(a);
     const bool metaA = fs::exists(a + ".meta", se);
@@ -178,7 +178,7 @@ void MaterialPreviews(World& world) {
         std::vector<unsigned char> flipped(px.size());
         for (int y = 0; y < kPx; ++y)
             std::memcpy(&flipped[(size_t)y * kPx * 4], &px[(size_t)(kPx - 1 - y) * kPx * 4], (size_t)kPx * 4);
-        stbi_write_png((outDir / (name + ".png")).string().c_str(), kPx, kPx, 4, flipped.data(), kPx * 4);
+        PngWrite::ToFile((outDir / (name + ".png")).u8string(), kPx, kPx, 4, flipped.data(), kPx * 4);
     }
     glDeleteFramebuffers(1, &readFbo);
     // ContentKey: stable, and follows a value edit and a queue change.

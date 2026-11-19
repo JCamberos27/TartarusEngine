@@ -78,7 +78,7 @@ void WritePng(const std::string& path, unsigned char r, unsigned char g, unsigne
             const bool on = ((x / 4) + (y / 4)) % 2 == 0;
             p[0] = on ? r : 30; p[1] = on ? g : 30; p[2] = on ? b : 30; p[3] = 255;
         }
-    stbi_write_png(path.c_str(), 16, 16, 4, px, 16 * 4);
+    PngWrite::ToFile(std::filesystem::path(path).u8string(), 16, 16, 4, px, 16 * 4);
 }
 // Writes the scratch folder (unless it is already there) and waits until the browser lists it.
 Steps EnsureScratch() {
