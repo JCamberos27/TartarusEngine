@@ -2031,8 +2031,6 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     m_SwayLookInput=glm::vec2(0);
     m_HaveSwayMoveInput=false;
     WriteIK();
-
-
 }
 
 void FirstPersonPresentation::RemoveViewKick(Camera& camera) {
@@ -2294,10 +2292,7 @@ void FirstPersonPresentation::ApplyHidden(World& world) {
     m_HiddenApplied = hidden;
 }
 
-// Pins the arms to the camera and the weapon to the arms' gun socket, from the rigs' current
-// posed node globals. Update runs it before the animators have posed this frame, so on its own
-// the gun rode last frame's hands - a frame behind every clip, sway and bob change, which read as
-// the left hand sliding on the handguard. LateUpdate runs it again once they have.
+// Hides the spare magazine bones unless the left hand holds them (see the header).
 void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, const glm::quat& armsRot,
                                                   const glm::vec3& weaponPos, const glm::quat& weaponRot) {
     m_SpareMagGap = -1.0f; // none this frame unless measured below
@@ -2325,6 +2320,10 @@ void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, cons
     // (SetHiddenNodes re-derives the palette of an externally posed model itself: it shows or goes this frame.)
 }
 
+// Pins the arms to the camera and the weapon to the arms' gun socket, from the rigs' current
+// posed node globals. Update runs it before the animators have posed this frame, so on its own
+// the gun rode last frame's hands - a frame behind every clip, sway and bob change, which read as
+// the left hand sliding on the handguard. LateUpdate runs it again once they have.
 void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const Camera* placementCamera,bool finalPass) {
     const Camera& placement=placementCamera?*placementCamera:camera;
     const glm::quat cameraRotation = CameraRotation(placement);
