@@ -19,6 +19,20 @@
 #include "../Renderer/CascadedShadowMap.h"
 #include "../Renderer/Texture.h"
 #include "../Core/PngWrite.h"
+#include "../Core/SamplingProfiler.h"
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#undef near // (minwindef.h: this file has lambdas named near and far)
+#undef far
+#endif
+#include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <json.hpp>
 #include <random>
@@ -597,7 +611,26 @@ static void Test_AssetDatabase_NonObjectMetaIsRewritten() {
     fs::remove_all(dir, ec);
 }
 
+// The sampler walks the main thread's stack while it is suspended. Suspended inside the loader (LoadLibrary / FreeLibrary
+// hold its lock), a walk through RtlLookupFunctionEntry waited on that lock forever; the walk now reads the modules'
+// unwind tables itself. Sampling a thread that loads and frees a DLL in a loop must finish, with real stacks.
+static void Test_SamplingProfiler_SurvivesTheLoaderLock() {
+#if defined(_WIN32) && defined(_M_X64)
+    SamplingProfiler::Start();
+    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(400);
+    int loads = 0;
+    while (std::chrono::steady_clock::now() < until) {
+        if (HMODULE m = LoadLibraryW(L"version.dll")) { FreeLibrary(m); ++loads; }
+    }
+    SamplingProfiler::Stop();
+    std::printf("[UnitTest] sampler: %zu samples over %d DLL loads, mean depth %.1f\n", SamplingProfiler::SampleCount(), loads,
+                SamplingProfiler::MeanDepth());
+    CHECK(loads > 10 && SamplingProfiler::SampleCount() > 20 && SamplingProfiler::MeanDepth() > 3.0);
+#endif
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"SamplingProfiler::SurvivesTheLoaderLock", Test_SamplingProfiler_SurvivesTheLoaderLock});
     tests.push_back({"PngWrite::LevelPerCallUnderThreads", Test_PngWrite_LevelPerCallUnderThreads});
     tests.push_back({"AssetDatabase::NonObjectMetaIsRewritten", Test_AssetDatabase_NonObjectMetaIsRewritten});
     tests.push_back({"BoneAnimChannel::FinalizeMatchesSearch", Test_BoneAnimChannel_FinalizeMatchesSearch});
