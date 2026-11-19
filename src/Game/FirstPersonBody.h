@@ -295,6 +295,7 @@ private:
     bool m_Turning = false;        // a turn-in-place clip is carrying the body round
     float m_Twist = 0.0f;          // view heading minus body heading, radians, wrapped
     int m_HeadNode = -1;
+    std::string m_HeadBone;        // the component's Head Bone through the Bone Map (Start)
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
     // Posture metrics (BodyDebug): spine_05's and the head's model-space rotations in the bind pose; the heading last frame.
     glm::quat m_BindChest{1.0f, 0.0f, 0.0f, 0.0f}, m_BindHead{1.0f, 0.0f, 0.0f, 0.0f};
