@@ -134,7 +134,7 @@ private:
     void FinishDeath(World& world, Npc& n);
     void LatePose(World& world, Npc& n, float dt);
     void UpdateHitboxes(Npc& n, const PlayerSnapshot& p, bool posed);
-    void UpdateLod(World& world, Npc& n, const PlayerSnapshot& p);
+    void UpdateLod(Npc& n, const PlayerSnapshot& p);
     // Gone: its capsule, agent and physics. `keepBody`: its entity tree goes into the pool for the next spawn (hidden), else
     // it is destroyed.
     void Despawn(World& world, Npc& n, bool keepBody = false);

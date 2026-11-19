@@ -143,10 +143,12 @@ bool NpcBody::Start(World& world, entt::entity root) {
     // it stands in its bind pose, warned once - never an error.
     m_Mm.SetDebug(&m_MmDebug);
     std::string error;
+    // Any Animator Controller left on a piece (a prefab from before Phase 6) is held whether or not the matcher runs: the
+    // matcher poses every piece, and without it the body keeps its bind pose.
+    for (entt::entity e : m_Pieces)
+        if (auto* ac = reg.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = true;
     if (m_Mm.Start(m_Models, (size_t)m_DriverIndex, error)) {
         m_MmActive = true;
-        for (entt::entity e : m_Pieces)
-            if (auto* ac = reg.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = true;
     } else {
         static bool warned = false;
         if (!warned) Log::Warn("Dummies: " + error + " - they stand in their bind pose.");
@@ -285,7 +287,7 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
     const bool flat = std::abs(m_FootOffset[0]) < 0.004f && std::abs(m_FootOffset[1]) < 0.004f && m_FootNormal[0].y > 0.999f &&
                       m_FootNormal[1].y > 0.999f;
     if (flat && !held && !legsKicked) { // the clips' own feet are right
-        if (kicked) { m.ApplyLocalPose(pose); SyncLower(); }
+        if (kicked) m.ApplyLocalPose(pose); // (LateUpdate syncs the pieces once the look is on too)
         return;
     }
     const float w = m_FootWeight;
@@ -336,8 +338,7 @@ void NpcBody::FootPass(float dt, const PoseKick& kick) {
         }
         IK::SolveTwoBone(pose, m_DriverParents, m_Globals, thigh, calf, foot, target, &footRot, 1.0f, 0.0f, &hint);
     }
-    m.ApplyLocalPose(pose);
-    SyncLower();
+    m.ApplyLocalPose(pose); // (LateUpdate syncs the pieces once the look is on too)
 }
 
 void NpcBody::SyncLower() {

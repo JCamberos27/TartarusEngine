@@ -45,6 +45,7 @@ struct Npc {
     bool Dead = false;
     float DiedAt = 0.0f;
     float UnseenSince = -1.0f;      // a corpse: since when the player hasn't seen it (-1: in sight now)
+    float NextSightCheck = 0.0f;    // a corpse: when its line of sight is next checked
     float LastHurt = -1e9f;
     float StaggerUntil = 0.0f;      // a heavy hit: slowed until then ...
     glm::vec3 PushVel{0.0f};        // ... and shoved back along the round (m/s, decays)

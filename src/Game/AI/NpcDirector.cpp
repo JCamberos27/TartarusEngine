@@ -532,7 +532,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
             SubTimer timer(*this, SubMove);
             Move(world, *up, dt);
         }
-        UpdateLod(world, *up, p);
+        UpdateLod(*up, p);
     }
     Respawns(world, assets);
     m_ThinkMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
@@ -754,7 +754,7 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt) {
 // Per dummy: how often its pose is worked out. Near and in view: every frame. Further (25 m) every second, past 50 m or out
 // of view every fourth, staggered between dummies. Just hurt or just spawned stays at full rate. The skipped frames keep the
 // last pose; time is kept for the next one.
-void NpcDirector::UpdateLod(World& world, Npc& n, const PlayerSnapshot& p) {
+void NpcDirector::UpdateLod(Npc& n, const PlayerSnapshot& p) {
     int lod = 1;
     float dist = 0.0f;
     bool onScreen = true;
@@ -771,11 +771,7 @@ void NpcDirector::UpdateLod(World& world, Npc& n, const PlayerSnapshot& p) {
     n.OnScreen = onScreen;
     const bool busy = m_Now - n.LastHurt < 0.5f || m_Now - n.SpawnedAt < 0.5f;
     n.Animate = busy || lod == 1 || ((m_Frame + n.Index) % lod) == 0;
-    // (Any Animator Controller left on a piece - a prefab from before Phase 6 - is always held: the matcher poses the body, stepping
-    // on the frames posed - LatePose.)
-    for (entt::entity e : n.Body.Pieces())
-        if (e != entt::null && world.Registry.valid(e))
-            if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = true;
+    // (Any Animator Controller left on a piece is held from NpcBody::Start: the matcher poses the body.)
 }
 
 // The per-bone hitboxes follow the skeleton for dummies within Hitbox Range of the player (made on first need, off beyond
@@ -980,14 +976,19 @@ void NpcDirector::UpdatePersistence(World& world, const PlayerSnapshot& p) {
     const int cap = std::max(m_Cfg.MaxCorpses, 1);
     int over = (int)corpses.size() - cap;
     for (Npc* n : corpses) {
-        bool seen = false;
-        if (n->Ragdoll) {
-            for (int part : {0, 1, 2}) if (!seen) seen = PlayerSees(p, n->Ragdoll->PartPosition(part));
-        } else {
-            seen = PlayerSees(p, n->Feet + glm::vec3(0.0f, 0.5f, 0.0f));
+        // Line of sight four times a second (up to three rays each): Unseen Time is seconds long, a quarter more doesn't show.
+        if (m_Now >= n->NextSightCheck) {
+            n->NextSightCheck = m_Now + 0.25f;
+            bool seen = false;
+            if (n->Ragdoll) {
+                for (int part : {0, 1, 2}) if (!seen) seen = PlayerSees(p, n->Ragdoll->PartPosition(part));
+            } else {
+                seen = PlayerSees(p, n->Feet + glm::vec3(0.0f, 0.5f, 0.0f));
+            }
+            if (seen) n->UnseenSince = -1.0f;
+            else if (n->UnseenSince < 0.0f) n->UnseenSince = m_Now;
         }
-        if (seen) n->UnseenSince = -1.0f;
-        else if (n->UnseenSince < 0.0f) n->UnseenSince = m_Now;
+        const bool seen = n->UnseenSince < 0.0f;
         const float unseenFor = seen ? 0.0f : m_Now - n->UnseenSince;
         if (unseenFor < m_Cfg.UnseenTime || (over <= 0 && m_Now - n->DiedAt <= m_Cfg.CorpseTime)) continue;
         --over;
