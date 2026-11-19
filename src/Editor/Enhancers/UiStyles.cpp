@@ -1,3 +1,4 @@
+#include "EnhancerCore.h"
 #include "UiStyles.h"
 #include "Palette.h"
 
@@ -129,7 +130,7 @@ void UiStyles::Load() {
         in >> j;
         FromJson(j);
     } catch (const std::exception& e) {
-        Log::Warn(std::string("Editor Enhancers: failed to parse '") + Path() + "': " + e.what() + " - tab and header styles off until fixed.");
+        Log::Warn(std::string("Editor Enhancers: failed to parse '") + Path() + "': " + e.what() + " - tab and header styles off until fixed (the file is kept as '" + KeepUnreadable(Path()) + "').");
         Reset();
     }
 }

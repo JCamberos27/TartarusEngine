@@ -203,7 +203,7 @@ void DrainBake(GraffitiDesigner& g) {
     if (g.BakeStage == 1) {
         Graffiti::BakeImages img;
         if (g.Comp.PollBake(img, /*wait=*/true)) BeginEncode(g, std::move(img));
-        else { g.BakeStage = 0; g.BakePiece.reset(); }
+        else { g.BakeStage = 0; g.BakePiece.reset(); g.Status = "Bake failed: the GPU readback didn't finish"; }
     }
     if (g.BakeStage == 2) {
         if (g.Encoding.valid()) g.Encoding.wait();
@@ -221,9 +221,9 @@ bool BakeNow(GraffitiDesigner& g) {
     const std::shared_ptr<Graffiti::Piece> snap = Graffiti::SnapshotForBake(*g.Piece);
     g.Comp.StartBake(*g.Piece, prog);
     Graffiti::BakeImages img;
-    if (!g.Comp.PollBake(img, /*wait=*/true)) return false;
+    if (!g.Comp.PollBake(img, /*wait=*/true)) { g.Status = "Bake failed: the GPU readback didn't finish"; return false; }
     const Graffiti::BakeFiles files = Graffiti::EncodePngs(img);
-    if (!Graffiti::WriteBake(*snap, files)) return false;
+    if (!Graffiti::WriteBake(*snap, files)) { g.Status = "Bake failed: couldn't write " + snap->DecalPath(); return false; }
     g.BakeDoneAt = Now();
     g.NeedsBuild = true; // the bake rendered without the cascade: show the canvas again
     g.BakedPaths.push_back(snap->DecalPath());
@@ -912,12 +912,16 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
     const bool decalSelected = m_Selected != entt::null && world.Registry.valid(m_Selected) && world.Registry.all_of<DecalComponent>(m_Selected);
     ImGui::BeginDisabled(!decalSelected);
     if (EditorUIPrimitives::SecondaryButton(ICON_FA_CHECK "  Apply to selected decal")) {
-        if (!fs::exists(fs::u8path(g.Piece->DecalPath()))) BakeNow(g);
-        PushUndo(world, "Apply Graffiti Piece");
-        auto& dc = world.Registry.get<DecalComponent>(m_Selected);
-        dc.AssetPath = g.Piece->DecalPath();
-        dc.Size = glm::vec3(g.Piece->Metres, dc.Size.z);
-        g.Target = m_Selected;
+        // A piece never baked has no .decal yet: bake it first, and leave the decal alone if that fails.
+        if (fs::exists(fs::u8path(g.Piece->DecalPath())) || BakeNow(g)) {
+            PushUndo(world, "Apply Graffiti Piece");
+            auto& dc = world.Registry.get<DecalComponent>(m_Selected);
+            dc.AssetPath = g.Piece->DecalPath();
+            dc.Size = glm::vec3(g.Piece->Metres, dc.Size.z);
+            g.Target = m_Selected;
+        } else {
+            EditorSound::Play(EditorSound::Event::Blocked);
+        }
     }
     ImGui::EndDisabled();
     ImGui::SameLine();

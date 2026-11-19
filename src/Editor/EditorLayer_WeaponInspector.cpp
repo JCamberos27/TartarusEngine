@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -1048,7 +1049,7 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     const auto stamp=fs::last_write_time(fs::u8path(path),ec);
     if(cache.Path!=path || cache.Stamp!=stamp) {
         if(cache.Path!=path) cache={};
-        cache.Path=path; cache.Stamp=stamp;
+        cache.Path=path; cache.Stamp=stamp; cache.Error.clear(); cache.Saved.clear();
         if(CameraShakeAsset::LoadFile(path,cache.Asset,&cache.Error)) cache.Saved=cache.Asset.ToJsonString();
     }
     ImGui::TextUnformatted(fs::u8path(path).filename().u8string().c_str());
@@ -1151,6 +1152,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     if (cache.Path != path || cache.Stamp != stamp) {
         cache.Path = path;
         cache.Stamp = stamp;
+        cache.ProfileStamp = {}; // the reload drops the overlaid profile: overlay it again
         cache.Error.clear();
         if (!FirstPersonAnimationSet::LoadFile(path, cache.Set, &cache.Error)) {
             // Keep a broken profile reference editable so it can be cleared or replaced.
@@ -1178,9 +1180,11 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                 s.Procedural.Recoil.BoltCycle = previous.BoltCycle;
                 s.Procedural.Recoil.BoltTravel = previous.BoltTravel;
                 s.Procedural.Recoil.HipProcedural = true;
-                cache.ProfileStamp = profileStamp;
                 cache.Error.clear();
+            } else {
+                cache.Error = "Recoil profile: " + why;
             }
+            cache.ProfileStamp = profileStamp; // a broken profile is read again only when it changes on disk
         }
     }
     const std::string name = fs::u8path(path).stem().u8string();
@@ -1272,13 +1276,20 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     for (const auto& t : K::kKnownTags) ctx.Tags.push_back(t.Name);
     SortUnique(ctx.Tags);
     SortUnique(ctx.StatesAndTags);
+    // Rigs that failed to load, with the write time they failed at: retried only once the file changes.
+    static std::map<std::string, fs::file_time_type> s_FailedRigs;
+    auto failedBefore = [&](const std::string& p) {
+        const auto it = s_FailedRigs.find(p);
+        std::error_code tec;
+        return it != s_FailedRigs.end() && it->second == fs::last_write_time(fs::u8path(p), tec);
+    };
     std::shared_ptr<Model> arms;
     const std::string armsPath = s.ArmsModel.empty() ? std::string() : ProjectPaths::Resolve(s.ArmsModel);
     if (!armsPath.empty() && m_AssetsPtr) {
         const fs::path want = fs::u8path(armsPath).lexically_normal();
         for (const auto& m : m_AssetsPtr->Models())
             if (m && fs::u8path(m->Path()).lexically_normal() == want) { arms = m; break; }
-        ctx.CanLoadArms = !arms && fs::exists(want, ec);
+        ctx.CanLoadArms = !arms && fs::exists(want, ec) && !failedBefore(armsPath);
     }
     if (arms) {
         ctx.Arms = arms.get();
@@ -1290,7 +1301,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         const fs::path want = fs::u8path(weaponPath).lexically_normal();
         for (const auto& m : m_AssetsPtr->Models())
             if (m && fs::u8path(m->Path()).lexically_normal() == want) { weaponModel = m; break; }
-        ctx.CanLoadWeapon = !weaponModel && fs::exists(want, ec);
+        ctx.CanLoadWeapon = !weaponModel && fs::exists(want, ec) && !failedBefore(weaponPath);
     }
     if (weaponModel) {
         ctx.Weapon = weaponModel.get();
@@ -1606,10 +1617,14 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     std::snprintf(summary, sizeof summary, "%s", s.Procedural.IK.Enabled ? "hands on the gun" : "off");
     if (r.Section(ICON_FA_HAND, "IK", summary)) DrawIK(r, s.Procedural.IK, ctx);
 
-    if (ctx.LoadArms && m_AssetsPtr && !m_AssetsPtr->LoadModel(armsPath))
-        Log::Warn("Couldn't load the arms model '" + s.ArmsModel + "' to check bone names.");
-    if (ctx.LoadWeapon && m_AssetsPtr && !m_AssetsPtr->LoadModel(weaponPath))
-        Log::Warn("Couldn't load the weapon model '" + s.WeaponModel + "' to check bone names.");
+    auto loadRig = [&](const std::string& p, const std::string& rel, const char* what) {
+        if (m_AssetsPtr->LoadModel(p)) return;
+        Log::Warn(std::string("Couldn't load the ") + what + " model '" + rel + "' to check bone names.");
+        std::error_code tec;
+        s_FailedRigs[p] = fs::last_write_time(fs::u8path(p), tec);
+    };
+    if (ctx.LoadArms && m_AssetsPtr) loadRig(armsPath, s.ArmsModel, "arms");
+    if (ctx.LoadWeapon && m_AssetsPtr) loadRig(weaponPath, s.WeaponModel, "weapon");
 
     ImGui::Spacing();
     r.Note("Edits save immediately. Numbers apply live in Play; the rigs and controller on the next Play.");

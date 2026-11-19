@@ -152,4 +152,9 @@ struct FAIcon { const char* Name; const char* Glyph; };
 const FAIcon* FAIconTable(std::size_t* count);   // sorted by Name
 const char* FAIconGlyph(const char* name);       // nullptr when unknown (or name null/empty)
 
+// A store whose file didn't parse (a merge conflict, a hand edit) starts from defaults, and its next save
+// would overwrite the file. This copies it to "<path>.bad" first, so nothing is lost; returns that path
+// ("" when the copy failed).
+std::string KeepUnreadable(const std::string& path);
+
 } // namespace Enhancers

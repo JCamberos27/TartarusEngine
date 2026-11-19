@@ -1,3 +1,4 @@
+#include "EnhancerCore.h"
 #include "TabState.h"
 
 #include "AtomicFile.h"
@@ -127,7 +128,7 @@ void TabState::Load() {
         in >> root;
         FromJson(root);
     } catch (const std::exception& e) {
-        Log::Warn(std::string("vTabs: failed to parse '") + Path() + "': " + e.what() + " - starting empty.");
+        Log::Warn(std::string("vTabs: failed to parse '") + Path() + "': " + e.what() + " - starting empty (the file is kept as '" + KeepUnreadable(Path()) + "').");
         Reset();
     }
 }

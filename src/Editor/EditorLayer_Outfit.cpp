@@ -45,7 +45,17 @@ struct OutfitUiState {
     bool Dragging = false;
     int Shading = 0; // ModelPreviewRenderer::Shading
 };
-std::unordered_map<entt::id_type, OutfitUiState> g_OutfitUi;
+std::unordered_map<entt::id_type, OutfitUiState> g_OutfitUi; // keyed by the whole entity value (id + version)
+// The .outfit presets under assets/: listed when the presets menu opens, not walked every frame it is open.
+std::vector<std::pair<std::string, std::string>> g_PresetFiles; // (project-relative path, menu label)
+void ScanPresets() {
+    g_PresetFiles.clear();
+    std::error_code ec;
+    for (auto it = std::filesystem::recursive_directory_iterator(ProjectPaths::Resolve("assets"), ec);
+         !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec))
+        if (it->path().extension() == ".outfit")
+            g_PresetFiles.emplace_back(ProjectPaths::Relativize(it->path().string()), ICON_FA_PERSON_DRESS "  " + it->path().stem().string());
+}
 
 // Models the preview has asked for, loading in the background.
 std::map<std::string, AssetLibrary::AsyncHandle> g_PreviewLoads;
@@ -107,6 +117,10 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     auto* outfit = reg.try_get<CharacterOutfitComponent>(root);
     if (!outfit || !m_AssetsPtr) return;
     AssetLibrary& assets = *m_AssetsPtr;
+    // Forget the panels of destroyed characters (an id is reused with a new version, so it can't inherit one).
+    if (g_OutfitUi.size() > 32)
+        for (auto it = g_OutfitUi.begin(); it != g_OutfitUi.end();)
+            it = reg.valid(entt::entity(it->first)) ? std::next(it) : g_OutfitUi.erase(it);
     OutfitUiState& ui = g_OutfitUi[entt::to_integral(root)];
 
     std::string error;
@@ -180,7 +194,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
                         EditorSound::Event::Randomize);
         }
         ImGui::SameLine();
-        if (EditorInternal::ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "Presets and tools")) ImGui::OpenPopup("##outfitMenu");
+        if (EditorInternal::ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "Presets and tools")) { ScanPresets(); ImGui::OpenPopup("##outfitMenu"); }
         if (ImGui::BeginPopup("##outfitMenu")) {
             ImGui::TextDisabled("Presets");
             ImGui::SetNextItemWidth(160.0f);
@@ -199,13 +213,10 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
                 const bool saved = OutfitSystem::SavePreset(world, assets, root, path, &err);
                 EditorSound::Play(saved ? EditorSound::Event::Save : EditorSound::Event::Blocked);
                 ui.Notes = {saved ? "Saved " + path : err};
+                if (saved) ScanPresets(); // the new preset shows in the list below at once
             }
-            std::error_code ec;
-            for (auto it = std::filesystem::recursive_directory_iterator(ProjectPaths::Resolve("assets"), ec);
-                 !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
-                if (it->path().extension() != ".outfit") continue;
-                const std::string rel = ProjectPaths::Relativize(it->path().string());
-                if (ImGui::MenuItem((ICON_FA_PERSON_DRESS "  " + it->path().stem().string()).c_str())) {
+            for (const auto& [rel, label] : g_PresetFiles) {
+                if (ImGui::MenuItem(label.c_str())) {
                     PushUndo(world, "Load Outfit Preset");
                     reportSound(OutfitSystem::LoadPreset(world, assets, root, rel), EditorSound::Event::PresetApply);
                 }

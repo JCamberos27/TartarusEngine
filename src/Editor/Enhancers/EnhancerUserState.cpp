@@ -1,3 +1,4 @@
+#include "EnhancerCore.h"
 #include "EnhancerUserState.h"
 
 #include "AtomicFile.h"
@@ -112,7 +113,7 @@ void EnhancerUserState::Load() {
     try {
         in >> root;
     } catch (const std::exception& e) {
-        Log::Warn(std::string("Editor Enhancers: failed to parse '") + path + "': " + e.what() + " - starting empty.");
+        Log::Warn(std::string("Editor Enhancers: failed to parse '") + path + "': " + e.what() + " - starting empty (the file is kept as '" + KeepUnreadable(path) + "').");
         Reset();
         return;
     }

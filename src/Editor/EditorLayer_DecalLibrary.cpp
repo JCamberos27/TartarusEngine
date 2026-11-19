@@ -1047,8 +1047,11 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
         ed.CascadeKey++;
     }
     static int lastCascade = -1;
-    static bool wasShown = false;
-    if (ed.CascadeKey != lastCascade || !wasShown) {
+    // Not drawn last frame = the panel just (re)opened: the tiles cascade in again.
+    static int lastDrawnFrame = -10;
+    const bool reopened = ImGui::GetFrameCount() - lastDrawnFrame > 1;
+    lastDrawnFrame = ImGui::GetFrameCount();
+    if (ed.CascadeKey != lastCascade || reopened) {
         lastCascade = ed.CascadeKey;
         if (animate && !ed.Visible.empty()) {
             const float total = Glass::StaggerDelay(Glass::DecalTileStaggerCap, Glass::DecalTileStaggerMs, Glass::DecalTileStaggerCap) +
@@ -1056,7 +1059,6 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
             motion.Pulse(kCascadeId, total);
         }
     }
-    wasShown = true;
 
     const float treeW = ImClamp(ImGui::GetContentRegionAvail().x * 0.24f, 130.0f * m_UIScale, 220.0f * m_UIScale);
     ImGui::BeginChild("##decalTree", ImVec2(treeW, 0.0f), ImGuiChildFlags_None);

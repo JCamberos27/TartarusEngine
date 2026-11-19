@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <iterator>
 
 namespace Enhancers {
@@ -303,6 +304,14 @@ const char* FAIconGlyph(const char* name) {
     const FAIcon* e = std::end(kFAIcons);
     const FAIcon* it = std::lower_bound(b, e, name, [](const FAIcon& a, const char* n) { return std::strcmp(a.Name, n) < 0; });
     return (it != e && std::strcmp(it->Name, name) == 0) ? it->Glyph : nullptr;
+}
+
+std::string KeepUnreadable(const std::string& path) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path from = fs::u8path(path), to = fs::u8path(path + ".bad");
+    fs::copy_file(from, to, fs::copy_options::overwrite_existing, ec);
+    return ec ? std::string() : to.u8string();
 }
 
 } // namespace Enhancers
