@@ -131,7 +131,13 @@ bool SpecLevel(const json& spec, const std::string& key, float& level, std::stri
         return true;
     }
     if (p[0] == "impact" && p.size() == 2) {
-        if (p[1] == "flesh") return Num(L, "flesh", level);
+        // Flesh, and gore 2 dB over it, are body hits heard where they land, not surface impacts at the impact distance
+        // (tools/audio/mixspec.py levels them the same way).
+        if (p[1] == "flesh" || p[1] == "gore") {
+            if (!Num(L, "flesh", level)) return false;
+            if (p[1] == "gore") level += 2.0f;
+            return true;
+        }
         if (!Num(L, "impact", level)) return false;
         level += surface(p[1]);
         refName = "impact";
