@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Pants",
   "guid": "11788510ead3c363",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Pants_Cargo_Straight_Bege": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Cargo_Straight/M_Pants_Cargo_Straight_Beige.mat"
   },

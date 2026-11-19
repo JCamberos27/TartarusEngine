@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Old",
   "guid": "d9ab61e97bdb0a0a",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Quantum_Old_Body": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body_Old.mat"
   },

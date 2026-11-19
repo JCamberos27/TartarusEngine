@@ -137,3 +137,39 @@ The outfit system uses the whole pack; `docs/CHARACTER_OUTFITS.md` describes it.
   `Quantum_Arms_FP` leaves 132/346/562 hidden arm vertices out from under the sleeve at 20/35/50 degrees). The
   pre-Phase-2 build fails the same way on the new assets: it comes from the import (Phase 3: check the shirt's
   sleeve weights, or the test's posing with the new `RootNode -> <Mesh> -> root` layout).
+
+## Phase 3 (2026-11-18, second computer)
+
+### The axis turn on RootNode: fixed with `rootNodeInModelSpace`
+
+Phase 0's "world-space poses are identical" held for the bind pose only. The engine's model space is
+`GlobalInverse * node global` with `GlobalInverse = inverse(RootNode)`, while skinned vertices are baked with the mesh
+node's full global frame, RootNode included. The old Unity-era files carry the -90 X turn on the `root` bone, so both
+agree. The Unreal exports carry it on RootNode, so the bones posed in a Z-up frame (`upperarm_l` at z 1.44) and the
+vertices sat in the Y-up one. At bind every skin matrix is the identity and nothing shows. Once a bone turns, its delta
+is applied in the wrong frame: limbs bend in the wrong plane. `OutfitEdgeBandPosed` caught it, because the new shirt's
+sleeve swung backwards while the kept arms swung down. The old shirt passes the same test.
+
+- New import setting `ModelImportSettings::RootNodeInModelSpace` (`.meta` `importer.rootNodeInModelSpace`, editor
+  "Root Node In Model Space"). Model space keeps the root node's transform (`GlobalInverse` = identity), and every bone
+  offset is re-based (`offset * GlobalInverse`). The bind is unchanged, and each bone's delta now turns the vertices in
+  their own frame. Opt-in, so no other asset changes.
+- `import_casual_bundle.py` sets it on every mesh it writes (211). The kept Unity-era files don't need it.
+- Result: `OutfitEdgeBandPosed` passes (0 holes at 20/35/50 degrees). `--unit-tests`: 55212 checks, 0 failures.
+
+### Re-running the import on another computer
+
+- `old_slot_table` keys the remap of an imported meta by the FBX material name, not the slot name. The eye, teeth and
+  brow fallback now tries both (it gave 102 "has no .mat" problems on a re-run).
+- Retirement is case-blind against what the import writes. Two jersey metas were tracked as `T_Woman_Jersey_*` while
+  the import writes `T_woman_jersey_*`; on Windows these are the same file, and the import deleted the texture it had
+  just cooked. Both metas were renamed to the written spelling.
+- `retired_used_paths.txt` merges with the list already there (a re-run only adds; the earlier files still go in Phase 4).
+- The re-import gives byte-identical `.mat`/`.meta`/CSV output apart from line endings.
+
+### Scenes
+
+- The 7 scenes with Quantum `library*` entries lost 211 dead entries (files retired in Phase 1, plus 35 old Unity-era
+  textures that only those lists kept alive). The 35 are retired now: CSV -35 rows, `retired_used_paths.txt` 480 -> 515.
+  The entries were removed line by line, so the rest of each scene is byte-identical.
+- All 60 `Outfits/Quantum/*.outfit` presets resolve (398 paths, 0 missing).

@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/FacialHair",
   "guid": "18d181866af118ac",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Beard": "assets/Characters/Quantum/Materials/FacialHair/Beard/M_Beard.mat"
   },

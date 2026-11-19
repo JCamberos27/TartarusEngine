@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
   "guid": "5ed33408e85cd769",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Cap_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Cap/M_Cap_Beige.mat",
     "MI_F_Haircut_Ponytail": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Ponytail/M_F_Haircut_Ponytail.mat",

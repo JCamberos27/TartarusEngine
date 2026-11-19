@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Female/Body/Parts",
   "guid": "cc4806d2d21e38f5",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_F_Vivian_Arms": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Arms.mat"
   },

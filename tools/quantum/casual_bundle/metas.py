@@ -38,7 +38,8 @@ META_TYPES = {".fbx": "model", ".obj": "model", ".gltf": "model", ".glb": "model
 # Every key ParseModelImporter (src/Editor/AssetLibrary.cpp) reads, for reference and validation of overrides.
 MODEL_IMPORTER_KEYS = ("globalScale", "importNormals", "importAnimations", "importSkeleton", "optimizeGraph", "simplify",
                        "materialImportMode", "upAxis", "pivotOffset", "excludeNodes", "meshNodes", "rootTransform",
-                       "unrotateNodes", "moveNodes", "skinIgnoresMeshNode", "mergeByMaterial", "clipTrims")
+                       "unrotateNodes", "moveNodes", "skinIgnoresMeshNode", "mergeByMaterial", "rootNodeInModelSpace",
+                       "clipTrims")
 
 # Windows caps one command line at 32767 characters; stay well under it when batching paths into one process.
 _MAX_CMDLINE = 30000

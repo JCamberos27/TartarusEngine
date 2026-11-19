@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
   "guid": "68d681bd32eaef7a",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Jeans_Jacket_Collar_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/M_Jeans_Jacket_Black_Fur.mat",
     "MI_Jeans_Jacket_Collar_Black_1": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar/M_Jeans_Jacket_Black_Fur.mat",

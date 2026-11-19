@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Old",
   "guid": "cf280934ecb2c3f8",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_EyeRefractive_Inst": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_DarkBrown.mat",
     "MI_EyeRefractive_Inst_4": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_DarkBrown.mat",

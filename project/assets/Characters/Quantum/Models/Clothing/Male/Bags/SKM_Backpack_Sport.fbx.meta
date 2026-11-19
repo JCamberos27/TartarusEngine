@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Bags",
   "guid": "2ec7645b2bd4d907",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Backpack_Sport_Black": "assets/Characters/Quantum/Materials/Clothing/Bags/Backpack_Sport/M_Backpack_Sport_Black.mat"
   },

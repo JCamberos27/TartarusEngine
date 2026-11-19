@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Pants",
   "guid": "599cbc13ca312f56",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Pants_Classic_Black": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants Classic/M_Pants_Classic_Black.mat"
   },

@@ -188,8 +188,12 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants Classic\T_P
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants Classic\T_Pants_Classic_Burgundy_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants Classic\T_Pants_Classic_Gray(Cubes)_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants Classic\T_Pants_Classic_Gray_BaseColor.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants Classic\T_Pants_Classic_Occlusion.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants Classic\T_Pants_Classic_Roughness.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants Classic\T_Pants_Classic_Unity_Normal.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Beige_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Beige_Lines_BaseColor.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Black_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Black_Lines_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Blue_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Blue_Lines_BaseColor.png
@@ -202,6 +206,9 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Spo
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Lines_Occlusion.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Lines_Roughness.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Lines_Unity_Normal.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Occlusion.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Roughness.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Unity_Normal.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_White_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_White_Lines_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Pants\Pants_Sport\T_Sport_Pants_Yellow_BaseColor.png
@@ -245,6 +252,9 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Sneakers\Sneakers
 Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Sneakers_Sport\T_Sneakers_Sport_Occlusion.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Sneakers_Sport\T_Sneakers_Sport_Roughness.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Sneakers_Sport\T_Sneakers_Sport_Unity_Normal.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Socks\T_Socks_Occlusion.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Socks\T_Socks_Roughness.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Socks\T_Socks_Unity_Normal.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Socks\T_Socks_White_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Shoes\Socks\T_Socks_White_Red_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\F_Jersey\T_Woman_Jersey_Beige_BaseColor.png
@@ -319,6 +329,7 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood\T_Hood
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood\T_Hoodie_Hood_Yellow_Print_Roughness.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood\T_Hoodie_Hood_Yellow_Print_Unity_Normal.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Beige_BaseColor.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Black_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Blue_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Burgundy_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Burgundy_Print_BaseColor.png
@@ -331,6 +342,9 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_H
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Green_Print_Occlusion.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Green_Print_Roughness.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Green_Print_Unity_Normal.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Occlusion.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Roughness.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Unity_Normal.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_White_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Yellow_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Hoodie_Hood_Up\T_Hoodie_Hood_Up_Yellow_Print_BaseColor.png
@@ -400,6 +414,7 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Sweater\T_Sweater_
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Sweater\T_Sweater_White_Roughness.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\Sweater\T_Sweater_White_Unity_Normal.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Beige_BaseColor.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Black_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Black_Print_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Black_Print_Occlusion.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Black_Print_Roughness.png
@@ -412,7 +427,11 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Bu
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Burgundy_Print_Unity_Normal.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Gray_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Green_BaseColor.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Occlusion.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Orange_BaseColor.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Roughness.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_Unity_Normal.png
+Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_White_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_White_Print_BaseColor.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_White_Print_Occlusion.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt\T_TShirt_White_Print_Roughness.png
@@ -440,6 +459,18 @@ Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt_Tucked\T_TS
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt_Tucked\T_TShirt_Tucked_White_Print_Occlusion.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt_Tucked\T_TShirt_Tucked_White_Print_Roughness.png
 Used\project\assets\Characters\Quantum\Textures\Clothing\Tops\TShirt_Tucked\T_TShirt_Tucked_White_Print_Unity_Normal.png
+Used\project\assets\Characters\Quantum\Textures\European\Arms\T_Quantum_Basemesh_Arms_BaseColor.1003.png
+Used\project\assets\Characters\Quantum\Textures\European\Arms\T_Quantum_Basemesh_Arms_Occlusion.1003.png
+Used\project\assets\Characters\Quantum\Textures\European\Arms\T_Quantum_Basemesh_Arms_Roughness.1003.png
+Used\project\assets\Characters\Quantum\Textures\European\Arms\T_Quantum_Basemesh_Arms_Unity_Normal.1003.png
+Used\project\assets\Characters\Quantum\Textures\European\Body\T_Quantum_Basemesh_Body_BaseColor.1002.png
+Used\project\assets\Characters\Quantum\Textures\European\Body\T_Quantum_Basemesh_Body_Occlusion.1002.png
+Used\project\assets\Characters\Quantum\Textures\European\Body\T_Quantum_Basemesh_Body_Roughness.1002.png
+Used\project\assets\Characters\Quantum\Textures\European\Body\T_Quantum_Basemesh_Body_Unity_Normal.1002.png
+Used\project\assets\Characters\Quantum\Textures\European\Head\T_Quantum_Basemesh_Head_BaseColor.1001.png
+Used\project\assets\Characters\Quantum\Textures\European\Head\T_Quantum_Basemesh_Head_Occlusion.1001.png
+Used\project\assets\Characters\Quantum\Textures\European\Head\T_Quantum_Basemesh_Head_Roughness.1001.png
+Used\project\assets\Characters\Quantum\Textures\European\Head\T_Quantum_Basemesh_Head_Unity_Normal.1001.png
 Used\project\assets\Characters\Quantum\Textures\Female\Afro\Arms\T_F_Vivian_Basemesh_Arms_Afro_BaseColor.1003.png
 Used\project\assets\Characters\Quantum\Textures\Female\Afro\Arms\T_F_Vivian_Basemesh_Arms_Afro_Occlusion.1003.png
 Used\project\assets\Characters\Quantum\Textures\Female\Afro\Arms\T_F_Vivian_Basemesh_Arms_Afro_Roughness.1003.png
@@ -480,3 +511,7 @@ Used\project\assets\Characters\Quantum\Textures\Old\Head\T_Quantum_Basemesh_Head
 Used\project\assets\Characters\Quantum\Textures\Old\Head\T_Quantum_Basemesh_Head_old_Occlusion.1001.png
 Used\project\assets\Characters\Quantum\Textures\Old\Head\T_Quantum_Basemesh_Head_old_Roughness.1001.png
 Used\project\assets\Characters\Quantum\Textures\Old\Head\T_Quantum_Basemesh_Head_old_Unity_Normal.1001.png
+Used\project\assets\Characters\Quantum\Textures\Young\Head\T_Quantum_Basemesh_Head_Young_BaseColor.1001.png
+Used\project\assets\Characters\Quantum\Textures\Young\Head\T_Quantum_Basemesh_Head_Young_Occlusion.1001.png
+Used\project\assets\Characters\Quantum\Textures\Young\Head\T_Quantum_Basemesh_Head_Young_Roughness.1001.png
+Used\project\assets\Characters\Quantum\Textures\Young\Head\T_Quantum_Basemesh_Head_Young_Unity_Normal.1001.png

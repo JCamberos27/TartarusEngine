@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
   "guid": "8da0acf3c0ca0981",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Panama_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Panama/M_Panama_Beige.mat"
   },

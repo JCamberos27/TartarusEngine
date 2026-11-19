@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Female/Body/Parts",
   "guid": "0db6be5a0cff3229",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_F_EyeRefractive_Inst": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Green.mat",
     "MI_F_EyeRefractive_Inst_5": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Green.mat",

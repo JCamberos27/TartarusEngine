@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
   "guid": "9ad41f80d9d98823",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Hat_Ushanka_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Hat_Ushanka/M_Hat_Ushanka_Beige.mat",
     "MI_Jacket_Winter_Fur_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Hat_Ushanka/M_Jacket_Winter_Fur_Beige.mat"

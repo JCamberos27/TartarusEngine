@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
   "guid": "bf96102f7b79f2c6",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Shirt_RolledUp_Black_1": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_Classic_RolledUp/M_Shirt_RolledUp_Black.mat"
   },

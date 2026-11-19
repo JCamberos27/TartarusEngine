@@ -2,6 +2,7 @@
   "folder": "assets/Characters/Quantum/Models/Female/Body/Heads",
   "guid": "46f8efe65cd63feb",
   "importer": {
+    "rootNodeInModelSpace": true,
     "simplify": 0.4
   },
   "materialRemap": {

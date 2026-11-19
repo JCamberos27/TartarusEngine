@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hair",
   "guid": "8d52cc04f725f6c4",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "M_F_Scalp": "assets/Characters/Quantum/Materials/Hair/F_Head_Scalp/M_F_Scalp.mat"
   },

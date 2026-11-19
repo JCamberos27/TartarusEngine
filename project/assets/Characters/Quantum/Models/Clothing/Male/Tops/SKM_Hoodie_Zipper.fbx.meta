@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
   "guid": "5896ae6bca048fe1",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Hoodie_Zipper_Black": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Zipper/M_Hoodie_Zipper_Black.mat",
     "MI_Tshirt_Tucked_Bege": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt_Tucked/M_TShirt_Tucked_Beige.mat"

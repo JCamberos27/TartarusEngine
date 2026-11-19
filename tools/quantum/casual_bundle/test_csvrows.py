@@ -87,6 +87,9 @@ class UsedTests(unittest.TestCase):
                                      "Used\\project\\assets\\Characters\\Quantum\\Textures\\T_B.png"])
             body = [l for l in out.read_text(encoding="utf-8").splitlines() if not l.startswith("#")]
             self.assertEqual(body, lines)
+            # A re-run keeps the earlier runs' entries (their files still have to leave the Drive).
+            again = csvrows.write_retired_used_list([f"{Q}/Textures/T_C.png"], out)
+            self.assertEqual(again, lines + ["Used\\project\\assets\\Characters\\Quantum\\Textures\\T_C.png"])
 
     def test_mirror_copies_only_what_differs(self):
         with tempfile.TemporaryDirectory() as d:

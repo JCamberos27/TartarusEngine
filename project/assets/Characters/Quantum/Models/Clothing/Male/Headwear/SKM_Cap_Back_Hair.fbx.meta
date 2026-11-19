@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Headwear",
   "guid": "f423aa85918552f2",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Cap_Blue_Logo": "assets/Characters/Quantum/Materials/Clothing/Headwear/Cap/M_Cap_Blue_Logo.mat",
     "MI_Hair_Long": "assets/Characters/Quantum/Materials/Hair/Hair_Long/M_Hair_Long.mat"

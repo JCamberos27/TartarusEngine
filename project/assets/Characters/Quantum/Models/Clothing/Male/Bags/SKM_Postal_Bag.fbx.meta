@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Bags",
   "guid": "73fc82f3b79204ea",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Postal_Bag_Bege_D": "assets/Characters/Quantum/Materials/Clothing/Bags/Bag_Postal/M_Postal_Bag_Beige.mat"
   },

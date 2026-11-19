@@ -85,6 +85,7 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
                                        {n["by"][0].get<float>(), n["by"][1].get<float>(), n["by"][2].get<float>()}});
     s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
     s.MergeByMaterial = imp.value("mergeByMaterial", false);
+    s.RootNodeInModelSpace = imp.value("rootNodeInModelSpace", false);
     s.ClipTrims.clear();
     if (imp.contains("clipTrims") && imp["clipTrims"].is_array())
         for (const auto& t : imp["clipTrims"])
@@ -834,6 +835,7 @@ json ModelImporterJson(const ModelImportSettings& settings) {
     }
     if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
     if (settings.MergeByMaterial) imp["mergeByMaterial"] = true;
+    if (settings.RootNodeInModelSpace) imp["rootNodeInModelSpace"] = true;
     if (!settings.ClipTrims.empty()) {
         json trims = json::array();
         for (const auto& t : settings.ClipTrims)

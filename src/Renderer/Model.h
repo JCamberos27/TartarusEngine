@@ -92,6 +92,11 @@ struct ModelImportSettings {
     // they belong while the mesh node still carries an offset (the modular Quantum arms and hands: they sat
     // 19 cm ahead of the wrists). Off = the node's frame is baked in, as Assimp hands it over.
     bool SkinIgnoresMeshNode = false;
+    // Model space keeps the root node's transform (GlobalInverse = identity, bone offsets re-based to match): for
+    // exports whose axis turn sits on the root node rather than the skeleton's top bone (Unreal's FBX export:
+    // RootNode -> <mesh> -> root). Off, bones pose in the root-less frame while the vertices were baked with it, so
+    // every animated bone turns its vertices in the wrong frame (the Quantum Casual Bundle's sleeves swung sideways).
+    bool RootNodeInModelSpace = false;
     MaterialMode MaterialImportMode = MaterialMode::ImportEmbedded;
     // Clips cut to a range of the source (seconds): the take is longer than the motion you want, or holds
     // two motions. Only the range plays, and it is the clip's length everywhere (looping, blend trees,

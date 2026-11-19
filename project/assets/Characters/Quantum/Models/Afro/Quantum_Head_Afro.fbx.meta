@@ -2,6 +2,7 @@
   "folder": "assets/Characters/Quantum/Models/Afro",
   "guid": "b14265d9180f94e3",
   "importer": {
+    "rootNodeInModelSpace": true,
     "simplify": 0.4
   },
   "materialRemap": {

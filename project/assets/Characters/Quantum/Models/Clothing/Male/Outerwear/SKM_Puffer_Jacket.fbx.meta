@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
   "guid": "fda610663454cf17",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Puffer_Jacket_Black_Clear": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Puffer_Jacket/M_Puffer_Jacket_Black_Clear.mat"
   },

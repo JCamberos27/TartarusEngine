@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Accessories",
   "guid": "9d2521f87d59fdda",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_F_Bracelet": "assets/Characters/Quantum/Materials/Clothing/Accessories/F_Bracelet/M_Bracelet.mat"
   },

@@ -149,8 +149,12 @@ def used_paths(paths) -> list[str]:
 
 def write_retired_used_list(paths, out: Path = RETIRED_USED_LIST) -> list[str]:
     """Writes the Used-side paths of retired payloads, one per line, for the owner-approved Phase 4 clean-up
-    (move each to Drive trash). Never touches the Drive itself. Returns the lines written."""
+    (move each to Drive trash). Never touches the Drive itself. Merges with the list already there: a re-run
+    retires only what is newly unreferenced, and the earlier runs' files still have to go. Returns the lines written."""
     lines = used_paths(paths)
+    if out.is_file():
+        with open(out, encoding="utf-8") as f:
+            lines = sorted(set(lines) | {s.rstrip("\n") for s in f if s.strip() and not s.startswith("#")})
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write("# Quantum swap: Drive \"Used\" files to move to Drive trash in Phase 4 (relative to \"Tartarus Assets\").\n")

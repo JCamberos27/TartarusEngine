@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Afro",
   "guid": "202e133369b07466",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Quantum_Body_Afro": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body_Afro.mat"
   },

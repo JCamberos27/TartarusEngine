@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Shoes",
   "guid": "16fd4119c4409da2",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Sneakers_Fabric": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_Sneakers_Fabric.mat"
   },

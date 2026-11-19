@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear",
   "guid": "193ce57779abf666",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Vest_Hunter_Black_D": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Vest_Hunter/M_Vest_Hunter_Black.mat"
   },

@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
   "guid": "14626e7a8c8b4ff7",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Hoodie_Hood_Bege": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood/M_Hoodie_Hood_Beige.mat",
     "MI_Leather_Jacket_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Leather/M_Leather_Jacket_Black.mat"

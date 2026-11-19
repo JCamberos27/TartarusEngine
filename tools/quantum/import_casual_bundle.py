@@ -213,7 +213,10 @@ class Importer:
                 target = mat.repo_path if mat else ""
                 if not target:                                  # eye/teeth/brows: the engine's own materials
                     old = {slot_norm(k): v for k, v in self.old_remaps.get(r.repo_path, {}).items()}
+                    # Pre-swap metas key the remap by slot name; metas this importer wrote key it by the FBX's
+                    # material name, so a re-run finds the kept target under fbx_name.
                     target = (self.old_remaps.get(r.repo_path, {}).get(slot) or old.get(slot_norm(slot))
+                              or self.old_remaps.get(r.repo_path, {}).get(fbx_name)
                               or self.slot_fallback.get(slot) or self.slot_fallback.get(slot_norm(slot), ""))
                 if not target:
                     unresolved.append(f"slot {slot} (material {mi or 'none'})")
@@ -244,8 +247,11 @@ class Importer:
         for ue, plan in self.plans.items():
             targets = {t.repo_path for t in plan.textures} | ({plan.albedo_path} if plan.albedo_path else set())
             rewrites[self.mat_row[ue].repo_path] = targets
+        # Case-blind: on Windows a file tracked as T_Woman_Jersey_* IS the T_woman_jersey_* the import writes, and
+        # deleting the "old" spelling deletes the new file.
+        written_ci = {p.casefold() for p in self.will_exist}
         self.retired = [p for p in refs.retire_candidates(index, self.keep, self.will_exist, rewrites)
-                        if p.startswith(QUANTUM + "/") and not p.endswith(".meta")]
+                        if p.startswith(QUANTUM + "/") and not p.endswith(".meta") and p.casefold() not in written_ci]
         # References read from files the import rewrites (a model's .meta, a .mat) are replaced, not left dangling.
         rewritten = {"project/" + p for p in rewrites} | {"project/" + p + ".meta" for p in rewrites}
         self.dangling = [d for d in refs.dangling(index, self.will_exist, self.retired)
@@ -282,7 +288,10 @@ class Importer:
             else:
                 n["mesh unchanged"] += 1
             defaults = {"simplify": 0.4} if "_head" in dst.stem.lower() and "/Clothing/" not in r.repo_path else None
-            metas.write_model_meta(r.repo_path, self.remaps.get(r.repo_path, {}), importer_defaults=defaults)
+            # Every mesh here is an Unreal export: its axis turn sits on RootNode, so the bones must pose in the
+            # frame the vertices were baked in (ModelImportSettings::RootNodeInModelSpace).
+            metas.write_model_meta(r.repo_path, self.remaps.get(r.repo_path, {}), importer_defaults=defaults,
+                                   importer_overrides={"rootNodeInModelSpace": True})
         for p in self.retired:
             for f in (common.repo_abs(p), common.meta_path(common.repo_abs(p))):
                 if f.exists():

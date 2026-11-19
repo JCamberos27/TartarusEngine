@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
   "guid": "0417c0c4fbe659b6",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_F_Haircut_Half_Up": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Half_Up/M_F_Haircut_Half_Up.mat"
   },

@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
   "guid": "11b1d585e4b54147",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "Fbx Default Material": "assets/Characters/Quantum/Materials/Clothing/Headwear/Cap/M_Cap_Beige.mat",
     "M_F_Scalp": "assets/Characters/Quantum/Materials/Hair/F_Head_Scalp/M_F_Scalp.mat"

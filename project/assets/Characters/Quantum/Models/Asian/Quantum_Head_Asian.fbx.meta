@@ -2,6 +2,7 @@
   "folder": "assets/Characters/Quantum/Models/Asian",
   "guid": "0e33a2582b3e8df5",
   "importer": {
+    "rootNodeInModelSpace": true,
     "simplify": 0.4
   },
   "materialRemap": {

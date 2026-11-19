@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Shoes",
   "guid": "5537e93e5d6bc618",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Socks": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat"
   },

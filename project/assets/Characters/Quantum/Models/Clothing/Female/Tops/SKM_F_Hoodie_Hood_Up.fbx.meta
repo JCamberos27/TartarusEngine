@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Tops",
   "guid": "f36c805a2e17dbe1",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Hoodie_HoodUp_Black": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
   },

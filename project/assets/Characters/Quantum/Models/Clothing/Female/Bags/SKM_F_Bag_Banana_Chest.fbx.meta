@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Bags",
   "guid": "f1c2bf8f8a54810d",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Bag_Banana_Black": "assets/Characters/Quantum/Materials/Clothing/Bags/Bag_Banana/M_Bag_Banana_Black.mat"
   },

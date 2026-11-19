@@ -195,6 +195,9 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     Row("Skin Ignores Mesh Node", "For an export whose skinned mesh shows up offset from its skeleton: the skin\nalready places the vertices, but the mesh node still carries a transform, applied\non top. On skips that node transform for skinned meshes. Apply to reimport.");
     isDirty |= EditorUIPrimitives::Checkbox("##SkinIgnoresMeshNode", &settings.SkinIgnoresMeshNode);
 
+    Row("Root Node In Model Space", "For an export whose axis turn sits on the root node instead of the skeleton's\ntop bone (Unreal FBX: RootNode -> mesh -> root): bones pose in the same frame as\nthe vertices. Off, animated limbs bend in the wrong plane. Apply to reimport.");
+    isDirty |= EditorUIPrimitives::Checkbox("##RootNodeInModelSpace", &settings.RootNodeInModelSpace);
+
     Row("Merge By Material", "Static meshes that share a material become one mesh, so a kit of many\nparts draws once per material instead of once per part. Leave off\nif you need the parts' own nodes. Apply to reimport.");
     isDirty |= EditorUIPrimitives::Checkbox("##MergeByMaterial", &settings.MergeByMaterial);
 

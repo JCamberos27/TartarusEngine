@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear",
   "guid": "e3dc75225781f594",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_F_Tshirt_Tucked_Gray": "assets/Characters/Quantum/Materials/Clothing/Tops/F_Tshirt_Tucked/M_F_Tshirt_Tucked_Gray.mat",
     "MI_Jeans_Vest_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Vest_Jeans/Jeanse_Vest/M_Jeans_Vest_Black.mat"

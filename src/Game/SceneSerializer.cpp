@@ -2072,6 +2072,7 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
         }
         if (m.SkinIgnoresMeshNode) mi["skinIgnoresMeshNode"] = true;
         if (m.MergeByMaterial) mi["mergeByMaterial"] = true;
+        if (m.RootNodeInModelSpace) mi["rootNodeInModelSpace"] = true;
         if (!m.ClipTrims.empty()) {
             json trims = json::array();
             for (const auto& t : m.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});
@@ -2160,6 +2161,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 sm.SourceUpAxis = Model::ParseUpAxis(m.value("upAxis", std::string("Y")));
                 sm.SkinIgnoresMeshNode = m.value("skinIgnoresMeshNode", false);
                 sm.MergeByMaterial = m.value("mergeByMaterial", false);
+                sm.RootNodeInModelSpace = m.value("rootNodeInModelSpace", false);
                 if (m.contains("pivotOffset") && m["pivotOffset"].is_array() && m["pivotOffset"].size() == 3)
                     sm.PivotOffset = {m["pivotOffset"][0].get<float>(), m["pivotOffset"][1].get<float>(), m["pivotOffset"][2].get<float>()};
                 if (m.contains("excludeNodes") && m["excludeNodes"].is_array())

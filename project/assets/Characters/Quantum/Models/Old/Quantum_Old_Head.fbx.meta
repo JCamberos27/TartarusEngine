@@ -2,6 +2,7 @@
   "folder": "assets/Characters/Quantum/Models/Old",
   "guid": "58807d91fafa1437",
   "importer": {
+    "rootNodeInModelSpace": true,
     "simplify": 0.4
   },
   "materialRemap": {

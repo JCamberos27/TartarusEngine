@@ -5719,34 +5719,38 @@ void TestOutfitEdgeBandPosed() {
     }
     // The model's geometry with its upper arms turned down by `deg` (0 = the bind pose).
     auto posed = [](const char* path, float deg, OutfitCoverage::Mesh& out) {
-        auto model = Model::ImportDeferred(ProjectPaths::Resolve(path), ModelImportSettings{});
+        ModelImportSettings settings; // the .meta's frame setting, as the game imports it (the shirt is an Unreal export)
+        if (std::ifstream f(ProjectPaths::Resolve(std::string(path) + ".meta")); f) {
+            const json meta = json::parse(f, nullptr, false);
+            if (meta.is_object() && meta.contains("importer") && meta["importer"].is_object())
+                settings.RootNodeInModelSpace = meta["importer"].value("rootNodeInModelSpace", false);
+        }
+        auto model = Model::ImportDeferred(ProjectPaths::Resolve(path), settings);
         if (!model) return false;
         out = {};
         model->CollisionGeometry(out.Positions, out.Indices);
-        std::vector<glm::mat4> boneM(512, glm::mat4(1.0f));
+        // Posed the way the renderer poses it (local pose -> final bone matrices), so a file whose skeleton sits
+        // under an extra node (the UE exports: RootNode -> <Mesh> -> root, the axis turn on RootNode) poses right.
+        std::vector<LocalTRS> pose;
+        model->BindLocalPose(pose);
         for (const char* side : {"_l", "_r"}) {
             const int ua = model->NodeIndex(std::string("upperarm") + side), la = model->NodeIndex(std::string("lowerarm") + side);
             if (ua < 0 || la < 0) return false;
-            const glm::vec3 s(model->SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, ua)[3]);
-            const glm::vec3 e(model->SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, la)[3]);
+            const glm::mat4 was = model->PoseNodeModelSpace(pose, ua);
+            const glm::vec3 s(was[3]), e(model->PoseNodeModelSpace(pose, la)[3]);
             const glm::vec3 axis = glm::normalize(glm::cross(e - s, glm::vec3(0.0f, -1.0f, 0.0f)));
-            const glm::mat4 r = glm::translate(glm::mat4(1.0f), s) * glm::rotate(glm::mat4(1.0f), glm::radians(deg), axis) *
-                                glm::translate(glm::mat4(1.0f), -s);
-            std::vector<char> under((size_t)model->NodeCount(), 0);
-            for (int i = 0; i < model->NodeCount(); ++i) { // parents come before their children
-                const int p = model->NodeParent(i);
-                under[(size_t)i] = i == ua || (p >= 0 && under[(size_t)p]);
-                const int id = under[(size_t)i] ? model->BoneId(model->NodeName(i)) : -1;
-                if (id >= 0 && id < 512) boneM[(size_t)id] = r;
-            }
+            model->SetPoseNodeModelSpace(pose, ua, glm::translate(glm::mat4(1.0f), s) *
+                                                       glm::rotate(glm::mat4(1.0f), glm::radians(deg), axis) *
+                                                       glm::translate(glm::mat4(1.0f), -s) * was);
         }
+        model->ApplyLocalPose(pose);
         size_t k = 0;
         for (int mi = 0; mi < model->MeshCount(); ++mi)
             for (const auto& v : model->MeshSkinVertices(mi)) {
                 glm::mat4 m(0.0f);
                 float tw = 0.0f;
                 for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
-                    if (v.BoneIDs[i] >= 0 && v.BoneIDs[i] < 512) { m += boneM[(size_t)v.BoneIDs[i]] * v.Weights[i]; tw += v.Weights[i]; }
+                    if (v.BoneIDs[i] >= 0) { m += model->FinalBoneMatrix(v.BoneIDs[i]) * v.Weights[i]; tw += v.Weights[i]; }
                 if (k < out.Positions.size() && tw > 1e-4f) out.Positions[k] = glm::vec3(m * glm::vec4(out.Positions[k], 1.0f));
                 ++k;
             }

@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
   "guid": "356b59bf05c9fba0",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_F_Haircut_Pixie_Cut_Black": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Pixie_Cut/M_F_Haircut_Pixie_Cut_Black.mat"
   },

@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
   "guid": "1cd89e9ceb820a56",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Hat_Classic": "assets/Characters/Quantum/Materials/Clothing/Headwear/Hat_Classic/M_Hat_Classic.mat"
   },

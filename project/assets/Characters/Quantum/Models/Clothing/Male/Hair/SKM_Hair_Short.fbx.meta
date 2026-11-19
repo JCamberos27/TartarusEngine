@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hair",
   "guid": "0429f7ced2677552",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Hair_Short": "assets/Characters/Quantum/Materials/Hair/Hair_Short/M_Hair_Short.mat"
   },

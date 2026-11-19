@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Accessories",
   "guid": "8777df48920337b3",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Watches_Military_Black": "assets/Characters/Quantum/Materials/Clothing/Accessories/Watches_Military/M_Watches_Military_Black.mat"
   },

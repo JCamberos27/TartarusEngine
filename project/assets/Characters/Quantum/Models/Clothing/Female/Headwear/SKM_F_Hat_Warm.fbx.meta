@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
   "guid": "5ffa0c9204307fa1",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Warm_Hat_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Warm_Hat/M_Warm_Hat_Beige.mat"
   },

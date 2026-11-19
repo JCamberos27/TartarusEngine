@@ -72,6 +72,7 @@ int ModelReport(const std::vector<std::string>& inputs) {
                 s.ImportSkeleton = imp.value("importSkeleton", true);
                 s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
                 s.MergeByMaterial = imp.value("mergeByMaterial", false);
+                s.RootNodeInModelSpace = imp.value("rootNodeInModelSpace", false);
                 s.SimplifyRatio = std::clamp(imp.value("simplify", 1.0f), 0.01f, 1.0f);
                 s.SourceUpAxis = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
                 if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)

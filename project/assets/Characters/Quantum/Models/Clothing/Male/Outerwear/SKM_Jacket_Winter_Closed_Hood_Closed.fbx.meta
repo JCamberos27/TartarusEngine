@@ -1,6 +1,9 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
   "guid": "e3c88af05f94984b",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
     "MI_Jacket_Winter_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Winter_Closed_Hood_Closed/M_Jacket_Winter_Black.mat",
     "MI_Jacket_Winter_Fur": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Winter_Closed_Hood_Closed/M_Jacket_Winter_Fur.mat"
