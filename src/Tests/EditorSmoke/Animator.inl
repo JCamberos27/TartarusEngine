@@ -31,10 +31,6 @@ const char* kSoldierRel = "assets/Characters/Spider/Spider.controller"; // a rea
 const char* kScratchRel = "editor-smoke-scratch-animator/Smoke.controller";
 std::string ScratchDir() { return ProjectPaths::Resolve("editor-smoke-scratch-animator"); }
 
-std::string ReadBytes(const std::string& path) {
-    std::ifstream f(fs::u8path(path), std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-}
 // The controller as saved on disk.
 AnimatorController OnDisk(const std::string& rel) {
     AnimatorController c;
@@ -210,7 +206,7 @@ void RegisterAnimatorTests() {
         Add("animator: Spider.controller opens, frames, selects, shows its tabs; the file is untouched", Cat({
             {FreshScene(), Wait(2),
              Do("note the file", [original](Ctx&) {
-                 *original = ReadBytes(ProjectPaths::Resolve(kSoldierRel));
+                 *original = ReadFileText(ProjectPaths::Resolve(kSoldierRel));
                  if (original->empty()) Fail(std::string("can't read ") + kSoldierRel);
              }),
              Do("open it in the Animator", [](Ctx& c) { AA::Open(c.E, kSoldierRel); }),
@@ -240,7 +236,7 @@ void RegisterAnimatorTests() {
              Shot("layers", {kAnimator}),
              Key(ImGuiKey_Escape), Wait(2),
              Expect("the file is byte-for-byte unchanged", [original](Ctx&) {
-                 const std::string now = ReadBytes(ProjectPaths::Resolve(kSoldierRel));
+                 const std::string now = ReadFileText(ProjectPaths::Resolve(kSoldierRel));
                  if (now == *original) return std::string();
                  std::ofstream(fs::u8path(ProjectPaths::Resolve(kSoldierRel)), std::ios::binary) << *original; // put it back
                  return std::string("the Animator rewrote Spider.controller (restored)");

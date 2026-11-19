@@ -308,10 +308,6 @@ Step ExpectLogged(std::string fragment) {
     }, 120);
 }
 bool FileExists(const std::string& path) { std::error_code ec; return fs::exists(fs::u8path(path), ec); }
-std::string ReadAll(const std::string& path) {
-    std::ifstream f(fs::u8path(path), std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-}
 
 } // namespace smoke_assets
 
@@ -713,16 +709,16 @@ void RegisterAssetsTests() {
              Until("its inspector", [](Ctx&) { return Find(ByExact("##f", kInspector)) != nullptr; }, 60),
              Shot("material-inspector", {kInspector}),
              InspReveal(ByExact("##f", kInspector)),
-             Do("keep the file as it is before the edit", [before](Ctx&) { *before = ReadAll(g_Text); }),
+             Do("keep the file as it is before the edit", [before](Ctx&) { *before = ReadFileText(g_Text); }),
              Drag(ByExact("##f", kInspector), [](Ctx&, ImVec2& out) {
                  const UiItem* it = Find(ByExact("##f", kInspector));
                  if (!it) return false;
                  out = ImVec2(it->Rect.Min.x + it->Rect.GetWidth() * 0.85f, it->Rect.GetCenter().y);
                  return true;
              }), Wait(6),
-             Until("the edit is saved to the .mat", [before](Ctx&) { return ReadAll(g_Text) != *before; }, 60),
+             Until("the edit is saved to the .mat", [before](Ctx&) { return ReadFileText(g_Text) != *before; }, 60),
              Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(6),
-             Until("undo puts the file back", [before](Ctx&) { return ReadAll(g_Text) == *before; }, 60),
+             Until("undo puts the file back", [before](Ctx&) { return ReadFileText(g_Text) == *before; }, 60),
              Do("deselect", [](Ctx& c) { X::Deselect(c.E); }), Wait(2)},
         }));
     }

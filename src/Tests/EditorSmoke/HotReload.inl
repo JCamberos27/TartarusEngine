@@ -43,11 +43,6 @@ constexpr const char* kEditorReloaded = "Editor hot reload: TartarusEditor modul
 constexpr const char* kGameReloaded = "Hot reload: TartarusGame module reloaded.";
 constexpr const char* kRebuildItem = "Rebuild Game & Editor Modules";
 
-int LogCount(const std::string& fragment) {
-    int n = 0;
-    for (const LogEntry& e : Log::Entries()) if (Contains(e.Message, fragment)) n += e.Count;
-    return n;
-}
 Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
     auto start = std::make_shared<double>(-1.0);
     return {name, [name, pred, seconds, start](Ctx& c) {
