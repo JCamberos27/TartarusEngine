@@ -16,7 +16,8 @@ public:
     int Run();
 
 private:
-    // The session proper: the window and engine up, the frame loop, shutdown. Returns the exit code.
+    // The session proper (AppSession in Application.cpp): the window and engine up, the frame loop, shutdown, with the
+    // fatal-error reporting around it. Returns the exit code.
     int RunSession();
 
     const LaunchOptions& m_Opt;
