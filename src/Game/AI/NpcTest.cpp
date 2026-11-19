@@ -24,10 +24,45 @@
 #include <iostream>
 
 
+namespace {
+// Each scenario's fixed traits (its name is what --npc-test takes). One not listed runs with the defaults.
+struct ScenarioTraits {
+    const char* Name;
+    float Seconds;     // its run length (0: the default, or worked out by the scenario - StopStepsSeconds and the like)
+    bool EveryFrame;   // NPC_TEST_RECORD takes every frame (else every other): the muzzle flame, the matcher's poses
+    bool WithoutSquad; // After() runs even in a scene with no dummies
+    bool CleanViews;   // no collider / physics-debug overlays in the shots
+};
+constexpr ScenarioTraits kScenarios[] = {
+    {"deaths", 70.0f, false, false, false},  {"feet", 10.0f, false, false, false},     {"stopsteps", 0.0f, false, true, false},
+    {"npcloco", 0.0f, false, false, false},  {"npcperf", 0.0f, false, false, false},   {"labloco", 0.0f, true, false, false},
+    {"testbed", 0.0f, true, false, false},   {"mmplayer", 0.0f, false, false, false},  {"mmstress", 0.0f, false, false, false},
+    {"mmview", 0.0f, true, true, true},      {"mmdb", 0.0f, true, true, true},         {"flame", 14.0f, true, false, false},
+    {"revolver", 116.0f, false, true, true}, {"blood", 44.0f, false, false, true},     {"decals", 52.0f, false, true, true},
+    {"doors", 300.0f, false, true, true},    {"roam", 420.0f, false, true, true},      {"ragdoll", 240.0f, false, false, true},
+};
+const ScenarioTraits& TraitsOf(const std::string& name) {
+    static constexpr ScenarioTraits kNone{"", 0.0f, false, false, false};
+    for (const ScenarioTraits& t : kScenarios)
+        if (name == t.Name) return t;
+    return kNone;
+}
+} // namespace
+
+int NpcTest::RecordStep() const { return TraitsOf(m_Scenario).EveryFrame ? 1 : 2; }
+bool NpcTest::RunsWithoutSquad() const { return TraitsOf(m_Scenario).WithoutSquad; }
+bool NpcTest::WantsCleanViews() const { return TraitsOf(m_Scenario).CleanViews; }
+
+void NpcTest::LookAt(const glm::vec3& target) {
+    const glm::vec3 d = glm::normalize(target - m_CamPos);
+    m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+    m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+    m_HaveCam = true;
+}
+
 NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "labloco" : scenario) {
     MmPlayerDebug::Wanted() = true; // the player's motion matching snapshot (read by the mm scenarios)
-    if (m_Scenario == "deaths") m_Duration = 70.0f;
-    if (m_Scenario == "feet") m_Duration = 10.0f;
+    if (const float s = TraitsOf(m_Scenario).Seconds; s > 0.0f) m_Duration = s;
     if (m_Scenario == "stopsteps") m_Duration = StopStepsSeconds();
     if (m_Scenario == "npcloco") m_Duration = NpcLocoSeconds();
     if (m_Scenario == "npcperf") m_Duration = NpcPerfSeconds();
@@ -43,13 +78,6 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
     }
     if (m_Scenario == "mmview") m_Duration = MmViewSeconds();
     if (m_Scenario == "mmdb") m_Duration = MmDbSeconds();
-    if (m_Scenario == "flame") m_Duration = 14.0f;
-    if (m_Scenario == "revolver") m_Duration = 116.0f;
-    if (m_Scenario == "blood") m_Duration = 44.0f;
-    if (m_Scenario == "decals") m_Duration = 52.0f;
-    if (m_Scenario == "doors") m_Duration = 300.0f; // (done once the route is walked)
-    if (m_Scenario == "roam") m_Duration = 420.0f;  // (done once the route is walked)
-    if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (Env::IsSet(Env::Var::NpcTestSeconds)) m_Duration = std::max(5.0f, Env::Float(Env::Var::NpcTestSeconds, 0.0f));
     if (Env::IsSet(Env::Var::NpcTestRecord)) m_RecordDir = Env::Str(Env::Var::NpcTestRecord);
     m_TraceDir = Env::IsSet(Env::Var::NpcTestTrace) ? Env::Str(Env::Var::NpcTestTrace) : m_RecordDir;
@@ -246,10 +274,7 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         const glm::vec3 eye = player.Cam.Position, front = player.Cam.Front();
         const glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
         m_CamPos = eye + right * 0.9f + front * 0.5f + glm::vec3(0.0f, 0.1f, 0.0f);
-        const glm::vec3 d = glm::normalize(eye + front * 0.7f - glm::vec3(0.0f, 0.15f, 0.0f) - m_CamPos);
-        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-        m_HaveCam = true;
+        LookAt(eye + front * 0.7f - glm::vec3(0.0f, 0.15f, 0.0f));
         if (now >= m_Duration && !m_Done) {
             m_Done = true;
             Check(m_PlayerShots > 0, "the player fired (" + std::to_string(m_PlayerShots) + " rounds)");
@@ -337,10 +362,7 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
                 m_DCamFor = t->Name;
                 m_CamPos = pelvis + side * 3.2f + fwd * 1.6f + glm::vec3(0.0f, 0.6f, 0.0f);
             }
-            const glm::vec3 d = glm::normalize(pelvis - glm::vec3(0.0f, 0.2f, 0.0f) - m_CamPos);
-            m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-            m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-            m_HaveCam = true;
+            LookAt(pelvis - glm::vec3(0.0f, 0.2f, 0.0f));
         }
     }
     switch (m_DStep) {
@@ -582,10 +604,7 @@ void NpcTest::Feet(NpcDirector& npcs, float now) {
         const float yaw = n->Body.Yaw() + glm::radians(-90.0f);
         const glm::vec3 hip = n->Feet + glm::vec3(0.0f, 0.6f, 0.0f);
         m_CamPos = hip + glm::vec3(std::sin(yaw), 0.15f, std::cos(yaw)) * 2.4f;
-        const glm::vec3 d = glm::normalize(hip - m_CamPos);
-        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-        m_HaveCam = true;
+        LookAt(hip);
     }
     if (now >= 9.0f && !m_Done) {
         m_Done = true;
@@ -624,10 +643,7 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
         m_BCamSet = true;
         // Square to the spray's line (it leaves along -Z toward the wall), a little in front and above.
         m_CamPos = chest + glm::vec3(-2.6f, 0.4f, 0.1f);
-        const glm::vec3 d = glm::normalize(chest + glm::vec3(0.0f, -0.45f, -0.8f) - m_CamPos);
-        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-        m_HaveCam = true;
+        LookAt(chest + glm::vec3(0.0f, -0.45f, -0.8f));
     };
     switch (m_BStep) {
     case 0: { // a line of dummies with hitboxes, sorted west to east
@@ -712,20 +728,14 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
             if (const Npc* w = find(m_BLine[0])) {
                 const glm::vec3 chest = w->Feet + glm::vec3(0.0f, 1.25f, 0.0f);
                 m_CamPos = chest + glm::vec3(0.35f, 0.15f, 1.15f);
-                const glm::vec3 d = glm::normalize(chest - glm::vec3(0.0f, 0.1f, 0.0f) - m_CamPos);
-                m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-                m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-                m_HaveCam = true;
+                LookAt(chest - glm::vec3(0.0f, 0.1f, 0.0f));
                 if (!m_BCloseUp && now - m_BAt > 4.0f) { m_Shot = "blood_wounded"; m_BCloseUp = true; }
             }
             break;
         }
         if (now - m_BAt < 16.0f) {
             m_CamPos = glm::vec3(-2.5f, 3.2f, 0.5f);
-            const glm::vec3 d = glm::normalize(glm::vec3(0.5f, 0.0f, -5.0f) - m_CamPos);
-            m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-            m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-            m_HaveCam = true;
+            LookAt(glm::vec3(0.5f, 0.0f, -5.0f));
             if (!m_BOverview && now - m_BAt > 15.0f) { m_Shot = "blood_overview"; m_BOverview = true; }
             break;
         }
@@ -753,10 +763,7 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
         if (!found) { ++m_BSurface; break; }
         // Square on, from the room side (+X), a little above.
         m_CamPos = centre + glm::vec3(1.6f, 0.35f, 0.25f);
-        const glm::vec3 look = glm::normalize(centre - m_CamPos);
-        m_CamYaw = glm::degrees(std::atan2(look.z, look.x));
-        m_CamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
-        m_HaveCam = true;
+        LookAt(centre);
         const float t = now - m_BAt;
         if (!m_BFired && t > 0.4f) {
             m_BImpactsBefore = BloodStats->Impacts;
@@ -903,10 +910,7 @@ void NpcTest::Ragdoll(World& world, NpcDirector& npcs, const Player& player) {
                 for (int k = 0; k < NpcRagdoll::kRagParts; ++k) lowest = std::min(lowest, n->Ragdoll->PartPosition(k).y);
             m_CamPos.y = lowest + 0.15f;
         }
-        const glm::vec3 d = glm::normalize(c - m_CamPos);
-        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-        m_HaveCam = true;
+        LookAt(c);
         if (sub == kFramesPerView - 1) {
             char name[128];
             const bool rest = m_RMoment >= kRagMomentCount;

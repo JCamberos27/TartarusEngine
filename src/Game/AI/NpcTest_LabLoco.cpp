@@ -136,10 +136,7 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
     const glm::vec3 mid = feet + glm::vec3(1.5f, 0.0f, 0.0f);
     const glm::vec3 want(mid.x - 2.8f, feet.y + 1.3f, mid.z + 2.8f);
     m_CamPos = m_HaveCam ? m_CamPos + (want - m_CamPos) * std::min(1.0f, dt * 5.0f) : want;
-    const glm::vec3 look = glm::normalize(mid + glm::vec3(0.0f, 0.8f, 0.0f) - m_CamPos);
-    m_CamYaw = glm::degrees(std::atan2(look.z, look.x));
-    m_CamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
-    m_HaveCam = true;
+    LookAt(mid + glm::vec3(0.0f, 0.8f, 0.0f));
 }
 
 void NpcTest::LabLoco(World& world, NpcDirector& npcs, const Player& player, float now) {

@@ -16,6 +16,7 @@
 // alone, no frames - much faster). TESTBED_PARTS=<letters> (e.g. C, AC) runs only those parts: the other parts' legs and
 // checks are skipped, the dummies' (E, F) too unless named.
 #include "NpcTest.h"
+#include "NpcTest_Common.h"
 #include "Core/Env.h"
 #include "BodyDebugDraw.h"
 #include "Components.h"
@@ -1109,10 +1110,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     }
     m_CamPos = m_HaveCam ? m_CamPos + (want - m_CamPos) * std::min(1.0f, dt * 5.0f) : want;
     if (glm::length(want - m_CamPos) > 6.0f) m_CamPos = want; // a placement: cut, don't fly
-    const glm::vec3 look = glm::normalize(at - m_CamPos);
-    m_CamYaw = glm::degrees(std::atan2(look.z, look.x));
-    m_CamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
-    m_HaveCam = true;
+    LookAt(at);
 }
 
 // --- mmplayer: the player's body on motion matching (docs/MOTION_MATCHING_HANDOFF.md, Phase 4) ------------------------
@@ -1326,11 +1324,6 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
 void NpcTest::MmStressChecks() {
     TestbedRun& R = *m_Tb;
     const MmPlayerDebug::Snapshot& mm = MmPlayerDebug::Info();
-    auto pct = [](std::vector<float> v, float p) {
-        if (v.empty()) return 0.0f;
-        std::sort(v.begin(), v.end());
-        return v[std::min(v.size() - 1, (size_t)std::lround(p * (float)(v.size() - 1)))];
-    };
     char b[400];
     std::printf("[MmStress] %-26s %7s %8s %8s %8s %8s %8s %9s %8s\n", "leg", "jumps/s", "step p50", "step p99", "step max", "hand>sh%",
                 "crossed%", "gap min", "end off");
@@ -1342,11 +1335,11 @@ void NpcTest::MmStressChecks() {
         const TestbedRun::MmStats& q = R.Mm[i];
         const float n = (float)std::max<size_t>(1, q.Chest.size());
         std::printf("[MmStress] %-26s %7.1f %8.2f %8.2f %8.2f %8.0f %8.0f %9.3f %8.1f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
-                    pct(q.StepAll, 0.5f), pct(q.StepAll, 0.99f), pct(q.StepAll, 1.0f), 100.0f * q.HandHigh / n, 100.0f * q.Crossed / n,
+                    NpcTestCommon::Percentile(q.StepAll, 0.5f), NpcTestCommon::Percentile(q.StepAll, 0.99f), NpcTestCommon::Percentile(q.StepAll, 1.0f), 100.0f * q.HandHigh / n, 100.0f * q.Crossed / n,
                     q.FeetGapMin, q.EndYawOff);
         for (float s : q.StepAll) pops += s > 45.0f;
         nonFinite += q.NonFinite;
-        if (pct(q.StepAll, 1.0f) > worstStep) { worstStep = pct(q.StepAll, 1.0f); worstStepLeg = kTb[i].Name; }
+        if (NpcTestCommon::Percentile(q.StepAll, 1.0f) > worstStep) { worstStep = NpcTestCommon::Percentile(q.StepAll, 1.0f); worstStepLeg = kTb[i].Name; }
         if (q.HandHigh / n > worstHigh) { worstHigh = q.HandHigh / n; worstHighLeg = kTb[i].Name; }
         rootOff = std::max(rootOff, q.RootOffsetMax);
         if (!kTb[i].Moving() && !kTb[i].Place && i > 0) {
@@ -1397,11 +1390,6 @@ void NpcTest::MmPlayerChecks() {
         Check(false, std::string("mmplayer: a check names leg '") + name + "', which the course doesn't have");
         return 0;
     };
-    auto median = [](std::vector<float> v) {
-        if (v.empty()) return 0.0f;
-        std::sort(v.begin(), v.end());
-        return v[v.size() / 2];
-    };
     auto mean = [](const std::vector<float>& v) {
         float sum = 0.0f;
         for (float x : v) sum += x;
@@ -1416,7 +1404,7 @@ void NpcTest::MmPlayerChecks() {
         const float n = (float)std::max(1, q.Steady);
         std::printf("[MmPlayer] %-26s %6d %6d %7.0f %7.0f %4.0f/%3.0f/%3.0f %9.2f %4.2f-%4.2f %5.2f %5d\n", kTb[i].Name, q.Frames, q.Steady,
                     100.0f * q.StrafeFlag / n, 100.0f * q.CrouchFlag / n, 100.0f * q.GaitAtLeast[1] / n, 100.0f * q.GaitAtLeast[2] / n,
-                    100.0f * q.GaitAtLeast[3] / n, median(q.RawRatio), q.Steady ? q.RateMin : 0.0f, q.Steady ? q.RateMax : 0.0f, mean(q.Speed),
+                    100.0f * q.GaitAtLeast[3] / n, NpcTestCommon::Percentile(q.RawRatio, 0.5f), q.Steady ? q.RateMin : 0.0f, q.Steady ? q.RateMax : 0.0f, mean(q.Speed),
                     q.AirFrames);
     }
     Check(R.MmFrames > 0 && R.MmPosed == R.MmFrames, "mmplayer: motion matching poses the body every frame (" + std::to_string(R.MmPosed) + " of " +
@@ -1451,7 +1439,7 @@ void NpcTest::MmPlayerChecks() {
     for (const char* name : {"A walk", "A jog", "M crouch walk", "M jog", "M strafe right (walk)", "M strafe left (walk)"}) {
         if (!TbPartOn(name[0])) continue;
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-        const float r = median(q.RawRatio);
+        const float r = NpcTestCommon::Percentile(q.RawRatio, 0.5f);
         std::snprintf(b, sizeof b, "%s: the matched clips move at the capsule's pace before warping (median clip / capsule speed %.2f over %zu "
                                    "frames, within 0.8..1.25)", name, r, q.RawRatio.size());
         Check(q.RawRatio.size() > 20 && r >= 0.8f && r <= 1.25f, b);
@@ -1469,14 +1457,9 @@ void NpcTest::MmPlayerChecks() {
     // Shift is the jog, as captured (a press of it while moving, held, the sprint - checked below): the jog gait plays, at its natural pace,
     // as cleanly as the walk - no stitching (jumps a second within 1.5x the walk's + 0.5) and the pose's frame-to-frame turn
     // like the walk's (p99 within 1.5x + 1 deg).
-    auto pctOf = [](std::vector<float> v, float p) {
-        if (v.empty()) return 0.0f;
-        std::sort(v.begin(), v.end());
-        return v[std::min(v.size() - 1, (size_t)std::lround(p * (float)(v.size() - 1)))];
-    };
     const char* walkRef = TbPartOn('A') ? "A walk" : "M walk looking about";
     const TestbedRun::MmStats& walkQ = R.Mm[legIndex(walkRef)];
-    const float walkJumps = walkQ.Jumps / std::max(0.1f, kTb[legIndex(walkRef)].Seconds), walkP99 = pctOf(walkQ.PoseStep, 0.99f);
+    const float walkJumps = walkQ.Jumps / std::max(0.1f, kTb[legIndex(walkRef)].Seconds), walkP99 = NpcTestCommon::Percentile(walkQ.PoseStep, 0.99f);
     // (Jog frames: the jog takes' style label - what the actor was doing - not the speed band: the jog's strafes move at walk
     // speeds, and by speed alone Shift sideways matched the walk's strafes, a speed walk.)
     const auto styleShare = [](const TestbedRun::MmStats& q, int style) { return q.Steady ? (float)q.Styles[style] / (float)q.Steady : 0.0f; };
@@ -1484,7 +1467,7 @@ void NpcTest::MmPlayerChecks() {
         if (!TbPartOn(name[0])) continue;
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
         const float jog = styleShare(q, MotionLabel::StyleJog);
-        const float jumps = q.Jumps / std::max(0.1f, kTb[legIndex(name)].Seconds), p99 = pctOf(q.PoseStep, 0.99f);
+        const float jumps = q.Jumps / std::max(0.1f, kTb[legIndex(name)].Seconds), p99 = NpcTestCommon::Percentile(q.PoseStep, 0.99f);
         std::snprintf(b, sizeof b, "%s: Shift plays the jog - jog frames %.0f %% of %d steady (>= 80 %%) at %.2f m/s; %.1f jumps a second (%s %.1f: "
                                    "within 1.5x + 0.5); pose step p99 %.2f deg (%s %.2f: within 1.5x + 1)", name, 100.0f * jog, q.Steady,
                       mean(q.Speed), jumps, walkRef, walkJumps, p99, walkRef, walkP99);
@@ -1531,8 +1514,8 @@ void NpcTest::MmPlayerChecks() {
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
         const float jumps = q.Jumps / std::max(0.1f, kTb[legIndex(name)].Seconds);
         std::printf("[MmCrouch] %-24s crouch frames %.0f %% of %d steady, %.2f m/s, %.1f jumps/s; eye body %.3f / capsule %.3f m (body - capsule %+.3f)\n",
-                    name, q.Steady ? 100.0f * q.CrouchFlag / q.Steady : 0.0f, q.Steady, mean(q.Speed), jumps, median(q.EyeBody),
-                    median(q.EyeCapsule), median(q.EyeBody) - median(q.EyeCapsule));
+                    name, q.Steady ? 100.0f * q.CrouchFlag / q.Steady : 0.0f, q.Steady, mean(q.Speed), jumps, NpcTestCommon::Percentile(q.EyeBody, 0.5f),
+                    NpcTestCommon::Percentile(q.EyeCapsule, 0.5f), NpcTestCommon::Percentile(q.EyeBody, 0.5f) - NpcTestCommon::Percentile(q.EyeCapsule, 0.5f));
         std::snprintf(b, sizeof b, "%s: the pack's crouch plays - crouch frames %.0f %% of %d steady (>= 95 %%), %.1f jumps a second (%s %.1f: "
                                    "within 1.5x + 0.5)", name, q.Steady ? 100.0f * q.CrouchFlag / q.Steady : 0.0f, q.Steady, jumps, walkRef, walkJumps);
         Check(q.Steady > 20 && q.CrouchFlag >= 0.95f * q.Steady && jumps <= 1.5f * walkJumps + 0.5f, b);
@@ -1548,25 +1531,20 @@ void NpcTest::MmPlayerChecks() {
     }
     // Looking about on the move: the pose stays as steady as walking straight - the worst bone's frame-to-frame turn
     // (p99) within 1.5x the straight leg's plus 1 degree, and the matcher jumps no more often (1.5x + 1 a second).
-    auto pct = [](std::vector<float> v, float p) {
-        if (v.empty()) return 0.0f;
-        std::sort(v.begin(), v.end());
-        return v[std::min(v.size() - 1, (size_t)std::lround(p * (float)(v.size() - 1)))];
-    };
     std::printf("[MmPlayer] %-26s %6s %9s %9s %9s %11s %9s %8s %6s %9s\n", "leg", "jumps/s", "step p50", "step p99", "step max", "view off max",
                 "searches", "by input", "by end", "traj err");
     for (int i = 0; i < kWatchLeg; ++i) {
         if (!TbLegOn(i)) continue; // (every leg: the stops too - Stage 3 compares them)
         const TestbedRun::MmStats& q = R.Mm[i];
         std::printf("[MmPlayer] %-26s %6.1f %9.2f %9.2f %9.2f %11.1f %9d %8d %6d %9.3f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
-                    pct(q.PoseStep, 0.5f), pct(q.PoseStep, 0.99f), pct(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd,
-                    pct(q.TrajErr, 0.5f));
+                    NpcTestCommon::Percentile(q.PoseStep, 0.5f), NpcTestCommon::Percentile(q.PoseStep, 0.99f), NpcTestCommon::Percentile(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd,
+                    NpcTestCommon::Percentile(q.TrajErr, 0.5f));
     }
     for (const auto& pair : {std::make_pair("M walk looking about", TbPartOn('A') ? "A walk" : "M crouch walk"),
                              std::make_pair("M jog looking about", "M jog")}) {
         const TestbedRun::MmStats& q = R.Mm[legIndex(pair.first)];
         const TestbedRun::MmStats& ref = R.Mm[legIndex(pair.second)];
-        const float p99 = pct(q.PoseStep, 0.99f), refP99 = pct(ref.PoseStep, 0.99f);
+        const float p99 = NpcTestCommon::Percentile(q.PoseStep, 0.99f), refP99 = NpcTestCommon::Percentile(ref.PoseStep, 0.99f);
         const float jumps = q.Jumps / std::max(0.1f, kTb[legIndex(pair.first)].Seconds);
         const float refJumps = ref.Jumps / std::max(0.1f, kTb[legIndex(pair.second)].Seconds);
         std::snprintf(b, sizeof b, "%s: the pose stays steady while the view sweeps 50 deg either side (worst bone's turn per frame p99 %.2f deg "
@@ -1580,17 +1558,17 @@ void NpcTest::MmPlayerChecks() {
     for (const char* name : {"A walk", "A jog", "M look down standing", "M look straight down", "M walk looking down", "M jog looking down", "M jog"}) {
         if (!TbPartOn(name[0])) continue;
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-        std::printf("[MmPlayer] %-26s %9.1f %11.1f %11.1f %11.1f %6.1f/%6.1f %10.1f\n", name, median(q.Pitch), median(q.ClipBend), median(q.Bend),
-                    pct(q.Bend, 1.0f), median(q.ArmAim), median(q.Arm), pct(q.Arm, 1.0f));
+        std::printf("[MmPlayer] %-26s %9.1f %11.1f %11.1f %11.1f %6.1f/%6.1f %10.1f\n", name, NpcTestCommon::Percentile(q.Pitch, 0.5f), NpcTestCommon::Percentile(q.ClipBend, 0.5f), NpcTestCommon::Percentile(q.Bend, 0.5f),
+                    NpcTestCommon::Percentile(q.Bend, 1.0f), NpcTestCommon::Percentile(q.ArmAim, 0.5f), NpcTestCommon::Percentile(q.Arm, 0.5f), NpcTestCommon::Percentile(q.Arm, 1.0f));
     }
     // Looking 60 degrees down the torso bends no further than on the locomotion controller (measured 2026-11-17: legacy
     // median 16-27, worst 27 degrees; motion matching before Spine Stability took it, running 46 and 61): the bend the view
     // adds over the gait's own (as posed, before the aim) - the sprint keeps its lean on purpose (Phase 4, play test 2).
     for (const char* name : {"M look down standing", "M walk looking down", "M jog looking down"}) {
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-        const float added = median(q.Bend) - median(q.ClipBend), worst = pct(q.Bend, 1.0f) - median(q.ClipBend);
+        const float added = NpcTestCommon::Percentile(q.Bend, 0.5f) - NpcTestCommon::Percentile(q.ClipBend, 0.5f), worst = NpcTestCommon::Percentile(q.Bend, 1.0f) - NpcTestCommon::Percentile(q.ClipBend, 0.5f);
         std::snprintf(b, sizeof b, "%s: the body doesn't fold at the waist - the view 60 deg down bends the torso %.1f deg more than the gait's "
-                                   "own %.1f (median; worst %.1f), <= 30 (worst <= 40)", name, added, median(q.ClipBend), worst);
+                                   "own %.1f (median; worst %.1f), <= 30 (worst <= 40)", name, added, NpcTestCommon::Percentile(q.ClipBend, 0.5f), worst);
         Check(q.Bend.size() > 20 && added <= 30.0f && worst <= 40.0f, b);
     }
     // ... and the arms hang (unarmed) rather than swinging back with the chest: looking down standing, the upper arms as far
@@ -1599,8 +1577,8 @@ void NpcTest::MmPlayerChecks() {
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
         const TestbedRun::MmStats& level = R.Mm[legIndex(TbPartOn('A') ? "A walk" : "M crouch walk")];
         std::snprintf(b, sizeof b, "%s: the arms hang - the upper arms %.1f deg off straight down (the spine's aim left them at "
-                                   "%.1f; looking level %.1f): within 10 of level", name, median(q.Arm), median(q.ArmAim), median(level.Arm));
-        Check(q.Arm.size() > 20 && median(q.Arm) <= median(level.Arm) + 10.0f, b);
+                                   "%.1f; looking level %.1f): within 10 of level", name, NpcTestCommon::Percentile(q.Arm, 0.5f), NpcTestCommon::Percentile(q.ArmAim, 0.5f), NpcTestCommon::Percentile(level.Arm, 0.5f));
+        Check(q.Arm.size() > 20 && NpcTestCommon::Percentile(q.Arm, 0.5f) <= NpcTestCommon::Percentile(level.Arm, 0.5f) + 10.0f, b);
     }
     // Looking down (the owner, 2026-11-17: "when I look all the way down I can see through my body"): the camera pass's hides
     // that fall inside the view - each a cut in the body the eye sees into.
@@ -1610,7 +1588,7 @@ void NpcTest::MmPlayerChecks() {
     for (const char* name : {"A walk", "A jog", "M jog", "M crouch walk", "M walk looking down", "M jog looking straight down"}) {
         if (!TbPartOn(name[0])) continue;
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-        const auto swing = [&](const std::vector<float>& v) { return 100.0f * (pct(v, 0.95f) - pct(v, 0.05f)); };
+        const auto swing = [&](const std::vector<float>& v) { return 100.0f * (NpcTestCommon::Percentile(v, 0.95f) - NpcTestCommon::Percentile(v, 0.05f)); };
         std::printf("[MmEye] %-28s eye height swing %5.1f cm, the clip head's %5.1f cm, the camera's %5.1f cm\n", name, swing(q.EyeH),
                     swing(q.HeadH), swing(q.CamH));
     }
@@ -1626,8 +1604,8 @@ void NpcTest::MmPlayerChecks() {
                     kTb[i].Name, q.RayFrames, q.InsideFrames, q.RayFrames ? 100.0f * q.InsideFrames / q.RayFrames : 0.0f, q.InsideMax, q.HitsMax,
                     q.InsideWhat.empty() ? "-" : q.InsideWhat.c_str());
         std::printf("[MmLookDown] %-28s the view looked down to %.1f deg (asked %.0f; steady p50 %.1f, p95 %.1f); the look-down limit p50 %.1f, "
-                    "p95 %.1f, max %.1f deg\n", kTb[i].Name, q.PitchMin, kTb[i].Pitch, pct(q.PitchSteady, 0.5f), pct(q.PitchSteady, 0.95f),
-                    pct(q.Limit, 0.5f), pct(q.Limit, 0.95f), q.LimitMax);
+                    "p95 %.1f, max %.1f deg\n", kTb[i].Name, q.PitchMin, kTb[i].Pitch, NpcTestCommon::Percentile(q.PitchSteady, 0.5f), NpcTestCommon::Percentile(q.PitchSteady, 0.95f),
+                    NpcTestCommon::Percentile(q.Limit, 0.5f), NpcTestCommon::Percentile(q.Limit, 0.95f), q.LimitMax);
         // ... and the inside of the body is (nearly) never in view: at most 10 of the 336 rays (3 % of the screen; the clothing's
         // own gaps - legacy shows 6 rays of the underpants' waistband jogging straight down). Before the eye's push, jogging and
         // looking straight down on motion matching: 110 rays into the torso through the neck opening, 92 % of the frames.
@@ -1647,9 +1625,9 @@ void NpcTest::MmPlayerChecks() {
         float rollMax = 0.0f;
         for (float r : q.ChestRoll) rollMax = std::max(rollMax, std::fabs(r));
         std::printf("[MmPosture] %-28s %6.0f %7.1f/%7.1f %6.1f/%6.1f %10.1f %5.1f/%5.1f %5.1f/%4.1f %12.2f %7.0f%% %8.2f %7.0f%% %6.0f%% %8.3f %8.0f %8.2f/%5.2f\n", kTb[i].Name,
-                    median(q.Pitch), median(q.ChestClip), median(q.ChestStable), median(q.Chest), pct(q.Chest, 1.0f), rollMax, median(q.Head),
-                    pct(q.Head, 0.0f), median(q.HeadWorld), pct(q.HeadWorld, 0.0f), pct(q.HandEye, 0.0f), 100.0f * q.HandHigh / n, pct(q.HandOver, 1.0f), 100.0f * q.HandView / n, 100.0f * q.Crossed / n,
-                    q.FeetGapMin, pct(q.YawRate, 1.0f), median(q.PelvisClip), median(q.Pelvis));
+                    NpcTestCommon::Percentile(q.Pitch, 0.5f), NpcTestCommon::Percentile(q.ChestClip, 0.5f), NpcTestCommon::Percentile(q.ChestStable, 0.5f), NpcTestCommon::Percentile(q.Chest, 0.5f), NpcTestCommon::Percentile(q.Chest, 1.0f), rollMax, NpcTestCommon::Percentile(q.Head, 0.5f),
+                    NpcTestCommon::Percentile(q.Head, 0.0f), NpcTestCommon::Percentile(q.HeadWorld, 0.5f), NpcTestCommon::Percentile(q.HeadWorld, 0.0f), NpcTestCommon::Percentile(q.HandEye, 0.0f), 100.0f * q.HandHigh / n, NpcTestCommon::Percentile(q.HandOver, 1.0f), 100.0f * q.HandView / n, 100.0f * q.Crossed / n,
+                    q.FeetGapMin, NpcTestCommon::Percentile(q.YawRate, 1.0f), NpcTestCommon::Percentile(q.PelvisClip, 0.5f), NpcTestCommon::Percentile(q.Pelvis, 0.5f));
     }
     // The trunk's motion per step (the owner: "the lower spine is grounded and the torso isn't getting the same motions"): each
     // angle's swing (p95 - p5, deg, steady part) as the clip poses it / as drawn - the pelvis, the chest, and the chest against
@@ -1660,7 +1638,7 @@ void NpcTest::MmPlayerChecks() {
         if (!TbLegOn(i)) continue;
         const TestbedRun::MmStats& q = R.Mm[i];
         if (q.Trunk[0].size() < 20) continue;
-        const auto swing = [&](const std::vector<float>& v) { return pct(v, 0.95f) - pct(v, 0.05f); };
+        const auto swing = [&](const std::vector<float>& v) { return NpcTestCommon::Percentile(v, 0.95f) - NpcTestCommon::Percentile(v, 0.05f); };
         std::printf("[MmTrunk] %-28s", kTb[i].Name);
         for (int k = 0; k < 9; ++k) std::printf("     %5.1f / %5.1f", swing(q.TrunkClip[k]), swing(q.Trunk[k]));
         std::printf("\n");
@@ -1681,8 +1659,8 @@ void NpcTest::MmPlayerChecks() {
                         q.Jumps / std::max(0.1f, kTb[i].Seconds), q.Searches, q.IdleRefits, q.Excl, q.Rewinds, q.RunLongest);
         else if (kTb[i].Jog)
             std::printf("[MmJog] %-29s %7.2f %4.2f/%4.2f %4.2f-%4.2f %8.0f %9.0f %9.0f %10.1f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
-                        q.SpeedMin, mean(q.Speed), q.RateMin, q.RateMax, 100.0f * q.RatePinned / n, pct(q.ViewRate, 0.99f),
-                        pct(q.YawRate, 0.99f), pct(q.Chest, 0.95f) - pct(q.Chest, 0.05f));
+                        q.SpeedMin, mean(q.Speed), q.RateMin, q.RateMax, 100.0f * q.RatePinned / n, NpcTestCommon::Percentile(q.ViewRate, 0.99f),
+                        NpcTestCommon::Percentile(q.YawRate, 0.99f), NpcTestCommon::Percentile(q.Chest, 0.95f) - NpcTestCommon::Percentile(q.Chest, 0.05f));
     }
     // What the layers after the pose do to it: per leg, the stream bones the drawn pose moves most off the matcher's (mean /
     // p95 deg over the steady part).
@@ -1696,7 +1674,7 @@ void NpcTest::MmPlayerChecks() {
         std::sort(order.begin(), order.end(), [](const auto& x, const auto& y) { return x.first > y.first; });
         std::printf("[MmLayers] %-22s", name);
         for (size_t k = 0; k < order.size() && k < 8; ++k)
-            std::printf("  %s %.1f/%.1f", (*layerBones)[order[k].second].c_str(), order[k].first, pct(L[order[k].second], 0.95f));
+            std::printf("  %s %.1f/%.1f", (*layerBones)[order[k].second].c_str(), order[k].first, NpcTestCommon::Percentile(L[order[k].second], 0.95f));
         std::printf("\n");
     }
     // The owner's play test 2 (2026-11-17), measured against the controller on this course (Phase 4 handoff). Under MM only.
@@ -1728,7 +1706,7 @@ void NpcTest::MmPlayerChecks() {
             if (!TbPartOn(name[0])) continue;
             const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
             if (q.Trunk[0].size() < 20) continue;
-            const auto swing = [&](const std::vector<float>& v) { return pct(v, 0.95f) - pct(v, 0.05f); };
+            const auto swing = [&](const std::vector<float>& v) { return NpcTestCommon::Percentile(v, 0.95f) - NpcTestCommon::Percentile(v, 0.05f); };
             const float yaw = swing(q.Trunk[6]) / std::max(swing(q.TrunkClip[6]), 1e-3f);
             const float bob = swing(q.Trunk[5]) / std::max(swing(q.TrunkClip[5]), 1e-3f);
             std::snprintf(b, sizeof b, "%s: the torso moves with the hips - the chest's swing against the pelvis %.2f of the clip's "
@@ -1746,7 +1724,7 @@ void NpcTest::MmPlayerChecks() {
             if (q.Chest.empty()) continue;
             const float high = (float)q.HandHigh / (float)q.Chest.size();
             if (high > worstHigh) { worstHigh = high; worstLeg = i; }
-            const float eye = pct(q.HandEye, 0.0f);
+            const float eye = NpcTestCommon::Percentile(q.HandEye, 0.0f);
             if (eye < worstEye) { worstEye = eye; eyeLeg = i; }
         }
         // (Logged: how often KeepHandsFromEye still moves a hand - Stage 3 keeps it only if it engages.)
@@ -1778,7 +1756,7 @@ void NpcTest::MmPlayerChecks() {
         //    drawn off the pose before the aim. (Uncapped: -40 / +76 deg - a limbo, a fold.)
         for (const char* name : {"M look straight down", "M jog looking straight down", "M walk looking straight up", "M jog looking straight up"}) {
             const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-            const float aim = median(q.Chest) - median(q.ChestStable);
+            const float aim = NpcTestCommon::Percentile(q.Chest, 0.5f) - NpcTestCommon::Percentile(q.ChestStable, 0.5f);
             std::snprintf(b, sizeof b, "%s: the chest pitches %.1f deg with the view (median), within the caps (-21..+26)", name, aim);
             Check(q.Chest.size() > 20 && aim >= -21.0f && aim <= 26.0f, b);
         }
@@ -1786,10 +1764,10 @@ void NpcTest::MmPlayerChecks() {
         //    moves as captured): the chest's pitch with the view moving at most 25 % of standing's, the view 60 deg down.
         {
             const TestbedRun::MmStats& still = R.Mm[legIndex("M look down standing")];
-            const float stand = median(still.Chest) - median(still.ChestStable);
+            const float stand = NpcTestCommon::Percentile(still.Chest, 0.5f) - NpcTestCommon::Percentile(still.ChestStable, 0.5f);
             for (const char* name : {"M walk looking down", "M jog looking down"}) {
                 const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
-                const float aim = median(q.Chest) - median(q.ChestStable);
+                const float aim = NpcTestCommon::Percentile(q.Chest, 0.5f) - NpcTestCommon::Percentile(q.ChestStable, 0.5f);
                 std::snprintf(b, sizeof b, "%s: Spine Aim fades moving - the chest pitches %.1f deg with the view against %.1f standing "
                                            "(|moving| <= 25 %% of |standing|)", name, aim, stand);
                 Check(q.Chest.size() > 20 && std::fabs(stand) > 2.0f && std::fabs(aim) <= 0.25f * std::fabs(stand), b);
@@ -1802,7 +1780,7 @@ void NpcTest::MmPlayerChecks() {
             const float crossed = q.Chest.empty() ? 0.0f : (float)q.Crossed / (float)q.Chest.size();
             std::snprintf(b, sizeof b, "%s: the body turns by the animation - at most %.1f deg in a frame (<= 30; %.0f deg/s), hands over the "
                                        "shoulders %d frames; feet crossed on %.0f %% by at most %.2f m (reported)", name, q.YawStepMax,
-                          pct(q.YawRate, 1.0f), q.HandHigh, 100.0f * crossed, -q.FeetGapMin);
+                          NpcTestCommon::Percentile(q.YawRate, 1.0f), q.HandHigh, 100.0f * crossed, -q.FeetGapMin);
             Check(q.Chest.size() > 20 && q.YawStepMax <= 30.0f && q.HandHigh == 0, b);
         }
         // 5. The facing model: the character facing never more than its clamp off the simulation's (any leg), and looking about
@@ -1837,7 +1815,7 @@ void NpcTest::MmPlayerChecks() {
     // step p99 within 1.15x + 1 deg of the leg's own away from jumps - the sprint's limbs move further a frame than the jog's, so
     // the jog's steps are no reference); and the planted feet hold (heel or ball <= 5 cm). The style share is checked above.
     if (TbPartOn('M')) {
-        const auto medianOf = [&](const std::vector<float>& v) { return pctOf(v, 0.5f); };
+        const auto medianOf = [&](const std::vector<float>& v) { return NpcTestCommon::Percentile(v, 0.5f); };
         std::printf("[MmSprint] %-24s %8s %8s %8s %9s %10s %9s %9s %8s %9s\n", "leg", "sprint %", "m/s", "jumps/s", "longest s",
                     "slide cm", "step p99", "play p99", "cruise %", "raw/caps");
         for (const char* name : {"M sprint", "M sprint turning", "M sprint from jog", "M sprint strafe left", "M sprint strafe right",
@@ -1847,7 +1825,7 @@ void NpcTest::MmPlayerChecks() {
             const auto it = m_SlideContactPlayer.find(name);
             std::printf("[MmSprint] %-24s %8.0f %8.2f %8.2f %9.2f %10.1f %9.2f %9.2f %8.0f %9.2f\n", name,
                         100.0f * styleShare(q, MotionLabel::StyleSprint), mean(q.Speed), q.Jumps / std::max(0.1f, kTb[i].Seconds), q.RunLongest,
-                        it != m_SlideContactPlayer.end() ? it->second * 100.0f : -1.0f, pctOf(q.PoseStep, 0.99f), pctOf(q.PoseStepPlaying, 0.99f),
+                        it != m_SlideContactPlayer.end() ? it->second * 100.0f : -1.0f, NpcTestCommon::Percentile(q.PoseStep, 0.99f), NpcTestCommon::Percentile(q.PoseStepPlaying, 0.99f),
                         q.Steady ? 100.0f * (float)q.Cruising / (float)q.Steady : 0.0f, medianOf(q.RawRatio));
         }
         const struct { const char* Leg; const char* Jog; } kSprintLegs[] = {
@@ -1858,7 +1836,7 @@ void NpcTest::MmPlayerChecks() {
             const TestbedRun::MmStats& q = R.Mm[i];
             const auto it = m_SlideContactPlayer.find(l.Leg);
             const float slide = it != m_SlideContactPlayer.end() ? it->second * 100.0f : -1.0f;
-            const float p99 = pctOf(q.PoseStep, 0.99f), play = pctOf(q.PoseStepPlaying, 0.99f);
+            const float p99 = NpcTestCommon::Percentile(q.PoseStep, 0.99f), play = NpcTestCommon::Percentile(q.PoseStepPlaying, 0.99f);
             const float jumps = q.Jumps / std::max(0.1f, kTb[i].Seconds), jogJumps = R.Mm[k].Jumps / std::max(0.1f, kTb[k].Seconds);
             std::snprintf(b, sizeof b, "%s: the sprint plays cleanly - %.1f jumps a second (%s %.1f: within 1.5x + 0.5), pose step p99 %.2f deg "
                                        "(its own away from jumps %.2f: within 1.15x + 1); feet hold %.1f cm at the heel or ball (<= 5); %.2f m/s",

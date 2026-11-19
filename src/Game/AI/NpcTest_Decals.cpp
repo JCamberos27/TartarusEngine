@@ -129,7 +129,6 @@ void NpcTest::Decals(World& world, NpcDirector&, float) {
         std::printf("[NpcTest] decals: %d of 15 rounds struck\n", hits);
         if (!Stress()) Check(hits == 15, "every round struck the wall or the floor (" + std::to_string(hits) + " of 15)");
         m_KStep = 1;
-        m_KAt = now;
     }
     // The cameras: each in place kSettle before its shot.
     while (m_KShot < kShotCount && now >= kShots[m_KShot].At) {
