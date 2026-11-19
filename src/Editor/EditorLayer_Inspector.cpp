@@ -4954,7 +4954,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             ClearSelection();
             m_SelectedAssetKey = path;
             m_SelectedAssetIsFolder = false;
-            m_ExtraAssetSelection.clear();
+            ClearExtraAssetSelection();
             if (m_AssetsPtr) NavigateAssetFolder(m_AssetsPtr->DiskFolderFor(path));
         }
         ImGui::EndDisabled();

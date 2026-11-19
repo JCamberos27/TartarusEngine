@@ -419,15 +419,33 @@ void EditorLayer::BeginRenameAsset(const std::string& key, bool isFolder, const 
 
 bool EditorLayer::IsAssetSelected(const std::string& key, bool isFolder) const {
     if (m_SelectedAssetKey == key && m_SelectedAssetIsFolder == isFolder) return true;
-    for (const auto& e : m_ExtraAssetSelection) {
-        if (e.Key == key && e.IsFolder == isFolder) return true;
+    // Asked for every tile every frame: a scan of a big selection (Ctrl+A in a large folder) made that O(tiles x selected).
+    if (m_ExtraAssetSelection.size() <= 16) {
+        for (const auto& e : m_ExtraAssetSelection)
+            if (e.Key == key && e.IsFolder == isFolder) return true;
+        return false;
     }
-    return false;
+    if (!m_ExtraAssetSelIndexValid) {
+        m_ExtraAssetSelIndex.clear();
+        for (const auto& e : m_ExtraAssetSelection) m_ExtraAssetSelIndex.insert(e.Key + (e.IsFolder ? '\x01' : '\x02'));
+        m_ExtraAssetSelIndexValid = true;
+    }
+    return m_ExtraAssetSelIndex.count(key + (isFolder ? '\x01' : '\x02')) != 0;
 }
 
 void EditorLayer::ClearAssetSelection() {
     m_SelectedAssetKey.clear();
+    ClearExtraAssetSelection();
+}
+
+void EditorLayer::AddExtraAssetSelection(const std::string& key, bool isFolder) {
+    m_ExtraAssetSelection.push_back({key, isFolder});
+    m_ExtraAssetSelIndexValid = false;
+}
+
+void EditorLayer::ClearExtraAssetSelection() {
     m_ExtraAssetSelection.clear();
+    m_ExtraAssetSelIndexValid = false;
 }
 
 void EditorLayer::ToggleAssetSelection(const std::string& key, bool isFolder) {
@@ -442,6 +460,7 @@ void EditorLayer::ToggleAssetSelection(const std::string& key, bool isFolder) {
             m_SelectedAssetKey = m_ExtraAssetSelection.back().Key;
             m_SelectedAssetIsFolder = m_ExtraAssetSelection.back().IsFolder;
             m_ExtraAssetSelection.pop_back();
+            m_ExtraAssetSelIndexValid = false;
         } else {
             m_SelectedAssetKey.clear();
         }
@@ -450,10 +469,11 @@ void EditorLayer::ToggleAssetSelection(const std::string& key, bool isFolder) {
     for (auto it = m_ExtraAssetSelection.begin(); it != m_ExtraAssetSelection.end(); ++it) {
         if (it->Key == key && it->IsFolder == isFolder) {
             m_ExtraAssetSelection.erase(it); // already co-selected — toggle it back off
+            m_ExtraAssetSelIndexValid = false;
             return;
         }
     }
-    m_ExtraAssetSelection.push_back({key, isFolder});
+    AddExtraAssetSelection(key, isFolder);
 }
 
 void EditorLayer::RequestDeleteAsset(World& world, AssetLibrary& assets, const std::string& key, bool isFolder, bool skipDialog) {
@@ -868,7 +888,7 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         ClearAssetSelection();
         m_SelectedAssetKey = newKeys[0];
         m_SelectedAssetIsFolder = false;
-        for (size_t i = 1; i < newKeys.size(); ++i) m_ExtraAssetSelection.push_back({newKeys[i], false});
+        for (size_t i = 1; i < newKeys.size(); ++i) AddExtraAssetSelection(newKeys[i], false);
     }
 }
 
@@ -2027,7 +2047,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         m_SelectedAssetKey = cells[0].key;
         m_SelectedAssetIsFolder = cells[0].kind == Cell::Kind::Folder;
         for (size_t i = 1; i < cells.size(); ++i) {
-            m_ExtraAssetSelection.push_back({cells[i].key, cells[i].kind == Cell::Kind::Folder});
+            AddExtraAssetSelection(cells[i].key, cells[i].kind == Cell::Kind::Folder);
         }
     }
 
@@ -2348,7 +2368,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 for (size_t i = lo; i <= hi; ++i) {
                     bool f = cells[i].kind == Cell::Kind::Folder;
                     if (i == lo) { m_SelectedAssetKey = cells[i].key; m_SelectedAssetIsFolder = f; }
-                    else m_ExtraAssetSelection.push_back({cells[i].key, f});
+                    else AddExtraAssetSelection(cells[i].key, f);
                 }
                 // Deliberately don't move the anchor, so repeated Shift-clicks keep extending
                 // or shrinking the range from the same starting point.
