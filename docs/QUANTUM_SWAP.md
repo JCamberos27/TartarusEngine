@@ -198,3 +198,34 @@ The wardrobe's rules were written for the old, partial pack (bald heads, no bear
 - The importer's two dangling references are fixed: `build_master_scene.py` spells out the body-part paths (the
   `{model}` template hid them from the reference scan), and `asset_manifest.py` drops the exclusion for the Unity-era
   `Textures/Clothing/Hats` folder, which no checkout has any more.
+
+### The player's head drew see-through
+
+The scenes' saved head material lists were still in the old head's slot order. On a re-dress, `PickedColourways` read
+each slot that differed from the remap as a picked colourway. The folder rule then spread `M_Eye_Overlay` (transparent)
+to every material in `Materials/Characters`, skin included. Fixed in two places: body parts take no colourway picks
+(`OutfitSystem.cpp`), and the 13 saved head lists now follow the new head's mesh order.
+
+## Merged (2026-11-18)
+
+Phases 0-3 merged in PR 831. The forest-lights PR 832 and the forest-trail scene removal PR 833 followed the same day.
+
+## Phase 4: Drive (2026-11-18)
+
+- **Upload:** the 850 payloads main lists but the Drive lacked went to `Used`: 691 added and 159 replaced (3.6 GB), each
+  checked by sha256. `Used\project\external_assets.csv` is main's copy again.
+- **Safety copy:** `C:\Users\jacob\_backup_old_quantum\` on the owner's PC holds the 515 retired `Used` files (1.9 GB)
+  and both old Raw folders (225 files, 4 GB). The plan said `D:\Jacob\JCamberos\`; this PC has no D:. The 159 replaced
+  files went up before the backup existed, so their old versions are only in the Drive's version history (30 days).
+- **Raw:** `Characters\Quantum - Extras (not in Casual Bundle)\` holds the 39 keep-list sources (3 GB): the team
+  arm/hand exports, the male and female face rigs (`.dna`, `.mb`, FBX, beard combos), `SKM_F_Vivian_Parts` and
+  `SKM_Hair_Back_2`. `Quantum - Characters (partial)` and `Quantum - Modular Basemesh` went to the Drive trash: their
+  other 186 files have Casual Bundle equivalents. `Raw\SOURCES.md` and `Raw\CHANGELOG.md` are updated.
+- **Used:** the 515 files in `tools/quantum/retired_used_paths.txt` went to the Drive trash. Separately, 293 unlisted
+  mocap `RootMotion` clips and the unused forest-trail scene went too. `asset_manifest.py verify` on `Used`: 7908 listed,
+  0 missing, 0 different, 0 unlisted.
+- **Team, after pulling:** `python tools/assets/asset_manifest.py prune project/assets/Characters/Quantum`, then
+  `fetch-assets.ps1`.
+- **Still open:**
+  - the Fab receipt and the Epic Starter Pack terms in `Licenses\`;
+  - plan step 4: deleting `UE_Source\` on the computer with `D:\Jacob\JCamberos`.
