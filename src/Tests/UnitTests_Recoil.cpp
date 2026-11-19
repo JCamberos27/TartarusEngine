@@ -39,14 +39,14 @@ void TestRecoilAnimDataPort() {
         if (bad==4) j["recoil"]["horizontalSmoothing"]="fast";
         CHECK(!RecoilAsset::FromJsonString(j.dump(),parsed)); CHECK(parsed.ToJsonString()==before);
     }
-    auto legacy=WeaponProceduralSettings::Defaults();
-    j={{"type","recoil"},{"version",1},{"recoil",legacy.ToJson()["recoil"]}};
-    CHECK(RecoilAsset::FromJsonString(j.dump(),parsed)); CHECK(parsed.Data.UnityPort);
-    CHECK(Near(parsed.Data.Unity.SemiRotCurve.Length(),legacy.Recoil.Duration));
+    // A version-1 asset (the old tuning) converts on load.
+    j={{"type","recoil"},{"version",1},{"recoil",{{"duration",0.4},{"enabled",false}}}};
+    CHECK(RecoilAsset::FromJsonString(j.dump(),parsed)); CHECK(!parsed.Data.Enabled);
+    CHECK(Near(parsed.Data.Unity.SemiRotCurve.Length(),0.4f));
     CHECK(parsed.Data.Unity.Pitch.x<0 && parsed.Data.Unity.Kickback.x<=0);
-    WeaponProceduralSettings embedded=legacy; embedded.Recoil=asset.Data;
-    auto restored=legacy; CHECK(WeaponProceduralSettings::FromJson(embedded.ToJson(),restored,nullptr));
-    CHECK(restored.Recoil.UnityPort && restored.Recoil.Unity.ToJson()==asset.Data.Unity.ToJson());
+    WeaponProceduralSettings embedded=WeaponProceduralSettings::Defaults(); embedded.Recoil=asset.Data;
+    auto restored=WeaponProceduralSettings::Defaults(); CHECK(WeaponProceduralSettings::FromJson(embedded.ToJson(),restored,nullptr));
+    CHECK(restored.Recoil.Unity.ToJson()==asset.Data.Unity.ToJson());
 }
 void TestRecoilAnimationPort() {
     auto d=Fixture(); std::mt19937 rng(7);
@@ -119,7 +119,7 @@ void TestUnityControllerRecoil() {
     // Controller target is unscaled in ADS, independent of the visual aim multipliers.
     RecoilAnimation hip,aim; hip.Play(d,false,600,RecoilFireMode::Semi,rng); aim.Play(d,true,600,RecoilFireMode::Semi,rng);
     hip.Update(d,false,0.1f,rng); aim.Update(d,true,0.1f,rng); CHECK(hip.RecoilDelta==aim.RecoilDelta);
-    WeaponProceduralSettings s=WeaponProceduralSettings::Defaults(); s.Recoil.UnityPort=true; s.Recoil.Unity=d;
+    WeaponProceduralSettings s=WeaponProceduralSettings::Defaults(); s.Recoil.Unity=d;
     s.Sway.Enabled=s.Breath.Enabled=s.Lean.Enabled=false;
     WeaponProceduralState host; WeaponProceduralInput input; input.Dt=0.1f;
     host.OnShot(s,false); host.Update(s,input); CHECK(Near(host.ConsumeAimKick().x,1));
