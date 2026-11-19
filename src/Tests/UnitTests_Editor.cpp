@@ -3,6 +3,7 @@
 #include "CurveEditor.h"
 #include "EditorFileHistory.h"
 #include "EditorLayer.h"
+#include "EditorSearch.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -570,6 +571,30 @@ void TestPrefsMigrationToCleanView() {
     s = saved;
 }
 
+// The Asset Browser search syntax and the shared filter helpers (EditorSearch.h).
+void TestEditorSearch() {
+    using namespace EditorSearch;
+    CHECK(MatchesFilter("", "anything"));
+    CHECK(MatchesFilter("ROCK", "mossy_rock_01"));
+    CHECK(!MatchesFilter("rocks", "rock"));
+    CHECK(ParentFolderOf("Props/Guns/AK") == "Props/Guns" && ParentFolderOf("Props").empty());
+    CHECK(LeafNameOf("Props/Guns/AK") == "AK" && LeafNameOf("Props") == "Props");
+    const ParsedAssetSearch p = ParseAssetSearch("  coastal T:Model t:texture l:Hero  scene ");
+    CHECK((p.nameTerms == std::vector<std::string>{"coastal", "scene"}));
+    CHECK((p.typeTerms == std::vector<std::string>{"model", "texture"}));
+    CHECK((p.labelTerms == std::vector<std::string>{"hero"}));
+    CHECK(MatchesAssetSearch(p, "Coastal Scene 2", "texture", {"HERO"}));
+    CHECK(!MatchesAssetSearch(p, "Coastal Scene 2", "sound", {"hero"}));   // type terms OR, this kind isn't one
+    CHECK(!MatchesAssetSearch(p, "Coastal 2", "model", {"hero"}));         // name terms AND
+    CHECK(!MatchesAssetSearch(p, "Coastal Scene", "model", {"heroes"}));   // labels match whole
+    std::string f = "rock t:Model";
+    CHECK(SearchHasToken(f, "t:Model") && !SearchHasToken(f, "t:Mod"));
+    ToggleSearchToken(f, "t:Model");
+    CHECK(f == "rock");
+    ToggleSearchToken(f, "l:Hero");
+    CHECK(f == "rock l:Hero");
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
@@ -582,4 +607,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Asset folders: only the user's are saved to project settings",TestAssetFoldersPersistOnlyUserFolders);
     tests.emplace_back("Outfit landing: an unrecorded change before it stays its own undo step",TestOutfitLandingKeepsUnrecordedChange);
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
+    tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
 }

@@ -138,62 +138,10 @@ std::string UsageTooltip(const std::vector<std::string>& users) {
     return s;
 }
 
-// Unity's Project-window search syntax: plain words match the asset name and are ANDed
-// together ("coastal scene" needs both words); "t:Model" restricts by asset type, and several
-// t: terms are ORed ("t:Model t:Texture" means either kind); "l:label" restricts by label, and
-// several l: terms are ANDed (must carry every listed label). Typed directly or built by the
-// Type/Label filter dropdown buttons - both just edit this same text.
-struct ParsedAssetSearch {
-    std::vector<std::string> nameTerms;
-    std::vector<std::string> typeTerms;  // lowercased kind names: "model","texture","material","shader",
-                                         // "sound","scene","prefab","folder"
-    std::vector<std::string> labelTerms; // lowercased
-};
-
-ParsedAssetSearch ParseAssetSearch(const std::string& filter) {
-    ParsedAssetSearch result;
-    std::istringstream iss(filter);
-    std::string token;
-    auto toLower = [](std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-        return s;
-    };
-    while (iss >> token) {
-        if (token.size() > 2 && (token[0] == 't' || token[0] == 'T') && token[1] == ':') {
-            result.typeTerms.push_back(toLower(token.substr(2)));
-        } else if (token.size() > 2 && (token[0] == 'l' || token[0] == 'L') && token[1] == ':') {
-            result.labelTerms.push_back(toLower(token.substr(2)));
-        } else {
-            result.nameTerms.push_back(token);
-        }
-    }
-    return result;
-}
-
-// `kind` is the asset's type name (already lowercased: "model", "texture", ...), `labels` its
-// current label set. Name terms AND, type terms OR (any one is enough), label terms AND (every
-// one must be present) - matching the semantics Unity documents for t:/l:.
-bool MatchesAssetSearch(const ParsedAssetSearch& parsed, const std::string& name, const std::string& kind,
-    const std::set<std::string>& labels) {
-    for (const auto& term : parsed.nameTerms) {
-        if (!MatchesFilter(term, name)) return false;
-    }
-    if (!parsed.typeTerms.empty()) {
-        bool anyTypeMatches = false;
-        for (const auto& t : parsed.typeTerms) {
-            if (t == kind) { anyTypeMatches = true; break; }
-        }
-        if (!anyTypeMatches) return false;
-    }
-    for (const auto& term : parsed.labelTerms) {
-        bool found = false;
-        for (const auto& lbl : labels) {
-            if (MatchesFilter(term, lbl) && term.size() == lbl.size()) { found = true; break; } // exact, case-insensitive
-        }
-        if (!found) return false;
-    }
-    return true;
-}
+// The t: / l: search syntax: EditorSearch.h (unit-tested there).
+using EditorSearch::ParsedAssetSearch;
+using EditorSearch::ParseAssetSearch;
+using EditorSearch::MatchesAssetSearch;
 
 } // namespace
 
