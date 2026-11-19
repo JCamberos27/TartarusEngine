@@ -1,5 +1,6 @@
 #pragma once
 #include <json.hpp>
+#include "Palette.h" // IconColorStyle
 
 #include <cstdint>
 #include <map>
@@ -17,11 +18,7 @@
 // "Mesh Renderer", "Animator Controller"). Colours are IM_COL32-packed like the Palette's.
 namespace Enhancers {
 
-struct UiStyle {
-    std::string   Icon;      // Font Awesome name, "" = the default glyph (headers only)
-    std::uint32_t Color = 0; // IM_COL32-packed, 0 = not set
-    bool IsEmpty() const { return Icon.empty() && Color == 0; }
-};
+using UiStyle = IconColorStyle; // Icon "" = the default glyph (headers only)
 
 class UiStyles {
 public:

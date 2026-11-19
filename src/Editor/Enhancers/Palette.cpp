@@ -38,6 +38,23 @@ bool ParseHexColor(const std::string& s, std::uint32_t& out) {
     return true;
 }
 
+nlohmann::json StyleToJson(const IconColorStyle& s) {
+    nlohmann::json j = nlohmann::json::object();
+    if (!s.Icon.empty()) j["icon"] = s.Icon;
+    if (s.Color) j["color"] = ToHexColor(s.Color);
+    return j;
+}
+IconColorStyle StyleFromJson(const nlohmann::json& j) {
+    IconColorStyle s;
+    if (!j.is_object()) return s;
+    if (auto it = j.find("icon"); it != j.end() && it->is_string()) s.Icon = it->get<std::string>();
+    if (auto it = j.find("color"); it != j.end() && it->is_string()) {
+        std::uint32_t c = 0;
+        if (ParseHexColor(it->get<std::string>(), c)) s.Color = c;
+    }
+    return s;
+}
+
 std::string ToHexColor(std::uint32_t c) {
     const unsigned r = c & 255, g = (c >> 8) & 255, b = (c >> 16) & 255, a = (c >> 24) & 255;
     char buf[10];
