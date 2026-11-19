@@ -143,16 +143,22 @@ void AssetThumbnailLoader::Pump(int maxUploads) {
         e.Pending = false;
         e.T.FlipV = r.FlipV;
         if (r.Pixels.size() != (size_t)kSize * kSize * 4) continue; // no thumbnail: the tile keeps its glyph
-        glGenTextures(1, &e.T.Tex);
-        glBindTexture(GL_TEXTURE_2D, e.T.Tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, r.Pixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        e.T.Tex = MakeTexture(kSize, r.Pixels.data());
         uploaded = true;
     }
     if (uploaded) GLStateCache::Invalidate(); // raw glBindTexture above
+}
+
+unsigned int AssetThumbnailLoader::MakeTexture(int size, const unsigned char* pixels) {
+    unsigned int tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return tex;
 }
 
 void AssetThumbnailLoader::Remove(std::unordered_map<std::string, Entry>::iterator it) {
