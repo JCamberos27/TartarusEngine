@@ -108,7 +108,7 @@ std::shared_ptr<MaterialAsset> MissingPlaceholder(const std::string& path) {
 }
 } // namespace
 
-std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib);
+static std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib);
 
 namespace {
 
@@ -208,7 +208,7 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
 // root, so a .mat works from any working directory, #354). A project-relative reference to a
 // file the project doesn't have, whose name IS a built-in engine shader, uses the engine one:
 // that's every material written while a copy of Standard.shader lived in project/shaders/.
-std::string ResolveShaderPath(const std::string& ref) {
+static std::string ResolveShaderPath(const std::string& ref) {
     if (ref.rfind("engine://", 0) == 0) return ShaderLibrary::ResolveRef(ref, {});
     std::string rel = ref.rfind("project://", 0) == 0 ? ref.substr(10) : ref;
     std::filesystem::path p(rel);
@@ -221,7 +221,7 @@ std::string ResolveShaderPath(const std::string& ref) {
     return resolved;
 }
 
-std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib) {
+static std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib) {
     using Queue = MaterialAsset::Queue;
     const Reader top{j, path};
     auto ma = std::make_shared<MaterialAsset>();

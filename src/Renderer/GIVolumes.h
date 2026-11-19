@@ -66,7 +66,7 @@ public:
     // z. Returns each brick's origin; `atlas` = the atlas size.
     static std::vector<glm::ivec3> Pack(const std::vector<glm::ivec3>& sizes, int maxWidth, glm::ivec3& atlas);
 
-    // One gathered volume (the editor's probe gizmo reads these).
+    // One gathered volume (unit tests read these through Volumes()).
     struct Volume {
         std::string Name;
         GI::Box Bounds;

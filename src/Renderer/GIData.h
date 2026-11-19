@@ -33,7 +33,6 @@ class Projector {
 public:
     void Add(const glm::vec3& dir, const glm::vec3& radiance, float solidAngle);
     ProbeSH Finish() const;
-    float TotalSolidAngle() const { return m_Weight; }
 private:
     glm::vec4 m_L[3]{glm::vec4(0.0f), glm::vec4(0.0f), glm::vec4(0.0f)}; // raw L_00, L_1x, L_1y, L_1z per channel
     float m_Weight = 0.0f;

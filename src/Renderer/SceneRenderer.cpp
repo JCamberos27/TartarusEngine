@@ -39,7 +39,6 @@
 #include "FurRenderer.h"
 #include "GrassRenderer.h"
 #include "ImpostorRenderer.h"
-#include "BloodPalette.h"
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
 #include "GLStateCache.h"

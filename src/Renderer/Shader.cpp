@@ -10,7 +10,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include <iostream>
 
 namespace {
 // GL-101/#367 diagnostic: give the linked program a KHR_debug label and, when the driver's

@@ -63,8 +63,7 @@ public:
     };
     const std::vector<SkinVertex>& SkinVertices() const { return m_Skin; }
 
-    // --mem-report: the GPU buffer handle (shared by ShareGeometry copies) and the CPU-side bytes this mesh keeps.
-    unsigned int IndexBuffer() const { return m_EBO; }
+    // --mem-report: the CPU-side bytes this mesh keeps.
     size_t CpuBytes() const {
         return m_LocalPositions.capacity() * sizeof(glm::vec3) + m_LocalIndices.capacity() * sizeof(unsigned int) +
                m_Skin.capacity() * sizeof(SkinVertex) + m_PendingVertices.capacity() * sizeof(ModelVertex);

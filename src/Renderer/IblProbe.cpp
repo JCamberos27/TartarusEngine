@@ -140,12 +140,6 @@ bool IblProbe::NeedsBake(const glm::vec3& horizonColor, const glm::vec3& zenithC
     return !m_Baked || horizonColor != m_BakedHorizon || zenithColor != m_BakedZenith;
 }
 
-bool IblProbe::BakeIfDirty(const glm::vec3& horizonColor, const glm::vec3& zenithColor) {
-    if (!NeedsBake(horizonColor, zenithColor)) return false;
-    Bake(horizonColor, zenithColor);
-    return true;
-}
-
 void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor) {
     m_BakedRotation = 0.0f;
     m_Step = -1; // an amortized sky bake in flight would otherwise swap over this one

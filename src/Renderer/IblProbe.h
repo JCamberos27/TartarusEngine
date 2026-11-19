@@ -25,7 +25,7 @@ class Shader;
 // Plus a view-and-environment-independent BRDF integration LUT (RG16F, 256x256, NdotV x
 // roughness -> scale/bias for F0). That one is baked ONCE, on first use, and never again.
 //
-// Baking is NOT per-frame. BakeIfDirty() compares the sky colours it was last baked with and
+// Baking is NOT per-frame. NeedsBake() compares the sky colours it was last baked with and
 // does nothing when they match, so the trigger needs no UI plumbing at all: it survives colour
 // edits, undo, scene load and serialization identically, because it watches the actual state
 // rather than any one code path that writes it.
@@ -55,8 +55,6 @@ public:
     // like the shadow passes in main.cpp.
     void Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor);
 
-    // Bake() if NeedsBake(); returns whether it actually baked.
-    bool BakeIfDirty(const glm::vec3& horizonColor, const glm::vec3& zenithColor);
 
     // PR13: convolve irradiance + specular cubes from an externally supplied env cubemap
     // (e.g. loaded via Cubemap::LoadHdr). Skips the sky-gradient pass. envCube must be a

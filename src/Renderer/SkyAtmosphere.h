@@ -177,7 +177,6 @@ private:
 
     VolumetricClouds m_Clouds;
     std::unordered_map<const void*, std::unique_ptr<ViewResources>> m_Views;
-    ViewResources* m_FrameView = nullptr; // the primary camera's, used by PrepareFrame
 
     // What the LUTs were last built from (they only depend on the medium, not the sun).
     bool m_LutsValid = false;

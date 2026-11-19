@@ -24,7 +24,6 @@
 #include "Grid.h"
 #include "HdrTarget.h"
 #include "Model.h"
-#include "OpaqueColorCopy.h"
 #include "PostProcessVolume.h"
 #include "Profiler.h"
 #include "ProjectSettings.h"
@@ -65,8 +64,6 @@ PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float b
     p.AutoExposureMaxEV = world.AutoExposureMaxEV;
     p.AutoExposureSpeedUp = world.AutoExposureSpeedUp;
     p.AutoExposureSpeedDown = world.AutoExposureSpeedDown;
-    p.DeltaTime = dt;
-    p.ExposureSlot = exposureSlot;
     ApplyPostProcessVolumes(world, cameraPos, p); // #162 / #203 - local and global volumes
     return p;
 }

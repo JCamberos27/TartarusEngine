@@ -3,15 +3,11 @@
 #include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "gl.h"
-#include <glm/glm.hpp>
 #include <algorithm>
 
 // GL_ONE — not exposed by the engine's minimal gl.h loader (only GL_SRC_ALPHA /
 // GL_ONE_MINUS_SRC_ALPHA are defined there); needed for additive (GL_ONE, GL_ONE) blending
 // when accumulating the upsample pyramid.
-#ifndef GL_ONE
-#define GL_ONE 1
-#endif
 
 Bloom::~Bloom() { Release(); }
 

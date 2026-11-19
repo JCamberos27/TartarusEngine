@@ -40,7 +40,7 @@ public:
     // clusters instead of each reserving its own fixed slot range. Generously sized relative to
     // typical light coverage (16x the old average of ~4 lights/cluster) while still being ~5.6x
     // smaller than the old fixed-stride buffer (65536 * 4 bytes = 256 KB vs. 1.38 MB). Must
-    // match kCullLightsCompute's GLOBAL_CAPACITY.
+    // match ClusterCull.comp.glsl's GLOBAL_CAPACITY.
     // Raised with the finer grid (8,064 clusters): an overflow drops lights, which shows.
     static constexpr int GLOBAL_INDEX_CAPACITY = 262144;
     // The decal index list (binding 14): every cluster owns a fixed Decals::MAX_PER_CLUSTER block
@@ -125,7 +125,7 @@ private:
     unsigned int m_Indices = 0; // binding 4: global compacted light-index list (#208)
     // binding 5: {globalCounter, overflowFlag} — globalCounter is the atomic append cursor into
     // m_Indices (reset to 0 before every cull dispatch); overflowFlag is atomicOr'd by
-    // kCullLightsCompute when a cluster's reserved block ran past GLOBAL_INDEX_CAPACITY (#204,
+    // ClusterCull.comp.glsl when a cluster's reserved block ran past GLOBAL_INDEX_CAPACITY (#204,
     // adapted for #208).
     unsigned int m_Overflow = 0;
     bool m_LastSaturated = false;

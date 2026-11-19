@@ -92,12 +92,11 @@ class VolumetricFog;
 class PuddleSsr;
 
 // Engine resources + this frame's light/shadow state that the scene-draw pass needs, gathered
-// into one explicit value instead of the ~25 `[&]`-captures the old main.cpp lambda relied on
-// (audit #359, pass 2). Pointers to the stable subsystems are the same every frame; the scalars
-// and the shadow arrays are refreshed per frame by main.cpp's light-gather + shadow passes
-// before RenderScene() runs. The shadow-array pointers alias main.cpp's fixed-size stack arrays
-// (SpotShadowMap::kMaxSpots / PointShadowMap::kMaxPoints entries); only the first *Count entries
-// are read.
+// into one explicit value. Pointers to the stable subsystems are the same every frame; the scalars
+// and the shadow arrays are refreshed per frame by the light gather + shadow passes (LightGather,
+// ShadowFrame) before RenderScene() runs. The shadow-array pointers alias the caller's fixed-size
+// arrays (SpotShadowMap::kMaxSpots / PointShadowMap::kMaxPoints entries); only the first *Count
+// entries are read.
 struct SceneRenderInputs {
     // --- stable engine resources ---
     Sky*                 sky            = nullptr;
@@ -139,7 +138,7 @@ struct SceneRenderInputs {
     float sunShadowBias       = 1.0f;
     float sunShadowNormalBias = 1.0f;
 
-    // spot-light shadow maps allocated this frame (arrays alias main.cpp stack storage)
+    // spot-light shadow maps allocated this frame (arrays alias the caller's storage)
     int              spotShadowCount      = 0;
     const glm::mat4* spotShadowVP         = nullptr;
     const glm::vec3* spotShadowPos        = nullptr;
@@ -178,8 +177,7 @@ struct FrameState {
     unsigned int ssrTex = 0; // puddle SSR result (PuddleSsr) the opaque pass reads on unit 18; 0 = none this view
 };
 
-// Host-owned scene-draw pass, extracted from main.cpp's `drawScene` lambda (audit #359, pass 2).
-// No behavior change: same GL calls, same uniform order. main.cpp still owns lifecycle, the
+// The scene-draw pass. The host (App/Application, through ViewPipeline) owns lifecycle, the
 // shadow/IBL/cluster prerequisite passes, framebuffer binding, and the viewport.
 class SceneRenderer {
 public:

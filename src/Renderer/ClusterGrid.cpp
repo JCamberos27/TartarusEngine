@@ -101,7 +101,7 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     EnsureCreated();
     const unsigned int groups = (CLUSTERS + 63) / 64;
 
-    // Cleared before the cull pass so kCullLightsCompute's atomicAdd/atomicOr accumulate fresh
+    // Cleared before the cull pass so ClusterCull.comp.glsl's atomicAdd/atomicOr accumulate fresh
     // state for just this frame's dispatch: the global append cursor restarts at 0, and the
     // overflow flag restarts clear (#204, adapted for #208's global list). A GPU-side clear: an
     // upload would write a buffer the previous view's dispatch may still be using.

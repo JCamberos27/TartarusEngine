@@ -8,7 +8,6 @@
 #include "DefaultTextures.h"
 #include "gl.h"
 
-#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
 
@@ -152,7 +151,6 @@ void VolumetricClouds::GenerateNoise() {
     glGenerateTextureMipmap(m_ShapeNoise);
     glGenerateTextureMipmap(m_DetailNoise);
     glGenerateTextureMipmap(m_Weather);
-    m_NoiseReady = true;
 }
 
 void VolumetricClouds::Tick(const SkySettings& s, float dt) {

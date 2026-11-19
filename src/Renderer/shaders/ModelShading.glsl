@@ -127,7 +127,7 @@ struct Light {
     vec4 PositionType; // xyz = world pos (point/spot); w = type: 0 directional, 1 point, 2 spot
     vec4 ColorRange;   // rgb = colour * intensity; a = range in metres (point/spot)
     vec4 DirCutoff;    // xyz = normalized aim direction (spot/directional); w = spot outer-cone cos (-1 = none)
-    vec4 Params;       // x = spot inner-cone cos; y = shadow slot; z = excluded-layer bits (#203); w reserved
+    vec4 Params;       // x = spot inner-cone cos; y = shadow slot; z = excluded-layer bits (#203); w = volumetric intensity
     vec4 BoxX, BoxY, BoxZ; // light bounds: rows world -> box (xyz = unit axis, w = -dot(axis, centre))
     vec4 BoxHalf;          // xyz = half extents; w = fade metres (< 0: unbounded)
 };

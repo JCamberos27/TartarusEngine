@@ -43,7 +43,6 @@ public:
     struct ProbeVolume { glm::vec3 Center, HalfSize; bool Capture; };
     ProbeVolume Volume(int i) const { return {m_Probes[i].Center, m_Probes[i].HalfSize, m_Probes[i].Capture}; }
     void SetLayer(int i, int layer) { m_Probes[i].Layer = layer; }
-    int Layer(int i) const { return m_Probes[i].Layer; }
     void SetCubeArray(unsigned int tex) { m_CubeArray = tex; }
     unsigned int CubeArray() const { return m_CubeArray; }
     // While a capture renders, every probe reads the sky: a probe's own half-written layer is never sampled, and a

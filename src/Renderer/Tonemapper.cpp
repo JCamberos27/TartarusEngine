@@ -9,12 +9,6 @@
 #include <algorithm>
 #include <cmath>
 
-#ifndef GL_R32F
-#define GL_R32F 0x822E
-#endif
-#ifndef GL_R16F
-#define GL_R16F 0x822D
-#endif
 
 Tonemapper::~Tonemapper() {
     delete m_Shader;

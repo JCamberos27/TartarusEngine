@@ -13,7 +13,6 @@ constexpr int kStride = 10;              // pos3 uv2 color4 kind1
 constexpr int kBeamSegments = 40;        // packed toward the emitter, where it's brightest
 constexpr float kSpotCore = 0.004f;      // metres: the dot's radius
 constexpr float kSpotQuad = 6.0f;        // the quad's half-size, in core radii (the halo)
-constexpr float kHoleQuad = 2.5f;        // in hole radii (the darkened ring)
 } // namespace
 
 WeaponFxRenderer::WeaponFxRenderer() {
@@ -45,13 +44,7 @@ void WeaponFxRenderer::AddBeam(const glm::vec3& from, const glm::vec3& to, const
 }
 
 void WeaponFxRenderer::AddSpot(const glm::vec3& center, const glm::vec3& normal, const glm::vec3& color) {
-    if (glm::length(normal) > 0.5f) m_Spots.push_back({center, glm::normalize(normal), glm::vec3(0.0f), color, kSpotCore, 0.0f});
-}
-
-void WeaponFxRenderer::AddHole(const glm::vec3& center, const glm::vec3& normal, const glm::vec3& tangent, float radius,
-                               float seed) {
-    if (glm::length(normal) > 0.5f && radius > 0.0f)
-        m_Holes.push_back({center, glm::normalize(normal), tangent, glm::vec3(0.015f, 0.013f, 0.012f), radius, seed});
+    if (glm::length(normal) > 0.5f) m_Spots.push_back({center, glm::normalize(normal), color, kSpotCore});
 }
 
 void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, int viewportHeight,
@@ -66,10 +59,8 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
     auto pixelAt = [&](const glm::vec3& p) { return glm::length(p - eye) * pxScale; };
 
     // A square on the surface, lifted just off it (more with distance, as depth precision drops).
-    auto decal = [&](const Decal& d, float halfSize, float kind, float alpha) {
-        glm::vec3 t = d.Tangent;
-        if (glm::length(t) < 0.5f)
-            t = std::abs(d.Normal.y) < 0.9f ? glm::cross(d.Normal, glm::vec3(0, 1, 0)) : glm::cross(d.Normal, glm::vec3(1, 0, 0));
+    auto decal = [&](const Spot& d, float halfSize, float kind, float alpha) {
+        glm::vec3 t = std::abs(d.Normal.y) < 0.9f ? glm::cross(d.Normal, glm::vec3(0, 1, 0)) : glm::cross(d.Normal, glm::vec3(1, 0, 0));
         t = glm::normalize(t - d.Normal * glm::dot(t, d.Normal));
         const glm::vec3 b = glm::cross(d.Normal, t);
         const glm::vec3 c = d.Center + d.Normal * (0.001f + glm::length(d.Center - eye) * 0.0004f);
@@ -78,19 +69,6 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
         vert(p00, -1, -1, d.Color, alpha, kind); vert(p10, 1, -1, d.Color, alpha, kind); vert(p11, 1, 1, d.Color, alpha, kind);
         vert(p00, -1, -1, d.Color, alpha, kind); vert(p11, 1, 1, d.Color, alpha, kind); vert(p01, -1, 1, d.Color, alpha, kind);
     };
-
-    // Holes first (alpha-blended, darkening), then the light (additive) over them.
-    // Always their real size; a far hole fades out as it shrinks to a few pixels across instead of
-    // flickering as a sub-pixel speck. The fade rides in the colour (the alpha is the edge seed).
-    for (Decal h : m_Holes) {
-        const float acrossPx = 2.0f * h.Radius / std::max(pixelAt(h.Center), 1e-6f);
-        const float t = std::clamp((acrossPx - 0.75f) / (3.0f - 0.75f), 0.0f, 1.0f);
-        const float fade = t * t * (3.0f - 2.0f * t);
-        if (fade <= 0.0f) continue;
-        h.Color = glm::vec3(fade);
-        decal(h, h.Radius * kHoleQuad, 2.0f, h.Seed);
-    }
-    const size_t holeVerts = V.size() / kStride;
 
     const glm::mat4 viewInv = glm::inverse(view);
     for (const Beam& beam : m_Beams) {
@@ -128,13 +106,12 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
             prevL = L; prevR = R; prevD = d; prevA = a;
         }
     }
-    for (const Decal& s : m_Spots) {
+    for (const Spot& s : m_Spots) {
         const float core = std::max(s.Radius, 1.3f * pixelAt(s.Center));
         decal(s, core * kSpotQuad, 1.0f, 1.0f);
     }
     m_Beams.clear();
     m_Spots.clear();
-    m_Holes.clear();
     if (V.empty()) return;
 
     glBindVertexArray(m_VAO);
@@ -159,15 +136,8 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
     glEnable(GL_BLEND);
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(-1.0f, -2.0f);
-    const GLsizei total = (GLsizei)(V.size() / kStride);
-    if (holeVerts > 0) {
-        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)holeVerts);
-    }
-    if ((GLsizei)holeVerts < total) {
-        glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
-        glDrawArrays(GL_TRIANGLES, (GLint)holeVerts, total - (GLsizei)holeVerts);
-    }
+    glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(V.size() / kStride));
     glDisable(GL_POLYGON_OFFSET_FILL);
     glDisable(GL_BLEND);
     glDepthFunc((GLenum)prevDepthFunc);

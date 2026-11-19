@@ -41,8 +41,6 @@ const std::vector<ImpostorSet>& Sets();
 // The set drawn for a LOD group whose LOD 0 draws `lod0` (its renderers' models, any order), or -1. Cached per model
 // list, so a full LOD pass over thousands of groups stays cheap.
 int Match(const std::vector<const Model*>& lod0);
-// Forgets the loaded sets and the match cache (a set added or re-baked while the editor runs).
-void Reload();
 // Unit tests: every LOD group matches set `set` (whatever its LOD 0 draws, models or none) with this start distance;
 // set -1 ends it.
 void TestOverride(int set, float startDistance);

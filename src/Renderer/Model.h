@@ -140,11 +140,10 @@ public:
 
     // Async import (AsyncAssetLoader): the whole Assimp import and every texture decode, with no
     // GL at all, so it can run on a worker thread. The result has its meshes and textures
-    // decoded but not uploaded; FinishGpuUpload() (main thread) creates the GL objects, and no one
-    // may draw or instance it before that. Settings as for the path constructor.
+    // decoded but not uploaded; GpuUploadStep / FinishGpuUploadStep (main thread) create the GL objects, and
+    // no one may draw or instance it before that. Settings as for the path constructor.
     static std::shared_ptr<Model> ImportDeferred(const std::string& path, const ModelImportSettings& settings);
     bool NeedsGpuUpload() const { return m_GpuPending; }
-    void FinishGpuUpload();
     // One mesh or one texture per call, so a loader can spread a big model over several frames.
     // Returns true once everything is uploaded.
     bool FinishGpuUploadStep();
@@ -195,7 +194,6 @@ public:
     // Geometry only — no material binds, no texture units. For the shadow / depth pre-pass.
     // Still uploads bone matrices + uUseSkinning: the depth vertex shader skins too.
     // slots: per-submesh MaterialAsset overrides; empty/short → imported mesh material.
-    void DrawDepthOnly(Shader& shader) { DrawDepthOnly(shader, {}); }
 
     // Clips: this model's own (0..OwnAnimationCount-1), then any attached from other files
     // (AttachClip, #175 — e.g. Mixamo animation-only FBXs played on the character).
@@ -204,8 +202,6 @@ public:
     int OwnAnimationCount() const { return (int)m_D->Animations.size(); }
     int AnimationCount() const { return (int)m_D->Animations.size() + (int)m_ExternalClips.size(); }
     const std::string& AnimationName(int index) const;
-    // A model file that is nothing but animation (no meshes) - an animation clip asset.
-    bool IsAnimationOnly() const { return m_D->Meshes.empty() && !m_D->Animations.empty(); }
 
     // #175 — plays `source`'s clip `sourceIndex` on this model, matching animated nodes by name
     // (a shared skeleton, e.g. every Mixamo export). `ref` is the stable reference it's found by
@@ -278,12 +274,6 @@ public:
     // CPU's blend. False, with the reason, when they differ or the shader doesn't build.
     static bool PreSkinSelfTest(std::string& why);
     bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }
-    // Has the current clip run out? True when nothing is set to play, false while a wrapping clip
-    // runs, and - unlike IsPlayingAnimation(), which a ClampForever clip never clears - true for a
-    // ClampForever clip that has reached its last frame and is now only holding it. This is the
-    // question a "did that one-shot finish?" gate actually wants: IsPlayingAnimation() answers
-    // "is a clip still driving the pose", and a held pose still is.
-    bool AnimationFinished() const;
     int  BoneCount() const { return m_D->BoneCounter; }
     // Changes whenever the pose does (a clip advanced, a pose applied): unchanged, the skinned mesh stands as it did.
     std::uint64_t PoseVersion() const { return m_PoseVersion; }
@@ -347,8 +337,6 @@ public:
     // The last pose ApplyLocalPose was given (empty before the first): for code that edits a
     // finished pose - IK on top of the animator's - and applies it again.
     const std::vector<LocalTRS>& AppliedLocalPose() const { return m_AppliedPose; }
-    // Seconds into the current clip as a 0..1 fraction of its length (0 when nothing plays).
-    float NormalizedTime() const;
 
     // --- Root motion (RootMotion.h) -------------------------------------------------------------
     // The node whose travel is the character's: `name` when this model has it, else (empty name)
@@ -378,7 +366,6 @@ public:
     // playing clips are posed in place and their motion collects until ConsumeRootMotion takes it.
     // -1 turns it off.
     void SetRootMotion(int node, const RootMotionSettings& s);
-    int RootMotionNode() const { return m_RootMotionNode; }
 
     // Nodes drawn collapsed: each one's subtree folds into its pivot (scale ~0), so skinned
     // geometry it drives disappears - e.g. a first-person body's arms while separate view-model

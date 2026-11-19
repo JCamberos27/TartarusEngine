@@ -2,7 +2,6 @@
 #include <glm/glm.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 
 // A substrate (docs/DECALS.md, "Substrate"): the PBR material under the paint, shown where a peel
@@ -31,15 +30,8 @@ struct SubstrateDesc {
 
     bool Enabled() const { return !Albedo.empty() && Strength > 0.0f; }
 
-    // Identity for the substrate table: the maps plus every value the GPU record carries.
-    std::string Key() const {
-        char buf[288];
-        std::snprintf(buf, sizeof buf, "|%g|%g,%g,%g|%g|%g,%g|%d|%g,%g,%g,%g|%g", Tiling, Tint.r, Tint.g, Tint.b, Strength,
-                      RoughRange.x, RoughRange.y, Mirror ? 1 : 0, Crop.x, Crop.y, Crop.z, Crop.w, Detail);
-        return Albedo + "|" + Normal + "|" + Roughness + "|" + AO + buf;
-    }
-    // The same identity without building a string (the per-frame lookups): a 64-bit hash of the maps and the
-    // values (Preset left out, as in Key()), and a field-by-field comparison.
+    // Identity for the substrate table without building a string (the per-frame lookups): a 64-bit hash of the
+    // maps and every value the GPU record carries (Preset left out), and a field-by-field comparison.
     std::uint64_t Hash() const {
         std::uint64_t h = 1469598103934665603ull;
         auto bytes = [&h](const void* p, std::size_t n) {

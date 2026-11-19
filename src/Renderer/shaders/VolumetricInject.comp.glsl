@@ -15,7 +15,6 @@ layout(binding = 6) uniform sampler3D uHistory;      // last frame's output of t
 layout(binding = 7) uniform sampler2D uBlueNoise;    // 32 x 32 void-and-cluster ranks
 
 uniform mat4  uInvView;       // view -> world
-uniform mat4  uView;
 uniform vec4  uProjParams;    // P[0][0], P[1][1], P[2][0], P[2][1]: the view ray through an NDC point
 uniform vec4  uSliceParams;   // x = near, y = ln(far / near)
 uniform vec3  uCameraPos;
@@ -29,7 +28,6 @@ uniform float uHeightFalloff;  // 0 = uniform; > 0 thins out above uBaseHeight
 uniform float uBaseHeight;
 uniform vec3  uAlbedo;         // single-scattering albedo (sigma_s / sigma_t)
 uniform float uAnisotropy;     // Henyey-Greenstein g
-uniform float uAmbientScale;   // x the sky ambient's in-scatter
 // The sky's irradiance probe (the model shader's unit 11): its up and down texels, averaged and
 // divided by pi, are the sky radiance the medium scatters isotropically.
 uniform int uIBLEnabled;
@@ -184,7 +182,7 @@ void main() {
     vec3 inScatter = vec3(0.0);
     if (uIBLEnabled == 1) {
         vec3 sky = textureLod(uIrradianceMap, vec3(0.0, 1.0, 0.0), 0.0).rgb + textureLod(uIrradianceMap, vec3(0.0, -1.0, 0.0), 0.0).rgb;
-        inScatter = sky * (0.5 / PI) * uIBLIntensity * uAmbientScale;
+        inScatter = sky * (0.5 / PI) * uIBLIntensity;
     }
     for (uint i = 0u; i < uDirectionalCount; ++i) {
         float vol = uLights[i].Params.w;

@@ -47,8 +47,6 @@ public:
     // that room's reflections, not the whole house's.
     static void RequestRecaptureAt(const glm::vec3& p);
 
-    int ReadyCount() const;
-    int SlotCount() const { return (int)m_Slots.size(); }
     void Release();
 
     // The view matrix of cube face `face` (GL order +X -X +Y -Y +Z -Z) seen from `pos`, oriented so a render of it

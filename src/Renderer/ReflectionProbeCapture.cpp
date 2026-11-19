@@ -56,12 +56,6 @@ void ReflectionProbeCapture::RequestRecaptureAt(const glm::vec3& p) {
 
 bool ReflectionProbeCapture::Busy() const { return m_Cap.Slot >= 0 || m_Pre.Slot >= 0 || !m_Queue.empty(); }
 
-int ReflectionProbeCapture::ReadyCount() const {
-    int n = 0;
-    for (const Slot& s : m_Slots) n += s.Ready ? 1 : 0;
-    return n;
-}
-
 glm::mat4 ReflectionProbeCapture::FaceView(const glm::vec3& pos, int face) {
     // GL cube faces with the up vectors that make a plain render land in the face as the sampler reads it (the
     // face's t axis runs down world -Y on the four sides). Each is a pure rotation, so winding and culling hold.

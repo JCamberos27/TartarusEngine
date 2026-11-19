@@ -218,7 +218,6 @@ void VolumetricFog::Render(const FrameState& fs) {
     Shader& inject = *m_InjectShader;
     inject.Bind();
     inject.SetMat4("uInvView", glm::inverse(ctx.View));
-    inject.SetMat4("uView", ctx.View);
     inject.SetVec4("uProjParams", projParams);
     inject.SetVec4("uSliceParams", sliceParams);
     inject.SetVec3("uCameraPos", camera);
@@ -232,7 +231,6 @@ void VolumetricFog::Render(const FrameState& fs) {
     inject.SetFloat("uBaseHeight", world.VolumetricBaseHeight);
     inject.SetVec3("uAlbedo", glm::clamp(world.VolumetricAlbedo, glm::vec3(0.0f), glm::vec3(1.0f)));
     inject.SetFloat("uAnisotropy", std::clamp(world.VolumetricAnisotropy, -0.95f, 0.95f));
-    inject.SetFloat("uAmbientScale", 1.0f);
     inject.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
     inject.SetFloat("uIBLIntensity", std::max(world.SkyAmbientIntensity, 0.0f));
     if (fs.iblOn) glBindTextureUnit(11, in.iblProbe->IrradianceMap());

@@ -59,7 +59,6 @@ public:
 
 private:
     struct VolumeJob {
-        entt::entity Entity = entt::null;
         std::string Name, BakeFile;
         GI::Box Bounds;
         glm::ivec3 Dims{0};
@@ -74,7 +73,6 @@ private:
     void ApplyLighting(World& world, const Pass& p);
     void RestoreLighting(World& world);
     bool Finish(World& world, GIVolumes& gi);
-    int ProbeCount() const;
 
     Options m_Opt;
     std::vector<VolumeJob> m_Volumes;
