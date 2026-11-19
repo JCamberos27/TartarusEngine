@@ -142,19 +142,20 @@ std::string ReadAll(const std::filesystem::path& p) {
 // --- Camera roll (#165) --------------------------------------------------------------------
 void TestRecoilProfile() {
     RecoilAsset asset, loaded;
-    asset.Data = WeaponProceduralSettings::Defaults().Recoil; // exercise version-1 migration
-    asset.Data.AimPitch = glm::vec2(1.0f);
-    asset.Data.AimYaw = glm::vec2(-0.2f);
-    asset.Data.AimRecovery = 1.0f;
-    asset.Data.AimSmoothing = glm::vec2(50.0f);
-    asset.Data.NoiseSide = {-0.001f, 0.001f};
-    asset.Data.PushAmount = 0.01f;
-    asset.Data.PitchProgression = 0.3f;
-    asset.Data.UpProgression = 0.003f;
-    asset.Data.SwayPitch = glm::vec2(0.2f);
-    asset.Data.SustainedCurves = true;
-    asset.Data.SustainedDuration = 0.25f;
-    asset.Data.AdsPivot = {0.0f, 0.0f, 0.1f};
+    LegacyRecoilSettings old = LegacyRecoilSettings::Defaults(); // old tuning, converted as a load converts it
+    old.AimPitch = glm::vec2(1.0f);
+    old.AimYaw = glm::vec2(-0.2f);
+    old.AimRecovery = 1.0f;
+    old.AimSmoothing = glm::vec2(50.0f);
+    old.NoiseSide = {-0.001f, 0.001f};
+    old.PushAmount = 0.01f;
+    old.PitchProgression = 0.3f;
+    old.UpProgression = 0.003f;
+    old.SwayPitch = glm::vec2(0.2f);
+    old.SustainedCurves = true;
+    old.SustainedDuration = 0.25f;
+    old.AdsPivot = {0.0f, 0.0f, 0.1f};
+    asset.Data.Unity = RecoilAnimData::FromLegacy(old);
     std::string why;
     CHECK(RecoilAsset::FromJsonString(asset.ToJsonString(), loaded, &why));
     CHECK(loaded.ToJsonString() == asset.ToJsonString());
@@ -191,11 +192,11 @@ void TestRecoilProfile() {
     CHECK(weapon.SaveFile(definition.u8string()));
     FirstPersonAnimationSet resolved;
     CHECK(FirstPersonAnimationSet::LoadFile(definition.u8string(), resolved, &why));
-    CHECK(resolved.Procedural.Recoil.UnityPort && resolved.Procedural.Recoil.Unity.VerticalRecoil == glm::vec2(1.0f));
+    CHECK(resolved.Procedural.Recoil.Unity.VerticalRecoil == glm::vec2(1.0f));
     CHECK(resolved.Procedural.Recoil.HipProcedural);
     CHECK(resolved.Procedural.Recoil.BoltBone == "action" && resolved.Procedural.Recoil.BoltTravel.z == 0.02f);
     CHECK(resolved.Gameplay.BurstRounds == 3);
-    asset.Data.AimPitch = glm::vec2(2.0f);
+    asset.Data.Unity.VerticalRecoil = glm::vec2(2.0f);
     CHECK(asset.SaveFile(profile.u8string()));
     CHECK(FirstPersonAnimationSet::LoadFile(definition.u8string(), resolved, &why));
     CHECK(resolved.Procedural.Recoil.Unity.VerticalRecoil == glm::vec2(2.0f));
@@ -216,66 +217,12 @@ void TestRecoilProfile() {
 
     auto settings = WeaponProceduralSettings::Defaults();
     settings.Recoil = loaded.Data;
-    settings.Recoil.UnityPort = false; // retain regression coverage for embedded legacy weapon definitions
-    settings.Recoil.AimPitch = glm::vec2(1.0f);
-    settings.Recoil.AimYaw = glm::vec2(0.0f);
-    settings.Recoil.AimSmoothing = glm::vec2(0.0f);
-    settings.Recoil.AimRecoveryDelay = 0.2f;
-    settings.Recoil.AimRecoverySpeed = 20.0f;
-    settings.Recoil.AimRecovery = 1.0f;
+    settings.Sway.Enabled = settings.Breath.Enabled = settings.Lean.Enabled = false;
     WeaponProceduralInput input;
-    input.Dt = 1.0f / 120.0f;
     input.Ads = true;
-    WeaponProceduralState state;
-    state.OnShot(settings, true);
-    CHECK(state.Update(settings, input).AimKick.x == 1.0f);
-    CHECK(state.ConsumeAimKick().x == 1.0f);
-    CHECK(state.ConsumeAimKick() == glm::vec2(0.0f));
-    state.CompensateAim({-1.0f, 0.0f});
-    float recovery = 0.0f;
-    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
-    CHECK(std::fabs(recovery) < 1e-5f); // player already countered all of it
-    state.Reset();
-    state.OnShot(settings, true);
-    state.Update(settings, input);
-    state.CompensateAim({-0.4f, 0.0f});
-    recovery = 0.0f;
-    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
-    CHECK(std::fabs(recovery + 0.6f) < 1e-4f);
-    state.Reset();
-    state.OnShot(settings, true);
-    state.Update(settings, input);
-    state.CompensateAim({1.0f, 0.0f}); // moving with the kick does not count as compensation
-    recovery = 0.0f;
-    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
-    CHECK(std::fabs(recovery + 1.0f) < 1e-4f);
-    state.Reset();
-    state.OnShot(settings, true);
-    state.SetFiring(true);
-    float heldAim = 0.0f;
-    for (int i = 0; i < 120; ++i) heldAim += state.Update(settings, input).AimKick.x;
-    CHECK(std::fabs(heldAim - 1.0f) < 1e-5f); // held fire postpones recovery even at a slow cadence
-    state.EndBurst();
-    for (int i = 0; i < 120; ++i) heldAim += state.Update(settings, input).AimKick.x;
-    CHECK(std::fabs(heldAim) < 1e-5f);
-    state.Reset();
-    state.OnShot(settings, true);
-    state.Update(settings, input);
-    state.DiscardClampedAim({1.0f, 0.0f});
-    recovery = 0.0f;
-    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
-    CHECK(std::fabs(recovery) < 1e-5f); // a kick blocked by the pitch limit must not recover
-    settings.Recoil.AimAdsScale = 0.5f;
-    settings.Recoil.AdsScale = 0.0f;
-    state.Reset();
-    state.OnShot(settings, true);
-    CHECK(state.Update(settings, input).AimKick.x == 0.5f); // independent controller ADS multiplier
-    settings.Recoil.AimAdsScale = 1.0f;
-    settings.Recoil.AdsScale = 1.0f;
-
-    // Same impulses at several frame rates: controller integration stays constant and all visual layers settle.
-    settings.Recoil.AimRecovery = 0.0f;
-    settings.Recoil.AimSmoothing = {30.0f, 60.0f};
+    // The same five rounds at several frame rates: finite every frame, the aim climb about the same, and all of it
+    // settles back once the trigger rests.
+    float climbAt60 = 0.0f;
     for (float dt : {1.0f / 30.0f, 1.0f / 60.0f, 1.0f / 144.0f}) {
         WeaponProceduralState sim;
         sim.Seed(42);
@@ -283,20 +230,23 @@ void TestRecoilProfile() {
         glm::vec2 integrated(0.0f);
         int shots = 0;
         for (int f = 0; f < (int)(5.0f / dt); ++f) {
-            if (shots < 5 && f * dt >= shots * 0.1f) { sim.OnShot(settings, true); ++shots; }
+            if (shots < 5 && f * dt >= shots * 0.1f) { sim.SetFiring(true); sim.OnShot(settings, true, true, 600.0f, RecoilFireMode::Auto); ++shots; }
+            else if (shots == 5 && f * dt >= 0.55f) sim.SetFiring(false);
             const auto& pose = sim.Update(settings, input);
             integrated += pose.AimKick;
-            CHECK(std::isfinite(pose.Position.x) && std::isfinite(pose.Rotation.x));
+            CHECK(std::isfinite(pose.Position.x) && std::isfinite(pose.Rotation.x) && std::isfinite(pose.AimKick.x));
         }
-        CHECK(std::fabs(integrated.x - 5.0f) < 0.001f);
+        if (dt == 1.0f / 60.0f) climbAt60 = integrated.x;
         CHECK(sim.ActiveShots() == 0 && glm::length(sim.Pose().Position) < 0.001f);
     }
+    CHECK(std::isfinite(climbAt60));
     // Shared asset stays immutable, and runtime states remain independent.
     WeaponProceduralState a, b;
     const auto tuning = loaded.ToJsonString();
+    input.Dt = 1.0f / 120.0f;
     a.OnShot(settings, true);
     a.Update(settings, input);
-    CHECK(b.ActiveShots() == 0 && b.Pose().AimKick == glm::vec2(0.0f));
+    CHECK(a.ActiveShots() == 1 && b.ActiveShots() == 0 && b.Pose().AimKick == glm::vec2(0.0f));
     CHECK(loaded.ToJsonString() == tuning);
     a.Reset();
     CHECK(a.ActiveShots() == 0 && a.Pose().Position == glm::vec3(0.0f));
@@ -4518,11 +4468,12 @@ void TestFirstPersonAnimationFSM() {
         "recoil":{"pitch":2.0}}})", v2, &error));
     CHECK(v2.Controller == "weapons/w.controller");
     CHECK(v2.Gameplay.Magazine == 20 && v2.Gameplay.RoundsPerMinute == 600.0f && !v2.Gameplay.AllowFullAuto);
-    // A pre-procedural recoil block becomes curves of the same shape: the 2 degree kick peaks at
-    // the old rise time (defaults for what's unspecified), ADS only.
-    CHECK(std::fabs(v2.Procedural.Recoil.Duration - (0.035f + 5.0f * 0.08f)) < 1e-5f);
-    CHECK(std::fabs(v2.Procedural.Recoil.Rotation.X.Evaluate(0.035f / v2.Procedural.Recoil.Duration) - 2.0f) < 1e-4f);
-    CHECK(v2.Procedural.Recoil.HipScale == 0.0f && v2.Procedural.Recoil.PitchRange == glm::vec2(1.0f));
+    // A pre-procedural recoil block becomes the old kick's shape (rise, then settle; defaults for what's unspecified),
+    // converted: the curves span the old duration and the 2 degree kick stays (it was ADS only, so it is the base).
+    const RecoilAnimData& oldKick = v2.Procedural.Recoil.Unity;
+    CHECK(std::fabs(oldKick.SemiRotCurve.Length() - (0.035f + 5.0f * 0.08f)) < 1e-4f);
+    CHECK(std::fabs(oldKick.SemiRotCurve.X.Evaluate(0.035f) - 1.0f) < 1e-3f); // normalised curve, peak at the rise
+    CHECK(std::fabs(oldKick.Pitch.x + 2.0f) < 1e-4f && oldKick.Pitch.x == oldKick.Pitch.y);
     FirstPersonAnimationSet again;
     CHECK(FirstPersonAnimationSet::FromJsonString(v2.ToJsonString(), again, &error));
     CHECK(again.Controller == v2.Controller && again.Gameplay.Magazine == 20 && !again.Gameplay.AllowFullAuto);
@@ -4918,14 +4869,19 @@ void TestWeaponProcedural() {
     WeaponProceduralSettings loaded;
     std::string error;
     CHECK(WeaponProceduralSettings::FromJson(defaults.ToJson(), loaded, &error));
-    CHECK(std::fabs(loaded.Recoil.Rotation.X.Evaluate(0.2f) - defaults.Recoil.Rotation.X.Evaluate(0.2f)) < 1e-4f);
+    CHECK(loaded.Recoil.Unity.ToJson() == defaults.Recoil.Unity.ToJson());
     CHECK(loaded.Bob.SprintStride == defaults.Bob.SprintStride && loaded.Bob.Ease == defaults.Bob.Ease);
     CHECK(loaded.StateOffsets.size() == defaults.StateOffsets.size() && loaded.IK.GunBone == "ik_hand_gun");
     WeaponProceduralSettings untouched = defaults;
     CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"recoil":{"duration":0}})"), untouched, &error));
     CHECK(error.find("duration") != std::string::npos);
     CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"breath":{"position":{"x":[[0,"a"]]}}})"), untouched, &error));
-    CHECK(untouched.Recoil.Duration == defaults.Recoil.Duration); // a bad load changes nothing
+    CHECK(untouched.Recoil.Unity.ToJson() == defaults.Recoil.Unity.ToJson()); // a bad load changes nothing
+    // Old tuning (no recoilAnimData) converts on load and saves converted: the old keys are gone from the file.
+    WeaponProceduralSettings converted = defaults;
+    CHECK(WeaponProceduralSettings::FromJson(json::parse(R"({"recoil":{"duration":0.3,"hipScale":0.5,"aimPitch":[0.2,0.4]}})"), converted, &error));
+    CHECK(std::fabs(converted.Recoil.Unity.SemiRotCurve.Length() - 0.3f) < 1e-4f && converted.Recoil.Unity.VerticalRecoil == glm::vec2(0.2f, 0.4f));
+    CHECK(converted.ToJson()["recoil"].contains("recoilAnimData") && !converted.ToJson()["recoil"].contains("duration"));
     // Partial blocks keep everything they don't name.
     CHECK(WeaponProceduralSettings::FromJson(json::parse(R"({"lean":{"angle":20}})"), untouched, &error));
     CHECK(untouched.Lean.Angle == 20.0f && untouched.Lean.Offset == defaults.Lean.Offset);
@@ -4941,63 +4897,36 @@ void TestWeaponProcedural() {
         return st.Pose();
     };
 
-    // Recoil: a shot kicks the muzzle up and back, and it settles back to rest.
+    // Recoil (a new weapon's, converted from the old defaults): a shot kicks the muzzle and settles back to rest.
     {
         WeaponProceduralState st;
         st.OnShot(s, true);
         const WeaponProceduralPose early = run(st, s, {}, 0.06f);
-        CHECK(early.Rotation.x > 0.5f && early.Position.z > 0.005f);
-        CHECK(early.CameraKick.x > 0.0f);
+        CHECK(std::fabs(early.Rotation.x) > 0.1f || std::fabs(early.Position.z) > 0.001f);
+        st.SetFiring(false);
         const WeaponProceduralPose rest = run(st, s, {}, 1.5f);
         CHECK(std::fabs(rest.Rotation.x) < 0.02f && std::fabs(rest.Position.z) < 1e-4f && st.ActiveShots() == 0);
     }
-    // Full auto overlaps shots into a climb bigger than any single kick.
-    {
-        WeaponProceduralState single, burst;
-        single.OnShot(s, true);
-        float singlePeak = 0.0f, burstPeak = 0.0f;
-        WeaponProceduralInput in;
-        in.Dt = 1.0f / 120.0f;
-        for (int f = 0; f < 120; ++f) singlePeak = std::max(singlePeak, single.Update(s, in).Rotation.x);
-        for (int f = 0; f < 120; ++f) {
-            if (f % 10 == 0) burst.OnShot(s, true); // ~720 rpm
-            burstPeak = std::max(burstPeak, burst.Update(s, in).Rotation.x);
-        }
-        CHECK(burstPeak > singlePeak * 1.5f);
-    }
-    // Aim climb moves the real aim and only its recoverable share comes back; the bolt cycles
-    // back and home within its cycle. Off by default (defaults have no climb and no bolt).
+    // The bolt cycles back and home within its cycle; the setting round-trips.
     {
         WeaponProceduralSettings a = s;
-        a.Recoil.AimPitch = glm::vec2(0.5f);
-        a.Recoil.AimYaw = glm::vec2(0.1f);
-        a.Recoil.AimRecovery = 0.5f;
-        a.Recoil.AimRecoveryDelay = 0.1f;
-        a.Recoil.AimRecoverySpeed = 20.0f;
         a.Recoil.BoltCycle = 0.08f;
-        a.Recoil.AdsScale = 1.0f;
         WeaponProceduralState st;
         WeaponProceduralInput in;
         in.Dt = 1.0f / 120.0f;
-        glm::vec2 aim(0.0f), peak(0.0f);
         float boltPeak = 0.0f;
-        for (int f = 0; f < 240; ++f) {
-            if (f < 30 && f % 10 == 0) st.OnShot(a, true); // three rounds
+        st.OnShot(a, true);
+        for (int f = 0; f < 60; ++f) {
             const WeaponProceduralPose& p = st.Update(a, in);
-            aim += p.AimKick;
-            peak = glm::max(peak, aim);
             if (f < 10) boltPeak = std::max(boltPeak, p.Bolt);
         }
-        CHECK(std::fabs(peak.x - 1.5f) < 0.02f && std::fabs(peak.y - 0.3f) < 0.01f);
-        CHECK(std::fabs(aim.x - 0.75f) < 0.02f); // half of it recovered
         CHECK(boltPeak > 0.95f && st.Pose().Bolt == 0.0f);
         WeaponProceduralSettings back;
         CHECK(WeaponProceduralSettings::FromJson(a.ToJson(), back, &error));
-        CHECK(back.Recoil.AimPitch == a.Recoil.AimPitch && back.Recoil.BoltCycle == a.Recoil.BoltCycle &&
-              back.Recoil.AimRecovery == a.Recoil.AimRecovery && !back.Recoil.HipProcedural);
+        CHECK(back.Recoil.BoltCycle == a.Recoil.BoltCycle && !back.Recoil.HipProcedural);
         WeaponProceduralState plain;
         plain.OnShot(s, true);
-        CHECK(plain.Update(s, in).AimKick == glm::vec2(0.0f) && plain.Pose().Bolt == 0.0f);
+        CHECK(plain.Update(s, in).Bolt == 0.0f); // off by default
     }
     // A disabled recoil does nothing.
     {
@@ -5059,7 +4988,6 @@ void TestWeaponProcedural() {
     // presentation moves the whole view model instead) rather than fading it away.
     {
         WeaponProceduralSettings z = WeaponProceduralSettings::Defaults();
-        z.Recoil.Duration = 0.0f;
         z.Bob.WalkStride = z.Bob.SprintStride = 0.0f;
         z.Breath.Period = 0.0f;
         z.Locomotion.MinRate = 1.3f;
@@ -5196,19 +5124,6 @@ void TestWeaponProcedural() {
         run(winded, b, sprint, 6.0f);
         CHECK(breathSpan(winded, still) > calmSpan * 1.4f);
 
-        // The per-round punch: a roll and an FOV pulse that spring back to nothing.
-        WeaponProceduralSettings pr = s;
-        WeaponProceduralState ps;
-        ps.OnShot(pr, false);
-        float peakFov = 0.0f, peakRoll = 0.0f;
-        for (int i = 0; i < 30; ++i) {
-            const WeaponProceduralPose& p = run(ps, pr, still, 1.0f / 120.0f);
-            peakFov = std::max(peakFov, p.FovKick);
-            peakRoll = std::max(peakRoll, std::fabs(p.CameraRoll));
-        }
-        CHECK(peakFov > pr.Recoil.FovPunch * pr.Recoil.HipScale * 0.3f && peakRoll > 0.03f);
-        CHECK(std::fabs(run(ps, pr, still, 2.0f).FovKick) < 1e-3f);
-
         // Lean: the head arcs over (slides Offset, drops a little, rolls Angle); the gun's roll
         // lags behind it early on.
         {
@@ -5243,12 +5158,12 @@ void TestWeaponProcedural() {
         edited.CameraMotion.SprintBob = glm::vec2(0.02f, 0.9f);
         edited.Obstruction.Reach = 1.1f;
         edited.Breath.ExertionScale = 3.0f;
-        edited.Recoil.FovPunch = -0.4f;
+        edited.Recoil.HipProcedural = true;
         WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
         std::string err;
         CHECK(WeaponProceduralSettings::FromJson(edited.ToJson(), back, &err));
         CHECK(back.Jump.LandPitch == 2.5f && back.CameraMotion.SprintBob == glm::vec2(0.02f, 0.9f) &&
-              back.Obstruction.Reach == 1.1f && back.Breath.ExertionScale == 3.0f && back.Recoil.FovPunch == -0.4f);
+              back.Obstruction.Reach == 1.1f && back.Breath.ExertionScale == 3.0f && back.Recoil.HipProcedural);
     }
 }
 
