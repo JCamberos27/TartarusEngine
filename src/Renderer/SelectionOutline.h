@@ -3,17 +3,19 @@
 
 #include <glm/glm.hpp>
 
+#include <entt/entity/entity.hpp>
+
 class World;
-class Camera;
-class EditorLayer;
 class HdrTarget;
 class Model;
 class Shader;
 
 struct SelectionOutlineInputs {
     World* world = nullptr;
-    EditorLayer* editor = nullptr;
-    Camera* editorCamera = nullptr;       // the hover pick's camera
+    const std::vector<entt::entity>* selection = nullptr; // the editor's selection
+    entt::entity hovered = entt::null;                    // the hover pre-highlight's entity (null: none)
+    glm::vec3 color{1.0f};                                // the ring's colour
+    float reveal = 1.0f;                                  // the selection ring's sweep-on, 0..1 (EditorLayer)
     Shader* maskShader = nullptr;   // OutlineModel: flat white silhouettes into the mask
     Shader* dilateShader = nullptr; // OutlineDilate: the ring around the mask
     unsigned int fsQuadVao = 0;     // attribute-less fullscreen triangle pair
@@ -21,7 +23,6 @@ struct SelectionOutlineInputs {
     glm::mat4 view{1.0f}, proj{1.0f}; // unjittered, so the outline doesn't shimmer through the TAA resolve
     int width = 0, height = 0;      // the Scene view's size
     bool wireframe = false;         // F5 Wireframe: the caller's polygon mode is GL_LINE
-    bool playing = false;           // no hover pre-highlight in Play
 };
 
 // The Scene view's selection outline: screen-space. Render the selected meshes' silhouettes to a

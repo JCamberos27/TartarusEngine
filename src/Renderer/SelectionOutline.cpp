@@ -2,9 +2,7 @@
 
 #include <algorithm>
 
-#include "Camera.h"
 #include "Components.h"
-#include "EditorLayer.h"
 #include "GLStateCache.h"
 #include "gl.h"
 #include "HdrTarget.h"
@@ -46,8 +44,8 @@ void SelectionOutline::EnsureMask(int w, int h) {
 // the hovered mesh in G), then one fullscreen pass paints both rings (OutlineDilate.frag.glsl).
 void SelectionOutline::Render(const SelectionOutlineInputs& in) {
     World& world = *in.world;
-    EditorLayer& editor = *in.editor;
-    const auto selection = editor.GetSelectedItems();
+    static const std::vector<entt::entity> kNone;
+    const std::vector<entt::entity>& selection = in.selection ? *in.selection : kNone;
 
     std::vector<Model*> models;
     std::vector<glm::mat4> xforms;
@@ -62,16 +60,13 @@ void SelectionOutline::Render(const SelectionOutlineInputs& in) {
     }
     const std::size_t selected = models.size();
     // Hover pre-highlight: the mesh under the cursor, unless it is already selected.
-    if (!in.playing) {
-        editor.UpdateHoverPick(world, *in.editorCamera);
-        const entt::entity hovered = editor.HoveredEntity();
-        if (hovered != entt::null && world.Registry.valid(hovered) &&
-            std::find(selection.begin(), selection.end(), hovered) == selection.end()) {
-            auto* hoverRend = world.Registry.try_get<RenderableComponent>(hovered);
-            if (hoverRend && hoverRend->ModelRef) {
-                xforms.push_back(world.GetCachedWorldTransform(hovered));
-                models.push_back(hoverRend->ModelRef.get());
-            }
+    const entt::entity hovered = in.hovered;
+    if (hovered != entt::null && world.Registry.valid(hovered) &&
+        std::find(selection.begin(), selection.end(), hovered) == selection.end()) {
+        auto* hoverRend = world.Registry.try_get<RenderableComponent>(hovered);
+        if (hoverRend && hoverRend->ModelRef) {
+            xforms.push_back(world.GetCachedWorldTransform(hovered));
+            models.push_back(hoverRend->ModelRef.get());
         }
     }
     if (models.empty() || in.width <= 0 || in.height <= 0) return;
@@ -113,7 +108,7 @@ void SelectionOutline::Render(const SelectionOutlineInputs& in) {
     glBindTextureUnit(0, m_Mask);
     dilate.SetInt("uMask", 0);
     dilate.SetVec3("uTexel", glm::vec3(1.0f / (float)w, 1.0f / (float)h, 0.0f));
-    dilate.SetVec3("uColor", editor.SelectionOutlineColor()); // theme-driven: near-white on Glass
+    dilate.SetVec3("uColor", in.color);
     dilate.SetFloat("uHoverFade", 0.65f);                      // the pre-highlight at ~35%
     dilate.SetInt("uRadius", kOutlinePixels);
     {   // Motion v2: the selection's outline sweeps on around its centre after it changes
@@ -122,7 +117,7 @@ void SelectionOutline::Render(const SelectionOutlineInputs& in) {
         if (selected) c /= (float)selected;
         const glm::vec4 clip = in.proj * in.view * glm::vec4(c, 1.0f);
         const glm::vec2 uv = clip.w > 1e-4f ? glm::vec2(clip) / clip.w * 0.5f + 0.5f : glm::vec2(0.5f);
-        dilate.SetFloat("uSweepHide", selected ? 1.0f - editor.SelectionOutlineReveal() : 0.0f);
+        dilate.SetFloat("uSweepHide", selected ? 1.0f - in.reveal : 0.0f);
         dilate.SetVec2("uSweepCenter", uv);
     }
     glBindVertexArray(in.fsQuadVao);
