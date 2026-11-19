@@ -165,14 +165,11 @@ public:
     // Pure helpers (unit-tested).
     static Decals::GpuDecalBounds BoundsFor(const glm::mat4& boxToWorld);
     static glm::mat4 VariationFor(int seed, float rotJitterDeg, float scaleJitter, bool flip);
-    static void SortDeterministic(std::vector<DecalInstance>& v);
-    // The cull compute's test (ClusterDecalCull.comp.glsl), CPU side: the box's AABB against `mn`/`mx`,
-    // then the box's own three axes. Conservative (no edge-cross axes); both in the same space.
-    static bool OverlapsAabb(const Decals::GpuDecalBounds& b, const glm::vec3& mn, const glm::vec3& mx);
-    // What the compute writes for one cluster: the indices of `bounds` that overlap it, in order, and
-    // past `cap` hits only the last `cap` (the top-most).
-    static void BinCluster(const std::vector<Decals::GpuDecalBounds>& bounds, const glm::vec3& mn,
-                           const glm::vec3& mx, int cap, std::vector<uint32_t>& out);
+    // The draw order every decal list is sorted by (components, the ghost, runtime decals, the per-view merge):
+    // the key (SortOrder, entity), then the seed, then `seq` (the gather order) - a strict total order, so the same
+    // decals draw in the same order every frame.
+    static bool DrawOrderLess(std::uint64_t aKey, std::uint32_t aSeed, std::uint32_t aSeq, std::uint64_t bKey,
+                              std::uint32_t bSeed, std::uint32_t bSeq);
     // The atlas frame a seed picks when DecalComponent::Frame is -1.
     static int FrameFor(int seed, int frames);
     // A runtime decal packed against its resident slot (WorldToBox is left to Prepare). `fade` (the

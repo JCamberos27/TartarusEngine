@@ -230,22 +230,11 @@ void HiZCuller::AddBox(const glm::vec3& wmin, const glm::vec3& wmax, bool bounde
     g_Boxes.emplace_back(hi, 0.0f);
 }
 
-bool HiZCuller::NearEye(const glm::vec3& wmin, const glm::vec3& wmax, const glm::vec3& eye, float margin) {
-    const glm::vec3 d = glm::max(glm::max(wmin - eye, eye - wmax), glm::vec3(0.0f));
-    return glm::dot(d, d) < margin * margin;
-}
-
 void HiZCuller::PadBounds(glm::vec3& wmin, glm::vec3& wmax) {
     // A hair larger than the object: the boxes and the depth program round positions differently.
     const glm::vec3 pad = (wmax - wmin) * 0.01f + glm::vec3(0.02f);
     wmin -= pad;
     wmax += pad;
-}
-
-int HiZCuller::LevelFor(int x0, int y0, int x1, int y1) {
-    int level = 0;
-    while ((x1 >> level) - (x0 >> level) > 1 || (y1 >> level) - (y0 >> level) > 1) ++level;
-    return level;
 }
 
 bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport, const glm::mat4& viewProj,
