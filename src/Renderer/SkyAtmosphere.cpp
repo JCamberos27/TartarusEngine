@@ -1,4 +1,5 @@
 #include "SkyAtmosphere.h"
+#include "GLStateScope.h"
 #include "TimeOfDay.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
@@ -536,13 +537,8 @@ void SkyAtmosphere::DrawSky(const void* viewKey) {
     UpdateAtmosphereUniforms(m_Settings, m_Lighting, vr.CameraWorld);
 
     // Only where nothing opaque wrote depth: the quad sits exactly on the far plane (Sky.vert).
-    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-    GLint prevDepthMask = GL_TRUE, prevDepthFunc = GL_LESS;
-    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
-    glGetIntegerv(GL_DEPTH_FUNC, &prevDepthFunc);
-    glDepthMask(GL_FALSE);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
+    {
+    GLSkyDepthScope skyDepth;
 
     const int* vp = vr.Viewport;
     m_CompositeShader->Bind();
@@ -554,10 +550,7 @@ void SkyAtmosphere::DrawSky(const void* viewKey) {
     m_CompositeShader->SetFloat("uFrame", (float)(m_Frame % 64));
     glBindVertexArray(m_Vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    glDepthFunc((GLenum)prevDepthFunc);
-    if (!wasDepthTest) glDisable(GL_DEPTH_TEST);
-    glDepthMask((GLboolean)prevDepthMask);
+    }
     glActiveTexture(GL_TEXTURE0);
     GLStateCache::Invalidate();
 }

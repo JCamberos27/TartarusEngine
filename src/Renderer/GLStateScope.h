@@ -28,3 +28,41 @@ private:
     static void Set(GLenum cap, bool on) { if (on) glEnable(cap); else glDisable(cap); }
     bool m_DepthTest = true, m_Blend = false, m_CullFace = true, m_DepthMask = true;
 };
+
+// A pass that writes every pixel it touches with nothing to test against (bakes, conversions): depth test, depth
+// writes, culling and blending off for its scope, the caller's restored after.
+class GLPlainPassScope {
+public:
+    GLPlainPassScope() {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+    }
+private:
+    GLStateScope m_Saved; // constructed first: saves before the changes above
+};
+
+// The sky's pixels only: a quad on the far plane tested GL_LEQUAL against the scene's depth, no depth writes.
+// Saves exactly what it changes (#112) and restores it on scope exit.
+class GLSkyDepthScope {
+public:
+    GLSkyDepthScope() {
+        m_DepthTest = glIsEnabled(GL_DEPTH_TEST) == GL_TRUE;
+        glGetIntegerv(GL_DEPTH_WRITEMASK, &m_Mask);
+        glGetIntegerv(GL_DEPTH_FUNC, &m_Func);
+        glDepthMask(GL_FALSE);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+    }
+    ~GLSkyDepthScope() {
+        glDepthFunc((GLenum)m_Func);
+        if (!m_DepthTest) glDisable(GL_DEPTH_TEST);
+        glDepthMask(m_Mask ? GL_TRUE : GL_FALSE);
+    }
+    GLSkyDepthScope(const GLSkyDepthScope&) = delete;
+    GLSkyDepthScope& operator=(const GLSkyDepthScope&) = delete;
+private:
+    bool m_DepthTest = true;
+    GLint m_Mask = GL_TRUE, m_Func = GL_LESS;
+};
