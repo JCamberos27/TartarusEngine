@@ -645,6 +645,11 @@ void FirstPersonBodyMotion::Pose(const std::vector<std::shared_ptr<Model>>& mode
 }
 
 namespace MmPlayerDebug {
+bool& Wanted() {
+    static bool wanted = false;
+    return wanted;
+}
+
 Snapshot& Info() {
     static Snapshot s;
     return s;

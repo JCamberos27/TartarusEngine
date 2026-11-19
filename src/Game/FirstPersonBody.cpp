@@ -688,7 +688,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         for (size_t k = 0; k < m_Pieces.size(); ++k)
             if (m_Pieces[k] == m_Driver) driverIndex = k;
         std::string error;
-        m_Mm.SetDebug(&MmPlayerDebug::Info()); // the player's (the Inspector, --npc-test mmplayer)
+        m_Mm.SetDebug(MmPlayerDebug::Wanted() ? &MmPlayerDebug::Info() : nullptr); // the player's (--npc-test reads it)
         if (!m_Mm.Start(m_Models, driverIndex, error)) {
             // (CI has no licensed assets: no body there - a warning, never an error.) Everything set up above is undone - the
             // pieces' tags and hidden bones, the world twins (which would stand frozen in the bind pose), the player's speeds -
