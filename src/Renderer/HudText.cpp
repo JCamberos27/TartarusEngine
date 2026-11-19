@@ -7,13 +7,9 @@
 #include "ShaderLibrary.h"
 #include "gl.h"
 
-// stb_truetype comes with Dear ImGui (imstb_truetype.h); the static copy here is this file's own.
-#define STBTT_STATIC
-#define STB_TRUETYPE_IMPLEMENTATION
 #pragma warning(push, 0)
-#include "imstb_truetype.h"
+#include "imstb_truetype.h" // declarations; the implementation is compiled once, in StbTrueType.cpp
 #pragma warning(pop)
-#pragma warning(disable : 4505) // the bake/render functions this file leaves unused
 
 #include <algorithm>
 #include <cmath>
