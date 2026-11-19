@@ -73,7 +73,6 @@ struct MoverWorld {
             v.y = f.Velocity.y;
             grounded = f.Grounded;
             if (each) each(f);
-#pragma warning(suppress : 4996)
             if (Env::Flag(Env::Var::MoverTrace)) { const glm::vec3 p = Feet(); std::printf("[MoverTrace] %d feet %.3f %.3f %.3f v %.2f %.2f %.2f g %d flags %u step %.3f\n", i, p.x, p.y, p.z, f.Velocity.x, f.Velocity.y, f.Velocity.z, (int)f.Grounded, f.Flags, f.StepDelta); }
         }
     }
@@ -138,6 +137,7 @@ void TestMoverDoorway() {
         const glm::vec3 dir(std::sin(tilt), 0.0f, std::cos(tilt));
         const glm::vec3 start(lateral - 1.5f * std::tan(tilt), 0.02f, -1.5f);
         MoverWorld w(build, start);
+        CHECK(w.Ok);
         if (!w.Ok) return;
         glm::vec3 prev = w.Feet();
         float slowest = 1e9f;
@@ -218,6 +218,7 @@ void TestMoverStepUnderLowCeiling() {
     }
     {
         MoverWorld w(build(kHeight + 0.1f), glm::vec3(0.0f, 0.02f, 0.0f));
+        CHECK(w.Ok);
         if (!w.Ok) return;
         w.Walk(glm::vec3(0, 0, 1), 3.0f, 1.0f);
         CHECK(w.Feet().z < 1.0f - kRadius + 0.01f && w.Feet().y < 0.05f);
@@ -248,6 +249,7 @@ void TestMoverStairsAndBlock() {
         m.Floor();
         m.Box(glm::vec3(0.0f, 0.2f, 1.5f), glm::vec3(1.0f, 0.2f, 0.5f));
     }, glm::vec3(0.0f, 0.02f, 0.0f));
+    CHECK(b.Ok);
     if (!b.Ok) return;
     b.Walk(glm::vec3(0, 0, 1), 3.0f, 1.0f);
     CHECK(b.Feet().y < 0.05f && b.Feet().z < 1.0f - kRadius + 0.01f);
@@ -277,6 +279,7 @@ void TestMoverSlopes() {
     }
     {
         MoverWorld w(ramp(60.0f), glm::vec3(0.0f, 0.02f, 0.0f));
+        CHECK(w.Ok);
         if (!w.Ok) return;
         w.Walk(glm::vec3(0, 0, 1), 3.0f, 1.5f);
         CHECK(w.Feet().y < 0.45f); // no higher than a step
@@ -341,6 +344,7 @@ void TestMoverLedge() {
     }
     {
         MoverWorld w(build, glm::vec3(0.0f, 1.02f, 0.8f * kRadius));
+        CHECK(w.Ok);
         if (!w.Ok) return;
         w.Walk(glm::vec3(0, 0, 1), 0.0f, 0.8f);
         CHECK(w.Feet().y < 0.5f);

@@ -190,7 +190,7 @@ static void Test_Model_AxisCorrection() {
 
 // Engine variant bits (ShaderVariant.h) sit in the key's top byte, apart from the material keywords, and a material
 // only drops grunge or parallax code when its own strength / scale says the shader would skip it.
-void Test_ShaderVariant_EngineBits() {
+static void Test_ShaderVariant_EngineBits() {
     CHECK((kVariantEngineMask & ((1u << kVariantMaterialKeywords) - 1u)) == 0u);
     for (ShaderVariantKey b : {kVariantNoLocalLights, kVariantNoDecals, kVariantNoDebugView, kVariantNoGrunge, kVariantNoParallax})
         CHECK((b & kVariantEngineMask) == b);
@@ -205,7 +205,7 @@ void Test_ShaderVariant_EngineBits() {
 
 // Load-time shader-variant warm-up: materials without a ShaderAsset draw through the model shader
 // (already built), so there is nothing to compile - and no GL context is touched.
-void Test_SceneRenderer_WarmShaderVariantsSkipsShaderless() {
+static void Test_SceneRenderer_WarmShaderVariantsSkipsShaderless() {
     World world;
     CHECK(SceneRenderer::WarmShaderVariants(world) == 0);
     const entt::entity e = world.Registry.create();
@@ -442,6 +442,7 @@ static void Test_Texture_NormalMapBC5Renormalized() {
     const TextureCpuData d = Texture::DecodeMemory("unit-test-normal", raw, w, h, s);
     CHECK(d.Ok && d.GLFormat == 0x8DBD /*GL_COMPRESSED_RG_RGTC2*/);
     CHECK(d.LevelSizes.size() == 4); // 8, 4, 2, 1
+    if (!d.Ok || d.LevelSizes.size() != 4) return;
     // One BC5 channel block (8 bytes) at texel (x, y) of its 4x4.
     auto channel = [](const unsigned char* b, int t) {
         const int e0 = b[0], e1 = b[1];

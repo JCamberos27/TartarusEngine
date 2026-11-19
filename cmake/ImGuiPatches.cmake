@@ -25,6 +25,15 @@ if(_imgui_passthrough_at GREATER -1)
   string(REPLACE "&io.DisplayFramebufferScale);\n    ImGui_ImplGlfw_UpdateMonitors();"
     "&io.DisplayFramebufferScale);\n    { static double s_NextMonitors = 0.0; const double now = glfwGetTime(); if (now >= s_NextMonitors) { s_NextMonitors = now + 0.5; ImGui_ImplGlfw_UpdateMonitors(); } }"
     _imgui_glfw_src "${_imgui_glfw_src}")
+  # Like the passthrough line, each of these is checked: an ImGui bump that rewrites one would otherwise drop it silently.
+  string(FIND "${_imgui_glfw_src}" "GLFW_CURSOR_DISABLED && glfwGetWindowAttrib(window, GLFW_HOVERED)" _imgui_hover_at)
+  if(_imgui_hover_at EQUAL -1)
+    message(WARNING "imgui_impl_glfw.cpp: GLFW_HOVERED line not found; the per-frame hover check stays unpatched")
+  endif()
+  string(FIND "${_imgui_glfw_src}" "s_NextMonitors" _imgui_monitors_at)
+  if(_imgui_monitors_at EQUAL -1)
+    message(WARNING "imgui_impl_glfw.cpp: UpdateMonitors line not found; the monitor list is rebuilt every frame")
+  endif()
   set(IMGUI_GLFW_BACKEND ${CMAKE_BINARY_DIR}/imgui_patched/imgui_impl_glfw.cpp)
   set(_imgui_glfw_old "")
   if(EXISTS ${IMGUI_GLFW_BACKEND})

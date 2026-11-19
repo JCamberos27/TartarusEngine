@@ -517,7 +517,7 @@ void TestNpcFlinchKicksAndSettles() {
     s2.Hit(1, up, fwd, 40.0f, 0.0f, slow);
     glm::vec3 r2[NpcFlinch::kBones];
     s2.Rotations(0.6f / 5.5f, r2);
-    CHECK(std::fabs(glm::length(r2[2]) - 2.0f * glm::length(atPeak)) < 0.03f * glm::length(atPeak) * 2.0f && s2.Active(0.8f) && !f.Active(10.5f));
+    CHECK(std::fabs(glm::length(r2[2]) - 2.0f * glm::length(atPeak)) < 0.03f * glm::length(atPeak) * 2.0f && s2.Active(0.8f) && !s2.Active(0.6f * 1.5f + 0.01f));
 }
 
 // The new Ragdoll Settings fields save and load.
@@ -1369,7 +1369,7 @@ void TestRagdollCorpseHitReacts() {
     float struckOff, farOff, driftOff, sleepOff, speedOff, struckOn, farOn, driftOn, sleepOn, speedOn;
     if (!run(0.0f, &struckOff, &farOff, &driftOff, &sleepOff, &speedOff)) return; // no physics
     CHECK(run(0.45f, &struckOn, &farOn, &driftOn, &sleepOn, &speedOn));
-    std::printf("[UnitTest] corpse hit: struck calf moved %.1f -> %.1f cm in 0.3 s (loose time 0 -> 0.45 s), far hand %.1f -> %.1f cm, pelvis drift %.1f -> %.1f cm, asleep again after %.2f -> %.2f s\n",
+    std::printf("[UnitTest] corpse hit: struck forearm moved %.1f -> %.1f cm in 0.3 s (loose time 0 -> 0.45 s), far hand %.1f -> %.1f cm, pelvis drift %.1f -> %.1f cm, asleep again after %.2f -> %.2f s\n",
                 struckOff * 100.0f, struckOn * 100.0f, farOff * 100.0f, farOn * 100.0f, driftOff * 100.0f, driftOn * 100.0f, sleepOff, sleepOn);
     CHECK(struckOn >= struckOff && struckOn > 0.04f);   // the struck limb reacts visibly (the loose time no less)
     CHECK(struckOn > 1.5f * farOn);                              // locally: the part the round hit moves most
@@ -1611,6 +1611,7 @@ void TestRagdollHasWeight() {
     RagdollSettingsComponent cfg;
     World world;
     FlatFloor(world);
+    if (!PhysicsWorld::IsActive()) return; // (no physics: the free-fall half above returned too)
     PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
     glm::mat4 partWorld[NpcRagdoll::kRagParts];
     CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(0.0f), cfg, parts, partWorld));
