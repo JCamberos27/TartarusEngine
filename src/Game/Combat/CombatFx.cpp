@@ -1,5 +1,7 @@
 #include "CombatFx.h"
+#include <optional>
 #include <sstream>
+#include "Audio/SoundManifest.h"
 
 #include "AudioEngine.h"
 #include "Audio/FoleyAudio.h"
@@ -153,26 +155,33 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
     WeaponAudio::Get().SetListener(m_Listener);
     auto& audio = WeaponAudio::Get();
     if (muzzle && !muzzle->FiringSounds.empty()) {
-        SoundSet set;
-        set.Key = "attachment." + muzzle->FiringSounds;
-        set.FilesExplicit = true;
-        std::istringstream files(muzzle->FiringSounds);
-        std::string file;
-        while (std::getline(files, file, ';')) if (!file.empty()) set.Files.push_back(file);
+        auto found = m_AttachmentSounds.find(muzzle->FiringSounds);
+        if (found == m_AttachmentSounds.end()) { // parsed once per sound list
+            SoundSet set;
+            set.Key = "attachment." + muzzle->FiringSounds;
+            set.FilesExplicit = true;
+            std::istringstream files(muzzle->FiringSounds);
+            std::string file;
+            while (std::getline(files, file, ';')) if (!file.empty()) set.Files.push_back(file);
+            found = m_AttachmentSounds.emplace(muzzle->FiringSounds, std::make_unique<SoundSet>(std::move(set))).first;
+        }
         SoundPlayer::Request request; request.Position = origin; request.At2D = fromPlayer;
-        audio.Player().Play(set, request);
+        audio.Player().Play(*found->second, request);
     } else audio.Shot(muzzle && !muzzle->FiringSoundProfile.empty() ? muzzle->FiringSoundProfile : shotgun ? kShotgunGunId : kDefaultGunId, origin, fromPlayer, shooter);
-    MuzzleEffectSettings fallback;
-    fallback.FlashTime=Settings.FlashTime;fallback.PlayerFlashScale=Settings.PlayerFlashScale;
-    fallback.FlameGlow=Settings.FlameGlow*(shotgun?0.5f:1.0f);fallback.FlameScale=Settings.FlameScale;
-    fallback.MuzzleStyle=Settings.MuzzleStyle;
-    if(shotgun) {
-        fallback.LightIntensity=26;fallback.FlameLifetimeMin=.175f;fallback.FlameLifetimeMax=.275f;
-        fallback.FlameLengthMin=.2f;fallback.FlameLengthMax=.28f;fallback.FlashSprite="muzzle_burst";
-        fallback.FlashLifetime=.11f;fallback.FlashSizeMin=fallback.FlashSizeMax=.38f;
-        fallback.SideJets=false;fallback.SmokeAlpha=.35f;fallback.SparkCount=14;
+    std::optional<MuzzleEffectSettings> fallbackStore; // only a gun with no muzzle settings of its own builds one
+    if (!muzzle) {
+        MuzzleEffectSettings& fallback = fallbackStore.emplace();
+        fallback.FlashTime=Settings.FlashTime;fallback.PlayerFlashScale=Settings.PlayerFlashScale;
+        fallback.FlameGlow=Settings.FlameGlow*(shotgun?0.5f:1.0f);fallback.FlameScale=Settings.FlameScale;
+        fallback.MuzzleStyle=Settings.MuzzleStyle;
+        if(shotgun) {
+            fallback.LightIntensity=26;fallback.FlameLifetimeMin=.175f;fallback.FlameLifetimeMax=.275f;
+            fallback.FlameLengthMin=.2f;fallback.FlameLengthMax=.28f;fallback.FlashSprite="muzzle_burst";
+            fallback.FlashLifetime=.11f;fallback.FlashSizeMin=fallback.FlashSizeMax=.38f;
+            fallback.SideJets=false;fallback.SmokeAlpha=.35f;fallback.SparkCount=14;
+        }
     }
-    const auto& fx=muzzle?*muzzle:fallback;
+    const auto& fx=muzzle?*muzzle:*fallbackStore;
     auto range=[&](float a,float b){return glm::mix(std::max(0.0f,std::min(a,b)),std::max(0.0f,std::max(a,b)),Rand01());};
 
     glm::vec3 dir = end - origin;

@@ -94,6 +94,15 @@ void PoseRocker(World& world, LightSwitchComponent& s) {
 
 // Starts whatever hasn't started; a circuit's first-found switch decides the state it starts in.
 void StartAll(World& world) {
+    {   // the usual frame: everything started - nothing to build
+        bool pending = false;
+        for (auto e : world.Registry.view<LightSwitchComponent>())
+            if (!world.Registry.get<LightSwitchComponent>(e).Started) { pending = true; break; }
+        if (!pending)
+            for (auto e : world.Registry.view<LightCircuitComponent>())
+                if (!world.Registry.get<LightCircuitComponent>(e).Started) { pending = true; break; }
+        if (!pending) return;
+    }
     std::unordered_map<std::string, bool> start;
     bool any = false;
     {

@@ -3,7 +3,8 @@
 #include "Curve.h"
 
 struct ParticleCurveCache {
-    std::string Stamp;
+    std::string Sources[4]; // the Size / Alpha / Speed / Emission texts these were parsed from
+    bool Parsed = false;
     Curve Size = Curve::Constant(1), Alpha = Curve::Constant(1);
     Curve Speed = Curve::Constant(1), Emission = Curve::Constant(1);
 };
