@@ -42,19 +42,12 @@ public:
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config);
     // The spent cases' mesh and material of `animationSet` (a .fpsanim) into the asset cache. Every slot's are warmed
     // when it starts; left to the first round fired (ShellCasings::Spawn), the FBX import stalls that frame for up to a second.
-    static void WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet);
     static void WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set);
     // A slot not in hand at Play start: its weapon and arms models, their material overrides and its spent cases into the
     // asset cache. Left to the first draw, the weapon's FBX and its 4K maps load on that frame (the .38: ~0.3 s warm,
     // seconds with its textures uncooked).
     static void WarmSlotAssets(AssetLibrary& assets, const std::string& animationSet);
     void PreloadClips(AssetLibrary& assets); // every slot's clip files, imported clip-only in parallel (Play start)
-    // Where rounds go instead of down the zeroed bore: from the muzzle toward `point` (pellets
-    // spread about that line). Null = the bore, as the player's do. Copied.
-    void SetShotTarget(const glm::vec3* point) {
-        m_HasShotTarget = point != nullptr;
-        if (point) m_ShotTarget = *point;
-    }
     void Stop(World& world);
 
     // Keeps the presentation in camera space, and takes in what the animator reported last
@@ -125,8 +118,6 @@ public:
     int SlotForKey(int configured) const;
     // The scroll wheel wraps through weapon slots (`step` +1 / -1).
     void CycleSlot(int step);
-    void CycleAttachment(Gameplay::AttachmentKind kind);
-    int AttachmentCount(Gameplay::AttachmentKind kind) const { return m_Attachments.Count(kind); }
 
     int Ammo() const { return m_Ammo; }
     void SetAmmo(int rounds) { m_Ammo = rounds < 0 ? 0 : rounds; } // tests: a part-empty magazine to reload
@@ -138,8 +129,6 @@ public:
     // sprint arms layered over those clips pull the hands off the gun, so the player drops to a run for them.
     // The caller keeps reading sprint intent, so it resumes when this becomes false.
     bool ActionBlocksSprint() const;
-    // False while the action still has to be worked after a round (gameplay.cycle).
-    bool Chambered() const { return m_Chambered; }
     int MagazineSize() const { return m_Set.Gameplay.Magazine; }
     bool IsActive() const { return m_Arms != entt::null; }
     // The runtime arms rig's entity (null when inactive) - the body's arms take their hands from it.
@@ -182,9 +171,6 @@ public:
     float GaitPhaseValue() const { return m_GaitPhase; }
     // 0..1 how crouched the player is, for WeaponAimSettings::Crouch* (call before Tick; default 0).
     void SetCrouch(float crouch) { m_Crouch = crouch; }
-    // Where the barrel points (world space): down the bore from the muzzle to the first surface.
-    // False while the gun isn't simply held at the hip (ADS, sprinting, reloading, holstered).
-    bool BarrelAimPoint(glm::vec3& out) const;
     // The gun's laser, straight down the bore: from the muzzle to the first surface it meets
     // (`hit` false = nothing within range; `to` is then the end of the range). On whenever the
     // gun is in hand and not put away, whatever it's doing - it swings with the reloads.
@@ -219,10 +205,6 @@ public:
     const std::string& CurrentState() const;
     const std::string& LastError() const { return m_LastError; }
     const WeaponProceduralPose& ProceduralPose() const { return m_Procedural.Pose(); }
-    // Diagnostics: the position offset (world) the view punch / lean / bob put on the camera this frame - zero
-    // once RemoveViewKick has taken it off - and the ADS hold (0..1; stays 0 holstered).
-    glm::vec3 ViewKickOffset() const { return m_KickApplied ? m_KickOffset : glm::vec3(0.0f); }
-    float AdsHold() const { return m_AdsHold; }
     // The weapon definition this is running, and whether IK carries the procedural motion (the
     // arms rig has the gun bone and both arm chains) or the whole view model does.
     const FirstPersonAnimationSet& Set() const { return m_Set; }
@@ -231,11 +213,6 @@ public:
             ? &m_SlotMuzzles[m_Slot] : nullptr;
     }
     bool UsesIK() const { return m_UsesIK; }
-    // What the ADS carry measured at Start (and on live edits): per carried state, the gun move
-    // onto the sights and the arm matching - for the weapon Inspector.
-    const AdsCarryReport& AdsReport() const { return m_AdsCarry.Report; }
-    // How far the ADS hand anchor holds the free hand to the body this frame (0 = on the gun).
-    float HandAnchorWeight() const { return m_AnchorWeight; }
     // Where an arms-rig node was drawn last frame, in the camera's view space (-Z ahead; metres).
     bool ArmsNodeInView(const std::string& node, glm::vec3& out) const;
     bool WeaponNodeInView(const std::string& node, glm::vec3& out) const;
@@ -249,13 +226,10 @@ public:
     // first-person gun moved by `worldFromFirstPerson` (rigid, world); the first-person gun is then the player's
     // camera's only. Off (no body to split for): the one gun shows everywhere, as before.
     // With a hand anchor the world copy has its own pose: the bones the free hand carries (the magazine, the shells) leave
-    // the first-person sights' anchor, and those in that hand - at `carriedHand` before its move, world - take its move
-    // (`carriedMove` by `carriedWeight`: FirstPersonBody::CarriedMove / TwinAnchorWeight / CarriedHand), so they stay in it.
+    // the first-person sights' anchor.
     // `holdingHand` (world), when given: the world body's free hand as solved - a part in it goes with that hand, held as
     // the first-person clips hold it, wherever the third-person clips (or the arm's reach) put the hand.
-    void PlaceWorldWeapon(World& world, bool split, const glm::mat4& worldFromFirstPerson,
-                          const glm::mat4& carriedMove = glm::mat4(1.0f), float carriedWeight = 0.0f,
-                          const glm::vec3& carriedHand = glm::vec3(0.0f), const glm::mat4* holdingHand = nullptr);
+    void PlaceWorldWeapon(World& world, bool split, const glm::mat4& worldFromFirstPerson, const glm::mat4* holdingHand = nullptr);
     // The barrel and sight line found this Play (the muzzle, and the sights' measurement while aiming).
     const FirstPersonBarrelReport& BarrelReport() const { return m_Barrel; }
     // Where rounds leave from this frame, world space: the muzzle and the (zeroed) bore.
@@ -341,9 +315,8 @@ private:
     glm::mat4 m_ParticleBindInverse{1.0f};
     Gameplay::WeaponAttachments m_Attachments, m_WorldAttachments;
     std::vector<std::array<int, 3>> m_SlotAttachmentSelections;
-    glm::vec3 m_OpticOffset{0.0f}, m_OpticFromOffset{0.0f};
-    glm::quat m_OpticRotation{1, 0, 0, 0}, m_OpticFromRotation{1, 0, 0, 0};
-    float m_OpticBlendElapsed = 1.0f, m_OpticBlendTime = .2f;
+    glm::vec3 m_OpticOffset{0.0f};
+    glm::quat m_OpticRotation{1, 0, 0, 0};
     void ApplyMuzzleAttachment();
     void SetupWeaponParticles();
     void SetupWorldWeaponParticles();
@@ -427,8 +400,6 @@ private:
     bool m_AimHit = false;        // the bore ray met a surface within range
     std::vector<ShotHit> m_ShotHits;
     std::vector<ShotTrace> m_ShotTraces;
-    bool m_HasShotTarget = false;
-    glm::vec3 m_ShotTarget{0.0f};
     // The sight line measured in Play (weapon root space), for a weapon without a saved one.
     bool m_SightMeasured = false;
     float m_SightSettled = 0.0f;  // seconds the sights have been steady for measuring
@@ -457,13 +428,11 @@ private:
     std::vector<glm::vec3> m_AnchorCentres;
     std::vector<glm::vec3> m_AnchorRest; // ... and where each rests (bind pose), weapon model space
     std::vector<int> m_AnchorBones;
-    float m_AnchorWeight = 0.0f; // this frame's (for the weapon test)
     // The weapon rig's anchor offsets as the animators applied them this frame (WriteHandAnchor writes the next frame's):
     // what the world copy's pose undoes. Position, rotation per m_AnchorBones.
     std::vector<std::pair<glm::vec3, glm::quat>> m_AnchorApplied;
     std::shared_ptr<Model> m_WorldWeaponModel; // the world copy's own model with a hand anchor (null: it shares the first-person one)
-    void PoseWorldWeapon(World& world, const glm::mat4& carriedMove, float carriedWeight, const glm::vec3& carriedHand,
-                         const glm::mat4* holdingHand = nullptr);
+    void PoseWorldWeapon(World& world, const glm::mat4* holdingHand);
     bool CarriedBonePoses(std::vector<glm::mat4>& out) const;
     // The first-person clips' free hand (the raw "arms" rig) in the weapon model's space, through where the gun sits.
     bool ClipHandInWeapon(glm::mat4& out) const;
@@ -488,8 +457,7 @@ private:
     glm::vec3 m_RestGrip{0.0f};                // the clips' free hand at rest, in the weapon's space (HandAnchor's Off)
     bool m_HaveRestGrip = false;
     bool m_AimPointValid = false;
-    float m_LookYaw = 0.0f, m_LookPitch = 0.0f, m_PrevLookYaw = 0.0f, m_PrevLookPitch = 0.0f;
-    bool m_HaveLook = false;
+    float m_LookPitch = 0.0f;
     glm::vec3 m_FlatRight{1.0f, 0.0f, 0.0f}, m_FlatForward{0.0f, 0.0f, -1.0f};
     // The view kick currently on the camera (so it can come off exactly).
     bool m_KickApplied = false;

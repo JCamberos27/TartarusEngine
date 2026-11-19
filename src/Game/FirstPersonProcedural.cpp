@@ -756,13 +756,6 @@ void WeaponProceduralState::DiscardClampedAim(glm::vec2 delta) {
     }
 }
 
-void WeaponProceduralState::PreviewShot(const WeaponRecoilSettings& r, float seconds, glm::vec3& rotation,
-                                        glm::vec3& position) {
-    const float u = r.Duration > 0.0f ? seconds / r.Duration : 1.0f;
-    rotation = r.Rotation.Evaluate(u);
-    position = r.Position.Evaluate(u);
-}
-
 IKCurveWeights SampleIKCurves(const WeaponIKSettings& ik, const AnimatorController& ctrl,
                               const AnimatorControllerComponent& ac, int layer) {
     IKCurveWeights w;

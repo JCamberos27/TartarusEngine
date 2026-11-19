@@ -454,10 +454,6 @@ public:
     void SetFiring(bool firing) { m_ControllerFiring = firing; if (!firing) m_Unity.Stop(); }
     glm::vec2 ConsumeAimKick() { const auto delta = m_Pose.AimKick; m_Pose.AimKick = glm::vec2(0.0f); return delta; }
 
-    // The summed recoil curves `seconds` after one shot with every random pick at 1 - what the
-    // Inspector's recoil preview plots.
-    static void PreviewShot(const WeaponRecoilSettings& r, float seconds, glm::vec3& rotation, glm::vec3& position);
-
 private:
     RecoilAnimation m_Unity;
     float m_SemiRecoveryTime = -1.0f; // held semi trigger expires after the committed shot's cadence

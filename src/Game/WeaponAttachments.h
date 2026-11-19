@@ -20,7 +20,6 @@ struct WeaponAttachment {
 class WeaponAttachments {
 public:
     void Load(World& world, entt::entity root, std::array<int, 3> preferred = {{-1, -1, -1}});
-    bool Cycle(World& world, AttachmentKind kind);
     const WeaponAttachment* Selected(AttachmentKind kind) const;
     bool Pose(const World& world, entt::entity root, AttachmentKind kind, glm::mat4& out) const;
     bool ReferenceOpticPose(const World& world, entt::entity root, glm::mat4& out) const;

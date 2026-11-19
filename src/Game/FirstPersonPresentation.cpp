@@ -175,11 +175,6 @@ void FirstPersonPresentation::PreloadClips(AssetLibrary& assets) {
     Log::Info(line);
 }
 
-void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet) {
-    FirstPersonAnimationSet set;
-    if (FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(animationSet), set, nullptr)) WarmEjectAssets(assets, set);
-}
-
 void FirstPersonPresentation::WarmSlotAssets(AssetLibrary& assets, const std::string& animationSet) {
     FirstPersonAnimationSet set;
     if (!FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(animationSet), set, nullptr)) return;
@@ -425,9 +420,8 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_WeaponParticles = m_WorldWeaponParticles = entt::null;
     m_WeaponEmitters.clear(); m_WorldWeaponEmitters.clear();
     m_WeaponAttachmentEntities.clear();
-    m_OpticOffset = m_OpticFromOffset = glm::vec3(0);
-    m_OpticRotation = m_OpticFromRotation = glm::quat(1, 0, 0, 0);
-    m_OpticBlendElapsed = 1;
+    m_OpticOffset = glm::vec3(0);
+    m_OpticRotation = glm::quat(1, 0, 0, 0);
     m_World = nullptr;
     m_PendingShots = 0;
     m_PendingEjects = 0;
@@ -467,7 +461,6 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_Sway.Reset();
     m_SwayLookInput=m_SwayMoveInput=glm::vec2(0);
     m_HaveSwayMoveInput=false;
-    m_HaveLook = false;
     m_HavePlayerLookBaseline = false;
     m_SetFile.clear();
     m_ReloadPoll = 0.0f;
@@ -544,21 +537,6 @@ void FirstPersonPresentation::ApplyMuzzleAttachment() {
         m_MuzzleLocal = glm::vec3(pose[3]);
         m_BoreLocal = glm::normalize(glm::mat3(pose) * glm::vec3(0, 0, -1));
         m_HaveMuzzle = true;
-    }
-}
-
-void FirstPersonPresentation::CycleAttachment(Gameplay::AttachmentKind kind) {
-    if (!m_World || !IsEquipped() || !m_Attachments.Cycle(*m_World, kind)) return;
-    m_SlotAttachmentSelections[m_Slot] = m_Attachments.Indices();
-    m_WorldAttachments.Load(*m_World, m_WorldWeaponParticles, m_Attachments.Indices());
-    if (kind == Gameplay::AttachmentKind::Muzzle) {
-        SetupMuzzle(glm::length(m_BoltStroke) >= 1e-5f ? m_WeaponModel->NodeIndex(m_Set.Procedural.Recoil.BoltBone) : -1);
-        ApplyMuzzleAttachment();
-    }
-    if (kind == Gameplay::AttachmentKind::Optic) {
-        m_OpticFromOffset = m_OpticOffset; m_OpticFromRotation = m_OpticRotation;
-        m_OpticBlendElapsed = 0;
-        if (const auto* optic = m_Attachments.Selected(kind)) m_OpticBlendTime = optic->AimBlendTime;
     }
 }
 
@@ -877,7 +855,6 @@ void FirstPersonPresentation::SetupHandAnchor() {
 // gun (which the sights have moved), and the weapon bones in it (the shell) go with it.
 void FirstPersonPresentation::WriteHandAnchor(IKRigComponent& rig, const AdsCarrySample& carry, const glm::quat& adsR,
                                               const glm::vec3& adsT) {
-    m_AnchorWeight = 0.0f;
     rig.LimbA.GoalMove = rig.LimbB.GoalMove = glm::mat4(1.0f);
     IKRigComponent* wrig = !m_AnchorBones.empty() && m_World && m_World->Registry.valid(m_Weapon)
                                ? m_World->Registry.try_get<IKRigComponent>(m_Weapon) : nullptr;
@@ -922,7 +899,6 @@ void FirstPersonPresentation::WriteHandAnchor(IKRigComponent& rig, const AdsCarr
         return x * x * (3.0f - 2.0f * x) * carry.Weight;
     };
     const float w = weightAt(inGun);
-    m_AnchorWeight = w;
     if (w > 0.0f) limb.GoalMove = AdsHandAnchorMove(clip[head], clip[socket], clip[hand], eye, gun, w);
     // The weapon bones it carries, each by its own distance from the gun (a shell in the hand or
     // waiting on the belt moves; one in the gun stays): the same move, in the weapon model's space.
@@ -1140,7 +1116,6 @@ bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const
 }
 
 void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const glm::mat4& worldFromFirstPerson,
-                                               const glm::mat4& carriedMove, float carriedWeight, const glm::vec3& carriedHand,
                                                const glm::mat4* holdingHand) {
     auto& reg = world.Registry;
     // The free hand's grip at rest (weapon space), for HandAnchor's Off.
@@ -1189,7 +1164,7 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
     world.SetWorldPose(m_WorldWeapon, glm::vec3(placed[3]), glm::normalize(glm::quat_cast(r)));
     m_WorldWeaponDelta = worldFromFirstPerson;
     reg.get<TransformComponent>(m_WorldWeapon).Scale = scale;
-    if (m_WorldWeaponModel) PoseWorldWeapon(world, carriedMove, carriedWeight, carriedHand, holdingHand);
+    if (m_WorldWeaponModel) PoseWorldWeapon(world, holdingHand);
     if (reg.valid(m_WeaponParticles) && reg.valid(m_WorldWeaponParticles))
         reg.get<TransformComponent>(m_WorldWeaponParticles) = reg.get<TransformComponent>(m_WeaponParticles);
     // Hidden (holstered, unarmed) with the first-person gun.
@@ -1209,8 +1184,7 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
 // the hand's move onto the body exactly as the hand does - the same share, about the hand - so the two go as one: no
 // sliding between them, no wrist in the magazine. One in the gun, or let go (the AK's old magazine), stays where the clip
 // has it on the gun.
-void FirstPersonPresentation::PoseWorldWeapon(World& world, const glm::mat4& carriedMove, float carriedWeight, const glm::vec3& carriedHand,
-                                              const glm::mat4* holdingHand) {
+void FirstPersonPresentation::PoseWorldWeapon(World& world, const glm::mat4* holdingHand) {
     if (!m_WeaponModel || !m_WorldWeaponModel) return;
     const std::vector<LocalTRS>& src = m_WeaponModel->AppliedLocalPose();
     Model& dst = *m_WorldWeaponModel;
@@ -1221,9 +1195,7 @@ void FirstPersonPresentation::PoseWorldWeapon(World& world, const glm::mat4& car
     pose = src;
     if (!CarriedBonePoses(bones)) return;
     const bool haveHeld = CarriedHeld(held) && held.size() == bones.size();
-    const glm::mat4 toWorld = world.ComposeWorldTransform(m_WorldWeapon), toModel = glm::inverse(toWorld);
-    // FirstPersonBody's hand anchor moves the hand by FirstPersonPartialMove about the hand itself: the same, rigidly.
-    const glm::mat4 handPivot = glm::translate(glm::mat4(1.0f), carriedHand);
+    const glm::mat4 toModel = glm::inverse(world.ComposeWorldTransform(m_WorldWeapon));
     targets.assign(m_AnchorBones.size(), glm::mat4(1.0f));
     // With the world hand as solved: a part in the hand is held as the first-person clips hold it (its place off their hand),
     // on the world hand - wherever the third-person clips have taken that hand (a stow re-timed, a reach the arm can't
@@ -1241,13 +1213,8 @@ void FirstPersonPresentation::PoseWorldWeapon(World& world, const glm::mat4& car
         heldOn = rigid(toModel * *holdingHand) * glm::inverse(rigid(clipHand)); // the clips' hand onto the world one (model space)
     }
     for (size_t k = 0; k < m_AnchorBones.size(); ++k) {
-        if (onHand) {
-            const float wb = std::clamp(held[k], 0.0f, 1.0f);
-            targets[k] = wb > 0.0f ? FirstPersonPartialMove(heldOn, bones[k], wb) : bones[k];
-            continue;
-        }
-        const float wb = haveHeld ? held[k] * std::clamp(carriedWeight, 0.0f, 1.0f) : 0.0f;
-        targets[k] = wb > 0.0f ? toModel * FirstPersonPartialMove(carriedMove, handPivot, wb) * glm::inverse(handPivot) * toWorld * bones[k] : bones[k];
+        const float wb = onHand ? std::clamp(held[k], 0.0f, 1.0f) : 0.0f;
+        targets[k] = wb > 0.0f ? FirstPersonPartialMove(heldOn, bones[k], wb) : bones[k];
     }
     for (size_t k = 0; k < m_AnchorBones.size(); ++k) dst.SetPoseNodeModelSpace(pose, m_AnchorBones[k], targets[k]);
     dst.ApplyLocalPose(pose);
@@ -1359,14 +1326,6 @@ bool FirstPersonPresentation::MuzzleFrames(glm::vec3& firstPerson, glm::vec3& wo
     const glm::vec3 b = glm::mat3(m_RootWorld) * m_BoreLocal;
     if (glm::dot(b, b) < 1e-12f) return false;
     bore = glm::normalize(b);
-    return true;
-}
-
-bool FirstPersonPresentation::BarrelAimPoint(glm::vec3& out) const {
-    const auto* ac = Animator();
-    if (!m_AimPointValid || !ac || !m_Equipped) return false;
-    if (!(ac->HasTag(K::kTagIdle) || ac->HasTag(K::kTagReady))) return false;
-    out = m_AimPoint;
     return true;
 }
 
@@ -1798,7 +1757,6 @@ void FirstPersonPresentation::FireShot() {
                 if (const auto* ps = m_World->Registry.try_get<ParticleSystemComponent>(e))
                     EmitParticleBurst(*m_World, e, ps->BurstCount);
     glm::vec3 line = m_BoreDir;
-    if (m_HasShotTarget && glm::length(m_ShotTarget - m_Muzzle) > 1e-3f) line = glm::normalize(m_ShotTarget - m_Muzzle);
     // A shotgun's round is several pellets, each down its own line inside the spread cone; the
     // round's shove is shared between them.
     const float spread = HasTag(K::kTagAds) ? g.SpreadAds : g.SpreadHip;
@@ -1946,12 +1904,6 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     m_Aiming = aiming;
     if (WallBlocked() && m_PeekSide == 0) aiming = false;
     ac->SetBool(K::kAim, aiming);
-    // Respond to movement intent before acceleration/collision smoothing. The animation's
-    // eased crossfade supplies the visual softness; waiting for speed stacks another delay
-    // on entry and keeps walking after the player releases movement. Scripted/NPC callers
-    // without action axes retain the velocity fallback.
-    const bool walkIntent=m_HaveSwayMoveInput?glm::length(m_SwayMoveInput)>0.05f:planarSpeed>0.05f;
-    ac->SetBool("AimWalk", aiming && m_Equipped && walkIntent); // compatibility for older ADS-only controllers
     const float aimBlendTime=m_Set.Procedural.Aim.BlendTime;
     ac->SetFloat("TransitionDuration:"+(m_Set.Ads.ReferenceState.empty()?std::string("Aim"):m_Set.Ads.ReferenceState),aimBlendTime);
     // Gated on a gun in hand, as the procedural's in.Ads is: holstered with aim held, the ADS hold (the carried pose, the
@@ -1961,7 +1913,6 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
                     ? std::clamp(m_AdsHold + (adsHeld ? dt : -dt) / aimBlendTime, 0.0f, 1.0f)
                     : (adsHeld ? 1.0f : 0.0f);
     m_TickDt = dt;
-    m_OpticBlendElapsed += std::max(0.0f, dt);
     // The jog (Shift): the locomotion layer's run clip, as authored, on the feet's phase (GaitPhase); off while aiming, in a
     // reload / inspect / melee, and for a moment after a shot, so the gun comes up to fire.
     {
@@ -2034,8 +1985,6 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     // The procedural stack, fed from what the controller is doing and how the camera moved.
     WeaponProceduralInput in;
     in.Dt = dt;
-    m_PrevLookYaw = m_LookYaw;
-    m_PrevLookPitch = m_LookPitch;
     in.Velocity = glm::vec3(glm::dot(velocity, m_FlatRight), 0.0f, -glm::dot(velocity, m_FlatForward));
     in.Sprinting = sprinting && planarSpeed > 0.1f;
     in.VerticalVelocity = velocity.y;
@@ -2094,7 +2043,6 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
 
     // The player's own look, before any punch goes on: the sway reads how fast it turns.
     RemoveViewKick(camera);
-    m_LookYaw = camera.Yaw;
     m_LookPitch = camera.Pitch;
     glm::vec2 controllerInput(0.0f);
     if (m_HavePlayerLookBaseline) {
@@ -2107,11 +2055,6 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     m_SwayLookInput+=glm::vec2(swayLook.y,swayLook.x);
     if (m_Set.Procedural.Recoil.UnityPort || m_Set.Procedural.Recoil.AimCompensation) m_Procedural.CompensateAim(controllerInput);
     m_HaveRawLookInput=false;
-    if (!m_HaveLook) {
-        m_PrevLookYaw = m_LookYaw;
-        m_PrevLookPitch = m_LookPitch;
-        m_HaveLook = true;
-    }
     {
         glm::vec3 f = camera.Front();
         f.y = 0.0f;
@@ -2506,10 +2449,8 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
         const glm::vec3 referenceCamera = glm::inverse(cameraRotation) * (glm::vec3(referenceSight[3]) - camera.Position);
         opticTarget = referenceCamera - opticTurn * sightCamera;
     }
-    const float opticT = m_OpticBlendTime > 0 ? std::clamp(m_OpticBlendElapsed / m_OpticBlendTime, 0.0f, 1.0f) : 1.0f;
-    const float opticEase = opticT * opticT * (3.0f - 2.0f * opticT);
-    m_OpticOffset = glm::mix(m_OpticFromOffset, opticTarget, opticEase);
-    m_OpticRotation = glm::slerp(m_OpticFromRotation, opticTurn, opticEase);
+    m_OpticOffset = opticTarget;
+    m_OpticRotation = opticTurn;
     const glm::quat correction = NormalizeRotation(cameraRotation * glm::slerp(identity, m_OpticRotation, m_AdsHold) * glm::inverse(cameraRotation));
     const glm::vec3 opticShift = cameraRotation * (m_OpticOffset * m_AdsHold);
     position = camera.Position + correction * (position - camera.Position) + opticShift;
