@@ -119,6 +119,8 @@ void CombatFx::Start(World& world) {
                               glm::vec3(1.0f, 0.55f, 0.2f), 1.0f, 0.6f, 14.0f, 1);
 }
 
+CombatFx::~CombatFx() { SetAudioLog(std::string()); }
+
 void CombatFx::SetAudioLog(const std::string& path) {
     if (m_Log) std::fclose(m_Log);
     m_Log = nullptr;

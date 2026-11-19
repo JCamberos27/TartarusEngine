@@ -3,7 +3,9 @@
 #include "Audio/SurfaceLookup.h"
 #include "Components.h"
 #include "FxSprites.h"
+#include "GameModuleAPI.h" // RaycastHit, QueryFilter
 #include "Model.h"
+#include "PhysicsWorld.h"
 #include "World.h"
 
 #include <algorithm>
@@ -84,7 +86,22 @@ void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const g
         const float a = U() * 6.2832f, r = spread * std::sqrt(U());
         return glm::normalize(axis + (t * std::cos(a) + b * std::sin(a)) * r);
     };
-    const glm::vec4 plane(n, -glm::dot(n, point) + 0.002f);
+    // What the chips land on: the surface hit when it's a floor, else the floor under a wall hit (none found: they fall on).
+    glm::vec4 plane(n, -glm::dot(n, point) + 0.002f);
+    if (n.y <= 0.6f) {
+        plane = glm::vec4(0.0f);
+        if (PhysicsWorld::IsActive()) {
+            const glm::vec3 from = point + n * 0.05f;
+            const float o[3] = {from.x, from.y, from.z}, down[3] = {0.0f, -1.0f, 0.0f};
+            QueryFilter f;
+            f.HitTriggers = 0;
+            RaycastHit hit;
+            if (PhysicsWorld::RaycastSolid(o, down, 3.0f, f, hit) && hit.Hit && hit.Normal[1] > 0.6f) {
+                const glm::vec3 fn = glm::normalize(glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]));
+                plane = glm::vec4(fn, -glm::dot(fn, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2])) + 0.002f);
+            }
+        }
+    }
     const bool hard = surface == "metal" || surface == "rock" || surface == "concrete" || surface == "brick" || surface == "asphalt" || surface == "tile";
     ++m_Spawned;
 
@@ -110,7 +127,7 @@ void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const g
             e.Alpha = surface == "glass" ? 0.6f : 1.0f;
             e.FadeOut = 0.2f;
             // A floor under a wall hit: the chips land on it; on a floor, they bounce on it.
-            if (n.y > 0.6f) e.Plane = plane;
+            e.Plane = plane;
             fx.Spawn(e);
         }
     }

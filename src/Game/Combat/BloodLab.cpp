@@ -44,7 +44,7 @@ void BloodLab::Draw(BloodFx& blood, const Stats& s) {
     ImGui::SliderFloat("Spray size", &c.Size, 0.2f, 3.0f, "%.2f");
     ImGui::SliderFloat("Energy scale", &c.EnergyScale, 0.2f, 3.0f, "%.2f");
     ImGui::SliderFloat("Dry seconds", &c.DrySeconds, 5.0f, 600.0f, "%.0f");
-    ImGui::SliderFloat("Stain lifetime", &c.DecalLifetime, 10.0f, 1800.0f, "%.0f");
+    ImGui::SliderFloat("Stain lifetime", &c.DecalLifetime, 0.0f, 1800.0f, c.DecalLifetime <= 0.0f ? "for good" : "%.0f s");
     ImGui::SliderInt("Max sprays", &c.MaxSprays, 1, 128);
     ImGui::SliderInt("Max stains", &c.MaxDecals, 8, 2048);
     ImGui::Checkbox("Pools", &c.Pools);

@@ -270,7 +270,7 @@ int BloodFx::DuplicateOf(int set, int knife, const glm::mat4& model) const {
 }
 
 BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along,
-                                       const glm::vec3& extent, float delay, int cell) {
+                                       const glm::vec3& extent, float delay, int cell, bool flipbook) {
     EnsureHooks();
     int cells = 1;
     const int id = m_KnifeLookup(entry, cells);
@@ -288,7 +288,8 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     d.Age = -std::max(delay, 0.0f);
     d.Life = Config.DecalLifetime > 0.0f ? Config.DecalLifetime * (0.9f + 0.2f * Random01()) : 1e9f;
     d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
-    if (const int dup = DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0 && d.FrameSeconds <= 0.0f) {
+    // (A flipbook - a wall drip running down - is its own stain: merged, the caller would re-time the one it landed on.)
+    if (const int dup = flipbook ? -1 : DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0) {
         ++m_StainsMerged;
         return &m_Decals[(size_t)dup];
     }
@@ -493,7 +494,7 @@ void BloodFx::SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size
         const float w = h * 0.5f;
         const glm::vec3 top = at + across * ((Random01() - 0.5f) * 0.5f * size) + n * 0.005f;
         Decal* d = AddKnifeDecal(kLeaks[std::min(2, (int)(Random01() * 3.0f))], top + down * (0.5f * h), n, across, glm::vec3(w, 0.2f, h),
-                                 land + 0.05f + 0.15f * Random01(), 0);
+                                 land + 0.05f + 0.15f * Random01(), 0, /*flipbook=*/true);
         if (!d) return;
         d->FrameSeconds = (2.0f + 3.0f * Random01()) / (float)std::max(d->Frames, 1); // runs down over 2-5 s, then stops
         d->PoolGrow = 0.05f;
@@ -517,7 +518,7 @@ BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, cons
     d.Age = -std::max(delay, 0.0f);
     d.Life = Config.DecalLifetime > 0.0f ? Config.DecalLifetime * (0.9f + 0.2f * Random01()) : 1e9f;
     d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
-    if (const int dup = DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0 && d.FrameSeconds <= 0.0f) {
+    if (const int dup = DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0) {
         ++m_StainsMerged;
         return &m_Decals[(size_t)dup];
     }
@@ -575,6 +576,13 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     for (const Recent& r : m_Recent)
         if (r.Entity == hit.Entity && m_Now - r.Time < 0.08f) {
             if (!hit.Player && Config.ImpactPuffs) SpawnPuffs(hit, dir, Energy(hit) * 0.5f * Config.EnergyScale, false, hit.Point, true);
+            // The pellet (or the second shooter's round) that kills still gives the body its pool.
+            if (hit.Killed && !hit.Player && Config.Pools && !Pooled(hit.Entity)) {
+                PendingPool pp{hit.Entity, m_Now + 0.6f, 0.75f};
+                pp.Deadline = m_Now + 4.0f;
+                pp.Palette = hit.Palette;
+                m_Pools.push_back(pp);
+            }
             return;
         }
     m_Recent.push_back({hit.Entity, m_Now});
@@ -828,7 +836,8 @@ void BloodFx::SpawnCorpseSplash(const Hit& hit, float energy) {
     EnsureHooks();
     // A body lying there: the round goes on into what it lies on, so the blood comes back up out of the wound and
     // splashes round it - from just above the wound, outward, low.
-    const glm::vec3 from = hit.Point + glm::vec3(0.0f, 0.06f, 0.0f) - glm::normalize(hit.Direction) * 0.04f;
+    const glm::vec3 dir = glm::length(hit.Direction) > 1e-5f ? glm::normalize(hit.Direction) : glm::vec3(0.0f, -1.0f, 0.0f);
+    const glm::vec3 from = hit.Point + glm::vec3(0.0f, 0.06f, 0.0f) - dir * 0.04f;
     const float timeScale = 1.6f / std::max(Config.Speed, 0.1f);
     const float k = std::clamp(energy, 0.5f, 2.0f);
     const float s = GroundSplatterSize(hit, energy);
@@ -1137,6 +1146,7 @@ void BloodFx::Update(float dt) {
         }
         ++i;
     }
+    m_Palette = 0; // (a person's again: what spawns before the next hit - footprints, the Blood Lab's - isn't the last bleeder's)
     m_Sprays.erase(std::remove_if(m_Sprays.begin(), m_Sprays.end(), [](const Spray& s) { return s.Age >= s.Duration; }),
                    m_Sprays.end());
     m_Recent.erase(std::remove_if(m_Recent.begin(), m_Recent.end(), [&](const Recent& r) { return m_Now - r.Time > 0.25f; }),
@@ -1166,7 +1176,7 @@ void BloodFx::Update(float dt) {
         if (std::find(alive.begin(), alive.end(), s.Group) != alive.end() || std::find(gone.begin(), gone.end(), s.Group) != gone.end())
             continue;
         scratch.clear();
-        (m_Members && m_Members(s.Group, scratch) ? alive : gone).push_back(s.Group);
+        (!m_Members || m_Members(s.Group, scratch) ? alive : gone).push_back(s.Group); // (no lookup set: nothing is known gone)
     }
     if (!gone.empty())
         m_Splats.erase(std::remove_if(m_Splats.begin(), m_Splats.end(),

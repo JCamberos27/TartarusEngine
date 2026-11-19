@@ -931,6 +931,59 @@ void Test_Blood_OnePool() {
     CHECK(fx.PoolsSpawned() == 1);
 }
 
+// A shotgun load: the first pellet only wounds, a later one in the same moment kills - the body still gets its pool.
+void Test_Blood_PelletKillPools() {
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false;
+        p = o + d * (-o.y / d.y);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    const glm::vec3 body(0.0f, 1.0f, 0.0f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = body; return true; });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 5;
+    h.Damage = 14.0f;
+    h.Pellets = 9;
+    fx.OnFleshHit(h); // a wound
+    h.Killed = true;
+    fx.OnFleshHit(h); // the same moment: the pellet that kills
+    CHECK(fx.Pooled(5));
+    for (int i = 0; i < 30; ++i) fx.Update(0.1f);
+    CHECK(fx.PoolsSpawned() == 1);
+}
+
+// What a creature's bleeding stamps goes back to a person's blood afterwards: a footprint in a person's pool is a person's.
+void Test_Blood_PaletteResets() {
+    BloodFx fx;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) { cells = 8; return std::string(e) == "footprint" ? 30 : -1; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3&, float, glm::vec3& p, glm::vec3& n) { p = glm::vec3(o.x, 0.0f, o.z); n = glm::vec3(0, 1, 0); return true; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    glm::vec3 spider(10.0f, 0.3f, 0.0f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = spider; return true; });
+    BloodFx::Hit h; // a creature, wounded: it drips ichor as it goes
+    h.Point = spider + glm::vec3(0, 0.2f, 0);
+    h.Entity = 9;
+    h.Damage = 20.0f;
+    h.Palette = BloodPalette::kIchor;
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 20; ++i) { spider.x += 0.1f; fx.Update(0.1f); }
+    CHECK(fx.BleedDrops() > 0);
+    fx.SpawnPoolAt(glm::vec3(0, 0, 0), glm::vec3(0, 1, 0), 2.0f); // a person's pool
+    fx.Update(30.0f);
+    fx.OnFootstep(-1, glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), 0);
+    fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f), glm::vec3(0, 0, -1), 1);
+    CHECK(fx.PrintsSpawned() == 1 && fx.Decals().back().Print && fx.Decals().back().Palette == BloodPalette::kHuman);
+}
+
 void Test_Blood_Gear() {
     // The player's gun: speckles that don't stack into a coat, never their own wound, and they stay - across a swap too.
     BloodFx fx;
@@ -1261,6 +1314,8 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::GroundSplatter", Test_Blood_GroundSplatter});
     tests.push_back({"Blood::OnePool", Test_Blood_OnePool});
     tests.push_back({"Blood::Gear", Test_Blood_Gear});
+    tests.push_back({"Blood::PelletKillPools", Test_Blood_PelletKillPools});
+    tests.push_back({"Blood::PaletteResets", Test_Blood_PaletteResets});
     tests.push_back({"Blood::DryOutOfView", Test_Blood_DryOutOfView});
     tests.push_back({"Blood::PrintsStay", Test_Blood_PrintsStay});
     tests.push_back({"Blood::CorpseSplash", Test_Blood_CorpseSplash});
