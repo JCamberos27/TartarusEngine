@@ -2785,6 +2785,7 @@ private:
         float FromFov = 60.0f, ToFov = 60.0f; // eased too, for "look through light" (#140 phase 4)
     };
     ViewTransition m_ViewTransition;
+    void BeginViewTransition(const Camera& cam); // from the camera's pose; callers set the To fields they change
 
     // Look through a light (#140 phase 4): move the editor camera to the light's POV — spot uses
     // 2x its cone angle for FOV, point ~90, directional goes orthographic. Esc restores the
