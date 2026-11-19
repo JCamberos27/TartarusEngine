@@ -3,6 +3,13 @@
 #   python tools/assets/asset_manifest.py build <repo>              writes <repo>/project/external_assets.csv
 #   python tools/assets/asset_manifest.py export <repo> <Used dir>  copies every listed file into <Used dir>
 #   python tools/assets/asset_manifest.py verify <dir> [--hash]     checks <dir> (a repo or a Used folder)
+#   python tools/assets/asset_manifest.py prune <repo> <folder> [--apply]
+#                                                                   lists (deletes with --apply) git-ignored payloads
+#                                                                   under <folder> that the CSV doesn't list
+#
+# prune exists because build re-lists ANY ignored file on disk: after a pack swap retires files, a checkout that
+# still has the old payloads would put them back in the CSV. fetch never deletes, so run prune after pulling
+# such a change. It only touches untracked, ignored files (never .meta files or local leftovers like *.bak).
 #
 # The Drive holds the listed payloads and nothing else: code, prefabs and every .meta live in git, and so
 # do scenes, except an oversized one that .gitignore excludes (GitHub's 100 MB limit).
@@ -18,7 +25,6 @@ import csv, hashlib, os, shutil, subprocess, sys
 
 CSV_REL = os.path.join('project', 'external_assets.csv')
 EXCLUDE_PREFIXES = (
-    'project/assets/Characters/Quantum/Textures/Clothing/Hats/',  # hats were removed from the project (#501)
     'project/assets/Characters/ybot/',  # a local Mixamo experiment no committed scene uses (Raw\Animations)
 )
 EXCLUDE_SUFFIXES = ('.bak', '.recovery.json', 'desktop.ini', 'Thumbs.db')
@@ -140,6 +146,26 @@ def verify(root, check_hash):
     return 1 if missing or wrong or extra else 0
 
 
+def prune(repo, folder, apply=False):
+    """Git-ignored, untracked payload files under <folder> (repo-relative or absolute) that external_assets.csv
+    doesn't list: printed, and deleted with apply. Returns their repo-relative paths."""
+    rel = os.path.relpath(os.path.abspath(os.path.join(repo, folder)), os.path.abspath(repo)).replace(os.sep, '/')
+    if rel == '..' or rel.startswith('../') or not (rel == 'project' or rel.startswith('project/')):
+        raise SystemExit(f'prune: {folder} is not inside {repo}/project')
+    listed = {r.lower() for r, _, _ in read_manifest(repo)}
+    stale = sorted(p for p in git(repo, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--', rel)
+                   if not p.endswith('.meta') and not p.endswith(EXCLUDE_SUFFIXES)
+                   and p[len('project/'):].lower() not in listed and os.path.isfile(os.path.join(repo, p)))
+    total = sum(os.path.getsize(os.path.join(repo, p)) for p in stale)
+    for p in stale:
+        print('delete ' if apply else 'stale  ', p)
+        if apply:
+            os.remove(os.path.join(repo, p))
+    print(f'{rel}: {len(stale)} ignored file(s) not in the CSV, {total / (1 << 20):.1f} MB'
+          + (' deleted' if apply else ' (dry run - add --apply to delete)'))
+    return stale
+
+
 if __name__ == '__main__':
     if len(sys.argv) >= 3 and sys.argv[1] == 'build':
         build(sys.argv[2])
@@ -147,6 +173,8 @@ if __name__ == '__main__':
         export(sys.argv[2], sys.argv[3])
     elif len(sys.argv) >= 3 and sys.argv[1] == 'verify':
         sys.exit(verify(sys.argv[2], '--hash' in sys.argv))
+    elif len(sys.argv) >= 4 and sys.argv[1] == 'prune':
+        prune(sys.argv[2], sys.argv[3], '--apply' in sys.argv)
     else:
         print(__doc__ or open(__file__).read().split('\nimport')[0])
         sys.exit(2)

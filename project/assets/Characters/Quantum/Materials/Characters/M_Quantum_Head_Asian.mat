@@ -3,12 +3,12 @@
   "matVersion": 2,
   "name": "M_Quantum_Head_Asian",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_Occlusion.1001.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_BaseColor.1001.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_BaseColor.png",
     "_BaseColor": [
-      1.0,
-      1.0,
-      1.0
+      0.75,
+      0.75,
+      0.75
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_Unity_Normal.1001.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Asian/Head/T_Quantum_Basemesh_Head_Asian_Roughness.1001.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "058911bef1bf8461",
-    "_AlbedoMap": "4594db41932a859f",
-    "_NormalMap": "335d252864294ea4",
-    "_RoughnessMap": "6daf6ed6bf074c05"
+    "_AOMap": "d84a2d09cf7c66b0",
+    "_AlbedoMap": "77c8c3a861c52d8c",
+    "_MetallicRoughnessMap": "d84a2d09cf7c66b0",
+    "_NormalMap": "c61775bffba25352"
   }
 }

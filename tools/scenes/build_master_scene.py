@@ -389,8 +389,9 @@ def player(s, arena, repo):
         s.models.append(e)
     body_mat = {'guid': ref(repo, 'assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat')['pathGuid'],
                 'path': 'assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat'}
-    for slot, model in (('Legs', 'Quantum_Legs'), ('Feet', 'Quantum_Feet'), ('UnderPants', 'Quantum_UnderPants')):
-        path = f'assets/Characters/Quantum/Models/European/{model}.fbx'
+    for slot, path in (('Legs', 'assets/Characters/Quantum/Models/European/Quantum_Legs.fbx'),
+                       ('Feet', 'assets/Characters/Quantum/Models/European/Quantum_Feet.fbx'),
+                       ('UnderPants', 'assets/Characters/Quantum/Models/European/Quantum_UnderPants.fbx')):
         r = ref(repo, path)
         e = s._common(slot, bid, (0.0, 0.0, 0.0), 0.0)
         e.update({'path': path, 'pathGuid': r['pathGuid'], 'materials': [body_mat], 'Animator Controller': anim,

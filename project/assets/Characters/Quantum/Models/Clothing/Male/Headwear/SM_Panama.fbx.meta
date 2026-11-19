@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Headwear",
+  "guid": "4c128ce241446833",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_Panama_Green": "assets/Characters/Quantum/Materials/Clothing/Headwear/Panama/M_Panama_Green.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

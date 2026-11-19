@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hair",
+  "guid": "bf82ff22a01bd82f",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_F_Haircut_Bobcut_2": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Bobcut/M_F_Haircut_Bobcut_2.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

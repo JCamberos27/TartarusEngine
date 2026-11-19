@@ -3,7 +3,7 @@
   "matVersion": 2,
   "name": "M_F_Shorts_Boots_Beige",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Shorts_Boots/T_F_Shorts_Boots_Jeans_Occlusion.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Shorts_Boots/T_F_Shorts_Boots_Jeans_OcclusionRoughnessMetallic.png",
     "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Shorts_Boots/T_F_Shorts_Boots_Beige_BaseColor.png",
     "_BaseColor": [
       1.0,
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Shorts_Boots/T_F_Shorts_Boots_Jeans_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Shorts_Boots/T_F_Shorts_Boots_Jeans_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Shorts_Boots/T_F_Shorts_Boots_Jeans_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Shorts_Boots/T_F_Shorts_Boots_Jeans_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "f55b656a261d2866",
+    "_AOMap": "dbb78bc682ca0827",
     "_AlbedoMap": "964bc83c9869fd44",
-    "_NormalMap": "7c8e6811984482fa",
-    "_RoughnessMap": "82f7a5e51a482284"
+    "_MetallicRoughnessMap": "dbb78bc682ca0827",
+    "_NormalMap": "3bf16abc88cbc8ef"
   }
 }

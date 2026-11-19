@@ -110,7 +110,8 @@ The game content under `project/assets` comes largely from licensed packs that m
 redistributed. Those files are deliberately **not** in this repository or its history: they are
 listed in `.gitignore` and `project/external_assets.csv` and shared privately with the team.
 Only their `.meta` sidecars, materials and other project data are tracked. The packs
-include the Quantum Characters modular pack, the MC Core Motion animation pack, the AKS-74U and
+include the Quantum Characters modular pack (the complete Quantum - Modular Casual Bundle from Fab, male and
+female, with its hair, facial hair and headwear), the MC Core Motion animation pack, the AKS-74U and
 Remington 870 models, Kinemation's FPS Animation Pack and Tactical Shooter Pack, KriptoFX Volumetric Blood
 Fluids, Knife Real Blood and PRO Effects, Sonniss GDC bundle recordings, the OpenAIR impulse responses
 (CC BY 4.0, University of York, openairlib.net), the EchoThief impulse responses (Dr. Chris Warren, SDSU)

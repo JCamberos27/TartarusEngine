@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Cap_Red_Logo",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Cap/T_Cap_Logo_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Cap/T_Cap_Logo_Red_BaseColor_D.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Cap/T_Cap_Logo_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Headwear/Cap/T_Cap_Logo_Normal_D.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "69b1112e103e7df7",
+    "_AlbedoMap": "7b91e60376a65215",
+    "_MetallicRoughnessMap": "69b1112e103e7df7",
+    "_NormalMap": "c77d2e3fdc2bb7df"
+  }
+}

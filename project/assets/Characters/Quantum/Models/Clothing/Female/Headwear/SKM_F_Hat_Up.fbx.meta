@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
+  "guid": "6a33ecdf5353519e",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_Hat_Up": "assets/Characters/Quantum/Materials/Clothing/Headwear/Hat_Up/M_Hat_Up.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

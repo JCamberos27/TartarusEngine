@@ -3,8 +3,8 @@
   "matVersion": 2,
   "name": "M_F_Tshirt_Tucked_Black_Print",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_Occlusion.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_BaseColor.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_BaseColor_D.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_Normal_D.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/F_Tshirt_Tucked/T_F_Tshirt_Tucked_Black_Print_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "033659585c19706e",
-    "_AlbedoMap": "b293cb98293def2a",
-    "_NormalMap": "da58e71c2144397c",
-    "_RoughnessMap": "88a84dee9ad7fc45"
+    "_AOMap": "2c0d36c1f3459bdc",
+    "_AlbedoMap": "5ff278bdea3ec8ec",
+    "_MetallicRoughnessMap": "2c0d36c1f3459bdc",
+    "_NormalMap": "db6a2d915de50b8b"
   }
 }

@@ -1,0 +1,40 @@
+{
+  "alphaCutoff": 0.3333,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Puffy_Vest_Beige",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Puffy_Vest_Tshirt/T_M_Puffy_Vest_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Puffy_Vest_Tshirt/T_M_Puffy_Vest_Bege_BaseColor_D.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Puffy_Vest_Tshirt/T_M_Puffy_Vest_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Puffy_Vest_Tshirt/T_M_Puffy_Vest_Normal__D.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "cdfd0c758e3c9c03",
+    "_AlbedoMap": "2f1b1bc3187985cd",
+    "_MetallicRoughnessMap": "cdfd0c758e3c9c03",
+    "_NormalMap": "6cdbd2bcb4a775d5"
+  }
+}

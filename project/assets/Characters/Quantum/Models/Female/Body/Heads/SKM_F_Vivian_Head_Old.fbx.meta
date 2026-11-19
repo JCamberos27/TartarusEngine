@@ -2,18 +2,19 @@
   "folder": "assets/Characters/Quantum/Models/Female/Body/Heads",
   "guid": "f946f5d2ae6a5179",
   "importer": {
+    "rootNodeInModelSpace": true,
     "simplify": 0.4
   },
   "materialRemap": {
-    "MI_F_Cartilage29": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat",
-    "MI_F_EyeOcclussion29": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
-    "MI_F_Lacrimal29": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
-    "MI_F_Saliva29": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat",
-    "MI_F_Teeth29": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat",
-    "MI_F_Vivian_Basemesh_Head": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Head_Old.mat",
-    "MI_Hair_Eyebrows_Eyelids36": "assets/Characters/Quantum/Materials/Characters/M_F_Brows_Lashes_Gray.mat",
-    "eyeLeft_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Blue.mat",
-    "eyeRight_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Blue.mat"
+    "MI_F_EyeRefractive_Inst": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Blue.mat",
+    "MI_F_EyeRefractive_Inst_4": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Blue.mat",
+    "MI_F_FaceHair_Inst": "assets/Characters/Quantum/Materials/Characters/M_F_Brows_Lashes_Gray.mat",
+    "MI_F_Vivian_Old_Head": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Head_Old.mat",
+    "MI_F_lacrimal_fluid_Inst": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat",
+    "MI_F_lacrimal_fluid_Inst_7": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
+    "M_F_Cartilage": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat",
+    "M_F_EyeOcclusion": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
+    "M_F_Teeth": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat"
   },
   "metaVersion": 1,
   "type": "model"

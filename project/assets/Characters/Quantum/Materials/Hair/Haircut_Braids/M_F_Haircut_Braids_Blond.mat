@@ -1,0 +1,36 @@
+{
+  "alphaCutoff": 0.35,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_F_Haircut_Braids_Blond",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Hair/Haircut_Braids/T_F_Haircut_BraidsBlond_Albedo.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_Roughness": 0.8546670079231262,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AlbedoMap": "7a4b6a11aa3fc63b"
+  }
+}

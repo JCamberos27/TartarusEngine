@@ -1,0 +1,15 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
+  "guid": "59fbb42d8f2e3915",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_F_Haircut_BraidsBlond": "assets/Characters/Quantum/Materials/Hair/Haircut_Braids/M_F_Haircut_Braids_Blond.mat",
+    "MI_F_Haircut_Ponytail_Blond": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Ponytail/M_F_Haircut_Ponytail_Blond.mat",
+    "MI_Warm_Hat_Bege": "assets/Characters/Quantum/Materials/Clothing/Headwear/Warm_Hat/M_Warm_Hat_Beige.mat",
+    "MI_Warm_Hat_Bege_3": "assets/Characters/Quantum/Materials/Clothing/Headwear/Warm_Hat/M_Warm_Hat_Beige.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

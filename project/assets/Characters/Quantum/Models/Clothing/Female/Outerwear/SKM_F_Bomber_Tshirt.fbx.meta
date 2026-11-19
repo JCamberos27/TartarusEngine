@@ -1,9 +1,12 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear",
   "guid": "fc2ad39c541a1d48",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "MI_F_Bomber": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Bomber/M_Bomber_Black.mat",
-    "MI_F_Bomber_Tshirt": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Bomber/M_Bomber_Black.mat"
+    "MI_F_Bomber_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Bomber/M_Bomber_Black.mat",
+    "MI_TShirt_Black": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_Black.mat"
   },
   "metaVersion": 1,
   "type": "model"

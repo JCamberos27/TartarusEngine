@@ -252,6 +252,18 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
         m_MergeBuckets.clear();
         ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
         FlushMergeBuckets(scene);
+        // RootNodeInModelSpace: the vertices were baked with the root node's frame (ProcessNode starts above it), so
+        // model space keeps it too. Re-base every bone onto it: offset' = offset * GlobalInverse makes
+        // GlobalInverse' (identity) * Global * offset' == R * (GlobalInverse * Global * offset) * R^-1 - the same
+        // bind, and each bone's delta turned into the vertices' frame instead of the root-less one.
+        if (settings.RootNodeInModelSpace && !IsNearlyIdentity(m_D->GlobalInverseTransform)) {
+            const glm::mat4 gi = m_D->GlobalInverseTransform, root = glm::inverse(gi);
+            for (auto& [name, info] : m_D->BoneInfoMap) {
+                info.OffsetMatrix = info.OffsetMatrix * gi;
+                m_D->BindPoseBones[info.ID] = root * m_D->BindPoseBones[info.ID] * gi;
+            }
+            m_D->GlobalInverseTransform = glm::mat4(1.0f);
+        }
     } else m_D->BoundsMin = m_D->BoundsMax = glm::vec3(0.0f);
     ReadHierarchy(scene->mRootNode, -1);
     if (settings.ImportAnimations) ReadAnimations(scene);

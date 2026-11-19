@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
+  "guid": "a4854da6379daf82",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_Headphones_Black": "assets/Characters/Quantum/Materials/Clothing/Headwear/Headphones/M_Headphones_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

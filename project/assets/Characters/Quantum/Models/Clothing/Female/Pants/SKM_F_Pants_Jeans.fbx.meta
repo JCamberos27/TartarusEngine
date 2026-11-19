@@ -1,8 +1,11 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Pants",
   "guid": "233b645ebc16dfae",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "M_F_Jeans7": "assets/Characters/Quantum/Materials/Clothing/Pants/F_Pants_Jeans/M_F_Pants_Jeans_Black.mat"
+    "MI_F_Pants_Jeans_Black": "assets/Characters/Quantum/Materials/Clothing/Pants/F_Pants_Jeans/M_F_Pants_Jeans_Black.mat"
   },
   "metaVersion": 1,
   "type": "model"

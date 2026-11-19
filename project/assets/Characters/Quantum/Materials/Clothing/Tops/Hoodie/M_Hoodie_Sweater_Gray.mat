@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Hoodie_Sweater_Gray",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie/T_Sweater_Gray_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie/T_Sweater_Gray_BaseColor_D.png",
+    "_BaseColor": [
+      0.8560000061988831,
+      0.8560000061988831,
+      0.8560000061988831
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie/T_Sweater_Gray_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie/T_Sweater_Gray_Normal_D.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "cd2f914d3c784d92",
+    "_AlbedoMap": "dace2b40353ebbb2",
+    "_MetallicRoughnessMap": "cd2f914d3c784d92",
+    "_NormalMap": "5e60509e78d3e35f"
+  }
+}

@@ -1,10 +1,11 @@
 {
+  "alphaCutoff": 0.3333,
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Jeans_Turn",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_Turn_Occlusion.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_Turn_BaseColor.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_Blue_Light_Decal_BaseColor.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +19,22 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_Turn_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans/Decal_Jeans/T_Jeans_Turn_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
+  "renderQueue": 1,
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "5c7b5b6348cd05fb",
-    "_AlbedoMap": "911b393cf5e90c0b",
-    "_NormalMap": "9c50a79980814a14",
-    "_RoughnessMap": "b3eb7abd01ee1faa"
+    "_AOMap": "2ecad5d8687f35de",
+    "_AlbedoMap": "31bc146fe559462e",
+    "_MetallicRoughnessMap": "2ecad5d8687f35de",
+    "_NormalMap": "e5e36a93f590dff7"
   }
 }

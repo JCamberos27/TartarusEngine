@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
+  "guid": "b3fe6b3113c0adcf",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "M_F_Scalp": "assets/Characters/Quantum/Materials/Hair/F_Head_Scalp/M_F_Scalp.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

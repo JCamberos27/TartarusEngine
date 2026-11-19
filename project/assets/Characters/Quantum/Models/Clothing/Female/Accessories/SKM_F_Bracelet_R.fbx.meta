@@ -1,8 +1,11 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Accessories",
   "guid": "9aafcdbe20d7379f",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "M_Bracelet": "assets/Characters/Quantum/Materials/Clothing/Accessories/F_Bracelet/M_Bracelet.mat"
+    "MI_F_Bracelet": "assets/Characters/Quantum/Materials/Clothing/Accessories/F_Bracelet/M_Bracelet.mat"
   },
   "metaVersion": 1,
   "type": "model"

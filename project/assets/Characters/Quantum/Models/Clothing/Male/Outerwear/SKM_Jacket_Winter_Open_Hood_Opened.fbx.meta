@@ -1,0 +1,14 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
+  "guid": "6112b74c1ac6ab53",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_Jacket_Winter_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Winter_Closed_Hood_Closed/M_Jacket_Winter_Black.mat",
+    "MI_Jacket_Winter_Fur": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Winter_Closed_Hood_Closed/M_Jacket_Winter_Fur.mat",
+    "MI_Tshirt_Tucked_Black": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt_Tucked/M_TShirt_Tucked_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,8 +1,11 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
   "guid": "aa2df8a7b73456bd",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "M_Hoodie_Hood": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood/M_Hoodie_Hood_Black.mat"
+    "MI_Hoodie_Hood_Black": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood/M_Hoodie_Hood_Black.mat"
   },
   "metaVersion": 1,
   "type": "model"

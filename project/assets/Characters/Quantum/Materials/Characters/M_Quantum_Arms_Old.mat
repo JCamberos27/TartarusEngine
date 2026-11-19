@@ -3,8 +3,8 @@
   "matVersion": 2,
   "name": "M_Quantum_Arms_Old",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_Occlusion.1003.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_BaseColor.1003.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_BaseColor.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_Unity_Normal.1003.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Old/Arms/T_Quantum_Basemesh_Arms_old_Roughness.1003.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "51728133eb13790c",
-    "_AlbedoMap": "c9d9f78878e4e41f",
-    "_NormalMap": "6d9c8e2c88656288",
-    "_RoughnessMap": "cbe5b1002ee76a2c"
+    "_AOMap": "0687162a6b84b3b0",
+    "_AlbedoMap": "78570c0dc22d58f8",
+    "_MetallicRoughnessMap": "0687162a6b84b3b0",
+    "_NormalMap": "bddcc1360b9e4cf5"
   }
 }

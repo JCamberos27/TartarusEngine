@@ -1,0 +1,40 @@
+{
+  "alphaCutoff": 0.3333,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Glasses_Aviator_White_Glass",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Commo_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Brown_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Commo_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "538fed2c6846c61b",
+    "_AlbedoMap": "447382421a76f57d",
+    "_MetallicRoughnessMap": "538fed2c6846c61b",
+    "_NormalMap": "cca2045d8dfcb8c9"
+  }
+}

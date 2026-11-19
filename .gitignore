@@ -76,8 +76,9 @@ project/assets/**/*.mmdb
 # ...and CC0 sounds, which anyone may redistribute: the interior door foley (credits in its CREDITS.md).
 !project/assets/Audio/Foley/door/**
 
-# Hat textures from the Quantum zip: the hats were removed from the project, so the editor
-# must not re-create .meta files for local copies of them.
+# Hat textures from the old Quantum zip: those hats were removed from the project (#501), so the editor
+# must not re-create .meta files for local copies of them. The Casual Bundle's headwear lives in
+# Headwear/ folders (Models/Clothing/<Male|Female>/Headwear, Materials|Textures/Clothing/Headwear).
 project/assets/Characters/Quantum/Textures/Clothing/Hats/
 videos/
 # Volumetric blood data converted from the KriptoFX asset (can't be redistributed).

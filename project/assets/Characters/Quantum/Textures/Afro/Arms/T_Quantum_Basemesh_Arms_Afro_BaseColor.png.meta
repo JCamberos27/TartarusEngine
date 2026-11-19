@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Characters/Quantum/Textures/Afro/Arms",
+  "guid": "6ce5a91c6a24106f",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": true,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

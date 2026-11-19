@@ -1,10 +1,11 @@
 {
   "folder": "assets/Characters/Quantum/Models/Afro",
   "guid": "a76da5325597f635",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "M_Quantum_Arms": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms_Afro.mat",
-    "M_Quantum_Body": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body_Afro.mat",
-    "M_Quantum_Head": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head_Afro.mat"
+    "MI_Quantum_Body_Afro": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body_Afro.mat"
   },
   "metaVersion": 1,
   "type": "model"

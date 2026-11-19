@@ -1,8 +1,11 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
   "guid": "e2d1fd615069caa6",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "M_Puffy_Vest": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Black.mat"
+    "MI_M_Puffy_Vest_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Black.mat"
   },
   "metaVersion": 1,
   "type": "model"

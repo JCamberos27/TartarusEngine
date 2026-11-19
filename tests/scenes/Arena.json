@@ -5929,54 +5929,6 @@
       "pathGuid": "4294419ced9a748d"
     },
     {
-      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_BaseColor.1001.png",
-      "pathGuid": "53c56365fccaaaf6"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Unity_Normal.1001.png",
-      "pathGuid": "1ce8ae861ca44d77"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Roughness.1001.png",
-      "pathGuid": "2c09c787a05ae64b"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Occlusion.1001.png",
-      "pathGuid": "4158845f83d91935"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_BaseColor.1003.png",
-      "pathGuid": "41cb6d59333dff57"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Unity_Normal.1003.png",
-      "pathGuid": "29da77c277b4c368"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Roughness.1003.png",
-      "pathGuid": "0f4f3be6435fb551"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Occlusion.1003.png",
-      "pathGuid": "a90075e269ca5791"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_BaseColor.1002.png",
-      "pathGuid": "eaeb3aa5bb6fea12"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Unity_Normal.1002.png",
-      "pathGuid": "04da729f18d0764b"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Roughness.1002.png",
-      "pathGuid": "31e1f9b82ac0d4d5"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Occlusion.1002.png",
-      "pathGuid": "d5ec3de7cc7c9073"
-    },
-    {
       "path": "assets/Characters/Quantum/Textures/Eyes/T_Eye_Hazel.png",
       "pathGuid": "713300e6ba74de44"
     },
@@ -5987,22 +5939,6 @@
     {
       "path": "assets/Characters/Quantum/Textures/Eyes/T_Eye_Brown.png",
       "pathGuid": "291658f014c4553a"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_BaseColor.1001.png",
-      "pathGuid": "7abfadd9b82d77d1"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Unity_Normal.1001.png",
-      "pathGuid": "435828b6af022794"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Roughness.1001.png",
-      "pathGuid": "c450debfcebdf287"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Occlusion.1001.png",
-      "pathGuid": "55d925b21b2b6d41"
     },
     {
       "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Black_BaseColor.png",
@@ -6049,22 +5985,6 @@
       "pathGuid": "9c0d74e53b152f2c"
     },
     {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Black_BaseColor.png",
-      "pathGuid": "f3f5b81961e09ab7"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Unity_Normal.png",
-      "pathGuid": "7b0cc2301d351e56"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Roughness.png",
-      "pathGuid": "ead0d73fa935a8e0"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Occlusion.png",
-      "pathGuid": "805f678756395cf6"
-    },
-    {
       "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
       "pathGuid": "7edf0f8ddb9b52e7"
     },
@@ -6097,60 +6017,12 @@
       "pathGuid": "8a2010d0c6a5ecff"
     },
     {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_White_BaseColor.png",
-      "pathGuid": "cf192a9cf6c428ce"
-    },
-    {
       "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Green_BaseColor.png",
       "pathGuid": "49c1f5a5b7028511"
     },
     {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
-      "pathGuid": "102e34904a03fd80"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
-      "pathGuid": "75f7d3734bdcbffe"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
-      "pathGuid": "6e90149c347bedc2"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
-      "pathGuid": "3d3479334266d781"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
-      "pathGuid": "dcc7e35f9e93a284"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
-      "pathGuid": "490076b88517c219"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
-      "pathGuid": "a344f2e9a18e398b"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
-      "pathGuid": "5ed366a42af67c36"
-    },
-    {
       "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
       "pathGuid": "427d699fbc412c22"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
-      "pathGuid": "91e0a7e4f759f6d4"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
-      "pathGuid": "b3b2b46e73b05bbc"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png",
-      "pathGuid": "407594381188360c"
     },
     {
       "path": "assets/Effects/Muzzle/7.png",
@@ -6268,16 +6140,16 @@
           "path": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat"
         },
         {
+          "guid": "7a80f13a6d4b5daf",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Brows_Lashes.mat"
+        },
+        {
           "guid": "9b4dcbacd337e8a1",
           "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat"
         },
         {
           "guid": "b0cdff125ce5bc62",
           "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
-        },
-        {
-          "guid": "7a80f13a6d4b5daf",
-          "path": "assets/Characters/Quantum/Materials/Characters/M_Brows_Lashes.mat"
         },
         {
           "guid": "b0cdff125ce5bc62",

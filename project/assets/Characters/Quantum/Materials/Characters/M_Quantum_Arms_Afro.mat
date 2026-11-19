@@ -3,8 +3,8 @@
   "matVersion": 2,
   "name": "M_Quantum_Arms_Afro",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_Occlusion.1003.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_BaseColor.1003.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_BaseColor.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_Unity_Normal.1003.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Afro/Arms/T_Quantum_Basemesh_Arms_Afro_Roughness.1003.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "1b2d8cd07ba5cec2",
-    "_AlbedoMap": "46b456829d9c74e7",
-    "_NormalMap": "abaadbd06fddef38",
-    "_RoughnessMap": "3cb6aa858c81fd61"
+    "_AOMap": "cfae3b11d3ca2060",
+    "_AlbedoMap": "6ce5a91c6a24106f",
+    "_MetallicRoughnessMap": "cfae3b11d3ca2060",
+    "_NormalMap": "3a0b3cf6a44a3724"
   }
 }

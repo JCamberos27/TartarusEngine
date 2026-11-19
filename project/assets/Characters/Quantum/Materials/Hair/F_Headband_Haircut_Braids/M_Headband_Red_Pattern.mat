@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Headband_Red_Pattern",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Hair/F_Headband_Haircut_Braids/T_Bandana_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Hair/F_Headband_Haircut_Braids/T_Bandana_Red_Pattern_BaseColor.png",
+    "_BaseColor": [
+      0.527999997138977,
+      0.527999997138977,
+      0.527999997138977
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Hair/F_Headband_Haircut_Braids/T_Bandana_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Hair/F_Headband_Haircut_Braids/T_Bandana_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "26024af37baea89b",
+    "_AlbedoMap": "a9bed5459ce8791c",
+    "_MetallicRoughnessMap": "26024af37baea89b",
+    "_NormalMap": "0d009746c6f6e03f"
+  }
+}

@@ -1,9 +1,13 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
   "guid": "643bd3d9211b0edc",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "M_Jacket_Classic1": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Classic/M_Jacket_Classic_Black.mat",
-    "lambert1": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Classic/M_Jacket_Classic_Black.mat"
+    "MI_Jacket_Classic_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Classic/M_Jacket_Classic_Black.mat",
+    "MI_Shirt_Classic_White": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_Classic/M_Shirt_Classic_White.mat",
+    "MI_Tie_Blue": "assets/Characters/Quantum/Materials/Clothing/Accessories/Tie/M_Tie_Blue.mat"
   },
   "metaVersion": 1,
   "type": "model"

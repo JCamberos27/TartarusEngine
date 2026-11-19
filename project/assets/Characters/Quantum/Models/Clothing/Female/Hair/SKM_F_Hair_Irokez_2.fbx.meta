@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hair",
+  "guid": "d182ecbca3d19f3a",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_Hair_Long_Red": "assets/Characters/Quantum/Materials/Hair/Hair_Long/M_Hair_Long_Red.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

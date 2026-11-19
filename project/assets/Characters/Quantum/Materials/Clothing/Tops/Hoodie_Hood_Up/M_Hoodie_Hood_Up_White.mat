@@ -3,12 +3,12 @@
   "matVersion": 2,
   "name": "M_Hoodie_Hood_Up_White",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_White_BaseColor.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_HoodUp_OcclusionRoughnessMetallic_D.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_HoodUp_White_BaseColor_D.png",
     "_BaseColor": [
-      1.0,
-      1.0,
-      1.0
+      0.6800000071525574,
+      0.6800000071525574,
+      0.6800000071525574
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_HoodUp_OcclusionRoughnessMetallic_D.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_HoodUp_Normal_D.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "3d3479334266d781",
-    "_AlbedoMap": "3816b6e27e17b029",
-    "_NormalMap": "75f7d3734bdcbffe",
-    "_RoughnessMap": "6e90149c347bedc2"
+    "_AOMap": "afd41a68aca4b294",
+    "_AlbedoMap": "0f9c104edbb4b656",
+    "_MetallicRoughnessMap": "afd41a68aca4b294",
+    "_NormalMap": "a5a1a6e4337db697"
   }
 }

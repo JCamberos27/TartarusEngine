@@ -3,8 +3,8 @@
   "matVersion": 2,
   "name": "M_F_Vivian_Body_Afro",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Female/European/Body/T_F_Vivian_Basemesh_Body_Occlusion.1002.png",
-    "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/Afro/Body/T_F_Vivian_Basemesh_Body_Afro_BaseColor.1002.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Female/Afro/Body/T_F_Vivian_Basemesh_Body_Afro_OcclusionRoughnessMetallic.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/Afro/Body/T_F_Vivian_Basemesh_Body_Afro_BaseColor.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -18,20 +18,21 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 0.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "",
-    "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Characters/Quantum/Textures/Female/Afro/Body/T_F_Vivian_Basemesh_Body_Afro_Unity_Normal.1002.png",
+    "_MetallicRoughnessMap": "assets/Characters/Quantum/Textures/Female/Afro/Body/T_F_Vivian_Basemesh_Body_Afro_OcclusionRoughnessMetallic.png",
+    "_NormalFlipY": true,
+    "_NormalMap": "assets/Characters/Quantum/Textures/Female/Afro/Body/T_F_Vivian_Basemesh_Body_Afro_Normal.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/Characters/Quantum/Textures/Female/Afro/Body/T_F_Vivian_Basemesh_Body_Afro_Roughness.1002.png",
+    "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "ba11a704037f8756",
-    "_AlbedoMap": "e9dd548ea541b77b",
-    "_NormalMap": "1e56b321ddee7ecf",
-    "_RoughnessMap": "a5c9830e9dda2429"
+    "_AOMap": "59bed0cd142ee731",
+    "_AlbedoMap": "ea8afdbb8671d194",
+    "_MetallicRoughnessMap": "59bed0cd142ee731",
+    "_NormalMap": "14b1abf505e992b3"
   }
 }

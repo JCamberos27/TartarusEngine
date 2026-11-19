@@ -1,0 +1,14 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Headwear",
+  "guid": "066da498c0204faa",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_F_Haircut_Half_Up": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Half_Up/M_F_Haircut_Half_Up.mat",
+    "MI_F_Haircut_Ponytail": "assets/Characters/Quantum/Materials/Hair/F_Haircut_Ponytail/M_F_Haircut_Ponytail.mat",
+    "MI_Headband_Red_Pattern": "assets/Characters/Quantum/Materials/Hair/F_Headband_Haircut_Braids/M_Headband_Red_Pattern.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

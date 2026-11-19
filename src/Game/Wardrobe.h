@@ -151,7 +151,8 @@ struct Wardrobe {
     std::vector<ExcludeRule> Excludes;
     std::vector<Style> Styles;
     std::vector<std::string> RandomOrder; // the order Randomize fills slots in (empty = Slots' order)
-    std::string HatSlot = "Hat", HairSlot = "Hair"; // a hat takes the haircut fitted to it
+    // A hat takes the haircut fitted to it ("hatSlot" / "hairSlot": Quantum's hats are its Headwear slot).
+    std::string HatSlot = "Hat", HairSlot = "Hair";
     std::vector<ItemOverride> Items;
 
     const SlotDef* Slot(const std::string& id) const;
@@ -200,8 +201,8 @@ void MarkVariants(const Wardrobe& w, std::vector<Item>& items);
 // --- Layers -----------------------------------------------------------------------------------
 
 // A slot's layer and whether it hides, when the .wardrobe doesn't say: body 0, shoes, tucked tops, pants,
-// tops, outerwear, collars, bags and wrists, then hair, beards and glasses (which drape over it all but
-// hide nothing), then hats. Wrists hide nothing either: a watch or bead bracelet shows the skin through
+// tops, outerwear, collars, bags and wrists, then hair, beards (Beard / FacialHair) and glasses (which drape over it
+// all but hide nothing), then hats (Hat / Headwear) and headphones over them. Wrists hide nothing either: a watch or bead bracelet shows the skin through
 // its gaps, and the arm posed away from the bind pose slides the hidden band out from under it.
 int DefaultLayer(const std::string& slot);
 bool DefaultHides(const std::string& slot);

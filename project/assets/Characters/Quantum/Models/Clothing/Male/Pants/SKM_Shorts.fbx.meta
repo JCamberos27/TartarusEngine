@@ -1,0 +1,13 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Pants",
+  "guid": "dc18cf11b0f64be7",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
+  "materialRemap": {
+    "MI_Quantum_Body": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat",
+    "MI_Shorts_Boots_Bege": "assets/Characters/Quantum/Materials/Clothing/Pants/Shorts/M_Shorts_Beige.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,9 +1,12 @@
 {
   "folder": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear",
   "guid": "a3b9f6d560e5baac",
+  "importer": {
+    "rootNodeInModelSpace": true
+  },
   "materialRemap": {
-    "M_F_Tshirt_Tucked": "assets/Characters/Quantum/Materials/Clothing/Tops/F_Tshirt_Tucked/M_F_Tshirt_Tucked_Black.mat",
-    "lambert2": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket/M_Jeans_Jacket_Black.mat"
+    "MI_F_TShirt_Tucked_Bege": "assets/Characters/Quantum/Materials/Clothing/Tops/F_Tshirt_Tucked/M_F_Tshirt_Tucked_Beige.mat",
+    "MI_Jeans_Jacket_Black": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket/M_Jeans_Jacket_Black.mat"
   },
   "metaVersion": 1,
   "type": "model"
