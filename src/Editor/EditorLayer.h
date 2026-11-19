@@ -1601,6 +1601,7 @@ private:
     // Drops the baseline when an outfit change landed since it was taken (OutfitSystem::LandedGeneration).
     void RebaseAfterOutfitChanges();
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
+    void TrimUndoHistory(); // drops the oldest step past kMaxHistory (EditorLayer_Scene.cpp)
     void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's

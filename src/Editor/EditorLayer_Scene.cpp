@@ -190,10 +190,7 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
         if(entry.CountsAsSceneEdit() && m_SavedUndoDepth>=0 && !m_RedoStack.empty()) m_SavedUndoDepth=-1;
         if(entry.CountsAsSceneEdit()) ++m_ContentDepth;
         PushHistoryEntry(m_UndoStack,m_UndoBaseJson,std::move(entry),before);
-        if(m_UndoStack.size()>kMaxHistory) {
-            if(m_UndoStack.front().CountsAsSceneEdit()) {--m_ContentDepth;if(m_SavedUndoDepth>0)--m_SavedUndoDepth;}
-            m_UndoStack.erase(m_UndoStack.begin());
-        }
+        TrimUndoHistory();
         ClearRedoHistory();RefreshDirtyFromHistory();m_EditPushedThisFrame=true;
     }
     if (m_GlobalUndoHasScene && !m_InPlayMode) {
@@ -247,10 +244,7 @@ bool EditorLayer::PushUnrecordedChange(const World& world, const std::string& cu
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     ++m_ContentDepth;
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), before);
-    if (m_UndoStack.size() > kMaxHistory) {
-        if (m_UndoStack.front().CountsAsSceneEdit()) {--m_ContentDepth;if(m_SavedUndoDepth>0)--m_SavedUndoDepth;}
-        m_UndoStack.erase(m_UndoStack.begin());
-    }
+    TrimUndoHistory();
     ClearRedoHistory();
     RefreshDirtyFromHistory();
     m_CurrentUndoScene = currentJson;
@@ -269,6 +263,18 @@ void EditorLayer::JournalBeforeOutfitLanding(const World& world) {
 void EditorLayer::JournalUnrecordedChange(const World& world) {
     if (m_InPlayMode || m_CurrentUndoScene.empty() || !m_AssetsPtr) return;
     JournalUnrecordedChange(world, SceneSerializer::SaveToString(world, *m_AssetsPtr));
+}
+
+// Past kMaxHistory the oldest step goes. Safe with the delta chain as-is: entry 0's patch only ever
+// rebuilt entry 0 from entry 1, so dropping it leaves every remaining link intact (#174 stage 2).
+// The whole stack shifts down by one, so the saved depth and the content depth follow.
+void EditorLayer::TrimUndoHistory() {
+    if (m_UndoStack.size() <= kMaxHistory) return;
+    if (m_UndoStack.front().CountsAsSceneEdit()) {
+        --m_ContentDepth;
+        if (m_SavedUndoDepth > 0) --m_SavedUndoDepth;
+    }
+    m_UndoStack.erase(m_UndoStack.begin());
 }
 
 void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files) {
@@ -902,16 +908,7 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), sceneJson);
     if (!selectionOnly) m_ContentDepth++; // Q6 — only real edits count toward the dirty flag
-    if (m_UndoStack.size() > kMaxHistory) {
-        // Safe with the delta chain as-is: entry 0's patch only ever rebuilt entry 0 from
-        // entry 1, so dropping it leaves every remaining link intact (#174 stage 2).
-        const bool evictedWasContent = m_UndoStack.front().CountsAsSceneEdit();
-        m_UndoStack.erase(m_UndoStack.begin());
-        if (evictedWasContent) {
-            if (m_SavedUndoDepth > 0) m_SavedUndoDepth--; // the whole stack shifted down by one
-            m_ContentDepth--;
-        }
-    }
+    TrimUndoHistory();
     ClearRedoHistory(); // a fresh edit invalidates whatever redo history existed
     RefreshDirtyFromHistory();
     if (!selectionOnly) m_EditPushedThisFrame = true; // tells RecordSelectionHistory not to ALSO push a Select entry
@@ -931,14 +928,7 @@ void EditorLayer::PushAssetUndo(const World& world, const std::string& matPath, 
     entry.AssetJson = std::move(before);
     entry.AssetOnly = assetOnly;
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), sceneJson);
-    if (m_UndoStack.size() > kMaxHistory) {
-        const bool evictedWasContent = m_UndoStack.front().CountsAsSceneEdit();
-        m_UndoStack.erase(m_UndoStack.begin());
-        if (evictedWasContent) {
-            if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
-            m_ContentDepth--;
-        }
-    }
+    TrimUndoHistory();
     ClearRedoHistory();
     RefreshDirtyFromHistory();
     m_EditPushedThisFrame = true; // not also a "Select" entry
@@ -1018,14 +1008,7 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), stagedJson);
     m_ContentDepth++; // Q6 — a staged edit is always a real edit, never SelectionOnly
-    if (m_UndoStack.size() > kMaxHistory) {
-        const bool evictedWasContent = m_UndoStack.front().CountsAsSceneEdit();
-        m_UndoStack.erase(m_UndoStack.begin());
-        if (evictedWasContent) {
-            if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
-            m_ContentDepth--;
-        }
-    }
+    TrimUndoHistory();
     ClearRedoHistory();
     RefreshDirtyFromHistory();
     m_HasStagedUndo = false;
