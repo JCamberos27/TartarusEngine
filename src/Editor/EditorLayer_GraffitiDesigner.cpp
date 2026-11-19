@@ -326,7 +326,11 @@ float PenPressure(const GraffitiDesigner& g) {
 
 void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport) {
     if (!g.Piece) return;
+    const size_t layersBefore = g.Piece->Layers.size();
+    g.StrokePrevSelected = g.Selected;
+    g.StrokePrevDirty = g.Dirty;
     const int layer = EnsureSprayLayer(g);
+    g.StrokeAddedLayer = g.Piece->Layers.size() != layersBefore;
     if (g.NeedsBuild || g.Dirty) Rebuild(g); // the live layer must be in the program
     g.CascadeLayer = -1;
     g.Stroking = true;
@@ -397,7 +401,17 @@ void EndStroke(GraffitiDesigner& g) {
         g.Piece->Layers[(size_t)g.StrokeLayer].Strokes.push_back(std::move(g.Live));
         SaveNow(g); // one stroke, one undo step (the file journal)
         g.NeedsBuild = true;
+    } else if (g.StrokeAddedLayer && g.StrokeLayer >= 0 && g.StrokeLayer < (int)g.Piece->Layers.size() &&
+               g.Piece->Layers[(size_t)g.StrokeLayer].Strokes.empty()) {
+        // A click, not a stroke: the Spray layer it made goes again, so no empty layer is saved as its own step.
+        auto& L = g.Piece->Layers;
+        L.erase(L.begin() + g.StrokeLayer);
+        if (g.StrokeLayer < (int)g.LayerIds.size()) g.LayerIds.erase(g.LayerIds.begin() + g.StrokeLayer);
+        g.Selected = g.StrokePrevSelected < (int)L.size() ? g.StrokePrevSelected : (int)L.size() - 1;
+        g.Dirty = g.StrokePrevDirty;
+        g.NeedsBuild = true;
     }
+    g.StrokeAddedLayer = false;
     g.Live = Graffiti::Stroke{};
     if (g.BakeAgain) {
         g.BakeAgain = false;
