@@ -1468,6 +1468,7 @@ private:
     void AddToSelectionIfAbsent(entt::entity entity); // additive-only: never toggles an already-selected item off
 
     void SyncViewportPrefs(); // #135 — persist the members below that EditorSettings mirrors
+    bool m_ViewportPrefsPending = false; // a synced value changed; written when no widget is active
 
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
