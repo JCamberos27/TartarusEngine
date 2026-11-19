@@ -246,6 +246,7 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
             Log::Error("Audio: voice limit reached; dropping '" + path + "'.", LogContext::Asset(path));
             ma_sound_uninit(sound.get());
             dropChain();
+            if (buffer) ma_audio_buffer_uninit(buffer.get()); // (a preloaded clip's buffer, after the sound that read it)
             return InvalidHandle;
         }
         index = static_cast<uint32_t>(g_Audio.Voices.size());

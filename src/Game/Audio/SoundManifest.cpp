@@ -113,7 +113,9 @@ SoundSet ApplySet(const json& j, SoundSet s) {
     s.MinDistance = std::max(Num(j, "minDistance", s.MinDistance), 0.01f);
     s.MaxDistance = std::max(Num(j, "maxDistance", s.MaxDistance), s.MinDistance);
     if (const std::string r = Str(j, "rolloff"); !r.empty())
-        s.Rolloff = r == "linear" ? AudioEngine::Rolloff::Linear : AudioEngine::Rolloff::Logarithmic;
+        s.Rolloff = r == "linear" ? AudioEngine::Rolloff::Linear
+                  : r == "exponential" || r == "exp" ? AudioEngine::Rolloff::Exponential
+                  : AudioEngine::Rolloff::Logarithmic;
     s.NoImmediateRepeat = Flag(j, "noImmediateRepeat", s.NoImmediateRepeat);
     s.MaxVoices = (int)Num(j, "maxVoices", (float)s.MaxVoices);
     s.StealFadeTime = Num(j, "stealFadeTime", s.StealFadeTime);
@@ -133,7 +135,7 @@ json SetToJson(const SoundSet& s) {
     j["bus"] = BusName(s.Bus);
     j["minDistance"] = s.MinDistance;
     j["maxDistance"] = s.MaxDistance;
-    j["rolloff"] = s.Rolloff == AudioEngine::Rolloff::Linear ? "linear" : "log";
+    j["rolloff"] = s.Rolloff == AudioEngine::Rolloff::Linear ? "linear" : s.Rolloff == AudioEngine::Rolloff::Exponential ? "exponential" : "log";
     j["noImmediateRepeat"] = s.NoImmediateRepeat;
     j["maxVoices"] = s.MaxVoices;
     j["stealFadeTime"] = s.StealFadeTime;
