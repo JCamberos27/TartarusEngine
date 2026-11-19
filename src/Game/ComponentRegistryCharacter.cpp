@@ -641,7 +641,7 @@ void RegisterCharacterComponents() {
                 {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Spine Aim Max Up", "Arms"}, {"Spine Aim Max Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"}, {"Grip Inset", "Arms"}, {"Finger Curl Extra", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},
-                {"Foot IK", "Foot IK"}, {"Foot IK Max Drop", "Foot IK"}, {"Bone Map", "Camera"}, {"Start Stop Clips", "Locomotion"},
+                {"Foot IK", "Foot IK"}, {"Foot IK Max Drop", "Foot IK"}, {"Bone Map", "Camera"},
             };
             for (auto& f : m.Fields)
                 for (const auto& [name, group] : kGroups)
