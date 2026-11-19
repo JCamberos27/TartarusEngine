@@ -62,47 +62,6 @@ struct HeadlessImGui {
 
 bool Near(float a, float b, float eps) { return std::fabs(a - b) <= eps; }
 
-void TestGlassThemeStyle() {
-    HeadlessImGui gui;
-    ImGuiStyle style;
-    ConfigureMacEngineTheme(style);
-    // 14 px on floating surfaces, smaller radii nested inside; the 8 px spatial law.
-    CHECK(style.WindowRounding == Glass::GlassRadius && style.WindowRounding == 14.0f);
-    CHECK(style.PopupRounding == 14.0f);
-    CHECK(style.FrameRounding == Glass::RadiusControl && style.FrameRounding == 8.0f);
-    CHECK(style.TabRounding == 8.0f && style.ChildRounding == 10.0f);
-    CHECK(style.WindowPadding.x == 16.0f && style.WindowPadding.y == 16.0f);
-    CHECK(style.ItemSpacing.x == 8.0f && style.ItemSpacing.y == 8.0f);
-    CHECK(style.FrameBorderSize == 0.0f); // flat fields: depth comes from fill, not outlines
-    CHECK(style.WindowBorderSize == 1.0f && style.PopupBorderSize == 1.0f); // the edge glass re-colours
-    // Every colour slot was written (no magenta sentinel left behind).
-    for (int i = 0; i < ImGuiCol_COUNT; ++i) {
-        const ImVec4 c = style.Colors[i];
-        CHECK(!(c.x == 1.0f && c.y == 0.0f && c.z == 1.0f && c.w == 1.0f));
-    }
-    // Solid where you work: docked panels and the solid fallbacks are opaque.
-    const ImVec4 bg = style.Colors[ImGuiCol_WindowBg];
-    CHECK(bg.x == Glass::Panel.x && bg.w == 1.0f);
-    CHECK(style.Colors[ImGuiCol_PopupBg].x == Glass::PopupSolid.x && style.Colors[ImGuiCol_PopupBg].w == 1.0f);
-    // A floating window's title bar is its body colour, so the compositor clears both together.
-    for (ImGuiCol t : {ImGuiCol_TitleBg, ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed})
-        CHECK(std::memcmp(&style.Colors[t], &bg, sizeof(bg)) == 0);
-    CHECK(style.Colors[ImGuiCol_MenuBarBg].x == 0.0f && style.Colors[ImGuiCol_MenuBarBg].w == 1.0f);
-    // Monochrome: no hue in the chrome. Every UI colour is a grey (axis / status colours are
-    // content and aren't ImGuiCol slots).
-    for (int i = 0; i < ImGuiCol_COUNT; ++i) {
-        const ImVec4 c = style.Colors[i];
-        CHECK(Near(c.x, c.y, 0.02f) && Near(c.y, c.z, 0.02f));
-    }
-    CHECK(style.Colors[ImGuiCol_TabSelectedOverline].x == Glass::Accent.x);
-    CHECK(style.Colors[ImGuiCol_Text].x == Glass::TextPrimary.x && style.Colors[ImGuiCol_Text].w == 1.0f);
-    // Calling it twice gives the same style (no accumulation).
-    ImGuiStyle again = style;
-    ConfigureMacEngineTheme(again);
-    CHECK(std::memcmp(again.Colors, style.Colors, sizeof(style.Colors)) == 0);
-    CHECK(again.FramePadding.x == style.FramePadding.x && again.WindowRounding == style.WindowRounding);
-}
-
 void TestGlassContrast() {
     using EditorUIPrimitives::ContrastRatio;
     for (const ImVec4& surface : {Glass::Panel, Glass::Card, Glass::Raised, Glass::GlassFallback}) {
@@ -123,7 +82,8 @@ void TestGlassContrast() {
 void TestGlassCompositorConvert() {
     HeadlessImGui gui;
     ImGuiStyle& style = ImGui::GetStyle();
-    ConfigureMacEngineTheme(style);
+    ImGui::StyleColorsDark(&style);
+    ApplyGlassMaterials(style);
     // A floating window, an overlay with a translucent background, and one with none.
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(100.0f, 80.0f), ImGuiCond_Always);
@@ -823,7 +783,8 @@ void TestGlassV2StyleMoods() {
     HeadlessImGui gui;
     MotionV2Defaults restore;
     ImGuiStyle base;
-    ConfigureMacEngineTheme(base);
+    ImGui::StyleColorsDark(&base);
+    ApplyGlassMaterials(base);
     base.Colors[ImGuiCol_WindowBg] = ImVec4(0, 0, 0, Glass::GlassPanelAlpha); // a Glass panel
     // Play: panels recede, text drops toward disabled, and it all stays grey.
     ImGuiStyle play = base;
@@ -970,7 +931,6 @@ void RegisterGlassTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Glass motion: keyframe clips and paths", TestGlassClipsAndPaths);
     tests.emplace_back("Glass motion: round 2 tokens", TestGlassRound2Tokens);
     tests.emplace_back("Glass motion: bridged widgets settle to nothing held", TestGlassBridgeWidgetsSettle);
-    tests.emplace_back("Glass theme: complete, monochrome style on the 8 px grid", TestGlassThemeStyle);
     tests.emplace_back("Glass theme: text contrast on solid surfaces and over the brightest glass", TestGlassContrast);
     tests.emplace_back("Glass compositor: finds and clears a floating window's solid look", TestGlassCompositorConvert);
     tests.emplace_back("Glass compositor: arrival pose moves vertices and clip rects", TestGlassCompositorPose);

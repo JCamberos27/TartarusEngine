@@ -23,7 +23,7 @@ The setting is stored as `glassTheme` in the editor preferences.
 | Where | What |
 | --- | --- |
 | `src/Editor/Glass/GlassTokens.h` | Every number in this document: palette, glass material, spacing, radii, type, motion. |
-| `src/Editor/Glass/GlassTheme.{h,cpp}` | `ConfigureMacEngineTheme`, the canvas, squircles, glass HUD plates. |
+| `src/Editor/Glass/GlassTheme.{h,cpp}` | `ApplyGlassMaterials`, the canvas, squircles, glass HUD plates. |
 | `src/Editor/Glass/GlassCompositor.{h,cpp}`, `GlassSurfaces.cpp` | Glass under every floating window, and the arrival motion. |
 | `src/Editor/Glass/GlassMotion.{h,cpp}` | `ImAnimContext`: the zero-at-rest animation map in front of ImAnim, plus the Motion v2 helpers (odometer, inertia, gradients, layers, startup, debugger). |
 | `src/Editor/Glass/GlassStyleMotion.{h,cpp}` | Category 10: the theme tween and the play / focus / prefab moods. |
@@ -267,30 +267,23 @@ unified inspector. ImAnim's profiler runs only while the window is open.
 
 ---
 
-## 4. `ConfigureMacEngineTheme`
+## 4. `ApplyGlassMaterials`
 
 ```cpp
-void ConfigureMacEngineTheme(ImGuiStyle& style); // GlassTheme.h
+void ApplyGlassMaterials(ImGuiStyle& style); // GlassTheme.h
 ```
 
-Call it on a default-constructed `ImGuiStyle`, then apply `ScaleAllSizes(uiScale)` once.
-`EditorLayer::ApplyThemeStyle` does exactly that. It sets:
+The Glass theme is not a separate style: `EditorLayer::ApplyThemeStyle` starts from Tartarus's own
+metrics and palette and then calls `ApplyGlassMaterials`, before `ScaleAllSizes(uiScale)`. Sizes,
+spacing and fonts stay Tartarus's. It changes only the materials:
 
-* **Metrics at 1x.**
-  * Padding and spacing: `WindowPadding` 16,16; `FramePadding` 12,8; `ItemSpacing` 8,8;
-    `ItemInnerSpacing` 8,4; `CellPadding` 8,4; `IndentSpacing` 16.
-  * Sizes: `ScrollbarSize` 12; `GrabMinSize` 12.
-  * Rounding: floating windows and popups 14; children 10; frames, tabs, scrollbars and grabs 8.
-  * Borders: a 1 px hairline on windows and popups (15% white once they are glass); no frame
-    borders and no tab-bar rule. A 2 px seam between docked panels.
-  * `DisabledAlpha` 0.42.
-* **The whole `ImGuiCol_` array.** The unit tests check that every slot was written, none is left
-  at the sentinel, and every slot is a grey (no hue in the chrome). Docked panels are `Panel`; the
-  canvas, menu bar and resting tabs are `Base`; the selected tab joins its panel and carries a 1 px
-  white line. Floating windows and popups are written *solid* (`WindowBg` `Panel`, `PopupBg`
-  `GlassFallback`, title bars the same colour as the body, borders `Hairline`), because the
-  compositor finds exactly those colours on each floating window and replaces them with glass
-  (see 6.1). Anywhere it doesn't run, they are the right fallback.
+* Docked panels, the menu bar and title bars become translucent black (`GlassPanelAlpha`,
+  `GlassChromeAlpha`) over the black canvas; children and the empty dock space are clear.
+* Tabs, headers, table headers, fields and buttons are dark glass; hover lifts with a faint white.
+* Borders and separators are faint white hairlines.
+* Floating windows and popups get `GlassWindowRounding` / `GlassPopupRounding`. Popups are written
+  *solid* (`PopupSolid`), because the compositor finds exactly those colours on each floating
+  window and replaces them with glass (see 6.1). Anywhere it doesn't run, they are the right fallback.
 
 The reloadable editor module (`TartarusEditor.dll`) doesn't include any Glass headers. It inherits
 the Glass style through the shared ImGui context. Its hand-coded `EditorTheme` fills stay in the
@@ -491,8 +484,7 @@ system is initialised with room for 16 clips and 8 instances instead of ImAnim's
   matrix. They hold nothing.
 * `GridRippleDelay` is plain Euclidean distance times a step, capped. ImAnim's
   `iam_stagger_grid_delay` normalises by the farthest tile, which is an O(tiles) scan per call.
-* `TextOnPath` (`iam_text_path`) follows a defined path. `TextAlongCubic` places glyphs along a
-  wire's bezier without defining a path, so a graph that redraws every frame registers nothing.
+* `TextAlongCubic` places glyphs along a wire's bezier without defining a path, so a graph that redraws every frame registers nothing.
 * The style motion registers two `ImGuiStyle` snapshots (`iam_style_register`), only when a theme
   actually changes, and blends them with `iam_style_blend_to` under a pulse. `iam_style_tween`
   isn't used: it re-registers its source and restarts every frame once it has finished. Like clip
@@ -517,7 +509,7 @@ falls back to `EditorTheme::AnimT`.
    content growing mid-animation is followed rather than snapped.
 2. The reveal reserves only the **animated height** in the parent layout. Everything below moves
    with the animation, so what you see is where it is.
-3. A `Glass::ClipGuard` (RAII `ImGui::PushClipRect` / `PopClipRect`, always intersecting with the
+3. A clip rect (`ImGui::PushClipRect` / `PopClipRect`, always intersecting with the
    parent's rect) the size of the animated region wraps the body. Text and widgets never bleed
    past the edge or pop at the end.
 
@@ -531,7 +523,7 @@ alpha, then undoes both after the row, so the rows after it are unaffected.
 Elements stay clickable and hit-accurate while they animate:
 
 * **Clipped means not hoverable.** ImGui hit-tests against the current clip rect, so the part of
-  a revealing body outside the `ClipGuard` cannot be hovered or clicked. Nothing invisible ever
+  a revealing body outside that clip rect cannot be hovered or clicked. Nothing invisible ever
   takes a click.
 * **Size-changing motion moves the real layout.** Reveals and staggered rows offset the cursor, so
   the hit rect *is* the drawn rect on every frame.

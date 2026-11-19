@@ -57,7 +57,7 @@
 #include "Glass/GlassDockMotion.h"   // tab overline glide, focus rim, play frame
 #include "Glass/GlassDragMotion.h"   // the drag ghost
 #include "Glass/GlassFeedbackMotion.h" // the About title's staggered headline
-#include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
+#include "Glass/GlassTheme.h"       // ApplyGlassMaterials (the opt-in Glass theme)
 #include "Glass/GlassStyleMotion.h" // theme tweens and the play / prefab / focus moods
 
 #include <imgui.h>
