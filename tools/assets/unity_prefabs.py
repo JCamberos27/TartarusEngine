@@ -332,7 +332,7 @@ class Converter:
             by_class[int(k)][int(v)] = e['second']
         return by_class
 
-    EMBEDDED_DUMP = os.environ.get('TARTARUS_EMBEDDED_DUMP', 'C:/Users/jacob/unity_truth/embedded')
+    EMBEDDED_DUMP = os.environ.get('TARTARUS_EMBEDDED_DUMP', '')  # where TartarusDump.EmbeddedMeshes wrote its OBJs
 
     def embedded_model(self, name):
         """Engine path of a mesh stored inside the current scene, exported by TartarusDump.EmbeddedMeshes as an OBJ
@@ -344,6 +344,9 @@ class Converter:
         rel = os.path.relpath(os.path.dirname(self.scene_path), self.pack.src)
         dst_dir = os.path.join(self.pack.dest, rel, scene + '_embedded')
         top = os.path.relpath(self.pack.src, self.pack.assets).split(os.sep)[0]
+        if not self.EMBEDDED_DUMP:
+            raise RuntimeError('set TARTARUS_EMBEDDED_DUMP to the folder TartarusDump.EmbeddedMeshes exported to '
+                               f'(scene {scene} stores mesh {name!r} inside itself)')
         src_dir = os.path.join(self.EMBEDDED_DUMP, top, scene)
         res = None
         idx = os.path.join(src_dir, 'index.json')
@@ -1134,8 +1137,6 @@ DRESSING_WORDS = {'rug', 'rugs', 'carpet', 'doormat', 'decal', 'decals', 'poster
 SMALL_PROP = 0.35  # metres: a prop smaller than this every way has no collider (strip_small_colliders)
 THIN_BOX = 0.04  # metres: the thickness a flat Unity box collider gets (Converter.colliders)
 SKIP_COMPONENTS = ('Camera', 'CharacterController', 'AudioListener')
-SIMPLE_MODS = re.compile(r'^(m_Local(Position|Rotation|Scale|EulerAnglesHint)\.[xyzw]|m_Name|m_RootOrder|'
-                         r'm_StaticEditorFlags|m_IsActive|m_ConstrainProportionsScale)$')
 
 
 def pack_files(pack, ext):
@@ -1592,9 +1593,12 @@ def scene_bounds(conv, scene):
                 e['name'] = f"{e['name']}~{e['id']}"
         src = os.path.join(tmp, 'bounds_tmp.json')
         write_json(src, sc)
-        subprocess.run([conv.exe, '--project', os.path.join(conv.pack.repo, 'project'), '--scene-bounds', src, '--out', tmp],
-                       capture_output=True, text=True, encoding='utf-8', errors='replace')
-        res = json.load(open(os.path.join(tmp, 'scenes', 'bounds_tmp.json'), encoding='utf-8'))
+        run = subprocess.run([conv.exe, '--project', os.path.join(conv.pack.repo, 'project'), '--scene-bounds', src, '--out', tmp],
+                             capture_output=True, text=True, encoding='utf-8', errors='replace')
+        res_path = os.path.join(tmp, 'scenes', 'bounds_tmp.json')
+        if run.returncode != 0 or not os.path.exists(res_path):
+            raise RuntimeError(f'--scene-bounds failed (exit {run.returncode}):\n' + (run.stdout or '')[-3000:])
+        res = json.load(open(res_path, encoding='utf-8'))
         out = {}
         for x in res['entities']:
             out[int(x['path'].split('/')[-1].rsplit('~', 1)[1])] = (list(x['min']), list(x['max']))

@@ -15,8 +15,6 @@ import scene_kit as k
 SWITCH_MODELS = 'assets/Props/Electrical/Models/'
 SWITCH_H = 1.15                 # the switch's middle above the floor
 SWITCH_OFF = 0.17               # ... and past the opening's edge (the jamb's face), along the wall: clear of the trim
-CLUSTER = 2.7                   # ceiling fittings closer than this share a circuit
-MAX_DISCS = 4                   # a cluster of flush discs bigger than this is split
 CLICK_ON = 'assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav'   # a wall switch flicked (dr19, Freesound CC0), softened
 CLICK_OFF = 'assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav'
 # The toggle is a lit one (an old illuminated switch): a dim warm orange while its room is dark, out once the light is

@@ -84,12 +84,14 @@ def prefab(rel, guid, col):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--repo', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-    ap.add_argument('--payload-root', default=r'C:\Users\jacob\Desktop\TartarusEngine')
+    ap.add_argument('--payload-root', help='the checkout that holds the Drive payloads and the built exe (default: --repo)')
     ap.add_argument('--exe')
     ap.add_argument('--dry', action='store_true')
     ap.add_argument('--force', action='store_true')
     args = ap.parse_args()
     assets = os.path.abspath(os.path.join(args.repo, 'project', 'assets'))
+    if not args.payload_root:
+        args.payload_root = args.repo
     payload_assets = os.path.join(args.payload_root, 'project', 'assets')
     exe = args.exe or os.path.join(args.payload_root, 'build', 'Release', 'TartarusEngine.exe')
 

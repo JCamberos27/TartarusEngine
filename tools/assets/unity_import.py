@@ -514,6 +514,8 @@ def run_cook(pack, blender, scratch):
     os.makedirs(scratch, exist_ok=True)
     # Blender's own parallelism is weak for this: split into 6 processes.
     items = list(merged.values())
+    # Each process logs to its own file (six full pipes read one after another could stall a writer), and a
+    # process that crashed or never printed its summary is reported, not counted as cooked.
     procs = []
     for n in range(6):
         part = items[n::6]
@@ -522,15 +524,28 @@ def run_cook(pack, blender, scratch):
         path = jobs.replace('.json', f'_{n}.json')
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(part, f)
-        procs.append(subprocess.Popen([blender, '-b', '--factory-startup', '--python',
-                                       os.path.join(os.path.dirname(__file__), 'unity_tex_cook.py'), '--', path],
-                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace'))
-    for p in procs:
-        out = p.communicate()[0]
-        for line in out.splitlines():
-            if line.startswith('[TexCook] FAILED'):
-                pack.report['textures that failed to cook'].append(line[17:])
-    pack.counts['textures cooked'] += sum(len(j['outs']) for j in items)
+        log_path = path.replace('.json', '.log')
+        log = open(log_path, 'w', encoding='utf-8', errors='replace')
+        p = subprocess.Popen([blender, '-b', '--factory-startup', '--python',
+                              os.path.join(os.path.dirname(__file__), 'unity_tex_cook.py'), '--', path],
+                             stdout=log, stderr=subprocess.STDOUT)
+        procs.append((p, log, log_path, part))
+    for p, log, log_path, part in procs:
+        rc = p.wait()
+        log.close()
+        summary = None
+        with open(log_path, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                line = line.rstrip()
+                if line.startswith('[TexCook] FAILED'):
+                    pack.report['textures that failed to cook'].append(line[17:])
+                elif line.startswith('[TexCook] ') and line.endswith(' failed') and ' written, ' in line:
+                    summary = line
+        if summary is None or rc != 0:
+            pack.report['texture cook processes that did not finish'].append(
+                f'{os.path.basename(log_path)}: exit {rc}, {len(part)} source(s) not confirmed (see the log)')
+            continue
+        pack.counts['textures cooked'] += int(summary.split()[1])
 
 
 def main():
