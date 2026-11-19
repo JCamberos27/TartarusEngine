@@ -288,22 +288,25 @@ void EditorLayer::AddToSelectionIfAbsent(entt::entity entity) {
     }
 }
 
+// Replaces the selection with `entities` (distinct): the first is the primary. One pass - adding them
+// one by one through AddToSelectionIfAbsent searched the growing selection for each (O(n^2)).
+void EditorLayer::SetSelectionToDistinct(const std::vector<entt::entity>& entities) {
+    m_RenamingEntity = entt::null;
+    m_Selected = entities.empty() ? entt::null : entities.front();
+    m_ExtraSelection.assign(entities.empty() ? entities.end() : entities.begin() + 1, entities.end());
+}
+
 void EditorLayer::SelectAllVisibleInHierarchy() {
     if (m_HierarchyVisibleOrder.empty()) return;
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : m_HierarchyVisibleOrder) AddToSelectionIfAbsent(e);
+    SetSelectionToDistinct(m_HierarchyVisibleOrder);
     m_SelectionAnchor = m_HierarchyVisibleOrder.front();
     // Deliberately no m_PendingFrameSelect here — snapping the camera to fit the entire scene
     // every time the user hits Ctrl+A would be more disruptive than helpful.
 }
 
 void EditorLayer::SelectAllEntities(World& world) {
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : world.Registry.view<const NameComponent>()) AddToSelectionIfAbsent(e);
+    const auto named = world.Registry.view<const NameComponent>();
+    SetSelectionToDistinct(std::vector<entt::entity>(named.begin(), named.end()));
     if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
 }
 
@@ -439,13 +442,12 @@ void EditorLayer::SelectionHistoryForward(World& world) {
 }
 
 void EditorLayer::InvertSelection(World& world) {
+    std::unordered_set<entt::entity> was(m_ExtraSelection.begin(), m_ExtraSelection.end());
+    if (m_Selected != entt::null) was.insert(m_Selected);
     std::vector<entt::entity> nowSelected;
     for (entt::entity e : world.Registry.view<const NameComponent>())
-        if (!IsSelected(e)) nowSelected.push_back(e);
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : nowSelected) AddToSelectionIfAbsent(e);
+        if (!was.count(e)) nowSelected.push_back(e);
+    SetSelectionToDistinct(nowSelected);
     if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
 }
 
