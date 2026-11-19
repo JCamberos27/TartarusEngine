@@ -4549,30 +4549,6 @@ void TestFirstPersonAnimationFSM() {
     CHECK(FirstPersonRegripDelay(0.0f) == 10.0f);
     CHECK(FirstPersonRegripDelay(1.0f) == 20.0f);
     CHECK(FirstPersonRegripDelay(-3.0f) == 10.0f && FirstPersonRegripDelay(7.0f) == 20.0f);
-
-    // Reload key: a tap reloads on release, a hold mag-checks once at the threshold.
-    {
-        using In = FirstPersonReloadInput;
-        const float dt = 1.0f / 60.0f;
-        FirstPersonReloadButton b;
-        CHECK(b.Update(false, dt) == In::None);             // idle
-        CHECK(b.Update(true, dt) == In::None);              // pressed
-        CHECK(b.Update(true, dt) == In::None);              // still short of the hold
-        CHECK(b.Update(false, dt) == In::Reload);           // quick release = tap
-        CHECK(b.Update(false, dt) == In::None);             // fires once
-
-        int magChecks = 0;
-        CHECK(b.Update(true, dt) == In::None);
-        for (int i = 0; i < 60; ++i) magChecks += b.Update(true, dt) == In::MagCheck;
-        CHECK(magChecks == 1);                              // one MagCheck per hold, however long
-        CHECK(b.Update(false, dt) == In::None);             // releasing a hold doesn't also reload
-
-        // Crosses the threshold on the frame the hold reaches it, not before.
-        FirstPersonReloadButton h;
-        h.Update(true, 0.0f);
-        CHECK(h.Update(true, FirstPersonReloadButton::kHoldSeconds * 0.9f) == In::None);
-        CHECK(h.Update(true, FirstPersonReloadButton::kHoldSeconds * 0.2f) == In::MagCheck);
-    }
 }
 
 // ADS animations: the "ads" settings block (and its pre-block gameplay keys), the generator's

@@ -161,7 +161,7 @@ public:
     // cascades. 0.75 matches every scene saved before the setting existed.
     float ShadowCascadeSplit{0.75f};
     // #110 - shadow budgets for local lights: how many shadowed spot / point lights get a map
-    // each frame (the most important ones, scored in main.cpp). Clamped to 0..SpotShadowMap::
+    // each frame (the most important ones, scored in LightGather.cpp). Clamped to 0..SpotShadowMap::
     // kMaxSpots / PointShadowMap::kMaxPoints on load and in the UI.
     int   MaxSpotShadows{4};
     int   MaxPointShadows{2};
@@ -289,9 +289,7 @@ public:
     // TransformComponent in place so the entity doesn't visually jump: its world-space transform
     // is preserved, only the frame it's expressed in changes. Fails (returns false, no change)
     // if `parent` is `child` itself or one of `child`'s own descendants, which would create a
-    // cycle. Deliberately does not support parenting a Collider entity — collision/raycast keep
-    // reading TransformComponent directly as world space (see ColliderComponent), so a parented
-    // entity with a Collider would collide using stale local coordinates.
+    // cycle. Collider entities parent like any other (physics and raycasts read world space).
     bool SetParent(entt::entity child, entt::entity parent);
 
     // Sets the Parent/Children links directly, WITHOUT touching TransformComponent — unlike

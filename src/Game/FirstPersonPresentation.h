@@ -96,7 +96,7 @@ public:
     bool IsFullAuto() const { return m_FullAuto; }
     void SetPlayerLookInput(glm::vec2 pitchYaw) { m_RawLookInput=pitchYaw; m_HaveRawLookInput=true; }
     void SetPlayerMoveInput(glm::vec2 rightForward) { m_SwayMoveInput=rightForward; m_HaveSwayMoveInput=true; }
-    // The R key: tap = Reload, hold = MagCheck (see FirstPersonReloadButton).
+    // The R key: tap = Reload, hold = MagCheck (the weapon rules' reload key, gameplay.reloadHoldSeconds).
     void UpdateReloadKey(bool down, float dt);
     void ResetReloadKey() { m_ReloadSeconds=0; m_ReloadDown=false; m_ReloadFired=false; }
     // Sets the Reload trigger when the magazine isn't full and no reload is running; the

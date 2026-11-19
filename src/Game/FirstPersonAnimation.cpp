@@ -698,26 +698,6 @@ glm::vec3 FirstPersonPelletDirection(const glm::vec3& dir, float halfAngleDegree
     return glm::normalize(dir + side * (r * std::cos(a)) + up * (r * std::sin(a)));
 }
 
-FirstPersonReloadInput FirstPersonReloadButton::Update(bool down, float dt) {
-    if (down) {
-        if (!Down) {
-            Down = true;
-            Fired = false;
-            Held = 0.0f;
-            return FirstPersonReloadInput::None;
-        }
-        Held += dt;
-        if (!Fired && Held >= HoldSeconds) {
-            Fired = true;
-            return FirstPersonReloadInput::MagCheck;
-        }
-        return FirstPersonReloadInput::None;
-    }
-    if (!Down) return FirstPersonReloadInput::None;
-    Down = false;
-    return Fired ? FirstPersonReloadInput::None : FirstPersonReloadInput::Reload;
-}
-
 std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponCheckInput& in) {
     using namespace FirstPersonAnimatorContract;
     using PT = AnimatorController::ParamType;

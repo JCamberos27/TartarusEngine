@@ -345,19 +345,3 @@ float FirstPersonRegripDelay(float unit01, float minSeconds = 10.0f, float maxSe
 // One pellet's direction: `dir` (unit) turned by up to `halfAngleDegrees`, spread evenly over the
 // cone's disc by two uniform [0,1] samples (u1: how far out, u2: which way round).
 glm::vec3 FirstPersonPelletDirection(const glm::vec3& dir, float halfAngleDegrees, float u1, float u2);
-
-// The reload key is overloaded: a tap reloads, a hold checks the magazine. A tap only resolves
-// on release (until then it can't be told from the start of a hold); a hold fires MagCheck the
-// moment it crosses HoldSeconds, and its release then does nothing.
-enum class FirstPersonReloadInput { None, Reload, MagCheck };
-struct FirstPersonReloadButton {
-    // Long enough that a deliberate tap never trips it, short enough that a hold doesn't feel
-    // laggy - the same ballpark shooters use for tap/hold on one key.
-    static constexpr float kHoldSeconds = 0.35f;
-    float HoldSeconds = kHoldSeconds;
-    bool Down = false;
-    bool Fired = false;
-    float Held = 0.0f;
-
-    FirstPersonReloadInput Update(bool down, float dt);
-};
