@@ -2280,11 +2280,19 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
     const bool desc = EditorSettings::Get().HierarchySortDesc;
     // Sort keys are computed once per row, not per comparison: the Name key for an unnamed row
     // ("Object 7") used to cost a full creation-order sort of the scene on every compare.
-    std::unordered_map<entt::entity, int> ordinals;
-    if (mode == 1) {
-        const auto list = ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
-        for (size_t i = 0; i < list.size(); ++i) ordinals[list[i]] = (int)i + 1;
-    }
+    // The "Object N" ordinals take a creation-order sort of the whole scene: only when a row here is
+    // unnamed, and once a frame (this runs for the roots and again for every expanded parent's children).
+    const auto ordinalOf = [&](entt::entity e) {
+        const int frame = ImGui::GetFrameCount();
+        if (m_HierOrdinalsFrame != frame) {
+            m_HierOrdinalsFrame = frame;
+            m_HierOrdinals.clear();
+            const auto list = ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
+            for (size_t i = 0; i < list.size(); ++i) m_HierOrdinals[list[i]] = (int)i + 1;
+        }
+        const auto it = m_HierOrdinals.find(e);
+        return it != m_HierOrdinals.end() ? it->second : 0;
+    };
     struct Keyed { entt::entity E; std::string Name; int Kind; };
     std::vector<Keyed> keyed;
     keyed.reserve(rows.size());
@@ -2292,7 +2300,7 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
         Keyed k{e, {}, 0};
         if (mode == 1) {
             const auto* nm = world.Registry.try_get<NameComponent>(e);
-            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(ordinals[e]);
+            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(ordinalOf(e));
         } else {
             k.Kind = HierarchyKindMask(world.Registry, e);
         }

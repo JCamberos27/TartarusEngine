@@ -2259,6 +2259,9 @@ private:
     // The flattened rows and the per-row ancestor chain used to be fresh vectors every frame
     // (one heap allocation per visible row for the chain); both are reused now.
     std::vector<HierarchyFlatRow> m_HierFlatRows;
+    // ApplyHierarchyDisplaySort's "Object N" ordinals, built at most once a frame (and only when needed).
+    mutable std::unordered_map<entt::entity, int> m_HierOrdinals;
+    mutable int m_HierOrdinalsFrame = -1;
     std::vector<entt::entity> m_HierChainScratch;
     // CreationOrdinal ("Object 7") was a full sort of every entity PER unnamed row (and per
     // comparison in the Name sort). Built lazily once per frame instead.
