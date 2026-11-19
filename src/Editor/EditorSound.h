@@ -171,7 +171,6 @@ void SetWindowFocused(bool focused);
 bool IsDoneChime(Event e);
 // The focus edge (host): if done chimes played while away, a Digest plays once shortly after (counted, then reset).
 void OnFocusRegained();
-int AwayDoneCount();
 // A drop the editor handled itself (a zone that isn't an ImGui drop target, e.g. Hierarchy rows): the observer's
 // DropAccept / DropReject for the drag ending stays quiet this frame and the next. The handler plays its own sound.
 void SuppressDropSound();

@@ -1,7 +1,7 @@
 #pragma once
 #include "UndoDeltaChain.h" // UndoEntry::Delta
 #include "EditorFileHistory.h"
-#include "AnimatorController.h" // #175 Part B - m_CtrlEdit
+#include "AnimatorController.h"
 #include <filesystem>
 #include <imgui.h> // ImGuiID (GetSceneGameDockNodeId)
 #include <glm/glm.hpp>
@@ -283,8 +283,6 @@ public:
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
     // live per-frame pointers the glue holds from SetFrameContext.
-    void ToolbarUndo(World& w, AssetLibrary& a) { Undo(w, a); }
-    void ToolbarRedo(World& w, AssetLibrary& a) { Redo(w, a); }
     void ToolbarToggleOrthographic(World& w, Camera& c) { ToggleOrthographic(w, c); }
 
     // Menu / popup bodies for the module's dropdowns, rendered host-side into the module-begun
@@ -293,13 +291,10 @@ public:
     void DrawEditMenuBody(World& world, AssetLibrary& assets);
     // The open scene's title, for the menu bar.
     std::string SceneTitle() const;
-    bool SceneDirty() const { return m_Dirty; }
-    bool IsInPlayMode() const { return m_InPlayMode; }
     // Dock sounds (DockFrame): re-prime the observer and stay quiet for `frames` frames, around a
     // layout change made by code (main.cpp's forced tab selection), not by the user's drag.
     void QuietDockSounds(int frames = 10);
     // The startup modals: main.cpp's startup chime waits while either is up.
-    bool IsRecoveryPromptPending() const { return m_RecoveryPromptPending; }
     bool IsStartupModalPending() const { return m_RecoveryPromptPending || !m_SceneVersionWarning.empty(); }
     // --editor-shot: draw every Inspector component open, so a capture shows their contents.
     void SetExpandAllComponents(bool on) { m_ExpandAllComponents = on; }
@@ -508,7 +503,6 @@ public:
     void ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r);
     void AddSelectionToFavorites(const World& world);
     void MigrateAssetFavorites(); // one-time import of asset_favorites.json into page 1
-    bool FavoritesOverlayVisible() const { return m_FavVisible; }
     int    m_FavPage = 0;            // the shown page; also where stars and drops add
     bool   m_FavLocked = false;      // pinned open (Ctrl+Alt+F, or the overlay's pin)
     bool   m_ShotOpenBookmarks = false; // --editor-shot: open the Inspector bookmarks list once
@@ -602,7 +596,6 @@ public:
     // comment), so camera navigation and viewport picking/box-select — both gated on this — keep
     // working inside the one place they need to.
     bool WantsCaptureMouse() const;
-    bool WantsCaptureKeyboard() const;
     // A floating window (Preferences, an undocked panel) or an open menu has keyboard focus, so
     // the viewport's own shortcuts (tools, view snaps, frame, quick-add) should stand down.
     bool OtherWindowOwnsKeyboard() const;
@@ -800,10 +793,6 @@ public:
     int GlassSurfacesForTest() const;
     int GlassCapturesForTest() const;
 
-    // True while a modal dialog (Save changes?, Recover unsaved changes?, a confirm prompt) is
-    // open. main.cpp reads it to frost the Scene viewport behind the dim scrim.
-    bool AnyModalOpen() const;
-
     // Set by main.cpp for the single frame a "clean viewport" capture renders — every editor
     // overlay (grid, gizmos, entity icons, light gizmos, HUDs, status bar) skips.
     void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
@@ -843,7 +832,6 @@ public:
     // Change". Only a change outside the outfits (SceneSerializer::SameSceneContentApartFromOutfits):
     // their own pieces move on the frames after a landing (OutfitSystem::UpdateAttachments).
     void JournalBeforeOutfitLanding(const World& world);
-    const std::string& PrefabModePath() const { return m_PrefabModePath; }
     void EnterPrefabMode(World& world, AssetLibrary& assets, const std::string& path);
     void ExitPrefabMode(World& world, AssetLibrary& assets, bool save = true);
     bool SavePrefabMode(World& world);
@@ -1469,7 +1457,6 @@ private:
     // Live gizmo drag readout: the transform at the instant a drag began, for the delta text.
     glm::vec3 m_GizmoDragStartPos{0.0f};
     glm::vec3 m_GizmoDragStartRot{0.0f};
-    glm::vec3 m_GizmoDragStartScale{1.0f};
     bool m_PrevLeftMouseDown = false;
 
     // Box/marquee select: press-drag-release in empty viewport space. Whether it turns out to
@@ -1589,7 +1576,6 @@ private:
     std::string m_CurrentUndoScene;
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
-    bool m_ViewportNavDrag = false; // a right/middle drag that began over the Scene view is held (UndoTrigger.h)
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
@@ -1727,13 +1713,6 @@ private:
     // Window > Game menu round-trip (see SetGameViewOpenState/ConsumeGameViewOpenRequest above).
     bool m_GameViewOpenCached = true;
     int m_GameViewOpenRequest = -1; // -1 none, 0 close, 1 open
-    // DVD-screensaver idle bounce: after 30 s with no mouse/keyboard input the mark launches out
-    // of its corner and ricochets around the viewport edges; any input eases it back home.
-    float m_MarkIdleTime = 0.0f;
-    glm::vec2 m_MarkPos{0.0f, 0.0f}; // drawn centre, screen px — eases to the corner, or bounces
-    glm::vec2 m_MarkVel{0.0f, 0.0f}; // px/sec, non-zero only while bouncing
-    bool m_MarkBouncing = false;
-    bool m_MarkPosValid = false;     // false until first laid out, so it doesn't fly in from (0,0)
 
     // The full-width toolbar strip + its dropdown menus moved into TartarusEditor.dll
     // (EditorModuleToolbar.cpp, issue #229). The host keeps the menu/popup *bodies* — declared
@@ -2456,7 +2435,6 @@ public:
     // (docs/DECALS.md, "Editor tools").
     DecalToolMode DecalTool() const { return m_DecalTool; }
     void SetDecalTool(DecalToolMode mode); // leaves the Hand and Measure tools; same mode again = off
-    void SetShowDecalLibrary(bool show) { m_ShowDecalLibrary = show; }
     // main.cpp: while a decal tool owns the mouse wheel (it turns / scales the ghost, or sizes the brush)
     // the camera does not zoom with it.
     bool DecalToolOwnsWheel() const;
@@ -2485,12 +2463,6 @@ private:
     // Multi-select counterpart: `sel` is every selected entity that has this component.
     void DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                           const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
-    // #302 Part B — a field label that, when this (component, field) on `entity` differs from
-    // the prefab it was instantiated from, tints itself in the selection accent and offers a
-    // right-click Revert / Apply menu. Falls back to a plain PropertyLabel otherwise.
-    // `component` is a ReflectComponent::Name or the specials "Transform" / "Name".
-    void PrefabOverrideLabel(World& world, entt::entity entity, const char* component,
-                             const char* field, const char* label, const char* tooltip);
     // #6 Defect #44/#54 — the ReflectFieldType switch, shared by the single-select (`sel` of size
     // 1, no mixed-value branch ever taken) and multi-select Inspector loops so a new field type or
     // widget improvement is written once instead of drifting between two independent copies. Draws
@@ -2709,7 +2681,6 @@ private:
     bool m_TransportMaximized = false;         // ... and maximized play, for the title-bar transport
     double m_PlayStartedAt = -1.0;             // ImGui time Play began (the title bar's play clock)
     float m_TitleTransportW = 0.0f;            // last frame's transport width, to centre it
-    int  m_ToolGlideLast = -2;                 // the tool rail's last active tool (-2 = none yet)
     int m_PendingThemeId = -1;                 // RequestEditorTheme, applied in BeginFrame
     void ApplyPendingTheme();                  // BeginFrame, before ImGui::NewFrame
     void GlassFrameBegin();                    // BeginFrame, after ImGui::NewFrame
@@ -2825,10 +2796,8 @@ private:
     CameraPose m_LookThroughRestore;
     // While looking through a light, flying the editor camera drives the light with it (fly it
     // into place / re-aim it from its own POV). One undo point is captured the first frame it
-    // actually moves; these hold the light's pose at entry so that first move is detectable.
+    // actually moves.
     bool m_LookThroughMoved = false;
-    glm::vec3 m_LookThroughStartPos{0.0f};
-    glm::vec3 m_LookThroughStartRot{0.0f};
     // The Inspector has no camera in scope, so its "Look through" button just records the light
     // here; Draw() acts on it once, with editorCamera available.
     entt::entity m_PendingLookThrough = entt::null;
@@ -2868,7 +2837,6 @@ public:
     // clockwise from the top (OutlineSweep), then holds at 1. Starts the sweep itself when it sees
     // the selection change (checked once a frame), so any caller can read it. Viewport motion off: 1.
     float SelectionOutlineReveal();
-    bool  RadialMenuOpen() const { return m_Radial.Open; }
 private:
     uint64_t m_OutlineSweepSig = 0;    // primary entity + selection count, last seen
     int      m_OutlineSweepFrame = -1; // frame the signature was last checked

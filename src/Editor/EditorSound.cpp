@@ -668,7 +668,6 @@ bool IsDoneChime(Event e) {
 void OnFocusRegained() {
     if (s.AwayDone > 0) s.DigestAtMs = NowMs() + 300.0;
 }
-int AwayDoneCount() { return s.AwayDone; }
 void SuppressDropSound() { s.DropQuietFrame = s.Frame; }
 
 void Play(Event e, float screenX01, float pitchScale, float gainDb) {

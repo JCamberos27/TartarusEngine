@@ -149,7 +149,9 @@ struct EditorMotionHooks; // EditorMotionHooks.h
 //        press back with a soft cancel when it is dragged off.
 //   44 - Glass Motion v2: EditorMotionHooks grows CategoryOn, Odometer, Inertia*, DrawSheen,
 //        DrawCursorGlow, RippleDelay, BeginLayer / EndLayer and seven new motion tokens.
-constexpr std::uint32_t kEditorModuleAPIVersion = 44;
+//   45 - Unused host callbacks removed: DrawStatusPanel, OpenPreferences, GetEngineMarkTexture and
+//        GetSceneTitle (no module code called them).
+constexpr std::uint32_t kEditorModuleAPIVersion = 45;
 
 // Editor Enhancers / vFolders (API v40): how one Asset Browser folder looks. POD - crosses the
 // module boundary. Glyphs are UTF-8 Font Awesome characters (at most 4 bytes + NUL).
@@ -252,7 +254,6 @@ struct EditorModuleGLFrameStats {
 
 struct EditorModuleHostAPI {
     std::uint32_t Version = kEditorModuleAPIVersion;
-    void (*DrawStatusPanel)(const char* title, const char* message, const char* accent) = nullptr;
 
     // --- ImGui sharing ---------------------------------------------------------------------
     // The module compiles its own copy of ImGui's sources, so it must be pointed at the host's
@@ -360,7 +361,6 @@ struct EditorModuleHostAPI {
     bool (*GetShowHistory)() = nullptr;      void (*SetShowHistory)(bool on) = nullptr;
     // These two persist into EditorSettings; the setter calls EditorSettings::Save() host-side.
     bool (*GetShowStats)() = nullptr;        void (*SetShowStats)(bool on) = nullptr;
-    void (*OpenPreferences)() = nullptr;
     void (*OpenShortcutsReference)() = nullptr; // v29 — Help menu's Shortcuts item
 
     // Menu / popup bodies rendered host-side into the module-begun menu or popup — the module
@@ -533,10 +533,6 @@ struct EditorModuleHostAPI {
 
     // --- Editor UI pass (API v38) ---
     void (*DrawEditMenuBody)() = nullptr;
-    unsigned int (*GetEngineMarkTexture)() = nullptr; // retired: the engine mark is gone; kept for the struct layout, always null
-    // The open scene's name (no extension) into `out`, and whether it has unsaved changes / the
-    // editor is in Play.
-    void (*GetSceneTitle)(char* out, int n, bool* outDirty, bool* outPlaying) = nullptr;
 
     // --- Editor Enhancers / vHierarchy (API v39) ---
     // Draws the nav row (scene selector, Back/Forward, bookmark chips) into the current window at

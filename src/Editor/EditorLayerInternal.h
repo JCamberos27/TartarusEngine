@@ -60,34 +60,6 @@ inline bool BeginCenteredModal(const char* id, bool* pOpen = nullptr,
     return ImGui::BeginPopupModal(id, pOpen, ImGuiWindowFlags_AlwaysAutoResize | extraFlags);
 }
 
-// --- Docked-panel tab-bar chrome text -------------------------------------------------------
-// A dock node's tab bar — the tab labels, each tab's close ×, the ▼ window-list button, the
-// node close × — is all drawn in ImGuiCol_Text, with no separate style colour (ImGui's own
-// source says as much). Windows XP's tab bar was a saturated Start-button green regardless of
-// its overall light-beige chrome, so its dark body text needed to flip to white just there.
-// PushTabChromeText/PopTabChromeText existed to do that flip, wrapping *just* each panel's
-// ImGui::Begin() call.
-//
-// Phase 1 item 9 removed Windows XP as a theme. PanelChromeIsLight() used to detect "light
-// chrome" from raw WindowBg luminance — which correctly no-ops on Dark, but is a FALSE POSITIVE
-// on the new Light theme: Light's tabs are neutral greys that already pair with its own normal
-// (dark) Text colour, not a saturated colour needing an override, so the luminance heuristic
-// would push illegible near-white text onto near-white tabs. Hardcoded to false rather than
-// deleted — deleting would mean touching every PushTabChromeText call site across the host and
-// three module TUs (EditorModuleAssetBrowser/Hierarchy/Inspector.cpp each keep their own copy of
-// this pair, same DLL-boundary reason ActionButton used to be duplicated) for a mechanism a
-// future saturated-chrome theme would just re-enable here.
-inline bool PanelChromeIsLight() {
-    return false;
-}
-inline void PushTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
-}
-inline void PopTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PopStyleColor();
-}
-
-
 // True only for entities the vertex-grab workflow applies to. Level-geometry boxes qualify now
 // too — their cube primitive has real vertices to grab, same as any placed cube.
 inline bool IsVertexDraggable(World& world, entt::entity entity) {
@@ -307,20 +279,10 @@ inline bool SettingsCheckbox(const char* label, bool* v) {
     return changed;
 }
 
-// A dialog's button row, right-aligned: call with the total width of the buttons that follow
-// (e.g. ButtonRowWidth({"Cancel", "Save"})) and lay them out with SameLine.
+// A button's width for `label` at the current frame padding.
 inline float ButtonWidth(const char* label) {
     return ImGui::CalcTextSize(label, nullptr, true).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 }
-inline void AlignButtonRow(std::initializer_list<const char*> labels, float minWidth = 0.0f) {
-    float w = 0.0f;
-    for (const char* l : labels) w += ImMax(ButtonWidth(l), minWidth);
-    w += ImGui::GetStyle().ItemSpacing.x * (float)(labels.size() > 0 ? labels.size() - 1 : 0);
-    const float avail = ImGui::GetContentRegionAvail().x;
-    if (avail > w) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - w);
-}
-
-
 // #152 — the one "is this object active" control, shared by the Hierarchy row and the Inspector
 // header so both panels speak the same language. Borderless (matches ActionButton). It always
 // occupies one frame-height slot so the layout never shifts:

@@ -61,20 +61,6 @@ void VSeparator() {
     ImGui::SameLine(0.0f, style.ItemSpacing.x);
 }
 
-// EditorInternal::PushTabChromeText — used to keep the dock tab bar's text white against
-// Windows XP's saturated-green tab chrome. Phase 1 item 9 removed that theme; Light's tabs are
-// neutral and already pair with its own normal text colour, so this is a permanent no-op now
-// (see EditorLayerInternal.h's PanelChromeIsLight for the full explanation).
-bool PanelChromeIsLight() {
-    return false;
-}
-void PushTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
-}
-void PopTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PopStyleColor();
-}
-
 // EditorInternal::MatchesFilter / ParentFolderOf / LeafNameOf, copied module-side.
 bool MatchesFilter(const std::string& filter, const std::string& text) {
     if (filter.empty()) return true;
@@ -614,9 +600,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     bool visible = true;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * uiScale, 4.0f * uiScale)); // #37
-    PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::Assets, &visible, ImGuiWindowFlags_None);
-    PopTabChromeText();
     ImGui::PopStyleVar();
     if (host.SetShowAssetBrowser) host.SetShowAssetBrowser(visible); // capture the title-bar X
     if (!open) { ImGui::End(); return; }

@@ -4566,27 +4566,7 @@ void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char*
                              "don't override it follow it. Undo puts the file back.");
 }
 
-// PropertyLabel plus the override affordance: when (component, field) on `entity` differs from
-// the .prefab, the label is tinted with the selection accent and a right-click opens
-// PrefabFieldMenu. Plain PropertyLabel otherwise (incl. any non-prefab entity).
-void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const char* component,
-                                      const char* field, const char* label, const char* tooltip) {
-    const bool overridden =
-        SceneSerializer::IsPrefabFieldOverridden(world, entity, component, field);
-    PropertyLabel(label, tooltip, overridden);
-    if (overridden) {
-        // The label is a bare Text item — BeginPopupContextItem is unreliable on those, so open
-        // the popup explicitly off IsItemClicked(right).
-        const std::string popupId = std::string(component) + "\x1f" + field; // unit-sep: never in a name
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup(popupId.c_str());
-        if (ImGui::BeginPopup(popupId.c_str())) {
-            PrefabFieldMenu(world, entity, component, field);
-            ImGui::EndPopup();
-        }
-    }
-}
-
-// #315 — multi-select counterparts of the three helpers above.
+// #315 — multi-select counterparts of the helpers above.
 bool EditorLayer::AnyPrefabFieldOverridden(World& world, const std::vector<entt::entity>& sel,
                                            const char* component, const char* field) {
     for (entt::entity e : sel)

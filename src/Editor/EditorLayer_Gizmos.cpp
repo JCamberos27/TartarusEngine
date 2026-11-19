@@ -773,14 +773,9 @@ void EditorLayer::LookThroughLight(World& world, Camera& editorCamera, entt::ent
         m_LookThroughRestore = {editorCamera.Position, editorCamera.Yaw, editorCamera.Pitch,
                                 editorCamera.Fov, editorCamera.OrthoHalfHeight, editorCamera.Orthographic};
     }
-    // Remember this light's pose so the first frame the flown camera diverges from it counts as
-    // a real reposition and gets its own undo entry. Re-armed per light when hopping.
-    {
-        const auto& tf0 = world.Registry.get<const TransformComponent>(light);
-        m_LookThroughStartPos = tf0.Position;
-        m_LookThroughStartRot = tf0.EulerDegrees();
-        m_LookThroughMoved = false;
-    }
+    // The first frame the flown camera moves the light gets its own undo entry. Re-armed per
+    // light when hopping.
+    m_LookThroughMoved = false;
 
     const auto& lc = world.Registry.get<const LightComponent>(light);
     glm::mat4 m = world.ComposeWorldTransform(light);
@@ -2640,7 +2635,6 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         PushUndo(world, GizmoOpUndoLabel(m_GizmoOp));
         m_GizmoDragStartPos = transform.Position;
         m_GizmoDragStartRot = transform.EulerDegrees();
-        m_GizmoDragStartScale = transform.Scale;
     }
     if (!isUsingNow && m_GizmoWasUsing && snapActive) GlassNotifySnap(); // Glass theme: the snap ring
     m_GizmoWasUsing = isUsingNow;

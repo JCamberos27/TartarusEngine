@@ -41,7 +41,6 @@ namespace AssetExts {
 extern const char* const Images[];   // .png .jpg .jpeg .tga .bmp .hdr .exr
 extern const char* const Hdri[];     // .hdr .exr
 extern const char* const Models[];   // .fbx .gltf .glb .obj .dae
-extern const char* const Sounds[];   // .wav .mp3 .ogg .flac
 extern const char* const Materials[];   // .mat
 extern const char* const Animations[]; // .fbx .gltf .glb .dae (clip sources)
 }

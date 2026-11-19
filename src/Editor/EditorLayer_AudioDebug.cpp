@@ -62,9 +62,7 @@ void EditorLayer::DrawAudioDebugPanel(World& world) {
     (void)world;
     if (!m_ShowAudioDebug) return;
     ImGui::SetNextWindowSize(ImVec2(380.0f * m_UIScale, 460.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::Audio, &m_ShowAudioDebug);
-    PopTabChromeText();
     if (!open) { ImGui::End(); return; }
     if (!AudioEngine::IsInitialized()) {
         ImGui::TextDisabled("The audio engine is not running.");

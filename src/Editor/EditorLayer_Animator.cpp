@@ -242,9 +242,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                             ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(std::min(1100.0f * m_UIScale, vp->WorkSize.x * 0.9f),
                                     std::min(620.0f * m_UIScale, vp->WorkSize.y * 0.9f)), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::Animator, &m_ShowAnimator);
-    PopTabChromeText();
     if (!open) { ImGui::End(); return; }
     const float S = m_UIScale;
 

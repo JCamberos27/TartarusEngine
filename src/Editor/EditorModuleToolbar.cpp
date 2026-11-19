@@ -26,7 +26,6 @@
 
 #include "EditorModuleAPI.h"
 #include "EditorUIPrimitives.h"
-#include "EditorIcons.h"
 #include "EditorTheme.h"
 
 #include <imgui.h>

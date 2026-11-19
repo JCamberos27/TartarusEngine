@@ -193,35 +193,6 @@ bool MatchesAssetSearch(const ParsedAssetSearch& parsed, const std::string& name
     return true;
 }
 
-// Adds `token` (e.g. "t:Model") to `filter`'s text if it's not already there, or removes it if
-// it is - how the Type/Label filter dropdown checkboxes edit the plain search text, since
-// that's the one source of truth Unity's own filters work the same way against.
-void ToggleSearchToken(std::string& filter, const std::string& token) {
-    std::istringstream iss(filter);
-    std::vector<std::string> tokens;
-    std::string t;
-    bool removed = false;
-    while (iss >> t) {
-        if (t == token) { removed = true; continue; }
-        tokens.push_back(t);
-    }
-    if (!removed) tokens.push_back(token);
-    filter.clear();
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        if (i) filter += " ";
-        filter += tokens[i];
-    }
-}
-
-bool SearchHasToken(const std::string& filter, const std::string& token) {
-    std::istringstream iss(filter);
-    std::string t;
-    while (iss >> t) {
-        if (t == token) return true;
-    }
-    return false;
-}
-
 } // namespace
 
 
