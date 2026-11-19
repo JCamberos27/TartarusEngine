@@ -2499,9 +2499,7 @@ private:
         // naming a ComponentRegistry component gains Open in Window / Alt+drag out, Ctrl+click
         // picking for the multi-component clipboard, Keep Changes After Play, and the A / X
         // hover keys.
-        entt::entity entity = entt::null,
-        // Optional visible title; label remains the stable component identity.
-        const char* displayLabel = nullptr);
+        entt::entity entity = entt::null);
 
     // #178 - every .preset under the project whose "component" matches `component`, as
     // {display name, path}. Rescanned when the menu opens; presets are few and this is not a

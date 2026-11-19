@@ -58,11 +58,8 @@
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax/ImFloor, ImGuiWindow, and the item-flag helpers the panels use
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_opengl3.h>
 #include <IconsFontAwesome6.h>
 
-#include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -78,7 +75,6 @@
 #include <fstream>
 #include <cmath>
 #include <cctype>
-#include <cstring>
 #include "ReflectionProbeCapture.h"
 #include <functional>
 #include <variant>
@@ -2769,11 +2765,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             const RegisteredComponent& rc = registeredComponents[ci];
             if (!rc.Meta.GenericInspector) continue; // Mesh Renderer: hand-coded, no multi-select section
 
-            std::string displayTitle;
             ImGui::Spacing();
-            if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, rc.Meta.Tooltip,
-                    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-                    entt::null, displayTitle.empty() ? nullptr : displayTitle.c_str())) {
+            if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, rc.Meta.Tooltip)) {
                 auto fieldPtr = [&](entt::entity e, const ReflectField& f) -> void* {
                     return f.Address(rc.Get(world.Registry, e));
                 };
@@ -3444,13 +3437,12 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Key) themselves; see their comments.
         const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
         bool reflPfRevert = false, reflPfApply = false;
-        const std::string displayTitle;
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
             rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
             compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr,
             // #178 - every generically-inspected component is also generically serialised, so
             // all of them can round-trip through a preset.
-            &reflSavePreset, &reflApplyPreset, entity, displayTitle.empty() ? nullptr : displayTitle.c_str());
+            &reflSavePreset, &reflApplyPreset, entity);
         if (compAdded) DrawOverrideGutterBar();
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
@@ -3830,7 +3822,7 @@ void EditorLayer::HandleInspectorHoverKeys(World& world) {
 bool EditorLayer::BeginComponentSection(const char* icon,
     const char* label, bool removable, bool& removedOut, const char* tooltip,
     bool* resetOut, bool* copyOut, bool* pasteOut, bool* prefabRevertOut, bool* prefabApplyOut,
-    bool* savePresetOut, std::string* applyPresetOut, entt::entity entity, const char* displayLabel) {
+    bool* savePresetOut, std::string* applyPresetOut, entt::entity entity) {
     removedOut = false;
     if (resetOut) *resetOut = false;
     if (copyOut)  *copyOut = false;
@@ -4111,8 +4103,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
                           : T::Mix(T::Secondary, T::Accent, openT);
         dl->AddText(ImVec2(ix, std::floor(cy - is.y * 0.5f)), FadeU32(T::U32(iconCol), fade), headerIcon);
         // The name, cut with an ellipsis before the status pills and the ... / x buttons.
-        const char* visibleLabel = displayLabel ? displayLabel : label;
-        const ImVec2 ls = ImGui::CalcTextSize(visibleLabel);
+        const ImVec2 ls = ImGui::CalcTextSize(label);
         const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + T::Px(8.0f);
         const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f + (flippable ? 1.0f : 0.0f)) + T::Px(8.0f);
         float lmax = hs.x + hw - btnReserve;
@@ -4139,7 +4130,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         }
         const ImVec4 nameCol = disabledComp ? T::Secondary : T::Text;
         EditorUIPrimitives::TextEllipsis(dl, ImVec2(lx, std::floor(cy - ls.y * 0.5f)), lmax,
-                                         T::U32(T::WithAlpha(nameCol, nameCol.w * fade)), visibleLabel);
+                                         T::U32(T::WithAlpha(nameCol, nameCol.w * fade)), label);
         dl->PopClipRect();
     }
     const bool headerHovered = ImGui::IsItemHovered();
