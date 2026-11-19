@@ -46,6 +46,10 @@ bool IsModelExt(const std::string& ext) {
     return ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".dae";
 }
 
+bool IsImageExt(const std::string& ext) {
+    return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr" || ext == ".exr";
+}
+
 // A stored reference as the scene loader reads it: project-relative -> absolute, a GUID sibling
 // ("<key>Guid") winning when it resolves; no "#clip" suffix, nothing synthetic ("primitive://").
 std::string ResolveRef(const json& obj, const std::string& key, const std::string& value) {
@@ -59,7 +63,7 @@ std::string ResolveRef(const json& obj, const std::string& key, const std::strin
 }
 
 struct PreloadRefs {
-    std::set<std::string> Models, Materials, Prefabs;
+    std::set<std::string> Models, Materials, Prefabs, Textures;
 };
 
 void CollectRefs(const json& node, PreloadRefs& out) {
@@ -72,11 +76,12 @@ void CollectRefs(const json& node, PreloadRefs& out) {
         if (it->is_string()) {
             const std::string& value = it->get_ref<const std::string&>();
             const std::string ext = LowerExt(value.substr(0, value.find('#')));
-            if (!IsModelExt(ext) && ext != ".mat" && ext != ".prefab") continue;
+            if (!IsModelExt(ext) && !IsImageExt(ext) && ext != ".mat" && ext != ".prefab") continue;
             const std::string path = ResolveRef(node, it.key(), value);
             if (path.empty()) continue;
             if (IsModelExt(ext)) out.Models.insert(path);
             else if (ext == ".mat") out.Materials.insert(path);
+            else if (IsImageExt(ext)) out.Textures.insert(path);
             else out.Prefabs.insert(path);
         } else if (it->is_structured()) {
             CollectRefs(*it, out);
@@ -123,6 +128,9 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestModelAsync(m));
     for (const std::string& m : refs.Materials)
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestMaterialAsync(m));
+    // Textures the scene names directly (sky, terrain layers...), with the default use the scene loader asks for.
+    for (const std::string& t : refs.Textures)
+        if (fs::exists(fs::u8path(t), ec)) state->Tickets.push_back(assets.RequestTextureAsync(t));
     m_ScenePreload = std::move(state);
     PumpScenePreload(world, assets); // already loaded (or nothing to load): opens now
 }
