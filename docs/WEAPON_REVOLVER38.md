@@ -68,7 +68,7 @@ frame 58 and `Refill` when the crane shuts (frame 322 of 372).
 
 The player carries it in the First Person Controller's sidearm slot (`Sidearm Weapon Prefab` / `Sidearm Animation
 Set`): 1 draws the primary (AK), 2 the secondary (870), 3 the sidearm and 4 goes unarmed (input action `Weapon4`).
-Every scene with the AK/870 player loadout has it; the Drive-hosted forest-trail scene is unchanged.
+Every scene with the AK/870 player loadout has it.
 
 ## Headless test
 

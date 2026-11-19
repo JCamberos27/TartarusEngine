@@ -14,8 +14,8 @@
 // still untouched; Play -> Stop restores the authored scene from its JSON snapshot as always.
 //
 // This header deliberately pulls in NO PhysX headers. Every PhysX type lives behind the pimpl
-// in PhysicsWorld.cpp so the SDK's include surface (and its /MD, exception, and alignment
-// requirements) stays confined to that one translation unit. All PhysX-touching code is
+// (PhysicsInternal.h and the Physics*.cpp files that include it) so the SDK's include surface (and its /MD,
+// exception, and alignment requirements) stays confined to those translation units. All PhysX-touching code is
 // host-only (TartarusEngine.exe) — never the reloadable TartarusGame / TartarusEditor DLLs.
 
 class World;
@@ -33,7 +33,7 @@ namespace PhysicsWorld {
 void Create(const World& world);
 
 // Tear down the Play session's scene, actors, joints and character. Idempotent — safe to call
-// when nothing is active, which is why the exit-while-playing path (main.cpp) can call it
+// when nothing is active, which is why the exit-while-playing path (AppSession::Finish) can call it
 // unconditionally via OnExitPlayMode. Called from EditorLayer::OnExitPlayMode. PxPhysics, the
 // dispatcher, materials and cooked meshes stay up for the next Play (#167).
 void Destroy();
@@ -309,15 +309,15 @@ int  RaycastAll(const float origin[3], const float dir[3], float maxDistance, co
                 RaycastHit* out, int maxHits);
 bool SphereCastFiltered(const float origin[3], const float dir[3], float radius, float maxDistance,
                         const QueryFilter& f, RaycastHit& outHit);
-// SphereCastFiltered that only hits the solid world: statics and kinematic bodies (doors,
-// platforms), not simulated props - for the weapon's wall and corner probes, so a rolling ball
-// isn't cover. Engine-side only (not in the gameplay-module API).
 // RaycastFiltered that only hits the solid world (statics and kinematic bodies), not simulated props:
 // for the foot IK's ground probe, so a rolling ball is not ground. Engine-side only.
 // fromOutside: a shape the ray starts inside isn't hit (PhysX would report it at distance 0, facing back along the ray);
 // the ray goes on to the first surface it enters - for probes that must find a face, not the solid they begin in.
 bool RaycastSolid(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit,
                   bool fromOutside = false);
+// SphereCastFiltered that only hits the solid world: statics and kinematic bodies (doors,
+// platforms), not simulated props - for the weapon's wall and corner probes, so a rolling ball
+// isn't cover. Engine-side only (not in the gameplay-module API).
 bool SphereCastSolid(const float origin[3], const float dir[3], float radius, float maxDistance,
                      const QueryFilter& f, RaycastHit& outHit);
 bool BoxCast(const float center[3], const float halfExtents[3], const float rotation[4], const float dir[3],

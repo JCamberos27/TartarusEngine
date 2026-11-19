@@ -16,7 +16,7 @@ class Player;
 class SprayCanSystem;
 class World;
 
-// What the combat wiring hooks together (the Renderer/ShadowFrame pattern: pointers to main's long-lived objects, no
+// What the combat wiring hooks together (the Renderer/ShadowFrame pattern: pointers to the session's long-lived objects, no
 // ownership). Every object here must outlive the CombatWiring that wired it.
 struct CombatWiringInputs {
     World* world = nullptr;

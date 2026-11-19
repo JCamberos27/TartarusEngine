@@ -10,7 +10,9 @@
 
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 
 // One training dummy: its body, its capsule and crowd agent, where it wanders and what has hit it. NpcDirector owns these
 // and runs them.
@@ -45,6 +47,7 @@ struct Npc {
     bool Dead = false;
     float DiedAt = 0.0f;
     float UnseenSince = -1.0f;      // a corpse: since when the player hasn't seen it (-1: in sight now)
+    float NextSightCheck = 0.0f;    // a corpse: when its line of sight is next checked
     float LastHurt = -1e9f;
     float StaggerUntil = 0.0f;      // a heavy hit: slowed until then ...
     glm::vec3 PushVel{0.0f};        // ... and shoved back along the round (m/s, decays)
@@ -83,6 +86,11 @@ struct Npc {
     float BlockedTime = 0.0f;       // moving but not getting anywhere
     bool TurningFirst = false;      // setting off behind itself: held while the body turns on the spot (NpcDirector::Move)
     float TurnFirstTime = 0.0f;     // ... for this long
+
+    std::optional<NpcFlinch> Flinch;                    // the hit-flinch kicks still settling
+    std::optional<std::pair<glm::vec3, Gait>> Scripted; // a test's order (NpcDirector::ScriptedMove): where, at what pace
+    struct DeathCapture { NpcRagdoll::BoneSnapshot Bones; float Dt = 0.0f; };
+    std::optional<DeathCapture> DeathBones;             // from the killing hit to the ragdoll's start: the pose it died in, its age
 };
 
 // Dummies are named "Dummy <n>": n is the number in the kill feed.

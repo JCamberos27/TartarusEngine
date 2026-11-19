@@ -23,7 +23,7 @@ struct ParticleCurveCache;
 struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<MaterialAsset> is valid here
 
 // The ECS component set every placed entity (former level-geometry box, imported model, or
-// procedural primitive) is built from. Replacing the old WorldBox/PlacedModel split â€” see
+// procedural primitive) is built from. Replacing the old WorldBox/PlacedModel split — see
 // World.h for the registry and the free functions (ComposeTransform, systems) that operate on
 // these.
 
@@ -69,10 +69,10 @@ struct OrderComponent {
     int Value = 0;
 };
 
-// What to draw. Every entity â€” including former "boxes", which now render through the same
+// What to draw. Every entity — including former "boxes", which now render through the same
 // cube-primitive Model + PBR material as everything else instead of a separate flat-shaded mesh.
 // Materials: per-submesh MaterialAsset overrides. A null or missing slot falls through to the
-// submesh's imported Material. Empty vector (level-geometry boxes) â†’ all imported materials.
+// submesh's imported Material. Empty vector (level-geometry boxes) → all imported materials.
 struct RenderableComponent {
     std::shared_ptr<Model> ModelRef;
     std::vector<std::shared_ptr<MaterialAsset>> Materials;
@@ -100,7 +100,7 @@ struct DetachedMeshComponent {
 // == 0` (the default, and every collider World::CreateBox makes) means "derive an axis-aligned
 // box from the mesh bounds", so existing scenes keep their shape without a migration.
 struct ColliderComponent {
-    // Values are fixed â€” serialized by index, and PhysicsWorld switches on them. Capsule's axis
+    // Values are fixed — serialized by index, and PhysicsWorld switches on them. Capsule's axis
     // is Y (its height runs along local up). ConvexHull / Mesh cook a shape from the entity's
     // RenderableComponent geometry (#185 PR 6): ConvexHull works on any body; Mesh is a
     // triangle mesh and PhysX only allows it on static/kinematic bodies (a Mesh collider with a
@@ -141,7 +141,7 @@ struct ColliderComponent {
 // static actor a lone ColliderComponent gets: it falls, tumbles, and is pushed around, and its
 // simulated pose is written back to the TransformComponent every frame (Play -> Stop restores
 // the authored pose from the scene snapshot, like every other Play-mode change). Needs a
-// ColliderComponent for its shape â€” a Rigidbody with no Collider does nothing. Registered
+// ColliderComponent for its shape — a Rigidbody with no Collider does nothing. Registered
 // through the reflection system (#184), so its Inspector section, serialization and Add
 // Component entry are all generated.
 struct RigidbodyComponent {
@@ -151,10 +151,10 @@ struct RigidbodyComponent {
     glm::vec3 InitialVelocity{0.0f}; // linear velocity applied once, on Play-mode entry
     float LinearDamping = 0.05f;     // per-second velocity bleed (0 = frictionless drift)
     float AngularDamping = 0.05f;
-    // #185 PR 9 â€” swept CCD for this body, so a fast small object can't tunnel a thin wall.
+    // #185 PR 9 — swept CCD for this body, so a fast small object can't tunnel a thin wall.
     // Costs a little; leave off for slow / large bodies.
     bool  ContinuousCollision = false;
-    // #185 hardening â€” per-axis constraints (PxRigidDynamicLockFlag). Freeze linear motion or
+    // #185 hardening — per-axis constraints (PxRigidDynamicLockFlag). Freeze linear motion or
     // rotation on any world axis: e.g. lock rotation X+Z to keep a barrel upright, or lock
     // position Y to pin a body to a horizontal plane. Ignored while Kinematic.
     bool  FreezePositionX = false, FreezePositionY = false, FreezePositionZ = false;
@@ -252,11 +252,11 @@ struct WorldTextComponent {
 
 // Tag only: which Hierarchy section an entity lists under ("Level Geometry" vs "Models") and
 // which JSON array (SceneSerializer's "boxes" vs "models") it round-trips through. Carries no
-// data of its own â€” an entity's actual shape/material comes from its RenderableComponent same
+// data of its own — an entity's actual shape/material comes from its RenderableComponent same
 // as any other entity.
 struct LevelGeometryTag {};
 
-// Free-text classification, mirroring Unity's Tag field â€” gameplay code and editor search can
+// Free-text classification, mirroring Unity's Tag field — gameplay code and editor search can
 // both filter on it ("t:Enemy" in the Hierarchy search box). Absent component == "Untagged".
 struct TagComponent {
     std::string Tag = "Untagged";
@@ -290,24 +290,24 @@ struct LodCulledTag {};
 struct DeactivatedTag {};
 
 // Unity's "Static" checkbox: marks geometry that never moves at runtime. Purely declarative
-// today (nothing in the engine batches or bakes yet) â€” it's here so scenes can be authored with
+// today (nothing in the engine batches or bakes yet) — it's here so scenes can be authored with
 // the distinction already recorded, rather than needing a re-pass once that optimization lands.
 struct StaticTag {};
 
 // Unity's layer field, "-lite" (#236 A1): a small integer slot (0..LayerRegistry::kCount-1)
 // grouping entities for editor visibility / pick-locking, camera culling, and (later) PhysX
 // collision filtering. Slot 0 is "Default"; the component is omitted entirely for it, so an
-// entity on the default layer costs nothing â€” same zero-default pattern as the tags above.
+// entity on the default layer costs nothing — same zero-default pattern as the tags above.
 // Human-readable slot names live in project/layers.json (LayerRegistry), not on the component.
 struct LayerComponent {
     int Layer = 0;
 };
 // SceneVis-lite (#236 B), the editor-only counterparts of Unity's Scene-view hand/lock columns.
-// Unlike InactiveTag these change nothing about the object itself â€” it still renders in the
+// Unlike InactiveTag these change nothing about the object itself — it still renders in the
 // Game view, still collides, still ticks, still saves:
-//   HiddenInSceneTag â€” not drawn in the editor Scene viewport, and not click-/marquee-pickable
+//   HiddenInSceneTag — not drawn in the editor Scene viewport, and not click-/marquee-pickable
 //                      there (a decluttering aid; the object is still "there").
-//   SceneLockedTag   â€” still drawn in the Scene viewport, but not click-/marquee-pickable, so a
+//   SceneLockedTag   — still drawn in the Scene viewport, but not click-/marquee-pickable, so a
 //                      finished piece of set dressing can't be grabbed by accident. Hierarchy
 //                      selection and the gizmo still work once selected.
 struct HiddenInSceneTag {};
@@ -330,12 +330,12 @@ struct HierarchyStyleComponent {
 // Runtime only, never saved: set by FirstPersonPresentation on the arms and weapon entities it
 // creates for Play, and read by the renderer's view-model sub-pass. Tagged entities are drawn
 // last, after a depth clear, projected with FirstPersonControllerComponent::ViewModelFov instead
-// of the view's own FOV â€” the depth clear is what stops world geometry (metres away) from
+// of the view's own FOV — the depth clear is what stops world geometry (metres away) from
 // clipping hands that sit ~0.3 m from the eye, and the separate, usually narrower FOV is what
 // makes a held weapon read as held rather than stretched into the scene.
 //
-// A caller that leaves RenderFrameContext::ViewModelFov at its default â€” the editor Scene tab,
-// which previews through its own camera â€” has no sub-pass to run, so tagged entities are drawn
+// A caller that leaves RenderFrameContext::ViewModelFov at its default — the editor Scene tab,
+// which previews through its own camera — has no sub-pass to run, so tagged entities are drawn
 // there as ordinary scene geometry exactly as before.
 struct ViewModelTag {};
 
@@ -433,7 +433,7 @@ struct LightComponent {
     // authored with shadow settings recorded even when it isn't currently casting. `Enabled`
     // replaces the old `CastShadows` bool; the legacy `"castShadows"` scene key still loads into
     // it and is still written for one release. Bias/NormalBias/Softness are multipliers on the
-    // shader's existing texel-proportional depth bias / normal-offset / PCF-radius terms â€” all
+    // shader's existing texel-proportional depth bias / normal-offset / PCF-radius terms — all
     // default 1.0, i.e. byte-identical to pre-phase-2 output. NearPlane feeds the perspective
     // near for spot/point depth passes. Resolution + UpdateMode are authored and serialized now
     // but don't take effect until the shadow maps support per-slot sizes.
@@ -712,11 +712,9 @@ struct FirstPersonBodyComponent {
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
-    // ---- lane A ----
     // How the spine's turns (view pitch, twist, shoulder line) are shared over spine_01..05, pelvis alpha:
     // the default is the even spread. Used by the player body and, copied at Play, by NPCs.
     IK::SpineDistribution Spine;
-    // ---- end lane A ----
     // The same looking down. Armed, the eye hangs off the shoulders as the arms rig's does, so looking
     // down it comes over the chest only as far as the chest pitches with it.
     float SpineAimDown = 0.9f;
@@ -739,10 +737,6 @@ struct FirstPersonBodyComponent {
     // is past the Turn Threshold (where the feet must step round) - what the turn clips can keep up
     // with, so they don't slide. Aiming within the threshold is free. 0 = no limit.
     float MaxTurnRate = 0.0f;
-    // Starting and stopping play their own clips (a push-off, a braking step) instead of blending
-    // straight between idle and the gait; the clips' root motion then eases the capsule up to
-    // speed and down again.
-    bool StartStopClips = false;
     // Crouching (hold the Crouch action): the capsule's height while crouched (0 = no crouching) and
     // the move speed as a fraction of Run Speed (the crouch-walk clips travel about 1.35 m/s).
     float CrouchHeight = 0.0f;
@@ -886,20 +880,17 @@ struct OutfitLayerTag {
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
-// cycling. Applied only while the scene is playing â€” edit mode always shows the authored
+// cycling. Applied only while the scene is playing — edit mode always shows the authored
 // pose. All parameters are authored/serialized; the Base* fields and Initialized are runtime
 // scratch, captured from the entity's authored transform the first frame play runs and never
 // written to the scene file, so Play -> Stop restores everything cleanly.
-// Registered via ComponentRegistry (#184) rather than hand-coded serializer/Inspector code â€” the
+// Registered via ComponentRegistry (#184) rather than hand-coded serializer/Inspector code — the
 // third such migration. Reflected fields are addressed by pointer-to-member
 // (ComponentReflection.h); the runtime-scratch tail (Initialized, Base*, Elapsed) is left out of
 // the reflected field list, same as it was left out of the old hand-written serializer. The flat
 // reflected Inspector list loses the old section's "Spin"/"Orbit"/"Bob"/"Light Color Cycle"
 // sub-headers, so field names below are qualified (e.g. "Orbit Speed", not "Speed") to stay
 // unambiguous without them.
-// #175 / #113 â€” Unity's (legacy) Animation component: plays one of the entity's model clips in
-// Play mode. Serialized fields are the authored setup; game code drives it at runtime by
-// changing Clip (crossfades to it) or IsPlaying. SkeletalAnimationSystem applies it each frame.
 // Root motion (RootMotion.h): what a component does with the travel its clips author on the root
 // bone. Off plays the clips as authored (a walk drags the mesh away from the object and snaps
 // back each loop). Apply takes the travel out of the pose and moves the object by it. In Place
@@ -922,6 +913,9 @@ struct RootMotionOptions {
     int ResolvedBone = -1;         // node index on the model, -1 = not found
 };
 
+// #175 / #113 — Unity's (legacy) Animation component: plays one of the entity's model clips in
+// Play mode. Serialized fields are the authored setup; game code drives it at runtime by
+// changing Clip (crossfades to it) or IsPlaying. SkeletalAnimationSystem applies it each frame.
 struct SkeletalAnimationComponent {
     std::string Clip;                // clip name; empty = the model's first clip
     bool PlayAutomatically = true;   // start when Play begins
@@ -1049,7 +1043,6 @@ struct IKLimb {
     bool KeepAnimatedOffset = true;
     bool MatchRotation = true;     // also turn the end to the goal's rotation
     float Weight = 1.0f;
-    // ---- lane A ----
     // Elbow/knee hint (IK.h TwoBoneHint). HintWeight 0 keeps the animated bend plane, as before.
     std::string PoleBone;          // node whose position the elbow points toward (empty = the animated elbow)
     float HintWeight = 0.0f;       // 0..1
@@ -1060,7 +1053,6 @@ struct IKLimb {
     // zero = the grip as animated. First-person weapon IK writes the hand-vs-gun offsets here.
     glm::vec3 GripPosition{0.0f};
     glm::vec3 GripRotation{0.0f};
-    // ---- end lane A ----
     // Runtime: radians to swing the solved limb about its root->end line (the elbow's "door"),
     // after the solve - the end stays put. Game code writes it (first-person ADS actions do).
     float Swivel = 0.0f;
@@ -1284,7 +1276,7 @@ struct SquadSettingsComponent {
     std::string BodyPrefab = "assets/AI/Soldier.json";
 };
 
-// Present only on entities that are parented, or that have at least one child â€” an entity with
+// Present only on entities that are parented, or that have at least one child — an entity with
 // no relationships at all simply lacks this component, so the common (flat) case pays no cost.
 // When Parent is not entt::null, this entity's TransformComponent is interpreted as LOCAL space
 // (relative to the parent's world transform, via World::ComposeWorldTransform) instead of world
@@ -1296,8 +1288,8 @@ struct HierarchyComponent {
 };
 
 // Marks the ROOT of a live prefab instance (#236 A2, stage 1-2). The scene file stores only a
-// stub for this entity â€” the source path plus the root's own transform / name / active / layer
-// (the "transform-only overrides") â€” and NOT its descendants; on load the subtree is rebuilt
+// stub for this entity — the source path plus the root's own transform / name / active / layer
+// (the "transform-only overrides") — and NOT its descendants; on load the subtree is rebuilt
 // from SourcePath and those overrides re-applied on top. So edits to the prefab asset propagate
 // to every instance on the next load, while each instance keeps its own placement.
 // Descendants carry no marker: the serializer recomputes the owned set from this root each save.
@@ -1308,7 +1300,7 @@ struct PrefabInstanceComponent {
     // a broken placeholder rather than silently vanishing. Never serialised.
     bool Missing = false;
     // Runtime-only (#236 A2 stage 3 / #302 Part B): every entity of this instance in
-    // prefab-local order â€” index 0 is this root, the rest follow InstantiatePrefab's creation
+    // prefab-local order — index 0 is this root, the rest follow InstantiatePrefab's creation
     // order (which is deterministic: the .prefab's boxes, then models, then empties, each in
     // file order). Populated by InstantiatePrefab; used at save time to pair each live entity
     // with its pristine counterpart in the .prefab file so per-field overrides can be diffed.
@@ -1316,11 +1308,6 @@ struct PrefabInstanceComponent {
     std::vector<entt::entity> InstanceEntities;
 };
 
-// PR14 (#333): placed reflection probe. Position comes from TransformComponent; this component
-// adds the box volume for parallax correction and a blend priority. The bake captures the sky
-// IBL (procedural or HDRI) at this probe's position; the shader corrects reflection vectors
-// to the box boundary, giving room-appropriate reflections without per-probe scene captures.
-// No probes in a scene â†’ the shader falls back to the global sky IBL path bit-identically.
 // Grass Area (GrassRenderer): a rectangle of procedural grass blades on the plane at this entity's position, SizeX
 // by SizeZ metres along its local X and Z (turns with the entity's yaw; scale is ignored). Nothing is stored per
 // blade: every frame the GPU scatters blades on a jittered grid in the chunks the camera sees, thins them with
@@ -1372,6 +1359,11 @@ struct TerrainComponent {
     std::uint64_t BuiltKey = 0;
 };
 
+// PR14 (#333): placed reflection probe. Position comes from TransformComponent; this component
+// adds the box volume for parallax correction and a blend priority. The bake captures the sky
+// IBL (procedural or HDRI) at this probe's position; the shader corrects reflection vectors
+// to the box boundary, giving room-appropriate reflections without per-probe scene captures.
+// No probes in a scene → the shader falls back to the global sky IBL path bit-identically.
 struct ReflectionProbeComponent {
     glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
@@ -1451,7 +1443,6 @@ struct SprayPaintComponent {
     std::string Painter;    // who is spraying it ("Player", an NPC's name): for the AI and the log
 };
 
-// ---- lane P ----
 // Scene-level visual effects and HUD settings (Lane P quality pass).
 // Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.
 // Defaults match the values these effects had before they were tunable; read once when Play starts.
@@ -1467,7 +1458,7 @@ struct FxHudSettingsComponent {
     float BeamBend = 4.0f;
 };
 
-// The volumetric blood (docs/BLOOD_FX.md, Game/Combat/BloodFx): on any object in the scene (the first one counts);
+// The volumetric blood (Game/Combat/BloodFx): on any object in the scene (the first one counts);
 // without one Play uses these same defaults. Copied into BloodFx::Settings when Play starts.
 struct BloodSettingsComponent {
     bool Enabled = true;
@@ -1484,8 +1475,6 @@ struct BloodSettingsComponent {
     bool ImpactPuffs = true;      // the flipbook burst, mist and droplets the frame a round goes in (Knife packs)
     int Gore = 1;                 // 0 off (no sprays or stains), 1 on
 };
-// ---- end lane P ----
-// ---- lane R ----
 // A soldier's ragdoll (Npc/NpcRagdoll): masses, joint ranges of motion, drives, body physics, impulse caps. On any object in
 // the scene (the first one counts); without one the NPCs use these same defaults. Hitbox shapes are not exposed (they change gameplay).
 // Joint limits are degrees from each joint's neutral pose (arm and leg hanging, spine and head upright).
@@ -1696,10 +1685,6 @@ struct RagdollSettingsComponent {
     float CorpseWakeTime = 0.45f;      // seconds the body stays loose (no settling) after a round, so the limb the round struck visibly reacts
     float CorpseShotMaxSpeed = 4.0f;   // m/s: the most a round adds to the struck part, whatever the damage
 };
-// ---- end lane R ----
-// ---- lane R-gear ----
-// ---- end lane R-gear ----
-// ---- lane S ----
 // One gun's audio tuning (Game/Audio/WeaponAudio): add one per gun, Gun naming it ("ak", "870"); a gun with none uses these
 // defaults. The per-event sets (reloads, ADS, equip ...) live in the Data File, a json of SoundSets by element; sets with no
 // entry there are filled from the audio manifest by key (snd.<Gun>.<element>).
@@ -1995,4 +1980,3 @@ struct ImpactAudioComponent {
     float FlybyMaxDistance = 14.0f;
     float FlybyFarGain = 0.35f;
 };
-// ---- end lane S ----

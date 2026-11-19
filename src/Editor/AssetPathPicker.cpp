@@ -17,6 +17,7 @@
 #include <cstring>
 #include <filesystem>
 #include <map>
+#include <unordered_map>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -31,18 +32,36 @@ const char* const Animations[] = {".fbx", ".gltf", ".glb", ".dae", nullptr};
 
 namespace {
 
+struct ScanEntry {
+    std::string Path;  // project-relative, forward slashes
+    std::string Lower; // Path lower-cased, for the filter
+    std::string Ext;   // lower-cased extension with its dot
+};
 struct ProjectScan {
-    std::vector<std::string> Files;   // project-relative, forward slashes, sorted
-    std::vector<std::string> Folders; // likewise
+    std::vector<ScanEntry> Files;   // sorted by Path
+    std::vector<ScanEntry> Folders; // likewise
 };
 
-// One walk of the project folder, shared by every picker, at most every few seconds.
-const ProjectScan& Scan() {
+ScanEntry MakeEntry(std::string path, bool folder) {
+    ScanEntry e{std::move(path), {}, {}};
+    e.Lower = e.Path;
+    for (char& c : e.Lower) c = (char)std::tolower((unsigned char)c);
+    if (!folder) {
+        const size_t dot = e.Lower.find_last_of('.'), slash = e.Lower.find_last_of('/');
+        if (dot != std::string::npos && (slash == std::string::npos || dot > slash + 1)) e.Ext = e.Lower.substr(dot);
+    }
+    return e;
+}
+
+// One walk of the project folder, shared by every picker: taken when a picker's list opens and the
+// last one is more than a few seconds old, never while a list is just staying open (a walk of a big
+// project is a visible hitch).
+const ProjectScan& Scan(bool opening) {
     static ProjectScan scan;
     static std::chrono::steady_clock::time_point at{};
     static bool once = false;
     const auto now = std::chrono::steady_clock::now();
-    if (once && now - at < std::chrono::seconds(4)) return scan;
+    if (once && (!opening || now - at < std::chrono::seconds(4))) return scan;
     once = true;
     at = now;
     scan.Files.clear();
@@ -58,31 +77,51 @@ const ProjectScan& Scan() {
                 it.disable_recursion_pending();
                 continue;
             }
-            scan.Folders.push_back(p.lexically_relative(root).generic_u8string());
+            scan.Folders.push_back(MakeEntry(p.lexically_relative(root).generic_u8string(), true));
             continue;
         }
         if (!it->is_regular_file() || p.extension() == ".meta") continue;
-        scan.Files.push_back(p.lexically_relative(root).generic_u8string());
+        scan.Files.push_back(MakeEntry(p.lexically_relative(root).generic_u8string(), false));
     }
-    std::sort(scan.Files.begin(), scan.Files.end());
-    std::sort(scan.Folders.begin(), scan.Folders.end());
+    const auto byPath = [](const ScanEntry& a, const ScanEntry& b) { return a.Path < b.Path; };
+    std::sort(scan.Files.begin(), scan.Files.end(), byPath);
+    std::sort(scan.Folders.begin(), scan.Folders.end(), byPath);
     return scan;
+}
+
+bool HasLowerExtension(const std::string& ext, const char* const* exts) {
+    if (!exts) return true;
+    for (const char* const* e = exts; *e; ++e)
+        if (ext == *e) return true;
+    return false;
 }
 
 bool HasExtension(const std::string& path, const char* const* exts) {
     if (!exts) return true;
     std::string ext = fs::u8path(path).extension().u8string();
     for (char& c : ext) c = (char)std::tolower((unsigned char)c);
-    for (const char* const* e = exts; *e; ++e)
-        if (ext == *e) return true;
-    return false;
+    return HasLowerExtension(ext, exts);
 }
 
-// Every space-separated word of `filter` appears in `text` (case-insensitive).
-bool Matches(const char* filter, const std::string& text) {
+// Whether the picker's current file is missing, re-asked at most once a second per path (every
+// picker on screen asked the disk every frame).
+bool PathMissing(const std::string& path) {
+    struct Seen { bool Missing; std::chrono::steady_clock::time_point At; };
+    static std::unordered_map<std::string, Seen> s_Seen;
+    const auto now = std::chrono::steady_clock::now();
+    auto it = s_Seen.find(path);
+    if (it != s_Seen.end() && now - it->second.At < std::chrono::seconds(1)) return it->second.Missing;
+    if (s_Seen.size() > 512) s_Seen.clear();
+    std::error_code ec;
+    const bool missing = !fs::exists(fs::u8path(ProjectPaths::Resolve(path)), ec);
+    s_Seen[path] = {missing, now};
+    return missing;
+}
+
+// Every space-separated word of `filter` appears in `lowerText` (already lower-cased).
+bool Matches(const char* filter, const std::string& lowerText) {
     if (!filter || !*filter) return true;
-    std::string hay = text;
-    for (char& c : hay) c = (char)std::tolower((unsigned char)c);
+    const std::string& hay = lowerText;
     std::string word;
     for (const char* p = filter;; ++p) {
         if (*p == ' ' || *p == '\0') {
@@ -114,9 +153,7 @@ bool AssetPathPicker(const char* id, std::string& path, const AssetPathPickerOpt
     const float gap = ImGui::GetStyle().ItemInnerSpacing.x;
 
     // The dropdown, showing the file's name (its folder in the tooltip), red when it's missing.
-    const fs::path resolved = path.empty() ? fs::path() : fs::u8path(ProjectPaths::Resolve(path));
-    std::error_code ec;
-    const bool missing = !path.empty() && !fs::exists(resolved, ec);
+    const bool missing = !path.empty() && PathMissing(path);
     std::string preview = path.empty() ? std::string(opt.NoneLabel ? opt.NoneLabel : "(none)")
                                        : fs::u8path(path).filename().u8string();
     if (opt.Folder && !path.empty() && preview.empty()) preview = path;
@@ -152,7 +189,8 @@ bool AssetPathPicker(const char* id, std::string& path, const AssetPathPickerOpt
         ImGui::EndCombo();
     } else if (open) {
         static char s_filter[128] = {};
-        if (ImGui::IsWindowAppearing()) {
+        const bool appearing = ImGui::IsWindowAppearing();
+        if (appearing) {
             s_filter[0] = '\0';
             ImGui::SetKeyboardFocusHere();
         }
@@ -162,13 +200,14 @@ bool AssetPathPicker(const char* id, std::string& path, const AssetPathPickerOpt
             path.clear();
             changed = true;
         }
-        const ProjectScan& scan = Scan();
-        const std::vector<std::string>& list = opt.Folder ? scan.Folders : scan.Files;
+        const ProjectScan& scan = Scan(appearing);
+        const std::vector<ScanEntry>& list = opt.Folder ? scan.Folders : scan.Files;
         int shown = 0, matched = 0;
         const int kMaxShown = 250;
-        for (const std::string& entry : list) {
-            if (!opt.Folder && !HasExtension(entry, opt.Extensions)) continue;
-            if (!Matches(s_filter, entry)) continue;
+        for (const ScanEntry& scanned : list) {
+            if (!opt.Folder && !HasLowerExtension(scanned.Ext, opt.Extensions)) continue;
+            if (!Matches(s_filter, scanned.Lower)) continue;
+            const std::string& entry = scanned.Path;
             ++matched;
             if (shown >= kMaxShown) continue;
             ++shown;

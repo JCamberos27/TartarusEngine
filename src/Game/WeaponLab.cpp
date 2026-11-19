@@ -2,7 +2,7 @@
 
 #include "Camera.h"
 #include "Components.h"
-#include "EditorSound.h"
+#include "GameShell.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
 #include "Model.h"
@@ -19,7 +19,7 @@ namespace {
 // TimeFaster / TimeSlower by which way the lab's speed moved; nothing when it didn't (already at the end).
 void TimeStepSound(float from, float to, float screenX01 = -1.0f) {
     if (std::abs(to - from) < 1e-3f) return;
-    EditorSound::Play(to > from ? EditorSound::Event::TimeFaster : EditorSound::Event::TimeSlower, screenX01);
+    GameShell::PlaySound(to > from ? GameShell::Sound::TimeFaster : GameShell::Sound::TimeSlower, screenX01);
 }
 }
 
@@ -196,7 +196,7 @@ void WeaponLab::DrawPanel(FirstPersonPresentation* p, bool playing) {
         const bool on = std::abs(m_TimeScale - s) < 1e-3f;
         if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
         if (ImGui::Button(label, ImVec2(56.0f, 0.0f))) {
-            TimeStepSound(m_TimeScale, s, EditorSound::LastItemScreenX());
+            TimeStepSound(m_TimeScale, s, GameShell::LastItemScreenX());
             m_TimeScale = s;
         }
         if (on) ImGui::PopStyleColor();

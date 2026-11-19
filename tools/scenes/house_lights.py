@@ -43,7 +43,6 @@ FIT = {
     'Lamp_wall_desk':        dict(at='below', drop=0.02, I=0.45, R=1.8, K=3200, spot=48.0, shadow=False, glow=0.50),
 }
 CEILING = ('Lamp_chandelier', 'Lamp_ceiling_circle', 'Lamp_bedroom', 'Lamp_kitchen_A', 'Lamp_kitchen_B')
-WALL = ('Lamp_wall_chan', 'Lamp_wall_toilet', 'Lamp_wall_fluorescent')
 PLUGGED = ('Lamp_table_A', 'Lamp_table_B', 'Lamp_stand', 'Lamp_floor', 'Lamp_wall_desk')
 
 

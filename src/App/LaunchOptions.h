@@ -33,7 +33,7 @@ enum class LaunchMode {
 struct LaunchOptions {
     LaunchMode mode = LaunchMode::Editor;
 
-    // Derived from `mode` (the harness branches in main read these).
+    // Derived from `mode` (the harness branches in the session read these).
     // --smoke-test: loads every scene under the folder (default: the engine's assets/test-scenes, falling back to the
     // project's scenes/), renders a fixed number of frames of each through the editor's own render path, and fails on
     // new GL errors or a zero draw count. --perf-bench and --npc-test run on the same harness, so they set it too.

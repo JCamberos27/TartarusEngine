@@ -33,9 +33,8 @@ public:
     // preloaded returns true immediately without re-decoding. Returns false if the file doesn't
     // exist or can't be decoded.
     static bool Load(const std::string& path);
-    // Frees one path's preloaded PCM data (or all of them). Safe to call while a Play()'d
-    // instance of that sound is still audible — voices share the decoded data by reference
-    // (#171), so the PCM lives until the last voice playing it is reaped.
+    // Voices share a preloaded sound's decoded data by reference (#171): a reload while one plays is safe, the old PCM
+    // lives until the last voice playing it is reaped.
     // Re-decodes a preloaded sound after its file changed on disk (`path` absolute; preloaded
     // entries under a project-relative name match too). Voices already playing keep the old PCM;
     // a failed decode keeps the old copy. False when the sound isn't preloaded (streamed sounds

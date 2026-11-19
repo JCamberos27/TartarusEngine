@@ -1,4 +1,5 @@
 #include "App/Application.h"
+#include "App/GameShellWiring.h"
 #include "TerrainSystem.h"
 
 #include "Window.h"
@@ -217,6 +218,7 @@ int Application::Run() {
     const char* logName = headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log";
     Log::OpenFile(logName);
     CrashHandler::SetReportLocation(UserPaths::Root(), logName); // a built game's dumps go to its own user folder
+    WireGameShell(); // gameplay's keys, sounds, F-row pill and look prefs come from the editor
     return RunSession();
 }
 
@@ -544,10 +546,10 @@ private:
     BulletHoleList bulletHoles; // where this Play's rounds struck
     NpcDirector npcDirector;    // the training dummies, in scenes with Dummy Spawns
     CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
-    BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+    BloodFx bloodFx;            // the volumetric blood out of every body a round goes into
     SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
     FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
-    ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
+    ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts
     BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
     // Play's combat hooked together: blood, impacts, foley and the Blood Lab (App/CombatWiring.h). Declared after
     // everything it hooks, so its destructor drops the footstep listener before they go.
@@ -1540,7 +1542,6 @@ bool AppSession::Frame() {
     playIn.play = &play;
     playIn.world = &world;
     playIn.assets = &assets;
-    playIn.window = &window;
     playIn.editor = &editor;
     playIn.gameModule = &gameModule;
     playIn.stillModels = &s_StillModels;

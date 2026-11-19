@@ -383,6 +383,7 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
         std::uint64_t xw[8];
         std::memcpy(xw, &lc.xform, sizeof xw);
         for (const std::uint64_t w : xw) h = HashWord(h, w);
+        h = HashWord(h, lc.visible ? (std::uint64_t)lc.visible->Id() : 0u); // the outfit's hidden-triangle set
         lc.hash = HashWord(h, lc.twoSided ? 1u : 0u);
     }
     // Drop the records of casters gone for a while so the map doesn't grow across scene loads.
