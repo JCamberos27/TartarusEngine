@@ -68,7 +68,6 @@ struct PlayFrameInputs {
     DevSpawner* devSpawner = nullptr;
     DevPanel* devPanel = nullptr;
     CombatFx* combatFx = nullptr;
-    CombatHud* combatHud = nullptr;
     const CombatWiring* combat = nullptr; // WorldImpact: a round into the world
     BloodFx* bloodFx = nullptr;
     ImpactFx* impactFx = nullptr;

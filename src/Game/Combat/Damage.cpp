@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <string>
 
 float DamageFalloff(float distance, float start, float end, float minScale) {
     minScale = std::clamp(minScale, 0.0f, 1.0f);
@@ -37,30 +36,9 @@ HitZone ZoneOfRegion(HitRegion r) {
     return HitZone::Torso;
 }
 
-HitRegion RegionFromBone(const char* bone) {
-    if (!bone) return HitRegion::Torso;
-    const std::string b(bone);
-    auto has = [&](const char* s) { return b.find(s) != std::string::npos; };
-    if (b == "head" || has("jaw") || has("eye")) return HitRegion::Head;
-    if (has("upperarm") || has("lowerarm") || has("hand") || has("index") || has("middle") || has("ring") || has("pinky") ||
-        has("thumb") || has("twist"))
-        return has("thigh") || has("calf") ? HitRegion::Leg : HitRegion::Arm;
-    if (has("thigh") || has("calf") || has("foot") || has("ball") || has("toe")) return HitRegion::Leg;
-    return HitRegion::Torso; // pelvis, spine, neck, clavicles
-}
-
 HitRegion RegionFromPart(int part) {
     if (part == 2) return HitRegion::Head;
     if (part >= 3 && part <= 6) return HitRegion::Arm;
     if (part >= 7 && part <= 10) return HitRegion::Leg;
     return HitRegion::Torso;
-}
-
-float DamageIndicatorAngle(const glm::vec3& cameraPos, float cameraYawDeg, const glm::vec3& source) {
-    const float yaw = glm::radians(cameraYawDeg);
-    const glm::vec2 fwd(std::cos(yaw), std::sin(yaw));     // (x, z) - Camera::Front without pitch
-    const glm::vec2 right(-std::sin(yaw), std::cos(yaw));  // Camera::Right
-    const glm::vec2 d(source.x - cameraPos.x, source.z - cameraPos.z);
-    if (glm::dot(d, d) < 1e-8f) return 0.0f;
-    return std::atan2(glm::dot(d, right), glm::dot(d, fwd));
 }

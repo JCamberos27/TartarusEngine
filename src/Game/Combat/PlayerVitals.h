@@ -1,11 +1,7 @@
 #pragma once
 
-#include <glm/glm.hpp>
 
-#include <vector>
-
-// The player's health in Play: damage, regeneration, death and the respawn timer, plus what the
-// HUD shows about it (the hurt flash, where hits came from, the hitmarker). Pure state - the host
+// The player's health in Play: damage, regeneration, death and the respawn timer. Pure state - the host
 // teleports the player and refills the weapons when WantsRespawn() says so, then calls Respawned().
 struct PlayerVitalsSettings {
     float MaxHealth = 100.0f;
@@ -19,10 +15,9 @@ class PlayerVitals {
 public:
     void Reset(const PlayerVitalsSettings& settings);
 
-    // A hit worth `amount` from `source` (world). Returns what it took (0 while dead, protected
-    // or god mode). Kills the player at 0.
-    float ApplyDamage(float amount, const glm::vec3& source);
-    // Time passes: regeneration, the respawn timer, the HUD's fades.
+    // A hit worth `amount`. Returns what it took (0 while dead, protected or god mode). Kills the player at 0.
+    float ApplyDamage(float amount);
+    // Time passes: regeneration, the respawn timer.
     void Tick(float dt);
 
     bool IsDead() const { return m_Dead; }
@@ -30,26 +25,8 @@ public:
     bool WantsRespawn() const { return m_Dead && m_DeadTime >= m_Settings.RespawnDelay; }
     void Respawned();                                   // full health, spawn protection on
     float Health() const { return m_Health; }
-    float Health01() const { return m_Settings.MaxHealth > 0.0f ? m_Health / m_Settings.MaxHealth : 0.0f; }
     float DeadTime() const { return m_DeadTime; }
-    float RespawnProgress() const;                       // 0..1 while dead
-    bool Protected() const { return m_Protection > 0.0f; }
-    int Deaths() const { return m_Deaths; }
-    float DamageTaken() const { return m_DamageTaken; }  // total this Play
     bool GodMode = false;
-
-    // The player's own rounds landed on an enemy (the hitmarker); `kill` when that one killed.
-    void MarkHit(bool kill, bool head);
-
-    // --- what the HUD draws ---
-    struct Indicator { glm::vec3 Source{0.0f}; float Age = 0.0f; float Strength = 0.0f; };
-    const std::vector<Indicator>& Indicators() const { return m_Indicators; }
-    float HurtFlash() const { return m_HurtFlash; }      // 0..1, a red pulse on each hit
-    float Hitmarker() const { return m_Hitmarker; }      // 0..1, fading
-    bool HitmarkerKill() const { return m_HitmarkerKill; }
-    bool HitmarkerHead() const { return m_HitmarkerHead; }
-    static constexpr float kIndicatorLife = 2.0f;
-    static constexpr int kMaxIndicators = 8;
 
 private:
     PlayerVitalsSettings m_Settings;
@@ -58,10 +35,4 @@ private:
     bool m_Dead = false, m_JustDied = false, m_DiedThisTick = false;
     float m_DeadTime = 0.0f;
     float m_Protection = 0.0f;
-    int m_Deaths = 0;
-    float m_DamageTaken = 0.0f;
-    std::vector<Indicator> m_Indicators;
-    float m_HurtFlash = 0.0f;
-    float m_Hitmarker = 0.0f;
-    bool m_HitmarkerKill = false, m_HitmarkerHead = false;
 };

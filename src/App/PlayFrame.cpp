@@ -28,7 +28,6 @@
 #include "Combat/FxSprites.h"
 #include "Combat/ImpactFx.h"
 #include "Combat/PlayerVitals.h"
-#include "CombatHud.h"
 #include "CombatWiring.h"
 #include "Components.h"
 #include "Core/Env.h"
@@ -85,7 +84,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     DevSpawner& devSpawner = *in.devSpawner;
     DevPanel& devPanel = *in.devPanel;
     CombatFx& combatFx = *in.combatFx;
-    CombatHud& combatHud = *in.combatHud;
     BloodFx& bloodFx = *in.bloodFx;
     ImpactFx& impactFx = *in.impactFx;
     FxSprites& fxSprites = *in.fxSprites;
@@ -353,11 +351,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                 bool killed = false, head = false, aliveWhenHit = false;
                 if (npcDirector.OnPlayerHit(world, hit.Entity, hit.Point, hit.Origin, hit.Direction,
                                             firstPersonPresentation.Set().Gameplay, &killed, &head, &aliveWhenHit)) {
-                    if (aliveWhenHit) {
-                        playerVitals.MarkHit(killed, head);
-                        combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
-                    }
-                    if (killed) combatHud.OnKill(npcDirector, hit.Entity, head);
+                    if (aliveWhenHit) combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
                     continue; // a dummy, not a wall: no hole
                 }
             }
