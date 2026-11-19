@@ -13,7 +13,8 @@
 
 namespace {
 
-using CubeFaces::kFaces; // CubeFaces.h
+using CubeFaces::FaceBasis; // CubeFaces.h
+using CubeFaces::kFaces;
 
 } // namespace
 

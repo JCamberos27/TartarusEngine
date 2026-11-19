@@ -233,8 +233,7 @@ void Print(const char* label, std::size_t from) {
     std::sort(t.begin(), t.end());
     const double n = (double)s.Totals.size();
     std::printf("[DecalPerf] %sframes %zu, prepares %llu: prepare %.4f ms/frame, submit %.4f ms/frame, median %.4f, p99 %.4f, "
-                "max %.3f ms (frame %llu), frames over 1 ms %d, over 4 ms %d, dropouts %llu
-",
+                "max %.3f ms (frame %llu), frames over 1 ms %d, over 4 ms %d, dropouts %llu\n",
                 label, s.Totals.size(), (unsigned long long)s.Calls, s.SumPrepare / n, s.SumSubmit / n, t[t.size() / 2],
                 t[std::min(t.size() - 1, (size_t)((double)t.size() * 0.99))], s.MaxTotal, (unsigned long long)s.MaxFrame,
                 (int)(t.end() - std::upper_bound(t.begin(), t.end(), 1.0f)),
@@ -243,8 +242,7 @@ void Print(const char* label, std::size_t from) {
         std::printf("[DecalPerf]   worst after the first 60 frames:");
         for (const Worst& w : s.Worsts)
             if (w.Total > 0.0f) std::printf(" %.3f ms (frame %llu, prepare %.3f)", w.Total, (unsigned long long)w.Frame, w.Prepare);
-        std::printf("
-");
+        std::printf("\n");
     }
     std::fflush(stdout);
 }
