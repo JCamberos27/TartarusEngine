@@ -14,7 +14,7 @@
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
 #include "Core/Paths.h"
-#include "EditorSettings.h"
+#include "GameShell.h"
 #include "ProjectComponentMigration.h"
 
 #include "Log.h"
@@ -78,7 +78,7 @@ std::vector<std::string> g_MigrationLog;
 // longer declares these fields, so Get() can't provide them) and copy the user's real authored
 // values onto World, rather than silently resetting to compiled defaults.
 void MigratePostProcessSettingsFromPrefs(World& world) {
-    std::ifstream in(EditorSettings::PrefsFilePath());
+    std::ifstream in(GameShell::PrefsFilePath());
     // Starts as an object, not null: with no editor_prefs.json (a fresh machine, or a built game,
     // which has its own user folder) json::value() on a null threw type_error 306 and the whole
     // pre-v3 scene failed to load. Wrong-typed values fall back to the defaults the same way.

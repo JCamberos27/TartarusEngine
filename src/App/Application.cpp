@@ -1,4 +1,5 @@
 #include "App/Application.h"
+#include "App/GameShellWiring.h"
 #include "TerrainSystem.h"
 
 #include "Window.h"
@@ -217,6 +218,7 @@ int Application::Run() {
     const char* logName = headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log";
     Log::OpenFile(logName);
     CrashHandler::SetReportLocation(UserPaths::Root(), logName); // a built game's dumps go to its own user folder
+    WireGameShell(); // gameplay's keys, sounds, F-row pill and look prefs come from the editor
     return RunSession();
 }
 
