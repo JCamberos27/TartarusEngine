@@ -207,12 +207,15 @@ inline float AnimatorCrossfadeWeight(float fade) {
 // Weights of a 1D blend tree's children for `value`: at most two non-zero, summing to 1.
 // `children` need not be sorted. Exposed for tests and the Animator window preview.
 std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value);
+void AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value, std::vector<float>& out); // (the same into a vector the caller keeps: no allocation per call)
 // Weights of a 2D (freeform cartesian) blend tree's children at (x, y), each child sitting at
 // (Threshold, ThresholdY): gradient-band interpolation, as Unity's Freeform Cartesian. A child's
 // weight is 1 on its own position and fades out toward every other child; they sum to 1.
 std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y);
+void AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y, std::vector<float>& out); // (the same into a vector the caller keeps: no allocation per call)
 // The weights of `m`'s children for the current parameter values (1D or 2D).
 std::vector<float> AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params);
+void AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params, std::vector<float>& out); // (the same into a vector the caller keeps: no allocation per call)
 
 // The pose of one motion (a clip, or a blend tree at `weights`, one per child) at `phase` (0..1 of the
 // state, `stateLen` seconds long). Blend-tree children are phase-synced, each at its own clip length; a
@@ -234,6 +237,7 @@ bool AnimatorSampleState(Model& model, AssetLibrary& assets, const AnimatorContr
 // (bottom first): the entries blend in order, each over everything below it, eased by
 // AnimatorCrossfadeWeight. Sums to 1. Root motion mixes the entries' travel by these.
 std::vector<float> AnimatorStackWeights(const std::vector<float>& fades);
+void AnimatorStackWeights(const std::vector<float>& fades, std::vector<float>& out); // (the same into a vector the caller keeps: no allocation per call)
 
 // Per node of a rig described by `parent` (parents first) and `name`: 1 when the node is inside
 // `layer`'s bone mask, else 0.
