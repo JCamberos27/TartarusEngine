@@ -4,6 +4,7 @@
 #include "FirstPersonProcedural.h"
 #include <algorithm>
 #include <cfloat>
+#include <string>
 #include <vector>
 #include <glm/gtx/euler_angles.hpp>
 namespace {
@@ -93,29 +94,39 @@ void RecoilAssetEditor::Draw(PropertyRows& r, WeaponRecoilSettings& settings, fl
     static int mode=0; static bool aiming=false;
     ImGui::Combo("Preview",&mode,"Semi\0Burst (3)\0Auto (10)\0"); ImGui::Checkbox("Preview Aiming",&aiming);
     static int seed=42; ImGui::InputInt("Pattern seed",&seed);
-    RecoilAnimation state; std::mt19937 rng(static_cast<unsigned>(seed));
     const float dt=1.0f/120,interval=60/std::max(rpm,1.0f);
     const int count=mode==0?1:mode==1?3:10;
-    const float recovery=std::max({d.SemiRotCurve.Length(),d.SemiLocCurve.Length(),d.AutoRotCurve.Length(),d.AutoLocCurve.Length()})/std::max(d.PlayRate,0.01f);
-    const float duration=std::clamp(count*interval+recovery+2.0f,2.0f,30.0f);
-    const int frames=static_cast<int>(duration/dt)+1;
-    std::vector<float> channels[8]; for(auto& channel:channels) channel.resize(frames);
-    int shot=0; bool stopped=false; glm::vec2 total(0);
-    for(int f=0;f<frames;++f) {
-        const double time=f*static_cast<double>(dt);
-        if(shot<count && time+1e-6>=shot*interval) {
-            state.Play(d,aiming,rpm,static_cast<RecoilFireMode>(mode),rng,time,dt); ++shot;
+    // The plot is a pure function of the recoil data and these four inputs: simulate (up to 30 s at 120 Hz) only
+    // when one of them changed, not every frame the inspector is open.
+    struct Plot { std::string Data; float Rpm=-1; int Mode=-1, Seed=0; bool Aiming=false; float Duration=0; int Frames=0; std::vector<float> Channels[8]; };
+    static Plot plot;
+    std::string data=d.ToJson().dump();
+    if(data!=plot.Data || rpm!=plot.Rpm || mode!=plot.Mode || seed!=plot.Seed || aiming!=plot.Aiming) {
+        plot.Data=std::move(data);plot.Rpm=rpm;plot.Mode=mode;plot.Seed=seed;plot.Aiming=aiming;
+        RecoilAnimation state; std::mt19937 rng(static_cast<unsigned>(seed));
+        const float recovery=std::max({d.SemiRotCurve.Length(),d.SemiLocCurve.Length(),d.AutoRotCurve.Length(),d.AutoLocCurve.Length()})/std::max(d.PlayRate,0.01f);
+        const float duration=std::clamp(count*interval+recovery+2.0f,2.0f,30.0f);
+        const int frames=static_cast<int>(duration/dt)+1;
+        std::vector<float>* channels=plot.Channels; for(int c=0;c<8;++c) channels[c].assign(frames,0.0f);
+        plot.Duration=duration;plot.Frames=frames;
+        int shot=0; bool stopped=false; glm::vec2 total(0);
+        for(int f=0;f<frames;++f) {
+            const double time=f*static_cast<double>(dt);
+            if(shot<count && time+1e-6>=shot*interval) {
+                state.Play(d,aiming,rpm,static_cast<RecoilFireMode>(mode),rng,time,dt); ++shot;
+            }
+            if(!stopped && shot==count && time>=count*interval) { state.Stop(); stopped=true; }
+            state.Update(d,aiming,dt,rng);
+            const glm::quat q(state.OutRot.w,-state.OutRot.x,-state.OutRot.y,state.OutRot.z);
+            float yaw,pitch,roll; glm::extractEulerAngleYXZ(glm::mat4_cast(q),yaw,pitch,roll);
+            const glm::vec3 rot=glm::degrees(glm::vec3(pitch,yaw,roll));
+            const glm::vec3 loc=state.OutLoc*glm::vec3(1,1,-1);
+            total+=state.RecoilDelta;
+            for(int a=0;a<3;++a) {channels[a][f]=rot[a]; channels[a+3][f]=loc[a];}
+            channels[6][f]=total.y; channels[7][f]=total.x;
         }
-        if(!stopped && shot==count && time>=count*interval) { state.Stop(); stopped=true; }
-        state.Update(d,aiming,dt,rng);
-        const glm::quat q(state.OutRot.w,-state.OutRot.x,-state.OutRot.y,state.OutRot.z);
-        float yaw,pitch,roll; glm::extractEulerAngleYXZ(glm::mat4_cast(q),yaw,pitch,roll);
-        const glm::vec3 rot=glm::degrees(glm::vec3(pitch,yaw,roll));
-        const glm::vec3 loc=state.OutLoc*glm::vec3(1,1,-1);
-        total+=state.RecoilDelta;
-        for(int a=0;a<3;++a) {channels[a][f]=rot[a]; channels[a+3][f]=loc[a];}
-        channels[6][f]=total.y; channels[7][f]=total.x;
     }
+    const float duration=plot.Duration; const int frames=plot.Frames; const std::vector<float>* channels=plot.Channels;
     ImGui::TextDisabled("%.2f s | %d shots | %.0f RPM | 120 Hz | no look compensation",duration,count,rpm);
     const char* labels[]={"Pitch (deg)","Yaw (deg)","Roll (deg)","Right (m)","Up (m)","Back (m)","Look pitch (deg)","Look yaw (deg)"};
     static int channel=0;

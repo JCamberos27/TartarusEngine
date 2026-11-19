@@ -4006,11 +4006,16 @@ void EditorLayer::PostModuleDraw(World& world) {
     // Tabs & Headers: a docked panel tab's right-click colour menu (every panel has begun by now).
     DrawPanelTabStyleMenu();
     EditorSettings::Flush();
-    Enhancers::EnhancerUserState::Get().Flush();
-    Enhancers::TabState::Get().Flush();
-    Enhancers::Palette::Flush();
-    Enhancers::FolderStyles::Get().Flush();
-    Enhancers::UiStyles::Get().Flush();
+    // The Enhancer stores are whole JSON files (two of them team-shared and watched by the undo history): a
+    // colour drag or a typed glob pattern marks them dirty every frame, so they are written when the widget is
+    // let go, not once per frame of the drag. Shutdown flushes whatever is left.
+    if (!ImGui::IsAnyItemActive()) {
+        Enhancers::EnhancerUserState::Get().Flush();
+        Enhancers::TabState::Get().Flush();
+        Enhancers::Palette::Flush();
+        Enhancers::FolderStyles::Get().Flush();
+        Enhancers::UiStyles::Get().Flush();
+    }
     FinishGlobalUndo(world);
     if(m_RequestGlobalUndo && m_AssetsPtr) Undo(world,*m_AssetsPtr);
     else if(m_RequestGlobalRedo && m_AssetsPtr) Redo(world,*m_AssetsPtr);
