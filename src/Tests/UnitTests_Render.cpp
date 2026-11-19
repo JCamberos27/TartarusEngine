@@ -9,6 +9,9 @@
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
 #include "../Renderer/LightBuffer.h"
+#include "../Renderer/ShadowLimits.h"
+#include "../Renderer/DecalTypes.h"
+#include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
 #include "../Renderer/ReflectionProbeCapture.h"
 #include "../Renderer/GIData.h"
@@ -616,6 +619,33 @@ void GISphericalHarmonics() {
 
 // A synthetic bake: probes lit by the analytic falloff of a point at the box's +X end. Grid, lookup, fade, file
 // round trip, the invalid-probe fill and the GIVolumes gather with circuit weights.
+// Shader constants that mirror C++ ones: each GLSL copy matches its C++ source, so a change to one side that misses
+// the other fails here instead of reading out of range on the GPU.
+void ShaderConstantsMatch() {
+    auto src = [](const char* name) {
+        std::ifstream in(EnginePaths::Resolve(std::string("assets/shaders/") + name), std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    auto has = [](const std::string& text, const std::string& line) { return text.find(line) != std::string::npos; };
+    const std::string grid = src("ClusterGrid.glsl"), cull = src("ClusterCull.comp.glsl");
+    const std::string decal = src("ClusterDecalCull.comp.glsl"), shading = src("ModelShading.glsl");
+    const std::string fog = src("VolumetricInject.comp.glsl");
+    if (grid.empty() || cull.empty() || decal.empty() || shading.empty() || fog.empty()) {
+        UnitTestSupport::Skip("no shaders next to the exe");
+        return;
+    }
+    const auto n = [](int v) { return std::to_string(v); };
+    CHECK(has(grid, "const uint C_GX = " + n(ClusterGrid::GRID_X) + "u, C_GY = " + n(ClusterGrid::GRID_Y) + "u, C_GZ = " +
+                        n(ClusterGrid::GRID_Z) + "u;"));
+    CHECK(has(cull, "const uint GLOBAL_CAPACITY = " + n(ClusterGrid::GLOBAL_INDEX_CAPACITY) + "u;"));
+    CHECK(has(cull, "const uint MAX_LIGHTS = " + n(LightBuffer::kMaxLights) + "u;"));
+    CHECK(has(decal, "const uint MAX_PER_CLUSTER = " + n(Decals::MAX_PER_CLUSTER) + "u;"));
+    for (const std::string* text : {&shading, &fog}) {
+        CHECK(has(*text, "uniform mat4 uSpotShadowVP[" + n(ShadowLimits::kMaxSpots) + "];"));
+        CHECK(has(*text, "uniform float uPointShadowFar[" + n(ShadowLimits::kMaxPoints) + "];"));
+    }
+}
+
 void GIVolumeLookup() {
     // Box, grid and fade.
     const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(2, 1, -3)), glm::radians(90.0f), glm::vec3(0, 1, 0));
@@ -800,6 +830,7 @@ void GIVolumeLookup() {
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
     tests.push_back({"GI: volume lookup, bake file, weights follow circuits", GIVolumeLookup});
+    tests.push_back({"Shader constants match their C++ sources", ShaderConstantsMatch});
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
