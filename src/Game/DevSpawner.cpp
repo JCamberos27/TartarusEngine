@@ -5,7 +5,6 @@
 #include "World.h"
 #include "AssetLibrary.h"
 #include "Model.h"
-#include "SceneSerializer.h"
 #include "PhysicsWorld.h"
 #include "GameModuleAPI.h"
 #include "FKeyRow.h"
@@ -20,7 +19,6 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
-#include <cstdio>
 
 namespace {
 
@@ -28,7 +26,7 @@ struct NpcVariant { const char* Name; bool Roam; };
 const NpcVariant kNpcs[] = {{"Dummy", true}, {"Dummy (Standing)", false}};
 const char* kItems[] = {"Ammo Box", "Physics Crate"};
 constexpr int kNpcCount = (int)(sizeof(kNpcs) / sizeof(kNpcs[0]));
-constexpr int kItemCount = 2;
+constexpr int kItemCount = (int)(sizeof(kItems) / sizeof(kItems[0]));
 
 bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDist, glm::vec3& point, glm::vec3& normal) {
     RaycastHit h;
@@ -49,11 +47,6 @@ entt::entity Box(World& world, AssetLibrary& assets, const glm::vec3& at, const 
     return e;
 }
 
-} // namespace
-
-DevSpawner::DevSpawner() = default;
-DevSpawner::~DevSpawner() = default;
-
 // The models and materials a prefab (or scene fragment) names, started loading in the background: the first F9 /
 // F11 of a Play then finds them in memory instead of importing them on the spot.
 void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
@@ -72,13 +65,9 @@ void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
     }
 }
 
-void DevSpawner::Warm(const Context& c) {
-    const SquadSettingsComponent squad = c.Npcs ? c.Npcs->Settings() : SquadSettingsComponent{};
-    if (m_Warmed < 1 && !squad.BodyPrefab.empty()) WarmPrefab(*c.Assets, squad.BodyPrefab);
-    ++m_Warmed;
-}
+} // namespace
 
-bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
+void DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
     const glm::vec3 f = glm::normalize(c.Front);
     glm::vec3 p, n;
     if (Ray(c.Eye, f, 30.0f, p, n)) {
@@ -98,12 +87,15 @@ bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
     at = p;
     const glm::vec3 to = c.Eye - p; // facing the player
     yawDeg = glm::degrees(std::atan2(to.x, to.z));
-    return true;
 }
 
 void DevSpawner::Update(const Context& c) {
     if (!c.WorldPtr || !c.Assets) return;
-    if (m_Warmed < 1) Warm(c);
+    // Once a Play, as soon as the dummies' settings name a body prefab.
+    if (!m_Warmed && c.Npcs && !c.Npcs->Settings().BodyPrefab.empty()) {
+        WarmPrefab(*c.Assets, c.Npcs->Settings().BodyPrefab);
+        m_Warmed = true;
+    }
     // The first F9 in a scene with no Dummy Spawn started the dummies: their navmesh is up after a Think.
     if (m_WaitSquad && c.Npcs && c.Npcs->Started()) { m_WaitSquad = false; SpawnNpc(c); }
     if (c.Keys) {
@@ -158,19 +150,8 @@ void DevSpawner::SpawnItem(const Context& c) {
     float yaw = 0.0f;
     Place(c, at, yaw);
     const glm::vec3 drop = at + glm::vec3(0.0f, 0.35f, 0.0f);
-    bool ok = true;
-    if (m_Item == 0) {
-        Pickup p;
-        p.Prop = Box(world, *c.Assets, drop, glm::vec3(0.35f, 0.2f, 0.25f), 4.0f, "[Runtime] Ammo Box");
-        m_Pickups.push_back(std::move(p));
-    } else {
-        m_Props.push_back(Box(world, *c.Assets, at + glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(0.8f), 25.0f, "[Runtime] Physics Crate"));
-    }
-    if (!ok) {
-        FKeyRow::Show("F11", "Item", "Couldn't spawn");
-        EditorSound::Play(EditorSound::Event::Blocked);
-        return;
-    }
+    if (m_Item == 0) m_Pickups.push_back(Box(world, *c.Assets, drop, glm::vec3(0.35f, 0.2f, 0.25f), 4.0f, "[Runtime] Ammo Box"));
+    else m_Props.push_back(Box(world, *c.Assets, at + glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(0.8f), 25.0f, "[Runtime] Physics Crate"));
     EditorSound::Play(EditorSound::Event::SpawnItem);
     FKeyRow::Show("F11", "Item", kItems[m_Item], m_Item, kItemCount);
 }
@@ -183,9 +164,9 @@ void DevSpawner::Pickups(const Context& c) {
     int best = -1;
     float bestOff = 0.45f;
     for (int i = 0; i < (int)m_Pickups.size(); ++i) {
-        const Pickup& p = m_Pickups[(size_t)i];
+        const entt::entity p = m_Pickups[(size_t)i];
         glm::vec3 pos;
-        if (const auto* t = world.Registry.valid(p.Prop) ? world.Registry.try_get<TransformComponent>(p.Prop) : nullptr) pos = t->Position;
+        if (const auto* t = world.Registry.valid(p) ? world.Registry.try_get<TransformComponent>(p) : nullptr) pos = t->Position;
         else continue;
         const float along = glm::dot(pos - c.Eye, f);
         if (along < 0.0f || along > 2.6f) continue;
@@ -193,13 +174,12 @@ void DevSpawner::Pickups(const Context& c) {
         if (off < bestOff) { bestOff = off; best = i; }
     }
     if (best < 0) return;
-    Pickup& p = m_Pickups[(size_t)best];
-    const char* what = "Ammo";
+    const entt::entity p = m_Pickups[(size_t)best];
     if (c.Gun && c.Gun->IsActive()) c.Gun->RefillAmmo();
-    if (world.Registry.valid(p.Prop)) world.DestroyEntityAndChildren(p.Prop);
+    if (world.Registry.valid(p)) world.DestroyEntityAndChildren(p);
     m_Pickups.erase(m_Pickups.begin() + best);
     EditorSound::Play(EditorSound::Event::SpawnItem, -1.0f, 1.25f);
-    FKeyRow::Show("E", "Picked up", what);
+    FKeyRow::Show("E", "Picked up", "Ammo");
 }
 
 void DevSpawner::Clear(const Context& c) {
@@ -208,8 +188,6 @@ void DevSpawner::Clear(const Context& c) {
     if (c.Npcs)
         for (int idx : m_NpcIds)
             if (const Npc* npc = c.Npcs->Find(idx); npc && npc->DevSpawned) c.Npcs->Remove(world, idx); // the slot may be a scene dummy's now
-    m_NpcIds.clear();
-    m_WaitSquad = false;
     Stop(world);
     EditorSound::Play(EditorSound::Event::ClearSpawns);
     FKeyRow::Show("F12", "Cleared", std::to_string(n) + (n == 1 ? " thing" : " things"));
@@ -218,8 +196,8 @@ void DevSpawner::Clear(const Context& c) {
 void DevSpawner::Stop(World& world) {
     m_NpcIds.clear();
     m_WaitSquad = false;
-    for (Pickup& p : m_Pickups)
-        if (world.Registry.valid(p.Prop)) world.DestroyEntityAndChildren(p.Prop);
+    for (entt::entity p : m_Pickups)
+        if (world.Registry.valid(p)) world.DestroyEntityAndChildren(p);
     m_Pickups.clear();
     for (entt::entity e : m_Props)
         if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
@@ -227,7 +205,7 @@ void DevSpawner::Stop(World& world) {
 }
 
 void DevSpawner::Forget() {
-    m_Warmed = 0;
+    m_Warmed = false;
     m_NpcIds.clear();
     m_Props.clear();
     m_Pickups.clear();

@@ -40,10 +40,8 @@ public:
     };
     // Starts powering ragdoll `id`, built from `parts` (BuildParts: the joints' frames) in a body whose axes are `root`'s (x left,
     // y up, z forward). `fallDir`: the way the body is going to fall (the round's, or the body's momentum; world, need not be level,
-    // zero: forward); `hitPart`: the part the round struck (-1 none); `point` / `shot`: where the round struck (world) and its direction
-    // (a zero shot: no reaction to it). `cfg` is copied.
-    void Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart, const RagdollSettingsComponent& cfg,
-               const glm::vec3& point = glm::vec3(0.0f), const glm::vec3& shot = glm::vec3(0.0f));
+    // zero: forward); `hitPart`: the part the round struck (-1 none). `cfg` is copied.
+    void Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart, const RagdollSettingsComponent& cfg);
     // Once per frame (`dt` seconds): the drives' strengths and targets, the settle, the rest.
     void Update(float dt);
     // Something shoved the body: the settle and the sleep start over.
@@ -125,8 +123,6 @@ public:
     struct BoneSnapshot;
     bool Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart = -1,
                const RagdollSettingsComponent* cfg = nullptr, const BoneSnapshot* prev = nullptr, float prevDt = 0.0f);
-    // The fastest part's speed (m/s) and spin (rad/s); false without a ragdoll.
-    bool Motion(float& linear, float& angular) const;
     void Stop();
     bool Active() const { return m_Id >= 0; }
     int Id() const { return m_Id; } // the physics ragdoll (PhysicsWorld), -1 when none
@@ -266,8 +262,7 @@ NpcPartShape NpcPartShapeOf(const NpcPartDef& def, const glm::vec3& a, const glm
 // further than the chest), and several rounds in a row add up to a cap. Pure maths (Hit, Rotations) apart from Apply.
 class NpcFlinch {
 public:
-    static constexpr int kBones = 13;
-    static const char* BoneName(int bone); // spine_01, spine_02, spine_03, neck_01, head, upperarm_l/r, lowerarm_l/r, thigh_l/r, calf_l/r
+    static constexpr int kBones = 13; // spine_01, spine_02, spine_03, neck_01, head, upperarm_l/r, lowerarm_l/r, thigh_l/r, calf_l/r
     struct Kick { int Bone; glm::vec3 Axis; float Peak, Start, Duration; };
     // `part`: a hitbox part (0 .. NpcRagdoll::kParts - 1); `boneDir`, `dir`: the part's bone direction and the round's travel, both in
     // the body's root space (need not be unit); `now`: the director's clock. Nothing is added with cfg.HitFlinch off.

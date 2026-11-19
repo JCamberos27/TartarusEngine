@@ -227,7 +227,7 @@ void PlaySession::Start() {
         const bool squadStarted = m_NpcDirector.Start(m_World, m_Assets, m_NpcTest && m_NpcTest->StartsEmptyDirector());
         if (m_NpcTest) std::printf("[NpcTest] dummies %s (%zu spawn points)\n", squadStarted ? "started" : "not started", m_NpcDirector.SpawnPoints().size());
         if (squadStarted) {
-            m_DevPanel.Reset(m_PlayerVitals, m_NpcDirector);
+            m_DevPanel.Reset(m_PlayerVitals);
             m_CombatHud.Reset();
             m_CombatFx.Start(m_World);
             if (m_NpcTest && !m_NpcTest->RecordDir().empty()) {

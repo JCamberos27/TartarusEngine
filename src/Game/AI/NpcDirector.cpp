@@ -97,7 +97,6 @@ const char* NpcDirector::SubName(int s) {
 
 struct NpcDirector::DummyBody {
     entt::entity Root = entt::null;
-    bool Bare = false; // undressed for a Bare spawn: pooled only for another
     std::vector<std::pair<entt::entity, AnimatorControllerComponent>> Animators; // as built: each dummy starts from these
 };
 
@@ -155,8 +154,6 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, bool allowEmpty) {
         SpawnPoint s;
         s.Pos = glm::vec3(w[3]);
         s.Yaw = NpcYawOf(glm::vec3(w[2]), 0.0f);
-        s.OutfitSeed = std::clamp(c.OutfitSeed, 0, 100000);
-        s.Bare = true; // every dummy spawns undressed (Spawn)
         s.Roam = c.Roam;
         const auto* order = reg.try_get<OrderComponent>(e);
         found.push_back({order ? order->Value : (int)entt::to_integral(e), s});
@@ -224,8 +221,7 @@ void NpcDirector::Stop(World& world) {
     m_NextName = 1;
 }
 
-void NpcDirector::BuildNav(World& world) {
-    (void)world;
+void NpcDirector::BuildNav() {
     const auto t0 = std::chrono::steady_clock::now();
     std::vector<float> verts;
     std::vector<int> tris;
@@ -263,7 +259,7 @@ void NpcDirector::BuildNav(World& world) {
 
 bool NpcDirector::LateStart(World& world, AssetLibrary& assets) {
     m_Started = true;
-    BuildNav(world);
+    BuildNav();
     if (m_Player.Valid) m_PlayerAgent = m_Crowd.Add(m_Player.Feet, m_Player.Radius, m_Player.Height, 6.0f, /*steer=*/false);
     for (int i = 0; i < (int)m_Spawns.size(); ++i) Spawn(world, assets, i);
     // A spare body, built now and laid out of the way: the first replacement comes before any corpse has gone.
@@ -299,6 +295,14 @@ std::shared_ptr<NpcDirector::DummyBody> NpcDirector::BuildBody(World& world, Ass
     // A prefab saved before its wardrobe's body changed gets the new parts now, before the body (and its ragdoll) reads
     // its pieces.
     OutfitSystem::RefreshBody(world, assets, built->Root);
+    // Bare: every clothing item off, so the wardrobe dresses the body in its own skin (as Character Outfit's Bare Body).
+    {
+        if (OutfitSystem::Pieces(world, built->Root).empty()) OutfitSystem::AdoptExisting(world, assets, built->Root);
+        Wardrobe::Request bare = OutfitSystem::CurrentRequest(world, built->Root);
+        bare.Items.clear();
+        const auto r = OutfitSystem::Apply(world, assets, built->Root, bare);
+        if (!r.Ok) Log::Warn("Dummies: a body kept its clothes - " + r.Error);
+    }
     std::vector<entt::entity> all;
     for (entt::entity e : created)
         if (reg.valid(e)) all.push_back(e);
@@ -315,7 +319,6 @@ int NpcDirector::SpawnAt(World& world, AssetLibrary& assets, const glm::vec3& po
     m_DevPoint = SpawnPoint{};
     m_DevPoint.Pos = pos;
     m_DevPoint.Yaw = glm::radians(yawDeg);
-    m_DevPoint.Bare = true;
     m_DevPoint.Roam = roam;
     const int idx = Spawn(world, assets, kDevSpawn);
     if (Npc* n = Find(idx)) n->DevSpawned = true;
@@ -332,14 +335,12 @@ void NpcDirector::Remove(World& world, int index) {
 int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     const bool dev = spawnIndex == kDevSpawn;
     if ((!dev && (spawnIndex < 0 || spawnIndex >= (int)m_Spawns.size())) || m_BodyJson.empty()) return -1;
-    SpawnPoint sp = dev ? m_DevPoint : m_Spawns[(size_t)spawnIndex];
-    sp.Bare = true; // every dummy spawns undressed - the bare body, no clothing
+    const SpawnPoint sp = dev ? m_DevPoint : m_Spawns[(size_t)spawnIndex];
     PROFILE_SCOPE("AI Spawn");
     auto& reg = world.Registry;
     // A body from the pool (a corpse that has gone) when there is one: shown again, its animators as they were built.
     std::shared_ptr<DummyBody> built;
     for (size_t k = m_Pool.size(); k-- > 0 && !built;) {
-        if (m_Pool[k] && m_Pool[k]->Bare != sp.Bare) continue; // dressed and undressed bodies are kept apart
         built = std::move(m_Pool[k]);
         m_Pool.erase(m_Pool.begin() + (long long)k);
         if (!built || !reg.valid(built->Root)) built.reset();
@@ -351,14 +352,6 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
         SetTreeActive(world, built->Root, true);
     } else if (!(built = BuildBody(world, assets))) {
         return -1;
-    } else if (sp.Bare) {
-        // Bare: every clothing item off, so the wardrobe dresses the body in its own skin (as Character Outfit's Bare Body).
-        if (OutfitSystem::Pieces(world, built->Root).empty()) OutfitSystem::AdoptExisting(world, assets, built->Root);
-        Wardrobe::Request bare = OutfitSystem::CurrentRequest(world, built->Root);
-        bare.Items.clear();
-        const auto r = OutfitSystem::Apply(world, assets, built->Root, bare);
-        if (!r.Ok) Log::Warn("Dummies: a Bare spawn kept its clothes - " + r.Error);
-        built->Bare = true;
     }
     const entt::entity root = built->Root;
     m_Bodies[root] = built;
@@ -763,10 +756,9 @@ void NpcDirector::UpdateLod(World& world, Npc& n, const PlayerSnapshot& p) {
     n.Animate = busy || lod == 1 || ((m_Frame + n.Index) % lod) == 0;
     // (Any Animator Controller left on a piece - a prefab from before Phase 6 - is always held: the matcher poses the body, stepping
     // on the frames posed - LatePose.)
-    const bool held = true;
     for (entt::entity e : n.Body.Pieces())
         if (e != entt::null && world.Registry.valid(e))
-            if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = held;
+            if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = true;
 }
 
 // The per-bone hitboxes follow the skeleton for dummies within Hitbox Range of the player (made on first need, off beyond
@@ -856,7 +848,6 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
     }
     n.Health -= amount;
     n.LastHurt = m_Now;
-    ++n.Hits;
     if (health) health->Current = std::max(0.0f, n.Health);
     // Dead: out of health, or a head shot that is enough.
     if (n.Health <= 0.0f || (zone == HitZone::Head && amount >= 60.0f)) {

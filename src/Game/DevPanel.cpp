@@ -3,22 +3,12 @@
 #include "AI/NpcDirector.h"
 #include "Combat/PlayerVitals.h"
 #include "EditorSound.h"
-#include "Input.h"
 #include "TimeService.h"
 #include "imgui.h"
-#include <GLFW/glfw3.h>
 
-#include <algorithm>
-
-void DevPanel::Reset(PlayerVitals& vitals, NpcDirector& npcs) {
-    (void)npcs;
-    Open = false;
-    InfiniteAmmo = false;
-    AiOverlay = false;
-    vitals.GodMode = false;
-}
-
-int DevPanel::KillAll(World& world, NpcDirector& npcs) {
+namespace {
+// The panel's buttons.
+int KillAll(World& world, NpcDirector& npcs) { // returns how many were killed
     int killed = 0;
     for (const auto& up : npcs.Npcs()) {
         if (!up || up->Dead) continue;
@@ -28,7 +18,8 @@ int DevPanel::KillAll(World& world, NpcDirector& npcs) {
     return killed;
 }
 
-int DevPanel::RespawnSquad(World& world, AssetLibrary& assets, NpcDirector& npcs) {
+// A dummy at every spawn that has none; returns how many spawned.
+int RespawnSquad(World& world, AssetLibrary& assets, NpcDirector& npcs) {
     const int spawns = (int)npcs.SpawnPoints().size();
     if (spawns <= 0) return 0;
     int made = 0;
@@ -39,6 +30,14 @@ int DevPanel::RespawnSquad(World& world, AssetLibrary& assets, NpcDirector& npcs
         if (!has && npcs.Spawn(world, assets, i) >= 0) ++made;
     }
     return made;
+}
+} // namespace
+
+void DevPanel::Reset(PlayerVitals& vitals) {
+    Open = false;
+    InfiniteAmmo = false;
+    AiOverlay = false;
+    vitals.GodMode = false;
 }
 
 void DevPanel::Draw(const Context& c) {
@@ -77,6 +76,5 @@ void DevPanel::Draw(const Context& c) {
     }
     ImGui::Checkbox("AI debug overlay", &AiOverlay);
     if (c.BloodLab) ImGui::Checkbox("Blood Lab", c.BloodLab);
-    ImGui::TextDisabled("F7 panel   F8 god mode");
     ImGui::End();
 }

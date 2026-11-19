@@ -31,10 +31,6 @@ void Spring(float& x, float& rate, float target, float omega, float zeta, float 
 
 glm::quat YawRotation(float yaw) { return glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)); }
 
-constexpr float kSlideTurnRate = 200.0f; // degrees a second: the feet sliding round behind a facing past the spine's twist
-constexpr float kMoveTurnRate = 240.0f;  // degrees a second: the most the heading swings on the move outside a turn clip
-
-
 } // namespace
 
 float NpcYawOf(const glm::vec3& dir, float fallback) {
@@ -42,7 +38,6 @@ float NpcYawOf(const glm::vec3& dir, float fallback) {
     return std::atan2(dir.x, dir.z);
 }
 
-constexpr float kWarpMax = 60.0f; // degrees the orientation warp may turn the legs
 float NpcSpineTwist(float offset, float maxTwist) {
     return std::clamp(FirstPersonBodyWrapAngle(offset), -maxTwist, maxTwist);
 }
@@ -515,16 +510,6 @@ bool NpcBody::BoneWorld(const std::string& bone, glm::vec3& out) const {
     if (!m_DriverModel->NodeTransform(bone, g)) return false;
     out = glm::vec3(RootWorld() * g[3]);
     return true;
-}
-
-std::string NpcBody::AnimDebug(const World& world) const {
-    if (m_PoseExternal || m_Driver == entt::null || !world.Registry.valid(m_Driver)) return "-";
-    {
-        char buf[160];
-        std::snprintf(buf, sizeof buf, "%s f%u rate %.2f searches %d jumps %d", m_MmDebug.Clip.c_str(), m_MmDebug.Frame, m_MmDebug.PlayRate,
-                      m_MmDebug.Searches, m_MmDebug.Jumps);
-        return buf;
-    }
 }
 
 std::string NpcBody::StateName(const World& world) const {

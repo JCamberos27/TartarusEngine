@@ -118,8 +118,6 @@ public:
     struct SpawnPoint {
         glm::vec3 Pos{0.0f};
         float Yaw = 0.0f;
-        int OutfitSeed = 0;
-        bool Bare = false; // dressed in its own skin, no clothing
         bool Roam = true;
     };
     // Whether the player could see `point` now: in front of the view (a cone a little wider than the screen), near enough and
@@ -141,7 +139,7 @@ private:
     // it is destroyed.
     void Despawn(World& world, Npc& n, bool keepBody = false);
     void Respawns(World& world, AssetLibrary& assets);
-    void BuildNav(World& world);
+    void BuildNav();
     void UpdatePersistence(World& world, const PlayerSnapshot& p);
 
     bool m_Active = false, m_Started = false;
@@ -164,7 +162,8 @@ private:
     struct DummyBody;
     std::unordered_map<entt::entity, std::shared_ptr<DummyBody>> m_Bodies; // per dummy, living or lying, by root
     std::vector<std::shared_ptr<DummyBody>> m_Pool;                        // hidden, ready for the next spawn
-    std::shared_ptr<DummyBody> BuildBody(World& world, AssetLibrary& assets); // from the body prefab; null on failure
+    // From the body prefab, every clothing item off (the wardrobe dresses it in its own skin); null on failure.
+    std::shared_ptr<DummyBody> BuildBody(World& world, AssetLibrary& assets);
     struct PendingRespawn { float At; int SpawnIndex; };
     std::vector<PendingRespawn> m_RespawnTimers;
     NavMesh m_Nav;
