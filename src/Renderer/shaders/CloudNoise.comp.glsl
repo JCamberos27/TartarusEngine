@@ -6,7 +6,7 @@
 //             erode the base into cauliflower lumps (Schneider, "The Real-time Volumetric
 //             Cloudscapes of Horizon: Zero Dawn", 2015).
 //   uMode 1 - detail, 32^3 RGBA8: Worley fBm at three frequencies, for the wispy edge erosion.
-//   uMode 2 - weather map, 512^2 RGBA8: R = coverage field (where clouds form), G = cloud-type
+//   uMode 2 - weather map, 2048^2 RGBA8: R = coverage field (where clouds form), G = cloud-type
 //             variation, B = streaky cirrus field, A = fine cirrus detail.
 //
 // Everything tiles, so the textures can repeat across the sky without seams.

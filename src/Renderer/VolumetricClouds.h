@@ -12,7 +12,7 @@ struct SkyLighting;
 //
 // GPU resources:
 //   - noise, generated once at first use: 128^3 Perlin-Worley shape, 32^3 Worley detail, and a
-//     512^2 weather map (CloudNoise.comp);
+//     2048^2 weather map (CloudNoise.comp);
 //   - a uniform block (binding 3) with this frame's layer, shape, wind and lighting parameters;
 //   - a cloud shadow map (R16F) over the ground around the camera, sampled by the model shader;
 //   - per view (ViewState): the reduced-resolution raymarch target, its depth, and two history
@@ -71,7 +71,6 @@ public:
     // xy = world XZ at the shadow map's centre, z = 1 / world extent, w = strength (0 = off).
     glm::vec4 ShadowParams() const { return m_ShadowParams; }
 
-    bool NoiseReady() const { return m_NoiseReady; }
 
     // Compiles the cloud programs and bakes the noise volumes now rather than on the first frame
     // that draws clouds (a ~230 ms stall). Idempotent.
@@ -79,7 +78,6 @@ public:
 
     // The wind's texture offsets (km), wrapped at whole tiles. For tests.
     glm::vec2 WeatherOffset() const { return m_WeatherOffset; }
-    glm::vec2 ShapeOffset() const { return m_ShapeOffset; }
 
 private:
     void EnsureResources();
@@ -95,7 +93,6 @@ private:
     unsigned int m_Weather = 0;
     unsigned int m_ShadowMap = 0;
     unsigned int m_Ubo = 0;
-    bool m_NoiseReady = false;
 
     glm::vec2 m_WeatherOffset{0.0f}; // km
     glm::vec2 m_ShapeOffset{0.0f};   // km

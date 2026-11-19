@@ -11,9 +11,6 @@
 #include <string>
 
 // RG texture format constants — not exposed by the engine's minimal gl.h loader.
-#ifndef GL_RG
-#define GL_RG   0x8227
-#endif
 #ifndef GL_RG32F
 #define GL_RG32F 0x8230
 #endif
@@ -163,7 +160,6 @@ void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, floa
 
     ssaoShader.SetMat4("uProjection",    proj);
     ssaoShader.SetMat4("uInvProjection", glm::inverse(proj));
-    ssaoShader.SetVec2("uScreenSize",    glm::vec2((float)m_HalfWidth, (float)m_HalfHeight));
     glUniform2i(ssaoShader.Loc("uDepthSize"), m_Width, m_Height);
     ssaoShader.SetFloat("uRadius",       radius);
     ssaoShader.SetFloat("uBias",         bias);

@@ -146,7 +146,7 @@ void main() {
 
     // Clamp to the list's actual capacity: a cluster whose reserved block would run past the
     // end (because earlier clusters already filled it) gets a truncated, never out-of-bounds,
-    // write, and flags the same overflow warning #204 introduced — now meaning "the shared list
+    // write, and flags the same overflow warning #204 introduced - now meaning "the shared list
     // is full" rather than "this one cluster hit its 100-light cap".
     uint writable = n;
     if (offset >= GLOBAL_CAPACITY) writable = 0u;

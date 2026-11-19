@@ -150,12 +150,6 @@ int Match(const std::vector<const Model*>& lod0) {
     return set;
 }
 
-void Reload() {
-    const bool drawable = S().Drawable;
-    S() = State{};
-    S().Drawable = drawable;
-}
-
 void TestOverride(int set, float startDistance) {
     S().TestSet = set;
     S().TestStart = startDistance;

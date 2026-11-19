@@ -14,7 +14,6 @@
 #include <fstream>
 #include <sstream>
 #include <cctype>
-#include <cassert>
 #include <cstdio>
 #include <algorithm>
 #include <filesystem>

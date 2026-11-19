@@ -8,7 +8,6 @@ uniform sampler2D uDepth;
 uniform sampler2D uNoise;
 uniform mat4 uProjection;
 uniform mat4 uInvProjection;
-uniform vec2 uScreenSize;   // this pass's (half-resolution) target size: the noise tiles over 4x4 of its texels
 uniform ivec2 uDepthSize;   // the full-resolution depth pre-pass
 uniform vec3 uKernel[32];
 uniform float uRadius;

@@ -67,8 +67,8 @@ public:
         std::shared_ptr<const GrassDensityMap> Map; // the density mask, or null
     };
     static AreaDesc Describe(const GrassAreaComponent& g, const glm::mat4& world);
-    // Chunks of `areas` inside `frustum` and nearer than their draw distance to `eye` (at most kMaxChunks, the
-    // nearest first). Pure CPU: unit-tested.
+    // Chunks of `areas` inside `frustum` and nearer than their draw distance to `eye` (at most kMaxChunks: the
+    // nearest ones, in no particular order). Pure CPU: unit-tested.
     // A terrain the Follow Terrain areas stand on: its grid and its entity's world origin (translation only).
     struct TerrainRef {
         std::shared_ptr<const TerrainGrid> Grid;

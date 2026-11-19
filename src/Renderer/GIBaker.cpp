@@ -52,12 +52,6 @@ GI::ProbeSH GIBaker::ProjectFaces(const float* rgba, int n, float* backfaceShare
     return p.Finish();
 }
 
-int GIBaker::ProbeCount() const {
-    int n = 0;
-    for (const auto& v : m_Volumes) n += v.Dims.x * v.Dims.y * v.Dims.z;
-    return n;
-}
-
 bool GIBaker::Begin(World& world, const Options& opt) {
     m_Opt = opt;
     m_Volumes.clear();
@@ -74,7 +68,6 @@ bool GIBaker::Begin(World& world, const Options& opt) {
         if (world.Registry.any_of<InactiveTag, DeactivatedTag>(e)) continue;
         const auto* nc = world.Registry.try_get<NameComponent>(e);
         VolumeJob j;
-        j.Entity = e;
         j.Name = nc ? nc->Name : std::string();
         if (!opt.Only.empty() && j.Name.find(opt.Only) == std::string::npos) continue;
         if (j.Name.empty()) { Log::Warn("[GI bake] a GI Volume with no name is skipped (its data is found by name)"); continue; }

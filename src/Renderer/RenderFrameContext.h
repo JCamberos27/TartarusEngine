@@ -9,12 +9,10 @@ class Ssao;
 
 // Per-viewport inputs for one scene draw (audit #359, pass 1).
 //
-// Bundles what used to be the positional parameters of main.cpp's `drawScene` lambda into one
-// explicit value, so the Scene tab, the docked Game view and maximized play all call the same
-// renderer entry point with a named struct instead of a long argument list. This is the first
-// reviewable slice of the SceneRenderer extraction: the draw *body* still lives in main.cpp for
-// now; only the call boundary is formalized here. The RenderStats out-param stays a separate
-// argument so this header carries no dependency on the editor layer.
+// One explicit value for a view's draw, so the Scene tab, the docked Game view and maximized play all
+// call the same renderer entry point (SceneRenderer::RenderScene, through ViewPipeline) with a named
+// struct instead of a long argument list. The RenderStats out-param stays a separate argument so
+// this header carries no dependency on the editor layer.
 //
 // GL state contract for the scene-draw pass that consumes this (documented per AC3):
 //   On entry the caller must have:

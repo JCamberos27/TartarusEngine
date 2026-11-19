@@ -7,7 +7,6 @@
 #include "Core/Profiler.h"
 #include "gl.h"
 
-#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
 
@@ -404,7 +403,6 @@ void SkyAtmosphere::PrepareFrame(const SkySettings& s, const SkyLighting& lit, c
 
     // The frame's own sky-view LUTs (primary camera), for the shadow map and the capture.
     ViewResources& fv = View(this);
-    m_FrameView = &fv;
     RenderSkyViewLuts(fv);
     BindLuts(fv);
 

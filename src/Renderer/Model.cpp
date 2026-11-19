@@ -26,7 +26,6 @@
 #include <assimp/config.h>
 #include <assimp/GltfMaterial.h>
 
-#include <iostream>
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
@@ -123,10 +122,6 @@ std::shared_ptr<Model> Model::ImportDeferred(const std::string& path, const Mode
     model->m_DeferGpu = false;
     model->m_GpuPending = true;
     return model;
-}
-
-void Model::FinishGpuUpload() {
-    while (!FinishGpuUploadStep()) {}
 }
 
 UploadStaging::Step Model::GpuUploadStep() {
@@ -690,7 +685,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
         for (unsigned int i : indices) it->Indices.push_back(base + i);
         return nullptr;
     }
-    // Deferred (ImportDeferred on a worker): keep the vertices for FinishGpuUpload, no GL here.
+    // Deferred (ImportDeferred on a worker): keep the vertices for FinishGpuUploadStep, no GL here.
     auto gpuMesh = m_DeferGpu ? std::make_unique<ModelMesh>(std::move(vertices), indices, true)
                               : std::make_unique<ModelMesh>(vertices, indices);
     if (skinned) gpuMesh->SetLocalPositions(std::move(posed));
@@ -760,7 +755,7 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
     TextureImportSettings settings;
     settings.IsSRGB = role == TextureRole::Color;
     if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
-    // Deferred: decode now (this thread), upload in FinishGpuUpload.
+    // Deferred: decode now (this thread), upload in FinishGpuUploadStep.
     auto tex = m_DeferGpu ? Texture::CreatePending(Texture::DecodeFile(fullPath, settings))
                           : std::make_shared<Texture>(fullPath, settings);
     if (!tex || (!tex->IsValid() && !tex->IsPendingUpload())) return nullptr;
@@ -1544,16 +1539,6 @@ float Model::AnimationLength(int index) const {
     return c ? c->LengthSeconds() : 0.0f;
 }
 
-bool Model::AnimationFinished() const {
-    if (m_Anim.Clip < 0) return true; // stopped, or a Once clip that dropped itself
-    if (m_Anim.Wrap == AnimationWrapMode::Loop || m_Anim.Wrap == AnimationWrapMode::PingPong)
-        return false;                 // wraps forever by construction
-    // Deliberately the same predicate UpdateAnimation() applies to a Once clip, so "finished"
-    // means the same thing whether the clip then drops itself or holds with ClampForever.
-    const float len = AnimationLength(m_Anim.Clip);
-    return m_Anim.Time >= len || m_Anim.Time < 0.0f;
-}
-
 int Model::FindClipByRef(const std::string& ref) const {
     for (int e = 0; e < (int)m_ExternalClips.size(); ++e)
         if (m_ExternalClips[e].Ref == ref) return (int)m_D->Animations.size() + e;
@@ -2094,11 +2079,6 @@ RootMotionDelta Model::ConsumeRootMotion() {
     const RootMotionDelta d = m_RootMotionPending;
     m_RootMotionPending = {};
     return d;
-}
-
-float Model::NormalizedTime() const {
-    const float len = m_Anim.Clip >= 0 ? AnimationLength(m_Anim.Clip) : 0.0f;
-    return len > 0.0f ? m_Anim.Time / len : 0.0f;
 }
 
 namespace {

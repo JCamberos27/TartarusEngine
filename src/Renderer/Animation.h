@@ -60,7 +60,6 @@ struct BoneAnimChannel {
     TrackInfo PositionInfo, RotationInfo, ScaleInfo;
     // Call once the keys are built (import, retarget).
     void Finalize();
-    glm::mat4 Interpolate(float timeTicks) const; // Sample() with identity defaults, as a matrix
 };
 
 // The imported node tree, flattened in depth-first order so a node's parent always comes first

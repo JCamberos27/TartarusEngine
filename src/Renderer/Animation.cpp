@@ -103,10 +103,6 @@ LocalTRS BoneAnimChannel::Sample(float timeTicks, const LocalTRS& bind) const {
     return out;
 }
 
-glm::mat4 BoneAnimChannel::Interpolate(float timeTicks) const {
-    return Sample(timeTicks, LocalTRS{}).ToMatrix();
-}
-
 float WrappedClipTicks(const AnimationClip& clip, float seconds, AnimationWrapMode wrap) {
     const float d = clip.EffectiveTicks();
     if (d <= 0.0f) return 0.0f;

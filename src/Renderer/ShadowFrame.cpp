@@ -1,8 +1,5 @@
 #include "ShadowFrame.h"
 #include <cstdio>
-#include <unordered_map>
-#include "Core/Env.h"
-#include "TimeService.h"
 
 #include <algorithm>
 #include <cmath>

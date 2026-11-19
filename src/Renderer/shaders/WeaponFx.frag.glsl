@@ -21,7 +21,7 @@ void main() {
         float dust = 0.55 + 0.3 * noise(d * 9.0 - uTime * 0.7) + 0.15 * noise(d * 37.0 + uTime * 1.9);
         float mote = pow(noise(d * 61.0 - uTime * 0.35), 18.0) * 3.0;
         FragColor = vec4(vColor.rgb * vColor.a * across * (dust + mote), 1.0);
-    } else if (vKind == 1) {
+    } else {
         // Spot: an over-bright core (washing out to white, the way a camera sees a laser dot)
         // in a tight glow and a wider, faint halo. uv 1 = the quad's edge = 6 core radii.
         float r = length(vUV) * 6.0;
@@ -30,19 +30,5 @@ void main() {
         vec3 c = mix(vColor.rgb, vec3(max(vColor.r, max(vColor.g, vColor.b))), core * 0.55);
         float flicker = 0.93 + 0.07 * noise(uTime * 23.0);
         FragColor = vec4(c * (core + glow) * flicker, 1.0);
-    } else {
-        // Bullet hole: a black bore with a slightly ragged edge in a soft darkened ring (the
-        // crushed, scorched surface round it). uv 1 = the quad's edge = 2.5 hole radii. The colour
-        // carries the distance fade (WeaponFxRenderer), the alpha the hole's seed.
-        float seed = vColor.a * 40.0;
-        float ang = atan(vUV.y, vUV.x);
-        float r = length(vUV) * 2.5;
-        float ragged = 1.0 + 0.10 * sin(ang * 5.0 + seed) + 0.06 * sin(ang * 11.0 + seed * 2.3);
-        float bore = 1.0 - smoothstep(0.82, 1.0, r / ragged);
-        float ring = (1.0 - smoothstep(1.0, 2.5, r / (0.9 + 0.1 * ragged)));
-        float a = max(bore, ring * ring * 0.55) * vColor.r;
-        if (a < 0.003) discard;
-        const vec3 kHole = vec3(0.015, 0.013, 0.012);
-        FragColor = vec4(kHole * (1.0 - bore * 0.9), a);
     }
 }
