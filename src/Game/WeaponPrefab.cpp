@@ -211,15 +211,6 @@ void WeaponAttachments::Load(World& world, entt::entity root, std::array<int, 3>
     world.SyncActiveInHierarchy();
 }
 
-bool WeaponAttachments::Cycle(World& world, AttachmentKind kind) {
-    const int k = (int)kind, n = (int)m_Items[k].size();
-    if (n < 2) return false;
-    world.Registry.emplace_or_replace<DeactivatedTag>(m_Items[k][m_Selected[k]].Entity);
-    m_Selected[k] = (m_Selected[k] + 1) % n;
-    world.Registry.remove<DeactivatedTag>(m_Items[k][m_Selected[k]].Entity);
-    world.SyncActiveInHierarchy();
-    return true;
-}
 const WeaponAttachment* WeaponAttachments::Selected(AttachmentKind kind) const {
     const int k = (int)kind, i = m_Selected[k];
     return i >= 0 && i < (int)m_Items[k].size() ? &m_Items[k][i] : nullptr;

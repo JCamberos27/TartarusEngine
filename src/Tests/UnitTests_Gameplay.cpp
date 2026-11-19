@@ -290,15 +290,15 @@ void TestWeaponAttachments() {
     CHECK(glm::length(glm::vec3(pose[3])-glm::vec3(0,0,-.7f))<1e-5f);
     CHECK(attachments.ReferenceOpticPose(world,root,pose));
     CHECK(glm::length(glm::vec3(pose[3])-glm::vec3(0,.1f,0))<1e-5f);
-    CHECK(attachments.Cycle(world,AttachmentKind::Muzzle));
+    // A slot's saved selection (Load's `preferred`) picks those and switches the rest off.
+    const std::array<int,3> first=attachments.Indices();
+    attachments.Load(world,root,{{1-first[0],-1,1-first[2]}});
     CHECK(attachments.Selected(AttachmentKind::Muzzle)->FiringSounds=="quiet1.wav;quiet2.wav");
     CHECK(!attachments.OwnsEmitter(world,flash) && attachments.OwnsEmitter(world,otherFlash));
-    CHECK(attachments.Cycle(world,AttachmentKind::Muzzle));
-    CHECK(attachments.Selected(AttachmentKind::Muzzle)->FiringSoundProfile=="ak");
-    CHECK(!attachments.Cycle(world,AttachmentKind::Grip));
-    CHECK(attachments.Cycle(world,AttachmentKind::Optic));
     CHECK(world.Registry.all_of<InactiveTag>(optic) && !world.Registry.all_of<InactiveTag>(irons));
-    CHECK(attachments.Cycle(world,AttachmentKind::Optic));
+    attachments.Load(world,root,first);
+    CHECK(attachments.Selected(AttachmentKind::Muzzle)->FiringSoundProfile=="ak");
+    CHECK(attachments.Indices()==first);
     CHECK(std::abs(attachments.Selected(AttachmentKind::Optic)->AimBlendTime-.3f)<1e-5f);
     const auto saved=SceneSerializer::SaveEntitiesToString(world,{root});
     World clone; std::vector<entt::entity> created;

@@ -150,11 +150,6 @@ public:
                         const glm::mat4& thirdPersonGun = glm::mat4(1.0f), const Model* thirdPersonRig = nullptr,
                         const std::string& gunSocket = {});
     bool SplitPoses() const { return !m_Twins.empty(); }
-    // The hand anchor's move (FirstPersonPresentation::PlaceWorldWeapon): none - the world hand carries what it holds
-    // straight off the gun, and PlaceWorldWeapon's `holdingHand` puts a part in it on the solved world hand.
-    glm::mat4 CarriedMove() const { return glm::mat4(1.0f); }
-    float TwinAnchorWeight() const { return 0.0f; }
-    glm::vec3 CarriedHand() const { return glm::vec3(0.0f); }
     // Where the world gun is off the first-person one this frame (rigid, world): the third-person hold. Identity with no
     // split.
     const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }

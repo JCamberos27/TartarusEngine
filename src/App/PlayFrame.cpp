@@ -343,8 +343,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             glm::mat4 holdingHand(1.0f);
             const bool haveHolding = haveAnchor && firstPersonBody.BoneWorldMatrix(world, handAnchor.Hand, holdingHand);
             firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunDelta(),
-                                                     firstPersonBody.CarriedMove(), firstPersonBody.TwinAnchorWeight(),
-                                                     firstPersonBody.CarriedHand(), haveHolding ? &holdingHand : nullptr);
+                                                     haveHolding ? &holdingHand : nullptr);
         }
         if (weaponLab) weaponLab->AfterPose(world, firstPersonBody, firstPersonPresentation, player.Cam, gameDt);
         // This frame's rounds, down the bore from the muzzle: a hole where each struck.

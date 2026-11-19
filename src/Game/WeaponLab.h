@@ -54,7 +54,7 @@ private:
     std::string m_LastAction = "-";
     // The readouts.
     std::string m_State;
-    float m_Lock = 0.0f, m_Anchor = 0.0f, m_HandGap[2] = {0.0f, 0.0f}, m_Spare = -1.0f;
+    float m_Lock = 0.0f, m_HandGap[2] = {0.0f, 0.0f}, m_Spare = -1.0f;
     float m_GunJump = 0.0f; // this frame's gun residual change (cm), for the live trace
     float m_Trace[180] = {};
     int m_TraceAt = 0;

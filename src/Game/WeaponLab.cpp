@@ -79,7 +79,6 @@ void WeaponLab::AfterPose(const World& world, const FirstPersonBody& body, const
     m_State = p.CurrentState();
     FirstPersonWorldGunInput gi;
     m_Lock = p.WorldGunInput(gi) ? gi.Shouldered : 0.0f;
-    m_Anchor = body.TwinAnchorWeight();
     for (int h = 0; h < 2; ++h) m_HandGap[h] = body.TwinHandGap(h);
     m_Spare = p.SpareMagazineShown() ? p.SpareMagazineGap() : -1.0f;
     if (dt > 0.0f) {
@@ -235,7 +234,7 @@ void WeaponLab::DrawPanel(FirstPersonPresentation* p, bool playing) {
 
         ImGui::SeparatorText("Third-person hold");
         ImGui::Text("State      %s", m_State.c_str());
-        ImGui::Text("Stock lock %.2f    Hand anchor %.2f", m_Lock, m_Anchor);
+        ImGui::Text("Stock lock %.2f", m_Lock);
         ImGui::Text("Hands off grip  L %.1f cm  R %.1f cm", m_HandGap[0] * 100.0f, m_HandGap[1] * 100.0f);
         if (m_Spare >= 0.0f) ImGui::Text("Spare mag / shell in hand: %.1f cm from it", m_Spare * 100.0f);
         else ImGui::TextDisabled("Spare mag / shell: hidden");
