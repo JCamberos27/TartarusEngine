@@ -118,6 +118,18 @@ void Test_Blood_ExrZipsRoundTrip() {
     std::vector<std::uint8_t> bad = file;
     bad[0] = 0;
     CHECK(!ReadExr(bad, img, &err));
+    // Malformed files are refused, never read past their end: every truncation, and every header byte set to 0xFF.
+    bool anyTruncatedRead = false;
+    for (size_t n = 0; n < file.size(); ++n) {
+        const std::vector<std::uint8_t> cut(file.begin(), file.begin() + (std::ptrdiff_t)n);
+        anyTruncatedRead |= ReadExr(cut, img, &err);
+    }
+    CHECK(!anyTruncatedRead);
+    for (size_t i = 8; i < std::min<size_t>(file.size(), 400); ++i) {
+        std::vector<std::uint8_t> flipped = file;
+        flipped[i] = 0xFF;
+        (void)ReadExr(flipped, img, &err); // (only that it returns: true or false, no crash)
+    }
 }
 
 void Test_Blood_VatBuild() {
