@@ -452,7 +452,7 @@ bool MaterialAsset::Save() const {
     const auto& m = Mat;
     json j;
     j["factorsScaleMaps"] = true; // #102 — see UpgradeLegacyMapFactors
-    if (!m.Substrate.Albedo.empty())
+    if (!m.Substrate.Albedo.empty() || !m.Substrate.Preset.empty())
         j["substrate"] = SubstrateJson::Write<json>(m.Substrate, [](const std::string& p) { return ProjectPaths::Relativize(p); });
 
     if (!ShaderPath.empty()) {
@@ -612,6 +612,16 @@ bool MaterialAsset::Save() const {
         if (m.IOR                 != 1.5f) j["ior"]                = m.IOR;
         if (m.SubsurfaceEnabled)            j["subsurface"]         = true;
         if (m.ReflectionProbes)             j["reflectionProbes"]   = true;
+        // Shell fur: the v1 keys Load reads (non-defaults only, as the v2 branch writes them).
+        const Material::FurDesc furDef;
+        if (m.Fur.Enabled != furDef.Enabled) j["furEnabled"] = m.Fur.Enabled;
+        if (m.Fur.Length  != furDef.Length)  j["furLength"]  = m.Fur.Length;
+        if (m.Fur.Density != furDef.Density) j["furDensity"] = m.Fur.Density;
+        if (m.Fur.Shells  != furDef.Shells)  j["furShells"]  = m.Fur.Shells;
+        if (m.Fur.Gravity != furDef.Gravity) j["furGravity"] = m.Fur.Gravity;
+        if (m.Fur.Tint    != furDef.Tint)    j["furTint"]    = Vec3ToJson(m.Fur.Tint);
+        if (m.Fur.Rim     != furDef.Rim)     j["furRim"]     = m.Fur.Rim;
+        if (!FurMaskPath.empty())            j["furMask"]    = FurMaskPath;
     }
     // Queue / surface fields, both formats (#105 — v1 used to drop them).
     // Written explicitly when the shader declares a Queue, so choosing Opaque on a shader whose

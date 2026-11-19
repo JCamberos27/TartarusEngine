@@ -879,6 +879,9 @@ void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t staged
 }
 
 bool Texture::Reimport(const TextureImportSettings& settings) {
+    // A texture still on its way up (CreatePending): land that upload first, or the later UploadStep would put the
+    // old pixels over the reimport's texture (and leak the GL name this makes).
+    if (IsPendingUpload()) FinishUpload();
     int w, h, c;
     if (m_Memory.empty() && !stbi_info(m_Path.c_str(), &w, &h, &c)) {
         Log::Error("Texture: cannot reimport '" + m_Path + "' - file is missing or unreadable.", LogContext::Asset(m_Path));
