@@ -81,8 +81,9 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     entt::entity root = SceneSerializer::InstantiatePrefab(world, assets, path);
     if (root == entt::null) {
         // Put the scene back exactly as it was.
-        SceneSerializer::LoadFromString(world, assets, m_PrefabModeSceneSnapshot);
+        const bool restored = SceneSerializer::LoadFromString(world, assets, m_PrefabModeSceneSnapshot);
         RestorePrePrefabHistory();
+        if (!restored) KeepUnrestoredSnapshot(m_PrefabModeSceneSnapshot, "Open Prefab");
         EnsureUndoScene(world);
         m_PrefabModeSceneSnapshot.clear();
         Log::Error("Couldn't open prefab '" + path + "'.");
@@ -172,9 +173,10 @@ void EditorLayer::ExitPrefabMode(World& world, AssetLibrary& assets, bool save) 
     ClearSelection();
     m_HierarchyVisibleOrder.clear();
     m_HierarchyVisibleBuild.clear();
-    SceneSerializer::LoadFromString(world, assets, m_PrefabModeSceneSnapshot);
-    m_PrefabModeSceneSnapshot.clear();
+    const bool restored = SceneSerializer::LoadFromString(world, assets, m_PrefabModeSceneSnapshot);
     RestorePrePrefabHistory();
+    if (!restored) KeepUnrestoredSnapshot(m_PrefabModeSceneSnapshot, "Back to Scene"); // after: it marks the scene unsaved
+    m_PrefabModeSceneSnapshot.clear();
     m_EditPushedThisFrame = true; // the cleared selection is part of leaving, not a "Deselect" undo step
     EnsureUndoScene(world);
     const std::string was = m_PrefabModePath;

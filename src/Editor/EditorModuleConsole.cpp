@@ -73,6 +73,7 @@ struct Entry {
     int Count = 1;
     int EntityOrder = -1;  // #146 structured context; -1 / "" when the entry wasn't tagged
     std::string AssetPath;
+    unsigned long long Seq = 0; // stable identity: the log's trim shifts indices, never this
 };
 
 bool FetchEntry(const EditorModuleHostAPI& host, int index, Entry& out) {
@@ -85,6 +86,7 @@ bool FetchEntry(const EditorModuleHostAPI& host, int index, Entry& out) {
     out.EntityOrder = -1;
     if (host.LogGetEntryContext) host.LogGetEntryContext(index, &out.EntityOrder, &assetPath);
     out.AssetPath = assetPath ? assetPath : "";
+    out.Seq = host.LogGetEntrySeq ? host.LogGetEntrySeq(index) : (unsigned long long)index + 1;
     return true;
 }
 
@@ -186,10 +188,10 @@ bool LevelVisible(const EditorConsoleState& state, int level) {
 std::vector<int> g_FilteredIndices;
 std::vector<int> g_RowCounts;
 unsigned int g_FilterCacheRevision = (unsigned int)-1; // forces a rebuild on first draw
-int g_SelectedEntry = -1; // log index of the row picked for the detail pane; -1 = none
+unsigned long long g_SelectedSeq = 0; // Seq of the row picked for the detail pane; 0 = none
 // The newest log index already offered a flash (new errors flash once). Unprimed until the first
 // draw, so the backlog shown at startup or after a module reload never flashes.
-int  g_FlashSeenIndex = -1;
+unsigned long long g_FlashSeenSeq = 0;
 bool g_FlashPrimed = false;
 std::string g_FilterCacheFilter;
 bool g_FilterCacheShowInfo = true;
@@ -380,7 +382,7 @@ void Draw(const EditorModuleHostAPI& host) {
         g_FilterCacheCollapse = state.Collapse;
     }
     if (g_FilteredIndices.empty()) {
-        g_SelectedEntry = -1;
+        g_SelectedSeq = 0;
         EditorUIPrimitives::EmptyState(ICON_FA_TERMINAL, entryCount == 0 ? "No messages" : "Nothing matches the filter",
                                        entryCount == 0 ? "Logs, warnings and errors appear here." : "Clear the search or show more levels.");
         ImGui::End();
@@ -388,10 +390,21 @@ void Draw(const EditorModuleHostAPI& host) {
     }
     // The detail pane under the list: only while a row is selected (and still exists).
     Entry detailEntry;
-    bool hasDetail = g_SelectedEntry >= 0 && g_SelectedEntry < entryCount && FetchEntry(host, g_SelectedEntry, detailEntry);
-    if (!hasDetail) g_SelectedEntry = -1;
+    // Found again by Seq each frame: a trim moves it to a lower index, or drops it.
+    // Entries are in rising Seq order, so a binary search over the cheap Seq query finds it.
+    bool hasDetail = false;
+    if (g_SelectedSeq != 0 && host.LogGetEntrySeq) {
+        int lo = 0, hi = entryCount - 1;
+        while (lo <= hi) {
+            const int mid = (lo + hi) / 2;
+            const unsigned long long seq = host.LogGetEntrySeq(mid);
+            if (seq == g_SelectedSeq) { hasDetail = FetchEntry(host, mid, detailEntry); break; }
+            if (seq < g_SelectedSeq) lo = mid + 1; else hi = mid - 1;
+        }
+    }
+    if (!hasDetail) g_SelectedSeq = 0;
     if (hasDetail && ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
-        g_SelectedEntry = -1;
+        g_SelectedSeq = 0;
         hasDetail = false;
     }
     float detailH = 0.0f;
@@ -441,13 +454,13 @@ void Draw(const EditorModuleHostAPI& host) {
                 if (row % 2 == 1)
                     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, rowTop.y),
                         ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), rowTop.y + rowHeight), EditorTheme::U32(EditorTheme::Stripe));
-                const bool rowClicked = ImGui::Selectable("##row", entryIndex == g_SelectedEntry, ImGuiSelectableFlags_AllowDoubleClick,
+                const bool rowClicked = ImGui::Selectable("##row", entry.Seq == g_SelectedSeq, ImGuiSelectableFlags_AllowDoubleClick,
                                                           ImVec2(std::max(ImGui::GetContentRegionAvail().x, rowW), 0.0f));
                 {
                     ImDrawList* rowDl = ImGui::GetWindowDrawList();
                     // A new error flashes its row red once (Glass RowFlash, through the motion bridge).
-                    const ImGuiID flashId = (ImGuiID)entryIndex * 2654435761u ^ 0xE5507F1Au;
-                    if (g_FlashPrimed && entry.Level == EditorModuleLogLevel_Error && entryIndex > g_FlashSeenIndex)
+                    const ImGuiID flashId = (ImGuiID)entry.Seq * 2654435761u ^ 0xE5507F1Au;
+                    if (g_FlashPrimed && entry.Level == EditorModuleLogLevel_Error && entry.Seq > g_FlashSeenSeq)
                         EditorTheme::MotionPulse(flashId, EditorMotionToken::Flash);
                     const float fp = EditorTheme::MotionPulseProgress(flashId);
                     if (fp < 1.0f) {
@@ -460,8 +473,8 @@ void Draw(const EditorModuleHostAPI& host) {
                     // Never the backlog (unprimed at first draw), and only the newest kSlideCap of a burst, so a log
                     // storm doesn't animate thousands of rows.
                     constexpr int kSlideCap = 32;
-                    const ImGuiID slideId = (ImGuiID)entryIndex * 2246822519u ^ 0x5110E1A7u;
-                    if (g_FlashPrimed && entryIndex > g_FlashSeenIndex && entryIndex > g_FilteredIndices.back() - kSlideCap)
+                    const ImGuiID slideId = (ImGuiID)entry.Seq * 2246822519u ^ 0x5110E1A7u;
+                    if (g_FlashPrimed && entry.Seq > g_FlashSeenSeq && entryIndex > g_FilteredIndices.back() - kSlideCap)
                         EditorTheme::MotionPulse(slideId, EditorMotionToken::Slide);
                     const float sp = EditorTheme::MotionPulseProgress(slideId);
                     const float slide = sp < 1.0f ? EditorTheme::Ease::OutCubic(sp) : 1.0f;
@@ -506,7 +519,7 @@ void Draw(const EditorModuleHostAPI& host) {
                 const bool hasAssetRef = !hasEntityRef && host.PingAssetPath &&
                     (!assetRef.empty() || ParsePathRef(entry.Message, assetRef));
 
-                if (rowClicked) g_SelectedEntry = entryIndex;
+                if (rowClicked) g_SelectedSeq = entry.Seq;
                 if (rowClicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     if (hasEntityRef) host.SelectEntityByOrder(entityRef);
                     else if (hasAssetRef) host.PingAssetPath(assetRef.c_str());
@@ -559,9 +572,12 @@ void Draw(const EditorModuleHostAPI& host) {
             }
         }
         clipper.End();
-        // Every entry up to the newest shown has had its chance to flash. A cleared log restarts
-        // the indices, so the mark follows it down.
-        g_FlashSeenIndex = g_FilteredIndices.empty() ? -1 : g_FilteredIndices.back();
+        // Every entry up to the newest shown has had its chance to flash (Seq only rises, through
+        // trims and clears alike).
+        if (!g_FilteredIndices.empty()) {
+            Entry newest;
+            if (FetchEntry(host, g_FilteredIndices.back(), newest)) g_FlashSeenSeq = std::max(g_FlashSeenSeq, newest.Seq);
+        }
         g_FlashPrimed = true;
 
         // Only when something actually arrived, so scrolling back through history isn't yanked to
@@ -614,7 +630,7 @@ void Draw(const EditorModuleHostAPI& host) {
                 EditorTheme::PopFont();
             }
             ImGui::EndChild();
-            if (closeClicked) g_SelectedEntry = -1;
+            if (closeClicked) g_SelectedSeq = 0;
         }
         ImGui::EndChild();
     }

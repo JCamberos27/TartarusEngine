@@ -86,6 +86,10 @@ bool Triggered(const char* id);
 // when the context lapses mid-gesture (the cursor dragging out of the viewport).
 bool Held(const char* id, bool ignoreContext = false);
 
+// The binding's key went down this frame with exactly its modifiers, whatever the contexts (a
+// single chord only). For keys that work over every panel and floating window, like Undo / Redo.
+bool Pressed(const char* id);
+
 // GLFW-input variant for Ctx_App shortcuts the main loop evaluates before an ImGui frame
 // exists (F1-F4 play controls, F11 fullscreen). Polls Input:: directly; edge-triggered via
 // Input::IsKeyPressed. Single-chord only — a sequence's prefix is ignored here.

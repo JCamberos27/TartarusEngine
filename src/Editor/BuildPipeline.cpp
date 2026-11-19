@@ -122,14 +122,16 @@ std::vector<std::string> FindProjectScenes() {
     std::error_code ec;
     const fs::path dir = ProjectPaths::Resolve("scenes");
     for (auto it = fs::recursive_directory_iterator(dir, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
-        if (!it->is_regular_file() || it->path().extension() != ".json") continue;
-        out.push_back(fs::relative(it->path(), ProjectPaths::Root(), ec).generic_string());
+        std::error_code fec; // the throwing overload, on the UI thread, could take the editor down
+        if (!it->is_regular_file(fec) || it->path().extension() != ".json") continue;
+        out.push_back(fs::relative(it->path(), ProjectPaths::Root(), fec).generic_string());
     }
     std::sort(out.begin(), out.end());
     return out;
 }
 
-Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
+namespace {
+Report BuildUnguarded(const ProjectSettings::BuildSettings& s, Progress* progress) {
     const auto t0 = std::chrono::steady_clock::now();
     Report r;
     auto stage = [progress](Stage st) { if (progress) progress->StageNow.store((int)st); };
@@ -195,6 +197,8 @@ Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
     r.OutputDir = out.string();
     std::error_code ec;
     if (IsInside(out, projectRoot)) return fail("the output folder can't be inside the project folder.");
+    // Nor hold the project: a previous build's player.json in it would get the project cleared below.
+    if (IsInside(projectRoot, out)) return fail("the output folder can't contain the project folder.");
     if (IsInside(out, exeDir) || IsInside(exeDir, out)) return fail("the output folder can't contain, or be inside, the engine's own folder.");
     if (fs::exists(out, ec)) {
         // Only ever clear a folder that is recognisably a previous build.
@@ -297,6 +301,21 @@ Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
     r.Message = msg;
     Log::Info(std::string("Build: ") + msg + " -> " + r.OutputDir);
     return r;
+}
+} // namespace
+
+Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
+    // Runs on a worker whose future the editor reads on the UI thread: a filesystem error that
+    // throws (a file vanishing mid-walk, access denied) has to end as a failed build, not rethrow there.
+    try {
+        return BuildUnguarded(s, progress);
+    } catch (const std::exception& e) {
+        Report r;
+        r.Ok = false;
+        r.Message = std::string("Build failed: ") + e.what();
+        Log::Error(r.Message);
+        return r;
+    }
 }
 
 bool Run(const std::string& exePath) {

@@ -1070,7 +1070,12 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     // #107 — an asset entry's redo side holds the file as it is NOW, before we roll it back.
     redoEntry.AssetPath = m_UndoStack.back().AssetPath;
     redoEntry.AssetOnly = m_UndoStack.back().AssetOnly;
-    redoEntry.Files=EditorFileHistory::CaptureCurrent(m_UndoStack.back().Files);
+    try {
+        redoEntry.Files=EditorFileHistory::CaptureCurrent(m_UndoStack.back().Files);
+    } catch (const std::exception& e) { // a file in the step can't be read now (locked, a folder)
+        Log::Error(std::string("Undo could not read a file it restores; history retained: ") + e.what());
+        return;
+    }
     if(!EditorFileHistory::Restore(m_UndoStack.back().Files)) {Log::Error("Undo could not restore files; history retained.");return;}
     ReloadHistoryFiles(assets,m_UndoStack.back().Files);
     if (!redoEntry.AssetPath.empty()) redoEntry.AssetJson = ReadTextFile(redoEntry.AssetPath);
@@ -1115,7 +1120,12 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     undoEntry.SelectionOnly = m_RedoStack.back().SelectionOnly; // Q6 — carry the flag across stacks
     undoEntry.AssetPath = m_RedoStack.back().AssetPath; // #107 — see Undo()
     undoEntry.AssetOnly = m_RedoStack.back().AssetOnly;
-    undoEntry.Files=EditorFileHistory::CaptureCurrent(m_RedoStack.back().Files);
+    try {
+        undoEntry.Files=EditorFileHistory::CaptureCurrent(m_RedoStack.back().Files);
+    } catch (const std::exception& e) { // a file in the step can't be read now (locked, a folder)
+        Log::Error(std::string("Redo could not read a file it restores; history retained: ") + e.what());
+        return;
+    }
     if(!EditorFileHistory::Restore(m_RedoStack.back().Files)) {Log::Error("Redo could not restore files; history retained.");return;}
     ReloadHistoryFiles(assets,m_RedoStack.back().Files);
     if (!undoEntry.AssetPath.empty()) undoEntry.AssetJson = ReadTextFile(undoEntry.AssetPath);
@@ -1242,6 +1252,22 @@ void EditorLayer::UpdatePlayModeAudio(const World& world, float dt, const glm::v
     }
 }
 
+// A scene snapshot that couldn't be loaded back (Stop, leaving Prefab Mode): written to
+// Library/Recovery so nothing is lost, with an error saying what to do. The open scene file on
+// disk is untouched by the failure.
+void EditorLayer::KeepUnrestoredSnapshot(const std::string& snapshot, const char* action) {
+    const std::filesystem::path dir = std::filesystem::u8path(ProjectPaths::Resolve("Library/Recovery"));
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path file = dir / (std::string(action) + "_unrestored_scene.json");
+    const bool kept = !snapshot.empty() && AtomicFile::WriteBytes(file, snapshot);
+    Log::Error(std::string(action) + ": the scene couldn't be restored, so the editor still shows the previous state. "
+               "Don't save it over the scene file: use File > Revert Scene." +
+               (kept ? " The scene as it was is kept in " + ProjectPaths::Relativize(file.u8string()) + "." : ""));
+    m_SavedUndoDepth = -1; // never "clean": the open world isn't the scene file's content
+    m_Dirty = true;
+}
+
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     FinishGlobalUndo(world,true);
     struct Applying {bool& Flag;Applying(bool& flag):Flag(flag){Flag=true;}~Applying(){Flag=false;}} applying(m_GlobalUndoApplying);
@@ -1271,7 +1297,11 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     // Save after Stop writes Play's warm-ups (the whole wardrobe's textures) into the scene.
     // Before the reload, so nothing the restored scene loads is forgotten.
     assets.EndPlayScope();
-    SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
+    if (!SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot)) {
+        // The world still holds Play's state. Keep the pre-Play scene where it can be recovered and
+        // say so: a Save now would write Play's state over the scene file.
+        KeepUnrestoredSnapshot(m_PlayModeSnapshot, "Stop");
+    }
     m_PlayModeSnapshot.clear();
 
     // Global transactions record only authored file/selection changes while Playing.

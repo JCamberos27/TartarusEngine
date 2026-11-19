@@ -4,6 +4,7 @@
 
 #include "EditorLayer.h"
 #include "EditorSound.h"
+#include "Shortcuts.h"
 #include "GameModuleBuild.h"
 #include "EditorPanels.h"
 #include "EditorLayerInternal.h"
@@ -69,6 +70,13 @@
 using namespace EditorInternal;
 
 namespace {
+
+// A menu item's shortcut hint, as the Shortcuts table binds it now (a rebind shows here too).
+std::string KeyHint(const char* id) {
+    const Shortcuts::Shortcut* sc = Shortcuts::Find(id);
+    return sc && sc->Current.IsBound() ? Shortcuts::ToString(sc->Current) : std::string();
+}
+#define KEY_HINT(id) (KeyHint(id).c_str())
 
 // A run of action-bar buttons that folds away when it doesn't apply (Play mode) and comes back
 // after: its width and alpha ease together (Glass ToolbarFold), so the bar around it narrows and
@@ -603,26 +611,26 @@ float EditorLayer::StatusBarHeightPx() const { return kStatusBarHeight * m_UISca
 // The Edit menu: the commands every editor puts there, each one already a shortcut elsewhere.
 void EditorLayer::DrawEditMenuBody(World& world, AssetLibrary& assets) {
     const bool sel = HasAnySelection();
-    if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Undo", "Ctrl+Z", false, !m_UndoStack.empty())) Undo(world, assets);
-    if (ImGui::MenuItem(ICON_FA_ROTATE_RIGHT "  Redo", "Ctrl+Y", false, !m_RedoStack.empty())) Redo(world, assets);
+    if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Undo", KEY_HINT("editor.undo"), false, !m_UndoStack.empty())) Undo(world, assets);
+    if (ImGui::MenuItem(ICON_FA_ROTATE_RIGHT "  Redo", KEY_HINT("editor.redo"), false, !m_RedoStack.empty())) Redo(world, assets);
     ImGui::Separator();
-    if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, sel)) CopySelection(world);
-    if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V")) PasteClipboard(world, assets);
-    if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false, sel)) DuplicateSelection(world, assets);
-    if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del", false, sel)) DeleteSelection(world);
+    if (ImGui::MenuItem(ICON_FA_COPY "  Copy", KEY_HINT("edit.copy"), false, sel)) CopySelection(world);
+    if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", KEY_HINT("edit.paste"))) PasteClipboard(world, assets);
+    if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", KEY_HINT("edit.duplicate"), false, sel)) DuplicateSelection(world, assets);
+    if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", KEY_HINT("edit.delete"), false, sel)) DeleteSelection(world);
     ImGui::Separator();
-    if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Select All", "Ctrl+A")) SelectAllEntities(world);
+    if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Select All", KEY_HINT("edit.selectAll"))) SelectAllEntities(world);
     ImGui::Separator();
-    if (ImGui::MenuItem(ICON_FA_SLIDERS "  Preferences...", "Ctrl+,")) OpenPreferences();
-    if (ImGui::MenuItem(ICON_FA_GEAR "  Project Settings...", "Ctrl+Shift+P")) OpenProjectSettings();
+    if (ImGui::MenuItem(ICON_FA_SLIDERS "  Preferences...", KEY_HINT("editor.preferences"))) OpenPreferences();
+    if (ImGui::MenuItem(ICON_FA_GEAR "  Project Settings...", KEY_HINT("project.settings"))) OpenProjectSettings();
 }
 
 void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
-            if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
+            if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", KEY_HINT("editor.newScene"))) {
                 RequestNewScene(world, assets);
             }
             ImGui::Separator();
-            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...", "Ctrl+O")) {
+            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...", KEY_HINT("editor.openScene"))) {
                 RequestOpenScene(world, assets, FileDialog::OpenFile(
                     "Scene Files\0*.json\0All Files\0*.*\0", m_Window));
             }
@@ -653,12 +661,12 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             // meant to keep. Editing itself stays fully live — this only gates the two ways to
             // write it to disk. AllowWhenDisabled so the "why" tooltip still shows on the greyed
             // item, not just when it's enabled.
-            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S", false, !m_InPlayMode)) {
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", KEY_HINT("editor.save"), false, !m_InPlayMode)) {
                 DoSave(world, assets);
             }
             if (m_InPlayMode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                 EditorUI::SetTooltip("Disabled while Playing \xE2\x80\x94 changes here revert on Stop anyway.");
-            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", "Ctrl+Shift+S", false, !m_InPlayMode)) {
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", KEY_HINT("editor.saveAs"), false, !m_InPlayMode)) {
                 DoSaveAs(world, assets);
             }
             if (m_InPlayMode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
@@ -728,9 +736,9 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             }
 
             EditorUIPrimitives::SectionHeader("Selection");
-            if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Selection Back", "Ctrl+[", false, CanSelectionHistoryBack()))
+            if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Selection Back", KEY_HINT("select.historyBack"), false, CanSelectionHistoryBack()))
                 SelectionHistoryBack(world);
-            if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", "Ctrl+]", false, CanSelectionHistoryForward()))
+            if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", KEY_HINT("select.historyForward"), false, CanSelectionHistoryForward()))
                 SelectionHistoryForward(world);
 
             // #4 item 7 — Draw mode moved out: it has its own viewport control (the left tool

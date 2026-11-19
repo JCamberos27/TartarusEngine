@@ -68,7 +68,9 @@ inline bool IsVertexDraggable(World& world, entt::entity entity) {
     // holding V over a selected light/empty would reach FindVertexUnderCursor's unchecked
     // get<RenderableComponent>(), which is undefined behavior (a crash) on an entity that
     // doesn't have one.
-    if (!world.Registry.all_of<RenderableComponent>(entity)) return false;
+    // A renderable without a model (added from the Inspector, a failed import) has none either.
+    const auto* rc = world.Registry.try_get<RenderableComponent>(entity);
+    if (!rc || !rc->ModelRef) return false;
     // Parented objects are fine (#184): the grab, drag plane and snap targets are all world
     // space, and UpdateVertexDrag converts the result into the parent's frame (#224).
     return true;

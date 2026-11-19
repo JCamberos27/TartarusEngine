@@ -116,6 +116,13 @@ void TestEditorNavigationUndo() {
         CHECK(AtomicFile::WriteBytes(path,"mixed",true));world.ExposureEV+=1;EditorHistoryTestAccess::Edit(editor,world);
         EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();EditorHistoryTestAccess::Undo(editor,world,assets);
         CHECK(*EditorFileHistory::Capture(path).Bytes=="after");CHECK(SceneSerializer::SaveToString(world,assets)==preEdit);
+        // A file the next step restores can't be read any more (a folder now): Undo logs and keeps
+        // the history instead of throwing out of the frame.
+        std::filesystem::remove(path);std::filesystem::create_directory(path);
+        const size_t undoDepth=EditorHistoryTestAccess::Count(editor);
+        bool threw=false;
+        try{EditorHistoryTestAccess::Undo(editor,world,assets);}catch(...){threw=true;}
+        CHECK(!threw);CHECK(EditorHistoryTestAccess::Count(editor)==undoDepth);
         std::filesystem::remove(path);
     }
     AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);

@@ -104,13 +104,15 @@ std::vector<std::string> FindTextureUsages(const World& world, const Texture* te
     auto view = world.Registry.view<const NameComponent, const RenderableComponent>(entt::exclude<LevelGeometryTag>);
     for (auto entity : view) {
         const auto& [name, renderable] = view.get<const NameComponent, const RenderableComponent>(entity);
+        // Every slot: its override material when it has one, else the model's imported one.
         bool used = false;
-        if (!renderable.Materials.empty() && renderable.Materials[0]) {
-            used = MaterialUsesTexture(renderable.Materials[0]->Mat, tex);
-        } else {
-            for (int i = 0; i < renderable.ModelRef->MeshCount(); ++i) {
-                if (MaterialUsesTexture(renderable.ModelRef->MeshMaterial(i), tex)) { used = true; break; }
-            }
+        const int meshes = renderable.ModelRef ? renderable.ModelRef->MeshCount() : 0;
+        const int slots = std::max(meshes, (int)renderable.Materials.size());
+        for (int i = 0; i < slots && !used; ++i) {
+            if (i < (int)renderable.Materials.size() && renderable.Materials[i])
+                used = MaterialUsesTexture(renderable.Materials[i]->Mat, tex);
+            else if (i < meshes)
+                used = MaterialUsesTexture(renderable.ModelRef->MeshMaterial(i), tex);
         }
         if (used) names.push_back(name.Name.empty() ? "(unnamed)" : name.Name);
     }

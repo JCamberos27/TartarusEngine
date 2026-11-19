@@ -1802,7 +1802,8 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
                 std::string texPath((const char*)payload->Data);
-                mat.*texSlot = assets.LoadTexture(texPath);
+                mat.*texSlot = LoadTextureForSlot(assets, texPath, texSlot); // as the picker: a normal / data map stays linear
+                DefaultEmissiveTint(mat, texSlot);
                 save();
             }
             ImGui::EndDragDropTarget();
@@ -5692,8 +5693,8 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
                     std::string texPath((const char*)payload->Data);
                     PushUndo(world, std::string("Set ") + label + " Map");
-                    auto tex = assets.LoadTexture(texPath);
-                    for (Material* mm : mats) mm->*texSlot = tex;
+                    auto tex = LoadTextureForSlot(assets, texPath, texSlot); // as the picker above
+                    for (Material* mm : mats) { mm->*texSlot = tex; DefaultEmissiveTint(*mm, texSlot); }
                 }
                 ImGui::EndDragDropTarget();
             }
@@ -6144,6 +6145,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         ImGui::TextUnformatted("Slot 0");
         ImGui::SameLine();
         const float clearW = nCustom > 0 ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        bool slotAssigned = false;
         if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
         if (ImGui::Button(btnLabel.c_str(), ImVec2(-clearW - FLT_MIN, 0))) {
             ImGui::OpenPopup("##matPicker");
@@ -6157,7 +6159,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     if (rc->Materials.empty()) rc->Materials.push_back(ma);
                     else rc->Materials[0] = ma;
                 }
-                return; // slots assigned; PBR editor not relevant
+                slotAssigned = true; // the PBR editor below isn't drawn this frame
             }
         }
         if (missing) ImGui::PopStyleColor();
@@ -6172,10 +6174,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     if (rc->Materials.empty()) rc->Materials.push_back(ma);
                     else rc->Materials[0] = ma;
                 }
-                return;
+                slotAssigned = true;
             }
             ImGui::EndDragDropTarget();
         }
+        if (slotAssigned) return; // every ImGui scope opened above is closed by now
         if (nCustom > 0) {
             ImGui::SameLine();
             if (ActionButton(ICON_FA_XMARK, "Remove material override from all selected", false,

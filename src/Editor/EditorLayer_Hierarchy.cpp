@@ -2163,14 +2163,15 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     }
     // #236 A2 — prefab-instance actions, only on an instance root.
     if (hasEntity && world.Registry.all_of<PrefabInstanceComponent>(entity)) {
-        const auto& pi = world.Registry.get<PrefabInstanceComponent>(entity);
+        // A copy: the click below removes the component this frame, before the tooltip reads it.
+        const std::string source = world.Registry.get<PrefabInstanceComponent>(entity).SourcePath;
         if (ImGui::MenuItem(ICON_FA_LINK_SLASH "  Unpack Prefab Instance")) {
             PushUndo(world, "Unpack Prefab");
             world.Registry.remove<PrefabInstanceComponent>(entity);
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Break the link to %s.\nThe objects stay; they just stop tracking the prefab.",
-                                 pi.SourcePath.c_str());
+                                 source.c_str());
     }
 
     ImGui::Separator();

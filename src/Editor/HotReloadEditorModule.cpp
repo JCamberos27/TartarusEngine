@@ -127,6 +127,10 @@ bool LogGetEntryFn(int index, int* outLevel, const char** outMessage, const char
     return true;
 }
 
+unsigned long long LogGetEntrySeqFn(int index) {
+    const std::vector<LogEntry>& entries = Log::Entries();
+    return index >= 0 && (size_t)index < entries.size() ? entries[(size_t)index].Seq : 0ull;
+}
 int LogCountOfFn(int level) { return Log::CountOf((LogLevel)level); }
 void LogClearFn() {
     Log::Clear();
@@ -617,6 +621,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.GetMotionHooks = &GetHostMotionHooks;
     api.PlayUISound = &HostPlayUISound;
     api.NoteUIPress = &HostNoteUIPress;
+    api.LogGetEntrySeq = &LogGetEntrySeqFn;
     return api;
 }
 
