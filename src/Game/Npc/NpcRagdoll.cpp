@@ -225,7 +225,7 @@ NpcRagdollMotor::Group NpcRagdollMotor::GroupOf(int part) {
     }
 }
 
-bool NpcRagdollMotor::IsHeadHit(int hitPart) { return hitPart == 2 || hitPart == NpcRagdoll::kNeck; }
+bool NpcRagdollMotor::IsHeadHit(int hitPart) { return hitPart == NpcRagdoll::kHead || hitPart == NpcRagdoll::kNeck; }
 
 float NpcRagdollMotor::LegLead(const Fall& fall, int part) {
     const RagDef& rd = kRagDefs[std::clamp(part, 0, NpcRagdoll::kRagParts - 1)];
@@ -266,7 +266,7 @@ float NpcRagdollMotor::RelaxStrength(const RagdollSettingsComponent& cfg, float 
 
 float NpcRagdollMotor::PartStrength(const RagdollSettingsComponent& cfg, int part, float t, int hitPart, const Fall* fall) {
     part = std::clamp(part, 0, NpcRagdoll::kRagParts - 1);
-    if (part == 0) return 1.0f; // the pelvis has no joint
+    if (part == NpcRagdoll::kPelvis) return 1.0f; // the pelvis has no joint
     const Group g = GroupOf(part);
     const bool legs = g == Group::Legs;
     const bool headKill = IsHeadHit(hitPart);
@@ -279,7 +279,8 @@ float NpcRagdollMotor::PartStrength(const RagdollSettingsComponent& cfg, int par
     const float curve = (1.0f - x) * (1.0f - x);
     float scale = legs ? cfg.StaggerLegStrength : 1.0f;
     // The struck joint takes the round instead of holding against it: the part's own (a hit pelvis: both hips; a hit head: the neck too).
-    const bool struck = part == hitPart || (hitPart == 0 && (part == 7 || part == 9)) || (hitPart == 2 && part == NpcRagdoll::kNeck);
+    const bool struck = part == hitPart || (hitPart == NpcRagdoll::kPelvis && (part == NpcRagdoll::kThighL || part == NpcRagdoll::kThighR)) ||
+                        (hitPart == NpcRagdoll::kHead && part == NpcRagdoll::kNeck);
     if (struck) scale *= cfg.HitWeakness;
     const float residual = std::clamp(cfg.ToneResidual, 0.0f, 1.0f);
     const float s = residual + (1.0f - residual) * curve * std::clamp(scale, 0.0f, 1.0f);
@@ -474,20 +475,22 @@ void NpcRagdollMotor::Update(float dt) {
 bool NpcRagdollMotor::Lying() const {
     const RagdollSettingsComponent& c = *m_Cfg;
     float p[3], q[4], chest[3];
-    if (!PhysicsWorld::GetRagdollPart(m_Id, 0, p, q) || !PhysicsWorld::GetRagdollPart(m_Id, 1, chest, q)) return true;
+    if (!PhysicsWorld::GetRagdollPart(m_Id, NpcRagdoll::kPelvis, p, q) || !PhysicsWorld::GetRagdollPart(m_Id, NpcRagdoll::kChest, chest, q)) return true;
     glm::vec3 axis[NpcRagdoll::kRagParts];
-    for (int part : {0, 7, 8, 9, 10}) { // the trunk and the legs: what the knee and hip angles read
+    for (int part : {NpcRagdoll::kPelvis, NpcRagdoll::kThighL, NpcRagdoll::kCalfL, NpcRagdoll::kThighR, NpcRagdoll::kCalfR}) { // what the angles read
         float pp[3], qq[4];
         if (!PhysicsWorld::GetRagdollPart(m_Id, part, pp, qq)) return true; // (as the pelvis read above: unreadable = lying)
         axis[part] = glm::quat(qq[3], qq[0], qq[1], qq[2]) * glm::vec3(1.0f, 0.0f, 0.0f);
     }
     const auto angle = [&](int a, int b) { return glm::degrees(std::acos(std::clamp(glm::dot(axis[a], axis[b]), -1.0f, 1.0f))); };
     // A knee's flexion is the angle between thigh and calf; a hip's is how far the thigh has come toward the trunk's line (0 = in line).
-    if (std::max(angle(7, 8), angle(9, 10)) > c.RestKneeMax) return false;
-    if (180.0f - std::min(angle(0, 7), angle(0, 9)) > c.RestHipMax) return false;
+    using R = NpcRagdoll;
+    if (std::max(angle(R::kThighL, R::kCalfL), angle(R::kThighR, R::kCalfR)) > c.RestKneeMax) return false;
+    if (180.0f - std::min(angle(R::kPelvis, R::kThighL), angle(R::kPelvis, R::kThighR)) > c.RestHipMax) return false;
     // On its side (one shoulder over the other) the hips are as high as they are wide and the stacked legs hold the top one up.
     float l[3], r[3], lq[4];
-    const bool side = PhysicsWorld::GetRagdollPart(m_Id, 3, l, lq) && PhysicsWorld::GetRagdollPart(m_Id, 5, r, lq) && std::fabs(l[1] - r[1]) > 0.15f;
+    const bool side = PhysicsWorld::GetRagdollPart(m_Id, R::kUpperArmL, l, lq) && PhysicsWorld::GetRagdollPart(m_Id, R::kUpperArmR, r, lq) &&
+                      std::fabs(l[1] - r[1]) > 0.15f;
     return p[1] <= c.RestPelvisMax + (side ? 0.08f : 0.0f) && chest[1] <= c.RestChestMax;
 }
 
@@ -495,7 +498,7 @@ bool NpcRagdollMotor::TipPropped() {
     // A dead arm doesn't stand: a segment pointing well up (its far end over its joint) has only come to rest balanced, and asleep
     // there it would stay raised for good. It gets a small shove over (the way it already leans), as gravity would given time.
     float pelvis[3], pq[4];
-    if (!PhysicsWorld::GetRagdollPart(m_Id, 0, pelvis, pq)) return false;
+    if (!PhysicsWorld::GetRagdollPart(m_Id, NpcRagdoll::kPelvis, pelvis, pq)) return false;
     for (int part : {3, 4, 5, 6}) {
         float p[3], q[4];
         if (!PhysicsWorld::GetRagdollPart(m_Id, part, p, q)) continue;
@@ -754,9 +757,10 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
     // Powered at first: the joints hold the death pose (their drive targets are the pose they were built in).
     m_Stiffness = cfg.DriveStiffness; m_Damping = cfg.DriveDamping; m_DistalDamping = cfg.DistalJointDamping;
     m_Powered = cfg.PoweredRagdoll;
-    for (int i = 0; i < kRagParts; ++i)
-        m_PartFade[i] = m_Powered ? (NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Legs ? cfg.StaggerTime : 0.0f) + (NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Legs ? cfg.LegsToneTime : NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Neck ? cfg.NeckToneTime : NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Arms ? cfg.ArmsToneTime : cfg.SpineToneTime)
-                                  : PartFade(&cfg, i);
+    for (int i = 0; i < kRagParts; ++i) {
+        const NpcRagdollMotor::Group g = NpcRagdollMotor::GroupOf(i);
+        m_PartFade[i] = m_Powered ? (g == NpcRagdollMotor::Group::Legs ? cfg.StaggerTime : 0.0f) + GroupTime(cfg, g) : PartFade(&cfg, i);
+    }
     if (!m_Powered) PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness, m_Damping);
     m_Drive = 1.0f;
     m_Time = 0.0f;
@@ -917,7 +921,7 @@ glm::vec3 NpcRagdoll::PartPosition(int part) const {
     return glm::vec3(p[0], p[1], p[2]);
 }
 
-glm::vec3 NpcRagdoll::Root() const { return PartPosition(0); }
+glm::vec3 NpcRagdoll::Root() const { return PartPosition(kPelvis); }
 
 // ---- Hit flinch --------------------------------------------------------------------------------------------------------
 

@@ -830,7 +830,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
                 n.Ragdoll->HitCorpse(part, d, amount, point, m_RagdollCfg);
                 if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.5f);
                 if (m_FleshHits.size() < 64)
-                    m_FleshHits.push_back({point, d, entity, part, amount, false, part == 2, true, weapon.Pellets, origin, true});
+                    m_FleshHits.push_back({point, d, entity, part, amount, false, part == NpcRagdoll::kHead, true, weapon.Pellets, origin, true});
             }
             return true;
         }
@@ -981,7 +981,8 @@ void NpcDirector::UpdatePersistence(World& world, const PlayerSnapshot& p) {
             n->NextSightCheck = m_Now + 0.25f;
             bool seen = false;
             if (n->Ragdoll) {
-                for (int part : {0, 1, 2}) if (!seen) seen = PlayerSees(p, n->Ragdoll->PartPosition(part));
+                for (int part : {NpcRagdoll::kPelvis, NpcRagdoll::kChest, NpcRagdoll::kHead})
+                    if (!seen) seen = PlayerSees(p, n->Ragdoll->PartPosition(part));
             } else {
                 seen = PlayerSees(p, n->Feet + glm::vec3(0.0f, 0.5f, 0.0f));
             }
