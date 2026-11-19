@@ -261,9 +261,9 @@ void TestWeaponAttachments() {
         auto& m=world.Registry.emplace<MuzzleAttachmentComponent>(owner);
         m.MuzzleTransform="Flash"; m.MuzzleFlash="Flash"; m.FiringSounds=sounds; m.FiringSoundProfile=profile;
     };
-    auto opticAttachment=[&](entt::entity owner,bool reference,float blend) -> OpticAttachmentComponent& {
+    auto opticAttachment=[&](entt::entity owner,bool reference) -> OpticAttachmentComponent& {
         auto& o=world.Registry.emplace<OpticAttachmentComponent>(owner);
-        o.AimPoint="Aim"; o.DefaultOptic=reference; o.AimBlendTime=blend; return o;
+        o.AimPoint="Aim"; o.DefaultOptic=reference; return o;
     };
     auto muzzle=child(root,"Standard muzzle"), otherMuzzle=child(root,"Suppressor");
     auto flash=child(muzzle,"Flash",{0,0,-.7f}), otherFlash=child(otherMuzzle,"Flash",{0,0,-.9f});
@@ -275,11 +275,11 @@ void TestWeaponAttachments() {
     auto grip=child(root,"Grip"); world.Registry.emplace<GripAttachmentComponent>(grip);
     auto irons=child(root,"Irons"), optic=child(root,"Red dot");
     child(irons,"Aim",{0,.1f,0}); child(optic,"Aim",{0,.2f,-.1f});
-    opticAttachment(irons,true,.2f);
-    opticAttachment(optic,false,.3f);
+    opticAttachment(irons,true);
+    opticAttachment(optic,false);
     world.Registry.emplace<DeactivatedTag>(irons);
     // A switched-off attachment is not one of the choices.
-    auto disabled=child(root,"Disabled optic"); opticAttachment(disabled,false,.2f).Enabled=false;
+    auto disabled=child(root,"Disabled optic"); opticAttachment(disabled,false).Enabled=false;
     WeaponAttachments attachments; attachments.Load(world,root);
     CHECK(attachments.Count(AttachmentKind::Muzzle)==2 && attachments.Count(AttachmentKind::Optic)==2);
     CHECK(attachments.Selected(AttachmentKind::Muzzle)->Entity==muzzle);
@@ -299,7 +299,7 @@ void TestWeaponAttachments() {
     attachments.Load(world,root,first);
     CHECK(attachments.Selected(AttachmentKind::Muzzle)->FiringSoundProfile=="ak");
     CHECK(attachments.Indices()==first);
-    CHECK(std::abs(attachments.Selected(AttachmentKind::Optic)->AimBlendTime-.3f)<1e-5f);
+    CHECK(attachments.Selected(AttachmentKind::Optic)->Entity==optic);
     const auto saved=SceneSerializer::SaveEntitiesToString(world,{root});
     World clone; std::vector<entt::entity> created;
     CHECK(SceneSerializer::AppendEntitiesFromString(clone,assets,saved,created));

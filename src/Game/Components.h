@@ -572,7 +572,6 @@ struct OpticAttachmentComponent {
     bool Enabled = true;
     std::string AimPoint = "Aim Point"; // its local -Z points along the sight line
     bool DefaultOptic = false;          // the iron-sight aim point the weapon's ADS animation was made for
-    float AimBlendTime = 0.2f;          // seconds to move between aim points when changing optics while aiming
 };
 
 // #165 - the built-in first-person player, as a component. In Play the player spawns at this
@@ -674,18 +673,11 @@ struct FirstPersonBodyComponent {
     // Motion matching, unarmed: how much of the mocap head's own motion the eye rides (0 = its slow average, within Eye Slack -
     // the stabilized camera; 1 = the head as captured: the jog's bob and sway). Armed, the eye stays the rig's.
     float MmHeadRide = 1.0f;
-    // 0 = the capsule moves exactly as the clips travel (root motion), 1 = as the input asks
-    // (the clips only animate). Between: a blend - heavier and more grounded toward 0.
-    float Responsiveness = 0.0f;
-    float ParamSmoothing = 0.12f;  // seconds the MoveX / MoveY parameters take to follow the input
     float WalkSpeed = 1.53f;       // m/s asked of the blend tree when walking - the default gait (the walk clips' speed)
     float RunSpeed = 3.26f;        // ... and with Shift held: the jog (the jog clips' speed)
     float SprintSpeed = 4.72f;     // ... and while sprinting (the run clip's)
-    // The capsule's own run / sprint speeds when they differ from the clips' (0 = the clips' Run /
-    // Sprint Speed). With Responsiveness up, the gait clips then play faster to keep pace.
+    // The capsule's own run speed when it differs from the clips' (0 = the clips' Run Speed).
     float PlayerRunSpeed = 0.0f;
-    float PlayerSprintSpeed = 0.0f;
-    float MaxPlayRate = 1.5f;      // the fastest the gait clips play, x authored
     std::string HeadBone = "head";
     // The eyes, from the head bone, in the body's frame (x right, y up, z forward), metres.
     glm::vec3 CameraOffset{0.0f, 0.08f, 0.1f};
@@ -724,12 +716,6 @@ struct FirstPersonBodyComponent {
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
-    // Model-space blend toward the standing/crouched idle spine. At full stability only
-    // spine_01 (10%) and spine_02 (5%) retain gait motion, including inherited pelvis sway.
-    // Pelvis and legs retain the full lower-body pose. Also copied to NPCs at Play.
-    // Applied before view aim and limb IK; 0 = authored gait, 1 = a stable upper spine.
-    // Crossfades out for crouch transitions, jumping and landing.
-    float SpineStability = 1.0f;
     // ---- lane A ----
     // How the spine's turns (view pitch, twist, shoulder line) are shared over spine_01..05, pelvis alpha:
     // the default is the even spread. Used by the player body and, copied at Play, by NPCs.
@@ -816,21 +802,7 @@ struct FirstPersonBodyComponent {
     // stay attached), which reach toward the gun - in view they'd bulge into the camera.
     std::string CameraHiddenBones = "clavicle_l, clavicle_r, upperarm_l, upperarm_r"; // Camera Hidden Bones
     float ArmsEaseOut = 0.1f; // Arms Ease Out
-    float TurnLagFloor = 90.0f; // Turn Lag Floor
-    float TurnLagMargin = 5.0f; // Turn Lag Margin
     float TurnEndAngle = 8.0f; // Turn End Angle
-    float TurnMinTime = 0.3f; // Turn Min Time
-    float TurnTimeout = 4.0f; // Turn Timeout
-    float TurnMoveEase = 0.08f; // Turn Move Ease
-    float StartIdleTime = 0.25f; // Start Idle Time
-    float StartMaxMove = 0.6f; // Start Max Move
-    float StopMinRunTime = 0.6f; // Stop Min Run Time
-    float StopMinRunTimeCrouched = 0.7f; // Stop Min Run Time (Crouched)
-    float StopMinSpeed = 1.2f; // Stop Min Speed
-    float StopMinSpeedCrouched = 0.6f; // Stop Min Speed (Crouched)
-    float StopDebounce = 0.05f; // Stop Debounce
-    float StopRunForward = 0.7f; // Stop Run Forward
-    float AirborneDelay = 0.15f; // Airborne Delay
     // Foot lock (IK::FootLock): a planted foot held in the world; the player body and the soldiers
     bool FootLockEnabled = true; // Foot Lock
     float FootLockHeight = 0.02f; // Foot Lock Height (m over the foot's lowest)
@@ -1929,7 +1901,6 @@ struct ReverbBusComponent {
     float SendActions = 1.0f;          // each gun's own mags, bolts, pumps, shells
     float SendImpacts = 1.0f;          // bullet impacts, flesh hits, flybys
     float SendCasings = 1.0f;
-    float SendVoice = 1.0f;            // (the voice system is gone: the key still loads, nothing reads it)
     float SendShot = 1.0f;             // the close / mech / sub layers of a gunshot: the crack feeds the room
     float SendTail = 0.0f;             // the recorded tails already hold their room
     // Occlusion: a 3D voice whose line of sight from the listener is blocked by solid geometry is low-passed.

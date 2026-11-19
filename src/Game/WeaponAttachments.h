@@ -13,7 +13,6 @@ struct WeaponAttachment {
     entt::entity Flash = entt::null;
     std::string FiringSounds;
     std::string FiringSoundProfile;
-    float AimBlendTime = .2f;
     bool DefaultOptic = false;
 };
 // Reads the public fields of the prefab's Attachment scripts. References are relative hierarchy paths.

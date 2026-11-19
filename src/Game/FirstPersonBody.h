@@ -59,17 +59,15 @@ struct FirstPersonHandAnchor {
     float Off = 1.0f;                      // ... and how far off its grip the clips' free hand is now (0 on it, 1 well off)
 };
 
-// True first person (#405, phase 1): the player's own body, drawn in the world under the play
-// camera and walked by its clips' root motion.
+// True first person (#405): the player's own body, drawn in the world under the play camera.
 //
 // The scene authors the body as ordinary objects: a root with the First Person Body component
 // (Components.h) and its pieces as children - head, torso, legs, feet, later clothing - rigged
-// models on one skeleton, the first with an Animator Controller driving the rest. In Play this class
-// takes it over: it stands the body at the capsule's feet facing the view, feeds the controller
-// the player's movement, runs its root motion In Place and hands that travel to the Player (which
-// sweeps the capsule with it, blended with the input by Responsiveness), and puts the camera in
-// the head. Like FirstPersonPresentation it owns nothing persistent: everything it changes on
-// the scene's objects is play-time state the Stop snapshot restores.
+// models on one skeleton. In Play this class takes it over: it stands the body at the capsule's
+// feet facing the view, poses the piece with the whole skeleton by motion matching
+// (FirstPersonBodyMotion; the capsule leads, at the mocap's gait speeds) and the other pieces with
+// it, and puts the camera in the head. Like FirstPersonPresentation it owns nothing persistent:
+// everything it changes on the scene's objects is play-time state the Stop snapshot restores.
 //
 // Frame order, per simulated step:
 //   BeforePlayerMove  camera back to the player's own eye; last step's root motion to the Player

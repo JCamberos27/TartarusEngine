@@ -182,7 +182,6 @@ void RegisterEngineComponents() {
             {"Enabled", T::Bool, TARTARUS_REFLECT_FIELD(OpticAttachmentComponent, Enabled), 0.0f, "Off: the weapon ignores this attachment."},
             {"Aim Point", T::String, TARTARUS_REFLECT_FIELD(OpticAttachmentComponent, AimPoint), 0.0f, "Path to the aim point below this object. Its local -Z axis points along the sight line."},
             {"Default Optic", T::Bool, TARTARUS_REFLECT_FIELD(OpticAttachmentComponent, DefaultOptic), 0.0f, "Marks the iron-sight aim point as the reference for the weapon's existing ADS animation."},
-            {"Aim Blend Time", T::Float, TARTARUS_REFLECT_FIELD(OpticAttachmentComponent, AimBlendTime), 0.01f, "Seconds to move between aim points when changing optics while aiming.", 0.0f, 1.0f},
         }
     });
     Register<HealthComponent>({
@@ -692,10 +691,9 @@ void RegisterEngineComponents() {
         ReflectComponent m;
         m.Name = "First Person Body"; m.Icon = ICON_FA_PERSON; m.Category = "Gameplay";
         m.Tooltip = "The player's own body in Play: it stands at the First Person Controller's feet facing the\n"
-                    "view, its Animator Controller gets the movement as parameters (MoveX, MoveY, Speed, Sprint,\n"
-                    "Grounded, Airborne, Jump), and the clips' root motion walks the player. The camera sits\n"
-                    "in its head. Put it on the body's root; its children are the pieces (head, torso, legs,\n"
-                    "feet or clothing); motion matching poses the one with the whole skeleton (the torso), the rest follow it.";
+                    "view, motion matching poses it from the player's movement, and the camera sits in its head.\n"
+                    "Put it on the body's root; its children are the pieces (head, torso, legs, feet or clothing);\n"
+                    "motion matching poses the one with the whole skeleton (the torso), the rest follow it.";
         m.Fields = {
             { "MM Post Layers", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MmPostLayers), 0.0f,
               "Temporary A/B switch (motion matching): off draws the matcher's pose with foot IK only - no Spine Aim /\n"
@@ -703,11 +701,6 @@ void RegisterEngineComponents() {
             { "MM Head Ride", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MmHeadRide), 0.01f,
               "Motion matching, unarmed: how much of the mocap head's own motion the camera rides. 0 = its slow average\n"
               "(the stabilized camera, within Eye Slack); 1 = the head as captured (the jog's bob and sway). Live in Play.", 0.0f, 1.0f },
-            { "Responsiveness", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Responsiveness), 0.01f,
-              "How the player moves: 0 = exactly as the clips travel (root motion - weighty, feet planted),\n"
-              "1 = as the input asks (snappy; the clips only animate). In between blends the two.", 0.0f, 1.0f },
-            { "Parameter Smoothing", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ParamSmoothing), 0.005f,
-              "Seconds MoveX / MoveY take to follow the input - how quickly the body changes gait.", 0.0f, 1.0f },
             { "Walk Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, WalkSpeed), 0.01f,
               "Metres per second asked of the blend tree when walking - the default gait. Match the walk clips (1.53).", 0.0f, 20.0f },
             { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, RunSpeed), 0.01f,
@@ -715,13 +708,7 @@ void RegisterEngineComponents() {
             { "Sprint Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SprintSpeed), 0.01f,
               "... and while sprinting (the run clip, 4.72).", 0.0f, 20.0f },
             { "Player Run Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, PlayerRunSpeed), 0.01f,
-              "The player's own run speed (m/s) when it should be faster than the clips travel. 0 = Run Speed.\n"
-              "With Responsiveness up the gait clips play faster to keep pace (up to Max Play Rate).", 0.0f, 20.0f },
-            { "Player Sprint Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, PlayerSprintSpeed), 0.01f,
-              "... and sprint speed. 0 = Sprint Speed.", 0.0f, 20.0f },
-            { "Max Play Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MaxPlayRate), 0.01f,
-              "The fastest the gait clips play (x authored) to keep the feet with a faster player. Needs the\n"
-              "controller's Locomotion state to take its speed from a PlayRate parameter.", 1.0f, 3.0f },
+              "The player's own run speed (m/s) when it should be faster than the clips travel. 0 = Run Speed.", 0.0f, 20.0f },
             { "Head Bone", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBone), 0.0f,
               "The bone the camera sits on." },
             { "Camera Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraOffset), 0.005f,
@@ -753,12 +740,6 @@ void RegisterEngineComponents() {
               "looks further. 0 = no limit. (Armed the arms need the full aim to reach the gun.)", 0.0f, 90.0f });
         m.Fields.push_back({ "Spine Aim Max Down", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimMaxDown), 0.5f,
               "Unarmed: the most (degrees) the chest pitches forward with the view looking down, eased in. 0 = no limit.", 0.0f, 90.0f });
-        m.Fields.push_back({ "Spine Stability", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineStability), 0.01f,
-              "Controls lower-body motion reaching the spine, including inherited pelvis sway. Pelvis keeps the full lower-body pose.\n"
-              "0 = authored gait; 1 = 10% gait at spine 1, 5% at spine 2, none at spine 3-5. Applies to player and NPCs.\n"
-              "View aim and arm IK still apply.\n"
-              "Fades out for crouch transitions, jumping and landing.", 0.0f, 1.0f });
-        m.Fields.back().Group = "Spine Distribution";
         m.Fields.push_back({ "Spine Weight 1", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[0]), 0.05f,
               "Relative share of the spine's look, twist and shoulder turns that spine_01 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
         m.Fields.back().Group = "Spine Distribution";
@@ -893,51 +874,9 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Arms Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsEaseOut), 0.005f,
               "Seconds the body's arms take to ease back to the locomotion pose once the gun is holstered.", 0.01f, 1.0f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
-        m.Fields.push_back({ "Turn Lag Floor", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnLagFloor), 1.0f,
-              "The body never lags the view by more than the larger of this (degrees) and Turn Threshold + Turn Lag Margin: a bounded slide of the feet\nbeats a chest twisted right round. Keep Mouse Sensitivity low enough that the turn clips keep up.", 0.0f, 180.0f });
-        m.Fields.back().Group = "Turning (advanced)";
-        m.Fields.push_back({ "Turn Lag Margin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnLagMargin), 0.5f,
-              "Added to Turn Threshold when working out the most the body may lag the view (see Turn Lag Floor).", 0.0f, 90.0f });
-        m.Fields.back().Group = "Turning (advanced)";
         m.Fields.push_back({ "Turn End Angle", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnEndAngle), 0.5f,
               "A turn on the spot ends once the body is within this many degrees of the view.", 0.0f, 45.0f });
         m.Fields.back().Group = "Turning (advanced)";
-        m.Fields.push_back({ "Turn Min Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnMinTime), 0.01f,
-              "A turn lasts at least this many seconds before it can end because its clip has finished.", 0.0f, 2.0f });
-        m.Fields.back().Group = "Turning (advanced)";
-        m.Fields.push_back({ "Turn Timeout", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnTimeout), 0.1f,
-              "A guard: a turn ends after this many seconds whatever the clip does.", 0.5f, 20.0f });
-        m.Fields.back().Group = "Turning (advanced)";
-        m.Fields.push_back({ "Turn Move Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnMoveEase), 0.005f,
-              "Moving, the body eases to face the view in this many seconds (a quick ease, no pop).", 0.005f, 1.0f });
-        m.Fields.back().Group = "Turning (advanced)";
-        m.Fields.push_back({ "Start Idle Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartIdleTime), 0.01f,
-              "A start clip plays only after the input has been idle this many seconds: a tap between keys is not a start.", 0.0f, 2.0f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Start Max Move", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartMaxMove), 0.05f,
-              "... and only while the body's current speed (m/s) is below this.", 0.0f, 5.0f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Stop Min Run Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinRunTime), 0.01f,
-              "A stop clip needs a run of at least this many seconds to stop from: a tap of the keys (or a step or two) just eases to a halt.", 0.0f, 3.0f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Stop Min Run Time (Crouched)", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinRunTimeCrouched), 0.01f,
-              "The same while crouched.", 0.0f, 3.0f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Stop Min Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinSpeed), 0.05f,
-              "... and at least this speed (m/s) to shed.", 0.0f, 10.0f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Stop Min Speed (Crouched)", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinSpeedCrouched), 0.05f,
-              "The same while crouched.", 0.0f, 10.0f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Stop Debounce", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopDebounce), 0.005f,
-              "Seconds of no input before a stop is decided (tapping between two keys isn't one).", 0.0f, 0.5f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Stop Run Forward", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopRunForward), 0.05f,
-              "A stop after a sprint uses the Stop Run clip when the last direction of travel was at least this far forward (0 = sideways, 1 = straight ahead).", 0.0f, 1.0f });
-        m.Fields.back().Group = "Start & Stop (advanced)";
-        m.Fields.push_back({ "Airborne Delay", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, AirborneDelay), 0.01f,
-              "Seconds off the ground before the controller's Airborne parameter is set (a step down a stair isn't a fall).", 0.0f, 1.0f });
-        m.Fields.back().Group = "Locomotion (advanced)";
         m.Fields.push_back({ "Foot Lock", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockEnabled), 0.0f,
               "A planted foot is held where it landed in the world (the player body and the soldiers), so the feet never skate when the clips and the capsule disagree - in a turn on the spot, a start or a stop as well as the walk.", 0.0f, 0.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
@@ -2469,7 +2408,6 @@ void RegisterEngineComponents() {
             { "Send Actions", T::Float, TARTARUS_REFLECT_FIELD(B, SendActions), 0.01f, "Each gun's own mags, bolts, pumps, shells.", 0.0f, 2.0f },
             { "Send Impacts", T::Float, TARTARUS_REFLECT_FIELD(B, SendImpacts), 0.01f, "Bullet impacts, flesh hits and flybys.", 0.0f, 2.0f },
             { "Send Casings", T::Float, TARTARUS_REFLECT_FIELD(B, SendCasings), 0.01f, "Shell casings on the ground.", 0.0f, 2.0f },
-            { "Send Voice", T::Float, TARTARUS_REFLECT_FIELD(B, SendVoice), 0.01f, "(Not used: the voice system was removed. The key still loads.)", 0.0f, 2.0f },
             { "Send Shot", T::Float, TARTARUS_REFLECT_FIELD(B, SendShot), 0.01f, "The close / mech / sub layers of a gunshot: the crack feeds the room, which is what makes it audible indoors.", 0.0f, 2.0f },
             { "Send Tail", T::Float, TARTARUS_REFLECT_FIELD(B, SendTail), 0.01f, "The recorded gun tails (and the far layer). 0: they already hold their room.", 0.0f, 2.0f },
             { "Occlusion Enabled", T::Bool, TARTARUS_REFLECT_FIELD(B, OcclusionEnabled), 0.0f, "A 3D voice whose line of sight from the listener is blocked by solid geometry is low-passed." },
