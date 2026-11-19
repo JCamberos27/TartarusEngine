@@ -17,9 +17,11 @@
 #include "../Renderer/ShaderVariant.h"
 #include "../Renderer/CascadedShadowMap.h"
 #include "../Renderer/Texture.h"
+#include "../Core/PngWrite.h"
 #include <filesystem>
 #include <json.hpp>
 #include <random>
+#include <thread>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -548,7 +550,34 @@ static void Test_CascadedShadowMap_HardKernelAndSplit() {
     CHECK(std::abs(back.ShadowCascadeSplit - 0.9f) < 1e-6f);
 }
 
+// PNG writes from several threads at different compression levels each get their own level: the bytes match a
+// single-threaded encode at that level (stb keeps the level in one global; PngWrite holds a lock around it).
+static void Test_PngWrite_LevelPerCallUnderThreads() {
+    const int w = 96, h = 64;
+    std::vector<unsigned char> px((size_t)w * h * 4);
+    std::mt19937 rng(3);
+    for (size_t i = 0; i < px.size(); ++i) px[i] = (unsigned char)((i / 4 % 7 == 0) ? rng() : i * 13);
+    std::string fast, best;
+    CHECK(PngWrite::Encode(fast, w, h, 4, px.data(), w * 4, 0) && PngWrite::Encode(best, w, h, 4, px.data(), w * 4, 9));
+    CHECK(fast.size() > best.size());
+    std::vector<std::string> got(8);
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 8; ++t)
+        threads.emplace_back([&, t] {
+            for (int k = 0; k < 20; ++k) {
+                std::string out;
+                PngWrite::Encode(out, w, h, 4, px.data(), w * 4, (t & 1) ? 9 : 0);
+                if (k == 19) got[(size_t)t] = out;
+            }
+        });
+    for (std::thread& th : threads) th.join();
+    for (int t = 0; t < 8; ++t) CHECK(got[(size_t)t] == ((t & 1) ? best : fast));
+    std::string none;
+    CHECK(!PngWrite::Encode(none, 0, h, 4, px.data(), 0) && !PngWrite::Encode(none, w, h, 5, px.data(), w * 5) && none.empty());
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"PngWrite::LevelPerCallUnderThreads", Test_PngWrite_LevelPerCallUnderThreads});
     tests.push_back({"BoneAnimChannel::FinalizeMatchesSearch", Test_BoneAnimChannel_FinalizeMatchesSearch});
     tests.push_back({"Material::HashCachePerFrame", Test_Material_HashCachePerFrame});
     tests.push_back({"Material::ExtraPropsHashPerFrame", Test_Material_ExtraPropsHashPerFrame});

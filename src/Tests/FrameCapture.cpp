@@ -2,7 +2,7 @@
 
 #include "gl.h"
 
-#include <stb_image_write.h>
+#include "PngWrite.h"
 
 #include <algorithm>
 #include <cstring>
@@ -30,7 +30,7 @@ std::string WritePngTo(const std::string& dir, const std::string& name, int w, i
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
     const std::string out = (std::filesystem::path(dir) / (name + ".png")).string();
-    stbi_write_png(out.c_str(), w, h, 4, rgba.data(), w * 4);
+    PngWrite::ToFile(std::filesystem::path(out).u8string(), w, h, 4, rgba.data(), w * 4);
     return out;
 }
 

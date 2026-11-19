@@ -14,17 +14,6 @@
 #pragma comment(lib, "shell32.lib")
 #endif
 
-// stb_image_write's one implementation in the engine (main.cpp's test-harness PNG / JPG writers use it).
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
-#endif
-#include <stb_image_write.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-
 namespace OsShell {
 
 void ShowInFolder(const std::string& path) {

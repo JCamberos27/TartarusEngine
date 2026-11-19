@@ -43,7 +43,7 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include "Core/Env.h"
 
 #include <GLFW/glfw3.h>
-#include <stb_image_write.h>
+#include "PngWrite.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -2025,7 +2025,7 @@ void AfterFrame(int fbWidth, int fbHeight) {
     const std::filesystem::path out = std::filesystem::path(g_ShotDir) / (rel + ".png");
     std::error_code ec;
     std::filesystem::create_directories(out.parent_path(), ec);
-    stbi_write_png(out.string().c_str(), fbWidth, fbHeight, 4, top.data(), fbWidth * 4);
+    PngWrite::ToFile(out.u8string(), fbWidth, fbHeight, 4, top.data(), fbWidth * 4);
     if (g_ShotForLastReport && !g_Reports.empty()) {
         g_Reports.back().Shots.push_back(rel + ".png");
         g_ShotForLastReport = false;

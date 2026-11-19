@@ -7,7 +7,7 @@
 #include "gl.h"
 
 #include "stb_image.h"
-#include "stb_image_write.h"
+#include "PngWrite.h"
 
 #include <algorithm>
 #include <chrono>
@@ -105,8 +105,6 @@ void SetGradient(const Shader& s, const Layer& l) {
     s.SetVec3("uGradientB", SrgbToLinear(l.GradientTo));
     s.SetVec2("uGradientDir", GradientDir(l.GradientAngle));
 }
-
-void AppendBytes(void* context, void* data, int size) { static_cast<std::string*>(context)->append((const char*)data, (size_t)size); }
 
 } // namespace
 
@@ -705,13 +703,13 @@ bool Compositor::ReadBack(BakeImages& out) {
 BakeFiles EncodePngs(const BakeImages& im) {
     BakeFiles f;
     if (im.Width <= 0 || im.Height <= 0) return f;
-    // stb's encoder is deterministic for a fixed level; set it explicitly so nothing else's choice
+    // stb's encoder is deterministic for a fixed level; it is passed explicitly so nothing else's choice
     // changes these bytes.
-    stbi_write_png_compression_level = 8;
-    stbi_write_png_to_func(AppendBytes, &f.Albedo, im.Width, im.Height, 4, im.Albedo.data(), im.Width * 4);
-    stbi_write_png_to_func(AppendBytes, &f.Normal, im.Width, im.Height, 3, im.Normal.data(), im.Width * 3);
-    stbi_write_png_to_func(AppendBytes, &f.Surface, im.Width, im.Height, 4, im.Surface.data(), im.Width * 4);
-    stbi_write_png_to_func(AppendBytes, &f.Aux, im.Width, im.Height, 1, im.Aux.data(), im.Width);
+    constexpr int kLevel = 8;
+    PngWrite::Encode(f.Albedo, im.Width, im.Height, 4, im.Albedo.data(), im.Width * 4, kLevel);
+    PngWrite::Encode(f.Normal, im.Width, im.Height, 3, im.Normal.data(), im.Width * 3, kLevel);
+    PngWrite::Encode(f.Surface, im.Width, im.Height, 4, im.Surface.data(), im.Width * 4, kLevel);
+    PngWrite::Encode(f.Aux, im.Width, im.Height, 1, im.Aux.data(), im.Width, kLevel);
     return f;
 }
 

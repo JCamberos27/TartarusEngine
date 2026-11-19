@@ -5,14 +5,7 @@
 #include "Log.h"
 
 #include "stb_image.h"
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
-#endif
-#include <stb_image_write.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
+#include "PngWrite.h"
 
 #include <filesystem>
 #include <fstream>
@@ -138,11 +131,9 @@ void Save(const std::string& path, int size, std::uint64_t key, const unsigned c
     std::error_code ec;
     std::filesystem::create_directories(std::filesystem::path(cachePath).parent_path(), ec);
 
-    stbi_write_png_compression_level = 6;
     std::string png;
-    auto append = [](void* ctx, void* data, int len) { static_cast<std::string*>(ctx)->append(static_cast<const char*>(data), (size_t)len); };
     // PNG first, then the key sidecar, each via temp file + atomic rename.
-    const bool ok = stbi_write_png_to_func(append, &png, size, size, 4, pixels, size * 4) && !png.empty() &&
+    const bool ok = PngWrite::Encode(png, size, size, 4, pixels, size * 4, 6) &&
                     AtomicFile::WriteBytes(cachePath, png, true) &&
                     AtomicFile::WriteBytes(KeyPath(cachePath), KeyToString(key), true);
     if (!ok) Log::Warn("ThumbnailCache: couldn't write " + ProjectPaths::Relativize(cachePath));

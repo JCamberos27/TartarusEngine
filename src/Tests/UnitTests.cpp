@@ -102,7 +102,7 @@
 #include "OutfitCoverage.h"
 #include "OutfitSystem.h"
 #include "Texture.h"
-#include <stb_image_write.h> // async decode test fixture
+#include "PngWrite.h" // async decode test fixture
 #include <set>
 #include <string>
 #include <thread>
@@ -3194,7 +3194,7 @@ void TestAsyncImportCpu() {
     const std::string png = (dir / "async_decode.png").string();
     std::vector<unsigned char> px(64 * 32 * 4);
     for (size_t i = 0; i < px.size(); ++i) px[i] = (unsigned char)(i * 7);
-    CHECK(stbi_write_png(png.c_str(), 64, 32, 4, px.data(), 64 * 4) != 0);
+    CHECK(PngWrite::ToFile(std::filesystem::path(png).u8string(), 64, 32, 4, px.data(), 64 * 4));
     TextureImportSettings s;
     s.MaxTextureSize = 16;
     TextureCpuData d = Texture::DecodeFile(png, s);
