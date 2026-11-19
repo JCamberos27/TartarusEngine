@@ -4,6 +4,7 @@
 #include "Model.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
+#include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -72,10 +73,7 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_ColorTex, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_DepthRBO);
 
-    GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
-        Log::Error("ModelPreviewRenderer: FBO incomplete (0x" + std::to_string(fboStatus) + ") at " +
-                   std::to_string(previewW) + "x" + std::to_string(previewH) + " - skipping preview");
+    if (!GLFramebufferCheck::Complete("ModelPreviewRenderer", m_FBO, previewW, previewH)) {
         glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFBO);
         glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
         return m_ColorTex;

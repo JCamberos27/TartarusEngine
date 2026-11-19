@@ -1,3 +1,4 @@
+#include "GLFramebufferCheck.h"
 #include "GpuMemTrack.h"
 #include "HdrTarget.h"
 #include "Log.h"
@@ -96,12 +97,11 @@ void HdrTarget::Create(int width, int height, int samples) {
 
     if (m_WantVelocity) SetVelocityEnabled(true);
 
-    GLenum ms = glCheckNamedFramebufferStatus(m_MsFbo, GL_FRAMEBUFFER);
-    GLenum rs = glCheckNamedFramebufferStatus(m_ResolveFbo, GL_FRAMEBUFFER);
-    if (ms != GL_FRAMEBUFFER_COMPLETE || rs != GL_FRAMEBUFFER_COMPLETE) {
-        Log::Error("HdrTarget: incomplete framebuffer (" + std::to_string(width) + "x" +
-                   std::to_string(height) + " x" + std::to_string(samples) + "  ms=0x" +
-                   std::to_string(ms) + " resolve=0x" + std::to_string(rs) + ")");
+    const bool msOk = GLFramebufferCheck::Complete("HdrTarget (multisampled)", m_MsFbo, width, height);
+    const bool rsOk = GLFramebufferCheck::Complete("HdrTarget (resolve)", m_ResolveFbo, width, height);
+    if (!msOk || !rsOk) {
+        Log::Error("HdrTarget: incomplete framebuffer at " + std::to_string(width) + "x" + std::to_string(height) + " x" +
+                   std::to_string(samples) + " samples - the view is off until the size or sample count changes.");
         Release();
         m_FailW = width;
         m_FailH = height;

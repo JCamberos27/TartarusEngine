@@ -1,6 +1,7 @@
 #include "MaterialPreviewRenderer.h"
 #include "Camera.h" // #202 - MakePerspective
 #include "DefaultTextures.h"
+#include "GLFramebufferCheck.h"
 #include "GLStateCache.h"
 #include "IblProbe.h"
 #include "Log.h"
@@ -273,9 +274,7 @@ unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset
     glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_ColorTex, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_DepthRBO);
-    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        Log::Error("Material preview: framebuffer incomplete (0x" + std::to_string(status) + ")");
+    if (!GLFramebufferCheck::Complete("Material preview", m_FBO, width, height)) {
         restore();
         return 0;
     }

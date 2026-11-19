@@ -52,47 +52,56 @@ void Load() {
             std::fprintf(stderr, "[Impostors] %s: %s\n", ProjectPaths::Relativize(manifest.string()).c_str(), e.what());
             continue;
         }
-        const std::string folder = ProjectPaths::Relativize(dir.path().string()) + "/";
-        const int frames = j.value("frames", 8);
-        if (j.contains("startDistance")) s.StartDistance = j["startDistance"].get<float>();
-        if (!j.contains("impostors") || !j["impostors"].is_object()) continue;
-        for (const auto& [name, v] : j["impostors"].items()) {
-            ImpostorSet set;
-            set.Name = name;
-            set.Frames = frames;
-            for (const auto& m : v.value("lod0Models", nlohmann::json::array())) set.Models.push_back(m.get<std::string>());
-            std::sort(set.Models.begin(), set.Models.end());
-            const auto c = v.value("centre", std::vector<float>{0.0f, 0.0f, 0.0f});
-            if (c.size() == 3) set.Centre = glm::vec3(c[0], c[1], c[2]);
-            set.Radius = v.value("radius", 0.0f);
-            const auto lo = v.value("boundsMin", std::vector<float>{}), hi = v.value("boundsMax", std::vector<float>{});
-            if (lo.size() == 3 && hi.size() == 3) {
-                set.BoundsMin = glm::vec3(lo[0], lo[1], lo[2]);
-                set.BoundsMax = glm::vec3(hi[0], hi[1], hi[2]);
-            } else { // an older bake: the sphere's box
-                set.BoundsMin = set.Centre - glm::vec3(set.Radius);
-                set.BoundsMax = set.Centre + glm::vec3(set.Radius);
-            }
-            set.WindBend = v.value("windBend", 0.0f);
-            set.WindHeight = std::max(v.value("windHeight", 1.0f), 0.01f);
-            set.WindFrequency = v.value("windFrequency", 1.0f);
-            set.FrameExtents.assign((size_t)frames * frames, glm::vec2(set.Radius)); // an older bake: the sphere
-            if (const auto fe = v.find("frameExtents"); fe != v.end() && fe->is_array() && fe->size() == set.FrameExtents.size())
-                for (size_t k = 0; k < set.FrameExtents.size(); ++k) {
-                    const auto& e = (*fe)[k];
-                    if (e.is_array() && e.size() == 2)
-                        set.FrameExtents[k] = glm::max(glm::vec2(e[0].get<float>(), e[1].get<float>()), glm::vec2(1e-3f));
+        try { // a field of the wrong type throws (nlohmann::type_error): skip this manifest, never the caller's frame
+            const std::string folder = ProjectPaths::Relativize(dir.path().string()) + "/";
+            const int frames = j.value("frames", 8);
+            if (j.contains("startDistance")) s.StartDistance = j["startDistance"].get<float>();
+            if (!j.contains("impostors") || !j["impostors"].is_object()) continue;
+            for (const auto& [name, v] : j["impostors"].items()) {
+                ImpostorSet set;
+                set.Name = name;
+                set.Frames = frames;
+                for (const auto& m : v.value("lod0Models", nlohmann::json::array())) set.Models.push_back(m.get<std::string>());
+                std::sort(set.Models.begin(), set.Models.end());
+                const auto c = v.value("centre", std::vector<float>{0.0f, 0.0f, 0.0f});
+                if (c.size() == 3) set.Centre = glm::vec3(c[0], c[1], c[2]);
+                set.Radius = v.value("radius", 0.0f);
+                const auto lo = v.value("boundsMin", std::vector<float>{}), hi = v.value("boundsMax", std::vector<float>{});
+                if (lo.size() == 3 && hi.size() == 3) {
+                    set.BoundsMin = glm::vec3(lo[0], lo[1], lo[2]);
+                    set.BoundsMax = glm::vec3(hi[0], hi[1], hi[2]);
+                } else { // an older bake: the sphere's box
+                    set.BoundsMin = set.Centre - glm::vec3(set.Radius);
+                    set.BoundsMax = set.Centre + glm::vec3(set.Radius);
                 }
-            set.Albedo = folder + v.value("albedo", std::string());
-            set.NormalDepth = folder + v.value("normalDepth", std::string());
-            set.Mask = folder + v.value("mask", std::string());
-            if (set.Models.empty() || !(set.Radius > 0.0f)) continue;
-            // A set whose atlases aren't fetched (Drive assets missing) draws nothing; leave its trees on their LODs.
-            if (!fs::exists(ProjectPaths::Resolve(set.Albedo), ec) || !fs::exists(ProjectPaths::Resolve(set.NormalDepth), ec) ||
-                !fs::exists(ProjectPaths::Resolve(set.Mask), ec))
-                continue;
-            s.ByModels[set.Models] = (int)s.Sets.size();
-            s.Sets.push_back(std::move(set));
+                set.WindBend = v.value("windBend", 0.0f);
+                set.WindHeight = std::max(v.value("windHeight", 1.0f), 0.01f);
+                set.WindFrequency = v.value("windFrequency", 1.0f);
+                set.FrameExtents.assign((size_t)frames * frames, glm::vec2(set.Radius)); // an older bake: the sphere
+                if (const auto fe = v.find("frameExtents"); fe != v.end() && fe->is_array() && fe->size() == set.FrameExtents.size())
+                    for (size_t k = 0; k < set.FrameExtents.size(); ++k) {
+                        const auto& e = (*fe)[k];
+                        if (e.is_array() && e.size() == 2)
+                            set.FrameExtents[k] = glm::max(glm::vec2(e[0].get<float>(), e[1].get<float>()), glm::vec2(1e-3f));
+                    }
+                set.Albedo = folder + v.value("albedo", std::string());
+                set.NormalDepth = folder + v.value("normalDepth", std::string());
+                set.Mask = folder + v.value("mask", std::string());
+                if (set.Models.empty() || !(set.Radius > 0.0f)) continue;
+                // A set whose atlases aren't fetched (Drive assets missing) draws nothing; leave its trees on their LODs.
+                if (!fs::exists(ProjectPaths::Resolve(set.Albedo), ec) || !fs::exists(ProjectPaths::Resolve(set.NormalDepth), ec) ||
+                    !fs::exists(ProjectPaths::Resolve(set.Mask), ec))
+                    continue;
+                if (!s.Sets.empty() && set.Frames != s.Sets.front().Frames) { // the draw takes one frame count for all
+                    std::fprintf(stderr, "[Impostors] %s: %d frames, not %d like the sets before it - left out\n",
+                                 set.Name.c_str(), set.Frames, s.Sets.front().Frames);
+                    continue;
+                }
+                s.ByModels[set.Models] = (int)s.Sets.size();
+                s.Sets.push_back(std::move(set));
+            }
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "[Impostors] %s: %s\n", ProjectPaths::Relativize(manifest.string()).c_str(), e.what());
         }
     }
 }

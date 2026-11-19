@@ -40,7 +40,8 @@ public:
     // Fits and renders the cascades to this view; a second view with the same matrices in the same frame reuses them.
     // False when the sun casts no shadows this frame. Restores the caller's framebuffer and viewport.
     bool RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitView, const glm::mat4& fitProj);
-    // Spot and point maps. Call once per frame after the characters are pre-skinned.
+    // Spot and point maps. Call once per frame after the characters are pre-skinned. Leaves the default framebuffer
+    // bound with the window viewport (in.windowWidth x in.windowHeight), not the caller's: call it between views.
     void RenderLocal(const ShadowFrameInputs& in);
 
 private:

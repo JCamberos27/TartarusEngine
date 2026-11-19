@@ -113,6 +113,8 @@ private:
     std::vector<GpuLight> m_Lights;
     int m_DirectionalCount = 0; // how many of m_Lights' front entries are directional (#188)
     bool m_Overflowed = false; // set when an Add* was dropped for being past kMaxLights (#204)
+    std::vector<std::pair<float, std::uint32_t>> m_SortKeys; // SortLocalNearestFirst's scratch
+    std::vector<GpuLight> m_SortScratch;
     unsigned int m_Ssbo = 0;
 
     void EnsureCreated();

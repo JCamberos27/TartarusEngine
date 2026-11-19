@@ -6,7 +6,7 @@
 // One GL_TEXTURE_CUBE_MAP_ARRAY of DEPTH_COMPONENT32F — one cube per slot (the scene's Max point
 // shadows setting, #110, up to kMaxPoints), six faces each,
 // sampled in the model shader as a samplerCubeArrayShadow. Per casting point light the caller
-// renders scene depth into all six faces (BeginFace) with a 90-degree perspective frustum, then
+// renders scene depth into all six faces (BeginFaceFromStatic) with a 90-degree perspective frustum, then
 // the shader reconstructs the dominant-axis NDC depth from the fragment->light vector and does a
 // hardware depth-compare. Keep the budget small — six depth passes per light is not cheap.
 class PointShadowMap {
@@ -22,12 +22,10 @@ public:
     // Lazily (re)creates the depth cube array when the resolution or cube count changes.
     void Configure(int resolution, int cubes);
 
-    // Binds the shadow FBO targeting cube `slot`'s face `face` (0..5 = +X,-X,+Y,-Y,+Z,-Z),
-    // sets the viewport, clears its depth. Does NOT restore the previous framebuffer.
-    void BeginFace(int slot, int face) const;
-    // The static-caster cache (a second cube array): BeginStaticFace clears and binds cube `slot`'s face in it;
-    // BeginFaceFromStatic copies that cached face into the live map and binds the live face for the moving
-    // casters drawn on top (like SpotShadowMap's static layer).
+    // The static-caster cache (a second cube array): BeginStaticFace clears and binds cube `slot`'s face
+    // (0..5 = +X,-X,+Y,-Y,+Z,-Z) in it; BeginFaceFromStatic copies that cached face into the live map and binds the
+    // live face for the moving casters drawn on top (like SpotShadowMap's static layer). Both set the viewport and
+    // do NOT restore the previous framebuffer.
     void BeginStaticFace(int slot, int face) const;
     void BeginFaceFromStatic(int slot, int face) const;
 
@@ -39,5 +37,6 @@ private:
     DepthArrayTarget m_Target; // the cube array (layer = cube*6 + face), its FBOs and the lazily made static cache
     int m_Resolution = 0;
     int m_Cubes = 0;
-    mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check in Begin()
+    mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check (CheckComplete)
+    void CheckComplete() const;
 };
