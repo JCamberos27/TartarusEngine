@@ -983,6 +983,7 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
 void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
     struct Cache {
         std::string Path, Error;
+        std::string Json; // the asset as last loaded or saved: the curve windows' fallback document
         fs::file_time_type Stamp{};
         RecoilAsset Asset;
     };
@@ -994,7 +995,7 @@ void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
         cache.Path = path;
         cache.Stamp = stamp;
         cache.Error.clear();
-        RecoilAsset::LoadFile(path, cache.Asset, &cache.Error);
+        if (RecoilAsset::LoadFile(path, cache.Asset, &cache.Error)) cache.Json = cache.Asset.ToJsonString();
     }
     ImGui::TextUnformatted(fs::u8path(path).filename().u8string().c_str());
     if (!cache.Error.empty()) { ImGui::TextWrapped("%s", cache.Error.c_str()); return; }
@@ -1027,13 +1028,14 @@ void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
     rows.Note("Shared recoil data. Changes save immediately and apply live to referencing weapons. Motion drives the gun bone before arm IK.");
     static float rpm = 600.0f;
     ImGui::DragFloat("Preview RPM", &rpm, 1.0f, 30.0f, 1800.0f);
-    CurveEditor::AssetScope curves(path,cache.Asset.ToJsonString(),[](const std::string& text,std::string& error){RecoilAsset a;return RecoilAsset::FromJsonString(text,a,&error);},
+    CurveEditor::AssetScope curves(path,cache.Json,[](const std::string& text,std::string& error){RecoilAsset a;return RecoilAsset::FromJsonString(text,a,&error);},
         [this](const std::string& label){m_GlobalUndoLabel=label;});
     BindRecoilData(curves,cache.Asset.Data.Unity,"/recoil");
     DrawRecoil(rows, cache.Asset.Data, rpm, true);
     if (changed) {
         if (cache.Asset.SaveFile(path)) {
             cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
+            cache.Json = cache.Asset.ToJsonString();
         } else Log::Error("Recoil profile was not saved: check ranges, durations, and rates.");
     }
 }
@@ -1069,7 +1071,7 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     bool changed=false;
     PropertyRows r(150*m_UIScale,changed);
     auto& s=cache.Asset;
-    CurveEditor::AssetScope curves(path,s.ToJsonString(),[](const std::string& text,std::string& error){CameraShakeAsset a;return CameraShakeAsset::FromJsonString(text,a,&error);},
+    CurveEditor::AssetScope curves(path,cache.Saved,[](const std::string& text,std::string& error){CameraShakeAsset a;return CameraShakeAsset::FromJsonString(text,a,&error);},
         [this](const std::string& label){m_GlobalUndoLabel=label;});
     const char* channelTitles[]={"Pitch (deg)","Yaw (deg)","Roll (deg)","Right (m)","Up (m)","Back (m)"};
     for(int c=0;c<6;++c)curves.Bind(c<3?s.Rotation[c]:s.Position[c-3],std::string(c<3?"/rotationCurves/":"/positionCurves/")+std::to_string(c%3),channelTitles[c]);
@@ -1145,6 +1147,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         FirstPersonAnimationSet Set;
         fs::file_time_type ProfileStamp{};
         std::string Error;
+        std::string Json; // the set as last loaded or saved: the curve windows' fallback document
     };
     static Cache cache;
     std::error_code ec;
@@ -1161,9 +1164,10 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             std::string parseError;
             if (!FirstPersonAnimationSet::FromJsonString(text, cache.Set, &parseError)) cache.Set = {};
         }
+        cache.Json = cache.Set.ToJsonString();
     }
     auto save = [&](const FirstPersonAnimationSet& s) {
-        if (s.SaveFile(path)) cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
+        if (s.SaveFile(path)) { cache.Stamp = fs::last_write_time(fs::u8path(path), ec); cache.Json = s.ToJsonString(); }
         else Log::Error("Couldn't save " + ProjectPaths::Relativize(path) + ".");
     };
 
@@ -1188,7 +1192,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         }
     }
     const std::string name = fs::u8path(path).stem().u8string();
-    CurveEditor::AssetScope curves(path,s.ToJsonString(),[](const std::string& text,std::string& error){FirstPersonAnimationSet a;return FirstPersonAnimationSet::FromJsonString(text,a,&error);},
+    CurveEditor::AssetScope curves(path,cache.Json,[](const std::string& text,std::string& error){FirstPersonAnimationSet a;return FirstPersonAnimationSet::FromJsonString(text,a,&error);},
         [this](const std::string& label){m_GlobalUndoLabel=label;});
     BindProceduralCurves(curves,s.Procedural);
 
