@@ -60,6 +60,11 @@ void LightSwitchCircuit() {
     glowing->Mat.EmissiveStrength = 2.0f;
     w.Registry.get_or_emplace<RenderableComponent>(fitting).Materials = {glowing};
     w.Registry.emplace<LightCircuitComponent>(fitting).Circuit = "Room";
+    // A lamp that is both: a glowing shade and a light on one entity - both follow the switch.
+    const entt::entity lamp = w.CreateModelEntity(model, glm::vec3(-3.0f, 2.0f, -2.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Lamp");
+    w.Registry.get_or_emplace<RenderableComponent>(lamp).Materials = {glowing};
+    w.Registry.emplace<LightComponent>(lamp);
+    w.Registry.emplace<LightCircuitComponent>(lamp).Circuit = "Room";
     // The switch, straight ahead of the eye.
     const glm::vec3 at(0.0f, 0.0f, -1.5f);
     const entt::entity sw = w.CreateModelEntity(model, at, glm::vec3(0.0f), glm::vec3(1.0f), "Switch");
@@ -69,9 +74,11 @@ void LightSwitchCircuit() {
     w.RebuildWorldTransformCache();
 
     const auto emission = [&] { return w.Registry.get<RenderableComponent>(fitting).Materials.at(0)->Mat.EmissiveStrength; };
+    const auto lampGlow = [&] { return w.Registry.get<RenderableComponent>(lamp).Materials.at(0)->Mat.EmissiveStrength; };
     LightSwitch::Update(w, glm::vec3(0.0f), glm::vec3(0, 0, -1), false); // starts: off
     w.RebuildWorldTransformCache();
     CHECK(w.Registry.all_of<InactiveTag>(light) && emission() == 0.0f && !LightSwitch::IsOn(w, "Room"));
+    CHECK(w.Registry.all_of<InactiveTag>(lamp) && lampGlow() == 0.0f);
     CHECK(glowing->Mat.EmissiveStrength == 2.0f); // the shared material itself is never touched
 
     const glm::vec3 lo = model->BoundsMin(), hi = model->BoundsMax();
@@ -82,6 +89,7 @@ void LightSwitchCircuit() {
     LightSwitch::Update(w, glm::vec3(0.0f), aim, true);
     w.RebuildWorldTransformCache();
     CHECK(!w.Registry.all_of<InactiveTag>(light) && emission() == 2.0f && LightSwitch::IsOn(w, "Room"));
+    CHECK(!w.Registry.all_of<InactiveTag>(lamp) && lampGlow() == 2.0f);
     LightSwitch::Update(w, glm::vec3(0.0f), aim, true);
     w.RebuildWorldTransformCache();
     CHECK(w.Registry.all_of<InactiveTag>(light) && emission() == 0.0f);

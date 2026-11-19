@@ -173,6 +173,7 @@ enum class SkyPreset {
     Count
 };
 const char* SkyPresetName(SkyPreset preset);
-// Overwrites `s` with the preset's values (keeps anything the preset doesn't mention, such as
-// latitude and the compass, at the value it had).
+// Overwrites `s` with the preset's look: everything back to Earth's defaults plus the preset's values, except where and
+// how the scene looks at the sky (date, latitude, compass, the clock's behaviour, the scene scale, cloud quality and shadows),
+// which keep the values they had.
 void ApplySkyPreset(SkySettings& s, SkyPreset preset);

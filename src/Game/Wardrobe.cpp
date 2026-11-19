@@ -107,7 +107,7 @@ std::string Stem(const std::string& path) {
 
 std::string PrettyName(const std::string& stem) {
     std::string s = stem;
-    for (const char* p : {"SKM_F_", "SKM_", "SM_", "Quantum_"})
+    for (const char* p : {"SKM_F_", "SM_F_", "SKM_", "SM_", "Quantum_"})
         if (StartsWithI(s, p)) { s = s.substr(std::string(p).size()); break; }
     std::string out;
     std::stringstream ss(s);
@@ -139,6 +139,7 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
     json j;
     try { j = json::parse(jsonText); } catch (const std::exception& e) { return fail(std::string("not valid JSON: ") + e.what()); }
     if (!j.is_object()) return fail("not a JSON object");
+    try { // (a field of the wrong type - "weight": "heavy" - throws from json's value() / get())
 
     Wardrobe w;
     w.Name = String(j, "name", "Wardrobe");
@@ -285,6 +286,9 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
         }
     out = std::move(w);
     return true;
+    } catch (const std::exception& e) {
+        return fail(std::string("a field has the wrong type: ") + e.what());
+    }
 }
 
 float FitOf(const Wardrobe& w, const std::string& path) {
