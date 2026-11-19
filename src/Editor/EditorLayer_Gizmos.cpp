@@ -368,6 +368,18 @@ bool EditorLayer::FrameFirstPersonBody(World& world, Camera& editorCamera) {
     return true;
 }
 
+// A camera move eased over the next frames: from the camera as it is, to the same pose until the caller
+// sets the target fields it changes.
+void EditorLayer::BeginViewTransition(const Camera& cam) {
+    m_ViewTransition.Active = true;
+    m_ViewTransition.T = 0.0f;
+    m_ViewTransition.FromPos = m_ViewTransition.ToPos = cam.Position;
+    m_ViewTransition.FromYaw = m_ViewTransition.ToYaw = cam.Yaw;
+    m_ViewTransition.FromPitch = m_ViewTransition.ToPitch = cam.Pitch;
+    m_ViewTransition.FromOrthoHalfHeight = m_ViewTransition.ToOrthoHalfHeight = cam.OrthoHalfHeight;
+    m_ViewTransition.FromFov = m_ViewTransition.ToFov = cam.Fov;
+}
+
 void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
     glm::vec3 mn, mx;
     if (!ComputeSceneBounds(world, mn, mx)) return;
@@ -382,16 +394,9 @@ void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
 
     // Glide there rather than teleport — same eased transition FocusOnSelection uses.
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = targetPos;
-    m_ViewTransition.ToYaw = editorCamera.Yaw;     // aim unchanged
-    m_ViewTransition.ToPitch = editorCamera.Pitch;
+    // aim unchanged
     m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
         ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
 }
@@ -414,16 +419,9 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
 
     // Glide there rather than teleport — same eased transition SnapToView uses (audit follow-up).
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = targetPos;
-    m_ViewTransition.ToYaw = editorCamera.Yaw;     // aim unchanged
-    m_ViewTransition.ToPitch = editorCamera.Pitch;
+    // aim unchanged
     m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
         ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
 }
@@ -622,13 +620,7 @@ void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, floa
     newFront = glm::normalize(newFront);
 
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToYaw = yaw;
     m_ViewTransition.ToPitch = pitch;
     m_ViewTransition.ToPos = pivot - newFront * distance;
@@ -818,13 +810,7 @@ void EditorLayer::LookThroughLight(World& world, Camera& editorCamera, entt::ent
                 : editorCamera.Fov;
 
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = pos;
     m_ViewTransition.ToYaw = yaw;
     m_ViewTransition.ToPitch = pitch;
@@ -843,13 +829,7 @@ void EditorLayer::ExitLookThrough(Camera& editorCamera) {
     if (!m_LookThroughActive) return;
     const CameraPose& r = m_LookThroughRestore;
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = r.Pos;
     m_ViewTransition.ToYaw = r.Yaw;
     m_ViewTransition.ToPitch = r.Pitch;
@@ -3410,13 +3390,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     if (modified && !wasOrbitDrag && ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_NONE) {
         const glm::vec3 forward = glm::normalize(camRot * glm::vec3(0.0f, 0.0f, -1.0f));
         SettleViewMorph(editorCamera);
-        m_ViewTransition.Active = true;
-        m_ViewTransition.T = 0.0f;
-        m_ViewTransition.FromPos = editorCamera.Position;
-        m_ViewTransition.FromYaw = editorCamera.Yaw;
-        m_ViewTransition.FromPitch = editorCamera.Pitch;
-        m_ViewTransition.FromOrthoHalfHeight = m_ViewTransition.ToOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-        m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+        BeginViewTransition(editorCamera);
         m_ViewTransition.ToPos = camPos;
         m_ViewTransition.ToPitch = glm::clamp(glm::degrees(asinf(glm::clamp(forward.y, -1.0f, 1.0f))), -89.0f, 89.0f);
         // Straight up / down has no heading of its own: keep the current one rather than spinning

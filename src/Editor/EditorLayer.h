@@ -1606,6 +1606,7 @@ private:
     // Drops the baseline when an outfit change landed since it was taken (OutfitSystem::LandedGeneration).
     void RebaseAfterOutfitChanges();
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
+    void TrimUndoHistory(); // drops the oldest step past kMaxHistory (EditorLayer_Scene.cpp)
     void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
@@ -2512,9 +2513,7 @@ private:
         // naming a ComponentRegistry component gains Open in Window / Alt+drag out, Ctrl+click
         // picking for the multi-component clipboard, Keep Changes After Play, and the A / X
         // hover keys.
-        entt::entity entity = entt::null,
-        // Optional visible title; label remains the stable component identity.
-        const char* displayLabel = nullptr);
+        entt::entity entity = entt::null);
 
     // #178 - every .preset under the project whose "component" matches `component`, as
     // {display name, path}. Rescanned when the menu opens; presets are few and this is not a
@@ -2799,6 +2798,7 @@ private:
         float FromFov = 60.0f, ToFov = 60.0f; // eased too, for "look through light" (#140 phase 4)
     };
     ViewTransition m_ViewTransition;
+    void BeginViewTransition(const Camera& cam); // from the camera's pose; callers set the To fields they change
 
     // Look through a light (#140 phase 4): move the editor camera to the light's POV — spot uses
     // 2x its cone angle for FOV, point ~90, directional goes orthographic. Esc restores the
