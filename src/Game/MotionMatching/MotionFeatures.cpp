@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <cstring>
 #include <fstream>
 
@@ -314,6 +315,12 @@ struct Reader {
         std::memcpy(dst, B.data() + At, n);
         At += n;
     }
+    // As MotionClipStream's: `count` records of at least `each` bytes still fit (a corrupt header count is refused before
+    // anything is sized by it).
+    bool Fits(std::uint64_t count, std::uint64_t each) {
+        if (each > 0 && count > (std::uint64_t)(B.size() - At) / each) Ok = false;
+        return Ok;
+    }
 };
 } // namespace
 
@@ -357,7 +364,7 @@ bool MotionFeatureSet::Save(const std::string& path, std::string* error) const {
 bool MotionFeatureSet::Load(const std::string& path, std::string* error) {
     std::vector<char> buf;
     {
-        std::ifstream f(path, std::ios::binary | std::ios::ate);
+        std::ifstream f(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
         if (!f) {
             if (error) *error = "cannot read " + path;
             return false;
@@ -388,6 +395,19 @@ bool MotionFeatureSet::Load(const std::string& path, std::string* error) {
         m_QScale[(size_t)d] = r.Get<float>();
         m_QOffset[(size_t)d] = r.Get<float>();
     }
+    // The normalization divides by Std and the search by QScale: a zero, negative or non-finite one (a corrupt file) would put
+    // NaN or infinity in every cost. And every count against what the file has left (a clip is at least 10 bytes, a frame
+    // kDims 16-bit features and its gait, flag and style bytes).
+    bool scalesOk = true;
+    for (int d = 0; d < kDims; ++d)
+        scalesOk = scalesOk && std::isfinite(m_Mean[(size_t)d]) && std::isfinite(m_QOffset[(size_t)d]) &&
+                   std::isfinite(m_Std[(size_t)d]) && m_Std[(size_t)d] > 0.0f && std::isfinite(m_QScale[(size_t)d]) &&
+                   m_QScale[(size_t)d] > 0.0f;
+    if (!scalesOk || !r.Fits(clips, 10) || !r.Fits(frames, kDims * sizeof(std::int16_t) + 3)) {
+        if (error) *error = path + ": corrupt header";
+        m_Q.clear(); m_Gait.clear(); m_Flags.clear(); m_Style.clear(); m_Clips.clear();
+        return false;
+    }
     m_Clips.resize(clips);
     for (Clip& c : m_Clips) {
         c.Name = r.Str();
@@ -403,7 +423,12 @@ bool MotionFeatureSet::Load(const std::string& path, std::string* error) {
     r.Raw(m_Flags.data(), frames);
     m_Style.resize(frames);
     r.Raw(m_Style.data(), frames);
-    if (!r.Ok || r.At != buf.size()) {
+    bool clipsOk = true;
+    for (size_t k = 0; k < m_Clips.size(); ++k) {
+        clipsOk = clipsOk && m_Clips[k].Count > 0 && (std::uint64_t)m_Clips[k].First + m_Clips[k].Count <= frames;
+        if (k > 0) clipsOk = clipsOk && m_Clips[k].First >= m_Clips[k - 1].First + m_Clips[k - 1].Count;
+    }
+    if (!r.Ok || r.At != buf.size() || !clipsOk) {
         if (error) *error = path + ": truncated or corrupt";
         m_Q.clear(); m_Gait.clear(); m_Flags.clear(); m_Style.clear(); m_Clips.clear();
         return false;

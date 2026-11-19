@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -51,10 +52,16 @@ struct In {
         At += n;
         return true;
     }
+    // Whether `count` records of at least `each` bytes can still follow: a header count no file of this size could hold is
+    // corrupt, and is refused before anything is sized by it (a bogus count used to throw bad_alloc or reserve gigabytes).
+    bool Fits(std::uint64_t count, std::uint64_t each) {
+        if (each > 0 && count > (std::uint64_t)(N - At) / each) Ok = false;
+        return Ok;
+    }
 };
 
 bool ReadWhole(const std::string& path, std::vector<char>& out) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    std::ifstream f(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
     if (!f) return false;
     const std::streamsize n = f.tellg();
     if (n < 0) return false;
@@ -159,6 +166,15 @@ bool MotionClipStream::Load(const std::string& path, std::string* error) {
                         statics = in.Get<std::uint32_t>(), clips = in.Get<std::uint32_t>();
     SourcePelvisHeight = in.Get<float>();
     RestYaw = in.Get<float>();
+    // Every count against what the file has left (a name is at least its 2-byte length, a static bone 18 bytes, a clip 20, a
+    // frame its root and pelvis, 24, plus a packed rotation per bone), and the rate the clip times are divided by.
+    const bool countsFit = in.Fits(bones, 2) && in.Fits(statics, 18) && in.Fits(clips, 20) && in.Fits(frames, 24) &&
+                           in.Fits((std::uint64_t)frames * bones, sizeof(MotionMath::PackedQuat));
+    if (!countsFit || !std::isfinite(fps) || fps <= 0.0f || !std::isfinite(RestYaw)) {
+        if (error) *error = path + ": corrupt header";
+        Reset(60.0f, {});
+        return false;
+    }
     std::vector<std::string> names(bones);
     for (auto& n : names) n = in.Str();
     Reset(fps, names);
@@ -189,6 +205,11 @@ bool MotionClipStream::Load(const std::string& path, std::string* error) {
     m_Rot.resize((size_t)frames * bones);
     in.Raw(m_Rot.data(), m_Rot.size() * sizeof(MotionMath::PackedQuat));
     const std::uint32_t fingerFrames = in.Get<std::uint32_t>();
+    if (!in.Fits((std::uint64_t)fingerFrames * statics, sizeof(std::uint32_t))) {
+        if (error) *error = path + ": truncated or corrupt";
+        Reset(60.0f, {});
+        return false;
+    }
     m_Finger.resize((size_t)fingerFrames * statics);
     in.Raw(m_Finger.data(), m_Finger.size() * sizeof(std::uint32_t));
     bool clipsOk = true;
