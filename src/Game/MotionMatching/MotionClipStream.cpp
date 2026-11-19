@@ -100,13 +100,11 @@ void MotionClipStream::AddClip(const Clip& info, const std::vector<RootSample>& 
     c.FingerFirst = kNoFingers;
     if (fingers && !fingers->empty() && !Statics.empty() && fingers->size() == n * Statics.size()) {
         c.FingerFirst = (std::uint32_t)(m_Finger.size() / Statics.size());
-        m_Finger.reserve(m_Finger.size() + fingers->size());
         for (const glm::quat& q : *fingers) m_Finger.push_back(MotionMath::PackQuat32(q));
     }
     m_Clips.push_back(c);
     m_Root.insert(m_Root.end(), root.begin(), root.end());
     m_Pelvis.insert(m_Pelvis.end(), pelvis.begin(), pelvis.end());
-    m_Rot.reserve(m_Rot.size() + rotations.size());
     for (const glm::quat& q : rotations) m_Rot.push_back(MotionMath::PackQuat(q));
 }
 
