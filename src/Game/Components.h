@@ -99,10 +99,6 @@ struct DetachedMeshComponent {
 // `Center` its offset from the entity origin, both in the entity's local space. `HalfExtents
 // == 0` (the default, and every collider World::CreateBox makes) means "derive an axis-aligned
 // box from the mesh bounds", so existing scenes keep their shape without a migration.
-//
-// The editor's AABB Raycast (World::Raycast â€” drop-to-surface / snap) still reads these via
-// the ColliderWorldBounds helper in World.cpp: axis-aligned, rotation-ignored, sized from the
-// RenderableComponent bounds (or a unit box).
 struct ColliderComponent {
     // Values are fixed â€” serialized by index, and PhysicsWorld switches on them. Capsule's axis
     // is Y (its height runs along local up). ConvexHull / Mesh cook a shape from the entity's
@@ -1830,14 +1826,11 @@ struct ReverbZoneComponent {
     // Ambience bed: a looping 2D sound (sound key, e.g. snd.amb.indoor_large) crossfaded by the listener's zone weights.
     std::string Ambience;              // empty = none
     float AmbienceVolume = 1.0f;       // linear, on top of the sound's mix_db
-    // Scenes saved before the convolution reverb carry the old feedback-network values under these keys. They still load; the wet level
-    // and the damping are read as trims (see Resolved()), the rest is not used. -1 = absent.
+    // Scenes saved before the convolution reverb carry the old feedback-network values under these keys: the wet level and the
+    // damping are read as trims (see Resolved()); the network's other keys (room size, decay, early/late mix) are ignored. -1 = absent.
     struct Legacy {
-        float RoomSize = 0.5f;
-        float DecayTime = 1.0f;
         float HfDamping = -1.0f;
         float WetLevel = -1.0f;
-        float EarlyLateMix = 0.5f;
     } Old;
     static float LegacyDefaultWet(int tailClass) { return tailClass == 0 ? 0.12f : tailClass == 1 ? 0.2f : tailClass == 3 ? 0.35f : 0.3f; }
     ReverbPreset Resolved() const {

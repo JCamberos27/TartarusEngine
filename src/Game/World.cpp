@@ -22,26 +22,6 @@ namespace {
 // Cycle guard for the world-transform cache's parent-chain walk: no legitimate scene nests this
 // deep, so exceeding it means a malformed hierarchy, not a tall one.
 constexpr size_t kMaxHierarchyDepth = 1024;
-
-// The box/primitive path (World::CreateBox, "Add > Cube/Sphere/...") happens to work with a
-// plain Position/Scale AABB because every built-in primitive's native mesh is pre-built to fit
-// exactly inside a -0.5..0.5 unit cube — so "size == Scale" is coincidentally exact for them.
-// An IMPORTED model's native bounds are whatever the source file's geometry actually spans
-// (rarely a unit cube), so that same formula would place the collider nowhere near the visible
-// mesh. Using the entity's own RenderableComponent bounds when one exists generalizes correctly
-// to any mesh while staying bit-identical for boxes/primitives (verified: BoundsMin/Max for the
-// cube/sphere/cylinder/cone/plane generators are exactly -0.5..0.5). Falls back to the old
-// Scale-only box for a Collider added to a mesh-less entity (a light or empty), which has no
-// bounds to derive from. Still axis-aligned/rotation-ignoring, matching the physics's existing,
-// deliberate "simple gameplay collision" simplification (see ColliderComponent).
-AABB ColliderWorldBounds(const entt::registry& registry, entt::entity entity, const TransformComponent& transform) {
-    if (const auto* renderable = registry.try_get<RenderableComponent>(entity); renderable && renderable->ModelRef) {
-        glm::vec3 worldMin = transform.Position + renderable->ModelRef->BoundsMin() * transform.Scale;
-        glm::vec3 worldMax = transform.Position + renderable->ModelRef->BoundsMax() * transform.Scale;
-        return AABB{glm::min(worldMin, worldMax), glm::max(worldMin, worldMax)}; // guards a negative Scale flipping min/max
-    }
-    return AABB::FromCenterSize(transform.Position, transform.Scale);
-}
 } // namespace
 
 // A default-constructed World is genuinely empty — no ground, no placeholder crates. Every
@@ -88,27 +68,6 @@ entt::entity World::CreateEmptyEntity(const glm::vec3& position, const glm::vec3
     Registry.emplace<NameComponent>(e, name);
     Registry.emplace<OrderComponent>(e, AllocateOrder());
     return e;
-}
-
-// World::ResolveCollisions (the AABB push-out that moved the Play-mode Player) was removed in
-// #185 PR 3 — the Player now sweeps the mover's kinematic capsule through PhysicsWorld's scene. The
-// AABB Raycast below stays: the editor still uses it for drop-to-surface / snap queries.
-entt::entity World::Raycast(const glm::vec3& origin, const glm::vec3& dir, float maxDist, float& outDist) const {
-    entt::entity best = entt::null;
-    float bestT = maxDist;
-    auto view = Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
-    for (auto entity : view) {
-        const auto& collider = view.get<const ColliderComponent>(entity);
-        if (collider.IsTrigger) continue;
-        AABB b = ColliderWorldBounds(Registry, entity, WorldSpaceTransform(entity)); // #114
-        float t;
-        if (b.RayIntersect(origin, dir, t) && t < bestT) {
-            bestT = t;
-            best = entity;
-        }
-    }
-    outDist = bestT;
-    return best;
 }
 
 glm::mat4 World::ComposeWorldTransform(entt::entity entity) const {

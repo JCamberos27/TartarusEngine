@@ -142,10 +142,7 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
                 const auto& clip = d.Clip(c);
                 const std::uint32_t last = clip.First + clip.Count - 1;
                 std::uint32_t a = f, b = f;
-                std::uint8_t kind = 0;
-                while (b + 1 <= last && why[b + 1]) kind |= why[b++];
-                kind |= why[b];
-                (void)kind;
+                while (b + 1 <= last && why[b + 1]) ++b;
                 std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)a - kHandsUpPad);
                 std::uint32_t to = std::min<std::uint32_t>(last, b + (std::uint32_t)kHandsUpPad);
                 if (widen) {

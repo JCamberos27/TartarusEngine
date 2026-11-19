@@ -27,7 +27,7 @@ const glm::vec3 kSolidColor   (0.35f, 0.90f, 0.35f); // green
 const glm::vec3 kTriggerColor (0.90f, 0.85f, 0.25f); // yellow
 const glm::vec3 kOccupiedColor(1.00f, 0.55f, 0.15f); // orange — trigger with something inside
 
-// Same axis-aligned box the legacy collider path uses (World.cpp's ColliderWorldBounds): render
+// Same axis-aligned box the physics' auto-sized collider uses (Physics/PhysicsActors.cpp's AutoBoxWorld): render
 // bounds scaled by the transform, or a unit box for a mesh-less entity.
 void AutoBoxWorld(const entt::registry& reg, entt::entity e, const TransformComponent& t,
                   glm::vec3& outCenter, glm::vec3& outHalf) {

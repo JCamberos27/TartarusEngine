@@ -231,18 +231,6 @@ static void Test_SceneRenderer_WarmShaderVariantsSkipsShaderless() {
 
 // The entity-ray test falls back to a unit box when a collider's renderer has no model, instead of
 // dereferencing it.
-static void Test_World_RaycastToleratesRenderableWithoutModel() {
-    World world;
-    const glm::vec3 zero(0.0f), one(1.0f);
-    const entt::entity e = world.CreateEmptyEntity(zero, zero, one, "NoModel");
-    world.Registry.emplace<ColliderComponent>(e);
-    world.Registry.emplace<RenderableComponent>(e); // ModelRef stays null
-    float dist = 0.0f;
-    const entt::entity hit = world.Raycast(glm::vec3(0.0f, 5.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), 100.0f, dist);
-    CHECK(hit == e);
-    CHECK(std::abs(dist - 4.5f) < 1e-3f); // the top of a unit box centred on the origin
-}
-
 // The prefab override diff: components with a hand-written JSON block (Collider, Joint) and the
 // Animation component are looked up by their JSON key. An untouched instance has no overrides,
 // an edited field is one entry, and a component the instance removed is recorded and survives a
@@ -640,7 +628,6 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Texture::NormalMapBC5Renormalized", Test_Texture_NormalMapBC5Renormalized});
     tests.push_back({"CascadedShadowMap::SliceTestMatchesAllPairs", Test_CascadedShadowMap_SliceTestMatchesAllPairs});
     tests.push_back({"CascadedShadowMap::HardKernelAndSplit", Test_CascadedShadowMap_HardKernelAndSplit});
-    tests.push_back({"World::RaycastToleratesRenderableWithoutModel", Test_World_RaycastToleratesRenderableWithoutModel});
     tests.push_back({"PrefabInstance::HandWrittenComponentsDiffByJsonKey", Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey});
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});

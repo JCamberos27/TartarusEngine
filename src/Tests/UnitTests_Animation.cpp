@@ -76,19 +76,6 @@ void TestNpcSpineTwistClamping() {
     CHECK(twisted > 0.0f); // positive offset should give positive twist
 }
 
-void TestFootTiltLimiting() {
-    // Verify that foot tilt is properly limited by max angle
-    // Simulate a steep slope (e.g., normal vector tilted 30 degrees)
-    glm::vec3 normal(0.5f, 0.866f, 0.0f); // normal tilted ~30 deg from vertical
-    float maxTilt = 0.5f; // radians, about 28 degrees
-
-    float angle = std::min(std::acos(std::clamp(normal.y, -1.0f, 1.0f)), maxTilt);
-
-    // angle should be clamped to maxTilt
-    CHECK(angle <= maxTilt);
-    CHECK(angle > 0.4f); // Should be substantial but under the limit
-}
-
 // ---- lane A round 2: pole/hint, max stretch, spine distribution, grip offsets ----
 namespace {
 // root (uniform scale, as imported) -> upper -> lower (bent) -> end; the elbow sits below the shoulder-hand line.
@@ -1285,7 +1272,6 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ADS reload preserves additive locomotion",TestAdsReloadPreservesAdditiveLocomotion});
     tests.push_back({"FirstPersonBody NPC tunables save/load round-trip", TestFirstPersonBodyNpcTunablesRoundTrip});
     tests.push_back({"NPC spine twist clamping", TestNpcSpineTwistClamping});
-    tests.push_back({"Foot tilt limiting", TestFootTiltLimiting});
     tests.push_back({"Two-bone hint defaults keep the old solve", TestTwoBoneHintDefaultsKeepOldSolve});
     tests.push_back({"Two-bone pole hint stops the elbow flip", TestTwoBoneHintStopsElbowFlip});
     tests.push_back({"Two-bone bend axis hint still reaches the target", TestTwoBoneBendAxisReachesTarget});
