@@ -3,6 +3,7 @@
 // Shared by UnitTests.cpp and the per-area test files (UnitTests_<Area>.cpp), so each area can add
 // tests in its own file instead of everyone editing UnitTests.cpp and its one big test table.
 
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -20,6 +21,13 @@ extern std::string g_SkipReason;
 // as SKIP, not PASS, and counts it. A test that ran some checks before skipping the rest is
 // "PASS (partly skipped: ...)".
 inline void Skip(const std::string& why) { g_SkipReason = why; }
+
+// A temp-file name of its own for this run (`stem` + a per-process stamp + `ext`), so two test runs at once
+// (several worktrees, CI shards) don't overwrite each other's files.
+inline std::string TempName(const std::string& stem, const std::string& ext = "") {
+    static const std::string stamp = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    return stem + "_" + stamp + ext;
+}
 
 using TestList = std::vector<std::pair<const char*, std::function<void()>>>;
 

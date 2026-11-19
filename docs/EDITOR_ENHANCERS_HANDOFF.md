@@ -1,6 +1,6 @@
 # Editor Enhancers: handoff for the next session
 
-Status as of 2026-10-07: all six tools and the Inspector attributes are integrated in upstream `main`. The historical phase design and branch references below remain an implementation map. Automated native and editor UI checks are available with `--unit-tests` and `--editor-tests`; manual testing of real authoring workflows remains useful. The previously untracked `VINSPECTOR_TEST_SHEET.md` is not part of this checkout.
+Status as of 2026-10-07: all six tools and the Inspector attributes are integrated in upstream `main`. The historical phase design and branch references below remain an implementation map. Automated native and editor UI checks are available with `--unit-tests` and `--editor-tests`; manual testing of real authoring workflows remains useful.
 
 The user-facing docs are in [EDITOR_ENHANCERS.md](EDITOR_ENHANCERS.md). This file preserves the implementation design and follow-up context.
 
@@ -44,7 +44,6 @@ Some of this already existed before the project, and the plan extends that code 
   4. Launch the editor with `run-editor.cmd`.
   5. Give the user a short test checklist.
 - If the editor is running and blocks a build, close it with `taskkill /IM TartarusEngine.exe /F`. No need to ask.
-- Leave the untracked files alone: `docs/REVIEW_LIST.md` and `project/editor_folders.json`. The second one is the user's own folder-style test data.
 
 ## 2. Build, test and repo conventions
 
@@ -169,14 +168,13 @@ The original plan file is `C:\Users\Jacob\plans\https-assetstore-unity-com-packa
 - `ReflectField` is in `src/Game/ComponentReflection.h`, l.42. Its fields: Name, Type, Address, Tooltip, Min/Max, Slider, Logarithmic, Format, EnumLabels/EnumCount, `VisibleIfField/Value/Not`, Group, EditorHidden, Key, LegacyNames, AssetPath.
 - Many components have a Bool field named exactly `"Enabled"`, e.g. TransformController, IKRig, AudioListener and a few others. Add an inline helper like `const ReflectField* FindEnabledField(const ReflectComponent&)` (a Bool field with `Name == "Enabled"`) instead of editing every registration. It serves the A hover key and an optional dimmed header.
 
-**Selection history** (`EditorLayer_Hierarchy.cpp` l.271–344; header `EditorLayer.h` l.902–925):
+**Selection history** (`EditorLayer_Hierarchy.cpp`; header `EditorLayer.h`):
 
-- `m_SelHistory` is `std::vector<std::vector<entt::entity>>`, with `m_SelHistoryPos` and `m_SelSnapshotLast`.
-- `RecordSelectionHistory(world)` runs once per frame (`EditorLayer.cpp` l.3657). It compares entity snapshots, pushes a selection-only undo entry unless `m_EditPushedThisFrame` is set, and caps the history at 64.
+- `m_SelHistory` is `std::vector<Enhancers::SelectionHistoryEntry>` (scene key, entity orders, asset), with `m_SelHistoryPos` and `m_SelSnapshotLast`.
+- `RecordSelectionHistory(world)` runs once per frame (`EditorLayer.cpp`, after the module draws). It compares entity snapshots, pushes a selection-only undo entry unless `m_EditPushedThisFrame` is set, and caps the history at 64.
 - `ApplySelectionSnapshot` sets `m_SelHistoryNavigating`.
-- **Bug to fix:** entries are raw entt handles. They go stale after an undo, Play/Stop or scene load, and can select a recycled, unrelated entity in another scene. Nothing clears the history on scene load.
-- `RestoreSelectionByOrder(world, orders)` (`EditorLayer_Scene.cpp` l.570) already selects by order and sets `m_SelHistoryNavigating`. `CaptureSelectedOrders(world, entities)` is at l.559.
-- Callers: shortcuts `select.historyBack/Forward` (`EditorLayer.cpp` l.3336), the Edit menu (`EditorLayer_Toolbar.cpp` l.693), and the Hierarchy nav bar (`EditorLayer_Enhancers.cpp` l.471).
+- `RestoreSelectionByOrder(world, orders)` (`EditorLayer_Scene.cpp`) already selects by order and sets `m_SelHistoryNavigating`; `CaptureSelectedOrders(world, entities)` sits next to it.
+- Callers: shortcuts `select.historyBack/Forward` (`EditorLayer.cpp`), the Edit menu (`EditorLayer_Toolbar.cpp`), and the Hierarchy nav bar (`EditorLayer_Enhancers.cpp`).
 
 **Asset selection:**
 

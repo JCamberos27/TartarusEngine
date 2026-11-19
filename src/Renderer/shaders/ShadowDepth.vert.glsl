@@ -30,6 +30,7 @@ uniform mat4 uCascadeViewProj[4];
 // to the texels its receivers can read. Needs GL_ARB_shader_viewport_layer_array; the engine sets it only then.
 uniform int uCascadeViewport;
 #include "FoliageWind.glsl"
+#include "SkinnedVertex.glsl"
 uniform int uUseSkinning;
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
 // uUseSkinning 2: skinned once this frame already (Model::PreSkin, SkinnedVertex.glsl); only the position is read.
@@ -46,7 +47,7 @@ out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     if (uUseSkinning == 2) {
-        uint s = uint(gl_VertexID - gl_BaseVertex + uSkinBase) * 5u;
+        uint s = uint(gl_VertexID - gl_BaseVertex + uSkinBase) * kSkinnedWords;
         localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
     } else if (uUseSkinning == 1) {
         int boneIds[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
