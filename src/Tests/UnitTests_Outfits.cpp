@@ -52,7 +52,6 @@
 #include "AnimationSystem.h"           // #123 - the spin systems, driven frame by frame below
 #include "GameRules.h"
 #include "HotReloadGameModule.h"      // Spin / Transform Controller run inside TartarusGame.dll, not the exe
-#include <windows.h> // GetModuleFileNameW: --unit-tests runs before EnginePaths::Init
 #include "UndoDeltaChain.h"
 #include "World.h"
 #include "ImpostorLibrary.h"
