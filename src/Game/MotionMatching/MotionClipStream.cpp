@@ -71,7 +71,7 @@ bool ReadWhole(const std::string& path, std::vector<char>& out) {
 }
 
 bool WriteWhole(const std::string& path, const std::vector<char>& b) {
-    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    std::ofstream f(std::filesystem::u8path(path), std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f.write(b.data(), (std::streamsize)b.size());
     return (bool)f;

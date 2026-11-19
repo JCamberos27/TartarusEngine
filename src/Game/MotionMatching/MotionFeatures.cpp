@@ -353,7 +353,7 @@ bool MotionFeatureSet::Save(const std::string& path, std::string* error) const {
     b.insert(b.end(), m_Gait.begin(), m_Gait.end());
     b.insert(b.end(), m_Flags.begin(), m_Flags.end());
     b.insert(b.end(), m_Style.begin(), m_Style.end());
-    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    std::ofstream f(std::filesystem::u8path(path), std::ios::binary | std::ios::trunc);
     if (!f || !f.write(b.data(), (std::streamsize)b.size())) {
         if (error) *error = "cannot write " + path;
         return false;

@@ -92,8 +92,8 @@ public:
     }
     // Finger bone `k` (Statics' order) at a global frame of `clip`: the track, or the relaxed pose when the clip has none.
     glm::quat FingerRotation(int clip, std::uint32_t frame, int k) const {
+        if (!HasFingers(clip)) return Statics[(size_t)k].Rotation;
         const Clip& c = m_Clips[(size_t)clip];
-        if (c.FingerFirst == kNoFingers) return Statics[(size_t)k].Rotation;
         return MotionMath::UnpackQuat32(m_Finger[((size_t)c.FingerFirst + (frame - c.First)) * Statics.size() + (size_t)k]);
     }
     // The root at `seconds` into `clip` (clamped to the clip), interpolated between frames.

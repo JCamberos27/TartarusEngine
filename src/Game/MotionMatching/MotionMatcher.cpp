@@ -140,7 +140,8 @@ void MotionMatcher::Update(float dt, const Input& in) {
         ++Searches;
         SearchMsTotal += ms;
         SearchMsMax = std::max(SearchMsMax, ms);
-        SearchMs.push_back((float)ms);
+        if (SearchMs.size() < kSearchSamples) SearchMs.push_back((float)ms);
+        else SearchMs[(size_t)(Searches - 1) % kSearchSamples] = (float)ms;
         m_Searched = true;
         if (m_Last.Frame >= 0 && m_Last.Switched) {
             BeginBlend();
