@@ -161,7 +161,7 @@ std::shared_ptr<Model> Model::CreateInstance() const {
     return inst;
 }
 
-void Model::ImportFromFile(const ModelImportSettings& settings) {
+bool Model::ImportFromFile(const ModelImportSettings& settings) {
     BumpAnimationEpoch(); // bones or clips may appear (a reimport reaches every instance sharing m_D)
     Assimp::Importer importer;
     // FBX files embed their own unit scale (commonly centimeters, sometimes meters or
@@ -228,7 +228,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
         }
         if (m_FinalBoneMatrices.empty()) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
         ++m_PoseVersion;
-        return;
+        return false;
     }
 
     // #96 — import into a fresh SharedData, then move it into the object every instance of this
@@ -271,7 +271,14 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     m_AnimFrom = {};
     m_FadeDuration = m_FadeElapsed = 0.0f;
     m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    // The node list may have changed: an applied pose, hidden nodes and the auto root-motion pick were for the old one.
+    m_ExternalPose = false;
+    m_AppliedPose.clear();
+    m_HiddenNodes.clear();
+    m_PoseDirty = m_PaletteDirty = false;
+    m_AutoRootMotionFor = nullptr;
     ++m_PoseVersion;
+    return true;
 }
 
 ModelImportSettings::UpAxis Model::ParseUpAxis(const std::string& s) {
@@ -307,8 +314,7 @@ bool Model::Reimport(const ModelImportSettings& settings) {
         Log::Error("Model: cannot reimport '" + m_Path + "' - file is missing.", LogContext::Asset(m_Path));
         return false;
     }
-    ImportFromFile(settings);
-    return !m_D->Meshes.empty();
+    return ImportFromFile(settings);
 }
 
 Model::~Model() { BumpAnimationEpoch(); }
@@ -1905,7 +1911,7 @@ void Model::ResolveAppliedPose() const {
     for (size_t i = 0; i < nodes.size(); ++i) {
         if (!path[i]) continue;
         const AnimNode& n = nodes[i];
-        const glm::mat4 local = pose[i].ToMatrix();
+        const glm::mat4 local = i < pose.size() ? pose[i].ToMatrix() : n.BindLocal; // a pose from before a reimport
         m_NodeGlobals[i] = n.Parent >= 0 ? AffineMul(m_NodeGlobals[n.Parent], local) : local;
         if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
     }
@@ -1953,12 +1959,17 @@ void Model::PosedBounds(glm::vec3& outMin, glm::vec3& outMax) const {
 }
 
 void Model::SetHiddenNodes(const std::vector<int>& nodes) {
-    m_HiddenNodes.clear();
+    std::vector<unsigned char> hidden;
     for (int n : nodes) {
         if (n < 0 || n >= NodeCount()) continue;
-        if (m_HiddenNodes.empty()) m_HiddenNodes.assign(NodeCount(), 0);
-        m_HiddenNodes[n] = 1;
+        if (hidden.empty()) hidden.assign(NodeCount(), 0);
+        hidden[n] = 1;
     }
+    if (hidden == m_HiddenNodes) return;
+    m_HiddenNodes.swap(hidden);
+    // An applied pose is re-resolved with the new set when next read (an animated one picks it up on its next tick).
+    m_PoseDirty = m_PaletteDirty = true;
+    ++m_PoseVersion;
 }
 
 int Model::FindRootMotionNode(const std::string& name) const {

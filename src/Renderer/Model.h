@@ -1,6 +1,7 @@
 #pragma once
 struct TerrainGrid; // Model::CreateTerrain
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -245,8 +246,9 @@ public:
     bool NeverAnimates() const {
         return !HasBones() && AnimationCount() == 0 && !m_PosePending && m_Anim.Clip < 0 && m_FadeDuration <= 0.0f;
     }
-    static uint64_t AnimationEpoch() { return s_AnimationEpoch; }
-    static void BumpAnimationEpoch() { ++s_AnimationEpoch; }
+    static uint64_t AnimationEpoch() { return s_AnimationEpoch.load(std::memory_order_relaxed); }
+    // Atomic: ImportDeferred bumps it on asset-loader worker threads while the main thread reads and bumps it.
+    static void BumpAnimationEpoch() { s_AnimationEpoch.fetch_add(1, std::memory_order_relaxed); }
 
     void TickAnimationOnce(uint64_t frameIndex, float dt) {
         if (m_LastTickedFrame == frameIndex) return;
@@ -369,7 +371,8 @@ public:
 
     // Nodes drawn collapsed: each one's subtree folds into its pivot (scale ~0), so skinned
     // geometry it drives disappears - e.g. a first-person body's arms while separate view-model
-    // arms are shown. Empty = none. The pose itself is unchanged; only the node globals are.
+    // arms are shown. Empty = none. The pose itself is unchanged; only the node globals are. A model at its bind
+    // pose (nothing playing, no applied pose) draws the bind palette and so ignores the set.
     void SetHiddenNodes(const std::vector<int>& nodes);
     RootMotionDelta ConsumeRootMotion();
 
@@ -619,7 +622,7 @@ private:
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
     uint64_t m_LastTickedFrame = ~0ull;
-    static inline uint64_t s_AnimationEpoch = 0;
+    static inline std::atomic<uint64_t> s_AnimationEpoch{0};
 
     // Import-time only: each node's model-space bind transform, for the bind-pose palette (#98).
     std::map<std::string, glm::mat4> m_ImportNodeGlobals;
@@ -632,7 +635,8 @@ private:
     };
     std::vector<MergeBucket> m_MergeBuckets;
 
-    void ImportFromFile(const ModelImportSettings& settings);
+    // False when the file couldn't be read or parsed (a reimport then keeps the previous import).
+    bool ImportFromFile(const ModelImportSettings& settings);
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
     // Null when the mesh went into a MergeBucket instead (FlushMergeBuckets makes it later).
     std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform,
