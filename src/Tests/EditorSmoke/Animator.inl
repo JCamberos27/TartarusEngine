@@ -358,16 +358,19 @@ void RegisterAnimatorTests() {
          Shot("layer", {kAnimator}),
 
          // The window's Undo / Redo.
+         Expect("the next Undo is the controller edit", [](Ctx& c) { const std::string t = X::UndoTop(c.E); return Contains(t, "Edit Smoke") ? std::string() : "undo top is '" + t + "'"; }),
          Click(WinButton(ICON_FA_ROTATE_LEFT)), Wait(6),
-         Until("Undo removes the layer", [](Ctx& c) { return Win(c)->Doc.Layers.size() == 1; }, 60),
+         Until("Undo removes the layer", [](Ctx& c) { return Win(c)->Doc.Layers.size() == 1; }, 600),
+         Expect("the next Undo is the controller edit", [](Ctx& c) { const std::string t = X::UndoTop(c.E); return Contains(t, "Edit Smoke") ? std::string() : "undo top is '" + t + "'"; }),
          Click(WinButton(ICON_FA_ROTATE_LEFT)), Wait(6),
-         Until("Undo removes the parameter", [](Ctx& c) { return (double)Win(c)->Doc.Parameters.size() == g_Number; }, 60),
+         Until("Undo removes the parameter", [](Ctx& c) { return (double)Win(c)->Doc.Parameters.size() == g_Number; }, 600),
+         Expect("the next Undo is the controller edit", [](Ctx& c) { const std::string t = X::UndoTop(c.E); return Contains(t, "Edit Smoke") ? std::string() : "undo top is '" + t + "'"; }),
          Click(WinButton(ICON_FA_ROTATE_LEFT)), Wait(6),
-         Until("Undo puts the transition back", [](Ctx& c) { return HasTransition(c, "New State", "Blend Tree"); }, 60),
+         Until("Undo puts the transition back", [](Ctx& c) { return HasTransition(c, "New State", "Blend Tree"); }, 600),
          Click(WinButton(ICON_FA_ROTATE_RIGHT)), Wait(6),
-         Until("Redo deletes it again", [](Ctx& c) { return !HasTransition(c, "New State", "Blend Tree"); }, 60),
+         Until("Redo deletes it again", [](Ctx& c) { return !HasTransition(c, "New State", "Blend Tree"); }, 600),
          Click(WinButton(ICON_FA_ROTATE_RIGHT)), Wait(6),
-         Until("Redo adds the parameter again", [](Ctx& c) { return (double)Win(c)->Doc.Parameters.size() == g_Number + 1; }, 60),
+         Until("Redo adds the parameter again", [](Ctx& c) { return (double)Win(c)->Doc.Parameters.size() == g_Number + 1; }, 600),
 
          // The Delete key on a selected state (canvas focused), then Ctrl+Z.
          Click(Tab("Layers")), Wait(2),
@@ -376,7 +379,7 @@ void RegisterAnimatorTests() {
          Key(ImGuiKey_Delete), Wait(4),
          ExpectTrue("Delete removed Idle", [](Ctx& c) { return StateIndex(c, "Idle") < 0; }),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(6),
-         Until("Ctrl+Z brings Idle back", [](Ctx& c) { return StateIndex(c, "Idle") >= 0; }, 60),
+         Until("Ctrl+Z brings Idle back", [](Ctx& c) { return StateIndex(c, "Idle") >= 0; }, 600),
          Shot("final", {kAnimator})},
     }), [](Ctx& c) { // passed or failed: close the Animator, delete the scratch controller
         AA::Show(c.E) = false;

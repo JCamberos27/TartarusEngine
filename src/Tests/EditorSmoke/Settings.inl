@@ -114,15 +114,18 @@ Steps TogglePref(const char* label, const char* key, LiveBool live) {
 // --- Project files ------------------------------------------------------------------------------
 std::string SettingsPath() { return ProjectPaths::Resolve("settings.json"); }
 std::string LayersPath() { return ProjectPaths::Resolve("layers.json"); }
-struct Saved { bool Existed = false; std::string Bytes; };
+struct Saved { bool Taken = false; bool Existed = false; std::string Bytes; };
 Saved g_SettingsFile, g_LayersFile;
 Saved Snapshot(const std::string& path) {
     Saved s;
+    s.Taken = true;
     s.Existed = std::filesystem::exists(path);
     if (s.Existed) s.Bytes = ReadText(path);
     return s;
 }
-void Restore(const std::string& path, const Saved& s) {
+void Restore(const std::string& path, Saved& s) {
+    if (!s.Taken) return; // nothing snapshotted (the test failed before its snapshot), or already put back
+    s.Taken = false;
     std::error_code ec;
     if (!s.Existed) { std::filesystem::remove(path, ec); return; }
     std::ofstream f(path, std::ios::binary | std::ios::trunc);
@@ -139,6 +142,12 @@ Step RestoreProjectFiles() {
         Restore(SettingsPath(), g_SettingsFile);
         Restore(LayersPath(), g_LayersFile);
     });
+}
+// The same, as a test's Finally: it runs when a step fails or times out too, so a failed run never
+// leaves the tracked project files edited.
+void RestoreProjectFilesNow(Ctx&) {
+    Restore(SettingsPath(), g_SettingsFile);
+    Restore(LayersPath(), g_LayersFile);
 }
 nlohmann::json ProjectJson() { return ReadJson(SettingsPath()); }
 // The first .meta under project/assets written after `since`, or "" when none was.
@@ -505,7 +514,7 @@ void RegisterSettingsTests() {
          TypeText("gravity"),
          Until("on Physics", [](Ctx& c) { return OnCategory(c, true, 0); }), Wait(3),
          Shot("gravity", {"###Settings"}),
-         Click(RightEnd(ByExact("##search", "###Settings"))), Wait(3),
+         Click(ClearX(ByExact("##search", "###Settings"))), Wait(3),
          ExpectTrue("search cleared", [](Ctx& c) { return A::SettingsSearch(c.E).empty(); }),
          Expect("every category listed", [](Ctx&) {
              std::string missing;
@@ -550,7 +559,7 @@ void RegisterSettingsTests() {
          }),
          RestoreProjectFiles(),
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
-    }));
+    }), RestoreProjectFilesNow);
 
     Add("settings: Tags & Layers - add and remove a tag, name and unname a layer", Seq({
         {FreshScene(), Wait(2), SnapshotProjectFiles(),
@@ -584,7 +593,7 @@ void RegisterSettingsTests() {
          Until("layers.json unnamed", [](Ctx&) { return FileLayerName(g_Slot).empty(); }),
          RestoreProjectFiles(),
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
-    }));
+    }), RestoreProjectFilesNow);
 
     // Shot only: Build and Build and Run are never clicked.
     Add("settings: Build page (shot only)", Seq({
