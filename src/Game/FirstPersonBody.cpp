@@ -733,7 +733,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
 
     Log::Info("First Person Body: '" + (reg.all_of<NameComponent>(body) ? reg.get<NameComponent>(body).Name : std::string("body")) +
               "' is the player's body - " + std::to_string(pieces.size()) + " pieces, " + std::to_string(shadowOnly) +
-              " hidden from the camera, root motion at responsiveness " + std::to_string(cfg.Responsiveness).substr(0, 4) + ".");
+              " hidden from the camera.");
     return true;
 }
 

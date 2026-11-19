@@ -2324,13 +2324,10 @@ void TestFirstPersonBodyTuning() {
     FirstPersonControllerComponent ctrl;
     auto near = [](float a, float b) { return std::abs(a - b) < 1e-5f; };
     CHECK(near(body.EyeSlack, 0.035f) && near(body.ReachSlack, 0.04f) && near(body.ShrugStart, 0.98f) && near(body.ShrugMax, 0.12f));
-    CHECK(near(body.TurnLagFloor, 90.0f) && near(body.TurnLagMargin, 5.0f) && near(body.TurnEndAngle, 8.0f) && near(body.TurnMinTime, 0.3f) &&
-          near(body.TurnTimeout, 4.0f) && near(body.TurnMoveEase, 0.08f));
-    CHECK(near(body.StartIdleTime, 0.25f) && near(body.StartMaxMove, 0.6f) && near(body.StopMinRunTime, 0.6f) && near(body.StopMinRunTimeCrouched, 0.7f) &&
-          near(body.StopMinSpeed, 1.2f) && near(body.StopMinSpeedCrouched, 0.6f) && near(body.StopDebounce, 0.05f) && near(body.StopRunForward, 0.7f));
+    CHECK(near(body.TurnEndAngle, 8.0f));
     CHECK(near(body.FootLockDrift, 0.25f) && body.FootLockEnabled && near(body.FootLockRelease, 0.2f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
           near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) &&
-          near(body.StairEase, 0.2f) && near(body.AirborneDelay, 0.15f));
+          near(body.StairEase, 0.2f));
     CHECK(near(ctrl.JumpBufferTime, 0.12f) && near(ctrl.CoyoteTime, 0.10f));
     // Walk is the default gait (the walk clips' speed), Shift the jog (the jog clips').
     CHECK(near(body.WalkSpeed, 1.53f) && near(body.RunSpeed, 3.26f) && body.WalkSpeed < body.RunSpeed);

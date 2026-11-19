@@ -194,7 +194,6 @@ void WeaponAttachments::Load(World& world, entt::entity root, std::array<int, 3>
         if (const auto* g = world.Registry.try_get<GripAttachmentComponent>(e); g && g->Enabled) add(e, 1, "", "");
         if (const auto* o = world.Registry.try_get<OpticAttachmentComponent>(e); o && o->Enabled) {
             auto* a = add(e, 2, o->AimPoint, "");
-            a->AimBlendTime = std::clamp(o->AimBlendTime, 0.0f, 1.0f);
             a->DefaultOptic = o->DefaultOptic;
         }
     }
