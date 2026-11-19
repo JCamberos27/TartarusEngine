@@ -239,8 +239,7 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
 
 void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash) {
     std::error_code ec;
-    std::filesystem::directory_iterator dir(CacheDir(), ec);
-    if (ec) return; // no cache directory yet (or can't be listed): nothing to prune
+    if (!std::filesystem::is_directory(CacheDir(), ec)) return; // no cache directory yet: nothing to prune
 
     struct Survivor {
         std::filesystem::file_time_type LastUsed;
@@ -308,7 +307,8 @@ void Prune(const std::function<std::optional<uint64_t>(const std::string& source
         }
 
         if (stale) {
-            std::filesystem::remove(path, ec);
+            std::error_code removeEc; // a file in use elsewhere: skip it, keep pruning
+            std::filesystem::remove(path, removeEc);
         } else {
             std::error_code statEc;
             auto lastUsed = entry.last_write_time(statEc);

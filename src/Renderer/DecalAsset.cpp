@@ -215,7 +215,7 @@ bool DecalAsset::Save() const {
     j["paint"] = {{"enabled", Paint}, {"roughness", PaintRoughness}, {"metal", PaintMetal},
                   {"relief", Relief},  {"uv", UVPaint}};
     j["weathering"] = {{"fade", Fade}, {"bleach", Bleach}, {"peel", Peel}, {"buff", Buff}, {"sceneGrading", SceneGrading}};
-    if (!Substrate.Albedo.empty())
+    if (!Substrate.Albedo.empty() || !Substrate.Preset.empty())
         j["substrate"] = SubstrateJson::Write<ojson>(Substrate, [](const std::string& p) { return p; });
     j["category"] = Category;
     ojson tags = ojson::array();

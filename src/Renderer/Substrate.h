@@ -59,6 +59,6 @@ struct SubstrateDesc {
 namespace SubstratePresets {
 // The .substrate preset at this project-relative (or absolute) path, read once and cached; an empty
 // desc (no albedo) when it's missing or broken. Preset is set to `path`. SubstrateJson.h.
-const SubstrateDesc& Get(const std::string& path);
+SubstrateDesc Get(const std::string& path);
 void ClearCache();
 } // namespace SubstratePresets

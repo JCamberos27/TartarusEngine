@@ -19,12 +19,14 @@ std::unordered_map<std::string, SubstrateDesc>& Cache() {
 
 namespace SubstratePresets {
 
-const SubstrateDesc& Get(const std::string& path) {
-    std::lock_guard<std::mutex> lock(s_Mutex);
-    auto& cache = Cache();
+SubstrateDesc Get(const std::string& path) {
     std::string key = path;
     for (char& c : key) c = c == '\\' ? '/' : (char)std::tolower((unsigned char)c);
-    if (auto it = cache.find(key); it != cache.end()) return it->second;
+    {
+        std::lock_guard<std::mutex> lock(s_Mutex);
+        if (auto it = Cache().find(key); it != Cache().end()) return it->second;
+    }
+    // Read and parsed unlocked: two threads asking for the same new preset both read it, and the first in wins.
     SubstrateDesc d;
     const std::string abs = path.empty() || std::filesystem::u8path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
     std::ifstream f(std::filesystem::u8path(abs));
@@ -40,7 +42,8 @@ const SubstrateDesc& Get(const std::string& path) {
         Log::Warn("Substrate: preset '" + path + "' not found - no substrate.");
     }
     d.Preset = path;
-    return cache.emplace(key, d).first->second;
+    std::lock_guard<std::mutex> lock(s_Mutex);
+    return Cache().emplace(key, std::move(d)).first->second;
 }
 
 void ClearCache() {
