@@ -1240,8 +1240,31 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             // With its material remap, like a placed copy (cached materials: cheap per frame).
             std::vector<std::shared_ptr<MaterialAsset>> previewSlots;
             assets.ApplyMaterialRemap(*model, previewSlots);
-            unsigned int handle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
-                m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2, previewSlots);
+            std::uint64_t previewKey = 1469598103934665603ull;
+            const auto mixKey = [&previewKey](const void* p, size_t n) {
+                const unsigned char* b = static_cast<const unsigned char*>(p);
+                for (size_t i = 0; i < n; ++i) { previewKey ^= b[i]; previewKey *= 1099511628211ull; }
+            };
+            const Model* modelPtr = model.get();
+            mixKey(&modelPtr, sizeof(modelPtr));
+            mixKey(&m_ModelPreviewYaw, sizeof(float));
+            mixKey(&m_ModelPreviewPitch, sizeof(float));
+            mixKey(&m_ModelPreviewDistance, sizeof(float));
+            mixKey(&previewDims, sizeof(previewDims));
+            for (const auto& slot : previewSlots) {
+                const std::uint64_t h = slot ? MaterialPreviewRenderer::ContentKey(*slot) : 0u;
+                mixKey(&h, sizeof(h));
+            }
+            constexpr float kModelPreviewRefresh = 0.5f;
+            m_ModelPreviewAge += ImGui::GetIO().DeltaTime;
+            if (!m_ModelPreviewHandle || previewKey != m_ModelPreviewKey || model->IsPlayingAnimation() ||
+                m_ModelPreviewAge >= kModelPreviewRefresh) {
+                m_ModelPreviewHandle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
+                    m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2, previewSlots);
+                m_ModelPreviewKey = previewKey;
+                m_ModelPreviewAge = 0.0f;
+            }
+            const unsigned int handle = m_ModelPreviewHandle;
             ImGui::Image((ImTextureID)(intptr_t)handle, previewDims, ImVec2(0, 1), ImVec2(1, 0)); // bottom-up FBO
 
             // Left-drag to orbit, scroll to zoom - the same mouse language as the main viewport's
