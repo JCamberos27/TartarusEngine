@@ -68,7 +68,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     // main's names for what the step reads, so the step reads as it did there.
     World& world = *in.world;
     AssetLibrary& assets = *in.assets;
-    Window& window = *in.window;
     EditorLayer& editor = *in.editor;
     HotReloadGameModule& gameModule = *in.gameModule;
     Player& player = *in.player;
