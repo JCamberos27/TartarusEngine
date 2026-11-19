@@ -12,6 +12,7 @@
 
 #include "Camera.h"
 #include "Components.h"
+#include "CubeFaces.h"
 #include "Core/Env.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
@@ -415,6 +416,44 @@ bool ShadowFrame::CollectLocalCasters(const Frustum* frustum, const AABB* range,
     return anyDynamic;
 }
 
+// The spot / point passes' prologue: store the LIGHT-FACING surface (back-face cull), NOT the far side. The sun CSM
+// front-face-culls fine because its rays are parallel, but a perspective light's rays diverge and a curved caster's back
+// face sits far enough past the contact that culling front faces detached the contact shadow - the sphere gap and
+// peter-panning in #134. gl_FragDepth is written linearly here, so glPolygonOffset does nothing; the bias lives
+// entirely in SpotShadow() / PointShadow()'s `ref` term.
+ShadowFrame::LocalPassLocs ShadowFrame::BeginLocalPass(Shader& shader) {
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    shader.Bind(); // linear distance-to-light depth
+    // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before DrawDepthOnly binds
+    // anything there (KHR 131204 on frame 1).
+    GLStateCache::BindTexture2D(0, DefaultTextures::White());
+    // #194: resolved once, outside the per-light x per-caster loops.
+    return {shader.Loc("uLightViewProj"), shader.Loc("uShadowLightPos"), shader.Loc("uShadowFar")};
+}
+
+void ShadowFrame::DrawLocalCasters(Shader& shader, bool animatedOnes, const Frustum* clip) {
+    m_Draws.clear();
+    for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
+        const LocalCaster* c = m_Visible[vi];
+        if ((m_VisibleDynamic[vi] != 0) != animatedOnes) continue;
+        if (clip && c->bounded && !clip->Intersects(c->bounds)) continue;
+        m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
+    }
+    DrawDepthCasters(shader, m_Draws);
+}
+
+void ShadowFrame::EndLocalPass(const ShadowFrameInputs& in) {
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, in.windowWidth, in.windowHeight);
+    GLStateCache::Invalidate();
+}
+
 void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
     PROFILE_SCOPE("Spot Shadow Pass");
     PROFILE_GPU_SCOPE("Spot Shadow Pass");
@@ -422,23 +461,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
     SpotShadowMap& spotShadowMap = *in.spotMap;
     Shader& localShadowShader = *in.localShader;
     const std::uint64_t frame = in.frame;
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    // Store the LIGHT-FACING surface (back-face cull), NOT the far side. The sun CSM front-face-culls fine because its
-    // rays are parallel, but a perspective spot's rays diverge and a curved caster's back face sits far enough past
-    // the contact that culling front faces detached the contact shadow - the sphere gap in #134. gl_FragDepth is
-    // written linearly here, so glPolygonOffset does nothing; the bias lives entirely in SpotShadow()'s `ref` term.
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-
-    localShadowShader.Bind(); // linear distance-to-light depth
-    // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before DrawDepthOnly binds
-    // anything there (KHR 131204 on frame 1).
-    GLStateCache::BindTexture2D(0, DefaultTextures::White());
-    // #194: resolve once, outside the per-spot x per-caster loop.
-    const int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
-    const int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
-    const int localFarLoc = localShadowShader.Loc("uShadowFar");
+    const LocalPassLocs locs = BeginLocalPass(localShadowShader);
     for (int s = 0; s < fl.SpotCount; ++s) {
         if (!fl.SpotLive[s]) continue;
         // A light that moves (the flashlight) draws straight into its live layer - caching static depth it would throw
@@ -468,9 +491,9 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         // Unchanged, and no animated caster in it now or last frame: keep the layer.
         if (!staticChanged && !animated && !m_SpotHadAnimated[s]) continue;
         m_SpotHadAnimated[s] = animated;
-        localShadowShader.SetMat4(localLightViewProjLoc, fl.SpotVP[s]);
-        localShadowShader.SetVec3(localLightPosLoc, fl.SpotPos[s]);
-        localShadowShader.SetFloat(localFarLoc, fl.SpotFar[s]);
+        localShadowShader.SetMat4(locs.ViewProj, fl.SpotVP[s]);
+        localShadowShader.SetVec3(locs.LightPos, fl.SpotPos[s]);
+        localShadowShader.SetFloat(locs.Far, fl.SpotFar[s]);
         // Where this frame's animated casters land in the map: their bounds' corners through the light, a texel of
         // slack each side. A caster without bounds or reaching behind the light covers it all.
         const int mapRes = spotShadowMap.Resolution();
@@ -490,14 +513,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
             }
             if (whole) { dynRect = glm::ivec4(0, 0, mapRes, mapRes); break; }
         }
-        auto drawCasters = [&](bool animatedOnes) {
-            m_Draws.clear();
-            for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
-                const LocalCaster* c = m_Visible[vi];
-                if ((m_VisibleDynamic[vi] != 0) == animatedOnes) m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
-            }
-            DrawDepthCasters(localShadowShader, m_Draws);
-        };
+        auto drawCasters = [&](bool animatedOnes) { DrawLocalCasters(localShadowShader, animatedOnes, nullptr); };
         if (lightMoved) {
             spotShadowMap.Begin(s);
             drawCasters(false);
@@ -523,12 +539,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         drawCasters(true);
         m_SpotDynamicRect[s] = dynRect;
     }
-
-    glDisable(GL_POLYGON_OFFSET_FILL);
-    glCullFace(GL_BACK);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, in.windowWidth, in.windowHeight);
-    GLStateCache::Invalidate();
+    EndLocalPass(in);
 }
 
 // Point-light cube shadow maps (#119) - six faces per casting point light.
@@ -539,29 +550,7 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
     PointShadowMap& pointShadowMap = *in.pointMap;
     Shader& localShadowShader = *in.localShader;
     const std::uint64_t frame = in.frame;
-    // Standard GL cube-map face order: +X -X +Y -Y +Z -Z, with the conventional ups.
-    static const glm::vec3 kFaceDir[6] = {
-        { 1, 0, 0}, {-1, 0, 0}, {0,  1, 0}, {0, -1, 0}, {0, 0,  1}, {0, 0, -1} };
-    static const glm::vec3 kFaceUp[6] = {
-        {0, -1, 0}, {0, -1, 0}, {0, 0,  1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0} };
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    // Store the LIGHT-FACING surface (back-face cull), matching the spot pass. Front-face culling here stored a
-    // sphere's FAR hemisphere, which under this 90° perspective sits well past the true contact - that was the sphere
-    // peter-panning in #134. gl_FragDepth is linear, so glPolygonOffset is inert; PointShadow()'s `ref` term carries
-    // all the bias.
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-
-    localShadowShader.Bind(); // linear distance-to-light depth
-    // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before DrawDepthOnly binds
-    // anything there (KHR 131204 on frame 1).
-    GLStateCache::BindTexture2D(0, DefaultTextures::White());
-    // #194: resolve once, outside the per-point x 6-face x per-caster loop.
-    const int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
-    const int cubeFarLoc = localShadowShader.Loc("uShadowFar");
-    const int cubeLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
+    const LocalPassLocs locs = BeginLocalPass(localShadowShader);
     for (int s = 0; s < fl.PointCount; ++s) {
         if (!fl.PointLive[s]) continue;
         // The light's whole reach: casters outside it can't show on any face.
@@ -583,10 +572,12 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
         const bool staticChanged = sig != m_PointShadowSig[s];
         m_PointShadowSig[s] = sig;
         const glm::mat4 proj = MakePerspective(90.0f, 1.0f, fl.PointNear[s], reach); // #202
-        localShadowShader.SetVec3(cubeLightPosLoc, lp);
-        localShadowShader.SetFloat(cubeFarLoc, reach);
+        localShadowShader.SetVec3(locs.LightPos, lp);
+        localShadowShader.SetFloat(locs.Far, reach);
         for (int f = 0; f < 6; ++f) {
-            const glm::mat4 vp = proj * glm::lookAt(lp, lp + kFaceDir[f], kFaceUp[f]);
+            const CubeFaces::FaceBasis& fb = CubeFaces::kFaces[f]; // GL face order, the conventional ups
+            const glm::vec3 dir(fb.forward[0], fb.forward[1], fb.forward[2]), up(fb.up[0], fb.up[1], fb.up[2]);
+            const glm::mat4 vp = proj * glm::lookAt(lp, lp + dir, up);
             const Frustum lf = Frustum::FromViewProj(vp);
             bool dynamicHere = false;
             for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
@@ -595,17 +586,8 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
             }
             if (!staticChanged && !dynamicHere && !m_PointFaceHadDynamic[s][f]) continue; // keep the face
             m_PointFaceHadDynamic[s][f] = dynamicHere;
-            localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
-            const auto drawCasters = [&](bool dynamicOnes) {
-                m_Draws.clear();
-                for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
-                    const LocalCaster* c = m_Visible[vi];
-                    if ((m_VisibleDynamic[vi] != 0) != dynamicOnes) continue;
-                    if (c->bounded && !lf.Intersects(c->bounds)) continue;
-                    m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
-                }
-                DrawDepthCasters(localShadowShader, m_Draws);
-            };
+            localShadowShader.SetMat4(locs.ViewProj, vp);
+            const auto drawCasters = [&](bool dynamicOnes) { DrawLocalCasters(localShadowShader, dynamicOnes, &lf); };
             if (staticChanged) {
                 pointShadowMap.BeginStaticFace(s, f);
                 drawCasters(false);
@@ -614,11 +596,5 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
             if (dynamicHere) drawCasters(true);
         }
     }
-
-    glDisable(GL_POLYGON_OFFSET_FILL);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, in.windowWidth, in.windowHeight);
-    GLStateCache::Invalidate();
+    EndLocalPass(in);
 }
