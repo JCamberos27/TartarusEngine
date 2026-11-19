@@ -98,6 +98,9 @@ private:
     // The shadow candidates' world transforms in registry order (what AssignShadowSlots composed), which Gather's pass
     // over the same view takes instead of composing them again.
     std::vector<std::pair<entt::entity, glm::mat4>> m_LightXforms;
+    // AssignShadowSlots' per-frame scratch (kept for its storage).
+    std::vector<entt::entity> m_ChosenSpots, m_ChosenPoints;
+    std::vector<std::pair<float, entt::entity>> m_SpotCandidates, m_PointCandidates;
     StableSlots m_SpotSlots, m_PointSlots;
     std::unordered_map<entt::entity, int> m_SpotSlotOf, m_PointSlotOf;
 };

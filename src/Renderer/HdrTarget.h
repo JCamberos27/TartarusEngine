@@ -70,6 +70,7 @@ private:
     unsigned int m_ResolveFbo = 0, m_ResolveColor = 0;
     unsigned int m_MsVelocity = 0; // TAA motion vectors, 0 unless SetVelocityEnabled(true)
     bool m_WantVelocity = false;   // sticky across Resize()/Create()
+    mutable int m_DrawBuffersState = -1; // the MS FBO's draw buffers as SetVelocityWrites last set them (-1 unknown)
     mutable unsigned int m_ResolveDepth = 0; // 0 until ResolvedDepthTexture() is first called
     mutable bool m_DepthRequested = false;   // sticky, so a later Resize()/Create() still provisions it
     int m_Width = 0, m_Height = 0, m_Samples = 0;

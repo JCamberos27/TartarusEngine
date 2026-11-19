@@ -63,12 +63,18 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
     std::vector<entt::entity>& frameShadowed = m_ShadowedScratch;
     frameShadowed.clear();
     m_LightXforms.clear();
-    std::vector<entt::entity> chosenSpots, chosenPoints;
+    std::vector<entt::entity>& chosenSpots = m_ChosenSpots;
+    std::vector<entt::entity>& chosenPoints = m_ChosenPoints;
+    chosenSpots.clear();
+    chosenPoints.clear();
     // The player's flashlight takes the first spot shadow; the scene's spots share the rest.
     const int sceneSpotShadowBudget = std::max(out.SpotBudget - (in.torch ? 1 : 0), 0);
     const glm::vec3 viewPos = in.viewCam->Position;
     const float tanHalfFov = std::tan(glm::radians(in.viewCam->Fov) * 0.5f);
-    std::vector<std::pair<float, entt::entity>> spots, points;
+    std::vector<std::pair<float, entt::entity>>& spots = m_SpotCandidates;
+    std::vector<std::pair<float, entt::entity>>& points = m_PointCandidates;
+    spots.clear();
+    points.clear();
     for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
         const auto& lc = world.Registry.get<LightComponent>(e);
         // (Scored on the intensity now: holding a flickering light's shadow through its bright peaks - a TV

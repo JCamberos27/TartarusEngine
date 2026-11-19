@@ -62,6 +62,7 @@
 // by --smoke-test to log which lobes actually rendered; harmless in normal runs.
 namespace {
 std::unordered_map<std::uint32_t, std::uint64_t> g_variantDrawCounts;
+bool g_countVariants = false; // set by ResetVariantDrawCounts: only a run that reads the tally pays for it
 
 // How far from the eye the view model (arms, weapon, the player body's sleeves) can reach, metres: decals
 // farther than this can't touch it, so its pass skips the decal cull (DecalSystem::NearestDynamicReceiverDecal).
@@ -76,7 +77,10 @@ ParticleRenderer* Particles() {
 }
 namespace SceneRendererDebug {
 const std::unordered_map<std::uint32_t, std::uint64_t>& VariantDrawCounts() { return g_variantDrawCounts; }
-void ResetVariantDrawCounts() { g_variantDrawCounts.clear(); }
+void ResetVariantDrawCounts() {
+    g_variantDrawCounts.clear();
+    g_countVariants = true;
+}
 }
 
 // Extracted from main.cpp's `drawScene` lambda (audit #359, pass 2) and then split into
@@ -854,7 +858,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             prog->SetInt("uAlphaBlend", passAlphaBlend);
             appliedPrograms.push_back(prog);
         }
-        g_variantDrawCounts[prog == &modelShader ? 0u : key]++;
+        if (g_countVariants) g_variantDrawCounts[prog == &modelShader ? 0u : key]++;
         return prog;
     };
 

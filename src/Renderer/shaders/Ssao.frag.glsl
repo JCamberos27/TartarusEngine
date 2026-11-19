@@ -9,7 +9,7 @@ uniform sampler2D uNoise;
 uniform mat4 uProjection;
 uniform mat4 uInvProjection;
 uniform ivec2 uDepthSize;   // the full-resolution depth pre-pass
-uniform vec3 uKernel[32];
+uniform vec3 uKernel[16];
 uniform float uRadius;
 uniform float uBias;
 
@@ -59,7 +59,7 @@ void main() {
     // Every other kernel sample (16 of Ssao's 32, short and long alike): the same look after the blur at ~0.08 ms
     // less in the Forest.
     float occlusion = 0.0;
-    for (int i = 0; i < 32; i += 2) {
+    for (int i = 0; i < 16; ++i) {
         vec3 samplePos = fragPos + TBN * uKernel[i] * uRadius;
 
         // Project sample position to screen.

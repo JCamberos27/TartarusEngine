@@ -166,8 +166,9 @@ void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, floa
     // #160 - the kernel never changes, so upload it once per program (again only if the program
     // is recreated) instead of 32 string-built uniform names every frame.
     if (m_KernelUploadedTo != ssaoShader.Program()) {
-        for (int i = 0; i < (int)m_Kernel.size(); ++i)
-            ssaoShader.SetVec3("uKernel[" + std::to_string(i) + "]", m_Kernel[i]);
+        // The 32-sample kernel's even entries (short and long alike): the 16 the shader takes.
+        for (int i = 0; i < (int)m_Kernel.size() / 2; ++i)
+            ssaoShader.SetVec3("uKernel[" + std::to_string(i) + "]", m_Kernel[2 * i]);
         m_KernelUploadedTo = ssaoShader.Program();
     }
 
