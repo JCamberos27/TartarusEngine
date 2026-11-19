@@ -35,6 +35,7 @@ int ConvertToGlass(ImDrawList* dl, const ImU32* clear, int clearCount, ImU32 bor
     const ImU32 borderRgb = border & kRgb;
     const ImU32 edgeRgb = edge & kRgb;
     const unsigned int edgeA = (edge & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT;
+    const unsigned int borderA = (border & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT;
     int cleared = 0;
     for (ImDrawVert& v : dl->VtxBuffer) {
         const ImU32 c = v.col;
@@ -44,9 +45,13 @@ int ConvertToGlass(ImDrawList* dl, const ImU32* clear, int clearCount, ImU32 bor
         if (hit) {
             v.col = c & kRgb;
             ++cleared;
-        } else if (border != 0 && (c & kRgb) == borderRgb) {
+        } else if (border != 0 && borderA != 0 && (c & kRgb) == borderRgb) {
+            // A border vertex at the border's own alpha becomes the edge at its alpha; an anti-aliased
+            // fringe keeps its share. Relative to the border, not to 255: Glass's border is white at 10%,
+            // which came out ~1.5% white instead of the 15% edge. Anything more opaque than the border
+            // (pure-white text shares its RGB) is not border and stays as drawn.
             const unsigned int a = (c & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT;
-            v.col = edgeRgb | (((a * edgeA + 127u) / 255u) << IM_COL32_A_SHIFT);
+            if (a <= borderA) v.col = edgeRgb | (((a * edgeA + borderA / 2u) / borderA) << IM_COL32_A_SHIFT);
         }
     }
     return cleared;

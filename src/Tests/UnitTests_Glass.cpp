@@ -140,6 +140,22 @@ void TestGlassCompositorConvert() {
     CHECK(edges > 0);
     CHECK(solid == 0);
     CHECK(Glass::FindWindowBackground(dl, floating->Rect()) == 0); // nothing left to clear
+
+    // Glass's own border is translucent (white at 10%, alpha 26): a border vertex becomes the edge at
+    // the edge's alpha (not 26 x 15% = ~1.5%), an anti-aliased fringe keeps its share, and pure white
+    // text - same RGB, more opaque than the border - is left alone.
+    ImDrawList glassDl(ImGui::GetDrawListSharedData());
+    auto vert = [&](ImU32 col) { ImDrawVert v{}; v.col = col; glassDl.VtxBuffer.push_back(v); };
+    const ImU32 glassBorder = IM_COL32(255, 255, 255, 26), glassEdge = IM_COL32(255, 255, 255, 38);
+    vert(glassBorder);
+    vert(IM_COL32(255, 255, 255, 13));
+    vert(IM_COL32(255, 255, 255, 255));
+    vert(IM_COL32(40, 40, 40, 26));
+    Glass::ConvertToGlass(&glassDl, nullptr, 0, glassBorder, glassEdge);
+    CHECK(glassDl.VtxBuffer[0].col == glassEdge);
+    CHECK(glassDl.VtxBuffer[1].col == IM_COL32(255, 255, 255, 19));
+    CHECK(glassDl.VtxBuffer[2].col == IM_COL32(255, 255, 255, 255));
+    CHECK(glassDl.VtxBuffer[3].col == IM_COL32(40, 40, 40, 26));
 }
 
 void TestGlassifySolids() {
