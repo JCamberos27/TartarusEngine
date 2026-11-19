@@ -1764,6 +1764,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             ctx.TxHdr->BindForRender(); // rebind MSAA FBO for the transparent draw pass
             glActiveTexture(GL_TEXTURE0 + 14);
             glBindTexture(GL_TEXTURE_2D, ctx.TxCapture->Texture());
+            glActiveTexture(GL_TEXTURE0); // the contract: unit 0 active on return (RenderFrameContext.h)
             for (Shader* p : appliedPrograms) {
                 p->Bind();
                 p->SetInt("uOpaqueColor", 14);

@@ -30,19 +30,13 @@ void PointShadowMap::Configure(int resolution, int cubes) {
         Log::Error("PointShadowMap: failed to create depth cube array (" + std::to_string(resolution) + ")");
 }
 
-void PointShadowMap::BeginFace(int slot, int face) const {
-    slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
-    face = std::clamp(face, 0, 5);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_Target.Fbo());
-    m_Target.AttachLayer(slot * 6 + face);
-    // audit #358 — a layered depth FBO only reports COMPLETE once a layer is attached, so the
-    // check belongs here, once, rather than in Configure().
-    if (!m_CompleteChecked) {
-        m_CompleteChecked = true;
-        GLFramebufferCheck::Complete("PointShadowMap", m_Target.Fbo(), m_Resolution, m_Resolution);
-    }
-    glViewport(0, 0, m_Resolution, m_Resolution);
-    glClear(GL_DEPTH_BUFFER_BIT);
+// audit #358 — a layered depth FBO only reports COMPLETE once a layer is attached, so the check runs once, on the
+// first face both FBOs have one, rather than in Configure().
+void PointShadowMap::CheckComplete() const {
+    if (m_CompleteChecked) return;
+    m_CompleteChecked = true;
+    GLFramebufferCheck::Complete("PointShadowMap", m_Target.Fbo(), m_Resolution, m_Resolution);
+    GLFramebufferCheck::Complete("PointShadowMap static", m_Target.StaticFbo(), m_Resolution, m_Resolution);
 }
 
 // The static-caster cache is allocated when a face first needs it: a scene with no shadowed point light never pays for it.
@@ -62,6 +56,7 @@ void PointShadowMap::BeginFaceFromStatic(int slot, int face) const {
     face = std::clamp(face, 0, 5);
     m_Target.AttachLayer(slot * 6 + face);
     m_Target.AttachStaticLayer(slot * 6 + face);
+    CheckComplete();
     glBlitNamedFramebuffer(m_Target.StaticFbo(), m_Target.Fbo(), 0, 0, m_Resolution, m_Resolution, 0, 0, m_Resolution, m_Resolution,
                            GL_DEPTH_BUFFER_BIT, GL_NEAREST);
     glBindFramebuffer(GL_FRAMEBUFFER, m_Target.Fbo());

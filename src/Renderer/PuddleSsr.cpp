@@ -25,7 +25,17 @@ void PuddleSsr::WarmUp() {
 
 unsigned int PuddleSsr::Prepare(const HdrTarget* target) {
     if (!target || !target->IsValid()) return 0;
+    ++m_Tick;
+    for (auto it = m_Views.begin(); it != m_Views.end();) { // views gone (a closed tab, a destroyed target)
+        if (it->first != target && m_Tick - it->second.LastUsed > 600) {
+            if (it->second.Tex) glDeleteTextures(1, &it->second.Tex);
+            it = m_Views.erase(it);
+        } else {
+            ++it;
+        }
+    }
     View& v = m_Views[target];
+    v.LastUsed = m_Tick;
     if (v.W != target->Width() || v.H != target->Height() || !v.Tex) {
         if (v.Tex) glDeleteTextures(1, &v.Tex);
         v.W = target->Width();

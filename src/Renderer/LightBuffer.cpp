@@ -97,8 +97,8 @@ void LightBuffer::SortLocalNearestFirst(const glm::vec3& eye) {
     const size_t first = (size_t)m_DirectionalCount;
     if (m_Lights.size() < first + 2) return;
     // Each light's key once, then a stable sort of the order (ties keep their place, as the insertion sort did).
-    static std::vector<std::pair<float, std::uint32_t>> keyed;
-    static std::vector<GpuLight> sorted;
+    auto& keyed = m_SortKeys;
+    auto& sorted = m_SortScratch;
     keyed.clear();
     for (size_t i = first; i < m_Lights.size(); ++i) keyed.emplace_back(gap(m_Lights[i]), (std::uint32_t)i);
     std::stable_sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });

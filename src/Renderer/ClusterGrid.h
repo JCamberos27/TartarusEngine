@@ -55,7 +55,10 @@ public:
     static constexpr int kBindDecalReadback = 17;
     static constexpr int kDecalViewBoxVec4s = 5;
 
+    ClusterGrid() = default;
     ~ClusterGrid();
+    ClusterGrid(const ClusterGrid&) = delete;
+    ClusterGrid& operator=(const ClusterGrid&) = delete;
 
     // Build cluster AABBs for this view and assign every point/spot light to the clusters it
     // touches. The LightBuffer SSBO must already be bound at binding 0 (LightBuffer::Bind(0)).

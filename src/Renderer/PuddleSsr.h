@@ -44,8 +44,10 @@ private:
         int W = 0, H = 0; // the target's (full) size
         int Frames = 0;   // frames traced at this size; 0 = no previous colour yet
         glm::mat4 PrevViewProj{1.0f};
+        unsigned LastUsed = 0; // m_Tick of its last Prepare
     };
     std::unordered_map<const HdrTarget*, View> m_Views;
     std::unique_ptr<Shader> m_Program;
     int m_Frame = 0;
+    unsigned m_Tick = 0; // Prepare calls, for evicting views no longer drawn
 };

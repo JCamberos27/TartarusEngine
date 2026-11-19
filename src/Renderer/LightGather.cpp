@@ -120,7 +120,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
     const Camera& lightViewCam = *in.viewCam;
     const float lightTanHalfFov = std::tan(glm::radians(lightViewCam.Fov) * 0.5f);
 
-    if (const TorchLight* torch = in.torch; torch && lightBuffer.Count() + 2 <= LightBuffer::kMaxLights) {
+    if (const TorchLight* torch = in.torch) { // first in after Clear(): its two spots always fit
         const glm::vec3 pos = torch->Position, aim = torch->Aim;
         int slot = -1;
         if (const auto it = m_SpotSlotOf.find(kTorchSlotKey); it != m_SpotSlotOf.end()) {
@@ -146,7 +146,6 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
     }
     size_t xformAt = 0; // m_LightXforms is in this view's order and a subset of it
     for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
-        if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
         if (world.Registry.all_of<InactiveTag>(e)) continue;
         // Lights panel solo/mute is an editing aid only - Play renders every light (#140).
         if (in.suppressed && in.suppressed(e)) continue;
@@ -155,6 +154,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
         // range would still shade it. (A directional keeps its slot: it decides the cascade pass.)
         if (lc.Kind != LightComponent::Type::Directional &&
             (lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f)) continue;
+        if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; } // one that would draw
         glm::mat4 m;
         if (xformAt < m_LightXforms.size() && m_LightXforms[xformAt].first == e) m = m_LightXforms[xformAt++].second;
         else m = world.ComposeWorldTransform(e);
