@@ -332,10 +332,6 @@ void TestMaterialShaderSelection() {
     CHECK(material.ShaderPath=="engine://RedDot.shader");
 }
 
-// vInspector (Phase 3b): the C# attributes come through Describe, and the edit-mode button /
-// ShowInInspector calls run on a temporary instance holding the saved fields.
-}
-namespace {
 void TestProjectWeaponLoadout(){
     using namespace Gameplay;
     int ammo[2]={3,7};WeaponLoadoutFrame loadout;loadout.Operation=3;loadout.Count=2;loadout.SlotAmmo=reinterpret_cast<std::uintptr_t>(ammo);loadout.Active=1;loadout.Magazine=30;loadout.CycleWait=2;WeaponRules::UpdateLoadout(loadout);CHECK(ammo[0]==-1 && ammo[1]==-1 && loadout.Ammo==30 && loadout.Chambered && loadout.CycleWait==0);
