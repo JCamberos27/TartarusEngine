@@ -5,30 +5,26 @@ Made from WeaponLab.json (its sky, lighting, player and body), so the two stay a
     python tools/scenes/build_locomotion_lab.py
 """
 import copy
-import json
 import os
+
+from lab_scene import LabScene
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, 'tests', 'scenes', 'WeaponLab.json')
 DST = os.path.join(ROOT, 'tests', 'scenes', 'LocomotionLab.json')
 
-j = json.load(open(SRC, encoding='utf-8'))
-next_id = max(x['id'] for k in ('boxes', 'empties', 'models') for x in j[k]) + 1
-next_order = max(x.get('order', 0) for k in ('boxes', 'empties', 'models') for x in j[k]) + 1
+lab = LabScene(SRC)
+j = lab.data
 ground = next(b for b in j['boxes'] if b['name'] == 'Ground')
 
 
 def box(name, pos, size):
-    global next_id, next_order
     b = copy.deepcopy(ground)
     b['name'] = name
-    b['id'] = next_id
-    b['order'] = next_order
+    b['id'], b['order'] = lab.take_id()
     b['position'] = [float(v) for v in pos]
     b['scale'] = [float(v) for v in size]
     b['rotation'] = [0.0, 0.0, 0.0, 1.0]
-    next_id += 1
-    next_order += 1
     j['boxes'].append(b)
 
 
@@ -41,22 +37,18 @@ for i in range(10):
 box('Platform 2.5m', (8.0, 1.25, 9.5), (4.0, 2.5, 4.0))
 
 # A bare training dummy (stands, takes hits) - --npc-test drives it.
-spawn = {'id': next_id, 'name': 'Dummy', 'order': next_order, 'parentId': -1, 'position': [-3.0, 0.0, 14.0],
+i, o = lab.take_id()
+spawn = {'id': i, 'name': 'Dummy', 'order': o, 'parentId': -1, 'position': [-3.0, 0.0, 14.0],
          'rotation': [0.0, 1.0, 0.0, 0.0], 'scale': [1.0, 1.0, 1.0],
          'Dummy Spawn': {'Roam': True}}
-next_id += 1
-next_order += 1
 j['empties'].append(spawn)
 
 # One dummy, never respawned: the lab is for watching it move, not a fight.
-squad = {'id': next_id, 'name': 'Lab Dummy Settings', 'order': next_order, 'parentId': -1, 'position': [0.0, 0.0, 0.0],
+i, o = lab.take_id()
+squad = {'id': i, 'name': 'Lab Dummy Settings', 'order': o, 'parentId': -1, 'position': [0.0, 0.0, 0.0],
          'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0],
          'Dummy Settings': {'Respawn': False, 'Respawn Delay': 3.0}}
-next_id += 1
-next_order += 1
 j['empties'].append(squad)
 
-with open(DST, 'w', encoding='utf-8', newline='\n') as f:
-    json.dump(j, f, indent=2)
-    f.write('\n')
+lab.write(DST)
 print('wrote', os.path.relpath(DST, ROOT), len(j['boxes']), 'boxes')

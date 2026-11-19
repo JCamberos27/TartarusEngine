@@ -1,5 +1,8 @@
 # Motion Matching Overhaul: Session Handoff
 
+> History: this is the overhaul's session log. Many functions, fields and files it names were renamed or removed by later
+> clean-ups (2026-11). [MOTION_MATCHING.md](MOTION_MATCHING.md) describes the system as it is now.
+
 **Read this first in every motion matching session.** It is the only context a new session needs. Update it at the end of
 every session: status, files touched, exact commands and results, open issues, next steps. Then commit.
 

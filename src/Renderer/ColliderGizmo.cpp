@@ -125,8 +125,8 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
             const Model* mkey = (rc && rc->ModelRef) ? rc->ModelRef.get() : nullptr;
             if (!mkey) continue;
 
-            auto it = m_MeshEdgeCache.find(mkey);
-            if (it == m_MeshEdgeCache.end()) {
+            MeshEdges& cached = m_MeshEdgeCache[mkey->ImportId()];
+            if (cached.Stamp != mkey->ImportStamp()) {
                 std::vector<glm::vec3> mv; std::vector<unsigned int> mi;
                 rc->ModelRef->CollisionGeometry(mv, mi);
                 std::vector<glm::vec3> edges;
@@ -143,10 +143,11 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
                         add(mi[k], mi[k+1]); add(mi[k+1], mi[k+2]); add(mi[k+2], mi[k]);
                     }
                 }
-                it = m_MeshEdgeCache.emplace(mkey, std::move(edges)).first;
+                cached.Stamp = mkey->ImportStamp();
+                cached.Edges = std::move(edges);
             }
 
-            const std::vector<glm::vec3>& edges = it->second;
+            const std::vector<glm::vec3>& edges = cached.Edges;
             if (!edges.empty()) {
                 const glm::mat4 M = ComposeTransform(t);
                 for (size_t k = 0; k + 1 < edges.size(); k += 2)

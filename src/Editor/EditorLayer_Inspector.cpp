@@ -1240,8 +1240,31 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             // With its material remap, like a placed copy (cached materials: cheap per frame).
             std::vector<std::shared_ptr<MaterialAsset>> previewSlots;
             assets.ApplyMaterialRemap(*model, previewSlots);
-            unsigned int handle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
-                m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2, previewSlots);
+            std::uint64_t previewKey = 1469598103934665603ull;
+            const auto mixKey = [&previewKey](const void* p, size_t n) {
+                const unsigned char* b = static_cast<const unsigned char*>(p);
+                for (size_t i = 0; i < n; ++i) { previewKey ^= b[i]; previewKey *= 1099511628211ull; }
+            };
+            const Model* modelPtr = model.get();
+            mixKey(&modelPtr, sizeof(modelPtr));
+            mixKey(&m_ModelPreviewYaw, sizeof(float));
+            mixKey(&m_ModelPreviewPitch, sizeof(float));
+            mixKey(&m_ModelPreviewDistance, sizeof(float));
+            mixKey(&previewDims, sizeof(previewDims));
+            for (const auto& slot : previewSlots) {
+                const std::uint64_t h = slot ? MaterialPreviewRenderer::ContentKey(*slot) : 0u;
+                mixKey(&h, sizeof(h));
+            }
+            constexpr float kModelPreviewRefresh = 0.5f;
+            m_ModelPreviewAge += ImGui::GetIO().DeltaTime;
+            if (!m_ModelPreviewHandle || previewKey != m_ModelPreviewKey || model->IsPlayingAnimation() ||
+                m_ModelPreviewAge >= kModelPreviewRefresh) {
+                m_ModelPreviewHandle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
+                    m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2, previewSlots);
+                m_ModelPreviewKey = previewKey;
+                m_ModelPreviewAge = 0.0f;
+            }
+            const unsigned int handle = m_ModelPreviewHandle;
             ImGui::Image((ImTextureID)(intptr_t)handle, previewDims, ImVec2(0, 1), ImVec2(1, 0)); // bottom-up FBO
 
             // Left-drag to orbit, scroll to zoom - the same mouse language as the main viewport's
@@ -1697,17 +1720,22 @@ static bool MaterialShaderDropdown(const MaterialAsset& material, std::string& s
     ImGui::SetNextItemWidth(-FLT_MIN);
     bool changed = false;
     if (ImGui::BeginCombo("##materialShader", mixed ? "(mixed)" : MaterialShaderLabel(material.ShaderPath).c_str())) {
-        std::vector<std::string> shaders{"engine://Standard.shader"};
-        for (const std::string dir : {ShaderLibrary::Dir(), ProjectPaths::Resolve("shaders"), ProjectPaths::Resolve("assets")}) {
-            std::error_code ec;
-            for (std::filesystem::recursive_directory_iterator it(std::filesystem::u8path(dir), std::filesystem::directory_options::skip_permission_denied, ec), end;
-                 !ec && it != end; it.increment(ec)) {
-                if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
-                const auto ref = dir == ShaderLibrary::Dir() ? "engine://" + std::filesystem::relative(it->path(), dir).generic_string()
-                                                             : ProjectPaths::Relativize(it->path().string());
-                if (std::find(shaders.begin(), shaders.end(), ref) == shaders.end()) shaders.push_back(ref);
+        // The shader files on disk, walked when the list opens (it walked the whole assets tree every frame it was open).
+        static std::vector<std::string> s_Found;
+        if (ImGui::IsWindowAppearing() || s_Found.empty()) {
+            s_Found = {"engine://Standard.shader"};
+            for (const std::string dir : {ShaderLibrary::Dir(), ProjectPaths::Resolve("shaders"), ProjectPaths::Resolve("assets")}) {
+                std::error_code ec;
+                for (std::filesystem::recursive_directory_iterator it(std::filesystem::u8path(dir), std::filesystem::directory_options::skip_permission_denied, ec), end;
+                     !ec && it != end; it.increment(ec)) {
+                    if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
+                    const auto ref = dir == ShaderLibrary::Dir() ? "engine://" + std::filesystem::relative(it->path(), dir).generic_string()
+                                                                 : ProjectPaths::Relativize(it->path().string());
+                    if (std::find(s_Found.begin(), s_Found.end(), ref) == s_Found.end()) s_Found.push_back(ref);
+                }
             }
         }
+        std::vector<std::string> shaders = s_Found;
         if (!material.ShaderPath.empty() && std::find(shaders.begin(), shaders.end(), material.ShaderPath) == shaders.end())
             shaders.push_back(material.ShaderPath);
         for (const auto& ref : shaders) {
@@ -2699,10 +2727,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
 
         {
-            std::set<std::string> tagChoices{"Untagged"};
-            for (auto e : world.Registry.view<const TagComponent>())
-                tagChoices.insert(world.Registry.get<TagComponent>(e).Tag);
-            for (const std::string& t : ProjectSettings::Tags()) tagChoices.insert(t); // #236 A4
             std::string sharedTag; bool tagMixed = false, first = true;
             forEach([&](entt::entity e) {
                 const auto* tc = world.Registry.try_get<TagComponent>(e);
@@ -2712,6 +2736,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             });
             PropertyLabel("Tag", "Sets the Tag on every selected object.");
             if (ImGui::BeginCombo("##mtag", tagMixed ? "\xE2\x80\x94" : sharedTag.c_str())) {
+                // Every tag in use plus the project's, gathered only while the list is open (a walk of every entity).
+                std::set<std::string> tagChoices{"Untagged"};
+                for (auto e : world.Registry.view<const TagComponent>())
+                    tagChoices.insert(world.Registry.get<TagComponent>(e).Tag);
+                for (const std::string& t : ProjectSettings::Tags()) tagChoices.insert(t); // #236 A4
                 for (const std::string& t : tagChoices) {
                     if (ImGui::Selectable(t.c_str(), !tagMixed && t == sharedTag)) {
                         PushUndo(world, "Set Tag");
@@ -3099,14 +3128,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 m_TagAddBuf[0] = '\0';
             }
         } else {
-            // Gather the distinct tags already in use, sorted, for the dropdown.
-            std::set<std::string> known;
-            for (auto e : registry.view<const TagComponent>()) {
-                const auto& tc = registry.get<TagComponent>(e);
-                if (!tc.Tag.empty()) known.insert(tc.Tag);
-            }
-            for (const std::string& t : ProjectSettings::Tags()) known.insert(t); // #236 A4
             if (ImGui::BeginCombo("##Tag", tagText.c_str())) {
+                // The distinct tags already in use, sorted, gathered only while the list is open.
+                std::set<std::string> known;
+                for (auto e : registry.view<const TagComponent>()) {
+                    const auto& tc = registry.get<TagComponent>(e);
+                    if (!tc.Tag.empty()) known.insert(tc.Tag);
+                }
+                for (const std::string& t : ProjectSettings::Tags()) known.insert(t); // #236 A4
                 if (ImGui::Selectable("Untagged", !tag)) setTag("");
                 if (!known.empty()) ImGui::Separator();
                 for (const auto& t : known) {
@@ -4277,7 +4306,14 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             ImGui::Separator();
             if (savePresetOut && ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save Preset")) *savePresetOut = true;
             if (applyPresetOut) {
-                const auto presets = PresetsForComponent(label);
+                // Read when the menu opens (every .preset file is opened and parsed), not every frame it stays open.
+                static std::string s_PresetsFor;
+                static std::vector<std::pair<std::string, std::string>> s_Presets;
+                if (ImGui::IsWindowAppearing() || s_PresetsFor != label) {
+                    s_PresetsFor = label;
+                    s_Presets = PresetsForComponent(s_PresetsFor);
+                }
+                const auto& presets = s_Presets;
                 if (ImGui::BeginMenu(ICON_FA_SLIDERS "  Apply Preset", !presets.empty())) {
                     for (const auto& [name, path] : presets)
                         if (ImGui::MenuItem(name.c_str())) *applyPresetOut = path;
@@ -4802,7 +4838,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     // First Person Body: check the setup against what the body needs (the controller's parameters and
     // states, bones, piece names) so a missing piece is said out loud instead of a feature silently
-    // doing nothing. FPBody::Validate is the same table the docs (docs/BODY_SETUP.md) are written from.
+    // doing nothing. FPBody::Validate is the same table.
     if (std::strcmp(componentName, "Character Outfit") == 0 && phase == ReflectExtraPhase::Bottom) {
         DrawCharacterOutfitEditor(world, entity);
         return;
