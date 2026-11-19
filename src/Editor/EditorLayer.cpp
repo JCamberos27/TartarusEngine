@@ -3007,6 +3007,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     FreeRetiredThumbnailTextures(); // last frame's draw lists are rendered by now
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
     m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
+    m_SoundWaveforms.Pump(); // sound tiles' waveforms, decoded off-thread
 
     if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
     SyncViewportPrefs();

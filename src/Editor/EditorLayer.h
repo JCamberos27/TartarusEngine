@@ -32,6 +32,7 @@
 #include "RenderStats.h" // ::RenderStats, re-exported below as EditorLayer::RenderStats (#359)
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
+#include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
 #include "MaterialPreviewRenderer.h"
@@ -1918,10 +1919,8 @@ private:
     void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
-    // Sound-cell waveform envelopes (#236 G), decoded once per path via AudioEngine.
-    // Empty vector = decode failed / not audio; cached either way.
-    std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
-    const std::vector<float>& SoundWaveform(const std::string& path);
+    // Sound-cell waveform envelopes (#236 G), decoded off the UI thread (AssetWaveformCache).
+    AssetWaveformCache m_SoundWaveforms;
 
     // Asset favourites (#236 G) — a starred subset. Since vFavorites they are the assets on the
     // favorites pages; the star toggle on the Asset Browser toolbar filters the grid to just these.
