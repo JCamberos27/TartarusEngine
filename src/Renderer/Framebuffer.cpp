@@ -8,7 +8,6 @@
 Framebuffer::~Framebuffer() { Release(); }
 
 void Framebuffer::Release() {
-    if (m_DepthRbo) { glDeleteRenderbuffers(1, &m_DepthRbo); m_DepthRbo = 0; }
     if (m_ColorTexture) { glDeleteTextures(1, &m_ColorTexture); m_ColorTexture = 0; }
     if (m_Fbo) { glDeleteFramebuffers(1, &m_Fbo); m_Fbo = 0; }
 }
@@ -19,7 +18,7 @@ void Framebuffer::Create(int width, int height) {
     m_Height = height;
 
     // Direct State Access + immutable colour storage (#96) — set up without disturbing the
-    // currently-bound framebuffer / texture / renderbuffer.
+    // currently-bound framebuffer / texture.
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ColorTexture);
     glTextureStorage2D(m_ColorTexture, 1, GL_RGB8, width, height);
     glTextureParameteri(m_ColorTexture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -27,16 +26,8 @@ void Framebuffer::Create(int width, int height) {
     glTextureParameteri(m_ColorTexture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(m_ColorTexture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Renderbuffer storage still has no DSA form in core GL; the one transient bind here is
-    // restored immediately and never observed by the renderer's own passes.
-    glGenRenderbuffers(1, &m_DepthRbo);
-    glBindRenderbuffer(GL_RENDERBUFFER, m_DepthRbo);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-    glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
     glCreateFramebuffers(1, &m_Fbo);
     glNamedFramebufferTexture(m_Fbo, GL_COLOR_ATTACHMENT0, m_ColorTexture, 0);
-    glNamedFramebufferRenderbuffer(m_Fbo, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_DepthRbo);
 
     // #160 - the shared check (#358) logs the status as a named enum; this used to print
     // "0x" followed by the DECIMAL value.
