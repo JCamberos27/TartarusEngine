@@ -70,8 +70,8 @@ private:
 // kMaxUploadsPerFrame slots a frame. A slot is pinned by every Request() in
 // the current frame (BeginFrame starts the next) and only an unpinned, least-recently-used slot is ever
 // evicted. The normal / surface / aux arrays only exist once a resident decal has that map, so
-// albedo-only libraries spend their budget on albedo. The arrays grow by doubling (within the budget),
-// and never past kMaxLayers: the shader reads the layer from 8 bits.
+// albedo-only libraries spend their budget on albedo. The arrays grow 4x at a time (within the budget), one
+// array per frame, and never past kMaxLayers: the shader reads the layer from 8 bits.
 class DecalTextureArrays {
 public:
     // Absolute paths; empty = no such map. Tier is the slot size request (DecalAsset::Tier).
@@ -153,7 +153,9 @@ private:
     enum Kind { kAlbedo = 0, kNormal, kSurface, kAux, kKinds };
 
     bool AllocateWithEviction(int size, DecalPageAllocator::Alloc& out);
-    void EnsureGpu(int layers, const bool want[kKinds]);
+    // The arrays the kinds in `want` (and every active one) need for `layers` layers. Grows one array per frame at
+    // most (each growth re-creates and copies a whole array: ~5 ms): true once they all have them.
+    bool EnsureGpu(int layers, const bool want[kKinds]);
     // `stagedOffset`: where the maps sit in the staging ring (bound as the unpack buffer), back to back in kind
     // order; kNotStaged = straight from d's memory.
     static constexpr std::size_t kNotStaged = ~std::size_t(0);
@@ -169,7 +171,9 @@ private:
     std::unique_ptr<Workers> m_Workers;
     unsigned int m_Tex[kKinds] = {};
     bool m_Active[kKinds] = {};
-    int m_GpuLayers = 0;
+    int m_GpuLayers = 0;              // the layer count the arrays are growing to (or have)
+    int m_KindLayers[kKinds] = {};    // each array's own layer count (0 = not created)
+    bool m_GrewThisFrame = false;
     std::size_t m_BudgetBytes = std::size_t(256) << 20;
     std::uint64_t m_Frame = 0;
     int m_InFlight = 0;

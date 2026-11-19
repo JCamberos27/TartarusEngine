@@ -401,10 +401,10 @@ void DecalTextureArrays::SetBudgetMB(int mb) {
 }
 
 std::size_t DecalTextureArrays::GpuBytes() const {
-    if (m_GpuLayers == 0) return 0;
-    bool active[kKinds];
-    for (int k = 0; k < kKinds; ++k) active[k] = m_Tex[k] != 0;
-    return PerLayerBytes(active) * (std::size_t)m_GpuLayers;
+    std::size_t bytes = 0;
+    for (int k = 0; k < kKinds; ++k)
+        for (int l = 0; l < kArrayLevels; ++l) bytes += LevelBytes(k, l) * (std::size_t)m_KindLayers[k];
+    return bytes;
 }
 
 int DecalTextureArrays::ResidentCount() const {
@@ -477,17 +477,26 @@ bool DecalTextureArrays::AllocateWithEviction(int size, DecalPageAllocator::Allo
     return false;
 }
 
-void DecalTextureArrays::EnsureGpu(int layers, const bool want[kKinds]) {
-    // Grow by doubling, within the budget's layer count: each growth re-creates and copies every array,
-    // so it happens a handful of times rather than once per layer. Never past the 8-bit layer field.
-    if (layers > m_GpuLayers && m_GpuLayers > 0) layers = std::max(layers, std::min(m_GpuLayers * 2, m_Alloc.MaxLayers()));
+bool DecalTextureArrays::EnsureGpu(int layers, const bool want[kKinds]) {
+    // Grow 4x at a time, within the budget's layer count: each growth re-creates and copies a whole array (the
+    // driver's allocation alone is a few ms), so it happens a couple of times rather than once per layer - and one
+    // array a frame, so a growth that reaches all four kinds spreads over four frames instead of stalling one.
+    // Never past the 8-bit layer field.
+    if (layers > m_GpuLayers) layers = std::max(layers, std::min(std::max(m_GpuLayers, 1) * 4, m_Alloc.MaxLayers()));
     layers = std::max(layers, m_GpuLayers);
     assert(layers <= kMaxLayers);
     layers = std::min(layers, kMaxLayers);
+    m_GpuLayers = layers;
+    bool done = true;
     for (int k = 0; k < kKinds; ++k) {
         if (!(want[k] || m_Active[k] || k == kAlbedo)) continue;
+        if (m_KindLayers[k] >= layers) continue;
+        if (m_GrewThisFrame) { // one array a frame: the rest next frame
+            done = false;
+            continue;
+        }
+        m_GrewThisFrame = true;
         const bool fresh = m_Tex[k] == 0;
-        if (!fresh && layers <= m_GpuLayers) continue;
         PROFILE_SCOPE("Decal Array Growth");
         unsigned int tex = 0;
         glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex);
@@ -501,18 +510,19 @@ void DecalTextureArrays::EnsureGpu(int layers, const bool want[kKinds]) {
         const float aniso = 8.0f;
         glTextureParameterfv(tex, GL_TEXTURE_MAX_ANISOTROPY, &aniso);
         // Growing keeps every resident page: a GPU-side copy, no re-decode.
-        if (!fresh && m_GpuLayers > 0) {
+        if (!fresh && m_KindLayers[k] > 0) {
             for (int l = 0; l < kArrayLevels; ++l) {
                 const int s = std::max(4, Decals::PAGE_SIZE >> l);
                 glCopyImageSubData(m_Tex[k], GL_TEXTURE_2D_ARRAY, l, 0, 0, 0, tex, GL_TEXTURE_2D_ARRAY, l, 0, 0, 0, s, s,
-                                   m_GpuLayers);
+                                   m_KindLayers[k]);
             }
         }
         if (m_Tex[k]) glDeleteTextures(1, &m_Tex[k]);
         m_Tex[k] = tex;
+        m_KindLayers[k] = layers;
         m_Active[k] = true;
     }
-    m_GpuLayers = layers;
+    return done;
 }
 
 void DecalTextureArrays::UploadSlot(Entry& e, const Decoded& d, std::size_t stagedOffset) {
@@ -524,11 +534,8 @@ void DecalTextureArrays::UploadSlot(Entry& e, const Decoded& d, std::size_t stag
         s.Alloc = {};
         return;
     }
-    const bool before[kKinds] = {m_Active[0], m_Active[1], m_Active[2], m_Active[3]};
-    EnsureGpu(m_Alloc.LayerCount(), d.Has);
-    if (before[1] != m_Active[1] || before[2] != m_Active[2] || before[3] != m_Active[3]) UpdateMaxLayers();
     const int size = s.Alloc.Size;
-    assert(s.Alloc.Layer >= 0 && s.Alloc.Layer < kMaxLayers && s.Alloc.Layer < m_GpuLayers);
+    assert(s.Alloc.Layer >= 0 && s.Alloc.Layer < kMaxLayers && s.Alloc.Layer < m_KindLayers[kAlbedo]);
     const bool staged = stagedOffset != kNotStaged;
     constexpr GLenum kPixelUnpackBuffer = 0x88EC; // GL_PIXEL_UNPACK_BUFFER
     if (staged) glBindBuffer(kPixelUnpackBuffer, UploadStaging::Buffer());
@@ -555,6 +562,7 @@ void DecalTextureArrays::UploadSlot(Entry& e, const Decoded& d, std::size_t stag
 void DecalTextureArrays::BeginFrame() {
     ++m_Frame;
     m_Deferred = false;
+    m_GrewThisFrame = false;
     // The decodes that have landed, oldest request first. Each slot's maps (a 2K decal's four: ~18 MB of BCn
     // mips) are first copied into the upload staging ring on its worker, and go up from there a pump later as
     // a pixel-unpack copy the driver queues: straight from memory, the driver's own copy of them held the main
@@ -588,6 +596,15 @@ void DecalTextureArrays::BeginFrame() {
         }
         std::size_t total = 0;
         for (int k = 0; k < kKinds; ++k) total += e.Staged->Has[k] ? e.Staged->Data[k].Pixels.size() : 0;
+        if (e.Staged->Has[kAlbedo]) { // room in the arrays first (UploadSlot fails a slot with no albedo)
+            const bool before[kKinds] = {m_Active[0], m_Active[1], m_Active[2], m_Active[3]};
+            const bool room = EnsureGpu(m_Alloc.LayerCount(), e.Staged->Has);
+            if (before[1] != m_Active[1] || before[2] != m_Active[2] || before[3] != m_Active[3]) UpdateMaxLayers();
+            if (!room) { // an array still growing: this slot goes up once it has
+                ++i;
+                continue;
+            }
+        }
         if (!e.Stage.Valid()) {
             if (total > 0) e.Stage = UploadStaging::Reserve(total);
             if (e.Stage.Valid()) {
