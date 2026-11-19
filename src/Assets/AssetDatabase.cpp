@@ -55,7 +55,8 @@ AssetGuid AssetGuid::FromString(const std::string& s) {
 }
 
 AssetGuid AssetGuid::Generate() {
-    static std::mt19937_64 rng(std::random_device{}());
+    // One engine per thread: the scan and loader workers generate under g_Mutex, the editor on the main thread without it.
+    thread_local std::mt19937_64 rng(std::random_device{}());
     AssetGuid g;
     do { g.Value = rng(); } while (g.Value == 0);
     return g;
@@ -133,10 +134,15 @@ std::string MetaPath(const std::string& assetPath) {
 }
 
 // Reads the full .meta file; returns an empty object on any error.
+// A .meta's JSON object, or null when it is missing, doesn't parse or isn't an object (an array or a number would make
+// the callers' j["guid"] throw).
 json ReadMetaFull(const std::string& metaPath) {
     std::ifstream f(metaPath);
     if (!f.is_open()) return {};
-    try { return json::parse(f); } catch (...) { return {}; }
+    try {
+        json j = json::parse(f);
+        return j.is_object() ? j : json{};
+    } catch (...) { return {}; }
 }
 
 // Reads the GUID from an existing .meta file. Returns invalid guid on any error.

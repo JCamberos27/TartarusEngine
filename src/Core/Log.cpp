@@ -3,7 +3,9 @@
 #include "DbgSymbols.h"
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <dbghelp.h> // #178 - Console stack traces (Dbghelp is already linked for MiniDumpWriteDump)
 #endif
