@@ -702,7 +702,8 @@ void TestGlassV2Inertia() {
     CHECK(travelled > 100.0f);                  // a real coast, roughly v / friction
     CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
     // Reading twice in one frame doesn't double the step.
-    gui.Frame([&] { m.Fling(kId, ImVec2(600.0f, 0.0f)); });
+    for (int f = 0; f < 6; ++f) gui.Frame([&] { m.InertiaTrack(kId, ImVec2(20.0f, 0.0f)); });
+    gui.Frame([&] { m.InertiaRelease(kId); });
     gui.Frame([&] { const float a = m.InertiaDelta(kId).x, b = m.InertiaDelta(kId).x; CHECK(a == b && a > 0.0f); });
     FramesToSettle(gui, [&] { m.InertiaDelta(kId); });
     // A slow release doesn't coast; Inertia off doesn't even track.
@@ -710,7 +711,7 @@ void TestGlassV2Inertia() {
     gui.Frame([&] { m.InertiaRelease(kId); });
     CHECK(m.LiveCount() == 0);
     m.SetCategoryEnabled(Glass::MotionCategory::Inertia, false);
-    gui.Frame([&] { m.InertiaTrack(kId, ImVec2(0.0f, 40.0f)); m.Fling(kId, ImVec2(0.0f, 900.0f)); });
+    gui.Frame([&] { m.InertiaTrack(kId, ImVec2(0.0f, 40.0f)); });
     CHECK(m.LiveCount() == 0);
 }
 

@@ -43,7 +43,7 @@ box('Platform 2.5m', (8.0, 1.25, 9.5), (4.0, 2.5, 4.0))
 # A bare training dummy (stands, takes hits) - --npc-test drives it.
 spawn = {'id': next_id, 'name': 'Dummy', 'order': next_order, 'parentId': -1, 'position': [-3.0, 0.0, 14.0],
          'rotation': [0.0, 1.0, 0.0, 0.0], 'scale': [1.0, 1.0, 1.0],
-         'Dummy Spawn': {'Bare': True, 'Outfit Seed': 1, 'Roam': True}}
+         'Dummy Spawn': {'Roam': True}}
 next_id += 1
 next_order += 1
 j['empties'].append(spawn)

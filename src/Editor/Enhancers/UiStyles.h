@@ -21,7 +21,6 @@ struct UiStyle {
     std::string   Icon;      // Font Awesome name, "" = the default glyph (headers only)
     std::uint32_t Color = 0; // IM_COL32-packed, 0 = not set
     bool IsEmpty() const { return Icon.empty() && Color == 0; }
-    bool operator==(const UiStyle& o) const { return Icon == o.Icon && Color == o.Color; }
 };
 
 class UiStyles {

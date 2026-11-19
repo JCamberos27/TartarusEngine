@@ -83,23 +83,6 @@ void TestEnhancerBookmarkList() {
     CHECK(capped.size() == 3 && capped.front().Order == 2 && capped.back().Order == 4);
 }
 
-void TestEnhancerNavHistory() {
-    NavHistory<int> h(4);
-    CHECK(!h.CanBack() && !h.CanForward() && h.Current() == nullptr);
-    h.Push(1); h.Push(2); h.Push(3);
-    h.Push(3); // same as current: no-op
-    CHECK(h.Size() == 3 && *h.Current() == 3);
-    CHECK(*h.Back() == 2 && *h.Back() == 1 && h.Back() == nullptr);
-    CHECK(*h.Forward() == 2);
-    h.Push(9); // pushing after Back truncates the forward branch (3)
-    CHECK(h.Size() == 3 && !h.CanForward() && *h.Current() == 9);
-    CHECK(*h.Back() == 2);
-    h.Push(10); h.Push(11); h.Push(12); // cap 4: oldest falls off
-    CHECK(h.Size() == 4 && h.Entries().front() == 2 && *h.Current() == 12);
-    h.Clear();
-    CHECK(h.Size() == 0 && h.Cursor() == -1);
-}
-
 void TestEnhancerSelectionHistory() {
     using E = SelectionHistoryEntry;
     const E a1{"sceneA", {1}, {}};
@@ -854,7 +837,6 @@ void TestEnhancerUiStyles() {
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerRefsRoundTrip", TestEnhancerRefsRoundTrip);
     tests.emplace_back("EnhancerBookmarkList", TestEnhancerBookmarkList);
-    tests.emplace_back("EnhancerNavHistory", TestEnhancerNavHistory);
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
     tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);
     tests.emplace_back("EnhancerKeepPlayChanges", TestEnhancerKeepPlayChanges);

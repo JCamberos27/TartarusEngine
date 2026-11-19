@@ -1952,8 +1952,6 @@
         1.0
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 1,
-        "Bare": true,
         "Roam": true
       }
     },

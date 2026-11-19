@@ -3844,8 +3844,6 @@
         1.0
       ],
       "Dummy Spawn": {
-        "Bare": true,
-        "Outfit Seed": 1,
         "Roam": false
       }
     },
@@ -3871,8 +3869,6 @@
         1.0
       ],
       "Dummy Spawn": {
-        "Bare": true,
-        "Outfit Seed": 2,
         "Roam": true
       }
     },

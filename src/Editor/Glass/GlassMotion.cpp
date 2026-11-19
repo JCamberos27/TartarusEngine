@@ -719,19 +719,6 @@ void ImAnimContext::InertiaRelease(ImGuiID id) {
                       0.94f + 0.12f * k, -6.0f + 6.0f * k);
 }
 
-void ImAnimContext::Fling(ImGuiID id, ImVec2 velocity) {
-    if (!CategoryOn(MotionCategory::Inertia)) return;
-    Entry* e = Find(id);
-    if (e && e->kind != Kind::Inertia) { Remove(id); e = nullptr; }
-    if (!e) e = &Add(id, Kind::Inertia);
-    if (e->duration != kInertiaCoasting) e->from4 = ImVec4(0, 0, 0, 0);
-    e->from4.x += velocity.x;
-    e->from4.y += velocity.y;
-    e->duration = kInertiaCoasting;
-    e->start = -1.0;
-    e->touched = m_Frame;
-}
-
 bool ImAnimContext::InertiaCoasting(ImGuiID id) const {
     const Entry* e = Find(id);
     return e && e->kind == Kind::Inertia && e->duration == kInertiaCoasting;

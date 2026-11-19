@@ -65,7 +65,6 @@ public:
     void Reset();                      // in-memory defaults (tests, project switch)
     void MarkDirty() { m_Dirty = true; ++m_Revision; }
     void Flush();                      // atomic write if dirty (call once per frame)
-    bool IsDirty() const { return m_Dirty; }
 
     nlohmann::json ToJson() const;
     void FromJson(const nlohmann::json& root);

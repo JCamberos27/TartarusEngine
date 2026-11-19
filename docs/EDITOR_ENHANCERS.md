@@ -25,7 +25,7 @@ Status by phase:
 
 | Piece | File | Notes |
 | --- | --- | --- |
-| Pure logic | `src/Editor/Enhancers/EnhancerCore.h/.cpp` | `EditorRef`, bookmark lists, `NavHistory`, `GlobMatch`, `FuzzyScore`, `RemapFolderKeys`, `FormatLength`, the icon table. No ImGui or EnTT, so the unit tests link it directly. |
+| Pure logic | `src/Editor/Enhancers/EnhancerCore.h/.cpp` | `EditorRef`, bookmark lists, `GlobMatch`, `FuzzyScore`, `RemapFolderKeys`, `FormatLength`, the icon table. No ImGui or EnTT, so the unit tests link it directly. |
 | Per-user state | `src/Editor/Enhancers/EnhancerUserState.h/.cpp` | Bookmarks and per-scene default parents, saved to `%LOCALAPPDATA%\TartarusEngine\enhancers_<projectHash>.json`. |
 | Component transfer | `src/Editor/Enhancers/ComponentTransfer.h/.cpp` | vInspector's multi-component clipboard and Keep Changes After Play, on top of the preset JSON (`SceneSerializer::ComponentToPresetJson`). |
 | Tab strips | `src/Editor/Enhancers/TabState.h/.cpp` | vTabs' tab lists (open / close / reopen / move / step) and their per-user file. |

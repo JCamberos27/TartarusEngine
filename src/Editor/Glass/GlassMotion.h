@@ -194,7 +194,6 @@ public:
     void  SetSpeed(float s) { m_Speed = s < 0.1f ? 0.1f : (s > 4.0f ? 4.0f : s); }
     float Speed() const { return m_Speed; }
     void  SetDebugTimeScale(float s) { m_DebugScale = s < 0.05f ? 0.05f : (s > 4.0f ? 4.0f : s); }
-    float DebugTimeScale() const { return m_DebugScale; }
     float TimeScale() const { return m_Speed * m_DebugScale; }
     // This frame's step on the motion clock (DeltaTime * TimeScale).
     float Dt() const { return m_Dt; }
@@ -220,8 +219,6 @@ public:
     ImVec2 InertiaDelta(ImGuiID id);
     void   InertiaStop(ImGuiID id) { Remove(id); }
     bool   InertiaCoasting(ImGuiID id) const;
-    // Start a coast directly with a velocity (px/s), e.g. a wheel notch.
-    void   Fling(ImGuiID id, ImVec2 velocity);
 
     // Living gradients (stateless; pure functions of the motion clock; Gradients off: nothing drawn).
     // A soft white band sweeping across [min, max] (busy sheen). `strength` 0..1 fades it.

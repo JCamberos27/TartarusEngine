@@ -149,11 +149,11 @@ i = nid()
 ents['empties'].append({'id': i, 'name': 'Dummy Settings', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -5.0],
                         'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
                         'Dummy Settings': {'Respawn': False, 'Respawn Delay': 8.0}})
-for k, (x, weapon) in enumerate([(-4.5, 'AKS-74U'), (-1.5, 'AKS-74U'), (1.5, 'Remington 870'), (4.5, 'AKS-74U')]):
+for k, x in enumerate([-4.5, -1.5, 1.5, 4.5]):
     i = nid()
     ents['empties'].append({'id': i, 'name': f'Dummy Spawn {k + 1}', 'order': i, 'parentId': enemies,
                             'position': [float(x), 0.1, -4.5], 'rotation': quat_euler(yaw=0), 'scale': [1, 1, 1],
-                            'Dummy Spawn': {'Outfit Seed': k, 'Roam': False}})
+                            'Dummy Spawn': {'Roam': False}})
 
 for k in ('boxes', 'empties', 'models'):
     scene[k] = ents[k]

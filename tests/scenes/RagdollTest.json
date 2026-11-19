@@ -900,8 +900,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": true,
         "Roam": false
       }
     },
@@ -927,8 +925,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": false,
         "Roam": false
       }
     },
@@ -954,8 +950,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": false,
         "Roam": false
       }
     },
@@ -981,8 +975,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": false,
         "Roam": false
       }
     },
@@ -1008,8 +1000,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": true,
         "Roam": false
       }
     },
@@ -1035,8 +1025,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": true,
         "Roam": false
       }
     },
@@ -1062,8 +1050,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": true,
         "Roam": false
       }
     },
@@ -1089,8 +1075,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": true,
         "Roam": false
       }
     },
@@ -1116,8 +1100,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": false,
         "Roam": false
       }
     },
@@ -1143,8 +1125,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": true,
         "Roam": false
       }
     },
@@ -1170,8 +1150,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": false,
         "Roam": false
       }
     },
@@ -1197,8 +1175,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
-        "Bare": true,
         "Roam": false
       }
     }
