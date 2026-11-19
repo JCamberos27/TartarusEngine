@@ -30,6 +30,7 @@ name: Build
 #   smoke  - needs build: --smoke-test under Mesa llvmpipe, no rebuild
 #   editor - needs build: --editor-tests in two shards (TARTARUS_EDITOR_TEST_SHARD), only when the change touches the editor
 #   gate   - the one job to require in branch protection: green only if all of the above passed (editor may be skipped)
+#   release - v* tags only, after gate: publishes the package `build` uploaded (the only job with a write token)
 # The test jobs run the exe that `build` produced, so the Release rebuild happens once. They check out the repo
 # as well: the engine finds project/ by walking up from build\Release\, which lands on the checkout.
 #
@@ -48,10 +49,12 @@ on:
   workflow_dispatch:
 
 # A new commit on a PR cancels that PR's run still in progress (it tests a commit nobody will merge).
-# Pushes to main and tags never cancel each other: every main commit and release keeps its result.
+# Main works the same way: a burst of merges would otherwise queue one full run per commit, and the newest
+# commit's run covers everything before it (an older run shows as cancelled, not failed). Tags and manual
+# runs keep a group per commit, so a release is never cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }} # per commit outside PRs: a shared group would drop queued runs
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.ref == 'refs/heads/main' && 'main') || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
 
 jobs:
   # Static checks, then the Debug build + unit tests. Debug only compiles and runs the headless tests: its render
@@ -68,6 +71,13 @@ jobs:
 
       - name: Asset export regression
         run: python -m unittest discover -s tools/assets -p 'test_*.py'
+
+      # The Quantum Casual Bundle importer's tests (map rows, refs, metas, materials, textures). The
+      # texture code uses Pillow; tests that need the real export skip themselves on a runner.
+      - name: Quantum importer regression
+        run: |
+          python -m pip install --quiet --disable-pip-version-check pillow==11.3.0
+          python -m unittest discover -s tools/quantum/casual_bundle -t tools/quantum -p 'test_*.py'
 
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
@@ -159,10 +169,8 @@ jobs:
   # The Release build, once. Everything the test jobs need leaves here as an artifact; the package leaves as a
   # release candidate. Also decides whether the editor tests run (the `scope` step).
   build:
-    # Only the release step needs more than read, and only on a tag. Declaring it here rather
-    # than leaving the workflow on the repository default keeps the token narrow.
     permissions:
-      contents: write
+      contents: read
     runs-on: windows-latest
     # Backstop: a hung build must not sit on a runner until GitHub's 6-hour job ceiling.
     # Build ~15 + unit tests 5 + package/verify; the render and editor tests are other jobs now.
@@ -174,8 +182,10 @@ jobs:
         with:
           fetch-depth: 2 # the PR's test merge commit plus its first parent (main), for the change list below
 
-      # The editor tests (~17 min of work, split in two shards) only re-prove the editor when something
-      # editor-facing changed. A PR runs them when it touches one of these paths; pushes to main, tags and manual runs always do.
+      # The editor tests (~17 min of work, split in two shards) are skipped only when a PR touches nothing the
+      # editor can load or link: docs, tools (not the build's .cmake scripts or patches), Markdown, the unit tests and the git metadata. Anything else
+      # (renderer, game, physics, audio, resources, extern, scenes) can break the editor, so it runs them.
+      # Pushes to main, tags and manual runs always do.
       - name: Does this change touch the editor?
         id: scope
         shell: pwsh
@@ -183,8 +193,8 @@ jobs:
           $editor = $true
           if ("${{ github.event_name }}" -eq "pull_request") {
             $changed = @(git diff --name-only HEAD^1 HEAD)
-            $paths = '^(src/(Editor|Core|App|Assets|Graffiti)/|src/main\.cpp$|src/Tests/(EditorSmoke/|EditorUiTests)|assets/|project/assets/Decals/|CMakeLists\.txt$|cmake/|\.github/workflows/|\.github/actions/)'
-            $hits = @($changed | Where-Object { $_ -match $paths })
+            $skip = '^(docs/|tools/(?!assimp_patches/|[^/]*\.cmake$)|src/Tests/UnitTests[^/]*$|\.gitignore$|\.gitattributes$|LICENSE$)|\.md$'
+            $hits = @($changed | Where-Object { $_ -notmatch $skip })
             $editor = $hits.Count -gt 0
             Write-Host "$($changed.Count) changed file(s), $($hits.Count) editor-facing"
             $hits | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
@@ -333,22 +343,6 @@ jobs:
           path: build/package/*.zip
           retention-days: 30
 
-      # Tag a commit v0.1.0 (matching the version in CMakeLists.txt) and push it to publish.
-      # Uses the gh CLI rather than a third-party release action: one less thing to pin, review
-      # and trust with a write token.
-      - name: Publish the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $zip = (Get-ChildItem build/package -Filter *.zip | Select-Object -First 1).FullName
-          gh release create "${{ github.ref_name }}" $zip `
-            --repo "${{ github.repository }}" `
-            --title "Tartarus Engine ${{ github.ref_name }}" `
-            --generate-notes
-
   # The software-rendered smoke scenes. Runs the exe `build` produced under Mesa llvmpipe.
   smoke:
     needs: build
@@ -442,7 +436,7 @@ jobs:
           path: crash-dumps/
           retention-days: 14
 
-  # The editor smoke test (--editor-tests, src/Tests/EditorUiTests.cpp + EditorSmoke_*.cpp): drives every panel,
+  # The editor smoke test (--editor-tests, src/Tests/EditorUiTests.cpp + EditorSmoke/*.inl): drives every panel,
   # menu and tool of the real editor with synthetic input, under the same llvmpipe context as the smoke test.
   # Split into two shards (TARTARUS_EDITOR_TEST_SHARD=i/2: the k-th test runs in shard k % 2) that run in parallel.
   # Exit code is 0 only when every test of the shard passed. Runs only when the change touches the editor.
@@ -568,3 +562,29 @@ jobs:
           case "$EDITOR" in success|skipped) ;; *) ok=0 ;; esac
           if [ "$ok" != 1 ]; then echo "::error::a required job did not pass"; exit 1; fi
           echo "all green"
+
+  # Publishes a v* tag as a GitHub release, but only once every gate passed: the package `build` uploaded, the
+  # smoke scenes, the editor tests and the Debug job. It is the only job with a write token, and only on a tag.
+  # Tag a commit v0.1.0 (matching the version in CMakeLists.txt) and push it to publish. Uses the gh CLI rather
+  # than a third-party release action: one less thing to pin, review and trust with a write token.
+  release:
+    needs: gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@v4
+        with:
+          name: TartarusEngine-win64
+          path: package
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          zip=$(ls package/*.zip | head -n 1)
+          gh release create "${{ github.ref_name }}" "$zip"             --repo "${{ github.repository }}"             --title "Tartarus Engine ${{ github.ref_name }}"             --generate-notes
