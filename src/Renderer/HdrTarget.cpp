@@ -26,6 +26,7 @@ std::string MemKey(const HdrTarget* t, const char* what) {
 HdrTarget::~HdrTarget() { Release(); }
 
 void HdrTarget::Release() {
+    m_DrawBuffersState = -1;
     // Textures and framebuffers share the same delete entry points whether created via DSA or
     // not, so no special-casing here.
     if (m_ResolveFbo)   { glDeleteFramebuffers(1, &m_ResolveFbo); m_ResolveFbo = 0; }
@@ -130,14 +131,18 @@ void HdrTarget::SetVelocityEnabled(bool on) {
 
 void HdrTarget::SetVelocityWrites(bool on) const {
     if (!m_MsFbo) return;
-    const GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, (on && m_MsVelocity) ? (GLenum)GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE};
+    const int state = (on && m_MsVelocity) ? 1 : 0;
+    if (state == m_DrawBuffersState) return; // already so: no driver call
+    const GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, state ? (GLenum)GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE};
     glNamedFramebufferDrawBuffers(m_MsFbo, 2, bufs);
+    m_DrawBuffersState = state;
 }
 
 void HdrTarget::ClearVelocity(float value) const {
     if (!m_MsFbo || !m_MsVelocity) return;
     const GLenum bufs[2] = {GL_NONE, GL_COLOR_ATTACHMENT1};
     glNamedFramebufferDrawBuffers(m_MsFbo, 2, bufs);
+    m_DrawBuffersState = -1; // neither state SetVelocityWrites knows
     GLboolean mask[4];
     glGetBooleanv(GL_COLOR_WRITEMASK, mask);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // a clear honours the write mask

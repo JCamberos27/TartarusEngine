@@ -58,6 +58,7 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
         if((viewModelPass&&world.Registry.all_of<ViewModelTag>(e))!=drawViewModel)continue;
         const glm::mat4 transform=world.ComposeWorldTransform(e);
         const int columns=std::clamp(ps.SheetColumns,1,256),rows=std::clamp(ps.SheetRows,1,256),cells=columns*rows;
+        Texture* sysTex[2]={nullptr,nullptr}; bool sysLooked[2]={false,false}; // the system's texture, as colour / data
         for(const auto& p:ps.Live) {
             if(p.Age>=p.Life)continue;
             const float t=std::clamp(p.Age/std::max(p.Life,1e-4f),0.0f,1.0f);
@@ -66,7 +67,12 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
             const std::string& path=p.TextureOverride.empty()?ps.Texture:p.TextureOverride;
             const bool flame=p.Length>0 && !path.empty();
             const bool smoke=ps.ShaderMode==1 && !flame;
-            Texture* tex=(smoke||path.empty())?nullptr:ParticleTexture(path,flame || ps.TextureChannels>0);
+            const bool data=flame || ps.TextureChannels>0;
+            Texture* tex=nullptr;
+            if(!smoke&&!path.empty()) {
+                if(!p.TextureOverride.empty()) tex=ParticleTexture(path,data);
+                else { if(!sysLooked[data]) { sysTex[data]=ParticleTexture(path,data); sysLooked[data]=true; } tex=sysTex[data]; }
+            }
             Instance in{};in.Pos[0]=pos.x;in.Pos[1]=pos.y;in.Pos[2]=pos.z;
             int blend=ps.BlendMode==1?1:0;
             if(flame&&tex) {

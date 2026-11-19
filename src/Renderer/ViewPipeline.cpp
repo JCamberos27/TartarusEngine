@@ -384,6 +384,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // MSAA HDR target is rebound here; the overlay still depth-tests correctly against
     // the real scene geometry already in that target's depth buffer.
     sceneHdr.BindForRender();
+    bool overlayDrawn = false;
     // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry
     // occludes it, no depth write so it never blocks anything drawn after. Also
     // carries the physics visual debug-draw channels (#185 A), which have their own
@@ -392,6 +393,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         const bool showShapes = EditorSettings::Get().ShowColliders;
         const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
         if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !in.harnessCleanViews) {
+            overlayDrawn = true;
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_FALSE);
             // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
@@ -405,8 +407,8 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // Resolve again now that the collider overlay is drawn, so the Scene tab
     // still shows them — only the earlier, overlay-free resolve above ever reached
     // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
-    // (exposure -> curve -> gamma, once, in Tonemapper).
-    sceneHdr.ResolveTo();
+    // (exposure -> curve -> gamma, once, in Tonemapper). Without the overlay the first resolve already holds it.
+    if (overlayDrawn) sceneHdr.ResolveTo();
     unsigned int sceneColorTex = sceneHdr.ResolvedColorTexture();
     if (sceneTaaOn) sceneColorTex = ResolveTaa(in, t, sceneColorTex, "TAA");
     {
