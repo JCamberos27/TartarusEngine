@@ -51,6 +51,11 @@ std::string Resolve(const std::string& name);
 // unchanged when it isn't under Root(). Use it at log sites that would print a resolved path (#18).
 std::string Relativize(const std::string& absolutePath);
 
+// Relativize's text-only answer: `path` spelled under `root` (drive letter and case ignored, either
+// slash) with no empty, "." or ".." segment after it. Fills `out` (forward slashes, the input's own
+// case) and returns true; anything else returns false and Relativize asks the disk instead.
+bool RelativizeUnder(const std::string& root, const std::string& path, std::string& out);
+
 } // namespace ProjectPaths
 
 namespace UserPaths {
