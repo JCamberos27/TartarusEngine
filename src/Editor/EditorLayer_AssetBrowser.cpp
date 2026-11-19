@@ -1126,27 +1126,41 @@ bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lin
 // Phase 5 item 4 — the three text columns Details view appends after a list row's name. Mirrors
 // the Explorer/Finder convention of leaving Size blank for folders (a recursive folder size isn't
 // worth a stat-per-subfile here) rather than showing 0.
-const char* AssetKindLabel(Cell::Kind k) {
-    switch (k) {
-        case Cell::Kind::Folder:     return "Folder";
-        case Cell::Kind::Scene:      return "Scene";
-        case Cell::Kind::Prefab:     return "Prefab";
-        case Cell::Kind::Model:      return "Model";
-        case Cell::Kind::Texture:    return "Texture";
-        case Cell::Kind::Material:   return "Material";
-        case Cell::Kind::Sound:      return "Sound";
-        case Cell::Kind::Shader:     return "Shader";
-        case Cell::Kind::Animator:   return "Animator Controller";
-        case Cell::Kind::Weapon:     return "Weapon Definition";
-        case Cell::Kind::Recoil:     return "Recoil Profile";
-        case Cell::Kind::CameraShake:return "Camera Shake";
-        case Cell::Kind::Decal:      return "Decal";
-        case Cell::Kind::Graffiti:   return "Graffiti Piece";
-        case Cell::Kind::Hdri:       return "HDRI";
-        case Cell::Kind::Script:     return "Script";
-    }
-    return "";
+// What the Asset Browser shows and does per kind of tile, in one place (it was five parallel switches).
+struct AssetKindInfo {
+    Cell::Kind Kind;
+    const char* Label;      // the Details view's Type column
+    const char* SearchName; // what "t:<name>" matches
+    const char* Icon;       // the tile glyph (a model with clips and a playing sound pick their own)
+    ImVec4 Color;           // the Grid view's bottom stripe
+    int SortRank;           // Sort by Type
+    bool FileOnly;          // a project file that is never a library entry: nothing to remove from the library
+};
+constexpr AssetKindInfo kAssetKinds[] = {
+    {Cell::Kind::Folder,      "Folder",              "folder",      ICON_FA_FOLDER,          EditorTheme::Secondary,    0,  false},
+    {Cell::Kind::Model,       "Model",               "model",       ICON_FA_CUBE,            EditorTheme::KindMesh,     3,  false},
+    {Cell::Kind::Texture,     "Texture",             "texture",     ICON_FA_IMAGE,           EditorTheme::KindTexture,  4,  false},
+    {Cell::Kind::Material,    "Material",            "material",    ICON_FA_DROPLET,         EditorTheme::KindMaterial, 5,  false},
+    {Cell::Kind::Sound,       "Sound",               "sound",       ICON_FA_MUSIC,           EditorTheme::KindAudio,    6,  false},
+    {Cell::Kind::Scene,       "Scene",               "scene",       ICON_FA_MAP,             EditorTheme::KindScene,    1,  false},
+    {Cell::Kind::Prefab,      "Prefab",              "prefab",      ICON_FA_BOX_ARCHIVE,     EditorTheme::KindPrefab,   2,  false},
+    {Cell::Kind::Shader,      "Shader",              "shader",      ICON_FA_FILE_CODE,       EditorTheme::KindScript,   8,  false},
+    {Cell::Kind::Animator,    "Animator Controller", "animator",    ICON_FA_DIAGRAM_PROJECT, EditorTheme::KindAnim,     9,  true},
+    {Cell::Kind::Weapon,      "Weapon Definition",   "weapon",      ICON_FA_CROSSHAIRS,      EditorTheme::Warning,      10, true},
+    {Cell::Kind::Hdri,        "HDRI",                "hdri",        ICON_FA_SUN,             EditorTheme::KindLight,    11, true},
+    {Cell::Kind::Script,      "Script",              "script",      ICON_FA_SCROLL,          EditorTheme::KindScript,   12, true},
+    {Cell::Kind::Recoil,      "Recoil Profile",      "recoil",      ICON_FA_BURST,           EditorTheme::Warning,      10, true},
+    {Cell::Kind::CameraShake, "Camera Shake",        "camerashake", ICON_FA_VIDEO,           EditorTheme::Warning,      10, true},
+    {Cell::Kind::Decal,       "Decal",               "decal",       ICON_FA_STAMP,           EditorTheme::KindMaterial, 5,  true},
+    {Cell::Kind::Graffiti,    "Graffiti Piece",      "graffiti",    ICON_FA_SPRAY_CAN,       EditorTheme::KindMaterial, 5,  true},
+};
+const AssetKindInfo& KindInfo(Cell::Kind k) {
+    for (const AssetKindInfo& info : kAssetKinds)
+        if (info.Kind == k) return info;
+    return kAssetKinds[0];
 }
+
+const char* AssetKindLabel(Cell::Kind k) { return KindInfo(k).Label; }
 
 std::string FormatFileSize(unsigned long long bytes) {
     static const char* kUnits[] = { "B", "KB", "MB", "GB" };
@@ -1965,8 +1979,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 if (filtering ? (folder != cur && folder.rfind(cur + "/", 0) != 0) : folder != cur) continue;
                 for (size_t i : items) {
                     const ProjectAssetFile& f = m_ProjectAssetIndex.files[i];
-                    const char* kindName = f.Kind == Cell::Kind::Prefab ? "prefab" : f.Kind == Cell::Kind::Decal ? "decal" : "hdri";
-                    if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, assets.Labels(f.Path))) continue;
+                    if (!MatchesAssetSearch(parsedSearch, f.Name, KindInfo(f.Kind).SearchName, assets.Labels(f.Path))) continue;
                     Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
                     c.unloaded = f.Kind == Cell::Kind::Prefab && !f.Unfetched && !m_ListedAssetKeys.count(f.Key);
                     c.unfetched = f.Unfetched;
@@ -2042,18 +2055,9 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             const std::string& folder = moved.empty() ? f.Folder : moved;
             if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
             if (m_ListedAssetKeys.count(f.Key)) continue;
-            const bool fileOnly = f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon ||
-                                  f.Kind == Cell::Kind::Recoil || f.Kind == Cell::Kind::CameraShake ||
-                                  f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script ||
-                                  f.Kind == Cell::Kind::Decal || f.Kind == Cell::Kind::Graffiti;
-            const char* kindName = f.Kind == Cell::Kind::Model ? "model" : f.Kind == Cell::Kind::Texture ? "texture"
-                                 : f.Kind == Cell::Kind::Material ? "material" : f.Kind == Cell::Kind::Sound ? "sound"
-                                 : f.Kind == Cell::Kind::Animator ? "animator" : f.Kind == Cell::Kind::Weapon ? "weapon"
-                                 : f.Kind == Cell::Kind::Recoil ? "recoil"
-                                 : f.Kind == Cell::Kind::CameraShake ? "camerashake"
-                                 : f.Kind == Cell::Kind::Decal ? "decal"
-                                 : f.Kind == Cell::Kind::Graffiti ? "graffiti"
-                                 : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
+            const AssetKindInfo& kind = KindInfo(f.Kind);
+            const bool fileOnly = kind.FileOnly;
+            const char* kindName = kind.SearchName;
             // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
             if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
                 !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
@@ -2076,27 +2080,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         {
             const int mode = std::clamp(EditorSettings::Get().AssetSortMode, 0, 3);
             const bool desc = EditorSettings::Get().AssetSortDesc;
-            auto typeRank = [](Cell::Kind k) {
-                switch (k) {
-                    case Cell::Kind::Folder:     return 0;
-                    case Cell::Kind::Scene:      return 1;
-                    case Cell::Kind::Prefab:     return 2;
-                    case Cell::Kind::Model:      return 3;
-                    case Cell::Kind::Texture:    return 4;
-                    case Cell::Kind::Material:   return 5;
-                    case Cell::Kind::Decal:      return 5;
-                    case Cell::Kind::Graffiti:   return 5;
-                    case Cell::Kind::Sound:      return 6;
-                    case Cell::Kind::Shader:     return 8;
-                    case Cell::Kind::Animator:   return 9;
-                    case Cell::Kind::Weapon:     return 10;
-                    case Cell::Kind::Recoil:     return 10;
-                    case Cell::Kind::CameraShake:return 10;
-                    case Cell::Kind::Hdri:       return 11;
-                    case Cell::Kind::Script:     return 12;
-                }
-                return 7;
-            };
+            auto typeRank = [](Cell::Kind k) { return KindInfo(k).SortRank; };
             // Names are lower-cased once per cell (not twice per comparison); Date/Size stat each file once
             // per build (StatAssetGridCell), which the Details view then reuses.
             struct SortKey { bool folder; int rank; long long num; std::string name; size_t index; };
@@ -2254,21 +2238,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         bool isSelected = IsAssetSelected(cell.key, isFolder);
         bool isRenaming = m_RenamingAssetKey == cell.key && m_RenamingIsFolder == isFolder;
         bool playing = cell.kind == Cell::Kind::Sound && AudioEngine::IsPreviewPlaying(cell.key);
-        const char* icon = isFolder ? ICON_FA_FOLDER
-            : cell.kind == Cell::Kind::Model ? (cell.model && cell.model->HasAnimations() ? ICON_FA_FILM : ICON_FA_CUBE)
-            : cell.kind == Cell::Kind::Scene ? ICON_FA_MAP
-            : cell.kind == Cell::Kind::Prefab ? ICON_FA_BOX_ARCHIVE
-            : cell.kind == Cell::Kind::Material ? ICON_FA_DROPLET
-            : cell.kind == Cell::Kind::Shader ? ICON_FA_FILE_CODE
-            : cell.kind == Cell::Kind::Animator ? ICON_FA_DIAGRAM_PROJECT
-            : cell.kind == Cell::Kind::Weapon ? ICON_FA_CROSSHAIRS
-            : cell.kind == Cell::Kind::Recoil ? ICON_FA_BURST
-            : cell.kind == Cell::Kind::CameraShake ? ICON_FA_VIDEO
-            : cell.kind == Cell::Kind::Decal ? ICON_FA_STAMP
-            : cell.kind == Cell::Kind::Graffiti ? ICON_FA_SPRAY_CAN
-            : cell.kind == Cell::Kind::Hdri ? ICON_FA_SUN
-            : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
-            : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
+        const char* icon = cell.kind == Cell::Kind::Model && cell.model && cell.model->HasAnimations() ? ICON_FA_FILM
+                         : playing ? ICON_FA_STOP
+                         : KindInfo(cell.kind).Icon;
 
         // Editor Enhancers / vFolders: a folder tile shows its resolved icon, colour and content.
         EditorFolderVisual folderVis;
@@ -2279,27 +2251,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         const ImU32 folderTint = (isFolder && folderVis.Color) ? (EditorTheme::UserPacked(folderVis.Color) | 0xFF000000u) : 0u;
 
         // The asset-type colour: the tile's bottom stripe in Grid view.
-        auto kindColor = [&]() -> ImVec4 {
-            switch (cell.kind) {
-                case Cell::Kind::Folder:     return EditorTheme::Secondary;
-                case Cell::Kind::Model:      return EditorTheme::KindMesh;
-                case Cell::Kind::Texture:    return EditorTheme::KindTexture;
-                case Cell::Kind::Hdri:       return EditorTheme::KindLight;
-                case Cell::Kind::Material:
-                case Cell::Kind::Decal:
-                case Cell::Kind::Graffiti:   return EditorTheme::KindMaterial;
-                case Cell::Kind::Sound:      return EditorTheme::KindAudio;
-                case Cell::Kind::Scene:      return EditorTheme::KindScene;
-                case Cell::Kind::Prefab:     return EditorTheme::KindPrefab;
-                case Cell::Kind::Script:
-                case Cell::Kind::Shader:     return EditorTheme::KindScript;
-                case Cell::Kind::Animator:   return EditorTheme::KindAnim;
-                case Cell::Kind::Weapon:     return EditorTheme::Warning;
-                case Cell::Kind::Recoil:     return EditorTheme::Warning;
-                case Cell::Kind::CameraShake:return EditorTheme::Warning;
-            }
-            return EditorTheme::Secondary;
-        };
+        auto kindColor = [&]() -> ImVec4 { return KindInfo(cell.kind).Color; };
 
         bool clicked = false;
         if (gridMode) {
@@ -2926,10 +2878,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     ? ICON_FA_TRASH "  Remove Selected from Library" : ICON_FA_TRASH "  Remove from Library";
                 ImGui::Separator();
                 // Files that are never library entries have nothing to remove from it.
-                const bool fileOnly = cell.kind == Cell::Kind::Animator || cell.kind == Cell::Kind::Weapon ||
-                                      cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake ||
-                                      cell.kind == Cell::Kind::Hdri || cell.kind == Cell::Kind::Script ||
-                                      cell.kind == Cell::Kind::Decal || cell.kind == Cell::Kind::Graffiti;
+                const bool fileOnly = KindInfo(cell.kind).FileOnly;
                 ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (!fileOnly && ImGui::MenuItem(removeLabel)) {
                     RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
