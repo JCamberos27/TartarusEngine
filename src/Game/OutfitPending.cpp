@@ -43,8 +43,6 @@ using namespace detail;
 
 namespace detail {
 
-using Then = std::function<void(World&, AssetLibrary&, entt::entity)>;
-
 // A change waiting for its assets. HasRequest false = only `After` (a colourway step).
 struct PendingChange {
     const World* W = nullptr;
