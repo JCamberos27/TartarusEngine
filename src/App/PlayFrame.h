@@ -29,7 +29,6 @@ class SprayCanSystem;
 struct StillModelCache;
 struct PlayState;
 class WeaponLab;
-class Window;
 class World;
 
 // What Play's per-frame simulation step reads, gathered once per frame (the Renderer/ShadowFrame pattern: pointers to
@@ -47,7 +46,6 @@ struct PlayFrameInputs {
 
     World* world = nullptr;
     AssetLibrary* assets = nullptr;
-    Window* window = nullptr;
     EditorLayer* editor = nullptr;
     HotReloadGameModule* gameModule = nullptr;
     StillModelCache* stillModels = nullptr; // the animation tick's gather (shared with the pre-skin pass)

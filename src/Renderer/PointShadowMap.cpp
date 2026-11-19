@@ -1,5 +1,4 @@
 #include "PointShadowMap.h"
-#include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -13,7 +12,6 @@ void PointShadowMap::Configure(int resolution, int cubes) {
 
     m_Resolution = resolution;
     m_Cubes = cubes;
-    m_CompleteChecked = false; // re-check after a resolution change (audit #358)
 
     // A cube-map array is a 2D array with depth = numCubes * 6; layer = cube*6 + face. The static casters' depth
     // (never sampled, only copied from) is made on first use: DepthArrayTarget::EnsureStatic.
@@ -30,35 +28,13 @@ void PointShadowMap::Configure(int resolution, int cubes) {
         Log::Error("PointShadowMap: failed to create depth cube array (" + std::to_string(resolution) + ")");
 }
 
-// audit #358 — a layered depth FBO only reports COMPLETE once a layer is attached, so the check runs once, on the
-// first face both FBOs have one, rather than in Configure().
-void PointShadowMap::CheckComplete() const {
-    if (m_CompleteChecked) return;
-    m_CompleteChecked = true;
-    GLFramebufferCheck::Complete("PointShadowMap", m_Target.Fbo(), m_Resolution, m_Resolution);
-    GLFramebufferCheck::Complete("PointShadowMap static", m_Target.StaticFbo(), m_Resolution, m_Resolution);
+namespace {
+int FaceLayer(int slot, int face, int cubes) { return std::clamp(slot, 0, std::max(cubes, 1) - 1) * 6 + std::clamp(face, 0, 5); }
 }
 
 // The static-caster cache is allocated when a face first needs it: a scene with no shadowed point light never pays for it.
-void PointShadowMap::BeginStaticFace(int slot, int face) const {
-    m_Target.EnsureStatic();
-    slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
-    face = std::clamp(face, 0, 5);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_Target.StaticFbo());
-    m_Target.AttachStaticLayer(slot * 6 + face);
-    glViewport(0, 0, m_Resolution, m_Resolution);
-    glClear(GL_DEPTH_BUFFER_BIT);
-}
+void PointShadowMap::BeginStaticFace(int slot, int face) const { m_Target.BeginStatic(FaceLayer(slot, face, m_Cubes)); }
 
 void PointShadowMap::BeginFaceFromStatic(int slot, int face) const {
-    m_Target.EnsureStatic();
-    slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
-    face = std::clamp(face, 0, 5);
-    m_Target.AttachLayer(slot * 6 + face);
-    m_Target.AttachStaticLayer(slot * 6 + face);
-    CheckComplete();
-    glBlitNamedFramebuffer(m_Target.StaticFbo(), m_Target.Fbo(), 0, 0, m_Resolution, m_Resolution, 0, 0, m_Resolution, m_Resolution,
-                           GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_Target.Fbo());
-    glViewport(0, 0, m_Resolution, m_Resolution);
+    m_Target.BeginFromStatic(FaceLayer(slot, face, m_Cubes), 0, 0, m_Resolution, m_Resolution);
 }

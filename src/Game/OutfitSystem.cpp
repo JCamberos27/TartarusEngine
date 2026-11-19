@@ -213,8 +213,10 @@ void DressPiece(AssetLibrary& assets, const Wardrobe::Wardrobe& w, const Wardrob
 // --- Catalog ----------------------------------------------------------------------------------
 
 const Wardrobe::Item* Catalog::Find(const std::string& path) const {
-    for (const auto& it : Items) if (Same(it.Path, path)) return &it;
-    return nullptr;
+    if (m_ByPath.empty() && !Items.empty())
+        for (const auto& it : Items) m_ByPath.emplace(Lower(Rel(it.Path)), &it); // (the first of a duplicate path wins, as the scan did)
+    const auto found = m_ByPath.find(Lower(Rel(path)));
+    return found != m_ByPath.end() ? found->second : nullptr;
 }
 
 const std::vector<const Wardrobe::Item*>& Catalog::ForSlot(const std::string& slot, Wardrobe::Gender g) const {

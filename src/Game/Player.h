@@ -112,7 +112,7 @@ public:
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
     // but ignores mouse-look / WASD / jump — used while the game runs inside the docked Game
     // panel and the player hasn't clicked in to take control yet (Esc hands control back).
-    void Update(float dt, World& world, struct GLFWwindow* window, bool readInput = true);
+    void Update(float dt, bool readInput = true);
 };
 
 // The horizontal move one step closer to the target: an exponential approach with time constant

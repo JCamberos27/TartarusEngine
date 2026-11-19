@@ -74,43 +74,44 @@ void LoudnessMeter::Process(const float* in, int frames) {
     }
 }
 
+// The K-weighting (the shelf, then the high-pass) of both channels, run over frames [from, to) of an interleaved
+// stereo buffer: the summed squared output. The filters keep their state between calls, so consecutive ranges are
+// one continuous run.
+struct LoudnessMeter::KWeighting {
+    Biquad Shelf[2], Hp[2];
+    explicit KWeighting(int sampleRate) {
+        for (int c = 0; c < 2; ++c) Design(sampleRate, Shelf[c], Hp[c]);
+    }
+    double Energy(const std::vector<float>& stereo, size_t from, size_t to) {
+        double s = 0.0;
+        for (size_t i = from; i < to; ++i)
+            for (int c = 0; c < 2; ++c) {
+                const double y = Hp[c].Run(Shelf[c].Run((double)stereo[2 * i + (size_t)c]));
+                s += y * y;
+            }
+        return s;
+    }
+};
+
 float LoudnessMeter::MomentaryMax(const std::vector<float>& stereo, int sampleRate, size_t from, size_t to) {
     to = std::min(to, stereo.size() / 2);
     const size_t block = (size_t)(sampleRate / 10), window = 4 * block;
     if (from >= to || to - from < window) return -120.0f;
-    Biquad shelf[2], hp[2];
-    for (int c = 0; c < 2; ++c) Design(sampleRate, shelf[c], hp[c]);
-    // run the filters from a little before the range so they have settled (1 s)
+    KWeighting k(sampleRate);
+    // run the filters from a little before the range so they have settled (1 s); the blocks are aligned to `from`,
+    // the warm-up is discarded
     const size_t warm = from > (size_t)sampleRate ? from - (size_t)sampleRate : 0;
+    (void)k.Energy(stereo, warm, from);
     std::vector<double> blocks;
-    size_t pos = warm;
-    // (the blocks are aligned to `from`, the filter warm-up is discarded)
-    for (; pos < from; ++pos)
-        for (int c = 0; c < 2; ++c) hp[c].Run(shelf[c].Run((double)stereo[2 * pos + (size_t)c]));
-    for (; pos + block <= to; pos += block) {
-        double s = 0.0;
-        for (size_t i = pos; i < pos + block; ++i)
-            for (int c = 0; c < 2; ++c) {
-                const double y = hp[c].Run(shelf[c].Run((double)stereo[2 * i + (size_t)c]));
-                s += y * y;
-            }
-        blocks.push_back(s / (double)block);
-    }
+    for (size_t pos = from; pos + block <= to; pos += block) blocks.push_back(k.Energy(stereo, pos, pos + block) / (double)block);
     float best = -120.0f;
     for (size_t b = 0; b + 4 <= blocks.size(); ++b) best = std::max(best, ToLufs((blocks[b] + blocks[b + 1] + blocks[b + 2] + blocks[b + 3]) / 4.0));
     return best;
 }
 
 double LoudnessMeter::KWeightedEnergy(const std::vector<float>& stereo, int sampleRate) {
-    Biquad shelf[2], hp[2];
-    for (int c = 0; c < 2; ++c) Design(sampleRate, shelf[c], hp[c]);
-    double s = 0.0;
-    for (size_t i = 0; i < stereo.size() / 2; ++i)
-        for (int c = 0; c < 2; ++c) {
-            const double y = hp[c].Run(shelf[c].Run((double)stereo[2 * i + (size_t)c]));
-            s += y * y;
-        }
-    return s;
+    KWeighting k(sampleRate);
+    return k.Energy(stereo, 0, stereo.size() / 2);
 }
 
 float LoudnessMeter::RmsDb(const std::vector<float>& stereo, size_t from, size_t to) {
@@ -129,19 +130,10 @@ float LoudnessMeter::PeakDb(const std::vector<float>& stereo, size_t from, size_
 }
 
 std::vector<double> LoudnessMeter::BlockPowers(const std::vector<float>& stereo, int sampleRate) {
-    Biquad shelf[2], hp[2];
-    for (int c = 0; c < 2; ++c) Design(sampleRate, shelf[c], hp[c]);
+    KWeighting k(sampleRate);
     const size_t block = (size_t)(sampleRate / 10), frames = stereo.size() / 2;
     std::vector<double> out;
-    for (size_t pos = 0; pos + block <= frames; pos += block) {
-        double sum = 0.0;
-        for (size_t i = pos; i < pos + block; ++i)
-            for (int c = 0; c < 2; ++c) {
-                const double y = hp[c].Run(shelf[c].Run((double)stereo[2 * i + (size_t)c]));
-                sum += y * y;
-            }
-        out.push_back(sum / (double)block);
-    }
+    for (size_t pos = 0; pos + block <= frames; pos += block) out.push_back(k.Energy(stereo, pos, pos + block) / (double)block);
     return out;
 }
 

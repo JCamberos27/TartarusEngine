@@ -670,23 +670,48 @@ std::string AssetLibrary::DiskFolderFor(const std::string& path) {
     return AddFolderPath(dir);
 }
 
+namespace {
+std::string LowerFolderKey(const std::string& s) {
+    std::string out(s);
+    for (char& c : out) c = (char)std::tolower((unsigned char)c);
+    return out;
+}
+} // namespace
+
+const std::string* AssetLibrary::FindFolderNoCase(const std::string& path) {
+    if (!m_FolderIndexValid) {
+        m_FolderIndex.clear();
+        m_FolderIndex.reserve(m_Folders.size());
+        for (size_t i = 0; i < m_Folders.size(); ++i) m_FolderIndex.emplace(LowerFolderKey(m_Folders[i]), i); // first one wins
+        m_FolderIndexValid = true;
+    }
+    const auto it = m_FolderIndex.find(LowerFolderKey(path));
+    return it != m_FolderIndex.end() ? &m_Folders[it->second] : nullptr;
+}
+
+bool AssetLibrary::HasFolder(const std::string& path) {
+    const std::string* f = FindFolderNoCase(path);
+    if (!f) return false;
+    // Two folders differing only in case: the index holds the first, so check the rest exactly.
+    return *f == path || std::find(m_Folders.begin(), m_Folders.end(), path) != m_Folders.end();
+}
+
+void AssetLibrary::AppendFolder(const std::string& path) {
+    m_Folders.push_back(path);
+    if (m_FolderIndexValid) m_FolderIndex.emplace(LowerFolderKey(path), m_Folders.size() - 1);
+}
+
 std::string AssetLibrary::AddFolderPath(const std::string& dir) {
     if (dir.empty()) return {};
-    if (std::find(m_Folders.begin(), m_Folders.end(), dir) != m_Folders.end()) return dir; // the common case
-    auto sameName = [](const std::string& a, const std::string& b) {
-        return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-            return std::tolower((unsigned char)x) == std::tolower((unsigned char)y); });
-    };
+    if (HasFolder(dir)) return dir; // the common case
     // Walk the directories top-down, reusing "Shaders" for "shaders" and so on.
     std::string folder;
     for (size_t start = 0; start <= dir.size();) {
         size_t end = dir.find('/', start);
         if (end == std::string::npos) end = dir.size();
-        const std::string wanted = (folder.empty() ? "" : folder + "/") + dir.substr(start, end - start);
-        auto it = std::find_if(m_Folders.begin(), m_Folders.end(),
-                               [&](const std::string& f) { return sameName(f, wanted); });
-        if (it != m_Folders.end()) folder = *it;
-        else { folder = wanted; m_Folders.push_back(folder); }
+        std::string wanted = (folder.empty() ? "" : folder + "/") + dir.substr(start, end - start);
+        if (const std::string* existing = FindFolderNoCase(wanted)) folder = *existing;
+        else { folder = std::move(wanted); AppendFolder(folder); }
         start = end + 1;
     }
     // Not persisted: these folders are derived from where the files sit and are found again on every load
@@ -702,8 +727,8 @@ bool AssetLibrary::IsDiskFolder(const std::string& folderPath) {
 }
 
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
-    if (std::find(m_Folders.begin(), m_Folders.end(), folderPath) == m_Folders.end()) {
-        m_Folders.push_back(folderPath);
+    if (!HasFolder(folderPath)) {
+        AppendFolder(folderPath);
         // A folder that is a real project directory is found again on every load (AddFolderPath),
         // so it is never written to settings.json. Undo snapshots carry the whole folder list and
         // re-create the missing ones through here, which used to save every on-disk folder.
@@ -720,6 +745,7 @@ void AssetLibrary::RenameFolder(const std::string& oldPath, const std::string& n
         else if (path.rfind(oldPath + "/", 0) == 0) path = newPath + path.substr(oldPath.size());
     };
     for (auto& f : m_Folders) remap(f);
+    FolderIndexDirty();
     for (auto& f : m_SavedFolders) remap(f);
     for (auto& [assetKey, folder] : m_AssetFolder) remap(folder);
     ++m_FolderMoveGen;
@@ -740,6 +766,7 @@ bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
 void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     m_Folders.erase(std::remove(m_Folders.begin(), m_Folders.end(), folderPath), m_Folders.end());
+    FolderIndexDirty();
     m_SavedFolders.erase(std::remove(m_SavedFolders.begin(), m_SavedFolders.end(), folderPath), m_SavedFolders.end());
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
@@ -774,6 +801,7 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
     // through CanDeleteFolder/DeleteFolder's "must be empty" guard one at a time.
     auto underFolder = [&](const std::string& f) { return f == folderPath || f.rfind(folderPath + "/", 0) == 0; };
     m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), underFolder), m_Folders.end());
+    FolderIndexDirty();
     m_SavedFolders.erase(std::remove_if(m_SavedFolders.begin(), m_SavedFolders.end(), underFolder), m_SavedFolders.end());
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());

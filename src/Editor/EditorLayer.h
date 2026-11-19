@@ -32,6 +32,7 @@
 #include "RenderStats.h" // ::RenderStats, re-exported below as EditorLayer::RenderStats (#359)
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
+#include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
 #include "MaterialPreviewRenderer.h"
@@ -78,6 +79,12 @@ struct AssetGridCell {
     // Listed in external_assets.csv but not on disk: a Drive file this checkout hasn't fetched.
     // Shown greyed; dragging it is refused (run tools/assets/fetch-assets.ps1).
     bool unfetched = false;
+    // The file's size / modified time, stat'ed once per list build (Date/Size sort, Details view)
+    // rather than every frame. Filled by StatAssetGridCell; zero / "-" when there is no file.
+    mutable bool statted = false;
+    mutable unsigned long long fileSize = 0;
+    mutable long long modifiedTicks = 0;
+    mutable std::string sizeText, modifiedText;
 };
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
@@ -550,13 +557,6 @@ public:
     // DrawHistoryListBody renders the click-to-jump rows into the module's History panel.
     // ShowHistory()/SetShowHistory() (above) carry the toggle.
     void DrawHistoryListBody(World& world, AssetLibrary& assets);                // EditorLayer_Toolbar.cpp
-    // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
-    // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport. Pass a zero size to
-    // say "no game view this frame".
-    void SetGameViewRect(ImVec2 imgPos, ImVec2 imgSize, unsigned int colorTex, int texW, int texH) {
-        m_GameViewImgPos = imgPos; m_GameViewImgSize = imgSize;
-        m_GameViewTex = colorTex; m_GameViewTexW = texW; m_GameViewTexH = texH;
-    }
     // Window > Game menu entry (#4 item 5) — GameViewPanel is owned by main.cpp, not this class,
     // so its open/closed state round-trips through these each frame: main.cpp pushes the panel's
     // current IsWindowOpen() in here every frame (so the menu checkbox reads live), and consumes
@@ -1466,8 +1466,10 @@ private:
     bool m_BoxSelectActive = false;
     glm::vec2 m_BoxSelectStart{0.0f, 0.0f};
     void AddToSelectionIfAbsent(entt::entity entity); // additive-only: never toggles an already-selected item off
+    void SetSelectionToDistinct(const std::vector<entt::entity>& entities); // replace, first = primary (EditorLayer_Hierarchy.cpp)
 
     void SyncViewportPrefs(); // #135 — persist the members below that EditorSettings mirrors
+    bool m_ViewportPrefsPending = false; // a synced value changed; written when no widget is active
 
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
@@ -1704,13 +1706,6 @@ private:
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
     std::unique_ptr<ScriptIDE> m_ScriptIDE;
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
-    // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
-    // DrawViewportActionBar to place the action bar over the game viewport.
-    ImVec2 m_GameViewImgPos{0.0f, 0.0f};
-    ImVec2 m_GameViewImgSize{0.0f, 0.0f};
-    unsigned int m_GameViewTex = 0;
-    int m_GameViewTexW = 0;
-    int m_GameViewTexH = 0;
     // Window > Game menu round-trip (see SetGameViewOpenState/ConsumeGameViewOpenRequest above).
     bool m_GameViewOpenCached = true;
     int m_GameViewOpenRequest = -1; // -1 none, 0 close, 1 open
@@ -1880,6 +1875,11 @@ private:
     float m_ModelPreviewDistance = 3.0f;
     bool m_ModelPreviewDragging = false; // press started while hovering the preview image
     ModelPreviewRenderer m_ModelPreview;
+    // The import preview re-renders when what it shows changes (model, orbit, size, materials), while a
+    // clip plays, and every kModelPreviewRefresh seconds for what the key can't see (textures streaming in).
+    std::uint64_t m_ModelPreviewKey = 0;
+    unsigned int m_ModelPreviewHandle = 0;
+    float m_ModelPreviewAge = 0.0f;
     ModelPreviewRenderer m_OutfitPreview; // the Character Outfit editor's spinnable item preview
 
     // Asset Browser model thumbnails (#18 P18): each Model rendered once into its own small GL
@@ -1926,10 +1926,8 @@ private:
     void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
-    // Sound-cell waveform envelopes (#236 G), decoded once per path via AudioEngine.
-    // Empty vector = decode failed / not audio; cached either way.
-    std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
-    const std::vector<float>& SoundWaveform(const std::string& path);
+    // Sound-cell waveform envelopes (#236 G), decoded off the UI thread (AssetWaveformCache).
+    AssetWaveformCache m_SoundWaveforms;
 
     // Asset favourites (#236 G) — a starred subset. Since vFavorites they are the assets on the
     // favorites pages; the star toggle on the Asset Browser toolbar filters the grid to just these.
@@ -2131,16 +2129,16 @@ private:
     bool m_ExpandAllComponents = false; // SetExpandAllComponents
     bool m_InPlayMode = false; // set by OnEnter/OnExitPlayMode — lets edit-mode-only shortcuts (F2 rename) yield to Play-mode ones
     std::string m_PlayModeSnapshot;
-    // #91 — the whole undo/redo history as it stood when Play started. Edits made while playing
-    // still record normally (so the History panel works mid-Play), but Stop reverts the scene,
-    // so their entries — whose snapshots hold transient play state — are thrown away by
-    // restoring this.
+    // #91 - set while a Play session runs: Stop drops the staged undo and refreshes the dirty
+    // state from the history. (It used to copy the whole undo/redo stacks at Play, never read back.)
+    bool m_PrePlayHistoryValid = false;
+    // A whole undo/redo history, put aside while Prefab Mode edits the prefab (m_PrePrefabHistory).
     struct SavedHistory {
         std::vector<UndoEntry> Undo, Redo;
         std::string UndoBase, RedoBase;
         int ContentDepth = 0, SavedDepth = 0;
         bool Valid = false;
-    } m_PrePlayHistory;
+    };
     // #176 - Prefab Mode state: the scene to return to, its history and dirty flag.
     std::string m_PrefabModePath;
     std::string m_InspectorRequestedPrefab;
@@ -2256,9 +2254,9 @@ private:
     std::vector<entt::entity> m_HierChainScratch;
     // CreationOrdinal ("Object 7") was a full sort of every entity PER unnamed row (and per
     // comparison in the Name sort). Built lazily once per frame instead.
-    std::unordered_map<entt::entity, int> m_HierOrdinals;
-    int m_HierOrdinalsFrame = -1;
-    int HierarchyCreationOrdinal(const World& world, entt::entity e);
+    mutable std::unordered_map<entt::entity, int> m_HierOrdinals;
+    mutable int m_HierOrdinalsFrame = -1;
+    int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon
     // under the mouse names, and whether a hover key acted (type-to-select skips that frame).
     entt::entity m_HierarchyHoverEntity = entt::null;

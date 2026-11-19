@@ -37,6 +37,4 @@ private:
     DepthArrayTarget m_Target; // the cube array (layer = cube*6 + face), its FBOs and the lazily made static cache
     int m_Resolution = 0;
     int m_Cubes = 0;
-    mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check (CheckComplete)
-    void CheckComplete() const;
 };

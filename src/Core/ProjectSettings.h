@@ -146,4 +146,14 @@ void SetStartupScene(std::string scene);
 void Load();
 void Save();
 
+// #132 - build and startup scenes are saved with their GUIDs and followed when moved. The asset layer answers the
+// lookups (Core does not depend on it): FollowRef is the path the GUID names now (else `ref`), PathForGuid the path of a
+// GUID (empty when unknown), GuidForPath a file's GUID as text (empty when it has none). Unset, scenes go by path only.
+struct SceneRefResolver {
+    std::string (*FollowRef)(const std::string& ref, const std::string& guid) = nullptr;
+    std::string (*PathForGuid)(const std::string& guid) = nullptr;
+    std::string (*GuidForPath)(const std::string& path) = nullptr;
+};
+void SetSceneRefResolver(const SceneRefResolver& r);
+
 } // namespace ProjectSettings
