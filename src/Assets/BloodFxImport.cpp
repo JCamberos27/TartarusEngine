@@ -35,9 +35,11 @@ bool ReadText(const std::string& path, std::string& out) {
     return true;
 }
 
+// A little-endian value at `at`; zero past the end of the buffer (the callers check what they need, this is the backstop
+// against a malformed file reading out of bounds).
 template <typename T> T Get(const std::vector<std::uint8_t>& b, size_t at) {
-    T v;
-    std::memcpy(&v, b.data() + at, sizeof(T));
+    T v{};
+    if (at <= b.size() && sizeof(T) <= b.size() - at) std::memcpy(&v, b.data() + at, sizeof(T));
     return v;
 }
 
@@ -160,20 +162,26 @@ bool ReadExr(const std::vector<std::uint8_t>& b, ExrImage& out, std::string* err
             size_t q = p;
             while (q < p + size && b[q] != 0) {
                 const size_t e = std::find(b.begin() + q, b.begin() + p + size, 0) - b.begin();
+                if (e + 17 > p + (size_t)size) { Fail(error, "truncated EXR channel list"); return false; } // name, NUL, 16 bytes
                 Chan c{std::string(b.begin() + q, b.begin() + e), Get<int>(b, e + 1)};
                 if (Get<int>(b, e + 9) != 1 || Get<int>(b, e + 13) != 1) { Fail(error, "subsampled EXR channels are not supported"); return false; }
                 chans.push_back(c);
                 q = e + 17;
             }
         } else if (name == "compression") {
+            if (size < 1) { Fail(error, "truncated EXR compression attribute"); return false; }
             compression = b[p];
         } else if (name == "dataWindow") {
+            if (size < 16) { Fail(error, "truncated EXR data window"); return false; }
             x0 = Get<int>(b, p); y0 = Get<int>(b, p + 4); x1 = Get<int>(b, p + 8); y1 = Get<int>(b, p + 12);
         }
         p += size;
     }
     ++p; // header terminator
     if (chans.empty() || x1 < x0 || y1 < y0) { Fail(error, "EXR header has no channels / data window"); return false; }
+    // (64-bit: a window from INT_MIN to INT_MAX overflows int.)
+    constexpr long long kMaxSide = 16384;
+    if ((long long)x1 - x0 + 1 > kMaxSide || (long long)y1 - y0 + 1 > kMaxSide) { Fail(error, "EXR image is larger than 16384 x 16384"); return false; }
     if (compression != 0 && compression != 2 && compression != 3) { Fail(error, "EXR compression " + std::to_string(compression) + " is not supported (NONE/ZIPS/ZIP only)"); return false; }
     for (const Chan& c : chans)
         if (c.Type != 1 && c.Type != 2) { Fail(error, "EXR channel '" + c.Name + "' is not HALF or FLOAT"); return false; }
