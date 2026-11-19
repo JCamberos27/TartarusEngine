@@ -1,4 +1,5 @@
 #include "ImpostorRenderer.h"
+#include "Log.h"
 
 #include "Core/Env.h"
 #include "Core/Paths.h"
@@ -257,7 +258,15 @@ bool ImpostorRenderer::Build(const World& world, int buckets,
     for (auto& l : m_Lists)
         if (l.size() > 1) std::sort(l.begin(), l.end(), [&](const Instance& a, const Instance& b) { return key(a) < key(b); });
     const std::size_t at = TakeUpload(total * sizeof(Instance));
-    if (at == ~std::size_t(0)) return false;
+    if (at == ~std::size_t(0)) { // too many instances for the upload ring this frame: none draw
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            Log::Warn("Impostors: " + std::to_string(total) + " instances don't fit the upload ring - impostors skipped "
+                      "while that holds");
+        }
+        return false;
+    }
     m_Draws.assign(m_Lists.size(), {});
     std::uint32_t first = 0;
     for (std::size_t i = 0; i < m_Lists.size(); ++i) {

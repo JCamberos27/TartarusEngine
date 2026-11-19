@@ -7,9 +7,7 @@
 #include "Model.h"
 #include "PhysicsWorld.h"
 #include "GameModuleAPI.h"
-#include "FKeyRow.h"
-#include "EditorSound.h"
-#include "Shortcuts.h"
+#include "GameShell.h"
 #include "Log.h"
 #include "Core/Paths.h"
 #include <glm/gtc/quaternion.hpp>
@@ -101,16 +99,16 @@ void DevSpawner::Update(const Context& c) {
     if (c.Keys) {
         auto variant = [&](int& cur, int count, const char* key, const char* title, const char* const* names) {
             cur = (cur + 1) % count;
-            EditorSound::Play(EditorSound::Event::FKeyCycle, -1.0f, 1.0f + 0.05f * (float)cur);
-            FKeyRow::Show(key, title, std::string(names[cur]) + "  (next)", cur, count);
+            GameShell::PlaySound(GameShell::Sound::FKeyCycle, -1.0f, 1.0f + 0.05f * (float)cur);
+            GameShell::FRowShow(key, title, std::string(names[cur]) + "  (next)", cur, count);
         };
         static const char* npcNames[kNpcCount];
         for (int i = 0; i < kNpcCount; ++i) npcNames[i] = kNpcs[i].Name;
-        if (Shortcuts::TriggeredGlfw("fkey.nextNpc")) variant(m_Npc, kNpcCount, "F9", "Dummy", npcNames);
-        if (Shortcuts::TriggeredGlfw("fkey.nextItem")) variant(m_Item, kItemCount, "F11", "Item", kItems);
-        if (Shortcuts::TriggeredGlfw("fkey.spawnNpc")) SpawnNpc(c);
-        if (Shortcuts::TriggeredGlfw("fkey.spawnItem")) SpawnItem(c);
-        if (Shortcuts::TriggeredGlfw("fkey.clearSpawns")) Clear(c);
+        if (GameShell::ShortcutTriggered("fkey.nextNpc")) variant(m_Npc, kNpcCount, "F9", "Dummy", npcNames);
+        if (GameShell::ShortcutTriggered("fkey.nextItem")) variant(m_Item, kItemCount, "F11", "Item", kItems);
+        if (GameShell::ShortcutTriggered("fkey.spawnNpc")) SpawnNpc(c);
+        if (GameShell::ShortcutTriggered("fkey.spawnItem")) SpawnItem(c);
+        if (GameShell::ShortcutTriggered("fkey.clearSpawns")) Clear(c);
     }
     Pickups(c);
 }
@@ -122,10 +120,10 @@ void DevSpawner::SpawnNpc(const Context& c) {
         // No Dummy Spawn here: start the dummies on this press (a one-off navmesh build, cached after).
         if (c.StartSquad && c.StartSquad()) {
             m_WaitSquad = true;
-            FKeyRow::Show("F9", "Dummy", "Building the navmesh...");
+            GameShell::FRowShow("F9", "Dummy", "Building the navmesh...");
         } else {
-            FKeyRow::Show("F9", "Dummy", "Can't start dummies here");
-            EditorSound::Play(EditorSound::Event::Blocked);
+            GameShell::FRowShow("F9", "Dummy", "Can't start dummies here");
+            GameShell::PlaySound(GameShell::Sound::Blocked);
         }
         return;
     }
@@ -135,13 +133,13 @@ void DevSpawner::SpawnNpc(const Context& c) {
     Place(c, at, yaw);
     const int idx = c.Npcs->SpawnAt(*c.WorldPtr, *c.Assets, at, yaw, v.Roam);
     if (idx < 0) {
-        FKeyRow::Show("F9", "Dummy", "No room there");
-        EditorSound::Play(EditorSound::Event::Blocked);
+        GameShell::FRowShow("F9", "Dummy", "No room there");
+        GameShell::PlaySound(GameShell::Sound::Blocked);
         return;
     }
     m_NpcIds.push_back(idx);
-    EditorSound::Play(EditorSound::Event::SpawnNpc);
-    FKeyRow::Show("F9", "Dummy", v.Name, m_Npc, kNpcCount);
+    GameShell::PlaySound(GameShell::Sound::SpawnNpc);
+    GameShell::FRowShow("F9", "Dummy", v.Name, m_Npc, kNpcCount);
 }
 
 void DevSpawner::SpawnItem(const Context& c) {
@@ -152,8 +150,8 @@ void DevSpawner::SpawnItem(const Context& c) {
     const glm::vec3 drop = at + glm::vec3(0.0f, 0.35f, 0.0f);
     if (m_Item == 0) m_Pickups.push_back(Box(world, *c.Assets, drop, glm::vec3(0.35f, 0.2f, 0.25f), 4.0f, "[Runtime] Ammo Box"));
     else m_Props.push_back(Box(world, *c.Assets, at + glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(0.8f), 25.0f, "[Runtime] Physics Crate"));
-    EditorSound::Play(EditorSound::Event::SpawnItem);
-    FKeyRow::Show("F11", "Item", kItems[m_Item], m_Item, kItemCount);
+    GameShell::PlaySound(GameShell::Sound::SpawnItem);
+    GameShell::FRowShow("F11", "Item", kItems[m_Item], m_Item, kItemCount);
 }
 
 void DevSpawner::Pickups(const Context& c) {
@@ -178,8 +176,8 @@ void DevSpawner::Pickups(const Context& c) {
     if (c.Gun && c.Gun->IsActive()) c.Gun->RefillAmmo();
     if (world.Registry.valid(p)) world.DestroyEntityAndChildren(p);
     m_Pickups.erase(m_Pickups.begin() + best);
-    EditorSound::Play(EditorSound::Event::SpawnItem, -1.0f, 1.25f);
-    FKeyRow::Show("E", "Picked up", "Ammo");
+    GameShell::PlaySound(GameShell::Sound::SpawnItem, -1.0f, 1.25f);
+    GameShell::FRowShow("E", "Picked up", "Ammo");
 }
 
 void DevSpawner::Clear(const Context& c) {
@@ -189,8 +187,8 @@ void DevSpawner::Clear(const Context& c) {
         for (int idx : m_NpcIds)
             if (const Npc* npc = c.Npcs->Find(idx); npc && npc->DevSpawned) c.Npcs->Remove(world, idx); // the slot may be a scene dummy's now
     Stop(world);
-    EditorSound::Play(EditorSound::Event::ClearSpawns);
-    FKeyRow::Show("F12", "Cleared", std::to_string(n) + (n == 1 ? " thing" : " things"));
+    GameShell::PlaySound(GameShell::Sound::ClearSpawns);
+    GameShell::FRowShow("F12", "Cleared", std::to_string(n) + (n == 1 ? " thing" : " things"));
 }
 
 void DevSpawner::Stop(World& world) {

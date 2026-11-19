@@ -20,8 +20,7 @@ void SetCharacterFeet(const glm::vec3& f) { PhysicsWorld::SetCharacterFootPositi
 unsigned MoveCharacter(const glm::vec3& d, float dt, bool snap = false) { return PhysicsWorld::MoveCharacter(&d.x, dt, snap); }
 }
 
-void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) {
-    (void)world; (void)window;
+void Player::Update(float dt, bool readInput) {
     dt = std::max(0.0f, dt);
     glm::vec2 move(ScriptedMove ? ScriptMove.x : (readInput ? InputMap::GetAxis("Horizontal") : 0.0f),
                    ScriptedMove ? ScriptMove.y : (readInput ? InputMap::GetAxis("Vertical") : 0.0f));

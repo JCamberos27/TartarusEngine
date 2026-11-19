@@ -138,6 +138,9 @@ public:
     // What the instances of one import share (meshes, GPU buffers, materials): two unskinned models with the same
     // value draw the same geometry, so GPU instancing groups placed copies by it (InstanceBatch.h).
     const void* ImportId() const { return m_D.get(); }
+    // Unique per import (a Reimport gets a new one; never reused, unlike an address): caches built from the
+    // imported geometry compare it to notice a reimport.
+    std::uint64_t ImportStamp() const { return m_D->ImportStamp; }
 
     // Async import (AsyncAssetLoader): the whole Assimp import and every texture decode, with no
     // GL at all, so it can run on a worker thread. The result has its meshes and textures
@@ -499,6 +502,7 @@ private:
 
     // #96 — everything an import produces, shared by every instance of the same asset.
     struct SharedData {
+        std::uint64_t ImportStamp = ++s_ImportStamps; // each SharedData (each import) its own
         std::string Directory;
         std::vector<std::unique_ptr<ModelMesh>> Meshes;
         std::map<std::string, std::shared_ptr<Texture>> TextureCache;
@@ -623,6 +627,7 @@ private:
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
     uint64_t m_LastTickedFrame = ~0ull;
     static inline std::atomic<uint64_t> s_AnimationEpoch{0};
+    static inline std::atomic<std::uint64_t> s_ImportStamps{0};
 
     // Import-time only: each node's model-space bind transform, for the bind-pose palette (#98).
     std::map<std::string, glm::mat4> m_ImportNodeGlobals;

@@ -3,8 +3,8 @@
 
 // The depth texture array behind the three shadow maps (SpotShadowMap, PointShadowMap, CascadedShadowMap): a
 // DEPTH_COMPONENT32F array with the hardware-compare sampler state, an optional depth-only FBO pair, an optional
-// lazily made static-cache copy, and its GpuMemTrack entries. The owning map keeps its public API, its layer
-// bookkeeping and its Begin* functions; this holds the GL objects.
+// lazily made static-cache copy, and its GpuMemTrack entries. The owning map keeps its public API and its layer
+// bookkeeping (a spot's layer, a point light's cube * 6 + face); the Begin steps behind it live here.
 class DepthArrayTarget {
 public:
     struct Desc {
@@ -40,6 +40,14 @@ public:
     void AttachLayer(int layer) const;
     void AttachStaticLayer(int layer) const;
 
+    // The passes (each binds its FBO, sets the full viewport, and does NOT restore the previous framebuffer):
+    // BeginLive clears and binds `layer` of the live map; BeginStatic clears and binds it in the static cache (made on
+    // first use); BeginFromStatic copies the cache's `layer` into the live one - only the rect [x0, x1) x [y0, y1),
+    // clamped to the map - and binds the live layer for the moving casters drawn on top.
+    void BeginLive(int layer) const;
+    void BeginStatic(int layer) const;
+    void BeginFromStatic(int layer, int x0, int y0, int x1, int y1) const;
+
 private:
     unsigned int m_Texture = 0;
     unsigned int m_Fbo = 0;
@@ -47,6 +55,9 @@ private:
     unsigned int m_StaticFbo = 0;
     int m_Resolution = 0;
     int m_Layers = 0;
+    mutable bool m_LiveChecked = false, m_StaticChecked = false; // audit #358: one completeness check each, once a
+                                                                // layer is attached (a layered FBO is incomplete before)
+    int ClampLayer(int layer) const { return layer < 0 ? 0 : layer >= m_Layers ? (m_Layers > 0 ? m_Layers - 1 : 0) : layer; }
     const void* m_Owner = nullptr;
     std::string m_LiveName, m_StaticName;
 };

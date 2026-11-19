@@ -1,4 +1,5 @@
 #include "GIData.h"
+#include "Log.h"
 
 #include <glm/gtc/packing.hpp>
 #include <algorithm>
@@ -250,10 +251,19 @@ bool Save(const BakeFile& file, const std::string& path, std::string* err) {
         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
         if (!f) { if (err) *err = "cannot write " + tmp; return false; }
         f.write((const char*)bytes.data(), (std::streamsize)bytes.size());
-        if (!f) { if (err) *err = "write failed"; return false; }
+        if (!f) {
+            if (err) *err = "write failed";
+            f.close();
+            std::filesystem::remove(tmp, ec);
+            return false;
+        }
     }
     std::filesystem::rename(tmp, path, ec);
-    if (ec) { if (err) *err = ec.message(); return false; }
+    if (ec) {
+        if (err) *err = ec.message();
+        std::filesystem::remove(tmp, ec);
+        return false;
+    }
     return true;
 }
 
@@ -269,6 +279,7 @@ struct CacheEntry {
     std::filesystem::file_time_type Time{};
     std::uintmax_t Size = 0;
     std::shared_ptr<const BakeFile> File;
+    bool Failed = false; // this (time, size) did not parse: not re-read until the file changes
     std::chrono::steady_clock::time_point Checked{};
 };
 std::unordered_map<std::string, CacheEntry>& Cache() {
@@ -291,11 +302,15 @@ std::shared_ptr<const BakeFile> Cached(const std::string& absPath) {
     const auto size = std::filesystem::file_size(absPath, ec);
     auto& e = Cache()[absPath];
     e.Checked = std::chrono::steady_clock::now();
-    if (e.File && e.Time == time && e.Size == size) return e.File;
+    if (ec) { e.File = nullptr; e.Failed = false; return nullptr; } // vanished between the two queries
+    if ((e.File || e.Failed) && e.Time == time && e.Size == size) return e.File;
     e.Time = time;
     e.Size = size;
     auto f = std::make_shared<BakeFile>();
-    e.File = Load(*f, absPath) ? std::shared_ptr<const BakeFile>(f) : nullptr;
+    std::string err;
+    e.Failed = !Load(*f, absPath, &err);
+    if (e.Failed) Log::Warn("GI: cannot read " + absPath + " (" + err + ")");
+    e.File = e.Failed ? nullptr : std::shared_ptr<const BakeFile>(f);
     return e.File;
 }
 

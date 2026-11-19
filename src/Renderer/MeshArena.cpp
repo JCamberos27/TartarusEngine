@@ -131,8 +131,7 @@ public:
         if (page != ~0u) return page;
         if (!NewPage(big ? verts : kPageVertices, big ? indices : kPageIndices, big)) return ~0u;
         page = (std::uint32_t)m_Pages.size() - 1;
-        TakeFrom(*m_Pages[page], verts, indices, vOff, iOff);
-        return page;
+        return TakeFrom(*m_Pages[page], verts, indices, vOff, iOff) ? page : ~0u;
     }
 
     // Returns a range to its page (page1 is 1-based). A dedicated page's one mesh is gone: its memory goes back (the
