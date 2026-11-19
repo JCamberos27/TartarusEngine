@@ -285,7 +285,6 @@ private:
     std::vector<Walker> m_Walkers;
     // Room for one more stain: the farthest out of view goes (a print for a print), else the oldest.
     void MakeRoom(bool print);
-    int m_PrintId = -2;
     glm::vec3 m_Eye{0.0f}, m_Forward{0.0f, 0.0f, -1.0f};
     bool m_HasViewer = false;
     int m_PrintsSpawned = 0;
