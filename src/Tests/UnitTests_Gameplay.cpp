@@ -357,19 +357,19 @@ void TestProjectNpcConfiguration() {
     const auto entity=converted.front();
     const auto& spawn=world.Registry.get<NpcSpawnComponent>(entity);
     const auto& squad=world.Registry.get<SquadSettingsComponent>(entity);
-    CHECK(spawn.OutfitSeed==5 && spawn.Bare && !spawn.Roam);
+    CHECK(!spawn.Roam); // (its old OutfitSeed / Bare are dropped: every dummy spawns bare)
     CHECK(std::abs(squad.HeavyHitDamage-55.f)<1e-6f && std::abs(squad.CorpseTime-90.f)<1e-6f && squad.MaxCorpses==7 && std::abs(squad.RespawnDelay-2.5f)<1e-6f);
     const auto snapshot=SceneSerializer::SaveToString(world);
     CHECK(snapshot.find("NpcDefinition")==std::string::npos && snapshot.find("SquadDefinition")==std::string::npos);
     World restored;CHECK(SceneSerializer::LoadFromString(restored,assets,snapshot));
     const auto views=restored.Registry.view<NpcSpawnComponent,SquadSettingsComponent>();CHECK(views.begin()!=views.end());
     if(views.begin()!=views.end()) {
-        CHECK(views.get<NpcSpawnComponent>(views.front()).OutfitSeed==5);
+        CHECK(!views.get<NpcSpawnComponent>(views.front()).Roam);
         CHECK(std::abs(views.get<SquadSettingsComponent>(views.front()).HeavyHitDamage-55.f)<1e-6f);
     }
     const SquadSettingsComponent defaults;
     const NpcSpawnComponent spawnDefaults;
-    CHECK(defaults.Respawn && defaults.HeavyHitDamage==40.f && spawnDefaults.Roam && !spawnDefaults.Bare && spawnDefaults.OutfitSeed==0);
+    CHECK(defaults.Respawn && defaults.HeavyHitDamage==40.f && spawnDefaults.Roam);
     CHECK(!defaults.BodyPrefab.empty());
 }
 void TestLightFlickerMigration() {

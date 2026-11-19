@@ -203,10 +203,6 @@ void RegisterEngineComponents() {
         m.Tooltip = "A training dummy appears here in Play, facing this object's forward: unarmed, it wanders the\n"
                     "navigation mesh near here (Roam), flinches when shot, bleeds, and dies into a ragdoll.";
         m.Fields = {
-            { "Outfit Seed", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, OutfitSeed), 1.0f,
-              "Which random outfit. 0 = a different one every Play.", 0.0f, 100000.0f },
-            { "Bare", T::Bool, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Bare), 0.0f,
-              "No outfit: the dummy spawns as the bare body. (For now every dummy spawns bare, whatever this says.)" },
             { "Roam", T::Bool, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Roam), 0.0f,
               "Wander the navigation mesh near the spawn. Off: stand where placed." },
         };

@@ -433,7 +433,8 @@ void TestRagdollAndSquadSettingsRoundTrip() {
         CHECK(s.HeavyHitDamage == 55.0f && s.CorpseTime == 180.0f && s.MaxCorpses == 12 && s.UnseenTime == 3.0f && s.FallGravity == 18.0f);
     }
     CHECK(oldFound == 1);
-    // The old "NPC Spawn" key still loads into the Dummy Spawn component; Roam wasn't there, so it defaults to true.
+    // The old "NPC Spawn" key still loads into the Dummy Spawn component; Roam wasn't there, so it defaults to true. (Its old
+    // "Outfit Seed" field is gone - every dummy spawns bare - and is ignored.)
     World oldSpawn;
     AssetLibrary assets4;
     const std::string spawnJson = std::string(R"({"formatVersion":3,"empties":[{"name":"P","id":1,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1],)") +
@@ -443,7 +444,7 @@ void TestRagdollAndSquadSettingsRoundTrip() {
     for (entt::entity b : oldSpawn.Registry.view<NpcSpawnComponent>()) {
         const auto& sp = oldSpawn.Registry.get<NpcSpawnComponent>(b);
         ++spawnFound;
-        CHECK(sp.OutfitSeed == 7 && sp.Roam && !sp.Bare);
+        CHECK(sp.Roam);
     }
     CHECK(spawnFound == 1);
 }
