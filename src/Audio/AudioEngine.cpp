@@ -245,7 +245,10 @@ void AudioEngine::Update() {
     ReapEditorVoices();
     ReapEditorLoops();
     if (g_Audio.EncoderOpen && !g_Audio.TapsExternal) { // AUDIO_CAPTURE: keep the file fed
-        std::vector<float> a, b, c;
+        static std::vector<float> a, b, c; // (reused: emptied, not reallocated, each Update)
+        a.clear();
+        b.clear();
+        c.clear();
         DrainTaps(a, b, c);
     }
 }
