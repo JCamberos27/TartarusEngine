@@ -28,6 +28,9 @@ void Test_LaunchOptions_Modes() {
     CHECK(Parse({"--unit-tests", "Env"}, o, err) && o.mode == LaunchMode::UnitTests && o.unitTestsFilter == "Env");
     CHECK(Parse({"--help"}, o, err) && o.mode == LaunchMode::Help);
     CHECK(Parse({"-h"}, o, err) && o.mode == LaunchMode::Help);
+    CHECK(Parse({"--import-blood", "pack"}, o, err) && o.mode == LaunchMode::ImportBlood && o.importDir == "pack");
+    CHECK(Parse({"--import-knife", "packs"}, o, err) && o.mode == LaunchMode::ImportKnife && o.importDir == "packs");
+    CHECK(!Parse({"--import-blood"}, o, err) && err.find("needs a value") != std::string::npos);
 }
 
 void Test_LaunchOptions_Lists() {
@@ -74,6 +77,7 @@ void Test_Env_ReadsAndHelp() {
     for (int i = 0; i < (int)Env::Var::Count; ++i)
         CHECK(help.find(Env::Describe((Env::Var)i).Name) != std::string::npos);
     CHECK(help.find("--perf-bench") != std::string::npos && help.find("--crash-dialog") != std::string::npos);
+    CHECK(help.find("--import-blood") != std::string::npos && help.find("--import-knife") != std::string::npos);
 }
 
 } // namespace
