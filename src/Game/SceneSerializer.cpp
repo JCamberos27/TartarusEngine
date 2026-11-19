@@ -25,8 +25,8 @@
 #include <json.hpp>
 #include <fstream>
 #include <sstream>
-#include <iostream>
 #include <unordered_map>
+#include <optional>
 #include <unordered_set>
 #include <set>
 #include <mutex>
@@ -39,7 +39,6 @@
 #include <vector>
 #include <cctype>
 #include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/euler_angles.hpp>
 #include <cmath>
 
 using json = nlohmann::json;
@@ -78,7 +77,7 @@ std::vector<std::string> g_MigrationLog;
 // longer declares these fields, so Get() can't provide them) and copy the user's real authored
 // values onto World, rather than silently resetting to compiled defaults.
 void MigratePostProcessSettingsFromPrefs(World& world) {
-    std::ifstream in(GameShell::PrefsFilePath());
+    std::ifstream in(std::filesystem::u8path(GameShell::PrefsFilePath()));
     // Starts as an object, not null: with no editor_prefs.json (a fresh machine, or a built game,
     // which has its own user folder) json::value() on a null threw type_error 306 and the whole
     // pre-v3 scene failed to load. Wrong-typed values fall back to the defaults the same way.
@@ -536,7 +535,10 @@ json ReflectFieldToJson(const ReflectField& f, const void* fp) {
     switch (f.Type) {
         case ReflectFieldType::Bool:   return *static_cast<const bool*>(fp);
         case ReflectFieldType::Int:    return *static_cast<const int*>(fp);
-        case ReflectFieldType::Float:  return *static_cast<const float*>(fp);
+        case ReflectFieldType::Float: {
+            const float v = *static_cast<const float*>(fp);
+            return std::isfinite(v) ? v : 0.0f; // NaN / inf would be written as null and fail the whole load
+        }
         case ReflectFieldType::Vec3:
         case ReflectFieldType::Color:  return Vec3ToJson(*static_cast<const glm::vec3*>(fp));
         case ReflectFieldType::String:
@@ -558,7 +560,7 @@ void ReflectFieldFromJson(const ReflectField& f, void* fp, const json& v, AssetL
     switch (f.Type) {
         case ReflectFieldType::Bool:   *static_cast<bool*>(fp)  = v.get<bool>(); break;
         case ReflectFieldType::Int:    *static_cast<int*>(fp)   = v.get<int>(); break;
-        case ReflectFieldType::Float:  *static_cast<float*>(fp) = v.get<float>(); break;
+        case ReflectFieldType::Float:  if (!v.is_null()) *static_cast<float*>(fp) = v.get<float>(); break; // (null: a NaN saved by an older build - keep the default)
         case ReflectFieldType::Vec3:
         case ReflectFieldType::Color:  *static_cast<glm::vec3*>(fp) = JsonToVec3(v); break;
         case ReflectFieldType::String:
@@ -1215,6 +1217,7 @@ SkySettings SkySettingsFromJson(const json& j) {
 json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nullptr,
                     bool flattenPrefabInstances = false) {
     json root;
+    std::unordered_map<std::string, std::optional<json>> prefabFiles; // each instance's .prefab, parsed once (nullopt: unreadable)
     auto included = [&](entt::entity e) { return !only || only->count(e) > 0; };
     // v4 changes the shape of every "rotation" value, so fragments and prefabs now need the
     // version too even though they still omit scene environment settings.
@@ -1409,6 +1412,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         TransformComponent transform = effectiveTransform(entity);
         const std::string name = nameOf(entity);
         const auto& renderable = boxView.get<const RenderableComponent>(entity);
+        if (!renderable.ModelRef) continue; // a box is always built with its cube; nothing to write without it
         json b = {
             {"position", Vec3ToJson(transform.Position)},
             {"scale", Vec3ToJson(transform.Scale)},
@@ -1443,12 +1447,11 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     root["empties"] = empties;
 
     json models = json::array();
-    auto modelView = world.Registry.view<const TransformComponent,
-        const RenderableComponent>(entt::exclude<LevelGeometryTag>);
     for (auto entity : modelEntities) {
         if (skipWrite(entity) || isPrefabRoot(entity)) continue; // #236 A2
         TransformComponent transform = effectiveTransform(entity);
-        const auto& renderable = modelView.get<const RenderableComponent>(entity);
+        const auto& renderable = modelViewForIds.get<const RenderableComponent>(entity);
+        if (!renderable.ModelRef) continue; // nothing to reload it from (a load always makes a Model)
 
         json m;
         m["path"] = AssetPathForWrite(renderable.ModelRef->Path()); // audit #364
@@ -1509,19 +1512,23 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             // #302 Part B — per-field overrides: diff each live instance entity against its
             // pristine counterpart in the .prefab file, by prefab-local index.
             if (!pi.InstanceEntities.empty()) {
-                std::ifstream pf(pi.SourcePath);
-                json prefab;
-                bool prefabOk = false;
-                if (pf.is_open()) {
-                    // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
-                    // save: skip this instance's override diff (its stub still saves) and warn.
-                    try { pf >> prefab; UpgradeLegacyBoxKeys(prefab); prefabOk = true; }
-                    catch (const std::exception& ex) {
-                        Log::Warn("Scene: couldn't parse prefab '" + pi.SourcePath +
-                                  "' while saving - its per-field overrides were not re-diffed: " + ex.what());
+                // Read once per save, however many instances of it the scene holds (the save runs on every undo commit).
+                auto [slot, fresh] = prefabFiles.try_emplace(pi.SourcePath);
+                if (fresh) {
+                    std::ifstream pf(std::filesystem::u8path(pi.SourcePath));
+                    if (pf.is_open()) {
+                        // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
+                        // save: skip this instance's override diff (its stub still saves) and warn.
+                        try { json parsed; pf >> parsed; UpgradeLegacyBoxKeys(parsed); slot->second = std::move(parsed); }
+                        catch (const std::exception& ex) {
+                            Log::Warn("Scene: couldn't parse prefab '" + pi.SourcePath +
+                                      "' while saving - its per-field overrides were not re-diffed: " + ex.what());
+                        }
                     }
                 }
+                const bool prefabOk = slot->second.has_value();
                 if (prefabOk) {
+                    const json& prefab = *slot->second;
                     std::vector<const json*> pristineEnts = PrefabEntityObjects(prefab);
                     json overrides = json::array();
                     const std::size_t n = std::min(pi.InstanceEntities.size(), pristineEnts.size());
@@ -1585,7 +1592,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     // already tolerates an unrecognized/missing key), but is very likely missing data this build
     // can't interpret, so it's called out loudly rather than silently: Console now, and stashed for
     // the caller (e.g. the editor) to also raise as a dialog via SceneSerializer::TakeLoadWarning().
-    g_LastLoadWarning.clear();
+    if (g_ApplyDepth == 1) g_LastLoadWarning.clear(); // not a nested prefab expansion / paste: it would drop the file's warning
     int formatVersion = root.value("formatVersion", 0);
     if (formatVersion > kSceneFormatVersion) {
         std::string msg = "Scene: this file's format version (" + std::to_string(formatVersion) +
@@ -2085,8 +2092,9 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
 // `hold` (optional): receives a reference to every model/texture/material the file's library lists, so a
 // caller can keep them alive across AssetLibrary::ReleaseUnreferenced - they are scene content (the next save
 // writes them back) even when no entity uses them yet (wardrobe pieces, materials only Play applies).
+// `writeMeta` false (a read-only load, Load's persistMigration false): the old block is not folded into any .meta.
 void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndoSnapshot = false,
-                           std::vector<std::shared_ptr<void>>* hold = nullptr) {
+                           std::vector<std::shared_ptr<void>>* hold = nullptr, bool writeMeta = true) {
     // #121 - MIGRATION ONLY. Scenes saved before this change carry an `assetMeta` block that
     // duplicates every asset's folder, display name, labels and import settings. That copy is no
     // longer written, and it is no longer applied to the AssetLibrary either: the asset's .meta
@@ -2113,6 +2121,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
             if (path.empty()) continue;
 
             if (!fromUndoSnapshot) {
+                if (!writeMeta) continue;
                 const std::string add =
                     SceneSerializer::MigrateAssetMetaFields(entry.dump(), AssetDatabase::ReadMetaFields(path));
                 if (add != "{}" && AssetDatabase::MergeMetaFields(path, add)) ++migrated;
@@ -2240,7 +2249,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
 const json* CachedPrefabJson(const std::string& path) {
     auto it = g_prefabPristineCache.find(path);
     if (it != g_prefabPristineCache.end()) return &it->second;
-    std::ifstream f(path);
+    std::ifstream f(std::filesystem::u8path(path));
     if (!f.is_open()) return nullptr;
     json parsed;
     try { f >> parsed; } catch (...) { return nullptr; }
@@ -2398,7 +2407,7 @@ bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const
         Log::Error("Scene: couldn't serialize the scene for '" + path + "' (file left untouched): " + e.what());
         return false;
     }
-    if (!AtomicFile::WriteBytes(std::filesystem::path(path), text, /*binary=*/false)) {
+    if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), text, /*binary=*/false)) {
         Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
         return false;
     }
@@ -2412,10 +2421,10 @@ std::string SceneSerializer::TakeLoadWarning() {
 }
 
 bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration) {
+    std::ifstream in(std::filesystem::u8path(path));
+    if (!in.is_open()) return false; // (before anything touches the world: a missing file leaves it as it was)
     OutfitSystem::CancelPending(world); // the registry is about to be replaced
     struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
-    std::ifstream in(path);
-    if (!in.is_open()) return false;
 
     json root;
     try {
@@ -2446,7 +2455,7 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     const bool migrating = formatVersion < kSceneFormatVersion;
     if (migrating && persistMigration) {
         std::error_code ec;
-        std::filesystem::copy_file(path, path + ".bak", std::filesystem::copy_options::overwrite_existing, ec);
+        std::filesystem::copy_file(std::filesystem::u8path(path), std::filesystem::u8path(path + ".bak"), std::filesystem::copy_options::overwrite_existing, ec);
         if (ec) Log::Warn("Scene: couldn't write a backup of '" + path + "' before migrating it: " + ec.message());
     }
 
@@ -2459,7 +2468,7 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     bool ok = true;
     std::vector<std::shared_ptr<void>> libraryHold; // the file's own library entries: never released below
     try {
-        ApplyAssetLibraryJson(assets, root, false, &libraryHold); // before ApplySceneJson: harmless either order, but library assets should exist first
+        ApplyAssetLibraryJson(assets, root, false, &libraryHold, /*writeMeta=*/persistMigration); // before ApplySceneJson: library assets should exist first
     } catch (const std::exception& e) {
         Log::Error("Scene: asset library data in '" + path + "' is malformed: " + e.what());
         ok = false;
@@ -2467,7 +2476,8 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     if (ok) ok = ApplySceneJson(world, assets, root);
     if (!ok) {
         Log::Error("Scene: '" + path + "' could not be loaded; the previous scene was kept.");
-        if (!previous.empty()) LoadFromString(world, assets, previous);
+        if (!previous.empty() && !LoadFromString(world, assets, previous))
+            Log::Error("Scene: restoring the previous scene failed too; the world may be incomplete.");
         return false;
     }
 
@@ -2479,7 +2489,7 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         if (dropped) Log::Info("Scene: released " + std::to_string(dropped) + " cached asset(s) the new scene doesn't use.");
     }
 
-    if (ok && migrating && !g_MigrationLog.empty()) {
+    if (migrating && !g_MigrationLog.empty()) {
         Log::Info((persistMigration ? "Scene: upgraded '" : "Scene: would upgrade (not persisting) '") + path +
                    "' to format v" + std::to_string(kSceneFormatVersion) + ":");
         for (const auto& line : g_MigrationLog) Log::Info("  - " + line);
@@ -2506,10 +2516,11 @@ bool SceneSerializer::SaveSnapshotToFile(const std::string& entitySnapshot, cons
         if (!root.is_object()) return false;
         AppendAssetLibraryJson(root, assets);
         text = root.dump(2);
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        Log::Error("Scene: couldn't build the snapshot for '" + path + "': " + e.what());
         return false;
     }
-    return AtomicFile::WriteBytes(std::filesystem::path(path), text, /*binary=*/false);
+    return AtomicFile::WriteBytes(std::filesystem::u8path(path), text, /*binary=*/false);
 }
 
 namespace {
@@ -2743,7 +2754,7 @@ bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const st
     // .prefab asset is self-contained — if `root` (or a child) is itself a prefab instance it is
     // baked in fully here, not left as a nested link (#236 A2 — nested prefabs are stage 4).
     // #82 — atomic write, and the write result is checked.
-    if (!AtomicFile::WriteJson(std::filesystem::path(path),
+    if (!AtomicFile::WriteJson(std::filesystem::u8path(path),
             json::parse(SaveEntitiesToString(world, {root}, /*flattenPrefabInstances=*/true)))) {
         Log::Error("Prefab: failed to write '" + path + "'.");
         return false;
@@ -2755,7 +2766,7 @@ bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const st
 entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& assets,
     const std::string& path, std::vector<entt::entity>* outAll) {
     struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
-    std::ifstream in(path);
+    std::ifstream in(std::filesystem::u8path(path));
     if (!in.is_open()) {
         Log::Error("Prefab: '" + path + "' could not be opened.");
         return entt::null;
@@ -2964,7 +2975,7 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
     // Read the .prefab fresh (not the cache — about to rewrite it), edit the entity object,
     // write it back pretty-printed.
     json prefab;
-    { std::ifstream f(pi.SourcePath);
+    { std::ifstream f(std::filesystem::u8path(pi.SourcePath));
       if (!f.is_open()) return false;
       try { f >> prefab; } catch (...) { return false; } }
     json* pe = PrefabEntityObjectMutable(prefab, idx);
@@ -2985,7 +2996,7 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
         (*pe)[jsonKey][field] = value;
     }
 
-    if (!AtomicFile::WriteJson(std::filesystem::path(pi.SourcePath), prefab)) return false; // #82
+    if (!AtomicFile::WriteJson(std::filesystem::u8path(pi.SourcePath), prefab)) return false; // #82
 
     g_prefabPristineCache.erase(pi.SourcePath); // Inspector re-reads -> override marker clears
     Log::Info("Applied '" + std::string(component) + "." + field + "' to prefab '" + pi.SourcePath +
@@ -3010,13 +3021,6 @@ bool SceneSerializer::IsPrefabComponentAdded(const World& world, entt::entity en
     return false;
 }
 
-void SceneSerializer::RevertPrefabComponent(World& world, AssetLibrary& /*assets*/, entt::entity entity,
-                                            const char* component) {
-    if (!IsPrefabComponentAdded(world, entity, component)) return; // only "added" is revertable here
-    for (const auto& rc : ComponentRegistry::All())
-        if (std::strcmp(rc.Meta.Name, component) == 0) { rc.Remove(world.Registry, entity); return; }
-}
-
 bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, const char* component) {
     entt::entity root = entt::null;
     for (entt::entity cur = entity; cur != entt::null; ) {
@@ -3037,7 +3041,7 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     if (!rcp || !rcp->Has(world.Registry, entity)) return false;
 
     json prefab;
-    { std::ifstream f(pi.SourcePath);
+    { std::ifstream f(std::filesystem::u8path(pi.SourcePath));
       if (!f.is_open()) return false;
       try { f >> prefab; } catch (...) { return false; } }
     json* pe = PrefabEntityObjectMutable(prefab, idx);
@@ -3051,7 +3055,7 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     // comment above for why (Collider/Joint's legacy lowercase JSON key).
     (*pe)[ReflectComponentKey(rcp->Meta)] = std::move(cj);
 
-    if (!AtomicFile::WriteJson(std::filesystem::path(pi.SourcePath), prefab)) return false; // #82
+    if (!AtomicFile::WriteJson(std::filesystem::u8path(pi.SourcePath), prefab)) return false; // #82
 
     g_prefabPristineCache.erase(pi.SourcePath);
     Log::Info("Applied component '" + std::string(component) + "' to prefab '" + pi.SourcePath +
