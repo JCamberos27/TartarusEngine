@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <dbghelp.h>
 #include <shellapi.h>
+#include <crtdbg.h>
 #include <cstdlib>
 #include <csignal>
 #include <algorithm>
@@ -243,7 +244,19 @@ void Install() {
     SetThreadStackGuarantee(&guarantee);
 }
 
-void SetInteractive(bool interactive) { g_Interactive = interactive; }
+void SetInteractive(bool interactive) {
+    g_Interactive = interactive;
+#ifdef _DEBUG
+    // A Debug CRT assertion (an out-of-range iterator, ...) opens a modal "Microsoft Visual C++ Runtime Library"
+    // box: an unattended run (the tests, CI) then hangs until it is killed, with nothing in its log. Unattended,
+    // they go to stderr instead and the run goes on to the invalid-parameter handler (a dump and a failed run).
+    const int mode = interactive ? _CRTDBG_MODE_WNDW : _CRTDBG_MODE_FILE;
+    for (int type : {_CRT_ASSERT, _CRT_ERROR}) {
+        _CrtSetReportMode(type, mode);
+        if (!interactive) _CrtSetReportFile(type, _CRTDBG_FILE_STDERR);
+    }
+#endif
+}
 void SetEmergencySave(EmergencySaveFn fn) { g_EmergencySave = fn; }
 } // namespace CrashHandler
 

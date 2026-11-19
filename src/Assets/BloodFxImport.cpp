@@ -149,10 +149,14 @@ bool ReadExr(const std::vector<std::uint8_t>& b, ExrImage& out, std::string* err
     std::vector<Chan> chans;
     int compression = -1, x0 = 0, y0 = 0, x1 = -1, y1 = -1;
     while (p < b.size() && b[p] != 0) {
+        // A name and a type, each NUL-terminated inside the file: a truncated one used to step `p` past the end, and
+        // b.begin() + p out of range is an assertion dialog in a Debug build (a test run that hung until it was killed).
         const size_t nameEnd = std::find(b.begin() + p, b.end(), 0) - b.begin();
+        if (nameEnd >= b.size()) { Fail(error, "truncated EXR header"); return false; }
         const std::string name(b.begin() + p, b.begin() + nameEnd);
         p = nameEnd + 1;
         const size_t typeEnd = std::find(b.begin() + p, b.end(), 0) - b.begin();
+        if (typeEnd >= b.size()) { Fail(error, "truncated EXR header"); return false; }
         p = typeEnd + 1;
         if (p + 4 > b.size()) break;
         const int size = Get<int>(b, p);
