@@ -40,7 +40,6 @@
 #include <imgui_internal.h>
 
 #include <memory>
-#include <unordered_set>
 #include <vector>
 
 namespace Glass {
@@ -188,7 +187,7 @@ private:
     int m_CaptureW = 0, m_CaptureH = 0;
     unsigned int m_BlurTex = 0;
     std::vector<std::unique_ptr<ImDrawList>> m_Plates; // reused across frames
-    std::unordered_set<ImGuiID> m_Seen, m_SeenNext;      // surfaces drawn last frame / this frame
+    std::vector<ImGuiID> m_Seen, m_SeenNext;             // surfaces drawn last frame (sorted) / this frame
     // Per-frame scratch, kept so a frame allocates nothing once the editor has settled.
     struct Group { ImGuiWindow* Window; SurfacePose Pose; float Rim; bool Startup; };
     std::vector<std::pair<const ImDrawList*, ImGuiWindow*>> m_Owner; // sorted by list

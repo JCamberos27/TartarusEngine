@@ -304,10 +304,11 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
         // The pose of the surface this list belongs to (computed once per surface per frame).
         float rim = 0.0f;
         SurfacePose pose;
+        bool startupPosed = false;
         if (li.Group) {
             auto git = std::find_if(m_Groups.begin(), m_Groups.end(), [&](const Group& gr) { return gr.Window == li.Group; });
             if (git == m_Groups.end()) {
-                const bool appeared = m_Seen.find(li.Group->ID) == m_Seen.end();
+                const bool appeared = !std::binary_search(m_Seen.begin(), m_Seen.end(), li.Group->ID);
                 Group gr{li.Group, SurfacePose{}, 0.0f, false};
                 gr.Pose = PoseFor(li.Group, li.Kind, appeared, &gr.Rim);
                 if (startup && (li.Kind == SurfaceKind::Panel || li.Kind == SurfaceKind::Window)) {
@@ -322,10 +323,11 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
                 }
                 m_Groups.push_back(gr);
                 git = m_Groups.end() - 1;
+                m_SeenNext.push_back(li.Group->ID); // once per group: a new group is a new surface
             }
-            m_SeenNext.insert(li.Group->ID);
             pose = git->Pose;
             rim = git->Rim;
+            startupPosed = git->Startup;
         }
 
         if (glassList) {
@@ -357,12 +359,12 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
         }
         // A docked panel keeps its own background in place while its content arrives.
         // (Not while it assembles at startup: then the whole panel arrives, background and all.)
-        bool startupPosed = false;
-        for (const Group& gr : m_Groups) if (gr.Window == li.Group) { startupPosed = gr.Startup; break; }
         const ImU32 anchored = (li.Kind == SurfaceKind::Panel && li.Group == w && !startupPosed) ? FindWindowBackground(dl, w->Rect()) : 0u;
         ApplyPose(dl, pose, anchored);
         m_Bounds[(size_t)i] = DrawListBounds(dl);
     }
+    std::sort(m_SeenNext.begin(), m_SeenNext.end());
+    m_SeenNext.erase(std::unique(m_SeenNext.begin(), m_SeenNext.end()), m_SeenNext.end());
     m_Seen.swap(m_SeenNext);
 
     // --- 2. Plan the captures (CPU only) -----------------------------------------------------------
