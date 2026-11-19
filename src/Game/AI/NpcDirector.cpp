@@ -212,9 +212,6 @@ void NpcDirector::Stop(World& world) {
     m_Crowd.Clear();
     m_Nav.Clear();
     m_FleshHits.clear();
-    m_Flinch.clear();
-    m_DeathBones.clear();
-    m_Scripted.clear();
     m_Spawns.clear();
     m_BodyJson.clear();
     m_PlayerAgent = -1;
@@ -445,9 +442,9 @@ void NpcDirector::Despawn(World& world, Npc& n, bool keepBody) {
     n.Ragdoll.reset();
     n.Body.Stop();
     FoleyAudio::Get().NpcGone(n.Index); // its stride / foot state goes with it
-    m_Flinch.erase(n.Index); // (keyed by index: the next spawn into this slot starts clean)
-    m_Scripted.erase(n.Index);
-    m_DeathBones.erase(n.Index);
+    n.Flinch.reset();
+    n.Scripted.reset();
+    n.DeathBones.reset();
     if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::DestroyNpcCharacter(n.Cct);
     n.Cct = PhysicsWorld::kNoCharacter;
     if (n.Agent >= 0) m_Crowd.Remove(n.Agent);
@@ -499,10 +496,10 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
             if (h->Current <= 0.0f) { Kill(world, n, {0, 0, 1}, n.Feet, 0); continue; }
         }
         Roam(n, dt);
-        if (const auto it = m_Scripted.find(n.Index); it != m_Scripted.end()) { // a test's order
+        if (n.Scripted) { // a test's order
             n.WantMove = true;
-            n.MoveTarget = it->second.first;
-            n.Pace = it->second.second;
+            n.MoveTarget = n.Scripted->first;
+            n.Pace = n.Scripted->second;
         }
         // Movement goal -> the crowd.
         if (n.Agent >= 0) {
@@ -688,10 +685,11 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
                     // (The flinch of the rounds before stays on that pose - LatePose kicks it - and the ragdoll takes it from there.)
                     LatePose(world, n, n.LateDt);
                     // The pose it was hit in (Kill: the last late pose's, n.LastPose) is n.LateDt older than this one.
-                    m_DeathBones[n.Index].Dt = n.LateDt;
+                    if (!n.DeathBones) n.DeathBones.emplace();
+                    n.DeathBones->Dt = n.LateDt;
                     n.LateDt = 0.0f;
                 }
-                m_Flinch.erase(n.Index);
+                n.Flinch.reset();
                 FinishDeath(world, n);
             }
             if (n.Ragdoll) {
@@ -712,7 +710,7 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
         }
         const float lateDt = n.LateDt;
         n.LateDt = 0.0f;
-        if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end() && !it->second.Active(m_Now)) m_Flinch.erase(it); // settled
+        if (n.Flinch && !n.Flinch->Active(m_Now)) n.Flinch.reset(); // settled
         LatePose(world, n, lateDt);
         // Footsteps on the posed feet's touch-downs.
         if (float feet[2]; n.Body.FootHeights(feet))
@@ -738,8 +736,8 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt) {
     {
         SubTimer timer(*this, SubBody);
         NpcBody::PoseKick kick;
-        if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end() && it->second.Active(m_Now)) {
-            const NpcFlinch* flinch = &it->second;
+        if (n.Flinch && n.Flinch->Active(m_Now)) {
+            const NpcFlinch* flinch = &*n.Flinch;
             const float now = m_Now;
             kick = [flinch, now](const Model& m, std::vector<LocalTRS>& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals) {
                 flinch->ApplyPose(m, pose, parents, globals, now);
@@ -830,7 +828,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
                 n.Ragdoll->HitCorpse(part, d, amount, point, m_RagdollCfg);
                 if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.5f);
                 if (m_FleshHits.size() < 64)
-                    m_FleshHits.push_back({point, d, entity, part, amount, false, part == 2, true, weapon.Pellets, origin, true});
+                    m_FleshHits.push_back({point, d, entity, part, amount, false, part == NpcRagdoll::kHead, true, weapon.Pellets, origin, true});
             }
             return true;
         }
@@ -868,7 +866,10 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         return;
     }
     // It flinches the way it was hit (where it was hit: a procedural kick on the pose, LatePose) ...
-    if (m_RagdollCfg.HitFlinch && part >= 0) m_Flinch[n.Index].Hit(n.Body, part, dir, amount, m_Now, m_RagdollCfg); // a kick on the struck region
+    if (m_RagdollCfg.HitFlinch && part >= 0) { // a kick on the struck region
+        if (!n.Flinch) n.Flinch.emplace();
+        n.Flinch->Hit(n.Body, part, dir, amount, m_Now, m_RagdollCfg);
+    }
     // ... and a heavy hit slows it a beat and shoves it back along the round.
     if (amount >= m_Cfg.HeavyHitDamage) {
         n.StaggerUntil = m_Now + m_Cfg.StaggerTime;
@@ -881,7 +882,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
 void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::vec3& point, float shove, int part) {
     if (n.Dead) return;
     n.Dead = true;
-    m_Scripted.erase(n.Index);
+    n.Scripted.reset();
     if (auto* h = world.Registry.try_get<HealthComponent>(n.Root)) h->Current = 0.0f;
     n.Health = 0.0f;
     n.DiedAt = m_Now;
@@ -899,8 +900,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     // player's round lands after this frame's animators, when the bones already hold this frame's clip pose without its foot IK,
     // look and flinch. Its age (Dt) is set with the dying frame's late pose; none (Valid false, a dummy killed before it was ever
     // posed): every part takes the body's velocity.
-    m_DeathBones[n.Index].Bones = n.LastPose;
-    m_DeathBones[n.Index].Dt = 0.0f;
+    n.DeathBones = Npc::DeathCapture{n.LastPose, 0.0f};
     n.DeathDir = glm::length(dir) > 1e-4f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
     n.DeathPoint = point;
     n.DeathShove = shove;
@@ -919,17 +919,18 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     n.Ragdoll = std::make_unique<NpcRagdoll>();
     // The bones' velocity: the finished pose of the late pose before the dummy died (Kill: n.LastPose) against the dying frame's,
     // over the real time between (LOD-held frames included; a held dying frame has no new pose: no relative motion, just the body's).
-    if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart, &m_RagdollCfg, &m_DeathBones[n.Index].Bones,
-                          m_DeathBones[n.Index].Dt)) {
+    if (!n.DeathBones) n.DeathBones.emplace();
+    if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart, &m_RagdollCfg, &n.DeathBones->Bones,
+                          n.DeathBones->Dt)) {
         n.Ragdoll.reset();
-        m_DeathBones.erase(n.Index);
+        n.DeathBones.reset();
         if (n.Root != entt::null && world.Registry.valid(n.Root)) {
             world.Registry.emplace_or_replace<DeactivatedTag>(n.Root);
             world.SyncActiveInHierarchy();
         }
         return;
     }
-    m_DeathBones.erase(n.Index);
+    n.DeathBones.reset();
     n.Ragdoll->Update(0.0f); // the pieces take the parts' first pose now
     if (TrackDeathPop && n.HaveLastBones) {
         static const char* kBones[3] = {"head", "hand_l", "foot_l"};
@@ -981,7 +982,8 @@ void NpcDirector::UpdatePersistence(World& world, const PlayerSnapshot& p) {
             n->NextSightCheck = m_Now + 0.25f;
             bool seen = false;
             if (n->Ragdoll) {
-                for (int part : {0, 1, 2}) if (!seen) seen = PlayerSees(p, n->Ragdoll->PartPosition(part));
+                for (int part : {NpcRagdoll::kPelvis, NpcRagdoll::kChest, NpcRagdoll::kHead})
+                    if (!seen) seen = PlayerSees(p, n->Ragdoll->PartPosition(part));
             } else {
                 seen = PlayerSees(p, n->Feet + glm::vec3(0.0f, 0.5f, 0.0f));
             }

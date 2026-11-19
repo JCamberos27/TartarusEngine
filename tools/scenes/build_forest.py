@@ -1062,7 +1062,7 @@ def build(repo):
         s.stamp(tall[0], root, (fx, round(H.low(fx, zl, 0.5) - 0.3, 3), zl), yaw=-90.0, name='Fallen On Wall',
                 lod=LODS['tree'], tilt=(round(lean_deg, 1), 0.0))
         mask.circle(fx, zl, 0.8)
-        counts['fallen on wall'] = zl
+        counts['fallen on wall'] = counts.get('fallen on wall', 0) + 1  # (was the z it landed at)
         break
 
     # --- a reflection probe over the clearing: the wet rocks and wood there reflect the dark forest, not the sky.

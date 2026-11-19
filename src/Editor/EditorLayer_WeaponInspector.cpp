@@ -1287,13 +1287,25 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         std::error_code tec;
         return it != s_FailedRigs.end() && it->second == fs::last_write_time(fs::u8path(p), tec);
     };
+    // The loaded model for a rig path. Remembered per path: the search normalises every loaded model's path
+    // (thousands in a dressed scene), so it runs only until the model is found or the library's model count changes.
+    static std::map<std::string, std::pair<std::weak_ptr<Model>, size_t>> s_RigModels;
+    auto findRig = [&](const std::string& p) -> std::shared_ptr<Model> {
+        auto& slot = s_RigModels[p];
+        if (auto m = slot.first.lock()) return m;
+        const size_t count = m_AssetsPtr->Models().size();
+        if (slot.second == count + 1) return nullptr; // not loaded, and nothing was added since we looked
+        const fs::path want = fs::u8path(p).lexically_normal();
+        for (const auto& m : m_AssetsPtr->Models())
+            if (m && fs::u8path(m->Path()).lexically_normal() == want) { slot = {m, 0}; return m; }
+        slot = {{}, count + 1};
+        return nullptr;
+    };
     std::shared_ptr<Model> arms;
     const std::string armsPath = s.ArmsModel.empty() ? std::string() : ProjectPaths::Resolve(s.ArmsModel);
     if (!armsPath.empty() && m_AssetsPtr) {
-        const fs::path want = fs::u8path(armsPath).lexically_normal();
-        for (const auto& m : m_AssetsPtr->Models())
-            if (m && fs::u8path(m->Path()).lexically_normal() == want) { arms = m; break; }
-        ctx.CanLoadArms = !arms && fs::exists(want, ec) && !failedBefore(armsPath);
+        arms = findRig(armsPath);
+        ctx.CanLoadArms = !arms && fs::exists(fs::u8path(armsPath), ec) && !failedBefore(armsPath);
     }
     if (arms) {
         ctx.Arms = arms.get();
@@ -1302,10 +1314,8 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     std::shared_ptr<Model> weaponModel;
     const std::string weaponPath = s.WeaponModel.empty() ? std::string() : ProjectPaths::Resolve(s.WeaponModel);
     if (!weaponPath.empty() && m_AssetsPtr) {
-        const fs::path want = fs::u8path(weaponPath).lexically_normal();
-        for (const auto& m : m_AssetsPtr->Models())
-            if (m && fs::u8path(m->Path()).lexically_normal() == want) { weaponModel = m; break; }
-        ctx.CanLoadWeapon = !weaponModel && fs::exists(want, ec) && !failedBefore(weaponPath);
+        weaponModel = findRig(weaponPath);
+        ctx.CanLoadWeapon = !weaponModel && fs::exists(fs::u8path(weaponPath), ec) && !failedBefore(weaponPath);
     }
     if (weaponModel) {
         ctx.Weapon = weaponModel.get();

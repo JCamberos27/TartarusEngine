@@ -1210,12 +1210,6 @@ def lights(s, lay, pk, repo, notes):
     pk.wiring = house_lights.wire(s, lay, pk, repo, sys.modules[__name__], notes)
     g = pk.wiring.g
 
-    def lamp(name, pos, **kw):
-        i = s.light(name, g, pos, **kw)
-        e = s.empties[-1]
-        e['Light']['Volumetric Intensity'] = 0.0
-        return i, e
-
     # Candles burned down on the living room floor, in front of the couch: someone's been here.
     couch = next(e for e in pk.props() if e['name'].startswith('Couch_3seat'))
     cb = pk.fit.boxes[couch['id']][0]

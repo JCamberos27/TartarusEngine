@@ -20,6 +20,7 @@
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
+#include <cstring>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
@@ -89,12 +90,13 @@ std::vector<std::string> ColourwayLabels(const std::vector<std::string>& options
     return out;
 }
 
+// Case-insensitive substring test, without copying either string (it runs per item per frame while searching).
 bool ContainsI(const std::string& hay, const char* needle) {
     if (!needle || !*needle) return true;
-    std::string h = hay, n = needle;
-    for (char& c : h) c = (char)std::tolower((unsigned char)c);
-    for (char& c : n) c = (char)std::tolower((unsigned char)c);
-    return h.find(n) != std::string::npos;
+    const char* end = needle + std::strlen(needle);
+    return std::search(hay.begin(), hay.end(), needle, end, [](char a, char b) {
+        return std::tolower((unsigned char)a) == std::tolower((unsigned char)b);
+    }) != hay.end();
 }
 
 bool SamePath(const std::string& a, const std::string& b) {

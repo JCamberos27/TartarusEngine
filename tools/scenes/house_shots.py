@@ -94,8 +94,10 @@ def safe(s):
 
 
 def run_engine(cams, out_dir, lights, scene, only=None):
-    exe = os.path.join(REPO, 'b', 'Release', 'TartarusEngine.exe')
+    # TARTARUS_EXE picks another build (a worktree's); the repo's own Release build otherwise.
+    exe = os.environ.get('TARTARUS_EXE') or os.path.join(REPO, 'b', 'Release', 'TartarusEngine.exe')
     prefs = os.path.expandvars(r'%LOCALAPPDATA%\TartarusEngine\editor_prefs.json')
+    os.makedirs(out_dir, exist_ok=True)  # before the prefs change, so a failure here leaves them untouched
     backup = None
     if os.path.exists(prefs):
         with open(prefs, encoding='utf-8') as f:
@@ -113,7 +115,6 @@ def run_engine(cams, out_dir, lights, scene, only=None):
         env['TARTARUS_LIGHTS_ON'] = '1' if lights else '0'
     if only:
         env['TARTARUS_LIGHTS_ONLY'] = only
-    os.makedirs(out_dir, exist_ok=True)
     try:
         r = subprocess.run([exe, '--smoke-test', os.path.join(REPO, 'project', 'scenes', scene), '--smoke-shots', out_dir],
                            cwd=REPO, env=env, capture_output=True, text=True, timeout=3600)

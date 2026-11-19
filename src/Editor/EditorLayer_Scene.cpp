@@ -1044,6 +1044,8 @@ void EditorLayer::RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::
     for (const auto& file : files) {
         const std::string path = file.Path.lexically_normal().string();
         m_AssetThumbs.Invalidate(path);
+        m_SoundWaveforms.Invalidate(path);
+        m_SoundWaveforms.Invalidate(ProjectPaths::Relativize(path));
         InvalidateModelThumbnail(path);
         InvalidateModelThumbnail(ProjectPaths::Relativize(path));
     }
@@ -1176,8 +1178,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     CancelEyedropper(); // #93
     m_InPlayMode = true;
     m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
-    m_PrePlayHistory = { m_UndoStack, m_RedoStack, m_UndoBaseJson, m_RedoBaseJson,
-                         m_ContentDepth, m_SavedUndoDepth, true }; // #91
+    m_PrePlayHistoryValid = true; // #91
     // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
     // different object afterward (#110).
@@ -1306,8 +1307,8 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
 
     // Global transactions record only authored file/selection changes while Playing.
     // Those edits persist on disk, so retain their history after Stop as well.
-    if (m_PrePlayHistory.Valid) {
-        m_PrePlayHistory = {};
+    if (m_PrePlayHistoryValid) {
+        m_PrePlayHistoryValid = false;
         m_HasStagedUndo = false;
         m_StagedUndoJson.clear();
         RefreshDirtyFromHistory();

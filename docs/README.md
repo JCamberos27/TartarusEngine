@@ -33,3 +33,7 @@ data, the bake, the runtime, tuning and tests ([the overhaul's handoff](MOTION_M
 * [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy/folder styling, bookmarks, hover keys, tabs,
   favorites and the ruler (vHierarchy / vFolders / vInspector / vTabs / vFavorites / vRuler).
 * [Editor Enhancers handoff](EDITOR_ENHANCERS_HANDOFF.md): implementation design and code map for the integrated tools.
+* [Decals](DECALS.md) and the [Graffiti Designer](GRAFFITI_DESIGNER.md): the decal system, its editor tools and painted pieces.
+* [Character outfits](CHARACTER_OUTFITS.md) and the [Quantum swap](QUANTUM_SWAP.md): the wardrobe, outfit pieces and the character pack move.
+* [Revolver .38](WEAPON_REVOLVER38.md): the sidearm's import and setup.
+* [Mocap export findings](MOCAP_EXPORT_FINDINGS.md) and the [motion matching audit](mm_audit.md): notes behind the motion matching data.
