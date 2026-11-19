@@ -472,6 +472,7 @@ struct Query {
     std::function<bool(const UiItem&)> Pred;
     int Nth = 0;        // which match (top-to-bottom, left-to-right)
     float AnchorX = -1.0f; // Click: where across the item (0 = left edge, 1 = right); < 0 = its centre
+    float InsetRightFrames = -1.0f; // Click: this many frame heights in from the right edge (wins over AnchorX)
 };
 Query ByLabel(std::string label, std::string root = {}) { Query q; q.Label = std::move(label); q.Root = std::move(root); return q; }
 Query ByExact(std::string label, std::string root = {}, int nth = 0) {
@@ -487,6 +488,9 @@ Query ByTag(std::string tag) {
 }
 // The same item, clicked near its right end (a row's x button).
 Query RightEnd(Query q) { q.AnchorX = 0.97f; return q; }
+// A search field's clear x: its hit box is the field's last frame height, whatever the field's width
+// (a fraction like RightEnd misses it on a wide field).
+Query ClearX(Query q) { q.InsetRightFrames = 0.5f; return q; }
 Query ByTagPrefix(std::string prefix) { Query q; q.TagPrefix = std::move(prefix); return q; }
 
 // Some widgets never report their label to the hooks (the pinned ImGui's BeginCombo has no
@@ -645,7 +649,8 @@ Step Click(Query q, int mods = 0, int button = 0, int clicks = 1) {
                     *last = it->Rect;
                     if (*still < 2) return false;
                 }
-                if (q.AnchorX >= 0.0f) p.x = it->Rect.Min.x + it->Rect.GetWidth() * q.AnchorX;
+                if (q.InsetRightFrames >= 0.0f) p.x = it->Rect.Max.x - ImGui::GetFrameHeight() * q.InsetRightFrames;
+                else if (q.AnchorX >= 0.0f) p.x = it->Rect.Min.x + it->Rect.GetWidth() * q.AnchorX;
                 MouseTo(p);
                 Mods(mods, true);
                 *phase = 1;

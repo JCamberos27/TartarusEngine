@@ -420,7 +420,11 @@ void RegisterPrefabsTests() {
         RightClick(ByTag("row:Crate Lamp")), Wait(3),
         Click(HierMenu(ICON_FA_CUBES "  Select Prefab Root")), Wait(3),
         Expect("the instance root is selected", [](Ctx& c) { return ExpectSelected(c, "Crate A"); }),
+        // The scratch prefab's watcher events can land late on a loaded machine: re-note them as the editor's
+        // own, so none becomes an "Unrecorded Change" step on top of the one this Ctrl+Z is for.
+        Do("re-note the scratch files", [](Ctx&) { NoteScratch(); }), Wait(2),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+        Until("undo selects the lamp", [](Ctx& c) { return ExpectSelected(c, "Crate Lamp").empty(); }, 120),
         Expect("undo selects the lamp again", [](Ctx& c) {
             const std::string why = ExpectSelected(c, "Crate Lamp");
             return why.empty() ? why : why + " | history: " + PA::UndoLabels(c.E);
@@ -442,7 +446,12 @@ void RegisterPrefabsTests() {
             return Contains(g_After, "SmokeCrate.prefab") ? std::string("the dump still names the prefab") : std::string();
         }),
         Shot("unpacked", {kInspector, kHierarchy}),
+        Do("re-note the scratch files", [](Ctx&) { NoteScratch(); }), Wait(2),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+        Until("undo relinks the instance", [](Ctx& c) {
+            const entt::entity e = ByName(c.W, "Crate A");
+            return e != entt::null && c.W.Registry.valid(e) && c.W.Registry.all_of<PrefabInstanceComponent>(e);
+        }, 120),
         ExpectDump("undo relinks it", &g_Before),
         ExpectTrue("an instance again", [](Ctx& c) { return c.W.Registry.all_of<PrefabInstanceComponent>(ByName(c.W, "Crate A")); }),
         Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),

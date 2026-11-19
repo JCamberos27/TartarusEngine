@@ -126,7 +126,7 @@ void RegisterPanelsTests() {
             Click(levelButton("Show / hide errors")), Wait(2),
             ExpectTrue("every level shown", [consoleState](Ctx&) { return consoleState().ShowInfo && consoleState().ShowWarning && consoleState().ShowError; }),
             Until("three rows again", [rows](Ctx&) { return rows() == 3; }),
-            Click(RightEnd(ByExact("##search", "###Console"))), Wait(3), // the x inside the field
+            Click(ClearX(ByExact("##search", "###Console"))), Wait(3), // the x inside the field
             ExpectTrue("filter cleared", [consoleState](Ctx&) { return consoleState().Filter[0] == '\0'; }),
             Click(ByExact(ICON_FA_TRASH_CAN, "###Console")), Wait(3),
             ExpectTrue("cleared", [](Ctx&) {
@@ -166,7 +166,7 @@ void RegisterPanelsTests() {
             ExpectTrue("Copy all shown / Clear console listed", [](Ctx&) { return Find(MenuItem("Copy all shown")) && Find(MenuItem("Clear console")); }),
             Click(MenuItem("Copy message")), Wait(3),
             ExpectTrue("copied", [](Ctx&) { const char* t = ImGui::GetClipboardText(); return t && Contains(t, "smoke-console-context"); }),
-            Click(RightEnd(ByExact("##search", "###Console"))), Wait(2),
+            Click(ClearX(ByExact("##search", "###Console"))), Wait(2),
             CloseByX(EditorPanels::Console),
             Until("closed by its x", [consoleState](Ctx&) { return !consoleState().Visible && Gone(EditorPanels::Console); }),
         });
@@ -453,8 +453,10 @@ void RegisterPanelsTests() {
             ResetCamera(), SelectByName("Gamma"), Wait(3), NoteCamera(),
             Click(nthSegment(1)),
             Until("the selection segment framed Gamma", CameraMoved, 240), Wait(20),
-            Do("log a line", [](Ctx&) { Log::Info("smoke-status-bar-line"); }), Wait(3),
             Shot("status-bar", {kStatus}),
+            // The last-log segment fades a few seconds after the line: log it right before the click (a slow
+            // software-rendered frame or a screenshot in between could outlast the fade).
+            Do("log a line", [](Ctx&) { Log::Info("smoke-status-bar-line"); }), Wait(2),
             Click(ByExact("##lastlog", kStatus)),
             Until("the last-log segment opened the Console", [](Ctx&) { return EditorModuleHost::ConsoleState().Visible && Shown(EditorPanels::Console); }),
             CloseByX(EditorPanels::Console),

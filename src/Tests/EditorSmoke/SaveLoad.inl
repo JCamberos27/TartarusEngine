@@ -180,46 +180,50 @@ void RegisterSaveLoadTests() {
 
     // Load -> save -> load of every project scene into scratch copies (never the originals), in a
     // World of its own so the editor's scene is untouched. The second save must equal the first.
-    Add("saveload: every project scene round-trips through save and load unchanged", {
-        FreshScene(), Wait(2),
-        Do("allow errors naming the external files missing here", [](Ctx&) {
-            for (const std::string& name : smoke_scenes::MissingExternalFiles()) g_AllowLog.push_back(name);
-        }),
-        Expect("round trips", [](Ctx& c) {
-            const fs::path dir = fs::path(UserPaths::Root()) / "editor-tests-roundtrip";
-            std::error_code ec;
-            fs::create_directories(dir, ec);
-            std::string problems;
-            int n = 0;
-            for (const fs::path& scene : ProjectScenes()) {
-                const std::string label = scene.filename().string();
+    // One scene per step: with the Drive assets present a big scene's first load imports its models
+    // synchronously (minutes for the Forest), and one frame holding every scene tripped the watchdog.
+    {
+        std::vector<Step> steps = {
+            FreshScene(), Wait(2),
+            Do("allow errors naming the external files missing here", [](Ctx&) {
+                for (const std::string& name : smoke_scenes::MissingExternalFiles()) g_AllowLog.push_back(name);
+            }),
+        };
+        const auto scenes = ProjectScenes();
+        if (scenes.empty()) steps.push_back(Expect("project scenes", [](Ctx&) { return std::string("no scenes found"); }));
+        for (const fs::path& scene : scenes) {
+            const std::string label = scene.filename().string();
+            steps.push_back(Expect(label + " round-trips", [scene, label](Ctx& c) {
+                const fs::path dir = fs::path(UserPaths::Root()) / "editor-tests-roundtrip";
+                std::error_code ec;
+                fs::create_directories(dir, ec);
                 const std::string before = ReadFile(scene.string());
-                World first;
-                if (!SceneSerializer::Load(first, c.A, scene.generic_string(), /*persistMigration=*/false)) {
-                    problems += label + ": failed to load; ";
-                    continue;
-                }
                 const std::string copyA = (dir / ("a-" + label)).generic_string();
                 const std::string copyB = (dir / ("b-" + label)).generic_string();
-                if (!SceneSerializer::Save(first, c.A, copyA)) { problems += label + ": first save failed; "; continue; }
-                World second;
-                if (!SceneSerializer::Load(second, c.A, copyA, false)) { problems += label + ": the saved copy failed to load; "; continue; }
-                if (!SceneSerializer::Save(second, c.A, copyB)) { problems += label + ": second save failed; "; continue; }
-                const std::string a = ReadFile(copyA), b = ReadFile(copyB);
-                if (a != b) {
+                std::string problem;
+                World first, second;
+                if (!SceneSerializer::Load(first, c.A, scene.generic_string(), /*persistMigration=*/false)) problem = "failed to load";
+                else if (!SceneSerializer::Save(first, c.A, copyA)) problem = "first save failed";
+                else if (!SceneSerializer::Load(second, c.A, copyA, false)) problem = "the saved copy failed to load";
+                else if (!SceneSerializer::Save(second, c.A, copyB)) problem = "second save failed";
+                else if (const std::string a = ReadFile(copyA), b = ReadFile(copyB); a != b) {
                     std::error_code fe;
-                    problems += label + " " + FirstDifference(a, b) + " (sizes on disk " + std::to_string(fs::file_size(copyA, fe)) +
-                                "/" + std::to_string(fs::file_size(copyB, fe)) + ", exists " + std::to_string(fs::exists(copyA, fe)) + "); ";
-                }
-                if (ReadFile(scene.string()) != before) problems += label + ": the original file changed; ";
-                ++n;
-            }
-            fs::remove_all(dir, ec);
-            if (n == 0) return std::string("no scenes found");
-            return problems;
-        }),
-        Do("let the asset loads finish", [](Ctx&) {}),
-        Until("assets settled", [](Ctx& c) { return c.A.AsyncInFlight() == 0; }, 60 * 120),
-        FreshScene(), Wait(3),
-    });
+                    problem = FirstDifference(a, b) + " (sizes on disk " + std::to_string(fs::file_size(copyA, fe)) + "/" +
+                              std::to_string(fs::file_size(copyB, fe)) + ")";
+                } else if (ReadFile(scene.string()) != before) problem = "the original file changed";
+                fs::remove(copyA, ec);
+                fs::remove(copyB, ec);
+                return problem.empty() ? std::string() : label + ": " + problem;
+            }));
+            steps.push_back(Wait(1));
+        }
+        steps.push_back(Do("remove the scratch folder", [](Ctx&) {
+            std::error_code ec;
+            fs::remove_all(fs::path(UserPaths::Root()) / "editor-tests-roundtrip", ec);
+        }));
+        steps.push_back(Until("assets settled", [](Ctx& c) { return c.A.AsyncInFlight() == 0; }, 60 * 120));
+        steps.push_back(FreshScene());
+        steps.push_back(Wait(3));
+        Add("saveload: every project scene round-trips through save and load unchanged", std::move(steps));
+    }
 }
