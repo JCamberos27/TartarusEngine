@@ -53,7 +53,6 @@ public:
     enum class Rolloff { Logarithmic = 0, Linear = 1, Exponential = 2 };
     static constexpr int kBusCount = 5;
     static void SetBusVolume(Bus bus, float volume);  // 0..1
-    static float BusVolume(Bus bus);
     static void SetMasterVolume(float volume);        // 0..1, applied on top of every bus
 
     // startOffsetSeconds > 0 starts the voice that far into the file (skips a lead-in: weapon sounds whose contact
@@ -84,8 +83,6 @@ public:
     // Which reverb a voice's send feeds: 0 = the listener's room (the default), 1 = the "remote room" bus (a sound heard through a
     // portal carries its own room's reverb: its params are set separately, SetReverb(p, 1)).
     static void SetReverbSendBus(SoundHandle handle, int bus);
-    // The send level of a voice that was started with a ReverbSend > 0.
-    static void SetReverbSend(SoundHandle handle, float level);
 
     // The reverb bus: a send every voice with a ReverbSend feeds, one convolution reverb (Audio/ConvolutionReverb, real recorded
     // impulse responses) summed into the output through the master limiter. A space is up to two weighted layers; the DSP glides to

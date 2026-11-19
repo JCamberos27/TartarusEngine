@@ -171,9 +171,7 @@ void FreezeRestingRagdolls(PhysicsState& s, float dt) {
         if (!rd.Art || rd.Frozen) continue;
         // Passing the bodies it began in: clear of them (a hand's breadth), it collides with them again.
         if (rd.PassBodies && !TouchesOtherBody(s, rd, 0.05f)) SetPassBodies(s, rd, false);
-        bool held = false; // a gun still in its hand: that joint needs the link in the scene
-        for (PxJoint* j : rd.Attach) held = held || j;
-        if (held || !rd.Art->isSleeping()) { rd.Rest = 0.0f; continue; }
+        if (!rd.Art->isSleeping()) { rd.Rest = 0.0f; continue; }
         rd.Rest += dt;
         if (rd.Rest >= kFreezeAfter) FreezeRagdoll(s, rd);
     }
@@ -188,24 +186,10 @@ PhysicsState::Ragdoll* RagdollInSlot(PhysicsState& s, int slot) {
     return slot >= 0 && slot < (int)s.ragdolls.size() && s.ragdolls[(size_t)slot].Art ? &s.ragdolls[(size_t)slot] : nullptr;
 }
 
-void ReleaseRagdollAttachments(PhysicsState& s, const PxRigidActor* actor) {
-    if (!actor) return;
-    for (auto& rd : s.ragdolls)
-        for (PxJoint*& j : rd.Attach) {
-            if (!j) continue;
-            PxRigidActor *a0 = nullptr, *a1 = nullptr;
-            j->getActors(a0, a1);
-            if (a0 == actor || a1 == actor) { j->release(); j = nullptr; } // (RagdollAttachmentHeld then reads false)
-        }
-}
-
 PhysicsState::Ragdoll* RagdollAt(int id) {
     return g_State ? RagdollAt(*g_State, id) : nullptr;
 }
 
-bool ValidRagdoll(int ragdoll) {
-    return RagdollAt(ragdoll) != nullptr;
-}
 } // namespace PhysicsWorld::detail
 
 namespace PhysicsWorld {
@@ -621,8 +605,6 @@ void DestroyRagdoll(int ragdoll) {
     PhysicsState::Ragdoll* rdp = RagdollAt(s, ragdoll);
     if (!rdp) return;
     auto& rd = *rdp;
-    const int slot = HandleSlot(ragdoll);
-    for (PxJoint* j : rd.Attach) if (j) j->release();
     if (rd.Frozen) { s.scene->removeActor(*rd.Frozen); rd.Frozen->release(); }
     if (rd.Good) rd.Good->release();
     if (rd.Art) rd.Art->release(); // its links, shapes and joints, and out of the scene
@@ -631,24 +613,6 @@ void DestroyRagdoll(int ragdoll) {
     const std::uint16_t gen = rd.Gen;
     rd = PhysicsState::Ragdoll();
     rd.Gen = gen;
-    // What was told to ignore it lets go: the slot's next ragdoll is someone else's (a dropped gun went on passing through it).
-    auto letGo = [&](PxRigidActor& a) {
-        bool changed = false;
-        for (PxShape* sh : ShapesOf(a)) {
-            PxFilterData f = sh->getSimulationFilterData();
-            if (!IgnoresRagdollSlot(f, slot)) continue;
-            f.word2 = 0u;
-            f.word3 = 0u;
-            sh->setSimulationFilterData(f);
-            changed = true;
-        }
-        if (changed && a.getScene()) s.scene->resetFiltering(a);
-        return changed;
-    };
-    for (auto& [entity, body] : s.bodyByEntity)
-        if (body && letGo(*body)) body->setMaxDepenetrationVelocity(PX_MAX_F32); // (as IgnoreRagdollParts with no mask)
-    for (auto& n : s.npcs)
-        if (PxRigidActor* a = n.Actor()) letGo(*a);
 }
 
 void SetRagdollDamping(int ragdoll, float linear, float angular) {
@@ -814,21 +778,6 @@ bool RagdollAsleep(int ragdoll) {
     return rd.Frozen || rd.Art->isSleeping();
 }
 
-void RagdollCounts(int& awake, int& asleep, int& frozen, float* fastestAwake) {
-    awake = asleep = frozen = 0;
-    if (fastestAwake) *fastestAwake = 0.0f;
-    if (!g_State) return;
-    for (const auto& rd : g_State->ragdolls) {
-        if (!rd.Art) continue;
-        if (rd.Frozen) { ++frozen; continue; }
-        if (rd.Art->isSleeping()) { ++asleep; continue; }
-        ++awake;
-        if (fastestAwake)
-            for (PxArticulationLink* l : rd.Bodies)
-                if (l) *fastestAwake = std::max(*fastestAwake, l->getLinearVelocity().magnitude());
-    }
-}
-
 bool RagdollFrozen(int ragdoll) { const PhysicsState::Ragdoll* rd = RagdollAt(ragdoll); return rd && rd->Frozen; }
 
 bool RagdollPairCollides(int ragdoll, int a, int b) {
@@ -853,150 +802,6 @@ bool GetRagdollJoint(int ragdoll, int part, float outPos[3], float outLo[3], flo
         if (outHi) outHi[k] = l.high;
     }
     return true;
-}
-
-int AttachToRagdollPart(unsigned entity, int ragdoll, int part, float breakForce) {
-    PhysicsState::Ragdoll* rdp = RagdollAt(ragdoll);
-    if (!rdp) return -1;
-    PhysicsState& s = *g_State;
-    auto& rd = *rdp;
-    if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return -1;
-    ThawRagdoll(s, rd);
-    auto it = s.bodyByEntity.find(entity);
-    if (it == s.bodyByEntity.end() || !it->second) return -1;
-    PxRigidDynamic* body = it->second;
-    PxArticulationLink* link = rd.Bodies[(size_t)part];
-    // Held where it is (both frames at the body's own pose), by a grip, not a weld: a stiff spring (acceleration units, so the gun's
-    // weight doesn't matter) pulls it back to where the hand has it. A rigid joint would let a heavy gun lever a light hand
-    // through its wrist and elbow limits.
-    const PxTransform at = body->getGlobalPose();
-    PxD6Joint* j = PxD6JointCreate(*s.physics, link, link->getGlobalPose().transformInv(at), body, PxTransform(PxIdentity));
-    if (!j) return -1;
-    for (PxD6Axis::Enum ax : {PxD6Axis::eX, PxD6Axis::eY, PxD6Axis::eZ, PxD6Axis::eTWIST, PxD6Axis::eSWING1, PxD6Axis::eSWING2})
-        j->setMotion(ax, PxD6Motion::eFREE);
-    // Sized by the held body itself (30 rad/s, critically damped), and capped: past the cap the gun lags the hand rather than
-    // dragging it.
-    const float m = std::max(body->getMass(), 0.1f), omega = 30.0f;
-    const PxVec3 I3 = body->getMassSpaceInertiaTensor();
-    const float I = std::max(std::max(I3.x, I3.y), std::max(I3.z, 1e-3f));
-    const PxD6JointDrive linear(m * omega * omega, 2.0f * m * omega, 120.0f, /*isAcceleration=*/false);
-    const PxD6JointDrive angular(I * omega * omega, 2.0f * I * omega, 8.0f, false); // (what a dead wrist can take without turning past its range)
-    for (PxD6Drive::Enum d : {PxD6Drive::eX, PxD6Drive::eY, PxD6Drive::eZ}) j->setDrive(d, linear);
-    j->setDrive(PxD6Drive::eSLERP, angular);
-    j->setDrivePosition(PxTransform(PxIdentity));
-    if (breakForce > 0.0f) j->setBreakForce(breakForce, breakForce);
-    for (size_t k = 0; k < rd.Attach.size(); ++k)
-        if (!rd.Attach[k]) { rd.Attach[k] = j; return (int)k; }
-    rd.Attach.push_back(j);
-    return (int)rd.Attach.size() - 1;
-}
-
-bool RagdollAttachmentHeld(int ragdoll, int handle) {
-    PhysicsState::Ragdoll* rdp = RagdollAt(ragdoll);
-    if (!rdp) return false;
-    auto& rd = *rdp;
-    if (handle < 0 || handle >= (int)rd.Attach.size() || !rd.Attach[(size_t)handle]) return false;
-    return !(rd.Attach[(size_t)handle]->getConstraintFlags() & PxConstraintFlag::eBROKEN);
-}
-
-void DetachFromRagdoll(int ragdoll, int handle) {
-    PhysicsState::Ragdoll* rdp = RagdollAt(ragdoll);
-    if (!rdp) return;
-    auto& rd = *rdp;
-    if (handle < 0 || handle >= (int)rd.Attach.size() || !rd.Attach[(size_t)handle]) return;
-    rd.Attach[(size_t)handle]->release();
-    rd.Attach[(size_t)handle] = nullptr;
-}
-
-bool IgnoreRagdollParts(unsigned entity, int ragdoll, unsigned partMask) {
-    if (!g_State) return false;
-    PhysicsState& s = *g_State;
-    auto it = s.bodyByEntity.find(entity);
-    if (it == s.bodyByEntity.end() || !it->second) return false;
-    PxRigidDynamic* body = it->second;
-    const bool on = partMask != 0u && ValidRagdoll(ragdoll);
-    // Whatever it was passing, it is pushed back out gently, not fired out of the body; PhysX's default (unlimited) comes back with the mask.
-    body->setMaxDepenetrationVelocity(on ? 1.5f : PX_MAX_F32);
-    std::vector<PxShape*> shapes = ShapesOf(*body);
-    for (PxShape* sh : shapes) {
-        PxFilterData f = sh->getSimulationFilterData();
-        // The ignorer slot of the ragdoll's own numbering: not one of its parts, so only this object's mask decides.
-        f.word2 = on ? (((PxU32)HandleSlot(ragdoll) + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
-        f.word3 = on ? partMask : 0u;
-        sh->setSimulationFilterData(f);
-    }
-    if (body->getScene()) {
-        s.scene->resetFiltering(*body);
-        body->wakeUp(); // (two bodies asleep inside each other would stay so)
-    }
-    return true;
-}
-
-unsigned RagdollPartsOverlapping(unsigned entity, int ragdoll, unsigned partMask, float inflate) {
-    PhysicsState::Ragdoll* rdp = RagdollAt(ragdoll);
-    if (!rdp) return 0u;
-    PhysicsState& s = *g_State;
-    auto it = s.bodyByEntity.find(entity);
-    if (it == s.bodyByEntity.end() || !it->second) return 0u;
-    PxRigidDynamic* body = it->second;
-    const auto& rd = *rdp;
-    std::vector<PxShape*> shapes = ShapesOf(*body);
-    const PxTransform bodyPose = body->getGlobalPose();
-    unsigned out = 0u;
-    for (int i = 0; i < (int)rd.Bodies.size() && i < kMaxRagdollParts; ++i) {
-        if (!(partMask & (1u << i)) || !rd.Bodies[(size_t)i]) continue;
-        PxShape* ps = LinkShape(rd.Bodies[(size_t)i]);
-        if (!ps || ps->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
-        PxCapsuleGeometry cap = static_cast<const PxCapsuleGeometry&>(ps->getGeometry());
-        cap.radius = std::max(cap.radius + inflate, 0.005f);
-        const PxTransform capPose = rd.Bodies[(size_t)i]->getGlobalPose() * ps->getLocalPose();
-        for (PxShape* sh : shapes)
-            if ((sh->getFlags() & PxShapeFlag::eSIMULATION_SHAPE) &&
-                PxGeometryQuery::overlap(sh->getGeometry(), bodyPose * sh->getLocalPose(), cap, capPose)) { out |= 1u << i; break; }
-    }
-    return out;
-}
-
-bool PushOutOfRagdoll(unsigned entity, int ragdoll, unsigned partMask) {
-    PhysicsState::Ragdoll* rdp = RagdollAt(ragdoll);
-    if (!rdp || partMask == 0u) return false;
-    PhysicsState& s = *g_State;
-    auto it = s.bodyByEntity.find(entity);
-    if (it == s.bodyByEntity.end() || !it->second) return false;
-    PxRigidDynamic* body = it->second;
-    const auto& rd = *rdp;
-    std::vector<PxShape*> shapes = ShapesOf(*body);
-    PxTransform pose = body->getGlobalPose();
-    bool moved = false;
-    for (int pass = 0; pass < 4; ++pass) {
-        PxVec3 shift(0.0f);
-        for (int i = 0; i < (int)rd.Bodies.size() && i < kMaxRagdollParts; ++i) {
-            if (!(partMask & (1u << i)) || !rd.Bodies[(size_t)i]) continue;
-            PxShape* ps = LinkShape(rd.Bodies[(size_t)i]);
-            if (!ps || ps->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
-            PxCapsuleGeometry cap = static_cast<const PxCapsuleGeometry&>(ps->getGeometry());
-            cap.radius += std::max(ps->getRestOffset(), 0.0f); // (out of the skin too)
-            const PxTransform capPose = rd.Bodies[(size_t)i]->getGlobalPose() * ps->getLocalPose();
-            for (PxShape* sh : shapes) {
-                if (!(sh->getFlags() & PxShapeFlag::eSIMULATION_SHAPE)) continue;
-                PxVec3 dir;
-                PxF32 depth = 0.0f;
-                if (PxGeometryQuery::computePenetration(dir, depth, sh->getGeometry(), pose * sh->getLocalPose(), cap, capPose) && depth > 1e-4f)
-                    shift += dir * (depth + 0.003f);
-            }
-        }
-        if (shift.magnitudeSquared() < 1e-8f) break;
-        // Never down: under a body lying on it, the shortest way out is through the floor. Pinned there, it stays to the contacts.
-        if (shift.y < -0.25f * shift.magnitude()) return false;
-        pose.p += shift;
-        moved = true;
-    }
-    if (moved) {
-        body->setGlobalPose(pose);
-        body->setLinearVelocity(PxVec3(0.0f));
-        body->setAngularVelocity(PxVec3(0.0f));
-    }
-    return moved;
 }
 
 bool GetRagdollPartShape(int ragdoll, int part, float* outRadius, float* outHalfLength) {

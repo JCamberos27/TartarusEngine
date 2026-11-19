@@ -84,8 +84,6 @@ struct PlayFrameInputs {
 // module's tick, particles and the models' animation advance.
 class PlayFrame {
 public:
-    PlayFrame();
-
     // The step itself: main calls it only when gameplay advances this frame (playing and not paused, or a Step).
     void Simulate(const PlayFrameInputs& in);
 

@@ -199,8 +199,6 @@ bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4])
 bool RagdollAsleep(int ragdoll);
 // At rest long enough to have been frozen (its parts a static copy, out of the solver until something hits it).
 bool RagdollFrozen(int ragdoll);
-// Every ragdoll by state (awake in the solver, asleep in it, frozen out of it).
-void RagdollCounts(int& awake, int& asleep, int& frozen, float* fastestAwake = nullptr); // (its fastest part, m/s)
 // The joints' slerp drives: each part held toward its target orientation (identity: the pose the ragdoll was built in,
 // see SetRagdollDriveTarget) as a spring of `stiffness` / `damping` (acceleration: mass independent). 0 = limp.
 void SetRagdollDrive(int ragdoll, float stiffness, float damping);
@@ -217,18 +215,6 @@ void RagdollRotationToJointAxes(const float rotXYZW[4], float outTwistSwing[3]);
 bool RagdollPairCollides(int ragdoll, int a, int b);
 // The joint holding `part` to its parent: its positions now and its limits (radians, as RagdollRotationToJointAxes); any out may be null.
 bool GetRagdollJoint(int ragdoll, int part, float outPos[3], float outLo[3], float outHi[3]);
-// Holds the rigid body of `entity` to part `part` where both are now (a gun in a dead hand), until released or loaded past
-// `breakForce` (N and N m; <= 0: unbreakable). A handle, -1 when either is missing.
-int  AttachToRagdollPart(unsigned entity, int ragdoll, int part, float breakForce);
-bool RagdollAttachmentHeld(int ragdoll, int handle); // false once it broke or was released
-void DetachFromRagdoll(int ragdoll, int handle);
-// The rigid body of `entity` stops colliding with the ragdoll's parts in `partMask` (bit per part); 0 (or a gone ragdoll) undoes it.
-bool IgnoreRagdollParts(unsigned entity, int ragdoll, unsigned partMask);
-// Of the ragdoll's parts in `partMask`, those the rigid body of `entity` overlaps now, each part's capsule grown by `inflate` (m).
-unsigned RagdollPartsOverlapping(unsigned entity, int ragdoll, unsigned partMask, float inflate);
-// Moves the rigid body of `entity` the shortest way out of the ragdoll's parts in `partMask` (and their skin), a few passes; true
-// when it moved. For a body that has to start colliding with parts it is inside of (the contact would only fight it there).
-bool PushOutOfRagdoll(unsigned entity, int ragdoll, unsigned partMask);
 // Part `part`'s capsule: radius and half length (the cylinder's, along its X).
 bool GetRagdollPartShape(int ragdoll, int part, float* outRadius, float* outHalfLength);
 // How deep (m) the worst pair of the ragdoll's parts that collide with each other overlaps now (0: none), and which.

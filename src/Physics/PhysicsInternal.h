@@ -111,13 +111,8 @@ struct SimEventCallback : PxSimulationEventCallback {
 // word1 of a ragdoll's parts: it started in or on another body, and passes the other ragdolls (not its own parts, not the world)
 // until it is clear of them (UpdateBodyPasses).
 constexpr PxU32 kPassBodies = 1u << 29;
-// A ragdoll's own part (word2: its id + 1, the part 0..31 above), not an object told to ignore one (slot kRagdollIgnorerSlot).
-constexpr PxU32 kRagdollIgnorerSlot = 32u;
-inline bool IsRagdollPart(const PxFilterData& f) { return (f.word2 & 0xFFFFu) != 0u && ((f.word2 >> 16) & 63u) < kRagdollIgnorerSlot; }
-// An object told to ignore the ragdoll in `slot` (IgnoreRagdollParts).
-inline bool IgnoresRagdollSlot(const PxFilterData& f, int slot) {
-    return (f.word2 & 0xFFFFu) == (PxU32)slot + 1u && ((f.word2 >> 16) & 63u) == kRagdollIgnorerSlot;
-}
+// A ragdoll's own part (word2: its id + 1 in the low half, the part 0..31 in the high half).
+inline bool IsRagdollPart(const PxFilterData& f) { return (f.word2 & 0xFFFFu) != 0u; }
 
 // Ragdoll, hitbox-set and NPC character ids handed out by the API: the slot in the low 16 bits, the slot's generation above.
 // A freed slot is reused with the next generation, so a stale id held past its Destroy finds nothing instead of the
@@ -245,7 +240,7 @@ struct PhysicsState {
     // Bodies: its links by part. Prev: each part's pose before the latest substep, so GetRagdollPart can interpolate like #168.
     // Drive: per part, the spherical joint to its parent (null for the root). Ignore: per part, the parts its shape doesn't
     // collide with (the filter's word3); Pending: pairs ignored only because they overlapped at build, let go once apart.
-    // Attach: joints that hold something to a part (a gun in the hand), released with it. ExtraGravity: m/s^2 added downward.
+    // ExtraGravity: m/s^2 added downward.
     struct Ragdoll {
         PxArticulationReducedCoordinate* Art = nullptr;
         std::vector<PxArticulationLink*> Bodies;
@@ -253,7 +248,6 @@ struct PhysicsState {
         std::vector<PxArticulationJointReducedCoordinate*> Drive;
         std::vector<PxU32> Ignore;
         std::vector<std::pair<int, int>> Pending;
-        std::vector<PxJoint*> Attach;
         std::vector<float> DriveInertia; // per part: what its joint turns (the part and all that hangs off it, about the joint), kg m^2
         std::vector<PxTransform> Shape;  // per part: its capsule in the link's frame (the link's frame is its joint's: see CreateRagdoll)
         // per part: a drive target given against the pose the body was built in (the motor's) is the joint's rotation Pre * t * Post
@@ -272,7 +266,7 @@ struct PhysicsState {
         // A corpse at rest is frozen: its articulation taken out of the scene and its capsules left as one static actor where
         // they lay (same filters, materials and part tags). A body falling onto a pile used to wake every corpse in it and
         // solve them all at the ragdolls' 32 iterations - tens to hundreds of milliseconds a step as the bodies piled up.
-        // A hit (RagdollImpulse), the Player walking into it or anything attached to it puts the articulation back.
+        // A hit (RagdollImpulse) or the Player walking into it puts the articulation back.
         PxRigidStatic* Frozen = nullptr;
         float Rest = 0.0f; // seconds asleep (unfrozen)
         std::uint16_t Gen = 0; // the slot's generation (see MakeHandle); kept when the slot is freed
@@ -429,9 +423,6 @@ void SyncEntities(PhysicsState& s, const World& world);
 // The static or dynamic/kinematic actor built for `entity` (dynamic first), or null.
 PxRigidActor* ActorFor(const PhysicsState& s, std::uint32_t entity);
 
-// All of an actor's shapes (a vector sized by getNbShapes, filled by getShapes).
-std::vector<PxShape*> ShapesOf(const PxRigidActor& actor);
-
 void BuildJoints(PhysicsState& s, const World& world);
 
 // --- Triggers (#185 PR 5) --------------------------------------------------------------
@@ -496,11 +487,8 @@ void FreezeRestingRagdolls(PhysicsState& s, float dt);
 PhysicsState::Ragdoll* RagdollAt(PhysicsState& s, int id);
 PhysicsState::Ragdoll* RagdollAt(int id);
 PhysicsState::Ragdoll* RagdollInSlot(PhysicsState& s, int slot);
-// Every attachment joint (AttachToRagdollPart) holding `actor`, released: the actor is going away.
-void ReleaseRagdollAttachments(PhysicsState& s, const PxRigidActor* actor);
 // The shadow `capsule` gets from its hitbox sets dropped (the capsule itself is going away).
 void ForgetHitboxCapsule(PhysicsState& s, const PxRigidActor* capsule);
-bool ValidRagdoll(int ragdoll); // RagdollAt(ragdoll) != nullptr
 
 // Before every substep: the extra gravity, and pairs that overlapped at build let collide once they are apart.
 void RagdollAfterSubstep(PhysicsState::Ragdoll& rd);

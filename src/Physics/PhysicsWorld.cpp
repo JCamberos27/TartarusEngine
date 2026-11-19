@@ -11,16 +11,15 @@ PxFilterFlags EngineFilterShader(
         if (((mask[la] >> lb) & 1u) == 0u) return PxFilterFlag::eKILL;
     }
     // The parts of one ragdoll (word2: its id + 1 in the low half, the part in the high half) collide with each other unless
-    // either one's word3 has the other's bit: parent and child, a pair that overlapped when the body was built (until it
-    // separates), a gun with the hand that held it.
+    // either one's word3 has the other's bit: parent and child, or a pair that overlapped when the body was built (until it
+    // separates).
     {
         const PxU32 r0 = filterData0.word2 & 0xFFFFu, r1 = filterData1.word2 & 0xFFFFu;
         if (r0 != r1 && ((filterData0.word1 | filterData1.word1) & kPassBodies) && IsRagdollPart(filterData0) && IsRagdollPart(filterData1))
             return PxFilterFlag::eKILL;
         if (r0 != 0u && r0 == r1) {
-            // (An ignorer's slot is past the 32 part bits: only its own mask decides.)
-            const PxU32 p0 = (filterData0.word2 >> 16) & 63u, p1 = (filterData1.word2 >> 16) & 63u;
-            if ((p1 < 32u && ((filterData0.word3 >> p1) & 1u)) || (p0 < 32u && ((filterData1.word3 >> p0) & 1u))) return PxFilterFlag::eKILL;
+            const PxU32 p0 = (filterData0.word2 >> 16) & 31u, p1 = (filterData1.word2 >> 16) & 31u;
+            if (((filterData0.word3 >> p1) & 1u) || ((filterData1.word3 >> p0) & 1u)) return PxFilterFlag::eKILL;
         }
     }
     if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
@@ -69,7 +68,7 @@ PhysicsCore::~PhysicsCore() {
 // every actor/shape it owns. The borrowed PhysicsCore pieces are never released here.
 PhysicsState::~PhysicsState() {
     for (PxJoint* j : joints)               if (j) j->release(); // #185 PR 11 — before the scene
-    for (auto& r : ragdolls) { if (r.Frozen && r.Art) { r.Art->release(); r.Art = nullptr; } if (r.Good) { r.Good->release(); r.Good = nullptr; } for (PxJoint* j : r.Attach) if (j) j->release(); if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } if (r.SlickMat) { r.SlickMat->release(); r.SlickMat = nullptr; } } // (the articulations go with the scene)
+    for (auto& r : ragdolls) { if (r.Frozen && r.Art) { r.Art->release(); r.Art = nullptr; } if (r.Good) { r.Good->release(); r.Good = nullptr; } if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } if (r.SlickMat) { r.SlickMat->release(); r.SlickMat = nullptr; } } // (the articulations go with the scene)
     if (scene)           scene->release();
 }
 } // namespace PhysicsWorld::detail
