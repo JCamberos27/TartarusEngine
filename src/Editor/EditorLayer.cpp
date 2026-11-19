@@ -3015,6 +3015,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
     DrawRecoveryPrompt(world, assets);
     DrawExitPrompt();
+    PumpScenePreload(world, assets); // a scene open waiting on its assets
+    DrawScenePreloadOverlay();
     DrawSceneSwitchPrompt(world, assets);
     DrawRevertScenePrompt(world, assets);
     DrawSettingsWindow(world); // #4 item 3 — merged Preferences + Project Settings

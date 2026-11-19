@@ -1741,6 +1741,18 @@ private:
     // File > Open... dialog does — shared so the Asset Browser's Scenes folder can open a
     // scene with one double-click instead of going through the OS file dialog.
     void OpenScene(World& world, AssetLibrary& assets, const std::string& path);
+    // A user's scene open (EditorLayer_ScenePreload.cpp): the scene's models and materials load on the
+    // asset workers first, then OpenScene runs from warm caches. `frame` frames the camera after.
+    void BeginOpenScene(World& world, AssetLibrary& assets, const std::string& path, bool frame);
+    void PumpScenePreload(World& world, AssetLibrary& assets); // once a frame, from Draw
+    void DrawScenePreloadOverlay();
+    struct ScenePreloadState;
+    std::shared_ptr<ScenePreloadState> m_ScenePreload; // null when no open is pending
+    size_t m_ScenePreloadReady = 0, m_ScenePreloadTotal = 0;
+public:
+    // While a scene open waits on its assets: its name and how many have loaded (false when none is pending).
+    bool ScenePreloadProgress(std::string& sceneName, size_t& ready, size_t& total) const;
+private:
     void NewScene(World& world, AssetLibrary& assets); // fresh scene, written to disk immediately; File > New Scene / Ctrl+N
 
     // Guards New Scene / Open Scene against silently discarding unsaved work (#216). Every call
