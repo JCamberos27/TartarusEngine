@@ -63,7 +63,7 @@ CachedPrefab& PrefabEntry(const std::string& prefab) {
 std::shared_ptr<const nlohmann::json> PrefabJson(const std::string& prefab) {
     CachedPrefab& c = PrefabEntry(prefab);
     if (!c.Json) {
-        std::ifstream file(ProjectPaths::Resolve(prefab));
+        std::ifstream file(std::filesystem::u8path(ProjectPaths::Resolve(prefab)));
         if (!file) return nullptr;
         auto json = nlohmann::json::parse(file);
         for (const char* collection : {"empties", "models", "boxes"})
@@ -323,7 +323,7 @@ bool ResolveWeaponGameplay(const std::string& prefab,FirstPersonWeaponGameplay& 
         // Old prefabs take their stats from their old animation descriptor's gameplay block; the prefab's own values win.
         if(!block->contains("Magazine")) {
             ReadComponentJson("Weapon Definition",*block,&weapon);
-            std::ifstream descriptor(ProjectPaths::Resolve(weapon.AnimationSet));
+            std::ifstream descriptor(std::filesystem::u8path(ProjectPaths::Resolve(weapon.AnimationSet)));
             if(descriptor) {
                 const auto legacy=nlohmann::json::parse(descriptor);
                 if(!ImportLegacyWeaponGameplay(legacy.value("gameplay",nlohmann::json::object()),weapon.Gameplay,error)) {
