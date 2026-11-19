@@ -51,13 +51,13 @@ namespace {
 void Tip(const char* s) { EditorUI::SetTooltip("%s", s); }
 } // namespace
 
-// Preferences > Editor Enhancers. The palette is the menu every Style picker offers (row colours,
-// folder colours, quick-pick icons); editing it here never touches styles already applied - those
-// store the colour value / icon name itself, not a palette index.
-void EditorLayer::DrawEnhancerPreferences() {
-    EditorSettings& prefs = EditorSettings::Get();
-    Enhancers::Palette& pal = Enhancers::Palette::Get();
+namespace {
+// What the preferences sections need from the editor (its window for file dialogs, the icon search buffer).
+struct PrefsCtx { GLFWwindow* Window; char* IconSearch; size_t IconSearchSize; };
 
+// Preferences > Editor Enhancers > Input.
+void PrefsInput() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Input");
     if (SettingsCheckbox("Hover keys", &prefs.EnhancerHoverKeys)) EditorSettings::Save();
     ImGui::SameLine();
@@ -73,6 +73,11 @@ void EditorLayer::DrawEnhancerPreferences() {
                          "Off: each panel's bookmark button opens them as a list, keeping one header row per panel.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Hierarchy.
+void PrefsHierarchy() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Hierarchy");
     if (SettingsCheckbox("Row styles", &prefs.HierarchyRowStyles)) EditorSettings::Save();
     ImGui::SameLine();
@@ -106,6 +111,11 @@ void EditorLayer::DrawEnhancerPreferences() {
                          "Drop rows on the bar to bookmark them.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Asset Browser folders.
+void PrefsAssetFolders() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Asset Browser folders");
     if (SettingsCheckbox("Folder styles", &prefs.FolderStyles)) EditorSettings::Save();
     ImGui::SameLine();
@@ -138,6 +148,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Folder rules (this project).
+void PrefsFolderRules(PrefsCtx& ctx) {
+    auto& fs = Enhancers::FolderStyles::Get();
     EditorUIPrimitives::SectionHeader("Folder rules (this project)");
     HintText("Style folders by name: the pattern is matched against the folder's name and its full path. "
              "* matches anything, ? one character. The first matching rule wins; a folder's own style beats any rule.");
@@ -166,7 +181,7 @@ void EditorLayer::DrawEnhancerPreferences() {
                     ImGui::OpenPopup("##ruleIcon");
                 if (ImGui::BeginPopup("##ruleIcon")) {
                     std::string icon = r.Style.Icon;
-                    if (Enhancers::IconPickerGrid("##ruleIconGrid", icon, m_FolderStyleIconSearch, sizeof(m_FolderStyleIconSearch), EditorTheme::Px(280.0f))) {
+                    if (Enhancers::IconPickerGrid("##ruleIconGrid", icon, ctx.IconSearch, ctx.IconSearchSize, EditorTheme::Px(280.0f))) {
                         r.Style.Icon = icon;
                         fs.MarkDirty();
                         ImGui::CloseCurrentPopup();
@@ -212,6 +227,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Inspector.
+void PrefsInspector() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Inspector");
     if (SettingsCheckbox("Navigation bar##insp", &prefs.InspectorNavBar)) EditorSettings::Save();
     ImGui::SameLine();
@@ -225,6 +245,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     EditorUI::HelpMarker("A component's actions button appears only while its header is hovered.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Favorites.
+void PrefsFavorites() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Favorites");
     if (SettingsCheckbox("Favorites overlay", &prefs.Favorites)) EditorSettings::Save();
     ImGui::SameLine();
@@ -239,6 +264,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Ruler.
+void PrefsRuler() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Ruler");
     if (SettingsCheckbox("Ruler (hold Shift+R)", &prefs.Ruler)) EditorSettings::Save();
     ImGui::SameLine();
@@ -257,6 +287,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Tabs.
+void PrefsTabs() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Tabs");
     if (SettingsCheckbox("Inspector tabs", &prefs.InspectorTabs)) EditorSettings::Save();
     ImGui::SameLine();
@@ -270,6 +305,11 @@ void EditorLayer::DrawEnhancerPreferences() {
                          "strip switches tabs, Ctrl+Shift+wheel moves the tab, middle-click closes.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Tab & header colours.
+void PrefsTabStyles(PrefsCtx& ctx) {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Tab & header colours");
     if (SettingsCheckbox("Panel tab colours", &prefs.PanelTabColors)) EditorSettings::Save();
     ImGui::SameLine();
@@ -339,7 +379,7 @@ void EditorLayer::DrawEnhancerPreferences() {
         }
         ImGui::SameLine();
         if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_EXPORT "  Export...##ui")) {
-            const std::string path = FileDialog::SaveFile("Tab & header styles (*.json)\0*.json\0", "json", m_Window);
+            const std::string path = FileDialog::SaveFile("Tab & header styles (*.json)\0*.json\0", "json", ctx.Window);
             if (!path.empty()) {
                 if (ui.ExportTo(path)) Log::Info("Editor Enhancers: tab & header styles exported to " + path);
                 else Log::Warn("Editor Enhancers: could not write " + path);
@@ -347,7 +387,7 @@ void EditorLayer::DrawEnhancerPreferences() {
         }
         ImGui::SameLine();
         if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_IMPORT "  Import...##ui")) {
-            const std::string path = FileDialog::OpenFile("Tab & header styles (*.json)\0*.json\0All Files\0*.*\0", m_Window);
+            const std::string path = FileDialog::OpenFile("Tab & header styles (*.json)\0*.json\0All Files\0*.*\0", ctx.Window);
             if (!path.empty()) {
                 if (ui.ImportFrom(path)) Log::Info("Editor Enhancers: tab & header styles imported from " + path);
                 else Log::Warn("Editor Enhancers: " + path + " is not a tab & header styles file.");
@@ -356,6 +396,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Palette colours.
+void PrefsPaletteColours() {
+    Enhancers::Palette& pal = Enhancers::Palette::Get();
     EditorUIPrimitives::SectionHeader("Palette colours");
     HintText("Offered by every Style menu (Hierarchy rows, folders). Click a swatch to edit it.");
     {
@@ -392,6 +437,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Palette icons.
+void PrefsPaletteIcons(PrefsCtx& ctx) {
+    Enhancers::Palette& pal = Enhancers::Palette::Get();
     EditorUIPrimitives::SectionHeader("Palette icons");
     HintText("Quick picks listed first in every icon picker. Right-click one to remove it.");
     {
@@ -443,7 +493,7 @@ void EditorLayer::DrawEnhancerPreferences() {
 
     ImGui::Spacing();
     if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_EXPORT "  Export...")) {
-        const std::string path = FileDialog::SaveFile("Palette (*.json)\0*.json\0", "json", m_Window);
+        const std::string path = FileDialog::SaveFile("Palette (*.json)\0*.json\0", "json", ctx.Window);
         if (!path.empty()) {
             if (pal.ExportTo(path)) Log::Info("Editor Enhancers: palette exported to " + path);
             else Log::Warn("Editor Enhancers: could not write " + path);
@@ -451,7 +501,7 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
     ImGui::SameLine();
     if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_IMPORT "  Import...")) {
-        const std::string path = FileDialog::OpenFile("Palette (*.json)\0*.json\0All Files\0*.*\0", m_Window);
+        const std::string path = FileDialog::OpenFile("Palette (*.json)\0*.json\0All Files\0*.*\0", ctx.Window);
         if (!path.empty()) {
             if (pal.ImportFrom(path)) { Enhancers::Palette::MarkDirty(); Log::Info("Editor Enhancers: palette imported from " + path); }
             else Log::Warn("Editor Enhancers: " + path + " is not a palette file.");
@@ -462,6 +512,26 @@ void EditorLayer::DrawEnhancerPreferences() {
         pal = Enhancers::Palette::Defaults();
         Enhancers::Palette::MarkDirty();
     }
+}
+
+} // namespace
+
+// Preferences > Editor Enhancers. The palette is the menu every Style picker offers (row colours,
+// folder colours, quick-pick icons); editing it here never touches styles already applied - those
+// store the colour value / icon name itself, not a palette index.
+void EditorLayer::DrawEnhancerPreferences() {
+    PrefsCtx ctx{m_Window, m_FolderStyleIconSearch, sizeof(m_FolderStyleIconSearch)};
+    PrefsInput();
+    PrefsHierarchy();
+    PrefsAssetFolders();
+    PrefsFolderRules(ctx);
+    PrefsInspector();
+    PrefsFavorites();
+    PrefsRuler();
+    PrefsTabs();
+    PrefsTabStyles(ctx);
+    PrefsPaletteColours();
+    PrefsPaletteIcons(ctx);
 }
 
 // ============================================================================================
