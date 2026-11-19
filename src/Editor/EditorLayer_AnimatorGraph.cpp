@@ -98,40 +98,49 @@ std::string ConditionLabel(const AC::Layer& Ly, const std::vector<int>& transiti
     return out;
 }
 
-} // namespace
+struct Edge {
+    NodeRef From, To;
+    std::vector<int> Transitions;
+    ImVec2 A, B;
+};
 
-namespace AnimatorUI {
+// Copy / paste: the selected states with the transitions between them, kept across controllers (the
+// clipboard outlives the window's controller). Parameters they use are not copied - Lint names any
+// the target lacks.
+struct Clipboard { std::vector<AC::State> States; std::vector<AC::Transition> Transitions; };
+Clipboard s_clip;
 
-// Middle: the state graph - nodes, edges, linking, selection, the context menu.
-void DrawGraphCanvas(AnimCtx& cx) {
-    World& world = cx.world;
-    AnimatorWindowState& W = cx.W;
-    AC& D = W.Doc;
-    AssetLibrary* assets = cx.assets;
-    AnimatorControllerComponent* live = cx.live;
-    Model* rig = cx.rig;
-    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
-    bool& changed = cx.changed;
-    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
-    // ================================ middle: the graph =======================================
-    AC::Layer& Ly = W.L();
-    const float canvasW = std::max(100.0f, ImGui::GetContentRegionAvail().x - rightW - ImGui::GetStyle().ItemSpacing.x);
-    ImGui::BeginChild("##animcanvas", ImVec2(canvasW, bodyH), ImGuiChildFlags_Borders,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove);
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImVec2 c0 = ImGui::GetCursorScreenPos();
-    const ImVec2 csz = ImGui::GetContentRegionAvail();
-    const ImVec2 c1 = c0 + csz;
-    ImGui::InvisibleButton("##canvasbtn", csz, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
-                                                   ImGuiButtonFlags_MouseButtonMiddle);
-    const bool canvasHovered = ImGui::IsItemHovered();
-    const ImVec2 mouse = ImGui::GetIO().MousePos;
-    ImGuiIO& io = ImGui::GetIO();
+// One frame of the graph canvas: its rectangle, the layer, and the wires, hover and motion state that
+// the drawing passes and the interaction share. DrawGraphCanvas runs the passes in order.
+struct GraphCanvas {
+    AnimCtx& cx;
+    AnimatorWindowState& W;
+    AC& D;
+    AC::Layer& Ly;
+    AnimatorControllerComponent* live;
+    bool& changed;
+    ImGuiIO& io;
+    Glass::ImAnimContext& M;
+    ImDrawList* dl = nullptr;
+    ImVec2 c0, c1, csz, mouse;
+    bool canvasHovered = false;
+    double now = 0.0;
+    unsigned seed = 0;
+    ImGuiID panId = 0, tugId = 0;
+    std::vector<NodeRef> nodes;
+    std::map<std::pair<NodeRef, NodeRef>, int> edgeIndex;
+    std::vector<Edge> edges;
+    std::map<NodeRef, ImVec2> wireOff;
+    int defaultState = -1;
+    int hoveredEdge = -1;
+    NodeRef hoveredNode{NodeKind::State, -2};
+
+    explicit GraphCanvas(AnimCtx& c)
+        : cx(c), W(c.W), D(c.W.Doc), Ly(c.W.L()), live(c.live), changed(c.changed), io(ImGui::GetIO()), M(Glass::Motion()) {}
 
     // A state index that outlived its state (deleted, a reload, another layer) must never be read.
-    auto validNode = [&](NodeRef n) { return n.Kind != NodeKind::State || (n.Index >= 0 && n.Index < (int)Ly.States.size()); };
-    if (W.Linking && (W.LinkLayer != W.Layer || !validNode(W.LinkFrom))) W.Linking = false;
-    auto nodeWorldPos = [&](NodeRef n) -> glm::vec2& {
+    bool validNode(NodeRef n) const { return n.Kind != NodeKind::State || (n.Index >= 0 && n.Index < (int)Ly.States.size()); }
+    glm::vec2& nodeWorldPos(NodeRef n) {
         static glm::vec2 s_Gone{0.0f};
         switch (n.Kind) {
             case NodeKind::Entry: return Ly.EntryPosition;
@@ -139,22 +148,62 @@ void DrawGraphCanvas(AnimCtx& cx) {
             case NodeKind::Exit:  return Ly.ExitPosition;
             default:              return validNode(n) ? Ly.States[n.Index].Position : (s_Gone = glm::vec2(0.0f));
         }
-    };
-    auto nodeSize = [&](NodeRef n) { return n.Kind == NodeKind::State ? ImVec2(kStateW, kStateH) : ImVec2(kSpecialW, kSpecialH); };
-    auto toScreen = [&](glm::vec2 p) { return c0 + W.Pan + ImVec2(p.x, p.y) * W.Zoom; };
-    auto toWorld = [&](ImVec2 s) { const ImVec2 v = (s - c0 - W.Pan) * (1.0f / W.Zoom); return glm::vec2(v.x, v.y); };
-    auto nodeRect = [&](NodeRef n, ImVec2& a, ImVec2& b) {
+    }
+    static ImVec2 nodeSize(NodeRef n) { return n.Kind == NodeKind::State ? ImVec2(kStateW, kStateH) : ImVec2(kSpecialW, kSpecialH); }
+    ImVec2 toScreen(glm::vec2 p) const { return c0 + W.Pan + ImVec2(p.x, p.y) * W.Zoom; }
+    glm::vec2 toWorld(ImVec2 s) const { const ImVec2 v = (s - c0 - W.Pan) * (1.0f / W.Zoom); return glm::vec2(v.x, v.y); }
+    void nodeRect(NodeRef n, ImVec2& a, ImVec2& b) {
         a = toScreen(nodeWorldPos(n));
         b = a + nodeSize(n) * W.Zoom;
-    };
-    auto nodeCenter = [&](NodeRef n) { ImVec2 a, b; nodeRect(n, a, b); return (a + b) * 0.5f; };
+    }
+    ImVec2 nodeCenter(NodeRef n) { ImVec2 a, b; nodeRect(n, a, b); return (a + b) * 0.5f; }
+    unsigned nodeId(NodeRef n) const {
+        return n.Kind == NodeKind::State ? NodeMotionId(W, Ly.States[n.Index].Name) : seed + 0x51u * (unsigned)n.Kind;
+    }
+    ImVec2 offOf(NodeRef n) const { auto it = wireOff.find(n); return it == wireOff.end() ? ImVec2(0, 0) : it->second; }
+    ImVec2 wireCenter(NodeRef n) { return nodeCenter(n) + offOf(n); }
 
-    std::vector<NodeRef> nodes;
+    void Begin();
+    void FrameOrCenter();
+    void StartMotion();
+    void DrawGrid();
+    void LayoutEdges();
+    void DrawEdges();
+    void DrawNodes();
+    void DrawOverlays();
+    // Edits.
+    void popIn(const std::vector<int>& fresh);
+    void makeTransition(NodeRef from, NodeRef to);
+    void deleteStates(std::vector<int> which) { DeleteStates(cx, Ly, std::move(which)); }
+    void duplicateStates(bool withTransitions);
+    void copyStates();
+    void pasteStates();
+    void createState(glm::vec2 at, bool blendTree);
+    // Input.
+    void HandleMouse();
+    void DrawContextMenu();
+    void HandleKeys();
+};
+
+// The canvas rectangle and its button (inside the canvas child), and the nodes to draw.
+void GraphCanvas::Begin() {
+    dl = ImGui::GetWindowDrawList();
+    c0 = ImGui::GetCursorScreenPos();
+    csz = ImGui::GetContentRegionAvail();
+    c1 = c0 + csz;
+    ImGui::InvisibleButton("##canvasbtn", csz, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
+                                                   ImGuiButtonFlags_MouseButtonMiddle);
+    canvasHovered = ImGui::IsItemHovered();
+    mouse = io.MousePos;
+    if (W.Linking && (W.LinkLayer != W.Layer || !validNode(W.LinkFrom))) W.Linking = false;
     for (int i = 0; i < (int)Ly.States.size(); ++i) nodes.push_back({NodeKind::State, i});
     nodes.push_back({NodeKind::Entry, -1});
     nodes.push_back({NodeKind::Any, -1});
     nodes.push_back({NodeKind::Exit, -1});
+}
 
+// Frame All, and centring on a state picked elsewhere.
+void GraphCanvas::FrameOrCenter() {
     if (W.FramePending && csz.x > 10.0f) {
         W.FramePending = false;
         Glass::Motion().InertiaStop(GraphMotionSeed(W) ^ 0x9A11F11Bu); // a coasting pan stops for the framing
@@ -183,21 +232,21 @@ void DrawGraphCanvas(AnimCtx& cx) {
             W.Pan = csz * 0.5f - ImVec2(p.x + sz.x * 0.5f, p.y + sz.y * 0.5f) * W.Zoom;
         }
     }
+}
 
-    // Motion v2. Every effect below is either a stateless function of the motion clock or a Glass entry that
-    // lives only while it moves; at rest the graph makes no entries.
-    Glass::ImAnimContext& M = Glass::Motion();
-    const double now = M.Now();
-    const unsigned seed = GraphMotionSeed(W);
-    auto nodeId = [&](NodeRef n) -> unsigned {
-        return n.Kind == NodeKind::State ? NodeMotionId(W, Ly.States[n.Index].Name) : seed + 0x51u * (unsigned)n.Kind;
-    };
+// Motion v2. Every effect below is either a stateless function of the motion clock or a Glass entry that
+// lives only while it moves; at rest the graph makes no entries.
+void GraphCanvas::StartMotion() {
+    now = M.Now();
+    seed = GraphMotionSeed(W);
     // A middle-drag pan that was let go coasts on (Inertia); framing or centring on a state stops it.
-    const ImGuiID panId = seed ^ 0x9A11F11Bu;
-    // (FramePending and CenterOn above stop it.)
+    panId = seed ^ 0x9A11F11Bu;
     W.Pan = W.Pan + M.InertiaDelta(panId);
+    tugId = seed ^ 0x7E6A11C3u; // the wire just linked (makeTransition) sags and springs straight
+}
 
-    // Grid
+// The background grid (and the canvas clip, popped by DrawOverlays).
+void GraphCanvas::DrawGrid() {
     dl->PushClipRect(c0, c1, true);
     dl->AddRectFilled(c0, c1, EditorTheme::U32(EditorTheme::Field));
     {
@@ -209,15 +258,10 @@ void DrawGraphCanvas(AnimCtx& cx) {
                 dl->AddLine(ImVec2(c0.x, c0.y + y), ImVec2(c1.x, c0.y + y), EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Text, 0.05f)));
         }
     }
+}
 
-    // --- edges -------------------------------------------------------------------------------
-    struct Edge {
-        NodeRef From, To;
-        std::vector<int> Transitions;
-        ImVec2 A, B;
-    };
-    std::map<std::pair<NodeRef, NodeRef>, int> edgeIndex;
-    std::vector<Edge> edges;
+// The wires: one per (from, to) pair, eased where a node jumped, and the one under the mouse.
+void GraphCanvas::LayoutEdges() {
     for (int t = 0; t < (int)Ly.Transitions.size(); ++t) {
         const auto& tr = Ly.Transitions[t];
         NodeRef from, to;
@@ -244,12 +288,11 @@ void DrawGraphCanvas(AnimCtx& cx) {
         }
     }
     // The default-state arrow from Entry is implicit (no transition), drawn in orange.
-    const int defaultState = Ly.DefaultStateIndex();
+    defaultState = Ly.DefaultStateIndex();
 
     // Wire morph: a node that jumped (undo, a typed position, a paste) has its wires ease to the new shape
     // (WireMorph) instead of redrawing at once. Last frame's position is kept in the canvas window's storage
     // (ImGui's memory); a direct mouse drag stays 1:1. The offset is screen px from the node's real centre.
-    std::map<NodeRef, ImVec2> wireOff;
     {
         ImGuiStorage* st = ImGui::GetStateStorage();
         for (NodeRef n : nodes) {
@@ -262,10 +305,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
             if (std::abs(shown.x - p.x) > 0.01f || std::abs(shown.y - p.y) > 0.01f) wireOff[n] = (shown - ImVec2(p.x, p.y)) * W.Zoom;
         }
     }
-    auto offOf = [&](NodeRef n) { auto it = wireOff.find(n); return it == wireOff.end() ? ImVec2(0, 0) : it->second; };
-    auto wireCenter = [&](NodeRef n) { return nodeCenter(n) + offOf(n); };
-
-    int hoveredEdge = -1;
+    hoveredEdge = -1;
     float hoveredEdgeDist = 7.0f;
     for (int e = 0; e < (int)edges.size(); ++e) {
         Edge& E = edges[e];
@@ -291,6 +331,10 @@ void DrawGraphCanvas(AnimCtx& cx) {
             if (d < hoveredEdgeDist) { hoveredEdgeDist = d; hoveredEdge = e; }
         }
     }
+}
+
+// Wires: arrows, condition labels, live flow pulses, the link tug, and Entry's default arrow.
+void GraphCanvas::DrawEdges() {
     auto edgeIsSelected = [&](const Edge& E) {
         return W.SelTransition >= 0 && std::find(E.Transitions.begin(), E.Transitions.end(), W.SelTransition) != E.Transitions.end();
     };
@@ -312,7 +356,6 @@ void DrawGraphCanvas(AnimCtx& cx) {
     constexpr float kFlowLingerSeconds = 1.2f; // a taken transition's pulses fade out over this
     const bool flowOn = live && M.CategoryOn(Glass::MotionCategory::Gradients);
     // Wire tug: the wire just linked sags and springs straight (NodePop's spring, riding on a pulse).
-    const ImGuiID tugId = seed ^ 0x7E6A11C3u;
     float tugSag = 0.0f;
     if (W.TugTransition >= 0 && M.PulseProgress(tugId) < 1.0f)
         tugSag = Glass::SpringImpulse(M.PulseElapsed(tugId, 1.0e3f), Glass::NodePop.p0, Glass::NodePop.p1, Glass::NodePop.p2, 14.0f * W.Zoom);
@@ -397,9 +440,11 @@ void DrawGraphCanvas(AnimCtx& cx) {
             Arrowhead(dl, (a + b) * 0.5f, b - a, 7.0f * std::max(W.Zoom, 0.6f), col);
         }
     }
+}
 
-    // --- nodes -------------------------------------------------------------------------------
-    NodeRef hoveredNode{NodeKind::State, -2};
+// Nodes: hover, live weights and progress, the pop-in, deleted ghosts and the live glide.
+void GraphCanvas::DrawNodes() {
+    hoveredNode = {NodeKind::State, -2};
     for (NodeRef n : nodes) {
         ImVec2 a, b;
         nodeRect(n, a, b);
@@ -557,8 +602,10 @@ void DrawGraphCanvas(AnimCtx& cx) {
     } else {
         W.GlideValid = false;
     }
+}
 
-    // Link preview
+// The link preview, box select and the hint line.
+void GraphCanvas::DrawOverlays() {
     if (W.Linking) {
         const ImVec2 a = nodeCenter(W.LinkFrom);
         dl->AddLine(a, mouse, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::AccentBright, 0.85f)), 2.0f);
@@ -575,153 +622,154 @@ void DrawGraphCanvas(AnimCtx& cx) {
     else if (W.Linking)
         dl->AddText(c0 + ImVec2(12, 10), EditorTheme::U32(EditorTheme::Secondary), "Click a state (or Exit) to finish the transition. Esc cancels.");
     dl->PopClipRect();
+}
 
-    // --- interaction -------------------------------------------------------------------------
-    // New states pop in (NodePop): the spring starts here and the node loop draws it. One NodePop cue per batch,
-    // panned to where the first one lands.
-    auto popIn = [&](const std::vector<int>& fresh) {
-        bool cue = false;
-        for (int i : fresh) {
-            if (i < 0 || i >= (int)Ly.States.size()) continue;
-            M.AnimateToggle(NodeMotionId(W, Ly.States[i].Name) ^ 0x90F0B0B1u, true, false, Glass::NodePop, Glass::NodePop);
-            if (cue) continue;
-            cue = true;
-            const ImGuiViewport* vp = ImGui::GetMainViewport();
-            const ImVec2 at = toScreen(Ly.States[i].Position + glm::vec2(kStateW, kStateH) * 0.5f);
-            EditorSound::Play(EditorSound::Event::NodePop, std::clamp((at.x - vp->Pos.x) / std::max(1.0f, vp->Size.x), 0.0f, 1.0f));
-        }
-    };
-    auto makeTransition = [&](NodeRef from, NodeRef to) {
-        if (to.Kind == NodeKind::Entry || to.Kind == NodeKind::Any) return;
-        if (from.Kind == NodeKind::Exit) return;
-        if (from.Kind == NodeKind::Entry && to.Kind == NodeKind::Exit) return;
-        AC::Transition t;
-        if (from.Kind == NodeKind::Any) t.FromKind = AC::Source::Any;
-        else if (from.Kind == NodeKind::Entry) t.FromKind = AC::Source::Entry;
-        else t.From = Ly.States[from.Index].Name;
-        t.To = to.Kind == NodeKind::Exit ? std::string(AC::kExitState) : Ly.States[to.Index].Name;
-        // Leaving a one-shot is usually "when it ends": start with exit time on.
-        if (from.Kind == NodeKind::State && !Ly.States[from.Index].Loop) { t.HasExitTime = true; t.ExitTime = 1.0f; }
-        if (from.Kind == NodeKind::Entry) t.Duration = 0.0f;
-        Ly.Transitions.push_back(std::move(t));
-        EditorSound::Play(EditorSound::Event::TransitionLink);
-        W.TugTransition = (int)Ly.Transitions.size() - 1; // the new wire sags and springs straight
-        M.Pulse(tugId, 0.6f);
-        W.ClearSelection();
-        W.SelTransition = (int)Ly.Transitions.size() - 1;
-        changed = true;
-    };
-    auto deleteStates = [&](std::vector<int> which) { DeleteStates(cx, Ly, std::move(which)); };
-    // withTransitions: the copies also get the transitions of the originals - between two copied states
-    // they connect the copies; to or from a state that isn't copied they connect the copy to that state.
-    auto duplicateStates = [&](bool withTransitions) {
-        std::vector<std::string> names;
-        for (const auto& s : Ly.States) names.push_back(s.Name);
-        std::vector<int> fresh;
-        std::vector<std::pair<std::string, std::string>> renamed; // original name -> copy name
-        for (int s : W.SelStates) {
-            if (s < 0 || s >= (int)Ly.States.size()) continue;
-            AC::State copy = Ly.States[s];
-            const std::string original = copy.Name;
-            copy.Name = UniqueName(copy.Name, names);
-            names.push_back(copy.Name);
-            renamed.push_back({original, copy.Name});
-            copy.Position += glm::vec2(30.0f, 30.0f);
-            Ly.States.push_back(std::move(copy));
-            fresh.push_back((int)Ly.States.size() - 1);
-        }
-        if (withTransitions) {
-            auto copyOf = [&](const std::string& n) -> const std::string* {
-                for (const auto& r : renamed) if (r.first == n) return &r.second;
-                return nullptr;
-            };
-            const size_t count = Ly.Transitions.size();
-            for (size_t i = 0; i < count; ++i) {
-                const AC::Transition t = Ly.Transitions[i];
-                const std::string* from = t.FromKind == AC::Source::State ? copyOf(t.From) : nullptr;
-                const std::string* to = t.To == AC::kExitState ? nullptr : copyOf(t.To);
-                if (!from && !to) continue;
-                AC::Transition n = t;
-                if (from) n.From = *from;
-                if (to) n.To = *to;
-                Ly.Transitions.push_back(std::move(n));
-            }
-        }
-        if (!fresh.empty()) EditorSound::Play(EditorSound::Event::StateAdd);
-        popIn(fresh);
-        W.ClearSelection();
-        W.SelStates = fresh;
-        changed = true;
-    };
-    // Copy / paste: the selected states with the transitions between them, kept across controllers (the
-    // clipboard outlives the window's controller). Parameters they use are not copied - Lint names any
-    // the target lacks.
-    struct Clipboard { std::vector<AC::State> States; std::vector<AC::Transition> Transitions; };
-    static Clipboard s_clip;
-    auto copyStates = [&]() {
-        s_clip = {};
-        for (int i : W.SelStates)
-            if (i >= 0 && i < (int)Ly.States.size()) s_clip.States.push_back(Ly.States[i]);
-        for (const auto& t : Ly.Transitions) {
-            if (t.FromKind != AC::Source::State) continue;
-            bool from = false, to = false;
-            for (const auto& c : s_clip.States) { from |= c.Name == t.From; to |= c.Name == t.To; }
-            if (from && to) s_clip.Transitions.push_back(t);
-        }
-    };
-    auto pasteStates = [&]() {
-        if (s_clip.States.empty()) return;
-        std::vector<std::string> names;
-        for (const auto& s : Ly.States) names.push_back(s.Name);
-        std::vector<std::pair<std::string, std::string>> renamed;
-        std::vector<int> fresh;
-        for (AC::State copy : s_clip.States) {
-            const std::string original = copy.Name;
-            copy.Name = UniqueName(copy.Name, names);
-            names.push_back(copy.Name);
-            renamed.push_back({original, copy.Name});
-            copy.Position += glm::vec2(30.0f, 30.0f);
-            copy.Motions.resize(D.Tracks.size()); // the target may have a different number of tracks
-            Ly.States.push_back(std::move(copy));
-            fresh.push_back((int)Ly.States.size() - 1);
-        }
-        auto renamedTo = [&](const std::string& n) {
-            for (const auto& r : renamed) if (r.first == n) return r.second;
-            return n;
+// New states pop in (NodePop): the spring starts here and the node loop draws it. One NodePop cue per batch,
+// panned to where the first one lands.
+void GraphCanvas::popIn(const std::vector<int>& fresh) {
+    bool cue = false;
+    for (int i : fresh) {
+        if (i < 0 || i >= (int)Ly.States.size()) continue;
+        M.AnimateToggle(NodeMotionId(W, Ly.States[i].Name) ^ 0x90F0B0B1u, true, false, Glass::NodePop, Glass::NodePop);
+        if (cue) continue;
+        cue = true;
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        const ImVec2 at = toScreen(Ly.States[i].Position + glm::vec2(kStateW, kStateH) * 0.5f);
+        EditorSound::Play(EditorSound::Event::NodePop, std::clamp((at.x - vp->Pos.x) / std::max(1.0f, vp->Size.x), 0.0f, 1.0f));
+    }
+}
+
+void GraphCanvas::makeTransition(NodeRef from, NodeRef to) {
+    if (to.Kind == NodeKind::Entry || to.Kind == NodeKind::Any) return;
+    if (from.Kind == NodeKind::Exit) return;
+    if (from.Kind == NodeKind::Entry && to.Kind == NodeKind::Exit) return;
+    AC::Transition t;
+    if (from.Kind == NodeKind::Any) t.FromKind = AC::Source::Any;
+    else if (from.Kind == NodeKind::Entry) t.FromKind = AC::Source::Entry;
+    else t.From = Ly.States[from.Index].Name;
+    t.To = to.Kind == NodeKind::Exit ? std::string(AC::kExitState) : Ly.States[to.Index].Name;
+    // Leaving a one-shot is usually "when it ends": start with exit time on.
+    if (from.Kind == NodeKind::State && !Ly.States[from.Index].Loop) { t.HasExitTime = true; t.ExitTime = 1.0f; }
+    if (from.Kind == NodeKind::Entry) t.Duration = 0.0f;
+    Ly.Transitions.push_back(std::move(t));
+    EditorSound::Play(EditorSound::Event::TransitionLink);
+    W.TugTransition = (int)Ly.Transitions.size() - 1; // the new wire sags and springs straight
+    M.Pulse(tugId, 0.6f);
+    W.ClearSelection();
+    W.SelTransition = (int)Ly.Transitions.size() - 1;
+    changed = true;
+}
+
+// withTransitions: the copies also get the transitions of the originals - between two copied states
+// they connect the copies; to or from a state that isn't copied they connect the copy to that state.
+void GraphCanvas::duplicateStates(bool withTransitions) {
+    std::vector<std::string> names;
+    for (const auto& s : Ly.States) names.push_back(s.Name);
+    std::vector<int> fresh;
+    std::vector<std::pair<std::string, std::string>> renamed; // original name -> copy name
+    for (int s : W.SelStates) {
+        if (s < 0 || s >= (int)Ly.States.size()) continue;
+        AC::State copy = Ly.States[s];
+        const std::string original = copy.Name;
+        copy.Name = UniqueName(copy.Name, names);
+        names.push_back(copy.Name);
+        renamed.push_back({original, copy.Name});
+        copy.Position += glm::vec2(30.0f, 30.0f);
+        Ly.States.push_back(std::move(copy));
+        fresh.push_back((int)Ly.States.size() - 1);
+    }
+    if (withTransitions) {
+        auto copyOf = [&](const std::string& n) -> const std::string* {
+            for (const auto& r : renamed) if (r.first == n) return &r.second;
+            return nullptr;
         };
-        for (AC::Transition t : s_clip.Transitions) {
-            t.From = renamedTo(t.From);
-            t.To = renamedTo(t.To);
-            Ly.Transitions.push_back(std::move(t));
+        const size_t count = Ly.Transitions.size();
+        for (size_t i = 0; i < count; ++i) {
+            const AC::Transition t = Ly.Transitions[i];
+            const std::string* from = t.FromKind == AC::Source::State ? copyOf(t.From) : nullptr;
+            const std::string* to = t.To == AC::kExitState ? nullptr : copyOf(t.To);
+            if (!from && !to) continue;
+            AC::Transition n = t;
+            if (from) n.From = *from;
+            if (to) n.To = *to;
+            Ly.Transitions.push_back(std::move(n));
         }
-        EditorSound::Play(EditorSound::Event::StateAdd);
-        popIn(fresh);
-        W.ClearSelection();
-        W.SelStates = fresh;
-        changed = true;
-    };
-    auto createState = [&](glm::vec2 at, bool blendTree) {
-        std::vector<std::string> names;
-        for (const auto& s : Ly.States) names.push_back(s.Name);
-        AC::State s;
-        s.Name = UniqueName(blendTree ? "Blend Tree" : "New State", names);
-        s.Motions.resize(D.Tracks.size());
-        if (blendTree) {
-            std::string param;
-            for (const auto& p : D.Parameters) if (p.Type == AC::ParamType::Float) { param = p.Name; break; }
-            s.Motions[0].BlendParam = param;
-            s.Motions[0].Children = {{"", 0.0f, 1.0f}, {"", 1.0f, 1.0f}};
-        }
-        s.Position = at - glm::vec2(kStateW, kStateH) * 0.5f;
-        Ly.States.push_back(std::move(s));
-        EditorSound::Play(EditorSound::Event::StateAdd);
-        popIn({(int)Ly.States.size() - 1});
-        if (Ly.States.size() == 1) Ly.DefaultState = Ly.States[0].Name; // implicit: no DefaultState sound
-        W.ClearSelection();
-        W.SelStates = {(int)Ly.States.size() - 1};
-        changed = true;
-    };
+    }
+    if (!fresh.empty()) EditorSound::Play(EditorSound::Event::StateAdd);
+    popIn(fresh);
+    W.ClearSelection();
+    W.SelStates = fresh;
+    changed = true;
+}
 
+void GraphCanvas::copyStates() {
+    s_clip = {};
+    for (int i : W.SelStates)
+        if (i >= 0 && i < (int)Ly.States.size()) s_clip.States.push_back(Ly.States[i]);
+    for (const auto& t : Ly.Transitions) {
+        if (t.FromKind != AC::Source::State) continue;
+        bool from = false, to = false;
+        for (const auto& c : s_clip.States) { from |= c.Name == t.From; to |= c.Name == t.To; }
+        if (from && to) s_clip.Transitions.push_back(t);
+    }
+}
+
+void GraphCanvas::pasteStates() {
+    if (s_clip.States.empty()) return;
+    std::vector<std::string> names;
+    for (const auto& s : Ly.States) names.push_back(s.Name);
+    std::vector<std::pair<std::string, std::string>> renamed;
+    std::vector<int> fresh;
+    for (AC::State copy : s_clip.States) {
+        const std::string original = copy.Name;
+        copy.Name = UniqueName(copy.Name, names);
+        names.push_back(copy.Name);
+        renamed.push_back({original, copy.Name});
+        copy.Position += glm::vec2(30.0f, 30.0f);
+        copy.Motions.resize(D.Tracks.size()); // the target may have a different number of tracks
+        Ly.States.push_back(std::move(copy));
+        fresh.push_back((int)Ly.States.size() - 1);
+    }
+    auto renamedTo = [&](const std::string& n) {
+        for (const auto& r : renamed) if (r.first == n) return r.second;
+        return n;
+    };
+    for (AC::Transition t : s_clip.Transitions) {
+        t.From = renamedTo(t.From);
+        t.To = renamedTo(t.To);
+        Ly.Transitions.push_back(std::move(t));
+    }
+    EditorSound::Play(EditorSound::Event::StateAdd);
+    popIn(fresh);
+    W.ClearSelection();
+    W.SelStates = fresh;
+    changed = true;
+}
+
+void GraphCanvas::createState(glm::vec2 at, bool blendTree) {
+    std::vector<std::string> names;
+    for (const auto& s : Ly.States) names.push_back(s.Name);
+    AC::State s;
+    s.Name = UniqueName(blendTree ? "Blend Tree" : "New State", names);
+    s.Motions.resize(D.Tracks.size());
+    if (blendTree) {
+        std::string param;
+        for (const auto& p : D.Parameters) if (p.Type == AC::ParamType::Float) { param = p.Name; break; }
+        s.Motions[0].BlendParam = param;
+        s.Motions[0].Children = {{"", 0.0f, 1.0f}, {"", 1.0f, 1.0f}};
+    }
+    s.Position = at - glm::vec2(kStateW, kStateH) * 0.5f;
+    Ly.States.push_back(std::move(s));
+    EditorSound::Play(EditorSound::Event::StateAdd);
+    popIn({(int)Ly.States.size() - 1});
+    if (Ly.States.size() == 1) Ly.DefaultState = Ly.States[0].Name; // implicit: no DefaultState sound
+    W.ClearSelection();
+    W.SelStates = {(int)Ly.States.size() - 1};
+    changed = true;
+}
+
+// Wheel zoom, clicks (select, link, box), the context menu's opening, middle-drag pan, node drags.
+void GraphCanvas::HandleMouse() {
     if (canvasHovered) {
         // Zoom about the mouse.
         if (io.MouseWheel != 0.0f) {
@@ -815,7 +863,9 @@ void DrawGraphCanvas(AnimCtx& cx) {
                 }
         }
     }
+}
 
+void GraphCanvas::DrawContextMenu() {
     if (ImGui::BeginPopup("##animctx")) {
         const NodeRef n = W.ContextNode;
         // The document can change under an open menu (a reload from disk, an undo): what it was opened on is gone.
@@ -854,27 +904,50 @@ void DrawGraphCanvas(AnimCtx& cx) {
         }
         ImGui::EndPopup();
     }
+}
 
-    // Keyboard, while the window has focus and no text field does.
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !io.WantTextInput) {
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) { W.Linking = false; W.BoxSelecting = false; }
-        if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
-            if (!W.SelStates.empty()) deleteStates(W.SelStates);
-            else if (W.SelTransition >= 0 && W.SelTransition < (int)Ly.Transitions.size()) {
-                Ly.Transitions.erase(Ly.Transitions.begin() + W.SelTransition);
-                EditorSound::Play(EditorSound::Event::TransitionBreak);
-                W.ClearSelection();
-                changed = true;
-            }
+// Keyboard, while the window has focus and no text field does.
+void GraphCanvas::HandleKeys() {
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || io.WantTextInput) return;
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) { W.Linking = false; W.BoxSelecting = false; }
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        if (!W.SelStates.empty()) deleteStates(W.SelStates);
+        else if (W.SelTransition >= 0 && W.SelTransition < (int)Ly.Transitions.size()) {
+            Ly.Transitions.erase(Ly.Transitions.begin() + W.SelTransition);
+            EditorSound::Play(EditorSound::Event::TransitionBreak);
+            W.ClearSelection();
+            changed = true;
         }
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates(io.KeyShift);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !W.SelStates.empty()) copyStates();
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) pasteStates();
-        if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) W.FramePending = true;
     }
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates(io.KeyShift);
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !W.SelStates.empty()) copyStates();
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) pasteStates();
+    if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) W.FramePending = true;
+}
+
+} // namespace
+
+namespace AnimatorUI {
+
+// Middle: the state graph - nodes, edges, linking, selection, the context menu.
+void DrawGraphCanvas(AnimCtx& cx) {
+    GraphCanvas g(cx);
+    const float canvasW = std::max(100.0f, ImGui::GetContentRegionAvail().x - cx.rightW - ImGui::GetStyle().ItemSpacing.x);
+    ImGui::BeginChild("##animcanvas", ImVec2(canvasW, cx.bodyH), ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove);
+    g.Begin();
+    g.FrameOrCenter();
+    g.StartMotion();
+    g.DrawGrid();
+    g.LayoutEdges();
+    g.DrawEdges();
+    g.DrawNodes();
+    g.DrawOverlays();
+    g.HandleMouse();
+    g.DrawContextMenu();
+    g.HandleKeys();
     ImGui::EndChild();
     ImGui::SameLine();
-
 }
 
 } // namespace AnimatorUI
