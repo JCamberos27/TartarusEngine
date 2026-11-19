@@ -1124,8 +1124,6 @@ void TestCameraFrustumValidation() {
     CHECK(cams == 1);
 }
 
-// The player's acceleration: 0 = the move is the input (as before); otherwise an exponential approach
-// that lands in the same place whatever the frame rate, and arrives rather than creeping.
 // The clip pickers' search: every word, any case, anywhere in the path.
 void TestClipFilterMatch() {
     using EditorInternal::ClipFilterMatch;
@@ -1162,6 +1160,8 @@ void TestFramePacing() {
     CHECK(std::abs(stall + unpaced - (0.1 + 0.4 * p)) < 1e-9);
 }
 
+// The player's acceleration: 0 = the move is the input (as before); otherwise an exponential approach
+// that lands in the same place whatever the frame rate, and arrives rather than creeping.
 void TestPlayerAcceleration() {
     // Body clips have different root travel by direction; sprint input must have equal speed.
     for (const glm::vec3 direction : {glm::vec3(0,0,1),glm::vec3(0,0,-1),glm::vec3(1,0,0),
