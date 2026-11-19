@@ -234,4 +234,7 @@ struct Snapshot {
     std::vector<float> Lines; // FirstPersonBodyMotion::Lines() (the mmplayer scenario draws them)
 };
 Snapshot& Info();
+// Whether the player's body fills Info() (FirstPersonBody::Start): only something that reads it asks (the npc tests). Filled
+// every frame it cost the clip name, a copy of the drawn lines and the pose, and three feature arrays, read by nothing in Play.
+bool& Wanted();
 } // namespace MmPlayerDebug

@@ -25,6 +25,7 @@
 
 
 NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "labloco" : scenario) {
+    MmPlayerDebug::Wanted() = true; // the player's motion matching snapshot (read by the mm scenarios)
     if (m_Scenario == "deaths") m_Duration = 70.0f;
     if (m_Scenario == "feet") m_Duration = 10.0f;
     if (m_Scenario == "stopsteps") m_Duration = StopStepsSeconds();
