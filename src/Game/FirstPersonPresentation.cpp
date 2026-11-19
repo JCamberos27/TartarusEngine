@@ -103,13 +103,19 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
         MuzzleEffectSettings muzzle;
         if(!slot.first->empty()) {
             std::string why;
-            if(!Gameplay::ResolveWeaponPrefab(*slot.first,set,why,&muzzle)) { SetError(why); return false; }
+            if(!Gameplay::ResolveWeaponPrefab(*slot.first,set,why,&muzzle)) {
+                // A later slot failing leaves no half-filled slot lists behind (SlotCount() would report slots on an
+                // inactive presentation).
+                Stop(world);
+                SetError(why);
+                return false;
+            }
         }
         if(!set.empty()) {
             m_SlotSets.push_back(set);m_SlotPrefabs.push_back(*slot.first);m_SlotMuzzles.push_back(muzzle);m_SlotConfigured.push_back(configured);
             std::error_code ec;
             m_SlotPrefabTimes.push_back(slot.first->empty()?std::filesystem::file_time_type{}:
-                std::filesystem::last_write_time(ProjectPaths::Resolve(*slot.first),ec));
+                std::filesystem::last_write_time(std::filesystem::u8path(ProjectPaths::Resolve(*slot.first)),ec));
         }
     }
     if (m_SlotSets.empty()) return true;
@@ -228,10 +234,10 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
     {
         std::error_code ec;
         m_RecoilFileTime = m_Set.RecoilProfile.empty() ? std::filesystem::file_time_type{} :
-            std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.RecoilProfile), ec);
+            std::filesystem::last_write_time(std::filesystem::u8path(ProjectPaths::Resolve(m_Set.RecoilProfile)), ec);
         ec.clear();
         m_ShakeFileTime=m_Set.CameraShakeProfile.empty()?std::filesystem::file_time_type{}:
-            std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.CameraShakeProfile),ec);
+            std::filesystem::last_write_time(std::filesystem::u8path(ProjectPaths::Resolve(m_Set.CameraShakeProfile)),ec);
     }
     if (!FinitePositive(config.ViewModelScale)) {
         SetError("View Model Scale must be finite and greater than zero");
@@ -444,8 +450,9 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_WeaponSocketWarned = false;
     m_Equipped = true;
     m_HiddenApplied = false;
-    m_Ammo = m_Set.Gameplay.Magazine;
     m_Chambered = true;
+    m_HaveRestGrip = false; // the next gun's grip is its own
+    m_SpareMagGap = -1.0f;
     m_CycleWait = 0.0f;
     m_CycleSeen = false;
     m_StopReload = false;
@@ -1502,7 +1509,7 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     m_ReloadPoll = 0.0f;
     if (m_Slot < (int)m_SlotPrefabs.size() && !m_SlotPrefabs[m_Slot].empty()) {
         std::error_code prefabError;
-        const auto time = std::filesystem::last_write_time(ProjectPaths::Resolve(m_SlotPrefabs[m_Slot]), prefabError);
+        const auto time = std::filesystem::last_write_time(std::filesystem::u8path(ProjectPaths::Resolve(m_SlotPrefabs[m_Slot])), prefabError);
         if (!prefabError && time != m_SlotPrefabTimes[m_Slot]) {
             std::string set, why; MuzzleEffectSettings muzzle;
             if (Gameplay::ResolveWeaponPrefab(m_SlotPrefabs[m_Slot], set, why, &muzzle)) {
@@ -1518,12 +1525,12 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     if (ec) return;
     std::filesystem::file_time_type recoilStamp{};
     if (!m_Set.RecoilProfile.empty()) {
-        recoilStamp = std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.RecoilProfile), ec);
+        recoilStamp = std::filesystem::last_write_time(std::filesystem::u8path(ProjectPaths::Resolve(m_Set.RecoilProfile)), ec);
         if (ec) recoilStamp = {};
     }
     std::filesystem::file_time_type shakeStamp{};
     if(!m_Set.CameraShakeProfile.empty()) {
-        shakeStamp=std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.CameraShakeProfile),ec);
+        shakeStamp=std::filesystem::last_write_time(std::filesystem::u8path(ProjectPaths::Resolve(m_Set.CameraShakeProfile)),ec);
         if(ec) shakeStamp={};
     }
     if (stamp == m_SetFileTime && recoilStamp == m_RecoilFileTime && shakeStamp==m_ShakeFileTime) return;
@@ -2264,7 +2271,7 @@ void FirstPersonPresentation::LateUpdate(World& world, Camera& camera) {
         m_KickOffset+=camera.Position-position;
         m_KickApplied=true;
     }
-    PlaceRigs(world, camera,&placementCamera);
+    PlaceRigs(world, camera,&placementCamera,/*finalPass=*/true);
     for (; m_PendingShots > 0; --m_PendingShots) FireShot();
     for (; m_PendingEjects > 0; --m_PendingEjects) Eject();
 }
@@ -2293,13 +2300,13 @@ void FirstPersonPresentation::ApplyHidden(World& world) {
 // the left hand sliding on the handguard. LateUpdate runs it again once they have.
 void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, const glm::quat& armsRot,
                                                   const glm::vec3& weaponPos, const glm::quat& weaponRot) {
+    m_SpareMagGap = -1.0f; // none this frame unless measured below
     if (!m_ArmsModel || !m_WeaponModel || m_Set.SpareMagazineBones.empty()) return;
     glm::mat4 hand(1.0f);
     if (!m_ArmsModel->NodeTransform(m_Set.Procedural.IK.LeftHand, hand)) return;
     const glm::vec3 handWorld = armsPos + armsRot * (m_Scale * glm::vec3(hand[3]));
     const float scale = std::max(m_Scale, 1e-6f);
     std::vector<int> hide;
-    m_SpareMagGap = -1.0f;
     for (const std::string& bone : m_Set.SpareMagazineBones) {
         glm::mat4 g(1.0f);
         const int n = m_WeaponModel->NodeIndex(bone);
@@ -2315,14 +2322,10 @@ void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, cons
     // The world copy's own model (PoseWorldWeapon re-applies its pose each frame) hides the same: the clip, not the world
     // body's hand, decides whether the hand has it.
     if (m_WorldWeaponModel) m_WorldWeaponModel->SetHiddenNodes(hide);
-    // Re-derive this frame's palette from the animator's pose, so it shows or goes this frame.
-    if (m_WeaponModel->HasExternalPose()) {
-        const std::vector<LocalTRS> pose = m_WeaponModel->AppliedLocalPose();
-        m_WeaponModel->ApplyLocalPose(pose);
-    }
+    // (SetHiddenNodes re-derives the palette of an externally posed model itself: it shows or goes this frame.)
 }
 
-void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const Camera* placementCamera) {
+void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const Camera* placementCamera,bool finalPass) {
     const Camera& placement=placementCamera?*placementCamera:camera;
     const glm::quat cameraRotation = CameraRotation(placement);
     // Without IK (switched off, or a rig lacking the gun bone or arm chains) the procedural pose
@@ -2465,9 +2468,12 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
     world.Registry.get<TransformComponent>(m_Weapon).Scale = glm::vec3(m_Scale);
     UpdateSpareMagazine(position, rigRotation, weaponPosition, weaponRotation);
 
-    // Where the barrel points: down the bore from the muzzle to the first thing it meets.
-    m_AimPointValid = false;
-    m_AimHit = false;
+    // Where the barrel points: down the bore from the muzzle to the first thing it meets. (Once a frame: Update's early
+    // placement measured the sight line too - it settled at twice the rate - and cast a second 300 m ray nothing read.)
+    if (finalPass) {
+        m_AimPointValid = false;
+        m_AimHit = false;
+    }
     glm::mat4 rootPose(1.0f);
     m_RootSeenValid = false;
     if (m_WeaponModel->NodeTransform(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot, rootPose)) {
@@ -2497,7 +2503,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
         m_RootSeen = seen * W;
         m_RootSeenValid = true;
     }
-    if (m_HaveMuzzle && m_RootSeenValid) {
+    if (finalPass && m_HaveMuzzle && m_RootSeenValid) {
         const glm::mat4 W = m_RootWorld, SW = m_RootSeen;
         const glm::vec3 muzzle = glm::vec3(SW * glm::vec4(m_MuzzleLocal, 1.0f));
         const glm::vec3 bore = glm::normalize(glm::mat3(SW) * m_BoreLocal);

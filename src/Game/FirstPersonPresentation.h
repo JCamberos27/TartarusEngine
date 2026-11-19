@@ -262,7 +262,9 @@ private:
     bool SetupIK();
     void SetupSway();
     void WriteIK();
-    void PlaceRigs(World& world, const Camera& camera,const Camera* placementCamera=nullptr);
+    // `finalPass`: also measure the sight line and cast the bore ray (the frame's last placement only - LateUpdate's, once the
+    // animators have posed: the shots fired after it read it).
+    void PlaceRigs(World& world, const Camera& camera,const Camera* placementCamera=nullptr,bool finalPass=false);
     void ApplyHidden(World& world);
     void WriteAdsHold(IKRigComponent& rig, const AdsCarrySample& carry);
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
