@@ -1,6 +1,5 @@
 #pragma once
 
-#include "AnimatorController.h"
 #include "IK.h"
 
 #include <array>
@@ -11,89 +10,14 @@
 
 struct FirstPersonBodyComponent;
 
-// The contract between the true-first-person body (FirstPersonBody) and the Animator Controller
-// that animates it: the parameters it drives, the states it watches, the tag it reads, and the
-// bones it poses. FirstPersonBody.cpp uses these names, and FirstPersonBodyValidate checks a
-// setup against them - so a missing state or bone is reported instead of silently doing nothing.
-// The reference controller is project/assets/Animations/Controllers/fps_body_locomotion.controller.
+// The true-first-person body's (FirstPersonBody's) contract with its rig: the bones it poses, the Bone Map that renames
+// them, and the setup checks (Validate), so a missing bone or piece is reported instead of silently doing nothing.
+// Motion matching poses the body (since Phase 6): no Animator Controller drives it, so there are no parameters, states or
+// tags to agree on.
 namespace FPBody {
 
-// Parameters the body sets every frame (Float unless noted).
-inline constexpr const char* kMoveX = "MoveX";           // the input in the body's frame, m/s, smoothed
-inline constexpr const char* kMoveY = "MoveY";
-inline constexpr const char* kSpeed = "Speed";           // |MoveX, MoveY|
-inline constexpr const char* kSprint = "Sprint";         // Bool
-inline constexpr const char* kGrounded = "Grounded";     // Bool
-inline constexpr const char* kAirborne = "Airborne";     // Bool: off the ground for > 0.15 s
-inline constexpr const char* kCrouched = "Crouched";     // Bool
-inline constexpr const char* kJump = "Jump";             // Trigger
-inline constexpr const char* kTurning = "Turning";       // Bool: turning on the spot
-inline constexpr const char* kTurnAngle = "TurnAngle";   // degrees the view is off the body's heading
-inline constexpr const char* kMoving = "Moving";         // Bool: the input asks to move
-inline constexpr const char* kStart = "Start";           // Trigger: a push-off clip
-inline constexpr const char* kStop = "Stop";             // Trigger: a braking clip
-inline constexpr const char* kStopRun = "StopRun";       // Trigger: a braking clip from a sprint
-inline constexpr const char* kStartX = "StartX";         // Float: the push-off's direction
-inline constexpr const char* kStartY = "StartY";
-inline constexpr const char* kStopX = "StopX";           // Float: the braking direction
-inline constexpr const char* kStopY = "StopY";
-inline constexpr const char* kCrouchDown = "CrouchDown"; // Trigger: stand -> crouch while still
-inline constexpr const char* kCrouchUp = "CrouchUp";     // Trigger: crouch -> stand while still
-// The richer graph (all optional: the body sets them and the graph may leave them unread).
-inline constexpr const char* kStartGait = "StartGait";             // Float: 0 walk, 1 jog, 2 run
-inline constexpr const char* kStopGait = "StopGait";
-inline constexpr const char* kStartTurn = "StartTurn";             // Float: a start that turns the body, + left, in 45 degree steps
-inline constexpr const char* kStartTurnAmount = "StartTurnAmount"; // Float: |StartTurn|, 1..4
-inline constexpr const char* kStartDistance = "StartDistance";     // Float: metres since the start (distance matching)
-inline constexpr const char* kStopDistance = "StopDistance";       // Float: metres still to go in the stop
-inline constexpr const char* kPivotDistance = "PivotDistance";     // Float: metres from the pivot's turnaround
-inline constexpr const char* kPivot = "Pivot";                     // Trigger: the travel reversed
-inline constexpr const char* kPivotX = "PivotX";                   // Float: the direction it was going
-inline constexpr const char* kPivotY = "PivotY";
-inline constexpr const char* kPivotGait = "PivotGait";
-inline constexpr const char* kStep = "Step";                       // Trigger: a tap, one small step
-inline constexpr const char* kStepX = "StepX";
-inline constexpr const char* kStepY = "StepY";
-inline constexpr const char* kFidget = "Fidget";                   // Trigger: an idle fidget
-inline constexpr const char* kFidgetIndex = "FidgetIndex";         // Float: which (an integer)
-inline constexpr const char* kSprintRate = "SprintRate";           // Float: the sprint loop's play rate
-inline constexpr const char* kStartOff = "StartOff";               // Bool: the travel swung off the start's push-off (to the loop)
-inline constexpr const char* kLandImpact = "LandImpact";           // Float: m/s fallen at the last touch-down (light vs heavy land)
-inline constexpr float kSprintClipSpeed = 4.25f;                   // m/s the sprint clip (AM_Loco_Run_Fast_01) travels
-// Optional: how much faster than authored the gait plays (the Locomotion state's speed parameter), so the
-// feet keep up with a player moving faster than the clips travel (Player Run / Sprint Speed). 1 = authored.
-inline constexpr const char* kPlayRate = "PlayRate";
-
-// States the body watches by name.
-inline constexpr const char* kStateLocomotion = "Locomotion";
-// Not a controller state: what BodyDebug reports while motion matching poses the body.
+// Not a controller state: what BodyDebug reports as the body's state while motion matching poses it.
 inline constexpr const char* kStateMotionMatching = "MotionMatching";
-inline constexpr const char* kStateJump = "Jump";
-inline constexpr const char* kStateFall = "Fall";
-inline constexpr const char* kStateLand = "Land";
-inline constexpr const char* kStateTurn = "Turn";
-inline constexpr const char* kStateCrouchTurn = "CrouchTurn";
-// A turn on the spot fading back into its loop: a start may cut in (the loop's idle under the fade is no pose to keep).
-inline bool TurnFadeToLoop(const std::string& from, const std::string& to) {
-    return (from == kStateTurn || from == kStateCrouchTurn) && (to == kStateLocomotion || to == "CrouchLoco");
-}
-inline constexpr const char* kStateStart = "Start";
-inline constexpr const char* kStateStop = "Stop";
-inline constexpr const char* kStateStopRun = "StopRun";
-inline constexpr const char* kStateCrouchLoco = "CrouchLoco";
-inline constexpr const char* kStateCrouchDown = "CrouchDown";
-inline constexpr const char* kStateCrouchUp = "CrouchUp";
-inline constexpr const char* kStateSprint = "Sprint";
-// Tags the body reads to know what kind of state plays (a graph may have several of each).
-inline constexpr const char* kTagStart = "Start";
-inline constexpr const char* kTagStartTurn = "StartTurn"; // a start whose yaw turns the body
-inline constexpr const char* kTagStop = "Stop";
-inline constexpr const char* kTagPivot = "Pivot";
-inline constexpr const char* kTagStep = "Step";
-inline constexpr const char* kTagFidget = "Fidget";
-
-// The tag foot IK reads: on the states where the feet are off the ground (Jump, Fall).
-inline constexpr const char* kTagAirborne = "Airborne";
 
 // Bones the body poses (the UE5 mannequin's names, which the Quantum body and the first-person
 // arms share).
@@ -119,30 +43,16 @@ inline const std::string& MappedBone(const std::map<std::string, std::string>& m
 }
 
 // Which body option needs a name.
-enum class Feature { Core, Turning, StartStop, Crouch, FootIK, WeaponArms, SpineAim };
+enum class Feature { Core, FootIK, WeaponArms, SpineAim };
 const char* FeatureName(Feature f);
 bool FeatureEnabled(Feature f, const FirstPersonBodyComponent& cfg);
 
-struct ParamSpec {
-    const char* Name;
-    AnimatorController::ParamType Type;
-    Feature Needed;
-    const char* What;
-};
-struct StateSpec {
-    const char* Name;
-    Feature Needed;
-    const char* What;
-    bool Required; // false: the graph may route around it (the body only reads it)
-};
 struct BoneSpec {
     const char* Name;
     Feature Needed;
     const char* What;
 };
-// The full tables (the documentation and the validator both read these).
-const std::vector<ParamSpec>& Params();
-const std::vector<StateSpec>& States();
+// The full table (the documentation and the validator both read it).
 const std::vector<BoneSpec>& Bones();
 
 enum class Severity { Ok = 0, Info, Warning, Error };
@@ -158,9 +68,6 @@ struct ValidationInput {
     const FirstPersonBodyComponent* Config = nullptr;
     bool HasPieces = false;                // rigged pieces under the body root
     bool HasDriverPiece = false;           // one with the whole skeleton (the pelvis, the head, a hand): motion matching's driver
-    // Optional (motion matching needs no controller since Phase 6): a controller on the driver, whose parameters are then checked.
-    const AnimatorController* Controller = nullptr; // the driver's controller, loaded (null = none / not loaded)
-    bool ControllerSet = false;            // the driver piece names a controller path
     std::function<bool(const std::string&)> HasBone; // on the driver's model (empty = skip bone checks)
     std::vector<std::string> PieceNames;   // names of the pieces (for Arms Piece / Hidden Parts matching)
     int BodyCount = 1;                     // First Person Body components in the scene

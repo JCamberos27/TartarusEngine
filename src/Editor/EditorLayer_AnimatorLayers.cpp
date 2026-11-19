@@ -395,19 +395,11 @@ void DrawLayersAndParameters(AnimCtx& cx) {
             char tab[48];
             std::snprintf(tab, sizeof tab, problems ? "Lint (%d)###lint" : "Lint###lint", problems);
             if (ImGui::BeginTabItem(tab)) {
-                static int s_against = 0; // 0 none, 1 body, 2 weapon
+                static int s_against = 0; // 0 none, 1 weapon (the body is posed by motion matching: no controller contract)
                 ImGui::SetNextItemWidth(-FLT_MIN);
-                ImGui::Combo("##against", &s_against, "Check the graph only\0Also check it as a first-person body controller\0Also check it as a first-person weapon controller\0");
+                ImGui::Combo("##against", &s_against, "Check the graph only\0Also check it as a first-person weapon controller\0");
                 std::vector<FPBody::Check> contract;
                 if (s_against == 1) {
-                    FirstPersonBodyComponent all;
-                    all.TurnThreshold = 55.0f; all.StartStopClips = true; all.CrouchHeight = 1.2f; all.FootIK = true; all.WeaponArms = true;
-                    FPBody::ValidationInput in;
-                    in.Config = &all;
-                    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
-                    in.Controller = &D;
-                    contract = FPBody::Validate(in);
-                } else if (s_against == 2) {
                     FirstPersonAnimationSet set;
                     set.Controller = W.Rel;
                     FirstPersonWeaponCheckInput in;
@@ -441,7 +433,7 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                     ImGui::PopID();
                 }
                 if (!contract.empty()) {
-                    EditorUIPrimitives::SectionHeader(s_against == 1 ? "As a body controller" : "As a weapon controller");
+                    EditorUIPrimitives::SectionHeader("As a weapon controller");
                     for (const auto& c : contract) {
                         ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
                         const char* icon = ICON_FA_CIRCLE_INFO;

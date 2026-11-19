@@ -2229,7 +2229,7 @@ void TestFirstPersonBodyBoneMap() {
     cfg.FootIK = true;
     FPBody::ValidationInput in;
     in.Config = &cfg;
-    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
+    in.HasPieces = in.HasDriverPiece = true;
     const std::set<std::string> rigBones = {"head", "Hips", "thigh_l", "calf_l", "LeftFoot", "thigh_r", "calf_r", "RightFoot"};
     in.HasBone = [&](const std::string& b) { return rigBones.count(b) > 0; };
     auto hasBoneWarning = [](const std::vector<FPBody::Check>& r) {
@@ -3271,23 +3271,14 @@ void TestFirstPersonBodyClothingHide() {
     CHECK(low == 0);
 }
 
-// The body's setup check: a controller built from the contract tables passes; one missing piece is named.
+// The body's setup check: a complete setup passes; a missing bone (through the Bone Map, the Head Bone too) and piece are named.
 void TestFirstPersonBodyValidate() {
     FirstPersonBodyComponent cfg;
-    cfg.TurnThreshold = 55.0f; cfg.StartStopClips = true; cfg.CrouchHeight = 1.2f; cfg.FootIK = true; cfg.WeaponArms = true;
+    cfg.FootIK = true; cfg.WeaponArms = true;
     cfg.SpineAim = 1.0f;
-    AnimatorController full;
-    for (const auto& p : FPBody::Params()) full.Parameters.push_back({p.Name, p.Type, 0.0f});
-    for (const auto& st : FPBody::States()) {
-        AnimatorController::State state;
-        state.Name = st.Name;
-        if (state.Name == FPBody::kStateJump || state.Name == FPBody::kStateFall) state.Tags.push_back(FPBody::kTagAirborne);
-        full.Layers[0].States.push_back(state);
-    }
     FPBody::ValidationInput in;
     in.Config = &cfg;
-    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
-    in.Controller = &full;
+    in.HasPieces = in.HasDriverPiece = true;
     in.HasBone = [](const std::string&) { return true; };
     in.PieceNames = {"Quantum_Head", "Quantum_Arms"};
     auto count = [](const std::vector<FPBody::Check>& c, FPBody::Severity level) {
@@ -3300,23 +3291,23 @@ void TestFirstPersonBodyValidate() {
         return false;
     };
     std::vector<FPBody::Check> r = FPBody::Validate(in);
-    // Nothing to report (the root-motion note went with the legacy controller path, Phase 6).
     CHECK(count(r, FPBody::Severity::Error) == 0 && count(r, FPBody::Severity::Warning) == 0);
 
-    // A missing parameter, state, bone, tag and piece are each named.
-    AnimatorController broken = full;
-    broken.Parameters.erase(std::remove_if(broken.Parameters.begin(), broken.Parameters.end(),
-                            [](const AnimatorController::Parameter& p) { return p.Name == FPBody::kTurnAngle; }), broken.Parameters.end());
-    auto& sts = broken.Layers[0].States;
-    sts.erase(std::remove_if(sts.begin(), sts.end(), [](const AnimatorController::State& st) { return st.Name == FPBody::kStateStop; }), sts.end());
-    for (auto& st : sts) st.Tags.clear();
-    in.Controller = &broken;
+    // A missing bone and piece are each named.
     in.HasBone = [](const std::string& b) { return b != "foot_l"; };
     in.PieceNames = {"Quantum_Head"};
     r = FPBody::Validate(in);
-    CHECK(has(r, "'TurnAngle'") && has(r, "state 'Stop'") && has(r, "'foot_l'") && has(r, "'Airborne' tag") && has(r, "'Arms' (Arms Piece)"));
+    CHECK(has(r, "'foot_l'") && has(r, "'Arms' (Arms Piece)"));
     CHECK(r.front().Level == FPBody::Severity::Warning);
+    // The Head Bone is looked up through the Bone Map, as the body finds it.
+    cfg.BoneMap = "head = Head";
+    in.HasBone = [](const std::string& b) { return b != "head"; };
+    in.PieceNames = {"Quantum_Head", "Quantum_Arms"};
+    CHECK(!has(FPBody::Validate(in), "(Head Bone)"));
+    cfg.BoneMap.clear();
+    CHECK(has(FPBody::Validate(in), "(Head Bone)"));
     // A modular body's hands are part of the arms (under a long sleeve they are all there is of them).
+    in.HasBone = [](const std::string&) { return true; };
     in.PieceNames = {"Quantum_Head", "Hands"};
     CHECK(!has(FPBody::Validate(in), "(Arms Piece)"));
     FirstPersonBodyComponent armsCfg;
@@ -3324,22 +3315,7 @@ void TestFirstPersonBodyValidate() {
     armsCfg.HandsPiece.clear();
     CHECK(!FPBody::IsArmsPiece(armsCfg, "Hands") && FPBody::IsArmsPiece(armsCfg, "Arms"));
 
-    // Features that are off need nothing: a bare controller is fine for a body with every option off.
     FirstPersonBodyComponent plain;
-    AnimatorController bare;
-    bare.Parameters = {{FPBody::kMoveX, AnimatorController::ParamType::Float, 0}, {FPBody::kMoveY, AnimatorController::ParamType::Float, 0},
-                       {FPBody::kSpeed, AnimatorController::ParamType::Float, 0}, {FPBody::kSprint, AnimatorController::ParamType::Bool, 0},
-                       {FPBody::kGrounded, AnimatorController::ParamType::Bool, 0}, {FPBody::kAirborne, AnimatorController::ParamType::Bool, 0},
-                       {FPBody::kJump, AnimatorController::ParamType::Trigger, 0}};
-    AnimatorController::State loco; loco.Name = FPBody::kStateLocomotion;
-    AnimatorController::State jump; jump.Name = FPBody::kStateJump;
-    AnimatorController::State fall; fall.Name = FPBody::kStateFall;
-    AnimatorController::State land; land.Name = FPBody::kStateLand;
-    bare.Layers[0].States = {loco, jump, fall, land};
-    FPBody::ValidationInput in2;
-    in2.Config = &plain; in2.HasPieces = in2.HasDriverPiece = in2.ControllerSet = true; in2.Controller = &bare;
-    in2.PieceNames = {"Quantum_Head"};
-    CHECK(count(FPBody::Validate(in2), FPBody::Severity::Warning) == 0);
 
     // Structural errors come first.
     FPBody::ValidationInput in3;

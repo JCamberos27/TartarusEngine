@@ -686,10 +686,9 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                 s.EyePrev[0] = eye;
                 ++s.JitterSeen;
             }
-            // The clips' travel against the capsule's, in the loop only (not a start still playing out or a fade). Under motion
-            // matching: the matched frame's root speed at the play rate it is warped to (BodyDebug RootSpeed).
-            if (L.Of == TbPart::A && bd.Valid && (bd.AnimatorState == FPBody::kStateLocomotion ||
-                                                  (bd.AnimatorState == FPBody::kStateMotionMatching && player.Grounded))) {
+            // The clips' travel against the capsule's, on the ground: the matched frame's root speed at the play rate it is
+            // warped to (BodyDebug RootSpeed).
+            if (L.Of == TbPart::A && bd.Valid && bd.AnimatorState == FPBody::kStateMotionMatching && player.Grounded) {
                 s.LoopClip += bd.RootSpeed;
                 s.LoopCapsule += glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
                 ++s.LoopFrames;
