@@ -1481,8 +1481,8 @@ void EditorLayer::DrawGlassSelectionCard(World& world, GlassHud& h) {
         const std::string name = nm && !nm->Name.empty() ? nm->Name : "Object " + std::to_string(HierarchyCreationOrdinal(world, shown));
         const auto* tf = reg.try_get<TransformComponent>(shown);
         const float w = Glass::Px(260.0f);
-        const float h = pad * 2.0f + lineH * 2.0f + Glass::Px(Glass::SpaceHalf) + (tf ? lineH + Glass::Px(Glass::SpaceHalf) : 0.0f);
-        const ImRect rest(ImVec2(right - w, vMax.y - margin - h), ImVec2(right, vMax.y - margin));
+        const float cardH = pad * 2.0f + lineH * 2.0f + Glass::Px(Glass::SpaceHalf) + (tf ? lineH + Glass::Px(Glass::SpaceHalf) : 0.0f);
+        const ImRect rest(ImVec2(right - w, vMax.y - margin - cardH), ImVec2(right, vMax.y - margin));
         const ImRect drawn = Scaled(rest, 0.96f + 0.04f * t, ImVec2(0.0f, Glass::Px(Glass::RevealRowShiftPx) * (1.0f - t)));
         ImGui::SetCursorScreenPos(rest.Min);
         bool hov = false, held = false;
@@ -1536,8 +1536,8 @@ void EditorLayer::DrawGlassStatsPill(GlassHud& h) {
         char frame[48];
         std::snprintf(frame, sizeof(frame), "   %.0f fps   %.1f ms", 1000.0f / ms, ms);
         const ImVec2 ts(Glass::ImAnimContext::OdometerWidth((double)objects, 0, " objects") + ImGui::CalcTextSize(frame).x, lineH);
-        const float h = lineH + Glass::Px(Glass::Space1) * 2.0f - Glass::Px(Glass::SpaceHalf);
-        const ImRect r(ImVec2(right - ts.x - pad * 2.0f, stackBottom - h), ImVec2(right, stackBottom));
+        const float pillH = lineH + Glass::Px(Glass::Space1) * 2.0f - Glass::Px(Glass::SpaceHalf);
+        const ImRect r(ImVec2(right - ts.x - pad * 2.0f, stackBottom - pillH), ImVec2(right, stackBottom));
         ImGui::SetCursorScreenPos(r.Min);
         bool hov = false, held = false;
         Glass::MotionButton(ImGui::GetID("##hudStats"), r, r, &hov, &held);
@@ -1578,12 +1578,12 @@ void EditorLayer::DrawGlassToasts(GlassHud& h) {
             if (toast.Dismissed < 0.0 && !busy && sinceResult >= lifetime) toast.Dismissed = now;
             const float exit = toast.Dismissed < 0.0 ? 0.0f : std::min(1.0f, (float)(now - toast.Dismissed) / exitDur);
             const ImVec2 bodySize = ImGui::CalcTextSize(toast.Body.c_str(), nullptr, false, wrap);
-            const float h = pad * 2.0f + lineH + Glass::Px(Glass::SpaceHalf) + bodySize.y;
+            const float toastH = pad * 2.0f + lineH + Glass::Px(Glass::SpaceHalf) + bodySize.y;
 
             // Restack on a spring when a toast leaves: one that's leaving gives up its slot at once
             // (it fades where it is), so the ones above start settling into the gap straight away.
             const bool leaving = toast.Dismissed >= 0.0;
-            const float targetY = leaving && toast.Y >= 0.0f ? toast.Y : bottom - h;
+            const float targetY = leaving && toast.Y >= 0.0f ? toast.Y : bottom - toastH;
             const float prevY = toast.Y < 0.0f ? targetY : toast.Y;
             const float y = motion.Follow(ImGui::GetID((int)toast.Id), targetY, prevY, Glass::ToastRestack);
             toast.Y = targetY;
@@ -1599,7 +1599,7 @@ void EditorLayer::DrawGlassToasts(GlassHud& h) {
             if (toast.Error && !busy && !motion.ReduceMotion() && shakeAge * 1000.0f < Glass::ErrorShake.durationMs)
                 shake = Glass::SpringImpulse(shakeAge, Glass::ErrorShake.mass, Glass::ErrorShake.stiffness, Glass::ErrorShake.damping,
                                              Glass::Px(Glass::ErrorShake.amplitudePx));
-            const ImRect rest(ImVec2(vMin.x + (m_ViewportSize.x - w) * 0.5f, y), ImVec2(vMin.x + (m_ViewportSize.x + w) * 0.5f, y + h));
+            const ImRect rest(ImVec2(vMin.x + (m_ViewportSize.x - w) * 0.5f, y), ImVec2(vMin.x + (m_ViewportSize.x + w) * 0.5f, y + toastH));
             const ImRect drawn = Scaled(rest, scale, ImVec2(shake, Glass::Px(Glass::ToastPopRisePx) * (1.0f - pop)));
 
             ImGui::SetCursorScreenPos(rest.Min);
