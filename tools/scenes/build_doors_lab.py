@@ -24,6 +24,8 @@ import json
 import math
 import os
 
+from lab_scene import LabScene, yaw_quat
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, 'tests', 'scenes', 'LocomotionLab.json')
 HALLWAY = os.path.join(ROOT, 'tests', 'scenes', 'Apartment Hallway.json')
@@ -37,7 +39,8 @@ DOOR_W, DOOR_H = 0.92, 2.06
 DOOR_WALL_Z = 0.032    # the frame's wall centre, door-local +Z of its origin (build_apartment_hallway.py)
 UP = 1.5               # the upper floor
 
-j = json.load(open(SRC, encoding='utf-8'))
+lab = LabScene(SRC)
+j = lab.data
 hall = json.load(open(HALLWAY, encoding='utf-8'))
 
 
@@ -55,8 +58,6 @@ INTERIOR = door_template('Door_Op_1_Frame_Interior')
 j['boxes'] = [b for b in j['boxes'] if b['name'] == 'Ground']
 j['empties'] = [e for e in j['empties'] if e['name'] not in ('Dummy', 'Lab Dummy Settings')]
 ground = j['boxes'][0]
-next_id = max(x['id'] for k in ('boxes', 'empties', 'models') for x in j[k]) + 1
-next_order = max(x.get('order', 0) for k in ('boxes', 'empties', 'models') for x in j[k]) + 1
 
 WALL_MAT = {'albedoMap': '', 'aoMap': '', 'baseColor': [0.84, 0.83, 0.8], 'emissiveColor': [0.0, 0.0, 0.0], 'emissiveMap': '',
             'emissiveStrength': 0.0, 'factorsScaleMaps': True, 'metallic': 0.0, 'metallicMap': '', 'metallicRoughnessMap': '',
@@ -64,17 +65,7 @@ WALL_MAT = {'albedoMap': '', 'aoMap': '', 'baseColor': [0.84, 0.83, 0.8], 'emiss
 DECK_MAT = copy.deepcopy(ground['materials'][0]['embedded'])
 
 
-def take_id():
-    global next_id, next_order
-    i, o = next_id, next_order
-    next_id += 1
-    next_order += 1
-    return i, o
-
-
-def yaw_quat(deg):
-    h = math.radians(deg) / 2
-    return [0.0, round(math.sin(h), 6), 0.0, round(math.cos(h), 6)]
+take_id = lab.take_id
 
 
 def empty(name, parent=-1, pos=(0.0, 0.0, 0.0), yaw=0.0, **components):
@@ -191,7 +182,5 @@ spawn['rotation'] = yaw_quat(-90.0)
 # door's hinge-jamb graze kept 0.14 of its speed at 0.30 (the doors scenario asks 0.5) and 0.59 at 0.22, the rest unchanged.
 spawn['First Person Controller']['Capsule Radius'] = 0.22
 
-with open(DST, 'w', encoding='utf-8', newline='\n') as f:
-    json.dump(j, f, indent=2)
-    f.write('\n')
+lab.write(DST)
 print('wrote', os.path.relpath(DST, ROOT), len(j['boxes']), 'boxes,', len(j['models']), 'models,', len(j['empties']), 'empties')

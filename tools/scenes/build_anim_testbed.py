@@ -12,26 +12,19 @@ Run from the repo root:
     python tools/scenes/build_anim_testbed.py
 """
 import copy
-import json
 import math
 import os
+
+from lab_scene import LabScene
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, 'tests', 'scenes', 'WeaponLab.json')
 DST = os.path.join(ROOT, 'project', 'scenes', 'AnimTestbed.json')
 
-j = json.load(open(SRC, encoding='utf-8'))
-next_id = max(x['id'] for k in ('boxes', 'empties', 'models') for x in j[k]) + 1
-next_order = max(x.get('order', 0) for k in ('boxes', 'empties', 'models') for x in j[k]) + 1
+lab = LabScene(SRC)
+j = lab.data
+take_id = lab.take_id
 ground = next(b for b in j['boxes'] if b['name'] == 'Ground')
-
-
-def take_id():
-    global next_id, next_order
-    i, o = next_id, next_order
-    next_id += 1
-    next_order += 1
-    return i, o
 
 
 def box(name, pos, size, rot=(0.0, 0.0, 0.0, 1.0)):
@@ -91,8 +84,5 @@ empty('Dummy Standing', (-5.0, 0.0, 14.0), (0.0, 1.0, 0.0, 0.0), {'Dummy Spawn':
 empty('Dummy Roaming', (-2.0, 0.0, 32.0), (0.0, 1.0, 0.0, 0.0), {'Dummy Spawn': {'Roam': True}})
 empty('Testbed Dummy Settings', (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), {'Dummy Settings': {'Respawn': True, 'Respawn Delay': 2.0}})
 
-os.makedirs(os.path.dirname(DST), exist_ok=True)
-with open(DST, 'w', encoding='utf-8', newline='\n') as f:
-    json.dump(j, f, indent=2)
-    f.write('\n')
+lab.write(DST)
 print('wrote', os.path.relpath(DST, ROOT), len(j['boxes']), 'boxes', len(j['empties']), 'empties')
