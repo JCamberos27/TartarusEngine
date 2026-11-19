@@ -2219,9 +2219,11 @@ void EditorLayer::ActivateFavorite(World& world, AssetLibrary& assets, const Enh
     m_FavWaitRelease = true;
 }
 
-void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
+// The overlay's state for this frame, before anything is drawn: a favourite waiting for its scene,
+// the lock / add-selection shortcuts, where it sits (over the Asset Browser, or centred) and the
+// hold-to-show timing with its fade. False = nothing to draw this frame.
+bool EditorLayer::UpdateFavoritesVisibility(World& world, ImVec2& areaMin, ImVec2& areaMax) {
     const EditorSettings& es = EditorSettings::Get();
-    auto& us = Enhancers::EnhancerUserState::Get();
     ImGuiIO& io = ImGui::GetIO();
     const double now = ImGui::GetTime();
     const bool wasVisible = m_FavVisible;
@@ -2233,7 +2235,7 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
         if (e != entt::null) { SelectItem(e, false); m_HierarchyScrollToEntity = e; }
         m_FavPendingScene.clear();
     }
-    if (!es.Favorites) { m_FavLocked = false; m_FavAlpha = 0.0f; return; }
+    if (!es.Favorites) { m_FavLocked = false; m_FavAlpha = 0.0f; return false; }
 
     // Lock / add-selection shortcuts (Triggered while hidden; checked directly while shown,
     // since every editor shortcut is suppressed then).
@@ -2264,8 +2266,20 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
     // Opens over 140 ms, closes over 90 ms (eased where it is drawn).
     m_FavAlpha = std::clamp(m_FavAlpha + (want ? io.DeltaTime / 0.14f : -io.DeltaTime / 0.09f), 0.0f, 1.0f);
     if (!want) m_FavRenaming = -1; // a rename left open must not grab the keys when it reopens
-    if (m_FavAlpha <= 0.01f) return;
+    if (m_FavAlpha <= 0.01f) return false;
     m_FavVisible = true;
+    areaMin = area.Min;
+    areaMax = area.Max;
+    return true;
+}
+
+void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
+    auto& us = Enhancers::EnhancerUserState::Get();
+    ImGuiIO& io = ImGui::GetIO();
+    const double now = ImGui::GetTime();
+    ImVec2 areaMin, areaMax;
+    if (!UpdateFavoritesVisibility(world, areaMin, areaMax)) return;
+    const ImRect area(areaMin, areaMax);
 
     Enhancers::EnsureFavoritePage(us.FavoritePages);
     const int pageCount = (int)us.FavoritePages.size();

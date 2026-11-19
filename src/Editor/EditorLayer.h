@@ -500,6 +500,7 @@ public:
     // The favorites overlay: hold Alt over the Asset Browser (or lock it open). Pages live in
     // EnhancerUserState::FavoritePages; everything below is session state.
     void DrawFavoritesOverlay(World& world, AssetLibrary& assets); // PostModuleDraw
+    bool UpdateFavoritesVisibility(World& world, ImVec2& areaMin, ImVec2& areaMax); // its state; false = not shown
     void ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r);
     void AddSelectionToFavorites(const World& world);
     void MigrateAssetFavorites(); // one-time import of asset_favorites.json into page 1
