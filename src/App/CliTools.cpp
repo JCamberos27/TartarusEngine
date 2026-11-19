@@ -4,7 +4,9 @@
 #include "App/LaunchOptions.h"
 
 #include "BuildPipeline.h"
+#include "BloodFxImport.h"
 #include "CrashHandler.h"
+#include "KnifeFxImport.h"
 #include "Core/Paths.h"
 #include "Game/Audio/AudioTest.h"
 #include "Game/MotionMatching/MotionBake.h"
@@ -381,6 +383,15 @@ int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
             return MotionBake::Run(opt.bakeMotionConfig, opt.bakeMatch, opt.sceneBoundsOut);
         // The audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
         case LaunchMode::AudioTest: return RunAudioTest(opt.audioTestScene, opt.audioTestReport);
+        // The vendor effect packs into the project's (git-ignored) effect folders: file conversion only, no GL.
+        case LaunchMode::ImportBlood:
+            CrashHandler::SetInteractive(false);
+            EnginePaths::Init(argv0); // ProjectPaths finds project/ from the exe
+            return BloodFxImport::ImportPackage(opt.importDir, ProjectPaths::Resolve("assets/Effects/Blood")) ? 0 : 1;
+        case LaunchMode::ImportKnife:
+            CrashHandler::SetInteractive(false);
+            EnginePaths::Init(argv0);
+            return KnifeFxImport::ImportPacks(opt.importDir, ProjectPaths::Resolve("assets/Effects/Knife")) ? 0 : 1;
         default: return -1;
     }
 }

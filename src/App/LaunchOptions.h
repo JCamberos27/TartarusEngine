@@ -24,6 +24,8 @@ enum class LaunchMode {
     AudioTest,    // --audio-test [scene] [--report <file>]
     BakeGI,       // --bake-gi <scene.json> [--gi-only <name>]
     BakeMotion,   // --bake-motion <file.mmconfig> [--match <text>] [--out <prefix>]
+    ImportBlood,  // --import-blood <VolumetricBloodFX package dir>
+    ImportKnife,  // --import-knife <folder holding the extracted Knife packs>
     CrashTest,    // --crash-test <kind> [--crash-dialog]
     Help,         // --help
 };
@@ -58,6 +60,7 @@ struct LaunchOptions {
     std::string bakeGiScene;        // --bake-gi <scene.json>: bake its GI Volumes (GIBaker), write their .gi, exit
     std::string bakeMotionConfig;   // --bake-motion <file.mmconfig>: the motion matching bake (MotionBake), exit
     std::string crashTestKind;      // --crash-test <av|overflow|abort|purecall|invalidparam|terminate>
+    std::string importDir;          // --import-blood / --import-knife <dir>: the vendor pack to convert
     std::vector<std::string> inputs; // --model-report / --model-nodes / --scene-bounds inputs
 
     // Modifiers.
