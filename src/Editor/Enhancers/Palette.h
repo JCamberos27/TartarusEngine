@@ -26,6 +26,8 @@ std::string ToHexColor(std::uint32_t c); // "#RRGGBB" when opaque, else "#RRGGBB
 struct Palette {
     std::vector<std::uint32_t> Colors;
     std::vector<std::string>   Icons; // Font Awesome names (see FAIconGlyph)
+    nlohmann::json Unknown = nlohmann::json::object(); // a newer build's sections, written back as they were
+    static constexpr int kVersion = 1;
 
     static Palette Defaults();
     static Palette& Get();     // the live per-user palette

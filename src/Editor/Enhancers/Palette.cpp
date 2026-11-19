@@ -82,8 +82,8 @@ Palette& Palette::Get() {
 }
 
 json Palette::ToJson() const {
-    json j;
-    j["version"] = 1;
+    json j = Unknown.is_object() ? Unknown : json::object();
+    j["version"] = kVersion;
     json cols = json::array();
     for (auto c : Colors) cols.push_back(ToHexColor(c));
     j["colors"] = cols;
@@ -95,6 +95,8 @@ Palette Palette::FromJson(const json& j) {
     const Palette defaults = Defaults();
     Palette p;
     if (j.is_object()) {
+        NoteNewerVersion(j, kVersion, "Style palette");
+        p.Unknown = UnownedKeys(j, {"version", "colors", "icons"});
         if (auto it = j.find("colors"); it != j.end() && it->is_array())
             for (const auto& c : *it) {
                 std::uint32_t v;

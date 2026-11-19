@@ -835,6 +835,51 @@ void TestEnhancerUiStyles() {
 }
 
 // A store file that didn't parse is copied aside before defaults could overwrite it.
+// Every Enhancer store writes back the sections a newer build added (an older build editing the file
+// must not strip them), and still reads its own.
+void TestEnhancerStoresKeepUnknownKeys() {
+    const nlohmann::json future = {{"keep", true}, {"n", 3}};
+    {
+        auto& fs = FolderStyles::Get();
+        const nlohmann::json saved = fs.ToJson();
+        nlohmann::json j = saved;
+        j["version"] = 99;
+        j["fromTheFuture"] = future;
+        fs.FromJson(j);
+        CHECK(fs.ToJson().value("fromTheFuture", nlohmann::json()) == future);
+        CHECK(fs.ToJson()["version"] == FolderStyles::kVersion);
+        fs.FromJson(saved);
+        CHECK(!fs.ToJson().contains("fromTheFuture"));
+    }
+    {
+        auto& us = UiStyles::Get();
+        const nlohmann::json saved = us.ToJson();
+        nlohmann::json j = saved;
+        j["fromTheFuture"] = future;
+        us.FromJson(j);
+        CHECK(us.ToJson().value("fromTheFuture", nlohmann::json()) == future);
+        us.FromJson(saved);
+        CHECK(!us.ToJson().contains("fromTheFuture"));
+    }
+    {
+        auto& ts = TabState::Get();
+        const nlohmann::json saved = ts.ToJson();
+        nlohmann::json j = saved;
+        j["fromTheFuture"] = future;
+        ts.FromJson(j);
+        CHECK(ts.ToJson().value("fromTheFuture", nlohmann::json()) == future);
+        CHECK(ts.ToJson().contains("inspector") && ts.ToJson().contains("starred"));
+        ts.FromJson(saved);
+    }
+    {
+        nlohmann::json j = Palette::Defaults().ToJson();
+        j["fromTheFuture"] = future;
+        const Palette p = Palette::FromJson(j);
+        CHECK(p.ToJson().value("fromTheFuture", nlohmann::json()) == future);
+        CHECK(p == Palette::Defaults()); // its own lists read as before
+    }
+}
+
 void TestEnhancerKeepUnreadable() {
     namespace fs = std::filesystem;
     const fs::path dir = fs::temp_directory_path() / "TartarusUnitTests" / "enhancers_bad";
@@ -858,6 +903,7 @@ void TestEnhancerKeepUnreadable() {
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerKeepUnreadable", TestEnhancerKeepUnreadable);
     tests.emplace_back("EnhancerRefsRoundTrip", TestEnhancerRefsRoundTrip);
+    tests.emplace_back("EnhancerStoresKeepUnknownKeys", TestEnhancerStoresKeepUnknownKeys);
     tests.emplace_back("EnhancerBookmarkList", TestEnhancerBookmarkList);
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
     tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);

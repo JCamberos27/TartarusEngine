@@ -117,7 +117,7 @@ FolderStyle StyleFromJson(const json& j) {
 } // namespace
 
 json FolderStyles::ToJson() const {
-    json j;
+    json j = m_Unknown;
     j["version"] = kVersion;
     j["autoIcons"] = AutoIcons;
     json f = json::object();
@@ -137,6 +137,8 @@ json FolderStyles::ToJson() const {
 void FolderStyles::FromJson(const json& j) {
     Reset();
     if (!j.is_object()) return;
+    NoteNewerVersion(j, kVersion, "Folder styles");
+    m_Unknown = UnownedKeys(j, {"version", "autoIcons", "folders", "rules"});
     if (auto it = j.find("autoIcons"); it != j.end() && it->is_boolean()) AutoIcons = it->get<bool>();
     if (auto it = j.find("folders"); it != j.end() && it->is_object())
         for (auto kv = it->begin(); kv != it->end(); ++kv) {
