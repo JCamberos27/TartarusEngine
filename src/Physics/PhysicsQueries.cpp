@@ -35,6 +35,16 @@ struct ExcludeActorFilter : PxQueryFilterCallback {
         return PxQueryHitType::eBLOCK;
     }
 };
+
+// A block hit (ray or sweep) into the API's RaycastHit.
+template <typename HitT>
+void FillHit(const HitT& b, RaycastHit& outHit) {
+    outHit.Hit = true;
+    outHit.Distance = b.distance;
+    outHit.Point[0]  = b.position.x; outHit.Point[1]  = b.position.y; outHit.Point[2]  = b.position.z;
+    outHit.Normal[0] = b.normal.x;   outHit.Normal[1] = b.normal.y;   outHit.Normal[2] = b.normal.z;
+    outHit.Entity = b.actor ? UserDataToEntity(b.actor->userData) : outHit.Entity;
+}
 } // namespace
 } // namespace PhysicsWorld
 
@@ -70,11 +80,7 @@ bool Raycast(const float origin[3], const float dir[3], float maxDistance, Rayca
     }
 
     const PxRaycastHit& b = buf.block;
-    outHit.Hit = true;
-    outHit.Distance = b.distance;
-    outHit.Point[0]  = b.position.x; outHit.Point[1]  = b.position.y; outHit.Point[2]  = b.position.z;
-    outHit.Normal[0] = b.normal.x;   outHit.Normal[1] = b.normal.y;   outHit.Normal[2] = b.normal.z;
-    outHit.Entity = b.actor ? UserDataToEntity(b.actor->userData) : outHit.Entity;
+    FillHit(b, outHit);
     qr.hit = true; qr.dist = b.distance;
     qr.hitPoint = b.position; qr.hitNormal = b.normal;
     RecordQuery(qr);
@@ -107,11 +113,7 @@ bool SphereCast(const float origin[3], const float dir[3], float radius, float m
         return false;
     }
     const PxSweepHit& b = buf.block;
-    outHit.Hit = true;
-    outHit.Distance = b.distance;
-    outHit.Point[0]  = b.position.x; outHit.Point[1]  = b.position.y; outHit.Point[2]  = b.position.z;
-    outHit.Normal[0] = b.normal.x;   outHit.Normal[1] = b.normal.y;   outHit.Normal[2] = b.normal.z;
-    outHit.Entity = b.actor ? UserDataToEntity(b.actor->userData) : outHit.Entity;
+    FillHit(b, outHit);
     qr.hit = true; qr.dist = b.distance;
     qr.hitPoint = b.position; qr.hitNormal = b.normal;
     RecordQuery(qr);
@@ -220,15 +222,6 @@ PxQuat ToQuat(const float rotation[4]) {
 
 namespace PhysicsWorld {
 namespace {
-template <typename HitT>
-void FillHit(const HitT& b, RaycastHit& outHit) {
-    outHit.Hit = true;
-    outHit.Distance = b.distance;
-    outHit.Point[0]  = b.position.x; outHit.Point[1]  = b.position.y; outHit.Point[2]  = b.position.z;
-    outHit.Normal[0] = b.normal.x;   outHit.Normal[1] = b.normal.y;   outHit.Normal[2] = b.normal.z;
-    outHit.Entity = b.actor ? UserDataToEntity(b.actor->userData) : outHit.Entity;
-}
-
 bool SweepFiltered(const PxGeometry& geom, const PxTransform& pose, const float dir[3], float maxDistance,
                    const QueryFilter& f, RaycastHit& outHit, bool skipSimulated = false) {
     outHit = RaycastHit{};

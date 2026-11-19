@@ -29,6 +29,7 @@ struct Region {
     std::size_t Offset = 0, Size = 0;
     unsigned char* Ptr = nullptr;
     std::shared_ptr<std::atomic<bool>> Copied;
+    bool Queued = false; // StageCopy handed it to the worker (Abandon only waits for a copy that was queued)
     bool Valid() const { return Ptr != nullptr; }
     bool Ready() const { return Copied && Copied->load(std::memory_order_acquire); }
 };

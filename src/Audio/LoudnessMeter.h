@@ -34,6 +34,7 @@ public:
 
 private:
     static void Design(int rate, Biquad& shelf, Biquad& hp);
+    struct KWeighting; // the filter pass of the static measurements (LoudnessMeter.cpp)
     static std::vector<double> BlockPowers(const std::vector<float>& stereo, int sampleRate); // K-weighted mean square per 100 ms
     int m_Rate, m_Block;
     Biquad m_Shelf[2], m_Hp[2];

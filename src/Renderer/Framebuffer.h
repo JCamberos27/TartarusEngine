@@ -1,9 +1,10 @@
 #pragma once
 
-// A resizable offscreen render target: one color texture (sampleable, for ImGui::Image or a
-// glBlitFramebuffer destination) plus a depth-only renderbuffer (needed for correct 3D
-// rendering into it, never sampled). Used by GameViewPanel to render the scene at a locked
-// aspect ratio/resolution independent of the window/editor-viewport size.
+// A resizable offscreen display target: one RGB8 colour texture (sampleable, for ImGui::Image or a
+// glBlitFramebuffer destination) and nothing else. The Scene and Game tabs' tonemapped images, the FXAA
+// intermediate and the modal-blur capture: the 3D draws happen in the HDR targets (HdrTarget), and what goes
+// into these afterwards - the tonemap, the grid, the HUD - draws with depth testing off, so there is no depth
+// buffer (a DEPTH24_STENCIL8 one used to come with every target and every resize: ~8 MB each at 1080p).
 class Framebuffer {
 public:
     Framebuffer() = default;
@@ -28,7 +29,6 @@ public:
 private:
     unsigned int m_Fbo = 0;
     unsigned int m_ColorTexture = 0;
-    unsigned int m_DepthRbo = 0;
     int m_Width = 0;
     int m_Height = 0;
 
