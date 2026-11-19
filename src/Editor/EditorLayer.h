@@ -2058,7 +2058,12 @@ private:
     // entities, just for library assets instead. Actions that only make sense for exactly one
     // asset (Rename) act on the primary alone; actions that generalize (Delete, Duplicate) act on
     // the whole selection.
-    std::vector<AssetKeyRef> m_ExtraAssetSelection;
+    std::vector<AssetKeyRef> m_ExtraAssetSelection; // change it through Add/ClearExtraAssetSelection (they keep the index)
+    void AddExtraAssetSelection(const std::string& key, bool isFolder);
+    void ClearExtraAssetSelection();
+    // IsAssetSelected's lookup for a big selection: key + a folder/asset tag, rebuilt after a change.
+    mutable std::unordered_set<std::string> m_ExtraAssetSelIndex;
+    mutable bool m_ExtraAssetSelIndexValid = false;
     // Anchor index (into DrawAssetBrowser's locally-built, currently-visible `cells` list) that a
     // Shift-click range-select extends from. Only meaningful within the same frame/folder view it
     // was set in; a stale value after navigating just produces a harmless one-off range on the
