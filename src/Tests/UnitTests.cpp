@@ -4788,56 +4788,58 @@ void TestProjectWatcher() {
     fs::create_directories(dir / "Library", ec);
     fs::create_directories(dir / "sub", ec);
     CHECK(ProjectWatcher::Start(dir.string()));
-    auto settle = [&] {
-        std::vector<ProjectWatcher::Change> all;
-        bool overflow = false;
-        // Up to 15 s (loaded machines); Start() returns with the watch armed. Done once something came in and then four
-        // polls (200 ms) in a row brought nothing: one quiet poll ended it between a new folder's event and its file's.
-        int quiet = 0;
-        for (int i = 0; i < 300; ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            auto got = ProjectWatcher::Drain(150, overflow);
-            all.insert(all.end(), got.begin(), got.end());
-            quiet = got.empty() ? quiet + 1 : 0;
-            if (!all.empty() && quiet >= 4) break;
-        }
-        return all;
-    };
-    auto has = [](const std::vector<ProjectWatcher::Change>& v, K kind, const fs::path& p, const fs::path& old = {}) {
+    using Changes = std::vector<ProjectWatcher::Change>;
+    auto has = [](const Changes& v, K kind, const fs::path& p, const fs::path& old = {}) {
         for (const auto& c : v)
             if (c.Type == kind && AssetDatabase::PathKey(c.Path) == AssetDatabase::PathKey(p.string()) &&
                 (old.empty() || AssetDatabase::PathKey(c.OldPath) == AssetDatabase::PathKey(old.string())))
                 return true;
         return false;
     };
+    // Drains until `done` holds for everything gathered (or 30 s pass: a loaded machine delivers late), then four quiet
+    // polls (200 ms) more so a stray extra event still shows. Start() returns with the watch armed. Without `done`, the
+    // first quiet spell after anything arrived ends it; that stopped early when a step's events came in two bursts.
+    auto settle = [&](const std::function<bool(const Changes&)>& done = {}) {
+        Changes all;
+        bool overflow = false;
+        int quiet = 0;
+        for (int i = 0; i < 600; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            auto got = ProjectWatcher::Drain(150, overflow);
+            all.insert(all.end(), got.begin(), got.end());
+            quiet = got.empty() ? quiet + 1 : 0;
+            if (!all.empty() && quiet >= 4 && (!done || done(all))) break;
+        }
+        return all;
+    };
 
     const fs::path a = dir / "a.png";
     CHECK(AtomicFile::WriteBytes(a, "1", true));
     std::ofstream(dir / "Library" / "cache.bin") << "x"; // ignored folder
-    auto c1 = settle();
+    auto c1 = settle([&](const Changes& v) { return has(v, K::Added, a) || has(v, K::Modified, a); });
     CHECK(has(c1, K::Added, a) || has(c1, K::Modified, a));
     CHECK(std::none_of(c1.begin(), c1.end(), [](const auto& c) { return c.Path.find("Library") != std::string::npos; }));
     CHECK(std::none_of(c1.begin(), c1.end(), [](const auto& c) { return c.Path.find(".tmp-") != std::string::npos; }));
 
     const fs::path b = dir / "b.png";
     fs::rename(a, b, ec);
-    auto c2 = settle();
+    auto c2 = settle([&](const Changes& v) { return has(v, K::Renamed, b, a); });
     CHECK(has(c2, K::Renamed, b, a));
 
     const fs::path moved = dir / "sub" / "b.png";
     fs::rename(b, moved, ec);                       // across folders: Removed + Added, paired
-    auto c3 = settle();
+    auto c3 = settle([&](const Changes& v) { return has(v, K::Renamed, moved, b); });
     CHECK(has(c3, K::Renamed, moved, b));
 
     std::ofstream(moved, std::ios::app) << "more";
-    auto c4 = settle();
+    auto c4 = settle([&](const Changes& v) { return has(v, K::Modified, moved); });
     CHECK(has(c4, K::Modified, moved));
 
     const fs::path t = dir / "temp.png";              // created and deleted before it settles
     std::ofstream(t) << "x";
     fs::remove(t, ec);
     fs::remove(moved, ec);
-    auto c5 = settle();
+    auto c5 = settle([&](const Changes& v) { return has(v, K::Removed, moved); });
     CHECK(has(c5, K::Removed, moved));
     CHECK(!has(c5, K::Added, t) && !has(c5, K::Removed, t));
 
@@ -4849,9 +4851,9 @@ void TestProjectWatcher() {
             while (writing) { std::ofstream(busy, std::ios::app) << "x"; std::this_thread::sleep_for(std::chrono::milliseconds(30)); }
         });
         std::ofstream(quiet) << "q";
-        std::vector<ProjectWatcher::Change> got;
+        Changes got;
         bool overflow = false;
-        for (int i = 0; i < 200 && !has(got, K::Added, quiet) && !has(got, K::Modified, quiet); ++i) {
+        for (int i = 0; i < 600 && !has(got, K::Added, quiet) && !has(got, K::Modified, quiet); ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             auto d = ProjectWatcher::Drain(200, overflow);
             got.insert(got.end(), d.begin(), d.end());
@@ -4869,11 +4871,17 @@ void TestProjectWatcher() {
         fs::create_directories(dir / "d3", ec);
         std::ofstream(dir / "d1" / "m.png") << "1";
         std::ofstream(dir / "d2" / "m.png") << "2";
-        settle();
+        settle([&](const Changes& v) {
+            return (has(v, K::Added, dir / "d1" / "m.png") || has(v, K::Modified, dir / "d1" / "m.png")) &&
+                   (has(v, K::Added, dir / "d2" / "m.png") || has(v, K::Modified, dir / "d2" / "m.png"));
+        });
         fs::remove(dir / "d1" / "m.png", ec);
         fs::remove(dir / "d2" / "m.png", ec);
         std::ofstream(dir / "d3" / "m.png") << "3";
-        auto c6 = settle();
+        auto c6 = settle([&](const Changes& v) {
+            return has(v, K::Removed, dir / "d1" / "m.png") && has(v, K::Removed, dir / "d2" / "m.png") &&
+                   has(v, K::Added, dir / "d3" / "m.png");
+        });
         CHECK(has(c6, K::Removed, dir / "d1" / "m.png"));
         CHECK(has(c6, K::Removed, dir / "d2" / "m.png"));
         CHECK(has(c6, K::Added, dir / "d3" / "m.png"));
@@ -4884,7 +4892,7 @@ void TestProjectWatcher() {
     {
         fs::create_directories(dir / "bin", ec);
         std::ofstream(dir / "bin" / "x.png") << "x";
-        auto c7 = settle();
+        auto c7 = settle([&](const Changes& v) { return has(v, K::Added, dir / "bin" / "x.png") || has(v, K::Modified, dir / "bin" / "x.png"); });
         CHECK(has(c7, K::Added, dir / "bin" / "x.png") || has(c7, K::Modified, dir / "bin" / "x.png"));
     }
 
@@ -5960,7 +5968,45 @@ void TestAssetPackImport() {
     fs::remove_all(base, ec);
 }
 
+namespace {
+// Every test writes under temp_directory_path(), and several runs can go at once (worktrees, CI-style queues): two runs
+// sharing %TEMP% wiped each other's fixture folders mid-test (the watcher and asset-identity tests failed "under load").
+// Each run gets its own folder under the user's temp folder, removed when the run ends.
+struct PrivateTempDir {
+    std::filesystem::path Dir;
+    std::wstring OldTmp, OldTemp;
+    bool HadTmp = false, HadTemp = false;
+    static bool Get(const wchar_t* name, std::wstring& out) {
+        const DWORD n = GetEnvironmentVariableW(name, nullptr, 0);
+        if (n == 0) return false;
+        out.resize(n);
+        out.resize(GetEnvironmentVariableW(name, out.data(), n));
+        return true;
+    }
+    PrivateTempDir() {
+        std::error_code ec;
+        Dir = std::filesystem::temp_directory_path(ec) / ("TartarusUnitTests-" + std::to_string(GetCurrentProcessId()));
+        std::filesystem::remove_all(Dir, ec);
+        if (!std::filesystem::create_directories(Dir, ec) || ec) { Dir.clear(); return; }
+        HadTmp = Get(L"TMP", OldTmp);
+        HadTemp = Get(L"TEMP", OldTemp);
+        SetEnvironmentVariableW(L"TMP", Dir.wstring().c_str());
+        SetEnvironmentVariableW(L"TEMP", Dir.wstring().c_str());
+    }
+    ~PrivateTempDir() {
+        if (Dir.empty()) return;
+        SetEnvironmentVariableW(L"TMP", HadTmp ? OldTmp.c_str() : nullptr);
+        SetEnvironmentVariableW(L"TEMP", HadTemp ? OldTemp.c_str() : nullptr);
+        std::error_code ec;
+        std::filesystem::remove_all(Dir, ec);
+    }
+    PrivateTempDir(const PrivateTempDir&) = delete;
+    PrivateTempDir& operator=(const PrivateTempDir&) = delete;
+};
+} // namespace
+
 int RunUnitTests(const char* filter) {
+    const PrivateTempDir privateTemp;
     UnitTestSupport::TestList tests = {
         {"AssetGuid", TestAssetGuid},
         {"UndoDeltaChain", TestUndoDeltaChain},
