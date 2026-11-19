@@ -208,7 +208,11 @@ struct AssetLibrary::AsyncLoader {
     }
 };
 
-AssetLibrary::AssetLibrary() : m_Folders(ProjectSettings::AssetFolders()), m_SavedFolders(m_Folders) {}
+AssetLibrary::AssetLibrary() : m_Folders(ProjectSettings::AssetFolders()), m_SavedFolders(m_Folders) {
+    // A settings.json that picked up on-disk folders (undo restores used to save them) is cleaned
+    // here; the next folder change writes the clean list.
+    m_SavedFolders.erase(std::remove_if(m_SavedFolders.begin(), m_SavedFolders.end(), IsDiskFolder), m_SavedFolders.end());
+}
 AssetLibrary::~AssetLibrary() = default;
 
 AssetLibrary::AsyncLoader& AssetLibrary::Async() {

@@ -425,9 +425,23 @@ void TestAssetFoldersPersistOnlyUserFolders() {
         CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
         AssetLibrary reloaded;
         CHECK((reloaded.Folders()==std::vector<std::string>{"UserA","UserC"}));
+        // A folder that is a real project directory (here "scenes") is listed but never saved:
+        // undo snapshots re-create on-disk folders through CreateFolder.
+        reloaded.CreateFolder("scenes");
+        CHECK(std::find(reloaded.Folders().begin(),reloaded.Folders().end(),"scenes")!=reloaded.Folders().end());
+        CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
     }
-    { std::ofstream out(path,std::ios::binary|std::ios::trunc); out<<original; }
+    {
+        // A settings.json that already saved an on-disk folder is cleaned on the next folder change.
+        ProjectSettings::SetAssetFolders({"UserA","scenes"});
+        AssetLibrary polluted;
+        polluted.CreateFolder("UserD");
+        CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserD"}));
+    }
+    // Memory first, file last: restoring the folders can save settings.json again with the
+    // serializer's formatting, which left the tracked file modified after a test run.
     ProjectSettings::SetAssetFolders(before);
+    { std::ofstream out(path,std::ios::binary|std::ios::trunc); out<<original; }
 }
 // #15 - an outfit landing (OutfitSystem::UpdatePending) makes the next frame's baseline the whole scene. Right
 // before one, a change made without an undo step is journaled - but not the outfits' own pieces moving or

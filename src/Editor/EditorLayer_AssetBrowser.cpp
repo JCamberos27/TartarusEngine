@@ -489,7 +489,8 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
         m_MaterialThumbLRU.pop_back();
         auto e = m_MaterialThumbs.find(evict);
         if (e != m_MaterialThumbs.end()) {
-            if (e->second.Tex) glDeleteTextures(1, &e->second.Tex);
+            // Retired, not deleted: a tile drawn earlier this frame may still use it (as the model path).
+            if (e->second.Tex) m_RetiredThumbnailTextures.push_back(e->second.Tex);
             m_MaterialThumbs.erase(e);
         }
     }
@@ -769,9 +770,10 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
         ImGui::Spacing();
 
         // Enter or Delete confirms, Esc cancels — the prompt can be cleared without the mouse.
-        const bool keyConfirm = ImGui::IsKeyPressed(ImGuiKey_Enter) ||
-                                ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) ||
-                                ImGui::IsKeyPressed(ImGuiKey_Delete);
+        // No key repeat: holding the Delete that opened this dialog must not confirm it.
+        const bool keyConfirm = ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+                                ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false) ||
+                                ImGui::IsKeyPressed(ImGuiKey_Delete, false);
         const bool keyCancel  = ImGui::IsKeyPressed(ImGuiKey_Escape);
 
         float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
@@ -911,7 +913,7 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         do {
             candidate = dir / (stem + " (" + std::to_string(n) + ")" + ext);
             n++;
-        } while (std::filesystem::exists(candidate));
+        } while (std::filesystem::exists(candidate, existsErr));
 
         std::error_code copyErr;
         AtomicFile::NotifyWillChange(candidate);
@@ -2491,6 +2493,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 // Unity/Explorer-standard Shift-click behavior. The anchor index is only
                 // meaningful against this same, currently-visible `cells` list.
                 ClearAssetSelection();
+                if (m_AssetSelectionAnchorIndex >= cells.size()) m_AssetSelectionAnchorIndex = cellIndex; // anchor from another folder
                 size_t lo = std::min(m_AssetSelectionAnchorIndex, cellIndex);
                 size_t hi = std::min(std::max(m_AssetSelectionAnchorIndex, cellIndex), cells.size() - 1);
                 for (size_t i = lo; i <= hi; ++i) {
@@ -2713,7 +2716,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) OsShell::OpenFile(cell.key);
-                if((cell.kind==Cell::Kind::Script || cell.kind==Cell::Kind::Shader) && ImGui::MenuItem("Open in Script IDE"))OpenScriptIDE(cell.key);
+                if (ImGui::MenuItem("Open in Script IDE")) OpenScriptIDE(cell.key);
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) OsShell::ShowInFolder(cell.key);
                 if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                     ImGui::SetClipboardText(cell.key.c_str());
@@ -2745,6 +2748,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 DrawFolderContextMenuBody(world, assets, cell.key);
                 ImGui::EndMenu();
             }
+            if (cell.kind == Cell::Kind::Script && ImGui::MenuItem("Open in Script IDE")) OpenScriptIDE(cell.key);
             EditorUIPrimitives::SectionHeader(ICON_FA_PEN "  Edit");
             if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
                 BeginRenameAsset(cell.key, isFolder, cell.display);

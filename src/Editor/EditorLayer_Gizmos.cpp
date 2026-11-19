@@ -101,6 +101,30 @@ inline bool ViewportUnpickable(const World& world, entt::entity e) {
     return ViewportPickLocked(world, e) || NotSceneSelectable(world, e);
 }
 
+// Re-aims a light (forward = local -Z) at newFwd by turning its current world rotation the
+// shortest way, so its roll is kept (rebuilding it from lookAt(up = Y) zeroed the roll), and
+// returns the result in the parent's frame. Returns false when the aim already matches.
+inline bool ReaimKeepingRoll(const glm::mat4& lightWorld, const glm::mat4& parentWorld, const glm::vec3& newFwdIn,
+                             glm::quat& outLocal) {
+    if (glm::length(newFwdIn) < 1e-6f) return false;
+    const glm::vec3 newFwd = glm::normalize(newFwdIn);
+    const glm::quat worldRot = QuaternionFromMatrix(lightWorld);
+    const glm::vec3 oldFwd = glm::normalize(worldRot * glm::vec3(0.0f, 0.0f, -1.0f));
+    if (glm::dot(oldFwd, newFwd) > 1.0f - 1e-7f) return false;
+    const glm::quat turned = glm::normalize(glm::rotation(oldFwd, newFwd) * worldRot);
+    outLocal = QuaternionFromMatrix(glm::inverse(parentWorld) * glm::mat4_cast(turned));
+    return true;
+}
+
+// An empty / light / camera on a layer hidden in the Scene view (the layer visibility mask, as
+// DrawEntityIcons uses) can't be clicked or marquee-selected there. The Entity icons mode is not
+// a pick rule: empties stay clickable at their origin with icons set to Lights & cameras.
+inline bool IconHiddenForPick(const World& world, entt::entity e, bool /*selected*/) {
+    const auto* lc = world.Registry.try_get<LayerComponent>(e);
+    const int layer = lc ? lc->Layer : 0;
+    return layer >= 0 && layer < 32 && !((EditorSettings::Get().LayerVisibleMask >> layer) & 1u);
+}
+
 // TransformComponent is LOCAL space once an entity has a parent, so anything that manipulates an
 // entity in world space has to bracket the work with these two: read the world matrix, do the
 // math there, then convert the result back into the parent's frame before writing it back.
@@ -863,20 +887,19 @@ void EditorLayer::UpdateLookThrough(World& world, Camera& editorCamera) {
             ? glm::inverse(world.ComposeWorldTransform(parent)) : glm::mat4(1.0f);
 
         glm::vec3 newPos = glm::vec3(invParent * glm::vec4(editorCamera.Position, 1.0f));
-        glm::vec3 fwd = editorCamera.Front();
-        glm::vec3 up = std::fabs(fwd.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
-        glm::quat newRotation = QuaternionFromMatrix(invParent *
-            glm::inverse(glm::lookAt(glm::vec3(0.0f), fwd, up)));
+        glm::quat newRotation = tf.Rotation;
+        const bool reaimed = ReaimKeepingRoll(world.ComposeWorldTransform(m_LookThroughLight), glm::inverse(invParent),
+                                              editorCamera.Front(), newRotation) &&
+                             !SameRotation(newRotation, tf.Rotation);
 
-        bool moved = glm::length(newPos - tf.Position) > 1e-4f ||
-                     !SameRotation(newRotation, tf.Rotation);
+        bool moved = glm::length(newPos - tf.Position) > 1e-4f || reaimed;
         if (moved) {
             if (!m_LookThroughMoved) {           // first real move -> one undo point, light still at entry pose
                 PushUndo(world, "Reposition Light (Look Through)");
                 m_LookThroughMoved = true;
             }
             tf.Position = newPos;
-            tf.SetRotationQuaternion(newRotation);
+            if (reaimed) tf.SetRotationQuaternion(newRotation);
         }
     }
 
@@ -1489,6 +1512,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
             for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
                 if (ViewportPickLocked(world, entity)) continue;
                 if (NotSceneSelectable(world, entity)) continue; // #236 B
+                if (IconHiddenForPick(world, entity, IsSelected(entity))) continue;
                 glm::mat4 model = world.ComposeWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
                 glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
@@ -1570,6 +1594,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
         if (ViewportPickLocked(world, entity)) continue;
         if (NotSceneSelectable(world, entity)) continue; // #236 B
+        if (IconHiddenForPick(world, entity, false)) continue; // the marquee only takes icons it can see
         glm::mat4 model = world.ComposeWorldTransform(entity);
         glm::vec3 worldPos = glm::vec3(model[3]);
         glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
@@ -1668,7 +1693,7 @@ void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
     float bestPixelDist = m_VertexPickPixels;
     glm::vec3 bestTarget{};
     bool found = false;
-    auto snapView = world.Registry.view<const RenderableComponent>(entt::exclude<LevelGeometryTag>);
+    auto snapView = world.Registry.view<const RenderableComponent>(entt::exclude<LevelGeometryTag, InactiveTag>);
     for (auto entity : snapView) {
         if (isExcluded(entity)) continue;
         const auto& otherRenderable = snapView.get<const RenderableComponent>(entity);
@@ -2373,12 +2398,8 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
             if (std::fabs(denom) > 1e-5f) {
                 float s = glm::dot(handlePos - rayO, nrm) / denom;
                 glm::vec3 fwd = (rayO + rayD * s) - pos;
-                if (glm::length(fwd) > 1e-4f) {
-                    fwd = glm::normalize(fwd);
-                    glm::vec3 up = std::fabs(fwd.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
-                    glm::mat4 rot = glm::inverse(glm::lookAt(glm::vec3(0.0f), fwd, up));
-                    xf.SetRotationQuaternion(QuaternionFromMatrix(glm::inverse(parentWorld) * rot));
-                }
+                glm::quat aimed;
+                if (ReaimKeepingRoll(model, parentWorld, fwd, aimed)) xf.SetRotationQuaternion(aimed); // keeps roll
             }
         }
     } else {
@@ -2645,9 +2666,14 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
 
     if (isUsingNow) {
         // Undo the Center-mode display shift before reading the result back, so the object's
-        // real origin moves by the drag delta rather than jumping onto its bounds center.
+        // real origin moves by the drag delta rather than jumping onto its bounds center. The
+        // offset turns and scales with the object (rotate / scale pivot on the center), so it is
+        // carried through this frame's change of the matrix's linear part.
         glm::mat4 adjusted = matrix;
-        adjusted[3] -= glm::vec4(centerOffset, 0.0f);
+        const glm::mat3 linBefore(matrixBeforeDrag), linAfter(matrix);
+        const glm::vec3 offsetNow = std::fabs(glm::determinant(linBefore)) > 1e-12f
+            ? linAfter * (glm::inverse(linBefore) * centerOffset) : centerOffset;
+        adjusted[3] -= glm::vec4(offsetNow, 0.0f);
         // Manipulate() edited the world-space matrix — convert back to local before writing it
         // to TransformComponent (a no-op conversion when unparented, since parentWorld is then
         // identity).
@@ -3341,6 +3367,19 @@ entt::entity EditorLayer::PlaceDecal(World& world, const std::string& path, cons
     return e;
 }
 
+void EditorLayer::AlignCameraToView(World& world, entt::entity camera, const Camera& view) {
+    if (!world.Registry.valid(camera) || !world.Registry.all_of<TransformComponent, CameraComponent>(camera)) return;
+    PushUndo(world, "Align Camera to View");
+    // The editor pose is world space; a parented camera stores local values (#224).
+    const glm::mat4 worldPose = glm::translate(glm::mat4(1.0f), view.Position) *
+        glm::inverse(glm::lookAt(glm::vec3(0.0f), glm::normalize(view.Front()), glm::vec3(0.0f, 1.0f, 0.0f)));
+    const glm::mat4 local = glm::inverse(ParentWorldMatrix(world, camera)) * worldPose;
+    auto& t = world.Registry.get<TransformComponent>(camera);
+    t.Position = glm::vec3(local[3]);
+    t.SetRotationQuaternion(QuaternionFromMatrix(local));
+    world.Registry.get<CameraComponent>(camera).FovDegrees = view.Fov;
+}
+
 bool EditorLayer::FitDecalToSurface(World& world, entt::entity entity) {
     auto* d = world.Registry.try_get<DecalComponent>(entity);
     if (!d || !world.Registry.all_of<TransformComponent>(entity)) return false;
@@ -3612,9 +3651,13 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             float nt[3], nr[3], ns[3];
             ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
             auto& transform = world.Registry.get<TransformComponent>(r.entity);
+            // Write only what the tool changes: a decompose round-trip of the untouched channels
+            // adds float noise to them every drag frame (a translate used to nudge rotation/scale).
             transform.Position = {nt[0], nt[1], nt[2]};
-            transform.SetRotationQuaternion(QuaternionFromMatrix(newLocal));
-            transform.Scale = {ns[0], ns[1], ns[2]};
+            if (m_GizmoOp != GizmoOp::Translate && m_GizmoOp != GizmoOp::Scale)
+                transform.SetRotationQuaternion(QuaternionFromMatrix(newLocal));
+            if (m_GizmoOp != GizmoOp::Translate && m_GizmoOp != GizmoOp::Rotate)
+                transform.Scale = {ns[0], ns[1], ns[2]};
             PushGizmoEditToPhysics(r.entity, newWorld); // #185
         }
     }

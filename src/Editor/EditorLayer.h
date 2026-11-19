@@ -2423,6 +2423,8 @@ private:
     // Moves the decal onto the surface its box projects at (along -Z) and turns +Z out of it,
     // keeping its spin. One undo step; false (nothing changed) when no surface is in reach.
     bool FitDecalToSurface(World& world, entt::entity entity);
+    // Puts a Camera entity at the editor camera's pose and FOV (world pose -> its parent's frame).
+    void AlignCameraToView(World& world, entt::entity camera, const Camera& view);
 public:
     // The ray cast the decal tools share (RaycastRenderables): the nearest surface along the ray,
     // its normal turned to face the ray, and the entity that owns it.

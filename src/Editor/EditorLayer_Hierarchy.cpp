@@ -168,6 +168,23 @@ int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) {
 }
 
 
+namespace {
+// Drops every entity whose ancestor is also in the list: moving a selected parent already carries
+// its selected children, and reparenting them too used to pull them out of it (flattening).
+std::vector<entt::entity> TopmostOnly(const World& world, std::vector<entt::entity> list) {
+    auto inList = [&](entt::entity e) { return std::find(list.begin(), list.end(), e) != list.end(); };
+    std::vector<entt::entity> out;
+    for (entt::entity e : list) {
+        bool under = false;
+        for (const auto* h = world.Registry.try_get<HierarchyComponent>(e); h && h->Parent != entt::null && !under;
+             h = world.Registry.valid(h->Parent) ? world.Registry.try_get<HierarchyComponent>(h->Parent) : nullptr)
+            under = inList(h->Parent);
+        if (!under) out.push_back(e);
+    }
+    return out;
+}
+} // namespace
+
 void EditorLayer::CopySelection(World& world) {
     auto selection = GetSelectedItems();
     if (selection.empty()) return;
@@ -1233,7 +1250,7 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
             if (world.Registry.valid(dragged)) {
                 // Dragging a row that's part of the current multi-selection un-parents the whole
                 // selection, not just the one row the mouse happened to grab (#220).
-                std::vector<entt::entity> toUnparent = IsSelected(dragged) ? GetSelectedItems()
+                std::vector<entt::entity> toUnparent = IsSelected(dragged) ? TopmostOnly(world, GetSelectedItems())
                                                                             : std::vector<entt::entity>{dragged};
                 StageUndo(world);
                 for (entt::entity e : toUnparent) {
@@ -1690,7 +1707,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 entt::entity dragged = *(const entt::entity*)drag->Data;
                 if (world.Registry.valid(dragged) && dragged != entity) {
                     // A multi-selected dragged row carries the whole selection (#220).
-                    std::vector<entt::entity> moving = IsSelected(dragged) ? GetSelectedItems()
+                    std::vector<entt::entity> moving = IsSelected(dragged) ? TopmostOnly(world, GetSelectedItems())
                                                                            : std::vector<entt::entity>{dragged};
                     if (zone == 0) {
                         StageUndo(world);
@@ -2192,6 +2209,7 @@ void EditorLayer::CreateEmptyParentForSelection(World& world) {
     std::vector<entt::entity> sel = GetSelectedItems();
     sel.erase(std::remove_if(sel.begin(), sel.end(),
         [&](entt::entity e) { return !world.Registry.valid(e); }), sel.end());
+    sel = TopmostOnly(world, std::move(sel));
     if (sel.empty()) return;
 
     glm::vec3 center(0.0f);
