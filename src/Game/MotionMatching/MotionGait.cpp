@@ -81,16 +81,11 @@ GaitSpeedTable GaitSpeedTable::Measure(const MotionDatabase& db) {
             while (j < n && in[(size_t)j]) ++j;
             if (j - i >= minLeg) {
                 float best = 0.0f, sum = 0.0f;
-                int bestAt = i;
                 for (int k = i; k < j; ++k) {
                     sum += speed[(size_t)k];
                     if (k - i >= win) sum -= speed[(size_t)(k - win)];
-                    if (k - i + 1 >= win && sum / (float)win > best) {
-                        best = sum / (float)win;
-                        bestAt = k - win / 2;
-                    }
+                    if (k - i + 1 >= win) best = std::max(best, sum / (float)win);
                 }
-                (void)bestAt;
                 out[g].push_back(best);
             }
             i = j;
