@@ -164,6 +164,5 @@ void Finish() {
               << std::endl;
 }
 
-bool Recording() { return s_State.pipe != nullptr; }
 
 } // namespace Cinematic

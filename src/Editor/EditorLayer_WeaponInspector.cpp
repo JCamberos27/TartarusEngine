@@ -101,8 +101,6 @@ void SortUnique(std::vector<std::string>& v) {
     v.erase(std::unique(v.begin(), v.end()), v.end());
 }
 
-bool Has(const std::vector<std::string>& v, const std::string& s) { return std::find(v.begin(), v.end(), s) != v.end(); }
-
 template<class VectorCurve>
 void BindVectorCurve(CurveEditor::AssetScope& scope,const VectorCurve& c,const std::string& pointer,const std::string& title,bool seconds=false) {
     CurveEditor::Options options;options.TimeInSeconds=seconds;
@@ -983,7 +981,7 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
 
 void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
     struct Cache {
-        std::string Path, Error, Saved;
+        std::string Path, Error;
         fs::file_time_type Stamp{};
         RecoilAsset Asset;
     };
@@ -995,7 +993,7 @@ void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
         cache.Path = path;
         cache.Stamp = stamp;
         cache.Error.clear();
-        if (RecoilAsset::LoadFile(path, cache.Asset, &cache.Error)) cache.Saved = cache.Asset.ToJsonString();
+        RecoilAsset::LoadFile(path, cache.Asset, &cache.Error);
     }
     ImGui::TextUnformatted(fs::u8path(path).filename().u8string().c_str());
     if (!cache.Error.empty()) { ImGui::TextWrapped("%s", cache.Error.c_str()); return; }
@@ -1034,7 +1032,6 @@ void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
     DrawRecoil(rows, cache.Asset.Data, rpm, true);
     if (changed) {
         if (cache.Asset.SaveFile(path)) {
-            cache.Saved = cache.Asset.ToJsonString();
             cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
         } else Log::Error("Recoil profile was not saved: check ranges, durations, and rates.");
     }
@@ -1147,7 +1144,6 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         FirstPersonAnimationSet Set;
         fs::file_time_type ProfileStamp{};
         std::string Error;
-        std::string Saved;                    // the file's content as last loaded / saved
     };
     static Cache cache;
     std::error_code ec;
@@ -1163,7 +1159,6 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             std::string parseError;
             if (!FirstPersonAnimationSet::FromJsonString(text, cache.Set, &parseError)) cache.Set = {};
         }
-        cache.Saved = cache.Set.Controller.empty() ? std::string() : cache.Set.ToJsonString();
     }
     auto save = [&](const FirstPersonAnimationSet& s) {
         if (s.SaveFile(path)) cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
@@ -1619,10 +1614,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     ImGui::Spacing();
     r.Note("Edits save immediately. Numbers apply live in Play; the rigs and controller on the next Play.");
     if (copied) changed = true;
-    if (changed) {
-        save(s);
-        cache.Saved = s.ToJsonString();
-    }
+    if (changed) save(s);
     if (!openProfile.empty()) {
         m_SelectedAssetKey = openProfile;
         m_SelectedAssetIsFolder = false;

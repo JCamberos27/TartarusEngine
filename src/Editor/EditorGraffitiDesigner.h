@@ -85,7 +85,6 @@ struct GraffitiDesigner {
     std::vector<uint32_t> PendingSeq;
     uint32_t NextSeq = 0;
     double StrokeStart = 0.0, LastSampleAt = -1.0, LastDripSound = -10.0;
-    glm::vec2 LastUv{0.0f};
     ImVec2 LastMouse{0, 0};
     float LivePressure = 0.0f;
     EditorSound::LoopHandle Hiss = -1;
@@ -98,13 +97,11 @@ struct GraffitiDesigner {
     int BakeStage = 0;
     bool BakeAgain = false;
     bool BakeUndoable = false, BakeAgainUndoable = false; // the Bake button's bake is an undo step of its own
-    std::future<uint64_t> Encoding; // the four PNGs' FNV-1a hash; 0 when writing failed
-    uint64_t LastBakeHash = 0;
+    std::future<bool> Encoding; // false when writing failed
     std::vector<EditorFileHistory::State> BakeBefore; // the maps and .decal as they were, for the bake's undo step
     std::vector<EditorFileHistory::State> PendingJournal; // a finished bake's pre-images, journaled next frame
     std::vector<std::string> BakedPaths;                  // .decal paths written since the library last looked
     std::shared_ptr<Graffiti::Piece> BakePiece; // what the bake in flight writes: paths and settings taken when it started
-    int Bakes = 0;
     double BakeDoneAt = -10.0;
 
     // The recipe file: its write time as we last wrote or read it (undo / redo rewrite it).
@@ -118,7 +115,6 @@ struct GraffitiDesigner {
     glm::mat4 OccKey{0.0f};           // view * projection * box the cells were worked out for
     const void* OccPiece = nullptr;   // ...and for which piece and target entity
     entt::entity OccTarget = entt::null;
-    double OccAt = -10.0;
     double OverlayUntil = -1.0;       // keep the live overlay until the re-baked decal is resident (or this time)
 
     // Text: letters cascade in as they're typed.

@@ -50,21 +50,6 @@ const char* FolderKindIconName(FolderKind k) {
     }
 }
 
-const char* FolderKindLabel(FolderKind k) {
-    switch (k) {
-        case FolderKind::Model:     return "Models";
-        case FolderKind::Texture:   return "Textures";
-        case FolderKind::Material:  return "Materials";
-        case FolderKind::Sound:     return "Sounds";
-        case FolderKind::Prefab:    return "Prefabs";
-        case FolderKind::Scene:     return "Scenes";
-        case FolderKind::Script:    return "Scripts";
-        case FolderKind::Animation: return "Animation";
-        case FolderKind::Shader:    return "Shaders";
-        default:                    return "Other";
-    }
-}
-
 FolderStyles& FolderStyles::Get() {
     static FolderStyles s;
     return s;

@@ -95,7 +95,6 @@ class EditorLayer {
     friend struct EditorUiTestAccess; // --editor-tests (src/Tests/EditorUiTests.cpp)
     // --editor-tests smoke suites (src/Tests/EditorSmoke/*.inl), one accessor struct each.
     friend struct EditorSmokeAccess_Menus;
-    friend struct EditorSmokeAccess_Panels;
     friend struct EditorSmokeAccess_Hierarchy;
     friend struct EditorSmokeAccess_Decals;
     friend struct EditorSmokeAccess_Inspector;
@@ -105,13 +104,9 @@ class EditorLayer {
     friend struct EditorSmokeAccess_SaveLoad;
     friend struct EditorSmokeAccess_Assets;
     friend struct EditorSmokeAccess_Animator;
-    friend struct EditorSmokeAccess_Curves;
-    friend struct EditorSmokeAccess_Particles;
-    friend struct EditorSmokeAccess_ScriptIDE;
     friend struct EditorSmokeAccess_HotReload;
     friend struct EditorSmokeAccess_Settings;
     friend struct EditorSmokeAccess_Scenes;
-    friend struct EditorSmokeAccess_Graffiti;
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
     // other Init/Shutdown-style lifecycle methods below, not a forward-declaration requirement
@@ -2483,9 +2478,6 @@ private:
     bool HandleGraffitiViewportSpray(World& world, Camera& editorCamera, bool leftPressed, bool leftDown);
     void DrawGraffitiViewportOverlay(World& world, Camera& editorCamera);
     void GraffitiFrame(World& world); // once a frame: bakes landing, recipe reloads after undo
-    // Editor smoke test hooks (EditorSmokeAccess_Graffiti): the bake paths that need two calls in one frame.
-    bool GraffitiTestBakeDuringBake();
-    bool GraffitiTestOpenOtherDuringBake(const std::string& otherPath);
     std::shared_ptr<struct GraffitiDesigner> m_Graffiti;
     bool m_ShowGraffitiDesigner = false;
     // The Character Outfit component's editor (EditorLayer_Outfit.cpp).

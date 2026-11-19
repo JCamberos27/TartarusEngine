@@ -274,7 +274,7 @@ template <class FE, class FC> void RemapIndices(DecalEditorState& ed, FE entry, 
 }
 
 // After the last file: depth-first sorted categories, entries in (category, name) order, counts.
-void FinishScan(DecalEditorState& ed, std::unordered_map<std::string, int>& byPath) {
+void FinishScan(DecalEditorState& ed) {
     const int n = (int)ed.Cats.size();
     std::vector<std::vector<int>> kids(n + 1); // kids[n] = roots
     for (int i = 0; i < n; ++i) kids[ed.Cats[i].Parent < 0 ? n : ed.Cats[i].Parent].push_back(i);
@@ -320,9 +320,7 @@ void FinishScan(DecalEditorState& ed, std::unordered_map<std::string, int>& byPa
     RebuildByPath(ed);
     for (const auto& e : ed.Entries)
         for (int c = e.Category; c >= 0; c = ed.Cats[c].Parent) ++ed.Cats[c].Count;
-    // The first category opens, so the tree isn't a wall of folders at first sight.
-    for (auto& c : ed.Cats) c.Open = c.Depth == 0 && false;
-    (void)byPath;
+    for (auto& c : ed.Cats) c.Open = false; // every category starts collapsed
     // Hearts from the preferences.
     std::unordered_set<std::string> fav(EditorSettings::Get().DecalFavorites.begin(), EditorSettings::Get().DecalFavorites.end());
     for (auto& e : ed.Entries) e.Favorite = fav.count(e.Rel) != 0;
@@ -373,7 +371,7 @@ void ScanStep(DecalEditorState& ed) {
         ed.Dirty = true;
     }
     if (ed.ScanAt >= ed.ScanQueue.size()) {
-        FinishScan(ed, byPath);
+        FinishScan(ed);
         byPath.clear();
         ed.ScanQueue.clear();
         ed.ScanQueue.shrink_to_fit();
@@ -817,8 +815,6 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
 
         int src = SourceKind(ed);
         static const char* const kSrc[3] = {"Decal", "Category", "Palette"};
-        ImGui::BeginDisabled(false);
-        const int before = src;
         if (EditorInternal::Segmented("##src", &src, kSrc, 3)) {
             EditorSound::Play(EditorSound::Event::PaletteSwap);
             if (src == 0) {
@@ -832,9 +828,7 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
                 SetPalette(ed, std::max(ed.ActivePalette, 0));
             }
             EditorSettings::Save();
-            (void)before;
         }
-        ImGui::EndDisabled();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("What the Decal Brush paints from: the selected decal, a category, or a palette.");
         ImGui::SameLine();
@@ -1127,7 +1121,7 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
         for (int i = 0; i < n; ++i) {
             const bool hasKids = ed.Cats[i].End > i + 1;
             bool& catOpen = ed.Cats[i].Open;
-            row(hasKids ? nullptr : nullptr, ed.Cats[i].Name.c_str(), ed.Cats[i].Count, i, ed.Cats[i].Depth, hasKids, &catOpen);
+            row(nullptr, ed.Cats[i].Name.c_str(), ed.Cats[i].Count, i, ed.Cats[i].Depth, hasKids, &catOpen);
             if (hasKids && !catOpen) i = ed.Cats[i].End - 1; // skip the collapsed subtree
         }
         if (!ed.ScanDone) {
@@ -1193,8 +1187,7 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
                             ToggleFavorite(ed, ei);
                         } else if (clicked) {
                             ed.PlacePath = e.Path;
-                            EditorSound::Play(EditorSound::Event::Select);
-                            if (SourceKind(ed) != 0) { /* the brush keeps its palette / category; Place uses this decal */ }
+                            EditorSound::Play(EditorSound::Event::Select); // the brush keeps its palette / category
                         }
                         if (ImGui::IsItemHovered(ImGuiHoveredFlags_None) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !overHeart) {
                             ed.PlacePath = e.Path;

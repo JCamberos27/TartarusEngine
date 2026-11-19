@@ -45,23 +45,10 @@ derived-neutral and retained assets separately with GUIDs and content hashes.
 
 ## Repeating the import
 
-Build the read-only Assimp inventory tool from the repository root:
-
-```bat
-tools\probes\build_probe.bat weapon_import_audit
-```
-
-Use Python with NumPy installed:
-
-```text
-python -B tools/weapons/reimport_authored_exports.py --audit
-python -B tools/weapons/reimport_authored_exports.py --apply
-```
-
-The FBX metadata helper uses Blender 5.2's standalone binary parser/writer;
-it does not launch Blender. `TARTARUS_BLENDER_FBX_ADDON` can point to another
-installation's `io_scene_fbx` directory. Staged imports and the original FBX
-backups are under `build/weapon-reimport`; source exports are never modified.
+The one-off import scripts (`tools/weapons/reimport_authored_exports.py` and the
+`weapon_import_audit` Assimp probe) were retired after this import; the probe's
+shared helper had already been removed, so it no longer built. Both are in git
+history if the import ever needs repeating.
 
 The final static audit checked all 51 updated assets, zero weapon roots, paired
 870 durations, authored arm file hashes, material names, geometry in root space,

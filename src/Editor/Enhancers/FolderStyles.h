@@ -47,7 +47,6 @@ FolderKind DominantKind(const FolderSummary& s, float share = 0.6f, int minCount
 // Up to `max` kinds present, most numerous first (ties in enum order). Returns how many.
 int TopKinds(const FolderSummary& s, FolderKind* out, int max);
 const char* FolderKindIconName(FolderKind k); // FA name; nullptr for Other
-const char* FolderKindLabel(FolderKind k);    // "Models", "Textures", ...
 
 enum class FolderStyleSource : std::uint8_t { Default, Builtin, Auto, Rule, Explicit };
 struct ResolvedFolderStyle {

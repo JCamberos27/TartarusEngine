@@ -63,6 +63,5 @@ int Warmup();
 bool Start(const std::string& shotsDir, int w, int h);
 void Write(const std::vector<unsigned char>& rgbaTopDown);
 void Finish();
-bool Recording();
 
 } // namespace Cinematic
