@@ -24,18 +24,6 @@ const char* kPrompt = "Save changes?##SceneSwitch";
 std::string g_Dump;  // a scene dump to compare against
 std::string g_Path;  // a scene path to come back to / clean up
 
-std::string ReadFile(const std::string& path) {
-    std::ifstream in(fs::path(path), std::ios::binary);
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
-// Where the first difference between two dumps is, with some context either side.
-std::string FirstDifference(const std::string& a, const std::string& b) {
-    size_t i = 0;
-    while (i < a.size() && i < b.size() && a[i] == b[i]) ++i;
-    const size_t from = i > 80 ? i - 80 : 0;
-    return "differs at byte " + std::to_string(i) + " of " + std::to_string(a.size()) + "/" + std::to_string(b.size()) +
-           ": '" + a.substr(from, 160) + "' vs '" + b.substr(from, 160) + "'";
-}
 Step Rename(const char* from, const char* to) {
     return Do(std::string("rename ") + from + " to " + to, [from, to](Ctx& c) {
         X::PushUndo(c.E, c.W, "Rename");
@@ -88,7 +76,7 @@ void RegisterSaveLoadTests() {
         Key(ImGuiKey_S, ImGuiMod_Ctrl),
         Until("saved (clean, file written)", [](Ctx& c) { return !SL::Dirty(c.E) && fs::exists(g_ScratchScene); }),
         Expect("the file holds the edits", [](Ctx&) {
-            const std::string s = ReadFile(g_ScratchScene);
+            const std::string s = ReadFileText(g_ScratchScene);
             return Contains(s, "Gamma Saved") && Contains(s, "Alpha") ? std::string() : std::string("Gamma Saved / Alpha not in the file");
         }),
         Do("dump the scene", [](Ctx& c) { g_Dump = SceneSerializer::SaveToString(c.W, c.A); }),
@@ -155,7 +143,7 @@ void RegisterSaveLoadTests() {
             return c.W.Registry.view<NameComponent>().empty() ? std::string() : std::string("objects in the new scene");
         }),
         Expect("the discarded edit never reached the scratch file", [](Ctx&) {
-            return Contains(ReadFile(g_ScratchScene), "Gamma Unsaved") ? std::string("the edit was saved") : std::string();
+            return Contains(ReadFileText(g_ScratchScene), "Gamma Unsaved") ? std::string("the edit was saved") : std::string();
         }),
         FreshScene(), Wait(10),
         DeleteUntitled(),
@@ -172,7 +160,7 @@ void RegisterSaveLoadTests() {
         Until("a new scene", [](Ctx& c) { return X::ScenePath(c.E) != g_ScratchScene; }),
         Do("note the new file", [](Ctx& c) { g_Path = X::ScenePath(c.E); }),
         Expect("the edit was saved first", [](Ctx&) {
-            return Contains(ReadFile(g_ScratchScene), "Beta Kept") ? std::string() : std::string("Beta Kept is not in the scratch file");
+            return Contains(ReadFileText(g_ScratchScene), "Beta Kept") ? std::string() : std::string("Beta Kept is not in the scratch file");
         }),
         FreshScene(), Wait(10),
         DeleteUntitled(),
@@ -197,7 +185,7 @@ void RegisterSaveLoadTests() {
                 const fs::path dir = fs::path(UserPaths::Root()) / "editor-tests-roundtrip";
                 std::error_code ec;
                 fs::create_directories(dir, ec);
-                const std::string before = ReadFile(scene.string());
+                const std::string before = ReadFileText(scene.string());
                 const std::string copyA = (dir / ("a-" + label)).generic_string();
                 const std::string copyB = (dir / ("b-" + label)).generic_string();
                 std::string problem;
@@ -206,11 +194,11 @@ void RegisterSaveLoadTests() {
                 else if (!SceneSerializer::Save(first, c.A, copyA)) problem = "first save failed";
                 else if (!SceneSerializer::Load(second, c.A, copyA, false)) problem = "the saved copy failed to load";
                 else if (!SceneSerializer::Save(second, c.A, copyB)) problem = "second save failed";
-                else if (const std::string a = ReadFile(copyA), b = ReadFile(copyB); a != b) {
+                else if (const std::string a = ReadFileText(copyA), b = ReadFileText(copyB); a != b) {
                     std::error_code fe;
                     problem = FirstDifference(a, b) + " (sizes on disk " + std::to_string(fs::file_size(copyA, fe)) + "/" +
                               std::to_string(fs::file_size(copyB, fe)) + ")";
-                } else if (ReadFile(scene.string()) != before) problem = "the original file changed";
+                } else if (ReadFileText(scene.string()) != before) problem = "the original file changed";
                 fs::remove(copyA, ec);
                 fs::remove(copyB, ec);
                 return problem.empty() ? std::string() : label + ": " + problem;

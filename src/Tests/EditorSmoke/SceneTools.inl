@@ -321,13 +321,6 @@ std::string SelectionNames(Ctx& c) {
     for (const std::string& n : names) s += (s.empty() ? "" : ",") + n;
     return s.empty() ? "(none)" : s;
 }
-std::string FirstDifference(const std::string& a, const std::string& b) {
-    size_t i = 0;
-    while (i < a.size() && i < b.size() && a[i] == b[i]) ++i;
-    const size_t from = i > 80 ? i - 80 : 0;
-    return "differs at byte " + std::to_string(i) + " of " + std::to_string(a.size()) + "/" + std::to_string(b.size()) +
-           ": '" + a.substr(from, 160) + "' vs '" + b.substr(from, 160) + "'";
-}
 // The scene (and selection) recorded at each undo depth while the chain was built.
 struct Snapshot { bool Has = false; std::string Dump, Selection, Top; };
 std::vector<Snapshot> g_At;

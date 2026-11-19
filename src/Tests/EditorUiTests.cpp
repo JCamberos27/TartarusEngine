@@ -1081,6 +1081,30 @@ static std::string ClipboardTextOrEmpty() {
     return t ? t : "";
 }
 
+// --- Helpers the smoke suites share (one copy, ahead of the suites) ----------------------------------
+// A whole file as bytes ("" when it can't be read).
+std::string ReadFileText(const std::filesystem::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    if (!f) return {};
+    return {std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
+}
+std::string ReadFileText(const std::string& path) { return ReadFileText(std::filesystem::u8path(path)); }
+std::string ReadFileText(const char* path) { return ReadFileText(std::filesystem::u8path(path)); }
+// Where the first difference between two dumps is, with some context either side.
+std::string FirstDifference(const std::string& a, const std::string& b) {
+    size_t i = 0;
+    while (i < a.size() && i < b.size() && a[i] == b[i]) ++i;
+    const size_t from = i > 80 ? i - 80 : 0;
+    return "differs at byte " + std::to_string(i) + " of " + std::to_string(a.size()) + "/" + std::to_string(b.size()) +
+           ": '" + a.substr(from, 160) + "' vs '" + b.substr(from, 160) + "'";
+}
+// How many times the log has said something containing `fragment` (repeats included).
+int LogCount(const std::string& fragment) {
+    int n = 0;
+    for (const LogEntry& e : Log::Entries()) if (Contains(e.Message, fragment)) n += e.Count;
+    return n;
+}
+
 #include "EditorSmoke/Menus.inl"
 #include "EditorSmoke/Panels.inl"
 #include "EditorSmoke/Hierarchy.inl"

@@ -120,7 +120,7 @@ Saved Snapshot(const std::string& path) {
     Saved s;
     s.Taken = true;
     s.Existed = std::filesystem::exists(path);
-    if (s.Existed) s.Bytes = ReadText(path);
+    if (s.Existed) s.Bytes = ReadFileText(path);
     return s;
 }
 void Restore(const std::string& path, Saved& s) {
@@ -410,7 +410,7 @@ void RegisterSettingsTests() {
              return s->Current.Key == ImGuiKey_K && !s->Current.Ctrl && s->Overridden ? std::string()
                  : "bound to " + Shortcuts::ToString(s->Current);
          }),
-         Until("shortcuts.json has it", [](Ctx&) { return Contains(ReadText(UserPaths::Resolve("shortcuts.json")), "edit.invertSelection"); }),
+         Until("shortcuts.json has it", [](Ctx&) { return Contains(ReadFileText(UserPaths::Resolve("shortcuts.json")), "edit.invertSelection"); }),
          Shot("rebound", {"###Settings"}),
          // The row's reset arrow (the toolbar's restore-all arrow is the first one).
          Click(ByExact(ICON_FA_ARROW_ROTATE_LEFT, "###Settings", 1)), Wait(3),
@@ -418,7 +418,7 @@ void RegisterSettingsTests() {
              const Shortcuts::Shortcut* s = Shortcuts::Find("edit.invertSelection");
              return s && !s->Overridden && s->Current == s->Default ? std::string() : "now " + Shortcuts::ToString(s->Current);
          }),
-         Until("shortcuts.json no longer has it", [](Ctx&) { return !Contains(ReadText(UserPaths::Resolve("shortcuts.json")), "edit.invertSelection"); }),
+         Until("shortcuts.json no longer has it", [](Ctx&) { return !Contains(ReadFileText(UserPaths::Resolve("shortcuts.json")), "edit.invertSelection"); }),
          Do("clear the filter", [](Ctx& c) { A::ShortcutFilter(c.E).clear(); ImGui::ClearActiveID(); }),
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
