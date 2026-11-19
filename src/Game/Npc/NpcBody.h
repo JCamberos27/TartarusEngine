@@ -28,6 +28,7 @@ class World;
 // The body's tuning: the player's First Person Body numbers, copied from the scene's player by NpcDirector.
 struct NpcHoldSettings {
     float TurnThreshold = 1.15f;     // radians: a still body further off than this turns on the spot
+    float TurnEndAngle = -1.0f;      // radians: a turn on the spot ends this close to the way (< 0: First Person Body's default)
     float FaceEase = 0.09f;          // seconds: heading easing while moving
     IK::SpineDistribution Spine;     // how the spine's turns are shared over spine_01..05 (default: even)
     float HeadMaxYaw = 1.2f;         // radians: head turns past chest (~70 deg)

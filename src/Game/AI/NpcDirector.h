@@ -164,7 +164,7 @@ private:
     std::vector<std::shared_ptr<DummyBody>> m_Pool;                        // hidden, ready for the next spawn
     // From the body prefab, every clothing item off (the wardrobe dresses it in its own skin); null on failure.
     std::shared_ptr<DummyBody> BuildBody(World& world, AssetLibrary& assets);
-    struct PendingRespawn { float At; int SpawnIndex; };
+    struct PendingRespawn { float At; int SpawnIndex; int Tries = 0; };
     std::vector<PendingRespawn> m_RespawnTimers;
     NavMesh m_Nav;
     NavCrowd m_Crowd;

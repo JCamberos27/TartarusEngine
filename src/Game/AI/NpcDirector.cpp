@@ -179,6 +179,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, bool allowEmpty) {
     if (auto bodies = world.Registry.view<FirstPersonBodyComponent>(); bodies.begin() != bodies.end()) {
         const auto& fpb = bodies.get<FirstPersonBodyComponent>(*bodies.begin());
         m_HoldSettings.TurnThreshold = glm::radians(fpb.NpcTurnThreshold); // degrees in the component
+        m_HoldSettings.TurnEndAngle = glm::radians(std::max(fpb.TurnEndAngle, 0.0f));
         m_HoldSettings.FaceEase = fpb.NpcFaceEase;
         m_HoldSettings.HeadMaxYaw = glm::radians(fpb.NpcHeadMaxYaw);
         m_HoldSettings.HeadMaxPitch = glm::radians(fpb.NpcHeadMaxPitch);
@@ -219,6 +220,9 @@ void NpcDirector::Stop(World& world) {
     m_PlayerAgent = -1;
     m_Active = m_Started = false;
     m_NextName = 1;
+    m_Frame = 0; // the next Play's costs count from its own start (the navmesh build stays out of them)
+    m_ThinkStat = m_LateStat = CostStats{};
+    for (CostStats& s : m_SubStat) s = CostStats{};
 }
 
 void NpcDirector::BuildNav() {
@@ -402,6 +406,16 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     }
     n->Cct = PhysicsWorld::CreateNpcCharacter(Id(root), kRadius, kStandCyl, &feet.x);
     n->Agent = m_Crowd.Add(feet, kNpcNavRadius, 1.8f, 3.2f);
+    if (n->Cct == PhysicsWorld::kNoCharacter || n->Agent < 0) {
+        Log::Warn(n->Cct == PhysicsWorld::kNoCharacter ? "Dummies: no room for a capsule there - not spawned."
+                                                       : "Dummies: the crowd is full - not spawned.");
+        if (n->Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::DestroyNpcCharacter(n->Cct);
+        if (n->Agent >= 0) m_Crowd.Remove(n->Agent);
+        n->Body.Stop();
+        m_Bodies.erase(root);
+        world.DestroyEntityAndChildren(root);
+        return -1;
+    }
     // The prefab's Health (Max, Invulnerable) when it has one; 100 otherwise.
     auto& health = reg.get_or_emplace<HealthComponent>(root);
     health.Max = std::clamp(health.Max, 1.0f, 100000.0f);
@@ -431,6 +445,9 @@ void NpcDirector::Despawn(World& world, Npc& n, bool keepBody) {
     n.Ragdoll.reset();
     n.Body.Stop();
     FoleyAudio::Get().NpcGone(n.Index); // its stride / foot state goes with it
+    m_Flinch.erase(n.Index); // (keyed by index: the next spawn into this slot starts clean)
+    m_Scripted.erase(n.Index);
+    m_DeathBones.erase(n.Index);
     if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::DestroyNpcCharacter(n.Cct);
     n.Cct = PhysicsWorld::kNoCharacter;
     if (n.Agent >= 0) m_Crowd.Remove(n.Agent);
@@ -980,14 +997,20 @@ void NpcDirector::UpdatePersistence(World& world, const PlayerSnapshot& p) {
     }
 }
 
-// A dead dummy comes back at its own spawn after Respawn Delay (not while the player stands on it: a second later).
+// A dead dummy comes back at its own spawn after Respawn Delay (stepped aside from anyone standing on it). A spawn that
+// fails is tried again a second later, a few times, then given up.
 void NpcDirector::Respawns(World& world, AssetLibrary& assets) {
+    constexpr int kMaxTries = 5;
     for (size_t i = 0; i < m_RespawnTimers.size();) {
         PendingRespawn& r = m_RespawnTimers[i];
         if (m_Now < r.At) { ++i; continue; }
         if (r.SpawnIndex < 0 || r.SpawnIndex >= (int)m_Spawns.size()) { m_RespawnTimers.erase(m_RespawnTimers.begin() + (long long)i); continue; }
-        if (Spawn(world, assets, r.SpawnIndex) >= 0) m_RespawnTimers.erase(m_RespawnTimers.begin() + (long long)i);
-        else r.At = m_Now + 1.0f;
+        if (Spawn(world, assets, r.SpawnIndex) >= 0 || ++r.Tries >= kMaxTries) {
+            if (r.Tries >= kMaxTries) Log::Warn("Dummies: spawn " + std::to_string(r.SpawnIndex) + " failed " + std::to_string(kMaxTries) + " times - not respawned.");
+            m_RespawnTimers.erase(m_RespawnTimers.begin() + (long long)i);
+        } else {
+            r.At = m_Now + 1.0f;
+        }
     }
 }
 
