@@ -1,6 +1,7 @@
 #include "AssetLibrary.h"
 
 #include <atomic>
+#include <fstream>
 #include <thread>
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
@@ -1093,4 +1094,11 @@ int AssetLibrary::ApplyMaterialRemap(const Model& model, std::vector<std::shared
         ++filled;
     }
     return filled;
+}
+
+bool AssetLibrary::ReadModelImportSettings(const std::string& metaPath, ModelImportSettings& out) {
+    std::ifstream in(metaPath);
+    if (!in) return false;
+    const json j = json::parse(in, nullptr, false);
+    return j.is_object() && ParseModelImporter(j, out);
 }
