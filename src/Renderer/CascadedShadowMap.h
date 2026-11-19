@@ -122,6 +122,7 @@ public:
     const std::array<glm::vec2, 8>& SliceCorners(int c) const { return m_SliceCorners[c]; }
 
 private:
+    float MarginNdc(int c, float kernelTexels, float normalBias) const; // ReadRect / CasterReachesSlice's reach
     DepthArrayTarget m_Target; // the cascade array (its own per-layer FBOs below, so no FBOs of its own)
     // One FBO per cascade, each attached to its own layer once in Configure(). Re-pointing a
     // single FBO's attachment in every Begin() made the driver revalidate it once per cascade.
@@ -158,7 +159,8 @@ private:
     std::array<std::uint64_t, kMaxCascades> m_HeldFrame{};
     std::array<float, kMaxCascades> m_HoldTexels{}; // extra reach this frame's render of the cascade carries
     std::uint64_t m_LastPlanFrame = ~std::uint64_t(0);
-    mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check in Begin()
+    mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check (CheckComplete)
+    void CheckComplete() const;
 
     void Release();
 };

@@ -91,7 +91,7 @@ void TestNativeWeaponRules() {
     w.Held=0; WeaponRules::Update(w); CHECK(w.Result==0);
     World world; Player player; player.Gravity=0; player.Cam.Yaw=-90; player.Cam.Position={0,2,0};
     player.ScriptedMove=true; player.ScriptMove={0,1}; player.MoveSpeed=6;
-    player.Update(.1f,world,nullptr,false);
+    player.Update(.1f,false);
     CHECK(std::abs(player.Velocity.z+6)<.001f);
     CHECK(std::abs(player.Cam.Position.z+.6f)<.001f);
 }

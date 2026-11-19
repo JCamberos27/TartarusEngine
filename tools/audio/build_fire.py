@@ -18,9 +18,6 @@ import adsp
 
 SR = adsp.SR
 _cache = {}
-# default bus balance of the five layers (every file is delivered at its own loudness target; the engine plays each
-# layer at mix_db relative to that, then a limiter on the weapon bus). Starting point for S2, not a mastering decision.
-# (superseded: mix_db now comes from recipes/mix.json via mixspec.py, applied by abuild.update_manifest)
 
 
 def src(path):

@@ -268,18 +268,6 @@ void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool o
     EditorSound::Play(on ? EditorSound::Event::FavoriteOn : EditorSound::Event::FavoriteOff);
 }
 
-// Decoded once per sound path (#236 G). An empty vector means "not decodable / not audio" and
-// is cached too, so a bad file isn't re-probed every frame.
-const std::vector<float>& EditorLayer::SoundWaveform(const std::string& path) {
-    auto it = m_SoundWaveforms.find(path);
-    if (it == m_SoundWaveforms.end()) {
-        std::vector<float> peaks;
-        AudioEngine::WaveformPeaks(path, 48, peaks);
-        it = m_SoundWaveforms.emplace(path, std::move(peaks)).first;
-    }
-    return it->second;
-}
-
 // Rendered once per Model into its own small texture, then cached. Returns 0 while this frame's
 // render budget is spent — the caller falls back to the type glyph and picks it up next frame.
 unsigned int EditorLayer::ModelThumbnail(Model& model) {
@@ -1187,6 +1175,21 @@ std::string FormatModifiedTime(const std::filesystem::file_time_type& t) {
     std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
     return buf;
 }
+
+// Size + modified time of a tile's file, once per list build (the cells live until the next rebuild).
+void StatAssetGridCell(const AssetGridCell& c) {
+    if (c.statted) return;
+    c.statted = true;
+    c.sizeText = c.modifiedText = "-";
+    if (c.kind == AssetGridCell::Kind::Folder) return;
+    std::error_code ec;
+    const std::filesystem::path p(c.key);
+    if (!std::filesystem::exists(p, ec)) return;
+    const auto sz = std::filesystem::file_size(p, ec);
+    if (!ec) { c.fileSize = (unsigned long long)sz; c.sizeText = FormatFileSize(sz); }
+    const auto mt = std::filesystem::last_write_time(p, ec);
+    if (!ec) { c.modifiedTicks = (long long)mt.time_since_epoch().count(); c.modifiedText = FormatModifiedTime(mt); }
+}
 } // namespace
 
 // Unity Project window's left pane (a real folder hierarchy with expand/collapse arrows, Alt+click
@@ -1205,6 +1208,7 @@ void EditorLayer::RefreshAssetBrowser() {
     InvalidateProjectAssetIndex();
     InvalidateModelThumbnail();          // clears every cached model thumbnail
     m_AssetThumbs.Clear();
+    m_SoundWaveforms.Clear();
     m_AssetListingRefreshTimer = 0.0f;
     m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
     m_LibraryIndex.Load(); // asset_library.json edits show on Refresh
@@ -1838,8 +1842,10 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     // filtering, to anything listed), a move, a rename, a label or name edit, or a favourite; streaming into other
     // folders costs nothing. Without that tracking, and for the disk-listed Scenes/Shaders/Library views, the library
     // growing rebuilds it at most every kPlayGridLibraryFrames frames and anything else within kPlayGridRefreshFrames.
-    // Edit mode rebuilds it every frame, as before.
-    constexpr int kPlayGridLibraryFrames = 30, kPlayGridRefreshFrames = 60;
+    // Edit mode keeps it too while the tracked content key matches, rebuilding at least every kEditGridRefreshFrames
+    // (which also picks up what the key can't see: files edited on disk for the Date/Size sort, the Scenes listing).
+    // Untracked views (Scenes/Shaders/Library, summaries not built yet) rebuild every frame in edit mode.
+    constexpr int kPlayGridLibraryFrames = 30, kPlayGridRefreshFrames = 60, kEditGridRefreshFrames = 120;
     std::uint64_t userKey = std::hash<std::string>{}(m_CurrentAssetFolder) * 31u + std::hash<std::string>{}(m_AssetSearchFilter);
     userKey ^= ((std::uint64_t)m_AssetFavoritesOnly | ((std::uint64_t)EditorSettings::Get().AssetSearchGlobal << 1) |
                 ((std::uint64_t)EditorSettings::Get().AssetSortDesc << 2) | ((std::uint64_t)EditorSettings::Get().AssetSortMode << 3)) *
@@ -1873,12 +1879,23 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         mixContent(assets.Folders().size());
         mixContent(m_ProjectAssetIndex.files.size());
         mixContent(m_AssetFavorites.size());
+        mixContent(m_FavCacheRevision);
         mixContent(filteringNow ? m_AnyFolderContentGen : folderGen != m_FolderContentGen.end() ? folderGen->second : 0u);
         contentKey = k != 0 ? k : 1u; // never 0 (= not tracked)
     }
-    const bool reuseCells = m_InPlayMode && PlayUiThrottle() && m_AssetGridCellsValid && userKey == m_AssetGridCellsUserKey &&
-                            (contentKey != 0 ? contentKey == m_AssetGridCellsContentKey
-                                     : gridKey == m_AssetGridCellsKey ? gridAge < kPlayGridRefreshFrames : gridAge < kPlayGridLibraryFrames);
+    const bool keysMatch = m_AssetGridCellsValid && userKey == m_AssetGridCellsUserKey;
+    // A second caller this frame (the Glass Library panel beside the Asset Browser) gets the same list, and the
+    // once-a-frame edges below (search sound, Ctrl+A) stay with the first.
+    if (keysMatch && gridAge == 0 && gridKey == m_AssetGridCellsKey && contentKey == m_AssetGridCellsContentKey) {
+        if (InAssetListWindow()) GridMotionFrameBegin(cells, m_CurrentAssetFolder, m_AssetSearchFilter, m_AssetFavoritesOnly, m_ImportQueue);
+        return;
+    }
+    const bool playReuse = m_InPlayMode && PlayUiThrottle() &&
+                           (contentKey != 0 ? contentKey == m_AssetGridCellsContentKey
+                                    : gridKey == m_AssetGridCellsKey ? gridAge < kPlayGridRefreshFrames : gridAge < kPlayGridLibraryFrames);
+    const bool editReuse = !m_InPlayMode && contentKey != 0 && contentKey == m_AssetGridCellsContentKey &&
+                           gridKey == m_AssetGridCellsKey && gridAge < kEditGridRefreshFrames;
+    const bool reuseCells = keysMatch && (playReuse || editReuse);
     if (!reuseCells) {
         m_AssetGridCellsContentKey = contentKey;
         cells.clear();
@@ -2080,47 +2097,37 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 }
                 return 7;
             };
-            std::unordered_map<std::string, long long> mtime;
-            std::unordered_map<std::string, unsigned long long> fsize;
-            if (mode == 2 || mode == 3) {
-                std::error_code ec;
-                for (const auto& c : cells) {
-                    if (c.kind == Cell::Kind::Folder) continue;
-                    std::filesystem::path p(c.key);
-                    if (!std::filesystem::exists(p, ec)) continue;
-                    if (mode == 2) {
-                        auto t = std::filesystem::last_write_time(p, ec);
-                        if (!ec) mtime[c.key] = (long long)t.time_since_epoch().count();
-                    } else {
-                        auto s = std::filesystem::file_size(p, ec);
-                        if (!ec) fsize[c.key] = (unsigned long long)s;
-                    }
+            // Names are lower-cased once per cell (not twice per comparison); Date/Size stat each file once
+            // per build (StatAssetGridCell), which the Details view then reuses.
+            struct SortKey { bool folder; int rank; long long num; std::string name; size_t index; };
+            std::vector<SortKey> keys;
+            keys.reserve(cells.size());
+            for (size_t i = 0; i < cells.size(); ++i) {
+                const Cell& c = cells[i];
+                SortKey k{c.kind == Cell::Kind::Folder, typeRank(c.kind), 0, c.display, i};
+                for (char& ch : k.name) ch = (char)std::tolower((unsigned char)ch);
+                if (mode == 2 || mode == 3) {
+                    StatAssetGridCell(c);
+                    k.num = mode == 2 ? c.modifiedTicks : (long long)c.fileSize;
                 }
+                keys.push_back(std::move(k));
             }
-            auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
-            std::sort(cells.begin(), cells.end(), [&](const Cell& a, const Cell& b) {
-                const bool aFolder = a.kind == Cell::Kind::Folder, bFolder = b.kind == Cell::Kind::Folder;
-                if (aFolder != bFolder) return aFolder; // folders first, always
+            std::sort(keys.begin(), keys.end(), [&](const SortKey& a, const SortKey& b) {
+                if (a.folder != b.folder) return a.folder; // folders first, always
                 int cmp = 0;
                 switch (mode) {
-                    case 1: cmp = typeRank(a.kind) - typeRank(b.kind); break;
-                    case 2: {
-                        long long ta = mtime.count(a.key) ? mtime[a.key] : 0;
-                        long long tb = mtime.count(b.key) ? mtime[b.key] : 0;
-                        cmp = (ta < tb) ? -1 : (ta > tb) ? 1 : 0;
-                        break;
-                    }
-                    case 3: {
-                        unsigned long long sa = fsize.count(a.key) ? fsize[a.key] : 0;
-                        unsigned long long sb = fsize.count(b.key) ? fsize[b.key] : 0;
-                        cmp = (sa < sb) ? -1 : (sa > sb) ? 1 : 0;
-                        break;
-                    }
+                    case 1: cmp = a.rank - b.rank; break;
+                    case 2:
+                    case 3: cmp = (a.num < b.num) ? -1 : (a.num > b.num) ? 1 : 0; break;
                     default: break;
                 }
-                if (cmp == 0) cmp = lower(a.display).compare(lower(b.display)); // stable tiebreak by name
+                if (cmp == 0) cmp = a.name.compare(b.name); // stable tiebreak by name
                 return desc ? cmp > 0 : cmp < 0;
             });
+            std::vector<Cell> sorted;
+            sorted.reserve(cells.size());
+            for (const SortKey& k : keys) sorted.push_back(std::move(cells[k.index]));
+            cells.swap(sorted);
         }
 
     }
@@ -2343,10 +2350,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 // GL render targets are bottom-up: flip V so the preview is upright.
                 dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y),
                              ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
-            } else if (cell.kind == Cell::Kind::Sound && !SoundWaveform(cell.key).empty()) {
+            } else if (const std::vector<float>* wave = cell.kind == Cell::Kind::Sound ? m_SoundWaveforms.Get(cell.key) : nullptr;
+                       wave && wave->size() > 1) {
                 // Waveform envelope in the icon square (#236 G), with a small play/stop glyph
-                // bottom-right so it still reads as a clickable sound.
-                const std::vector<float>& peaks = SoundWaveform(cell.key);
+                // bottom-right so it still reads as a clickable sound. The type glyph shows until it's decoded.
+                const std::vector<float>& peaks = *wave;
                 const float w = m_AssetIconSize, h = m_AssetIconSize;
                 const ImVec2 o(tileMin.x + (cellWidth - w) * 0.5f, tileMin.y + cellPadding * 0.5f);
                 const float midY = o.y + h * 0.5f;
@@ -2420,21 +2428,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             // drag source, double-click and the context menu below all attach to it.
             const bool detailsMode = !isRenaming && EditorSettings::Get().AssetDetailsMode;
             if (detailsMode) {
-                std::error_code ec;
-                std::string sizeStr = "-", modStr = "-";
-                if (!isFolder) {
-                    const std::filesystem::path p(cell.key);
-                    if (std::filesystem::exists(p, ec)) {
-                        const auto sz = std::filesystem::file_size(p, ec);
-                        if (!ec) sizeStr = FormatFileSize(sz);
-                        const auto mt = std::filesystem::last_write_time(p, ec);
-                        if (!ec) modStr = FormatModifiedTime(mt);
-                    }
-                }
+                StatAssetGridCell(cell);
                 ImGui::TableSetColumnIndex(1); ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Dim);
                 ImGui::TextUnformatted(AssetKindLabel(cell.kind));
-                ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(sizeStr.c_str());
-                ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(modStr.c_str());
+                ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(cell.sizeText.c_str());
+                ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(cell.modifiedText.c_str());
                 ImGui::PopStyleColor();
                 ImGui::TableSetColumnIndex(0);
             }

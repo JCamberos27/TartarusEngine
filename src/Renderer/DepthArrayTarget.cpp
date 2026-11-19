@@ -1,6 +1,9 @@
 #include "DepthArrayTarget.h"
+#include "GLFramebufferCheck.h"
 #include "GpuMemTrack.h"
 #include "gl.h"
+
+#include <algorithm>
 
 unsigned int DepthArrayTarget::CreateDepthFbo() {
     unsigned int fbo = 0;
@@ -23,6 +26,7 @@ void DepthArrayTarget::Release() {
 void DepthArrayTarget::Create(const Desc& d, const void* owner) {
     Release();
     m_Owner = owner;
+    m_LiveChecked = m_StaticChecked = false; // re-check after a resolution change
     m_Resolution = d.resolution;
     m_Layers = d.layers;
     m_LiveName = d.liveName;
@@ -67,4 +71,45 @@ void DepthArrayTarget::AttachLayer(int layer) const {
 
 void DepthArrayTarget::AttachStaticLayer(int layer) const {
     glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_Static, 0, layer);
+}
+
+void DepthArrayTarget::BeginLive(int layer) const {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
+    AttachLayer(ClampLayer(layer));
+    if (!m_LiveChecked) {
+        m_LiveChecked = true;
+        GLFramebufferCheck::Complete(m_LiveName.c_str(), m_Fbo, m_Resolution, m_Resolution);
+    }
+    glViewport(0, 0, m_Resolution, m_Resolution);
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void DepthArrayTarget::BeginStatic(int layer) const {
+    EnsureStatic();
+    glBindFramebuffer(GL_FRAMEBUFFER, m_StaticFbo);
+    AttachStaticLayer(ClampLayer(layer));
+    if (!m_StaticChecked) {
+        m_StaticChecked = true;
+        GLFramebufferCheck::Complete(m_StaticName.c_str(), m_StaticFbo, m_Resolution, m_Resolution);
+    }
+    glViewport(0, 0, m_Resolution, m_Resolution);
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void DepthArrayTarget::BeginFromStatic(int layer, int x0, int y0, int x1, int y1) const {
+    EnsureStatic();
+    layer = ClampLayer(layer);
+    AttachLayer(layer);
+    if (!m_LiveChecked) {
+        m_LiveChecked = true;
+        GLFramebufferCheck::Complete(m_LiveName.c_str(), m_Fbo, m_Resolution, m_Resolution);
+    }
+    x0 = std::clamp(x0, 0, m_Resolution); x1 = std::clamp(x1, 0, m_Resolution);
+    y0 = std::clamp(y0, 0, m_Resolution); y1 = std::clamp(y1, 0, m_Resolution);
+    if (x0 < x1 && y0 < y1) {
+        AttachStaticLayer(layer);
+        glBlitNamedFramebuffer(m_StaticFbo, m_Fbo, x0, y0, x1, y1, x0, y0, x1, y1, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
+    glViewport(0, 0, m_Resolution, m_Resolution);
 }

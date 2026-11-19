@@ -192,6 +192,8 @@ public:
     // (RagdollDefOf) that keeps those indices and adds neck_01, hand_l, hand_r, foot_l, foot_r after them, so a hit part's index
     // names the same body part in both.
     static constexpr int kParts = 11;
+    static constexpr int kPelvis = 0, kChest = 1, kHead = 2, kUpperArmL = 3, kForearmL = 4, kUpperArmR = 5, kForearmR = 6,
+                         kThighL = 7, kCalfL = 8, kThighR = 9, kCalfR = 10; // (the hitbox parts)
     static constexpr int kNeck = 11, kHandL = 12, kHandR = 13, kFootL = 14, kFootR = 15;
     static constexpr int kRagParts = 16;
 

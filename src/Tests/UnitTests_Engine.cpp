@@ -606,9 +606,14 @@ static void Test_AssetDatabase_NonObjectMetaIsRewritten() {
 static void Test_SamplingProfiler_SurvivesTheLoaderLock() {
 #if defined(_WIN32) && defined(_M_X64)
     SamplingProfiler::Start();
-    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(400);
+    // Bounded by work, not a fixed window: a loaded machine gave the sampler only 9 ticks in 400 ms. A deadlock still
+    // shows (the loop never returns); 10 s is a cap for a sampler that stopped ticking.
+    const auto start = std::chrono::steady_clock::now();
+    const auto until = start + std::chrono::seconds(10);
     int loads = 0;
-    while (std::chrono::steady_clock::now() < until) {
+    while (std::chrono::steady_clock::now() < until &&
+           (std::chrono::steady_clock::now() < start + std::chrono::milliseconds(400) || loads <= 10 ||
+            SamplingProfiler::SampleCount() <= 20)) {
         if (HMODULE m = LoadLibraryW(L"version.dll")) { FreeLibrary(m); ++loads; }
     }
     SamplingProfiler::Stop();

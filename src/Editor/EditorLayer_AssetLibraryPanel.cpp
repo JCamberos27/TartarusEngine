@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -53,6 +54,7 @@ struct LibraryState {
     std::string Root;                                   // the library folder these caches are for
     std::map<std::string, std::vector<DirEntry>> Children;
     std::vector<std::string> Index;                     // every folder, for search (built lazily)
+    std::vector<std::string> IndexNames;                // each one's folder name lower-cased, parallel to Index
     bool IndexBuilt = false;
     std::string Selected;
     FolderSummary Summary;
@@ -68,6 +70,22 @@ LibraryState& State() {
 std::string Lower(std::string s) {
     for (char& c : s) c = (char)std::tolower((unsigned char)c);
     return s;
+}
+
+// Whether a folder (dirOnly) or any file is there, asked of the disk at most once a second per path:
+// the panel asked three times a frame while it was open.
+bool OnDisk(const std::string& path, bool dirOnly) {
+    struct Seen { bool There; std::chrono::steady_clock::time_point At; };
+    static std::map<std::pair<std::string, bool>, Seen> s_Seen;
+    const auto now = std::chrono::steady_clock::now();
+    const auto key = std::make_pair(path, dirOnly);
+    auto it = s_Seen.find(key);
+    if (it != s_Seen.end() && now - it->second.At < std::chrono::seconds(1)) return it->second.There;
+    if (s_Seen.size() > 64) s_Seen.clear();
+    std::error_code ec;
+    const bool there = dirOnly ? fs::is_directory(path, ec) : fs::exists(path, ec);
+    s_Seen[key] = {there, now};
+    return there;
 }
 
 const std::vector<DirEntry>& ChildrenOf(const std::string& dir) {
@@ -95,6 +113,7 @@ const std::vector<DirEntry>& ChildrenOf(const std::string& dir) {
 void BuildIndex() {
     LibraryState& st = State();
     st.Index.clear();
+    st.IndexNames.clear();
     std::error_code ec;
     size_t visited = 0;
     fs::recursive_directory_iterator walk(st.Root, fs::directory_options::skip_permission_denied, ec), end;
@@ -103,6 +122,7 @@ void BuildIndex() {
         if (!walk->is_directory(fec)) continue;
         if (walk.depth() >= 4) walk.disable_recursion_pending();
         st.Index.push_back(walk->path().string());
+        st.IndexNames.push_back(Lower(walk->path().filename().string()));
     }
     st.IndexBuilt = true;
 }
@@ -197,8 +217,7 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
         EditorSettings::Save();
     };
 
-    std::error_code ec;
-    if (prefs.AssetLibraryPath.empty() || !fs::is_directory(prefs.AssetLibraryPath, ec)) {
+    if (prefs.AssetLibraryPath.empty() || !OnDisk(prefs.AssetLibraryPath, true)) {
         ImGui::Spacing();
         ImGui::TextWrapped(prefs.AssetLibraryPath.empty()
             ? "Point this panel at a folder of assets outside the project - a library of packs laid out "
@@ -254,8 +273,9 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
         if (st.Search[0]) {
             const std::string needle = Lower(st.Search);
             int shown = 0;
-            for (const std::string& p : st.Index) {
-                if (Lower(fs::path(p).filename().string()).find(needle) == std::string::npos) continue;
+            for (size_t i = 0; i < st.Index.size(); ++i) {
+                if (st.IndexNames[i].find(needle) == std::string::npos) continue;
+                const std::string& p = st.Index[i];
                 const std::string rel = fs::path(p).lexically_relative(st.Root).generic_string();
                 if (ImGui::Selectable((ICON_FA_FOLDER "  " + rel + "##" + p).c_str(), st.Selected == p)) select(p);
                 if (++shown >= 300) { ImGui::TextDisabled("More matches - refine the search."); break; }
@@ -282,7 +302,7 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
         // Right: what the selected folder holds, a preview and Import.
         ImGui::TableNextColumn();
         ImGui::BeginChild("##libdetail", ImVec2(0, 0));
-        if (st.Selected.empty() || !fs::is_directory(st.Selected, ec)) {
+        if (st.Selected.empty() || !OnDisk(st.Selected, true)) {
             ImGui::TextDisabled("Select an asset folder on the left.");
         } else {
             const FolderSummary& s = st.Summary;
@@ -314,7 +334,7 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
 
             const fs::path inProject = fs::path(AssetImport::ProjectImportDirectory(ProjectPaths::Root(), s.Path,
                                                                                   prefs.AssetLibraryPath)) / name;
-            const bool alreadyIn = fs::exists(inProject, ec);
+            const bool alreadyIn = OnDisk(inProject.string(), false);
             if (alreadyIn) {
                 ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), ICON_FA_CHECK "  In the project as %s",
                                    ProjectPaths::Relativize(inProject.string()).c_str());
