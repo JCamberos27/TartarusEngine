@@ -2293,6 +2293,8 @@ private:
     void HandleHierarchyHoverKeys(World& world);
     // Per-scene user-state key: the scene's GUID, else its path ("" for an untitled scene).
     std::string CurrentSceneKey() const;
+    // Once per frame: entries a scene got while it was keyed by its path move to its GUID once it has one.
+    void TrackSceneKey();
     entt::entity FindEntityByOrder(const World& world, int order) const;
     // vHierarchy D key: new objects created without an explicit parent land under it.
     entt::entity ResolveDefaultParent(const World& world) const;

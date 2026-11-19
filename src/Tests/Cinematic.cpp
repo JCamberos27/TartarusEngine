@@ -23,6 +23,7 @@ struct State {
     FILE* pipe = nullptr;
     int w = 0, h = 0;
     long long written = 0;
+    long long dropped = 0; // frames the pipe did not take (ffmpeg gone or full disk)
     std::string path;
 };
 State s_State;
@@ -153,6 +154,7 @@ void Write(const std::vector<unsigned char>& rgba) {
     State& s = s_State;
     if (!s.pipe || rgba.size() != (size_t)s.w * (size_t)s.h * 4) return;
     if (std::fwrite(rgba.data(), 1, rgba.size(), s.pipe) == rgba.size()) ++s.written;
+    else ++s.dropped;
 }
 
 void Finish() {
@@ -162,6 +164,8 @@ void Finish() {
     s.pipe = nullptr;
     std::cout << "[Cinematic] " << s.written << " frames (" << (double)s.written / 60.0 << " s), ffmpeg exit " << rc
               << std::endl;
+    if (rc != 0 || s.dropped > 0)
+        std::cerr << "[Cinematic] FAILED: ffmpeg exit " << rc << ", " << s.dropped << " frame(s) not written - the clip is incomplete" << std::endl;
 }
 
 
