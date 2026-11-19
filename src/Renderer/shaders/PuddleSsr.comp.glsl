@@ -21,13 +21,7 @@ uniform int   uSteps;        // linear steps (16-24)
 uniform float uMaxDistance;  // metres along the ray
 uniform int   uFrame;        // jitter seed
 
-// ModelFragment.glsl's puddle noise, verbatim: the mask has to agree with the shading.
-float WetHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float WetNoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(WetHash(i), WetHash(i + vec2(1, 0)), u.x), mix(WetHash(i + vec2(0, 1)), WetHash(i + vec2(1, 1)), u.x), u.y);
-}
+#include "Noise.glsl" // WetNoise (the shading's), Ign
 
 ivec2 gDepthSize;
 float DepthAt(vec2 uv) { return texelFetch(uDepth, clamp(ivec2(uv * vec2(gDepthSize)), ivec2(0), gDepthSize - 1), 0).r; }
@@ -91,7 +85,7 @@ void main() {
     float z0k = vp.z * k0, z1k = ev.z * k1;
 
     // Interleaved gradient noise: a per-pixel start offset TAA turns into a smooth result instead of bands.
-    float jitter = fract(52.9829189 * fract(dot(vec2(px) + float(uFrame % 64) * vec2(5.588238, 5.588238), vec2(0.06711056, 0.00583715))));
+    float jitter = Ign(vec2(px) + float(uFrame % 64) * vec2(5.588238, 5.588238));
     float prevT = 0.0, prevZ = vp.z;
     float hitT = -1.0;
     const int kMaxSteps = 32;

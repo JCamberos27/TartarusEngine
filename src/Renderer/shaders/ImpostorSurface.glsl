@@ -4,6 +4,7 @@
 // depth to the bit (GL_EQUAL), so every step of it is `precise` and both programs call ImpostorResolve the same way.
 // The includer declares uView (ModelShading.glsl does) and defines IMPOSTOR_HAS_VIEW, or this declares it.
 #include "ImpostorCommon.glsl" // ImpostorQRot
+#include "Noise.glsl"          // Ign: the LOD dither, ModelFragment's exactly
 #ifndef IMPOSTOR_HAS_VIEW
 uniform mat4 uView;
 #endif
@@ -51,7 +52,7 @@ struct ImpostorFrag {
 // The LOD cross-fade's dither (ModelFragment.glsl's, the same pattern): false where this copy isn't drawn.
 bool ImpostorDithered() {
     if (vFade == 0.0) return true;
-    float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float n = Ign(gl_FragCoord.xy);
     return vFade > 0.0 ? n < vFade : n >= -vFade;
 }
 

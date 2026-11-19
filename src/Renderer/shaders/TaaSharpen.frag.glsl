@@ -8,7 +8,7 @@ out vec4 FragColor;
 uniform sampler2D uSrc;
 uniform float uSharpness; // 0..1
 
-vec3 FromWork(vec3 c) { return c / max(1.0 - max(c.r, max(c.g, c.b)), 1e-4); }
+#include "TaaWork.glsl"
 
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);
