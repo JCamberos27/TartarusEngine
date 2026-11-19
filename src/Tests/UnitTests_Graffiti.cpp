@@ -174,7 +174,7 @@ void RoundTrip() {
     CHECK(s.Type == LayerType::Stamp && s.Texture == p.Layers[1].Texture && s.TextureColor && !s.Luma && s.Shadow);
     CHECK(Near(s.ShadowOffset.y, -0.01f) && Near(s.Aspect, 1.5f) && Near(s.Rotation, 12.0f));
     const Layer& t = q->Layers[2];
-    CHECK(t.Text == "KING 9" && t.Alphabet == "Block" && t.WarpMode == Warp::Arc && t.Letters.size() == 1 && t.Metal == 1.0f);
+    CHECK(t.Text == "KING 9" && t.Alphabet == "Block" && t.WarpMode == Warp::Arc && t.Metal == 1.0f);
     CHECK(t.Letters.size() == 1 && t.Letters[0].Index == 2 && t.Letters[0].HasFill && !t.Letters[0].HasOutline);
     const Layer& sp = q->Layers[3];
     CHECK(sp.Clip && Near(sp.Glow, 0.75f) && sp.Strokes.size() == 3);
@@ -231,8 +231,10 @@ void ForgivingLoad() {
     if (p->Layers[1].Strokes.size() == 1) {
         const Stroke& s = p->Layers[1].Strokes[0];
         CHECK(s.Tip == Cap::Fat && s.Samples.size() == 2); // two bad samples dropped
+        if (s.Samples.size() == 2) {
         CHECK(s.Samples[0].Pressure == 1000 && s.Samples[0].DistanceMm == 20);
         CHECK(s.Samples[1].TimeMs == 100);                // never back in time
+        }
     }
     CHECK(p->Layers[2].Type == LayerType::Spray);         // an unknown type keeps the default
 }
@@ -368,7 +370,7 @@ void SprayModel() {
     eraseDwell.Erase = true;
     const auto erased = run(eraseDwell, true);
     CHECK(CountDrips(erased) == 0 && !erased.empty() && (erased[0].Flags & kSplatErase) != 0);
-    CHECK(CountDrips(fat) == 0 || true);
+    CHECK(CountDrips(fat) == 0); // a fat pass at a steady pace never pools
     CHECK(CountDrips(run(MakeStroke(Cap::Fat, {0.1f, 0.5f}, {0.9f, 0.5f}, 0.35f, 0.25f), true)) == 0); // a quick far pass
     // Drips run down the wall (canvas +y), later than the paint that set them off, and taper.
     float minY = 1e9f, maxY = -1e9f, firstDripTime = 1e9f;
@@ -416,7 +418,7 @@ void TextLayout() {
     // Kerning spreads the line; an arc lifts the middle and turns the ends the opposite ways.
     p.Layers[0].Kerning = 0.2f;
     const LayerProgram wide = BuildLayer(p, 0, FakeMetrics, tex);
-    CHECK(wide.Quads[2].Centre.x - wide.Quads[0].Centre.x > lp.Quads[2].Centre.x - lp.Quads[0].Centre.x);
+    CHECK(wide.Quads.size() == 3 && wide.Quads[2].Centre.x - wide.Quads[0].Centre.x > lp.Quads[2].Centre.x - lp.Quads[0].Centre.x);
     p.Layers[0].Kerning = 0.0f;
     p.Layers[0].Text = "ABC";
     p.Layers[0].Letters.clear();

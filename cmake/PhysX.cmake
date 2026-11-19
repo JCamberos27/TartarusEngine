@@ -11,9 +11,8 @@
 # tools/physx_harvest.cmake then stages the output into a plain Debug/ Release/ layout.
 #
 # Host-only: linked into TartarusEngine, never the reloadable TartarusGame / TartarusEditor
-# DLLs. PR 1 (#185) uses only PxFoundation/PxPhysics/PxScene/PxDefaultCpuDispatcher/PxMaterial
-# — an empty world stepped during Play. Cooking / character-kinematic libs get added in later
-# PRs as the code that needs them lands.
+# DLLs. The libraries the engine uses are listed in _physx_link_libs below (core, cooking,
+# extensions, PVD); add one there when new code needs it.
 include(ExternalProject)
 
 set(PHYSX_GIT_TAG "107.3-physx-5.6.1"  CACHE STRING "NVIDIA PhysX 5 release tag to build")

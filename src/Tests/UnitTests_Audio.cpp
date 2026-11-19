@@ -2023,12 +2023,11 @@ void TestPortalPathsAndLoss() {
     CHECK(std::fabs(glm::length(path.Virtual - lis) - path.Length) < 1e-3f && glm::normalize(path.Virtual - lis).x < -0.99f);
     CHECK(path.Gain > 0.97f && path.CutoffHz > 19000.0f); // an open doorway straight through: no loss
     // The sound has to bend round the opening: quieter and darker; the more, the more.
-    PortalPath bent, bentMore;
+    PortalPath bent;
     CHECK(z.FindPath(glm::vec3(3.0f, 0.0f, 5.0f), glm::vec3(8.0f, 0.0f, 5.0f), bent)); // in from one side of the door, out the same side: ~127 degrees
     CHECK(bent.Gain < 0.8f && bent.CutoffHz < 18000.0f);
     PortalPath nearBend;
     CHECK(z.FindPath(glm::vec3(3.0f, 0.0f, 1.0f), glm::vec3(9.0f, 0.0f, -1.0f), nearBend) && nearBend.Gain > bent.Gain && nearBend.CutoffHz > bent.CutoffHz);
-    (void)bentMore;
     // A closed portal lets very little through; half open lies between.
     world.Registry.get<ReverbPortalComponent>(portal).OpenAmount = 0.0f;
     CHECK(z.Refresh(world));
@@ -2152,8 +2151,15 @@ void TestPortalVoicesAndFallback() {
     world.Registry.get<ReverbPortalComponent>(portal).OpenAmount = 1.0f;
     for (int i = 0; i < 300; ++i) wa.Update(0.016f);
     CHECK(be.LastGain > 0.95f && be.Occlusion.back().second > 15000.0f);
-    // The portal voice's apparent position follows too (the backend is told).
-    CHECK(!be.Positions.empty() || true);
+    // The portal voice's apparent position follows the path: the listener walking across room B moves it (the backend
+    // is told). (A door opening or closing changes the path's loss, not where the portal is heard from.)
+    be.Positions.clear();
+    for (int i = 0; i < 60; ++i) {
+        pl.SetListener(glm::vec3(14.0f, 0.0f, -3.0f + 0.1f * (float)i));
+        wa.SetListener(glm::vec3(14.0f, 0.0f, -3.0f + 0.1f * (float)i));
+        wa.Update(0.016f);
+    }
+    CHECK(!be.Positions.empty());
     // Portals off in the component: the direct path again.
     wa.Bus().PortalsEnabled = false;
     pl.StopAll();
@@ -3419,8 +3425,7 @@ void TestConvolverDestroyWithQueuedTail() {
         std::vector<float> in(4096, 0.2f), l(4096), r(4096);
         for (int k = 0; k < 6; ++k) c.Process(in.data(), l.data(), r.data(), 4096);
     } // (~Convolver waits, bounded, for the posted blocks)
-    worker.reset();
-    CHECK(true);
+    worker.reset(); // (reaching here is the check: the destructor waited for the queued blocks and returned)
 }
 
 // disabled foley is silent but every footfall still reaches the step listener (the blood's footprints); NpcGone drops a soldier's stride.
