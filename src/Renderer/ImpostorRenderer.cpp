@@ -178,38 +178,7 @@ bool ImpostorRenderer::EnsureAtlases() {
     return true;
 }
 
-std::size_t ImpostorRenderer::TakeUpload(std::size_t size) {
-    constexpr std::size_t kNone = ~std::size_t(0);
-    constexpr std::size_t kUploadBytes = 4ull << 20;  // ~0.17 MB a frame in the Forest (the view and the sun)
-    constexpr std::uint64_t kUploadSafeFrames = 16;   // SwapBuffers keeps the CPU a few frames ahead at most
-    if (size == 0 || size > kUploadBytes / 4 || m_UploadFailed) return kNone;
-    if (!m_UploadBase) {
-        GLint align = 0;
-        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &align);
-        if (align <= 0 || 256 % align != 0) { m_UploadFailed = true; return kNone; } // RingFit places at multiples of 256
-        const GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
-        glCreateBuffers(1, &m_UploadBuf);
-        glNamedBufferStorage(m_UploadBuf, (GLsizeiptr)kUploadBytes, nullptr, flags);
-        m_UploadBase = static_cast<unsigned char*>(glMapNamedBufferRange(m_UploadBuf, 0, (GLsizeiptr)kUploadBytes, flags));
-        if (!m_UploadBase) {
-            glDeleteBuffers(1, &m_UploadBuf);
-            m_UploadBuf = 0;
-            m_UploadFailed = true;
-            return kNone;
-        }
-    }
-    const std::uint64_t frame = Time::FrameCount();
-    std::size_t old = 0;
-    while (old < m_UploadSpans.size() && frame - m_UploadSpans[old].Frame > kUploadSafeFrames) ++old;
-    m_UploadSpans.erase(m_UploadSpans.begin(), m_UploadSpans.begin() + (std::ptrdiff_t)old);
-    const bool empty = m_UploadSpans.empty();
-    const std::size_t tail = empty ? m_UploadHead : m_UploadSpans.front().Start;
-    const std::size_t at = UploadStaging::RingFit(kUploadBytes, m_UploadHead, tail, empty, size);
-    if (at == kNone) return kNone;
-    m_UploadSpans.push_back({at, frame});
-    m_UploadHead = at + size;
-    return at;
-}
+std::size_t ImpostorRenderer::TakeUpload(std::size_t size) { return m_Ring.Take(size); }
 
 bool ImpostorRenderer::Build(const World& world, int buckets,
                              const std::function<unsigned(const glm::vec3&, const glm::vec3&)>& keep,
@@ -269,7 +238,7 @@ bool ImpostorRenderer::Build(const World& world, int buckets,
     std::uint32_t first = 0;
     for (std::size_t i = 0; i < m_Lists.size(); ++i) {
         if (m_Lists[i].empty()) continue;
-        std::memcpy(m_UploadBase + at + (std::size_t)first * sizeof(Instance), m_Lists[i].data(),
+        std::memcpy(m_Ring.Base() + at + (std::size_t)first * sizeof(Instance), m_Lists[i].data(),
                     m_Lists[i].size() * sizeof(Instance));
         m_Draws[i] = {first, (std::uint32_t)m_Lists[i].size()};
         first += (std::uint32_t)m_Lists[i].size();
@@ -295,7 +264,7 @@ void ImpostorRenderer::DrawBucket(Shader& prog, int bucket) {
     const Range& d = m_Draws[(std::size_t)bucket];
     if (!d.Count) return;
     glBindVertexArray(m_Vao);
-    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kInstanceBinding, m_UploadBuf, (GLintptr)m_Span, (GLsizeiptr)m_SpanBytes);
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kInstanceBinding, m_Ring.Buffer(), (GLintptr)m_Span, (GLsizeiptr)m_SpanBytes);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSetBinding, m_SetBuf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kExtentBinding, m_ExtentBuf);
     for (int k = 0; k < 3; ++k) glBindTextureUnit((GLuint)k, m_Arrays[k]);
