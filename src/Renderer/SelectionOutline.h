@@ -20,7 +20,7 @@ struct SelectionOutlineInputs {
     Shader* dilateShader = nullptr; // OutlineDilate: the ring around the mask
     unsigned int fsQuadVao = 0;     // attribute-less fullscreen triangle pair
     HdrTarget* target = nullptr;    // the Scene view's HDR target the ring is painted into
-    glm::mat4 view{1.0f}, proj{1.0f}; // unjittered: the outline sits on the TAA-resolved image
+    glm::mat4 view{1.0f}, proj{1.0f}; // unjittered, so the outline doesn't shimmer through the TAA resolve
     int width = 0, height = 0;      // the Scene view's size
     bool wireframe = false;         // F5 Wireframe: the caller's polygon mode is GL_LINE
     bool playing = false;           // no hover pre-highlight in Play

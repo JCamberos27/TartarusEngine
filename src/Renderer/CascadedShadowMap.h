@@ -158,7 +158,8 @@ private:
     std::array<std::uint64_t, kMaxCascades> m_HeldFrame{};
     std::array<float, kMaxCascades> m_HoldTexels{}; // extra reach this frame's render of the cascade carries
     std::uint64_t m_LastPlanFrame = ~std::uint64_t(0);
-    mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check in Begin()
+    mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check (CheckComplete)
+    void CheckComplete() const;
 
     void Release();
 };
