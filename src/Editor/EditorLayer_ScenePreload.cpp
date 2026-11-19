@@ -28,6 +28,10 @@ struct EditorLayer::ScenePreloadState {
     bool Frame = false; // frame the camera once it's open (a user open, not a revert)
     std::vector<AssetLibrary::AsyncHandle> Tickets;
     std::chrono::steady_clock::time_point Started;
+    // The history when the open was asked for: unsaved changes then were already dismissed (Don't Save,
+    // Revert); a step recorded while the assets load is a new edit, and the open asks again.
+    size_t UndoSize = 0, RedoSize = 0;
+    int ContentDepth = 0;
 };
 
 namespace {
@@ -111,6 +115,9 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
     state->Path = path;
     state->Frame = frame;
     state->Started = std::chrono::steady_clock::now();
+    state->UndoSize = m_UndoStack.size();
+    state->RedoSize = m_RedoStack.size();
+    state->ContentDepth = m_ContentDepth;
     std::error_code ec;
     for (const std::string& m : refs.Models)
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestModelAsync(m));
@@ -136,13 +143,15 @@ void EditorLayer::PumpScenePreload(World& world, AssetLibrary& assets) {
     if (timedOut) Log::Warn("Opening '" + st.Path + "': some assets were still loading after 10 minutes; opening anyway.");
     const std::string path = st.Path;
     const bool frame = st.Frame;
+    const bool editedSince = m_UndoStack.size() != st.UndoSize || m_RedoStack.size() != st.RedoSize ||
+                             m_ContentDepth != st.ContentDepth;
     m_ScenePreload.reset();
     m_ScenePreloadReady = m_ScenePreloadTotal = 0;
     if (m_InPlayMode) {
         Log::Warn("Stop Play mode before opening another scene.");
         return;
     }
-    if (m_Dirty) { // edited while it loaded: ask again (the open is instant now, the caches are warm)
+    if (m_Dirty && editedSince) { // edited while it loaded: ask again (the open is instant now, the caches are warm)
         m_PendingSceneSwitch = PendingSceneSwitch::Open;
         m_PendingScenePath = path;
         m_ScenePromptPending = true;
