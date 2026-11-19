@@ -29,6 +29,7 @@ uniform int uUseSkinning;
 // Bone palette as an std430 SSBO (binding 1), uploaded per skinned draw (#104). MAX_BONES=512
 // entries (#113); the index is clamped to the buffer's length so a bad index can't read past it.
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
+#include "Skin.glsl" // SkinPalette
 #include "SkinnedVertex.glsl"
 #include "FoliageWind.glsl"
 layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
@@ -113,17 +114,7 @@ void main() {
             localNormal = UnpackUnitOct(uSkinned[s + 3u]);
             localTangent = UnpackUnitOct(uSkinned[s + 4u]);
         } else {
-            mat4 skinMat = mat4(0.0);
-            float totalWeight = 0.0;
-            for (int i = 0; i < 8; ++i) {
-                if (boneIds[i] >= 0) {
-                    skinMat += uBones[clamp(boneIds[i], 0, uBones.length() - 1)] * boneWeights[i]; // never OOB (#98)
-                    totalWeight += boneWeights[i];
-                }
-            }
-            if (totalWeight <= 0.0001) {
-                skinMat = mat4(1.0);
-            }
+            mat4 skinMat = SkinPalette();
             localPos = skinMat * localPos;
             localNormal = mat3(skinMat) * aNormal;
             localTangent = mat3(skinMat) * aTangent;

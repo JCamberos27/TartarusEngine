@@ -18,7 +18,7 @@ ChannelPreviewRenderer::~ChannelPreviewRenderer() {
 
 unsigned int ChannelPreviewRenderer::Render(const Texture& source, int channel, int previewW, int previewH) {
     if (!m_Shader) {
-        m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ChannelPreview.vert.glsl"),
+        m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                             ShaderLibrary::ReadFile("ChannelPreview.frag.glsl"));
         glGenVertexArrays(1, &m_VAO);
         glGenFramebuffers(1, &m_FBO);

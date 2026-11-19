@@ -1241,7 +1241,7 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                                 for (size_t k = lo; k <= hi; ++k) {
                                     const bool f = cells[k].kind == AssetGridCell::Kind::Folder;
                                     if (k == lo) { m_SelectedAssetKey = cells[k].key; m_SelectedAssetIsFolder = f; }
-                                    else m_ExtraAssetSelection.push_back({cells[k].key, f});
+                                    else AddExtraAssetSelection(cells[k].key, f);
                                 }
                             } else if (io.KeyCtrl) {
                                 ToggleAssetSelection(cell.key, isFolder);

@@ -77,9 +77,9 @@ glm::mat4 TemporalAA::BeginFrame(const glm::mat4& view, const glm::mat4& proj, i
 
 void TemporalAA::EnsureShaders() {
     if (m_Resolve) return;
-    m_Resolve = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"), ShaderLibrary::ReadFile("TaaResolve.frag.glsl"),
+    m_Resolve = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"), ShaderLibrary::ReadFile("TaaResolve.frag.glsl"),
                            "taaResolve");
-    m_Sharpen = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"), ShaderLibrary::ReadFile("TaaSharpen.frag.glsl"),
+    m_Sharpen = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"), ShaderLibrary::ReadFile("TaaSharpen.frag.glsl"),
                            "taaSharpen");
     glGenVertexArrays(1, &m_Vao);
 }

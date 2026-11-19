@@ -20,9 +20,7 @@ uniform vec2  uSrcSize;     // and its size: it maps onto the whole of uDst
 uniform ivec2 uDstSize;
 uniform int   uDecodeSrgb;
 
-vec3 SrgbToLinear(vec3 c) {
-    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
-}
+#include "Color.glsl" // SrgbToLinear
 
 vec3 Tap(vec2 uv) {
     vec3 c = textureLod(uSrc, clamp(uv, uSrcClamp.xy, uSrcClamp.zw), uSrcLod).rgb;

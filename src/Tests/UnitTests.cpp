@@ -5607,7 +5607,6 @@ void TestIKSolver() {
     }
 }
 
-} // namespace
 
 // A ragdoll keeps its root where the NPC stood while the body lies a body length away. The culling bounds
 // (Model::PosedBounds) must hold every skinned vertex of the posed piece; the bind box padded 1.75x didn't (a
@@ -5978,7 +5977,6 @@ void TestAssetPackImport() {
     fs::remove_all(base, ec);
 }
 
-namespace {
 // Every test writes under temp_directory_path(), and several runs can go at once (worktrees, CI-style queues): two runs
 // sharing %TEMP% wiped each other's fixture folders mid-test (the watcher and asset-identity tests failed "under load").
 // Each run gets its own folder under the user's temp folder, removed when the run ends.
@@ -6104,31 +6102,39 @@ int RunUnitTests(const char* filter) {
     RegisterRagdollTests(tests);
     RegisterLaunchOptionsTests(tests);
     RegisterAnimationTests(tests);
-    { void RegisterMotionMatchingTests(UnitTestSupport::TestList&); RegisterMotionMatchingTests(tests); } // UnitTests_MotionMatching.cpp
-    { void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList&); RegisterMotionMatchingRuntimeTests(tests); } // UnitTests_MotionMatchingRuntime.cpp
+    RegisterMotionMatchingTests(tests); // UnitTests_MotionMatching.cpp
+    RegisterMotionMatchingRuntimeTests(tests); // UnitTests_MotionMatchingRuntime.cpp
     RegisterEditorTests(tests);
     RegisterEnhancerTests(tests);
     RegisterRecoilPortTests(tests);
     RegisterSwayPortTests(tests);
-    { void RegisterRenderTests(UnitTestSupport::TestList&); RegisterRenderTests(tests); } // UnitTests_Render.cpp
-    { void RegisterGrassTests(UnitTestSupport::TestList&); RegisterGrassTests(tests); } // UnitTests_Grass.cpp
-    { void RegisterWorldTextTests(UnitTestSupport::TestList&); RegisterWorldTextTests(tests); } // UnitTests_WorldText.cpp
-    { void RegisterOpenableTests(UnitTestSupport::TestList&); RegisterOpenableTests(tests); } // UnitTests_Openable.cpp
-    { void RegisterLightSwitchTests(UnitTestSupport::TestList&); RegisterLightSwitchTests(tests); } // UnitTests_LightSwitch.cpp
-    { void RegisterCinematicTests(UnitTestSupport::TestList&); RegisterCinematicTests(tests); } // UnitTests_Cinematic.cpp
+    RegisterRenderTests(tests); // UnitTests_Render.cpp
+    RegisterGrassTests(tests); // UnitTests_Grass.cpp
+    RegisterWorldTextTests(tests); // UnitTests_WorldText.cpp
+    RegisterOpenableTests(tests); // UnitTests_Openable.cpp
+    RegisterLightSwitchTests(tests); // UnitTests_LightSwitch.cpp
+    RegisterCinematicTests(tests); // UnitTests_Cinematic.cpp
     RegisterCharacterMoverTests(tests); // UnitTests_CharacterMover.cpp
     RegisterEngineTests(tests);
-    { void RegisterGameplayTests(UnitTestSupport::TestList&); RegisterGameplayTests(tests); }
+    RegisterGameplayTests(tests);
     RegisterBloodTests(tests);
     RegisterGlassTests(tests);
-    { void RegisterEditorSoundTests(UnitTestSupport::TestList&); RegisterEditorSoundTests(tests); } // UnitTests_EditorSound.cpp
-    { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp
-    { void RegisterDecalRenderTests(UnitTestSupport::TestList&); RegisterDecalRenderTests(tests); } // UnitTests_DecalRender.cpp
-    { void RegisterDecalRuntimeTests(UnitTestSupport::TestList&); RegisterDecalRuntimeTests(tests); } // UnitTests_DecalRuntime.cpp
-    { void RegisterDecalAssetTests(UnitTestSupport::TestList&); RegisterDecalAssetTests(tests); } // UnitTests_DecalAssets.cpp
-    { void RegisterGraffitiTests(UnitTestSupport::TestList&); RegisterGraffitiTests(tests); } // UnitTests_Graffiti.cpp
-    { void RegisterGizmoIconTests(UnitTestSupport::TestList&); RegisterGizmoIconTests(tests); } // UnitTests_GizmoIcons.cpp
-    { void RegisterAssetLibraryTests(UnitTestSupport::TestList&); RegisterAssetLibraryTests(tests); } // UnitTests_AssetLibrary.cpp
+    RegisterEditorSoundTests(tests); // UnitTests_EditorSound.cpp
+    RegisterAudioTests(tests); // UnitTests_Audio.cpp
+    RegisterDecalRenderTests(tests); // UnitTests_DecalRender.cpp
+    RegisterDecalRuntimeTests(tests); // UnitTests_DecalRuntime.cpp
+    RegisterDecalAssetTests(tests); // UnitTests_DecalAssets.cpp
+    RegisterGraffitiTests(tests); // UnitTests_Graffiti.cpp
+    RegisterGizmoIconTests(tests); // UnitTests_GizmoIcons.cpp
+    RegisterAssetLibraryTests(tests); // UnitTests_AssetLibrary.cpp
+    {
+        std::set<std::string> names;
+        for (const auto& t : tests)
+            if (!names.insert(t.first).second) {
+                std::cout << "[UnitTest] FAIL two tests are both named \"" << t.first << "\"\n";
+                ++g_Failures;
+            }
+    }
     int ran = 0, skipped = 0;
     for (const auto& [name, fn] : tests) {
         if(filter && std::string(name).find(filter)==std::string::npos) continue;

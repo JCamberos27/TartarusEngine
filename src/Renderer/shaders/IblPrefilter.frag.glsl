@@ -6,45 +6,10 @@ out vec4 FragColor;
 uniform samplerCube uEnvMap;
 uniform float uRoughness;
 uniform float uEnvResolution; // base face size of uEnvMap, for the mip-selection heuristic
-uniform float uEnvRotation; // #108 — HDRI Y rotation (radians), same convention as SkyHdri.frag
-vec3 RotateEnv(vec3 d) {
-    float c = cos(uEnvRotation), s = sin(uEnvRotation);
-    return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
-}
+#include "IblEnvSample.glsl"
 
-uniform float uRadianceClamp; // #277 — >0: cap the brightest channel (keeps hue); removes an HDRI's sun
-vec3 ClampRadiance(vec3 c) {
-    float m = max(c.r, max(c.g, c.b));
-    return (uRadianceClamp > 0.0 && m > uRadianceClamp) ? c * (uRadianceClamp / m) : c;
-}
-
-const float PI = 3.14159265359;
+#include "IblSampling.glsl"
 const uint kSampleCount = 128u;
-
-float RadicalInverseVdC(uint bits) {
-    bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    return float(bits) * 2.3283064365386963e-10;
-}
-
-vec2 Hammersley(uint i, uint n) { return vec2(float(i) / float(n), RadicalInverseVdC(i)); }
-
-vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
-    float a = roughness * roughness;
-    float phi = 2.0 * PI * Xi.x;
-    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-
-    vec3 H = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-
-    vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-    vec3 tangent = normalize(cross(up, N));
-    vec3 bitangent = cross(N, tangent);
-    return normalize(tangent * H.x + bitangent * H.y + N * H.z);
-}
 
 float DistributionGGX(float NdotH, float roughness) {
     float a = roughness * roughness;

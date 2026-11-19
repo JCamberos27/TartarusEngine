@@ -507,6 +507,7 @@ public:
     // The favorites overlay: hold Alt over the Asset Browser (or lock it open). Pages live in
     // EnhancerUserState::FavoritePages; everything below is session state.
     void DrawFavoritesOverlay(World& world, AssetLibrary& assets); // PostModuleDraw
+    bool UpdateFavoritesVisibility(World& world, ImVec2& areaMin, ImVec2& areaMax); // its state; false = not shown
     void ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r);
     void AddSelectionToFavorites(const World& world);
     void MigrateAssetFavorites(); // one-time import of asset_favorites.json into page 1
@@ -1220,6 +1221,8 @@ private:
     void RunDecalRadialItem(int i);
     // Editor Enhancers / vRuler (EditorLayer_Gizmos.cpp): hold Shift+R over the Scene view.
     bool ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const;
+    // A world point in screen pixels over the Scene viewport through `viewProj`; false at/behind the eye.
+    bool WorldToViewport(const glm::mat4& viewProj, const glm::vec3& p, ImVec2& out) const;
     bool RulerHeldNow() const;
     void DrawRuler(World& world, Camera& cam);
     bool m_RulerHeld = false;                   // held over the viewport this frame (main.cpp: no wheel zoom)
@@ -1603,6 +1606,7 @@ private:
     // Drops the baseline when an outfit change landed since it was taken (OutfitSystem::LandedGeneration).
     void RebaseAfterOutfitChanges();
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
+    void TrimUndoHistory(); // drops the oldest step past kMaxHistory (EditorLayer_Scene.cpp)
     void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
@@ -1736,6 +1740,18 @@ private:
     // File > Open... dialog does — shared so the Asset Browser's Scenes folder can open a
     // scene with one double-click instead of going through the OS file dialog.
     void OpenScene(World& world, AssetLibrary& assets, const std::string& path);
+    // A user's scene open (EditorLayer_ScenePreload.cpp): the scene's models and materials load on the
+    // asset workers first, then OpenScene runs from warm caches. `frame` frames the camera after.
+    void BeginOpenScene(World& world, AssetLibrary& assets, const std::string& path, bool frame);
+    void PumpScenePreload(World& world, AssetLibrary& assets); // once a frame, from Draw
+    void DrawScenePreloadOverlay();
+    struct ScenePreloadState;
+    std::shared_ptr<ScenePreloadState> m_ScenePreload; // null when no open is pending
+    size_t m_ScenePreloadReady = 0, m_ScenePreloadTotal = 0;
+public:
+    // While a scene open waits on its assets: its name and how many have loaded (false when none is pending).
+    bool ScenePreloadProgress(std::string& sceneName, size_t& ready, size_t& total) const;
+private:
     void NewScene(World& world, AssetLibrary& assets); // fresh scene, written to disk immediately; File > New Scene / Ctrl+N
 
     // Guards New Scene / Open Scene against silently discarding unsaved work (#216). Every call
@@ -2064,7 +2080,12 @@ private:
     // entities, just for library assets instead. Actions that only make sense for exactly one
     // asset (Rename) act on the primary alone; actions that generalize (Delete, Duplicate) act on
     // the whole selection.
-    std::vector<AssetKeyRef> m_ExtraAssetSelection;
+    std::vector<AssetKeyRef> m_ExtraAssetSelection; // change it through Add/ClearExtraAssetSelection (they keep the index)
+    void AddExtraAssetSelection(const std::string& key, bool isFolder);
+    void ClearExtraAssetSelection();
+    // IsAssetSelected's lookup for a big selection: key + a folder/asset tag, rebuilt after a change.
+    mutable std::unordered_set<std::string> m_ExtraAssetSelIndex;
+    mutable bool m_ExtraAssetSelIndexValid = false;
     // Anchor index (into DrawAssetBrowser's locally-built, currently-visible `cells` list) that a
     // Shift-click range-select extends from. Only meaningful within the same frame/folder view it
     // was set in; a stale value after navigating just produces a harmless one-off range on the
@@ -2497,9 +2518,7 @@ private:
         // naming a ComponentRegistry component gains Open in Window / Alt+drag out, Ctrl+click
         // picking for the multi-component clipboard, Keep Changes After Play, and the A / X
         // hover keys.
-        entt::entity entity = entt::null,
-        // Optional visible title; label remains the stable component identity.
-        const char* displayLabel = nullptr);
+        entt::entity entity = entt::null);
 
     // #178 - every .preset under the project whose "component" matches `component`, as
     // {display name, path}. Rescanned when the menu opens; presets are few and this is not a
@@ -2790,6 +2809,7 @@ private:
         float FromFov = 60.0f, ToFov = 60.0f; // eased too, for "look through light" (#140 phase 4)
     };
     ViewTransition m_ViewTransition;
+    void BeginViewTransition(const Camera& cam); // from the camera's pose; callers set the To fields they change
 
     // Look through a light (#140 phase 4): move the editor camera to the light's POV — spot uses
     // 2x its cone angle for FOV, point ~90, directional goes orthographic. Esc restores the

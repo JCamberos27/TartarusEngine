@@ -23,3 +23,6 @@ void ImpostorFrameBasis(vec3 d, out vec3 right, out vec3 up) {
     right = abs(d.y) < 0.999 ? normalize(cross(vec3(0.0, 1.0, 0.0), d)) : vec3(1.0, 0.0, 0.0);
     up = cross(d, right);
 }
+
+// Rotates v by the unit quaternion q (xyz vector part, w scalar).
+vec3 ImpostorQRot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }

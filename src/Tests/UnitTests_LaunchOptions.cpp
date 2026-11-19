@@ -1,6 +1,7 @@
 #include "UnitTestSupport.h"
 #include "../App/LaunchOptions.h"
 #include "../Core/Env.h"
+#include "../Core/Paths.h"
 
 #include <string>
 #include <vector>
@@ -80,6 +81,35 @@ void Test_Env_ReadsAndHelp() {
     CHECK(help.find("--import-blood") != std::string::npos && help.find("--import-knife") != std::string::npos);
 }
 
+// The text-only answer Relativize gives for a path spelled under the project root: no disk access,
+// so the Asset Browser can file thousands of not-yet-fetched paths in one frame.
+void Test_ProjectPaths_RelativizeUnder() {
+    std::string r;
+    const std::string root = "C:\\Proj\\project";
+    CHECK(ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\assets\\a.png", r) && r == "assets/a.png");
+    CHECK(ProjectPaths::RelativizeUnder(root, "c:/proj/PROJECT/assets/Sub/B.fbx", r) && r == "assets/Sub/B.fbx"); // drive letter + root case
+    CHECK(ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project/assets\\x/y.wav", r) && r == "assets/x/y.wav");    // mixed slashes
+    CHECK(ProjectPaths::RelativizeUnder(root + "\\", "C:\\Proj\\project\\a.json", r) && r == "a.json");            // root with a trailing slash
+    CHECK(ProjectPaths::RelativizeUnder("C:/Proj/project/", "C:\\Proj\\project\\a.json", r) && r == "a.json");
+    r = "unchanged";
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project", r) && r == "unchanged");         // the root itself
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\", r));
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\assets\\", r));                   // trailing slash: the disk decides
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\projectX\\a.png", r));                     // a sibling sharing the prefix
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\other\\a.png", r));                        // outside
+    CHECK(!ProjectPaths::RelativizeUnder(root, "D:\\Proj\\project\\a.png", r));                      // another drive
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\..\\secret.txt", r));             // ".." walks out
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\a\\..\\b.png", r));
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\.\\b.png", r));
+    CHECK(!ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\a\\\\b.png", r));                 // empty segment
+    CHECK(ProjectPaths::RelativizeUnder(root, "C:\\Proj\\project\\.hidden\\a..b.png", r) && r == ".hidden/a..b.png"); // dots inside names are fine
+    CHECK(!ProjectPaths::RelativizeUnder("", "C:\\a.png", r));
+    // Relativize itself: under the real root, the same answer as the text; outside, the input back.
+    const std::string& real = ProjectPaths::Root();
+    CHECK(ProjectPaths::Relativize(real + "\\assets\\NotOnDisk\\x.png") == "assets/NotOnDisk/x.png");
+    CHECK(ProjectPaths::Relativize("Z:\\elsewhere\\x.png") == "Z:\\elsewhere\\x.png");
+}
+
 } // namespace
 
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
@@ -87,4 +117,5 @@ void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"LaunchOptions::Lists", Test_LaunchOptions_Lists});
     tests.push_back({"LaunchOptions::Errors", Test_LaunchOptions_Errors});
     tests.push_back({"Env::ReadsAndHelp", Test_Env_ReadsAndHelp});
+    tests.push_back({"ProjectPaths::RelativizeUnder", Test_ProjectPaths_RelativizeUnder});
 }

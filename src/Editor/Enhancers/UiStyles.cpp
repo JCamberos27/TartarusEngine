@@ -14,22 +14,6 @@ using json = nlohmann::json;
 namespace Enhancers {
 
 namespace {
-json StyleToJson(const UiStyle& s) {
-    json j = json::object();
-    if (!s.Icon.empty()) j["icon"] = s.Icon;
-    if (s.Color) j["color"] = ToHexColor(s.Color);
-    return j;
-}
-UiStyle StyleFromJson(const json& j) {
-    UiStyle s;
-    if (!j.is_object()) return s;
-    if (auto it = j.find("icon"); it != j.end() && it->is_string()) s.Icon = it->get<std::string>();
-    if (auto it = j.find("color"); it != j.end() && it->is_string()) {
-        std::uint32_t c = 0;
-        if (ParseHexColor(it->get<std::string>(), c)) s.Color = c;
-    }
-    return s;
-}
 void MapFromJson(const json& j, const char* key, std::map<std::string, UiStyle>& out) {
     if (auto it = j.find(key); it != j.end() && it->is_object())
         for (auto kv = it->begin(); kv != it->end(); ++kv) {

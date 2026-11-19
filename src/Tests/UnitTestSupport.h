@@ -55,3 +55,20 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests);     // UnitTests_Bloo
 void RegisterGlassTests(UnitTestSupport::TestList& tests);     // UnitTests_Glass.cpp
 void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests); // UnitTests_CharacterMover.cpp
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests); // UnitTests_LaunchOptions.cpp
+void RegisterMotionMatchingTests(UnitTestSupport::TestList& tests); // UnitTests_MotionMatching.cpp
+void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests); // UnitTests_MotionMatchingRuntime.cpp
+void RegisterRenderTests(UnitTestSupport::TestList& tests); // UnitTests_Render.cpp
+void RegisterGrassTests(UnitTestSupport::TestList& tests); // UnitTests_Grass.cpp
+void RegisterWorldTextTests(UnitTestSupport::TestList& tests); // UnitTests_WorldText.cpp
+void RegisterOpenableTests(UnitTestSupport::TestList& tests); // UnitTests_Openable.cpp
+void RegisterLightSwitchTests(UnitTestSupport::TestList& tests); // UnitTests_LightSwitch.cpp
+void RegisterCinematicTests(UnitTestSupport::TestList& tests); // UnitTests_Cinematic.cpp
+void RegisterGameplayTests(UnitTestSupport::TestList& tests);
+void RegisterEditorSoundTests(UnitTestSupport::TestList& tests); // UnitTests_EditorSound.cpp
+void RegisterAudioTests(UnitTestSupport::TestList& tests); // UnitTests_Audio.cpp
+void RegisterDecalRenderTests(UnitTestSupport::TestList& tests); // UnitTests_DecalRender.cpp
+void RegisterDecalRuntimeTests(UnitTestSupport::TestList& tests); // UnitTests_DecalRuntime.cpp
+void RegisterDecalAssetTests(UnitTestSupport::TestList& tests); // UnitTests_DecalAssets.cpp
+void RegisterGraffitiTests(UnitTestSupport::TestList& tests); // UnitTests_Graffiti.cpp
+void RegisterGizmoIconTests(UnitTestSupport::TestList& tests); // UnitTests_GizmoIcons.cpp
+void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests); // UnitTests_AssetLibrary.cpp
