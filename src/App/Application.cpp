@@ -1730,8 +1730,8 @@ int Application::RunSession() {
                         giBaker = std::make_unique<GIBaker>();
                         GIBaker::Options bo;
                         bo.Only = opt.bakeGiOnly;
-                        if (const std::string e = Env::Str(Env::Var::GiBakeEmissive); !e.empty()) bo.Emissive = std::stof(e);
-                        if (const std::string b = Env::Str(Env::Var::GiBakeBounces); !b.empty()) bo.Bounces = std::stoi(b);
+                        bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
+                        bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
                         if (!giBaker->Begin(world, bo)) {
                             std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
                             giBakeExit = 1;
@@ -1959,8 +1959,14 @@ int Application::RunSession() {
             // --perf-bench --smoke-shots <dir>: one picture of maximized play (its 400th frame), to check what was
             // measured. Locked aspect reads the Game view's target, Free Aspect the back buffer before the UI.
             static int perfMaxFrames = 0;
+            static std::string perfMaxScene; // the count starts over for each scene of the run
             const auto perfMaxShot = [&](unsigned fbo, int w, int h) {
-                if (!opt.perfBenchMode || opt.smokeShotsDir.empty() || ++perfMaxFrames != 400) return;
+                if (!opt.perfBenchMode || opt.smokeShotsDir.empty()) return;
+                if (smoke.CurrentPath() != perfMaxScene) {
+                    perfMaxScene = smoke.CurrentPath();
+                    perfMaxFrames = 0;
+                }
+                if (++perfMaxFrames != 400) return;
                 std::vector<unsigned char> px = FrameCapture::GrabTopDown(fbo, w, h);
                 for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
                 FrameCapture::WritePngTo(opt.smokeShotsDir, std::filesystem::path(smoke.CurrentPath()).stem().string() + "_playmax", w, h, px);

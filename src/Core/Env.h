@@ -22,8 +22,9 @@
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
-    X(LightsOn, "TARTARUS_LIGHTS_ON", Flag, "smoke shots: 1 = every light circuit on, 0 = as the switches start")         X(LightsOnly, "TARTARUS_LIGHTS_ONLY", Str, "smoke shots: only these ';'-separated light circuits on (leak checks)") \
-    X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'x y z yaw pitch;...' camera poses to capture")      \
+    X(LightsOn, "TARTARUS_LIGHTS_ON", Flag, "smoke shots: 1 = every light circuit on, 0 = as the switches start")     \
+    X(LightsOnly, "TARTARUS_LIGHTS_ONLY", Str, "smoke shots: only these ';'-separated light circuits on (leak checks)") \
+    X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'name:x,y,z,yaw,pitch;...' poses to capture")  \
     X(ShotStart, "TARTARUS_SHOT_START", Int, "--smoke-shots: frame of the first shot-camera capture (default 40)")    \
     X(ShotFov, "TARTARUS_SHOT_FOV", Float, "--smoke-shots: Scene-view FOV for shot cameras")                          \
     X(ShotSize, "TARTARUS_SHOT_SIZE", Str, "--smoke-shots / cinematic: Scene-view render size WxH")                    \
@@ -61,8 +62,8 @@
     X(PumpTrace, "TARTARUS_PUMP_TRACE", Flag, "trace the asset library pump")                                         \
     X(ProbeLog, "TARTARUS_PROBE_LOG", Flag, "log reflection probe captures")                                          \
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \
-    X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Str, "--bake-gi: emission kept in the captures (default 0)")            \
-    X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Str, "--bake-gi: light bounces to bake (default 2)")                      \
+    X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Float, "--bake-gi: emission kept in the captures (default 0)")            \
+    X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Int, "--bake-gi: light bounces to bake (default 2)")                      \
     X(SkinAudit, "TARTARUS_SKIN_AUDIT", Flag, "log skinning audit")                                                   \
     X(TrisReport, "TARTARUS_TRIS_REPORT", Int, "print a triangle report on this frame")                               \
     X(HizStats, "TARTARUS_HIZ_STATS", Flag, "print Hi-Z culling stats")                                               \

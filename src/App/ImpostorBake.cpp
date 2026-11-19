@@ -2,6 +2,8 @@
 
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
+#include "AtomicFile.h"
+#include "App/CliTools.h"
 #include "Components.h"
 #include "Core/Paths.h"
 #include "GLStateCache.h"
@@ -156,11 +158,7 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
         return 2;
     }
     const fs::path outDir = fs::absolute(outArg);
-    EnginePaths::Init(argv0);
-    LayerRegistry::Load();
-    AssetDatabase::ScanProject();
-    ProjectSettings::Load();
-    ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders"));
+    InitProjectForTool(argv0);
     Window window(64, 64, "bake-impostors"); // hidden: the GL context models and textures upload into
     AssetLibrary assets;
     const auto drain = [&] { for (int k = 0; k < 20000 && assets.AsyncInFlight() > 0; ++k) { assets.PumpAsync(50.0); UploadStaging::Finish(); } };
@@ -396,9 +394,9 @@ int BakeImpostors(const std::vector<std::string>& scenes, const std::string& out
     glDeleteFramebuffers(1, &fbo);
     glDeleteTextures(3, tex);
     glDeleteTextures(1, &depth);
-    {
-        std::ofstream f(outDir / "impostors.json");
-        f << manifest.dump(1);
+    if (!AtomicFile::WriteBytes(outDir / "impostors.json", manifest.dump(1), true)) {
+        std::fprintf(stderr, "[ImpostorBake] couldn't write %s\n", (outDir / "impostors.json").generic_string().c_str());
+        ++failed;
     }
     std::printf("[ImpostorBake] %zu impostors -> %s, %d failed\n", bakes.size(), outDir.generic_string().c_str(), failed);
     std::fflush(stdout);

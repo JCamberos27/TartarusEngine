@@ -90,7 +90,7 @@ bool KnifeFxLibrary::Load() {
         }
     }
     if (m_Entries.empty()) {
-        Log::Warn("KnifeFx: no Knife texture libraries in assets/Effects/Knife");
+        Log::Warn("KnifeFx: no Knife texture libraries in assets/Effects/Knife (convert the extracted Knife packs with --import-knife <dir>)");
         return false;
     }
     m_Loaded = true;

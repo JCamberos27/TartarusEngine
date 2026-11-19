@@ -10,6 +10,10 @@ struct LaunchOptions;
 // --bake-impostors, --audio-test, --import-blood and --import-knife. Returns the run's exit code when opt.mode is one of them, or -1 otherwise.
 int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0);
 
+// What the scene-loading tools set up before they load anything: the engine and project paths, the layers, the
+// AssetDatabase scan (GUIDs), the project settings and the shader library (engine:// refs).
+void InitProjectForTool(const char* argv0);
+
 // #174 - `--build [outDir]`: File > Build without the UI, on a worker thread with progress as the editor's Build button
 // runs it. `outDir` (when not empty) overrides Project Settings > Build's Output Folder. Needs EnginePaths set up. Returns the exit code (0 = built).
 int RunBuildTool(const std::string& outDir);

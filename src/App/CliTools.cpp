@@ -2,6 +2,7 @@
 
 #include "App/ImpostorBake.h"
 #include "App/LaunchOptions.h"
+#include "AtomicFile.h"
 
 #include "BuildPipeline.h"
 #include "BloodFxImport.h"
@@ -284,18 +285,15 @@ int SceneBounds(const std::vector<std::string>& inputArgs, const std::string& ou
         std::cerr << "[SceneBounds] usage: --scene-bounds <scene.json|prefab dir>... --out <dir>\n";
         return 2;
     }
-    EnginePaths::Init(argv0);
-    LayerRegistry::Load();
-    AssetDatabase::ScanProject();
-    ProjectSettings::Load();
-    ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders")); // materials resolve engine:// shader refs
+    InitProjectForTool(argv0);
     Window window(64, 64, "scene-bounds"); // hidden until Show(): the GL context models and textures upload into
     AssetLibrary assets;
     const auto writeJson = [](const fs::path& file, const json& j) {
         std::error_code ec;
         fs::create_directories(file.parent_path(), ec);
-        std::ofstream out(file);
-        out << j.dump(1);
+        if (AtomicFile::WriteBytes(file, j.dump(1), true)) return true;
+        std::fprintf(stderr, "[SceneBounds] couldn't write %s\n", file.generic_string().c_str());
+        return false;
     };
     const auto drain = [&] { for (int k = 0; k < 20000 && assets.AsyncInFlight() > 0; ++k) { assets.PumpAsync(50.0); UploadStaging::Finish(); } }; // no frames: free the staging ring by hand
     int failed = 0;
@@ -332,7 +330,7 @@ int SceneBounds(const std::vector<std::string>& inputArgs, const std::string& ou
                 pj["entities"] = std::move(entities);
                 all[key] = std::move(pj);
             }
-            writeJson(outDir / "prefabs" / (pack + ".json"), outJ);
+            if (!writeJson(outDir / "prefabs" / (pack + ".json"), outJ)) ++failed;
             std::printf("[SceneBounds] %s: %zu prefabs\n", pack.c_str(), prefabs.size());
         } else {
             World world;
@@ -351,7 +349,7 @@ int SceneBounds(const std::vector<std::string>& inputArgs, const std::string& ou
             sj["union"] = SceneBoundsUnion(lo, hi, entities.size());
             const size_t n = entities.size();
             sj["entities"] = std::move(entities);
-            writeJson(outDir / "scenes" / (abs.stem().string() + ".json"), sj);
+            if (!writeJson(outDir / "scenes" / (abs.stem().string() + ".json"), sj)) ++failed;
             std::printf("[SceneBounds] %s: %zu model entities\n", abs.stem().string().c_str(), n);
         }
     }
@@ -360,6 +358,14 @@ int SceneBounds(const std::vector<std::string>& inputArgs, const std::string& ou
 }
 
 } // namespace
+
+void InitProjectForTool(const char* argv0) {
+    EnginePaths::Init(argv0);
+    LayerRegistry::Load();
+    AssetDatabase::ScanProject();
+    ProjectSettings::Load();
+    ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders")); // materials resolve engine:// shader refs
+}
 
 int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
     switch (opt.mode) {
@@ -382,7 +388,9 @@ int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
             EnginePaths::Init(argv0); // ProjectPaths (the .mmconfig's paths) finds project/ from the exe
             return MotionBake::Run(opt.bakeMotionConfig, opt.bakeMatch, opt.sceneBoundsOut);
         // The audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
-        case LaunchMode::AudioTest: return RunAudioTest(opt.audioTestScene, opt.audioTestReport);
+        case LaunchMode::AudioTest:
+            InitProjectForTool(argv0); // the scene's paths, layers, GUIDs and engine:// shaders, as the editor has them
+            return RunAudioTest(opt.audioTestScene, opt.audioTestReport);
         // The vendor effect packs into the project's (git-ignored) effect folders: file conversion only, no GL.
         case LaunchMode::ImportBlood:
             CrashHandler::SetInteractive(false);
