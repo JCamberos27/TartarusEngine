@@ -157,12 +157,10 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
         const MotionDatabase::Box& lb = large[L];
         if (!BoxMayPass(lb, p)) continue;
         if (BoxDistance(q, lb) + GaitCostBound(p, lb.GaitMin, lb.GaitMax) + p.TransitionCost >= r.Cost) continue;
-        ++r.LargeBoxesVisited;
         for (size_t S = L * kPer; S < std::min(small.size(), (L + 1) * kPer); ++S) {
             const MotionDatabase::Box& sb = small[S];
             if (!BoxMayPass(sb, p)) continue;
             if (BoxDistance(q, sb) + GaitCostBound(p, sb.GaitMin, sb.GaitMax) + p.TransitionCost >= r.Cost) continue;
-            ++r.SmallBoxesVisited;
             const std::uint32_t from = (std::uint32_t)S * MotionDatabase::kSmallBox;
             const std::uint32_t to = std::min(n, from + (std::uint32_t)MotionDatabase::kSmallBox);
             for (std::uint32_t i = from; i < to; ++i) {

@@ -56,7 +56,7 @@ struct MotionSearchResult {
     float Cost = 0.0f;
     float CurrentCost = -1.0f;   // the playing frame's own cost (-1: none was playing or it doesn't pass)
     bool Switched = false;       // Frame differs from the playing frame
-    std::uint32_t FramesScored = 0, SmallBoxesVisited = 0, LargeBoxesVisited = 0;
+    std::uint32_t FramesScored = 0;
 };
 
 namespace MotionSearch {

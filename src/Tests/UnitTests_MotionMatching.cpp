@@ -653,7 +653,7 @@ void TestRigDiffWithPack() {
     std::string err;
     const std::string cfgPath = ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny.mmconfig");
     if (!cfg.Load(cfgPath, err)) return Skip(name, err);
-    const std::string source = MotionBake::SourceDir(cfg);
+    const std::string source = MotionBake::SourceDir();
     if (source.empty()) return Skip(name, "TARTARUS_MM_SOURCE not set");
     const fs::path rig = fs::path(source) / cfg.SourceRig;
     if (!fs::exists(rig) || !fs::exists(cfg.TargetRig)) return Skip(name, "rig files missing");

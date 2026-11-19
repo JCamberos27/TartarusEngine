@@ -102,7 +102,6 @@ public:
     std::array<float, kDims> Normalized(std::uint32_t frame) const;
     std::array<float, kDims> Raw(std::uint32_t frame) const;
     void Normalize(const float* raw, float* out) const;
-    void Denormalize(const float* norm, float* out) const;
     float Mean(int d) const { return m_Mean[(size_t)d]; }
     float Scale(int d) const { return m_Scale[(size_t)d]; } // the group's std that dimension d is divided by
     // The 16-bit features (kDims per frame) and their map to the normalized space: normalized = q * QA(d) + QB(d).

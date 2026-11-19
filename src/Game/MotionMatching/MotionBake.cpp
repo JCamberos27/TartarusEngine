@@ -161,8 +161,7 @@ std::string MotionTake::TagString() const {
 
 namespace MotionBake {
 
-std::string SourceDir(const MotionBakeConfig& cfg) {
-    (void)cfg;
+std::string SourceDir() {
     const std::string dir = Env::Str(Env::Var::MmSource);
     std::error_code ec;
     return !dir.empty() && fs::is_directory(dir, ec) ? dir : std::string();
@@ -204,9 +203,6 @@ bool ReadTakes(const std::string& csvPath, std::vector<MotionTake>& out, std::st
         t.Source = col("source");
         t.Loop = std::atoi(col("loop").c_str());
         if (t.Source == t.Name) t.Source.clear();
-        t.Group = col("group");
-        t.Pattern = col("pattern");
-        t.Seconds = (float)std::atof(col("seconds").c_str());
         t.Include = col("include") == "1";
         t.TrimStart = (float)std::atof(col("trim_start").c_str());
         t.TrimEnd = (float)std::atof(col("trim_end").c_str());
@@ -603,12 +599,10 @@ struct TakeResult {
     std::vector<glm::vec3> PelvisT;
     std::vector<glm::quat> Rot; // frames x bones
     MotionClipFrames Frames;
-    std::vector<glm::vec3> HipsRight;
     RootValidation Raw;          // the generated root, the source's own feet
     RootValidation Rebuilt;      // the feet rebuilt from the quantized stream on the target rig, placed by the root
     float RebuildMaxCm = 0.0f;   // worst distance between a source foot and its rebuild
     float SpeedP50 = 0.0f, PelvisP50 = 0.0f, AnkleP05 = 0.0f;
-    int Labelled[4] = {0, 0, 0, 0};
     std::vector<glm::quat> StaticRot;
     std::vector<glm::quat> FingerRot; // frames x StaticBones, when the take animates its fingers (HasFingers)
     bool HasFingers = false;
@@ -840,7 +834,6 @@ TakeResult BakeTake(const BakeContext& ctx, const MotionTake& take, bool wantSta
     cut(pelvisRootSpace, 1);
     cut(r.Track.Position, 1);
     cut(r.Track.Yaw, 1);
-    r.HipsRight = in.HipsRight;
     r.Root.resize((size_t)n);
     r.PelvisT.resize((size_t)n);
     for (int f = 0; f < n; ++f) {
@@ -931,7 +924,7 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
         return 2;
     }
     if (!outOverride.empty()) cfg.Output = fs::absolute(outOverride).lexically_normal().string();
-    const std::string source = SourceDir(cfg);
+    const std::string source = SourceDir();
     if (source.empty()) {
         std::cerr << "[MotionBake] ERROR: TARTARUS_MM_SOURCE is not set to the mocap pack's folder (anims\\, rig\\)" << std::endl;
         return 2;

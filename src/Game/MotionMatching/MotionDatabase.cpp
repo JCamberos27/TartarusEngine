@@ -203,10 +203,6 @@ void MotionDatabase::Normalize(const float* raw, float* out) const {
     for (int d = 0; d < kDims; ++d) out[d] = (raw[d] - m_Mean[(size_t)d]) / m_Scale[(size_t)d];
 }
 
-void MotionDatabase::Denormalize(const float* norm, float* out) const {
-    for (int d = 0; d < kDims; ++d) out[d] = norm[d] * m_Scale[(size_t)d] + m_Mean[(size_t)d];
-}
-
 float MotionDatabase::SecondsInClip(std::uint32_t frame) const {
     return (float)(frame - Clip(ClipOf(frame)).First) / Fps();
 }

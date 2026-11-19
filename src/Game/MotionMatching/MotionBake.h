@@ -31,7 +31,6 @@ class Model;
 
 struct MotionBakeConfig {
     std::string Path;          // the .mmconfig itself
-    std::string SourceEnv = "TARTARUS_MM_SOURCE";
     std::string SourceAnims = "anims", SourceRig = "rig/SKM_Manny.fbx";
     std::string Takes, TargetRig, Output;
     float Fps = 60.0f;
@@ -60,8 +59,6 @@ struct MotionTake {
     // bone's place at the clip's start, not its moving one (whose travel the pack's takes don't have).
     bool RootMotion() const { return HasTag("rootmotion"); }
     int Loop = 0; // > 1: a loop clip, played this many times over (its root's travel carried from cycle to cycle)
-    std::string Group, Pattern;
-    float Seconds = 0.0f;
     bool Include = false;
     float TrimStart = 0.0f, TrimEnd = 0.0f; // seconds into the take; TrimEnd <= 0 = the take's end
     std::vector<std::string> Tags;
@@ -72,7 +69,7 @@ struct MotionTake {
 namespace MotionBake {
 
 // The pack's folder (the config's source env var), or "" when unset or missing.
-std::string SourceDir(const MotionBakeConfig& cfg);
+std::string SourceDir();
 
 bool ReadTakes(const std::string& csvPath, std::vector<MotionTake>& out, std::string& error);
 

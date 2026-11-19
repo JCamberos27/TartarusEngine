@@ -75,7 +75,6 @@ public:
     float Fps() const { return m_Fps; }
     std::uint32_t FrameCount() const { return (std::uint32_t)m_Root.size(); }
     const std::vector<std::string>& Bones() const { return m_Bones; }
-    int BoneIndex(const std::string& name) const;
     const std::vector<Clip>& Clips() const { return m_Clips; }
     int FindClip(const std::string& name) const;
     float ClipSeconds(int clip) const;

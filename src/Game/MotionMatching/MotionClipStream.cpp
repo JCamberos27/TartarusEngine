@@ -205,11 +205,6 @@ bool MotionClipStream::Load(const std::string& path, std::string* error) {
     return true;
 }
 
-int MotionClipStream::BoneIndex(const std::string& name) const {
-    for (size_t i = 0; i < m_Bones.size(); ++i)
-        if (m_Bones[i] == name) return (int)i;
-    return -1;
-}
 
 int MotionClipStream::FindClip(const std::string& name) const {
     for (size_t i = 0; i < m_Clips.size(); ++i)
