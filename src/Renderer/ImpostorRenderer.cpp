@@ -1,4 +1,6 @@
 #include "ImpostorRenderer.h"
+#include <optional>
+#include "GLStateScope.h"
 #include "Log.h"
 
 #include "Core/Env.h"
@@ -289,9 +291,8 @@ void ImpostorRenderer::DrawDepth(const glm::mat4& view, const glm::mat4& proj, c
     p.SetVec3("uEye", eye);
     p.SetInt("uOrtho", 0);
     p.SetFloat("uDepthPush", 0.0f);
-    glDisable(GL_CULL_FACE); // a card faces the viewer, but its winding isn't kept
+    GLCullOffScope cullOff; // a card faces the viewer, but its winding isn't kept
     DrawBucket(p, 0);
-    glEnable(GL_CULL_FACE);
 }
 
 void ImpostorRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, bool depthPrepassed,
@@ -319,17 +320,10 @@ void ImpostorRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, con
         glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, viewDepth);
         glActiveTexture(GL_TEXTURE0);
     }
-    if (depthPrepassed) {
-        glDepthMask(GL_FALSE);
-        glDepthFunc(GL_EQUAL);
-    }
-    glDisable(GL_CULL_FACE);
+    std::optional<GLDepthStateScope> prepassed; // the pre-pass laid the depth: test it exactly, write nothing
+    if (depthPrepassed) prepassed.emplace(false, GL_EQUAL);
+    GLCullOffScope cullOff;
     DrawBucket(p, 0);
-    glEnable(GL_CULL_FACE);
-    if (depthPrepassed) {
-        glDepthMask(GL_TRUE);
-        glDepthFunc(GL_LEQUAL);
-    }
 }
 
 void ImpostorRenderer::DrawSun(const World& world, const glm::mat4* cascadeViewProj, const Frustum* cascadeFrusta,
@@ -351,7 +345,7 @@ void ImpostorRenderer::DrawSun(const World& world, const glm::mat4* cascadeViewP
     p.Bind();
     p.SetInt("uOrtho", 1);
     p.SetVec3("uOrthoToViewer", glm::normalize(towardSun));
-    glDisable(GL_CULL_FACE);
+    std::optional<GLCullOffScope> cullOff(std::in_place);
     for (int c = 0; c < cascades; ++c) {
         if (!m_Draws[(std::size_t)c].Count) continue;
         bindCascade(c);
@@ -359,6 +353,6 @@ void ImpostorRenderer::DrawSun(const World& world, const glm::mat4* cascadeViewP
         p.SetMat4("uLightViewProj", cascadeViewProj[c]);
         DrawBucket(p, c);
     }
-    glEnable(GL_CULL_FACE);
+    cullOff.reset();
     m_HaveList = false; // the view's list is gone: Gather again before drawing the view
 }

@@ -1,4 +1,6 @@
 #include "VolumetricFog.h"
+#include "GLStateCache.h"
+#include "GLStateScope.h"
 #include "SceneRenderer.h"
 #include "RenderFrameContext.h"
 #include "World.h"
@@ -310,11 +312,13 @@ void VolumetricFog::DrawSky(const void* viewKey, const int viewport[4]) {
     const auto it = m_Views.find(viewKey);
     if (it == m_Views.end() || !it->second->Rendered || !m_SkyShader) return;
     const ViewState& vs = *it->second;
-    GLint depthFunc = GL_LESS;
-    glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
+    GLDepthStateScope depth(false, GL_LEQUAL);
     const GLboolean blend = glIsEnabled(GL_BLEND);
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(GL_FALSE);
+    GLint blendFunc[4] = {GL_ONE, GL_ZERO, GL_ONE, GL_ZERO};
+    glGetIntegerv(GL_BLEND_SRC_RGB, &blendFunc[0]);
+    glGetIntegerv(GL_BLEND_DST_RGB, &blendFunc[1]);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &blendFunc[2]);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &blendFunc[3]);
     glEnable(GL_BLEND);
     // dst * a + rgb on colour; destination alpha kept.
     glBlendFuncSeparate(GL_ONE, GL_SRC_ALPHA, GL_ZERO, GL_ONE);
@@ -328,6 +332,6 @@ void VolumetricFog::DrawSky(const void* viewKey, const int viewport[4]) {
     glBindVertexArray(0);
     glBindTextureUnit(6, 0);
     if (!blend) glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
-    glDepthFunc((GLenum)depthFunc);
+    glBlendFuncSeparate((GLenum)blendFunc[0], (GLenum)blendFunc[1], (GLenum)blendFunc[2], (GLenum)blendFunc[3]);
+    GLStateCache::Invalidate(); // the raw program / VAO binds above
 }

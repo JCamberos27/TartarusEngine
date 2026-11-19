@@ -66,3 +66,33 @@ private:
     bool m_DepthTest = true;
     GLint m_Mask = GL_TRUE, m_Func = GL_LESS;
 };
+
+// Face culling off for a scope (double-sided cards, blades), the caller's setting restored after.
+class GLCullOffScope {
+public:
+    GLCullOffScope() : m_On(glIsEnabled(GL_CULL_FACE) == GL_TRUE) { glDisable(GL_CULL_FACE); }
+    ~GLCullOffScope() { if (m_On) glEnable(GL_CULL_FACE); }
+    GLCullOffScope(const GLCullOffScope&) = delete;
+    GLCullOffScope& operator=(const GLCullOffScope&) = delete;
+private:
+    bool m_On;
+};
+
+// Depth writes and the depth function set for a scope, the caller's restored after.
+class GLDepthStateScope {
+public:
+    GLDepthStateScope(bool writes, GLenum func) {
+        glGetIntegerv(GL_DEPTH_WRITEMASK, &m_Mask);
+        glGetIntegerv(GL_DEPTH_FUNC, &m_Func);
+        glDepthMask(writes ? GL_TRUE : GL_FALSE);
+        glDepthFunc(func);
+    }
+    ~GLDepthStateScope() {
+        glDepthMask(m_Mask ? GL_TRUE : GL_FALSE);
+        glDepthFunc((GLenum)m_Func);
+    }
+    GLDepthStateScope(const GLDepthStateScope&) = delete;
+    GLDepthStateScope& operator=(const GLDepthStateScope&) = delete;
+private:
+    GLint m_Mask = GL_TRUE, m_Func = GL_LESS;
+};

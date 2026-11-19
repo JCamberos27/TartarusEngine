@@ -1,4 +1,5 @@
 #include "GrassRenderer.h"
+#include "GLStateScope.h"
 
 #include "GLStateCache.h"
 #include "Material.h"
@@ -355,7 +356,7 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBladeBinding, m_BladeBuf);
     glBindVertexArray(m_Vao);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_CmdBuf);
-    glDisable(GL_CULL_FACE); // blades are seen from both sides
+    GLCullOffScope cullOff; // blades are seen from both sides
     prog.SetInt("uInstanceBase", 0);
     prog.SetInt("uSegments", nearSegments);
     glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)0);
@@ -364,7 +365,6 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)(4 * sizeof(std::uint32_t)));
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     glBindVertexArray(0);
-    glEnable(GL_CULL_FACE);
     GLStateCache::Invalidate();
 }
 
@@ -402,14 +402,12 @@ void GrassRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, bool d
     prog.SetInt("uDepthOnly", 0);
     prog.SetInt("uObjectLayerBit", 1);
     prog.SetInt("uNoReceiveShadows", 0);
-    GLint prevDepthFunc = GL_LESS;
-    glGetIntegerv(GL_DEPTH_FUNC, &prevDepthFunc);
+    {
+    GLStateScope saved; // depth test, blending, culling and depth writes back as the caller had them
+    GLDepthStateScope depth(depthWrites, GL_LEQUAL);
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(depthWrites ? GL_TRUE : GL_FALSE);
     glDisable(GL_BLEND);
     Draw(prog, view, proj);
-    glDepthMask(GL_TRUE);
-    glDepthFunc((GLenum)prevDepthFunc);
+    }
     GLStateCache::Invalidate();
 }
