@@ -1,6 +1,3 @@
-#include "GameFrames.h"
-#include "GameRules.h"
-#include <stdexcept>
 #include "FirstPersonBody.h"
 #include "Profiler.h"
 #include "BodyDebugDraw.h"
@@ -10,7 +7,6 @@
 
 #include "Camera.h"
 #include "Components.h"
-#include "Core/Env.h"
 #include "GameModuleAPI.h"
 #include "IK.h"
 #include "Log.h"
@@ -30,8 +26,6 @@
 #include <cmath>
 #include <map>
 #include <tuple>
-#include <unordered_map>
-#include <unordered_set>
 #include <cstdio>
 #include <sstream>
 
@@ -175,12 +169,6 @@ void FirstPersonBodyCurlFingers(const Model& m, std::vector<LocalTRS>& pose, flo
     }
 }
 
-void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose, const std::vector<int>& parents,
-                                 float clavicleWeight) {
-    static const std::map<std::string, std::string> kNoMap;
-    CopyArmShape(m, rig, weight, pose, parents, kNoMap, clavicleWeight);
-}
-
 void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],
                                       const std::function<int(int)>& rigOf, std::vector<FirstPersonArmShapeLink>& out) {
     out.clear();
@@ -193,12 +181,6 @@ void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents
         if (!under[(size_t)i]) continue;
         if (const int r = rigOf(i); r >= 0) out.push_back({i, r, clavicle[(size_t)i] != 0});
     }
-}
-
-void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
-                                  std::vector<FirstPersonArmShapeLink>& out) {
-    const int clavicles[2] = {m.NodeIndex(FPBody::kBoneClavicle[0]), m.NodeIndex(FPBody::kBoneClavicle[1])};
-    FirstPersonBodyArmShapeLinksFrom(m.NodeCount(), parents, clavicles, [&](int i) { return rig.NodeIndex(m.NodeName(i)); }, out);
 }
 
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
@@ -428,66 +410,6 @@ float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::
     return maxPush;
 }
 
-glm::vec3 FirstPersonGunSeat(const FirstPersonWorldGunInput& gun, const FirstPersonGunSeatBody& body, glm::vec3* meshPush,
-                             const glm::vec3* cachedMeshPush) {
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    glm::vec3 across = body.UpperR - body.UpperL;
-    across.y = 0.0f;
-    const glm::vec3 right = glm::length(across) > 1e-4f ? glm::normalize(across) : glm::vec3(1.0f, 0.0f, 0.0f);
-    const glm::vec3 front = glm::normalize(glm::cross(up, right));
-    // The butt into the right shoulder pocket while shouldered.
-    const glm::vec3 pocket = body.UpperR + right * gun.Pocket.x + up * gun.Pocket.y + front * gun.Pocket.z;
-    glm::vec3 shift = (pocket - gun.ButtWorld) * std::clamp(gun.Shouldered, 0.0f, 1.0f);
-    // Keep-outs: the neck, and the head (with a hood on it) centred a little over the head bone.
-    const glm::vec3 fwd = glm::length(gun.ForwardWorld) > 1e-4f ? glm::normalize(gun.ForwardWorld) : front;
-    const struct { glm::vec3 Centre; float Radius; } keepOut[2] = {{body.Neck, gun.NeckRadius}, {body.Head + up * 0.07f, gun.HeadRadius}};
-    for (int pass = 0; pass < 4; ++pass)
-        for (const auto& k : keepOut) {
-            const glm::vec3 a = gun.ButtWorld + shift, b = a + fwd * gun.GunLength;
-            const glm::vec3 ab = b - a;
-            const float t = std::clamp(glm::dot(k.Centre - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
-            glm::vec3 away = a + ab * t - k.Centre;
-            const float d = glm::length(away);
-            if (d >= k.Radius) continue;
-            away = d > 1e-4f ? away / d : right; // dead on: out to the gun's side
-            shift += away * (k.Radius - d);
-        }
-    // The drawn head, neck and hood, whatever the outfit (the spheres are only their rough shape): straight out from the
-    // hood sphere's centre, as far as it takes. On the sights the cheek is welded onto the stock, 2.5 cm off it: kept the
-    // full Mesh Clearance away there, a crouched head (low over the gun) pushed the butt down off the shoulder.
-    const glm::vec3 beforeMesh = shift;
-    const float headClearance = glm::mix(gun.MeshClearance, std::min(gun.MeshClearance, 0.025f), std::clamp(gun.CheekWeld, 0.0f, 1.0f));
-    if (body.HeadPoints && headClearance > 0.0f) {
-        const glm::vec3 a = gun.ButtWorld + shift, b = a + fwd * gun.GunLength;
-        const glm::vec3 centre = keepOut[1].Centre;
-        const glm::vec3 ab = b - a;
-        const float t = std::clamp(glm::dot(centre - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
-        glm::vec3 away = a + ab * t - centre;
-        away = glm::length(away) > 1e-4f ? glm::normalize(away) : right;
-        const float room = std::max(0.0f, gun.MaxShift - glm::length(shift));
-        shift += away * FirstPersonBodyClearPush(*body.HeadPoints, a, b, away, headClearance, room, 0.01f);
-    }
-    // ... and the drawn torso whenever the butt isn't in the pocket (a reload tucks it under the arm; looking steeply
-    // down, a shouldered stock would lie down the chest): straight out from the chest, by that weight.
-    if (body.TorsoPoints && body.Chest && gun.MeshClearance > 0.0f && gun.TorsoKeepOut > 1e-3f) {
-        const glm::vec3 a = gun.ButtWorld + shift, b = a + fwd * gun.GunLength;
-        const glm::vec3 ab = b - a;
-        const float t = std::clamp(glm::dot(*body.Chest - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
-        glm::vec3 away = a + ab * t - *body.Chest;
-        away = glm::length(away) > 1e-4f ? glm::normalize(away) : front;
-        const float room = std::max(0.0f, gun.MaxShift - glm::length(shift));
-        shift += away * FirstPersonBodyClearPush(*body.TorsoPoints, a, b, away, gun.MeshClearance, room, 0.01f) *
-                 std::clamp(gun.TorsoKeepOut, 0.0f, 1.0f);
-    }
-    if (body.HeadPoints || body.TorsoPoints) {
-        if (meshPush) *meshPush = shift - beforeMesh;
-    } else if (cachedMeshPush) {
-        shift += *cachedMeshPush;
-    }
-    if (const float len = glm::length(shift); len > gun.MaxShift && len > 1e-6f) shift *= gun.MaxShift / len;
-    return shift;
-}
-
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise) {
     return std::clamp(std::min(offL, offR), -std::max(maxDrop, 0.0f), std::max(maxRaise, 0.0f));
 }
@@ -566,7 +488,6 @@ std::vector<std::uint8_t> FirstPersonBodyCollarVertices(const std::vector<glm::v
 }
 
 void FirstPersonBody::Fail(const std::string& message) {
-    m_LastError = message;
     Log::Warn("First Person Body: " + message);
     m_Body = entt::null;
 }
@@ -748,9 +669,8 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     // then play faster to keep pace (Tick's PlayRate).
     m_RunSpeed = std::max(cfg.RunSpeed, 0.01f);
     m_PlayerRunSpeed = cfg.PlayerRunSpeed > 0.0f ? cfg.PlayerRunSpeed : m_RunSpeed;
-    // Walk is the default gait and Shift the jog: the capsule tops out at the run (jog) speed, so the sprint
-    // never plays. The walk keeps the jog's ratio of player to clip speed. (Motion matching sets the gait speeds below.)
-    m_PlayerSprintSpeed = m_PlayerRunSpeed;
+    // Walk is the default gait and Shift the jog. The walk keeps the jog's ratio of player to clip speed. (Motion matching
+    // sets the gait speeds below.)
     m_PlayerWalkSpeed = std::clamp(cfg.WalkSpeed, 0.01f, m_RunSpeed) * m_PlayerRunSpeed / m_RunSpeed;
     m_CrouchHeight = cfg.CrouchHeight;
     m_CrouchSpeed = cfg.CrouchSpeed;
@@ -981,10 +901,6 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) { m_Body = entt::null; return; }
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
-    m_SpineCrouch = std::clamp(player.CrouchBlend, 0.0f, 1.0f);
-    const float bodyScale = std::max(reg.get<TransformComponent>(m_Body).Scale.y, 1e-3f);
-    m_SpineCrouchDrop = cfg.CrouchHeight > 0.0f ? std::max(player.Size.y - cfg.CrouchHeight, 0.0f) / bodyScale : 0.0f;
-    m_Responsiveness = cfg.Responsiveness;
     for (entt::entity e : m_Pieces)
         if (auto* tag = reg.valid(e) ? reg.try_get<PlayerBodyTag>(e) : nullptr) {
             // Live, for the Inspector - clothing keeping its own (Start's), not reset to the body's.
@@ -992,7 +908,6 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             tag->NearHideWidth = tag->Clothing ? std::max(cfg.ClothingNearHideWidth, 0.0f) : 0.0f;
         }
     BodyDebug::Clear();
-    m_SinceTrigger += dt;
 
     // Stand at the capsule's feet, facing the view.
     if (PhysicsWorld::HasCharacter()) {
@@ -1093,7 +1008,6 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     // (A piece that still carries an Animator Controller - a scene from before Phase 6 - is held: the matcher poses every piece.)
     for (entt::entity e : m_Pieces)
         if (auto* ac = reg.valid(e) ? reg.try_get<AnimatorControllerComponent>(e) : nullptr) { ac->SkipUpdate = true; ac->SkippedTime = 0.0f; }
-    m_RootVelocity = glm::vec3(0.0f);
 
     FirstPersonBodyMotion::Input in;
     in.Dt = dt;
@@ -1146,12 +1060,9 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     m_TurnThreshold = cfg.TurnThreshold;
     m_MaxTurnRate = cfg.MaxTurnRate;
     m_Grounded = player.Grounded;
-    m_InLand = false;
     m_Move = FirstPersonBodyLocalMove(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), m_Yaw);
     m_IdleTime = m_Still ? m_IdleTime + dt : 0.0f;
     m_MoveTime = m_Still ? 0.0f : m_MoveTime + dt;
-    m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
-    if (!player.Grounded) m_FallSpeed = std::max(0.0f, -player.Velocity.y);
     world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
     UpdateGaitPhase(player, dt);
 
@@ -1189,9 +1100,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
     m_Spine = cfg.Spine;
 
-    // This step's root motion, for the capsule's next move.
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
-    m_RootVelocity = glm::vec3(0.0f); // capsule-led: no clip travel
     // Motion matching: this step's pose onto every piece (the controller's update was held), before anything reads it.
     if (m_Mm.Active()) {
         m_Mm.Pose(m_Models);
@@ -1219,7 +1128,6 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         if (follow) m_ArmsWeight = 1.0f;
         else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
         m_ArmsWeightEased = true;
-        m_EyeArmsWeight = m_ArmsWeight;
     }
 
     BodyDebug::Info().ChestPitchClipDeg = ChestPitchDeg();
@@ -1372,10 +1280,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         }
     }
     if (!matched) m_HaveRigShoulderLine = false;
-    // Unarmed, the chest's heading: Spine Twist of the way from where the clips have it (a turn leads with the chest) to
-    // the view's, measured off the shoulder line - one pass, about the model's up, so the line's heading lands exactly
-    // (every bone's share turns about the same axis; short of it only where the spine's per-bone limits stop it). Off it,
-    // one shoulder sits further from the view than the other.
+    // Unarmed, the chest's heading: Spine Twist of the view's turn off the body.
     if (mmLayers && cfg.SpineTwist > 0.0f && !matched) {
         // Motion matching: an additive yaw - the view off the character facing (which turns as the mocap turns), capped,
         // spread over the spine - on top of the clip's chest. Not a closed loop: the gait's own counter-rotation of the
@@ -1384,15 +1289,6 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         const float lim = glm::radians(kMmChestTwistMax);
         const float twist = std::clamp(m_Twist, -lim, lim) * std::min(cfg.SpineTwist, 1.0f);
         if (std::abs(twist) > 0.002f) ApplySpineAim(camera, 0.0f, twist);
-    } else if (mmLayers && cfg.SpineTwist > 0.0f && !matched) {
-        glm::vec3 l, r;
-        shoulderPair(l, r);
-        const glm::vec3 across = l - r; // model +X (the mannequin's left) when the chest faces forward
-        if (across.x * across.x + across.z * across.z > 1e-6f) {
-            const float chestYaw = std::atan2(-across.z, across.x); // rotating +X about +Y by t gives z = -sin t
-            const float error = FirstPersonBodyWrapAngle(m_Twist - chestYaw);
-            if (std::abs(error) > 0.002f) ApplySpineAim(camera, 0.0f, error * std::min(cfg.SpineTwist, 1.0f));
-        }
     }
     if (!haveHead) return;
 
@@ -1510,13 +1406,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // does: estimated off the spine's length, measured, trimmed once (the spine's spread and limits set the pivot). The
     // kick's drop and the rest (bob, landing dip, ADS camera share) stay on the camera alone - centimetres, which Arm
     // Steadiness (held in the camera's frame, below) and the elbows take up.
-    m_LeanWanted = m_LeanShoulders = 0.0f;
     {
         glm::vec3 flatRight = camera.Right();
         flatRight.y = 0.0f;
         const float len = glm::length(flatRight);
         const float side = len > 1e-4f ? glm::dot(viewKick, flatRight / len) : 0.0f;
-        m_LeanWanted = side;
         glm::mat4 root(1.0f);
         if (std::abs(side) > 1e-3f && haveShoulders && model->NodeTransform(Bone(FPBody::kBoneSpine[0]), root)) {
             const glm::vec3 rightModel = glm::inverse(yaw) * (flatRight / len);
@@ -1534,7 +1428,6 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
                     ApplySpineRotation(glm::angleAxis(angle, axis));
                     moved = glm::dot(shouldersNow() - start, rightModel);
                 }
-                m_LeanShoulders = moved * scale;
             }
         }
     }
@@ -1548,9 +1441,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // The camera: the body's eye with the view punch kept on top. What this adds is measured from the camera as it came
     // in (the player's own eye + the kick), so it is the eye less the player's own eye: next frame RemoveViewKick takes
     // the kick off and BeforePlayerMove this, and the camera is the player's own eye again - nothing accumulates.
-    m_BodyEye = eyeWorld;
     BodyDebug::Info().BodyEye = eyeWorld;
-    m_ViewKick = viewKick;
     const glm::vec3 cameraIn = camera.Position;
     camera.Position = eyeWorld + viewKick;
     m_CameraApplied = camera.Position - cameraIn;
@@ -2189,9 +2080,7 @@ glm::mat4 FirstPersonPartialMove(const glm::mat4& move, const glm::mat4& m, floa
 }
 
 void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera,
-                                     const glm::mat4& thirdPersonGun, const FirstPersonWorldGunInput* /*gun*/,
-                                     const Model* thirdPersonRig, const std::string& gunSocket,
-                                     const FirstPersonHandAnchor* /*handAnchor*/) {
+                                     const glm::mat4& thirdPersonGun, const Model* thirdPersonRig, const std::string& gunSocket) {
     if (!IsActive()) return;
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;

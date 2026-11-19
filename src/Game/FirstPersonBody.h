@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Audio/FoleyAudio.h" // FootContactDetector (the gait phase)
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -27,7 +26,7 @@ struct FirstPersonBodyComponent;
 struct AnimatorControllerComponent;
 struct LocalTRS;
 
-// One body node's arm-shape link to the arms rig (FirstPersonBodyArmShapeLinks).
+// One body node's arm-shape link to the arms rig (FirstPersonBodyArmShapeLinksFrom).
 struct FirstPersonArmShapeLink { int Body, Rig; bool Clavicle; };
 
 // The world gun this frame (FirstPersonPresentation::WorldGunInput): the first-person gun's butt and
@@ -117,7 +116,7 @@ struct FirstPersonGaitPhase {
 class FirstPersonBody {
 public:
     // Finds the scene's First Person Body and takes it over. False (and every call below a
-    // no-op) when there is none or it can't run - see LastError. Sets the player's move speeds
+    // no-op) when there is none or it can't run (the reason is logged). Sets the player's move speeds
     // to the body's Run / Sprint speeds, so the input asks the blend tree for what it has.
     bool Start(World& world, Player& player);
     // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).
@@ -126,7 +125,6 @@ public:
     bool IsActive() const { return m_Body != entt::null; }
     // The body's Character Outfit changed its pieces since Start (Stop + Start again to take them).
     bool OutfitChanged(const World& world) const;
-    const std::string& LastError() const { return m_LastError; }
 
     void BeforePlayerMove(Player& player, Camera& camera);
     void Tick(World& world, const Player& player, const Camera& camera, float dt);
@@ -147,12 +145,10 @@ public:
     // That is the first-person gun moved by `thirdPersonGun` (the rig's model space; FirstPersonPresentation::
     // ThirdPersonGunCorrection: the 3P clips' gun against the 1P clips'), and with `thirdPersonRig` (the 3P clips' pose,
     // FirstPersonPresentation::ThirdPersonArms) its grip on the gun at `gunSocket` - the hands, fingers and elbows -
-    // instead of the first-person rig's. `gun` and `handAnchor` are no longer read (the shoulder lock, cheek weld and
-    // hand anchor are gone); kept so the caller needn't change.
+    // instead of the first-person rig's.
     void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr,
-                        const glm::mat4& thirdPersonGun = glm::mat4(1.0f), const FirstPersonWorldGunInput* gun = nullptr,
-                        const Model* thirdPersonRig = nullptr, const std::string& gunSocket = {},
-                        const FirstPersonHandAnchor* handAnchor = nullptr);
+                        const glm::mat4& thirdPersonGun = glm::mat4(1.0f), const Model* thirdPersonRig = nullptr,
+                        const std::string& gunSocket = {});
     bool SplitPoses() const { return !m_Twins.empty(); }
     // The hand anchor's move (FirstPersonPresentation::PlaceWorldWeapon): none - the world hand carries what it holds
     // straight off the gun, and PlaceWorldWeapon's `holdingHand` puts a part in it on the solved world hand.
@@ -162,11 +158,6 @@ public:
     // Where the world gun is off the first-person one this frame (rigid, world): the third-person hold. Identity with no
     // split.
     const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }
-    // What the hands are doing, for the idle fidgets: a gun held (the ready stance's own fidgets) and busy with it
-    // (aiming, or just fired: no fidget). Set each frame before Tick.
-    void SetHands(bool armed, bool busy) { m_Armed = armed; m_Busy = busy; }
-    // Diagnostics: where the body stands (world; the capsule's feet with a stair step eased in).
-    const glm::vec3& Feet() const { return m_Feet; }
     float TwinHandGap(int side) const { return m_TwinHandGap[side & 1]; }
 
     // A standard bone's world position as last posed - from the arms
@@ -178,55 +169,20 @@ public:
     // Each foot's height above the body's feet as last posed (m; [0] left, [1] right), for the footsteps
     // (FoleyAudio). False with no body or no foot bones.
     bool FootHeights(const World& world, float (&out)[2]) const;
-    bool FootPoints(const World& world, glm::vec3 (&out)[2]) const; // the feet in the driver's model space (x right, y up, z forward)
     // The gait's phase from the body's own foot plants (0 = the left foot down, 0.5 = the right), what the weapon's walk and
     // run sway and the view bob follow so they dip on the footfalls. False until the feet have planted.
     bool GaitPhase(float& phase) const { phase = m_Gait.Phase; return IsActive() && m_Gait.Locked; }
-    float Yaw() const { return m_Yaw; }     // body heading, radians about +Y (model +Z faces the view)
-    float Twist() const { return m_Twist; } // view heading minus body heading, radians
-
-    // The controller parameters of the last Tick (body frame: x right, y forward, m/s).
-    glm::vec2 Move() const { return m_Move; }
-    // The root motion's horizontal velocity (world, m/s) from the last LateUpdate.
-    glm::vec3 RootVelocity() const { return m_RootVelocity; }
-
-    // Diagnostics of the last LateUpdate's camera (world). The camera ends at BodyEye() + ViewKick(): the body's eye
-    // (head / shoulders, no procedural motion), plus what the presentation's view punch put on it this frame (walk bob,
-    // landing dip, lean, ADS camera share - FirstPersonPresentation::ViewKickOffset), kept rather than overwritten.
-    glm::vec3 BodyEye() const { return m_BodyEye; }
-    glm::vec3 ViewKick() const { return m_ViewKick; }
-    // The lean: the kick's sideways part (m, + = the view's right) and how far the spine's lean carried the
-    // shoulders that way (m, world) - the two match within the spine's limits, so the hands stay on the gun.
-    float LeanWanted() const { return m_LeanWanted; }
-    float LeanShoulders() const { return m_LeanShoulders; }
-    // Weapon Arms' weight: now, and as LateUpdate's eye used it (the same frame's: equal but for a holster's first frame).
-    float ArmsWeight() const { return m_ArmsWeight; }
-    float EyeArmsWeight() const { return m_EyeArmsWeight; }
-    // The clips' feet before foot IK (driver model space), which the gait phase is read off. False until posed.
-    bool GaitFeet(glm::vec3 (&out)[2]) const { out[0] = m_GaitFeet[0]; out[1] = m_GaitFeet[1]; return m_HaveGaitFeet; }
-    float GaitRate() const { return m_Gait.Rate; } // the gait phase's cycles a second
-    // Motion matching took (the database loaded and bound): the pose comes from FirstPersonBodyMotion.
-    bool MotionMatching() const { return m_Mm.Active(); }
     // How much of the mocap head's own motion the eye rides (0..1): the presentation drops that share of its camera bob.
     float HeadRide() const { return m_HeadRide; }
-    const FirstPersonBodyMotion& Motion() const { return m_Mm; }
 
 private:
+    bool FootPoints(const World& world, glm::vec3 (&out)[2]) const; // the feet in the driver's model space (x right, y up, z forward)
     // Motion matching's Tick (after the body's feet and the view's heading are worked out).
     void TickMotionMatching(World& world, const Player& player, const FirstPersonBodyComponent& cfg, float dt);
     void UpdateGaitPhase(const Player& player, float dt);
     FirstPersonBodyMotion m_Mm;
     Player::DirectionalSpeeds m_MmSpeeds; // the gait table's speeds, for the capsule (BeforePlayerMove)
     void Fail(const std::string& message);
-    // Legacy only (motion matching plays the mocap's own lean).
-    float m_SpineCrouch = 0.0f, m_SpineCrouchDrop = 0.0f;
-    struct SpineReference {
-        std::vector<int> Parents, Bones;
-        std::array<int, 5> SpineNodes = {-1, -1, -1, -1, -1};
-        std::vector<glm::mat4> Globals[2];
-        int Clips[2] = {-2, -2}; // rebuilt if an idle clip becomes available after startup
-    };
-    std::map<const Model*, SpineReference> m_SpineReferences;
     void ApplySpineAim(const Camera& camera, float amount, float twist);
     // Arm Hang (unarmed): the spine's pitch at the view carried the arms round with the chest - looking down they swung
     // back, stiff, behind a body bent over. Each piece's upper arms' model-space rotations are taken before the pitch and
@@ -308,14 +264,11 @@ private:
     int m_NeckNode = -1, m_HeadRimNode = -1; // the driver's neck_01 / head (the opening's axis, posed)
     bool m_EyeClearBuilt = false;
     float m_EyeClear = 0.0f; // m the eye is moved forward by it (eased)
-    std::string m_LastError;
     int m_OutfitVersion = 0;       // CharacterOutfitComponent::Version at Start
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
     bool m_HaveHeading = false;
     float m_CrouchHeight = 0.0f, m_CrouchSpeed = 0.42f; // the component's, from Start
-    float m_IdleTime = 1.0f;       // seconds with no move input (a start clip needs a real pause)
-    glm::vec2 m_LastDir{0.0f, 1.0f}; // the last move direction (body frame) and whether it was a sprint
-    bool m_LastSprint = false;
+    float m_IdleTime = 1.0f;       // seconds standing still (BodyDebug)
     bool m_Grounded = false;       // at the last Tick
     glm::vec3 m_ArmedEyeDelta{0.0f}; // the shoulder-anchored eye minus the head's, in the body's frame (as of the last armed frame)
     bool m_HaveArmedEye = false;
@@ -324,7 +277,6 @@ private:
     std::vector<std::pair<entt::entity, int>> m_ArmsEasedOut;
     // Whether piece `e` is part of the arms (FPBody::IsArmsPiece on its name, with this body's settings).
     bool IsArmsPiece(const entt::registry& reg, entt::entity e) const;
-    bool m_InLand = false;         // the animator is in the landing state (the input drives the capsule)
     float m_FootWeight = 0.0f;     // 0..1: how much foot IK is on (eases at the edges of grounded)
     bool m_HaveFoot = false;
     // The body's own height. Stairs: the capsule climbs a step at a time; the body follows the ground's ramp under it
@@ -339,29 +291,13 @@ private:
     bool m_HaveCapsule = false;
     glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity
     IK::FootLock m_Lock;                        // planted feet held in the world
-    std::string m_LastState;                    // the driver's state last frame
-    bool m_TurnFade = false;                    // a turn on the spot fading back to its loop (a start may cut in)
     float m_FootOffset[2] = {0.0f, 0.0f};                 // ground under each foot minus the capsule's, smoothed
     glm::vec3 m_FootNormal[2] = {glm::vec3(0, 1, 0), glm::vec3(0, 1, 0)};
-    float m_MoveTime = 0.0f;       // seconds of move input in a row (a tap is not a run to stop from)
-    bool m_WasCrouched = false;    // for the stand<->crouch edge
-    // What the locomotion script keeps between frames beyond the above: distance matching, the pivot under way,
-    // the fidget timer, and the picks it last made.
-    struct LocoMemory {
-        float StartDistance = 0.0f, PivotDistance = 0.0f, PivotTravel = 0.0f, MoveDistance = 0.0f;
-        float FidgetTime = 0.0f, FidgetNext = 0.0f, FidgetIndex = 0.0f;
-        float StartGait = 1.0f, StopGait = 1.0f, PivotGait = 1.0f, StartTurn = 0.0f, StartTurnAmount = 1.0f;
-        glm::vec2 PivotDir{0.0f, 1.0f}, StepDir{0.0f, 1.0f};
-        bool PivotReversed = false;
-    } m_Loco;
-    bool m_Armed = false, m_Busy = false; // a gun in hand; aiming or just fired (SetHands)
-    std::uint32_t m_Random = 0x9E3779B9u;
+    float m_MoveTime = 0.0f;       // seconds moving in a row (BodyDebug)
     bool m_Still = false;          // standing still at the last Tick (the view's turn is then limited)
     float m_MaxTurnRate = 0.0f;    // the component's, from the last Tick
     float m_TurnThreshold = 0.0f;
     bool m_Turning = false;        // a turn-in-place clip is carrying the body round
-    float m_TurnTime = 0.0f;       // seconds into it
-    float m_TurnDone = 0.0f;       // radians the clip has turned the body so far
     float m_Twist = 0.0f;          // view heading minus body heading, radians, wrapped
     int m_HeadNode = -1;
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
@@ -401,10 +337,7 @@ private:
     glm::vec3 m_CameraApplied{0.0f}; // what LateUpdate added to the camera (BeforePlayerMove takes it off)
     glm::vec3 m_CameraBase{0.0f};    // the player's own eye at Tick (no body, no view punch): LateUpdate's kick is off it
     bool m_HaveCameraBase = false;
-    glm::vec3 m_BodyEye{0.0f}, m_ViewKick{0.0f}; // LateUpdate's eye and the presentation's kick on top (diagnostics)
-    float m_LeanWanted = 0.0f, m_LeanShoulders = 0.0f; // the lean's side step and the spine's share of it (diagnostics)
     glm::vec3 m_HeadEased{0.0f}; // unarmed: the clips' head as the eye follows it (FirstPersonBodyFollowShoulders)
-    float m_EyeArmsWeight = 0.0f;    // m_ArmsWeight as LateUpdate's eye used it
     float m_ArmsWeightPrev = 0.0f;   // ... and before LateUpdate eased it (ArmsLateUpdate re-decides from it)
     bool m_ArmsWeightEased = false;  // LateUpdate has eased m_ArmsWeight this frame
     bool m_ViewModelFovOk = true;    // the last ArmsLateUpdate had a view-model FOV (LateUpdate's guess at the rig)
@@ -413,17 +346,10 @@ private:
     glm::vec3 m_Feet{0.0f};
     float m_Yaw = 0.0f;           // body heading, radians about +Y (model +Z faces the view)
     glm::vec2 m_Move{0.0f};
-    glm::vec3 m_RootVelocity{0.0f};
-    float m_AirTime = 0.0f;
-    std::string m_LastTrigger;     // the last start / stop / crouch / jump trigger fired (for the debug readout)
-    float m_SinceTrigger = 1000.0f;
     float m_RunSpeed = 0.0f;       // the blend tree's (the clips') run speed
     float m_PlayerRunSpeed = 0.0f; // the capsule's run / sprint speeds (Player Run / Sprint Speed, else the clips')
-    float m_PlayerSprintSpeed = 0.0f;
     float m_PlayerWalkSpeed = 0.0f; // the capsule's walk (the default gait); Shift is the jog (m_PlayerRunSpeed)
-    float m_FallSpeed = 0.0f;       // m/s down at the last airborne frame: the next landing's impact
     FirstPersonGaitPhase m_Gait;
-    float m_Responsiveness = 0.0f; // the component's, from the last Tick
 };
 
 // --- The maths, exposed for tests ------------------------------------------------------------
@@ -461,41 +387,20 @@ float FirstPersonBodyMmAimFade(float speed, float from, float to);
 // the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
 float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,
                                float clearance, float maxPush, float step);
-// The body a world gun is seated on (FirstPersonGunSeat), world space: the upper arms' heads, the neck and head bones,
-// and - when known this frame - the chest (spine_05) and the drawn head / torso vertices.
-struct FirstPersonGunSeatBody {
-    glm::vec3 UpperL{0.0f}, UpperR{0.0f}, Neck{0.0f}, Head{0.0f};
-    const glm::vec3* Chest = nullptr;
-    const std::vector<glm::vec3>* HeadPoints = nullptr;
-    const std::vector<glm::vec3>* TorsoPoints = nullptr;
-};
-// How far the world gun moves off `gun.ButtWorld` / `gun.ForwardWorld` to sit on `body`: its butt into the right shoulder
-// pocket by Shouldered; out of the neck and hood keep-outs; out of the drawn head (and, by Torso Keep Out, the torso) by
-// Mesh Clearance; at most Max Shift. The mesh part is written to `meshPush` when points were given, and `cachedMeshPush`
-// stands in for it when not (a caller skinning every few frames). (No caller since the soldiers went and the player's world
-// body took the 3P clips' hold as it is; kept, with its unit test, until those are retired together.)
-glm::vec3 FirstPersonGunSeat(const FirstPersonWorldGunInput& gun, const FirstPersonGunSeatBody& body, glm::vec3* meshPush = nullptr,
-                             const glm::vec3* cachedMeshPush = nullptr);
 // The hand anchor's share for something `distance` off the gun's box: 0 within `nearDist`, 1 from `farDist`, smoothstep between.
 float FirstPersonAnchorWeight(float distance, float nearDist, float farDist);
 // `m` (any frame, scale kept) moved `weight` of the way by the rigid world move `move`: its origin along the straight line,
 // its turn by slerp. 0 = `m`, 1 = `move` * `m`.
 glm::mat4 FirstPersonPartialMove(const glm::mat4& move, const glm::mat4& m, float weight);
-// The arms rig's arm shapes onto `pose` of model `m` (rotations of every node under the clavicles, the body
-// keeping its bone lengths), by `weight`; the clavicles themselves by `weight * clavicleWeight`. What the
-// player's arms take before reaching the rig's hands.
-void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose,
-                                 const std::vector<int>& parents, float clavicleWeight);
-// The same with the body / rig node pairs worked out once (FirstPersonBodyArmShapeLinks), for a body that holds the
-// same rig frame after frame - no name lookups per frame.
-void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
-                                  std::vector<FirstPersonArmShapeLink>& out);
 // Grip Inset's direction: the way `rig`'s hand on `side` (0 left, 1 right) closes, world - from its knuckle toward its
 // curled middle fingertip, across the hand's length. Zero when the rig has no such bones or the hand is open.
 glm::vec3 FirstPersonBodyPalmDirection(const Model& rig, const glm::mat4& rigWorld, int side);
 // Finger Curl Extra: every finger joint of `m` (index / middle / ring / pinky 01-03, not the thumb) turned `degrees`
 // further about the axis it has already turned on from its rest - the way the grip closes it.
 void FirstPersonBodyCurlFingers(const Model& m, std::vector<LocalTRS>& pose, float degrees);
+// The arms rig's arm shapes onto `pose` (rotations of every linked node under the clavicles, the body keeping its bone
+// lengths), by `weight`; the clavicles by `weight * clavicleWeight`. What the player's arms take before reaching the
+// rig's hands. `links`: the body / rig node pairs (FirstPersonBodyArmShapeLinksFrom), worked out once.
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
 // The arm solve's steps (FirstPersonBody::LateUpdate), kept as free functions for reuse; where callers differ, the

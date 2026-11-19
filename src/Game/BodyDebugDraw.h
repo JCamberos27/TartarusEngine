@@ -82,9 +82,9 @@ struct Snapshot {
     float EyeToUpperArmRig[2] = {0, 0}, EyeToUpperArmBody[2] = {0, 0};
     float NearPlane = 0.0f;
     float EyeBodyPush = 0.0f;
-    int NeckRimPoints = 0;
+    int NeckRimPoints = 0;        // the torso's neck opening's rim vertices EyeBodyPush keeps out of the view
     float LookLimitDeg = -89.0f;  // the look-down limit (Player::MinPitch under motion matching)
-    float HeadRide = 0.0f;        // FirstPersonBody::HeadRide (the procedural camera bob is off by this share)        // the torso's neck opening's rim vertices EyeBodyPush keeps out of the view     // m the eye is moved forward to keep the upper torso past the near plane (EyeBodyPush)
+    float HeadRide = 0.0f;        // FirstPersonBody::HeadRide (the procedural camera bob is off by this share)
     // FirstPersonBody's camera probe (overlay on): the piece the camera sees nearest the eye, how far ahead
     // (along the view) and the bone that mostly moves that spot; which pass draws it.
     std::string ProbePiece, ProbeBone;
