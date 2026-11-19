@@ -14,31 +14,11 @@
 
 namespace EditorModuleInspector {
 
-namespace {
-
-// EditorInternal::PushTabChromeText — used to keep the dock tab bar's text white against
-// Windows XP's saturated-green tab chrome. Phase 1 item 9 removed that theme; Light's tabs are
-// neutral and already pair with its own normal text colour, so this is a permanent no-op now
-// (see EditorLayerInternal.h's PanelChromeIsLight for the full explanation).
-bool PanelChromeIsLight() {
-    return false;
-}
-void PushTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
-}
-void PopTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PopStyleColor();
-}
-
-} // namespace
-
 void Draw(const EditorModuleHostAPI& host) {
     if (host.GetShowInspector && !host.GetShowInspector()) return;
 
     bool visible = true;
-    PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::Inspector, &visible, ImGuiWindowFlags_None);
-    PopTabChromeText();
     if (host.SetShowInspector) host.SetShowInspector(visible); // capture the title-bar X
     if (!open) { ImGui::End(); return; }
 

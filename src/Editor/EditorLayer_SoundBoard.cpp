@@ -102,9 +102,7 @@ void EditorLayer::DrawEditorSoundPreferences() {
 void EditorLayer::DrawSoundBoardPanel() {
     if (!m_ShowSoundBoard) return;
     ImGui::SetNextWindowSize(ImVec2(640.0f * m_UIScale, 600.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::SoundBoard, &m_ShowSoundBoard);
-    PopTabChromeText();
     if (!open) { ImGui::End(); return; }
 
     const EditorSound::Settings& st = EditorSound::Current();

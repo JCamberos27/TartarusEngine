@@ -25,7 +25,6 @@ namespace AssetExts {
 const char* const Images[] = {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".hdr", ".exr", nullptr};
 const char* const Hdri[] = {".hdr", ".exr", nullptr};
 const char* const Models[] = {".fbx", ".gltf", ".glb", ".obj", ".dae", nullptr};
-const char* const Sounds[] = {".wav", ".mp3", ".ogg", ".flac", nullptr};
 const char* const Materials[] = {".mat", nullptr};
 const char* const Animations[] = {".fbx", ".gltf", ".glb", ".dae", nullptr};
 }

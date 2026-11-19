@@ -788,9 +788,7 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
     static const ImGuiID kCardId = ImHashStr("##decalCard");
 
     ImGui::SetNextWindowSize(ImVec2(760.0f * m_UIScale, 560.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::DecalLibrary, &m_ShowDecalLibrary);
-    PopTabChromeText();
     if (!open) {
         ed.HoverEntry = -1;
         ImGui::End();

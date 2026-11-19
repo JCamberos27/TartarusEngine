@@ -1241,9 +1241,7 @@ void EditorLayer::DrawLightsSection(World& world, float w) {
 void EditorLayer::DrawLightingPanel(World& world) {
     if (!m_ShowLighting) return;
     ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 430.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::Lighting, &m_ShowLighting);
-    PopTabChromeText();
     if (!open) { ImGui::End(); return; }
 
     const float w = 170.0f * m_UIScale;
@@ -1277,9 +1275,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                                         ImMin(460.0f * m_UIScale, ImMax(work.y - margin, 240.0f))),
                                  ImGuiCond_FirstUseEver);
     }
-    PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
     const bool settingsOpen = ImGui::Begin(EditorPanels::Settings, &m_ShowPreferences);
-    PopTabChromeText();
     if (!settingsOpen) { ImGui::End(); return; }
 
     static const char* kEditorCats[] = {
@@ -2688,11 +2684,9 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
     // Wide enough that Slow-mo + 1x + Step never wrap/clip regardless of UI scale (#32).
     ImGui::SetNextWindowSize(ImVec2(360.0f * m_UIScale, 320.0f * m_UIScale), ImGuiCond_FirstUseEver);
     bool open = EditorSettings::Get().ShowPhysicsPanel;
-    PushTabChromeText();
     // #40 — the title now reads exactly like its Window-menu entry ("Physics Debug"), not the
     // shorter "Physics" the menu item disagreed with.
     const bool visible = ImGui::Begin(EditorPanels::PhysicsDebug, &open);
-    PopTabChromeText();
     EditorSettings& es = EditorSettings::Get();
 
     if (visible) {
@@ -2868,10 +2862,6 @@ bool EditorLayer::WantsCaptureMouse() const {
     // Asset-Browser drop target) then naturally no-ops.
     if (m_GameInputActive) return true;
     return ImGui::GetIO().WantCaptureMouse && !IsMouseOverSceneViewport();
-}
-
-bool EditorLayer::WantsCaptureKeyboard() const {
-    return ImGui::GetIO().WantCaptureKeyboard || m_GameInputActive;
 }
 
 bool EditorLayer::OtherWindowOwnsKeyboard() const {
@@ -3270,9 +3260,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     ImGuiWindowFlags sceneFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
         ImGuiWindowFlags_NoFocusOnAppearing;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
     m_SceneViewportVisible = ImGui::Begin(EditorPanels::Scene, nullptr, sceneFlags);
-    PopTabChromeText();
     ImGui::PopStyleVar();
     // Track Scene's live dock node every frame (not just once) so the Play/Stop re-docking
     // safety net always targets the pair's CURRENT home — wherever the user last dragged the
@@ -4030,8 +4018,4 @@ void EditorLayer::PostModuleDraw(World& world) {
     else if(m_RequestGlobalRedo && m_AssetsPtr) Redo(world,*m_AssetsPtr);
     m_RequestGlobalUndo=m_RequestGlobalRedo=false;
     AtomicFile::SetChangeObserver({});
-}
-
-bool EditorLayer::AnyModalOpen() const {
-    return ImGui::GetTopMostPopupModal() != nullptr;
 }

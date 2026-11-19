@@ -122,14 +122,12 @@ inline float Px(float v) { return v * Scale(); }
 inline float BodySize()    { return Px(kBaseFontPx); }
 inline float SmallSize()   { return Px(13.0f); }
 inline float HeadingSize() { return Px(11.5f); }  // tracked mono capitals
-inline float TitleSize()   { return Px(18.0f); }
 
 inline void PushBody()    { ImGui::PushFont(UiFont(), BodySize()); }
 inline void PushSmall()   { ImGui::PushFont(UiFont(), SmallSize()); }
 inline void PushMono()    { ImGui::PushFont(MonoFont(), Px(13.5f)); }
 inline void PushMonoSmall() { ImGui::PushFont(MonoFont(), Px(12.0f)); }
 inline void PushHeading() { ImGui::PushFont(MonoFont(), HeadingSize()); }
-inline void PushTitle()   { ImGui::PushFont(UiFont(), TitleSize()); }
 inline void PopFont()     { ImGui::PopFont(); }
 
 // --- Tracked text ---------------------------------------------------------------------------------
@@ -285,18 +283,6 @@ inline float MotionFollow(ImGuiID id, float target, EditorMotionToken token = Ed
     if (h && h->Follow) return h->Follow(id, target, prev, (int)token);
     return target;
 }
-// An OKLAB colour tween (a straight mix through AnimT when the bridge is missing).
-inline ImVec4 MotionColor(ImGuiID id, ImVec4 target, ImVec4 rest, EditorMotionToken token) {
-    const EditorMotionHooks* h = MotionHooks();
-    if (h && h->AnimateColor) {
-        const float t4[4] = {target.x, target.y, target.z, target.w};
-        const float r4[4] = {rest.x, rest.y, rest.z, rest.w};
-        float o4[4] = {target.x, target.y, target.z, target.w};
-        h->AnimateColor(id, t4, r4, (int)token, o4);
-        return ImVec4(o4[0], o4[1], o4[2], o4[3]);
-    }
-    return target;
-}
 inline void MotionPulse(ImGuiID id, EditorMotionToken token) {
     const EditorMotionHooks* h = MotionHooks();
     if (h && h->Pulse) h->Pulse(id, (int)token);
@@ -305,21 +291,9 @@ inline float MotionPulseProgress(ImGuiID id) {
     const EditorMotionHooks* h = MotionHooks();
     return (h && h->PulseProgress) ? h->PulseProgress(id) : 1.0f;
 }
-inline void MotionTriggerWiggle(ImGuiID id) {
-    const EditorMotionHooks* h = MotionHooks();
-    if (h && h->TriggerWiggle) h->TriggerWiggle(id);
-}
-inline float MotionWiggle(ImGuiID id) {
-    const EditorMotionHooks* h = MotionHooks();
-    return (h && h->Wiggle) ? h->Wiggle(id) : 0.0f;
-}
 inline void MotionScrollToY(float y) {
     const EditorMotionHooks* h = MotionHooks();
     if (h && h->ScrollToY) h->ScrollToY(y); else ImGui::SetScrollY(y);
-}
-inline void MotionScrollToBottom() {
-    const EditorMotionHooks* h = MotionHooks();
-    if (h && h->ScrollToBottom) h->ScrollToBottom(); else ImGui::SetScrollY(ImGui::GetScrollMaxY());
 }
 
 // --- Motion v2 (API v44): each falls back to the static look when the bridge is missing ----------
@@ -338,31 +312,9 @@ inline float MotionOdometer(ImGuiID id, ImDrawList* dl, ImVec2 pos, double value
     dl->AddText(pos, col, buf);
     return ImGui::CalcTextSize(buf).x;
 }
-inline void MotionInertiaTrack(ImGuiID id, ImVec2 delta) {
-    const EditorMotionHooks* h = MotionHooks();
-    if (h && h->InertiaTrack) h->InertiaTrack(id, delta.x, delta.y);
-}
-inline void MotionInertiaRelease(ImGuiID id) {
-    const EditorMotionHooks* h = MotionHooks();
-    if (h && h->InertiaRelease) h->InertiaRelease(id);
-}
-inline ImVec2 MotionInertiaDelta(ImGuiID id) {
-    const EditorMotionHooks* h = MotionHooks();
-    ImVec2 d(0, 0);
-    if (h && h->InertiaDelta) h->InertiaDelta(id, &d.x, &d.y);
-    return d;
-}
-inline void MotionSheen(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImGuiID seed, float strength) {
-    const EditorMotionHooks* h = MotionHooks();
-    if (h && h->DrawSheen) h->DrawSheen(dl, mn.x, mn.y, mx.x, mx.y, seed, strength);
-}
 inline void MotionCursorGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImVec2 cursor, float strength) {
     const EditorMotionHooks* h = MotionHooks();
     if (h && h->DrawCursorGlow) h->DrawCursorGlow(dl, mn.x, mn.y, mx.x, mx.y, cursor.x, cursor.y, strength);
-}
-inline float MotionRippleDelay(int col, int row, int originCol, int originRow) {
-    const EditorMotionHooks* h = MotionHooks();
-    return (h && h->RippleDelay) ? h->RippleDelay(col, row, originCol, originRow) : 0.0f;
 }
 inline int MotionBeginLayer(ImDrawList* dl) {
     const EditorMotionHooks* h = MotionHooks();

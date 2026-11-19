@@ -66,18 +66,6 @@ Camera* g_Camera = nullptr;
 // corrupting the first instance's state.
 bool g_InstanceLive = false;
 
-void DrawStatusPanel(const char* title, const char* message, const char* accent) {
-    bool open = true;
-    if (!ImGui::Begin(title, &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::End();
-        return;
-    }
-    ImGui::TextWrapped("%s", message);
-    ImGui::Separator();
-    ImGui::TextColored(EditorTheme::Success, "%s", accent);
-    ImGui::End();
-}
-
 void* GetImGuiContextPtr() {
     return ImGui::GetCurrentContext();
 }
@@ -276,7 +264,6 @@ bool TbGetShowHistory() { return g_Editor && g_Editor->ShowHistory(); }
 void TbSetShowHistory(bool on) { if (g_Editor) g_Editor->SetShowHistory(on); }
 bool TbGetShowStats() { return EditorSettings::Get().SceneShowStats; }
 void TbSetShowStats(bool on) { EditorSettings::Get().SceneShowStats = on; EditorSettings::Save(); }
-void TbOpenPreferences() { if (g_Editor) g_Editor->OpenPreferences(); }
 void TbOpenShortcutsReference() { if (g_Editor) g_Editor->OpenShortcutsReference(); }
 
 // --- Help menu (API v33, #184) -------------------------------------------------------------
@@ -313,12 +300,6 @@ void HelpReportBug() {
 
 void TbDrawEditMenuBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawEditMenuBody(*g_World, *g_Assets);
-}
-void TbGetSceneTitle(char* out, int n, bool* outDirty, bool* outPlaying) {
-    if (!g_Editor) { if (out && n > 0) out[0] = '\0'; return; }
-    if (out && n > 0) std::snprintf(out, (size_t)n, "%s", g_Editor->SceneTitle().c_str());
-    if (outDirty) *outDirty = g_Editor->SceneDirty();
-    if (outPlaying) *outPlaying = g_Editor->IsInPlayMode();
 }
 void TbDrawFileMenuBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawFileMenuBody(*g_World, *g_Assets);
@@ -485,12 +466,6 @@ void  HistDrawListBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHistoryListBody(*g_World, *g_Assets);
 }
 
-// --- Document strip (API v20, Phase 3 item 1) --------------------------------------------
-
-// --- Play controls, Zone B (API v21, Phase 3 item 2) -------------------------------------
-
-// --- Play-mode panel tint (API v22, Q12 / Phase 4 #6) -------------------------------------
-
 // --- Asset Browser folder history (API v23, Phase 5 item 3) ------------------------------
 void AbFolderHistoryBack()          { if (g_Editor) g_Editor->AssetFolderHistoryBack(); }
 void AbFolderHistoryForward()       { if (g_Editor) g_Editor->AssetFolderHistoryForward(); }
@@ -530,7 +505,6 @@ void HostNoteUIPress(unsigned itemId) { EditorSound::NotePress(itemId); }
 EditorModuleHostAPI MakeHostAPI() {
     EditorModuleHostAPI api;
     api.Version = kEditorModuleAPIVersion;
-    api.DrawStatusPanel = &DrawStatusPanel;
     api.GetImGuiContext = &GetImGuiContextPtr;
     api.GetImGuiAllocators = &GetImGuiAllocators;
     api.LogRevision = &LogRevisionFn;
@@ -562,7 +536,6 @@ EditorModuleHostAPI MakeHostAPI() {
     api.SetShowHistory = &TbSetShowHistory;
     api.GetShowStats = &TbGetShowStats;
     api.SetShowStats = &TbSetShowStats;
-    api.OpenPreferences = &TbOpenPreferences;
     api.OpenShortcutsReference = &TbOpenShortcutsReference;
     api.LogGetEntryContext = &LogGetEntryContextFn;
     api.LogGetEntryStack = &LogGetEntryStackFn; // #178
@@ -572,7 +545,6 @@ EditorModuleHostAPI MakeHostAPI() {
     api.ReportBug = &HelpReportBug;
     api.DrawFileMenuBody = &TbDrawFileMenuBody;
     api.DrawEditMenuBody = &TbDrawEditMenuBody;
-    api.GetSceneTitle = &TbGetSceneTitle;
     api.DrawAddEntityMenuItems = &TbDrawAddEntityMenuItems;
     api.DrawViewMenuBody = &TbDrawViewMenuBody;
     api.DrawWindowMenuBody = &TbDrawWindowMenuBody;
@@ -655,16 +627,13 @@ const EditorModuleHostAPI kHostAPI = MakeHostAPI();
 // instead of silently disabling a panel feature.
 int CountUnassignedHostSlots(const EditorModuleHostAPI& api) {
     static_assert(sizeof(void (*)()) == sizeof(void*), "function pointers are assumed pointer-sized");
-    static_assert(offsetof(EditorModuleHostAPI, DrawStatusPanel) == sizeof(void*),
+    static_assert(offsetof(EditorModuleHostAPI, GetImGuiContext) == sizeof(void*),
                   "Version is expected to be followed directly by the function-pointer slots");
     static_assert(sizeof(EditorModuleHostAPI) % sizeof(void*) == 0, "unexpected EditorModuleHostAPI layout");
     constexpr std::size_t slots = sizeof(EditorModuleHostAPI) / sizeof(void*) - 1;
     const auto* bytes = reinterpret_cast<const unsigned char*>(&api) + sizeof(void*);
-    // Retired slots stay null on purpose (kept only for the struct layout); not a missing callback.
-    constexpr std::size_t retiredEngineMark = offsetof(EditorModuleHostAPI, GetEngineMarkTexture) / sizeof(void*) - 1;
     int unassigned = 0;
     for (std::size_t i = 0; i < slots; ++i) {
-        if (i == retiredEngineMark) continue;
         void* slot = nullptr;
         std::memcpy(&slot, bytes + i * sizeof(void*), sizeof(void*));
         if (!slot) ++unassigned;

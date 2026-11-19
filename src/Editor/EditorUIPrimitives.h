@@ -603,7 +603,6 @@ inline void SceneDataBadge(TooltipFn tooltipFn) {
 // "wrong colour this frame" flicker while a readback catches up. Use these two together: draw
 // the plate first, then the text in kHudTextColor on top.
 inline constexpr ImU32 kHudTextColor         = IM_COL32(0xE6, 0xE8, 0xE6, 255); // EditorTheme::Text
-inline constexpr ImU32 kHudTextDisabledColor = IM_COL32(0xE6, 0xE8, 0xE6, 150);
 inline constexpr ImU32 kHudPlateColor        = IM_COL32(0x00, 0x00, 0x00, 219); // EditorTheme::HudPlate
 
 // Fills `mn`..`mx` with the standard HUD plate colour. Pass the tight bounding box of the

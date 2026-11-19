@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
-#include <cmath>
 
 using json = nlohmann::json;
 void EditorSettings::ReloadForUndo() {Get()=EditorSettings{};Load();}
@@ -212,7 +211,6 @@ void EditorSettings::Load() {
         }
     }
     s.ShowBodyDebug = SafeValue(root, "showBodyDebug", s.ShowBodyDebug);
-    s.ToolPaletteCollapsed = SafeValue(root, "toolPaletteCollapsed", s.ToolPaletteCollapsed);
     s.DecalFavorites = SafeValue(root, "decalFavorites", s.DecalFavorites);
     s.DecalRecent = SafeValue(root, "decalRecent", s.DecalRecent);
     s.DecalPalette = SafeValue(root, "decalPalette", s.DecalPalette);
@@ -529,7 +527,6 @@ void EditorSettings::Flush() {
         root["sceneCameras"] = std::move(cams);
     }
     root["showBodyDebug"] = Get().ShowBodyDebug;
-    root["toolPaletteCollapsed"] = Get().ToolPaletteCollapsed;
     root["decalFavorites"] = Get().DecalFavorites;
     root["decalRecent"] = Get().DecalRecent;
     root["decalPalette"] = Get().DecalPalette;

@@ -180,10 +180,8 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
     EditorSettings& prefs = EditorSettings::Get();
     if (!prefs.ShowAssetLibrary) return;
     ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 420.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
     bool open = true;
     const bool visible = ImGui::Begin(EditorPanels::AssetLibrary, &open);
-    PopTabChromeText();
     if (!open) { prefs.ShowAssetLibrary = false; EditorSettings::Save(); }
     if (!visible) { ImGui::End(); return; }
 

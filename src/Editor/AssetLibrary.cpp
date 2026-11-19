@@ -658,16 +658,6 @@ void AssetLibrary::AdoptDiskFolder(const std::string& path, const std::string* m
     if (!folder.empty()) m_AssetFolder[path] = folder;
 }
 
-std::string AssetLibrary::BrowserFolderFor(const std::string& path) {
-    auto it = m_AssetFolder.find(path);
-    if (it != m_AssetFolder.end()) return it->second;
-    try {
-        const json j = json::parse(AssetDatabase::ReadMetaFields(path));
-        if (j.contains("folder") && j["folder"].is_string()) return AddFolderPath(j["folder"].get<std::string>());
-    } catch (...) { WarnBadMeta(path); }
-    return DiskFolderFor(path);
-}
-
 std::string AssetLibrary::DiskFolderFor(const std::string& path) {
     if (path.empty() || path.find("://") != std::string::npos) return {};
     std::string dir = ProjectPaths::Relativize(path);
@@ -688,7 +678,6 @@ std::string AssetLibrary::AddFolderPath(const std::string& dir) {
     };
     // Walk the directories top-down, reusing "Shaders" for "shaders" and so on.
     std::string folder;
-    bool added = false;
     for (size_t start = 0; start <= dir.size();) {
         size_t end = dir.find('/', start);
         if (end == std::string::npos) end = dir.size();
@@ -696,13 +685,12 @@ std::string AssetLibrary::AddFolderPath(const std::string& dir) {
         auto it = std::find_if(m_Folders.begin(), m_Folders.end(),
                                [&](const std::string& f) { return sameName(f, wanted); });
         if (it != m_Folders.end()) folder = *it;
-        else { folder = wanted; m_Folders.push_back(folder); added = true; }
+        else { folder = wanted; m_Folders.push_back(folder); }
         start = end + 1;
     }
     // Not persisted: these folders are derived from where the files sit and are found again on every load
     // (saving them rewrote the tracked project/settings.json each time an asset was first seen). Folders
     // the user makes or renames in the browser still persist (CreateFolder / RenameFolder).
-    (void)added;
     return folder;
 }
 

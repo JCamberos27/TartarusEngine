@@ -236,12 +236,6 @@ struct EditorSettings {
     void RememberSceneCamera(const SceneCameraPose& pose); // moves/inserts it at the front, trims to the cap
     bool  ShowBodyDebug          = false; // the Gizmos > Player body overlay (foot IK rays, headings, eye anchor)
 
-    // --- Tool palette (Phase 3 item 3): the vertical Hand/Translate/Rotate/Scale/Rect/Universal
-    // + Measure/Duplicate-Array + space/pivot rail docked to the Scene viewport's left edge,
-    // replacing those buttons' old home in the top toolbar strip. Collapsed to a thin strip
-    // (just the chevron) when true; expanded (the default) otherwise.
-    bool  ToolPaletteCollapsed   = false;
-
     // Decal editor tools (EditorLayer_DecalLibrary.cpp, docs/DECALS.md "Editor tools").
     // Decals and palettes are project-relative paths with forward slashes.
     std::vector<std::string> DecalFavorites;   // Decal Library hearts

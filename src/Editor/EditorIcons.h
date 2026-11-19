@@ -67,31 +67,16 @@
 #define EDITOR_ICON_TOGGLE_GIZMOS ICON_FA_SHAPES
 
 // --- Grid / Snap -----------------------------------------------------------------------------------
-#define EDITOR_ICON_GRID           ICON_FA_TABLE_CELLS
 #define EDITOR_ICON_SNAP_TO_GRID   ICON_FA_MAGNET
 #define EDITOR_ICON_SNAP_TO_GROUND ICON_FA_DOWN_LONG
 
 // --- Zone A / document strip -------------------------------------------------------------------------
-#define EDITOR_ICON_UNDO ICON_FA_ROTATE_LEFT
-#define EDITOR_ICON_REDO ICON_FA_ROTATE_RIGHT
 #define EDITOR_ICON_SAVE ICON_FA_FLOPPY_DISK
 
 // --- Panel toggles / capture -------------------------------------------------------------------------
 #define EDITOR_ICON_STATISTICS ICON_FA_CHART_SIMPLE
 #define EDITOR_ICON_CONSOLE    ICON_FA_TERMINAL
 #define EDITOR_ICON_HISTORY    ICON_FA_CLOCK_ROTATE_LEFT
-#define EDITOR_ICON_CARET_DOWN ICON_FA_CARET_DOWN
-
-// --- Window controls ---------------------------------------------------------------------------------
-#define EDITOR_ICON_WINDOW_MINIMIZE ICON_FA_MINUS
-#define EDITOR_ICON_WINDOW_MAXIMIZE ICON_FA_EXPAND
-#define EDITOR_ICON_WINDOW_RESTORE  ICON_FA_COMPRESS
-#define EDITOR_ICON_WINDOW_CLOSE    ICON_FA_XMARK
-// ICON_FA_XMARK also marks "remove this tag" (EditorLayer.cpp) and "delete this layout preset"
-// (EditorLayer_Toolbar.cpp), left as plain ICON_FA_XMARK rather than routed through this header:
-// all three are the same single concept (dismiss/remove/close), not two different actions
-// wearing one glyph, so giving them separate semantic names would manufacture a distinction that
-// doesn't exist. Only EDITOR_ICON_WINDOW_CLOSE is registered below for the uniqueness check.
 
 namespace EditorIcons {
 
@@ -109,14 +94,11 @@ inline constexpr IconEntry kAllIcons[] = {
     {"UnlitMode", EDITOR_ICON_UNLIT_MODE}, {"NormalsMode", EDITOR_ICON_NORMALS_MODE},
     {"CascadesMode", EDITOR_ICON_CASCADES_MODE}, {"MipMode", EDITOR_ICON_MIP_MODE},
     {"ToggleGizmos", EDITOR_ICON_TOGGLE_GIZMOS},
-    {"Grid", EDITOR_ICON_GRID}, {"SnapToGrid", EDITOR_ICON_SNAP_TO_GRID},
+    {"SnapToGrid", EDITOR_ICON_SNAP_TO_GRID},
     {"SnapToGround", EDITOR_ICON_SNAP_TO_GROUND},
-    {"Undo", EDITOR_ICON_UNDO}, {"Redo", EDITOR_ICON_REDO}, {"Save", EDITOR_ICON_SAVE},
+    {"Save", EDITOR_ICON_SAVE},
     {"Statistics", EDITOR_ICON_STATISTICS}, {"Console", EDITOR_ICON_CONSOLE},
     {"History", EDITOR_ICON_HISTORY},
-    {"CaretDown", EDITOR_ICON_CARET_DOWN},
-    {"WindowMinimize", EDITOR_ICON_WINDOW_MINIMIZE}, {"WindowMaximize", EDITOR_ICON_WINDOW_MAXIMIZE},
-    {"WindowRestore", EDITOR_ICON_WINDOW_RESTORE}, {"WindowClose", EDITOR_ICON_WINDOW_CLOSE},
 };
 inline constexpr std::size_t kAllIconsCount = sizeof(kAllIcons) / sizeof(kAllIcons[0]);
 

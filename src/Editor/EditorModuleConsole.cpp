@@ -255,16 +255,8 @@ void Draw(const EditorModuleHostAPI& host) {
     EditorConsoleState& state = *host.ConsoleState();
     if (!state.Visible) return;
 
-    // This used to flip the dock tab bar's text to white against Windows XP's saturated-green
-    // tab chrome (detected from WindowBg luminance, no theme knowledge needed across the module
-    // boundary). Phase 1 item 9 removed that theme; Light's tabs are neutral and already pair
-    // with its own normal text colour, so the luminance check would be a false positive there
-    // now (see EditorLayerInternal.h's PanelChromeIsLight) — permanently disabled instead.
-    const bool consoleLightChrome = false;
-    if (consoleLightChrome) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
     ImGuiWindowFlags flags = ImGuiWindowFlags_None;
     const bool consoleOpen = ImGui::Begin(EditorPanels::Console, &state.Visible, flags);
-    if (consoleLightChrome) ImGui::PopStyleColor();
     if (!consoleOpen) { ImGui::End(); return; }
 
     // One toolbar row: clear / save, the three level toggles (each with its count), the search box

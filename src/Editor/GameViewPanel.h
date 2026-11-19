@@ -64,8 +64,6 @@ public:
     // True exactly once, the frame the user left-clicked inside the running Game view while
     // it wasn't yet controlling input — main.cpp turns that into "capture mouse/keyboard".
     bool ConsumeEngageClick() { bool v = m_EngageClickPending; m_EngageClickPending = false; return v; }
-    // Whether the pointer was over the rendered image on the last RenderUI call.
-    bool IsViewHovered() const { return m_ViewHovered; }
 
     // Call whenever Play Mode is entered/exited. When "Maximize on Play" is enabled, entering
     // Play requests OS fullscreen and exiting it requests leaving fullscreen again (consume the
@@ -85,10 +83,6 @@ public:
     // This run only, not written to the prefs (--perf-bench).
     void UsePresetThisSession(const ResolutionPreset& preset) { m_CurrentPreset = preset; }
     const ResolutionPreset& GetCurrentPreset() const { return m_CurrentPreset; }
-
-    ResolutionManager::LetterboxRect CalculateLetterboxSize(ImVec2 containerSize, float targetAspect) const {
-        return ResolutionManager::CalculateLetterboxRect(containerSize, targetAspect);
-    }
 
     // Resolves the current preset into concrete framebuffer pixel dimensions, given the space
     // actually available this frame (the Game panel's own content region while editing — see

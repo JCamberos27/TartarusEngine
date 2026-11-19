@@ -209,15 +209,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
     // regardless of anything EditorLayer explicitly requests afterward. See EditorLayer's
     // matching flag on "Scene" for the full explanation (found in ImGui's own source, not
     // guessed) - both windows need it, since either one's auto-focus alone can win this fight.
-    // This used to flip the dock tab bar's text to white against Windows XP's saturated-green
-    // tab chrome (detected from WindowBg luminance). Phase 1 item 9 removed that theme; Light's
-    // tabs are neutral and already pair with its own normal text colour, so the luminance check
-    // would be a false positive there now (see EditorLayerInternal.h's PanelChromeIsLight) —
-    // permanently disabled instead.
-    const bool gvLightChrome = false;
-    if (gvLightChrome) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
     m_Visible = ImGui::Begin(EditorPanels::Game, &m_WindowOpen, ImGuiWindowFlags_NoFocusOnAppearing);
-    if (gvLightChrome) ImGui::PopStyleColor();
     if (!m_Visible) {
         m_LastAvailableRegion = ImVec2(0.0f, 0.0f);
         m_ViewImageSize = ImVec2(0.0f, 0.0f);
