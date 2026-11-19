@@ -220,7 +220,7 @@ private:
     float m_Time = 0.0f;             // seconds since death
     float m_FingerTime = 0.0f;       // seconds since death, for the fingers letting go
     float m_FingerRelaxTime = 0.35f;
-    float m_PartFade[kRagParts];        // per part: seconds to limp
+    float m_PartFade[kRagParts] = {};   // per part: seconds to limp
     float m_DistalDamping = 0.0f;    // the hands' and feet's joint damping floor
     float m_Stiffness = 700.0f, m_Damping = 60.0f; // the drives' strength, from the settings
     float m_StartLimbSpeed = 0.0f, m_StartLimbSpin = 0.0f; // (tests) see StartLimbSpeed

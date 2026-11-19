@@ -35,6 +35,23 @@
 
 namespace {
 
+// An 80 m floor box whose top is at y = `top` (physics not up yet: FlatFloor does that).
+void AddFloor(World& world, float top) {
+    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, top - 0.5f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
+    world.Registry.emplace<ColliderComponent>(floorE, col);
+}
+
+// A floor whose top is at y = `top`, physics up.
+void FlatFloor(World& world, float top = 0.0f) {
+    AddFloor(world, top);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+}
+
 // A soldier standing facing +z (x is the body's left), arms down at 45 degrees (an A pose), every limb straight.
 bool StandingBone(const char* name, glm::vec3& out) {
     static const std::map<std::string, glm::vec3> kBones = {
@@ -354,14 +371,7 @@ void TestRagdollHandsAndFeetRestOnTheFloor() {
 }
 void HandsAndFeetOnTheFloor(const RagdollSettingsComponent& cfg) {
     World world;
-    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-    ColliderComponent col;
-    col.Kind = ColliderComponent::Shape::Box;
-    col.HalfExtents = glm::vec3(20.0f, 0.5f, 20.0f);
-    world.Registry.emplace<ColliderComponent>(floorE, col);
-    world.SyncActiveInHierarchy();
-    world.RebuildWorldTransformCache();
-    PhysicsWorld::Create(world);
+    FlatFloor(world);
     if (!PhysicsWorld::IsActive()) return;
     PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
     CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(0.0f), cfg, parts));
@@ -651,11 +661,7 @@ RagdollSettingsComponent PassiveCfg() {
 KillStats KillOnAFloor(const RagdollSettingsComponent& cfg, const KillCase& kc) {
     KillStats st;
     World world;
-    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-    ColliderComponent col;
-    col.Kind = ColliderComponent::Shape::Box;
-    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-    world.Registry.emplace<ColliderComponent>(floorE, col);
+    AddFloor(world, -0.03f);
     if (kc.Crate) {
         // A metre-high crate just behind the body (RagdollTest's): a round from the front puts it against the crate.
         const entt::entity crate = world.CreateEmptyEntity(glm::vec3(0.0f, -0.03f + 0.5f, -0.95f), glm::vec3(0.0f), glm::vec3(1.0f), "Crate");
@@ -907,14 +913,7 @@ void TestRagdollMuscleToneCurves() {
 void TestRagdollMusclesFoldTheKnees() {
     auto kneeAfter = [&](const RagdollSettingsComponent& cfg, float seconds, float* pelvisY) {
         World world;
-        const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-        ColliderComponent col;
-        col.Kind = ColliderComponent::Shape::Box;
-        col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-        world.Registry.emplace<ColliderComponent>(floorE, col);
-        world.SyncActiveInHierarchy();
-        world.RebuildWorldTransformCache();
-        PhysicsWorld::Create(world);
+        FlatFloor(world, -0.03f);
         float knee = -1.0f;
         if (!PhysicsWorld::IsActive()) return knee;
         PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
@@ -954,14 +953,7 @@ void TestRagdollMusclesFoldTheKnees() {
 // A body that has come to rest is put to sleep and stays so (no drive write wakes it) until something hits it.
 void TestRagdollSettlesAndSleeps() {
     World world;
-    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-    ColliderComponent col;
-    col.Kind = ColliderComponent::Shape::Box;
-    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-    world.Registry.emplace<ColliderComponent>(floorE, col);
-    world.SyncActiveInHierarchy();
-    world.RebuildWorldTransformCache();
-    PhysicsWorld::Create(world);
+    FlatFloor(world, -0.03f);
     if (!PhysicsWorld::IsActive()) return;
     const RagdollSettingsComponent cfg;
     PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
@@ -999,14 +991,7 @@ void TestRagdollSettlesAndSleeps() {
 // onto it rests on it without waking it, and a shot thaws it. A solve driven past any sane speed is put back, finite and still.
 void TestRagdollRestingCorpseFreezes() {
     World world;
-    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-    ColliderComponent col;
-    col.Kind = ColliderComponent::Shape::Box;
-    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-    world.Registry.emplace<ColliderComponent>(floorE, col);
-    world.SyncActiveInHierarchy();
-    world.RebuildWorldTransformCache();
-    PhysicsWorld::Create(world);
+    FlatFloor(world, -0.03f);
     if (!PhysicsWorld::IsActive()) return;
     const RagdollSettingsComponent cfg;
     const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
@@ -1105,14 +1090,7 @@ RagdollSettingsComponent RevampCfg() {
 std::vector<std::vector<glm::vec3>> KillPositions(const RagdollSettingsComponent& cfg, const KillCase& kc, const std::vector<float>& seconds, NpcRagdollMotor::Fall* fall = nullptr) {
     std::vector<std::vector<glm::vec3>> out;
     World world;
-    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-    ColliderComponent col;
-    col.Kind = ColliderComponent::Shape::Box;
-    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-    world.Registry.emplace<ColliderComponent>(floorE, col);
-    world.SyncActiveInHierarchy();
-    world.RebuildWorldTransformCache();
-    PhysicsWorld::Create(world);
+    FlatFloor(world, -0.03f);
     if (!PhysicsWorld::IsActive()) return out;
     PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
     glm::mat4 partWorld[NpcRagdoll::kRagParts];
@@ -1312,14 +1290,7 @@ void TestRagdollReactionsLayerTheTarget() {
 void TestRagdollCorpseHitReacts() {
     auto run = [&](float wakeTime, float* struckMove, float* farMove, float* pelvisDrift, float* sleptAt, float* speed) {
         World world;
-        const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-        ColliderComponent col;
-        col.Kind = ColliderComponent::Shape::Box;
-        col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-        world.Registry.emplace<ColliderComponent>(floorE, col);
-        world.SyncActiveInHierarchy();
-        world.RebuildWorldTransformCache();
-        PhysicsWorld::Create(world);
+        FlatFloor(world, -0.03f);
         if (!PhysicsWorld::IsActive()) return false;
         RagdollSettingsComponent cfg;
         cfg.CorpseWakeTime = wakeTime;
@@ -1415,18 +1386,6 @@ void TestRagdollLyingFieldsRoundTrip() {
 }
 
 // --- The articulation ragdoll ----------------------------------------------------------------------------------------------
-
-// A floor whose top is at y = 0, physics up.
-void FlatFloor(World& world) {
-    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
-    ColliderComponent col;
-    col.Kind = ColliderComponent::Shape::Box;
-    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
-    world.Registry.emplace<ColliderComponent>(floorE, col);
-    world.SyncActiveInHierarchy();
-    world.RebuildWorldTransformCache();
-    PhysicsWorld::Create(world);
-}
 
 // A joint rotation as the articulation's three joint positions: the rotation vector's components; and a driven joint goes to
 // the rotation its target names (the motor's targets mean what they did on the old slerp drives).
