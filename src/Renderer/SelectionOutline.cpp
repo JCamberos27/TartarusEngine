@@ -90,11 +90,11 @@ void SelectionOutline::Render(const SelectionOutlineInputs& in) {
     if (in.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // mask must be solid
     for (std::size_t i = 0; i < models.size(); ++i) {
         const bool hover = i >= selected;
-        glColorMaski(0, !hover, hover, GL_FALSE, GL_FALSE);
+        glColorMask(!hover, hover, GL_FALSE, GL_FALSE); // one draw buffer
         maskShader.SetMat4("uModel", xforms[i]);
         models[i]->Draw(maskShader);
     }
-    glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     if (in.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glBlitNamedFramebuffer(m_MaskMsFbo, m_MaskFbo, 0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST); // resolve
 
