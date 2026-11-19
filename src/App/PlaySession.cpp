@@ -8,7 +8,6 @@
 #include "BloodRenderer.h"
 #include "BulletHoles.h"
 #include "Camera.h"
-#include "CombatHud.h"
 #include "Combat/BloodFx.h"
 #include "Combat/CombatFx.h"
 #include "Combat/FxSprites.h"
@@ -144,7 +143,6 @@ void PlaySession::Start() {
             fx = m_World.Registry.get<FxHudSettingsComponent>(e);
         }
         m_CombatFx.Settings = fx;
-        m_CombatHud.Settings = fx;
         m_WeaponFx.Settings = fx;
     }
     m_BloodFx.Clear();
@@ -228,7 +226,6 @@ void PlaySession::Start() {
         if (m_NpcTest) std::printf("[NpcTest] dummies %s (%zu spawn points)\n", squadStarted ? "started" : "not started", m_NpcDirector.SpawnPoints().size());
         if (squadStarted) {
             m_DevPanel.Reset(m_PlayerVitals);
-            m_CombatHud.Reset();
             m_CombatFx.Start(m_World);
             if (m_NpcTest && !m_NpcTest->RecordDir().empty()) {
                 std::error_code ec;

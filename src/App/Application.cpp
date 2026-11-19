@@ -106,7 +106,7 @@
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
 #include "Combat/ImpactFx.h"
 #include "Combat/BloodLab.h"
-#include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
+#include "CombatHud.h"          // the AI overlay and the F-row's world lines over Play
 #include "DevPanel.h"           // the dev overlay in Play
 #include "DevSpawner.h"         // F9-F12 spawns
 #include "PlayerLook.h"         // F7 / F8
@@ -457,7 +457,7 @@ int Application::RunSession() {
             combatWiring.Wire(cw);
         }
         PlayerVitals playerVitals;  // the player's health in Play
-        CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
+        CombatHud combatHud;        // the AI debug overlay and the F-row's world lines
         DevPanel devPanel;          // dev tools in Play (no default keys)
         DevSpawner devSpawner;      // F9-F12: dummies and items at the crosshair
         PlayerLook playerLook;      // F7 / F8: the player's look and clothes, kept between Plays
@@ -502,7 +502,7 @@ int Application::RunSession() {
             }
             out.insert(out.end(), meshLines.begin(), meshLines.end());
         };
-        // The text-and-shapes combat HUD (ammo, kill feed, radio subtitles, awareness chevrons, AI overlay) for one view.
+        // The debug overlay (the AI overlay, the F-row's world lines) for one view.
         auto drawCombatHud = [&](unsigned fbo, int w, int h, const glm::mat4& v, const glm::mat4& p) {
             if(!playUsesPlayer)return;
             CombatHudInput in;
@@ -511,18 +511,6 @@ int Application::RunSession() {
             in.Height = h;
             in.ViewProj = p * v;
             in.CamPos = player.Cam.Position;
-            in.CamYawDeg = player.Cam.Yaw;
-            in.RealTime = (float)glfwGetTime();
-            in.PlayerDead = playerVitals.IsDead();
-            in.Armed = firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped();
-            if (in.Armed) {
-                in.Ammo = firstPersonPresentation.Ammo();
-                in.Magazine = firstPersonPresentation.MagazineSize();
-                in.FireMode = firstPersonPresentation.Set().Gameplay.Pellets > 1 ? "PUMP" : firstPersonPresentation.IsFullAuto() ? "AUTO" : "SEMI";
-                in.Reloading = firstPersonPresentation.IsReloading();
-            }
-            in.God = playerVitals.GodMode;
-            in.InfiniteAmmo = devPanel.InfiniteAmmo;
             in.AiOverlay = devPanel.AiOverlay || FKeyRow::CurrentOverlay() == FKeyRow::OverlayAi;
             // F6 Nav / Hitboxes: world lines the HUD projects like the AI overlay's.
             static std::vector<float> fRowLines;
@@ -872,7 +860,7 @@ int Application::RunSession() {
         // Entering and leaving Play (App/PlaySession.h): snapshot on Play, restore on Stop.
         int& errPauseSeen = play.ErrPauseSeen;
         PlaySession playSession(play, window, world, assets, editor, gameView, editorCamera, player, flashlight, gravityGun,
-                                firstPersonPresentation, firstPersonBody, combatFx, combatHud, weaponFx, bloodFx, fxSprites,
+                                firstPersonPresentation, firstPersonBody, combatFx, weaponFx, bloodFx, fxSprites,
                                 playerVitals, npcDirector, devPanel, bulletHoles, shellCasings, weaponLab.get(),
                                 npcTest.get());
         auto startPlay = [&]() { playSession.Start(); };
@@ -1376,7 +1364,6 @@ int Application::RunSession() {
             playIn.devSpawner = &devSpawner;
             playIn.devPanel = &devPanel;
             playIn.combatFx = &combatFx;
-            playIn.combatHud = &combatHud;
             playIn.combat = &combatWiring;
             playIn.bloodFx = &bloodFx;
             playIn.impactFx = &impactFx;

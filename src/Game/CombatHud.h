@@ -1,66 +1,34 @@
 #pragma once
 
 #include "HudText.h"
-#include "Components.h"
 
 #include <glm/glm.hpp>
 
-#include <string>
 #include <vector>
 
 class NpcDirector;
 
-// Everything the combat HUD draws with text and shapes: the ammo counter (bottom right), the kill feed and streak banner (top right /
-// top centre), a GOD tag, and the AI debug overlay (the director's lines and a label per dummy). One HudText batch, one draw call.
+// The debug overlay drawn over Play with text and shapes: the AI overlay (the director's lines and a label per dummy) and the
+// F-row's world lines (F6 Nav / Hitboxes). One HudText batch, one draw call.
 struct CombatHudInput {
     unsigned Fbo = 0;
     int Width = 0, Height = 0;
     glm::mat4 ViewProj{1.0f};
     glm::vec3 CamPos{0.0f};
-    float CamYawDeg = 0.0f;
-    float RealTime = 0.0f;       // wall clock, for pulses
-    bool PlayerDead = false;
-    bool Armed = false;          // a gun in hand (the ammo counter)
-    int Ammo = 0, Magazine = 0;
-    const char* FireMode = "";
-    bool Reloading = false;
-    bool God = false;
-    bool InfiniteAmmo = false;
     bool AiOverlay = false;
     const std::vector<float>* Lines = nullptr; // F6 Nav / Hitboxes: world lines, 7 floats per vertex (xyz rgba), two per line
 };
 
 class CombatHud {
 public:
-    // Scene tuning (feed life, streak window); the defaults are the old fixed values.
-    FxHudSettingsComponent Settings;
-    // The kill streak after a kill `sinceLastKill` seconds after the previous one.
-    static int NextStreak(const FxHudSettingsComponent& s, int streak, float sinceLastKill) {
-        return sinceLastKill <= s.StreakWindow ? streak + 1 : 1;
-    }
-    static bool FeedExpired(const FxHudSettingsComponent& s, float age) { return age > s.FeedLife; }
-    // Forgets the feed and the streak (a new Play).
-    void Reset();
-    // The player's round killed `entity` (a dummy of `npcs`).
-    void OnKill(const NpcDirector& npcs, unsigned entity, bool head);
     // Draws the frame into `in.Fbo`.
-    void Draw(const CombatHudInput& in, NpcDirector& npcs);
-
-    int Kills() const { return m_Kills; }
-    int FeedRows() const { return (int)m_Feed.size(); }
+    void Draw(const CombatHudInput& in, const NpcDirector& npcs);
 
 private:
-    struct FeedRow { std::string Name; bool Head = false; float At = 0.0f; };
-
-    void DrawAmmo(const CombatHudInput& in);
-    void DrawFeed(const CombatHudInput& in, float now);
     void DrawDebug(const CombatHudInput& in, const NpcDirector& npcs);
     void DrawLines(const CombatHudInput& in, const std::vector<float>& lines); // world lines, clipped to the near plane
     bool Project(const CombatHudInput& in, const glm::vec3& p, glm::vec2& out) const;
 
     HudText m_Text;
-    std::vector<FeedRow> m_Feed;
     std::vector<float> m_Lines; // scratch for the director's debug lines
-    int m_Kills = 0, m_Streak = 0;
-    float m_LastKillAt = -1e9f, m_StreakAt = -1e9f;
 };

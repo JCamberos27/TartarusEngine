@@ -44,7 +44,4 @@ glm::mat3 StarRotation(float hours, float dayOfYear, float latitudeDeg, float no
 // Clamped to 24 in polar day and 12 in polar night. Sunrise is 24 minus this.
 float SunsetHour(float dayOfYear, float latitudeDeg);
 
-// Elevation (radians) of a direction above the horizon.
-inline float Elevation(const glm::vec3& dir) { return std::asin(glm::clamp(dir.y, -1.0f, 1.0f)); }
-
 } // namespace TimeOfDay

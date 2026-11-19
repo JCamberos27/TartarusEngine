@@ -2,7 +2,6 @@
 #include "../Game/Components.h"
 #include "../Game/ComponentRegistry.h"
 #include "../Game/GravityGun.h"
-#include "../Game/CombatHud.h"
 #include "../Game/DevPanel.h"
 #include "../Game/AI/NpcDirector.h"
 #include "../Game/Combat/PlayerVitals.h"
@@ -75,13 +74,21 @@ static void Test_FxHudSettings_RoundTrip() {
     in.BeamHalfWidth = 0.003f;
     in.BeamFalloff = 5.0f;
     in.BeamBend = 8.0f;
-    in.FeedLife = 9.0f;
-    in.StreakWindow = 2.0f;
     FxHudSettingsComponent out;
     CHECK(RoundTrip(world, assets, "FX & HUD Settings", in, out));
     CHECK(out.FlashTime == 0.1f && out.PlayerFlashScale == 0.5f && out.FlameGlow == 90.0f && out.FlameScale == 2.5f);
     CHECK(out.BeamRange == 60.0f && out.BeamHalfWidth == 0.003f && out.BeamFalloff == 5.0f && out.BeamBend == 8.0f);
-    CHECK(out.FeedLife == 9.0f && out.StreakWindow == 2.0f);
+    // A scene saved while the kill feed's fields existed still loads (the old keys are skipped).
+    World old;
+    AssetLibrary oldAssets;
+    CHECK(SceneSerializer::LoadFromString(old, oldAssets, R"({"formatVersion":4,"empties":[{"id":0,"name":"Fx",)"
+                                                          R"("FX & HUD Settings":{"Beam Range":42,"Feed Life":9,"Streak Window":2}}]})"));
+    int seen = 0;
+    for (entt::entity e : old.Registry.view<FxHudSettingsComponent>()) {
+        ++seen;
+        CHECK(old.Registry.get<FxHudSettingsComponent>(e).BeamRange == 42.0f);
+    }
+    CHECK(seen == 1);
 }
 
 static void Test_BloodSettings_RoundTrip() {
@@ -122,27 +129,13 @@ static void Test_FxHud_SettingsDrivePureHelpers() {
     FxHudSettingsComponent s;
     // Defaults are the old fixed values.
     CHECK(WeaponFxRenderer::BeamLength(s, 200.0f) == 150.0f && WeaponFxRenderer::BeamLength(s, 40.0f) == 40.0f);
-    CHECK(CombatHud::NextStreak(s, 1, 3.9f) == 2 && CombatHud::NextStreak(s, 1, 4.1f) == 1);
-    CHECK(!CombatHud::FeedExpired(s, 4.4f) && CombatHud::FeedExpired(s, 4.6f));
     // Changed values change the result.
     s.BeamRange = 60.0f;
     CHECK(WeaponFxRenderer::BeamLength(s, 200.0f) == 60.0f);
-    s.StreakWindow = 2.0f;
-    CHECK(CombatHud::NextStreak(s, 1, 3.9f) == 1);
-    s.FeedLife = 9.0f;
-    CHECK(!CombatHud::FeedExpired(s, 4.6f) && CombatHud::FeedExpired(s, 9.5f));
 }
 
-// The kill feed and the dev panel's reset are native again (they were project C# for a while).
-static void Test_CombatHud_KillFeedAndDevReset() {
-    NpcDirector npcs;
-    CombatHud hud;
-    hud.Reset();
-    for (int i = 0; i < 7; ++i) hud.OnKill(npcs, 1000u + (unsigned)i, i == 0);
-    CHECK(hud.Kills() == 7 && hud.FeedRows() == 5); // the feed keeps the last five rows
-    hud.Reset();
-    CHECK(hud.Kills() == 0 && hud.FeedRows() == 0);
-
+// The dev panel's reset.
+static void Test_DevPanelReset() {
     DevPanel panel;
     panel.Open = panel.InfiniteAmmo = panel.AiOverlay = true;
     PlayerVitals vitals;
@@ -619,7 +612,7 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
     tests.push_back({"BloodSettings::RoundTrip", Test_BloodSettings_RoundTrip});
     tests.push_back({"GravityGun::AssistReach", Test_GravityGun_AssistReach});
-    tests.push_back({"CombatHud kill feed and DevPanel reset", Test_CombatHud_KillFeedAndDevReset});
+    tests.push_back({"DevPanel reset", Test_DevPanelReset});
     tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
     tests.push_back({"Model::AxisCorrection", Test_Model_AxisCorrection});
     tests.push_back({"SceneRenderer::WarmShaderVariantsSkipsShaderless", Test_SceneRenderer_WarmShaderVariantsSkipsShaderless});

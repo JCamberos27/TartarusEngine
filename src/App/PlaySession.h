@@ -66,13 +66,13 @@ public:
     PlaySession(PlayState& state, Window& window, World& world, AssetLibrary& assets,
                 EditorLayer& editor, GameViewPanel& gameView, Camera& editorCamera, Player& player, Flashlight& flashlight,
                 GravityGun& gravityGun, FirstPersonPresentation& presentation, FirstPersonBody& body,
-                CombatFx& combatFx, CombatHud& combatHud, WeaponFxRenderer& weaponFx, BloodFx& bloodFx,
+                CombatFx& combatFx, WeaponFxRenderer& weaponFx, BloodFx& bloodFx,
                 FxSprites& fxSprites, PlayerVitals& playerVitals, NpcDirector& npcDirector, DevPanel& devPanel,
                 BulletHoleList& bulletHoles, ShellCasings& shellCasings, WeaponLab* weaponLab, NpcTest* npcTest)
         : m_State(state), m_Window(window), m_World(world), m_Assets(assets), m_Editor(editor),
           m_GameView(gameView), m_EditorCamera(editorCamera), m_Player(player), m_Flashlight(flashlight),
           m_GravityGun(gravityGun), m_Presentation(presentation), m_Body(body), m_CombatFx(combatFx),
-          m_CombatHud(combatHud), m_WeaponFx(weaponFx), m_BloodFx(bloodFx), m_FxSprites(fxSprites),
+          m_WeaponFx(weaponFx), m_BloodFx(bloodFx), m_FxSprites(fxSprites),
           m_PlayerVitals(playerVitals), m_NpcDirector(npcDirector), m_DevPanel(devPanel), m_BulletHoles(bulletHoles),
           m_ShellCasings(shellCasings), m_WeaponLab(weaponLab), m_NpcTest(npcTest) {}
 
@@ -93,7 +93,6 @@ private:
     FirstPersonPresentation& m_Presentation;
     FirstPersonBody& m_Body;
     CombatFx& m_CombatFx;
-    CombatHud& m_CombatHud;
     WeaponFxRenderer& m_WeaponFx;
     BloodFx& m_BloodFx;
     FxSprites& m_FxSprites;

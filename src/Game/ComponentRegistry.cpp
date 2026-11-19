@@ -1945,10 +1945,6 @@ void RegisterEngineComponents() {
               "Laser beam glow falloff distance in metres near the emitter.", 0.1f, 50.0f },
             { "Beam Bend", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamBend), 0.1f,
               "Laser beam easing distance over which view-model emitter eases onto the true path (metres).", 0.1f, 20.0f },
-            { "Feed Life", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FeedLife), 0.1f,
-              "Seconds a kill feed line stays on screen.", 0.1f, 60.0f },
-            { "Streak Window", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, StreakWindow), 0.1f,
-              "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
         },
     });
     for(size_t i=0;i<5;++i)Storage().back().Meta.Fields[i].EditorHidden=true;

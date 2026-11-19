@@ -1431,23 +1431,10 @@ void TestPlayerConfigRoundTrip() {
 // where the exit code is enforced. It is the one test that stands a real PhysX world up.
 // Bones and ragdoll parts map to the regions of a hit, which map to the zones the damage multipliers are keyed on.
 void TestNpcHitRegions() {
-    CHECK(RegionFromBone("head") == HitRegion::Head);
-    CHECK(RegionFromBone("neck_01") == HitRegion::Torso);
-    CHECK(RegionFromBone("spine_03") == HitRegion::Torso);
-    CHECK(RegionFromBone("pelvis") == HitRegion::Torso);
-    CHECK(RegionFromBone("clavicle_l") == HitRegion::Torso);
-    CHECK(RegionFromBone("upperarm_l") == HitRegion::Arm);
-    CHECK(RegionFromBone("lowerarm_r") == HitRegion::Arm);
-    CHECK(RegionFromBone("hand_r") == HitRegion::Arm);
-    CHECK(RegionFromBone("index_01_l") == HitRegion::Arm);
-    CHECK(RegionFromBone("thigh_l") == HitRegion::Leg);
-    CHECK(RegionFromBone("calf_r") == HitRegion::Leg);
-    CHECK(RegionFromBone("foot_l") == HitRegion::Leg);
-    CHECK(RegionFromBone("ball_r") == HitRegion::Leg);
-    CHECK(RegionFromBone("nonsense") == HitRegion::Torso);
-    CHECK(RegionFromBone(nullptr) == HitRegion::Torso);
-    // Every part of the soldier's table lands where its bone does.
-    for (int i = 0; i < NpcRagdoll::kParts; ++i) CHECK(RegionFromPart(i) == RegionFromBone(NpcPartDefOf(i).Bone));
+    // Every part of the soldier's table lands where its bone does: pelvis, spine_03, head, the arms, the legs.
+    static const HitRegion kWant[NpcRagdoll::kParts] = {HitRegion::Torso, HitRegion::Torso, HitRegion::Head, HitRegion::Arm, HitRegion::Arm,
+                                                        HitRegion::Arm, HitRegion::Arm, HitRegion::Leg, HitRegion::Leg, HitRegion::Leg, HitRegion::Leg};
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) CHECK(RegionFromPart(i) == kWant[i]);
     CHECK(RegionFromPart(-1) == HitRegion::Torso && RegionFromPart(99) == HitRegion::Torso);
     // Regions to zones: arms and legs are both "limb", with the weapon's limb multiplier.
     CHECK(ZoneOfRegion(HitRegion::Head) == HitZone::Head);
@@ -1701,6 +1688,7 @@ void TestPhysicsWorldSync() {
 // smoke_sky_* scenes.
 void TestPhysicalSky() {
     using namespace TimeOfDay;
+    auto Elevation = [](const glm::vec3& d) { return std::asin(glm::clamp(d.y, -1.0f, 1.0f)); }; // above the horizon (radians)
     auto near = [](float a, float b, float eps) { return std::abs(a - b) <= eps; };
 
     // Equinox at the equator: the noon sun is overhead, 06:00 on the eastern horizon (+X),

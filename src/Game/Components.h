@@ -1495,8 +1495,6 @@ struct FxHudSettingsComponent {
     float BeamHalfWidth = 0.0015f;
     float BeamFalloff = 2.5f;
     float BeamBend = 4.0f;
-    float FeedLife = 4.5f;
-    float StreakWindow = 4.0f;
 };
 
 // The volumetric blood (docs/BLOOD_FX.md, Game/Combat/BloodFx): on any object in the scene (the first one counts);
