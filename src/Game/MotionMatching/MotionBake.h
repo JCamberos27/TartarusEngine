@@ -16,7 +16,8 @@
 //   output        "assets/Animations/MotionMatching/Manny" (no extension)
 //   fps, workers, bones (the streamed core bones), staticBones (name prefixes: one relaxed pose from staticPoseFrom),
 //   rootSynth { default {posSigma, yawSigma, hipsWeight}, byTag { tag: {...} } }, labels {...},
-//   budgets { poseMB, featureMB, loadSeconds }, validation { facingP95Deg, yawJitter, rigLengthPct }
+//   budgets { poseMB, featureMB, loadSeconds } (load: MotionDatabase::Load, as the runtime loads it),
+//   validation { facingP95Deg, yawJitter, reconstructCm, rigLengthPct } (warnings: the takes over them are listed)
 
 #include "MotionFeatures.h"
 #include "RootSynth.h"

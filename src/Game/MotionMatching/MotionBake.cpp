@@ -1080,6 +1080,7 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
     json takesJ = json::array();
     float worstFacing = 0.0f, worstJitter = 0.0f, worstRebuild = 0.0f;
     std::string worstFacingAt, worstJitterAt, worstRebuildAt;
+    json overJ = {{"facingP95", json::array()}, {"yawJitter", json::array()}, {"rebuildCm", json::array()}};
     // The relaxed finger pose first: the finger tracks are stored in its order.
     for (const TakeResult& r : results)
         if (r.Ok && r.Take.Name == staticFrom && !r.StaticRot.empty())
@@ -1135,6 +1136,11 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
         if (forward && r.Raw.FacingP95 > worstFacing) { worstFacing = r.Raw.FacingP95; worstFacingAt = r.Take.Name; }
         if (r.Raw.YawJitter > worstJitter) { worstJitter = r.Raw.YawJitter; worstJitterAt = r.Take.Name; }
         if (r.RebuildMaxCm > worstRebuild) { worstRebuild = r.RebuildMaxCm; worstRebuildAt = r.Take.Name; }
+        // The validation limits (the .mmconfig's "validation"): a take over one is flagged, not failed - the numbers are the
+        // root's and the rebuild's quality, for a look at the take, not a broken bake.
+        if (forward && r.Raw.FacingP95 > cfg.FacingP95Deg) overJ["facingP95"].push_back(r.Take.Name);
+        if (r.Raw.YawJitter > cfg.YawJitterMax) overJ["yawJitter"].push_back(r.Take.Name);
+        if (r.RebuildMaxCm > cfg.ReconstructCm) overJ["rebuildCm"].push_back(r.Take.Name);
         takesJ.push_back({{"name", r.Take.Name}, {"tags", r.Take.TagString()}, {"frames", r.Root.size()},
                           {"sourceStart", r.SourceStart}, {"takeSeconds", r.TakeSeconds}, {"importSeconds", r.ImportSeconds},
                           {"speedP50", r.SpeedP50}, {"speedMax", r.Raw.SpeedMax}, {"stepMaxM", r.Raw.StepMax},
@@ -1195,11 +1201,9 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
         std::cerr << "[MotionBake] ERROR: " << error << std::endl;
         return 1;
     }
-    const double l0 = Now();
-    MotionClipStream check;
-    MotionFeatureSet checkDb;
-    const bool loaded = check.Load(animPath, &error) && checkDb.Load(dbPath, &error);
-    const double loadSeconds = Now() - l0;
+    MotionDatabase check; // (the runtime's whole load: both files, then Build - the glitch scan, the boxes)
+    const bool loaded = check.Load(cfg.Output, &error);
+    const double loadSeconds = check.LoadSeconds();
     if (!loaded) {
         std::cerr << "[MotionBake] ERROR: reading back: " << error << std::endl;
         return 1;
@@ -1216,6 +1220,11 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
                 cfg.BudgetLoadSeconds, loadOk ? "OK" : "OVER");
     std::printf("[MotionBake] worst: forward facing p95 %.1f deg (%s), yaw jitter %.1f (%s), foot rebuild %.2f cm (%s)\n",
                 worstFacing, worstFacingAt.c_str(), worstJitter, worstJitterAt.c_str(), worstRebuild, worstRebuildAt.c_str());
+    std::printf("[MotionBake] validation (warnings): %zu forward takes over facing p95 %.1f deg, %zu over yaw jitter %.0f, "
+                "%zu over foot rebuild %.2f cm (the report's \"overValidation\" names them)\n",
+                overJ["facingP95"].size(), cfg.FacingP95Deg, overJ["yawJitter"].size(), cfg.YawJitterMax, overJ["rebuildCm"].size(),
+                cfg.ReconstructCm);
+    report["overValidation"] = overJ;
     std::printf("[MotionBake] wrote %s (%s) and %s (%s) in %.0f s\n", animPath.c_str(), Mb((size_t)fs::file_size(animPath, ec)).c_str(),
                 dbPath.c_str(), Mb((size_t)fs::file_size(dbPath, ec)).c_str(), Now() - start);
     report["config"] = cfg.Path;

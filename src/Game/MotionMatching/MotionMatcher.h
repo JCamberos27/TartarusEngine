@@ -79,6 +79,8 @@ public:
     int IdleRefits = 0; // idle searches because the continuation stopped fitting
     int ForcedByExcluded = 0; // searches forced because the playing frame is Excluded (it played into an excluded stretch)
     double SearchMsTotal = 0.0, SearchMsMax = 0.0;
+    // The latest kSearchSamples search times (ms; a ring once full, so a long Play doesn't grow it ~10 a second forever).
+    static constexpr size_t kSearchSamples = 4096;
     std::vector<float> SearchMs;
 
     // World point / facing -> the character's root space (MotionDatabase's feature convention).
