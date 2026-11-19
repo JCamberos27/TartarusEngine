@@ -284,10 +284,10 @@ void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos
 }
 
 void SetCharacterFootPosition(const float footPos[3]) {
-    if (!HasCharacter()) return;
+    if (!HasCharacter() || !FiniteVec3(footPos)) return;
     if (CharacterBody* b = g_State->playerBody.get()) {
         b->Feet = glm::vec3(footPos[0], footPos[1], footPos[2]);
-        b->Actor->setGlobalPose(PxTransform(BodyCentre(*b)));
+        PlaceBody(*b); // the target too: the last move's target pulled a respawned player back for one simulate
     }
 }
 

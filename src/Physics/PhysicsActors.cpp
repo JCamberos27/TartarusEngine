@@ -59,6 +59,7 @@ PxMaterial* GetMaterial(PhysicsState& s, const ColliderComponent& c) {
     auto it = s.materialCache.find(key);
     if (it != s.materialCache.end()) return it->second;
     PxMaterial* m = s.physics->createMaterial(staticFr, friction, bounciness);
+    if (!m) return s.defaultMaterial; // (PhysX out of memory: the default rather than a null to dereference)
     // PxCombineMode is eAVERAGE, eMIN, eMULTIPLY, eMAX - the order ColliderComponent stores.
     m->setFrictionCombineMode((PxCombineMode::Enum)frictionCombine);
     m->setRestitutionCombineMode((PxCombineMode::Enum)bounceCombine);
@@ -93,6 +94,7 @@ void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<s
         PxTransform shapeLocal(PxIdentity);
         PxShape* shape = nullptr;
         PxMaterial* mat = GetMaterial(s, ResolvePhysicMaterial(c)); // #185 PR 7, #170 combine modes + Physic Material asset
+        if (!mat) { ++skipped; continue; }
         auto make = [&](const PxGeometry& g) {
             shape = s.physics->createShape(g, *mat, /*isExclusive=*/true, flags);
         };
@@ -211,6 +213,7 @@ void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<s
 
         if (!rb) {
             PxRigidStatic* a = s.physics->createRigidStatic(actorPose);
+            if (!a) { shape->release(); ++skipped; continue; }
             a->attachShape(*shape);
             a->userData = EntityToUserData(e);
             shape->release();
@@ -221,6 +224,7 @@ void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<s
         }
 
         PxRigidDynamic* b = s.physics->createRigidDynamic(actorPose);
+        if (!b) { shape->release(); ++skipped; continue; }
         b->attachShape(*shape);
         // #169 - ProjectSettings' Solver Iterations was stored and shown but never applied.
         b->setSolverIterationCounts((PxU32)std::clamp(ProjectSettings::Physics().SolverIterations, 1, 255));
