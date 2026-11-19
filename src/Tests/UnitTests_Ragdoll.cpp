@@ -25,6 +25,10 @@
 #include <vector>
 #include <string>
 #include "GameModuleAPI.h" // BodyState
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h> // GetThreadTimes
 #include "Npc/NpcBody.h"
 
 // Unit tests for ragdolls, NPC death and NPC physics. Add a function per test and list it below.
@@ -566,15 +570,27 @@ void TestNavBoundaryEdgesMergeQuickly() {
     std::string error;
     CHECK(nav.Build(verts, tris, NavBuildSettings(), &error));
     std::vector<NavMesh::Edge> edges;
+    // CPU time of this thread (the merge is single-threaded): what the merge costs, whatever else the machine is doing. Wall
+    // time on a loaded machine (parallel builds, a shared CI runner) ran past the budget with the merge itself unchanged.
+    const auto threadCpuMs = []() {
+        FILETIME created, exited, kernel, user;
+        if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user)) return 0.0;
+        const auto ms = [](const FILETIME& f) { return (double)(((std::uint64_t)f.dwHighDateTime << 32) | f.dwLowDateTime) * 1e-4; };
+        return ms(kernel) + ms(user);
+    };
+    const double cpu0 = threadCpuMs();
     const auto t0 = std::chrono::steady_clock::now();
     nav.BoundaryEdges(edges);
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    const double cpuMs = threadCpuMs() - cpu0;
     CHECK(edges.size() >= 24 * 24 * 4);
 #ifdef NDEBUG
-    CHECK(ms < 250.0); // the cubic merge needed seconds here
+    const double budgetMs = 250.0; // the cubic merge needed seconds here
 #else
-    CHECK(ms < 1000.0); // unoptimised on a shared CI runner it can pass 250 ms; the cubic merge still needed seconds
+    const double budgetMs = 1000.0; // unoptimised; the cubic merge still needed seconds
 #endif
+    CHECK(cpuMs < budgetMs);
+    CHECK(ms < 8.0 * budgetMs); // the wall clock only has to stay within a loaded machine's reach
     int joinable = 0;
     for (size_t i = 0; i < edges.size(); ++i)
         for (size_t j = 0; j < edges.size(); ++j) {
