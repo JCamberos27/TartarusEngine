@@ -35,13 +35,17 @@ void FxSprites::Spawn(const Emit& e) {
     p.E = e;
     p.Seed = (std::uint32_t)(Rand() * 16777216.0f);
     if (e.Entry >= 0) {
+        bool cached = false;
         for (const Cached& c : m_Cache)
-            if (c.Id == e.Entry) { p.Frames = std::max(1, c.Info.Frames); p.Aspect = c.Info.Aspect; }
-        if (!m_Lookup)
+            if (c.Id == e.Entry) { p.Frames = std::max(1, c.Info.Frames); p.Aspect = c.Info.Aspect; cached = true; break; }
+        if (!cached && !m_Lookup)
             if (const auto* le = KnifeFxLibrary::Get().At(e.Entry)) { p.Frames = std::max(1, le->Frames); p.Aspect = le->Aspect; }
     }
     if (p.E.Frame < 0) p.E.Frame = std::min(p.Frames - 1, (int)(Rand() * (float)p.Frames));
-    if ((int)m_Live.size() >= MaxLive) m_Live.erase(m_Live.begin());
+    // Full: the oldest sixteenth goes at once (they're first: spawn order is kept), so heavy fire shifts the list once every
+    // ~MaxLive/16 spawns instead of on every one.
+    if ((int)m_Live.size() >= MaxLive)
+        m_Live.erase(m_Live.begin(), m_Live.begin() + std::min((long long)m_Live.size(), (long long)std::max(1, MaxLive / 16)));
     m_Live.push_back(p);
     ++m_Spawned;
 }

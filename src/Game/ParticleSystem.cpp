@@ -25,10 +25,11 @@ glm::mat3 Basis(const glm::mat4& m) {
     return b;
 }
 void Curves(ParticleSystemComponent& ps) {
-    const std::string stamp=ps.SizeCurve+'|'+ps.AlphaCurve+'|'+ps.SpeedCurve+'|'+ps.EmissionCurve;
     if(!ps.Curves || ps.Curves.use_count()!=1)ps.Curves=std::make_shared<ParticleCurveCache>();
-    if(stamp==ps.Curves->Stamp)return;
-    ps.Curves->Stamp=stamp;
+    std::string* src=ps.Curves->Sources;
+    if(src[0]==ps.SizeCurve && src[1]==ps.AlphaCurve && src[2]==ps.SpeedCurve && src[3]==ps.EmissionCurve && ps.Curves->Parsed)return;
+    ps.Curves->Parsed=true;
+    src[0]=ps.SizeCurve;src[1]=ps.AlphaCurve;src[2]=ps.SpeedCurve;src[3]=ps.EmissionCurve;
     auto parse=[](const std::string& text,Curve& out) {
         Curve c;if(Curve::FromJson(nlohmann::json::parse(text,nullptr,false),c)&&!c.Empty())out=std::move(c);
         else out=Curve::Constant(1.0f);
@@ -36,11 +37,11 @@ void Curves(ParticleSystemComponent& ps) {
     parse(ps.SizeCurve,ps.Curves->Size);parse(ps.AlphaCurve,ps.Curves->Alpha);
     parse(ps.SpeedCurve,ps.Curves->Speed);parse(ps.EmissionCurve,ps.Curves->Emission);
 }
-void Spawn(World& world,entt::entity entity,ParticleSystemComponent& ps,int count,float subFrame) {
+void Spawn(const glm::mat4& m,ParticleSystemComponent& ps,int count,float subFrame) {
     const int cap=std::clamp(ps.MaxParticles,0,100000);
     count=std::clamp(count,0,std::max(0,cap-int(ps.Live.size())));
     if(!count||ps.Lifetime<=0)return;
-    const glm::mat4 m=world.ComposeWorldTransform(entity);const auto basis=Basis(m);
+    const auto basis=Basis(m);
     const float radius=std::max(0.0f,ps.ShapeRadius);
     auto range=[&](float a,float b){return glm::mix(std::min(a,b),std::max(a,b),Rand01(ps.Rng));};
     for(int i=0;i<count;++i) {
@@ -88,7 +89,7 @@ void RestartParticleSystem(ParticleSystemComponent& ps,bool clear) {
 }
 void EmitParticleBurst(World& world,entt::entity entity,int count) {
     if(!world.Registry.valid(entity)||world.Registry.all_of<InactiveTag>(entity)||!world.Registry.all_of<TransformComponent>(entity))return;
-    if(auto* ps=world.Registry.try_get<ParticleSystemComponent>(entity))Spawn(world,entity,*ps,count,0);
+    if(auto* ps=world.Registry.try_get<ParticleSystemComponent>(entity))Spawn(world.ComposeWorldTransform(entity),*ps,count,0);
 }
 void UpdateParticleSystems(World& world,float dt) {
     if(!std::isfinite(dt)||dt<=0)return;dt=std::min(dt,.1f);
@@ -155,7 +156,7 @@ void UpdateParticleSystems(World& world,float dt) {
             if(ps.HavePreviousPosition && end>begin)ps.DistanceAccumulator+=glm::length(origin-ps.PreviousPosition)*std::max(0.0f,ps.RateOverDistance)*(end-begin)/dt;
             const int count=int(std::min(100000.0f,std::floor(ps.EmitAccumulator)))+int(std::min(100000.0f,std::floor(ps.DistanceAccumulator)));
             ps.EmitAccumulator-=std::floor(ps.EmitAccumulator);ps.DistanceAccumulator-=std::floor(ps.DistanceAccumulator);
-            Spawn(world,e,ps,count,dt);
+            Spawn(m,ps,count,dt);
             if(ps.BurstCount>0) {
                 const int cycle0=std::max(0,int(std::floor((begin-delay)/duration)));
                 const int cycle1=ps.Looping?std::max(cycle0,int(std::floor((end-delay)/duration))):0;
@@ -170,7 +171,7 @@ void UpdateParticleSystems(World& world,float dt) {
                         if(at>before || (first && at==before))++events;
                     }
                 }
-                Spawn(world,e,ps,int(std::min(100000LL,static_cast<long long>(events)*std::clamp(ps.BurstCount,0,100000))),0);
+                Spawn(m,ps,int(std::min(100000LL,static_cast<long long>(events)*std::clamp(ps.BurstCount,0,100000))),0);
             }
         }
         ps.PreviousPosition=origin;ps.HavePreviousPosition=true;

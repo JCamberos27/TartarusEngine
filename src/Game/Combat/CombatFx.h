@@ -5,8 +5,12 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+struct SoundSet; // Audio/SoundManifest.h
 
 #include "../Components.h"
 
@@ -82,6 +86,7 @@ private:
     std::FILE* m_Log = nullptr;
     std::vector<Flash> m_Flashes;
     size_t m_NextFlash = 0;
+    std::unordered_map<std::string, std::unique_ptr<SoundSet>> m_AttachmentSounds; // a muzzle's FiringSounds, parsed once
     entt::entity m_Sparks = entt::null, m_Flame = entt::null, m_PlayerFlame = entt::null, m_PlayerWorldFlame = entt::null, m_Smoke = entt::null, m_Tracers = entt::null;
     float m_LastWhizz = -1e9f, m_Now = 0.0f;
     std::uint32_t m_Rng = 0xC0FFEEu;
