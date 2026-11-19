@@ -61,13 +61,27 @@ void HdrTarget::Create(int width, int height, int samples) {
     m_Height = height;
     m_Samples = samples;
 
-    // --- Multisample scene target: RGBA16F colour + 32F depth, both as textures so depth is
-    //     readable later (SSAO / screen-space passes).
-    glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsColor);
-    glTextureStorage2DMultisample(m_MsColor, samples, GL_RGBA16F, width, height, GL_TRUE);
-
-    glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsDepth);
-    glTextureStorage2DMultisample(m_MsDepth, samples, GL_DEPTH_COMPONENT32F, width, height, GL_TRUE);
+    // --- Scene target: RGBA16F colour + 32F depth, both as textures so depth is readable later (SSAO / screen-space
+    //     passes). With one sample (TAA, FXAA, Off) they are plain 2D textures and serve as their own resolve: no
+    //     resolve copies, and ResolveTo / ResolveDepthOnly do nothing.
+    const bool single = samples == 1;
+    auto plain = [width, height](unsigned int& tex, GLenum format, GLint filter) {
+        glCreateTextures(GL_TEXTURE_2D, 1, &tex);
+        glTextureStorage2D(tex, 1, format, width, height);
+        glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, filter);
+        glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, filter);
+        glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    };
+    if (single) {
+        plain(m_MsColor, GL_RGBA16F, GL_LINEAR);
+        plain(m_MsDepth, GL_DEPTH_COMPONENT32F, GL_NEAREST);
+    } else {
+        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsColor);
+        glTextureStorage2DMultisample(m_MsColor, samples, GL_RGBA16F, width, height, GL_TRUE);
+        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsDepth);
+        glTextureStorage2DMultisample(m_MsDepth, samples, GL_DEPTH_COMPONENT32F, width, height, GL_TRUE);
+    }
 
     glCreateFramebuffers(1, &m_MsFbo);
     glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT0, m_MsColor, 0);
@@ -75,10 +89,24 @@ void HdrTarget::Create(int width, int height, int samples) {
     const GLenum drawBuf = GL_COLOR_ATTACHMENT0;
     glNamedFramebufferDrawBuffers(m_MsFbo, 1, &drawBuf);
 
+    GpuMemTrack::Set(MemKey(this, "MS color+depth"), (size_t)width * height * samples * 12);
+    if (single) { // nothing to resolve into
+        const bool ok = GLFramebufferCheck::Complete("HdrTarget", m_MsFbo, width, height);
+        if (m_WantVelocity) SetVelocityEnabled(true);
+        if (!ok) {
+            Log::Error("HdrTarget: incomplete framebuffer at " + std::to_string(width) + "x" + std::to_string(height) +
+                       " - the view is off until the size or sample count changes.");
+            Release();
+            m_FailW = width;
+            m_FailH = height;
+            m_FailSamples = samples;
+        }
+        return;
+    }
+
     // --- Single-sample resolve target the tonemap pass samples.
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveColor);
     glTextureStorage2D(m_ResolveColor, 1, GL_RGBA16F, width, height);
-    GpuMemTrack::Set(MemKey(this, "MS color+depth"), (size_t)width * height * samples * 12);
     GpuMemTrack::Set(MemKey(this, "resolve color"), (size_t)width * height * 8);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -116,8 +144,13 @@ void HdrTarget::SetVelocityEnabled(bool on) {
     m_WantVelocity = on;
     if (!m_MsFbo) return;
     if (on && !m_MsVelocity) {
-        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsVelocity);
-        glTextureStorage2DMultisample(m_MsVelocity, m_Samples, GL_RG16F, m_Width, m_Height, GL_TRUE);
+        if (m_Samples == 1) { // TAA's case (it runs without MSAA): a plain 2D texture, read as sampler2D
+            glCreateTextures(GL_TEXTURE_2D, 1, &m_MsVelocity);
+            glTextureStorage2D(m_MsVelocity, 1, GL_RG16F, m_Width, m_Height);
+        } else {
+            glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsVelocity);
+            glTextureStorage2DMultisample(m_MsVelocity, m_Samples, GL_RG16F, m_Width, m_Height, GL_TRUE);
+        }
         GpuMemTrack::Set(MemKey(this, "MS velocity"), (size_t)m_Width * m_Height * m_Samples * 4);
         glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT1, m_MsVelocity, 0);
     } else if (!on && m_MsVelocity) {
@@ -169,6 +202,7 @@ void HdrTarget::CreateResolveDepth() const {
 
 unsigned int HdrTarget::ResolvedDepthTexture() const {
     m_DepthRequested = true;
+    if (m_Samples == 1) return m_MsDepth; // its own resolve
     if (!m_ResolveDepth && m_ResolveFbo) {
         // Target already sized - provision depth into the existing FBO right away (DSA allows
         // attaching to a complete framebuffer without rebinding it). If not sized yet, the next
@@ -180,7 +214,7 @@ unsigned int HdrTarget::ResolvedDepthTexture() const {
 }
 
 void HdrTarget::ResolveDepthOnly() const {
-    if (!m_MsFbo || !m_ResolveFbo) return;
+    if (!m_MsFbo || !m_ResolveFbo) return; // (one sample: no resolve FBO - the depth is already single-sample)
     ResolvedDepthTexture();
     glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
         0, 0, m_Width, m_Height,
@@ -189,8 +223,8 @@ void HdrTarget::ResolveDepthOnly() const {
 }
 
 void HdrTarget::ResolveTo() const {
-    if (!m_MsFbo || !m_ResolveFbo) return;
-    // MSAA down-resolve (a plain copy when m_Samples == 1). Colour always, for the tonemap pass.
+    if (!m_MsFbo || !m_ResolveFbo) return; // one sample: the target is its own resolve
+    // MSAA down-resolve. Colour always, for the tonemap pass.
     // Depth (#121) only once something has asked for it via ResolvedDepthTexture() - see #206.
     glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
         0, 0, m_Width, m_Height,

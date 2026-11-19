@@ -32,7 +32,8 @@ public:
     // draw framebuffer afterwards — the caller rebinds whatever it needs next.
     void ResolveTo() const;
 
-    unsigned int ResolvedColorTexture() const { return m_ResolveColor; } // RGBA16F, linear-filtered, sampleable
+    // RGBA16F, linear-filtered, sampleable (with one sample, the render target itself)
+    unsigned int ResolvedColorTexture() const { return m_Samples == 1 ? m_MsColor : m_ResolveColor; }
 
     // Mid-pass: resolves only the depth into ResolvedDepthTexture() (provisioning it on first use) -
     // for a pass that reconstructs the surfaces drawn so far while the MSAA target stays bound (the
@@ -48,7 +49,7 @@ public:
     unsigned int MultisampleFbo() const { return m_MsFbo; }
     // The multisampled depth itself (GL_TEXTURE_2D_MULTISAMPLE, Samples() of them): a pass that tests against it with
     // depth writes off may also read it (after glTextureBarrier) - the impostors' lit pass does.
-    unsigned int MultisampleDepthTexture() const { return m_MsDepth; }
+    unsigned int MultisampleDepthTexture() const { return m_MsDepth; } // GL_TEXTURE_2D_MULTISAMPLE, or GL_TEXTURE_2D at one sample
 
     // TAA motion vectors (TemporalAA.h): an RG16F second colour attachment at the same sample count. Off by default
     // and allocated only while a view wants it. Even when on, location 1 is NOT in the draw buffers unless
@@ -58,7 +59,7 @@ public:
     bool VelocityEnabled() const { return m_MsVelocity != 0; }
     void SetVelocityWrites(bool on) const;
     void ClearVelocity(float value) const; // every pixel = (value, value): "unknown, reproject from depth"
-    unsigned int VelocityTexture() const { return m_MsVelocity; } // GL_TEXTURE_2D_MULTISAMPLE, RG16F
+    unsigned int VelocityTexture() const { return m_MsVelocity; } // RG16F: GL_TEXTURE_2D at one sample (TAA's case), else MS
 
     int Width() const { return m_Width; }
     int Height() const { return m_Height; }

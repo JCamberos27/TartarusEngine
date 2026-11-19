@@ -7,7 +7,7 @@ out vec4 FragColor;
 
 uniform sampler2D uColor;     // this frame, linear HDR (jittered)
 uniform sampler2D uDepth;     // this frame's depth (jittered)
-uniform sampler2DMS uVelocity; // UV motion (current - previous); x > 2 = not written: reproject from depth
+uniform sampler2D uVelocity; // UV motion (current - previous); x > 2 = not written: reproject from depth
 uniform sampler2D uHistory;   // last frame's history (bilinear)
 uniform int  uHistoryValid;
 uniform int  uOrtho;
