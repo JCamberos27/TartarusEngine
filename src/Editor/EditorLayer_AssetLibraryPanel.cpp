@@ -176,6 +176,10 @@ std::string FormatBytes(uintmax_t b) {
 
 } // namespace
 
+// The panel's state is a function-local static, destroyed at exit after the GL context: its
+// preview textures go here, from FreeGpuResources, instead.
+void EditorLayer::ReleaseAssetLibraryPanelPreviews() { State().Previews.clear(); }
+
 void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
     EditorSettings& prefs = EditorSettings::Get();
     if (!prefs.ShowAssetLibrary) return;

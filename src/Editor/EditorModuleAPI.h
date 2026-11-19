@@ -151,7 +151,9 @@ struct EditorMotionHooks; // EditorMotionHooks.h
 //        DrawCursorGlow, RippleDelay, BeginLayer / EndLayer and seven new motion tokens.
 //   45 - Unused host callbacks removed: DrawStatusPanel, OpenPreferences, GetEngineMarkTexture and
 //        GetSceneTitle (no module code called them).
-constexpr std::uint32_t kEditorModuleAPIVersion = 45;
+//   46 - LogGetEntrySeq: an entry's stable sequence number. The Console keys its selection and new-
+//        error flash on it, since the log trims old entries and shifts every index.
+constexpr std::uint32_t kEditorModuleAPIVersion = 46;
 
 // Editor Enhancers / vFolders (API v40): how one Asset Browser folder looks. POD - crosses the
 // module boundary. Glyphs are UTF-8 Font Awesome characters (at most 4 bytes + NUL).
@@ -563,6 +565,11 @@ struct EditorModuleHostAPI {
     // --- Editor UI sounds, presses (API v43) ---
     // EditorSound::NotePress: the ImGui item id of a primitive that just sounded its press.
     void (*NoteUIPress)(unsigned itemId) = nullptr;
+
+    // --- Log entry identity (API v46) ---
+    // The entry's sequence number: unique and rising, unlike its index, which the log's trim shifts.
+    // 0 for an out-of-range index.
+    unsigned long long (*LogGetEntrySeq)(int index) = nullptr;
 };
 
 struct EditorModuleAPI {

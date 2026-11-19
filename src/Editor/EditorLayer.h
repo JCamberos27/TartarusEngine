@@ -1337,6 +1337,7 @@ private:
     void DrawSoundBoardPanel();             // EditorLayer_SoundBoard.cpp
     void DrawEditorSoundPreferences();      // EditorLayer_SoundBoard.cpp (Preferences > Editor Sounds)
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
+    void ReleaseAssetLibraryPanelPreviews(); // its preview textures, while the GL context lives
     void DrawEnvironmentSettings(World& world, float itemWidth);
     void DrawPhysicalSkySettings(World& world, float itemWidth); // EditorLayer_Sky.cpp
     void DrawPostProcessSettings(World& world, float itemWidth);
@@ -2147,6 +2148,7 @@ private:
     SavedHistory m_PrePrefabHistory;
     bool m_PrefabModeSceneDirty = false;
     void RestorePrePrefabHistory();
+    void KeepUnrestoredSnapshot(const std::string& snapshot, const char* action); // EditorLayer_Scene.cpp
     // #132 - one change each (EditorLayer_ProjectSync.cpp).
     void OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath);
     int  ApplyAssetMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath, bool& listed);

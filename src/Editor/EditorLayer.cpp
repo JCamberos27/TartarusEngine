@@ -543,6 +543,7 @@ void EditorLayer::FreeGpuResources() {
     FreeRetiredThumbnailTextures();
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();
+    ReleaseAssetLibraryPanelPreviews();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
     if (m_Glass) { // the Glass theme's frosted-HUD blur chain and its window compositor
         m_Glass->Backdrop.Release();
@@ -3560,9 +3561,13 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     // Asset windows, Inspectors and curves all share the chronological history.
     // A text field keeps its native character-edit undo until editing is committed.
-    if(!m_GameInputActive && !ScriptIDEHasKeyboardFocus() && !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl) {
-        if(ImGui::IsKeyPressed(ImGuiKey_Z,false) && !ImGui::GetIO().KeyShift) Undo(world,assets);
-        if(ImGui::IsKeyPressed(ImGuiKey_Y,false) || (ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z,false))) Redo(world,assets);
+    // Through the Shortcuts table, so a rebind in Preferences takes effect; Ctrl+Shift+Z stays a
+    // fixed second Redo (Shortcuts' invalid-chord sound already treats it as taken).
+    if(!m_GameInputActive && !ScriptIDEHasKeyboardFocus() && !ImGui::GetIO().WantTextInput) {
+        const ImGuiIO& io = ImGui::GetIO();
+        if(Shortcuts::Pressed("editor.undo")) Undo(world,assets);
+        else if(Shortcuts::Pressed("editor.redo") ||
+                (io.KeyCtrl && io.KeyShift && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_Z,false))) Redo(world,assets);
     }
 
     if (keyboardFree) {

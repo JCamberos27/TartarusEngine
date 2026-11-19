@@ -598,6 +598,13 @@ bool Held(const char* id, bool ignoreContext) {
     return ImGui::IsKeyDown(c.Key) && ModsMatch(ImGui::GetIO(), c.Ctrl, c.Shift, c.Alt, c.Super);
 }
 
+bool Pressed(const char* id) {
+    const Shortcut* s = Find(id);
+    if (!s || !s->Current.IsBound() || s->Current.HasPrefix()) return false;
+    const Chord& c = s->Current;
+    return KeyPressedInclSibling(c.Key) && ModsMatch(ImGui::GetIO(), c.Ctrl, c.Shift, c.Alt, c.Super);
+}
+
 // --- GLFW-input path (main loop, no ImGui frame) ------------------------------------------
 namespace {
 int GlfwKeyFromImGui(ImGuiKey k) {

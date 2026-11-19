@@ -1555,6 +1555,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         if (ViewportPickLocked(world, entity)) continue;
         if (NotSceneSelectable(world, entity)) continue; // #236 B
         const auto& renderable = entityView.get<const RenderableComponent>(entity);
+        if (!renderable.ModelRef || renderable.ModelRef->MeshCount() == 0) continue; // no model: no box to select
         glm::mat4 model = world.ComposeWorldTransform(entity);
         AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
         glm::vec2 pMin, pMax;
@@ -1671,6 +1672,7 @@ void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
     for (auto entity : snapView) {
         if (isExcluded(entity)) continue;
         const auto& otherRenderable = snapView.get<const RenderableComponent>(entity);
+        if (!otherRenderable.ModelRef) continue;
         glm::mat4 otherMatrix = world.ComposeWorldTransform(entity);
         glm::vec3 candidateLocal;
         // Passing the current best-so-far as this call's own cutoff narrows every subsequent
@@ -2575,8 +2577,10 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     if (auto* hier = world.Registry.try_get<HierarchyComponent>(m_Selected)) parent = hier->Parent;
     glm::mat4 parentWorld = parent != entt::null ? world.ComposeWorldTransform(parent) : glm::mat4(1.0f);
 
-    glm::vec3 nativeBoundsMin = registryHasRenderable ? renderablePtr->ModelRef->BoundsMin() : glm::vec3(-0.5f);
-    glm::vec3 nativeBoundsMax = registryHasRenderable ? renderablePtr->ModelRef->BoundsMax() : glm::vec3(0.5f);
+    // A renderable can be without a model (added from the Inspector, a failed import): the unit box too.
+    const bool hasModelBounds = registryHasRenderable && renderablePtr->ModelRef && renderablePtr->ModelRef->MeshCount() > 0;
+    glm::vec3 nativeBoundsMin = hasModelBounds ? renderablePtr->ModelRef->BoundsMin() : glm::vec3(-0.5f);
+    glm::vec3 nativeBoundsMax = hasModelBounds ? renderablePtr->ModelRef->BoundsMax() : glm::vec3(0.5f);
 
     if (!BeginGizmoOverlay(editorCamera, "##GizmoOverlay")) return;
 
@@ -3254,7 +3258,7 @@ void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::ent
     // Lift the object so its footprint rests on the surface rather than its origin sinking to it.
     glm::vec3 dropWorld = p;
     const glm::mat4 selWorld = world.ComposeWorldTransform(sel);
-    if (const auto* selR = world.Registry.try_get<RenderableComponent>(sel)) {
+    if (const auto* selR = world.Registry.try_get<RenderableComponent>(sel); selR && selR->ModelRef) {
         const AABB sw = AABB{selR->ModelRef->BoundsMin(), selR->ModelRef->BoundsMax()}.Transformed(selWorld);
         const glm::vec3 selCtr = (sw.Min + sw.Max) * 0.5f;
         const glm::vec3 selOrigin = glm::vec3(selWorld[3]);
