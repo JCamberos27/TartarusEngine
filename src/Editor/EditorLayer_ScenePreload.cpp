@@ -59,7 +59,7 @@ std::string ResolveRef(const json& obj, const std::string& key, const std::strin
 }
 
 struct PreloadRefs {
-    std::set<std::string> Models, Materials, Prefabs;
+    std::set<std::string> Models, Materials, Prefabs, Textures;
 };
 
 void CollectRefs(const json& node, PreloadRefs& out) {
@@ -84,6 +84,20 @@ void CollectRefs(const json& node, PreloadRefs& out) {
     }
 }
 
+// The scene's "libraryTextures" list: textures the scene loader loads as they are (LoadTexture's
+// default use), whatever else references them. Only these: a texture named elsewhere (a sky HDRI,
+// a decal) has its own loader, and loading it here would add it to the library.
+void CollectLibraryTextures(const json& scene, PreloadRefs& out) {
+    const auto list = scene.find("libraryTextures");
+    if (list == scene.end() || !list->is_array()) return;
+    for (const json& v : *list) {
+        std::string path;
+        if (v.is_string()) path = ResolveRef(json::object(), "path", v.get<std::string>());
+        else if (v.is_object() && v.contains("path") && v["path"].is_string()) path = ResolveRef(v, "path", v["path"].get<std::string>());
+        if (!path.empty()) out.Textures.insert(path);
+    }
+}
+
 bool ReadJsonFile(const std::string& path, json& out) {
     std::ifstream f(fs::u8path(path), std::ios::binary);
     if (!f.is_open()) return false;
@@ -99,6 +113,7 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
     PreloadRefs refs;
     if (ReadJsonFile(path, scene)) {
         CollectRefs(scene, refs);
+        CollectLibraryTextures(scene, refs);
         // Prefabs place models too: follow them a few levels (a prefab can nest others).
         std::set<std::string> seen;
         for (int depth = 0; depth < 4 && !refs.Prefabs.empty(); ++depth) {
@@ -123,6 +138,8 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestModelAsync(m));
     for (const std::string& m : refs.Materials)
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestMaterialAsync(m));
+    for (const std::string& t : refs.Textures)
+        if (fs::exists(fs::u8path(t), ec)) state->Tickets.push_back(assets.RequestTextureAsync(t));
     m_ScenePreload = std::move(state);
     PumpScenePreload(world, assets); // already loaded (or nothing to load): opens now
 }
