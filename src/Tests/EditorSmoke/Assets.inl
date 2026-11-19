@@ -150,8 +150,27 @@ Step Navigate(std::string folder) {
 Step UntilFolder(std::string folder) {
     return Until("the browser is in '" + folder + "'", [folder](Ctx& c) { return X::CurrentFolder(c.E) == folder; }, 60);
 }
+// `timeout` frames count only while the browser's project index is idle: a scan in flight (several seconds on a
+// project with the Drive assets linked) doesn't use them up. A scan that never lands fails after kIndexWaitSeconds.
+constexpr double kIndexWaitSeconds = 300.0;
 Step UntilListed(std::string name, int timeout = 240) {
-    return Until(name + " is listed", [name](Ctx& c) { return CellIndex(c, name) >= 0; }, timeout);
+    auto idleFrames = std::make_shared<int>(0);
+    auto waitStart = std::make_shared<double>(-1.0);
+    return {name + " is listed", [name, timeout, idleFrames, waitStart](Ctx& c) {
+        const auto done = [&] { *idleFrames = 0; *waitStart = -1.0; return true; };
+        if (CellIndex(c, name) >= 0) return done();
+        const double now = ImGui::GetTime();
+        if (*waitStart < 0.0) *waitStart = now;
+        if (X::AssetIndexBusy(c.E)) {
+            *idleFrames = 0;
+            if (now - *waitStart <= kIndexWaitSeconds) return false;
+            Fail(name + " is listed: the Asset Browser index was still scanning after " + std::to_string((int)kIndexWaitSeconds) + " s");
+            return done();
+        }
+        if (++*idleFrames <= timeout) return false;
+        Fail(name + " is listed: timed out (" + std::to_string(timeout) + " frames after the Asset Browser index was current)");
+        return done();
+    }, 1000000};
 }
 // The grid / list child window (its tiles live in it).
 ImGuiWindow* ListWindow() {
@@ -348,7 +367,7 @@ void RegisterAssetsTests() {
     Add("assets: search, t: filters, the filter and sort menus", Cat({
         {FreshScene(), Wait(2)},
         EnsureScratch(),
-        {Navigate(kFolder), Wait(4), UntilListed("Smoke Cube.obj"),
+        {Navigate(kFolder), Wait(4), UntilListed("Smoke Cube.obj"), UntilListed("Smoke Prefab.prefab"),
          Click(ByExact("##search", kAssets)), Wait(3), TypeText("Smoke"), Wait(4),
          Until("search = Smoke", [](Ctx& c) { return AX::Search(c.E) == "Smoke"; }, 30),
          Expect("Smoke matches the cube, the image and the prefab, not the others", [](Ctx& c) {
