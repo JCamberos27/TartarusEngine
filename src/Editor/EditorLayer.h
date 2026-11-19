@@ -78,6 +78,12 @@ struct AssetGridCell {
     // Listed in external_assets.csv but not on disk: a Drive file this checkout hasn't fetched.
     // Shown greyed; dragging it is refused (run tools/assets/fetch-assets.ps1).
     bool unfetched = false;
+    // The file's size / modified time, stat'ed once per list build (Date/Size sort, Details view)
+    // rather than every frame. Filled by StatAssetGridCell; zero / "-" when there is no file.
+    mutable bool statted = false;
+    mutable unsigned long long fileSize = 0;
+    mutable long long modifiedTicks = 0;
+    mutable std::string sizeText, modifiedText;
 };
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
@@ -550,13 +556,6 @@ public:
     // DrawHistoryListBody renders the click-to-jump rows into the module's History panel.
     // ShowHistory()/SetShowHistory() (above) carry the toggle.
     void DrawHistoryListBody(World& world, AssetLibrary& assets);                // EditorLayer_Toolbar.cpp
-    // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
-    // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport. Pass a zero size to
-    // say "no game view this frame".
-    void SetGameViewRect(ImVec2 imgPos, ImVec2 imgSize, unsigned int colorTex, int texW, int texH) {
-        m_GameViewImgPos = imgPos; m_GameViewImgSize = imgSize;
-        m_GameViewTex = colorTex; m_GameViewTexW = texW; m_GameViewTexH = texH;
-    }
     // Window > Game menu entry (#4 item 5) — GameViewPanel is owned by main.cpp, not this class,
     // so its open/closed state round-trips through these each frame: main.cpp pushes the panel's
     // current IsWindowOpen() in here every frame (so the menu checkbox reads live), and consumes
@@ -1704,13 +1703,6 @@ private:
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
     std::unique_ptr<ScriptIDE> m_ScriptIDE;
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
-    // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
-    // DrawViewportActionBar to place the action bar over the game viewport.
-    ImVec2 m_GameViewImgPos{0.0f, 0.0f};
-    ImVec2 m_GameViewImgSize{0.0f, 0.0f};
-    unsigned int m_GameViewTex = 0;
-    int m_GameViewTexW = 0;
-    int m_GameViewTexH = 0;
     // Window > Game menu round-trip (see SetGameViewOpenState/ConsumeGameViewOpenRequest above).
     bool m_GameViewOpenCached = true;
     int m_GameViewOpenRequest = -1; // -1 none, 0 close, 1 open
