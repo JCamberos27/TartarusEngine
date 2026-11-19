@@ -299,7 +299,15 @@ Window::Window(int width, int height, const std::string& title, bool seeThrough)
     glfwSetFramebufferSizeCallback(m_Handle, FramebufferSizeCallback);
     glfwSetDropCallback(m_Handle, DropCallbackTrampoline);
 
-    glViewport(0, 0, width, height);
+    // The size asked for is in screen coordinates; with GLFW_SCALE_TO_MONITOR on a scaled desktop the framebuffer is
+    // larger, and until the first resize callback everything sized from Width()/Height() used the smaller number.
+    int fbW = 0, fbH = 0;
+    glfwGetFramebufferSize(m_Handle, &fbW, &fbH);
+    if (fbW > 0 && fbH > 0) {
+        m_Width = fbW;
+        m_Height = fbH;
+    }
+    glViewport(0, 0, m_Width, m_Height);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glEnable(GL_MULTISAMPLE);

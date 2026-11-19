@@ -41,6 +41,6 @@ a message about the OpenGL version, update your GPU driver; Intel/AMD/NVIDIA dri
 last few years all supply 4.6. Remote Desktop sessions and some VMs expose only a software
 adapter below 4.6 and will not run it.
 
-Crash dumps, if any, land next to the executable as crash_<pid>_<timestamp>.dmp with a .txt
-summary beside them. Both are useful in a bug report, along with Preferences > About >
-Copy report.
+Crash dumps, if any, land in %LOCALAPPDATA%\TartarusEngine\Crashes\ as crash_<pid>_<timestamp>.dmp,
+next to the Logs folder (Editor.log). Both are useful in a bug report, along with
+Preferences > About > Copy report.

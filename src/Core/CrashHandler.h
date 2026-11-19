@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 // Last-resort crash reporting. Catches unhandled SEH exceptions (access violations, stack
 // overflows) and the CRT failures that bypass them (invalid parameter, pure virtual call,
 // std::terminate, abort) (#148). A watchdog thread created at Install() writes a minidump to
@@ -8,6 +10,11 @@
 // installing twice is harmless. Call once, as early in main() as possible.
 namespace CrashHandler {
 void Install();
+
+// Where this run's reports go once its user folder is known (a built game has its own, not the editor's):
+// <userRoot>\Crashes, with the dialog naming Logs\<logFile>. Call after UserPaths and the log are set up; until then
+// reports go to %LOCALAPPDATA%\TartarusEngine\Crashes.
+void SetReportLocation(const std::string& userRoot, const std::string& logFile);
 
 // False for non-interactive runs (--smoke-test, ...): report to stderr only, never a
 // dialog nobody is there to dismiss. Defaults to true.
