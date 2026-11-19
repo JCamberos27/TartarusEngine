@@ -82,7 +82,14 @@ void DrawLayersAndParameters(AnimCtx& cx) {
             ImGui::TextUnformatted("Name");
             ImGui::SameLine(80.0f * S);
             const std::string oldName = Ly.Name;
-            if (InputName("##lname", Ly.Name, -FLT_MIN)) {
+            const auto layerTaken = [&] {
+                for (int k = 0; k < (int)D.Layers.size(); ++k)
+                    if (k != W.Layer && D.Layers[k].Name == Ly.Name) return true;
+                return false;
+            };
+            if (InputName("##lname", Ly.Name, -FLT_MIN) && layerTaken()) {
+                Ly.Name = oldName; // taken: two layers of one name would be merged by name lookups
+            } else if (Ly.Name != oldName) {
                 for (auto& layer : D.Layers)
                     if (layer.WeightCurveLayer == oldName) layer.WeightCurveLayer = Ly.Name;
                 changed = true;
@@ -227,7 +234,11 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                 ImGui::EndDisabled();
                 ImGui::SameLine();
                 const std::string trackBefore = D.Tracks[t];
-                if (InputName("##tname", D.Tracks[t], -FLT_MIN)) {
+                const bool trackTaken = InputName("##tname", D.Tracks[t], -FLT_MIN) &&
+                                        std::count(D.Tracks.begin(), D.Tracks.end(), D.Tracks[t]) > 1;
+                if (trackTaken) {
+                    D.Tracks[t] = trackBefore; // taken
+                } else if (D.Tracks[t] != trackBefore) {
                     // Objects on this controller that picked the track by name follow the rename.
                     for (auto [e, ac] : world.Registry.view<AnimatorControllerComponent>().each())
                         if (ac.Controller == W.Rel && ac.Track == trackBefore) ac.Track = D.Tracks[t];
@@ -267,7 +278,12 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                 }
                 ImGui::SameLine();
                 const std::string before = p.Name;
-                if (InputName("##pname", p.Name, ImGui::GetContentRegionAvail().x * 0.45f)) {
+                bool paramTaken = false;
+                if (InputName("##pname", p.Name, ImGui::GetContentRegionAvail().x * 0.45f))
+                    for (int k = 0; k < (int)D.Parameters.size(); ++k) paramTaken |= k != i && D.Parameters[k].Name == p.Name;
+                if (paramTaken) {
+                    p.Name = before; // taken: conditions would silently read the other parameter
+                } else if (p.Name != before) {
                     for (auto& Lr : D.Layers) {
                         for (auto& t : Lr.Transitions)
                             for (auto& cond : t.Conditions) if (cond.Param == before) cond.Param = p.Name;

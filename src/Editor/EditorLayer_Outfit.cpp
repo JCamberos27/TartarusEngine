@@ -219,18 +219,21 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
                 if (ImGui::MenuItem(label.c_str())) {
                     PushUndo(world, "Load Outfit Preset");
                     reportSound(OutfitSystem::LoadPreset(world, assets, root, rel), EditorSound::Event::PresetApply);
+                    pieces = OutfitSystem::Pieces(world, root); // the old pieces may be gone
                 }
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt untagged children")) {
                 PushUndo(world, "Adopt Outfit Pieces");
                 ui.Notes = {"Adopted " + std::to_string(OutfitSystem::AdoptExisting(world, assets, root)) + " pieces"};
+                pieces = OutfitSystem::Pieces(world, root);
             }
             if (ImGui::MenuItem(ICON_FA_ERASER "  Take everything off")) {
                 PushUndo(world, "Clear Outfit");
                 Wardrobe::Request req = OutfitSystem::CurrentRequest(world, root);
                 req.Items.clear();
                 reportSound(OutfitSystem::Submit(world, assets, root, req), EditorSound::Event::Unequip);
+                pieces = OutfitSystem::Pieces(world, root);
             }
             if (ImGui::MenuItem(ICON_FA_ROTATE "  Rescan wardrobe")) OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, true);
             ImGui::MenuItem("Show fitted cuts", nullptr, &ui.ShowVariants);
@@ -299,9 +302,16 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
 
     // --- The open slot -----------------------------------------------------------------------------
     const Wardrobe::SlotDef* slot = cat->W.Slot(ui.Slot);
-    auto worn = pieces.find(ui.Slot);
-    const std::string current = worn != pieces.end() ? reg.get<OutfitPieceComponent>(worn->second).Item : std::string();
-    const Wardrobe::Item* wornItem = current.empty() ? nullptr : cat->Find(current);
+    // What the open slot wears. Equip / Remove below apply at once when everything is loaded, which can
+    // destroy the old piece: they re-read this so the rest of the frame never touches a gone entity.
+    auto worn = pieces.end();
+    const Wardrobe::Item* wornItem = nullptr;
+    const auto readWorn = [&] {
+        worn = pieces.find(ui.Slot);
+        const std::string current = worn != pieces.end() ? reg.get<OutfitPieceComponent>(worn->second).Item : std::string();
+        wornItem = current.empty() ? nullptr : cat->Find(current);
+    };
+    readWorn();
     // What's worn in the other slots, to mark the cards that don't go with it (Wardrobe::Conflicts).
     std::vector<const Wardrobe::Item*> others;
     for (const auto& [s, e] : pieces)
@@ -332,6 +342,8 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         if (ImGui::Button("Remove##outfitRemove")) {
             PushUndo(world, "Remove " + slot->Label);
             reportSound(OutfitSystem::Equip(world, assets, root, ui.Slot, std::string()), EditorSound::Event::Unequip);
+            pieces = OutfitSystem::Pieces(world, root);
+            readWorn();
         }
         ImGui::PopStyleColor(4);
     }
@@ -365,6 +377,8 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         if (ImGui::Selectable(it->Name.c_str(), selected, 0, ImVec2(0.0f, row - ImGui::GetStyle().ItemSpacing.y)) && !selected) {
             PushUndo(world, "Equip " + it->Name);
             reportSound(OutfitSystem::Equip(world, assets, root, ui.Slot, it->Path), EditorSound::Event::Equip);
+            pieces = OutfitSystem::Pieces(world, root);
+            readWorn();
         }
         const bool hovered = ImGui::IsItemHovered();
         if (hovered) hoveredItem = it;

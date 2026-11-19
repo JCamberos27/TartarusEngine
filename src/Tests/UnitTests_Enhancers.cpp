@@ -617,6 +617,30 @@ void TestEnhancerPalette() {
     CHECK(Palette::FromJson(nlohmann::json::object()) == Palette::Defaults());
 }
 
+// A scene saved before it had a .meta was keyed by its path; once it has a GUID its entries follow it.
+void TestEnhancerRekeyScene() {
+    auto& st = EnhancerUserState::Get();
+    const nlohmann::json saved = st.ToJson();
+    st.Reset();
+    const std::string path = "C:/p/assets/Scenes/Room.json", guid = "0123456789abcdef";
+    st.EntityBookmarks.push_back(EditorRef::MakeEntity(path, 3, "Lamp"));
+    st.EntityBookmarks.push_back(EditorRef::MakeEntity("other", 4, "Door"));
+    st.FavoritePages.push_back({"Page 1", {EditorRef::MakeEntity(path, 5, "Chair")}});
+    st.DefaultParents[path] = 9;
+    st.DefaultParents["other"] = 2;
+    CHECK(st.RekeyScene(path, guid));
+    CHECK(st.EntityBookmarks[0].Scene == guid && st.EntityBookmarks[1].Scene == "other");
+    CHECK(st.FavoritePages[0].Items[0].Scene == guid);
+    CHECK(st.DefaultParents.count(path) == 0 && st.DefaultParents[guid] == 9 && st.DefaultParents["other"] == 2);
+    CHECK(!st.RekeyScene(path, guid)); // nothing left under the path
+    CHECK(!st.RekeyScene("", guid) && !st.RekeyScene(guid, guid));
+    // A default parent already set under the GUID wins over the old path's.
+    st.DefaultParents["p2"] = 1;
+    st.DefaultParents["g2"] = 6;
+    CHECK(st.RekeyScene("p2", "g2") && st.DefaultParents["g2"] == 6 && !st.DefaultParents.count("p2"));
+    st.FromJson(saved);
+}
+
 void TestEnhancerUserStateRoundTrip() {
     auto& st = EnhancerUserState::Get();
     const nlohmann::json saved = st.ToJson(); // tests share the singleton - restore it after
@@ -857,6 +881,7 @@ void TestEnhancerKeepUnreadable() {
 
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerKeepUnreadable", TestEnhancerKeepUnreadable);
+    tests.emplace_back("EnhancerRekeyScene", TestEnhancerRekeyScene);
     tests.emplace_back("EnhancerRefsRoundTrip", TestEnhancerRefsRoundTrip);
     tests.emplace_back("EnhancerBookmarkList", TestEnhancerBookmarkList);
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
