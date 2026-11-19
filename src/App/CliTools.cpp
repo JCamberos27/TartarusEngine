@@ -8,6 +8,7 @@
 #include "BloodFxImport.h"
 #include "CrashHandler.h"
 #include "KnifeFxImport.h"
+#include "Core/Env.h"
 #include "Core/Paths.h"
 #include "Game/Audio/AudioTest.h"
 #include "Game/MotionMatching/MotionBake.h"
@@ -193,11 +194,7 @@ int ModelNodes(const std::vector<std::string>& inputs) {
         Assimp::Importer importer;
         importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
         // TARTARUS_NODES_PIVOTS=1 keeps the FBX pivot chain as "$AssimpFbx$_<part>" helper nodes (what the engine folds).
-        char* pv = nullptr;
-        size_t pvn = 0;
-        _dupenv_s(&pv, &pvn, "TARTARUS_NODES_PIVOTS");
-        importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, pv && *pv == '1');
-        std::free(pv);
+        importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, Env::Flag(Env::Var::NodesPivots));
         const aiScene* scene = importer.ReadFile(f.string(), aiProcess_Triangulate | aiProcess_GlobalScale);
         if (!scene || !scene->mRootNode) {
             ++failed;

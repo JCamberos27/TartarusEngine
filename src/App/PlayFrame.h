@@ -33,7 +33,7 @@ class Window;
 class World;
 
 // What Play's per-frame simulation step reads, gathered once per frame (the Renderer/ShadowFrame pattern: pointers to
-// main's long-lived objects, no ownership).
+// the session's long-lived objects, no ownership).
 struct PlayFrameInputs {
     // This frame
     float dt = 0.0f;      // real time
