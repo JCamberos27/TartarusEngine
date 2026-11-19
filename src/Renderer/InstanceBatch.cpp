@@ -139,6 +139,15 @@ void Upload() {
     glNamedBufferData(g_Buffer, (GLsizeiptr)(g_Staging.size() * sizeof(glm::mat4)), g_Staging.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBinding, g_Buffer);
 }
+
+bool UploadRange(unsigned binding, const void* data, std::size_t bytes) {
+    if (bytes == 0) return false;
+    const std::size_t at = Take(bytes);
+    if (at == ~std::size_t(0)) return false;
+    std::memcpy(R().Base + at, data, bytes);
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, binding, R().Buffer, (GLintptr)at, (GLsizeiptr)bytes);
+    return true;
+}
 } // namespace InstanceBuffer
 
 bool MultiDrawEnabled() {
@@ -175,15 +184,33 @@ void BuildIndirectBatches(const std::vector<IndirectItem>& items, std::vector<In
 
 namespace IndirectBuffer {
 namespace {
-GLuint g_Indirect = 0;
+GLuint g_Indirect = 0; // the fallback store
+GLuint g_Current = 0;  // what the last Upload filled: the ring's buffer or the fallback
+std::size_t g_Base = 0, g_Bytes = 0;
 }
+// A depth pass and the opaque pass each upload their commands: re-specifying one buffer each time (glNamedBufferData)
+// waited on NVIDIA's threaded driver like the instance uploads did, so the commands share the instance ring.
 void Upload(const std::vector<IndirectCommand>& commands) {
-    if (!g_Indirect) glCreateBuffers(1, &g_Indirect);
-    glNamedBufferData(g_Indirect, (GLsizeiptr)(std::max<std::size_t>(commands.size(), 1) * sizeof(IndirectCommand)),
-                      commands.empty() ? nullptr : commands.data(), GL_STREAM_DRAW);
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, g_Indirect);
+    const std::size_t bytes = std::max<std::size_t>(commands.size(), 1) * sizeof(IndirectCommand);
+    const std::size_t at = commands.empty() ? ~std::size_t(0) : InstanceBuffer::Take(bytes);
+    if (at != ~std::size_t(0)) {
+        std::memcpy(InstanceBuffer::R().Base + at, commands.data(), bytes);
+        g_Current = InstanceBuffer::R().Buffer;
+        g_Base = at;
+    } else {
+        if (!g_Indirect) glCreateBuffers(1, &g_Indirect);
+        glNamedBufferData(g_Indirect, (GLsizeiptr)bytes, commands.empty() ? nullptr : commands.data(), GL_STREAM_DRAW);
+        g_Current = g_Indirect;
+        g_Base = 0;
+    }
+    g_Bytes = bytes;
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, g_Current);
 }
-unsigned Handle() { return g_Indirect; }
+unsigned Handle() { return g_Current; }
+std::size_t Base() { return g_Base; }
+void BindStorage(unsigned binding) {
+    if (g_Current) glBindBufferRange(GL_SHADER_STORAGE_BUFFER, binding, g_Current, (GLintptr)g_Base, (GLsizeiptr)g_Bytes);
+}
 } // namespace IndirectBuffer
 
 namespace {
