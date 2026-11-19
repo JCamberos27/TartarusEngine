@@ -28,6 +28,10 @@ bool Set(World& world, const std::string& circuit, bool on);
 // shows the whole house lit.
 void SetAll(World& world, bool on);
 
+// Every started switch and circuit back as authored (materials, lights, rockers) and not started: what SetAll did to an
+// edit world (the GI bake) is undone, so Play starts them from Start On again.
+void Stop(World& world);
+
 // Whether `circuit` is on (false for one that hasn't started).
 bool IsOn(World& world, const std::string& circuit);
 
