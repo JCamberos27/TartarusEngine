@@ -68,37 +68,11 @@ int ModelReport(const std::vector<std::string>& inputs) {
         ModelImportSettings s;
         s.MaterialImportMode = ModelImportSettings::MaterialMode::None;
         s.ImportAnimations = false;
-        if (std::ifstream in(f.string() + ".meta"); in) {
-            const nlohmann::json j = nlohmann::json::parse(in, nullptr, false);
-            if (j.is_object() && j.contains("importer") && j["importer"].is_object()) {
-                const auto& imp = j["importer"];
-                s.GlobalScale = imp.value("globalScale", 1.0f);
-                s.ImportSkeleton = imp.value("importSkeleton", true);
-                s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
-                s.MergeByMaterial = imp.value("mergeByMaterial", false);
-                s.RootNodeInModelSpace = imp.value("rootNodeInModelSpace", false);
-                s.SimplifyRatio = std::clamp(imp.value("simplify", 1.0f), 0.01f, 1.0f);
-                s.SourceUpAxis = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
-                if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)
-                    s.PivotOffset = {imp["pivotOffset"][0].get<float>(), imp["pivotOffset"][1].get<float>(), imp["pivotOffset"][2].get<float>()};
-                if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
-                    for (const auto& n : imp["excludeNodes"])
-                        if (n.is_string()) s.ExcludeNodes.push_back(n.get<std::string>());
-                if (imp.contains("meshNodes") && imp["meshNodes"].is_array())
-                    for (const auto& n : imp["meshNodes"])
-                        if (n.is_string()) s.MeshNodes.push_back(n.get<std::string>());
-                if (imp.contains("rootTransform") && imp["rootTransform"].is_array() && imp["rootTransform"].size() == 16)
-                    for (int k = 0; k < 16; ++k) s.RootTransform[k / 4][k % 4] = imp["rootTransform"][k].get<float>();
-                if (imp.contains("unrotateNodes") && imp["unrotateNodes"].is_array())
-                    for (const auto& n : imp["unrotateNodes"])
-                        if (n.is_string()) s.UnrotateNodes.push_back(n.get<std::string>());
-                if (imp.contains("moveNodes") && imp["moveNodes"].is_array())
-                    for (const auto& n : imp["moveNodes"])
-                        if (n.is_object() && n.contains("by") && n["by"].is_array() && n["by"].size() == 3)
-                            s.MoveNodes.push_back({n.value("node", std::string()),
-                                                   {n["by"][0].get<float>(), n["by"][1].get<float>(), n["by"][2].get<float>()}});
-            }
-        }
+        // The library's own reader (every field the editor applies); the report then imports without materials
+        // or clips, as it always did.
+        AssetLibrary::ReadModelImportSettings(f.string() + ".meta", s);
+        s.MaterialImportMode = ModelImportSettings::MaterialMode::None;
+        s.ImportAnimations = false;
         const auto model = Model::ImportDeferred(f.string(), s);
         if (!model || model->MeshCount() == 0) {
             ++failed;

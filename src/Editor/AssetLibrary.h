@@ -39,6 +39,9 @@ public:
     // AssetImport::GuessTextureKind), and the import settings that follow from it.
     static TextureUse GuessTextureUse(const std::string& path);
     static TextureImportSettings DefaultTextureSettings(const std::string& path);
+    // A model's import settings from its .meta (the same reader the library uses). False when the .meta is
+    // missing, unreadable or has no importer block; `out` keeps its values for whatever the .meta does not name.
+    static bool ReadModelImportSettings(const std::string& metaPath, ModelImportSettings& out);
     // The settings half of LoadTexture, split out so it can be tested without a GL context:
     // reads the .meta importer block if there is one, else applies the default for `use`.
     // Does nothing if settings for `path` are already known (in-memory settings win).
