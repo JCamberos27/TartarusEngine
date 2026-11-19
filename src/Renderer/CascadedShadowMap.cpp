@@ -302,15 +302,19 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
     return true;
 }
 
+// audit GL-204 — one completeness check of every FBO the cascades use: the per-cascade ones (Begin, and the
+// layered path's partial clears) and the layered one.
+void CascadedShadowMap::CheckComplete() const {
+    if (m_CompleteChecked) return;
+    m_CompleteChecked = true;
+    for (int c = 0; c < m_Count; ++c) GLFramebufferCheck::Complete("CascadedShadowMap", m_Fbos[c], m_Resolution, m_Resolution);
+    if (m_LayeredFbo) GLFramebufferCheck::Complete("CascadedShadowMap (layered)", m_LayeredFbo, m_Resolution, m_Resolution);
+}
+
 void CascadedShadowMap::Begin(int i) const {
     i = std::clamp(i, 0, m_Count - 1);
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbos[i]);
-    // audit GL-204 — one-shot completeness check of every cascade's FBO.
-    if (!m_CompleteChecked) {
-        m_CompleteChecked = true;
-        for (int c = 0; c < m_Count; ++c)
-            GLFramebufferCheck::Complete("CascadedShadowMap", m_Fbos[c], m_Resolution, m_Resolution);
-    }
+    CheckComplete();
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
 }
@@ -332,10 +336,7 @@ void CascadedShadowMap::BeginLayered(unsigned mask) const {
             }
     }
     glBindFramebuffer(GL_FRAMEBUFFER, m_LayeredFbo);
-    if (!m_CompleteChecked) {
-        m_CompleteChecked = true;
-        GLFramebufferCheck::Complete("CascadedShadowMap (layered)", m_LayeredFbo, m_Resolution, m_Resolution);
-    }
+    CheckComplete();
     glViewport(0, 0, m_Resolution, m_Resolution);
     if ((mask & all) == all) glClear(GL_DEPTH_BUFFER_BIT); // every layer of a layered attachment
 }
