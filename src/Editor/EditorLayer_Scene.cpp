@@ -1044,6 +1044,8 @@ void EditorLayer::RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::
     for (const auto& file : files) {
         const std::string path = file.Path.lexically_normal().string();
         m_AssetThumbs.Invalidate(path);
+        m_SoundWaveforms.Invalidate(path);
+        m_SoundWaveforms.Invalidate(ProjectPaths::Relativize(path));
         InvalidateModelThumbnail(path);
         InvalidateModelThumbnail(ProjectPaths::Relativize(path));
     }

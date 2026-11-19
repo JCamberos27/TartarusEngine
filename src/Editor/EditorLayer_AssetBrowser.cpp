@@ -268,18 +268,6 @@ void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool o
     EditorSound::Play(on ? EditorSound::Event::FavoriteOn : EditorSound::Event::FavoriteOff);
 }
 
-// Decoded once per sound path (#236 G). An empty vector means "not decodable / not audio" and
-// is cached too, so a bad file isn't re-probed every frame.
-const std::vector<float>& EditorLayer::SoundWaveform(const std::string& path) {
-    auto it = m_SoundWaveforms.find(path);
-    if (it == m_SoundWaveforms.end()) {
-        std::vector<float> peaks;
-        AudioEngine::WaveformPeaks(path, 48, peaks);
-        it = m_SoundWaveforms.emplace(path, std::move(peaks)).first;
-    }
-    return it->second;
-}
-
 // Rendered once per Model into its own small texture, then cached. Returns 0 while this frame's
 // render budget is spent — the caller falls back to the type glyph and picks it up next frame.
 unsigned int EditorLayer::ModelThumbnail(Model& model) {
@@ -1205,6 +1193,7 @@ void EditorLayer::RefreshAssetBrowser() {
     InvalidateProjectAssetIndex();
     InvalidateModelThumbnail();          // clears every cached model thumbnail
     m_AssetThumbs.Clear();
+    m_SoundWaveforms.Clear();
     m_AssetListingRefreshTimer = 0.0f;
     m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
     m_LibraryIndex.Load(); // asset_library.json edits show on Refresh
@@ -2343,10 +2332,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 // GL render targets are bottom-up: flip V so the preview is upright.
                 dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y),
                              ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
-            } else if (cell.kind == Cell::Kind::Sound && !SoundWaveform(cell.key).empty()) {
+            } else if (const std::vector<float>* wave = cell.kind == Cell::Kind::Sound ? m_SoundWaveforms.Get(cell.key) : nullptr;
+                       wave && wave->size() > 1) {
                 // Waveform envelope in the icon square (#236 G), with a small play/stop glyph
-                // bottom-right so it still reads as a clickable sound.
-                const std::vector<float>& peaks = SoundWaveform(cell.key);
+                // bottom-right so it still reads as a clickable sound. The type glyph shows until it's decoded.
+                const std::vector<float>& peaks = *wave;
                 const float w = m_AssetIconSize, h = m_AssetIconSize;
                 const ImVec2 o(tileMin.x + (cellWidth - w) * 0.5f, tileMin.y + cellPadding * 0.5f);
                 const float midY = o.y + h * 0.5f;
