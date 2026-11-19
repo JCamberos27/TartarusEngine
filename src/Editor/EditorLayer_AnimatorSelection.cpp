@@ -424,7 +424,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
             if (DangerIconButton(ICON_FA_TRASH, "Remove this curve", ImVec2(ImGui::GetFrameHeight(), 0.0f))) removeCurve = ci;
             ::Curve curve;
             for(const auto& k:cv.Keys)curve.Keys.push_back({k.Time,k.Value,k.InTangent,k.OutTangent,k.Interpolation});
-            CurveEditor::AssetScope curves(W.Abs,D.ToJsonString(),[](const std::string& text,std::string& error){AC doc;return AC::FromJsonString(text,doc,&error);});
+            CurveEditor::AssetScope curves(W.Abs,W.Saved,[](const std::string& text,std::string& error){AC doc;return AC::FromJsonString(text,doc,&error);});
             const auto escape=[](const std::string& name){std::string result;for(char c:name){if(c=='~')result+="~0";else if(c=='/')result+="~1";else result+=c;}return result;};
             curves.Bind(curve,"/layers/@"+escape(L.Name)+"/states/@"+escape(s.Name)+"/curves/@"+escape(cv.Name)+"/keys",L.Name+" / "+s.Name+" / "+cv.Name);
             CurveEditor::Options options;options.Title=cv.Name.c_str();options.LinearFallback=true;
