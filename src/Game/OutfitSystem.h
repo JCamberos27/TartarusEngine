@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class AssetLibrary;
@@ -32,6 +33,7 @@ struct Catalog {
 
 private:
     mutable std::map<std::pair<std::string, int>, std::vector<const Wardrobe::Item*>> m_SlotLists;
+    mutable std::unordered_map<std::string, const Wardrobe::Item*> m_ByPath; // lowercased project-relative path -> item
 };
 
 // The wardrobe at `path` (project-relative), scanned once and cached; `rescan` reads it again. Null

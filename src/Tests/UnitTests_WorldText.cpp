@@ -43,7 +43,7 @@ void LayoutMetrics() {
     std::ifstream in(EnginePaths::Resolve("assets/fonts/JetBrainsMono-Regular.ttf"), std::ios::binary);
     const std::vector<unsigned char> ttf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (ttf.empty()) {
-        Log::Info("WorldText layout: no font - skipped.");
+        UnitTestSupport::Skip("no font (assets/fonts)");
         return;
     }
     const WorldTextLayout::Font font = WorldTextLayout::Bake(ttf);

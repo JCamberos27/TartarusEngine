@@ -1601,9 +1601,23 @@ void TestRagdollHasWeight() {
     PhysicsWorld::Destroy();
 }
 
+// The hitbox table and the ragdoll's share their first kParts rows (a hit part's index names the same body part in both),
+// and the named parts are the bones they say.
+void TestRagdollTablesAgree() {
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) CHECK(std::strcmp(NpcPartDefOf(i).Bone, NpcRagdollDefOf(i).Bone) == 0);
+    using R = NpcRagdoll;
+    const std::pair<int, const char*> named[] = {{R::kPelvis, "pelvis"},    {R::kChest, "spine_03"},     {R::kHead, "head"},
+                                                 {R::kUpperArmL, "upperarm_l"}, {R::kForearmL, "lowerarm_l"}, {R::kUpperArmR, "upperarm_r"},
+                                                 {R::kForearmR, "lowerarm_r"}, {R::kThighL, "thigh_l"},     {R::kCalfL, "calf_l"},
+                                                 {R::kThighR, "thigh_r"},     {R::kCalfR, "calf_r"},       {R::kNeck, "neck_01"},
+                                                 {R::kHandL, "hand_l"},       {R::kHandR, "hand_r"},       {R::kFootL, "foot_l"},
+                                                 {R::kFootR, "foot_r"}};
+    for (const auto& [part, bone] : named) CHECK(std::strcmp(NpcRagdollDefOf(part).Bone, bone) == 0);
+}
 } // namespace
 
 void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"RagdollTablesAgree", TestRagdollTablesAgree});
     tests.push_back({"RagdollHingesDoNotHyperextend", TestRagdollHingesDoNotHyperextend});
     tests.push_back({"RagdollSettingsReachTheParts", TestRagdollSettingsReachTheParts});
     tests.push_back({"RagdollAndSquadSettingsRoundTrip", TestRagdollAndSquadSettingsRoundTrip});
