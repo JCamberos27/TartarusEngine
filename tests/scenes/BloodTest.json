@@ -1820,7 +1820,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 0,
         "Roam": false
       }
     },
@@ -1846,7 +1845,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 1,
         "Roam": false
       }
     },
@@ -1872,7 +1870,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 2,
         "Roam": false
       }
     },
@@ -1898,7 +1895,6 @@
         1
       ],
       "Dummy Spawn": {
-        "Outfit Seed": 3,
         "Roam": false
       }
     }

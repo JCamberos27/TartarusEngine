@@ -87,8 +87,8 @@ box('Ledge 1m', (-7.0, 0.5, 20.0), (4.0, 1.0, 4.0))
 box('Cover Wall', (5.0, 1.0, 24.0), (3.0, 2.0, 0.3))
 
 # Dummies: one standing still beside the lane (turns, flinch, kills), one roaming beyond it.
-empty('Dummy Standing', (-5.0, 0.0, 14.0), (0.0, 1.0, 0.0, 0.0), {'Dummy Spawn': {'Bare': True, 'Outfit Seed': 1, 'Roam': False}})
-empty('Dummy Roaming', (-2.0, 0.0, 32.0), (0.0, 1.0, 0.0, 0.0), {'Dummy Spawn': {'Bare': True, 'Outfit Seed': 2, 'Roam': True}})
+empty('Dummy Standing', (-5.0, 0.0, 14.0), (0.0, 1.0, 0.0, 0.0), {'Dummy Spawn': {'Roam': False}})
+empty('Dummy Roaming', (-2.0, 0.0, 32.0), (0.0, 1.0, 0.0, 0.0), {'Dummy Spawn': {'Roam': True}})
 empty('Testbed Dummy Settings', (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), {'Dummy Settings': {'Respawn': True, 'Respawn Delay': 2.0}})
 
 os.makedirs(os.path.dirname(DST), exist_ok=True)

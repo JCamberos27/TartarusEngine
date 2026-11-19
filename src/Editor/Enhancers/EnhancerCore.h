@@ -63,38 +63,6 @@ int  FindRef(const std::vector<EditorRef>& list, const EditorRef& r); // -1 when
 // Moves list[from] so it ends up at index `to` (clamped). No-op on a bad `from`.
 void MoveRef(std::vector<EditorRef>& list, int from, int to);
 
-// --- Back/Forward history -------------------------------------------------------------------
-// Browser-style: Push after Back drops the forward entries; pushing the current entry again is
-// a no-op; the oldest entry falls off at `Cap`.
-template <class T>
-class NavHistory {
-public:
-    explicit NavHistory(std::size_t cap = 64) : m_Cap(cap < 1 ? 1 : cap) {}
-
-    void Push(const T& v) {
-        if (m_Cursor >= 0 && m_Entries[(std::size_t)m_Cursor] == v) return;
-        m_Entries.resize((std::size_t)(m_Cursor + 1)); // truncate forward
-        m_Entries.push_back(v);
-        if (m_Entries.size() > m_Cap) m_Entries.erase(m_Entries.begin());
-        m_Cursor = (int)m_Entries.size() - 1;
-    }
-    bool CanBack() const    { return m_Cursor > 0; }
-    bool CanForward() const { return m_Cursor + 1 < (int)m_Entries.size(); }
-    // Returns the entry moved to, or nullptr at either end.
-    const T* Back()    { if (!CanBack()) return nullptr;    return &m_Entries[(std::size_t)--m_Cursor]; }
-    const T* Forward() { if (!CanForward()) return nullptr; return &m_Entries[(std::size_t)++m_Cursor]; }
-    const T* Current() const { return m_Cursor >= 0 ? &m_Entries[(std::size_t)m_Cursor] : nullptr; }
-    void Clear() { m_Entries.clear(); m_Cursor = -1; }
-    std::size_t Size() const { return m_Entries.size(); }
-    int Cursor() const { return m_Cursor; }
-    const std::vector<T>& Entries() const { return m_Entries; }
-
-private:
-    std::vector<T> m_Entries;
-    int            m_Cursor = -1;
-    std::size_t    m_Cap;
-};
-
 // --- Selection history (vInspector Back/Forward) ---------------------------------------------
 // One past selection, named by identity rather than by entt handle so it survives undo,
 // Play/Stop and scene loads: the scene key plus each selected entity's OrderComponent value

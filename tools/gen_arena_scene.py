@@ -214,14 +214,13 @@ i = nid()
 ents['empties'].append({'id': i, 'name': 'Dummy Settings', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -HALF + 2.0],
                         'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
                         'Dummy Settings': {'Respawn': True, 'Respawn Delay': 8.0}})
-# Facing +Z (yaw 0), toward the player's end. Two shotguns among the rifles.
-for k, (x, weapon, skill) in enumerate([(-20, 'AKS-74U', 0.6), (-10, 'Remington 870', 0.55), (0, 'AKS-74U', 0.7),
-                                        (10, 'AKS-74U', 0.6), (20, 'Remington 870', 0.55)]):
+# Facing +Z (yaw 0), toward the player's end.
+for k, x in enumerate([-20, -10, 0, 10, 20]):
     i = nid()
     ents['empties'].append({'id': i, 'name': f'Dummy Spawn {k + 1}', 'order': i, 'parentId': enemies,
                             'position': [float(x), 0.1, -HALF + 5.0], 'rotation': quat_euler(yaw=0),
                             'scale': [1, 1, 1],
-                            'Dummy Spawn': {'Outfit Seed': 0, 'Roam': True}})
+                            'Dummy Spawn': {'Roam': True}})
 
 for k in ('boxes', 'empties', 'models'):
     scene[k] = ents[k]
