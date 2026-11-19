@@ -3,6 +3,7 @@
 #pragma once
 
 #include "AnimatorController.h"
+#include "AnimatorLint.h"
 #include "AssetLibrary.h"
 #include "Components.h"
 #include "EditorSound.h"
@@ -48,6 +49,11 @@ struct AnimatorWindowState {
     bool Loaded = false;
     std::string Error;
     std::string Saved; // the document as last saved: the baseline the next edit is diffed against
+    unsigned Revision = 0; // bumped on every load and every committed edit: caches keyed on the document use it
+
+    // The Lint tab's issues, recomputed only when Revision moves (not every frame).
+    std::vector<AnimatorLint::Issue> LintIssues;
+    unsigned LintRevision = ~0u;
 
     entt::entity Entity = entt::null; // rig for clip pickers / live view
     int Layer = 0;
@@ -113,6 +119,7 @@ struct AnimatorWindowState {
         Loaded = true;
         Error.clear();
         Saved = Doc.ToJsonString();
+        ++Revision;
         std::error_code ec;
         Stamp = fs::last_write_time(fs::u8path(Abs), ec);
         Layer = std::clamp(Layer, 0, (int)Doc.Layers.size() - 1);
@@ -133,6 +140,7 @@ struct AnimatorWindowState {
         if (now == Saved) return {};
         std::string before = std::move(Saved);
         Saved = std::move(now);
+        ++Revision;
         Write();
         return before;
     }
