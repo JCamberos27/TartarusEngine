@@ -162,6 +162,9 @@ std::shared_ptr<Model> Model::CreateInstance() const {
 }
 
 bool Model::ImportFromFile(const ModelImportSettings& settings) {
+    ImportScratch scratch;
+    m_Import = &scratch;
+    struct ClearScratch { Model* M; ~ClearScratch() { M->m_Import = nullptr; } } clearScratch{this};
     BumpAnimationEpoch(); // bones or clips may appear (a reimport reaches every instance sharing m_D)
     Assimp::Importer importer;
     // FBX files embed their own unit scale (commonly centimeters, sometimes meters or
@@ -240,11 +243,11 @@ bool Model::ImportFromFile(const ModelImportSettings& settings) {
 
     m_D->GlobalInverseTransform = glm::inverse(AiToGlm(scene->mRootNode->mTransformation));
     m_D->BindPoseBones.assign(MAX_BONES, glm::mat4(1.0f));
-    m_ImportNodeGlobals.clear();
+    m_Import->NodeGlobals.clear();
     CollectNodeGlobals(scene->mRootNode, glm::mat4(1.0f));
 
     if (!settings.AnimationOnly) {
-        m_MergeBuckets.clear();
+        m_Import->MergeBuckets.clear();
         ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
         FlushMergeBuckets(scene);
         // RootNodeInModelSpace: the vertices were baked with the root node's frame (ProcessNode starts above it), so
@@ -262,7 +265,7 @@ bool Model::ImportFromFile(const ModelImportSettings& settings) {
     } else m_D->BoundsMin = m_D->BoundsMax = glm::vec3(0.0f);
     ReadHierarchy(scene->mRootNode, -1);
     if (settings.ImportAnimations) ReadAnimations(scene);
-    m_ImportNodeGlobals.clear();
+    m_Import->NodeGlobals.clear();
 
     *target = std::move(*m_D);
     m_D = target;
@@ -301,7 +304,7 @@ glm::mat4 Model::AxisCorrection(int upAxis, int upSign, int frontAxis, int front
 
 void Model::CollectNodeGlobals(const aiNode* node, const glm::mat4& parentTransform) {
     const glm::mat4 global = parentTransform * AiToGlm(node->mTransformation);
-    m_ImportNodeGlobals.emplace(node->mName.C_Str(), global);
+    m_Import->NodeGlobals.emplace(node->mName.C_Str(), global);
     for (unsigned int i = 0; i < node->mNumChildren; ++i) CollectNodeGlobals(node->mChildren[i], global);
 }
 
@@ -573,12 +576,12 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     glm::mat4 offsetFix(1.0f);
     if (skinned) {
         const aiBone* first = mesh->mBones[0];
-        if (auto g = m_ImportNodeGlobals.find(first->mName.C_Str()); g != m_ImportNodeGlobals.end()) {
+        if (auto g = m_Import->NodeGlobals.find(first->mName.C_Str()); g != m_Import->NodeGlobals.end()) {
             const glm::mat4 c = m_D->GlobalInverseTransform * g->second * AiToGlm(first->mOffsetMatrix);
             if (!IsNearlyIdentity(c)) {
                 bool nodeFrame = NearlyEqual(c, nodeTransform);
                 for (const aiNode* a = node ? node->mParent : nullptr; a && !nodeFrame; a = a->mParent)
-                    if (auto ag = m_ImportNodeGlobals.find(a->mName.C_Str()); ag != m_ImportNodeGlobals.end())
+                    if (auto ag = m_Import->NodeGlobals.find(a->mName.C_Str()); ag != m_Import->NodeGlobals.end())
                         nodeFrame = NearlyEqual(c, ag->second);
                 if (nodeFrame) offsetFix = glm::inverse(c);
             }
@@ -678,11 +681,11 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     }
     // MergeByMaterial: a static mesh joins its material's bucket (in file order), made into one mesh after the walk.
     if (m_D->Settings.MergeByMaterial && !skinned) {
-        auto it = std::find_if(m_MergeBuckets.begin(), m_MergeBuckets.end(),
+        auto it = std::find_if(m_Import->MergeBuckets.begin(), m_Import->MergeBuckets.end(),
                                [&](const MergeBucket& b) { return b.MaterialIndex == mesh->mMaterialIndex; });
-        if (it == m_MergeBuckets.end()) {
-            m_MergeBuckets.push_back({mesh->mMaterialIndex, false, {}, {}});
-            it = m_MergeBuckets.end() - 1;
+        if (it == m_Import->MergeBuckets.end()) {
+            m_Import->MergeBuckets.push_back({mesh->mMaterialIndex, false, {}, {}});
+            it = m_Import->MergeBuckets.end() - 1;
         }
         const unsigned int base = (unsigned int)it->Vertices.size();
         it->VertexColors = it->VertexColors || mesh->HasVertexColors(0);
@@ -700,13 +703,13 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 }
 
 void Model::FlushMergeBuckets(const aiScene* scene) {
-    for (MergeBucket& b : m_MergeBuckets) {
+    for (MergeBucket& b : m_Import->MergeBuckets) {
         auto gpuMesh = m_DeferGpu ? std::make_unique<ModelMesh>(std::move(b.Vertices), b.Indices, true)
                                   : std::make_unique<ModelMesh>(b.Vertices, b.Indices);
         AssignImportedMaterial(*gpuMesh, scene, b.MaterialIndex, b.VertexColors);
         m_D->Meshes.push_back(std::move(gpuMesh));
     }
-    m_MergeBuckets.clear();
+    m_Import->MergeBuckets.clear();
 }
 
 void Model::AssignImportedMaterial(ModelMesh& gpuMesh, const aiScene* scene, unsigned int materialIndex, bool vertexColors) {
@@ -1397,7 +1400,7 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh,
             }
             BoneInfo info{m_D->BoneCounter, AiToGlm(bone->mOffsetMatrix) * offsetFix};
             m_D->BoneInfoMap[boneName] = info;
-            if (auto g = m_ImportNodeGlobals.find(boneName); g != m_ImportNodeGlobals.end())
+            if (auto g = m_Import->NodeGlobals.find(boneName); g != m_Import->NodeGlobals.end())
                 m_D->BindPoseBones[info.ID] = m_D->GlobalInverseTransform * g->second * info.OffsetMatrix; // #98
             boneID = m_D->BoneCounter++;
         } else {

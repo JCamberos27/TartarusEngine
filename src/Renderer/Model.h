@@ -638,16 +638,19 @@ private:
     static inline std::atomic<uint64_t> s_AnimationEpoch{0};
     static inline std::atomic<std::uint64_t> s_ImportStamps{0};
 
-    // Import-time only: each node's model-space bind transform, for the bind-pose palette (#98).
-    std::map<std::string, glm::mat4> m_ImportNodeGlobals;
-    // Import-time only (MergeByMaterial): the static meshes of each material, gathered for one ModelMesh apiece.
+    // Import-time only state, on ImportFromFile's stack while it runs (null otherwise): not carried by every placed
+    // instance (a forest has ~150k).
     struct MergeBucket {
         unsigned int MaterialIndex = 0;
         bool VertexColors = false;
         std::vector<ModelVertex> Vertices;
         std::vector<unsigned int> Indices;
     };
-    std::vector<MergeBucket> m_MergeBuckets;
+    struct ImportScratch {
+        std::map<std::string, glm::mat4> NodeGlobals; // each node's model-space bind transform (bind-pose palette, #98)
+        std::vector<MergeBucket> MergeBuckets;        // MergeByMaterial: each material's static meshes, one ModelMesh apiece
+    };
+    ImportScratch* m_Import = nullptr;
 
     // False when the file couldn't be read or parsed (a reimport then keeps the previous import).
     bool ImportFromFile(const ModelImportSettings& settings);
