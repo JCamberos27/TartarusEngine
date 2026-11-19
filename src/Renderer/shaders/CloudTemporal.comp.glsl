@@ -74,7 +74,9 @@ void main() {
     vec4 nearP = uInvViewProj * vec4(ndc, -1.0, 1.0);
     vec4 farP = uInvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 rd = normalize(farP.xyz / farP.w - nearP.xyz / nearP.w);
-    float depthKm = texelFetch(uCurrentDepth, px, 0).r;
+    // The cloud depth this frame: an un-marched checker texel still holds one up to 3 frames old, so it takes its
+    // block's marched texel's (fresh, one texel over).
+    float depthKm = texelFetch(uCurrentDepth, fresh ? px : base, 0).r;
     vec3 worldPt = uCameraWorld + rd * depthKm * uKmToWorld;
     vec4 prevClip = uPrevViewProj * vec4(worldPt, 1.0);
     vec2 prevUv = prevClip.w > 0.0 ? prevClip.xy / prevClip.w * 0.5 + 0.5 : vec2(-1.0);
