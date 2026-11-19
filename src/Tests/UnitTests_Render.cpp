@@ -77,7 +77,7 @@ std::vector<entt::entity> Gather(World& w, const VisibilityQuery& q) {
 void GatherCache() {
     const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
     if (!std::filesystem::exists(path)) {
-        Log::Info("GatherCache: no test model - skipped.");
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
         return;
     }
     const auto model = Model::ImportDeferred(path, ModelImportSettings{});
@@ -131,7 +131,7 @@ void MergeByMaterial() {
     const char* rel = "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx";
     const std::string path = ProjectPaths::Resolve(rel);
     if (!std::filesystem::exists(path)) {
-        Log::Info("MergeByMaterial: no model library - skipped.");
+        UnitTestSupport::Skip("no model library (Drive assets)");
         return;
     }
     ModelImportSettings s;
@@ -278,7 +278,7 @@ void InstanceSlots() {
 void InstanceImportId() {
     const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
     if (!std::filesystem::exists(path)) {
-        Log::Info("InstanceImportId: no test model - skipped.");
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
         return;
     }
     const auto model = Model::ImportDeferred(path, ModelImportSettings{});
@@ -388,11 +388,13 @@ void SceneWindSettings() {
     CHECK(glm::length(north - glm::vec2(0.0f, -1.0f)) < 1e-5f && glm::length(east - glm::vec2(1.0f, 0.0f)) < 1e-5f);
     const glm::vec2 turned = TimeOfDay::BearingToXZ(0.0f, 90.0f); // the compass offset turns it a quarter, staying unit
     CHECK(std::abs(std::abs(turned.x) - 1.0f) < 1e-5f && std::abs(turned.y) < 1e-5f);
+    const glm::vec2 savedDir = Material::WindDirection();
+    const Material::WindField savedWind = Material::Wind();
     Material::WindField w;
     w.Strength = 0.5f;
     Material::SetWind(glm::vec2(3.0f, 4.0f), w);
     CHECK(glm::length(Material::WindDirection() - glm::vec2(0.6f, 0.8f)) < 1e-5f && Material::Wind().Strength == 0.5f);
-    Material::SetWind(glm::vec2(0.8f, 0.6f), Material::WindField{});
+    Material::SetWind(savedDir, savedWind);
     CHECK(HiZCuller::FoliageSway(0.35f, 2.0f) > HiZCuller::FoliageSway(0.35f, 1.0f));
     CHECK(HiZCuller::FoliageSway(0.0f, 0.0f) == 0.0f);
 }
@@ -482,7 +484,7 @@ void FurShellLod() {
 // The shell-fur properties save to a .mat and load back; a material without fur writes none of them, and the
 // property accessors (the Inspector's path) reach the same fields.
 void FurMaterialRoundTrip() {
-    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "tartarus_fur_test";
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_fur_test");
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
     MaterialAsset ma;
@@ -669,7 +671,7 @@ void GIVolumeLookup() {
     CHECK(back.Volumes[0].Layers.size() == 2 && back.Volumes[0].Layers[1].Circuit.empty());
     CHECK(std::abs(back.Volumes[0].Layers[0].Probes[5].c[1].x - lamp.Probes[5].c[1].x) < 1e-3f);
     CHECK(!GI::Deserialize(back, bytes.data(), bytes.size() / 2)); // truncated
-    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_gi_test.gi").string();
+    const std::string path = (std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_gi_test", ".gi")).string();
     CHECK(GI::Save(file, path));
     const auto cached = GI::Cached(path);
     CHECK(cached && cached->Find("Living"));

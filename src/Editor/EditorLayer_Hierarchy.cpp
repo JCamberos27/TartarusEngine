@@ -155,7 +155,7 @@ ImGuiID HierarchyNodeStateId(const World& world, entt::entity e, std::vector<ent
 // "Object 7" for an entity the user never named (#21 P10): its 1-based position in creation
 // order. This used to re-sort every entity per call - once per unnamed visible row per frame -
 // so the ordinals are now built once per frame instead.
-int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) {
+int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) const {
     const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
     if (frame != m_HierOrdinalsFrame) {
         m_HierOrdinalsFrame = frame;
@@ -288,22 +288,25 @@ void EditorLayer::AddToSelectionIfAbsent(entt::entity entity) {
     }
 }
 
+// Replaces the selection with `entities` (distinct): the first is the primary. One pass - adding them
+// one by one through AddToSelectionIfAbsent searched the growing selection for each (O(n^2)).
+void EditorLayer::SetSelectionToDistinct(const std::vector<entt::entity>& entities) {
+    m_RenamingEntity = entt::null;
+    m_Selected = entities.empty() ? entt::null : entities.front();
+    m_ExtraSelection.assign(entities.empty() ? entities.end() : entities.begin() + 1, entities.end());
+}
+
 void EditorLayer::SelectAllVisibleInHierarchy() {
     if (m_HierarchyVisibleOrder.empty()) return;
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : m_HierarchyVisibleOrder) AddToSelectionIfAbsent(e);
+    SetSelectionToDistinct(m_HierarchyVisibleOrder);
     m_SelectionAnchor = m_HierarchyVisibleOrder.front();
     // Deliberately no m_PendingFrameSelect here — snapping the camera to fit the entire scene
     // every time the user hits Ctrl+A would be more disruptive than helpful.
 }
 
 void EditorLayer::SelectAllEntities(World& world) {
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : world.Registry.view<const NameComponent>()) AddToSelectionIfAbsent(e);
+    const auto named = world.Registry.view<const NameComponent>();
+    SetSelectionToDistinct(std::vector<entt::entity>(named.begin(), named.end()));
     if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
 }
 
@@ -439,13 +442,12 @@ void EditorLayer::SelectionHistoryForward(World& world) {
 }
 
 void EditorLayer::InvertSelection(World& world) {
+    std::unordered_set<entt::entity> was(m_ExtraSelection.begin(), m_ExtraSelection.end());
+    if (m_Selected != entt::null) was.insert(m_Selected);
     std::vector<entt::entity> nowSelected;
     for (entt::entity e : world.Registry.view<const NameComponent>())
-        if (!IsSelected(e)) nowSelected.push_back(e);
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : nowSelected) AddToSelectionIfAbsent(e);
+        if (!was.count(e)) nowSelected.push_back(e);
+    SetSelectionToDistinct(nowSelected);
     if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
 }
 
@@ -2278,11 +2280,6 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
     const bool desc = EditorSettings::Get().HierarchySortDesc;
     // Sort keys are computed once per row, not per comparison: the Name key for an unnamed row
     // ("Object 7") used to cost a full creation-order sort of the scene on every compare.
-    std::unordered_map<entt::entity, int> ordinals;
-    if (mode == 1) {
-        const auto list = ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
-        for (size_t i = 0; i < list.size(); ++i) ordinals[list[i]] = (int)i + 1;
-    }
     struct Keyed { entt::entity E; std::string Name; int Kind; };
     std::vector<Keyed> keyed;
     keyed.reserve(rows.size());
@@ -2290,7 +2287,7 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
         Keyed k{e, {}, 0};
         if (mode == 1) {
             const auto* nm = world.Registry.try_get<NameComponent>(e);
-            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(ordinals[e]);
+            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(HierarchyCreationOrdinal(world, e)); // once a frame, only for unnamed rows
         } else {
             k.Kind = HierarchyKindMask(world.Registry, e);
         }

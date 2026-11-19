@@ -130,6 +130,7 @@ void main() {
 struct Resources {
     std::unique_ptr<Shader> Copy, Down, Cull;
     GLuint Boxes = 0, Groups = 0, CmdList = 0, Remap = 0;
+    std::uint32_t RemapCapacity = 0; // ints in Remap (grow-only: the cull writes it, nothing on the CPU reads it)
     // One pyramid per view size: the editor's Scene and Game views (and Play's) cull every frame, and a single shared
     // pyramid was reallocated for each of them in turn whenever their sizes differed.
     struct Pyramid {
@@ -267,15 +268,26 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
     }
 
     // The test.
-    glNamedBufferData(r.Boxes, (GLsizeiptr)(g_Boxes.size() * sizeof(glm::vec4)), g_Boxes.data(), GL_STREAM_DRAW);
-    glNamedBufferData(r.Groups, (GLsizeiptr)(groups.size() * sizeof(Group)), groups.data(), GL_STREAM_DRAW);
-    glNamedBufferData(r.CmdList, (GLsizeiptr)(std::max<std::size_t>(cmdList.size(), 1) * sizeof(std::uint32_t)),
-                      cmdList.empty() ? nullptr : cmdList.data(), GL_STREAM_DRAW);
-    glNamedBufferData(r.Remap, (GLsizeiptr)(std::max<std::uint32_t>(slotCount, 1) * sizeof(std::int32_t)), nullptr, GL_STREAM_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 22, r.Boxes);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, r.Groups);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 24, r.CmdList);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 29, indirectBuffer);
+    // The inputs through the instance ring (a fresh span each, bound as a range); re-specifying four buffers per view
+    // per frame (glNamedBufferData) waited on NVIDIA's threaded driver. The old way only when the ring can't take them.
+    auto upload = [](GLuint fallback, unsigned binding, const void* data, std::size_t bytes) {
+        if (InstanceBuffer::UploadRange(binding, data, bytes)) return;
+        glNamedBufferData(fallback, (GLsizeiptr)bytes, data, GL_STREAM_DRAW);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, fallback);
+    };
+    upload(r.Boxes, 22, g_Boxes.data(), g_Boxes.size() * sizeof(glm::vec4));
+    upload(r.Groups, 23, groups.data(), groups.size() * sizeof(Group));
+    const std::uint32_t noCmd = 0;
+    upload(r.CmdList, 24, cmdList.empty() ? &noCmd : cmdList.data(), std::max<std::size_t>(cmdList.size(), 1) * sizeof(std::uint32_t));
+    if (indirectBuffer == IndirectBuffer::Handle()) IndirectBuffer::BindStorage(29);
+    else glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 29, indirectBuffer);
+    // The remap is the cull's own output, read only by the GPU: one store that grows, not a new one each call.
+    if (slotCount > r.RemapCapacity) {
+        r.RemapCapacity = std::max<std::uint32_t>(slotCount + slotCount / 2, 1024);
+        glDeleteBuffers(1, &r.Remap);
+        glCreateBuffers(1, &r.Remap);
+        glNamedBufferStorage(r.Remap, (GLsizeiptr)r.RemapCapacity * (GLsizeiptr)sizeof(std::int32_t), nullptr, 0);
+    }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kRemapBinding, r.Remap);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
     r.Cull->Bind();
@@ -298,7 +310,8 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
             total += g.Count;
             if (!g.CmdCount) continue;
             std::uint32_t n = 0;
-            glGetNamedBufferSubData(indirectBuffer, (GLintptr)(cmdList[g.CmdFirst] * 5u + 1u) * 4, 4, &n);
+            const GLintptr base = indirectBuffer == IndirectBuffer::Handle() ? (GLintptr)IndirectBuffer::Base() : 0;
+            glGetNamedBufferSubData(indirectBuffer, base + (GLintptr)(cmdList[g.CmdFirst] * 5u + 1u) * 4, 4, &n);
             kept += n;
         }
         std::fprintf(stdout, "[HiZ] %u of %u copies drawn (%u groups)\n", kept, total, (unsigned)groups.size());

@@ -32,6 +32,7 @@
 #include "RenderStats.h" // ::RenderStats, re-exported below as EditorLayer::RenderStats (#359)
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
+#include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
 #include "MaterialPreviewRenderer.h"
@@ -1465,8 +1466,10 @@ private:
     bool m_BoxSelectActive = false;
     glm::vec2 m_BoxSelectStart{0.0f, 0.0f};
     void AddToSelectionIfAbsent(entt::entity entity); // additive-only: never toggles an already-selected item off
+    void SetSelectionToDistinct(const std::vector<entt::entity>& entities); // replace, first = primary (EditorLayer_Hierarchy.cpp)
 
     void SyncViewportPrefs(); // #135 — persist the members below that EditorSettings mirrors
+    bool m_ViewportPrefsPending = false; // a synced value changed; written when no widget is active
 
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
@@ -1872,6 +1875,11 @@ private:
     float m_ModelPreviewDistance = 3.0f;
     bool m_ModelPreviewDragging = false; // press started while hovering the preview image
     ModelPreviewRenderer m_ModelPreview;
+    // The import preview re-renders when what it shows changes (model, orbit, size, materials), while a
+    // clip plays, and every kModelPreviewRefresh seconds for what the key can't see (textures streaming in).
+    std::uint64_t m_ModelPreviewKey = 0;
+    unsigned int m_ModelPreviewHandle = 0;
+    float m_ModelPreviewAge = 0.0f;
     ModelPreviewRenderer m_OutfitPreview; // the Character Outfit editor's spinnable item preview
 
     // Asset Browser model thumbnails (#18 P18): each Model rendered once into its own small GL
@@ -1918,10 +1926,8 @@ private:
     void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
-    // Sound-cell waveform envelopes (#236 G), decoded once per path via AudioEngine.
-    // Empty vector = decode failed / not audio; cached either way.
-    std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
-    const std::vector<float>& SoundWaveform(const std::string& path);
+    // Sound-cell waveform envelopes (#236 G), decoded off the UI thread (AssetWaveformCache).
+    AssetWaveformCache m_SoundWaveforms;
 
     // Asset favourites (#236 G) — a starred subset. Since vFavorites they are the assets on the
     // favorites pages; the star toggle on the Asset Browser toolbar filters the grid to just these.
@@ -2123,16 +2129,16 @@ private:
     bool m_ExpandAllComponents = false; // SetExpandAllComponents
     bool m_InPlayMode = false; // set by OnEnter/OnExitPlayMode — lets edit-mode-only shortcuts (F2 rename) yield to Play-mode ones
     std::string m_PlayModeSnapshot;
-    // #91 — the whole undo/redo history as it stood when Play started. Edits made while playing
-    // still record normally (so the History panel works mid-Play), but Stop reverts the scene,
-    // so their entries — whose snapshots hold transient play state — are thrown away by
-    // restoring this.
+    // #91 - set while a Play session runs: Stop drops the staged undo and refreshes the dirty
+    // state from the history. (It used to copy the whole undo/redo stacks at Play, never read back.)
+    bool m_PrePlayHistoryValid = false;
+    // A whole undo/redo history, put aside while Prefab Mode edits the prefab (m_PrePrefabHistory).
     struct SavedHistory {
         std::vector<UndoEntry> Undo, Redo;
         std::string UndoBase, RedoBase;
         int ContentDepth = 0, SavedDepth = 0;
         bool Valid = false;
-    } m_PrePlayHistory;
+    };
     // #176 - Prefab Mode state: the scene to return to, its history and dirty flag.
     std::string m_PrefabModePath;
     std::string m_InspectorRequestedPrefab;
@@ -2248,9 +2254,9 @@ private:
     std::vector<entt::entity> m_HierChainScratch;
     // CreationOrdinal ("Object 7") was a full sort of every entity PER unnamed row (and per
     // comparison in the Name sort). Built lazily once per frame instead.
-    std::unordered_map<entt::entity, int> m_HierOrdinals;
-    int m_HierOrdinalsFrame = -1;
-    int HierarchyCreationOrdinal(const World& world, entt::entity e);
+    mutable std::unordered_map<entt::entity, int> m_HierOrdinals;
+    mutable int m_HierOrdinalsFrame = -1;
+    int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon
     // under the mouse names, and whether a hover key acted (type-to-select skips that frame).
     entt::entity m_HierarchyHoverEntity = entt::null;

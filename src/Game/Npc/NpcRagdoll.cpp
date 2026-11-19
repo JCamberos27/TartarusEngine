@@ -499,7 +499,7 @@ bool NpcRagdollMotor::TipPropped() {
     // there it would stay raised for good. It gets a small shove over (the way it already leans), as gravity would given time.
     float pelvis[3], pq[4];
     if (!PhysicsWorld::GetRagdollPart(m_Id, NpcRagdoll::kPelvis, pelvis, pq)) return false;
-    for (int part : {3, 4, 5, 6}) {
+    for (int part : {NpcRagdoll::kUpperArmL, NpcRagdoll::kForearmL, NpcRagdoll::kUpperArmR, NpcRagdoll::kForearmR}) {
         float p[3], q[4];
         if (!PhysicsWorld::GetRagdollPart(m_Id, part, p, q)) continue;
         const glm::vec3 dir = glm::quat(q[3], q[0], q[1], q[2]) * glm::vec3(1.0f, 0.0f, 0.0f);
@@ -526,7 +526,7 @@ bool NpcRagdollMotor::TipPropped() {
 
 bool NpcRagdollMotor::Grounded() const {
     // A ray down from the pelvis and from the chest: either within its radius (and the skin) of the solid world.
-    for (int part : {0, 1}) {
+    for (int part : {NpcRagdoll::kPelvis, NpcRagdoll::kChest}) {
         float p[3], q[4];
         if (!PhysicsWorld::GetRagdollPart(m_Id, part, p, q)) continue;
         const float down[3] = {0.0f, -1.0f, 0.0f};
