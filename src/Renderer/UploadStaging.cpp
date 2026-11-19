@@ -1,4 +1,5 @@
 #include "UploadStaging.h"
+#include "GpuMemTrack.h"
 #include "gl.h"
 #include "ProjectSettings.h"
 #include "Core/Env.h"
@@ -85,6 +86,7 @@ bool EnsureRing() {
     glCreateBuffers(1, &r.Buffer);
     glNamedBufferStorage(r.Buffer, (GLsizeiptr)kCapacity, nullptr, flags);
     r.Base = static_cast<unsigned char*>(glMapNamedBufferRange(r.Buffer, 0, (GLsizeiptr)kCapacity, flags));
+    if (r.Base) GpuMemTrack::Set("UploadStaging ring (pinned system memory)", kCapacity);
     if (!r.Base) {
         std::fprintf(stderr, "[UploadStaging] could not map the staging ring - uploading from memory as before\n");
         glDeleteBuffers(1, &r.Buffer);
