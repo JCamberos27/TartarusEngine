@@ -143,7 +143,7 @@ void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<s
                 make(PxTriangleMeshGeometry(tm, meshScale));
             } else {
                 PxConvexMesh*& cm = s.convexCache[key];
-                if (!cm) cm = CookConvex(*s.physics, verts); // TEMP
+                if (!cm) cm = CookConvex(*s.physics, verts);
                 if (!cm) {
                     s.convexCache.erase(key);
                     // Better a rough box than no collider at all (#185 hardening).
@@ -289,7 +289,6 @@ void RemoveActor(PhysicsState& s, std::uint32_t id) {
         s.staticByEntity.erase(st);
     }
     if (!actor) return;
-    ReleaseRagdollAttachments(s, actor); // a gun held in a dead hand, the gun gone
     for (PxJoint*& j : s.joints) {
         if (!j) continue;
         PxRigidActor *a0 = nullptr, *a1 = nullptr;
@@ -390,12 +389,6 @@ PxRigidActor* ActorFor(const PhysicsState& s, std::uint32_t entity) {
     if (auto it = s.bodyByEntity.find(entity); it != s.bodyByEntity.end()) return it->second;
     if (auto st = s.staticByEntity.find(entity); st != s.staticByEntity.end()) return st->second;
     return nullptr;
-}
-
-std::vector<PxShape*> ShapesOf(const PxRigidActor& actor) {
-    std::vector<PxShape*> shapes(actor.getNbShapes());
-    actor.getShapes(shapes.data(), (PxU32)shapes.size());
-    return shapes;
 }
 
 void BuildJoints(PhysicsState& s, const World& world) {

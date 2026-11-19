@@ -282,12 +282,6 @@ void AudioEngine::SetOcclusion(SoundHandle handle, float cutoffHz, float gain) {
     v.Lpf->Target.store(hz, std::memory_order_relaxed);
 }
 
-void AudioEngine::SetReverbSend(SoundHandle handle, float level) {
-    if (!Resolve(handle)) return;
-    Voice& v = g_Audio.Voices[handle & kIndexMask];
-    if (v.Split) ma_node_set_output_bus_volume(v.Split.get(), 1, std::max(level, 0.0f));
-}
-
 int AudioEngine::VoiceCount() {
     int n = 0;
     for (const Voice& v : g_Audio.Voices)
@@ -375,4 +369,3 @@ void AudioEngine::SetBusVolume(Bus bus, float volume) {
     if (g_Audio.BusesReady) ma_sound_group_set_volume(&g_Audio.Buses[b], g_Audio.BusVolume[b]);
     if (b == 0) UpdateReturnGains(); // the returns follow the SFX bus
 }
-float AudioEngine::BusVolume(Bus bus) { return g_Audio.BusVolume[std::clamp((int)bus, 0, kBusCount - 1)]; }

@@ -61,9 +61,6 @@
 #include "Window.h"
 #include "World.h"
 
-PlayFrame::PlayFrame() {
-}
-
 bool PlayFrame::GravityGunLive(const PlayFrameInputs& in) {
     return in.play->GravityGun && !(in.firstPersonPresentation->IsActive() && in.firstPersonPresentation->IsEquipped());
 }

@@ -1,7 +1,6 @@
 #include "AtomicFile.h"
 #include <cctype>
 #include <unordered_map>
-#include <mutex>
 #include "Log.h"
 
 #include <algorithm>
@@ -24,8 +23,6 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-#include <thread>
-#include <chrono>
 #endif
 
 namespace AtomicFile {

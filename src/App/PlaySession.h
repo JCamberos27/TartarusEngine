@@ -78,7 +78,6 @@ public:
 
     void Start(); // no-op while playing
     void Stop();  // no-op while stopped
-    void Toggle() { if (m_State.Playing) Stop(); else Start(); }
 
 private:
     PlayState& m_State;

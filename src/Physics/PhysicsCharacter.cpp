@@ -457,7 +457,6 @@ void DestroyNpcCharacter(CharacterId id) {
     // first - released, the next move read the freed actor.
     if (a && g_State->playerGround == a) g_State->playerGround = nullptr;
     ForgetHitboxCapsule(*g_State, a);
-    ReleaseRagdollAttachments(*g_State, a);
     if (n->body) n->body->Actor->release();
     const std::uint16_t gen = n->Gen;
     *n = NpcCharacter{};
