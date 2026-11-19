@@ -27,7 +27,7 @@ class WeaponLab;
 class Window;
 class World;
 
-// The play-mode state bits main's frame loop reads. Play is not a whole-screen mode swap: three independent bits
+// The play-mode state bits the session's frame loop reads. Play is not a whole-screen mode swap: three independent bits
 // describe it -
 //   EditorUIVisible - the editor panels + dockspace are shown (true whenever NOT maximized)
 //   Playing         - the scene is simulating; the Game panel renders from the player camera
@@ -44,7 +44,7 @@ struct PlayState {
     // state directly, like the old Play mode.
     bool GameInputEngaged = false;
     // #165 - what Play renders through: the first-person player (UsesPlayer), or the scene's Camera entity
-    // (CameraEntity), mirrored each frame into main's playSceneCam.
+    // (CameraEntity), mirrored each frame into the session's playSceneCam.
     bool UsesPlayer = true;
     bool GravityGun = true;
     float BaseFov = 58.7f;         // the player's vertical FOV / mouse sensitivity; the

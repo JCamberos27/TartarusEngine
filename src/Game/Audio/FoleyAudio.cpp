@@ -206,7 +206,6 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
         m_Steps += n;
     }
     // FOLEY_FEET_LOG=1: the feet the steps are read from, a line a frame (time, heights, planted heights, swinging, steps, speed).
-#pragma warning(suppress : 4996)
     static const bool feetLog = Env::Flag(Env::Var::FoleyFeetLog);
     if (feetLog && fromFeet) {
         static double clock = 0.0;
@@ -250,7 +249,6 @@ bool FoleyAudio::NpcFeet(World& world, int id, const glm::vec3& feet, const floa
     // Tracked at any range (the feet stay primed), heard within the NPC step range.
     FootContactDetector& fd = m_NpcFeet[id];
     const int down = fd.Update(height, dt, LiftHeight(m_T, speed), m_T.FootContactHeight);
-#pragma warning(suppress : 4996)
     static const bool feetLog = Env::Flag(Env::Var::FoleyFeetLog);
     if (feetLog) {
         static std::unordered_map<int, double> clock;
