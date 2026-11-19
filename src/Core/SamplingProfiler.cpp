@@ -12,6 +12,7 @@
 #endif
 #include <windows.h>
 #include <dbghelp.h>
+#include <psapi.h>
 #include <timeapi.h>
 
 #include <algorithm>
@@ -46,13 +47,71 @@ std::atomic<bool> g_Run{false};
 std::thread g_Thread;
 HANDLE g_Target = nullptr;
 
+// Every loaded module's unwind table (.pdata), read in Start() on the profiled thread itself. The walk looks functions up
+// here instead of RtlLookupFunctionEntry, which takes the loader's function-table lock: with the main thread suspended
+// while holding it (loading a DLL, a C++ throw), the sampler waited on it forever. RtlVirtualUnwind only decodes.
+struct ModuleUnwind {
+    DWORD64 Base = 0, End = 0;
+    const RUNTIME_FUNCTION* Fns = nullptr;
+    DWORD Count = 0;
+};
+std::vector<ModuleUnwind> g_Modules; // sorted by Base
+
+void ReadModuleTables() {
+    g_Modules.clear();
+    HMODULE mods[1024];
+    DWORD bytes = 0;
+    if (!K32EnumProcessModules(GetCurrentProcess(), mods, sizeof(mods), &bytes)) return;
+    for (DWORD i = 0; i < bytes / sizeof(HMODULE) && i < 1024; ++i) {
+        MODULEINFO mi{};
+        if (!K32GetModuleInformation(GetCurrentProcess(), mods[i], &mi, sizeof(mi))) continue;
+        const auto* base = reinterpret_cast<const BYTE*>(mi.lpBaseOfDll);
+        const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+        if (dos->e_magic != IMAGE_DOS_SIGNATURE) continue;
+        const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+        if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.NumberOfRvaAndSizes <= IMAGE_DIRECTORY_ENTRY_EXCEPTION) continue;
+        const IMAGE_DATA_DIRECTORY& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+        ModuleUnwind m;
+        m.Base = (DWORD64)base;
+        m.End = m.Base + mi.SizeOfImage;
+        if (dir.VirtualAddress && dir.Size) {
+            m.Fns = reinterpret_cast<const RUNTIME_FUNCTION*>(base + dir.VirtualAddress);
+            m.Count = dir.Size / sizeof(RUNTIME_FUNCTION);
+        }
+        g_Modules.push_back(m);
+    }
+    std::sort(g_Modules.begin(), g_Modules.end(), [](const ModuleUnwind& a, const ModuleUnwind& b) { return a.Base < b.Base; });
+}
+
+// The module holding `pc` (null: one loaded after Start, or not code) and its function entry (null: a leaf).
+const ModuleUnwind* FindModule(DWORD64 pc) {
+    auto it = std::upper_bound(g_Modules.begin(), g_Modules.end(), pc, [](DWORD64 v, const ModuleUnwind& m) { return v < m.Base; });
+    if (it == g_Modules.begin()) return nullptr;
+    --it;
+    return pc < it->End ? &*it : nullptr;
+}
+const RUNTIME_FUNCTION* FindFunction(const ModuleUnwind& m, DWORD64 pc) {
+    const DWORD rva = (DWORD)(pc - m.Base);
+    DWORD lo = 0, hi = m.Count;
+    while (lo < hi) {
+        const DWORD mid = lo + (hi - lo) / 2;
+        const RUNTIME_FUNCTION& f = m.Fns[mid];
+        if (rva < f.BeginAddress) hi = mid;
+        else if (rva >= f.EndAddress) lo = mid + 1;
+        else return &f;
+    }
+    return nullptr;
+}
+
 // Unwinds `ctx` (the suspended thread's context) in place, recording return addresses.
 int UnwindFrames(CONTEXT& ctx, std::uint64_t* out) {
     int n = 0;
     while (n < kMaxDepth && ctx.Rip) {
         out[n++] = ctx.Rip;
-        DWORD64 imageBase = 0;
-        PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(ctx.Rip, &imageBase, nullptr);
+        const ModuleUnwind* mod = FindModule(ctx.Rip);
+        if (!mod) break; // (no table for it: the sample ends here rather than guess)
+        const DWORD64 imageBase = mod->Base;
+        PRUNTIME_FUNCTION fn = const_cast<PRUNTIME_FUNCTION>(FindFunction(*mod, ctx.Rip));
         if (!fn) { // a leaf function: the return address is on top of the stack
             ctx.Rip = *(DWORD64*)ctx.Rsp;
             ctx.Rsp += 8;
@@ -102,6 +161,7 @@ void Start() {
     g_Count = 0;
     g_Frame = 0;
     g_FrameMs.clear();
+    ReadModuleTables(); // (every Start: the hot-reloaded modules come and go)
     if (!g_Target)
         DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &g_Target,
                         THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, 0);
@@ -119,6 +179,16 @@ void EndFrame(double frameMs) {
     if (!g_Run) return;
     g_FrameMs.push_back((float)frameMs);
     g_Frame.store((std::uint32_t)g_FrameMs.size(), std::memory_order_relaxed);
+}
+
+size_t SampleCount() { return g_Count.load(std::memory_order_relaxed); }
+
+double MeanDepth() {
+    const size_t n = g_Count.load(std::memory_order_relaxed);
+    if (n == 0) return 0.0;
+    double sum = 0.0;
+    for (size_t i = 0; i < n; ++i) sum += g_Samples[i].Depth;
+    return sum / (double)n;
 }
 
 void Report(const char* label, int top) {
@@ -252,6 +322,8 @@ void Start() {}
 void Stop() {}
 void Report(const char*, int) {}
 void EndFrame(double) {}
+size_t SampleCount() { return 0; }
+double MeanDepth() { return 0.0; }
 } // namespace SamplingProfiler
 
 #endif

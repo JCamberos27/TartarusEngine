@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 // --perf-bench --perf-sample: a statistical CPU profiler for the main thread, for finding where
 // time goes below the PROFILE_SCOPE level without an elevated ETW session. A background thread
 // suspends the main thread about once a millisecond, unwinds its stack (x64 unwind tables, no
@@ -15,4 +17,7 @@ namespace SamplingProfiler {
     void EndFrame(double frameMs);
     // Prints "[PerfSample] <label> ..." lines to stdout: the top `top` functions both ways.
     void Report(const char* label, int top = 40);
+    // Samples taken since Start(), and their mean stack depth (for tests).
+    size_t SampleCount();
+    double MeanDepth();
 }
