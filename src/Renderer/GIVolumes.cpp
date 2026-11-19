@@ -15,6 +15,10 @@
 #include <cstring>
 #include <unordered_set>
 
+#ifndef GL_MAX_3D_TEXTURE_SIZE // core since GL 1.2; the generated loader header leaves it out
+#define GL_MAX_3D_TEXTURE_SIZE 0x8073
+#endif
+
 namespace {
 
 struct GpuVolume {

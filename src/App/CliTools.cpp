@@ -344,6 +344,7 @@ int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
         // runner. Exit code = failed checks (0 = pass).
         case LaunchMode::UnitTests:
             CrashHandler::SetInteractive(false);
+            EnginePaths::Init(argv0); // shipped assets (fonts, shaders) resolve next to the exe, not the cwd
             return RunUnitTests(opt.unitTestsFilter.empty() ? nullptr : opt.unitTestsFilter.c_str()) == 0 ? 0 : 1;
         case LaunchMode::ModelReport: CrashHandler::SetInteractive(false); return ModelReport(opt.inputs);
         case LaunchMode::ModelNodes: CrashHandler::SetInteractive(false); return ModelNodes(opt.inputs);

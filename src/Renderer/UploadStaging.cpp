@@ -164,6 +164,7 @@ void StageCopy(Region& r, std::function<void(unsigned char* dst)> fill) {
     if (!r.Valid()) return;
     unsigned char* dst = r.Ptr;
     std::shared_ptr<std::atomic<bool>> done = r.Copied;
+    r.Queued = true;
     W().Push([dst, done, fill = std::move(fill)] {
         fill(dst);
         done->store(true, std::memory_order_release);
@@ -193,6 +194,6 @@ void Warm() {
 
 void UploadStaging::Abandon(Region& reg) {
     if (!reg.Valid()) return;
-    while (!reg.Ready()) std::this_thread::yield(); // the worker is mid-copy into it: let it finish first
+    while (reg.Queued && !reg.Ready()) std::this_thread::yield(); // the worker is mid-copy into it: let it finish first
     Retire(reg);
 }
