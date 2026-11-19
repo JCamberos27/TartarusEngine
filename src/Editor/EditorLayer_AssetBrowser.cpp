@@ -138,62 +138,10 @@ std::string UsageTooltip(const std::vector<std::string>& users) {
     return s;
 }
 
-// Unity's Project-window search syntax: plain words match the asset name and are ANDed
-// together ("coastal scene" needs both words); "t:Model" restricts by asset type, and several
-// t: terms are ORed ("t:Model t:Texture" means either kind); "l:label" restricts by label, and
-// several l: terms are ANDed (must carry every listed label). Typed directly or built by the
-// Type/Label filter dropdown buttons - both just edit this same text.
-struct ParsedAssetSearch {
-    std::vector<std::string> nameTerms;
-    std::vector<std::string> typeTerms;  // lowercased kind names: "model","texture","material","shader",
-                                         // "sound","scene","prefab","folder"
-    std::vector<std::string> labelTerms; // lowercased
-};
-
-ParsedAssetSearch ParseAssetSearch(const std::string& filter) {
-    ParsedAssetSearch result;
-    std::istringstream iss(filter);
-    std::string token;
-    auto toLower = [](std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-        return s;
-    };
-    while (iss >> token) {
-        if (token.size() > 2 && (token[0] == 't' || token[0] == 'T') && token[1] == ':') {
-            result.typeTerms.push_back(toLower(token.substr(2)));
-        } else if (token.size() > 2 && (token[0] == 'l' || token[0] == 'L') && token[1] == ':') {
-            result.labelTerms.push_back(toLower(token.substr(2)));
-        } else {
-            result.nameTerms.push_back(token);
-        }
-    }
-    return result;
-}
-
-// `kind` is the asset's type name (already lowercased: "model", "texture", ...), `labels` its
-// current label set. Name terms AND, type terms OR (any one is enough), label terms AND (every
-// one must be present) - matching the semantics Unity documents for t:/l:.
-bool MatchesAssetSearch(const ParsedAssetSearch& parsed, const std::string& name, const std::string& kind,
-    const std::set<std::string>& labels) {
-    for (const auto& term : parsed.nameTerms) {
-        if (!MatchesFilter(term, name)) return false;
-    }
-    if (!parsed.typeTerms.empty()) {
-        bool anyTypeMatches = false;
-        for (const auto& t : parsed.typeTerms) {
-            if (t == kind) { anyTypeMatches = true; break; }
-        }
-        if (!anyTypeMatches) return false;
-    }
-    for (const auto& term : parsed.labelTerms) {
-        bool found = false;
-        for (const auto& lbl : labels) {
-            if (MatchesFilter(term, lbl) && term.size() == lbl.size()) { found = true; break; } // exact, case-insensitive
-        }
-        if (!found) return false;
-    }
-    return true;
-}
+// The t: / l: search syntax: EditorSearch.h (unit-tested there).
+using EditorSearch::ParsedAssetSearch;
+using EditorSearch::ParseAssetSearch;
+using EditorSearch::MatchesAssetSearch;
 
 } // namespace
 
@@ -308,57 +256,19 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     const std::uint64_t cacheKey = ThumbnailCache::DependencyKey(path, deps);
     std::vector<unsigned char> cachedPixels;
     if (ThumbnailCache::Load(path, kSize, cacheKey, cachedPixels)) {
-        glGenTextures(1, &dst);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, cachedPixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        GLStateCache::Invalidate(); // raw glBindTexture above — see the matching note below
+        dst = AssetThumbnailLoader::MakeTexture(kSize, cachedPixels.data());
+        GLStateCache::Invalidate(); // raw glBindTexture
     } else {
         const float dist = ModelPreviewRenderer::ComputeFramingDistance(model);
         std::vector<std::shared_ptr<MaterialAsset>> slots;
         if (m_AssetsPtr && !remap.empty()) m_AssetsPtr->ApplyMaterialRemap(model, slots);
         const unsigned int src = m_ThumbnailPreview.Render(model, 0.7f, 0.5f, dist, kSize, kSize, slots);
 
-        glGenTextures(1, &dst);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        // Copy the shared preview render into `dst` via a scratch read-FBO. Predates the 4.6
-        // upgrade (4.3+ has glCopyImageSubData) but glCopyTexSubImage2D from a bound READ
-        // framebuffer works fine and is already loaded, so it's kept as-is.
-        GLint prevRead = 0, prevDraw = 0;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
-        if (!m_ThumbnailBlitFbo) glGenFramebuffers(1, &m_ThumbnailBlitFbo);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ThumbnailBlitFbo);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src, 0);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, kSize, kSize);
-
-        // Phase 5 item 9 — persist what was just rendered, so the NEXT launch is a cache hit.
-        // glGetTexImage isn't in this codebase's trimmed GL loader (extern/glloader/gl.h); read
-        // via glReadPixels from `src` instead, while it's still the bound READ_FRAMEBUFFER
-        // attachment above — the exact same pixels glCopyTexSubImage2D just copied into `dst`.
-        std::vector<unsigned char> freshPixels((size_t)kSize * kSize * 4);
-        glReadPixels(0, 0, kSize, kSize, GL_RGBA, GL_UNSIGNED_BYTE, freshPixels.data());
+        // Copied out of the shared preview target, and persisted so the NEXT launch is a cache hit
+        // (Phase 5 item 9); CopyPreviewTexture resyncs GLStateCache (audit GL-202).
+        std::vector<unsigned char> freshPixels;
+        CopyPreviewTexture(src, dst, kSize, &freshPixels);
         ThumbnailCache::SaveAsync(path, kSize, cacheKey, std::move(freshPixels)); // encode + write off the UI thread
-
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
-
-        // The preview render plus the raw glBindTexture calls above never went through
-        // GLStateCache; resync it so a later Texture::Bind() on the same unit isn't skipped as
-        // falsely-redundant (audit GL-202: the "call Invalidate() after every raw-GL pass" rule
-        // this path was missing).
-        GLStateCache::Invalidate();
     }
 
     m_ThumbnailLRU.push_front(path);
@@ -380,15 +290,7 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
 }
 
 void EditorLayer::CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut) {
-    if (!dst) {
-        glGenTextures(1, &dst);
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    }
+    if (!dst) dst = AssetThumbnailLoader::MakeTexture(size, nullptr);
     GLint prevRead = 0, prevDraw = 0;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
@@ -443,13 +345,7 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
     std::vector<unsigned char> pixels;
     // First sight this session: a cached PNG whose dependencies are unchanged is the same image.
     if (fresh && ThumbnailCache::Load(path, kSize, diskKey, pixels)) {
-        glGenTextures(1, &entry.Tex);
-        glBindTexture(GL_TEXTURE_2D, entry.Tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        entry.Tex = AssetThumbnailLoader::MakeTexture(kSize, pixels.data());
         GLStateCache::Invalidate();
         entry.DiskKey = diskKey;
     } else {
@@ -523,15 +419,33 @@ void EditorLayer::BeginRenameAsset(const std::string& key, bool isFolder, const 
 
 bool EditorLayer::IsAssetSelected(const std::string& key, bool isFolder) const {
     if (m_SelectedAssetKey == key && m_SelectedAssetIsFolder == isFolder) return true;
-    for (const auto& e : m_ExtraAssetSelection) {
-        if (e.Key == key && e.IsFolder == isFolder) return true;
+    // Asked for every tile every frame: a scan of a big selection (Ctrl+A in a large folder) made that O(tiles x selected).
+    if (m_ExtraAssetSelection.size() <= 16) {
+        for (const auto& e : m_ExtraAssetSelection)
+            if (e.Key == key && e.IsFolder == isFolder) return true;
+        return false;
     }
-    return false;
+    if (!m_ExtraAssetSelIndexValid) {
+        m_ExtraAssetSelIndex.clear();
+        for (const auto& e : m_ExtraAssetSelection) m_ExtraAssetSelIndex.insert(e.Key + (e.IsFolder ? '\x01' : '\x02'));
+        m_ExtraAssetSelIndexValid = true;
+    }
+    return m_ExtraAssetSelIndex.count(key + (isFolder ? '\x01' : '\x02')) != 0;
 }
 
 void EditorLayer::ClearAssetSelection() {
     m_SelectedAssetKey.clear();
+    ClearExtraAssetSelection();
+}
+
+void EditorLayer::AddExtraAssetSelection(const std::string& key, bool isFolder) {
+    m_ExtraAssetSelection.push_back({key, isFolder});
+    m_ExtraAssetSelIndexValid = false;
+}
+
+void EditorLayer::ClearExtraAssetSelection() {
     m_ExtraAssetSelection.clear();
+    m_ExtraAssetSelIndexValid = false;
 }
 
 void EditorLayer::ToggleAssetSelection(const std::string& key, bool isFolder) {
@@ -546,6 +460,7 @@ void EditorLayer::ToggleAssetSelection(const std::string& key, bool isFolder) {
             m_SelectedAssetKey = m_ExtraAssetSelection.back().Key;
             m_SelectedAssetIsFolder = m_ExtraAssetSelection.back().IsFolder;
             m_ExtraAssetSelection.pop_back();
+            m_ExtraAssetSelIndexValid = false;
         } else {
             m_SelectedAssetKey.clear();
         }
@@ -554,10 +469,11 @@ void EditorLayer::ToggleAssetSelection(const std::string& key, bool isFolder) {
     for (auto it = m_ExtraAssetSelection.begin(); it != m_ExtraAssetSelection.end(); ++it) {
         if (it->Key == key && it->IsFolder == isFolder) {
             m_ExtraAssetSelection.erase(it); // already co-selected — toggle it back off
+            m_ExtraAssetSelIndexValid = false;
             return;
         }
     }
-    m_ExtraAssetSelection.push_back({key, isFolder});
+    AddExtraAssetSelection(key, isFolder);
 }
 
 void EditorLayer::RequestDeleteAsset(World& world, AssetLibrary& assets, const std::string& key, bool isFolder, bool skipDialog) {
@@ -972,7 +888,7 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         ClearAssetSelection();
         m_SelectedAssetKey = newKeys[0];
         m_SelectedAssetIsFolder = false;
-        for (size_t i = 1; i < newKeys.size(); ++i) m_ExtraAssetSelection.push_back({newKeys[i], false});
+        for (size_t i = 1; i < newKeys.size(); ++i) AddExtraAssetSelection(newKeys[i], false);
     }
 }
 
@@ -1126,27 +1042,41 @@ bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lin
 // Phase 5 item 4 — the three text columns Details view appends after a list row's name. Mirrors
 // the Explorer/Finder convention of leaving Size blank for folders (a recursive folder size isn't
 // worth a stat-per-subfile here) rather than showing 0.
-const char* AssetKindLabel(Cell::Kind k) {
-    switch (k) {
-        case Cell::Kind::Folder:     return "Folder";
-        case Cell::Kind::Scene:      return "Scene";
-        case Cell::Kind::Prefab:     return "Prefab";
-        case Cell::Kind::Model:      return "Model";
-        case Cell::Kind::Texture:    return "Texture";
-        case Cell::Kind::Material:   return "Material";
-        case Cell::Kind::Sound:      return "Sound";
-        case Cell::Kind::Shader:     return "Shader";
-        case Cell::Kind::Animator:   return "Animator Controller";
-        case Cell::Kind::Weapon:     return "Weapon Definition";
-        case Cell::Kind::Recoil:     return "Recoil Profile";
-        case Cell::Kind::CameraShake:return "Camera Shake";
-        case Cell::Kind::Decal:      return "Decal";
-        case Cell::Kind::Graffiti:   return "Graffiti Piece";
-        case Cell::Kind::Hdri:       return "HDRI";
-        case Cell::Kind::Script:     return "Script";
-    }
-    return "";
+// What the Asset Browser shows and does per kind of tile, in one place (it was five parallel switches).
+struct AssetKindInfo {
+    Cell::Kind Kind;
+    const char* Label;      // the Details view's Type column
+    const char* SearchName; // what "t:<name>" matches
+    const char* Icon;       // the tile glyph (a model with clips and a playing sound pick their own)
+    ImVec4 Color;           // the Grid view's bottom stripe
+    int SortRank;           // Sort by Type
+    bool FileOnly;          // a project file that is never a library entry: nothing to remove from the library
+};
+constexpr AssetKindInfo kAssetKinds[] = {
+    {Cell::Kind::Folder,      "Folder",              "folder",      ICON_FA_FOLDER,          EditorTheme::Secondary,    0,  false},
+    {Cell::Kind::Model,       "Model",               "model",       ICON_FA_CUBE,            EditorTheme::KindMesh,     3,  false},
+    {Cell::Kind::Texture,     "Texture",             "texture",     ICON_FA_IMAGE,           EditorTheme::KindTexture,  4,  false},
+    {Cell::Kind::Material,    "Material",            "material",    ICON_FA_DROPLET,         EditorTheme::KindMaterial, 5,  false},
+    {Cell::Kind::Sound,       "Sound",               "sound",       ICON_FA_MUSIC,           EditorTheme::KindAudio,    6,  false},
+    {Cell::Kind::Scene,       "Scene",               "scene",       ICON_FA_MAP,             EditorTheme::KindScene,    1,  false},
+    {Cell::Kind::Prefab,      "Prefab",              "prefab",      ICON_FA_BOX_ARCHIVE,     EditorTheme::KindPrefab,   2,  false},
+    {Cell::Kind::Shader,      "Shader",              "shader",      ICON_FA_FILE_CODE,       EditorTheme::KindScript,   8,  false},
+    {Cell::Kind::Animator,    "Animator Controller", "animator",    ICON_FA_DIAGRAM_PROJECT, EditorTheme::KindAnim,     9,  true},
+    {Cell::Kind::Weapon,      "Weapon Definition",   "weapon",      ICON_FA_CROSSHAIRS,      EditorTheme::Warning,      10, true},
+    {Cell::Kind::Hdri,        "HDRI",                "hdri",        ICON_FA_SUN,             EditorTheme::KindLight,    11, true},
+    {Cell::Kind::Script,      "Script",              "script",      ICON_FA_SCROLL,          EditorTheme::KindScript,   12, true},
+    {Cell::Kind::Recoil,      "Recoil Profile",      "recoil",      ICON_FA_BURST,           EditorTheme::Warning,      10, true},
+    {Cell::Kind::CameraShake, "Camera Shake",        "camerashake", ICON_FA_VIDEO,           EditorTheme::Warning,      10, true},
+    {Cell::Kind::Decal,       "Decal",               "decal",       ICON_FA_STAMP,           EditorTheme::KindMaterial, 5,  true},
+    {Cell::Kind::Graffiti,    "Graffiti Piece",      "graffiti",    ICON_FA_SPRAY_CAN,       EditorTheme::KindMaterial, 5,  true},
+};
+const AssetKindInfo& KindInfo(Cell::Kind k) {
+    for (const AssetKindInfo& info : kAssetKinds)
+        if (info.Kind == k) return info;
+    return kAssetKinds[0];
 }
+
+const char* AssetKindLabel(Cell::Kind k) { return KindInfo(k).Label; }
 
 std::string FormatFileSize(unsigned long long bytes) {
     static const char* kUnits[] = { "B", "KB", "MB", "GB" };
@@ -1965,8 +1895,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 if (filtering ? (folder != cur && folder.rfind(cur + "/", 0) != 0) : folder != cur) continue;
                 for (size_t i : items) {
                     const ProjectAssetFile& f = m_ProjectAssetIndex.files[i];
-                    const char* kindName = f.Kind == Cell::Kind::Prefab ? "prefab" : f.Kind == Cell::Kind::Decal ? "decal" : "hdri";
-                    if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, assets.Labels(f.Path))) continue;
+                    if (!MatchesAssetSearch(parsedSearch, f.Name, KindInfo(f.Kind).SearchName, assets.Labels(f.Path))) continue;
                     Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
                     c.unloaded = f.Kind == Cell::Kind::Prefab && !f.Unfetched && !m_ListedAssetKeys.count(f.Key);
                     c.unfetched = f.Unfetched;
@@ -2042,18 +1971,9 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             const std::string& folder = moved.empty() ? f.Folder : moved;
             if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
             if (m_ListedAssetKeys.count(f.Key)) continue;
-            const bool fileOnly = f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon ||
-                                  f.Kind == Cell::Kind::Recoil || f.Kind == Cell::Kind::CameraShake ||
-                                  f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script ||
-                                  f.Kind == Cell::Kind::Decal || f.Kind == Cell::Kind::Graffiti;
-            const char* kindName = f.Kind == Cell::Kind::Model ? "model" : f.Kind == Cell::Kind::Texture ? "texture"
-                                 : f.Kind == Cell::Kind::Material ? "material" : f.Kind == Cell::Kind::Sound ? "sound"
-                                 : f.Kind == Cell::Kind::Animator ? "animator" : f.Kind == Cell::Kind::Weapon ? "weapon"
-                                 : f.Kind == Cell::Kind::Recoil ? "recoil"
-                                 : f.Kind == Cell::Kind::CameraShake ? "camerashake"
-                                 : f.Kind == Cell::Kind::Decal ? "decal"
-                                 : f.Kind == Cell::Kind::Graffiti ? "graffiti"
-                                 : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
+            const AssetKindInfo& kind = KindInfo(f.Kind);
+            const bool fileOnly = kind.FileOnly;
+            const char* kindName = kind.SearchName;
             // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
             if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
                 !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
@@ -2076,27 +1996,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         {
             const int mode = std::clamp(EditorSettings::Get().AssetSortMode, 0, 3);
             const bool desc = EditorSettings::Get().AssetSortDesc;
-            auto typeRank = [](Cell::Kind k) {
-                switch (k) {
-                    case Cell::Kind::Folder:     return 0;
-                    case Cell::Kind::Scene:      return 1;
-                    case Cell::Kind::Prefab:     return 2;
-                    case Cell::Kind::Model:      return 3;
-                    case Cell::Kind::Texture:    return 4;
-                    case Cell::Kind::Material:   return 5;
-                    case Cell::Kind::Decal:      return 5;
-                    case Cell::Kind::Graffiti:   return 5;
-                    case Cell::Kind::Sound:      return 6;
-                    case Cell::Kind::Shader:     return 8;
-                    case Cell::Kind::Animator:   return 9;
-                    case Cell::Kind::Weapon:     return 10;
-                    case Cell::Kind::Recoil:     return 10;
-                    case Cell::Kind::CameraShake:return 10;
-                    case Cell::Kind::Hdri:       return 11;
-                    case Cell::Kind::Script:     return 12;
-                }
-                return 7;
-            };
+            auto typeRank = [](Cell::Kind k) { return KindInfo(k).SortRank; };
             // Names are lower-cased once per cell (not twice per comparison); Date/Size stat each file once
             // per build (StatAssetGridCell), which the Details view then reuses.
             struct SortKey { bool folder; int rank; long long num; std::string name; size_t index; };
@@ -2147,7 +2047,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         m_SelectedAssetKey = cells[0].key;
         m_SelectedAssetIsFolder = cells[0].kind == Cell::Kind::Folder;
         for (size_t i = 1; i < cells.size(); ++i) {
-            m_ExtraAssetSelection.push_back({cells[i].key, cells[i].kind == Cell::Kind::Folder});
+            AddExtraAssetSelection(cells[i].key, cells[i].kind == Cell::Kind::Folder);
         }
     }
 
@@ -2254,21 +2154,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         bool isSelected = IsAssetSelected(cell.key, isFolder);
         bool isRenaming = m_RenamingAssetKey == cell.key && m_RenamingIsFolder == isFolder;
         bool playing = cell.kind == Cell::Kind::Sound && AudioEngine::IsPreviewPlaying(cell.key);
-        const char* icon = isFolder ? ICON_FA_FOLDER
-            : cell.kind == Cell::Kind::Model ? (cell.model && cell.model->HasAnimations() ? ICON_FA_FILM : ICON_FA_CUBE)
-            : cell.kind == Cell::Kind::Scene ? ICON_FA_MAP
-            : cell.kind == Cell::Kind::Prefab ? ICON_FA_BOX_ARCHIVE
-            : cell.kind == Cell::Kind::Material ? ICON_FA_DROPLET
-            : cell.kind == Cell::Kind::Shader ? ICON_FA_FILE_CODE
-            : cell.kind == Cell::Kind::Animator ? ICON_FA_DIAGRAM_PROJECT
-            : cell.kind == Cell::Kind::Weapon ? ICON_FA_CROSSHAIRS
-            : cell.kind == Cell::Kind::Recoil ? ICON_FA_BURST
-            : cell.kind == Cell::Kind::CameraShake ? ICON_FA_VIDEO
-            : cell.kind == Cell::Kind::Decal ? ICON_FA_STAMP
-            : cell.kind == Cell::Kind::Graffiti ? ICON_FA_SPRAY_CAN
-            : cell.kind == Cell::Kind::Hdri ? ICON_FA_SUN
-            : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
-            : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
+        const char* icon = cell.kind == Cell::Kind::Model && cell.model && cell.model->HasAnimations() ? ICON_FA_FILM
+                         : playing ? ICON_FA_STOP
+                         : KindInfo(cell.kind).Icon;
 
         // Editor Enhancers / vFolders: a folder tile shows its resolved icon, colour and content.
         EditorFolderVisual folderVis;
@@ -2279,27 +2167,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         const ImU32 folderTint = (isFolder && folderVis.Color) ? (EditorTheme::UserPacked(folderVis.Color) | 0xFF000000u) : 0u;
 
         // The asset-type colour: the tile's bottom stripe in Grid view.
-        auto kindColor = [&]() -> ImVec4 {
-            switch (cell.kind) {
-                case Cell::Kind::Folder:     return EditorTheme::Secondary;
-                case Cell::Kind::Model:      return EditorTheme::KindMesh;
-                case Cell::Kind::Texture:    return EditorTheme::KindTexture;
-                case Cell::Kind::Hdri:       return EditorTheme::KindLight;
-                case Cell::Kind::Material:
-                case Cell::Kind::Decal:
-                case Cell::Kind::Graffiti:   return EditorTheme::KindMaterial;
-                case Cell::Kind::Sound:      return EditorTheme::KindAudio;
-                case Cell::Kind::Scene:      return EditorTheme::KindScene;
-                case Cell::Kind::Prefab:     return EditorTheme::KindPrefab;
-                case Cell::Kind::Script:
-                case Cell::Kind::Shader:     return EditorTheme::KindScript;
-                case Cell::Kind::Animator:   return EditorTheme::KindAnim;
-                case Cell::Kind::Weapon:     return EditorTheme::Warning;
-                case Cell::Kind::Recoil:     return EditorTheme::Warning;
-                case Cell::Kind::CameraShake:return EditorTheme::Warning;
-            }
-            return EditorTheme::Secondary;
-        };
+        auto kindColor = [&]() -> ImVec4 { return KindInfo(cell.kind).Color; };
 
         bool clicked = false;
         if (gridMode) {
@@ -2500,7 +2368,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 for (size_t i = lo; i <= hi; ++i) {
                     bool f = cells[i].kind == Cell::Kind::Folder;
                     if (i == lo) { m_SelectedAssetKey = cells[i].key; m_SelectedAssetIsFolder = f; }
-                    else m_ExtraAssetSelection.push_back({cells[i].key, f});
+                    else AddExtraAssetSelection(cells[i].key, f);
                 }
                 // Deliberately don't move the anchor, so repeated Shift-clicks keep extending
                 // or shrinking the range from the same starting point.
@@ -2926,10 +2794,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     ? ICON_FA_TRASH "  Remove Selected from Library" : ICON_FA_TRASH "  Remove from Library";
                 ImGui::Separator();
                 // Files that are never library entries have nothing to remove from it.
-                const bool fileOnly = cell.kind == Cell::Kind::Animator || cell.kind == Cell::Kind::Weapon ||
-                                      cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake ||
-                                      cell.kind == Cell::Kind::Hdri || cell.kind == Cell::Kind::Script ||
-                                      cell.kind == Cell::Kind::Decal || cell.kind == Cell::Kind::Graffiti;
+                const bool fileOnly = KindInfo(cell.kind).FileOnly;
                 ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (!fileOnly && ImGui::MenuItem(removeLabel)) {
                     RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);

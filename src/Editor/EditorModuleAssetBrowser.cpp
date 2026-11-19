@@ -15,6 +15,7 @@
 // survives a reload) via Is/SetAssetFolderExpanded. Drag payloads are bare path strings.
 
 #include "EditorModuleAPI.h"
+#include "EditorSearch.h"
 #include "EditorPanels.h"
 #include "EditorTheme.h"
 #include "EditorUIPrimitives.h"
@@ -61,56 +62,12 @@ void VSeparator() {
     ImGui::SameLine(0.0f, style.ItemSpacing.x);
 }
 
-// EditorInternal::MatchesFilter / ParentFolderOf / LeafNameOf, copied module-side.
-bool MatchesFilter(const std::string& filter, const std::string& text) {
-    if (filter.empty()) return true;
-    auto toLower = [](std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-        return s;
-    };
-    return toLower(text).find(toLower(filter)) != std::string::npos;
-}
-std::string ParentFolderOf(const std::string& p) {
-    size_t s = p.find_last_of('/');
-    return s == std::string::npos ? std::string() : p.substr(0, s);
-}
-std::string LeafNameOf(const std::string& p) {
-    size_t s = p.find_last_of('/');
-    return s == std::string::npos ? p : p.substr(s + 1);
-}
-
-// Asset Browser search-token helpers (file-local in the host .cpp), copied module-side.
-bool SearchHasToken(const std::string& filter, const std::string& token) {
-    std::string t;
-    for (size_t i = 0; i <= filter.size(); ++i) {
-        if (i == filter.size() || filter[i] == ' ' || filter[i] == '\t') {
-            if (t == token) return true;
-            t.clear();
-        } else {
-            t += filter[i];
-        }
-    }
-    return false;
-}
-void ToggleSearchToken(std::string& filter, const std::string& token) {
-    std::vector<std::string> tokens;
-    std::string t;
-    bool removed = false;
-    for (size_t i = 0; i <= filter.size(); ++i) {
-        if (i == filter.size() || filter[i] == ' ' || filter[i] == '\t') {
-            if (!t.empty()) {
-                if (t == token) removed = true;
-                else tokens.push_back(t);
-            }
-            t.clear();
-        } else {
-            t += filter[i];
-        }
-    }
-    if (!removed) tokens.push_back(token);
-    filter.clear();
-    for (size_t i = 0; i < tokens.size(); ++i) { if (i) filter += " "; filter += tokens[i]; }
-}
+// MatchesFilter, the folder path helpers and the search-token helpers: EditorSearch.h (shared with the host).
+using EditorSearch::MatchesFilter;
+using EditorSearch::ParentFolderOf;
+using EditorSearch::LeafNameOf;
+using EditorSearch::SearchHasToken;
+using EditorSearch::ToggleSearchToken;
 
 std::string HostString(void (*getter)(char*, int)) {
     if (!getter) return {};

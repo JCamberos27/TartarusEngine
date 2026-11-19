@@ -11,6 +11,7 @@
 // (behind host.SetTooltip) and for the panel's own persistent UI state, which the host owns so a
 // reload doesn't clear the user's filter.
 
+#include "EditorSearch.h"
 #include "EditorModuleAPI.h"
 #include "EditorPanels.h"
 #include "EditorTheme.h"
@@ -34,17 +35,9 @@ namespace EditorModuleConsole {
 
 namespace {
 
-// Case-insensitive substring match — the same rule EditorInternal::MatchesFilter applies host-side
-// (copied rather than included: EditorLayerInternal.h pulls in World/EnTT/the renderer, none of
-// which belong in this DLL).
-bool MatchesFilter(const std::string& filter, const std::string& text) {
-    if (filter.empty()) return true;
-    auto toLower = [](std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-        return s;
-    };
-    return toLower(text).find(toLower(filter)) != std::string::npos;
-}
+// Case-insensitive substring match, the host's rule: EditorSearch.h (standard library only, so this DLL
+// can include it; EditorLayerInternal.h pulls in World/EnTT/the renderer).
+using EditorSearch::MatchesFilter;
 
 // EditorUI::VSeparator: a 1px rule in ImGuiCol_Separator spanning the frame height, with
 // ItemSpacing.x of breathing room either side. Advances the cursor itself.
