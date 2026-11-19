@@ -69,12 +69,17 @@ std::vector<std::string> FindPhysicMaterials() {
     const fs::path root(ProjectPaths::Root());
     for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
          !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
-        if (it.depth() == 0 && it->is_directory() && it->path().filename() == "Library") {
+        // Each entry's own error code: the throwing overloads threw out of the walk on an entry that vanished or was locked,
+        // and relative()'s failure, written into the walk's code, ended it.
+        std::error_code entryEc;
+        if (it.depth() == 0 && it->is_directory(entryEc) && it->path().filename() == "Library") {
             it.disable_recursion_pending();
             continue;
         }
-        if (it->is_regular_file() && it->path().extension() == ".physicmaterial")
-            out.push_back(fs::relative(it->path(), root, ec).generic_string());
+        if (it->is_regular_file(entryEc) && it->path().extension() == ".physicmaterial") {
+            const fs::path rel = fs::relative(it->path(), root, entryEc);
+            if (!entryEc && !rel.empty()) out.push_back(rel.generic_string());
+        }
     }
     std::sort(out.begin(), out.end());
     return out;

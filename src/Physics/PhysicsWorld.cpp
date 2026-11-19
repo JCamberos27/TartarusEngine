@@ -105,7 +105,7 @@ bool EnsureCore() {
     // to inspect, and costs nothing when nothing is listening.
     c->pvd = PxCreatePvd(*c->foundation);
     c->pvdTransport = PxDefaultPvdSocketTransportCreate("127.0.0.1", 5425, 10);
-    c->pvd->connect(*c->pvdTransport, PxPvdInstrumentationFlag::eALL);
+    if (c->pvd && c->pvdTransport) c->pvd->connect(*c->pvdTransport, PxPvdInstrumentationFlag::eALL);
 #endif
 
     PxPvd* pvdArg = nullptr;
@@ -150,6 +150,11 @@ bool EnsureCore() {
     c->workers = std::max<PxU32>(1, std::min<PxU32>(hw ? hw - 1 : 1, 4));
     c->dispatcher = PxDefaultCpuDispatcherCreate(c->workers);
     c->defaultMaterial = c->physics->createMaterial(0.6f, 0.6f, 0.0f);
+    if (!c->dispatcher || !c->defaultMaterial) {
+        Log::Error("PhysX: couldn't create the CPU dispatcher or the default material - physics disabled for this Play session.");
+        delete c;
+        return false;
+    }
 
     g_Core = c;
     Log::Info("PhysX initialised (" + std::to_string(c->workers) + " worker threads).");
