@@ -1458,7 +1458,7 @@ struct FxHudSettingsComponent {
     float BeamBend = 4.0f;
 };
 
-// The volumetric blood (docs/BLOOD_FX.md, Game/Combat/BloodFx): on any object in the scene (the first one counts);
+// The volumetric blood (Game/Combat/BloodFx): on any object in the scene (the first one counts);
 // without one Play uses these same defaults. Copied into BloodFx::Settings when Play starts.
 struct BloodSettingsComponent {
     bool Enabled = true;

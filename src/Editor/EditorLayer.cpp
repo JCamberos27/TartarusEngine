@@ -2982,7 +2982,11 @@ void EditorLayer::SyncViewportPrefs() {
     sync(p.GizmoPivotCenter, m_GizmoPivotCenter);
     sync(p.ActiveTool, (int)m_GizmoOp);
     sync(p.ShadingMode, (int)m_ShadingMode);
-    if (!changed) return;
+    if (changed) m_ViewportPrefsPending = true;
+    // Written once the drag or edit that changed them ends: the Preferences sliders bound to these
+    // members changed them every frame of a drag, and each frame was a durable settings write.
+    if (!m_ViewportPrefsPending || ImGui::IsAnyItemActive()) return;
+    m_ViewportPrefsPending = false;
     // Picking a tool or toggling the grid is not an authored edit: write it outside the undo
     // journal (like RememberLastScene), or each one became an "Edit editor_prefs.json" undo step
     // that Ctrl+Z spent first and that cleared the redo stack.
@@ -3007,6 +3011,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     FreeRetiredThumbnailTextures(); // last frame's draw lists are rendered by now
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
     m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
+    m_SoundWaveforms.Pump(); // sound tiles' waveforms, decoded off-thread
 
     if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
     SyncViewportPrefs();

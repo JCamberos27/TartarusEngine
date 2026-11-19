@@ -42,16 +42,31 @@ std::string FormatBytes(std::uint64_t b) {
 
 // std::string-backed InputText without imgui_stdlib.
 // A Settings row (EditorInternal::SettingsLabel): the label on the left, the field to its right.
+// The value follows every keystroke; the return is true once the edit is done (the field lost focus
+// or Enter), so the settings file is written once per edit, not per key.
 bool InputString(const char* label, std::string& s, float /*width*/) {
     char buf[512];
     std::snprintf(buf, sizeof(buf), "%s", s.c_str());
     EditorInternal::SettingsLabel(label);
     ImGui::PushID(label);
-    const bool edited = ImGui::InputText("##v", buf, sizeof(buf));
+    if (ImGui::InputText("##v", buf, sizeof(buf))) s = buf;
+    const bool done = ImGui::IsItemDeactivatedAfterEdit();
     ImGui::PopID();
-    if (!edited) return false;
-    s = buf;
-    return true;
+    return done;
+}
+
+// project/scenes/*.json, walked at most every couple of seconds (the Build page asked every frame).
+const std::vector<std::string>& ProjectScenesCached() {
+    static std::vector<std::string> s_Scenes;
+    static std::chrono::steady_clock::time_point s_At{};
+    static bool s_Once = false;
+    const auto now = std::chrono::steady_clock::now();
+    if (!s_Once || now - s_At > std::chrono::seconds(2)) {
+        s_Once = true;
+        s_At = now;
+        s_Scenes = BuildPipeline::FindProjectScenes();
+    }
+    return s_Scenes;
 }
 
 // Same Settings row as InputString, but the value is picked (a file or folder), never typed.
@@ -175,7 +190,7 @@ void EditorLayer::DrawBuildSettingsBody() {
 
         // Everything under project/scenes that isn't in the list yet.
         std::vector<std::string> candidates;
-        for (const std::string& s : BuildPipeline::FindProjectScenes())
+        for (const std::string& s : ProjectScenesCached())
             if (std::find(b.Scenes.begin(), b.Scenes.end(), s) == b.Scenes.end()) candidates.push_back(s);
         ImGui::BeginDisabled(candidates.empty());
         ImGui::SetNextItemWidth(kw);
@@ -212,8 +227,8 @@ void EditorLayer::DrawBuildSettingsBody() {
     if (ImGui::InputInt2("##WindowSize", wh)) {
         b.Width = std::clamp(wh[0], 320, 16384);
         b.Height = std::clamp(wh[1], 200, 16384);
-        changed = true;
     }
+    changed |= ImGui::IsItemDeactivatedAfterEdit(); // saved once the edit is done, like the text fields
     ImGui::EndDisabled();
     changed |= SettingsCheckbox("V-Sync", &b.VSync);
     changed |= SettingsCheckbox("Development Build", &b.DevelopmentBuild);

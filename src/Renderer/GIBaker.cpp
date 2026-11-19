@@ -183,7 +183,14 @@ void GIBaker::RestoreLighting(World& world) {
 bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const RenderFrameContext&)>& draw,
                    const std::function<void(const glm::vec3&)>& moveCamera) {
     if (m_Finished) return true;
-    if (!m_Error.empty()) { m_Finished = true; return true; }
+    if (!m_Error.empty()) { // as Finish puts things back, without writing a half bake
+        RestoreLighting(world);
+        gi.SetOverride(nullptr);
+        gi.SetSolo(nullptr);
+        gi.SetEnabled(true);
+        m_Finished = true;
+        return true;
+    }
 
     auto hasLayer = [&](const VolumeJob& v, const std::string& c) {
         return std::find(v.Layers.begin(), v.Layers.end(), c) != v.Layers.end();
@@ -228,6 +235,7 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
             if (++pi >= (int)m_Volumes[vi].Valid.size()) {
                 pi = 0;
                 do ++vi; while (vi < (int)m_Volumes.size() && !hasLayer(m_Volumes[vi], pass.Circuit));
+                break; // the next volume starts next frame, with the camera moved to it (its lights and shadows)
             }
         }
     }
