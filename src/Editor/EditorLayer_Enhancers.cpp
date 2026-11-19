@@ -49,15 +49,23 @@ using namespace EditorInternal;
 
 namespace {
 void Tip(const char* s) { EditorUI::SetTooltip("%s", s); }
+// Every drag payload that carries one asset (by path): bookmarks, tabs, favourites and pins accept all of them.
+constexpr const char* kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH", "ASSET_PREFAB_PATH",
+                                          "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
+bool IsAssetDrag(const ImGuiPayload& p) {
+    for (const char* type : kAssetPayloads)
+        if (p.IsDataType(type)) return true;
+    return false;
+}
 } // namespace
 
-// Preferences > Editor Enhancers. The palette is the menu every Style picker offers (row colours,
-// folder colours, quick-pick icons); editing it here never touches styles already applied - those
-// store the colour value / icon name itself, not a palette index.
-void EditorLayer::DrawEnhancerPreferences() {
-    EditorSettings& prefs = EditorSettings::Get();
-    Enhancers::Palette& pal = Enhancers::Palette::Get();
+namespace {
+// What the preferences sections need from the editor (its window for file dialogs, the icon search buffer).
+struct PrefsCtx { GLFWwindow* Window; char* IconSearch; size_t IconSearchSize; };
 
+// Preferences > Editor Enhancers > Input.
+void PrefsInput() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Input");
     if (SettingsCheckbox("Hover keys", &prefs.EnhancerHoverKeys)) EditorSettings::Save();
     ImGui::SameLine();
@@ -73,6 +81,11 @@ void EditorLayer::DrawEnhancerPreferences() {
                          "Off: each panel's bookmark button opens them as a list, keeping one header row per panel.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Hierarchy.
+void PrefsHierarchy() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Hierarchy");
     if (SettingsCheckbox("Row styles", &prefs.HierarchyRowStyles)) EditorSettings::Save();
     ImGui::SameLine();
@@ -106,6 +119,11 @@ void EditorLayer::DrawEnhancerPreferences() {
                          "Drop rows on the bar to bookmark them.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Asset Browser folders.
+void PrefsAssetFolders() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Asset Browser folders");
     if (SettingsCheckbox("Folder styles", &prefs.FolderStyles)) EditorSettings::Save();
     ImGui::SameLine();
@@ -138,6 +156,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Folder rules (this project).
+void PrefsFolderRules(PrefsCtx& ctx) {
+    auto& fs = Enhancers::FolderStyles::Get();
     EditorUIPrimitives::SectionHeader("Folder rules (this project)");
     HintText("Style folders by name: the pattern is matched against the folder's name and its full path. "
              "* matches anything, ? one character. The first matching rule wins; a folder's own style beats any rule.");
@@ -166,7 +189,7 @@ void EditorLayer::DrawEnhancerPreferences() {
                     ImGui::OpenPopup("##ruleIcon");
                 if (ImGui::BeginPopup("##ruleIcon")) {
                     std::string icon = r.Style.Icon;
-                    if (Enhancers::IconPickerGrid("##ruleIconGrid", icon, m_FolderStyleIconSearch, sizeof(m_FolderStyleIconSearch), EditorTheme::Px(280.0f))) {
+                    if (Enhancers::IconPickerGrid("##ruleIconGrid", icon, ctx.IconSearch, ctx.IconSearchSize, EditorTheme::Px(280.0f))) {
                         r.Style.Icon = icon;
                         fs.MarkDirty();
                         ImGui::CloseCurrentPopup();
@@ -212,6 +235,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Inspector.
+void PrefsInspector() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Inspector");
     if (SettingsCheckbox("Navigation bar##insp", &prefs.InspectorNavBar)) EditorSettings::Save();
     ImGui::SameLine();
@@ -225,6 +253,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     EditorUI::HelpMarker("A component's actions button appears only while its header is hovered.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Favorites.
+void PrefsFavorites() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Favorites");
     if (SettingsCheckbox("Favorites overlay", &prefs.Favorites)) EditorSettings::Save();
     ImGui::SameLine();
@@ -239,6 +272,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Ruler.
+void PrefsRuler() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Ruler");
     if (SettingsCheckbox("Ruler (hold Shift+R)", &prefs.Ruler)) EditorSettings::Save();
     ImGui::SameLine();
@@ -257,6 +295,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Tabs.
+void PrefsTabs() {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Tabs");
     if (SettingsCheckbox("Inspector tabs", &prefs.InspectorTabs)) EditorSettings::Save();
     ImGui::SameLine();
@@ -270,6 +313,11 @@ void EditorLayer::DrawEnhancerPreferences() {
                          "strip switches tabs, Ctrl+Shift+wheel moves the tab, middle-click closes.");
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Tab & header colours.
+void PrefsTabStyles(PrefsCtx& ctx) {
+    EditorSettings& prefs = EditorSettings::Get();
     EditorUIPrimitives::SectionHeader("Tab & header colours");
     if (SettingsCheckbox("Panel tab colours", &prefs.PanelTabColors)) EditorSettings::Save();
     ImGui::SameLine();
@@ -339,7 +387,7 @@ void EditorLayer::DrawEnhancerPreferences() {
         }
         ImGui::SameLine();
         if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_EXPORT "  Export...##ui")) {
-            const std::string path = FileDialog::SaveFile("Tab & header styles (*.json)\0*.json\0", "json", m_Window);
+            const std::string path = FileDialog::SaveFile("Tab & header styles (*.json)\0*.json\0", "json", ctx.Window);
             if (!path.empty()) {
                 if (ui.ExportTo(path)) Log::Info("Editor Enhancers: tab & header styles exported to " + path);
                 else Log::Warn("Editor Enhancers: could not write " + path);
@@ -347,7 +395,7 @@ void EditorLayer::DrawEnhancerPreferences() {
         }
         ImGui::SameLine();
         if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_IMPORT "  Import...##ui")) {
-            const std::string path = FileDialog::OpenFile("Tab & header styles (*.json)\0*.json\0All Files\0*.*\0", m_Window);
+            const std::string path = FileDialog::OpenFile("Tab & header styles (*.json)\0*.json\0All Files\0*.*\0", ctx.Window);
             if (!path.empty()) {
                 if (ui.ImportFrom(path)) Log::Info("Editor Enhancers: tab & header styles imported from " + path);
                 else Log::Warn("Editor Enhancers: " + path + " is not a tab & header styles file.");
@@ -356,6 +404,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Palette colours.
+void PrefsPaletteColours() {
+    Enhancers::Palette& pal = Enhancers::Palette::Get();
     EditorUIPrimitives::SectionHeader("Palette colours");
     HintText("Offered by every Style menu (Hierarchy rows, folders). Click a swatch to edit it.");
     {
@@ -392,6 +445,11 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+}
+
+// Preferences > Editor Enhancers > Palette icons.
+void PrefsPaletteIcons(PrefsCtx& ctx) {
+    Enhancers::Palette& pal = Enhancers::Palette::Get();
     EditorUIPrimitives::SectionHeader("Palette icons");
     HintText("Quick picks listed first in every icon picker. Right-click one to remove it.");
     {
@@ -443,7 +501,7 @@ void EditorLayer::DrawEnhancerPreferences() {
 
     ImGui::Spacing();
     if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_EXPORT "  Export...")) {
-        const std::string path = FileDialog::SaveFile("Palette (*.json)\0*.json\0", "json", m_Window);
+        const std::string path = FileDialog::SaveFile("Palette (*.json)\0*.json\0", "json", ctx.Window);
         if (!path.empty()) {
             if (pal.ExportTo(path)) Log::Info("Editor Enhancers: palette exported to " + path);
             else Log::Warn("Editor Enhancers: could not write " + path);
@@ -451,7 +509,7 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
     ImGui::SameLine();
     if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_IMPORT "  Import...")) {
-        const std::string path = FileDialog::OpenFile("Palette (*.json)\0*.json\0All Files\0*.*\0", m_Window);
+        const std::string path = FileDialog::OpenFile("Palette (*.json)\0*.json\0All Files\0*.*\0", ctx.Window);
         if (!path.empty()) {
             if (pal.ImportFrom(path)) { Enhancers::Palette::MarkDirty(); Log::Info("Editor Enhancers: palette imported from " + path); }
             else Log::Warn("Editor Enhancers: " + path + " is not a palette file.");
@@ -462,6 +520,26 @@ void EditorLayer::DrawEnhancerPreferences() {
         pal = Enhancers::Palette::Defaults();
         Enhancers::Palette::MarkDirty();
     }
+}
+
+} // namespace
+
+// Preferences > Editor Enhancers. The palette is the menu every Style picker offers (row colours,
+// folder colours, quick-pick icons); editing it here never touches styles already applied - those
+// store the colour value / icon name itself, not a palette index.
+void EditorLayer::DrawEnhancerPreferences() {
+    PrefsCtx ctx{m_Window, m_FolderStyleIconSearch, sizeof(m_FolderStyleIconSearch)};
+    PrefsInput();
+    PrefsHierarchy();
+    PrefsAssetFolders();
+    PrefsFolderRules(ctx);
+    PrefsInspector();
+    PrefsFavorites();
+    PrefsRuler();
+    PrefsTabs();
+    PrefsTabStyles(ctx);
+    PrefsPaletteColours();
+    PrefsPaletteIcons(ctx);
 }
 
 // ============================================================================================
@@ -1184,8 +1262,6 @@ void EditorLayer::DrawInspectorNavBar(World& world, InspectorNavAction& act) {
                 us.MarkDirty();
             }
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads) {
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 const std::string key((const char*)p->Data);
@@ -1344,8 +1420,6 @@ void EditorLayer::DrawInspectorHeaderNav(World& world, InspectorNavAction& act, 
                 us.MarkDirty();
             }
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads)
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 const std::string key((const char*)p->Data);
@@ -1425,34 +1499,26 @@ std::vector<int> FuzzyTop(const char* query, int count, TextFn text, int limit) 
 }
 } // namespace
 
-bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view,
-                               const std::vector<TabStripItem>& items, const char* liveLabel, const char* liveIcon,
-                               const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop,
-                               bool showDropHint, float leftInset, float rightInset) {
-    auto& ts = Enhancers::TabState::Get();
-    ImGuiIO& io = ImGui::GetIO();
-    const int before = strip.Active;
-    const float h = ImGui::GetFrameHeight();
-    // The row is the full width; the strip sits between the insets the caller keeps for its own
-    // buttons (the Inspector's Back / Forward and the bookmark button share this row).
-    const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-    const float rowW = ImGui::GetContentRegionAvail().x;
-    const ImVec2 barMin(rowMin.x + leftInset, rowMin.y);
-    const float barW = std::max(rowW - leftInset - rightInset, h * 2.0f);
-    const float plusW = h;
-    const ImVec2 stripMin = barMin;
-    // The strip's right end without the overflow controls; with them it ends sooner (below).
-    const float stripEndX = barMin.x + std::max(barW - plusW - EditorTheme::Px(4.0f), 1.0f);
-    ImGui::PushID(id);
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine(ImVec2(rowMin.x, barMin.y + h - 0.5f), ImVec2(rowMin.x + rowW, barMin.y + h - 0.5f), EditorTheme::U32(EditorTheme::Hairline));
-
-    // Layout: the live tab (index -1) then the strip's tabs.
-    EditorTheme::PushSmall();
-    const float padX = EditorTheme::Px(8.0f), gap = EditorTheme::Px(5.0f), closeW = EditorTheme::Px(14.0f);
+namespace {
+// DrawTabStrip's pieces. The tab row's geometry for this frame: where each tab sits in the scrolled
+// strip, and whether the overflow controls (list button, and < > when there is room) show.
+struct TabStripLayout {
+    int First = 0, N = 0;              // -1 when the live tab leads; the strip's tab count
+    std::vector<float> Xs, Ws;         // per tab, from First: x inside the strip and width
+    float ContentW = 0.0f, VisibleW = 0.0f, MaxScroll = 0.0f;
+    float ArrowW = 0.0f, ListW = 0.0f;
+    bool Overflow = false, Arrows = false;
+    ImVec2 StripMax;
+};
+// Lays the tabs out (the small font is pushed by the caller: it sizes the labels).
+TabStripLayout LayoutTabStrip(int tabCount, const std::vector<EditorLayer::TabStripItem>& items, const char* liveLabel,
+                              const char* liveIcon, ImVec2 stripMin, ImVec2 barMin, float stripEndX, float h,
+                              float padX, float gap, float closeW) {
+    TabStripLayout lay;
     const int first = liveLabel ? -1 : 0;
-    const int n = (int)strip.Tabs.size();
-    std::vector<float> xs, ws;
+    const int n = tabCount;
+    std::vector<float>& xs = lay.Xs;
+    std::vector<float>& ws = lay.Ws;
     xs.reserve((size_t)(n + 1)); ws.reserve((size_t)(n + 1));
     float x = 0.0f;
     for (int i = first; i < n; ++i) {
@@ -1475,7 +1541,21 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     const ImVec2 stripMax(std::max(stripEndX - controlsW, stripMin.x + 1.0f), barMin.y + h);
     const float visibleW = stripMax.x - stripMin.x;
     const float maxScroll = std::max(0.0f, contentW - visibleW);
+    lay.First = first; lay.N = n; lay.ContentW = contentW; lay.VisibleW = visibleW; lay.MaxScroll = maxScroll;
+    lay.ArrowW = arrowW; lay.ListW = listW; lay.Overflow = overflow; lay.Arrows = arrows; lay.StripMax = stripMax;
+    return lay;
+}
 
+// Keeps the active tab in view and handles the wheel over the strip (scroll; Shift switches tabs;
+// Ctrl+Shift moves the active one), then eases the scroll.
+void ScrollTabStrip(Enhancers::TabStrip& strip, EditorLayer::TabStripView& view, const TabStripLayout& lay, ImVec2 barMin,
+                    float barW, const char* liveLabel, Enhancers::TabState& ts) {
+    ImGuiIO& io = ImGui::GetIO();
+    const int first = lay.First;
+    const std::vector<float>& xs = lay.Xs;
+    const std::vector<float>& ws = lay.Ws;
+    const float visibleW = lay.VisibleW, maxScroll = lay.MaxScroll;
+    const ImVec2 stripMax = lay.StripMax;
     // Keep a newly active tab in view.
     if (strip.Active != view.SeenActive) {
         view.SeenActive = strip.Active;
@@ -1507,6 +1587,133 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     view.ScrollTarget = std::clamp(view.ScrollTarget, 0.0f, maxScroll);
     view.Scroll += (view.ScrollTarget - view.Scroll) * std::min(1.0f, io.DeltaTime * 16.0f);
     if (std::fabs(view.ScrollTarget - view.Scroll) < 0.5f) view.Scroll = view.ScrollTarget;
+}
+
+// The overflow controls after the tabs: < > step through them (held, they repeat) and the list
+// button opens every tab by name.
+void DrawTabOverflow(Enhancers::TabStrip& strip, const std::vector<EditorLayer::TabStripItem>& items, const TabStripLayout& lay,
+                     const char* liveLabel, const char* liveIcon, ImVec2 barMin, float h) {
+    const int first = lay.First, n = lay.N;
+    const float arrowW = lay.ArrowW, listW = lay.ListW;
+    const bool arrows = lay.Arrows;
+    const ImVec2 stripMax = lay.StripMax;
+    const int lo = liveLabel ? -1 : 0;
+    ImGui::SetCursorScreenPos(ImVec2(stripMax.x + EditorTheme::Px(2.0f), barMin.y));
+    if (arrows) {
+        ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true); // held, they keep stepping, like ImGui's
+        if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_LEFT, "Previous tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
+            strip.Active = std::clamp(strip.Active - 1, lo, n - 1);
+        ImGui::SameLine(0.0f, 0.0f);
+        if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_RIGHT, "Next tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
+            strip.Active = std::clamp(strip.Active + 1, lo, n - 1);
+        ImGui::PopItemFlag();
+        ImGui::SameLine(0.0f, 0.0f);
+    }
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_DOWN, "All open tabs", &Tip, false, ImVec2(listW, h)))
+        ImGui::OpenPopup("##tabList");
+    if (ImGui::BeginPopup("##tabList")) {
+        for (int i = first; i < n; ++i) {
+            const EditorLayer::TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
+            const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
+            const std::string text = std::string(icon ? icon : "") + (icon ? "  " : "") + (i < 0 ? liveLabel : (item ? item->Label.c_str() : ""));
+            ImGui::PushID(i);
+            if (ImGui::Selectable(text.c_str(), strip.Active == i)) strip.Active = i;
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// The "+" menu at the bar's right end, and the whole bar as a drop target for anything openable.
+void DrawTabPlusAndDrop(const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint,
+                        ImDrawList* dl, const TabStripLayout& lay, const char* liveLabel, ImVec2 stripMin, ImVec2 barMin,
+                        float barW, float plusW, float h) {
+    const int n = lay.N;
+    const std::vector<float>& xs = lay.Xs;
+    const std::vector<float>& ws = lay.Ws;
+    const ImVec2 stripMax = lay.StripMax;
+    // "+": the caller's menu (starred tabs and a fuzzy search).
+    ImGui::SetCursorScreenPos(ImVec2(barMin.x + barW - plusW, barMin.y));
+    if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "Open a tab (Ctrl+T)", &Tip, false, ImVec2(plusW, h))) ImGui::OpenPopup("##tabPlus");
+    ImGui::SetNextWindowSizeConstraints(ImVec2(EditorTheme::Px(240.0f), 0.0f), ImVec2(EditorTheme::Px(420.0f), EditorTheme::Px(420.0f)));
+    if (ImGui::BeginPopup("##tabPlus")) {
+        plusMenu();
+        ImGui::EndPopup();
+    }
+
+    // Drop anything openable anywhere on the bar. While something openable is dragged the bar
+    // gets a dashed outline; over it, the outline lights and a "Drop to open" pill says what a
+    // release does (ImGui's own target rectangle is hidden).
+    bool dropHover = false;
+    ImGui::PushStyleColor(ImGuiCol_DragDropTarget, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_DragDropTargetBg, ImVec4(0, 0, 0, 0));
+    if (ImGui::BeginDragDropTargetCustom(ImRect(barMin, ImVec2(barMin.x + barW, stripMax.y)), ImGui::GetID("##tabDrop"))) {
+        dropHover = true;
+        acceptDrop();
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::PopStyleColor(2);
+    if (showDropHint) {
+        const ImVec2 dmn(barMin.x + 1.0f, barMin.y + EditorTheme::Px(1.0f)), dmx(barMin.x + barW - 1.0f, stripMax.y - 1.0f);
+        EditorUIPrimitives::DrawDashedRect(dl, dmn, dmx, EditorTheme::U32(dropHover ? EditorTheme::Accent : EditorTheme::Strong));
+        if (dropHover) {
+            EditorTheme::PushSmall();
+            const char* text = ICON_FA_ARROW_DOWN "  Drop to open";
+            const ImVec2 pts = ImGui::CalcTextSize(text);
+            const float ph = pts.y + EditorTheme::Px(6.0f), pw = pts.x + EditorTheme::Px(18.0f);
+            const ImVec2 pmn(std::floor((dmn.x + dmx.x - pw) * 0.5f), std::floor((dmn.y + dmx.y - ph) * 0.5f));
+            const ImVec2 pmx(pmn.x + pw, pmn.y + ph);
+            EditorUIPrimitives::DrawSoftShadow(dl, pmn, pmx, ph * 0.5f, EditorTheme::Px(5.0f), 0.6f);
+            dl->AddRectFilled(pmn, pmx, EditorTheme::U32(EditorTheme::Raised), ph * 0.5f);
+            dl->AddRect(pmn, pmx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.6f)), ph * 0.5f, 0, 1.0f);
+            dl->AddText(ImVec2(pmn.x + EditorTheme::Px(9.0f), pmn.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Text), text);
+            EditorTheme::PopFont();
+        } else if (n == 0) {
+            EditorTheme::PushSmall();
+            const char* hint = "Drop here to open a tab";
+            const ImVec2 hs = ImGui::CalcTextSize(hint);
+            const float hx = stripMin.x + (liveLabel ? xs[0] + ws[0] + EditorTheme::Px(8.0f) : EditorTheme::Px(8.0f));
+            if (hx + hs.x < stripMax.x) dl->AddText(ImVec2(hx, std::floor((stripMin.y + stripMax.y - hs.y) * 0.5f)), EditorTheme::U32(EditorTheme::Dim), hint);
+            EditorTheme::PopFont();
+        }
+    }
+}
+} // namespace
+
+bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view,
+                               const std::vector<TabStripItem>& items, const char* liveLabel, const char* liveIcon,
+                               const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop,
+                               bool showDropHint, float leftInset, float rightInset) {
+    auto& ts = Enhancers::TabState::Get();
+    ImGuiIO& io = ImGui::GetIO();
+    const int before = strip.Active;
+    const float h = ImGui::GetFrameHeight();
+    // The row is the full width; the strip sits between the insets the caller keeps for its own
+    // buttons (the Inspector's Back / Forward and the bookmark button share this row).
+    const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+    const float rowW = ImGui::GetContentRegionAvail().x;
+    const ImVec2 barMin(rowMin.x + leftInset, rowMin.y);
+    const float barW = std::max(rowW - leftInset - rightInset, h * 2.0f);
+    const float plusW = h;
+    const ImVec2 stripMin = barMin;
+    // The strip's right end without the overflow controls; with them it ends sooner (below).
+    const float stripEndX = barMin.x + std::max(barW - plusW - EditorTheme::Px(4.0f), 1.0f);
+    ImGui::PushID(id);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddLine(ImVec2(rowMin.x, barMin.y + h - 0.5f), ImVec2(rowMin.x + rowW, barMin.y + h - 0.5f), EditorTheme::U32(EditorTheme::Hairline));
+
+    // Layout: the live tab (index -1) then the strip's tabs.
+    EditorTheme::PushSmall();
+    const float padX = EditorTheme::Px(8.0f), gap = EditorTheme::Px(5.0f), closeW = EditorTheme::Px(14.0f);
+    const TabStripLayout lay = LayoutTabStrip((int)strip.Tabs.size(), items, liveLabel, liveIcon, stripMin, barMin, stripEndX, h,
+                                              padX, gap, closeW);
+    const int first = lay.First, n = lay.N;
+    const std::vector<float>& xs = lay.Xs;
+    const std::vector<float>& ws = lay.Ws;
+    const float maxScroll = lay.MaxScroll;
+    const ImVec2 stripMax = lay.StripMax;
+
+    ScrollTabStrip(strip, view, lay, barMin, barW, liveLabel, ts);
 
     // Tabs. Inactive tabs draw on channel 0, the overflow fades on 1, the active tab and a dragged
     // tab's ghost on 2: a fade never dims the tab you are on, and the ghost floats over the rest.
@@ -1651,79 +1858,9 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     dl->ChannelsMerge();
     ImGui::PopClipRect();
 
-    if (overflow) {
-        const int lo = liveLabel ? -1 : 0;
-        ImGui::SetCursorScreenPos(ImVec2(stripMax.x + EditorTheme::Px(2.0f), barMin.y));
-        if (arrows) {
-            ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true); // held, they keep stepping, like ImGui's
-            if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_LEFT, "Previous tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
-                strip.Active = std::clamp(strip.Active - 1, lo, n - 1);
-            ImGui::SameLine(0.0f, 0.0f);
-            if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_RIGHT, "Next tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
-                strip.Active = std::clamp(strip.Active + 1, lo, n - 1);
-            ImGui::PopItemFlag();
-            ImGui::SameLine(0.0f, 0.0f);
-        }
-        if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_DOWN, "All open tabs", &Tip, false, ImVec2(listW, h)))
-            ImGui::OpenPopup("##tabList");
-        if (ImGui::BeginPopup("##tabList")) {
-            for (int i = first; i < n; ++i) {
-                const TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
-                const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
-                const std::string text = std::string(icon ? icon : "") + (icon ? "  " : "") + (i < 0 ? liveLabel : (item ? item->Label.c_str() : ""));
-                ImGui::PushID(i);
-                if (ImGui::Selectable(text.c_str(), strip.Active == i)) strip.Active = i;
-                ImGui::PopID();
-            }
-            ImGui::EndPopup();
-        }
-    }
+    if (lay.Overflow) DrawTabOverflow(strip, items, lay, liveLabel, liveIcon, barMin, h);
 
-    // "+": the caller's menu (starred tabs and a fuzzy search).
-    ImGui::SetCursorScreenPos(ImVec2(barMin.x + barW - plusW, barMin.y));
-    if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "Open a tab (Ctrl+T)", &Tip, false, ImVec2(plusW, h))) ImGui::OpenPopup("##tabPlus");
-    ImGui::SetNextWindowSizeConstraints(ImVec2(EditorTheme::Px(240.0f), 0.0f), ImVec2(EditorTheme::Px(420.0f), EditorTheme::Px(420.0f)));
-    if (ImGui::BeginPopup("##tabPlus")) {
-        plusMenu();
-        ImGui::EndPopup();
-    }
-
-    // Drop anything openable anywhere on the bar. While something openable is dragged the bar
-    // gets a dashed outline; over it, the outline lights and a "Drop to open" pill says what a
-    // release does (ImGui's own target rectangle is hidden).
-    bool dropHover = false;
-    ImGui::PushStyleColor(ImGuiCol_DragDropTarget, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_DragDropTargetBg, ImVec4(0, 0, 0, 0));
-    if (ImGui::BeginDragDropTargetCustom(ImRect(barMin, ImVec2(barMin.x + barW, stripMax.y)), ImGui::GetID("##tabDrop"))) {
-        dropHover = true;
-        acceptDrop();
-        ImGui::EndDragDropTarget();
-    }
-    ImGui::PopStyleColor(2);
-    if (showDropHint) {
-        const ImVec2 dmn(barMin.x + 1.0f, barMin.y + EditorTheme::Px(1.0f)), dmx(barMin.x + barW - 1.0f, stripMax.y - 1.0f);
-        EditorUIPrimitives::DrawDashedRect(dl, dmn, dmx, EditorTheme::U32(dropHover ? EditorTheme::Accent : EditorTheme::Strong));
-        if (dropHover) {
-            EditorTheme::PushSmall();
-            const char* text = ICON_FA_ARROW_DOWN "  Drop to open";
-            const ImVec2 pts = ImGui::CalcTextSize(text);
-            const float ph = pts.y + EditorTheme::Px(6.0f), pw = pts.x + EditorTheme::Px(18.0f);
-            const ImVec2 pmn(std::floor((dmn.x + dmx.x - pw) * 0.5f), std::floor((dmn.y + dmx.y - ph) * 0.5f));
-            const ImVec2 pmx(pmn.x + pw, pmn.y + ph);
-            EditorUIPrimitives::DrawSoftShadow(dl, pmn, pmx, ph * 0.5f, EditorTheme::Px(5.0f), 0.6f);
-            dl->AddRectFilled(pmn, pmx, EditorTheme::U32(EditorTheme::Raised), ph * 0.5f);
-            dl->AddRect(pmn, pmx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.6f)), ph * 0.5f, 0, 1.0f);
-            dl->AddText(ImVec2(pmn.x + EditorTheme::Px(9.0f), pmn.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Text), text);
-            EditorTheme::PopFont();
-        } else if (n == 0) {
-            EditorTheme::PushSmall();
-            const char* hint = "Drop here to open a tab";
-            const ImVec2 hs = ImGui::CalcTextSize(hint);
-            const float hx = stripMin.x + (liveLabel ? xs[0] + ws[0] + EditorTheme::Px(8.0f) : EditorTheme::Px(8.0f));
-            if (hx + hs.x < stripMax.x) dl->AddText(ImVec2(hx, std::floor((stripMin.y + stripMax.y - hs.y) * 0.5f)), EditorTheme::U32(EditorTheme::Dim), hint);
-            EditorTheme::PopFont();
-        }
-    }
+    DrawTabPlusAndDrop(plusMenu, acceptDrop, showDropHint, dl, lay, liveLabel, stripMin, barMin, barW, plusW, h);
     ImGui::SetCursorScreenPos(ImVec2(rowMin.x, stripMax.y + EditorTheme::Px(2.0f)));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
     ImGui::PopID();
@@ -1790,9 +1927,7 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
 
     const ImGuiPayload* drag = ImGui::GetDragDropPayload();
     const bool dragging = drag && (drag->IsDataType("HIERARCHY_ENTITY") || drag->IsDataType("INSPECTOR_COMPONENT") ||
-                                   drag->IsDataType("ASSET_MODEL_PATH") || drag->IsDataType("ASSET_TEXTURE_PATH") ||
-                                   drag->IsDataType("ASSET_MATERIAL_PATH") || drag->IsDataType("ASSET_PREFAB_PATH") ||
-                                   drag->IsDataType("ASSET_SOUND_PATH") || drag->IsDataType("ASSET_FILE_PATH") || drag->IsDataType("ASSET_DECAL_PATH"));
+                                   IsAssetDrag(*drag));
     if (strip.Tabs.empty() && !dragging) return false; // nothing to show: no strip until there is a tab
 
     std::vector<TabStripItem> items;
@@ -1882,8 +2017,6 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
             strip.Open(Enhancers::EditorRef::MakeComponent(sceneKey, c->Order, c->Component, nm ? nm->Name : std::string()));
             ts.MarkDirty();
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads)
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 const std::string key((const char*)p->Data);
@@ -1915,10 +2048,7 @@ bool EditorLayer::DrawAssetTabStrip(AssetLibrary& assets, float rightInset, bool
     if (Shortcuts::Triggered("project.tabs.reopen") && strip.Reopen() >= 0) ts.MarkDirty();
 
     const ImGuiPayload* drag = ImGui::GetDragDropPayload();
-    const bool dragging = drag && (drag->IsDataType("ASSET_FOLDER_PATH") || drag->IsDataType("ASSET_MODEL_PATH") ||
-                                   drag->IsDataType("ASSET_TEXTURE_PATH") || drag->IsDataType("ASSET_MATERIAL_PATH") ||
-                                   drag->IsDataType("ASSET_PREFAB_PATH") || drag->IsDataType("ASSET_SOUND_PATH") ||
-                                   drag->IsDataType("ASSET_FILE_PATH") || drag->IsDataType("ASSET_DECAL_PATH"));
+    const bool dragging = drag && (drag->IsDataType("ASSET_FOLDER_PATH") || IsAssetDrag(*drag));
     if (strip.Tabs.empty() && !dragging && !alwaysShow) return false;
 
     // The active tab follows navigation: it is the browser's current place.
@@ -1973,8 +2103,6 @@ bool EditorLayer::DrawAssetTabStrip(AssetLibrary& assets, float rightInset, bool
             strip.Open(folderRef((const char*)p->Data), true, true);
             ts.MarkDirty();
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads)
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 // A file opens its folder in a new tab, with the file selected.
@@ -2091,9 +2219,11 @@ void EditorLayer::ActivateFavorite(World& world, AssetLibrary& assets, const Enh
     m_FavWaitRelease = true;
 }
 
-void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
+// The overlay's state for this frame, before anything is drawn: a favourite waiting for its scene,
+// the lock / add-selection shortcuts, where it sits (over the Asset Browser, or centred) and the
+// hold-to-show timing with its fade. False = nothing to draw this frame.
+bool EditorLayer::UpdateFavoritesVisibility(World& world, ImVec2& areaMin, ImVec2& areaMax) {
     const EditorSettings& es = EditorSettings::Get();
-    auto& us = Enhancers::EnhancerUserState::Get();
     ImGuiIO& io = ImGui::GetIO();
     const double now = ImGui::GetTime();
     const bool wasVisible = m_FavVisible;
@@ -2105,7 +2235,7 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
         if (e != entt::null) { SelectItem(e, false); m_HierarchyScrollToEntity = e; }
         m_FavPendingScene.clear();
     }
-    if (!es.Favorites) { m_FavLocked = false; m_FavAlpha = 0.0f; return; }
+    if (!es.Favorites) { m_FavLocked = false; m_FavAlpha = 0.0f; return false; }
 
     // Lock / add-selection shortcuts (Triggered while hidden; checked directly while shown,
     // since every editor shortcut is suppressed then).
@@ -2136,8 +2266,20 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
     // Opens over 140 ms, closes over 90 ms (eased where it is drawn).
     m_FavAlpha = std::clamp(m_FavAlpha + (want ? io.DeltaTime / 0.14f : -io.DeltaTime / 0.09f), 0.0f, 1.0f);
     if (!want) m_FavRenaming = -1; // a rename left open must not grab the keys when it reopens
-    if (m_FavAlpha <= 0.01f) return;
+    if (m_FavAlpha <= 0.01f) return false;
     m_FavVisible = true;
+    areaMin = area.Min;
+    areaMax = area.Max;
+    return true;
+}
+
+void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
+    auto& us = Enhancers::EnhancerUserState::Get();
+    ImGuiIO& io = ImGui::GetIO();
+    const double now = ImGui::GetTime();
+    ImVec2 areaMin, areaMax;
+    if (!UpdateFavoritesVisibility(world, areaMin, areaMax)) return;
+    const ImRect area(areaMin, areaMax);
 
     Enhancers::EnsureFavoritePage(us.FavoritePages);
     const int pageCount = (int)us.FavoritePages.size();
@@ -2524,8 +2666,6 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
                 const std::string path((const char*)p->Data);
                 added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeFolder(path, FolderLeaf(path)));
             }
-            static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                         "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
             for (const char* type : kAssetPayloads)
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                     const std::string key((const char*)p->Data);
