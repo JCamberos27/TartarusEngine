@@ -32,6 +32,7 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <unordered_map>
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
@@ -473,10 +474,33 @@ std::string EditorLayer::CurrentSceneKey() const {
     return g.IsValid() ? g.ToString() : std::filesystem::path(m_CurrentScenePath).lexically_normal().generic_string();
 }
 
+// Every bookmark chip, tab and pin resolves its entity each frame: one order -> entity map, rebuilt when the
+// registry or its entity count changes, when a hit turns out stale (a renumber), or once a second as a backstop,
+// instead of a walk over every entity per lookup.
 entt::entity EditorLayer::FindEntityByOrder(const World& world, int order) const {
     if (order < 0) return entt::null;
-    for (auto [e, o] : world.Registry.view<const OrderComponent>().each())
-        if (o.Value == order) return e;
+    static std::unordered_map<int, entt::entity> s_ByOrder;
+    static const void* s_Registry = nullptr;
+    static int s_Frame = -1;
+    static size_t s_Count = 0;
+    const auto* orders = world.Registry.storage<OrderComponent>(); // const registry: null until any entity has one
+    const size_t count = orders ? orders->size() : 0;
+    const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
+    if (frame < 0 || frame - s_Frame >= 60 || frame < s_Frame || s_Registry != &world.Registry || s_Count != count) {
+        s_ByOrder.clear();
+        for (auto [e, o] : world.Registry.view<const OrderComponent>().each()) s_ByOrder.emplace(o.Value, e);
+        s_Frame = frame;
+        s_Registry = &world.Registry;
+        s_Count = count;
+    }
+    const auto it = s_ByOrder.find(order);
+    if (it == s_ByOrder.end()) return entt::null;
+    // An entity renumbered since the map was built: check before trusting it, and rebuild on the next call.
+    const OrderComponent* o = world.Registry.valid(it->second) ? world.Registry.try_get<OrderComponent>(it->second) : nullptr;
+    if (o && o->Value == order) return it->second;
+    s_Frame = -1000;
+    for (auto [e, oc] : world.Registry.view<const OrderComponent>().each())
+        if (oc.Value == order) return e;
     return entt::null;
 }
 
