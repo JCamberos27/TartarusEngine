@@ -1221,6 +1221,8 @@ private:
     void RunDecalRadialItem(int i);
     // Editor Enhancers / vRuler (EditorLayer_Gizmos.cpp): hold Shift+R over the Scene view.
     bool ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const;
+    // A world point in screen pixels over the Scene viewport through `viewProj`; false at/behind the eye.
+    bool WorldToViewport(const glm::mat4& viewProj, const glm::vec3& p, ImVec2& out) const;
     bool RulerHeldNow() const;
     void DrawRuler(World& world, Camera& cam);
     bool m_RulerHeld = false;                   // held over the viewport this frame (main.cpp: no wheel zoom)
