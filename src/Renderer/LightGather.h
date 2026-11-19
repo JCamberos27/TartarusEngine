@@ -10,9 +10,9 @@
 #include <glm/glm.hpp>
 
 #include "ShadowLimits.h"
+#include "SkyAtmosphere.h" // SkyLighting (FrameLights holds one)
 
 class World;
-class SkyAtmosphere;
 class Camera;
 class LightBuffer;
 
