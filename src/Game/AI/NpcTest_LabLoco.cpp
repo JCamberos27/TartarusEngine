@@ -122,12 +122,13 @@ void NpcTest::LabLocoDrive(Player& player, FirstPersonPresentation& weapon, floa
         const BodyDebug::Snapshot& bd = BodyDebug::Info();
         const glm::vec3 f = player.Cam.Front(), r = glm::normalize(glm::cross(f, glm::vec3(0, 1, 0))), u = glm::cross(r, f);
         const glm::vec3 eye(glm::dot(bd.EyeApplied, r), glm::dot(bd.EyeApplied, u), glm::dot(bd.EyeApplied, f));
-        std::fprintf(g_Trace, "%d,%.4f,%d,%.3f,%d,%.4f,%.4f,%.4f,%.3f,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s\n", m_LabFrame++,
+        std::fprintf(g_Trace, "%d,%.4f,%d,%.3f,%d,%.4f,%.4f,%.4f,%.3f,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s\n", m_LabFrame,
                      m_LabClock, leg, glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)), (int)weapon.HaveGaitPhase(),
                      weapon.GaitPhaseValue(), player.Cam.Position.y, pose.CameraOffset.y, pose.CameraRoll, pose.Position.x, pose.Position.y,
                      pose.Position.z, pose.Rotation.x, pose.Rotation.y, pose.Rotation.z, local.x, local.y, local.z, eye.x, eye.y, eye.z,
                      bd.HandGap[0], bd.HandGap[1], weapon.CurrentState().c_str());
     }
+    ++m_LabFrame;
 
     // The Scene view: off the pair's front quarter (the player and the dummy 3 m to its side both in shot, neither hiding the
     // other), following them down the lane at chest height.
@@ -168,6 +169,6 @@ void NpcTest::LabLoco(World& world, NpcDirector& npcs, const Player& player, flo
     }
     if (m_LabClock >= LabLocoSeconds() && !m_Done) {
         m_Done = true;
-        Check(m_LabFrame > 100, "labloco: the run went through (" + std::to_string(m_LabFrame) + " frames traced)");
+        Check(m_LabFrame > 100, "labloco: the run went through (" + std::to_string(m_LabFrame) + " frames)");
     }
 }

@@ -38,12 +38,6 @@
 #include <string>
 
 namespace {
-// --- values read from the body, the ragdoll and the dummy's animator ---
-bool BodyEyeOf(const BodyDebug::Snapshot& s, glm::vec3& out) { out = s.BodyEye; return true; }
-bool LegReachOf(const BodyDebug::Snapshot& s, float& l, float& r) { l = s.LegReach[0]; r = s.LegReach[1]; return true; }
-// At Ragdoll::Start: the most any part's inherited velocity is off the body's.
-bool SpreadOf(const NpcRagdoll& r, float& out) { out = r.StartLimbSpeed(); return true; }
-
 // --- the player's legs (Drive) ---
 enum class TbPart : unsigned char { A, B, C, D, M, S, Watch };
 struct TbLeg {
@@ -481,7 +475,6 @@ struct NpcTest::TestbedRun {
     int JumpSlot[kTbMaxLegs] = {};
     float FlatCamMax = 0.0f; // A walk's highest camera off the capsule's eye (steady)
     bool HaveFlat = false;
-    bool ResidMissing = false, ReachMissing = false;
     // B
     float LeanBase = 0.0f;
     int LeanBaseN = 0;
@@ -519,7 +512,7 @@ struct NpcTest::TestbedRun {
     int RespawnedIndex = -1;
     glm::vec3 FeetAt[2]{};
     float IdleDrift = 0.0f, FlinchDrift = 0.0f;
-    bool SpreadMissing = false;
+    bool FlinchFeetLost = false; // a foot couldn't be read during the flinch
     int Skipped = 0;
 };
 
@@ -639,11 +632,9 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     const glm::vec3 flatRight = glm::normalize(glm::cross(flatFront, glm::vec3(0.0f, 1.0f, 0.0f)));
     const float camRelY = cam.y - capsuleEye.y;
     const float camSide = glm::dot(cam - capsuleEye, flatRight);
-    glm::vec3 bodyEye(0.0f);
-    const bool haveBodyEye = BodyEyeOf(bd, bodyEye);
-    const float residY = haveBodyEye ? cam.y - bodyEye.y : 0.0f;
-    float reachL = 0.0f, reachR = 0.0f;
-    const bool haveReach = LegReachOf(bd, reachL, reachR);
+    const glm::vec3 bodyEye = bd.BodyEye;
+    const float residY = cam.y - bodyEye.y;
+    const float reachL = bd.LegReach[0], reachR = bd.LegReach[1];
     const FirstPersonPresentation* weapon = R.Weapon;
     const bool gaitOk = weapon && weapon->HaveGaitPhase();
     const float gait = weapon ? weapon->GaitPhaseValue() : 0.0f;
@@ -674,9 +665,11 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             s.CamMax = std::max(s.CamMax, camRelY);
             s.ProcMin = std::min(s.ProcMin, procY);
             s.ProcMax = std::max(s.ProcMax, procY);
-            if (haveBodyEye) { s.ResidMin = std::min(s.ResidMin, residY); s.ResidMax = std::max(s.ResidMax, residY); ++s.ResidFrames; }
+            s.ResidMin = std::min(s.ResidMin, residY);
+            s.ResidMax = std::max(s.ResidMax, residY);
+            ++s.ResidFrames;
             s.HeadRide = std::max(s.HeadRide, BodyDebug::Info().HeadRide);
-            if (haveBodyEye) {
+            {
                 const glm::vec3 kick = cam - bodyEye, eye = bodyEye - capsuleEye;
                 if (s.JitterSeen >= 2) {
                     const float k2 = glm::length(kick - 2.0f * s.KickPrev[0] + s.KickPrev[1]);
@@ -713,7 +706,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                 s.TwinGapMax = std::max({s.TwinGapMax, bd.TwinHandGap[0], bd.TwinHandGap[1]});
             }
         }
-        if (haveReach && (L.Of == TbPart::C || L.Of == TbPart::A) && L.Moving()) {
+        if ((L.Of == TbPart::C || L.Of == TbPart::A) && L.Moving()) {
             s.HaveReach = true;
             s.LegReachMax = std::max({s.LegReachMax, reachL, reachR});
             s.ClampPullMax = std::max({s.ClampPullMax, bd.ClampPull[0], bd.ClampPull[1]});
@@ -764,16 +757,15 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                 R.LastWeaponState = weaponState;
             }
         }
-        if (!haveBodyEye) R.ResidMissing = true;
-        if (!haveReach) R.ReachMissing = true;
     }
 
     // --- the player's checks, once its legs are through ---
     if (L.Of == TbPart::Watch && !R.PlayerChecked) {
         R.PlayerChecked = true;
-        auto legIndex = [](const char* name) {
+        auto legIndex = [this](const char* name) {
             for (int i = 0; i < kTbCount; ++i)
                 if (std::string(kTb[i].Name) == name) return i;
+            Check(false, std::string("testbed: a check names leg '") + name + "', which the course doesn't have");
             return 0;
         };
         auto skip = [&](const std::string& what, const char* accessor) {
@@ -1012,14 +1004,8 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     case 4: { // F: the ragdoll's first velocities
         Npc* k = find(R.Killed);
         if (!k || !k->Ragdoll) { if (inStage > 1.0f) { Check(false, "F setup: a ragdoll took the body"); next(5); } break; }
-        float spread = 0.0f;
-        if (SpreadOf(*k->Ragdoll, spread))
-            Check(spread < 0.3f, "F: the ragdoll's parts start with the idle body's velocity (worst part " + std::to_string(spread) + " m/s off, < 0.3)");
-        else {
-            ++R.Skipped;
-            R.SpreadMissing = true;
-            std::printf("[NpcTest] SKIP F: the ragdoll's parts start with the idle body's velocity (< 0.3 m/s) (needs NpcRagdoll::InheritedVelocitySpread)\n");
-        }
+        const float spread = k->Ragdoll->StartLimbSpeed();
+        Check(spread < 0.3f, "F: the ragdoll's parts start with the idle body's velocity (worst part " + std::to_string(spread) + " m/s off, < 0.3)");
         next(5);
         break;
     }
@@ -1051,12 +1037,14 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     case 6: { // F: the flinch, the planted feet held
         Npc* s = find(R.Respawned);
         if (!s || s->Dead) { next(7); break; }
-        R.FlinchDrift = std::max(R.FlinchDrift, feetDrift(*s));
+        const float drift = feetDrift(*s);
+        if (drift < 0.0f) R.FlinchFeetLost = true;
+        R.FlinchDrift = std::max(R.FlinchDrift, drift);
         if (inStage >= 1.0f) {
             std::printf("[Testbed] F: planted feet drift %.1f mm through the flinch (%.1f mm over a second idling before it)\n", R.FlinchDrift * 1000.0f,
                         R.IdleDrift * 1000.0f);
-            Check(R.FlinchDrift < 0.01f, "F: the thigh shot's flinch leaves the planted feet where they are (" + std::to_string(R.FlinchDrift * 1000.0f) +
-                                             " mm, < 10 mm)");
+            Check(!R.FlinchFeetLost && R.FlinchDrift < 0.01f, "F: the thigh shot's flinch leaves the planted feet where they are (" +
+                                                                 std::to_string(R.FlinchDrift * 1000.0f) + " mm, < 10 mm)");
             next(7);
         }
         break;
@@ -1097,7 +1085,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
         }
         std::fprintf(R.Trace, "%d,%.4f,%d,%.4f,%.3f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%.5f,%.5f,%.5f,%.5f,%.3f,%d,%.4f,%.4f,%s,%d,%.2f,%.3f,%s,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,", R.Frame++,
                      now, leg, R.Into, glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)), (int)gaitOk, gait, cam.x, cam.y, cam.z, foot[1], camRelY,
-                     camSide, (int)haveBodyEye, residY, procY, bd.HandGap[0], bd.HandGap[1], bd.ArmsWeight, (int)haveReach, reachL, reachR, weaponState.c_str(),
+                     camSide, 1, residY, procY, bd.HandGap[0], bd.HandGap[1], bd.ArmsWeight, 1, reachL, reachR, weaponState.c_str(),
                      R.Stage, npcYaw, npcSpeed, npcState.c_str(), bd.PieceHandGap, bd.TwinHandGap[0], bd.TwinHandGap[1], bodyEye.x, bodyEye.y,
                      bodyEye.z);
         // The foot IK behind the leg checks: each foot's ground off the body's base, the body's off the capsule's, the lock
@@ -1404,9 +1392,10 @@ void NpcTest::MmStressChecks() {
 void NpcTest::MmPlayerChecks() {
     TestbedRun& R = *m_Tb;
     const MmPlayerDebug::Snapshot& mm = MmPlayerDebug::Info();
-    auto legIndex = [](const char* name) {
+    auto legIndex = [this](const char* name) {
         for (int i = 0; i < kTbCount; ++i)
             if (std::string(kTb[i].Name) == name) return i;
+        Check(false, std::string("mmplayer: a check names leg '") + name + "', which the course doesn't have");
         return 0;
     };
     auto median = [](std::vector<float> v) {

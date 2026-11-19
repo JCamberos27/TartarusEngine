@@ -145,7 +145,6 @@ void NpcTest::MmViewValidate() {
     MmViewRun& r = *m_Mm;
     const MotionClipStream& s = r.Stream;
     const MotionFeatureSet& db = r.Db;
-    constexpr float kDeg = 180.0f / MotionMath::kPi;
     std::printf("[MmView] %-46s %6s %6s %6s %7s %6s %6s %6s %7s  %s\n", "clip", "frames", "step", "fac95", "jitter", "wobble",
                 "slideL", "slideR", "featCm", "gait i/w/j/r crouch strafe air");
     float worstStep = 0.0f, worstFacing = 0.0f, worstJitter = 0.0f, worstSlide = 0.0f, worstFeat = 0.0f, worstSlideGap = 0.0f;
@@ -240,7 +239,6 @@ void NpcTest::MmViewValidate() {
     std::snprintf(b, sizeof b, "the .mmdb's foot features match the stream: worst %.3f cm (%s), under 1", worstFeat, worstFeatAt.c_str());
     Check(worstFeat < 1.0f, b);
     Check(labelFails == 0, "every take's labels fit it (" + std::to_string(labelFails) + " don't)");
-    (void)kDeg;
 }
 
 void NpcTest::MmView(World& world) {
@@ -371,7 +369,9 @@ void NpcTest::MmView(World& world) {
     }
     ++r.Frames;
     bool finite = true;
-    for (const LocalTRS& l : r.Pose) finite = finite && std::isfinite(l.R.w) && std::isfinite(l.T.x) && std::isfinite(l.T.y);
+    for (const LocalTRS& l : r.Pose)
+        finite = finite && std::isfinite(l.R.w) && std::isfinite(l.R.x) && std::isfinite(l.R.y) && std::isfinite(l.R.z) && std::isfinite(l.T.x) &&
+                 std::isfinite(l.T.y) && std::isfinite(l.T.z);
     r.Finite += finite ? 1 : 0;
 
     // The lines: the root's path 2 s back (grey) and 1 s ahead (yellow), its facing (green), the hips' (red), the ankles.
