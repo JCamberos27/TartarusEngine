@@ -335,6 +335,7 @@ void TestEnhancerNonSerializedField() {
     CHECK(vol != nullptr);
     if (!vol) return;
     vol->NonSerialized = true;
+    struct Restore { ReflectField* f; ~Restore() { f->NonSerialized = false; } } restore{vol}; // even if a save throws
     const std::string preset = SceneSerializer::ComponentToPresetJson(w, e, audioName);
     World b;
     const bool loaded = SceneSerializer::LoadFromString(b, assets, SceneSerializer::SaveToString(w, assets));
@@ -413,6 +414,7 @@ void TestEnhancerTabStateRoundTrip() {
     CHECK(RefFromJson(RefToJson(ent), back) && back == ent && back.Sub.empty());
 
     TabState& ts = TabState::Get();
+    const nlohmann::json savedTabs = ts.ToJson(); // shared singleton - restore after
     ts.Reset();
     ts.Inspector.Open(ent);
     ts.Inspector.Open(comp);
@@ -435,7 +437,7 @@ void TestEnhancerTabStateRoundTrip() {
     bad["inspector"]["active"] = 42;
     ts.FromJson(bad);
     CHECK(ts.Inspector.Active == 0);
-    ts.Reset();
+    ts.FromJson(savedTabs);
 }
 
 // --- vFavorites (Phase 5) -------------------------------------------------------------------

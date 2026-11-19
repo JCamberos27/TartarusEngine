@@ -39,11 +39,18 @@ struct HeadlessImGui {
         unsigned char* pixels = nullptr;
         int w = 0, h = 0;
         io.Fonts->GetTexDataAsRGBA32(&pixels, &w, &h);
+        ResetMotion();
+    }
+    // The motion context and the theme's hooks are process-wide: every test starts from, and leaves,
+    // the defaults (all categories on, motion not reduced, no hooks), even one that bails out early.
+    static void ResetMotion() {
         Glass::Motion().Reset();
         Glass::Motion().SetReduceMotion(false);
+        for (int c = 0; c < (int)Glass::MotionCategory::Count; ++c) Glass::Motion().SetCategoryEnabled((Glass::MotionCategory)c, true);
+        EditorTheme::SetMotionHooks(nullptr);
     }
     ~HeadlessImGui() {
-        Glass::Motion().Reset();
+        ResetMotion();
         ImGui::DestroyContext(context);
         ImGui::SetCurrentContext(previous);
     }
@@ -887,6 +894,29 @@ void TestGlassV2TokensAndStartup() {
     CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
 }
 
+// The startup wave: the centre panel starts at once and a corner one last, inside StartupSeconds; each
+// arrives from a smaller, faded pose drawn nearer the centre and lands exactly on identity.
+void TestGlassStartupPose() {
+    HeadlessImGui gui; // Scale() reads the ImGui context
+    const ImVec2 dMin(0.0f, 0.0f), dMax(1600.0f, 900.0f);
+    const ImRect centre(ImVec2(700.0f, 400.0f), ImVec2(900.0f, 500.0f));
+    const ImRect right(ImVec2(1300.0f, 400.0f), ImVec2(1500.0f, 500.0f));
+    const ImRect corner(ImVec2(1500.0f, 800.0f), ImVec2(1600.0f, 900.0f));
+    CHECK(Glass::StartupDelay(centre, dMin, dMax) == 0.0f);
+    const float dRight = Glass::StartupDelay(right, dMin, dMax), dCorner = Glass::StartupDelay(corner, dMin, dMax);
+    CHECK(dRight > 0.0f && dCorner > dRight);
+    CHECK(dCorner + Glass::StartupPanelMs * 0.001f <= Glass::StartupSeconds + 1e-3f); // the wave ends on time
+    CHECK(Glass::StartupLocal(dRight - 0.01f, dRight) == 0.0f && Glass::StartupLocal(dRight + 10.0f, dRight) == 1.0f);
+    const Glass::SurfacePose start = Glass::StartupPose(right, dMin, dMax, 0.0f);
+    CHECK(Near(start.scale, Glass::StartupFromScale, 1e-4f) && start.alpha < 0.01f);
+    CHECK(start.offset.x < 0.0f && Near(start.offset.y, 0.0f, 1e-4f)); // right of centre: starts nearer it
+    CHECK(Glass::StartupPose(centre, dMin, dMax, 0.0f).offset.x == 0.0f); // the middle one only grows
+    const Glass::SurfacePose mid = Glass::StartupPose(right, dMin, dMax, 0.5f);
+    CHECK(mid.scale > start.scale && mid.scale < 1.0f && mid.alpha > start.alpha && mid.offset.x > start.offset.x);
+    CHECK(Glass::StartupPose(right, dMin, dMax, 1.0f).Identity());
+    CHECK(Glass::StartupPose(right, dMin, dMax, 0.999f).alpha == 1.0f); // faded in well before it lands
+}
+
 void TestRadialLayout() {
     // The menu centre and every block land on whole pixels.
     const ImVec2 snapped = RadialLayout::Snap(ImVec2(412.37f, 300.62f));
@@ -948,5 +978,6 @@ void RegisterGlassTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Glass layout: drawing under a table after a clipped loop", TestGlassTableBackgroundAfterClipper);
     tests.emplace_back("Glass layout: moving buttons stay clickable", TestGlassMotionButtonPolicy);
     tests.emplace_back("Glass motion: springs, curves and stagger", TestGlassSprings);
+    tests.emplace_back("Glass startup: the wave from the centre, each panel lands on identity", TestGlassStartupPose);
     tests.emplace_back("Radial menu: snapped centres, labels inside the wedge, icons only past 8 slots", TestRadialLayout);
 }
