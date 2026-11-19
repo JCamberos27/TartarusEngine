@@ -262,6 +262,12 @@ void TestSoundSetJsonRoundTrip() {
     CHECK(back.PitchMin == s.PitchMin && back.PitchMax == s.PitchMax && back.Bus == s.Bus);
     CHECK(back.MinDistance == s.MinDistance && back.MaxDistance == s.MaxDistance && back.Rolloff == s.Rolloff);
     CHECK(!back.NoImmediateRepeat && back.MaxVoices == 5 && back.StealFadeTime == s.StealFadeTime && back.Loop);
+    // Every rolloff survives the trip (Exponential used to come back Logarithmic).
+    for (AudioEngine::Rolloff r : {AudioEngine::Rolloff::Linear, AudioEngine::Rolloff::Logarithmic, AudioEngine::Rolloff::Exponential}) {
+        SoundSet x = s;
+        x.Rolloff = r;
+        CHECK(SoundSet::FromJson("snd.test.x", x.ToJson()).Rolloff == r);
+    }
     // A partial json only overrides what it names.
     const SoundSet part = SoundSet::FromJson("k", R"({"volume":0.25})", s);
     CHECK(part.Volume == 0.25f && part.Files == s.Files && part.MaxVoices == 5);
