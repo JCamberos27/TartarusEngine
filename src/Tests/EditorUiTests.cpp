@@ -15,10 +15,7 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 
 #include "EditorLayer.h"
 #include "EditorPanels.h"
-#include "EditorGraffitiDesigner.h" // the Graffiti suite
-#include "PenInput.h"
 #include "AssetDatabase.h"
-#include "DecalSystem.h"
 #include "EditorSettings.h"
 #include "EditorTestProbe.h"
 #include "Shortcuts.h"
@@ -42,7 +39,6 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include "GLDebug.h"
 #include "Input.h" // Input::SimulateKeyTap - main-loop keys (F1..F4) for the PlayMode suite
 #include "AtomicFile.h" // NoteSelfWrite - scratch files a suite writes are not external changes
-#include "Log.h"
 #include "gl.h"
 #include "Core/Env.h"
 
@@ -140,7 +136,6 @@ struct EditorUiTestAccess {
     static entt::entity Selected(EditorLayer& e) { return e.m_Selected; }
     static std::vector<entt::entity> Selection(EditorLayer& e) { return e.GetSelectedItems(); }
     static std::string& AssetKey(EditorLayer& e) { return e.m_SelectedAssetKey; }
-    static bool& AssetIsFolder(EditorLayer& e) { return e.m_SelectedAssetIsFolder; }
     static void Select(EditorLayer& e, entt::entity x) { e.ClearAssetSelection(); e.SelectItem(x, false); }
     static void SelectAsset(EditorLayer& e, const std::string& key) {
         e.ClearSelection(); e.ClearAssetSelection(); e.m_SelectedAssetKey = key; e.m_SelectedAssetIsFolder = false;
@@ -211,24 +206,19 @@ struct EditorUiTestAccess {
     static const std::set<std::string>& Picked(EditorLayer& e) { return e.m_InspectorPickedComponents; }
     static const std::vector<std::string>& Clipboard(EditorLayer& e) { return e.m_ComponentClipboard; }
     static const std::vector<Enhancers::PlayKeep>& Keeps(EditorLayer& e) { return e.m_PlayKeep; }
-    static ImGuiID Removing(EditorLayer& e) { return e.m_RemovingSection; }
-    static std::string HoverSection(EditorLayer& e) { return e.m_HoverSection.Label; }
     static bool RulerHeld(EditorLayer& e) { return e.m_RulerHeld; }
     static entt::entity RulerHit(EditorLayer& e) { return e.m_RulerHitEntity; }
     static entt::entity RulerBounds(EditorLayer& e) { return e.m_RulerBounds; }
-    static int RulerDepth(EditorLayer& e) { return e.m_RulerDepth; }
     static bool FavVisible(EditorLayer& e) { return e.m_FavVisible; }
     static bool& FavLocked(EditorLayer& e) { return e.m_FavLocked; }
     static int& FavPage(EditorLayer& e) { return e.m_FavPage; }
     static bool& InspectorLocked(EditorLayer& e) { return e.m_InspectorLocked; }
-    static void Lock(EditorLayer& e) { e.m_InspectorLocked = false; e.ToggleInspectorLock(); }
     static std::string& CurrentFolder(EditorLayer& e) { return e.m_CurrentAssetFolder; }
     static void NavigateFolder(EditorLayer& e, const std::string& f) { e.NavigateAssetFolder(f); }
     static std::string SceneKey(EditorLayer& e) { return e.CurrentSceneKey(); }
     // The motion demo.
     static void Frame(EditorLayer& e, World& w, Camera& cam) { e.FocusOnSelection(w, cam); }
     static void Duplicate(EditorLayer& e, World& w, AssetLibrary& a) { e.DuplicateSelection(w, a, false); }
-    static void RequestPause(EditorLayer& e) { e.m_PauseToggleRequested = true; }
 };
 using X = EditorUiTestAccess;
 
@@ -613,14 +603,6 @@ Step Expect(std::string name, std::function<std::string(Ctx&)> check) {
         return true;
     }};
 }
-Step Print(std::string what) {
-    return Do("print", [what](Ctx&) {
-        ImGuiContext& g = *ImGui::GetCurrentContext();
-        std::printf("    [%s] mouse=(%.0f,%.0f) down0=%d hovered='%s' hoveredId=%08X activeId=%08X wantCapture=%d\n", what.c_str(),
-                    g.IO.MousePos.x, g.IO.MousePos.y, (int)g.IO.MouseDown[0], g.HoveredWindow ? g.HoveredWindow->Name : "-",
-                    g.HoveredId, g.ActiveId, (int)g.IO.WantCaptureMouse);
-    });
-}
 Step ExpectTrue(std::string name, std::function<bool(Ctx&)> pred) {
     return Expect(name, [pred](Ctx& c) { return pred(c) ? std::string() : std::string("false"); });
 }
@@ -918,18 +900,6 @@ Query ObjectMenu() {
     Query q;
     q.Root = kInspector;
     q.Pred = [](const UiItem& it) { return Visible(it.Label) == ICON_FA_ELLIPSIS_VERTICAL && Contains(it.Window, "entityHeaderCard"); };
-    return q;
-}
-// The "+" on the dictionary editor's "New key" row.
-Query PlusBesideNewKey() {
-    Query q;
-    q.Root = kInspector;
-    q.Pred = [](const UiItem& it) {
-        if (it.Label != ICON_FA_PLUS) return false;
-        for (const UiItem& k : g_Reg.Last)
-            if (k.Label == "##newkey" && it.Rect.GetCenter().y > k.Rect.Min.y && it.Rect.GetCenter().y < k.Rect.Max.y) return true;
-        return false;
-    };
     return q;
 }
 // Types into the focused text field.

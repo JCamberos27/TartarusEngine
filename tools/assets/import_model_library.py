@@ -572,7 +572,7 @@ def project_models(repo, exe):
     return out
 
 
-# Gallery pieces smaller than this (meters, largest side) cast no shadow, as apartment_kit.py's loose props.
+# Gallery pieces smaller than this (meters, largest side) cast no shadow, so loose props stay cheap.
 TINY_PROP = 0.15
 # Texture size by what it covers: the largest model (meters, largest side) that uses each map decides.
 TEXTURE_TIERS = [(0.3, 512), (1.0, 1024), (float('inf'), 2048)]

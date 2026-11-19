@@ -88,14 +88,6 @@ const char* LayerIcon(Graffiti::LayerType t) {
     }
 }
 
-// FNV-1a over the four baked PNGs: equal bakes hash equal (the smoke test's determinism check).
-uint64_t HashFiles(const Graffiti::BakeFiles& f) {
-    uint64_t h = 1469598103934665603ull;
-    for (const std::string* s : {&f.Albedo, &f.Normal, &f.Surface, &f.Aux})
-        for (unsigned char c : *s) h = (h ^ c) * 1099511628211ull;
-    return h;
-}
-
 void SyncLayerIds(GraffitiDesigner& g) {
     const size_t n = g.Piece ? g.Piece->Layers.size() : 0;
     while (g.LayerIds.size() < n) g.LayerIds.push_back(g.NextLayerId++);
@@ -178,9 +170,8 @@ void BeginEncode(GraffitiDesigner& g, Graffiti::BakeImages&& img) {
             g.BakeUndoable = false;
         }
     }
-    g.Encoding = std::async(std::launch::async, [piece, img = std::move(img)]() -> uint64_t {
-        const Graffiti::BakeFiles files = Graffiti::EncodePngs(img);
-        return Graffiti::WriteBake(*piece, files) ? HashFiles(files) : 0ull;
+    g.Encoding = std::async(std::launch::async, [piece, img = std::move(img)]() -> bool {
+        return Graffiti::WriteBake(*piece, Graffiti::EncodePngs(img));
     });
     g.BakeStage = 2;
 }
@@ -188,13 +179,11 @@ void BeginEncode(GraffitiDesigner& g, Graffiti::BakeImages&& img) {
 // Stage 2 done (the worker has finished): the result lands, and the bake's undo step is queued for the
 // next frame's GraffitiFrame (it needs the World).
 void FinishEncode(GraffitiDesigner& g) {
-    const uint64_t h = g.Encoding.get();
+    const bool written = g.Encoding.get();
     g.BakeStage = 0;
     const std::shared_ptr<Graffiti::Piece> piece = std::move(g.BakePiece);
     g.BakePiece.reset();
-    if (h && piece) {
-        g.LastBakeHash = h;
-        ++g.Bakes;
+    if (written && piece) {
         g.BakeDoneAt = Now();
         g.Status = "Baked " + fs::u8path(piece->DecalPath()).filename().u8string();
         if (g.BakeUndoable) g.PendingJournal = std::move(g.BakeBefore);
@@ -235,8 +224,6 @@ bool BakeNow(GraffitiDesigner& g) {
     if (!g.Comp.PollBake(img, /*wait=*/true)) return false;
     const Graffiti::BakeFiles files = Graffiti::EncodePngs(img);
     if (!Graffiti::WriteBake(*snap, files)) return false;
-    g.LastBakeHash = HashFiles(files);
-    ++g.Bakes;
     g.BakeDoneAt = Now();
     g.NeedsBuild = true; // the bake rendered without the cascade: show the canvas again
     g.BakedPaths.push_back(snap->DecalPath());
@@ -353,7 +340,6 @@ void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport)
     g.Live.Angle = g.NibAngle;
     g.StrokeStart = Now();
     g.LastSampleAt = -1.0;
-    g.LastUv = uv;
     g.LastMouse = ImGui::GetIO().MousePos;
     const float pen0 = PenPressure(g);
     const float start = pen0 >= 0.0f ? pen0 : g.Pressure;
@@ -395,7 +381,6 @@ void StrokeSample(GraffitiDesigner& g, glm::vec2 uv) {
     for (size_t i = before; i < g.Pending.size(); ++i) g.PendingSeq.push_back(g.NextSeq++);
     DrainDue(g, g.Live.Samples.back().Time(), false);
     g.Comp.LiveComposite(*g.Piece, g.Program);
-    g.LastUv = uv;
     EditorSound::SetLoop(g.Hiss, 0.4f + 0.6f * g.LivePressure, 0.88f + 0.24f * g.LivePressure);
 }
 
@@ -653,22 +638,6 @@ std::string EditorLayer::CreateGraffitiPiece(const std::string& folder, const st
     return target.u8string();
 }
 
-bool EditorLayer::GraffitiTestBakeDuringBake() {
-    if (!m_Graffiti || !m_Graffiti->Piece) return false;
-    GraffitiDesigner& g = *m_Graffiti;
-    StartBake(g, /*undoable=*/false); // an async bake goes out...
-    const bool started = g.BakeStage == 1;
-    return started && BakeNow(g); // ...and a blocking one right behind it
-}
-
-bool EditorLayer::GraffitiTestOpenOtherDuringBake(const std::string& otherPath) {
-    if (!m_Graffiti || !m_Graffiti->Piece) return false;
-    StartBake(*m_Graffiti, /*undoable=*/false);
-    if (m_Graffiti->BakeStage != 1) return false;
-    OpenGraffitiPiece(otherPath); // the open piece changes while the bake is still in flight
-    return true;
-}
-
 bool EditorLayer::GraffitiViewportSprayActive() const {
     return m_Graffiti && m_ShowGraffitiDesigner && m_Graffiti->ViewportSpray;
 }
@@ -857,7 +826,6 @@ void EditorLayer::DrawGraffitiViewportOverlay(World& world, Camera& editorCamera
         g.OccKey = key;
         g.OccPiece = pieceKey;
         g.OccTarget = g.Target;
-        g.OccAt = Now();
         g.OccVisible.assign((size_t)(kGrid * kGrid), 1);
         const glm::vec3 eye = editorCamera.Position;
         for (int y = 0; y < kGrid; ++y)
