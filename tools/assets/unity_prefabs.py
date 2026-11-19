@@ -1311,6 +1311,9 @@ LOOK_NIGHT = dict(
     volumetricEnabled=True, volDensity=0.008, volAnisotropy=0.6, volHeightFalloff=0.1, volDistance=64.0, volQuality=1,
     wetness=0.85, puddleAmount=0.45, puddleScale=4.0, puddleSsr=True,  # the lamps and facades in the puddles
 )
+# Demo scenes not converted: the Mossy forest trail is a 111 MB scene the game doesn't use (its pack's assets stay).
+SKIP_SCENES = {('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail')}
+
 LOOK_SCENES = {
     ('ModularCityAlleyPack', 'Example_Scene_Day'): LOOK_DAY,
     ('ModularCityAlleyPack', 'Example_Scene_Night'): LOOK_NIGHT,
@@ -1327,10 +1330,6 @@ LOOK_SCENES = {
         LOOK_NIGHT, shadowCascades=1, skyAmbientIntensity=0.35, autoExposureMaxEV=2.5,
         gradeTemperature=-4.0,  # a lighter cool grade: the sodium lamps keep their amber
         ssaoEnabled=False, volQuality=0),  # under the frame budget: SSAO off, one moon cascade, low froxel fog
-    # Low ground mist hugging the trail (the terrain sits around y 3-4), lit through the canopy for god rays.
-    ('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail'): dict(
-        LOOK_DAY, gradeTemperature=0.0, gradeColorFilter=[0.97, 1.0, 0.96],
-        volDensity=0.12, volHeightFalloff=0.8, volBaseHeight=3.0, volAnisotropy=0.8, volDistance=80.0, shadowCascades=2),
 }
 NIGHT_MOON_SKY = 0.006  # sky moonBrightness: dim, though the full high moon from the night offset is still there to see by
 NIGHT_SHADOW_RES = 2048  # world shadowResolution for night scenes (moon map); 4096 default
@@ -1395,7 +1394,8 @@ def convert(pack, exe):
                    'prefab')
         pack.counts['prefabs'] += 1
     for p in pack_files(pack, '.unity'):
-        write_scene(conv, p)
+        if (pack.name, os.path.splitext(os.path.basename(p))[0]) not in SKIP_SCENES:
+            write_scene(conv, p)
     return conv
 
 
