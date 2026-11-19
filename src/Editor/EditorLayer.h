@@ -508,6 +508,13 @@ public:
     // EnhancerUserState::FavoritePages; everything below is session state.
     void DrawFavoritesOverlay(World& world, AssetLibrary& assets); // PostModuleDraw
     bool UpdateFavoritesVisibility(World& world, ImVec2& areaMin, ImVec2& areaMax); // its state; false = not shown
+    struct FavoritesFrame; // the open overlay's frame, shared by its parts (EditorLayer_Enhancers.cpp)
+    void DrawFavoritesKeys(FavoritesFrame& f);
+    void DrawFavoritesHeader(FavoritesFrame& f);
+    void DrawFavoritesTiles(World& world, AssetLibrary& assets, FavoritesFrame& f);
+    void AcceptFavoritesDrop(World& world, FavoritesFrame& f);
+    void DrawFavoritesFooter();
+    void ApplyFavoritesEdits(World& world, AssetLibrary& assets, FavoritesFrame& f);
     void ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r);
     void AddSelectionToFavorites(const World& world);
     void MigrateAssetFavorites(); // one-time import of asset_favorites.json into page 1

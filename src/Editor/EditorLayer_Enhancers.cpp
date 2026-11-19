@@ -2273,6 +2273,37 @@ bool EditorLayer::UpdateFavoritesVisibility(World& world, ImVec2& areaMin, ImVec
     return true;
 }
 
+// One frame of the open favorites overlay: what its parts share (the page list, the fade, the
+// overlay's draw list) and the list edits the tiles collect, applied after drawing.
+struct EditorLayer::FavoritesFrame {
+    EditorLayer& Layer;
+    Enhancers::EnhancerUserState& Us;
+    decltype(Enhancers::EnhancerUserState::FavoritePages)& Pages;
+    ImGuiIO& Io;
+    double Now;
+    int PageCount;
+    float E;      // the overlay's eased fade
+    float Margin; // the card's inset from the panel
+    ImDrawList* Dl;
+    bool Hovered, Typing;
+    std::vector<Enhancers::EditorRef>* Items = nullptr; // the shown page's (set by DrawFavoritesTiles)
+    std::string SceneKey;
+    int Activate = -1, RemoveAt = -1, MoveFrom = -1, MoveTo = -1, MoveToPage = -1;
+
+    ImU32 A(ImVec4 c, float k = 1.0f) const { return EditorTheme::U32(EditorTheme::WithAlpha(c, c.w * k * E)); }
+    // Show page p (wrapping); the old page slides out.
+    void SwitchPage(int p) {
+        p = ((p % PageCount) + PageCount) % PageCount;
+        if (p == Layer.m_FavPage) return;
+        Layer.m_FavAnimDir = p > Layer.m_FavPage ? 1 : -1;
+        Layer.m_FavAnimStart = Now;
+        Layer.m_FavPrevPage = Layer.m_FavPage;
+        Layer.m_FavPage = p;
+        Layer.m_FavHighlight = -1;
+        Layer.m_FavRenaming = -1;
+    }
+};
+
 void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
     auto& us = Enhancers::EnhancerUserState::Get();
     ImGuiIO& io = ImGui::GetIO();
@@ -2284,16 +2315,6 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
     Enhancers::EnsureFavoritePage(us.FavoritePages);
     const int pageCount = (int)us.FavoritePages.size();
     m_FavPage = std::clamp(m_FavPage, 0, pageCount - 1);
-    auto switchPage = [&](int p) {
-        p = ((p % pageCount) + pageCount) % pageCount;
-        if (p == m_FavPage) return;
-        m_FavAnimDir = p > m_FavPage ? 1 : -1;
-        m_FavAnimStart = now;
-        m_FavPrevPage = m_FavPage;
-        m_FavPage = p;
-        m_FavHighlight = -1;
-        m_FavRenaming = -1;
-    };
 
     // The overlay covers the panel: the panel dims behind a floating card (soft shadow, hairline
     // edge) that arrives with a fade, a 6px rise and a slight scale.
@@ -2328,392 +2349,447 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
         const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
         const bool typing = ImGui::GetIO().WantTextInput;
         auto& pages = us.FavoritePages;
-
-        // --- Keyboard: 1-9 pick a page, Left / Right step, Up / Down + Enter pick an item, Esc closes.
-        if (!typing) {
-            for (int k = 0; k < 9 && k < pageCount; ++k)
-                if (ImGui::IsKeyPressed((ImGuiKey)(ImGuiKey_1 + k), false) || ImGui::IsKeyPressed((ImGuiKey)(ImGuiKey_Keypad1 + k), false)) switchPage(k);
-            if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) switchPage(m_FavPage + 1);
-            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))  switchPage(m_FavPage - 1);
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_FavLocked = false; m_FavWaitRelease = true; }
-        }
-        // Wheel over the overlay: one notch, one page.
-        if (hovered && !typing) {
-            ImGui::SetKeyOwner(ImGuiKey_MouseWheelY, ImGui::GetID("##favWheel"));
-            m_FavWheel += io.MouseWheel;
-            if (m_FavWheel <= -1.0f) { switchPage(m_FavPage + 1); m_FavWheel = 0.0f; }
-            else if (m_FavWheel >= 1.0f) { switchPage(m_FavPage - 1); m_FavWheel = 0.0f; }
-        } else {
-            m_FavWheel = 0.0f;
-        }
-
-        // --- Header: the tracked title, the page pills (a lit indicator slides to the shown page;
-        // double-click renames), "+" page, and the pin at the right.
-        const float h = ImGui::GetFrameHeight();
-        int deletePage = -1, movePageFrom = -1, movePageTo = -1;
-        const float rowY = ImGui::GetCursorScreenPos().y;
-        {
-            T::PushHeading();
-            const ImVec2 p = ImGui::GetCursorScreenPos();
-            const float tr = T::HeadingTracking();
-            const ImVec2 ts = T::CalcTrackedSize("FAVORITES", tr);
-            T::DrawTracked(dl, ImVec2(p.x, std::floor(p.y + (h - ts.y) * 0.5f)), A(T::Secondary), "FAVORITES", tr);
-            ImGui::Dummy(ImVec2(ts.x + T::Px(8.0f), h));
-            T::PopFont();
-        }
-        dl->ChannelsSplit(2);
-        dl->ChannelsSetCurrent(1);
-        float pillTargetX = 0.0f, pillTargetW = 0.0f;
-        const float pillInset = T::Px(3.0f), pillR = (h - pillInset * 2.0f) * 0.5f;
-        for (int p = 0; p < pageCount; ++p) {
-            ImGui::SameLine(0.0f, T::Px(4.0f));
-            ImGui::PushID(p);
-            if (m_FavRenaming == p) {
-                ImGui::SetNextItemWidth(EditorTheme::Px(120.0f));
-                if (ImGui::IsWindowAppearing() || !ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-                const bool done = ImGui::InputText("##rename", m_FavRenameBuf, sizeof(m_FavRenameBuf),
-                                                   ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-                if (done || ImGui::IsItemDeactivated()) {
-                    if (m_FavRenameBuf[0] && pages[(size_t)p].Name != m_FavRenameBuf) { pages[(size_t)p].Name = m_FavRenameBuf; us.MarkDirty(); }
-                    m_FavRenaming = -1;
-                }
-                if (p == m_FavPage) { pillTargetX = ImGui::GetItemRectMin().x; pillTargetW = ImGui::GetItemRectSize().x; }
-            } else {
-                const std::string& name = pages[(size_t)p].Name;
-                char num[8] = {};
-                if (p < 9) std::snprintf(num, sizeof(num), "%d", p + 1);
-                T::PushSmall();
-                const float padX = T::Px(10.0f);
-                const float numW = num[0] ? ImGui::CalcTextSize(num).x + T::Px(6.0f) : 0.0f;
-                const float w = std::min(padX * 2.0f + numW + ImGui::CalcTextSize(name.c_str()).x, T::Px(170.0f));
-                const ImVec2 pmn = ImGui::GetCursorScreenPos();
-                const bool clicked = ImGui::InvisibleButton("##page", ImVec2(w, h));
-                const bool hov = ImGui::IsItemHovered();
-                if (hov) Tip("Click to show, double-click to rename. Drop favorites here to move them.");
-                if (clicked) switchPage(p);
-                const bool cur = p == m_FavPage;
-                if (cur) { pillTargetX = pmn.x; pillTargetW = w; }
-                const float hovT = T::AnimT(ImGui::GetID("##hov"), hov && !cur);
-                if (hovT > 0.0f)
-                    dl->AddRectFilled(ImVec2(pmn.x, pmn.y + pillInset), ImVec2(pmn.x + w, pmn.y + h - pillInset), A(T::Hover, hovT), pillR);
-                const float cy = std::floor(pmn.y + h * 0.5f);
-                float tx = pmn.x + padX;
-                if (num[0]) {
-                    const ImVec2 ns = ImGui::CalcTextSize(num);
-                    dl->AddText(ImVec2(tx, std::floor(cy - ns.y * 0.5f)), A(cur ? T::Secondary : T::Dim), num);
-                    tx += numW;
-                }
-                const ImVec2 ls = ImGui::CalcTextSize(name.c_str());
-                EditorUIPrimitives::TextEllipsis(dl, ImVec2(tx, std::floor(cy - ls.y * 0.5f)), pmn.x + w - padX * 0.6f,
-                                                 A(cur ? T::AccentBright : T::Mix(T::Secondary, T::Text, hovT)), name.c_str());
-                T::PopFont();
-                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                    m_FavRenaming = p;
-                    std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", name.c_str());
-                }
-                // Drop an item on a page pill to move it there.
-                if (ImGui::BeginDragDropTarget()) {
-                    if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("FAVORITE_ITEM")) {
-                        const int from = *(const int*)pl->Data;
-                        auto& src = pages[(size_t)m_FavPage].Items;
-                        if (p != m_FavPage && from >= 0 && from < (int)src.size()) {
-                            const Enhancers::EditorRef moved = src[(size_t)from];
-                            src.erase(src.begin() + from);
-                            Enhancers::AddFavorite(pages, p, moved);
-                            us.MarkDirty();
-                        }
-                    }
-                    ImGui::EndDragDropTarget();
-                }
-                if (ImGui::BeginPopupContextItem("##pageCtx")) {
-                    if (ImGui::MenuItem(ICON_FA_PEN "  Rename")) {
-                        m_FavRenaming = p;
-                        std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", name.c_str());
-                    }
-                    if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Move Left", nullptr, false, p > 0)) { movePageFrom = p; movePageTo = p - 1; }
-                    if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Move Right", nullptr, false, p + 1 < pageCount)) { movePageFrom = p; movePageTo = p + 1; }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_TRASH "  Delete Page", nullptr, false, pageCount > 1)) deletePage = p;
-                    ImGui::EndPopup();
-                }
-            }
-            ImGui::PopID();
-        }
-        // The indicator glides to the shown page's pill (under the pills, channel 0).
-        if (pillTargetW > 0.0f) {
-            if (m_FavPillW <= 0.0f) { m_FavPillX = pillTargetX; m_FavPillW = pillTargetW; }
-            const float k = std::min(1.0f, io.DeltaTime * 16.0f);
-            m_FavPillX += (pillTargetX - m_FavPillX) * k;
-            m_FavPillW += (pillTargetW - m_FavPillW) * k;
-            if (std::fabs(pillTargetX - m_FavPillX) < 0.5f && std::fabs(pillTargetW - m_FavPillW) < 0.5f) { m_FavPillX = pillTargetX; m_FavPillW = pillTargetW; }
-            dl->ChannelsSetCurrent(0);
-            const ImVec2 imn(m_FavPillX, rowY + pillInset), imx(m_FavPillX + m_FavPillW, rowY + h - pillInset);
-            dl->AddRectFilled(imn, imx, A(T::AccentWash), pillR);
-            dl->AddRect(imn, imx, A(T::WithAlpha(T::Accent, 0.35f)), pillR, 0, 1.0f);
-        }
-        dl->ChannelsMerge();
-        ImGui::SameLine(0.0f, T::Px(4.0f));
-        if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "New page", &Tip, false, ImVec2(h, h))) {
-            pages.push_back(Enhancers::FavoritePage{"Page " + std::to_string(pageCount + 1), {}});
-            us.MarkDirty();
-            // Straight to the new page (switchPage wraps by the page count from before the add).
-            m_FavAnimDir = 1;
-            m_FavAnimStart = now;
-            m_FavPrevPage = m_FavPage;
-            m_FavPage = pageCount;
-            m_FavHighlight = -1;
-            m_FavRenaming = pageCount;
-            std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", pages.back().Name.c_str());
-        }
-        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - h);
-        if (EditorUIPrimitives::ActionButton(m_FavLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN,
-                                             m_FavLocked ? "Unpin (Esc)" : "Keep open (Ctrl+Alt+F)", &Tip, m_FavLocked, ImVec2(h, h)))
-            m_FavLocked = !m_FavLocked;
-        if (deletePage >= 0) {
-            pages.erase(pages.begin() + deletePage);
-            us.MarkDirty();
-            m_FavPage = std::clamp(m_FavPage > deletePage ? m_FavPage - 1 : m_FavPage, 0, (int)pages.size() - 1);
-            m_FavPrevPage = -1;
-        }
-        if (movePageFrom >= 0) {
-            Enhancers::MoveFavoritePage(pages, movePageFrom, movePageTo);
-            if (m_FavPage == movePageFrom) m_FavPage = std::clamp(movePageTo, 0, (int)pages.size() - 1);
-            m_FavPrevPage = -1;
-            us.MarkDirty();
-        }
-        {
-            const float y = std::floor(ImGui::GetCursorScreenPos().y + T::Px(3.0f));
-            const float x0 = ImGui::GetWindowPos().x + margin, x1 = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - margin;
-            dl->AddRectFilled(ImVec2(x0, y), ImVec2(x1, y + 1.0f), A(T::Hairline));
-            ImGui::Dummy(ImVec2(0.0f, T::Px(8.0f)));
-        }
-
-        // --- Items. A page switch slides the old page out and the new one in, crossfading.
-        const float pt = m_FavAnimStart < 0.0 ? 1.0f : T::Ease::OutCubic((float)((now - m_FavAnimStart) / 0.18));
-        if (pt >= 1.0f) { m_FavAnimStart = -1.0; m_FavPrevPage = -1; }
-        const float slideD = T::Px(48.0f) * (float)m_FavAnimDir;
-        const float footerH = T::Px(26.0f);
-        ImGui::BeginChild("##favItems", ImVec2(0.0f, -footerH), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
-        dl = ImGui::GetWindowDrawList();
-        auto& items = pages[(size_t)std::clamp(m_FavPage, 0, (int)pages.size() - 1)].Items;
-        const std::string sceneKey = CurrentSceneKey();
-        const auto& folders = assets.Folders();
-
-        auto describe = [&](std::vector<Enhancers::EditorRef>& refs) {
-            std::vector<FavoriteDisplay> out(refs.size());
-            for (size_t i = 0; i < refs.size(); ++i) {
-                Enhancers::EditorRef& r = refs[i];
-                FavoriteDisplay& d = out[i];
-                if (r.Kind == Enhancers::RefKind::Folder) {
-                    EditorFolderVisual vis;
-                    GetFolderVisual(assets, r.Path, vis);
-                    d.Icon = vis.Icon[0] ? std::string(vis.Icon) : std::string(r.Path.empty() ? ICON_FA_HOUSE : ICON_FA_FOLDER);
-                    d.Color = vis.Color;
-                    d.Label = FolderLeaf(r.Path);
-                    d.Missing = !r.Path.empty() && std::find(folders.begin(), folders.end(), r.Path) == folders.end();
-                    d.Tooltip = (r.Path.empty() ? std::string("Assets") : r.Path) + " (folder)";
-                    d.Sub = d.Missing ? std::string("Missing folder") : (r.Path.empty() ? std::string("Project root") : r.Path);
-                } else if (r.Kind == Enhancers::RefKind::Asset) {
-                    d.Icon = AssetChipIcon(r.Path);
-                    d.Label = r.Label.empty() ? AssetChipLabel(r.Path) : r.Label;
-                    d.Tooltip = r.Path;
-                    const size_t sl = r.Path.find_last_of('/');
-                    d.Sub = sl == std::string::npos ? std::string("Asset") : r.Path.substr(0, sl);
-                } else {
-                    const bool here = r.Scene == sceneKey;
-                    const entt::entity en = here ? FindEntityByOrder(world, r.Order) : entt::null;
-                    d.Icon = ICON_FA_CUBE;
-                    if (en != entt::null) {
-                        if (const auto* nm = world.Registry.try_get<NameComponent>(en); nm && !nm->Name.empty()) r.Label = nm->Name;
-                        if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(en); st && !st->Icon.empty())
-                            if (const char* g = Enhancers::FAIconGlyph(st->Icon.c_str())) d.Icon = g;
-                        if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(en); st && st->Color) d.Color = st->Color;
-                    }
-                    d.Label = r.Label.empty() ? std::string("(unnamed)") : r.Label;
-                    d.Missing = here && en == entt::null;
-                    d.Tooltip = d.Label + (here ? (d.Missing ? "\nNo longer in this scene." : "") : "\nIn another scene - click to open it.");
-                    d.Sub = here ? (d.Missing ? std::string("Missing object") : std::string("Object in this scene"))
-                                 : "In " + FolderLeaf(r.Scene);
-                }
-            }
-            return out;
-        };
-        std::vector<FavoriteDisplay> shown = describe(items);
-
-        // Keyboard highlight; the focus ring shows only while the keyboard is driving.
-        if (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f) m_FavKeyNav = false;
-        if (!typing && !items.empty()) {
-            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) { m_FavHighlight = std::min(m_FavHighlight + 1, (int)items.size() - 1); m_FavKeyNav = true; }
-            if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))   { m_FavHighlight = std::max(m_FavHighlight - 1, 0); m_FavKeyNav = true; }
-        }
-        int activate = -1, removeAt = -1, moveFrom = -1, moveTo = -1, moveToPage = -1;
-        if (!typing && m_FavHighlight >= 0 && m_FavHighlight < (int)items.size() &&
-            (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)))
-            activate = m_FavHighlight;
-
-        // Tiles flow left to right: an icon badge in the item's colour, its name, and where it lives.
-        const float tileH = T::Px(48.0f);
-        const float gap = T::Px(8.0f);
-        const float availW = ImGui::GetContentRegionAvail().x;
-        const int cols = std::max(1, (int)((availW + gap) / (T::Px(190.0f) + gap)));
-        const float realW = (availW - gap * (cols - 1)) / cols;
-        const ImVec2 origin = ImGui::GetCursorScreenPos();
-        auto tilePos = [&](int i, float dx) {
-            return ImVec2(std::floor(origin.x + (i % cols) * (realW + gap) + dx), std::floor(origin.y + (i / cols) * (tileH + gap)));
-        };
-        auto drawTile = [&](const FavoriteDisplay& d, ImVec2 mn, float k, float hovT, bool focus, bool ghost) {
-            const float lift = std::floor(T::Px(1.0f) * hovT);
-            mn.y -= lift;
-            const ImVec2 mx(mn.x + realW, mn.y + tileH);
-            const float rr = T::Px(6.0f);
-            const float body = ghost ? 0.35f : 1.0f;
-            if (hovT > 0.0f) EditorUIPrimitives::DrawSoftShadow(dl, mn, mx, rr, T::Px(6.0f), 0.5f * hovT * k * e);
-            dl->AddRectFilled(mn, mx, A(T::Mix(T::Card, T::Hover, hovT), k * body), rr);
-            dl->AddRect(mn, mx, A(T::Mix(T::Hairline, T::Strong, hovT), k), rr, 0, 1.0f);
-            if (focus) dl->AddRect(ImVec2(mn.x - 2.0f, mn.y - 2.0f), ImVec2(mx.x + 2.0f, mx.y + 2.0f), A(T::Accent, k), rr + 2.0f, 0, T::Px(1.5f));
-            const float bs = T::Px(30.0f);
-            const ImVec2 bmn(mn.x + T::Px(9.0f), std::floor((mn.y + mx.y - bs) * 0.5f)), bmx(bmn.x + bs, bmn.y + bs);
-            dl->AddRectFilled(bmn, bmx, d.Color ? A(T::WithAlpha(T::UserColor(d.Color), 0.15f), k * body) : A(T::Hover, k * body), T::Px(5.0f));
-            const ImVec2 is = ImGui::CalcTextSize(d.Icon.c_str());
-            dl->AddText(ImVec2(std::floor((bmn.x + bmx.x - is.x) * 0.5f), std::floor((bmn.y + bmx.y - is.y) * 0.5f)),
-                        A(d.Missing ? T::Dim : (d.Color ? T::UserGlyphColor(d.Color) : T::Secondary), k * body), d.Icon.c_str());
-            const float tx = bmx.x + T::Px(10.0f), right = mx.x - T::Px(8.0f);
-            const float nameH = ImGui::GetFontSize();
-            T::PushSmall();
-            const float subH = ImGui::GetFontSize();
-            T::PopFont();
-            const float ty = std::floor((mn.y + mx.y - nameH - subH - T::Px(2.0f)) * 0.5f);
-            EditorUIPrimitives::TextEllipsis(dl, ImVec2(tx, ty), right, A(d.Missing ? T::Dim : T::Text, k * body), d.Label.c_str());
-            T::PushSmall();
-            EditorUIPrimitives::TextEllipsis(dl, ImVec2(tx, ty + nameH + T::Px(2.0f)), right, A(T::Dim, k * body), d.Sub.c_str());
-            T::PopFont();
-        };
-
-        // The page being left, drawn only (no interaction), sliding out and fading.
-        if (m_FavAnimStart >= 0.0 && m_FavPrevPage >= 0 && m_FavPrevPage < (int)pages.size() && m_FavPrevPage != m_FavPage) {
-            const std::vector<FavoriteDisplay> old = describe(pages[(size_t)m_FavPrevPage].Items);
-            for (int i = 0; i < (int)old.size(); ++i) drawTile(old[(size_t)i], tilePos(i, -slideD * pt), 1.0f - pt, 0.0f, false, false);
-        }
-        const float inDx = slideD * (1.0f - pt);
-        const ImGuiPayload* favDrag = ImGui::GetDragDropPayload();
-        const int dragFrom = favDrag && favDrag->IsDataType("FAVORITE_ITEM") ? *(const int*)favDrag->Data : -1;
-        for (int i = 0; i < (int)items.size(); ++i) {
-            const FavoriteDisplay& d = shown[(size_t)i];
-            const ImVec2 mn = tilePos(i, inDx);
-            const ImVec2 mx(mn.x + realW, mn.y + tileH);
-            ImGui::PushID(i);
-            ImGui::SetCursorScreenPos(mn);
-            if (ImGui::InvisibleButton("##fav", ImVec2(realW, tileH))) activate = i;
-            const bool hov = ImGui::IsItemHovered();
-            if (hov) m_FavHighlight = i;
-            bool ghost = false, dropHere = false;
-            if (ImGui::BeginDragDropSource()) {
-                ImGui::SetDragDropPayload("FAVORITE_ITEM", &i, sizeof(int));
-                ImGui::Text("%s  %s", d.Icon.c_str(), d.Label.c_str());
-                ImGui::EndDragDropSource();
-                ghost = true;
-            }
-            if (ImGui::BeginDragDropTarget()) {
-                dropHere = true;
-                if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("FAVORITE_ITEM", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) { moveFrom = *(const int*)pl->Data; moveTo = i; }
-                ImGui::EndDragDropTarget();
-            }
-            if (ImGui::BeginPopupContextItem("##favCtx")) {
-                if (ImGui::MenuItem(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "  Open")) activate = i;
-                if (pageCount > 1 && ImGui::BeginMenu(ICON_FA_ARROW_RIGHT "  Move to Page")) {
-                    for (int p = 0; p < pageCount; ++p)
-                        if (p != m_FavPage && ImGui::MenuItem(pages[(size_t)p].Name.c_str())) { moveFrom = i; moveToPage = p; }
-                    ImGui::EndMenu();
-                }
-                ImGui::Separator();
-                if (ImGui::MenuItem(ICON_FA_TRASH "  Remove from Favorites")) removeAt = i;
-                ImGui::EndPopup();
-            }
-            const float hovT = T::AnimT(ImGui::GetID("##hov"), hov && dragFrom < 0);
-            drawTile(d, mn, std::max(pt, 0.05f), hovT, m_FavKeyNav && m_FavHighlight == i, ghost);
-            // Reordering: an insertion bar on the side the dragged tile will land.
-            if (dropHere && dragFrom >= 0 && dragFrom != i) {
-                const float bx = dragFrom > i ? mn.x - gap * 0.5f : mx.x + gap * 0.5f;
-                dl->AddRectFilled(ImVec2(bx - T::Px(1.5f), mn.y + T::Px(4.0f)), ImVec2(bx + T::Px(1.5f), mx.y - T::Px(4.0f)), A(T::Accent), T::Px(1.5f));
-            }
-            if (hov && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) EditorUI::SetTooltip("%s", d.Tooltip.c_str());
-            ImGui::PopID();
-        }
-        const int rows = ((int)items.size() + cols - 1) / cols;
-        ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + rows * (tileH + gap)));
-        if (items.empty()) {
-            ImGui::Dummy(ImVec2(0.0f, T::Px(18.0f)));
-            EditorUIPrimitives::EmptyState(ICON_FA_STAR, "Nothing on this page yet",
-                                           "Drop folders, assets or Hierarchy objects here, star an asset, or press Ctrl+Alt+B to add the selection.");
-        }
-        ImGui::Dummy(ImVec2(0.0f, 0.0f));
-        ImGui::EndChild();
-        dl = ImGui::GetWindowDrawList();
-
-        // Drop anything favoritable anywhere on the overlay: the shown page gets it.
-        if (ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect, ImGui::GetID("##favDrop"))) {
-            bool added = false;
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
-                const entt::entity dragged = *(const entt::entity*)p->Data;
-                const std::vector<entt::entity> dropped = IsSelected(dragged) ? GetSelectedItems() : std::vector<entt::entity>{dragged};
-                for (entt::entity en : dropped) {
-                    const auto* o = world.Registry.valid(en) ? world.Registry.try_get<OrderComponent>(en) : nullptr;
-                    const auto* nm = o ? world.Registry.try_get<NameComponent>(en) : nullptr;
-                    if (o) added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeEntity(sceneKey, o->Value, nm ? nm->Name : std::string()));
-                }
-            }
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
-                const std::string path((const char*)p->Data);
-                added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeFolder(path, FolderLeaf(path)));
-            }
-            for (const char* type : kAssetPayloads)
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                    const std::string key((const char*)p->Data);
-                    added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)));
-                }
-            if (added) us.MarkDirty();
-            ImGui::EndDragDropTarget();
-        }
-
-        // Footer: the keys, as key caps.
-        {
-            auto hint = [&](const char* key, const char* what, bool first) {
-                if (!first) ImGui::SameLine(0.0f, T::Px(14.0f));
-                EditorUIPrimitives::KeyCap(key);
-                ImGui::SameLine(0.0f, T::Px(5.0f));
-                T::PushSmall();
-                ImGui::TextColored(T::Dim, "%s", what);
-                T::PopFont();
-            };
-            ImGui::Dummy(ImVec2(0.0f, T::Px(2.0f)));
-            hint("1-9", "Pages", true);
-            hint(ICON_FA_ARROW_UP ICON_FA_ARROW_DOWN, "Select", false);
-            hint("Enter", "Open", false);
-            hint("Esc", "Close", false);
-        }
-
-        // Apply list edits after drawing.
-        if (moveFrom >= 0 && moveToPage >= 0 && moveFrom < (int)items.size()) {
-            const Enhancers::EditorRef moved = items[(size_t)moveFrom];
-            items.erase(items.begin() + moveFrom);
-            Enhancers::AddFavorite(pages, moveToPage, moved);
-            us.MarkDirty();
-        } else if (moveFrom >= 0 && moveTo >= 0 && moveFrom != moveTo) {
-            Enhancers::MoveRef(items, moveFrom, moveTo);
-            us.MarkDirty();
-        }
-        if (removeAt >= 0 && removeAt < (int)items.size()) {
-            items.erase(items.begin() + removeAt);
-            us.MarkDirty();
-        }
-        if (activate >= 0 && activate < (int)items.size()) {
-            const Enhancers::EditorRef r = items[(size_t)activate];
-            ActivateFavorite(world, assets, r);
-        }
+        FavoritesFrame f{*this, us, pages, io, now, pageCount, e, margin, dl, hovered, typing};
+        DrawFavoritesKeys(f);
+        DrawFavoritesHeader(f);
+        DrawFavoritesTiles(world, assets, f);
+        AcceptFavoritesDrop(world, f);
+        DrawFavoritesFooter();
+        ApplyFavoritesEdits(world, assets, f);
     }
     ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
+}
+
+// --- Keyboard: 1-9 pick a page, Left / Right step, Up / Down + Enter pick an item, Esc closes.
+void EditorLayer::DrawFavoritesKeys(FavoritesFrame& f) {
+    ImGuiIO& io = f.Io;
+    const int pageCount = f.PageCount;
+    const bool hovered = f.Hovered;
+    const bool typing = f.Typing;
+    if (!typing) {
+        for (int k = 0; k < 9 && k < pageCount; ++k)
+            if (ImGui::IsKeyPressed((ImGuiKey)(ImGuiKey_1 + k), false) || ImGui::IsKeyPressed((ImGuiKey)(ImGuiKey_Keypad1 + k), false)) f.SwitchPage(k);
+        if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) f.SwitchPage(m_FavPage + 1);
+        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))  f.SwitchPage(m_FavPage - 1);
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_FavLocked = false; m_FavWaitRelease = true; }
+    }
+    // Wheel over the overlay: one notch, one page.
+    if (hovered && !typing) {
+        ImGui::SetKeyOwner(ImGuiKey_MouseWheelY, ImGui::GetID("##favWheel"));
+        m_FavWheel += io.MouseWheel;
+        if (m_FavWheel <= -1.0f) { f.SwitchPage(m_FavPage + 1); m_FavWheel = 0.0f; }
+        else if (m_FavWheel >= 1.0f) { f.SwitchPage(m_FavPage - 1); m_FavWheel = 0.0f; }
+    } else {
+        m_FavWheel = 0.0f;
+    }
+}
+
+// --- Header: the tracked title, the page pills (a lit indicator slides to the shown page;
+// double-click renames), "+" page, and the pin at the right.
+void EditorLayer::DrawFavoritesHeader(FavoritesFrame& f) {
+    namespace T = EditorTheme;
+    auto& us = f.Us;
+    auto& pages = f.Pages;
+    ImGuiIO& io = f.Io;
+    const double now = f.Now;
+    const int pageCount = f.PageCount;
+    const float margin = f.Margin;
+    ImDrawList*& dl = f.Dl;
+    const float h = ImGui::GetFrameHeight();
+    int deletePage = -1, movePageFrom = -1, movePageTo = -1;
+    const float rowY = ImGui::GetCursorScreenPos().y;
+    {
+        T::PushHeading();
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float tr = T::HeadingTracking();
+        const ImVec2 ts = T::CalcTrackedSize("FAVORITES", tr);
+        T::DrawTracked(dl, ImVec2(p.x, std::floor(p.y + (h - ts.y) * 0.5f)), f.A(T::Secondary), "FAVORITES", tr);
+        ImGui::Dummy(ImVec2(ts.x + T::Px(8.0f), h));
+        T::PopFont();
+    }
+    dl->ChannelsSplit(2);
+    dl->ChannelsSetCurrent(1);
+    float pillTargetX = 0.0f, pillTargetW = 0.0f;
+    const float pillInset = T::Px(3.0f), pillR = (h - pillInset * 2.0f) * 0.5f;
+    for (int p = 0; p < pageCount; ++p) {
+        ImGui::SameLine(0.0f, T::Px(4.0f));
+        ImGui::PushID(p);
+        if (m_FavRenaming == p) {
+            ImGui::SetNextItemWidth(EditorTheme::Px(120.0f));
+            if (ImGui::IsWindowAppearing() || !ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+            const bool done = ImGui::InputText("##rename", m_FavRenameBuf, sizeof(m_FavRenameBuf),
+                                               ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+            if (done || ImGui::IsItemDeactivated()) {
+                if (m_FavRenameBuf[0] && pages[(size_t)p].Name != m_FavRenameBuf) { pages[(size_t)p].Name = m_FavRenameBuf; us.MarkDirty(); }
+                m_FavRenaming = -1;
+            }
+            if (p == m_FavPage) { pillTargetX = ImGui::GetItemRectMin().x; pillTargetW = ImGui::GetItemRectSize().x; }
+        } else {
+            const std::string& name = pages[(size_t)p].Name;
+            char num[8] = {};
+            if (p < 9) std::snprintf(num, sizeof(num), "%d", p + 1);
+            T::PushSmall();
+            const float padX = T::Px(10.0f);
+            const float numW = num[0] ? ImGui::CalcTextSize(num).x + T::Px(6.0f) : 0.0f;
+            const float w = std::min(padX * 2.0f + numW + ImGui::CalcTextSize(name.c_str()).x, T::Px(170.0f));
+            const ImVec2 pmn = ImGui::GetCursorScreenPos();
+            const bool clicked = ImGui::InvisibleButton("##page", ImVec2(w, h));
+            const bool hov = ImGui::IsItemHovered();
+            if (hov) Tip("Click to show, double-click to rename. Drop favorites here to move them.");
+            if (clicked) f.SwitchPage(p);
+            const bool cur = p == m_FavPage;
+            if (cur) { pillTargetX = pmn.x; pillTargetW = w; }
+            const float hovT = T::AnimT(ImGui::GetID("##hov"), hov && !cur);
+            if (hovT > 0.0f)
+                dl->AddRectFilled(ImVec2(pmn.x, pmn.y + pillInset), ImVec2(pmn.x + w, pmn.y + h - pillInset), f.A(T::Hover, hovT), pillR);
+            const float cy = std::floor(pmn.y + h * 0.5f);
+            float tx = pmn.x + padX;
+            if (num[0]) {
+                const ImVec2 ns = ImGui::CalcTextSize(num);
+                dl->AddText(ImVec2(tx, std::floor(cy - ns.y * 0.5f)), f.A(cur ? T::Secondary : T::Dim), num);
+                tx += numW;
+            }
+            const ImVec2 ls = ImGui::CalcTextSize(name.c_str());
+            EditorUIPrimitives::TextEllipsis(dl, ImVec2(tx, std::floor(cy - ls.y * 0.5f)), pmn.x + w - padX * 0.6f,
+                                             f.A(cur ? T::AccentBright : T::Mix(T::Secondary, T::Text, hovT)), name.c_str());
+            T::PopFont();
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                m_FavRenaming = p;
+                std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", name.c_str());
+            }
+            // Drop an item on a page pill to move it there.
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("FAVORITE_ITEM")) {
+                    const int from = *(const int*)pl->Data;
+                    auto& src = pages[(size_t)m_FavPage].Items;
+                    if (p != m_FavPage && from >= 0 && from < (int)src.size()) {
+                        const Enhancers::EditorRef moved = src[(size_t)from];
+                        src.erase(src.begin() + from);
+                        Enhancers::AddFavorite(pages, p, moved);
+                        us.MarkDirty();
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+            if (ImGui::BeginPopupContextItem("##pageCtx")) {
+                if (ImGui::MenuItem(ICON_FA_PEN "  Rename")) {
+                    m_FavRenaming = p;
+                    std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", name.c_str());
+                }
+                if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Move Left", nullptr, false, p > 0)) { movePageFrom = p; movePageTo = p - 1; }
+                if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Move Right", nullptr, false, p + 1 < pageCount)) { movePageFrom = p; movePageTo = p + 1; }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_TRASH "  Delete Page", nullptr, false, pageCount > 1)) deletePage = p;
+                ImGui::EndPopup();
+            }
+        }
+        ImGui::PopID();
+    }
+    // The indicator glides to the shown page's pill (under the pills, channel 0).
+    if (pillTargetW > 0.0f) {
+        if (m_FavPillW <= 0.0f) { m_FavPillX = pillTargetX; m_FavPillW = pillTargetW; }
+        const float k = std::min(1.0f, io.DeltaTime * 16.0f);
+        m_FavPillX += (pillTargetX - m_FavPillX) * k;
+        m_FavPillW += (pillTargetW - m_FavPillW) * k;
+        if (std::fabs(pillTargetX - m_FavPillX) < 0.5f && std::fabs(pillTargetW - m_FavPillW) < 0.5f) { m_FavPillX = pillTargetX; m_FavPillW = pillTargetW; }
+        dl->ChannelsSetCurrent(0);
+        const ImVec2 imn(m_FavPillX, rowY + pillInset), imx(m_FavPillX + m_FavPillW, rowY + h - pillInset);
+        dl->AddRectFilled(imn, imx, f.A(T::AccentWash), pillR);
+        dl->AddRect(imn, imx, f.A(T::WithAlpha(T::Accent, 0.35f)), pillR, 0, 1.0f);
+    }
+    dl->ChannelsMerge();
+    ImGui::SameLine(0.0f, T::Px(4.0f));
+    if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "New page", &Tip, false, ImVec2(h, h))) {
+        pages.push_back(Enhancers::FavoritePage{"Page " + std::to_string(pageCount + 1), {}});
+        us.MarkDirty();
+        // Straight to the new page (switchPage wraps by the page count from before the add).
+        m_FavAnimDir = 1;
+        m_FavAnimStart = now;
+        m_FavPrevPage = m_FavPage;
+        m_FavPage = pageCount;
+        m_FavHighlight = -1;
+        m_FavRenaming = pageCount;
+        std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", pages.back().Name.c_str());
+    }
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - h);
+    if (EditorUIPrimitives::ActionButton(m_FavLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN,
+                                         m_FavLocked ? "Unpin (Esc)" : "Keep open (Ctrl+Alt+F)", &Tip, m_FavLocked, ImVec2(h, h)))
+        m_FavLocked = !m_FavLocked;
+    if (deletePage >= 0) {
+        pages.erase(pages.begin() + deletePage);
+        us.MarkDirty();
+        m_FavPage = std::clamp(m_FavPage > deletePage ? m_FavPage - 1 : m_FavPage, 0, (int)pages.size() - 1);
+        m_FavPrevPage = -1;
+    }
+    if (movePageFrom >= 0) {
+        Enhancers::MoveFavoritePage(pages, movePageFrom, movePageTo);
+        if (m_FavPage == movePageFrom) m_FavPage = std::clamp(movePageTo, 0, (int)pages.size() - 1);
+        m_FavPrevPage = -1;
+        us.MarkDirty();
+    }
+    {
+        const float y = std::floor(ImGui::GetCursorScreenPos().y + T::Px(3.0f));
+        const float x0 = ImGui::GetWindowPos().x + margin, x1 = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - margin;
+        dl->AddRectFilled(ImVec2(x0, y), ImVec2(x1, y + 1.0f), f.A(T::Hairline));
+        ImGui::Dummy(ImVec2(0.0f, T::Px(8.0f)));
+    }
+}
+
+// --- Items. A page switch slides the old page out and the new one in, crossfading.
+void EditorLayer::DrawFavoritesTiles(World& world, AssetLibrary& assets, FavoritesFrame& f) {
+    namespace T = EditorTheme;
+    auto& pages = f.Pages;
+    ImGuiIO& io = f.Io;
+    const double now = f.Now;
+    const int pageCount = f.PageCount;
+    const float e = f.E;
+    ImDrawList*& dl = f.Dl;
+    const bool typing = f.Typing;
+    int& activate = f.Activate;
+    int& removeAt = f.RemoveAt;
+    int& moveFrom = f.MoveFrom;
+    int& moveTo = f.MoveTo;
+    int& moveToPage = f.MoveToPage;
+    const float pt = m_FavAnimStart < 0.0 ? 1.0f : T::Ease::OutCubic((float)((now - m_FavAnimStart) / 0.18));
+    if (pt >= 1.0f) { m_FavAnimStart = -1.0; m_FavPrevPage = -1; }
+    const float slideD = T::Px(48.0f) * (float)m_FavAnimDir;
+    const float footerH = T::Px(26.0f);
+    ImGui::BeginChild("##favItems", ImVec2(0.0f, -footerH), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+    dl = ImGui::GetWindowDrawList();
+    f.Items = &pages[(size_t)std::clamp(m_FavPage, 0, (int)pages.size() - 1)].Items;
+    auto& items = *f.Items;
+    f.SceneKey = CurrentSceneKey();
+    const std::string& sceneKey = f.SceneKey;
+    const auto& folders = assets.Folders();
+
+    auto describe = [&](std::vector<Enhancers::EditorRef>& refs) {
+        std::vector<FavoriteDisplay> out(refs.size());
+        for (size_t i = 0; i < refs.size(); ++i) {
+            Enhancers::EditorRef& r = refs[i];
+            FavoriteDisplay& d = out[i];
+            if (r.Kind == Enhancers::RefKind::Folder) {
+                EditorFolderVisual vis;
+                GetFolderVisual(assets, r.Path, vis);
+                d.Icon = vis.Icon[0] ? std::string(vis.Icon) : std::string(r.Path.empty() ? ICON_FA_HOUSE : ICON_FA_FOLDER);
+                d.Color = vis.Color;
+                d.Label = FolderLeaf(r.Path);
+                d.Missing = !r.Path.empty() && std::find(folders.begin(), folders.end(), r.Path) == folders.end();
+                d.Tooltip = (r.Path.empty() ? std::string("Assets") : r.Path) + " (folder)";
+                d.Sub = d.Missing ? std::string("Missing folder") : (r.Path.empty() ? std::string("Project root") : r.Path);
+            } else if (r.Kind == Enhancers::RefKind::Asset) {
+                d.Icon = AssetChipIcon(r.Path);
+                d.Label = r.Label.empty() ? AssetChipLabel(r.Path) : r.Label;
+                d.Tooltip = r.Path;
+                const size_t sl = r.Path.find_last_of('/');
+                d.Sub = sl == std::string::npos ? std::string("Asset") : r.Path.substr(0, sl);
+            } else {
+                const bool here = r.Scene == sceneKey;
+                const entt::entity en = here ? FindEntityByOrder(world, r.Order) : entt::null;
+                d.Icon = ICON_FA_CUBE;
+                if (en != entt::null) {
+                    if (const auto* nm = world.Registry.try_get<NameComponent>(en); nm && !nm->Name.empty()) r.Label = nm->Name;
+                    if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(en); st && !st->Icon.empty())
+                        if (const char* g = Enhancers::FAIconGlyph(st->Icon.c_str())) d.Icon = g;
+                    if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(en); st && st->Color) d.Color = st->Color;
+                }
+                d.Label = r.Label.empty() ? std::string("(unnamed)") : r.Label;
+                d.Missing = here && en == entt::null;
+                d.Tooltip = d.Label + (here ? (d.Missing ? "\nNo longer in this scene." : "") : "\nIn another scene - click to open it.");
+                d.Sub = here ? (d.Missing ? std::string("Missing object") : std::string("Object in this scene"))
+                             : "In " + FolderLeaf(r.Scene);
+            }
+        }
+        return out;
+    };
+    std::vector<FavoriteDisplay> shown = describe(items);
+
+    // Keyboard highlight; the focus ring shows only while the keyboard is driving.
+    if (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f) m_FavKeyNav = false;
+    if (!typing && !items.empty()) {
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) { m_FavHighlight = std::min(m_FavHighlight + 1, (int)items.size() - 1); m_FavKeyNav = true; }
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))   { m_FavHighlight = std::max(m_FavHighlight - 1, 0); m_FavKeyNav = true; }
+    }
+    if (!typing && m_FavHighlight >= 0 && m_FavHighlight < (int)items.size() &&
+        (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)))
+        activate = m_FavHighlight;
+
+    // Tiles flow left to right: an icon badge in the item's colour, its name, and where it lives.
+    const float tileH = T::Px(48.0f);
+    const float gap = T::Px(8.0f);
+    const float availW = ImGui::GetContentRegionAvail().x;
+    const int cols = std::max(1, (int)((availW + gap) / (T::Px(190.0f) + gap)));
+    const float realW = (availW - gap * (cols - 1)) / cols;
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    auto tilePos = [&](int i, float dx) {
+        return ImVec2(std::floor(origin.x + (i % cols) * (realW + gap) + dx), std::floor(origin.y + (i / cols) * (tileH + gap)));
+    };
+    auto drawTile = [&](const FavoriteDisplay& d, ImVec2 mn, float k, float hovT, bool focus, bool ghost) {
+        const float lift = std::floor(T::Px(1.0f) * hovT);
+        mn.y -= lift;
+        const ImVec2 mx(mn.x + realW, mn.y + tileH);
+        const float rr = T::Px(6.0f);
+        const float body = ghost ? 0.35f : 1.0f;
+        if (hovT > 0.0f) EditorUIPrimitives::DrawSoftShadow(dl, mn, mx, rr, T::Px(6.0f), 0.5f * hovT * k * e);
+        dl->AddRectFilled(mn, mx, f.A(T::Mix(T::Card, T::Hover, hovT), k * body), rr);
+        dl->AddRect(mn, mx, f.A(T::Mix(T::Hairline, T::Strong, hovT), k), rr, 0, 1.0f);
+        if (focus) dl->AddRect(ImVec2(mn.x - 2.0f, mn.y - 2.0f), ImVec2(mx.x + 2.0f, mx.y + 2.0f), f.A(T::Accent, k), rr + 2.0f, 0, T::Px(1.5f));
+        const float bs = T::Px(30.0f);
+        const ImVec2 bmn(mn.x + T::Px(9.0f), std::floor((mn.y + mx.y - bs) * 0.5f)), bmx(bmn.x + bs, bmn.y + bs);
+        dl->AddRectFilled(bmn, bmx, d.Color ? f.A(T::WithAlpha(T::UserColor(d.Color), 0.15f), k * body) : f.A(T::Hover, k * body), T::Px(5.0f));
+        const ImVec2 is = ImGui::CalcTextSize(d.Icon.c_str());
+        dl->AddText(ImVec2(std::floor((bmn.x + bmx.x - is.x) * 0.5f), std::floor((bmn.y + bmx.y - is.y) * 0.5f)),
+                    f.A(d.Missing ? T::Dim : (d.Color ? T::UserGlyphColor(d.Color) : T::Secondary), k * body), d.Icon.c_str());
+        const float tx = bmx.x + T::Px(10.0f), right = mx.x - T::Px(8.0f);
+        const float nameH = ImGui::GetFontSize();
+        T::PushSmall();
+        const float subH = ImGui::GetFontSize();
+        T::PopFont();
+        const float ty = std::floor((mn.y + mx.y - nameH - subH - T::Px(2.0f)) * 0.5f);
+        EditorUIPrimitives::TextEllipsis(dl, ImVec2(tx, ty), right, f.A(d.Missing ? T::Dim : T::Text, k * body), d.Label.c_str());
+        T::PushSmall();
+        EditorUIPrimitives::TextEllipsis(dl, ImVec2(tx, ty + nameH + T::Px(2.0f)), right, f.A(T::Dim, k * body), d.Sub.c_str());
+        T::PopFont();
+    };
+
+    // The page being left, drawn only (no interaction), sliding out and fading.
+    if (m_FavAnimStart >= 0.0 && m_FavPrevPage >= 0 && m_FavPrevPage < (int)pages.size() && m_FavPrevPage != m_FavPage) {
+        const std::vector<FavoriteDisplay> old = describe(pages[(size_t)m_FavPrevPage].Items);
+        for (int i = 0; i < (int)old.size(); ++i) drawTile(old[(size_t)i], tilePos(i, -slideD * pt), 1.0f - pt, 0.0f, false, false);
+    }
+    const float inDx = slideD * (1.0f - pt);
+    const ImGuiPayload* favDrag = ImGui::GetDragDropPayload();
+    const int dragFrom = favDrag && favDrag->IsDataType("FAVORITE_ITEM") ? *(const int*)favDrag->Data : -1;
+    for (int i = 0; i < (int)items.size(); ++i) {
+        const FavoriteDisplay& d = shown[(size_t)i];
+        const ImVec2 mn = tilePos(i, inDx);
+        const ImVec2 mx(mn.x + realW, mn.y + tileH);
+        ImGui::PushID(i);
+        ImGui::SetCursorScreenPos(mn);
+        if (ImGui::InvisibleButton("##fav", ImVec2(realW, tileH))) activate = i;
+        const bool hov = ImGui::IsItemHovered();
+        if (hov) m_FavHighlight = i;
+        bool ghost = false, dropHere = false;
+        if (ImGui::BeginDragDropSource()) {
+            ImGui::SetDragDropPayload("FAVORITE_ITEM", &i, sizeof(int));
+            ImGui::Text("%s  %s", d.Icon.c_str(), d.Label.c_str());
+            ImGui::EndDragDropSource();
+            ghost = true;
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            dropHere = true;
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("FAVORITE_ITEM", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) { moveFrom = *(const int*)pl->Data; moveTo = i; }
+            ImGui::EndDragDropTarget();
+        }
+        if (ImGui::BeginPopupContextItem("##favCtx")) {
+            if (ImGui::MenuItem(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "  Open")) activate = i;
+            if (pageCount > 1 && ImGui::BeginMenu(ICON_FA_ARROW_RIGHT "  Move to Page")) {
+                for (int p = 0; p < pageCount; ++p)
+                    if (p != m_FavPage && ImGui::MenuItem(pages[(size_t)p].Name.c_str())) { moveFrom = i; moveToPage = p; }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_TRASH "  Remove from Favorites")) removeAt = i;
+            ImGui::EndPopup();
+        }
+        const float hovT = T::AnimT(ImGui::GetID("##hov"), hov && dragFrom < 0);
+        drawTile(d, mn, std::max(pt, 0.05f), hovT, m_FavKeyNav && m_FavHighlight == i, ghost);
+        // Reordering: an insertion bar on the side the dragged tile will land.
+        if (dropHere && dragFrom >= 0 && dragFrom != i) {
+            const float bx = dragFrom > i ? mn.x - gap * 0.5f : mx.x + gap * 0.5f;
+            dl->AddRectFilled(ImVec2(bx - T::Px(1.5f), mn.y + T::Px(4.0f)), ImVec2(bx + T::Px(1.5f), mx.y - T::Px(4.0f)), f.A(T::Accent), T::Px(1.5f));
+        }
+        if (hov && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) EditorUI::SetTooltip("%s", d.Tooltip.c_str());
+        ImGui::PopID();
+    }
+    const int rows = ((int)items.size() + cols - 1) / cols;
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + rows * (tileH + gap)));
+    if (items.empty()) {
+        ImGui::Dummy(ImVec2(0.0f, T::Px(18.0f)));
+        EditorUIPrimitives::EmptyState(ICON_FA_STAR, "Nothing on this page yet",
+                                       "Drop folders, assets or Hierarchy objects here, star an asset, or press Ctrl+Alt+B to add the selection.");
+    }
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::EndChild();
+    dl = ImGui::GetWindowDrawList();
+}
+
+// Drop anything favoritable anywhere on the overlay: the shown page gets it.
+void EditorLayer::AcceptFavoritesDrop(World& world, FavoritesFrame& f) {
+    auto& us = f.Us;
+    auto& pages = f.Pages;
+    const std::string& sceneKey = f.SceneKey;
+    if (ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect, ImGui::GetID("##favDrop"))) {
+        bool added = false;
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            const entt::entity dragged = *(const entt::entity*)p->Data;
+            const std::vector<entt::entity> dropped = IsSelected(dragged) ? GetSelectedItems() : std::vector<entt::entity>{dragged};
+            for (entt::entity en : dropped) {
+                const auto* o = world.Registry.valid(en) ? world.Registry.try_get<OrderComponent>(en) : nullptr;
+                const auto* nm = o ? world.Registry.try_get<NameComponent>(en) : nullptr;
+                if (o) added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeEntity(sceneKey, o->Value, nm ? nm->Name : std::string()));
+            }
+        }
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
+            const std::string path((const char*)p->Data);
+            added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeFolder(path, FolderLeaf(path)));
+        }
+        for (const char* type : kAssetPayloads)
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
+                const std::string key((const char*)p->Data);
+                added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)));
+            }
+        if (added) us.MarkDirty();
+        ImGui::EndDragDropTarget();
+    }
+}
+
+// Footer: the keys, as key caps.
+void EditorLayer::DrawFavoritesFooter() {
+    namespace T = EditorTheme;
+    auto hint = [&](const char* key, const char* what, bool first) {
+        if (!first) ImGui::SameLine(0.0f, T::Px(14.0f));
+        EditorUIPrimitives::KeyCap(key);
+        ImGui::SameLine(0.0f, T::Px(5.0f));
+        T::PushSmall();
+        ImGui::TextColored(T::Dim, "%s", what);
+        T::PopFont();
+    };
+    ImGui::Dummy(ImVec2(0.0f, T::Px(2.0f)));
+    hint("1-9", "Pages", true);
+    hint(ICON_FA_ARROW_UP ICON_FA_ARROW_DOWN, "Select", false);
+    hint("Enter", "Open", false);
+    hint("Esc", "Close", false);
+}
+
+// Apply list edits after drawing.
+void EditorLayer::ApplyFavoritesEdits(World& world, AssetLibrary& assets, FavoritesFrame& f) {
+    auto& us = f.Us;
+    auto& pages = f.Pages;
+    auto& items = *f.Items;
+    int& activate = f.Activate;
+    int& removeAt = f.RemoveAt;
+    int& moveFrom = f.MoveFrom;
+    int& moveTo = f.MoveTo;
+    int& moveToPage = f.MoveToPage;
+    if (moveFrom >= 0 && moveToPage >= 0 && moveFrom < (int)items.size()) {
+        const Enhancers::EditorRef moved = items[(size_t)moveFrom];
+        items.erase(items.begin() + moveFrom);
+        Enhancers::AddFavorite(pages, moveToPage, moved);
+        us.MarkDirty();
+    } else if (moveFrom >= 0 && moveTo >= 0 && moveFrom != moveTo) {
+        Enhancers::MoveRef(items, moveFrom, moveTo);
+        us.MarkDirty();
+    }
+    if (removeAt >= 0 && removeAt < (int)items.size()) {
+        items.erase(items.begin() + removeAt);
+        us.MarkDirty();
+    }
+    if (activate >= 0 && activate < (int)items.size()) {
+        const Enhancers::EditorRef r = items[(size_t)activate];
+        ActivateFavorite(world, assets, r);
+    }
 }
 
 // ============================================================================================
