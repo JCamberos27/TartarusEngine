@@ -8,7 +8,7 @@
 //
 //  1. Motion that changes size moves the real layout. An opening section's height is the animated
 //     value: everything below it is laid out against that height, so what you see is where it is.
-//     Its body is laid out at full size behind a clip rect (ClipGuard) the height of the animated
+//     Its body is laid out at full size behind a clip rect (ImGui::PushClipRect) the height of the animated
 //     region, so text and buttons never pop or bleed past the edge, and the parts outside the clip
 //     are not hoverable either: ImGui hit-tests against the window's current ClipRect, which
 //     ImGui::PushClipRect narrows (IsMouseHoveringRect intersects with it).
@@ -29,16 +29,6 @@
 #include <imgui_internal.h> // ImRect, ImGuiButtonFlags_
 
 namespace Glass {
-
-// RAII for ImGui::PushClipRect/PopClipRect. Intersects with the current clip rect, so a guard
-// never widens what its parent allows.
-class ClipGuard {
-public:
-    ClipGuard(ImVec2 min, ImVec2 max) { ImGui::PushClipRect(min, max, true); }
-    ~ClipGuard() { ImGui::PopClipRect(); }
-    ClipGuard(const ClipGuard&) = delete;
-    ClipGuard& operator=(const ClipGuard&) = delete;
-};
 
 // RAII: draws go to the current table's background channel (under every cell's content), then
 // back to whatever channel was current. Unlike ImGui::TablePushBackgroundChannel/Pop it is valid

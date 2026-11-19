@@ -9,12 +9,6 @@
 
 struct ImDrawList;
 
-// Overrides every ImGuiStyle field the editor relies on: metrics (padding, spacing, rounding,
-// borders) at 1x UI scale, and the whole colour array. Call on a style reset to defaults; the
-// caller applies ScaleAllSizes(uiScale) afterwards exactly once (EditorLayer::ApplyThemeStyle does
-// both). Safe to call repeatedly.
-void ConfigureMacEngineTheme(ImGuiStyle& style);
-
 // Black Glass as the editor uses it: turns a style that already carries the Tartarus metrics and
 // palette into glass. Surfaces you work on become translucent black over the canvas
 // (DrawWallpaper), fields and buttons become white washes, borders become faint white hairlines,

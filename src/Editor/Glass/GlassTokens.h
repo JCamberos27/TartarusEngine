@@ -151,12 +151,6 @@ constexpr float Concentric(float outerRadius, float inset) {
 constexpr float SquircleExponent    = 5.0f;
 constexpr float SquircleRadiusScale = 1.28f;
 
-// Type roles, as sizes at 1x (they follow the UI scale through the font's baked size).
-constexpr float TypeBody     = 15.0f;
-constexpr float TypeCaption  = 13.0f;
-constexpr float TypeHeadline = 13.0f; // section headers: medium weight via the UI face, not caps
-constexpr float TypeTitle    = 20.0f;
-
 // =================================================================================================
 // 3. The fluid motion matrix (docs/EDITOR_DESIGN_SYSTEM.md, "Motion" has the table)
 // =================================================================================================
@@ -270,7 +264,6 @@ constexpr MotionSpec CheckErase     = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
 // An input's 1 px focus ring.
 constexpr MotionSpec FocusIn        = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
 constexpr MotionSpec FocusOut       = {EaseId::OutCubic, 0, 0, 0, 0, 200.0f};
-constexpr float      FocusRingAlpha = 0.55f;
 // Rejected input: one small horizontal wiggle (f ~ 6.4 Hz, zeta = 0.3), much gentler than the
 // compile-failure shake.
 constexpr ShakeSpec  InvalidWiggle  = {1.0f, 1600.0f, 24.0f, 3.0f, 360.0f};
@@ -446,7 +439,6 @@ constexpr float      StartupDropPx       = 14.0f;
 constexpr MotionSpec DecalStampPop   = {EaseId::Spring, 1.0f, 260.0f, 14.0f, 0.0f, 460.0f}; // zeta*omega = 7
 constexpr float      DecalStampFromScale = 1.18f;  // the stamped decal's box settles from this
 constexpr MotionSpec DecalRingFlash  = {EaseId::OutCubic, 0, 0, 0, 0, 380.0f};
-constexpr float      DecalRingPx     = 34.0f;      // the flash ring's final radius at 1x
 constexpr MotionSpec DecalGhostFade  = {EaseId::OutCubic, 0, 0, 0, 0, 160.0f};
 constexpr float      DecalGhostAlpha = 0.62f;      // the ghost decal's opacity
 constexpr float      DecalGhostBreath = 0.14f;     // +- of that, slowly

@@ -1474,10 +1474,8 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
 
     // --- Scene stats pill, above the selection card (Gizmos popup > Stats pill; off by default) ----
     if (prefs.GlassStatsPill) {
-        char stats[96];
         const int objects = (int)reg.view<const NameComponent>().size();
         const float ms = std::max(0.01f, m_SmoothedFrameMs);
-        std::snprintf(stats, sizeof(stats), "%d objects   %.0f fps   %.1f ms", objects, 1000.0f / ms, ms);
         // The object count rolls (it changes on an edit, then holds still: no motion at rest); the
         // frame figures change every frame, so they stay plain text.
         char frame[48];
@@ -1492,7 +1490,6 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         const ImVec2 at(r.Min.x + pad, r.GetCenter().y - lineH * 0.5f);
         const float ow = motion.Odometer(ImGui::GetID("##hudObjects"), dl, at, (double)objects, 0, Col(Glass::TextSecondary), " objects");
         dl->AddText(ImVec2(at.x + ow, at.y), Col(Glass::TextSecondary), frame);
-        (void)stats;
     }
 
     // --- Toasts, bottom-centre, newest at the bottom -----------------------------------------------
@@ -1504,7 +1501,6 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         const float w = std::min(Glass::Px(380.0f), m_ViewportSize.x - margin * 2.0f);
         const float wrap = w - pad * 2.0f - Glass::Px(Glass::Space2);
         float bottom = vMax.y - margin;
-        bool anyMoving = false;
         for (int i = (int)g.Toasts.size() - 1; i >= 0; --i) {
             GlassEditorState::Toast& toast = g.Toasts[(size_t)i];
             const float age = (float)(now - toast.Born);
@@ -1539,7 +1535,6 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
                                              Glass::Px(Glass::ErrorShake.amplitudePx));
             const ImRect rest(ImVec2(vMin.x + (m_ViewportSize.x - w) * 0.5f, y), ImVec2(vMin.x + (m_ViewportSize.x + w) * 0.5f, y + h));
             const ImRect drawn = Scaled(rest, scale, ImVec2(shake, Glass::Px(Glass::ToastPopRisePx) * (1.0f - pop)));
-            anyMoving = anyMoving || pop < 1.0f || exit > 0.0f || shake != 0.0f;
 
             ImGui::SetCursorScreenPos(rest.Min);
             bool hov = false, held = false;
@@ -1614,7 +1609,6 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         if (g.Toasts.empty()) g.Toasts.shrink_to_fit(); // nothing showing, nothing held
         if (m_RebuildToastId != 0 && std::none_of(g.Toasts.begin(), g.Toasts.end(), [&](const GlassEditorState::Toast& t) { return t.Id == m_RebuildToastId; }))
             m_RebuildToastId = 0;
-        (void)anyMoving;
     }
 
     // --- Snap ring: an elastic pop where a snapped gizmo drag landed -------------------------------

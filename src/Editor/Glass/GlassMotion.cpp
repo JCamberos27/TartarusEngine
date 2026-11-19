@@ -896,17 +896,7 @@ float ImAnimContext::GridRippleDelay(int col, int row, int cols, int rows, int o
     return d * stepMs * 0.001f;
 }
 
-// --- Motion v2: text on paths ---------------------------------------------------------------------
-void ImAnimContext::TextOnPath(ImGuiID pathId, const char* text, ImVec2 origin, ImU32 col, float offsetPx, bool centred) {
-    if (!text || !*text || !iam_path_exists(pathId)) return;
-    iam_text_path_opts o;
-    o.origin = origin;
-    o.offset = offsetPx;
-    o.align = centred ? iam_text_align_center : iam_text_align_start;
-    o.color = col;
-    iam_text_path(pathId, text, o);
-}
-
+// --- Motion v2: text along a wire ------------------------------------------------------------------
 void ImAnimContext::TextAlongCubic(ImDrawList* dl, ImVec2 p0, ImVec2 p1, ImVec2 p2, ImVec2 p3, const char* text,
                                    ImU32 col, float centerT, float liftPx) {
     if (!dl || !text || !*text) return;

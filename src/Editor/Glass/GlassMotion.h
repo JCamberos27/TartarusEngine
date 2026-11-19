@@ -241,10 +241,8 @@ public:
     // (iam_stagger_grid_delay), capped at `capSteps` steps.
     static float GridRippleDelay(int col, int row, int cols, int rows, int originCol, int originRow, float stepMs, int capSteps);
 
-    // Text on paths. TextOnPath follows a path made with DefinePath (in pixels, offset by
-    // `origin`), via iam_text_path. TextAlongCubic places glyphs along a cubic bezier (a node-graph
-    // wire) centred at arc fraction `centerT`, with no path definition (stateless).
-    static void TextOnPath(ImGuiID pathId, const char* text, ImVec2 origin, ImU32 col, float offsetPx, bool centred);
+    // TextAlongCubic places glyphs along a cubic bezier (a node-graph wire) centred at arc fraction
+    // `centerT`, with no path definition (stateless).
     static void TextAlongCubic(ImDrawList* dl, ImVec2 p0, ImVec2 p1, ImVec2 p2, ImVec2 p3, const char* text,
                                ImU32 col, float centerT, float liftPx);
 
