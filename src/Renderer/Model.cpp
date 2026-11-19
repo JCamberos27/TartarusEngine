@@ -685,7 +685,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
         for (unsigned int i : indices) it->Indices.push_back(base + i);
         return nullptr;
     }
-    // Deferred (ImportDeferred on a worker): keep the vertices for FinishGpuUpload, no GL here.
+    // Deferred (ImportDeferred on a worker): keep the vertices for FinishGpuUploadStep, no GL here.
     auto gpuMesh = m_DeferGpu ? std::make_unique<ModelMesh>(std::move(vertices), indices, true)
                               : std::make_unique<ModelMesh>(vertices, indices);
     if (skinned) gpuMesh->SetLocalPositions(std::move(posed));
@@ -755,7 +755,7 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
     TextureImportSettings settings;
     settings.IsSRGB = role == TextureRole::Color;
     if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
-    // Deferred: decode now (this thread), upload in FinishGpuUpload.
+    // Deferred: decode now (this thread), upload in FinishGpuUploadStep.
     auto tex = m_DeferGpu ? Texture::CreatePending(Texture::DecodeFile(fullPath, settings))
                           : std::make_shared<Texture>(fullPath, settings);
     if (!tex || (!tex->IsValid() && !tex->IsPendingUpload())) return nullptr;

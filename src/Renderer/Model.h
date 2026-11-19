@@ -536,7 +536,7 @@ private:
     PlaybackState m_AnimFrom;      // what's being faded out (Clip -1 = the bind pose)
     float m_FadeElapsed = 0.0f, m_FadeDuration = 0.0f; // crossfade progress; duration 0 = none
     bool m_DeferGpu = false;       // ImportDeferred: build meshes/textures without GL
-    bool m_GpuPending = false;     // ImportDeferred's result, until FinishGpuUpload
+    bool m_GpuPending = false;     // ImportDeferred's result, until FinishGpuUploadStep
     bool m_PosePending = false;    // a fade to "stopped" still needs final matrices this frame
     bool m_ExternalPose = false;   // ApplyLocalPose owns the pose until the next PlayAnimation
     std::vector<LocalTRS> m_AppliedPose; // ... and what it was given (AppliedLocalPose)
