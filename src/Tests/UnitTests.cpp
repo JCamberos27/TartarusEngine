@@ -103,6 +103,7 @@
 #include "OutfitSystem.h"
 #include "Texture.h"
 #include "PngWrite.h" // async decode test fixture
+#include "EditorLayerInternal.h" // ClipFilterMatch
 #include <set>
 #include <string>
 #include <thread>
@@ -1296,6 +1297,15 @@ void TestCameraFrustumValidation() {
 
 // The player's acceleration: 0 = the move is the input (as before); otherwise an exponential approach
 // that lands in the same place whatever the frame rate, and arrives rather than creeping.
+// The clip pickers' search: every word, any case, anywhere in the path.
+void TestClipFilterMatch() {
+    using EditorInternal::ClipFilterMatch;
+    const std::string path = "Animations/Mocap/AF_Walk/Walk_Fwd_NoRM.fbx";
+    CHECK(ClipFilterMatch(nullptr, path) && ClipFilterMatch("", path) && ClipFilterMatch("   ", path));
+    CHECK(ClipFilterMatch("walk", path) && ClipFilterMatch("WALK fwd", path) && ClipFilterMatch("  norm  af_", path));
+    CHECK(!ClipFilterMatch("run", path) && !ClipFilterMatch("walk run", path) && !ClipFilterMatch("fwdx", path));
+}
+
 void TestFramePacing() {
     const double p = 1.0 / 60.0;
     // Jittered CPU-side frame times around one refresh come out as whole refreshes.
@@ -6060,6 +6070,7 @@ int RunUnitTests(const char* filter) {
         {"SceneRoundTrip", TestSceneRoundTrip},
         {"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip},
         {"PlayerAcceleration", TestPlayerAcceleration},
+        {"ClipFilterMatch", TestClipFilterMatch},
         {"FramePacing", TestFramePacing},
         {"NpcHitRegions", TestNpcHitRegions},
         {"IKSetGlobalsBatch", TestIKSetGlobalsBatch},

@@ -431,19 +431,18 @@ const std::vector<std::string>& ProjectModelFiles() {
     return files;
 }
 
+// Every space-separated word of `filter` appears in `text`, ignoring case. Runs per file per frame while a
+// picker is searching, so it compares in place instead of lower-casing copies.
 bool ClipFilterMatch(const char* filter, const std::string& text) {
     if (!filter || !*filter) return true;
-    std::string hay = text;
-    for (char& ch : hay) ch = (char)std::tolower((unsigned char)ch);
+    const auto same = [](char a, char b) { return std::tolower((unsigned char)a) == std::tolower((unsigned char)b); };
     const char* p = filter;
     while (*p) {
         while (*p == ' ') ++p;
         const char* start = p;
         while (*p && *p != ' ') ++p;
         if (p == start) break;
-        std::string word(start, p);
-        for (char& ch : word) ch = (char)std::tolower((unsigned char)ch);
-        if (hay.find(word) == std::string::npos) return false;
+        if (std::search(text.begin(), text.end(), start, p, same) == text.end()) return false;
     }
     return true;
 }
