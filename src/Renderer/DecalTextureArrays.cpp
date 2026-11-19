@@ -2,6 +2,7 @@
 #include "DecalTextureArrays.h"
 #include "Texture.h"
 #include "Log.h"
+#include "Core/Profiler.h"
 #include "gl.h"
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstring>
 #include <deque>
 #include <fstream>
 #include <iterator>
@@ -334,8 +336,7 @@ private:
 DecalTextureArrays::DecalTextureArrays() { UpdateMaxLayers(); }
 
 DecalTextureArrays::~DecalTextureArrays() {
-    for (auto& [key, e] : m_Slots)
-        if (e->Pending.valid()) e->Pending.wait(); // let a decode in flight finish before its workers go
+    for (auto& [key, e] : m_Slots) ReleaseEntry(*e); // let a decode in flight finish before its workers go
     m_Slots.clear();
     m_Workers.reset();
     for (unsigned int& t : m_Tex)
@@ -412,9 +413,15 @@ int DecalTextureArrays::ResidentCount() const {
     return n;
 }
 
+void DecalTextureArrays::ReleaseEntry(Entry& e) {
+    if (e.Pending.valid()) e.Pending.wait();
+    if (e.Stage.Valid()) UploadStaging::Abandon(e.Stage);
+    e.Staged.reset();
+}
+
 void DecalTextureArrays::Clear() {
     for (auto& [key, e] : m_Slots) {
-        if (e->Pending.valid()) e->Pending.wait();
+        ReleaseEntry(*e);
         m_Alloc.Free(e->S.Alloc);
     }
     m_Slots.clear();
@@ -428,10 +435,8 @@ void DecalTextureArrays::Drop(const Source& src) {
     const auto it = m_Slots.find(key);
     if (it == m_Slots.end()) return;
     Entry& e = *it->second;
-    if (e.Pending.valid()) { // its decode is of the old files: let it land, then throw it away
-        e.Pending.wait();
-        --m_InFlight;
-    }
+    if (e.Pending.valid()) --m_InFlight; // its decode is of the old files: let it land, then throw it away
+    ReleaseEntry(e);
     if (e.S.Alloc.Valid()) m_Alloc.Free(e.S.Alloc);
     m_Slots.erase(it);
     m_Pending.erase(std::remove(m_Pending.begin(), m_Pending.end(), key), m_Pending.end());
@@ -483,6 +488,7 @@ void DecalTextureArrays::EnsureGpu(int layers, const bool want[kKinds]) {
         if (!(want[k] || m_Active[k] || k == kAlbedo)) continue;
         const bool fresh = m_Tex[k] == 0;
         if (!fresh && layers <= m_GpuLayers) continue;
+        PROFILE_SCOPE("Decal Array Growth");
         unsigned int tex = 0;
         glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex);
         glTextureStorage3D(tex, kArrayLevels, kFormat[k], Decals::PAGE_SIZE, Decals::PAGE_SIZE, layers);
@@ -509,7 +515,8 @@ void DecalTextureArrays::EnsureGpu(int layers, const bool want[kKinds]) {
     m_GpuLayers = layers;
 }
 
-void DecalTextureArrays::UploadSlot(Entry& e, Decoded& d) {
+void DecalTextureArrays::UploadSlot(Entry& e, const Decoded& d, std::size_t stagedOffset) {
+    PROFILE_SCOPE("Decal Slot Upload");
     Slot& s = e.S;
     if (!d.Has[kAlbedo]) {
         s.Failed = true;
@@ -522,53 +529,99 @@ void DecalTextureArrays::UploadSlot(Entry& e, Decoded& d) {
     if (before[1] != m_Active[1] || before[2] != m_Active[2] || before[3] != m_Active[3]) UpdateMaxLayers();
     const int size = s.Alloc.Size;
     assert(s.Alloc.Layer >= 0 && s.Alloc.Layer < kMaxLayers && s.Alloc.Layer < m_GpuLayers);
+    const bool staged = stagedOffset != kNotStaged;
+    constexpr GLenum kPixelUnpackBuffer = 0x88EC; // GL_PIXEL_UNPACK_BUFFER
+    if (staged) glBindBuffer(kPixelUnpackBuffer, UploadStaging::Buffer());
+    std::size_t base = 0; // this kind's start among the staged maps
     for (int k = 0; k < kKinds; ++k) {
         if (!d.Has[k]) continue;
         const TextureCpuData& t = d.Data[k];
         std::size_t off = 0;
         for (int l = 0; l <= s.MaxLod && l < (int)t.LevelSizes.size(); ++l) {
             const int ls = size >> l;
+            const void* src = staged ? reinterpret_cast<const void*>(static_cast<std::uintptr_t>(stagedOffset + base + off))
+                                     : static_cast<const void*>(t.Pixels.data() + off);
             glCompressedTextureSubImage3D(m_Tex[k], l, s.Alloc.X >> l, s.Alloc.Y >> l, s.Alloc.Layer, ls, ls, 1, kFormat[k],
-                                          (GLsizei)t.LevelSizes[l], t.Pixels.data() + off);
+                                          (GLsizei)t.LevelSizes[l], src);
             off += t.LevelSizes[l];
         }
+        base += t.Pixels.size();
         s.TexFlags |= kHasFlag[k];
     }
+    if (staged) glBindBuffer(kPixelUnpackBuffer, 0);
     s.Ready = true;
 }
 
 void DecalTextureArrays::BeginFrame() {
     ++m_Frame;
     m_Deferred = false;
-    // The decodes that have landed, oldest request first, at most kMaxUploadsPerFrame of them: each is a few
-    // MB of BCn mips into the arrays (and maybe a growth), so a burst of new decals spreads over frames.
-    // A big slot (a 2K decal's four maps, ~18 MB with mips) goes up on its own.
+    // The decodes that have landed, oldest request first. Each slot's maps (a 2K decal's four: ~18 MB of BCn
+    // mips) are first copied into the upload staging ring on its worker, and go up from there a pump later as
+    // a pixel-unpack copy the driver queues: straight from memory, the driver's own copy of them held the main
+    // thread for 4-28 ms (the hallway's Decal Prepare spikes). At most kMaxUploadsPerFrame slots a frame (each
+    // may also grow the arrays). A slot too big to stage, or with staging off, uploads from memory as before.
     int uploads = 0;
     std::size_t bytes = 0;
     for (size_t i = 0; i < m_Pending.size() && uploads < kMaxUploadsPerFrame && bytes < kUploadBytesPerFrame;) {
         const auto it = m_Slots.find(m_Pending[i]);
-        if (it == m_Slots.end() || !it->second->Pending.valid()) {
+        if (it == m_Slots.end() || (!it->second->Pending.valid() && !it->second->Staged)) {
             m_Pending.erase(m_Pending.begin() + (std::ptrdiff_t)i);
             continue;
         }
         Entry& e = *it->second;
-        if (e.Pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            ++i;
-            continue;
+        if (!e.Staged) {
+            if (e.Pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                ++i;
+                continue;
+            }
+            std::shared_ptr<Decoded> d;
+            try { d = e.Pending.get(); } catch (...) {} // a worker that threw (out of memory) counts as failed
+            --m_InFlight;
+            if (!d) {
+                m_Pending.erase(m_Pending.begin() + (std::ptrdiff_t)i);
+                e.S.Failed = true;
+                m_Alloc.Free(e.S.Alloc);
+                e.S.Alloc = {};
+                continue;
+            }
+            e.Staged = std::move(d);
         }
-        std::shared_ptr<Decoded> d;
-        try { d = e.Pending.get(); } catch (...) {} // a worker that threw (out of memory) counts as failed
-        --m_InFlight;
-        m_Pending.erase(m_Pending.begin() + (std::ptrdiff_t)i);
-        if (d) {
-            UploadSlot(e, *d);
-            ++uploads;
-            for (int k = 0; k < kKinds; ++k) bytes += d->Has[k] ? d->Data[k].Pixels.size() : 0;
+        std::size_t total = 0;
+        for (int k = 0; k < kKinds; ++k) total += e.Staged->Has[k] ? e.Staged->Data[k].Pixels.size() : 0;
+        if (!e.Stage.Valid()) {
+            if (total > 0) e.Stage = UploadStaging::Reserve(total);
+            if (e.Stage.Valid()) {
+                std::shared_ptr<const Decoded> maps = e.Staged; // alive until the copy is done (it is released after)
+                UploadStaging::StageCopy(e.Stage, [maps](unsigned char* dst) {
+                    for (int k = 0; k < kKinds; ++k) {
+                        if (!maps->Has[k]) continue;
+                        const std::vector<unsigned char>& px = maps->Data[k].Pixels;
+                        std::memcpy(dst, px.data(), px.size());
+                        dst += px.size();
+                    }
+                });
+                ++i; // up from the ring once the worker has copied it
+                continue;
+            }
+            if (total > 0 && UploadStaging::Stageable(total)) { // the ring is full for now: next pump
+                ++i;
+                continue;
+            }
+            UploadSlot(e, *e.Staged, kNotStaged);
         } else {
-            e.S.Failed = true;
-            m_Alloc.Free(e.S.Alloc);
-            e.S.Alloc = {};
+            if (!e.Stage.Ready()) {
+                ++i;
+                continue;
+            }
+            UploadSlot(e, *e.Staged, e.Stage.Offset);
+            UploadStaging::Retire(e.Stage);
+            e.Stage = {};
         }
+        ++uploads;
+        bytes += total;
+        // The decoded maps go back to the OS on the staging worker: freeing ~18 MB here costs a millisecond.
+        UploadStaging::Dispose([spent = std::move(e.Staged)]() mutable { spent.reset(); });
+        m_Pending.erase(m_Pending.begin() + (std::ptrdiff_t)i);
     }
 }
 
