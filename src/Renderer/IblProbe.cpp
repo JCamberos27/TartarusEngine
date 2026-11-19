@@ -1,4 +1,5 @@
 #include "IblProbe.h"
+#include "CubeFaces.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLFramebufferCheck.h"
@@ -11,18 +12,7 @@
 
 namespace {
 
-// Face-local bases for GL_TEXTURE_CUBE_MAP layers 0..5 (+X, -X, +Y, -Y, +Z, -Z). The V axis is
-// flipped relative to world up on the four side faces, matching OpenGL's (left-handed, +Y-down)
-// cube-face convention — get this wrong and reflections come out mirrored.
-struct FaceBasis { float forward[3]; float right[3]; float up[3]; };
-const FaceBasis kFaces[6] = {
-    {{ 1,  0,  0}, { 0,  0, -1}, { 0, -1,  0}}, // +X
-    {{-1,  0,  0}, { 0,  0,  1}, { 0, -1,  0}}, // -X
-    {{ 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // +Y
-    {{ 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // -Y
-    {{ 0,  0,  1}, { 1,  0,  0}, { 0, -1,  0}}, // +Z
-    {{ 0,  0, -1}, {-1,  0,  0}, { 0, -1,  0}}, // -Z
-};
+using CubeFaces::kFaces; // CubeFaces.h
 
 } // namespace
 

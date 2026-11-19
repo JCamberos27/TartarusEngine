@@ -1,4 +1,5 @@
 #include "Cubemap.h"
+#include "CubeFaces.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
@@ -8,15 +9,7 @@
 
 namespace {
 
-struct FaceBasis { float forward[3]; float right[3]; float up[3]; };
-const FaceBasis kFaces[6] = {
-    {{ 1,  0,  0}, { 0,  0, -1}, { 0, -1,  0}}, // +X
-    {{-1,  0,  0}, { 0,  0,  1}, { 0, -1,  0}}, // -X
-    {{ 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // +Y
-    {{ 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // -Y
-    {{ 0,  0,  1}, { 1,  0,  0}, { 0, -1,  0}}, // +Z
-    {{ 0,  0, -1}, {-1,  0,  0}, { 0, -1,  0}}, // -Z
-};
+using CubeFaces::kFaces; // CubeFaces.h
 
 } // namespace
 
