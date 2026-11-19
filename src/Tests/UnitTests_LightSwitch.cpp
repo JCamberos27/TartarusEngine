@@ -42,7 +42,7 @@ void LightSwitchSceneBlocks() {
 void LightSwitchCircuit() {
     const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
     if (!std::filesystem::exists(path)) {
-        Log::Info("LightSwitchCircuit: no test model - skipped.");
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
         return;
     }
     const auto model = Model::ImportDeferred(path, ModelImportSettings{});
@@ -104,7 +104,7 @@ void LightSwitchCircuit() {
 void LightSwitchImportedGlow() {
     const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
     if (!std::filesystem::exists(path)) {
-        Log::Info("LightSwitchImportedGlow: no test model - skipped.");
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
         return;
     }
     // Its own copy of the model, so the imported material can glow without touching the shared one.
@@ -167,7 +167,7 @@ void LightSwitchImportedGlow() {
 void LightSwitchStopRestores() {
     const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
     if (!std::filesystem::exists(path)) {
-        Log::Info("LightSwitchStopRestores: no test model - skipped.");
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
         return;
     }
     const auto model = Model::ImportDeferred(path, ModelImportSettings{});

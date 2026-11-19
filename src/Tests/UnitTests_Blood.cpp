@@ -272,6 +272,7 @@ void Test_Blood_SprayTiming() {
 void Test_Blood_FleshHits() {
     BloodFx fx;
     fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; }); // no physics here
     int rays = 0;
     // A wall 1 m along -Z, facing the spray.
     fx.SetRaycast([&](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
@@ -400,7 +401,7 @@ void Test_Blood_Decals() {
     CHECK(!fx.Decals().empty());
     fx.Config.MaxDecals = 3;
     for (unsigned e = 50; e < 60; ++e) { h.Entity = e; h.Point.x = (float)e; fx.OnFleshHit(h); }
-    CHECK((int)fx.Decals().size() <= 3);
+    CHECK(!fx.Decals().empty() && (int)fx.Decals().size() <= 3); // capped, not emptied
     // No pool for a body that's gone by then.
     fx.Clear();
     corpseThere = false;
@@ -482,14 +483,21 @@ void Test_Blood_Energy() {
     BloodFx::Hit head = h;
     head.Head = true;
     CHECK(BloodFx::Energy(head) > rifle);
+    const auto plain = [&](float damage) { // a single round of `damage` at the same spot (named fields: a new Hit field can't shift it)
+        BloodFx::Hit p;
+        p.Point = h.Point;
+        p.Direction = h.Direction;
+        p.Damage = damage;
+        return p;
+    };
     BloodFx::Hit shotgun = h;     // one pellet of a 9-pellet load, carrying the load
     shotgun.Damage = 14.0f;
     shotgun.Pellets = 9;
-    CHECK(BloodFx::Energy(shotgun) > BloodFx::Energy(BloodFx::Hit{h.Point, h.Direction, 0, -1, 14.0f}));
+    CHECK(BloodFx::Energy(shotgun) > BloodFx::Energy(plain(14.0f)));
     BloodFx::Hit graze = h;
     graze.Damage = 8.0f;
     CHECK(BloodFx::Energy(graze) < BloodFx::kExitEnergy);
-    CHECK(BloodFx::Energy(BloodFx::Hit{h.Point, h.Direction, 0, -1, 10000.0f}) <= 3.0f);
+    CHECK(BloodFx::Energy(plain(10000.0f)) <= 3.0f);
     // The spray's stretch: along the line of flight longer, across it unchanged.
     const glm::mat4 m = BloodFx::PrefabToWorld(glm::vec3(0.0f), glm::vec3(1, 0, 0), 1.0f, 0.0f, glm::vec3(1, 0, 0), 1.4f);
     CHECK(std::abs(glm::length(glm::vec3(m * glm::vec4(1, 0, 0, 0))) - 1.4f) < 1e-4f);
@@ -698,11 +706,6 @@ void Test_Blood_Footprints() {
     fx.OnFootstep(7, glm::vec3(0, 0, 0), glm::vec3(1, 0, 0), -1);
     CHECK(fx.BloodySteps(7) == 0);
 }
-
-
-
-
-
 
 void Test_ImpactFx_Surfaces() {
     // Substring words: none may hide inside another surface's name ("pane" in "Panel" did).

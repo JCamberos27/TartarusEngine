@@ -475,12 +475,13 @@ bool NpcRagdollMotor::Lying() const {
     const RagdollSettingsComponent& c = *m_Cfg;
     float p[3], q[4], chest[3];
     if (!PhysicsWorld::GetRagdollPart(m_Id, 0, p, q) || !PhysicsWorld::GetRagdollPart(m_Id, 1, chest, q)) return true;
-    auto dir = [&](int part) {
+    glm::vec3 axis[NpcRagdoll::kRagParts];
+    for (int part : {0, 7, 8, 9, 10}) { // the trunk and the legs: what the knee and hip angles read
         float pp[3], qq[4];
-        PhysicsWorld::GetRagdollPart(m_Id, part, pp, qq);
-        return glm::quat(qq[3], qq[0], qq[1], qq[2]) * glm::vec3(1.0f, 0.0f, 0.0f);
-    };
-    const auto angle = [&](int a, int b) { return glm::degrees(std::acos(std::clamp(glm::dot(dir(a), dir(b)), -1.0f, 1.0f))); };
+        if (!PhysicsWorld::GetRagdollPart(m_Id, part, pp, qq)) return true; // (as the pelvis read above: unreadable = lying)
+        axis[part] = glm::quat(qq[3], qq[0], qq[1], qq[2]) * glm::vec3(1.0f, 0.0f, 0.0f);
+    }
+    const auto angle = [&](int a, int b) { return glm::degrees(std::acos(std::clamp(glm::dot(axis[a], axis[b]), -1.0f, 1.0f))); };
     // A knee's flexion is the angle between thigh and calf; a hip's is how far the thigh has come toward the trunk's line (0 = in line).
     if (std::max(angle(7, 8), angle(9, 10)) > c.RestKneeMax) return false;
     if (180.0f - std::min(angle(0, 7), angle(0, 9)) > c.RestHipMax) return false;
