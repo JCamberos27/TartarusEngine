@@ -1,5 +1,8 @@
 #include "UnitTestSupport.h"
 #include "FirstPersonProcedural.h"
+#include "FirstPersonAnimation.h"
+#include "Paths.h"
+#include <filesystem>
 #include <glm/gtx/euler_angles.hpp>
 #include <cmath>
 
@@ -144,9 +147,26 @@ void TestUnityControllerRecoil() {
         else CHECK(std::abs(angle-2.0f)<0.001f);
     }
 }
+// The shipped weapons fire their .recoil profiles: the recoil a weapon plays is exactly its profile's, whatever older
+// tuning its .fpsanim still embeds (that converts on load, unused).
+void TestShippedWeaponsUseTheirProfiles() {
+    int checked=0;
+    for (const char* w : {"AKS74U/AKS74U","Remington870/Remington870","Revolver38/Revolver38"}) {
+        const std::string base=std::string("assets/Weapons/")+w;
+        if (!std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(base+".fpsanim")))) continue;
+        FirstPersonAnimationSet set; RecoilAsset profile; std::string why;
+        CHECK(FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(base+".fpsanim"),set,&why));
+        CHECK(!set.RecoilProfile.empty());
+        CHECK(RecoilAsset::LoadFile(ProjectPaths::Resolve(set.RecoilProfile),profile,&why));
+        CHECK(set.Procedural.Recoil.Unity.ToJson()==profile.Data.Unity.ToJson() && set.Procedural.Recoil.Enabled==profile.Data.Enabled);
+        ++checked;
+    }
+    if (checked==0) UnitTestSupport::Skip("no shipped weapons in this checkout");
+}
 }
 void RegisterRecoilPortTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("RecoilAnimDataPort",TestRecoilAnimDataPort);
     tests.emplace_back("RecoilAnimationPort",TestRecoilAnimationPort);
     tests.emplace_back("UnityControllerRecoil",TestUnityControllerRecoil);
+    tests.emplace_back("ShippedWeaponsUseTheirProfiles",TestShippedWeaponsUseTheirProfiles);
 }
