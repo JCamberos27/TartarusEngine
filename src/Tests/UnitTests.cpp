@@ -4835,11 +4835,15 @@ void TestProjectWatcher() {
     auto settle = [&] {
         std::vector<ProjectWatcher::Change> all;
         bool overflow = false;
-        for (int i = 0; i < 300; ++i) { // up to 15 s (loaded machines); Start() returns with the watch armed
+        // Up to 15 s (loaded machines); Start() returns with the watch armed. Done once something came in and then four
+        // polls (200 ms) in a row brought nothing: one quiet poll ended it between a new folder's event and its file's.
+        int quiet = 0;
+        for (int i = 0; i < 300; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             auto got = ProjectWatcher::Drain(150, overflow);
             all.insert(all.end(), got.begin(), got.end());
-            if (!all.empty() && got.empty()) break;
+            quiet = got.empty() ? quiet + 1 : 0;
+            if (!all.empty() && quiet >= 4) break;
         }
         return all;
     };

@@ -9,6 +9,8 @@
 #include "../Game/Combat/CombatFx.h"
 #include "../Renderer/WeaponFxRenderer.h"
 #include "AssetLibrary.h"
+#include "AssetDatabase.h"
+#include "AtomicFile.h"
 #include "SceneSerializer.h"
 #include "World.h"
 #include "../Renderer/Animation.h"
@@ -576,8 +578,35 @@ static void Test_PngWrite_LevelPerCallUnderThreads() {
     CHECK(!PngWrite::Encode(none, 0, h, 4, px.data(), 0) && !PngWrite::Encode(none, w, h, 5, px.data(), w * 5) && none.empty());
 }
 
+// A .meta that is valid JSON but not an object (an array, a number) reads as empty and is rewritten as one, instead of
+// throwing out of the merge.
+static void Test_AssetDatabase_NonObjectMetaIsRewritten() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dir = fs::temp_directory_path(ec) / "TartarusUnitTest_MetaShape";
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    const fs::path file = dir / "thing.txt";
+    CHECK(AtomicFile::WriteBytes(file, "x", true));
+    const AssetGuid fresh = AssetGuid::Generate();
+    CHECK(AtomicFile::WriteBytes(dir / "thing.txt.meta", nlohmann::json({{"guid", fresh.ToString()}, {"type", "asset"}}).dump(), true));
+    CHECK(AssetDatabase::EnsureGuid(file.string()) == fresh);
+    for (const char* bad : {"[1, 2]", "42", "\"text\""}) {
+        CHECK(AtomicFile::WriteBytes(dir / "thing.txt.meta", bad, true));
+        CHECK(AssetDatabase::ReadMetaFields(file.string()) == "{}");
+        bool threw = false, merged = false;
+        try { merged = AssetDatabase::MergeMetaFields(file.string(), R"({"note": 1})"); } catch (...) { threw = true; }
+        CHECK(!threw && merged);
+        const nlohmann::json back = nlohmann::json::parse(AssetDatabase::ReadMetaFields(file.string()), nullptr, false);
+        CHECK(back.is_object() && back.value("note", 0) == 1 && back.value("guid", std::string()) == fresh.ToString());
+    }
+    AssetDatabase::ForgetPath(file.string());
+    fs::remove_all(dir, ec);
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"PngWrite::LevelPerCallUnderThreads", Test_PngWrite_LevelPerCallUnderThreads});
+    tests.push_back({"AssetDatabase::NonObjectMetaIsRewritten", Test_AssetDatabase_NonObjectMetaIsRewritten});
     tests.push_back({"BoneAnimChannel::FinalizeMatchesSearch", Test_BoneAnimChannel_FinalizeMatchesSearch});
     tests.push_back({"Material::HashCachePerFrame", Test_Material_HashCachePerFrame});
     tests.push_back({"Material::ExtraPropsHashPerFrame", Test_Material_ExtraPropsHashPerFrame});
