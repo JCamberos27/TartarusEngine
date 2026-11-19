@@ -227,8 +227,6 @@ void HiZPieces() {
     CHECK(HiZCuller::FoliageSway(0.15f) > 0.3f);
 }
 
-// Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
-// colour, queue or slot count keeps them apart, and the hash agrees with the comparison.
 // UploadStaging's ring: blocks go after the head, wrap to the start up to the oldest live block, and never overlap it.
 void UploadStagingRing() {
     constexpr std::size_t kNone = ~std::size_t(0);
@@ -251,6 +249,8 @@ void AssetPumpBudget() {
     CHECK(AssetLibrary::PumpBudgetMs(true, false, 1.0) == 3.0);   // lots of headroom: capped
 }
 
+// Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
+// colour, queue or slot count keeps them apart, and the hash agrees with the comparison.
 void InstanceSlots() {
     Material::NextHashFrame();
     auto mat = [](glm::vec3 colour) {
@@ -355,8 +355,6 @@ void TaaAndWetnessRoundTrip() {
         for (int r = 0; r < 4; ++r) CHECK(std::abs(back[c][r] - proj[c][r]) < 1e-6f);
 }
 
-// Volumetric fog settings and a light's Volumetric Intensity save and load; a scene saved before
-// they existed loads with the fog off and every light at 1.
 // The scene's one wind (SkySettings Wind*): the settings round-trip, an older scene gets the defaults, plants and clouds
 // share the bearing convention (toward the bearing; north = -Z), and the culling margin grows with the scene strength.
 void SceneWindSettings() {
@@ -399,6 +397,8 @@ void SceneWindSettings() {
     CHECK(HiZCuller::FoliageSway(0.0f, 0.0f) == 0.0f);
 }
 
+// Volumetric fog settings and a light's Volumetric Intensity save and load; a scene saved before
+// they existed loads with the fog off and every light at 1.
 void VolumetricSettingsRoundTrip() {
     AssetLibrary assets;
     World world;
@@ -533,8 +533,6 @@ void FurMaterialRoundTrip() {
     CHECK(MaterialAsset::GetColor(m, "_FurTint") == glm::vec3(0.5f));
     std::filesystem::remove_all(dir, ec);
 }
-
-} // namespace
 
 // Reflection probe room captures: each cube face's view looks down its GL face axis and is a pure rotation (culling
 // holds); only probes whose volume changed are queued again. Puddle SSR: off by default, saved only when on, and a
@@ -796,6 +794,8 @@ void GIVolumeLookup() {
     }
     CHECK(n == 1);
 }
+
+} // namespace
 
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
