@@ -2332,11 +2332,8 @@ void RegisterEngineComponents() {
             { "Ambience", T::String, TARTARUS_REFLECT_FIELD(Z, Ambience), 0.0f, "Sound key of a looping ambience bed for this space (e.g. snd.amb.indoor_large). Empty: none. 2D, crossfaded by the listener's zone weights (1 s fades), started and stopped with Play." },
             { "Ambience Volume", T::Float, TARTARUS_REFLECT_FIELD(Z, AmbienceVolume), 0.01f, "Linear gain of the ambience bed, on top of its mix_db.", 0.0f, 4.0f },
             // Scenes saved before the convolution reverb: loaded, not drawn (Wet Level and HF Damping are read as trims in Custom mode).
-            { "Room Size", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.RoomSize), 0.01f, "Old feedback-network value (not used).", 0.0f, 1.0f },
-            { "Decay Time", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.DecayTime), 0.05f, "Old feedback-network value (not used).", 0.05f, 20.0f },
             { "HF Damping", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.HfDamping), 0.01f, "Old 0..1 damping: read as 0 .. 10 dB of HF Damping (dB) in Custom mode. -1 = absent.", -1.0f, 1.0f },
             { "Wet Level", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.WetLevel), 0.01f, "Old wet level: read as a trim in dB relative to the Tail Class's old default (Custom mode). -1 = absent.", -1.0f, 1.0f },
-            { "Early/Late Mix", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.EarlyLateMix), 0.01f, "Old feedback-network value (not used).", 0.0f, 1.0f },
         };
         m.Fields[1].EnumLabels = "Box\0Sphere\0"; m.Fields[1].EnumCount = 2;
         m.Fields[2].VisibleIfField = "Shape"; m.Fields[2].VisibleIfValue = 0;
@@ -2354,7 +2351,7 @@ void RegisterEngineComponents() {
                 f.Group = "Reverb";
             } else if (n == "Ambience" || n == "Ambience Volume") {
                 f.Group = "Ambience";
-            } else if (n == "Room Size" || n == "Decay Time" || n == "HF Damping" || n == "Wet Level" || n == "Early/Late Mix") {
+            } else if (n == "HF Damping" || n == "Wet Level") {
                 f.EditorHidden = true;
             }
         }
