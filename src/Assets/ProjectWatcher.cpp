@@ -46,6 +46,13 @@ HANDLE g_ReadyEvent = nullptr; // set once the first directory read is armed (St
 #endif
 
 std::string Key(const std::string& p) { return AssetDatabase::PathKey(p); }
+// A bare file name, compared the way Windows does (case-insensitively). Key() would make it absolute against the working
+// directory first: a filesystem call per pending change for nothing.
+std::string NameKey(const std::string& path) {
+    std::string n = std::filesystem::path(path).filename().string();
+    for (char& ch : n) ch = (char)std::tolower((unsigned char)ch);
+    return n;
+}
 
 // Paths the editor itself churns (caches, captures, layouts) and transient files are never news.
 bool Ignored(const fs::path& rel) {
@@ -275,7 +282,7 @@ std::vector<Change> Drain(int settleMs, bool& overflowed) {
     for (int i = 0; i < (int)out.size(); ++i) {
         const Change& c = out[i];
         if (c.Type != Change::Kind::Removed && c.Type != Change::Kind::Added) continue;
-        NameGroup& g = groups[Key(fs::path(c.Path).filename().string())];
+        NameGroup& g = groups[NameKey(c.Path)];
         if (c.Type == Change::Kind::Removed) { g.Removed = i; ++g.RemovedCount; }
         else { g.Added = i; ++g.AddedCount; }
     }

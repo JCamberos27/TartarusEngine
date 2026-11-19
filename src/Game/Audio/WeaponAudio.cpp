@@ -695,9 +695,17 @@ int WeaponAudio::PlayTail(WeaponAudioProfile& p, const SoundPlayer::Request& bas
 
 void AppendAudioDebugLines(const World& world, std::vector<float>& out, bool zones) {
     if (zones) {
-        ReverbZones z;
-        z.Build(world);
-        z.DebugLines(out);
+        // Kept between calls and refreshed (cheap when nothing moved; it rebuilds itself when zones come or go): the collider
+        // gizmo asks every frame while the overlay is on, and building it read every zone and portal each time.
+        static ReverbZones s_Zones;
+        static const World* s_World = nullptr;
+        if (s_World != &world) {
+            s_Zones.Build(world);
+            s_World = &world;
+        } else {
+            s_Zones.Refresh(world);
+        }
+        s_Zones.DebugLines(out);
     }
     if (WeaponAudio::Get().Active()) WeaponAudio::Get().EnvironmentDebugLines(out, false);
 }

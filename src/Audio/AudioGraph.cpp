@@ -238,17 +238,24 @@ AudioEngine::MeterReading AudioEngine::GetMeter(int id) {
     return m;
 }
 
+namespace {
+// The tap ring the audio thread writes (taps on for --audio-test, or AUDIO_CAPTURE): made once, kept.
+TapRing* EnsureTapStorage() {
+    if (!g_Audio.TapStorage) {
+        g_Audio.TapStorage = std::make_unique<TapRing>();
+        g_Audio.TapStorage->Master.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+        g_Audio.TapStorage->Pre.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+        g_Audio.TapStorage->Wet.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+    }
+    return g_Audio.TapStorage.get();
+}
+} // namespace
+
 void AudioEngine::EnableTaps(bool on) {
     if (!g_Audio.Initialized) return;
     g_Audio.TapsExternal = on;
     if (on) {
-        if (!g_Audio.TapStorage) {
-            g_Audio.TapStorage = std::make_unique<TapRing>();
-            g_Audio.TapStorage->Master.assign(2 * (size_t)TapRing::kFrames, 0.0f);
-            g_Audio.TapStorage->Pre.assign(2 * (size_t)TapRing::kFrames, 0.0f);
-            g_Audio.TapStorage->Wet.assign(2 * (size_t)TapRing::kFrames, 0.0f);
-        }
-        g_Audio.Taps.store(g_Audio.TapStorage.get(), std::memory_order_release);
+        g_Audio.Taps.store(EnsureTapStorage(), std::memory_order_release);
     } else if (!g_Audio.EncoderOpen) {
         g_Audio.Taps.store(nullptr, std::memory_order_release);
     }
@@ -300,13 +307,7 @@ bool AudioEngine::StartCapture(const std::string& wavPath) {
     }
     g_Audio.EncoderOpen = true;
     Log::Info("Audio: capturing the master output to '" + wavPath + "'.");
-    if (!g_Audio.TapStorage) {
-        g_Audio.TapStorage = std::make_unique<TapRing>();
-        g_Audio.TapStorage->Master.assign(2 * (size_t)TapRing::kFrames, 0.0f);
-        g_Audio.TapStorage->Pre.assign(2 * (size_t)TapRing::kFrames, 0.0f);
-        g_Audio.TapStorage->Wet.assign(2 * (size_t)TapRing::kFrames, 0.0f);
-    }
-    g_Audio.Taps.store(g_Audio.TapStorage.get(), std::memory_order_release);
+    g_Audio.Taps.store(EnsureTapStorage(), std::memory_order_release);
     return true;
 }
 
