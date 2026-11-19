@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 
 #include <atomic>
+#include <cctype>
 #include <filesystem>
 #include <mutex>
 #include <unordered_map>
@@ -163,10 +164,35 @@ void SetRootOverride(const std::string& root) { Pin().SetOverride(root); }
 const std::string& Root() { return Pin().Get(FindRoot); }
 std::string Resolve(const std::string& name) { return Join(Root(), name); }
 
-// relative() canonicalizes both paths against the disk (a CreateFile each), and the Asset Browser
-// asks for every project file each time its index lands. Root() never moves, so an absolute path's
-// answer is memoized; a relative one depends on the working directory and isn't.
+bool RelativizeUnder(const std::string& root, const std::string& path, std::string& out) {
+    const auto slash = [](char c) { return c == '\\' || c == '/'; };
+    size_t n = root.size();
+    while (n > 0 && slash(root[n - 1])) --n;
+    if (n == 0 || path.size() <= n + 1 || !slash(path[n])) return false;
+    for (size_t i = 0; i < n; ++i) {
+        const char a = path[i], b = root[i];
+        if (slash(a) ? !slash(b) : std::tolower((unsigned char)a) != std::tolower((unsigned char)b)) return false;
+    }
+    std::string rel(path, n + 1);
+    for (size_t a = 0; a <= rel.size();) {
+        size_t b = a;
+        while (b < rel.size() && !slash(rel[b])) ++b;
+        const size_t len = b - a;
+        if (len == 0 || (rel[a] == '.' && (len == 1 || (len == 2 && rel[a + 1] == '.')))) return false;
+        if (b < rel.size()) rel[b] = '/';
+        a = b + 1;
+    }
+    out = std::move(rel);
+    return true;
+}
+
+// relative() canonicalizes both paths against the disk (a CreateFile each, ~0.7 ms), and the Asset
+// Browser asks for every project file each time its index lands. A path spelled under Root() is
+// answered from its text; the rest (outside the project, "..", another spelling of the root such as
+// a junction's target) go to relative(). Root() never moves, so an absolute path's answer is
+// memoized; a relative one depends on the working directory and isn't.
 std::string Relativize(const std::string& absolutePath) {
+    if (std::string rel; RelativizeUnder(Root(), absolutePath, rel)) return rel;
     if (!fs::path(absolutePath).is_absolute()) return RelativizeUncached(absolutePath);
     static std::mutex mutex;
     static std::unordered_map<std::string, std::string> cache;
