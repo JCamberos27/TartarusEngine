@@ -91,7 +91,6 @@ void MemReport::Write(const std::string& dir, const std::string& label, const st
     j["textureEmbeddedSourceMiB"] = texEmbeddedMiB;
 
     std::unordered_set<const ModelMesh*> seenMesh;
-    std::unordered_set<unsigned> seenVbo;
     std::unordered_set<const Model*> seenModel;
     json meshes = json::array();
     double meshGpuMiB = 0, meshCpuMiB = 0, skinCpuMiB = 0;
@@ -100,8 +99,9 @@ void MemReport::Write(const std::string& dir, const std::string& label, const st
         for (int i = 0; i < m->MeshCount(); ++i) {
             const ModelMesh* mm = m->MeshPtr(i);
             if (!mm || !seenMesh.insert(mm).second) continue;
-            const bool firstGpu = mm->VertexBuffer() != 0 && seenVbo.insert(mm->VertexBuffer()).second;
-            const size_t gpu = firstGpu ? (size_t)mm->VertexCount() * sizeof(ModelVertex) + (size_t)mm->IndexCount() * 4 : 0;
+            // Each mesh owns its range: arena / skin-pool meshes share a page's VBO, so de-duping by VBO counted only
+            // the page's first mesh. Instances share the ModelMesh itself (seenMesh above).
+            const size_t gpu = mm->VertexBuffer() != 0 ? (size_t)mm->VertexCount() * sizeof(ModelVertex) + (size_t)mm->IndexCount() * 4 : 0;
             json e = {{"model", m->Path()}, {"mesh", i}, {"verts", mm->VertexCount()}, {"indices", mm->IndexCount()},
                       {"gpuBytes", gpu}, {"cpuBytes", mm->CpuBytes()}, {"skinCpuBytes", mm->SkinBytes()}};
             meshGpuMiB += gpu / 1048576.0;

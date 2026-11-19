@@ -16,6 +16,15 @@ inputs:
 runs:
   using: composite
   steps:
+    # The archive is fetched once per version and shared by the smoke job and both editor shards through the
+    # Actions cache (it was downloaded three times per run, and GitHub's release host sometimes answers 5xx).
+    # The cache is only a download shortcut: the SHA-256 check below still runs on a restored archive.
+    - name: Restore the Mesa archive from the cache
+      uses: actions/cache@v4
+      with:
+        path: mesa3d-26.1.8-release-msvc.7z
+        key: mesa3d-26.1.8-4C6D32E653E0FF9AD07796E40C0BCFABF2764D849E3CE4F3B1590112C87E42F9
+
     - name: Download, verify and install Mesa
       shell: pwsh
       env:
@@ -28,7 +37,9 @@ runs:
         $url  = "https://github.com/pal1000/mesa-dist-win/releases/download/$ver/$name"
         # GitHub's release downloads sometimes answer with a 5xx page; retry those rather than fail
         # the whole run after the build and unit tests have passed (PR #497's first run).
-        Invoke-WebRequest -Uri $url -OutFile $name -MaximumRetryCount 4 -RetryIntervalSec 15
+        # The version, name and SHA-256 above must match the cache step's path and key.
+        if (Test-Path $name) { Write-Host "Mesa archive restored from the cache" }
+        else { Invoke-WebRequest -Uri $url -OutFile $name -MaximumRetryCount 4 -RetryIntervalSec 15 }
         $got = (Get-FileHash -Algorithm SHA256 -Path $name).Hash
         if ($got -ne $sha) { throw "Mesa archive SHA-256 mismatch: expected $sha, got $got" }
         Write-Host "Mesa $ver checksum verified"

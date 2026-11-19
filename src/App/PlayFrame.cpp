@@ -68,7 +68,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     // main's names for what the step reads, so the step reads as it did there.
     World& world = *in.world;
     AssetLibrary& assets = *in.assets;
-    Window& window = *in.window;
     EditorLayer& editor = *in.editor;
     HotReloadGameModule& gameModule = *in.gameModule;
     Player& player = *in.player;
@@ -182,7 +181,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         player.AimHeld=firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped() && !playerVitals.IsDead() &&
             ((gameHasInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()));
         player.SprintBlocked=firstPersonPresentation.ActionBlocksSprint();
-        player.Update(gameDt, world, window.Handle(), gameHasInput && !playerVitals.IsDead());
+        player.Update(gameDt, gameHasInput && !playerVitals.IsDead());
         // Before the body places itself: it is the controller's child, posed in world space.
         if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
             const float yaw = glm::radians(player.Cam.Yaw); // Camera forward = (cos, 0, sin)
@@ -285,16 +284,11 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     // listener matches the frame that's about to be rendered.
     // #171 - or from an Audio Listener entity, when the scene has one.
     {
-        entt::entity listener = entt::null;
-        int bestOrder = 0x7fffffff;
-        for (auto e : world.Registry.view<const AudioListenerComponent, const TransformComponent>()) {
-            if (!world.Registry.get<AudioListenerComponent>(e).Enabled || world.Registry.all_of<InactiveTag>(e)) continue;
-            const auto* ord = world.Registry.try_get<OrderComponent>(e);
-            const int o = ord ? ord->Value : 0;
-            if (o < bestOrder) { bestOrder = o; listener = e; }
-        }
+        const entt::entity listener = FindActiveAudioListener(world);
+        glm::vec3 earPos = gameCam->Position;
         if (listener != entt::null) {
             const glm::mat4 lm = world.ComposeWorldTransform(listener);
+            earPos = glm::vec3(lm[3]);
             const glm::vec3 fwd = -glm::vec3(lm[2]), up = glm::vec3(lm[1]);
             AudioEngine::SetListener(glm::vec3(lm[3]),
                                      glm::length(fwd) > 1e-6f ? glm::normalize(fwd) : glm::vec3(0, 0, -1),
@@ -302,8 +296,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         } else {
             AudioEngine::SetListener(gameCam->Position, gameCam->Front(), gameCam->Up());
         }
-        editor.UpdatePlayModeAudio(world, gameDt,
-            listener != entt::null ? glm::vec3(world.ComposeWorldTransform(listener)[3]) : gameCam->Position);
+        editor.UpdatePlayModeAudio(world, gameDt, earPos);
     }
     // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
     // pose, and the play-mode snapshot restores everything this touched on Stop.

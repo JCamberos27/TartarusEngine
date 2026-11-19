@@ -326,20 +326,29 @@ set(TARTARUS_STAGED_ASSETS
   "extern/ImGuiColorTextEdit/LICENSE|assets/licenses|ImGuiColorTextEdit.txt"
   "tests/smoke-scenes|assets/test-scenes"
 )
-set(_stage_commands "")
-foreach(_entry IN LISTS TARTARUS_STAGED_ASSETS)
-  string(REPLACE "|" ";" _parts "${_entry}")
+# One staged entry: its source (relative to the repo), destination folder and file name (the source's own unless
+# the entry renames it). Shared by the POST_BUILD copy and the install rules so the two read entries the same way.
+function(tartarus_staged_entry entry out_src out_dst out_name)
+  string(REPLACE "|" ";" _parts "${entry}")
   list(GET _parts 0 _src)
   list(GET _parts 1 _dst)
+  get_filename_component(_name "${_src}" NAME)
+  list(LENGTH _parts _n)
+  if(_n GREATER 2)
+    list(GET _parts 2 _name)
+  endif()
+  set(${out_src} "${_src}" PARENT_SCOPE)
+  set(${out_dst} "${_dst}" PARENT_SCOPE)
+  set(${out_name} "${_name}" PARENT_SCOPE)
+endfunction()
+
+set(_stage_commands "")
+foreach(_entry IN LISTS TARTARUS_STAGED_ASSETS)
+  tartarus_staged_entry("${_entry}" _src _dst _name)
   set(_dst_dir "$<TARGET_FILE_DIR:TartarusEngine>/${_dst}")
   if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/${_src}")
     list(APPEND _stage_commands COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/${_src}" "${_dst_dir}")
   else()
-    get_filename_component(_name "${_src}" NAME)
-    list(LENGTH _parts _n)
-    if(_n GREATER 2)
-      list(GET _parts 2 _name)
-    endif()
     list(APPEND _stage_commands
       COMMAND ${CMAKE_COMMAND} -E make_directory "${_dst_dir}"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/${_src}" "${_dst_dir}/${_name}")
@@ -392,17 +401,11 @@ endforeach()
 # Engine-owned content (TARTARUS_STAGED_ASSETS above), from the source tree rather than the
 # build tree so `cpack` does not depend on which config was staged last.
 foreach(_entry IN LISTS TARTARUS_STAGED_ASSETS)
-  string(REPLACE "|" ";" _parts "${_entry}")
-  list(GET _parts 0 _src)
-  list(GET _parts 1 _dst)
-  list(LENGTH _parts _n)
+  tartarus_staged_entry("${_entry}" _src _dst _name)
   if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/${_src}")
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/${_src}/" DESTINATION "${_dst}")
-  elseif(_n GREATER 2)
-    list(GET _parts 2 _name)
-    install(FILES "${CMAKE_SOURCE_DIR}/${_src}" DESTINATION "${_dst}" RENAME "${_name}")
   else()
-    install(FILES "${CMAKE_SOURCE_DIR}/${_src}" DESTINATION "${_dst}")
+    install(FILES "${CMAKE_SOURCE_DIR}/${_src}" DESTINATION "${_dst}" RENAME "${_name}")
   endif()
 endforeach()
 

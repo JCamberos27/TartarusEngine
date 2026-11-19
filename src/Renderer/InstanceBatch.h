@@ -100,6 +100,9 @@ std::vector<glm::mat4>& Staging();
 // no normal matrix, but the shader's layout is still two mat4s per instance).
 void Append(std::vector<glm::mat4>& staging, const glm::mat4& xform);
 void Upload();
+// Any per-frame data through the same ring: copies `bytes` into a fresh span and binds it as SSBO `binding` (a range).
+// False when the ring can't take it (too big, or no ring): the caller uploads its own way.
+bool UploadRange(unsigned binding, const void* data, std::size_t bytes);
 // Closes this frame's ring span (reused kSafeFrames presented frames later). Once per frame, after SwapBuffers.
 void EndFrame();
 }
@@ -129,10 +132,16 @@ struct IndirectBatch {
 void BuildIndirectBatches(const std::vector<IndirectItem>& items, std::vector<IndirectCommand>& commands,
                           std::vector<IndirectBatch>& batches);
 namespace IndirectBuffer {
-// Uploads the commands into a fresh data store and binds it as GL_DRAW_INDIRECT_BUFFER (draws issued before keep theirs).
+// Uploads the commands into a fresh span of the instance ring (or, when it can't take them, a fresh data store) and
+// binds it as GL_DRAW_INDIRECT_BUFFER (draws issued before keep theirs).
 void Upload(const std::vector<IndirectCommand>& commands);
-unsigned Handle(); // the GL buffer the last Upload filled
-inline const void* Offset(std::uint32_t command) { return (const void*)((std::uintptr_t)command * sizeof(IndirectCommand)); }
+unsigned Handle();     // the GL buffer the last Upload filled
+std::size_t Base();    // ...and where in it the commands start
+// The last Upload's commands as SSBO `binding` (the HiZ cull writes their instance counts).
+void BindStorage(unsigned binding);
+inline const void* Offset(std::uint32_t command) {
+    return (const void*)(Base() + (std::uintptr_t)command * sizeof(IndirectCommand));
+}
 }
 
 // One caster in a depth-only pass: the SSAO and opaque depth pre-passes, and the sun, spot and point shadow maps.

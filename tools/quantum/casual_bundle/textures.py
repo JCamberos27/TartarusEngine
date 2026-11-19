@@ -213,11 +213,12 @@ def _save_png(im: Image.Image, dst: Path) -> None:
 
 
 def _up_to_date(dst: Path, sources: list[Path], size: tuple[int, int]) -> CookResult | None:
-    """Cache check: dst exists, is newer than every source and already has the expected (capped) size."""
+    """Cache check: dst exists, is newer than every source and than this cooker (a change to how a kind is baked
+    re-cooks everything), and already has the expected (capped) size."""
     if not dst.exists():
         return None
     t = dst.stat().st_mtime
-    if any(s.stat().st_mtime > t for s in sources):
+    if any(s.stat().st_mtime > t for s in [*sources, Path(__file__)]):
         return None
     try:
         with Image.open(dst) as im:

@@ -131,7 +131,12 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
     }
     for (const auto& c : changes) {
         using K = ProjectWatcher::Change::Kind;
-        if (c.Type == K::Modified) m_AssetThumbs.Invalidate(fs::path(c.Path).lexically_normal().string());
+        if (c.Type == K::Modified) {
+            const std::string changed = fs::path(c.Path).lexically_normal().string();
+            m_AssetThumbs.Invalidate(changed);
+            m_SoundWaveforms.Invalidate(changed);
+            m_SoundWaveforms.Invalidate(ProjectPaths::Relativize(changed));
+        }
         else if (ChangesAssetIndex(c.Path) || (c.Type == K::Renamed && ChangesAssetIndex(c.OldPath)))
             InvalidateProjectAssetIndex(); // the Asset Browser's list of files on disk
         switch (c.Type) {
@@ -252,6 +257,7 @@ bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std:
         if (rekey(ts.Inspector.Tabs) | rekey(ts.Inspector.Closed) | rekey(ts.Starred)) ts.MarkDirty();
     }
     m_AssetThumbs.Invalidate(oldKey);
+    m_SoundWaveforms.Invalidate(oldKey);
     InvalidateProjectAssetIndex();
     InvalidateScenesListing();
     Log::Info("Renamed '" + fs::path(oldAbs).filename().string() + "' to '" + fs::path(newAbs).filename().string() + "'" +
