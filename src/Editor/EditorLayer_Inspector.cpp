@@ -4857,26 +4857,8 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         in.HasDriverPiece = driver != entt::null;
         for (entt::entity e : pieces)
             if (const auto* n = registry.try_get<NameComponent>(e)) in.PieceNames.push_back(n->Name);
-        // The controller, re-read twice a second at most (the Animator window saves on every edit).
-        static std::string s_ctrlPath;
-        static AnimatorController s_ctrl;
-        static bool s_ctrlLoaded = false;
-        static double s_ctrlAt = -10.0;
         Model* driverModel = nullptr;
         if (driver != entt::null) driverModel = registry.get<RenderableComponent>(driver).ModelRef.get();
-        if (const auto* acp = driver != entt::null ? registry.try_get<AnimatorControllerComponent>(driver) : nullptr) {
-            const auto& ac = *acp;
-            in.ControllerSet = !ac.Controller.empty();
-            const double now = ImGui::GetTime();
-            if (in.ControllerSet && (ac.Controller != s_ctrlPath || now - s_ctrlAt > 0.5)) {
-                s_ctrlPath = ac.Controller;
-                s_ctrlAt = now;
-                AnimatorController loaded;
-                s_ctrlLoaded = AnimatorController::LoadFile(ProjectPaths::Resolve(ac.Controller), loaded);
-                if (s_ctrlLoaded) s_ctrl = std::move(loaded);
-            }
-            if (in.ControllerSet && s_ctrlLoaded && s_ctrlPath == ac.Controller) in.Controller = &s_ctrl;
-        }
         if (driverModel) in.HasBone = [driverModel](const std::string& b) { return driverModel->NodeIndex(b) >= 0; };
 
         SetupChecksUI::Draw(FPBody::Validate(in), "Setup: everything the body needs is there", "##bodysetup");

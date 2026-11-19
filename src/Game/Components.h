@@ -743,10 +743,6 @@ struct FirstPersonBodyComponent {
     // is past the Turn Threshold (where the feet must step round) - what the turn clips can keep up
     // with, so they don't slide. Aiming within the threshold is free. 0 = no limit.
     float MaxTurnRate = 0.0f;
-    // Starting and stopping play their own clips (a push-off, a braking step) instead of blending
-    // straight between idle and the gait; the clips' root motion then eases the capsule up to
-    // speed and down again.
-    bool StartStopClips = false;
     // Crouching (hold the Crouch action): the capsule's height while crouched (0 = no crouching) and
     // the move speed as a fraction of Run Speed (the crouch-walk clips travel about 1.35 m/s).
     float CrouchHeight = 0.0f;
