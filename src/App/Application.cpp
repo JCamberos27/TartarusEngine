@@ -544,10 +544,10 @@ private:
     BulletHoleList bulletHoles; // where this Play's rounds struck
     NpcDirector npcDirector;    // the training dummies, in scenes with Dummy Spawns
     CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
-    BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+    BloodFx bloodFx;            // the volumetric blood out of every body a round goes into
     SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
     FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
-    ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
+    ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts
     BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
     // Play's combat hooked together: blood, impacts, foley and the Blood Lab (App/CombatWiring.h). Declared after
     // everything it hooks, so its destructor drops the footstep listener before they go.

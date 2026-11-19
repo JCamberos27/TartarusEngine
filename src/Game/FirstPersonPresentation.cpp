@@ -2123,7 +2123,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
             m_PendingEjects += n;
         }
         RunGameplay(8,0.0f,false,false,(ac->EventFired(K::kEventRefill)?1:0)|(ac->EventFired(K::kEventLoadRound)?2:0));
-        // The audio the controller's states carry: events named snd.<gun>.<element> (see docs/AUDIO.md) play that set.
+        // The audio the controller's states carry: events named snd.<gun>.<element> play that set.
         for (const std::string& e : ac->FiredEvents)
             if (e.rfind("snd.", 0) == 0) WeaponSound(m_SetFile, e);
         ac->FiredEvents.clear();
