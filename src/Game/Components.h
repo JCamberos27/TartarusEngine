@@ -1216,6 +1216,8 @@ struct LightCircuitComponent {
     // Runtime, never serialized.
     bool Started = false;
     std::vector<std::shared_ptr<MaterialAsset>> OnMaterials, OffMaterials;
+    std::vector<std::shared_ptr<MaterialAsset>> AuthoredMaterials; // the slots as they were at start (LightSwitch::Stop)
+    bool AuthoredOff = false;                                     // its light was deactivated at start
 };
 
 // Works a circuit with Interact (E): a wall switch (its Rocker child flips) or a lamp's own body. Every switch on the same

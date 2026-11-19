@@ -30,7 +30,9 @@ bool Glows(const std::shared_ptr<MaterialAsset>& m) {
 
 void StartCircuitPiece(World& world, entt::entity e, LightCircuitComponent& c) {
     c.Started = true;
+    c.AuthoredOff = world.Registry.all_of<DeactivatedTag>(e);
     auto* r = world.Registry.try_get<RenderableComponent>(e);
+    c.AuthoredMaterials = r ? r->Materials : std::vector<std::shared_ptr<MaterialAsset>>{};
     if (!r || c.Glow <= 0.0f) return;
     c.OnMaterials.clear();
     c.OffMaterials.clear();
@@ -214,6 +216,34 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
         any = true;
     }
     if (!any) ReflectionProbeCapture::RequestRecaptureAt(glm::vec3(world.GetCachedWorldTransform(e)[3]));
+}
+
+void Stop(World& world) {
+    bool changed = false;
+    for (auto e : world.Registry.view<LightCircuitComponent>()) {
+        auto& c = world.Registry.get<LightCircuitComponent>(e);
+        if (!c.Started) continue;
+        if (auto* r = world.Registry.try_get<RenderableComponent>(e); r && !c.OnMaterials.empty()) r->Materials = c.AuthoredMaterials;
+        if (world.Registry.all_of<LightComponent>(e) && world.Registry.all_of<DeactivatedTag>(e) != c.AuthoredOff) {
+            if (c.AuthoredOff) world.Registry.emplace<DeactivatedTag>(e);
+            else world.Registry.remove<DeactivatedTag>(e);
+            changed = true;
+        }
+        c.Started = false;
+        c.OnMaterials.clear();
+        c.OffMaterials.clear();
+        c.AuthoredMaterials.clear();
+    }
+    for (auto e : world.Registry.view<LightSwitchComponent>()) {
+        auto& s = world.Registry.get<LightSwitchComponent>(e);
+        if (!s.Started) continue;
+        if (s.RockerEntity != entt::null && world.Registry.valid(s.RockerEntity))
+            if (auto* t = world.Registry.try_get<TransformComponent>(s.RockerEntity)) t->Rotation = s.RockerBase;
+        s.Started = false;
+        s.On = false;
+        s.RockerEntity = entt::null;
+    }
+    if (changed) world.SyncActiveInHierarchy();
 }
 
 void SetAll(World& world, bool on) {

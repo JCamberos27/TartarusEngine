@@ -174,7 +174,7 @@ void GIBaker::RestoreLighting(World& world) {
     for (entt::entity e : m_Parked)
         if (world.Registry.valid(e)) world.Registry.remove<DeactivatedTag>(e);
     m_Parked.clear();
-    LightSwitch::SetAll(world, true);
+    LightSwitch::Stop(world); // the switches and circuits as authored again (Play starts them from Start On)
     if (m_LightingSaved) world.SkyAmbientIntensity = m_SkyAmbient;
     m_LightingSaved = false;
     world.SyncActiveInHierarchy();

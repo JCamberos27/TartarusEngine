@@ -161,9 +161,51 @@ void LightSwitchImportedGlow() {
     CHECK(toggleGlow() > 0.0f);
     model->MeshMaterial(0) = saved;
 }
+
+// The GI bake works the circuits in the edit world (SetAll) and then Stops them: the fittings get their own materials back,
+// the lights their authored state, and Play starts every switch from Start On again.
+void LightSwitchStopRestores() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        Log::Info("LightSwitchStopRestores: no test model - skipped.");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const entt::entity light = w.CreateEmptyEntity(glm::vec3(0.0f, 2.0f, -2.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Bulb");
+    w.Registry.emplace<LightComponent>(light);
+    w.Registry.emplace<LightCircuitComponent>(light).Circuit = "Room";
+    const entt::entity fitting = w.CreateModelEntity(model, glm::vec3(3.0f, 2.0f, -2.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Shade");
+    auto glowing = std::make_shared<MaterialAsset>();
+    glowing->Mat.EmissiveColor = glm::vec3(1.0f, 0.8f, 0.6f);
+    glowing->Mat.EmissiveStrength = 2.0f;
+    w.Registry.get_or_emplace<RenderableComponent>(fitting).Materials = {glowing};
+    w.Registry.emplace<LightCircuitComponent>(fitting).Circuit = "Room";
+    const entt::entity sw = w.CreateEmptyEntity(glm::vec3(0.0f, 0.0f, -1.5f), glm::vec3(0.0f), glm::vec3(1.0f), "Switch");
+    auto& s = w.Registry.emplace<LightSwitchComponent>(sw);
+    s.Circuit = "Room";
+    s.StartOn = false;
+    w.RebuildWorldTransformCache();
+
+    LightSwitch::SetAll(w, false); // the bake's passes
+    LightSwitch::SetAll(w, true);
+    LightSwitch::Stop(w);           // the bake is done
+    const auto& slots = w.Registry.get<RenderableComponent>(fitting).Materials;
+    CHECK(slots.size() == 1 && slots[0] == glowing);
+    CHECK(!w.Registry.all_of<DeactivatedTag>(light));
+    CHECK(!w.Registry.get<LightSwitchComponent>(sw).Started && !w.Registry.get<LightCircuitComponent>(light).Started);
+
+    LightSwitch::Update(w, glm::vec3(0.0f), glm::vec3(0, 0, -1), false); // Play starts: off, as Start On says
+    w.RebuildWorldTransformCache();
+    CHECK(w.Registry.all_of<DeactivatedTag>(light) && !LightSwitch::IsOn(w, "Room"));
+    CHECK(w.Registry.get<RenderableComponent>(fitting).Materials.at(0)->Mat.EmissiveStrength == 0.0f);
+}
 } // namespace
 
 void RegisterLightSwitchTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"LightSwitch: Stop puts what SetAll did back as authored (the GI bake)", LightSwitchStopRestores});
     tests.push_back({"LightSwitch: scene blocks load and save", LightSwitchSceneBlocks});
     tests.push_back({"LightSwitch: start state, Interact flips the light and the fitting's glow", LightSwitchCircuit});
     tests.push_back({"LightSwitch: a fitting drawing its imported materials loses its glow when off", LightSwitchImportedGlow});
