@@ -28,7 +28,9 @@ struct Window {
     std::string SourceCurve;
     bool Focus=true,Dirty=false,Pending=false;
     fs::file_time_type Stamp{};
+    double LastPoll=-1.0e9; // the source is re-read at most every k*PollSeconds (it was every frame); <0 forces the next frame
 };
+constexpr double kReadPollSeconds=0.1,kFilePollSeconds=0.5;
 using Key=std::pair<ImGuiContext*,std::string>;
 std::map<Key,Binding> bindings;
 std::map<Key,Window> windows;
@@ -164,7 +166,9 @@ void DrawWindows(const std::function<void()>& undo,const std::function<void()>& 
         if(ImGui::Begin(title.c_str(),&open)) {
             if(w.Bound.Source) {
                 if(const auto b=bindings.find({ctx,w.Key});b!=bindings.end())w.Bound.Source=b->second.Source;
-                if(w.Bound.Source->ReadCurve && !w.Dirty) {
+                const double now=ImGui::GetTime();
+                if(w.Bound.Source->ReadCurve && !w.Dirty && now-w.LastPoll>=kReadPollSeconds) {
+                    w.LastPoll=now;
                     Curve external;
                     if(w.Bound.Source->ReadCurve(external,w.Error)) {
                         const std::string value=external.ToJson(false).dump();
@@ -172,13 +176,14 @@ void DrawWindows(const std::function<void()>& undo,const std::function<void()>& 
                         w.Error.clear();
                     }
                 }
-                else if(!w.Bound.Source->ReadCurve) {
+                else if(!w.Bound.Source->ReadCurve && now-w.LastPoll>=kFilePollSeconds) {
+                    w.LastPoll=now;
                     std::error_code ec;const auto stamp=fs::last_write_time(fs::u8path(w.Bound.Source->Path),ec);
                     if(!ec&&stamp!=w.Stamp&&!w.Dirty&&Read(w))w.Stamp=stamp;
                 }
             }
-            ImGui::BeginDisabled(!canUndo);if(EditorUIPrimitives::SecondaryButton("Undo")&&undo)undo();ImGui::EndDisabled();ImGui::SameLine();
-            ImGui::BeginDisabled(!canRedo);if(EditorUIPrimitives::SecondaryButton("Redo")&&redo)redo();ImGui::EndDisabled();
+            ImGui::BeginDisabled(!canUndo);if(EditorUIPrimitives::SecondaryButton("Undo")&&undo){undo();w.LastPoll=-1.0e9;}ImGui::EndDisabled();ImGui::SameLine();
+            ImGui::BeginDisabled(!canRedo);if(EditorUIPrimitives::SecondaryButton("Redo")&&redo){redo();w.LastPoll=-1.0e9;}ImGui::EndDisabled();
             if(w.Bound.Source){ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Reload"))Read(w);ImGui::SameLine();ImGui::TextDisabled("%s",fs::u8path(w.Bound.Source->Path).filename().u8string().c_str());}
             if(w.Opt.TimeInSeconds){ImGui::SetNextItemWidth(120);ImGui::DragFloat("Edit end (s)",&w.Opt.TimeMax,.01f,std::max(.01f,w.Working.EndTime()),600,"%.3f",ImGuiSliderFlags_AlwaysClamp);}
             if(!w.Error.empty()){ImGui::TextWrapped("%s",w.Error.c_str());if(w.Dirty&&EditorUIPrimitives::SecondaryButton("Save Curve"))Save(w);}
