@@ -19,6 +19,10 @@ class World;
 // Everything it creates is runtime-only and destroyed by Stop.
 class CombatFx {
 public:
+    CombatFx() = default;
+    ~CombatFx();
+    CombatFx(const CombatFx&) = delete; // (owns the audio log's FILE*)
+    CombatFx& operator=(const CombatFx&) = delete;
     enum class Gun { Rifle, Shotgun };
     enum class Cue { BodyFall, FleshHit, Hitmarker, HitmarkerKill };
 

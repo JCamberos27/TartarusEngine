@@ -265,8 +265,9 @@ private:
     glm::vec3 RandomTangent(const glm::vec3& n);
     // A Knife decal: `entry`'s cell `cell` (-1 a random one) on the surface at `centre` facing `up`; the image's
     // u along `along`, its v (top to bottom) along up x along. Null when the library lacks it.
+    // `flipbook`: it runs through its cells (a wall drip) - never merged into another stain.
     Decal* AddKnifeDecal(const char* entry, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along, const glm::vec3& extent,
-                         float delay, int cell = -1);
+                         float delay, int cell = -1, bool flipbook = false);
     // Drips running down a wall from the spatter at `at` (facing `n`), from `land` seconds on.
     void SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size, float land);
     KnifeFn m_KnifeLookup;
