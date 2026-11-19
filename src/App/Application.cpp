@@ -1966,6 +1966,9 @@ int Application::RunSession() {
             // the tab alone, the mmplayer recording caught 152 of ~4000 frames (Phase 4): the tab reported hidden most of the run.
             // The size is the last one the tab had, so every recorded frame is the same size.
             const bool recordingGame = npcTest && playing && !npcTest->RecordDir().empty();
+            // The scene Camera the Game view previews through while editing, looked up once for the frame (the view's render
+            // and both of its UI calls below; nothing between them edits the scene).
+            const entt::entity editSceneCamera = playing ? entt::null : FindActiveSceneCamera(world);
             if (gameTabVisible || playMaxLocked || recordingGame) {
                 PROFILE_SCOPE("Game View Render");
                 PROFILE_GPU_SCOPE("Game View Render");
@@ -1995,7 +1998,7 @@ int Application::RunSession() {
                 // While editing, render through a placed Camera entity if the scene has one, so
                 // the Game panel previews the framed shot (#36 B10). In Play, gameCam already is
                 // the right camera (#165: the player, or the scene Camera mirrored into it).
-                entt::entity sceneCamEnt = playing ? entt::null : FindActiveSceneCamera(world);
+                const entt::entity sceneCamEnt = editSceneCamera;
                 if (sceneCamEnt != entt::null) {
                     const auto& cc = world.Registry.get<CameraComponent>(sceneCamEnt);
                     glm::mat4 camModel = world.ComposeWorldTransform(sceneCamEnt);
@@ -2112,7 +2115,7 @@ int Application::RunSession() {
                         ImGui::SetNextWindowPos(ImVec2(m.x - 80.0f, m.y - 10.0f), ImGuiCond_Always);
                     }
                     gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged,
-                                      /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
+                                      /*noSceneCamera=*/!playing && editSceneCamera == entt::null);
                     if (tearOff && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                         if (ImGuiWindow* gw = ImGui::FindWindowByName(EditorPanels::Game)) ImGui::StartMouseMovingWindow(gw);
                     if (weaponLab) weaponLab->DrawPanel(&firstPersonPresentation, playing);
@@ -2137,7 +2140,7 @@ int Application::RunSession() {
                 // What the embedded view draws next frame (it runs inside editor.Draw, before this
                 // frame's game render).
                 gameView.SetFrameState(gameViewStats, playing, gameInputEngaged,
-                                       /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
+                                       /*noSceneCamera=*/!playing && editSceneCamera == entt::null);
                 // Click inside the running Game view (while it doesn't yet own input) captures
                 // the cursor for the player. Esc / Stop release it (handled above / in stopPlay). Not in a smoke / npc /
                 // perf run: its input is scripted (Input::SetIgnoreDevices), so a click there would only trap the cursor.
