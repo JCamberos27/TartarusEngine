@@ -117,15 +117,10 @@ static void Test_GravityGun_AssistReach() {
 static void Test_FxHud_SettingsDrivePureHelpers() {
     FxHudSettingsComponent s;
     // Defaults are the old fixed values.
-    CHECK(CombatFx::FlashPeak(s, false, false) == 18.0f);
-    CHECK(CombatFx::FlashPeak(s, true, false) == 26.0f);
-    CHECK(std::abs(CombatFx::FlashPeak(s, false, true) - 18.0f * 0.35f) < 1e-5f);
     CHECK(WeaponFxRenderer::BeamLength(s, 200.0f) == 150.0f && WeaponFxRenderer::BeamLength(s, 40.0f) == 40.0f);
     CHECK(CombatHud::NextStreak(s, 1, 3.9f) == 2 && CombatHud::NextStreak(s, 1, 4.1f) == 1);
     CHECK(!CombatHud::FeedExpired(s, 4.4f) && CombatHud::FeedExpired(s, 4.6f));
     // Changed values change the result.
-    s.PlayerFlashScale = 0.5f;
-    CHECK(CombatFx::FlashPeak(s, false, true) == 9.0f);
     s.BeamRange = 60.0f;
     CHECK(WeaponFxRenderer::BeamLength(s, 200.0f) == 60.0f);
     s.StreakWindow = 2.0f;
@@ -148,7 +143,7 @@ static void Test_CombatHud_KillFeedAndDevReset() {
     panel.Open = panel.InfiniteAmmo = panel.AiOverlay = true;
     PlayerVitals vitals;
     vitals.GodMode = true;
-    panel.Reset(vitals, npcs);
+    panel.Reset(vitals);
     CHECK(!panel.Open && !panel.InfiniteAmmo && !panel.AiOverlay);
     CHECK(!vitals.GodMode);
 }

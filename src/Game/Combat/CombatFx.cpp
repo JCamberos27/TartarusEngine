@@ -268,7 +268,6 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
         e.ViewModel = fromPlayer && e.Mode == FxSprites::Shade::Additive; // the player's flash with the gun; smoke in the world
         e.Follow = e.ViewModel ? follow : 0;
         fx.Spawn(e);
-        ++m_MuzzleSprites;
     };
     // Seen from behind the gun, half a metre from the eye, the flash is mostly hidden by the gun and must not white out the
     // view: the player's own is a third of the size and a fraction of the light of what a soldier's reads as across a room.
@@ -388,12 +387,8 @@ void CombatFx::Whizz(const glm::vec3& point, float miss) {
 
 void CombatFx::Play(Cue cue, const glm::vec3& pos, bool at2D, float volume) {
     if (!m_Active) return;
+    // (The pump, the reload and the dry fire are the weapons' own: an animator's snd.* event plays the recorded take.)
     switch (cue) {
-    // The pump, the reload and the dry fire are the weapons' own: an animator's snd.* event plays the recorded take
-    // (snd.<gun>.pump_back, mag_out, dry_fire ...), so these cues make no sound of their own.
-    case Cue::Pump:
-    case Cue::Reload:
-    case Cue::DryFire: break;
     case Cue::BodyFall: PlaySet(BodyFallSet(), pos, at2D, volume); break;
     case Cue::FleshHit: ImpactAudio::Get().Flesh(pos, at2D, volume); break; // the recorded flesh impact (snd.impact.flesh)
     case Cue::Hitmarker: PlaySet(UiSet("snd.ui.hitmarker"), pos, true, volume); break;

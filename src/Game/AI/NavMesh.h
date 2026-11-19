@@ -68,14 +68,10 @@ public:
     // normal (from the mesh toward what ends it), for cover. Merged collinear neighbours.
     struct Edge { glm::vec3 A, B, Out; };
     void BoundaryEdges(std::vector<Edge>& out) const;
-    // The mesh's polygons as triangles (world xyz, 9 floats each), for the debug view.
-    void DebugTriangles(std::vector<float>& out) const;
     int PolyCount() const;
     // Switch off every polygon no walker can reach from `seeds` (each snapped within `extents`): a roof, the top of a
     // wardrobe - walkable surfaces nobody gets onto. Nothing is cut when no seed lands on the mesh. Returns the count cut.
     int KeepReachable(const std::vector<glm::vec3>& seeds, const glm::vec3& extents);
-    glm::vec3 BoundsMin() const { return m_BMin; }
-    glm::vec3 BoundsMax() const { return m_BMax; }
 
     dtNavMesh* Detour() const { return m_Mesh; }
     dtNavMeshQuery* Query() const { return m_Query; }
@@ -87,7 +83,6 @@ private:
     dtNavMeshQuery* m_Query = nullptr;
     std::unique_ptr<dtQueryFilter> m_Filter;
     std::vector<unsigned char> m_Data; // the tile, for Save (Detour owns its own copy)
-    glm::vec3 m_BMin{0.0f}, m_BMax{0.0f};
 };
 
 // Steering for every soldier at once (DetourCrowd): each follows its path corridor and steers
@@ -112,18 +107,13 @@ public:
     void SetMaxSpeed(int agent, float speed);
     void Update(float dt);
     glm::vec3 Velocity(int agent) const;      // what the crowd wants, m/s
-    glm::vec3 Position(int agent) const;
     // Where the agent's capsule really is now (and for a non-steering agent, how fast it moves).
     void Sync(int agent, const glm::vec3& feet, const glm::vec3& velocity = glm::vec3(0.0f));
     bool HasTarget(int agent) const;
-    // Distance left along the corridor to the target (straight-line from the last corner).
-    float RemainingDistance(int agent) const;
     // The next corner the agent steers for (its position when none).
     glm::vec3 NextCorner(int agent) const;
     // The corners the agent steers through (at most `max`, in order; the last is the target once the path reaches it - `reachesTarget`).
     int Corners(int agent, glm::vec3* out, int max, bool* reachesTarget = nullptr) const;
-    // Debug: the agent's target state (dtCrowd's DT_CROWDAGENT_TARGET_*, -1 none) and corner count.
-    int TargetState(int agent, int* corners = nullptr) const;
 
 private:
     dtCrowd* m_Crowd = nullptr;

@@ -173,11 +173,6 @@ bool NavMesh::InitFromData(unsigned char* data, int size) {
         Clear();
         return false;
     }
-    const dtMeshTile* tile = static_cast<const dtNavMesh*>(m_Mesh)->getTile(0);
-    if (tile && tile->header) {
-        m_BMin = V(tile->header->bmin);
-        m_BMax = V(tile->header->bmax);
-    }
     return true;
 }
 
@@ -382,25 +377,6 @@ void NavMesh::BoundaryEdges(std::vector<Edge>& out) const {
     out.resize(w);
 }
 
-void NavMesh::DebugTriangles(std::vector<float>& out) const {
-    out.clear();
-    if (!m_Mesh) return;
-    const dtNavMesh* nm = m_Mesh;
-    for (int t = 0; t < nm->getMaxTiles(); ++t) {
-        const dtMeshTile* tile = nm->getTile(t);
-        if (!tile || !tile->header) continue;
-        for (int i = 0; i < tile->header->polyCount; ++i) {
-            const dtPoly& p = tile->polys[i];
-            if (p.getType() != DT_POLYTYPE_GROUND || !(p.flags & kWalkFlag)) continue;
-            for (int j = 2; j < p.vertCount; ++j)
-                for (int k : {0, j - 1, j}) {
-                    const float* v = &tile->verts[p.verts[k] * 3];
-                    out.insert(out.end(), {v[0], v[1], v[2]});
-                }
-        }
-    }
-}
-
 int NavMesh::PolyCount() const {
     if (!m_Mesh) return 0;
     const dtNavMesh* nm = m_Mesh;
@@ -532,12 +508,6 @@ glm::vec3 NavCrowd::Velocity(int agent) const {
     return ag && ag->active ? V(ag->vel) : glm::vec3(0.0f);
 }
 
-glm::vec3 NavCrowd::Position(int agent) const {
-    if (!m_Crowd || agent < 0) return glm::vec3(0.0f);
-    const dtCrowdAgent* ag = m_Crowd->getAgent(agent);
-    return ag && ag->active ? V(ag->npos) : glm::vec3(0.0f);
-}
-
 void NavCrowd::Sync(int agent, const glm::vec3& feet, const glm::vec3& velocity) {
     if (!m_Crowd || agent < 0 || !m_Mesh) return;
     dtCrowdAgent* ag = m_Crowd->getEditableAgent(agent);
@@ -575,31 +545,6 @@ bool NavCrowd::HasTarget(int agent) const {
     if (!m_Crowd || agent < 0) return false;
     const dtCrowdAgent* ag = m_Crowd->getAgent(agent);
     return ag && ag->active && ag->targetState != DT_CROWDAGENT_TARGET_NONE && ag->targetState != DT_CROWDAGENT_TARGET_FAILED;
-}
-
-float NavCrowd::RemainingDistance(int agent) const {
-    if (!m_Crowd || agent < 0) return 0.0f;
-    const dtCrowdAgent* ag = m_Crowd->getAgent(agent);
-    if (!ag || !ag->active || ag->targetState == DT_CROWDAGENT_TARGET_NONE) return 0.0f;
-    float d = 0.0f;
-    glm::vec3 prev = V(ag->npos);
-    for (int i = 0; i < ag->ncorners; ++i) {
-        const glm::vec3 c = V(&ag->cornerVerts[i * 3]);
-        d += glm::length(glm::vec2(c.x - prev.x, c.z - prev.z));
-        prev = c;
-    }
-    const glm::vec3 t = V(ag->targetPos);
-    d += glm::length(glm::vec2(t.x - prev.x, t.z - prev.z));
-    return d;
-}
-
-int NavCrowd::TargetState(int agent, int* corners) const {
-    if (corners) *corners = 0;
-    if (!m_Crowd || agent < 0) return -1;
-    const dtCrowdAgent* ag = m_Crowd->getAgent(agent);
-    if (!ag || !ag->active) return -1;
-    if (corners) *corners = ag->ncorners;
-    return (int)ag->targetState;
 }
 
 int NavCrowd::Corners(int agent, glm::vec3* out, int max, bool* reachesTarget) const {

@@ -16,14 +16,14 @@
 class Model;
 class World;
 
-// A dummy's body: the outfit pieces under one root (assets/AI/Soldier.json), on the npc_soldier controller (the player
-// body's standing locomotion). Capsule-led: the director moves the capsule and this turns that into the
-// controller's parameters, stands the body on the capsule's feet, turns it on the spot with the turn clips, and afterwards
-// bends the finished pose - the feet onto the ground, the chest and head toward what it looks at.
+// A dummy's body: the outfit pieces under one root (assets/AI/Soldier.json), posed by the player's motion matching
+// (FirstPersonBodyMotion on the shared database). Capsule-led: the director moves the capsule; this stands the body on the
+// capsule's feet, steps the matcher toward where the capsule is going (its trajectory along the crowd's corners), and
+// afterwards bends the finished pose - the feet onto the ground, the chest and head toward what it looks at.
 //
 // Frame order:
-//   Tick         before the animators: heading, parameters, triggers
-//   LateUpdate   after them: a hit flinch's kick, foot IK, the look, the pose onto every piece; the eye
+//   Tick         before the animators: the body stood on the capsule at its heading
+//   LateUpdate   after them: the matcher's step, a hit flinch's kick, foot IK, the look, the pose onto every piece; the eye
 
 // The body's tuning: the player's First Person Body numbers, copied from the scene's player by NpcDirector.
 struct NpcHoldSettings {
@@ -84,9 +84,7 @@ public:
     bool Sprinting() const { return m_In.Sprint; } // this frame's gait (NpcBodyInput::Sprint)
 
     float Yaw() const { return m_Yaw; }
-    bool Turning() const { return m_Turning; }
     glm::vec3 Eye() const { return m_Eye; }               // world, after LateUpdate
-    glm::vec3 Feet() const { return m_Feet; }
     // A standard bone's world position as last posed; false when there is no such bone.
     bool BoneWorld(const World& world, const std::string& bone, glm::vec3& out) const;
     bool BoneWorld(const std::string& bone, glm::vec3& out) const;
@@ -99,10 +97,8 @@ public:
     entt::entity Driver() const { return m_Driver; }
     // The driver's current state name, for the debug overlay.
     std::string StateName(const World& world) const;
-    std::string AnimDebug(const World& world) const; // (tests) the base layer's crossfade stack and its last transition
     // The pose is the ragdoll's from now on: Tick / LateUpdate stop touching the pose.
     void SetPoseOwnedElsewhere(bool owned) { m_PoseExternal = owned; }
-    bool PoseOwnedElsewhere() const { return m_PoseExternal; }
     // Motion matching took (the database loaded and bound - not in CI, which has no licensed assets: the body stands in its bind
     // pose). Its gait speeds are what the capsule should move at.
     bool MotionMatching() const { return m_MmActive; }

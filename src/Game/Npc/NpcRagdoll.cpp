@@ -353,9 +353,7 @@ glm::quat NpcRagdollMotor::TargetAt(const RagdollSettingsComponent& cfg, int par
 }
 
 void NpcRagdollMotor::Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart,
-                            const RagdollSettingsComponent& cfg, const glm::vec3& point, const glm::vec3& shot) {
-    (void)point;
-    (void)shot;
+                            const RagdollSettingsComponent& cfg) {
     m_Id = id;
     m_HitPart = hitPart;
     m_Cfg = std::make_shared<RagdollSettingsComponent>(cfg);
@@ -714,7 +712,7 @@ int NpcRagdoll::Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm
         // the body's momentum plus the round's.
         float mass = 0.0f;
         for (int i = 0; i < kRagParts; ++i) mass += PartMass(&cfg, i);
-        motor->Begin(id, parts, root, velocity * mass + impulse * scale, target, cfg, point, impulse);
+        motor->Begin(id, parts, root, velocity * mass + impulse * scale, target, cfg);
     }
     return target;
 }
@@ -912,11 +910,6 @@ float NpcRagdoll::HitCorpse(int part, const glm::vec3& dir, float damage, const 
     return speed;
 }
 
-bool NpcRagdoll::Motion(float& linear, float& angular) const {
-    linear = angular = 0.0f;
-    return m_Id >= 0 && PhysicsWorld::RagdollMotion(m_Id, &linear, &angular);
-}
-
 glm::vec3 NpcRagdoll::PartPosition(int part) const {
     float p[3], q[4];
     if (m_Id < 0 || !PhysicsWorld::GetRagdollPart(m_Id, part, p, q)) return glm::vec3(0.0f);
@@ -948,8 +941,6 @@ const FlinchRegion kFlinchRegions[NpcRagdoll::kParts] = {
     {{CR, THR, -1}, {0.8f, 0.3f, 0.0f}, 1.4f},         // calf r
 };
 } // namespace
-
-const char* NpcFlinch::BoneName(int bone) { return kFlinchBones[std::clamp(bone, 0, kBones - 1)]; }
 
 float NpcFlinch::Curve(float age, float duration) {
     if (age <= 0.0f || duration <= 1e-4f) return 0.0f;
