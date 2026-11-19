@@ -2696,6 +2696,12 @@ private:
     void DrawGlassInspector(World& world, AssetLibrary& assets);
     void DrawGlassLibrary(World& world, AssetLibrary& assets);
     void DrawGlassViewportOverlays(World& world);                  // inside the Scene window
+    struct GlassHud; // DrawGlassViewportOverlays' frame, shared by its parts (EditorLayer_Glass.cpp)
+    void DrawGlassSelectionCard(World& world, GlassHud& h);
+    void DrawGlassStatsPill(GlassHud& h);
+    void DrawGlassToasts(GlassHud& h);
+    void DrawGlassSnapRing(GlassHud& h);
+    void FinishGlassFrostedBlur(GlassHud& h);
     void PollGlassNotifications();                                 // compile errors -> toasts
     // `chimed`: the toast's own event already sounded (ModuleReload, NotifyError...), so no ToastIn on top.
     void PushGlassToast(const std::string& title, const std::string& body, bool error, bool chimed = false);
