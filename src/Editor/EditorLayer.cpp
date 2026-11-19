@@ -2982,7 +2982,11 @@ void EditorLayer::SyncViewportPrefs() {
     sync(p.GizmoPivotCenter, m_GizmoPivotCenter);
     sync(p.ActiveTool, (int)m_GizmoOp);
     sync(p.ShadingMode, (int)m_ShadingMode);
-    if (!changed) return;
+    if (changed) m_ViewportPrefsPending = true;
+    // Written once the drag or edit that changed them ends: the Preferences sliders bound to these
+    // members changed them every frame of a drag, and each frame was a durable settings write.
+    if (!m_ViewportPrefsPending || ImGui::IsAnyItemActive()) return;
+    m_ViewportPrefsPending = false;
     // Picking a tool or toggling the grid is not an authored edit: write it outside the undo
     // journal (like RememberLastScene), or each one became an "Edit editor_prefs.json" undo step
     // that Ctrl+Z spent first and that cleared the redo stack.
