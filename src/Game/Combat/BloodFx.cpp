@@ -307,8 +307,12 @@ bool BloodFx::InView(const Decal& d) const {
     const float dist = glm::length(to);
     if (dist - r > kVisibleReach) return false;
     if (dist <= r + 2.0f) return true; // right here: under your feet counts as seen
-    // A 75 degree half-angle cone (wider than any view and its edges), grown by the stain's size.
-    return glm::dot(to / dist, m_Forward) > std::cos(std::min(1.309f + std::asin(std::min(r / dist, 1.0f)), 3.1416f));
+    // A 75 degree half-angle cone (wider than any view and its edges), grown by the stain's size. Inside the bare cone it's in
+    // view whatever its size (most stains, every frame): no asin / cos for those.
+    const float facing = glm::dot(to / dist, m_Forward);
+    constexpr float kCosCone = 0.25882f; // cos(1.309 rad = 75 degrees)
+    if (facing > kCosCone) return true;
+    return facing > std::cos(std::min(1.309f + std::asin(std::min(r / dist, 1.0f)), 3.1416f));
 }
 
 bool BloodFx::InViewPoint(const glm::vec3& c, float r) const {
@@ -414,8 +418,12 @@ int BloodFx::BloodySteps(int walker) const {
 }
 
 bool BloodFx::InFreshBlood(const glm::vec3& feet) const {
-    int printId = -2, cells = 0;
-    if (m_KnifeLookup) printId = m_KnifeLookup("footprint", cells);
+    if (m_PrintId < 0 && m_KnifeLookup) { // (found once; a miss is asked again: the library may not have loaded yet)
+        int cells = 0;
+        m_PrintId = m_KnifeLookup("footprint", cells);
+        m_PrintCells = cells;
+    }
+    const int printId = m_PrintId >= 0 ? m_PrintId : -2;
     for (const Decal& d : m_Decals) {
         if (d.Age < 0.5f || d.Age > kFreshSeconds || d.Print || (d.Knife >= 0 && d.Knife == printId)) continue;
         const glm::vec3 up = glm::normalize(glm::vec3(d.Model[1]));
@@ -455,9 +463,8 @@ void BloodFx::OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& vel
 
     if (InFreshBlood(feet)) { // soles soaked: the next steps carry it out
         if (w->Steps == 0) {
-            int cells = 1;
-            m_KnifeLookup("footprint", cells);
-            w->Shoe = std::min(cells - 1, (int)(Random01() * (float)std::max(cells, 1)));
+            const int cells = std::max(m_PrintCells, 1); // (InFreshBlood looked the footprint entry up)
+            w->Shoe = std::min(cells - 1, (int)(Random01() * (float)cells));
         }
         w->Steps = kPrintSteps;
         return;

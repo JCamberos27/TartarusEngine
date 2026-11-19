@@ -73,7 +73,7 @@ public:
     void SetDecalSetLookup(SimFn fn) { m_SetLookup = std::move(fn); }
     // Knife library entry name -> id and its cell count (-1 = not there). Defaults to KnifeFxLibrary::Get().
     using KnifeFn = std::function<int(const char* entry, int& cells)>;
-    void SetKnifeLookup(KnifeFn fn) { m_KnifeLookup = std::move(fn); }
+    void SetKnifeLookup(KnifeFn fn) { m_KnifeLookup = std::move(fn); m_PrintId = -1; }
     // Where a body is now (its pelvis), for the pool under a corpse; false once it's gone. Set by the host.
     using BodyFn = std::function<bool(unsigned entity, glm::vec3& centre)>;
     void SetBodyLookup(BodyFn fn) { m_Body = std::move(fn); }
@@ -271,6 +271,7 @@ private:
     // Drips running down a wall from the spatter at `at` (facing `n`), from `land` seconds on.
     void SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size, float land);
     KnifeFn m_KnifeLookup;
+    mutable int m_PrintId = -1, m_PrintCells = 1; // the footprint entry and its cells, once the lookup has found it
     int m_DripsSpawned = 0;
     int m_StainsMerged = 0;
     struct Walker {
