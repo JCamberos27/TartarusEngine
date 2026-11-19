@@ -42,10 +42,7 @@ constexpr int kNLegCount = (int)(sizeof(kNLegs) / sizeof(kNLegs[0]));
 static_assert(kNLegCount <= 16, "per-leg arrays");
 
 struct NLegStats {
-    float SpeedSum = 0.0f;
-    int SpeedN = 0;
-    int Starts = 0, Stops = 0; // entries into a start / stop state
-    std::set<std::string> States;
+    float TopSpeed = 0.0f; // the leg's top speed (m/s)
     // Motion matching (the body's matcher steps, NpcBody::MmDebug): on the move (capsule over 0.3 m/s, not yet there) the jumps
     // (a search that changed the clip), the pose steps and the time; cruising (at 90 % of the pace or more) the frames playing
     // the style asked for; and the matched frame's gait and clip at the leg's end.
@@ -63,7 +60,6 @@ struct NLegStats {
     std::string EndClip;
 };
 NLegStats g_N[kNLegCount];
-std::string g_LastState;
 bool g_Mm = false;
 int g_MmUpdates = 0;
 float P99(std::vector<float> v) {
@@ -72,8 +68,6 @@ float P99(std::vector<float> v) {
     return v[(size_t)(0.99f * (float)(v.size() - 1))];
 }
 
-bool IsStartState(const std::string& s) { return s.rfind("Start", 0) == 0 || s.rfind("CrouchStart", 0) == 0; }
-bool IsStopState(const std::string& s) { return s.rfind("Stop", 0) == 0 || s == "CrouchStop"; }
 float Flat(const glm::vec3& a, const glm::vec3& b) { return glm::length(glm::vec2(a.x - b.x, a.z - b.z)); }
 } // namespace
 
@@ -123,7 +117,7 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
     NLegStats& s = g_N[m_NLLeg];
     const float legTime = now - m_NLStart;
     const float speed = glm::length(glm::vec2(n.Velocity.x, n.Velocity.z));
-    if (m_NLArrived < 0.0f) { s.SpeedSum = std::max(s.SpeedSum, speed); s.SpeedN = 1; } // the leg's top speed
+    if (m_NLArrived < 0.0f) s.TopSpeed = std::max(s.TopSpeed, speed);
     g_Mm = n.Body.MotionMatching();
     const bool moving = m_NLArrived < 0.0f && speed > 0.3f;
     if (moving && s.MoveStart < 0.0f) s.MoveStart = now;
@@ -153,14 +147,6 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
         s.EndGait = mm.Gait;
         s.EndClip = mm.Clip;
     }
-    const std::string state = n.Body.StateName(world);
-    if (!state.empty() && state != g_LastState) {
-        s.States.insert(state);
-        if (IsStartState(state)) ++s.Starts;
-        if (IsStopState(state)) ++s.Stops;
-        std::printf("[NpcLoco] %6.2f s  %-28s %s -> %s  (%.2f m/s)\n", now, L.Name, g_LastState.c_str(), state.c_str(), speed);
-        g_LastState = state;
-    }
     if ((m_NLArrived >= 0.0f && now - m_NLArrived >= L.Hold) || legTime > 12.0f) {
         SlideLeg(L.Name);
         ++m_NLLeg;
@@ -182,13 +168,8 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
 void NpcTest::NpcLocoReport() {
     m_Done = true;
     m_Duration = m_Time; // done: end the run
-    auto speed = [](int i) { return g_N[i].SpeedN ? g_N[i].SpeedSum / (float)g_N[i].SpeedN : 0.0f; };
-    for (int i = 0; i < kNLegCount; ++i) {
-        std::string states;
-        for (const std::string& st : g_N[i].States) states += (states.empty() ? "" : ", ") + st;
-        std::printf("[NpcLoco] %-28s speed %.2f m/s  starts %d  stops %d  states: %s\n", kNLegs[i].Name, speed(i), g_N[i].Starts,
-                    g_N[i].Stops, states.c_str());
-    }
+    auto speed = [](int i) { return g_N[i].TopSpeed; };
+    for (int i = 0; i < kNLegCount; ++i) std::printf("[NpcLoco] %-28s top speed %.2f m/s\n", kNLegs[i].Name, speed(i));
     Check(m_NLLeg >= kNLegCount, "the dummy went through every leg");
     Check(g_Mm, "the dummy's pose is motion matching's (the database baked)");
     {

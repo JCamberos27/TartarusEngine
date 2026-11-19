@@ -147,13 +147,13 @@ struct NpcTest::MmDbRun {
     FkChain Fk;
     MotionMatcher Matcher;
     TrajectoryPredictor Sim;
-    float Clock = 0.0f, SegClock = 0.0f, Facing = -0.5f * kPi; // course time; facing west
+    float Clock = 0.0f, Facing = -0.5f * kPi; // course time; facing west
     int Seg = -1;
     bool LedgeLeg = false; // the wall segment: at kLedgeFrom, now heading for the face
     glm::vec3 Watch = kStage + glm::vec3(0.0f, 0.9f, 0.0f);
     std::vector<float> Lines;
     // Live stats.
-    int Frames = 0, Finite = 0, CrouchWrong = 0, AirborneMatched = 0, JumpFrames = 0, WallSegmentHits = 0;
+    int Frames = 0, Finite = 0, CrouchWrong = 0, AirborneMatched = 0, WallSegmentHits = 0;
     float WallWorstPenetration = -1.0f; // m the sphere goes into the ledge (negative: its closest gap)
     std::vector<float> JumpRaw, JumpOut, NonJumpStep;
     struct SegStats { std::vector<float> PosErr, FacingErr; int Searches = 0, Jumps = 0; int GaitFrames[4] = {0, 0, 0, 0}; };
@@ -191,6 +191,10 @@ void NpcTest::MmDbOffline() {
     std::vector<std::uint32_t> searchable;
     for (std::uint32_t i = 0; i < db.FrameCount(); ++i)
         if (MotionSearch::Passes(db.Flags(i), MotionSearchParams{})) searchable.push_back(i);
+    if (searchable.empty()) {
+        Check(false, "the database has searchable frames");
+        return;
+    }
     std::uniform_int_distribution<size_t> pick(0, searchable.size() - 1);
     std::normal_distribution<float> noise(0.0f, 0.25f);
     std::vector<float> ms;
@@ -503,7 +507,6 @@ void NpcTest::MmDb(World& world) {
     const Segment& g = kCourse[seg];
     if (seg != r.Seg) {
         r.Seg = seg;
-        r.SegClock = 0.0f;
         std::printf("[MmDb] %5.1f s  %s\n", r.Clock, g.Name);
     }
     if (g.Wall) { // home on kLedgeFrom, then walk at the face from there (obliquely: the walk slides along it)
@@ -618,5 +621,4 @@ void NpcTest::MmDb(World& world) {
                     r.Db.Clip(r.Db.ClipOf(m.Frame())).Name.c_str(), r.Db.SecondsInClip(m.Frame()), m.LastResult().Cost,
                     m.LastResult().CurrentCost);
     r.Clock += dt;
-    r.SegClock += dt;
 }

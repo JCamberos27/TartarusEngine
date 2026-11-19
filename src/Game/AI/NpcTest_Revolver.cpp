@@ -45,6 +45,7 @@ struct NpcTest::RevolverRun {
     float FingerRest = -1.0f, FingerCurl = 0.0f;
     // The muzzle light: per shot, the brightest within 0.1 s and how far it sat from the muzzle; still lit 0.3 s on.
     int ShotsSeen = 0, ShotsLit = 0;
+    bool ShotLitCounted = false; // this shot's light already counted
     float LitPeak = 0.0f, LitFar = 0.0f, LitLate = 0.0f, ShotAt = -1.0f;
     int Tracers = 0; // the most tracer streaks in flight while the player fires
     // Sights-up kick, per weapon (0 revolver, 1 AK): the procedural pose's largest offset after a shot, the IK weight
@@ -146,7 +147,7 @@ void NpcTest::RevolverDrive(Player& player, FirstPersonPresentation& weapon, flo
         if (fireWindow && R.FingerRest > 0.0f) R.FingerCurl = std::max(R.FingerCurl, std::abs(d - R.FingerRest));
     }
     // The muzzle light on every revolver shot (sights and hip), and the tracers.
-    if (onRevolver && R.LastAmmo >= 0 && weapon.Ammo() < R.LastAmmo && t < 31.0f) { ++R.ShotsSeen; R.ShotAt = t; }
+    if (onRevolver && R.LastAmmo >= 0 && weapon.Ammo() < R.LastAmmo && t < 31.0f) { ++R.ShotsSeen; R.ShotAt = t; R.ShotLitCounted = false; }
     if (glm::vec3 so, sd; onRevolver && t < 31.0f && weapon.MuzzleRay(so, sd)) {
         const glm::vec3 f = player.Cam.Front(), r = player.Cam.Right(), u = player.Cam.Up();
         const glm::vec3 inView(glm::dot(sd, r), glm::dot(sd, u), glm::dot(sd, f));
@@ -168,7 +169,7 @@ void NpcTest::RevolverDrive(Player& player, FirstPersonPresentation& weapon, flo
             R.LitPeak = std::max(R.LitPeak, lit);
             if (weapon.MuzzleFrames(fpMuzzle, worldMuzzle, bore))
                 R.LitFar = std::max(R.LitFar, std::min(glm::length(at - fpMuzzle), glm::length(at - worldMuzzle)));
-            if (R.ShotsLit < R.ShotsSeen) ++R.ShotsLit;
+            if (!R.ShotLitCounted) { ++R.ShotsLit; R.ShotLitCounted = true; }
         }
         if (R.ShotAt >= 0.0f && t - R.ShotAt >= 0.3f && t - R.ShotAt < 0.4f) R.LitLate = std::max(R.LitLate, lit);
     }
