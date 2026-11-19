@@ -899,14 +899,23 @@ bool IsTextureFileExt(std::string ext) {
            ext == ".psd" || ext == ".gif" || ext == ".hdr" || ext == ".pic" || ext == ".pnm";
 }
 
+std::string LooseName(const std::string& name); // below
+
 // Every image file up to three folders below `root`, shallowest first. Scene loads resolve many
 // textures for many models in the same few folders, so listings are cached briefly: long enough
 // to cover one load or one import batch, short enough that files copied in a moment ago show up.
-// The walk is capped so a model sitting near a huge folder can't stall an import.
-std::shared_ptr<const std::vector<std::filesystem::path>> ImageFilesUnder(const std::filesystem::path& root) {
+// The walk is capped so a model sitting near a huge folder can't stall an import. Each file carries the
+// lowered / loose names the lookups compare (worked out once per listing, not per lookup per file).
+struct ListedImage {
+    std::filesystem::path Path;
+    std::string Lower;    // LowerTextureName(filename)
+    std::string Loose;    // LooseTextureKey(filename)
+    std::string SetLoose; // the stem without a "T_" prefix, loose (FindTextureSetMap)
+};
+std::shared_ptr<const std::vector<ListedImage>> ImageFilesUnder(const std::filesystem::path& root) {
     namespace fs = std::filesystem;
     using Clock = std::chrono::steady_clock;
-    struct Listing { Clock::time_point Built; std::shared_ptr<const std::vector<fs::path>> Files; };
+    struct Listing { Clock::time_point Built; std::shared_ptr<const std::vector<ListedImage>> Files; };
     static std::mutex s_Mutex;
     static std::map<std::string, Listing> s_Cache;
     constexpr auto kLifetime = std::chrono::seconds(3);
@@ -935,9 +944,18 @@ std::shared_ptr<const std::vector<std::filesystem::path>> ImageFilesUnder(const 
         }
     }
     std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-    auto files = std::make_shared<std::vector<fs::path>>();
+    auto files = std::make_shared<std::vector<ListedImage>>();
     files->reserve(found.size());
-    for (auto& f : found) files->push_back(std::move(f.second));
+    for (auto& f : found) {
+        ListedImage li;
+        li.Lower = LowerTextureName(f.second.filename());
+        li.Loose = LooseTextureKey(f.second.filename());
+        std::string stem = f.second.stem().string();
+        if (stem.size() > 2 && (stem[0] == 'T' || stem[0] == 't') && stem[1] == '_') stem = stem.substr(2);
+        li.SetLoose = LooseName(stem);
+        li.Path = std::move(f.second);
+        files->push_back(std::move(li));
+    }
     if (s_Cache.size() > 256) s_Cache.clear();
     s_Cache[key] = Listing{now, files};
     return files;
@@ -1020,13 +1038,11 @@ std::string Model::FindTextureSetMap(const std::string& modelDirStr, const std::
     std::vector<std::pair<std::string, fs::path>> maps;
     for (const fs::path& root : roots) {
         const auto files = ImageFilesUnder(root);
-        for (const fs::path& f : *files) {
-            std::string stem = f.stem().string();
-            if (stem.size() > 2 && (stem[0] == 'T' || stem[0] == 't') && stem[1] == '_') stem = stem.substr(2);
-            const std::string loose = LooseName(stem);
+        for (const ListedImage& li : *files) {
+            const std::string& loose = li.SetLoose;
             for (const std::string& suf : suffixes) {
                 if (loose.size() <= suf.size() || loose.compare(loose.size() - suf.size(), suf.size(), suf) != 0) continue;
-                maps.emplace_back(loose.substr(0, loose.size() - suf.size()), f);
+                maps.emplace_back(loose.substr(0, loose.size() - suf.size()), li.Path);
                 break; // this file's map type is `suf`
             }
         }
@@ -1102,11 +1118,11 @@ std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const st
         const std::string wantLoose = LooseTextureKey(filename);
         for (const fs::path& root : roots) {
             const auto files = ImageFilesUnder(root);
-            for (const fs::path& f : *files)
-                if (LowerTextureName(f.filename()) == wantName) return f.string();
+            for (const ListedImage& li : *files)
+                if (li.Lower == wantName) return li.Path.string();
             if (wantLoose.empty()) continue;
-            for (const fs::path& f : *files)
-                if (LooseTextureKey(f.filename()) == wantLoose) return f.string();
+            for (const ListedImage& li : *files)
+                if (li.Loose == wantLoose) return li.Path.string();
         }
     }
 
