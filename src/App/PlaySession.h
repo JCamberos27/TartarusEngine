@@ -109,5 +109,7 @@ private:
 entt::entity FindFirstPersonController(World& world);
 // The first active in-scene Camera entity (creation order), or entt::null.
 entt::entity FindActiveSceneCamera(const World& world);
+// #171 - the enabled Audio Listener the same way (the lowest Order, then creation order), or entt::null.
+entt::entity FindActiveAudioListener(const World& world);
 // #165 - yaw/pitch (Camera's convention) of an entity's forward (-Z) axis. Roll is dropped: Camera has none.
 void YawPitchFromWorld(const glm::mat4& m, float& yawDeg, float& pitchDeg);

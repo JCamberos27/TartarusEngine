@@ -48,6 +48,8 @@ struct DistanceModel {
 
 // Cutoff (Hz) of the air low-pass at `distance` (20 kHz = open).
 float AirCutoffHz(const AudioMixComponent& s, float distance);
+// The same law from its four settings (the sound player keeps its own copy of them).
+float AirCutoffHz(bool enabled, float startDistance, float exponent, float minHz, float distance);
 
 class MixDucker {
 public:
