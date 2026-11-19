@@ -195,8 +195,6 @@ struct AnimatorController {
     bool SaveFile(const std::string& path) const;
 };
 
-// Weights of a 1D blend tree's children for `value`: at most two non-zero, summing to 1.
-// `children` need not be sorted. Exposed for tests and the Animator window preview.
 // How much a crossfading state shows at fade progress `fade` (0..1, linear in time): eased in
 // and out, so a pose settles into the next instead of sliding over at a constant rate and
 // stopping dead. Anything weighting by a crossfade (e.g. the first-person ADS correction)
@@ -206,6 +204,8 @@ inline float AnimatorCrossfadeWeight(float fade) {
     return fade * fade * (3.0f - 2.0f * fade);
 }
 
+// Weights of a 1D blend tree's children for `value`: at most two non-zero, summing to 1.
+// `children` need not be sorted. Exposed for tests and the Animator window preview.
 std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value);
 // Weights of a 2D (freeform cartesian) blend tree's children at (x, y), each child sitting at
 // (Threshold, ThresholdY): gradient-band interpolation, as Unity's Freeform Cartesian. A child's

@@ -4120,48 +4120,6 @@ void TestWeaponJankMeter() {
     CHECK(grip.size() == 1 && grip[0].What == WeaponJankEvent::Kind::Grip && grip[0].Side == 0 && std::abs(grip[0].Size - 3.0f) < 0.01f);
 }
 
-// The shoulder lock (FirstPersonGunSeat), shared by the player's world body and the soldiers: a shouldered butt goes into
-// the pocket, a gun through the neck comes out of it, and the move is never more than Max Shift.
-void TestFirstPersonGunSeat() {
-    FirstPersonGunSeatBody body;
-    body.UpperL = glm::vec3(0.19f, 1.43f, 0.0f);
-    body.UpperR = glm::vec3(-0.19f, 1.43f, 0.0f);
-    body.Neck = glm::vec3(0.0f, 1.52f, 0.0f);
-    body.Head = glm::vec3(0.0f, 1.62f, 0.0f);
-    FirstPersonWorldGunInput gun;
-    gun.Pocket = glm::vec3(-0.06f, -0.045f, 0.03f);
-    gun.Shouldered = 1.0f;
-    gun.MeshClearance = 0.0f;
-    gun.NeckRadius = 0.09f;
-    gun.HeadRadius = 0.14f;
-    gun.GunLength = 0.45f;
-    gun.MaxShift = 0.3f;
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    const glm::vec3 right = glm::normalize(body.UpperR - body.UpperL);
-    const glm::vec3 front = glm::normalize(glm::cross(up, right));
-    const glm::vec3 pocket = body.UpperR + right * gun.Pocket.x + up * gun.Pocket.y + front * gun.Pocket.z;
-    // Shouldered, 5 cm over the pocket, pointing ahead and clear of the neck: seated, exactly.
-    gun.ButtWorld = pocket + up * 0.05f;
-    gun.ForwardWorld = front;
-    glm::vec3 shift = FirstPersonGunSeat(gun, body);
-    CHECK(glm::length(gun.ButtWorld + shift - pocket) < 1e-4f);
-    // Not shouldered: left where it is.
-    gun.Shouldered = 0.0f;
-    shift = FirstPersonGunSeat(gun, body);
-    CHECK(glm::length(shift) < 1e-5f);
-    // Through the neck (unshouldered): out of the neck sphere.
-    gun.ButtWorld = body.Neck - front * 0.1f;
-    shift = FirstPersonGunSeat(gun, body);
-    const glm::vec3 a = gun.ButtWorld + shift, b = a + front * gun.GunLength;
-    const float t = std::clamp(glm::dot(body.Neck - a, b - a) / glm::dot(b - a, b - a), 0.0f, 1.0f);
-    CHECK(glm::length(a + (b - a) * t - body.Neck) >= gun.NeckRadius - 1e-3f);
-    // Never more than Max Shift.
-    gun.Shouldered = 1.0f;
-    gun.ButtWorld = pocket + up * 2.0f;
-    gun.MaxShift = 0.1f;
-    CHECK(glm::length(FirstPersonGunSeat(gun, body)) <= 0.1f + 1e-5f);
-}
-
 // The third-person hold (FirstPersonPresentation::ThirdPersonGunCorrection): each weapon's controller plays an
 // "arms3p" clip wherever it plays an "arms" one - that clip's ThirdPerson/ *_A_3P_* version (tools/weapons/add_3p_track.py).
 void TestThirdPersonArmsTrack() {
@@ -6094,7 +6052,6 @@ int RunUnitTests(const char* filter) {
         {"RemingtonController", TestRemingtonController},
         {"Revolver38Assets", TestRevolver38Assets},
         {"ThirdPersonArmsTrack", TestThirdPersonArmsTrack},
-        {"FirstPersonGunSeat", TestFirstPersonGunSeat},
         {"WeaponJankMeter", TestWeaponJankMeter},
         {"FirstPersonHandAnchor", TestFirstPersonHandAnchor},
         {"FirstPersonAds", TestFirstPersonAds},

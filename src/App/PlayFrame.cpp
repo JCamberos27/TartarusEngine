@@ -198,8 +198,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             firstPersonBody.Stop(world);
                     firstPersonBody.Start(world, player);
         }
-        firstPersonBody.SetHands(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped(),
-                                 firstPersonPresentation.IsActive() && firstPersonPresentation.HandsBusy());
         firstPersonBody.Tick(world, player, player.Cam, gameDt);
         if (firstPersonPresentation.IsActive()) {
             if (!npcTest) firstPersonPresentation.SetPlayerLookInput(player.LookDeltaInput);
@@ -336,18 +334,14 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         PROFILE_SCOPE("FP Arms + World Gun");
         // The body's hands onto the arms rig's, now that the rig is seated.
         // Split poses: the body's world twins hold the world gun, the first-person one carried to its
-        // third-person hold and by their chest.
-        // The shoulder lock seats that world gun on the twin's shoulder (FirstPersonGunSeat).
-        FirstPersonWorldGunInput worldGun;
-        const bool haveWorldGun = firstPersonPresentation.IsActive() && firstPersonPresentation.WorldGunInput(worldGun);
+        // third-person hold.
         // A reload's pouch and shells: the world body's free hand held to its chest (FirstPersonBody's hand anchor).
         FirstPersonHandAnchor handAnchor;
         const bool haveAnchor = firstPersonPresentation.IsActive() && firstPersonPresentation.HandAnchor(handAnchor);
         firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
                                        firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam,
-                                       firstPersonPresentation.ThirdPersonGunCorrection(), haveWorldGun ? &worldGun : nullptr,
-                                       firstPersonPresentation.ThirdPersonArms(), firstPersonPresentation.GunSocket(),
-                                       haveAnchor ? &handAnchor : nullptr);
+                                       firstPersonPresentation.ThirdPersonGunCorrection(),
+                                       firstPersonPresentation.ThirdPersonArms(), firstPersonPresentation.GunSocket());
         if (firstPersonPresentation.IsActive()) {
             glm::mat4 holdingHand(1.0f);
             const bool haveHolding = haveAnchor && firstPersonBody.BoneWorldMatrix(world, handAnchor.Hand, holdingHand);
