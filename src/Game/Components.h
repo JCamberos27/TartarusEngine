@@ -1296,8 +1296,6 @@ struct HealthComponent {
 // Where a training dummy appears in Play (NpcDirector), facing this object's forward: an unarmed body that wanders
 // the navigation mesh, flinches when shot, bleeds, and dies into a ragdoll.
 struct NpcSpawnComponent {
-    int OutfitSeed = 0;    // 0 = a random outfit each Play
-    bool Bare = false;     // no outfit: the bare body
     bool Roam = true;      // wanders the navigation mesh near its spawn (off: stands where it was placed)
 };
 
