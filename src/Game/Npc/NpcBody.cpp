@@ -438,7 +438,7 @@ void NpcBody::StepMotionMatching(World& world, float dt) {
     mi.Sprint = m_In.Sprint;
     mi.Style = m_In.Style;
     mi.TurnThreshold = m_Set.TurnThreshold;
-    mi.TurnEndAngle = glm::radians(std::max(kTune.TurnEndAngle, 0.0f));
+    mi.TurnEndAngle = m_Set.TurnEndAngle >= 0.0f ? m_Set.TurnEndAngle : glm::radians(std::max(kTune.TurnEndAngle, 0.0f));
     // The capsule's ease to pace (an exponential, time constant AccelTime) as the predictor's spring - as the player's.
     mi.VelocityHalflife = std::max(m_In.AccelTime, 0.02f) * 0.6931f;
     mi.Path = m_In.Path;
