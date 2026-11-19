@@ -214,7 +214,9 @@ int Application::Run() {
 
     // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
-    Log::OpenFile(headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log");
+    const char* logName = headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log";
+    Log::OpenFile(logName);
+    CrashHandler::SetReportLocation(UserPaths::Root(), logName); // a built game's dumps go to its own user folder
     return RunSession();
 }
 

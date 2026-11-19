@@ -29,6 +29,7 @@ const char* g_Reason = "";    // static strings only
 bool g_Interactive = true;
 wchar_t g_Dir[MAX_PATH] = {0}; // %LOCALAPPDATA%\TartarusEngine\Crashes\ (trailing slash)
 wchar_t g_DumpPath[MAX_PATH] = {0};
+wchar_t g_LogName[64] = L"Editor.log"; // the run's log under <user folder>/Logs, named in the dialog
 CrashHandler::EmergencySaveFn volatile g_EmergencySave = nullptr;
 LONG volatile g_EmergencySaved = 0; // 1 = the callback ran and reported success
 
@@ -140,15 +141,15 @@ DWORD WINAPI Watchdog(void*) {
     RunEmergencySave();
 
     if (g_Interactive) {
-        // #148 — tell the user instead of vanishing. The editor's own log (Editor.log) sits next
-        // to the Crashes folder, so opening the folder shows both.
+        // #148 — tell the user instead of vanishing. The run's log (Logs/Editor.log, Player.log, ...) sits in the
+        // user folder beside Crashes.
         wchar_t msg[MAX_PATH * 2 + 512];
         const wchar_t* recovered = g_EmergencySaved
             ? L"Your unsaved scene changes were saved; you'll be offered to restore them next time.\n\n"
             : L"";
         if (ok)
             wsprintfW(msg, L"Tartarus Engine crashed and has to close.\n\n%sA crash report was saved to:\n%s\n\n"
-                           L"Open the folder? Attach the .dmp and Logs\\Editor.log to a bug report.", recovered, g_DumpPath);
+                           L"Open the folder? Attach the .dmp and Logs\\%ls to a bug report.", recovered, g_DumpPath, g_LogName);
         else
             wsprintfW(msg, L"Tartarus Engine crashed and has to close.\n\n%sThe crash report couldn't be written.", recovered);
         const int choice = MessageBoxW(nullptr, msg, L"Tartarus Engine",
@@ -209,6 +210,19 @@ void OnAbort(int) { ReportHere("abort()"); }
 } // namespace
 
 namespace CrashHandler {
+void SetReportLocation(const std::string& userRoot, const std::string& logFile) {
+    if (userRoot.empty()) return;
+    wchar_t root[MAX_PATH] = {0};
+    if (!MultiByteToWideChar(CP_UTF8, 0, userRoot.c_str(), -1, root, MAX_PATH - 16)) return;
+    wchar_t dir[MAX_PATH] = {0};
+    wsprintfW(dir, L"%s\\Crashes\\", root);
+    CreateDirectoryW(root, nullptr);
+    CreateDirectoryW(dir, nullptr);
+    lstrcpynW(g_Dir, dir, MAX_PATH);
+    if (!logFile.empty()) MultiByteToWideChar(CP_UTF8, 0, logFile.c_str(), -1, g_LogName, (int)(sizeof(g_LogName) / sizeof(g_LogName[0])));
+    PruneOldDumps();
+}
+
 void Install() {
     if (g_Request) return; // installing twice is harmless
     ResolveDumpDir();
@@ -265,5 +279,5 @@ void CrashForTest(const char* kind) {
 } // namespace CrashHandler
 
 #else
-namespace CrashHandler { void Install() {} void SetInteractive(bool) {} void SetEmergencySave(EmergencySaveFn) {} void CrashForTest(const char*) {} }
+namespace CrashHandler { void Install() {} void SetReportLocation(const std::string&, const std::string&) {} void SetInteractive(bool) {} void SetEmergencySave(EmergencySaveFn) {} void CrashForTest(const char*) {} }
 #endif
