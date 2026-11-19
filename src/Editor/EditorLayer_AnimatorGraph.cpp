@@ -128,12 +128,16 @@ void DrawGraphCanvas(AnimCtx& cx) {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     ImGuiIO& io = ImGui::GetIO();
 
+    // A state index that outlived its state (deleted, a reload, another layer) must never be read.
+    auto validNode = [&](NodeRef n) { return n.Kind != NodeKind::State || (n.Index >= 0 && n.Index < (int)Ly.States.size()); };
+    if (W.Linking && (W.LinkLayer != W.Layer || !validNode(W.LinkFrom))) W.Linking = false;
     auto nodeWorldPos = [&](NodeRef n) -> glm::vec2& {
+        static glm::vec2 s_Gone{0.0f};
         switch (n.Kind) {
             case NodeKind::Entry: return Ly.EntryPosition;
             case NodeKind::Any:   return Ly.AnyPosition;
             case NodeKind::Exit:  return Ly.ExitPosition;
-            default:              return Ly.States[n.Index].Position;
+            default:              return validNode(n) ? Ly.States[n.Index].Position : (s_Gone = glm::vec2(0.0f));
         }
     };
     auto nodeSize = [&](NodeRef n) { return n.Kind == NodeKind::State ? ImVec2(kStateW, kStateH) : ImVec2(kSpecialW, kSpecialH); };
@@ -814,10 +818,14 @@ void DrawGraphCanvas(AnimCtx& cx) {
 
     if (ImGui::BeginPopup("##animctx")) {
         const NodeRef n = W.ContextNode;
-        if (n.Index != -2) {
+        // The document can change under an open menu (a reload from disk, an undo): what it was opened on is gone.
+        if ((n.Index != -2 && !validNode(n)) || (n.Index == -2 && W.ContextTransition >= (int)Ly.Transitions.size()))
+            ImGui::CloseCurrentPopup();
+        else if (n.Index != -2) {
             if (n.Kind != NodeKind::Exit && ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Make Transition")) {
                 W.Linking = true;
                 W.LinkFrom = n;
+                W.LinkLayer = W.Layer;
             }
             if (n.Kind == NodeKind::State) {
                 if (ImGui::MenuItem(ICON_FA_STAR "  Set as Layer Default State", nullptr, false, n.Index != defaultState)) {

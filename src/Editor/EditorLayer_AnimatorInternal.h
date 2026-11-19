@@ -66,6 +66,7 @@ struct AnimatorWindowState {
 
     bool Linking = false;
     NodeRef LinkFrom;
+    int LinkLayer = -1; // the layer LinkFrom indexes: a layer switch drops the link
     bool BoxSelecting = false;
     ImVec2 BoxStart{};
     bool MovingNodes = false;
@@ -116,6 +117,8 @@ struct AnimatorWindowState {
         Stamp = fs::last_write_time(fs::u8path(Abs), ec);
         Layer = std::clamp(Layer, 0, (int)Doc.Layers.size() - 1);
         ClearSelection();
+        Linking = BoxSelecting = false; // indices into the old document
+        ContextTransition = -1;
         return true;
     }
     void Write() {

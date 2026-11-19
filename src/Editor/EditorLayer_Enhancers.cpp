@@ -1704,8 +1704,14 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
     ImGui::PopID();
 
+    // Both indices were taken against this frame's order: close first, then shift the move past it.
+    if (closeAt >= 0) {
+        strip.Close(closeAt);
+        if (moveFrom == closeAt) moveFrom = -1;
+        else if (moveFrom > closeAt) --moveFrom;
+        if (moveTo > closeAt) --moveTo;
+    }
     if (moveFrom >= 0) strip.Move(moveFrom, moveTo);
-    if (closeAt >= 0) strip.Close(closeAt);
     if (closeOthers != -2) strip.CloseOthers(closeOthers);
     if (closeAll) { while (!strip.Tabs.empty()) strip.Close((int)strip.Tabs.size() - 1); strip.Active = -1; }
     if (!liveLabel && strip.Active < 0 && !strip.Tabs.empty()) strip.Active = 0;
@@ -2673,7 +2679,10 @@ constexpr Enhancers::FolderKind kListedFolderKind[5] = {Enhancers::FolderKind::M
 void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
     const size_t sig = (m_ProjectAssetIndex.files.size() * 0x9E3779B97F4A7C15ull) ^
                        ((size_t)assets.FolderMoveGeneration() << 20) ^ (assets.Folders().size() << 40);
-    m_FolderSummaryAge += ImGui::GetIO().DeltaTime;
+    // Called once per folder row or tile: the age moves once a frame, or Play's once-a-second slot would come
+    // round as many times faster as there are folders on screen.
+    static int s_AgedFrame = -1;
+    if (ImGui::GetFrameCount() != s_AgedFrame) { s_AgedFrame = ImGui::GetFrameCount(); m_FolderSummaryAge += ImGui::GetIO().DeltaTime; }
     const bool stale = !m_FolderSummariesValid || sig != m_FolderSummarySig;
     if (!stale) return;
     // During Play a needed walk waits for the once-a-second slot.

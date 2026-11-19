@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <iostream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -13,6 +14,12 @@ namespace UnitTestSupport {
 extern int g_Failures;
 extern int g_Checks;
 extern const char* g_CurrentTest;
+extern std::string g_SkipReason;
+
+// A test that can't run here (project content missing) says why and returns: the runner reports it
+// as SKIP, not PASS, and counts it. A test that ran some checks before skipping the rest is
+// "PASS (partly skipped: ...)".
+inline void Skip(const std::string& why) { g_SkipReason = why; }
 
 using TestList = std::vector<std::pair<const char*, std::function<void()>>>;
 

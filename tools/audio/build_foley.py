@@ -240,7 +240,8 @@ def main():
     build_steps(cfg, entries)
     build_steps(cfg, entries, "barefoot")
     build_steps(cfg, entries, "generic")
-    print("manifest files:", abuild.update_manifest(entries, ["Foley/"]))
+    # Foley/door/ belongs to build_doors.py: a full foley build must not delete it.
+    print("manifest files:", abuild.update_manifest(entries, ["Foley/"], keep=lambda e: e["file"].startswith("Foley/door/")))
 
 
 if __name__ == "__main__":

@@ -652,8 +652,11 @@ def main():
         if not os.path.isdir(os.path.join(src_root, s["dir"])):
             sys.exit(f"missing source folder: {os.path.join(src_root, s['dir'])}")
     os.makedirs(OUT_DIR, exist_ok=True)
-    for f in os.listdir(OUT_DIR):                         # this build owns every wav in the folder
-        if f.lower().endswith(".wav"):
+    # This build owns its events' wavs (any variant), not the folder: Spray*.wav come from build_spray.py.
+    owned = tuple(name.lower() for name in EVENTS)
+    for f in os.listdir(OUT_DIR):
+        stem = os.path.splitext(f)[0].lower()
+        if f.lower().endswith(".wav") and any(stem == n or (stem.startswith(n) and stem[len(n):].lstrip("_").isdigit()) for n in owned):
             os.remove(os.path.join(OUT_DIR, f))
     rows = []
     for name, ev in EVENTS.items():

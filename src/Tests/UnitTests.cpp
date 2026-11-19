@@ -116,6 +116,7 @@ namespace UnitTestSupport {
 int g_Failures = 0;
 int g_Checks = 0;
 const char* g_CurrentTest = "";
+std::string g_SkipReason;
 
 } // namespace UnitTestSupport
 
@@ -2823,7 +2824,7 @@ void TestWardrobeQuantum() {
     // git, so a clone has the wardrobe file but no meshes until they're fetched.
     if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Quantum.wardrobe")) ||
         !std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Models/European/Quantum_Torso.fbx"))) {
-        Log::Info("WardrobeQuantum: no Quantum pack in this project - skipped.");
+        UnitTestSupport::Skip("no Quantum pack in this project");
         return;
     }
     AssetLibrary assets;
@@ -3162,7 +3163,7 @@ void TestAsyncImportCpu() {
         const auto oldHead = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head_Old.fbx");
         CHECK(oldHead && oldHead->BoundsMax().y > 1.6f && oldHead->BoundsMin().y > 1.3f);
     } else {
-        Log::Info("AsyncImportCpu: no Quantum pack - model checks skipped.");
+        UnitTestSupport::Skip("no Quantum pack: model checks");
     } // the models are destroyed here with nothing uploaded, which must not touch GL
 
     std::error_code ec;
@@ -3226,7 +3227,7 @@ void TestFirstPersonBodyClothingHide() {
     // The Quantum pack's hooded coat, hood up: its hood and collar are found, its body and sleeves aren't. Needs the pack (project content).
     const std::string jacketPath = "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Coat_Hoodie_Hood.fbx";
     if (!std::filesystem::exists(ProjectPaths::Resolve(jacketPath))) {
-        Log::Info("FirstPersonBodyClothingHide: no Quantum pack - model checks skipped.");
+        UnitTestSupport::Skip("no Quantum pack: model checks");
         return;
     }
     const auto jacket = Model::ImportDeferred(ProjectPaths::Resolve(jacketPath), ModelImportSettings{});
@@ -3793,7 +3794,7 @@ void TestGaitPhaseSync() {
 void TestAKAdditiveWalking() {
     // The distributable sample omits Weapons. Source checkouts still gate the authored graph.
     if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
-        Log::Info("AK additive walking: no weapon project data - skipped.");
+        UnitTestSupport::Skip("no weapon project data");
         return;
     }
     AnimatorController c;
@@ -3872,7 +3873,7 @@ void TestAKAdditiveWalking() {
 }
 void TestSprintTransitionWalk() {
     if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
-        Log::Info("Sprint transition walk: no weapon project data - skipped.");
+        UnitTestSupport::Skip("no weapon project data");
         return;
     }
     for (const char* path : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller",
@@ -4104,10 +4105,11 @@ void TestThirdPersonArmsTrack() {
                             "assets/Weapons/Revolver38/Revolver38.controller"}) {
         const std::string path = ProjectPaths::Resolve(rel);
         AnimatorController ctrl;
-        if (!AnimatorController::LoadFile(path, ctrl)) {
-            std::printf("  (skipped: no %s)\n", path.c_str());
+        if (!std::filesystem::exists(path)) { // a source checkout without weapons; a broken file fails below
+            UnitTestSupport::Skip("no " + path);
             continue;
         }
+        CHECK(AnimatorController::LoadFile(path, ctrl));
         const bool has = std::find(ctrl.Tracks.begin(), ctrl.Tracks.end(), "arms3p") != ctrl.Tracks.end();
         CHECK(has);
         if (!has) continue;
@@ -4137,8 +4139,12 @@ void TestRemingtonController() {
     namespace K = FirstPersonAnimatorContract;
     const std::string path = ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.controller");
     AnimatorController ctrl;
+    if (!std::filesystem::exists(path)) { // a source checkout without weapons; a broken file fails below
+        UnitTestSupport::Skip("no " + path);
+        return;
+    }
     if (!AnimatorController::LoadFile(path, ctrl)) {
-        std::printf("  (skipped: no %s)\n", path.c_str());
+        CHECK(!"the controller loads");
         return;
     }
     constexpr int kMagazine = 6;
@@ -4271,8 +4277,12 @@ void TestRevolver38Assets() {
     namespace K = FirstPersonAnimatorContract;
     const std::string path = ProjectPaths::Resolve("assets/Weapons/Revolver38/Revolver38.controller");
     AnimatorController ctrl;
+    if (!std::filesystem::exists(path)) { // a source checkout without weapons; a broken file fails below
+        UnitTestSupport::Skip("no " + path);
+        return;
+    }
     if (!AnimatorController::LoadFile(path, ctrl)) {
-        std::printf("  (skipped: no %s)\n", path.c_str());
+        CHECK(!"the controller loads");
         return;
     }
     constexpr int kCylinder = 6;
@@ -5629,7 +5639,7 @@ void TestIKSolver() {
 void TestPosedBounds() {
     const char* path = "assets/Characters/Quantum/Models/European/Quantum_Head.fbx";
     if (!std::filesystem::exists(ProjectPaths::Resolve(path))) {
-        Log::Info("PosedBounds: no Quantum pack - skipped.");
+        UnitTestSupport::Skip("no Quantum pack");
         return;
     }
     auto model = Model::ImportDeferred(ProjectPaths::Resolve(path), ModelImportSettings{});
@@ -5682,7 +5692,7 @@ void TestOutfitEdgeBandPosed() {
     const char* armsPath = "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx";
     const char* shirtPath = "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Shirt_Hawaii.fbx";
     if (!std::filesystem::exists(ProjectPaths::Resolve(armsPath)) || !std::filesystem::exists(ProjectPaths::Resolve(shirtPath))) {
-        Log::Info("OutfitEdgeBandPosed: no Quantum pack - skipped.");
+        UnitTestSupport::Skip("no Quantum pack");
         return;
     }
     // The model's geometry with its upper arms turned down by `deg` (0 = the bind pose).
@@ -5773,7 +5783,7 @@ void TestOutfitRigidUnderHood() {
     const std::string C = "assets/Characters/Quantum/Models/Clothing/Male/";
     const std::string headPath = "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx";
     if (!std::filesystem::exists(ProjectPaths::Resolve(C + "Tops/SKM_Hoodie_Hood_Up.fbx")) || !std::filesystem::exists(ProjectPaths::Resolve(headPath))) {
-        Log::Info("OutfitRigidUnderHood: no Quantum pack - skipped.");
+        UnitTestSupport::Skip("no Quantum pack");
         return;
     }
     auto geo = [](const std::string& rel) {
@@ -5804,7 +5814,7 @@ void TestQuantumMaterialTextures() {
     namespace fs = std::filesystem;
     const fs::path root = ProjectPaths::Resolve("assets/Characters/Quantum/Materials");
     if (!fs::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Models/European/Quantum_Torso.fbx")) || !fs::exists(root)) {
-        Log::Info("QuantumMaterialTextures: no Quantum pack - skipped.");
+        UnitTestSupport::Skip("no Quantum pack");
         return;
     }
     auto lower = [](std::string s) {
@@ -6104,10 +6114,13 @@ int RunUnitTests(const char* filter) {
     { void RegisterGraffitiTests(UnitTestSupport::TestList&); RegisterGraffitiTests(tests); } // UnitTests_Graffiti.cpp
     { void RegisterGizmoIconTests(UnitTestSupport::TestList&); RegisterGizmoIconTests(tests); } // UnitTests_GizmoIcons.cpp
     { void RegisterAssetLibraryTests(UnitTestSupport::TestList&); RegisterAssetLibraryTests(tests); } // UnitTests_AssetLibrary.cpp
+    int ran = 0, skipped = 0;
     for (const auto& [name, fn] : tests) {
         if(filter && std::string(name).find(filter)==std::string::npos) continue;
+        ++ran;
         g_CurrentTest = name;
-        const int before = g_Failures;
+        UnitTestSupport::g_SkipReason.clear();
+        const int before = g_Failures, checksBefore = g_Checks;
         try {
             fn();
         } catch (const std::exception& e) {
@@ -6117,9 +6130,19 @@ int RunUnitTests(const char* filter) {
             ++g_Failures;
             std::cout << "[UnitTest] FAIL " << name << ": threw a non-std exception\n";
         }
-        std::cout << "[UnitTest] " << (g_Failures == before ? "PASS " : "FAIL ") << name << "\n";
+        const std::string& skip = UnitTestSupport::g_SkipReason;
+        if (g_Failures != before) std::cout << "[UnitTest] FAIL " << name << "\n";
+        else if (!skip.empty() && g_Checks == checksBefore) { ++skipped; std::cout << "[UnitTest] SKIP " << name << ": " << skip << "\n"; }
+        else if (!skip.empty()) std::cout << "[UnitTest] PASS " << name << " (partly skipped: " << skip << ")\n";
+        else std::cout << "[UnitTest] PASS " << name << "\n";
     }
-    std::cout << "[UnitTest] " << g_Checks << " checks, " << g_Failures << " failure(s)\n";
+    // A filter that matches nothing is a typo, not a pass.
+    if (filter && ran == 0) {
+        std::cout << "[UnitTest] FAIL no test name contains \"" << filter << "\"\n";
+        ++g_Failures;
+    }
+    std::cout << "[UnitTest] " << g_Checks << " checks, " << g_Failures << " failure(s), " << ran << " test(s) run, " << skipped
+              << " skipped\n";
     std::cout.flush();
     return g_Failures;
 }
