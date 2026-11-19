@@ -1499,34 +1499,26 @@ std::vector<int> FuzzyTop(const char* query, int count, TextFn text, int limit) 
 }
 } // namespace
 
-bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view,
-                               const std::vector<TabStripItem>& items, const char* liveLabel, const char* liveIcon,
-                               const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop,
-                               bool showDropHint, float leftInset, float rightInset) {
-    auto& ts = Enhancers::TabState::Get();
-    ImGuiIO& io = ImGui::GetIO();
-    const int before = strip.Active;
-    const float h = ImGui::GetFrameHeight();
-    // The row is the full width; the strip sits between the insets the caller keeps for its own
-    // buttons (the Inspector's Back / Forward and the bookmark button share this row).
-    const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-    const float rowW = ImGui::GetContentRegionAvail().x;
-    const ImVec2 barMin(rowMin.x + leftInset, rowMin.y);
-    const float barW = std::max(rowW - leftInset - rightInset, h * 2.0f);
-    const float plusW = h;
-    const ImVec2 stripMin = barMin;
-    // The strip's right end without the overflow controls; with them it ends sooner (below).
-    const float stripEndX = barMin.x + std::max(barW - plusW - EditorTheme::Px(4.0f), 1.0f);
-    ImGui::PushID(id);
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine(ImVec2(rowMin.x, barMin.y + h - 0.5f), ImVec2(rowMin.x + rowW, barMin.y + h - 0.5f), EditorTheme::U32(EditorTheme::Hairline));
-
-    // Layout: the live tab (index -1) then the strip's tabs.
-    EditorTheme::PushSmall();
-    const float padX = EditorTheme::Px(8.0f), gap = EditorTheme::Px(5.0f), closeW = EditorTheme::Px(14.0f);
+namespace {
+// DrawTabStrip's pieces. The tab row's geometry for this frame: where each tab sits in the scrolled
+// strip, and whether the overflow controls (list button, and < > when there is room) show.
+struct TabStripLayout {
+    int First = 0, N = 0;              // -1 when the live tab leads; the strip's tab count
+    std::vector<float> Xs, Ws;         // per tab, from First: x inside the strip and width
+    float ContentW = 0.0f, VisibleW = 0.0f, MaxScroll = 0.0f;
+    float ArrowW = 0.0f, ListW = 0.0f;
+    bool Overflow = false, Arrows = false;
+    ImVec2 StripMax;
+};
+// Lays the tabs out (the small font is pushed by the caller: it sizes the labels).
+TabStripLayout LayoutTabStrip(int tabCount, const std::vector<EditorLayer::TabStripItem>& items, const char* liveLabel,
+                              const char* liveIcon, ImVec2 stripMin, ImVec2 barMin, float stripEndX, float h,
+                              float padX, float gap, float closeW) {
+    TabStripLayout lay;
     const int first = liveLabel ? -1 : 0;
-    const int n = (int)strip.Tabs.size();
-    std::vector<float> xs, ws;
+    const int n = tabCount;
+    std::vector<float>& xs = lay.Xs;
+    std::vector<float>& ws = lay.Ws;
     xs.reserve((size_t)(n + 1)); ws.reserve((size_t)(n + 1));
     float x = 0.0f;
     for (int i = first; i < n; ++i) {
@@ -1549,7 +1541,21 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     const ImVec2 stripMax(std::max(stripEndX - controlsW, stripMin.x + 1.0f), barMin.y + h);
     const float visibleW = stripMax.x - stripMin.x;
     const float maxScroll = std::max(0.0f, contentW - visibleW);
+    lay.First = first; lay.N = n; lay.ContentW = contentW; lay.VisibleW = visibleW; lay.MaxScroll = maxScroll;
+    lay.ArrowW = arrowW; lay.ListW = listW; lay.Overflow = overflow; lay.Arrows = arrows; lay.StripMax = stripMax;
+    return lay;
+}
 
+// Keeps the active tab in view and handles the wheel over the strip (scroll; Shift switches tabs;
+// Ctrl+Shift moves the active one), then eases the scroll.
+void ScrollTabStrip(Enhancers::TabStrip& strip, EditorLayer::TabStripView& view, const TabStripLayout& lay, ImVec2 barMin,
+                    float barW, const char* liveLabel, Enhancers::TabState& ts) {
+    ImGuiIO& io = ImGui::GetIO();
+    const int first = lay.First;
+    const std::vector<float>& xs = lay.Xs;
+    const std::vector<float>& ws = lay.Ws;
+    const float visibleW = lay.VisibleW, maxScroll = lay.MaxScroll;
+    const ImVec2 stripMax = lay.StripMax;
     // Keep a newly active tab in view.
     if (strip.Active != view.SeenActive) {
         view.SeenActive = strip.Active;
@@ -1581,6 +1587,133 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     view.ScrollTarget = std::clamp(view.ScrollTarget, 0.0f, maxScroll);
     view.Scroll += (view.ScrollTarget - view.Scroll) * std::min(1.0f, io.DeltaTime * 16.0f);
     if (std::fabs(view.ScrollTarget - view.Scroll) < 0.5f) view.Scroll = view.ScrollTarget;
+}
+
+// The overflow controls after the tabs: < > step through them (held, they repeat) and the list
+// button opens every tab by name.
+void DrawTabOverflow(Enhancers::TabStrip& strip, const std::vector<EditorLayer::TabStripItem>& items, const TabStripLayout& lay,
+                     const char* liveLabel, const char* liveIcon, ImVec2 barMin, float h) {
+    const int first = lay.First, n = lay.N;
+    const float arrowW = lay.ArrowW, listW = lay.ListW;
+    const bool arrows = lay.Arrows;
+    const ImVec2 stripMax = lay.StripMax;
+    const int lo = liveLabel ? -1 : 0;
+    ImGui::SetCursorScreenPos(ImVec2(stripMax.x + EditorTheme::Px(2.0f), barMin.y));
+    if (arrows) {
+        ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true); // held, they keep stepping, like ImGui's
+        if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_LEFT, "Previous tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
+            strip.Active = std::clamp(strip.Active - 1, lo, n - 1);
+        ImGui::SameLine(0.0f, 0.0f);
+        if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_RIGHT, "Next tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
+            strip.Active = std::clamp(strip.Active + 1, lo, n - 1);
+        ImGui::PopItemFlag();
+        ImGui::SameLine(0.0f, 0.0f);
+    }
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_DOWN, "All open tabs", &Tip, false, ImVec2(listW, h)))
+        ImGui::OpenPopup("##tabList");
+    if (ImGui::BeginPopup("##tabList")) {
+        for (int i = first; i < n; ++i) {
+            const TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
+            const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
+            const std::string text = std::string(icon ? icon : "") + (icon ? "  " : "") + (i < 0 ? liveLabel : (item ? item->Label.c_str() : ""));
+            ImGui::PushID(i);
+            if (ImGui::Selectable(text.c_str(), strip.Active == i)) strip.Active = i;
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// The "+" menu at the bar's right end, and the whole bar as a drop target for anything openable.
+void DrawTabPlusAndDrop(const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint,
+                        ImDrawList* dl, const TabStripLayout& lay, const char* liveLabel, ImVec2 stripMin, ImVec2 barMin,
+                        float barW, float plusW, float h) {
+    const int n = lay.N;
+    const std::vector<float>& xs = lay.Xs;
+    const std::vector<float>& ws = lay.Ws;
+    const ImVec2 stripMax = lay.StripMax;
+    // "+": the caller's menu (starred tabs and a fuzzy search).
+    ImGui::SetCursorScreenPos(ImVec2(barMin.x + barW - plusW, barMin.y));
+    if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "Open a tab (Ctrl+T)", &Tip, false, ImVec2(plusW, h))) ImGui::OpenPopup("##tabPlus");
+    ImGui::SetNextWindowSizeConstraints(ImVec2(EditorTheme::Px(240.0f), 0.0f), ImVec2(EditorTheme::Px(420.0f), EditorTheme::Px(420.0f)));
+    if (ImGui::BeginPopup("##tabPlus")) {
+        plusMenu();
+        ImGui::EndPopup();
+    }
+
+    // Drop anything openable anywhere on the bar. While something openable is dragged the bar
+    // gets a dashed outline; over it, the outline lights and a "Drop to open" pill says what a
+    // release does (ImGui's own target rectangle is hidden).
+    bool dropHover = false;
+    ImGui::PushStyleColor(ImGuiCol_DragDropTarget, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_DragDropTargetBg, ImVec4(0, 0, 0, 0));
+    if (ImGui::BeginDragDropTargetCustom(ImRect(barMin, ImVec2(barMin.x + barW, stripMax.y)), ImGui::GetID("##tabDrop"))) {
+        dropHover = true;
+        acceptDrop();
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::PopStyleColor(2);
+    if (showDropHint) {
+        const ImVec2 dmn(barMin.x + 1.0f, barMin.y + EditorTheme::Px(1.0f)), dmx(barMin.x + barW - 1.0f, stripMax.y - 1.0f);
+        EditorUIPrimitives::DrawDashedRect(dl, dmn, dmx, EditorTheme::U32(dropHover ? EditorTheme::Accent : EditorTheme::Strong));
+        if (dropHover) {
+            EditorTheme::PushSmall();
+            const char* text = ICON_FA_ARROW_DOWN "  Drop to open";
+            const ImVec2 pts = ImGui::CalcTextSize(text);
+            const float ph = pts.y + EditorTheme::Px(6.0f), pw = pts.x + EditorTheme::Px(18.0f);
+            const ImVec2 pmn(std::floor((dmn.x + dmx.x - pw) * 0.5f), std::floor((dmn.y + dmx.y - ph) * 0.5f));
+            const ImVec2 pmx(pmn.x + pw, pmn.y + ph);
+            EditorUIPrimitives::DrawSoftShadow(dl, pmn, pmx, ph * 0.5f, EditorTheme::Px(5.0f), 0.6f);
+            dl->AddRectFilled(pmn, pmx, EditorTheme::U32(EditorTheme::Raised), ph * 0.5f);
+            dl->AddRect(pmn, pmx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.6f)), ph * 0.5f, 0, 1.0f);
+            dl->AddText(ImVec2(pmn.x + EditorTheme::Px(9.0f), pmn.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Text), text);
+            EditorTheme::PopFont();
+        } else if (n == 0) {
+            EditorTheme::PushSmall();
+            const char* hint = "Drop here to open a tab";
+            const ImVec2 hs = ImGui::CalcTextSize(hint);
+            const float hx = stripMin.x + (liveLabel ? xs[0] + ws[0] + EditorTheme::Px(8.0f) : EditorTheme::Px(8.0f));
+            if (hx + hs.x < stripMax.x) dl->AddText(ImVec2(hx, std::floor((stripMin.y + stripMax.y - hs.y) * 0.5f)), EditorTheme::U32(EditorTheme::Dim), hint);
+            EditorTheme::PopFont();
+        }
+    }
+}
+} // namespace
+
+bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view,
+                               const std::vector<TabStripItem>& items, const char* liveLabel, const char* liveIcon,
+                               const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop,
+                               bool showDropHint, float leftInset, float rightInset) {
+    auto& ts = Enhancers::TabState::Get();
+    ImGuiIO& io = ImGui::GetIO();
+    const int before = strip.Active;
+    const float h = ImGui::GetFrameHeight();
+    // The row is the full width; the strip sits between the insets the caller keeps for its own
+    // buttons (the Inspector's Back / Forward and the bookmark button share this row).
+    const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+    const float rowW = ImGui::GetContentRegionAvail().x;
+    const ImVec2 barMin(rowMin.x + leftInset, rowMin.y);
+    const float barW = std::max(rowW - leftInset - rightInset, h * 2.0f);
+    const float plusW = h;
+    const ImVec2 stripMin = barMin;
+    // The strip's right end without the overflow controls; with them it ends sooner (below).
+    const float stripEndX = barMin.x + std::max(barW - plusW - EditorTheme::Px(4.0f), 1.0f);
+    ImGui::PushID(id);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddLine(ImVec2(rowMin.x, barMin.y + h - 0.5f), ImVec2(rowMin.x + rowW, barMin.y + h - 0.5f), EditorTheme::U32(EditorTheme::Hairline));
+
+    // Layout: the live tab (index -1) then the strip's tabs.
+    EditorTheme::PushSmall();
+    const float padX = EditorTheme::Px(8.0f), gap = EditorTheme::Px(5.0f), closeW = EditorTheme::Px(14.0f);
+    const TabStripLayout lay = LayoutTabStrip((int)strip.Tabs.size(), items, liveLabel, liveIcon, stripMin, barMin, stripEndX, h,
+                                              padX, gap, closeW);
+    const int first = lay.First, n = lay.N;
+    const std::vector<float>& xs = lay.Xs;
+    const std::vector<float>& ws = lay.Ws;
+    const float maxScroll = lay.MaxScroll;
+    const ImVec2 stripMax = lay.StripMax;
+
+    ScrollTabStrip(strip, view, lay, barMin, barW, liveLabel, ts);
 
     // Tabs. Inactive tabs draw on channel 0, the overflow fades on 1, the active tab and a dragged
     // tab's ghost on 2: a fade never dims the tab you are on, and the ghost floats over the rest.
@@ -1725,79 +1858,9 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     dl->ChannelsMerge();
     ImGui::PopClipRect();
 
-    if (overflow) {
-        const int lo = liveLabel ? -1 : 0;
-        ImGui::SetCursorScreenPos(ImVec2(stripMax.x + EditorTheme::Px(2.0f), barMin.y));
-        if (arrows) {
-            ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true); // held, they keep stepping, like ImGui's
-            if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_LEFT, "Previous tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
-                strip.Active = std::clamp(strip.Active - 1, lo, n - 1);
-            ImGui::SameLine(0.0f, 0.0f);
-            if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_RIGHT, "Next tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
-                strip.Active = std::clamp(strip.Active + 1, lo, n - 1);
-            ImGui::PopItemFlag();
-            ImGui::SameLine(0.0f, 0.0f);
-        }
-        if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_DOWN, "All open tabs", &Tip, false, ImVec2(listW, h)))
-            ImGui::OpenPopup("##tabList");
-        if (ImGui::BeginPopup("##tabList")) {
-            for (int i = first; i < n; ++i) {
-                const TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
-                const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
-                const std::string text = std::string(icon ? icon : "") + (icon ? "  " : "") + (i < 0 ? liveLabel : (item ? item->Label.c_str() : ""));
-                ImGui::PushID(i);
-                if (ImGui::Selectable(text.c_str(), strip.Active == i)) strip.Active = i;
-                ImGui::PopID();
-            }
-            ImGui::EndPopup();
-        }
-    }
+    if (lay.Overflow) DrawTabOverflow(strip, items, lay, liveLabel, liveIcon, barMin, h);
 
-    // "+": the caller's menu (starred tabs and a fuzzy search).
-    ImGui::SetCursorScreenPos(ImVec2(barMin.x + barW - plusW, barMin.y));
-    if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "Open a tab (Ctrl+T)", &Tip, false, ImVec2(plusW, h))) ImGui::OpenPopup("##tabPlus");
-    ImGui::SetNextWindowSizeConstraints(ImVec2(EditorTheme::Px(240.0f), 0.0f), ImVec2(EditorTheme::Px(420.0f), EditorTheme::Px(420.0f)));
-    if (ImGui::BeginPopup("##tabPlus")) {
-        plusMenu();
-        ImGui::EndPopup();
-    }
-
-    // Drop anything openable anywhere on the bar. While something openable is dragged the bar
-    // gets a dashed outline; over it, the outline lights and a "Drop to open" pill says what a
-    // release does (ImGui's own target rectangle is hidden).
-    bool dropHover = false;
-    ImGui::PushStyleColor(ImGuiCol_DragDropTarget, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_DragDropTargetBg, ImVec4(0, 0, 0, 0));
-    if (ImGui::BeginDragDropTargetCustom(ImRect(barMin, ImVec2(barMin.x + barW, stripMax.y)), ImGui::GetID("##tabDrop"))) {
-        dropHover = true;
-        acceptDrop();
-        ImGui::EndDragDropTarget();
-    }
-    ImGui::PopStyleColor(2);
-    if (showDropHint) {
-        const ImVec2 dmn(barMin.x + 1.0f, barMin.y + EditorTheme::Px(1.0f)), dmx(barMin.x + barW - 1.0f, stripMax.y - 1.0f);
-        EditorUIPrimitives::DrawDashedRect(dl, dmn, dmx, EditorTheme::U32(dropHover ? EditorTheme::Accent : EditorTheme::Strong));
-        if (dropHover) {
-            EditorTheme::PushSmall();
-            const char* text = ICON_FA_ARROW_DOWN "  Drop to open";
-            const ImVec2 pts = ImGui::CalcTextSize(text);
-            const float ph = pts.y + EditorTheme::Px(6.0f), pw = pts.x + EditorTheme::Px(18.0f);
-            const ImVec2 pmn(std::floor((dmn.x + dmx.x - pw) * 0.5f), std::floor((dmn.y + dmx.y - ph) * 0.5f));
-            const ImVec2 pmx(pmn.x + pw, pmn.y + ph);
-            EditorUIPrimitives::DrawSoftShadow(dl, pmn, pmx, ph * 0.5f, EditorTheme::Px(5.0f), 0.6f);
-            dl->AddRectFilled(pmn, pmx, EditorTheme::U32(EditorTheme::Raised), ph * 0.5f);
-            dl->AddRect(pmn, pmx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.6f)), ph * 0.5f, 0, 1.0f);
-            dl->AddText(ImVec2(pmn.x + EditorTheme::Px(9.0f), pmn.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Text), text);
-            EditorTheme::PopFont();
-        } else if (n == 0) {
-            EditorTheme::PushSmall();
-            const char* hint = "Drop here to open a tab";
-            const ImVec2 hs = ImGui::CalcTextSize(hint);
-            const float hx = stripMin.x + (liveLabel ? xs[0] + ws[0] + EditorTheme::Px(8.0f) : EditorTheme::Px(8.0f));
-            if (hx + hs.x < stripMax.x) dl->AddText(ImVec2(hx, std::floor((stripMin.y + stripMax.y - hs.y) * 0.5f)), EditorTheme::U32(EditorTheme::Dim), hint);
-            EditorTheme::PopFont();
-        }
-    }
+    DrawTabPlusAndDrop(plusMenu, acceptDrop, showDropHint, dl, lay, liveLabel, stripMin, barMin, barW, plusW, h);
     ImGui::SetCursorScreenPos(ImVec2(rowMin.x, stripMax.y + EditorTheme::Px(2.0f)));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
     ImGui::PopID();
