@@ -186,17 +186,25 @@ bool ReadExr(const std::vector<std::uint8_t>& b, ExrImage& out, std::string* err
     for (const Chan& c : chans)
         if (c.Type != 1 && c.Type != 2) { Fail(error, "EXR channel '" + c.Name + "' is not HALF or FLOAT"); return false; }
 
-    out.Width = x1 - x0 + 1;
-    out.Height = y1 - y0 + 1;
+    const int width = x1 - x0 + 1, height = y1 - y0 + 1;
+    size_t lineBytes = 0;
+    for (const Chan& c : chans) lineBytes += (size_t)width * (c.Type == 1 ? 2 : 4);
+    const int linesPerBlock = compression == 3 ? 16 : 1;
+    const int blocks = (height + linesPerBlock - 1) / linesPerBlock;
+    // Before anything is allocated, the file has to be able to hold what the header claims: its offset table, and pixel
+    // data that inflates to the image (stored raw: as many bytes; zlib: at most ~1032x). A damaged header naming a
+    // 16384 x 16384 window in a file of a few hundred bytes otherwise zero-filled gigabytes.
+    if (p + (size_t)blocks * 8 > b.size()) { Fail(error, "truncated EXR offset table"); return false; }
+    const std::uint64_t rawTotal = (std::uint64_t)lineBytes * (std::uint64_t)height;
+    const std::uint64_t dataBytes = b.size() - (p + (size_t)blocks * 8);
+    const std::uint64_t maxRaw = compression == 0 ? dataBytes : dataBytes * 1032ull;
+    if (rawTotal > maxRaw) { Fail(error, "EXR data window is larger than the file can hold"); return false; }
+
+    out.Width = width;
+    out.Height = height;
     out.Channels.clear();
     for (const Chan& c : chans) out.Channels.push_back(c.Name);
     out.Pixels.assign((size_t)out.Width * out.Height * chans.size(), 0.0f);
-
-    size_t lineBytes = 0;
-    for (const Chan& c : chans) lineBytes += (size_t)out.Width * (c.Type == 1 ? 2 : 4);
-    const int linesPerBlock = compression == 3 ? 16 : 1;
-    const int blocks = (out.Height + linesPerBlock - 1) / linesPerBlock;
-    if (p + (size_t)blocks * 8 > b.size()) { Fail(error, "truncated EXR offset table"); return false; }
     std::vector<std::uint8_t> raw, tmp;
     for (int bi = 0; bi < blocks; ++bi) {
         const std::uint64_t off = Get<std::uint64_t>(b, p + (size_t)bi * 8);
