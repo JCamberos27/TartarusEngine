@@ -6125,10 +6125,13 @@ int RunUnitTests(const char* filter) {
         if(filter && std::string(name).find(filter)==std::string::npos) continue;
         ++ran;
         g_CurrentTest = name;
-        // Named (and flushed) before it runs, so a test that hangs until a CI timeout is the last line in the log.
+        // Named before it runs, with both streams flushed (tests and the engine also print through printf and the
+        // log), so a test that hangs until a CI timeout is the last line in the log.
         std::cout << "[UnitTest] RUN  " << name << std::endl;
+        std::fflush(stdout);
         UnitTestSupport::g_SkipReason.clear();
         const int before = g_Failures, checksBefore = g_Checks;
+        const auto started = std::chrono::steady_clock::now();
         try {
             fn();
         } catch (const std::exception& e) {
@@ -6139,10 +6142,14 @@ int RunUnitTests(const char* filter) {
             std::cout << "[UnitTest] FAIL " << name << ": threw a non-std exception\n";
         }
         const std::string& skip = UnitTestSupport::g_SkipReason;
-        if (g_Failures != before) std::cout << "[UnitTest] FAIL " << name << "\n";
-        else if (!skip.empty() && g_Checks == checksBefore) { ++skipped; std::cout << "[UnitTest] SKIP " << name << ": " << skip << "\n"; }
-        else if (!skip.empty()) std::cout << "[UnitTest] PASS " << name << " (partly skipped: " << skip << ")\n";
-        else std::cout << "[UnitTest] PASS " << name << "\n";
+        const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+        const std::string took = " (" + std::to_string(ms) + " ms)";
+        if (g_Failures != before) std::cout << "[UnitTest] FAIL " << name << took << "\n";
+        else if (!skip.empty() && g_Checks == checksBefore) { ++skipped; std::cout << "[UnitTest] SKIP " << name << ": " << skip << took << "\n"; }
+        else if (!skip.empty()) std::cout << "[UnitTest] PASS " << name << " (partly skipped: " << skip << ")" << took << "\n";
+        else std::cout << "[UnitTest] PASS " << name << took << "\n";
+        std::cout.flush();
+        std::fflush(stdout);
     }
     // A filter that matches nothing is a typo, not a pass.
     if (filter && ran == 0) {
