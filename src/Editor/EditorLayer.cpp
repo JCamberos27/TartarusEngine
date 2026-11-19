@@ -3636,7 +3636,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (Shortcuts::Triggered("panel.focus.console"))   ImGui::SetWindowFocus("Console");
         if (HasAnySelection() && Shortcuts::Triggered("edit.delete")) {
             DeleteSelection(world);
-        } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
             std::vector<AssetKeyRef> toDelete;
             toDelete.push_back({m_SelectedAssetKey, m_SelectedAssetIsFolder});
             for (const auto& e : m_ExtraAssetSelection) toDelete.push_back(e);
@@ -3678,14 +3678,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (Shortcuts::Triggered("camera.alignToView") &&
                 m_Selected != entt::null && world.Registry.valid(m_Selected) &&
                 world.Registry.all_of<CameraComponent>(m_Selected)) {
-            PushUndo(world, "Align Camera to View");
-            auto& t = world.Registry.get<TransformComponent>(m_Selected);
-            t.Position = editorCamera.Position;
-            glm::vec3 d = glm::normalize(editorCamera.Front());
-            t.SetRotationEuler(glm::vec3(
-                glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
-                glm::degrees(std::atan2(-d.x, -d.z)), 0.0f));
-            world.Registry.get<CameraComponent>(m_Selected).FovDegrees = editorCamera.Fov;
+            AlignCameraToView(world, m_Selected, editorCamera);
         }
 
         // Unity Project-window-style Asset Browser shortcuts. The four discrete actions are

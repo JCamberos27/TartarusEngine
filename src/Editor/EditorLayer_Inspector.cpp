@@ -1032,6 +1032,12 @@ void DefaultEmissiveTint(Material& m, std::shared_ptr<Texture> Material::* slot)
 
 // Small eyedropper button, drawn right after a colour swatch. Arms EditorLayer's viewport
 // eyedropper on `target` (a stable pointer into a component / World member). #236 R2.
+// A custom shader's Texture2D property: a [Normal] map (or one defaulting to "normal") is
+// imported linear like the built-in Normal slot; anything else loads as authored.
+std::shared_ptr<Texture> LoadTextureForShaderProp(AssetLibrary& assets, const std::string& path, const ShaderProperty& prop) {
+    if (prop.NormalMap || prop.DefaultTex == "normal") return LoadTextureForSlot(assets, path, &Material::NormalMap);
+    return assets.LoadTexture(path);
+}
 void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
     ImGui::SameLine(0.0f, 4.0f);
     ImGui::PushID(target);
@@ -1727,7 +1733,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
         // commit), so it's the undo state. Recorded only when the save actually changed it.
         std::string before = ReadTextFile(matPath);
         ma->SyncTexturePathsFromMat();
-        ma->Save();
+        if (!ma->Save()) Log::Error("Couldn't save material '" + matPath + "' - the edit stays in memory only.");
         if (ReadTextFile(matPath) != before)
             PushAssetUndo(world, matPath, std::move(before), "Edit " + std::filesystem::path(matPath).stem().string());
     };
@@ -1920,14 +1926,14 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
                 {
                     std::string path;
                     if (TexturePickerPopup("##texPicker", assets, path)) {
-                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(path)); MaterialAsset::DefaultFactorsForNewMap(mat, prop.Name); // #102
+                        MaterialAsset::SetTexture(mat, prop.Name, LoadTextureForShaderProp(assets, path, prop)); MaterialAsset::DefaultFactorsForNewMap(mat, prop.Name); // #102
                         save();
                     }
                 }
                 if (ImGui::BeginDragDropTarget()) {
                     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
                         std::string texPath((const char*)p->Data);
-                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(texPath)); MaterialAsset::DefaultFactorsForNewMap(mat, prop.Name);
+                        MaterialAsset::SetTexture(mat, prop.Name, LoadTextureForShaderProp(assets, texPath, prop)); MaterialAsset::DefaultFactorsForNewMap(mat, prop.Name);
                         save();
                     }
                     ImGui::EndDragDropTarget();
@@ -2227,7 +2233,8 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             // identically to one pointing at a present file. Checked once here in the shared
             // renderer so every reflected asset field (Audio Source's Clip today, any future one)
             // gets it for free.
-            const bool missing = !mixed && !shared.empty() && !std::filesystem::exists(shared);
+            std::error_code existsEc; // the non-throwing overload: an odd path must not throw out of the frame
+            const bool missing = !mixed && !shared.empty() && !std::filesystem::exists(shared, existsEc);
             const std::string preview = mixed ? "\xE2\x80\x94"
                 : (shared.empty() ? "(none)"
                    : (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string()) +
@@ -2271,7 +2278,8 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                     CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
                 }
                 for (const std::string& a : AssetRefChoices(assets, f.AssetKind))
-                    if (ImGui::Selectable(std::filesystem::path(a).filename().string().c_str(), !mixed && a == shared)) {
+                    // "##" + the full path: two assets with the same file name in different folders are distinct items
+                    if (ImGui::Selectable((std::filesystem::path(a).filename().string() + "##" + a).c_str(), !mixed && a == shared)) {
                         StageUndo(world);
                         forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = a; });
                         CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
@@ -3206,7 +3214,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (tfPaste) PasteComponentFromClip(world, entity);
 
     // --- Mesh Renderer ---------------------------------------------------------------------
-    if (auto* renderable = registry.try_get<RenderableComponent>(entity)) {
+    if (auto* renderable = registry.try_get<RenderableComponent>(entity); renderable && !renderable->ModelRef) {
+        ImGui::TextDisabled(ICON_FA_TRIANGLE_EXCLAMATION "  Mesh Renderer has no mesh."); // guarded like every other ModelRef read
+    } else if (renderable) {
         // Not removable on level geometry: a box IS its cube mesh, and removing it would leave
         // an invisible collider that the Hierarchy still lists under "Level Geometry".
         if (BeginComponentSection(ICON_FA_DRAW_POLYGON, "Mesh Renderer", !isLevelGeometry, removed,
@@ -5018,18 +5028,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
         ImGui::Spacing();
         if (EditorUIPrimitives::SecondaryButton(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
-            PushUndo(world, "Align Camera to View");
-            const Camera& ec = *m_EditorCameraPtr;
-            auto& t = registry.get<TransformComponent>(entity);
-            t.Position = ec.Position;
-            glm::vec3 d = glm::normalize(ec.Front());
-            // Match the Add > Camera convention: ComposeTransform yaws (Y) then pitches (X),
-            // local -Z is forward.
-            t.SetRotationEuler(glm::vec3(
-                glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
-                glm::degrees(std::atan2(-d.x, -d.z)),
-                0.0f));
-            cam->FovDegrees = ec.Fov;
+            AlignCameraToView(world, entity, *m_EditorCameraPtr); // world pose -> the camera's parent frame
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Snap this camera to the editor viewport's current position, aim and FOV.");
@@ -5347,6 +5346,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 const int ord = registry.get<const OrderComponent>(oe).Value;
                 const std::string& nm = registry.get<const NameComponent>(oe).Name;
                 std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
+                lbl += "##" + std::to_string(ord); // same-named objects are distinct items
                 if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
                     PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
                 }
@@ -5874,7 +5874,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     std::string path;
                     if (TexturePickerPopup("##texPicker", assets, path)) {
                         PushUndo(world, std::string("Set ") + label);
-                        auto tex = assets.LoadTexture(path);
+                        auto tex = LoadTextureForShaderProp(assets, path, prop);
                         for (Material* mm : mats) { MaterialAsset::SetTexture(*mm, prop.Name, tex); MaterialAsset::DefaultFactorsForNewMap(*mm, prop.Name); }
                     }
                 }
@@ -5886,7 +5886,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
                         std::string texPath((const char*)p->Data);
                         PushUndo(world, std::string("Set ") + label);
-                        auto tex = assets.LoadTexture(texPath);
+                        auto tex = LoadTextureForShaderProp(assets, texPath, prop);
                         for (Material* mm : mats) { MaterialAsset::SetTexture(*mm, prop.Name, tex); MaterialAsset::DefaultFactorsForNewMap(*mm, prop.Name); }
                     }
                     ImGui::EndDragDropTarget();
@@ -6045,12 +6045,19 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     std::string path = FileDialog::SaveFile(
                         "Material\0*.mat\0", "mat", m_Window);
                     if (!path.empty()) {
-                        PushUndo(world, "Save Material as Asset");
-                        slot->Path = path;
-                        slot->Name = std::filesystem::path(path).stem().string();
-                        slot->SyncTexturePathsFromMat();
-                        slot->Save();
-                        assets.LoadMaterial(path); // register with the library
+                        // Write a copy first: the slot only becomes file-backed once the file exists
+                        // (a failed write used to leave it pointing at a missing .mat).
+                        MaterialAsset saved = *slot;
+                        saved.Path = path;
+                        saved.Name = std::filesystem::path(path).stem().string();
+                        saved.SyncTexturePathsFromMat();
+                        if (saved.Save()) {
+                            PushUndo(world, "Save Material as Asset");
+                            *slot = std::move(saved);
+                            assets.LoadMaterial(path); // register with the library
+                        } else {
+                            Log::Error("Couldn't write '" + path + "' - the material stays embedded.");
+                        }
                     }
                 }
                 if (ImGui::IsItemHovered())

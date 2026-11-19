@@ -1475,7 +1475,9 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
     // their original relative layout. Copying the model file alone left glTF unimportable and
     // OBJ / FBX untextured.
     std::vector<std::pair<std::string, std::string>> deps;
-    if (subfolder == "models") deps = Model::SourceDependencies(abs.string());
+    // Callers pass "Models"; the old lower-case compare never matched, so a model's .bin / .mtl /
+    // textures were left behind.
+    if (subfolder == "Models" || subfolder == "models") deps = Model::SourceDependencies(abs.string());
     if (!deps.empty()) {
         // The same file imported before: reuse that copy rather than add "<name> (2)".
         for (int n = 1; n < 100; ++n) {
@@ -1723,8 +1725,11 @@ int EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& 
         assets.CreateFolder(rootFolder);
 
         std::error_code walkErr;
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(
-                 root, std::filesystem::directory_options::skip_permission_denied, walkErr)) {
+        // increment(ec), not a range-for: the range-for's operator++ throws on an unreadable entry.
+        for (auto it = std::filesystem::recursive_directory_iterator(
+                 root, std::filesystem::directory_options::skip_permission_denied, walkErr);
+             !walkErr && it != std::filesystem::recursive_directory_iterator(); it.increment(walkErr)) {
+            const std::filesystem::directory_entry& entry = *it;
             std::error_code relErr;
             std::filesystem::path rel = std::filesystem::relative(entry.path(), root, relErr);
             if (relErr) continue;
@@ -1738,9 +1743,10 @@ int EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& 
             }
             std::string virtualFolder = relFolder.empty() ? rootFolder : rootFolder + "/" + relFolder;
 
-            if (entry.is_directory()) {
+            std::error_code typeErr;
+            if (entry.is_directory(typeErr)) {
                 assets.CreateFolder(virtualFolder + "/" + entry.path().filename().string());
-            } else if (entry.is_regular_file() && !AssetImport::ImportKind(entry.path().string()).empty()) {
+            } else if (entry.is_regular_file(typeErr) && !AssetImport::ImportKind(entry.path().string()).empty()) {
                 // Only files the importer loads. The rest (.bin, .mtl, .meta, readmes, a pack's
                 // manifest .json - which ImportDroppedFile would try to open as a scene) are
                 // companion data that sits beside them.

@@ -694,9 +694,19 @@ std::string AssetLibrary::AddFolderPath(const std::string& dir) {
     return folder;
 }
 
+bool AssetLibrary::IsDiskFolder(const std::string& folderPath) {
+    if (folderPath.empty()) return false;
+    std::error_code ec;
+    return std::filesystem::is_directory(std::filesystem::u8path(ProjectPaths::Resolve(folderPath)), ec);
+}
+
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
     if (std::find(m_Folders.begin(), m_Folders.end(), folderPath) == m_Folders.end()) {
         m_Folders.push_back(folderPath);
+        // A folder that is a real project directory is found again on every load (AddFolderPath),
+        // so it is never written to settings.json. Undo snapshots carry the whole folder list and
+        // re-create the missing ones through here, which used to save every on-disk folder.
+        if (IsDiskFolder(folderPath)) return;
         m_SavedFolders.push_back(folderPath);
         PersistFolders();
     }

@@ -200,6 +200,8 @@ public:
 
     // Writes m_SavedFolders back to project/settings.json (#121).
     void PersistFolders();
+    // True when the folder path is a directory in the project (derived, never saved).
+    static bool IsDiskFolder(const std::string& folderPath);
 
     // An asset whose .meta never chose a folder (loaded by a scene or a weapon file rather than
     // imported through the Asset Browser) is filed under its folder on disk, so it doesn't land
