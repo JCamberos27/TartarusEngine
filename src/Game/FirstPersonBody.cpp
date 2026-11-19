@@ -530,9 +530,10 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     if (const auto* outfit = reg.try_get<CharacterOutfitComponent>(body)) m_OutfitVersion = outfit->Version;
 
     Model& model = *reg.get<RenderableComponent>(m_Driver).ModelRef;
-    m_HeadNode = model.NodeIndex(cfg.HeadBone);
+    m_HeadBone = Bone(cfg.HeadBone); // through the Bone Map, as the driver was picked by it
+    m_HeadNode = model.NodeIndex(m_HeadBone);
     if (m_HeadNode < 0)
-        Log::Warn("First Person Body: the body has no bone '" + cfg.HeadBone + "' - the camera stays at the eye height.");
+        Log::Warn("First Person Body: the body has no bone '" + m_HeadBone + "' - the camera stays at the eye height.");
     else
         m_RestHead = glm::vec3(model.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, m_HeadNode)[3]);
     m_HaveBindPosture = false;
@@ -674,6 +675,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     m_PlayerWalkSpeed = std::clamp(cfg.WalkSpeed, 0.01f, m_RunSpeed) * m_PlayerRunSpeed / m_RunSpeed;
     m_CrouchHeight = cfg.CrouchHeight;
     m_CrouchSpeed = cfg.CrouchSpeed;
+    const float playerMoveSpeed = player.MoveSpeed, playerSprint = player.SprintMultiplier; // (restored if MM can't start)
     player.MoveSpeed = m_PlayerWalkSpeed;
     player.SprintMultiplier = m_PlayerRunSpeed / m_PlayerWalkSpeed;
     player.GaitSpeeds.Active = false;
@@ -688,9 +690,13 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         std::string error;
         m_Mm.SetDebug(&MmPlayerDebug::Info()); // the player's (the Inspector, --npc-test mmplayer)
         if (!m_Mm.Start(m_Models, driverIndex, error)) {
-            // (CI has no licensed assets: no body there - a warning, never an error.)
+            // (CI has no licensed assets: no body there - a warning, never an error.) Everything set up above is undone - the
+            // pieces' tags and hidden bones, the world twins (which would stand frozen in the bind pose), the player's speeds -
+            // so the scene plays as if there were no body.
             Fail(error + " - the body is off.");
-            m_Body = entt::null;
+            Stop(world);
+            player.MoveSpeed = playerMoveSpeed;
+            player.SprintMultiplier = playerSprint;
             return false;
         } else {
             const GaitSpeedTable& g = m_Mm.Gaits();
@@ -847,7 +853,7 @@ void FirstPersonBody::PlaceHeadAttachedTwins(World& world) {
         if (reg.valid(m_Pieces[k]) && reg.all_of<OutfitPieceComponent>(m_Pieces[k]) && reg.get<OutfitPieceComponent>(m_Pieces[k]).Slot == "Head")
             headTwin = (int)k;
     if (headTwin < 0 || !reg.valid(m_Twins[headTwin]) || !m_TwinModels[headTwin]) return;
-    const int bone = m_TwinModels[headTwin]->BoneId("head");
+    const int bone = m_TwinModels[headTwin]->BoneId(m_HeadBone);
     if (bone < 0) return;
     const glm::mat4 follow = world.ComposeWorldTransform(m_Twins[headTwin]) * m_TwinModels[headTwin]->FinalBoneMatrix(bone);
     const glm::vec3 scale(glm::length(glm::vec3(follow[0])), glm::length(glm::vec3(follow[1])), glm::length(glm::vec3(follow[2])));
@@ -2134,7 +2140,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         const entt::entity e = m_Pieces[k];
         if (e == m_Body || !reg.valid(e) || !IsArmsPiece(reg, e)) continue;
         if (viewModelArms) {
-            if (!reg.all_of<ViewModelTag>(e)) { reg.emplace<ViewModelTag>(e); m_ArmsTagged.push_back(e); }
+            if (!reg.all_of<ViewModelTag>(e)) {
+                reg.emplace<ViewModelTag>(e);
+                // (Once: every draw re-adds the tag, and Stop only needs each piece once.)
+                if (std::find(m_ArmsTagged.begin(), m_ArmsTagged.end(), e) == m_ArmsTagged.end()) m_ArmsTagged.push_back(e);
+            }
         } else if (reg.all_of<ViewModelTag>(e)) {
             reg.remove<ViewModelTag>(e);
         }
@@ -2544,7 +2554,7 @@ float FirstPersonBody::EyeBodyPush(World& world, const Camera& camera, const glm
             int want[4];
             const char* names[4] = {FPBody::kBoneSpine[2], FPBody::kBoneSpine[3], FPBody::kBoneSpine[4], "neck_01"};
             for (int i = 0; i < 4; ++i) want[i] = m.BoneId(Bone(names[i]));
-            const int neckNode = m.NodeIndex(Bone("neck_01")), headNode = m.NodeIndex(Bone("head"));
+            const int neckNode = m.NodeIndex(Bone("neck_01")), headNode = m.NodeIndex(m_HeadBone);
             if (neckNode >= 0 && headNode >= 0) {
                 const glm::vec3 n0(m.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, neckNode)[3]);
                 const glm::vec3 n1(m.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, headNode)[3]);
@@ -2603,7 +2613,7 @@ float FirstPersonBody::EyeBodyPush(World& world, const Camera& camera, const glm
         m_EyeClearPoints.insert(m_EyeClearPoints.end(), rim.begin(), rim.end());
         if (const Model* drv = DriverModel()) {
             m_NeckNode = drv->NodeIndex(Bone("neck_01"));
-            m_HeadRimNode = drv->NodeIndex(Bone("head"));
+            m_HeadRimNode = drv->NodeIndex(m_HeadBone);
         }
         BodyDebug::Info().NeckRimPoints = (int)rim.size();
     }
