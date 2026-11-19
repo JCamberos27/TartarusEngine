@@ -275,7 +275,6 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     int cells = 1;
     const int id = m_KnifeLookup(entry, cells);
     if (id < 0) return nullptr;
-    MakeRoom(std::string(entry) == "footprint");
     const glm::vec3 y = glm::normalize(up);
     glm::vec3 x = along - y * glm::dot(along, y);
     x = glm::length(x) > 1e-4f ? glm::normalize(x) : RandomTangent(y);
@@ -293,6 +292,7 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
         ++m_StainsMerged;
         return &m_Decals[(size_t)dup];
     }
+    MakeRoom(std::string(entry) == "footprint"); // (only for a stain that's added: a merge adds none)
     d.Palette = m_Palette;
     m_Decals.push_back(d);
     ++m_DecalsSpawned;
@@ -350,7 +350,8 @@ void BloodFx::MakeRoom(bool print) {
     if (count < cap) return;
     // Out of view first: the small marks (drops, specks) before the stains, the farthest first. Failing that (it's
     // all in view), the oldest small mark, then the oldest stain - never a pool or a print while anything else can go.
-    // Ranked in one pass and the `count - cap + 1` first ones dropped together (one at a time was a scan each).
+    // Ranked in one pass and the `count - cap + 1` first ones dropped together, plus a thirty-second of the cap as
+    // headroom: a hit lays 15-30 stains, and ranking the whole list for each one was most of a hit's cost at the cap.
     auto size = [](const Decal& d) { return std::max(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2]))); };
     struct Candidate {
         int Index, Tier; // 0 out of view, 1 a small mark in view, 2 a stain in view, 3 anything else (pools)
@@ -368,7 +369,7 @@ void BloodFx::MakeRoom(bool print) {
     std::stable_sort(order.begin(), order.end(), [](const Candidate& a, const Candidate& b) {
         return a.Tier != b.Tier ? a.Tier < b.Tier : a.Score > b.Score;
     });
-    const size_t drop = std::min(order.size(), (size_t)(count - cap + 1));
+    const size_t drop = std::min(order.size(), (size_t)(count - cap + 1 + cap / 32));
     if (drop == 0) return;
     static std::vector<unsigned char> gone;
     gone.assign(m_Decals.size(), 0);
@@ -507,7 +508,6 @@ BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, cons
     EnsureHooks();
     const int s = m_SetLookup(set);
     if (s < 0) return nullptr;
-    MakeRoom(false);
     const glm::vec3 y = glm::normalize(up);
     glm::vec3 x = along - y * glm::dot(along, y);
     x = glm::length(x) > 1e-4f ? glm::normalize(x) : RandomTangent(y);
@@ -522,6 +522,7 @@ BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, cons
         ++m_StainsMerged;
         return &m_Decals[(size_t)dup];
     }
+    MakeRoom(false);
     d.Palette = m_Palette;
     m_Decals.push_back(d);
     ++m_DecalsSpawned;
