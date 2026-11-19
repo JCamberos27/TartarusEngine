@@ -140,9 +140,9 @@ bool Set(World& world, const std::string& circuit, bool on) {
         auto& c = cv.get<LightCircuitComponent>(e);
         if (!c.Started || c.Circuit != circuit) continue;
         found = true;
-        if (auto* r = world.Registry.try_get<RenderableComponent>(e); r && !c.OnMaterials.empty()) {
+        if (auto* r = world.Registry.try_get<RenderableComponent>(e); r && !c.OnMaterials.empty())
             r->Materials = on != c.GlowWhenOff ? c.OnMaterials : c.OffMaterials; // a lit toggle glows while it's off
-        } else if (world.Registry.all_of<LightComponent>(e)) {
+        if (world.Registry.all_of<LightComponent>(e)) {
             const bool off = world.Registry.all_of<DeactivatedTag>(e);
             if (on && off) { world.Registry.remove<DeactivatedTag>(e); changed = true; }
             if (!on && !off) { world.Registry.emplace<DeactivatedTag>(e); changed = true; }
@@ -170,8 +170,7 @@ bool IsOn(World& world, const std::string& circuit) {
     for (auto e : cv) {
         const auto& c = cv.get<LightCircuitComponent>(e);
         if (!c.Started || c.Circuit != circuit) continue;
-        if (world.Registry.all_of<LightComponent>(e) && !world.Registry.all_of<RenderableComponent>(e))
-            return !world.Registry.all_of<DeactivatedTag>(e);
+        if (world.Registry.all_of<LightComponent>(e)) return !world.Registry.all_of<DeactivatedTag>(e);
     }
     return false;
 }

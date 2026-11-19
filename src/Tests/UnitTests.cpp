@@ -2562,7 +2562,16 @@ void TestWardrobe() {
     CHECK(w.Bodies[0].Parts.size() == 5 && w.Bodies[0].Parts[0].second == "assets/Chars/Body/Torso.fbx");
     CHECK(w.Covers.size() == 3 && w.Covers[1].Gender == (int)Wardrobe::Gender::Male && w.Covers[0].Gender == -1);
     CHECK(!Wardrobe::Parse("{}", w, &err) && !err.empty());
+    {   // A field of the wrong type fails the parse with the error, it doesn't throw out of it.
+        std::string bad = text;
+        bad.replace(bad.find("\"hidden\": true"), 14, "\"hidden\": \"yes\"");
+        err.clear();
+        bool parsed = true;
+        try { parsed = Wardrobe::Parse(bad, w, &err); } catch (...) { parsed = true; err.clear(); }
+        CHECK(!parsed && err.find("wrong type") != std::string::npos);
+    }
     CHECK(Wardrobe::Parse(text, w, &err));
+    CHECK(Wardrobe::PrettyName("SM_F_Balaclava_Crime") == "Balaclava Crime");
 
     CHECK(Wardrobe::PrettyName("SKM_F_Hoodie_Zipper_Hood") == "Hoodie Zipper Hood");
     CHECK(Wardrobe::PrettyName("SKM_Tshirt_Tucked") == "T-Shirt Tucked");

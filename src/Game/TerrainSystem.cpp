@@ -32,7 +32,9 @@ void Sync(World& world) {
     auto view = world.Registry.view<TerrainComponent, RenderableComponent>();
     for (auto [e, t, rc] : view.each()) {
         const std::uint64_t key = Key(t);
-        if (key != t.BuiltKey || !t.Built) {
+        // (These fields failed to decode last time - no grid, no model, same key: nothing to retry until they change.)
+        const bool failedBefore = key == t.BuiltKey && !t.Built && !t.Grid;
+        if (key != t.BuiltKey || (!t.Built && !failedBefore)) {
             t.BuiltKey = key;
             t.Built.reset();
             auto grid = std::make_shared<TerrainGrid>();

@@ -430,7 +430,7 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
         const entt::entity e = pieces[p.Slot];
         auto model = assets.InstantiateModel(ProjectPaths::Resolve(p.Path));
         if (!model) { r.Notes.push_back("can't load " + p.Path); failed.insert(p.Slot); continue; }
-        auto& rc = reg.get<RenderableComponent>(e);
+        auto& rc = reg.get_or_emplace<RenderableComponent>(e);
         // A body part takes its remap's materials and the race's skin, never a colourway: its materials share one
         // folder (Materials/Characters), so a slot that merely differs from the remap (a list saved in another
         // model's slot order) would pass for a pick and spread to every slot - the eye overlay over the face.
@@ -448,7 +448,7 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
         auto& piece = reg.get<OutfitPieceComponent>(it->second);
         piece.Item = p.Path;
         piece.Flags = flagsOf(p);
-        auto& rc = reg.get<RenderableComponent>(it->second);
+        auto& rc = reg.get_or_emplace<RenderableComponent>(it->second);
         if (rc.Materials.empty()) DressPiece(assets, cat->W, race, rc, {});
         else if (race)
             for (auto& m : rc.Materials) {
@@ -1191,7 +1191,7 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
         store.Running.erase(it);
         return &done->second;
     }
-    const FileStamp us = StampOf(Lower(Rel(underModel))), os = StampOf(key.second);
+    const FileStamp us = StampOf(Lower(Rel(underModel))), os = StampOf(Lower(Rel(overModel)));
     std::vector<std::uint8_t> loaded;
     if (LoadCoverage(key, us, os, loaded)) return &store.Done.emplace(key, std::move(loaded)).first->second;
     // A few at a time: a scene of new outfits with a cold Library/OutfitCoverage used to start a thread
