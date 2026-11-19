@@ -3,6 +3,7 @@
 // and puts the fragment at the blended surface's depth (gl_FragDepth). The pre-pass and the lit pass must agree on that
 // depth to the bit (GL_EQUAL), so every step of it is `precise` and both programs call ImpostorResolve the same way.
 // The includer declares uView (ModelShading.glsl does) and defines IMPOSTOR_HAS_VIEW, or this declares it.
+#include "ImpostorCommon.glsl" // ImpostorQRot
 #ifndef IMPOSTOR_HAS_VIEW
 uniform mat4 uView;
 #endif
@@ -46,7 +47,6 @@ struct ImpostorFrag {
     vec3 WorldPos;    // the surface (with the depth offset)
 };
 
-vec3 ImpostorQRot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
 
 // The LOD cross-fade's dither (ModelFragment.glsl's, the same pattern): false where this copy isn't drawn.
 bool ImpostorDithered() {
