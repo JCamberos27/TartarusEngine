@@ -247,7 +247,8 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
         else std::cerr << "Ignoring the argument '" << s << "'." << std::endl;
     }
 
-    if (Env::Flag(Env::Var::WeaponLab)) o.weaponLabMode = true; // run-weapon-lab.cmd starts the exe without arguments
+    // run-weapon-lab.cmd starts the exe without arguments; only the windowed modes take it, as they do --weapon-lab.
+    if (Env::Flag(Env::Var::WeaponLab) && (kGuiModes & Bit(o.mode))) o.weaponLabMode = true;
 
     o.smokeTestMode = o.mode == LaunchMode::SmokeTest || o.mode == LaunchMode::PerfBench || o.mode == LaunchMode::NpcTest;
     o.perfBenchMode = o.mode == LaunchMode::PerfBench;

@@ -76,7 +76,7 @@ bool BloodRenderer::Load() {
         if (e.path().extension() == ".bvat") files.push_back(e.path().u8string());
     std::sort(files.begin(), files.end());
     if (files.empty()) {
-        Log::Warn("Blood: no volumetric blood data in assets/Effects/Blood");
+        Log::Warn("Blood: no volumetric blood data in assets/Effects/Blood (convert the VolumetricBloodFX package with --import-blood <dir>)");
         return false;
     }
     std::vector<glm::vec4> frameBounds;
