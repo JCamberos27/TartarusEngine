@@ -184,10 +184,6 @@ public:
     entt::entity CreateEmptyEntity(const glm::vec3& position, const glm::vec3& rotationEuler,
         const glm::vec3& scale, const std::string& name);
 
-    // Casts a ray against every Collider entity; returns the closest hit, or entt::null.
-    // Editor-only now (drop-to-surface / snap); Play-mode collision moved to PhysX (#185 PR 3).
-    entt::entity Raycast(const glm::vec3& origin, const glm::vec3& dir, float maxDist, float& outDist) const;
-
     // Walks the HierarchyComponent parent chain (if any) and composes local transforms
     // top-down: an unparented entity's world transform is just ComposeTransform(its own
     // TransformComponent), matching every entity's behavior before parenting existed.

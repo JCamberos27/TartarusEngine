@@ -99,10 +99,6 @@ struct DetachedMeshComponent {
 // `Center` its offset from the entity origin, both in the entity's local space. `HalfExtents
 // == 0` (the default, and every collider World::CreateBox makes) means "derive an axis-aligned
 // box from the mesh bounds", so existing scenes keep their shape without a migration.
-//
-// The editor's AABB Raycast (World::Raycast â€” drop-to-surface / snap) still reads these via
-// the ColliderWorldBounds helper in World.cpp: axis-aligned, rotation-ignored, sized from the
-// RenderableComponent bounds (or a unit box).
 struct ColliderComponent {
     // Values are fixed â€” serialized by index, and PhysicsWorld switches on them. Capsule's axis
     // is Y (its height runs along local up). ConvexHull / Mesh cook a shape from the entity's
