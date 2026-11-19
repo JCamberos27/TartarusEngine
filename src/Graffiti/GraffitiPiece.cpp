@@ -108,7 +108,19 @@ std::string StemName(const std::string& path) {
 std::string CompactNumberArrays(const std::string& in) {
     std::string out;
     out.reserve(in.size());
+    bool inString = false; // text inside a JSON string is copied as it is: a name like "[ 1, 2 ]" keeps its spaces
     for (size_t i = 0; i < in.size(); ++i) {
+        if (inString) {
+            out += in[i];
+            if (in[i] == '\\' && i + 1 < in.size()) out += in[++i]; // an escape and the character it escapes
+            else if (in[i] == '"') inString = false;
+            continue;
+        }
+        if (in[i] == '"') {
+            inString = true;
+            out += in[i];
+            continue;
+        }
         if (in[i] == '[') {
             size_t j = i + 1;
             bool numeric = false, ok = true;

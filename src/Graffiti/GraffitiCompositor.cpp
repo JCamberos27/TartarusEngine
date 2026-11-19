@@ -415,6 +415,7 @@ void Compositor::DrawLayer(const Piece& piece, const LayerProgram& lp, const Tar
             if (q.Reveal <= 0.0f || q.Texture < 0) continue;
             // (Program::Textures is shared by the whole piece; the layer's quads index it.)
             const Image* img = nullptr;
+            if ((size_t)q.Texture >= m_TextureNames.size()) continue; // (a program built against another texture list)
             if (const auto it = m_Images.find(m_TextureNames[(size_t)q.Texture]); it != m_Images.end()) img = &it->second;
             if (!img || !img->Tex) continue;
             BindTex(0, img->Tex);
@@ -647,7 +648,10 @@ void Compositor::FinishInFlight() {
     const GLenum r = glClientWaitSync((GLsync)m_Fence, GL_SYNC_FLUSH_COMMANDS_BIT, 5000000000ull);
     glDeleteSync((GLsync)m_Fence);
     m_Fence = nullptr;
-    if (r == GL_TIMEOUT_EXPIRED || r == GL_WAIT_FAILED) return;
+    if (r == GL_TIMEOUT_EXPIRED || r == GL_WAIT_FAILED) {
+        Log::Warn("Graffiti: a bake didn't finish on the GPU within 5 s and was dropped; bake the piece again.");
+        return;
+    }
     BakeImages images;
     if (ReadBack(images)) {
         m_Stash = std::move(images);
@@ -679,11 +683,15 @@ bool Compositor::ReadBack(BakeImages& out) {
     out.Surface.resize(px * 4);
     out.Aux.resize(px);
     // GL rows run bottom up: flip into the top-first rows a PNG wants.
+    bool ok = true;
     for (int i = 0; i < 4; ++i) {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, m_Pbo[i]);
         const int comp = i == 3 ? 1 : 4;
         const auto* src = static_cast<const uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, (GLsizeiptr)(px * comp), GL_MAP_READ_BIT));
-        if (!src) continue;
+        if (!src) { // (that map would bake as zeros)
+            ok = false;
+            continue;
+        }
         for (int y = 0; y < m_H; ++y) {
             const uint8_t* row = src + (size_t)(m_H - 1 - y) * m_W * comp;
             if (i == 1) {
@@ -694,10 +702,11 @@ bool Compositor::ReadBack(BakeImages& out) {
                 std::memcpy(dst.data() + (size_t)y * m_W * comp, row, (size_t)m_W * comp);
             }
         }
-        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        if (glUnmapBuffer(GL_PIXEL_PACK_BUFFER) == GL_FALSE) ok = false; // (the store was corrupted while mapped)
     }
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    return true;
+    if (!ok) Log::Warn("Graffiti: couldn't read a baked map back from the GPU; the bake was dropped, bake the piece again.");
+    return ok;
 }
 
 BakeFiles EncodePngs(const BakeImages& im) {

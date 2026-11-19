@@ -187,6 +187,14 @@ void RoundTrip() {
     }
     // A sample is one line of the file.
     CHECK(a.find("[10000, 50000, 900, 120, 0]") != std::string::npos);
+    // Text that looks like a number array keeps its spacing: only real arrays are compacted, not strings.
+    {
+        Piece named = p;
+        named.Layers[2].Text = "[ 1, 2 ]";
+        named.Layers[2].Name = "a [3,  4] \" b";
+        const auto back = Piece::FromString(named.ToString(), named.Path);
+        CHECK(back->Layers.size() == 4 && back->Layers[2].Text == "[ 1, 2 ]" && back->Layers[2].Name == "a [3,  4] \" b");
+    }
 
     // Save / Load through the disk, atomically.
     CHECK(p.Save());
