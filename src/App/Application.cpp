@@ -1540,7 +1540,6 @@ bool AppSession::Frame() {
     playIn.play = &play;
     playIn.world = &world;
     playIn.assets = &assets;
-    playIn.window = &window;
     playIn.editor = &editor;
     playIn.gameModule = &gameModule;
     playIn.stillModels = &s_StillModels;

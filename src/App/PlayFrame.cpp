@@ -68,7 +68,6 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     // main's names for what the step reads, so the step reads as it did there.
     World& world = *in.world;
     AssetLibrary& assets = *in.assets;
-    Window& window = *in.window;
     EditorLayer& editor = *in.editor;
     HotReloadGameModule& gameModule = *in.gameModule;
     Player& player = *in.player;
@@ -182,7 +181,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         player.AimHeld=firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped() && !playerVitals.IsDead() &&
             ((gameHasInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()));
         player.SprintBlocked=firstPersonPresentation.ActionBlocksSprint();
-        player.Update(gameDt, world, window.Handle(), gameHasInput && !playerVitals.IsDead());
+        player.Update(gameDt, gameHasInput && !playerVitals.IsDead());
         // Before the body places itself: it is the controller's child, posed in world space.
         if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
             const float yaw = glm::radians(player.Cam.Yaw); // Camera forward = (cos, 0, sin)
