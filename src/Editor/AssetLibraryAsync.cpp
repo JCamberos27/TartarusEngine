@@ -537,6 +537,7 @@ int AssetLibrary::EndPlayScope() {
         return !m.Folders.count(f) &&
                std::find(m_SavedFolders.begin(), m_SavedFolders.end(), f) == m_SavedFolders.end();
     }), m_Folders.end());
+    FolderIndexDirty();
 
     m = PlayMark{};
     return forgot;

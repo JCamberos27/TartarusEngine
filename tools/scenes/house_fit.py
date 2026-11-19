@@ -10,6 +10,8 @@ import math
 import os
 import subprocess
 import sys
+import shutil
+import atexit
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -211,6 +213,7 @@ def measure(repo, exe=None):
         if e['kind'] == 'models' and e.get('path'):
             paths.setdefault(e['path'], e.get('pathGuid'))
     tmp = tempfile.mkdtemp(prefix='house_fit_')
+    atexit.register(shutil.rmtree, tmp, True)  # gone however this ends (sys.exit included)
     models = []
     for i, (p, g) in enumerate(sorted(paths.items())):
         m = {'id': i + 1, 'order': i + 1, 'parentId': -1, 'name': f'm{i}', 'path': p,

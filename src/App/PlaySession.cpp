@@ -46,16 +46,29 @@
 #include <cstdlib>
 #include <filesystem>
 
-entt::entity FindFirstPersonController(World& world) {
+namespace {
+// The active entity with component C and a Transform that `keep` accepts, with the lowest Order (no Order: 0); the
+// first in creation order among equals. entt::null when there is none.
+template <typename C, typename Keep>
+entt::entity LowestOrder(const World& world, Keep keep) {
     entt::entity best = entt::null;
     int bestOrder = 0x7fffffff;
-    for (auto e : world.Registry.view<const FirstPersonControllerComponent, const TransformComponent>()) {
-        if (world.Registry.all_of<InactiveTag>(e)) continue;
+    for (auto e : world.Registry.view<const C, const TransformComponent>()) {
+        if (world.Registry.all_of<InactiveTag>(e) || !keep(world.Registry.get<const C>(e))) continue;
         const auto* ord = world.Registry.try_get<OrderComponent>(e);
-        int o = ord ? ord->Value : 0;
+        const int o = ord ? ord->Value : 0;
         if (o < bestOrder) { bestOrder = o; best = e; }
     }
     return best;
+}
+} // namespace
+
+entt::entity FindFirstPersonController(World& world) {
+    return LowestOrder<FirstPersonControllerComponent>(world, [](const FirstPersonControllerComponent&) { return true; });
+}
+
+entt::entity FindActiveAudioListener(const World& world) {
+    return LowestOrder<AudioListenerComponent>(world, [](const AudioListenerComponent& l) { return l.Enabled; });
 }
 
 void YawPitchFromWorld(const glm::mat4& m, float& yawDeg, float& pitchDeg) {
@@ -67,15 +80,7 @@ void YawPitchFromWorld(const glm::mat4& m, float& yawDeg, float& pitchDeg) {
 }
 
 entt::entity FindActiveSceneCamera(const World& world) {
-    entt::entity best = entt::null;
-    int bestOrder = 0x7fffffff;
-    for (auto e : world.Registry.view<const CameraComponent, const TransformComponent>()) {
-        if (world.Registry.all_of<InactiveTag>(e)) continue;
-        const auto* ord = world.Registry.try_get<OrderComponent>(e);
-        int o = ord ? ord->Value : 0;
-        if (o < bestOrder) { bestOrder = o; best = e; }
-    }
-    return best;
+    return LowestOrder<CameraComponent>(world, [](const CameraComponent&) { return true; });
 }
 
 void PlaySession::Start() {

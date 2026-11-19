@@ -44,5 +44,4 @@ private:
     DepthArrayTarget m_Target; // the layer array, its FBOs and the lazily made static cache
     int m_Resolution = 0;
     int m_Layers = 0;
-    mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check in Begin()
 };

@@ -376,6 +376,13 @@ struct ScriptIDE::Impl {
     }
     void Build() {if(!SaveAll())return;if(!GameModuleBuild::Available()){Status="Module rebuilds need the engine's source checkout and CMake build folder.";return;}GameModuleBuild::Request();}
     void Draw();
+    // Draw's parts, top to bottom: menu bar and shortcuts, the sources list, the conflict / find bar,
+    // the code tabs over the build information, then the popups and the unsaved-changes prompt.
+    void DrawMenuBar(bool focused);
+    void DrawSources(float scale,float divider);
+    void DrawConflictAndFind();
+    void DrawCodeAndInformation(float scale,float divider);
+    void DrawPopups();
 };
 namespace {std::string g_SessionDirectory;}
 void ScriptIDE::SetSessionDirectory(const std::string& dir){g_SessionDirectory=dir;}
@@ -400,6 +407,18 @@ void ScriptIDE::Impl::Draw() {
     if(!ImGui::Begin("Script IDE",&Visible,ImGuiWindowFlags_MenuBar)){ImGui::End();return;}
     const bool focused=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
     KeyboardActive=focused;
+    DrawMenuBar(focused);
+    const float scale=EditorTheme::Scale(),divider=6.0f*scale;
+    DrawSources(scale,divider);
+    ImGui::SameLine(0,0);ImGui::BeginChild("EditorArea",ImVec2(0,0));
+    DrawConflictAndFind();
+    DrawCodeAndInformation(scale,divider);
+    ImGui::EndChild();
+    DrawPopups();
+    ImGui::End();
+}
+
+void ScriptIDE::Impl::DrawMenuBar(bool focused) {
     auto& io=ImGui::GetIO();bool saveKey=focused && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S,false);
     if(ImGui::BeginMenuBar()) {
         if(ImGui::BeginMenu("File")) {if(ImGui::MenuItem("Save","Ctrl+S",false,Active!=nullptr))Save(*Active);if(ImGui::MenuItem("Save All","Ctrl+Shift+S"))SaveAll();if(ImGui::MenuItem("Reload from disk",nullptr,false,Active!=nullptr))ClosePath="reload:"+Active->Path;ImGui::EndMenu();}
@@ -435,7 +454,10 @@ void ScriptIDE::Impl::Draw() {
         if(ImGui::IsKeyPressed(ImGuiKey_F6,false))Build();
         if(io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Space,false))Complete();
     }
-    const float scale=EditorTheme::Scale(),divider=6.0f*scale;
+}
+
+void ScriptIDE::Impl::DrawSources(float scale,float divider) {
+    auto& io=ImGui::GetIO();
     const auto space=ImGui::GetContentRegionAvail();
     const float sidebarMin=std::min(80.0f*scale,std::max(1.0f,space.x*.25f));
     const float sidebarMax=std::max(sidebarMin,space.x-divider-std::min(180.0f*scale,space.x*.5f));
@@ -455,7 +477,9 @@ void ScriptIDE::Impl::Draw() {
     if(ImGui::IsItemDeactivated())PersistSoon();
     auto dividerMin=ImGui::GetItemRectMin(),dividerMax=ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddLine(ImVec2(dividerMin.x+divider*.5f,dividerMin.y),ImVec2(dividerMin.x+divider*.5f,dividerMax.y),ImGui::GetColorU32(ImGui::IsItemActive()?ImGuiCol_SeparatorActive:ImGui::IsItemHovered()?ImGuiCol_SeparatorHovered:ImGuiCol_Separator));
-    ImGui::SameLine(0,0);ImGui::BeginChild("EditorArea",ImVec2(0,0));
+}
+
+void ScriptIDE::Impl::DrawConflictAndFind() {
     if(Active && Active->Conflict) {
         ImGui::TextColored(ImVec4(1,.7f,.2f,1),"File changed on disk. Your buffer has been kept.");
         if(EditorUIPrimitives::SecondaryButton("Reload disk version"))ClosePath="reload:"+Active->Path;ImGui::SameLine();bool overwrite;{EditorSoundEvents::ScopedClickSilence quiet;overwrite=EditorUIPrimitives::SecondaryButton("Overwrite disk with buffer");}if(overwrite)Save(*Active,true);
@@ -468,6 +492,10 @@ void ScriptIDE::Impl::Draw() {
         Field("Find",Find,180);flow(button("Previous"));if(EditorUIPrimitives::SecondaryButton("Previous"))FindNext(true);flow(button("Next"));if(EditorUIPrimitives::SecondaryButton("Next"))FindNext();flow(ImGui::GetFrameHeight()+ImGui::GetStyle().ItemInnerSpacing.x+ImGui::CalcTextSize("Replace").x);ImGui::Checkbox("Replace",&ReplaceVisible);flow(button("Close find"));if(EditorUIPrimitives::SecondaryButton("Close find"))FindVisible=false;
         if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);flow(button("Replace match"));if(EditorUIPrimitives::SecondaryButton("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);PersistSoon();}flow(button("Replace all"));if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);PersistSoon();}}
     }
+}
+
+void ScriptIDE::Impl::DrawCodeAndInformation(float scale,float divider) {
+    auto& io=ImGui::GetIO();
     const float paneHeight=std::max(1.0f,ImGui::GetContentRegionAvail().y);
     const float infoMin=std::min(64.0f*scale,paneHeight*.3f);
     const float infoMax=std::max(infoMin,paneHeight-divider-std::min(100.0f*scale,paneHeight*.5f));
@@ -500,7 +528,7 @@ void ScriptIDE::Impl::Draw() {
     if(ImGui::IsItemHovered() || ImGui::IsItemActive())ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     if(ImGui::IsItemActive())InformationHeight=std::clamp(infoHeight-io.MouseDelta.y,infoMin,infoMax)/scale;
     if(ImGui::IsItemDeactivated())PersistSoon();
-    dividerMin=ImGui::GetItemRectMin();dividerMax=ImGui::GetItemRectMax();
+    auto dividerMin=ImGui::GetItemRectMin(),dividerMax=ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddLine(ImVec2(dividerMin.x,dividerMin.y+divider*.5f),ImVec2(dividerMax.x,dividerMin.y+divider*.5f),ImGui::GetColorU32(ImGui::IsItemActive()?ImGuiCol_SeparatorActive:ImGui::IsItemHovered()?ImGuiCol_SeparatorHovered:ImGuiCol_Separator));
     ImGui::BeginChild("InformationPane",ImVec2(0,0));
     ImGui::PopStyleVar();
@@ -519,7 +547,9 @@ void ScriptIDE::Impl::Draw() {
         ImGui::EndTabBar();
     }
     ImGui::EndChild(); // InformationPane
-    ImGui::EndChild();
+}
+
+void ScriptIDE::Impl::DrawPopups() {
     if(CompletionOpen){ImGui::OpenPopup("Completion");CompletionOpen=false;}
     if(ImGui::BeginPopup("Completion")) {
         Field("Filter",CompletionFilter,220);ImGui::BeginChild("Candidates",ImVec2(470,220));int id=0;
@@ -540,5 +570,4 @@ void ScriptIDE::Impl::Draw() {
         ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Discard")){if(ClosePath.rfind("reload:",0)==0){auto path=ClosePath.substr(7);for(auto& d:Documents)if(Same(d->Path,path))Reload(*d);}else Close(ClosePath);ClosePath.clear();ImGui::CloseCurrentPopup();}
         ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Cancel")){ClosePath.clear();ImGui::CloseCurrentPopup();}ImGui::EndPopup();
     }
-    ImGui::End();
 }

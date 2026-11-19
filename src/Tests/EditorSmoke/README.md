@@ -2,7 +2,7 @@
 
 `TartarusEngine.exe --editor-tests [filter]` runs every test in `src/Tests/EditorUiTests.cpp`
 and the suites in this folder, in the real editor (1920x1080 window, scratch user folder, an empty
-in-memory scene). CI runs it under Mesa llvmpipe on every push (`.github/workflows/build.yml`)
+in-memory scene). CI runs it under Mesa llvmpipe, in two shards, for changes that touch the editor (`.github/workflows/build.yml`)
 and uploads `editor-test-shots/` (screenshots plus `report.md`) as an artifact.
 
 Each `<Suite>.inl` is `#include`d by `EditorUiTests.cpp` inside its anonymous namespace, so it

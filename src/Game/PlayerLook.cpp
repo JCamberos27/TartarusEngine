@@ -4,10 +4,7 @@
 #include "Components.h"
 #include "World.h"
 #include "AssetLibrary.h"
-#include "EditorSettings.h"
-#include "EditorSound.h"
-#include "FKeyRow.h"
-#include "Shortcuts.h"
+#include "GameShell.h"
 #include <algorithm>
 #include <chrono>
 #include <string>
@@ -86,7 +83,7 @@ void PlayerLook::LoadAhead(World& world, AssetLibrary& assets, entt::entity root
     auto& outfit = world.Registry.get<CharacterOutfitComponent>(root);
     if (!m_Catalog) return;
     const Wardrobe::Wardrobe& w = m_Catalog->W;
-    const EditorSettings& es = EditorSettings::Get();
+    const GameShell::LookPrefs es = GameShell::LoadLook();
     const int bare = (int)w.Styles.size();
     if (step == 0) m_NextSeed = NewSeed();
     if (step <= 1) {
@@ -123,10 +120,10 @@ void PlayerLook::WarmSome(AssetLibrary& assets) {
 
 void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
     // An idle frame (no key, nothing loading, the warm-up done) costs the root check and the key lookups.
-    const bool next = keys && Shortcuts::TriggeredGlfw("fkey.look");
-    const bool prev = keys && !next && Shortcuts::TriggeredGlfw("fkey.lookBack");
-    const bool fresh = keys && Shortcuts::TriggeredGlfw("fkey.outfit");
-    const bool restyle = keys && !fresh && Shortcuts::TriggeredGlfw("fkey.outfitStyle");
+    const bool next = keys && GameShell::ShortcutTriggered("fkey.look");
+    const bool prev = keys && !next && GameShell::ShortcutTriggered("fkey.lookBack");
+    const bool fresh = keys && GameShell::ShortcutTriggered("fkey.outfit");
+    const bool restyle = keys && !fresh && GameShell::ShortcutTriggered("fkey.outfitStyle");
     entt::entity root = m_AppliedFor;
     if (root == entt::null || !world.Registry.valid(root) || !world.Registry.all_of<CharacterOutfitComponent>(root)) root = PlayerRoot(world);
     if (root == entt::null) return;
@@ -142,7 +139,7 @@ void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
     const auto& cat = m_Catalog;
     const Wardrobe::Wardrobe& w = cat->W;
     const std::vector<Look>& looks = m_Looks;
-    EditorSettings& es = EditorSettings::Get();
+    GameShell::LookPrefs es = GameShell::LoadLook(); // (saved back below when a key changes it)
     const int bare = (int)w.Styles.size();
 
     // A new Play: the kept look and clothes go on, and the whole wardrobe starts loading behind them.
@@ -165,9 +162,9 @@ void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
         m_HeldDone = done;
         m_HeldTotal = total;
         m_HoldText = "Loading " + std::to_string(done) + "/" + std::to_string(total);
-        FKeyRow::Hold(m_LookSwap ? "F7" : "F8", m_LookSwap ? "Look" : "Outfit", m_HoldText);
+        GameShell::FRowHold(m_LookSwap ? "F7" : "F8", m_LookSwap ? "Look" : "Outfit", m_HoldText);
     }
-    if (m_Dressing && !pending) { m_Dressing = false; m_HeldDone = m_HeldTotal = -1; FKeyRow::Release("Ready"); }
+    if (m_Dressing && !pending) { m_Dressing = false; m_HeldDone = m_HeldTotal = -1; GameShell::FRowRelease("Ready"); }
     if (m_Ahead && !pending) {
         LoadAhead(world, assets, root, m_AheadStep);
         if (++m_AheadStep > 2) { m_Ahead = false; m_AheadStep = 0; }
@@ -185,9 +182,9 @@ void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
         // A style cut for one body only doesn't follow the switch: back to the wardrobe's own pick.
         if (es.FRowStyle >= 0 && !StyleFits(w, es.FRowStyle, l.Sex)) es.FRowStyle = -1;
         es.FRowLook = Key(l);
-        EditorSettings::Save();
-        EditorSound::Play(next ? EditorSound::Event::FKeyCycle : EditorSound::Event::FKeyCycleBack, -1.0f, 1.0f + 0.04f * (float)i);
-        FKeyRow::Show("F7", "Look", Label(l), i, n);
+        GameShell::SaveLook(es);
+        GameShell::PlaySound(next ? GameShell::Sound::FKeyCycle : GameShell::Sound::FKeyCycleBack, -1.0f, 1.0f + 0.04f * (float)i);
+        GameShell::FRowShow("F7", "Look", Label(l), i, n);
         m_Dressing = m_Ahead = m_LookSwap = true;
         m_AheadStep = 0;
     }
@@ -198,11 +195,11 @@ void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
         if (restyle) es.FRowStyle = NextStyle(w, es.FRowStyle, sex);
         es.FRowOutfitSeed = m_NextSeed ? m_NextSeed : NewSeed(); // the outfit drawn ahead: already loading
         Dress(world, assets, root, w, es.FRowStyle, es.FRowOutfitSeed);
-        EditorSettings::Save();
+        GameShell::SaveLook(es);
         const std::string style = es.FRowStyle < 0 ? std::string("Any style") : es.FRowStyle >= bare ? std::string("Bare") : w.Styles[(size_t)es.FRowStyle].Name;
-        EditorSound::Play(EditorSound::Event::SpawnItem, -1.0f, restyle ? 1.12f : 1.0f);
-        if (restyle) FKeyRow::Show("F8", "Style", style, std::max(es.FRowStyle, 0), bare + 1);
-        else FKeyRow::Show("F8", "Outfit", "New " + style + " outfit");
+        GameShell::PlaySound(GameShell::Sound::SpawnItem, -1.0f, restyle ? 1.12f : 1.0f);
+        if (restyle) GameShell::FRowShow("F8", "Style", style, std::max(es.FRowStyle, 0), bare + 1);
+        else GameShell::FRowShow("F8", "Outfit", "New " + style + " outfit");
         m_Dressing = m_Ahead = true;
         m_AheadStep = 0;
         m_LookSwap = false;

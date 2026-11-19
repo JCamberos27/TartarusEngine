@@ -15,6 +15,10 @@
 #include <cstring>
 #include <unordered_set>
 
+#ifndef GL_MAX_3D_TEXTURE_SIZE // core since GL 1.2; the generated loader header leaves it out
+#define GL_MAX_3D_TEXTURE_SIZE 0x8073
+#endif
+
 namespace {
 
 struct GpuVolume {
@@ -206,7 +210,11 @@ void GIVolumes::Rebuild() {
     // volume however many circuits light it - reading every layer cost the living room's 10 volumes x 4 layers.
     std::vector<glm::ivec3> sizes;
     for (const auto& v : m_Volumes) sizes.push_back({v.Dims.x, v.Dims.y, 3 * v.Dims.z});
-    const GLint max3d = 2048; // GL_MAX_3D_TEXTURE_SIZE's guaranteed minimum on GL 4.3+
+    static const GLint max3d = [] { // the GPU's limit (2048 is only the guaranteed minimum on GL 4.3+)
+        GLint v = 0;
+        glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &v);
+        return v >= 2048 ? v : 2048;
+    }();
     m_BrickOrigin = Pack(sizes, std::min(512, (int)max3d), m_AtlasSize);
     if (m_AtlasSize.z > max3d || m_AtlasSize.y > max3d) {
         Log::Warn("[GI] atlas " + std::to_string(m_AtlasSize.x) + "x" + std::to_string(m_AtlasSize.y) + "x" +
