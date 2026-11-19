@@ -1,5 +1,6 @@
 #pragma once
 #include "DecalTypes.h"
+#include "UploadStaging.h"
 #include <glm/glm.hpp>
 #include <array>
 #include <cstddef>
@@ -64,12 +65,13 @@ private:
 // The four decal texture arrays (units 22-25: albedo sRGB BC3, normal BC5, surface BC3, aux BC4),
 // PAGE_SIZE^2 layers sub-allocated by DecalPageAllocator, with slots kept resident by LRU under the
 // Project Settings budget. Maps are decoded and BCn-encoded on a few persistent worker threads through
-// the regular Texture decode + TextureCache (TextureImportSettings::ForceFormat), then uploaded here on
-// the main thread, at most kMaxUploadsPerFrame slots a frame. A slot is pinned by every Request() in
+// the regular Texture decode + TextureCache (TextureImportSettings::ForceFormat), copied into the upload
+// staging ring on its worker (UploadStaging), then uploaded here on the main thread out of that ring, at most
+// kMaxUploadsPerFrame slots a frame. A slot is pinned by every Request() in
 // the current frame (BeginFrame starts the next) and only an unpinned, least-recently-used slot is ever
 // evicted. The normal / surface / aux arrays only exist once a resident decal has that map, so
-// albedo-only libraries spend their budget on albedo. The arrays grow by doubling (within the budget),
-// and never past kMaxLayers: the shader reads the layer from 8 bits.
+// albedo-only libraries spend their budget on albedo. The arrays grow 4x at a time (within the budget), one
+// array per frame, and never past kMaxLayers: the shader reads the layer from 8 bits.
 class DecalTextureArrays {
 public:
     // Absolute paths; empty = no such map. Tier is the slot size request (DecalAsset::Tier).
@@ -144,13 +146,21 @@ private:
     struct Entry {
         std::uint64_t Key = 0;
         Slot S;
-        std::future<std::shared_ptr<Decoded>> Pending;
+        std::future<std::shared_ptr<Decoded>> Pending; // the decode, until it lands
+        std::shared_ptr<Decoded> Staged;              // ...then its maps, on their way through the staging ring
+        UploadStaging::Region Stage;
     };
     enum Kind { kAlbedo = 0, kNormal, kSurface, kAux, kKinds };
 
     bool AllocateWithEviction(int size, DecalPageAllocator::Alloc& out);
-    void EnsureGpu(int layers, const bool want[kKinds]);
-    void UploadSlot(Entry& e, Decoded& d);
+    // The arrays the kinds in `want` (and every active one) need for `layers` layers. Grows one array per frame at
+    // most (each growth re-creates and copies a whole array: ~5 ms): true once they all have them.
+    bool EnsureGpu(int layers, const bool want[kKinds]);
+    // `stagedOffset`: where the maps sit in the staging ring (bound as the unpack buffer), back to back in kind
+    // order; kNotStaged = straight from d's memory.
+    static constexpr std::size_t kNotStaged = ~std::size_t(0);
+    void UploadSlot(Entry& e, const Decoded& d, std::size_t stagedOffset);
+    void ReleaseEntry(Entry& e); // waits out its decode and its staged copy (Drop, Clear, the destructor)
     std::size_t PerLayerBytes(const bool active[kKinds]) const;
     void UpdateMaxLayers();
 
@@ -161,7 +171,9 @@ private:
     std::unique_ptr<Workers> m_Workers;
     unsigned int m_Tex[kKinds] = {};
     bool m_Active[kKinds] = {};
-    int m_GpuLayers = 0;
+    int m_GpuLayers = 0;              // the layer count the arrays are growing to (or have)
+    int m_KindLayers[kKinds] = {};    // each array's own layer count (0 = not created)
+    bool m_GrewThisFrame = false;
     std::size_t m_BudgetBytes = std::size_t(256) << 20;
     std::uint64_t m_Frame = 0;
     int m_InFlight = 0;
