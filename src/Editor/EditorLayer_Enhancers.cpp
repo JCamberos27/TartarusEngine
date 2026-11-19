@@ -49,6 +49,14 @@ using namespace EditorInternal;
 
 namespace {
 void Tip(const char* s) { EditorUI::SetTooltip("%s", s); }
+// Every drag payload that carries one asset (by path): bookmarks, tabs, favourites and pins accept all of them.
+constexpr const char* kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH", "ASSET_PREFAB_PATH",
+                                          "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
+bool IsAssetDrag(const ImGuiPayload& p) {
+    for (const char* type : kAssetPayloads)
+        if (p.IsDataType(type)) return true;
+    return false;
+}
 } // namespace
 
 namespace {
@@ -1254,8 +1262,6 @@ void EditorLayer::DrawInspectorNavBar(World& world, InspectorNavAction& act) {
                 us.MarkDirty();
             }
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads) {
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 const std::string key((const char*)p->Data);
@@ -1414,8 +1420,6 @@ void EditorLayer::DrawInspectorHeaderNav(World& world, InspectorNavAction& act, 
                 us.MarkDirty();
             }
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads)
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 const std::string key((const char*)p->Data);
@@ -1860,9 +1864,7 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
 
     const ImGuiPayload* drag = ImGui::GetDragDropPayload();
     const bool dragging = drag && (drag->IsDataType("HIERARCHY_ENTITY") || drag->IsDataType("INSPECTOR_COMPONENT") ||
-                                   drag->IsDataType("ASSET_MODEL_PATH") || drag->IsDataType("ASSET_TEXTURE_PATH") ||
-                                   drag->IsDataType("ASSET_MATERIAL_PATH") || drag->IsDataType("ASSET_PREFAB_PATH") ||
-                                   drag->IsDataType("ASSET_SOUND_PATH") || drag->IsDataType("ASSET_FILE_PATH") || drag->IsDataType("ASSET_DECAL_PATH"));
+                                   IsAssetDrag(*drag));
     if (strip.Tabs.empty() && !dragging) return false; // nothing to show: no strip until there is a tab
 
     std::vector<TabStripItem> items;
@@ -1952,8 +1954,6 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
             strip.Open(Enhancers::EditorRef::MakeComponent(sceneKey, c->Order, c->Component, nm ? nm->Name : std::string()));
             ts.MarkDirty();
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads)
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 const std::string key((const char*)p->Data);
@@ -1985,10 +1985,7 @@ bool EditorLayer::DrawAssetTabStrip(AssetLibrary& assets, float rightInset, bool
     if (Shortcuts::Triggered("project.tabs.reopen") && strip.Reopen() >= 0) ts.MarkDirty();
 
     const ImGuiPayload* drag = ImGui::GetDragDropPayload();
-    const bool dragging = drag && (drag->IsDataType("ASSET_FOLDER_PATH") || drag->IsDataType("ASSET_MODEL_PATH") ||
-                                   drag->IsDataType("ASSET_TEXTURE_PATH") || drag->IsDataType("ASSET_MATERIAL_PATH") ||
-                                   drag->IsDataType("ASSET_PREFAB_PATH") || drag->IsDataType("ASSET_SOUND_PATH") ||
-                                   drag->IsDataType("ASSET_FILE_PATH") || drag->IsDataType("ASSET_DECAL_PATH"));
+    const bool dragging = drag && (drag->IsDataType("ASSET_FOLDER_PATH") || IsAssetDrag(*drag));
     if (strip.Tabs.empty() && !dragging && !alwaysShow) return false;
 
     // The active tab follows navigation: it is the browser's current place.
@@ -2043,8 +2040,6 @@ bool EditorLayer::DrawAssetTabStrip(AssetLibrary& assets, float rightInset, bool
             strip.Open(folderRef((const char*)p->Data), true, true);
             ts.MarkDirty();
         }
-        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
         for (const char* type : kAssetPayloads)
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 // A file opens its folder in a new tab, with the file selected.
@@ -2594,8 +2589,6 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
                 const std::string path((const char*)p->Data);
                 added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeFolder(path, FolderLeaf(path)));
             }
-            static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
-                                                         "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"};
             for (const char* type : kAssetPayloads)
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                     const std::string key((const char*)p->Data);
