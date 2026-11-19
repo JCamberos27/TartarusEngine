@@ -1,6 +1,6 @@
 // --editor-tests: end-to-end UI tests of the Editor Enhancers (vInspector, vTabs, vFavorites,
-// vRuler) in the running editor. See EditorUiTests.h for the model; the checklist these automate
-// is docs/VINSPECTOR_TEST_SHEET.md.
+// vRuler) in the running editor, and the editor panels around them (EditorSmoke/*.inl). See
+// EditorUiTests.h for the model.
 //
 // How widgets are found: the host executable is built with IMGUI_ENABLE_TEST_ENGINE, so ImGui
 // reports every submitted item (id, rectangle, label, item flags) to the hooks below while a test

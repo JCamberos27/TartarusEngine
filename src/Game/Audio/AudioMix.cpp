@@ -55,9 +55,13 @@ float DistanceModel::GainDbAt(float d) const {
     return StartGainDb() - SlopeDb * std::log2(dd / mn);
 }
 
+float AirCutoffHz(bool enabled, float startDistance, float exponent, float minHz, float distance) {
+    if (!enabled || startDistance <= 0.0f || distance <= startDistance) return 20000.0f;
+    return std::max(20000.0f * std::pow(startDistance / distance, exponent), minHz);
+}
+
 float AirCutoffHz(const AudioMixComponent& s, float distance) {
-    if (!s.AirEnabled || distance <= s.AirStartDistance || s.AirStartDistance <= 0.0f) return 20000.0f;
-    return std::max(20000.0f * std::pow(s.AirStartDistance / distance, s.AirExponent), s.AirMinHz);
+    return AirCutoffHz(s.AirEnabled, s.AirStartDistance, s.AirExponent, s.AirMinHz, distance);
 }
 
 void MixDucker::Configure(const AudioMixComponent& s) {

@@ -38,7 +38,7 @@
     X(EditorTestExclude, "TARTARUS_EDITOR_TEST_EXCLUDE", List, "--editor-tests: test names to skip")                  \
     X(EditorTestShard, "TARTARUS_EDITOR_TEST_SHARD", Str, "--editor-tests: run shard i/n")                            \
     X(EditorTestDump, "TARTARUS_EDITOR_TEST_DUMP", Str, "--editor-tests: on failure, dump this window's widgets")     \
-    X(MotionDemo, "TARTARUS_MOTION_DEMO", Str, "MotionDemo: output folder")                                           \
+    X(MotionDemo, "TARTARUS_MOTION_DEMO", Str, "MotionDemo: output .mp4 path")                                        \
     X(Ffmpeg, "TARTARUS_FFMPEG", Str, "MotionDemo: ffmpeg.exe path")                                                  \
     /* NPC tests */                                                                                                     \
     X(NpcTestScene, "NPC_TEST_SCENE", Str, "--npc-test: scene name (tests/scenes/, else scenes/) instead of the default")             \

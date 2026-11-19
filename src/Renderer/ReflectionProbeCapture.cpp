@@ -39,8 +39,12 @@ ReflectionProbeCapture::~ReflectionProbeCapture() { Release(); }
 
 void ReflectionProbeCapture::Release() {
     if (m_Array) { glDeleteTextures(1, &m_Array); m_Array = 0; }
-    for (unsigned int& c : m_CaptureCube)
+    GpuMemTrack::Set(GpuMemTrack::Key("ReflectionProbeCapture array", this), 0);
+    for (int i = 0; i < 2; ++i) {
+        unsigned int& c = m_CaptureCube[i];
         if (c) { glDeleteTextures(1, &c); c = 0; }
+        GpuMemTrack::Set(GpuMemTrack::Key("ReflectionProbeCapture cube " + std::to_string(i), this), 0);
+    }
     m_ArrayLayers = 0;
     m_Slots.clear();
     m_Queue.clear();
@@ -78,6 +82,10 @@ void ReflectionProbeCapture::EnsureArray(int layers) {
     if (m_Array) glDeleteTextures(1, &m_Array);
     m_ArrayLayers = std::max(4, (layers + 3) / 4 * 4); // room to add a few probes without a reallocation
     m_Array = IblProbe::CreateSpecularCubeArray(m_ArrayLayers);
+    {   // R11G11B10F (4 bytes/texel), the mip chain adds about a third
+        const size_t face = (size_t)IblProbe::kSpecularSize * IblProbe::kSpecularSize * 4;
+        GpuMemTrack::Set(GpuMemTrack::Key("ReflectionProbeCapture array", this), face * 6 * m_ArrayLayers * 4 / 3);
+    }
     // A new array holds nothing: every slot captures again.
     m_Cap = {};
     m_Pre = {};
@@ -89,13 +97,14 @@ void ReflectionProbeCapture::EnsureArray(int layers) {
 }
 
 void ReflectionProbeCapture::EnsureCaptureCubes() {
-    for (unsigned int& c : m_CaptureCube) {
+    for (int i = 0; i < 2; ++i) {
+        unsigned int& c = m_CaptureCube[i];
         if (c) continue;
         int mips = 1;
         while ((kFaceSize >> mips) > 0) ++mips; // the prefilter reads well down the chain (like IblProbe's env cube)
         glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &c);
         glTextureStorage2D(c, mips, GL_RGBA16F, kFaceSize, kFaceSize);
-        GpuMemTrack::Set("ReflectionProbeCapture cube " + std::to_string(c), (size_t)kFaceSize * kFaceSize * 6 * 8 * 4 / 3);
+        GpuMemTrack::Set(GpuMemTrack::Key("ReflectionProbeCapture cube " + std::to_string(i), this), (size_t)kFaceSize * kFaceSize * 6 * 8 * 4 / 3);
         glTextureParameteri(c, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTextureParameteri(c, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(c, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -205,7 +214,11 @@ void ReflectionProbeCapture::Step(IblProbe& ibl, ReflectionProbeArray& probes,
     }
     if (m_Cap.Slot >= 0 && !m_Cap.Done) {
         m_Target->Resize(kFaceSize, kFaceSize, 1);
-        if (!m_Target->IsValid()) { m_Cap = {}; return; }
+        if (!m_Target->IsValid()) { // try this slot again next frame rather than dropping it
+            m_Queue.insert(m_Queue.begin(), m_Cap.Slot);
+            m_Cap = {};
+            return;
+        }
         const Volume& vol = m_Slots[m_Cap.Slot].Vol;
         m_Target->BindForRender();
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

@@ -1272,7 +1272,7 @@ void Test_KnifeFx_Library() {
     e.Flags = EntryMask;
     lib.Entries.push_back(e);
     lib.Color.assign(LayerBytes(8, 2), 0x5A);
-    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_kfx_test.kfx").string();
+    const std::string path = (std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_kfx_test", ".kfx")).string();
     CHECK(WriteLibrary(path, lib));
     LibraryData back;
     std::string err;

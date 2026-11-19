@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -39,7 +40,11 @@ private:
 
     // #185 — model-space UNIQUE edges of a convex-hull / triangle-mesh collider, built once per
     // Model from its cooked collision geometry and then just transformed each frame. An empty
-    // list means "too dense — draw the bounds box instead". Keyed by raw Model* (stable for the
-    // life of a loaded asset); entries are cheap and never invalidate.
-    std::unordered_map<const Model*, std::vector<glm::vec3>> m_MeshEdgeCache;
+    // list means "too dense — draw the bounds box instead". Keyed by the import every instance
+    // shares (Model::ImportId); its ImportStamp tells a reimport, or a new import at a freed address, apart.
+    struct MeshEdges {
+        std::uint64_t Stamp = 0; // 0: not built yet (stamps start at 1)
+        std::vector<glm::vec3> Edges;
+    };
+    std::unordered_map<const void*, MeshEdges> m_MeshEdgeCache;
 };

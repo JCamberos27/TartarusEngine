@@ -2,7 +2,7 @@
 
 #include "AI/NpcDirector.h"
 #include "Combat/PlayerVitals.h"
-#include "EditorSound.h"
+#include "GameShell.h"
 #include "TimeService.h"
 #include "imgui.h"
 
@@ -71,7 +71,7 @@ void DevPanel::Draw(const Context& c) {
     if (ImGui::SliderFloat("Time scale", &scale, 0.05f, 2.0f, "%.2f")) Time::SetTimeScale(scale);
     ImGui::SameLine();
     if (ImGui::SmallButton("1x")) {
-        EditorSound::Play(EditorSound::Event::TimeReset, EditorSound::LastItemScreenX());
+        GameShell::PlaySound(GameShell::Sound::TimeReset, GameShell::LastItemScreenX());
         Time::SetTimeScale(1.0f);
     }
     ImGui::Checkbox("AI debug overlay", &AiOverlay);
