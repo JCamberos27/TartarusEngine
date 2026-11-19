@@ -3,8 +3,6 @@
 
 #include <glm/glm.hpp>
 
-#include "Framebuffer.h"
-
 class World;
 class Camera;
 class EditorLayer;
@@ -42,11 +40,12 @@ public:
     void Render(const SelectionOutlineInputs& in);
 
 private:
-    void DrawOutline(const SelectionOutlineInputs& in, const std::vector<Model*>& models,
-                     const std::vector<glm::mat4>& xforms, const glm::vec3& outlineColor, float outlineFade,
-                     bool outlineSweep);
+    void EnsureMask(int w, int h);
+    void Free();
 
-    Framebuffer m_Mask; // 1-bit silhouette mask (the resolved one the ring samples)
-    unsigned int m_MaskMsFbo = 0, m_MaskMsColor = 0; // its 4x MSAA draw target
-    int m_MaskMsW = 0, m_MaskMsH = 0;
+    // One RG8 silhouette mask at the view's size: R the selection, G the hover pre-highlight. Drawn into the 4x MSAA
+    // target, resolved into m_Mask for the ring pass (a fetch at a pixel centre reads that pixel's 4-sample coverage).
+    unsigned int m_MaskMsFbo = 0, m_MaskMsColor = 0;
+    unsigned int m_MaskFbo = 0, m_Mask = 0;
+    int m_MaskW = 0, m_MaskH = 0;
 };
