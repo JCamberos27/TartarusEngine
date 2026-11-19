@@ -38,6 +38,9 @@ struct Flashlight {
             Placed = true;
             return;
         }
-        Aim = glm::normalize(glm::mix(Aim, front, 1.0f - std::exp(-Follow * dt)));
+        // (A view flicked straight round in one step mixes to nothing: the beam then snaps to the view instead of NaN.)
+        const glm::vec3 aim = glm::mix(Aim, front, 1.0f - std::exp(-Follow * dt));
+        const float len = glm::length(aim);
+        Aim = len > 1e-4f ? aim / len : front;
     }
 };

@@ -1349,6 +1349,9 @@ struct AnimatorClipPath {
 const AnimatorClipPath* ClipPath(const Model& m, int clip) {
     if (clip < 0) return nullptr;
     static std::map<std::pair<const Model*, int>, std::unique_ptr<AnimatorClipPath>> s_Paths;
+    // Keyed by model address: every rig instance ever spawned (each dummy, each respawn) adds its clips, so it is dropped
+    // wholesale now and then (a cache: the paths are measured again on demand), as CachedLayerMask does.
+    if (s_Paths.size() > 4096) s_Paths.clear();
     auto& slot = s_Paths[{&m, clip}];
     const float len = m.AnimationLength(clip);
     if (slot && slot->Length == len) return slot.get();

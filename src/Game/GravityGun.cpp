@@ -116,7 +116,8 @@ void GravityGun::PredictThrow(const glm::vec3& fwd, float speed) {
             m_Prediction.Legs.back().push_back(p);
             continue;
         }
-        // Contact: finish this leg where the body touches, mark the spot, then bounce.
+        // Contact: finish this leg where the body touches, mark the spot, then bounce. (No normal to bounce off: stop there.)
+        if (glm::length(Vec(hit.Normal)) < 1e-6f) return;
         const glm::vec3 n = glm::normalize(Vec(hit.Normal));
         p += dir * hit.Distance;
         m_Prediction.Legs.back().push_back(p);

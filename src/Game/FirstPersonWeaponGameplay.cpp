@@ -22,6 +22,10 @@ glm::vec3 Vec(const json& j, const char* name) {
     return {(*it)[0].get<float>(), (*it)[1].get<float>(), (*it)[2].get<float>()};
 }
 float Bound(float v, float fallback, float low, float high) { return std::clamp(std::isfinite(v) ? v : fallback, low, high); }
+// A JSON number as an int within [low, high]: a NaN, infinity or out-of-range float cast straight to int is undefined.
+int BoundInt(float v, int fallback, int low, int high) {
+    return std::isfinite(v) ? (int)std::clamp(v, (float)low, (float)high) : fallback;
+}
 bool Fail(std::string& error, const char* why) { error = why; return false; }
 }
 
@@ -41,6 +45,12 @@ bool NormalizeWeaponGameplay(FirstPersonWeaponGameplay& w, std::string& error) {
     w.FalloffStart = Bound(w.FalloffStart, 25.0f, 0.0f, 10000.0f);
     w.FalloffEnd = std::max(w.FalloffStart, Bound(w.FalloffEnd, 60.0f, 0.0f, 10000.0f));
     w.FalloffMin = Bound(w.FalloffMin, 0.6f, 0.0f, 1.0f);
+    // Fed to physics and the zeroing every round: a NaN here (a hand-edited prefab) spread into the world.
+    w.ImpactImpulse = Bound(w.ImpactImpulse, 0.0f, 0.0f, 100000.0f);
+    w.ImpactMaxSpeed = Bound(w.ImpactMaxSpeed, 8.0f, 0.0f, 1000.0f);
+    w.ZeroDistance = Bound(w.ZeroDistance, 25.0f, 0.0f, 10000.0f);
+    w.RegripMin = Bound(w.RegripMin, 10.0f, 0.0f, 3600.0f);
+    w.RegripMax = Bound(w.RegripMax, 20.0f, 0.0f, 3600.0f);
     if (w.RegripMax < w.RegripMin) std::swap(w.RegripMin, w.RegripMax);
     error.clear();
     return true;
@@ -50,7 +60,7 @@ namespace Gameplay {
 bool ImportLegacyWeaponGameplay(const json& g, FirstPersonWeaponGameplay& w, std::string& error) {
     w = FirstPersonWeaponGameplay{};
     if (!g.is_object()) return NormalizeWeaponGameplay(w, error);
-    w.Magazine = std::max(1, (int)Num(g, "magazine", (float)w.Magazine));
+    w.Magazine = BoundInt(Num(g, "magazine", (float)w.Magazine), w.Magazine, 1, 100000);
     w.RoundsPerMinute = Num(g, "rpm", w.RoundsPerMinute);
     w.AllowFullAuto = Bool(g, "allowFullAuto", w.AllowFullAuto);
     const float burst = Num(g, "burstRounds", 0.0f);
@@ -64,7 +74,7 @@ bool ImportLegacyWeaponGameplay(const json& g, FirstPersonWeaponGameplay& w, std
     w.ImpactMaxSpeed = std::max(0.0f, Num(g, "impactMaxSpeed", w.ImpactMaxSpeed));
     w.ZeroDistance = std::max(0.0f, Num(g, "zeroDistance", w.ZeroDistance));
     w.BulletHoleRadius = Num(g, "bulletHoleRadius", w.BulletHoleRadius);
-    w.Pellets = std::clamp((int)Num(g, "pellets", (float)w.Pellets), 1, 64);
+    w.Pellets = BoundInt(Num(g, "pellets", (float)w.Pellets), w.Pellets, 1, 64);
     if (const auto sight = g.find("sightLine"); sight != g.end() && sight->is_object()) {
         const glm::vec3 origin = Vec(*sight, "origin"), direction = Vec(*sight, "direction");
         const float length = glm::length(direction);
