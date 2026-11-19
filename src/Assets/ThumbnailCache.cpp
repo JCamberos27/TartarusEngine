@@ -145,13 +145,23 @@ void PruneOrphans() {
     std::error_code ec;
     if (!fs::is_directory(dir, ec)) return;
 
-    std::unordered_set<std::string> live;
-    CollectMetaGuids(ProjectPaths::Root(), live);
-    CollectMetaGuids(EnginePaths::Resolve("assets"), live);
+    // The project's GUIDs are the AssetDatabase's (its scan, which this waits for, read every .meta once already); the
+    // engine's own assets get theirs on first use, so their small folder is read here. A thumbnail written after this
+    // started is left alone: its asset may have been registered after the check below looked.
+    std::unordered_set<std::string> engineLive;
+    CollectMetaGuids(EnginePaths::Resolve("assets"), engineLive);
+    const auto started = fs::file_time_type::clock::now();
+    auto live = [&](const std::string& guid) {
+        if (engineLive.count(guid)) return true;
+        if (guid.find_first_not_of("0123456789abcdef") != std::string::npos) return false;
+        return !AssetDatabase::PathForGuid(AssetGuid::FromString(guid)).empty();
+    };
 
     int removed = 0;
     for (const auto& entry : fs::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file(ec)) continue;
+        std::error_code tec;
+        if (entry.last_write_time(tec) >= started && !tec) continue;
         const std::string name = entry.path().filename().string();
         // "{16 hex}.png" and its "{16 hex}.png.key" sidecar are cache entries; anything else
         // (e.g. a .meta an older ScanProject created for a thumbnail) is junk.
@@ -159,7 +169,7 @@ void PruneOrphans() {
         const bool isKey = name.size() == 24 && name.compare(16, 8, ".png.key") == 0;
         std::string guid = (isPng || isKey) ? name.substr(0, 16) : std::string();
         for (char& c : guid) c = (char)std::tolower((unsigned char)c);
-        if ((isPng || isKey) && live.count(guid)) continue;
+        if ((isPng || isKey) && live(guid)) continue;
         if (fs::remove(entry.path(), ec)) ++removed;
     }
     if (removed > 0) Log::Info("ThumbnailCache: pruned " + std::to_string(removed) + " orphaned file(s).");
