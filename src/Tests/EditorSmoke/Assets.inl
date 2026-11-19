@@ -80,6 +80,18 @@ void WritePng(const std::string& path, unsigned char r, unsigned char g, unsigne
         }
     PngWrite::ToFile(std::filesystem::path(path).u8string(), 16, 16, 4, px, 16 * 4);
 }
+// What the background-menu test creates: removed before it runs and after it (pass or fail), so a run
+// filtered to that test, or one that failed half-way, never leaves "New Material.mat" for the next run
+// to collide with (only the suite's last test deletes the whole scratch folder).
+void RemoveCreated() {
+    std::error_code ec;
+    for (const char* f : {"New Folder", "Smoke Folder", "New Material.mat", "Smoke Mat.mat", "New Animator Controller.controller",
+                          "New Recoil.recoil", "New Camera Shake.camerashake"}) {
+        AtomicFile::NoteSelfWrite(fs::u8path(DirFile(f)));
+        fs::remove_all(fs::u8path(DirFile(f)), ec);
+        fs::remove(fs::u8path(DirFile(std::string(f) + ".meta")), ec);
+    }
+}
 // Writes the scratch folder (unless it is already there) and waits until the browser lists it.
 Steps EnsureScratch() {
     return {
@@ -429,7 +441,7 @@ void RegisterAssetsTests() {
 
     // ------------------------------------------------------------------ the grid's background menu
     Add("assets: New Folder + rename, Create Material / Animator Controller / Recoil / Camera Shake", Cat({
-        {FreshScene(), Wait(2)},
+        {FreshScene(), Wait(2), Do("remove what a previous run created", [](Ctx& c) { RemoveCreated(); AX::Refresh(c.E); }), Wait(3)},
         EnsureScratch(),
         {Navigate(kFolder), Wait(4), UntilListed("Smoke Tex.png"),
          Do("note the undo depth", [](Ctx& c) { g_Number = (double)X::UndoDepth(c.E); })},
@@ -476,7 +488,7 @@ void RegisterAssetsTests() {
          UntilListed("New Animator Controller.controller", 300), UntilListed("New Recoil.recoil", 300),
          UntilListed("New Camera Shake.camerashake", 300),
          Shot("created", {kAssets})},
-    }));
+    }), [](Ctx&) { RemoveCreated(); });
 
     // ------------------------------------------------------------------ a tile's context menu
     {
