@@ -558,8 +558,6 @@ void TestGaitTable() {
     CHECK(std::fabs(t.Walk - 1.3f) < 0.03f && std::fabs(t.Jog - 2.0f) < 0.04f && std::fabs(t.Run - 4.5f) < 0.09f);
     CHECK(std::fabs(t.CrouchWalk - 0.9f) < 0.03f);
     CHECK(t.Legs[0] == 1 && t.Legs[1] == 1 && t.Legs[2] == 1 && t.Legs[3] == 1); // the circles turn too fast to be legs
-    CHECK(t.GaitFor(0.1f, false) == MotionLabel::Idle && t.GaitFor(1.3f, false) == MotionLabel::Walk);
-    CHECK(t.GaitFor(2.1f, false) == MotionLabel::Jog && t.GaitFor(4.0f, false) == MotionLabel::Run);
     CHECK(t.SpeedFor(MotionLabel::Jog, false) == t.Jog && t.SpeedFor(MotionLabel::Walk, true) == t.CrouchWalk);
     CHECK(t.SpeedFor(MotionLabel::Idle, false) == 0.0f);
     CHECK(std::fabs(t.Strafe[0] - 1.1f) < 0.03f && t.StrafeLegs[0] == 2 && t.StrafeLegs[2] == 0); // the two walk strafes

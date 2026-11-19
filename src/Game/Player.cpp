@@ -166,29 +166,6 @@ float PlayerGaitSpeed(const Player::DirectionalSpeeds& s, const glm::vec2& local
     return side + (back - s.Strafe[gait]) * u * u * (3.0f - 2.0f * u);
 }
 
-glm::vec3 PlayerClipVelocity(const glm::vec3& v, const glm::vec3* walls, int count) {
-    constexpr float kEps = 1e-5f;
-    glm::vec3 out = v;
-    for (int i = 0; i < count; ++i) {
-        const float li = glm::length(walls[i]);
-        if (li < 1e-4f) continue;
-        const glm::vec3 ni = walls[i] / li;
-        if (glm::dot(out, ni) >= -kEps) continue;
-        glm::vec3 slid = out - ni * glm::dot(out, ni);
-        for (int j = 0; j < count; ++j) {
-            const float lj = glm::length(walls[j]);
-            if (j == i || lj < 1e-4f || glm::dot(slid, walls[j] / lj) >= -kEps) continue;
-            // Into a second wall too: along the corner between them, or stopped where they meet head on.
-            glm::vec3 crease = glm::cross(ni, walls[j] / lj);
-            const float cl = glm::length(crease);
-            slid = cl < 1e-4f ? glm::vec3(0.0f) : crease / cl * glm::dot(out, crease / cl);
-            break;
-        }
-        out = slid;
-    }
-    return glm::dot(out, v) > 0.0f ? out : glm::vec3(0.0f);
-}
-
 glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime) {
     // Speeding up toward the target uses the acceleration time; slowing down (letting go, or turning
     // to a slower move) the deceleration time.

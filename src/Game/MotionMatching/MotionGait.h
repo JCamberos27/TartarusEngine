@@ -51,7 +51,5 @@ struct GaitSpeedTable {
     float StyleSpeed(int style) const;
     float StyleStrafe(int style) const;
     float StyleBack(int style) const; // backwards (the style's sideways speed when it has no backward legs)
-    // The gait a speed falls under: the nearest table speed (idle under half a walk).
-    int GaitFor(float speed, bool crouch) const;
     std::string Describe() const;
 };

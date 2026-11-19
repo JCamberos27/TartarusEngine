@@ -164,14 +164,6 @@ float GaitSpeedTable::StyleBack(int style) const {
     return Back[g] > 0.0f ? Back[g] : StyleStrafe(style);
 }
 
-int GaitSpeedTable::GaitFor(float speed, bool crouch) const {
-    if (speed < 0.5f * (crouch ? CrouchWalk : Walk)) return MotionLabel::Idle;
-    if (crouch) return MotionLabel::Walk;
-    if (speed < 0.5f * (Walk + Jog)) return MotionLabel::Walk;
-    if (speed < 0.5f * (Jog + Run)) return MotionLabel::Jog;
-    return MotionLabel::Run;
-}
-
 std::string GaitSpeedTable::Describe() const {
     char b[1400];
     std::snprintf(b, sizeof b,
