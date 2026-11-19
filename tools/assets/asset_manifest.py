@@ -25,8 +25,6 @@ import csv, hashlib, os, shutil, subprocess, sys
 
 CSV_REL = os.path.join('project', 'external_assets.csv')
 EXCLUDE_PREFIXES = (
-    # The old Unity-era hats (removed in #501). The Casual Bundle's headwear lives in Headwear/ folders instead.
-    'project/assets/Characters/Quantum/Textures/Clothing/Hats/',
     'project/assets/Characters/ybot/',  # a local Mixamo experiment no committed scene uses (Raw\Animations)
 )
 EXCLUDE_SUFFIXES = ('.bak', '.recovery.json', 'desktop.ini', 'Thumbs.db')

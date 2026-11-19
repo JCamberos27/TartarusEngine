@@ -2917,8 +2917,8 @@ void TestWardrobeQuantum() {
     CHECK(pieceFor(r, "Legs").empty() && pieceFor(r, "Head") == "Quantum_Head_Afro" && pieceFor(r, "Torso") == "Quantum_Torso_Afro");
     CHECK(pieceFor(r, "Balaclava") == "SM_Balaclava_Crime");
     // On the head: the balaclava, hoods, the black (classic) glasses and the pack's hair, beards, hats and headphones -
-    // each riding the head, so first person draws it only in shadow (FirstPersonBody). No aviators (hidden) and
-    // nothing from the old Hats folders (excluded).
+    // each riding the head, so first person draws it only in shadow (FirstPersonBody). The aviators are in the
+    // catalog but don't go with the balaclava (they clip it); the classic glasses do.
     req = {};
     req.Sex = Wardrobe::Gender::Female;
     req.Items = {{"Balaclava", item("Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx")},
@@ -2930,7 +2930,10 @@ void TestWardrobeQuantum() {
     CHECK(cat->W.HatSlot == "Headwear" && cat->W.HairSlot == "Hair");
     for (const char* s : {"Hair", "FacialHair", "Headwear", "Headphones", "Balaclava", "Glasses"})
         CHECK(cat->W.Slot(s) && cat->W.Slot(s)->HeadAttached);
-    for (const auto& it : cat->Items) CHECK(it.Path.find("/Hats/") == std::string::npos && it.Path.find("Aviator") == std::string::npos);
+    CHECK(cat->Find("assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Aviator.fbx") != nullptr);
+    req.Items["Glasses"] = item("Clothing/Female/Glasses/SKM_F_Glasses_Aviator.fbx");
+    r = Wardrobe::Resolve(cat->W, cat->Items, req);
+    CHECK(pieceFor(r, "Balaclava") == "SM_F_Balaclava_Crime" && pieceFor(r, "Glasses").empty() && r.Dropped.size() == 1);
     // A hood that's up goes over the balaclava, and only that way round (else each cuts holes in the other).
     for (const char* hood : {"Tops/SKM_Hoodie_Hood_Up", "Tops/SKM_Hoodie_Zipper_Hood", "Outerwear/SKM_Coat_Hoodie_Hood"}) {
         const std::string slot = std::string(hood).rfind("Tops", 0) == 0 ? "Top" : "Outerwear";
@@ -3034,6 +3037,8 @@ void TestWardrobeQuantum() {
     CHECK(pieceFor(r, "Top") == "SKM_Shirt_Tie" && pieceFor(r, "Arms") == "Quantum_Hands" && r.Clashes.empty());
     r = male({{"Top", item("Clothing/Male/Tops/SKM_Shirt_Classic_RolledUp.fbx")}});
     CHECK(pieceFor(r, "Arms") == "Quantum_Arms_FP");
+    r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_Tshirt.fbx")}});
+    CHECK(pieceFor(r, "Arms") == "Quantum_Hands");
 
     // Races: the old man's own body parts (his legs are the European ones in his skin); tattoos and ornaments are
     // skins over the European body, kept out of Randomize.
@@ -3077,19 +3082,43 @@ void TestWardrobeQuantum() {
             CHECK(!pieceFor(got, "Pants").empty() && !pieceFor(got, "Shoes").empty());
             for (const auto& [slot, path] : want.Items) CHECK(cat->Find(path) && !cat->Find(path)->Variant);
         }
-    // The balaclava locked off, Randomize dresses the head too - hair, beards, hats - still with nothing taken off.
+    // The balaclava is rare in the everyday styles (the Masked style always wears it), so Randomize dresses the
+    // head - hair, beards, hats - still with nothing taken off; the loud cuts and long beards stay out of Formal.
+    int everyday = 0, masked = 0;
+    for (unsigned seed = 1; seed <= 200; ++seed) {
+        Wardrobe::Request base;
+        for (const char* s : {"Casual", "Formal"}) {
+            const auto want = Wardrobe::Randomize(cat->W, cat->Items, base, seed, {}, s);
+            everyday += want.Items.count("Balaclava") > 0;
+            if (std::string(s) == "Formal")
+                for (const char* slot : {"Hair", "FacialHair"})
+                    if (want.Items.count(slot)) {
+                        const std::string p = want.Items.at(slot);
+                        CHECK(p.find("Mohawk") == std::string::npos && p.find("Irokez") == std::string::npos &&
+                              p.find("Braids") == std::string::npos && p.find("Beard_Long") == std::string::npos);
+                    }
+        }
+        for (int g = 0; g < 2; ++g) {
+            base.Sex = (Wardrobe::Gender)g;
+            const auto want = Wardrobe::Randomize(cat->W, cat->Items, base, seed, {}, "Masked");
+            const auto got = Wardrobe::Resolve(cat->W, cat->Items, want);
+            masked += !pieceFor(got, "Balaclava").empty();
+            CHECK(got.Dropped.empty() && !pieceFor(got, "Pants").empty() && !pieceFor(got, "Shoes").empty());
+        }
+    }
+    CHECK(everyday < 40 && masked == 400);
     int withHair = 0, withHat = 0;
     for (int g = 0; g < 2; ++g)
         for (unsigned seed = 1; seed <= 200; ++seed) {
             Wardrobe::Request base;
             base.Sex = (Wardrobe::Gender)g;
-            const auto want = Wardrobe::Randomize(cat->W, cat->Items, base, seed, {"Balaclava"});
+            const auto want = Wardrobe::Randomize(cat->W, cat->Items, base, seed);
             const auto got = Wardrobe::Resolve(cat->W, cat->Items, want);
-            CHECK(got.Dropped.empty() && got.Clashes.empty() && pieceFor(got, "Balaclava").empty());
+            CHECK(got.Dropped.empty() && got.Clashes.empty());
             withHair += !pieceFor(got, "Hair").empty();
             withHat += want.Items.count("Headwear") > 0;
         }
-    Log::Info("Quantum wardrobe: Randomize without a balaclava - " + std::to_string(withHair) + " / 400 with hair, " +
+    Log::Info("Quantum wardrobe: Randomize - " + std::to_string(withHair) + " / 400 with hair, " +
               std::to_string(withHat) + " with headwear");
     CHECK(withHair > 100 && withHat > 20);
     // Locked slots stay as they are.

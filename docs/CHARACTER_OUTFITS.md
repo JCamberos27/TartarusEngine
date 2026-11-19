@@ -49,7 +49,7 @@ name** (case-insensitive), by remapped **material names**, and by **tags** other
 
 | Key | What it says |
 |---|---|
-| `itemFolders`, `excludeFolders` | Where items are scanned; folder names that hide a model (`StaticMesh`, `WithHair`, `Hats`) |
+| `itemFolders`, `excludeFolders` | Where items are scanned; folder names that hide a model (`StaticMesh`) |
 | `skinMaterials` | Base skin material names; a race's `skin` suffix makes its variant |
 | `hatSlot`, `hairSlot` | The slots the hat-takes-its-fitted-haircut rule works between (defaults `Hat` / `Hair`) |
 | `slots` | `id`, `label`, `folders`, `nameSuffix`, `headAttached` (rides the head: shadow-only in first person), `layer` (how far out it's worn), `hides` (false for see-through items) |
@@ -108,16 +108,24 @@ Rules for the head:
 - **Hoods.** A hood that's up (`Hoodie_Hood_Up`, `Hoodie_Zipper_Hood`, `Coat_Hoodie_Hood`, both winter
   jackets) clears the hair, takes headphones and hats off unless they fit under it (`UnderHood`: caps, bandanas,
   headbands, warm hats, berets), and is layered over the balaclava and the headwear.
-- **The balaclava** takes hair, facial hair, headwear and headphones off. It's filled at 1.0 in every style, so
-  Randomize dresses the head only when the Balaclava slot is locked empty.
+- **The balaclava** takes hair, facial hair, headwear, headphones and the aviators off (the classic glasses stay).
+  The everyday styles fill it at 0.05; the **Masked** style (weight 0.4, every Casual or Winter piece) always
+  wears it.
+- **Hair and beards** carry no style tags, so they go in every style, except the loud ones: mohawks, irokez,
+  braids and the long beards are tagged with every style but Formal.
+- Men's hats have no fitted cuts (only the female Bobcut/Ponytail ones), so a man's hat hides the hair that pokes
+  through. `SKM_Hat_Classic_Hairs` is a hat only (no hair mesh), and `SKM_Bobcut` is the pack's own male cut.
 - **Static (SM_) headwear** with a skinned twin (`SM_Cap`, `SM_Cap_Back`, `SM_Panama`, `SM_F_Cap`,
   `SM_F_Cap_Back`) is offered as "(static)": the same colourways, riding the head bone.
-- Hidden on purpose: the aviators (they clip the balaclava), the body's own shoe feet and wrists, and
+- Hidden on purpose: the body's own shoe feet and wrists, and
   `SM_F_Haircut_Scalp` (the pack gives it no material).
 
 Other rules: backpacks and bags (layer 8) go over the outerwear (6); a suit jacket (`Jacket_Classic_*`) brings its
 own shirt and tie and clears the top; `Shirt_Tie` is a formal, tucked, long-sleeved top (the arms become the
-sleeve hands), a soft clash with shorts and flip-flops; rolled-up sleeves keep the arms.
+sleeve hands), a soft clash with shorts and flip-flops; rolled-up sleeves keep the arms. The male long sleeves
+(hoodies, the classic and tie shirts, the bombers, coats and full jackets, `Jacket_Tshirt` included) swap the arms for
+the sleeve hands; vests, jerseys, T-shirts, the Hawaii shirt and the rolled-ups keep them. The female body has no
+sleeve hands, so she keeps her full arms under every sleeve.
 
 Races: male European, Afro, Asian, Old, Young, plus Tattooed (`_Tatto` arm skin), Ornaments (`_Ornament`) and the
 Realistic Skeleton; female European, Afro, Old, plus Make-up (its own head) and Tattoo L / R / L+R. Afro brings its

@@ -173,3 +173,28 @@ sleeve swung backwards while the kept arms swung down. The old shirt passes the 
   textures that only those lists kept alive). The 35 are retired now: CSV -35 rows, `retired_used_paths.txt` 480 -> 515.
   The entries were removed line by line, so the rest of each scene is byte-identical.
 - All 60 `Outfits/Quantum/*.outfit` presets resolve (398 paths, 0 missing).
+
+### Outfit rules for the complete pack
+
+The wardrobe's rules were written for the old, partial pack (bald heads, no beards or hats). With the full bundle in:
+
+- **Balaclava:** the everyday styles fill it at 0.05 (was 1.0, which kept every random head bald). A new **Masked**
+  style (weight 0.4, any Casual or Winter piece) always wears it. Randomize now gives 265 / 400 heads with hair and
+  114 with headwear.
+- **Aviators** are offered again; a hard exclude keeps them off the balaclava (the classic glasses still go with it).
+- **Hair and beards** stay in every style, except mohawks, irokez, braids and the long beards: they're kept out of Formal.
+- **Long sleeves:** `SKM_Jacket_Tshirt` joins the sleeve-hands list (its sleeves reach the wrist like the other
+  jackets, by mesh extent). Vests, jerseys, T-shirts, the Hawaii shirt and the rolled-ups keep the full arms.
+- **Third-person arms:** unchanged. Every male body keeps the first-person arms, and races swap only their skin.
+- Checked in data, no change: `SKM_Bobcut` is the pack's own male cut (`SKM_M_Bobcut`), `SKM_Hair_Skin` is real hair,
+  and `SKM_Hat_Classic_Hairs` is a hat only (no hair mesh, so not `HairBuiltIn`).
+- Dead `excludeFolders` (`WithHair`, `Hats`) are gone. `tools/quantum/wardrobe_audit.py` lists each slot's items and
+  tags and flags rules that match nothing.
+
+### Phase 3 leftovers
+
+- `AI/Soldier.json` and `tools/scenes/sandbox_template.json` already resolve: 38 Quantum refs each, 0 missing paths,
+  0 GUID mismatches. No regeneration needed (`gen_npc_soldier.py` was removed with the legacy locomotion).
+- The importer's two dangling references are fixed: `build_master_scene.py` spells out the body-part paths (the
+  `{model}` template hid them from the reference scan), and `asset_manifest.py` drops the exclusion for the Unity-era
+  `Textures/Clothing/Hats` folder, which no checkout has any more.

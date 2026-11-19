@@ -2,7 +2,7 @@
   "name": "Quantum",
   "root": "assets/Characters/Quantum",
   "itemFolders": ["Models/Clothing"],
-  "excludeFolders": ["StaticMesh", "WithHair", "Hats"],
+  "excludeFolders": ["StaticMesh"],
   "skinMaterials": ["M_Quantum_Body", "M_Quantum_Arms", "M_Quantum_Head", "M_F_Vivian_Body", "M_F_Vivian_Arms", "M_F_Vivian_Head"],
   "hatSlot": "Headwear",
   "hairSlot": "Hair",
@@ -82,7 +82,7 @@
     { "slot": "Top", "gender": "Male", "nameHasAny": ["SKM_Hoodie", "SKM_Shirt_Classic", "SKM_Shirt_Tie"], "nameLacksAll": ["RolledUp"],
       "replace": "Arms", "with": "SleeveHands" },
     { "slot": "Outerwear", "gender": "Male",
-      "nameHasAny": ["SKM_Bomber_", "SKM_Coat_", "SKM_Jacket_Classic", "SKM_Jacket_Shirt", "SKM_Jacket_Winter",
+      "nameHasAny": ["SKM_Bomber_", "SKM_Coat_", "SKM_Jacket_Classic", "SKM_Jacket_Shirt", "SKM_Jacket_Tshirt", "SKM_Jacket_Winter",
                      "SKM_Jeans_Jacket", "SKM_Leather_Jacket", "SKM_Puffer_Jacket"], "replace": "Arms", "with": "SleeveHands" },
     { "slot": "Top", "race": "Skeleton", "hide": ["Torso"] },
     { "slot": "Outerwear", "race": "Skeleton", "hide": ["Torso"] }
@@ -132,7 +132,10 @@
     { "slot": "Bag",       "nameHasAny": ["Backpack_Casual", "Postal", "Banana"],  "add": ["Casual"] },
     { "slot": "Bag",       "nameHasAny": ["Backpack_Sport", "Banana"],             "add": ["Sport"] },
     { "slot": "Bag",       "nameHasAny": ["Banana", "Backpack_Casual"],            "add": ["Summer"] },
-    { "slot": "Bag",       "nameHasAny": ["Backpack"],                             "add": ["Winter"] }
+    { "slot": "Bag",       "nameHasAny": ["Backpack"],                             "add": ["Winter"] },
+    { "slot": "Hair",      "nameHasAny": ["Mohawk", "Irokez", "Braids"],           "add": ["Casual", "Sport", "Winter", "Summer"] },
+    { "slot": "FacialHair","nameHasAny": ["Beard_Long"],                           "add": ["Casual", "Sport", "Winter", "Summer"] },
+    {                      "tags": ["Casual", "Winter"],                           "add": ["Masked"] }
   ],
 
   "clears": [
@@ -149,6 +152,7 @@
     { "a": { "slot": "Balaclava" }, "b": { "slot": "FacialHair" }, "why": "the balaclava covers the face" },
     { "a": { "slot": "Balaclava" }, "b": { "slot": "Headwear" },   "why": "the balaclava covers the head" },
     { "a": { "slot": "Balaclava" }, "b": { "slot": "Headphones" }, "why": "the balaclava covers the ears" },
+    { "a": { "slot": "Balaclava" }, "b": { "slot": "Glasses", "nameHasAny": ["Aviator"] }, "why": "the aviators clip it" },
     { "a": { "tags": ["HoodUp"] }, "b": { "slot": "Headwear", "lacksTags": ["UnderHood"] }, "why": "the hood is up" },
     { "a": { "tags": ["HoodUp"] }, "b": { "slot": "Headphones" }, "why": "the hood is up" },
     { "a": { "slot": "Headwear", "tags": ["BigHat"] }, "b": { "slot": "Headphones" }, "why": "no room under the hat" },
@@ -184,25 +188,28 @@
                   "Hair", "Headwear", "Headphones", "FacialHair"],
   "styles": [
     { "name": "Casual", "weight": 3.0,
-      "fill": { "Outerwear": 0.45, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 1.0,
+      "fill": { "Outerwear": 0.45, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 0.05,
                 "Glasses": 0.2, "Bag": 0.2, "Wrist L": 0.2, "Wrist R": 0.1,
                 "Hair": 0.9, "Headwear": 0.25, "Headphones": 0.1, "FacialHair": 0.4 } },
     { "name": "Sport", "weight": 2.0,
-      "fill": { "Outerwear": 0.2, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 1.0,
+      "fill": { "Outerwear": 0.2, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 0.05,
                 "Glasses": 0.1, "Bag": 0.3, "Wrist L": 0.3, "Wrist R": 0.1,
                 "Hair": 0.9, "Headwear": 0.35, "Headphones": 0.3, "FacialHair": 0.3 } },
     { "name": "Formal", "weight": 1.0, "gender": "Male",
-      "fill": { "Outerwear": 0.75, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 1.0,
+      "fill": { "Outerwear": 0.75, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 0.05,
                 "Glasses": 0.35, "Wrist L": 0.4,
                 "Hair": 0.95, "FacialHair": 0.4 } },
     { "name": "Winter", "weight": 1.5,
-      "fill": { "Outerwear": 1.0, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 1.0,
+      "fill": { "Outerwear": 1.0, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 0.05,
                 "Glasses": 0.1, "Bag": 0.15, "Wrist L": 0.1,
                 "Hair": 0.9, "Headwear": 0.7, "Headphones": 0.1, "FacialHair": 0.5 } },
     { "name": "Summer", "weight": 1.5,
-      "fill": { "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 1.0,
+      "fill": { "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 0.05,
                 "Glasses": 0.5, "Bag": 0.15, "Wrist L": 0.3, "Wrist R": 0.2,
-                "Hair": 0.9, "Headwear": 0.4, "FacialHair": 0.3 } }
+                "Hair": 0.9, "Headwear": 0.4, "FacialHair": 0.3 } },
+    { "name": "Masked", "weight": 0.4,
+      "fill": { "Outerwear": 0.6, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 1.0, "Balaclava": 1.0,
+                "Bag": 0.25, "Wrist L": 0.2 } }
   ],
 
   "items": [
@@ -211,8 +218,6 @@
     { "path": "Models/Clothing/Female/Shoes/SKM_F_Vivian_Feet_Shoes_Long.fbx", "hidden": true },
     { "path": "Models/Clothing/Female/Accessories/SKM_F_Vivian_Wrist.fbx", "hidden": true },
     { "path": "Models/Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx", "fit": 1.06 },
-    { "path": "Models/Clothing/Male/Glasses/SKM_Glasses_Aviator.fbx", "hidden": true },
-    { "path": "Models/Clothing/Female/Glasses/SKM_F_Glasses_Aviator.fbx", "hidden": true },
     { "path": "Models/Clothing/Male/Shoes/SKM_Socks.fbx", "slot": "Socks" },
     { "path": "Models/Clothing/Female/Shoes/SKM_F_Socks.fbx", "slot": "Socks" },
     { "path": "Models/Clothing/Female/Shoes/SKM_F_Socks_V2.fbx", "slot": "Socks", "name": "Socks Long" },
