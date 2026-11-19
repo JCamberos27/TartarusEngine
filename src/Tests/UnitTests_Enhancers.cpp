@@ -20,6 +20,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <string>
@@ -832,9 +834,29 @@ void TestEnhancerUiStyles() {
     ui.FromJson(saved);
 }
 
+// A store file that didn't parse is copied aside before defaults could overwrite it.
+void TestEnhancerKeepUnreadable() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "TartarusUnitTests" / "enhancers_bad";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    const fs::path file = dir / "editor_folders.json";
+    { std::ofstream(file, std::ios::binary) << "<<<<<<< HEAD\n{\"version\": 1}\n"; }
+    const std::string kept = KeepUnreadable(file.u8string());
+    CHECK(kept == (dir / "editor_folders.json.bad").u8string());
+    std::ifstream in(fs::u8path(kept), std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(in)), {});
+    CHECK(bytes.rfind("<<<<<<< HEAD", 0) == 0);
+    CHECK(KeepUnreadable((dir / "missing.json").u8string()).empty());
+    in.close();
+    fs::remove_all(dir, ec);
+}
+
 } // namespace
 
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("EnhancerKeepUnreadable", TestEnhancerKeepUnreadable);
     tests.emplace_back("EnhancerRefsRoundTrip", TestEnhancerRefsRoundTrip);
     tests.emplace_back("EnhancerBookmarkList", TestEnhancerBookmarkList);
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);

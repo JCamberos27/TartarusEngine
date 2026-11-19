@@ -373,13 +373,16 @@ void EditorLayer::ApplyPendingTheme() {
 void EditorLayer::SetGlassThemeForTest(bool on) {
     struct Saved { bool Huds, Blur, Objects, Properties, Library; };
     static Saved s_Saved = {true, true, false, false, false};
+    static bool s_On = false; // a second "on" must not save the already-forced prefs over the originals
     EditorSettings& p = EditorSettings::Get();
     if (on) {
-        s_Saved = {p.GlassViewportHuds, p.GlassFrostedBlur, p.ShowGlassHierarchy, p.ShowGlassInspector, p.ShowGlassAssets};
+        if (!s_On) s_Saved = {p.GlassViewportHuds, p.GlassFrostedBlur, p.ShowGlassHierarchy, p.ShowGlassInspector, p.ShowGlassAssets};
         p.GlassViewportHuds = p.GlassFrostedBlur = true;
         p.ShowGlassHierarchy = p.ShowGlassInspector = p.ShowGlassAssets = true;
         m_PendingThemeId = 1;
+        s_On = true;
     } else {
+        s_On = false;
         p.GlassViewportHuds = s_Saved.Huds;
         p.GlassFrostedBlur = s_Saved.Blur;
         p.ShowGlassHierarchy = s_Saved.Objects;

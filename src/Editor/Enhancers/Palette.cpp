@@ -122,7 +122,7 @@ void Palette::Load() {
         in >> j;
         Get() = FromJson(j);
     } catch (const std::exception& e) {
-        Log::Warn(std::string("Editor Enhancers: failed to parse '") + Path() + "': " + e.what() + " - using the default palette.");
+        Log::Warn(std::string("Editor Enhancers: failed to parse '") + Path() + "': " + e.what() + " - using the default palette (the file is kept as '" + KeepUnreadable(Path()) + "').");
         Get() = Defaults();
     }
 }

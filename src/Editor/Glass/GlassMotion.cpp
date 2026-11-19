@@ -380,8 +380,10 @@ float ImAnimContext::HoverGlow(ImGuiID id, bool hovered) {
 void ImAnimContext::Pulse(ImGuiID id, float durationSeconds, float delaySeconds) {
     if (m_ReduceMotion) { Remove(id); return; }
     Entry* e = Find(id);
+    // An entry of another kind under this id (a clip keeps its own ImAnim instance and live count) is
+    // removed properly, not relabelled in place.
+    if (e && e->kind != Kind::Pulse) { Remove(id); e = nullptr; }
     if (!e) e = &Add(id, Kind::Pulse);
-    e->kind = Kind::Pulse;
     e->start = m_Time + (double)delaySeconds;
     e->duration = durationSeconds > 1e-4f ? durationSeconds : 1e-4f;
     e->touched = m_Frame;

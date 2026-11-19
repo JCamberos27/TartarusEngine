@@ -6125,6 +6125,8 @@ int RunUnitTests(const char* filter) {
         if(filter && std::string(name).find(filter)==std::string::npos) continue;
         ++ran;
         g_CurrentTest = name;
+        // Named (and flushed) before it runs, so a test that hangs until a CI timeout is the last line in the log.
+        std::cout << "[UnitTest] RUN  " << name << std::endl;
         UnitTestSupport::g_SkipReason.clear();
         const int before = g_Failures, checksBefore = g_Checks;
         try {

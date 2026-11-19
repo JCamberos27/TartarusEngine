@@ -135,11 +135,12 @@ struct ScriptIDE::Impl {
     Clock::time_point LastScan=Clock::now()-std::chrono::seconds(5);
     bool Restoring=false; // reopening the last session's documents: silent
     bool SavingAll=false; // Save All sounds once, not once per document
-    // The session file is written from Poll, not on every change: typing waits for a 1 s pause, anything else goes
-    // out next frame. Destruction writes it at once.
+    // The session file is written from Poll, not on every change: typing at most once a second, anything else
+    // (a theme, a tab, a save) next frame. The earliest request wins, so a change after typing isn't held
+    // back by the typing delay. Destruction writes it at once.
     bool PersistPending=false;Clock::time_point PersistAt{};
     void PersistSoon(std::chrono::milliseconds delay=std::chrono::milliseconds(0)) {
-        const auto at=Clock::now()+delay;if(!PersistPending || at>PersistAt)PersistAt=at;PersistPending=true;
+        const auto at=Clock::now()+delay;if(!PersistPending || at<PersistAt)PersistAt=at;PersistPending=true;
     }
     Impl() {
         Restoring=true;
