@@ -431,7 +431,10 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
         auto model = assets.InstantiateModel(ProjectPaths::Resolve(p.Path));
         if (!model) { r.Notes.push_back("can't load " + p.Path); failed.insert(p.Slot); continue; }
         auto& rc = reg.get<RenderableComponent>(e);
-        const Picks previous = PickedColourways(assets, cat->W, rc);
+        // A body part takes its remap's materials and the race's skin, never a colourway: its materials share one
+        // folder (Materials/Characters), so a slot that merely differs from the remap (a list saved in another
+        // model's slot order) would pass for a pick and spread to every slot - the eye overlay over the face.
+        const Picks previous = p.BodyPart ? Picks{} : PickedColourways(assets, cat->W, rc);
         rc.ModelRef = model;
         rc.Materials.clear();
         DressPiece(assets, cat->W, race, rc, previous);
