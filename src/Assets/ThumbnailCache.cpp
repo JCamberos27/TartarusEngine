@@ -1,6 +1,5 @@
 #include "ThumbnailCache.h"
 #include "AssetDatabase.h"
-#include "AtomicFile.h"
 #include "Core/Paths.h"
 #include "Log.h"
 
@@ -12,6 +11,10 @@
 #include <cctype>
 #include <sstream>
 #include <unordered_set>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 
 namespace ThumbnailCache {
 namespace {
@@ -124,20 +127,101 @@ bool LoadAnyVersion(const std::string& path, int size, std::vector<unsigned char
     return ok;
 }
 
+namespace {
+// Temp file + rename (replaces the old file in one step), no flush: a lost cache entry only
+// means a re-render. The temp name carries the thread so two writers never share one.
+bool WriteCacheFile(const std::string& target, const std::string& bytes) {
+    namespace fs = std::filesystem;
+    const fs::path dst = fs::u8path(target);
+    fs::path tmp = dst;
+    tmp += ".tmp-" + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+        out.write(bytes.data(), (std::streamsize)bytes.size());
+        if (!out) return false;
+    }
+    std::error_code ec;
+    fs::rename(tmp, dst, ec);
+    if (ec) fs::remove(tmp, ec);
+    return !ec;
+}
+
+void WriteThumbnail(const std::string& cachePath, int size, std::uint64_t key, const unsigned char* pixels) {
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::u8path(cachePath).parent_path(), ec);
+    std::string png;
+    // PNG first, then the key sidecar: a crash between them leaves the old key, which no longer
+    // matches, so the entry is simply re-rendered.
+    const bool ok = PngWrite::Encode(png, size, size, 4, pixels, size * 4, 6) &&
+                    WriteCacheFile(cachePath, png) && WriteCacheFile(KeyPath(cachePath), KeyToString(key));
+    if (!ok) Log::Warn("ThumbnailCache: couldn't write " + ProjectPaths::Relativize(cachePath));
+}
+
+// One worker for SaveAsync; jobs are written in order. The destructor (static teardown) drains
+// the queue so thumbnails rendered just before exit still land.
+class SaveWorker {
+public:
+    struct Job { std::string CachePath; int Size = 0; std::uint64_t Key = 0; std::vector<unsigned char> Pixels; };
+    void Push(Job job) {
+        {
+            std::lock_guard<std::mutex> lk(m_Mutex);
+            m_Jobs.push_back(std::move(job));
+            if (!m_Thread.joinable()) m_Thread = std::thread([this] { Run(); });
+        }
+        m_Wake.notify_one();
+    }
+    void Flush() {
+        std::unique_lock<std::mutex> lk(m_Mutex);
+        m_Idle.wait(lk, [this] { return m_Jobs.empty() && !m_Busy; });
+    }
+    ~SaveWorker() {
+        {
+            std::lock_guard<std::mutex> lk(m_Mutex);
+            m_Stop = true;
+        }
+        m_Wake.notify_one();
+        if (m_Thread.joinable()) m_Thread.join();
+    }
+private:
+    void Run() {
+        std::unique_lock<std::mutex> lk(m_Mutex);
+        for (;;) {
+            m_Wake.wait(lk, [this] { return m_Stop || !m_Jobs.empty(); });
+            if (m_Jobs.empty()) return; // stopping, nothing left
+            Job job = std::move(m_Jobs.front());
+            m_Jobs.pop_front();
+            m_Busy = true;
+            lk.unlock();
+            WriteThumbnail(job.CachePath, job.Size, job.Key, job.Pixels.data());
+            lk.lock();
+            m_Busy = false;
+            if (m_Jobs.empty()) m_Idle.notify_all();
+        }
+    }
+    std::mutex m_Mutex;
+    std::condition_variable m_Wake, m_Idle;
+    std::deque<Job> m_Jobs;
+    std::thread m_Thread;
+    bool m_Busy = false, m_Stop = false;
+};
+SaveWorker& Worker() { static SaveWorker w; return w; }
+} // namespace
+
 void Save(const std::string& path, int size, std::uint64_t key, const unsigned char* pixels) {
     const std::string cachePath = CacheFilePath(path);
     if (cachePath.empty() || !pixels) return;
-
-    std::error_code ec;
-    std::filesystem::create_directories(std::filesystem::path(cachePath).parent_path(), ec);
-
-    std::string png;
-    // PNG first, then the key sidecar, each via temp file + atomic rename.
-    const bool ok = PngWrite::Encode(png, size, size, 4, pixels, size * 4, 6) &&
-                    AtomicFile::WriteBytes(cachePath, png, true) &&
-                    AtomicFile::WriteBytes(KeyPath(cachePath), KeyToString(key), true);
-    if (!ok) Log::Warn("ThumbnailCache: couldn't write " + ProjectPaths::Relativize(cachePath));
+    WriteThumbnail(cachePath, size, key, pixels);
 }
+
+void SaveAsync(const std::string& path, int size, std::uint64_t key, std::vector<unsigned char> pixels) {
+    if ((int)pixels.size() < size * size * 4) return;
+    std::string cachePath = CacheFilePath(path); // AssetDatabase on the calling thread
+    if (cachePath.empty()) return;
+    Worker().Push({std::move(cachePath), size, key, std::move(pixels)});
+}
+
+void FlushAsync() { Worker().Flush(); }
 
 void PruneOrphans() {
     namespace fs = std::filesystem;

@@ -5,6 +5,11 @@
 
 #include "AssetLibraryIndex.h"
 #include "ModularSnap.h"
+#include "ThumbnailCache.h"
+#include "AssetDatabase.h"
+#include "Core/Paths.h"
+#include <filesystem>
+#include <fstream>
 
 #include <cmath>
 #include <vector>
@@ -81,10 +86,38 @@ void TestSnapGridAndFree() {
     CHECK(Near(SnapYawDegrees(44.0f), 0.0f) && Near(SnapYawDegrees(46.0f), 90.0f) && Near(SnapYawDegrees(-170.0f), -180.0f));
 }
 
+// SaveAsync writes on a worker; after FlushAsync the entry loads back with its key, a different
+// key misses, and a second save replaces the first (temp file + rename, no stray temp files).
+void TestThumbnailAsyncSave() {
+    namespace fs = std::filesystem;
+    const std::string asset = ProjectPaths::Resolve("assets/__thumb_async_ut.bin");
+    { std::ofstream(fs::u8path(asset), std::ios::binary) << "x"; }
+    const int size = 4;
+    std::vector<unsigned char> a((size_t)size * size * 4, 10), b((size_t)size * size * 4, 200);
+    ThumbnailCache::SaveAsync(asset, size, 111, a);
+    ThumbnailCache::SaveAsync(asset, size, 222, b);
+    ThumbnailCache::FlushAsync();
+    std::vector<unsigned char> got;
+    CHECK(ThumbnailCache::Load(asset, size, 222, got));
+    CHECK(got == b);
+    CHECK(!ThumbnailCache::Load(asset, size, 111, got));
+    const std::string cache = ThumbnailCache::CacheFilePath(asset);
+    int strays = 0;
+    std::error_code ec;
+    for (const auto& e : fs::directory_iterator(fs::u8path(cache).parent_path(), ec))
+        if (e.path().filename().string().find(".tmp-") != std::string::npos) ++strays;
+    CHECK(strays == 0);
+    fs::remove(fs::u8path(cache), ec);
+    fs::remove(fs::u8path(cache + ".key"), ec);
+    AssetDatabase::ForgetPath(asset);
+    fs::remove(fs::u8path(asset), ec);
+    fs::remove(fs::u8path(asset + ".meta"), ec);
+}
 } // namespace
 
 void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Asset Library: category rules and kit table", TestIndexRules);
     tests.emplace_back("Asset Library: kit pieces snap flush and fronts line up", TestSnapFlush);
     tests.emplace_back("Asset Library: lone pieces land on the kit grid", TestSnapGridAndFree);
+    tests.emplace_back("Thumbnail cache: async save lands, replaces, and leaves no temp files", TestThumbnailAsyncSave);
 }
