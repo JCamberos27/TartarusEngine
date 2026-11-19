@@ -32,6 +32,7 @@
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
+#include <future>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -388,17 +389,11 @@ void EditorLayer::DrawControllerAssetInspector(const std::string& path) {
 
 namespace EditorInternal {
 
-const std::vector<std::string>& ProjectModelFiles() {
-    static std::vector<std::string> files;
-    static std::chrono::steady_clock::time_point scanned{};
-    static bool once = false;
-    const auto now = std::chrono::steady_clock::now();
-    if (once && now - scanned < std::chrono::seconds(5)) return files;
-    once = true;
-    scanned = now;
-    files.clear();
+namespace {
+// Every model file under the project root (Library/ skipped), project-relative and sorted.
+std::vector<std::string> ScanModelFiles(const fs::path& root) {
+    std::vector<std::string> files;
     std::error_code ec;
-    const fs::path root(ProjectPaths::Root());
     for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
          !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
         if (it.depth() == 0 && it->is_directory() && it->path().filename() == "Library") {
@@ -414,20 +409,40 @@ const std::vector<std::string>& ProjectModelFiles() {
     std::sort(files.begin(), files.end());
     return files;
 }
+} // namespace
 
+// The first call walks the project at once (a picker or wizard opening needs the list); after that the
+// refresh every 5 s while a picker is open runs on a worker, and callers see the last finished list.
+const std::vector<std::string>& ProjectModelFiles() {
+    static std::vector<std::string> files;
+    static std::future<std::vector<std::string>> scan;
+    static std::chrono::steady_clock::time_point started{};
+    static bool once = false;
+    if (scan.valid() && scan.wait_for(std::chrono::seconds(0)) == std::future_status::ready) files = scan.get();
+    const auto now = std::chrono::steady_clock::now();
+    if (!once) {
+        once = true;
+        started = now;
+        files = ScanModelFiles(fs::path(ProjectPaths::Root()));
+    } else if (!scan.valid() && now - started >= std::chrono::seconds(5)) {
+        started = now;
+        scan = std::async(std::launch::async, ScanModelFiles, fs::path(ProjectPaths::Root()));
+    }
+    return files;
+}
+
+// Every space-separated word of `filter` appears in `text`, ignoring case. Runs per file per frame while a
+// picker is searching, so it compares in place instead of lower-casing copies.
 bool ClipFilterMatch(const char* filter, const std::string& text) {
     if (!filter || !*filter) return true;
-    std::string hay = text;
-    for (char& ch : hay) ch = (char)std::tolower((unsigned char)ch);
+    const auto same = [](char a, char b) { return std::tolower((unsigned char)a) == std::tolower((unsigned char)b); };
     const char* p = filter;
     while (*p) {
         while (*p == ' ') ++p;
         const char* start = p;
         while (*p && *p != ' ') ++p;
         if (p == start) break;
-        std::string word(start, p);
-        for (char& ch : word) ch = (char)std::tolower((unsigned char)ch);
-        if (hay.find(word) == std::string::npos) return false;
+        if (std::search(text.begin(), text.end(), start, p, same) == text.end()) return false;
     }
     return true;
 }

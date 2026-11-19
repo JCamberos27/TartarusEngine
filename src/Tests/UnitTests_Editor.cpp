@@ -415,12 +415,16 @@ void TestAssetFoldersPersistOnlyUserFolders() {
         AssetLibrary assets;
         assets.AddFolderPath("disk/found/here");
         CHECK(std::find(assets.Folders().begin(),assets.Folders().end(),"disk/found")!=assets.Folders().end());
+        // Another case of a known folder reuses its spelling (the case-insensitive folder index).
+        CHECK(assets.AddFolderPath("Disk/FOUND/other")=="disk/found/other");
         assets.CreateFolder("UserB");
         CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserB"}));
         assets.RenameFolder("UserB","UserC");
         CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
+        CHECK(assets.AddFolderPath("userc/x")=="UserC/x"); // the index follows a rename
         assets.DeleteFolder("disk/found/here"); // deleting a found folder still saves only the user's
         CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
+        CHECK(assets.AddFolderPath("DISK/found/HERE")=="disk/found/HERE"); // ...and a delete
         ProjectSettings::Load();
         CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
         AssetLibrary reloaded;

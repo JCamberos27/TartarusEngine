@@ -80,7 +80,10 @@ public:
     // --- debug / tests ---
     const std::vector<std::unique_ptr<Npc>>& Npcs() const { return m_Npcs; }
     // Dummy `index` has hit-flinch kicks still settling (for tests).
-    bool FlinchActive(int index) const { const auto it = m_Flinch.find(index); return it != m_Flinch.end() && it->second.Active(m_Now); }
+    bool FlinchActive(int index) const {
+        const Npc* n = index >= 0 && index < (int)m_Npcs.size() ? m_Npcs[(size_t)index].get() : nullptr;
+        return n && n->Flinch && n->Flinch->Active(m_Now);
+    }
     const NavMesh& Nav() const { return m_Nav; }
     CombatFx* Fx = nullptr;    // flesh hits and body falls (optional; the host owns it)
     bool FootIKEverywhere = false;     // feet onto the ground at any distance and out of view (tests)
@@ -110,8 +113,8 @@ public:
     // (Npc::LastPose), whenever in the frame the kill comes.
     void Kill(World& world, Npc& npc, const glm::vec3& dir, const glm::vec3& point, float shove = 40.0f, int part = -1);
     // Tests: dummy `index` heads for `target` at `pace` whatever its roam wants; EndScriptedMove hands it back. Cleared when it dies.
-    void ScriptedMove(int index, const glm::vec3& target, Gait pace = Gait::Walk) { m_Scripted[index] = {target, pace}; }
-    void EndScriptedMove(int index) { m_Scripted.erase(index); }
+    void ScriptedMove(int index, const glm::vec3& target, Gait pace = Gait::Walk) { if (Npc* n = Find(index)) n->Scripted = std::make_pair(target, pace); }
+    void EndScriptedMove(int index) { if (Npc* n = Find(index)) n->Scripted.reset(); }
     bool TrackDeathPop = false;        // record the bones' last animated pose so the ragdoll's first frame can be compared
     bool NoLod = false;                // every dummy animates every frame (tests)
 
@@ -134,7 +137,7 @@ private:
     void FinishDeath(World& world, Npc& n);
     void LatePose(World& world, Npc& n, float dt);
     void UpdateHitboxes(Npc& n, const PlayerSnapshot& p, bool posed);
-    void UpdateLod(World& world, Npc& n, const PlayerSnapshot& p);
+    void UpdateLod(Npc& n, const PlayerSnapshot& p);
     // Gone: its capsule, agent and physics. `keepBody`: its entity tree goes into the pool for the next spawn (hidden), else
     // it is destroyed.
     void Despawn(World& world, Npc& n, bool keepBody = false);
@@ -151,9 +154,6 @@ private:
     std::uint64_t m_NavHash = 0;
     SquadSettingsComponent m_Cfg;            // the scene's Dummy Settings (defaults without one)
     RagdollSettingsComponent m_RagdollCfg;   // ... and Ragdoll Settings
-    struct DeathCapture { NpcRagdoll::BoneSnapshot Bones; float Dt = 0.0f; };
-    std::unordered_map<int, DeathCapture> m_DeathBones; // by dummy index, from the hit to the ragdoll's start
-    std::unordered_map<int, NpcFlinch> m_Flinch;       // by dummy index: the hit-flinch kicks still settling
     NpcHoldSettings m_HoldSettings;        // the scene player's First Person Body numbers
     std::string m_BodyJson;
     std::vector<std::unique_ptr<Npc>> m_Npcs;
@@ -175,7 +175,6 @@ private:
     float m_ThinkMs = 0.0f, m_LateMs = 0.0f;
     int m_NextName = 1;
     int m_Frame = 0;
-    std::unordered_map<int, std::pair<glm::vec3, Gait>> m_Scripted; // ScriptedMove, by dummy index
     // Cost accounting (see Sub).
     struct SubTimer;
     float m_SubFrame[SubCount] = {};

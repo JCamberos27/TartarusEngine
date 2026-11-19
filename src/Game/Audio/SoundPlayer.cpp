@@ -281,8 +281,7 @@ void SoundPlayer::Update(float dt) {
 }
 
 float SoundPlayer::AirCutoff(const OcclusionSettings& s, float distance) {
-    if (!s.AirEnabled || s.AirStartDistance <= 0.0f || distance <= s.AirStartDistance) return 20000.0f;
-    return std::max(20000.0f * std::pow(s.AirStartDistance / distance, s.AirExponent), s.AirMinHz);
+    return AirCutoffHz(s.AirEnabled, s.AirStartDistance, s.AirExponent, s.AirMinHz, distance);
 }
 
 void SoundPlayer::GroupVoices(int (&out)[(int)MixGroup::Count]) const {
@@ -358,20 +357,18 @@ void SoundPlayer::UpdateOcclusion(float dt) {
         t.PortalCut = std::exp(std::log(t.PortalCut) + (std::log(t.TargetPortalCut) - std::log(t.PortalCut)) * a);
         if (std::fabs(t.TargetGain - t.Gain) < 0.002f) t.Gain = t.TargetGain;
         if (std::fabs(std::log(t.TargetPortalCut / t.PortalCut)) < 0.01f) t.PortalCut = t.TargetPortalCut;
-        if (t.Portal || glm::dot(t.CurPos - t.SentPos, t.CurPos - t.SentPos) > 1e-6f) {
-            if (glm::dot(t.CurPos - t.SentPos, t.CurPos - t.SentPos) > 1e-6f) {
-                be.SetVoicePosition(t.Handle, t.CurPos);
-                t.SentPos = t.CurPos;
-            }
+        if (glm::dot(t.CurPos - t.SentPos, t.CurPos - t.SentPos) > 1e-6f) {
+            be.SetVoicePosition(t.Handle, t.CurPos);
+            t.SentPos = t.CurPos;
         }
         if (t.Portal) ++m_PortalVoices;
         const float hz = std::min({OcclusionCutoff(m_Occ, t.Amount), std::min(t.PortalCut, 20000.0f), AirCutoff(m_Occ, glm::length(t.CurPos - m_ListenerPos))});
-        if (t.Amount != before || std::fabs(std::log(hz / t.LastCutoff)) > 0.02f || std::fabs(t.Gain - t.SentGain) > 0.01f) {
-            if (std::fabs(std::log(hz / t.LastCutoff)) > 0.02f || std::fabs(t.Gain - t.SentGain) > 0.01f || hz >= 20000.0f != (t.LastCutoff >= 20000.0f)) {
-                be.SetOcclusion(t.Handle, hz, t.Gain);
-                t.LastCutoff = hz;
-                t.SentGain = t.Gain;
-            }
+        // Sent when the cutoff or gain moved enough, or the occlusion moved and the cutoff crossed fully open either way.
+        const bool cutoffMoved = std::fabs(std::log(hz / t.LastCutoff)) > 0.02f, gainMoved = std::fabs(t.Gain - t.SentGain) > 0.01f;
+        if (cutoffMoved || gainMoved || (t.Amount != before && (hz >= 20000.0f) != (t.LastCutoff >= 20000.0f))) {
+            be.SetOcclusion(t.Handle, hz, t.Gain);
+            t.LastCutoff = hz;
+            t.SentGain = t.Gain;
         }
     }
     m_OccCursor = (m_OccCursor + 1) % std::max<size_t>(m_Occluded.size(), 1);

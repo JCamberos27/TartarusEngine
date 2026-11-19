@@ -339,6 +339,8 @@ uniform float uGrungeScale; // tiles per metre
 void ApplyGrunge(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, inout float ao,
                  vec3 geoN, out uint sub, out SubstrateSample ss) {
     sub = 0u;
+    ss = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 1.0, 1.0, 0.0, vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0),
+                         vec3(0.0, 0.0, 1.0)); // defined on the early return too (strength 0: no substrate)
     if (uHasGrungeMap == 0 || uGrungeStrength <= 0.0) return;
     vec4 g4 = SampleTriplanar(uGrungeMap, vWorldPos, TriplanarWeights(geoN), max(uGrungeScale, 1e-4));
     vec3 g = g4.rgb;

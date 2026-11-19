@@ -1,6 +1,7 @@
 #include "AssetDatabase.h"
 #include "Log.h"
 #include "Core/Paths.h"
+#include "ProjectSettings.h"
 #include "AtomicFile.h"
 #include <json.hpp>
 
@@ -53,6 +54,21 @@ AssetGuid AssetGuid::FromString(const std::string& s) {
     g.Value = std::stoull(s, nullptr, 16);
     return g;
 }
+
+namespace {
+// ProjectSettings (Core) follows its scenes by GUID through these, registered before main() runs.
+const bool s_SceneRefsRegistered = [] {
+    ProjectSettings::SceneRefResolver r;
+    r.FollowRef = [](const std::string& ref, const std::string& guid) { return AssetDatabase::FollowRef(ref, guid); };
+    r.PathForGuid = [](const std::string& guid) { return AssetDatabase::PathForGuid(AssetGuid::FromString(guid)); };
+    r.GuidForPath = [](const std::string& path) {
+        const AssetGuid g = AssetDatabase::GuidForPath(path);
+        return g.IsValid() ? g.ToString() : std::string();
+    };
+    ProjectSettings::SetSceneRefResolver(r);
+    return true;
+}();
+} // namespace
 
 AssetGuid AssetGuid::Generate() {
     // One engine per thread: the scan and loader workers generate under g_Mutex, the editor on the main thread without it.

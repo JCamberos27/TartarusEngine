@@ -22,11 +22,10 @@ std::string LowerExt(const std::string& path) {
 } // namespace
 
 std::string ImportKind(const std::string& path) {
-    const std::string ext = LowerExt(path);
-    if (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb") return "model";
-    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") return "texture";
-    if (ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac") return "sound";
-    if (ext == ".prefab") return "prefab";
+    // The AssetDatabase's extension table decides what a file is (one list for both).
+    const std::string type = AssetDatabase::AssetType(path);
+    if (type == "model" || type == "texture" || type == "prefab") return type;
+    if (type == "audio") return "sound";
     return {};
 }
 

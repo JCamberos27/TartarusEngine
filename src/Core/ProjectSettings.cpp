@@ -5,7 +5,6 @@
 #include "Paths.h"
 #include "AtomicFile.h"
 #include "Utf8.h"
-#include "AssetDatabase.h" // #132 - build scenes by GUID
 
 #include <json.hpp>
 
@@ -17,6 +16,17 @@
 using json = nlohmann::json;
 
 namespace ProjectSettings {
+namespace {
+// Set by the asset layer (AssetDatabase.cpp): Core stays below it.
+SceneRefResolver g_SceneRefs;
+std::string FollowSceneRef(const std::string& ref, const std::string& guid) {
+    return g_SceneRefs.FollowRef ? g_SceneRefs.FollowRef(ref, guid) : ref;
+}
+std::string SceneGuid(const std::string& path) { return g_SceneRefs.GuidForPath ? g_SceneRefs.GuidForPath(path) : std::string(); }
+} // namespace
+
+void SetSceneRefResolver(const SceneRefResolver& r) { g_SceneRefs = r; }
+
 namespace {
 
 PhysicsSettings g_Physics;
@@ -107,7 +117,7 @@ void Load() {
 
     if(auto scene=root.find("startupScene");scene!=root.end() && scene->is_string()) {
         const auto guid=root.find("startupSceneGuid");
-        g_StartupScene=AssetDatabase::FollowRef(scene->get<std::string>(),guid!=root.end() && guid->is_string()?guid->get<std::string>():std::string{});
+        g_StartupScene=FollowSceneRef(scene->get<std::string>(),guid!=root.end() && guid->is_string()?guid->get<std::string>():std::string{});
     }
 
     if (const auto it = root.find("physics"); it != root.end() && it->is_object()) {
@@ -221,7 +231,7 @@ void Load() {
                 std::string& rel = g_Build.Scenes[kept++];
                 std::error_code ec;
                 if (i < guids->size() && (*guids)[i].is_string() && !std::filesystem::exists(ProjectPaths::Resolve(rel), ec)) {
-                    const std::string moved = AssetDatabase::PathForGuid(AssetGuid::FromString((*guids)[i].get<std::string>()));
+                    const std::string moved = g_SceneRefs.PathForGuid ? g_SceneRefs.PathForGuid((*guids)[i].get<std::string>()) : std::string();
                     if (!moved.empty() && std::filesystem::exists(moved, ec)) {
                         const std::string movedRel = ProjectPaths::Relativize(moved);
                         Log::Info("Build Settings: scene '" + rel + "' moved to '" + movedRel + "'.");
@@ -254,8 +264,7 @@ void Load() {
 void Save() {
     json root;
     root["startupScene"]=g_StartupScene;
-    const auto startupGuid=AssetDatabase::GuidForPath(ProjectPaths::Resolve(g_StartupScene));
-    root["startupSceneGuid"]=startupGuid.IsValid()?startupGuid.ToString():std::string{};
+    root["startupSceneGuid"]=SceneGuid(ProjectPaths::Resolve(g_StartupScene));
     root["physics"] = {
         {"gravity", json::array({g_Physics.Gravity.x, g_Physics.Gravity.y, g_Physics.Gravity.z})},
         {"fixedTimestep", g_Physics.FixedTimestep},
@@ -286,8 +295,7 @@ void Save() {
     build["outputDir"] = g_Build.OutputDir;
     json guids = json::array(); // #132 - parallel to "scenes", so a moved scene can be followed
     for (const std::string& sc : g_Build.Scenes) {
-        const AssetGuid g = AssetDatabase::GuidForPath(ProjectPaths::Resolve(sc));
-        guids.push_back(g.IsValid() ? g.ToString() : std::string());
+        guids.push_back(SceneGuid(ProjectPaths::Resolve(sc)));
     }
     build["sceneGuids"] = std::move(guids);
     root["build"] = std::move(build);

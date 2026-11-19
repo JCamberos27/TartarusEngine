@@ -103,6 +103,7 @@
 #include "OutfitSystem.h"
 #include "Texture.h"
 #include "PngWrite.h" // async decode test fixture
+#include "EditorLayerInternal.h" // ClipFilterMatch
 #include <set>
 #include <string>
 #include <thread>
@@ -1296,6 +1297,15 @@ void TestCameraFrustumValidation() {
 
 // The player's acceleration: 0 = the move is the input (as before); otherwise an exponential approach
 // that lands in the same place whatever the frame rate, and arrives rather than creeping.
+// The clip pickers' search: every word, any case, anywhere in the path.
+void TestClipFilterMatch() {
+    using EditorInternal::ClipFilterMatch;
+    const std::string path = "Animations/Mocap/AF_Walk/Walk_Fwd_NoRM.fbx";
+    CHECK(ClipFilterMatch(nullptr, path) && ClipFilterMatch("", path) && ClipFilterMatch("   ", path));
+    CHECK(ClipFilterMatch("walk", path) && ClipFilterMatch("WALK fwd", path) && ClipFilterMatch("  norm  af_", path));
+    CHECK(!ClipFilterMatch("run", path) && !ClipFilterMatch("walk run", path) && !ClipFilterMatch("fwdx", path));
+}
+
 void TestFramePacing() {
     const double p = 1.0 / 60.0;
     // Jittered CPU-side frame times around one refresh come out as whole refreshes.
@@ -2229,7 +2239,7 @@ void TestFirstPersonBodyBoneMap() {
     cfg.FootIK = true;
     FPBody::ValidationInput in;
     in.Config = &cfg;
-    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
+    in.HasPieces = in.HasDriverPiece = true;
     const std::set<std::string> rigBones = {"head", "Hips", "thigh_l", "calf_l", "LeftFoot", "thigh_r", "calf_r", "RightFoot"};
     in.HasBone = [&](const std::string& b) { return rigBones.count(b) > 0; };
     auto hasBoneWarning = [](const std::vector<FPBody::Check>& r) {
@@ -3271,23 +3281,14 @@ void TestFirstPersonBodyClothingHide() {
     CHECK(low == 0);
 }
 
-// The body's setup check: a controller built from the contract tables passes; one missing piece is named.
+// The body's setup check: a complete setup passes; a missing bone (through the Bone Map, the Head Bone too) and piece are named.
 void TestFirstPersonBodyValidate() {
     FirstPersonBodyComponent cfg;
-    cfg.TurnThreshold = 55.0f; cfg.StartStopClips = true; cfg.CrouchHeight = 1.2f; cfg.FootIK = true; cfg.WeaponArms = true;
+    cfg.FootIK = true; cfg.WeaponArms = true;
     cfg.SpineAim = 1.0f;
-    AnimatorController full;
-    for (const auto& p : FPBody::Params()) full.Parameters.push_back({p.Name, p.Type, 0.0f});
-    for (const auto& st : FPBody::States()) {
-        AnimatorController::State state;
-        state.Name = st.Name;
-        if (state.Name == FPBody::kStateJump || state.Name == FPBody::kStateFall) state.Tags.push_back(FPBody::kTagAirborne);
-        full.Layers[0].States.push_back(state);
-    }
     FPBody::ValidationInput in;
     in.Config = &cfg;
-    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
-    in.Controller = &full;
+    in.HasPieces = in.HasDriverPiece = true;
     in.HasBone = [](const std::string&) { return true; };
     in.PieceNames = {"Quantum_Head", "Quantum_Arms"};
     auto count = [](const std::vector<FPBody::Check>& c, FPBody::Severity level) {
@@ -3300,23 +3301,23 @@ void TestFirstPersonBodyValidate() {
         return false;
     };
     std::vector<FPBody::Check> r = FPBody::Validate(in);
-    // Nothing to report (the root-motion note went with the legacy controller path, Phase 6).
     CHECK(count(r, FPBody::Severity::Error) == 0 && count(r, FPBody::Severity::Warning) == 0);
 
-    // A missing parameter, state, bone, tag and piece are each named.
-    AnimatorController broken = full;
-    broken.Parameters.erase(std::remove_if(broken.Parameters.begin(), broken.Parameters.end(),
-                            [](const AnimatorController::Parameter& p) { return p.Name == FPBody::kTurnAngle; }), broken.Parameters.end());
-    auto& sts = broken.Layers[0].States;
-    sts.erase(std::remove_if(sts.begin(), sts.end(), [](const AnimatorController::State& st) { return st.Name == FPBody::kStateStop; }), sts.end());
-    for (auto& st : sts) st.Tags.clear();
-    in.Controller = &broken;
+    // A missing bone and piece are each named.
     in.HasBone = [](const std::string& b) { return b != "foot_l"; };
     in.PieceNames = {"Quantum_Head"};
     r = FPBody::Validate(in);
-    CHECK(has(r, "'TurnAngle'") && has(r, "state 'Stop'") && has(r, "'foot_l'") && has(r, "'Airborne' tag") && has(r, "'Arms' (Arms Piece)"));
+    CHECK(has(r, "'foot_l'") && has(r, "'Arms' (Arms Piece)"));
     CHECK(r.front().Level == FPBody::Severity::Warning);
+    // The Head Bone is looked up through the Bone Map, as the body finds it.
+    cfg.BoneMap = "head = Head";
+    in.HasBone = [](const std::string& b) { return b != "head"; };
+    in.PieceNames = {"Quantum_Head", "Quantum_Arms"};
+    CHECK(!has(FPBody::Validate(in), "(Head Bone)"));
+    cfg.BoneMap.clear();
+    CHECK(has(FPBody::Validate(in), "(Head Bone)"));
     // A modular body's hands are part of the arms (under a long sleeve they are all there is of them).
+    in.HasBone = [](const std::string&) { return true; };
     in.PieceNames = {"Quantum_Head", "Hands"};
     CHECK(!has(FPBody::Validate(in), "(Arms Piece)"));
     FirstPersonBodyComponent armsCfg;
@@ -3324,22 +3325,7 @@ void TestFirstPersonBodyValidate() {
     armsCfg.HandsPiece.clear();
     CHECK(!FPBody::IsArmsPiece(armsCfg, "Hands") && FPBody::IsArmsPiece(armsCfg, "Arms"));
 
-    // Features that are off need nothing: a bare controller is fine for a body with every option off.
     FirstPersonBodyComponent plain;
-    AnimatorController bare;
-    bare.Parameters = {{FPBody::kMoveX, AnimatorController::ParamType::Float, 0}, {FPBody::kMoveY, AnimatorController::ParamType::Float, 0},
-                       {FPBody::kSpeed, AnimatorController::ParamType::Float, 0}, {FPBody::kSprint, AnimatorController::ParamType::Bool, 0},
-                       {FPBody::kGrounded, AnimatorController::ParamType::Bool, 0}, {FPBody::kAirborne, AnimatorController::ParamType::Bool, 0},
-                       {FPBody::kJump, AnimatorController::ParamType::Trigger, 0}};
-    AnimatorController::State loco; loco.Name = FPBody::kStateLocomotion;
-    AnimatorController::State jump; jump.Name = FPBody::kStateJump;
-    AnimatorController::State fall; fall.Name = FPBody::kStateFall;
-    AnimatorController::State land; land.Name = FPBody::kStateLand;
-    bare.Layers[0].States = {loco, jump, fall, land};
-    FPBody::ValidationInput in2;
-    in2.Config = &plain; in2.HasPieces = in2.HasDriverPiece = in2.ControllerSet = true; in2.Controller = &bare;
-    in2.PieceNames = {"Quantum_Head"};
-    CHECK(count(FPBody::Validate(in2), FPBody::Severity::Warning) == 0);
 
     // Structural errors come first.
     FPBody::ValidationInput in3;
@@ -4812,56 +4798,58 @@ void TestProjectWatcher() {
     fs::create_directories(dir / "Library", ec);
     fs::create_directories(dir / "sub", ec);
     CHECK(ProjectWatcher::Start(dir.string()));
-    auto settle = [&] {
-        std::vector<ProjectWatcher::Change> all;
-        bool overflow = false;
-        // Up to 15 s (loaded machines); Start() returns with the watch armed. Done once something came in and then four
-        // polls (200 ms) in a row brought nothing: one quiet poll ended it between a new folder's event and its file's.
-        int quiet = 0;
-        for (int i = 0; i < 300; ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            auto got = ProjectWatcher::Drain(150, overflow);
-            all.insert(all.end(), got.begin(), got.end());
-            quiet = got.empty() ? quiet + 1 : 0;
-            if (!all.empty() && quiet >= 4) break;
-        }
-        return all;
-    };
-    auto has = [](const std::vector<ProjectWatcher::Change>& v, K kind, const fs::path& p, const fs::path& old = {}) {
+    using Changes = std::vector<ProjectWatcher::Change>;
+    auto has = [](const Changes& v, K kind, const fs::path& p, const fs::path& old = {}) {
         for (const auto& c : v)
             if (c.Type == kind && AssetDatabase::PathKey(c.Path) == AssetDatabase::PathKey(p.string()) &&
                 (old.empty() || AssetDatabase::PathKey(c.OldPath) == AssetDatabase::PathKey(old.string())))
                 return true;
         return false;
     };
+    // Drains until `done` holds for everything gathered (or 30 s pass: a loaded machine delivers late), then four quiet
+    // polls (200 ms) more so a stray extra event still shows. Start() returns with the watch armed. Without `done`, the
+    // first quiet spell after anything arrived ends it; that stopped early when a step's events came in two bursts.
+    auto settle = [&](const std::function<bool(const Changes&)>& done = {}) {
+        Changes all;
+        bool overflow = false;
+        int quiet = 0;
+        for (int i = 0; i < 600; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            auto got = ProjectWatcher::Drain(150, overflow);
+            all.insert(all.end(), got.begin(), got.end());
+            quiet = got.empty() ? quiet + 1 : 0;
+            if (!all.empty() && quiet >= 4 && (!done || done(all))) break;
+        }
+        return all;
+    };
 
     const fs::path a = dir / "a.png";
     CHECK(AtomicFile::WriteBytes(a, "1", true));
     std::ofstream(dir / "Library" / "cache.bin") << "x"; // ignored folder
-    auto c1 = settle();
+    auto c1 = settle([&](const Changes& v) { return has(v, K::Added, a) || has(v, K::Modified, a); });
     CHECK(has(c1, K::Added, a) || has(c1, K::Modified, a));
     CHECK(std::none_of(c1.begin(), c1.end(), [](const auto& c) { return c.Path.find("Library") != std::string::npos; }));
     CHECK(std::none_of(c1.begin(), c1.end(), [](const auto& c) { return c.Path.find(".tmp-") != std::string::npos; }));
 
     const fs::path b = dir / "b.png";
     fs::rename(a, b, ec);
-    auto c2 = settle();
+    auto c2 = settle([&](const Changes& v) { return has(v, K::Renamed, b, a); });
     CHECK(has(c2, K::Renamed, b, a));
 
     const fs::path moved = dir / "sub" / "b.png";
     fs::rename(b, moved, ec);                       // across folders: Removed + Added, paired
-    auto c3 = settle();
+    auto c3 = settle([&](const Changes& v) { return has(v, K::Renamed, moved, b); });
     CHECK(has(c3, K::Renamed, moved, b));
 
     std::ofstream(moved, std::ios::app) << "more";
-    auto c4 = settle();
+    auto c4 = settle([&](const Changes& v) { return has(v, K::Modified, moved); });
     CHECK(has(c4, K::Modified, moved));
 
     const fs::path t = dir / "temp.png";              // created and deleted before it settles
     std::ofstream(t) << "x";
     fs::remove(t, ec);
     fs::remove(moved, ec);
-    auto c5 = settle();
+    auto c5 = settle([&](const Changes& v) { return has(v, K::Removed, moved); });
     CHECK(has(c5, K::Removed, moved));
     CHECK(!has(c5, K::Added, t) && !has(c5, K::Removed, t));
 
@@ -4873,9 +4861,9 @@ void TestProjectWatcher() {
             while (writing) { std::ofstream(busy, std::ios::app) << "x"; std::this_thread::sleep_for(std::chrono::milliseconds(30)); }
         });
         std::ofstream(quiet) << "q";
-        std::vector<ProjectWatcher::Change> got;
+        Changes got;
         bool overflow = false;
-        for (int i = 0; i < 200 && !has(got, K::Added, quiet) && !has(got, K::Modified, quiet); ++i) {
+        for (int i = 0; i < 600 && !has(got, K::Added, quiet) && !has(got, K::Modified, quiet); ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             auto d = ProjectWatcher::Drain(200, overflow);
             got.insert(got.end(), d.begin(), d.end());
@@ -4893,11 +4881,17 @@ void TestProjectWatcher() {
         fs::create_directories(dir / "d3", ec);
         std::ofstream(dir / "d1" / "m.png") << "1";
         std::ofstream(dir / "d2" / "m.png") << "2";
-        settle();
+        settle([&](const Changes& v) {
+            return (has(v, K::Added, dir / "d1" / "m.png") || has(v, K::Modified, dir / "d1" / "m.png")) &&
+                   (has(v, K::Added, dir / "d2" / "m.png") || has(v, K::Modified, dir / "d2" / "m.png"));
+        });
         fs::remove(dir / "d1" / "m.png", ec);
         fs::remove(dir / "d2" / "m.png", ec);
         std::ofstream(dir / "d3" / "m.png") << "3";
-        auto c6 = settle();
+        auto c6 = settle([&](const Changes& v) {
+            return has(v, K::Removed, dir / "d1" / "m.png") && has(v, K::Removed, dir / "d2" / "m.png") &&
+                   has(v, K::Added, dir / "d3" / "m.png");
+        });
         CHECK(has(c6, K::Removed, dir / "d1" / "m.png"));
         CHECK(has(c6, K::Removed, dir / "d2" / "m.png"));
         CHECK(has(c6, K::Added, dir / "d3" / "m.png"));
@@ -4908,7 +4902,7 @@ void TestProjectWatcher() {
     {
         fs::create_directories(dir / "bin", ec);
         std::ofstream(dir / "bin" / "x.png") << "x";
-        auto c7 = settle();
+        auto c7 = settle([&](const Changes& v) { return has(v, K::Added, dir / "bin" / "x.png") || has(v, K::Modified, dir / "bin" / "x.png"); });
         CHECK(has(c7, K::Added, dir / "bin" / "x.png") || has(c7, K::Modified, dir / "bin" / "x.png"));
     }
 
@@ -5984,7 +5978,45 @@ void TestAssetPackImport() {
     fs::remove_all(base, ec);
 }
 
+namespace {
+// Every test writes under temp_directory_path(), and several runs can go at once (worktrees, CI-style queues): two runs
+// sharing %TEMP% wiped each other's fixture folders mid-test (the watcher and asset-identity tests failed "under load").
+// Each run gets its own folder under the user's temp folder, removed when the run ends.
+struct PrivateTempDir {
+    std::filesystem::path Dir;
+    std::wstring OldTmp, OldTemp;
+    bool HadTmp = false, HadTemp = false;
+    static bool Get(const wchar_t* name, std::wstring& out) {
+        const DWORD n = GetEnvironmentVariableW(name, nullptr, 0);
+        if (n == 0) return false;
+        out.resize(n);
+        out.resize(GetEnvironmentVariableW(name, out.data(), n));
+        return true;
+    }
+    PrivateTempDir() {
+        std::error_code ec;
+        Dir = std::filesystem::temp_directory_path(ec) / ("TartarusUnitTests-" + std::to_string(GetCurrentProcessId()));
+        std::filesystem::remove_all(Dir, ec);
+        if (!std::filesystem::create_directories(Dir, ec) || ec) { Dir.clear(); return; }
+        HadTmp = Get(L"TMP", OldTmp);
+        HadTemp = Get(L"TEMP", OldTemp);
+        SetEnvironmentVariableW(L"TMP", Dir.wstring().c_str());
+        SetEnvironmentVariableW(L"TEMP", Dir.wstring().c_str());
+    }
+    ~PrivateTempDir() {
+        if (Dir.empty()) return;
+        SetEnvironmentVariableW(L"TMP", HadTmp ? OldTmp.c_str() : nullptr);
+        SetEnvironmentVariableW(L"TEMP", HadTemp ? OldTemp.c_str() : nullptr);
+        std::error_code ec;
+        std::filesystem::remove_all(Dir, ec);
+    }
+    PrivateTempDir(const PrivateTempDir&) = delete;
+    PrivateTempDir& operator=(const PrivateTempDir&) = delete;
+};
+} // namespace
+
 int RunUnitTests(const char* filter) {
+    const PrivateTempDir privateTemp;
     UnitTestSupport::TestList tests = {
         {"AssetGuid", TestAssetGuid},
         {"UndoDeltaChain", TestUndoDeltaChain},
@@ -6060,6 +6092,7 @@ int RunUnitTests(const char* filter) {
         {"SceneRoundTrip", TestSceneRoundTrip},
         {"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip},
         {"PlayerAcceleration", TestPlayerAcceleration},
+        {"ClipFilterMatch", TestClipFilterMatch},
         {"FramePacing", TestFramePacing},
         {"NpcHitRegions", TestNpcHitRegions},
         {"IKSetGlobalsBatch", TestIKSetGlobalsBatch},

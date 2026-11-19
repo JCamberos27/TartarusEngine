@@ -3,6 +3,7 @@
 #endif
 #include "gl.h"
 #include "ShaderAsset.h"
+#include "ShaderVariant.h" // kVariantMaterialKeywords
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
@@ -290,11 +291,12 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
             while (ss >> kw) sa->m_Keywords.push_back(kw);
             // The variant key is a 32-bit mask (ShaderVariantKey), so bit 32+ can never be
             // selected. Enforced in Debug and Release (#354).
-            if (sa->m_Keywords.size() > 32) {
+            if (sa->m_Keywords.size() > (size_t)kVariantMaterialKeywords) {
                 Log::Error("ShaderAsset: '" + path + "' declares " +
                            std::to_string(sa->m_Keywords.size()) +
-                           " keywords; only the first 32 are usable — the rest are dropped.");
-                sa->m_Keywords.resize(32);
+                           " keywords; only the first " + std::to_string(kVariantMaterialKeywords) +
+                           " are usable (the key's other bits are the engine's) — the rest are dropped.");
+                sa->m_Keywords.resize((size_t)kVariantMaterialKeywords);
             }
         } else if (token == "Vertex") {
             sa->m_VertFile = Trim(ReadBlock(text));

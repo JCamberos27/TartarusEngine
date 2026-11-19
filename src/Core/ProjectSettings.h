@@ -20,12 +20,11 @@ struct PhysicsSettings {
     // value), which made every crate, domino and ball fall at almost twice real speed. The
     // player's own fall is the First Person Controller's Gravity (Player::Gravity).
     glm::vec3 Gravity{0.0f, -9.81f, 0.0f};
-    // Stored + shown, not yet consumed (Player integrates on a collision-safety substep cap,
-    // not a fixed sim step). Lands with the #185 physics step.
+    // Time::FixedDeltaTime: the fixed step the gameplay module's fixed updates get.
     float FixedTimestep = 1.0f / 60.0f;
     int   SolverIterations = 8;
 
-    // #185 PR 8 — collision matrix over the 8 LayerRegistry slots. Bit j of LayerCollisionMask[i]
+    // #185 PR 8 — collision matrix over the 32 LayerRegistry slots. Bit j of LayerCollisionMask[i]
     // set == entities on layer i and layer j collide. Symmetric (the editor keeps both bits in
     // sync); default all-on. Copied into the PhysX scene at Play-enter, so edits apply next Play.
     // #150: one row per LayerRegistry slot (32), default all-on.
@@ -146,5 +145,15 @@ void SetStartupScene(std::string scene);
 // treated as an error (same policy as LayerRegistry / EditorSettings).
 void Load();
 void Save();
+
+// #132 - build and startup scenes are saved with their GUIDs and followed when moved. The asset layer answers the
+// lookups (Core does not depend on it): FollowRef is the path the GUID names now (else `ref`), PathForGuid the path of a
+// GUID (empty when unknown), GuidForPath a file's GUID as text (empty when it has none). Unset, scenes go by path only.
+struct SceneRefResolver {
+    std::string (*FollowRef)(const std::string& ref, const std::string& guid) = nullptr;
+    std::string (*PathForGuid)(const std::string& guid) = nullptr;
+    std::string (*GuidForPath)(const std::string& path) = nullptr;
+};
+void SetSceneRefResolver(const SceneRefResolver& r);
 
 } // namespace ProjectSettings

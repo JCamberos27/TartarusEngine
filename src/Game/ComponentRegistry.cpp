@@ -804,9 +804,6 @@ void RegisterEngineComponents() {
               "Each foot is put on the ground under it, the pelvis drops to the lower foot and the legs are re-solved, so the feet meet stairs and slopes." });
         m.Fields.push_back({ "Foot IK Max Drop", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootIKMaxDrop), 0.01f,
               "The most the pelvis may drop (metres) to let the lower foot reach the ground.", 0.0f, 1.0f });
-        m.Fields.push_back({ "Start Stop Clips", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartStopClips), 0.0f,
-              "Starting and stopping play their own clips (a push-off, a braking step) instead of blending\n"
-              "straight between idle and the gait; their root motion eases the capsule up to speed and down." });
         m.Fields.push_back({ "Eye Slack", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, EyeSlack), 0.001f,
               "How far (metres) the camera may trail or lead the body's shoulders. A clip that throws the shoulders about (a stop pulling the body back)\nwould otherwise carry them out of the arms' reach and a hand would come off the gun. Bigger motions move the camera with them.", 0.0f, 0.2f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
@@ -1890,7 +1887,7 @@ void RegisterEngineComponents() {
 
     Register<BloodSettingsComponent>({
         "Blood Settings", ICON_FA_DROPLET,
-        "The volumetric blood (the first Blood Settings in the scene counts; docs/BLOOD_FX.md): how big the sprays are,\n"
+        "The volumetric blood (the first Blood Settings in the scene counts): how big the sprays are,\n"
         "how many stains stay and for how long, and what blood lands on.",
         "Gameplay",
         {

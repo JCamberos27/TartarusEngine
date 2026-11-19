@@ -5,11 +5,14 @@
 
 void Camera::RefreshBasisIfNeeded() const {
     if (Yaw == m_CachedYaw && Pitch == m_CachedPitch && Roll == m_CachedRoll) return;
+    // Straight up or down, the front is parallel to world up and the cross products below are zero: clamp as
+    // ProcessMouseLook does, for a pitch set any other way (a scene, a component, script).
+    const float pitch = std::clamp(Pitch, -89.0f, 89.0f);
 
     glm::vec3 f;
-    f.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
-    f.y = sin(glm::radians(Pitch));
-    f.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
+    f.x = cos(glm::radians(Yaw)) * cos(glm::radians(pitch));
+    f.y = sin(glm::radians(pitch));
+    f.z = sin(glm::radians(Yaw)) * cos(glm::radians(pitch));
     m_CachedFront = glm::normalize(f);
     m_CachedRight = glm::normalize(glm::cross(m_CachedFront, glm::vec3(0, 1, 0)));
     m_CachedUp = glm::normalize(glm::cross(m_CachedRight, m_CachedFront));
