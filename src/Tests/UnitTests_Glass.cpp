@@ -84,6 +84,9 @@ void TestGlassCompositorConvert() {
     ImGuiStyle& style = ImGui::GetStyle();
     ImGui::StyleColorsDark(&style);
     ApplyGlassMaterials(style);
+    // A solid look for the compositor to find: off-white text and an opaque hairline border.
+    style.Colors[ImGuiCol_Text] = Glass::TextPrimary;
+    style.Colors[ImGuiCol_Border] = style.Colors[ImGuiCol_Separator] = Glass::Hairline;
     // A floating window, an overlay with a translucent background, and one with none.
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(100.0f, 80.0f), ImGuiCond_Always);
