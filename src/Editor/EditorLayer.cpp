@@ -1,4 +1,5 @@
 #include "EditorLayer.h"
+#include "ThumbnailCache.h"
 #include "ScriptIDE.h"
 #include "CurveEditor.h"
 #include "EditorUIPrimitives.h"
@@ -558,6 +559,7 @@ void EditorLayer::Shutdown() {
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
     GameModuleBuild::Shutdown();
+    ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
     // A build still running: stop it at the next file and wait, so it isn't cut off mid-copy.
     CancelBuild();

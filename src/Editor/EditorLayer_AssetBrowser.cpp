@@ -360,7 +360,7 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
         // attachment above — the exact same pixels glCopyTexSubImage2D just copied into `dst`.
         std::vector<unsigned char> freshPixels((size_t)kSize * kSize * 4);
         glReadPixels(0, 0, kSize, kSize, GL_RGBA, GL_UNSIGNED_BYTE, freshPixels.data());
-        ThumbnailCache::Save(path, kSize, cacheKey, freshPixels.data());
+        ThumbnailCache::SaveAsync(path, kSize, cacheKey, std::move(freshPixels)); // encode + write off the UI thread
 
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
@@ -467,14 +467,17 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
     } else {
         const unsigned int src = m_MaterialThumbPreview.Render(ma, MaterialPreviewRenderer::Shape::Sphere,
                                                                0.5f, 0.3f, kSize, kSize);
-        if (!src) return entry.Tex;
-        // Persist only when the files changed; a live slider drag re-renders in memory without
-        // rewriting the PNG every frame.
-        const bool persist = diskKey != entry.DiskKey;
-        CopyPreviewTexture(src, entry.Tex, kSize, persist ? &pixels : nullptr);
-        if (persist) {
-            ThumbnailCache::Save(path, kSize, diskKey, pixels.data());
-            entry.DiskKey = diskKey;
+        // A failed render is remembered under this content key (stored below with no texture),
+        // so it isn't retried - with its dependency stats - every frame until the material changes.
+        if (src) {
+            // Persist only when the files changed; a live slider drag re-renders in memory without
+            // rewriting the PNG every frame.
+            const bool persist = diskKey != entry.DiskKey;
+            CopyPreviewTexture(src, entry.Tex, kSize, persist ? &pixels : nullptr);
+            if (persist) {
+                ThumbnailCache::SaveAsync(path, kSize, diskKey, std::move(pixels)); // encode + write off the UI thread
+                entry.DiskKey = diskKey;
+            }
         }
     }
     entry.ContentKey = contentKey;

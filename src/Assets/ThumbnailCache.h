@@ -38,7 +38,16 @@ bool LoadAnyVersion(const std::string& path, int size, std::vector<unsigned char
 // Writes a `size` x `size` RGBA8 thumbnail for `path` plus its key sidecar. Best-effort: I/O
 // failures are logged, not fatal — a missing persistent cache just means the in-RAM render
 // happens again next launch, not a correctness problem.
+// A cache needs no durability: the files are written to a temp name and renamed into place,
+// without a flush to disk or the AtomicFile change observer (the undo journal and the project
+// watcher ignore Library/ anyway). Safe to call from any thread.
 void Save(const std::string& path, int size, std::uint64_t key, const unsigned char* pixels);
+// Save() on a background worker: for the UI thread (the Asset Browser's model / material
+// thumbnails), where the PNG encode and two file writes cost a frame hitch per thumbnail.
+// The cache path is resolved here, on the calling thread.
+void SaveAsync(const std::string& path, int size, std::uint64_t key, std::vector<unsigned char> pixels);
+// Blocks until every SaveAsync queued so far is written (tests; shutdown drains on its own).
+void FlushAsync();
 
 // Deletes cached thumbnails whose GUID no longer belongs to any asset (no .meta under the
 // project or the engine's shipped assets carries it) and any stray non-thumbnail files in the
