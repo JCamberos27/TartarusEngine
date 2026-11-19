@@ -166,27 +166,6 @@ def loudness_short(x, win_s=0.1, hop_s=0.025):
     return float(-0.691 + 10 * np.log10(max(float(ms.max()), 1e-12)))
 
 
-def remove_tones(x, lo=1500.0, hi=16000.0, min_db=5.0, max_notches=6, depth_db=None):
-    """Notch out whistles: the narrow spectral peaks standing min_db or more above the spectrum's local median in [lo, hi], each
-    cut by its own excess (or depth_db) with a bandwidth of ~1/6 octave. A bullet flyby's whine is a tone riding on its whoosh;
-    the whoosh and crack stay. EQ on the recording - nothing added."""
-    from pedalboard import PeakFilter
-    m = to_mono(x)
-    fr, _, S = signal.stft(m, SR, nperseg=4096, noverlap=3072)
-    p = np.mean(np.abs(S) ** 2, axis=1)
-    ton = 10 * np.log10(p / (signal.medfilt(p, 31) + 1e-15) + 1e-15)
-    band = (fr >= lo) & (fr <= hi)
-    plugs, taken = [], []
-    for i in np.argsort(-(ton * band)):
-        if len(plugs) >= max_notches or ton[i] < min_db or not band[i]:
-            break
-        if any(abs(math.log2(fr[i] / f)) < 1 / 6 for f in taken):
-            continue
-        taken.append(float(fr[i]))
-        plugs.append(PeakFilter(cutoff_frequency_hz=float(fr[i]), gain_db=-float(depth_db or min(ton[i] + 3.0, 18.0)), q=8.0))
-    return board(x, *plugs) if plugs else x
-
-
 def detone(x, lo=1500.0, hi=16000.0, thresh_db=6.0, keep_db=2.0, med_bins=31):
     """Time-varying whistle removal: per STFT frame (2048 / hop 512), every bin in [lo, hi] standing more than thresh_db over the
     frame's local spectral median (med_bins wide) is pulled down to keep_db over it. Catches a Doppler-sweeping whine that a
