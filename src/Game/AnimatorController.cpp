@@ -1022,7 +1022,6 @@ struct Sampler {
     Model& M;
     AssetLibrary& Assets;
     int Track;
-    Pose Tmp, Tmp2;
     // Root motion: when RootNode >= 0, states that use it are sampled in place.
     int RootNode = -1;
     RootMotionSettings RM;
@@ -1052,7 +1051,8 @@ struct Sampler {
         const auto& m = s.MotionFor(Track);
         if (m.Empty()) return false;
         const std::vector<float> w = m.IsBlendTree() ? AnimatorMotionWeights(m, params) : std::vector<float>{};
-        return AnimatorSampleMotion(M, Assets, m, w, s.Loop, s.RootMotion, RootNode, RM, phase, stateLen, out, Tmp2);
+        thread_local Pose scratch; // a blend tree's second child (kept between calls: this runs per state per rig per frame)
+        return AnimatorSampleMotion(M, Assets, m, w, s.Loop, s.RootMotion, RootNode, RM, phase, stateLen, out, scratch);
     }
 
     // The root's travel in state `s` between two phases, timed exactly as Sample plays it.
@@ -1102,7 +1102,7 @@ void SampleLayer(const AnimatorController::Layer& L, const AnimatorLayerRuntime&
                  int layerIndex, const Pose& base, bool atPhaseZero, Pose& out, Pose* top = nullptr) {
     out = base;
     if (top) *top = base;
-    Pose item;
+    thread_local Pose item;
     bool first = true;
     for (const auto& it : rt.Stack) {
         if (it.State < 0 || it.State >= (int)L.States.size()) continue;
@@ -1161,10 +1161,12 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
                const IKRigComponent* ikRig, int rootNode, const RootMotionSettings& rm, RootMotionDelta* motion) {
     if (motion) *motion = {};
     if (model.NodeCount() == 0) return;
-    Sampler smp{model, assets, track, {}, {}};
+    Sampler smp{model, assets, track};
     smp.RootNode = rootNode;
     smp.RM = rm;
-    Pose bind, pose, layerPose, refPose, gripPose;
+    // Scratch kept between calls (every rig, every frame): sized once per rig size, not allocated per pose.
+    thread_local Pose bind, pose, layerPose, refPose, gripPose;
+    gripPose.clear(); // empty = no grip pose this frame (read below)
     model.BindLocalPose(bind);
     pose = bind;
     const bool heldBeforeLayers=ikRig && ikRig->Enabled && ikRig->Weight>0 &&
@@ -1180,7 +1182,8 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
                         ikRig && (rt.Stack.size() > 1 || preserveBaseGrip) ? &gripPose : nullptr);
             if (motion && rootNode >= 0) {
                 // Each entry's travel, weighted by how much of it shows in the blended pose.
-                std::vector<float> fades;
+                thread_local std::vector<float> fades;
+                fades.clear();
                 for (const auto& it : rt.Stack) fades.push_back(it.Fade);
                 const std::vector<float> w = AnimatorStackWeights(fades);
                 RootMotionMix mix;
@@ -1247,7 +1250,7 @@ CameraEffectPose AnimatorActionCamera(Model& arms,Model* weapon,AssetLibrary& as
     const auto& layer=ctrl.Layers[0];
     const int reference=layer.FindState(settings.ReferenceState);
     if(reference<0) return result;
-    Sampler sample{arms,assets,track,{},{}}, paired{weapon?*weapon:arms,assets,ctrl.TrackIndex("weapon"),{}, {}};
+    Sampler sample{arms,assets,track}, paired{weapon?*weapon:arms,assets,ctrl.TrackIndex("weapon")};
     auto length=[&](int state) {
         float len=sample.MotionLength(layer.States[state].MotionFor(track),ac.Params);
         if(weapon) len=std::max(len,paired.MotionLength(layer.States[state].MotionFor(paired.Track),ac.Params));
@@ -1422,10 +1425,10 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
         const auto ctrl = GetAnimatorController(dac.Controller);
         if (!ctrl) continue;
 
-        std::vector<Sampler> samplers;
-        samplers.reserve(group.size());
+        static std::vector<Sampler> samplers; // (reused: Samplers own no heap memory, only the vector's capacity is kept)
+        samplers.clear();
         for (const Rig& r : group)
-            if (r.M) samplers.push_back({*r.M, assets, ctrl->TrackIndex(r.AC->Track), {}, {}});
+            if (r.M) samplers.push_back({*r.M, assets, ctrl->TrackIndex(r.AC->Track)});
         // Resolve every clip a rig's track can reach the first time the rig meets this controller:
         // a clip in another file loads (and attaches) on first use, and entering a new state
         // mid-Play used to hitch a frame by ~20 ms. PrefetchAnimatorClips normally did this behind
@@ -1436,7 +1439,7 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
         // length: every rig's pose asks for the same few (per crossfade entry, per layer), each a pass
         // over every rig's clips, so they are worked out once.
         bool memo = false;
-        std::vector<std::vector<float>> lengths;
+        static std::vector<std::vector<float>> lengths; // (reused: assign below keeps each row's capacity)
         const auto stateLength = [&](int li, int si) {
             if (li < 0 || li >= (int)ctrl->Layers.size() || si < 0 || si >= (int)ctrl->Layers[li].States.size())
                 return 1.0f;
@@ -1636,7 +1639,7 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
         const std::uint64_t warmKey = pairKey(m, ctrl.get(), track);
         if (s_Warm.count(warmKey)) continue;
         if (!request(*ctrl, track)) continue;
-        Sampler smp{*m, assets, track, {}, {}};
+        Sampler smp{*m, assets, track};
         WarmControllerClips(*ctrl, smp);
         s_Warm.insert(warmKey);
     }

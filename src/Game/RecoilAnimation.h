@@ -60,7 +60,9 @@ private:
     void SetupTransition(glm::vec3,glm::vec3,const RecoilVectorCurve&,const RecoilVectorCurve&);
     glm::vec3 m_TargetRot{0},m_TargetLoc{0},m_StartRot{0},m_StartLoc{0},m_RawRot{0},m_RawLoc{0},m_SmoothRot{0},m_SmoothLoc{0};
     glm::bvec3 m_RestRot{true},m_RestLoc{true};
-    RecoilVectorCurve m_RotCurve,m_LocCurve;
+    // The playing transition's curves are the asset's own, by m_StateIndex (read each Update, so live edits apply); only
+    // their length is kept, for Stop. (Copies of them - six Curves - were re-made every frame of firing.)
+    float m_CurveLength=0;
     glm::vec2 m_NoiseTarget{0},m_NoiseOut{0},m_PitchSway{0},m_YawSway{0},m_PitchProgress{0},m_UpProgress{0};
     float m_PushTarget=0,m_PushOut=0,m_Playback=0,m_LastFrameTime=0,m_SinceShot=1e9f,m_Dt=1.0f/60;
     double m_LastShotTime=0;

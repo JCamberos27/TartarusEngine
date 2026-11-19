@@ -150,7 +150,7 @@ RecoilAnimData RecoilAnimData::FromLegacy(const WeaponRecoilSettings& r) {
 
 void RecoilAnimation::SetupTransition(glm::vec3 rot,glm::vec3 loc,const RecoilVectorCurve& rc,const RecoilVectorCurve& lc) {
     m_StartRot=rot; m_StartLoc=loc; m_RestRot=m_RestLoc=glm::bvec3(true);
-    m_RotCurve=rc; m_LocCurve=lc; m_LastFrameTime=std::max(rc.Length(),lc.Length());
+    m_CurveLength=std::max(rc.Length(),lc.Length()); m_LastFrameTime=m_CurveLength;
     m_Playback=0; m_IsPlaying=true;
 }
 void RecoilAnimation::Play(const RecoilAnimData& d,bool aiming,float rpm,RecoilFireMode mode,std::mt19937& rng,double unscaledTime,float frameDt) {
@@ -184,7 +184,7 @@ void RecoilAnimation::Stop() {
     m_IsFiring=false;
     for (int i=0;i<2;++i) m_Recoil[i]*=Compensation(m_Recoil[i],m_Compensation[i]);
     m_CachedRecoil=m_TargetRecoil=m_Recoil;
-    if (m_StateIndex==1 && m_IsLooping) { m_LastFrameTime=std::max(m_RotCurve.Length(),m_LocCurve.Length()); m_IsPlaying=true; }
+    if (m_StateIndex==1 && m_IsLooping) { m_LastFrameTime=m_CurveLength; m_IsPlaying=true; }
     m_IsLooping=false;
 }
 void RecoilAnimation::CalculateTargets(const RecoilAnimData& d,bool aiming,std::mt19937& rng) {
@@ -212,10 +212,11 @@ void RecoilAnimation::Update(const RecoilAnimData& d,bool aiming,float dt,std::m
     if (!m_IsFiring) m_TargetRecoil*=1-Alpha(d.Damping,m_Dt);
     RecoilDelta=m_Recoil-m_CachedRecoil; m_CachedRecoil=m_Recoil;
     if (m_IsPlaying) {
-        // Unity VectorCurve copies retain references to the asset's AnimationCurve objects.
-        // Refresh the host's value copies so curve edits also affect an active transition.
-        m_RotCurve=m_StateIndex==0?d.SemiRotCurve:d.AutoRotCurve;
-        m_LocCurve=m_StateIndex==0?d.SemiLocCurve:d.AutoLocCurve;
+        // Unity VectorCurve copies retain references to the asset's AnimationCurve objects: the asset's own curves are read,
+        // so curve edits also affect an active transition.
+        const RecoilVectorCurve& rotCurve=m_StateIndex==0?d.SemiRotCurve:d.AutoRotCurve;
+        const RecoilVectorCurve& locCurve=m_StateIndex==0?d.SemiLocCurve:d.AutoLocCurve;
+        m_CurveLength=std::max(rotCurve.Length(),locCurve.Length());
         if (Approx(m_Playback)) CalculateTargets(d,aiming,rng);
         float last=std::max(0.0f,m_Playback-m_Dt*d.PlayRate);
         const auto solve=[&](const RecoilVectorCurve& curve,glm::vec3& start,const glm::vec3& target,glm::bvec3& rest) {
@@ -226,8 +227,8 @@ void RecoilAnimation::Update(const RecoilAnimData& d,bool aiming,float dt,std::m
             }
             return out;
         };
-        m_RawRot=solve(m_RotCurve,m_StartRot,m_TargetRot,m_RestRot);
-        m_RawLoc=solve(m_LocCurve,m_StartLoc,m_TargetLoc,m_RestLoc);
+        m_RawRot=solve(rotCurve,m_StartRot,m_TargetRot,m_RestRot);
+        m_RawLoc=solve(locCurve,m_StartLoc,m_TargetLoc,m_RestLoc);
         const auto smooth=[&](glm::vec3& out,glm::vec3 raw,glm::vec3 rate,glm::vec3 extra) {
             for (int i=0;i<3;++i) {
                 float scale=Approx(extra[i])?1:extra[i];
