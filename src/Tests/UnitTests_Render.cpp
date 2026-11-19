@@ -9,7 +9,8 @@
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
 #include "../Renderer/LightBuffer.h"
-#include "../Renderer/ShadowLimits.h"
+#include "../Renderer/PointShadowMap.h"
+#include "../Renderer/SpotShadowMap.h"
 #include "../Renderer/DecalTypes.h"
 #include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
@@ -641,8 +642,8 @@ void ShaderConstantsMatch() {
     CHECK(has(cull, "const uint MAX_LIGHTS = " + n(LightBuffer::kMaxLights) + "u;"));
     CHECK(has(decal, "const uint MAX_PER_CLUSTER = " + n(Decals::MAX_PER_CLUSTER) + "u;"));
     for (const std::string* text : {&shading, &fog}) {
-        CHECK(has(*text, "uniform mat4 uSpotShadowVP[" + n(ShadowLimits::kMaxSpots) + "];"));
-        CHECK(has(*text, "uniform float uPointShadowFar[" + n(ShadowLimits::kMaxPoints) + "];"));
+        CHECK(has(*text, "uniform mat4 uSpotShadowVP[" + n(SpotShadowMap::kMaxSpots) + "];"));
+        CHECK(has(*text, "uniform float uPointShadowFar[" + n(PointShadowMap::kMaxPoints) + "];"));
     }
 }
 
