@@ -9,11 +9,10 @@
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
-#include "PointShadowMap.h"
-#include "SkyAtmosphere.h"
-#include "SpotShadowMap.h"
+#include "ShadowLimits.h"
 
 class World;
+class SkyAtmosphere;
 class Camera;
 class LightBuffer;
 
@@ -42,23 +41,23 @@ struct FrameLights {
 
     // One past the highest slot in use this frame (#119); *Live says which are.
     int SpotCount = 0;
-    bool SpotLive[SpotShadowMap::kMaxSpots] = {};
-    glm::mat4 SpotVP[SpotShadowMap::kMaxSpots] = {};
-    glm::vec3 SpotPos[SpotShadowMap::kMaxSpots] = {};
-    float SpotFar[SpotShadowMap::kMaxSpots] = {};
-    float SpotHalfTan[SpotShadowMap::kMaxSpots] = {}; // tan(half-FOV) of the map: sizes the shader's texel estimate (#134)
+    bool SpotLive[ShadowLimits::kMaxSpots] = {};
+    glm::mat4 SpotVP[ShadowLimits::kMaxSpots] = {};
+    glm::vec3 SpotPos[ShadowLimits::kMaxSpots] = {};
+    float SpotFar[ShadowLimits::kMaxSpots] = {};
+    float SpotHalfTan[ShadowLimits::kMaxSpots] = {}; // tan(half-FOV) of the map: sizes the shader's texel estimate (#134)
     // Per-light shadow multipliers (#140 phase 2): 1.0 unless the light's ShadowSettings override them.
-    float SpotBias[SpotShadowMap::kMaxSpots] = {};
-    float SpotNormalBias[SpotShadowMap::kMaxSpots] = {};
-    float SpotSoftness[SpotShadowMap::kMaxSpots] = {};
+    float SpotBias[ShadowLimits::kMaxSpots] = {};
+    float SpotNormalBias[ShadowLimits::kMaxSpots] = {};
+    float SpotSoftness[ShadowLimits::kMaxSpots] = {};
 
     int PointCount = 0;
-    bool PointLive[PointShadowMap::kMaxPoints] = {};
-    glm::vec3 PointPos[PointShadowMap::kMaxPoints] = {};
-    float PointFar[PointShadowMap::kMaxPoints] = {};
-    float PointNear[PointShadowMap::kMaxPoints] = {};
-    float PointBias[PointShadowMap::kMaxPoints] = {};
-    float PointNormalBias[PointShadowMap::kMaxPoints] = {};
+    bool PointLive[ShadowLimits::kMaxPoints] = {};
+    glm::vec3 PointPos[ShadowLimits::kMaxPoints] = {};
+    float PointFar[ShadowLimits::kMaxPoints] = {};
+    float PointNear[ShadowLimits::kMaxPoints] = {};
+    float PointBias[ShadowLimits::kMaxPoints] = {};
+    float PointNormalBias[ShadowLimits::kMaxPoints] = {};
 
     std::set<entt::entity> OverBudget; // shadow candidates that got no slot (the Inspector's warning)
 };
@@ -85,9 +84,9 @@ public:
 private:
     // Each light keeps its shadow slot - its layer, and with it the cached static depth - for as long as it holds a
     // shadow; a light taking a shadow gets the free slot unused longest.
-    struct StableSlots {
-        entt::entity Owner[SpotShadowMap::kMaxSpots];
-        std::uint64_t Used[SpotShadowMap::kMaxSpots] = {};
+    struct StableSlots { // sized for the larger of the two maps (spots); the points' budget uses the first kMaxPoints
+        entt::entity Owner[ShadowLimits::kMaxSpots];
+        std::uint64_t Used[ShadowLimits::kMaxSpots] = {};
         StableSlots();
         void Assign(const std::vector<entt::entity>& want, int budget, std::uint64_t frame, std::unordered_map<entt::entity, int>& out);
     };

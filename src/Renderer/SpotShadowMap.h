@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <array>
 #include "DepthArrayTarget.h"
+#include "ShadowLimits.h"
 
 // Perspective shadow maps for spot lights (#119).
 //
@@ -15,7 +16,7 @@ class SpotShadowMap {
 public:
     // Hard ceiling: the size of ModelFragment.glsl's uSpotShadow* arrays. The per-scene budget
     // (World::MaxSpotShadows) picks how many layers are actually allocated and rendered.
-    static constexpr int kMaxSpots = 16;
+    static constexpr int kMaxSpots = ShadowLimits::kMaxSpots;
 
     SpotShadowMap() = default;
     SpotShadowMap(const SpotShadowMap&) = delete;
