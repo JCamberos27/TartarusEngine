@@ -155,7 +155,7 @@ ImGuiID HierarchyNodeStateId(const World& world, entt::entity e, std::vector<ent
 // "Object 7" for an entity the user never named (#21 P10): its 1-based position in creation
 // order. This used to re-sort every entity per call - once per unnamed visible row per frame -
 // so the ordinals are now built once per frame instead.
-int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) {
+int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) const {
     const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
     if (frame != m_HierOrdinalsFrame) {
         m_HierOrdinalsFrame = frame;
@@ -2280,19 +2280,6 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
     const bool desc = EditorSettings::Get().HierarchySortDesc;
     // Sort keys are computed once per row, not per comparison: the Name key for an unnamed row
     // ("Object 7") used to cost a full creation-order sort of the scene on every compare.
-    // The "Object N" ordinals take a creation-order sort of the whole scene: only when a row here is
-    // unnamed, and once a frame (this runs for the roots and again for every expanded parent's children).
-    const auto ordinalOf = [&](entt::entity e) {
-        const int frame = ImGui::GetFrameCount();
-        if (m_HierOrdinalsFrame != frame) {
-            m_HierOrdinalsFrame = frame;
-            m_HierOrdinals.clear();
-            const auto list = ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
-            for (size_t i = 0; i < list.size(); ++i) m_HierOrdinals[list[i]] = (int)i + 1;
-        }
-        const auto it = m_HierOrdinals.find(e);
-        return it != m_HierOrdinals.end() ? it->second : 0;
-    };
     struct Keyed { entt::entity E; std::string Name; int Kind; };
     std::vector<Keyed> keyed;
     keyed.reserve(rows.size());
@@ -2300,7 +2287,7 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
         Keyed k{e, {}, 0};
         if (mode == 1) {
             const auto* nm = world.Registry.try_get<NameComponent>(e);
-            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(ordinalOf(e));
+            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(HierarchyCreationOrdinal(world, e)); // once a frame, only for unnamed rows
         } else {
             k.Kind = HierarchyKindMask(world.Registry, e);
         }
