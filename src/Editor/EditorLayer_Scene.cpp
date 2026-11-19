@@ -626,8 +626,7 @@ void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std
         m_ScenePromptPending = true;
         return;
     }
-    OpenScene(world, assets, path);
-    FrameOpenedScene(world, path);
+    BeginOpenScene(world, assets, path, /*frame=*/true);
 }
 
 // A scene the user opened (not a revert of the one already open) starts where it was left, or framed.
@@ -731,7 +730,7 @@ void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
         return;
     }
     if (m_Dirty) { m_RevertPromptPending = true; return; }
-    OpenScene(world, assets, m_CurrentScenePath);
+    BeginOpenScene(world, assets, m_CurrentScenePath, /*frame=*/false);
 }
 
 void EditorLayer::DrawRevertScenePrompt(World& world, AssetLibrary& assets) {
@@ -744,7 +743,7 @@ void EditorLayer::DrawRevertScenePrompt(World& world, AssetLibrary& assets) {
         if (PrimaryButton("Revert", ImVec2(110.0f * m_UIScale, 0.0f))) {
             m_RevertPromptPending = false;
             ImGui::CloseCurrentPopup();
-            OpenScene(world, assets, m_CurrentScenePath);
+            BeginOpenScene(world, assets, m_CurrentScenePath, /*frame=*/false);
         }
         ImGui::SameLine();
         if (PrimaryButton("Cancel", ImVec2(110.0f * m_UIScale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
@@ -771,10 +770,8 @@ void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
 
         auto runPendingSwitch = [&]() {
             if (m_PendingSceneSwitch == PendingSceneSwitch::New) NewScene(world, assets);
-            else if (m_PendingSceneSwitch == PendingSceneSwitch::Open) {
-                OpenScene(world, assets, m_PendingScenePath);
-                FrameOpenedScene(world, m_PendingScenePath);
-            }
+            else if (m_PendingSceneSwitch == PendingSceneSwitch::Open)
+                BeginOpenScene(world, assets, m_PendingScenePath, /*frame=*/true);
             m_PendingSceneSwitch = PendingSceneSwitch::None;
             m_PendingScenePath.clear();
         };
