@@ -34,6 +34,14 @@ struct LocalTRS {
 // The matrix that carries normals for the model matrix m: the inverse-transpose of its 3x3 part.
 inline glm::mat3 NormalMatrix(const glm::mat4& m) { return glm::transpose(glm::inverse(glm::mat3(m))); }
 
+// The inverse of an affine transform (bottom row 0 0 0 1): its 3x3 part inverted, the translation carried back.
+inline glm::mat4 AffineInverse(const glm::mat4& m) {
+    const glm::mat3 inv = glm::inverse(glm::mat3(m));
+    glm::mat4 r(inv);
+    r[3] = glm::vec4(-(inv * glm::vec3(m[3])), 1.0f);
+    return r;
+}
+
 inline glm::mat4 AffineMul(const glm::mat4& a, const glm::mat4& b) {
     glm::mat4 r;
     for (int c = 0; c < 3; ++c) r[c] = a[0] * b[c][0] + a[1] * b[c][1] + a[2] * b[c][2];
