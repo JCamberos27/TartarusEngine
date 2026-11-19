@@ -107,7 +107,16 @@ struct ScriptIDE::Impl {
         // Motion v2: last frame's view (scroll, height) and caret, so a jump can ease from where it was. No animation state.
         bool EaseJump=false,Scrolling=false;int SweepLine=-1,ScrollHold=0;float LastScrollY=0,ViewH=0,ScrollFrom=0,ScrollTo=0;
         TextEditor::Coordinates CaretLast=TextEditor::Coordinates::Invalid();ImVec2 CaretPrev{0,0};double CaretMovedAt=0;
-        bool Dirty() const {return Editor.GetText()!=Saved;}
+        // Unsaved edits. Comparing the whole text costs a full copy, so it runs at most once a frame per document
+        // (Touched() forces it again after an edit or a save in the same frame).
+        mutable int DirtyFrame=-1;mutable bool DirtyNow=false;
+        bool Dirty() const {
+            const int frame=ImGui::GetCurrentContext()?ImGui::GetFrameCount():-2;
+            if(frame<0 || frame!=DirtyFrame){DirtyFrame=frame;DirtyNow=Editor.GetText()!=Saved;}
+            return DirtyNow;
+        }
+        void Touched() {DirtyFrame=-1;}
+        fs::file_time_type DiskTime{}; // the file's write time when DiskBytes was read: the 1 s poll reads only on a change
         std::string Bytes() const {auto text=Editor.GetText();if(CRLF){std::string expanded;for(char c:text){if(c=='\n')expanded+='\r';expanded+=c;}text=std::move(expanded);}return (Bom?"\xEF\xBB\xBF":"")+text;}
     };
     std::vector<std::unique_ptr<Document>> Documents;
@@ -126,6 +135,12 @@ struct ScriptIDE::Impl {
     Clock::time_point LastScan=Clock::now()-std::chrono::seconds(5);
     bool Restoring=false; // reopening the last session's documents: silent
     bool SavingAll=false; // Save All sounds once, not once per document
+    // The session file is written from Poll, not on every change: typing waits for a 1 s pause, anything else goes
+    // out next frame. Destruction writes it at once.
+    bool PersistPending=false;Clock::time_point PersistAt{};
+    void PersistSoon(std::chrono::milliseconds delay=std::chrono::milliseconds(0)) {
+        const auto at=Clock::now()+delay;if(!PersistPending || at>PersistAt)PersistAt=at;PersistPending=true;
+    }
     Impl() {
         Restoring=true;
         SessionPath=fs::u8path(ScriptIDE::SessionFile());std::error_code ec;fs::create_directories(SessionPath.parent_path(),ec);
@@ -134,20 +149,28 @@ struct ScriptIDE::Impl {
             Theme=std::clamp(session.value("theme",0),0,static_cast<int>(ScriptIDEThemes::Presets.size())-1);
             SidebarWidth=std::clamp(session.value("sidebarWidth",235.0f),80.0f,2000.0f);
             InformationHeight=std::clamp(session.value("informationHeight",200.0f),64.0f,2000.0f);
-            for(const auto& saved:session.value("documents",Json::array())) {
+            for(const auto& saved:session.value("documents",Json::array())) try {
                 const auto path=saved.at("path").get<std::string>();if(!fs::is_regular_file(fs::u8path(path)) || KindOf(fs::u8path(path))==Kind::None)continue;
                 auto* doc=Open(path);if(!doc)continue;
                 if(saved.value("dirty",false)) {doc->Editor.SetText(saved.at("text").get<std::string>());doc->Conflict=saved.value("disk",std::string())!=doc->DiskBytes;Status="Recovered unsaved buffers.";}
-            }
+            } catch(const std::exception& e){Status=e.what();}
             const auto active=session.value("active",std::string());if(!active.empty() && fs::is_regular_file(fs::u8path(active)))Open(active);
             Visible=visible;Focus=visible;
         }} catch(const std::exception& e){Status=e.what();}
         Restoring=false;
+        PersistSoon();
     }
     ~Impl() {Persist();}
+    // Only unsaved buffers carry their text (and the disk bytes they were based on): the rest reopen from disk.
     void Persist() {
-        Json documents=Json::array();for(const auto& d:Documents)documents.push_back({{"path",d->Path},{"dirty",d->Dirty()},{"text",d->Editor.GetText()},{"disk",d->DiskBytes}});
-        AtomicFile::WriteBytes(SessionPath,Json{{"visible",Visible},{"theme",Theme},{"sidebarWidth",SidebarWidth},{"informationHeight",InformationHeight},{"active",Active?Active->Path:""},{"documents",documents}}.dump());
+        PersistPending=false;
+        Json documents=Json::array();
+        for(const auto& d:Documents) {
+            const bool dirty=d->Dirty();Json entry={{"path",d->Path},{"dirty",dirty}};
+            if(dirty){entry["text"]=d->Editor.GetText();entry["disk"]=d->DiskBytes;} // "disk": to spot a file changed meanwhile
+            documents.push_back(std::move(entry));
+        }
+        if(!AtomicFile::WriteBytes(SessionPath,Json{{"visible",Visible},{"theme",Theme},{"sidebarWidth",SidebarWidth},{"informationHeight",InformationHeight},{"active",Active?Active->Path:""},{"documents",documents}}.dump()))Status="Couldn't save the Script IDE session (crash recovery) to "+SessionPath.u8string()+".";
     }
     Document* Open(const std::string& path,int line=0,int column=1) {
         try {
@@ -157,10 +180,10 @@ struct ScriptIDE::Impl {
             if(kind==Kind::None)throw std::runtime_error("The Script IDE opens C++ sources, shaders and .tescript files.");
             auto bytes=Read(fs::u8path(absolute));if(bytes.size()>8*1024*1024)throw std::runtime_error("Source file exceeds the 8 MB editor limit.");
             if(bytes.find('\0')!=std::string::npos)throw std::runtime_error("Use UTF-8 source; binary/UTF-16 files cannot be edited here.");
-            auto doc=std::make_unique<Document>();doc->Path=absolute;doc->Type=kind;doc->DiskBytes=bytes;doc->CRLF=bytes.find("\r\n")!=std::string::npos;
+            auto doc=std::make_unique<Document>();doc->Path=absolute;doc->Type=kind;doc->DiskBytes=bytes;{std::error_code tec;doc->DiskTime=fs::last_write_time(fs::u8path(absolute),tec);}doc->CRLF=bytes.find("\r\n")!=std::string::npos;
             doc->Bom=bytes.compare(0,3,"\xEF\xBB\xBF")==0;if(doc->Bom)bytes.erase(0,3);Wide(bytes);
             doc->Editor.SetLanguageDefinition(Language(kind));doc->Editor.SetShowWhitespaces(false);doc->Editor.SetTabSize(4);doc->Editor.SetText(bytes);doc->Saved=doc->Editor.GetText();doc->Editor.SetReadOnly(!Authored(absolute));
-            Active=doc.get();Jump(*doc,line,column);Land(*doc,line);Documents.push_back(std::move(doc));Activate=absolute;Visible=Focus=true;MarkProblems();Persist();
+            Active=doc.get();Jump(*doc,line,column);Land(*doc,line);Documents.push_back(std::move(doc));Activate=absolute;Visible=Focus=true;MarkProblems();PersistSoon();
             if(!Restoring)EditorSound::Play(EditorSound::Event::AssetOpen); // a new tab only, not re-activating an open one
             return Active;
         }catch(const std::exception& e){Status=e.what();if(!Restoring)EditorSound::Play(EditorSound::Event::Blocked);return nullptr;}
@@ -203,7 +226,7 @@ struct ScriptIDE::Impl {
             std::error_code ec;const bool exists=fs::is_regular_file(fs::u8path(doc.Path),ec);
             if(!overwrite && ((!exists && !doc.DiskBytes.empty()) || (exists && Read(fs::u8path(doc.Path))!=doc.DiskBytes))){doc.Conflict=true;Status="File changed outside the IDE. Reload or explicitly overwrite before saving.";return false;}
             auto bytes=doc.Bytes();if(!AtomicFile::WriteBytes(fs::u8path(doc.Path),bytes,true)){Status="Save failed: "+doc.Path;return false;}
-            doc.DiskBytes=bytes;doc.Saved=doc.Editor.GetText();doc.Conflict=false;AfterSave(doc);Persist();return true;
+            doc.DiskBytes=bytes;{std::error_code tec;doc.DiskTime=fs::last_write_time(fs::u8path(doc.Path),tec);}doc.Saved=doc.Editor.GetText();doc.Touched();doc.Conflict=false;AfterSave(doc);PersistSoon();return true;
         }catch(const std::exception& e){Status=e.what();return false;}
     }
     bool SaveAll() {
@@ -218,19 +241,20 @@ struct ScriptIDE::Impl {
         if(found==Documents.end())return;
         if(Active==found->get())Active=nullptr;Documents.erase(found);
         if(!Active && !Documents.empty()){Active=Documents.front().get();Activate=Active->Path;}
-        Persist();
+        PersistSoon();
     }
     void Reload(Document& doc) {
         try {
             auto bytes=Read(fs::u8path(doc.Path));
             if(bytes.size()>8*1024*1024 || bytes.find('\0')!=std::string::npos)throw std::runtime_error("Disk source must be UTF-8 and no larger than 8 MB.");
             auto disk=bytes;bool bom=bytes.compare(0,3,"\xEF\xBB\xBF")==0;if(bom)bytes.erase(0,3);Wide(bytes);
-            doc.DiskBytes=std::move(disk);doc.Bom=bom;doc.CRLF=bytes.find("\r\n")!=std::string::npos;doc.Editor.SetText(bytes);doc.Saved=doc.Editor.GetText();doc.Conflict=false;Persist();
+            doc.DiskBytes=std::move(disk);{std::error_code tec;doc.DiskTime=fs::last_write_time(fs::u8path(doc.Path),tec);}doc.Bom=bom;doc.CRLF=bytes.find("\r\n")!=std::string::npos;doc.Editor.SetText(bytes);doc.Saved=doc.Editor.GetText();doc.Touched();doc.Conflict=false;PersistSoon();
         }catch(const std::exception& e){doc.Conflict=true;Status=e.what();}
     }
     void Poll() {
         if(FileScan.valid() && FileScan.wait_for(std::chrono::milliseconds(0))==std::future_status::ready)try {ProjectFiles=FileScan.get();}catch(const std::exception& e){Status=e.what();}
-        if(!FileScan.valid() && Clock::now()-LastScan>std::chrono::seconds(3)) {
+        if(PersistPending && Clock::now()>=PersistAt)Persist();
+        if(Visible && !FileScan.valid() && Clock::now()-LastScan>std::chrono::seconds(3)) {
             LastScan=Clock::now();FileScan=std::async(std::launch::async,ScanSources,ProjectPaths::Root(),EngineSources());
         }
         const bool building=GameModuleBuild::Running();
@@ -238,7 +262,9 @@ struct ScriptIDE::Impl {
         WasBuilding=building;
         if(Clock::now()-LastDiskCheck>std::chrono::seconds(1)) {
             LastDiskCheck=Clock::now();for(auto& d:Documents)try {
-                auto disk=Read(fs::u8path(d->Path));if(disk!=d->DiskBytes){if(d->Dirty())d->Conflict=true;else Reload(*d);}
+                std::error_code tec;const auto stamp=fs::last_write_time(fs::u8path(d->Path),tec);
+                if(!tec && stamp==d->DiskTime)continue; // unchanged since we read or wrote it: no full read
+                auto disk=Read(fs::u8path(d->Path));if(disk!=d->DiskBytes){if(d->Dirty())d->Conflict=true;else Reload(*d);}else d->DiskTime=stamp;
             }catch(...){d->Conflict=true;}
         }
     }
@@ -259,9 +285,12 @@ struct ScriptIDE::Impl {
     void ApplyCompletion(const std::string& name) {
         if(!Active)return;auto pos=Active->Editor.GetCursorPosition();auto line=Active->Editor.GetCurrentLineText();int byte=Active->Editor.CursorByteIndex(),start=byte;
         while(start>0 && (std::isalnum(static_cast<unsigned char>(line[start-1])) || line[start-1]=='_'))--start;
-        auto begin=pos;begin.mColumn-=byte-start;Active->Editor.SetSelection(begin,pos);Active->Editor.ReplaceSelection(name);CompletionOpen=false;Persist();
+        auto begin=pos;begin.mColumn-=byte-start;Active->Editor.SetSelection(begin,pos);Active->Editor.ReplaceSelection(name);CompletionOpen=false;PersistSoon();
     }
     void FindNext(bool reverse=false) {
+        try {FindNextIn(reverse);}catch(const std::exception& e){Status=e.what();}
+    }
+    void FindNextIn(bool reverse) {
         if(!Active || Find.empty())return;auto text=Active->Editor.GetText();auto lines=Active->Editor.GetTextLines();auto c=Active->Editor.GetCursorPosition();size_t offset=Active->Editor.CursorByteIndex();for(int i=0;i<c.mLine;++i)offset+=lines[i].size()+1;
         size_t found=reverse?text.rfind(Find,offset>0?offset-1:0):text.find(Find,offset);if(found==std::string::npos)found=reverse?text.rfind(Find):text.find(Find);
         if(found==std::string::npos){Status="No match.";EditorSound::Play(EditorSound::Event::SearchEmpty);return;}
@@ -359,7 +388,7 @@ bool ScriptIDE::HasUnsavedFiles() const {return std::any_of(impl->Documents.begi
 bool ScriptIDE::OwnsKeyboard() const {return impl->KeyboardActive;}
 bool ScriptIDE::SaveAll(){return impl->SaveAll();}
 void ScriptIDE::CancelPrompts(){impl->ClosePath.clear();}
-void ScriptIDE::DiscardAll(){for(auto& d:impl->Documents)if(d->Dirty()){impl->Reload(*d);if(d->Dirty())d->Editor.SetText(d->Saved);}impl->Persist();}
+void ScriptIDE::DiscardAll(){for(auto& d:impl->Documents)if(d->Dirty()){impl->Reload(*d);if(d->Dirty())d->Editor.SetText(d->Saved);}impl->PersistSoon();}
 
 void ScriptIDE::Impl::Draw() {
     Poll();KeyboardActive=false;if(!Visible)return;
@@ -374,8 +403,8 @@ void ScriptIDE::Impl::Draw() {
     if(ImGui::BeginMenuBar()) {
         if(ImGui::BeginMenu("File")) {if(ImGui::MenuItem("Save","Ctrl+S",false,Active!=nullptr))Save(*Active);if(ImGui::MenuItem("Save All","Ctrl+Shift+S"))SaveAll();if(ImGui::MenuItem("Reload from disk",nullptr,false,Active!=nullptr))ClosePath="reload:"+Active->Path;ImGui::EndMenu();}
         if(ImGui::BeginMenu("Edit")) {
-            if(ImGui::MenuItem("Undo","Ctrl+Z",false,Active && Active->Editor.CanUndo())){Active->Editor.Undo();Persist();}
-            if(ImGui::MenuItem("Redo","Ctrl+Y",false,Active && Active->Editor.CanRedo())){Active->Editor.Redo();Persist();}
+            if(ImGui::MenuItem("Undo","Ctrl+Z",false,Active && Active->Editor.CanUndo())){Active->Editor.Undo();PersistSoon();}
+            if(ImGui::MenuItem("Redo","Ctrl+Y",false,Active && Active->Editor.CanRedo())){Active->Editor.Redo();PersistSoon();}
             if(ImGui::MenuItem("Find / Replace","Ctrl+F"))FindVisible=true;
             if(ImGui::MenuItem("Complete word","Ctrl+Space",false,Active && !Active->Editor.IsReadOnly()))Complete();
             ImGui::EndMenu();
@@ -392,7 +421,7 @@ void ScriptIDE::Impl::Draw() {
         if(ImGui::BeginMenu("Appearance")) {
             ImGui::TextDisabled("Font: JetBrains Mono");ImGui::Separator();
             for(int i=0;i<static_cast<int>(ScriptIDEThemes::Presets.size());++i)
-                if(ImGui::MenuItem(ScriptIDEThemes::Presets[i].Name,nullptr,Theme==i)){Theme=i;Persist();}
+                if(ImGui::MenuItem(ScriptIDEThemes::Presets[i].Name,nullptr,Theme==i)){Theme=i;PersistSoon();}
             ImGui::Separator();if(ImGui::MenuItem("Dock alongside Scene / Game"))DockToScene=true;
             ImGui::EndMenu();
         }
@@ -422,7 +451,7 @@ void ScriptIDE::Impl::Draw() {
     ImGui::InvisibleButton("##SourcesDivider",ImVec2(divider,std::max(1.0f,space.y)));
     if(ImGui::IsItemHovered() || ImGui::IsItemActive())ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     if(ImGui::IsItemActive())SidebarWidth=std::clamp(sidebar+io.MouseDelta.x,sidebarMin,sidebarMax)/scale;
-    if(ImGui::IsItemDeactivated())Persist();
+    if(ImGui::IsItemDeactivated())PersistSoon();
     auto dividerMin=ImGui::GetItemRectMin(),dividerMax=ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddLine(ImVec2(dividerMin.x+divider*.5f,dividerMin.y),ImVec2(dividerMin.x+divider*.5f,dividerMax.y),ImGui::GetColorU32(ImGui::IsItemActive()?ImGuiCol_SeparatorActive:ImGui::IsItemHovered()?ImGuiCol_SeparatorHovered:ImGuiCol_Separator));
     ImGui::SameLine(0,0);ImGui::BeginChild("EditorArea",ImVec2(0,0));
@@ -436,7 +465,7 @@ void ScriptIDE::Impl::Draw() {
         auto flow=[&](float width){if(ImGui::GetItemRectMax().x+ImGui::GetStyle().ItemSpacing.x+width<=right)ImGui::SameLine();};
         auto button=[](const char* label){return ImGui::CalcTextSize(label,nullptr,true).x+ImGui::GetStyle().FramePadding.x*2;};
         Field("Find",Find,180);flow(button("Previous"));if(EditorUIPrimitives::SecondaryButton("Previous"))FindNext(true);flow(button("Next"));if(EditorUIPrimitives::SecondaryButton("Next"))FindNext();flow(ImGui::GetFrameHeight()+ImGui::GetStyle().ItemInnerSpacing.x+ImGui::CalcTextSize("Replace").x);ImGui::Checkbox("Replace",&ReplaceVisible);flow(button("Close find"));if(EditorUIPrimitives::SecondaryButton("Close find"))FindVisible=false;
-        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);flow(button("Replace match"));if(EditorUIPrimitives::SecondaryButton("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);Persist();}flow(button("Replace all"));if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);Persist();}}
+        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);flow(button("Replace match"));if(EditorUIPrimitives::SecondaryButton("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);PersistSoon();}flow(button("Replace all"));if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);PersistSoon();}}
     }
     const float paneHeight=std::max(1.0f,ImGui::GetContentRegionAvail().y);
     const float infoMin=std::min(64.0f*scale,paneHeight*.3f);
@@ -450,13 +479,12 @@ void ScriptIDE::Impl::Draw() {
             if(ImGui::BeginTabItem(title.c_str(),&open,flags)) {
                 Active=&d;if(Same(Activate,d.Path))Activate.clear();
                 auto cursor=d.Editor.GetCursorPosition();ImGui::TextDisabled("%s  |  Ln %d, Col %d%s",Label(d.Path).c_str(),cursor.mLine+1,cursor.mColumn+1,d.Editor.IsReadOnly()?"  |  read-only":"");
-                const auto before=d.Editor.GetText();
                 auto palette=ScriptIDEThemes::Palette(Theme);const ImU32 caret=palette[(int)TextEditor::PaletteIndex::Cursor];
                 palette[(int)TextEditor::PaletteIndex::Cursor]=caret&~IM_COL32_A_MASK; // the editor's own caret is hidden: RenderMotion draws a gliding one
                 d.Editor.SetPalette(palette);
                 EditorTheme::PushMono();BeforeRender(d);d.Editor.Render("Code",ImVec2(0,std::max(1.0f,ImGui::GetContentRegionAvail().y)));
-                const bool typed=d.Editor.GetText()!=before;RenderMotion(d,caret,typed);EditorTheme::PopFont();
-                if(typed){CompletionOpen=false;Persist();}
+                const bool typed=d.Editor.IsTextChanged();if(typed)d.Touched();RenderMotion(d,caret,typed);EditorTheme::PopFont();
+                if(typed){CompletionOpen=false;PersistSoon(std::chrono::seconds(1));}
                 ImGui::EndTabItem();
             }
             if(!open)ClosePath=d.Path;
@@ -470,7 +498,7 @@ void ScriptIDE::Impl::Draw() {
     ImGui::InvisibleButton("##InformationDivider",ImVec2(std::max(1.0f,ImGui::GetContentRegionAvail().x),divider));
     if(ImGui::IsItemHovered() || ImGui::IsItemActive())ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     if(ImGui::IsItemActive())InformationHeight=std::clamp(infoHeight-io.MouseDelta.y,infoMin,infoMax)/scale;
-    if(ImGui::IsItemDeactivated())Persist();
+    if(ImGui::IsItemDeactivated())PersistSoon();
     dividerMin=ImGui::GetItemRectMin();dividerMax=ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddLine(ImVec2(dividerMin.x,dividerMin.y+divider*.5f),ImVec2(dividerMax.x,dividerMin.y+divider*.5f),ImGui::GetColorU32(ImGui::IsItemActive()?ImGuiCol_SeparatorActive:ImGui::IsItemHovered()?ImGuiCol_SeparatorHovered:ImGuiCol_Separator));
     ImGui::BeginChild("InformationPane",ImVec2(0,0));
