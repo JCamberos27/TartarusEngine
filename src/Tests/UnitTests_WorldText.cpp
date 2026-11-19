@@ -2,7 +2,7 @@
 #include "../Renderer/WorldText.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
-#include "../Editor/AssetLibrary.h"
+#include "../Assets/AssetLibrary.h"
 #include "../Game/SceneSerializer.h"
 #include "../Core/Paths.h"
 #include "../Core/Log.h"
