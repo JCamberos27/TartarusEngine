@@ -152,11 +152,7 @@ class Pack:
 
 
 # --- the house itself -------------------------------------------------------------------------------------------
-LAMPS_OFF = ('Lamp_bedroom', 'Lamp_ceiling_circle', 'Lamp_chandelier', 'Lamp_floor', 'Lamp_kitchen_A',
-             'Lamp_kitchen_B', 'Lamp_stand', 'Lamp_table_A', 'Lamp_table_B', 'Lamp_wall_chan', 'Lamp_wall_fluorescent',
-             'Lamp_wall_toilet')
 OFF = {'guid': 'af7ac0342f5de963', 'path': PACK + 'Materials/M_Lamps_House_Off.mat'}
-OFF_OUT = {'guid': 'd48f49996a84314b', 'path': PACK + 'Materials/M_Lamps_Off.mat'}
 DEAD_SCREEN = {}    # filled by add_house: the devices' material with the emission off
 
 

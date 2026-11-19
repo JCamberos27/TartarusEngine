@@ -217,10 +217,6 @@ def _k_weight(y):
     return signal.lfilter(b2, a2, out, axis=0)
 
 
-def rms_db(x):
-    return 10 * math.log10(max(float(np.mean(x ** 2)), 1e-12))
-
-
 def dc_offset(x):
     return float(np.abs(x.mean(axis=0)).max())
 
@@ -359,13 +355,6 @@ def pitch(x, semitones):
         return x
     r = 2 ** (semitones / 12.0)
     n = int(round(len(x) / r))
-    t = np.linspace(0, len(x) - 1, n)
-    return np.stack([np.interp(t, np.arange(len(x)), x[:, c]) for c in range(x.shape[1])], 1).astype(np.float32)
-
-
-def stretch_to(x, n):
-    """Resample a clip to exactly n samples (varispeed)."""
-    _PITCH.append(12.0 * math.log2(len(x) / max(1, n)))
     t = np.linspace(0, len(x) - 1, n)
     return np.stack([np.interp(t, np.arange(len(x)), x[:, c]) for c in range(x.shape[1])], 1).astype(np.float32)
 

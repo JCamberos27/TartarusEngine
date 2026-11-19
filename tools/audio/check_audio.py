@@ -43,6 +43,10 @@ FORBIDDEN = [
 ]
 
 
+# A trig call that shapes a gain window or a spectral taper (not a tone) says so on its line with this mark.
+WINDOW_MARK = "# check_audio: window"
+
+
 def scan_generators():
     errs = []
     for f in sorted(os.listdir(abuild.HERE)):
@@ -52,6 +56,8 @@ def scan_generators():
         for pat, why in FORBIDDEN:
             for m in re.finditer(pat, text):
                 line = text[:m.start()].count("\n") + 1
+                if WINDOW_MARK in text.splitlines()[line - 1]:
+                    continue
                 if why is None:
                     if f != "adsp.py":
                         errs.append(f"{f}:{line}: np.random generator outside adsp.deterministic_rng")

@@ -84,7 +84,7 @@ def gate_pre_onset(x, rule):
         return x                                    # the lead-in is sound, not noise: leave it
     w = np.ones(len(x), np.float32)
     w[:start - ramp] = 0.0
-    w[start - ramp:start] = np.sin(np.linspace(0.0, math.pi / 2, ramp)) ** 2
+    w[start - ramp:start] = np.sin(np.linspace(0.0, math.pi / 2, ramp)) ** 2  # check_audio: window
     return (np.asarray(x) * w[:, None]).astype(np.float32)
 
 
@@ -98,7 +98,7 @@ def shape_tail(x, tail_s):
         return x
     a = pk + int(0.6 * tail_s * SR)
     y = np.array(x[:end], np.float32, copy=True)
-    y[a:end] *= (np.cos(np.linspace(0.0, np.pi, end - a)) * 0.5 + 0.5)[:, None]
+    y[a:end] *= (np.cos(np.linspace(0.0, np.pi, end - a)) * 0.5 + 0.5)[:, None]  # check_audio: window
     return y
 
 

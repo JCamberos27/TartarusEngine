@@ -10,10 +10,11 @@ import os
 import subprocess
 import zipfile
 
-SRC_ROOT = r"C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
+# Where the purchased archives and the AE Master Unity project sit on this machine (outside the repo).
+SRC_ROOT = os.environ.get("TARTARUS_AUDIO_IMPORT", "")
 OUT = os.environ.get("TARTARUS_AUDIO_SRC", r"C:\tb\audio-src")  # see adsp.SRC_ROOT
 UNRAR = r"C:\Program Files\WinRAR\UnRAR.exe"
-AE_ROOT = r"C:\Users\jacob\OneDrive\Desktop\AE Master\Assets"
+AE_ROOT = os.environ.get("TARTARUS_AE_ASSETS", "")  # the AE Master project's Assets folder
 AE_PACKS = [
     ("ColdBore Flesh", r"ColdBore\ProjectileSystem\Demo\Assets\SurfaceAudio\Clips\Flesh",
      [f"FleshImpact_0{i}.wav" for i in range(1, 7)]),
@@ -27,6 +28,9 @@ def has_wavs(d):
 
 
 def main():
+    if not SRC_ROOT or not AE_ROOT:
+        raise SystemExit("set TARTARUS_AUDIO_IMPORT (the folder with Tactical Shooter Pack.rar and Boots.zip) and "
+                         "TARTARUS_AE_ASSETS (the AE Master project's Assets folder)")
     os.makedirs(OUT, exist_ok=True)
     tsp = os.path.join(OUT, "tsp")
     if not has_wavs(tsp):
