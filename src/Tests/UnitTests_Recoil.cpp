@@ -1,5 +1,8 @@
 #include "UnitTestSupport.h"
 #include "FirstPersonProcedural.h"
+#include "Paths.h"
+#include <cstdio>
+#include <fstream>
 #include <glm/gtx/euler_angles.hpp>
 #include <cmath>
 
@@ -144,9 +147,55 @@ void TestUnityControllerRecoil() {
         else CHECK(std::abs(angle-2.0f)<0.001f);
     }
 }
+
+// Measurement only: the legacy solver against its FromLegacy conversion on each shipped weapon's embedded legacy block.
+struct RecoilTrace { float PeakPitch=0, PeakYaw=0, PeakKick=0, PeakT=0, Settle=0, ClimbPitch=0, ClimbYaw=0, CamPitch=0; };
+RecoilTrace TraceRecoil(const WeaponProceduralSettings& s, bool ads, int shots, float rpm) {
+    WeaponProceduralState st, base;
+    WeaponProceduralInput in; in.Dt=1.0f/120.0f; in.Ads=ads; in.Grounded=true;
+    RecoilTrace t; const float interval=60.0f/rpm; float nextShot=0; int fired=0; float time=0, lastBig=0;
+    const auto mode = shots>1 ? RecoilFireMode::Auto : RecoilFireMode::Semi;
+    for (int f=0; f<240; ++f, time+=in.Dt) {
+        if (fired<shots && time>=nextShot-1e-5f) { st.SetFiring(true); st.OnShot(s,ads,true,rpm,mode,time,in.Dt); ++fired; nextShot+=interval; if (fired==shots) {} }
+        if (fired==shots && time>=nextShot-interval+0.05f) st.SetFiring(false);
+        const auto p = st.Update(s,in); const auto b = base.Update(s,in);
+        const glm::vec3 r = p.Rotation-b.Rotation, x = p.Position-b.Position;
+        t.ClimbPitch += p.AimKick.x; t.ClimbYaw += p.AimKick.y; st.ConsumeAimKick();
+        if (std::abs(r.x)>std::abs(t.PeakPitch)) { t.PeakPitch=r.x; t.PeakT=time; }
+        if (std::abs(r.y)>std::abs(t.PeakYaw)) t.PeakYaw=r.y;
+        if (std::abs(x.z)>std::abs(t.PeakKick)) t.PeakKick=x.z;
+        if (std::abs(p.CameraKick.x)>std::abs(t.CamPitch)) t.CamPitch=p.CameraKick.x;
+        if (std::abs(r.x)>0.05f*std::abs(t.PeakPitch) || std::abs(x.z)>0.05f*std::abs(t.PeakKick)) lastBig=time;
+    }
+    t.Settle=lastBig; return t;
+}
+void TestLegacyRecoilVsConverted() {
+    std::vector<std::pair<std::string,WeaponProceduralSettings>> cases;
+    cases.push_back({"Defaults()",WeaponProceduralSettings::Defaults()});
+    for (const char* w : {"AKS74U/AKS74U","Remington870/Remington870","Revolver38/Revolver38"}) {
+        std::ifstream f(ProjectPaths::Resolve(std::string("assets/Weapons/")+w+".fpsanim"));
+        if (!f) { std::printf("[RecoilCompare] missing %s\n",w); continue; }
+        auto j=nlohmann::json::parse(f,nullptr,false);
+        WeaponProceduralSettings s=WeaponProceduralSettings::Defaults(); std::string why;
+        if (!j.contains("procedural") || !WeaponProceduralSettings::FromJson(j["procedural"],s,&why)) { std::printf("[RecoilCompare] %s: %s\n",w,why.c_str()); continue; }
+        cases.push_back({w,s});
+    }
+    for (auto& [name,legacy] : cases) {
+        legacy.Recoil.UnityPort=false; legacy.Recoil.Enabled=true;
+        WeaponProceduralSettings conv=legacy; conv.Recoil.Unity=RecoilAnimData::FromLegacy(legacy.Recoil); conv.Recoil.UnityPort=true;
+        for (int ads=0; ads<2; ++ads) for (int shots : {1,10}) {
+            const auto a=TraceRecoil(legacy,ads,shots,600), b=TraceRecoil(conv,ads,shots,600);
+            std::printf("[RecoilCompare] %-26s %s %2d shot | legacy pitch %7.3f yaw %7.3f kick %7.4f peak@%.3f settle %.3f climb %6.3f/%6.3f cam %6.3f | converted pitch %7.3f yaw %7.3f kick %7.4f peak@%.3f settle %.3f climb %6.3f/%6.3f cam %6.3f\n",
+                name.c_str(), ads?"ADS":"hip", shots, a.PeakPitch,a.PeakYaw,a.PeakKick,a.PeakT,a.Settle,a.ClimbPitch,a.ClimbYaw,a.CamPitch,
+                b.PeakPitch,b.PeakYaw,b.PeakKick,b.PeakT,b.Settle,b.ClimbPitch,b.ClimbYaw,b.CamPitch);
+        }
+    }
+    std::fflush(stdout);
+}
 }
 void RegisterRecoilPortTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("RecoilAnimDataPort",TestRecoilAnimDataPort);
     tests.emplace_back("RecoilAnimationPort",TestRecoilAnimationPort);
     tests.emplace_back("UnityControllerRecoil",TestUnityControllerRecoil);
+    tests.emplace_back("LegacyRecoilVsConverted",TestLegacyRecoilVsConverted);
 }
