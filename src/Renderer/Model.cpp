@@ -383,7 +383,7 @@ bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worl
     outT = bestWorldT;
     if (outMeshIndex) *outMeshIndex = bestMesh;
     if (outNormal) {
-        glm::vec3 n = glm::normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * bestLocalN);
+        glm::vec3 n = glm::normalize(NormalMatrix(modelMatrix) * bestLocalN);
         if (glm::dot(n, wd) > 0.0f) n = -n; // face the ray origin
         *outNormal = n;
     }
@@ -584,7 +584,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
             }
         }
     }
-    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(bake)));
+    glm::mat3 normalMatrix = NormalMatrix(bake);
 
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         ModelVertex v;
@@ -2830,7 +2830,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const ProgramSelector& selectProgram, float opacity,
                          const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided,
                          const VisibleIndexBuffer* visible, int instances) {
-    const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
+    const glm::mat4 nrm = glm::mat4(NormalMatrix(xform));
 
     Shader*             lastProg = nullptr;
     const MaterialLocs* locs = nullptr;
@@ -3049,7 +3049,7 @@ long long Model::DrawFurShells(Shader& prog, const glm::mat4& xform, const std::
             preSkinned = UploadBoneMatrices(prog);
             locs = &CachedMaterialLocs(prog);
             prog.SetMat4(prog.Loc("uModel"), xform);
-            prog.SetMat4(prog.Loc("uNormalMatrix"), glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform)))));
+            prog.SetMat4(prog.Loc("uNormalMatrix"), glm::mat4(NormalMatrix(xform)));
             bound = true;
         }
         const int shells = bind(prog, mat, user);

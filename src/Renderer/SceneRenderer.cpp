@@ -1,4 +1,5 @@
 #include "SceneRenderer.h"
+#include "Animation.h" // NormalMatrix
 #include <cstdio>
 #include <cstdlib>
 #include <array>
@@ -251,7 +252,7 @@ const CandidateCache& Candidates(World& world) {
             Candidate& c = cache.List[cache.Index[slot]];
             if (c.Entity != e) continue;
             c.V.Xform = world.GetCachedWorldTransform(e);
-            c.V.Normal = glm::transpose(glm::inverse(glm::mat3(c.V.Xform)));
+            c.V.Normal = NormalMatrix(c.V.Xform);
             FillBounds(c.V, *c.Renderable);
             CandidateCell& cell = cache.Cells[c.Cell];
             if (!cell.Always) {
@@ -299,7 +300,7 @@ const CandidateCache& Candidates(World& world) {
         c.V.Layer = c.Layer;
         c.V.Renderable = &r;
         c.V.Xform = world.GetCachedWorldTransform(entity);
-        c.V.Normal = glm::transpose(glm::inverse(glm::mat3(c.V.Xform)));
+        c.V.Normal = NormalMatrix(c.V.Xform);
         FillBounds(c.V, r);
         built.push_back(c);
     }
