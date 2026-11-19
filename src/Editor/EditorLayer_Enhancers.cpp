@@ -1613,7 +1613,7 @@ void DrawTabOverflow(Enhancers::TabStrip& strip, const std::vector<EditorLayer::
         ImGui::OpenPopup("##tabList");
     if (ImGui::BeginPopup("##tabList")) {
         for (int i = first; i < n; ++i) {
-            const TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
+            const EditorLayer::TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
             const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
             const std::string text = std::string(icon ? icon : "") + (icon ? "  " : "") + (i < 0 ? liveLabel : (item ? item->Label.c_str() : ""));
             ImGui::PushID(i);
