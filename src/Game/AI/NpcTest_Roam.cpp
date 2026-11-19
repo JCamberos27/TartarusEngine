@@ -81,7 +81,6 @@ void NpcTest::RoamSetUp(World& world, const Player& player) {
         if (!pts.empty()) { // walked in the order given, a leg with no route on the mesh straight at its point
             const glm::vec3 f = pts.front() + glm::vec3(0.0f, 0.05f, 0.0f);
             PhysicsWorld::SetCharacterFootPosition(&f.x);
-            m_RoStart = pts.front();
             m_RoPoints.assign(pts.begin() + 1, pts.end());
             std::printf("[NpcTest] roam: %zu given waypoints, %d off the mesh\n", m_RoPoints.size(), m_RoOffMesh);
             return;
@@ -90,7 +89,6 @@ void NpcTest::RoamSetUp(World& world, const Player& player) {
     glm::vec3 at;
     PhysicsWorld::GetCharacterFootPosition(&at.x);
     if (!nav.Closest(at, at, glm::vec3(1.0f, 2.0f, 1.0f)) && !pts.empty()) at = pts.front();
-    m_RoStart = at;
     while (!pts.empty() && (int)m_RoPoints.size() < kMaxPoints) {
         int best = -1;
         float bestLen = 1e9f;

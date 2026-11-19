@@ -6,6 +6,7 @@
 // frame's wall time. (Phase 5 measured it against the legacy controller too: docs/MOTION_MATCHING_HANDOFF.md.) Logged as [NpcPerf]; checked: every dummy spawned and roaming, and every
 // dummy's matcher stepping as its LOD tier says.
 #include "NpcTest.h"
+#include "NpcTest_Common.h"
 #include "NpcDirector.h"
 #include "Player.h"
 #include "PhysicsWorld.h"
@@ -43,11 +44,6 @@ struct PerfState {
 };
 PerfState g_P;
 
-float Percentile(std::vector<float> v, float p) {
-    if (v.empty()) return 0.0f;
-    std::sort(v.begin(), v.end());
-    return v[(size_t)(p * (float)(v.size() - 1))];
-}
 } // namespace
 
 float NpcTest::NpcPerfSeconds() { return kPerfSeconds + 1.0f; } // (the report at kPerfSeconds, a second before the run ends)
@@ -124,8 +120,8 @@ void NpcTest::NpcPerf(World& world, NpcDirector& npcs, float now) {
                 100.0 * s.LodFrames[1] * perDummyLod, 100.0 * s.LodFrames[2] * perDummyLod, 100.0 * s.LodFrames[4] * perDummyLod,
                 100.0 * s.MovingFrames * perDummyLod);
     std::printf("[NpcPerf] frame ms: avg %.3f  p50 %.3f  p95 %.3f  p99 %.3f  max %.3f\n",
-                frames > 0 ? (double)std::accumulate(s.FrameMs.begin(), s.FrameMs.end(), 0.0) / frames : 0.0, Percentile(s.FrameMs, 0.5f),
-                Percentile(s.FrameMs, 0.95f), Percentile(s.FrameMs, 0.99f), Percentile(s.FrameMs, 1.0f));
+                frames > 0 ? (double)std::accumulate(s.FrameMs.begin(), s.FrameMs.end(), 0.0) / frames : 0.0, NpcTestCommon::Percentile(s.FrameMs, 0.5f),
+                NpcTestCommon::Percentile(s.FrameMs, 0.95f), NpcTestCommon::Percentile(s.FrameMs, 0.99f), NpcTestCommon::Percentile(s.FrameMs, 1.0f));
     std::printf("[NpcPerf] director ms a frame: think %.3f (max %.3f), late %.3f (max %.3f), both %.3f = %.4f per dummy\n", think.Avg(),
                 think.Max, late.Avg(), late.Max, think.Avg() + late.Avg(), alive ? (think.Avg() + late.Avg()) / alive : 0.0f);
     PrintCosts(npcs);
