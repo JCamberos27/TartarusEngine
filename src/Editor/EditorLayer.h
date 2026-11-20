@@ -2123,8 +2123,14 @@ private:
     AssetThumbnailLoader m_AssetThumbs; // tiles of unloaded assets
     void RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets);
     // What an Inspector asset field of `kind` offers: every such file in the project (loaded or
-    // not) plus anything loaded from outside it, sorted by file name.
-    std::vector<std::string> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // not) plus anything loaded from outside it, sorted by file name (then path).
+    struct AssetRefChoice {
+        std::string Path;
+        std::string Label; // file name + "##" + path: same-named files in different folders stay distinct ImGui items
+    };
+    std::vector<AssetRefChoice> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // The open Inspector asset combo's list: built when the combo opens, reused while it stays open.
+    std::vector<AssetRefChoice> m_AssetRefChoiceCache;
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
