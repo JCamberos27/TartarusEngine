@@ -316,9 +316,13 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         m_BindPose.push_back(std::move(bind));
     }
     m_Shared = shared;
-    const bool carried = carry && carry != this && carry->m_Shared == shared;
+    // (Another driver rig is another cached instance - its own excluded stretches - of the same frames: the frame numbers hold.)
+    const bool carried = carry && carry != this && carry->m_Shared &&
+                         (carry->m_Shared == shared || (carry->m_Shared->Db.FrameCount() == shared->Db.FrameCount() &&
+                                                         carry->m_Shared->StartFrame == shared->StartFrame));
     if (carried) {
         m_Matcher = carry->m_Matcher;
+        m_Matcher.Rebind(&shared->Db);
         m_Predictor = carry->m_Predictor;
         m_DesiredYaw = carry->m_DesiredYaw;
         m_YawRate = carry->m_YawRate;
