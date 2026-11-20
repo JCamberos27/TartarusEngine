@@ -75,7 +75,7 @@ public:
     void SetFloat(int loc, float v) const;
     void SetInt(int loc, int v) const;
 
-    // One caller-owned block of pre-resolved locations per program (Model.cpp's material
+    // One caller-owned block of pre-resolved locations per program (ModelDraw.cpp's material
     // uniforms), so a hot path that needs dozens of them doesn't look each one up per draw.
     // Dropped on Reload() along with the name cache, since a relink can move every location.
     void* LocationBlock() const { return m_LocationBlock.get(); }

@@ -57,7 +57,7 @@ class SkyAtmosphere {
 public:
     static constexpr int kEnvSize = 128;
     // Model-shader texture units: the top two of the 32 every GL 4.6 GPU has, which material
-    // texture allocation stops short of (ShaderAsset::BuildBindings, Model.cpp's fixed 16-18).
+    // texture allocation stops short of (ShaderAsset::BuildBindings, ModelDraw.cpp's fixed 16-18).
     static constexpr int kAerialUnit = 30;
     static constexpr int kCloudShadowUnit = 31;
 

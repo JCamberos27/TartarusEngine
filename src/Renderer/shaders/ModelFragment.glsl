@@ -60,7 +60,7 @@ uniform float uWetness;
 uniform float uPuddleAmount;
 uniform float uPuddleScale;
 uniform int   uNoWetness;
-uniform int   uFoliageSurface; // Material::Foliage (Model.cpp)
+uniform int   uFoliageSurface; // Material::Foliage (ModelDraw.cpp)
 
 #include "Noise.glsl" // WetNoise, Ign
 

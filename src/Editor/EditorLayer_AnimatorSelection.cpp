@@ -251,13 +251,21 @@ void SelectionPanel::DrawStateTravel(AC::State& s) {
         auto analyse = [&](const std::string& ref, const char* label) {
             const int c = ResolveAnimationClip(*rigModel, ref, *assets);
             if (c < 0) return;
-            struct Cached { const Model* M = nullptr; int Clip = -1, Node = -1; bool Rot = false, Vert = false; ClipAnalysis::Result R; };
+            // Keyed by the model's address AND its file and clip count, so a new model that reuses a freed
+            // address is never read as the old one; bounded (a long session browses many clips).
+            struct Cached { const Model* M = nullptr; std::string Path; int Clips = -1, Clip = -1, Node = -1; bool Rot = false, Vert = false; ClipAnalysis::Result R; };
             static std::unordered_map<std::string, Cached> s_cache;
-            Cached& e = s_cache[std::string(label) + "|" + ref];
-            if (e.M != rigModel || e.Clip != c || e.Node != node || e.Rot != rms.Rotation || e.Vert != rms.Vertical) {
+            std::string key = label;
+            key += '|';
+            key += ref;
+            if (s_cache.size() > 64 && !s_cache.count(key)) s_cache.clear();
+            Cached& e = s_cache[key];
+            if (e.M != rigModel || e.Clip != c || e.Node != node || e.Rot != rms.Rotation || e.Vert != rms.Vertical ||
+                e.Clips != rigModel->AnimationCount() || e.Path != rigModel->Path()) {
                 const std::string feet[2] = {FPBody::kBoneFoot[0], FPBody::kBoneFoot[1]};
                 std::vector<std::string> seam = {FPBody::kBoneFoot[0], FPBody::kBoneFoot[1], FPBody::kBoneHand[0], FPBody::kBoneHand[1], "head"};
-                e = {rigModel, c, node, rms.Rotation, rms.Vertical, ClipAnalysis::Analyze(*rigModel, c, node, rms, feet, seam)};
+                e = {rigModel, rigModel->Path(), rigModel->AnimationCount(), c, node, rms.Rotation, rms.Vertical,
+                     ClipAnalysis::Analyze(*rigModel, c, node, rms, feet, seam)};
             }
             const ClipAnalysis::Result& a = e.R;
             if (!a.Valid) return;
