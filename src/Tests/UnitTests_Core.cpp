@@ -19,6 +19,7 @@
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
 #include <set>
+#include <map>
 #include "Log.h" // #178 stack traces
 #include "FrameLoads.h"
 #include "InputMap.h"
@@ -482,7 +483,83 @@ void TestFrameLoads() {
 
 } // namespace
 
+// The world transform cache across small structure changes (what an outfit piece landing does: create + attach,
+// re-parent, destroy a subtree, a destroy straight through the registry, a transform removed and added back): every
+// frame's cached matrices match a fresh compose, each moved or new one is reported changed, membership changes are
+// flagged, and none of these frames takes the full walk.
+void TestTransformCacheStructureChanges() {
+    World world;
+    std::uint32_t rng = 12345;
+    auto rand = [&](std::uint32_t n) { rng = rng * 1664525u + 1013904223u; return (rng >> 8) % n; };
+    auto randVec = [&] { return glm::vec3((float)rand(100) * 0.1f - 5.0f, (float)rand(100) * 0.1f, (float)rand(100) * 0.1f - 5.0f); };
+    std::vector<entt::entity> live;
+    for (int i = 0; i < 200; ++i) {
+        const entt::entity e = world.CreateEmptyEntity(randVec(), glm::vec3(0.0f, (float)rand(360), 0.0f), glm::vec3(1.0f), "E");
+        if (!live.empty() && rand(3) != 0) world.AttachChildRaw(e, live[rand((std::uint32_t)live.size())]);
+        live.push_back(e);
+    }
+    std::map<entt::entity, glm::mat4> last;
+    auto near = [](const glm::mat4& a, const glm::mat4& b) {
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                if (std::abs(a[c][r] - b[c][r]) > 1e-3f) return false;
+        return true;
+    };
+    auto check = [&](bool membershipExpected) {
+        world.RebuildWorldTransformCache();
+        const auto& changedList = world.ChangedWorldTransforms();
+        const std::set<entt::entity> changed(changedList.begin(), changedList.end());
+        std::map<entt::entity, glm::mat4> now;
+        bool allMatch = true, allReported = true;
+        for (entt::entity e : world.Registry.view<TransformComponent>()) {
+            const glm::mat4 cached = world.GetCachedWorldTransform(e);
+            allMatch = allMatch && near(cached, world.ComposeWorldTransform(e));
+            const auto it = last.find(e);
+            if (it == last.end() || !near(it->second, cached)) allReported = allReported && changed.count(e) != 0;
+            now[e] = cached;
+        }
+        CHECK(allMatch);
+        CHECK(allReported);
+        if (membershipExpected) CHECK(world.TransformCacheMembershipChanged());
+        last = std::move(now);
+    };
+    check(true);
+    const std::uint64_t fullAfterLoad = world.TransformCacheFullWalks(); // the first build
+    auto pick = [&] { return live[rand((std::uint32_t)live.size())]; };
+    auto prune = [&] {
+        live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !world.Registry.valid(e); }), live.end());
+    };
+    for (int frame = 0; frame < 60; ++frame) {
+        bool membership = false;
+        switch (frame % 6) {
+        case 0: { // a piece lands: created and attached under a live entity
+            const entt::entity e = world.CreateEmptyEntity(randVec(), glm::vec3(0.0f), glm::vec3(1.0f), "Piece");
+            world.AttachChildRaw(e, pick());
+            live.push_back(e);
+            membership = true;
+            break;
+        }
+        case 1: world.SetParent(pick(), rand(4) == 0 ? entt::entity{entt::null} : pick()); break; // cycles refused
+        case 2: world.DestroyEntityAndChildren(pick()); prune(); membership = true; break;
+        case 3: world.Registry.destroy(pick()); prune(); membership = true; break; // children keep a dead parent id
+        case 4: { // a transform removed under its children, then added back next time round
+            const entt::entity e = pick();
+            if (world.Registry.all_of<TransformComponent>(e)) world.Registry.remove<TransformComponent>(e);
+            break;
+        }
+        case 5:
+            for (entt::entity e : live)
+                if (!world.Registry.all_of<TransformComponent>(e)) world.Registry.emplace<TransformComponent>(e, randVec(), glm::vec3(0.0f), glm::vec3(1.0f));
+            break;
+        }
+        world.Registry.get_or_emplace<TransformComponent>(pick()).Position += glm::vec3(0.5f, 0.0f, 0.0f); // and one moves
+        check(membership);
+    }
+    CHECK(world.TransformCacheFullWalks() == fullAfterLoad);
+}
+
 void RegisterCoreTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"TransformCacheStructureChanges", TestTransformCacheStructureChanges});
     tests.push_back({"InputMap", TestInputMap});
     tests.push_back({"LogStackTrace", TestLogStackTrace});
     tests.push_back({"FramePacing", TestFramePacing});

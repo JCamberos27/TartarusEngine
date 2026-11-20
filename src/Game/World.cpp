@@ -202,17 +202,10 @@ void World::RebuildWorldTransformCache() {
     m_ChangedTransforms.clear();
     m_TransformMembershipChanged = false;
     if (RebuildChangedTransformsOnly()) return;
+    ++m_TransformFullWalks;
     size_t slots = 0;
     for (entt::entity entity : view) slots = std::max(slots, (size_t)entt::to_entity(entity) + 1);
-    auto ensureSlots = [&](size_t n) {
-        if (n <= m_WorldTransformKeys.size()) return;
-        m_WorldTransformKeys.resize(n, entt::null);
-        m_WorldTransformCache.resize(n);
-        m_LocalSnapshots.resize(n);
-        m_LocalHashes.resize(n, 0);
-        m_RebuildDone.resize(n, 0);
-        m_RebuildChanged.resize(n, 0);
-    };
+    auto ensureSlots = [&](size_t n) { EnsureTransformSlots(n); };
     ensureSlots(slots);
     const std::uint32_t gen = ++m_RebuildGeneration;
     auto doneNow = [&](entt::entity e) {
@@ -302,6 +295,7 @@ void World::RebuildWorldTransformCache() {
             m_TransformMembershipChanged = true;
         }
     }
+    CountKeyedWithTransform();
     TransformStructure(m_TransformStructure);
     m_TransformStructureValid = true;
 }
@@ -312,18 +306,107 @@ void World::TransformStructure(std::uint64_t out[3]) {
     out[2] = Registry.storage<TransformComponent>().size();
 }
 
-// The common frame: the hierarchy is as the last full rebuild left it and the same entities have transforms, so each
+// A structure change for the incremental pass: `dirty` holds the scan's finds (moved, new to the cache, re-parented).
+// Checks first, then changes, so false (nothing changed) sends the frame to the full walk: a mostly new set (a scene
+// load), a parent chain that loops, or a Transform-less ancestor new to the cache. On success the cache has dropped
+// what was destroyed, keyed what is new, re-read the parents, and `dirty` also holds what lost its transform or sits
+// under a re-parented Transform-less ancestor; the caller recomposes those subtrees.
+bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
+    const auto& hierarchy = Registry.storage<HierarchyComponent>();
+    const auto parentOf = [&](entt::entity e) {
+        if (!hierarchy.contains(e)) return entt::entity{entt::null};
+        const entt::entity p = hierarchy.get(e).Parent;
+        return p != entt::null && Registry.valid(p) ? p : entt::entity{entt::null};
+    };
+    size_t fresh = 0;
+    for (entt::entity e : dirty) {
+        const bool cached = IsWorldTransformCached(e);
+        fresh += cached ? 0 : 1;
+        if (cached && parentOf(e) == m_LocalSnapshots[(size_t)entt::to_entity(e)].Parent) continue; // only moved
+        int depth = 0;
+        for (entt::entity p = parentOf(e); p != entt::null; p = parentOf(p)) {
+            if (++depth > kMaxHierarchyDepth) return false;
+            if (!IsWorldTransformCached(p) && !Registry.all_of<TransformComponent>(p)) return false;
+        }
+    }
+    if (fresh * 2 > Registry.storage<TransformComponent>().size()) return false;
+
+    // What left: destroyed (the slot is dropped) or lost its transform (kept as a Transform-less ancestor, like the
+    // full walk keeps one, and recomposed with its subtree). A Transform-less ancestor isn't in the scan: its own
+    // re-parenting is found here.
+    for (size_t s = 0; s < m_WorldTransformKeys.size(); ++s) {
+        const entt::entity k = m_WorldTransformKeys[s];
+        if (k == entt::null) continue;
+        if (!Registry.valid(k)) {
+            m_WorldTransformKeys[s] = entt::null;
+            m_TransformMembershipChanged = true;
+            continue;
+        }
+        LocalSnapshot& snap = m_LocalSnapshots[s];
+        if (snap.HasTransform && !Registry.all_of<TransformComponent>(k)) {
+            snap.HasTransform = false;
+            m_LocalHashes[s] = 0;
+            dirty.push_back(k);
+        } else if (!snap.HasTransform && parentOf(k) != snap.Parent) {
+            dirty.push_back(k);
+        }
+    }
+    for (entt::entity e : dirty) {
+        const size_t s = (size_t)entt::to_entity(e);
+        EnsureTransformSlots(s + 1);
+        if (m_WorldTransformKeys[s] != e) {
+            m_WorldTransformKeys[s] = e;
+            m_LocalSnapshots[s].HasTransform = true; // new to the cache: found in the transform pool
+            m_LocalHashes[s] = 0;
+            m_TransformMembershipChanged = true;
+        }
+        m_LocalSnapshots[s].Parent = parentOf(e);
+        if (!m_LocalSnapshots[s].HasTransform && Registry.all_of<TransformComponent>(e))
+            m_LocalSnapshots[s].HasTransform = true; // a Transform-less ancestor given one again
+    }
+    CountKeyedWithTransform();
+    TransformStructure(m_TransformStructure);
+    return true;
+}
+
+void World::CountKeyedWithTransform() {
+    m_KeyedWithTransform = 0;
+    for (size_t s = 0; s < m_WorldTransformKeys.size(); ++s)
+        m_KeyedWithTransform += m_WorldTransformKeys[s] != entt::null && m_LocalSnapshots[s].HasTransform ? 1 : 0;
+}
+
+void World::EnsureTransformSlots(size_t n) {
+    if (n <= m_WorldTransformKeys.size()) return;
+    m_WorldTransformKeys.resize(n, entt::null);
+    m_WorldTransformCache.resize(n);
+    m_LocalSnapshots.resize(n);
+    m_LocalHashes.resize(n, 0);
+    m_RebuildDone.resize(n, 0);
+    m_RebuildChanged.resize(n, 0);
+}
+
+// The common frame: the hierarchy is as the last rebuild left it and the same entities have transforms, so each
 // slot's recorded parent still holds. One linear pass over the transforms finds the ones whose local values moved;
-// only those and their descendants are recomposed (parents first), everything else keeps its matrix. Returns false,
-// having changed nothing, when the full walk is needed instead.
+// only those and their descendants are recomposed (parents first), everything else keeps its matrix.
+// A frame whose structure changed by a few entities (an outfit piece landing: created, attached, a piece destroyed)
+// takes the same pass, which then also finds the entities new to the cache and the ones whose parent changed; the
+// cache drops what left it and recomposes only those subtrees, instead of walking every entity (2-5 ms on the forest,
+// on each of the landing frames). Returns false, having changed nothing, when the full walk is needed instead.
 bool World::RebuildChangedTransformsOnly() {
     if (!m_TransformStructureValid) return false;
-    auto view = Registry.view<TransformComponent>();
     std::uint64_t structure[3];
     TransformStructure(structure);
-    if (!std::equal(structure, structure + 3, m_TransformStructure)) return false;
+    // Parents can only have changed when the hierarchy did (every re-parent goes through World and bumps its version).
+    const bool reparents = !std::equal(structure, structure + 3, m_TransformStructure);
     std::vector<entt::entity>& dirty = m_DirtyScratch;
     dirty.clear();
+    // The parent the full walk would use: none, or a destroyed parent's, read as a root.
+    const auto& hierarchy = Registry.storage<HierarchyComponent>();
+    const auto parentOf = [&](entt::entity e) {
+        if (!hierarchy.contains(e)) return entt::entity{entt::null};
+        const entt::entity p = hierarchy.get(e).Parent;
+        return p != entt::null && Registry.valid(p) ? p : entt::entity{entt::null};
+    };
     // The scan is split across the cores in fixed chunks of the transform pool (read only; each chunk keeps its own
     // list): one thread took ~1.7 ms over the forest's 200k transforms, every frame. Chunk order keeps the pool's order.
     const auto& pool = Registry.storage<TransformComponent>();
@@ -337,22 +420,35 @@ bool World::RebuildChangedTransformsOnly() {
     if (s_ChunkDirty.size() < chunks) s_ChunkDirty.resize(chunks);
     s_ChunkIds.resize(chunks);
     std::iota(s_ChunkIds.begin(), s_ChunkIds.end(), size_t(0));
+    static std::vector<size_t> s_ChunkKept; // per chunk: cached entities that still hold their transform
+    s_ChunkKept.assign(chunks, 0);
     std::atomic<bool> newToCache{false};
     auto scan = [&](size_t c) {
         std::vector<entt::entity>& out = s_ChunkDirty[c];
         out.clear();
+        size_t kept = 0;
         const size_t end = std::min(count, (c + 1) * kChunk);
         for (size_t i = c * kChunk; i < end; ++i) {
             const entt::entity e = ents[(std::ptrdiff_t)i];
             const size_t s = (size_t)entt::to_entity(e);
-            if (s >= m_WorldTransformKeys.size() || m_WorldTransformKeys[s] != e) { newToCache = true; return; }
+            if (s >= m_WorldTransformKeys.size() || m_WorldTransformKeys[s] != e) {
+                newToCache = true;
+                out.push_back(e);
+                continue;
+            }
+            kept += m_LocalSnapshots[s].HasTransform ? 1 : 0;
             if (m_LocalHashes[s] != LocalHash(comps[(std::ptrdiff_t)i])) out.push_back(e); // 0 (no transform at the snapshot) never matches
+            else if (reparents && parentOf(e) != m_LocalSnapshots[s].Parent) out.push_back(e); // re-parented
         }
+        s_ChunkKept[c] = kept;
     };
     if (chunks > 1) std::for_each(std::execution::par, s_ChunkIds.begin(), s_ChunkIds.end(), scan);
     else if (chunks == 1) scan(0);
-    if (newToCache) return false; // new to the cache
+    // Something entered or left the cache, even under unchanged counts (one transform removed and another added).
+    const bool structural = reparents || newToCache ||
+                            std::accumulate(s_ChunkKept.begin(), s_ChunkKept.end(), size_t(0)) != m_KeyedWithTransform;
     for (size_t c = 0; c < chunks; ++c) dirty.insert(dirty.end(), s_ChunkDirty[c].begin(), s_ChunkDirty[c].end());
+    if (structural && !ApplyTransformStructureChanges(dirty)) return false;
     if (dirty.empty()) return true;
 
     const std::uint32_t gen = ++m_RebuildGeneration;

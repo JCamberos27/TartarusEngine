@@ -218,6 +218,8 @@ public:
     uint64_t PreviousTransformCacheStamp() const { return m_PrevTransformCacheStamp; }
     const std::vector<entt::entity>& ChangedWorldTransforms() const { return m_ChangedTransforms; }
     bool TransformCacheMembershipChanged() const { return m_TransformMembershipChanged; }
+    // How many rebuilds took the full walk (tests: a small structure change takes the incremental pass).
+    std::uint64_t TransformCacheFullWalks() const { return m_TransformFullWalks; }
 
     // #163 - picks each LOD Group's level for a view (eye position + projection) and tags the
     // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
@@ -352,6 +354,11 @@ private:
     std::vector<entt::entity> m_DirtyScratch, m_PendingScratch, m_ChainScratch;
     void TransformStructure(std::uint64_t out[3]);
     bool RebuildChangedTransformsOnly();
+    bool ApplyTransformStructureChanges(std::vector<entt::entity>& dirty);
+    void EnsureTransformSlots(size_t n);
+    std::uint64_t m_TransformFullWalks = 0;
+    size_t m_KeyedWithTransform = 0; // cache slots whose entity had a transform when last composed
+    void CountKeyedWithTransform();
     // SyncActiveInHierarchy's inputs as of its last run (hierarchy, transforms, Deactivated/InactiveTag sets): it is
     // skipped while they stay the same.
     std::uint64_t m_ActiveSignature[6] = {};
