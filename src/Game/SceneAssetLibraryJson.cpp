@@ -3,45 +3,9 @@
 namespace SceneDetail {
 
 
-// Persists the Asset Browser's library list (not just what's placed in the scene) — otherwise an
-// imported-but-unused asset would simply vanish on the next launch. Per-asset data (folder,
-// display name, labels, import settings) is NOT written here: it lives in the asset's .meta
-// sidecar, and the folder list lives in project/settings.json (#121).
-// `includeAssetMetadata` (#121): fold in the per-asset folder/display-name/labels/import-settings
-// block and the virtual-folder list. TRUE ONLY for the in-memory undo snapshot, which has to be a
-// true replace so that an Asset Browser edit (move to folder, rename, relabel, change import
-// settings) stays undoable. It is FALSE for every scene FILE: that duplication is what #121 is
-// about - it forked the folder organisation across scenes, let one texture carry different import
-// settings per scene, and produced scene merge conflicts from unrelated Asset Browser edits.
-void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool includeAssetMetadata) {
-    json modelPaths = json::array();
-    for (const auto& m : assets.Models()) modelPaths.push_back(PathRef(m->Path()));
-    root["libraryModels"] = modelPaths;
-
-    json texPaths = json::array();
-    for (const auto& t : assets.Textures()) texPaths.push_back(PathRef(t->Path()));
-    root["libraryTextures"] = texPaths;
-
-    {
-        json arr = json::array();
-        for (const auto& m : assets.Materials()) arr.push_back(PathRef(m->Path));
-        root["libraryMaterials"] = arr;
-    }
-
-    {
-        json arr = json::array();
-        for (const auto& p : assets.Sounds()) arr.push_back(PathRef(p));
-        root["librarySounds"] = arr;
-    }
-    {
-        json arr = json::array();
-        for (const auto& p : assets.Prefabs()) arr.push_back(PathRef(p));
-        root["libraryPrefabs"] = arr;
-    }
-    if (!includeAssetMetadata) return; // scene file: per-asset data lives in .meta (#121)
-
-    root["assetFolders"] = assets.Folders();
-
+// The per-asset block of an undo snapshot (see AppendAssetLibraryJson): every asset with a folder, display
+// name, labels or import settings in the live library.
+json BuildAssetMetaJson(const AssetLibrary& assets) {
     json meta = json::array();
     std::unordered_map<std::string, std::size_t> indexByPath; // #121 - findOrCreate used to be O(n^2)
     auto findOrCreate = [&](const std::string& key) -> json& {
@@ -97,7 +61,49 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
             mi["clipTrims"] = trims;
         }
     }
-    root["assetMeta"] = meta;
+    return meta;
+}
+
+// Persists the Asset Browser's library list (not just what's placed in the scene) — otherwise an
+// imported-but-unused asset would simply vanish on the next launch. Per-asset data (folder,
+// display name, labels, import settings) is NOT written here: it lives in the asset's .meta
+// sidecar, and the folder list lives in project/settings.json (#121).
+// `includeAssetMetadata` (#121): fold in the per-asset folder/display-name/labels/import-settings
+// block and the virtual-folder list. TRUE ONLY for the in-memory undo snapshot, which has to be a
+// true replace so that an Asset Browser edit (move to folder, rename, relabel, change import
+// settings) stays undoable. It is FALSE for every scene FILE: that duplication is what #121 is
+// about - it forked the folder organisation across scenes, let one texture carry different import
+// settings per scene, and produced scene merge conflicts from unrelated Asset Browser edits.
+void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool includeAssetMetadata) {
+    json modelPaths = json::array();
+    for (const auto& m : assets.Models()) modelPaths.push_back(PathRef(m->Path()));
+    root["libraryModels"] = modelPaths;
+
+    json texPaths = json::array();
+    for (const auto& t : assets.Textures()) texPaths.push_back(PathRef(t->Path()));
+    root["libraryTextures"] = texPaths;
+
+    {
+        json arr = json::array();
+        for (const auto& m : assets.Materials()) arr.push_back(PathRef(m->Path));
+        root["libraryMaterials"] = arr;
+    }
+
+    {
+        json arr = json::array();
+        for (const auto& p : assets.Sounds()) arr.push_back(PathRef(p));
+        root["librarySounds"] = arr;
+    }
+    {
+        json arr = json::array();
+        for (const auto& p : assets.Prefabs()) arr.push_back(PathRef(p));
+        root["libraryPrefabs"] = arr;
+    }
+    if (!includeAssetMetadata) return; // scene file: per-asset data lives in .meta (#121)
+
+    root["assetFolders"] = assets.Folders();
+
+    root["assetMeta"] = BuildAssetMetaJson(assets);
 }
 
 // `hold` (optional): receives a reference to every model/texture/material the file's library lists, so a
@@ -116,7 +122,11 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
     // Runs before the library loads below, so the migrated values are in place by the time an
     // asset is actually imported and it gets imported once, with the right settings, rather than
     // once with defaults plus a Reimport.
-    if (root.contains("assetMeta")) {
+    // An undo or redo of a scene edit leaves every asset's metadata as it was, and re-applying it went through each
+    // asset's .meta (1,763 entries on the Forest, most of a second per step). When the snapshot's block is what the
+    // live library would write now there is nothing to restore: skip it.
+    const bool metaUnchanged = fromUndoSnapshot && root.contains("assetMeta") && root["assetMeta"] == BuildAssetMetaJson(assets);
+    if (root.contains("assetMeta") && !metaUnchanged) {
         // An undo snapshot is authoritative: it is the in-memory record of what the library
         // looked like a moment ago, so restoring it is a true replace. The Set* calls below
         // write straight through to each asset's .meta, so undoing an Asset Browser edit undoes
