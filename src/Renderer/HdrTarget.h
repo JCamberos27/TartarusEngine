@@ -64,7 +64,7 @@ public:
     bool VelocityEnabled() const { return m_MsVelocity != 0; }
     void SetVelocityWrites(bool on) const;
     void ClearVelocity(float value) const; // every pixel = (value, value): "unknown, reproject from depth"
-    unsigned int VelocityTexture() const { return m_MsVelocity; } // RG16F: GL_TEXTURE_2D at one sample (TAA's case), else MS
+    unsigned int VelocityTexture() const { return m_MsVelocity; } // RG16F: GL_TEXTURE_2D_MULTISAMPLE (TAA: kTaaMsaaSamples), 2D at one sample
 
     int Width() const { return m_Width; }
     int Height() const { return m_Height; }

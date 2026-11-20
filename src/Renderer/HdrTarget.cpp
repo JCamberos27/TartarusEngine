@@ -146,7 +146,7 @@ void HdrTarget::SetVelocityEnabled(bool on) {
     m_WantVelocity = on;
     if (!m_MsFbo) return;
     if (on && !m_MsVelocity) {
-        if (m_Samples == 1) { // TAA's case (it runs without MSAA): a plain 2D texture, read as sampler2D
+        if (m_Samples == 1) { // a plain 2D texture like the rest of a 1-sample target, so the FBO stays complete
             glCreateTextures(GL_TEXTURE_2D, 1, &m_MsVelocity);
             glTextureStorage2D(m_MsVelocity, 1, GL_RG16F, m_Width, m_Height);
         } else {
