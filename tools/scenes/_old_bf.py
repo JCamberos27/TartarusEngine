@@ -1,0 +1,1176 @@
+# The Forest: a dense stand of mossy cedars at night, the project's main scene to build out from. Layers, from the
+# ground up:
+#   - a floor of soil and needles, and one forest-wide Grass Area (GrassRenderer: procedural, GPU-scattered blades)
+#     whose density mask follows the canopy - full in the clearing and the glades, thin under the crowns - and is
+#     cut out round every log, rock, stump and trunk;
+#   - a gently rolling terrain (a Terrain component: +-1-2 m of smooth noise, flatter in the clearing and down to
+#     y = 0 along the boundary wall), everything below seated on it - ground-hugging pieces tipped to its slope,
+#     trees and plants upright, sunk to its lowest point under their foot;
+#   - scanned patches of real forest floor in drifts, and low root mounds;
+#   - logs, rocks and stumps, then what gathers round them: moss, ferns in stands of one species, mushrooms;
+#     ground cover in patches, flowers and tall grass in the glades, bushes, fallen branches and lichen;
+#   - deadfall: trunks lying out from the stumps they broke from, their crowns a litter of branches; fungi on the
+#     dead wood; now and then a leaning cedar;
+#   - cedars from the SeedMesh pack's full LOD prefabs, packed in clumps with thinner glades between them (spacing
+#     from a noise field), in a 120 x 120 m playable square and a wall of more trees round it to the horizon;
+#     most of them with the moss, fern and vine cover the pack grew up that variant's trunk;
+#   - the Apartment Hallway's night sky, moon and player, and volumetric fog for depth;
+#   - a 4 m precast concrete wall round the playable square (posts every 6 m), dressed in places with spalled
+#     concrete, soot, old paint patches, rust and water streaks and a grime band, under sodium wall lamps: the decal
+#     test surface (bullet holes are the runtime ones: shoot it). Trees and ground pieces keep clear of it.
+#
+#   python tools/scenes/build_forest.py [<repo>]
+#
+# Writes project/scenes/Forest.json (+ .meta, its guid kept across rebuilds).
+# World (metres): X east, Z south, the ground at ground(x, z) (0 at the wall), the player in the clearing facing north.
+#
+# Every prefab is checked before it is used: a LOD Group's levels are its first children in order, and each must be
+# an active model - the pack's "Background" tree variants have empty placeholders for their two nearest levels, so
+# those trees vanished as the player walked up to them. A prefab that fails is reported and left out.
+import json
+import math
+import os
+import random
+import secrets
+import struct
+import sys
+import base64
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _old_sk as k  # noqa: E402
+import forest_house as fh  # noqa: E402
+
+HALF = 60.0                        # the playable forest: -HALF..HALF on X and Z
+OUTER = 100.0                      # trees carry on to here, past the bounds, so the forest never ends in view
+MOON_FOG_GLOW = 4.0               # the Moon light's Volumetric Intensity (its scatter in the fog)
+CLEARING = (0.0, 6.0, 8.5)         # centre x, z and radius of the clearing the player starts in
+# A worn trail from the clearing's north edge, winding through the trees to the north wall's lamp (x -3): no trees
+# within PATH_TREES of its line, no plants, scans or litter within PATH_KEEP, the grass worn off within PATH_BARE.
+TRAIL = [(0.0, -1.5), (-2.5, -12.0), (1.5, -24.0), (-1.0, -36.0), (-4.0, -47.0), (-3.0, -57.0)]
+PATH_TREES, PATH_KEEP, PATH_BARE = 2.4, 1.4, (0.7, 1.7)
+# The hero spot at the clearing's north-east edge, in the player's view: a boulder and a smaller rock in front of a
+# long fallen trunk lying round the clearing's rim, the big stump it broke from at its near end. The boulder is
+# stretched up (x, y, z scale) so it stands out of the grass. (prefab, x, z, yaw, scale)
+HERO_ROCKS = [('Mossy_Rock_var3.prefab', 4.2, 3.9, 25.0, (1.5, 2.0, 1.5)),
+              ('Volcanic_Mossy_Rocks.prefab', 2.9, 1.6, 140.0, (1.1, 1.3, 1.1)),
+              ('Cedrus_stump_1.prefab', 3.75, -1.15, 210.0, (1.6, 1.6, 1.6))]
+HERO_LOG = ('Mossy_rotten_log_var8.prefab', 5.85, 3.15, -63.9, 1.0)   # lies along local X, tangent to the rim
+SEEDMESH = 'assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/'
+VEG, GO = SEEDMESH + 'Vegetation/', SEEDMESH + 'Ground_objects/Prefabs/'
+GROUND = SEEDMESH + 'Terrain_Textures/Dirt/M_Dirt_forest_mat.mat'     # soil, needles and twigs
+
+TREES = [VEG + f'Cedrus_tree/Prefabs/Cedrus_tree_var{n}.prefab' for n in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15)]
+GROUND_COVER = ([VEG + f'Ground_cover_plants/Prefabs/ForestClover_var{n}.prefab' for n in (1, 2, 3)] +
+                [VEG + f'Ground_cover_plants/Prefabs/Ground_weed_var{n}.prefab' for n in (1, 2, 3, 4, 5, 6)] +
+                [VEG + f'Ground_cover_plants/Prefabs/Ground_Leaves_var{n}.prefab' for n in (1, 2)])
+# The pack's CedrusPlants_cover_varN is moss, ferns and vines grown up one cedar variant's trunk (4-8 m tall; its
+# Cedrus_tree_varN_PC prefab is the pair): it goes on that tree at the tree's own transform, never on open ground.
+TREE_COVER = {n: VEG + f'Cedrus_tree/Prefabs/CedrusPlants_cover_var{n}.prefab' for n in (2, 3, 4, 5, 6)}
+TREE_COVER_SHARE = 0.8    # (its models' .metas map it to the _Tree materials, whose wind bends with the trunk)
+FLOWERS = [VEG + f'Flower_Weeds/Prefabs/Ground_flower_weed_var{n} Variant.prefab' for n in range(1, 6)]
+WILD_GRASS = [VEG + f'Grass/Prefabs/Wild_forest_grass_var{n}.prefab' for n in (1, 2, 3)]
+MOSS = [VEG + f'Moss_cover/Prefabs/Moss_cover_var{n}.prefab' for n in (1, 2, 3, 4)]
+# Ferns grow in stands of one kind: each list is a species, and a patch draws from one.
+FERN_SPECIES = [[VEG + f'Ferns/Prefabs/Wild_fern_Var{n}.prefab' for n in (1, 2, 3, 4, 5)],
+                [VEG + f'Ferns/Prefabs/Common_fern_var{n}.prefab' for n in (1, 2, 3, 4)],
+                [VEG + f'Ferns/Prefabs/Eagle_fern_var{n}.prefab' for n in (1, 2, 3, 4, 5, 6)],
+                [VEG + f'Ferns/Prefabs/Cretan_brake_fern_var{n}.prefab' for n in (1, 2, 3, 4, 5)]]
+BUSHES = ([VEG + f'Roldana_plant/Prefabs/Roldana_plant_var{n}.prefab' for n in range(1, 12)] +
+          [VEG + f'Roldana_plant/Prefabs/Roldana_plant_var{n} Variant.prefab' for n in (12, 13, 14)] +
+          [VEG + f'Oreopanax_Xalapensis/Prefabs/Oreopanax_Xalapensis_var{n} Variant.prefab' for n in range(1, 7)])
+DEBRIS = ([VEG + f'Cedrus_tree/Prefabs/Dry_cedrus_debris_Var{n}.prefab' for n in range(1, 8)] +
+          [GO + f'Short_rotten_branch_var{n}.prefab' for n in range(1, 6)] +
+          [GO + f'Rotten_cedrus_branch_var{n}.prefab' for n in range(1, 6)] +
+          [GO + 'Generic_dry_leaves_var1.prefab'] +
+          [GO + f'Lichen_branch_Debris_{n} Variant.prefab' for n in (1, 2)])
+LOGS = ([GO + f'Mossy_log_var{n}.prefab' for n in (9, 10, 11)] +
+        [GO + f'Mossy_rotten_log_var{n}.prefab' for n in (3, 4, 7, 8)] +
+        [GO + f'Mossy_Rotten_log_var{n}.prefab' for n in (1, 2)] + [GO + 'Rotten_log_var5.prefab', GO + 'Rotten_log_var6.prefab'] +
+        [GO + 'Rotten_log_var12.prefab'])
+# Ground scans: mossy, rooty patches of real forest floor (1.5-2.3 m, up to 0.4 m of relief) over the flat floor box;
+# stretched, they make the low mounds.
+SCANS = [GO + f'Forest_ground_scan_var{n}.prefab' for n in (1, 2, 3)]
+# Deadfall: a fallen trunk with the stump it broke from. (prefab, half its length, the axis it lies along)
+FALLEN = [(GO + 'Large_RottenCedrus_log_1 Variant.prefab', 1.35, 'z'), (GO + 'Mossy_rotten_log_var8.prefab', 3.9, 'x'),
+          (GO + 'Mossy_rotten_log_var7.prefab', 2.05, 'x'), (GO + 'Mossy_Rotten_log_var2.prefab', 1.7, 'x'),
+          (GO + 'Rotten_log_var5.prefab', 1.55, 'x'), (GO + 'Mossy_rotten_log_var3.prefab', 1.35, 'x')]
+CROWN_DEBRIS = ([GO + 'Rotten_cedrus_branchGroup_var1.prefab'] + [GO + f'Lichen_branch_Debris_{n} Variant.prefab' for n in (1, 2)] +
+                [GO + f'Rotten_cedrus_branch_var{n}.prefab' for n in range(1, 6)])
+FALLING_DEBRIS = [SEEDMESH + f'Effects/Falling_Tree_debris/Prefab/Falling_debris_{n}.prefab' for n in range(1, 10)]
+WOOD_MUSHROOMS = [SEEDMESH + f'Mushrooms/Prefabs/Rotten_wood_mushroom_var{n}.prefab' for n in range(1, 6)]
+# Shelf fungi go on stumps: (stump prefab, trunk radius where they sit, the height band they sit in), measured.
+TREE_MUSHROOMS = [SEEDMESH + f'Mushrooms/Prefabs/Tree_Mushroom_var{n}.prefab' for n in range(1, 5)]
+STUMP_TRUNK = {'Cedrus_stump_1': (0.17, 0.25, 0.75), 'Tree_stump_var2': (0.36, 0.3, 0.8),
+               'Tree_stump_var3': (0.55, 0.35, 0.95), 'Tree_stump_var4': (0.36, 0.3, 0.8),
+               'Tree_stump_var5': (0.5, 0.2, 0.5)}
+ROCKS = ([GO + f'Mossy_rock_var{n}.prefab' for n in (1, 2, 5, 6, 7, 8)] +
+         [GO + f'Mossy_Rock_var{n}.prefab' for n in (3, 4)] + [GO + 'Volcanic_Mossy_Rocks.prefab'])
+STUMPS = [GO + 'Cedrus_stump_1.prefab'] + [GO + f'Tree_stump_var{n}.prefab' for n in (2, 3, 4, 5)]
+MUSHROOMS = ([SEEDMESH + f'Mushrooms/Prefabs/{n}_VMushroom.prefab'
+              for n in ('Aged', 'Damaged', 'Dark_1', 'Dark_2', 'Red_Aged_1', 'Red_Couple', 'SmallOrange_1', 'SmallOrange_2')])
+
+
+# LOD switch points (screen-height share where each level hands over; past the last, the piece isn't drawn). The
+# pack's own dropped a 1 m fern at ~9 m: here each level holds out far enough that the swap happens in the fog
+# (World::LodSmooth cross-fades it), trees never vanish in view, and small plants stay to ~100 m.
+LODS = {
+    'tree': (1.2, 0.25, 0.09, 0.012),
+    'plant': (0.45, 0.16, 0.05, 0.008),
+    'small': (0.4, 0.14, 0.04, 0.012),
+    'solid': (0.6, 0.22, 0.07, 0.01),
+}
+
+
+def prefab_problem(p):
+    """Why a prefab can't be stamped as is, or None: one root; its LOD Group's levels all active models."""
+    ents = [e for key in ('empties', 'boxes', 'models') for e in p.get(key, [])]
+    roots = [e for e in ents if e['parentId'] == -1]
+    if len(roots) != 1:
+        return f'{len(roots)} roots'
+    root = roots[0]
+    if not any('path' in e and e.get('active', True) for e in ents):
+        return 'no active model'
+    lod = root.get('LOD Group')
+    if not lod:
+        return None
+    levels = sum(1 for key, v in lod.items() if key.startswith('LOD ') and v > 0)
+    kids = sorted((e for e in ents if e['parentId'] == root['id']), key=lambda e: (e.get('order', e['id']), e['id']))
+    bad = [i for i in range(levels) if i >= len(kids) or 'path' not in kids[i] or not kids[i].get('active', True)]
+    return f'LOD levels {bad} are not active models' if bad else None
+
+
+# Cedar var4's prefab is its one full mesh (70k triangles) at every distance. Its pack ships two reduced meshes and a
+# 150-triangle bake beside it, so the prefab is rebuilt here as a LOD Group of the four.
+VAR4_LODS = [VEG + 'Cedrus_tree/Cedrus_Tree_mesh/' + m for m in
+             ('Cedrus_tree_var4.fbx', 'Cedrus_tree_var4_autoLOD1.fbx', 'Cedrus_tree_var4_autoLOD2.fbx',
+              'Bake_Mesh/Cedrus_tree_var4_BakeMesh.fbx')]
+
+
+def lod_var4(repo, p):
+    """var4's prefab as a LOD Group root over VAR4_LODS, its trunk colliders after the levels."""
+    def guid(path):
+        with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
+            return json.load(f)['guid']
+    root = {'id': 100, 'order': 0, 'parentId': -1, 'name': 'Cedrus_tree_var4', 'position': [0.0, 0.0, 0.0],
+            'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0], 'static': True,
+            'LOD Group': {'LOD 0': 0.6, 'LOD 1': 0.25, 'LOD 2': 0.08, 'LOD 3': 0.04, 'Size': 0.0}}
+    models = [{'id': 101 + i, 'order': 1 + i, 'parentId': 100, 'name': os.path.splitext(os.path.basename(m))[0],
+               'path': m, 'pathGuid': guid(m), 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0],
+               'scale': [1.0, 1.0, 1.0], 'static': True} for i, m in enumerate(VAR4_LODS)]
+    cols = [dict(e, parentId=100, order=10 + i) for i, e in enumerate(p['empties'])]
+    return {'boxes': [], 'empties': [root] + cols, 'formatVersion': p.get('formatVersion', 4), 'models': models}
+
+
+class Forest(k.Scene):
+    def __init__(self, base, repo):
+        super().__init__(base)
+        self.repo = repo
+        self.cache = {}
+        self.rejected = {}
+
+    def prefab(self, path):
+        if path not in self.cache:
+            full = os.path.join(self.repo, 'project', path)
+            if not os.path.exists(full):
+                self.cache[path] = None
+                self.rejected[path] = 'missing'
+            else:
+                with open(full, encoding='utf-8') as f:
+                    p = json.load(f)
+                if path.endswith('/Cedrus_tree_var4.prefab'):
+                    p = lod_var4(self.repo, p)
+                why = prefab_problem(p)
+                self.cache[path] = None if why else p
+                if why:
+                    self.rejected[path] = why
+        return self.cache[path]
+
+    def usable(self, paths):
+        return [p for p in paths if self.prefab(p)]
+
+    def stamp(self, path, parent, pos, yaw=0.0, scale=1.0, name=None, lod=None, tilt=(0.0, 0.0), normal=None):
+        """A copy of a .prefab's entities under a new empty at pos (the editor's drop, by hand). New ids follow the
+        prefab's own order, so children keep their order - a LOD Group's levels are its children in order.
+        `scale` may be one number or (x, y, z); `tilt` is (pitch, roll) after the yaw; `normal` tips the whole piece
+        (after its yaw and tilt) so its up follows that vector - the ground's slope."""
+        p = self.prefab(path)
+        root = self.empty(name or os.path.splitext(os.path.basename(path))[0], parent, pos, yaw=yaw, static=True)
+        top = next(e for e in self.empties if e['id'] == root)
+        sc = [scale] * 3 if isinstance(scale, (int, float)) else list(scale)
+        if sc != [1.0, 1.0, 1.0]:
+            top['scale'] = [round(v, 3) for v in sc]
+        if tilt != (0.0, 0.0):
+            top['rotation'] = k.euler_quat(yaw, tilt[0], tilt[1])
+        if normal is not None:
+            top['rotation'] = [round(v, 6) for v in quat_mul(up_to(normal), k.euler_quat(yaw, tilt[0], tilt[1]))]
+        ents = sorted(((key, e) for key in ('empties', 'boxes', 'models') for e in p.get(key, [])),
+                      key=lambda ke: (ke[1].get('order', ke[1]['id']), ke[1]['id']))
+        remap = {e['id']: self._next() for _, e in ents}
+        for key, e in ents:
+            c = json.loads(json.dumps(e))
+            c['id'] = c['order'] = remap[e['id']]
+            c['parentId'] = root if e['parentId'] == -1 else remap[e['parentId']]
+            if lod and e['parentId'] == -1 and 'LOD Group' in c:
+                # Our own screen-height switch points for the levels the prefab has (see LODS); its last level
+                # always takes the profile's last, so a two-level prefab isn't dropped at a mid-range size.
+                n = sum(1 for i in range(4) if c['LOD Group'].get(f'LOD {i}', 0.0) > 0.0)
+                points = list(lod[:max(n - 1, 0)]) + [lod[-1]] if n else []
+                for i, v in enumerate(points):
+                    c['LOD Group'][f'LOD {i}'] = v
+            getattr(self, key).append(c)
+        return root
+
+    def keep_from(self, base, names):
+        """Copy the base scene's root entities named in `names`, with everything under them, ids renumbered."""
+        ents = [e for key in ('empties', 'boxes', 'models') for e in base.get(key, [])]
+        keep = {e['id'] for e in ents if e['parentId'] == -1 and e['name'] in names}
+        grew = True
+        while grew:
+            grew = False
+            for e in ents:
+                if e['id'] not in keep and e['parentId'] in keep:
+                    keep.add(e['id'])
+                    grew = True
+        remap = {i: self._next() for i in sorted(keep, key=lambda i: next(e.get('order', i) for e in ents if e['id'] == i))}
+        for key in ('empties', 'boxes', 'models'):
+            for e in base.get(key, []):
+                if e['id'] in keep:
+                    c = json.loads(json.dumps(e))
+                    c['id'] = c['order'] = remap[e['id']]
+                    c['parentId'] = -1 if e['parentId'] == -1 else remap[e['parentId']]
+                    getattr(self, key).append(c)
+
+
+def grass(**kw):
+    """A Grass Area of meadow grass, for where the canopy opens (under the cedars the floor is moss and litter, no
+    grass). Short, olive and dull, with dry blades through it, so it sits in with the moss and bark."""
+    # (#753's tuning: denser, finer olive blades)
+    g = {'Size X': 12.0, 'Size Z': 12.0, 'Density': 480.0, 'Height': 0.36, 'Height Variation': 0.5,
+         'Width': 0.014, 'Bend': 0.4, 'Base Color': [0.022, 0.026, 0.012], 'Tip Color': [0.105, 0.112, 0.05],
+         'Dry Color': [0.17, 0.14, 0.085], 'Color Variation': 0.35, 'Patchiness': 0.55, 'Wind Strength': 0.35,
+         'Wind Speed': 0.85, 'Near Distance': 16.0, 'Draw Distance': 60.0, 'Edge Fade': 3.0, 'Seed': 1,
+         'Receive Shadows': True, 'Follow Terrain': True}
+    g.update(kw)
+    return {'Grass Area': g}
+
+
+def noise2(x, z, seed, scale):
+    """Smooth value noise in [0, 1] (the clumping of the trees)."""
+    def h(i, j):
+        n = (i * 374761393 + j * 668265263 + seed * 2147483647) & 0xffffffff
+        n = ((n ^ (n >> 13)) * 1274126177) & 0xffffffff
+        return ((n ^ (n >> 16)) & 0xffffff) / 16777215.0
+    x, z = x / scale, z / scale
+    i, j = math.floor(x), math.floor(z)
+    fx, fz = x - i, z - j
+    fx, fz = fx * fx * (3 - 2 * fx), fz * fz * (3 - 2 * fz)
+    a, b, c, d = h(i, j), h(i + 1, j), h(i, j + 1), h(i + 1, j + 1)
+    return (a + (b - a) * fx) * (1 - fz) + (c + (d - c) * fx) * fz
+
+
+class Grid:
+    """A spatial hash for min-distance scatter."""
+    def __init__(self, cell=4.0):
+        self.cell, self.cells = cell, {}
+
+    def near(self, x, z, r):
+        c = self.cell
+        for i in range(int((x - r) // c), int((x + r) // c) + 1):
+            for j in range(int((z - r) // c), int((z + r) // c) + 1):
+                for px, pz, pr in self.cells.get((i, j), ()):
+                    if (x - px) ** 2 + (z - pz) ** 2 < (max(r, pr)) ** 2:
+                        return True
+        return False
+
+    def add(self, x, z, r):
+        self.cells.setdefault((int(x // self.cell), int(z // self.cell)), []).append((x, z, r))
+
+def _trail_points(step=0.5):
+    """TRAIL as a Catmull-Rom curve sampled every ~`step` metres."""
+    pts = [TRAIL[0]] + TRAIL + [TRAIL[-1]]
+    out = []
+    for i in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = pts[i - 1:i + 3]
+        n = max(1, int(math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / step))
+        for j in range(n):
+            t = j / n
+            out.append(tuple(0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t +
+                                    (-a + 3 * b - 3 * c + d) * t ** 3) for a, b, c, d in zip(p0, p1, p2, p3)))
+    return out + [TRAIL[-1]]
+
+
+TRAIL_PTS = _trail_points()
+_TX0, _TX1 = min(x for x, _ in TRAIL_PTS) - 4.0, max(x for x, _ in TRAIL_PTS) + 4.0
+_TZ0, _TZ1 = min(z for _, z in TRAIL_PTS) - 4.0, max(z for _, z in TRAIL_PTS) + 4.0
+
+
+def trail_d(x, z):
+    """Distance from (x, z) to the trail's line (99 when it's nowhere near)."""
+    if not (_TX0 < x < _TX1 and _TZ0 < z < _TZ1):
+        return 99.0
+    return min(math.hypot(x - px, z - pz) for px, pz in TRAIL_PTS)
+
+
+def smoothstep(a, b, x):
+    t = min(max((x - a) / (b - a), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+# --- the terrain: TERRAIN_RES samples over TERRAIN_SIZE metres a side, centred on the origin, stored as 16-bit
+# heights (TerrainGrid.h). Placements sample the quantized grid with the engine's own triangle split, so they sit
+# exactly on the mesh and its collider.
+TERRAIN_SIZE = 2 * 100.0 + 40.0     # 2 * OUTER + 40: past the last trees
+TERRAIN_RES = 241                   # 1 m cells
+TERRAIN_SEED = 41
+
+
+def terrain_raw(x, z):
+    """The rolling ground before quantizing: two octaves of smooth noise, +-1-2 m, eased flat in the clearing (a
+    little roll left) and down to 0 along the wall's line, so its foot and lamps stay where they were."""
+    h = ((noise2(x, z, TERRAIN_SEED, 24.0) - 0.5) * 3.4 + (noise2(x, z, TERRAIN_SEED + 2, 13.0) - 0.5) * 0.5 +
+         (noise2(x, z, TERRAIN_SEED + 4, 60.0) - 0.5) * 1.6)
+    cx, cz, cr = CLEARING
+    clear = 0.15 + 0.85 * smoothstep(cr - 2.0, cr + 9.0, math.hypot(x - cx, z - cz))
+    wall = min(abs(abs(x) - HALF) if abs(z) < HALF + 14 else 99.0, abs(abs(z) - HALF) if abs(x) < HALF + 14 else 99.0)
+    return fh.flatten(x, z, h * clear * smoothstep(0.8, 14.0, wall))     # eased flat under the house's lot
+
+
+class Terrain:
+    def __init__(self):
+        n, size = TERRAIN_RES, TERRAIN_SIZE
+        self.cell = size / (n - 1)
+        raw = [terrain_raw(-size / 2 + i * self.cell, -size / 2 + j * self.cell) for j in range(n) for i in range(n)]
+        self.lo, self.hi = math.floor(min(raw) * 10) / 10 - 0.1, math.ceil(max(raw) * 10) / 10 + 0.1
+        q = [round((h - self.lo) / (self.hi - self.lo) * 65535) for h in raw]
+        self.h = [self.lo + v * (self.hi - self.lo) / 65535 for v in q]       # what the engine decodes
+        self.b64 = base64.b64encode(struct.pack('<%dH' % len(q), *q)).decode('ascii')
+
+    def __call__(self, x, z):
+        """TerrainGrid::Height: the cell's two triangles, split from (i+1, j) to (i, j+1)."""
+        n = TERRAIN_RES
+        gx = min(max((x + TERRAIN_SIZE / 2) / self.cell, 0.0), n - 1.0)
+        gz = min(max((z + TERRAIN_SIZE / 2) / self.cell, 0.0), n - 1.0)
+        i, j = min(int(gx), n - 2), min(int(gz), n - 2)
+        fx, fz = gx - i, gz - j
+        h00, h10, h01, h11 = self.h[j * n + i], self.h[j * n + i + 1], self.h[(j + 1) * n + i], self.h[(j + 1) * n + i + 1]
+        if fx + fz <= 1.0:
+            return h00 + fx * (h10 - h00) + fz * (h01 - h00)
+        return h11 + (1 - fx) * (h01 - h11) + (1 - fz) * (h10 - h11)
+
+    def low(self, x, z, r):
+        """The lowest ground under a foot of radius r: an upright piece sunk to it never floats on a slope."""
+        return min(self(x + dx * r, z + dz * r) for dx, dz in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)))
+
+    def normal(self, x, z, r):
+        """The ground's up vector fitted over r metres round (x, z)."""
+        sx = (self(x + r, z) - self(x - r, z)) / (2 * r)
+        sz = (self(x, z + r) - self(x, z - r)) / (2 * r)
+        ln = math.sqrt(sx * sx + 1 + sz * sz)
+        return (-sx / ln, 1 / ln, -sz / ln)
+
+    def entity(self, s, parent, material):
+        """The floor: a model entity of the engine's Terrain, its mesh collider and the forest-floor material."""
+        e = s._common('Forest Floor', parent, (0.0, 0.0, 0.0), 0.0)
+        e.update({'path': 'primitive://terrain#0', 'static': True, 'materials': [{'embedded': material}],
+                  'collider': {'friction': 0.8, 'isTrigger': False, 'shape': 4},
+                  'Terrain': {'Size X': TERRAIN_SIZE, 'Size Z': TERRAIN_SIZE, 'Res X': TERRAIN_RES, 'Res Z': TERRAIN_RES,
+                              'Height Min': self.lo, 'Height Max': self.hi, 'UV Tile': 4.0, 'Heights': self.b64}})
+        s.models.append(e)
+        return e
+
+
+# Footprints measured by the engine (--scene-bounds on the pack's prefab folders): each solid piece's local XZ box
+# (min x, max x, min z, max z) and each cedar's crown radius. Regenerate with the engine if the pack changes.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'forest_footprints.json'), encoding='utf-8') as _f:
+    FOOTPRINTS = json.load(_f)
+
+GRASS_SPAN = 2 * (60.0 + 4.0)       # the forest-wide Grass Area: the playable square and a strip past it
+GRASS_CELL = 0.32                    # density mask sample spacing (metres)
+GRASS_SHADE = (0.3, 1.2)             # canopy shade (summed crown falloffs) at which the grass starts thinning / is gone
+GRASS_UNDER = 0.0                    # what's left under the thickest canopy (moss and litter there, no grass)
+TRUNK_CLEAR = 0.5                    # metres x tree scale kept bare round a trunk
+SOLID_PAD, SOLID_FADE = 0.08, 0.25   # bare margin round a log / rock / stump, then the blades ramp back in
+
+
+class GrassMask:
+    """The forest-wide Grass Area's density mask: canopy shade from the cedars' crowns, with the solid pieces' oriented
+    footprints and the trunks cut out. Sample (0, 0) at (-GRASS_SPAN / 2, -GRASS_SPAN / 2), GrassDensityMap.h."""
+    def __init__(self):
+        self.n = int(round(GRASS_SPAN / GRASS_CELL)) + 1
+        self.step = GRASS_SPAN / (self.n - 1)
+        self.shade = [0.0] * (self.n * self.n)
+        self.cut = [1.0] * (self.n * self.n)
+
+    def _box(self, x0, z0, x1, z1):
+        """The sample index ranges covering a world rectangle."""
+        lo = lambda v: max(0, int(math.floor((v + GRASS_SPAN / 2) / self.step)))  # noqa: E731
+        hi = lambda v: min(self.n - 1, int(math.ceil((v + GRASS_SPAN / 2) / self.step)))  # noqa: E731
+        return range(lo(z0), hi(z1) + 1), range(lo(x0), hi(x1) + 1)
+
+    def crown(self, x, z, r):
+        """A cedar's shade: a Gaussian falloff over its crown radius."""
+        rows, cols = self._box(x - 2.5 * r, z - 2.5 * r, x + 2.5 * r, z + 2.5 * r)
+        k = 1.0 / (r * r)
+        for j in rows:
+            wz = -GRASS_SPAN / 2 + j * self.step
+            for i in cols:
+                wx = -GRASS_SPAN / 2 + i * self.step
+                d2 = (wx - x) ** 2 + (wz - z) ** 2
+                self.shade[j * self.n + i] += math.exp(-d2 * k)
+
+    def circle(self, x, z, r, fade=SOLID_FADE):
+        rows, cols = self._box(x - r - fade, z - r - fade, x + r + fade, z + r + fade)
+        for j in rows:
+            wz = -GRASS_SPAN / 2 + j * self.step
+            for i in cols:
+                wx = -GRASS_SPAN / 2 + i * self.step
+                d = math.hypot(wx - x, wz - z) - r
+                v = min(max(d / fade, 0.0), 1.0)
+                c = j * self.n + i
+                self.cut[c] = min(self.cut[c], v)
+
+    def footprint(self, x, z, yaw, sc, box, pad=SOLID_PAD, fade=SOLID_FADE):
+        """A piece's local XZ box (scaled, turned by yaw like Forest.stamp) cut out, with a soft edge."""
+        if isinstance(sc, (int, float)):
+            sx = sz = sc
+        else:
+            sx, sz = sc[0], sc[2]
+        a = math.radians(yaw)
+        ca, sa = math.cos(a), math.sin(a)
+        x0, x1, z0, z1 = box[0] * sx - pad, box[1] * sx + pad, box[2] * sz - pad, box[3] * sz + pad
+        reach = max(abs(x0), abs(x1), abs(z0), abs(z1)) * 1.42 + fade
+        rows, cols = self._box(x - reach, z - reach, x + reach, z + reach)
+        for j in rows:
+            wz = -GRASS_SPAN / 2 + j * self.step - z
+            for i in cols:
+                wx = -GRASS_SPAN / 2 + i * self.step - x
+                lx, lz = wx * ca - wz * sa, wx * sa + wz * ca      # world -> the piece's local axes
+                dx = max(x0 - lx, lx - x1, 0.0)
+                dz = max(z0 - lz, lz - z1, 0.0)
+                v = min(math.hypot(dx, dz) / fade, 1.0)
+                c = j * self.n + i
+                self.cut[c] = min(self.cut[c], v)
+
+    def values(self, full):
+        """Per sample, 0..1: the canopy's thinning (full(x, z) forces 1, e.g. the clearing) times the cut-outs."""
+        lo, hi = GRASS_SHADE
+        out = []
+        for j in range(self.n):
+            wz = -GRASS_SPAN / 2 + j * self.step
+            for i in range(self.n):
+                wx = -GRASS_SPAN / 2 + i * self.step
+                c = j * self.n + i
+                t = min(max((self.shade[c] - lo) / (hi - lo), 0.0), 1.0)
+                t = t * t * (3 - 2 * t)
+                dens = 1.0 if full(wx, wz) else 1.0 - (1.0 - GRASS_UNDER) * t
+                out.append(dens * self.cut[c])
+        return out
+
+    def encode(self, values):
+        return base64.b64encode(bytes(int(round(min(max(v, 0.0), 1.0) * 255)) for v in values)).decode('ascii')
+
+
+def quat_mul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
+
+
+def up_to(n):
+    """The shortest rotation taking +Y to the unit vector n."""
+    x, y, z = n
+    ax, az = z, -x                  # (0, 1, 0) x n
+    s = math.sqrt(ax * ax + az * az)
+    if s < 1e-9:
+        return [0.0, 0.0, 0.0, 1.0]
+    ang = math.atan2(s, y) / 2
+    return [ax / s * math.sin(ang), 0.0, az / s * math.sin(ang), math.cos(ang)]
+
+
+# The boundary wall: precast concrete panels between posts, the decal test surface. WALLS: side -> (the axis it sits
+# on, its sign); its inner face is WALL_T / 2 in from +-HALF. Trees keep WALL_CLEAR_TREE metres off its line, every
+# scattered piece WALL_CLEAR, so nothing pokes through it or hides its decals.
+WALLS = {'N': ('z', -1.0), 'S': ('z', 1.0), 'W': ('x', -1.0), 'E': ('x', 1.0)}
+WALL_H, WALL_T = 4.0, 0.4
+WALL_TINT = (1.3, 1.28, 1.24)    # the floor-concrete maps are dark for a wall
+POST_EVERY, POST_W, POST_D, POST_H = 6.0, 0.5, 0.9, 4.3
+WALL_CLEAR_TREE, WALL_CLEAR = 2.2, 1.2
+DEAD_LAMPS, FLICKER_LAMPS = {('E', 14)}, {('N', 14)}   # (side, panel): one blown lamp, one failing (Fluorescent flicker)
+# The dressed panels: (side, panel index from the left as seen from inside, kind), a few on every wall, each
+# under a lamp.
+WALL_SITES = [('N', 9, 'patched'), ('N', 4, 'firefight'), ('N', 14, 'stained'), ('N', 18, 'firefight'),
+              ('S', 10, 'firefight'), ('S', 6, 'patched'), ('S', 15, 'stained'), ('S', 1, 'firefight'),
+              ('W', 9, 'patched'), ('W', 3, 'stained'), ('W', 13, 'firefight'), ('W', 17, 'patched'),
+              ('E', 10, 'firefight'), ('E', 5, 'stained'), ('E', 14, 'patched'), ('E', 1, 'firefight')]
+# A dead cedar fallen onto the west wall: its foot WALL_LEAN_FOOT m in from the wall, tipped so the trunk rests on
+# the wall's top edge, the crown hanging over the far side.
+WALL_LEAN_FOOT, WALL_HEIGHT_REST = 5.7, 4.0
+_CONCRETE = 'assets/Architecture/Building/Textures/Floor_Concrete/Floor_Concrete_'   # Wall_Concrete's sheet has trim bands
+CONCRETE = tuple(_CONCRETE + m + '.png' for m in ('Base_Color', 'Normal', 'Roughness', 'AO'))
+D = 'assets/Decals/'
+STAIN = D + 'Stains/Splatters/DA_Stain_{:03d}.decal'
+SPLAT = D + 'Stains/LiquidSplatter/DA_LiquidSplatter_{:03d}.decal'
+PEEL = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}.decal'
+RUST, GRIME, SPALL, SOOT = [0.3, 0.14, 0.06], [0.08, 0.08, 0.05], [0.07, 0.065, 0.06], [0.02, 0.02, 0.02]
+MAX_WALL_DECALS, MAX_WALL_MAPS = 300, 12     # unique maps: 2K slots of the decal texture budget (docs/DECALS.md)
+
+
+def by_wall(x, z, clear):
+    """Is (x, z) within `clear` metres of the boundary wall's line (on either side of it)?"""
+    return ((abs(abs(z) - HALF) < clear and abs(x) < HALF + clear) or
+            (abs(abs(x) - HALF) < clear and abs(z) < HALF + clear))
+
+
+class WallDecals:
+    """Decals on the boundary wall's inner faces, placed by (side, u, y): u runs along the wall left to right as seen
+    from inside, y up from the ground. Each box's +Z points into the forest (the decal projects along -Z)."""
+    def __init__(self, s, parent):
+        self.s, self.parent, self.maps, self.n = s, parent, set(), 0
+
+    @staticmethod
+    def face(side, u, y, out=0.0):
+        """(position, yaw) at (u, y) on `side`'s inner face, `out` metres in front of it."""
+        axis, sign = WALLS[side]
+        d = sign * (HALF - WALL_T / 2 - out)
+        if axis == 'z':
+            return ((u, y, d), 0.0) if sign < 0 else ((-u, y, d), 180.0)
+        return ((d, y, -u), 90.0) if sign < 0 else ((d, y, u), -90.0)
+
+    def put(self, asset, side, u, y, w, h, seed, sort, opacity=1.0, tint=None, spin=0.0, jitter=(0.0, 0.0),
+            flip=False, substrate=False):
+        pos, yaw = self.face(side, u, y)
+        dc = {'Asset': asset, 'Size': [round(w, 3), round(h, 3), 0.25], 'Seed': seed, 'Sort Order': sort,
+              'Opacity': round(opacity, 3), 'Affect Static': True, 'Affect Dynamic': False,
+              'Rotation Jitter': jitter[0], 'Scale Jitter': jitter[1], 'Random Flip': flip}
+        if tint:
+            dc['Tint'] = list(tint)
+        if substrate:
+            dc.update({'Substrate': 'Preset', 'Substrate Preset': D + 'Substrates/SB_Wall_Concrete.substrate'})
+        self.n += 1
+        self.s.empty(f'Wall Decal {self.n:03d}', self.parent, pos, yaw=yaw, **{'Decal': dc})
+        if spin:
+            e = self.s.empties[-1]
+            e['rotation'] = k.euler_quat(yaw, 0.0, spin)
+        self.maps.add(asset)
+
+
+def panels():
+    """Every panel between two posts: (side, u of its middle)."""
+    n = int(round(2 * HALF / POST_EVERY))
+    return [(side, -HALF + POST_EVERY * (i + 0.5)) for side in WALLS for i in range(n)]
+
+
+def dress_walls(s, root, repo):
+    """The posts, the decals and the lamps on the boundary wall, on a random stream of its own so the forest's
+    doesn't move. Returns (decals, lamps)."""
+    rng = random.Random(4242)
+    concrete = k.textured(repo, *CONCRETE, base=WALL_TINT, triplanar_scale=0.6, roughness=0.9)
+    grp = s.empty('Concrete Wall', root, (0, 0, 0), static=True)
+    posts = s.empty('Posts', grp, (0, 0, 0), static=True)
+    n = int(round(2 * HALF / POST_EVERY))
+    for side, (axis, sign) in WALLS.items():
+        for i in range(n + 1):
+            u = -HALF + POST_EVERY * i
+            if axis == 'x' and abs(u) >= HALF:      # the corners are the north and south walls' end posts
+                continue
+            c = (u, POST_H / 2, sign * HALF) if axis == 'z' else (sign * HALF, POST_H / 2, u)
+            size = (POST_W, POST_H, POST_D) if axis == 'z' else (POST_D, POST_H, POST_W)
+            s.box('Wall Post', posts, c, size, concrete, static=True)
+
+    dg = s.empty('Wall Decals', grp, (0, 0, 0), static=True)
+    w = WallDecals(s, dg)
+    span = POST_EVERY - POST_W - 0.5            # what a decal may cover between two posts' faces
+    seed = iter(range(7000, 100000))
+    # a grime band on every panel: splash-up and damp along the foot, broken up by the map's seed / flip
+    for side, u in panels():
+        w.put(SPLAT.format(3), side, u, 0.55, span, 1.1, next(seed), 0, rng.uniform(0.35, 0.55), GRIME,
+              flip=True, jitter=(0.0, 0.1))
+
+    def chips(side, u, y, spread, count, sort=4):
+        """Concrete knocked off in a burst round (u, y): dark spall marks with their rays. (The peeling-paint maps
+        don't do here - they reveal concrete, and this is concrete already.)"""
+        for _ in range(count):
+            a, r = rng.uniform(0, 2 * math.pi), spread * rng.random() ** 0.6
+            sz = rng.uniform(0.1, 0.26)
+            w.put(STAIN.format(rng.choice((596, 598))), side, u + math.cos(a) * r, y + math.sin(a) * r * 0.7, sz, sz,
+                  next(seed), sort, rng.uniform(0.6, 0.85), SPALL, spin=round(rng.uniform(0, 360), 1))
+
+    def streaks(side, u, count, tint=RUST):
+        """Rust / water runs down from the top edge."""
+        for _ in range(count):
+            h = rng.uniform(1.4, 2.6)
+            w.put(STAIN.format(594), side, u + rng.uniform(-2.0, 2.0), WALL_H - h / 2, rng.uniform(0.4, 0.7), h,
+                  next(seed), 1, rng.uniform(0.6, 0.85), tint)
+
+    sites = WALL_SITES
+    lamps = s.empty('Wall Lamps', grp, (0, 0, 0), static=True)
+    housing = k.textured(repo, base=(0.05, 0.05, 0.05), roughness=0.5, metallic=0.8)
+    lens = k.textured(repo, base=(1.0, 0.62, 0.3), emissive=(1.0, 0.62, 0.3), strength=6.0)
+    dead_lens = k.textured(repo, base=(0.22, 0.17, 0.12), roughness=0.3)    # a blown lamp: the glass, unlit
+    for side, i, kind in sites:
+        u = -HALF + POST_EVERY * (i + 0.5)
+        if kind == 'firefight':
+            for cu, cy in ((u - 1.2, 1.3), (u + 0.9, 1.6), (u + 0.1, 0.9)):
+                chips(side, cu, cy, 0.55, 6)
+            w.put(STAIN.format(595), side, u - 0.3, 1.2, 1.8, 1.8, next(seed), 2, 0.6, SOOT,
+                  spin=round(rng.uniform(0, 360), 1))
+        elif kind == 'patched':
+            # an old grey paint patch, flaking back to the concrete, with grime runs and a few chips
+            w.put(PEEL.format(rng.choice((7, 13))), side, u, 1.6, 4.0, 2.2, next(seed), 2, 0.75, [0.55, 0.55, 0.53],
+                  substrate=True)
+            streaks(side, u, 2, GRIME)
+            chips(side, u + 1.5, 2.4, 0.45, 4)
+        elif kind == 'stained':
+            streaks(side, u, 6)
+            w.put(STAIN.format(595), side, u - 1.2, 0.7, 1.2, 1.2, next(seed), 2, 0.6, RUST,
+                  spin=round(rng.uniform(0, 360), 1))
+            chips(side, u + 1.5, 1.1, 0.45, 4)
+        # the lamp over it: a dark housing on the wall, a glowing lens, a sodium spot down the face
+        pos, yaw = WallDecals.face(side, u, 3.65, out=0.15)
+        lamp = s.empty('Wall Lamp', lamps, pos, yaw=yaw, static=True)
+        s.box('Lamp Housing', lamp, (0.0, 0.0, 0.0), (0.45, 0.16, 0.3), housing, collider=False, static=True)
+        dead = (side, i) in DEAD_LAMPS
+        s.box('Lamp Lens', lamp, (0.0, -0.085, 0.02), (0.36, 0.02, 0.22), dead_lens if dead else lens, collider=False,
+              static=True)
+        if dead:
+            continue
+        # Every lamp casts shadows; the renderer gives the scene's 8 spot-shadow slots to the ones nearest the
+        # view. Nothing they light moves but grass and fronds, so the map is baked once.
+        light = s.light('Lamp Light', lamp, (0.0, -0.12, 0.25), intensity=7.0, rng=9.0, kelvin=2100.0, spot=72.0,
+                        pitch=-65.0, shadows=True,
+                        **(k.light_flicker(0, 3.0, 9.0, 0.8, 7) if (side, i) in FLICKER_LAMPS else {}))
+        next(e for e in s.empties if e['id'] == light)['Light']['Shadow Update Mode'] = 'Static (bake once)'
+    s.empty('Decal Grading', grp, (0.0, 0.0, 0.0), **{'Decal Grading': {'Age': 0.25, 'Wear': 0.3}})
+    assert w.n <= MAX_WALL_DECALS and len(w.maps) <= MAX_WALL_MAPS, (w.n, len(w.maps))
+    return w.n, len(sites)
+
+
+def build(repo):
+    with open(os.path.join(repo, 'tests', 'scenes', 'Apartment Hallway.json'), encoding='utf-8') as f:
+        base = json.load(f)
+    s = Forest(base, repo)
+    s.keep_from(base, {'Moon', 'Player Spawn'})
+    # The moon lights the fog harder than the ground: toward it the haze glows behind black trunks.
+    for e in s.empties:
+        if e['parentId'] == -1 and e['name'] == 'Moon' and 'Light' in e:
+            e['Light']['Volumetric Intensity'] = MOON_FOG_GLOW
+    d = s.data
+    d['sky'].update({'seaLevel': 0.0, 'clouds': True, 'cloudCoverage': 0.3, 'cloudType': 0.35, 'cloudQuality': 0,
+                     'cloudShadows': False, 'cloudWindSpeed': 4.0, 'moonBrightness': 0.0164, 'nightBrightness': 4.4,
+                     'skyIntensity': 0.15})
+    # Volumetric fog for the depth between the trunks: uniform, dense and dark (outdoors only - the rule is no fog
+    # indoors; a low-lying mist was tried in #745 and the uniform look kept). The distance fog's settings stay for
+    # when it's switched back on. The scene is kept dark (sky 0.15, sky ambient 0.08, a dim moon) so the moonlit fog
+    # glows against black trunks; the brighter fill of #741 is gone.
+    # Moon shadows out to 70 m over 4 cascades, so trunks across the clearing still cast; a slight cool grade for
+    # the moonlight (the sodium lamps stay warm against it).
+    d.update({'shadowDistance': 70.0, 'shadowCascades': 4, 'gradeTemperature': -6.0, 'maxSpotShadows': 8, 'fogEnabled': False, 'fogMode': 3, 'fogDensity': 0.02,
+              'fogColor': [0.03, 0.038, 0.052], 'fogHeightFalloff': 0.06, 'fogBaseHeight': 0.0,
+              'volumetricEnabled': True, 'volDensity': 0.02, 'volBaseHeight': 0.0, 'volHeightFalloff': 0.0,
+              'volAnisotropy': 0.6, 'volAlbedo': [0.9, 0.9, 0.9], 'skyAmbientIntensity': 0.08})
+    rng = random.Random(11)
+    cx, cz, cr = CLEARING
+    counts, dropped = {}, {}
+
+    root = s.empty('Forest', -1, (0, 0, 0), static=True)
+    ground = k.from_mat(repo, GROUND, triplanar=True, triplanarScale=0.4, triplanarBreakup=1.0)   # (#753: no tiling)
+    H = Terrain()
+    H.entity(s, root, ground)
+    concrete = k.textured(repo, *CONCRETE, base=WALL_TINT, triplanar_scale=0.6, roughness=0.9)
+    for side, (axis, sign) in WALLS.items():
+        c = (0.0, WALL_H / 2, sign * HALF) if axis == 'z' else (sign * HALF, WALL_H / 2, 0.0)
+        size = (2 * HALF, WALL_H, WALL_T) if axis == 'z' else (WALL_T, WALL_H, 2 * HALF)
+        s.box(f'Concrete Wall {side}', root, c, size, concrete, static=True)
+
+    g = s.empty('Grass', root, (0, 0, 0), static=True)
+    mask = GrassMask()      # filled as the trees and the solid pieces go down; the area is added at the end
+
+    # --- cedars: clumps and glades. Spacing runs 3.2 m in a clump to 9 m in a glade, from a noise field; the
+    # clearing stays open, with a softer edge of saplings-size trees round it.
+    # Covers and leaning trees draw from streams of their own, so the trees' own layout doesn't move.
+    cover_rng, lean_rng = random.Random(23), random.Random(29)
+    trees = s.usable(TREES)
+    grid = Grid(4.0)
+    tree_pts = []
+    covered = leaning = 0
+    grp = s.empty('Cedars', root, (0, 0, 0), static=True)
+    for _ in range(60000):
+        x, z = rng.uniform(-OUTER, OUTER), rng.uniform(-OUTER, OUTER)
+        dc = math.hypot(x - cx, z - cz)
+        if dc < cr + 1.5:
+            continue
+        clump = noise2(x, z, 3, 22.0)
+        spacing = 3.2 + 5.8 * (1.0 - clump) ** 1.5
+        if grid.near(x, z, spacing):
+            continue
+        grid.add(x, z, spacing)
+        edge = dc < cr + 6.0
+        scale = rng.uniform(0.55, 0.8) if edge else rng.uniform(0.8, 1.25)
+        path, yaw = rng.choice(trees), round(rng.uniform(0, 360), 1)
+        if by_wall(x, z, WALL_CLEAR_TREE) or trail_d(x, z) < PATH_TREES or fh.in_lot(x, z, 2.5):
+            continue
+        tree_pts.append((x, z, scale))
+        mask.crown(x, z, 1.2 * min(max(FOOTPRINTS['crowns'].get(path, 3.0), 2.0), 5.0) * scale)
+        mask.circle(x, z, TRUNK_CLEAR * scale)
+        # Storm damage: now and then a tree leans, its foot sunk so the lean reads as roots giving way.
+        lean = lean_rng.random() < 0.035 and not edge
+        tilt = (round(lean_rng.uniform(6.0, 15.0), 1), round(lean_rng.uniform(-4.0, 4.0), 1)) if lean else (0.0, 0.0)
+        y = H.low(x, z, 0.5 * scale) - (0.25 if lean else 0.0)     # upright, sunk to the low side of its foot
+        leaning += lean
+        tree = s.stamp(path, grp, (round(x, 2), round(y, 3), round(z, 2)), yaw=yaw, scale=scale, name='Cedar', lod=LODS['tree'],
+                       tilt=tilt)
+        var = int(path.rsplit('_var', 1)[1].split('.')[0])
+        if var in TREE_COVER and cover_rng.random() < TREE_COVER_SHARE and s.prefab(TREE_COVER[var]):
+            s.stamp(TREE_COVER[var], tree, (0.0, 0.0, 0.0), lod=LODS['tree'])
+            covered += 1
+    counts['cedars'], counts['tree covers'], counts['leaning'] = len(tree_pts), covered, leaning
+
+    inside = [(x, z, sc) for x, z, sc in tree_pts if abs(x) < HALF + 6 and abs(z) < HALF + 6]
+
+    trunks = Grid(2.0)          # every trunk, for keeping fallen logs out of standing trees
+    for x, z, sc in tree_pts:
+        trunks.add(x, z, 0.45 * sc)
+    mounds = []                 # (x, z, radius): small cover and litter stay off them (they'd be buried)
+
+    def on_mound(x, z):
+        return any((x - mx) ** 2 + (z - mz) ** 2 < mr * mr for mx, mz, mr in mounds)
+
+    def ok(x, z, spread=HALF + 4.0, clearing_ok=False, clear=WALL_CLEAR):
+        return (abs(x) <= spread and abs(z) <= spread and (clearing_ok or math.hypot(x - cx, z - cz) >= cr - 0.5)
+                and not by_wall(x, z, clear) and trail_d(x, z) >= PATH_KEEP)
+
+    def around(pts, r_min, r_max):
+        """A point r_min..r_max from a random one of pts ((x, z, ...))."""
+        px, pz = rng.choice(pts)[:2]
+        a, r = rng.uniform(0, 2 * math.pi), rng.uniform(r_min, r_max)
+        return px + math.cos(a) * r, pz + math.sin(a) * r
+
+    def scatter(name, paths, n, near_tree, r_min, r_max, scale, avoid=1.0, spread=HALF + 4.0, clearing_ok=False,
+                lod='plant', anchors=None, near_anchor=0.0, a_min=0.5, a_max=2.0, off_mounds=False, group=None,
+                hug=0.0, sink=0.0):
+        """`n` copies of `paths`: round a random anchor (a_min..a_max off it) with probability `near_anchor`, else
+        round a random trunk (r_min..r_max) with probability `near_tree`, else anywhere; kept off the clearing
+        (unless clearing_ok) and `avoid` metres apart. hug > 0: tipped to the ground's slope fitted over `hug` metres
+        (ground-hugging pieces); else upright, sunk to the lowest ground under it. `sink` lowers it further.
+        Returns what it placed: (x, z, path, yaw, scale)."""
+        group = group or s.empty(name, root, (0, 0, 0), static=True)
+        usable = s.usable(paths)
+        pts = []
+        if not usable:
+            return pts
+        local = Grid(2.0)
+        placed = 0
+        for _ in range(n * 8):
+            if placed >= n:
+                break
+            u = rng.random()
+            if anchors and u < near_anchor:
+                x, z = around(anchors, a_min, a_max)
+            elif inside and u < near_anchor + (1.0 - near_anchor) * near_tree:
+                x, z = around(inside, r_min, r_max)
+            else:
+                x, z = rng.uniform(-spread, spread), rng.uniform(-spread, spread)
+            if abs(x) > spread or abs(z) > spread:
+                continue
+            if not clearing_ok and math.hypot(x - cx, z - cz) < cr - 0.5:
+                continue
+            if off_mounds and on_mound(x, z):
+                continue
+            if avoid > 0 and local.near(x, z, avoid):
+                continue
+            if avoid > 0:
+                local.add(x, z, avoid)
+            path, yaw, sc = rng.choice(usable), round(rng.uniform(0, 360), 1), rng.uniform(*scale)
+            placed += 1     # counted even when the wall strip drops it, so the draws after it don't shift
+            if by_wall(x, z, WALL_CLEAR) or trail_d(x, z) < PATH_KEEP:
+                dropped[name] = dropped.get(name, 0) + 1
+                continue
+            if hug > 0:
+                y, up = H(x, z), H.normal(x, z, hug * sc)
+            else:
+                y, up = H.low(x, z, 0.3 * sc), None
+            s.stamp(path, group, (round(x, 2), round(y - sink, 3), round(z, 2)), yaw=yaw, scale=sc, lod=LODS[lod],
+                    normal=up)
+            pts.append((x, z, path, yaw, sc))
+            if path in FOOTPRINTS['solids']:
+                mask.footprint(x, z, yaw, sc, FOOTPRINTS['solids'][path])
+        counts[name] = counts.get(name, 0) + placed - dropped.get(name, 0)
+        return pts
+
+    def patches(name, species, n_patches, per_patch, radius, scale, anchors, near_anchor, near_tree, avoid=0.7,
+                lod='plant', clearing_ok=False, where=None):
+        """Stands of one species: a patch centre (by an anchor, by a trunk, or where `where(x, z)` likes), then
+        per_patch plants of one list in `species` thrown round it, thicker in the middle."""
+        group = s.empty(name, root, (0, 0, 0), static=True)
+        kinds = [s.usable(sp) for sp in species]
+        kinds = [kd for kd in kinds if kd]
+        local, n = Grid(2.0), 0
+        for _ in range(n_patches * 20):
+            if n_patches <= 0:
+                break
+            u = rng.random()
+            if anchors and u < near_anchor:
+                x0, z0 = around(anchors, 0.8, 2.5)
+            elif u < near_anchor + near_tree:
+                x0, z0 = around(inside, 1.0, 5.0)
+            else:
+                x0, z0 = rng.uniform(-HALF, HALF), rng.uniform(-HALF, HALF)
+                if where and not where(x0, z0):
+                    continue
+            if not ok(x0, z0, clearing_ok=clearing_ok):
+                continue
+            n_patches -= 1
+            kind = rng.choice(kinds)
+            for _ in range(rng.randint(*per_patch)):
+                a, r = rng.uniform(0, 2 * math.pi), radius * rng.random() ** 0.7
+                x, z = x0 + math.cos(a) * r, z0 + math.sin(a) * r
+                if not ok(x, z, clearing_ok=clearing_ok) or local.near(x, z, avoid) or on_mound(x, z):
+                    continue
+                local.add(x, z, avoid)
+                s.stamp(rng.choice(kind), group, (round(x, 2), round(H.low(x, z, 0.25), 3), round(z, 2)),
+                        yaw=round(rng.uniform(0, 360), 1),
+                        scale=rng.uniform(*scale), lod=LODS[lod])
+                n += 1
+        counts[name] = n
+
+    # --- the floor: real ground scans in drifts (where a noise field says), and low mounds - stretched scans - at
+    # tree roots and here and there between them.
+    floor = s.empty('Ground Scans', root, (0, 0, 0), static=True)
+    scans = s.usable(SCANS)
+    n_scan = 0
+    for _ in range(6000):
+        if n_scan >= 520 or not scans:
+            break
+        x, z = rng.uniform(-HALF - 4, HALF + 4), rng.uniform(-HALF - 4, HALF + 4)
+        if noise2(x, z, 7, 14.0) < 0.5 or not ok(x, z, clearing_ok=True, clear=0.8):
+            continue
+        sc = rng.uniform(0.8, 1.5)
+        s.stamp(rng.choice(scans), floor, (round(x, 2), round(H(x, z) - 0.04, 3), round(z, 2)),
+                yaw=round(rng.uniform(0, 360), 1), scale=sc, lod=LODS['solid'], normal=H.normal(x, z, 1.0 * sc))
+        n_scan += 1
+    counts['ground scans'] = n_scan
+    hump = s.empty('Mounds', root, (0, 0, 0), static=True)
+    for _ in range(4000):
+        if len(mounds) >= 80 or not scans:
+            break
+        x, z = around(inside, 0.4, 1.2) if rng.random() < 0.45 else (rng.uniform(-HALF, HALF), rng.uniform(-HALF, HALF))
+        if not ok(x, z, clear=2.5) or math.hypot(x - cx, z - cz) < cr + 1.5 or on_mound(x, z):
+            continue
+        sxz, sy = rng.uniform(2.0, 3.2), rng.uniform(1.0, 1.6)
+        s.stamp(rng.choice(scans), hump, (round(x, 2), round(H(x, z) - 0.05 * sy, 3), round(z, 2)),
+                yaw=round(rng.uniform(0, 360), 1), scale=(sxz, sy, sxz * rng.uniform(0.8, 1.1)), lod=LODS['solid'],
+                normal=H.normal(x, z, 0.6 * sxz))
+        mounds.append((x, z, 0.75 * sxz))
+    counts['mounds'] = len(mounds)
+
+    # --- the solid pieces first: logs, rocks and stumps are what ferns, moss and fungi gather round.
+    logs = scatter('Logs', LOGS, 45, 0.4, 2.0, 8.0, (0.8, 1.15), avoid=6.0, lod='solid', hug=1.5, sink=0.04)
+    rocks = scatter('Rocks', ROCKS, 70, 0.3, 1.5, 8.0, (0.6, 1.3), avoid=3.5, lod='solid', hug=0.8, sink=0.05)
+    stumps = scatter('Stumps', STUMPS, 35, 0.2, 2.0, 8.0, (0.8, 1.2), avoid=5.0, lod='solid', sink=0.03)
+
+    # --- deadfall: a trunk that broke and fell, lying out from its stump, its crown end a mess of branches and
+    # needles, fungi at its foot.
+    dead = s.empty('Deadfall', root, (0, 0, 0), static=True)
+    fallen = [(p, h, ax) for p, h, ax in FALLEN if s.prefab(p)]
+    falls = []
+    for _ in range(30000):
+        if counts.get('deadfall', 0) >= 16 or not fallen or not stumps:
+            break
+        x0, z0 = around(inside, 2.0, 4.0)
+        a = rng.uniform(0, 2 * math.pi)
+        dx, dz = math.cos(a), math.sin(a)
+        path, half, axis = rng.choice(fallen)
+        sc = rng.uniform(0.9, 1.15)
+        length = 2 * half * sc
+        line = [(x0 + dx * t, z0 + dz * t) for t in [i * 0.5 for i in range(int((length + 1.4) / 0.5) + 1)]]
+        if not all(ok(px, pz, spread=HALF - 2.0, clear=2.0) and not trunks.near(px, pz, 0.5) for px, pz in line):
+            continue
+        if any(math.hypot(px - fx, pz - fz) < 3.0 for px, pz in line for fx, fz in falls):
+            continue
+        st = rng.choice(STUMPS)
+        if not s.prefab(st):
+            continue
+        y0 = H.low(x0, z0, 0.4)
+        site = s.empty('Fallen Tree', dead, (round(x0, 2), round(y0 - 0.03, 3), round(z0, 2)), static=True)
+        st_sc = rng.uniform(0.9, 1.15)
+        s.stamp(st, site, (0.0, 0.0, 0.0), yaw=round(rng.uniform(0, 360), 1), scale=st_sc, lod=LODS['solid'])
+
+        def rel(px, pz):
+            """The ground under a site-local point, relative to the site."""
+            return round(H(x0 + px, z0 + pz) - y0 + 0.03, 3)
+        stumps.append((x0, z0, st, 0.0, st_sc))
+        if st in FOOTPRINTS['solids']:
+            mask.circle(x0, z0, max(map(abs, FOOTPRINTS['solids'][st])) * st_sc)
+        mid = 0.7 + length / 2          # the log starts just past the stump
+        yaw = math.degrees(math.atan2(-dz, dx)) if axis == 'x' else math.degrees(math.atan2(dx, dz))
+        # The log lies along the slope between its two ends and across it at its middle.
+        h0, h1 = H(x0 + dx * 0.7, z0 + dz * 0.7), H(x0 + dx * (0.7 + length), z0 + dz * (0.7 + length))
+        ha = H(x0 + dx * mid - dz * 0.6, z0 + dz * mid + dx * 0.6)
+        hb = H(x0 + dx * mid + dz * 0.6, z0 + dz * mid - dx * 0.6)
+        along, across = (h1 - h0) / length, (hb - ha) / 1.2     # rise per metre along (dx, dz) and along (dz, -dx)
+        n = (-(along * dx + across * dz), 1.0, -(along * dz - across * dx))
+        ln = math.sqrt(sum(v * v for v in n))
+        s.stamp(path, site, (round(dx * mid, 2), round((h0 + h1) / 2 - y0 - 0.02, 3), round(dz * mid, 2)),
+                yaw=round(yaw, 1), scale=sc, lod=LODS['solid'], normal=tuple(v / ln for v in n))
+        if path in FOOTPRINTS['solids']:
+            mask.footprint(x0 + dx * mid, z0 + dz * mid, round(yaw, 1), sc, FOOTPRINTS['solids'][path])
+        end = 0.7 + length
+        crown = [p for p in CROWN_DEBRIS if s.prefab(p)]
+        for i in range(rng.randint(2, 4)):
+            t = end + rng.uniform(-0.6, 1.2)
+            ox, oz = -dz * rng.uniform(-1.4, 1.4), dx * rng.uniform(-1.4, 1.4)
+            s.stamp(rng.choice(crown), site, (round(dx * t + ox, 2), rel(dx * t + ox, dz * t + oz), round(dz * t + oz, 2)),
+                    yaw=round(rng.uniform(0, 360), 1), scale=rng.uniform(0.8, 1.2), lod=LODS['small'])
+        for i in range(rng.randint(5, 10)):
+            t = rng.uniform(0.6, end + 1.5)
+            ox, oz = -dz * rng.uniform(-1.2, 1.2), dx * rng.uniform(-1.2, 1.2)
+            s.stamp(rng.choice(FALLING_DEBRIS + DEBRIS[:7]), site,
+                    (round(dx * t + ox, 2), rel(dx * t + ox, dz * t + oz), round(dz * t + oz, 2)),
+                    yaw=round(rng.uniform(0, 360), 1), scale=rng.uniform(0.9, 1.4), lod=LODS['small'])
+        falls += line
+        # (as a log lying along its local X, which the fungi below go by)
+        logs.append((x0 + dx * mid, z0 + dz * mid, path, yaw if axis == 'x' else yaw - 90.0, sc))
+        counts['deadfall'] = counts.get('deadfall', 0) + 1
+
+    wood_pts = [(x, z) for x, z, *_ in logs + stumps]
+    anchors = wood_pts + [(x, z) for x, z, *_ in rocks]
+    # --- the hero spot: a boulder and a rock before a long fallen trunk at the clearing's rim, ferns, moss and
+    # mushrooms round their feet, fungi on the trunk (added to the logs below).
+    hero, hero_rng = s.empty('Hero Spot', root, (0, 0, 0), static=True), random.Random(41)
+    for name, x, z, yaw, sc in HERO_ROCKS + [HERO_LOG]:
+        path = GO + name
+        if not s.prefab(path):
+            continue
+        s.stamp(path, hero, (x, round(H(x, z) - 0.05, 3), z), yaw=yaw, scale=sc, lod=LODS['solid'],
+                normal=H.normal(x, z, 1.0))
+        if path in FOOTPRINTS['solids']:
+            mask.footprint(x, z, yaw, sc if isinstance(sc, float) else sc[0], FOOTPRINTS['solids'][path])
+        else:
+            mask.circle(x, z, 0.8 * (sc if isinstance(sc, float) else sc[0]))
+    hero_pts = [(x, z) for _, x, z, _, _ in HERO_ROCKS] + [(HERO_LOG[1], HERO_LOG[2])]
+    lx, lz, la = HERO_LOG[1], HERO_LOG[2], math.radians(HERO_LOG[3])
+    ldx, ldz = math.cos(la), -math.sin(la)
+
+    def by_hero(x, z):
+        """Inside the rocks or under the trunk?"""
+        t = (x - lx) * ldx + (z - lz) * ldz
+        if abs(t) < 3.9 and abs((x - lx) * -ldz + (z - lz) * ldx) < 0.75:
+            return True
+        return any(math.hypot(x - rx, z - rz) < 1.4 * sc[0] for _, rx, rz, _, sc in HERO_ROCKS)
+    for group, paths, n, r0, r1, sc_rng, lod, hug in (
+            ('Ferns', [p for sp in FERN_SPECIES[:2] for p in sp], 10, 1.2, 2.6, (0.9, 1.3), 'plant', 0.0),
+            ('Moss', MOSS, 6, 0.6, 1.8, (0.9, 1.3), 'plant', 0.6),
+            ('Mushrooms', MUSHROOMS, 8, 0.4, 1.4, (0.9, 1.4), 'small', 0.0)):
+        usable, placed = s.usable(paths), 0
+        for _ in range(n * 10):
+            if placed >= n or not usable:
+                break
+            ax, az = hero_rng.choice(hero_pts)
+            a, r = hero_rng.uniform(0, 2 * math.pi), hero_rng.uniform(r0, r1)
+            x, z = ax + math.cos(a) * r, az + math.sin(a) * r
+            if by_hero(x, z) or trail_d(x, z) < PATH_KEEP:
+                continue
+            sc = hero_rng.uniform(*sc_rng)
+            y, up = (H(x, z), H.normal(x, z, hug * sc)) if hug else (H.low(x, z, 0.25), None)
+            s.stamp(hero_rng.choice(usable), hero, (round(x, 2), round(y, 3), round(z, 2)),
+                    yaw=round(hero_rng.uniform(0, 360), 1), scale=sc, lod=LODS[lod], normal=up)
+            placed += 1
+        counts['hero ' + group.lower()] = placed
+    if s.prefab(GO + HERO_LOG[0]):
+        logs.append((lx, lz, GO + HERO_LOG[0], HERO_LOG[3], HERO_LOG[4]))
+
+    scatter('Moss Mats', MOSS, 260, 0.6, 0.5, 3.5, (0.8, 1.4), avoid=1.2, anchors=anchors, near_anchor=0.35,
+            a_min=0.4, a_max=1.6, hug=0.6)
+    patches('Ground Cover', [GROUND_COVER[0:3], GROUND_COVER[3:9], GROUND_COVER[9:11]], 260, (3, 8), 2.2,
+            (0.8, 1.3), anchors, 0.2, 0.45, avoid=0.6, clearing_ok=True)
+    patches('Ferns', FERN_SPECIES, 170, (4, 9), 3.0, (0.75, 1.3), anchors, 0.45, 0.35, avoid=0.8)
+    # flowers and tall wild grass where the canopy opens: round the clearing's edge and in the glades
+    glade = lambda x, z: noise2(x, z, 3, 22.0) < 0.35 or math.hypot(x - cx, z - cz) < cr + 4.0  # noqa: E731
+    patches('Flowers', [FLOWERS], 40, (3, 7), 1.6, (0.8, 1.2), None, 0.0, 0.0, avoid=0.5, clearing_ok=True, where=glade)
+    patches('Wild Grass', [WILD_GRASS], 45, (2, 6), 1.8, (0.8, 1.3), None, 0.0, 0.0, avoid=0.6, clearing_ok=True,
+            where=glade)
+    scatter('Bushes', BUSHES, 260, 0.6, 1.5, 7.0, (0.7, 1.2), avoid=2.2)
+    scatter('Debris', DEBRIS, 420, 0.75, 0.5, 6.0, (0.8, 1.2), avoid=0.8, clearing_ok=True, lod='small',
+            off_mounds=True, hug=0.6)
+    scatter('Mushrooms', MUSHROOMS, 160, 0.9, 0.4, 1.6, (0.8, 1.4), avoid=0.4, lod='small', anchors=wood_pts,
+            near_anchor=0.5, a_min=0.3, a_max=1.1, off_mounds=True)
+
+    # --- fungi on the dead wood: clusters at the foot of each log, shelf fungi up the stumps.
+    fungi = s.empty('Wood Fungi', root, (0, 0, 0), static=True)
+    wood = s.usable(WOOD_MUSHROOMS)
+    n_f = 0
+    for x, z, path, yaw, sc in logs:
+        if not wood or rng.random() < 0.35:
+            continue
+        a = math.radians(yaw)
+        ax, az = math.cos(a), -math.sin(a)                     # the log's long (local X) axis
+        for _ in range(rng.randint(1, 3)):
+            t, side = rng.uniform(-0.8, 0.8) * sc, rng.choice((-1, 1)) * 0.2 * sc
+            px, pz = x + ax * t - az * side, z + az * t + ax * side
+            for _ in range(rng.randint(2, 5)):
+                fx, fz = px + rng.uniform(-0.12, 0.12), pz + rng.uniform(-0.12, 0.12)
+                s.stamp(rng.choice(wood), fungi, (round(fx, 3), round(H(fx, fz), 3), round(fz, 3)),
+                        yaw=round(rng.uniform(0, 360), 1), scale=rng.uniform(0.8, 1.5), lod=LODS['small'])
+                n_f += 1
+    shelves = s.usable(TREE_MUSHROOMS)
+    for x, z, path, _yaw, sc in stumps:
+        trunk = STUMP_TRUNK.get(os.path.splitext(os.path.basename(path))[0])
+        if not shelves or not trunk or rng.random() < 0.4:
+            continue
+        r, lo, hi = trunk
+        a0 = rng.uniform(0, 2 * math.pi)
+        for i in range(rng.randint(1, 3)):
+            a = a0 + rng.uniform(-0.6, 0.6)
+            dx, dz = math.cos(a), math.sin(a)
+            y = rng.uniform(lo, hi) * sc
+            base = H.low(x, z, 0.3 * sc) - 0.03     # the stump's own seat (Stumps: upright, sunk 3 cm)
+            s.stamp(rng.choice(shelves), fungi,
+                    (round(x + dx * r * sc * 0.92, 3), round(base + y, 3), round(z + dz * r * sc * 0.92, 3)),
+                    yaw=round(math.degrees(math.atan2(dx, dz)), 1), scale=rng.uniform(0.7, 1.1), lod=LODS['small'])
+            n_f += 1
+    counts['wood fungi'] = n_f
+
+    # --- the wall's foot: drifts of fallen leaves and moss that have piled against it, with gaps.
+    foot, foot_rng = s.empty('Wall Foot', root, (0, 0, 0), static=True), random.Random(53)
+    litter, moss_mats, n_foot = s.usable(GROUND_COVER[9:11]), s.usable(MOSS), 0
+    for side, (axis, sign) in WALLS.items():
+        u = -HALF + 1.0
+        while u < HALF - 1.0:
+            u += foot_rng.uniform(1.2, 3.5)
+            if foot_rng.random() < 0.35 or not litter:
+                continue
+            d = HALF - foot_rng.uniform(0.55, 0.95)
+            x, z = (u, sign * d) if axis == 'z' else (sign * d, u)
+            moss = foot_rng.random() < 0.3 and moss_mats
+            sc = foot_rng.uniform(0.9, 1.3)
+            s.stamp(foot_rng.choice(moss_mats if moss else litter), foot, (round(x, 2), round(H(x, z), 3), round(z, 2)),
+                    yaw=round(foot_rng.uniform(0, 360), 1), scale=sc, lod=LODS['plant'], normal=H.normal(x, z, 0.6))
+            n_foot += 1
+    counts['wall foot'] = n_foot
+
+    # --- a dead cedar fallen onto the west wall, where the line from its foot to the wall misses every trunk.
+    tall = [t for t in s.usable(TREES) if '_var1.' in t or '_var6.' in t]     # the 22 m cedars
+    lean_deg = math.degrees(math.atan2(WALL_LEAN_FOOT, WALL_HEIGHT_REST))
+    for i in sorted(range(20), key=lambda i: abs(i - 9.5)):     # between two posts, from the middle out
+        zl, fx = -HALF + POST_EVERY * (i + 0.5), -HALF + WALL_LEAN_FOOT
+        if not tall or any(trunks.near(fx - t, zl, 1.2) for t in [i * 0.5 for i in range(12)]):
+            continue
+        # (a panel's u runs along the wall as seen from inside, so on the west wall z = -u)
+        if any(abs(zl + (-HALF + POST_EVERY * (j + 0.5))) < 3.0 for sd, j, _ in WALL_SITES if sd == 'W'):
+            continue
+        s.stamp(tall[0], root, (fx, round(H.low(fx, zl, 0.5) - 0.3, 3), zl), yaw=-90.0, name='Fallen On Wall',
+                lod=LODS['tree'], tilt=(round(lean_deg, 1), 0.0))
+        mask.circle(fx, zl, 0.8)
+        counts['fallen on wall'] = counts.get('fallen on wall', 0) + 1  # (was the z it landed at)
+        break
+
+    # --- a reflection probe over the clearing: the wet rocks and wood there reflect the dark forest, not the sky.
+    s.empty('Clearing Reflection Probe', root, (cx, 4.0, cz), static=True,
+            **{'Reflection Probe': {'Importance': 1.0, 'Size': [28.0, 12.0, 28.0], 'Capture Scene': True}})
+
+    # The forest-wide grass: full in the clearing, thinning under the canopy, bare at the wall's foot and round
+    # every solid piece and trunk.
+    vals = mask.values(lambda x, z: math.hypot(x - cx, z - cz) < cr)
+    for k_, v in enumerate(vals):
+        wx, wz = -GRASS_SPAN / 2 + (k_ % mask.n) * mask.step, -GRASS_SPAN / 2 + (k_ // mask.n) * mask.step
+        if by_wall(wx, wz, 0.6):
+            vals[k_] = 0.0
+        else:
+            vals[k_] *= smoothstep(PATH_BARE[0], PATH_BARE[1], trail_d(wx, wz))
+        vals[k_] = fh.grass_value(wx, wz, vals[k_])     # the house's overgrown lawn
+    s.empty('Forest Grass', g, (0.0, 0.0, 0.0), static=True,
+            **grass(**{'Size X': GRASS_SPAN, 'Size Z': GRASS_SPAN, 'Seed': 2, 'Edge Fade': 0.0,
+                       'Map Res X': mask.n, 'Map Res Z': mask.n, 'Density Map': mask.encode(vals)}))
+    counts['grass cover %'] = round(100.0 * sum(vals) / len(vals), 1)
+
+    counts['wall decals'], counts['wall lamps'] = dress_walls(s, root, repo)
+
+    counts.update(house(s, root, repo, H))
+
+    # The player in the clearing, facing south across it to the house
+    px, pz = cx + 2.0, cz - 2.0
+    for e in s.empties:
+        if e['parentId'] == -1 and 'First Person Controller' in e:
+            e['position'] = [px, round(H(px, pz), 3), pz]
+            e['rotation'] = k.euler_quat(180.0)
+    return s, counts
+
+
+# The forest groups cleared out of the house's lot (their pieces stay where they are everywhere else, so the rest of
+# the forest doesn't move); the yard gets its own planting.
+LOT_PRUNE = {'Ground Scans': 0.5, 'Mounds': 2.0, 'Logs': 1.5, 'Rocks': 1.0, 'Stumps': 1.0, 'Deadfall': 1.5,
+             'Moss Mats': 0.0, 'Ground Cover': 0.0, 'Ferns': 0.5, 'Flowers': 0.0, 'Wild Grass': 0.0, 'Bushes': 1.5,
+             'Debris': 0.0, 'Mushrooms': 0.0, 'Wood Fungi': 0.5}
+
+
+def prune_lot(s, root):
+    ents = {e['id']: e for e in s.empties + s.models + s.boxes}
+    kids = {}
+    for e in ents.values():
+        kids.setdefault(e['parentId'], []).append(e['id'])
+    gone = set()
+
+    def sub(i):
+        out = [i]
+        for c in kids.get(i, []):
+            out += sub(c)
+        return out
+    for gid in kids.get(root, []):
+        pad = LOT_PRUNE.get(ents[gid]['name'])
+        if pad is None:
+            continue
+        for item in kids.get(gid, []):
+            x, _, z = ents[item]['position']
+            pts = [(x, z)] + [(x + ents[c]['position'][0], z + ents[c]['position'][2]) for c in kids.get(item, [])]
+            if any(fh.in_lot(px, pz, pad) for px, pz in pts):
+                gone.update(sub(item))
+    for key in ('empties', 'models', 'boxes'):
+        setattr(s, key, [e for e in getattr(s, key) if e['id'] not in gone])
+    return len(gone)
+
+
+def house(s, root, repo, H):
+    """The abandoned house and its yard (forest_house.py), on the lot cleared for it."""
+    notes = {'pruned from the lot': prune_lot(s, root)}
+    s.data['maxPointShadows'] = max(s.data.get('maxPointShadows', 0), fh.POINT_SHADOWS)
+    s.data['maxSpotShadows'] = max(s.data.get('maxSpotShadows', 0), fh.SPOT_SHADOWS)
+    here = os.path.dirname(os.path.abspath(__file__))
+    pk, lay, broken, rng = fh.add_house(s, root, repo, os.path.join(here, 'forest_house_pack.json'), notes)
+    litter = DEBRIS[17:18]    # dry leaves only indoors: nothing green, no branches or needle clumps
+    fh.dress_inside(s, lay, pk, rng, broken, litter, notes)
+    fh.grime(s, lay, pk, rng, notes)
+    fh.lights(s, lay, pk, repo, notes)
+    fh.porch_light(s, lay, notes, pk)
+    fh.reflection_probes(s, root)
+    notes['quiet shadows'] = fh.quiet_shadows(s, next(e['id'] for e in s.empties if e['name'] == 'Abandoned House'))
+    fh.add_yard(s, root, repo, H, {'yard': FERN_SPECIES[0] + FERN_SPECIES[1] + GROUND_COVER[3:9] + WILD_GRASS + FLOWERS,
+                                   'litter': GROUND_COVER[9:11] + DEBRIS, 'saplings': TREES, 'tree_lod': LODS['tree']},
+                notes)
+    notes['quiet shadows'] += fh.quiet_shadows(s, next(e['id'] for e in s.empties if e['name'] == 'Yard'), fh.YARD_QUIET)
+    return notes
+
+
+def write_meta(path):
+    meta = path + '.meta'
+    if os.path.exists(meta):
+        return
+    with open(meta, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump({'guid': secrets.token_hex(8), 'metaVersion': 1, 'type': 'scene'}, f, indent=2)
+        f.write('\n')
+
+
+def main():
+    repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..'))
+    s, counts = build(repo)
+    out = os.path.join(repo, 'project', 'scenes', 'Forest.json')
+    s.write(out)
+    write_meta(out)
+    for path, why in sorted(s.rejected.items()):
+        print(f'build_forest: left out {path}: {why}')
+    print('build_forest: ' + ', '.join(f'{v} {k_}' for k_, v in counts.items()) +
+          f'; {len(s.boxes)} boxes, {len(s.models)} models, {len(s.empties)} empties -> {out}')
+
+
+if __name__ == '__main__':
+    main()

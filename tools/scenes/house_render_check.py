@@ -10,7 +10,7 @@ import math
 import os
 import sys
 
-from PIL import Image, ImageStat
+from PIL import Image
 
 import house_shots as hs
 
@@ -37,7 +37,7 @@ def qmul(a, b):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else os.path.join(REPO, 'b', 'house_render_check')
+    out = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else os.path.join(REPO, 'build', 'house_render_check')
     cap = int(sys.argv[sys.argv.index('--max') + 1]) if '--max' in sys.argv else 999
     with open(os.path.join(REPO, 'project', 'scenes', 'Forest.json'), encoding='utf-8') as f:
         d = json.load(f)
@@ -69,7 +69,6 @@ def main():
             top = by[top['parentId']]
         tops[top['id']] = top
     lights = [(world(e['id'])[0], e['Light Circuit']['Circuit']) for e in d['empties'] if 'Light' in e and e.get('Light Circuit')]
-    starts_on = {e['Light Switch']['Circuit'] for e in ents if e.get('Light Switch', {}).get('Start On')}
     circuit_of = {}
     cams = []
     for i, e in list(tops.items())[:cap]:
@@ -87,8 +86,10 @@ def main():
         cams.append((f'{i}_{hs.safe(e["name"])}', cam, *hs.look(cam, p)))
         circuit_of[cams[-1][0]] = circuit
     print(f'{len(cams)} fittings')
-    for state in ('0', '1'):
-        hs.run_engine(cams, os.path.join(out, state), state == '1', 'Forest.json')
+    # off: every circuit off (';' = only no circuit on; every switch in the Forest starts on, so "as the switches
+    # start" would be lit too); on: every circuit on
+    hs.run_engine(cams, os.path.join(out, '0'), None, 'Forest.json', only=';')
+    hs.run_engine(cams, os.path.join(out, '1'), True, 'Forest.json')
     fails, brighter = [], 0
 
     def p99(path):
@@ -108,9 +109,8 @@ def main():
             fails.append(name)
             continue
         off, on = p99(paths[0]), p99(paths[1])
-        start_on = circuit_of[name] in starts_on      # on from the start: lit in both shots
-        brighter += on > off + 0.05 or start_on
-        ok = start_on or off <= OFF_MAX
+        brighter += on > off + 0.05
+        ok = off <= OFF_MAX
         print(f'{"ok  " if ok else "FAIL"} {name} [{circuit_of[name]}]: off {off:.2f} on {on:.2f}')
         if not ok:
             fails.append(name)

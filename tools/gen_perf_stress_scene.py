@@ -80,7 +80,7 @@ def light(name, parent, pos, rot, kind, color, intensity, rng, shadows, angle=35
     e['Light'] = {'Angular Size': 1.0, 'Cast Shadows': shadows, 'Color': list(color), 'ColorTempK': 0.0,
                   'Culling Mask': -1, 'Intensity': intensity, 'Range': rng, 'Shadow Bias': 1.0,
                   'Shadow Near Plane': 0.1 if kind != 'Directional' else 0.05, 'Shadow Normal Bias': 1.0,
-                  'Shadow Resolution': 'Follow global', 'Shadow Softness': 0.35, 'Shadow Update Mode': 'Dynamic',
+                  'Shadow Softness': 0.35, 
                   'Spot Angle': angle, 'Type': kind}
     ents['empties'].append(e)
 

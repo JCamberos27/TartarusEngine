@@ -54,7 +54,7 @@ def cams_for(pk, rooms):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, 'b', 'house_gi_check')
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, 'build', 'house_gi_check')
     pk, rooms = hg.house_rooms()
     cams = cams_for(pk, rooms)
     sc = json.load(open(os.path.join(SCN, 'Forest.json'), encoding='utf-8'))

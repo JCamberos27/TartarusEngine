@@ -240,9 +240,7 @@
     "Shadow Bias": 1.0,
     "Shadow Near Plane": 0.05000000074505806,
     "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
     "Shadow Softness": 0.3499999940395355,
-    "Shadow Update Mode": "Dynamic",
     "Spot Angle": 35.0,
     "Type": "Directional"
    },
@@ -313,8 +311,6 @@
     "Foot IK Fade": 0.10000000149011612,
     "Foot IK Max Drop": 0.3499999940395355,
     "Foot Lock Drift": 0.11999999731779099,
-    "Foot Lock Ease In": 0.03999999910593033,
-    "Foot Lock Ease Out": 0.07999999821186066,
     "Foot Max Raise": 0.25,
     "Foot Normal Ease": 0.07999999821186066,
     "Foot Offset Ease": 0.05999999865889549,
