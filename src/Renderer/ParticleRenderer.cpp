@@ -2,6 +2,7 @@
 #include "Components.h"
 #include "ParticleSystem.h"
 #include "GLStateCache.h"
+#include "GLStateScope.h"
 #include "RenderFrameContext.h"
 #include "Shader.h"
 #include "Core/Paths.h"
@@ -14,8 +15,6 @@
 #include <vector>
 
 ParticleRenderer::~ParticleRenderer() {
-    delete m_Shader;
-    delete m_SmokeShader;
     if(m_Vbo)glDeleteBuffers(1,&m_Vbo);
     if(m_Vao)glDeleteVertexArrays(1,&m_Vao);
 }
@@ -29,8 +28,8 @@ static_assert(sizeof(Instance)==128);
 }
 void ParticleRenderer::EnsureCreated() {
     if(m_Shader)return;
-    m_Shader=new Shader(ShaderLibrary::ReadFile("Particle.vert.glsl"),ShaderLibrary::ReadFile("Particle.frag.glsl"));
-    m_SmokeShader=new Shader(ShaderLibrary::ReadFile("Particle.vert.glsl"),ShaderLibrary::ReadFile("ProceduralSmoke.frag.glsl"));
+    m_Shader=std::make_unique<Shader>(ShaderLibrary::ReadFile("Particle.vert.glsl"),ShaderLibrary::ReadFile("Particle.frag.glsl"));
+    m_SmokeShader=std::make_unique<Shader>(ShaderLibrary::ReadFile("Particle.vert.glsl"),ShaderLibrary::ReadFile("ProceduralSmoke.frag.glsl"));
     glCreateVertexArrays(1,&m_Vao);glCreateBuffers(1,&m_Vbo);
     glVertexArrayVertexBuffer(m_Vao,0,m_Vbo,0,sizeof(Instance));glVertexArrayBindingDivisor(m_Vao,0,1);
     for(unsigned i=0;i<8;++i) {
@@ -38,15 +37,31 @@ void ParticleRenderer::EnsureCreated() {
         glVertexArrayAttribBinding(m_Vao,i,0);
     }
 }
-Texture* ParticleRenderer::ParticleTexture(const std::string& path,bool flame) {
-    const std::string key=(flame?"data:":"color:")+path;
-    auto it=m_Textures.find(key);
-    if(it==m_Textures.end()) {
-        TextureImportSettings s;s.IsSRGB=!flame;s.WrapMode=TextureImportSettings::Wrap::ClampToEdge;
-        auto tex=std::make_shared<Texture>(ProjectPaths::Resolve(path),s);
-        it=m_Textures.emplace(key,std::move(tex)).first;
+bool ParticleRenderer::ParticleTexture(const std::string& path,bool data,Texture*& out) {
+    out=nullptr;
+    auto& slots=m_Textures[data?1:0];
+    auto it=slots.find(path);
+    if(it==slots.end()) {
+        Texture::InitGpuCaps(); // what DecodeFile needs, from the main thread
+        TextureImportSettings s;s.IsSRGB=!data;s.WrapMode=TextureImportSettings::Wrap::ClampToEdge;
+        TextureSlot slot;
+        slot.Decode=std::async(std::launch::async,[file=ProjectPaths::Resolve(path),s] { return Texture::DecodeFile(file,s); });
+        it=slots.emplace(path,std::move(slot)).first;
     }
-    return it->second->IsValid()?it->second.get():nullptr;
+    TextureSlot& slot=it->second;
+    if(slot.Decode.valid()) {
+        if(slot.Decode.wait_for(std::chrono::seconds(0))!=std::future_status::ready)return false;
+        slot.Tex=std::make_shared<Texture>(slot.Decode.get()); // the GL upload, main thread
+    }
+    if(slot.Tex&&slot.Tex->IsValid())out=slot.Tex.get();
+    return true;
+}
+void ParticleRenderer::WarmUp(const World& world) {
+    EnsureCreated();
+    for(auto [e,ps]:world.Registry.view<const ParticleSystemComponent>().each()) {
+        Texture* unused=nullptr;
+        if(!ps.Texture.empty())ParticleTexture(ps.Texture,ps.TextureChannels>0,unused);
+    }
 }
 int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool viewModelPass,bool drawViewModel) {
     static std::vector<Item> items;static std::vector<Instance> upload;static std::vector<Batch> batches;
@@ -58,7 +73,8 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
         if((viewModelPass&&world.Registry.all_of<ViewModelTag>(e))!=drawViewModel)continue;
         const glm::mat4 transform=world.ComposeWorldTransform(e);
         const int columns=std::clamp(ps.SheetColumns,1,256),rows=std::clamp(ps.SheetRows,1,256),cells=columns*rows;
-        Texture* sysTex[2]={nullptr,nullptr}; bool sysLooked[2]={false,false}; // the system's texture, as colour / data
+        // The system's texture, as colour / data: -1 not looked up yet, 0 still decoding, 1 ready.
+        Texture* sysTex[2]={nullptr,nullptr}; signed char sysState[2]={-1,-1};
         for(const auto& p:ps.Live) {
             if(p.Age>=p.Life)continue;
             const float t=std::clamp(p.Age/std::max(p.Life,1e-4f),0.0f,1.0f);
@@ -70,8 +86,13 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
             const bool data=flame || ps.TextureChannels>0;
             Texture* tex=nullptr;
             if(!smoke&&!path.empty()) {
-                if(!p.TextureOverride.empty()) tex=ParticleTexture(path,data);
-                else { if(!sysLooked[data]) { sysTex[data]=ParticleTexture(path,data); sysLooked[data]=true; } tex=sysTex[data]; }
+                bool ready;
+                if(!p.TextureOverride.empty()) ready=ParticleTexture(path,data,tex);
+                else {
+                    if(sysState[data]<0)sysState[data]=ParticleTexture(path,data,sysTex[data])?1:0;
+                    ready=sysState[data]>0;tex=sysTex[data];
+                }
+                if(!ready)continue; // still decoding: drawn from the frame it's uploaded, never as an untextured disc
             }
             Instance in{};in.Pos[0]=pos.x;in.Pos[1]=pos.y;in.Pos[2]=pos.z;
             int blend=ps.BlendMode==1?1:0;
@@ -142,13 +163,12 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
         glNamedBufferData(m_Vbo,GLsizeiptr(m_Capacity*sizeof(Instance)),nullptr,GL_DYNAMIC_DRAW);
     }
     glNamedBufferSubData(m_Vbo,0,GLsizeiptr(upload.size()*sizeof(Instance)),upload.data());
-    const GLboolean prevBlend=glIsEnabled(GL_BLEND),prevCull=glIsEnabled(GL_CULL_FACE),prevDepth=glIsEnabled(GL_DEPTH_TEST);
-    GLboolean prevMask;glGetBooleanv(GL_DEPTH_WRITEMASK,&prevMask);
+    const GLStateScope savedState;const GLBlendFuncScope savedBlendFunc; // the caller's state, blend function included, back at return
     glEnable(GL_DEPTH_TEST);glDepthMask(GL_FALSE);glDisable(GL_CULL_FACE);glEnable(GL_BLEND);
     glBindVertexArray(m_Vao);
     Shader* activeShader=nullptr;
     for(const auto& batch:batches) {
-        Shader* shader=batch.Smoke?m_SmokeShader:m_Shader;
+        Shader* shader=batch.Smoke?m_SmokeShader.get():m_Shader.get();
         if(shader!=activeShader) {
             shader->Bind();shader->SetMat4("uView",ctx.View);shader->SetMat4("uProj",ctx.Proj);
             if(!batch.Smoke)shader->SetInt("uParticleTex",0);
@@ -161,9 +181,6 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
         if(batch.Tex)batch.Tex->Bind(0);
         glDrawArraysInstancedBaseInstance(GL_TRIANGLES,0,6,batch.Count,batch.First);
     }
-    glBindVertexArray(0);glDepthMask(prevMask);
-    if(!prevDepth)glDisable(GL_DEPTH_TEST);
-    if(!prevBlend)glDisable(GL_BLEND);
-    if(prevCull)glEnable(GL_CULL_FACE);
+    glBindVertexArray(0);
     GLStateCache::Invalidate();return int(items.size());
 }
