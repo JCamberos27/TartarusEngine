@@ -378,7 +378,7 @@ private:
     }};
     Shader outlineModelShader{ShaderLibrary::ReadFileRequired("OutlineModel.vert.glsl"),
                               ShaderLibrary::ReadFileRequired("Outline.frag.glsl"), "outlineModelShader"};
-    Shader outlineDilateShader{ShaderLibrary::ReadFileRequired("OutlineDilate.vert.glsl"),
+    Shader outlineDilateShader{ShaderLibrary::ReadFileRequired("Fullscreen.vert.glsl"),
                                ShaderLibrary::ReadFileRequired("OutlineDilate.frag.glsl"), "outlineDilateShader"};
     Shader shadowShader{ShaderLibrary::ReadFileRequired("ShadowDepth.vert.glsl"),
                         ShaderLibrary::ReadFileRequired("ShadowDepth.frag.glsl"), "shadowShader"};
@@ -448,7 +448,7 @@ private:
         ShaderLibrary::RegisterForHotReload(outlineModelShader, "OutlineModel.vert.glsl", "Outline.frag.glsl");
     }};
     Step step21{[&] {
-        ShaderLibrary::RegisterForHotReload(outlineDilateShader, "OutlineDilate.vert.glsl", "OutlineDilate.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(outlineDilateShader, "Fullscreen.vert.glsl", "OutlineDilate.frag.glsl");
     }};
     Step step22{[&] {
         ShaderLibrary::RegisterForHotReload(shadowShader, "ShadowDepth.vert.glsl", "ShadowDepth.frag.glsl");

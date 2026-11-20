@@ -120,23 +120,8 @@ float CloudShadow(vec3 p) {
     return texture(uCloudShadowMap, uv).r;
 }
 
-// Every scene light (directional sun, point, spot) in one std430 SSBO — filled by LightBuffer
-// on the CPU, bound at binding = 0. This is the layout the clustered-forward cull pass will
-// consume later, so it doesn't change again when that lands.
-struct Light {
-    vec4 PositionType; // xyz = world pos (point/spot); w = type: 0 directional, 1 point, 2 spot
-    vec4 ColorRange;   // rgb = colour * intensity; a = range in metres (point/spot)
-    vec4 DirCutoff;    // xyz = normalized aim direction (spot/directional); w = spot outer-cone cos (-1 = none)
-    vec4 Params;       // x = spot inner-cone cos; y = shadow slot; z = excluded-layer bits (#203); w = volumetric intensity
-    vec4 BoxX, BoxY, BoxZ; // light bounds: rows world -> box (xyz = unit axis, w = -dot(axis, centre))
-    vec4 BoxHalf;          // xyz = half extents; w = fade metres (< 0: unbounded)
-};
-
-layout(std430, binding = 0) readonly buffer LightBuffer {
-    uint uLightCount;
-    uint uDirectionalCount; // directional lights are packed at the front of uLights[] (#188)
-    Light uLights[];
-};
+// Every scene light and the clustered lists (uLights[], uClusterRange[], uClusterLightIndices[]).
+#include "LightBuffer.glsl"
 // The light's bounds (Light component > Bounds) at world point p: 1 well inside the box, falling to 0 at its faces.
 float LightBoxFade(uint i, vec3 p) {
     vec4 h = uLights[i].BoxHalf;
@@ -160,10 +145,7 @@ bool LightAffects(uint i) {
 // the point/spot lights whose range reaches it. This fragment finds its own froxel from
 // gl_FragCoord + view depth and loops only that froxel's [offset, offset+count) slice of the
 // global list. uClusterEnabled == 0 (the offscreen model preview, which runs no compute pass)
-// falls back to looping every light.
-struct ClusterRange { uint offset; uint count; };
-layout(std430, binding = 3) readonly buffer ClusterCounts { ClusterRange uClusterRange[]; };
-layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
+// falls back to looping every light. The lists themselves are declared in LightBuffer.glsl.
 uniform int  uClusterEnabled;
 uniform vec2 uClusterScreenSize;
 uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))

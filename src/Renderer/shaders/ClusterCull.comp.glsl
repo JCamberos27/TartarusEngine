@@ -2,12 +2,12 @@
 layout(local_size_x = 64) in;
 
 struct AABB  { vec4 mn; vec4 mx; };
-struct Light { vec4 PositionType; vec4 ColorRange; vec4 DirCutoff; vec4 Params; vec4 BoxX; vec4 BoxY; vec4 BoxZ; vec4 BoxHalf; };
-// Per-cluster range into the global index list (#208): replaces the old bare per-cluster count
-// at a fixed slot.
-struct ClusterRange { uint offset; uint count; };
+// Light, and ClusterRange: each cluster's {offset, count} range into the global index list (#208).
+#include "LightTypes.glsl"
 
-layout(std430, binding = 0) readonly  buffer LightBuffer   { uint uLightCount; Light uLights[]; };
+// uDirectionalCount is unused here (directional lights fail the range test), but declared so the
+// block matches LightBuffer.glsl's member for member.
+layout(std430, binding = 0) readonly  buffer LightBuffer   { uint uLightCount; uint uDirectionalCount; Light uLights[]; };
 layout(std430, binding = 2) readonly  buffer ClusterAABBs  { AABB uClusters[]; };
 layout(std430, binding = 3) writeonly buffer ClusterCounts { ClusterRange uRange[]; };
 layout(std430, binding = 4) writeonly buffer ClusterIndex  { uint uIndex[]; };

@@ -34,23 +34,8 @@ uniform int uIBLEnabled;
 uniform float uIBLIntensity;
 layout(binding = 11) uniform samplerCube uIrradianceMap;
 
-// --- lights: the scene's light SSBO and the cluster lists (same layout as ModelShading.glsl) ---
-struct Light {
-    vec4 PositionType; // xyz = world pos; w = type: 0 directional, 1 point, 2 spot
-    vec4 ColorRange;   // rgb = colour * intensity; a = range
-    vec4 DirCutoff;    // xyz = aim; w = spot outer cos
-    vec4 Params;       // x = spot inner cos; y = shadow slot; z = excluded layers; w = volumetric intensity
-    vec4 BoxX, BoxY, BoxZ; // light bounds (LightBuffer::BoundLast)
-    vec4 BoxHalf;          // xyz = half extents; w = fade (< 0: unbounded)
-};
-layout(std430, binding = 0) readonly buffer LightBuffer {
-    uint uLightCount;
-    uint uDirectionalCount;
-    Light uLights[];
-};
-struct ClusterRange { uint offset; uint count; };
-layout(std430, binding = 3) readonly buffer ClusterCounts { ClusterRange uClusterRange[]; };
-layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
+// --- lights: the scene's light SSBO and the cluster lists (the model shader's) ---
+#include "LightBuffer.glsl"
 uniform int  uClusterEnabled;
 uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
 #include "ClusterGrid.glsl"
