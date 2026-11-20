@@ -717,7 +717,7 @@ void RegisterAssetsTests() {
              Shot("model-inspector", {kInspector}),
              RevealTile("Smoke Tex.png"), Click(Tile("Smoke Tex.png")), Wait(5),
              Shot("texture-inspector", {kInspector}),
-             RevealTile("Smoke Prefab.prefab"), Click(Tile("Smoke Prefab.prefab")), Wait(5),
+             UntilListed("Smoke Prefab.prefab"), RevealTile("Smoke Prefab.prefab"), Click(Tile("Smoke Prefab.prefab")), Wait(5),
              Shot("prefab-inspector", {kInspector})},
             // A material: write one (the background menu's own path), edit it in its inspector.
             BackgroundMenu("Create Material"),
@@ -738,7 +738,22 @@ void RegisterAssetsTests() {
              Until("the edit is saved to the .mat", [before](Ctx&) { return ReadFileText(g_Text) != *before; }, 60),
              Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(6),
              Until("undo puts the file back", [before](Ctx&) { return ReadFileText(g_Text) == *before; }, 60),
-             Do("deselect", [](Ctx& c) { X::Deselect(c.E); }), Wait(2)},
+             Do("deselect", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
+             // A .mat that isn't valid JSON: its inspector says so and shows no fields to edit (an edit
+             // would save Standard defaults over the file).
+             Do("write a broken .mat and select it", [](Ctx& c) {
+                 g_AllowLog.push_back("JSON parse error");
+                 g_Text = DirFile("Smoke Broken.mat");
+                 std::ofstream(fs::u8path(g_Text), std::ios::binary) << "{ not json";
+                 X::SelectAsset(c.E, g_Text);
+             }), Wait(10),
+             ExpectTrue("it loaded as a Missing placeholder", [](Ctx& c) { const auto ma = c.A.LoadMaterial(g_Text); return ma && ma->Missing; }),
+             ExpectTrue("its inspector shows no material fields", [](Ctx&) { return Find(ByLabel("(none)", kInspector)) == nullptr; }), // the texture-map slots
+             ExpectTrue("the file is untouched", [](Ctx&) { return ReadFileText(g_Text) == "{ not json"; }),
+             Do("deselect and remove it", [](Ctx& c) {
+                 X::Deselect(c.E);
+                 std::error_code ec; fs::remove(fs::u8path(g_Text), ec); fs::remove(fs::u8path(g_Text + ".meta"), ec);
+             }), Wait(2)},
         }));
     }
 

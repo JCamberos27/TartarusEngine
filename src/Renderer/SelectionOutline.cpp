@@ -85,7 +85,6 @@ void SelectionOutline::Render(const SelectionOutlineInputs& in) {
     maskShader.Bind();
     maskShader.SetMat4("uView", in.view);
     maskShader.SetMat4("uProj", in.proj);
-    maskShader.SetFloat("uThickness", 0.0f);
     maskShader.SetVec3("uOutlineColor", glm::vec3(1.0f));
     if (in.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // mask must be solid
     for (std::size_t i = 0; i < models.size(); ++i) {
