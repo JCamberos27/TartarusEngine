@@ -327,7 +327,7 @@ void TaaAndWetnessRoundTrip() {
         World reloaded;
         CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
         CHECK(reloaded.AntiAliasing == World::AntiAliasingMode::Taa && reloaded.TaaSharpness == 0.6f);
-        CHECK(reloaded.TaaEnabled() && reloaded.EffectiveMsaaSamples() == 1 && !reloaded.EffectiveFxaa());
+        CHECK(reloaded.TaaEnabled() && reloaded.EffectiveMsaaSamples() == World::kTaaMsaaSamples && !reloaded.EffectiveFxaa());
         CHECK(reloaded.Wetness == 0.8f && reloaded.PuddleAmount == 0.4f && reloaded.PuddleScale == 7.5f);
         CHECK(reloaded.MsaaSamples == world.MsaaSamples); // kept for switching back
     }

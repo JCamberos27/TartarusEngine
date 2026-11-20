@@ -173,7 +173,7 @@ void EditorSettings::Load() {
     s.MotionStartup = SafeValue(root, "motionStartup", s.MotionStartup);
     // "glassTheme", not the retired "editorTheme": old prefs files still carry that key with
     // values from the removed theme picker, and must not switch Glass on by accident.
-    s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), 0, 1);
+    s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), kTartarusTheme, kGlassTheme);
     s.GlassViewportHuds = SafeValue(root, "glassViewportHuds", s.GlassViewportHuds);
     s.GlassFrostedBlur = SafeValue(root, "glassFrostedBlur", s.GlassFrostedBlur);
     s.GlassStatsPill = SafeValue(root, "glassStatsPill", s.GlassStatsPill);

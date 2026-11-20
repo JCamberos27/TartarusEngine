@@ -32,6 +32,7 @@
 #include "RenderStats.h" // ::RenderStats, re-exported below as EditorLayer::RenderStats (#359)
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
+#include "LruMap.h" // m_ModelThumbnails / m_MaterialThumbs
 #include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
@@ -61,8 +62,11 @@ enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (
 // so it never crosses the DLL boundary — the module only ever asks for a cell count + a
 // DrawAssetCell(index) callback.
 struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
+struct Material;      // Material.h
+class ShaderAsset;    // ShaderAsset.h
 struct RegisteredComponent; // ComponentRegistry.h
 struct EditorFolderVisual;  // EditorModuleAPI.h
+namespace EditorSearch { struct ParsedAssetSearch; } // EditorSearch.h
 enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
@@ -1800,6 +1804,29 @@ private:
     // multi-select (m_AssetSelectionAnchorIndex indexes into this). Never mutated between
     // FrameBegin and the last DrawAssetCell of a frame.
     std::vector<AssetGridCell> m_AssetGridCells;
+    // AssetGridFrameBegin's parts and DrawAssetCell's / HandleAssetGridBackground's, all in EditorLayer_AssetBrowser.cpp.
+    struct AssetCellLook; // what one tile shows (thumbnail, glyph, folder tint, selected / renaming / playing)
+    void CollectAssetGridCells(AssetLibrary& assets, const EditorSearch::ParsedAssetSearch& search);
+    void AssetGridFrameEdges(); // the search-empty sound and Ctrl+A select-all
+    void BuildAssetCellLook(AssetLibrary& assets, const AssetGridCell& cell, AssetCellLook& look);
+    bool DrawAssetTile(World& world, AssetLibrary& assets, const AssetGridCell& cell, const AssetCellLook& look, float cellW, float cellH);
+    bool DrawAssetRow(World& world, AssetLibrary& assets, const AssetGridCell& cell, const AssetCellLook& look);
+    void DrawAssetRenameField(World& world, AssetLibrary& assets, float width);
+    void ClickAssetCell(const AssetGridCell& cell, size_t cellIndex, bool isFolder, bool playing);
+    void HandleAssetCellOpen(World& world, AssetLibrary& assets, const AssetGridCell& cell, int index, bool isFolder, bool isSelected);
+    void HandleAssetCellDragDrop(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder);
+    void DrawAssetCellContextMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder);
+    void DrawSceneCellMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell);
+    void DrawShaderCellMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell);
+    void DrawAssetItemMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder);
+    void SelectForAssetContextMenu(const std::string& key, bool isFolder);
+    void CopyAssetPathMenuItem(const std::string& key);
+    void AssetFavoritesMenuItem();
+    void EditAssetLabelsMenuItem(World& world, AssetLibrary& assets, const std::string& key);
+    void SelectSceneReferences(World& world, const AssetGridCell& cell);
+    void DrawAssetGridCreateMenu(World& world, AssetLibrary& assets);
+    void SelectCreatedAssetFile(const std::string& path);
+    void DrawWeaponWizardPopup();
     // Whether the Asset Browser's list and folder summaries are reused between frames during Play (above, and
     // RebuildFolderSummariesIfNeeded). TARTARUS_NO_UI_THROTTLE=1 turns it off for A/B benches.
     static bool PlayUiThrottle();
@@ -1864,6 +1891,12 @@ private:
     void DrawMaterialAssetEditor(World& world, AssetLibrary& assets, const std::string& matPath);
     void DrawMaterialAssetFields(World& world, AssetLibrary& assets, const std::shared_ptr<MaterialAsset>& ma,
                                  const std::string& matPath);
+    struct MaterialEdits; // how a material edit is recorded: scene undo, or saving the .mat
+    void DrawMaterialProperties(World& world, AssetLibrary& assets, const std::vector<Material*>& mats,
+                                const std::vector<MaterialAsset*>& matAssets, const ShaderAsset* shader,
+                                const MaterialEdits& edits);
+    void DrawShaderPropertyRows(AssetLibrary& assets, const std::vector<Material*>& mats, const ShaderAsset& sa,
+                                const MaterialEdits& edits);
 
     // #107 - Unity's material preview: the material on a sphere (or cube / cylinder / torus /
     // plane) at the bottom of the Inspector, drag to orbit. Re-rendered only when the material,
@@ -1912,14 +1945,12 @@ private:
     //
     // Keyed by asset path (#181) rather than the Model* — stable across a Model being destroyed
     // and a new allocation reusing the same address, unlike the pointer. Bounded to
-    // kMaxModelThumbnails with simple LRU eviction (a doubly-linked list for recency order plus
-    // the map for O(1) lookup/touch) so browsing a large library over a session doesn't leak GL
-    // textures forever; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps this well under a
-    // megabyte of VRAM.
+    // kMaxModelThumbnails, least recently used evicted first, so browsing a large library over a
+    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps
+    // this well under a megabyte of VRAM.
     ModelPreviewRenderer m_ThumbnailPreview;
     static constexpr size_t kMaxModelThumbnails = 128;
-    std::list<std::string> m_ThumbnailLRU; // front = most recently used
-    std::unordered_map<std::string, std::pair<unsigned int, std::list<std::string>::iterator>> m_ModelThumbnails;
+    LruMap<unsigned int> m_ModelThumbnails; // path -> GL texture
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
     // Thumbnails dropped mid-frame (a Reimport from a tile's menu, an LRU eviction) may already be
@@ -1937,11 +1968,9 @@ private:
         unsigned int Tex = 0;
         std::uint64_t ContentKey = 0;
         std::uint64_t DiskKey = 0; // ThumbnailCache key the persisted PNG was saved with
-        std::list<std::string>::iterator Lru;
     };
     MaterialPreviewRenderer m_MaterialThumbPreview;
-    std::list<std::string> m_MaterialThumbLRU;
-    std::unordered_map<std::string, MaterialThumb> m_MaterialThumbs;
+    LruMap<MaterialThumb> m_MaterialThumbs;
     unsigned int MaterialThumbnail(const std::shared_ptr<MaterialAsset>& ma); // 0 = none yet (use the glyph)
     void ClearMaterialThumbnails();
     // Copies a `size`-square preview render into `dst` (allocated here when 0) through the
@@ -2081,6 +2110,7 @@ private:
         bool IsFolder = false;
         bool operator==(const AssetKeyRef& o) const { return Key == o.Key && IsFolder == o.IsFolder; }
     };
+    std::vector<AssetKeyRef> AssetSelectionForAction() const; // everything selected, primary first (EditorLayer_AssetBrowser.cpp)
     // m_SelectedAssetKey/m_SelectedAssetIsFolder is the "primary"/anchor selection (same role as
     // m_Selected for scene entities); m_ExtraAssetSelection holds everything else co-selected via
     // Ctrl/Shift-click — mirroring the m_Selected + m_ExtraSelection split already used for scene
@@ -2292,7 +2322,7 @@ private:
     char m_HierStyleIconSearch[64] = {};
     void HandleHierarchyHoverKeys(World& world);
     // Per-scene user-state key: the scene's GUID, else its path ("" for an untitled scene).
-    std::string CurrentSceneKey() const;
+    const std::string& CurrentSceneKey() const; // worked out once per frame
     entt::entity FindEntityByOrder(const World& world, int order) const;
     // vHierarchy D key: new objects created without an explicit parent land under it.
     entt::entity ResolveDefaultParent(const World& world) const;

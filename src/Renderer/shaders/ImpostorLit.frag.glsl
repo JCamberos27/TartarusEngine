@@ -12,6 +12,7 @@ vec3 vWorldPos; // ModelShading.glsl reads it: the surface ImpostorResolve finds
 // of which is nearer than this surface is dropped before the lighting - the program writes gl_FragDepth, so GL_EQUAL
 // only runs after it. uImpDepthSamples 0: no depth to read.
 layout(binding = 3) uniform sampler2DMS uImpViewDepth;
+layout(binding = 37) uniform sampler2D uImpViewDepth1; // the same at one sample (uImpDepthSamples -1)
 uniform int uImpDepthSamples;
 uniform mat4 uPrevViewProj; // TAA (ModelVertex.glsl's): last frame's, unjittered
 uniform vec2 uTaaJitter;
@@ -20,7 +21,9 @@ const float kVelocityUnknown = 4.0;
 void main() {
     ImpostorFrag f;
     if (!ImpostorResolve(f)) discard;
-    if (uImpDepthSamples > 0) {
+    if (uImpDepthSamples < 0) {
+        if (gl_FragDepth > texelFetch(uImpViewDepth1, ivec2(gl_FragCoord.xy), 0).r) discard; // something nearer
+    } else if (uImpDepthSamples > 0) {
         float farthest = 0.0;
         for (int i = 0; i < uImpDepthSamples; ++i) farthest = max(farthest, texelFetch(uImpViewDepth, ivec2(gl_FragCoord.xy), i).r);
         if (gl_FragDepth > farthest) discard; // every sample is something nearer (equal: this surface, kept)

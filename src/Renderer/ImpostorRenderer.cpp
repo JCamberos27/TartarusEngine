@@ -313,11 +313,12 @@ void ImpostorRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, con
     p.SetInt("uNoReceiveShadows", 0);
     // The pre-pass's depth is final for these pixels: read it to drop hidden ones before the lighting.
     const bool readDepth = viewDepth && depthPrepassed && samples >= 1 && glTextureBarrier;
-    p.SetInt("uImpDepthSamples", readDepth ? std::min(samples, 8) : 0);
+    // > 0: that many samples of a multisampled depth (unit 3); -1: a single-sample one (unit 37).
+    p.SetInt("uImpDepthSamples", !readDepth ? 0 : samples == 1 ? -1 : std::min(samples, 8));
     if (readDepth) {
         glTextureBarrier(); // the depth just written by the pre-pass and the opaque draws, visible to texel fetches
-        glActiveTexture(GL_TEXTURE0 + 3);
-        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, viewDepth);
+        glActiveTexture(GL_TEXTURE0 + (samples == 1 ? 37 : 3));
+        glBindTexture(samples == 1 ? GL_TEXTURE_2D : GL_TEXTURE_2D_MULTISAMPLE, viewDepth);
         glActiveTexture(GL_TEXTURE0);
     }
     std::optional<GLDepthStateScope> prepassed; // the pre-pass laid the depth: test it exactly, write nothing

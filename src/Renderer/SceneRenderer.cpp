@@ -662,8 +662,8 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     program.SetInt("uApplyTonemap", 0);
 }
 
-void SceneRenderer::WarmEffects() {
-    Particles()->WarmUp();
+void SceneRenderer::WarmEffects(const World& world) {
+    Particles()->WarmUp(world);
     FxSpriteRenderer::Get().WarmUp();
     BloodRenderer::Get().WarmUp();
     WorldTextRenderer::Get().WarmUp();
@@ -875,9 +875,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         std::uint64_t MatKey;
         const Shader* Prog;   // #112 - slot 0's program; the opaque pass groups by it first
         int Meshes, Tris, Verts;
-        // PR9 transparent queue
-        MaterialAsset::Queue Queue;
-        int  QueueIndex;
+        int  QueueIndex; // the material's render queue index: the transparent sort's first key
         float ViewDepth; // view-space -Z (more positive = farther) for back-to-front sort
         glm::vec3 Centre; // world-space bounds centre — picks this object's reflection probes (#108)
         Model::MeshPass Pass; // #112 — which of the model's submeshes this item draws
@@ -885,7 +883,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         int  LayerBit;        // #203 - 1 << Layer, tested against each light's excluded layers
         float NearHide = 0.0f; // PlayerBodyTag: metres around the eye not drawn (the player's own body)
         const int* HideBones = nullptr; // PlayerBodyTag::CameraHideBones in the camera's view, else none
-        bool NoSsao = false;  // left out of the SSAO depth pre-pass (main.cpp), so it must not sample the map
+        bool NoSsao = false;  // left out of the SSAO depth pre-pass (ViewPipeline), so it must not sample the map
         unsigned HideVerts = 0; // OutfitHideTag: the piece's covered vertices (SkinHideBuffer), 0 = none
         float NearHideWidth = 0.0f; // PlayerBodyTag: clothing's Near Hide to either side (0 = a sphere)
         unsigned CollarVerts = 0;   // PlayerBodyTag::CollarVerts in the camera's world pass, 0 = none
@@ -1056,7 +1054,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             }
             DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
+                qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.StaticReceiver = staticReceiver;
             item.GIMask = in.giVolumes ? (validBounds ? in.giVolumes->MaskFor(vis.WorldMin, vis.WorldMax) : in.giVolumes->AllMask()) : 0ull;
@@ -1088,7 +1086,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (anyOpaque) {
             DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
+                2000, viewDepth, centre, opaquePass,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;

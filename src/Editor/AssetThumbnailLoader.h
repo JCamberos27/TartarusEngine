@@ -1,12 +1,11 @@
 #pragma once
 #include <condition_variable>
 #include <deque>
-#include <list>
 #include <mutex>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <vector>
+#include "LruMap.h"
 
 // Thumbnails for Asset Browser entries that aren't loaded (the browser lists every asset file on
 // disk, like Unity's Project window, but only loads one when it's used). Loading a texture just to
@@ -54,14 +53,13 @@ public:
 private:
     struct Job { std::string Path; Source From; unsigned Ticket; };
     struct Result { std::string Path; std::vector<unsigned char> Pixels; bool FlipV; unsigned Ticket; };
-    struct Entry { Thumb T; bool Pending = true; unsigned Ticket = 0; std::list<std::string>::iterator Lru; };
+    struct Entry { Thumb T; bool Pending = true; unsigned Ticket = 0; };
 
     void Worker();
-    void Remove(std::unordered_map<std::string, Entry>::iterator it);
+    void Remove(const std::string& key); // frees its texture
 
-    std::unordered_map<std::string, Entry> m_Entries; // main thread only
-    std::list<std::string> m_Lru;                     // front = most recently used
-    unsigned m_NextTicket = 1;                        // a result is used only by the request that asked for it
+    LruMap<Entry> m_Entries;   // main thread only
+    unsigned m_NextTicket = 1; // a result is used only by the request that asked for it
 
     std::mutex m_Mutex; // guards everything below
     std::condition_variable m_Wake;
