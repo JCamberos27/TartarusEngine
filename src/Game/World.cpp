@@ -201,7 +201,16 @@ void World::RebuildWorldTransformCache() {
     auto view = Registry.view<TransformComponent>();
     m_ChangedTransforms.clear();
     m_TransformMembershipChanged = false;
+    m_StructureDelta.Added.clear();
+    m_StructureDelta.Reparented.clear();
+    m_StructureDelta.Dropped.clear();
+    m_StructureDelta.Valid = true;
     if (RebuildChangedTransformsOnly()) return;
+    // The full walk keeps no lists (and the incremental pass may have started some before handing over).
+    m_StructureDelta.Added.clear();
+    m_StructureDelta.Reparented.clear();
+    m_StructureDelta.Dropped.clear();
+    m_StructureDelta.Valid = false;
     ++m_TransformFullWalks;
     size_t slots = 0;
     for (entt::entity entity : view) slots = std::max(slots, (size_t)entt::to_entity(entity) + 1);
@@ -341,6 +350,7 @@ bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
         const entt::entity k = m_WorldTransformKeys[s];
         if (k == entt::null) continue;
         if (!Registry.valid(k)) {
+            m_StructureDelta.Dropped.emplace_back(k, m_LocalSnapshots[s].Parent);
             m_WorldTransformKeys[s] = entt::null;
             m_TransformMembershipChanged = true;
             dropped = true;
@@ -369,13 +379,17 @@ bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
     for (entt::entity e : dirty) {
         const size_t s = (size_t)entt::to_entity(e);
         EnsureTransformSlots(s + 1);
+        const entt::entity parent = parentOf(e);
         if (m_WorldTransformKeys[s] != e) {
             m_WorldTransformKeys[s] = e;
             m_LocalSnapshots[s].HasTransform = true; // new to the cache: found in the transform pool
             m_LocalHashes[s] = 0;
             m_TransformMembershipChanged = true;
+            m_StructureDelta.Added.push_back(e);
+        } else if (m_LocalSnapshots[s].Parent != parent) {
+            m_StructureDelta.Reparented.emplace_back(e, m_LocalSnapshots[s].Parent); // listed once: the parent is now read
         }
-        m_LocalSnapshots[s].Parent = parentOf(e);
+        m_LocalSnapshots[s].Parent = parent;
         if (!m_LocalSnapshots[s].HasTransform && transforms.contains(e))
             m_LocalSnapshots[s].HasTransform = true; // a Transform-less ancestor given one again
     }

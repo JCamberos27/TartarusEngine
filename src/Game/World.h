@@ -93,6 +93,21 @@ public:
     uint64_t PreviousTransformCacheStamp() const { return m_PrevTransformCacheStamp; }
     const std::vector<entt::entity>& ChangedWorldTransforms() const { return m_ChangedTransforms; }
     bool TransformCacheMembershipChanged() const { return m_TransformMembershipChanged; }
+    // What the latest rebuild changed in the cache's STRUCTURE relative to the previous one, filled by the incremental
+    // pass's structure step and cleared by every rebuild (read only). Read this, not ChangedWorldTransforms, for who
+    // came, went or moved in the hierarchy: that one lists recomposed matrices and promises nothing about why, so a
+    // re-parent that keeps the world matrix (SetParent does) is listed here but need not be there. Valid is false
+    // after a rebuild that took the full walk, which keeps no lists: anything derived must be rebuilt in full.
+    // An entity that only lost or regained its TransformComponent stays in the cache and is not listed.
+    struct TransformStructureDelta {
+        bool Valid = false;
+        std::vector<entt::entity> Added;                               // new to the cache
+        std::vector<std::pair<entt::entity, entt::entity>> Reparented; // (entity, the parent it had)
+        std::vector<std::pair<entt::entity, entt::entity>> Dropped;    // (destroyed entity as cached, the parent it had)
+    };
+    const TransformStructureDelta& TransformStructureChanges() const { return m_StructureDelta; }
+    // How many ApplyLod calls rebuilt their records in full (tests: a small structure change patches them).
+    std::uint64_t LodFullPasses() const { return m_LodFullPasses; }
     // How many rebuilds took the full walk (tests: a small structure change takes the incremental pass).
     std::uint64_t TransformCacheFullWalks() const { return m_TransformFullWalks; }
 
@@ -227,6 +242,7 @@ private:
     std::uint64_t m_TransformStructure[3] = {};
     bool m_TransformStructureValid = false;
     std::vector<entt::entity> m_DirtyScratch, m_PendingScratch, m_ChainScratch;
+    TransformStructureDelta m_StructureDelta;
     void TransformStructure(std::uint64_t out[3]);
     bool RebuildChangedTransformsOnly();
     bool ApplyTransformStructureChanges(std::vector<entt::entity>& dirty);
@@ -276,6 +292,12 @@ private:
     std::vector<size_t> m_LodChunkIds;
     std::uint64_t m_LodSignature[4] = {};
     bool m_LodValid = false;  // the tags match m_LodState
+    std::uint64_t m_LodFullPasses = 0;
+    // Entity slot -> the entity that had a RenderableComponent as of the last ApplyLod (filled by its full pass, kept by
+    // its structure patch): tells which of the transform cache's dropped entities took a renderer with them.
+    std::vector<entt::entity> m_LodRenderOwner;
+    std::vector<entt::entity> m_LodTouched, m_LodRemeasure; // the structure patch's scratch
+    std::vector<std::pair<entt::entity, entt::entity>> m_LodDroppedSorted;
     // Bumped by every re-parent, attach and hierarchy destroy: ApplyLod's records are only good while it stays put.
     std::uint64_t m_HierarchyVersion = 0;
     bool IsWorldTransformCached(entt::entity e) const {
