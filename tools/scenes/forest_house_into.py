@@ -16,19 +16,6 @@ import build_forest_day as bfd
 import scene_kit as k
 
 
-def subtree(ents, root):
-    kids = {}
-    for e in ents:
-        kids.setdefault(e['parentId'], []).append(e)
-    out, todo = [], [root]
-    while todo:
-        i = todo.pop()
-        for e in kids.get(i, []):
-            out.append(e)
-            todo.append(e['id'])
-    return out
-
-
 def main():
     repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..'))
     built, counts = bf.build(repo)
@@ -49,10 +36,10 @@ def main():
             pname = built_by_id[top_new['parentId']]['name'] if top_new['parentId'] in built_by_id else None
             parent = next((e['id'] for e in d['empties'] if e['name'] == pname), -1)
             top_old = {'id': None, 'parentId': parent}
-        gone = {top_old['id']} | {e['id'] for e in subtree(old, top_old['id'])} if top_old['id'] is not None else set()
+        gone = {top_old['id']} | {e['id'] for e in k.descendants(old, top_old['id'])} if top_old['id'] is not None else set()
         for key in keys:
             d[key] = [e for e in d[key] if e['id'] not in gone]
-        keep = {top_new['id']} | {e['id'] for e in subtree([e for _, e in new], top_new['id'])}
+        keep = {top_new['id']} | {e['id'] for e in k.descendants([e for _, e in new], top_new['id'])}
         base = max(e['id'] for key in keys for e in d[key]) + 1
         remap = {}
         for _, e in sorted(((key, e) for key, e in new if e['id'] in keep), key=lambda ke: ke[1]['id']):
