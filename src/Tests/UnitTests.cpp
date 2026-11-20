@@ -3033,7 +3033,7 @@ struct PrivateTempDir {
 } // namespace
 
 void UnitTestSupport::EnsureEngineComponents() {
-    UnitTestSupport::EnsureEngineComponents();
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
 }
 
 int RunUnitTests(const char* filter) {
