@@ -4,12 +4,14 @@ import argparse
 import json
 import math
 import os
+import secrets
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'assets'))
 from import_model_library import model_report, write_json  # noqa: E402
 
 ROOTS = ['assets/Architecture', 'assets/Furniture', 'assets/Props']
+SCENE_FORMAT_VERSION = 4   # = kSceneFormatVersion (src/Game/SceneSerializerInternal.h): bump both together
 
 
 def model_index(repo, exe=None):
@@ -36,18 +38,69 @@ def model_index(repo, exe=None):
     return index
 
 
+# --- quaternions ([x, y, z, w]) ----------------------------------------------------------------------------------
+def qmul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
+
+
+def qrot(q, v):
+    """v rotated by the unit quaternion q."""
+    x, y, z, w = q
+    vx, vy, vz = v
+    tx, ty, tz = 2 * (y * vz - z * vy), 2 * (z * vx - x * vz), 2 * (x * vy - y * vx)
+    return [vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx)]
+
+
+def qinv(q):
+    """The inverse of a unit quaternion."""
+    return [-q[0], -q[1], -q[2], q[3]]
+
+
+def axis_q(axis, deg):
+    """deg degrees about the unit vector axis."""
+    h = math.radians(deg) / 2
+    s = math.sin(h)
+    return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(h)]
+
+
 def euler_quat(yaw=0.0, pitch=0.0, roll=0.0):
     """[x, y, z, w] for yaw about Y, then pitch about X, then roll about Z (degrees; each in the frame left by the
     one before, so yaw turns the piece and pitch / roll tip it about its own axes)."""
-    def mul(a, b):
-        ax, ay, az, aw = a
-        bx, by, bz, bw = b
-        return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
-                aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
     hy, hp, hr = (math.radians(v) / 2 for v in (yaw, pitch, roll))
-    q = mul(mul([0.0, math.sin(hy), 0.0, math.cos(hy)], [math.sin(hp), 0.0, 0.0, math.cos(hp)]),
-            [0.0, 0.0, math.sin(hr), math.cos(hr)])
+    q = qmul(qmul([0.0, math.sin(hy), 0.0, math.cos(hy)], [math.sin(hp), 0.0, 0.0, math.cos(hp)]),
+             [0.0, 0.0, math.sin(hr), math.cos(hr)])
     return [round(v, 6) for v in q]
+
+
+# --- asset references and scene files ---------------------------------------------------------------------------
+def ref(repo, path):
+    """{'path', 'pathGuid'} for a project-relative asset (the guid from its .meta); '' for no path, as the engine
+    writes an empty slot."""
+    if not path:
+        return ''
+    with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
+        return {'path': path, 'pathGuid': json.load(f)['guid']}
+
+
+def write_scene_meta(path):
+    """The scene's .meta with a new guid, unless it has one: settings.json and the build list point at that guid."""
+    meta = path + '.meta'
+    if os.path.exists(meta):
+        return
+    with open(meta, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump({'guid': secrets.token_hex(8), 'metaVersion': 1, 'type': 'scene'}, f, indent=2)
+        f.write('\n')
+
+
+def first(it, what):
+    """The first item of `it`; exits naming `what` when there is none (instead of a bare StopIteration)."""
+    v = next(iter(it), None)
+    if v is None:
+        sys.exit(f'{os.path.basename(sys.argv[0])}: no {what} found')
+    return v
 
 
 class Scene:
@@ -55,7 +108,7 @@ class Scene:
         skip = {'boxes', 'empties', 'models', 'libraryMaterials', 'libraryModels', 'libraryPrefabs', 'librarySounds',
                 'libraryTextures'}
         self.data = {k: v for k, v in base.items() if k not in skip}
-        self.data['formatVersion'] = 4
+        self.data['formatVersion'] = SCENE_FORMAT_VERSION
         self.boxes, self.empties, self.models = [], [], []
         self._id = 0
 
@@ -105,6 +158,34 @@ class Scene:
         self.data.update({'boxes': self.boxes, 'empties': self.empties, 'models': self.models})
         write_json(path, self.data)
 
+    # --- the player ------------------------------------------------------------------------------------------------
+    def copy_player(self, arena, pos, yaw=0.0, controller=None):
+        """Arena's player at pos: its spawn (First Person Controller, `controller` keys overriding Arena's), body and
+        the body's Torso / Head / Arms pieces. Returns the body's id, for the caller's outfit_piece()s."""
+        spawn = first((e for e in arena['empties'] if 'First Person Controller' in e), "Arena's player spawn")
+        body = first((e for e in arena['empties'] if e.get('parentId') == spawn['id'] and 'First Person Body' in e),
+                     "Arena's player body")
+        ctrl = {k: v for k, v in spawn.items() if k[0].isupper()}
+        ctrl['First Person Controller'] = {**ctrl['First Person Controller'], **(controller or {})}
+        sid = self.empty('Player Spawn', -1, pos, yaw=yaw, **ctrl)
+        bid = self.empty('Player Body', sid, tuple(body['position']), **{k: v for k, v in body.items() if k[0].isupper()})
+        for p in arena['models']:
+            if p.get('parentId') == body['id'] and p.get('Outfit Piece', {}).get('Slot') in ('Torso', 'Head', 'Arms'):
+                e = self._common(p['name'], bid, tuple(p['position']), 0.0)
+                e['rotation'] = p['rotation']
+                e.update({k: v for k, v in p.items() if k in ('path', 'pathGuid', 'materials', 'Outfit Piece')})
+                self.models.append(e)
+        return bid
+
+    def outfit_piece(self, repo, body, slot, path, mat, flags):
+        """A worn piece under the player's body: the model at path in the .mat mat (Outfit Piece Flags: 1 body
+        part, 0 clothing, 2 a rigid attachment)."""
+        m = ref(repo, path)
+        e = self._common(slot, body, (0.0, 0.0, 0.0), 0.0)
+        e.update({**m, 'materials': [{'guid': ref(repo, mat)['pathGuid'], 'path': mat}],
+                  'Outfit Piece': {'Flags': flags, 'Item': m, 'Slot': slot}})
+        self.models.append(e)
+
 
 def light_flicker(Mode=0, MinInterval=4.0, MaxInterval=15.0, Depth=1.0, Seed=1):
     """The native "Light Flicker" component (Mode: 0 Fluorescent, 1 Tv, 2 Candle)."""
@@ -118,30 +199,25 @@ def from_mat(repo, mat_path, grunge=None, grunge_strength=0.0, grunge_scale=0.5,
     with open(os.path.join(repo, 'project', mat_path), encoding='utf-8') as f:
         p = json.load(f)['properties']
 
-    def ref(path):
-        if not path:
-            return ''
-        with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
-            return {'path': path, 'pathGuid': json.load(f)['guid']}
-    m = {'albedoMap': ref(p.get('_AlbedoMap')), 'aoMap': ref(p.get('_AOMap')), 'baseColor': p.get('_BaseColor', [1, 1, 1]),
-         'emissiveColor': p.get('_EmissiveColor', [0, 0, 0]), 'emissiveMap': ref(p.get('_EmissiveMap')),
+    m = {'albedoMap': ref(repo, p.get('_AlbedoMap')), 'aoMap': ref(repo, p.get('_AOMap')), 'baseColor': p.get('_BaseColor', [1, 1, 1]),
+         'emissiveColor': p.get('_EmissiveColor', [0, 0, 0]), 'emissiveMap': ref(repo, p.get('_EmissiveMap')),
          'emissiveStrength': p.get('_EmissiveStrength', 0.0), 'factorsScaleMaps': True, 'metallic': p.get('_Metallic', 0.0),
-         'metallicMap': ref(p.get('_MetallicMap')), 'metallicRoughnessMap': ref(p.get('_MetallicRoughnessMap')),
-         'normalMap': ref(p.get('_NormalMap')), 'roughness': p.get('_Roughness', 0.6),
-         'roughnessMap': ref(p.get('_RoughnessMap')), 'triplanar': False, 'triplanarScale': 1.0}
-    m.update(_decal_keys(ref, grunge, grunge_strength, grunge_scale, receive_decals))
+         'metallicMap': ref(repo, p.get('_MetallicMap')), 'metallicRoughnessMap': ref(repo, p.get('_MetallicRoughnessMap')),
+         'normalMap': ref(repo, p.get('_NormalMap')), 'roughness': p.get('_Roughness', 0.6),
+         'roughnessMap': ref(repo, p.get('_RoughnessMap')), 'triplanar': False, 'triplanarScale': 1.0}
+    m.update(_decal_keys(repo, grunge, grunge_strength, grunge_scale, receive_decals))
     for key, value in overrides.items():
         m[{'emissive_strength': 'emissiveStrength'}.get(key, key)] = value
     return m
 
 
-def _decal_keys(ref, grunge, grunge_strength, grunge_scale, receive_decals):
+def _decal_keys(repo, grunge, grunge_strength, grunge_scale, receive_decals):
     """The embedded material's grunge map (a project-relative texture laid over the surface triplanar in world
     space, docs/DECALS.md), its strength (0 = off) and tiles per metre, and whether clustered decals project onto
     it. Only the non-default ones, as the engine writes them, so materials without them don't change."""
     m = {}
     if grunge:
-        m['grungeMap'] = ref(grunge)
+        m['grungeMap'] = ref(repo, grunge)
     if grunge_strength != 0.0:
         m['grungeStrength'] = grunge_strength
     if grunge_scale != 0.5:
@@ -155,16 +231,11 @@ def textured(repo, albedo=None, normal=None, rough=None, ao=None, base=(1.0, 1.0
              triplanar_scale=1.0, emissive=(0.0, 0.0, 0.0), strength=0.0, grunge=None, grunge_strength=0.0,
              grunge_scale=0.5, receive_decals=True):
     """An embedded box material over imported texture paths (project-relative), triplanar so boxes of any size tile."""
-    def ref(p):
-        if not p:
-            return ''
-        with open(os.path.join(repo, 'project', p + '.meta'), encoding='utf-8') as f:
-            return {'path': p, 'pathGuid': json.load(f)['guid']}
-    m = {'albedoMap': ref(albedo), 'aoMap': ref(ao), 'baseColor': list(base), 'emissiveColor': list(emissive),
+    m = {'albedoMap': ref(repo, albedo), 'aoMap': ref(repo, ao), 'baseColor': list(base), 'emissiveColor': list(emissive),
          'emissiveMap': '', 'emissiveStrength': strength, 'factorsScaleMaps': True, 'metallic': metallic,
-         'metallicMap': '', 'metallicRoughnessMap': '', 'normalMap': ref(normal), 'roughness': roughness,
-         'roughnessMap': ref(rough), 'triplanar': bool(albedo or normal), 'triplanarScale': triplanar_scale}
-    m.update(_decal_keys(ref, grunge, grunge_strength, grunge_scale, receive_decals))
+         'metallicMap': '', 'metallicRoughnessMap': '', 'normalMap': ref(repo, normal), 'roughness': roughness,
+         'roughnessMap': ref(repo, rough), 'triplanar': bool(albedo or normal), 'triplanarScale': triplanar_scale}
+    m.update(_decal_keys(repo, grunge, grunge_strength, grunge_scale, receive_decals))
     return m
 
 

@@ -25,6 +25,7 @@ import sys
 import house_fit as hf
 import house_lights
 import scene_kit as k
+from scene_kit import axis_q, first, qinv, qmul, qrot  # noqa: F401 (first: fh.first)
 
 PACK = 'assets/Environments/SuburbNeighborhoodHousePack/'
 PROPS_IN, PROPS_OUT = PACK + 'Prefabs/Props_interior/', PACK + 'Prefabs/Props_exterior/'
@@ -85,27 +86,6 @@ def to_world(p):
     dx, dz = p[0] - PACK_C[0], p[2] - PACK_C[2]
     return (HOUSE_AT[0] + math.cos(a) * dx + math.sin(a) * dz, HOUSE_AT[1] + p[1] - PACK_C[1],
             HOUSE_AT[2] - math.sin(a) * dx + math.cos(a) * dz)
-
-
-# --- quaternions ([x, y, z, w]) for the pack-space edits
-def qmul(a, b):
-    ax, ay, az, aw = a
-    bx, by, bz, bw = b
-    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
-
-
-def qrot(q, v):
-    x, y, z, w = q
-    vx, vy, vz = v
-    tx, ty, tz = 2 * (y * vz - z * vy), 2 * (z * vx - x * vz), 2 * (x * vy - y * vx)
-    return [vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx)]
-
-
-def axis_q(axis, deg):
-    h = math.radians(deg) / 2
-    s = math.sin(h)
-    return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(h)]
 
 
 def yaw_of(q):
@@ -268,9 +248,9 @@ class Fit:
             pos, rot = self.pk.world(e['id'])
             ctr = c.get('center', [0, 0, 0])
             w = he[0] * 2
-            mid = hf.qrot(rot, ctr)
+            mid = qrot(rot, ctr)
             cx, cz = pos[0] + mid[0], pos[2] + mid[2]
-            along, through = hf.qrot(rot, (1, 0, 0)), hf.qrot(rot, (0, 0, 1))
+            along, through = qrot(rot, (1, 0, 0)), qrot(rot, (0, 0, 1))
             # the swing and the way through; rubbish keeps further off (a bag by the frame crowds the door)
             hw, hd = (w / 2 + 0.55, w + 0.45) if wide else (w / 2 + 0.12, w + 0.15)
             pts = [(cx + along[0] * sa * hw + through[0] * sd * hd, cz + along[2] * sa * hw + through[2] * sd * hd)
@@ -387,10 +367,10 @@ class Fit:
     def set_world(self, i, pos, rot):
         e = self.pk.by[i]
         ppos, prot = self.pk.world(e['parentId']) if e['parentId'] in self.pk.by else ([0, 0, 0], [0, 0, 0, 1])
-        inv = hf.qinv(prot)
-        lp = hf.qrot(inv, [pos[k] - ppos[k] for k in range(3)])
+        inv = qinv(prot)
+        lp = qrot(inv, [pos[k] - ppos[k] for k in range(3)])
         e['position'] = [round(v, 4) for v in lp]
-        e['rotation'] = [round(v, 6) for v in hf.qmul(inv, rot)]
+        e['rotation'] = [round(v, 6) for v in qmul(inv, rot)]
 
     def group_of(self, i):
         out, todo = [], [i]
@@ -407,9 +387,9 @@ class Fit:
             pos, rot = self.pk.world(j)
             old[j] = (list(self.pk.by[j]['position']), list(self.pk.by[j]['rotation']))
             rel = [pos[k] - pivot[k] for k in range(3)]
-            v = hf.qrot(turn_q, rel)
+            v = qrot(turn_q, rel)
             npos = [pivot[0] + v[0] + shift[0], pivot[1] + v[1] + lift, pivot[2] + v[2] + shift[1]]
-            self.set_world(j, npos, hf.qmul(turn_q, rot))
+            self.set_world(j, npos, qmul(turn_q, rot))
         return old
 
     def undo(self, old):
@@ -436,7 +416,7 @@ def open_sealed_doors(pk, notes):
             if w['id'] in pk.gone:
                 continue
             wp, wr = pk.world(w['id'])
-            loc = qrot(hf.qinv(wr), [lp[k] - wp[k] for k in range(3)])
+            loc = qrot(qinv(wr), [lp[k] - wp[k] for k in range(3)])
             length = float(re.match(r'Wall_Interior_(\d+)x', w['name']).group(1)) * 0.97
             if not (-0.3 < loc[2] < 0.3 and 0.2 < loc[0] < length - 0.2 and -0.6 < loc[1] < 0.6):
                 continue
@@ -653,7 +633,7 @@ def trash_house(pk, rng, notes):
                 # land it: turned about its centre, moved out beside the piece, then set down on the floor
                 pos, rot = pk.world(r)
                 old = {r: (list(pk.by[r]['position']), list(pk.by[r]['rotation']))}
-                v = hf.qrot(q, [pos[k] - c[k] for k in range(3)])
+                v = qrot(q, [pos[k] - c[k] for k in range(3)])
                 fit.set_world(r, [c[0] + v[0] + math.cos(a) * d, pos[1], c[2] + v[2] + math.sin(a) * d], qmul(q, rot))
                 bs2 = fit.prop_boxes(r)
                 dy = fl + 0.002 - min(b.ylo() for b in bs2)
@@ -679,9 +659,9 @@ def trash_house(pk, rng, notes):
         pos, rot = pk.world(i)
         for _ in range(tries):
             q = qmul(axis_q((0, 1, 0), rng.uniform(-50, 50)), qmul(rot, qmul(axis_q(axis, rng.choice((-90.0, 90.0))),
-                                                                               hf.qinv(rot))))
+                                                                               qinv(rot))))
             rel = [pos[k] - c[k] for k in range(3)]
-            v = hf.qrot(q, rel)
+            v = qrot(q, rel)
             sh = (rng.uniform(-0.2, 0.2), rng.uniform(-0.2, 0.2))
             old = {i: (list(pk.by[i]['position']), list(pk.by[i]['rotation']))}
             fit.set_world(i, [c[0] + v[0] + sh[0], pos[1], c[2] + v[2] + sh[1]], qmul(q, rot))

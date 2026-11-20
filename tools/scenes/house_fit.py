@@ -14,33 +14,10 @@ import shutil
 import atexit
 import tempfile
 
+from scene_kit import SCENE_FORMAT_VERSION, qrot
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 BOUNDS_FILE = os.path.join(HERE, 'forest_house_bounds.json')
-
-
-# --- quaternions ([x, y, z, w]) ---------------------------------------------------------------------------------
-def qmul(a, b):
-    ax, ay, az, aw = a
-    bx, by, bz, bw = b
-    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
-
-
-def qrot(q, v):
-    x, y, z, w = q
-    vx, vy, vz = v
-    tx, ty, tz = 2 * (y * vz - z * vy), 2 * (z * vx - x * vz), 2 * (x * vy - y * vx)
-    return [vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx)]
-
-
-def qinv(q):
-    return [-q[0], -q[1], -q[2], q[3]]
-
-
-def axis_q(axis, deg):
-    h = math.radians(deg) / 2
-    s = math.sin(h)
-    return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(h)]
 
 
 # --- oriented boxes -----------------------------------------------------------------------------------------------
@@ -239,7 +216,7 @@ def measure(repo, exe=None):
         models.append(m)
     scene = os.path.join(tmp, 'house_models.json')
     with open(scene, 'w', encoding='utf-8') as f:
-        json.dump({'formatVersion': 4, 'boxes': [], 'empties': [], 'models': models}, f)
+        json.dump({'formatVersion': SCENE_FORMAT_VERSION, 'boxes': [], 'empties': [], 'models': models}, f)
     pack = 'assets/Environments/SuburbNeighborhoodHousePack/Prefabs/'
     folders = [pack + d for d in ('Props_interior', 'Props_exterior', 'Ground')] + EXTRA_PREFAB_DIRS
     dirs = [os.path.join(repo, 'project', d) for d in folders]

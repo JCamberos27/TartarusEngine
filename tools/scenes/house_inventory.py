@@ -11,6 +11,7 @@ import sys
 
 import build_forest as bf
 import forest_house as fh
+import scene_kit as k
 import house_lights as hl
 
 # Groups reviewed as a whole per room (the plan's section G): rubbish, leaves, decals, the yard's overgrowth.
@@ -51,8 +52,8 @@ def main():
         p, r, sc = local(e)
         if e['parentId'] in by:
             pp, pr, ps = world(e['parentId'])
-            v = fh.qrot(pr, [p[0] * ps[0], p[1] * ps[1], p[2] * ps[2]])
-            res = ([pp[0] + v[0], pp[1] + v[1], pp[2] + v[2]], fh.qmul(pr, r), [ps[a] * sc[a] for a in range(3)])
+            v = k.qrot(pr, [p[0] * ps[0], p[1] * ps[1], p[2] * ps[2]])
+            res = ([pp[0] + v[0], pp[1] + v[1], pp[2] + v[2]], k.qmul(pr, r), [ps[a] * sc[a] for a in range(3)])
         else:
             res = (list(p), list(r), list(sc))
         cache[i] = res
