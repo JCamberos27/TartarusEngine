@@ -137,8 +137,8 @@ void RegisterInspectorTests() {
             InspOpen(name), InspUntilOpen(name), WaitSeconds(0.3),
             Shot("section", {kInspector}),
             Click(MoreButton(name.c_str())), Wait(2),
-            Click(MenuItem("Remove Component")), WaitSeconds(0.5),
-            ExpectTrue("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
+            Click(MenuItem("Remove Component")),
+            Until("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }), Wait(3),
             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
             ExpectTrue("undo puts it back", [rcp](Ctx& c) { return rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
             Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
@@ -181,11 +181,11 @@ void RegisterInspectorTests() {
         ExpectTrue("undo", [](Ctx& c) { return (c.W.Registry.get<RenderableComponent>(ByName(c.W, "Alpha")).ReceiveShadows ? 1.0 : 0.0) == g_Number; }),
         // Remove from the section menu: the mesh is parked, not lost.
         Click(MoreButton("Mesh Renderer")), Wait(2),
-        Click(MenuItem("Remove Component")), WaitSeconds(0.5),
-        ExpectTrue("removed; mesh kept detached", [](Ctx& c) {
+        Click(MenuItem("Remove Component")),
+        Until("removed; mesh kept detached", [](Ctx& c) {
             const entt::entity a = ByName(c.W, "Alpha");
             return !c.W.Registry.all_of<RenderableComponent>(a) && c.W.Registry.all_of<DetachedMeshComponent>(a);
-        }),
+        }), Wait(3),
         ExpectTrue("Material section gone", [](Ctx&) { return Find(Header("Material")) == nullptr; }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo", [](Ctx& c) { return c.W.Registry.all_of<RenderableComponent>(ByName(c.W, "Alpha")); }),
