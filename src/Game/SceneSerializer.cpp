@@ -292,8 +292,8 @@ std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::st
     AppendAssetLibraryJson(live, assets, /*includeAssetMetadata=*/true);
     bool same = true;
     for (const char* k : kLibraryKeys) {
-        const auto a = loaded.find(k), b = live.find(k);
-        if ((a == loaded.end()) != (b == live.end()) || (a != loaded.end() && *a != *b)) { same = false; break; }
+        const bool inLoaded = loaded.contains(k), inLive = live.contains(k);
+        if (inLoaded != inLive || (inLoaded && loaded.at(k) != live.at(k))) { same = false; break; }
     }
     if (same) return loadedText;
     json out = loaded;
