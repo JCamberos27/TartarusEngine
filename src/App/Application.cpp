@@ -539,10 +539,9 @@ private:
     }};
     std::unique_ptr<NpcTest> npcTest;
     Step step38{[&] {
-        if (opt.npcTestMode) {
-            npcTest = std::make_unique<NpcTest>(opt.npcTestScenario);
-            FirstPersonPresentation::FixRandomSeed(1); // the same recoil and shake patterns every run
-        }
+        if (opt.npcTestMode) npcTest = std::make_unique<NpcTest>(opt.npcTestScenario);
+        // --npc-test and the --perf-bench --smoke-shots picture: the same recoil and shake patterns every run.
+        if (opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) FirstPersonPresentation::FixRandomSeed(1);
     }};
     NpcTest::BloodView npcTestBlood; // what the blood scenario reads of the blood each frame
     Step step39{[&] {
@@ -1609,12 +1608,13 @@ bool AppSession::Frame() {
     {
     PROFILE_SCOPE("Asset Pump + Outfit Hiding");
     { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
-    // --npc-test: an outfit change in Play lands on the frame that asked for it, not when the machine finishes loading it
-    // (the player's pieces, asked for in Play's first frames, landed 0.2-0.5 s in and rebuilt the body - OutfitChanged -
-    // on a frame that followed the machine's load, so no two runs matched). It waits only while the loads progress: a
-    // change whose loads stall (5 s with none finishing - a file that never loads) stops the waiting until an outfit
-    // change lands again, and that change lands whenever it can, as in Play.
-    if (opt.npcTestMode && playing && OutfitSystem::AnyPending()) {
+    // --npc-test and the --perf-bench --smoke-shots picture: an outfit change in Play lands on the frame that asked for
+    // it, not when the machine finishes loading it (the player's pieces, asked for in Play's first frames, landed 0.2-0.5 s
+    // in and rebuilt the body - OutfitChanged - on a frame that followed the machine's load, so no two runs matched: the
+    // picture's view-model arm landed in one of two poses). It waits only while the loads progress: a change whose loads
+    // stall (5 s with none finishing - a file that never loads) stops the waiting until an outfit change lands again, and
+    // that change lands whenever it can, as in Play. Timed perf-bench runs (no pictures) don't wait.
+    if ((opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) && playing && OutfitSystem::AnyPending()) {
         static unsigned s_stalledAt = ~0u; // the landed generation the last stall happened at
         if (OutfitSystem::LandedGeneration() != s_stalledAt) {
             // Progress: one more of the waiting changes' own loads done (not the library's in-flight count, which a
