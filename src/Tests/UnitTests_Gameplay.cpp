@@ -481,10 +481,26 @@ void TestFreshAssetRefRoundTrip() {
     World back; AssetLibrary assets2;
     CHECK(SceneSerializer::LoadFromString(back, assets2, first));
     CHECK(SceneSerializer::SaveToString(back, assets2) == first);
+
+    // A Mesh Renderer added to an empty has no mesh yet: the object is still saved (as an empty), and
+    // the save is stable.
+    World meshless; AssetLibrary assets3;
+    const auto a = meshless.CreateEmptyEntity({1,2,3},{0,0,0},{1,1,1},"Alpha");
+    meshless.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Beta");
+    meshless.Registry.emplace<RenderableComponent>(a);
+    const std::string withMeshless = SceneSerializer::SaveToString(meshless, assets3);
+    CHECK(withMeshless.find("\"Alpha\"") != std::string::npos);
+    World again; AssetLibrary assets4;
+    CHECK(SceneSerializer::LoadFromString(again, assets4, withMeshless));
+    int alphas = 0;
+    for (auto [ent, n, t] : again.Registry.view<NameComponent, TransformComponent>().each())
+        if (n.Name == "Alpha") { ++alphas; CHECK(t.Position == glm::vec3(1, 2, 3)); }
+    CHECK(alphas == 1);
+    CHECK(SceneSerializer::SaveToString(again, assets4) == withMeshless);
 }
 
 void RegisterGameplayTests(UnitTestSupport::TestList& tests) {
-    tests.emplace_back("Scene: a fresh component's asset path saves with its GUID",TestFreshAssetRefRoundTrip);
+    tests.emplace_back("Scene: fresh components (asset path GUID, meshless Mesh Renderer) round-trip",TestFreshAssetRefRoundTrip);
     tests.emplace_back("Scene: a non-finite float field saves and loads",TestSceneNonFiniteFloat);
     tests.emplace_back("Game module weapon/body rules dispatch",TestGameRulesDispatch);
     tests.emplace_back("Native weapon loadout rules",TestProjectWeaponLoadout);
