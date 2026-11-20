@@ -104,7 +104,7 @@ bool RecoilAnimData::FromJson(const json& j,RecoilAnimData& out,std::string* err
     }
     out=std::move(parsed); if (error) error->clear(); return true;
 }
-RecoilAnimData RecoilAnimData::FromLegacy(const WeaponRecoilSettings& r) {
+RecoilAnimData RecoilAnimData::FromLegacy(const LegacyRecoilSettings& r) {
     RecoilAnimData d;
     const auto scaled=[](Curve c,float duration,float sign) {
         if (c.Empty()) return Curve::Line(0,0,duration,0);
@@ -124,12 +124,15 @@ RecoilAnimData RecoilAnimData::FromLegacy(const WeaponRecoilSettings& r) {
     d.SemiRotCurve=curves(r.Rotation,r.Duration,{-1,-1,1}); d.SemiLocCurve=curves(r.Position,r.Duration,{1,1,-1});
     normalize(d.SemiRotCurve,rot); normalize(d.SemiLocCurve,loc);
     const auto range=[](glm::vec2 v,float scale) { v*=scale; return glm::vec2(std::min(v.x,v.y),std::max(v.x,v.y)); };
-    d.Pitch=range(r.PitchRange,rot.x*r.HipScale);
-    auto yaw=range(r.YawRange,rot.y*r.HipScale),roll=range(r.RollRange,rot.z*r.HipScale);
+    // The solver's base kick is the hip's, scaled by AimRot / AimLoc with the sights up. An ADS-only tuning (Hip Scale 0:
+    // its hip rounds played the Fire clip) takes the ADS kick as the base instead of converting to no kick at all.
+    const float base=r.HipScale>1e-6f?r.HipScale:r.AdsScale;
+    d.Pitch=range(r.PitchRange,rot.x*base);
+    auto yaw=range(r.YawRange,rot.y*base),roll=range(r.RollRange,rot.z*base);
     const auto split=[](glm::vec2 v) { return v.x<=0 && v.y>=0 ? glm::vec4(v.x,0,0,v.y) : glm::vec4(v.x,v.y,v.x,v.y); };
     d.Yaw=split(yaw); d.Roll=split(roll);
-    d.KickRight=range(r.SideRange,loc.x*r.HipScale); d.KickUp=range(r.UpRange,loc.y*r.HipScale); d.Kickback=range(r.KickRange,loc.z*r.HipScale);
-    float aim=r.HipScale>1e-6f?r.AdsScale/r.HipScale:1;
+    d.KickRight=range(r.SideRange,loc.x*base); d.KickUp=range(r.UpRange,loc.y*base); d.Kickback=range(r.KickRange,loc.z*base);
+    float aim=base>1e-6f?r.AdsScale/base:1;
     d.AimRot=r.AdsRotationScale*aim; d.AimLoc=r.AdsPositionScale*aim;
     d.AutoRotCurve=r.SustainedCurves?curves(r.SustainedRotation,r.SustainedDuration,{-1,-1,1}):d.SemiRotCurve;
     d.AutoLocCurve=r.SustainedCurves?curves(r.SustainedPosition,r.SustainedDuration,{1,1,-1}):d.SemiLocCurve;
