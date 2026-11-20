@@ -1610,17 +1610,29 @@ bool AppSession::Frame() {
     if (opt.npcTestMode && playing && OutfitSystem::AnyPending()) {
         static unsigned s_stalledAt = ~0u; // the landed generation the last stall happened at
         if (OutfitSystem::LandedGeneration() != s_stalledAt) {
+            // Progress: one more of the waiting changes' own loads done (not the library's in-flight count, which a
+            // load finishing while another queues leaves unchanged).
+            auto loadsDone = [&] {
+                int done = 0;
+                for (entt::entity root : world.Registry.view<const CharacterOutfitComponent>()) {
+                    int d = 0;
+                    if (OutfitSystem::IsPending(world, root, &d)) done += d;
+                }
+                return done;
+            };
             auto lastProgress = std::chrono::steady_clock::now();
-            int inFlight = assets.AsyncInFlight();
-            while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) && inFlight > 0) {
+            int done = loadsDone();
+            while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) && assets.AsyncInFlight() > 0) {
                 assets.PumpAsync(50.0);
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                const int now = assets.AsyncInFlight();
-                if (now < inFlight) lastProgress = std::chrono::steady_clock::now();
-                inFlight = now;
+                if (const int now = loadsDone(); now != done) {
+                    done = now;
+                    lastProgress = std::chrono::steady_clock::now();
+                }
                 if (std::chrono::steady_clock::now() - lastProgress > std::chrono::seconds(5)) {
                     s_stalledAt = OutfitSystem::LandedGeneration();
-                    std::printf("[NpcTest] an outfit change's loads stalled (%d in flight for 5 s): no more waiting for it\n", inFlight);
+                    std::printf("[NpcTest] an outfit change's loads stalled (none done in 5 s, %d in flight): no more waiting for it\n",
+                                assets.AsyncInFlight());
                     break;
                 }
             }
