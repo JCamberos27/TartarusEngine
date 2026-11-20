@@ -3102,6 +3102,7 @@ int RunUnitTests(const char* filter) {
     RegisterSwayPortTests(tests);
     RegisterRenderTests(tests); // UnitTests_Render.cpp
     RegisterGrassTests(tests); // UnitTests_Grass.cpp
+    RegisterTerrainTests(tests); // UnitTests_Terrain.cpp
     RegisterWorldTextTests(tests); // UnitTests_WorldText.cpp
     RegisterOpenableTests(tests); // UnitTests_Openable.cpp
     RegisterLightSwitchTests(tests); // UnitTests_LightSwitch.cpp
