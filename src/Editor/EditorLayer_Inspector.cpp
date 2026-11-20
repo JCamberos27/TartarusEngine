@@ -1586,6 +1586,17 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     ImGui::TextDisabled("%s", matPath.c_str());
     ImGui::Spacing();
 
+    // A file that is gone or isn't valid JSON loads as a Missing placeholder (Standard defaults, no
+    // shader). Showing its fields would look like a "Default Lit" material, and any edit would save
+    // those defaults over the file, so say what is wrong instead.
+    if (ma->Missing) {
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::WarningColor());
+        ImGui::TextWrapped(ICON_FA_TRIANGLE_EXCLAMATION "  This material file is missing or isn't valid JSON, so it can't be "
+                           "edited here. Fix or replace the file; it reloads when it changes on disk.");
+        ImGui::PopStyleColor();
+        return;
+    }
+
     DrawMaterialAssetFields(world, assets, ma, matPath);
     DrawMaterialPreview(ma); // #107
 }

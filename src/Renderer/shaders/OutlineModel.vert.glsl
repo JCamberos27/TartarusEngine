@@ -22,24 +22,16 @@ layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
 #include "SkinnedVertex.glsl"
 layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
 uniform int uSkinBase;
-uniform float uThickness;
 
 void main() {
+    // Flat silhouette for the selection/hover mask (SelectionOutline): position only, no
+    // normal push, so no per-vertex normal matrix.
     vec4 localPos = vec4(aPos, 1.0);
-    vec3 localNormal = aNormal;
-
     if (uUseSkinning == 2) {
         uint s = uint(gl_VertexID - gl_BaseVertex + uSkinBase) * kSkinnedWords;
         localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
-        localNormal = UnpackUnitOct(uSkinned[s + 3u]);
     } else if (uUseSkinning == 1) {
-        mat4 skinMat = SkinPalette();
-        localPos = skinMat * localPos;
-        localNormal = mat3(skinMat) * aNormal;
+        localPos = SkinPalette() * localPos;
     }
-
-    vec4 world = uModel * localPos;
-    vec3 worldNormal = normalize(mat3(transpose(inverse(uModel))) * localNormal);
-    world.xyz += worldNormal * uThickness;
-    gl_Position = uProj * uView * world;
+    gl_Position = uProj * uView * (uModel * localPos);
 }

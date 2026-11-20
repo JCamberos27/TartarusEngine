@@ -662,8 +662,8 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     program.SetInt("uApplyTonemap", 0);
 }
 
-void SceneRenderer::WarmEffects() {
-    Particles()->WarmUp();
+void SceneRenderer::WarmEffects(const World& world) {
+    Particles()->WarmUp(world);
     FxSpriteRenderer::Get().WarmUp();
     BloodRenderer::Get().WarmUp();
     WorldTextRenderer::Get().WarmUp();
