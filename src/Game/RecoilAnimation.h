@@ -44,9 +44,8 @@ enum class RecoilFireMode { Semi, Burst, Auto };
 // RecoilAnimation.cs timeline and solver, one instance per equipped presentation.
 class RecoilAnimation {
 public:
-    // The time since the last shot and the frame step are the solver's own (Update's game-time dt), so a shot's
-    // semi/auto decision follows the game clock (time scale, the npc tests' fixed step), not the wall clock.
-    void Play(const RecoilAnimData&,bool aiming,float rpm,RecoilFireMode,std::mt19937&);
+    void Play(const RecoilAnimData&,bool aiming,float rpm,RecoilFireMode,std::mt19937&,
+              double unscaledTime=-1,float frameDt=-1);
     void Stop();
     void Update(const RecoilAnimData&,bool aiming,float dt,std::mt19937&);
     void UpdateDeltaInput(glm::vec2 input) { m_DeltaInput=input; }
@@ -66,6 +65,7 @@ private:
     float m_CurveLength=0;
     glm::vec2 m_NoiseTarget{0},m_NoiseOut{0},m_PitchSway{0},m_YawSway{0},m_PitchProgress{0},m_UpProgress{0};
     float m_PushTarget=0,m_PushOut=0,m_Playback=0,m_LastFrameTime=0,m_SinceShot=1e9f,m_Dt=1.0f/60;
+    double m_LastShotTime=0;
     bool m_IsPlaying=false,m_IsLooping=false,m_EnableSmoothing=false,m_IsFiring=false;
     int m_StateIndex=0;
     glm::vec2 m_DeltaInput{0},m_Compensation{0},m_TargetRecoil{0},m_Recoil{0},m_CachedRecoil{0};

@@ -633,10 +633,10 @@ void WeaponProceduralState::Reset() {
     m_Rng = rng;
 }
 
-void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt, float rpm, RecoilFireMode mode) {
+void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt, float rpm, RecoilFireMode mode, double unscaledTime, float frameDt) {
     const auto& r = s.Recoil;
     if (!r.Enabled) return;
-    m_Unity.Play(r.Unity,ads,rpm,mode,m_Rng);
+    m_Unity.Play(r.Unity,ads,rpm,mode,m_Rng,unscaledTime,frameDt);
     m_SemiRecoveryTime = mode == RecoilFireMode::Semi ? 60.0f / std::max(1.0f,rpm) : -1.0f;
     if (cycleBolt) m_BoltTime = 0;
 }

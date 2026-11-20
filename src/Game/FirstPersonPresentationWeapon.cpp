@@ -22,6 +22,7 @@
 #include "Core/Paths.h"
 #include "RotationMath.h"
 #include "World.h"
+#include "TimeService.h"
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -190,7 +191,8 @@ bool FirstPersonPresentation::Fire() {
 void FirstPersonPresentation::CommitShot(bool ads, bool cycleBolt) {
     const auto mode = m_FullAuto ? RecoilFireMode::Auto :
         m_Set.Gameplay.BurstRounds > 1 ? RecoilFireMode::Burst : RecoilFireMode::Semi;
-    m_Procedural.OnShot(m_Set.Procedural, ads, cycleBolt, m_Set.Gameplay.RoundsPerMinute, mode);
+    m_Procedural.OnShot(m_Set.Procedural, ads, cycleBolt, m_Set.Gameplay.RoundsPerMinute, mode,
+                        Time::UnscaledTimeSinceStartup(), Time::DeltaTime());
     if(!m_Set.CameraShakeProfile.empty()) m_CameraShake.Trigger(m_Set.CameraShake,ads);
     RunGameplay(2);
     ShotImpact();
