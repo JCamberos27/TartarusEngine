@@ -116,7 +116,10 @@ public:
     // Finds the scene's First Person Body and takes it over. False (and every call below a
     // no-op) when there is none or it can't run (the reason is logged). Sets the player's move speeds
     // to the body's Run / Sprint speeds, so the input asks the blend tree for what it has.
-    bool Start(World& world, Player& player);
+    // `carry`: a stopped body's motion to play on from (Restart).
+    bool Start(World& world, Player& player, const FirstPersonBodyMotion* carry = nullptr);
+    // Stop + Start, the motion playing on from where it was (OutfitChanged: the new pieces, the same motion).
+    bool Restart(World& world, Player& player);
     // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).
     const std::string& Bone(const std::string& standard) const { return FPBody::MappedBone(m_BoneMap, standard); }
     void Stop(World& world);

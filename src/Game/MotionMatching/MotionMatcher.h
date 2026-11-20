@@ -61,6 +61,9 @@ public:
     static constexpr int kReselectPad = 10;
 
     void Reset(const MotionDatabase* db, std::uint32_t frame);
+    // Plays on in `db`, another instance of the same frames (the frame, the history and the blend kept; a frame `db` refuses
+    // is left at the next search, as one played into).
+    void Rebind(const MotionDatabase* db) { m_Db = db; }
     void Update(float dt, const Input& in);
     // Jumps to `frame` now, dead-blending from what is on screen (the airborne segment's entry and exit).
     void ForceFrame(std::uint32_t frame);
