@@ -36,7 +36,7 @@ def pack_mask(pack, mask_guid, height_guid):
     if not ms or not hs:
         return ''
     dst = pack.out_path(ms, '_CoverMask.png')
-    if not os.path.exists(dst) or os.path.getmtime(dst) < max(os.path.getmtime(ms), os.path.getmtime(hs)):
+    if not pack.dry and (not os.path.exists(dst) or os.path.getmtime(dst) < max(os.path.getmtime(ms), os.path.getmtime(hs))):
         m = Image.open(ms).convert('RGBA')
         size = (min(m.width, 2048), min(m.height, 2048))
         m = m.resize(size, Image.LANCZOS)
@@ -72,14 +72,12 @@ def main():
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import unity_import as ui
     from import_model_library import write_json
-    assets = os.path.dirname(src)
-    while os.path.basename(assets) != 'Assets' and os.path.dirname(assets) != assets:
-        assets = os.path.dirname(assets)
-    pack = ui.Pack(repo, src, 'SeedMesh_' + ui.tidy(os.path.basename(os.path.normpath(src))), assets)
+    pack = ui.Pack(repo, src, 'SeedMesh_' + ui.tidy(os.path.basename(os.path.normpath(src))), ui.find_assets(src))
+    pack.dry = dry  # --dry: no texture copies, masks, .mat or .meta writes
     pack.index()
-    n = 0
+    n = changed = 0
     for guid, path in list(pack.guids.items()):
-        if not path.endswith('.mat') or not os.path.abspath(path).startswith(src):
+        if not path.endswith('.mat') or not os.path.abspath(path).startswith(src + os.sep):  # "X" must not match "X2"
             continue
         doc = ui.uy.load(ui.uy.read(path).split('\n', 3)[3])['Material']
         if ui.SHADERS.get((doc.get('m_Shader') or {}).get('guid')) != 'seed':
@@ -97,16 +95,20 @@ def main():
         out = os.path.join(os.path.dirname(pack.out_path(path, '.mat')), 'M_' + ui.tidy(name) + '.mat')
         if not os.path.exists(out):
             continue
-        d = json.load(open(out, encoding='utf-8'))
+        with open(out, encoding='utf-8') as f:
+            d = json.load(f)
+        before = dict(d['properties'])
         for k in [k for k in d['properties'] if k.startswith('_Cover')]:
             del d['properties'][k]
         if add_cover(pack, name, tex, fl, d['properties'], foliage):
             n += 1
+        if d['properties'] != before:  # also when an old cover layer was only removed
+            changed += 1
             if not dry:
                 write_json(out, d)
     if not dry:
         pack.write_texture_metas()
-    print('materials with a cover layer:', n)
+    print('materials with a cover layer:', n, '| .mat files', 'to change:' if dry else 'changed:', changed)
 
 
 if __name__ == '__main__':

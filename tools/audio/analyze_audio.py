@@ -121,7 +121,7 @@ def report_key(key, files, layer):
             worst = max(dev, key=lambda n: abs(dev[n]))
             if abs(dev[worst]) > 4.0 and r["bands"][worst] > -30:
                 flags.append(f"{worst} {dev[worst]:+.1f} dB vs siblings")
-        if transient and r["attack_ms"] > 25 and layer not in ("sub",):
+        if transient and r["attack_ms"] > 25:
             flags.append(f"soft attack {r['attack_ms']:.0f} ms")
         if layer not in ("tail", "far", "ambience", "loop", "ir", "sub"):
             if r["pre_db"] > -45:

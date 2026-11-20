@@ -173,9 +173,7 @@ def _load_8bit(src: Path) -> Image.Image:
     im.load()
     if im.mode in ("I;16", "I;16B", "I;16L", "I"):
         im = im.convert("I").point(lambda v: v * (1 / 257)).convert("L")
-    elif im.mode == "P":
-        im = im.convert("RGBA")
-    elif im.mode == "PA":
+    elif im.mode in ("P", "PA"):
         im = im.convert("RGBA")
     elif im.mode not in ("L", "LA", "RGB", "RGBA"):
         im = im.convert("RGBA")

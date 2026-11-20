@@ -167,20 +167,6 @@
           "speed": 0
         },
         {
-          "events": [
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.0263
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.6262
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.9683
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -206,6 +192,20 @@
           "tags": [
             "IKOff",
             "Shouldered"
+          ],
+          "events": [
+            {
+              "name": "snd.870.cloth@17",
+              "time": 0.0
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.6128
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.9549
+            }
           ]
         },
         {
@@ -242,44 +242,6 @@
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.1027
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.57
-            },
-            {
-              "name": "snd.870.pump_back@159",
-              "time": 0.6116
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.626
-            },
-            {
-              "name": "snd.870.pump_fwd@140",
-              "time": 0.752
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.76
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.8133
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.846
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.936
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -304,39 +266,47 @@
           "speed": 1.0,
           "tags": [
             "Busy"
+          ],
+          "events": [
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.101
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.5191
+            },
+            {
+              "name": "snd.870.pump_back@97",
+              "time": 0.6239
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.6243
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.7091
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.7624
+            },
+            {
+              "name": "snd.870.pump_fwd@80",
+              "time": 0.7639
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.8443
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.9343
+            }
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.0417
-            },
-            {
-              "name": "snd.870.pump_back@159",
-              "time": 0.1907
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.2222
-            },
-            {
-              "name": "snd.870.pump_fwd@140",
-              "time": 0.4833
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.5069
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.6111
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.8666
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -361,23 +331,39 @@
           "speed": 1.0,
           "tags": [
             "Busy"
-          ]
-        },
-        {
+          ],
           "events": [
             {
-              "name": "snd.870.melee_swing@0",
+              "name": "snd.870.cloth@100",
               "time": 0.0
             },
             {
-              "name": "snd.870.melee_hit@0",
-              "time": 0.1194
+              "name": "snd.870.cloth@255",
+              "time": 0.1161
             },
             {
-              "name": "snd.870.cloth@0",
-              "time": 0.2537
+              "name": "snd.870.pump_back@97",
+              "time": 0.2164
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.4009
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.505
+            },
+            {
+              "name": "snd.870.pump_fwd@80",
+              "time": 0.5082
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.8631
             }
-          ],
+          ]
+        },
+        {
           "loop": false,
           "motions": {
             "arms": {
@@ -402,15 +388,23 @@
           "speed": 1.0,
           "tags": [
             "Busy"
+          ],
+          "events": [
+            {
+              "name": "snd.870.melee_swing@0",
+              "time": 0.0
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.0257
+            },
+            {
+              "name": "snd.870.melee_hit@19",
+              "time": 0.1022
+            }
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.870.draw@360",
-              "time": 0.0957
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -435,15 +429,15 @@
           "speed": 1.0,
           "tags": [
             "IKOff"
+          ],
+          "events": [
+            {
+              "name": "snd.870.draw@374",
+              "time": 0.0779
+            }
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.870.holster@300",
-              "time": 0.3214
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -468,6 +462,12 @@
           "speed": 1.0,
           "tags": [
             "IKOff"
+          ],
+          "events": [
+            {
+              "name": "snd.870.holster@312",
+              "time": 0.2957
+            }
           ]
         },
         {
@@ -500,16 +500,16 @@
         {
           "events": [
             {
-              "name": "snd.870.pump_back@133",
-              "time": 0.0
+              "name": "snd.870.pump_back@97",
+              "time": 0.049
             },
             {
               "name": "Eject",
               "time": 0.2
             },
             {
-              "name": "snd.870.pump_fwd@140",
-              "time": 0.2182
+              "name": "snd.870.pump_fwd@80",
+              "time": 0.2995
             }
           ],
           "loop": false,
@@ -540,16 +540,6 @@
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.1667
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.9599
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -575,49 +565,59 @@
           "tags": [
             "Reload",
             "ADSCarry"
+          ],
+          "events": [
+            {
+              "name": "snd.870.cloth@83",
+              "time": 0.0
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.9429
+            }
           ]
         },
         {
           "events": [
             {
-              "name": "snd.870.pump_back@159",
-              "time": 0.0029
+              "name": "snd.870.pump_back@97",
+              "time": 0.026
             },
             {
-              "name": "snd.870.cloth@0",
-              "time": 0.1313
+              "name": "snd.870.cloth@255",
+              "time": 0.0358
             },
             {
-              "name": "snd.870.handle@3",
-              "time": 0.1925
+              "name": "snd.870.handle@12",
+              "time": 0.1893
             },
             {
-              "name": "snd.870.handle@3",
-              "time": 0.28
+              "name": "snd.870.handle@12",
+              "time": 0.2768
             },
             {
-              "name": "snd.870.shell_load_chamber@44",
-              "time": 0.3212
+              "name": "snd.870.shell_load_chamber@70",
+              "time": 0.3113
             },
             {
-              "name": "snd.870.handle@3",
-              "time": 0.605
+              "name": "snd.870.handle@12",
+              "time": 0.6018
             },
             {
-              "name": "snd.870.pump_fwd@140",
-              "time": 0.685
+              "name": "snd.870.pump_fwd@80",
+              "time": 0.7074
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.717
             },
             {
               "name": "LoadRound",
               "time": 0.74
             },
             {
-              "name": "snd.870.cloth@0",
-              "time": 0.8125
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.9487
+              "name": "snd.870.handle@12",
+              "time": 0.9455
             }
           ],
           "loop": false,
@@ -650,20 +650,20 @@
         {
           "events": [
             {
-              "name": "snd.870.cloth@0",
-              "time": 0.0143
+              "name": "snd.870.cloth@17",
+              "time": 0.0
             },
             {
-              "name": "snd.870.shell_insert@3",
-              "time": 0.1546
+              "name": "snd.870.shell_insert@19",
+              "time": 0.1412
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.5532
             },
             {
               "name": "LoadRound",
               "time": 0.6
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.7714
             }
           ],
           "loop": false,
@@ -696,20 +696,20 @@
         {
           "events": [
             {
-              "name": "snd.870.cloth@0",
-              "time": 0.0102
+              "name": "snd.870.cloth@17",
+              "time": 0.0
             },
             {
-              "name": "snd.870.shell_insert@3",
-              "time": 0.1104
+              "name": "snd.870.shell_insert@19",
+              "time": 0.1009
+            },
+            {
+              "name": "snd.870.cloth@255",
+              "time": 0.4053
             },
             {
               "name": "LoadRound",
               "time": 0.43
-            },
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.5612
             }
           ],
           "loop": false,
@@ -740,16 +740,6 @@
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.870.cloth@0",
-              "time": 0.06
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.5359
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -775,6 +765,16 @@
           "tags": [
             "Reload",
             "ADSCarry"
+          ],
+          "events": [
+            {
+              "name": "snd.870.cloth@50",
+              "time": 0.0
+            },
+            {
+              "name": "snd.870.handle@12",
+              "time": 0.5257
+            }
           ]
         }
       ],

@@ -13,7 +13,6 @@ import glob
 import json
 import math
 import os
-import secrets
 import subprocess
 import sys
 
@@ -22,6 +21,8 @@ try:
     from mathutils import Matrix, Vector
 except ImportError:
     bpy = None
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # Blender doesn't add the script's folder
+from import_model_library import guid  # noqa: E402
 
 
 def world_verts(o):
@@ -433,7 +434,7 @@ def build():
                 with open(path + '.meta', encoding='utf-8') as f:
                     old = json.load(f).get('guid')
             with open(path + '.meta', 'w', encoding='utf-8', newline='\n') as f:
-                json.dump(dict(meta, guid=old or secrets.token_hex(8)), f, indent=2, sort_keys=True)
+                json.dump(dict(meta, guid=old or guid()), f, indent=2, sort_keys=True)
                 f.write('\n')
             if motion:
                 parts_out.append({'stem': os.path.splitext(os.path.basename(path))[0], 'motion': motion})
@@ -451,15 +452,15 @@ def build():
 def main():
     import argparse
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from import_model_library import model_report, write_json
+    from import_model_library import BLENDER_SCRIPT_ARGS, find_blender, model_report, write_json
     ap = argparse.ArgumentParser()
     ap.add_argument('repo')
     ap.add_argument('only', nargs='*')
-    ap.add_argument('--blender', default=(glob.glob(r'C:\Program Files\Blender Foundation\*\blender.exe') or ['blender'])[-1])
+    ap.add_argument('--blender', default=find_blender())
     ap.add_argument('--exe')
     args = ap.parse_args()
     repo = os.path.abspath(args.repo)
-    out = subprocess.run([args.blender, '-b', '--factory-startup', '--python', os.path.abspath(__file__), '--', repo,
+    out = subprocess.run([args.blender, *BLENDER_SCRIPT_ARGS, os.path.abspath(__file__), '--', repo,
                           *args.only], capture_output=True, text=True, encoding='utf-8', errors='replace')
     # each body, then its parts: 'assemble_kits: part <rel>' lines come before their body's 'assemble_kits: <rel>'
     kits, parts = [], []

@@ -15,7 +15,6 @@ materialRemap keys
 Metas
 - write_model_meta() keeps the GUID and every importer key already in the .meta (simplify 0.4 on heads,
   skinIgnoresMeshNode on Quantum_Arms/Quantum_Hands, ...), replaces materialRemap wholesale and sets folder.
-- upsert_meta_guid() makes sure any payload has a .meta with a GUID, reusing what is there.
 """
 from __future__ import annotations
 
@@ -29,17 +28,6 @@ from . import common
 
 ENGINE_EXE = Path(os.environ.get("TARTARUS_ENGINE_EXE", str(common.REPO / "build" / "Release" / "TartarusEngine.exe")))
 FBX_MATERIALS_CACHE = Path(__file__).resolve().parent / "fbx_materials.json"
-
-# Asset type per extension, as AssetDatabase.cpp KnownExtensions() writes it (only the kinds this import produces).
-META_TYPES = {".fbx": "model", ".obj": "model", ".gltf": "model", ".glb": "model",
-              ".png": "texture", ".jpg": "texture", ".jpeg": "texture", ".tga": "texture", ".bmp": "texture",
-              ".mat": "material"}
-
-# Every key ParseModelImporter (src/Assets/AssetLibrary.cpp) reads, for reference and validation of overrides.
-MODEL_IMPORTER_KEYS = ("globalScale", "importNormals", "importAnimations", "importSkeleton", "optimizeGraph", "simplify",
-                       "materialImportMode", "upAxis", "pivotOffset", "excludeNodes", "meshNodes", "rootTransform",
-                       "unrotateNodes", "moveNodes", "skinIgnoresMeshNode", "mergeByMaterial", "rootNodeInModelSpace",
-                       "clipTrims")
 
 # Windows caps one command line at 32767 characters; stay well under it when batching paths into one process.
 _MAX_CMDLINE = 30000
@@ -176,6 +164,17 @@ def _material_leaf(ue_path: str) -> str:
 FBX_DEFAULT_MATERIAL = "Fbx Default Material"
 
 
+def slot_keys(material_slots: list[dict]) -> list[str]:
+    """The key of each manifest slot in match_slots' pairs: its name ('slot<i>' when unnamed), and '<name>#<i>' for a
+    name an EARLIER slot already used (matched or not), so the importer rebuilds the same keys."""
+    keys, seen = [], set()
+    for i, s in enumerate(material_slots):
+        slot = s.get("slot", "") or f"slot{i}"
+        keys.append(f"{slot}#{i}" if slot in seen else slot)
+        seen.add(slot)
+    return keys
+
+
 def predict_fbx_material_names(material_slots: list[dict]) -> list[str]:
     """The FBX material name of each manifest material slot, in slot order.
 
@@ -212,10 +211,7 @@ def match_slots(material_slots: list[dict], fbx_names: list[str] | None) -> tupl
     reported = list(fbx_names)
     pairs: dict[str, str] = {}
     unused: list[str] = []
-    for i, (s, name) in enumerate(zip(material_slots, predicted)):
-        slot = s.get("slot", "") or f"slot{i}"
-        if slot in pairs:
-            slot = f"{slot}#{i}"
+    for i, (slot, name) in enumerate(zip(slot_keys(material_slots), predicted)):
         # The default material sometimes carries the slot index after a space ("Fbx Default Material 10", seen on
         # SKM_Quantum_FaceRig_Beard and two presets); accept either spelling.
         options = [name] + ([f"{name} {i}"] if name == FBX_DEFAULT_MATERIAL else [])
@@ -239,13 +235,6 @@ def _read_meta(meta: Path) -> dict | None:
             data = json.load(f)
         return data if isinstance(data, dict) else None
     except (OSError, ValueError):
-        return None
-
-
-def _folder_of(asset_abs: Path, project: Path) -> str | None:
-    try:
-        return asset_abs.parent.resolve().relative_to(project.resolve()).as_posix()
-    except ValueError:
         return None
 
 
@@ -291,25 +280,3 @@ def write_model_meta(fbx_repo_path: str, remap: dict[str, str], importer_default
         data.pop("materialRemap", None)
     _write_if_changed(meta, data, before)
     return data
-
-
-def upsert_meta_guid(asset_abs: Path, project: Path = common.PROJECT) -> str:
-    """Makes sure `asset_abs` has a .meta with a GUID and returns that GUID.
-
-    An existing .meta is reused as is (a GUID is added only when it has none, plus type/metaVersion if missing).
-    A new one gets folder (when the asset is under `project`), guid, metaVersion 1 and type from the extension
-    (texture / material / model, else "asset" as AssetDatabase does)."""
-    asset_abs = Path(asset_abs)
-    meta = common.meta_path(asset_abs)
-    before = _read_meta(meta)
-    data = dict(before or {})
-    if not data.get("guid"):
-        data["guid"] = common.new_guid()
-    data.setdefault("metaVersion", 1)
-    data.setdefault("type", META_TYPES.get(asset_abs.suffix.lower(), "asset"))
-    if before is None:
-        folder = _folder_of(asset_abs, project)
-        if folder is not None:
-            data["folder"] = folder
-    _write_if_changed(meta, data, before)
-    return data["guid"]

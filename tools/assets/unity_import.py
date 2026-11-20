@@ -15,7 +15,6 @@
 import argparse
 import collections
 import json
-import math
 import os
 import re
 import shutil
@@ -24,9 +23,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 import unity_yaml as uy  # noqa: E402
-from import_model_library import write_json, write_meta  # noqa: E402
+from import_model_library import BLENDER_SCRIPT_ARGS, find_blender, write_json, write_meta  # noqa: E402
 
-BLENDER = r'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe'
 MAX_TEX = 2048
 
 # Unity shader guid -> what it converts as. fileID 106 (guid 0000000000000000f000000000000000) is Skybox/Procedural.
@@ -79,6 +77,20 @@ def tidy(name):
     return re.sub(r'[^A-Za-z0-9_\-]+', '_', name).strip('_')
 
 
+def find_assets(pack):
+    """The Unity project's Assets folder above <pack> (SeedMesh/<Pack> sits a few levels down); the filesystem root if none."""
+    assets = os.path.dirname(os.path.abspath(pack))
+    while os.path.basename(assets) != 'Assets' and os.path.dirname(assets) != assets:
+        assets = os.path.dirname(assets)
+    return assets
+
+
+def default_exe(repo):
+    """build/Release (the documented build dir), else b/Release when only that one exists."""
+    paths = [os.path.join(repo, d, 'Release', 'TartarusEngine.exe') for d in ('build', 'b')]
+    return next((p for p in paths if os.path.exists(p)), paths[0])
+
+
 class Pack:
     def __init__(self, repo, src, name, assets):
         self.repo, self.src, self.name = repo, os.path.abspath(src), name
@@ -93,6 +105,8 @@ class Pack:
         self.cook = []        # Blender jobs
         self.cooked = {}      # (src, expr, max) -> engine texture project path
         self.textures = {}    # engine texture project path -> role ('albedo', 'normal', 'data')
+        self.cur = '?'        # what is being converted, for report lines
+        self.dry = False      # True: work everything out, write nothing (seed_cover --dry)
 
     # --- index ---------------------------------------------------------------------------------------------------
     def index(self):
@@ -126,11 +140,14 @@ class Pack:
         """Engine path of texture <guid> through <expr> (unity_tex_cook.py), copying it as-is where that's enough."""
         src = self.guids.get(guid)
         if not src:
-            self.report['missing textures (dangling in the source pack: asset deleted, nothing to convert)'].append(f'{guid} (used by {getattr(self, "cur", "?")})')
+            self.report['missing textures (dangling in the source pack: asset deleted, nothing to convert)'].append(f'{guid} (used by {self.cur})')
             return ''
         key = (src, json.dumps(expr), suffix)
         if key in self.cooked:
-            return self.cooked[key]
+            p = self.cooked[key]
+            if self.textures.get(p) != role:  # one file, one .meta: the first role (sRGB / normal) stays
+                self.report['textures used with two roles (first kept; check the .meta)'].append(f'{p}: {self.textures.get(p)} + {role} ({self.cur})')
+            return p
         ext = os.path.splitext(src)[1].lower()
         w, h = image_size(src)
         plain = expr in ('rgba', 'rgb') and not suffix
@@ -141,12 +158,13 @@ class Pack:
                 # atlas whose alpha is 0 where the artist painted nothing, smoothness leftovers) goes black in the distance
                 # (the Office pack's wall flags). Opaque use gets an RGB-only copy next to the original.
                 dst = self.out_path(src, '_rgb' + ext)
-                strip_alpha(src, dst)
-            else:
+                if not self.dry:
+                    strip_alpha(src, dst)
+            elif not self.dry:
                 copy_if_changed(src, dst)
         else:
             dst = self.out_path(src, (suffix or '') + '.png')
-            if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
+            if not self.dry and (not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src)):
                 self.cook.append({'src': src, 'max': MAX_TEX, 'outs': [
                     {'path': dst, 'expr': expr, 'srgb': role == 'albedo', 'alpha': expr == 'rgba'}]})
             if max(w, h) > MAX_TEX:
@@ -159,6 +177,9 @@ class Pack:
     def write_texture_metas(self):
         for p, role in self.textures.items():
             full = os.path.join(self.repo, 'project', *p.split('/'))
+            if not os.path.exists(full):  # its cook failed or never ran (--skip-cook): no .meta for a missing file
+                self.report['textures not on disk (no .meta written)'].append(p)
+                continue
             write_meta(full, os.path.dirname(p), 'texture', {'importer': {
                 'anisoLevel': 8, 'compression': 1, 'filterMode': 2, 'generateMipmaps': True,
                 'isSRGB': role == 'albedo', 'maxTextureSize': MAX_TEX, 'textureType': 1 if role == 'normal' else 0,
@@ -195,7 +216,7 @@ class Pack:
         for e in (doc.get('m_SavedProperties') or {}).get('m_Colors') or []:
             co.update(e)
         keywords = set(doc.get('m_ValidKeywords') or []) | set((doc.get('m_ShaderKeywords') or '').split())
-        prev, self.cur = getattr(self, 'cur', '?'), 'material ' + name
+        prev, self.cur = self.cur, 'material ' + name
         props, extra = self.convert_material(name, kind, tex, fl, co, keywords)
         self.cur = prev
         dst = os.path.join(os.path.dirname(self.out_path(src, '.mat')), 'M_' + tidy(name) + '.mat')
@@ -338,7 +359,6 @@ class Pack:
             # plants are never metal; a foliage MaskMap's R channel is not metallic in any case
             p['_MetallicMap'], p['_Metallic'] = '', 0.0
             p['_RoughnessMap'], p['_Roughness'] = '', 0.85   # Smoothness 1 on leaves rendered black mirrors
-        if kind == 'foliage':
             strength, height, frequency, flutter = FOLIAGE_WIND.get(name, (0.08, 3.0, 1.0, 0.3))
             p.update({'_Foliage': True, '_WindStrength': strength, '_WindHeight': height, '_WindFrequency': frequency,
                       '_WindFlutter': flutter, '_Translucency': 0.6})
@@ -438,7 +458,8 @@ def has_alpha_data(path):
             if im.mode not in ('RGBA', 'LA', 'PA') and not (im.mode == 'P' and 'transparency' in im.info):
                 return False
             return im.convert('RGBA').getchannel('A').getextrema()[0] < 255
-    except Exception:
+    except Exception as e:  # unreadable here = treated as opaque; say so instead of hiding it
+        print(f'warning: could not read the alpha of {path} ({e}); treated as opaque', file=sys.stderr)
         return False
 
 
@@ -500,7 +521,12 @@ def image_size(path):
                 return x1 - x0 + 1, y1 - y0 + 1
     except struct.error:
         pass
-    return 0, 0
+    try:  # header past the first 64 KB (a JPEG with a large EXIF / ICC block): PIL reads only the header
+        from PIL import Image
+        with Image.open(path) as im:
+            return im.size
+    except Exception:
+        return 0, 0
 
 
 def run_cook(pack, blender, scratch):
@@ -526,7 +552,7 @@ def run_cook(pack, blender, scratch):
             json.dump(part, f)
         log_path = path.replace('.json', '.log')
         log = open(log_path, 'w', encoding='utf-8', errors='replace')
-        p = subprocess.Popen([blender, '-b', '--factory-startup', '--python',
+        p = subprocess.Popen([blender, *BLENDER_SCRIPT_ARGS,
                               os.path.join(os.path.dirname(__file__), 'unity_tex_cook.py'), '--', path],
                              stdout=log, stderr=subprocess.STDOUT)
         procs.append((p, log, log_path, part))
@@ -555,23 +581,19 @@ def main():
     ap.add_argument('--name')
     ap.add_argument('--assets', help='the Unity project Assets folder (default: the pack folder\'s parent)')
     ap.add_argument('--exe')
-    ap.add_argument('--blender', default=BLENDER)
+    ap.add_argument('--blender', default=find_blender())
     ap.add_argument('--skip-cook', action='store_true')
     args = ap.parse_args()
     repo = os.path.abspath(args.repo)
     name = args.name or tidy(os.path.basename(os.path.normpath(args.pack)))
-    exe = os.path.abspath(args.exe) if args.exe else os.path.join(repo, 'b', 'Release', 'TartarusEngine.exe')
-    assets = args.assets
-    if not assets:  # SeedMesh/<Pack>: the Assets folder is the first parent holding a sibling "Packages"-less tree
-        assets = os.path.dirname(os.path.abspath(args.pack))
-        while os.path.basename(assets) != 'Assets' and os.path.dirname(assets) != assets:
-            assets = os.path.dirname(assets)
+    exe = os.path.abspath(args.exe) if args.exe else default_exe(repo)
+    assets = args.assets or find_assets(args.pack)
     pack = Pack(repo, args.pack, name, assets)
     pack.index()
     import unity_prefabs  # noqa: E402  (placement; needs the exe)
     unity_prefabs.convert(pack, exe)
     if not args.skip_cook:
-        run_cook(pack, args.blender, os.path.join(repo, 'b', 'unity_import'))
+        run_cook(pack, args.blender, os.path.join(repo, 'build', 'unity_import'))
     pack.write_texture_metas()
     unity_prefabs.write_report(pack)
 

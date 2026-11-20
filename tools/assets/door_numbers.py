@@ -6,10 +6,8 @@
 #   python tools/assets/door_numbers.py <repo> [--blender <blender.exe>] [--exe <TartarusEngine.exe>]
 # runs itself inside Blender to cut the plates out, then re-centres each pivot from the engine's --model-report, so
 # the exe must be built.
-import glob
 import json
 import os
-import secrets
 import subprocess
 import sys
 
@@ -46,14 +44,14 @@ def build():
 def main():
     import argparse
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from import_model_library import model_report, write_json
+    from import_model_library import BLENDER_SCRIPT_ARGS, find_blender, guid, model_report, write_json
     ap = argparse.ArgumentParser()
     ap.add_argument('repo')
-    ap.add_argument('--blender', default=(glob.glob(r'C:\Program Files\Blender Foundation\*\blender.exe') or ['blender'])[-1])
+    ap.add_argument('--blender', default=find_blender())
     ap.add_argument('--exe')
     args = ap.parse_args()
     repo = os.path.abspath(args.repo)
-    out = subprocess.run([args.blender, '-b', '--factory-startup', '--python', os.path.abspath(__file__), '--', repo],
+    out = subprocess.run([args.blender, *BLENDER_SCRIPT_ARGS, os.path.abspath(__file__), '--', repo],
                          capture_output=True, text=True, encoding='utf-8', errors='replace')
     made = [line.split(': ', 1)[1].strip() for line in out.stdout.splitlines() if line.startswith('door_numbers: ')]
     if out.returncode or len(made) != 10:
@@ -67,7 +65,7 @@ def main():
             with open(rel + '.meta', encoding='utf-8') as f:
                 old = json.load(f).get('guid')
         meta = json.loads(json.dumps(leaf))
-        meta['guid'] = old or secrets.token_hex(8)
+        meta['guid'] = old or guid()
         meta['materialRemap'] = {'Numbers_Mat': leaf['materialRemap']['Numbers_Mat']}
         meta['importer']['excludeNodes'] = []
         meta['importer']['pivotOffset'] = [0.0, 0.0, 0.0]

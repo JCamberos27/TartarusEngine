@@ -33,17 +33,6 @@ def near_ident_rot(m, eps=1e-4):
     return all(abs(m[i] - IDENT[i]) < eps for i in (0, 1, 2, 4, 5, 6, 8, 9, 10))
 
 
-def trs(pos, rot, scale):
-    x, y, z, w = rot
-    n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
-    x, y, z, w = x / n, y / n, z / n, w / n
-    sx, sy, sz = scale
-    return [(1 - 2 * (y * y + z * z)) * sx, (2 * (x * y + z * w)) * sx, (2 * (x * z - y * w)) * sx, 0.0,
-            (2 * (x * y - z * w)) * sy, (1 - 2 * (x * x + z * z)) * sy, (2 * (y * z + x * w)) * sy, 0.0,
-            (2 * (x * z + y * w)) * sz, (2 * (y * z - x * w)) * sz, (1 - 2 * (x * x + y * y)) * sz, 0.0,
-            pos[0], pos[1], pos[2], 1.0]
-
-
 def decompose(m):
     sx = math.sqrt(m[0] ** 2 + m[1] ** 2 + m[2] ** 2)
     sy = math.sqrt(m[4] ** 2 + m[5] ** 2 + m[6] ** 2)
@@ -157,15 +146,6 @@ class FbxInfo:
         for name, n in self.real.items():
             if n['parent'] is not None:
                 self.children[n['parent']].append(name)
-
-    def global_of(self, name, geo=True):
-        n = self.real[name]
-        m = mul(n['local'], n['geo']) if geo else n['local']
-        p = n['parent']
-        while p is not None:  # a parent's geometric transform is its own: it doesn't reach its children
-            m = mul(self.real[p]['local'], m)
-            p = self.real[p]['parent']
-        return m
 
     def engine_global(self, name):
         """The transform the engine bakes into <name>'s vertices (every ancestor's folded transform, then its own)."""

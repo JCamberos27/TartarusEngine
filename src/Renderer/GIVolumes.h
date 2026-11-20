@@ -38,8 +38,11 @@ public:
     void Update(const World& world);
     // The CPU half of Update (no GL): the baked volumes and this frame's layer weights.
     void Gather(const World& world);
-    // uGIEnabled, the atlas on unit 28 and the UBO on binding 4. Every program that shades (ApplyFrameState).
-    void Bind(Shader& program) const;
+    // uGIEnabled and the bounds (SetProgramUniforms, once per program per frame), the atlas on unit 28 and the UBO
+    // on binding 4 (BindResources, again after any pass that reused them). Every program that shades
+    // (SceneRenderer::ApplyFrameState / BindFrameResources).
+    void SetProgramUniforms(Shader& program) const;
+    void BindResources() const;
     // Which volumes a draw whose world bounds are [mn, mx] can touch (bit i = volume i): set per draw as uGIMask, so a
     // pixel tests only those (testing all 46 house volumes on every forest pixel cost 2 ms). AllMask(): every volume.
     std::uint64_t MaskFor(const glm::vec3& mn, const glm::vec3& mx) const;

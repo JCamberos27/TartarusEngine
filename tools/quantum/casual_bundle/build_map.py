@@ -80,7 +80,6 @@ OUTERWEAR_TOKENS = {"bomber", "coat", "jacket", "vest", "puffer"}
 # facialhair | headwear | skip. A None slot for clothing means "Tops or Outerwear by item name".
 FOLDER_RULES = [
     (r"^(Male|Female)/Presets?(/|$)", "skip", "Mesh/*/Preset*: merged preset character (not imported)"),
-    (r"^Male/Preset/", "skip", "Mesh/*/Preset*: merged preset character (not imported)"),
     (r"^(Male/Body/Quantum_FaceRig|Female/Body/Vivan_FaceRig)/", "skip",
      "face rig: >512 bones / duplicate of regular head (morph-target rig; the engine has no morph targets)"),
     (r"^Male/Arms/(Arms|Wrist)/", "body", None),
@@ -479,7 +478,7 @@ def cluster(meshes: list[UEMesh]) -> list[list[UEMesh]]:
     return clusters
 
 
-def body_race(item_members: list[UEMesh], folder: str, stem: str) -> str:
+def body_race(folder: str, stem: str) -> str:
     toks = {t.lower() for t in tokens(stem)}
     if "young" in toks:
         return "Young"
@@ -536,7 +535,7 @@ def build_items(meshes: list[UEMesh]) -> list[Item]:
             m.item = it
         it.stem = derived_stem(it)
         if it.kind == "body":
-            it.race = body_race(it.members, it.folder, it.stem) if it.gender == "Male" else None
+            it.race = body_race(it.folder, it.stem) if it.gender == "Male" else None
     return merged
 
 
@@ -1112,7 +1111,6 @@ def build(manifest: dict, geo: dict[str, Geo], repo: Repo, load_material=None) -
     rows += keep_old_rows(repo, rows, keep_meshes, keep_mats)
 
     # ---- checks
-    rows.sort(key=row_sort_key)
     seen: dict[str, int] = collections.Counter(r.ue_asset for r in rows if r.ue_asset)
     dupes = [ue for ue, n in seen.items() if n > 1]
     missing = [ue for ue, info in assets.items() if info.get("class") in MAPPED_CLASSES and ue not in seen]
@@ -1122,6 +1120,7 @@ def build(manifest: dict, geo: dict[str, Geo], repo: Repo, load_material=None) -
         r = MapRow(ue_asset=ue, ue_class=assets[ue]["class"], role=role_of(assets[ue]["class"]), action="skip",
                    source_file=assets[ue].get("file", ""), notes="UNCLASSIFIED: no rule produced a row")
         rows.append(r)
+    rows.sort(key=row_sort_key)          # after the UNCLASSIFIED rows, so the CSV stays sorted
     targets = collections.defaultdict(list)
     for r in rows:
         if r.action in ("replace", "new", "keep-old"):
@@ -1296,6 +1295,11 @@ def texture_rows(assets: dict, mats: dict[str, UEMat], repo: Repo) -> tuple[list
         if path in taken:                               # same texture name from another UE folder
             path = f"{folder}/{ue_parent(ue).rsplit('/', 1)[-1]}/{ue_name(ue)}.png"
             warnings.append(f"texture name clash at {folder}/{ue_name(ue)}.png: {ue} -> sub-folder")
+            if path in taken:                           # the sub-folder is taken too: never overwrite silently
+                warnings.append(f"texture name clash at {path} too: {ue} vs {taken[path]} (rename one by hand)")
+                r.action, r.notes = "skip", f"CLASH: {path} already holds {taken[path]}"
+                rows.append(r)
+                continue
         taken[path] = ue
         r.repo_path, r.item_group = path, material_row(owner).item_group
         r.action = "replace" if path in repo.files else "new"

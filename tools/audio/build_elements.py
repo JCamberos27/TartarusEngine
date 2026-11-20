@@ -10,7 +10,6 @@ import os
 import sys
 
 import numpy as np
-from scipy import signal
 
 import abuild
 import adsp

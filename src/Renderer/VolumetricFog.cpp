@@ -293,19 +293,23 @@ void VolumetricFog::Render(const FrameState& fs) {
     vs.PrevCamera = camera;
 }
 
-void VolumetricFog::ApplyToProgram(Shader& program, const void* viewKey, bool enabled) const {
+const VolumetricFog::ViewState* VolumetricFog::RenderedView(const void* viewKey, bool enabled) const {
+    if (!enabled) return nullptr;
     const auto it = m_Views.find(viewKey);
-    const ViewState* vs = enabled && it != m_Views.end() && it->second->Rendered ? it->second.get() : nullptr;
-    if (!vs) { ApplyDisabled(program); return; }
-    glBindTextureUnit(kVolumeUnit, vs->Integrated);
+    return it != m_Views.end() && it->second->Rendered ? it->second.get() : nullptr;
+}
+
+void VolumetricFog::BindTexture(const void* viewKey, bool enabled) const {
+    const ViewState* vs = RenderedView(viewKey, enabled);
+    glBindTextureUnit(kVolumeUnit, vs ? vs->Integrated : DefaultTextures::Volume());
+}
+
+void VolumetricFog::SetProgramUniforms(Shader& program, const void* viewKey, bool enabled) const {
+    const ViewState* vs = RenderedView(viewKey, enabled);
+    if (!vs) { program.SetInt("uVolOn", 0); return; }
     program.SetInt("uVolOn", 1);
     program.SetMat4("uVolViewProj", vs->ViewProj);
     program.SetVec4("uVolParams", ApplyParams(vs->D, vs->Far, vs->PixelsPerFroxel));
-}
-
-void VolumetricFog::ApplyDisabled(Shader& program) {
-    glBindTextureUnit(kVolumeUnit, DefaultTextures::Volume());
-    program.SetInt("uVolOn", 0);
 }
 
 void VolumetricFog::DrawSky(const void* viewKey, const int viewport[4]) {

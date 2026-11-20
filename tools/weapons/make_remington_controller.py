@@ -2,6 +2,9 @@
 # locomotion, re-pointed at the Remington's clips, with the AK's two magazine reloads replaced by a
 # tube loaded a round at a time and a pump worked after every shot.
 #
+# ONE-SHOT BOOTSTRAP: the shipped Remington870.controller has since been tuned in the editor (870 sound events,
+# transition timings, parameter order). Re-running this overwrites all of that; diff before committing.
+#
 #   python tools/weapons/make_remington_controller.py
 #
 # Per-round reload (gameplay.reload = perRound; the driver sets LastRound / StopReload):
@@ -145,7 +148,8 @@ for layer in c["layers"][1:]:
         if s.get("speed", 1) == 0:
             clips = ("Idle", "Idle")
         replacement = motions(*clips)
-        s["motions"] = {track: replacement[track] for track in s["motions"]}
+        # arms3p is dropped here: add_3p_track.py (run next, see its header) rebuilds it from the new arms clips.
+        s["motions"] = {track: replacement[track] for track in s["motions"] if track in replacement}
 with open(OUT, "w", encoding="utf-8", newline="\n") as f:
     json.dump(c, f, indent=2, sort_keys=True)
     f.write("\n")
