@@ -614,7 +614,7 @@ void TestAutoSaveFromUndoSnapshot() {
     World world;
     AssetLibrary assets;
     for (int i = 0; i < 4; ++i) world.CreateEmptyEntity({(float)i, 0.5f, -2.25f}, {}, {1, 1, 1}, "Autosave fixture " + std::to_string(i));
-    assets.CreateFolder("unit-autosave/Sub");
+    assets.AddFolderPath("unit-autosave/Sub"); // listed (so the snapshot has assetFolders), never written to project settings
     const std::filesystem::path dir = UnitTestSupport::TempDir("autosave-snapshot");
     const std::string fromSave = (dir / "save.json").string(), fromSnapshot = (dir / "snapshot.json").string();
     CHECK(SceneSerializer::Save(world, assets, fromSave));
