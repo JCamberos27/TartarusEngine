@@ -905,8 +905,17 @@ def apply_mod(o, prop, val, ref, pack):
             pack.counts['material overrides on instances'] += 1
 
 
+
+def report_source(pack):
+    """The pack folder as the report prints it: relative to the Unity project ("Assets/<pack>"), never an absolute
+    path - the report is tracked in a public repo and must not carry a user folder."""
+    if os.path.basename(pack.assets) == 'Assets':
+        return 'Assets/' + os.path.relpath(pack.src, pack.assets).replace(os.sep, '/')
+    return os.path.basename(os.path.normpath(pack.src))
+
+
 def write_report(pack):
-    lines = [f'# {pack.name}: Unity import report', '', f'Source: `{pack.src}`', '', '## Counts', '']
+    lines = [f'# {pack.name}: Unity import report', '', f'Source: `{report_source(pack)}`', '', '## Counts', '']
     for k, v in sorted(pack.counts.items()):
         lines.append(f'- {k}: {v}')
     lines += ['', '## Not converted / approximated', '']

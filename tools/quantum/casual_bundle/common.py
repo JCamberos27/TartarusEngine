@@ -23,10 +23,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]                    # TartarusEngine/
 PROJECT = REPO / "project"                                    # repo paths are relative to this
 QUANTUM = "assets/Characters/Quantum"                         # repo path of the pack root
-EXPORT_ROOT = Path(os.environ.get("QUANTUM_BUNDLE_EXPORT", r"D:\Jacob\JCamberos\Quantum - Modular Casual Bundle"))
+# The UE export of the bundle (outside the repo): QUANTUM_BUNDLE_EXPORT, else a sibling folder of the checkout.
+EXPORT_ROOT = Path(os.environ.get("QUANTUM_BUNDLE_EXPORT", str(REPO.parent / "Quantum - Modular Casual Bundle")))
 EXPORT_MANIFEST = EXPORT_ROOT / "manifest.json"
 UE_ROOT = "/Game/Casual_Wear_Bundle"
 MAP_CSV = Path(__file__).resolve().parent.parent / "casual_bundle_map.csv"   # tools/quantum/casual_bundle_map.csv
+# --model-report output for the export's meshes. The engine prints absolute paths; tracked copies put <bundle> in place
+# of EXPORT_ROOT (build_map.export_key only needs the "Export/..." tail).
 MESH_REPORT = Path(os.environ.get("QUANTUM_MESH_REPORT", str(Path(__file__).resolve().parent / "mesh_report.txt")))
 
 # Texture caps (pixels) - match the existing Quantum metas and tools/quantum/audit_quantum_assets.py defaults.
