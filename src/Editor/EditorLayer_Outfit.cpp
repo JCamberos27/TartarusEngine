@@ -185,8 +185,12 @@ void DrawOutfitMenu(OutfitCtx& c) {
         EditorSoundEvents::ScopedClickSilence quiet; // Save / Blocked instead of the click
         save = EditorUIPrimitives::PrimaryButton("Save");
     }
-    if (save) {
-        const std::string path = "assets/Characters/Outfits/" + std::string(ui.PresetName) + ".outfit";
+    if (save && ui.PresetName[0] == '\0') { EditorSound::Play(EditorSound::Event::Blocked); ui.Notes = {"Name the preset first."}; }
+    else if (save) {
+        // The name is a file name: no folders or characters Windows refuses.
+        std::string name = ui.PresetName;
+        for (char& ch : name) if (std::strchr("<>:\"/\\|?*", ch)) ch = '_';
+        const std::string path = "assets/Characters/Outfits/" + name + ".outfit";
         std::error_code ec;
         std::filesystem::create_directories(ProjectPaths::Resolve("assets/Characters/Outfits"), ec);
         std::string err;

@@ -1402,7 +1402,9 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Label("Controller", "The Animator Controller that animates both rigs: its \"arms\" track plays on the arms\n"
                               "model and its \"weapon\" track on the weapon model.");
         if (ImGui::BeginCombo("##wctrl", s.Controller.empty() ? "(v1 clip list)" : s.Controller.c_str())) {
-            for (const std::string& c : FindAnimatorControllers())
+            static std::vector<std::string> s_Controllers; // the tree is walked when the list opens, not every frame it stays open
+            if (ImGui::IsWindowAppearing()) s_Controllers = FindAnimatorControllers();
+            for (const std::string& c : s_Controllers)
                 if (ImGui::Selectable(c.c_str(), c == s.Controller)) { s.Controller = c; changed = true; }
             ImGui::EndCombo();
         }

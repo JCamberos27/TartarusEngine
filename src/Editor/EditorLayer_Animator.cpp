@@ -81,8 +81,10 @@ void EditorLayer::DrawAnimatorControllerExtra(World& world, entt::entity entity)
     const float btnW = ImGui::CalcTextSize(ICON_FA_PLUS " New").x + ImGui::GetStyle().FramePadding.x * 2.0f;
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - btnW - ImGui::GetStyle().ItemSpacing.x);
     if (ImGui::BeginCombo("##ctrlpick", ac->Controller.empty() ? "(none)" : ac->Controller.c_str())) {
+        static std::vector<std::string> s_Controllers; // the tree is walked when the list opens, not every frame it stays open
+        if (ImGui::IsWindowAppearing()) s_Controllers = FindAnimatorControllers();
         if (ImGui::Selectable("(none)", ac->Controller.empty())) { PushUndo(world, "Set Animator Controller"); ac->Controller.clear(); }
-        for (const std::string& path : FindAnimatorControllers())
+        for (const std::string& path : s_Controllers)
             if (ImGui::Selectable(path.c_str(), path == ac->Controller)) {
                 PushUndo(world, "Set Animator Controller");
                 ac->Controller = path;
@@ -251,7 +253,9 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
     {
         ImGui::SetNextItemWidth(260.0f * S);
         if (ImGui::BeginCombo("##animfile", W.Rel.empty() ? "(open a controller)" : W.Rel.c_str())) {
-            for (const std::string& path : FindAnimatorControllers())
+            static std::vector<std::string> s_Controllers; // the tree is walked when the list opens, not every frame it stays open
+            if (ImGui::IsWindowAppearing()) s_Controllers = FindAnimatorControllers();
+            for (const std::string& path : s_Controllers)
                 if (ImGui::Selectable(path.c_str(), path == W.Rel)) OpenAnimatorWindow(path);
             ImGui::EndCombo();
         }
