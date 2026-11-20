@@ -72,7 +72,8 @@ SHOTS = [
 
 
 def build(ffmpeg, out='trailer.mp4', warmup=300):
-    keys, lights, t = [], [], 0.0
+    # every Forest switch starts on: all off before the first frame, so each room's cue really turns its light on
+    keys, lights, t = [], [{'t': 0.0, 'circuit': '*', 'on': False}], 0.0
     for name, dur, fov, pts, cues in SHOTS:
         n = len(pts)
         for k, (p, tg) in enumerate(pts):
@@ -94,7 +95,8 @@ def main():
     if '--preview' in a:
         os.environ['TARTARUS_SHOT_FOV'] = '50'
         cams = [(f'{n}_{k}', p, *look(p, tg)) for n, _, _, pts, _ in SHOTS for k, (p, tg) in enumerate(pts)]
-        print('engine exit', hs.run_engine(cams, out, True, 'Forest.json'))
+        hs.run_engine(cams, out, True, 'Forest.json')
+        print('preview stills ->', out)
         return
     ffmpeg = os.environ.get('TARTARUS_FFMPEG')
     if not ffmpeg:
@@ -104,7 +106,8 @@ def main():
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(build(ffmpeg), f, indent=1)
     os.environ['TARTARUS_CINEMATIC'] = path
-    print('engine exit', hs.run_engine([], out, None, 'Forest.json'), '->', os.path.join(out, 'trailer.mp4'))
+    hs.run_engine([], out, None, 'Forest.json')
+    print('->', os.path.join(out, 'trailer.mp4'))
 
 
 if __name__ == '__main__':

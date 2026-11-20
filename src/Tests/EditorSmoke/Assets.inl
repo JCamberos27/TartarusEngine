@@ -429,7 +429,12 @@ void RegisterAssetsTests() {
          Click(Icon(ICON_FA_ARROW_DOWN_SHORT_WIDE)), Wait(3), Click(MenuItem("Name")), Wait(3),
          Click(Icon(ICON_FA_ARROW_DOWN_SHORT_WIDE)), Wait(3), Click(MenuItem("Ascending")), Wait(3),
          ExpectTrue("Name, ascending again", [](Ctx&) { return EditorSettings::Get().AssetSortMode == 0 && !EditorSettings::Get().AssetSortDesc; })},
-    }));
+    }), [](Ctx& c) {
+        // Pass or fail: no search, sorted by Name ascending (a failure used to leave later suites' grids sorted by size).
+        AX::Search(c.E).clear();
+        EditorSettings::Get().AssetSortMode = 0;
+        EditorSettings::Get().AssetSortDesc = false;
+    });
 
     // ------------------------------------------------------------------ views and zoom
     {
@@ -470,9 +475,12 @@ void RegisterAssetsTests() {
              Click(ByExact("##IconSize", kAssets), ImGuiMod_Ctrl), Wait(3),
              Key(ImGuiKey_A, ImGuiMod_Ctrl), TypeText("48"), Key(ImGuiKey_Enter), Wait(4),
              ExpectTrue("tiles at 48 px", [](Ctx& c) { return std::fabs(AX::IconSize(c.E) - 48.0f) < 0.5f; }),
-             Shot("zoom-48", {kAssets}),
-             Do("back to the size it had", [size](Ctx& c) { AX::IconSize(c.E) = *size; }), Wait(2)},
-        }));
+             Shot("zoom-48", {kAssets})},
+        }), [size](Ctx& c) {
+            // Pass or fail: grid view at the zoom it had (a failure used to leave the browser in list view at 48 px).
+            EditorSettings::Get().AssetDetailsMode = false;
+            if (*size > 0.0f) AX::IconSize(c.E) = *size;
+        });
     }
 
     // ------------------------------------------------------------------ the grid's background menu
@@ -528,7 +536,7 @@ void RegisterAssetsTests() {
 
     // ------------------------------------------------------------------ a tile's context menu
     {
-        auto clip = std::make_shared<std::string>();
+        auto clip = std::make_shared<std::optional<std::string>>();
         Add("assets: Edit Labels, favorites, Copy Path, Find References, Reimport, Place Instance", Cat({
             {FreshScene(), Wait(2)},
             EnsureScratch(),
@@ -575,7 +583,6 @@ void RegisterAssetsTests() {
                  const char* t = ImGui::GetClipboardText();
                  return t && std::string(t) == CellKey(c, "Smoke Cube.obj") ? std::string() : "clipboard: " + std::string(t ? t : "");
              }),
-             Do("put the clipboard back", [clip](Ctx&) { ImGui::SetClipboardText(clip->c_str()); }),
              MarkLog()},
             TileMenu("Smoke Cube.obj", "Find References in Scene"),
             {ExpectLogged("No objects in this scene use"), MarkLog()},
@@ -601,7 +608,12 @@ void RegisterAssetsTests() {
              ExpectTrue("the instance is still there", [](Ctx& c) { return ByName(c.W, "Smoke Prefab Root") != entt::null; }),
              Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
              Until("the third undo removes the instance", [](Ctx& c) { return ByName(c.W, "Smoke Prefab Root") == entt::null; }, 60)},
-        }));
+        }), [clip](Ctx& c) {
+            // Pass or fail: the clipboard as it was before Copy Path, all assets shown (not favorites only).
+            if (*clip) ImGui::SetClipboardText((*clip)->c_str());
+            clip->reset();
+            AX::FavoritesOnly(c.E) = false;
+        });
     }
 
     // ------------------------------------------------------------------ the Asset Library root
@@ -674,10 +686,10 @@ void RegisterAssetsTests() {
         {Navigate(kFolder), Wait(4), UntilListed("Smoke Cube.obj"),
          RevealTile("Smoke Cube.obj"),
          Click(Tile("Smoke Cube.obj")), Wait(4), // loads it (an unloaded file is loaded on its first click)
-         Until("the cube is loaded", [](Ctx& c) {
+         UntilSeconds("the cube is loaded", [](Ctx& c) {
              const int i = CellIndex(c, "Smoke Cube.obj");
              return i >= 0 && AX::Cells(c.E)[(size_t)i].model != nullptr;
-         }, 300),
+         }, 30),
          RevealTile("Smoke Cube.obj"),
          Drag(Tile("Smoke Cube.obj"), AtItem(ByExact("##viewport_drop_zone"))), Wait(5),
          Until("Smoke Cube placed in the scene", [](Ctx& c) {
@@ -720,12 +732,12 @@ void RegisterAssetsTests() {
             EnsureScratch(),
             {Navigate(kFolder), Wait(4), UntilListed("Smoke Cube.obj"),
              Do("load the cube", [](Ctx& c) { c.A.LoadModel(CellKey(c, "Smoke Cube.obj")); }),
-             Until("the cube's tile has a rendered thumbnail", [](Ctx& c) {
+             UntilSeconds("the cube's tile has a rendered thumbnail", [](Ctx& c) {
                  const int i = CellIndex(c, "Smoke Cube.obj");
                  if (i < 0) return false;
                  const auto& cell = AX::Cells(c.E)[(size_t)i];
                  return cell.model && AX::ModelThumb(c.E, *cell.model) != 0;
-             }, 300),
+             }, 30),
              Until("the image's tile shows the image", [](Ctx& c) {
                  const int i = CellIndex(c, "Smoke Tex.png");
                  return i >= 0 && (AX::Cells(c.E)[(size_t)i].texture || AX::Cells(c.E)[(size_t)i].unloaded);
@@ -782,7 +794,16 @@ void RegisterAssetsTests() {
                  X::SelectAsset(c.E, g_Text);
              }), Wait(10),
              ExpectTrue("it loaded as a Missing placeholder", [](Ctx& c) { const auto ma = c.A.LoadMaterial(g_Text); return ma && ma->Missing; }),
-             ExpectTrue("its inspector shows no material fields", [](Ctx&) { return Find(ByLabel("(none)", kInspector)) == nullptr; }), // the texture-map slots
+             // Positive first: the Inspector is up and showing this file (otherwise "no fields" passes trivially).
+             ExpectTrue("the Inspector shows the broken .mat", [](Ctx& c) {
+                 if (X::AssetKey(c.E) != g_Text) return false;
+                 for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                     if (w->Active && !w->Hidden && Contains(w->Name, kInspector) && !Contains(w->Name, "/")) return true;
+                 return false;
+             }),
+             ExpectTrue("its inspector shows no material fields", [](Ctx&) {
+                 return Find(ByLabel("(none)", kInspector)) == nullptr && Find(ByExact("##f", kInspector)) == nullptr; // texture slots, sliders
+             }),
              ExpectTrue("the file is untouched", [](Ctx&) { return ReadFileText(g_Text) == "{ not json"; }),
              Do("deselect and remove it", [](Ctx& c) {
                  X::Deselect(c.E);
@@ -817,6 +838,9 @@ void RegisterAssetsTests() {
         Until("it lists Props", [](Ctx&) { return Find(ByLabel("Props", kLibraryPanel)) != nullptr; }, 60),
         Shot("library", {kLibraryPanel}),
         Click(ByExact("##libsearch", kLibraryPanel)), Wait(3), TypeText("crate"), Wait(4),
+        Until("the search lists Props/Crate and not Props/Barrel", [](Ctx&) {
+            return Find(ByLabel("Props/Crate", kLibraryPanel)) != nullptr && Find(ByLabel("Props/Barrel", kLibraryPanel)) == nullptr;
+        }, 60),
         Click(ByLabel("Props/Crate", kLibraryPanel)), Wait(4),
         // The summary (a preview image, the counts) runs below the panel: its Import button is
         // under the image, so scroll the details pane to its end.
@@ -826,13 +850,14 @@ void RegisterAssetsTests() {
             return Find(ByLabel("Import 'Crate'", kLibraryPanel)) != nullptr;
         }, 60),
         Shot("crate", {kLibraryPanel}), // the Import button isn't clicked: it copies into the project
-        Do("close the panel and delete the library", [](Ctx&) {
-            EditorSettings::Get().ShowAssetLibrary = false;
-            EditorSettings::Get().AssetLibraryPath.clear();
-            std::error_code ec;
-            fs::remove_all(fs::u8path(LibraryDir()), ec);
-        }),
+        Do("close the panel", [](Ctx&) { EditorSettings::Get().ShowAssetLibrary = false; }),
         Until("the Asset Library is gone", [](Ctx&) { return !ChromeUi::Shown(EditorPanels::AssetLibrary); }, 60),
+    }, [](Ctx&) {
+        // Pass or fail: panel closed, no library path, the library folder gone (it lives in the user folder).
+        EditorSettings::Get().ShowAssetLibrary = false;
+        EditorSettings::Get().AssetLibraryPath.clear();
+        std::error_code ec;
+        fs::remove_all(fs::u8path(LibraryDir()), ec);
     });
 
     // ------------------------------------------------------------------ cleanup: Delete Folder
@@ -860,6 +885,8 @@ void RegisterAssetsTests() {
                  (sub ? " the subfolder" : "") + "; on disk: " + (FileExists(Dir()) ? "still there" : "gone"));
             return true;
         }, 1000000},
+        // Delete Folder only takes a library folder out of the browser (undoable); the files stay on disk.
+        ExpectTrue("still on disk", [](Ctx&) { return FileExists(Dir()); }),
         Do("delete it from disk and rescan", [](Ctx& c) {
             AX::Search(c.E).clear();
             std::error_code ec;

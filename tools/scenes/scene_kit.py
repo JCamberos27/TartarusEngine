@@ -1,5 +1,6 @@
 # Helpers for scene generators: the model index (path, guid and engine-measured bounds of every imported model)
 # and the scene-JSON pieces (empties, models, boxes, lights) in the format SceneSerializer reads.
+import argparse
 import json
 import math
 import os
@@ -12,15 +13,11 @@ ROOTS = ['assets/Architecture', 'assets/Furniture', 'assets/Props']
 
 
 def model_index(repo, exe=None):
-    """stem -> {'path', 'guid', 'min', 'max'}; bounds are after the .meta's scale / axis / pivot."""
+    """stem -> {'path', 'guid', 'min', 'max'}; bounds are after the .meta's scale / axis / pivot. Exits if the engine
+    could not read a model (a stem missing from the index would only fail later, as a KeyError)."""
     project = os.path.join(repo, 'project')
-    exe = exe or os.path.join(repo, 'build', 'Release', 'TartarusEngine.exe')
-    cwd = os.getcwd()
-    os.chdir(repo)
-    try:
-        report = model_report(exe, ['project/' + r for r in ROOTS])
-    finally:
-        os.chdir(cwd)
+    exe = exe or find_exe(repo)
+    report = model_report(exe, [os.path.join(project, *r.split('/')) for r in ROOTS])   # exits on a failed model
     index = {}
     for root in ROOTS:
         for folder, _, files in os.walk(os.path.join(project, *root.split('/'))):
@@ -28,21 +25,15 @@ def model_index(repo, exe=None):
                 if not name.lower().endswith('.fbx'):
                     continue
                 full = os.path.join(folder, name)
-                # the report's keys are the paths it was given, normcased
-                r = report.get(os.path.normcase(os.path.normpath(os.path.relpath(full, repo))))
+                r = report.get(os.path.normcase(os.path.normpath(full)))   # the report's keys: its paths, normcased
                 if not r:
-                    continue
+                    sys.exit(f'scene_kit.model_index: --model-report has no row for {full}')
                 with open(full + '.meta', encoding='utf-8') as f:
                     g = json.load(f)['guid']
                 rel = os.path.relpath(full, project).replace(os.sep, '/')
                 index[os.path.splitext(name)[0]] = {'path': rel, 'guid': g, 'min': r['min'], 'max': r['max'],
                                                     'meshes': r['meshes']}
     return index
-
-
-def yaw_quat(deg):
-    h = math.radians(deg) / 2
-    return [0.0, round(math.sin(h), 6), 0.0, round(math.cos(h), 6)]
 
 
 def euler_quat(yaw=0.0, pitch=0.0, roll=0.0):
@@ -107,7 +98,7 @@ class Scene:
         return self.empty(name, parent, pos, yaw=yaw if spot else 0.0, pitch=pitch if spot else 0.0, Light={
             'Angular Size': 0.53, 'Cast Shadows': shadows, 'Color': list(color), 'ColorTempK': kelvin, 'Culling Mask': -1,
             'Intensity': intensity, 'Range': rng, 'Shadow Bias': 1.0, 'Shadow Near Plane': 0.05, 'Shadow Normal Bias': 1.0,
-            'Shadow Resolution': 'Follow global', 'Shadow Softness': softness, 'Shadow Update Mode': 'Dynamic',
+            'Shadow Softness': softness, 
             'Spot Angle': spot or 30.0, 'Type': 'Spot' if spot else 'Point'}, **extra)
 
     def write(self, path):
@@ -175,3 +166,32 @@ def textured(repo, albedo=None, normal=None, rough=None, ao=None, base=(1.0, 1.0
          'roughnessMap': ref(rough), 'triplanar': bool(albedo or normal), 'triplanarScale': triplanar_scale}
     m.update(_decal_keys(ref, grunge, grunge_strength, grunge_scale, receive_decals))
     return m
+
+
+def builder_args(scene, what):
+    """<repo> (default: this checkout) and --force, for a builder that writes a whole committed scene."""
+    ap = argparse.ArgumentParser(description=f'Rebuild the {scene} scene from scratch.')
+    ap.add_argument('repo', nargs='?', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+    ap.add_argument('--force', action='store_true', help=f'overwrite the existing scene and lose {what}')
+    args = ap.parse_args()
+    args.repo = os.path.abspath(args.repo)
+    return args
+
+
+def refuse_overwrite(path, args, what):
+    if os.path.exists(path) and not args.force:
+        sys.exit(f'{path} exists and has {what}, which a rebuild would lose. Pass --force to overwrite it.')
+
+
+def find_exe(repo):
+    """TARTARUS_EXE (another build, e.g. a worktree's), else the repo's build/Release, else b/Release."""
+    exe = os.environ.get('TARTARUS_EXE')
+    if exe:
+        if not os.path.isfile(exe):
+            sys.exit(f'TARTARUS_EXE={exe} does not exist')
+        return exe
+    for d in ('build', 'b'):
+        exe = os.path.join(repo, d, 'Release', 'TartarusEngine.exe')
+        if os.path.isfile(exe):
+            return exe
+    sys.exit(f'No TartarusEngine.exe under {repo}\\build\\Release or b\\Release: build it, or set TARTARUS_EXE')

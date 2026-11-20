@@ -164,8 +164,7 @@ def build(repo):
     # The scene's first directional light: the time of day drives it (the moon by night).
     s.empty('Moon', -1, (0, 40, 0), pitch=-37.0, yaw=-110.0, Light={
         'Type': 'Directional', 'Color': [0.78, 0.86, 1.0], 'Intensity': 0.6, 'Range': 200.0, 'Spot Angle': 35.0,
-        'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'Shadow Resolution': 'Follow global',
-        'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0, 'Culling Mask': -1})
+        'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'ColorTempK': 0.0, 'Culling Mask': -1})
 
     # --- Ground: one 200 x 200 m slab (the grid is world-space, so every box lines up with it) ----------------------
     s.block('Ground (concrete)', -100, 100, -0.2, 0.0, -100, 100, material=s.mats['ground'])
@@ -373,7 +372,6 @@ def npc_bay(s):
 
 def player(s, arena, repo):
     """Arena's player (controller, weapons, first-person body) at the hub, stripped to the bare body + underpants."""
-    ents = {e['id']: e for k in ('empties', 'models') for e in arena.get(k, [])}
     spawn = next(e for e in arena['empties'] if 'First Person Controller' in e)
     body = next(e for e in arena['empties'] if e.get('parentId') == spawn['id'] and 'First Person Body' in e)
     keep_slots = {'Torso', 'Head', 'Arms'}

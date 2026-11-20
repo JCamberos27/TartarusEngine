@@ -19,9 +19,11 @@
 #     concrete, soot, old paint patches, rust and water streaks and a grime band, under sodium wall lamps: the decal
 #     test surface (bullet holes are the runtime ones: shoot it). Trees and ground pieces keep clear of it.
 #
-#   python tools/scenes/build_forest.py [<repo>]
+#   python tools/scenes/build_forest.py [<repo>] [--force]
 #
-# Writes project/scenes/Forest.json (+ .meta, its guid kept across rebuilds).
+# Writes project/scenes/Forest.json (+ .meta, its guid kept across rebuilds). The committed Forest has hand edits this
+# script doesn't make (mushrooms out, shadows off on ground cover), so it refuses to overwrite it unless --force is
+# given; forest_house_into.py swaps a rebuilt house in without touching the rest.
 # World (metres): X east, Z south, the ground at ground(x, z) (0 at the wall), the player in the clearing facing north.
 #
 # Every prefab is checked before it is used: a LOD Group's levels are its first children in order, and each must be
@@ -195,7 +197,7 @@ class Forest(k.Scene):
         (after its yaw and tilt) so its up follows that vector - the ground's slope."""
         p = self.prefab(path)
         root = self.empty(name or os.path.splitext(os.path.basename(path))[0], parent, pos, yaw=yaw, static=True)
-        top = next(e for e in self.empties if e['id'] == root)
+        top = self.empties[-1]   # the empty just made (was a scan of every empty per stamp)
         sc = [scale] * 3 if isinstance(scale, (int, float)) else list(scale)
         if sc != [1.0, 1.0, 1.0]:
             top['scale'] = [round(v, 3) for v in sc]
@@ -640,7 +642,6 @@ def dress_walls(s, root, repo):
         light = s.light('Lamp Light', lamp, (0.0, -0.12, 0.25), intensity=7.0, rng=9.0, kelvin=2100.0, spot=72.0,
                         pitch=-65.0, shadows=True,
                         **(k.light_flicker(0, 3.0, 9.0, 0.8, 7) if (side, i) in FLICKER_LAMPS else {}))
-        next(e for e in s.empties if e['id'] == light)['Light']['Shadow Update Mode'] = 'Static (bake once)'
     s.empty('Decal Grading', grp, (0.0, 0.0, 0.0), **{'Decal Grading': {'Age': 0.25, 'Wear': 0.3}})
     assert w.n <= MAX_WALL_DECALS and len(w.maps) <= MAX_WALL_MAPS, (w.n, len(w.maps))
     return w.n, len(sites)
@@ -1161,9 +1162,11 @@ def write_meta(path):
 
 
 def main():
-    repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..'))
-    s, counts = build(repo)
+    args = k.builder_args('Forest', 'its hand edits')
+    repo = args.repo
     out = os.path.join(repo, 'project', 'scenes', 'Forest.json')
+    k.refuse_overwrite(out, args, 'its hand edits (use forest_house_into.py for the house)')
+    s, counts = build(repo)
     s.write(out)
     write_meta(out)
     for path, why in sorted(s.rejected.items()):

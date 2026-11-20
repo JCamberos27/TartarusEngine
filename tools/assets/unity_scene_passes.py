@@ -4,9 +4,9 @@ import copy
 import json
 import math
 import os
-import re
 import subprocess
 
+import model_report
 from import_model_library import write_json, write_meta
 from unity_arch import ARCH_SCALE, arch_class
 from unity_space import _qmul, _qrot, _world_of, r6
@@ -201,21 +201,9 @@ def model_tris(exe, repo, rels):
     """Triangles of each project-relative model path, as imported with its meta (the engine's --model-report)."""
     if not rels:
         return {}
-    absf = {os.path.normcase(os.path.normpath(os.path.join(repo, 'project', *r.split('/')))): r for r in rels}
-    out = subprocess.run([exe, '--model-report', *absf], capture_output=True, text=True, encoding='utf-8',
-                         errors='replace').stdout
-    tris, cur = {}, None
-    for line in out.splitlines():
-        line = line.strip()
-        m = re.match(r'\[ModelReport\] (.*) size \S+ \S+ \S+ min ', line)
-        if m:
-            cur = absf.get(os.path.normcase(os.path.normpath(m.group(1))))
-            continue
-        m = re.match(r'\[ModelReport\]\s+tris: (\d+)', line)
-        if m and cur:
-            tris[cur] = int(m.group(1))
-            cur = None
-    return tris
+    absf = {model_report.key(os.path.join(repo, 'project', *r.split('/'))): r for r in rels}
+    rows, _, _ = model_report.run(exe, list(absf))
+    return {absf[k]: r['tris'] for k, r in rows.items() if k in absf and r['tris'] is not None}
 
 
 def auto_lod(exe, repo, pack_name, scene, counts, report=None):

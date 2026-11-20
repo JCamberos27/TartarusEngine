@@ -41,7 +41,8 @@ UP = 1.5               # the upper floor
 
 lab = LabScene(SRC)
 j = lab.data
-hall = json.load(open(HALLWAY, encoding='utf-8'))
+with open(HALLWAY, encoding='utf-8') as f:
+    hall = json.load(f)
 
 
 def door_template(stem):
@@ -170,7 +171,7 @@ lighting = next(e for e in j['empties'] if e['name'] == 'Lighting')['id']
 empty('Corridor Fill', lighting, (-8.4, 2.4, 0.0), Light={
     'Angular Size': 0.53, 'Cast Shadows': False, 'Color': [1.0, 0.95, 0.88], 'ColorTempK': 0.0, 'Culling Mask': -1,
     'Intensity': 1.5, 'Range': 6.0, 'Shadow Bias': 1.0, 'Shadow Near Plane': 0.05, 'Shadow Normal Bias': 1.0,
-    'Shadow Resolution': 'Follow global', 'Shadow Softness': 1.0, 'Shadow Update Mode': 'Dynamic', 'Spot Angle': 30.0,
+    'Shadow Softness': 1.0, 'Spot Angle': 30.0,
     'Type': 'Point'})
 
 # The player at the corridor's west end, facing east down it (the hallway's spawn).

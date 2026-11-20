@@ -43,20 +43,6 @@ bool Under(const fs::path& path, const fs::path& root) {
     return lower(p).rfind(lower(r) + "/", 0) == 0;
 }
 // Log lines containing `fragment`, counting collapsed repeats.
-// Until, with a real-time limit (frame rates vary a lot between a desktop GPU and llvmpipe).
-Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
-    auto start = std::make_shared<double>(-1.0);
-    return {name, [name, pred, seconds, start](Ctx& c) {
-        const double now = ImGui::GetTime();
-        if (*start < 0.0) *start = now;
-        if (pred(c)) return true;
-        if (now - *start > seconds) {
-            Fail("step '" + name + "' timed out after " + std::to_string((int)seconds) + " s");
-            return true;
-        }
-        return false;
-    }, 100000000};
-}
 
 ImGuiWindow* Shown(const char* name) {
     ImGuiWindow* w = ImGui::FindWindowByName(name);
