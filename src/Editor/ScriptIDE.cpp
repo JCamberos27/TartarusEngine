@@ -131,6 +131,7 @@ struct ScriptIDE::Impl {
     Clock::time_point LastDiskCheck=Clock::now();
     fs::path SessionPath;
     std::vector<std::string> ProjectFiles;
+    std::vector<std::string> ProjectLabels; // Label() of each ProjectFiles entry: built when the list changes, not per frame (fs::relative stats the disk)
     std::future<std::vector<std::string>> FileScan;
     Clock::time_point LastScan=Clock::now()-std::chrono::seconds(5);
     bool Restoring=false; // reopening the last session's documents: silent
@@ -252,8 +253,13 @@ struct ScriptIDE::Impl {
             doc.DiskBytes=std::move(disk);{std::error_code tec;doc.DiskTime=fs::last_write_time(fs::u8path(doc.Path),tec);}doc.Bom=bom;doc.CRLF=bytes.find("\r\n")!=std::string::npos;doc.Editor.SetText(bytes);doc.Saved=doc.Editor.GetText();doc.Touched();doc.Conflict=false;PersistSoon();
         }catch(const std::exception& e){doc.Conflict=true;Status=e.what();}
     }
+    void SetProjectFiles(std::vector<std::string> files) {
+        if(files==ProjectFiles)return;
+        ProjectFiles=std::move(files);ProjectLabels.clear();ProjectLabels.reserve(ProjectFiles.size());
+        for(const auto& path:ProjectFiles)try {ProjectLabels.push_back(Label(path));}catch(const std::exception&){ProjectLabels.push_back(path);}
+    }
     void Poll() {
-        if(FileScan.valid() && FileScan.wait_for(std::chrono::milliseconds(0))==std::future_status::ready)try {ProjectFiles=FileScan.get();}catch(const std::exception& e){Status=e.what();}
+        if(FileScan.valid() && FileScan.wait_for(std::chrono::milliseconds(0))==std::future_status::ready)try {SetProjectFiles(FileScan.get());}catch(const std::exception& e){Status=e.what();}
         if(PersistPending && Clock::now()>=PersistAt)Persist();
         if(Visible && !FileScan.valid() && Clock::now()-LastScan>std::chrono::seconds(3)) {
             LastScan=Clock::now();FileScan=std::async(std::launch::async,ScanSources,ProjectPaths::Root(),EngineSources());
@@ -265,7 +271,7 @@ struct ScriptIDE::Impl {
             LastDiskCheck=Clock::now();for(auto& d:Documents)try {
                 std::error_code tec;const auto stamp=fs::last_write_time(fs::u8path(d->Path),tec);
                 if(!tec && stamp==d->DiskTime)continue; // unchanged since we read or wrote it: no full read
-                auto disk=Read(fs::u8path(d->Path));if(disk!=d->DiskBytes){if(d->Dirty())d->Conflict=true;else Reload(*d);}else d->DiskTime=stamp;
+                auto disk=Read(fs::u8path(d->Path));if(disk!=d->DiskBytes){if(d->Dirty()){d->Conflict=true;d->DiskTime=stamp;}else Reload(*d);}else d->DiskTime=stamp; // a conflict keeps the stamp too: no full re-read every second while it waits
             }catch(...){d->Conflict=true;}
         }
     }
@@ -465,11 +471,11 @@ void ScriptIDE::Impl::DrawSources(float scale,float divider) {
     ImGui::BeginChild("Sources",ImVec2(sidebar,0),ImGuiChildFlags_Borders,ImGuiWindowFlags_HorizontalScrollbar);
     ImGui::TextUnformatted("SOURCES");
     Field("##ScriptSearch",SourceFilter,sidebar-20);
-    try {for(const auto& path:ProjectFiles) {
-        auto label=Label(path);
-        if(!SourceFilter.empty() && label.find(SourceFilter)==std::string::npos)continue;
-        if(ImGui::Selectable(label.c_str(),Active && Same(Active->Path,path)))Open(path);
-    }}catch(const std::exception& e){ImGui::TextWrapped("%s",e.what());}
+    auto row=[&](size_t i){const auto& path=ProjectFiles[i];if(ImGui::Selectable(ProjectLabels[i].c_str(),Active && Same(Active->Path,path)))Open(path);};
+    if(SourceFilter.empty()) {
+        ImGuiListClipper clipper;clipper.Begin(static_cast<int>(ProjectFiles.size()));
+        while(clipper.Step())for(int i=clipper.DisplayStart;i<clipper.DisplayEnd;++i)row(static_cast<size_t>(i));
+    } else for(size_t i=0;i<ProjectFiles.size();++i)if(ProjectLabels[i].find(SourceFilter)!=std::string::npos)row(i);
     ImGui::EndChild();ImGui::SameLine(0,0);
     ImGui::InvisibleButton("##SourcesDivider",ImVec2(divider,std::max(1.0f,space.y)));
     if(ImGui::IsItemHovered() || ImGui::IsItemActive())ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
@@ -490,7 +496,7 @@ void ScriptIDE::Impl::DrawConflictAndFind() {
         auto flow=[&](float width){if(ImGui::GetItemRectMax().x+ImGui::GetStyle().ItemSpacing.x+width<=right)ImGui::SameLine();};
         auto button=[](const char* label){return ImGui::CalcTextSize(label,nullptr,true).x+ImGui::GetStyle().FramePadding.x*2;};
         Field("Find",Find,180);flow(button("Previous"));if(EditorUIPrimitives::SecondaryButton("Previous"))FindNext(true);flow(button("Next"));if(EditorUIPrimitives::SecondaryButton("Next"))FindNext();flow(ImGui::GetFrameHeight()+ImGui::GetStyle().ItemInnerSpacing.x+ImGui::CalcTextSize("Replace").x);ImGui::Checkbox("Replace",&ReplaceVisible);flow(button("Close find"));if(EditorUIPrimitives::SecondaryButton("Close find"))FindVisible=false;
-        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);flow(button("Replace match"));if(EditorUIPrimitives::SecondaryButton("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);PersistSoon();}flow(button("Replace all"));if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);PersistSoon();}}
+        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);flow(button("Replace match"));if(EditorUIPrimitives::SecondaryButton("Replace match") && !Find.empty() && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);PersistSoon();}flow(button("Replace all"));if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);PersistSoon();}}
     }
 }
 

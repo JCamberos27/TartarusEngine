@@ -43,6 +43,9 @@ public:
     // The spent cases' mesh and material of `animationSet` (a .fpsanim) into the asset cache. Every slot's are warmed
     // when it starts; left to the first round fired (ShellCasings::Spawn), the FBX import stalls that frame for up to a second.
     static void WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set);
+    // --npc-test: every presentation's recoil and camera-shake patterns start from `seed` at each Play, so a run's
+    // kicks repeat. Without it (Play) each Play draws a fresh pattern.
+    static void FixRandomSeed(unsigned seed);
     // A slot not in hand at Play start: its weapon and arms models, their material overrides and its spent cases into the
     // asset cache. Left to the first draw, the weapon's FBX and its 4K maps load on that frame (the .38: ~0.3 s warm,
     // seconds with its textures uncooked).

@@ -106,12 +106,23 @@ void SetTransformRotationFromJson(TransformComponent& transform, const json& val
 bool RotationJsonNearlyEqual(const json& a, const json& b);
 std::string PathOrEmpty(const std::shared_ptr<Texture>& tex);
 std::string AssetPathForWrite(const std::string& path);
+// One scene build's asset reference answers, per path string: the written path
+// (AssetPathForWrite) and the GUID string ("" when unregistered). A big scene places the same few
+// models and materials thousands of times; each answer used to be worked out again (two locked
+// map lookups and a key normalisation) for every placement.
+struct AssetRefWriteCache {
+    struct Ref { std::string WritePath, Guid; };
+    const Ref& Get(const std::string& path);
+private:
+    std::unordered_map<std::string, Ref> m_Refs;
+};
 std::string AssetPathForRead(const std::string& path);
 json PathRef(const std::string& path);
 std::string ResolveAssetRef(const json& val);
 std::string ResolveAssetRef(const json& obj, const char* pathKey, const char* guidKey);
 std::shared_ptr<Texture> LoadIfPresent(AssetLibrary& assets, const json& obj, const char* key);
-json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matSlots);
+json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matSlots,
+                         AssetRefWriteCache* refs = nullptr);
 void WriteRendererFlags(json& obj, const RenderableComponent& rc);
 void ReadRendererFlags(const json& obj, RenderableComponent& rc);
 void ReadMaterialSlots(AssetLibrary& assets, const json& obj, RenderableComponent& rc);

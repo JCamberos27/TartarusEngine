@@ -140,7 +140,9 @@ bool Draw(const char* id,Curve& curve,const ImVec2& size,const Options& o) {
     if(clicked||button) {
         auto& w=windows[{ImGui::GetCurrentContext(),key}];
         if(w.Key.empty()){w.Key=key;w.Working=curve;OptionsFor(w,o);}
-        w.Bound=bound;if(w.Bound.Title.empty())w.Bound.Title=o.Title?o.Title:"Curve";w.Focus=true;
+        w.Bound=bound;
+        if(!w.Bound.Source){w.Bound.HasDefault=o.Default!=nullptr;if(o.Default)w.Default=*o.Default;} // unbound: Reset to default uses the caller's default
+        if(w.Bound.Title.empty())w.Bound.Title=o.Title?o.Title:"Curve";w.Focus=true;
     }
     return committed;
 }

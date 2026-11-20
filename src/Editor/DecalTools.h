@@ -62,8 +62,6 @@ public:
     // One cursor sample on the surface (point, unit normal). Appends the dabs it completes to `out`
     // (room for `cap`) and returns how many. The first sample drops the first dab.
     int Advance(const glm::vec3& point, const glm::vec3& normal, BrushDab* out, int cap);
-    int Placed() const { return m_Placed; }
-    bool Started() const { return m_Started; }
 
 private:
     int Emit(const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir, BrushDab* out, int cap);

@@ -142,7 +142,7 @@ inline std::uint32_t TreeLineChildMask(std::uint32_t parentMask, int parentDepth
 
 // --- Units ------------------------------------------------------------------------------------
 // Distance readout shared by the Measure tool and vRuler. Scene units are metres.
-//   metric:   adapts the unit - "4.2 mm", "37.5 cm", "1.84 m", "2.31 km"
+//   metric:   adapts the unit - "4.2 mm", "37.5 cm", "1.840 m", "2.31 km"
 //   imperial: feet + inches - "5' 10.9\"", "0' 3.2\"", or miles past 5280 ft ("1.42 mi")
 // Writes into `buf` (always NUL-terminated) and returns it.
 const char* FormatLength(float meters, bool imperial, char* buf, std::size_t n);
