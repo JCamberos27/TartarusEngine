@@ -41,7 +41,7 @@ void Update(Gameplay::WeaponFrame& w) {
         if (!w.Pressed) { ResetBurst(w); return; }
         w.Cooldown = 60.0f / std::max(1.0f, w.Rpm);
         if (w.BurstRemaining > 0) --w.BurstRemaining;
-        w.Result = ((w.FullAuto || w.UnityRecoil) && w.Held) || w.BurstRemaining > 0 ? 1 : 0;
+        w.Result = w.Held || w.BurstRemaining > 0 ? 1 : 0; // a held trigger keeps the recoil solver firing, semi included
         break;
     case 5: // Reload
         if (!w.Equipped || Has(w, Reloading) || w.Ammo >= w.Magazine) return;
