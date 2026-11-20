@@ -13,6 +13,7 @@
 #include "ParticleSystem.h"
 #include "PhysicsWorld.h"
 #include "AnimatorController.h"
+#include "App/ScratchProfile.h"
 #include "Camera.h"
 #include "GameModuleAPI.h"
 #include "MaterialAsset.h"
@@ -117,7 +118,7 @@ void ProjectSync(EditorLayer& editor, World& world, AssetLibrary& assets) {
 void MaterialPreviews(World& world) {
     namespace fs = std::filesystem;
     std::error_code pe;
-    const fs::path outDir = fs::temp_directory_path(pe) / "TartarusSmokeMaterialPreview";
+    const fs::path outDir = fs::temp_directory_path(pe) / ScratchFolderName("TartarusSmokeMaterialPreview", ScratchInstanceName());
     fs::create_directories(outDir, pe);
     // The scene's own materials: whatever else is still loaded (the startup scene's - the Sandbox
     // player's black clothing, near the backdrop's colour) isn't what this scene tests.
@@ -204,7 +205,7 @@ void MaterialPreviews(World& world) {
 // objects came back.
 void PrefabMode(EditorLayer& editor, World& world, AssetLibrary& assets) {
     std::error_code pe;
-    const std::filesystem::path dir = std::filesystem::temp_directory_path(pe) / "TartarusSmokePrefab";
+    const std::filesystem::path dir = std::filesystem::temp_directory_path(pe) / ScratchFolderName("TartarusSmokePrefab", ScratchInstanceName());
     std::filesystem::create_directories(dir, pe);
     const std::string prefabPath = (dir / "crate.prefab").string();
     const size_t sceneEntities = world.Registry.storage<entt::entity>().in_use();

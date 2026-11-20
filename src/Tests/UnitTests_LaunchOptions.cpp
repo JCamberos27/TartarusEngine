@@ -1,5 +1,7 @@
 #include "UnitTestSupport.h"
 #include "../App/LaunchOptions.h"
+#include "../App/ScratchProfile.h"
+#include "../Core/ModuleCopies.h"
 #include "../Core/Env.h"
 #include "../Core/Paths.h"
 
@@ -110,6 +112,25 @@ void Test_ProjectPaths_RelativizeUnder() {
     CHECK(ProjectPaths::Relativize("Z:\\elsewhere\\x.png") == "Z:\\elsewhere\\x.png");
 }
 
+void Test_ScratchProfile_InstanceNames() {
+    // TARTARUS_EDITOR_TEST_INSTANCE: parallel harness runs get their own user folder; no name = the old folder.
+    CHECK(ScratchFolderName("TartarusEngine-Test", "") == "TartarusEngine-Test");
+    CHECK(ScratchFolderName("TartarusEngine-Shot", "w1") == "TartarusEngine-Shot-w1");
+    CHECK(ScratchInstanceNameValid("") && ScratchInstanceNameValid("w1") && ScratchInstanceNameValid("bench_2-b"));
+    CHECK(!ScratchInstanceNameValid("a b") && !ScratchInstanceNameValid("..") && !ScratchInstanceNameValid("x/y"));
+    CHECK(!ScratchInstanceNameValid("w1\\..") && !ScratchInstanceNameValid(std::string(33, 'a')));
+}
+
+void Test_ModuleCopies_OwnerPid() {
+    // The hot-reload sweep keeps copies a running instance owns; it reads the pid from the name.
+    CHECK(ModuleCopies::OwnerPid(L"TartarusEditor_1234_1.dll", L"TartarusEditor_") == 1234u);
+    CHECK(ModuleCopies::OwnerPid(L"TartarusGame_7_12.dll", L"TartarusGame_") == 7u);
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_3.dll", L"TartarusGame_"));       // old style: no pid
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_x_1.dll", L"TartarusGame_"));
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusEditor_5_1.dll", L"TartarusGame_"));
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_99999999999_1.dll", L"TartarusGame_"));
+}
+
 } // namespace
 
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
@@ -118,4 +139,6 @@ void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"LaunchOptions::Errors", Test_LaunchOptions_Errors});
     tests.push_back({"Env::ReadsAndHelp", Test_Env_ReadsAndHelp});
     tests.push_back({"ProjectPaths::RelativizeUnder", Test_ProjectPaths_RelativizeUnder});
+    tests.push_back({"ScratchProfile::InstanceNames", Test_ScratchProfile_InstanceNames});
+    tests.push_back({"ModuleCopies::OwnerPid", Test_ModuleCopies_OwnerPid});
 }
