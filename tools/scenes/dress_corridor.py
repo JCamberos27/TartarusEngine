@@ -138,7 +138,9 @@ def patch_materials(d, repo):
     walls = [e for e in d['models'] if e['name'] == 'Wall - Corridor']
     ceils = [e for e in d['models'] if e['name'] == 'Ceiling - Corridor']
     trims = corridor_trims(d, by_id)
-    assert len(walls) == 22 and len(ceils) == 1 and len(trims) == 10, (len(walls), len(ceils), len(trims))
+    assert len(walls) == 22 and len(ceils) == 1 and len(trims) == 10, \
+        f'expected 22 walls, 1 ceiling, 10 baseboards, found {len(walls)}, {len(ceils)}, {len(trims)}: if the hallway ' \
+        'was rebuilt on purpose, update these counts'
     for e in walls:
         m = e['materials'][0]['embedded']
         m['albedoMap'] = ref(repo, WALL_DIR + 'Diffuse_2k.jpg')

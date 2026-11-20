@@ -32,7 +32,7 @@ T = 0.15              # partition thickness
 TX = 0.3              # outside walls
 HALL = 1.075          # corridor wall centre lines at z = +-HALL: 2.0 m clear
 GRUNGE_WALL = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_036.png'   # corridor walls
-GRUNGE_WORN = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'   # corridor ceiling + trim
+GRUNGE_WORN = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'   # corridor ceiling
 D = 8.6               # apartment depth, corridor wall to outside wall (centre lines)
 DOOR_W, DOOR_H = 0.92, 2.06      # opening for Door_Op_1's frame (the frame's own trim covers the gap)
 DOOR_WALL_Z = 0.032              # the frame's wall centre, door-local +Z of its origin
@@ -149,8 +149,9 @@ class Hallway(k.Scene):
             'corridor_ceiling': k.textured(r, albedo=ceil + 'Base_Color.png', normal=ceil + 'Normal.png',
                                            base=(0.95, 0.95, 0.95), roughness=0.95, triplanar_scale=0.33,
                                            grunge=GRUNGE_WORN, grunge_strength=0.45, grunge_scale=0.25),
-            'corridor_trim': k.textured(r, base=(0.86, 0.85, 0.82), roughness=0.4, grunge=GRUNGE_WORN,
-                                        grunge_strength=0.5),
+            # _036 like the walls: _085's near-binary mask opens black blobs on trim (what dress_corridor.py sets)
+            'corridor_trim': k.textured(r, base=(0.86, 0.85, 0.82), roughness=0.4, grunge=GRUNGE_WALL,
+                                        grunge_strength=0.4),
             'tile_wall': k.textured(r, normal=plaster['normal'], rough=plaster['rough'], base=(0.88, 0.89, 0.88),
                                     roughness=0.45, triplanar_scale=0.5),
             # ~9 boards a tile: 0.9 tiles a metre gives 12 cm boards
@@ -430,7 +431,8 @@ class Hallway(k.Scene):
 
     # --- lighting ----------------------------------------------------------------------------------------------------
     def lamp_glow(self, stem, strength):
-        meta = json.load(open(os.path.join(self.repo, 'project', self.idx[stem]['path'] + '.meta'), encoding='utf-8'))
+        with open(os.path.join(self.repo, 'project', self.idx[stem]['path'] + '.meta'), encoding='utf-8') as f:
+            meta = json.load(f)
         mat = next(iter(meta['materialRemap'].values()))
         over = {'emissive_strength': strength}
         if strength == 0:

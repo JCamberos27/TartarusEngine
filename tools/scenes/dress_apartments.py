@@ -12,8 +12,8 @@
 #    They also gain the corridor's "substrate" preset references (dc.SUBSTRATES): Wall_Concrete on walls and reveals,
 #    Floor_Concrete on ceilings, PH_Dark_Wooden_Planks on baseboards. 301 is the hand-edited NPC test room: nothing
 #    there is touched except these materials and the added decals;
-#  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (~115-125
-#    decals), the rest moderate (~70-80). Per room, as budget allows: door-frame cracks and flakes, skirting bands,
+#  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (a budget of
+#    112-124 decals), the rest moderate (68-78). Per room, as budget allows: door-frame cracks and flakes, skirting bands,
 #    mid-wall hero patches (larger and lit rooms; each over a grey grime halo, its peel layer smaller and turned so it
 #    doesn't read as a square stamp), grime bands along the skirting, water runs from the ceiling line, grime up the
 #    wall ends, and ceiling clusters (a water mark under the peel) under the lamp and in the corners. Bathrooms always
@@ -132,7 +132,7 @@ def read_geometry(d):
             assert normal_of(e['rotation'])[1] < -0.99 and abs(y - CEIL_Y) < 1e-6, f"{e['name']} is not a ceiling"
             rooms[(int(m[1]), m[2])] = Room(int(m[1]), m[2], x - e['scale'][0] / 2, x + e['scale'][0] / 2,
                                             z - e['scale'][1] / 2, z + e['scale'][1] / 2)
-    assert len(rooms) == 24, len(rooms)
+    assert len(rooms) == 24, f'expected 24 rooms, found {len(rooms)}: if the hallway was rebuilt on purpose, update it'
 
     # wall pieces -> one Line per (room, facing, plane); which side faces into the room comes from the ceiling footprint
     lines = {}
@@ -211,7 +211,9 @@ def patch_materials(d, repo, by_id, rooms):
     ceils = [e for e in d['models'] if re.fullmatch(r'Ceiling - Apartment \d+ - .+', e['name'])]
     corridor = {id(e) for e in dc.corridor_trims(d, by_id)}
     trims = [e for e in d['boxes'] if e['name'] == 'Baseboard' and id(e) not in corridor]
-    assert len(walls) == 234 and len(ceils) == 24 and len(trims) == 138, (len(walls), len(ceils), len(trims))
+    assert len(walls) == 234 and len(ceils) == 24 and len(trims) == 138, \
+        f'expected 234 walls, 24 ceilings, 138 baseboards, found {len(walls)}, {len(ceils)}, {len(trims)}: if the hallway ' \
+        'was rebuilt on purpose, update these counts'
     for e in walls + reveals:
         m = e['materials'][0]['embedded']      # keep baseColor / normalMap / roughnessMap: the walls stay white
         m['aoMap'] = ao
@@ -563,10 +565,11 @@ def dress_unit(S, unit, rooms, trash, hero):
     got = {'hero': hero}
 
     def attempt(fn, *args):
-        """Generate one feature into the buffer; returns (ok, items, wall-space marks to roll back to)."""
+        """Generate one feature into the buffer; returns (ok, items, wall-space and grime-band marks to roll back to)."""
         counter[0] += 1
         S.pending, S.cur = [], None
         mark = {id(l): len(l.taken) for m in mine for l in m.lines}
+        mark['grimed'] = len(S.grimed)
         ok = fn(S, *args, unit * 10000 + counter[0] * 10, trash)
         items, S.pending = S.pending, []
         return ok, items, mark
@@ -579,6 +582,7 @@ def dress_unit(S, unit, rooms, trash, hero):
         for m in mine:                      # dropped: free the wall space it claimed
             for l in m.lines:
                 del l.taken[mark[id(l)]:]
+        del S.grimed[mark['grimed']:]       # and its wall's grime band, so a later grime can use that wall
         return False
 
     S.count_cum = 0
@@ -639,11 +643,14 @@ def self_check(d, S):
     return counts
 
 
-def camera_poses(S, rooms):
+def camera_poses(S):
     """One pose per unit, looking at its biggest hero patch, preferring the room with a lamp."""
     poses = []
     for unit in UNITS:
         cand = [h for h in S.heroes if h[0].unit == unit]
+        if not cand:
+            poses.append(f'{unit}: no hero patch (budget spent before one fitted)')
+            continue
         room, line, u, y, w, h = max(cand, key=lambda c: (bool(c[0].lamps), c[4] * c[5]))
         tx, _, tz = line.pos(u, y)
         far = (room.x1 if line.sign > 0 else room.x0) if line.axis == 'x' else (room.z1 if line.sign > 0 else room.z0)
@@ -676,6 +683,7 @@ def main():
     maps = len(set(used))
     assert maps <= MAX_2K, maps
     checked = self_check(d, S)
+    poses = camera_poses(S)
 
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(d, f, indent=2, sort_keys=True)
@@ -685,7 +693,7 @@ def main():
           + f'); corridor + apartments use {maps} unique 2K maps, + {len(dc.SUBSTRATES)} substrate sets (a 2K slot each)')
     print(f'self-check OK: {checked["wall"]} wall, {checked["ceil"]} ceiling, {checked["floor"]} floor decals')
     print('camera poses:')
-    for p in camera_poses(S, rooms):
+    for p in poses:
         print('  ' + p)
 
 
