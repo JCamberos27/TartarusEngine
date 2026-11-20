@@ -94,20 +94,36 @@ def _cross(a, b):
 
 
 def overlap(a, b, margin=0.0):
-    """Do two oriented boxes overlap by more than `margin` (separating axis test)?"""
-    d = [b.c[i] - a.c[i] for i in range(3)]
-    axes = list(a.ax) + list(b.ax)
-    for u in a.ax:
-        for v in b.ax:
-            c = _cross(u, v)
-            n = math.sqrt(_dot(c, c))
-            if n > 1e-6:
-                axes.append([c[0] / n, c[1] / n, c[2] / n])
-    for L in axes:
-        ra = sum(abs(_dot(a.ax[k], L)) * a.h[k] for k in range(3))
-        rb = sum(abs(_dot(b.ax[k], L)) * b.h[k] for k in range(3))
-        if abs(_dot(d, L)) > ra + rb - margin:
+    """Do two oriented boxes overlap by more than `margin` (separating axis test)?
+    The six face axes go first and the nine edge-cross axes are only built when none of them separates (most pairs
+    stop there). Hot: ~1.8M calls per Forest build, so the dot products are written out; the sums keep the order
+    sum() used, so results are bit-identical to the plain version."""
+    ac, bc = a.c, b.c
+    d0, d1, d2 = bc[0] - ac[0], bc[1] - ac[1], bc[2] - ac[2]
+    (a00, a01, a02), (a10, a11, a12), (a20, a21, a22) = a.ax
+    (b00, b01, b02), (b10, b11, b12), (b20, b21, b22) = b.ax
+    ha0, ha1, ha2 = a.h
+    hb0, hb1, hb2 = b.h
+
+    def sep(x, y, z):
+        ra = abs(a00 * x + a01 * y + a02 * z) * ha0 + abs(a10 * x + a11 * y + a12 * z) * ha1 + \
+            abs(a20 * x + a21 * y + a22 * z) * ha2
+        rb = abs(b00 * x + b01 * y + b02 * z) * hb0 + abs(b10 * x + b11 * y + b12 * z) * hb1 + \
+            abs(b20 * x + b21 * y + b22 * z) * hb2
+        return abs(d0 * x + d1 * y + d2 * z) > ra + rb - margin
+
+    for x, y, z in a.ax:
+        if sep(x, y, z):
             return False
+    for x, y, z in b.ax:
+        if sep(x, y, z):
+            return False
+    for u0, u1, u2 in a.ax:
+        for v0, v1, v2 in b.ax:
+            c0, c1, c2 = u1 * v2 - u2 * v1, u2 * v0 - u0 * v2, u0 * v1 - u1 * v0
+            n = math.sqrt(c0 * c0 + c1 * c1 + c2 * c2)
+            if n > 1e-6 and sep(c0 / n, c1 / n, c2 / n):
+                return False
     return True
 
 
