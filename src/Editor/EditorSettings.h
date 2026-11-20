@@ -169,7 +169,8 @@ struct EditorSettings {
     // (docs/EDITOR_DESIGN_SYSTEM.md, src/Editor/Glass/); 0 = Tartarus, the phosphor terminal look
     // (EditorTheme.h). Glass also unlocks the Glass Workspace panels (Window > Glass Workspace)
     // and the frosted viewport HUDs below. Applied live.
-    int  EditorThemeId = 1;
+    static constexpr int kTartarusTheme = 0, kGlassTheme = 1; // EditorThemeId values
+    int  EditorThemeId = kGlassTheme;
     // Glass only: the frosted HUD cards over the Scene viewport (selection, scene stats, compile /
     // snap notifications), and whether they blur the scene behind them (a compute pass, see
     // GlassBackdrop.h) or just tint it.
