@@ -50,6 +50,12 @@ Step ChooseDecal(const char* stem) {
         Fail(std::string("decal not indexed: ") + stem);
     });
 }
+// The Apartment Hallway open has landed (its models preload on the asset workers first, #938): up to 60 s.
+Step UntilHallwayOpen() {
+    return Until("the Apartment Hallway is open", [](Ctx& c) {
+        return EditorSmokeAccess_Scenes::IsOpen(c.E, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
+    }, 3600);
+}
 Step SelectRoom() {
     return Do("select the Apartment 303 living room floor", [](Ctx& c) {
         const entt::entity f = EntByName(c.W, "Floor - Apartment 303 - Living Room");
@@ -94,7 +100,7 @@ void RegisterDecalsTests() {
         Do("open the Apartment Hallway", [](Ctx& c) {
             EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
         }),
-        Wait(120), Aim(), Do("gizmos, icons and grid off for the shots", [](Ctx& c) { SA::Gizmos(c.E, false); }), Wait(5),
+        UntilHallwayOpen(), Wait(30), Aim(), Do("gizmos, icons and grid off for the shots", [](Ctx& c) { SA::Gizmos(c.E, false); }), Wait(5),
         // --- Library
         Do("open the Decal Library", [](Ctx& c) { SA::Library(c.E, true); }), Wait(4),
         Until("the packs are indexed", [](Ctx& c) { return SA::Ed(c.E).ScanDone; }, 2400),
@@ -177,7 +183,7 @@ void RegisterDecalsLitTests() {
         Do("open the Apartment Hallway", [](Ctx& c) {
             EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
         }),
-        Wait(120),
+        UntilHallwayOpen(), Wait(30),
         Do("open the library to index", [](Ctx& c) { SA::Library(c.E, true); }),
         Until("indexed", [](Ctx& c) { return SA::Ed(c.E).ScanDone; }, 2400),
         Do("close it", [](Ctx& c) { SA::Library(c.E, false); }),
