@@ -7,6 +7,7 @@
 #include "AssetDatabase.h"
 #include "gl.h"
 #include "GLStateCache.h"
+#include "FrameLoads.h"
 #include "TextureCache.h"
 #include "stb_image.h"
 #include "stb_dxt.h"
@@ -875,7 +876,9 @@ void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t staged
     m_Settings = data.Settings;
     m_UpW = uploadW; m_UpH = uploadH;
     LiveTextures::Add(this);
-    TextureLoadStats::AddUpload(MsSince(uploadStart), m_GpuBytes);
+    const double uploadMs = MsSince(uploadStart);
+    TextureLoadStats::AddUpload(uploadMs, m_GpuBytes);
+    FrameLoads::Note("texture upload", m_Path, uploadMs);
 }
 
 bool Texture::Reimport(const TextureImportSettings& settings) {

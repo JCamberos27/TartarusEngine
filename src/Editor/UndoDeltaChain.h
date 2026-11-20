@@ -96,11 +96,19 @@ private:
     mutable std::shared_future<std::string> m_Job;
 };
 
+inline bool ApplyPatch(const nlohmann::json& source, const std::string& patchJson, std::string& out) {
+    if (patchJson.empty()) return false;
+    try {
+        out = source.patch(nlohmann::json::parse(patchJson)).dump();
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
 inline bool ApplyPatch(const std::string& sourceJson, const std::string& patchJson, std::string& out) {
     if (patchJson.empty()) return false;
     try {
-        out = nlohmann::json::parse(sourceJson).patch(nlohmann::json::parse(patchJson)).dump();
-        return true;
+        return ApplyPatch(nlohmann::json::parse(sourceJson), patchJson, out);
     } catch (const std::exception&) {
         return false;
     }
@@ -129,21 +137,28 @@ enum class PopResult {
 };
 
 // Removes the top entry, handing back the entry itself and its full scene JSON, and re-anchors
-// `baseJson` on the entry underneath.
+// `baseJson` on the entry underneath. `outParsed`, when given, also gets `outFullJson` parsed (the
+// re-anchoring parses it anyway), or a discarded value when it won't parse.
 template <class Entry>
 PopResult Pop(std::vector<Entry>& stack, std::string& baseJson, Entry& outEntry,
-              std::string& outFullJson) {
+              std::string& outFullJson, nlohmann::json* outParsed = nullptr) {
     if (stack.empty()) return PopResult::Empty;
     outFullJson = baseJson; // the top entry is the one held in full
     outEntry = std::move(stack.back());
     stack.pop_back();
+    nlohmann::json parsed(nlohmann::json::value_t::discarded);
+    if (outParsed || !stack.empty()) {
+        try { parsed = nlohmann::json::parse(outFullJson); }
+        catch (const std::exception&) { parsed = nlohmann::json(nlohmann::json::value_t::discarded); }
+    }
+    struct HandOver { nlohmann::json& From; nlohmann::json* To; ~HandOver() { if (To) *To = std::move(From); } } handOver{parsed, outParsed};
     if (stack.empty()) {
         baseJson.clear();
         baseJson.shrink_to_fit();
         return PopResult::Ok;
     }
     // Re-anchor on the entry that's now on top by walking its patch back one step.
-    if (!ApplyPatch(outFullJson, stack.back().Delta.Text(), baseJson)) {
+    if (parsed.is_discarded() || !ApplyPatch(parsed, stack.back().Delta.Text(), baseJson)) {
         // Can't happen in practice (every link is built from our own serializer's output), but
         // if the chain ever did break, drop the unreachable tail rather than hand back a wrong
         // scene: the entry just popped still restores correctly, only the history behind it

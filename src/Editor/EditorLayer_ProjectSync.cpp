@@ -84,7 +84,7 @@ int RetargetSceneReferences(World& world, const std::string& oldPath, const std:
     for (auto [e, rend] : reg.view<RenderableComponent>().each())
         if (rend.ModelRef && SameFile(AbsoluteOf(rend.ModelRef->Path()), oldPath)) { rend.ModelRef->SetPath(newPath); ++n; }
     for (auto [e, pi] : reg.view<PrefabInstanceComponent>().each()) n += Retarget(pi.SourcePath, oldPath, newPath) ? 1 : 0;
-    n += Retarget(world.SkyHdriPath, oldPath, newPath) ? 1 : 0;
+    n += Retarget(world.Render.SkyHdriPath, oldPath, newPath) ? 1 : 0;
     return n;
 }
 

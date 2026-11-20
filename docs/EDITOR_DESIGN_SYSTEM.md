@@ -53,7 +53,7 @@ one black. `Glass::DrawWallpaper()` paints `Base` behind everything each frame.
 | Token | HEX | Use |
 | --- | --- | --- |
 | `Base` | `#000000` | Menu bar, status bar, dock gaps, unselected tabs, the canvas |
-| `Panel` | `#050505` | A docked panel (`WindowBg`) in the Tartarus theme |
+| `Panel` | `#050505` | A docked panel (`WindowBg`) and its selected tab in the Tartarus theme |
 | `Card` | `#090909` | A card inside a panel (Inspector component bodies) |
 | `Raised` | `#0E0E0E` | Headers, table headers |
 | `Hover` / `Pressed` | `#1C1C1C` / `#2A2A2A` | Tab hover and press |

@@ -3,7 +3,8 @@
 The first-person player's body and the NPC dummies are posed by motion matching. Every frame, a matcher searches a database of
 motion capture for the pose that best continues the current one along the trajectory the character is about to take, and blends
 over to it. There is no locomotion state machine, and no start, stop or turn clips to trigger. The overhaul that replaced the old
-locomotion graphs, and its decisions, measurements and history, is in [`MOTION_MATCHING_HANDOFF.md`](MOTION_MATCHING_HANDOFF.md).
+locomotion graphs, its decisions, what each phase shipped and the open issues, is in
+[`MOTION_MATCHING_HANDOFF.md`](MOTION_MATCHING_HANDOFF.md) (its full session log is in git history).
 
 ## The data
 
@@ -46,7 +47,7 @@ locomotion graphs, and its decisions, measurements and history, is in [`MOTION_M
   - **Speeds:** the director moves the capsule at the gait table's walk, jog, and sprint (for a run).
   - **Trajectory:** follows the crowd's route corners.
   - **Turn first:** setting off from a stand more than 90 deg behind itself, a dummy turns on the spot before its capsule moves
-    (until within its Turn Threshold): the one exception to capsule-led movement (the handoff's Phase 5, open item 1).
+    (until within its Turn Threshold): the one exception to capsule-led movement (the handoff's Decisions; its spot turn is an open issue).
   - **LOD:** the animation LOD holds frames, and a held frame doesn't step the matcher. The next posed frame steps it over the
     whole held time, so a far dummy searches a quarter as often.
   - **After the matcher:** the foot pass, the look and the piece sync run as before.
@@ -58,7 +59,7 @@ locomotion graphs, and its decisions, measurements and history, is in [`MOTION_M
 
 - **The defaults** are in `FirstPersonBodyMotion::Settings`.
 - **`TARTARUS_MM_TUNE="Key=value,..."`** overrides a setting at startup with no rebuild (`MmTune`). The keys are listed in
-  `MOTION_MATCHING_HANDOFF.md`, "Fast iteration".
+  `MOTION_MATCHING_HANDOFF.md`, "Test protocol and fast iteration".
 - **The Inspector's First Person Body** keeps two A/B switches:
   - MM Post Layers: off draws the matcher's pose with foot IK only.
   - MM Head Ride: how much of the mocap head's motion the eye rides.
@@ -90,7 +91,7 @@ scenario runs on a light test scene; none runs in the apartment scene.
 - **Running jumps:** every jump starts from standing.
 - **Prone:** only the transitions to and from it.
 
-The open measurements that still fail are in the handoff's open items. They're reported there; their limits haven't been
+The open measurements that still fail are in the handoff's open issues. They're reported there; their limits haven't been
 loosened.
 
 ## Where things are

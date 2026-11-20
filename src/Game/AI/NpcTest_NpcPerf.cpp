@@ -1,4 +1,4 @@
-// --npc-test npcperf: what the dummies cost (docs/MOTION_MATCHING_HANDOFF.md, Phase 5: "perf compared against the baseline").
+// --npc-test npcperf: what the dummies cost (docs/MOTION_MATCHING_HANDOFF.md, Phase 5).
 // LocomotionLab's open floor (a light test scene); the player stands still at its south end looking north (+Z), and
 // kPerfDummies dummies roam round posts spread in front of it (near, 25 m off, past 50 m) and behind it, so every animation LOD
 // tier runs: every frame (near and in view), every second frame (past 25 m), every fourth (past 50 m or out of view).

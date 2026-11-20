@@ -22,6 +22,7 @@
 #include "Material.h"
 #include "AudioEngine.h"
 #include "SceneSerializer.h"
+#include "SceneSnapshotJson.h" // undo / redo load the snapshot UndoDelta::Pop already parsed
 #include "OutfitSystem.h"
 #include "AABB.h"
 #include "PhysicsWorld.h"
@@ -86,6 +87,20 @@ uint64_t HashSceneJson(const std::string& s) {
         h *= 1099511628211ull; // FNV-1a prime
     }
     return h;
+}
+
+// Loads an undo / redo step's scene: from the parse UndoDelta::Pop already did when it has one.
+bool LoadHistoryScene(World& world, AssetLibrary& assets, const std::string& text, const nlohmann::json& parsed) {
+    return parsed.is_object() ? SceneSerializer::LoadFromJson(world, assets, parsed)
+                              : SceneSerializer::LoadFromString(world, assets, text);
+}
+
+// The undo baseline (m_CurrentUndoScene) after an undo / redo step that left the scene alone (a
+// selection step): the save the step made before it, instead of a second one. Empty otherwise:
+// a loaded snapshot is saved again, since not every scene loads back to the same bytes (a
+// Weapon Definition's default Flame Texture is written as a bare path until a load resolves it).
+std::string BaselineAfterHistoryStep(bool sceneUntouched, const std::string& currentJson) {
+    return sceneUntouched ? currentJson : std::string();
 }
 } // namespace
 
@@ -312,8 +327,8 @@ void EditorLayer::PushHistoryEntry(std::vector<UndoEntry>& stack, std::string& b
 }
 
 bool EditorLayer::PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
-                                  UndoEntry& outEntry, std::string& outFullJson) {
-    const UndoDelta::PopResult r = UndoDelta::Pop(stack, baseJson, outEntry, outFullJson);
+                                  UndoEntry& outEntry, std::string& outFullJson, nlohmann::json* outParsed) {
+    const UndoDelta::PopResult r = UndoDelta::Pop(stack, baseJson, outEntry, outFullJson, outParsed);
     if (r == UndoDelta::PopResult::TailDropped)
         Log::Error("Undo history: a step couldn't be reconstructed - earlier history was dropped.");
     return r != UndoDelta::PopResult::Empty;
@@ -1065,14 +1080,15 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
 
     UndoEntry entry;
     std::string targetJson;
-    if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson)) return;
+    nlohmann::json targetRoot;
+    if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson, &targetRoot)) return;
     if (entry.CountsAsSceneEdit()) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
     // An asset-only step leaves the scene as it is — skip the full registry rebuild. So does a
     // selection-only step (#138): its stored state is only a placeholder (see PushUndo).
     const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash);
     if (sceneReloaded) {
-        if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+        if (!LoadHistoryScene(world, assets, targetJson, targetRoot)) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
             Log::Error("Undo failed - the scene was left as it was.");
             SceneSerializer::LoadFromString(world, assets, currentJson);
@@ -1082,7 +1098,11 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (sceneReloaded) InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
-    m_CurrentUndoScene.clear();EnsureUndoScene(world);
+    // A step that left the scene alone keeps the save it made above as the baseline (X-33).
+    const bool sceneUntouched = !sceneReloaded && entry.Files.empty() && entry.AssetPath.empty();
+    m_CurrentUndoScene = m_InPlayMode ? std::string()
+        : BaselineAfterHistoryStep(sceneUntouched, currentJson);
+    EnsureUndoScene(world);
     EditorSound::Play(EditorSound::Event::Undo); // a jump back several steps is one sound (its cooldown)
 }
 
@@ -1116,11 +1136,12 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
 
     UndoEntry entry;
     std::string targetJson;
-    if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
+    nlohmann::json targetRoot;
+    if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson, &targetRoot)) return;
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
     const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash); // #138
     if (sceneReloaded) {
-        if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+        if (!LoadHistoryScene(world, assets, targetJson, targetRoot)) {
             Log::Error("Redo failed - the scene was left as it was."); // #83
             SceneSerializer::LoadFromString(world, assets, currentJson);
         }
@@ -1129,7 +1150,11 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     if (sceneReloaded) InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
-    m_CurrentUndoScene.clear();EnsureUndoScene(world);
+    // A step that left the scene alone keeps the save it made above as the baseline (X-33).
+    const bool sceneUntouched = !sceneReloaded && entry.Files.empty() && entry.AssetPath.empty();
+    m_CurrentUndoScene = m_InPlayMode ? std::string()
+        : BaselineAfterHistoryStep(sceneUntouched, currentJson);
+    EnsureUndoScene(world);
     EditorSound::Play(EditorSound::Event::Redo);
 }
 
