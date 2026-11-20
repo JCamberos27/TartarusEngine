@@ -2036,7 +2036,7 @@ void AfterFrame(int fbWidth, int fbHeight) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadPixels(0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
     auto shot = std::make_shared<std::vector<unsigned char>>(px.size());
-    std::vector<unsigned char>& top = *shot; // read below by the blank checks, written by the worker
+    std::vector<unsigned char>& top = *shot; // read below by the blank checks and by the PNG worker (neither writes it)
     for (int y = 0; y < fbHeight; ++y)
         std::memcpy(&top[(size_t)y * fbWidth * 4], &px[(size_t)(fbHeight - 1 - y) * fbWidth * 4], (size_t)fbWidth * 4);
     for (size_t i = 3; i < top.size(); i += 4) top[i] = 255;
