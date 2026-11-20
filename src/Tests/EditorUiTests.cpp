@@ -308,11 +308,21 @@ std::chrono::steady_clock::time_point g_TestStart;
 // for 3 minutes, and aborts the run (CrashHandler writes a minidump with every thread's stack)
 // when frames have stopped for 4 minutes or the run passes TARTARUS_EDITOR_TEST_DEADLINE minutes.
 // EditorUiTests::SetRunEndHook. Run under its mutex, so clearing it waits for a call in progress.
+// Next to it, the cleanups suites register with AtRunEnd (a scratch folder made by whichever of their tests ran
+// first), so they run on every way out too: the Summary, a watchdog abort, a filter that skipped the suite's own
+// cleanup test. Each may run more than once (the Summary, then a teardown the watchdog cuts short): keep them
+// idempotent.
 std::mutex g_RunEndMutex;
 std::function<void()> g_RunEndHook;
+std::vector<std::function<void()>> g_RunCleanups;
 void RunEndHook() {
     std::lock_guard<std::mutex> lk(g_RunEndMutex);
     if (g_RunEndHook) g_RunEndHook();
+    for (auto& f : g_RunCleanups) f();
+}
+void AtRunEnd(std::function<void()> f) {
+    std::lock_guard<std::mutex> lk(g_RunEndMutex);
+    g_RunCleanups.push_back(std::move(f));
 }
 
 namespace watchdog {

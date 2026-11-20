@@ -97,6 +97,11 @@ Steps EnsureScratch() {
     return {
         Do("write the scratch folder", [](Ctx& c) {
             g_Ed = &c.E;
+            static bool s_RemoveAtEnd = false; // once per run, whichever test made the folder
+            if (!s_RemoveAtEnd) {
+                s_RemoveAtEnd = true;
+                AtRunEnd([] { std::error_code e; fs::remove_all(fs::u8path(Dir()), e); });
+            }
             std::error_code ec;
             if (fs::exists(fs::u8path(DirFile("Sub/Deeper/Deep Tex.png")), ec) && HasFolder(c, kDeeper)) return;
             fs::remove_all(fs::u8path(Dir()), ec);
@@ -811,7 +816,15 @@ void RegisterAssetsTests() {
         Until("the Delete Asset? prompt", [](Ctx&) { return Find(ByExact("Delete", "Delete Asset?")) != nullptr; }, 60),
         Shot("prompt"),
         Click(ByExact("Delete", "Delete Asset?")), Wait(4),
-        Until("the folder left the browser", [](Ctx& c) { return !HasFolder(c, kFolder) && !HasFolder(c, kSub); }, 60),
+        // On a timeout, say what is still there (the library's folder, the subfolder, the files on disk).
+        {"the folder left the browser", [n = std::make_shared<int>(0)](Ctx& c) {
+            const bool folder = HasFolder(c, kFolder), sub = HasFolder(c, kSub);
+            if (!folder && !sub) return true;
+            if (++*n <= 60) return false;
+            Fail(std::string("the folder left the browser: after 60 frames the library still lists") + (folder ? " the folder" : "") +
+                 (sub ? " the subfolder" : "") + "; on disk: " + (FileExists(Dir()) ? "still there" : "gone"));
+            return true;
+        }, 1000000},
         Do("delete it from disk and rescan", [](Ctx& c) {
             AX::Search(c.E).clear();
             std::error_code ec;
@@ -819,5 +832,13 @@ void RegisterAssetsTests() {
             AX::Refresh(c.E);
         }), WaitSeconds(1.0),
         ExpectTrue("gone from disk", [](Ctx&) { return !FileExists(Dir()); }),
+    }, [](Ctx& c) {
+        // Also when a step above failed: the scratch folder must never outlive the suite (the next run and
+        // other suites would find its files).
+        if (!FileExists(Dir())) return;
+        AX::Search(c.E).clear();
+        std::error_code ec;
+        fs::remove_all(fs::u8path(Dir()), ec);
+        AX::Refresh(c.E);
     });
 }
