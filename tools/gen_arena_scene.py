@@ -3,131 +3,46 @@
 # Player Body / outfit subtree), the Sun and the sky / post settings are copied from the Sandbox so
 # the arena plays exactly like it; everything else is built here. Re-running overwrites hand edits.
 # Usage: python tools/gen_arena_scene.py <repo root>
-import json
 import math
 import os
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scenes'))
+from proto_scene import ProtoScene, Sandbox, euler_quat, grid_mat, write_sorted  # noqa: E402
+
 root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..')
 scenes = os.path.join(root, 'tests', 'scenes')
-sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scenes', 'sandbox_template.json'), encoding='utf-8'))
 
 AK = 'assets/Weapons/AKS74U/AKS74U.fpsanim'
 REMINGTON = 'assets/Weapons/Remington870/Remington870.fpsanim'
 
-# Scene-wide settings (sky, post, shadows, fog...) come over as-is; the asset library lists don't.
-SKIP_KEYS = {'boxes', 'empties', 'models', 'libraryMaterials', 'libraryModels', 'libraryPrefabs',
-             'librarySounds', 'libraryTextures'}
-scene = {k: v for k, v in sandbox.items() if k not in SKIP_KEYS}
-scene['formatVersion'] = 4
-ents = {'boxes': [], 'empties': [], 'models': []}
+GROUND, WALL, ACCENT = grid_mat('light', 0.9), grid_mat('dark'), grid_mat('orange', 0.75)
+CRATE = grid_mat('orange', 0.8, (0.85, 0.7, 0.55))
 
-_next = [0]
-def nid():
-    _next[0] += 1
-    return _next[0] - 1
-
-def fail(msg):
-    sys.exit(f'gen_arena_scene: {msg}')
+S = ProtoScene('gen_arena_scene', WALL)
+sandbox = Sandbox(S)
+scene = sandbox.settings()   # sky, post, shadows, fog... as-is; not the entities or the asset library lists
+fail, group, box, block = S.fail, S.group, S.box, S.block
 
 # --- copy entities out of the Sandbox -------------------------------------------------------------
-src = {}
-for kind in ('boxes', 'empties', 'models'):
-    for e in sandbox[kind]:
-        src[e['id']] = (kind, e)
-
-def find(name):
-    hits = [i for i, (_, e) in src.items() if e['name'] == name]
-    if len(hits) != 1: fail(f'expected one "{name}" in sandbox_template.json, found {len(hits)}')
-    return hits[0]
-
-def subtree(top):
-    ids, frontier = [top], [top]
-    while frontier:
-        p = frontier.pop()
-        kids = sorted(i for i, (_, e) in src.items() if e.get('parentId') == p)
-        ids += kids
-        frontier += kids
-    return ids
-
-def copy_tree(top, parent=-1, **overrides):
-    remap = {}
-    for old in subtree(top):
-        remap[old] = nid()
-    for old in subtree(top):
-        kind, e = src[old]
-        c = json.loads(json.dumps(e))
-        c['id'] = remap[old]
-        c['order'] = remap[old]
-        c['parentId'] = parent if old == top else remap[e['parentId']]
-        if old == top: c.update(overrides)
-        ents[kind].append(c)
-    return remap[top]
-
 def path_of(ref):
     return ref.get('path') if isinstance(ref, dict) else ref
 
-spawn_id = find('Player Spawn')
-spawn = src[spawn_id][1]
+spawn_id = sandbox.find('Player Spawn')
+spawn = sandbox.entity(spawn_id)
 fpc = spawn.get('First Person Controller') or fail('Player Spawn has no First Person Controller')
 if path_of(fpc.get('Animation Set')) != AK: fail('Player Spawn Animation Set is not the AKS-74U')
 if path_of(fpc.get('Secondary Animation Set')) != REMINGTON: fail('Player Spawn Secondary Animation Set is not the Remington 870')
 if fpc.get('Gravity Gun') is not True: fail('Player Spawn has the gravity gun off')
-body = [i for i in subtree(spawn_id) if src[i][1]['name'] == 'Player Body']
+body = [i for i in sandbox.subtree(spawn_id) if sandbox.entity(i)['name'] == 'Player Body']
 if len(body) != 1: fail('Player Spawn has no single Player Body child')
-b = src[body[0]][1]
+b = sandbox.entity(body[0])
 if 'Character Outfit' not in b or 'First Person Body' not in b: fail('Player Body lacks Character Outfit / First Person Body')
-pieces = [e for i, (_, e) in src.items() if e.get('parentId') == body[0]]
+pieces = sandbox.children(body[0])
 if len(pieces) != 9: fail(f'Player Body has {len(pieces)} pieces, expected 9')
 # (Motion matching poses the body, Phase 6: a piece carries no Animator Controller.)
 for p in pieces:
     if 'Animator Controller' in p: fail(f'body piece "{p["name"]}" still has an Animator Controller (the legacy locomotion is gone)')
-
-# --- helpers --------------------------------------------------------------------------------------
-def quat_euler(pitch=0.0, yaw=0.0, roll=0.0):
-    # Degrees, applied yaw (Y) * pitch (X) * roll (Z); returns [x, y, z, w].
-    p, y, r = (math.radians(a) * 0.5 for a in (pitch, yaw, roll))
-    cy, sy, cp, sp, cr, sr = math.cos(y), math.sin(y), math.cos(p), math.sin(p), math.cos(r), math.sin(r)
-    # q = qy * qx * qz
-    w = cy * cp * cr + sy * sp * sr
-    x = cy * sp * cr + sy * cp * sr
-    yy = sy * cp * cr - cy * sp * sr
-    z = cy * cp * sr - sy * sp * cr
-    return [round(x, 6), round(yy, 6), round(z, 6), round(w, 6)]
-
-TEX = {'light': ('assets/Materials/Prototype/proto_grid_light.png', 'c90849c8fc6c88b0'),
-       'dark': ('assets/Materials/Prototype/proto_grid_dark.png', '2b60657ce9aa4555'),
-       'orange': ('assets/Materials/Prototype/proto_grid_orange.png', 'c389fb6bc574bb89')}
-
-def mat(tex, rough=0.85, color=(1, 1, 1)):
-    path, guid = TEX[tex]
-    return [{'embedded': {'albedoMap': {'path': path, 'pathGuid': guid}, 'aoMap': '', 'baseColor': list(color),
-                          'emissiveColor': [0, 0, 0], 'emissiveMap': '', 'emissiveStrength': 1.0,
-                          'factorsScaleMaps': True, 'metallic': 0.0, 'metallicMap': '', 'metallicRoughnessMap': '',
-                          'normalMap': '', 'roughness': rough, 'roughnessMap': '', 'triplanar': True,
-                          'triplanarScale': 0.25}}]
-
-GROUND, WALL, ACCENT = mat('light', 0.9), mat('dark'), mat('orange', 0.75)
-CRATE = mat('orange', 0.8, (0.85, 0.7, 0.55))
-
-def group(name, parent=-1, pos=(0, 0, 0)):
-    i = nid()
-    ents['empties'].append({'id': i, 'name': name, 'order': i, 'parentId': parent, 'position': list(pos),
-                            'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1]})
-    return i
-
-def box(name, center, size, parent, m=WALL, yaw=0.0, pitch=0.0, friction=0.8):
-    # A cube primitive: mesh + Box collider + level geometry. center is the box's middle.
-    i = nid()
-    ents['boxes'].append({'collider': {'friction': friction, 'isTrigger': False}, 'color': [1.0, 1.0, 1.0],
-                          'id': i, 'materials': m, 'name': name, 'order': i, 'parentId': parent,
-                          'position': [round(v, 4) for v in center], 'rotation': quat_euler(pitch, yaw),
-                          'scale': [round(v, 4) for v in size]})
-    return i
-
-def block(name, x, z, w, h, d, parent, m=WALL, yaw=0.0, y0=0.0):
-    # Box standing on the ground (or on y0): x/z is the footprint centre.
-    return box(name, (x, y0 + h * 0.5, z), (w, h, d), parent, m, yaw)
 
 # --- arena ----------------------------------------------------------------------------------------
 HALF = 32.0                   # playable area is 64 x 64 m
@@ -140,11 +55,9 @@ for n, (x, z, w, d) in {'North Wall': (0, -HALF - 0.25, 2 * HALF + 1, 0.5),
     block(n, x, z, w, 4.0, d, env)
 
 lighting = group('Lighting')
-copy_tree(find('Sun'), lighting)
-i = nid()
-ents['empties'].append({'Reflection Probe': {'Importance': 0.5, 'Size': [2 * HALF, 8.0, 2 * HALF]}, 'id': i,
-                        'name': 'Arena Reflection Probe', 'order': i, 'parentId': lighting, 'position': [0, 4.0, 0],
-                        'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1]})
+sandbox.copy_tree(sandbox.find('Sun'), lighting)
+S.node('Arena Reflection Probe', lighting, (0, 4.0, 0),
+       **{'Reflection Probe': {'Importance': 0.5, 'Size': [2 * HALF, 8.0, 2 * HALF]}})
 
 cover = group('Cover')
 
@@ -208,24 +121,11 @@ crates('Tower South', 18, 7.5, [(0, 0, 0), (0, 0, 1)], trench)
 
 # --- player and enemy spawns ----------------------------------------------------------------------
 # Same facing as the Sandbox spawn (yaw 180 looks down -Z, toward the enemy side).
-copy_tree(spawn_id, -1, position=[0.0, 0.1, HALF - 4.0], rotation=quat_euler(yaw=180))
+sandbox.copy_tree(spawn_id, -1, position=[0.0, 0.1, HALF - 4.0], rotation=euler_quat(180))
 enemies = group('Enemies')
-i = nid()
-ents['empties'].append({'id': i, 'name': 'Dummy Settings', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -HALF + 2.0],
-                        'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
-                        'Dummy Settings': {'Respawn': True, 'Respawn Delay': 8.0}})
+S.node('Dummy Settings', enemies, (0.0, 0.0, -HALF + 2.0), **{'Dummy Settings': {'Respawn': True, 'Respawn Delay': 8.0}})
 # Facing +Z (yaw 0), toward the player's end.
 for k, x in enumerate([-20, -10, 0, 10, 20]):
-    i = nid()
-    ents['empties'].append({'id': i, 'name': f'Dummy Spawn {k + 1}', 'order': i, 'parentId': enemies,
-                            'position': [float(x), 0.1, -HALF + 5.0], 'rotation': quat_euler(yaw=0),
-                            'scale': [1, 1, 1],
-                            'Dummy Spawn': {'Roam': True}})
+    S.node(f'Dummy Spawn {k + 1}', enemies, (float(x), 0.1, -HALF + 5.0), euler_quat(0), **{'Dummy Spawn': {'Roam': True}})
 
-for k in ('boxes', 'empties', 'models'):
-    scene[k] = ents[k]
-out = os.path.join(scenes, 'Arena.json')
-with open(out, 'w', encoding='utf-8', newline='\n') as f:
-    json.dump(scene, f, indent=2, sort_keys=True)
-    f.write('\n')
-print(f'wrote {out}: {len(ents["boxes"])} boxes, {len(ents["empties"])} empties, {len(ents["models"])} models')
+write_sorted(os.path.join(scenes, 'Arena.json'), scene, S.ents)
