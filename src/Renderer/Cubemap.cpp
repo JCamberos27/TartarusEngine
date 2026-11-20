@@ -70,8 +70,8 @@ std::shared_ptr<Cubemap> Cubemap::LoadHdr(const std::string& path, int faceSize,
     glTextureParameteri(cubeTex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTextureParameteri(cubeTex, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-    // Render equirect -> 6 cube faces using the shared Ibl vertex + equirect fragment shaders.
-    Shader cvtShader(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+    // Render equirect -> 6 cube faces: the shared fullscreen vertex stage + the equirect fragment shader.
+    Shader cvtShader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                      ShaderLibrary::ReadFile("IblEquirect.frag.glsl"));
     unsigned int fbo = 0, vao = 0;
     glCreateFramebuffers(1, &fbo);
@@ -97,7 +97,7 @@ std::shared_ptr<Cubemap> Cubemap::LoadHdr(const std::string& path, int faceSize,
         const GLenum draw[1] = {GL_COLOR_ATTACHMENT0};
         glNamedFramebufferDrawBuffers(fbo, 1, draw);
         glViewport(0, 0, faceSize, faceSize);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
     }
 
     glGenerateTextureMipmap(cubeTex);

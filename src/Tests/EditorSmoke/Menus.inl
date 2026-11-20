@@ -47,7 +47,6 @@ struct EditorSmokeAccess_Menus {
     static size_t SoloCount(EditorLayer& e) { return e.m_SoloLights.size(); }
     static void ClearSoloMute(EditorLayer& e) { e.m_SoloLights.clear(); e.m_MutedLights.clear(); }
     static bool RevertPrompt(EditorLayer& e) { return e.m_RevertPromptPending; }
-    static bool CanBack(EditorLayer& e) { return e.CanSelectionHistoryBack(); }
 };
 
 namespace {
@@ -270,16 +269,17 @@ void RegisterMenusTests() {
          ExpectTrue("not dirty", [](Ctx& c) { return !A::Dirty(c.E); }),
          Shot("new-scene", {"###Hierarchy", "###Scene"}),
          Do("note the file", [](Ctx& c) { g_Text = X::ScenePath(c.E); }),
-         FreshScene(), Wait(10),
-         // New Scene writes project/scenes/Untitled*.json: remove it (and any .meta the scan made).
-         Do("delete the new scene file", [](Ctx&) {
-             std::error_code ec;
-             if (Contains(g_Text, "Untitled")) {
-                 std::filesystem::remove(g_Text, ec);
-                 std::filesystem::remove(g_Text + ".meta", ec);
-             }
-         })},
-    }));
+         FreshScene(), Wait(10)},
+    }), [](Ctx& c) {
+        // New Scene writes project/scenes/Untitled*.json: remove it (and any .meta the scan made), also when
+        // a check above failed while the new scene was still open.
+        for (const std::string& p : {X::ScenePath(c.E), g_Text}) {
+            if (!Contains(std::filesystem::path(p).filename().string(), "Untitled")) continue;
+            std::error_code ec;
+            std::filesystem::remove(p, ec);
+            std::filesystem::remove(p + ".meta", ec);
+        }
+    });
 
     // ---------------------------------------------------------------------------------- Edit
     Add("menus: Edit menu - Duplicate, Undo, Redo, Copy, Paste, Delete, Select All", Seq({

@@ -180,6 +180,7 @@ int Application::Run() {
     CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty() && !giBakeMode); // #148: no crash dialog on an unattended run
     // --editor-shot and --bake-gi run on a copy of the user's prefs, so the run's window, camera and last scene stay its own.
     if ((!opt.editorShotDir.empty() || giBakeMode) && !PrepareEditorShotProfile(opt)) return 1;
+    if (opt.smokeTestMode && !PrepareSmokeProfile()) return 1; // smoke / perf / npc: per-instance prefs when named
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
     // stderr line, dialog) can be checked: av | overflow | abort | purecall | invalidparam | terminate.
@@ -378,7 +379,7 @@ private:
     }};
     Shader outlineModelShader{ShaderLibrary::ReadFileRequired("OutlineModel.vert.glsl"),
                               ShaderLibrary::ReadFileRequired("Outline.frag.glsl"), "outlineModelShader"};
-    Shader outlineDilateShader{ShaderLibrary::ReadFileRequired("OutlineDilate.vert.glsl"),
+    Shader outlineDilateShader{ShaderLibrary::ReadFileRequired("Fullscreen.vert.glsl"),
                                ShaderLibrary::ReadFileRequired("OutlineDilate.frag.glsl"), "outlineDilateShader"};
     Shader shadowShader{ShaderLibrary::ReadFileRequired("ShadowDepth.vert.glsl"),
                         ShaderLibrary::ReadFileRequired("ShadowDepth.frag.glsl"), "shadowShader"};
@@ -448,7 +449,7 @@ private:
         ShaderLibrary::RegisterForHotReload(outlineModelShader, "OutlineModel.vert.glsl", "Outline.frag.glsl");
     }};
     Step step21{[&] {
-        ShaderLibrary::RegisterForHotReload(outlineDilateShader, "OutlineDilate.vert.glsl", "OutlineDilate.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(outlineDilateShader, "Fullscreen.vert.glsl", "OutlineDilate.frag.glsl");
     }};
     Step step22{[&] {
         ShaderLibrary::RegisterForHotReload(shadowShader, "ShadowDepth.vert.glsl", "ShadowDepth.frag.glsl");
@@ -815,6 +816,7 @@ private:
     }};
     Step step54{[&] {
         editor.Init(window.Handle());
+        UsePrivateClipboardForInstance(); // parallel named harness runs don't share the system clipboard
     }};
     Step step55{[&] {
         editor.SetHeadless(headless);

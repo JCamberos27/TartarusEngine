@@ -14,14 +14,9 @@
 #include "EditorTheme.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
-#include "AnimationSystem.h"
 #include "AnimatorController.h"
-#include "AnimatorLint.h"
-#include "ClipAnalysis.h"
-#include "FirstPersonBodyContract.h"
 #include "FirstPersonAnimation.h"
 #include "Components.h"
-#include "CurveEditor.h"
 #include "AssetLibrary.h"
 #include "Log.h"
 #include "Model.h"
@@ -36,12 +31,8 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <functional>
-#include <map>
-#include <unordered_map>
 
 using namespace EditorInternal;
 namespace fs = std::filesystem;
@@ -81,8 +72,10 @@ void EditorLayer::DrawAnimatorControllerExtra(World& world, entt::entity entity)
     const float btnW = ImGui::CalcTextSize(ICON_FA_PLUS " New").x + ImGui::GetStyle().FramePadding.x * 2.0f;
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - btnW - ImGui::GetStyle().ItemSpacing.x);
     if (ImGui::BeginCombo("##ctrlpick", ac->Controller.empty() ? "(none)" : ac->Controller.c_str())) {
+        static std::vector<std::string> s_Controllers; // the tree is walked when the list opens, not every frame it stays open
+        if (ImGui::IsWindowAppearing()) s_Controllers = FindAnimatorControllers();
         if (ImGui::Selectable("(none)", ac->Controller.empty())) { PushUndo(world, "Set Animator Controller"); ac->Controller.clear(); }
-        for (const std::string& path : FindAnimatorControllers())
+        for (const std::string& path : s_Controllers)
             if (ImGui::Selectable(path.c_str(), path == ac->Controller)) {
                 PushUndo(world, "Set Animator Controller");
                 ac->Controller = path;
@@ -251,7 +244,9 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
     {
         ImGui::SetNextItemWidth(260.0f * S);
         if (ImGui::BeginCombo("##animfile", W.Rel.empty() ? "(open a controller)" : W.Rel.c_str())) {
-            for (const std::string& path : FindAnimatorControllers())
+            static std::vector<std::string> s_Controllers; // the tree is walked when the list opens, not every frame it stays open
+            if (ImGui::IsWindowAppearing()) s_Controllers = FindAnimatorControllers();
+            for (const std::string& path : s_Controllers)
                 if (ImGui::Selectable(path.c_str(), path == W.Rel)) OpenAnimatorWindow(path);
             ImGui::EndCombo();
         }
@@ -304,6 +299,17 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                                      "current state is highlighted in the graph.");
         }
     }
+    // Reload when the file changed on disk under us (another tool, or version control). Runs while the
+    // file can't be read too, so fixing it outside the editor brings the graph back.
+    if (!W.Rel.empty() && ImGui::GetTime() - W.LastStat > 0.5) {
+        W.LastStat = ImGui::GetTime();
+        std::error_code ec;
+        const auto stamp = fs::last_write_time(fs::u8path(W.Abs), ec);
+        if (!ec && stamp != W.Stamp && !W.MovingNodes) {
+            W.Load(W.Rel);
+        }
+    }
+
     if (!W.Loaded) {
         if (!W.Rel.empty())
             ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read %s: %s",
@@ -316,20 +322,13 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         return;
     }
 
-    // Reload when the file changed on disk under us (another tool, or version control).
-    if (ImGui::GetTime() - W.LastStat > 0.5) {
-        W.LastStat = ImGui::GetTime();
-        std::error_code ec;
-        const auto stamp = fs::last_write_time(fs::u8path(W.Abs), ec);
-        if (!ec && stamp != W.Stamp && !W.MovingNodes) {
-            W.Load(W.Rel);
-        }
-    }
-
-    // Live runtime of the chosen rig (Play only).
+    // Live runtime of the chosen rig (Play only), only while it runs the controller shown here: the rig
+    // picked for another controller stays picked when the top-bar combo switches files.
     AnimatorControllerComponent* live = nullptr;
     if (m_InPlayMode && W.Entity != entt::null && world.Registry.valid(W.Entity))
-        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(W.Entity); ac && ac->Started) live = ac;
+        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(W.Entity);
+            ac && ac->Started && !ac->Controller.empty() && ProjectPaths::Resolve(ac->Controller) == W.Abs)
+            live = ac;
     if (m_InPlayMode && !live) {
         // Nothing picked: follow the first object running this controller.
         const std::string absSel = W.Abs;

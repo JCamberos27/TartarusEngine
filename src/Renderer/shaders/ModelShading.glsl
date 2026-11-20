@@ -120,33 +120,8 @@ float CloudShadow(vec3 p) {
     return texture(uCloudShadowMap, uv).r;
 }
 
-// Every scene light (directional sun, point, spot) in one std430 SSBO — filled by LightBuffer
-// on the CPU, bound at binding = 0. This is the layout the clustered-forward cull pass will
-// consume later, so it doesn't change again when that lands.
-struct Light {
-    vec4 PositionType; // xyz = world pos (point/spot); w = type: 0 directional, 1 point, 2 spot
-    vec4 ColorRange;   // rgb = colour * intensity; a = range in metres (point/spot)
-    vec4 DirCutoff;    // xyz = normalized aim direction (spot/directional); w = spot outer-cone cos (-1 = none)
-    vec4 Params;       // x = spot inner-cone cos; y = shadow slot; z = excluded-layer bits (#203); w = volumetric intensity
-    vec4 BoxX, BoxY, BoxZ; // light bounds: rows world -> box (xyz = unit axis, w = -dot(axis, centre))
-    vec4 BoxHalf;          // xyz = half extents; w = fade metres (< 0: unbounded)
-};
-
-layout(std430, binding = 0) readonly buffer LightBuffer {
-    uint uLightCount;
-    uint uDirectionalCount; // directional lights are packed at the front of uLights[] (#188)
-    Light uLights[];
-};
-// The light's bounds (Light component > Bounds) at world point p: 1 well inside the box, falling to 0 at its faces.
-float LightBoxFade(uint i, vec3 p) {
-    vec4 h = uLights[i].BoxHalf;
-    if (h.w < 0.0) return 1.0;
-    vec3 q = vec3(dot(uLights[i].BoxX.xyz, p) + uLights[i].BoxX.w, dot(uLights[i].BoxY.xyz, p) + uLights[i].BoxY.w,
-                  dot(uLights[i].BoxZ.xyz, p) + uLights[i].BoxZ.w);
-    vec3 in3 = h.xyz - abs(q);
-    return clamp(min(in3.x, min(in3.y, in3.z)) / h.w, 0.0, 1.0);
-}
-
+// Every scene light and the clustered lists (uLights[], uClusterRange[], uClusterLightIndices[]).
+#include "LightBuffer.glsl"
 // #203 - lighting layers. uObjectLayerBit is 1 << this object's layer (0 = unfiltered, for
 // draws that never set it); a light skips objects whose bit is in its excluded-layer set.
 uniform int uObjectLayerBit;
@@ -160,10 +135,7 @@ bool LightAffects(uint i) {
 // the point/spot lights whose range reaches it. This fragment finds its own froxel from
 // gl_FragCoord + view depth and loops only that froxel's [offset, offset+count) slice of the
 // global list. uClusterEnabled == 0 (the offscreen model preview, which runs no compute pass)
-// falls back to looping every light.
-struct ClusterRange { uint offset; uint count; };
-layout(std430, binding = 3) readonly buffer ClusterCounts { ClusterRange uClusterRange[]; };
-layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
+// falls back to looping every light. The lists themselves are declared in LightBuffer.glsl.
 uniform int  uClusterEnabled;
 uniform vec2 uClusterScreenSize;
 uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
@@ -710,17 +682,12 @@ bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) {
     float dist = sqrt(dist2);
     L = toLight / max(dist, 1e-4);
 
-    // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist * dist) * boxFade;
+    float atten = LightDistanceAtten(dist, range) * boxFade;
 
     if (type == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
-        float outerCos = lt.DirCutoff.w;
-        float innerCos = lt.Params.x;
-        if (cosAngle < outerCos) return false;
-        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        float cone = SpotConeAtten(i, L);
+        if (cone <= 0.0) return false;
+        atten *= cone;
         // Early-out before the shadow-map sample, not just before shading (#191) — a fragment at
         // the far edge of the cone/range falloff is already at atten==0 here, so this skips a
         // full shadow-array texture fetch that would just get multiplied away.

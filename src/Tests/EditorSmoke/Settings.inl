@@ -469,7 +469,11 @@ void RegisterSettingsTests() {
          Wait(5),
          Shot("tartarus"),
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
-    }));
+    }), [](Ctx& c) {
+        // A failure midway left Black Glass on for every later shot.
+        EditorSettings::Get().GlassFrostedBlur = true;
+        c.E.RequestEditorTheme(EditorSettings::kTartarusTheme);
+    });
 
     // ---------------------------------------------------------------------------- UI scale
     Add("settings: UI scale override by typing, restart warning, Auto resets it", Seq({
@@ -494,9 +498,11 @@ void RegisterSettingsTests() {
          ExpectTrue("back on Auto", [](Ctx&) { return EditorSettings::Get().UiScaleOverride == 0.0f; }),
          Until("editor_prefs.json uiScaleOverride 0", [](Ctx&) { return Prefs().value("uiScaleOverride", -1.0f) == 0.0f; }),
          Until("the Auto button is gone", [](Ctx&) { return Find(ByExact("Auto##uiscale", "###Settings")) == nullptr; }),
-         CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings),
-         Do("restore the starting override", [](Ctx&) { EditorSettings::Get().UiScaleOverride = g_Vec.x; EditorSettings::Save(); })},
-    }));
+         CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
+    }), [](Ctx&) {
+        // Pass or fail, the run goes back to its starting override (noted in g_Vec.x by the second step).
+        if (EditorSettings::Get().UiScaleOverride != g_Vec.x) { EditorSettings::Get().UiScaleOverride = g_Vec.x; EditorSettings::Save(); }
+    });
 
     // ------------------------------------------------------------------------------ Search
     Add("settings: search 'vsync' jumps to Performance; clearing it shows every category", Seq({
