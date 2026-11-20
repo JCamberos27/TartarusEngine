@@ -57,6 +57,12 @@ bool IsAssetDrag(const ImGuiPayload& p) {
         if (p.IsDataType(type)) return true;
     return false;
 }
+// Inside a drop target: the asset key of an asset dropped this frame (any of kAssetPayloads), else null.
+const char* AcceptAssetDrop() {
+    for (const char* type : kAssetPayloads)
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) return (const char*)p->Data;
+    return nullptr;
+}
 } // namespace
 
 namespace {
@@ -546,10 +552,22 @@ void EditorLayer::DrawEnhancerPreferences() {
 // vHierarchy
 // ============================================================================================
 
-std::string EditorLayer::CurrentSceneKey() const {
-    if (m_CurrentScenePath.empty()) return std::string();
-    const AssetGuid g = AssetDatabase::GuidForPath(m_CurrentScenePath);
-    return g.IsValid() ? g.ToString() : std::filesystem::path(m_CurrentScenePath).lexically_normal().generic_string();
+// Asked for 8+ times a frame (bookmarks, tabs, pins, history): the GUID lookup and the string are worked out
+// once per frame and per scene path.
+const std::string& EditorLayer::CurrentSceneKey() const {
+    static std::string s_Key, s_Path;
+    static int s_Frame = -1;
+    const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -1;
+    if (frame != s_Frame || frame < 0 || s_Path != m_CurrentScenePath) {
+        s_Frame = frame;
+        s_Path = m_CurrentScenePath;
+        if (m_CurrentScenePath.empty()) s_Key.clear();
+        else {
+            const AssetGuid g = AssetDatabase::GuidForPath(m_CurrentScenePath);
+            s_Key = g.IsValid() ? g.ToString() : std::filesystem::path(m_CurrentScenePath).lexically_normal().generic_string();
+        }
+    }
+    return s_Key;
 }
 
 void EditorLayer::TrackSceneKey() {
@@ -641,6 +659,20 @@ std::string NormalizedPathKey(const std::string& path) {
     std::string k = std::filesystem::path(path).lexically_normal().generic_string();
     for (char& c : k) c = (char)std::tolower((unsigned char)c);
     return k;
+}
+// Whether a scene file is on disk, for the scene list's rows. The list stats each scene it shows, every frame
+// while it is open; the answers are kept until the list opens again or for a second, whichever comes first.
+bool SceneFileExists(const std::string& path, bool listOpening) {
+    static std::unordered_map<std::string, bool> s_Exists;
+    static double s_At = -1.0;
+    const double now = ImGui::GetTime();
+    if (listOpening || now - s_At > 1.0) { s_Exists.clear(); s_At = now; }
+    const auto it = s_Exists.find(path);
+    if (it != s_Exists.end()) return it->second;
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(path, ec);
+    s_Exists.emplace(path, exists);
+    return exists;
 }
 Enhancers::EditorRef SceneRefFor(const std::string& path) {
     const AssetGuid g = AssetDatabase::GuidForPath(path);
@@ -878,14 +910,14 @@ void EditorLayer::DrawHierarchyNavBar(World& world, AssetLibrary& assets) {
     if (ImGui::BeginCombo("##scene", comboLabel.c_str(), ImGuiComboFlags_HeightLarge)) {
         RefreshScenesListingIfNeeded();
         std::set<std::string> listed;
+        const bool listOpening = ImGui::IsWindowAppearing();
         const std::string curKey = m_CurrentScenePath.empty() ? std::string() : NormalizedPathKey(m_CurrentScenePath);
         std::string toggleBookmark; // applied after the loops - they iterate the bookmark list
         auto entry = [&](const std::string& path) {
             if (path.empty()) return;
             const std::string key = NormalizedPathKey(path);
             if (!listed.insert(key).second) return;
-            std::error_code ec;
-            const bool exists = std::filesystem::exists(path, ec);
+            const bool exists = SceneFileExists(path, listOpening);
             const Enhancers::EditorRef ref = SceneRefFor(path);
             const bool starred = Enhancers::FindRef(us.SceneBookmarks, ref) >= 0;
             ImGui::PushID(key.c_str());
@@ -1281,14 +1313,12 @@ void EditorLayer::DrawInspectorNavBar(World& world, InspectorNavAction& act) {
                 us.MarkDirty();
             }
         }
-        for (const char* type : kAssetPayloads) {
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                if (!key.empty()) {
-                    Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)),
-                                         Enhancers::EnhancerUserState::kMaxBookmarks);
-                    us.MarkDirty();
-                }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            if (!key.empty()) {
+                Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)),
+                                     Enhancers::EnhancerUserState::kMaxBookmarks);
+                us.MarkDirty();
             }
         }
         ImGui::EndDragDropTarget();
@@ -1439,14 +1469,13 @@ void EditorLayer::DrawInspectorHeaderNav(World& world, InspectorNavAction& act, 
                 us.MarkDirty();
             }
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                if (!key.empty()) {
-                    Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)), Enhancers::EnhancerUserState::kMaxBookmarks);
-                    us.MarkDirty();
-                }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            if (!key.empty()) {
+                Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)), Enhancers::EnhancerUserState::kMaxBookmarks);
+                us.MarkDirty();
             }
+        }
         ImGui::EndDragDropTarget();
     }
 
@@ -2036,11 +2065,10 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
             strip.Open(Enhancers::EditorRef::MakeComponent(sceneKey, c->Order, c->Component, nm ? nm->Name : std::string()));
             ts.MarkDirty();
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                if (!key.empty()) { strip.Open(Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key))); ts.MarkDirty(); }
-            }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            if (!key.empty()) { strip.Open(Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key))); ts.MarkDirty(); }
+        }
     };
     DrawTabStrip("##inspTabs", strip, m_InspectorTabView, items, "Selection", ICON_FA_ARROW_POINTER, plusMenu, acceptDrop, dragging,
                  leftInset, rightInset);
@@ -2122,16 +2150,15 @@ bool EditorLayer::DrawAssetTabStrip(AssetLibrary& assets, float rightInset, bool
             strip.Open(folderRef((const char*)p->Data), true, true);
             ts.MarkDirty();
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                // A file opens its folder in a new tab, with the file selected.
-                const std::string key((const char*)p->Data);
-                strip.Open(folderRef(assets.AssetFolder(key)), true, true);
-                ts.MarkDirty();
-                ClearAssetSelection();
-                m_SelectedAssetKey = key;
-                m_SelectedAssetIsFolder = false;
-            }
+        if (const char* dropped = AcceptAssetDrop()) {
+            // A file opens its folder in a new tab, with the file selected.
+            const std::string key(dropped);
+            strip.Open(folderRef(assets.AssetFolder(key)), true, true);
+            ts.MarkDirty();
+            ClearAssetSelection();
+            m_SelectedAssetKey = key;
+            m_SelectedAssetIsFolder = false;
+        }
     };
     // With no tabs yet (the row is up for the bookmark button), the current folder shows as a live
     // tab, like a browser's first tab; Ctrl+T or "+" makes it a real one.
@@ -2754,11 +2781,10 @@ void EditorLayer::AcceptFavoritesDrop(World& world, FavoritesFrame& f) {
             const std::string path((const char*)p->Data);
             added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeFolder(path, FolderLeaf(path)));
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)));
-            }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)));
+        }
         if (added) us.MarkDirty();
         ImGui::EndDragDropTarget();
     }
