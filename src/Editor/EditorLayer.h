@@ -183,7 +183,8 @@ public:
     // `path` was last left; with no saved pose: behind the Player Spawn, else in front of a First
     // Person Body, else pulled back to fit the scene. Snaps (no glide). RememberSceneCamera stores
     // `cam` for `path`. Both do nothing saved/restored while SetDeterministicSceneCamera is on
-    // (smoke / screenshot runs always take the fallback chain).
+    // (smoke / screenshot runs always take the fallback chain). It also keeps the real OS cursor
+    // out of the hover pre-highlight (UpdateHoverPick).
     bool PlaceSceneCamera(World& world, Camera& cam, const std::string& path);
     void RememberSceneCamera(const std::string& path, const Camera& cam);
     void SetDeterministicSceneCamera(bool on) { m_DeterministicSceneCamera = on; }
@@ -1491,9 +1492,20 @@ private:
     bool m_GizmosMasterVisible = true; // #236 "Gizmos" dropdown master switch — hides every viewport gizmo/icon at once
     bool m_ShowEntityIcons = true;     // #236 — scripted override (smoke tests / clean shots) ANDed with EditorSettings::EntityIconsMode
     // Entity-icon occlusion cache: one camera-to-icon ray per entity, refreshed round-robin (the
-    // stalest first, a few dozen per frame) — an entity never checked counts as visible.
-    struct IconOcclusion { bool Occluded = false; std::uint32_t FrameChecked = 0; };
+    // stalest first, a few dozen per frame) once the camera, the icon or any renderable moved;
+    // an entity never checked counts as visible.
+    struct IconOcclusion {
+        bool Occluded = false;
+        std::uint32_t FrameChecked = 0;        // last frame it was checked or found still current
+        glm::vec3 CamPos{0.0f}, IconPos{0.0f}; // the camera and the icon at its last ray
+        std::uint64_t GeometrySerial = 0;      // m_IconGeometrySerial at its last ray
+    };
     std::unordered_map<entt::entity, IconOcclusion> m_IconOcclusion;
+    // Bumped whenever a world-transform rebuild moved, added or removed a renderable.
+    std::uint64_t m_IconGeometrySerial = 0;
+    std::uint64_t m_IconGeometryStamp = 0;                              // the World::TransformCacheStamp it last looked at
+    std::vector<std::pair<std::uint32_t, size_t>> m_IconOcclusionStale; // DrawEntityIcons scratch
+    std::vector<entt::entity> m_IconOcclusionSkipChain;                 // DrawEntityIcons scratch
     std::uint32_t m_IconOcclusionFrame = 0;
     // True when `entity` is selected or sits under a selected entity (the Volume / Collider "selected only" rule).
     bool IsSelectedOrUnderSelected(const World& world, entt::entity entity) const;
@@ -2022,6 +2034,7 @@ private:
     // "Asset Library/<Category>[/<Sub>]/<Pack>" by asset_library.json. Rebuilt when the index changes.
     void RefreshLibraryView();
     std::unordered_map<std::string, std::vector<size_t>> m_LibraryItems; // folder -> m_ProjectAssetIndex.files
+    unsigned m_LibraryIndexGen = 0; // bumped on each m_LibraryIndex.Load: a scan grouped by older rules is regrouped
     size_t m_LibraryViewKey = (size_t)-1;
     void RefreshShadersListingIfNeeded();
     void RefreshAnimationListingIfNeeded();
@@ -2042,6 +2055,9 @@ private:
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
         bool Unfetched = false;  // an external_assets.csv row with no file on disk (AssetGridCell::unfetched)
+        // Library view placement (prefab / decal / hdri only), worked out on the scan's thread: the
+        // asset_library.json category id and the pack folder (LibraryGroupOf).
+        std::string LibraryCategory, LibraryPack;
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
     struct {
@@ -2049,6 +2065,7 @@ private:
         bool valid = false; // false = scan again (when the one in flight, if any, finishes)
         std::future<std::vector<ProjectAssetFile>> scan;
         std::chrono::steady_clock::time_point scanStarted;
+        unsigned scanLibraryGen = 0, filesLibraryGen = 0; // m_LibraryIndexGen the scan in flight / `files` grouped by
     } m_ProjectAssetIndex;
     // PathKeys of everything the library lists, rebuilt when its list sizes change.
     std::unordered_set<std::string> m_ListedAssetKeys;
@@ -2066,7 +2083,9 @@ private:
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
-    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root); // worker thread
+    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
+    static bool IsLibraryKind(const ProjectAssetFile& f); // placeable: listed under the Library view
+    static void LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetFile& f); // fills LibraryCategory/Pack
     static bool ProjectAssetKindOf(ProjectAssetFile& f); // sets f.Kind from its extension; false = not an asset
     bool m_UnfetchedDragNoted = false; // the "not fetched" note already given for this drag
     void InvalidateProjectAssetIndex() { m_ProjectAssetIndex.valid = false; }

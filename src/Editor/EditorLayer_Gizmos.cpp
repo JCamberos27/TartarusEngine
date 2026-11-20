@@ -29,6 +29,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "Core/Paths.h"
+#include "Core/Env.h"
 #include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
@@ -1837,16 +1838,39 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
     // models) one costs about a millisecond: the budget is time as well as count - at least one
     // ray a frame, then more only while under kRayBudgetMs. Sixteen lamps took the Scene view
     // from 35 to 6 fps on a count-only budget.
+    // A ray only goes out when its answer can have changed since the icon's last one: the camera
+    // or the icon moved, or a renderable moved, appeared or went away (the world-transform cache
+    // says which entities it recomputed). A still camera over a still scene casts none.
     ++m_IconOcclusionFrame;
     {
+        if (world.TransformCacheStamp() != m_IconGeometryStamp) {
+            bool moved = world.PreviousTransformCacheStamp() != m_IconGeometryStamp || // missed a rebuild: assume so
+                         world.TransformCacheMembershipChanged();
+            for (entt::entity e : world.ChangedWorldTransforms()) {
+                if (moved) break;
+                moved = world.Registry.valid(e) && world.Registry.all_of<RenderableComponent>(e);
+            }
+            m_IconGeometryStamp = world.TransformCacheStamp();
+            if (moved) ++m_IconGeometrySerial;
+        }
         constexpr size_t kRaysPerFrame = 24;
         constexpr double kRayBudgetMs = 1.0;
         const auto rayStart = std::chrono::steady_clock::now();
-        std::vector<std::pair<std::uint32_t, size_t>> stale; // (frame last checked, item index)
+        std::vector<std::pair<std::uint32_t, size_t>>& stale = m_IconOcclusionStale; // (frame last checked, item index)
+        stale.clear();
         for (size_t i = 0; i < items.size(); ++i) {
             if (items[i].Selected) continue;
             auto it = m_IconOcclusion.find(items[i].Entity);
-            stale.emplace_back(it == m_IconOcclusion.end() ? 0u : it->second.FrameChecked, i);
+            if (it == m_IconOcclusion.end()) {
+                stale.emplace_back(0u, i);
+                continue;
+            }
+            IconOcclusion& o = it->second;
+            if (o.CamPos == camPos && o.IconPos == items[i].Pos && o.GeometrySerial == m_IconGeometrySerial) {
+                o.FrameChecked = m_IconOcclusionFrame; // still current: keeps it out of the forget sweep below
+                continue;
+            }
+            stale.emplace_back(o.FrameChecked, i);
         }
         const size_t n = std::min(stale.size(), kRaysPerFrame);
         std::partial_sort(stale.begin(), stale.begin() + (std::ptrdiff_t)n, stale.end());
@@ -1856,7 +1880,8 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
                 break; // the rest stay stale and go first next frame
             const Item& it = items[stale[k].second];
             // The icon's own ancestors (a lamp fixture it hangs from) must not hide it.
-            std::vector<entt::entity> skipChain;
+            std::vector<entt::entity>& skipChain = m_IconOcclusionSkipChain;
+            skipChain.clear();
             if (const auto* hier = world.Registry.try_get<HierarchyComponent>(it.Entity)) {
                 entt::entity walk = hier->Parent;
                 while (walk != entt::null && world.Registry.valid(walk) && skipChain.size() < 32) {
@@ -1874,6 +1899,9 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
             IconOcclusion& slot = m_IconOcclusion[it.Entity];
             slot.Occluded = hit.Entity != entt::null;
             slot.FrameChecked = m_IconOcclusionFrame;
+            slot.CamPos = camPos;
+            slot.IconPos = it.Pos;
+            slot.GeometrySerial = m_IconGeometrySerial;
         }
         // Forget entities that stopped being candidates (deleted, mode changed) every few seconds.
         if ((m_IconOcclusionFrame & 511u) == 0u) {
@@ -3601,6 +3629,18 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
 // main.cpp draws. Reuses the click pick's exact-triangle raycast; runs only when the cursor moved
 // (at most one raycast per frame) and stands down whenever the mouse belongs to something else.
 void EditorLayer::UpdateHoverPick(World& world, Camera& editorCamera) {
+    // Test and bench runs: the real OS cursor must not pick (it sits wherever the user left it, so
+    // the outline pass came and went run to run). TARTARUS_HOVER_ENTITY names a fixed entity instead.
+    if (m_DeterministicSceneCamera) {
+        if (m_HoverEntity != entt::null && world.Registry.valid(m_HoverEntity)) return;
+        m_HoverEntity = entt::null;
+        static const std::string forced = Env::Str(Env::Var::HoverEntity);
+        if (forced.empty()) return;
+        for (auto [entity, name] : world.Registry.view<NameComponent>().each()) {
+            if (name.Name == forced) { m_HoverEntity = entity; break; }
+        }
+        return;
+    }
     ImGuiIO& io = ImGui::GetIO();
     const bool idle = !m_InPlayMode && !m_MeasureTool && m_DecalTool == DecalToolMode::None &&
                       !m_GizmoEngaged && !m_ViewGizmoBlocking && !m_LightHandleEngaged &&
