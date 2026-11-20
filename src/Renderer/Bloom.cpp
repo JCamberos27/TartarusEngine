@@ -1,5 +1,4 @@
 #include "Bloom.h"
-#include "GLStateScope.h"
 #include "Shader.h"
 #include "gl.h"
 #include <algorithm>
@@ -39,8 +38,6 @@ void Bloom::Compute(Shader& threshShader, Shader& downsampleShader, Shader& upsa
 
     // Pass 3 — upsample chain: walk back up, tent-filtering each mip and additively blending it
     // into the next larger one (which still holds its own downsampled contents from pass 2).
-    // The caller's blend function comes back afterwards (it used to be left at ONE, ONE).
-    GLBlendFuncScope blendFunc;
     upsampleShader.Bind();
     upsampleShader.SetInt("uSrc", 0);
     glEnable(GL_BLEND);
@@ -50,6 +47,9 @@ void Bloom::Compute(Shader& threshShader, Shader& downsampleShader, Shader& upsa
         glBindTextureUnit(0, m_Mips[i].Texture());
         FullscreenPass::Draw();
     }
+    // Back to GL's default (ONE, ZERO) instead of leaving additive behind; every pass that blends sets its own
+    // function, so nothing is read back to restore.
+    glBlendFunc(GL_ONE, GL_ZERO);
     glDisable(GL_BLEND);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

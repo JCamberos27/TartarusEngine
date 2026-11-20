@@ -42,8 +42,8 @@ private:
 //
 // Scopes nest: only the outermost one reads and restores the caller's state, so a post chain wrapped in one
 // scope (ViewPipeline) queries GL once instead of once per pass. The blend function, framebuffer and viewport
-// are not restored: each pass binds its own target, and a pass that changes the blend function keeps its own
-// GLBlendFuncScope.
+// are not restored: each pass binds its own target, and every pass that blends sets its own function (Bloom
+// puts GL's default back after its additive upsample).
 class FullscreenPass {
 public:
     FullscreenPass();
