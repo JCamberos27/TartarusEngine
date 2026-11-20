@@ -44,13 +44,9 @@ void DrawLayersTab(AnimCtx& cx) {
     World& world = cx.world;
     AnimatorWindowState& W = cx.W;
     AC& D = W.Doc;
-    AssetLibrary* assets = cx.assets;
-    AnimatorControllerComponent* live = cx.live;
     Model* rig = cx.rig;
-    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
+    const float S = cx.S;
     bool& changed = cx.changed;
-    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
-    (void)changed;
     for (int i = 0; i < (int)D.Layers.size(); ++i) {
         ImGui::PushID(i);
         const auto& Ly = D.Layers[i];
@@ -263,16 +259,10 @@ void DrawLayersTab(AnimCtx& cx) {
 
 // The Parameters tab: the parameter list, live values while playing.
 void DrawParametersTab(AnimCtx& cx) {
-    World& world = cx.world;
     AnimatorWindowState& W = cx.W;
     AC& D = W.Doc;
-    AssetLibrary* assets = cx.assets;
     AnimatorControllerComponent* live = cx.live;
-    Model* rig = cx.rig;
-    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
     bool& changed = cx.changed;
-    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
-    (void)changed;
     if (live) {
         EditorUIPrimitives::SectionHeader("Live");
         for (auto& p : live->Params) LiveParamWidget(p, ImGui::GetContentRegionAvail().x * 0.5f);
@@ -398,16 +388,9 @@ void DrawParametersTab(AnimCtx& cx) {
 
 // The History tab (while playing): every transition this object's controller took, newest first.
 void DrawHistoryTab(AnimCtx& cx) {
-    World& world = cx.world;
     AnimatorWindowState& W = cx.W;
     AC& D = W.Doc;
-    AssetLibrary* assets = cx.assets;
     AnimatorControllerComponent* live = cx.live;
-    Model* rig = cx.rig;
-    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
-    bool& changed = cx.changed;
-    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
-    (void)changed;
     HintText("Every transition this object's controller took, newest first (Play).");
     if (ActionButton(ICON_FA_TRASH " Clear", "Empty the list")) live->History.clear();
     if (live->History.empty()) ImGui::TextDisabled("Nothing yet.");
@@ -426,16 +409,8 @@ void DrawHistoryTab(AnimCtx& cx) {
 
 // Lint: the mistakes a controller loads fine with and then quietly doesn't do what it was built to.
 void DrawLintTab(AnimCtx& cx) {
-    World& world = cx.world;
     AnimatorWindowState& W = cx.W;
     AC& D = W.Doc;
-    AssetLibrary* assets = cx.assets;
-    AnimatorControllerComponent* live = cx.live;
-    Model* rig = cx.rig;
-    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
-    bool& changed = cx.changed;
-    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
-    (void)changed;
     if (W.LintRevision != W.Revision) { W.LintIssues = AnimatorLint::Check(D); W.LintRevision = W.Revision; }
     const std::vector<AnimatorLint::Issue>& issues = W.LintIssues;
     int problems = 0;
@@ -503,15 +478,8 @@ void DrawLintTab(AnimCtx& cx) {
 
 // Left: layers, parameters, and (while playing) the transition history.
 void DrawLayersAndParameters(AnimCtx& cx) {
-    World& world = cx.world;
-    AnimatorWindowState& W = cx.W;
-    AC& D = W.Doc;
-    AssetLibrary* assets = cx.assets;
     AnimatorControllerComponent* live = cx.live;
-    Model* rig = cx.rig;
-    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
-    bool& changed = cx.changed;
-    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D; (void)changed;
+    const float leftW = cx.leftW, bodyH = cx.bodyH;
     // ============================ left: layers / parameters ===================================
     ImGui::BeginChild("##animleft", ImVec2(leftW, bodyH), ImGuiChildFlags_Borders);
     if (ImGui::BeginTabBar("##animlefttabs")) {
