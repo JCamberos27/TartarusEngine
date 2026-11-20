@@ -66,7 +66,7 @@ Query IdeTabEndingWith(const std::string& suffix) {
     Query q;
     q.Root = kIde;
     q.Pred = [suffix](const UiItem& it) {
-        const std::string v = Visible(it.Label);
+        const std::string v(Visible(it.Label));
         return Contains(it.Label, "###") && v.size() >= suffix.size() && v.compare(v.size() - suffix.size(), suffix.size(), suffix) == 0;
     };
     return q;

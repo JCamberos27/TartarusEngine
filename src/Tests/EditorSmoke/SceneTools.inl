@@ -1016,7 +1016,7 @@ void RegisterSceneToolsTests() {
             const std::vector<std::string> want = ST::HistoryRows(c.E), got = rows(c);
             if (want == got) return std::string();
             std::string s = "panel:";
-            for (const auto& r : got) s += " [" + Visible(r) + "]";
+            for (const auto& r : got) s += " [" + std::string(Visible(r)) + "]";
             s += " stack:";
             for (const auto& r : want) s += " [" + r + "]";
             return s;
