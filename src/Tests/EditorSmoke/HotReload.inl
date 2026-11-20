@@ -43,19 +43,6 @@ constexpr const char* kEditorReloaded = "Editor hot reload: TartarusEditor modul
 constexpr const char* kGameReloaded = "Hot reload: TartarusGame module reloaded.";
 constexpr const char* kRebuildItem = "Rebuild Game & Editor Modules";
 
-Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
-    auto start = std::make_shared<double>(-1.0);
-    return {name, [name, pred, seconds, start](Ctx& c) {
-        const double now = ImGui::GetTime();
-        if (*start < 0.0) *start = now;
-        if (pred(c)) return true;
-        if (now - *start > seconds) {
-            Fail("step '" + name + "' timed out after " + std::to_string((int)seconds) + " s");
-            return true;
-        }
-        return false;
-    }, 100000000};
-}
 // Marks a file as just written (what the module watchers look at); false when it doesn't exist.
 bool Touch(const fs::path& p) {
     std::error_code ec;
@@ -181,8 +168,7 @@ void RegisterHotReloadTests() {
                 std::error_code ec;
                 return !fs::exists(fs::path(path().string() + ".meta"), ec);
             }, 10),
-            Do("clean up", cleanup),
-        });
+        }, cleanup); // pass or fail: a scene left in project/scenes would become a scenes: test of its own
     }
 
     // ------------------------------------------------------------------ the real rebuild

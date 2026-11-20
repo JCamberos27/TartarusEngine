@@ -150,11 +150,11 @@ void RestoreProjectFilesNow(Ctx&) {
     Restore(LayersPath(), g_LayersFile);
 }
 nlohmann::json ProjectJson() { return ReadJson(SettingsPath()); }
-// The first .meta under project/assets written after `since`, or "" when none was.
 std::filesystem::file_time_type g_MetaSince;
 const char* const kGuessedTexture = "assets/Materials/Prototype/proto_grid_orange.png"; // its .meta has no importer
 TextureImportSettings g_UndoTexture;
 ModelImportSettings g_UndoModel;
+// The first .meta under project/assets written after `since`, or "" when none was.
 std::string MetaWrittenSince(std::filesystem::file_time_type since) {
     namespace fs = std::filesystem;
     std::error_code ec;

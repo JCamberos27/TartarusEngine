@@ -186,7 +186,8 @@ void RegisterInspectorTests() {
             const entt::entity a = ByName(c.W, "Alpha");
             return !c.W.Registry.all_of<RenderableComponent>(a) && c.W.Registry.all_of<DetachedMeshComponent>(a);
         }),
-        ExpectTrue("Material section gone", [](Ctx&) { return Find(Header("Material")) == nullptr; }),
+        // Transform first: "gone" alone also passes when the Inspector draws nothing.
+        ExpectTrue("Material section gone (Transform still shown)", [](Ctx&) { return Find(Header("Transform")) && !Find(Header("Material")); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo", [](Ctx& c) { return c.W.Registry.all_of<RenderableComponent>(ByName(c.W, "Alpha")); }),
         Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
@@ -510,7 +511,7 @@ void RegisterInspectorTests() {
         ExpectTrue("Gamma's intensity = 9", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity == 9.0f; }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo -> 1", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity == 1.0f; }),
-        ExpectTrue("Gamma shows no Audio Source section", [](Ctx&) { return Find(Header("Audio Source")) == nullptr; }),
+        ExpectTrue("Gamma shows its Light and no Audio Source", [](Ctx&) { return Find(Header("Light")) && !Find(Header("Audio Source")); }),
     });
     Add("inspector: Transform menu Reset, Copy Component and Paste onto another object; undo", {
         FreshScene(), Wait(2), SelectByName("Alpha"), Wait(3),
@@ -635,7 +636,7 @@ void RegisterInspectorTests() {
         ExpectTrue("locked", [](Ctx& c) { return X::InspectorLocked(c.E); }),
         SelectByName("Beta"), Wait(3),
         Expect("selection moved to Beta", [](Ctx& c) { return ExpectSelected(c, "Beta"); }),
-        ExpectTrue("Inspector still on Alpha (no Light section)", [](Ctx&) { return Find(Header("Light")) == nullptr; }),
+        ExpectTrue("Inspector still on Alpha (a Transform, no Light)", [](Ctx&) { return Find(Header("Transform")) && !Find(Header("Light")); }),
         Shot("locked", {kInspector}),
         Click(InspCard(ICON_FA_LOCK)), Wait(3),
         ExpectTrue("unlocked", [](Ctx& c) { return !X::InspectorLocked(c.E); }),
