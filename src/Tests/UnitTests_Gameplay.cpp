@@ -96,6 +96,10 @@ void TestNativeWeaponRules() {
     player.Update(.1f,false);
     CHECK(std::abs(player.Velocity.z+6)<.001f);
     CHECK(std::abs(player.Cam.Position.z+.6f)<.001f);
+    // Without physics a fall still ends at KillY: back at the respawn point, at rest.
+    Player faller; faller.Cam.Position={0,2,0}; faller.KillY=-5; faller.RespawnFeet={1,1,1};
+    for (int i=0;i<200;++i) { faller.Update(.05f,false); if (faller.Velocity==glm::vec3(0)) break; }
+    CHECK(faller.Velocity==glm::vec3(0) && std::abs(faller.Cam.Position.x-1)<.001f && faller.Cam.Position.y>1);
 }
 void TestWeaponPrefabsAndComponents() {
     World world; AssetLibrary assets;
