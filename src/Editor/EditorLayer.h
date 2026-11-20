@@ -61,6 +61,8 @@ enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (
 // so it never crosses the DLL boundary — the module only ever asks for a cell count + a
 // DrawAssetCell(index) callback.
 struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
+struct Material;      // Material.h
+class ShaderAsset;    // ShaderAsset.h
 struct RegisteredComponent; // ComponentRegistry.h
 struct EditorFolderVisual;  // EditorModuleAPI.h
 enum class ReflectAssetKind; // ComponentReflection.h
@@ -1864,6 +1866,12 @@ private:
     void DrawMaterialAssetEditor(World& world, AssetLibrary& assets, const std::string& matPath);
     void DrawMaterialAssetFields(World& world, AssetLibrary& assets, const std::shared_ptr<MaterialAsset>& ma,
                                  const std::string& matPath);
+    struct MaterialEdits; // how a material edit is recorded: scene undo, or saving the .mat
+    void DrawMaterialProperties(World& world, AssetLibrary& assets, const std::vector<Material*>& mats,
+                                const std::vector<MaterialAsset*>& matAssets, const ShaderAsset* shader,
+                                const MaterialEdits& edits);
+    void DrawShaderPropertyRows(AssetLibrary& assets, const std::vector<Material*>& mats, const ShaderAsset& sa,
+                                const MaterialEdits& edits);
 
     // #107 - Unity's material preview: the material on a sphere (or cube / cylinder / torus /
     // plane) at the bottom of the Inspector, drag to orbit. Re-rendered only when the material,
