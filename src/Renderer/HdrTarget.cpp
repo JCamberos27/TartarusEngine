@@ -224,8 +224,13 @@ unsigned int HdrTarget::PreviousColorTexture() const {
         glTextureParameteri(m_PrevColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(m_PrevColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTextureParameteri(m_PrevColor, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        // Zero until the first copy (the loader has no glClearTexImage: a throwaway FBO clears it).
+        unsigned int fbo = 0;
+        glCreateFramebuffers(1, &fbo);
+        glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, m_PrevColor, 0);
         const float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        glClearTexImage(m_PrevColor, 0, GL_RGBA, GL_FLOAT, zero);
+        glClearNamedFramebufferfv(fbo, GL_COLOR, 0, zero);
+        glDeleteFramebuffers(1, &fbo);
         GpuMemTrack::Set(MemKey(this, "previous color"), (size_t)m_Width * m_Height * 8);
     }
     return m_PrevColor;
