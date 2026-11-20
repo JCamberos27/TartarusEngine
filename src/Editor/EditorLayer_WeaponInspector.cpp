@@ -941,6 +941,313 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     ImGui::Text("0 - %.2f seconds; authored curve playback",span);
 }
 
+namespace {
+
+// A recoil profile's numbers over a weapon's recoil; the bolt setup stays the weapon's own.
+void ApplyRecoilProfile(WeaponRecoilSettings& dst, const WeaponRecoilSettings& profile) {
+    const auto previous = dst;
+    dst = profile;
+    dst.BoltBone = previous.BoltBone;
+    dst.BoltCycle = previous.BoltCycle;
+    dst.BoltTravel = previous.BoltTravel;
+    dst.HipProcedural = true;
+}
+
+// "<weapon>.<ext>" next to the weapon, or "<weapon> N.<ext>" when that is taken.
+fs::path FreeSiblingPath(const std::string& weaponPath, const char* ext) {
+    std::error_code ec;
+    const auto base = fs::u8path(weaponPath).parent_path() / (fs::u8path(weaponPath).stem().u8string() + ext);
+    auto target = base;
+    for (int n = 1; fs::exists(target, ec); ++n)
+        target = base.parent_path() / (base.stem().u8string() + " " + std::to_string(n) + ext);
+    return target;
+}
+
+// The "Copy Settings From..." popup body: section checkboxes, then one row per other weapon. True once a weapon was copied.
+bool DrawCopySettingsFrom(FirstPersonAnimationSet& s, const std::string& path, const std::vector<std::string>& listing) {
+    static bool s_copyGameplay = true, s_copyAds = true, s_copyBarrel = true, s_copyRecoil = true, s_copyMovement = true, s_copyIK = false;
+    ImGui::TextDisabled("Sections to copy");
+    if(s.HasLegacyGameplay) ImGui::Checkbox("Legacy gameplay (magazine, fire rate, impacts)", &s_copyGameplay);
+    ImGui::Checkbox("Aim-down-sights", &s_copyAds);
+    ImGui::Checkbox("Barrel and laser", &s_copyBarrel);
+    ImGui::Checkbox("Recoil", &s_copyRecoil);
+    ImGui::Checkbox("Movement (sway, bob, breathing, camera, walls)", &s_copyMovement);
+    ImGui::Checkbox("IK (bone names: only for the same arms rig)", &s_copyIK);
+    EditorUIPrimitives::SectionHeader("From");
+    for (const std::string& other : listing) {
+        if (fs::u8path(other).extension() != ".fpsanim" || fs::u8path(other).lexically_normal() == fs::u8path(path).lexically_normal()) continue;
+        if (!ImGui::Selectable(fs::u8path(other).stem().u8string().c_str())) continue;
+        FirstPersonAnimationSet from;
+        std::string err;
+        if (!FirstPersonAnimationSet::LoadFile(other, from, &err)) {
+            Log::Warn("Copy Settings: couldn't read '" + other + "': " + err);
+            continue;
+        }
+        if (s.HasLegacyGameplay && from.HasLegacyGameplay && s_copyGameplay) s.Gameplay = from.Gameplay;
+        if (s_copyAds) s.Ads = from.Ads;
+        if (s_copyBarrel) { s.Muzzle = from.Muzzle; s.Laser = from.Laser; }
+        WeaponProceduralSettings merged = from.Procedural;
+        if (!s_copyRecoil) merged.Recoil = s.Procedural.Recoil;
+        if (!s_copyIK) merged.IK = s.Procedural.IK;
+        if (!s_copyMovement) {
+            WeaponProceduralSettings keep = s.Procedural;
+            keep.Recoil = merged.Recoil;
+            keep.IK = merged.IK;
+            merged = keep;
+        }
+        s.Procedural = merged;
+        if (s_copyRecoil) {
+            s.RecoilProfile = from.RecoilProfile;
+            s.RecoilProfileGuid = from.RecoilProfileGuid;
+        }
+        ImGui::CloseCurrentPopup();
+        return true;
+    }
+    return false;
+}
+
+// Status chips (controller, rig, ADS) and the setup checks under them.
+void DrawWeaponStatus(const FirstPersonAnimationSet& s, const WeaponContext& ctx, const std::string& path) {
+    char buf[128];
+    if (ctx.Controller) {
+        int states = 0;
+        for (const auto& L : ctx.Controller->Layers) states += (int)L.States.size();
+        std::snprintf(buf, sizeof buf, "Controller: %d states", states);
+        PropertyRows::Badge(Status::Ok, buf, s.Controller.c_str());
+    } else {
+        PropertyRows::Badge(Status::Error, "No controller");
+    }
+    ImGui::SameLine();
+    if (ctx.Arms) {
+        const bool socketOk = s.WeaponSocket.empty() || ctx.Arms->NodeIndex(s.WeaponSocket) >= 0;
+        const int missing = MissingIKBones(s.Procedural.IK, *ctx.Arms);
+        PropertyRows::Badge(socketOk && !missing ? Status::Ok : Status::Warning,
+                            socketOk && !missing ? "Rig OK" : "Rig: check bones",
+                            "Weapon socket and IK bones checked against the arms rig.");
+    } else {
+        PropertyRows::Badge(Status::Info, "Rig not checked", "Load the arms rig from the IK section to check its bones.");
+    }
+    int carried = 0, authored = 0, problems = 0;
+    std::string reference = s.Ads.ReferenceState;
+    if (ctx.Controller && !ctx.Controller->Layers.empty())
+        for (const auto& st : ctx.Controller->Layers[0].States) {
+            const AdsMode m = ModeOf(st, s, reference);
+            carried += m == AdsMode::Carried;
+            authored += m == AdsMode::Authored;
+        }
+    if (const AdsCarryReport* rep = FindAdsCarryReport(path)) {
+        problems = (int)rep->Warnings.size();
+        for (const auto& e : rep->Entries) problems += !e.Problem.empty();
+    }
+    ImGui::SameLine();
+    std::snprintf(buf, sizeof buf, "ADS: %d clip%s, %d carried", authored, authored == 1 ? "" : "s", carried);
+    PropertyRows::Badge(problems ? Status::Warning : Status::Ok, buf, "See Aim-Down-Sights.");
+
+    // The setup checks: what the controller and rigs still lack for this weapon to work end to end.
+    FirstPersonWeaponCheckInput wi;
+    wi.Set = &s;
+    wi.Controller = ctx.Controller.get();
+    if (ctx.Arms) wi.HasArmsBone = [arms = ctx.Arms](const std::string& b) { return arms->NodeIndex(b) >= 0; };
+    ImGui::Spacing();
+    SetupChecksUI::Draw(FirstPersonWeaponValidate(wi), "Setup: everything the driver needs is there", "##weaponsetup");
+}
+
+void DrawLegacyGameplay(PropertyRows& r, FirstPersonWeaponGameplay& g) {
+    r.Int("Magazine", g.Magazine, 1, 1000, "Rounds per magazine.");
+    r.Float("Rounds / Minute", g.RoundsPerMinute, 5.0f, 60.0f, 2000.0f, "%.0f", "Full-auto cadence.");
+    r.Check("Full-Auto", g.AllowFullAuto, "Off for a semi-only weapon: the fire-mode key then does nothing.");
+    float burstRounds = (float)g.BurstRounds;
+    if (r.Float("Burst Rounds", burstRounds, 1.0f, 0.0f, 32.0f, "%.0f", "0 or 1 = semi; higher values schedule a burst in semi mode. Release interrupts the burst."))
+        g.BurstRounds = (int)std::round(burstRounds);
+    r.Float("Reload Hold", g.ReloadHoldSeconds, 0.01f, 0.05f, 2.0f, "%.2f s", "R held this long checks the magazine instead of reloading.");
+    glm::vec2 fidget(g.RegripMin, g.RegripMax);
+    if (r.Range("Fidget After", fidget, 0.1f, "%.1f s", "Seconds of settled idle before the fidget plays (random between min and max)."))
+        g.RegripMin = std::max(0.0f, fidget.x), g.RegripMax = std::max(g.RegripMin, fidget.y);
+    bool perRound = g.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound;
+    if (r.Check("Per-Round Reload", perRound,
+                "A tube loaded a round at a time: each LoadRound event adds one, the load state loops until LastRound,\n"
+                "and pulling the trigger (StopReload) finishes the round in hand and stops. Off: Refill fills the magazine."))
+        g.Reload = perRound ? FirstPersonWeaponGameplay::ReloadMode::PerRound : FirstPersonWeaponGameplay::ReloadMode::Magazine;
+    r.Check("Cycle After Shot", g.CycleAfterShot,
+            "A pump or bolt: after each round the Cycle trigger plays the state tagged Cycling, and the gun can't fire until it has.");
+    if (g.CycleAfterShot)
+        r.Float("Cycle Delay", g.CycleDelay, 0.01f, 0.0f, 2.0f, "%.2f s", "Seconds after the shot before the action is worked.");
+    r.Heading("Pellets");
+    r.Int("Pellets", g.Pellets, 1, 64, "Rays per round: 1 for a rifle, a shotgun's pellet count (00 buckshot: 8-9).");
+    r.Float("Spread (Hip)", g.SpreadHip, 0.05f, 0.0f, 45.0f, "%.2f deg", "Half angle of the cone the pellets leave in, sights down.");
+    r.Float("Spread (ADS)", g.SpreadAds, 0.05f, 0.0f, 45.0f, "%.2f deg", "... and with the sights up.");
+    r.Heading("Impacts");
+    r.Float("Impulse", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f N*s",
+            "How hard each round shoves the physics body it hits, at the hit point (0 = no push); a shotgun's pellets share it.");
+    r.Float("Max Speed", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f m/s", "Caps the velocity one round can add, so light props fly without rocketing off.");
+}
+
+// Sets Mount Rotation / Offset from the socket and the weapon root on the first frame of the default state's clips
+// (how the two files were authored to sit together). True when it measured.
+bool MeasureMountRotation(FirstPersonAnimationSet& s, const AnimatorController& ac, Model& arms, Model& weaponModel, AssetLibrary& assets) {
+    const AnimatorController::Layer& layer = ac.Layers[0];
+    const int di = layer.DefaultStateIndex() >= 0 ? layer.DefaultStateIndex() : 0;
+    std::string armsRef, weaponRef;
+    if (di < (int)layer.States.size()) {
+        const auto& st = layer.States[di];
+        const int at = ac.TrackIndex("arms"), wt = ac.TrackIndex("weapon");
+        if (at < (int)st.Motions.size()) armsRef = st.Motions[at].Clip;
+        if (wt < (int)st.Motions.size()) weaponRef = st.Motions[wt].Clip;
+    }
+    const int ac0 = armsRef.empty() ? -1 : ResolveAnimationClip(arms, armsRef, assets);
+    const int wc0 = weaponRef.empty() ? -1 : ResolveAnimationClip(weaponModel, weaponRef, assets);
+    const int sn = arms.NodeIndex(s.WeaponSocket), rn = weaponModel.NodeIndex(s.WeaponRoot);
+    if (sn < 0 || rn < 0) {
+        Log::Warn("Measure Mount Rotation: the socket or the weapon root is not on its rig.");
+        return false;
+    }
+    // A missing clip (no weapon clip for the default state) measures the bind pose.
+    const glm::mat4 sock = arms.SampleNodeModelSpace(ac0, 0.0f, AnimationWrapMode::ClampForever, sn);
+    const glm::mat4 root = weaponModel.SampleNodeModelSpace(wc0, 0.0f, AnimationWrapMode::ClampForever, rn);
+    auto rot = [](const glm::mat4& m) {
+        glm::mat3 b(m);
+        for (int c = 0; c < 3; ++c) b[c] = glm::normalize(b[c]);
+        return glm::normalize(glm::quat_cast(b));
+    };
+    const glm::vec3 e = EulerYXZFromQuaternion(glm::inverse(rot(sock)) * rot(root));
+    auto snap = [](float v) { const float q = std::round(v / 90.0f) * 90.0f; return std::abs(v - q) < 0.05f ? q : std::round(v * 100.0f) / 100.0f; };
+    s.WeaponMountRotation = {snap(e.x), snap(e.y), snap(e.z)};
+    // And where the root sits from the socket, in the socket's frame (sub-0.1 mm is noise).
+    glm::vec3 t = glm::vec3(glm::inverse(sock) * root[3]);
+    for (int i = 0; i < 3; ++i) t[i] = std::abs(t[i]) < 1e-4f ? 0.0f : std::round(t[i] * 1e5f) / 1e5f;
+    s.WeaponMountOffset = t;
+    Log::Info("Measured mount rotation (Y-X-Z): " + std::to_string(s.WeaponMountRotation.x) + ", " +
+              std::to_string(s.WeaponMountRotation.y) + ", " + std::to_string(s.WeaponMountRotation.z) +
+              ", offset " + std::to_string(t.x) + ", " + std::to_string(t.y) + ", " + std::to_string(t.z) + " m");
+    return true;
+}
+
+// What a section asks of the editor after it drew: a changed set to save, an asset to select, a listing to refresh.
+struct WeaponSectionOut {
+    bool& Changed;
+    std::string& OpenAsset;
+    bool ListingChanged = false;
+};
+
+// Recoil: the shared profile picker, Extract / Duplicate, and either the bolt setup (with a profile) or the embedded recoil.
+void DrawRecoilSection(PropertyRows& r, FirstPersonAnimationSet& s, const std::string& path, std::string& error, WeaponSectionOut& out) {
+    static const char* const extensions[] = {".recoil", nullptr};
+    AssetPathPickerOptions options;
+    options.Extensions = extensions;
+    options.DragPayload = "ASSET_FILE_PATH";
+    options.NoneLabel = "(embedded recoil)";
+    options.DialogFilter = "Recoil Profile\0*.recoil\0All Files\0*.*\0";
+    ImGui::TextUnformatted("Recoil Profile");
+    std::string selected = s.RecoilProfile;
+    if (AssetPathPicker("##recoilprofile", selected, options)) {
+        RecoilAsset loaded;
+        std::string why;
+        if (selected.empty() || RecoilAsset::LoadFile(ProjectPaths::Resolve(selected), loaded, &why)) {
+            s.RecoilProfile = selected;
+            s.RecoilProfileGuid = AssetDatabase::RefGuid(selected);
+            error.clear();
+            if (!selected.empty()) ApplyRecoilProfile(s.Procedural.Recoil, loaded.Data);
+            out.Changed = true;
+        } else Log::Error(why);
+    }
+    const bool extracting = s.RecoilProfile.empty();
+    bool makeRecoil;
+    {
+        EditorSoundEvents::ScopedClickSilence quiet; // Create / Duplicate / Blocked instead of the click
+        makeRecoil = EditorUIPrimitives::SecondaryButton(extracting ? "Extract Recoil Asset" : "Duplicate Recoil Asset");
+    }
+    if (makeRecoil) {
+        const fs::path target = FreeSiblingPath(path, ".recoil");
+        RecoilAsset asset;
+        asset.Data = s.Procedural.Recoil;
+        const bool saved = asset.SaveFile(target.u8string());
+        EditorSound::Play(!saved ? EditorSound::Event::Blocked : extracting ? EditorSound::Event::Create : EditorSound::Event::Duplicate);
+        if (saved) {
+            AssetDatabase::EnsureGuid(target.u8string());
+            s.RecoilProfile = ProjectPaths::Relativize(target.u8string());
+            s.RecoilProfileGuid = AssetDatabase::RefGuid(s.RecoilProfile);
+            s.Procedural.Recoil.HipProcedural = true;
+            out.Changed = true;
+            out.ListingChanged = true;
+        } else Log::Error("Could not save recoil profile.");
+    }
+    if (s.RecoilProfile.empty()) {
+        DrawRecoil(r, s.Procedural.Recoil, s.Gameplay.RoundsPerMinute);
+        return;
+    }
+    ImGui::SameLine();
+    if (EditorUIPrimitives::SecondaryButton("Open Profile")) out.OpenAsset = ProjectPaths::Resolve(s.RecoilProfile);
+    r.Note("Shared recoil: edits affect every weapon referencing this asset. Bolt setup stays on this weapon.");
+    r.Text("Bolt Bone", s.Procedural.Recoil.BoltBone, "Bone on the weapon model.");
+    r.Float("Bolt Cycle", s.Procedural.Recoil.BoltCycle, 0.001f, 0.0f, 1.0f, "%.3f s", "Seconds for a full bolt cycle.");
+    r.Vec3("Bolt Travel", s.Procedural.Recoil.BoltTravel, 0.001f, "%.4f", "Weapon model units; explicit stroke avoids needing a Fire clip.");
+    const auto* report = FindBarrelReport(path);
+    ImGui::BeginDisabled(!report || glm::length(report->BoltTravel) < 1e-6f);
+    if (EditorUIPrimitives::SecondaryButton("Use Measured Bolt Travel")) {
+        s.Procedural.Recoil.BoltTravel = report->BoltTravel;
+        out.Changed = true;
+    }
+    ImGui::EndDisabled();
+    r.Note("Play once with the optional Fire clip to capture its bolt stroke, or enter travel directly. Set Barrel & Laser > muzzle manually if the bolt does not follow the bore.");
+}
+
+// Camera: the action-animation camera and the firing shake asset.
+void DrawCameraSection(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& ctx, const std::string& path, WeaponSectionOut& out) {
+    auto& c=s.ActionCamera;
+    r.Check("Action Animation",c.Enabled,"Follow this animated rig node during actions, before ADS holds and IK.");
+    r.Name("Camera Node",c.Node,ctx.Bones,ctx.Arms!=nullptr && !c.Node.empty(),
+        "Animated bone on the arms rig; use head to attach the camera to the head. Empty uses the player's Camera Bone.","The arms rig has no node named '%s'.");
+    r.Name("Reference State",c.ReferenceState,ctx.States,ctx.Controller!=nullptr,
+        "The neutral camera pose, sampled at this state's first frame.","The controller has no reference state '%s'.");
+    auto list=[&](const char* label,std::vector<std::string>& values,const char* tip) {
+        std::string text;
+        for(const auto& value:values) text+=(text.empty()?"":", ")+value;
+        if(!r.Text(label,text,tip)) return;
+        values.clear();
+        std::stringstream input(text); std::string value;
+        while(std::getline(input,value,',')) {
+            const auto start=value.find_first_not_of(" \t");
+            if(start!=std::string::npos) values.push_back(value.substr(start,value.find_last_not_of(" \t")-start+1));
+        }
+    };
+    list("Action Tags",c.Tags,"Comma-separated tags whose states animate the camera. Reload, Busy and Cycling cover normal actions.");
+    list("Extra States",c.States,"Additional state names, e.g. Draw, Holster. Transitions blend to/from neutral automatically.");
+    r.Float("Rotation Scale",c.RotationScale,.01f,0,2,"x%.2f","One follows the bone's animated rotation. Zero disables it.");
+    r.Float("Position Scale",c.PositionScale,.01f,0,2,"x%.2f","One follows the bone's animated translation. Zero keeps the eye in place.");
+    r.Float("Action ADS Scale",c.AdsScale,.01f,0,2,"x%.2f","Action camera motion strength when aiming.");
+    r.Note("Use head to follow the existing head animation directly. Select any other animated node here if needed. The camera keeps mouse look and blends back to normal as the action ends.");
+    static const char* const extensions[]={".camerashake",nullptr};
+    AssetPathPickerOptions options;
+    options.Extensions=extensions; options.DragPayload="ASSET_FILE_PATH"; options.NoneLabel="(no firing shake)";
+    options.DialogFilter="Camera Shake\0*.camerashake\0All Files\0*.*\0";
+    std::string selected=s.CameraShakeProfile;
+    if(r.Path("Firing Shake",selected,options,"Reusable camera shake asset, triggered for every committed shot, including procedural fire.")) {
+        CameraShakeAsset loaded; std::string why;
+        if(selected.empty() || CameraShakeAsset::LoadFile(ProjectPaths::Resolve(selected),loaded,&why)) {
+            s.CameraShakeProfile=selected; s.CameraShakeProfileGuid=AssetDatabase::RefGuid(selected);
+            s.CameraShake=loaded; out.Changed=true;
+        } else Log::Error(why);
+    }
+    bool createShake;
+    { EditorSoundEvents::ScopedClickSilence quiet; createShake=EditorUIPrimitives::SecondaryButton("Create Firing Shake"); } // Create / Blocked instead
+    if(createShake) {
+        const fs::path target=FreeSiblingPath(path,".camerashake");
+        const bool saved=CameraShakeAsset{}.SaveFile(target.u8string());
+        EditorSound::Play(saved?EditorSound::Event::Create:EditorSound::Event::Blocked);
+        if(saved) {
+            AssetDatabase::EnsureGuid(target.u8string());
+            s.CameraShakeProfile=ProjectPaths::Relativize(target.u8string());
+            s.CameraShakeProfileGuid=AssetDatabase::RefGuid(s.CameraShakeProfile);
+            s.CameraShake={}; out.Changed=true; out.ListingChanged=true; out.OpenAsset=target.u8string();
+        } else Log::Error("Could not create camera shake asset.");
+    }
+    if(!s.CameraShakeProfile.empty()) {
+        ImGui::SameLine(); if(EditorUIPrimitives::SecondaryButton("Open Shake")) out.OpenAsset=ProjectPaths::Resolve(s.CameraShakeProfile);
+    }
+}
+
+} // namespace
+
 void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     struct Cache {
         std::string Path;
@@ -979,12 +1286,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             RecoilAsset profile;
             std::string why;
             if (RecoilAsset::LoadFile(ProjectPaths::Resolve(s.RecoilProfile), profile, &why)) {
-                const auto previous = s.Procedural.Recoil;
-                s.Procedural.Recoil = profile.Data;
-                s.Procedural.Recoil.BoltBone = previous.BoltBone;
-                s.Procedural.Recoil.BoltCycle = previous.BoltCycle;
-                s.Procedural.Recoil.BoltTravel = previous.BoltTravel;
-                s.Procedural.Recoil.HipProcedural = true;
+                ApplyRecoilProfile(s.Procedural.Recoil, profile.Data);
                 cache.Error.clear();
             } else {
                 cache.Error = "Recoil profile: " + why;
@@ -1014,49 +1316,12 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::TextDisabled("%s", ProjectPaths::Relativize(path).c_str());
     }
     // Copy tuning from another weapon: pick the sections, then the weapon. Undo takes it back.
-    static bool s_copyGameplay = true, s_copyAds = true, s_copyBarrel = true, s_copyRecoil = true, s_copyMovement = true, s_copyIK = false;
     bool copied = false;
     if (ActionButton(ICON_FA_COPY "  Copy Settings From...", "Take gameplay, ADS, recoil and movement numbers from another weapon", false, ImVec2(-FLT_MIN, 0.0f)))
         ImGui::OpenPopup("##copyfrom");
     if (ImGui::BeginPopup("##copyfrom")) {
-        ImGui::TextDisabled("Sections to copy");
-        if(s.HasLegacyGameplay) ImGui::Checkbox("Legacy gameplay (magazine, fire rate, impacts)", &s_copyGameplay);
-        ImGui::Checkbox("Aim-down-sights", &s_copyAds);
-        ImGui::Checkbox("Barrel and laser", &s_copyBarrel);
-        ImGui::Checkbox("Recoil", &s_copyRecoil);
-        ImGui::Checkbox("Movement (sway, bob, breathing, camera, walls)", &s_copyMovement);
-        ImGui::Checkbox("IK (bone names: only for the same arms rig)", &s_copyIK);
-        EditorUIPrimitives::SectionHeader("From");
         RefreshAnimationListingIfNeeded();
-        for (const std::string& other : m_AnimationListingCache.paths) {
-            if (fs::u8path(other).extension() != ".fpsanim" || fs::u8path(other).lexically_normal() == fs::u8path(path).lexically_normal()) continue;
-            if (!ImGui::Selectable(fs::u8path(other).stem().u8string().c_str())) continue;
-            FirstPersonAnimationSet from;
-            std::string err;
-            if (!FirstPersonAnimationSet::LoadFile(other, from, &err)) {
-                Log::Warn("Copy Settings: couldn't read '" + other + "': " + err);
-                continue;
-            }
-            if (s.HasLegacyGameplay && from.HasLegacyGameplay && s_copyGameplay) s.Gameplay = from.Gameplay;
-            if (s_copyAds) s.Ads = from.Ads;
-            if (s_copyBarrel) { s.Muzzle = from.Muzzle; s.Laser = from.Laser; }
-            WeaponProceduralSettings merged = from.Procedural;
-            if (!s_copyRecoil) merged.Recoil = s.Procedural.Recoil;
-            if (!s_copyIK) merged.IK = s.Procedural.IK;
-            if (!s_copyMovement) {
-                WeaponProceduralSettings keep = s.Procedural;
-                keep.Recoil = merged.Recoil;
-                keep.IK = merged.IK;
-                merged = keep;
-            }
-            s.Procedural = merged;
-            if (s_copyRecoil) {
-                s.RecoilProfile = from.RecoilProfile;
-                s.RecoilProfileGuid = from.RecoilProfileGuid;
-            }
-            copied = true;
-            ImGui::CloseCurrentPopup();
-        }
+        copied = DrawCopySettingsFrom(s, path, m_AnimationListingCache.paths);
         ImGui::EndPopup();
     }
     if (!cache.Error.empty()) {
@@ -1123,52 +1388,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         for (int i = 0; i < weaponModel->NodeCount(); ++i) ctx.WeaponBones.push_back(weaponModel->NodeName(i));
     }
 
-    // Status chips.
-    {
-        char buf[128];
-        if (ctx.Controller) {
-            int states = 0;
-            for (const auto& L : ctx.Controller->Layers) states += (int)L.States.size();
-            std::snprintf(buf, sizeof buf, "Controller: %d states", states);
-            PropertyRows::Badge(Status::Ok, buf, s.Controller.c_str());
-        } else {
-            PropertyRows::Badge(Status::Error, "No controller");
-        }
-        ImGui::SameLine();
-        if (ctx.Arms) {
-            const bool socketOk = s.WeaponSocket.empty() || ctx.Arms->NodeIndex(s.WeaponSocket) >= 0;
-            const int missing = MissingIKBones(s.Procedural.IK, *ctx.Arms);
-            PropertyRows::Badge(socketOk && !missing ? Status::Ok : Status::Warning,
-                                socketOk && !missing ? "Rig OK" : "Rig: check bones",
-                                "Weapon socket and IK bones checked against the arms rig.");
-        } else {
-            PropertyRows::Badge(Status::Info, "Rig not checked", "Load the arms rig from the IK section to check its bones.");
-        }
-        int carried = 0, authored = 0, problems = 0;
-        std::string reference = s.Ads.ReferenceState;
-        if (ctx.Controller && !ctx.Controller->Layers.empty())
-            for (const auto& st : ctx.Controller->Layers[0].States) {
-                const AdsMode m = ModeOf(st, s, reference);
-                carried += m == AdsMode::Carried;
-                authored += m == AdsMode::Authored;
-            }
-        if (const AdsCarryReport* rep = FindAdsCarryReport(path)) {
-            problems = (int)rep->Warnings.size();
-            for (const auto& e : rep->Entries) problems += !e.Problem.empty();
-        }
-        ImGui::SameLine();
-        std::snprintf(buf, sizeof buf, "ADS: %d clip%s, %d carried", authored, authored == 1 ? "" : "s", carried);
-        PropertyRows::Badge(problems ? Status::Warning : Status::Ok, buf, "See Aim-Down-Sights.");
-    }
-    // The setup checks: what the controller and rigs still lack for this weapon to work end to end.
-    {
-        FirstPersonWeaponCheckInput wi;
-        wi.Set = &s;
-        wi.Controller = ctx.Controller.get();
-        if (ctx.Arms) wi.HasArmsBone = [arms = ctx.Arms](const std::string& b) { return arms->NodeIndex(b) >= 0; };
-        ImGui::Spacing();
-        SetupChecksUI::Draw(FirstPersonWeaponValidate(wi), "Setup: everything the driver needs is there", "##weaponsetup");
-    }
+    DrawWeaponStatus(s, ctx, path);
     ImGui::Spacing();
 
     bool changed = false;
@@ -1197,35 +1417,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     if (r.Section(ICON_FA_BULLSEYE, "Aim-Down-Sights", summary, true)) DrawAds(r, s, ctx, path);
 
     std::snprintf(summary, sizeof summary, "%d rounds, %.0f rpm", g.Magazine, g.RoundsPerMinute);
-    if (s.HasLegacyGameplay && r.Section(ICON_FA_GUN, "Legacy Gameplay", summary, false)) {
-        r.Int("Magazine", g.Magazine, 1, 1000, "Rounds per magazine.");
-        r.Float("Rounds / Minute", g.RoundsPerMinute, 5.0f, 60.0f, 2000.0f, "%.0f", "Full-auto cadence.");
-        r.Check("Full-Auto", g.AllowFullAuto, "Off for a semi-only weapon: the fire-mode key then does nothing.");
-        float burstRounds = (float)g.BurstRounds;
-        if (r.Float("Burst Rounds", burstRounds, 1.0f, 0.0f, 32.0f, "%.0f", "0 or 1 = semi; higher values schedule a burst in semi mode. Release interrupts the burst."))
-            g.BurstRounds = (int)std::round(burstRounds);
-        r.Float("Reload Hold", g.ReloadHoldSeconds, 0.01f, 0.05f, 2.0f, "%.2f s", "R held this long checks the magazine instead of reloading.");
-        glm::vec2 fidget(g.RegripMin, g.RegripMax);
-        if (r.Range("Fidget After", fidget, 0.1f, "%.1f s", "Seconds of settled idle before the fidget plays (random between min and max)."))
-            g.RegripMin = std::max(0.0f, fidget.x), g.RegripMax = std::max(g.RegripMin, fidget.y);
-        bool perRound = g.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound;
-        if (r.Check("Per-Round Reload", perRound,
-                    "A tube loaded a round at a time: each LoadRound event adds one, the load state loops until LastRound,\n"
-                    "and pulling the trigger (StopReload) finishes the round in hand and stops. Off: Refill fills the magazine."))
-            g.Reload = perRound ? FirstPersonWeaponGameplay::ReloadMode::PerRound : FirstPersonWeaponGameplay::ReloadMode::Magazine;
-        r.Check("Cycle After Shot", g.CycleAfterShot,
-                "A pump or bolt: after each round the Cycle trigger plays the state tagged Cycling, and the gun can't fire until it has.");
-        if (g.CycleAfterShot)
-            r.Float("Cycle Delay", g.CycleDelay, 0.01f, 0.0f, 2.0f, "%.2f s", "Seconds after the shot before the action is worked.");
-        r.Heading("Pellets");
-        r.Int("Pellets", g.Pellets, 1, 64, "Rays per round: 1 for a rifle, a shotgun's pellet count (00 buckshot: 8-9).");
-        r.Float("Spread (Hip)", g.SpreadHip, 0.05f, 0.0f, 45.0f, "%.2f deg", "Half angle of the cone the pellets leave in, sights down.");
-        r.Float("Spread (ADS)", g.SpreadAds, 0.05f, 0.0f, 45.0f, "%.2f deg", "... and with the sights up.");
-        r.Heading("Impacts");
-        r.Float("Impulse", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f N*s",
-                "How hard each round shoves the physics body it hits, at the hit point (0 = no push); a shotgun's pellets share it.");
-        r.Float("Max Speed", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f m/s", "Caps the velocity one round can add, so light props fly without rocketing off.");
-    }
+    if (s.HasLegacyGameplay && r.Section(ICON_FA_GUN, "Legacy Gameplay", summary, false)) DrawLegacyGameplay(r, g);
 
     if(!s.HasLegacyGameplay) ImGui::TextWrapped("Weapon stats and damage are authored on the prefab root's Weapon Definition.");
     const FirstPersonBarrelReport* barrel = FindBarrelReport(path);
@@ -1249,184 +1441,23 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                "Fixed socket -> weapon root translation, in the socket's frame (metres). Zero when the root sits on the socket.");
         // Measure it: the rotation between the socket and the weapon root at the first frame of the default
         // state's clips (how the two files were authored to sit together), Y-X-Z degrees.
-        {
-            const bool can = arms && weaponModel && ctx.Controller && !s.WeaponSocket.empty() && !s.WeaponRoot.empty() && m_AssetsPtr;
-            ImGui::BeginDisabled(!can);
-            if (ActionButton(ICON_FA_RULER "  Measure Mount Rotation",
-                             "Reads the socket's and the weapon root's orientation on the first frame of the default state's clips\n"
-                             "and sets Mount Rotation to the fixed turn between them, and Mount Offset to where the root sits\n"
-                             "from the socket (needs the rigs loaded and a socket / root set).",
-                             false, ImVec2(-FLT_MIN, 0.0f))) {
-                const AnimatorController& ac = *ctx.Controller;
-                const AnimatorController::Layer& layer = ac.Layers[0];
-                const int di = layer.DefaultStateIndex() >= 0 ? layer.DefaultStateIndex() : 0;
-                std::string armsRef, weaponRef;
-                if (di < (int)layer.States.size()) {
-                    const auto& st = layer.States[di];
-                    const int at = ac.TrackIndex("arms"), wt = ac.TrackIndex("weapon");
-                    if (at < (int)st.Motions.size()) armsRef = st.Motions[at].Clip;
-                    if (wt < (int)st.Motions.size()) weaponRef = st.Motions[wt].Clip;
-                }
-                const int ac0 = armsRef.empty() ? -1 : ResolveAnimationClip(*arms, armsRef, *m_AssetsPtr);
-                const int wc0 = weaponRef.empty() ? -1 : ResolveAnimationClip(*weaponModel, weaponRef, *m_AssetsPtr);
-                const int sn = arms->NodeIndex(s.WeaponSocket), rn = weaponModel->NodeIndex(s.WeaponRoot);
-                if (sn < 0 || rn < 0) {
-                    Log::Warn("Measure Mount Rotation: the socket or the weapon root is not on its rig.");
-                } else {
-                    // A missing clip (no weapon clip for the default state) measures the bind pose.
-                    const glm::mat4 sock = arms->SampleNodeModelSpace(ac0, 0.0f, AnimationWrapMode::ClampForever, sn);
-                    const glm::mat4 root = weaponModel->SampleNodeModelSpace(wc0, 0.0f, AnimationWrapMode::ClampForever, rn);
-                    auto rot = [](const glm::mat4& m) {
-                        glm::mat3 b(m);
-                        for (int c = 0; c < 3; ++c) b[c] = glm::normalize(b[c]);
-                        return glm::normalize(glm::quat_cast(b));
-                    };
-                    const glm::vec3 e = EulerYXZFromQuaternion(glm::inverse(rot(sock)) * rot(root));
-                    auto snap = [](float v) { const float q = std::round(v / 90.0f) * 90.0f; return std::abs(v - q) < 0.05f ? q : std::round(v * 100.0f) / 100.0f; };
-                    s.WeaponMountRotation = {snap(e.x), snap(e.y), snap(e.z)};
-                    // And where the root sits from the socket, in the socket's frame (sub-0.1 mm is noise).
-                    glm::vec3 t = glm::vec3(glm::inverse(sock) * root[3]);
-                    for (int i = 0; i < 3; ++i) t[i] = std::abs(t[i]) < 1e-4f ? 0.0f : std::round(t[i] * 1e5f) / 1e5f;
-                    s.WeaponMountOffset = t;
-                    changed = true;
-                    Log::Info("Measured mount rotation (Y-X-Z): " + std::to_string(s.WeaponMountRotation.x) + ", " +
-                              std::to_string(s.WeaponMountRotation.y) + ", " + std::to_string(s.WeaponMountRotation.z) +
-                              ", offset " + std::to_string(t.x) + ", " + std::to_string(t.y) + ", " + std::to_string(t.z) + " m");
-                }
-            }
-            ImGui::EndDisabled();
-        }
+        const bool can = arms && weaponModel && ctx.Controller && !s.WeaponSocket.empty() && !s.WeaponRoot.empty() && m_AssetsPtr;
+        ImGui::BeginDisabled(!can);
+        if (ActionButton(ICON_FA_RULER "  Measure Mount Rotation",
+                         "Reads the socket's and the weapon root's orientation on the first frame of the default state's clips\n"
+                         "and sets Mount Rotation to the fixed turn between them, and Mount Offset to where the root sits\n"
+                         "from the socket (needs the rigs loaded and a socket / root set).",
+                         false, ImVec2(-FLT_MIN, 0.0f))
+            && MeasureMountRotation(s, *ctx.Controller, *arms, *weaponModel, *m_AssetsPtr))
+            changed = true;
+        ImGui::EndDisabled();
     }
 
-    const auto& rc = s.Procedural.Recoil;
-    std::snprintf(summary, sizeof summary, "%s", rc.Enabled ? "kick, climb" : "off");
-    if (r.Section(ICON_FA_BURST, "Recoil", summary)) {
-        static const char* const extensions[] = {".recoil", nullptr};
-        AssetPathPickerOptions options;
-        options.Extensions = extensions;
-        options.DragPayload = "ASSET_FILE_PATH";
-        options.NoneLabel = "(embedded recoil)";
-        options.DialogFilter = "Recoil Profile\0*.recoil\0All Files\0*.*\0";
-        ImGui::TextUnformatted("Recoil Profile");
-        std::string selected = s.RecoilProfile;
-        if (AssetPathPicker("##recoilprofile", selected, options)) {
-            RecoilAsset loaded;
-            std::string why;
-            if (selected.empty() || RecoilAsset::LoadFile(ProjectPaths::Resolve(selected), loaded, &why)) {
-                s.RecoilProfile = selected;
-                s.RecoilProfileGuid = AssetDatabase::RefGuid(selected);
-                cache.Error.clear();
-                if (!selected.empty()) {
-                    auto& dst = s.Procedural.Recoil;
-                    const auto previous = dst;
-                    dst = loaded.Data;
-                    dst.BoltBone = previous.BoltBone;
-                    dst.BoltCycle = previous.BoltCycle;
-                    dst.BoltTravel = previous.BoltTravel;
-                    dst.HipProcedural = true;
-                }
-                changed = true;
-            } else Log::Error(why);
-        }
-        const bool extracting = s.RecoilProfile.empty();
-        bool makeRecoil;
-        {
-            EditorSoundEvents::ScopedClickSilence quiet; // Create / Duplicate / Blocked instead of the click
-            makeRecoil = EditorUIPrimitives::SecondaryButton(extracting ? "Extract Recoil Asset" : "Duplicate Recoil Asset");
-        }
-        if (makeRecoil) {
-            const auto base = fs::u8path(path).parent_path() / (fs::u8path(path).stem().u8string() + ".recoil");
-            auto target = base;
-            for (int n = 1; fs::exists(target, ec); ++n)
-                target = base.parent_path() / (base.stem().u8string() + " " + std::to_string(n) + ".recoil");
-            RecoilAsset asset;
-            asset.Data = s.Procedural.Recoil;
-            const bool saved = asset.SaveFile(target.u8string());
-            EditorSound::Play(!saved ? EditorSound::Event::Blocked : extracting ? EditorSound::Event::Create : EditorSound::Event::Duplicate);
-            if (saved) {
-                AssetDatabase::EnsureGuid(target.u8string());
-                s.RecoilProfile = ProjectPaths::Relativize(target.u8string());
-                s.RecoilProfileGuid = AssetDatabase::RefGuid(s.RecoilProfile);
-                s.Procedural.Recoil.HipProcedural = true;
-                changed = true;
-                InvalidateAnimationListing();
-            } else Log::Error("Could not save recoil profile.");
-        }
-        if (!s.RecoilProfile.empty()) {
-            ImGui::SameLine();
-            if (EditorUIPrimitives::SecondaryButton("Open Profile")) {
-                openProfile = ProjectPaths::Resolve(s.RecoilProfile);
-            }
-            r.Note("Shared recoil: edits affect every weapon referencing this asset. Bolt setup stays on this weapon.");
-            r.Text("Bolt Bone", s.Procedural.Recoil.BoltBone, "Bone on the weapon model.");
-            r.Float("Bolt Cycle", s.Procedural.Recoil.BoltCycle, 0.001f, 0.0f, 1.0f, "%.3f s", "Seconds for a full bolt cycle.");
-            r.Vec3("Bolt Travel", s.Procedural.Recoil.BoltTravel, 0.001f, "%.4f", "Weapon model units; explicit stroke avoids needing a Fire clip.");
-            const auto* report = FindBarrelReport(path);
-            ImGui::BeginDisabled(!report || glm::length(report->BoltTravel) < 1e-6f);
-            if (EditorUIPrimitives::SecondaryButton("Use Measured Bolt Travel")) {
-                s.Procedural.Recoil.BoltTravel = report->BoltTravel;
-                changed = true;
-            }
-            ImGui::EndDisabled();
-            r.Note("Play once with the optional Fire clip to capture its bolt stroke, or enter travel directly. Set Barrel & Laser > muzzle manually if the bolt does not follow the bore.");
-        } else DrawRecoil(r, s.Procedural.Recoil, g.RoundsPerMinute);
-    }
-
-    if(r.Section(ICON_FA_VIDEO,"Camera","action animation, firing shake")) {
-        auto& c=s.ActionCamera;
-        r.Check("Action Animation",c.Enabled,"Follow this animated rig node during actions, before ADS holds and IK.");
-        r.Name("Camera Node",c.Node,ctx.Bones,ctx.Arms!=nullptr && !c.Node.empty(),
-            "Animated bone on the arms rig; use head to attach the camera to the head. Empty uses the player's Camera Bone.","The arms rig has no node named '%s'.");
-        r.Name("Reference State",c.ReferenceState,ctx.States,ctx.Controller!=nullptr,
-            "The neutral camera pose, sampled at this state's first frame.","The controller has no reference state '%s'.");
-        auto list=[&](const char* label,std::vector<std::string>& values,const char* tip) {
-            std::string text;
-            for(const auto& value:values) text+=(text.empty()?"":", ")+value;
-            if(!r.Text(label,text,tip)) return;
-            values.clear();
-            std::stringstream input(text); std::string value;
-            while(std::getline(input,value,',')) {
-                const auto start=value.find_first_not_of(" \t");
-                if(start!=std::string::npos) values.push_back(value.substr(start,value.find_last_not_of(" \t")-start+1));
-            }
-        };
-        list("Action Tags",c.Tags,"Comma-separated tags whose states animate the camera. Reload, Busy and Cycling cover normal actions.");
-        list("Extra States",c.States,"Additional state names, e.g. Draw, Holster. Transitions blend to/from neutral automatically.");
-        r.Float("Rotation Scale",c.RotationScale,.01f,0,2,"x%.2f","One follows the bone's animated rotation. Zero disables it.");
-        r.Float("Position Scale",c.PositionScale,.01f,0,2,"x%.2f","One follows the bone's animated translation. Zero keeps the eye in place.");
-        r.Float("Action ADS Scale",c.AdsScale,.01f,0,2,"x%.2f","Action camera motion strength when aiming.");
-        r.Note("Use head to follow the existing head animation directly. Select any other animated node here if needed. The camera keeps mouse look and blends back to normal as the action ends.");
-        static const char* const extensions[]={".camerashake",nullptr};
-        AssetPathPickerOptions options;
-        options.Extensions=extensions; options.DragPayload="ASSET_FILE_PATH"; options.NoneLabel="(no firing shake)";
-        options.DialogFilter="Camera Shake\0*.camerashake\0All Files\0*.*\0";
-        std::string selected=s.CameraShakeProfile;
-        if(r.Path("Firing Shake",selected,options,"Reusable camera shake asset, triggered for every committed shot, including procedural fire.")) {
-            CameraShakeAsset loaded; std::string why;
-            if(selected.empty() || CameraShakeAsset::LoadFile(ProjectPaths::Resolve(selected),loaded,&why)) {
-                s.CameraShakeProfile=selected; s.CameraShakeProfileGuid=AssetDatabase::RefGuid(selected);
-                s.CameraShake=loaded; changed=true;
-            } else Log::Error(why);
-        }
-        bool createShake;
-        { EditorSoundEvents::ScopedClickSilence quiet; createShake=EditorUIPrimitives::SecondaryButton("Create Firing Shake"); } // Create / Blocked instead
-        if(createShake) {
-            const auto base=fs::u8path(path).parent_path()/(fs::u8path(path).stem().u8string()+".camerashake");
-            auto target=base;
-            for(int n=1;fs::exists(target,ec);++n) target=base.parent_path()/(base.stem().u8string()+" "+std::to_string(n)+".camerashake");
-            const bool saved=CameraShakeAsset{}.SaveFile(target.u8string());
-            EditorSound::Play(saved?EditorSound::Event::Create:EditorSound::Event::Blocked);
-            if(saved) {
-                AssetDatabase::EnsureGuid(target.u8string());
-                s.CameraShakeProfile=ProjectPaths::Relativize(target.u8string());
-                s.CameraShakeProfileGuid=AssetDatabase::RefGuid(s.CameraShakeProfile);
-                s.CameraShake={}; changed=true; InvalidateAnimationListing(); openProfile=target.u8string();
-            } else Log::Error("Could not create camera shake asset.");
-        }
-        if(!s.CameraShakeProfile.empty()) {
-            ImGui::SameLine(); if(EditorUIPrimitives::SecondaryButton("Open Shake")) openProfile=ProjectPaths::Resolve(s.CameraShakeProfile);
-        }
-    }
+    WeaponSectionOut out{changed, openProfile};
+    std::snprintf(summary, sizeof summary, "%s", s.Procedural.Recoil.Enabled ? "kick, climb" : "off");
+    if (r.Section(ICON_FA_BURST, "Recoil", summary)) DrawRecoilSection(r, s, path, cache.Error, out);
+    if (r.Section(ICON_FA_VIDEO, "Camera", "action animation, firing shake")) DrawCameraSection(r, s, ctx, path, out);
+    if (out.ListingChanged) InvalidateAnimationListing();
     if (r.Section(ICON_FA_PERSON_RUNNING, "Movement", "sway, breathing, jump, camera, walls")) DrawMovement(r, s.Procedural, ctx);
 
     std::snprintf(summary, sizeof summary, "%s", s.Procedural.IK.Enabled ? "hands on the gun" : "off");
