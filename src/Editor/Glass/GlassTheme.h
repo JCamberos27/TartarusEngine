@@ -38,7 +38,7 @@ void DrawSquircleBorder(ImDrawList* dl, ImVec2 min, ImVec2 max, ImU32 col, float
 void DrawSoftShadow(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, float alpha, float spreadPx);
 
 // A glass plate drawn inside the Scene view (the viewport HUDs): the blurred scene (GlassBackdrop)
-// sampled under exactly this rect, the 25% black tint, the 15% white edge and a soft shadow.
+// sampled under exactly this rect, the chrome's tint (OverlayTint) and the 15% white edge. No shadow.
 // `blurTex` 0 = no blur available (the option is off, or the GPU path failed): falls back to the
 // opaque GlassFallback.
 // `viewportMin`/`viewportMax` is the screen rect the blurred texture covers. `blurVtx` (optional)
