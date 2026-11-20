@@ -143,6 +143,9 @@ public:
     // spawned after the rebuild, or a caller running before the first one — so it is always
     // correct, never merely fast.
     glm::mat4 GetCachedWorldTransform(entt::entity entity) const;
+    // Changes whenever a parent link changes (SetParent, a destroy, a cut cycle): what is derived
+    // from the hierarchy is good while this stays the same.
+    std::uint64_t HierarchyVersion() const { return m_HierarchyVersion; }
 
     // #114 — the entity's transform expressed in WORLD space (position / YXZ Euler degrees /
     // absolute scale decomposed from ComposeWorldTransform). Identical to its TransformComponent
