@@ -553,10 +553,10 @@ static void Test_CascadedShadowMap_HardKernelAndSplit() {
 
     World w;
     AssetLibrary assets;
-    w.ShadowCascadeSplit = 0.9f;
+    w.Render.ShadowCascadeSplit = 0.9f;
     World back;
     CHECK(SceneSerializer::LoadFromString(back, assets, SceneSerializer::SaveToString(w, assets)));
-    CHECK(std::abs(back.ShadowCascadeSplit - 0.9f) < 1e-6f);
+    CHECK(std::abs(back.Render.ShadowCascadeSplit - 0.9f) < 1e-6f);
 }
 
 // PNG writes from several threads at different compression levels each get their own level: the bytes match a

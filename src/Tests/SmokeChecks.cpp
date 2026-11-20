@@ -78,8 +78,8 @@ void ProjectSync(EditorLayer& editor, World& world, AssetLibrary& assets) {
     std::this_thread::sleep_for(std::chrono::milliseconds(3100)); // past the self-write window
     std::ofstream(m, std::ios::app) << "\n";                        // an outside edit: re-import it
     const bool matAdded = pump([&] { return !assets.FindListed(m).empty(); });
-    const std::string savedSky = world.SkyHdriPath;
-    world.SkyHdriPath = a;
+    const std::string savedSky = world.Render.SkyHdriPath;
+    world.Render.SkyHdriPath = a;
     // Rename it in place, alone: its .meta stays behind and must be carried over.
     fs::rename(a, c, se);
     const bool renamed = pump([&] { return !assets.FindListed(c).empty() && assets.FindListed(a).empty(); });
@@ -92,11 +92,11 @@ void ProjectSync(EditorLayer& editor, World& world, AssetLibrary& assets) {
     const bool moved = pump([&] { return !assets.FindListed(b).empty() && assets.FindListed(c).empty(); });
     const bool sameGuid = renamedGuid && AssetDatabase::GuidForPath(b) == guidA;
     const bool metaMoved = fs::exists(b + ".meta", se) && !fs::exists(c + ".meta", se);
-    const bool skyFollowed = AssetDatabase::PathKey(world.SkyHdriPath) == AssetDatabase::PathKey(b);
+    const bool skyFollowed = AssetDatabase::PathKey(world.Render.SkyHdriPath) == AssetDatabase::PathKey(b);
     std::shared_ptr<MaterialAsset> mat = assets.LoadMaterial(assets.FindListed(m));
     const bool matFollowed = mat && mat->Mat.AlbedoMap &&
         AssetDatabase::PathKey(mat->AlbedoMapPath) == AssetDatabase::PathKey(b);
-    world.SkyHdriPath = savedSky;
+    world.Render.SkyHdriPath = savedSky;
     // Delete it; its .meta goes with it.
     fs::remove(b, se);
     const bool removed = pump([&] { return assets.FindListed(b).empty(); });

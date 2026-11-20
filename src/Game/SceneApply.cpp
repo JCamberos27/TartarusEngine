@@ -25,21 +25,21 @@ void MigratePostProcessSettingsFromPrefs(World& world) {
         const auto it = prefs.find(key);
         return (it != prefs.end() && it->is_boolean()) ? it->get<bool>() : fallback;
     };
-    world.ExposureEV       = num("exposureEV", 0.0f);
-    world.TonemapOperator  = num("tonemapOperator", 1);
-    world.MsaaSamples      = num("msaaSamples", 4);
-    world.SsaoEnabled      = flag("ssaoEnabled", false);
-    world.BloomEnabled     = flag("bloomEnabled", false);
-    world.BloomThreshold   = num("bloomThreshold", 1.0f);
-    world.BloomKnee        = num("bloomKnee", 0.5f);
-    world.BloomIntensity   = num("bloomIntensity", 0.25f);
-    world.ShadowsEnabled   = flag("shadowsEnabled", true);
-    world.ShadowResolution = num("shadowResolution", 4096);
-    world.ShadowCascades   = num("shadowCascades", 4);
-    world.ShadowDistance   = num("shadowDistance", 500.0f);
+    world.Render.ExposureEV       = num("exposureEV", 0.0f);
+    world.Render.TonemapOperator  = num("tonemapOperator", 1);
+    world.Render.MsaaSamples      = num("msaaSamples", 4);
+    world.Render.SsaoEnabled      = flag("ssaoEnabled", false);
+    world.Render.BloomEnabled     = flag("bloomEnabled", false);
+    world.Render.BloomThreshold   = num("bloomThreshold", 1.0f);
+    world.Render.BloomKnee        = num("bloomKnee", 0.5f);
+    world.Render.BloomIntensity   = num("bloomIntensity", 0.25f);
+    world.Render.ShadowsEnabled   = flag("shadowsEnabled", true);
+    world.Render.ShadowResolution = num("shadowResolution", 4096);
+    world.Render.ShadowCascades   = num("shadowCascades", 4);
+    world.Render.ShadowDistance   = num("shadowDistance", 500.0f);
     g_MigrationLog.push_back("post-processing/shadow settings (exposure=" +
-        std::to_string(world.ExposureEV) + ", bloom=" + (world.BloomEnabled ? "on" : "off") +
-        ", ssao=" + (world.SsaoEnabled ? "on" : "off") + ") migrated from editor_prefs.json");
+        std::to_string(world.Render.ExposureEV) + ", bloom=" + (world.Render.BloomEnabled ? "on" : "off") +
+        ", ssao=" + (world.Render.SsaoEnabled ? "on" : "off") + ") migrated from editor_prefs.json");
 }
 
 // Guards ApplySceneJson against runaway recursion when a prefab instance stub expands another
@@ -113,111 +113,111 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         // and must not disturb the scene's own.
     } else
     if (root.contains("skyHorizonColor") || root.contains("skyZenithColor")) {
-        world.SkyHorizonColor = JsonToVec3(root.value("skyHorizonColor", json::array({0.53f, 0.72f, 0.86f})), glm::vec3(0.53f, 0.72f, 0.86f));
-        world.SkyZenithColor = JsonToVec3(root.value("skyZenithColor", json::array({0.20f, 0.40f, 0.75f})), glm::vec3(0.20f, 0.40f, 0.75f));
+        world.Render.SkyHorizonColor = JsonToVec3(root.value("skyHorizonColor", json::array({0.53f, 0.72f, 0.86f})), glm::vec3(0.53f, 0.72f, 0.86f));
+        world.Render.SkyZenithColor = JsonToVec3(root.value("skyZenithColor", json::array({0.20f, 0.40f, 0.75f})), glm::vec3(0.20f, 0.40f, 0.75f));
     } else if (root.contains("skyColor")) {
         // Migrate scenes saved before the sky became a horizon/zenith gradient — keep the old
         // flat color as the horizon and fall back to the default zenith blue above it.
-        world.SkyHorizonColor = JsonToVec3(root["skyColor"], glm::vec3(0.53f, 0.72f, 0.86f));
-        world.SkyZenithColor = glm::vec3(0.20f, 0.40f, 0.75f);
+        world.Render.SkyHorizonColor = JsonToVec3(root["skyColor"], glm::vec3(0.53f, 0.72f, 0.86f));
+        world.Render.SkyZenithColor = glm::vec3(0.20f, 0.40f, 0.75f);
     } else {
-        world.SkyHorizonColor = glm::vec3(0.53f, 0.72f, 0.86f);
-        world.SkyZenithColor = glm::vec3(0.20f, 0.40f, 0.75f);
+        world.Render.SkyHorizonColor = glm::vec3(0.53f, 0.72f, 0.86f);
+        world.Render.SkyZenithColor = glm::vec3(0.20f, 0.40f, 0.75f);
     }
     // #196: scenes saved before IBL existed carry no ambient intensity — 1.0 (the physically
     // consistent value) is the right default for them, same as a brand-new scene.
     if (clearFirst) {
-        world.SkyAmbientIntensity    = root.value("skyAmbientIntensity",    1.0f);
+        world.Render.SkyAmbientIntensity    = root.value("skyAmbientIntensity",    1.0f);
         // PR13: HDRI sky source fields (absent in old scenes → Procedural defaults)
-        world.SkySourceMode          = (World::SkySource)std::clamp(root.value("skySource", 0), 0, 2); // #122
-        world.Sky                    = SkySettingsFromJson(root.value("sky", json::object()));
-        world.SkyHdriPath            = ResolveAssetRef(root, "skyHdriPath", "skyHdriGuid"); // audit #364, #132
-        world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
-        world.SkyHdriSun             = (World::HdriSunMode)std::clamp(root.value("skyHdriSun", 0), 0, 2); // #277
-        world.SkyHdriSunThreshold    = std::max(1.0f, root.value("skyHdriSunThreshold", 50.0f));
+        world.Render.SkySourceMode          = (World::SkySource)std::clamp(root.value("skySource", 0), 0, 2); // #122
+        world.Render.Sky                    = SkySettingsFromJson(root.value("sky", json::object()));
+        world.Render.SkyHdriPath            = ResolveAssetRef(root, "skyHdriPath", "skyHdriGuid"); // audit #364, #132
+        world.Render.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
+        world.Render.SkyHdriSun             = (World::HdriSunMode)std::clamp(root.value("skyHdriSun", 0), 0, 2); // #277
+        world.Render.SkyHdriSunThreshold    = std::max(1.0f, root.value("skyHdriSunThreshold", 50.0f));
         // #110 - local-light shadow budgets; absent in older scenes -> the old fixed caps.
-        world.MaxSpotShadows  = std::clamp(root.value("maxSpotShadows", 4), 0, SpotShadowMap::kMaxSpots);
-        world.MaxPointShadows = std::clamp(root.value("maxPointShadows", 2), 0, PointShadowMap::kMaxPoints);
+        world.Render.MaxSpotShadows  = std::clamp(root.value("maxSpotShadows", 4), 0, SpotShadowMap::kMaxSpots);
+        world.Render.MaxPointShadows = std::clamp(root.value("maxPointShadows", 2), 0, PointShadowMap::kMaxPoints);
 
         // #9, Phase M item 1 — v3+ scenes own these directly; a pre-v3 file has none of these
         // keys (BuildSceneJson only started writing them at v3), which is exactly the signal to
         // migrate the user's real values forward from editor_prefs.json instead of defaulting.
         if (root.contains("exposureEV")) {
-            world.ExposureEV       = root.value("exposureEV", 0.0f);
-            world.TonemapOperator  = root.value("tonemapOperator", 1);
-            world.MsaaSamples      = root.value("msaaSamples", 4);
-            world.SsaoEnabled      = root.value("ssaoEnabled", false);
-            world.SsaoRadius       = std::clamp(root.value("ssaoRadius", 0.5f), 0.05f, 5.0f);
-            world.SsaoBias         = std::clamp(root.value("ssaoBias", 0.025f), 0.0f, 0.5f);
-            world.SsaoIntensity    = std::clamp(root.value("ssaoIntensity", 1.0f), 0.1f, 4.0f);
-            world.BloomEnabled     = root.value("bloomEnabled", false);
-            world.BloomThreshold   = root.value("bloomThreshold", 1.0f);
-            world.BloomKnee        = root.value("bloomKnee", 0.5f);
-            world.BloomIntensity   = root.value("bloomIntensity", 0.25f);
+            world.Render.ExposureEV       = root.value("exposureEV", 0.0f);
+            world.Render.TonemapOperator  = root.value("tonemapOperator", 1);
+            world.Render.MsaaSamples      = root.value("msaaSamples", 4);
+            world.Render.SsaoEnabled      = root.value("ssaoEnabled", false);
+            world.Render.SsaoRadius       = std::clamp(root.value("ssaoRadius", 0.5f), 0.05f, 5.0f);
+            world.Render.SsaoBias         = std::clamp(root.value("ssaoBias", 0.025f), 0.0f, 0.5f);
+            world.Render.SsaoIntensity    = std::clamp(root.value("ssaoIntensity", 1.0f), 0.1f, 4.0f);
+            world.Render.BloomEnabled     = root.value("bloomEnabled", false);
+            world.Render.BloomThreshold   = root.value("bloomThreshold", 1.0f);
+            world.Render.BloomKnee        = root.value("bloomKnee", 0.5f);
+            world.Render.BloomIntensity   = root.value("bloomIntensity", 0.25f);
             // #162 - absent in older scenes: neutral.
-            world.FxaaEnabled        = root.value("fxaa", false);
-            world.AutoExposure       = root.value("autoExposure", false);
-            world.AutoExposureMinEV  = std::clamp(root.value("autoExposureMinEV", -4.0f), -12.0f, 12.0f);
-            world.AutoExposureMaxEV  = std::clamp(root.value("autoExposureMaxEV", 4.0f), -12.0f, 12.0f);
-            world.AutoExposureSpeedUp   = std::clamp(root.value("autoExposureSpeedUp", 2.0f), 0.0f, 20.0f);
-            world.AutoExposureSpeedDown = std::clamp(root.value("autoExposureSpeedDown", 1.0f), 0.0f, 20.0f);
-            world.GradeTemperature   = std::clamp(root.value("gradeTemperature", 0.0f), -100.0f, 100.0f);
-            world.GradeTint          = std::clamp(root.value("gradeTint", 0.0f), -100.0f, 100.0f);
-            world.GradeContrast      = std::clamp(root.value("gradeContrast", 0.0f), -100.0f, 100.0f);
-            world.GradeSaturation    = std::clamp(root.value("gradeSaturation", 0.0f), -100.0f, 100.0f);
-            world.GradeColorFilter   = glm::vec3(1.0f);
+            world.Render.FxaaEnabled        = root.value("fxaa", false);
+            world.Render.AutoExposure       = root.value("autoExposure", false);
+            world.Render.AutoExposureMinEV  = std::clamp(root.value("autoExposureMinEV", -4.0f), -12.0f, 12.0f);
+            world.Render.AutoExposureMaxEV  = std::clamp(root.value("autoExposureMaxEV", 4.0f), -12.0f, 12.0f);
+            world.Render.AutoExposureSpeedUp   = std::clamp(root.value("autoExposureSpeedUp", 2.0f), 0.0f, 20.0f);
+            world.Render.AutoExposureSpeedDown = std::clamp(root.value("autoExposureSpeedDown", 1.0f), 0.0f, 20.0f);
+            world.Render.GradeTemperature   = std::clamp(root.value("gradeTemperature", 0.0f), -100.0f, 100.0f);
+            world.Render.GradeTint          = std::clamp(root.value("gradeTint", 0.0f), -100.0f, 100.0f);
+            world.Render.GradeContrast      = std::clamp(root.value("gradeContrast", 0.0f), -100.0f, 100.0f);
+            world.Render.GradeSaturation    = std::clamp(root.value("gradeSaturation", 0.0f), -100.0f, 100.0f);
+            world.Render.GradeColorFilter   = glm::vec3(1.0f);
             if (root.contains("gradeColorFilter") && root["gradeColorFilter"].is_array() && root["gradeColorFilter"].size() == 3)
                 for (int i = 0; i < 3; ++i)
                     if (root["gradeColorFilter"][i].is_number())
-                        world.GradeColorFilter[i] = std::max(0.0f, root["gradeColorFilter"][i].get<float>());
+                        world.Render.GradeColorFilter[i] = std::max(0.0f, root["gradeColorFilter"][i].get<float>());
     // Volumetric fog: absent in older scenes, which load with it off.
-    world.VolumetricEnabled       = root.value("volumetricEnabled", false);
-    world.VolumetricDensity       = std::clamp(root.value("volDensity", 0.02f), 0.0f, 10.0f);
-    world.VolumetricAnisotropy    = std::clamp(root.value("volAnisotropy", 0.6f), -0.95f, 0.95f);
-    world.VolumetricHeightFalloff = std::clamp(root.value("volHeightFalloff", 0.0f), 0.0f, 10.0f);
-    world.VolumetricBaseHeight    = root.value("volBaseHeight", 0.0f);
-    world.VolumetricAlbedo        = glm::vec3(0.9f);
+    world.Render.VolumetricEnabled       = root.value("volumetricEnabled", false);
+    world.Render.VolumetricDensity       = std::clamp(root.value("volDensity", 0.02f), 0.0f, 10.0f);
+    world.Render.VolumetricAnisotropy    = std::clamp(root.value("volAnisotropy", 0.6f), -0.95f, 0.95f);
+    world.Render.VolumetricHeightFalloff = std::clamp(root.value("volHeightFalloff", 0.0f), 0.0f, 10.0f);
+    world.Render.VolumetricBaseHeight    = root.value("volBaseHeight", 0.0f);
+    world.Render.VolumetricAlbedo        = glm::vec3(0.9f);
     if (root.contains("volAlbedo") && root["volAlbedo"].is_array() && root["volAlbedo"].size() == 3)
         for (int i = 0; i < 3; ++i)
             if (root["volAlbedo"][i].is_number())
-                world.VolumetricAlbedo[i] = std::clamp(root["volAlbedo"][i].get<float>(), 0.0f, 1.0f);
-    world.VolumetricDistance      = std::clamp(root.value("volDistance", 64.0f), 4.0f, 1000.0f);
-    world.VolumetricQuality       = std::clamp(root.value("volQuality", 1), 0, 2);
-    world.DepthOfField  = root.value("depthOfField", false);
-    world.FocusDistance = std::clamp(root.value("focusDistance", 10.0f), 0.0f, 10000.0f);
+                world.Render.VolumetricAlbedo[i] = std::clamp(root["volAlbedo"][i].get<float>(), 0.0f, 1.0f);
+    world.Render.VolumetricDistance      = std::clamp(root.value("volDistance", 64.0f), 4.0f, 1000.0f);
+    world.Render.VolumetricQuality       = std::clamp(root.value("volQuality", 1), 0, 2);
+    world.Render.DepthOfField  = root.value("depthOfField", false);
+    world.Render.FocusDistance = std::clamp(root.value("focusDistance", 10.0f), 0.0f, 10000.0f);
     // Absent: the mode the older msaaSamples / fxaa fields already describe (never TAA).
-    world.AntiAliasing = World::LegacyAntiAliasing(world.MsaaSamples, world.FxaaEnabled);
+    world.Render.AntiAliasing = World::LegacyAntiAliasing(world.Render.MsaaSamples, world.Render.FxaaEnabled);
     if (const auto aa = root.find("antiAliasing"); aa != root.end() && aa->is_string()) {
         const std::string v = aa->get<std::string>();
-        if (v == "Off") world.AntiAliasing = World::AntiAliasingMode::Off;
-        else if (v == "FXAA") world.AntiAliasing = World::AntiAliasingMode::Fxaa;
-        else if (v == "MSAA") world.AntiAliasing = World::AntiAliasingMode::Msaa;
-        else if (v == "TAA") world.AntiAliasing = World::AntiAliasingMode::Taa;
+        if (v == "Off") world.Render.AntiAliasing = World::AntiAliasingMode::Off;
+        else if (v == "FXAA") world.Render.AntiAliasing = World::AntiAliasingMode::Fxaa;
+        else if (v == "MSAA") world.Render.AntiAliasing = World::AntiAliasingMode::Msaa;
+        else if (v == "TAA") world.Render.AntiAliasing = World::AntiAliasingMode::Taa;
     }
-    world.TaaSharpness = std::clamp(root.value("taaSharpness", 0.35f), 0.0f, 1.0f);
-    world.Wetness      = std::clamp(root.value("wetness", 0.0f), 0.0f, 1.0f);
-    world.PuddleAmount = std::clamp(root.value("puddleAmount", 0.0f), 0.0f, 1.0f);
-    world.PuddleScale  = std::clamp(root.value("puddleScale", 4.0f), 0.25f, 100.0f);
-    world.PuddleSsr    = root.value("puddleSsr", false);
-    world.FocusRange    = std::clamp(root.value("focusRange", 3.0f), 0.01f, 10000.0f);
-    world.DofMaxBlur    = std::clamp(root.value("dofMaxBlur", 8.0f), 0.0f, 32.0f);
-            world.FogEnabled       = root.value("fogEnabled", false);
-            world.FogMode          = std::clamp(root.value("fogMode", 2), 1, 3);
-            world.FogColor         = glm::vec3(0.55f, 0.62f, 0.72f);
+    world.Render.TaaSharpness = std::clamp(root.value("taaSharpness", 0.35f), 0.0f, 1.0f);
+    world.Render.Wetness      = std::clamp(root.value("wetness", 0.0f), 0.0f, 1.0f);
+    world.Render.PuddleAmount = std::clamp(root.value("puddleAmount", 0.0f), 0.0f, 1.0f);
+    world.Render.PuddleScale  = std::clamp(root.value("puddleScale", 4.0f), 0.25f, 100.0f);
+    world.Render.PuddleSsr    = root.value("puddleSsr", false);
+    world.Render.FocusRange    = std::clamp(root.value("focusRange", 3.0f), 0.01f, 10000.0f);
+    world.Render.DofMaxBlur    = std::clamp(root.value("dofMaxBlur", 8.0f), 0.0f, 32.0f);
+            world.Render.FogEnabled       = root.value("fogEnabled", false);
+            world.Render.FogMode          = std::clamp(root.value("fogMode", 2), 1, 3);
+            world.Render.FogColor         = glm::vec3(0.55f, 0.62f, 0.72f);
             if (root.contains("fogColor") && root["fogColor"].is_array() && root["fogColor"].size() == 3)
                 for (int i = 0; i < 3; ++i)
                     if (root["fogColor"][i].is_number())
-                        world.FogColor[i] = std::max(0.0f, root["fogColor"][i].get<float>());
-            world.FogDensity       = std::max(0.0f, root.value("fogDensity", 0.01f));
-            world.FogStart         = root.value("fogStart", 10.0f);
-            world.FogEnd           = root.value("fogEnd", 300.0f);
-            world.FogHeightFalloff = std::max(0.0f, root.value("fogHeightFalloff", 0.0f));
-            world.FogBaseHeight    = root.value("fogBaseHeight", 0.0f);
-            world.ShadowsEnabled   = root.value("shadowsEnabled", true);
-            world.ShadowResolution = root.value("shadowResolution", 4096);
-            world.ShadowCascades   = root.value("shadowCascades", 4);
-            world.ShadowDistance   = root.value("shadowDistance", 500.0f);
-            world.ShadowCascadeSplit = std::clamp(root.value("shadowCascadeSplit", 0.75f), 0.0f, 0.98f);
+                        world.Render.FogColor[i] = std::max(0.0f, root["fogColor"][i].get<float>());
+            world.Render.FogDensity       = std::max(0.0f, root.value("fogDensity", 0.01f));
+            world.Render.FogStart         = root.value("fogStart", 10.0f);
+            world.Render.FogEnd           = root.value("fogEnd", 300.0f);
+            world.Render.FogHeightFalloff = std::max(0.0f, root.value("fogHeightFalloff", 0.0f));
+            world.Render.FogBaseHeight    = root.value("fogBaseHeight", 0.0f);
+            world.Render.ShadowsEnabled   = root.value("shadowsEnabled", true);
+            world.Render.ShadowResolution = root.value("shadowResolution", 4096);
+            world.Render.ShadowCascades   = root.value("shadowCascades", 4);
+            world.Render.ShadowDistance   = root.value("shadowDistance", 500.0f);
+            world.Render.ShadowCascadeSplit = std::clamp(root.value("shadowCascadeSplit", 0.75f), 0.0f, 0.98f);
         } else {
             MigratePostProcessSettingsFromPrefs(world);
         }

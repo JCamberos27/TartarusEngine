@@ -33,7 +33,7 @@ void FormatClock(float hours, char* out, size_t n) {
 } // namespace
 
 void EditorLayer::DrawPhysicalSkySettings(World& world, float w) {
-    SkySettings& s = world.Sky;
+    SkySettings& s = world.Render.Sky;
 
     // One slider row with the undo step taken when the drag starts (EditorUI::SliderFloat's
     // out-param, not IsItemActivated - see DrawEnvironmentSettings).

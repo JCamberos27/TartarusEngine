@@ -174,7 +174,7 @@ VolumetricFog::ViewState& VolumetricFog::View(const void* key) {
 }
 
 bool VolumetricFog::WantedFor(const World& world, const RenderFrameContext& ctx, const int viewport[4]) {
-    return world.VolumetricEnabled && world.VolumetricDensity > 0.0f && !ctx.Unlit && ctx.DebugView == 0 &&
+    return world.Render.VolumetricEnabled && world.Render.VolumetricDensity > 0.0f && !ctx.Unlit && ctx.DebugView == 0 &&
            ctx.TxHdr != nullptr && std::abs(ctx.Proj[3][3]) < 0.5f && viewport[2] > 0 && viewport[3] > 0;
 }
 
@@ -193,8 +193,8 @@ void VolumetricFog::Render(const FrameState& fs) {
     }
 
     ViewState& vs = View(ctx.TxHdr);
-    const QualityLevel q = Quality(world.VolumetricQuality);
-    const float far = std::clamp(world.VolumetricDistance, 4.0f, 1000.0f);
+    const QualityLevel q = Quality(world.Render.VolumetricQuality);
+    const float far = std::clamp(world.Render.VolumetricDistance, 4.0f, 1000.0f);
     if (vs.W != q.W || vs.H != q.H || vs.D != q.D) {
         vs.Release();
         vs.W = q.W; vs.H = q.H; vs.D = q.D;
@@ -228,13 +228,13 @@ void VolumetricFog::Render(const FrameState& fs) {
     inject.SetFloat("uBlend", q.Blend);
     // Golden-ratio steps: each frame's offset lands in the largest gap the earlier ones left.
     inject.SetFloat("uFrameJitter", (float)std::fmod((double)vs.Frame * 0.6180339887498949, 1.0));
-    inject.SetFloat("uDensity", std::max(world.VolumetricDensity, 0.0f));
-    inject.SetFloat("uHeightFalloff", std::max(world.VolumetricHeightFalloff, 0.0f));
-    inject.SetFloat("uBaseHeight", world.VolumetricBaseHeight);
-    inject.SetVec3("uAlbedo", glm::clamp(world.VolumetricAlbedo, glm::vec3(0.0f), glm::vec3(1.0f)));
-    inject.SetFloat("uAnisotropy", std::clamp(world.VolumetricAnisotropy, -0.95f, 0.95f));
+    inject.SetFloat("uDensity", std::max(world.Render.VolumetricDensity, 0.0f));
+    inject.SetFloat("uHeightFalloff", std::max(world.Render.VolumetricHeightFalloff, 0.0f));
+    inject.SetFloat("uBaseHeight", world.Render.VolumetricBaseHeight);
+    inject.SetVec3("uAlbedo", glm::clamp(world.Render.VolumetricAlbedo, glm::vec3(0.0f), glm::vec3(1.0f)));
+    inject.SetFloat("uAnisotropy", std::clamp(world.Render.VolumetricAnisotropy, -0.95f, 0.95f));
     inject.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
-    inject.SetFloat("uIBLIntensity", std::max(world.SkyAmbientIntensity, 0.0f));
+    inject.SetFloat("uIBLIntensity", std::max(world.Render.SkyAmbientIntensity, 0.0f));
     if (fs.iblOn) glBindTextureUnit(11, in.iblProbe->IrradianceMap());
     inject.SetInt("uClusterEnabled", fs.clusterOn ? 1 : 0);
     if (fs.clusterOn) inject.SetVec4("uClusterZParams", ClusterGrid::ZParams(fs.clusterNearZ, fs.clusterFarZ));

@@ -325,19 +325,19 @@ void VolumetricBlueNoise() {
 void TaaAndWetnessRoundTrip() {
     AssetLibrary assets;
     World world;
-    world.AntiAliasing = World::AntiAliasingMode::Taa;
-    world.TaaSharpness = 0.6f;
-    world.Wetness = 0.8f;
-    world.PuddleAmount = 0.4f;
-    world.PuddleScale = 7.5f;
+    world.Render.AntiAliasing = World::AntiAliasingMode::Taa;
+    world.Render.TaaSharpness = 0.6f;
+    world.Render.Wetness = 0.8f;
+    world.Render.PuddleAmount = 0.4f;
+    world.Render.PuddleScale = 7.5f;
     const std::string saved = SceneSerializer::SaveToString(world);
     {
         World reloaded;
         CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-        CHECK(reloaded.AntiAliasing == World::AntiAliasingMode::Taa && reloaded.TaaSharpness == 0.6f);
-        CHECK(reloaded.TaaEnabled() && reloaded.EffectiveMsaaSamples() == World::kTaaMsaaSamples && !reloaded.EffectiveFxaa());
-        CHECK(reloaded.Wetness == 0.8f && reloaded.PuddleAmount == 0.4f && reloaded.PuddleScale == 7.5f);
-        CHECK(reloaded.MsaaSamples == world.MsaaSamples); // kept for switching back
+        CHECK(reloaded.Render.AntiAliasing == World::AntiAliasingMode::Taa && reloaded.Render.TaaSharpness == 0.6f);
+        CHECK(reloaded.Render.TaaEnabled() && reloaded.Render.EffectiveMsaaSamples() == World::kTaaMsaaSamples && !reloaded.Render.EffectiveFxaa());
+        CHECK(reloaded.Render.Wetness == 0.8f && reloaded.Render.PuddleAmount == 0.4f && reloaded.Render.PuddleScale == 7.5f);
+        CHECK(reloaded.Render.MsaaSamples == world.Render.MsaaSamples); // kept for switching back
     }
     nlohmann::json j = nlohmann::json::parse(saved);
     for (const char* k : {"antiAliasing", "taaSharpness", "wetness", "puddleAmount", "puddleScale"}) CHECK(j.erase(k) == 1);
@@ -345,13 +345,13 @@ void TaaAndWetnessRoundTrip() {
     {
         World old;
         CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
-        CHECK(old.AntiAliasing == World::AntiAliasingMode::Fxaa && old.EffectiveFxaa() && !old.TaaEnabled());
-        CHECK(old.EffectiveMsaaSamples() == old.MsaaSamples);
-        CHECK(old.Wetness == 0.0f && old.PuddleAmount == 0.0f && old.PuddleScale == 4.0f && old.TaaSharpness == 0.35f);
+        CHECK(old.Render.AntiAliasing == World::AntiAliasingMode::Fxaa && old.Render.EffectiveFxaa() && !old.Render.TaaEnabled());
+        CHECK(old.Render.EffectiveMsaaSamples() == old.Render.MsaaSamples);
+        CHECK(old.Render.Wetness == 0.0f && old.Render.PuddleAmount == 0.0f && old.Render.PuddleScale == 4.0f && old.Render.TaaSharpness == 0.35f);
     }
     {
         const World plain;
-        CHECK(plain.AntiAliasing == World::AntiAliasingMode::Msaa && plain.EffectiveMsaaSamples() == plain.MsaaSamples);
+        CHECK(plain.Render.AntiAliasing == World::AntiAliasingMode::Msaa && plain.Render.EffectiveMsaaSamples() == plain.Render.MsaaSamples);
         const nlohmann::json pj = nlohmann::json::parse(SceneSerializer::SaveToString(plain));
         CHECK(!pj.contains("antiAliasing") && !pj.contains("wetness") && !pj.contains("puddleAmount"));
     }
@@ -372,17 +372,17 @@ void TaaAndWetnessRoundTrip() {
 void SceneWindSettings() {
     AssetLibrary assets;
     World world;
-    world.SkySourceMode = World::SkySource::Atmosphere;
-    world.Sky.CloudWindDirectionDegrees = 120.0f;
-    world.Sky.WindStrength = 0.6f;
-    world.Sky.WindGustiness = 0.3f;
-    world.Sky.WindGustSpeed = 6.5f;
+    world.Render.SkySourceMode = World::SkySource::Atmosphere;
+    world.Render.Sky.CloudWindDirectionDegrees = 120.0f;
+    world.Render.Sky.WindStrength = 0.6f;
+    world.Render.Sky.WindGustiness = 0.3f;
+    world.Render.Sky.WindGustSpeed = 6.5f;
     const std::string saved = SceneSerializer::SaveToString(world);
     {
         World reloaded;
         CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-        CHECK(reloaded.Sky.CloudWindDirectionDegrees == 120.0f && reloaded.Sky.WindStrength == 0.6f);
-        CHECK(reloaded.Sky.WindGustiness == 0.3f && reloaded.Sky.WindGustSpeed == 6.5f);
+        CHECK(reloaded.Render.Sky.CloudWindDirectionDegrees == 120.0f && reloaded.Render.Sky.WindStrength == 0.6f);
+        CHECK(reloaded.Render.Sky.WindGustiness == 0.3f && reloaded.Render.Sky.WindGustSpeed == 6.5f);
     }
     nlohmann::json j = nlohmann::json::parse(saved);
     CHECK(j.contains("sky"));
@@ -391,8 +391,8 @@ void SceneWindSettings() {
         World old;
         CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
         const SkySettings d;
-        CHECK(old.Sky.WindStrength == d.WindStrength && old.Sky.WindGustiness == d.WindGustiness);
-        CHECK(old.Sky.WindGustSpeed == d.WindGustSpeed && old.Sky.CloudWindDirectionDegrees == 120.0f);
+        CHECK(old.Render.Sky.WindStrength == d.WindStrength && old.Render.Sky.WindGustiness == d.WindGustiness);
+        CHECK(old.Render.Sky.WindGustSpeed == d.WindGustSpeed && old.Render.Sky.CloudWindDirectionDegrees == 120.0f);
     }
     const glm::vec2 north = TimeOfDay::BearingToXZ(0.0f, 0.0f), east = TimeOfDay::BearingToXZ(90.0f, 0.0f);
     CHECK(glm::length(north - glm::vec2(0.0f, -1.0f)) < 1e-5f && glm::length(east - glm::vec2(1.0f, 0.0f)) < 1e-5f);
@@ -417,22 +417,22 @@ void VolumetricSettingsRoundTrip() {
     const glm::vec3 zero(0.0f), one(1.0f);
     const entt::entity lamp = world.CreateEmptyEntity(zero, zero, one, "Lamp");
     world.Registry.emplace<LightComponent>(lamp).VolumetricIntensity = 3.5f;
-    world.VolumetricEnabled = true;
-    world.VolumetricDensity = 0.07f;
-    world.VolumetricAnisotropy = -0.3f;
-    world.VolumetricHeightFalloff = 0.25f;
-    world.VolumetricBaseHeight = 2.0f;
-    world.VolumetricAlbedo = glm::vec3(0.5f, 0.6f, 0.7f);
-    world.VolumetricDistance = 40.0f;
-    world.VolumetricQuality = 2;
+    world.Render.VolumetricEnabled = true;
+    world.Render.VolumetricDensity = 0.07f;
+    world.Render.VolumetricAnisotropy = -0.3f;
+    world.Render.VolumetricHeightFalloff = 0.25f;
+    world.Render.VolumetricBaseHeight = 2.0f;
+    world.Render.VolumetricAlbedo = glm::vec3(0.5f, 0.6f, 0.7f);
+    world.Render.VolumetricDistance = 40.0f;
+    world.Render.VolumetricQuality = 2;
     const std::string saved = SceneSerializer::SaveToString(world);
     {
         World reloaded;
         CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-        CHECK(reloaded.VolumetricEnabled && reloaded.VolumetricQuality == 2);
-        CHECK(reloaded.VolumetricDensity == 0.07f && reloaded.VolumetricAnisotropy == -0.3f);
-        CHECK(reloaded.VolumetricHeightFalloff == 0.25f && reloaded.VolumetricBaseHeight == 2.0f);
-        CHECK(reloaded.VolumetricAlbedo == glm::vec3(0.5f, 0.6f, 0.7f) && reloaded.VolumetricDistance == 40.0f);
+        CHECK(reloaded.Render.VolumetricEnabled && reloaded.Render.VolumetricQuality == 2);
+        CHECK(reloaded.Render.VolumetricDensity == 0.07f && reloaded.Render.VolumetricAnisotropy == -0.3f);
+        CHECK(reloaded.Render.VolumetricHeightFalloff == 0.25f && reloaded.Render.VolumetricBaseHeight == 2.0f);
+        CHECK(reloaded.Render.VolumetricAlbedo == glm::vec3(0.5f, 0.6f, 0.7f) && reloaded.Render.VolumetricDistance == 40.0f);
         float intensity = -1.0f;
         for (auto [e, l] : reloaded.Registry.view<const LightComponent>().each()) intensity = l.VolumetricIntensity;
         CHECK(intensity == 3.5f);
@@ -453,8 +453,8 @@ void VolumetricSettingsRoundTrip() {
         World old;
         CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
         const World defaults;
-        CHECK(!old.VolumetricEnabled && old.VolumetricDensity == defaults.VolumetricDensity &&
-              old.VolumetricAnisotropy == defaults.VolumetricAnisotropy && old.VolumetricQuality == 1);
+        CHECK(!old.Render.VolumetricEnabled && old.Render.VolumetricDensity == defaults.Render.VolumetricDensity &&
+              old.Render.VolumetricAnisotropy == defaults.Render.VolumetricAnisotropy && old.Render.VolumetricQuality == 1);
         bool sawLight = false;
         for (auto [e, l] : old.Registry.view<const LightComponent>().each()) {
             sawLight = true;
@@ -673,17 +673,17 @@ void ProbeCaptureAndPuddleSsr() {
 
     AssetLibrary assets;
     World world;
-    CHECK(!world.PuddleSsr);
+    CHECK(!world.Render.PuddleSsr);
     const entt::entity probe = world.Registry.create();
     world.Registry.emplace<TransformComponent>(probe);
     CHECK(world.Registry.emplace<ReflectionProbeComponent>(probe).CaptureScene);
     CHECK(!nlohmann::json::parse(SceneSerializer::SaveToString(world)).contains("puddleSsr"));
-    world.PuddleSsr = true;
+    world.Render.PuddleSsr = true;
     world.Registry.get<ReflectionProbeComponent>(probe).CaptureScene = false;
     const std::string saved = SceneSerializer::SaveToString(world);
     World reloaded;
     CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-    CHECK(reloaded.PuddleSsr);
+    CHECK(reloaded.Render.PuddleSsr);
     int probes = 0;
     for (auto [e, rp] : reloaded.Registry.view<const ReflectionProbeComponent>().each()) { ++probes; CHECK(!rp.CaptureScene); }
     CHECK(probes == 1);
@@ -1498,31 +1498,31 @@ void TestPhysicalSky() {
 
     // Scene files: every field round-trips, old scenes load the defaults, bad values clamp.
     World w;
-    w.SkySourceMode = World::SkySource::Atmosphere;
-    w.Sky.CloudCoverage = 0.77f;
-    w.Sky.RayleighTint = glm::vec3(0.5f, 1.0f, 0.625f);
-    w.Sky.CloudQuality = 2;
-    w.Sky.MoonEnabled = false;
-    w.Sky.NightBrightness = 2.5f;
-    w.Sky.TimeOfDayHours = 17.25f;
+    w.Render.SkySourceMode = World::SkySource::Atmosphere;
+    w.Render.Sky.CloudCoverage = 0.77f;
+    w.Render.Sky.RayleighTint = glm::vec3(0.5f, 1.0f, 0.625f);
+    w.Render.Sky.CloudQuality = 2;
+    w.Render.Sky.MoonEnabled = false;
+    w.Render.Sky.NightBrightness = 2.5f;
+    w.Render.Sky.TimeOfDayHours = 17.25f;
     AssetLibrary assets;
     const std::string saved = SceneSerializer::SaveToString(w, assets);
     World r;
     AssetLibrary assets2;
     CHECK(SceneSerializer::LoadFromString(r, assets2, saved));
-    CHECK(r.SkySourceMode == World::SkySource::Atmosphere);
-    CHECK(r.Sky == w.Sky);
+    CHECK(r.Render.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(r.Render.Sky == w.Render.Sky);
     World old;
     AssetLibrary assets3;
     CHECK(SceneSerializer::LoadFromString(old, assets3, R"({"formatVersion":4,"skySource":2})"));
-    CHECK(old.SkySourceMode == World::SkySource::Atmosphere && old.Sky == SkySettings{});
+    CHECK(old.Render.SkySourceMode == World::SkySource::Atmosphere && old.Render.Sky == SkySettings{});
     World clamped;
     AssetLibrary assets4;
     CHECK(SceneSerializer::LoadFromString(clamped, assets4,
         R"({"formatVersion":4,"skySource":9,"sky":{"cloudCoverage":7,"cloudQuality":9,"latitude":-400,"clouds":"yes"}})"));
-    CHECK(clamped.SkySourceMode == World::SkySource::Atmosphere);
-    CHECK(clamped.Sky.CloudCoverage == 1.0f && clamped.Sky.CloudQuality == 3 && clamped.Sky.LatitudeDegrees == -90.0f);
-    CHECK(clamped.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
+    CHECK(clamped.Render.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(clamped.Render.Sky.CloudCoverage == 1.0f && clamped.Render.Sky.CloudQuality == 3 && clamped.Render.Sky.LatitudeDegrees == -90.0f);
+    CHECK(clamped.Render.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
 }
 
 // --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
