@@ -217,6 +217,13 @@ float FirstPersonBody::EyeBodyPush(World& world, const Camera& camera, const glm
     const glm::vec3 f = camera.Front(), u = camera.Up(), r = camera.Right();
     const float nearPlane = std::max(camera.NearPlane, 0.01f), need = nearPlane + kEyeBodyClearance;
     const float tanHalf = std::tan(glm::radians(camera.Fov) * 0.5f), kAspect = 16.0f / 9.0f;
+    // Only a point nearer than `need` to some tried eye (on eye + flat * [0, kEyeBodyPushMax]) can block, so the rest are
+    // dropped once here instead of tested by every push step and every bisection probe (up to ~110 sweeps a frame).
+    thread_local std::vector<glm::vec3> nearPoints;
+    nearPoints.clear();
+    const float reach = need + kEyeBodyPushMax + 1e-3f;
+    for (const glm::vec3& p : points)
+        if (glm::dot(p - eye, p - eye) < reach * reach) nearPoints.push_back(p);
     const auto blockedAs = [&](const glm::vec3& at, const glm::vec3& vf, const glm::vec3& vu, const glm::vec3& vr) {
         if (rimOpen && glm::dot(at - rimCentre, rimAxis) > 0.0f)
             for (const glm::vec3& p : rimPoints) {
@@ -226,7 +233,7 @@ float FirstPersonBody::EyeBodyPush(World& world, const Camera& camera, const glm
                 const float w = z * tanHalf * (1.0f + kNeckRimMargin);
                 if (z > 0.0f && std::abs(glm::dot(d, vu)) <= w && std::abs(glm::dot(d, vr)) <= w * kAspect) return true;
             }
-        for (const glm::vec3& p : points) {
+        for (const glm::vec3& p : nearPoints) {
             const glm::vec3 d = p - at;
             const float z = glm::dot(d, vf);
             if (z <= 0.0f || z >= need) continue;
