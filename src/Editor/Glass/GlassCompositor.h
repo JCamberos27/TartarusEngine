@@ -178,6 +178,22 @@ private:
     // One planned capture: the framebuffer rect (GL pixels, bottom-up) it copies and blurs.
     struct CaptureRect { int X0, Y0, X1, Y1; };
 
+    // The frame Render works on: its draw data, viewport, framebuffer size and display rect.
+    struct Frame {
+        ImDrawData* dd = nullptr;
+        ImGuiViewport* vp = nullptr;
+        int fbW = 0, fbH = 0;
+        ImVec2 dispMin, dispMax;
+        int listCount = 0;
+    };
+    static bool DrawsPlate(const ListInfo& li) {
+        return li.Plate && li.Alpha > 0.0f && li.PlateRect.GetWidth() >= 1.0f && li.PlateRect.GetHeight() >= 1.0f;
+    }
+    // Render's three passes, in order.
+    void PoseLists(const Frame& f);               // classify, convert and pose every list (CPU only)
+    void PlanCaptures(const Frame& f, bool blur); // which capture each plate samples, and each capture's rect
+    void DrawLists(const Frame& f);               // back to front, a glass plate under each surface
+
     SurfacePose PoseFor(ImGuiWindow* group, SurfaceKind kind, bool appeared, float* rimBoost);
     void Capture(int w, int h, const CaptureRect& rect);
     void Flush(ImDrawData* dd, std::vector<ImDrawList*>& pending, bool& texturesSent);
