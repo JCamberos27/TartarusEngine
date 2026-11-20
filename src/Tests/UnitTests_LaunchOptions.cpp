@@ -1,5 +1,6 @@
 #include "UnitTestSupport.h"
 #include "../App/LaunchOptions.h"
+#include "../App/ScratchProfile.h"
 #include "../Core/Env.h"
 #include "../Core/Paths.h"
 
@@ -110,6 +111,15 @@ void Test_ProjectPaths_RelativizeUnder() {
     CHECK(ProjectPaths::Relativize("Z:\\elsewhere\\x.png") == "Z:\\elsewhere\\x.png");
 }
 
+void Test_ScratchProfile_InstanceNames() {
+    // TARTARUS_EDITOR_TEST_INSTANCE: parallel harness runs get their own user folder; no name = the old folder.
+    CHECK(ScratchFolderName("TartarusEngine-Test", "") == "TartarusEngine-Test");
+    CHECK(ScratchFolderName("TartarusEngine-Shot", "w1") == "TartarusEngine-Shot-w1");
+    CHECK(ScratchInstanceNameValid("") && ScratchInstanceNameValid("w1") && ScratchInstanceNameValid("bench_2-b"));
+    CHECK(!ScratchInstanceNameValid("a b") && !ScratchInstanceNameValid("..") && !ScratchInstanceNameValid("x/y"));
+    CHECK(!ScratchInstanceNameValid("w1\\..") && !ScratchInstanceNameValid(std::string(33, 'a')));
+}
+
 } // namespace
 
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
@@ -118,4 +128,5 @@ void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"LaunchOptions::Errors", Test_LaunchOptions_Errors});
     tests.push_back({"Env::ReadsAndHelp", Test_Env_ReadsAndHelp});
     tests.push_back({"ProjectPaths::RelativizeUnder", Test_ProjectPaths_RelativizeUnder});
+    tests.push_back({"ScratchProfile::InstanceNames", Test_ScratchProfile_InstanceNames});
 }

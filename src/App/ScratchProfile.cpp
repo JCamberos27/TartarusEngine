@@ -4,6 +4,7 @@
 #include "Core/Env.h"
 #include "Core/Paths.h"
 #include "ScriptIDE.h"
+#include "imgui.h"
 #include "Tests/EditorUiTests.h" // --editor-tests
 
 #include <algorithm>
@@ -14,25 +15,71 @@
 #include <iterator>
 #include <string>
 
+bool ScratchInstanceNameValid(const std::string& name) {
+    return name.size() <= 32 &&
+           std::all_of(name.begin(), name.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; });
+}
+
+std::string ScratchFolderName(const std::string& base, const std::string& instance) {
+    return instance.empty() ? base : base + "-" + instance;
+}
+
+std::string ScratchInstanceName() {
+    const std::string s = Env::Str(Env::Var::EditorTestInstance);
+    return ScratchInstanceNameValid(s) ? s : std::string();
+}
+
+namespace {
+
+// TARTARUS_EDITOR_TEST_INSTANCE=<name> gives a harness run its own scratch user folder (<base>-<name>), so runs from
+// different checkouts at the same time never write the same prefs, layout or log. A name with other characters
+// refuses the run rather than falling back to the shared folder.
+bool InstanceNameOk(const char* what) {
+    const std::string s = Env::Str(Env::Var::EditorTestInstance);
+    if (ScratchInstanceNameValid(s)) return true;
+    std::cerr << what << ": TARTARUS_EDITOR_TEST_INSTANCE='" << s
+              << "' must be at most 32 letters, digits, '-' or '_'; refusing to run." << std::endl;
+    return false;
+}
+
+// Points UserPaths at <base>[-<instance>] and checks it took (Root() pins on first use).
+bool UseScratchFolder(const char* what, const std::string& base) {
+    const std::string name = ScratchFolderName(base, ScratchInstanceName());
+    UserPaths::SetAppName(name);
+    if (std::filesystem::path(UserPaths::Root()).filename() == name) return true;
+    std::cerr << what << ": could not set up a scratch user folder; refusing to run." << std::endl;
+    return false;
+}
+
+// Copies the prefs and layout the user sees into the scratch folder this run may freely rewrite (window placement,
+// layout, last scene). UserPaths::Root() pins on first use, so the real folder comes from BaseDir() instead.
+bool CopyUserPrefsToScratch(const char* what, const std::string& base, bool dropLayout) {
+    namespace fs = std::filesystem;
+    fs::path real;
+    if (const std::string appData = UserPaths::BaseDir(); !appData.empty()) real = fs::path(appData) / "TartarusEngine";
+    if (!UseScratchFolder(what, base)) return false;
+    const fs::path scratch = UserPaths::Root();
+    std::error_code eqEc;
+    if (real.empty() || fs::equivalent(real, scratch, eqEc)) {
+        std::cerr << what << ": could not set up a scratch user folder; refusing to run." << std::endl;
+        return false;
+    }
+    std::error_code ec;
+    for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
+        fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
+    if (dropLayout) fs::remove(scratch / "imgui.ini", ec);
+    return true;
+}
+
+} // namespace
+
 bool PrepareEditorTestsProfile(const LaunchOptions& opt) {
     // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
     // favorites - the tests start from a known state and never touch the user's own files.
     namespace fs = std::filesystem;
-    // TARTARUS_EDITOR_TEST_INSTANCE=<name> gives this run its own folder
-    // (TartarusEngine-Test-<name>), so runs from different checkouts at the same time don't
-    // overwrite each other's prefs. Letters, digits, '-' and '_' only.
-    std::string scratchName = "TartarusEngine-Test";
-    if (const std::string s = Env::Str(Env::Var::EditorTestInstance);
-        !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; }))
-        scratchName += "-" + s;
-    UserPaths::SetAppName(scratchName);
-    const fs::path scratch = UserPaths::Root();
-    if (scratch.filename() != scratchName) {
-        std::cerr << "--editor-tests: could not set up a scratch user folder; refusing to run." << std::endl;
-        return false;
-    }
+    if (!InstanceNameOk("--editor-tests") || !UseScratchFolder("--editor-tests", "TartarusEngine-Test")) return false;
     std::error_code ec;
-    for (const auto& entry : fs::directory_iterator(scratch, ec)) fs::remove_all(entry.path(), ec);
+    for (const auto& entry : fs::directory_iterator(UserPaths::Root(), ec)) fs::remove_all(entry.path(), ec);
     // The Script IDE's session (open tabs, unsaved buffers) lives in the project; this run's goes
     // in the scratch folder instead, so it starts with no tabs and leaves the user's alone.
     ScriptIDE::SetSessionDirectory(UserPaths::Resolve("IDE"));
@@ -41,25 +88,23 @@ bool PrepareEditorTestsProfile(const LaunchOptions& opt) {
 }
 
 bool PrepareEditorShotProfile(const LaunchOptions& opt) {
-    // The prefs and layout the user sees, copied into a scratch user folder that this run may
-    // freely rewrite (window placement, layout, last scene).
-    // UserPaths::Root() pins on first use, so the real folder comes from BaseDir() instead.
-    namespace fs = std::filesystem;
-    fs::path real;
-    if (const std::string appData = UserPaths::BaseDir(); !appData.empty())
-        real = fs::path(appData) / "TartarusEngine";
-    UserPaths::SetAppName("TartarusEngine-Shot");
-    const fs::path scratch = UserPaths::Root();
-    std::error_code eqEc;
-    if (real.empty() || fs::equivalent(real, scratch, eqEc) || scratch.filename() != "TartarusEngine-Shot") {
-        std::cerr << "--editor-shot: could not set up a scratch user folder; refusing to run." << std::endl;
-        return false;
-    }
-    std::error_code ec;
-    for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
-        fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
-    if (opt.editorShotDefaultLayout) fs::remove(scratch / "imgui.ini", ec);
-    return true;
+    return InstanceNameOk("--editor-shot") &&
+           CopyUserPrefsToScratch("--editor-shot", "TartarusEngine-Shot", opt.editorShotDefaultLayout);
+}
+
+bool PrepareSmokeProfile() {
+    // Without an instance name the run keeps using the real user folder, as before.
+    if (!InstanceNameOk("--smoke-test")) return false;
+    if (ScratchInstanceName().empty()) return true;
+    return CopyUserPrefsToScratch("--smoke-test", "TartarusEngine-Smoke", /*dropLayout=*/false);
+}
+
+void UsePrivateClipboardForInstance() {
+    if (ScratchInstanceName().empty() || !ImGui::GetCurrentContext()) return;
+    static std::string clip;
+    ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+    pio.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) { clip = text ? text : ""; };
+    pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char* { return clip.c_str(); };
 }
 
 struct ProjectFilesGuard::File {
