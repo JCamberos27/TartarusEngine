@@ -422,7 +422,8 @@ void UpdateHiding(World& world) {
     }
 }
 
-std::shared_future<void> PrefetchCoverage(const World& world, entt::entity root, const std::vector<Wardrobe::Piece>& pieces) {
+std::shared_future<void> detail::PrefetchCoverage(const World& world, entt::entity root,
+                                                  const std::vector<Wardrobe::Piece>& pieces) {
     const auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(root);
     if (!outfit || !outfit->AutoHide || pieces.size() < 2) return {};
     // The keys UpdateHiding will ask for once these pieces are worn: layers and fits from the same wardrobe, the
