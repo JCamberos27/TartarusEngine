@@ -9,6 +9,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Bloom.h"
+#include "FullscreenPass.h"
 #include "BodyDebugDraw.h"
 #include "Camera.h"
 #include "ColliderGizmo.h"
@@ -105,6 +106,7 @@ void ViewPipeline::DrawScene(const ViewPipelineInputs& in, const RenderFrameCont
 // The occlusion + blur from `target`'s depth, however that depth was filled.
 void ViewPipeline::SsaoCompute(const ViewPipelineInputs& in, Ssao& target, const glm::mat4& proj) {
     PROFILE_GPU_SCOPE("SSAO Compute + Blur");
+    FullscreenPass pass; // one state save/restore for both passes
     target.Compute(*in.ssaoComputeShader, proj, in.world->SsaoRadius, in.world->SsaoBias);
     target.Blur(*in.ssaoBlurShader);
     GLStateCache::Invalidate();
@@ -415,8 +417,9 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // (exposure -> curve -> gamma, once, in Tonemapper). Without the overlay the first resolve already holds it.
     if (overlayDrawn) sceneHdr.ResolveTo();
     unsigned int sceneColorTex = sceneHdr.ResolvedColorTexture();
-    if (sceneTaaOn) sceneColorTex = ResolveTaa(in, t, sceneColorTex, "TAA");
     {
+    FullscreenPass post; // TAA + tonemap: one state save/restore for the chain
+    if (sceneTaaOn) sceneColorTex = ResolveTaa(in, t, sceneColorTex, "TAA");
     PROFILE_GPU_SCOPE("Tonemap");
     in.tonemapper->Apply(sceneColorTex, sceneFramebuffer.Handle(), scW, scH,
                          MakePostSettings(world, bloomGlowTex, bloomIntensity, in.dt, 0, editorCamera.Position));
@@ -501,6 +504,8 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     if (in.worldExtras) in.worldExtras(view, proj, eye);
 
     gameHdr.ResolveTo();
+    {
+    FullscreenPass postChain; // TAA, bloom, tonemap, upscale: one state save/restore for the chain
     unsigned int gameColorTex = gameHdr.ResolvedColorTexture();
     if (gameTaaOn) gameColorTex = ResolveTaa(in, t, gameColorTex, "TAA (Game)");
 
@@ -521,6 +526,7 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     if (scaled) {
         PROFILE_GPU_SCOPE("Upscale");
         in.upscaler->Apply(in.gameLdr->ColorTexture(), rw, rh, outFbo, 0, 0, outW, outH, EditorSettings::Get().RenderSharpness);
+    }
     }
     if (in.hud) in.hud(outFbo, outW, outH, view, proj);
 }

@@ -1,54 +1,30 @@
 #include "GpuMemTrack.h"
 #include "OpaqueColorCopy.h"
 #include "GLFramebufferCheck.h"
-#include "../extern/glloader/gl.h"
+#include "gl.h"
 
 OpaqueColorCopy::~OpaqueColorCopy() {
     GpuMemTrack::Set(GpuMemTrack::Key("OpaqueColorCopy", this), 0);
     if (m_ReadFbo) glDeleteFramebuffers(1, &m_ReadFbo);
-    if (m_DrawFbo) glDeleteFramebuffers(1, &m_DrawFbo);
-    if (m_Tex)     glDeleteTextures(1, &m_Tex);
 }
 
 void OpaqueColorCopy::CopyFrom(unsigned int srcTex, int width, int height) {
     if (width <= 0 || height <= 0 || !srcTex) return;
 
-    const bool sizeChanged = (m_Width != width || m_Height != height || !m_Tex);
-    if (sizeChanged) {
-        if (m_Tex) glDeleteTextures(1, &m_Tex);
-        int maxDim = width > height ? width : height;
-        int numMips = 1;
-        while ((maxDim >> numMips) > 0) ++numMips;
-
-        glCreateTextures(GL_TEXTURE_2D, 1, &m_Tex);
-        glTextureStorage2D(m_Tex, numMips, GL_RGBA16F, width, height);
+    const bool sizeChanged = m_Copy.Width() != width || m_Copy.Height() != height || !m_Copy.Fbo();
+    m_Copy.Ensure(width, height, GL_RGBA16F, "OpaqueColorCopy draw", true, 0); // attached once, at allocation
+    if (sizeChanged)
         GpuMemTrack::Set(GpuMemTrack::Key("OpaqueColorCopy", this), (size_t)width * height * 8 * 4 / 3);
-        glTextureParameteri(m_Tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTextureParameteri(m_Tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(m_Tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(m_Tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        m_Width  = width;
-        m_Height = height;
-    }
 
-    // Lazy-create the blit FBOs.
     if (!m_ReadFbo) glCreateFramebuffers(1, &m_ReadFbo);
-    if (!m_DrawFbo) glCreateFramebuffers(1, &m_DrawFbo);
-
-    // Attach the source texture as the read color attachment.
     glNamedFramebufferTexture(m_ReadFbo, GL_COLOR_ATTACHMENT0, srcTex, 0);
-    // Attach mip 0 of the destination as the draw color attachment.
-    glNamedFramebufferTexture(m_DrawFbo, GL_COLOR_ATTACHMENT0, m_Tex, 0);
-
-    if (sizeChanged) { // audit #358 — validate once per resize, not every frame
+    if (sizeChanged) // audit #358 — validate once per resize, not every frame
         GLFramebufferCheck::Complete("OpaqueColorCopy read", m_ReadFbo, width, height);
-        GLFramebufferCheck::Complete("OpaqueColorCopy draw", m_DrawFbo, width, height);
-    }
 
-    glBlitNamedFramebuffer(m_ReadFbo, m_DrawFbo,
+    glBlitNamedFramebuffer(m_ReadFbo, m_Copy.Fbo(),
                            0, 0, width, height,
                            0, 0, width, height,
                            GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-    glGenerateTextureMipmap(m_Tex);
+    glGenerateTextureMipmap(m_Copy.Texture());
 }

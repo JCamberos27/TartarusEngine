@@ -1,5 +1,4 @@
 #include "ScreenBlur.h"
-#include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLStateCache.h"
@@ -7,80 +6,40 @@
 
 #include <glm/glm.hpp>
 
-ScreenBlur::~ScreenBlur() {
-    delete m_Shader;
-    if (m_Vao) glDeleteVertexArrays(1, &m_Vao);
-    if (m_Tex[0]) glDeleteTextures(2, m_Tex);
-    if (m_Fbo[0]) glDeleteFramebuffers(2, m_Fbo);
-}
-
-void ScreenBlur::Ensure(int halfW, int halfH) {
-    if (!m_Shader) {
-        m_Shader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
-                              ShaderLibrary::ReadFile("ScreenBlur.frag.glsl"));
-        glGenVertexArrays(1, &m_Vao);
-    }
-    if (m_W == halfW && m_H == halfH && m_Fbo[0]) return;
-
-    if (m_Tex[0]) glDeleteTextures(2, m_Tex);
-    if (m_Fbo[0]) glDeleteFramebuffers(2, m_Fbo);
-    glGenFramebuffers(2, m_Fbo);
-    glGenTextures(2, m_Tex);
-    for (int i = 0; i < 2; ++i) {
-        glBindTexture(GL_TEXTURE_2D, m_Tex[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, halfW, halfH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo[i]);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_Tex[i], 0);
-        GLFramebufferCheck::Complete("ScreenBlur ping-pong", m_Fbo[i], halfW, halfH); // audit #358
-    }
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    m_W = halfW;
-    m_H = halfH;
-}
+ScreenBlur::ScreenBlur() = default;
+ScreenBlur::~ScreenBlur() = default;
 
 void ScreenBlur::Apply(unsigned int srcTex, int width, int height, unsigned int dstFbo, int iterations) {
     const int hw = width > 2 ? width / 2 : 1;
     const int hh = height > 2 ? height / 2 : 1;
-    Ensure(hw, hh);
+    if (!m_Shader)
+        m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
+                                            ShaderLibrary::ReadFile("ScreenBlur.frag.glsl"));
+    for (ColorTarget& t : m_Half) t.Ensure(hw, hh, GL_RGBA8, "ScreenBlur ping-pong");
 
-    const GLboolean prevDepth = glIsEnabled(GL_DEPTH_TEST);
-    const GLboolean prevBlend = glIsEnabled(GL_BLEND);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-
+    FullscreenPass fullscreen;
     m_Shader->Bind();
     m_Shader->SetInt("uTex", 0);
-    glBindVertexArray(m_Vao);
 
     auto pass = [&](unsigned int tex, unsigned int fbo, int vpW, int vpH, float dx, float dy) {
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glViewport(0, 0, vpW, vpH);
         GLStateCache::BindTexture2D(0, tex);
         m_Shader->SetVec2("uDir", glm::vec2(dx, dy));
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        FullscreenPass::Draw();
     };
 
     const float tx = 1.0f / (float)hw;
     const float ty = 1.0f / (float)hh;
 
     // Downsample + first horizontal blur: full-res source into the half-res ping buffer.
-    pass(srcTex, m_Fbo[0], hw, hh, tx, 0.0f);
-    pass(m_Tex[0], m_Fbo[1], hw, hh, 0.0f, ty);
+    pass(srcTex, m_Half[0].Fbo(), hw, hh, tx, 0.0f);
+    pass(m_Half[0].Texture(), m_Half[1].Fbo(), hw, hh, 0.0f, ty);
     for (int i = 1; i < iterations; ++i) {
-        pass(m_Tex[1], m_Fbo[0], hw, hh, tx, 0.0f);
-        pass(m_Tex[0], m_Fbo[1], hw, hh, 0.0f, ty);
+        pass(m_Half[1].Texture(), m_Half[0].Fbo(), hw, hh, tx, 0.0f);
+        pass(m_Half[0].Texture(), m_Half[1].Fbo(), hw, hh, 0.0f, ty);
     }
 
     // Upsample to the destination (plain bilinear copy — uDir 0).
-    pass(m_Tex[1], dstFbo, width, height, 0.0f, 0.0f);
-
-    glBindVertexArray(0);
-    if (prevDepth) glEnable(GL_DEPTH_TEST);
-    if (prevBlend) glEnable(GL_BLEND);
-    GLStateCache::Invalidate();
+    pass(m_Half[1].Texture(), dstFbo, width, height, 0.0f, 0.0f);
 }
