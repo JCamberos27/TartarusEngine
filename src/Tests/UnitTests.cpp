@@ -2126,7 +2126,8 @@ void TestAsyncImportCpu() {
         UnitTestSupport::Skip("no Quantum pack: model checks");
     } // the models are destroyed here with nothing uploaded, which must not touch GL
 
-    const std::string png = (TempDir() / "async_decode.png").string();
+    const auto dir = TempDir();
+    const std::string png = (dir / "async_decode.png").string();
     std::vector<unsigned char> px(64 * 32 * 4);
     for (size_t i = 0; i < px.size(); ++i) px[i] = (unsigned char)(i * 7);
     CHECK(PngWrite::ToFile(std::filesystem::path(png).u8string(), 64, 32, 4, px.data(), 64 * 4));
@@ -2138,6 +2139,7 @@ void TestAsyncImportCpu() {
     const auto pending = Texture::CreatePending(std::move(d));
     CHECK(pending && pending->IsPendingUpload() && !pending->IsValid() && pending->Width() == 64);
     CHECK(Texture::CreatePending(Texture::DecodeFile((dir / "missing.png").string(), s)) == nullptr);
+    std::error_code ec;
     std::filesystem::remove(png, ec);
 }
 
