@@ -22,12 +22,7 @@ namespace fs = std::filesystem;
 
 bool Near(float a, float b, float eps = 1e-5f) { return std::abs(a - b) <= eps; }
 
-fs::path TempDir() {
-    std::error_code ec;
-    const fs::path dir = fs::temp_directory_path(ec) / "TartarusUnitTests" / "Graffiti";
-    fs::create_directories(dir, ec);
-    return dir;
-}
+fs::path TempDir() { return UnitTestSupport::TempDir("Graffiti"); }
 
 // Every glyph is a 0.8-wide image with ink across its middle 0.6; stamps are 2:1.
 ImageMetrics FakeMetrics(const std::string& path) {
