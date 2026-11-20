@@ -538,9 +538,8 @@ void EditorLayer::FreeGpuResources() {
     if (m_GpuResourcesFreed) return;
     m_GpuResourcesFreed = true;
 
-    for (auto& [path, entry] : m_ModelThumbnails) { (void)path; if (entry.first) glDeleteTextures(1, &entry.first); }
-    m_ModelThumbnails.clear();
-    m_ThumbnailLRU.clear();
+    m_ModelThumbnails.ForEach([](unsigned int& tex) { if (tex) glDeleteTextures(1, &tex); });
+    m_ModelThumbnails.Clear();
     FreeRetiredThumbnailTextures();
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();

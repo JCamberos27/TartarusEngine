@@ -32,6 +32,7 @@
 #include "RenderStats.h" // ::RenderStats, re-exported below as EditorLayer::RenderStats (#359)
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
+#include "LruMap.h" // m_ModelThumbnails / m_MaterialThumbs
 #include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
@@ -1912,14 +1913,12 @@ private:
     //
     // Keyed by asset path (#181) rather than the Model* — stable across a Model being destroyed
     // and a new allocation reusing the same address, unlike the pointer. Bounded to
-    // kMaxModelThumbnails with simple LRU eviction (a doubly-linked list for recency order plus
-    // the map for O(1) lookup/touch) so browsing a large library over a session doesn't leak GL
-    // textures forever; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps this well under a
-    // megabyte of VRAM.
+    // kMaxModelThumbnails, least recently used evicted first, so browsing a large library over a
+    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps
+    // this well under a megabyte of VRAM.
     ModelPreviewRenderer m_ThumbnailPreview;
     static constexpr size_t kMaxModelThumbnails = 128;
-    std::list<std::string> m_ThumbnailLRU; // front = most recently used
-    std::unordered_map<std::string, std::pair<unsigned int, std::list<std::string>::iterator>> m_ModelThumbnails;
+    LruMap<unsigned int> m_ModelThumbnails; // path -> GL texture
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
     // Thumbnails dropped mid-frame (a Reimport from a tile's menu, an LRU eviction) may already be
@@ -1937,11 +1936,9 @@ private:
         unsigned int Tex = 0;
         std::uint64_t ContentKey = 0;
         std::uint64_t DiskKey = 0; // ThumbnailCache key the persisted PNG was saved with
-        std::list<std::string>::iterator Lru;
     };
     MaterialPreviewRenderer m_MaterialThumbPreview;
-    std::list<std::string> m_MaterialThumbLRU;
-    std::unordered_map<std::string, MaterialThumb> m_MaterialThumbs;
+    LruMap<MaterialThumb> m_MaterialThumbs;
     unsigned int MaterialThumbnail(const std::shared_ptr<MaterialAsset>& ma); // 0 = none yet (use the glyph)
     void ClearMaterialThumbnails();
     // Copies a `size`-square preview render into `dst` (allocated here when 0) through the
@@ -2292,7 +2289,7 @@ private:
     char m_HierStyleIconSearch[64] = {};
     void HandleHierarchyHoverKeys(World& world);
     // Per-scene user-state key: the scene's GUID, else its path ("" for an untitled scene).
-    std::string CurrentSceneKey() const;
+    const std::string& CurrentSceneKey() const; // worked out once per frame
     // Once per frame: entries a scene got while it was keyed by its path move to its GUID once it has one.
     void TrackSceneKey();
     entt::entity FindEntityByOrder(const World& world, int order) const;
