@@ -23,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import forest_house as fh  # noqa: E402
 import house_lights as hl  # noqa: E402
+import house_model as hm  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
 SCENE = os.path.join(REPO, 'project', 'scenes', 'Forest.json')
@@ -40,12 +41,8 @@ def house_rooms():
     """The rooms exactly as house_lights.wire sees them: the pack with the same edits add_house makes."""
     notes = {}
     pk = fh.Pack(os.path.join(HERE, 'forest_house_pack.json'))
-    fh.open_sealed_doors(pk, notes)
-    fh.floor_the_stairwell(pk, notes)
-    fh.clear_walls(pk, notes)
-    fh.ease_side_door(pk, notes)
-    fh.trash_house(pk, random.Random(301), notes)
-    return pk, hl.named_rooms(pk.fit, fh.floor_rects(pk), fh)
+    fh.prepare_pack(pk, random.Random(301), notes)
+    return pk, hl.named_rooms(pk.fit, hm.floor_rects(pk))
 
 
 def cover(room, fit):
@@ -219,7 +216,7 @@ def main():
             vols.append((f"GI {r['name']}" + (f' {n + 1}' if len(boxes) > 1 else ''), b, layers))
     # the stairwell: two storeys tall, no floor of its own
     x0, x1, z0, z1 = hl.STAIRWELL
-    vols.append(('GI stairwell', (x0, x1, fh.FLOOR_1 - 0.05, fh.CEIL_2 + 0.05, z0, z1), ['Stairs']))
+    vols.append(('GI stairwell', (x0, x1, hm.FLOOR_1 - 0.05, hm.CEIL_2 + 0.05, z0, z1), ['Stairs']))
 
     # --prune-from <preview .gi>: drop the circuit layers the preview bake found empty in a volume (a neighbour behind a
     # shut door or a wall), so the full bake doesn't spend time on them. The Outside always stays.

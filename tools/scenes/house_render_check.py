@@ -13,7 +13,7 @@ import sys
 from PIL import Image
 
 import house_shots as hs
-from scene_kit import qmul, qrot
+from scene_kit import look, qmul, qrot
 
 REPO = hs.REPO
 OFF_MAX = 0.55       # the brightest pixels (99th percentile, 0..1) at a fitting whose circuit is off: no glow there
@@ -72,7 +72,7 @@ def main():
         ln = math.hypot(dx, dz)
         dist = 1.1
         cam = [p[0] + dx / ln * dist, p[1] - 0.45 if p[1] > 1.8 else p[1] + 0.35, p[2] + dz / ln * dist]
-        cams.append((f'{i}_{hs.safe(e["name"])}', cam, *hs.look(cam, p)))
+        cams.append((f'{i}_{hs.safe(e["name"])}', cam, *look(cam, p)))
         circuit_of[cams[-1][0]] = circuit
     print(f'{len(cams)} fittings')
     # off: every circuit off (';' = only no circuit on; every switch in the Forest starts on, so "as the switches

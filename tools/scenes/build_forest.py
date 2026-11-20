@@ -79,10 +79,11 @@ FERN_SPECIES = [[VEG + f'Ferns/Prefabs/Wild_fern_Var{n}.prefab' for n in (1, 2, 
 BUSHES = ([VEG + f'Roldana_plant/Prefabs/Roldana_plant_var{n}.prefab' for n in range(1, 12)] +
           [VEG + f'Roldana_plant/Prefabs/Roldana_plant_var{n} Variant.prefab' for n in (12, 13, 14)] +
           [VEG + f'Oreopanax_Xalapensis/Prefabs/Oreopanax_Xalapensis_var{n} Variant.prefab' for n in range(1, 7)])
+DRY_LEAVES = GO + 'Generic_dry_leaves_var1.prefab'
 DEBRIS = ([VEG + f'Cedrus_tree/Prefabs/Dry_cedrus_debris_Var{n}.prefab' for n in range(1, 8)] +
           [GO + f'Short_rotten_branch_var{n}.prefab' for n in range(1, 6)] +
           [GO + f'Rotten_cedrus_branch_var{n}.prefab' for n in range(1, 6)] +
-          [GO + 'Generic_dry_leaves_var1.prefab'] +
+          [DRY_LEAVES] +
           [GO + f'Lichen_branch_Debris_{n} Variant.prefab' for n in (1, 2)])
 LOGS = ([GO + f'Mossy_log_var{n}.prefab' for n in (9, 10, 11)] +
         [GO + f'Mossy_rotten_log_var{n}.prefab' for n in (3, 4, 7, 8)] +
@@ -149,14 +150,11 @@ VAR4_LODS = [VEG + 'Cedrus_tree/Cedrus_Tree_mesh/' + m for m in
 
 def lod_var4(repo, p):
     """var4's prefab as a LOD Group root over VAR4_LODS, its trunk colliders after the levels."""
-    def guid(path):
-        with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
-            return json.load(f)['guid']
     root = {'id': 100, 'order': 0, 'parentId': -1, 'name': 'Cedrus_tree_var4', 'position': [0.0, 0.0, 0.0],
             'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0], 'static': True,
             'LOD Group': {'LOD 0': 0.6, 'LOD 1': 0.25, 'LOD 2': 0.08, 'LOD 3': 0.04, 'Size': 0.0}}
     models = [{'id': 101 + i, 'order': 1 + i, 'parentId': 100, 'name': os.path.splitext(os.path.basename(m))[0],
-               'path': m, 'pathGuid': guid(m), 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0],
+               'path': m, 'pathGuid': k.guid(repo, m), 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0],
                'scale': [1.0, 1.0, 1.0], 'static': True} for i, m in enumerate(VAR4_LODS)]
     cols = [dict(e, parentId=100, order=10 + i) for i, e in enumerate(p['empties'])]
     return {'boxes': [], 'empties': [root] + cols, 'formatVersion': p.get('formatVersion', 4), 'models': models}
@@ -312,11 +310,6 @@ def trail_d(x, z):
     return min(math.hypot(x - px, z - pz) for px, pz in TRAIL_PTS)
 
 
-def smoothstep(a, b, x):
-    t = min(max((x - a) / (b - a), 0.0), 1.0)
-    return t * t * (3 - 2 * t)
-
-
 # --- the terrain: TERRAIN_RES samples over TERRAIN_SIZE metres a side, centred on the origin, stored as 16-bit
 # heights (TerrainGrid.h). Placements sample the quantized grid with the engine's own triangle split, so they sit
 # exactly on the mesh and its collider.
@@ -331,9 +324,9 @@ def terrain_raw(x, z):
     h = ((noise2(x, z, TERRAIN_SEED, 24.0) - 0.5) * 3.4 + (noise2(x, z, TERRAIN_SEED + 2, 13.0) - 0.5) * 0.5 +
          (noise2(x, z, TERRAIN_SEED + 4, 60.0) - 0.5) * 1.6)
     cx, cz, cr = CLEARING
-    clear = 0.15 + 0.85 * smoothstep(cr - 2.0, cr + 9.0, math.hypot(x - cx, z - cz))
+    clear = 0.15 + 0.85 * k.smoothstep(cr - 2.0, cr + 9.0, math.hypot(x - cx, z - cz))
     wall = min(abs(abs(x) - HALF) if abs(z) < HALF + 14 else 99.0, abs(abs(z) - HALF) if abs(x) < HALF + 14 else 99.0)
-    return fh.flatten(x, z, h * clear * smoothstep(0.8, 14.0, wall))     # eased flat under the house's lot
+    return fh.flatten(x, z, h * clear * k.smoothstep(0.8, 14.0, wall))     # eased flat under the house's lot
 
 
 class Terrain:
@@ -541,11 +534,7 @@ class WallDecals:
     def put(self, asset, side, u, y, w, h, seed, sort, opacity=1.0, tint=None, spin=0.0, jitter=(0.0, 0.0),
             flip=False, substrate=False):
         pos, yaw = self.face(side, u, y)
-        dc = {'Asset': asset, 'Size': [round(w, 3), round(h, 3), 0.25], 'Seed': seed, 'Sort Order': sort,
-              'Opacity': round(opacity, 3), 'Affect Static': True, 'Affect Dynamic': False,
-              'Rotation Jitter': jitter[0], 'Scale Jitter': jitter[1], 'Random Flip': flip}
-        if tint:
-            dc['Tint'] = list(tint)
+        dc = k.decal(asset, (w, h, 0.25), seed, sort, opacity, tint, jitter, flip)
         if substrate:
             dc.update({'Substrate': 'Preset', 'Substrate Preset': D + 'Substrates/SB_Wall_Concrete.substrate'})
         self.n += 1
@@ -1077,7 +1066,7 @@ def build(repo):
         if by_wall(wx, wz, 0.6):
             vals[k_] = 0.0
         else:
-            vals[k_] *= smoothstep(PATH_BARE[0], PATH_BARE[1], trail_d(wx, wz))
+            vals[k_] *= k.smoothstep(PATH_BARE[0], PATH_BARE[1], trail_d(wx, wz))
         vals[k_] = fh.grass_value(wx, wz, vals[k_])     # the house's overgrown lawn
     s.empty('Forest Grass', g, (0.0, 0.0, 0.0), static=True,
             **grass(**{'Size X': GRASS_SPAN, 'Size Z': GRASS_SPAN, 'Seed': 2, 'Edge Fade': 0.0,
@@ -1137,7 +1126,8 @@ def house(s, root, repo, H):
     s.data['maxSpotShadows'] = max(s.data.get('maxSpotShadows', 0), fh.SPOT_SHADOWS)
     here = os.path.dirname(os.path.abspath(__file__))
     pk, lay, broken, rng = fh.add_house(s, root, repo, os.path.join(here, 'forest_house_pack.json'), notes)
-    litter = DEBRIS[17:18]    # dry leaves only indoors: nothing green, no branches or needle clumps
+    s.house_pack = pk     # for the tools that read the built house back (house_inventory)
+    litter = [DRY_LEAVES]    # dry leaves only indoors: nothing green, no branches or needle clumps
     fh.dress_inside(s, lay, pk, rng, broken, litter, notes)
     fh.grime(s, lay, pk, rng, notes)
     fh.lights(s, lay, pk, repo, notes)

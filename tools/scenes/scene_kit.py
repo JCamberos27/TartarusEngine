@@ -66,6 +66,18 @@ def axis_q(axis, deg):
     return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(h)]
 
 
+def smoothstep(a, b, x):
+    t = min(max((x - a) / (b - a), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def look(cam, target):
+    """Yaw, pitch (degrees, the engine camera's convention) from cam to target."""
+    d = [target[i] - cam[i] for i in range(3)]
+    h = math.hypot(d[0], d[2]) or 1e-6
+    return math.degrees(math.atan2(d[2], d[0])), math.degrees(math.atan2(d[1], h))
+
+
 def euler_quat(yaw=0.0, pitch=0.0, roll=0.0):
     """[x, y, z, w] for yaw about Y, then pitch about X, then roll about Z (degrees; each in the frame left by the
     one before, so yaw turns the piece and pitch / roll tip it about its own axes)."""
@@ -76,13 +88,18 @@ def euler_quat(yaw=0.0, pitch=0.0, roll=0.0):
 
 
 # --- asset references and scene files ---------------------------------------------------------------------------
+def guid(repo, path):
+    """A project-relative asset's guid, from its .meta."""
+    with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
+        return json.load(f)['guid']
+
+
 def ref(repo, path):
     """{'path', 'pathGuid'} for a project-relative asset (the guid from its .meta); '' for no path, as the engine
     writes an empty slot."""
     if not path:
         return ''
-    with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
-        return {'path': path, 'pathGuid': json.load(f)['guid']}
+    return {'path': path, 'pathGuid': guid(repo, path)}
 
 
 def write_scene_meta(path):
@@ -214,6 +231,16 @@ class Scene:
         e.update({**m, 'materials': [{'guid': ref(repo, mat)['pathGuid'], 'path': mat}],
                   'Outfit Piece': {'Flags': flags, 'Item': m, 'Slot': slot}})
         self.models.append(e)
+
+
+def decal(asset, size, seed, sort, opacity=1.0, tint=None, jitter=(0.0, 0.0), flip=False):
+    """The native "Decal" component: static surfaces only; jitter is (rotation, scale)."""
+    dc = {'Asset': asset, 'Size': [round(v, 3) for v in size], 'Seed': seed, 'Sort Order': sort,
+          'Opacity': round(opacity, 3), 'Affect Static': True, 'Affect Dynamic': False,
+          'Rotation Jitter': jitter[0], 'Scale Jitter': jitter[1], 'Random Flip': flip}
+    if tint:
+        dc['Tint'] = list(tint)
+    return dc
 
 
 def light_flicker(Mode=0, MinInterval=4.0, MaxInterval=15.0, Depth=1.0, Seed=1):

@@ -8,7 +8,6 @@ import json
 import os
 import sys
 
-import build_forest as bf
 import scene_kit as k
 
 SETTINGS = {'exposureEV': 0.0, 'gradeContrast': 8.0, 'gradeSaturation': 4.0, 'gradeTemperature': 2.0,
