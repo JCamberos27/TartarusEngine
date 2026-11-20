@@ -809,11 +809,11 @@ void RegisterSceneToolsTests() {
                  std::filesystem::create_directories(std::filesystem::u8path(watchDir()), ec);
                  std::ofstream(std::filesystem::u8path(watchFile())) << "outside";
              }),
-             Until("the editor syncs it, and Gamma dims with no undo step in that same frame", [synced](Ctx& c) {
+             UntilSeconds("the editor syncs it, and Gamma dims with no undo step in that same frame", [synced](Ctx& c) {
                  if (ST::ExternalSyncs(c.E) == *synced) return false;
                  c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity = 0.25f;
                  return true;
-             }, 600), Wait(3),
+             }, 15), Wait(3),
              // A later sync (the file after its folder) journals the dimming first: the same step.
              Expect("only the rename is a step so far, plus at most the dimming", [](Ctx& c) {
                  const size_t d = X::UndoDepth(c.E);
@@ -948,7 +948,8 @@ void RegisterSceneToolsTests() {
              Expect("every step pushed at least one entry", [](Ctx& c) {
                  int recorded = 0;
                  for (const Snapshot& r : g_At) recorded += r.Has ? 1 : 0;
-                 return recorded >= 12 ? std::string() : std::to_string(recorded) + " depths recorded; history: " + ST::TopLabel(c.E);
+                 // 13 Records: "nothing" at depth 0, then 12 actions; one that pushed nothing overwrote the depth before it.
+                 return recorded == 13 ? std::string() : std::to_string(recorded) + " of 13 depths recorded; history: " + ST::TopLabel(c.E);
              })},
         });
         s.push_back(Walk(true, 0, checked));

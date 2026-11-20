@@ -32,7 +32,7 @@ T = 0.15              # partition thickness
 TX = 0.3              # outside walls
 HALL = 1.075          # corridor wall centre lines at z = +-HALL: 2.0 m clear
 GRUNGE_WALL = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_036.png'   # corridor walls
-GRUNGE_WORN = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'   # corridor ceiling + trim
+GRUNGE_WORN = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'   # corridor ceiling
 D = 8.6               # apartment depth, corridor wall to outside wall (centre lines)
 DOOR_W, DOOR_H = 0.92, 2.06      # opening for Door_Op_1's frame (the frame's own trim covers the gap)
 DOOR_WALL_Z = 0.032              # the frame's wall centre, door-local +Z of its origin
@@ -149,8 +149,9 @@ class Hallway(k.Scene):
             'corridor_ceiling': k.textured(r, albedo=ceil + 'Base_Color.png', normal=ceil + 'Normal.png',
                                            base=(0.95, 0.95, 0.95), roughness=0.95, triplanar_scale=0.33,
                                            grunge=GRUNGE_WORN, grunge_strength=0.45, grunge_scale=0.25),
-            'corridor_trim': k.textured(r, base=(0.86, 0.85, 0.82), roughness=0.4, grunge=GRUNGE_WORN,
-                                        grunge_strength=0.5),
+            # _036 like the walls: _085's near-binary mask opens black blobs on trim (what dress_corridor.py sets)
+            'corridor_trim': k.textured(r, base=(0.86, 0.85, 0.82), roughness=0.4, grunge=GRUNGE_WALL,
+                                        grunge_strength=0.4),
             'tile_wall': k.textured(r, normal=plaster['normal'], rough=plaster['rough'], base=(0.88, 0.89, 0.88),
                                     roughness=0.45, triplanar_scale=0.5),
             # ~9 boards a tile: 0.9 tiles a metre gives 12 cm boards
@@ -312,11 +313,11 @@ class Hallway(k.Scene):
                     mid = ((p0 + p1) / 2, (y0 + y1) / 2)
                     c = (mid[0], mid[1], inward) if axis == 'x' else (inward, mid[1], mid[0])
                     self.face(f'Wall - {label}', walls, c, normal, p1 - p0, y1 - y0, wall_mat)
-                self.reveals(walls, axis, line, a, b, inward, normal, wall_mat)
+                self.reveals(walls, axis, line, a, b, inward, wall_mat)
                 self.baseboard(trim, axis, line, a, b, inward, normal,
                                self.mats['corridor_trim' if key == 'Corridor' else 'trim'])
 
-    def reveals(self, parent, axis, line, a, b, inward, normal, mat):
+    def reveals(self, parent, axis, line, a, b, inward, mat):
         """The sides of each window and arch opening, from this room's face to the wall's centre line (the room on
         the other side does its own half)."""
         depth = abs(inward - line)
@@ -430,7 +431,8 @@ class Hallway(k.Scene):
 
     # --- lighting ----------------------------------------------------------------------------------------------------
     def lamp_glow(self, stem, strength):
-        meta = json.load(open(os.path.join(self.repo, 'project', self.idx[stem]['path'] + '.meta'), encoding='utf-8'))
+        with open(os.path.join(self.repo, 'project', self.idx[stem]['path'] + '.meta'), encoding='utf-8') as f:
+            meta = json.load(f)
         mat = next(iter(meta['materialRemap'].values()))
         over = {'emissive_strength': strength}
         if strength == 0:
@@ -500,7 +502,7 @@ class Hallway(k.Scene):
                             'HF Damping dB': 2.0, 'Low Cut (Hz)': 100.0, 'Ambience': amb, 'Ambience Volume': vol}})
         # the corridor: hard and bare, a longer tail; the units: empty rooms, a little livelier than a furnished flat
         zone('Corridor Reverb', self.rooms['Corridor'], 'assets/Audio/IR/apartment_3.wav', 'snd.amb.indoor_small', 0.3, 2)
-        for number, plan, x0, sx, row in PLACEMENT:
+        for number, *_ in PLACEMENT:
             rects = [r for key, r in self.rooms.items() if key.startswith(f'Apartment {number}/')]
             rect = (min(r[0] for r in rects), min(r[1] for r in rects), max(r[2] for r in rects), max(r[3] for r in rects))
             # the night through the windows, faint

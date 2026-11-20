@@ -64,6 +64,7 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <future>
@@ -623,6 +624,21 @@ Step WaitSeconds(double seconds) {
 }
 Step Until(std::string name, std::function<bool(Ctx&)> pred, int timeout = 120) {
     return {std::move(name), std::move(pred), timeout};
+}
+// Until, with a real-time limit: for async work (loads, thumbnails, file watchers). A hidden test
+// window runs far faster than 60 Hz, so a frame count is well under a second there.
+Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
+    auto start = std::make_shared<double>(-1.0);
+    return {name, [name, pred, seconds, start](Ctx& c) {
+        const double now = ImGui::GetTime();
+        if (*start < 0.0) *start = now;
+        if (pred(c)) return true;
+        if (now - *start > seconds) {
+            Fail("step '" + name + "' timed out after " + std::to_string((int)seconds) + " s");
+            return true;
+        }
+        return false;
+    }, 100000000};
 }
 // Fails the test (with `what` as the reason) when `check` returns a non-empty message.
 Step Expect(std::string name, std::function<std::string(Ctx&)> check) {

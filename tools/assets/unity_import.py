@@ -13,6 +13,7 @@
 #   python tools/assets/unity_import.py <repo> <Unity pack dir> [--name <Name>] [--exe <exe>] [--blender <exe>]
 #                                       [--assets <Unity Assets dir>] [--skip-cook]
 import argparse
+import functools
 import collections
 import json
 import os
@@ -23,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 import unity_yaml as uy  # noqa: E402
-from import_model_library import BLENDER_SCRIPT_ARGS, find_blender, write_json, write_meta  # noqa: E402
+from import_model_library import BLENDER_SCRIPT_ARGS, find_blender, standard_props, write_json, write_meta  # noqa: E402
 
 MAX_TEX = 2048
 
@@ -89,6 +90,15 @@ def default_exe(repo):
     """build/Release (the documented build dir), else b/Release when only that one exists."""
     paths = [os.path.join(repo, d, 'Release', 'TartarusEngine.exe') for d in ('build', 'b')]
     return next((p for p in paths if os.path.exists(p)), paths[0])
+
+
+
+def tex_entry(tex, *keys):
+    """The first of keys a Unity material's texture table has: (texture guid, its entry), or (None, None)."""
+    for k in keys:
+        if k in tex:
+            return tex[k]['m_Texture']['guid'], tex[k]
+    return None, None
 
 
 class Pack:
@@ -240,16 +250,9 @@ class Pack:
         R metallic, G AO, A smoothness; no metal anywhere in the pack) and _Color; _BaseColorMap / _MaskMap / _NormalMap are
         stale HDRP leftovers (often a different texture). _ASSET_TYPE 0 common, 1 foliage, 2 moss variant. _Covering_* /
         _Snow_*_sm layers become the Standard shaders' _Cover* world-up blend (seed_cover.py)."""
-        def first(*keys):
-            for k in keys:
-                if k in tex:
-                    return tex[k]['m_Texture']['guid'], tex[k]
-            return None, None
+        first = functools.partial(tex_entry, tex)
         c = co.get('_Color') or co.get('_BaseColor') or {}
-        p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [round(c.get(k, 1.0), 4) for k in 'rgb'], '_DoubleSided': False,
-             '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
-             '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.9, '_RoughnessMap': '',
-             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+        p = standard_props(0.9, [round(c.get(k, 1.0), 4) for k in 'rgb'])
         cutout = fl.get('_AlphaCutoffEnable', 0) == 1 or '_ALPHATEST_ON' in keywords
         if hdrp:   # real HDRP/Lit props
             g, t = first('_BaseColorMap', '_MainTex')
@@ -310,20 +313,13 @@ class Pack:
             c = co.get(k)
             return [c['r'], c['g'], c['b'], c.get('a', 1.0)] if c else list(d)
 
-        def guid_of(*keys):
-            for k in keys:
-                if k in tex:
-                    return tex[k]['m_Texture']['guid'], tex[k]
-            return None, None
+        first = functools.partial(tex_entry, tex)
 
-        p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [1.0, 1.0, 1.0], '_DoubleSided': False,
-             '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
-             '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.5, '_RoughnessMap': '',
-             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+        p = standard_props(0.5)
         extra = {}
         base = colour('_BaseColor', colour('_Color'))
         p['_BaseColor'] = [round(v, 4) for v in base[:3]]
-        g, t = guid_of('_BaseMap', '_MainTex', '_BaseColorMap', '_Albedo', '_AlbedoMap')
+        g, t = first('_BaseMap', '_MainTex', '_BaseColorMap', '_Albedo', '_AlbedoMap')
         cutout = fl.get('_AlphaClip', 0) == 1 or '_ALPHATEST_ON' in keywords or kind == 'foliage'
         transparent = fl.get('_Surface', 0) == 1 or kind == 'water'
         if g:
@@ -339,12 +335,12 @@ class Pack:
             p['_EmissiveColor'], p['_BaseColor'] = p['_BaseColor'], [0.0, 0.0, 0.0]
             p['_Roughness'], p['_SpecularHighlights'], p['_GlossyReflections'] = 1.0, False, False
         smooth = fl.get('_Smoothness', fl.get('_Glossiness', 0.5))
-        g, _ = guid_of('_MetallicGlossMap', '_MaskMap')
+        g, _ = first('_MetallicGlossMap', '_MaskMap')
         if g and kind != 'unlit':
             p['_MetallicMap'] = self.texture(g, ['ch', 0, 1.0, 0.0], 'data', '_Metallic')
             p['_Metallic'] = 1.0
             if fl.get('_SmoothnessTextureChannel', 0) == 1 and p['_AlbedoMap']:
-                ga, _ = guid_of('_BaseMap', '_MainTex')
+                ga, _ = first('_BaseMap', '_MainTex')
                 p['_RoughnessMap'] = self.texture(ga, ['ch', 3, -smooth, 1.0], 'data', f'_Roughness{round(smooth * 100)}')
             else:
                 p['_RoughnessMap'] = self.texture(g, ['ch', 3, -smooth, 1.0], 'data', f'_Roughness{round(smooth * 100)}')
@@ -364,35 +360,35 @@ class Pack:
                       '_WindFlutter': flutter, '_Translucency': 0.6})
         if kind == 'water':
             p['_Roughness'] = min(p['_Roughness'], 0.05)
-        g, _ = guid_of('_OcclusionMap')
+        g, _ = first('_OcclusionMap')
         if g and kind != 'unlit':
             strength = fl.get('_OcclusionStrength', 1.0)
             p['_AOMap'] = self.texture(g, ['ao', 1, strength], 'data', f'_AO{round(strength * 100)}')
-        g, t = guid_of('_BumpMap', '_NormalMap')
+        g, t = first('_BumpMap', '_NormalMap')
         if g:
             p['_NormalMap'] = self.texture(g, 'rgb', 'normal')
             if fl.get('_BumpScale', 1.0) != 1.0:
                 p['_NormalStrength'] = fl['_BumpScale']
             if kind == 'water':   # the pack's 0.03 flattens the ripples away
                 p['_NormalStrength'] = max(p.get('_NormalStrength', 1.0), 0.3)
-        g, _ = guid_of('_ParallaxMap', '_HeightMap')
+        g, _ = first('_ParallaxMap', '_HeightMap')
         if g:
             p['_HeightMap'] = self.texture(g, ['ch', 1, 1.0, 0.0], 'data', '_Height')
             p['_ParallaxScale'] = round(min(fl.get('_Parallax', 0.02), 0.1), 4)
         em = colour('_EmissionColor', (0, 0, 0, 1))
-        g, _ = guid_of('_EmissionMap')
+        g, _ = first('_EmissionMap')
         if kind != 'unlit' and ('_EMISSION' in keywords or g) and max(em[:3]) > 0:
             peak = max(em[:3])
             p['_EmissiveColor'] = [round(v / peak, 4) for v in em[:3]] if peak > 1 else [round(v, 4) for v in em[:3]]
             p['_EmissiveStrength'] = round(max(peak, 1.0), 4)
             if g:
                 p['_EmissiveMap'] = self.texture(g, 'rgb', 'albedo')
-        g, t = guid_of('_DetailAlbedoMap')
+        g, t = first('_DetailAlbedoMap')
         if g:
             p['_DetailAlbedoMap'] = self.texture(g, 'rgb', 'albedo')
             sc = t.get('m_Scale') or {}
             p['_DetailTiling'] = [sc.get('x', 1), sc.get('y', 1)]
-        g, _ = guid_of('_DetailNormalMap')
+        g, _ = first('_DetailNormalMap')
         if g:
             p['_DetailNormalMap'] = self.texture(g, 'rgb', 'normal')
         if fl.get('_Cull', 2) == 0 or kind == 'foliage':

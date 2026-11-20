@@ -5,6 +5,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 
 
 IDENT = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
@@ -67,31 +68,52 @@ def r6(v):
 
 
 # --- FBX node data ----------------------------------------------------------------------------------------------
+def _batches(files, budget=24000):
+    """Split paths so each --model-nodes command line stays well under Windows' 32767-character limit."""
+    batch, size = [], 0
+    for f in files:
+        if batch and size + len(f) + 3 > budget:
+            yield batch
+            batch, size = [], 0
+        batch.append(f)
+        size += len(f) + 3
+    if batch:
+        yield batch
+
+
+def _parse_nodes(stdout, out):
+    cur = None
+    for line in stdout.splitlines():
+        m = re.match(r'\[ModelNodes\] (.*) unitscale (\S+)$', line.strip())
+        if m:
+            cur = out.setdefault(os.path.normcase(os.path.normpath(m.group(1))), {'nodes': {}, 'order': []})
+            continue
+        m = re.match(r'\[ModelNodes\]   node (.*?) parent (.*?) local((?: \S+){16})(.*)$', line)
+        if m and cur is not None:
+            meshes = [(a, b, list(map(float, c.split())))
+                      for a, b, c in re.findall(r'\| mesh (.*?) material (.*?) aabb((?: \S+){6})', m.group(4))]
+            cur['nodes'][m.group(1)] = {'name': m.group(1), 'parent': m.group(2),
+                                        'L': list(map(float, m.group(3).split())), 'meshes': meshes}
+            cur['order'].append(m.group(1))
+
+
 def read_nodes(exe, files):
-    """FBX path (normcased) -> {'nodes': {name: node}, 'order': [names]} from --model-nodes with pivots kept."""
+    """FBX path (normcased) -> {'nodes': {name: node}, 'order': [names]} from --model-nodes with pivots kept.
+    Files the exe still has not answered for after 3 tries are left out (callers report them)."""
     out = {}
     env = dict(os.environ, TARTARUS_NODES_PIVOTS='1')
-    files = sorted(set(files))
-    for i in range(0, len(files), 150):
-        batch = files[i:i + 150]
-        for attempt in range(3):   # the exe occasionally drops a batch; ask again for what is missing
+    key = lambda f: os.path.normcase(os.path.normpath(f))
+    todo = sorted(set(files))
+    for attempt in range(3):   # the exe occasionally drops a batch; ask again only for what is missing
+        for batch in _batches(todo):
             res = subprocess.run([exe, '--model-nodes', *batch], capture_output=True, text=True,
                                  encoding='utf-8', errors='replace', env=env)
-            if res.stdout.count(' unitscale ') >= len(batch):
-                break
-        cur = None
-        for line in res.stdout.splitlines():
-            m = re.match(r'\[ModelNodes\] (.*) unitscale (\S+)$', line.strip())
-            if m:
-                cur = out.setdefault(os.path.normcase(os.path.normpath(m.group(1))), {'nodes': {}, 'order': []})
-                continue
-            m = re.match(r'\[ModelNodes\]   node (.*?) parent (.*?) local((?: \S+){16})(.*)$', line)
-            if m and cur is not None:
-                meshes = [(a, b, list(map(float, c.split())))
-                          for a, b, c in re.findall(r'\| mesh (.*?) material (.*?) aabb((?: \S+){6})', m.group(4))]
-                cur['nodes'][m.group(1)] = {'name': m.group(1), 'parent': m.group(2),
-                                            'L': list(map(float, m.group(3).split())), 'meshes': meshes}
-                cur['order'].append(m.group(1))
+            _parse_nodes(res.stdout, out)
+        todo = [f for f in todo if key(f) not in out]
+        if not todo:
+            break
+    if todo:
+        print(f'warning: --model-nodes gave no answer for {len(todo)} FBX after 3 tries, e.g. {todo[0]}', file=sys.stderr)
     return out
 
 

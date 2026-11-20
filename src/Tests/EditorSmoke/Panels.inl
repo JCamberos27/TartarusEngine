@@ -295,6 +295,7 @@ void RegisterPanelsTests() {
          Do("scroll to the time-scale row", [](Ctx&) { // below the fold; clipped widgets carry no label
              if (ImGuiWindow* w = Win(EditorPanels::PhysicsDebug)) ImGui::SetScrollY(w, w->ScrollMax.y);
          }), Wait(3),
+         Do("time scale at 0.5x (1x is the default, so the click must change it)", [](Ctx&) { EditorSettings::Get().PhysicsSimTimeScale = 0.5f; }), Wait(2),
          Click(ByExact("1x", "###PhysicsDebug")), Wait(2),
          ExpectTrue("1x", [](Ctx&) { return EditorSettings::Get().PhysicsSimTimeScale == 1.0f; }),
          ExpectTrue("Step disabled outside Play", [](Ctx&) {
