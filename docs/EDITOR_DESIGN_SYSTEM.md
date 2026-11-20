@@ -379,7 +379,7 @@ Out, sampled with UVs mapped from a surface's screen rect, so it shows exactly w
   the blur "breathing" as the window resizes.
 * **Cost.** Each level is a quarter of the one above, so the chain costs about 1.4× its first
   downsample. It shows as **"Glass Backdrop"** (and the copy before it as **"Glass Capture"**) in
-  the Statistics GPU scopes. Not yet profiled on the 1080 Ti.
+  the Statistics GPU scopes.
 * **Barriers and state.** `glMemoryBarrier(TEXTURE_FETCH | SHADER_IMAGE_ACCESS)` between passes; no
   pass reads the mip level it writes. Afterwards the image and texture unit 0 are unbound and the
   GL state cache is invalidated.

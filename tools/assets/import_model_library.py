@@ -17,8 +17,10 @@ import os
 import re
 import secrets
 import shutil
-import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import model_report as engine_model_report  # noqa: E402
 
 DEFAULT_RAW = r'G:\My Drive\Tartarus Assets\Raw'
 
@@ -293,6 +295,14 @@ def write_json(path, data):
         f.write('\n')
 
 
+def standard_props(roughness, base=(1.0, 1.0, 1.0)):
+    """A Standard (Lit) material's full property set with nothing mapped: the one copy every importer starts from."""
+    return {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': list(base), '_DoubleSided': False,
+            '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
+            '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': roughness,
+            '_RoughnessMap': '', '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+
+
 def write_meta(path, rel_folder, kind, extra=None, existing_ok=True):
     meta_path = path + '.meta'
     old = {}
@@ -306,17 +316,8 @@ def write_meta(path, rel_folder, kind, extra=None, existing_ok=True):
 
 
 def model_report(exe, paths):
-    out = subprocess.run([exe, '--model-report', *paths], capture_output=True, text=True, encoding='utf-8', errors='replace')
-    rows = {}
-    rx = re.compile(r'\[ModelReport\] (.*) size (\S+) (\S+) (\S+) min (\S+) (\S+) (\S+) max (\S+) (\S+) (\S+) meshes (\d+) materials ?(.*)$')
-    for line in out.stdout.splitlines():
-        m = rx.match(line.strip())
-        if m:
-            v = list(map(float, m.groups()[1:10]))
-            rows[os.path.normcase(os.path.normpath(m.group(1)))] = {
-                'min': v[3:6], 'max': v[6:9], 'meshes': int(m.group(11)),
-                'materials': [x for x in m.group(12).split('|') if x]}
-    if 'failed' not in out.stdout or ' 0 failed' not in out.stdout:
+    rows, failed, out = engine_model_report.run(exe, paths)
+    if failed != 0:
         sys.exit('import_model_library: --model-report failed:\n' + out.stdout[-2000:] + out.stderr[-2000:])
     return rows
 
@@ -461,10 +462,9 @@ def main():
         mat_paths[name] = rel(path)
 
     def props_base():
-        return {'_AOMap': '', '_AlbedoMap': '', '_BaseColor': [1.0, 1.0, 1.0], '_DoubleSided': False,
-                '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
-                '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.6,
-                '_RoughnessMap': '', '_Triplanar': False, '_TriplanarScale': 1.0}
+        p = standard_props(0.6)
+        del p['_ReflectionProbes']   # library materials have always left probes at the engine default (off)
+        return p
 
     slot = {'albedo': '_AlbedoMap', 'normal': '_NormalMap', 'metallic': '_MetallicMap', 'roughness': '_RoughnessMap',
             'ao': '_AOMap', 'emissive': '_EmissiveMap'}

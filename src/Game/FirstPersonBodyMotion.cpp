@@ -278,7 +278,8 @@ float FirstPersonBodyMotion::RootYawRate(const MotionDatabase& db, std::uint32_t
     return Wrap(db.Stream().Root(b).Yaw - db.Stream().Root(a).Yaw) * db.Fps() / (float)(b - a);
 }
 
-bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& models, size_t driver, std::string& error) {
+bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& models, size_t driver, std::string& error,
+                                  const FirstPersonBodyMotion* carry) {
     Stop();
     std::string err;
     auto shared = SharedMotionDatabase::Get(ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny"), &err,
@@ -315,7 +316,33 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         m_BindPose.push_back(std::move(bind));
     }
     m_Shared = shared;
-    m_Matcher.Reset(&m_Shared->Db, m_Shared->StartFrame);
+    // (Another driver rig is another cached instance - its own excluded stretches - of the same frames: the frame numbers hold.)
+    const bool carried = carry && carry != this && carry->m_Shared &&
+                         (carry->m_Shared == shared || (carry->m_Shared->Db.FrameCount() == shared->Db.FrameCount() &&
+                                                         carry->m_Shared->StartFrame == shared->StartFrame));
+    if (carried) {
+        m_Matcher = carry->m_Matcher;
+        m_Matcher.Rebind(&shared->Db);
+        m_Predictor = carry->m_Predictor;
+        m_DesiredYaw = carry->m_DesiredYaw;
+        m_YawRate = carry->m_YawRate;
+        m_SimYaw = carry->m_SimYaw;
+        m_SimYawRate = carry->m_SimYawRate;
+        m_HaveYaw = carry->m_HaveYaw;
+        m_Still = carry->m_Still;
+        m_Turning = carry->m_Turning;
+        m_Air = carry->m_Air;
+        m_AirTime = carry->m_AirTime;
+        m_LandTimer = carry->m_LandTimer;
+        m_AirRate = carry->m_AirRate;
+        m_AirLast = carry->m_AirLast;
+        m_WarpRate = carry->m_WarpRate;
+        m_AnimSpeed = carry->m_AnimSpeed;
+        m_CapsuleSpeed = carry->m_CapsuleSpeed;
+        m_LastOut = carry->m_LastOut;
+    } else {
+        m_Matcher.Reset(&m_Shared->Db, m_Shared->StartFrame);
+    }
     // Experiment knobs (MmTune; keys as named here).
     {
         Settings& c = Config;
@@ -335,9 +362,11 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         const MotionSearchParams defaults;
         for (int g = 0; g < MotionFeature::GroupCount; ++g) m_GroupWeight[g] = MmTune(kW[g], defaults.GroupWeight[g]);
     }
-    m_HaveYaw = false;
-    m_Air = Air::None;
-    m_WarpRate = 1.0f;
+    if (!carried) {
+        m_HaveYaw = false;
+        m_Air = Air::None;
+        m_WarpRate = 1.0f;
+    }
     if (m_Debug) *m_Debug = MmPlayerDebug::Snapshot{};
     return true;
 }

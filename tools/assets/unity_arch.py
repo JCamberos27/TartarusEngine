@@ -70,6 +70,7 @@ def arch_rescale(pack, out, prefab, unscaled=False):
     g = 1.0 if unscaled else s
     ents = out['boxes'] + out['empties'] + out['models']
     ids = {e['id']: e for e in ents}
+    boxes = {id(e) for e in out['boxes']}   # by identity: a list test compared whole dicts, entity by entity
     kids = collections.defaultdict(list)
     for e in ents:
         kids[e['parentId'] if e['parentId'] in ids else -1].append(e)
@@ -79,7 +80,7 @@ def arch_rescale(pack, out, prefab, unscaled=False):
         top = par is None or 'path' not in par
         rig = rig or e['name'] in ('Player Spawn', 'Sun')  # the spawn's rig and the template Sun are not layout
         kind = arch_class(pack.name, e)
-        if kind is None and e in out['boxes']:
+        if kind is None and id(e) in boxes:
             kind = True
         # once inside a scaled building piece (a door leaf under its frame's pivot group) the factor is already applied
         fresh = need_par == 1.0
@@ -92,7 +93,7 @@ def arch_rescale(pack, out, prefab, unscaled=False):
         if move != 1.0:
             e['position'] = r6([c * move for c in e['position']])
         col = e.get('collider')
-        if col and 'path' not in e and e not in out['boxes'] and not kids[e['id']] and col.get('shape') in (0, 1, 2):
+        if col and 'path' not in e and id(e) not in boxes and not kids[e['id']] and col.get('shape') in (0, 1, 2):
             for k in ('center', 'halfExtents'):  # a collider-only helper: the shape itself takes the size, not the entity
                 if k in col:
                     col[k] = r6([c * own for c in col[k]])

@@ -67,6 +67,7 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <future>
 #include <thread>
 #include <unordered_map>
@@ -422,13 +423,19 @@ std::string Trim(std::string s, size_t n = 300) {
 }
 void ResetHealth() {
     g_GlErrBase = GLDebug::ErrorCount();
-    for (const LogEntry& e : Log::Entries()) g_LogSeqSeen = std::max(g_LogSeqSeen, e.Seq);
+    const auto& entries = Log::Entries();
+    if (!entries.empty()) g_LogSeqSeen = std::max(g_LogSeqSeen, entries.back().Seq);
     g_AllowLog.clear();
     g_ImGuiErrors.clear();
 }
 void CheckHealth(World& w) {
-    for (const LogEntry& e : Log::Entries()) {
-        if (e.Seq <= g_LogSeqSeen) continue;
+    // Seq grows along the vector, so only the tail past g_LogSeqSeen is new: find it from the end
+    // instead of walking the whole log every frame.
+    const auto& entries = Log::Entries();
+    size_t first = entries.size();
+    while (first > 0 && entries[first - 1].Seq > g_LogSeqSeen) --first;
+    for (size_t i = first; i < entries.size(); ++i) {
+        const LogEntry& e = entries[i];
         g_LogSeqSeen = std::max(g_LogSeqSeen, e.Seq);
         if (e.Level == LogLevel::Warning) {
             if (g_Cur.Warnings.size() < 40) g_Cur.Warnings.push_back(Trim(e.Message));
@@ -483,11 +490,9 @@ std::string Slug(const std::string& s) {
 }
 
 // --- Item queries ------------------------------------------------------------------------------
-std::string Visible(const std::string& label) {
-    const size_t at = label.find("##");
-    return at == std::string::npos ? label : label.substr(0, at);
-}
-bool Contains(const std::string& hay, const std::string& needle) { return hay.find(needle) != std::string::npos; }
+// Views into the label: FindAll runs these on every registered item for every query each frame.
+std::string_view Visible(std::string_view label) { return label.substr(0, label.find("##")); }
+bool Contains(std::string_view hay, std::string_view needle) { return hay.find(needle) != std::string_view::npos; }
 
 struct Query {
     std::string Label;  // matched against the visible label (contains)
@@ -998,11 +1003,13 @@ std::function<bool(Ctx&, ImVec2&)> AtPoint(std::function<ImVec2(Ctx&)> p) {
 std::vector<Step> ClickHere(int holdFrames = 6) {
     return {MouseButton(0, true), Wait(holdFrames), MouseButton(0, false)};
 }
-std::vector<Step> Cat(std::initializer_list<std::vector<Step>> parts) {
+// The parts in order, as one step list.
+std::vector<Step> Cat(std::vector<std::vector<Step>> parts) {
     std::vector<Step> out;
-    for (const auto& p : parts) out.insert(out.end(), p.begin(), p.end());
+    for (auto& p : parts) for (auto& st : p) out.push_back(std::move(st));
     return out;
 }
+Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
 
 void RegisterMotionDemo() {
     Add("motion demo", Cat({

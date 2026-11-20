@@ -51,8 +51,6 @@ LEGACY_LOOP_CLIPS = ['Fwd', 'Fwd_Left', 'Fwd_Right', 'Left', 'Right', 'Bwd', 'Bw
 LEGACY_ONE_SHOTS = ['Fwd_Start', 'Fwd_Stop', 'Bwd_Start', 'Bwd_Stop', 'Left_Start', 'Left_Stop', 'Right_Start', 'Right_Stop',
                     'Fwd_Pivot', 'Bwd_Pivot', 'Left_Pivot', 'Right_Pivot'] + \
                    [f'Start_Turn_{s}{a:03d}_{s}foot' for s in ('L', 'R') for a in (45, 90, 135, 180)]
-# Measured out (the bake refuses them: under a second of motion, nothing for a search to play on).
-LEGACY_OUT = set()
 # Mirrored (2026-11-17, measured): the side loops run at different speeds - Left 2.30 m/s, Right 2.96 - so a strafe either way
 # finds one of them out of its warp range (0.8-1.25). Each is baked a second time, mirrored: both sides get both speeds.
 LEGACY_MIRROR = {'Left', 'Right'}
@@ -133,9 +131,11 @@ def main():
 
     mirrored = []
     for r in rows:
-        r['include'], r['trim_start'], r['trim_end'], r['notes'], r['source'] = 0, TRIM, 0.0, '', ''
+        r['include'], r['trim_start'], r['trim_end'], r['notes'], r['source'] = 0, TRIM, round(r['seconds'] - TRIM, 3), '', ''
         sheet_note = SHEET.get(r['name'], (False, ''))[1]
-        r['trim_end'] = round(r['seconds'] - TRIM, 3)
+        if r['trim_end'] <= r['trim_start']:  # under 2 x TRIM: nothing left between the trims
+            r['notes'] = f"left out: {r['seconds']:.2f} s, under the {2 * TRIM:.0f} s of trims"
+            continue
         if a.audit:
             r['include'], r['notes'] = 1, sheet_note
             continue
@@ -161,8 +161,7 @@ def main():
                    (['strafe'] if clip in ('Left', 'Right') else [])
             rows.append(dict(name='Legacy_Jog_' + clip, source=f'{LEGACY_DIR}/AM_Loco_Jog_{clip}', group='Sprint',
                              pattern='Legacy_Jog_' + clip, take=1, seconds=0.0, frames=0, exaggerated=False, tags=tags,
-                             include=0 if clip in LEGACY_OUT else 1, trim_start=0.0, trim_end=0.0, loop=loop,
-                             notes='the old locomotion\'s jog: the held sprint' + (' (out: under a second)' if clip in LEGACY_OUT else '')))
+                             include=1, trim_start=0.0, trim_end=0.0, loop=loop, notes='the old locomotion\'s jog: the held sprint'))
             if clip in LEGACY_MIRROR:
                 r = dict(rows[-1])
                 rows.append(dict(r, name=r['name'] + '_Mirror', pattern=r['pattern'] + '_Mirror', tags=r['tags'] + ['mirrored'],

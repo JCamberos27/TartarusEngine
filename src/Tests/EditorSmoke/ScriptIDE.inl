@@ -42,7 +42,6 @@ bool Under(const fs::path& path, const fs::path& root) {
     auto lower = [](std::string s) { for (char& ch : s) ch = (char)std::tolower((unsigned char)ch); return s; };
     return lower(p).rfind(lower(r) + "/", 0) == 0;
 }
-// Log lines containing `fragment`, counting collapsed repeats.
 
 ImGuiWindow* Shown(const char* name) {
     ImGuiWindow* w = ImGui::FindWindowByName(name);
@@ -66,7 +65,7 @@ Query IdeTabEndingWith(const std::string& suffix) {
     Query q;
     q.Root = kIde;
     q.Pred = [suffix](const UiItem& it) {
-        const std::string v = Visible(it.Label);
+        const std::string v(Visible(it.Label));
         return Contains(it.Label, "###") && v.size() >= suffix.size() && v.compare(v.size() - suffix.size(), suffix.size(), suffix) == 0;
     };
     return q;
@@ -196,7 +195,6 @@ std::vector<Step> HideIde() {
         Wait(2),
     };
 }
-Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
 // Every Script IDE test ends here, passed or failed. A failed test stops before its own CloseTab /
 // RemoveDoc / HideIde steps: its unsaved buffer then failed every later ExpectClean (HasUnsavedScripts is
 // IDE-wide), its scratch file stayed in the project and the IDE stayed docked over Scene.
@@ -241,11 +239,6 @@ Step ClickIfShown(Query q) {
         return *skip == 1 || inner(c);
     };
     return click;
-}
-std::vector<Step> Join(std::vector<std::vector<Step>> parts) {
-    std::vector<Step> out;
-    for (auto& part : parts) for (auto& s : part) out.push_back(std::move(s));
-    return out;
 }
 } // namespace smoke_ide
 
@@ -298,7 +291,7 @@ void RegisterScriptIDETests() {
         Add("scriptide: Window > Script IDE opens it docked with Scene; File/Edit/Navigate/Build/Appearance menus", std::move(steps), IdeFinally);
     }
 
-    Add("scriptide: Open in Script IDE from a shader's Asset Browser menu", Join({
+    Add("scriptide: Open in Script IDE from a shader's Asset Browser menu", Cat({
         {FreshScene(), Wait(2),
          Do("browse the Shaders folder", [](Ctx& c) { g_Text = X::CurrentFolder(c.E); X::NavigateFolder(c.E, "Shaders"); }),
          // A small window can leave a floating panel (the Animator) over the docked Asset Browser.
@@ -331,7 +324,7 @@ void RegisterScriptIDETests() {
     {
         const fs::path p = Scratch("SmokeType.cpp");
         const std::string f = p.filename().string(), orig = "int SmokeValue = 1;\n";
-        Add("scriptide: type in a C++ file, undo / redo by keys and Edit menu, dirty marker, Ctrl+S saves", Join({
+        Add("scriptide: type in a C++ file, undo / redo by keys and Edit menu, dirty marker, Ctrl+S saves", Cat({
             {FreshScene()}, WriteDoc(p, orig), OpenDoc(p),
             {ExpectClean(f)},
             CaretToEnd(),
@@ -354,7 +347,7 @@ void RegisterScriptIDETests() {
     {
         const fs::path p = Scratch("SmokeFind.cpp");
         const std::string f = p.filename().string();
-        Add("scriptide: Edit > Find / Replace: Next, Replace match, Replace all, undo, File > Save", Join({
+        Add("scriptide: Edit > Find / Replace: Next, Replace match, Replace all, undo, File > Save", Cat({
             {FreshScene()}, WriteDoc(p, "int SmokeValue = 1;\nint Other = SmokeValue;\n"), OpenDoc(p),
             IdeMenu("Edit", "Find / Replace"),
             {Click(Ide("Find")), Wait(2), Key(ImGuiKey_A, ImGuiMod_Ctrl), TypeText("SmokeValue"), Wait(2),
@@ -379,7 +372,7 @@ void RegisterScriptIDETests() {
     {
         const fs::path p = Scratch("SmokeGoto.cpp");
         const std::string f = p.filename().string();
-        Add("scriptide: Navigate > Go to line moves the caret; Ctrl+G and Ctrl+F open their tools", Join({
+        Add("scriptide: Navigate > Go to line moves the caret; Ctrl+G and Ctrl+F open their tools", Cat({
             {FreshScene()}, WriteDoc(p, "int A = 1;\nint B = 2;\nint C = 3;\n"), OpenDoc(p),
             {ClickIfShown(Ide("Close find")), Wait(2)}, // start with the find bar closed
             IdeMenu("Navigate", "Go to line"),
@@ -405,7 +398,7 @@ void RegisterScriptIDETests() {
         const fs::path p = Scratch("SmokeShader.frag.glsl");
         const std::string f = p.filename().string();
         const std::string orig = "#version 460 core\n// SmokeShaderMarker\nout vec4 FragColor;\nvoid main() { FragColor = vec4(1.0); }\n";
-        Add("scriptide: a project GLSL file from the SOURCES list and from Find in project; edit and save", Join({
+        Add("scriptide: a project GLSL file from the SOURCES list and from Find in project; edit and save", Cat({
             {FreshScene()}, WriteDoc(p, orig),
             {Do("show the IDE", [](Ctx& c) { c.E.OpenScriptIDE(); }),
              UntilSeconds("the IDE is shown", [](Ctx&) { return IdeWindow() != nullptr; }, 5),
@@ -439,7 +432,7 @@ void RegisterScriptIDETests() {
     {
         const fs::path pa = Scratch("SmokeCloseA.cpp"), pb = Scratch("SmokeCloseB.cpp");
         const std::string fa = pa.filename().string(), fb = pb.filename().string();
-        Add("scriptide: closing tabs: clean closes; modified asks (Cancel keeps, Save writes, Discard drops)", Join({
+        Add("scriptide: closing tabs: clean closes; modified asks (Cancel keeps, Save writes, Discard drops)", Cat({
             {FreshScene()}, WriteDoc(pa, "int A = 1;\n"), WriteDoc(pb, "int B = 2;\n"), OpenDoc(pa), OpenDoc(pb),
             CloseTab(fa),
             {ExpectTrue(fb + " still open", [fb](Ctx&) { return Find(IdeTab(fb)) != nullptr; })},
@@ -471,7 +464,7 @@ void RegisterScriptIDETests() {
     {
         const fs::path pa = Scratch("SmokeAllA.cpp"), pb = Scratch("SmokeAllB.cpp");
         const std::string fa = pa.filename().string(), fb = pb.filename().string();
-        Add("scriptide: File > Save All writes every modified tab", Join({
+        Add("scriptide: File > Save All writes every modified tab", Cat({
             {FreshScene()}, WriteDoc(pa, "int A = 1;\n"), WriteDoc(pb, "int B = 2;\n"), OpenDoc(pa),
             CaretToEnd(), {TypeText("a"), Wait(2)},
             OpenDoc(pb),
@@ -486,7 +479,7 @@ void RegisterScriptIDETests() {
     {
         const fs::path p = Scratch("SmokeExternal.cpp");
         const std::string f = p.filename().string();
-        Add("scriptide: edits outside the IDE: a clean tab reloads; a modified one offers Reload / Overwrite; Reload from disk", Join({
+        Add("scriptide: edits outside the IDE: a clean tab reloads; a modified one offers Reload / Overwrite; Reload from disk", Cat({
             {FreshScene()}, WriteDoc(p, "int V = 1;\n"), OpenDoc(p),
             WriteDoc(p, "int V = 2;\n"),
             {WaitSeconds(2.0),
@@ -524,7 +517,7 @@ void RegisterScriptIDETests() {
     {
         const fs::path p = Scratch("SmokeComplete.cpp");
         const std::string f = p.filename().string();
-        Add("scriptide: Complete word (Edit menu and Ctrl+Space) inserts an identifier from the open files", Join({
+        Add("scriptide: Complete word (Edit menu and Ctrl+Space) inserts an identifier from the open files", Cat({
             {FreshScene()}, WriteDoc(p, "int SmokeCompletionTarget = 1;\n"), OpenDoc(p),
             CaretToEnd(), {TypeText("SmokeCompl"), Wait(2)},
             IdeMenu("Edit", "Complete word"),
@@ -548,7 +541,7 @@ void RegisterScriptIDETests() {
         const fs::path p = Scratch("SmokeTheme.frag.glsl");
         const std::string f = p.filename().string();
         auto restore = std::make_shared<int>(0);
-        std::vector<Step> steps = Join({
+        std::vector<Step> steps = Cat({
             {FreshScene()},
             WriteDoc(p, "#version 460 core\n// themes\nout vec4 FragColor;\nvoid main() { FragColor = vec4(0.5, 0.25, 1.0, 1.0); }\n"),
             OpenDoc(p),
@@ -582,7 +575,7 @@ void RegisterScriptIDETests() {
             ImGuiWindow* scene = ImGui::FindWindowByName(EditorPanels::Scene);
             return ide && scene && ide->DockId != 0 && ide->DockId == scene->DockId;
         }));
-        for (Step& s : Join({CloseTab(f), RemoveDoc(p), HideIde()})) steps.push_back(std::move(s));
+        for (Step& s : Cat({CloseTab(f), RemoveDoc(p), HideIde()})) steps.push_back(std::move(s));
         Add("scriptide: Appearance switches all twelve themes (saved with the session); Dock alongside Scene / Game", std::move(steps), IdeFinally);
     }
 
@@ -593,7 +586,7 @@ void RegisterScriptIDETests() {
         Query dockTab;
         dockTab.Exact = kIde;
         dockTab.Pred = [](const UiItem& it) { return it.Root != kIde && !Contains(it.Root, "##Menu") && !Contains(it.Root, "##Popup"); };
-        Add("scriptide: closing the IDE panel hides it and keeps a modified buffer; Window menu brings it back", Join({
+        Add("scriptide: closing the IDE panel hides it and keeps a modified buffer; Window menu brings it back", Cat({
             {FreshScene()}, WriteDoc(p, "int P = 1;\n"), OpenDoc(p),
             CaretToEnd(), {TypeText("q"), Wait(2), ExpectDirty(f),
                            Click(dockTab, 0, 2), Wait(3),
@@ -619,7 +612,7 @@ void RegisterScriptIDETests() {
         auto base = std::make_shared<int>(0);
         const std::string reloaded = "Shader hot reload: recompiled OutlineModel.vert.glsl + Outline.frag.glsl.";
         auto path = [] { return fs::path(ShaderLibrary::Dir()) / "Outline.frag.glsl"; };
-        Add("scriptide: a staged engine shader opens read-only; editing it on disk hot reloads, then it is restored", Join({
+        Add("scriptide: a staged engine shader opens read-only; editing it on disk hot reloads, then it is restored", Cat({
             {FreshScene(),
              Do("read the staged shader", [path, original, editable](Ctx&) {
                  *original = ReadFileText(path());

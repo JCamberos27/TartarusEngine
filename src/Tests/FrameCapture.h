@@ -11,6 +11,8 @@ std::vector<unsigned char> GrabRegion(int x, int y, int w, int h);
 // The harnesses' PNG captures: framebuffer `fbo`'s w x h pixels, top row first (GL reads bottom up). Leaves the read
 // framebuffer at 0.
 std::vector<unsigned char> GrabTopDown(unsigned fbo, int w, int h);
+// The same into `out`, reusing its storage (a video capture grabs every frame).
+void GrabTopDown(unsigned fbo, int w, int h, std::vector<unsigned char>& out);
 // Writes `rgba` (w x h, top row first) to dir/name.png, making dir if needed. Returns the path.
 std::string WritePngTo(const std::string& dir, const std::string& name, int w, int h, const std::vector<unsigned char>& rgba);
 

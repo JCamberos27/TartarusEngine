@@ -16,7 +16,7 @@ import re
 import sys
 
 import unity_yaml as uy
-from import_model_library import write_json, write_meta
+from import_model_library import standard_props, write_json, write_meta
 from unity_arch import ARCH_SCALE, SCALE_OVERRIDES, arch_class, arch_mesh, arch_rescale
 from unity_look import apply_look
 from unity_scene_passes import (AUTO_LOD, _walk, auto_lod, dedupe_openables, scene_bounds, settle_props, shut_ajar,
@@ -97,6 +97,9 @@ class Converter:
         self.terrain_mats = {}   # engine path of a terrain OBJ -> its material path
         self.mat_guids = {}      # engine mat path -> guid
         self.clips = {}          # unity .anim guid -> clip summary
+        self.metas = {}          # project rel path -> its .meta (see meta())
+        self.model_by_path = {}  # engine model path -> unity guid (see _model_guid_for)
+        self.open_motions = {}   # Animator controller guid -> its 'Open' states' motion guids
 
     # models ---------------------------------------------------------------------------------------------------
     def load_fbx(self, guids):
@@ -179,10 +182,7 @@ class Converter:
         divided by the layer's tileSize, so the material itself does not tile."""
         from unity_import import tidy, rel_project
         name = 'M_Terrain_' + tidy(ent.get('layer') or 'Ground')
-        p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [1.0, 1.0, 1.0], '_DoubleSided': False,
-             '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
-             '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.9, '_RoughnessMap': '',
-             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+        p = standard_props(0.9)
         prev, self.pack.cur = self.pack.cur, 'terrain ' + name
         if ent.get('albedo') in self.pack.guids:
             p['_AlbedoMap'] = self.pack.texture(ent['albedo'], 'rgb', 'albedo')
@@ -217,21 +217,29 @@ class Converter:
             dst = f'{stem}@{re.sub(r"[^A-Za-z0-9_]+", "_", node)}{ext}'
             from unity_import import copy_if_changed
             copy_if_changed(src, dst)
-            meta = json.load(open(src + '.meta', encoding='utf-8'))
+            meta = self.meta(base)
             rel = os.path.relpath(dst, os.path.join(self.pack.repo, 'project')).replace(os.sep, '/')
             imp = dict(meta['importer'])
             if base in self.unity_scale:  # the base mesh's scale from before set_correction gave it ARCH_SCALE
                 imp['globalScale'] = self.unity_scale[base]
             write_meta(dst, os.path.dirname(rel), 'model',
                        {'importer': imp, 'materialRemap': meta.get('materialRemap', {})})
+            self.metas.pop(rel, None)
             self.set_correction(rel, info.correction(node), [node])
             self.variants[key] = rel
             self.pack.counts['model variants (one mesh of a multi-mesh FBX)'] += 1
         return self.variants[key]
 
+    def meta(self, rel):
+        """A project file's .meta, read once per run; set_correction keeps the cached copy in step with its writes."""
+        if rel not in self.metas:
+            with open(os.path.join(self.pack.repo, 'project', *rel.split('/')) + '.meta', encoding='utf-8') as f:
+                self.metas[rel] = json.load(f)
+        return self.metas[rel]
+
     def set_correction(self, rel, c, only):
         path = os.path.join(self.pack.repo, 'project', *rel.split('/')) + '.meta'
-        meta = json.load(open(path, encoding='utf-8'))
+        meta = self.meta(rel)
         imp = meta['importer']
         imp.pop('pivotOffset', None)
         imp.pop('rootTransform', None)
@@ -246,8 +254,7 @@ class Converter:
         write_json(path, meta)
 
     def guid_of(self, rel):
-        path = os.path.join(self.pack.repo, 'project', *rel.split('/')) + '.meta'
-        return json.load(open(path, encoding='utf-8'))['guid']
+        return self.meta(rel)['guid']
 
     # Unity files ----------------------------------------------------------------------------------------------
     def parse_file(self, path):
@@ -394,7 +401,7 @@ class Converter:
     def prefab_tree(self, guid):
         """A fresh copy of a source prefab's tree, keyed by its own fileIDs (and its nested instances' ids)."""
         path = self.pack.guids[guid]
-        roots, objs, _ = self.parse_file(path)
+        roots, objs, by_id = self.parse_file(path)
         if not roots:
             return None
         root = roots[0]
@@ -403,15 +410,12 @@ class Converter:
             by_src.setdefault(nid, o)
         types.update(self.nested_types)
         # Transforms and components resolve to their GameObject: modifications target any of them
-        for fid, (cls, t, body, stripped) in self._docs_index(path).items():
+        for fid, (cls, t, body, stripped) in by_id.items():   # parse_file's index: the file is not parsed twice
             types[fid] = t
             go = (body.get('m_GameObject') or {}).get('fileID')
             if go in objs:
                 by_src[fid] = objs[go]
         return root, by_src, types
-
-    def _docs_index(self, path):
-        return {fid: (cls, t, body, s) for cls, fid, t, body, s in uy.docs(uy.read(path))}
 
     def model_tree(self, guid):
         """Unity's model prefab for an FBX: the node tree (root collapsed when it has one child), with ids from the
@@ -585,11 +589,12 @@ class Converter:
         guids = []
         for a in comps.get('Animator', []):
             cg = (a.get('m_Controller') or {}).get('guid')
-            cpath = self.pack.guids.get(cg)
-            if cpath:
-                for c, _, t, b, _s in uy.docs(uy.read(cpath)):
-                    if t == 'AnimatorState' and str(b.get('m_Name', '')).lower() == 'open':
-                        guids.append((b.get('m_Motion') or {}).get('guid'))
+            if cg not in self.open_motions:
+                cpath = self.pack.guids.get(cg)
+                self.open_motions[cg] = [(b.get('m_Motion') or {}).get('guid') for c, _, t, b, _s in
+                                         (uy.docs(uy.read(cpath)) if cpath else [])
+                                         if t == 'AnimatorState' and str(b.get('m_Name', '')).lower() == 'open']
+            guids += self.open_motions[cg]
         for a in comps.get('Animation', []):
             guids += [(m or {}).get('guid') for m in a.get('m_Animations') or []]
         for g in guids:
@@ -675,7 +680,7 @@ class Converter:
         if '_embedded/' in rel:  # an exported scene mesh: slot i is submesh i, so the renderer's list is the answer
             paths = [self.pack.material(g) if g else None for g in unity]
             return [{'guid': self._mat_guid(m), 'path': m} if m else {} for m in paths] if any(paths) else None
-        meta = json.load(open(os.path.join(self.pack.repo, 'project', *rel.split('/')) + '.meta', encoding='utf-8'))
+        meta = self.meta(rel)
         remap = meta.get('materialRemap', {})
         guid = self._model_guid_for(rel)
         info = self.fbx.get(guid)
@@ -707,10 +712,11 @@ class Converter:
 
     def _model_guid_for(self, rel):
         base = re.sub(r'@[^/]*(\.[^./]+)$', r'\1', rel)
-        for g, p in self.pack.models.items():
-            if p == base:
-                return g
-        return None
+        if len(self.model_by_path) != len(self.pack.models):   # models only get added while a pack converts
+            self.model_by_path = {}
+            for g, p in self.pack.models.items():
+                self.model_by_path.setdefault(p, g)   # the first guid for a path, as the old scan found
+        return self.model_by_path.get(base)
 
     def _mat_guid(self, path):
         if path not in self.mat_guids:
@@ -899,8 +905,17 @@ def apply_mod(o, prop, val, ref, pack):
             pack.counts['material overrides on instances'] += 1
 
 
+
+def report_source(pack):
+    """The pack folder as the report prints it: relative to the Unity project ("Assets/<pack>"), never an absolute
+    path - the report is tracked in a public repo and must not carry a user folder."""
+    if os.path.basename(pack.assets) == 'Assets':
+        return 'Assets/' + os.path.relpath(pack.src, pack.assets).replace(os.sep, '/')
+    return os.path.basename(os.path.normpath(pack.src))
+
+
 def write_report(pack):
-    lines = [f'# {pack.name}: Unity import report', '', f'Source: `{pack.src}`', '', '## Counts', '']
+    lines = [f'# {pack.name}: Unity import report', '', f'Source: `{report_source(pack)}`', '', '## Counts', '']
     for k, v in sorted(pack.counts.items()):
         lines.append(f'- {k}: {v}')
     lines += ['', '## Not converted / approximated', '']

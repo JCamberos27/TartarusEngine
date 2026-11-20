@@ -4,7 +4,7 @@ whole editor (EditorUIPrimitives::ActionButton and ::PrimaryButton; ::DangerIcon
 sanctioned third-party-red variant of ActionButton). EditorUIPrimitives.h is the one place that's
 allowed to define those treatments by pushing ImGuiCol_Button/ButtonHovered/ButtonActive style
 colours directly — every other .cpp/.h in src/Editor (subfolders included) should call the primitive instead of hand-
-rolling its own copy of the same three PushStyleColor calls, which is exactly how #160 happened
+rolling its own copy of the same three PushStyleColor calls or a raw ImGui::Button/SmallButton, which is exactly how #160 happened
 the first time (three panel .cpp files each carrying their own near-identical ActionButton before
 EditorUIPrimitives.h existed to share one implementation across the host/module DLL boundary).
 
@@ -17,7 +17,7 @@ tools/check_component_registration.py): a new file introducing the pattern fails
 file already on the list can still be tightened to zero occurrences later without the lint
 needing to change first.
 
-Fails (exit 1) on: a manual push in a .cpp not on the allow-list; a stale allow-list entry for a
+Comments are ignored. Fails (exit 1) on: a manual push or raw button in a .cpp/.h not on the allow-list; a stale allow-list entry for a
 file that no longer has any manual push (the coarse grain means this can't detect a *partial*
 migration within an already-listed file — that's a known limitation, not a bug).
 
@@ -27,6 +27,8 @@ import re
 import sys
 from pathlib import Path
 
+from guard_common import parse_allowlist, strip_cpp_comments
+
 ROOT = Path(__file__).resolve().parent.parent
 EDITOR_DIR = ROOT / "src" / "Editor"
 ALLOWLIST = ROOT / "tools" / "button_styling_allowlist.txt"
@@ -34,21 +36,6 @@ SANCTIONED_FILE = "EditorUIPrimitives.h"
 
 PUSH_RE = re.compile(r"PushStyleColor\(\s*ImGuiCol_Button(Hovered|Active)?\s*,")
 BUTTON_RE = re.compile(r"ImGui::(SmallButton|Button)\s*\(")
-
-
-def parse_allowlist(text: str) -> dict[str, str]:
-    out = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            sys.exit(f"allowlist: malformed line (no '='): {line!r}")
-        name, reason = (s.strip() for s in line.split("=", 1))
-        if not reason:
-            sys.exit(f"allowlist: {name} has no reason")
-        out[name] = reason
-    return out
 
 
 def main() -> int:
@@ -65,8 +52,7 @@ def main() -> int:
         name = path.relative_to(EDITOR_DIR).as_posix()
         if name == SANCTIONED_FILE:
             continue
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        # Check for both style color pushes and raw ImGui::Button/SmallButton calls
+        lines = strip_cpp_comments(path.read_text(encoding="utf-8", errors="replace")).splitlines()
         hits = [i + 1 for i, line in enumerate(lines) if PUSH_RE.search(line) or BUTTON_RE.search(line)]
         if hits:
             violations[name] = hits

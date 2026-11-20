@@ -182,11 +182,6 @@ Step SavedStates(int n) {
         return (int)OnDisk(kScratchRel).Layers[0].States.size() == n;
     }, 60);
 }
-std::vector<Step> Cat(std::vector<std::vector<Step>> parts) {
-    std::vector<Step> out;
-    for (auto& p : parts) for (auto& s : p) out.push_back(std::move(s));
-    return out;
-}
 Step UntilLoaded(std::string rel) {
     return Until("the Animator shows " + rel, [rel](Ctx& c) {
         AnimatorWindowState* w = Win(c);

@@ -88,7 +88,12 @@ private:
     void DrawLocalCasters(Shader& shader, bool animatedOnes, const Frustum* clip);
     static void EndLocalPass(const ShadowFrameInputs& in);
 
-    // Sun
+    // Sun: RenderSun's steps, in order, over one SunPass (ShadowFrame.cpp).
+    struct SunPass;
+    void GatherSunCasters(SunPass& p, const glm::mat4& fitView, const glm::mat4& fitProj);
+    void DrawSunCasters(SunPass& p);
+    void DrawSunImpostors(SunPass& p);
+    void DrawSunGrass(SunPass& p, const glm::mat4& fitView);
     struct SunFit { std::uint64_t frame = ~0ull; glm::mat4 view{0.0f}, proj{0.0f}; };
     SunFit m_LastSunFit;
     std::vector<SunCaster> m_SunCasters;

@@ -18,14 +18,30 @@ std::vector<unsigned char> GrabRegion(int x, int y, int w, int h) {
     return px;
 }
 
-std::vector<unsigned char> GrabTopDown(unsigned fbo, int w, int h) {
+void GrabTopDown(unsigned fbo, int w, int h, std::vector<unsigned char>& out) {
+    w = std::max(w, 0);
+    h = std::max(h, 0);
+    out.resize((size_t)w * h * 4);
+    if (w == 0 || h == 0) return;
     glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-    std::vector<unsigned char> px = GrabRegion(0, 0, w, h);
+    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, out.data());
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    std::vector<unsigned char> flipped(px.size());
-    for (int y = 0; y < h; ++y)
-        std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
-    return flipped;
+    // Flip in place, one row at a time: no second full-frame buffer.
+    const size_t row = (size_t)w * 4;
+    std::vector<unsigned char> tmp(row);
+    for (int y = 0; y < h / 2; ++y) {
+        unsigned char* a = &out[(size_t)y * row];
+        unsigned char* b = &out[(size_t)(h - 1 - y) * row];
+        std::memcpy(tmp.data(), a, row);
+        std::memcpy(a, b, row);
+        std::memcpy(b, tmp.data(), row);
+    }
+}
+
+std::vector<unsigned char> GrabTopDown(unsigned fbo, int w, int h) {
+    std::vector<unsigned char> px;
+    GrabTopDown(fbo, w, h, px);
+    return px;
 }
 
 std::string WritePngTo(const std::string& dir, const std::string& name, int w, int h, const std::vector<unsigned char>& rgba) {
