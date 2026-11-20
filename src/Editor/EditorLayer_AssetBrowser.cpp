@@ -1719,12 +1719,48 @@ bool EditorLayer::PlayUiThrottle() {
     return on;
 }
 
+namespace {
+// Sort control (#236 G) - folders always first; within each group, Name / Type / Date / Size (mode 0-3),
+// ascending or descending. Names are lower-cased once per cell (not twice per comparison); Date/Size stat
+// each file once per build (StatAssetGridCell, which the Details view then reuses). primitive:// and other
+// fileless keys fall back to 0, sorting to the "oldest / smallest" end.
+void SortAssetGridCells(std::vector<Cell>& cells, int mode, bool desc) {
+    struct SortKey { bool folder; int rank; long long num; std::string name; size_t index; };
+    std::vector<SortKey> keys;
+    keys.reserve(cells.size());
+    for (size_t i = 0; i < cells.size(); ++i) {
+        const Cell& c = cells[i];
+        SortKey k{c.kind == Cell::Kind::Folder, KindInfo(c.kind).SortRank, 0, c.display, i};
+        for (char& ch : k.name) ch = (char)std::tolower((unsigned char)ch);
+        if (mode == 2 || mode == 3) {
+            StatAssetGridCell(c);
+            k.num = mode == 2 ? c.modifiedTicks : (long long)c.fileSize;
+        }
+        keys.push_back(std::move(k));
+    }
+    std::sort(keys.begin(), keys.end(), [&](const SortKey& a, const SortKey& b) {
+        if (a.folder != b.folder) return a.folder; // folders first, always
+        int cmp = 0;
+        switch (mode) {
+            case 1: cmp = a.rank - b.rank; break;
+            case 2:
+            case 3: cmp = (a.num < b.num) ? -1 : (a.num > b.num) ? 1 : 0; break;
+            default: break;
+        }
+        if (cmp == 0) cmp = a.name.compare(b.name); // stable tiebreak by name
+        return desc ? cmp > 0 : cmp < 0;
+    });
+    std::vector<Cell> sorted;
+    sorted.reserve(cells.size());
+    for (const SortKey& k : keys) sorted.push_back(std::move(cells[k.index]));
+    cells.swap(sorted);
+}
+} // namespace
+
 void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     (void)world;
     auto& cells = m_AssetGridCells;
-
-    bool searching = !m_AssetSearchFilter.empty();
-    ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
+    const ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
 
     // During Play the list is kept between frames: collecting and sorting it walks every folder and every asset in
     // the library (~3-5 ms with ~11k assets) while the game is what's being watched. A change the user makes - folder,
@@ -1786,214 +1822,189 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                                     : gridKey == m_AssetGridCellsKey ? gridAge < kPlayGridRefreshFrames : gridAge < kPlayGridLibraryFrames);
     const bool editReuse = !m_InPlayMode && contentKey != 0 && contentKey == m_AssetGridCellsContentKey &&
                            gridKey == m_AssetGridCellsKey && gridAge < kEditGridRefreshFrames;
-    const bool reuseCells = keysMatch && (playReuse || editReuse);
-    if (!reuseCells) {
+    if (!(keysMatch && (playReuse || editReuse))) {
         m_AssetGridCellsContentKey = contentKey;
-        cells.clear();
         m_AssetGridCellsValid = true;
         m_AssetGridCellsUserKey = userKey;
         m_AssetGridCellsKey = gridKey;
         m_AssetGridCellsFrame = gridFrame;
-        // A type/label filter still narrows results even inside a specific folder (not just while
-        // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
-        // right where they are rather than forcing a switch to whole-library search first.
-        // "filtering" collects candidate cells from the WHOLE library (not just the current
-        // folder). A search/type/label filter does that, and so does the favourites-only view —
-        // its whole point is to gather starred assets from anywhere.
-        bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty()
-                         || m_AssetFavoritesOnly;
-
-        // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
-        // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
-        const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
-        auto inSearchScope = [&](const std::string& assetFolder) {
-            if (scopeGlobal || m_AssetFavoritesOnly || m_CurrentAssetFolder.empty()) return true;
-            return assetFolder == m_CurrentAssetFolder ||
-                   assetFolder.rfind(m_CurrentAssetFolder + "/", 0) == 0;
-        };
-
-        // A special, filesystem-backed folder (not one of AssetLibrary's virtual reference
-        // folders) listing every *.json under scenes/ on disk, so scenes can be browsed and
-        // opened the same way models/textures/sounds are, instead of only via File > Open.
-        static const std::string kScenesFolder = "Scenes";
-        assets.CreateFolder(kScenesFolder);
-        if ((filtering && inSearchScope(kScenesFolder)) || m_CurrentAssetFolder == kScenesFolder) {
-            RefreshScenesListingIfNeeded(); // (#175) cached — see m_ScenesListingCache
-            for (const auto& path : m_ScenesListingCache.paths) {
-                std::string name = std::filesystem::path(path).stem().string();
-                if (!MatchesAssetSearch(parsedSearch, name, "scene", assets.Labels(path))) continue;
-                cells.push_back({Cell::Kind::Scene, path, name, nullptr, nullptr});
-            }
-        }
-
-        // Phase 6 item 15 — a "Shaders" folder listing every *.shader under project/shaders/, so
-        // shaders are browsable the same way scenes are, instead of invisible to the Asset Browser.
-        static const std::string kShadersFolder = "Shaders";
-        assets.CreateFolder(kShadersFolder);
-        if ((filtering && inSearchScope(kShadersFolder)) || m_CurrentAssetFolder == kShadersFolder) {
-            RefreshShadersListingIfNeeded();
-            for (const auto& path : m_ShadersListingCache.paths) {
-                std::string name = std::filesystem::path(path).stem().string();
-                if (!MatchesAssetSearch(parsedSearch, name, "shader", {})) continue;
-                if (IsBuiltinShaderPath(path)) name += " (built-in)";
-                cells.push_back({Cell::Kind::Shader, path, name, nullptr, nullptr});
-            }
-        }
-
-        // The Asset Library root: placeables by category and pack (asset_library.json), without moving
-        // a file. Browsing lists one category folder; a search inside it covers that subtree.
-        // Always kept current (cheap: rebuilt only when the index changes) - the folder tree lists
-        // the Library root from it before anyone has opened it.
-        RefreshProjectAssetIndexIfNeeded(assets);
-        RefreshLibraryView();
-        if (AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder)) {
-            const std::string& cur = m_CurrentAssetFolder;
-            if (!filtering)
-                for (const auto& folder : AssetLibraryView::Folders())
-                    if (ParentFolderOf(folder) == cur)
-                        cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
-            for (const auto& [folder, items] : m_LibraryItems) {
-                if (filtering ? (folder != cur && folder.rfind(cur + "/", 0) != 0) : folder != cur) continue;
-                for (size_t i : items) {
-                    const ProjectAssetFile& f = m_ProjectAssetIndex.files[i];
-                    if (!MatchesAssetSearch(parsedSearch, f.Name, KindInfo(f.Kind).SearchName, assets.Labels(f.Path))) continue;
-                    Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
-                    c.unloaded = f.Kind == Cell::Kind::Prefab && !f.Unfetched && !m_ListedAssetKeys.count(f.Key);
-                    c.unfetched = f.Unfetched;
-                    cells.push_back(std::move(c));
-                }
-            }
-        }
-
-        // Animation assets use their real project folders, like prefabs and scripts.
-        // Retire the old all-project shortcut when it has no authored folder behind it.
-        // DeleteFolder only changes the browser folder list; it does not delete files.
-        // The folder list first: the disk is only asked while there is a shortcut to retire.
-        std::error_code animationFolderEc;
-        const auto& browserFolders = assets.Folders();
-        if (std::find(browserFolders.begin(), browserFolders.end(), "Animation") != browserFolders.end() &&
-            !std::filesystem::is_directory(ProjectPaths::Resolve("Animation"), animationFolderEc)) {
-            if (assets.CanDeleteFolder("Animation")) {
-                assets.DeleteFolder("Animation");
-                if (m_CurrentAssetFolder == "Animation") NavigateAssetFolder("assets/Weapons", /*sound=*/false);
-            }
-        }
-
-        for (const auto& folder : assets.Folders()) {
-            bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
-                                     && inSearchScope(ParentFolderOf(folder)))
-                : (ParentFolderOf(folder) == m_CurrentAssetFolder);
-            if (show) cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
-        }
-        // Where it's filed first (a lookup, no copies): browsing shows one folder of thousands of assets, so
-        // the name, labels and search match are only worked out for the ones that can show.
-        auto inView = [&](const std::string& path) {
-            const std::string& folder = assets.AssetFolderRef(path);
-            return filtering ? inSearchScope(folder) : folder == m_CurrentAssetFolder;
-        };
-        for (const auto& model : assets.Models()) {
-            const std::string& path = model->Path();
-            if (!inView(path)) continue;
-            std::string name = assets.DisplayName(path);
-            if (!MatchesAssetSearch(parsedSearch, name, "model", assets.Labels(path))) continue;
-            cells.push_back({Cell::Kind::Model, path, std::move(name), model, nullptr});
-        }
-        for (const auto& tex : assets.Textures()) {
-            const std::string& path = tex->Path();
-            if (!inView(path)) continue;
-            std::string name = assets.DisplayName(path);
-            if (!MatchesAssetSearch(parsedSearch, name, "texture", assets.Labels(path))) continue;
-            cells.push_back({Cell::Kind::Texture, path, std::move(name), nullptr, tex});
-        }
-        for (const auto& mat : assets.Materials()) {
-            const std::string& path = mat->Path;
-            if (!inView(path)) continue;
-            std::string name = assets.DisplayName(path);
-            if (!MatchesAssetSearch(parsedSearch, name, "material", assets.Labels(path))) continue;
-            cells.push_back({Cell::Kind::Material, path, std::move(name), nullptr, nullptr, mat});
-        }
-        for (const auto& sound : assets.Sounds()) {
-            if (!inView(sound)) continue;
-            std::string name = assets.DisplayName(sound);
-            if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
-            cells.push_back({Cell::Kind::Sound, sound, std::move(name), nullptr, nullptr});
-        }
-        for (const auto& prefab : assets.Prefabs()) {
-            if (!inView(prefab)) continue;
-            std::string name = assets.DisplayName(prefab);
-            if (!MatchesAssetSearch(parsedSearch, name, "prefab", assets.Labels(prefab))) continue;
-            cells.push_back({Cell::Kind::Prefab, prefab, std::move(name), nullptr, nullptr});
-        }
-        // Every other asset file in the project, unloaded until it's used (see m_ProjectAssetIndex),
-        // and the kinds that are never library entries.
-        RefreshProjectAssetIndexIfNeeded(assets);
-        for (const auto& f : m_ProjectAssetIndex.files) {
-            const std::string& moved = assets.AssetFolderRef(f.Path); // filed elsewhere in the browser since indexing
-            const std::string& folder = moved.empty() ? f.Folder : moved;
-            if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
-            if (m_ListedAssetKeys.count(f.Key)) continue;
-            const AssetKindInfo& kind = KindInfo(f.Kind);
-            const bool fileOnly = kind.FileOnly;
-            const char* kindName = kind.SearchName;
-            // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
-            if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
-                !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
-            Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
-            c.unloaded = !fileOnly && !f.Unfetched;
-            c.unfetched = f.Unfetched;
-            cells.push_back(std::move(c));
-        }
-
-        // Favourites view (#236 G): a flat list of just the starred entries — assets, folders,
-        // scenes and screenshots alike — from anywhere.
-        if (m_AssetFavoritesOnly) {
-            cells.erase(std::remove_if(cells.begin(), cells.end(),
-                [&](const Cell& c) { return !IsAssetFavorite(c.key); }), cells.end());
-        }
-
-        // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,
-        // ascending or descending. Date/Size stat the on-disk file once here (primitive:// and other
-        // fileless keys fall back to 0, sorting to the "oldest / smallest" end).
-        {
-            const int mode = std::clamp(EditorSettings::Get().AssetSortMode, 0, 3);
-            const bool desc = EditorSettings::Get().AssetSortDesc;
-            auto typeRank = [](Cell::Kind k) { return KindInfo(k).SortRank; };
-            // Names are lower-cased once per cell (not twice per comparison); Date/Size stat each file once
-            // per build (StatAssetGridCell), which the Details view then reuses.
-            struct SortKey { bool folder; int rank; long long num; std::string name; size_t index; };
-            std::vector<SortKey> keys;
-            keys.reserve(cells.size());
-            for (size_t i = 0; i < cells.size(); ++i) {
-                const Cell& c = cells[i];
-                SortKey k{c.kind == Cell::Kind::Folder, typeRank(c.kind), 0, c.display, i};
-                for (char& ch : k.name) ch = (char)std::tolower((unsigned char)ch);
-                if (mode == 2 || mode == 3) {
-                    StatAssetGridCell(c);
-                    k.num = mode == 2 ? c.modifiedTicks : (long long)c.fileSize;
-                }
-                keys.push_back(std::move(k));
-            }
-            std::sort(keys.begin(), keys.end(), [&](const SortKey& a, const SortKey& b) {
-                if (a.folder != b.folder) return a.folder; // folders first, always
-                int cmp = 0;
-                switch (mode) {
-                    case 1: cmp = a.rank - b.rank; break;
-                    case 2:
-                    case 3: cmp = (a.num < b.num) ? -1 : (a.num > b.num) ? 1 : 0; break;
-                    default: break;
-                }
-                if (cmp == 0) cmp = a.name.compare(b.name); // stable tiebreak by name
-                return desc ? cmp > 0 : cmp < 0;
-            });
-            std::vector<Cell> sorted;
-            sorted.reserve(cells.size());
-            for (const SortKey& k : keys) sorted.push_back(std::move(cells[k.index]));
-            cells.swap(sorted);
-        }
-
+        CollectAssetGridCells(assets, parsedSearch);
+        SortAssetGridCells(cells, std::clamp(EditorSettings::Get().AssetSortMode, 0, 3), EditorSettings::Get().AssetSortDesc);
     }
+    AssetGridFrameEdges();
+
+    // #219: the wrapping grid clips by ROW (see the module's clipper loop). The cell-size math and
+    // cellsPerRow live module-side now, derived from GetAssetGridMetrics(); DrawAssetCell just
+    // takes the rect it was told to fill. List mode is a grid with one cell per row.
+
+    // Motion v2: folder zoom / ripples (the Asset Browser's grid only, not the Glass Library's rebuild).
+    if (InAssetListWindow()) GridMotionFrameBegin(cells, m_CurrentAssetFolder, m_AssetSearchFilter, m_AssetFavoritesOnly, m_ImportQueue);
+}
+
+// Fills m_AssetGridCells (unsorted) with what the current folder / search / favourites view shows.
+// AssetGridFrameBegin has refreshed the project index this frame.
+void EditorLayer::CollectAssetGridCells(AssetLibrary& assets, const ParsedAssetSearch& parsedSearch) {
+    auto& cells = m_AssetGridCells;
+    cells.clear();
+    // A type/label filter still narrows results even inside a specific folder (not just while
+    // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
+    // right where they are rather than forcing a switch to whole-library search first.
+    // "filtering" collects candidate cells from the WHOLE library (not just the current
+    // folder). A search/type/label filter does that, and so does the favourites-only view —
+    // its whole point is to gather starred assets from anywhere.
+    const bool filtering = !m_AssetSearchFilter.empty() || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty()
+                           || m_AssetFavoritesOnly;
+
+    // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
+    // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
+    const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
+    auto inSearchScope = [&](const std::string& assetFolder) {
+        if (scopeGlobal || m_AssetFavoritesOnly || m_CurrentAssetFolder.empty()) return true;
+        return assetFolder == m_CurrentAssetFolder ||
+               assetFolder.rfind(m_CurrentAssetFolder + "/", 0) == 0;
+    };
+
+    // A special, filesystem-backed folder (not one of AssetLibrary's virtual reference
+    // folders) listing every *.json under scenes/ on disk, so scenes can be browsed and
+    // opened the same way models/textures/sounds are, instead of only via File > Open.
+    static const std::string kScenesFolder = "Scenes";
+    assets.CreateFolder(kScenesFolder);
+    if ((filtering && inSearchScope(kScenesFolder)) || m_CurrentAssetFolder == kScenesFolder) {
+        RefreshScenesListingIfNeeded(); // (#175) cached — see m_ScenesListingCache
+        for (const auto& path : m_ScenesListingCache.paths) {
+            std::string name = std::filesystem::path(path).stem().string();
+            if (!MatchesAssetSearch(parsedSearch, name, "scene", assets.Labels(path))) continue;
+            cells.push_back({Cell::Kind::Scene, path, name, nullptr, nullptr});
+        }
+    }
+
+    // Phase 6 item 15 — a "Shaders" folder listing every *.shader under project/shaders/, so
+    // shaders are browsable the same way scenes are, instead of invisible to the Asset Browser.
+    static const std::string kShadersFolder = "Shaders";
+    assets.CreateFolder(kShadersFolder);
+    if ((filtering && inSearchScope(kShadersFolder)) || m_CurrentAssetFolder == kShadersFolder) {
+        RefreshShadersListingIfNeeded();
+        for (const auto& path : m_ShadersListingCache.paths) {
+            std::string name = std::filesystem::path(path).stem().string();
+            if (!MatchesAssetSearch(parsedSearch, name, "shader", {})) continue;
+            if (IsBuiltinShaderPath(path)) name += " (built-in)";
+            cells.push_back({Cell::Kind::Shader, path, name, nullptr, nullptr});
+        }
+    }
+
+    // The Asset Library root: placeables by category and pack (asset_library.json), without moving
+    // a file. Browsing lists one category folder; a search inside it covers that subtree.
+    // Always kept current (cheap: rebuilt only when the index changes) - the folder tree lists
+    // the Library root from it before anyone has opened it.
+    RefreshLibraryView();
+    if (AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder)) {
+        const std::string& cur = m_CurrentAssetFolder;
+        if (!filtering)
+            for (const auto& folder : AssetLibraryView::Folders())
+                if (ParentFolderOf(folder) == cur)
+                    cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
+        for (const auto& [folder, items] : m_LibraryItems) {
+            if (filtering ? (folder != cur && folder.rfind(cur + "/", 0) != 0) : folder != cur) continue;
+            for (size_t i : items) {
+                const ProjectAssetFile& f = m_ProjectAssetIndex.files[i];
+                if (!MatchesAssetSearch(parsedSearch, f.Name, KindInfo(f.Kind).SearchName, assets.Labels(f.Path))) continue;
+                Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
+                c.unloaded = f.Kind == Cell::Kind::Prefab && !f.Unfetched && !m_ListedAssetKeys.count(f.Key);
+                c.unfetched = f.Unfetched;
+                cells.push_back(std::move(c));
+            }
+        }
+    }
+
+    // Animation assets use their real project folders, like prefabs and scripts.
+    // Retire the old all-project shortcut when it has no authored folder behind it.
+    // DeleteFolder only changes the browser folder list; it does not delete files.
+    // The folder list first: the disk is only asked while there is a shortcut to retire.
+    std::error_code animationFolderEc;
+    const auto& browserFolders = assets.Folders();
+    if (std::find(browserFolders.begin(), browserFolders.end(), "Animation") != browserFolders.end() &&
+        !std::filesystem::is_directory(ProjectPaths::Resolve("Animation"), animationFolderEc)) {
+        if (assets.CanDeleteFolder("Animation")) {
+            assets.DeleteFolder("Animation");
+            if (m_CurrentAssetFolder == "Animation") NavigateAssetFolder("assets/Weapons", /*sound=*/false);
+        }
+    }
+
+    for (const auto& folder : assets.Folders()) {
+        bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
+                                 && inSearchScope(ParentFolderOf(folder)))
+            : (ParentFolderOf(folder) == m_CurrentAssetFolder);
+        if (show) cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
+    }
+    // Where it's filed first (a lookup, no copies): browsing shows one folder of thousands of assets, so
+    // the name, labels and search match are only worked out for the ones that can show.
+    auto inView = [&](const std::string& path) {
+        const std::string& folder = assets.AssetFolderRef(path);
+        return filtering ? inSearchScope(folder) : folder == m_CurrentAssetFolder;
+    };
+    for (const auto& model : assets.Models()) {
+        const std::string& path = model->Path();
+        if (!inView(path)) continue;
+        std::string name = assets.DisplayName(path);
+        if (!MatchesAssetSearch(parsedSearch, name, "model", assets.Labels(path))) continue;
+        cells.push_back({Cell::Kind::Model, path, std::move(name), model, nullptr});
+    }
+    for (const auto& tex : assets.Textures()) {
+        const std::string& path = tex->Path();
+        if (!inView(path)) continue;
+        std::string name = assets.DisplayName(path);
+        if (!MatchesAssetSearch(parsedSearch, name, "texture", assets.Labels(path))) continue;
+        cells.push_back({Cell::Kind::Texture, path, std::move(name), nullptr, tex});
+    }
+    for (const auto& mat : assets.Materials()) {
+        const std::string& path = mat->Path;
+        if (!inView(path)) continue;
+        std::string name = assets.DisplayName(path);
+        if (!MatchesAssetSearch(parsedSearch, name, "material", assets.Labels(path))) continue;
+        cells.push_back({Cell::Kind::Material, path, std::move(name), nullptr, nullptr, mat});
+    }
+    for (const auto& sound : assets.Sounds()) {
+        if (!inView(sound)) continue;
+        std::string name = assets.DisplayName(sound);
+        if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
+        cells.push_back({Cell::Kind::Sound, sound, std::move(name), nullptr, nullptr});
+    }
+    for (const auto& prefab : assets.Prefabs()) {
+        if (!inView(prefab)) continue;
+        std::string name = assets.DisplayName(prefab);
+        if (!MatchesAssetSearch(parsedSearch, name, "prefab", assets.Labels(prefab))) continue;
+        cells.push_back({Cell::Kind::Prefab, prefab, std::move(name), nullptr, nullptr});
+    }
+    // Every other asset file in the project, unloaded until it's used (see m_ProjectAssetIndex),
+    // and the kinds that are never library entries.
+    for (const auto& f : m_ProjectAssetIndex.files) {
+        const std::string& moved = assets.AssetFolderRef(f.Path); // filed elsewhere in the browser since indexing
+        const std::string& folder = moved.empty() ? f.Folder : moved;
+        if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
+        if (m_ListedAssetKeys.count(f.Key)) continue;
+        const AssetKindInfo& kind = KindInfo(f.Kind);
+        // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
+        if (!MatchesAssetSearch(parsedSearch, f.Name, kind.SearchName, {}) &&
+            !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
+        Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
+        c.unloaded = !kind.FileOnly && !f.Unfetched;
+        c.unfetched = f.Unfetched;
+        cells.push_back(std::move(c));
+    }
+
+    // Favourites view (#236 G): a flat list of just the starred entries — assets, folders,
+    // scenes and screenshots alike — from anywhere.
+    if (m_AssetFavoritesOnly) {
+        cells.erase(std::remove_if(cells.begin(), cells.end(),
+            [&](const Cell& c) { return !IsAssetFavorite(c.key); }), cells.end());
+    }
+}
+
+// The grid's once-a-frame input edges (the first AssetGridFrameBegin caller of a frame only).
+void EditorLayer::AssetGridFrameEdges() {
+    const auto& cells = m_AssetGridCells;
     // SearchEmpty: once, when typing turns a search that found something into one that finds nothing.
-    if (searching && cells.empty() && m_SearchSoundPrevHadResults && !m_SearchSoundPrevFilter.empty() &&
+    if (!m_AssetSearchFilter.empty() && cells.empty() && m_SearchSoundPrevHadResults && !m_SearchSoundPrevFilter.empty() &&
         m_AssetSearchFilter != m_SearchSoundPrevFilter)
         EditorSound::Play(EditorSound::Event::SearchEmpty);
     m_SearchSoundPrevFilter = m_AssetSearchFilter;
@@ -2011,13 +2022,161 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             AddExtraAssetSelection(cells[i].key, cells[i].kind == Cell::Kind::Folder);
         }
     }
+}
 
-    // #219: the wrapping grid clips by ROW (see the module's clipper loop). The cell-size math and
-    // cellsPerRow live module-side now, derived from GetAssetGridMetrics(); DrawAssetCell just
-    // takes the rect it was told to fill. List mode is a grid with one cell per row.
+namespace {
+// Motion v2, per tile. The first drawn cell of the frame takes the grid's geometry (the clipper starts every step
+// at a row start, so the content width here is the module's) and opens the folder-zoom layer. Returns how far this
+// tile has rippled in (1 = at rest): the folder ripple spreads from its origin tile, an imported tile has its own
+// pulse. The look is the old diagonal wave's (fade, rise, OutCubic over 260 ms).
+float AssetCellMotionBegin(const std::vector<Cell>& cells, int index, float cellW, float cellH, bool gridMode) {
+    AssetGridMotionState& gm = GridMotion();
+    Glass::ImAnimContext& motion = Glass::Motion();
+    const int frame = ImGui::GetFrameCount();
+    if (gm.GeomFrame != frame) {
+        gm.GeomFrame = frame;
+        const ImGuiStyle& st = ImGui::GetStyle();
+        const float availW = ImGui::GetContentRegionAvail().x;
+        if (gridMode) {
+            gm.Cols = std::max(1, (int)((availW + st.ItemSpacing.x) / (cellW + st.ItemSpacing.x)));
+            gm.Stride = ImVec2(cellW + st.ItemSpacing.x, cellH + st.ItemSpacing.y);
+            gm.CellSize = ImVec2(cellW, cellH);
+        } else {
+            gm.Cols = 1;
+            gm.Stride = ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing());
+            gm.CellSize = ImVec2(availW, ImGui::GetTextLineHeight());
+        }
+        const ImVec2 here = ImGui::GetCursorScreenPos();
+        gm.Origin = ImVec2(here.x, here.y - (float)(index / gm.Cols) * gm.Stride.y);
+        if (motion.PulseActive(kGridZoomId) && !gm.LayerDl) {
+            gm.LayerDl = ImGui::GetWindowDrawList();
+            gm.LayerVtx = Glass::ImAnimContext::BeginLayer(gm.LayerDl);
+        }
+    }
+    float reveal = 1.0f;
+    const int col = index % gm.Cols, row = index / gm.Cols;
+    const float el = motion.PulseElapsed(kGridRippleId, FLT_MAX);
+    if (el != FLT_MAX) {
+        const int rows = ((int)cells.size() + gm.Cols - 1) / gm.Cols;
+        const float delay = Glass::ImAnimContext::GridRippleDelay(col, row, gm.Cols, rows, gm.RippleCol, gm.RippleRow,
+                                                                  Glass::RippleStepMs, Glass::RippleCap);
+        reveal = Glass::EaseProgress(Glass::HoverIn, (el - delay) / (Glass::GridWaveFadeMs * 0.001f));
+    }
+    if (gm.ImportArmed) {
+        const ImGuiID tid = ImportTileId(cells[(size_t)index].key);
+        if (motion.PulseActive(tid)) reveal = std::min(reveal, Glass::EaseProgress(Glass::HoverIn, motion.PulseProgress(tid)));
+    }
+    return reveal;
+}
 
-    // Motion v2: folder zoom / ripples (the Asset Browser's grid only, not the Glass Library's rebuild).
-    if (InAssetListWindow()) GridMotionFrameBegin(cells, m_CurrentAssetFolder, m_AssetSearchFilter, m_AssetFavoritesOnly, m_ImportQueue);
+// Motion v2: the ripple's fade, rise and scale, applied to everything the tile drew since `vtx`.
+void AssetCellMotionEnd(ImDrawList* dl, int vtx, ImVec2 restMin, ImVec2 restSize, float reveal, bool gridMode) {
+    if (vtx < 0) return;
+    Glass::LayerTransform t;
+    t.pivot = ImVec2(restMin.x + restSize.x * 0.5f, restMin.y + restSize.y * 0.5f);
+    const float s = gridMode ? kTileFromScale + (1.0f - kTileFromScale) * reveal : 1.0f;
+    t.scale = ImVec2(s, s);
+    t.translate = ImVec2(0.0f, EditorTheme::Px(Glass::GridWaveRisePx) * (1.0f - reveal));
+    t.alpha = reveal;
+    Glass::ImAnimContext::EndLayer(dl, vtx, t);
+}
+
+// The hover tooltip of a tile / row: its name and what can be done with it.
+void AssetCellTooltip(const World& world, const Cell& cell) {
+    switch (cell.kind) {
+        case Cell::Kind::Model:
+            EditorUI::SetTooltip("%s\n\nDrag into the viewport to place\n\n%s",
+                cell.display.c_str(), UsageTooltip(cell.model ? FindModelUsages(world, cell.model.get())
+                                                              : std::vector<std::string>{}).c_str());
+            break;
+        case Cell::Kind::Texture:
+            EditorUI::SetTooltip(
+                "%s\n\nDrag onto a model to set its Albedo map,\nor onto a map row in the Inspector's PBR Material.\n\n%s",
+                cell.display.c_str(), UsageTooltip(cell.texture ? FindTextureUsages(world, cell.texture.get())
+                                                                : std::vector<std::string>{}).c_str());
+            break;
+        case Cell::Kind::Material:
+            EditorUI::SetTooltip("%s\n\nDrag onto a model to apply this material.", cell.display.c_str());
+            break;
+        case Cell::Kind::Sound:
+            EditorUI::SetTooltip("%s\n\nClick to preview\n\n%s",
+                cell.display.c_str(), UsageTooltip(FindSoundUsages(world, cell.key)).c_str());
+            break;
+        case Cell::Kind::Scene:
+            EditorUI::SetTooltip("%s\n\nDouble-click to open", cell.display.c_str());
+            break;
+        case Cell::Kind::Prefab:
+            EditorUI::SetTooltip("%s\n\nDrag into the viewport to place an instance,\nor double-click to place one at the origin.",
+                cell.display.c_str());
+            break;
+        case Cell::Kind::Shader:
+            EditorUI::SetTooltip("%s\n\nDouble-click to open externally.\nSelect to preview + compile status in the Inspector.",
+                cell.display.c_str());
+            break;
+        case Cell::Kind::Animator:
+            EditorUI::SetTooltip("%s\n\nDouble-click to open in the Animator.", cell.display.c_str());
+            break;
+        case Cell::Kind::Weapon:
+        case Cell::Kind::Recoil:
+        case Cell::Kind::CameraShake:
+            EditorUI::SetTooltip("%s\n\nSelect to edit in the Inspector.", cell.display.c_str());
+            break;
+        case Cell::Kind::Decal:
+            EditorUI::SetTooltip("%s\n\nDrag onto a surface in the viewport to place it,\n"
+                                 "or onto a placed decal to swap its look.\nSelect to edit in the Inspector.",
+                                 cell.display.c_str());
+            break;
+        case Cell::Kind::Hdri:
+            EditorUI::SetTooltip("%s\n\nDrag onto the sky's HDRI field (Environment) to light the scene with it.",
+                cell.display.c_str());
+            break;
+        case Cell::Kind::Script:
+            EditorUI::SetTooltip("%s\n\nDouble-click to open externally.", cell.display.c_str());
+            break;
+        default:
+            EditorUI::SetTooltip("%s\n\nDouble-click to open. Drag assets onto it to file them here.", cell.display.c_str());
+            break;
+    }
+}
+} // namespace
+
+// What one tile shows, worked out once per cell and shared by its grid and list forms.
+struct EditorLayer::AssetCellLook {
+    // Tile image for a file that isn't loaded: a small decode of an image, the last cached render of a model / material.
+    AssetThumbnailLoader::Thumb unloadedThumb;
+    ImVec2 uv0, uv1;
+    EditorFolderVisual folderVis; // Editor Enhancers / vFolders: a folder tile's resolved icon, colour and content
+    const char* icon = nullptr;
+    ImU32 folderTint = 0;
+    bool isFolder = false, isSelected = false, isRenaming = false, playing = false;
+};
+
+void EditorLayer::BuildAssetCellLook(AssetLibrary& assets, const AssetGridCell& cell, AssetCellLook& look) {
+    if (cell.unfetched) {
+        // no decode: there's no file to read
+    } else if ((cell.unloaded && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Material)) ||
+               cell.kind == Cell::Kind::Hdri) { // never loaded here: a small tone-mapped decode (stb; .exr keeps the glyph)
+        look.unloadedThumb = m_AssetThumbs.Get(cell.key, cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri
+            ? AssetThumbnailLoader::Source::Image : AssetThumbnailLoader::Source::Cached);
+    } else if (cell.kind == Cell::Kind::Decal) { // its albedo's image thumbnail (the glyph until there is one)
+        if (const std::string& albedo = DecalThumbnailSource(cell.key); !albedo.empty())
+            look.unloadedThumb = m_AssetThumbs.Get(albedo, AssetThumbnailLoader::Source::Image);
+    }
+    look.uv0 = ImVec2(0.0f, look.unloadedThumb.FlipV ? 1.0f : 0.0f);
+    look.uv1 = ImVec2(1.0f, look.unloadedThumb.FlipV ? 0.0f : 1.0f);
+
+    look.isFolder = cell.kind == Cell::Kind::Folder;
+    look.isSelected = IsAssetSelected(cell.key, look.isFolder);
+    look.isRenaming = m_RenamingAssetKey == cell.key && m_RenamingIsFolder == look.isFolder;
+    look.playing = cell.kind == Cell::Kind::Sound && AudioEngine::IsPreviewPlaying(cell.key);
+    look.icon = cell.kind == Cell::Kind::Model && cell.model && cell.model->HasAnimations() ? ICON_FA_FILM
+              : look.playing ? ICON_FA_STOP
+              : KindInfo(cell.kind).Icon;
+    if (look.isFolder) {
+        GetFolderVisual(assets, cell.key, look.folderVis);
+        if (look.folderVis.Icon[0]) look.icon = look.folderVis.Icon;
+    }
+    look.folderTint = (look.isFolder && look.folderVis.Color) ? (EditorTheme::UserPacked(look.folderVis.Color) | 0xFF000000u) : 0u;
 }
 
 // One tile at the module's current cursor. `gridMode` false = the compact icon+name list row.
@@ -2026,9 +2185,6 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
     auto& cells = m_AssetGridCells;
     if (index < 0 || (size_t)index >= cells.size()) return;
     const size_t cellIndex = (size_t)index;
-    const float cellWidth = cellW;
-    const float cellHeight = cellH;
-    const float cellPadding = 8.0f;
     if (cells[cellIndex].unloaded) {
         // A file nothing has loaded yet: load it the moment it's clicked or right-clicked, before
         // the tile code below runs, so selection / drag / the context menu see a normal asset.
@@ -2039,51 +2195,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
             LoadUnloadedAsset(assets, cells[cellIndex]);
     }
-    // --- Motion v2 -------------------------------------------------------------------------------
-    // The first drawn cell of the frame takes the grid's geometry (the clipper starts every step at a
-    // row start, so the content width here is the module's) and opens the folder-zoom layer.
-    AssetGridMotionState& gm = GridMotion();
-    Glass::ImAnimContext& motion = Glass::Motion();
-    {
-        const int frame = ImGui::GetFrameCount();
-        if (gm.GeomFrame != frame) {
-            gm.GeomFrame = frame;
-            const ImGuiStyle& st = ImGui::GetStyle();
-            const float availW = ImGui::GetContentRegionAvail().x;
-            if (gridMode) {
-                gm.Cols = std::max(1, (int)((availW + st.ItemSpacing.x) / (cellW + st.ItemSpacing.x)));
-                gm.Stride = ImVec2(cellW + st.ItemSpacing.x, cellH + st.ItemSpacing.y);
-                gm.CellSize = ImVec2(cellW, cellH);
-            } else {
-                gm.Cols = 1;
-                gm.Stride = ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing());
-                gm.CellSize = ImVec2(availW, ImGui::GetTextLineHeight());
-            }
-            const ImVec2 here = ImGui::GetCursorScreenPos();
-            gm.Origin = ImVec2(here.x, here.y - (float)(index / gm.Cols) * gm.Stride.y);
-            if (motion.PulseActive(kGridZoomId) && !gm.LayerDl) {
-                gm.LayerDl = ImGui::GetWindowDrawList();
-                gm.LayerVtx = Glass::ImAnimContext::BeginLayer(gm.LayerDl);
-            }
-        }
-    }
-    // How far this tile has rippled in: the folder ripple spreads from its origin tile, an imported
-    // tile has its own pulse. The look is the old diagonal wave's (fade, rise, OutCubic over 260 ms).
-    float reveal = 1.0f;
-    {
-        const int col = index % gm.Cols, row = index / gm.Cols;
-        const float el = motion.PulseElapsed(kGridRippleId, FLT_MAX);
-        if (el != FLT_MAX) {
-            const int rows = ((int)cells.size() + gm.Cols - 1) / gm.Cols;
-            const float delay = Glass::ImAnimContext::GridRippleDelay(col, row, gm.Cols, rows, gm.RippleCol, gm.RippleRow,
-                                                                      Glass::RippleStepMs, Glass::RippleCap);
-            reveal = Glass::EaseProgress(Glass::HoverIn, (el - delay) / (Glass::GridWaveFadeMs * 0.001f));
-        }
-        if (gm.ImportArmed) {
-            const ImGuiID tid = ImportTileId(cells[cellIndex].key);
-            if (motion.PulseActive(tid)) reveal = std::min(reveal, Glass::EaseProgress(Glass::HoverIn, motion.PulseProgress(tid)));
-        }
-    }
+    const float reveal = AssetCellMotionBegin(cells, index, cellW, cellH, gridMode);
     ImDrawList* tileDl = ImGui::GetWindowDrawList();
     const ImVec2 restMin = ImGui::GetCursorScreenPos();
     const ImVec2 restSize = gridMode ? ImVec2(cellW, cellH) : ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight());
@@ -2091,740 +2203,640 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
     {
         const auto& cell = cells[cellIndex];
         ImGui::PushID(cell.key.c_str());
-        // Tile image for a file that isn't loaded: a small decode of an image, the last cached
-        // render of a model / material.
-        AssetThumbnailLoader::Thumb unloadedThumb;
         // An unfetched file's tile draws at 40% (ImGui's Alpha also dims the images) until the cell ends.
         struct DimScope {
             bool On;
             explicit DimScope(bool on) : On(on) { if (On) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.4f); }
             ~DimScope() { if (On) ImGui::PopStyleVar(); }
         } dim(cell.unfetched);
-        if (cell.unfetched) {
-            // no decode: there's no file to read
-        } else if ((cell.unloaded && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Material)) ||
-            cell.kind == Cell::Kind::Hdri) // never loaded here: a small tone-mapped decode (stb; .exr keeps the glyph)
-            unloadedThumb = m_AssetThumbs.Get(cell.key, cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri
-                ? AssetThumbnailLoader::Source::Image : AssetThumbnailLoader::Source::Cached);
-        else if (cell.kind == Cell::Kind::Decal) // its albedo's image thumbnail (the glyph until there is one)
-            if (const std::string& albedo = DecalThumbnailSource(cell.key); !albedo.empty())
-                unloadedThumb = m_AssetThumbs.Get(albedo, AssetThumbnailLoader::Source::Image);
-        const ImVec2 thumbUv0(0.0f, unloadedThumb.FlipV ? 1.0f : 0.0f), thumbUv1(1.0f, unloadedThumb.FlipV ? 0.0f : 1.0f);
+        AssetCellLook look;
+        BuildAssetCellLook(assets, cell, look);
 
-        bool isFolder = cell.kind == Cell::Kind::Folder;
-        bool isSelected = IsAssetSelected(cell.key, isFolder);
-        bool isRenaming = m_RenamingAssetKey == cell.key && m_RenamingIsFolder == isFolder;
-        bool playing = cell.kind == Cell::Kind::Sound && AudioEngine::IsPreviewPlaying(cell.key);
-        const char* icon = cell.kind == Cell::Kind::Model && cell.model && cell.model->HasAnimations() ? ICON_FA_FILM
-                         : playing ? ICON_FA_STOP
-                         : KindInfo(cell.kind).Icon;
-
-        // Editor Enhancers / vFolders: a folder tile shows its resolved icon, colour and content.
-        EditorFolderVisual folderVis;
-        if (isFolder) {
-            GetFolderVisual(assets, cell.key, folderVis);
-            if (folderVis.Icon[0]) icon = folderVis.Icon;
-        }
-        const ImU32 folderTint = (isFolder && folderVis.Color) ? (EditorTheme::UserPacked(folderVis.Color) | 0xFF000000u) : 0u;
-
-        // The asset-type colour: the tile's bottom stripe in Grid view.
-        auto kindColor = [&]() -> ImVec4 { return KindInfo(cell.kind).Color; };
-
-        bool clicked = false;
-        if (gridMode) {
-            // The tile itself (Selectable for its background/hit-test, or a same-size Dummy
-            // while renaming) stays "the last submitted item" for everything below (hover,
-            // drag-drop, context menu) - icon and label are painted directly onto the draw
-            // list afterward rather than as their own widgets, so they never steal that.
-            ImVec2 tileMin = ImGui::GetCursorScreenPos();
-            ImVec2 tileSize(cellWidth, cellHeight);
-            if (!isRenaming) {
-                // NoNav (Defect #43): the host's Enter/Backspace/Left/Right folder-traversal
-                // block drives selection off m_CurrentAssetFolder directly — ImGui's own
-                // keyboard nav must not also move focus between tiles on the same keys.
-                ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-                clicked = ImGui::Selectable("##tile", isSelected, ImGuiSelectableFlags_None, tileSize);
-                ImGui::PopItemFlag();
-            } else {
-                ImGui::Dummy(tileSize);
-            }
-
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
-            {
-                // 2px asset-type stripe along the tile's bottom edge; a selected tile also gets a
-                // 1.5px accent outline.
-                const float stripeH = EditorTheme::Px(2.0f);
-                const ImVec2 tileMax(tileMin.x + tileSize.x, tileMin.y + tileSize.y);
-                dl->AddRectFilled(ImVec2(tileMin.x, tileMax.y - stripeH), tileMax,
-                                  EditorTheme::U32(kindColor()));
-                if (isSelected)
-                    dl->AddRect(tileMin, tileMax, EditorTheme::U32(EditorTheme::Accent),
-                                ImGui::GetStyle().FrameRounding, ImDrawFlags_None, EditorTheme::Px(1.5f));
-            }
-            unsigned int modelThumb = (cell.kind == Cell::Kind::Model && cell.model) ? ModelThumbnail(*cell.model)
-                                    : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
-            if (unloadedThumb.Tex) {
-                ImVec2 imgPos(tileMin.x + (cellWidth - m_AssetIconSize) * 0.5f, tileMin.y + cellPadding * 0.5f);
-                dl->AddImage((ImTextureID)(intptr_t)unloadedThumb.Tex, imgPos,
-                             ImVec2(imgPos.x + m_AssetIconSize, imgPos.y + m_AssetIconSize), thumbUv0, thumbUv1);
-            } else if (cell.texture && cell.kind == Cell::Kind::Texture) {
-                float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
-                ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
-                ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - imgSize.y) * 0.5f);
-                dl->AddImage((ImTextureID)(intptr_t)cell.texture->GLHandle(), imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
-            } else if (modelThumb) {
-                ImVec2 imgSize(m_AssetIconSize, m_AssetIconSize);
-                ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f);
-                // GL render targets are bottom-up: flip V so the preview is upright.
-                dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y),
-                             ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
-            } else if (const std::vector<float>* wave = cell.kind == Cell::Kind::Sound ? m_SoundWaveforms.Get(cell.key) : nullptr;
-                       wave && wave->size() > 1) {
-                // Waveform envelope in the icon square (#236 G), with a small play/stop glyph
-                // bottom-right so it still reads as a clickable sound. The type glyph shows until it's decoded.
-                const std::vector<float>& peaks = *wave;
-                const float w = m_AssetIconSize, h = m_AssetIconSize;
-                const ImVec2 o(tileMin.x + (cellWidth - w) * 0.5f, tileMin.y + cellPadding * 0.5f);
-                const float midY = o.y + h * 0.5f;
-                const ImU32 wc = ImGui::GetColorU32(ImGuiCol_SliderGrab);
-                for (size_t i = 0; i < peaks.size(); ++i) {
-                    const float x = o.x + (float)i / (float)(peaks.size() - 1) * w;
-                    const float a = std::clamp(peaks[i], 0.0f, 1.0f) * (h * 0.46f);
-                    dl->AddLine(ImVec2(x, midY - a), ImVec2(x, midY + a), wc, 1.2f);
-                }
-                ImFont* font = ImGui::GetFont();
-                const float gs = m_AssetIconSize * 0.32f;
-                dl->AddText(font, gs, ImVec2(o.x + w - gs, o.y + h - gs),
-                            ImGui::GetColorU32(ImGuiCol_Text), playing ? ICON_FA_STOP : ICON_FA_PLAY);
-            } else {
-                ImFont* font = ImGui::GetFont();
-                ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, icon);
-                ImVec2 glyphPos(tileMin.x + (cellWidth - glyphSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - glyphSize.y) * 0.5f);
-                dl->AddText(font, m_AssetIconSize, glyphPos, folderTint ? folderTint : textColor, icon);
-                // vFolders content minimap: what a plain folder holds, stamped small along its glyph's foot.
-                if (isFolder && !folderVis.Icon[0] && folderVis.MiniCount > 0 && EditorSettings::Get().FolderMinimap) {
-                    const float ms = std::max(9.0f, m_AssetIconSize * 0.22f);
-                    float mx = tileMin.x + (cellWidth - folderVis.MiniCount * ms * 1.25f) * 0.5f;
-                    const float my = tileMin.y + cellPadding * 0.5f + m_AssetIconSize - ms * 0.9f;
-                    for (int k = 0; k < folderVis.MiniCount; ++k, mx += ms * 1.25f)
-                        dl->AddText(font, ms, ImVec2(mx, my), EditorTheme::U32(EditorTheme::Base), folderVis.Mini[k]);
-                }
-            }
-
-            // Favourite star badge, top-right of the tile (#236 G).
-            if (IsAssetFavorite(cell.key)) {
-                const float ss = std::max(10.0f, m_AssetIconSize * 0.28f);
-                dl->AddText(ImGui::GetFont(), ss, ImVec2(tileMin.x + cellWidth - ss - 3.0f, tileMin.y + 2.0f),
-                            ImGui::GetColorU32(ImGuiCol_SliderGrab), ICON_FA_STAR);
-            }
-
-            if (!isRenaming) {
-                // Label box spans the whole cell (like the icon above it, which is centred in
-                // cellWidth), with a small inset so a full-width line doesn't touch the edges —
-                // DrawClampedGridLabel centres each line within this box.
-                // Phase 5 item 4 — two lines instead of one, so a longer name (a common case once
-                // the browser is re-rooted on the real project tree) doesn't truncate as eagerly.
-                ImVec2 labelPos(tileMin.x + 3.0f, tileMin.y + m_AssetIconSize + cellPadding);
-                bool truncated = DrawClampedGridLabel(dl, labelPos, cellWidth - 6.0f,
-                    ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str(), /*maxLines=*/2);
-                if (truncated && ImGui::IsItemHovered()) {
-                    EditorUI::SetTooltip(cell.display.c_str());
-                }
-            } else {
-                ImGui::SetCursorScreenPos(ImVec2(tileMin.x + 2.0f, tileMin.y + m_AssetIconSize + cellPadding));
-                ImGui::SetNextItemWidth(cellWidth - 4.0f);
-                if (m_RenamingJustStarted) {
-                    ImGui::SetKeyboardFocusHere();
-                    m_RenamingJustStarted = false;
-                }
-                bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
-                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-                const ImVec2 renameFieldMin = ImGui::GetItemRectMin();
-                const ImVec2 renameFieldMax = ImGui::GetItemRectMax();
-                bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
-                bool lostFocus = ImGui::IsItemDeactivated() && !done;
-                if (done) CommitRename(world, assets);
-                else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
-                DrawRenameRejectedTooltip(renameFieldMin, renameFieldMax);
-                ImGui::SetCursorScreenPos(ImVec2(tileMin.x, tileMin.y + tileSize.y));
-            }
-        } else {
-            // Details mode runs inside the module's ImGui table (EditorModuleAssetBrowser.cpp,
-            // DrawDetailsTable): the module has already started this row, so the Type / Size /
-            // Modified cells are filled first (columns 1-3), then the cursor returns to column 0 for
-            // the icon + the row's Selectable - which stays the last submitted item, so hover,
-            // drag source, double-click and the context menu below all attach to it.
-            const bool detailsMode = !isRenaming && EditorSettings::Get().AssetDetailsMode;
-            if (detailsMode) {
-                StatAssetGridCell(cell);
-                ImGui::TableSetColumnIndex(1); ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Dim);
-                ImGui::TextUnformatted(AssetKindLabel(cell.kind));
-                ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(cell.sizeText.c_str());
-                ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(cell.modifiedText.c_str());
-                ImGui::PopStyleColor();
-                ImGui::TableSetColumnIndex(0);
-            }
-
-            // List mode: little icon (real thumbnail for textures, a Font Awesome glyph
-            // otherwise) followed by the name, mirroring how the Scene Hierarchy lists rows.
-            float rowIconSize = ImGui::GetTextLineHeight();
-            unsigned int rowModelThumb = (cell.kind == Cell::Kind::Model && cell.model) ? ModelThumbnail(*cell.model)
-                                       : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
-            if (unloadedThumb.Tex) {
-                ImGui::Image((ImTextureID)(intptr_t)unloadedThumb.Tex, ImVec2(rowIconSize, rowIconSize), thumbUv0, thumbUv1);
-            } else if (cell.texture && cell.kind == Cell::Kind::Texture) {
-                ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
-            } else if (rowModelThumb) {
-                ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize), ImVec2(0, 1), ImVec2(1, 0));
-            } else if (folderTint) {
-                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(folderTint), "%s", icon);
-            } else {
-                ImGui::TextUnformatted(icon);
-            }
-            ImGui::SameLine();
-
-            if (isRenaming) {
-                ImGui::SetNextItemWidth(-1);
-                if (m_RenamingJustStarted) {
-                    ImGui::SetKeyboardFocusHere();
-                    m_RenamingJustStarted = false;
-                }
-                bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
-                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-                const ImVec2 renameFieldMin = ImGui::GetItemRectMin();
-                const ImVec2 renameFieldMax = ImGui::GetItemRectMax();
-                bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
-                bool lostFocus = ImGui::IsItemDeactivated() && !done;
-                if (done) CommitRename(world, assets);
-                else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
-                DrawRenameRejectedTooltip(renameFieldMin, renameFieldMax);
-            } else {
-                // NoNav (Defect #43): same reasoning as the grid tile above.
-                ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-                clicked = ImGui::Selectable(cell.display.c_str(), isSelected,
-                    detailsMode ? (ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)
-                                : ImGuiSelectableFlags_None,
-                    ImVec2(0.0f, 0.0f));
-                ImGui::PopItemFlag();
-            }
-        }
-
-        if (clicked) {
-            // One selection context at a time: clicking an asset drops the scene-entity
-            // selection, so the Inspector shows this asset's Import Settings instead of staying
-            // on whatever object was selected (it otherwise always wins, so an asset click
-            // right after e.g. a Hierarchy rename appeared to do nothing).
-            ClearSelection();
-
-            ImGuiIO& assetIO = ImGui::GetIO();
-            if (assetIO.KeyShift && !m_SelectedAssetKey.empty()) {
-                // Range-select from the anchor to here, replacing the current selection —
-                // Unity/Explorer-standard Shift-click behavior. The anchor index is only
-                // meaningful against this same, currently-visible `cells` list.
-                ClearAssetSelection();
-                if (m_AssetSelectionAnchorIndex >= cells.size()) m_AssetSelectionAnchorIndex = cellIndex; // anchor from another folder
-                size_t lo = std::min(m_AssetSelectionAnchorIndex, cellIndex);
-                size_t hi = std::min(std::max(m_AssetSelectionAnchorIndex, cellIndex), cells.size() - 1);
-                for (size_t i = lo; i <= hi; ++i) {
-                    bool f = cells[i].kind == Cell::Kind::Folder;
-                    if (i == lo) { m_SelectedAssetKey = cells[i].key; m_SelectedAssetIsFolder = f; }
-                    else AddExtraAssetSelection(cells[i].key, f);
-                }
-                // Deliberately don't move the anchor, so repeated Shift-clicks keep extending
-                // or shrinking the range from the same starting point.
-            } else if (assetIO.KeyCtrl) {
-                ToggleAssetSelection(cell.key, isFolder);
-                m_AssetSelectionAnchorIndex = cellIndex;
-            } else {
-                ClearAssetSelection();
-                m_SelectedAssetKey = cell.key;
-                m_SelectedAssetIsFolder = isFolder;
-                m_AssetSelectionAnchorIndex = cellIndex;
-            }
-            if (cell.kind == Cell::Kind::Sound && !assetIO.KeyShift && !assetIO.KeyCtrl) {
-                if (playing) AudioEngine::StopPreview();
-                else AudioEngine::PlayPreview(cell.key);
-            }
-        }
-        // Motion v2: remember the folder tile under the pointer (else the selected one), so opening
-        // it (double-click, Enter) zooms in about it and the new grid ripples out from there.
-        if (isFolder) {
-            const int frame = ImGui::GetFrameCount();
-            const bool hov = ImGui::IsItemHovered();
-            if (hov || (isSelected && !(gm.TileFrame == frame && gm.TileHovered))) {
-                if (gm.TileKey != cell.key) gm.TileKey = cell.key;
-                const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-                gm.TileCentre = ImVec2((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);
-                gm.TileIndex = index;
-                gm.TileFrame = frame;
-                gm.TileHovered = hov;
-            }
-        }
-        if (isFolder && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            NavigateAssetFolder(cell.key);
-        }
-        if (cell.kind == Cell::Kind::Scene && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            RequestOpenScene(world, assets, cell.key);
-        }
-        if (cell.kind == Cell::Kind::Graffiti && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-            OpenGraffitiPiece(cell.key); // the Graffiti Designer
-        if (cell.kind == Cell::Kind::Animator && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            OpenAnimatorWindow(ProjectPaths::Relativize(cell.key));
-            EditorSound::Play(EditorSound::Event::AssetOpen, EditorSound::LastItemScreenX());
-        }
-        if ((cell.kind == Cell::Kind::Shader || cell.kind == Cell::Kind::Script) &&
-            ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            OpenScriptIDE(cell.key);
-            EditorSound::Play(EditorSound::Event::AssetOpen, EditorSound::LastItemScreenX());
-        }
-        // #176 - double-click opens the prefab in Prefab Mode, like Unity (drag it into the scene,
-        // or right-click > Place Instance, to place one).
-        if (cell.kind == Cell::Kind::Prefab && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            EnterPrefabMode(world, assets, cell.key);
-        }
-
-        if (isFolder) {
-            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
-                ImGui::SetDragDropPayload("ASSET_FOLDER_PATH", cell.key.c_str(), cell.key.size() + 1);
-                Glass::DragGhostLabel(ICON_FA_FOLDER, cell.display.c_str());
-                ImGui::EndDragDropSource();
-            }
-            if (!AssetLibraryView::IsLibraryFolder(cell.key) && ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_SOUND_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                // #184 — materials are foldered by AssetFolder like the kinds above but weren't accepted.
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                // Controllers, weapon definitions, scripts and decals: files, filed the same way.
-                for (const char* fileType : {"ASSET_FILE_PATH", "ASSET_DECAL_PATH"})
-                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(fileType)) {
-                        PushUndo(world, "Move Asset to Folder");
-                        assets.SetAssetFolder((const char*)p->Data, cell.key);
-                    }
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
-                    std::string src((const char*)p->Data);
-                    if (src != cell.key && cell.key.rfind(src + "/", 0) != 0) {
-                        PushUndo(world, "Move Folder");
-                        assets.RenameFolder(src, cell.key + "/" + LeafNameOf(src));
-                    }
-                }
-                ImGui::EndDragDropTarget();
-            }
-        } else if (cell.unfetched) {
-            // Nothing to place: a drag only says why (once per drag), with the invalid bump.
-            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !m_UnfetchedDragNoted) {
-                m_UnfetchedDragNoted = true;
-                EditorSound::Play(EditorSound::Event::ShortcutInvalid, EditorSound::LastItemScreenX());
-                Log::Warn("Not fetched: " + cell.display + " is a Drive asset this checkout doesn't have yet - run tools/assets/fetch-assets.ps1");
-            }
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) m_UnfetchedDragNoted = false;
-        } else if (cell.kind != Cell::Kind::Scene &&
-                   cell.kind != Cell::Kind::Shader) { // not placeable — nothing to drag into the viewport
-            const char* payloadType = cell.kind == Cell::Kind::Model ? "ASSET_MODEL_PATH"
-                : cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri ? "ASSET_TEXTURE_PATH" // the sky's HDRI field takes .hdr
-                : cell.kind == Cell::Kind::Material ? "ASSET_MATERIAL_PATH"
-                : cell.kind == Cell::Kind::Prefab ? "ASSET_PREFAB_PATH"
-                : cell.kind == Cell::Kind::Sound ? "ASSET_SOUND_PATH"
-                : cell.kind == Cell::Kind::Decal ? "ASSET_DECAL_PATH" : "ASSET_FILE_PATH";
-            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
-                ImGui::SetDragDropPayload(payloadType, cell.key.c_str(), cell.key.size() + 1);
-                Glass::DragGhostLabel(ICON_FA_FILE, cell.display.c_str());
-                ImGui::EndDragDropSource();
-            }
-        }
-
-        if (isFolder && ImGui::IsItemHovered()) SetHoveredAssetFolder(cell.key); // vFolders hover keys
-        if (!isRenaming && ImGui::IsItemHovered()) {
-            if (cell.kind == Cell::Kind::Model) {
-                EditorUI::SetTooltip("%s\n\nDrag into the viewport to place\n\n%s",
-                    cell.display.c_str(), UsageTooltip(cell.model ? FindModelUsages(world, cell.model.get())
-                                                                  : std::vector<std::string>{}).c_str());
-            } else if (cell.kind == Cell::Kind::Texture) {
-                EditorUI::SetTooltip(
-                    "%s\n\nDrag onto a model to set its Albedo map,\nor onto a map row in the Inspector's PBR Material.\n\n%s",
-                    cell.display.c_str(), UsageTooltip(cell.texture ? FindTextureUsages(world, cell.texture.get())
-                                                                    : std::vector<std::string>{}).c_str());
-            } else if (cell.kind == Cell::Kind::Material) {
-                EditorUI::SetTooltip("%s\n\nDrag onto a model to apply this material.", cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Sound) {
-                EditorUI::SetTooltip("%s\n\nClick to preview\n\n%s",
-                    cell.display.c_str(), UsageTooltip(FindSoundUsages(world, cell.key)).c_str());
-            } else if (cell.kind == Cell::Kind::Scene) {
-                EditorUI::SetTooltip("%s\n\nDouble-click to open", cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Prefab) {
-                EditorUI::SetTooltip("%s\n\nDrag into the viewport to place an instance,\nor double-click to place one at the origin.",
-                    cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Shader) {
-                EditorUI::SetTooltip("%s\n\nDouble-click to open externally.\nSelect to preview + compile status in the Inspector.",
-                    cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Animator) {
-                EditorUI::SetTooltip("%s\n\nDouble-click to open in the Animator.", cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Weapon || cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake) {
-                EditorUI::SetTooltip("%s\n\nSelect to edit in the Inspector.", cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Decal) {
-                EditorUI::SetTooltip("%s\n\nDrag onto a surface in the viewport to place it,\n"
-                                     "or onto a placed decal to swap its look.\nSelect to edit in the Inspector.",
-                                     cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Hdri) {
-                EditorUI::SetTooltip("%s\n\nDrag onto the sky's HDRI field (Environment) to light the scene with it.",
-                    cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Script) {
-                EditorUI::SetTooltip("%s\n\nDouble-click to open externally.", cell.display.c_str());
-            } else {
-                EditorUI::SetTooltip("%s\n\nDouble-click to open. Drag assets onto it to file them here.", cell.display.c_str());
-            }
-        }
-
-        if (cell.kind == Cell::Kind::Scene) {
-            // Scenes aren't AssetLibrary entries (no rename / remove-from-library — they're real
-            // .json files on disk), so they get their own short context menu: Open + Delete.
-            if (ImGui::BeginPopupContextItem()) {
-                if (!IsAssetSelected(cell.key, false)) {
-                    ClearAssetSelection();
-                    m_SelectedAssetKey = cell.key;
-                    m_SelectedAssetIsFolder = false;
-                }
-                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) RequestOpenScene(world, assets, cell.key);
-                if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
-                    ImGui::SetClipboardText(cell.key.c_str());
-                    Log::Info("Copied path: " + cell.key);
-                }
-                {
-                    std::vector<std::string> favKeys{ m_SelectedAssetKey };
-                    for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
-                    const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
-                        [&](const std::string& k) { return IsAssetFavorite(k); });
-                    std::string lbl = std::string(ICON_FA_STAR "  ") +
-                        (allFav ? "Remove from Favorites" : "Add to Favorites"); // #19 — en-US, matches IsAssetFavorite/SetAssetFavorites
-                    if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
-                    if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
-                }
-
-                // Act on the whole selection when the right-clicked scene is part of a
-                // multi-selection, same as the generic asset menu.
-                std::vector<AssetKeyRef> scenesForAction;
-                scenesForAction.push_back({m_SelectedAssetKey, false});
-                for (const auto& e : m_ExtraAssetSelection) scenesForAction.push_back(e);
-                const bool multi = scenesForAction.size() > 1;
-                const bool anyOpen = std::any_of(scenesForAction.begin(), scenesForAction.end(),
-                    [&](const AssetKeyRef& r) { return r.Key == m_CurrentScenePath; });
-                ImGui::Separator();
-                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete",
-                                    nullptr, false, !(!multi && anyOpen)))
-                    RequestDeleteAssets(world, assets, scenesForAction, /*skipDialog=*/false);
-                ImGui::PopStyleColor();
-                if (!multi && anyOpen && ImGui::IsItemHovered())
-                    EditorUI::SetTooltip("This scene is open — open a different scene first.");
-                ImGui::EndPopup();
-            }
-        } else if (cell.kind == Cell::Kind::Shader) {
-            // Also a real file on disk, not a library asset (item 15): Open externally, Show in
-            // folder, Copy Path, Delete — no favorites/rename, this isn't a placeable/reference
-            // asset the rest of the browser's machinery (usages, drag-onto-model, etc.) applies to.
-            if (ImGui::BeginPopupContextItem()) {
-                if (!IsAssetSelected(cell.key, false)) {
-                    ClearAssetSelection();
-                    m_SelectedAssetKey = cell.key;
-                    m_SelectedAssetIsFolder = false;
-                }
-                if (ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) OsShell::OpenFile(cell.key);
-                if (ImGui::MenuItem("Open in Script IDE")) OpenScriptIDE(cell.key);
-                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) OsShell::ShowInFolder(cell.key);
-                if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
-                    ImGui::SetClipboardText(cell.key.c_str());
-                    Log::Info("Copied path: " + cell.key);
-                }
-                std::vector<AssetKeyRef> shadersForAction;
-                shadersForAction.push_back({m_SelectedAssetKey, false});
-                for (const auto& e : m_ExtraAssetSelection) shadersForAction.push_back(e);
-                const bool multi = shadersForAction.size() > 1;
-                if (!IsBuiltinShaderPath(cell.key) || multi) {
-                    ImGui::Separator();
-                    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                    if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete"))
-                        RequestDeleteAssets(world, assets, shadersForAction, /*skipDialog=*/false);
-                    ImGui::PopStyleColor();
-                }
-                ImGui::EndPopup();
-            }
-        } else if (ImGui::BeginPopupContextItem()) {
-            // Right-clicking an item already part of the selection keeps the whole selection
-            // (so Delete/Remove from Library below can act on all of it, Explorer-style);
-            // right-clicking an unselected item replaces the selection with just this one.
-            if (!IsAssetSelected(cell.key, isFolder)) {
-                ClearAssetSelection();
-                m_SelectedAssetKey = cell.key;
-                m_SelectedAssetIsFolder = isFolder;
-            }
-            if (isFolder && ImGui::BeginMenu(ICON_FA_PALETTE "  Folder Style & Bookmark")) { // vFolders
-                DrawFolderContextMenuBody(world, assets, cell.key);
-                ImGui::EndMenu();
-            }
-            if (cell.kind == Cell::Kind::Script && ImGui::MenuItem("Open in Script IDE")) OpenScriptIDE(cell.key);
-            EditorUIPrimitives::SectionHeader(ICON_FA_PEN "  Edit");
-            if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
-                BeginRenameAsset(cell.key, isFolder, cell.display);
-            }
-            // The labels popup opens nested in this context menu, so the menu has to stay open
-            // for it (a MenuItem normally closes its popup, and the nested popup with it); Apply
-            // closes both.
-            ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
-            const bool editLabels = ImGui::MenuItem(ICON_FA_TAG "  Edit Labels...");
-            ImGui::PopItemFlag();
-            if (editLabels) {
-                std::string joined;
-                for (const auto& lbl : assets.Labels(cell.key)) {
-                    if (!joined.empty()) joined += ", ";
-                    joined += lbl;
-                }
-                snprintf(m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer), "%s", joined.c_str());
-                ImGui::OpenPopup("##EditLabels");
-            }
-            bool labelsApplied = false;
-            if (ImGui::BeginPopup("##EditLabels")) {
-                ImGui::TextDisabled("Comma-separated labels - searchable as l:label");
-                ImGui::SetNextItemWidth(240.0f * m_UIScale); // #37
-                bool enter = ImGui::InputText("##LabelsBuf", m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer),
-                    ImGuiInputTextFlags_EnterReturnsTrue);
-                bool apply = enter || EditorUIPrimitives::PrimaryButton("Apply");
-                if (apply) {
-                    std::set<std::string> labels;
-                    std::stringstream ss(m_LabelsEditBuffer);
-                    std::string part;
-                    while (std::getline(ss, part, ',')) {
-                        size_t b = part.find_first_not_of(" \t");
-                        size_t e = part.find_last_not_of(" \t");
-                        if (b != std::string::npos) labels.insert(part.substr(b, e - b + 1));
-                    }
-                    PushUndo(world, "Edit Labels");
-                    assets.SetLabels(cell.key, labels);
-                    ImGui::CloseCurrentPopup();
-                    labelsApplied = true;
-                }
-                ImGui::EndPopup();
-            }
-            if (labelsApplied) ImGui::CloseCurrentPopup(); // the context menu too
-            if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
-                ImGui::SetClipboardText(cell.key.c_str());
-                Log::Info("Copied path: " + cell.key);
-            }
-            {
-                // Favourites — acts on the whole selection when the right-clicked item is
-                // part of a multi-selection (#236 G).
-                std::vector<std::string> favKeys{ m_SelectedAssetKey };
-                for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
-                const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
-                    [&](const std::string& k) { return IsAssetFavorite(k); });
-                std::string lbl = std::string(ICON_FA_STAR "  ") +
-                    (allFav ? "Remove from Favorites" : "Add to Favorites"); // #19 — en-US, matches IsAssetFavorite/SetAssetFavorites
-                if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
-                if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
-            }
-
-            // #178 - Unity's Find References In Scene: selects every object in the open scene that
-            // uses this asset (as its mesh, a material slot, a texture in any of its materials,
-            // its sound, or its prefab source).
-            if (!isFolder && m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Find References in Scene")) {
-                auto same = [](const std::string& a, const std::string& b) {
-                    if (a.empty() || b.empty()) return false;
-                    std::error_code ec;
-                    const auto na = std::filesystem::weakly_canonical(std::filesystem::path(a), ec);
-                    const auto nb = std::filesystem::weakly_canonical(std::filesystem::path(b), ec);
-                    std::string sa = na.generic_string(), sb = nb.generic_string();
-                    std::transform(sa.begin(), sa.end(), sa.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-                    std::transform(sb.begin(), sb.end(), sb.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-                    return sa == sb;
-                };
-                auto usesTexture = [&](const Material& m) {
-                    for (const auto* t : {&m.AlbedoMap, &m.NormalMap, &m.MetallicRoughnessMap, &m.MetallicMap,
-                                          &m.RoughnessMap, &m.AOMap, &m.EmissiveMap, &m.ClearCoatMap,
-                                          &m.ThicknessMap, &m.HeightMap, &m.DetailAlbedoMap, &m.DetailNormalMap})
-                        if (*t && same((*t)->Path(), cell.key)) return true;
-                    for (const auto& [name, prop] : m.ExtraProps)
-                        if ((prop.Tex && same(prop.Tex->Path(), cell.key)) || same(prop.TexPath, cell.key)) return true;
-                    return false;
-                };
-                std::vector<entt::entity> hits;
-                for (auto [e, name] : world.Registry.view<const NameComponent>().each()) {
-                    (void)name;
-                    bool uses = false;
-                    if (const auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef) {
-                        uses = same(rc->ModelRef->Path(), cell.key);
-                        for (int i = 0; !uses && i < rc->ModelRef->MeshCount(); ++i) {
-                            const bool hasSlot = i < (int)rc->Materials.size() && rc->Materials[i];
-                            if (hasSlot && same(rc->Materials[i]->Path, cell.key)) uses = true;
-                            else uses = usesTexture(hasSlot ? rc->Materials[i]->Mat : rc->ModelRef->MeshMaterial(i));
-                        }
-                    }
-                    if (!uses) if (const auto* a = world.Registry.try_get<AudioSourceComponent>(e)) uses = same(a->SoundPath, cell.key);
-                    if (!uses) if (const auto* p = world.Registry.try_get<PrefabInstanceComponent>(e)) uses = same(p->SourcePath, cell.key);
-                    if (uses) hits.push_back(e);
-                }
-                ClearSelection();
-                for (entt::entity e : hits) AddToSelectionIfAbsent(e);
-                if (hits.empty()) Log::Info("No objects in this scene use '" + cell.display + "'.");
-                else Log::Info("Selected " + std::to_string(hits.size()) + " object(s) using '" + cell.display + "'.");
-            }
-
-            if (!isFolder && m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Find References in Project")) {
-                const std::vector<std::string> refs = FindProjectReferences(cell.key);
-                if (refs.empty()) {
-                    Log::Info("No scene, prefab, material or controller in the project references '" + cell.display + "'.");
-                } else {
-                    Log::Info(std::to_string(refs.size()) + " file(s) reference '" + cell.display + "' (double-click one to find it):");
-                    for (const std::string& r : refs)
-                        Log::Info("    " + r, LogContext::Asset(ProjectPaths::Resolve(r)));
-                }
-            }
-            // Reimport straight from the context menu instead of only via Import Settings >
-            // Apply (#28 P17). Single selection, real imported assets only.
-            if (!isFolder && m_ExtraAssetSelection.empty() &&
-                (cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Texture)) {
-                EditorUIPrimitives::SectionHeader(ICON_FA_ROTATE "  Actions");
-                if (ImGui::MenuItem(ICON_FA_ROTATE "  Reimport")) {
-                    if (cell.kind == Cell::Kind::Model) {
-                        PushUndo(world, "Reimport Model");
-                        if (assets.ReimportModel(cell.key)) Log::Info("Reimported model '" + cell.key + "'.");
-                        else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
-                        InvalidateModelThumbnail();
-                    } else {
-                        PushUndo(world, "Reimport Texture");
-                        if (assets.ReimportTexture(cell.key)) Log::Info("Reimported texture '" + cell.key + "'.");
-                        else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
-                    }
-                }
-                if (cell.kind == Cell::Kind::Model && ImGui::MenuItem(ICON_FA_DROPLET "  Extract Materials"))
-                    ExtractMaterialsFor(world, assets, cell.key);
-                if (cell.kind == Cell::Kind::Model && ImGui::IsItemHovered())
-                    EditorUI::SetTooltip("Write one editable .mat per material this model uses (into the\n"
-                                         "asset's Materials folder) and use them on its placed objects.");
-                if (cell.kind == Cell::Kind::Texture && ImGui::MenuItem(ICON_FA_STAMP "  Create Decal"))
-                    CreateDecalAsset(world, assets, std::filesystem::u8path(cell.key).parent_path().u8string(), cell.key);
-                if (cell.kind == Cell::Kind::Texture && ImGui::IsItemHovered())
-                    EditorUI::SetTooltip("Write a .decal next to this texture, using it as the albedo. A texture\n"
-                                         "with no real alpha is read as a white-on-black mask (luma).");
-            }
-
-            // Everything currently selected, whenever the right-clicked item is part of a
-            // multi-selection - so Delete/Remove from Library act on the whole group rather
-            // than just the one cell that happened to receive the right-click.
-            std::vector<AssetKeyRef> selectionForAction;
-            selectionForAction.push_back({m_SelectedAssetKey, m_SelectedAssetIsFolder});
-            for (const auto& e : m_ExtraAssetSelection) selectionForAction.push_back(e);
-            const char* deleteLabel = selectionForAction.size() > 1
-                ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete Folder";
-
-            if (isFolder) {
-                ImGui::Separator();
-                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                if (ImGui::MenuItem(deleteLabel)) {
-                    RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
-                }
-                ImGui::PopStyleColor();
-            } else {
-                if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PEN_TO_SQUARE "  Open Prefab")) {
-                    EnterPrefabMode(world, assets, cell.key); // #176
-                }
-                if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PLUS "  Place Instance")) {
-                    PushUndo(world, "Place Prefab Instance");
-                    entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
-                    if (spawned != entt::null) {
-                        UniquifyName(world, spawned);
-                        SelectItem(spawned, false);
-                    }
-                }
-                const char* removeLabel = selectionForAction.size() > 1
-                    ? ICON_FA_TRASH "  Remove Selected from Library" : ICON_FA_TRASH "  Remove from Library";
-                ImGui::Separator();
-                // Files that are never library entries have nothing to remove from it.
-                const bool fileOnly = KindInfo(cell.kind).FileOnly;
-                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                if (!fileOnly && ImGui::MenuItem(removeLabel)) {
-                    RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
-                }
-                ImGui::PopStyleColor();
-                if (cell.kind == Cell::Kind::Prefab) ImGui::TextDisabled("The .prefab file stays on disk.");
-                // #129 - Unity's Delete: the file and its .meta go to the Recycle Bin (project files only).
-                std::vector<std::string> onDisk;
-                for (const auto& item : selectionForAction)
-                    if (!item.IsFolder && !IsBuiltinShaderPath(item.Key) && IsProjectFile(item.Key)) onDisk.push_back(item.Key);
-                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                if (!onDisk.empty() &&
-                    ImGui::MenuItem(onDisk.size() > 1 ? ICON_FA_TRASH "  Delete Selected from Disk..." : ICON_FA_TRASH "  Delete from Disk...")) {
-                    m_PendingDiskDeleteRefs.clear();
-                    for (const std::string& k : onDisk)
-                        for (std::string& r : FindProjectReferences(k))
-                            if (std::find(m_PendingDiskDeleteRefs.begin(), m_PendingDiskDeleteRefs.end(), r) == m_PendingDiskDeleteRefs.end())
-                                m_PendingDiskDeleteRefs.push_back(std::move(r));
-                    m_PendingDiskDelete = onDisk;
-                    m_OpenDiskDeleteRequested = true;
-                }
-                ImGui::PopStyleColor();
-            }
-            ImGui::EndPopup();
-        }
-
+        // The tile / row's Selectable (or the rename field) stays "the last submitted item" for
+        // everything below: hover, drag-drop, double-click and the context menu all attach to it.
+        const bool clicked = gridMode ? DrawAssetTile(world, assets, cell, look, cellW, cellH)
+                                      : DrawAssetRow(world, assets, cell, look);
+        if (clicked) ClickAssetCell(cell, cellIndex, look.isFolder, look.playing);
+        HandleAssetCellOpen(world, assets, cell, index, look.isFolder, look.isSelected);
+        HandleAssetCellDragDrop(world, assets, cell, look.isFolder);
+        if (look.isFolder && ImGui::IsItemHovered()) SetHoveredAssetFolder(cell.key); // vFolders hover keys
+        if (!look.isRenaming && ImGui::IsItemHovered()) AssetCellTooltip(world, cell);
+        DrawAssetCellContextMenu(world, assets, cell, look.isFolder);
         ImGui::PopID();
     }
+    AssetCellMotionEnd(tileDl, tileVtx, restMin, restSize, reveal, gridMode);
+}
 
-    // Motion v2: the ripple's fade, rise and scale, applied to everything the tile just drew.
-    if (tileVtx >= 0) {
-        Glass::LayerTransform t;
-        t.pivot = ImVec2(restMin.x + restSize.x * 0.5f, restMin.y + restSize.y * 0.5f);
-        const float s = gridMode ? kTileFromScale + (1.0f - kTileFromScale) * reveal : 1.0f;
-        t.scale = ImVec2(s, s);
-        t.translate = ImVec2(0.0f, EditorTheme::Px(Glass::GridWaveRisePx) * (1.0f - reveal));
-        t.alpha = reveal;
-        Glass::ImAnimContext::EndLayer(tileDl, tileVtx, t);
+// The rename text field of the tile / row being renamed: Enter commits, Escape or clicking away cancels.
+void EditorLayer::DrawAssetRenameField(World& world, AssetLibrary& assets, float width) {
+    ImGui::SetNextItemWidth(width);
+    if (m_RenamingJustStarted) {
+        ImGui::SetKeyboardFocusHere();
+        m_RenamingJustStarted = false;
+    }
+    const bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
+        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+    const ImVec2 renameFieldMin = ImGui::GetItemRectMin();
+    const ImVec2 renameFieldMax = ImGui::GetItemRectMax();
+    const bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
+    const bool lostFocus = ImGui::IsItemDeactivated() && !done;
+    if (done) CommitRename(world, assets);
+    else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
+    DrawRenameRejectedTooltip(renameFieldMin, renameFieldMax);
+}
+
+// Grid view: the tile's Selectable (a same-size Dummy while renaming) with its image or glyph,
+// type stripe, favourite star and two-line label painted onto the draw list. Returns clicked.
+bool EditorLayer::DrawAssetTile(World& world, AssetLibrary& assets, const AssetGridCell& cell, const AssetCellLook& look,
+                                float cellWidth, float cellHeight) {
+    constexpr float cellPadding = 8.0f;
+    // The tile itself (Selectable for its background/hit-test, or a same-size Dummy
+    // while renaming) stays "the last submitted item" for everything below (hover,
+    // drag-drop, context menu) - icon and label are painted directly onto the draw
+    // list afterward rather than as their own widgets, so they never steal that.
+    bool clicked = false;
+    const ImVec2 tileMin = ImGui::GetCursorScreenPos();
+    const ImVec2 tileSize(cellWidth, cellHeight);
+    if (!look.isRenaming) {
+        // NoNav (Defect #43): the host's Enter/Backspace/Left/Right folder-traversal
+        // block drives selection off m_CurrentAssetFolder directly — ImGui's own
+        // keyboard nav must not also move focus between tiles on the same keys.
+        ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+        clicked = ImGui::Selectable("##tile", look.isSelected, ImGuiSelectableFlags_None, tileSize);
+        ImGui::PopItemFlag();
+    } else {
+        ImGui::Dummy(tileSize);
+    }
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+    {
+        // 2px asset-type stripe along the tile's bottom edge; a selected tile also gets a
+        // 1.5px accent outline.
+        const float stripeH = EditorTheme::Px(2.0f);
+        const ImVec2 tileMax(tileMin.x + tileSize.x, tileMin.y + tileSize.y);
+        dl->AddRectFilled(ImVec2(tileMin.x, tileMax.y - stripeH), tileMax, EditorTheme::U32(KindInfo(cell.kind).Color));
+        if (look.isSelected)
+            dl->AddRect(tileMin, tileMax, EditorTheme::U32(EditorTheme::Accent),
+                        ImGui::GetStyle().FrameRounding, ImDrawFlags_None, EditorTheme::Px(1.5f));
+    }
+    const unsigned int modelThumb = (cell.kind == Cell::Kind::Model && cell.model) ? ModelThumbnail(*cell.model)
+                                  : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
+    if (look.unloadedThumb.Tex) {
+        ImVec2 imgPos(tileMin.x + (cellWidth - m_AssetIconSize) * 0.5f, tileMin.y + cellPadding * 0.5f);
+        dl->AddImage((ImTextureID)(intptr_t)look.unloadedThumb.Tex, imgPos,
+                     ImVec2(imgPos.x + m_AssetIconSize, imgPos.y + m_AssetIconSize), look.uv0, look.uv1);
+    } else if (cell.texture && cell.kind == Cell::Kind::Texture) {
+        float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
+        ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
+        ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - imgSize.y) * 0.5f);
+        dl->AddImage((ImTextureID)(intptr_t)cell.texture->GLHandle(), imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
+    } else if (modelThumb) {
+        ImVec2 imgSize(m_AssetIconSize, m_AssetIconSize);
+        ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f);
+        // GL render targets are bottom-up: flip V so the preview is upright.
+        dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y),
+                     ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+    } else if (const std::vector<float>* wave = cell.kind == Cell::Kind::Sound ? m_SoundWaveforms.Get(cell.key) : nullptr;
+               wave && wave->size() > 1) {
+        // Waveform envelope in the icon square (#236 G), with a small play/stop glyph
+        // bottom-right so it still reads as a clickable sound. The type glyph shows until it's decoded.
+        const std::vector<float>& peaks = *wave;
+        const float w = m_AssetIconSize, h = m_AssetIconSize;
+        const ImVec2 o(tileMin.x + (cellWidth - w) * 0.5f, tileMin.y + cellPadding * 0.5f);
+        const float midY = o.y + h * 0.5f;
+        const ImU32 wc = ImGui::GetColorU32(ImGuiCol_SliderGrab);
+        for (size_t i = 0; i < peaks.size(); ++i) {
+            const float x = o.x + (float)i / (float)(peaks.size() - 1) * w;
+            const float a = std::clamp(peaks[i], 0.0f, 1.0f) * (h * 0.46f);
+            dl->AddLine(ImVec2(x, midY - a), ImVec2(x, midY + a), wc, 1.2f);
+        }
+        ImFont* font = ImGui::GetFont();
+        const float gs = m_AssetIconSize * 0.32f;
+        dl->AddText(font, gs, ImVec2(o.x + w - gs, o.y + h - gs),
+                    ImGui::GetColorU32(ImGuiCol_Text), look.playing ? ICON_FA_STOP : ICON_FA_PLAY);
+    } else {
+        ImFont* font = ImGui::GetFont();
+        ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, look.icon);
+        ImVec2 glyphPos(tileMin.x + (cellWidth - glyphSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - glyphSize.y) * 0.5f);
+        dl->AddText(font, m_AssetIconSize, glyphPos, look.folderTint ? look.folderTint : textColor, look.icon);
+        // vFolders content minimap: what a plain folder holds, stamped small along its glyph's foot.
+        const EditorFolderVisual& fv = look.folderVis;
+        if (look.isFolder && !fv.Icon[0] && fv.MiniCount > 0 && EditorSettings::Get().FolderMinimap) {
+            const float ms = std::max(9.0f, m_AssetIconSize * 0.22f);
+            float mx = tileMin.x + (cellWidth - fv.MiniCount * ms * 1.25f) * 0.5f;
+            const float my = tileMin.y + cellPadding * 0.5f + m_AssetIconSize - ms * 0.9f;
+            for (int k = 0; k < fv.MiniCount; ++k, mx += ms * 1.25f)
+                dl->AddText(font, ms, ImVec2(mx, my), EditorTheme::U32(EditorTheme::Base), fv.Mini[k]);
+        }
+    }
+
+    // Favourite star badge, top-right of the tile (#236 G).
+    if (IsAssetFavorite(cell.key)) {
+        const float ss = std::max(10.0f, m_AssetIconSize * 0.28f);
+        dl->AddText(ImGui::GetFont(), ss, ImVec2(tileMin.x + cellWidth - ss - 3.0f, tileMin.y + 2.0f),
+                    ImGui::GetColorU32(ImGuiCol_SliderGrab), ICON_FA_STAR);
+    }
+
+    if (!look.isRenaming) {
+        // Label box spans the whole cell (like the icon above it, which is centred in
+        // cellWidth), with a small inset so a full-width line doesn't touch the edges —
+        // DrawClampedGridLabel centres each line within this box.
+        // Phase 5 item 4 — two lines instead of one, so a longer name (a common case once
+        // the browser is re-rooted on the real project tree) doesn't truncate as eagerly.
+        ImVec2 labelPos(tileMin.x + 3.0f, tileMin.y + m_AssetIconSize + cellPadding);
+        bool truncated = DrawClampedGridLabel(dl, labelPos, cellWidth - 6.0f,
+            ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str(), /*maxLines=*/2);
+        if (truncated && ImGui::IsItemHovered()) {
+            EditorUI::SetTooltip(cell.display.c_str());
+        }
+    } else {
+        ImGui::SetCursorScreenPos(ImVec2(tileMin.x + 2.0f, tileMin.y + m_AssetIconSize + cellPadding));
+        DrawAssetRenameField(world, assets, cellWidth - 4.0f);
+        ImGui::SetCursorScreenPos(ImVec2(tileMin.x, tileMin.y + tileSize.y));
+    }
+    return clicked;
+}
+
+// List / Details view: a small icon (real thumbnail for textures, a Font Awesome glyph otherwise)
+// then the name, mirroring how the Scene Hierarchy lists rows. Returns clicked.
+bool EditorLayer::DrawAssetRow(World& world, AssetLibrary& assets, const AssetGridCell& cell, const AssetCellLook& look) {
+    // Details mode runs inside the module's ImGui table (EditorModuleAssetBrowser.cpp,
+    // DrawDetailsTable): the module has already started this row, so the Type / Size /
+    // Modified cells are filled first (columns 1-3), then the cursor returns to column 0 for
+    // the icon + the row's Selectable - which stays the last submitted item, so hover,
+    // drag source, double-click and the context menu below all attach to it.
+    const bool detailsMode = !look.isRenaming && EditorSettings::Get().AssetDetailsMode;
+    if (detailsMode) {
+        StatAssetGridCell(cell);
+        ImGui::TableSetColumnIndex(1); ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Dim);
+        ImGui::TextUnformatted(AssetKindLabel(cell.kind));
+        ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(cell.sizeText.c_str());
+        ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(cell.modifiedText.c_str());
+        ImGui::PopStyleColor();
+        ImGui::TableSetColumnIndex(0);
+    }
+
+    const float rowIconSize = ImGui::GetTextLineHeight();
+    const unsigned int rowModelThumb = (cell.kind == Cell::Kind::Model && cell.model) ? ModelThumbnail(*cell.model)
+                                     : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
+    if (look.unloadedThumb.Tex) {
+        ImGui::Image((ImTextureID)(intptr_t)look.unloadedThumb.Tex, ImVec2(rowIconSize, rowIconSize), look.uv0, look.uv1);
+    } else if (cell.texture && cell.kind == Cell::Kind::Texture) {
+        ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
+    } else if (rowModelThumb) {
+        ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize), ImVec2(0, 1), ImVec2(1, 0));
+    } else if (look.folderTint) {
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(look.folderTint), "%s", look.icon);
+    } else {
+        ImGui::TextUnformatted(look.icon);
+    }
+    ImGui::SameLine();
+
+    if (look.isRenaming) {
+        DrawAssetRenameField(world, assets, -1.0f);
+        return false;
+    }
+    // NoNav (Defect #43): same reasoning as the grid tile.
+    ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+    const bool clicked = ImGui::Selectable(cell.display.c_str(), look.isSelected,
+        detailsMode ? (ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)
+                    : ImGuiSelectableFlags_None,
+        ImVec2(0.0f, 0.0f));
+    ImGui::PopItemFlag();
+    return clicked;
+}
+
+// A click on a tile / row: plain, Shift (range from the anchor) or Ctrl (toggle) selection; a sound previews.
+void EditorLayer::ClickAssetCell(const AssetGridCell& cell, size_t cellIndex, bool isFolder, bool playing) {
+    const auto& cells = m_AssetGridCells;
+    // One selection context at a time: clicking an asset drops the scene-entity
+    // selection, so the Inspector shows this asset's Import Settings instead of staying
+    // on whatever object was selected (it otherwise always wins, so an asset click
+    // right after e.g. a Hierarchy rename appeared to do nothing).
+    ClearSelection();
+
+    ImGuiIO& assetIO = ImGui::GetIO();
+    if (assetIO.KeyShift && !m_SelectedAssetKey.empty()) {
+        // Range-select from the anchor to here, replacing the current selection —
+        // Unity/Explorer-standard Shift-click behavior. The anchor index is only
+        // meaningful against this same, currently-visible `cells` list.
+        ClearAssetSelection();
+        if (m_AssetSelectionAnchorIndex >= cells.size()) m_AssetSelectionAnchorIndex = cellIndex; // anchor from another folder
+        size_t lo = std::min(m_AssetSelectionAnchorIndex, cellIndex);
+        size_t hi = std::min(std::max(m_AssetSelectionAnchorIndex, cellIndex), cells.size() - 1);
+        for (size_t i = lo; i <= hi; ++i) {
+            bool f = cells[i].kind == Cell::Kind::Folder;
+            if (i == lo) { m_SelectedAssetKey = cells[i].key; m_SelectedAssetIsFolder = f; }
+            else AddExtraAssetSelection(cells[i].key, f);
+        }
+        // Deliberately don't move the anchor, so repeated Shift-clicks keep extending
+        // or shrinking the range from the same starting point.
+    } else if (assetIO.KeyCtrl) {
+        ToggleAssetSelection(cell.key, isFolder);
+        m_AssetSelectionAnchorIndex = cellIndex;
+    } else {
+        ClearAssetSelection();
+        m_SelectedAssetKey = cell.key;
+        m_SelectedAssetIsFolder = isFolder;
+        m_AssetSelectionAnchorIndex = cellIndex;
+    }
+    if (cell.kind == Cell::Kind::Sound && !assetIO.KeyShift && !assetIO.KeyCtrl) {
+        if (playing) AudioEngine::StopPreview();
+        else AudioEngine::PlayPreview(cell.key);
     }
 }
 
-// The empty-space click-to-clear + right-click "New Folder" popup, drawn by the module right
-// after the last DrawAssetCell (still inside its ##AssetList child).
-void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) {
-    auto makeNewFolder = [&]() {
-        std::string base = m_CurrentAssetFolder.empty() ? "New Folder" : (m_CurrentAssetFolder + "/New Folder");
-        std::string candidate = base;
-        int n = 1;
-        auto exists = [&](const std::string& p) {
-            for (const auto& f : assets.Folders()) if (f == p) return true;
-            return false;
-        };
-        while (exists(candidate)) candidate = base + " (" + std::to_string(n++) + ")";
-        PushUndo(world, "Create Folder");
-        assets.CreateFolder(candidate);
-        BeginRenameAsset(candidate, true, LeafNameOf(candidate));
-    };
+// Double-click opens: a folder navigates, a scene loads, a prefab enters Prefab Mode, a controller,
+// graffiti piece, shader or script opens in its editor.
+void EditorLayer::HandleAssetCellOpen(World& world, AssetLibrary& assets, const AssetGridCell& cell, int index,
+                                      bool isFolder, bool isSelected) {
+    if (isFolder) {
+        // Motion v2: remember the folder tile under the pointer (else the selected one), so opening
+        // it (double-click, Enter) zooms in about it and the new grid ripples out from there.
+        AssetGridMotionState& gm = GridMotion();
+        const int frame = ImGui::GetFrameCount();
+        const bool hov = ImGui::IsItemHovered();
+        if (hov || (isSelected && !(gm.TileFrame == frame && gm.TileHovered))) {
+            if (gm.TileKey != cell.key) gm.TileKey = cell.key;
+            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            gm.TileCentre = ImVec2((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);
+            gm.TileIndex = index;
+            gm.TileFrame = frame;
+            gm.TileHovered = hov;
+        }
+    }
+    if (!ImGui::IsItemHovered() || !ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) return;
+    switch (cell.kind) {
+        case Cell::Kind::Folder: NavigateAssetFolder(cell.key); break;
+        case Cell::Kind::Scene: RequestOpenScene(world, assets, cell.key); break;
+        case Cell::Kind::Graffiti: OpenGraffitiPiece(cell.key); break; // the Graffiti Designer
+        case Cell::Kind::Animator:
+            OpenAnimatorWindow(ProjectPaths::Relativize(cell.key));
+            EditorSound::Play(EditorSound::Event::AssetOpen, EditorSound::LastItemScreenX());
+            break;
+        case Cell::Kind::Shader:
+        case Cell::Kind::Script:
+            OpenScriptIDE(cell.key);
+            EditorSound::Play(EditorSound::Event::AssetOpen, EditorSound::LastItemScreenX());
+            break;
+        // #176 - double-click opens the prefab in Prefab Mode, like Unity (drag it into the scene,
+        // or right-click > Place Instance, to place one).
+        case Cell::Kind::Prefab: EnterPrefabMode(world, assets, cell.key); break;
+        default: break;
+    }
+}
 
-    // ChildWindows: Details view's table scrolls in its own inner window inside ##AssetList.
-    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && !ImGui::IsAnyItemHovered()) {
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ClearAssetSelection();
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##BrowserBgContext");
+// Drag and drop: a folder is a drag source and takes dropped assets / folders (filed under it);
+// any other placeable asset is a drag source; an unfetched one only says why it can't be dragged.
+void EditorLayer::HandleAssetCellDragDrop(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder) {
+    if (isFolder) {
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
+            ImGui::SetDragDropPayload("ASSET_FOLDER_PATH", cell.key.c_str(), cell.key.size() + 1);
+            Glass::DragGhostLabel(ICON_FA_FOLDER, cell.display.c_str());
+            ImGui::EndDragDropSource();
+        }
+        if (!AssetLibraryView::IsLibraryFolder(cell.key) && ImGui::BeginDragDropTarget()) {
+            // Every asset kind the browser files by AssetFolder (#184: materials too; controllers, weapon
+            // definitions, scripts and decals are files, filed the same way).
+            for (const char* type : {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_SOUND_PATH", "ASSET_PREFAB_PATH",
+                                     "ASSET_MATERIAL_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"})
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
+                    PushUndo(world, "Move Asset to Folder");
+                    assets.SetAssetFolder((const char*)p->Data, cell.key);
+                }
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
+                std::string src((const char*)p->Data);
+                if (src != cell.key && cell.key.rfind(src + "/", 0) != 0) {
+                    PushUndo(world, "Move Folder");
+                    assets.RenameFolder(src, cell.key + "/" + LeafNameOf(src));
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+    } else if (cell.unfetched) {
+        // Nothing to place: a drag only says why (once per drag), with the invalid bump.
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !m_UnfetchedDragNoted) {
+            m_UnfetchedDragNoted = true;
+            EditorSound::Play(EditorSound::Event::ShortcutInvalid, EditorSound::LastItemScreenX());
+            Log::Warn("Not fetched: " + cell.display + " is a Drive asset this checkout doesn't have yet - run tools/assets/fetch-assets.ps1");
+        }
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) m_UnfetchedDragNoted = false;
+    } else if (cell.kind != Cell::Kind::Scene &&
+               cell.kind != Cell::Kind::Shader) { // not placeable — nothing to drag into the viewport
+        const char* payloadType = cell.kind == Cell::Kind::Model ? "ASSET_MODEL_PATH"
+            : cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri ? "ASSET_TEXTURE_PATH" // the sky's HDRI field takes .hdr
+            : cell.kind == Cell::Kind::Material ? "ASSET_MATERIAL_PATH"
+            : cell.kind == Cell::Kind::Prefab ? "ASSET_PREFAB_PATH"
+            : cell.kind == Cell::Kind::Sound ? "ASSET_SOUND_PATH"
+            : cell.kind == Cell::Kind::Decal ? "ASSET_DECAL_PATH" : "ASSET_FILE_PATH";
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
+            ImGui::SetDragDropPayload(payloadType, cell.key.c_str(), cell.key.size() + 1);
+            Glass::DragGhostLabel(ICON_FA_FILE, cell.display.c_str());
+            ImGui::EndDragDropSource();
+        }
+    }
+}
+
+// --- Tile context menus --------------------------------------------------------------------------
+
+// Right-clicking an item already part of the selection keeps the whole selection (so the menu's
+// actions can act on all of it, Explorer-style); right-clicking an unselected item replaces the
+// selection with just this one.
+void EditorLayer::SelectForAssetContextMenu(const std::string& key, bool isFolder) {
+    if (IsAssetSelected(key, isFolder)) return;
+    ClearAssetSelection();
+    m_SelectedAssetKey = key;
+    m_SelectedAssetIsFolder = isFolder;
+}
+
+// Everything selected, primary first: what the menus' Delete / Remove act on.
+std::vector<EditorLayer::AssetKeyRef> EditorLayer::AssetSelectionForAction() const {
+    std::vector<AssetKeyRef> out;
+    out.push_back({m_SelectedAssetKey, m_SelectedAssetIsFolder});
+    for (const auto& e : m_ExtraAssetSelection) out.push_back(e);
+    return out;
+}
+
+// "Copy Path" (single selection only).
+void EditorLayer::CopyAssetPathMenuItem(const std::string& key) {
+    if (!m_ExtraAssetSelection.empty() || !ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) return;
+    ImGui::SetClipboardText(key.c_str());
+    Log::Info("Copied path: " + key);
+}
+
+// Add to / Remove from Favorites, for the whole selection (#236 G).
+void EditorLayer::AssetFavoritesMenuItem() {
+    std::vector<std::string> favKeys{ m_SelectedAssetKey };
+    for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
+    const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
+        [&](const std::string& k) { return IsAssetFavorite(k); });
+    std::string lbl = std::string(ICON_FA_STAR "  ") +
+        (allFav ? "Remove from Favorites" : "Add to Favorites"); // #19 — en-US, matches IsAssetFavorite/SetAssetFavorites
+    if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
+    if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
+}
+
+void EditorLayer::DrawAssetCellContextMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder) {
+    if (cell.kind == Cell::Kind::Scene) DrawSceneCellMenu(world, assets, cell);
+    else if (cell.kind == Cell::Kind::Shader) DrawShaderCellMenu(world, assets, cell);
+    else DrawAssetItemMenu(world, assets, cell, isFolder);
+}
+
+// Scenes aren't AssetLibrary entries (no rename / remove-from-library — they're real
+// .json files on disk), so they get their own short context menu: Open + Delete.
+void EditorLayer::DrawSceneCellMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell) {
+    if (!ImGui::BeginPopupContextItem()) return;
+    SelectForAssetContextMenu(cell.key, false);
+    if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) RequestOpenScene(world, assets, cell.key);
+    CopyAssetPathMenuItem(cell.key);
+    AssetFavoritesMenuItem();
+
+    // Act on the whole selection when the right-clicked scene is part of a
+    // multi-selection, same as the generic asset menu.
+    const std::vector<AssetKeyRef> scenesForAction = AssetSelectionForAction();
+    const bool multi = scenesForAction.size() > 1;
+    const bool anyOpen = std::any_of(scenesForAction.begin(), scenesForAction.end(),
+        [&](const AssetKeyRef& r) { return r.Key == m_CurrentScenePath; });
+    ImGui::Separator();
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+    if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete",
+                        nullptr, false, !(!multi && anyOpen)))
+        RequestDeleteAssets(world, assets, scenesForAction, /*skipDialog=*/false);
+    ImGui::PopStyleColor();
+    if (!multi && anyOpen && ImGui::IsItemHovered())
+        EditorUI::SetTooltip("This scene is open — open a different scene first.");
+    ImGui::EndPopup();
+}
+
+// Also a real file on disk, not a library asset (item 15): Open externally, Show in
+// folder, Copy Path, Delete — no favorites/rename, this isn't a placeable/reference
+// asset the rest of the browser's machinery (usages, drag-onto-model, etc.) applies to.
+void EditorLayer::DrawShaderCellMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell) {
+    if (!ImGui::BeginPopupContextItem()) return;
+    SelectForAssetContextMenu(cell.key, false);
+    if (ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) OsShell::OpenFile(cell.key);
+    if (ImGui::MenuItem("Open in Script IDE")) OpenScriptIDE(cell.key);
+    if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) OsShell::ShowInFolder(cell.key);
+    CopyAssetPathMenuItem(cell.key);
+    const std::vector<AssetKeyRef> shadersForAction = AssetSelectionForAction();
+    const bool multi = shadersForAction.size() > 1;
+    if (!IsBuiltinShaderPath(cell.key) || multi) {
+        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+        if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete"))
+            RequestDeleteAssets(world, assets, shadersForAction, /*skipDialog=*/false);
+        ImGui::PopStyleColor();
+    }
+    ImGui::EndPopup();
+}
+
+// "Edit Labels...": a nested popup with the comma-separated labels (searchable as l:label).
+void EditorLayer::EditAssetLabelsMenuItem(World& world, AssetLibrary& assets, const std::string& key) {
+    // The labels popup opens nested in this context menu, so the menu has to stay open
+    // for it (a MenuItem normally closes its popup, and the nested popup with it); Apply
+    // closes both.
+    ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+    const bool editLabels = ImGui::MenuItem(ICON_FA_TAG "  Edit Labels...");
+    ImGui::PopItemFlag();
+    if (editLabels) {
+        std::string joined;
+        for (const auto& lbl : assets.Labels(key)) {
+            if (!joined.empty()) joined += ", ";
+            joined += lbl;
+        }
+        snprintf(m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer), "%s", joined.c_str());
+        ImGui::OpenPopup("##EditLabels");
+    }
+    bool labelsApplied = false;
+    if (ImGui::BeginPopup("##EditLabels")) {
+        ImGui::TextDisabled("Comma-separated labels - searchable as l:label");
+        ImGui::SetNextItemWidth(240.0f * m_UIScale); // #37
+        bool enter = ImGui::InputText("##LabelsBuf", m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer),
+            ImGuiInputTextFlags_EnterReturnsTrue);
+        bool apply = enter || EditorUIPrimitives::PrimaryButton("Apply");
+        if (apply) {
+            std::set<std::string> labels;
+            std::stringstream ss(m_LabelsEditBuffer);
+            std::string part;
+            while (std::getline(ss, part, ',')) {
+                size_t b = part.find_first_not_of(" \t");
+                size_t e = part.find_last_not_of(" \t");
+                if (b != std::string::npos) labels.insert(part.substr(b, e - b + 1));
+            }
+            PushUndo(world, "Edit Labels");
+            assets.SetLabels(key, labels);
+            ImGui::CloseCurrentPopup();
+            labelsApplied = true;
+        }
+        ImGui::EndPopup();
+    }
+    if (labelsApplied) ImGui::CloseCurrentPopup(); // the context menu too
+}
+
+// #178 - Unity's Find References In Scene: selects every object in the open scene that
+// uses this asset (as its mesh, a material slot, a texture in any of its materials,
+// its sound, or its prefab source).
+void EditorLayer::SelectSceneReferences(World& world, const AssetGridCell& cell) {
+    auto same = [](const std::string& a, const std::string& b) {
+        if (a.empty() || b.empty()) return false;
+        std::error_code ec;
+        const auto na = std::filesystem::weakly_canonical(std::filesystem::path(a), ec);
+        const auto nb = std::filesystem::weakly_canonical(std::filesystem::path(b), ec);
+        std::string sa = na.generic_string(), sb = nb.generic_string();
+        std::transform(sa.begin(), sa.end(), sa.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        std::transform(sb.begin(), sb.end(), sb.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        return sa == sb;
+    };
+    auto usesTexture = [&](const Material& m) {
+        for (const auto* t : {&m.AlbedoMap, &m.NormalMap, &m.MetallicRoughnessMap, &m.MetallicMap,
+                              &m.RoughnessMap, &m.AOMap, &m.EmissiveMap, &m.ClearCoatMap,
+                              &m.ThicknessMap, &m.HeightMap, &m.DetailAlbedoMap, &m.DetailNormalMap})
+            if (*t && same((*t)->Path(), cell.key)) return true;
+        for (const auto& [name, prop] : m.ExtraProps)
+            if ((prop.Tex && same(prop.Tex->Path(), cell.key)) || same(prop.TexPath, cell.key)) return true;
+        return false;
+    };
+    std::vector<entt::entity> hits;
+    for (auto [e, name] : world.Registry.view<const NameComponent>().each()) {
+        (void)name;
+        bool uses = false;
+        if (const auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef) {
+            uses = same(rc->ModelRef->Path(), cell.key);
+            for (int i = 0; !uses && i < rc->ModelRef->MeshCount(); ++i) {
+                const bool hasSlot = i < (int)rc->Materials.size() && rc->Materials[i];
+                if (hasSlot && same(rc->Materials[i]->Path, cell.key)) uses = true;
+                else uses = usesTexture(hasSlot ? rc->Materials[i]->Mat : rc->ModelRef->MeshMaterial(i));
+            }
+        }
+        if (!uses) if (const auto* a = world.Registry.try_get<AudioSourceComponent>(e)) uses = same(a->SoundPath, cell.key);
+        if (!uses) if (const auto* p = world.Registry.try_get<PrefabInstanceComponent>(e)) uses = same(p->SourcePath, cell.key);
+        if (uses) hits.push_back(e);
+    }
+    ClearSelection();
+    for (entt::entity e : hits) AddToSelectionIfAbsent(e);
+    if (hits.empty()) Log::Info("No objects in this scene use '" + cell.display + "'.");
+    else Log::Info("Selected " + std::to_string(hits.size()) + " object(s) using '" + cell.display + "'.");
+}
+
+// The context menu of every other tile: folder style, rename, labels, favourites, references,
+// reimport / extract / create decal, prefab open / place, remove from library, delete from disk.
+void EditorLayer::DrawAssetItemMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder) {
+    if (!ImGui::BeginPopupContextItem()) return;
+    SelectForAssetContextMenu(cell.key, isFolder);
+    if (isFolder && ImGui::BeginMenu(ICON_FA_PALETTE "  Folder Style & Bookmark")) { // vFolders
+        DrawFolderContextMenuBody(world, assets, cell.key);
+        ImGui::EndMenu();
+    }
+    if (cell.kind == Cell::Kind::Script && ImGui::MenuItem("Open in Script IDE")) OpenScriptIDE(cell.key);
+    EditorUIPrimitives::SectionHeader(ICON_FA_PEN "  Edit");
+    if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
+        BeginRenameAsset(cell.key, isFolder, cell.display);
+    }
+    EditAssetLabelsMenuItem(world, assets, cell.key);
+    CopyAssetPathMenuItem(cell.key);
+    AssetFavoritesMenuItem();
+
+    if (!isFolder && m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Find References in Scene"))
+        SelectSceneReferences(world, cell);
+    if (!isFolder && m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Find References in Project")) {
+        const std::vector<std::string> refs = FindProjectReferences(cell.key);
+        if (refs.empty()) {
+            Log::Info("No scene, prefab, material or controller in the project references '" + cell.display + "'.");
+        } else {
+            Log::Info(std::to_string(refs.size()) + " file(s) reference '" + cell.display + "' (double-click one to find it):");
+            for (const std::string& r : refs)
+                Log::Info("    " + r, LogContext::Asset(ProjectPaths::Resolve(r)));
+        }
+    }
+    // Reimport straight from the context menu instead of only via Import Settings >
+    // Apply (#28 P17). Single selection, real imported assets only.
+    if (!isFolder && m_ExtraAssetSelection.empty() &&
+        (cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Texture)) {
+        EditorUIPrimitives::SectionHeader(ICON_FA_ROTATE "  Actions");
+        if (ImGui::MenuItem(ICON_FA_ROTATE "  Reimport")) {
+            if (cell.kind == Cell::Kind::Model) {
+                PushUndo(world, "Reimport Model");
+                if (assets.ReimportModel(cell.key)) Log::Info("Reimported model '" + cell.key + "'.");
+                else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
+                InvalidateModelThumbnail();
+            } else {
+                PushUndo(world, "Reimport Texture");
+                if (assets.ReimportTexture(cell.key)) Log::Info("Reimported texture '" + cell.key + "'.");
+                else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
+            }
+        }
+        if (cell.kind == Cell::Kind::Model && ImGui::MenuItem(ICON_FA_DROPLET "  Extract Materials"))
+            ExtractMaterialsFor(world, assets, cell.key);
+        if (cell.kind == Cell::Kind::Model && ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Write one editable .mat per material this model uses (into the\n"
+                                 "asset's Materials folder) and use them on its placed objects.");
+        if (cell.kind == Cell::Kind::Texture && ImGui::MenuItem(ICON_FA_STAMP "  Create Decal"))
+            CreateDecalAsset(world, assets, std::filesystem::u8path(cell.key).parent_path().u8string(), cell.key);
+        if (cell.kind == Cell::Kind::Texture && ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Write a .decal next to this texture, using it as the albedo. A texture\n"
+                                 "with no real alpha is read as a white-on-black mask (luma).");
     }
 
-    // --- Motion v2 ---------------------------------------------------------------------------------
+    // Everything currently selected, whenever the right-clicked item is part of a
+    // multi-selection - so Delete/Remove from Library act on the whole group rather
+    // than just the one cell that happened to receive the right-click.
+    const std::vector<AssetKeyRef> selectionForAction = AssetSelectionForAction();
+    if (isFolder) {
+        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+        if (ImGui::MenuItem(selectionForAction.size() > 1 ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete Folder"))
+            RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
+        ImGui::PopStyleColor();
+    } else {
+        if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PEN_TO_SQUARE "  Open Prefab")) {
+            EnterPrefabMode(world, assets, cell.key); // #176
+        }
+        if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PLUS "  Place Instance")) {
+            PushUndo(world, "Place Prefab Instance");
+            entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
+            if (spawned != entt::null) {
+                UniquifyName(world, spawned);
+                SelectItem(spawned, false);
+            }
+        }
+        const char* removeLabel = selectionForAction.size() > 1
+            ? ICON_FA_TRASH "  Remove Selected from Library" : ICON_FA_TRASH "  Remove from Library";
+        ImGui::Separator();
+        // Files that are never library entries have nothing to remove from it.
+        const bool fileOnly = KindInfo(cell.kind).FileOnly;
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+        if (!fileOnly && ImGui::MenuItem(removeLabel)) {
+            RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
+        }
+        ImGui::PopStyleColor();
+        if (cell.kind == Cell::Kind::Prefab) ImGui::TextDisabled("The .prefab file stays on disk.");
+        // #129 - Unity's Delete: the file and its .meta go to the Recycle Bin (project files only).
+        std::vector<std::string> onDisk;
+        for (const auto& item : selectionForAction)
+            if (!item.IsFolder && !IsBuiltinShaderPath(item.Key) && IsProjectFile(item.Key)) onDisk.push_back(item.Key);
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+        if (!onDisk.empty() &&
+            ImGui::MenuItem(onDisk.size() > 1 ? ICON_FA_TRASH "  Delete Selected from Disk..." : ICON_FA_TRASH "  Delete from Disk...")) {
+            m_PendingDiskDeleteRefs.clear();
+            for (const std::string& k : onDisk)
+                for (std::string& r : FindProjectReferences(k))
+                    if (std::find(m_PendingDiskDeleteRefs.begin(), m_PendingDiskDeleteRefs.end(), r) == m_PendingDiskDeleteRefs.end())
+                        m_PendingDiskDeleteRefs.push_back(std::move(r));
+            m_PendingDiskDelete = onDisk;
+            m_OpenDiskDeleteRequested = true;
+        }
+        ImGui::PopStyleColor();
+    }
+    ImGui::EndPopup();
+}
+
+namespace {
+// Motion v2 folder zoom: diving in, the new grid grows from FolderZoomFrom about the opened tile while it
+// fades in; going up, the parent shrinks from 1.12 about the folder we came from.
+void EndGridFolderZoom() {
     AssetGridMotionState& gm = GridMotion();
     Glass::ImAnimContext& motion = Glass::Motion();
-    // Folder zoom: diving in, the new grid grows from FolderZoomFrom about the opened tile while it
-    // fades in; going up, the parent shrinks from 1.12 about the folder we came from.
     if (gm.LayerDl) {
         const float e = Glass::EaseProgress(Glass::FolderZoom, motion.PulseProgress(kGridZoomId));
         const float from = gm.ZoomOut ? kZoomOutFrom : Glass::FolderZoomFrom;
@@ -2838,319 +2850,340 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
     } else {
         motion.PulseProgress(kGridZoomId); // nothing drawn (an empty folder): let it run out
     }
+}
 
-    // Drag the grid to scroll it; let go to fling (Inertia). Left-drag on empty grid space (the grid
-    // has no box-select, so empty space is free) or middle-drag anywhere over it. A tile's own
-    // left-drag stays drag-and-drop: a press on a tile never starts this. Claiming the active id also
-    // keeps a floating Asset Browser from being dragged around by its background.
-    {
-        ImGuiWindow* list = ImGui::GetCurrentWindow();
-        ImGuiWindow* target = list; // Details view scrolls its table's inner window
-        if (EditorSettings::Get().AssetDetailsMode)
-            if (ImGuiTable* table = ImGui::TableFindByID(ImGui::GetID("##AssetDetails")))
-                if (table->InnerWindow) target = table->InnerWindow;
-        const ImGuiID dragId = ImGui::GetID("##gridFling");
-        const ImGuiID flingKey = target->ID ^ kGridFlingSalt;
-        static int s_DragButton = -1;
-        if (ImGui::GetActiveID() == 0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
-            int button = -1;
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered()) button = ImGuiMouseButton_Left;
-            else if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) button = ImGuiMouseButton_Middle;
-            if (button >= 0) {
-                ImGui::SetActiveID(dragId, list);
-                ImGui::FocusWindow(list); // what the click would have done (the active id stops ImGui doing it)
-                s_DragButton = button;
-                motion.InertiaStop(flingKey);
-            }
+// Drag the grid to scroll it; let go to fling (Inertia). Left-drag on empty grid space (the grid
+// has no box-select, so empty space is free) or middle-drag anywhere over it. A tile's own
+// left-drag stays drag-and-drop: a press on a tile never starts this. Claiming the active id also
+// keeps a floating Asset Browser from being dragged around by its background.
+void UpdateGridDragScroll() {
+    Glass::ImAnimContext& motion = Glass::Motion();
+    ImGuiWindow* list = ImGui::GetCurrentWindow();
+    ImGuiWindow* target = list; // Details view scrolls its table's inner window
+    if (EditorSettings::Get().AssetDetailsMode)
+        if (ImGuiTable* table = ImGui::TableFindByID(ImGui::GetID("##AssetDetails")))
+            if (table->InnerWindow) target = table->InnerWindow;
+    const ImGuiID dragId = ImGui::GetID("##gridFling");
+    const ImGuiID flingKey = target->ID ^ kGridFlingSalt;
+    static int s_DragButton = -1;
+    if (ImGui::GetActiveID() == 0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+        int button = -1;
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered()) button = ImGuiMouseButton_Left;
+        else if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) button = ImGuiMouseButton_Middle;
+        if (button >= 0) {
+            ImGui::SetActiveID(dragId, list);
+            ImGui::FocusWindow(list); // what the click would have done (the active id stops ImGui doing it)
+            s_DragButton = button;
+            motion.InertiaStop(flingKey);
         }
-        auto scrollBy = [&](float dy) {
-            const float y = std::clamp(target->Scroll.y + dy, 0.0f, target->ScrollMax.y);
-            ImGui::SetScrollY(target, y);
-            return y != target->Scroll.y + dy; // hit an end
-        };
-        if (ImGui::GetActiveID() == dragId) {
-            if (s_DragButton >= 0 && ImGui::IsMouseDown(s_DragButton)) {
-                const float dy = -ImGui::GetIO().MouseDelta.y;
-                if (dy != 0.0f) scrollBy(dy);
-                motion.InertiaTrack(flingKey, ImVec2(0.0f, dy));
-                if (ImGui::IsMouseDragging(s_DragButton)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-            } else {
-                motion.InertiaRelease(flingKey);
-                ImGui::ClearActiveID();
-                s_DragButton = -1;
-            }
-        }
-        const ImVec2 coast = motion.InertiaDelta(flingKey);
-        if (coast.y != 0.0f && scrollBy(coast.y)) motion.InertiaStop(flingKey);
     }
+    auto scrollBy = [&](float dy) {
+        const float y = std::clamp(target->Scroll.y + dy, 0.0f, target->ScrollMax.y);
+        ImGui::SetScrollY(target, y);
+        return y != target->Scroll.y + dy; // hit an end
+    };
+    if (ImGui::GetActiveID() == dragId) {
+        if (s_DragButton >= 0 && ImGui::IsMouseDown(s_DragButton)) {
+            const float dy = -ImGui::GetIO().MouseDelta.y;
+            if (dy != 0.0f) scrollBy(dy);
+            motion.InertiaTrack(flingKey, ImVec2(0.0f, dy));
+            if (ImGui::IsMouseDragging(s_DragButton)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        } else {
+            motion.InertiaRelease(flingKey);
+            ImGui::ClearActiveID();
+            s_DragButton = -1;
+        }
+    }
+    const ImVec2 coast = motion.InertiaDelta(flingKey);
+    if (coast.y != 0.0f && scrollBy(coast.y)) motion.InertiaStop(flingKey);
+}
 
+// A file in `dir` (created if missing) that doesn't exist yet: "<stem><ext>", then "<stem> (1)<ext>",
+// "<stem> (2)<ext>"... (`numberInParens` false: "<stem> 1<ext>", "<stem> 2<ext>"...). "" if the folder
+// can't be made.
+std::filesystem::path NewUniqueFile(const std::filesystem::path& dir, const std::string& stem, const std::string& ext,
+                                    bool numberInParens) {
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (!std::filesystem::is_directory(dir, ec)) return {};
+    std::filesystem::path p = dir / std::filesystem::u8path(stem + ext);
+    for (int n = 1; std::filesystem::exists(p, ec); ++n)
+        p = dir / std::filesystem::u8path(stem + (numberInParens ? " (" + std::to_string(n) + ")" : " " + std::to_string(n)) + ext);
+    return p;
+}
+} // namespace
+
+// The empty-space click-to-clear + right-click "Create" popup, drawn by the module right
+// after the last DrawAssetCell (still inside its ##AssetList child).
+void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) {
+    // ChildWindows: Details view's table scrolls in its own inner window inside ##AssetList.
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && !ImGui::IsAnyItemHovered()) {
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ClearAssetSelection();
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##BrowserBgContext");
+    }
+    EndGridFolderZoom();
+    UpdateGridDragScroll();
     if (ImGui::BeginPopup("##BrowserBgContext")) {
-        if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
-        ImGui::Separator();
-        if (ImGui::MenuItem(ICON_FA_DROPLET "  Create Material")) {
-            // #87 — the file used to be built from the VIRTUAL folder name with no root, so it
-            // landed relative to the process CWD (usually build/Release/, wiped by a clean
-            // build). Write it under the project's materials/ folder, then file it into the
-            // Asset Browser folder the user is looking at.
-            const std::string folder = m_CurrentAssetFolder;
-            std::error_code ec;
-            // In the folder being viewed, like Unity (assets/Materials when it isn't a real folder).
-            const std::filesystem::path dir = ProjectPaths::Resolve(NewAssetFolder("assets/Materials"));
-            std::filesystem::create_directories(dir, ec);
-            std::filesystem::path candidatePath = dir / "New Material.mat";
-            for (int n = 1; std::filesystem::exists(candidatePath, ec); ++n)
-                candidatePath = dir / ("New Material (" + std::to_string(n) + ").mat");
-            const std::string candidate = candidatePath.generic_string();
-            PushUndo(world, "Create Material");
-            auto mat = MaterialAsset::CreateDefault(candidate);
-            if (mat) {
-                assets.LoadMaterial(candidate);
-                if (!folder.empty()) assets.SetAssetFolder(candidate, folder);
-                BeginRenameAsset(candidate, false, std::filesystem::path(candidate).stem().string());
-            } else {
-                Log::Error("Create Material: couldn't write '" + candidate + "'.");
-            }
-        }
-        if (ImGui::MenuItem(ICON_FA_STAMP "  Create Decal"))
-            CreateDecalAsset(world, assets, ProjectPaths::Resolve(NewAssetFolder("assets/Decals")), std::string());
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("A new .decal in this folder. Right-click a texture > Create Decal to start from an image.");
-        if (ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Create Graffiti Piece")) {
-            const std::string piece = CreateGraffitiPiece(ProjectPaths::Resolve(NewAssetFolder("assets/Decals/Graffiti/Pieces")));
-            if (!piece.empty()) OpenGraffitiPiece(piece);
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("A new GP_*.graffiti recipe, opened in the Graffiti Designer.");
-        if (ImGui::MenuItem(ICON_FA_GUN "  Create First-Person Weapon...")) m_OpenWeaponWizard = true;
-        if (ImGui::MenuItem(ICON_FA_VIDEO "  Create Camera Shake")) {
-            const auto base=std::filesystem::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/CameraShake")+"/New Camera Shake.camerashake"));
-            auto target=base;
-            std::error_code ec;
-            for(int n=1;std::filesystem::exists(target,ec);++n)
-                target=base.parent_path()/(base.stem().u8string()+" "+std::to_string(n)+".camerashake");
-            if(CameraShakeAsset{}.SaveFile(target.u8string())) {
-                AssetDatabase::EnsureGuid(target.u8string());
-                m_SelectedAssetKey=target.u8string(); m_SelectedAssetIsFolder=false;
-                EditorSound::Play(EditorSound::Event::Create);
-                InvalidateAnimationListing();
-                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
-            } else Log::Error("Could not create camera shake asset.");
-        }
-        if (ImGui::MenuItem(ICON_FA_BURST "  Create Recoil Profile")) {
-            const std::string rel = NewAssetFolder("assets/Recoil") + "/New Recoil.recoil";
-            auto recoilPath = std::filesystem::u8path(ProjectPaths::Resolve(rel));
-            recoilPath.replace_extension(".recoil");
-            const auto base = recoilPath;
-            std::error_code recoilEc;
-            std::filesystem::create_directories(recoilPath.parent_path(), recoilEc);
-            for (int n = 1; std::filesystem::exists(recoilPath, recoilEc); ++n)
-                recoilPath = base.parent_path() / (base.stem().u8string() + " " + std::to_string(n) + ".recoil");
-            if (RecoilAsset{}.SaveFile(recoilPath.u8string())) {
-                AssetDatabase::EnsureGuid(recoilPath.u8string());
-                m_SelectedAssetKey = recoilPath.u8string();
-                m_SelectedAssetIsFolder = false;
-                EditorSound::Play(EditorSound::Event::Create);
-                InvalidateAnimationListing();
-                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
-            } else Log::Error("Could not create recoil profile.");
-        }
-        if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Animator Controller")) {
-            // In the folder being viewed, like Create Material (assets/Animations/Controllers otherwise);
-            // listed in that project folder and opened straight into the Animator window.
-            std::error_code ec;
-            const std::string dirRel = NewAssetFolder("assets/Animations/Controllers");
-            std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve(dirRel)), ec);
-            std::string rel = dirRel + "/New Animator Controller.controller";
-            for (int n = 1; std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(rel)), ec); ++n)
-                rel = dirRel + "/New Animator Controller (" + std::to_string(n) + ").controller";
-            AnimatorController c;
-            AnimatorController::State idle;
-            idle.Name = "Idle";
-            idle.Motions.resize(c.Tracks.size());
-            c.Layers[0].States.push_back(std::move(idle));
-            c.Layers[0].DefaultState = "Idle";
-            if (c.SaveFile(ProjectPaths::Resolve(rel))) {
-                InvalidateAnimationListing();
-                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
-                OpenAnimatorWindow(rel);
-                EditorSound::Play(EditorSound::Event::Create);
-                Log::Info("Created " + rel + ".");
-            } else {
-                Log::Error("Create Animator Controller: couldn't write '" + rel + "'.");
-            }
-        }
+        DrawAssetGridCreateMenu(world, assets);
         ImGui::EndPopup();
     }
+    DrawWeaponWizardPopup();
+}
 
-    // --- New First-Person Weapon wizard ----------------------------------------------------------
-    // Arms + weapon model, the folders holding their animation files, one clip per state (guessed from the
-    // file names, editable), then: <weapons/Name/Name.fpsanim> and the standard first-person controller.
-    {
-        struct Wizard {
-            bool Open = false;
-            char Name[64] = "New Weapon";
-            std::string ArmsModel, WeaponModel, ArmsDir, WeaponDir;
-            std::vector<FPWizard::Pick> Picks;
-            std::string Error;
-        };
-        static Wizard w;
-        auto parentOf = [](const std::string& p) {
-            const size_t s = p.find_last_of('/');
-            return s == std::string::npos ? std::string() : p.substr(0, s);
-        };
-        auto filesIn = [&](const std::string& dir) {
-            std::vector<std::string> out;
-            for (const std::string& f : ProjectModelFiles())
-                if (parentOf(f) == dir) out.push_back(f);
-            return out;
-        };
-        auto autoAssign = [&]() {
-            const std::vector<std::string> armsFiles = filesIn(w.ArmsDir), weaponFiles = filesIn(w.WeaponDir);
-            w.Picks.clear();
-            for (const auto& s : FPWizard::States())
-                w.Picks.push_back({s.State, FPWizard::PickClip(s.State, armsFiles), FPWizard::PickClip(s.State, weaponFiles)});
-        };
-        // A model file combo.
-        auto modelCombo = [&](const char* id, std::string& path) {
-            bool changed = false;
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 20.0f, 0.0f), ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
-            if (ImGui::BeginCombo(id, path.empty() ? "(none)" : path.c_str())) {
-                static char filter[64] = "";
-                if (ImGui::IsWindowAppearing()) { filter[0] = 0; ImGui::SetKeyboardFocusHere(); }
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                ImGui::InputTextWithHint("##f", ICON_FA_MAGNIFYING_GLASS " search", filter, sizeof filter);
-                std::string picked = path;
-                if (ProjectClipFileList(filter, picked, 200) && picked != path) { path = picked; changed = true; ImGui::CloseCurrentPopup(); }
-                ImGui::EndCombo();
-            }
-            return changed;
-        };
-        // A folder combo: every project folder that holds model files.
-        auto dirCombo = [&](const char* id, std::string& dir) {
-            bool changed = false;
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 20.0f, 0.0f), ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
-            if (ImGui::BeginCombo(id, dir.empty() ? "(pick a folder)" : dir.c_str())) {
-                static char filter[64] = "";
-                if (ImGui::IsWindowAppearing()) { filter[0] = 0; ImGui::SetKeyboardFocusHere(); }
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                ImGui::InputTextWithHint("##f", ICON_FA_MAGNIFYING_GLASS " search", filter, sizeof filter);
-                std::set<std::string> dirs;
-                for (const std::string& f : ProjectModelFiles()) dirs.insert(parentOf(f));
-                for (const std::string& d : dirs) {
-                    if (!ClipFilterMatch(filter, d)) continue;
-                    const std::string label = (d.empty() ? std::string("(project root)") : d) + "##dir" + d;
-                    if (ImGui::Selectable(label.c_str(), d == dir)) { dir = d; changed = true; ImGui::CloseCurrentPopup(); }
-                }
-                ImGui::EndCombo();
-            }
-            return changed;
-        };
-        auto clipCombo = [&](const char* id, std::string& clip, const std::string& dir) {
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            const std::string shown = clip.empty() ? std::string("(none)") : std::filesystem::u8path(clip).stem().u8string();
-            if (ImGui::BeginCombo(id, shown.c_str())) {
-                if (ImGui::Selectable("(none)", clip.empty())) clip.clear();
-                for (const std::string& f : filesIn(dir))
-                    if (ImGui::Selectable(std::filesystem::u8path(f).stem().u8string().c_str(), f == clip)) clip = f;
-                ImGui::EndCombo();
-            }
-        };
+// A new asset file made from the Create menu: selected, listed in its folder without a manual refresh.
+void EditorLayer::SelectCreatedAssetFile(const std::string& path) {
+    AssetDatabase::EnsureGuid(path);
+    m_SelectedAssetKey = path;
+    m_SelectedAssetIsFolder = false;
+    EditorSound::Play(EditorSound::Event::Create);
+    InvalidateAnimationListing();
+    InvalidateProjectAssetIndex();
+}
 
-        if (m_OpenWeaponWizard) {
-            m_OpenWeaponWizard = false;
-            w = Wizard{};
-            autoAssign();
-            ImGui::OpenPopup("New First-Person Weapon");
+// The background's right-click menu: New Folder and Create <asset>, each made in the folder being viewed
+// (NewAssetFolder: the kind's default folder when the view isn't a real project folder).
+void EditorLayer::DrawAssetGridCreateMenu(World& world, AssetLibrary& assets) {
+    namespace fs = std::filesystem;
+    if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) {
+        const std::string base = m_CurrentAssetFolder.empty() ? "New Folder" : (m_CurrentAssetFolder + "/New Folder");
+        const auto& folders = assets.Folders();
+        std::string candidate = base;
+        for (int n = 1; std::find(folders.begin(), folders.end(), candidate) != folders.end(); ++n)
+            candidate = base + " (" + std::to_string(n) + ")";
+        PushUndo(world, "Create Folder");
+        assets.CreateFolder(candidate);
+        BeginRenameAsset(candidate, true, LeafNameOf(candidate));
+    }
+    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_DROPLET "  Create Material")) {
+        // #87 — the file used to be built from the VIRTUAL folder name with no root, so it
+        // landed relative to the process CWD (usually build/Release/, wiped by a clean
+        // build). Write it under the project, then file it into the Asset Browser folder the
+        // user is looking at.
+        const std::string folder = m_CurrentAssetFolder;
+        const fs::path file = NewUniqueFile(fs::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/Materials"))), "New Material", ".mat", true);
+        const std::string candidate = file.generic_u8string();
+        PushUndo(world, "Create Material");
+        if (!file.empty() && MaterialAsset::CreateDefault(candidate)) {
+            assets.LoadMaterial(candidate);
+            if (!folder.empty()) assets.SetAssetFolder(candidate, folder);
+            BeginRenameAsset(candidate, false, file.stem().u8string());
+        } else {
+            Log::Error("Create Material: couldn't write '" + candidate + "'.");
         }
-        ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 640.0f * m_UIScale), ImGuiCond_Appearing);
-        if (ImGui::BeginPopupModal("New First-Person Weapon", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-            ImGui::TextWrapped("Pick the arms and weapon models and the folders holding their animation files. Clips are matched to the "
-                               "standard first-person states by file name; fix any that are wrong, then Create.");
-            ImGui::Spacing();
-            ImGui::InputText("Name", w.Name, sizeof w.Name);
-            ImGui::TextUnformatted("Arms model");
-            modelCombo("##wa", w.ArmsModel);
-            ImGui::TextUnformatted("Weapon model");
-            modelCombo("##ww", w.WeaponModel);
-            ImGui::TextUnformatted("Arms animations folder");
-            if (dirCombo("##wad", w.ArmsDir)) autoAssign();
-            ImGui::TextUnformatted("Weapon animations folder");
-            if (dirCombo("##wwd", w.WeaponDir)) autoAssign();
-            if (EditorUIPrimitives::SecondaryButton("Re-match by name")) autoAssign();
-            ImGui::Separator();
-            if (ImGui::BeginChild("##wclips", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.5f), ImGuiChildFlags_Borders)) {
-                if (ImGui::BeginTable("##wt", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-                    ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                    ImGui::TableSetupColumn("Arms clip", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-                    ImGui::TableSetupColumn("Weapon clip", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-                    ImGui::TableHeadersRow();
-                    for (size_t i = 0; i < w.Picks.size(); ++i) {
-                        ImGui::PushID((int)i);
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn();
-                        ImGui::TextUnformatted(w.Picks[i].State.c_str());
-                        ImGui::TableNextColumn();
-                        clipCombo("##a", w.Picks[i].ArmsClip, w.ArmsDir);
-                        ImGui::TableNextColumn();
-                        clipCombo("##w", w.Picks[i].WeaponClip, w.WeaponDir);
-                        ImGui::PopID();
-                    }
-                    ImGui::EndTable();
-                }
+    }
+    if (ImGui::MenuItem(ICON_FA_STAMP "  Create Decal"))
+        CreateDecalAsset(world, assets, ProjectPaths::Resolve(NewAssetFolder("assets/Decals")), std::string());
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("A new .decal in this folder. Right-click a texture > Create Decal to start from an image.");
+    if (ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Create Graffiti Piece")) {
+        const std::string piece = CreateGraffitiPiece(ProjectPaths::Resolve(NewAssetFolder("assets/Decals/Graffiti/Pieces")));
+        if (!piece.empty()) OpenGraffitiPiece(piece);
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("A new GP_*.graffiti recipe, opened in the Graffiti Designer.");
+    if (ImGui::MenuItem(ICON_FA_GUN "  Create First-Person Weapon...")) m_OpenWeaponWizard = true;
+    if (ImGui::MenuItem(ICON_FA_VIDEO "  Create Camera Shake")) {
+        const fs::path file = NewUniqueFile(fs::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/CameraShake"))), "New Camera Shake", ".camerashake", false);
+        if (!file.empty() && CameraShakeAsset{}.SaveFile(file.u8string())) SelectCreatedAssetFile(file.u8string());
+        else Log::Error("Could not create camera shake asset.");
+    }
+    if (ImGui::MenuItem(ICON_FA_BURST "  Create Recoil Profile")) {
+        const fs::path file = NewUniqueFile(fs::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/Recoil"))), "New Recoil", ".recoil", false);
+        if (!file.empty() && RecoilAsset{}.SaveFile(file.u8string())) SelectCreatedAssetFile(file.u8string());
+        else Log::Error("Could not create recoil profile.");
+    }
+    if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Animator Controller")) {
+        // Listed in its project folder and opened straight into the Animator window.
+        const std::string dirRel = NewAssetFolder("assets/Animations/Controllers");
+        const fs::path file = NewUniqueFile(fs::u8path(ProjectPaths::Resolve(dirRel)), "New Animator Controller", ".controller", true);
+        const std::string rel = dirRel + "/" + file.filename().u8string();
+        AnimatorController c;
+        AnimatorController::State idle;
+        idle.Name = "Idle";
+        idle.Motions.resize(c.Tracks.size());
+        c.Layers[0].States.push_back(std::move(idle));
+        c.Layers[0].DefaultState = "Idle";
+        if (!file.empty() && c.SaveFile(ProjectPaths::Resolve(rel))) {
+            InvalidateAnimationListing();
+            InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
+            OpenAnimatorWindow(rel);
+            EditorSound::Play(EditorSound::Event::Create);
+            Log::Info("Created " + rel + ".");
+        } else {
+            Log::Error("Create Animator Controller: couldn't write '" + rel + "'.");
+        }
+    }
+}
+
+// --- New First-Person Weapon wizard ----------------------------------------------------------
+// Arms + weapon model, the folders holding their animation files, one clip per state (guessed from the
+// file names, editable), then: <weapons/Name/Name.fpsanim> and the standard first-person controller.
+void EditorLayer::DrawWeaponWizardPopup() {
+    struct Wizard {
+        bool Open = false;
+        char Name[64] = "New Weapon";
+        std::string ArmsModel, WeaponModel, ArmsDir, WeaponDir;
+        std::vector<FPWizard::Pick> Picks;
+        std::string Error;
+    };
+    static Wizard w;
+    auto parentOf = [](const std::string& p) {
+        const size_t s = p.find_last_of('/');
+        return s == std::string::npos ? std::string() : p.substr(0, s);
+    };
+    auto filesIn = [&](const std::string& dir) {
+        std::vector<std::string> out;
+        for (const std::string& f : ProjectModelFiles())
+            if (parentOf(f) == dir) out.push_back(f);
+        return out;
+    };
+    auto autoAssign = [&]() {
+        const std::vector<std::string> armsFiles = filesIn(w.ArmsDir), weaponFiles = filesIn(w.WeaponDir);
+        w.Picks.clear();
+        for (const auto& s : FPWizard::States())
+            w.Picks.push_back({s.State, FPWizard::PickClip(s.State, armsFiles), FPWizard::PickClip(s.State, weaponFiles)});
+    };
+    // A model file combo.
+    auto modelCombo = [&](const char* id, std::string& path) {
+        bool changed = false;
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 20.0f, 0.0f), ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
+        if (ImGui::BeginCombo(id, path.empty() ? "(none)" : path.c_str())) {
+            static char filter[64] = "";
+            if (ImGui::IsWindowAppearing()) { filter[0] = 0; ImGui::SetKeyboardFocusHere(); }
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputTextWithHint("##f", ICON_FA_MAGNIFYING_GLASS " search", filter, sizeof filter);
+            std::string picked = path;
+            if (ProjectClipFileList(filter, picked, 200) && picked != path) { path = picked; changed = true; ImGui::CloseCurrentPopup(); }
+            ImGui::EndCombo();
+        }
+        return changed;
+    };
+    // A folder combo: every project folder that holds model files.
+    auto dirCombo = [&](const char* id, std::string& dir) {
+        bool changed = false;
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 20.0f, 0.0f), ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
+        if (ImGui::BeginCombo(id, dir.empty() ? "(pick a folder)" : dir.c_str())) {
+            static char filter[64] = "";
+            if (ImGui::IsWindowAppearing()) { filter[0] = 0; ImGui::SetKeyboardFocusHere(); }
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputTextWithHint("##f", ICON_FA_MAGNIFYING_GLASS " search", filter, sizeof filter);
+            std::set<std::string> dirs;
+            for (const std::string& f : ProjectModelFiles()) dirs.insert(parentOf(f));
+            for (const std::string& d : dirs) {
+                if (!ClipFilterMatch(filter, d)) continue;
+                const std::string label = (d.empty() ? std::string("(project root)") : d) + "##dir" + d;
+                if (ImGui::Selectable(label.c_str(), d == dir)) { dir = d; changed = true; ImGui::CloseCurrentPopup(); }
             }
-            ImGui::EndChild();
-            int filled = 0;
-            for (const auto& p : w.Picks) filled += !p.ArmsClip.empty() || !p.WeaponClip.empty();
-            const bool ready = w.Name[0] && !w.ArmsModel.empty() && !w.WeaponModel.empty() && filled > 0;
-            ImGui::TextDisabled("%d of %d states have a clip. Missing ones play the bind pose / nothing (Idle and Fire matter most).", filled, (int)w.Picks.size());
-            if (!w.Error.empty()) ImGui::TextColored(EditorUIPrimitives::DangerColor(), "%s", w.Error.c_str());
-            ImGui::BeginDisabled(!ready);
-            bool createClicked;
-            { EditorSoundEvents::ScopedClickSilence quiet; createClicked = EditorUIPrimitives::PrimaryButton("Create"); } // Create / Blocked below
-            if (createClicked) {
-                std::string safe = w.Name;
-                for (char& c : safe) if (!std::isalnum((unsigned char)c) && c != '_' && c != '-' && c != ' ') c = '_';
-                const std::string dirRel = "assets/Weapons/" + safe;
-                const std::string setRel = dirRel + "/" + safe + ".fpsanim", ctrlRel = dirRel + "/" + safe + ".controller";
-                std::error_code ec;
-                std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve(dirRel)), ec);
-                FirstPersonAnimationSet set = FPWizard::Build(w.ArmsModel, w.WeaponModel, w.Picks);
-                if (std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(setRel)), ec)) {
-                    w.Error = "'" + setRel + "' already exists: pick another name.";
-                    EditorSound::Play(EditorSound::Event::Blocked);
-                } else if (!BuildFirstPersonController(set).SaveFile(ProjectPaths::Resolve(ctrlRel))) {
-                    w.Error = "Couldn't write '" + ctrlRel + "'.";
-                    EditorSound::Play(EditorSound::Event::Blocked);
+            ImGui::EndCombo();
+        }
+        return changed;
+    };
+    auto clipCombo = [&](const char* id, std::string& clip, const std::string& dir) {
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        const std::string shown = clip.empty() ? std::string("(none)") : std::filesystem::u8path(clip).stem().u8string();
+        if (ImGui::BeginCombo(id, shown.c_str())) {
+            if (ImGui::Selectable("(none)", clip.empty())) clip.clear();
+            for (const std::string& f : filesIn(dir))
+                if (ImGui::Selectable(std::filesystem::u8path(f).stem().u8string().c_str(), f == clip)) clip = f;
+            ImGui::EndCombo();
+        }
+    };
+
+    if (m_OpenWeaponWizard) {
+        m_OpenWeaponWizard = false;
+        w = Wizard{};
+        autoAssign();
+        ImGui::OpenPopup("New First-Person Weapon");
+    }
+    ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 640.0f * m_UIScale), ImGuiCond_Appearing);
+    if (ImGui::BeginPopupModal("New First-Person Weapon", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::TextWrapped("Pick the arms and weapon models and the folders holding their animation files. Clips are matched to the "
+                           "standard first-person states by file name; fix any that are wrong, then Create.");
+        ImGui::Spacing();
+        ImGui::InputText("Name", w.Name, sizeof w.Name);
+        ImGui::TextUnformatted("Arms model");
+        modelCombo("##wa", w.ArmsModel);
+        ImGui::TextUnformatted("Weapon model");
+        modelCombo("##ww", w.WeaponModel);
+        ImGui::TextUnformatted("Arms animations folder");
+        if (dirCombo("##wad", w.ArmsDir)) autoAssign();
+        ImGui::TextUnformatted("Weapon animations folder");
+        if (dirCombo("##wwd", w.WeaponDir)) autoAssign();
+        if (EditorUIPrimitives::SecondaryButton("Re-match by name")) autoAssign();
+        ImGui::Separator();
+        if (ImGui::BeginChild("##wclips", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.5f), ImGuiChildFlags_Borders)) {
+            if (ImGui::BeginTable("##wt", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("Arms clip", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+                ImGui::TableSetupColumn("Weapon clip", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+                ImGui::TableHeadersRow();
+                for (size_t i = 0; i < w.Picks.size(); ++i) {
+                    ImGui::PushID((int)i);
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted(w.Picks[i].State.c_str());
+                    ImGui::TableNextColumn();
+                    clipCombo("##a", w.Picks[i].ArmsClip, w.ArmsDir);
+                    ImGui::TableNextColumn();
+                    clipCombo("##w", w.Picks[i].WeaponClip, w.WeaponDir);
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+        }
+        ImGui::EndChild();
+        int filled = 0;
+        for (const auto& p : w.Picks) filled += !p.ArmsClip.empty() || !p.WeaponClip.empty();
+        const bool ready = w.Name[0] && !w.ArmsModel.empty() && !w.WeaponModel.empty() && filled > 0;
+        ImGui::TextDisabled("%d of %d states have a clip. Missing ones play the bind pose / nothing (Idle and Fire matter most).", filled, (int)w.Picks.size());
+        if (!w.Error.empty()) ImGui::TextColored(EditorUIPrimitives::DangerColor(), "%s", w.Error.c_str());
+        ImGui::BeginDisabled(!ready);
+        bool createClicked;
+        { EditorSoundEvents::ScopedClickSilence quiet; createClicked = EditorUIPrimitives::PrimaryButton("Create"); } // Create / Blocked below
+        if (createClicked) {
+            std::string safe = w.Name;
+            for (char& c : safe) if (!std::isalnum((unsigned char)c) && c != '_' && c != '-' && c != ' ') c = '_';
+            const std::string dirRel = "assets/Weapons/" + safe;
+            const std::string setRel = dirRel + "/" + safe + ".fpsanim", ctrlRel = dirRel + "/" + safe + ".controller";
+            std::error_code ec;
+            std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve(dirRel)), ec);
+            FirstPersonAnimationSet set = FPWizard::Build(w.ArmsModel, w.WeaponModel, w.Picks);
+            if (std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(setRel)), ec)) {
+                w.Error = "'" + setRel + "' already exists: pick another name.";
+                EditorSound::Play(EditorSound::Event::Blocked);
+            } else if (!BuildFirstPersonController(set).SaveFile(ProjectPaths::Resolve(ctrlRel))) {
+                w.Error = "Couldn't write '" + ctrlRel + "'.";
+                EditorSound::Play(EditorSound::Event::Blocked);
+            } else {
+                set.Controller = ctrlRel;
+                set.Clips.clear();
+                RecoilAsset recoil;
+                set.Procedural.Recoil = recoil.Data;
+                set.Procedural.Recoil.HipProcedural = true;
+                set.RecoilProfile = dirRel + "/" + safe + ".recoil";
+                const bool profileSaved = recoil.SaveFile(ProjectPaths::Resolve(set.RecoilProfile));
+                if (profileSaved) {
+                    AssetDatabase::EnsureGuid(ProjectPaths::Resolve(set.RecoilProfile));
+                    set.RecoilProfileGuid = AssetDatabase::RefGuid(set.RecoilProfile);
+                }
+                if (profileSaved && set.SaveFile(ProjectPaths::Resolve(setRel))) {
+                    InvalidateAnimationListing();
+                    Log::Info("Created weapon " + setRel + " (controller " + ctrlRel + "). Select it in the Asset Browser to tune it.");
+                    EditorSound::Play(EditorSound::Event::Create);
+                    ImGui::CloseCurrentPopup();
                 } else {
-                    set.Controller = ctrlRel;
-                    set.Clips.clear();
-                    RecoilAsset recoil;
-                    set.Procedural.Recoil = recoil.Data;
-                    set.Procedural.Recoil.HipProcedural = true;
-                    set.RecoilProfile = dirRel + "/" + safe + ".recoil";
-                    const bool profileSaved = recoil.SaveFile(ProjectPaths::Resolve(set.RecoilProfile));
-                    if (profileSaved) {
-                        AssetDatabase::EnsureGuid(ProjectPaths::Resolve(set.RecoilProfile));
-                        set.RecoilProfileGuid = AssetDatabase::RefGuid(set.RecoilProfile);
-                    }
-                    if (profileSaved && set.SaveFile(ProjectPaths::Resolve(setRel))) {
-                        InvalidateAnimationListing();
-                        Log::Info("Created weapon " + setRel + " (controller " + ctrlRel + "). Select it in the Asset Browser to tune it.");
-                        EditorSound::Play(EditorSound::Event::Create);
-                        ImGui::CloseCurrentPopup();
-                    } else {
-                        w.Error = "Couldn't write '" + setRel + "'.";
-                        EditorSound::Play(EditorSound::Event::Blocked);
-                    }
+                    w.Error = "Couldn't write '" + setRel + "'.";
+                    EditorSound::Play(EditorSound::Event::Blocked);
                 }
             }
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-            if (EditorUIPrimitives::SecondaryButton("Cancel")) ImGui::CloseCurrentPopup();
-            ImGui::EndPopup();
         }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (EditorUIPrimitives::SecondaryButton("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
     }
 }
 
