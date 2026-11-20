@@ -120,19 +120,11 @@ vec3 PointSpotScatter(uint i, vec3 p, vec3 V) {
     if (dist2 > range * range) return vec3(0.0);
     float dist = sqrt(dist2);
     vec3 L = toLight / max(dist, 1e-4);
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist2);
-    if (lt.BoxHalf.w >= 0.0) {
-        vec3 q = vec3(dot(lt.BoxX.xyz, p) + lt.BoxX.w, dot(lt.BoxY.xyz, p) + lt.BoxY.w, dot(lt.BoxZ.xyz, p) + lt.BoxZ.w);
-        vec3 in3 = lt.BoxHalf.xyz - abs(q);
-        atten *= clamp(min(in3.x, min(in3.y, in3.z)) / lt.BoxHalf.w, 0.0, 1.0);
-    }
+    float atten = LightDistanceAtten(dist, range) * LightBoxFade(i, p);
     if (int(lt.PositionType.w) == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L);
-        float outerCos = lt.DirCutoff.w;
-        if (cosAngle < outerCos) return vec3(0.0);
-        atten *= smoothstep(outerCos, max(lt.Params.x, outerCos + 1e-3), cosAngle);
+        float cone = SpotConeAtten(i, L);
+        if (cone <= 0.0) return vec3(0.0);
+        atten *= cone;
         if (atten <= 0.0) return vec3(0.0);
         atten *= SpotShadow(int(lt.Params.y), p);
     } else {

@@ -122,16 +122,6 @@ float CloudShadow(vec3 p) {
 
 // Every scene light and the clustered lists (uLights[], uClusterRange[], uClusterLightIndices[]).
 #include "LightBuffer.glsl"
-// The light's bounds (Light component > Bounds) at world point p: 1 well inside the box, falling to 0 at its faces.
-float LightBoxFade(uint i, vec3 p) {
-    vec4 h = uLights[i].BoxHalf;
-    if (h.w < 0.0) return 1.0;
-    vec3 q = vec3(dot(uLights[i].BoxX.xyz, p) + uLights[i].BoxX.w, dot(uLights[i].BoxY.xyz, p) + uLights[i].BoxY.w,
-                  dot(uLights[i].BoxZ.xyz, p) + uLights[i].BoxZ.w);
-    vec3 in3 = h.xyz - abs(q);
-    return clamp(min(in3.x, min(in3.y, in3.z)) / h.w, 0.0, 1.0);
-}
-
 // #203 - lighting layers. uObjectLayerBit is 1 << this object's layer (0 = unfiltered, for
 // draws that never set it); a light skips objects whose bit is in its excluded-layer set.
 uniform int uObjectLayerBit;
@@ -692,17 +682,12 @@ bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) {
     float dist = sqrt(dist2);
     L = toLight / max(dist, 1e-4);
 
-    // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist * dist) * boxFade;
+    float atten = LightDistanceAtten(dist, range) * boxFade;
 
     if (type == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
-        float outerCos = lt.DirCutoff.w;
-        float innerCos = lt.Params.x;
-        if (cosAngle < outerCos) return false;
-        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        float cone = SpotConeAtten(i, L);
+        if (cone <= 0.0) return false;
+        atten *= cone;
         // Early-out before the shadow-map sample, not just before shading (#191) — a fragment at
         // the far edge of the cone/range falloff is already at atten==0 here, so this skips a
         // full shadow-array texture fetch that would just get multiplied away.
