@@ -2465,12 +2465,12 @@ bool AppSession::Frame() {
     lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
     {
         PROFILE_SCOPE("Swap Buffers");
-        // --perf-bench in a window that never shows (KeepsWindowHidden): presenting a hidden window took NVIDIA's
-        // slow path, ~2.7 ms a frame with the GPU idle and the CPU blocked (the Forest's play-max read 14.2 ms
-        // hidden, 11.6 ms on screen). Nothing is on screen to present, so pace like a swap chain instead: a
-        // fence a frame, and wait for the one kHiddenFramesAhead frames back. The bench then measures the frame.
-        const bool hiddenBench = opt.perfBenchMode && hiddenRun;
-        if (hiddenBench) {
+        // A window that never shows (KeepsWindowHidden): presenting a hidden window took NVIDIA's slow path,
+        // ~2.7 ms a frame with the GPU idle and the CPU blocked (the Forest's play-max read 14.2 ms hidden, 11.6 ms
+        // on screen; a 21600-frame npc test ran about a minute longer). Nothing is on screen to present, so pace
+        // like a swap chain instead: a fence a frame, and wait for the one kHiddenFramesAhead frames back. Every
+        // capture (Shot steps, --editor-shot, MotionDemo) reads the back buffer before this point.
+        if (hiddenRun) {
             constexpr int kHiddenFramesAhead = 2;
             static GLsync s_Pace[kHiddenFramesAhead] = {};
             static int s_PaceAt = 0;
