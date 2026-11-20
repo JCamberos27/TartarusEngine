@@ -65,9 +65,12 @@ public:
     // %LOCALAPPDATA%\TartarusEngine\enhancer_tabs_<project hash>.json
     static std::string Path();
 
+    static constexpr int kVersion = 1;
+
 private:
     TabState() = default;
     bool m_Dirty = false;
+    nlohmann::json m_Unknown = nlohmann::json::object(); // a newer build's sections, written back as they were
 };
 
 } // namespace Enhancers
