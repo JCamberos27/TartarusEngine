@@ -95,6 +95,35 @@ def write_scene_meta(path):
         f.write('\n')
 
 
+def descendants(ents, root):
+    """Every entity under `root` (by parentId), at any depth."""
+    kids = {}
+    for e in ents:
+        kids.setdefault(e['parentId'], []).append(e)
+    out, todo = [], [root]
+    while todo:
+        for e in kids.get(todo.pop(), []):
+            out.append(e)
+            todo.append(e['id'])
+    return out
+
+
+# --- Door_Op_1 in a wall ----------------------------------------------------------------------------------------
+DOOR_WALL_Z = 0.032   # the frame's wall centre, door-local +Z of its origin
+
+
+def door_pose(axis, line, along, sign):
+    """(yaw, x, z) of a Door_Op_1 frame in a wall running along `axis` ('x': at z = line, 'z': at x = line), centred at
+    `along`; sign +1 when the room it swings into is on the line's + side. The door is modelled with its inside (chain,
+    catch, hinge knuckles) on its back, local -Z: that faces the room it swings into, and it swings that way (Swing
+    Back). The frame sits on the wall's centre line."""
+    if axis == 'x':
+        yaw, wx, wz = (180.0 if sign > 0 else 0.0), along, line
+    else:
+        yaw, wx, wz = (-90.0 if sign > 0 else 90.0), line, along
+    return yaw, wx - math.sin(math.radians(yaw)) * DOOR_WALL_Z, wz - math.cos(math.radians(yaw)) * DOOR_WALL_Z
+
+
 def first(it, what):
     """The first item of `it`; exits naming `what` when there is none (instead of a bare StopIteration)."""
     v = next(iter(it), None)

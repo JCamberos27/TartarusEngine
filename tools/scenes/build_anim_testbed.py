@@ -11,7 +11,6 @@ Everything is laid out around one lane the player starts on (origin, facing +Z):
 Run from the repo root:
     python tools/scenes/build_anim_testbed.py
 """
-import copy
 import math
 import os
 
@@ -23,26 +22,11 @@ DST = os.path.join(ROOT, 'project', 'scenes', 'AnimTestbed.json')
 
 lab = LabScene(SRC)
 j = lab.data
-take_id = lab.take_id
-ground = next(b for b in j['boxes'] if b['name'] == 'Ground')
-
-
-def box(name, pos, size, rot=(0.0, 0.0, 0.0, 1.0)):
-    b = copy.deepcopy(ground)
-    b['id'], b['order'] = take_id()
-    b['name'] = name
-    b['position'] = [float(v) for v in pos]
-    b['scale'] = [float(v) for v in size]
-    b['rotation'] = [float(v) for v in rot]
-    j['boxes'].append(b)
+box = lab.ground_box
 
 
 def empty(name, pos, rot, comps):
-    i, o = take_id()
-    e = {'id': i, 'name': name, 'order': o, 'parentId': -1, 'position': [float(v) for v in pos],
-         'rotation': [float(v) for v in rot], 'scale': [1.0, 1.0, 1.0]}
-    e.update(comps)
-    j['empties'].append(e)
+    lab.empty(name, pos=pos, rotation=rot, **comps)
 
 
 # The lane: posts beside it every 5 m, so slide and stopping distance read against something fixed.

@@ -34,7 +34,6 @@ GRUNGE_WALL = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_036.png'  
 GRUNGE_WORN = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'   # corridor ceiling
 D = 8.6               # apartment depth, corridor wall to outside wall (centre lines)
 DOOR_W, DOOR_H = 0.92, 2.06      # opening for Door_Op_1's frame (the frame's own trim covers the gap)
-DOOR_WALL_Z = 0.032              # the frame's wall centre, door-local +Z of its origin
 WIN_STEM, WIN_SCALE = 'Window_Tall_Fake', 1.15   # 1.0 x 1.77 m
 WIN_W, WIN_H, WIN_FRAME, WIN_SILL = 0.87 * WIN_SCALE, 1.54 * WIN_SCALE, 0.045 * WIN_SCALE, 0.7
 PLANE = 'assets/Architecture/Building/Models/Plane_1m.obj'
@@ -352,15 +351,7 @@ class Hallway(k.Scene):
     def doors(self, root):
         grp = self.empty('Doors', root)
         for number, room, axis, line, along, sign, interior in self.door_specs:
-            # Door_Op_1 is modelled with its inside (the chain, the door catch, the hinge knuckles, the inner trim) on its
-            # back, local -Z: that faces the room it swings into, and it swings that way (Swing Back). The frame sits on
-            # the wall's centre line.
-            if axis == 'x':
-                yaw, wall_pt = (180.0 if sign > 0 else 0.0), (along, line)
-            else:
-                yaw, wall_pt = (-90.0 if sign > 0 else 90.0), (line, along)
-            fz = (math.sin(math.radians(yaw)), math.cos(math.radians(yaw)))
-            ox, oz = wall_pt[0] - fz[0] * DOOR_WALL_Z, wall_pt[1] - fz[1] * DOOR_WALL_Z
+            yaw, ox, oz = k.door_pose(axis, line, along, sign)
             suffix = '_Interior' if interior else ''
             parent = self.empty(f'{number} {room} Door' if interior else f'{number} Front Door', grp)
             self.model(self.idx, 'Door_Op_1_Frame' + suffix, parent, (ox, 0.0, oz), yaw, name='Frame', static=True)
