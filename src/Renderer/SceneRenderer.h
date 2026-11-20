@@ -196,8 +196,8 @@ public:
     // piece) would otherwise compile its new variants on the frame that first draws it.
     static int WarmShaderVariants(World& world, entt::entity root);
     // The combat effects' programs (particles, FX sprites, blood sprays and decals) compiled now: each used to compile
-    // on its first use, mid-fight.
-    static void WarmEffects();
+    // on its first use, mid-fight. The scene's particle textures start decoding too.
+    static void WarmEffects(const World& world);
 
     // Draws sky + the opaque and transparent scene geometry for one viewport. `ctx` carries the
     // per-view params (see RenderFrameContext.h and its GL state contract); `in` carries the
