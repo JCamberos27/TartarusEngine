@@ -1182,7 +1182,9 @@ bool AppSession::Frame() {
     MotionDemo::PinClock(); // the motion demo's virtual clock: exactly 1/60 s per frame
     // --perf-bench --smoke-shots: game time steps 1/120 s a frame, so the play-max picture is the same moment
     // every run (a before/after pixel diff of a GPU change). The timings of such a run aren't the measurement.
-    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : 0.0);
+    // --npc-test: 1/60 s, its game step (gameDt below), so what reads Time's clocks - the recoil's unscaled shot
+    // timing among them - repeats run to run too, instead of following how long each frame really took.
+    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : opt.npcTestMode ? 1.0 / 60.0 : 0.0);
     Time::BeginFrame();
     const auto frameWorkStart = std::chrono::steady_clock::now(); // to SwapBuffers: this frame's own work
     const float dt = Time::UnscaledDeltaTime();
