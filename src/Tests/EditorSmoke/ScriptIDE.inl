@@ -19,14 +19,6 @@ namespace fs = std::filesystem;
 
 constexpr const char* kIde = "Script IDE";
 
-bool WriteText(const fs::path& p, const std::string& text) {
-    std::error_code ec;
-    fs::create_directories(p.parent_path(), ec);
-    std::ofstream f(p, std::ios::binary | std::ios::trunc);
-    if (!f) return false;
-    f << text;
-    return static_cast<bool>(f);
-}
 fs::path Scratch(const std::string& name) { return fs::path(ProjectPaths::Resolve("work/editor-smoke-ide")) / name; }
 fs::path SessionFile() { return fs::u8path(ScriptIDE::SessionFile()); }
 int SessionTheme() {
@@ -172,7 +164,7 @@ std::vector<fs::path> g_Scratch; // files WriteDoc made this test; IdeFinally re
 std::vector<Step> WriteDoc(fs::path path, std::string text) {
     return {Do("write " + path.filename().string(), [path, text](Ctx&) {
         g_Scratch.push_back(path);
-        if (!WriteText(path, text)) Fail("couldn't write " + path.string());
+        if (!WriteFile(path, text)) Fail("couldn't write " + path.string());
     })};
 }
 // Middle-click closes a clean tab (a modified one asks first).
@@ -632,11 +624,11 @@ void RegisterScriptIDETests() {
             CloseTab(f),
             {Do("append a comment to the staged shader", [path, original, base, reloaded](Ctx&) {
                  *base = LogCount(reloaded);
-                 if (!WriteText(path(), *original + "\n// editor smoke test: hot reload probe\n")) Fail("couldn't write " + path().string());
+                 if (!WriteFile(path(), *original + "\n// editor smoke test: hot reload probe\n")) Fail("couldn't write " + path().string());
              }),
              UntilSeconds("the outline program recompiled", [base, reloaded](Ctx&) { return LogCount(reloaded) > *base; }, 20),
              Do("restore the original text", [path, original](Ctx&) {
-                 if (!WriteText(path(), *original)) Fail("couldn't restore " + path().string());
+                 if (!WriteFile(path(), *original)) Fail("couldn't restore " + path().string());
              }),
              UntilSeconds("recompiled again from the original", [base, reloaded](Ctx&) { return LogCount(reloaded) > *base + 1; }, 20),
              ExpectTrue("the staged shader is byte-for-byte the original", [path, original](Ctx&) { return ReadFileText(path()) == *original; })},
@@ -644,7 +636,7 @@ void RegisterScriptIDETests() {
             {Shot("after-reload", {kScene})},
         }), [path, original](Ctx&) {
             // A timed-out step skips the restore above: put the staged shader back regardless.
-            if (!original->empty() && ReadFileText(path()) != *original) WriteText(path(), *original);
+            if (!original->empty() && ReadFileText(path()) != *original) WriteFile(path(), *original);
         });
     }
 }

@@ -200,6 +200,16 @@ struct EditorUiTestAccess {
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }
     static void Deselect(EditorLayer& e) { e.ClearSelection(); e.ClearAssetSelection(); }
     static size_t UndoDepth(EditorLayer& e) { return e.m_UndoStack.size(); }
+    static size_t RedoDepth(EditorLayer& e) { return e.m_RedoStack.size(); }
+    static bool Dirty(EditorLayer& e) { return e.m_Dirty; }
+    static bool& ShowAssets(EditorLayer& e) { return e.m_ShowAssetBrowser; }
+    static bool& ShowAnimator(EditorLayer& e) { return e.m_ShowAnimator; }
+    static bool& ShowHistory(EditorLayer& e) { return e.m_ShowHistory; }
+    static bool ArrayDupShown(EditorLayer& e) { return e.m_ShowArrayDuplicate; }
+    static void SetArrayDup(EditorLayer& e, int nx, int ny, int nz, glm::vec3 step) {
+        e.m_ArrayDupCount[0] = nx; e.m_ArrayDupCount[1] = ny; e.m_ArrayDupCount[2] = nz;
+        e.m_ArrayDupStep[0] = step.x; e.m_ArrayDupStep[1] = step.y; e.m_ArrayDupStep[2] = step.z;
+    }
     static std::string UndoTop(EditorLayer& e) { return e.m_UndoStack.empty() ? std::string("-") : e.m_UndoStack.back().Label; }
     static void PushUndo(EditorLayer& e, World& w, const char* label) { e.PushUndo(w, label); }
     static bool InPlay(EditorLayer& e) { return e.m_InPlayMode; }
@@ -629,6 +639,15 @@ Step WaitSeconds(double seconds) {
 }
 Step Until(std::string name, std::function<bool(Ctx&)> pred, int timeout = 120) {
     return {std::move(name), std::move(pred), timeout};
+}
+// Writes `text` to `path` (parent folders made, file replaced); false when it couldn't.
+bool WriteFile(const std::filesystem::path& path, std::string_view text) {
+    std::error_code ec;
+    if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path(), ec);
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+    f.write(text.data(), (std::streamsize)text.size());
+    return static_cast<bool>(f);
 }
 // Until, with a real-time limit: for async work (loads, thumbnails, file watchers). A hidden test
 // window runs far faster than 60 Hz, so a frame count is well under a second there.

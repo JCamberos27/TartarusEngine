@@ -1,7 +1,9 @@
 # Black Glass: the editor design system
 
-Black Glass is the Tartarus editor's default look, with one rule: **things that float are glass,
-things you work in are solid.** Docked panels, the menu bar and the status bar are solid black.
+Black Glass is the Tartarus editor's default look, with one rule: **things that float are real
+blurred glass, things you work in are dark tinted glass.** Docked panels are black at 15% over the
+black canvas (`GlassPanelAlpha`), and the menu bar, tab strips and status bar black at 80%
+(`GlassChromeAlpha`); with *See-through window* on, the Windows desktop shows through them.
 Everything that floats over them (menus, popups, combo lists, context menus, tooltips, modals,
 undocked windows, the viewport toolbar, tool rail, overlays, HUDs and notifications) is real
 blurred glass over whatever is behind it. The chrome is monochrome: white text on black, with colour
@@ -51,7 +53,7 @@ one black. `Glass::DrawWallpaper()` paints `Base` behind everything each frame.
 | Token | HEX | Use |
 | --- | --- | --- |
 | `Base` | `#000000` | Menu bar, status bar, dock gaps, unselected tabs, the canvas |
-| `Panel` | `#050505` | A docked panel (`WindowBg`), the selected tab |
+| `Panel` | `#050505` | A docked panel (`WindowBg`) in the Tartarus theme |
 | `Card` | `#090909` | A card inside a panel (Inspector component bodies) |
 | `Raised` | `#0E0E0E` | Headers, table headers |
 | `Hover` / `Pressed` | `#1C1C1C` / `#2A2A2A` | Tab hover and press |
@@ -64,13 +66,13 @@ What floats. Every glass surface is three layers:
 | Layer | Value | Notes |
 | --- | --- | --- |
 | Backdrop | The blur of whatever is behind it | 6 half-resolution levels deep: no shape survives, only colour fields. Saturation ×0.85; highlights capped at encoded luminance 0.52 |
-| `GlassTint` | `#000000` @ 0.25 | Over the backdrop |
+| `OverlayTint` | `#000000` @ 0.80 (`GlassChromeAlpha`) | Over the backdrop: the chrome's tint |
 | `GlassEdge` | `#FFFFFF` @ 0.15 | 1 px border |
-| `GlassRadius` | 14 px | Corners of floating surfaces. Docked panels are square |
+| `GlassWindowRounding` / `GlassPopupRounding` | 10 / 8 px | Corners of floating windows / popups. Docked panels are square |
 | `GlassFallback` | `#141414` | Opaque stand-in where there is no blur (*Frosted blur* off, a shader failure, a window dragged out to its own OS window) |
 
 The highlight cap keeps white text legible on glass over anything: the brightest a backdrop can
-be is 0.52, and under the tint that is `#636363`, which still gives `TextPrimary` 4.5:1.
+be is 0.52, and under the 80% tint that is about `#1B1B1B`, far past `TextPrimary`'s 4.5:1.
 
 Washes drawn on a surface are plain white at low alpha, so they lighten black and glass alike:
 
@@ -126,11 +128,11 @@ Space(k) = k · U · uiScale        k ∈ {0, 0.5, 1, 1.5, 2, 3, 4}
 Nothing is ever 3, 5, 6 or 10 px. Every length goes through `Glass::Px()` or `ScaleAllSizes`, so the
 law holds at every UI scale.
 
-**Radii.** 14 px on floating surfaces, smaller and nested inside them:
+**Radii.** 10 px on floating windows (`GlassWindowRounding`), 8 px on popups and menus
+(`GlassPopupRounding`), smaller and nested inside them:
 
 | Token | px | Applies to |
 | --- | --- | --- |
-| `RadiusWindow` (`GlassRadius`) | 14 | Floating windows, popups, menus, tooltips, HUDs |
 | `RadiusCard` | 10 | Child windows, Inspector cards, asset tiles |
 | `RadiusControl` | 8 | Frames, buttons, tabs, scrollbars |
 | `RadiusGrab` | 8 | Slider grabs |
@@ -396,7 +398,7 @@ for each draw list (back to front):
     render everything queued so far          → the framebuffer holds exactly what is behind it
     if anything drawn since the last capture overlaps this surface:
       copy the framebuffer, blur it          → GlassBackdrop
-    draw the plate: soft shadow, the blur under the window's rect and rounding, the 25% tint
+    draw the plate: the blur under the window's rect and rounding, the 80% tint
   queue the draw list
 render the rest
 ```
@@ -605,8 +607,7 @@ The test restores every preference it touched.
   search filter.
 * **Blur cost.** The blur re-runs every frame while glass shows. It doesn't yet skip frames where
   nothing behind it changed.
-* **No desktop see-through.** Glass blurs the editor's own frame, not the Windows desktop. (Windows
-  11 acrylic behind the whole GLFW window is possible, but would make the editor stop being solid
-  black, so it isn't done.)
+* **See-through is not blurred.** With *See-through window* on, the desktop shows through the
+  panels' tint as-is; glass only blurs the editor's own frame.
 * **Closing has no motion.** ImGui stops drawing a window the frame it closes, so surfaces arrive
   with motion but leave at once.

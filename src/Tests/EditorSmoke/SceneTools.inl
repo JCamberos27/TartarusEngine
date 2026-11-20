@@ -39,14 +39,6 @@ struct EditorSmokeAccess_SceneTools {
     static int Shading(EditorLayer& e) { return (int)e.m_ShadingMode; }
     static bool Gliding(EditorLayer& e) { return e.m_ViewTransition.Active; }
     static bool GizmoEngaged(EditorLayer& e) { return e.m_GizmoEngaged; }
-    static bool ArrayDupShown(EditorLayer& e) { return e.m_ShowArrayDuplicate; }
-    static void SetArrayDup(EditorLayer& e, int nx, int ny, int nz, glm::vec3 step) {
-        e.m_ArrayDupCount[0] = nx; e.m_ArrayDupCount[1] = ny; e.m_ArrayDupCount[2] = nz;
-        e.m_ArrayDupStep[0] = step.x; e.m_ArrayDupStep[1] = step.y; e.m_ArrayDupStep[2] = step.z;
-    }
-    static bool& ShowHistory(EditorLayer& e) { return e.m_ShowHistory; }
-    static bool& ShowAssets(EditorLayer& e) { return e.m_ShowAssetBrowser; }
-    static size_t RedoDepth(EditorLayer& e) { return e.m_RedoStack.size(); }
     static unsigned ExternalSyncs(EditorLayer& e) { return e.m_ExternalSyncs; }
     static void ClearUndo(EditorLayer& e) { e.ClearUndoHistory(); }
     // The History panel's rows as DrawHistoryListBody draws them: the undo stack oldest first
@@ -140,8 +132,8 @@ Steps Tidy() {
         CloseMenus(),
         Do("tools back to their defaults, panels back", [](Ctx& c) {
             ST::Defaults(c.E);
-            ST::ShowAssets(c.E) = true;
-            ST::ShowHistory(c.E) = false;
+            X::ShowAssets(c.E) = true;
+            X::ShowHistory(c.E) = false;
         }),
         ChromeUi::ResetCamera(), Wait(3),
     };
@@ -500,13 +492,13 @@ void RegisterSceneToolsTests() {
         {Do("nothing selected", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
          Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Duplicate Array")) != nullptr; }),
              Click(MenuItem("Duplicate Array")), Wait(3),
-         ExpectTrue("with nothing selected the dialog does not open", [](Ctx& c) { return !ST::ArrayDupShown(c.E); }),
+         ExpectTrue("with nothing selected the dialog does not open", [](Ctx& c) { return !X::ArrayDupShown(c.E); }),
          SelectByName("Gamma"), Wait(2),
          Do("note the scene", [](Ctx& c) { g_Text = SceneSerializer::SaveToString(c.W, c.A); }),
          Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Duplicate Array")) != nullptr; }),
              Click(MenuItem("Duplicate Array")),
          Until("the dialog", [](Ctx&) { return Find(ByExact("Create", "##ArrayDup")) != nullptr; }),
-         Do("3 x 1 x 2 cells, 2 m apart in X and 1.5 m in Z", [](Ctx& c) { ST::SetArrayDup(c.E, 3, 1, 2, glm::vec3(2.0f, 0.0f, 1.5f)); }),
+         Do("3 x 1 x 2 cells, 2 m apart in X and 1.5 m in Z", [](Ctx& c) { X::SetArrayDup(c.E, 3, 1, 2, glm::vec3(2.0f, 0.0f, 1.5f)); }),
          Wait(2),
          Shot("dialog"),
          Click(ByExact("Create", "##ArrayDup")), Wait(3),
@@ -532,7 +524,7 @@ void RegisterSceneToolsTests() {
              for (const auto& x : want) w += x;
              return g == w ? std::string() : "Gammas at " + g + ", expected " + w;
          }),
-         ExpectTrue("dialog closed", [](Ctx& c) { return !ST::ArrayDupShown(c.E); }),
+         ExpectTrue("dialog closed", [](Ctx& c) { return !X::ArrayDupShown(c.E); }),
          Shot("grid", {kScene}),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
          Expect("one undo removes every copy", [](Ctx& c) {
@@ -927,7 +919,7 @@ void RegisterSceneToolsTests() {
                  X::PushUndo(c.E, c.W, "Dim Gamma");
                  c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity = 0.25f;
              }), Wait(3), Record("dimming Gamma"),
-             Do("Duplicate Array 3 x 1 x 1", [](Ctx& c) { ST::SetArrayDup(c.E, 3, 1, 1, glm::vec3(0.0f, 0.0f, 2.0f)); }),
+             Do("Duplicate Array 3 x 1 x 1", [](Ctx& c) { X::SetArrayDup(c.E, 3, 1, 1, glm::vec3(0.0f, 0.0f, 2.0f)); }),
              Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Duplicate Array")) != nullptr; }),
              Click(MenuItem("Duplicate Array")),
              Click(ByExact("Create", "##ArrayDup")), Wait(3), Record("Duplicate Array"),
@@ -954,7 +946,7 @@ void RegisterSceneToolsTests() {
         });
         s.push_back(Walk(true, 0, checked));
         s.push_back(Expect("back at the start", [](Ctx& c) {
-            return X::UndoDepth(c.E) == 0 && ST::RedoDepth(c.E) > 0 ? MatchesRecord(c) : "depth " + std::to_string(X::UndoDepth(c.E));
+            return X::UndoDepth(c.E) == 0 && X::RedoDepth(c.E) > 0 ? MatchesRecord(c) : "depth " + std::to_string(X::UndoDepth(c.E));
         }));
         // The top depth is only known once the chain ran: build the redo Walk then.
         auto redo = std::make_shared<Step>();
@@ -966,7 +958,7 @@ void RegisterSceneToolsTests() {
         }, 6000});
         for (const Step& st : Steps{
                  Expect("at the top again, nothing left to redo", [](Ctx& c) {
-                     return X::UndoDepth(c.E) == g_TopDepth && ST::RedoDepth(c.E) == 0 ? MatchesRecord(c) : "depth " + std::to_string(X::UndoDepth(c.E));
+                     return X::UndoDepth(c.E) == g_TopDepth && X::RedoDepth(c.E) == 0 ? MatchesRecord(c) : "depth " + std::to_string(X::UndoDepth(c.E));
                  }),
                  Expect("every recorded depth was checked twice", [checked](Ctx&) {
                      int recorded = 0;
@@ -977,12 +969,12 @@ void RegisterSceneToolsTests() {
                  // Undo three, then a new edit: the redo branch is gone and Ctrl+Y does nothing.
                  HoverPanel(kScene),
                  Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
-                 Expect("three undone", [](Ctx& c) { return ST::RedoDepth(c.E) == 3 ? MatchesRecord(c) : "redo depth " + std::to_string(ST::RedoDepth(c.E)); }),
+                 Expect("three undone", [](Ctx& c) { return X::RedoDepth(c.E) == 3 ? MatchesRecord(c) : "redo depth " + std::to_string(X::RedoDepth(c.E)); }),
                  Do("a new edit", [](Ctx& c) {
                      X::PushUndo(c.E, c.W, "Rename Beta");
                      c.W.Registry.get<NameComponent>(ByName(c.W, "Beta")).Name = "Beta Branched";
                  }), Wait(3),
-                 ExpectTrue("the redo stack is cleared", [](Ctx& c) { return ST::RedoDepth(c.E) == 0; }),
+                 ExpectTrue("the redo stack is cleared", [](Ctx& c) { return X::RedoDepth(c.E) == 0; }),
                  Do("note the scene", [](Ctx& c) { g_Text = SceneSerializer::SaveToString(c.W, c.A); }),
                  Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
                  Expect("Ctrl+Y does nothing now", [](Ctx& c) {
@@ -1038,7 +1030,7 @@ void RegisterSceneToolsTests() {
              Do("dim Gamma", [](Ctx& c) { X::PushUndo(c.E, c.W, "Dim Gamma"); c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity = 0.5f; }),
              Wait(3), Record("dimming Gamma"),
              HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
-             ExpectTrue("two steps to redo", [](Ctx& c) { return ST::RedoDepth(c.E) == 2; }),
+             ExpectTrue("two steps to redo", [](Ctx& c) { return X::RedoDepth(c.E) == 2; }),
              HoverPanel(kScene), Key(ImGuiKey_H, ImGuiMod_Ctrl | ImGuiMod_Shift),
              ChromeUi::UntilShown(EditorPanels::History),
              ChromeUi::BringToFront(EditorPanels::History), Wait(3),
@@ -1058,11 +1050,11 @@ void RegisterSceneToolsTests() {
              Shot("history-at-start", {"###History"}),
              Click(historyRow("Dim Gamma")), Wait(3),
              Expect("clicking the last redo row replays everything", [](Ctx& c) {
-                 return ST::RedoDepth(c.E) == 0 && X::UndoDepth(c.E) == g_TopDepth ? MatchesRecord(c) : "depth " + std::to_string(X::UndoDepth(c.E));
+                 return X::RedoDepth(c.E) == 0 && X::UndoDepth(c.E) == g_TopDepth ? MatchesRecord(c) : "depth " + std::to_string(X::UndoDepth(c.E));
              }),
              Expect("rows follow: nothing to redo", rowsMatch),
              HoverPanel(kScene), Key(ImGuiKey_H, ImGuiMod_Ctrl | ImGuiMod_Shift), Wait(3),
-             ExpectTrue("Ctrl+Shift+H hides it again", [](Ctx& c) { return !ST::ShowHistory(c.E); })},
+             ExpectTrue("Ctrl+Shift+H hides it again", [](Ctx& c) { return !X::ShowHistory(c.E); })},
             Tidy(),
         });
         Add("scenetools: the History panel lists the undo stack and jumps to a clicked step", s);

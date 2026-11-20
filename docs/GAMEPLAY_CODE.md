@@ -23,7 +23,7 @@ with no engine state of their own. That keeps them easy to unit test
 ## Components
 
 Components are plain structs in `src/Game/Components.h`, registered once in
-`src/Game/ComponentRegistry.cpp` with `ReflectComponent`. Registration gives the component its
+the matching `src/Game/ComponentRegistry*.cpp` file (Audio, Character, Gameplay, Physics, Scene) with `ReflectComponent`. Registration gives the component its
 scene/prefab JSON, its Inspector (groups, bounds, tooltips, enums, asset pickers), Add Component
 menu entry, copy/paste and undo. The JSON key is the display name; enums are written as their
 label. Fields left out of the registration are runtime scratch and never saved.
@@ -81,7 +81,7 @@ files; a development build keeps it.
 ## Adding a gameplay component
 
 1. Add the struct to `Components.h`.
-2. Register its fields in `ComponentRegistry.cpp`.
+2. Register its fields in the matching `ComponentRegistry*.cpp`.
 3. Write its system and call it from `GameModule.cpp` (reloadable) or the host's update.
 4. Add a unit test in `UnitTests_Gameplay.cpp`.
 

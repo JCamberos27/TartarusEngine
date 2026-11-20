@@ -1,7 +1,7 @@
 # Weapon sway
 
 Weapon definitions store the supplied KINEMATION `SwayModifierSettings.cs` settings under
-`procedural.sway`. Edit them in the weapon Inspector's **Movement / Sway** section. They are
+`procedural.sway`. Edit them in the weapon Inspector's **Movement** section (the **Aiming Sway** and **Movement Sway** groups). They are
 part of the `.fpsanim`, with its normal save, undo and Play hot reload; no separate asset is needed.
 
 The new job ports `SwayModifierJob.cs` and its dependency `KSpringMath.FloatSpringInterp`.
@@ -54,7 +54,7 @@ skips just its channel rather than reproducing Unity's invalid-handle error. Dis
 does not layer the old solver on top. Equip/weapon changes reset independent spring state.
 
 AKS-74U and Remington870 now use the source presets. Older embedded definitions can still
-load their legacy sway; **Use Unity Sway** replaces it with these presets. Their old look-rate
+load their legacy sway; **Use Shooter Preset** (in each sway group) replaces it with these presets. Their old look-rate
 limits, free-aim zone and velocity-based fields do not appear in the new modifier. The
 Animator's ADS Walking layer remains independent of additive-bone curve animation.
 

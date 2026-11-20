@@ -199,7 +199,7 @@ If a hover key acted in a frame, the Hierarchy's type-to-select ignores that key
 Right-click a folder (in the tree, or a folder tile in the grid under **Folder Style & Bookmark**):
 
 * **Folder colour**: a palette swatch or a custom colour. It tints the folder's icon, and the
-  whole tree row too if **Colour the whole row** is on in Settings.
+  whole tree row too if **Colour the row** is on in Settings.
 * **Folder icon**: any Font Awesome icon.
 * **Clear Folder Style**.
 * **Style every folder named "X"**: turns this folder's style into a folder rule (see below).
@@ -433,7 +433,7 @@ History panel. Preferences > Editor Enhancers > Tabs turns each strip off.
 
 Code: `Enhancers::TabStrip` / `TabState` (`src/Editor/Enhancers/TabState.h`, unit tested) and
 `EditorLayer::DrawTabStrip` (`EditorLayer_Enhancers.cpp`). The Asset Browser strip is drawn
-through the existing `DrawFolderNavBar` callback, so the module API version is unchanged (40).
+through the existing `DrawFolderNavBar` callback, so the module API version did not change for it.
 
 ## Tab & header colours
 
@@ -553,6 +553,8 @@ editor: a hidden 1920x1080 window, an in-memory scene (Alpha, Beta, Gamma) rebui
 a scratch user folder (`%LOCALAPPDATA%\TartarusEngine-Test`, wiped each run) so your own prefs,
 bookmarks and tabs are never touched. The optional filter runs only tests whose name contains it
 (case-insensitive), e.g. `--editor-tests tabs`. The exit code is 0 when everything passed.
+`TARTARUS_EDITOR_TEST_INSTANCE` gives a run its own scratch folder and `TARTARUS_SHOW=1` shows the
+window; the full list of test variables is in `src/Tests/EditorSmoke/README.md`.
 
 ```
 build\Release\TartarusEngine.exe --editor-tests

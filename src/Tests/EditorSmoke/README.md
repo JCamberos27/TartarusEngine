@@ -34,6 +34,21 @@ window (`"###Inspector"`, `"###Hierarchy"`, `"###Assets"`, `"###Scene"`, `"##Too
 menu bar). Menu labels carry an icon prefix (`ICON_FA_FLOPPY_DISK "  Save"`), so match with
 `ByLabel` / `MenuItem` on the words.
 
+## Environment variables
+
+All are listed in `src/Core/Env.h`.
+
+| Variable | What it does |
+|---|---|
+| `TARTARUS_SHOW=1` | Show the window (runs are hidden by default); `TARTARUS_EDITOR_TEST_SHOW` is the old name |
+| `TARTARUS_EDITOR_TEST_INSTANCE=<name>` | Own scratch user folder (`TartarusEngine-Test-<name>`), so parallel runs don't share prefs |
+| `TARTARUS_EDITOR_TEST_SIZE=WxH`, `TARTARUS_EDITOR_TEST_SCALE=<f>` | Window size and UI scale |
+| `TARTARUS_EDITOR_TEST_SHARD=i/n` | Run shard i of n (CI uses two) |
+| `TARTARUS_EDITOR_TEST_EXCLUDE=a,b` | Comma-separated name parts to skip (case-insensitive) |
+| `TARTARUS_EDITOR_TEST_DEADLINE=<min>` | Watchdog deadline; past it the run aborts for a crash dump |
+| `TARTARUS_EDITOR_TEST_SHOTS=<dir>` | Folder for the screenshots and report |
+| `TARTARUS_EDITOR_TEST_DUMP=<window>` | On a failure, dump that window's widgets |
+
 Every frame of every test is also checked by the health monitor: a new error in the editor log, a
 GL debug error, an ImGui recoverable error, conflicting widget ids, or a NaN transform fails the
 test. Warnings are listed in the report.

@@ -1,5 +1,8 @@
 # UE5 Manny Mocap Export: Findings for the Motion Matching Locomotion Overhaul
 
+> Historical (2026-11-17). The open questions below were settled by the shipped bake; the current
+> design is in [MOTION_MATCHING.md](MOTION_MATCHING.md).
+
 Written 2026-11-17 by the "UE5 Manny export" session. Everything below was verified unless marked **UNVERIFIED**.
 
 ## 1. What we have

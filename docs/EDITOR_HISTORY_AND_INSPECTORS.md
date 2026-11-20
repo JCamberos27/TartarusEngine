@@ -15,7 +15,7 @@ Select a `.recoil` asset to tune its scalar settings and view read-only X/Y/Z cu
 ## Gameplay Inspectors
 
 First Person Body, First Person Controller, Weapon Definition and the other gameplay components
-draw from their reflected fields in `src/Game/ComponentRegistry.cpp`. Field groups become the
+draw from their reflected fields in `src/Game/ComponentRegistry*.cpp`. Field groups become the
 Inspector's sections, and every field keeps its asset picker, bounds, tooltip and conditional
 visibility. Scenes saved while these were C# scripts convert to the native components on read.
 See [Gameplay code](GAMEPLAY_CODE.md) for adding a component.

@@ -24,11 +24,8 @@ struct EditorSmokeAccess_Menus {
     static bool& FrameOnSelect(EditorLayer& e) { return e.m_FrameOnSelect; }
     static bool& ShowHierarchy(EditorLayer& e) { return e.m_ShowHierarchy; }
     static bool& ShowInspector(EditorLayer& e) { return e.m_ShowInspector; }
-    static bool& ShowAssets(EditorLayer& e) { return e.m_ShowAssetBrowser; }
-    static bool& ShowAnimator(EditorLayer& e) { return e.m_ShowAnimator; }
     static bool& ShowLighting(EditorLayer& e) { return e.m_ShowLighting; }
     static bool& ShowAudio(EditorLayer& e) { return e.m_ShowAudioDebug; }
-    static bool& ShowHistory(EditorLayer& e) { return e.m_ShowHistory; }
     static void RequestMaximizeToggle(EditorLayer& e) { e.m_MaximizeToggleRequested = true; }
     static bool& ShowSettings(EditorLayer& e) { return e.m_ShowPreferences; }
     static bool& SettingsIsProject(EditorLayer& e) { return e.m_SettingsGroupIsProject; }
@@ -39,8 +36,6 @@ struct EditorSmokeAccess_Menus {
     static std::string& ShortcutFilter(EditorLayer& e) { return e.m_PrefsShortcutFilter; }
     static std::string& CapturingShortcut(EditorLayer& e) { return e.m_PrefsCapturingId; }
     static bool GameOpen(EditorLayer& e) { return e.m_GameViewOpenCached; }
-    static bool Dirty(EditorLayer& e) { return e.m_Dirty; }
-    static size_t RedoDepth(EditorLayer& e) { return e.m_RedoStack.size(); }
     static bool HandTool(EditorLayer& e) { return e.m_HandTool; }
     static bool LayoutPending(EditorLayer& e) { return e.m_ResetLayoutRequested || !e.m_PendingLayoutIni.empty(); }
     static bool& ShowSaveLayout(EditorLayer& e) { return e.m_ShowSaveLayout; }
@@ -233,20 +228,20 @@ void RegisterMenusTests() {
          Do("mark the scene edited", [](Ctx& c) { X::PushUndo(c.E, c.W, "Edit"); c.W.Registry.get<NameComponent>(ByName(c.W, "Gamma")).Name = "Gamma Saved"; }),
          Wait(3)},
         MenuClick("File", "New Scene", MenuExact(ICON_FA_FLOPPY_DISK "  Save")),
-        {Until("saved", [](Ctx& c) { return std::filesystem::exists(g_ScratchScene) && !A::Dirty(c.E); }),
+        {Until("saved", [](Ctx& c) { return std::filesystem::exists(g_ScratchScene) && !X::Dirty(c.E); }),
          Expect("the file holds the scene", [](Ctx&) {
              const std::string s = ReadFileText(g_ScratchScene);
              return Contains(s, "Gamma Saved") && Contains(s, "Alpha") ? std::string() : std::string("Gamma Saved / Alpha not in the file");
          })},
         {Do("edit after the save", [](Ctx& c) { X::PushUndo(c.E, c.W, "Rename"); c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Alpha Unsaved"; }),
-         Until("dirty", [](Ctx& c) { return A::Dirty(c.E); })},
+         Until("dirty", [](Ctx& c) { return X::Dirty(c.E); })},
         MenuClick("File", "New Scene", "Revert Scene"),
         {Until("the revert prompt", [](Ctx& c) { return A::RevertPrompt(c.E); }),
          Shot("revert-prompt", {"Revert Scene?"}),
          Click(ByExact("Revert", "Revert Scene?")),
          Until("reloaded from disk", [](Ctx& c) { return ByName(c.W, "Alpha") != entt::null && ByName(c.W, "Alpha Unsaved") == entt::null; }),
          ExpectTrue("the saved edit is back", [](Ctx& c) { return ByName(c.W, "Gamma Saved") != entt::null; }),
-         ExpectTrue("not dirty after the reload", [](Ctx& c) { return !A::Dirty(c.E); })},
+         ExpectTrue("not dirty after the reload", [](Ctx& c) { return !X::Dirty(c.E); })},
     }));
 
     Add("menus: File > New Scene starts an empty scene file", Cat({
@@ -259,7 +254,7 @@ void RegisterMenusTests() {
              if (!std::filesystem::exists(p)) return "no file at " + p;
              return EntityCount(c.W) == 0 ? std::string() : std::to_string(EntityCount(c.W)) + " objects in the new scene";
          }),
-         ExpectTrue("not dirty", [](Ctx& c) { return !A::Dirty(c.E); }),
+         ExpectTrue("not dirty", [](Ctx& c) { return !X::Dirty(c.E); }),
          Shot("new-scene", {"###Hierarchy", "###Scene"}),
          Do("note the file", [](Ctx& c) { g_Text = X::ScenePath(c.E); }),
          FreshScene(), Wait(10)},
@@ -479,7 +474,7 @@ void RegisterMenusTests() {
         static const Core kCore[] = {
             {"Hierarchy", EditorPanels::Hierarchy, &A::ShowHierarchy},
             {"Inspector", EditorPanels::Inspector, &A::ShowInspector},
-            {"Assets", EditorPanels::Assets, &A::ShowAssets},
+            {"Assets", EditorPanels::Assets, &X::ShowAssets},
         };
         Steps s = {FreshScene(), Wait(2)};
         for (const Core& k : kCore) {

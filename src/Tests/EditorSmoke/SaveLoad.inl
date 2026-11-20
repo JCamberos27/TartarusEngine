@@ -10,7 +10,6 @@
 
 } // namespace
 struct EditorSmokeAccess_SaveLoad {
-    static bool Dirty(EditorLayer& e) { return e.m_Dirty; }
     static std::string Title(EditorLayer& e) { return e.SceneTitle(); }
     static bool SwitchPrompt(EditorLayer& e) { return e.m_ScenePromptPending; }
     static void Open(EditorLayer& e, World& w, AssetLibrary& a, const std::string& path) { e.RequestOpenScene(w, a, path); }
@@ -73,10 +72,10 @@ void RegisterSaveLoadTests() {
             c.W.Registry.get<TransformComponent>(ByName(c.W, "Alpha")).Position = glm::vec3(1.25f, -2.5f, 7.0f);
             c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).Intensity = 0.125f;
         }), Wait(3),
-        ExpectTrue("dirty after the edits", [](Ctx& c) { return SL::Dirty(c.E); }),
+        ExpectTrue("dirty after the edits", [](Ctx& c) { return X::Dirty(c.E); }),
         HoverPanel(kScene), Wait(2),
         Key(ImGuiKey_S, ImGuiMod_Ctrl),
-        Until("saved (clean, file written)", [](Ctx& c) { return !SL::Dirty(c.E) && fs::exists(g_ScratchScene); }),
+        Until("saved (clean, file written)", [](Ctx& c) { return !X::Dirty(c.E) && fs::exists(g_ScratchScene); }),
         Expect("the file holds the edits", [](Ctx&) {
             const std::string s = ReadFileText(g_ScratchScene);
             return Contains(s, "Gamma Saved") && Contains(s, "Alpha") ? std::string() : std::string("Gamma Saved / Alpha not in the file");
@@ -94,7 +93,7 @@ void RegisterSaveLoadTests() {
             const std::string now = SceneSerializer::SaveToString(c.W, c.A);
             return now == g_Dump ? std::string() : FirstDifference(g_Dump, now);
         }),
-        ExpectTrue("clean after the open", [](Ctx& c) { return !SL::Dirty(c.E); }),
+        ExpectTrue("clean after the open", [](Ctx& c) { return !X::Dirty(c.E); }),
         Expect("no undo history after the open", [](Ctx& c) {
             return X::UndoDepth(c.E) == 0 ? std::string() : "history: " + EditorSmokeAccess_PlayMode::UndoLabels(c.E);
         }),
@@ -103,20 +102,20 @@ void RegisterSaveLoadTests() {
     Add("saveload: undo back to the saved state clears the dirty flag; redo sets it again", {
         FreshScene(),
         Do("save first", [](Ctx& c) { c.E.SaveScene(c.W, c.A); }), Wait(3),
-        ExpectTrue("clean after the save", [](Ctx& c) { return !SL::Dirty(c.E); }),
+        ExpectTrue("clean after the save", [](Ctx& c) { return !X::Dirty(c.E); }),
         Rename("Alpha", "Alpha 2"), Wait(3),
-        ExpectTrue("dirty after an edit", [](Ctx& c) { return SL::Dirty(c.E); }),
+        ExpectTrue("dirty after an edit", [](Ctx& c) { return X::Dirty(c.E); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         Expect("clean again after undoing it", [](Ctx& c) {
             if (ByName(c.W, "Alpha") == entt::null) return std::string("undo did not run");
-            return SL::Dirty(c.E) ? std::string("still dirty at the saved state") : std::string();
+            return X::Dirty(c.E) ? std::string("still dirty at the saved state") : std::string();
         }),
         Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
-        ExpectTrue("dirty after redo", [](Ctx& c) { return ByName(c.W, "Alpha 2") != entt::null && SL::Dirty(c.E); }),
+        ExpectTrue("dirty after redo", [](Ctx& c) { return ByName(c.W, "Alpha 2") != entt::null && X::Dirty(c.E); }),
         SelectByName("Beta"), Wait(3),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3), // undoes the selection
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3), // undoes the rename
-        ExpectTrue("a selection step never dirties", [](Ctx& c) { return ByName(c.W, "Alpha") != entt::null && !SL::Dirty(c.E); }),
+        ExpectTrue("a selection step never dirties", [](Ctx& c) { return ByName(c.W, "Alpha") != entt::null && !X::Dirty(c.E); }),
     });
 
     Add("saveload: Ctrl+N over unsaved changes asks; Cancel keeps the scene, Don't Save switches", {
@@ -131,7 +130,7 @@ void RegisterSaveLoadTests() {
         Click(ByExact("Cancel", kPrompt)),
         Until("prompt closed", [](Ctx& c) { return !SL::SwitchPrompt(c.E); }), Wait(3),
         ExpectTrue("still the same scene, still dirty, the edit kept", [](Ctx& c) {
-            return X::ScenePath(c.E) == g_ScratchScene && SL::Dirty(c.E) && ByName(c.W, "Gamma Unsaved") != entt::null;
+            return X::ScenePath(c.E) == g_ScratchScene && X::Dirty(c.E) && ByName(c.W, "Gamma Unsaved") != entt::null;
         }),
         Key(ImGuiKey_N, ImGuiMod_Ctrl),
         Until("the prompt again", [](Ctx&) { return Find(ByExact("Don't Save", kPrompt)) != nullptr; }),
@@ -141,7 +140,7 @@ void RegisterSaveLoadTests() {
         Expect("an empty, clean Untitled scene", [](Ctx& c) {
             if (!Contains(fs::path(g_Path).filename().string(), "Untitled")) return "path is " + g_Path;
             if (SL::Title(c.E).rfind("Untitled", 0) != 0) return "title is " + SL::Title(c.E);
-            if (SL::Dirty(c.E)) return std::string("dirty");
+            if (X::Dirty(c.E)) return std::string("dirty");
             return c.W.Registry.view<NameComponent>().empty() ? std::string() : std::string("objects in the new scene");
         }),
         Expect("the discarded edit never reached the scratch file", [](Ctx&) {
@@ -175,9 +174,7 @@ void RegisterSaveLoadTests() {
     {
         std::vector<Step> steps = {
             FreshScene(), Wait(2),
-            Do("allow errors naming the external files missing here", [](Ctx&) {
-                for (const std::string& name : smoke_scenes::MissingExternalFiles()) g_AllowLog.push_back(name);
-            }),
+            smoke_scenes::AllowMissingExternal(),
         };
         const auto scenes = ProjectScenes();
         if (scenes.empty()) steps.push_back(Expect("project scenes", [](Ctx&) { return std::string("no scenes found"); }));

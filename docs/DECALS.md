@@ -20,11 +20,13 @@ views; previews have no froxels and get no decals), `RenderScene`:
    and uploaded: 128-byte `GpuDecal`s to SSBO 11, world-space boxes to SSBO 12;
 2. dispatches `ClusterDecalCull.comp.glsl` from `ClusterGrid::Cull`, right after the light cull and
    over the same froxel AABBs. Per cluster it rejects on the box's view-space AABB, then on the
-   box's own three axes (a conservative 6-axis SAT), counts, reserves one block of the shared index
-   list (SSBO 14, 131072 entries behind a {cursor, overflow} header) with one `atomicAdd`, and
-   writes. Past 256 hits a cluster keeps the top-most (the end of the sort order). Ranges go to
-   SSBO 13. `ClusterGrid::DecalOverflow()` reports the cap (bit 1) or a full list (bit 2), a cull or
-   two late. The view-model sub-pass re-runs the cull for its own projection, decals included;
+   box's own three axes (a conservative 6-axis SAT). It runs as two passes of one program: pass 0
+   moves each box into view space once, pass 1 gives each cluster a workgroup that marks its hits in
+   a shared bitmask and writes them, in sort order, into the cluster's own fixed block of the index
+   list (SSBO 14, `Decals::MAX_PER_CLUSTER` = 256 entries per cluster, so the list can't fill).
+   Past 256 hits a cluster keeps the top-most (the end of the sort order). Ranges go to SSBO 13.
+   `ClusterGrid::DecalOverflow()` reports a clamped cluster (bit 1), read back a cull or two late
+   without a stall. The view-model sub-pass re-runs the cull for its own projection, decals included;
 3. binds SSBO 11 and the arrays on units 22-25 in `ApplyFrameState`, and again right after the
    blood decals draw (they and the FX sprites put their own arrays on 22-24).
 
@@ -79,8 +81,8 @@ pages, 11 mips (down to one BC block).
   first, then the smallest larger one is split, then a new layer opens; four free siblings merge.
   Atlas frames are folded into `GpuDecal::Rect`, with `maxLod` stopping where a frame is still 4
   texels across.
-- **Decode.** Each map goes through `Texture::DecodeFile` on a worker (`std::async`, three at
-  once) with `TextureImportSettings::ForceFormat`, which resamples to the slot size and encodes
+- **Decode.** Each map goes through `Texture::DecodeFile` on one of the arrays' persistent
+  worker threads (a few decodes in flight at once) with `TextureImportSettings::ForceFormat`, which resamples to the slot size and encodes
   exactly the array's BCn format, BC3 keeping its alpha block. The result is cached in
   `Library/Textures` like every other texture, so a decal decodes once per machine. Uploads happen
   on the main thread at the next `Prepare`; a decal draws from the frame after.
@@ -301,7 +303,7 @@ pass (a depth-reconstructing box draw with its own atlases on units 28/29 and SS
   - the Knife library entries (read back from their GL arrays);
   - the procedural bullet hole.
 
-  The pure image makers are in `DecalBake`. Bump `kMapsVersion` in `BloodRenderer.cpp` when they change.
+  The pure image makers are in `DecalBake` (`GeneratedDecalMaps.h`). Bump `kMapsVersion` in `BloodRenderer.cpp` when they change.
 - **Response.** It comes from `assets/Decals/Runtime/DA_Blood.decal` and `DA_BulletHole.decal`
   (channels, fades, roughness):
   - Blood's **Cutout** is the aux reveal order cut by a threshold (`FLAG_REVEAL`, the peel term's

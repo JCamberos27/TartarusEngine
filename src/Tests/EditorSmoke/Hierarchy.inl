@@ -15,11 +15,6 @@ struct EditorSmokeAccess_Hierarchy {
     static entt::entity Renaming(EditorLayer& e) { return e.m_RenamingEntity; }
     static bool ClipboardEmpty(EditorLayer& e) { return e.m_Clipboard.empty(); }
     static entt::entity DefaultParent(EditorLayer& e, World& w) { return e.ResolveDefaultParent(w); }
-    static bool ArrayDupShown(EditorLayer& e) { return e.m_ShowArrayDuplicate; }
-    static void ResetArrayDup(EditorLayer& e) {
-        e.m_ArrayDupCount[0] = 3; e.m_ArrayDupCount[1] = 1; e.m_ArrayDupCount[2] = 1;
-        e.m_ArrayDupStep[0] = 2.0f; e.m_ArrayDupStep[1] = 0.0f; e.m_ArrayDupStep[2] = 0.0f;
-    }
     static void ClearFilter(EditorLayer& e) { e.m_HierarchyFilter.clear(); }
     static const std::string& Filter(EditorLayer& e) { return e.m_HierarchyFilter; }
     // Set-up edits made in code skip PushUndo; drop the cached undo baseline so the next real
@@ -380,17 +375,17 @@ void RegisterHierarchyTests() {
     });
     Add("hierarchy: Duplicate Array dialog makes copies, undo removes them", {
         FreshScene(), HierFresh(), Wait(2),
-        Do("default counts", [](Ctx& c) { HX::ResetArrayDup(c.E); }),
+        Do("default counts", [](Ctx& c) { X::SetArrayDup(c.E, 3, 1, 1, glm::vec3(2.0f, 0.0f, 0.0f)); }),
         HierRemember(),
         RightClick(ByTag("row:Alpha")), Wait(2),
         Click(HierMenu(ICON_FA_TABLE_CELLS "  Duplicate Array\xE2\x80\xA6")), Wait(3),
-        ExpectTrue("dialog open", [](Ctx& c) { return HX::ArrayDupShown(c.E); }),
+        ExpectTrue("dialog open", [](Ctx& c) { return X::ArrayDupShown(c.E); }),
         Shot("dialog"),
         Click(ByExact("Create", "##ArrayDup")), Wait(3),
         ExpectTrue("two copies (3 x 1 x 1)", [](Ctx& c) {
             return ByName(c.W, "Alpha (1)") != entt::null && ByName(c.W, "Alpha (2)") != entt::null && HierCount(c.W) == 5;
         }),
-        ExpectTrue("dialog closed", [](Ctx& c) { return !HX::ArrayDupShown(c.E); }),
+        ExpectTrue("dialog closed", [](Ctx& c) { return !X::ArrayDupShown(c.E); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         HierExpectRestored("undo restores the tree"),
     });
