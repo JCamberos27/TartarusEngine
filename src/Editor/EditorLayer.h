@@ -183,7 +183,8 @@ public:
     // `path` was last left; with no saved pose: behind the Player Spawn, else in front of a First
     // Person Body, else pulled back to fit the scene. Snaps (no glide). RememberSceneCamera stores
     // `cam` for `path`. Both do nothing saved/restored while SetDeterministicSceneCamera is on
-    // (smoke / screenshot runs always take the fallback chain).
+    // (smoke / screenshot runs always take the fallback chain). It also keeps the real OS cursor
+    // out of the hover pre-highlight (UpdateHoverPick).
     bool PlaceSceneCamera(World& world, Camera& cam, const std::string& path);
     void RememberSceneCamera(const std::string& path, const Camera& cam);
     void SetDeterministicSceneCamera(bool on) { m_DeterministicSceneCamera = on; }

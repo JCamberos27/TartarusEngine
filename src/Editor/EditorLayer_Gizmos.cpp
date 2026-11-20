@@ -29,6 +29,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "Core/Paths.h"
+#include "Core/Env.h"
 #include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
@@ -3569,6 +3570,18 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
 // main.cpp draws. Reuses the click pick's exact-triangle raycast; runs only when the cursor moved
 // (at most one raycast per frame) and stands down whenever the mouse belongs to something else.
 void EditorLayer::UpdateHoverPick(World& world, Camera& editorCamera) {
+    // Test and bench runs: the real OS cursor must not pick (it sits wherever the user left it, so
+    // the outline pass came and went run to run). TARTARUS_HOVER_ENTITY names a fixed entity instead.
+    if (m_DeterministicSceneCamera) {
+        if (m_HoverEntity != entt::null && world.Registry.valid(m_HoverEntity)) return;
+        m_HoverEntity = entt::null;
+        static const std::string forced = Env::Str(Env::Var::HoverEntity);
+        if (forced.empty()) return;
+        for (auto [entity, name] : world.Registry.view<NameComponent>().each()) {
+            if (name.Name == forced) { m_HoverEntity = entity; break; }
+        }
+        return;
+    }
     ImGuiIO& io = ImGui::GetIO();
     const bool idle = !m_InPlayMode && !m_MeasureTool && m_DecalTool == DecalToolMode::None &&
                       !m_GizmoEngaged && !m_ViewGizmoBlocking && !m_LightHandleEngaged &&

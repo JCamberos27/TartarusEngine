@@ -70,6 +70,7 @@
     X(HizStats, "TARTARUS_HIZ_STATS", Flag, "print Hi-Z culling stats")                                               \
     X(SampleHitchMs, "TARTARUS_SAMPLE_HITCH_MS", Float, "--perf-sample: keep only frames over this many ms")          \
     X(SampleFocus, "TARTARUS_SAMPLE_FOCUS", Str, "--perf-sample: report call chains through this function")           \
+    X(HoverEntity, "TARTARUS_HOVER_ENTITY", Str, "harness runs: hover pre-highlight this entity (by name), not the cursor") \
     X(SampleUnder, "TARTARUS_SAMPLE_UNDER", List, "--perf-sample: report time under these functions")                 \
     X(NodesPivots, "TARTARUS_NODES_PIVOTS", Flag, "--model-nodes: keep FBX pivot nodes")                              \
     X(GlDebug, "TARTARUS_GL_DEBUG", Flag, "GL debug output in Release builds")                                                     \
