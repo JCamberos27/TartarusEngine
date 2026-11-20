@@ -258,14 +258,14 @@ void RegisterSettingsTests() {
         OpenCategory(false, 4),
         {Shot("performance", {"###Settings"}),
          Do("note", [](Ctx& c) {
-             g_Number = c.W.AutoExposure ? 1.0 : 0.0; g_Vec.x = (float)X::UndoDepth(c.E);
+             g_Number = c.W.Render.AutoExposure ? 1.0 : 0.0; g_Vec.x = (float)X::UndoDepth(c.E);
              g_MetaSince = std::filesystem::file_time_type::clock::now();
          }),
          Click(ByExact("Auto exposure", "###Settings")), Wait(3),
-         ExpectTrue("auto exposure toggled", [](Ctx& c) { return c.W.AutoExposure != Noted(); }),
+         ExpectTrue("auto exposure toggled", [](Ctx& c) { return c.W.Render.AutoExposure != Noted(); }),
          ExpectTrue("one undo step", [](Ctx& c) { return (float)X::UndoDepth(c.E) == g_Vec.x + 1.0f; }),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
-         Until("undo restores it", [](Ctx& c) { return c.W.AutoExposure == Noted(); }),
+         Until("undo restores it", [](Ctx& c) { return c.W.Render.AutoExposure == Noted(); }),
          // An undo re-applies every asset's metadata; that used to rewrite ~90 tracked .meta files.
          Expect("the undo wrote no .meta", [](Ctx&) {
              const std::string m = MetaWrittenSince(g_MetaSince);
@@ -316,11 +316,11 @@ void RegisterSettingsTests() {
          }),
          FreshScene(), Wait(2)},
         OpenCategory(false, 4),
-        {Do("note", [](Ctx& c) { g_Number = c.W.AutoExposure ? 1.0 : 0.0; }),
+        {Do("note", [](Ctx& c) { g_Number = c.W.Render.AutoExposure ? 1.0 : 0.0; }),
          Click(ByExact("Auto exposure", "###Settings")), Wait(3),
-         ExpectTrue("auto exposure toggled", [](Ctx& c) { return c.W.AutoExposure != Noted(); }),
+         ExpectTrue("auto exposure toggled", [](Ctx& c) { return c.W.Render.AutoExposure != Noted(); }),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
-         Until("undo restores it", [](Ctx& c) { return c.W.AutoExposure == Noted(); }),
+         Until("undo restores it", [](Ctx& c) { return c.W.Render.AutoExposure == Noted(); }),
          Expect("the undo wrote no .meta", [](Ctx&) {
              const std::string m = MetaWrittenSince(g_MetaSince);
              return m.empty() ? std::string() : "wrote " + m;

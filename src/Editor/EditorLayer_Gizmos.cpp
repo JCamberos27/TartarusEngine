@@ -29,6 +29,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "Core/Paths.h"
+#include "Core/Env.h"
 #include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
@@ -1012,22 +1013,54 @@ EditorLayer::DropPose EditorLayer::ComputeDropPose(World& world, Camera& editorC
 }
 
 std::vector<AABB> EditorLayer::NearbyBoxes(World& world, const AABB& box, float reach, entt::entity skip) const {
+    // The other kit pieces don't move during a drag (only `skip`'s subtree, which is left out), so their
+    // world boxes are gathered once when a drag starts and only the overlap test runs each frame. A
+    // drag calls this every frame: a gap of a frame, another skip entity or a renderable count change
+    // starts over.
+    auto view = world.Registry.view<RenderableComponent>();
+    const int frame = ImGui::GetFrameCount();
+    KitBoxCache& kc = m_KitBoxCache;
+    if (kc.Owner != &world || kc.Skip != skip || kc.Frame + 1 < frame || kc.Frame > frame || kc.Renderables != view.size()) {
+        kc.Owner = &world;
+        kc.Skip = skip;
+        kc.Renderables = view.size();
+        kc.Boxes.clear();
+        // Kit modules once per model / prefab source path (placed models are separate Model objects but
+        // share a handful of files), same rule as KitModuleOf.
+        std::unordered_map<std::string, float> pathModule;
+        auto moduleOf = [&](const std::string& path) {
+            auto [it, fresh] = pathModule.try_emplace(path, 0.0f);
+            if (fresh) it->second = m_LibraryIndex.KitModuleOf(ProjectRelative(path));
+            return it->second;
+        };
+        for (entt::entity e : view) {
+            const auto& rc = view.get<RenderableComponent>(e);
+            if (!rc.ModelRef) continue;
+            float module = moduleOf(rc.ModelRef->Path());
+            for (entt::entity c = e; module <= 0.0f && c != entt::null;) { // or the prefab instance it's part of
+                if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(c)) {
+                    module = moduleOf(pi->SourcePath);
+                    break;
+                }
+                const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+                c = hp ? hp->Parent : entt::null;
+            }
+            if (module <= 0.0f) continue;
+            bool inSkip = false;
+            for (entt::entity c = e; c != entt::null && !inSkip;) {
+                inSkip = c == skip;
+                const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+                c = hp ? hp->Parent : entt::null;
+            }
+            if (!inSkip)
+                kc.Boxes.push_back(AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e)));
+        }
+    }
+    kc.Frame = frame;
     const AABB grown{box.Min - glm::vec3(reach), box.Max + glm::vec3(reach)};
     std::vector<AABB> out;
-    auto view = world.Registry.view<RenderableComponent>();
-    for (entt::entity e : view) {
-        const auto& rc = view.get<RenderableComponent>(e);
-        if (!rc.ModelRef) continue;
-        bool inSkip = false;
-        for (entt::entity c = e; c != entt::null && !inSkip;) {
-            inSkip = c == skip;
-            const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
-            c = hp ? hp->Parent : entt::null;
-        }
-        if (inSkip || KitModuleOf(world, e) <= 0.0f) continue;
-        const AABB b = AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e));
+    for (const AABB& b : kc.Boxes)
         if (b.Intersects(grown)) out.push_back(b);
-    }
     return out;
 }
 
@@ -1805,16 +1838,39 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
     // models) one costs about a millisecond: the budget is time as well as count - at least one
     // ray a frame, then more only while under kRayBudgetMs. Sixteen lamps took the Scene view
     // from 35 to 6 fps on a count-only budget.
+    // A ray only goes out when its answer can have changed since the icon's last one: the camera
+    // or the icon moved, or a renderable moved, appeared or went away (the world-transform cache
+    // says which entities it recomputed). A still camera over a still scene casts none.
     ++m_IconOcclusionFrame;
     {
+        if (world.TransformCacheStamp() != m_IconGeometryStamp) {
+            bool moved = world.PreviousTransformCacheStamp() != m_IconGeometryStamp || // missed a rebuild: assume so
+                         world.TransformCacheMembershipChanged();
+            for (entt::entity e : world.ChangedWorldTransforms()) {
+                if (moved) break;
+                moved = world.Registry.valid(e) && world.Registry.all_of<RenderableComponent>(e);
+            }
+            m_IconGeometryStamp = world.TransformCacheStamp();
+            if (moved) ++m_IconGeometrySerial;
+        }
         constexpr size_t kRaysPerFrame = 24;
         constexpr double kRayBudgetMs = 1.0;
         const auto rayStart = std::chrono::steady_clock::now();
-        std::vector<std::pair<std::uint32_t, size_t>> stale; // (frame last checked, item index)
+        std::vector<std::pair<std::uint32_t, size_t>>& stale = m_IconOcclusionStale; // (frame last checked, item index)
+        stale.clear();
         for (size_t i = 0; i < items.size(); ++i) {
             if (items[i].Selected) continue;
             auto it = m_IconOcclusion.find(items[i].Entity);
-            stale.emplace_back(it == m_IconOcclusion.end() ? 0u : it->second.FrameChecked, i);
+            if (it == m_IconOcclusion.end()) {
+                stale.emplace_back(0u, i);
+                continue;
+            }
+            IconOcclusion& o = it->second;
+            if (o.CamPos == camPos && o.IconPos == items[i].Pos && o.GeometrySerial == m_IconGeometrySerial) {
+                o.FrameChecked = m_IconOcclusionFrame; // still current: keeps it out of the forget sweep below
+                continue;
+            }
+            stale.emplace_back(o.FrameChecked, i);
         }
         const size_t n = std::min(stale.size(), kRaysPerFrame);
         std::partial_sort(stale.begin(), stale.begin() + (std::ptrdiff_t)n, stale.end());
@@ -1824,7 +1880,8 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
                 break; // the rest stay stale and go first next frame
             const Item& it = items[stale[k].second];
             // The icon's own ancestors (a lamp fixture it hangs from) must not hide it.
-            std::vector<entt::entity> skipChain;
+            std::vector<entt::entity>& skipChain = m_IconOcclusionSkipChain;
+            skipChain.clear();
             if (const auto* hier = world.Registry.try_get<HierarchyComponent>(it.Entity)) {
                 entt::entity walk = hier->Parent;
                 while (walk != entt::null && world.Registry.valid(walk) && skipChain.size() < 32) {
@@ -1842,6 +1899,9 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
             IconOcclusion& slot = m_IconOcclusion[it.Entity];
             slot.Occluded = hit.Entity != entt::null;
             slot.FrameChecked = m_IconOcclusionFrame;
+            slot.CamPos = camPos;
+            slot.IconPos = it.Pos;
+            slot.GeometrySerial = m_IconGeometrySerial;
         }
         // Forget entities that stopped being candidates (deleted, mode changed) every few seconds.
         if ((m_IconOcclusionFrame & 511u) == 0u) {
@@ -3569,6 +3629,18 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
 // main.cpp draws. Reuses the click pick's exact-triangle raycast; runs only when the cursor moved
 // (at most one raycast per frame) and stands down whenever the mouse belongs to something else.
 void EditorLayer::UpdateHoverPick(World& world, Camera& editorCamera) {
+    // Test and bench runs: the real OS cursor must not pick (it sits wherever the user left it, so
+    // the outline pass came and went run to run). TARTARUS_HOVER_ENTITY names a fixed entity instead.
+    if (m_DeterministicSceneCamera) {
+        if (m_HoverEntity != entt::null && world.Registry.valid(m_HoverEntity)) return;
+        m_HoverEntity = entt::null;
+        static const std::string forced = Env::Str(Env::Var::HoverEntity);
+        if (forced.empty()) return;
+        for (auto [entity, name] : world.Registry.view<NameComponent>().each()) {
+            if (name.Name == forced) { m_HoverEntity = entity; break; }
+        }
+        return;
+    }
     ImGuiIO& io = ImGui::GetIO();
     const bool idle = !m_InPlayMode && !m_MeasureTool && m_DecalTool == DecalToolMode::None &&
                       !m_GizmoEngaged && !m_ViewGizmoBlocking && !m_LightHandleEngaged &&

@@ -82,7 +82,7 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
         const auto& lc = world.Registry.get<LightComponent>(e);
         // (Scored on the intensity now: holding a flickering light's shadow through its bright peaks - a TV
         // across the living room - cost the main pass ~1.3 ms in Floor3. Its slot, and so its cache, waits for it.)
-        if (!lc.Shadow.Enabled || !world.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
+        if (!lc.Shadow.Enabled || !world.Render.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
             lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f || world.Registry.all_of<InactiveTag>(e) || (in.suppressed && in.suppressed(e)))
             continue;
         const glm::mat4 lightXform = world.ComposeWorldTransform(e);
@@ -104,7 +104,7 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
     take(points, (size_t)out.PointBudget, chosenPoints);
     std::sort(frameShadowed.begin(), frameShadowed.end());
     m_PrevShadowed.swap(frameShadowed); // now this frame's holders (frameShadowed keeps last frame's storage)
-    if (in.torch && world.ShadowsEnabled && out.SpotBudget > 0) chosenSpots.insert(chosenSpots.begin(), kTorchSlotKey);
+    if (in.torch && world.Render.ShadowsEnabled && out.SpotBudget > 0) chosenSpots.insert(chosenSpots.begin(), kTorchSlotKey);
     m_SpotSlots.Assign(chosenSpots, out.SpotBudget, in.frame + 1, m_SpotSlotOf);
     m_PointSlots.Assign(chosenPoints, out.PointBudget, in.frame + 1, m_PointSlotOf);
     // Candidates that didn't get a slot, for the Inspector's over-budget warning.
@@ -122,8 +122,8 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
     lightBuffer.Clear();
 
     // Per-scene budgets (Lighting > Shadows), clamped to the shader's array ceilings.
-    out.SpotBudget = std::clamp(world.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots);
-    out.PointBudget = std::clamp(world.MaxPointShadows, 0, PointShadowMap::kMaxPoints);
+    out.SpotBudget = std::clamp(world.Render.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots);
+    out.PointBudget = std::clamp(world.Render.MaxPointShadows, 0, PointShadowMap::kMaxPoints);
     AssignShadowSlots(in, out);
 
     const Camera& lightViewCam = *in.viewCam;
@@ -181,7 +181,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
             float dirIntensity = lc.Intensity;
             // Physical sky: the first lit directional takes the resolved direction and the atmosphere-filtered colour.
             if (in.physicalSky && !out.SkyResolved && lc.Intensity > 0.0f) {
-                out.Sky = skyAtmosphere.ResolveLighting(world.Sky, aim, lc.Color * lc.Intensity,
+                out.Sky = skyAtmosphere.ResolveLighting(world.Render.Sky, aim, lc.Color * lc.Intensity,
                                                         lc.AngularSizeDegrees, in.skyCameraPos);
                 out.SkyResolved = true;
                 aim = -out.Sky.LightDir;
@@ -257,7 +257,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
             glm::vec3 radiance = previewSunColor * 5.0f;
             out.SunDir = glm::normalize(glm::vec3(-0.4f, -0.8f, -0.3f));
             if (in.physicalSky) {
-                out.Sky = skyAtmosphere.ResolveLighting(world.Sky, out.SunDir, radiance, out.SunAngularDeg, in.skyCameraPos);
+                out.Sky = skyAtmosphere.ResolveLighting(world.Render.Sky, out.SunDir, radiance, out.SunAngularDeg, in.skyCameraPos);
                 out.SkyResolved = true;
                 out.SunDir = -out.Sky.LightDir;
                 radiance = out.Sky.LightRadiance;

@@ -144,7 +144,7 @@ void SceneRenderer::ViewPass::PrepareView() {
     }
     // Puddle SSR: wanted with standing water, IBL and a depth pre-pass to trace against; the trace itself runs after
     // that pre-pass. Not for probe captures, debug views or orthographic views.
-    m_SsrWanted = m_World.PuddleSsr && m_World.PuddleAmount > 0.0f && gathered.iblOn && !ctx.ProbeCapture &&
+    m_SsrWanted = m_World.Render.PuddleSsr && m_World.Render.PuddleAmount > 0.0f && gathered.iblOn && !ctx.ProbeCapture &&
                   ctx.DebugView == 0 && ctx.TxHdr && ctx.TxHdr->IsValid() && in.depthShader &&
                   ProjectSettings::Quality().DepthPrepass && Perspective(ctx.Proj) &&
                   gathered.vp[0] == 0 && gathered.vp[1] == 0 && gathered.vp[2] == ctx.TxHdr->Width() &&
@@ -1060,11 +1060,11 @@ void SceneRenderer::ViewPass::DrawSky() {
         // A circuit's GI bake: the sky is black (the Outside layer carries it).
     } else if (m_In.skyAtmosphere) {
         m_In.skyAtmosphere->DrawSky(ctx.TxHdr);
-    } else if (m_World.SkySourceMode == World::SkySource::Hdri && m_In.hdriCube) {
-        const float rotRad = glm::radians(m_World.SkyRotationDegrees);
+    } else if (m_World.Render.SkySourceMode == World::SkySource::Hdri && m_In.hdriCube) {
+        const float rotRad = glm::radians(m_World.Render.SkyRotationDegrees);
         m_In.sky->DrawHdri(m_In.hdriCube->Texture(), rotRad, ctx.View, ctx.Proj);
     } else {
-        m_In.sky->Draw(ctx.View, ctx.Proj, m_World.SkyHorizonColor, m_World.SkyZenithColor);
+        m_In.sky->Draw(ctx.View, ctx.Proj, m_World.Render.SkyHorizonColor, m_World.Render.SkyZenithColor);
     }
     // The volumetric fog over the sky's pixels (every surface applied it in its own shading).
     if (m_Fs.volOn) {
