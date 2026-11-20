@@ -308,11 +308,21 @@ std::chrono::steady_clock::time_point g_TestStart;
 // for 3 minutes, and aborts the run (CrashHandler writes a minidump with every thread's stack)
 // when frames have stopped for 4 minutes or the run passes TARTARUS_EDITOR_TEST_DEADLINE minutes.
 // EditorUiTests::SetRunEndHook. Run under its mutex, so clearing it waits for a call in progress.
+// Next to it, the cleanups suites register with AtRunEnd (a scratch folder made by whichever of their tests ran
+// first), so they run on every way out too: the Summary, a watchdog abort, a filter that skipped the suite's own
+// cleanup test. Each may run more than once (the Summary, then a teardown the watchdog cuts short): keep them
+// idempotent.
 std::mutex g_RunEndMutex;
 std::function<void()> g_RunEndHook;
+std::vector<std::function<void()>> g_RunCleanups;
 void RunEndHook() {
     std::lock_guard<std::mutex> lk(g_RunEndMutex);
     if (g_RunEndHook) g_RunEndHook();
+    for (auto& f : g_RunCleanups) f();
+}
+void AtRunEnd(std::function<void()> f) {
+    std::lock_guard<std::mutex> lk(g_RunEndMutex);
+    g_RunCleanups.push_back(std::move(f));
 }
 
 namespace watchdog {
@@ -934,10 +944,6 @@ glm::vec3 g_Vec{0.0f};
 void Add(std::string name, std::vector<Step> steps, std::function<void(Ctx&)> finally = {}) {
     g_Tests.push_back({std::move(name), std::move(steps), std::move(finally)});
 }
-// Cleanups a suite registers for the end of the run: what its tests share (a scratch folder made by whichever of
-// them ran first) goes even when a filter skipped the suite's own cleanup test or a test failed.
-std::vector<std::function<void()>> g_RunCleanups;
-void AtRunEnd(std::function<void()> f) { g_RunCleanups.push_back(std::move(f)); }
 
 // =============================================================================================
 // The Glass motion demo (MotionDemo.h): a scripted tour of the editor's motion, recorded at 60 fps.
@@ -2061,8 +2067,6 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
 
     // Summary.
     g_Done = true;
-    for (auto& f : g_RunCleanups) f();
-    g_RunCleanups.clear();
     ctx->TestEngineHookItems = false;
     std::cout << "\n[EditorTest] ==== Summary ====" << std::endl;
     for (const auto& l : g_FailLines) std::cout << "[EditorTest] FAIL " << l << std::endl;
