@@ -912,7 +912,9 @@ void TestRemingtonController() {
             }
             CHECK(arms->NodeIndex(set.WeaponSocket) >= 0 && weapon->NodeIndex(set.WeaponRoot) >= 0);
             bool material = false;
-            for (int i = 0; i < weapon->MeshCount(); ++i) material = material || weapon->MeshMaterial(i).Name == set.WeaponMaterials[0].first;
+            CHECK(!set.WeaponMaterials.empty());
+            if (!set.WeaponMaterials.empty())
+                for (int i = 0; i < weapon->MeshCount(); ++i) material = material || weapon->MeshMaterial(i).Name == set.WeaponMaterials[0].first;
             CHECK(material);
         }
     }
