@@ -216,7 +216,7 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
                 f->Set(o, i + 1 < argc && IsValue(argv[i + 1]) ? argv[++i] : std::string());
                 break;
             case Arity::Required:
-                if (i + 1 >= argc || std::string(argv[i + 1]).rfind("--", 0) == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == 0 || std::string(argv[i + 1]).rfind("--", 0) == 0) { // "" is no value either
                     error = "'" + a + "' needs a value: " + a + " <" + f->Value + ">";
                     return false;
                 }
