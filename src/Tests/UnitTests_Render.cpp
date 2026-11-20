@@ -20,6 +20,7 @@
 #include "../Renderer/LightBuffer.h"
 #include "../Renderer/PointShadowMap.h"
 #include "../Renderer/SpotShadowMap.h"
+#include "../Renderer/ShadowFrame.h"
 #include "../Renderer/DecalTypes.h"
 #include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
@@ -947,6 +948,26 @@ using json = nlohmann::json;
 using UnitTestSupport::TempDir;
 using UnitTestSupport::ReadAll;
 
+// A still spot / point light redraws its static depth only when a caster's signature changes. A colourway swaps one
+// material slot in place (same count, same first slot): that must change the signature too.
+void TestLocalCasterHashSlots() {
+    auto a = std::make_shared<MaterialAsset>();
+    auto b = std::make_shared<MaterialAsset>();
+    auto c = std::make_shared<MaterialAsset>();
+    const glm::mat4 xf(1.0f);
+    const std::vector<std::shared_ptr<MaterialAsset>> before{a, b};
+    const std::vector<std::shared_ptr<MaterialAsset>> after{a, c}; // slot 1 recoloured
+    const std::uint64_t h0 = LocalCasterHash(7, nullptr, before, xf, 0, false);
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 0, false) == h0); // stable
+    CHECK(LocalCasterHash(7, nullptr, after, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, {b, a}, xf, 0, false) != h0); // slot order counts
+    CHECK(LocalCasterHash(7, nullptr, {a}, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 3, false) != h0); // hidden-triangle set
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 0, true) != h0);
+    CHECK(LocalCasterHash(8, nullptr, before, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
+}
+
 void TestCameraRoll() {
     auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-4f; };
     Camera cam; // yaw -90: looking down -Z, right = +X, up = +Y
@@ -1770,4 +1791,5 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
+    tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
 }

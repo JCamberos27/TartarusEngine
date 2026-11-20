@@ -21,6 +21,11 @@ class VisibleIndexBuffer;
 struct FrameLights;
 struct Frustum;
 
+// A local (spot / point) caster's change signature: its id, model, every material slot, transform, hidden-triangle set
+// (VisibleIndexBuffer id, 0 = none) and Two Sided. A still light keeps its static depth while the signatures hold.
+std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::vector<std::shared_ptr<MaterialAsset>>& materials,
+                              const glm::mat4& xform, unsigned visibleId, bool twoSided);
+
 struct ShadowFrameInputs {
     World* world = nullptr;
     const FrameLights* lights = nullptr;
