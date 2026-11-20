@@ -1055,10 +1055,10 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
                              std::remainder(camera.Yaw - m_PlayerLookBaseline.y, 360.0f));
         controllerInput = delta;
     }
-    if (m_Set.Procedural.Recoil.UnityPort && m_HaveRawLookInput) controllerInput=m_RawLookInput;
+    if (m_HaveRawLookInput) controllerInput=m_RawLookInput;
     const glm::vec2 swayLook=m_HaveRawLookInput?m_RawLookInput:controllerInput;
     m_SwayLookInput+=glm::vec2(swayLook.y,swayLook.x);
-    if (m_Set.Procedural.Recoil.UnityPort || m_Set.Procedural.Recoil.AimCompensation) m_Procedural.CompensateAim(controllerInput);
+    m_Procedural.CompensateAim(controllerInput);
     m_HaveRawLookInput=false;
     {
         glm::vec3 f = camera.Front();
@@ -1070,10 +1070,8 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     // Aim climb: unlike the punch below it stays - the player has to pull it back down.
     {
         const glm::vec2 climb = m_Procedural.ConsumeAimKick();
-        const float before = camera.Pitch;
         camera.Pitch = std::clamp(camera.Pitch + climb.x, -89.0f, 89.0f);
         camera.Yaw += climb.y;
-        m_Procedural.DiscardClampedAim(glm::vec2(climb.x - (camera.Pitch - before), 0.0f));
     }
     m_PlayerLookBaseline = glm::vec2(camera.Pitch, camera.Yaw);
     m_HavePlayerLookBaseline = true;
