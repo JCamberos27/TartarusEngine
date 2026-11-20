@@ -312,7 +312,9 @@ void World::TransformStructure(std::uint64_t out[3]) {
 // what was destroyed, keyed what is new, re-read the parents, and `dirty` also holds what lost its transform or sits
 // under a re-parented Transform-less ancestor; the caller recomposes those subtrees.
 bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
+    // The pools themselves: a registry lookup per call (all_of) cost ~1-2 ms over the forest's cache slots.
     const auto& hierarchy = Registry.storage<HierarchyComponent>();
+    const auto& transforms = Registry.storage<TransformComponent>();
     const auto parentOf = [&](entt::entity e) {
         if (!hierarchy.contains(e)) return entt::entity{entt::null};
         const entt::entity p = hierarchy.get(e).Parent;
@@ -326,10 +328,10 @@ bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
         int depth = 0;
         for (entt::entity p = parentOf(e); p != entt::null; p = parentOf(p)) {
             if (++depth > kMaxHierarchyDepth) return false;
-            if (!IsWorldTransformCached(p) && !Registry.all_of<TransformComponent>(p)) return false;
+            if (!IsWorldTransformCached(p) && !transforms.contains(p)) return false;
         }
     }
-    if (fresh * 2 > Registry.storage<TransformComponent>().size()) return false;
+    if (fresh * 2 > transforms.size()) return false;
 
     // What left: destroyed (the slot is dropped) or lost its transform (kept as a Transform-less ancestor, like the
     // full walk keeps one, and recomposed with its subtree). A Transform-less ancestor isn't in the scan: its own
@@ -343,7 +345,7 @@ bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
             continue;
         }
         LocalSnapshot& snap = m_LocalSnapshots[s];
-        if (snap.HasTransform && !Registry.all_of<TransformComponent>(k)) {
+        if (snap.HasTransform && !transforms.contains(k)) {
             snap.HasTransform = false;
             m_LocalHashes[s] = 0;
             dirty.push_back(k);
@@ -361,7 +363,7 @@ bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
             m_TransformMembershipChanged = true;
         }
         m_LocalSnapshots[s].Parent = parentOf(e);
-        if (!m_LocalSnapshots[s].HasTransform && Registry.all_of<TransformComponent>(e))
+        if (!m_LocalSnapshots[s].HasTransform && transforms.contains(e))
             m_LocalSnapshots[s].HasTransform = true; // a Transform-less ancestor given one again
     }
     CountKeyedWithTransform();
