@@ -2,7 +2,8 @@
 
 Working log for replacing `project/assets/Characters/Quantum` with the complete Quantum Modular Casual Bundle
 (male + female "Vivian"), exported from Unreal to a local `Quantum - Modular Casual Bundle\` folder
-(`Export\`, `manifest.json`, `AUDIT_REPORT.md`). The full plan was a local plan file, not in the repo.
+(`Export\`, `manifest.json`, `AUDIT_REPORT.md`). The job is finished (PR 831); the wardrobe itself is
+documented in [CHARACTER_OUTFITS.md](CHARACTER_OUTFITS.md).
 Branch: `dev/quantum-swap`.
 
 ## Phase 0 results (2026-11-18)
@@ -71,7 +72,7 @@ The real names of all 1,075 exported FBX files are cached in `tools/quantum/casu
 ### Other findings
 
 - `SKM_Vivan_Head_FaceRig` has more than 512 bones (the engine's `MAX_BONES`). The face-rig heads are skipped; the regular heads replace the old ones.
-- `.gitignore:81` and `asset_manifest.py` `EXCLUDE_PREFIXES` drop `Textures/Clothing/Hats/` (hats were removed in #501). New headwear uses `Headwear/` folders instead.
+- The `.gitignore` hats rule and `asset_manifest.py` `EXCLUDE_PREFIXES` drop `Textures/Clothing/Hats/` (hats were removed in #501). New headwear uses `Headwear/` folders instead.
 - Wardrobe clothing is found by **folder scan**, so 26 kept items (Inboots pants, `SKM_Boots_Socks`, `Quantum_Arms.fbx`...) have no explicit reference anywhere. The map lists them as `keep-old` rows so the retirement scan can't drop them.
 - Already broken today: the wardrobe's `SM_Glasses_Aviator` override and 6 `project/settings.json` `assetFolders` entries that don't exist.
 
@@ -95,7 +96,7 @@ So no skin textures need keeping from the old copy.
 - **Engine limits handled:**
   - Glasses lenses and the female scalp are translucent in UE; they are rebuilt opaque or cut-out from their textures, like the old mats.
   - Roughness Intensity above 1 is capped (2 headphone mats).
-- **Pre-swap backup** (repo Quantum folder + CSV): kept locally (`_backup_old_quantum\`).
+- **Pre-swap backup** (repo Quantum folder + CSV): kept off the repo.
 
 `tools/quantum/audit_quantum_assets.py` after the import: 110 notes, none blocking.
 - 15 "FBX material not remapped": FBX material entries with no geometry, which Assimp drops; every drawn material is remapped. The two team arm/hand exports carry them from before the swap.
@@ -214,7 +215,7 @@ Phases 0-3 merged in PR 831. The forest-lights PR 832 and the forest-trail scene
 
 - **Upload:** the 850 payloads main lists but the Drive lacked went to `Used`: 691 added and 159 replaced (3.6 GB), each
   checked by sha256. `Used\project\external_assets.csv` is main's copy again.
-- **Safety copy:** a local `_backup_old_quantum\` folder holds the 515 retired `Used` files (1.9 GB)
+- **Safety copy:** an off-repo backup holds the 515 retired `Used` files (1.9 GB)
   and both old Raw folders (225 files, 4 GB). The 159 replaced
   files went up before the backup existed, so their old versions are only in the Drive's version history (30 days).
 - **Raw:** `Characters\Quantum - Extras (not in Casual Bundle)\` holds the 39 keep-list sources (3 GB): the team
@@ -225,7 +226,7 @@ Phases 0-3 merged in PR 831. The forest-lights PR 832 and the forest-trail scene
   mocap `RootMotion` clips and the unused forest-trail scene went too. `asset_manifest.py verify` on `Used`: 7908 listed,
   0 missing, 0 different, 0 unlisted.
 - **Team, after pulling:** `python tools/assets/asset_manifest.py prune project/assets/Characters/Quantum`, then
-  `fetch-assets.ps1`.
+  `tools/assets/fetch-assets.ps1`.
 - **Still open:**
   - the Fab receipt and the Epic Starter Pack terms in `Licenses\`;
-  - plan step 4: deleting `UE_Source\` on the export machine.
+  - deleting `UE_Source\` on the export machine.

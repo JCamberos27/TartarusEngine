@@ -1,6 +1,6 @@
 // The Graffiti Designer's CPU side (docs/GRAFFITI_DESIGNER.md): the .graffiti round trip and its
 // forgiving load, and the paint program - deterministic from the seed (the CPU half of "a re-bake
-// is byte-identical"; the GPU half is the smoke_decals bake check), the live stroke stream equal to
+// is byte-identical"; the GPU half has no automated check), the live stroke stream equal to
 // the bake's, the spray model (cone, distance, pressure, drips), seeds that survive a layer reorder,
 // and the text layout.
 #include "UnitTestSupport.h"

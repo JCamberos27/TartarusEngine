@@ -77,7 +77,7 @@ read back from disk bake to the same bytes.
 - The layer is then composited onto the stack below through a ping-pong pair that also carries
   height, glow and metal.
 - The same program always issues the same draws in the same order, with no atomics, so a re-bake
-  is byte-identical on one machine. The editor smoke test checks this.
+  is byte-identical on one machine. The unit tests check the CPU half (the program from the seed).
 
 **The bake**
 - One pass writes:
@@ -166,7 +166,8 @@ In Play, the player and NPCs can spray a stored piece onto a wall (`src/Game/Spr
 - A `SprayCanAction` names the piece, the can's ray and an optional duration.
 - An NPC's action comes from `SprayCanAction::ForCharacter`. The ray starts at its hand and runs along
   the way it faces.
-- The player presses **F6** (a dev key, no HUD) to spray the next piece from
+- The player presses the **Spray Can** shortcut (`dev.sprayCan`, unbound by default: bind it in
+  Shortcuts; no HUD) to spray the next piece from
   `assets/Decals/Graffiti/Pieces` at the crosshair.
 - `SprayCanSystem::Start` casts for a wall within reach. It then creates an ordinary entity with a
   **Decal** (the piece's baked `DA_Piece_*.decal`) and a **Spray Paint** component.

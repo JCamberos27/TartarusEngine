@@ -78,27 +78,27 @@ build/Release/TartarusEngine.exe --npc-test revolver --smoke-shots <dir>
 
 Harness runs are hidden by default; set `TARTARUS_SHOW=1` to watch it.
 
-`src/Game/AI/NpcTest_Revolver.cpp`, 77 s in the WeaponLab: ADS (the sight line is logged), two sights-up
+`src/Game/AI/NpcTest_Revolver.cpp`, 116 s in the WeaponLab: ADS (the sight line is logged), two sights-up
 shots, a partial reload, six hip shots, a full reload, inspect, mag check, melee, walk and sprint, then the AK
 and 870 fired and reloaded, the slots switched and one scroll notch. It saves 49 named frames of the Scene and
-Game views and runs 19 checks: ammo, ejections by model, the cases at rest, hammer and trigger travel,
+Game views and runs 25 checks: ammo, ejections by model, the cases at rest, hammer and trigger travel,
 one chamber per hip shot with no backwards spin, the actions and sprint playing, each slot keeping its ammo.
 Since the motion matching Phase 1, harness runs ignore the keyboard, mouse and focus (`Input::SetIgnoreDevices`), and
 `TARTARUS_UNLOCKED_FPS=1` takes VSync and the FPS cap off, so a visible run (`tools/mm_smoke.ps1 revolver -SkipUnit
--SkipSmoke`) shouldn't stall when it loses focus. That hasn't been confirmed on this scenario yet. The run's
+-SkipSmoke -Show`) shouldn't stall when it loses focus. That hasn't been confirmed on this scenario yet. The run's
 summary says FAIL only for 4 log errors that predate the revolver (`T_Spider_AO.png`, `worklight_hum_1.wav`).
 
 ## Open items
 
 - **Audio.** Gun id `revolver38` (the prefab's Firing Sound Profile and the controller's `snd.revolver38.*` events;
-  a built-in gun in `SoundManifest.h`). See *Audio* below. The gun has no environment tails (`fire_tail_<space>`,
+  a built-in gun in `src/Game/Audio/SoundManifest.h`). See *Audio* below. The gun has no environment tails (`fire_tail_<space>`,
   `build_tails.py`): the libraries hold no pistol shots in rooms, so every space plays its own recorded R08 tail.
 - **Play tuning.** `SIGHT_CORRECTION`, the 3P holds in `author_3p.py` (`REVOLVER`) and the recoil and damage
   values are first passes.
 
 ## Audio
 
-Ported from the approved AE showcase design (`AE_Weapon_Renders/audio/build_38.py`), rebuilt the engine's way:
+Ported from the AE showcase design (an external sound-design script, not in this repo), rebuilt the engine's way:
 
 ```text
 export TARTARUS_AUDIO_SRC="<Drive>/Tartarus Assets/Raw/Audio/audio-src"

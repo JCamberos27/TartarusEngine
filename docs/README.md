@@ -12,7 +12,7 @@ Run `python tools/assets/check_git_assets.py` before committing or pushing.
 * [History and Inspectors](EDITOR_HISTORY_AND_INSPECTORS.md): global undo and gameplay Inspectors.
 * [Script IDE](SCRIPT_IDE.md): embedded C++, shader and .tescript editing, module rebuilds and recovery.
 * [Curve editor](CURVE_EDITOR.md): shared curve authoring tools.
-* [Black Glass design system](EDITOR_DESIGN_SYSTEM.md): the opt-in editor theme (solid black panels, real blurred glass under everything that floats), its motion language, Glass Workspace panels and viewport HUDs.
+* [Black Glass design system](EDITOR_DESIGN_SYSTEM.md): the default editor theme (tinted black panels, real blurred glass under everything that floats), its motion language, Glass Workspace panels and viewport HUDs.
 
 ## Gameplay code
 
@@ -20,19 +20,17 @@ Run `python tools/assets/check_git_assets.py` before committing or pushing.
 hot-reloading the game and editor modules. Everything is native C++.
 
 [Motion Matching](MOTION_MATCHING.md): how the player's body and the NPC dummies are posed from the mocap database - the
-data, the bake, the runtime, tuning and tests ([the overhaul's handoff](MOTION_MATCHING_HANDOFF.md) has its history).
+data, the bake, the runtime, tuning and tests ([implementation notes](MOTION_MATCHING_HANDOFF.md): decisions, what each phase shipped, testing, open issues).
 
 ## Related engine systems
 
 * [Project assets](PROJECT_ASSETS.md): folder layout, weapon files, and duplicate consolidation.
-* [Weapon reimport](WEAPON_REIMPORT.md): repeating the AKS74U and Remington 870 authored-export import.
+* [Weapon reimport](WEAPON_REIMPORT.md): how the AKS74U and Remington 870 authored exports were imported (the one-off scripts are retired).
 * [Procedural recoil](PROCEDURAL_RECOIL.md), [weapon camera](WEAPON_CAMERA.md),
-  [weapon sway](WEAPON_SWAY.md), [curve editor](CURVE_EDITOR.md).
-* [Script IDE](SCRIPT_IDE.md), [editor history and inspectors](EDITOR_HISTORY_AND_INSPECTORS.md),
-  [particle system](PARTICLE_SYSTEM.md).
+  [weapon sway](WEAPON_SWAY.md).
+* [Particle system](PARTICLE_SYSTEM.md).
 * [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy/folder styling, bookmarks, hover keys, tabs,
   favorites and the ruler (vHierarchy / vFolders / vInspector / vTabs / vFavorites / vRuler).
-* [Editor Enhancers handoff](EDITOR_ENHANCERS_HANDOFF.md): implementation design and code map for the integrated tools.
 * [Decals](DECALS.md) and the [Graffiti Designer](GRAFFITI_DESIGNER.md): the decal system, its editor tools and painted pieces.
 * [Character outfits](CHARACTER_OUTFITS.md) and the [Quantum swap](QUANTUM_SWAP.md): the wardrobe, outfit pieces and the character pack move.
 * [Revolver .38](WEAPON_REVOLVER38.md): the sidearm's import and setup.
