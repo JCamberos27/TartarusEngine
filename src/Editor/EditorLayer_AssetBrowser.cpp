@@ -2025,7 +2025,24 @@ void EditorLayer::CollectAssetGridCells(AssetLibrary& assets, const ParsedAssetS
     }
     // Every other asset file in the project, unloaded until it's used (see m_ProjectAssetIndex),
     // and the kinds that are never library entries.
-    for (const auto& f : m_ProjectAssetIndex.files) {
+    // Candidates first, by the scan folder (no lookup), plus the few files the library moved into view since
+    // indexing; only those ask AssetFolderRef. Kept in index order, as the full walk listed them.
+    const auto& indexFiles = m_ProjectAssetIndex.files;
+    auto inViewFolder = [&](const std::string& folder) {
+        return filtering ? inSearchScope(folder) : folder == m_CurrentAssetFolder;
+    };
+    std::vector<std::uint32_t> candidates;
+    for (std::uint32_t i = 0; i < (std::uint32_t)indexFiles.size(); ++i)
+        if (inViewFolder(indexFiles[i].Folder)) candidates.push_back(i);
+    const size_t scanCandidates = candidates.size();
+    for (const auto& [path, folder] : assets.AssetFolders()) {
+        if (folder.empty() || !inViewFolder(folder)) continue;
+        const auto it = m_ProjectAssetIndex.byPath.find(std::string_view(path));
+        if (it != m_ProjectAssetIndex.byPath.end() && !inViewFolder(indexFiles[it->second].Folder)) candidates.push_back(it->second);
+    }
+    if (candidates.size() != scanCandidates) std::sort(candidates.begin(), candidates.end());
+    for (const std::uint32_t i : candidates) {
+        const ProjectAssetFile& f = indexFiles[i];
         const std::string& moved = assets.AssetFolderRef(f.Path); // filed elsewhere in the browser since indexing
         const std::string& folder = moved.empty() ? f.Folder : moved;
         if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
