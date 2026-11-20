@@ -16,7 +16,7 @@ import re
 import sys
 
 import unity_yaml as uy
-from import_model_library import write_json, write_meta
+from import_model_library import standard_props, write_json, write_meta
 from unity_arch import ARCH_SCALE, SCALE_OVERRIDES, arch_class, arch_mesh, arch_rescale
 from unity_look import apply_look
 from unity_scene_passes import (AUTO_LOD, _walk, auto_lod, dedupe_openables, scene_bounds, settle_props, shut_ajar,
@@ -179,10 +179,7 @@ class Converter:
         divided by the layer's tileSize, so the material itself does not tile."""
         from unity_import import tidy, rel_project
         name = 'M_Terrain_' + tidy(ent.get('layer') or 'Ground')
-        p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [1.0, 1.0, 1.0], '_DoubleSided': False,
-             '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
-             '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.9, '_RoughnessMap': '',
-             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+        p = standard_props(0.9)
         prev, self.pack.cur = self.pack.cur, 'terrain ' + name
         if ent.get('albedo') in self.pack.guids:
             p['_AlbedoMap'] = self.pack.texture(ent['albedo'], 'rgb', 'albedo')
