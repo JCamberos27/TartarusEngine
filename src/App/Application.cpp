@@ -1602,6 +1602,17 @@ bool AppSession::Frame() {
     {
     PROFILE_SCOPE("Asset Pump + Outfit Hiding");
     { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
+    // --npc-test: an outfit change in Play lands on the frame that asked for it, not when the machine finishes loading it
+    // (the player's pieces, asked for in Play's first frames, landed 0.2-0.5 s in and rebuilt the body - OutfitChanged -
+    // on a frame that followed the machine's load, so no two runs matched). At most 30 s a frame.
+    if (opt.npcTestMode && playing && OutfitSystem::AnyPending()) {
+        const auto waitStart = std::chrono::steady_clock::now();
+        while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) &&
+               std::chrono::steady_clock::now() - waitStart < std::chrono::seconds(30)) {
+            assets.PumpAsync(50.0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    }
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
     { PROFILE_SCOPE("Outfit Pending");
       // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.
