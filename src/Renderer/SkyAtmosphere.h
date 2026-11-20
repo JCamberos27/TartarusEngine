@@ -170,6 +170,10 @@ private:
     std::unique_ptr<Shader> m_CompositeShader;
 
     unsigned int m_Ubo = 0;
+    // What m_Ubo holds (an AtmosphereUbo): the frame setup, each view and its cloud and sky draws all fill it,
+    // mostly with the same values, so a repeat skips the upload.
+    glm::vec4 m_UboContents[17]{};
+    bool m_UboContentsValid = false;
     unsigned int m_TransmittanceLut = 0;
     unsigned int m_MultiScatterLut = 0;
     unsigned int m_EnvCube = 0;
