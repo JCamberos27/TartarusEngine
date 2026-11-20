@@ -31,6 +31,21 @@ MAX_PITCH_ST = 2.0       # no pitch / varispeed shift of a source cut beyond thi
 MONO_FOLD_MAX_DB = 4.0   # a fully decorrelated stereo pair loses 3 dB on a mono fold; a little more is tolerated
 IMPACT_LEAD_MAX_MS = 5.0  # bullet impacts start at once (first sound within this of the file start)
 LAYER_GROUPS = ("close", "mech", "sub", "tail", "far")
+# Parked sets: sounds kept in the project for a later rebuild but played by nothing. They were made before today's rules (the spider's
+# chitin taps are High Heels steps pitched up 13-19 st, its hiss is synthesised), so the pitch cap, the loudness window and the
+# provenance rule skip them; format, peak, clipping, edges and the mix still apply. Rebuilding one means dropping it from here.
+PARKED = {
+    "Creatures/spider/": "spider creature removed 2026-11-15 (03e01fdd); its sounds stay for a later rebuild",
+}
+# Keys quieter / louder than their layer window on purpose (key -> why). Anything else outside its window still fails.
+LOUDNESS_WINDOW_OK = {
+    "snd.foley.door.switch_on": "a light switch flicks softly, 9 dB under the latch (39aa9dca)",
+    "snd.foley.door.switch_off": "a light switch flicks softly, 9 dB under the latch (39aa9dca)",
+}
+
+
+def parked(f):
+    return next((why for pre, why in PARKED.items() if f.startswith(pre)), None)
 
 
 FORBIDDEN = [
@@ -104,7 +119,9 @@ def main():
         if tp > T["peak_dbtp_max"] + 0.05:
             errs.append(f"{tag}: true peak {tp:.2f} dBTP > {T['peak_dbtp_max']}")
         measured[e["file"]] = lm
-        if layer not in NO_LOUDNESS_WINDOW and not (win["min"] <= lm <= win["max"]):
+        is_parked = parked(e["file"])
+        if (layer not in NO_LOUDNESS_WINDOW and e["key"] not in LOUDNESS_WINDOW_OK and not is_parked
+                and not (win["min"] <= lm <= win["max"])):
             errs.append(f"{tag}: {lm:.1f} LUFS-M outside {layer} window [{win['min']}, {win['max']}]")
         if abs(lm - e["lufs_m_max"]) > 0.3:                  # mix_db is derived from the manifest's number: it must be the file's
             errs.append(f"{tag}: manifest lufs_m_max {e['lufs_m_max']} but the file measures {lm:.2f} (stale manifest)")
@@ -150,7 +167,9 @@ def main():
                 errs.append(f"{tag}: first sound at {lead:.1f} ms (> {IMPACT_LEAD_MAX_MS} ms of lead-in silence)")
         # provenance: every output must name the recorded files it is made of (hard rule: nothing is synthesised)
         srcs = e.get("sources")
-        if not srcs:
+        if is_parked:
+            pass
+        elif not srcs:
             errs.append(f"{tag}: no `sources` (provenance) in the manifest")
         else:
             for s in srcs:
