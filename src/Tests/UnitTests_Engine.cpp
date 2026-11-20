@@ -17,6 +17,7 @@
 #include "AssetDatabase.h"
 #include "AtomicFile.h"
 #include "SceneSerializer.h"
+#include "SceneSerializerInternal.h"
 #include "SceneFileJson.h"
 #include "World.h"
 #include "../Renderer/Model.h"
@@ -1318,7 +1319,85 @@ static void Test_SceneSnapshot_BytesPinned() {
     }
 }
 
+// A scene loads to the same thing every time (undo/redo reload the whole scene from its snapshot), the component
+// blocks are read by their key with the old precedence, and a material slot follows its .mat by the GUID it saved.
+// (Empties only: a box or a model would need GL for its mesh.)
+static void Test_SceneReload_SameResult() {
+    namespace fs = std::filesystem;
+    using nlohmann::json;
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    std::error_code ec;
+    const fs::path dir = TempDir() / "reload_same";
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir / "Sub", ec);
+
+    const json scene = {
+        {"formatVersion", 4},
+        {"empties", json::array({
+            {{"id", 0}, {"name", "Crate"}, {"position", {1, 2, 3}}, {"order", 0},
+             {"tag", "Loot"}, {"layer", 3}, {"static", true}, {"active", false},
+             {"collider", {{"isTrigger", true}}}, {"Health", {{"Max", 250.0}}}},
+            // Both keys: the current one wins, as before.
+            {{"id", 1}, {"name", "Spawn A"}, {"parentId", 0}, {"order", 1},
+             {"Dummy Spawn", {{"Roam", false}}}, {"NPC Spawn", {{"Roam", true}}}},
+            // Only the legacy key: still read.
+            {{"id", 2}, {"name", "Spawn B"}, {"parentId", 1}, {"order", 2}, {"NPC Spawn", {{"Roam", false}}}},
+            // A non-object under a component's key adds the component with its defaults, as before.
+            {{"id", 3}, {"name", "Odd"}, {"order", 3}, {"Health", 5}},
+        })},
+    };
+
+    AssetLibrary assets;
+    World w;
+    CHECK(SceneSerializer::LoadFromString(w, assets, scene.dump()));
+    auto byName = [](World& world, const char* name) {
+        for (auto [e, n] : world.Registry.view<NameComponent>().each()) if (n.Name == name) return e;
+        return entt::entity{entt::null};
+    };
+    const entt::entity crate = byName(w, "Crate"), a = byName(w, "Spawn A"), b = byName(w, "Spawn B"), odd = byName(w, "Odd");
+    CHECK(crate != entt::null && a != entt::null && b != entt::null && odd != entt::null);
+    if (crate != entt::null) {
+        const auto* hp = w.Registry.try_get<HealthComponent>(crate);
+        CHECK(hp && hp->Max == 250.0f);
+        CHECK((w.Registry.all_of<ColliderComponent, TagComponent, LayerComponent, StaticTag, DeactivatedTag>(crate)));
+    }
+    if (a != entt::null) { const auto* s = w.Registry.try_get<NpcSpawnComponent>(a); CHECK(s && !s->Roam); }
+    if (b != entt::null) { const auto* s = w.Registry.try_get<NpcSpawnComponent>(b); CHECK(s && !s->Roam); }
+    if (odd != entt::null) { const auto* h = w.Registry.try_get<HealthComponent>(odd); CHECK(h && h->Max == HealthComponent{}.Max); }
+
+    // Save, reload, save: the same bytes and the same entities every time.
+    const std::string first = SceneSerializer::SaveToString(w, assets);
+    for (int i = 0; i < 2; ++i) {
+        World again;
+        CHECK(SceneSerializer::LoadFromString(again, assets, first));
+        CHECK(again.Registry.view<NameComponent>().size() == w.Registry.view<NameComponent>().size());
+        CHECK(SceneSerializer::SaveToString(again, assets) == first);
+    }
+    CHECK(SceneSerializer::LoadFromString(w, assets, first)); // in place, the way Undo does it
+    CHECK(SceneSerializer::SaveToString(w, assets) == first);
+
+    // A material slot as MaterialSlotsToJson writes it ({"guid","path"}) follows its .mat after a move.
+    MaterialAsset mat;
+    mat.Path = (dir / "Old.mat").string();
+    mat.Mat.Roughness = 0.42f;
+    CHECK(mat.Save());
+    const AssetGuid g = AssetGuid::Generate();
+    CHECK(AtomicFile::WriteBytes(mat.Path + ".meta", json({{"guid", g.ToString()}, {"type", "material"}}).dump(), true));
+    CHECK(AssetDatabase::EnsureGuid(mat.Path) == g);
+    const std::string movedMat = (dir / "Sub" / "Moved.mat").string();
+    fs::rename(mat.Path, movedMat, ec);
+    AssetDatabase::NotifyMoved(mat.Path, movedMat);
+    RenderableComponent rc;
+    SceneDetail::ReadMaterialSlots(assets, json{{"materials", json::array({json{{"guid", g.ToString()}, {"path", mat.Path}}, nullptr})}}, rc);
+    CHECK(rc.Materials.size() == 2 && rc.Materials[0] && !rc.Materials[1]);
+    CHECK(!rc.Materials.empty() && rc.Materials[0] &&
+          AssetDatabase::PathKey(rc.Materials[0]->Path) == AssetDatabase::PathKey(movedMat));
+    CHECK(!rc.Materials.empty() && rc.Materials[0] && rc.Materials[0]->Mat.Roughness == 0.42f);
+    fs::remove_all(dir, ec);
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"SceneSerializer::ReloadSameResult", Test_SceneReload_SameResult});
     tests.push_back({"SceneSerializer::SnapshotBytesPinned", Test_SceneSnapshot_BytesPinned});
     tests.push_back({"SamplingProfiler::SurvivesTheLoaderLock", Test_SamplingProfiler_SurvivesTheLoaderLock});
     tests.push_back({"PngWrite::LevelPerCallUnderThreads", Test_PngWrite_LevelPerCallUnderThreads});
