@@ -222,36 +222,6 @@ void ClusterGrid::BindForShading() const {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Decals::BIND_INDICES, m_DecalIndices);
 }
 
-bool ClusterGrid::ReadDecalSnapshot(DecalSnapshot& out) const {
-    if (!m_DecalIndices || m_LastDecalSlot < 0) return false;
-    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-    out.DecalCount = m_LastDecalCount;
-    out.BuildSlot = m_LastDecalSlot;
-    out.Clusters.resize((size_t)CLUSTERS * 2);
-    glGetNamedBufferSubData(m_AABBs[m_LastDecalSlot], 0, (GLsizeiptr)(out.Clusters.size() * sizeof(glm::vec4)), out.Clusters.data());
-    out.ViewBoxes.resize((size_t)m_LastDecalCount * kDecalViewBoxVec4s);
-    glGetNamedBufferSubData(m_DecalViewBoxes, 0, (GLsizeiptr)(out.ViewBoxes.size() * sizeof(glm::vec4)), out.ViewBoxes.data());
-    out.Ranges.resize((size_t)CLUSTERS * 2);
-    glGetNamedBufferSubData(m_DecalRanges, 0, (GLsizeiptr)(out.Ranges.size() * sizeof(uint32_t)), out.Ranges.data());
-    out.Indices.resize(2 + (size_t)kDecalIndexCapacity);
-    glGetNamedBufferSubData(m_DecalIndices, 0, (GLsizeiptr)(out.Indices.size() * sizeof(uint32_t)), out.Indices.data());
-    return true;
-}
-
-bool ClusterGrid::DecalBoxOverlaps(const glm::vec4* box, const glm::vec3& mn, const glm::vec3& mx, float slack) {
-    const glm::vec3 bc = 0.5f * (mn + mx), bh = 0.5f * (mx - mn);
-    const glm::vec3 d = glm::vec3(box[0]) - bc;
-    const glm::vec3 reach = glm::vec3(box[1]) + bh + glm::vec3(slack);
-    if (std::abs(d.x) > reach.x || std::abs(d.y) > reach.y || std::abs(d.z) > reach.z) return false;
-    for (int k = 0; k < 3; ++k) {
-        const glm::vec4 a = box[2 + k];
-        if (a.w == 0.0f) continue;
-        const glm::vec3 n(a);
-        if (std::abs(glm::dot(d, n)) > a.w + glm::dot(bh, glm::abs(n)) + slack) return false;
-    }
-    return true;
-}
-
 glm::vec4 ClusterGrid::ZParams(float nearZ, float farZ) {
     float lg = std::log(farZ / nearZ);
     return glm::vec4(nearZ, farZ,

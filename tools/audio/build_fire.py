@@ -234,6 +234,10 @@ def main():
     """build_fire.py [ak|870|revolver38] [layer ...]   -- e.g.  build_fire.py ak sub   rebuilds only the AK sub layer."""
     only = sys.argv[1] if len(sys.argv) > 1 else None
     layers = sys.argv[2:] or None
+    if only not in (None, "ak", "870", "revolver38"):
+        sys.exit(f"unknown gun {only!r} (ak, 870 or revolver38)")
+    if layers and set(layers) - set(LAYER_NAMES):
+        sys.exit(f"unknown layer(s) {sorted(set(layers) - set(LAYER_NAMES))} (one of {', '.join(LAYER_NAMES)})")
     allent, prefixes = [], []
     for name, path in (("ak", "ak_fire.json"), ("870", "remington870_fire.json"), ("revolver38", "revolver38_fire.json")):
         if only and only != name:

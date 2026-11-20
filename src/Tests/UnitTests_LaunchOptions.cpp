@@ -34,6 +34,8 @@ void Test_LaunchOptions_Modes() {
     CHECK(Parse({"--import-blood", "pack"}, o, err) && o.mode == LaunchMode::ImportBlood && o.importDir == "pack");
     CHECK(Parse({"--import-knife", "packs"}, o, err) && o.mode == LaunchMode::ImportKnife && o.importDir == "packs");
     CHECK(!Parse({"--import-blood"}, o, err) && err.find("needs a value") != std::string::npos);
+    // An empty value (a script whose path conversion failed) used to start a plain editor that never exits.
+    CHECK(!Parse({"--editor-shot", ""}, o, err) && err.find("needs a value") != std::string::npos);
 }
 
 void Test_LaunchOptions_Lists() {

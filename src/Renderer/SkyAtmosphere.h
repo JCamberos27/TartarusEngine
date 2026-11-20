@@ -47,7 +47,7 @@ struct SkyLighting {
 //   2. ResolveLighting()  - sun/moon directions, the directional light's colour and aim.
 //   3. PrepareFrame()     - LUTs when the atmosphere changed, the cloud shadow map, and the
 //                           environment capture when the sky has changed enough to re-bake.
-//   4. per view: RenderView() (before the scene's opaque pass), ApplyToProgram() for each model
+//   4. per view: RenderView() (before the scene's opaque pass), SetProgramUniforms() + BindTextures() for each model
 //      program, then DrawSky() once the opaque geometry is down.
 //
 // GL contract: every pass is compute except DrawSky's full-screen draw, which renders into
@@ -109,12 +109,14 @@ public:
     // the pixels still showing sky run the atmosphere/cloud shader.
     void DrawSky(const void* viewKey);
 
-    // Model-shader state for the view rendered by the last RenderView(viewKey): the aerial
-    // perspective volume and the cloud shadow map (kAerialUnit / kCloudShadowUnit), plus their
-    // uniforms.
-    void ApplyToProgram(Shader& program, const void* viewKey, const int viewport[4]) const;
-    // The same units with neutral textures and the effects switched off (other sky modes).
-    static void ApplyDisabled(Shader& program);
+    // Model-shader state for the view rendered by the last RenderView(viewKey): the uniforms of the aerial
+    // perspective and the cloud shadows, and (BindTextures) their volume and map on kAerialUnit / kCloudShadowUnit.
+    // The uniforms stay with the program; the textures are rebound after any pass that reused those units.
+    void SetProgramUniforms(Shader& program, const void* viewKey, const int viewport[4]) const;
+    void BindTextures(const void* viewKey) const;
+    // Both effects switched off, with neutral textures on the units (other sky modes).
+    static void SetDisabledUniforms(Shader& program);
+    static void BindDisabledTextures();
 
     // Direct transmittance of the atmosphere from `altitudeKm` above sea level toward `dir`
     // (CPU, for the sun light's colour and for tests). Zero once the planet is in the way.
@@ -135,6 +137,10 @@ public:
     float ClockOffsetHours() const { return m_ClockOffsetHours; }
 
 private:
+    // What BindTextures binds, or 0 when that effect is off (a neutral texture goes on the unit).
+    unsigned int AerialTexture(const void* viewKey) const;
+    unsigned int CloudShadowTexture() const;
+
     struct ViewResources {
         unsigned int SkyViewSun = 0, SkyViewMoon = 0, Aerial = 0;
         unsigned int SkyAmbient = 0; // 3 x 1, SkyAmbient.comp.glsl
@@ -170,6 +176,10 @@ private:
     std::unique_ptr<Shader> m_CompositeShader;
 
     unsigned int m_Ubo = 0;
+    // What m_Ubo holds (an AtmosphereUbo): the frame setup, each view and its cloud and sky draws all fill it,
+    // mostly with the same values, so a repeat skips the upload.
+    glm::vec4 m_UboContents[17]{};
+    bool m_UboContentsValid = false;
     unsigned int m_TransmittanceLut = 0;
     unsigned int m_MultiScatterLut = 0;
     unsigned int m_EnvCube = 0;

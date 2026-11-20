@@ -1,7 +1,9 @@
 # Runs NPC test scenarios several times each and reports every check's pass rate: one run of a noisy test
 # (npcloco, deaths) can't tell a fix from noise.
 #   python tools/npc_test_runs.py <engine exe> <scenario>... [--runs N] [--parallel N] [--logs DIR] [--visible]
-# Runs go hidden (the engine's default) and muted; --visible shows them (TARTARUS_SHOW=1), still muted. Always at unlocked FPS. At most 4 engines at once (VRAM). Exit code 1 if any check ever failed.
+# Runs go hidden (the engine's default) and muted; --visible shows them (TARTARUS_SHOW=1), still muted. Always at unlocked FPS. At most 4 engines at once (VRAM).
+# Exit code 1 if any check ever failed, was missing from a run, or a run didn't finish. NPC_TEST_* variables set in the
+# calling shell reach every run (listed at the start), except NPC_TEST_RECORD: parallel runs would write one folder.
 import argparse
 import os
 import re
@@ -26,6 +28,7 @@ def check_name(text):
 def run_one(exe, workdir, scenario, log, visible, timeout):
     env = dict(os.environ, TARTARUS_MUTE='1', TARTARUS_UNLOCKED_FPS='1')  # no VSync / FPS cap: game time is a fixed 1/60 s step
     env.pop('TARTARUS_HIDDEN', None)
+    env.pop('NPC_TEST_RECORD', None)
     if visible:
         env['TARTARUS_SHOW'] = '1'  # harness runs are hidden unless this is set
     else:
@@ -60,7 +63,10 @@ def main():
     ap.add_argument('--timeout', type=int, default=1800, help='seconds before a run counts as hung (default 30 min)')
     a = ap.parse_args()
     exe = os.path.abspath(a.exe)
-    workdir = os.path.abspath(os.path.join(os.path.dirname(exe), '..', '..'))  # <repo>/b/Release/TartarusEngine.exe
+    workdir = os.path.abspath(os.path.join(os.path.dirname(exe), '..', '..'))  # <repo>/<build dir>/Release/TartarusEngine.exe
+    ambient = sorted(k for k in os.environ if k.upper().startswith('NPC_TEST_') and k.upper() != 'NPC_TEST_RECORD')
+    if ambient:
+        print('note: every run gets ' + ', '.join(f'{k}={os.environ[k]}' for k in ambient))
     os.makedirs(a.logs, exist_ok=True)
     jobs = []
     for scenario in a.scenarios:
@@ -81,7 +87,7 @@ def main():
             seen = [checks[n] for _, (checks, _) in mine if n in checks]
             passed = sum(1 for ok, _ in seen if ok)
             mark = 'ok  ' if passed == len(seen) == len(mine) else 'FLAKY' if passed else 'FAIL'
-            failed = failed or passed < len(seen)
+            failed = failed or passed < len(seen) or len(seen) < len(mine)
             print(f'  {mark} {passed}/{len(seen)}' + (f' (in {len(seen)} of {len(mine)} runs)' if len(seen) < len(mine) else '') + f'  {n}')
             for ok, text in seen:
                 if not ok:

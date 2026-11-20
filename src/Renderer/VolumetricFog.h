@@ -55,11 +55,11 @@ public:
     // units 6-11 changed: invalidate GLStateCache afterwards.
     void Render(const FrameState& fs);
 
-    // Binds this view's integrated volume on kVolumeUnit and sets the program's uVol* uniforms;
-    // `enabled` false (or no volume for this view) switches the shader's apply off.
-    void ApplyToProgram(Shader& program, const void* viewKey, bool enabled) const;
-    // For a program that never draws with the fog: switch its apply off and keep a valid 3D texture on the unit.
-    static void ApplyDisabled(Shader& program);
+    // The program's uVol* uniforms for this view, and (BindTexture) its integrated volume on kVolumeUnit, rebound
+    // after any pass that reused the unit. `enabled` false (or no volume for this view) switches the shader's apply
+    // off and keeps a valid 3D texture on the unit.
+    void SetProgramUniforms(Shader& program, const void* viewKey, bool enabled) const;
+    void BindTexture(const void* viewKey, bool enabled) const;
 
     // The fog over the sky: a far-plane triangle blended over whatever the sky drew. Call right
     // after the sky, with the scene's depth bound.
@@ -75,6 +75,10 @@ public:
     static void BuildBlueNoise(unsigned short out[32 * 32]);
 
 private:
+    struct ViewState;
+    // This view's rendered volume, or null when the fog is off for it.
+    const ViewState* RenderedView(const void* viewKey, bool enabled) const;
+
     struct ViewState {
         unsigned int Scatter[2] = {0, 0}; // pass 1 output, ping-ponged as each other's history
         unsigned int Integrated = 0;      // pass 2 output, what the shading reads
