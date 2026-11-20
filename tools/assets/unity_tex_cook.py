@@ -80,7 +80,8 @@ def build(px, expr):
 
 
 def main():
-    jobs = json.load(open(sys.argv[sys.argv.index('--') + 1], encoding='utf-8'))
+    with open(sys.argv[sys.argv.index('--') + 1], encoding='utf-8') as f:
+        jobs = json.load(f)
     done = failed = 0
     for job in jobs:
         try:

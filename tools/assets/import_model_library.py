@@ -205,7 +205,6 @@ MOVE = {'Kitchen_Cabinet_B_Door_B_R': [{'node': 'Kitchen_cabinet_B_door_glass', 
 #   'centre'      centred on the body in X
 #   'lid'         centred on the body in X and Z, resting on its top
 #   'in'          centred on the body in X and Z, at the height as authored (sticks in a vase, a lid already at height)
-#   ('span', x0, x1)  centred in X on that span of the body (its own space, meters)
 #   ('place', x, z, yaw)  turned `yaw` degrees about Y, its centre at (x, z) of the body (height as authored)
 #   ('on', stem)  the rule after it, against another part (already seated) instead of the body
 #   ('as', stem)  an alternative to that part (glass doors for wooden ones): shown on a second copy of the body, in its place
@@ -288,6 +287,21 @@ def glob_raw(raw, pattern):
     return sorted(glob.glob(os.path.join(raw, pattern.replace('/', os.sep))))
 
 
+def read_json(path):
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def copy_if_changed(src, dst):
+    """Copies src over dst unless dst is already that file: same size and not older (copy2 keeps the time, so a
+    same-size edit of src is newer and still copies)."""
+    if (os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src)
+            and os.path.getmtime(dst) >= os.path.getmtime(src) - 2.0):
+        return
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copy2(src, dst)
+
+
 def write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
@@ -303,12 +317,10 @@ def standard_props(roughness, base=(1.0, 1.0, 1.0)):
             '_RoughnessMap': '', '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
 
 
-def write_meta(path, rel_folder, kind, extra=None, existing_ok=True):
+def write_meta(path, rel_folder, kind, extra=None):
+    """Writes path's .meta, keeping the guid of one already there."""
     meta_path = path + '.meta'
-    old = {}
-    if existing_ok and os.path.exists(meta_path):
-        with open(meta_path, encoding='utf-8') as f:
-            old = json.load(f)
+    old = read_json(meta_path) if os.path.exists(meta_path) else {}
     data = {'folder': rel_folder, 'guid': old.get('guid') or guid(), 'metaVersion': 1, 'type': kind}
     data.update(extra or {})
     write_json(meta_path, data)
@@ -437,9 +449,7 @@ def main():
         folder = os.path.join(assets, *s['pack'].split('/'), 'Textures', name)
         for kind, src in s['maps'].items():
             dst = os.path.join(folder, os.path.basename(src))
-            os.makedirs(folder, exist_ok=True)
-            if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(src):
-                shutil.copy2(src, dst)
+            copy_if_changed(src, dst)
             linear = kind != 'albedo' and kind != 'emissive'
             write_meta(dst, rel(folder), 'texture', {'importer': {
                 'anisoLevel': 8, 'compression': 1, 'filterMode': 2, 'generateMipmaps': True, 'isSRGB': not linear,
@@ -534,9 +544,7 @@ def main():
     for m in models:
         folder = os.path.join(assets, *m['pack'].split('/'), 'Models')
         dst = os.path.join(folder, m['stem'] + os.path.splitext(m['src'])[1])
-        os.makedirs(folder, exist_ok=True)
-        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(m['src']):
-            shutil.copy2(m['src'], dst)
+        copy_if_changed(m['src'], dst)
         importer = {'globalScale': m['scale'], 'importAnimations': False, 'importNormals': True, 'importSkeleton': False,
                     'materialImportMode': 1, 'mergeByMaterial': True, 'optimizeGraph': True}
         if any(abs(v) > 1e-4 for v in m['offset']):
@@ -703,7 +711,7 @@ def write_gallery(repo, exe):
     library = project_models(repo, exe)
 
     scenes = os.path.join(repo, 'project', 'scenes')
-    sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scenes', 'sandbox_template.json'), encoding='utf-8'))
+    sandbox = read_json(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scenes', 'sandbox_template.json'))
     skip = {'boxes', 'empties', 'models', 'libraryMaterials', 'libraryModels', 'libraryPrefabs', 'librarySounds',
             'libraryTextures'}
     scene = {k: v for k, v in sandbox.items() if k not in skip}
@@ -765,8 +773,6 @@ def write_gallery(repo, exe):
             d = [0.0, 0.0, 0.0]
             if rule == 'centre':
                 d[0] = (tlo[0] + thi[0]) / 2 - (lo[0] + hi[0]) / 2
-            elif isinstance(rule, tuple) and rule[0] == 'span':
-                d[0] = (rule[1] + rule[2]) / 2 - (lo[0] + hi[0]) / 2
             elif isinstance(rule, tuple) and rule[0] == 'place':
                 # its own centre (height as authored) turned about its entity's origin, then put at (x, z)
                 yaws[p['stem']] = rule[3]
@@ -890,10 +896,12 @@ def write_gallery(repo, exe):
         rows.append((pack, row_z, x, depth, height))
         row_z -= max(depth, 1.0) + 6.0
     # Floor: prototype grid box under everything.
+    if not rows:
+        sys.exit('import_model_library: no models in the project to lay out (run the import first)')
     width = max(r[2] for r in rows) + 4.0
     length = -row_z + 4.0
     grid = 'assets/Materials/Prototype/proto_grid_light.png'
-    grid_guid = json.load(open(os.path.join(repo, 'project', grid + '.meta'), encoding='utf-8'))['guid']
+    grid_guid = read_json(os.path.join(repo, 'project', grid + '.meta'))['guid']
     boxes.append({'collider': {'friction': 0.8, 'isTrigger': False}, 'color': [1.0, 1.0, 1.0],
                   'id': next(ids), 'name': 'Floor', 'order': next(order), 'parentId': -1,
                   'position': [round(width / 2 - 2.0, 3), -0.05, round(-length / 2 + 2.0, 3)], 'rotation': ident,
