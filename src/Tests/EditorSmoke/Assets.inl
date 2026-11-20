@@ -97,6 +97,11 @@ Steps EnsureScratch() {
     return {
         Do("write the scratch folder", [](Ctx& c) {
             g_Ed = &c.E;
+            static bool s_RemoveAtEnd = false; // once per run, whichever test made the folder
+            if (!s_RemoveAtEnd) {
+                s_RemoveAtEnd = true;
+                AtRunEnd([] { std::error_code e; fs::remove_all(fs::u8path(Dir()), e); });
+            }
             std::error_code ec;
             if (fs::exists(fs::u8path(DirFile("Sub/Deeper/Deep Tex.png")), ec) && HasFolder(c, kDeeper)) return;
             fs::remove_all(fs::u8path(Dir()), ec);

@@ -934,6 +934,10 @@ glm::vec3 g_Vec{0.0f};
 void Add(std::string name, std::vector<Step> steps, std::function<void(Ctx&)> finally = {}) {
     g_Tests.push_back({std::move(name), std::move(steps), std::move(finally)});
 }
+// Cleanups a suite registers for the end of the run: what its tests share (a scratch folder made by whichever of
+// them ran first) goes even when a filter skipped the suite's own cleanup test or a test failed.
+std::vector<std::function<void()>> g_RunCleanups;
+void AtRunEnd(std::function<void()> f) { g_RunCleanups.push_back(std::move(f)); }
 
 // =============================================================================================
 // The Glass motion demo (MotionDemo.h): a scripted tour of the editor's motion, recorded at 60 fps.
@@ -2057,6 +2061,8 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
 
     // Summary.
     g_Done = true;
+    for (auto& f : g_RunCleanups) f();
+    g_RunCleanups.clear();
     ctx->TestEngineHookItems = false;
     std::cout << "\n[EditorTest] ==== Summary ====" << std::endl;
     for (const auto& l : g_FailLines) std::cout << "[EditorTest] FAIL " << l << std::endl;
