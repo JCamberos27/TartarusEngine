@@ -147,7 +147,6 @@ Gameplay::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float d
     f.CycleAfterShot=g.CycleAfterShot;
     f.HipProcedural=m_Set.Procedural.Recoil.HipProcedural;
     f.RecoilProfile=!m_Set.RecoilProfile.empty() && !m_Set.HipFireClip; // hipFireClip: the profile only shapes sights-up shots
-    f.UnityRecoil=m_Set.Procedural.Recoil.UnityPort;
     if(ac->HasTag(K::kTagHidden)) f.Tags|=1;
     if(ac->HasTag(K::kTagReload)) f.Tags|=2;
     if(ac->HasTag(K::kTagBusy)) f.Tags|=4;

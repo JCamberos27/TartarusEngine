@@ -115,13 +115,7 @@ void BindRecoilData(CurveEditor::AssetScope& scope,const RecoilAnimData& d,const
 }
 void BindProceduralCurves(CurveEditor::AssetScope& scope,const WeaponProceduralSettings& p) {
     scope.Bind(p.Aim.Blend,"/procedural/aim/blend","Aim blend");
-    BindVectorCurve(scope,p.Recoil.Rotation,"/procedural/recoil/rotation","Recoil rotation");
-    BindVectorCurve(scope,p.Recoil.Position,"/procedural/recoil/position","Recoil position");
-    BindVectorCurve(scope,p.Recoil.SustainedRotation,"/procedural/recoil/sustainedRotation","Sustained rotation");
-    BindVectorCurve(scope,p.Recoil.SustainedPosition,"/procedural/recoil/sustainedPosition","Sustained position");
-    scope.Bind(p.Recoil.CameraPitch,"/procedural/recoil/cameraPitch","Camera pitch");
-    scope.Bind(p.Recoil.CameraYaw,"/procedural/recoil/cameraYaw","Camera yaw");
-    if(p.Recoil.UnityPort)BindRecoilData(scope,p.Recoil.Unity,"/procedural/recoil/recoilAnimData");
+    BindRecoilData(scope,p.Recoil.Unity,"/procedural/recoil/recoilAnimData");
     BindVectorCurve(scope,p.Breath.Position,"/procedural/breath/position","Breathing position");
     scope.Bind(p.Breath.Pitch,"/procedural/breath/pitch","Breathing pitch");
 }
@@ -137,29 +131,6 @@ void CurveRow(PropertyRows& r, const char* label, const char* id, Curve& c, cons
     o.Default = &def;
     o.Title = label;
     if (CurveEditor::Draw(id, c, ImVec2(0.0f, ImGui::GetFontSize() * 5.0f), o)) r.MarkChanged();
-}
-
-void Curve3Rows(PropertyRows& r, const char* id, FirstPersonCurve3& c, const FirstPersonCurve3& def, const char* xl,
-                const char* yl, const char* zl, const char* fmtXY, const char* fmtZ, float ampXY, float ampZ, const char* tip) {
-    ImGui::PushID(id);
-    CurveRow(r, xl, "##x", c.X, def.X, fmtXY, ampXY, tip);
-    CurveRow(r, yl, "##y", c.Y, def.Y, fmtXY, ampXY, tip);
-    CurveRow(r, zl, "##z", c.Z, def.Z, fmtZ, ampZ, tip);
-    ImGui::PopID();
-}
-
-// A shot's curve that doesn't come back to 0 by the end of the shot snaps the gun when the shot
-// expires.
-void EndsAtZero(const char* what, const Curve& c) {
-    if (c.Empty()) return;
-    float peak = 0.0f;
-    for (const CurveKey& k : c.Keys) peak = std::max(peak, std::fabs(k.Value));
-    const float end = c.Evaluate(1.0f);
-    if (std::fabs(end) > std::max(peak * 0.02f, 1e-5f)) {
-        char msg[160];
-        std::snprintf(msg, sizeof msg, "%s ends at %g, not 0: it snaps back as each shot ends", what, end);
-        PropertyRows::Badge(Status::Warning, msg);
-    }
 }
 
 bool Tree(const char* label, bool defaultOpen = false) {
@@ -406,183 +377,16 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
 // --- Recoil ------------------------------------------------------------------------------------
 
 void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm, bool profile = false) {
-    if (profile || rc.UnityPort) { RecoilAssetEditor::Draw(r,rc,rpm); return; }
-    static const WeaponProceduralSettings kDefaults = WeaponProceduralSettings::Defaults();
-    const WeaponRecoilSettings& def = kDefaults.Recoil;
-    r.Check("Enabled", rc.Enabled, "Procedural recoil on every shot, hip and ADS.");
-    r.Float("Hip Scale", rc.HipScale, 0.01f, 0.0f, 5.0f, "x%.2f", "Multiplier for hip fire.");
-    r.Float("ADS Scale", rc.AdsScale, 0.01f, 0.0f, 5.0f, "x%.2f", "Multiplier with the sights up.");
-
-    if (Tree("Kick", true)) {
-        r.Float("Duration", rc.Duration, 0.005f, 0.02f, 3.0f, "%.3f s", "Seconds one shot's curves span. The curves are keyed over 0..1 of it.");
-        r.Vec3("Pivot", rc.Pivot, 0.001f, "%.3f", "Metres: the rotation centre relative to the gun bone, camera frame.\n"
-                                                   "Push it back (+Z) to pivot nearer the shoulder.");
-        r.Vec3("ADS Pivot", rc.AdsPivot, 0.001f, "%.3f", "Rotation centre with sights raised, camera-space metres.");
-        r.Vec3("ADS Rotation", rc.AdsRotationScale, 0.01f, "%.2f", "Per-axis visual rotation multipliers.");
-        r.Vec3("ADS Position", rc.AdsPositionScale, 0.01f, "%.2f", "Per-axis visual translation multipliers.");
-        r.Spring("Smoothing", rc.Smoothing.Frequency, rc.Smoothing.Damping,
-                 "The spring the summed kicks run through. Higher frequency = snappier; damping 1 = no overshoot.");
-        r.Heading("Per-shot random scale");
-        r.Range("Pitch", rc.PitchRange, 0.01f, "%.2f", "Each shot multiplies its pitch curve by a random value in this range.");
-        r.Range("Yaw", rc.YawRange, 0.01f, "%.2f", "A negative min lets the shot kick either way.");
-        r.Range("Roll", rc.RollRange, 0.01f, "%.2f", "A negative min lets the shot roll either way.");
-        r.Range("Side", rc.SideRange, 0.01f, "%.2f", "A negative min lets the shot push either way.");
-        r.Range("Up", rc.UpRange, 0.01f, "%.2f", "Random scale for the Up curve.");
-        r.Range("Kickback", rc.KickRange, 0.01f, "%.2f", "Random scale for the Kickback curve.");
-        if (Tree("Shot curves")) {
-            const char* shotTip = "One shot's motion over its Duration (0 = the shot). Should end at 0. Shots overlap and add, so full-auto climbs.";
-            Curve3Rows(r, "rot", rc.Rotation, def.Rotation, "Pitch (deg)", "Yaw (deg)", "Roll (deg)", "%.2f", "%.2f", 1.0f, 1.0f, shotTip);
-            Curve3Rows(r, "pos", rc.Position, def.Position, "Side (m)", "Up (m)", "Kickback (m)", "%.4f", "%.4f", 0.002f, 0.01f, shotTip);
-            ImGui::TreePop();
-        }
-        EndsAtZero("Pitch", rc.Rotation.X);
-        EndsAtZero("Yaw", rc.Rotation.Y);
-        EndsAtZero("Roll", rc.Rotation.Z);
-        EndsAtZero("Side", rc.Position.X);
-        EndsAtZero("Up", rc.Position.Y);
-        EndsAtZero("Kickback", rc.Position.Z);
-        ImGui::TreePop();
-    }
-
-    if (Tree("Sustained Fire")) {
-        r.Check("Separate Curves", rc.SustainedCurves, "Use these curves after the first round of a burst. Every round remains shot-driven.");
-        r.Float("Duration", rc.SustainedDuration, 0.005f, 0.02f, 3.0f, "%.3f s", "Duration of each sustained-fire kick.");
-        Curve3Rows(r, "srot", rc.SustainedRotation, def.Rotation, "Pitch (deg)", "Yaw (deg)", "Roll (deg)", "%.2f", "%.2f", 1.0f, 1.0f, "Sustained shot response. End at zero.");
-        Curve3Rows(r, "spos", rc.SustainedPosition, def.Position, "Side (m)", "Up (m)", "Kickback (m)", "%.4f", "%.4f", 0.002f, 0.01f, "Sustained shot response. End at zero.");
-        ImGui::TreePop();
-    }
-    if (Tree("Recoil Layers")) {
-        r.Range("Noise Side", rc.NoiseSide, 0.001f, "%.4f m", "Random lateral impulse per shot.");
-        r.Range("Noise Up", rc.NoiseUp, 0.001f, "%.4f m", "Random vertical impulse per shot.");
-        r.Float("Noise Attack", rc.NoiseAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Noise response speed.");
-        r.Float("Noise Decay", rc.NoiseDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Noise return speed.");
-        r.Float("Noise ADS", rc.NoiseAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS noise multiplier.");
-        r.Float("Push", rc.PushAmount, 0.001f, 0.0f, 0.2f, "%.4f m", "Additional backward impulse per round.");
-        r.Float("Push Attack", rc.PushAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Push response speed.");
-        r.Float("Push Decay", rc.PushDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Push return speed.");
-        r.Range("Sway Pitch", rc.SwayPitch, 0.01f, "%.2f deg", "Accumulated sway impulse per round.");
-        r.Range("Sway Yaw", rc.SwayYaw, 0.01f, "%.2f deg", "Accumulated lateral sway per round.");
-        r.Float("Sway Roll", rc.SwayRoll, 0.01f, -5.0f, 5.0f, "%.2f", "Roll per degree of sway yaw.");
-        r.Vec3("Sway Pivot", rc.SwayPivot, 0.001f, "%.3f", "Sway rotation centre in camera-space metres.");
-        r.Float("Sway Attack", rc.SwayAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Sway response speed.");
-        r.Float("Sway Decay", rc.SwayDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Sway return speed.");
-        r.Float("Sway ADS", rc.SwayAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS sway multiplier.");
-        r.Float("Pitch Progression", rc.PitchProgression, 0.01f, 0.0f, 10.0f, "%.2f deg", "Additional visual muzzle climb per round.");
-        r.Float("Up Progression", rc.UpProgression, 0.001f, 0.0f, 0.2f, "%.4f m", "Additional upward translation per round.");
-        r.Float("Progression Attack", rc.ProgressionAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Progression response speed.");
-        r.Float("Progression Decay", rc.ProgressionDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Progression return speed.");
-        r.Float("Progression ADS", rc.ProgressionAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS progression multiplier.");
-        ImGui::TreePop();
-    }
-
-    if (Tree("Variety")) {
-        r.Note("Runtime randomness, so no two rounds - and no two bursts - leave the gun the same way.");
-        r.Float("Kick Spread", rc.KickSpread, 0.1f, 0.0f, 90.0f, "%.1f deg", "Each round's muzzle rise leaves at its own angle off straight up (normal sigma).");
-        r.Float("Kick Bias", rc.KickBias, 0.1f, -45.0f, 45.0f, "%.1f deg", "Shifts that angle's average (+ = right).");
-        r.Float("Time Jitter", rc.TimeJitter, 0.005f, 0.0f, 0.9f, "%.2f", "Each round's curves play over Duration x [1 - j, 1 + j].");
-        r.Float("First Shot", rc.FirstShotScale, 0.01f, 0.0f, 5.0f, "x%.2f", "The first round of a burst kicks this much harder.");
-        r.Float("Wander", rc.Wander, 0.005f, 0.0f, 5.0f, "%.3f deg", "Full-auto sideways drift: a random walk, this sigma per round.");
-        r.Float("Wander Return", rc.WanderReturn, 0.005f, 0.0f, 1.0f, "%.2f", "How much of the drift is pulled back toward centre each round.");
-        r.Float("Burst Growth", rc.BurstGrowth, 0.005f, 0.0f, 2.0f, "%.3f", "Widens Kick Spread and Wander per round of a burst...");
-        r.Float("Burst Growth Max", rc.BurstGrowthMax, 0.01f, 1.0f, 10.0f, "x%.2f", "...up to this multiple.");
-        ImGui::TreePop();
-    }
-
-    if (Tree("Aim Climb")) {
-        r.Note("Moves where the player actually aims (the view punch below only moves what they see).");
-        r.Range("Pitch", rc.AimPitch, 0.005f, "%.3f deg", "Degrees up per round, a random pick in this range.");
-        r.Range("Yaw", rc.AimYaw, 0.005f, "%.3f deg", "Degrees right per round (negative = left), a random pick in this range.");
-        r.Float("Pitch Attack", rc.AimSmoothing.x, 0.1f, 0.0f, 200.0f, "%.1f /s", "Pitch attack rate. Zero applies immediately.");
-        r.Float("Yaw Attack", rc.AimSmoothing.y, 0.1f, 0.0f, 200.0f, "%.1f /s", "Yaw attack rate. Zero applies immediately.");
-        r.Check("Player Compensation", rc.AimCompensation, "Opposing player input reduces automatic recovery so the aim is not pulled down twice.");
-        r.Float("Controller ADS", rc.AimAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS controller recoil multiplier, independent of the visual kick.");
-        r.Float("Recovery", rc.AimRecovery, 0.01f, 0.0f, 1.0f, "%.2f", "How much of the climb eases back once the trigger rests (the rest is the player's to pull down).");
-        r.Float("Recovery Delay", rc.AimRecoveryDelay, 0.005f, 0.0f, 2.0f, "%.3f s", "Rest this long before it starts easing back.");
-        r.Float("Recovery Speed", rc.AimRecoverySpeed, 0.1f, 0.0f, 100.0f, "%.1f deg/s", "How fast it eases back.");
-        ImGui::TreePop();
-    }
-
-    if (Tree("Camera Punch")) {
-        const char* camTip = "View punch per shot, degrees: what the player sees, not where they aim. Recovers on its own.";
-        CurveRow(r, "Pitch (deg)", "##cp", rc.CameraPitch, def.CameraPitch, "%.2f", 0.5f, camTip);
-        CurveRow(r, "Yaw (deg)", "##cy", rc.CameraYaw, def.CameraYaw, "%.2f", 0.2f, camTip);
-        EndsAtZero("Camera Pitch", rc.CameraPitch);
-        EndsAtZero("Camera Yaw", rc.CameraYaw);
-        r.Range("Yaw Range", rc.CameraYawRange, 0.01f, "%.2f", "Random scale for the camera yaw; a negative min kicks either way.");
-        r.Float("Scale", rc.CameraScale, 0.01f, 0.0f, 5.0f, "x%.2f", "Multiplier for the whole camera punch (0 = off).");
-        r.Spring("Smoothing", rc.CameraSmoothing.Frequency, rc.CameraSmoothing.Damping,
-                 "Smooths the summed punch so full auto reads as one rolling push. Frequency 0.1 is nearly off.");
-        ImGui::TreePop();
-    }
-
-    if (Tree("Camera Shake")) {
-        r.Float("Amount", rc.ShakeAmount, 0.005f, 0.0f, 1.0f, "%.3f", "Trauma each round adds (0 = no shake). The shake is trauma squared, so one tap is a tremor and full auto a rattle.");
-        r.Vec3("Max", rc.ShakeMax, 0.01f, "%.2f", "Degrees of shake (pitch, yaw, roll) at full trauma.", "PYR");
-        r.Float("Frequency", rc.ShakeFrequency, 0.1f, 0.0f, 60.0f, "%.1f Hz", "How fast the shake's noise moves.");
-        r.Float("Decay", rc.ShakeDecay, 0.05f, 0.0f, 20.0f, "%.2f /s", "Trauma drained per second.");
-        r.Float("ADS Scale", rc.ShakeAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier for the visible shake (and the roll and FOV punch below) with the sights up.");
-        r.Float("Camera Roll", rc.CameraRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Each round snaps the view's roll a random way by up to this much, and it springs back.");
-        r.Float("FOV Punch", rc.FovPunch, 0.01f, -10.0f, 10.0f, "%.2f deg", "Each round pulses the field of view by about this much (+ widens), springing back.");
-        r.Spring("Punch Spring", rc.PunchSpring.Frequency, rc.PunchSpring.Damping, "How the roll and FOV punch snap in and settle.");
-        ImGui::TreePop();
-    }
-
-    if (!profile && Tree("Bolt & Hip Fire")) {
+    RecoilAssetEditor::Draw(r,rc,rpm);
+    if (profile) return;
+    // The weapon's own (a shared profile never carries these).
+    if (Tree("Bolt & Hip Fire")) {
         r.Check("Hip Procedural", rc.HipProcedural, "Hip rounds kick procedurally too (wherever the gun is simply held) instead of replaying the Fire clip.");
         r.Float("Bolt Cycle", rc.BoltCycle, 0.001f, 0.0f, 1.0f, "%.3f s", "Seconds the bolt takes to slam back and return each round (0 = no procedural bolt).");
         r.Text("Bolt Bone", rc.BoltBone, "Bone on the weapon rig that cycles, along the travel its Fire clip authors.");
         r.Vec3("Bolt Travel", rc.BoltTravel, 0.001f, "%.4f", "Explicit stroke in weapon model units. Zero optionally measures a Fire clip.");
         ImGui::TreePop();
     }
-
-    // What a burst looks like with these numbers: the gun's pitch over 1.5 s of a 10-round ADS
-    // burst at the weapon's rpm, every random pick at its middle.
-    WeaponProceduralSettings sim = kDefaults;
-    sim.Recoil = rc;
-    sim.Sway.Enabled = sim.Breath.Enabled = sim.Lean.Enabled = false;
-    sim.StateOffsets.clear();
-    auto& sr = sim.Recoil;
-    for (glm::vec2* rg : {&sr.PitchRange, &sr.YawRange, &sr.RollRange, &sr.SideRange, &sr.UpRange, &sr.KickRange, &sr.CameraYawRange})
-        *rg = glm::vec2((rg->x + rg->y) * 0.5f);
-    sr.KickSpread = sr.TimeJitter = sr.Wander = 0.0f;
-    WeaponProceduralState st;
-    WeaponProceduralInput in;
-    in.Dt = 1.0f / 120.0f;
-    static int previewMode = 2;
-    static bool previewAds = true;
-    ImGui::Combo("Preview", &previewMode, "Single shot\0Three-round burst\0Held auto (10 rounds)\0");
-    ImGui::Checkbox("Preview ADS", &previewAds);
-    const float interval = rpm > 0.0f ? 60.0f / rpm : 0.1f;
-    float pitch[180], aimPitch[180], aimYaw[180], kickback[180];
-    glm::vec2 totalAim(0.0f);
-    float aimPeak = 0.01f, backPeak = 0.0001f;
-    const int count = previewMode == 0 ? 1 : previewMode == 1 ? 3 : 10;
-    float next = 0.0f, peak = 0.01f;
-    int shots = 0;
-    for (int f = 0; f < 180; ++f) {
-        if (shots < count && f * in.Dt >= next) { st.OnShot(sim, previewAds); next += interval; ++shots; }
-        in.Ads = previewAds;
-        const auto& pose = st.Update(sim, in);
-        pitch[f] = pose.Rotation.x;
-        totalAim += pose.AimKick;
-        aimPitch[f] = totalAim.x;
-        aimYaw[f] = totalAim.y;
-        kickback[f] = pose.Position.z;
-        aimPeak = std::max(aimPeak, std::max(std::fabs(totalAim.x), std::fabs(totalAim.y)));
-        backPeak = std::max(backPeak, std::fabs(kickback[f]));
-        peak = std::max(peak, std::fabs(pitch[f]));
-    }
-    char overlay[64];
-    std::snprintf(overlay, sizeof overlay, "%d rounds: gun pitch peaks %.2f deg", count, peak);
-    ImGui::Spacing();
-    ImGui::PlotLines("##burst", pitch, 180, 0, overlay, -peak * 0.25f, peak * 1.15f, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 5.0f));
-    if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("The gun's pitch over 1.5 s of a 10-round burst at this weapon's rounds per minute,\n"
-                             "with every random range at its middle. Updates as you edit.");
-    ImGui::PlotLines("##controllerpitch", aimPitch, 180, 0, "Controller pitch (deg)", -aimPeak, aimPeak, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 4.0f));
-    ImGui::PlotLines("##controlleryaw", aimYaw, 180, 0, "Controller yaw (deg)", -aimPeak, aimPeak, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 4.0f));
-    ImGui::PlotLines("##kickback", kickback, 180, 0, "Gun kickback (metres)", -backPeak, backPeak, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 4.0f));
-    r.ResetButton("Recoil", [&] { rc = def; });
 }
 
 // --- Movement ----------------------------------------------------------------------------------
@@ -1495,7 +1299,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     }
 
     const auto& rc = s.Procedural.Recoil;
-    std::snprintf(summary, sizeof summary, "%s", rc.Enabled ? (rc.ShakeAmount > 0.0f ? "kick, climb, shake" : "kick, climb") : "off");
+    std::snprintf(summary, sizeof summary, "%s", rc.Enabled ? "kick, climb" : "off");
     if (r.Section(ICON_FA_BURST, "Recoil", summary)) {
         static const char* const extensions[] = {".recoil", nullptr};
         AssetPathPickerOptions options;

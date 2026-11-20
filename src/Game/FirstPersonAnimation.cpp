@@ -178,13 +178,15 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
                 const float rise = Number(*r, "rise", 0.035f), settle = Number(*r, "settle", 0.08f);
                 if (!(rise > 0.0f) || !(settle > 0.0f) || !Finite(offset) || !std::isfinite(pitch))
                     return Fail(error, "'gameplay.recoil' needs positive rise/settle and finite pitch/offset");
-                p.Recoil.Duration = rise + 5.0f * settle;
-                const float peak = rise / p.Recoil.Duration, tau = settle / p.Recoil.Duration;
-                p.Recoil.Rotation = {FirstPersonKickCurve(pitch, peak, tau), {}, {}};
-                p.Recoil.Position = {FirstPersonKickCurve(offset.x, peak, tau), FirstPersonKickCurve(offset.y, peak, tau),
-                                     FirstPersonKickCurve(offset.z, peak, tau)};
-                p.Recoil.PitchRange = p.Recoil.UpRange = p.Recoil.KickRange = p.Recoil.SideRange = glm::vec2(1.0f);
-                p.Recoil.HipScale = 0.0f; // it used to kick in ADS only
+                LegacyRecoilSettings legacy = LegacyRecoilSettings::Defaults();
+                legacy.Duration = rise + 5.0f * settle;
+                const float peak = rise / legacy.Duration, tau = settle / legacy.Duration;
+                legacy.Rotation = {FirstPersonKickCurve(pitch, peak, tau), {}, {}};
+                legacy.Position = {FirstPersonKickCurve(offset.x, peak, tau), FirstPersonKickCurve(offset.y, peak, tau),
+                                   FirstPersonKickCurve(offset.z, peak, tau)};
+                legacy.PitchRange = legacy.UpRange = legacy.KickRange = legacy.SideRange = glm::vec2(1.0f);
+                legacy.HipScale = 0.0f; // it used to kick in ADS only
+                p.Recoil.Unity = RecoilAnimData::FromLegacy(legacy);
             }
             if (const auto b = g->find("adsBob"); b != g->end() && b->is_object()) {
                 const float stride = Number(*b, "stride", 2.4f);
@@ -352,11 +354,6 @@ bool FirstPersonAnimationSet::LoadFile(const std::string& path, FirstPersonAnima
     if(!parsed.CameraShakeProfile.empty()) {
         parsed.CameraShakeProfile=AssetDatabase::FollowRef(parsed.CameraShakeProfile,parsed.CameraShakeProfileGuid);
         if(!CameraShakeAsset::LoadFile(ProjectPaths::Resolve(parsed.CameraShakeProfile),parsed.CameraShake,error)) return false;
-        // This profile is the complete firing camera motion: legacy punch/roll must not
-        // add another (potentially randomized) camera offset over the authored curves.
-        parsed.Procedural.Recoil.ShakeAmount=0;
-        parsed.Procedural.Recoil.CameraScale=0;
-        parsed.Procedural.Recoil.CameraRoll=0;
     }
     out = std::move(parsed);
     return true;

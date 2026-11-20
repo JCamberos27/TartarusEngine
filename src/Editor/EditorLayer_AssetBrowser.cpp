@@ -220,14 +220,7 @@ void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool o
 // render budget is spent — the caller falls back to the type glyph and picks it up next frame.
 unsigned int EditorLayer::ModelThumbnail(Model& model) {
     const std::string& path = model.Path();
-    auto it = m_ModelThumbnails.find(path);
-    if (it != m_ModelThumbnails.end()) {
-        // Touch: move to the front (most-recently-used end) of the LRU list.
-        m_ThumbnailLRU.erase(it->second.second);
-        m_ThumbnailLRU.push_front(path);
-        it->second.second = m_ThumbnailLRU.begin();
-        return it->second.first;
-    }
+    if (const unsigned int* cached = m_ModelThumbnails.Find(path)) return *cached;
     if (m_ThumbnailBudgetThisFrame <= 0) return 0;
     m_ThumbnailBudgetThisFrame--;
 
@@ -271,21 +264,10 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
         ThumbnailCache::SaveAsync(path, kSize, cacheKey, std::move(freshPixels)); // encode + write off the UI thread
     }
 
-    m_ThumbnailLRU.push_front(path);
-    m_ModelThumbnails[path] = { dst, m_ThumbnailLRU.begin() };
-
-    // LRU eviction: bounded above kMaxModelThumbnails so browsing a large asset library over a
-    // session doesn't accumulate GL textures forever. The least-recently-used entry is the back
-    // of the list.
-    if (m_ModelThumbnails.size() > kMaxModelThumbnails) {
-        const std::string evictPath = m_ThumbnailLRU.back();
-        m_ThumbnailLRU.pop_back();
-        auto evictIt = m_ModelThumbnails.find(evictPath);
-        if (evictIt != m_ModelThumbnails.end()) {
-            if (evictIt->second.first) m_RetiredThumbnailTextures.push_back(evictIt->second.first);
-            m_ModelThumbnails.erase(evictIt);
-        }
-    }
+    m_ModelThumbnails.Insert(path, dst);
+    // Bounded so browsing a large asset library over a session doesn't accumulate GL textures.
+    // Retired, not deleted: a tile drawn earlier this frame may still use the evicted one.
+    m_ModelThumbnails.TrimTo(kMaxModelThumbnails, [this](unsigned int& tex) { if (tex) m_RetiredThumbnailTextures.push_back(tex); });
     return dst;
 }
 
@@ -316,13 +298,10 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
     const int kSize = 128;
     const std::uint64_t contentKey = MaterialPreviewRenderer::ContentKey(*ma);
 
-    auto it = m_MaterialThumbs.find(path);
-    if (it != m_MaterialThumbs.end()) {
-        m_MaterialThumbLRU.erase(it->second.Lru);
-        m_MaterialThumbLRU.push_front(path);
-        it->second.Lru = m_MaterialThumbLRU.begin();
-        if (it->second.ContentKey == contentKey || m_ThumbnailBudgetThisFrame <= 0)
-            return it->second.Tex; // current, or stale for a frame until there's budget
+    const MaterialThumb* cached = m_MaterialThumbs.Find(path);
+    if (cached) {
+        if (cached->ContentKey == contentKey || m_ThumbnailBudgetThisFrame <= 0)
+            return cached->Tex; // current, or stale for a frame until there's budget
     } else if (m_ThumbnailBudgetThisFrame <= 0) {
         return 0;
     }
@@ -340,8 +319,8 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
     if (ma->Shader && !ma->ShaderPath.empty()) deps.push_back(ma->ShaderPath);
     const std::uint64_t diskKey = ThumbnailCache::DependencyKey(path, deps);
 
-    const bool fresh = it == m_MaterialThumbs.end();
-    MaterialThumb entry = fresh ? MaterialThumb{} : it->second;
+    const bool fresh = !cached;
+    MaterialThumb entry = fresh ? MaterialThumb{} : *cached;
     std::vector<unsigned char> pixels;
     // First sight this session: a cached PNG whose dependencies are unchanged is the same image.
     if (fresh && ThumbnailCache::Load(path, kSize, diskKey, pixels)) {
@@ -366,42 +345,24 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
     }
     entry.ContentKey = contentKey;
 
-    if (fresh) {
-        m_MaterialThumbLRU.push_front(path);
-        entry.Lru = m_MaterialThumbLRU.begin();
-    }
-    m_MaterialThumbs[path] = entry;
-    if (m_MaterialThumbs.size() > kMaxModelThumbnails) {
-        const std::string evict = m_MaterialThumbLRU.back();
-        m_MaterialThumbLRU.pop_back();
-        auto e = m_MaterialThumbs.find(evict);
-        if (e != m_MaterialThumbs.end()) {
-            // Retired, not deleted: a tile drawn earlier this frame may still use it (as the model path).
-            if (e->second.Tex) m_RetiredThumbnailTextures.push_back(e->second.Tex);
-            m_MaterialThumbs.erase(e);
-        }
-    }
+    m_MaterialThumbs.Insert(path, entry);
+    // Retired, not deleted: a tile drawn earlier this frame may still use it (as the model path).
+    m_MaterialThumbs.TrimTo(kMaxModelThumbnails, [this](MaterialThumb& t) { if (t.Tex) m_RetiredThumbnailTextures.push_back(t.Tex); });
     return entry.Tex;
 }
 
 void EditorLayer::ClearMaterialThumbnails() {
-    for (auto& [p, t] : m_MaterialThumbs) { (void)p; if (t.Tex) glDeleteTextures(1, &t.Tex); }
-    m_MaterialThumbs.clear();
-    m_MaterialThumbLRU.clear();
+    m_MaterialThumbs.ForEach([](MaterialThumb& t) { if (t.Tex) glDeleteTextures(1, &t.Tex); });
+    m_MaterialThumbs.Clear();
 }
 
 void EditorLayer::InvalidateModelThumbnail(const std::string& path) {
     if (path.empty()) { // clear all — a reimport can rebuild any model in place
-        for (auto& [p, entry] : m_ModelThumbnails) { (void)p; if (entry.first) m_RetiredThumbnailTextures.push_back(entry.first); }
-        m_ModelThumbnails.clear();
-        m_ThumbnailLRU.clear();
+        m_ModelThumbnails.ForEach([this](unsigned int& tex) { if (tex) m_RetiredThumbnailTextures.push_back(tex); });
+        m_ModelThumbnails.Clear();
         return;
     }
-    auto it = m_ModelThumbnails.find(path);
-    if (it == m_ModelThumbnails.end()) return;
-    if (it->second.first) m_RetiredThumbnailTextures.push_back(it->second.first);
-    m_ThumbnailLRU.erase(it->second.second);
-    m_ModelThumbnails.erase(it);
+    m_ModelThumbnails.Erase(path, [this](unsigned int& tex) { if (tex) m_RetiredThumbnailTextures.push_back(tex); });
 }
 void EditorLayer::FreeRetiredThumbnailTextures() {
     if (m_RetiredThumbnailTextures.empty()) return;

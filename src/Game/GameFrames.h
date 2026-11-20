@@ -26,7 +26,6 @@ struct WeaponFrame {
     std::int32_t CycleAfterShot{};
     std::int32_t HipProcedural{};
     std::int32_t RecoilProfile{};
-    std::int32_t UnityRecoil{};
     std::int32_t Equipped{};
     std::int32_t Chambered{};
     std::int32_t CycleSeen{};
@@ -68,7 +67,7 @@ struct WeaponLoadoutFrame {
 // Identifies these structs to a hot-reloaded game module (GameModuleAPI::FramesLayout): the host
 // only calls a module's rules when the module was built against the same frames. Bump
 // kFramesRevision whenever a field is added, removed, retyped or reordered.
-constexpr std::uint32_t kFramesRevision = 2; // 2: BodyMotionFrame gone (Phase 6)
+constexpr std::uint32_t kFramesRevision = 3; // 2: BodyMotionFrame gone (Phase 6); 3: WeaponFrame::UnityRecoil gone
 constexpr std::uint32_t FramesLayout() {
     return kFramesRevision * 0x9E3779B1u ^ (static_cast<std::uint32_t>(sizeof(WeaponFrame)) * 0x100u +
                                              static_cast<std::uint32_t>(sizeof(WeaponLoadoutFrame)));
