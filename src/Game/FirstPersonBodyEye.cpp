@@ -109,7 +109,7 @@ float FirstPersonBody::EyeBodyPush(World& world, const Camera& camera, const glm
             const entt::entity e = m_Pieces[k];
             if (!m_Models[k] || !reg.valid(e) || IsArmsPiece(reg, e) || reg.all_of<ViewModelTag>(e)) continue;
             const auto* tag = reg.try_get<PlayerBodyTag>(e);
-            if (!tag || tag->CameraHidden || tag->Clothing) continue;
+            if (!tag || tag->CameraHidden) continue; // (clothing too: a jacket's lining showed looking down - prototype)
             const Model& m = *m_Models[k];
             int want[4];
             const char* names[4] = {FPBody::kBoneSpine[2], FPBody::kBoneSpine[3], FPBody::kBoneSpine[4], "neck_01"};
