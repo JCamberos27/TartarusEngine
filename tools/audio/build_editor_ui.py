@@ -706,7 +706,6 @@ def check_master(fn, q, ev, row):
 
 
 def write_license(rows):
-    k, y = SETS["K"], SETS["Y"]
     lines = [
         "# Editor UI sounds: sources and licenses",
         "",

@@ -7,7 +7,6 @@ Sources live in C:\\tb\\audio-src\\ir (never committed).
 """
 import glob
 import json
-import math
 import os
 import sys
 

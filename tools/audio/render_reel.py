@@ -50,9 +50,10 @@ class Reel:
 
     def put(self, x, t, gain_db=0.0):
         s = max(0, int(round(t * SR)))
-        e = min(len(self.buf), s + len(x))
-        if e > s:
-            self.buf[s:e] += x[:e - s] * 10 ** (gain_db / 20)
+        e = s + len(x)
+        if e > len(self.buf):                            # grow (the size is only an estimate): never cut a reel's tail
+            self.buf = np.concatenate([self.buf, np.zeros((e - len(self.buf) + SR, 2), np.float32)])
+        self.buf[s:e] += x * 10 ** (gain_db / 20)
 
     def save(self, name, ceiling=-1.0):
         os.makedirs(OUT, exist_ok=True)
