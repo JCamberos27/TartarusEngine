@@ -218,6 +218,9 @@ private:
     // (camera, cascaded/spot/point shadows, IBL, reflection probes, SSAO, clustered lighting,
     // unlit/tonemap flags). Safe to call once per distinct program used in a frame.
     void ApplyFrameState(Shader& program, const FrameState& fs) const;
+    // Only the texture units, SSBOs and the GI UBO of ApplyFrameState, no uniforms: after a pass that reused those
+    // bindings, for programs whose uniforms (kept per program by GL) are still this frame's.
+    void BindFrameResources(const FrameState& fs) const;
 
     // Froxel volumetric fog: per-view volumes, built in RenderScene before the opaque pass.
     std::unique_ptr<VolumetricFog> m_Volumetrics;

@@ -304,13 +304,16 @@ void GIVolumes::WriteUbo() {
     glNamedBufferSubData(m_Ubo, 0, (GLsizeiptr)bytes, &b);
 }
 
-void GIVolumes::Bind(Shader& program) const {
+void GIVolumes::SetProgramUniforms(Shader& program) const {
     const bool on = m_Enabled && m_Atlas && !m_Volumes.empty();
     program.SetInt("uGIEnabled", on ? 1 : 0);
     // Draws that don't set their own mask (grass, fur, impostors) test every volume, behind the quick reject.
     SetMask(program, AllMask());
     program.SetVec3("uGIBoundsMin", m_AllMin);
     program.SetVec3("uGIBoundsMax", m_AllMax);
+}
+
+void GIVolumes::BindResources() const {
     glBindTextureUnit(kUnit, m_Atlas ? m_Atlas : DefaultTextures::Volume());
     if (m_Ubo) glBindBufferBase(GL_UNIFORM_BUFFER, kUboBinding, m_Ubo);
 }

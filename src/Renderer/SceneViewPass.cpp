@@ -643,7 +643,10 @@ void SceneRenderer::ViewPass::DepthPrepass() {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
         glDisable(GL_BLEND);
-        m_R.ApplyFrameState(m_ModelShader, fs); // the occlusion passes used texture units 0 and 1
+        // The occlusion passes used texture units 0 and 1 and other programs: the model shader's uniforms are still
+        // this frame's, only the bindings come back.
+        m_ModelShader.Bind();
+        m_R.BindFrameResources(fs);
     }
     // The grass into the view's depth after SSAO has taken its copy: the lit pass then shades each grass pixel
     // once, but SSAO and Hi-Z never see the blades - thin, swaying, half-transparent to the eye, they only left
@@ -695,7 +698,7 @@ void SceneRenderer::ViewPass::DepthPrepass() {
         // single-sample copy of the depth to read, and every texel is marched as before.
         in.skyAtmosphere->RenderClouds(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos,
                                        viewDepthCopied ? ctx.SsaoSrc->DepthTexture() : 0u);
-        m_R.ApplyFrameState(m_ModelShader, fs); // the cloud passes used texture units up to 12
+        m_R.BindFrameResources(fs); // the cloud passes used texture units up to 12 (the model shader is still bound)
     }
 }
 

@@ -555,15 +555,32 @@ void SkyAtmosphere::DrawSky(const void* viewKey) {
     GLStateCache::Invalidate();
 }
 
-void SkyAtmosphere::ApplyToProgram(Shader& program, const void* viewKey, const int viewport[4]) const {
+unsigned int SkyAtmosphere::AerialTexture(const void* viewKey) const {
+    if (!m_Prepared || m_Settings.AerialPerspectiveScale <= 0.0f) return 0u;
     const auto it = m_Views.find(viewKey);
-    const ViewResources* vr = it != m_Views.end() ? it->second.get() : nullptr;
-    const bool aerial = m_Prepared && vr && vr->Aerial && m_Settings.AerialPerspectiveScale > 0.0f;
-    const glm::vec4 shadow = m_Clouds.ShadowParams();
-    const bool cloudShadows = m_Prepared && m_Settings.CloudsEnabled && shadow.w > 0.0f && m_Clouds.ShadowMap();
+    return it != m_Views.end() ? it->second->Aerial : 0u;
+}
 
-    glBindTextureUnit(SkyAtmosphere::kAerialUnit, aerial ? vr->Aerial : DefaultTextures::Volume());
-    glBindTextureUnit(SkyAtmosphere::kCloudShadowUnit, cloudShadows ? m_Clouds.ShadowMap() : DefaultTextures::White());
+unsigned int SkyAtmosphere::CloudShadowTexture() const {
+    const bool on = m_Prepared && m_Settings.CloudsEnabled && m_Clouds.ShadowParams().w > 0.0f;
+    return on ? m_Clouds.ShadowMap() : 0u;
+}
+
+void SkyAtmosphere::BindTextures(const void* viewKey) const {
+    const unsigned int aerial = AerialTexture(viewKey), cloudShadow = CloudShadowTexture();
+    glBindTextureUnit(SkyAtmosphere::kAerialUnit, aerial ? aerial : DefaultTextures::Volume());
+    glBindTextureUnit(SkyAtmosphere::kCloudShadowUnit, cloudShadow ? cloudShadow : DefaultTextures::White());
+}
+
+void SkyAtmosphere::BindDisabledTextures() {
+    glBindTextureUnit(SkyAtmosphere::kAerialUnit, DefaultTextures::Volume());
+    glBindTextureUnit(SkyAtmosphere::kCloudShadowUnit, DefaultTextures::White());
+}
+
+void SkyAtmosphere::SetProgramUniforms(Shader& program, const void* viewKey, const int viewport[4]) const {
+    const bool aerial = AerialTexture(viewKey) != 0u;
+    const bool cloudShadows = CloudShadowTexture() != 0u;
+    const glm::vec4 shadow = m_Clouds.ShadowParams();
     program.SetInt("uAerialOn", aerial ? 1 : 0);
     program.SetVec4("uAerialViewport", glm::vec4((float)viewport[0], (float)viewport[1],
                                                  (float)std::max(viewport[2], 1), (float)std::max(viewport[3], 1)));
@@ -573,9 +590,7 @@ void SkyAtmosphere::ApplyToProgram(Shader& program, const void* viewKey, const i
     program.SetVec3("uCloudShadowLightDir", m_Lighting.CloudLightDir);
 }
 
-void SkyAtmosphere::ApplyDisabled(Shader& program) {
-    glBindTextureUnit(SkyAtmosphere::kAerialUnit, DefaultTextures::Volume());
-    glBindTextureUnit(SkyAtmosphere::kCloudShadowUnit, DefaultTextures::White());
+void SkyAtmosphere::SetDisabledUniforms(Shader& program) {
     program.SetInt("uAerialOn", 0);
     program.SetInt("uCloudShadowOn", 0);
 }

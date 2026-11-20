@@ -458,7 +458,6 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     CascadedShadowMap&    shadowMap     = *in.sunShadow;
     SpotShadowMap&        spotShadowMap = *in.spotShadow;
     PointShadowMap&       pointShadowMap = *in.pointShadow;
-    IblProbe&             iblProbe      = *in.iblProbe;
     ReflectionProbeArray& probeArray    = *in.probeArray;
 
     program.Bind();
@@ -496,11 +495,6 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // Per-light sun shadow multipliers (#140 phase 2); 1.0 == pre-phase-2 output.
     program.SetFloat("uSunShadowBias", in.sunShadowBias);
     program.SetFloat("uSunShadowNormalBias", in.sunShadowNormalBias);
-    glActiveTexture(GL_TEXTURE0 + 8);
-    {
-        unsigned int sunTex = shadowMap.DepthArray();
-        glBindTexture(GL_TEXTURE_2D_ARRAY, sunTex ? sunTex : DefaultTextures::DepthArray());
-    }
     program.SetInt("uShadowMap", 8);
     program.SetFloat("uShadowMapResolution", (float)shadowMap.Resolution()); // #190
 
@@ -518,14 +512,6 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uSpotShadowNormalBias[0]", fs.spotCountForView, in.spotShadowNormalBias);
         program.SetFloatArray("uSpotShadowSoftness[0]",   fs.spotCountForView, in.spotShadowSoftness);
     }
-    glActiveTexture(GL_TEXTURE0 + 9);
-    // A valid depth-compare texture even when no spot shadow map is allocated, so the
-    // sampler2DArrayShadow on unit 9 is never backed by texture 0 (audit #357). The shader still
-    // early-outs on uSpotShadowCount == 0.
-    {
-        unsigned int spotTex = spotShadowMap.DepthArray();
-        glBindTexture(GL_TEXTURE_2D_ARRAY, spotTex ? spotTex : DefaultTextures::DepthArray());
-    }
     program.SetInt("uSpotShadowMap", 9);
     program.SetFloat("uSpotShadowMapResolution", (float)spotShadowMap.Resolution()); // #190
 
@@ -536,23 +522,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uPointShadowBias[0]",       fs.pointCountForView, in.pointShadowBias);
         program.SetFloatArray("uPointShadowNormalBias[0]", fs.pointCountForView, in.pointShadowNormalBias);
     }
-    glActiveTexture(GL_TEXTURE0 + 10);
-    { // valid samplerCubeArrayShadow backing even with no point shadow map (audit #357)
-        unsigned int pointTex = pointShadowMap.DepthCubeArray();
-        glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointTex ? pointTex : DefaultTextures::DepthCubeArray());
-    }
     program.SetInt("uPointShadowMap", 10);
     program.SetFloat("uPointShadowMapResolution", (float)pointShadowMap.Resolution()); // #190
 
-    // IBL probes on units 11/12/13 (#196). The shader declares those units with layout(binding=)
-    // qualifiers, so there's no SetInt here — just the bind. Unlit mode skips lighting entirely.
+    // IBL probes on units 11/12/13 (#196): the shader declares those units with layout(binding=)
+    // qualifiers, so there's no SetInt. Unlit mode skips lighting entirely.
     if (fs.iblOn) {
-        glActiveTexture(GL_TEXTURE0 + 11);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.IrradianceMap());
-        glActiveTexture(GL_TEXTURE0 + 12);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.SpecularMap());
-        glActiveTexture(GL_TEXTURE0 + 13);
-        glBindTexture(GL_TEXTURE_2D, iblProbe.BrdfLut());
         program.SetFloat("uIBLIntensity", ctx.GIBake ? 0.0f : std::max(fs.world->SkyAmbientIntensity, 0.0f));
         program.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
     }
@@ -563,11 +538,11 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // Physical sky: aerial perspective (unit 30) and cloud shadows (unit 31). Neutral textures
     // and both switched off for the other sky modes.
     if (in.skyAtmosphere && !ctx.Unlit)
-        in.skyAtmosphere->ApplyToProgram(program, ctx.TxHdr, fs.vp);
+        in.skyAtmosphere->SetProgramUniforms(program, ctx.TxHdr, fs.vp);
     else
-        SkyAtmosphere::ApplyDisabled(program);
+        SkyAtmosphere::SetDisabledUniforms(program);
     // Froxel volumetric fog (unit 27): this view's volume, built in RenderScene, or off.
-    m_Volumetrics->ApplyToProgram(program, ctx.TxHdr, fs.volOn);
+    m_Volumetrics->SetProgramUniforms(program, ctx.TxHdr, fs.volOn);
 
     // #162 - fog.
     program.SetInt("uFogMode", fs.fogOn && fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
@@ -582,58 +557,87 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
             program.SetFloat("uFogBaseHeight", w.FogBaseHeight);
         }
     }
-    // Captured room probes (ReflectionProbeCapture) on unit 26, the puddle SSR (PuddleSsr) on unit 29: units 1-7 and
-    // 16-20 are material maps (ShaderAsset::BuildBindings) - a 2D map and the cube array sharing a unit made draws
-    // fail, and the SSR read a material's white default. Never texture 0 either.
-    glBindTextureUnit(26, probeArray.CubeArray() ? probeArray.CubeArray() : DefaultTextures::BlackCubeArray());
     program.SetInt("uSsrEnabled", fs.ssrTex ? 1 : 0);
-    glBindTextureUnit(29, fs.ssrTex ? fs.ssrTex : DefaultTextures::Black());
-    glActiveTexture(GL_TEXTURE0);
 
     // PR14: nearest 2 reflection probes for parallax box projection — no-op (uProbeCount=0 or the
     // uniforms absent) when the shader lacks the _REFLECTION_PROBES keyword / the scene has none.
     probeArray.Bind(program, ctx.ViewPos);
     // Baked GI (GIVolumes): atlas on unit 28, volumes on UBO binding 4. Unlit draws no lighting.
-    if (in.giVolumes && !ctx.Unlit) in.giVolumes->Bind(program);
-    else { program.SetInt("uGIEnabled", 0); glBindTextureUnit(28, DefaultTextures::Volume()); }
+    if (in.giVolumes && !ctx.Unlit) in.giVolumes->SetProgramUniforms(program);
+    else program.SetInt("uGIEnabled", 0);
 
     // PR15: SSAO occlusion map (unit 15), pre-computed before this pass. ctx.SsaoSrc is the
     // caller's own per-viewport Ssao instance; IsValid() is false until its first filled frame.
     if (fs.ssaoOn) {
-        glActiveTexture(GL_TEXTURE0 + 15);
-        glBindTexture(GL_TEXTURE_2D, ctx.SsaoSrc->OcclusionTexture());
         program.SetInt("uSSAOMap", 15);
         program.SetVec2("uScreenSize", glm::vec2((float)fs.vp[2], (float)fs.vp[3]));
-        glActiveTexture(GL_TEXTURE0);
     }
     program.SetInt("uSSAOEnabled", fs.ssaoOn ? 1 : 0);
     program.SetFloat("uSSAOIntensity", fs.ssaoIntensity);
 
-    // The light SSBO (binding 0) is built once per frame by main.cpp — just (re)bind it.
-    in.lightBuffer->Bind(0);
-
     // Clustered-forward light lists (#120). The cull dispatch itself runs once in RenderScene;
-    // here every program just rebinds the range/index SSBOs and takes the froxel params.
+    // here every program takes the froxel params (BindFrameResources binds the lists).
     if (fs.clusterOn) {
-        in.clusterGrid->BindForShading();
         program.SetVec2("uClusterScreenSize", glm::vec2((float)fs.vp[2], (float)fs.vp[3]));
         program.SetVec4("uClusterZParams", ClusterGrid::ZParams(fs.clusterNearZ, fs.clusterFarZ));
     }
     program.SetInt("uClusterEnabled", fs.clusterOn ? 1 : 0);
 
-    // Clustered decals: the list (SSBO 11) and the texture arrays on units 22-25 (the blood stains and
-    // bullet holes among them, and the blood splats' maps). The FX sprites bind their own arrays over
-    // 22-24 after the opaque and transparent passes; every program that draws after them comes through here.
+    // Clustered decals (their list and maps: BindFrameResources).
     program.SetInt("uDecalCount", fs.decalCount);
     // Substrates (the table on SSBO 16, maps in the same arrays): the Grunge reveal and peeling-paint
     // decals read them, in the views that prepared decals this frame.
     program.SetInt("uSubstrateOn", in.decals && in.decals->SubstrateCount() > 0 && fs.clusterOn ? 1 : 0);
-    if (in.decals) in.decals->BindForShading();
 
     program.SetInt("uUnlit", ctx.Unlit ? 1 : 0);
     // Real scene path: emit linear HDR; the shared Tonemapper pass maps it after MSAA resolve.
     // (Offscreen model thumbnails set this to 1 to self-tonemap.)
     program.SetInt("uApplyTonemap", 0);
+
+    BindFrameResources(fs);
+}
+
+void SceneRenderer::BindFrameResources(const FrameState& fs) const {
+    const RenderFrameContext& ctx = *fs.ctx;
+    const SceneRenderInputs&  in  = *fs.in;
+
+    // The shadow maps on units 8 (sun cascades), 9 (spots) and 10 (points); material maps use 1..7. A valid
+    // depth-compare texture even when a map isn't allocated, so a shadow sampler is never backed by texture 0
+    // (audit #357); the shader early-outs on the zero counts.
+    const unsigned int sunTex = in.sunShadow->DepthArray();
+    glBindTextureUnit(8, sunTex ? sunTex : DefaultTextures::DepthArray());
+    const unsigned int spotTex = in.spotShadow->DepthArray();
+    glBindTextureUnit(9, spotTex ? spotTex : DefaultTextures::DepthArray());
+    const unsigned int pointTex = in.pointShadow->DepthCubeArray();
+    glBindTextureUnit(10, pointTex ? pointTex : DefaultTextures::DepthCubeArray());
+    if (fs.iblOn) {
+        glBindTextureUnit(11, in.iblProbe->IrradianceMap());
+        glBindTextureUnit(12, in.iblProbe->SpecularMap());
+        glBindTextureUnit(13, in.iblProbe->BrdfLut());
+    }
+    // PR15: SSAO occlusion map (unit 15), pre-computed before this pass.
+    if (fs.ssaoOn) glBindTextureUnit(15, ctx.SsaoSrc->OcclusionTexture());
+
+    // Captured room probes (ReflectionProbeCapture) on unit 26, the puddle SSR (PuddleSsr) on unit 29: units 1-7 and
+    // 16-20 are material maps (ShaderAsset::BuildBindings) - a 2D map and the cube array sharing a unit made draws
+    // fail, and the SSR read a material's white default. Never texture 0 either.
+    const unsigned int probeTex = in.probeArray->CubeArray();
+    glBindTextureUnit(26, probeTex ? probeTex : DefaultTextures::BlackCubeArray());
+    glBindTextureUnit(29, fs.ssrTex ? fs.ssrTex : DefaultTextures::Black());
+    m_Volumetrics->BindTexture(ctx.TxHdr, fs.volOn); // unit 27
+    if (in.giVolumes && !ctx.Unlit) in.giVolumes->BindResources(); // unit 28 + UBO binding 4
+    else glBindTextureUnit(28, DefaultTextures::Volume());
+    if (in.skyAtmosphere && !ctx.Unlit) in.skyAtmosphere->BindTextures(ctx.TxHdr); // units 30, 31
+    else SkyAtmosphere::BindDisabledTextures();
+
+    // The light SSBO (binding 0) is built once per frame by main.cpp: just (re)bind it. Then the cluster lists, and
+    // the clustered decals: their list (SSBO 11) and texture arrays on units 22-25 (the blood stains and bullet holes
+    // among them, and the blood splats' maps). The FX sprites bind their own arrays over 22-24 after the opaque and
+    // transparent passes; every program that draws after them comes through here.
+    in.lightBuffer->Bind(0);
+    if (fs.clusterOn) in.clusterGrid->BindForShading();
+    if (in.decals) in.decals->BindForShading();
+    glActiveTexture(GL_TEXTURE0);
 }
 
 void SceneRenderer::WarmEffects(const World& world) {
