@@ -27,7 +27,7 @@
 #   2. --smoke-test tests\smoke-scenes
 #   3. --npc-test <scenario> for every scenario given, Runs times each
 #   4. --perf-bench <PerfBench>, when given
-# Every run is visible (TARTARUS_SHOW=1; harness runs are hidden without it) at unlocked FPS (TARTARUS_UNLOCKED_FPS=1), muted unless -Sound.
+# Every run is hidden (the engine's default for harness runs; -Show sets TARTARUS_SHOW=1 to watch) at unlocked FPS (TARTARUS_UNLOCKED_FPS=1), muted unless -Sound.
 # Release is a GUI-subsystem build, so each run is a Start-Process -PassThru + WaitForExit() with stdout redirected to
 # its log. Each npc run gets NPC_TEST_TRACE=<TraceDir>\<scenario>[_<k>] (default <LogDir>\traces): testbed and labloco
 # write trace.csv there, and labloco's one check counts the traced frames, so it fails without it.
@@ -47,6 +47,7 @@ param(
     [switch]$SkipUnit,
     [switch]$SkipSmoke,
     [switch]$Sound,
+    [switch]$Show,
     [int]$TimeoutMinutes = 30,
     [string]$LogDir = '',
     [string]$Legs = '',
@@ -110,7 +111,7 @@ function Add-Result($step, $ok, $exit, $detail, $wall, $log, $errors, $tolerated
 function Start-Engine([string]$name, [string[]]$engineArgs, [hashtable]$extraEnv) {
     $log = Join-Path $LogDir "$name.log"
     $err = Join-Path $LogDir "$name.stderr.log"
-    $set = @{ TARTARUS_UNLOCKED_FPS = '1'; TARTARUS_HIDDEN = $null; TARTARUS_SHOW = '1'; TARTARUS_MUTE = $(if ($Sound) { $null } else { '1' }) }
+    $set = @{ TARTARUS_UNLOCKED_FPS = '1'; TARTARUS_HIDDEN = $null; TARTARUS_SHOW = $(if ($Show) { '1' } else { $null }); TARTARUS_MUTE = $(if ($Sound) { $null } else { '1' }) }
     if ($extraEnv) { foreach ($k in $extraEnv.Keys) { $set[$k] = $extraEnv[$k] } }
     $saved = @{}
     foreach ($k in $set.Keys) {

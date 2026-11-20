@@ -76,6 +76,8 @@ Every scene with the AK/870 player loadout has it.
 build/Release/TartarusEngine.exe --npc-test revolver --smoke-shots <dir>
 ```
 
+Harness runs are hidden by default (Jacob's OK 2026-11-20); set `TARTARUS_SHOW=1` to watch it.
+
 `src/Game/AI/NpcTest_Revolver.cpp`, 77 s in the WeaponLab: ADS (the sight line is logged), two sights-up
 shots, a partial reload, six hip shots, a full reload, inspect, mag check, melee, walk and sprint, then the AK
 and 870 fired and reloaded, the slots switched and one scroll notch. It saves 49 named frames of the Scene and

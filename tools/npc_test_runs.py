@@ -1,7 +1,7 @@
 # Runs NPC test scenarios several times each and reports every check's pass rate: one run of a noisy test
 # (npcloco, deaths) can't tell a fix from noise.
 #   python tools/npc_test_runs.py <engine exe> <scenario>... [--runs N] [--parallel N] [--logs DIR] [--visible]
-# Runs go hidden and muted unless --visible (then muted only), always at unlocked FPS. At most 4 engines at once (VRAM). Exit code 1 if any check ever failed.
+# Runs go hidden (the engine's default) and muted; --visible shows them (TARTARUS_SHOW=1), still muted. Always at unlocked FPS. At most 4 engines at once (VRAM). Exit code 1 if any check ever failed.
 import argparse
 import os
 import re
