@@ -2,14 +2,12 @@
 
 #include "gl.h"
 #include "Core/Env.h"
-#include "Log.h"
 #include "Tests/Cinematic.h"
+#include "Tests/FfmpegPipe.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 
-#include <cstdio>
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -23,11 +21,8 @@ struct State {
     bool   active = false;
     std::string out, ffmpeg;
     long long frame = 0;
-    FILE*  pipe = nullptr;
-    int    w = 0, h = 0;
+    FfmpegPipe pipe;
     std::vector<unsigned char> pixels;
-    long long written = 0;
-    long long dropped = 0; // frames the pipe did not take (ffmpeg gone, full disk) or of the wrong size
     bool clockOnly = false;
 };
 State s_State;
@@ -58,34 +53,17 @@ void PinImGuiDelta() {
 
 void StartRecording(int width, int height) {
     State& s = s_State;
-    if (!Active() || s.pipe || width <= 0 || height <= 0) return;
-    s.w = width;
-    s.h = height;
-    // Raw RGBA in, bottom-up (GL's order, flipped by ffmpeg), H.264 out at exactly 60 fps.
-    // yuv420p needs even sizes: an odd width or height is cropped by one pixel, or libx264 quits after a few frames.
-    char size[32];
-    std::snprintf(size, sizeof(size), "%dx%d", width, height);
-    const std::string cmd = "\"\"" + s.ffmpeg + "\" -hide_banner -loglevel error -y -f rawvideo -pix_fmt rgba -s " + size +
-                            " -framerate 60 -i - -vf vflip,crop=trunc(iw/2)*2:trunc(ih/2)*2 -c:v libx264 -preset slow -crf 15 -pix_fmt yuv420p"
-                            " -r 60 -movflags +faststart \"" + s.out + "\"\"";
-    s.pipe = _popen(cmd.c_str(), "wb");
-    if (!s.pipe) std::cerr << "[MotionDemo] could not start ffmpeg" << std::endl;
-    else std::cout << "[MotionDemo] recording " << size << " @ 60 fps -> " << s.out << std::endl;
+    if (!Active() || s.pipe.IsOpen()) return;
+    // Bottom-up rows (GL's order), flipped by ffmpeg.
+    s.pipe.Open({s.ffmpeg, s.out, width, height, /*FlipY*/ true, "-preset slow -crf 15", "MotionDemo"});
 }
 
 void StopRecording() {
-    State& s = s_State;
-    if (!s.pipe) return;
-    const int rc = _pclose(s.pipe);
-    s.pipe = nullptr;
-    std::cout << "[MotionDemo] " << s.written << " frames (" << (double)s.written / 60.0 << " s), ffmpeg exit " << rc << std::endl;
-    // A logged error fails the demo run (the editor-test health check), so a broken video is not a pass.
-    if (rc != 0 || s.dropped > 0)
-        Log::Error("MotionDemo: ffmpeg exit " + std::to_string(rc) + ", " + std::to_string(s.dropped) +
-                   " frame(s) not written - the clip is incomplete");
+    // A logged error (FfmpegPipe::Close) fails the demo run (the editor-test health check), so a broken video is not a pass.
+    s_State.pipe.Close();
 }
 
-bool Recording() { return s_State.pipe != nullptr; }
+bool Recording() { return s_State.pipe.IsOpen(); }
 
 void DrawCursor() {
     if (!Recording()) return;
@@ -106,14 +84,13 @@ void DrawCursor() {
 
 void CaptureFrame(int width, int height) {
     State& s = s_State;
-    if (!s.pipe) return;
-    if (width != s.w || height != s.h) { ++s.dropped; return; } // the window can't change size mid-video
+    if (!s.pipe.IsOpen()) return;
+    if (width != s.pipe.Width() || height != s.pipe.Height()) { s.pipe.Drop(); return; } // the window can't change size mid-video
     s.pixels.resize((size_t)width * (size_t)height * 4);
     // The default framebuffer reads from its back buffer; RGBA rows are 4-byte aligned already.
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
-    if (std::fwrite(s.pixels.data(), 1, s.pixels.size(), s.pipe) == s.pixels.size()) ++s.written;
-    else ++s.dropped;
+    s.pipe.Write(s.pixels.data(), s.pixels.size());
 }
 
 } // namespace MotionDemo
