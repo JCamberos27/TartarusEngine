@@ -80,6 +80,8 @@ void UpdatePending(World& world, AssetLibrary& assets);
 // or an outfit whose body it hasn't checked against the wardrobe yet (RefreshBodies). The editor journals
 // an edit made without an undo step before then (EditorLayer::JournalBeforeOutfitLanding).
 bool LandingDue(const World& world);
+// Whether a waiting change is still reading its saved skin coverage (it lands once that's done, as once its assets are).
+bool CoverageReading();
 // Goes up each time UpdatePending changes a world: a waiting change landing, or a stale body being rebuilt. Neither
 // is an edit of its own - one finishes an edit made frames earlier, the other brings a scene just opened up to
 // date - so the editor folds them into its undo baseline (EditorLayer::BeginGlobalUndoFrame).

@@ -539,8 +539,9 @@ void EditorLayer::FreeGpuResources() {
     if (m_GpuResourcesFreed) return;
     m_GpuResourcesFreed = true;
 
-    m_ModelThumbnails.ForEach([](unsigned int& tex) { if (tex) glDeleteTextures(1, &tex); });
+    m_ModelThumbnails.ForEach([](ModelThumb& t) { if (t.Tex) glDeleteTextures(1, &t.Tex); });
     m_ModelThumbnails.Clear();
+    FreeModelThumbnailReadbacks();
     FreeRetiredThumbnailTextures();
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();
@@ -3010,6 +3011,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     FreeRetiredThumbnailTextures(); // last frame's draw lists are rendered by now
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
+    m_ThumbnailMsThisFrame = 0.0;   // ... and model renders only while under kThumbnailFrameBudgetMs
+    PumpModelThumbnails();
     m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
     m_SoundWaveforms.Pump(); // sound tiles' waveforms, decoded off-thread
 

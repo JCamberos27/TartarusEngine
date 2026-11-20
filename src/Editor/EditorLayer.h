@@ -33,6 +33,7 @@
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
 #include "LruMap.h" // m_ModelThumbnails / m_MaterialThumbs
+#include "ThumbnailCache.h" // ThumbnailCache::AsyncProbe (m_ModelThumbProbe)
 #include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
@@ -412,6 +413,19 @@ public:
     // since that's a genuine import from outside the project, not an assignment). EditorLayer_Inspector.cpp.
     bool TexturePickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
     bool MaterialPickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
+private:
+    // The pickers' filtered rows, rebuilt only when the popup opens, the search text changes or the
+    // library's list changes size (they were re-filtered, and every row's texture looked up, each frame).
+    struct PickerRow { std::string Path, Name; };
+    struct PickerRowCache {
+        std::vector<PickerRow> Rows;
+        std::string Needle;
+        size_t SourceCount = (size_t)-1;
+    };
+    PickerRowCache m_TexturePickerRows, m_MaterialPickerRows;
+    static void RefreshPickerRows(PickerRowCache& cache, const std::vector<std::string>& source, const std::string& needle,
+                                  const std::function<std::string(const std::string&)>& nameOf);
+public:
     // Per-frame tree prep: virtual folders, listing-cache refresh, ancestor-expand on folder
     // change; returns the folder to scroll into view this frame ("" = none).
     std::string AssetBrowserTreeFrameSetup(AssetLibrary& assets);                // EditorLayer_AssetBrowser.cpp
@@ -1977,13 +1991,35 @@ private:
     // Keyed by asset path (#181) rather than the Model* — stable across a Model being destroyed
     // and a new allocation reusing the same address, unlike the pointer. Bounded to
     // kMaxModelThumbnails, least recently used evicted first, so browsing a large library over a
-    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps
-    // this well under a megabyte of VRAM.
+    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap is 16 MB.
+    //
+    // Nothing on the UI thread touches the disk: a new tile asks m_ModelThumbProbe (a worker) for
+    // its dependency key and cached PNG; a hit is uploaded when it comes back, a miss is rendered
+    // within this frame's budget (count and ~2 ms), and the render's pixels come back through a
+    // pixel-pack buffer a few frames later (no glReadPixels stall) to be saved for the next launch.
+    struct ModelThumb {
+        enum class Stage : unsigned char { Probing, Render, Ready };
+        unsigned int Tex = 0;
+        unsigned Ticket = 0;   // the probe this entry waits for; a stale result is ignored
+        std::uint64_t Key = 0; // ThumbnailCache key (set once the probe is back)
+        Stage St = Stage::Probing;
+    };
     ModelPreviewRenderer m_ThumbnailPreview;
-    static constexpr size_t kMaxModelThumbnails = 128;
-    LruMap<unsigned int> m_ModelThumbnails; // path -> GL texture
+    static constexpr int kModelThumbSize = 128;
+    static constexpr size_t kMaxModelThumbnails = 256;
+    static constexpr size_t kMaxMaterialThumbnails = 128;
+    static constexpr double kThumbnailFrameBudgetMs = 2.0; // model renders stop for the frame past this
+    LruMap<ModelThumb> m_ModelThumbnails; // path -> thumbnail
+    ThumbnailCache::AsyncProbe m_ModelThumbProbe;
+    unsigned m_NextModelThumbTicket = 1;
+    struct ThumbReadback { unsigned int Pbo = 0; void* Fence = nullptr; std::string Path; std::uint64_t Key = 0; };
+    std::vector<ThumbReadback> m_ThumbReadbacks; // renders whose pixels are on their way to the cache
+    std::vector<unsigned int> m_FreeThumbPbos;
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
+    double m_ThumbnailMsThisFrame = 0.0;
+    void PumpModelThumbnails(); // once a frame: probe results uploaded, finished readbacks saved
+    void FreeModelThumbnailReadbacks();
     // Thumbnails dropped mid-frame (a Reimport from a tile's menu, an LRU eviction) may already be
     // in this frame's draw lists, so their textures are deleted at the start of the next frame.
     std::vector<unsigned int> m_RetiredThumbnailTextures;
@@ -2006,7 +2042,8 @@ private:
     void ClearMaterialThumbnails();
     // Copies a `size`-square preview render into `dst` (allocated here when 0) through the
     // thumbnail blit FBO, optionally reading the pixels back for the persistent cache.
-    void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
+    // pixelsOut: read back now (stalls). packPbo: read into that pixel-pack buffer instead, collected later.
+    void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut, unsigned int packPbo = 0);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
     // Sound-cell waveform envelopes (#236 G), decoded off the UI thread (AssetWaveformCache).
@@ -2070,15 +2107,23 @@ private:
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
         bool Unfetched = false;  // an external_assets.csv row with no file on disk (AssetGridCell::unfetched)
+        bool FirstOfKey = true;  // the first file in the scan with its Key (the one the folder summaries count)
         // Library view placement (prefab / decal / hdri only), worked out on the scan's thread: the
         // asset_library.json category id and the pack folder (LibraryGroupOf).
         std::string LibraryCategory, LibraryPack;
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
+    // What a scan hands back. The maps view the files' own Key / Path strings (first file wins) and are built on the
+    // scan's thread; moving the vector keeps those strings where they are.
+    struct ProjectAssetScan {
+        std::vector<ProjectAssetFile> files;
+        std::unordered_map<std::string_view, std::uint32_t> byKey, byPath;
+    };
     struct {
         std::vector<ProjectAssetFile> files;
+        std::unordered_map<std::string_view, std::uint32_t> byKey, byPath; // into `files`, from the same scan
         bool valid = false; // false = scan again (when the one in flight, if any, finishes)
-        std::future<std::vector<ProjectAssetFile>> scan;
+        std::future<ProjectAssetScan> scan;
         std::chrono::steady_clock::time_point scanStarted;
         unsigned scanLibraryGen = 0, filesLibraryGen = 0; // m_LibraryIndexGen the scan in flight / `files` grouped by
     } m_ProjectAssetIndex;
@@ -2093,12 +2138,18 @@ private:
     AssetThumbnailLoader m_AssetThumbs; // tiles of unloaded assets
     void RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets);
     // What an Inspector asset field of `kind` offers: every such file in the project (loaded or
-    // not) plus anything loaded from outside it, sorted by file name.
-    std::vector<std::string> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // not) plus anything loaded from outside it, sorted by file name (then path).
+    struct AssetRefChoice {
+        std::string Path;
+        std::string Label; // file name + "##" + path: same-named files in different folders stay distinct ImGui items
+    };
+    std::vector<AssetRefChoice> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // The open Inspector asset combo's list: built when the combo opens, reused while it stays open.
+    std::vector<AssetRefChoice> m_AssetRefChoiceCache;
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
-    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
+    static ProjectAssetScan ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
     static bool IsLibraryKind(const ProjectAssetFile& f); // placeable: listed under the Library view
     static void LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetFile& f); // fills LibraryCategory/Pack
     static bool ProjectAssetKindOf(ProjectAssetFile& f); // sets f.Kind from its extension; false = not an asset
@@ -2417,9 +2468,10 @@ private:
     // list shrinks or a new scan lands, which asks for a full walk.
     bool m_FolderSummariesValid = false;
     struct FolderIndexContribution { std::uint32_t Folder; Enhancers::FolderKind Kind; }; // Folder: m_FolderIndexFolders
-    // Index file PathKey -> where it counts. The keys view m_ProjectAssetIndex.files[i].Key: a new scan replaces those
-    // strings, but it also clears m_FolderSummariesValid, so nothing looks a key up before the next walk rebuilds this.
-    std::unordered_map<std::string_view, FolderIndexContribution> m_FolderIndexContrib;
+    static constexpr std::uint32_t kIndexFileNotCounted = 0xFFFFFFFFu;
+    // Per m_ProjectAssetIndex.files entry: where it counts (Folder kIndexFileNotCounted: nowhere). A new scan replaces
+    // the files, but it also clears m_FolderSummariesValid, so nothing reads this before the next walk rebuilds it.
+    std::vector<FolderIndexContribution> m_FolderIndexContrib;
     std::vector<std::string> m_FolderIndexFolders; // the folders m_FolderIndexContrib names, one per run of files
     // What the Asset Browser grid keys its Play-mode cell cache on (AssetGridFrameBegin): full walks, and per folder
     // (and overall) how often a newly listed asset changed what it holds.
@@ -2427,6 +2479,7 @@ private:
     std::unordered_map<std::string, unsigned> m_FolderContentGen;
     void RebuildFolderSummariesIfNeeded(AssetLibrary& assets);
     void NoteListedInFolderSummaries(AssetLibrary& assets, int list, const std::string& path, const std::string& key);
+    const std::string* UncountIndexFile(std::uint32_t file); // the folder it counted in, or nullptr
     std::string m_HoverAssetFolder;       // the folder under the mouse this frame (tree or grid)
     bool m_HoverAssetFolderSet = false;
     void HandleFolderHoverKeys(AssetLibrary& assets); // PostModuleDraw, after the module drew the tree
