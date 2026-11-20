@@ -35,7 +35,7 @@ META_TYPES = {".fbx": "model", ".obj": "model", ".gltf": "model", ".glb": "model
               ".png": "texture", ".jpg": "texture", ".jpeg": "texture", ".tga": "texture", ".bmp": "texture",
               ".mat": "material"}
 
-# Every key ParseModelImporter (src/Editor/AssetLibrary.cpp) reads, for reference and validation of overrides.
+# Every key ParseModelImporter (src/Assets/AssetLibrary.cpp) reads, for reference and validation of overrides.
 MODEL_IMPORTER_KEYS = ("globalScale", "importNormals", "importAnimations", "importSkeleton", "optimizeGraph", "simplify",
                        "materialImportMode", "upAxis", "pivotOffset", "excludeNodes", "meshNodes", "rootTransform",
                        "unrotateNodes", "moveNodes", "skinIgnoresMeshNode", "mergeByMaterial", "rootNodeInModelSpace",

@@ -391,7 +391,7 @@ def bake_hair_albedo(alpha_tex: Path, root_tex: Path, dst: Path, cap: int,
 # ------------------------------------------------------------------------------------------------- metas ---
 def texture_importer(kind: str, cap: int) -> dict:
     """The importer block every Quantum texture meta uses (Textures/Clothing/Tops/Hoodie/*.png.meta).
-    Fields: src/Editor/AssetLibrary.cpp ParseTextureImporter + src/Renderer/Texture.h TextureImportSettings:
+    Fields: src/Assets/AssetLibrary.cpp ParseTextureImporter + src/Renderer/Texture.h TextureImportSettings:
     textureType 0 Default / 1 NormalMap (forces linear), filterMode 2 Trilinear, wrapMode 0 Repeat,
     compression 2 HighQuality BCn, maxTextureSize = the cap (the engine downsizes on import past it)."""
     if kind not in KINDS:
