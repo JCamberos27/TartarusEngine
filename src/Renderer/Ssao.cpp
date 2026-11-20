@@ -1,7 +1,6 @@
 #include "GpuMemTrack.h"
 #include "Ssao.h"
 #include "GLStateCache.h"
-#include "GLStateScope.h"
 #include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "gl.h"
@@ -19,16 +18,12 @@ Ssao::~Ssao() { Release(); }
 
 void Ssao::Release() {
     GpuMemTrack::Set(GpuMemTrack::Key("Ssao depth copy", this), 0);
-    if (m_Vao)       { glDeleteVertexArrays(1, &m_Vao);        m_Vao       = 0; }
-    if (m_DepthFbo)  { glDeleteFramebuffers(1, &m_DepthFbo);   m_DepthFbo  = 0; }
-    if (m_DepthTex)  { glDeleteTextures(1, &m_DepthTex);       m_DepthTex  = 0; }
-    if (m_SsaoFbo)   { glDeleteFramebuffers(1, &m_SsaoFbo);    m_SsaoFbo   = 0; }
-    if (m_SsaoColor) { glDeleteTextures(1, &m_SsaoColor);      m_SsaoColor = 0; }
-    if (m_BlurFbo)   { glDeleteFramebuffers(1, &m_BlurFbo);    m_BlurFbo   = 0; }
-    if (m_BlurColor) { glDeleteTextures(1, &m_BlurColor);      m_BlurColor = 0; }
-    if (m_NoiseTex)  { glDeleteTextures(1, &m_NoiseTex);       m_NoiseTex  = 0; }
+    if (m_DepthFbo) { glDeleteFramebuffers(1, &m_DepthFbo); m_DepthFbo = 0; }
+    if (m_DepthTex) { glDeleteTextures(1, &m_DepthTex);     m_DepthTex = 0; }
+    m_Raw.Release();
+    m_Blur.Release();
+    if (m_NoiseTex) { glDeleteTextures(1, &m_NoiseTex);     m_NoiseTex = 0; }
     m_Width = m_Height = 0;
-    m_HalfWidth = m_HalfHeight = 0;
     m_Valid = false;
 }
 
@@ -83,41 +78,14 @@ void Ssao::Create(int width, int height) {
     const GLenum kNone = GL_NONE;
     glNamedFramebufferDrawBuffers(m_DepthFbo, 1, &kNone); // depth-only: no colour writes
 
-    const GLenum kColor0 = GL_COLOR_ATTACHMENT0;
-
-    // Raw SSAO pass: half resolution, occlusion + view z (RG16F)
-    m_HalfWidth = std::max((width + 1) / 2, 1);
-    m_HalfHeight = std::max((height + 1) / 2, 1);
-    glCreateTextures(GL_TEXTURE_2D, 1, &m_SsaoColor);
-    glTextureStorage2D(m_SsaoColor, 1, GL_RG16F, m_HalfWidth, m_HalfHeight);
-    glTextureParameteri(m_SsaoColor, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(m_SsaoColor, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTextureParameteri(m_SsaoColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(m_SsaoColor, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glCreateFramebuffers(1, &m_SsaoFbo);
-    glNamedFramebufferTexture(m_SsaoFbo, GL_COLOR_ATTACHMENT0, m_SsaoColor, 0);
-    glNamedFramebufferDrawBuffers(m_SsaoFbo, 1, &kColor0);
-
-    // Blurred pass: R8 with linear filter (for bilinear fetch from modelShader)
-    glCreateTextures(GL_TEXTURE_2D, 1, &m_BlurColor);
-    glTextureStorage2D(m_BlurColor, 1, GL_R8, width, height);
-    glTextureParameteri(m_BlurColor, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(m_BlurColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(m_BlurColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(m_BlurColor, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glCreateFramebuffers(1, &m_BlurFbo);
-    glNamedFramebufferTexture(m_BlurFbo, GL_COLOR_ATTACHMENT0, m_BlurColor, 0);
-    glNamedFramebufferDrawBuffers(m_BlurFbo, 1, &kColor0);
-
-    // audit #358 — name the owner/dims/status if any of the three targets is incomplete, and
-    // record it so IsValid() reports false. Callers then skip the SSAO passes entirely and the
-    // scene renders without ambient occlusion, instead of the passes running against a bad FBO.
+    // audit #358 — any incomplete target makes IsValid() false: callers then skip the SSAO passes
+    // entirely and the scene renders without ambient occlusion, instead of the passes running
+    // against a bad FBO. Raw occlusion at half resolution (nearest), the blurred map at full (linear,
+    // for the model shader's bilinear fetch).
     bool ok = GLFramebufferCheck::Complete("Ssao depth pre-pass", m_DepthFbo, width, height);
-    ok = GLFramebufferCheck::Complete("Ssao raw occlusion", m_SsaoFbo, m_HalfWidth, m_HalfHeight) && ok;
-    ok = GLFramebufferCheck::Complete("Ssao blur", m_BlurFbo, width, height) && ok;
+    ok = m_Raw.Ensure((width + 1) / 2, (height + 1) / 2, GL_RG16F, "Ssao raw occlusion", false) && ok;
+    ok = m_Blur.Ensure(width, height, GL_R8, "Ssao blur") && ok;
     m_Valid = ok;
-
-    glGenVertexArrays(1, &m_Vao);
 }
 
 void Ssao::Resize(int width, int height) {
@@ -141,21 +109,14 @@ void Ssao::WarmUp(Shader& ssaoShader, Shader& blurShader) {
 }
 
 void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, float bias) {
-    GLStateScope restore; // #160 - put depth/blend/cull back as the caller had them
-    glBindFramebuffer(GL_FRAMEBUFFER, m_SsaoFbo);
-    glViewport(0, 0, m_HalfWidth, m_HalfHeight);
+    FullscreenPass pass; // #160 - depth/blend/cull back as the caller had them afterwards
+    m_Raw.Bind();
     m_Proj = proj;
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_BLEND);
-    glDisable(GL_CULL_FACE);
 
     ssaoShader.Bind();
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_DepthTex);
+    glBindTextureUnit(0, m_DepthTex);
     ssaoShader.SetInt("uDepth", 0);
-    glActiveTexture(GL_TEXTURE0 + 1);
-    glBindTexture(GL_TEXTURE_2D, m_NoiseTex);
+    glBindTextureUnit(1, m_NoiseTex);
     ssaoShader.SetInt("uNoise", 1);
 
     ssaoShader.SetMat4("uProjection",    proj);
@@ -172,34 +133,18 @@ void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, floa
         m_KernelUploadedTo = ssaoShader.Program();
     }
 
-    glBindVertexArray(m_Vao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glBindVertexArray(0);
-
-    glActiveTexture(GL_TEXTURE0);
+    FullscreenPass::Draw();
 }
 
 void Ssao::Blur(Shader& blurShader) {
-    GLStateScope restore; // #160
-    glBindFramebuffer(GL_FRAMEBUFFER, m_BlurFbo);
-    glViewport(0, 0, m_Width, m_Height);
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_BLEND);
-    glDisable(GL_CULL_FACE);
+    FullscreenPass pass; // #160
+    m_Blur.Bind();
 
     blurShader.Bind();
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_SsaoColor);
+    glBindTextureUnit(0, m_Raw.Texture());
     blurShader.SetInt("uSsao", 0);
-    glActiveTexture(GL_TEXTURE0 + 1);
-    glBindTexture(GL_TEXTURE_2D, m_DepthTex);
+    glBindTextureUnit(1, m_DepthTex);
     blurShader.SetInt("uDepth", 1);
     blurShader.SetMat4("uProjection", m_Proj);
-
-    glBindVertexArray(m_Vao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glBindVertexArray(0);
-
-    glActiveTexture(GL_TEXTURE0);
+    FullscreenPass::Draw();
 }

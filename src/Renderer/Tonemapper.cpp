@@ -1,44 +1,20 @@
 #include "Tonemapper.h"
-#include "Framebuffer.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLStateCache.h"
-#include "GLFramebufferCheck.h"
 #include "gl.h"
 
 #include <algorithm>
 #include <cmath>
 
-
-Tonemapper::~Tonemapper() {
-    delete m_Shader;
-    delete m_Fxaa;
-    delete m_Ldr;
-    delete m_LumShader;
-    delete m_AdaptShader;
-    delete m_DofShader;
-    if (m_DofTex) glDeleteTextures(1, &m_DofTex);
-    if (m_DofFbo) glDeleteFramebuffers(1, &m_DofFbo);
-    if (m_Vao) glDeleteVertexArrays(1, &m_Vao);
-    if (m_LumTex) glDeleteTextures(1, &m_LumTex);
-    if (m_LumFbo) glDeleteFramebuffers(1, &m_LumFbo);
-    for (int s = 0; s < kExposureSlots; ++s) {
-        if (m_EvTex[s][0]) glDeleteTextures(2, m_EvTex[s]);
-        if (m_EvFbo[s][0]) glDeleteFramebuffers(2, m_EvFbo[s]);
-    }
-}
-
-void Tonemapper::EnsureCreated() {
-    if (m_Shader) return;
-    m_Shader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
-                          ShaderLibrary::ReadFile("Tonemapper.frag.glsl"));
-    m_Fxaa = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
-                        ShaderLibrary::ReadFile("Fxaa.frag.glsl"));
-    m_Ldr = new Framebuffer();
-    glGenVertexArrays(1, &m_Vao); // attribute-less; positions come from gl_VertexID
-}
+Tonemapper::Tonemapper() = default;
+Tonemapper::~Tonemapper() = default;
 
 namespace {
+
+std::unique_ptr<Shader> MakeFullscreenShader(const char* frag) {
+    return std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"), ShaderLibrary::ReadFile(frag));
+}
 
 // #162 - Unity's white balance (ColorUtils.ComputeColorBalance): Temperature/Tint shift the
 // white point along/across the Planckian locus; the result is a per-channel LMS gain.
@@ -66,56 +42,39 @@ void WhiteBalanceGains(float temperature, float tint, float out[3]) {
 constexpr int kLumSize = 64;   // metering resolution; its mip chain ends at 1x1
 constexpr int kLumTopMip = 6;  // log2(kLumSize)
 
-unsigned int MakeColorTarget(unsigned int& fbo, int size, GLenum internalFormat, bool mips) {
-    unsigned int tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, size, size, 0, GL_RED, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mips ? GL_LINEAR_MIPMAP_NEAREST : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mips ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (mips) glGenerateMipmap(GL_TEXTURE_2D); // allocate the chain once
-    glGenFramebuffers(1, &fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
-    GLFramebufferCheck::Complete("Tonemapper luminance target", fbo, size, size);
-    return tex;
-}
-
 } // namespace
+
+void Tonemapper::EnsureCreated() {
+    if (m_Shader) return;
+    m_Shader = MakeFullscreenShader("Tonemapper.frag.glsl");
+    m_Fxaa = MakeFullscreenShader("Fxaa.frag.glsl");
+}
 
 unsigned int Tonemapper::UpdateAutoExposure(unsigned int srcHdrTexture, const PostSettings& post) {
     const int slot = std::clamp(post.ExposureSlot, 0, kExposureSlots - 1);
     if (!m_LumShader) {
-        m_LumShader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
-                                 ShaderLibrary::ReadFile("AutoExposureLum.frag.glsl"));
-        m_AdaptShader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
-                                   ShaderLibrary::ReadFile("AutoExposureAdapt.frag.glsl"));
-        m_LumTex = MakeColorTarget(m_LumFbo, kLumSize, GL_R16F, true);
+        m_LumShader = MakeFullscreenShader("AutoExposureLum.frag.glsl");
+        m_AdaptShader = MakeFullscreenShader("AutoExposureAdapt.frag.glsl");
+        m_Lum.Ensure(kLumSize, kLumSize, GL_R16F, "Tonemapper luminance target", true, 0);
         for (int s = 0; s < kExposureSlots; ++s)
-            for (int i = 0; i < 2; ++i) m_EvTex[s][i] = MakeColorTarget(m_EvFbo[s][i], 1, GL_R32F, false);
-        GLStateCache::Invalidate(); // MakeColorTarget bound textures behind the cache's back
+            for (int i = 0; i < 2; ++i) m_Ev[s][i].Ensure(1, 1, GL_R32F, "Tonemapper exposure target", false);
     }
-    glBindVertexArray(m_Vao);
 
     // 1) log2 luminance into 64x64, then let the mip chain average it down to 1x1.
-    glBindFramebuffer(GL_FRAMEBUFFER, m_LumFbo);
-    glViewport(0, 0, kLumSize, kLumSize);
+    m_Lum.Bind();
     m_LumShader->Bind();
     GLStateCache::BindTexture2D(0, srcHdrTexture);
     m_LumShader->SetInt("uHdr", 0);
     m_LumShader->SetVec2("uTexel", glm::vec2(1.0f / kLumSize));
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glGenerateTextureMipmap(m_LumTex);
+    FullscreenPass::Draw();
+    glGenerateTextureMipmap(m_Lum.Texture());
 
     // 2) Ease this view's EV toward the metered target (ping-pong between two 1x1 texels).
     const int prev = m_EvCur[slot], next = 1 - prev;
-    glBindFramebuffer(GL_FRAMEBUFFER, m_EvFbo[slot][next]);
-    glViewport(0, 0, 1, 1);
+    m_Ev[slot][next].Bind();
     m_AdaptShader->Bind();
-    GLStateCache::BindTexture2D(0, m_LumTex);
-    GLStateCache::BindTexture2D(1, m_EvTex[slot][prev]);
+    GLStateCache::BindTexture2D(0, m_Lum.Texture());
+    GLStateCache::BindTexture2D(1, m_Ev[slot][prev].Texture());
     m_AdaptShader->SetInt("uLum", 0);
     m_AdaptShader->SetFloat("uTopMip", (float)kLumTopMip);
     m_AdaptShader->SetInt("uPrev", 1);
@@ -127,35 +86,16 @@ unsigned int Tonemapper::UpdateAutoExposure(unsigned int srcHdrTexture, const Po
     m_AdaptShader->SetFloat("uSpeedUp", std::max(post.AutoExposureSpeedUp, 0.0f));
     m_AdaptShader->SetFloat("uSpeedDown", std::max(post.AutoExposureSpeedDown, 0.0f));
     m_AdaptShader->SetFloat("uDt", std::min(post.DeltaTime, 0.25f)); // a hitch shouldn't pop exposure
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    FullscreenPass::Draw();
     m_EvCur[slot] = next;
     m_EvValid[slot] = true;
-    return m_EvTex[slot][next];
+    return m_Ev[slot][next].Texture();
 }
 
 unsigned int Tonemapper::ApplyDepthOfField(unsigned int srcHdrTexture, int w, int h, const PostSettings& post) {
-    if (!m_DofShader)
-        m_DofShader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
-                                 ShaderLibrary::ReadFile("DepthOfField.frag.glsl"));
-    if (w != m_DofW || h != m_DofH || !m_DofTex) {
-        if (m_DofTex) glDeleteTextures(1, &m_DofTex);
-        if (m_DofFbo) glDeleteFramebuffers(1, &m_DofFbo);
-        glGenTextures(1, &m_DofTex);
-        glBindTexture(GL_TEXTURE_2D, m_DofTex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glGenFramebuffers(1, &m_DofFbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, m_DofFbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_DofTex, 0);
-        m_DofW = w; m_DofH = h;
-        GLStateCache::Invalidate(); // raw texture bind above
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, m_DofFbo);
-    glViewport(0, 0, w, h);
-    glBindVertexArray(m_Vao);
+    if (!m_DofShader) m_DofShader = MakeFullscreenShader("DepthOfField.frag.glsl");
+    m_Dof.Ensure(w, h, GL_RGBA16F, "Tonemapper depth of field");
+    m_Dof.Bind();
     m_DofShader->Bind();
     GLStateCache::BindTexture2D(0, srcHdrTexture);
     GLStateCache::BindTexture2D(1, post.DepthTexture);
@@ -168,17 +108,13 @@ unsigned int Tonemapper::ApplyDepthOfField(unsigned int srcHdrTexture, int w, in
     m_DofShader->SetFloat("uRange", std::max(post.FocusRange, 0.01f));
     m_DofShader->SetFloat("uMaxRadius", std::clamp(post.MaxBlur, 0.0f, 32.0f) * (float)h / 1080.0f);
     m_DofShader->SetVec2("uTexel", glm::vec2(1.0f / (float)w, 1.0f / (float)h));
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    return m_DofTex;
+    FullscreenPass::Draw();
+    return m_Dof.Texture();
 }
 
 void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW, int dstH, const PostSettings& post) {
     EnsureCreated();
-
-    GLboolean prevDepth = glIsEnabled(GL_DEPTH_TEST);
-    GLboolean prevBlend = glIsEnabled(GL_BLEND);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
+    FullscreenPass pass;
 
     // #162 - with FXAA the tone-mapped image goes to an intermediate first, then FXAA resolves
     // it into the real destination.
@@ -190,8 +126,8 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
     else m_EvValid[std::clamp(post.ExposureSlot, 0, kExposureSlots - 1)] = false; // re-enabling snaps
 
     const bool fxaa = post.Fxaa && dstW > 0 && dstH > 0;
-    if (fxaa) m_Ldr->Resize(dstW, dstH);
-    glBindFramebuffer(GL_FRAMEBUFFER, fxaa ? m_Ldr->Handle() : dstFbo);
+    if (fxaa) m_Ldr.Ensure(dstW, dstH, GL_RGB8, "Tonemapper FXAA input");
+    glBindFramebuffer(GL_FRAMEBUFFER, fxaa ? m_Ldr.Fbo() : dstFbo);
     glViewport(0, 0, dstW, dstH);
 
     m_Shader->Bind();
@@ -203,12 +139,10 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
     if (adaptedEv) GLStateCache::BindTexture2D(2, adaptedEv);
     m_Shader->SetInt("uAdaptedEv", 2);
 
-    // PR16 — bloom: bind glow texture on unit 1; shader adds it before the tone curve.
+    // PR16 - bloom: glow texture on unit 1; the shader adds it before the tone curve.
     const bool bloomOn = post.BloomTexture != 0 && post.BloomIntensity > 0.0f;
     if (bloomOn) {
-        glActiveTexture(GL_TEXTURE0 + 1);
-        glBindTexture(GL_TEXTURE_2D, post.BloomTexture);
-        glActiveTexture(GL_TEXTURE0);
+        GLStateCache::BindTexture2D(1, post.BloomTexture);
         m_Shader->SetInt("uBloom", 1);
         m_Shader->SetFloat("uBloomIntensity", post.BloomIntensity);
     }
@@ -222,25 +156,15 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
     m_Shader->SetFloat("uContrast", 1.0f + std::clamp(post.Contrast, -100.0f, 100.0f) / 100.0f);
     m_Shader->SetFloat("uSaturation", 1.0f + std::clamp(post.Saturation, -100.0f, 100.0f) / 100.0f);
     m_Shader->SetInt("uDither", post.Dither ? 1 : 0);
-
-    glBindVertexArray(m_Vao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    FullscreenPass::Draw();
 
     if (fxaa) {
         glBindFramebuffer(GL_FRAMEBUFFER, dstFbo);
         glViewport(0, 0, dstW, dstH);
         m_Fxaa->Bind();
-        GLStateCache::BindTexture2D(0, m_Ldr->ColorTexture());
+        GLStateCache::BindTexture2D(0, m_Ldr.Texture());
         m_Fxaa->SetInt("uLdr", 0);
         m_Fxaa->SetVec2("uTexel", glm::vec2(1.0f / dstW, 1.0f / dstH));
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        FullscreenPass::Draw();
     }
-    glBindVertexArray(0);
-
-    if (prevDepth) glEnable(GL_DEPTH_TEST);
-    if (prevBlend) glEnable(GL_BLEND);
-
-    // Shader::Bind goes through GLStateCache, but the raw VAO bind above and ImGui's later raw
-    // GL calls mean the next cached bind shouldn't trust stale state.
-    GLStateCache::Invalidate();
 }

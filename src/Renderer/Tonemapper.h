@@ -1,7 +1,10 @@
 #pragma once
 
+#include "FullscreenPass.h"
+
+#include <memory>
+
 class Shader;
-class Framebuffer;
 
 // #162 - everything the final HDR -> display pass applies, gathered so call sites don't grow
 // a parameter per effect. Defaults are neutral (grading off, no FXAA).
@@ -47,7 +50,7 @@ class Tonemapper {
 public:
     enum class Operator { Reinhard = 0, ACES = 1, AgX = 2 };
 
-    Tonemapper() = default;
+    Tonemapper();
     ~Tonemapper();
     Tonemapper(const Tonemapper&) = delete;
     Tonemapper& operator=(const Tonemapper&) = delete;
@@ -67,21 +70,17 @@ private:
     // #162 - meters srcHdrTexture and updates the slot's adapted EV; returns that 1x1 texture.
     unsigned int UpdateAutoExposure(unsigned int srcHdrTexture, const PostSettings& post);
 
-    // #162 - blurs srcHdrTexture by depth into m_DofTex (w x h) and returns it.
+    // #162 - blurs srcHdrTexture by depth into m_Dof (w x h) and returns it.
     unsigned int ApplyDepthOfField(unsigned int srcHdrTexture, int w, int h, const PostSettings& post);
-    Shader* m_DofShader = nullptr;
-    unsigned int m_DofTex = 0, m_DofFbo = 0;
-    int m_DofW = 0, m_DofH = 0;
-    static constexpr int kExposureSlots = 2;
-    Shader* m_Shader = nullptr;       // owned; raw ptr to keep this header free of <memory>
-    Shader* m_Fxaa = nullptr;         // #162
-    Framebuffer* m_Ldr = nullptr;     // #162 - tonemapped image FXAA reads from
-    unsigned int m_Vao = 0;
 
-    Shader* m_LumShader = nullptr;    // #162 - auto exposure
-    Shader* m_AdaptShader = nullptr;
-    unsigned int m_LumTex = 0, m_LumFbo = 0;
-    unsigned int m_EvTex[kExposureSlots][2] = {}, m_EvFbo[kExposureSlots][2] = {};
+    static constexpr int kExposureSlots = 2;
+    std::unique_ptr<Shader> m_Shader, m_Fxaa, m_DofShader;
+    ColorTarget m_Ldr; // #162 - the tone-mapped image FXAA reads from
+    ColorTarget m_Dof;
+
+    std::unique_ptr<Shader> m_LumShader, m_AdaptShader; // #162 - auto exposure
+    ColorTarget m_Lum;                                  // log2 luminance, 64x64 with its mip chain
+    ColorTarget m_Ev[kExposureSlots][2];                // 1x1 adapted EV per view, ping-pong
     int  m_EvCur[kExposureSlots] = {};
     bool m_EvValid[kExposureSlots] = {};
 };

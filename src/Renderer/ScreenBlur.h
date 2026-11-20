@@ -1,5 +1,9 @@
 #pragma once
 
+#include "FullscreenPass.h"
+
+#include <memory>
+
 class Shader;
 
 // Full-screen separable Gaussian blur for the frosted modal backdrop. Runs at half resolution
@@ -7,7 +11,7 @@ class Shader;
 // times, then upsampled — smooth and cheap, and only invoked while a modal dialog is open.
 class ScreenBlur {
 public:
-    ScreenBlur() = default;
+    ScreenBlur();
     ~ScreenBlur();
     ScreenBlur(const ScreenBlur&) = delete;
     ScreenBlur& operator=(const ScreenBlur&) = delete;
@@ -17,11 +21,6 @@ public:
     void Apply(unsigned int srcTex, int width, int height, unsigned int dstFbo, int iterations = 3);
 
 private:
-    void Ensure(int halfW, int halfH);
-
-    Shader* m_Shader = nullptr;   // owned; raw ptr keeps this header free of <memory>
-    unsigned int m_Vao = 0;
-    unsigned int m_Fbo[2] = {0, 0};
-    unsigned int m_Tex[2] = {0, 0};
-    int m_W = 0, m_H = 0;
+    std::unique_ptr<Shader> m_Shader;
+    ColorTarget m_Half[2]; // half-resolution ping-pong
 };
