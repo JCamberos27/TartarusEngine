@@ -46,21 +46,6 @@ def curves(root, name, property_name):
     return {c[3]: obs[c[1]] for c in connections if c[2] in nodes and len(c) > 3 and obs[c[1]].id == b'AnimationCurve'}
 
 
-def set_duration(root, seconds):
-    stop = round(seconds * 46186158000)
-    for node in objects(root).values():
-        if node.id == b'AnimationStack':
-            for key in (b'LocalStop', b'ReferenceStop'):
-                properties(node)[key].props[4] = stop
-    for node in root.elems:
-        if node.id == b'Takes':
-            for take in node.elems:
-                if take.id == b'Take':
-                    for span in take.elems:
-                        if span.id in (b'LocalTime', b'ReferenceTime'):
-                            span.props[:] = [0, stop]
-
-
 def zero_translation(root, name):
     properties(models(root)[name])[b'Lcl Translation'].props[4:] = [0.0, 0.0, 0.0]
     for curve in curves(root, name, b'Lcl Translation').values():

@@ -477,6 +477,8 @@ def rework_hand(dst, frames, windows):
                     if o0 <= f <= o1:
                         src = s0 + (s1 - s0) * (f - o0) / max(o1 - o0, 1)
                         break
+                else:                                   # never reuse the previous frame's source silently
+                    raise SystemExit("retime window %d-%d: frame %d is outside its knots %r" % (fa, fb, f, knots))
                 h, p_ = at(src)
                 gf = rec[f][2]
                 want[f] = (gf @ h, gf @ p_)
