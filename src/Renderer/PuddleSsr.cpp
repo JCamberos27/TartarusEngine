@@ -60,6 +60,7 @@ void PuddleSsr::Trace(const HdrTarget* target, unsigned int depthTex, const glm:
     if (v.Frames > 0) {
         PROFILE_GPU_SCOPE("Puddle SSR");
         WarmUp();
+        const unsigned int prevColor = target->PreviousColorTexture(); // before Bind: its first call unbinds programs
         Shader& p = *m_Program;
         p.Bind();
         p.SetMat4("uProj", proj);
@@ -72,7 +73,7 @@ void PuddleSsr::Trace(const HdrTarget* target, unsigned int depthTex, const glm:
         p.SetFloat("uMaxDistance", kMaxDistance);
         p.SetInt("uFrame", ++m_Frame);
         glBindTextureUnit(32, depthTex); // TextureUnits::SsrDepth / SsrPrevColor: no draw uses them
-        glBindTextureUnit(33, target->PreviousColorTexture()); // last frame's colour (uPrevColor)
+        glBindTextureUnit(33, prevColor); // last frame's colour (uPrevColor)
         glBindImageTexture(0, v.Tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
         const int w = std::max(1, (v.W + 1) / 2), h = std::max(1, (v.H + 1) / 2);
         glDispatchCompute((unsigned)((w + 7) / 8), (unsigned)((h + 7) / 8), 1);

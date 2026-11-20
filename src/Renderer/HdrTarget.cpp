@@ -1,6 +1,7 @@
 #include "GLFramebufferCheck.h"
 #include "GpuMemTrack.h"
 #include "HdrTarget.h"
+#include "GLStateCache.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -224,7 +225,10 @@ unsigned int HdrTarget::PreviousColorTexture() const {
         glTextureParameteri(m_PrevColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(m_PrevColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTextureParameteri(m_PrevColor, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        // Zero until the first copy (the loader has no glClearTexImage: a throwaway FBO clears it).
+        // Zero until the first copy (the loader has no glClearTexImage: a throwaway FBO clears it). With no program
+        // bound, and left that way: the driver checks the bound program's samplers at a clear, and one with a sampler
+        // on an empty unit logs a warning. Once per target; callers bind their own program after this.
+        GLStateCache::UseProgram(0);
         unsigned int fbo = 0;
         glCreateFramebuffers(1, &fbo);
         glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, m_PrevColor, 0);
