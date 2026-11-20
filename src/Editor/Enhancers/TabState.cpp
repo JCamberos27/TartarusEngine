@@ -105,16 +105,24 @@ void TabState::Reset() {
     Inspector = TabStrip{};
     Assets = TabStrip{};
     Starred.clear();
+    m_Unknown = json::object();
     m_Dirty = false;
 }
 
 json TabState::ToJson() const {
-    return json{{"version", 1}, {"inspector", Inspector.ToJson()}, {"assets", Assets.ToJson()}, {"starred", RefsToJson(Starred)}};
+    json j = m_Unknown;
+    j["version"] = kVersion;
+    j["inspector"] = Inspector.ToJson();
+    j["assets"] = Assets.ToJson();
+    j["starred"] = RefsToJson(Starred);
+    return j;
 }
 
 void TabState::FromJson(const json& root) {
     Reset();
     if (!root.is_object()) return;
+    NoteNewerVersion(root, kVersion, "vTabs");
+    m_Unknown = UnownedKeys(root, {"version", "inspector", "assets", "starred"});
     if (auto it = root.find("inspector"); it != root.end()) Inspector.FromJson(*it);
     if (auto it = root.find("assets"); it != root.end()) Assets.FromJson(*it);
     if (auto it = root.find("starred"); it != root.end()) Starred = RefsFromJson(*it);
