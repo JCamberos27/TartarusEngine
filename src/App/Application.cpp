@@ -538,7 +538,10 @@ private:
     }};
     std::unique_ptr<NpcTest> npcTest;
     Step step38{[&] {
-        if (opt.npcTestMode) npcTest = std::make_unique<NpcTest>(opt.npcTestScenario);
+        if (opt.npcTestMode) {
+            npcTest = std::make_unique<NpcTest>(opt.npcTestScenario);
+            FirstPersonPresentation::FixRandomSeed(1); // the same recoil and shake patterns every run
+        }
     }};
     NpcTest::BloodView npcTestBlood; // what the blood scenario reads of the blood each frame
     Step step39{[&] {
