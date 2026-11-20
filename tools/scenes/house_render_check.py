@@ -88,8 +88,8 @@ def main():
     print(f'{len(cams)} fittings')
     # off: every circuit off (';' = only no circuit on; every switch in the Forest starts on, so "as the switches
     # start" would be lit too); on: every circuit on
-    hs.run_engine(cams, os.path.join(out, '0'), None, 'Forest.json', only=';')
-    hs.run_engine(cams, os.path.join(out, '1'), True, 'Forest.json')
+    hs.run_engine(cams, os.path.join(out, '0'), None, 'Forest.json', only=';', check=False)
+    hs.run_engine(cams, os.path.join(out, '1'), True, 'Forest.json', check=False)
     fails, brighter = [], 0
 
     def p99(path):

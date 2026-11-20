@@ -71,7 +71,7 @@ def main():
             mine = [c[:4] for c in cams if c[-1] == circuit]
             for tag, scene in (('gi', 'Forest.json'), ('off', 'Forest_gicheck_off.json')):
                 d = os.path.join(out, tag)
-                hs.run_engine([(f'{tag}_{n}', p, y, pi) for n, p, y, pi in mine], d, None, scene, circuit)
+                hs.run_engine([(f'{tag}_{n}', p, y, pi) for n, p, y, pi in mine], d, None, scene, circuit, check=False)
                 for n, *_ in mine:
                     shots[(tag, n)] = os.path.join(d, f'{os.path.splitext(scene)[0]}_{tag}_{n}.png')
     finally:

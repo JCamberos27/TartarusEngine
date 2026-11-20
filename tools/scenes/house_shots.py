@@ -131,8 +131,13 @@ def run_engine(cams, out_dir, lights, scene, only=None, check=True):
         env['TARTARUS_LIGHTS_ONLY'] = only
     r = subprocess.run([exe, '--smoke-test', os.path.join(REPO, 'project', 'scenes', scene), '--smoke-shots', out_dir],
                        cwd=REPO, env=env, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=3600)
-    if r.returncode and check:
-        sys.exit(f'engine exit {r.returncode} ({scene}):\n{r.stdout[-3000:]}{r.stderr[-2000:]}')
+    if r.returncode:
+        causes = [ln.strip() for ln in r.stdout.splitlines() if 'cause:' in ln or ln.startswith('[error]')]
+        msg = f'engine exit {r.returncode} ({scene}): ' + ('; '.join(dict.fromkeys(causes)) or
+                                                           r.stdout[-2000:] + r.stderr[-1000:])
+        if check:
+            sys.exit(msg)
+        print('warning: ' + msg, file=sys.stderr)   # the caller checks each shot itself
     return r.returncode
 
 
