@@ -5,7 +5,7 @@
   python tools/audio/apply_sync_map.py --check    # exit 1 when the controllers differ from what this would write
 
 sync_map.json: {"<gun>/<Clip>": [{"key", "frame", "time", ...}]}, frame = the CONTACT frame (0-based, 60 fps) of the sound.
-  <gun>   AKS74U or Remington870 -> ak / 870 (folder under project/assets/Weapons)
+  <gun>   ak / 870 / revolver38 -> AKS74U / Remington870 / Revolver38 (folder under project/assets/Weapons)
   <Clip>  Tac_Reload ... -> the controller state with the underscores removed (TacReload ...)
 
 A sound file carries its contact transient `anchor_ms` into the file (pump / bolt lead-ins 28-130 ms, draw / holster ~300 ms),
@@ -19,7 +19,11 @@ variant's transient lands on the contact frame.
 
 snd.<gun>.fire is not placed on the Fire state: shots play from the round (WeaponAudio::Shot expands it to the fire_* layers),
 so hip and ADS fire sound the same. Every other event and field of a controller is left alone; the old snd.* events are
-replaced everywhere. Files keep their formatting (indent 2, their own key order, CRLF / trailing newline as found).
+replaced everywhere.
+
+Hand-placed events: an entry {"key", "time", "hand": true} (no frame) is written as-is, name = key and time = the normalized
+time, with no lead math. The revolver's handling events were timed by hand in the editor and are kept this way so a re-apply
+leaves them exactly where they are. Files keep their formatting (indent 2, their own key order, CRLF / trailing newline as found).
 """
 import argparse
 import json
@@ -31,7 +35,7 @@ WEAPONS = ROOT / "project" / "assets" / "Weapons"
 SYNC_MAP = Path(__file__).resolve().parent / "sync_map.json"
 MANIFEST = ROOT / "project" / "assets" / "Audio" / "audio_manifest.json"
 FPS = 60.0
-GUNS = {"ak": "AKS74U", "870": "Remington870"}
+GUNS = {"ak": "AKS74U", "870": "Remington870", "revolver38": "Revolver38"}
 
 
 def load_controller(path):
@@ -67,11 +71,15 @@ def plan_from_sync_map(path, anchors):
         folder = GUNS.get(gun) or gun
         state = clip.replace("_", "")
         # The clip's length in frames: frame / time of any event past frame 0 (time = frame / frames).
-        frames = next((round(e["frame"] / e["time"]) for e in entries if e.get("time") and e["frame"] > 0), None)
+        frames = next((round(e["frame"] / e["time"]) for e in entries
+                       if not e.get("hand") and e.get("time") and e.get("frame", 0) > 0), None)
         for e in entries:
             key = e["key"]
             if key.endswith(".fire"):
                 continue  # the shot layers play from the round
+            if e.get("hand"):
+                out.setdefault(folder, {}).setdefault(state, []).append((key, e["time"]))
+                continue
             if frames is None:
                 warnings.append(f"{clip_key}: cannot derive the clip length; skipped")
                 break
@@ -88,19 +96,17 @@ def apply(folder, per_state):
     data, crlf, trailing = load_controller(path)
     warnings = []
     states = {s.get("name"): s for layer in data.get("layers", []) for s in layer.get("states", [])}
-    for s in states.values():
+    for state_name in per_state:
+        if state_name not in states:
+            warnings.append(f"{folder}: no state '{state_name}' in the controller")
+    for state_name, s in states.items():
         kept = [ev for ev in s.get("events", []) if not str(ev.get("name", "")).startswith("snd.")]
-        if kept:
-            s["events"] = kept
+        merged = kept + [{"name": n, "time": t} for n, t in per_state.get(state_name, [])]
+        if merged:
+            # Assigning an existing key keeps its place in the state; only a new "events" key goes at the end.
+            s["events"] = sorted(merged, key=lambda ev: (ev["time"], ev["name"]))
         else:
             s.pop("events", None)
-    for state_name, events in per_state.items():
-        s = states.get(state_name)
-        if s is None:
-            warnings.append(f"{folder}: no state '{state_name}' in the controller")
-            continue
-        merged = s.get("events", []) + [{"name": n, "time": t} for n, t in events]
-        s["events"] = sorted(merged, key=lambda ev: (ev["time"], ev["name"]))
     return dump_controller(data, crlf, trailing), old, warnings, path
 
 
