@@ -1460,6 +1460,22 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 // project, offered here as "Import from disk..."). Both list what's already registered in the
 // AssetLibrary (i.e. what the Asset Browser already shows) rather than re-scanning the project
 // folder, so a picker and the Asset Browser can never disagree about what counts as an asset.
+void EditorLayer::RefreshPickerRows(PickerRowCache& cache, const std::vector<std::string>& source, const std::string& needle,
+                                    const std::function<std::string(const std::string&)>& nameOf) {
+    if (cache.SourceCount == source.size() && cache.Needle == needle) return;
+    cache.SourceCount = source.size();
+    cache.Needle = needle;
+    cache.Rows.clear();
+    std::string lname;
+    for (const std::string& path : source) {
+        std::string name = nameOf(path);
+        lname = name;
+        for (char& c : lname) c = (char)tolower((unsigned char)c);
+        if (!needle.empty() && lname.find(needle) == std::string::npos) continue;
+        cache.Rows.push_back({path, std::move(name)});
+    }
+}
+
 bool EditorLayer::TexturePickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath) {
     bool picked = false;
     ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 380.0f * m_UIScale), ImGuiCond_Appearing);
@@ -1471,28 +1487,36 @@ bool EditorLayer::TexturePickerPopup(const char* popupId, AssetLibrary& assets, 
         for (char& c : needle) c = (char)tolower((unsigned char)c);
 
         ImGui::Separator();
+        if (ImGui::IsWindowAppearing()) m_TexturePickerRows.SourceCount = (size_t)-1; // fresh list per open
+        RefreshPickerRows(m_TexturePickerRows, assets.TexturePaths(), needle,
+                          [](const std::string& p) { return std::filesystem::path(p).filename().string(); });
         ImGui::BeginChild("##texPickerList", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()));
-        for (const std::string& path : assets.TexturePaths()) {
-            std::string name = std::filesystem::path(path).filename().string();
-            std::string lname = name;
-            for (char& c : lname) c = (char)tolower((unsigned char)c);
-            if (!needle.empty() && lname.find(needle) == std::string::npos) continue;
-
-            ImGui::PushID(path.c_str());
-            Texture* tex = assets.LoadTexture(path).get(); // cache hit, already imported
-            if (tex && tex->IsValid()) {
-                ImGui::Image((ImTextureID)(intptr_t)tex->GLHandle(),
-                             ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
-                ImGui::SameLine();
+        // Every row is an icon-height row, so only the visible ones are submitted (and only they look
+        // their texture up).
+        const float iconH = ImGui::GetFrameHeight();
+        ImGuiListClipper clipper;
+        clipper.Begin((int)m_TexturePickerRows.Rows.size(), iconH + ImGui::GetStyle().ItemSpacing.y);
+        while (clipper.Step())
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const PickerRow& row = m_TexturePickerRows.Rows[(size_t)i];
+                ImGui::PushID(row.Path.c_str());
+                Texture* tex = assets.LoadTexture(row.Path).get(); // cache hit, already imported
+                const bool hasIcon = tex && tex->IsValid();
+                if (hasIcon) {
+                    ImGui::Image((ImTextureID)(intptr_t)tex->GLHandle(), ImVec2(iconH, iconH));
+                    ImGui::SameLine();
+                } else {
+                    ImGui::Dummy(ImVec2(0.0f, iconH)); // keep the row height the clipper assumes
+                    ImGui::SameLine(0.0f, 0.0f);
+                }
+                if (ImGui::Selectable(row.Name.c_str())) {
+                    outPath = row.Path;
+                    picked = true;
+                    ImGui::CloseCurrentPopup();
+                }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", row.Path.c_str());
+                ImGui::PopID();
             }
-            if (ImGui::Selectable(name.c_str())) {
-                outPath = path;
-                picked = true;
-                ImGui::CloseCurrentPopup();
-            }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", path.c_str());
-            ImGui::PopID();
-        }
         ImGui::EndChild();
 
         ImGui::Separator();
@@ -1521,16 +1545,21 @@ bool EditorLayer::MaterialPickerPopup(const char* popupId, AssetLibrary& assets,
         for (char& c : needle) c = (char)tolower((unsigned char)c);
 
         ImGui::Separator();
+        if (ImGui::IsWindowAppearing()) m_MaterialPickerRows.SourceCount = (size_t)-1; // fresh list per open
+        RefreshPickerRows(m_MaterialPickerRows, assets.MaterialPaths(), needle,
+                          [&assets](const std::string& p) { return assets.DisplayName(p); });
         ImGui::BeginChild("##matPickerList", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()));
-        for (const std::string& path : assets.MaterialPaths()) {
-            std::string name = assets.DisplayName(path);
-            std::string lname = name;
-            for (char& c : lname) c = (char)tolower((unsigned char)c);
-            if (!needle.empty() && lname.find(needle) == std::string::npos) continue;
-
+        // Fixed-height rows: only the visible ones are submitted, so only they ask for a thumbnail
+        // (every row queued one before, every frame).
+        const float rowH = ImGui::GetTextLineHeight() * 1.7f;
+        ImGuiListClipper clipper;
+        clipper.Begin((int)m_MaterialPickerRows.Rows.size(), rowH + ImGui::GetStyle().ItemSpacing.y);
+        while (clipper.Step())
+        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+            const std::string& path = m_MaterialPickerRows.Rows[(size_t)i].Path;
+            const std::string& name = m_MaterialPickerRows.Rows[(size_t)i].Name;
             ImGui::PushID(path.c_str());
             // #107 - each row leads with the material's thumbnail (the type glyph until it renders).
-            const float rowH = ImGui::GetTextLineHeight() * 1.7f;
             const ImVec2 rowPos = ImGui::GetCursorScreenPos();
             if (ImGui::Selectable("##pick", false, ImGuiSelectableFlags_None, ImVec2(0.0f, rowH))) {
                 outPath = path;
