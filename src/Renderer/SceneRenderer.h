@@ -8,6 +8,8 @@
 #include <entt/entity/fwd.hpp>
 #include "RenderStats.h"
 
+struct SceneViewScratch; // SceneViewPass.h
+
 // Per-run tally of meshes drawn through each ShaderAsset variant key (audit #354). Key 0 means
 // the default modelShader / a zero-keyword variant. Read by --smoke-test to report which lobes
 // actually rendered; reset it per scene.
@@ -196,8 +198,8 @@ public:
     // piece) would otherwise compile its new variants on the frame that first draws it.
     static int WarmShaderVariants(World& world, entt::entity root);
     // The combat effects' programs (particles, FX sprites, blood sprays and decals) compiled now: each used to compile
-    // on its first use, mid-fight.
-    static void WarmEffects();
+    // on its first use, mid-fight. The scene's particle textures start decoding too.
+    static void WarmEffects(const World& world);
 
     // Draws sky + the opaque and transparent scene geometry for one viewport. `ctx` carries the
     // per-view params (see RenderFrameContext.h and its GL state contract); `in` carries the
@@ -221,4 +223,7 @@ private:
     std::unique_ptr<VolumetricFog> m_Volumetrics;
     // Puddle screen-space reflections: per-view half-res traces, between the depth pre-pass and the opaque pass.
     std::unique_ptr<PuddleSsr> m_Ssr;
+    // RenderScene's stages and the lists they reuse across views and frames (SceneViewPass.h).
+    class ViewPass;
+    std::unique_ptr<SceneViewScratch> m_Scratch;
 };

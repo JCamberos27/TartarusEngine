@@ -22,6 +22,14 @@ struct EditorSmokeAccess_Scenes {
         e.m_Dirty = false;
         e.RequestOpenScene(w, a, path);
     }
+    // An open is two steps since the async preload (#938): `path` is open once nothing is preloading and it is the
+    // current scene. With the Drive assets linked the preload can take seconds, far past a fixed frame wait.
+    static bool IsOpen(EditorLayer& e, const std::string& path) { return !e.m_ScenePreload && e.m_CurrentScenePath == path; }
+    // For a timeout message: what the open is still waiting on.
+    static std::string OpenState(EditorLayer& e, AssetLibrary& a) {
+        return std::string(e.m_ScenePreload ? "a preload is still pending" : "no preload pending") +
+               ", " + std::to_string(a.AsyncInFlight()) + " asset load(s) in flight, open scene '" + e.m_CurrentScenePath + "'";
+    }
     // The undo stack's labels that aren't selection steps (opening a scene and playing it is none).
     static std::string EditSteps(EditorLayer& e) {
         std::string s;

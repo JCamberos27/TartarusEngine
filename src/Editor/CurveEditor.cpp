@@ -234,7 +234,8 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Double-click: add key   Ctrl-click: select multiple\nDrag empty space: select   Right-drag: pan   Wheel: zoom\nRight-click key: tangents   Delete: remove   Ctrl+Z / Ctrl+Y: undo / redo");
     const auto edited=s.Editor.GetCurve();
     if (edited!=incoming) s.Pending=true;
-    curve=FromImCurve(edited);
+    // Only when something changed: rebuilding the whole Curve every frame allocated for nothing.
+    if (edited!=incoming || committed) curve=FromImCurve(edited);
     // The canvas's own key edits (double-click insert, Delete), not its Ctrl+Z / Ctrl+Y history.
     if (!ctrl && curve.Keys.size()>keysBefore) EditorSound::Play(EditorSound::Event::KeyAdd,graphX);
     else if (!ctrl && curve.Keys.size()<keysBefore) EditorSound::Play(EditorSound::Event::KeyDelete,graphX);

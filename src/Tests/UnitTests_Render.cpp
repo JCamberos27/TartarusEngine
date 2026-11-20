@@ -546,6 +546,110 @@ void FurMaterialRoundTrip() {
     std::filesystem::remove_all(dir, ec);
 }
 
+// The built-in property table: a default material writes only the core keys (v2 and v1 names); every field
+// round-trips through both formats; the accessors and the bind resolver agree on kinds, clamps and the emissive
+// pre-multiply.
+void MaterialBuiltinTable() {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_mat_table");
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    auto readJson = [](const std::string& path) {
+        std::ifstream in(path);
+        return nlohmann::json::parse(in, nullptr, false);
+    };
+    // Defaults: exactly the always-written keys.
+    MaterialAsset def;
+    def.Path = (dir / "M_Default.mat").string();
+    def.ShaderPath = "engine://Standard.shader";
+    CHECK(def.Save());
+    const nlohmann::json dj = readJson(def.Path);
+    CHECK(dj.contains("properties") && dj["properties"].size() == 14);
+    for (const char* k : {"_BaseColor", "_Metallic", "_Roughness", "_EmissiveColor", "_EmissiveStrength", "_Triplanar",
+                          "_TriplanarScale", "_AlbedoMap", "_NormalMap", "_MetallicRoughnessMap", "_MetallicMap",
+                          "_RoughnessMap", "_AOMap", "_EmissiveMap"})
+        CHECK(dj["properties"].contains(k));
+    MaterialAsset defV1 = def;
+    defV1.ShaderPath.clear();
+    defV1.Path = (dir / "M_DefaultV1.mat").string();
+    CHECK(defV1.Save());
+    const nlohmann::json dj1 = readJson(defV1.Path);
+    CHECK(dj1.contains("baseColor") && dj1.contains("emissiveMap") && !dj1.contains("transmission") && !dj1.contains("furEnabled"));
+
+    // Every field away from its default, through v2 and v1.
+    for (const bool v2 : {true, false}) {
+        MaterialAsset ma;
+        ma.Path = (dir / (v2 ? "M_All.mat" : "M_AllV1.mat")).string();
+        if (v2) ma.ShaderPath = "engine://Standard.shader";
+        Material& m = ma.Mat;
+        m.BaseColor = {0.1f, 0.2f, 0.3f}; m.Metallic = 0.7f; m.Roughness = 0.2f;
+        m.EmissiveColor = {0.5f, 0.25f, 0.0f}; m.EmissiveStrength = 3.0f;
+        m.Triplanar = true; m.TriplanarScale = 2.0f; m.TriplanarBreakup = 0.4f;
+        m.ClearCoat = 0.6f; m.ClearCoatRoughness = 0.1f; m.Anisotropy = -0.5f; m.AnisotropyRotation = 0.25f;
+        m.Sheen = {0.2f, 0.2f, 0.4f}; m.SheenRoughness = 0.3f; m.SubsurfaceColor = {0.9f, 0.1f, 0.1f}; m.Thickness = 0.8f;
+        m.TransmissionStrength = 0.5f; m.IOR = 1.33f; m.SubsurfaceEnabled = true; m.ReflectionProbes = true;
+        m.GrungeStrength = 0.5f; m.GrungeScale = 2.0f; m.ReceiveDecals = false; m.NoWetness = true; m.Foliage = true;
+        m.WindStrength = 0.3f; m.WindFrequency = 2.0f; m.WindFlutter = 0.1f; m.WindHeight = 3.0f; m.Translucency = 0.2f;
+        m.UVTiling = {2.0f, 3.0f}; m.UVOffset = {0.5f, 0.25f}; m.DetailTiling = {8.0f, 6.0f};
+        m.NormalStrength = 0.5f; m.NormalFlipY = true; m.DoubleSided = true; m.UseVertexColor = true;
+        m.SpecularHighlights = false; m.GlossyReflections = false; m.ParallaxScale = 0.05f;
+        m.Fur.Enabled = true; m.Fur.Shells = 8; m.Fur.Tint = glm::vec3(0.5f);
+        ma.AlbedoMapPath = "a.png"; ma.ThicknessMapPath = "t.png"; ma.GrungeMapPath = "g.png"; ma.FurMaskPath = "f.png";
+        CHECK(ma.Save());
+        if (!v2) {
+            const nlohmann::json j1 = readJson(ma.Path);
+            CHECK(j1.contains("transmission") && j1.contains("subsurface") && j1.contains("vertexColors") && j1["furShells"].is_number_integer());
+        }
+        const auto back = MaterialAsset::Load(ma.Path);
+        CHECK(back != nullptr);
+        if (!back) continue;
+        const Material& b = back->Mat;
+        CHECK(b.BaseColor == m.BaseColor && b.Metallic == m.Metallic && b.Roughness == m.Roughness);
+        CHECK(b.EmissiveColor == m.EmissiveColor && b.EmissiveStrength == m.EmissiveStrength);
+        CHECK(b.Triplanar && b.TriplanarScale == 2.0f && b.TriplanarBreakup == 0.4f);
+        CHECK(b.ClearCoat == 0.6f && b.ClearCoatRoughness == 0.1f && b.Anisotropy == -0.5f && b.AnisotropyRotation == 0.25f);
+        CHECK(b.Sheen == m.Sheen && b.SheenRoughness == 0.3f && b.SubsurfaceColor == m.SubsurfaceColor && b.Thickness == 0.8f);
+        CHECK(b.TransmissionStrength == 0.5f && b.IOR == 1.33f && b.SubsurfaceEnabled && b.ReflectionProbes);
+        CHECK(b.GrungeStrength == 0.5f && b.GrungeScale == 2.0f && !b.ReceiveDecals && b.NoWetness && b.Foliage);
+        CHECK(b.WindStrength == 0.3f && b.WindFrequency == 2.0f && b.WindFlutter == 0.1f && b.WindHeight == 3.0f && b.Translucency == 0.2f);
+        CHECK(b.UVTiling == m.UVTiling && b.UVOffset == m.UVOffset && b.DetailTiling == m.DetailTiling);
+        CHECK(b.NormalStrength == 0.5f && b.NormalFlipY && b.DoubleSided && b.UseVertexColor);
+        CHECK(!b.SpecularHighlights && !b.GlossyReflections && b.ParallaxScale == 0.05f);
+        CHECK(b.Fur.Enabled && b.Fur.Shells == 8 && b.Fur.Tint == glm::vec3(0.5f));
+        CHECK(back->AlbedoMapPath == "a.png" && back->ThicknessMapPath == "t.png" && back->GrungeMapPath == "g.png" && back->FurMaskPath == "f.png");
+        CHECK(back->NormalMapPath.empty());
+    }
+
+    // Accessors and the bind resolver.
+    Material m;
+    m.EmissiveColor = glm::vec3(0.5f);
+    m.EmissiveStrength = 4.0f;
+    CHECK(MaterialAsset::GetColor(m, "_EmissiveColor") == glm::vec3(2.0f));
+    CHECK(MaterialAsset::GetAuthoredColor(m, "_EmissiveColor") == glm::vec3(0.5f));
+    CHECK(!MaterialAsset::IsBuiltinProp("_SubsurfaceEnabled") && !MaterialAsset::IsBuiltinProp("_CoverStrength"));
+    MaterialAsset::SetFloat(m, "_FurShells", 7.6f);
+    CHECK(m.Fur.Shells == 8 && MaterialAsset::GetFloat(m, "_FurShells") == 8.0f);
+    MaterialAsset::SetFloat(m, "_FurDensity", 0.0f);
+    CHECK(m.Fur.Density == 1.0f);
+    MaterialAsset::SetVec(m, "_UVTiling", glm::vec4(3.0f, 4.0f, 9.0f, 9.0f));
+    CHECK(m.UVTiling == glm::vec2(3.0f, 4.0f) && MaterialAsset::GetVec(m, "_UVTiling") == glm::vec4(3.0f, 4.0f, 0.0f, 0.0f));
+    MaterialAsset::SetFloat(m, "_BaseColor", 9.0f); // wrong kind: ignored
+    CHECK(m.BaseColor == glm::vec3(1.0f) && MaterialAsset::GetFloat(m, "_BaseColor") == 0.0f);
+    const std::shared_ptr<Texture>& (*tex)(const Material&) = nullptr;
+    glm::vec4 (*val)(const Material&) = nullptr;
+    MaterialAsset::ResolveBuiltin("_EmissiveColor", ShaderPropType::Color, tex, val);
+    CHECK(!tex && val && glm::vec3(val(m)) == glm::vec3(2.0f));
+    MaterialAsset::ResolveBuiltin("_FurShells", ShaderPropType::Int, tex, val);
+    CHECK(val && val(m).x == 8.0f);
+    MaterialAsset::ResolveBuiltin("_NormalFlipY", ShaderPropType::Bool, tex, val);
+    m.NormalFlipY = true;
+    CHECK(val && val(m).x == 1.0f);
+    MaterialAsset::ResolveBuiltin("_Metallic", ShaderPropType::Color, tex, val);
+    CHECK(!tex && !val);
+    MaterialAsset::ResolveBuiltin("_DetailNormalMap", ShaderPropType::Texture2D, tex, val);
+    CHECK(tex && !val && !tex(m));
+    std::filesystem::remove_all(dir, ec);
+}
+
 // Reflection probe room captures: each cube face's view looks down its GL face axis and is a pure rotation (culling
 // holds); only probes whose volume changed are queued again. Puddle SSR: off by default, saved only when on, and a
 // probe's Capture Scene defaults on and survives a save.
@@ -1547,6 +1651,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TAA mode + rain wetness round-trip; old scenes keep MSAA/FXAA and stay dry; jitter un-jitters", TaaAndWetnessRoundTrip});
     tests.push_back({"Fur: shell count follows the hair's size on screen", FurShellLod});
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
+    tests.push_back({"Materials: built-in property table - default keys, v1/v2 round-trip, accessors and bind resolver", MaterialBuiltinTable});
     tests.push_back({"LodGroup", TestLodGroup});
     tests.push_back({"LodImpostor", TestLodImpostor});
     tests.push_back({"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch});
