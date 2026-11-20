@@ -2979,6 +2979,7 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
     ++m_FolderSummaryWalkGen;
     m_FolderSummaries.clear();
     m_FolderIndexContrib.clear();
+    m_FolderIndexFolders.clear();
     // Only what RefreshProjectAssetIndexIfNeeded has keyed: the rest arrives through NoteListedInFolderSummaries.
     const auto listed = [&](int l, size_t size) { return std::min(size, m_ListedAssetCounts[l]); };
     for (size_t i = 0, n = listed(0, assets.Models().size()); i < n; ++i)
@@ -2991,14 +2992,25 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
         m_FolderSummaries[assets.AssetFolderRef(assets.Sounds()[i])].Add(kListedFolderKind[3]);
     for (size_t i = 0, n = listed(4, assets.Prefabs().size()); i < n; ++i)
         m_FolderSummaries[assets.AssetFolderRef(assets.Prefabs()[i])].Add(kListedFolderKind[4]);
+    // ~11k index files, a directory's files next to each other (scan order): the folder is stored and hashed once per
+    // run of files in it, not per file (string copies and lookups per file made this the landing frame's ~10 ms).
     m_FolderIndexContrib.reserve(m_ProjectAssetIndex.files.size());
+    const std::string* runFolder = nullptr;
+    Enhancers::FolderSummary* runSummary = nullptr; // looked up on the run's first counted file
     for (const auto& f : m_ProjectAssetIndex.files) {
         if (m_ListedAssetKeys.count(f.Key)) continue;
         const std::string& moved = assets.AssetFolderRef(f.Path);
         const std::string& folder = moved.empty() ? f.Folder : moved;
+        if (!runFolder || *runFolder != folder) {
+            runFolder = &folder; // f.Folder or the library's entry: neither moves during this loop
+            runSummary = nullptr;
+            m_FolderIndexFolders.push_back(folder);
+        }
         const Enhancers::FolderKind kind = FolderKindOf(f.Kind);
-        if (m_FolderIndexContrib.try_emplace(f.Key, FolderIndexContribution{folder, kind}).second)
-            m_FolderSummaries[folder].Add(kind);
+        const auto folderId = (std::uint32_t)(m_FolderIndexFolders.size() - 1);
+        if (!m_FolderIndexContrib.try_emplace(std::string_view(f.Key), FolderIndexContribution{folderId, kind}).second) continue;
+        if (!runSummary) runSummary = &m_FolderSummaries[folder];
+        runSummary->Add(kind);
     }
 }
 
@@ -3009,10 +3021,11 @@ void EditorLayer::NoteListedInFolderSummaries(AssetLibrary& assets, int list, co
     m_FolderSummaries[folder].Add(kListedFolderKind[list]);
     ++m_FolderContentGen[folder];
     ++m_AnyFolderContentGen;
-    const auto it = m_FolderIndexContrib.find(key);
+    const auto it = m_FolderIndexContrib.find(std::string_view(key));
     if (it == m_FolderIndexContrib.end()) return;
-    if (it->second.Folder != folder) ++m_FolderContentGen[it->second.Folder]; // its unloaded tile goes
-    const auto s = m_FolderSummaries.find(it->second.Folder);
+    const std::string& counted = m_FolderIndexFolders[it->second.Folder];
+    if (counted != folder) ++m_FolderContentGen[counted]; // its unloaded tile goes
+    const auto s = m_FolderSummaries.find(counted);
     if (s != m_FolderSummaries.end()) {
         s->second.Remove(it->second.Kind);
         if (s->second.Total == 0) m_FolderSummaries.erase(s); // as a full walk would leave it: no entry
