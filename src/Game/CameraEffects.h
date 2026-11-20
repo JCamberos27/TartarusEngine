@@ -40,6 +40,7 @@ class CameraShakeState {
 public:
     explicit CameraShakeState(unsigned seed=std::random_device{}()) : m_Rng(seed) {}
     void Reset() { m_Shots.clear(); }
+    void Seed(unsigned seed) { m_Rng.seed(seed); }
     void Trigger(const CameraShakeAsset& asset,bool ads);
     CameraEffectPose Update(float dt);
 private:

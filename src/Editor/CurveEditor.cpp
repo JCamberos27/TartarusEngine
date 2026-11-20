@@ -21,7 +21,7 @@ bool Preview(const char* id,const Curve& curve,const ImVec2& size,const Options&
 namespace {
 struct Session {
     ImCurveEditor<float> Editor;
-    bool Pending=false,NumericPending=false,Expanded=false,Snap=false,Link=false,Playing=false,KeyList=true;
+    bool Pending=false,NumericPending=false,Snap=false,Link=false,Playing=false,KeyList=true;
     int LastFrame=0;ImVec2 Min{},Max{};
     ImGuiID RootWindow=0;
     float TimeStep=.01f,ValueStep=.01f,Playhead=0,InsertTime=0,InsertValue=0;
@@ -93,8 +93,6 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     }
     ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Deselect")){selected.clear();s.Editor.SelectKeys({});}
     ImGui::SameLine();
-    // Toolbar history changes must reach the asset before preset handling.
-    if (committed) curve=FromImCurve(s.Editor.GetCurve());
     if (EditorUIPrimitives::SecondaryButton("Presets")) ImGui::OpenPopup("##presets");
     if (ImGui::BeginPopup("##presets")) {
         float amplitude=0;
@@ -232,7 +230,7 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     s.Min=ImGui::GetWindowPos();s.Max=s.Min+ImGui::GetWindowSize();
     s.RootWindow=ImGui::GetCurrentWindow()->RootWindow->ID;
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Double-click: add key   Ctrl-click: select multiple\nDrag empty space: select   Right-drag: pan   Wheel: zoom\nRight-click key: tangents   Delete: remove   Ctrl+Z / Ctrl+Y: undo / redo");
-    const auto edited=s.Editor.GetCurve();
+    const auto& edited=s.Editor.GetCurve();
     if (edited!=incoming) s.Pending=true;
     // Only when something changed: rebuilding the whole Curve every frame allocated for nothing.
     if (edited!=incoming || committed) curve=FromImCurve(edited);

@@ -33,12 +33,15 @@
 #include <cmath>
 #include <filesystem>
 #include <cstdio>
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 
 using namespace FirstPersonPresentationDetail;
 
 namespace {
+
+std::optional<unsigned> g_FixedSeed; // FixRandomSeed
 
 bool FinitePositive(float value) {
     return std::isfinite(value) && value > 0.0f;
@@ -159,6 +162,8 @@ void FirstPersonPresentation::WarmSlotAssets(AssetLibrary& assets, const std::st
         for (const auto& [name, matPath] : *overrides) assets.LoadMaterial(ProjectPaths::Resolve(matPath));
     WarmEjectAssets(assets, set);
 }
+
+void FirstPersonPresentation::FixRandomSeed(unsigned seed) { g_FixedSeed = seed; }
 
 void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set) {
     if (!set.Eject.Enabled || set.Eject.Model.empty()) return;
@@ -364,7 +369,9 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
     }
     m_Procedural.Reset();
     m_CameraShake.Reset(); m_ShakePose={};
+    if (g_FixedSeed) m_Rng.seed(*g_FixedSeed); // --npc-test (FixRandomSeed): the same patterns every run
     m_Procedural.Seed(m_Rng()); // a fresh recoil pattern every Play, not the same one each time
+    m_CameraShake.Seed(m_Rng()); // and camera shake
     m_UsesIK = SetupIK();
     SetupSway();
     SetupBolt(assets, *ctrl);

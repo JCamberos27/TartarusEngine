@@ -97,7 +97,6 @@ int FolderStyles::OnFolderPathChanged(const std::string& oldPath, const std::str
     return n;
 }
 
-
 json FolderStyles::ToJson() const {
     json j = m_Unknown;
     j["version"] = kVersion;
@@ -141,6 +140,7 @@ void FolderStyles::Reset() {
     Folders.clear();
     Rules.clear();
     AutoIcons = true;
+    m_Unknown = json::object();
     m_Dirty = false;
 }
 

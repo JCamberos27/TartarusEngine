@@ -96,7 +96,8 @@ void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTe
                       ImVec2 vpMin, ImVec2 vpMax, float alpha, int* blurVtx) {
     if (blurVtx) blurVtx[0] = blurVtx[1] = 0;
     if (alpha <= 0.0f) return;
-    if (blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y) {
+    const bool blurred = blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y;
+    if (blurred) {
         // The blurred scene, sampled under exactly this rect: the plate's corners map to the same
         // spot of the blurred texture the sharp scene image shows there, so the glass lines up
         // with the 3D view behind it to the pixel. v runs 1 -> 0 (GL textures are bottom-up),
@@ -113,7 +114,6 @@ void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTe
     }
     // The chrome's tint over the blur (the same glass as the action bar and tool rail). Without a
     // blur the plate is the opaque fallback instead, so its text stays legible over anything.
-    const bool blurred = blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y;
     const ImVec4 tint = blurred ? OverlayTint : GlassFallback;
     DrawSquircle(dl, min, max, U32(WithAlpha(tint, tint.w * alpha)), radius);
     // The 1 px edge of 15% white.

@@ -905,6 +905,7 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     if(changed) {
         CameraShakeAsset valid;
         if(CameraShakeAsset::FromJsonString(s.ToJsonString(),valid,&cache.Error) && s.SaveFile(path)) {
+            cache.Error.clear(); // a corrected value clears the old rejection
             cache.Saved=s.ToJsonString(); cache.Stamp=fs::last_write_time(fs::u8path(path),ec);
         } else if(cache.Error.empty()) cache.Error="Could not save camera shake.";
     }
@@ -918,19 +919,27 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     if(previewBurst) ImGui::DragFloat("Preview RPM",&rpm,1,60,2000,"%.0f");
     rpm=std::clamp(rpm,60.0f,2000.0f);
     constexpr int samples=240;
-    std::vector<float> channels[6]; for(auto& channel:channels) channel.resize(samples);
-    CameraShakeState state(previewSeed);
+    // The plot is a pure function of the saved asset and the preview inputs: simulate only when one changed
+    // (edits save immediately, so cache.Saved follows them), not every frame the inspector is open.
+    struct Plot { std::string Path,Saved; bool Ads=false,Burst=false; float Rpm=-1,Span=0; unsigned Seed=0; std::vector<float> Channels[6]; };
+    static Plot plot;
     const int rounds=previewBurst?10:1;
     const float spacing=60/rpm,span=s.Duration+(rounds-1)*spacing+.1f,dt=span/(samples-1);
-    int fired=0;
-    for(int i=0;i<samples;++i) {
-        const float time=i*dt;
-        while(fired<rounds && time+1e-6f>=fired*spacing) { state.Trigger(s,previewAds); ++fired; }
-        const auto pose=state.Update(i?dt:0);
-        Camera camera; ApplyCameraEffect(camera,pose);
-        const glm::vec3 angles(camera.Pitch,camera.Yaw+90,camera.Roll);
-        for(int c=0;c<3;++c) { channels[c][i]=angles[c]; channels[c+3][i]=pose.Position[c]; }
+    if(plot.Path!=path || plot.Saved!=cache.Saved || plot.Ads!=previewAds || plot.Burst!=previewBurst || plot.Rpm!=rpm || plot.Seed!=previewSeed || plot.Span!=span) {
+        plot.Path=path; plot.Saved=cache.Saved; plot.Ads=previewAds; plot.Burst=previewBurst; plot.Rpm=rpm; plot.Seed=previewSeed; plot.Span=span;
+        for(auto& channel:plot.Channels) channel.assign(samples,0.0f);
+        CameraShakeState state(previewSeed);
+        int fired=0;
+        for(int i=0;i<samples;++i) {
+            const float time=i*dt;
+            while(fired<rounds && time+1e-6f>=fired*spacing) { state.Trigger(s,previewAds); ++fired; }
+            const auto pose=state.Update(i?dt:0);
+            Camera camera; ApplyCameraEffect(camera,pose);
+            const glm::vec3 angles(camera.Pitch,camera.Yaw+90,camera.Roll);
+            for(int c=0;c<3;++c) { plot.Channels[c][i]=angles[c]; plot.Channels[c+3][i]=pose.Position[c]; }
+        }
     }
+    const auto& channels=plot.Channels;
     const char* names[]={"Pitch (deg)","Yaw (deg)","Roll (deg)","Right (m)","Up (m)","Back (m)"};
     for(int c=0;c<6;++c) {
         ImGui::PushID(c); ImGui::TextUnformatted(names[c]);
@@ -1328,7 +1337,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::PushTextWrapPos(0.0f);
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", cache.Error.c_str());
         ImGui::PopTextWrapPos();
-        if (s.Controller.empty()) return;
+        if (s.Controller.empty()) { if (copied) save(s); return; } // a Copy Settings From still saves
     }
 
     // Choices and checks: the controller's states and tags, the arms rig's bones once it is
@@ -1441,7 +1450,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                "Fixed socket -> weapon root translation, in the socket's frame (metres). Zero when the root sits on the socket.");
         // Measure it: the rotation between the socket and the weapon root at the first frame of the default
         // state's clips (how the two files were authored to sit together), Y-X-Z degrees.
-        const bool can = arms && weaponModel && ctx.Controller && !s.WeaponSocket.empty() && !s.WeaponRoot.empty() && m_AssetsPtr;
+        const bool can = arms && weaponModel && ctx.Controller && !ctx.Controller->Layers.empty() && !s.WeaponSocket.empty() && !s.WeaponRoot.empty() && m_AssetsPtr;
         ImGui::BeginDisabled(!can);
         if (ActionButton(ICON_FA_RULER "  Measure Mount Rotation",
                          "Reads the socket's and the weapon root's orientation on the first frame of the default state's clips\n"

@@ -876,6 +876,22 @@ void TestEnhancerStoresKeepUnknownKeys() {
         CHECK(fs.ToJson()["version"] == FolderStyles::kVersion);
         fs.FromJson(saved);
         CHECK(!fs.ToJson().contains("fromTheFuture"));
+        // Reset (a project with no editor_folders.json) drops the last file's unknown sections too, so they
+        // can't be written into the next project's file.
+        fs.FromJson(j);
+        fs.Reset();
+        CHECK(!fs.ToJson().contains("fromTheFuture"));
+        fs.FromJson(saved);
+    }
+    {
+        auto& eu = EnhancerUserState::Get();
+        const nlohmann::json saved = eu.ToJson();
+        nlohmann::json j = saved;
+        j["fromTheFuture"] = future;
+        eu.FromJson(j);
+        CHECK(eu.ToJson().value("fromTheFuture", nlohmann::json()) == future);
+        eu.FromJson(saved);
+        CHECK(!eu.ToJson().contains("fromTheFuture"));
     }
     {
         auto& us = UiStyles::Get();

@@ -25,7 +25,12 @@ namespace SceneSerializer {
     // any caller that's meant to be read-only against the file on disk — headless tooling
     // (--smoke-test) must never mutate a scene file just because it was
     // loaded for inspection (audit #77).
-    bool Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration = true);
+    //
+    // parsed (optional, SceneFileJson.h): the file already read and parsed by the caller. Used as
+    // it is when the file's size and write time still match; otherwise the file is read again.
+    struct ParsedSceneFile;
+    bool Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration = true,
+              const ParsedSceneFile* parsed = nullptr);
 
     // Every full scene (not an entity-subset fragment) carries a "formatVersion" integer at its
     // root, written by Save/SaveToString and checked on every load (#195). A file whose
