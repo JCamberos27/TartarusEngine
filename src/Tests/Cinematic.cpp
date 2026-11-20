@@ -138,8 +138,9 @@ bool Start(const std::string& shotsDir, int w, int h) {
     char size[32];
     std::snprintf(size, sizeof(size), "%dx%d", w, h);
     // Raw RGBA in, top row first; H.264 out at exactly 60 fps, quality-first (a trailer, not a test artifact).
+    // yuv420p needs even sizes: an odd width or height is cropped by one pixel, or libx264 quits after a few frames.
     const std::string cmd = "\"\"" + s.ffmpeg + "\" -hide_banner -loglevel error -y -f rawvideo -pix_fmt rgba -s " + size +
-                            " -framerate 60 -i - -c:v libx264 -preset slow -tune film -crf " + std::to_string(s.crf) +
+                            " -framerate 60 -i - -vf crop=trunc(iw/2)*2:trunc(ih/2)*2 -c:v libx264 -preset slow -tune film -crf " + std::to_string(s.crf) +
                             " -pix_fmt yuv420p -r 60 -movflags +faststart \"" + out + "\"\"";
     s.pipe = _popen(cmd.c_str(), "wb");
     if (!s.pipe) { Log::Error("Cinematic: could not start ffmpeg"); return false; }
