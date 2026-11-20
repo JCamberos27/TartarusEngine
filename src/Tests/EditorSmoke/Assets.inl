@@ -670,10 +670,10 @@ void RegisterAssetsTests() {
         {Navigate(kFolder), Wait(4), UntilListed("Smoke Cube.obj"),
          RevealTile("Smoke Cube.obj"),
          Click(Tile("Smoke Cube.obj")), Wait(4), // loads it (an unloaded file is loaded on its first click)
-         Until("the cube is loaded", [](Ctx& c) {
+         UntilSeconds("the cube is loaded", [](Ctx& c) {
              const int i = CellIndex(c, "Smoke Cube.obj");
              return i >= 0 && AX::Cells(c.E)[(size_t)i].model != nullptr;
-         }, 300),
+         }, 30),
          RevealTile("Smoke Cube.obj"),
          Drag(Tile("Smoke Cube.obj"), AtItem(ByExact("##viewport_drop_zone"))), Wait(5),
          Until("Smoke Cube placed in the scene", [](Ctx& c) {
@@ -716,12 +716,12 @@ void RegisterAssetsTests() {
             EnsureScratch(),
             {Navigate(kFolder), Wait(4), UntilListed("Smoke Cube.obj"),
              Do("load the cube", [](Ctx& c) { c.A.LoadModel(CellKey(c, "Smoke Cube.obj")); }),
-             Until("the cube's tile has a rendered thumbnail", [](Ctx& c) {
+             UntilSeconds("the cube's tile has a rendered thumbnail", [](Ctx& c) {
                  const int i = CellIndex(c, "Smoke Cube.obj");
                  if (i < 0) return false;
                  const auto& cell = AX::Cells(c.E)[(size_t)i];
                  return cell.model && AX::ModelThumb(c.E, *cell.model) != 0;
-             }, 300),
+             }, 30),
              Until("the image's tile shows the image", [](Ctx& c) {
                  const int i = CellIndex(c, "Smoke Tex.png");
                  return i >= 0 && (AX::Cells(c.E)[(size_t)i].texture || AX::Cells(c.E)[(size_t)i].unloaded);

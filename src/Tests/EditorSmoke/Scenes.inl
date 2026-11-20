@@ -43,19 +43,6 @@ namespace smoke_scenes {
 namespace fs = std::filesystem;
 using SA = EditorSmokeAccess_Scenes;
 
-Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
-    auto start = std::make_shared<double>(-1.0);
-    return {name, [name, pred, seconds, start](Ctx& c) {
-        const double now = ImGui::GetTime();
-        if (*start < 0.0) *start = now;
-        if (pred(c)) return true;
-        if (now - *start > seconds) {
-            Fail("step '" + name + "' timed out after " + std::to_string((int)seconds) + " s");
-            return true;
-        }
-        return false;
-    }, 100000000};
-}
 // File names of the external assets (project/external_assets.csv) missing on this machine.
 const std::vector<std::string>& MissingExternalFiles() {
     static const std::vector<std::string> names = [] {
