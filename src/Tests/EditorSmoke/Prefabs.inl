@@ -12,7 +12,6 @@
 
 } // namespace
 struct EditorSmokeAccess_Prefabs {
-    static bool Dirty(EditorLayer& e) { return e.m_Dirty; }
     // A failed test can leave Prefab Mode open; leave it without saving so the next test starts clean.
     static void Leave(EditorLayer& e, World& w, AssetLibrary& a) { if (e.InPrefabMode()) e.ExitPrefabMode(w, a, /*save=*/false); }
 };
@@ -248,11 +247,11 @@ void RegisterPrefabsTests() {
         InspOpen("Light"), InspUntilOpen("Light"),
         InspReveal(ByTag("field:Light/Intensity")), Click(ByTag("field:Light/Intensity"), ImGuiMod_Ctrl), Wait(3),
         TypeText("7"), Wait(2), Key(ImGuiKey_Enter), Wait(3),
-        ExpectTrue("intensity 7, unsaved", [](Ctx& c) { return std::fabs(LampIntensity(c.W, "Crate") - 7.0f) < 1e-4f && PF::Dirty(c.E); }),
+        ExpectTrue("intensity 7, unsaved", [](Ctx& c) { return std::fabs(LampIntensity(c.W, "Crate") - 7.0f) < 1e-4f && X::Dirty(c.E); }),
         Shot("prefab mode dirty", {kScene, kInspector}),
         HoverPanel(kScene), Wait(2),
         Key(ImGuiKey_S, ImGuiMod_Ctrl),
-        Until("saved", [](Ctx& c) { return !PF::Dirty(c.E); }),
+        Until("saved", [](Ctx& c) { return !X::Dirty(c.E); }),
         Expect("the file has 7", [](Ctx& c) {
             const float v = FileIntensity(c);
             return std::fabs(v - 7.0f) < 1e-4f ? std::string() : "file intensity " + std::to_string(v);
@@ -263,9 +262,9 @@ void RegisterPrefabsTests() {
             X::PushUndo(c.E, c.W, "Move");
             c.W.Registry.get<TransformComponent>(ChildOf(c.W, "Crate", "Crate Lamp")).Position = glm::vec3(0, 2.5f, 0);
         }), Wait(3),
-        ExpectTrue("dirty again", [](Ctx& c) { return PF::Dirty(c.E); }),
+        ExpectTrue("dirty again", [](Ctx& c) { return X::Dirty(c.E); }),
         Click(ByLabel("Save", kModeBar)),
-        Until("saved by the button", [](Ctx& c) { return !PF::Dirty(c.E); }),
+        Until("saved by the button", [](Ctx& c) { return !X::Dirty(c.E); }),
         // Edit 3, left unsaved: Back to Scene saves it.
         Do("rename the lamp", [](Ctx& c) {
             X::PushUndo(c.E, c.W, "Rename");

@@ -128,8 +128,7 @@ void Restore(const std::string& path, Saved& s) {
     s.Taken = false;
     std::error_code ec;
     if (!s.Existed) { std::filesystem::remove(path, ec); return; }
-    std::ofstream f(path, std::ios::binary | std::ios::trunc);
-    f << s.Bytes;
+    if (!WriteFile(std::filesystem::u8path(path), s.Bytes)) Fail("couldn't restore " + path);
 }
 Step SnapshotProjectFiles() {
     return Do("snapshot project/settings.json and layers.json", [](Ctx&) {

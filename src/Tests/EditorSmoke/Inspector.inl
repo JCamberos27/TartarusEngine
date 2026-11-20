@@ -279,9 +279,8 @@ void RegisterInspectorTests() {
          // not a text field. The project ships none, so make one in a scratch folder (deleted at
          // the end) and wait out the picker's 4 s project-scan cache.
          Do("make a scratch script", [](Ctx&) {
-             std::error_code ec;
-             std::filesystem::create_directories(InspScratchDir(), ec);
-             std::ofstream(InspScratchDir() + "/spin.tescript") << "// editor smoke test\n";
+             if (!WriteFile(std::filesystem::u8path(InspScratchDir() + "/spin.tescript"), "// editor smoke test\n"))
+                 Fail("couldn't write the scratch script");
          }),
          // The field's tag sits on its last item, the browse button (a native dialog: never
          // clicked unattended); the dropdown is the item to its left on the same row.
