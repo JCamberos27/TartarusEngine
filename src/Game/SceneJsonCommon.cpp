@@ -99,12 +99,21 @@ std::string AssetPathForWriteUncached(const std::string& path, const std::filesy
     return rel.generic_string();
 }
 
+// The GUID of a path about to be written. The database keys absolute paths, and a relative one is
+// made absolute against the working directory there, so a project-relative path (a component's
+// default, e.g. the muzzle flame texture) is resolved under the project root first, the way a load
+// resolves it. Without that a fresh component saved a bare path but loaded back as {path, pathGuid}.
+static AssetGuid GuidForWrite(const std::string& path) {
+    const bool relative = !IsSyntheticRef(path) && std::filesystem::path(path).is_relative();
+    return AssetDatabase::GuidForPath(relative ? AssetPathForRead(path) : path);
+}
+
 const AssetRefWriteCache::Ref& AssetRefWriteCache::Get(const std::string& path) {
     auto it = m_Refs.find(path);
     if (it != m_Refs.end()) return it->second;
     Ref r;
     r.WritePath = AssetPathForWrite(path);
-    if (const AssetGuid g = AssetDatabase::GuidForPath(path); g.IsValid()) r.Guid = g.ToString();
+    if (const AssetGuid g = GuidForWrite(path); g.IsValid()) r.Guid = g.ToString();
     return m_Refs.emplace(path, std::move(r)).first->second;
 }
 
@@ -161,7 +170,7 @@ std::string AssetPathForRead(const std::string& path) {
 json PathRef(const std::string& path) {
     if (path.empty()) return path;
     std::string stored = AssetPathForWrite(path);
-    AssetGuid g = AssetDatabase::GuidForPath(path); // GUID lookup needs the real (absolute) path
+    const AssetGuid g = GuidForWrite(path);
     if (g.IsValid()) return json{{"path", stored}, {"pathGuid", g.ToString()}};
     return stored;
 }

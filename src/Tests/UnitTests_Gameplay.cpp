@@ -10,6 +10,7 @@
 #include "ComponentRegistry.h"
 #include "SceneReferences.h"
 #include "Core/Paths.h"
+#include "AssetDatabase.h"
 #include <filesystem>
 #include <json.hpp>
 #include "World.h"
@@ -460,7 +461,30 @@ void TestSceneNonFiniteFloat() {
     for (auto [ent, body] : old.Registry.view<FirstPersonBodyComponent>().each()) CHECK(body.FootIKMaxDrop == FirstPersonBodyComponent{}.FootIKMaxDrop);
 }
 
+// A freshly added component's asset field holds a project-relative default (the muzzle flame
+// texture): it saves with its GUID, the same as after a load, so save(load(save)) == save.
+void TestFreshAssetRefRoundTrip() {
+    const std::string flame = MuzzleEffectSettings{}.FlameTexture;
+    const AssetGuid guid = AssetDatabase::EnsureGuid(ProjectPaths::Resolve(flame));
+    CHECK(guid.IsValid());
+    World world; AssetLibrary assets;
+    const auto e = world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Weapon");
+    CHECK(world.Registry.emplace<WeaponDefinitionComponent>(e).Muzzle.FlameTexture == flame);
+    const std::string first = SceneSerializer::SaveToString(world, assets);
+    nlohmann::json saved;
+    std::function<void(const nlohmann::json&)> find = [&](const nlohmann::json& n) {
+        if (n.is_object()) { for (auto it = n.begin(); it != n.end(); ++it) { if (it.key() == "Flame Texture") saved = *it; else find(*it); } }
+        else if (n.is_array()) for (const auto& x : n) find(x);
+    };
+    find(nlohmann::json::parse(first));
+    CHECK(saved.is_object() && saved.value("pathGuid", std::string()) == guid.ToString());
+    World back; AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(back, assets2, first));
+    CHECK(SceneSerializer::SaveToString(back, assets2) == first);
+}
+
 void RegisterGameplayTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Scene: a fresh component's asset path saves with its GUID",TestFreshAssetRefRoundTrip);
     tests.emplace_back("Scene: a non-finite float field saves and loads",TestSceneNonFiniteFloat);
     tests.emplace_back("Game module weapon/body rules dispatch",TestGameRulesDispatch);
     tests.emplace_back("Native weapon loadout rules",TestProjectWeaponLoadout);
