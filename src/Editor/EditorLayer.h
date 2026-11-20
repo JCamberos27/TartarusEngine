@@ -2456,6 +2456,21 @@ private:
     std::shared_ptr<AnimatorWindowState> m_AnimatorWin; // shared_ptr: the type is only complete in EditorLayer_Animator.cpp
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
+    // Its handlers, one per component (EditorLayer_Inspector.cpp's name -> handler table).
+    void DrawParticleSystemExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawRigidbodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAnimationExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAnimatorComponentExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawCharacterOutfitExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawReflectionProbeExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawFirstPersonBodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawFirstPersonControllerExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawIKRigExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawCameraExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawLightExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAudioSourceExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawColliderExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawJointExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
     // Decals (docs/DECALS.md). EditorLayer_Decals.cpp: the .decal asset editor, the Decal
     // component's extras (preview + atlas-frame picker, channel matrix, fade curves, Fit to
     // Surface), Create Decal (writes a DA_*.decal) and the albedo an Asset Browser tile shows.
@@ -2531,6 +2546,8 @@ private:
     // Multi-select counterpart: `sel` is every selected entity that has this component.
     void DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                           const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
+    void DrawRigidbodyExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
+    void DrawLightExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
     // #6 Defect #44/#54 — the ReflectFieldType switch, shared by the single-select (`sel` of size
     // 1, no mixed-value branch ever taken) and multi-select Inspector loops so a new field type or
     // widget improvement is written once instead of drifting between two independent copies. Draws
