@@ -178,6 +178,11 @@ bool IsValue(const char* a) { return a[0] != '-'; }
 
 } // namespace
 
+bool KeepsWindowHidden(const LaunchOptions& o) {
+    if (o.mode == LaunchMode::Editor || !(kGuiModes & Bit(o.mode))) return false;
+    return !Env::Flag(Env::Var::Show) && !Env::Flag(Env::Var::EditorTestShow);
+}
+
 bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& error) {
     LaunchOptions o;
     const FlagDef* modeFlag = nullptr;
