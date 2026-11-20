@@ -20,7 +20,7 @@ Run `python tools/assets/check_git_assets.py` before committing or pushing.
 hot-reloading the game and editor modules. Everything is native C++.
 
 [Motion Matching](MOTION_MATCHING.md): how the player's body and the NPC dummies are posed from the mocap database - the
-data, the bake, the runtime, tuning and tests ([the overhaul's handoff](MOTION_MATCHING_HANDOFF.md) has its history).
+data, the bake, the runtime, tuning and tests ([implementation notes](MOTION_MATCHING_HANDOFF.md): decisions, what each phase shipped, testing, open issues).
 
 ## Related engine systems
 
