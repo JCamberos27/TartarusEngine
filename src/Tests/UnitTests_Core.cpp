@@ -20,6 +20,7 @@
 #include "AudioEngine.h"
 #include <set>
 #include "Log.h" // #178 stack traces
+#include "FrameLoads.h"
 #include "InputMap.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
@@ -457,6 +458,28 @@ void TestUtf8Truncate() {
     CHECK(s == "short");
 }
 
+// --- FrameLoads: off by default, Take() hands over a frame's loads once, Summarize groups them by kind ------------
+void TestFrameLoads() {
+    std::vector<FrameLoads::Event> got;
+    FrameLoads::Enable(false);
+    FrameLoads::Note("shader", "ignored", 1.0);
+    FrameLoads::Take(got);
+    CHECK(got.empty());
+    FrameLoads::Enable(true);
+    FrameLoads::Note("texture upload", "assets/a/rock.png", 2.0);
+    FrameLoads::Note("shader", "SSAO", 5.5);
+    FrameLoads::Note("texture upload", "assets\\b\\moss.png", 1.0);
+    FrameLoads::Take(got);
+    CHECK(got.size() == 3);
+    CHECK(FrameLoads::Summarize(got) == "texture upload x2 3.00 ms (rock.png moss.png); shader x1 5.50 ms (SSAO)");
+    FrameLoads::Take(got); // taken already: the next frame starts empty
+    CHECK(got.empty());
+    for (int i = 0; i < 5; ++i) FrameLoads::Note("model load (sync)", "m" + std::to_string(i), 1.0);
+    FrameLoads::Take(got);
+    CHECK(FrameLoads::Summarize(got) == "model load (sync) x5 5.00 ms (m0 m1 m2 ...)");
+    FrameLoads::Enable(false);
+}
+
 } // namespace
 
 void RegisterCoreTests(UnitTestSupport::TestList& tests) {
@@ -466,6 +489,7 @@ void RegisterCoreTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip});
     tests.push_back({"AtomicFile", TestAtomicFile});
     tests.push_back({"Utf8Truncate", TestUtf8Truncate});
+    tests.push_back({"FrameLoads", TestFrameLoads});
     tests.push_back({"PhysicMaterial", TestPhysicMaterial});
     tests.push_back({"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp});
     tests.push_back({"PhysicsWorldSync", TestPhysicsWorldSync});

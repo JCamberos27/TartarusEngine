@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Core/FrameLoads.h"
+#include "Core/Profiler.h"
+
 #include <chrono>
 #include <string>
 #include <utility>
@@ -8,6 +11,8 @@
 // --perf-bench's measuring: every frame's time and the profiler's CPU / GPU scopes over a phase, the worst frames (with
 // what each spent its time on), and the two reports (a scene's edit / play / play-max phase, and the --npc-test combat
 // bench). Driven from SmokeHarness; the control flow around it (Play toggles, phase boundaries) stays with the caller.
+// Each worst frame lists its top CPU scopes, its top GPU scopes (attached once they're read back, a few frames late)
+// and what loaded during it (Core/FrameLoads.h). TARTARUS_PERF_CSV also appends the hitch report to a CSV file.
 class PerfBench {
 public:
     // --perf-bench measures each scene twice: kPhaseFrames in edit mode, then as many in Play.
@@ -17,7 +22,8 @@ public:
     PerfBench();
 
     int Warmup() const { return m_Warmup; }
-    // Milliseconds since the last call (or construction), and hands the frame time to the sampling profiler.
+    // Milliseconds since the last call (or construction), and hands the frame time to the sampling profiler. Also takes
+    // the frame's load log, so loads in unmeasured (warm-up) frames don't pile onto the first measured one.
     double TakeFrameMs();
     // Adds one measured frame: its time, the profiler's last-frame CPU and GPU scopes, and the stutter record.
     void Sample(double frameMs, int frameNo);
@@ -35,13 +41,25 @@ private:
     using AccumList = std::vector<std::pair<std::string, Accum>>;
     // Stutters: the worst frames with what that frame spent its time on (the per-scope maxima are independent, so they
     // can't say which scope made a hitch).
-    struct Worst { double Ms; int Frame; std::string Scopes; };
+    struct Worst {
+        double Ms = -1.0;
+        int Frame = 0;
+        unsigned Serial = 0; // the profiler's frame, to find its GPU scopes once they're read back
+        std::string Cpu, Gpu, Loads;
+        bool HaveGpu = false;
+        bool GpuStarved = false; // GpuStarvedFrame: its GPU scopes are mostly CPU time, not GPU work
+    };
+    // One line of the hitch report: frame-time percentiles and hitch counts over a set of frames.
+    struct Stats { double P50 = 0, P95 = 0, P99 = 0, P999 = 0, Max = 0; int Over2x = 0, Over33 = 0; size_t N = 0; };
 
     static void Add(AccumList& v, const std::string& name, double ms);
-    static std::string ScopesNow();
+    static std::string TopScopes(const std::vector<Profiler::Entry>& entries);
+    static void FillGpu(Worst& w);
+    static Stats StatsOf(std::vector<double> t);
     void Settle(bool haveScopes);
     void RecordFrame(double frameMs, int frame);
-    void ReportHitches(const char* label);
+    void ReportHitches(const std::string& sceneFile, const char* label);
+    void AppendCsv(const std::string& sceneFile, const char* label, const Stats& all, const Stats& after2s) const;
     void PrintScopeTable();
 
     int m_Warmup = 0;
@@ -50,5 +68,6 @@ private:
     std::chrono::steady_clock::time_point m_LastFrameEnd;
     std::vector<double> m_FrameTimes;
     std::vector<Worst> m_Worst;
-    Worst m_Pending{-1.0, 0, {}};
+    Worst m_Pending;
+    std::vector<FrameLoads::Event> m_Loads; // the frame's loads, from TakeFrameMs
 };

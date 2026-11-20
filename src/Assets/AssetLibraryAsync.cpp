@@ -17,6 +17,7 @@
 #include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include "Core/Env.h"
+#include "Core/FrameLoads.h"
 
 #include <algorithm>
 #include <atomic>
@@ -87,9 +88,10 @@ struct PumpStepTimer {
     const std::string& Path;
     std::chrono::steady_clock::time_point T0 = std::chrono::steady_clock::now();
     ~PumpStepTimer() {
-        if (!PumpTrace()) return;
+        if (!PumpTrace() && !FrameLoads::Enabled()) return;
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - T0).count();
-        if (ms >= 1.0) std::printf("[PumpTrace] %.2f ms %s %s\n", ms, What, Path.c_str());
+        FrameLoads::Note(What, Path, ms);
+        if (PumpTrace() && ms >= 1.0) std::printf("[PumpTrace] %.2f ms %s %s\n", ms, What, Path.c_str());
     }
 };
 

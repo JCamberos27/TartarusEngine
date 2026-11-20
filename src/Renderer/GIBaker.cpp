@@ -144,7 +144,7 @@ float GIBaker::Progress() const { return m_Total > 0 ? (float)((double)m_Done / 
 
 void GIBaker::ApplyLighting(World& world, const Pass& p) {
     if (!m_LightingSaved) {
-        m_SkyAmbient = world.SkyAmbientIntensity;
+        m_SkyAmbient = world.Render.SkyAmbientIntensity;
         m_LightingSaved = true;
     }
     for (entt::entity e : m_Parked)
@@ -175,7 +175,7 @@ void GIBaker::RestoreLighting(World& world) {
         if (world.Registry.valid(e)) world.Registry.remove<DeactivatedTag>(e);
     m_Parked.clear();
     LightSwitch::Stop(world); // the switches and circuits as authored again (Play starts them from Start On)
-    if (m_LightingSaved) world.SkyAmbientIntensity = m_SkyAmbient;
+    if (m_LightingSaved) world.Render.SkyAmbientIntensity = m_SkyAmbient;
     m_LightingSaved = false;
     world.SyncActiveInHierarchy();
 }

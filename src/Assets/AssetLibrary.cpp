@@ -12,6 +12,8 @@
 #include "Log.h"
 #include "ProjectSettings.h" // #121 - virtual folders are project data, not scene data
 #include "Core/Paths.h"
+#include "Core/FrameLoads.h"
+#include <chrono>
 #include <algorithm>
 #include <map>
 #include <set>
@@ -187,8 +189,12 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     auto it = FindAnySpelling(m_ModelCache, m_ModelKeys, m_KeyEpoch, path);
     if (it != m_ModelCache.end()) return it->second;
 
+    const auto start = std::chrono::steady_clock::now();
     PrepareModelImport(path);
-    return RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
+    auto model = RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
+    FrameLoads::Note("model load (sync)", path,
+                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+    return model;
 }
 
 std::shared_ptr<Model> AssetLibrary::LoadAnimationSource(const std::string& path) {
