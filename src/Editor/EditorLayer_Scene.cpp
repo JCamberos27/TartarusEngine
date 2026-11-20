@@ -2,6 +2,8 @@
 // mode enter/exit and dropped-file import. Split out of
 // EditorLayer.cpp for build time (#179).
 
+#include <chrono>
+#include <future>
 #include <iterator>
 #include "EditorSound.h"
 #include "EditorTheme.h"
@@ -379,20 +381,38 @@ static void PlaySceneLoadedSound(const World& world, int warnsBefore) {
     else if (!EditorSound::PlayedThisFrame()) EditorSound::Play(EditorSound::Event::MissingRefs);
 }
 
-bool EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets) {
+bool EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets, bool background) {
     if (m_CurrentScenePath.empty()) return false; // untitled scene (New Scene) has no sidecar location
+    WaitRecoveryWrite(); // one write at a time, in order
     const std::string path = RecoveryPathFor(m_CurrentScenePath);
     if (InPrefabMode()) { // #176 - the world holds the prefab; the scene is the snapshot
         return m_PrefabModeSceneDirty && SceneSerializer::SaveSnapshotToFile(m_PrefabModeSceneSnapshot, assets, path);
     }
-    if (SceneSerializer::Save(world, assets, path)) {
-        Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
+    std::function<bool()> write = SceneSerializer::PrepareSave(world, assets, path);
+    if (!write) return false;
+    if (background) {
+        m_RecoveryWrite = std::async(std::launch::async, std::move(write));
         return true;
     }
-    return false;
+    if (!write()) return false;
+    Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
+    return true;
+}
+
+void EditorLayer::WaitRecoveryWrite() {
+    if (!m_RecoveryWrite.valid()) return;
+    m_RecoveryWrite.wait();
+    PollRecoveryWrite();
+}
+
+void EditorLayer::PollRecoveryWrite() {
+    if (!m_RecoveryWrite.valid() || m_RecoveryWrite.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    if (m_RecoveryWrite.get()) // a failure was logged by the write itself
+        Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
 }
 
 void EditorLayer::ClearRecoverySnapshot() {
+    WaitRecoveryWrite(); // a write still running would bring the file back
     if (m_CurrentScenePath.empty()) return;
     std::error_code ec;
     std::filesystem::remove(RecoveryPathFor(m_CurrentScenePath), ec); // absent file is not an error
@@ -486,6 +506,8 @@ bool EditorLayer::CrashRecoverySave(const World& world, const AssetLibrary& asse
                    SceneSerializer::SaveSnapshotToFile(m_PrefabModeSceneSnapshot, assets, RecoveryPathFor(m_CurrentScenePath));
         }
         if (!m_Dirty || m_CurrentScenePath.empty()) return false;
+        // An auto-save write still running: give it a moment, so the two don't race to the file.
+        if (m_RecoveryWrite.valid()) m_RecoveryWrite.wait_for(std::chrono::seconds(2));
         const std::string path = RecoveryPathFor(m_CurrentScenePath);
         if (m_InPlayMode)
             return !m_PlayModeSnapshot.empty() && SceneSerializer::SaveSnapshotToFile(m_PlayModeSnapshot, assets, path);

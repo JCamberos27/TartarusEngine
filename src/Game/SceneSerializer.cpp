@@ -6,26 +6,40 @@ using namespace SceneDetail;
 
 
 bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const std::string& path) {
-    // #82 — build the whole document in memory FIRST, and only then touch the file, through
+    const std::function<bool()> write = PrepareSave(world, assets, path);
+    return write && write();
+}
+
+std::function<bool()> SceneSerializer::PrepareSave(const World& world, const AssetLibrary& assets, const std::string& path) {
+    // #82 - build the whole document in memory FIRST, and only then touch the file, through
     // AtomicFile (temp + flush + atomic replace). The old version opened a truncating ofstream
     // before building, so any exception while building (e.g. a corrupt prefab) left the scene
     // file empty; and it never checked the write, so a full disk / locked file still reported
     // success.
-    std::string text;
+    auto root = std::make_shared<json>();
     try {
-        json root = BuildSceneJson(world);
-        AppendAssetLibraryJson(root, assets);
-        WarnNonPortablePaths(root, ""); // audit #364 — surface any absolute/'..' path before it's written
-        text = root.dump(2);
+        *root = BuildSceneJson(world);
+        AppendAssetLibraryJson(*root, assets);
+        WarnNonPortablePaths(*root, ""); // audit #364 - surface any absolute/'..' path before it's written
     } catch (const std::exception& e) {
         Log::Error("Scene: couldn't serialize the scene for '" + path + "' (file left untouched): " + e.what());
-        return false;
+        return {};
     }
-    if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), text, /*binary=*/false)) {
-        Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
-        return false;
-    }
-    return true;
+    // The tree is the scene's own copy: formatting and writing it no longer touch the World.
+    return [root, path]() {
+        std::string text;
+        try {
+            text = root->dump(2);
+        } catch (const std::exception& e) { // e.g. invalid UTF-8 in a name
+            Log::Error("Scene: couldn't format the scene for '" + path + "' (file left untouched): " + e.what());
+            return false;
+        }
+        if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), text, /*binary=*/false)) {
+            Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
+            return false;
+        }
+        return true;
+    };
 }
 
 std::string SceneSerializer::TakeLoadWarning() {

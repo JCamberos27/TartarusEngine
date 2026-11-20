@@ -3047,6 +3047,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // file, and does NOT clear m_Dirty: the timer is a crash safety net, and an unnoticed bad
     // edit must never be able to auto-overwrite the only saved copy. The scene file changes
     // only on an explicit Save / Save As.
+    PollRecoveryWrite(); // the last auto-save's background write, once it's done
     const EditorSettings& prefsForAutoSave = EditorSettings::Get();
     if (prefsForAutoSave.AutoSaveEnabled) {
         m_AutoSaveTimer += dt;
@@ -3055,7 +3056,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             m_AutoSaveTimer = 0.0f;
             // #90 — Draw() also runs during in-panel Play, when the world holds transient play
             // state; the recovery file must only ever hold edit-mode content.
-            if ((m_Dirty || m_PrefabModeSceneDirty) && !m_InPlayMode && WriteRecoverySnapshot(world, assets))
+            if ((m_Dirty || m_PrefabModeSceneDirty) && !m_InPlayMode && WriteRecoverySnapshot(world, assets, /*background=*/true))
                 EditorSound::Play(EditorSound::Event::Autosave); // the timer's write only, never the emergency ones
         }
     } else {
