@@ -2373,8 +2373,11 @@ private:
     // RefreshProjectAssetIndexIfNeeded patches them as lists grow (NoteListedInFolderSummaries) and clears this when a
     // list shrinks or a new scan lands, which asks for a full walk.
     bool m_FolderSummariesValid = false;
-    struct FolderIndexContribution { std::string Folder; Enhancers::FolderKind Kind; };
-    std::unordered_map<std::string, FolderIndexContribution> m_FolderIndexContrib; // index file PathKey -> where it counts
+    struct FolderIndexContribution { std::uint32_t Folder; Enhancers::FolderKind Kind; }; // Folder: m_FolderIndexFolders
+    // Index file PathKey -> where it counts. The keys view m_ProjectAssetIndex.files[i].Key: a new scan replaces those
+    // strings, but it also clears m_FolderSummariesValid, so nothing looks a key up before the next walk rebuilds this.
+    std::unordered_map<std::string_view, FolderIndexContribution> m_FolderIndexContrib;
+    std::vector<std::string> m_FolderIndexFolders; // the folders m_FolderIndexContrib names, one per run of files
     // What the Asset Browser grid keys its Play-mode cell cache on (AssetGridFrameBegin): full walks, and per folder
     // (and overall) how often a newly listed asset changed what it holds.
     unsigned m_FolderSummaryWalkGen = 0, m_AnyFolderContentGen = 0;
