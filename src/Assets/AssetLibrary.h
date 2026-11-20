@@ -198,6 +198,9 @@ public:
     void DeleteFolderRecursive(const std::string& folderPath);
     // True while folderPath (or a folder above it) was deleted in the browser but its directory is still on disk.
     bool IsRemovedDiskFolder(const std::string& folderPath);
+    // The marks behind IsRemovedDiskFolder, carried by undo snapshots so a redo of Delete Folder keeps it out too.
+    const std::vector<std::string>& RemovedDiskFolders() const { return m_RemovedDiskFolders; }
+    void SetRemovedDiskFolders(std::vector<std::string> marks) { m_RemovedDiskFolders = std::move(marks); }
     const std::vector<std::string>& Folders() const { return m_Folders; }
     // Fired after a folder is renamed / moved (newPath = where it went) or deleted (newPath "") -
     // for data keyed by folder path elsewhere (Editor Enhancers folder styles and bookmarks).

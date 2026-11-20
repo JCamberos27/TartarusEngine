@@ -489,6 +489,21 @@ void TestDeletedDiskFolderStaysOut() {
         CHECK(assets.AddFolderPath(sub)==sub);
         CHECK(listed(assets,top)&&listed(assets,sub));
     }
+    fs::create_directories(fs::u8path(ProjectPaths::Resolve(sub)),ec);
+    {
+        // Undo and redo go through the scene snapshot: the redo of Delete Folder keeps it out as well.
+        World world;AssetLibrary assets;
+        assets.AddFolderPath(sub);
+        const std::string before=SceneSerializer::SaveToString(world,assets);
+        assets.DeleteFolderRecursive(top);
+        const std::string after=SceneSerializer::SaveToString(world,assets);
+        CHECK(SceneSerializer::LoadFromString(world,assets,before)); // undo
+        CHECK(listed(assets,top)&&listed(assets,sub)&&!assets.IsRemovedDiskFolder(sub));
+        CHECK(SceneSerializer::LoadFromString(world,assets,after)); // redo
+        CHECK(!listed(assets,top)&&!listed(assets,sub)&&assets.IsRemovedDiskFolder(sub));
+        assets.AddFolderPath(sub); // a scan landing after the redo
+        CHECK(!listed(assets,top)&&!listed(assets,sub));
+    }
     fs::remove_all(fs::u8path(ProjectPaths::Resolve(top)),ec);
 }
 // #15 - an outfit landing (OutfitSystem::UpdatePending) makes the next frame's baseline the whole scene. Right
