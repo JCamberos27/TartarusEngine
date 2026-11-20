@@ -698,7 +698,10 @@ void SceneRenderer::ViewPass::DepthPrepass() {
         // single-sample copy of the depth to read, and every texel is marched as before.
         in.skyAtmosphere->RenderClouds(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos,
                                        viewDepthCopied ? ctx.SsaoSrc->DepthTexture() : 0u);
-        m_R.BindFrameResources(fs); // the cloud passes used texture units up to 12 (the model shader is still bound)
+        // The cloud passes bound their own programs and used texture units up to 12: the model shader is current
+        // again (its uniforms are still this frame's), only the bindings come back.
+        m_ModelShader.Bind();
+        m_R.BindFrameResources(fs);
     }
 }
 
