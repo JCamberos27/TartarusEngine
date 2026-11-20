@@ -44,10 +44,9 @@ struct FirstPersonSpring {
     float Damping = 1.0f;    // 1 = no overshoot, < 1 = springy
 };
 
-struct WeaponRecoilSettings {
-    bool UnityPort = false; // shared .recoil assets use the direct RecoilAnimation solver
-    RecoilAnimData Unity;
-    bool Enabled = true;
+// The pre-RecoilAnimData recoil tuning (.fpsanim "procedural.recoil" without "recoilAnimData", .recoil version 1). Read only
+// on load, where RecoilAnimData::FromLegacy converts it: the solver it fed is retired.
+struct LegacyRecoilSettings {
     // Seconds one shot's curves span; they are keyed over 0..1 of it.
     float Duration = 0.4f;
     // Per-shot shape. Rotation curves are degrees, position curves metres. Kickback is +Z (into
@@ -117,7 +116,6 @@ struct WeaponRecoilSettings {
     float AimRecoverySpeed = 8.0f;
     // Attack rate per second, independently for pitch/yaw. Zero applies immediately.
     glm::vec2 AimSmoothing{40.0f};
-    bool AimCompensation = true;
     float AimAdsScale = 1.0f;
     // Camera shake: each round adds ShakeAmount of "trauma" (0..1, draining at ShakeDecay per
     // second); the view shakes by trauma^2 x ShakeMax degrees (pitch, yaw, roll) of smooth noise
@@ -135,6 +133,15 @@ struct WeaponRecoilSettings {
     float CameraRoll = 0.3f;
     float FovPunch = 0.35f;
     FirstPersonSpring PunchSpring{9.0f, 0.55f};
+    static LegacyRecoilSettings Defaults(); // the old defaults (kick curves), which a new weapon still starts from
+    // Reads the old keys of a "recoil" object over `io` (unknown keys ignored) and checks them; false + error if invalid.
+    static bool FromJson(const nlohmann::json& recoil, LegacyRecoilSettings& io, std::string* error = nullptr);
+};
+
+struct WeaponRecoilSettings {
+    // The recoil: RecoilAnimation (RecoilAnimation.h) plays this. Old tuning arrives converted (LegacyRecoilSettings).
+    RecoilAnimData Unity;
+    bool Enabled = true;
     // Hip fire kicks procedurally, like ADS, instead of restarting the controller's Fire state
     // every round. Off plays the Fire clip (the older behaviour).
     bool HipProcedural = false;
@@ -435,53 +442,25 @@ public:
                 RecoilFireMode mode = RecoilFireMode::Semi, double unscaledTime = -1, float frameDt = -1);
     const WeaponProceduralPose& Update(const WeaponProceduralSettings& s, const WeaponProceduralInput& in);
     const WeaponProceduralPose& Pose() const { return m_Pose; }
-    int ActiveShots() const { return (int)m_Shots.size() + (m_Unity.IsPlaying() ? 1 : 0); }
+    int ActiveShots() const { return m_Unity.IsPlaying() ? 1 : 0; }
     void Seed(unsigned seed) { m_Rng.seed(seed); }
-    // Input and output use (pitch, yaw) degrees, before procedural view punch.
-    void CompensateAim(glm::vec2 playerDelta);
-    void DiscardClampedAim(glm::vec2 unappliedDelta);
-    void EndBurst() { m_BurstEnded = true; m_ControllerFiring = false; m_Unity.Stop(); }
-    void SetFiring(bool firing) { m_ControllerFiring = firing; if (!firing) m_Unity.Stop(); }
+    // The player's own aim input this frame, (pitch, yaw) degrees: pulling against the climb counts as compensation.
+    void CompensateAim(glm::vec2 playerDelta) { m_Unity.UpdateDeltaInput({playerDelta.y, playerDelta.x}); }
+    void EndBurst() { m_Unity.Stop(); }
+    void SetFiring(bool firing) { if (!firing) m_Unity.Stop(); }
     glm::vec2 ConsumeAimKick() { const auto delta = m_Pose.AimKick; m_Pose.AimKick = glm::vec2(0.0f); return delta; }
 
 private:
     RecoilAnimation m_Unity;
     float m_SemiRecoveryTime = -1.0f; // held semi trigger expires after the committed shot's cadence
-    struct Shot {
-        float Time = 0.0f;
-        float Scale = 1.0f;
-        float Duration = 1.0f;
-        glm::vec3 Rot{1.0f}, Pos{1.0f};
-        float Lift = 0.0f;     // yaw taken from the pitch curve: the kick's direction off vertical
-        float CamPitch = 1.0f;
-        float CamYaw = 1.0f;
-        bool Sustained = false;
-        glm::vec3 RotScale{1.0f}, PosScale{1.0f};
-    };
     struct Spring3 {
         glm::vec3 X{0.0f}, V{0.0f};
         void Step(const glm::vec3& target, float dt, const FirstPersonSpring& sp);
     };
 
-    std::vector<Shot> m_Shots;
-    glm::vec2 m_AimPending{0.0f};     // climb still to feed in (spread over a few frames)
-    glm::vec2 m_AimRecoverable{0.0f}; // climb that recovery will hand back
-    glm::vec2 m_AimOutstanding{0.0f};
-    bool m_BurstEnded = true;
-    bool m_ControllerFiring = false;
-    glm::vec3 m_NoiseTarget{0.0f}, m_NoiseOut{0.0f};
-    glm::vec3 m_LayerTarget{0.0f}, m_LayerOut{0.0f}; // push, pitch progression, up progression
-    glm::vec3 m_RecoilSwayTarget{0.0f}, m_RecoilSwayOut{0.0f};
-    float m_SinceShot = 1e9f;
-    int m_BurstShots = 0;             // rounds so far in the current burst
-    float m_Wander = 0.0f;            // the sideways drift's random walk (degrees per round)
     float m_BoltTime = 1e9f;
-    float m_Trauma = 0.0f;            // camera shake, 0..1
-    float m_ShakeTime = 0.0f;         // noise clock (cycles)
-    Spring3 m_RecoilRot, m_RecoilPos, m_Camera;
     Spring3 m_JumpRot, m_JumpPos;      // air lag + landing kick
     Spring3 m_CamMotion;               // landing dip (y), nod (x), strafe roll (z)
-    Spring3 m_Punch;                   // per-round camera roll (x), FOV pulse (y)
     Spring3 m_Obstruct;                // retract (x), tuck (y), faces up (z)
     Spring3 m_ObstructSide;            // aside: -1 (on the left) .. 1 (on the right), in x
     float m_DriftTime = 0.0f;

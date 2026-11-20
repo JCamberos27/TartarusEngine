@@ -436,16 +436,13 @@ struct LightComponent {
     // it and is still written for one release. Bias/NormalBias/Softness are multipliers on the
     // shader's existing texel-proportional depth bias / normal-offset / PCF-radius terms — all
     // default 1.0, i.e. byte-identical to pre-phase-2 output. NearPlane feeds the perspective
-    // near for spot/point depth passes. Resolution + UpdateMode are authored and serialized now
-    // but don't take effect until the shadow maps support per-slot sizes.
+    // near for spot/point depth passes.
     struct ShadowSettings {
         bool  Enabled    = false;   // was LightComponent::CastShadows
         float Bias       = 1.0f;    // x the shader's texel-proportional depth bias
         float NormalBias = 1.0f;    // x the normal-offset term
         float Softness   = 1.0f;    // x the PCF radius
         float NearPlane  = 0.05f;   // perspective near for spot/point depth
-        int   Resolution = 0;       // 0 = follow global; else 512/1024/2048/4096 (authored-only v1)
-        int   UpdateMode = 0;       // 0 Dynamic, 1 Static (bake once), 2 Off        (authored-only v1)
     } Shadow;
 };
 

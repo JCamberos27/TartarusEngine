@@ -552,10 +552,22 @@ void EditorLayer::DrawEnhancerPreferences() {
 // vHierarchy
 // ============================================================================================
 
-std::string EditorLayer::CurrentSceneKey() const {
-    if (m_CurrentScenePath.empty()) return std::string();
-    const AssetGuid g = AssetDatabase::GuidForPath(m_CurrentScenePath);
-    return g.IsValid() ? g.ToString() : std::filesystem::path(m_CurrentScenePath).lexically_normal().generic_string();
+// Asked for 8+ times a frame (bookmarks, tabs, pins, history): the GUID lookup and the string are worked out
+// once per frame and per scene path.
+const std::string& EditorLayer::CurrentSceneKey() const {
+    static std::string s_Key, s_Path;
+    static int s_Frame = -1;
+    const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -1;
+    if (frame != s_Frame || frame < 0 || s_Path != m_CurrentScenePath) {
+        s_Frame = frame;
+        s_Path = m_CurrentScenePath;
+        if (m_CurrentScenePath.empty()) s_Key.clear();
+        else {
+            const AssetGuid g = AssetDatabase::GuidForPath(m_CurrentScenePath);
+            s_Key = g.IsValid() ? g.ToString() : std::filesystem::path(m_CurrentScenePath).lexically_normal().generic_string();
+        }
+    }
+    return s_Key;
 }
 
 // Every bookmark chip, tab and pin resolves its entity each frame: one order -> entity map, rebuilt when the
