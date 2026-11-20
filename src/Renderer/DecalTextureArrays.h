@@ -160,7 +160,7 @@ private:
     // order; kNotStaged = straight from d's memory.
     static constexpr std::size_t kNotStaged = ~std::size_t(0);
     void UploadSlot(Entry& e, const Decoded& d, std::size_t stagedOffset);
-    void ReleaseEntry(Entry& e); // waits out its decode and its staged copy (Drop, Clear, the destructor)
+    void ReleaseEntry(Entry& e); // drops its decode unread, waits out a staged copy in progress (Drop, Clear, the destructor)
     std::size_t PerLayerBytes(const bool active[kKinds]) const;
     void UpdateMaxLayers();
 
