@@ -50,15 +50,18 @@ Step ChooseDecal(const char* stem) {
         Fail(std::string("decal not indexed: ") + stem);
     });
 }
-// The Apartment Hallway open has landed (its models preload on the asset workers first, #938): up to 60 s.
+// The Apartment Hallway open has landed (its models preload on the asset workers first, #938): up to 60 s
+// of wall clock (a hidden window runs far faster than 60 frames a second).
 // On a timeout it says what the open is still waiting on.
 Step UntilHallwayOpen() {
-    auto frames = std::make_shared<int>(0);
-    return {"the Apartment Hallway is open", [frames](Ctx& c) {
-        if (EditorSmokeAccess_Scenes::IsOpen(c.E, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"))) { *frames = 0; return true; }
-        if (++*frames <= 3600) return false;
-        *frames = 0;
-        Fail("the Apartment Hallway is open: not after 3600 frames - " + EditorSmokeAccess_Scenes::OpenState(c.E, c.A));
+    auto start = std::make_shared<double>(-1.0);
+    return {"the Apartment Hallway is open", [start](Ctx& c) {
+        const double now = ImGui::GetTime();
+        if (*start < 0.0) *start = now;
+        if (EditorSmokeAccess_Scenes::IsOpen(c.E, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"))) { *start = -1.0; return true; }
+        if (now - *start <= 60.0) return false;
+        *start = -1.0;
+        Fail("the Apartment Hallway is open: not after 60 s - " + EditorSmokeAccess_Scenes::OpenState(c.E, c.A));
         return true;
     }, 1000000};
 }
@@ -168,8 +171,8 @@ void RegisterDecalsTests() {
             return n == g_Saved && n > 0 ? std::string() : "decal count " + std::to_string(n) + " vs saved " + std::to_string(g_Saved);
         }),
         Shot("reloaded"),
-        Do("gizmos back", [](Ctx& c) { SA::Gizmos(c.E, true); }),
     }, [](Ctx& c) {
+        SA::Gizmos(c.E, true);
         SA::SetTool(c.E, 0);
         SA::Library(c.E, false);
         std::error_code ec;
@@ -214,6 +217,5 @@ void RegisterDecalsLitTests() {
             c.Cam.Yaw = -50.0f;
             c.Cam.Pitch = -3.0f;
         }), Wait(60), Shot("grime-lit"),
-        Do("gizmos back", [](Ctx& c) { SA::Gizmos(c.E, true); }),
-    });
+    }, [](Ctx& c) { SA::Gizmos(c.E, true); });
 }

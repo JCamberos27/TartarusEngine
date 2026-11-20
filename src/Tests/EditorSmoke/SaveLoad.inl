@@ -30,14 +30,16 @@ Step Rename(const char* from, const char* to) {
         c.W.Registry.get<NameComponent>(ByName(c.W, from)).Name = to;
     });
 }
-// New Scene writes project/scenes/Untitled*.json: delete it (and any .meta the asset scan made).
+// New Scene writes project/scenes/Untitled*.json: delete it (and any .meta the asset scan made). The
+// tests also run this from their Finally, so a failed test leaves no scene for the "scenes:" suite to pick up.
+void RemoveUntitled() {
+    std::error_code ec;
+    if (!Contains(fs::path(g_Path).filename().string(), "Untitled")) return;
+    fs::remove(g_Path, ec);
+    fs::remove(g_Path + ".meta", ec);
+}
 Step DeleteUntitled() {
-    return Do("delete the Untitled scene New Scene wrote", [](Ctx&) {
-        std::error_code ec;
-        if (!Contains(fs::path(g_Path).filename().string(), "Untitled")) return;
-        fs::remove(g_Path, ec);
-        fs::remove(g_Path + ".meta", ec);
-    });
+    return Do("delete the Untitled scene New Scene wrote", [](Ctx&) { RemoveUntitled(); });
 }
 std::vector<fs::path> ProjectScenes() {
     std::vector<fs::path> scenes;
@@ -147,7 +149,7 @@ void RegisterSaveLoadTests() {
         }),
         FreshScene(), Wait(10),
         DeleteUntitled(),
-    });
+    }, [](Ctx&) { RemoveUntitled(); });
 
     Add("saveload: Save in the New Scene prompt writes the edit, then switches", {
         FreshScene(),
@@ -164,7 +166,7 @@ void RegisterSaveLoadTests() {
         }),
         FreshScene(), Wait(10),
         DeleteUntitled(),
-    });
+    }, [](Ctx&) { RemoveUntitled(); });
 
     // Load -> save -> load of every project scene into scratch copies (never the originals), in a
     // World of its own so the editor's scene is untouched. The second save must equal the first.
