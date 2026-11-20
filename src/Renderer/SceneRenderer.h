@@ -8,6 +8,8 @@
 #include <entt/entity/fwd.hpp>
 #include "RenderStats.h"
 
+struct SceneViewScratch; // SceneViewPass.h
+
 // Per-run tally of meshes drawn through each ShaderAsset variant key (audit #354). Key 0 means
 // the default modelShader / a zero-keyword variant. Read by --smoke-test to report which lobes
 // actually rendered; reset it per scene.
@@ -221,4 +223,7 @@ private:
     std::unique_ptr<VolumetricFog> m_Volumetrics;
     // Puddle screen-space reflections: per-view half-res traces, between the depth pre-pass and the opaque pass.
     std::unique_ptr<PuddleSsr> m_Ssr;
+    // RenderScene's stages and the lists they reuse across views and frames (SceneViewPass.h).
+    class ViewPass;
+    std::unique_ptr<SceneViewScratch> m_Scratch;
 };
