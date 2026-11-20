@@ -6,17 +6,23 @@ namespace SceneDetail {
 // Material slots of a RenderableComponent <-> JSON. Shared by boxes and models: #120 — boxes
 // used to write only their colour, so a .mat or an embedded PBR material assigned to a
 // level-geometry box was silently dropped on save, on every undo/redo and on Play -> Stop.
-json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matSlots) {
+json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matSlots, AssetRefWriteCache* refs) {
     if (matSlots.empty()) return nullptr;
     json arr = json::array();
     for (const auto& slot : matSlots) {
         if (!slot) { arr.push_back(nullptr); continue; }
         if (!slot->Path.empty()) {
             json entry;
-            AssetGuid g = AssetDatabase::GuidForPath(slot->Path);
-            if (g.IsValid()) entry["guid"] = g.ToString();
-            entry["path"] = AssetPathForWrite(slot->Path); // audit #364
-            arr.push_back(entry);
+            if (refs) {
+                const AssetRefWriteCache::Ref& r = refs->Get(slot->Path);
+                if (!r.Guid.empty()) entry["guid"] = r.Guid;
+                entry["path"] = r.WritePath; // audit #364
+            } else {
+                AssetGuid g = AssetDatabase::GuidForPath(slot->Path);
+                if (g.IsValid()) entry["guid"] = g.ToString();
+                entry["path"] = AssetPathForWrite(slot->Path); // audit #364
+            }
+            arr.push_back(std::move(entry));
         } else {
             const auto& smat = slot->Mat;
             json em = {

@@ -185,7 +185,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         if (collider->FrictionCombine != 0) cj["frictionCombine"] = collider->FrictionCombine;
         if (collider->BounceCombine != 0)   cj["bounceCombine"]   = collider->BounceCombine;
         if (!collider->Material.empty())    cj["material"]        = collider->Material; // #170
-        j["collider"] = cj;
+        j["collider"] = std::move(cj);
     }
     // Joint (#185 PR 11) — hand-serialised (its "other end" isn't a plain reflectable field).
     if (const auto* joint = world.Registry.try_get<JointComponent>(entity)) {
@@ -222,7 +222,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         json cj;
         for (const auto& f : rc.Meta.Fields)
             if (!f.NonSerialized) cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
-        j[ReflectComponentKey(rc.Meta)] = cj; // Name unless Key is set: a renamed label keeps its files
+        j[ReflectComponentKey(rc.Meta)] = std::move(cj); // Name unless Key is set: a renamed label keeps its files
     }
 }
 
