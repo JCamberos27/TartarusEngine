@@ -162,7 +162,8 @@ Measured on the full-pack audit (`docs/mm_audit.md`, 2026-11-17). Each is a capt
   `Application.cpp` ~1229 and `src/Core/Input.cpp` ~92; `docs/WEAPON_REVOLVER38.md:84` describes the stall.
 - **Test script.** `tools/mm_smoke.ps1` builds Release, then runs `--unit-tests`, `--smoke-test tests\smoke-scenes`,
   and the npc-test scenarios given as arguments, in that order.
-  - Every run is visible, with unlocked FPS and no `TARTARUS_HIDDEN`.
+  - Every run is hidden (harness runs are hidden by default; Jacob's OK 2026-11-20), with unlocked FPS. `-Show`
+    sets `TARTARUS_SHOW=1` to watch them.
   - Each run is launched with `Start-Process -PassThru` + `WaitForExit()`, because Release is a GUI-subsystem build.
   - It prints a pass/fail table and exits non-zero on any failure.
 - **Baseline.** Run the legacy `testbed`, `npcloco`, `locomotion`, `stopsteps`, `feet` and `labloco` scenarios, plus
@@ -858,7 +859,9 @@ drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
 
 ## Test protocol (every phase)
 
-- Tests always run **visible**: never set `TARTARUS_HIDDEN`, and keep `--visible` on `tools/npc_test_runs.py`.
+- Tests run **hidden**, like every harness run (Jacob's OK 2026-11-20). To watch one, set `TARTARUS_SHOW=1`
+  (`-Show` on `tools/mm_smoke.ps1`, `--visible` on `tools/npc_test_runs.py`). FPS and wall-time readouts can differ from
+  the older visible baselines; that is not a failure.
 - **No footage** (the owner, 2026-11-17: "We don't need to waste time recording footage for something I can test"): don't
   set `NPC_TEST_RECORD` or render before/after videos. Verify with the checks and measurements; the owner plays it in the
   editor. Record only when the owner asks.
