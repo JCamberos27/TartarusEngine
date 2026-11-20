@@ -41,7 +41,7 @@ namespace GLStateCache {
     const FrameStats& GetFrameStats();
     void ResetFrameStats();
 
-    // Material uniform-upload dedup (#192). Model.cpp's BindMaterial uploads ~12 scalar/vector
+    // Material uniform-upload dedup (#192). ModelDraw.cpp's BindMaterial uploads ~12 scalar/vector
     // uniforms and up to 7 texture binds per mesh, per entity, per pass — almost all redundant
     // when consecutive draws share a material (the draw loop now sorts by material so they do).
     // `materialHash` is Material::Hash() — a value hash, so two objects with identical material

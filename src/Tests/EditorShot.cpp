@@ -123,7 +123,7 @@ void EditorShot::AfterFrame(Window& window, bool& exitApproved) {
             std::vector<unsigned char> flipped = FrameCapture::GrabTopDown(0, w, h);
             for (size_t i = 3; i < flipped.size(); i += 4) flipped[i] = 255;
             const std::string out = FrameCapture::WritePngTo(m_Dir, m_Views[step], w, h, flipped);
-            std::cout << "[EditorShot] " << out << std::endl;
+            if (!out.empty()) std::cout << "[EditorShot] " << out << std::endl;
         }
         if (step + 1 >= (int)std::size(m_Views)) { exitApproved = true; window.SetShouldClose(true); }
     }

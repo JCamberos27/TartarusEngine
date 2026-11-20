@@ -48,6 +48,27 @@ std::string EnhancerUserState::Path() {
     return UserPaths::Resolve("enhancers_" + ProjectKey(ProjectPaths::Root()) + ".json");
 }
 
+bool EnhancerUserState::RekeyScene(const std::string& from, const std::string& to) {
+    if (from.empty() || to.empty() || from == to) return false;
+    bool moved = false;
+    auto refs = [&](std::vector<EditorRef>& list) {
+        for (EditorRef& r : list)
+            if (r.Scene == from) { r.Scene = to; moved = true; }
+    };
+    refs(SceneBookmarks);
+    refs(EntityBookmarks);
+    refs(FolderBookmarks);
+    refs(InspectorBookmarks);
+    for (FavoritePage& p : FavoritePages) refs(p.Items);
+    if (auto it = DefaultParents.find(from); it != DefaultParents.end()) {
+        if (!DefaultParents.count(to)) DefaultParents[to] = it->second; // one already set under the GUID wins
+        DefaultParents.erase(it);
+        moved = true;
+    }
+    if (moved) MarkDirty();
+    return moved;
+}
+
 void EnhancerUserState::Reset() {
     SceneBookmarks.clear();
     EntityBookmarks.clear();

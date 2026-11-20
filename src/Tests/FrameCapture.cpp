@@ -4,6 +4,8 @@
 
 #include "PngWrite.h"
 
+#include <iostream>
+
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -30,7 +32,10 @@ std::string WritePngTo(const std::string& dir, const std::string& name, int w, i
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
     const std::string out = (std::filesystem::path(dir) / (name + ".png")).string();
-    PngWrite::ToFile(std::filesystem::path(out).u8string(), w, h, 4, rgba.data(), w * 4);
+    if (!PngWrite::ToFile(std::filesystem::path(out).u8string(), w, h, 4, rgba.data(), w * 4)) {
+        std::cerr << "[FrameCapture] FAILED to write " << out << std::endl;
+        return {};
+    }
     return out;
 }
 

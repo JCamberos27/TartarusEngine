@@ -364,7 +364,7 @@ void SmokeHarness::PerfFrame() {
     } else if (opt.perfBenchMode) {
         const double frameMs = m_Perf.TakeFrameMs();
         const int phaseFrame = (m_FramesRendered - 1) % PerfBench::kPhaseFrames + 1;
-        if (opt.perfSample && phaseFrame == m_Perf.Warmup()) SamplingProfiler::Start();
+        if (opt.perfSample && phaseFrame == std::max(m_Perf.Warmup(), 1)) SamplingProfiler::Start(); // warmup 0: from frame 1
         if (phaseFrame > m_Perf.Warmup()) m_Perf.Sample(frameMs, phaseFrame);
         if (phaseFrame == PerfBench::kPhaseFrames) {
             m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(),

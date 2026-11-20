@@ -97,6 +97,11 @@ Steps EnsureScratch() {
     return {
         Do("write the scratch folder", [](Ctx& c) {
             g_Ed = &c.E;
+            static bool s_RemoveAtEnd = false; // once per run, whichever test made the folder
+            if (!s_RemoveAtEnd) {
+                s_RemoveAtEnd = true;
+                AtRunEnd([] { std::error_code e; fs::remove_all(fs::u8path(Dir()), e); });
+            }
             std::error_code ec;
             if (fs::exists(fs::u8path(DirFile("Sub/Deeper/Deep Tex.png")), ec) && HasFolder(c, kDeeper)) return;
             fs::remove_all(fs::u8path(Dir()), ec);
@@ -717,7 +722,7 @@ void RegisterAssetsTests() {
              Shot("model-inspector", {kInspector}),
              RevealTile("Smoke Tex.png"), Click(Tile("Smoke Tex.png")), Wait(5),
              Shot("texture-inspector", {kInspector}),
-             RevealTile("Smoke Prefab.prefab"), Click(Tile("Smoke Prefab.prefab")), Wait(5),
+             UntilListed("Smoke Prefab.prefab"), RevealTile("Smoke Prefab.prefab"), Click(Tile("Smoke Prefab.prefab")), Wait(5),
              Shot("prefab-inspector", {kInspector})},
             // A material: write one (the background menu's own path), edit it in its inspector.
             BackgroundMenu("Create Material"),
@@ -738,7 +743,22 @@ void RegisterAssetsTests() {
              Until("the edit is saved to the .mat", [before](Ctx&) { return ReadFileText(g_Text) != *before; }, 60),
              Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(6),
              Until("undo puts the file back", [before](Ctx&) { return ReadFileText(g_Text) == *before; }, 60),
-             Do("deselect", [](Ctx& c) { X::Deselect(c.E); }), Wait(2)},
+             Do("deselect", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
+             // A .mat that isn't valid JSON: its inspector says so and shows no fields to edit (an edit
+             // would save Standard defaults over the file).
+             Do("write a broken .mat and select it", [](Ctx& c) {
+                 g_AllowLog.push_back("JSON parse error");
+                 g_Text = DirFile("Smoke Broken.mat");
+                 std::ofstream(fs::u8path(g_Text), std::ios::binary) << "{ not json";
+                 X::SelectAsset(c.E, g_Text);
+             }), Wait(10),
+             ExpectTrue("it loaded as a Missing placeholder", [](Ctx& c) { const auto ma = c.A.LoadMaterial(g_Text); return ma && ma->Missing; }),
+             ExpectTrue("its inspector shows no material fields", [](Ctx&) { return Find(ByLabel("(none)", kInspector)) == nullptr; }), // the texture-map slots
+             ExpectTrue("the file is untouched", [](Ctx&) { return ReadFileText(g_Text) == "{ not json"; }),
+             Do("deselect and remove it", [](Ctx& c) {
+                 X::Deselect(c.E);
+                 std::error_code ec; fs::remove(fs::u8path(g_Text), ec); fs::remove(fs::u8path(g_Text + ".meta"), ec);
+             }), Wait(2)},
         }));
     }
 
@@ -796,7 +816,15 @@ void RegisterAssetsTests() {
         Until("the Delete Asset? prompt", [](Ctx&) { return Find(ByExact("Delete", "Delete Asset?")) != nullptr; }, 60),
         Shot("prompt"),
         Click(ByExact("Delete", "Delete Asset?")), Wait(4),
-        Until("the folder left the browser", [](Ctx& c) { return !HasFolder(c, kFolder) && !HasFolder(c, kSub); }, 60),
+        // On a timeout, say what is still there (the library's folder, the subfolder, the files on disk).
+        {"the folder left the browser", [n = std::make_shared<int>(0)](Ctx& c) {
+            const bool folder = HasFolder(c, kFolder), sub = HasFolder(c, kSub);
+            if (!folder && !sub) return true;
+            if (++*n <= 60) return false;
+            Fail(std::string("the folder left the browser: after 60 frames the library still lists") + (folder ? " the folder" : "") +
+                 (sub ? " the subfolder" : "") + "; on disk: " + (FileExists(Dir()) ? "still there" : "gone"));
+            return true;
+        }, 1000000},
         Do("delete it from disk and rescan", [](Ctx& c) {
             AX::Search(c.E).clear();
             std::error_code ec;
@@ -804,5 +832,13 @@ void RegisterAssetsTests() {
             AX::Refresh(c.E);
         }), WaitSeconds(1.0),
         ExpectTrue("gone from disk", [](Ctx&) { return !FileExists(Dir()); }),
+    }, [](Ctx& c) {
+        // Also when a step above failed: the scratch folder must never outlive the suite (the next run and
+        // other suites would find its files).
+        if (!FileExists(Dir())) return;
+        AX::Search(c.E).clear();
+        std::error_code ec;
+        fs::remove_all(fs::u8path(Dir()), ec);
+        AX::Refresh(c.E);
     });
 }
