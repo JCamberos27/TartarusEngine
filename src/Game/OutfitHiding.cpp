@@ -106,9 +106,13 @@ namespace {
 // background thread and kept in Library/OutfitCoverage, so a pair is computed once per machine, not once
 // per editor session, and never on the main thread.
 using CoverageKey = std::pair<std::string, std::string>;
+struct CoverageRead; // PrefetchCoverage's reads, one per pair
 struct CoverageStore {
     std::map<CoverageKey, std::vector<std::uint8_t>> Done;
     std::map<CoverageKey, std::future<std::vector<std::uint8_t>>> Running;
+    // PrefetchCoverage's batches still reading (or read, not yet taken), and the pairs they hold.
+    std::vector<std::pair<std::shared_ptr<std::vector<CoverageRead>>, std::shared_future<void>>> Reading;
+    std::set<CoverageKey> Queued;
 };
 CoverageStore& Coverage() {
     static CoverageStore s;
@@ -190,6 +194,55 @@ void SaveCoverage(const CoverageKey& k, const FileStamp& under, const FileStamp&
     if (ec) fs::remove(tmp, ec);
 }
 
+struct CoverageRead {
+    CoverageKey Key;
+    std::string UnderModel, OverModel; // project-relative, lower case (StampOf)
+    std::vector<std::uint8_t> Data;
+    bool Hit = false;
+};
+
+// The thresholds are in metres, so a character scaled up or down has coverage of its own: `root`'s scale as the key
+// spells it ("" at 1).
+std::string ScaleTag(const World& world, entt::entity root) {
+    if (!world.Registry.valid(root)) return {};
+    const float s = glm::length(glm::vec3(world.ComposeWorldTransform(root)[1]));
+    if (std::abs(s - 1.0f) <= 0.005f) return {};
+    char buf[24];
+    std::snprintf(buf, sizeof(buf), "|x%.2f", s);
+    return buf;
+}
+
+// A fitted piece (ItemOverride::Fit) covers differently: its fit is part of the key.
+std::string FitTag(float fit) {
+    if (fit <= 0.0f || std::abs(fit - 1.0f) < 1e-4f) return {};
+    char buf[24];
+    std::snprintf(buf, sizeof(buf), "|fit%.3f", fit);
+    return buf;
+}
+
+// `underModel` / `overModel`: project-relative, lower case.
+CoverageKey MakeKey(const std::string& underModel, bool exposed, bool rigid, const std::string& scale, float underFit,
+                    const std::string& overModel, float overFit) {
+    return {underModel + (exposed ? "|exposed" : "") + (rigid ? "|rigid" : "") + scale + FitTag(underFit),
+            overModel + FitTag(overFit)};
+}
+
+// How a piece worn with these flags is hidden: `exposed` = it's the head; `rigid` = headwear on the head bone.
+bool ExposedPiece(int flags) { return (flags & OutfitPieceBodyPart) && (flags & OutfitPieceHeadAttached); }
+bool RigidPiece(int flags) { return !(flags & OutfitPieceBodyPart) && (flags & OutfitPieceHeadAttached); }
+
+// PrefetchCoverage's finished batches into Done (a pair it didn't find is left for PairCoverage to work out).
+void TakeReads(CoverageStore& store) {
+    for (auto it = store.Reading.begin(); it != store.Reading.end();) {
+        if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) { ++it; continue; }
+        for (CoverageRead& r : *it->first) {
+            if (r.Hit) store.Done.emplace(r.Key, std::move(r.Data));
+            store.Queued.erase(r.Key);
+        }
+        it = store.Reading.erase(it);
+    }
+}
+
 // The pair's covered vertices if they're known (memory, then disk); else starts working them out in the
 // background and returns null - ask again next frame.
 // `exposed`: `under` is the head; `rigid`: headwear on the head bone (OutfitCoverage::Hidden) - each its own
@@ -198,27 +251,14 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
                                               const std::string& underModel, const std::string& overModel, bool exposed,
                                               bool rigid) {
     CoverageStore& store = Coverage();
-    // The thresholds are in metres, so a character scaled up or down has coverage of its own.
-    std::string scale;
-    if (const auto* h = world.Registry.try_get<HierarchyComponent>(under); h && world.Registry.valid(h->Parent)) {
-        const glm::mat4 root = world.ComposeWorldTransform(h->Parent);
-        const float s = glm::length(glm::vec3(root[1]));
-        if (std::abs(s - 1.0f) > 0.005f) {
-            char buf[24];
-            std::snprintf(buf, sizeof(buf), "|x%.2f", s);
-            scale = buf;
-        }
-    }
-    // A fitted piece (ItemOverride::Fit) covers differently: its fit is part of the key.
-    auto fitTag = [&](entt::entity e) {
+    const auto* h = world.Registry.try_get<HierarchyComponent>(under);
+    const std::string scale = h ? ScaleTag(world, h->Parent) : std::string();
+    auto fitOf = [&](entt::entity e) {
         const auto* p = world.Registry.try_get<OutfitPieceComponent>(e);
-        if (!p || p->Fit <= 0.0f || std::abs(p->Fit - 1.0f) < 1e-4f) return std::string();
-        char buf[24];
-        std::snprintf(buf, sizeof(buf), "|fit%.3f", p->Fit);
-        return std::string(buf);
+        return p ? p->Fit : 0.0f;
     };
-    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : "") + (rigid ? "|rigid" : "") + scale + fitTag(under),
-                          Lower(Rel(overModel)) + fitTag(over)};
+    const CoverageKey key =
+        MakeKey(Lower(Rel(underModel)), exposed, rigid, scale, fitOf(under), Lower(Rel(overModel)), fitOf(over));
     if (auto it = store.Done.find(key); it != store.Done.end()) return &it->second;
     if (auto it = store.Running.find(key); it != store.Running.end()) {
         if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return nullptr;
@@ -291,6 +331,7 @@ std::shared_ptr<VisibleIndexBuffer> VisibleTriangles(const Model& model, const s
 
 void UpdateHiding(World& world) {
     auto& reg = world.Registry;
+    if (!Coverage().Reading.empty()) TakeReads(Coverage());
     static std::uint64_t frame = 0;
     ++frame;
     // The wardrobe of the last outfit looked at: nearly every outfit in a scene shares one.
@@ -346,8 +387,7 @@ void UpdateHiding(World& world) {
                 const auto* urc = reg.try_get<RenderableComponent>(under);
                 if (!urc || !urc->ModelRef) continue;
                 const int flags = reg.get<OutfitPieceComponent>(under).Flags;
-                const bool exposed = (flags & OutfitPieceBodyPart) && (flags & OutfitPieceHeadAttached);
-                const bool rigid = !(flags & OutfitPieceBodyPart) && (flags & OutfitPieceHeadAttached);
+                const bool exposed = ExposedPiece(flags), rigid = RigidPiece(flags);
                 std::vector<std::uint8_t> hidden;
                 for (const auto& [overSlot, over] : pieces) {
                     const auto* orc = reg.try_get<RenderableComponent>(over);
@@ -380,6 +420,52 @@ void UpdateHiding(World& world) {
         }
         outfit.HideSignature = signature;
     }
+}
+
+std::shared_future<void> PrefetchCoverage(const World& world, entt::entity root, const std::vector<Wardrobe::Piece>& pieces) {
+    const auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(root);
+    if (!outfit || !outfit->AutoHide || pieces.size() < 2) return {};
+    // The keys UpdateHiding will ask for once these pieces are worn: layers and fits from the same wardrobe, the
+    // root's scale, each piece's flags as Apply sets them.
+    const auto wardrobe = LayerWardrobe(outfit->Wardrobe);
+    const std::string scale = ScaleTag(world, root);
+    struct Worn {
+        std::string Slot, Model;
+        int Flags = 0;
+        float Fit = 1.0f;
+        Wardrobe::Layering Layer;
+    };
+    std::vector<Worn> worn;
+    for (const auto& p : pieces) {
+        const int flags = (p.BodyPart ? OutfitPieceBodyPart : 0) | (p.HeadAttached ? OutfitPieceHeadAttached : 0);
+        OutfitPieceComponent piece;
+        piece.Slot = p.Slot;
+        piece.Item = p.Path;
+        piece.Flags = flags;
+        worn.push_back({p.Slot, Lower(Rel(p.Path)), flags, wardrobe ? Wardrobe::FitOf(*wardrobe, p.Path) : 1.0f,
+                        PieceLayer(wardrobe.get(), piece)});
+    }
+    CoverageStore& store = Coverage();
+    auto reads = std::make_shared<std::vector<CoverageRead>>();
+    for (const Worn& under : worn)
+        for (const Worn& over : worn) {
+            if (&under == &over || !Wardrobe::Hides(over.Layer, under.Slot, under.Layer, over.Slot)) continue;
+            CoverageKey key = MakeKey(under.Model, ExposedPiece(under.Flags), RigidPiece(under.Flags), scale, under.Fit,
+                                      over.Model, over.Fit);
+            if (store.Done.count(key) || store.Running.count(key) || !store.Queued.insert(key).second) continue;
+            CoverageRead r;
+            r.Key = std::move(key);
+            r.UnderModel = under.Model;
+            r.OverModel = over.Model;
+            reads->push_back(std::move(r));
+        }
+    if (reads->empty()) return {};
+    std::shared_future<void> done = std::async(std::launch::async, [reads] {
+                                        for (CoverageRead& r : *reads)
+                                            r.Hit = LoadCoverage(r.Key, StampOf(r.UnderModel), StampOf(r.OverModel), r.Data);
+                                    }).share();
+    store.Reading.emplace_back(reads, done);
+    return done;
 }
 
 void UpdateAttachments(World& world) {

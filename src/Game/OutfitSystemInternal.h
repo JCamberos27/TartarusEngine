@@ -7,6 +7,7 @@
 #include <entt/entt.hpp>
 
 #include <functional>
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -30,8 +31,14 @@ void RequestMaterial(AssetLibrary& assets, const std::string& rel, std::vector<A
 // (OutfitPending.cpp) What runs once a change's assets have loaded.
 using Then = std::function<void(World&, AssetLibrary&, entt::entity)>;
 // (OutfitPending.cpp) Starts loading what `request` needs from `cat`; the tickets to wait on (notes: what's missing).
+// `outPieces` (optional): the pieces the change will wear.
 std::vector<AssetLibrary::AsyncHandle> Prefetch(World& world, AssetLibrary& assets, entt::entity root, const Catalog& cat,
-                                                const Wardrobe::Request& request, std::vector<std::string>& notes);
+                                                const Wardrobe::Request& request, std::vector<std::string>& notes,
+                                                std::vector<Wardrobe::Piece>* outPieces = nullptr);
+// (OutfitHiding.cpp) Reads, on a worker thread, the saved skin coverage `root` will need once it wears `pieces`, so
+// UpdateHiding finds it in memory on the frame the change lands instead of reading a file per pair there. Ready when
+// the reads are done (whatever they found: a pair not on disk is still worked out as before). Invalid = nothing to read.
+std::shared_future<void> PrefetchCoverage(const World& world, entt::entity root, const std::vector<Wardrobe::Piece>& pieces);
 // (OutfitPending.cpp) `after` now if every ticket is ready, else once they are (UpdatePending).
 void WhenReady(World& world, AssetLibrary& assets, entt::entity root, std::vector<AssetLibrary::AsyncHandle> tickets, Then after);
 // (OutfitPending.cpp) What the next change builds on: the one still waiting to load, else what's worn now.
