@@ -142,7 +142,7 @@ public:
     // outside Prepare reads 0 until the next Prepare uploads it.
     uint32_t SubstrateIndex(const SubstrateDesc& desc);
     // The same for a material's substrate, through the DecalSystem alive (main.cpp owns one); 0 when
-    // there's none or the material has no substrate. Model.cpp sets it as uMaterialSubstrate. Cached by
+    // there's none or the material has no substrate. ModelDraw.cpp sets it as uMaterialSubstrate. Cached by
     // the desc's address (the material's own), re-resolved only when the desc changes.
     static int MaterialSubstrate(const SubstrateDesc& desc);
     int SubstrateCount() const { return (int)m_Subs.size(); }
