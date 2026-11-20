@@ -1046,11 +1046,11 @@ void RegisterMotionDemo() {
             // 8. Save: the unsaved dot becomes a check that draws on and fades.
             Key(ImGuiKey_S, ImGuiMod_Ctrl), WaitSeconds(1.6),
             // 9. Play: triangle morphs to square, the play frame breathes, dims on pause.
-            Glide(AtItem(ByExact("##transport")), 34), WaitSeconds(0.2),
+            Glide(AtItem(ByLabel("Play", "##MainToolbar")), 34), WaitSeconds(0.2),
         },
-        ClickHere(), {WaitSeconds(2.6), Glide(AtItem(ByLabel("Pause")), 22), WaitSeconds(0.2)}, ClickHere(),
-        {WaitSeconds(1.4), Glide(AtItem(ByLabel("Resume")), 10), WaitSeconds(0.2)}, ClickHere(),
-        {WaitSeconds(1.2), Glide(AtItem(ByExact("##transport")), 22), WaitSeconds(0.2)}, ClickHere(),
+        ClickHere(), {WaitSeconds(2.6), Glide(AtItem(ByLabel("Pause", "##MainToolbar")), 22), WaitSeconds(0.2)}, ClickHere(),
+        {WaitSeconds(1.4), Glide(AtItem(ByLabel("Resume", "##MainToolbar")), 10), WaitSeconds(0.2)}, ClickHere(),
+        {WaitSeconds(1.2), Glide(AtItem(ByLabel("Stop", "##MainToolbar")), 22), WaitSeconds(0.2)}, ClickHere(),
         {
             WaitSeconds(1.2),
             // 10. A module reload that landed: a toast whose check draws on.
