@@ -831,7 +831,7 @@ void TestAssetMetaMigration() {
 
 // --- #178: component presets round-trip through the scene field encoding --------------------
 void TestComponentPreset() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World world;
     AssetLibrary assets;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -1676,7 +1676,7 @@ void TestPhysicalSky() {
 // documents catches the whole class at once, which is what #202 asks for under "scene
 // round-trips" and what #121/#342 changed enough of to be worth pinning down.
 void TestSceneRoundTrip() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
 
     World a;
     AssetLibrary assetsA;
@@ -1957,7 +1957,7 @@ void TestMaterialRobustness() {
 
 // --- Component registry: unique names / keys, enum labels well-formed --------------------------
 void TestComponentRegistry() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     CHECK(!ComponentRegistry::All().empty());
     std::set<std::string> names;
     for (const RegisteredComponent& rc : ComponentRegistry::All()) {
@@ -2126,10 +2126,7 @@ void TestAsyncImportCpu() {
         UnitTestSupport::Skip("no Quantum pack: model checks");
     } // the models are destroyed here with nothing uploaded, which must not touch GL
 
-    std::error_code ec;
-    const auto dir = std::filesystem::temp_directory_path(ec) / "TartarusUnitTests";
-    std::filesystem::create_directories(dir, ec);
-    const std::string png = (dir / "async_decode.png").string();
+    const std::string png = (TempDir() / "async_decode.png").string();
     std::vector<unsigned char> px(64 * 32 * 4);
     for (size_t i = 0; i < px.size(); ++i) px[i] = (unsigned char)(i * 7);
     CHECK(PngWrite::ToFile(std::filesystem::path(png).u8string(), 64, 32, 4, px.data(), 64 * 4));
@@ -3032,6 +3029,10 @@ struct PrivateTempDir {
     PrivateTempDir& operator=(const PrivateTempDir&) = delete;
 };
 } // namespace
+
+void UnitTestSupport::EnsureEngineComponents() {
+    UnitTestSupport::EnsureEngineComponents();
+}
 
 int RunUnitTests(const char* filter) {
     const PrivateTempDir privateTemp;
