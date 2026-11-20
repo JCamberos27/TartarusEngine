@@ -2469,12 +2469,13 @@ bool AppSession::Frame() {
     lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
     {
         PROFILE_SCOPE("Swap Buffers");
-        // A window that never shows (KeepsWindowHidden): presenting a hidden window took NVIDIA's slow path,
-        // ~2.7 ms a frame with the GPU idle and the CPU blocked (the Forest's play-max read 14.2 ms hidden, 11.6 ms
-        // on screen; a 21600-frame npc test ran about a minute longer). Nothing is on screen to present, so pace
-        // like a swap chain instead: a fence a frame, and wait for the one kHiddenFramesAhead frames back. Every
-        // capture (Shot steps, --editor-shot, MotionDemo) reads the back buffer before this point.
-        if (hiddenRun) {
+        // A smoke-harness run (smoke, perf-bench, npc-test) in a window that never shows (KeepsWindowHidden):
+        // presenting a hidden window took NVIDIA's slow path, ~2.7 ms a frame with the GPU idle and the CPU blocked
+        // (the Forest's play-max read 14.2 ms hidden, 11.6 ms on screen; a 21600-frame npc test ran about a minute
+        // longer). Nothing is on screen to present, so pace like a swap chain instead: a fence a frame, and wait for
+        // the one kHiddenFramesAhead frames back. Not for --editor-tests: its steps count frames while camera glides
+        // run on real time, and unthrottled frames timed 7 of them out; it keeps presenting, as it always has.
+        if (hiddenRun && opt.smokeTestMode) {
             constexpr int kHiddenFramesAhead = 2;
             static GLsync s_Pace[kHiddenFramesAhead] = {};
             static int s_PaceAt = 0;
