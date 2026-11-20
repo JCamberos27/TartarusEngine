@@ -101,16 +101,10 @@ void AssetThumbnailLoader::Worker() {
 AssetThumbnailLoader::Thumb AssetThumbnailLoader::Get(const std::string& pathIn, Source source) {
     const bool mask = source == Source::Mask || source == Source::MaskInverted;
     const std::string path = mask ? MaskKey(pathIn, source == Source::MaskInverted) : pathIn;
-    auto it = m_Entries.find(path);
-    if (it != m_Entries.end()) {
-        m_Lru.splice(m_Lru.begin(), m_Lru, it->second.Lru);
-        return it->second.T;
-    }
+    if (const Entry* found = m_Entries.Find(path)) return found->T;
     Entry e;
     e.Ticket = m_NextTicket++;
-    m_Lru.push_front(path);
-    e.Lru = m_Lru.begin();
-    m_Entries.emplace(path, e);
+    m_Entries.Insert(path, e);
     {
         std::lock_guard<std::mutex> lk(m_Mutex);
         m_Jobs.push_front({path, source, e.Ticket});
@@ -118,11 +112,11 @@ AssetThumbnailLoader::Thumb AssetThumbnailLoader::Get(const std::string& pathIn,
             // Forget the dropped requests too, so asking again re-queues them.
             const std::string dropped = m_Jobs.back().Path;
             m_Jobs.pop_back();
-            if (auto d = m_Entries.find(dropped); d != m_Entries.end() && d->second.Pending) Remove(d);
+            if (const Entry* d = m_Entries.Peek(dropped); d && d->Pending) Remove(dropped);
         }
     }
     m_Wake.notify_one();
-    if (m_Entries.size() > kMaxThumbs) Remove(m_Entries.find(m_Lru.back()));
+    m_Entries.TrimTo(kMaxThumbs, [](Entry& old) { if (old.T.Tex) glDeleteTextures(1, &old.T.Tex); });
     return {};
 }
 
@@ -137,9 +131,9 @@ void AssetThumbnailLoader::Pump(int maxUploads) {
     }
     bool uploaded = false;
     for (Result& r : done) {
-        auto it = m_Entries.find(r.Path);
-        if (it == m_Entries.end() || !it->second.Pending || it->second.Ticket != r.Ticket) continue; // evicted / superseded
-        Entry& e = it->second;
+        Entry* found = m_Entries.Peek(r.Path);
+        if (!found || !found->Pending || found->Ticket != r.Ticket) continue; // evicted / superseded
+        Entry& e = *found;
         e.Pending = false;
         e.T.FlipV = r.FlipV;
         if (r.Pixels.size() != (size_t)kSize * kSize * 4) continue; // no thumbnail: the tile keeps its glyph
@@ -161,23 +155,19 @@ unsigned int AssetThumbnailLoader::MakeTexture(int size, const unsigned char* pi
     return tex;
 }
 
-void AssetThumbnailLoader::Remove(std::unordered_map<std::string, Entry>::iterator it) {
-    if (it == m_Entries.end()) return;
-    if (it->second.T.Tex) glDeleteTextures(1, &it->second.T.Tex);
-    m_Lru.erase(it->second.Lru);
-    m_Entries.erase(it);
+void AssetThumbnailLoader::Remove(const std::string& key) {
+    m_Entries.Erase(key, [](Entry& e) { if (e.T.Tex) glDeleteTextures(1, &e.T.Tex); });
 }
 
 void AssetThumbnailLoader::Invalidate(const std::string& path) {
-    Remove(m_Entries.find(path));
-    Remove(m_Entries.find(MaskKey(path, false)));
-    Remove(m_Entries.find(MaskKey(path, true)));
+    Remove(path);
+    Remove(MaskKey(path, false));
+    Remove(MaskKey(path, true));
 }
 
 void AssetThumbnailLoader::Clear() {
-    for (auto& [path, e] : m_Entries) { (void)path; if (e.T.Tex) glDeleteTextures(1, &e.T.Tex); }
-    m_Entries.clear();
-    m_Lru.clear();
+    m_Entries.ForEach([](Entry& e) { if (e.T.Tex) glDeleteTextures(1, &e.T.Tex); });
+    m_Entries.Clear();
     std::lock_guard<std::mutex> lk(m_Mutex);
     m_Jobs.clear();
     m_Done.clear();
