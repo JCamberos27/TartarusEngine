@@ -27,7 +27,7 @@ namespace fs = std::filesystem;
 using AA = EditorSmokeAccess_Animator;
 
 const char* kAnimator = "###Animator";
-const char* kSoldierRel = "assets/Characters/Spider/Spider.controller"; // a real controller, read-only (npc_soldier went with Phase 6)
+const char* kSpiderRel = "assets/Characters/Spider/Spider.controller"; // a real controller, read-only
 const char* kScratchRel = "editor-smoke-scratch-animator/Smoke.controller";
 std::string ScratchDir() { return ProjectPaths::Resolve("editor-smoke-scratch-animator"); }
 
@@ -200,17 +200,17 @@ Step UntilLoaded(std::string rel) {
 void RegisterAnimatorTests() {
     using namespace smoke_animator;
 
-    // ---------------------------------------------------------------- npc_soldier, read-only
+    // ---------------------------------------------------------------- Spider.controller, read-only
     {
         auto original = std::make_shared<std::string>();
         Add("animator: Spider.controller opens, frames, selects, shows its tabs; the file is untouched", Cat({
             {FreshScene(), Wait(2),
              Do("note the file", [original](Ctx&) {
-                 *original = ReadFileText(ProjectPaths::Resolve(kSoldierRel));
-                 if (original->empty()) Fail(std::string("can't read ") + kSoldierRel);
+                 *original = ReadFileText(ProjectPaths::Resolve(kSpiderRel));
+                 if (original->empty()) Fail(std::string("can't read ") + kSpiderRel);
              }),
-             Do("open it in the Animator", [](Ctx& c) { AA::Open(c.E, kSoldierRel); }),
-             UntilLoaded(kSoldierRel), Wait(3),
+             Do("open it in the Animator", [](Ctx& c) { AA::Open(c.E, kSpiderRel); }),
+             UntilLoaded(kSpiderRel), Wait(3),
              Expect("it has states", [](Ctx& c) { return StateCount(c) > 0 ? std::string() : std::string("no states in layer 0"); }),
              Shot("graph", {kAnimator}),
              Click(WinButton(ICON_FA_EXPAND)), Wait(3),
@@ -236,12 +236,14 @@ void RegisterAnimatorTests() {
              Shot("layers", {kAnimator}),
              Key(ImGuiKey_Escape), Wait(2),
              Expect("the file is byte-for-byte unchanged", [original](Ctx&) {
-                 const std::string now = ReadFileText(ProjectPaths::Resolve(kSoldierRel));
-                 if (now == *original) return std::string();
-                 std::ofstream(fs::u8path(ProjectPaths::Resolve(kSoldierRel)), std::ios::binary) << *original; // put it back
-                 return std::string("the Animator rewrote Spider.controller (restored)");
+                 return ReadFileText(ProjectPaths::Resolve(kSpiderRel)) == *original
+                     ? std::string() : std::string("the Animator rewrote Spider.controller (restored)");
              })},
-        }));
+        }), [original](Ctx&) {
+            // Put a tracked project file back whichever step failed.
+            if (!original->empty() && ReadFileText(ProjectPaths::Resolve(kSpiderRel)) != *original)
+                std::ofstream(fs::u8path(ProjectPaths::Resolve(kSpiderRel)), std::ios::binary) << *original;
+        });
     }
 
     // ---------------------------------------------------------------- scratch controller, edited

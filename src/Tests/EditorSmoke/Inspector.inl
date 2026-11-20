@@ -320,8 +320,12 @@ void RegisterInspectorTests() {
              return c.W.Registry.get<TransformControllerComponent>(ByName(c.W, "Alpha")).ScriptPath ==
                     TransformControllerComponent{}.ScriptPath;
          }),
-         Do("delete the scratch script", [](Ctx&) { std::error_code ec; std::filesystem::remove_all(InspScratchDir(), ec); })},
-    }));
+         Wait(1)},
+    }), [](Ctx&) {
+        // Pass or fail: the scratch folder goes (project/editor-smoke-scratch).
+        std::error_code ec;
+        std::filesystem::remove_all(InspScratchDir(), ec);
+    });
     // #12: Add Component gave a new Transform Controller a Script Path that doesn't exist, so the
     // field was red (missing) from the start.
     Add("inspector: a new Transform Controller's Script Path isn't missing", {
@@ -537,11 +541,12 @@ void RegisterInspectorTests() {
     });
     {
         auto before = std::make_shared<std::set<std::string>>();
+        auto listed = std::make_shared<bool>(false);
         Query presetItem;
         presetItem.Pred = [](const UiItem& it) { return Contains(it.Root, "##Menu") && !g_Text.empty() && Visible(it.Label) == g_Text; };
         Add("inspector: component menu Save Preset, then Apply Preset restores the values; undo", {
             FreshScene(), Wait(2), SelectByName("Beta"), Wait(3),
-            Do("list the presets folder", [before](Ctx&) { *before = InspListDir(InspPresetDir()); g_Text.clear(); }),
+            Do("list the presets folder", [before, listed](Ctx&) { *before = InspListDir(InspPresetDir()); *listed = true; g_Text.clear(); }),
             Click(MoreButton("Light")), Wait(2),
             Click(InspPopup(ICON_FA_FLOPPY_DISK "  Save Preset")), Wait(3),
             Expect("a new Light preset file", [before](Ctx&) {
@@ -562,11 +567,13 @@ void RegisterInspectorTests() {
             ExpectTrue("preset applied: intensity 9 again", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).Intensity == 9.0f; }),
             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
             ExpectTrue("undo -> 42", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).Intensity == 42.0f; }),
-            Do("delete the new preset files", [before](Ctx&) {
-                std::error_code ec;
-                for (const std::string& p : InspListDir(InspPresetDir()))
-                    if (!before->count(p)) std::filesystem::remove(p, ec);
-            }),
+        }, [before, listed](Ctx&) {
+            // Pass or fail: the presets this test saved go (project/presets is tracked).
+            if (!*listed) return;
+            *listed = false;
+            std::error_code ec;
+            for (const std::string& p : InspListDir(InspPresetDir()))
+                if (!before->count(p)) std::filesystem::remove(p, ec); // the .preset and any .meta the scan made
         });
     }
 
