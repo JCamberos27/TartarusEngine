@@ -719,6 +719,7 @@ void AssetLibrary::AppendFolder(const std::string& path) {
 std::string AssetLibrary::AddFolderPath(const std::string& dir) {
     if (dir.empty()) return {};
     if (HasFolder(dir)) return dir; // the common case
+    if (IsRemovedDiskFolder(dir)) return dir; // deleted in the browser: its files are still on disk, the folder stays out
     // Walk the directories top-down, reusing "Shaders" for "shaders" and so on.
     std::string folder;
     for (size_t start = 0; start <= dir.size();) {
@@ -742,6 +743,12 @@ bool AssetLibrary::IsDiskFolder(const std::string& folderPath) {
 }
 
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
+    if (!m_RemovedDiskFolders.empty()) {
+        // Made again (or put back by an undo): it and the folders above it are listed from their files again.
+        const std::string key = LowerFolderKey(folderPath);
+        m_RemovedDiskFolders.erase(std::remove_if(m_RemovedDiskFolders.begin(), m_RemovedDiskFolders.end(),
+            [&](const std::string& r) { return key == r || key.rfind(r + "/", 0) == 0; }), m_RemovedDiskFolders.end());
+    }
     if (!HasFolder(folderPath)) {
         AppendFolder(folderPath);
         // A folder that is a real project directory is found again on every load (AddFolderPath),
@@ -785,9 +792,30 @@ void AssetLibrary::EraseFolder(const std::string& folderPath) {
     PersistFolders();
 }
 
+bool AssetLibrary::IsRemovedDiskFolder(const std::string& folderPath) {
+    if (m_RemovedDiskFolders.empty()) return false;
+    const std::string key = LowerFolderKey(folderPath);
+    for (auto it = m_RemovedDiskFolders.begin(); it != m_RemovedDiskFolders.end(); ++it) {
+        if (key != *it && key.rfind(*it + "/", 0) != 0) continue;
+        if (IsDiskFolder(*it)) return true;
+        m_RemovedDiskFolders.erase(it); // its directory is gone: a new one by that name is listed as usual
+        return false;
+    }
+    return false;
+}
+
+void AssetLibrary::NoteRemovedDiskFolder(const std::string& folderPath) {
+    if (!IsDiskFolder(folderPath)) return; // a browser-only folder never comes back by itself
+    const std::string key = LowerFolderKey(folderPath);
+    for (const std::string& r : m_RemovedDiskFolders)
+        if (key == r || key.rfind(r + "/", 0) == 0) return; // already under a mark
+    m_RemovedDiskFolders.push_back(key);
+}
+
 void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     EraseFolder(folderPath);
+    NoteRemovedDiskFolder(folderPath);
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
 
@@ -823,6 +851,7 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
     FolderIndexDirty();
     m_SavedFolders.erase(std::remove_if(m_SavedFolders.begin(), m_SavedFolders.end(), underFolder), m_SavedFolders.end());
     PersistFolders();
+    NoteRemovedDiskFolder(folderPath);
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
 

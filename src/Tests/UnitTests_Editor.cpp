@@ -454,6 +454,43 @@ void TestAssetFoldersPersistOnlyUserFolders() {
     ProjectSettings::SetAssetFolders(before);
     { std::ofstream out(path,std::ios::binary|std::ios::trunc); out<<original; }
 }
+// Delete Folder takes a folder out of the browser and leaves its files on disk. An asset-index scan that lands
+// afterwards (AddFolderPath per file directory) listed it again within a second, so the delete undid itself.
+void TestDeletedDiskFolderStaysOut() {
+    namespace fs=std::filesystem;
+    const std::string top="unit-removed-folder";
+    const std::string sub=top+"/Sub";
+    std::error_code ec;
+    fs::create_directories(fs::u8path(ProjectPaths::Resolve(sub)),ec);
+    CHECK(!ec);
+    auto listed=[](AssetLibrary& a,const std::string& f){ return std::find(a.Folders().begin(),a.Folders().end(),f)!=a.Folders().end(); };
+    {
+        AssetLibrary assets;
+        CHECK(assets.AddFolderPath(sub)==sub);
+        CHECK(listed(assets,top)&&listed(assets,sub));
+        assets.DeleteFolderRecursive(top);
+        CHECK(!listed(assets,top)&&!listed(assets,sub));
+        CHECK(assets.IsRemovedDiskFolder(sub));
+        // A scan that started before the delete lands after it: the files are still on disk.
+        CHECK(assets.AddFolderPath(sub)==sub);
+        CHECK(assets.AddFolderPath(top)==top);
+        CHECK(assets.AddFolderPath("UNIT-Removed-Folder/sub")=="UNIT-Removed-Folder/sub"); // another case of it
+        CHECK(!listed(assets,top)&&!listed(assets,sub));
+        // Undo puts the folders back through CreateFolder: listed from their files again.
+        assets.CreateFolder(top);
+        CHECK(!assets.IsRemovedDiskFolder(sub));
+        CHECK(assets.AddFolderPath(sub)==sub);
+        CHECK(listed(assets,top)&&listed(assets,sub));
+        // Deleted again, then the directory goes from disk: a new folder by that name is listed as usual.
+        assets.DeleteFolderRecursive(top);
+        CHECK(assets.IsRemovedDiskFolder(top));
+        fs::remove_all(fs::u8path(ProjectPaths::Resolve(top)),ec);
+        CHECK(!assets.IsRemovedDiskFolder(top));
+        CHECK(assets.AddFolderPath(sub)==sub);
+        CHECK(listed(assets,top)&&listed(assets,sub));
+    }
+    fs::remove_all(fs::u8path(ProjectPaths::Resolve(top)),ec);
+}
 // #15 - an outfit landing (OutfitSystem::UpdatePending) makes the next frame's baseline the whole scene. Right
 // before one, a change made without an undo step is journaled - but not the outfits' own pieces moving or
 // coming and going (UpdateAttachments places rigid head wear on the frames after a landing), there or at Undo. The outfit
@@ -734,6 +771,7 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("CurveWheelCapture",TestCurveWheelCapture);
     tests.emplace_back("UndoTriggerSkipsNavigation",TestUndoTriggerSkipsNavigation);
     tests.emplace_back("Asset folders: only the user's are saved to project settings",TestAssetFoldersPersistOnlyUserFolders);
+    tests.emplace_back("Asset folders: a folder deleted in the browser stays out while its files are on disk",TestDeletedDiskFolderStaysOut);
     tests.emplace_back("Outfit landing: an unrecorded change before it stays its own undo step",TestOutfitLandingKeepsUnrecordedChange);
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);

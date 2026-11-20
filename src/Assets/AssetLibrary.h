@@ -196,6 +196,8 @@ public:
     // subfolder itself. Real, irreversible-except-via-undo data loss if misused, which is why
     // the Asset Browser only offers this behind a confirmation dialog.
     void DeleteFolderRecursive(const std::string& folderPath);
+    // True while folderPath (or a folder above it) was deleted in the browser but its directory is still on disk.
+    bool IsRemovedDiskFolder(const std::string& folderPath);
     const std::vector<std::string>& Folders() const { return m_Folders; }
     // Fired after a folder is renamed / moved (newPath = where it went) or deleted (newPath "") -
     // for data keyed by folder path elsewhere (Editor Enhancers folder styles and bookmarks).
@@ -372,6 +374,11 @@ private:
     std::unordered_map<std::string, size_t> m_FolderIndex;
     bool m_FolderIndexValid = false;
     void FolderIndexDirty() { m_FolderIndexValid = false; }
+    // Folders deleted in the browser (lower-cased) whose directory stayed on disk: Delete Folder only takes a folder
+    // out of the browser, so AddFolderPath (asset-index landings, async loads) must not list it again from the files
+    // still in it. A mark goes when the folder is made again (CreateFolder, an undo) or its directory is gone.
+    std::vector<std::string> m_RemovedDiskFolders;
+    void NoteRemovedDiskFolder(const std::string& folderPath);
     const std::string* FindFolderNoCase(const std::string& path);
     bool HasFolder(const std::string& path);
     void AppendFolder(const std::string& path);
