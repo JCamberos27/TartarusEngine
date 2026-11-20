@@ -73,7 +73,7 @@ Every scene with the AK/870 player loadout has it.
 ## Headless test
 
 ```
-TARTARUS_HIDDEN=1 build/Release/TartarusEngine.exe --npc-test revolver --smoke-shots <dir>
+build/Release/TartarusEngine.exe --npc-test revolver --smoke-shots <dir>
 ```
 
 `src/Game/AI/NpcTest_Revolver.cpp`, 77 s in the WeaponLab: ADS (the sight line is logged), two sights-up
