@@ -116,13 +116,10 @@ void FirstPersonBody::Fail(const std::string& message) {
 bool FirstPersonBody::Restart(World& world, Player& player) {
     FirstPersonBodyMotion carry = m_Mm; // (Stop clears m_Mm)
     Stop(world);
-    m_Carry = &carry;
-    const bool ok = Start(world, player);
-    m_Carry = nullptr;
-    return ok;
+    return Start(world, player, &carry);
 }
 
-bool FirstPersonBody::Start(World& world, Player& player) {
+bool FirstPersonBody::Start(World& world, Player& player, const FirstPersonBodyMotion* carry) {
     *this = FirstPersonBody{};
     BodyDebug::Info() = BodyDebug::Snapshot{};
     auto& reg = world.Registry;
@@ -319,7 +316,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
             if (m_Pieces[k] == m_Driver) driverIndex = k;
         std::string error;
         m_Mm.SetDebug(MmPlayerDebug::Wanted() ? &MmPlayerDebug::Info() : nullptr); // the player's (--npc-test reads it)
-        if (!m_Mm.Start(m_Models, driverIndex, error, m_Carry)) {
+        if (!m_Mm.Start(m_Models, driverIndex, error, carry)) {
             // (CI has no licensed assets: no body there - a warning, never an error.) Everything set up above is undone - the
             // pieces' tags and hidden bones, the world twins (which would stand frozen in the bind pose), the player's speeds -
             // so the scene plays as if there were no body.

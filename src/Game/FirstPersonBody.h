@@ -116,7 +116,8 @@ public:
     // Finds the scene's First Person Body and takes it over. False (and every call below a
     // no-op) when there is none or it can't run (the reason is logged). Sets the player's move speeds
     // to the body's Run / Sprint speeds, so the input asks the blend tree for what it has.
-    bool Start(World& world, Player& player);
+    // `carry`: a stopped body's motion to play on from (Restart).
+    bool Start(World& world, Player& player, const FirstPersonBodyMotion* carry = nullptr);
     // Stop + Start, the motion playing on from where it was (OutfitChanged: the new pieces, the same motion).
     bool Restart(World& world, Player& player);
     // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).
@@ -176,7 +177,6 @@ private:
     void TickMotionMatching(World& world, const Player& player, const FirstPersonBodyComponent& cfg, float dt);
     void UpdateGaitPhase(const Player& player, float dt);
     FirstPersonBodyMotion m_Mm;
-    const FirstPersonBodyMotion* m_Carry = nullptr; // Restart's motion, for the Start it makes
     Player::DirectionalSpeeds m_MmSpeeds; // the gait table's speeds, for the capsule (BeforePlayerMove)
     void Fail(const std::string& message);
     void ApplySpineAim(const Camera& camera, float amount, float twist);
