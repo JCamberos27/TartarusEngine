@@ -286,24 +286,6 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
     return LoadFromJson(world, assets, root);
 }
 
-std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::string& loadedText, const AssetLibrary& assets) {
-    json live;
-    live["hasAssetLibrarySnapshot"] = true;
-    AppendAssetLibraryJson(live, assets, /*includeAssetMetadata=*/true);
-    bool same = true;
-    for (const char* k : kLibraryKeys) {
-        const bool inLoaded = loaded.contains(k), inLive = live.contains(k);
-        if (inLoaded != inLive || (inLoaded && loaded.at(k) != live.at(k))) { same = false; break; }
-    }
-    if (same) return loadedText;
-    json out = loaded;
-    for (const char* k : kLibraryKeys) {
-        out.erase(k);
-        if (const auto it = live.find(k); it != live.end()) out[k] = *it;
-    }
-    return out.dump();
-}
-
 bool SceneSerializer::LoadFromJson(World& world, AssetLibrary& assets, const json& root) {
     OutfitSystem::CancelPending(world); // the registry is about to be replaced
     struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
