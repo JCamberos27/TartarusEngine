@@ -166,16 +166,19 @@ bool RetargetBakeClip(const std::vector<AnimNode>& source, const AnimationClip& 
     // Unmatched bones between a matched bone and a matched one below it share their turns by depth.
     std::vector<int> lower(n, -1);
     std::vector<float> frac(n, 0.0f);
+    std::vector<std::vector<int>> children(n); // each node's non-IK children, in node order (the old scan's order)
+    for (int c = 0; c < n; ++c)
+        if (target[c].Parent >= 0 && target[c].Parent < n && !IsIkBone(target[c].Name)) children[target[c].Parent].push_back(c);
+    std::vector<int> queue;
     for (int i = 0; i < n; ++i) {
         if (match[i] >= 0 || matchedAncestor[i] < 0 || IsIkBone(target[i].Name)) continue;
         int found = -1; // the first matched node below i, breadth first
-        std::vector<int> queue{i};
+        queue.assign(1, i);
         for (size_t q = 0; q < queue.size() && found < 0; ++q)
-            for (int c = 0; c < n; ++c)
-                if (target[c].Parent == queue[q] && !IsIkBone(target[c].Name)) {
-                    if (match[c] >= 0) { found = c; break; }
-                    queue.push_back(c);
-                }
+            for (int c : children[queue[q]]) {
+                if (match[c] >= 0) { found = c; break; }
+                queue.push_back(c);
+            }
         if (found < 0) continue;
         const int a = matchedAncestor[i];
         lower[i] = found;
@@ -255,7 +258,7 @@ bool RetargetBakeClip(const std::vector<AnimNode>& source, const AnimationClip& 
             if (moves[i])
                 pos = PositionOf(tgtRest[i]) + fm * (PositionOf(srcNow[match[i]]) - PositionOf(srcRest[match[i]])) * k;
             tgtNow[i] = glm::translate(glm::mat4(1.0f), pos) * glm::mat4_cast(rot[i]) * glm::scale(glm::mat4(1.0f), ScaleOf(tgtRest[i]));
-            const glm::mat4 local = p >= 0 ? glm::inverse(tgtNow[p]) * tgtNow[i] : tgtNow[i];
+            const glm::mat4 local = p >= 0 ? AffineMul(AffineInverse(tgtNow[p]), tgtNow[i]) : tgtNow[i];
             BoneAnimChannel& ch = out.Channels[nodeChannel[i]];
             glm::quat r = RotationOf(local);
             if (!ch.Rotations.empty() && glm::dot(ch.Rotations.back().Value, r) < 0.0f) r = -r; // keep keys on one hemisphere

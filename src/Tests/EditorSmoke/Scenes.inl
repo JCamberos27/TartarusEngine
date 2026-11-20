@@ -123,9 +123,9 @@ void RegisterScenesTests() {
             // Allowed first: the previous scene's async loads can still log while FreshScene runs.
             Do("allow errors naming the external files missing here", [](Ctx&) {
                 for (const std::string& name : MissingExternalFiles()) g_AllowLog.push_back(name);
-                // Logged without a file name when the soldier's (external) body meshes are missing.
+                // Logged without a file name when the Dummy's (external) body meshes are missing.
                 if (!MissingExternalFiles().empty())
-                    g_AllowLog.push_back("Enemy AI: the soldier's body has no animated skeleton");
+                    g_AllowLog.push_back("Dummies: the body has no animated skeleton");
             }),
             FreshScene(), Wait(2),
             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }), Wait(2),

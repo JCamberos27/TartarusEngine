@@ -1,4 +1,5 @@
 #include "GpuMemTrack.h"
+#include "CubeFaces.h"
 #include "ReflectionProbeCapture.h"
 #include "HdrTarget.h"
 #include "IblProbe.h"
@@ -63,10 +64,10 @@ bool ReflectionProbeCapture::Busy() const { return m_Cap.Slot >= 0 || m_Pre.Slot
 glm::mat4 ReflectionProbeCapture::FaceView(const glm::vec3& pos, int face) {
     // GL cube faces with the up vectors that make a plain render land in the face as the sampler reads it (the
     // face's t axis runs down world -Y on the four sides). Each is a pure rotation, so winding and culling hold.
-    static const glm::vec3 kDir[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
-    static const glm::vec3 kUp[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
     face = std::clamp(face, 0, 5);
-    return glm::lookAt(pos, pos + kDir[face], kUp[face]);
+    const CubeFaces::FaceBasis& f = CubeFaces::kFaces[face];
+    const glm::vec3 dir(f.forward[0], f.forward[1], f.forward[2]), up(f.up[0], f.up[1], f.up[2]);
+    return glm::lookAt(pos, pos + dir, up);
 }
 
 glm::mat4 ReflectionProbeCapture::FaceProj() { return glm::perspective(glm::radians(90.0f), 1.0f, 0.05f, 1000.0f); }
@@ -114,8 +115,10 @@ void ReflectionProbeCapture::EnsureCaptureCubes() {
 }
 
 void ReflectionProbeCapture::Sync(ReflectionProbeArray& probes, bool environmentReady, double nowSeconds) {
-    std::vector<Volume> want;
-    std::vector<int> slotOf(probes.Count(), -1);
+    std::vector<Volume>& want = m_Want;
+    std::vector<int>& slotOf = m_SlotOf;
+    want.clear();
+    slotOf.assign((std::size_t)probes.Count(), -1);
     for (int i = 0; i < probes.Count(); ++i) {
         const ReflectionProbeArray::ProbeVolume v = probes.Volume(i);
         if (!v.Capture) continue;
@@ -149,8 +152,8 @@ void ReflectionProbeCapture::Sync(ReflectionProbeArray& probes, bool environment
     }
     s_RecaptureAt.clear();
 
-    std::vector<Volume> have;
-    have.reserve(m_Slots.size());
+    std::vector<Volume>& have = m_Have;
+    have.clear();
     for (const Slot& s : m_Slots) have.push_back(s.Vol);
     if (!SameVolumes(have, want)) {
         if (!SameVolumes(m_Pending, want)) {

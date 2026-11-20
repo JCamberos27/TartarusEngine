@@ -80,6 +80,13 @@ private:
     // `skipPlayer`, and folds each static one's hash into `sig`. Returns whether any visible caster is dynamic.
     bool CollectLocalCasters(const Frustum* frustum, const AABB* range, bool skipPlayer, int turnSlot, std::uint64_t frame,
                              std::uint64_t& sig);
+    // The spot and point passes' shared steps. Begin: depth on, back faces culled (the light-facing surface), the local
+    // depth program bound; returns its light uniforms. Draw: m_Visible's animated (or static) casters, those outside
+    // `clip` (a point light's face) skipped. End: the state both leave behind.
+    struct LocalPassLocs { int ViewProj = -1, LightPos = -1, Far = -1; };
+    LocalPassLocs BeginLocalPass(Shader& shader);
+    void DrawLocalCasters(Shader& shader, bool animatedOnes, const Frustum* clip);
+    static void EndLocalPass(const ShadowFrameInputs& in);
 
     // Sun
     struct SunFit { std::uint64_t frame = ~0ull; glm::mat4 view{0.0f}, proj{0.0f}; };

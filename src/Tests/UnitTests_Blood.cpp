@@ -1286,7 +1286,6 @@ void Test_KnifeFx_Library() {
     std::error_code ec;
     std::filesystem::remove(path, ec);
 }
-} // namespace
 
 // The blood palette: a person's is exactly what it was before palettes were per body (the constants every stain and
 // spray was drawn with), palette 0 is a person's, and anything unknown falls back to it; the ichor (a second palette) is yellow-green.
@@ -1308,6 +1307,8 @@ void Test_Blood_PaletteHumanUnchanged() {
     CHECK(i.Dried.g < i.Fresh.g * 0.3f);                           // darker dried: olive
     CHECK(i.FilmOpacity < 1.0f);                                    // a little translucent
 }
+
+} // namespace
 
 void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::HalfAndOct", Test_Blood_HalfAndOct});

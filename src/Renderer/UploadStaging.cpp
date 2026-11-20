@@ -1,7 +1,9 @@
 #include "UploadStaging.h"
+#include "GpuMemTrack.h"
 #include "gl.h"
 #include "ProjectSettings.h"
 #include "Core/Env.h"
+#include "Core/TimeService.h"
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -85,6 +87,7 @@ bool EnsureRing() {
     glCreateBuffers(1, &r.Buffer);
     glNamedBufferStorage(r.Buffer, (GLsizeiptr)kCapacity, nullptr, flags);
     r.Base = static_cast<unsigned char*>(glMapNamedBufferRange(r.Buffer, 0, (GLsizeiptr)kCapacity, flags));
+    if (r.Base) GpuMemTrack::Set("UploadStaging ring (pinned system memory)", kCapacity);
     if (!r.Base) {
         std::fprintf(stderr, "[UploadStaging] could not map the staging ring - uploading from memory as before\n");
         glDeleteBuffers(1, &r.Buffer);
@@ -196,4 +199,36 @@ void UploadStaging::Abandon(Region& reg) {
     if (!reg.Valid()) return;
     while (reg.Queued && !reg.Ready()) std::this_thread::yield(); // the worker is mid-copy into it: let it finish first
     Retire(reg);
+}
+
+std::size_t MappedRing::Take(std::size_t size) {
+    constexpr std::size_t kNone = ~std::size_t(0);
+    if (size == 0 || size > m_Bytes / 4 || m_Failed) return kNone;
+    if (!m_Base) {
+        GLint align = 0;
+        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &align);
+        if (align <= 0 || 256 % align != 0) { m_Failed = true; return kNone; } // RingFit places at multiples of 256
+        const GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+        glCreateBuffers(1, &m_Buffer);
+        glNamedBufferStorage(m_Buffer, (GLsizeiptr)m_Bytes, nullptr, flags);
+        m_Base = static_cast<unsigned char*>(glMapNamedBufferRange(m_Buffer, 0, (GLsizeiptr)m_Bytes, flags));
+        if (!m_Base) {
+            glDeleteBuffers(1, &m_Buffer);
+            m_Buffer = 0;
+            m_Failed = true;
+            return kNone;
+        }
+        GpuMemTrack::Set(GpuMemTrack::Key(m_Name, this), m_Bytes);
+    }
+    const std::uint64_t frame = Time::FrameCount();
+    std::size_t old = 0;
+    while (old < m_Spans.size() && frame - m_Spans[old].Frame > m_SafeFrames) ++old;
+    m_Spans.erase(m_Spans.begin(), m_Spans.begin() + (std::ptrdiff_t)old);
+    const bool empty = m_Spans.empty();
+    const std::size_t tail = empty ? m_Head : m_Spans.front().Start;
+    const std::size_t at = UploadStaging::RingFit(m_Bytes, m_Head, tail, empty, size);
+    if (at == kNone) return kNone;
+    m_Spans.push_back({at, frame});
+    m_Head = at + size;
+    return at;
 }

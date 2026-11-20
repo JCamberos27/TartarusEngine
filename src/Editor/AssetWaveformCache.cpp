@@ -32,16 +32,10 @@ void AssetWaveformCache::Worker() {
 }
 
 const std::vector<float>* AssetWaveformCache::Get(const std::string& path) {
-    auto it = m_Entries.find(path);
-    if (it != m_Entries.end()) {
-        m_Lru.splice(m_Lru.begin(), m_Lru, it->second.Lru);
-        return it->second.Pending ? nullptr : &it->second.Peaks;
-    }
+    if (const Entry* found = m_Entries.Find(path)) return found->Pending ? nullptr : &found->Peaks;
     Entry e;
     const unsigned ticket = e.Ticket = m_NextTicket++;
-    m_Lru.push_front(path);
-    e.Lru = m_Lru.begin();
-    m_Entries.emplace(path, std::move(e));
+    m_Entries.Insert(path, std::move(e));
     {
         std::lock_guard<std::mutex> lk(m_Mutex);
         m_Jobs.push_front({path, ticket});
@@ -49,11 +43,11 @@ const std::vector<float>* AssetWaveformCache::Get(const std::string& path) {
             // Forget the dropped request too, so asking again re-queues it.
             const std::string dropped = m_Jobs.back().Path;
             m_Jobs.pop_back();
-            if (auto d = m_Entries.find(dropped); d != m_Entries.end() && d->second.Pending) Remove(d);
+            if (const Entry* d = m_Entries.Peek(dropped); d && d->Pending) m_Entries.Erase(dropped);
         }
     }
     m_Wake.notify_one();
-    if (m_Entries.size() > kMaxEntries) Remove(m_Entries.find(m_Lru.back()));
+    m_Entries.TrimTo(kMaxEntries);
     return nullptr;
 }
 
@@ -65,24 +59,17 @@ void AssetWaveformCache::Pump() {
         done.swap(m_Done);
     }
     for (Result& r : done) {
-        auto it = m_Entries.find(r.Path);
-        if (it == m_Entries.end() || !it->second.Pending || it->second.Ticket != r.Ticket) continue; // evicted / superseded
-        it->second.Pending = false;
-        it->second.Peaks = std::move(r.Peaks);
+        Entry* e = m_Entries.Peek(r.Path);
+        if (!e || !e->Pending || e->Ticket != r.Ticket) continue; // evicted / superseded
+        e->Pending = false;
+        e->Peaks = std::move(r.Peaks);
     }
 }
 
-void AssetWaveformCache::Remove(std::unordered_map<std::string, Entry>::iterator it) {
-    if (it == m_Entries.end()) return;
-    m_Lru.erase(it->second.Lru);
-    m_Entries.erase(it);
-}
-
-void AssetWaveformCache::Invalidate(const std::string& path) { Remove(m_Entries.find(path)); }
+void AssetWaveformCache::Invalidate(const std::string& path) { m_Entries.Erase(path); }
 
 void AssetWaveformCache::Clear() {
-    m_Entries.clear();
-    m_Lru.clear();
+    m_Entries.Clear();
     std::lock_guard<std::mutex> lk(m_Mutex);
     m_Jobs.clear();
     m_Done.clear();

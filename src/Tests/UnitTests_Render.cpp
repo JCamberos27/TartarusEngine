@@ -9,6 +9,10 @@
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
 #include "../Renderer/LightBuffer.h"
+#include "../Renderer/PointShadowMap.h"
+#include "../Renderer/SpotShadowMap.h"
+#include "../Renderer/DecalTypes.h"
+#include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
 #include "../Renderer/ReflectionProbeCapture.h"
 #include "../Renderer/GIData.h"
@@ -227,8 +231,6 @@ void HiZPieces() {
     CHECK(HiZCuller::FoliageSway(0.15f) > 0.3f);
 }
 
-// Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
-// colour, queue or slot count keeps them apart, and the hash agrees with the comparison.
 // UploadStaging's ring: blocks go after the head, wrap to the start up to the oldest live block, and never overlap it.
 void UploadStagingRing() {
     constexpr std::size_t kNone = ~std::size_t(0);
@@ -251,6 +253,8 @@ void AssetPumpBudget() {
     CHECK(AssetLibrary::PumpBudgetMs(true, false, 1.0) == 3.0);   // lots of headroom: capped
 }
 
+// Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
+// colour, queue or slot count keeps them apart, and the hash agrees with the comparison.
 void InstanceSlots() {
     Material::NextHashFrame();
     auto mat = [](glm::vec3 colour) {
@@ -355,8 +359,6 @@ void TaaAndWetnessRoundTrip() {
         for (int r = 0; r < 4; ++r) CHECK(std::abs(back[c][r] - proj[c][r]) < 1e-6f);
 }
 
-// Volumetric fog settings and a light's Volumetric Intensity save and load; a scene saved before
-// they existed loads with the fog off and every light at 1.
 // The scene's one wind (SkySettings Wind*): the settings round-trip, an older scene gets the defaults, plants and clouds
 // share the bearing convention (toward the bearing; north = -Z), and the culling margin grows with the scene strength.
 void SceneWindSettings() {
@@ -399,6 +401,8 @@ void SceneWindSettings() {
     CHECK(HiZCuller::FoliageSway(0.0f, 0.0f) == 0.0f);
 }
 
+// Volumetric fog settings and a light's Volumetric Intensity save and load; a scene saved before
+// they existed loads with the fog off and every light at 1.
 void VolumetricSettingsRoundTrip() {
     AssetLibrary assets;
     World world;
@@ -534,8 +538,6 @@ void FurMaterialRoundTrip() {
     std::filesystem::remove_all(dir, ec);
 }
 
-} // namespace
-
 // Reflection probe room captures: each cube face's view looks down its GL face axis and is a pure rotation (culling
 // holds); only probes whose volume changed are queued again. Puddle SSR: off by default, saved only when on, and a
 // probe's Capture Scene defaults on and survives a save.
@@ -618,6 +620,33 @@ void GISphericalHarmonics() {
 
 // A synthetic bake: probes lit by the analytic falloff of a point at the box's +X end. Grid, lookup, fade, file
 // round trip, the invalid-probe fill and the GIVolumes gather with circuit weights.
+// Shader constants that mirror C++ ones: each GLSL copy matches its C++ source, so a change to one side that misses
+// the other fails here instead of reading out of range on the GPU.
+void ShaderConstantsMatch() {
+    auto src = [](const char* name) {
+        std::ifstream in(EnginePaths::Resolve(std::string("assets/shaders/") + name), std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    auto has = [](const std::string& text, const std::string& line) { return text.find(line) != std::string::npos; };
+    const std::string grid = src("ClusterGrid.glsl"), cull = src("ClusterCull.comp.glsl");
+    const std::string decal = src("ClusterDecalCull.comp.glsl"), shading = src("ModelShading.glsl");
+    const std::string fog = src("VolumetricInject.comp.glsl");
+    if (grid.empty() || cull.empty() || decal.empty() || shading.empty() || fog.empty()) {
+        UnitTestSupport::Skip("no shaders next to the exe");
+        return;
+    }
+    const auto n = [](int v) { return std::to_string(v); };
+    CHECK(has(grid, "const uint C_GX = " + n(ClusterGrid::GRID_X) + "u, C_GY = " + n(ClusterGrid::GRID_Y) + "u, C_GZ = " +
+                        n(ClusterGrid::GRID_Z) + "u;"));
+    CHECK(has(cull, "const uint GLOBAL_CAPACITY = " + n(ClusterGrid::GLOBAL_INDEX_CAPACITY) + "u;"));
+    CHECK(has(cull, "const uint MAX_LIGHTS = " + n(LightBuffer::kMaxLights) + "u;"));
+    CHECK(has(decal, "const uint MAX_PER_CLUSTER = " + n(Decals::MAX_PER_CLUSTER) + "u;"));
+    for (const std::string* text : {&shading, &fog}) {
+        CHECK(has(*text, "uniform mat4 uSpotShadowVP[" + n(SpotShadowMap::kMaxSpots) + "];"));
+        CHECK(has(*text, "uniform float uPointShadowFar[" + n(PointShadowMap::kMaxPoints) + "];"));
+    }
+}
+
 void GIVolumeLookup() {
     // Box, grid and fade.
     const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(2, 1, -3)), glm::radians(90.0f), glm::vec3(0, 1, 0));
@@ -797,9 +826,12 @@ void GIVolumeLookup() {
     CHECK(n == 1);
 }
 
+} // namespace
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
     tests.push_back({"GI: volume lookup, bake file, weights follow circuits", GIVolumeLookup});
+    tests.push_back({"Shader constants match their C++ sources", ShaderConstantsMatch});
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});

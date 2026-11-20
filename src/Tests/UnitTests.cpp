@@ -1873,7 +1873,12 @@ void TestTextureCacheVariants() {
     TextureCache::Store(src, b, ib);
     CHECK(TextureCache::Load(src, a, out) && out.Pixels.size() == 16 && out.Pixels[0] == 7);
     CHECK(TextureCache::Load(src, b, out) && out.Pixels.size() == 16 && out.Pixels[0] == 9);
+    // The entries land in the project's real Library/Textures: remove exactly the two this test wrote.
+    const std::string pa = TextureCache::EntryPath(src, a), pb = TextureCache::EntryPath(src, b);
+    CHECK(pa != pb);
     std::error_code ec;
+    CHECK(std::filesystem::remove(std::filesystem::path(pa), ec));
+    CHECK(std::filesystem::remove(std::filesystem::path(pb), ec));
     std::filesystem::remove(src, ec);
 }
 

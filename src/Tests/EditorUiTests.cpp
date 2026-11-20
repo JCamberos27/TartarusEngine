@@ -67,6 +67,8 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include <mutex>
 #include <set>
 #include <string>
+#include <future>
+#include <memory>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -214,6 +216,9 @@ struct EditorUiTestAccess {
     static int& FavPage(EditorLayer& e) { return e.m_FavPage; }
     static bool& InspectorLocked(EditorLayer& e) { return e.m_InspectorLocked; }
     static std::string& CurrentFolder(EditorLayer& e) { return e.m_CurrentAssetFolder; }
+    // The Asset Browser's project index (what lists prefabs, controllers and other unlisted files) is
+    // waiting to rescan or still scanning. With the Drive assets linked it is ~11.6k files.
+    static bool AssetIndexBusy(EditorLayer& e) { return !e.m_ProjectAssetIndex.valid || e.m_ProjectAssetIndex.scan.valid(); }
     static void NavigateFolder(EditorLayer& e, const std::string& f) { e.NavigateAssetFolder(f); }
     static std::string SceneKey(EditorLayer& e) { return e.CurrentSceneKey(); }
     // The motion demo.
@@ -302,6 +307,14 @@ std::chrono::steady_clock::time_point g_TestStart;
 // thread names the test and step whenever no frame has finished for a minute or one test has run
 // for 3 minutes, and aborts the run (CrashHandler writes a minidump with every thread's stack)
 // when frames have stopped for 4 minutes or the run passes TARTARUS_EDITOR_TEST_DEADLINE minutes.
+// EditorUiTests::SetRunEndHook. Run under its mutex, so clearing it waits for a call in progress.
+std::mutex g_RunEndMutex;
+std::function<void()> g_RunEndHook;
+void RunEndHook() {
+    std::lock_guard<std::mutex> lk(g_RunEndMutex);
+    if (g_RunEndHook) g_RunEndHook();
+}
+
 namespace watchdog {
 extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
 extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
@@ -341,6 +354,7 @@ void Start() {
                 else if (now - doneAt >= std::chrono::seconds(60)) {
                     std::printf("[EditorTest] WATCHDOG: the editor hasn't exited a minute after the summary - ending it\n");
                     std::fflush(stdout);
+                    RunEndHook();
                     TerminateProcess(GetCurrentProcess(), g_Failed == 0 && g_Passed > 0 ? 0u : 1u);
                 }
                 continue;
@@ -368,6 +382,7 @@ void Start() {
                 std::printf("[EditorTest] WATCHDOG: %s - aborting in %s (frame %llu) for a crash dump\n",
                             hung ? "frames stopped for 4 minutes" : "past TARTARUS_EDITOR_TEST_DEADLINE", where.c_str(), (unsigned long long)frames);
                 std::fflush(stdout);
+                RunEndHook();
                 std::abort();
             }
             std::fflush(stdout);
@@ -1862,6 +1877,20 @@ bool Enabled() { return g_Enabled; }
 
 int ExitCode() { return g_Failed == 0 && g_Passed > 0 ? 0 : 1; }
 
+void SetRunEndHook(std::function<void()> hook) {
+    std::lock_guard<std::mutex> lk(g_RunEndMutex);
+    g_RunEndHook = std::move(hook);
+}
+
+// The last screenshot's PNG write. Encoding a full-window PNG took the test thread 100+ ms per shot (a
+// few hundred shots a run); it now runs beside the next frames, one at a time (PngWrite is serialized
+// anyway), and the summary waits for the last one.
+static std::future<void> g_ShotWrite;
+
+static void FinishShotWrite() {
+    if (g_ShotWrite.valid()) g_ShotWrite.get();
+}
+
 bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera& camera) {
     if (!g_Enabled) return true;
     if (g_Done) return true;
@@ -2035,7 +2064,9 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     if (g_Skipped) std::cout << ", " << g_Skipped << " filtered out";
     if (g_ShardCount > 1) std::cout << " (shard " << g_ShardIndex << "/" << g_ShardCount << ")";
     std::cout << std::endl;
+    FinishShotWrite(); // the report links every shot
     WriteReport();
+    RunEndHook(); // also covers a teardown that later hangs and is cut short
     return true;
 }
 
@@ -2047,14 +2078,19 @@ void AfterFrame(int fbWidth, int fbHeight) {
     std::vector<unsigned char> px((size_t)fbWidth * fbHeight * 4);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadPixels(0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-    std::vector<unsigned char> top(px.size());
+    auto shot = std::make_shared<std::vector<unsigned char>>(px.size());
+    std::vector<unsigned char>& top = *shot; // read below by the blank checks and by the PNG worker (neither writes it)
     for (int y = 0; y < fbHeight; ++y)
         std::memcpy(&top[(size_t)y * fbWidth * 4], &px[(size_t)(fbHeight - 1 - y) * fbWidth * 4], (size_t)fbWidth * 4);
     for (size_t i = 3; i < top.size(); i += 4) top[i] = 255;
     const std::filesystem::path out = std::filesystem::path(g_ShotDir) / (rel + ".png");
     std::error_code ec;
     std::filesystem::create_directories(out.parent_path(), ec);
-    PngWrite::ToFile(out.u8string(), fbWidth, fbHeight, 4, top.data(), fbWidth * 4);
+    FinishShotWrite();
+    g_ShotWrite = std::async(std::launch::async, [shot, path = out.u8string(), fbWidth, fbHeight] {
+        if (!PngWrite::ToFile(path, fbWidth, fbHeight, 4, shot->data(), fbWidth * 4))
+            std::cout << "[EditorTest] WARNING: could not write " << path << std::endl;
+    });
     if (g_ShotForLastReport && !g_Reports.empty()) {
         g_Reports.back().Shots.push_back(rel + ".png");
         g_ShotForLastReport = false;

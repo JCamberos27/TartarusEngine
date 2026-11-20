@@ -10,16 +10,7 @@
 vec3 vWorldPos = vec3(0.0); // ModelShading's functions read it: here the sprite's fragment
 #include "ModelShading.glsl"
 
-struct FxSprite {
-    vec4 PosSize;
-    vec4 AxisRot;
-    vec4 Color;
-    vec4 Params;
-    ivec4 Tex;
-    ivec4 Info;
-    vec4 Extra;
-};
-layout(std430, binding = 10) readonly buffer FxSprites { FxSprite uSprites[]; };
+#include "FxSpriteCommon.glsl"
 
 layout(binding = 17) uniform sampler2D uSceneDepth;      // single-sample resolve of the scene so far
 layout(binding = 21) uniform sampler2DArray uFxColor;    // the sprite library (KnifeFxLibrary): BC3

@@ -251,7 +251,7 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
     }
     if (gpu.size() > m_SprayCapacity) {
         if (m_SprayBuffer) glDeleteBuffers(1, &m_SprayBuffer);
-        m_SprayCapacity = std::max<size_t>(gpu.size(), 32);
+        m_SprayCapacity = std::max<size_t>({gpu.size(), m_SprayCapacity * 2, 32}); // doubling: not a new buffer per spray
         glCreateBuffers(1, &m_SprayBuffer);
         glNamedBufferStorage(m_SprayBuffer, (GLsizeiptr)(m_SprayCapacity * sizeof(GpuSpray)), nullptr, GL_DYNAMIC_STORAGE_BIT);
     }
@@ -361,11 +361,15 @@ int BloodRenderer::DecalSet(const std::string& name) const {
 
 const DecalTextureArrays::Source* BloodRenderer::SetMaps(int set) {
     if (set < 0 || set >= (int)m_SetNames.size()) return nullptr;
-    if (m_SetSrc.size() != m_SetNames.size()) m_SetSrc.assign(m_SetNames.size(), nullptr);
+    if (m_SetSrc.size() != m_SetNames.size()) {
+        m_SetSrc.assign(m_SetNames.size(), nullptr);
+        m_SetKeys.clear();
+        for (const std::string& n : m_SetNames) m_SetKeys.push_back("blood_" + n + "_" + kMapsVersion);
+    }
     if (m_SetSrc[(size_t)set]) return m_SetSrc[(size_t)set];
-    const std::string name = m_SetNames[set];
-    const std::string dir = m_SetDir;
-    return m_SetSrc[(size_t)set] = GeneratedDecalMaps::Get().Find("blood_" + name + "_" + kMapsVersion, kSetTier, [name, dir]() -> GeneratedDecalMaps::Job {
+    const std::string& name = m_SetNames[set];
+    const std::string& dir = m_SetDir;
+    return m_SetSrc[(size_t)set] = GeneratedDecalMaps::Get().Find(m_SetKeys[(size_t)set], kSetTier, [name, dir]() -> GeneratedDecalMaps::Job {
         return [name, dir]() {
             namespace fs = std::filesystem;
             int nw = 0, nh = 0, nc = 0, mw = 0, mh = 0, mc = 0;
@@ -391,7 +395,8 @@ const DecalTextureArrays::Source* BloodRenderer::KnifeMaps(int knife, DecalBake:
     const int tier = std::min(size, 2048);
     const int cacheKey = knife * 4 + (int)mode;
     if (const auto it = m_KnifeSrc.find(cacheKey); it != m_KnifeSrc.end() && it->second) return it->second;
-    const std::string key = "knife_" + k->Name + "_" + ModeName(mode) + "_" + kMapsVersion;
+    std::string& key = m_KnifeKeys[cacheKey];
+    if (key.empty()) key = "knife_" + k->Name + "_" + ModeName(mode) + "_" + kMapsVersion;
     return m_KnifeSrc[cacheKey] = GeneratedDecalMaps::Get().Find(key, tier, [&, k, color, normal, size, mode]() -> GeneratedDecalMaps::Job {
         // Read the entry's layers back on this (the GL) thread; the worker re-packs them.
         auto rgba = std::make_shared<std::vector<uint8_t>>((size_t)size * size * 4);

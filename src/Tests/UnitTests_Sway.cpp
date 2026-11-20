@@ -36,7 +36,7 @@ void Settings() {
     WeaponProceduralSettings definition=WeaponProceduralSettings::Defaults(), parsed;
     definition.Sway.Unity=s;
     CHECK(WeaponProceduralSettings::FromJson(definition.ToJson(),parsed,&error));
-    CHECK(parsed.Sway.UnityPort && parsed.Sway.Unity.MovementSway.Space==SwaySpace::WorldSpace);
+    CHECK(parsed.Sway.Unity.MovementSway.Space==SwaySpace::WorldSpace);
     CHECK(definition.ToJson()["sway"].contains("aimingSway") && !definition.ToJson()["sway"].contains("lookSmoothing"));
     FirstPersonAnimationSet weapon, loaded;
     weapon.ArmsModel="a.fbx"; weapon.WeaponModel="w.fbx"; weapon.Controller="c.controller";
