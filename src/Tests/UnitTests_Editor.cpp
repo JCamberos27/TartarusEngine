@@ -633,6 +633,21 @@ void TestUndoDeltaChain() {
     CHECK(e.Tag == 1 && same(full, s1));
     CHECK(UndoDelta::Pop(stack, base, e, full) == UndoDelta::PopResult::Empty);
 
+    // X-33: Pop can hand back the full state parsed too (undo / redo load it without parsing again),
+    // both while re-anchoring on the entry underneath and for the last entry.
+    UndoDelta::Push(stack, base, TestEntry{{}, 1}, s1);
+    UndoDelta::Push(stack, base, TestEntry{{}, 2}, s2);
+    nlohmann::json parsed;
+    CHECK(UndoDelta::Pop(stack, base, e, full, &parsed) == UndoDelta::PopResult::Ok);
+    CHECK(e.Tag == 2 && same(full, s2) && parsed == nlohmann::json::parse(s2) && same(base, s1));
+    CHECK(UndoDelta::Pop(stack, base, e, full, &parsed) == UndoDelta::PopResult::Ok);
+    CHECK(e.Tag == 1 && parsed == nlohmann::json::parse(s1) && base.empty());
+    // A top that won't parse comes back as a discarded value (the caller parses the text itself).
+    stack.push_back(TestEntry{{}, 9});
+    base = "{broken";
+    CHECK(UndoDelta::Pop(stack, base, e, full, &parsed) == UndoDelta::PopResult::Ok);
+    CHECK(parsed.is_discarded() && full == "{broken");
+
     // Malformed input never throws out of the helpers.
     std::string out;
     CHECK(!UndoDelta::ApplyPatch(s1, "{not json", out));

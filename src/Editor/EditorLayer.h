@@ -1627,8 +1627,9 @@ private:
                                  UndoEntry&& entry, const std::string& newFullJson);
     // Removes the top entry, handing back the entry itself and its full scene JSON, and
     // re-anchors `baseJson` on the entry underneath. Returns false only if the stack was empty.
+    // `outParsed` (optional): `outFullJson` parsed, a discarded value when it won't parse.
     static bool PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
-                                UndoEntry& outEntry, std::string& outFullJson);
+                                UndoEntry& outEntry, std::string& outFullJson, nlohmann::json* outParsed = nullptr);
     void ClearRedoHistory();  // redo stack + its base, kept in lockstep
     void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
     void RememberLastScene(const std::string& path); // LastScenePath, written now and never journaled as an undo step
