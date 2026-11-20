@@ -11,13 +11,9 @@
 #include "gl.h"
 #include "Core/Profiler.h"
 
-// stb_truetype comes with Dear ImGui (imstb_truetype.h); the static copy here is this file's own (HudText has another).
-#define STBTT_STATIC
-#define STB_TRUETYPE_IMPLEMENTATION
 #pragma warning(push, 0)
-#include "imstb_truetype.h"
+#include "imstb_truetype.h" // declarations; the implementation is compiled once, in StbTrueType.cpp
 #pragma warning(pop)
-#pragma warning(disable : 4505) // the bake/render functions this file leaves unused
 
 #include <algorithm>
 #include <cmath>
@@ -263,7 +259,9 @@ int WorldTextRenderer::Draw(World& world, const glm::mat4& view, const glm::mat4
         right *= t.Size;
         up *= t.Size;
 
-        const std::string key = t.Text + char('0' + std::clamp(t.Align, 0, 2));
+        static std::string key; // reused: no string built per label per frame once it has grown
+        key.assign(t.Text);
+        key.push_back(char('0' + std::clamp(t.Align, 0, 2)));
         auto it = layouts.find(key);
         if (it == layouts.end()) {
             Cached c;

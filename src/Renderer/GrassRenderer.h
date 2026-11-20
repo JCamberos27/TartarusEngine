@@ -1,4 +1,5 @@
 #pragma once
+#include "UploadStaging.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -107,12 +108,7 @@ private:
     // Each cull's areas and chunks go into a persistently mapped ring (written with a memcpy, bound as ranges); a span
     // is reused only kUploadSafeFrames frames later, so no fence and no buffer re-specification (each one drained
     // NVIDIA's threaded driver, three times a frame).
-    struct UploadSpan { std::size_t Start; std::uint64_t Frame; };
-    unsigned m_UploadBuf = 0;
-    unsigned char* m_UploadBase = nullptr;
-    bool m_UploadFailed = false;
-    std::size_t m_UploadHead = 0;
-    std::vector<UploadSpan> m_UploadSpans; // live spans, oldest first
+    MappedRing m_Ring{8ull << 20, "GrassRenderer chunk ring"}; // ~0.4 MB a frame in the Forest (3 culls)
     // Where the last cull's areas and chunks went (the draws read the same areas).
     struct BufferRange {
         unsigned Buffer = 0;

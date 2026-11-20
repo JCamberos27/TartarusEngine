@@ -4,13 +4,9 @@ out vec4 FragColor;
 
 uniform sampler2D uSrc;
 
-// 4-tap box filter at the midpoints of the 2x2 source block this destination texel covers —
-// cheaper than a full Gaussian and avoids the aliasing a single point-sample would introduce.
+// 2x2 box filter of the source block this destination texel covers, in one fetch: a destination texel centre sits on
+// the shared corner of its four source texels, so one bilinear tap there averages them equally (four taps at the
+// texel centres cost 4x the fetches for the same value). Avoids the aliasing a point sample would introduce.
 void main() {
-    vec2 texel = 1.0 / vec2(textureSize(uSrc, 0));
-    vec3 result = texture(uSrc, vUV + texel * vec2(-0.5, -0.5)).rgb
-                + texture(uSrc, vUV + texel * vec2( 0.5, -0.5)).rgb
-                + texture(uSrc, vUV + texel * vec2(-0.5,  0.5)).rgb
-                + texture(uSrc, vUV + texel * vec2( 0.5,  0.5)).rgb;
-    FragColor = vec4(result * 0.25, 1.0);
+    FragColor = vec4(texture(uSrc, vUV).rgb, 1.0);
 }

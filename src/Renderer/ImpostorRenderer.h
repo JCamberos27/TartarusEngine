@@ -1,5 +1,6 @@
 #pragma once
 
+#include "UploadStaging.h"
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -89,10 +90,5 @@ private:
     bool m_HaveList = false;
     int m_DrawCalls = 0;
     // The instance upload ring (persistently mapped, reused by frame age - never re-specified: a driver drain).
-    unsigned m_UploadBuf = 0;
-    unsigned char* m_UploadBase = nullptr;
-    bool m_UploadFailed = false;
-    std::size_t m_UploadHead = 0;
-    struct UploadSpan { std::size_t Start; std::uint64_t Frame; };
-    std::vector<UploadSpan> m_UploadSpans;
+    MappedRing m_Ring{4ull << 20, "ImpostorRenderer instance ring"}; // ~0.17 MB a frame in the Forest (the view and the sun)
 };
