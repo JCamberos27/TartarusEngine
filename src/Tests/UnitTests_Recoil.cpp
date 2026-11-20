@@ -1,5 +1,8 @@
 #include "UnitTestSupport.h"
 #include "FirstPersonProcedural.h"
+#include "FirstPersonAnimation.h"
+#include "Paths.h"
+#include <filesystem>
 #include <glm/gtx/euler_angles.hpp>
 #include <cmath>
 
@@ -39,14 +42,14 @@ void TestRecoilAnimDataPort() {
         if (bad==4) j["recoil"]["horizontalSmoothing"]="fast";
         CHECK(!RecoilAsset::FromJsonString(j.dump(),parsed)); CHECK(parsed.ToJsonString()==before);
     }
-    auto legacy=WeaponProceduralSettings::Defaults();
-    j={{"type","recoil"},{"version",1},{"recoil",legacy.ToJson()["recoil"]}};
-    CHECK(RecoilAsset::FromJsonString(j.dump(),parsed)); CHECK(parsed.Data.UnityPort);
-    CHECK(Near(parsed.Data.Unity.SemiRotCurve.Length(),legacy.Recoil.Duration));
+    // A version-1 asset (the old tuning) converts on load.
+    j={{"type","recoil"},{"version",1},{"recoil",{{"duration",0.4},{"enabled",false}}}};
+    CHECK(RecoilAsset::FromJsonString(j.dump(),parsed)); CHECK(!parsed.Data.Enabled);
+    CHECK(Near(parsed.Data.Unity.SemiRotCurve.Length(),0.4f));
     CHECK(parsed.Data.Unity.Pitch.x<0 && parsed.Data.Unity.Kickback.x<=0);
-    WeaponProceduralSettings embedded=legacy; embedded.Recoil=asset.Data;
-    auto restored=legacy; CHECK(WeaponProceduralSettings::FromJson(embedded.ToJson(),restored,nullptr));
-    CHECK(restored.Recoil.UnityPort && restored.Recoil.Unity.ToJson()==asset.Data.Unity.ToJson());
+    WeaponProceduralSettings embedded=WeaponProceduralSettings::Defaults(); embedded.Recoil=asset.Data;
+    auto restored=WeaponProceduralSettings::Defaults(); CHECK(WeaponProceduralSettings::FromJson(embedded.ToJson(),restored,nullptr));
+    CHECK(restored.Recoil.Unity.ToJson()==asset.Data.Unity.ToJson());
 }
 void TestRecoilAnimationPort() {
     auto d=Fixture(); std::mt19937 rng(7);
@@ -119,7 +122,7 @@ void TestUnityControllerRecoil() {
     // Controller target is unscaled in ADS, independent of the visual aim multipliers.
     RecoilAnimation hip,aim; hip.Play(d,false,600,RecoilFireMode::Semi,rng); aim.Play(d,true,600,RecoilFireMode::Semi,rng);
     hip.Update(d,false,0.1f,rng); aim.Update(d,true,0.1f,rng); CHECK(hip.RecoilDelta==aim.RecoilDelta);
-    WeaponProceduralSettings s=WeaponProceduralSettings::Defaults(); s.Recoil.UnityPort=true; s.Recoil.Unity=d;
+    WeaponProceduralSettings s=WeaponProceduralSettings::Defaults(); s.Recoil.Unity=d;
     s.Sway.Enabled=s.Breath.Enabled=s.Lean.Enabled=false;
     WeaponProceduralState host; WeaponProceduralInput input; input.Dt=0.1f;
     host.OnShot(s,false); host.Update(s,input); CHECK(Near(host.ConsumeAimKick().x,1));
@@ -144,9 +147,26 @@ void TestUnityControllerRecoil() {
         else CHECK(std::abs(angle-2.0f)<0.001f);
     }
 }
+// The shipped weapons fire their .recoil profiles: the recoil a weapon plays is exactly its profile's, whatever older
+// tuning its .fpsanim still embeds (that converts on load, unused).
+void TestShippedWeaponsUseTheirProfiles() {
+    int checked=0;
+    for (const char* w : {"AKS74U/AKS74U","Remington870/Remington870","Revolver38/Revolver38"}) {
+        const std::string base=std::string("assets/Weapons/")+w;
+        if (!std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(base+".fpsanim")))) continue;
+        FirstPersonAnimationSet set; RecoilAsset profile; std::string why;
+        CHECK(FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(base+".fpsanim"),set,&why));
+        CHECK(!set.RecoilProfile.empty());
+        CHECK(RecoilAsset::LoadFile(ProjectPaths::Resolve(set.RecoilProfile),profile,&why));
+        CHECK(set.Procedural.Recoil.Unity.ToJson()==profile.Data.Unity.ToJson() && set.Procedural.Recoil.Enabled==profile.Data.Enabled);
+        ++checked;
+    }
+    if (checked==0) UnitTestSupport::Skip("no shipped weapons in this checkout");
+}
 }
 void RegisterRecoilPortTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("RecoilAnimDataPort",TestRecoilAnimDataPort);
     tests.emplace_back("RecoilAnimationPort",TestRecoilAnimationPort);
     tests.emplace_back("UnityControllerRecoil",TestUnityControllerRecoil);
+    tests.emplace_back("ShippedWeaponsUseTheirProfiles",TestShippedWeaponsUseTheirProfiles);
 }
