@@ -286,7 +286,7 @@ public:
     // least a quarter millisecond so the loads keep moving.
     static double PumpBudgetMs(bool playing, bool urgent, double lastFrameWorkMs);
     int AsyncInFlight() const;
-    std::string AsyncDebugDump() const; // X-31 WIP diagnostic
+    std::string AsyncDebugDump(); // X-31 WIP diagnostic
 
     // --- Play scope ----------------------------------------------------------------------------
     // Play loads assets the edit-mode scene never asked for (PlayerLook warms the whole wardrobe,

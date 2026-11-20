@@ -227,7 +227,7 @@ int AssetLibrary::AsyncInFlight() const {
     return (int)m_Async->Active.size();
 }
 
-std::string AssetLibrary::AsyncDebugDump() const {
+std::string AssetLibrary::AsyncDebugDump() {
     if (!m_Async) return "(no loader)";
     std::string out;
     size_t queued = 0;
