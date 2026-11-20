@@ -7,6 +7,7 @@
 #include "ModularSnap.h"
 #include "ThumbnailCache.h"
 #include "AssetDatabase.h"
+#include "AssetLibrary.h"
 #include "Core/Paths.h"
 #include <filesystem>
 #include <fstream>
@@ -113,6 +114,35 @@ void TestThumbnailAsyncSave() {
     fs::remove(fs::u8path(asset), ec);
     fs::remove(fs::u8path(asset + ".meta"), ec);
 }
+
+// A model's material remap is cached after the first read. Renaming or deleting the model must not leave the old
+// path answering from that cache (W5-103): the old path reads its (now missing) .meta, the new one reads the moved one.
+void TestRemapCacheFollowsRenameAndRemoval() {
+    namespace fs = std::filesystem;
+    const std::string a = "assets/__remap_ut_a.obj", b = "assets/__remap_ut_b.obj";
+    std::error_code ec;
+    for (const std::string& p : {a, b}) {
+        fs::remove(fs::u8path(ProjectPaths::Resolve(p)), ec);
+        fs::remove(fs::u8path(ProjectPaths::Resolve(p) + ".meta"), ec);
+    }
+    { std::ofstream(fs::u8path(ProjectPaths::Resolve(a)), std::ios::binary) << "o x\n"; }
+    AssetLibrary assets;
+    assets.SetMaterialRemap(a, "Body", "assets/__remap_ut.mat");
+    CHECK(assets.MaterialRemap(a).count("Body") == 1);
+
+    fs::rename(fs::u8path(ProjectPaths::Resolve(a)), fs::u8path(ProjectPaths::Resolve(b)), ec);
+    fs::rename(fs::u8path(ProjectPaths::Resolve(a) + ".meta"), fs::u8path(ProjectPaths::Resolve(b) + ".meta"), ec);
+    AssetDatabase::ForgetPath(a);
+    assets.RenamePath(a, b);
+    CHECK(assets.MaterialRemap(a).empty());
+    CHECK(assets.MaterialRemap(b).count("Body") == 1);
+
+    fs::remove(fs::u8path(ProjectPaths::Resolve(b)), ec);
+    fs::remove(fs::u8path(ProjectPaths::Resolve(b) + ".meta"), ec);
+    AssetDatabase::ForgetPath(b);
+    assets.ForgetRemoved(b);
+    CHECK(assets.MaterialRemap(b).empty());
+}
 } // namespace
 
 void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests) {
@@ -120,4 +150,5 @@ void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Asset Library: kit pieces snap flush and fronts line up", TestSnapFlush);
     tests.emplace_back("Asset Library: lone pieces land on the kit grid", TestSnapGridAndFree);
     tests.emplace_back("Thumbnail cache: async save lands, replaces, and leaves no temp files", TestThumbnailAsyncSave);
+    tests.emplace_back("Asset Library: material remap cache follows a rename and a removal", TestRemapCacheFollowsRenameAndRemoval);
 }
