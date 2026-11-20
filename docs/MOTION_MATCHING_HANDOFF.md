@@ -162,7 +162,7 @@ Measured on the full-pack audit (`docs/mm_audit.md`, 2026-11-17). Each is a capt
   `Application.cpp` ~1229 and `src/Core/Input.cpp` ~92; `docs/WEAPON_REVOLVER38.md:84` describes the stall.
 - **Test script.** `tools/mm_smoke.ps1` builds Release, then runs `--unit-tests`, `--smoke-test tests\smoke-scenes`,
   and the npc-test scenarios given as arguments, in that order.
-  - Every run is hidden (harness runs are hidden by default; Jacob's OK 2026-11-20), with unlocked FPS. `-Show`
+  - Every run is hidden (harness runs are hidden by default), with unlocked FPS. `-Show`
     sets `TARTARUS_SHOW=1` to watch them.
   - Each run is launched with `Start-Process -PassThru` + `WaitForExit()`, because Release is a GUI-subsystem build.
   - It prints a pass/fail table and exits non-zero on any failure.
@@ -528,7 +528,7 @@ registered.
   - Unit 52256 checks, smoke 21/21, testbed 29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6,
     labloco 1/1, mmview 12/12, mmdb 18/18, mmplayer 38/38.
   - Perf edit 3.09 / play 6.02 ms (Phase 3: 3.15 / 6.02).
-  - Baseline comparison: `D:\mm_phase4\summary\SUMMARY.md`.
+  - Baseline comparison: `<scratch>\summary\SUMMARY.md`.
 - **Since then** `mmplayer` is 45/45 and the MM unit tests pass (887 checks). The full pass hasn't been re-run.
 - **Player foot slide** (worst per leg, cm; legacy ~0.1):
   - walk 7.1 (one plant), run 2.1, normal stairs 0.0, steep stairs 0.3, ramp 3.1;
@@ -627,12 +627,12 @@ chest and head in degrees off the bind pose, + forward / chin down):
 | Run flick: body turn rate, feet crossed, worst cross | 1762 deg/s, 4 %, 2 cm | 1437 deg/s, 0 %, 0 cm (arms up 9 %) | 450 deg/s, 2 %, 5 cm |
 
 - **Full pass** (`mm_smoke.ps1 testbed npcloco locomotion stopsteps feet labloco mmview mmdb mmplayer -PerfBench
-  tests\perf-scenes\perf_stress.json`, `D:\mm_phase4\fullpass`): **all PASS** - unit 53186 checks, smoke 21/21, testbed
+  tests\perf-scenes\perf_stress.json`, `<scratch>\fullpass`): **all PASS** - unit 53186 checks, smoke 21/21, testbed
   29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18, mmplayer 56/56
   (5.56 ms/frame, 180 fps), perf edit 3.11 / play 6.03 ms (Phase 3: 3.15 / 6.02).
-- **Baseline comparison** (`baseline_summary.py` -> `D:\mm_phase4\summary2`): every legacy number is unchanged (foot slide,
+- **Baseline comparison** (`baseline_summary.py` -> `<scratch>\summary2`): every legacy number is unchanged (foot slide,
   clip speeds, checks); the baseline's broken-asset log errors are gone; frame costs within noise.
-- **Recording for the owner:** `D:\mm_phase4\mmplayer_phase4.mp4` (Scene view left, Game view right, 30 fps).
+- **Recording for the owner:** `<scratch>\mmplayer_phase4.mp4` (Scene view left, Game view right, 30 fps).
 - Visual review (contact sheets of the recordings, 0.1 s): the run leans with a compact swing; the crouch walk is hunched,
   hands by the knees; looking down the body bends a little and the arms hang; looking up there is no arch; the flick turns
   without the arms going up.
@@ -708,9 +708,9 @@ looking down standing still look awkward ("the hand motions while walking or run
   / 1.4). Per-leg table `[MmStress]`. `TbLeg` gained `Move2` / `AltPeriod` / `CrouchPeriod` / `JumpEvery`; the per-leg arrays
   are 128.
 - **Full pass** (`mm_smoke.ps1 testbed npcloco locomotion stopsteps feet labloco mmview mmdb mmplayer mmstress -PerfBench
-  tests\perf-scenes\perf_stress.json`, `D:\mm_phase4\fullpass2`): **all PASS** - unit 53187 checks, smoke 21/21, testbed
+  tests\perf-scenes\perf_stress.json`, `<scratch>\fullpass2`): **all PASS** - unit 53187 checks, smoke 21/21, testbed
   29/29, npcloco 33/33, locomotion 20/20, stopsteps 10/10, feet 6/6, labloco 1/1, mmview 12/12, mmdb 18/18, mmplayer 57/57
-  (179 fps), mmstress 16/16, perf edit 3.08 / play 6.03 ms. Baseline (`D:\mm_phase4\summary3`): 71 of 77 rows identical; the
+  (179 fps), mmstress 16/16, perf edit 3.08 / play 6.03 ms. Baseline (`<scratch>\summary3`): 71 of 77 rows identical; the
   6 others differ only by the baseline's broken-asset log errors (gone) and frame cost within noise.
 - Stress findings, judged fine: the zig-zag's crossover steps (13 % of frames, 11 cm), the strafe circle's (16 %), the wall
   push's search churn (3.7 jumps/s while the capsule is pinned), a teleport onto the ramp playing a turn on the spot.
@@ -747,10 +747,10 @@ scratch scripts parse `Manny.mmanim` / `.mmdb` directly (formats in their header
   velocity carries across a forced jump within 0.65-1.25x) and "sprint loop wrap" (on a speeding-up synthetic take: the raw
   speed jumps at the wrap, the shown speed and the closed pose don't; smooth through the overlap). `Loop::SetSpan` builds a
   loop's shown-speed table (the picker's and the test's).
-- **Results** (`mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"`, `D:\mm_phase4\session3_run1`): unit 1812
+- **Results** (`mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"`, `<scratch>\session3_run1`): unit 1812
   checks, 0 failures; **mmplayer 57/57**. The engine picked the predicted stride (`sprint loop: Run_Loop_Take001 @
   19.80-20.42 s, 4.63 m/s shown, score 12.16`); the sprint is now **4.40 m/s** (was 4.57). Against the last run on the old
-  stride (`D:\mm_phase4\s10_loop2`), same course:
+  stride (`<scratch>\s10_loop2`), same course:
   - straight sprint: foot slide worst 0.8 -> 0.5 cm, run turning 1.6 -> 0.9; loop 100 %, 0.3 / 0.0 jumps/s (unchanged);
     pose step max 23.7 deg = its p99 22.7 (no spike at the wrap; the stride's limbs move more per frame than the old one's 17);
   - single worst plants up on transient legs: run flick 1.9 -> 9.8 cm, run looking about 11.0 -> 16.2, run + jump 0.2 ->
@@ -762,7 +762,7 @@ scratch scripts parse `Manny.mmanim` / `.mmdb` directly (formats in their header
     brake).
   - (A before / after video was made for the owner, then deleted at the owner's request: the owner tests in the editor.)
 - At a fixed 1/60 s the dead-blend fix is a no-op (the interval is the dt), so the course numbers above are the loop's alone.
-- `mmstress` on the new loop (`D:\mm_phase4\session3_stress`): **16/16**, worst bone step 24.4 deg (sprint reversals; was
+- `mmstress` on the new loop (`<scratch>\session3_stress`): **16/16**, worst bone step 24.4 deg (sprint reversals; was
   19.8, the limit 45).
 
 **Session 3, play test 4 (the owner's recording, 2026-11-17 11:28: idle hands jerking, sprint goofy).** Reviewed frame by
@@ -795,7 +795,7 @@ frame (Scene view, 0.1 s):
   the matcher's pose with foot IK only) and "MM Sprint Loop" (off: matching on the run fragments).
 - New mmplayer legs: `M idle`, `M run random look`, `M run mouse noise`. New tables `[MmIdle]`, `[MmSprint]`, `[MmLayers]`.
   Checks 63 (idle holds, no rewinds; the search-rate check now excludes idle and loop time).
-- Unit test: "reselect history and the idle hold". Unit 1821 checks, 0 failures; mmplayer 63/63 (`D:\mm_phase4\pt4_run4`).
+- Unit test: "reselect history and the idle hold". Unit 1821 checks, 0 failures; mmplayer 63/63 (`<scratch>\pt4_run4`).
 
 **Session 3, "why does the sprint do a stop every few steps?" (the owner).** The loop's crossfade. For the first 16 frames
 (0.27 s) after every wrap it played the frames *past* the stride's end, blending into the stride's start - and past the end
@@ -814,7 +814,7 @@ current pick 12.5 % after / 7.8 % before) - so no re-pick or side swap fixes it,
 - Unit test rewritten: a 0.43 rad seam closes exactly (0.00000 rad at the wrap), the step across the wrap 0.0327 rad against
   0.0320 into it, 0.5 % of the seam left at the next wrap (a 30-frame span; 0.2 % on the real 37-frame stride), the shown
   speed continuous.
-- `mmplayer` 61/61 (`D:\mm_phase4\seam1`, against `trunk_mm3` before): straight sprint pelvis pitch swing per cycle 21.2 ->
+- `mmplayer` 61/61 (`<scratch>\seam1`, against `trunk_mm3` before): straight sprint pelvis pitch swing per cycle 21.2 ->
   15.3 deg and yaw 15.9 -> 14.4 (the brake's dip gone), pose step max 23.7 -> 23.2 (no spike at the wrap), loop 100 %, 0.3
   jumps/s; slide worst 0.5 -> 1.0 cm. **Watch:** run + jump's landing back into the sprint slid 8.5 cm worst / 3.3 mean (was
   2.2 / 0.7; 4 plants) - the transient legs have swung run to run all session (the flick 1.9 / 9.8 / 8.5 cm with unrelated
@@ -859,7 +859,7 @@ drawn (`FirstPersonBody::TrunkAngles`, `BodyDebug::TrunkClipDeg` / `TrunkDeg`).
 
 ## Test protocol (every phase)
 
-- Tests run **hidden**, like every harness run (Jacob's OK 2026-11-20). To watch one, set `TARTARUS_SHOW=1`
+- Tests run **hidden**, like every harness run. To watch one, set `TARTARUS_SHOW=1`
   (`-Show` on `tools/mm_smoke.ps1`, `--visible` on `tools/npc_test_runs.py`). FPS and wall-time readouts can differ from
   the older visible baselines; that is not a failure.
 - **No footage** (the owner, 2026-11-17: "We don't need to waste time recording footage for something I can test"): don't
@@ -989,7 +989,7 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
   `MmPlayerChecks`). Run: `tools\mm_smoke.ps1 mmplayer -SkipSmoke -UnitFilter "Motion matching"` (~2.5 min).
 - Run the runtime: `tools\mm_smoke.ps1 mmdb -SkipSmoke -UnitFilter "Motion matching"` (build, the MM unit tests,
   `mmdb`: ~2 min).
-- Bake: `set TARTARUS_MM_SOURCE=D:\Jacob\JCamberos\Manny_Mocap_Export` then
+- Bake: `set TARTARUS_MM_SOURCE=<mocap pack folder>\Manny_Mocap_Export` then
   `build\Release\TartarusEngine.exe --bake-motion assets/Animations/MotionMatching/Manny.mmconfig` (30 s, 4 workers;
   `--match <text>` bakes some takes, `--out <prefix>` writes elsewhere - use D: for scratch).
 - Takes list: `python tools/mm/gen_takes.py` (reads `TARTARUS_MM_SOURCE`'s `manifest.json`).
@@ -1087,8 +1087,8 @@ Run as little as answers the question. Three tiers (`tools\mm_smoke.ps1`):
     `project/external_assets.csv` and in the Drive's copy (which still lists the legacy clips Phase 6 kept on the Drive - not
     overwritten by the repo's; its two rows end in LF, the rest CRLF: edit it byte-exact). `asset_manifest.py verify` on
     `Used`: 8025 listed, 0 missing, 0 different (1 unlisted: the SeedMesh scene, as before). A line in `Raw\CHANGELOG.md`.
-    Backups on D: - the main checkout's database before it `D:\Jacob\mm_scratch\db_before_rollfix\`, the Drive's
-    2026-11-16 files, CSV and changelog `D:\Jacob\mm_scratch\drive_before_rollfix\` (with `SHA256SUMS`).
+    The main checkout's database before it and the Drive's 2026-11-16 files, CSV and changelog were backed up locally
+    (with `SHA256SUMS`).
   - **`A jog` 2.6 jumps/s** (the pack's short jog straights) and **the looking-about jump rates** (tight turns at a walk / jog)
     - reported, limits unchanged.
   - *Fixed:* `M strafe right (walk)` 0.72 -> 0.95, by mirroring the walk's strafes - at the cost of **`M crouch strafe right`
@@ -1112,7 +1112,7 @@ plays the pack's mocap as captured:
 - Spine Aim fading while moving;
 - additive Spine Twist.
 
-**Read the plan first:** `C:\Users\Jacob\Desktop\MM_STRIPBACK_PLAN.md`. It holds the full inventory with a verdict per
+**The strip-back plan** (a local plan file, not in the repo) holds the full inventory with a verdict per
 item, three stages (the owner plays each), the tests to delete and add, and verification. Owner bar: AAA, no Frankenstein
 work, no footage (the owner tests in the editor). The notes below predate it; where they conflict, the plan wins.
 
@@ -1170,7 +1170,7 @@ work, no footage (the owner tests in the editor). The notes below predate it; wh
     worst -84.5 deg, push up to 7 cm, 0 inside rays; walking and standing: no limit, 0 rays.
   - `mmplayer` 68/70 (the two Stage 2 failures), `mmstress` 16/16, legacy `testbed` 29/29.
 
-**The full-library plan (2026-11-17, approved; `C:\Users\Jacob\.claude\plans\https-docs-google-com-spreadsheets-d-1sz-velvety-salamander.md`):**
+**The full-library plan (2026-11-17, approved):**
 use the whole pack, as designed. Owner decisions: compress then raise the caps; stroll; a run only if the data holds one;
 animate fingers (unarmed); mirror only where the audit finds a gap.
 - **Step 0, the audit (done):** `gen_takes.py --audit`, `tools/mm/audit.mmconfig` (every take, no budgets, into
@@ -1554,9 +1554,9 @@ adopted. Next: find which of the walk-right strafe takes' facing drifts (their d
 breakdown at the leg's searches.
 
 **Tooling found on the way:** a fresh worktree configures in 15 s with the main checkout's dependency sources
-(`-DFETCHCONTENT_SOURCE_DIR_<NAME>=C:/Users/Jacob/Desktop/TartarusEngine/build/_deps/<name>-src` for glfw glm assimp entt imgui
+(`-DFETCHCONTENT_SOURCE_DIR_<NAME>=<main checkout>/build/_deps/<name>-src` for glfw glm assimp entt imgui
 imguizmo imanim meshoptimizer recastnavigation); the licensed assets can be hard-linked in (no disk). 43 forest files there
-exceed MAX_PATH under `.claude\worktrees\...` and log errors at load (`-AllowErrors 'SeedMesh_Mossy_Cedrus_Forest'`).
+exceed MAX_PATH under a deeply nested worktree path and log errors at load (`-AllowErrors 'SeedMesh_Mossy_Cedrus_Forest'`).
 
 ## The bake's twist roll (2026-11-18, `dev/mm-bake-roll`)
 
@@ -1632,8 +1632,8 @@ rates, `M crouch strafe right`), mmstress 16/16, mmview 12/12, mmdb 18/18. **Ins
 (the owner's go-ahead; sha256 `bbfa0bbd...` / `3d77e47b...`, 194,080,116 / 29,166,619 bytes): the main checkout's build loads it
 (511,582 frames, the cooked search 0 mismatches, load 1.41 s); the Drive's `Used\` copied, its CSV's two rows changed byte-exact,
 `verify` 8025 listed / 0 missing / 0 different (1 unlisted: the SeedMesh scene); a `Raw\CHANGELOG.md` entry; `project/
-external_assets.csv`'s two rows. The twist-roll database before it: `D:\Jacob\mm_scratch\rollfix4\`; the Drive's CSV and
-changelog before it: `D:\Jacob\mm_scratch\drive_before_mirror\`.
+external_assets.csv`'s two rows. The twist-roll database and the Drive's CSV and
+changelog before it were backed up locally.
 
 ## Phase 5: first steps (done - see above)
 
@@ -1650,7 +1650,7 @@ changelog before it: `D:\Jacob\mm_scratch\drive_before_mirror\`.
 
 1. Branch `dev/mm-phase3` from `dev/mm-phase2`, in the main checkout (licensed assets and `build\` only exist there).
    Big scratch output on D:.
-2. Bake first if the cooked files are missing: `set TARTARUS_MM_SOURCE=D:\Jacob\JCamberos\Manny_Mocap_Export`, then
+2. Bake first if the cooked files are missing: `set TARTARUS_MM_SOURCE=<mocap pack folder>\Manny_Mocap_Export`, then
    `build\Release\TartarusEngine.exe --bake-motion assets/Animations/MotionMatching/Manny.mmconfig` (30 s). The pack
    is also on the Drive (`Raw\Animations\Quantum Stage - Motion Matching Library\Manny Export`).
 3. `MotionDatabase` loads `Manny.mmanim` + `Manny.mmdb` (`MotionClipStream::Load`, `MotionFeatureSet::Load`); normalize
@@ -1669,9 +1669,9 @@ changelog before it: `D:\Jacob\mm_scratch\drive_before_mirror\`.
    there, so a separate worktree can't run the engine. C: has little free space; put big scratch output on D:.
 2. The pack is already on this machine. Read it through a new `Env.h` variable (for example `TARTARUS_MM_SOURCE`); never
    hard-code the path.
-   - `D:\Jacob\JCamberos\Manny_Mocap_Export\`: `anims\` (139 FBX, 4.47 GB), `rig\SKM_Manny.fbx`, `manifest.json`.
-   - The pack's raw source data, with fingers, is in `D:\Jacob\JCamberos\Downloads\raw_source__data\`.
-   - The owner has OK'd Drive access. The Drive (`G:\My Drive\Tartarus Assets`) is nearly full, so ask before writing
+   - `<mocap pack folder>\Manny_Mocap_Export\`: `anims\` (139 FBX, 4.47 GB), `rig\SKM_Manny.fbx`, `manifest.json`.
+   - The pack's raw source data, with fingers, is in its `raw_source__data\` download.
+   - The Drive (`G:\My Drive\Tartarus Assets`) is nearly full, so ask before writing
      the archive there.
 3. Diff the rest pose and bone lengths: pack `rig/SKM_Manny.fbx` against `Quantum_Body_Full.fbx`, through `Model`.
    Report any core bone that differs by more than 2%.

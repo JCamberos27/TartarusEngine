@@ -25,7 +25,7 @@ source .blend is never written; `save3p` writes a separate copy for `author_3p.p
 
 ## What the exporter fixes
 
-Approved in the November 2026 audit, applied in memory on every export:
+Applied in memory on every export:
 
 - **Fire.** The weapon take only flicked the hammer. It is now a double-action pull: trigger back, hammer
   cocked and the cylinder indexing one chamber (60°, counter-clockwise from the rear) over six frames, the
@@ -76,7 +76,7 @@ Every scene with the AK/870 player loadout has it.
 build/Release/TartarusEngine.exe --npc-test revolver --smoke-shots <dir>
 ```
 
-Harness runs are hidden by default (Jacob's OK 2026-11-20); set `TARTARUS_SHOW=1` to watch it.
+Harness runs are hidden by default; set `TARTARUS_SHOW=1` to watch it.
 
 `src/Game/AI/NpcTest_Revolver.cpp`, 77 s in the WeaponLab: ADS (the sight line is logged), two sights-up
 shots, a partial reload, six hip shots, a full reload, inspect, mag check, melee, walk and sprint, then the AK
