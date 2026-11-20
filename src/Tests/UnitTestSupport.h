@@ -4,6 +4,8 @@
 // tests in its own file instead of everyone editing UnitTests.cpp and its one big test table.
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -30,6 +32,19 @@ inline std::string TempName(const std::string& stem, const std::string& ext = ""
 }
 
 using TestList = std::vector<std::pair<const char*, std::function<void()>>>;
+
+// A scratch folder under the system temp directory (created when missing).
+inline std::filesystem::path TempDir() {
+    std::error_code ec;
+    auto dir = std::filesystem::temp_directory_path(ec) / "TartarusUnitTests";
+    std::filesystem::create_directories(dir, ec);
+    return dir;
+}
+// A whole file as bytes ("" when it can't be read).
+inline std::string ReadAll(const std::filesystem::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
 
 } // namespace UnitTestSupport
 
@@ -72,3 +87,6 @@ void RegisterDecalAssetTests(UnitTestSupport::TestList& tests); // UnitTests_Dec
 void RegisterGraffitiTests(UnitTestSupport::TestList& tests); // UnitTests_Graffiti.cpp
 void RegisterGizmoIconTests(UnitTestSupport::TestList& tests); // UnitTests_GizmoIcons.cpp
 void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests); // UnitTests_AssetLibrary.cpp
+void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonBody.cpp
+void RegisterOutfitsTests(UnitTestSupport::TestList& tests); // UnitTests_Outfits.cpp
+void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonWeapons.cpp

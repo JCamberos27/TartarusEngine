@@ -1,4 +1,5 @@
 #include "GrassRenderer.h"
+#include "GLStateScope.h"
 
 #include "GLStateCache.h"
 #include "Material.h"
@@ -257,38 +258,7 @@ void GrassRenderer::BufferRange::Bind(unsigned binding) const {
     glBindBufferRange(GL_SHADER_STORAGE_BUFFER, binding, Buffer, (GLintptr)Offset, (GLsizeiptr)Size);
 }
 
-std::size_t GrassRenderer::TakeUpload(std::size_t size) {
-    constexpr std::size_t kNone = ~std::size_t(0);
-    constexpr std::size_t kUploadBytes = 8ull << 20;  // ~0.4 MB a frame in the Forest (3 culls)
-    constexpr std::uint64_t kUploadSafeFrames = 16;   // SwapBuffers keeps the CPU a few frames ahead at most
-    if (size == 0 || size > kUploadBytes / 4 || m_UploadFailed) return kNone;
-    if (!m_UploadBase) {
-        GLint align = 0;
-        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &align);
-        if (align <= 0 || 256 % align != 0) { m_UploadFailed = true; return kNone; } // RingFit places at multiples of 256
-        const GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
-        glCreateBuffers(1, &m_UploadBuf);
-        glNamedBufferStorage(m_UploadBuf, (GLsizeiptr)kUploadBytes, nullptr, flags);
-        m_UploadBase = static_cast<unsigned char*>(glMapNamedBufferRange(m_UploadBuf, 0, (GLsizeiptr)kUploadBytes, flags));
-        if (!m_UploadBase) {
-            glDeleteBuffers(1, &m_UploadBuf);
-            m_UploadBuf = 0;
-            m_UploadFailed = true;
-            return kNone;
-        }
-    }
-    const std::uint64_t frame = Time::FrameCount();
-    std::size_t old = 0;
-    while (old < m_UploadSpans.size() && frame - m_UploadSpans[old].Frame > kUploadSafeFrames) ++old;
-    m_UploadSpans.erase(m_UploadSpans.begin(), m_UploadSpans.begin() + (std::ptrdiff_t)old);
-    const bool empty = m_UploadSpans.empty();
-    const std::size_t tail = empty ? m_UploadHead : m_UploadSpans.front().Start;
-    const std::size_t at = UploadStaging::RingFit(kUploadBytes, m_UploadHead, tail, empty, size);
-    if (at == kNone) return kNone;
-    m_UploadSpans.push_back({at, frame});
-    m_UploadHead = at + size;
-    return at;
-}
+std::size_t GrassRenderer::TakeUpload(std::size_t size) { return m_Ring.Take(size); }
 
 bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, float maxDistance) {
     m_Culled = false;
@@ -321,10 +291,10 @@ bool GrassRenderer::Cull(const glm::mat4& view, const glm::mat4& proj, const glm
     const std::size_t chunkAt = (areaBytes + 255) & ~std::size_t(255);
     const std::size_t at = TakeUpload(chunkAt + chunkBytes);
     if (at != ~std::size_t(0)) {
-        std::memcpy(m_UploadBase + at, areas.data(), areaBytes);
-        std::memcpy(m_UploadBase + at + chunkAt, m_Chunks.data(), chunkBytes);
-        m_AreaBind = {m_UploadBuf, at, areaBytes};
-        m_ChunkBind = {m_UploadBuf, at + chunkAt, chunkBytes};
+        std::memcpy(m_Ring.Base() + at, areas.data(), areaBytes);
+        std::memcpy(m_Ring.Base() + at + chunkAt, m_Chunks.data(), chunkBytes);
+        m_AreaBind = {m_Ring.Buffer(), at, areaBytes};
+        m_ChunkBind = {m_Ring.Buffer(), at + chunkAt, chunkBytes};
     } else { // the ring is full or unavailable: a fresh data store, as before
         glNamedBufferData(m_AreaBuf, (GLsizeiptr)areaBytes, areas.data(), GL_STREAM_DRAW);
         glNamedBufferData(m_ChunkBuf, (GLsizeiptr)chunkBytes, m_Chunks.data(), GL_STREAM_DRAW);
@@ -386,7 +356,7 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBladeBinding, m_BladeBuf);
     glBindVertexArray(m_Vao);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_CmdBuf);
-    glDisable(GL_CULL_FACE); // blades are seen from both sides
+    GLCullOffScope cullOff; // blades are seen from both sides
     prog.SetInt("uInstanceBase", 0);
     prog.SetInt("uSegments", nearSegments);
     glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)0);
@@ -395,7 +365,6 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)(4 * sizeof(std::uint32_t)));
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     glBindVertexArray(0);
-    glEnable(GL_CULL_FACE);
     GLStateCache::Invalidate();
 }
 
@@ -433,14 +402,12 @@ void GrassRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, bool d
     prog.SetInt("uDepthOnly", 0);
     prog.SetInt("uObjectLayerBit", 1);
     prog.SetInt("uNoReceiveShadows", 0);
-    GLint prevDepthFunc = GL_LESS;
-    glGetIntegerv(GL_DEPTH_FUNC, &prevDepthFunc);
+    {
+    GLStateScope saved; // depth test, blending, culling and depth writes back as the caller had them
+    GLDepthStateScope depth(depthWrites, GL_LEQUAL);
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(depthWrites ? GL_TRUE : GL_FALSE);
     glDisable(GL_BLEND);
     Draw(prog, view, proj);
-    glDepthMask(GL_TRUE);
-    glDepthFunc((GLenum)prevDepthFunc);
+    }
     GLStateCache::Invalidate();
 }

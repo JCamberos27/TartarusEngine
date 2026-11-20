@@ -1,5 +1,6 @@
 #pragma once
 #include "DepthArrayTarget.h"
+#include "ShadowLimits.h"
 
 // Cube-map shadow maps for point lights (#119). Companion to SpotShadowMap.
 //
@@ -13,7 +14,7 @@ class PointShadowMap {
 public:
     // Hard ceiling: the size of ModelFragment.glsl's uPointShadow* arrays. The per-scene budget
     // (World::MaxPointShadows) picks how many cubes are actually allocated and rendered.
-    static constexpr int kMaxPoints = 8;
+    static constexpr int kMaxPoints = ShadowLimits::kMaxPoints;
 
     PointShadowMap() = default;
     PointShadowMap(const PointShadowMap&) = delete;

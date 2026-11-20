@@ -9,6 +9,7 @@
 
 void ReflectionProbeArray::Update(const World& world) {
     m_Probes.clear();
+    m_MemoValid = false;
     auto view = world.Registry.view<const TransformComponent, const ReflectionProbeComponent>();
     for (auto [entity, tc, rp] : view.each()) {
         // #197 — inactive probes don't shade, like inactive lights and renderables.
@@ -29,6 +30,11 @@ void ReflectionProbeArray::Update(const World& world) {
 }
 
 int ReflectionProbeArray::Select(const glm::vec3& viewCenter, Scored (&best)[kMaxDraw], float& totalScore) const {
+    if (m_MemoValid && m_MemoCentre == viewCenter) {
+        std::copy(std::begin(m_MemoBest), std::end(m_MemoBest), std::begin(best));
+        totalScore = m_MemoTotal;
+        return m_MemoFound;
+    }
     // Score = importance / (1 + distance^2): closer + more important scores higher.
     int found = 0;
     for (int i = 0; i < (int)m_Probes.size(); ++i) {
@@ -50,6 +56,11 @@ int ReflectionProbeArray::Select(const glm::vec3& viewCenter, Scored (&best)[kMa
     totalScore = 0.0f;
     for (int j = 0; j < found; ++j) totalScore += best[j].score;
     if (totalScore < 1e-6f) totalScore = 1.0f;
+    std::copy(std::begin(best), std::end(best), std::begin(m_MemoBest));
+    m_MemoCentre = viewCenter;
+    m_MemoFound = found;
+    m_MemoTotal = totalScore;
+    m_MemoValid = true;
     return found;
 }
 

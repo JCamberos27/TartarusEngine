@@ -36,7 +36,12 @@ TrajectoryRibbon::~TrajectoryRibbon() {
 }
 
 void TrajectoryRibbon::AddPath(const std::vector<glm::vec3>& points, const glm::vec4& color, int fadeInSegments) {
-    if (points.size() >= 2) m_Paths.push_back({points, color, fadeInSegments});
+    if (points.size() < 2) return;
+    if (m_PathCount == m_Paths.size()) m_Paths.emplace_back();
+    Path& p = m_Paths[m_PathCount++];
+    p.Points.assign(points.begin(), points.end()); // into last frame's storage: no new vector per path per frame
+    p.Color = color;
+    p.FadeIn = fadeInSegments;
 }
 
 void TrajectoryRibbon::AddRing(const glm::vec3& center, const glm::vec3& normal, float radius, const glm::vec4& color) {
@@ -53,7 +58,8 @@ void TrajectoryRibbon::Draw(const glm::mat4& view, const glm::mat4& proj, const 
         return std::max(kMinHalfWidth, glm::length(p - eye) * kHalfWidthPerMetre);
     };
     // One quad per segment, widened across the view direction.
-    for (const Path& path : m_Paths) {
+    for (std::size_t pi = 0; pi < m_PathCount; ++pi) {
+        const Path& path = m_Paths[pi];
         const std::vector<glm::vec3>& P = path.Points;
         auto fade = [&](size_t i) {
             return path.FadeIn > 0 ? std::min(1.0f, (float)i / (float)path.FadeIn) : 1.0f;
@@ -86,7 +92,7 @@ void TrajectoryRibbon::Draw(const glm::mat4& view, const glm::mat4& proj, const 
             vert(i0, r.Color, 1.0f); vert(o1, r.Color, 1.0f); vert(i1, r.Color, 1.0f);
         }
     }
-    m_Paths.clear();
+    m_PathCount = 0;
     m_Rings.clear();
     if (V.empty()) return;
 

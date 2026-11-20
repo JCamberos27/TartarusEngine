@@ -258,6 +258,7 @@ struct HotReloadEntry {
     Shader* Program;
     std::string Vert, Frag;
     std::vector<std::string> Deps;
+    bool DepsKnown = false; // expanded at the first file change, not at registration (startup re-read every stage)
 };
 std::vector<HotReloadEntry>& HotReloadEntries() {
     static std::vector<HotReloadEntry> entries;
@@ -273,7 +274,7 @@ std::vector<std::string> DepsOf(const std::string& vert, const std::string& frag
 
 void RegisterForHotReload(Shader& shader, const std::string& vertFile, const std::string& fragFile) {
     UnregisterForHotReload(shader);
-    HotReloadEntries().push_back({&shader, vertFile, fragFile, DepsOf(vertFile, fragFile)});
+    HotReloadEntries().push_back({&shader, vertFile, fragFile, {}, false});
 }
 
 void UnregisterForHotReload(Shader& shader) {
@@ -286,6 +287,10 @@ void ClearHotReload() { HotReloadEntries().clear(); }
 int ReloadChanged(const std::vector<std::string>& changed) {
     int reloaded = 0;
     for (HotReloadEntry& h : HotReloadEntries()) {
+        if (!h.DepsKnown) {
+            h.Deps = DepsOf(h.Vert, h.Frag);
+            h.DepsKnown = true;
+        }
         const bool affected = std::any_of(h.Deps.begin(), h.Deps.end(), [&](const std::string& d) {
             return std::find(changed.begin(), changed.end(), d) != changed.end();
         });

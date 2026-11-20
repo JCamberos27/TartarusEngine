@@ -72,7 +72,6 @@ void FirstPersonPresentation::RefreshViewKick(Camera& camera) {
     const glm::vec2 before(camera.Pitch, camera.Yaw);
     camera.Pitch = std::clamp(camera.Pitch + climb.x, -89.0f, 89.0f);
     camera.Yaw += climb.y;
-    m_Procedural.DiscardClampedAim(glm::vec2(climb.x - (camera.Pitch - before.x), 0.0f));
     m_PlayerLookBaseline += glm::vec2(camera.Pitch, camera.Yaw) - before;
     ApplyViewPunch(camera);
 }

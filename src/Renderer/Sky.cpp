@@ -1,29 +1,15 @@
 #include "Sky.h"
+#include "GLStateScope.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLStateCache.h"
 #include "gl.h"
 
 namespace {
-// Sky pixels only: depth test GL_LEQUAL against the far-plane quad, no depth writes. Saves
-// exactly what it mutates (#112) and restores it on scope exit.
+// Sky pixels only (GLSkyDepthScope), and the cache resynced after the raw VAO / texture binds below.
 struct SkyDepthScope {
-    GLboolean WasDepthTest;
-    GLint PrevMask = GL_TRUE, PrevFunc = GL_LESS;
-    SkyDepthScope() {
-        WasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-        glGetIntegerv(GL_DEPTH_WRITEMASK, &PrevMask);
-        glGetIntegerv(GL_DEPTH_FUNC, &PrevFunc);
-        glDepthMask(GL_FALSE);
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LEQUAL);
-    }
-    ~SkyDepthScope() {
-        glDepthFunc((GLenum)PrevFunc);
-        if (!WasDepthTest) glDisable(GL_DEPTH_TEST);
-        glDepthMask((GLboolean)PrevMask);
-        GLStateCache::Invalidate(); // raw VAO / texture binds below
-    }
+    GLSkyDepthScope Depth;
+    ~SkyDepthScope() { GLStateCache::Invalidate(); }
 };
 }
 

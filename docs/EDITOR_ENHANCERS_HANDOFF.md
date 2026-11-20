@@ -159,7 +159,7 @@ The original plan file is `C:\Users\Jacob\plans\https-assetstore-unity-com-packa
 
 **Supporting APIs:**
 
-- `SceneSerializer::ComponentToPresetJson(world, e, name)` and `ApplyComponentPresetJson(world, assets, e, json)` (`src/Game/SceneSerializer.cpp` ~2451):
+- `SceneSerializer::ComponentToPresetJson(world, e, name)` and `ApplyComponentPresetJson(world, assets, e, json)` (`src/Game/SceneComponentJson.cpp`):
   - Only for `GenericSerialize` components.
   - Apply **adds the component if missing**.
   - The caller owns undo.
@@ -308,7 +308,7 @@ struct SelectionHistoryEntry {
 - `Tab` (const char*)
 - `OnChanged` (`void(*)(World&, entt::entity, void* comp)`)
 - `Variants` / `VariantLabels` / `VariantCount` (quick-pick chips)
-- `NonSerialized`: display-only. The serializer loops at `SceneSerializer.cpp` ~601 and ~748 must skip it.
+- `NonSerialized`: display-only. The serializer's component loops must skip it: `WriteCommonComponents` / `ReadCommonComponents` and the preset functions in `src/Game/SceneComponentJson.cpp`.
 
 `ReflectComponent` gains:
 
