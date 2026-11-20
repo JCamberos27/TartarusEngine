@@ -1,7 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <cstdint>
-#include <vector>
 
 class Shader;
 
@@ -25,6 +24,8 @@ class Shader;
 // matrix or screen size changes (expensive operation: 8,064 froxel AABBs + glMemoryBarrier).
 // The cull pass (light binning) runs every frame regardless, since lights move. We cache the
 // last (proj, screenW, screenH, nearZ, farZ) and skip the build dispatch when unchanged.
+struct ClusterDecalSnapshot; // ClusterDecalSnapshot.h
+
 class ClusterGrid {
 public:
     // The grid is also written out in GLSL, once, in shaders/ClusterGrid.glsl (C_GX / C_GY / C_GZ), which the build,
@@ -82,7 +83,7 @@ public:
     // (the world view and the view model's).
     unsigned DecalOverflow() const;
     // How many clusters were clamped to Decals::MAX_PER_CLUSTER, the most of any projection in use;
-    // `buildSlot` >= 0 asks for one projection's (DecalSnapshot::BuildSlot).
+    // `buildSlot` >= 0 asks for one projection's (ClusterDecalSnapshot::BuildSlot).
     unsigned DecalOverflowClusters(int buildSlot = -1) const;
 
     // True if the global index list (binding 4) would have overflowed its GLOBAL_INDEX_CAPACITY
@@ -101,21 +102,8 @@ public:
     // Allocates the cluster buffers and builds the cull programs now (load-time warm-up).
     void WarmUp() { EnsureCreated(); }
 
-    // Tests only (smoke_decals_stress): the last decal cull's inputs and outputs, read back synchronously.
-    struct DecalSnapshot {
-        int DecalCount = 0;
-        int BuildSlot = -1;
-        std::vector<glm::vec4> Clusters;  // CLUSTERS * 2: view-space min, max
-        std::vector<glm::vec4> ViewBoxes; // DecalCount * kDecalViewBoxVec4s
-        std::vector<uint32_t> Ranges;     // CLUSTERS * 2: offset, count
-        std::vector<uint32_t> Indices;    // the {entries in use, overflow} header, then the whole list
-    };
-    bool ReadDecalSnapshot(DecalSnapshot& out) const;
-    // The cull's overlap test on one ViewBox (ClusterDecalCull.comp.glsl's Overlaps), CPU side. `slack`
-    // widens (> 0) or narrows (< 0) every separating-axis test by that much, to bracket rounding.
-    static bool DecalBoxOverlaps(const glm::vec4* box, const glm::vec3& mn, const glm::vec3& mx, float slack);
-
 private:
+    friend bool ReadClusterDecalSnapshot(const ClusterGrid& grid, ClusterDecalSnapshot& out); // tests only
     void EnsureCreated();
     void ReadDecalOverflow() const;
     // binding 2. #160: one AABB set per recently-used projection. With a single set, the Scene and
