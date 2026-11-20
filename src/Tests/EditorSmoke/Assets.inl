@@ -788,7 +788,13 @@ void RegisterAssetsTests() {
                  X::Deselect(c.E);
                  std::error_code ec; fs::remove(fs::u8path(g_Text), ec); fs::remove(fs::u8path(g_Text + ".meta"), ec);
              }), Wait(2)},
-        }));
+        }), [](Ctx&) { // the tone isn't part of the scratch set: a filtered or failed run mustn't leave it behind
+            std::error_code ec;
+            for (const char* f : {"Smoke Tone.wav", "Smoke Tone.wav.meta"}) {
+                AtomicFile::NoteSelfWrite(fs::u8path(DirFile(f)));
+                fs::remove(fs::u8path(DirFile(f)), ec);
+            }
+        });
     }
 
     // ------------------------------------------------------------------ Asset Library panel
