@@ -192,7 +192,7 @@ namespace {
 // The keys SaveToString(world, assets) adds on top of the scene: its own marker and every key
 // AppendAssetLibraryJson writes.
 constexpr const char* kLibraryKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures", "libraryMaterials",
-                                        "librarySounds", "libraryPrefabs", "assetFolders", "assetMeta"};
+                                        "librarySounds", "libraryPrefabs", "assetFolders", "removedDiskFolders", "assetMeta"};
 } // namespace
 
 bool SceneSerializer::SameSceneContent(const std::string& a, const std::string& b) {
