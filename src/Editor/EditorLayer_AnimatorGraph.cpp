@@ -4,16 +4,9 @@
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
-#include "AnimationSystem.h"
 #include "AnimatorController.h"
-#include "AnimatorLint.h"
-#include "ClipAnalysis.h"
-#include "FirstPersonBodyContract.h"
-#include "FirstPersonAnimation.h"
 #include "Components.h"
-#include "CurveEditor.h"
 #include "AssetLibrary.h"
-#include "Log.h"
 #include "Model.h"
 #include "Core/Paths.h"
 #include "World.h"
@@ -22,18 +15,12 @@
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
-#include <cctype>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <filesystem>
-#include <functional>
 #include <map>
-#include <unordered_map>
 #include "EditorLayer_AnimatorInternal.h"
 #include "Glass/GlassMotion.h" // wire flow, node pops, the live-state glide, coasting pan
-#include "Glass/GlassTokens.h"
 #include <imgui_internal.h>    // ImHashStr
 
 using namespace EditorInternal;

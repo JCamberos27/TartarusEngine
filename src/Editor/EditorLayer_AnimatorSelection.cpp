@@ -48,14 +48,13 @@ struct SelectionPanel {
     AC& D;
     AssetLibrary* assets;
     AnimatorControllerComponent* live;
-    Model* rig;
     const float S;
     bool& changed;
     AC::Layer& L;
     const float labelW;
 
     explicit SelectionPanel(AnimCtx& c)
-        : cx(c), world(c.world), W(c.W), D(c.W.Doc), assets(c.assets), live(c.live), rig(c.rig), S(c.S), changed(c.changed),
+        : cx(c), world(c.world), W(c.W), D(c.W.Doc), assets(c.assets), live(c.live), S(c.S), changed(c.changed),
           L(c.W.L()), labelW(110.0f * c.S) {}
 
     void row(const char* label);

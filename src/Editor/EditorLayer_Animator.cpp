@@ -14,14 +14,9 @@
 #include "EditorTheme.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
-#include "AnimationSystem.h"
 #include "AnimatorController.h"
-#include "AnimatorLint.h"
-#include "ClipAnalysis.h"
-#include "FirstPersonBodyContract.h"
 #include "FirstPersonAnimation.h"
 #include "Components.h"
-#include "CurveEditor.h"
 #include "AssetLibrary.h"
 #include "Log.h"
 #include "Model.h"
@@ -36,12 +31,8 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <functional>
-#include <map>
-#include <unordered_map>
 
 using namespace EditorInternal;
 namespace fs = std::filesystem;
@@ -308,6 +299,17 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                                      "current state is highlighted in the graph.");
         }
     }
+    // Reload when the file changed on disk under us (another tool, or version control). Runs while the
+    // file can't be read too, so fixing it outside the editor brings the graph back.
+    if (!W.Rel.empty() && ImGui::GetTime() - W.LastStat > 0.5) {
+        W.LastStat = ImGui::GetTime();
+        std::error_code ec;
+        const auto stamp = fs::last_write_time(fs::u8path(W.Abs), ec);
+        if (!ec && stamp != W.Stamp && !W.MovingNodes) {
+            W.Load(W.Rel);
+        }
+    }
+
     if (!W.Loaded) {
         if (!W.Rel.empty())
             ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read %s: %s",
@@ -320,20 +322,13 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         return;
     }
 
-    // Reload when the file changed on disk under us (another tool, or version control).
-    if (ImGui::GetTime() - W.LastStat > 0.5) {
-        W.LastStat = ImGui::GetTime();
-        std::error_code ec;
-        const auto stamp = fs::last_write_time(fs::u8path(W.Abs), ec);
-        if (!ec && stamp != W.Stamp && !W.MovingNodes) {
-            W.Load(W.Rel);
-        }
-    }
-
-    // Live runtime of the chosen rig (Play only).
+    // Live runtime of the chosen rig (Play only), only while it runs the controller shown here: the rig
+    // picked for another controller stays picked when the top-bar combo switches files.
     AnimatorControllerComponent* live = nullptr;
     if (m_InPlayMode && W.Entity != entt::null && world.Registry.valid(W.Entity))
-        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(W.Entity); ac && ac->Started) live = ac;
+        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(W.Entity);
+            ac && ac->Started && !ac->Controller.empty() && ProjectPaths::Resolve(ac->Controller) == W.Abs)
+            live = ac;
     if (m_InPlayMode && !live) {
         // Nothing picked: follow the first object running this controller.
         const std::string absSel = W.Abs;
