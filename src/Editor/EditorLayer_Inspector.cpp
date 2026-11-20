@@ -70,6 +70,7 @@
 #include <memory>
 #include <algorithm>
 #include <unordered_map>
+#include <string_view>
 #include <set>
 #include <sstream>
 #include <fstream>
@@ -4805,642 +4806,539 @@ void EditorLayer::PrefabOverrideLabelMulti(World& world, const std::vector<entt:
     }
 }
 
-// #302: custom, editor-only controls a reflection-registered component wants inside its generic
-// Inspector section. Reflection covers the data (fields, serialization, Add/Remove, multi-edit);
-// anything that needs editor state the game module can't see — the editor camera (Camera), or
-// the eyedropper / Kelvin bar / viewport actions (Light) — lives here. Dispatched by
-// ReflectComponent::Name; `phase` is Top (before the generic fields) or Bottom (after).
-void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& world,
-                                              entt::entity entity, ReflectExtraPhase phase) {
+// The model on `entity`'s Mesh Renderer, or null.
+static Model* ModelOn(entt::registry& registry, entt::entity entity) {
+    const auto* rc = registry.try_get<RenderableComponent>(entity);
+    return rc ? rc->ModelRef.get() : nullptr;
+}
+
+void EditorLayer::DrawParticleSystemExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Bottom) return;
     auto& registry = world.Registry;
-
-    if(std::strcmp(componentName,"Particle System")==0 && phase==ReflectExtraPhase::Bottom) {
-        auto* ps=registry.try_get<ParticleSystemComponent>(entity);if(!ps)return;
-        // A narrow Inspector clipped "Clear" past the right edge: a button that doesn't fit after
-        // the previous one wraps onto the next line (as the X/Y/Z rows do).
-        auto nextButton=[](const char* label) {
-            ImGui::SameLine();
-            if(ImGui::GetContentRegionAvail().x<ButtonWidth(label))ImGui::NewLine();
-        };
-        if(ImGui::Button("Restart"))RestartParticleSystem(*ps);
-        nextButton("Emit Burst");
-        if(ImGui::Button("Emit Burst"))EmitParticleBurst(world,entity,std::max(1,ps->BurstCount));
-        nextButton("Clear");if(ImGui::Button("Clear"))ps->Live.clear();
-        ImGui::TextDisabled("%zu / %d particles",ps->Live.size(),ps->MaxParticles);
-        // A narrow Inspector cut the header's title off mid-word at the right edge: when the full
-        // title doesn't fit beside the arrow, it shortens to "Curves" (same id, so the open state
-        // carries over) and the full title moves to the tooltip.
-        const char* curvesTitle="Lifetime & Emission Curves";
-        const float curvesNeed=ImGui::GetFontSize()+ImGui::GetStyle().FramePadding.x*4.0f+ImGui::CalcTextSize(curvesTitle).x;
-        const bool curvesFit=ImGui::GetContentRegionAvail().x>=curvesNeed;
-        const bool curvesOpen=ImGui::CollapsingHeader(curvesFit?"Lifetime & Emission Curves###ParticleCurves":"Curves###ParticleCurves");
-        if(!curvesFit && ImGui::IsItemHovered())EditorUI::SetTooltip("%s",curvesTitle);
-        if(curvesOpen) {
-            if(ps->EditorCurveIdentity.empty()) {
-                PushUndo(world,"Initialize Particle Curves");ps->EditorCurveIdentity=AssetGuid::Generate().ToString();
-            }
-            const std::string identity=ps->EditorCurveIdentity;
-            const auto* orderComponent=registry.try_get<OrderComponent>(entity);
-            const int order=orderComponent?orderComponent->Value:-1;
-            const std::string ownerScene=m_CurrentScenePath,ownerPrefab=m_PrefabModePath;
-            const std::pair<const char*,std::string ParticleSystemComponent::*> fields[]={
-                {"Size over life",&ParticleSystemComponent::SizeCurve},
-                {"Alpha over life",&ParticleSystemComponent::AlphaCurve},
-                {"Speed over life",&ParticleSystemComponent::SpeedCurve},
-                {"Emission over cycle",&ParticleSystemComponent::EmissionCurve}};
-            for(const auto& field:fields) {
-                Curve curve=Curve::Constant(1);Curve::FromJson(nlohmann::json::parse(ps->*field.second,nullptr,false),curve);
-                CurveEditor::Options options;options.Title=field.first;
-                ImGui::TextUnformatted(field.first);
-                const auto member=field.second;
-                auto valid=[this,&world,order,identity,ownerScene,ownerPrefab]()->ParticleSystemComponent* {
-                    if(m_CurrentScenePath!=ownerScene||m_PrefabModePath!=ownerPrefab)return nullptr;
-                    for(auto [e,p,o]:world.Registry.view<ParticleSystemComponent,OrderComponent>().each())
-                        if(o.Value==order && p.EditorCurveIdentity==identity)return &p;
-                    return nullptr;
-                };
-                CurveEditor::DrawBound(field.first,curve,{0,50},options,
-                    "Particles "+identity+" "+std::to_string(order)+" - "+field.first,
-                    [valid,member](Curve& c,std::string& error) {
-                        auto* p=valid();if(!p){error="This emitter was removed or its scene was replaced.";return false;}
-                        return Curve::FromJson(nlohmann::json::parse(p->*member,nullptr,false),c);
-                    },
-                    [this,&world,valid,member](const Curve& c,std::string& error) {
-                        auto* p=valid();if(!p){error="This emitter was removed or its scene was replaced.";return false;}
-                        PushUndo(world,"Edit Particle Curve");p->*member=c.ToJson(false).dump();return true;
-                    });
-            }
-        }
-        return;
-    }
-
-    // #128 — Unity's "needs a Collider" box: a Rigidbody with no Collider isn't added to the
-    // physics world at all, so it silently never falls or collides.
-    if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top &&
-        !registry.all_of<ColliderComponent>(entity)) {
-        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
-                           "No Collider - this Rigidbody won't simulate. Add a Collider.");
-    }
-
-    // #175 — the Animation component's clip picker (the model's clip names) and an edit-mode
-    // preview; the preview is the Mesh Renderer's old runtime-only Play button, now saved as a
-    // component that also plays in Play mode.
-    if (std::strcmp(componentName, "Animation") == 0 && phase == ReflectExtraPhase::Top) {
-        auto* anim = registry.try_get<SkeletalAnimationComponent>(entity);
-        const auto* rc = registry.try_get<RenderableComponent>(entity);
-        Model* model = rc ? rc->ModelRef.get() : nullptr;
-        if (!anim || !m_AssetsPtr) return;
-        AssetLibrary& assets = *m_AssetsPtr;
-        if (!model) {
-            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
-                               "Needs a Mesh Renderer with a rigged model.");
-            return;
-        }
-        PropertyLabel("Clip", "Which clip to play: one of this model's own, or a clip from another model file\n"
-                              "with the same skeleton (e.g. a Mixamo animation exported without skin).\n"
-                              "Empty = the model's first clip.");
-        const int resolved = ResolveAnimationClip(*model, anim->Clip, assets);
-        const std::string preview = anim->Clip.empty()
-            ? (model->OwnAnimationCount() > 0 ? model->AnimationName(0) + " (first)" : std::string("(none)"))
-            : (resolved >= 0 ? model->AnimationName(resolved) : anim->Clip);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        if (ImGui::BeginCombo("##animclip", preview.c_str(), ImGuiComboFlags_HeightLarge)) {
-            static char filter[128] = "";
-            ClipFilterBox(filter, sizeof filter);
-            auto pick = [&](const std::string& ref, const std::string& label, float seconds) {
-                if (!ClipFilterMatch(filter, label + " " + ref)) return;
-                char text[256];
-                std::snprintf(text, sizeof(text), "%s  (%.2fs)", label.c_str(), seconds);
-                if (ImGui::Selectable(text, ref == anim->Clip)) {
-                    PushUndo(world, "Set Animation Clip");
-                    anim->Clip = ref;
-                }
-            };
-            for (int i = 0; i < model->OwnAnimationCount(); ++i)
-                pick(model->AnimationName(i), model->AnimationName(i), model->AnimationLength(i));
-            // Clips in other model files of the project that animate this skeleton (#175).
-            bool header = false;
-            for (const auto& src : assets.Models()) {
-                if (!src || src->Path() == model->Path() || src->OwnAnimationCount() == 0) continue;
-                for (int j = 0; j < src->OwnAnimationCount(); ++j) {
-                    const std::string ref = AnimationClipRef(*src, j);
-                    const int idx = ResolveAnimationClip(*model, ref, assets); // attaches if compatible
-                    if (idx < 0) continue;
-                    if (!header) { EditorUIPrimitives::SectionHeader("From other files"); header = true; }
-                    pick(ref, model->AnimationName(idx), model->AnimationLength(idx));
-                }
-            }
-            // Animation files no scene has loaded yet (e.g. an imported pack).
-            std::string file = anim->Clip;
-            if (ProjectClipFileList(filter, file) && file != anim->Clip) {
-                PushUndo(world, "Set Animation Clip");
-                anim->Clip = file;
-            }
-            ImGui::EndCombo();
-        }
-        if (resolved < 0 && !anim->Clip.empty())
-            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  '%s' isn't a clip this model can play; the first clip plays.", anim->Clip.c_str());
-        if (!m_InPlayMode) {
-            PropertyLabel("Preview", "Plays the clip in the Scene view while editing (not saved).");
-            const bool previewing = model->IsPlayingAnimation();
-            if (EditorUIPrimitives::SecondaryButton(previewing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play")) {
-                if (previewing) model->StopAnimation();
-                else {
-                    // With root motion on, preview in place: the object doesn't move in edit mode.
-                    RootMotionSettings rms;
-                    rms.Rotation = anim->RootMotion.Rotation;
-                    rms.Vertical = anim->RootMotion.Vertical;
-                    model->SetRootMotion(anim->RootMotion.Mode != 0 ? model->FindRootMotionNode(anim->RootMotion.Bone) : -1, rms);
-                    model->PlayAnimation(resolved < 0 ? 0 : resolved, 0.0f, (AnimationWrapMode)std::clamp(anim->WrapMode, 0, 3), anim->Speed);
-                }
-            }
-        }
-        return;
-    }
-
-    if (std::strcmp(componentName, "Animator Controller") == 0 && phase == ReflectExtraPhase::Top) {
-        DrawAnimatorControllerExtra(world, entity); // #175 Part B
-        return;
-    }
-    // Root motion: the bone picker and live readout, under the Root Motion group.
-    if (phase == ReflectExtraPhase::Bottom &&
-        (std::strcmp(componentName, "Animator Controller") == 0 || std::strcmp(componentName, "Animation") == 0)) {
-        const auto* rc = registry.try_get<RenderableComponent>(entity);
-        Model* model = rc ? rc->ModelRef.get() : nullptr;
-        if (std::strcmp(componentName, "Animation") == 0) {
-            if (auto* sa = registry.try_get<SkeletalAnimationComponent>(entity)) DrawRootMotionExtra(world, entity, sa->RootMotion, model);
-        } else if (auto* ac = registry.try_get<AnimatorControllerComponent>(entity)) {
-            DrawRootMotionExtra(world, entity, ac->RootMotion, model);
-        }
-        return;
-    }
-
-    // First Person Body: check the setup against what the body needs (the controller's parameters and
-    // states, bones, piece names) so a missing piece is said out loud instead of a feature silently
-    // doing nothing. FPBody::Validate is the same table.
-    if (std::strcmp(componentName, "Character Outfit") == 0 && phase == ReflectExtraPhase::Bottom) {
-        DrawCharacterOutfitEditor(world, entity);
-        return;
-    }
-
-    // Reflection Probe: captures only redo on their own when a probe moves; lights and props moving don't.
-    if (std::strcmp(componentName, "Reflection Probe") == 0 && phase == ReflectExtraPhase::Bottom) {
-        if (EditorUIPrimitives::SecondaryButton(ICON_FA_ROTATE "  Recapture Probes"))
-            ReflectionProbeCapture::RequestRecapture();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Render every Capture Scene probe's room again (a few frames each).\n"
-                                 "They capture at scene load and when a probe moves; after moving lights or props, press this.");
-        return;
-    }
-
-    // Decals: asset status up top; preview + atlas-frame picker, channel matrix, fade curves,
-    // Fit to Surface and the shared asset's settings below (EditorLayer_Decals.cpp).
-    if (std::strcmp(componentName, "Decal") == 0) {
-        DrawDecalComponentExtra(world, entity, phase);
-        return;
-    }
-
-    if (std::strcmp(componentName, "First Person Body") == 0 && phase == ReflectExtraPhase::Top) {
-        const auto* cfg = registry.try_get<FirstPersonBodyComponent>(entity);
-        if (!cfg) return;
-        FPBody::ValidationInput in;
-        in.Config = cfg;
-        in.BodyCount = (int)registry.view<FirstPersonBodyComponent>().size();
-        std::vector<entt::entity> pieces;
-        auto rigged = [&](entt::entity e) {
-            const auto* rc = registry.try_get<RenderableComponent>(e);
-            return rc && rc->ModelRef && rc->ModelRef->NodeCount() > 0;
-        };
-        if (rigged(entity)) pieces.push_back(entity);
-        if (const auto* h = registry.try_get<HierarchyComponent>(entity))
-            for (entt::entity child : h->Children)
-                if (registry.valid(child) && rigged(child)) pieces.push_back(child);
-        in.HasPieces = !pieces.empty();
-        // The driver: the piece with the whole skeleton (FirstPersonBody::Start picks the same), named through the Bone Map.
-        entt::entity driver = entt::null;
-        {
-            const auto map = FPBody::ParseBoneMap(cfg->BoneMap);
-            const auto bone = [&](const std::string& b) { const auto it = map.find(b); return it != map.end() ? it->second : b; };
-            for (entt::entity e : pieces) {
-                const Model& m = *registry.get<RenderableComponent>(e).ModelRef;
-                if (m.NodeIndex(bone(FPBody::kBonePelvis)) >= 0 && m.NodeIndex(bone(cfg->HeadBone)) >= 0 && m.NodeIndex(bone(FPBody::kBoneHand[1])) >= 0) {
-                    driver = e;
-                    break;
-                }
-            }
-        }
-        in.HasDriverPiece = driver != entt::null;
-        for (entt::entity e : pieces)
-            if (const auto* n = registry.try_get<NameComponent>(e)) in.PieceNames.push_back(n->Name);
-        Model* driverModel = nullptr;
-        if (driver != entt::null) driverModel = registry.get<RenderableComponent>(driver).ModelRef.get();
-        if (driverModel) in.HasBone = [driverModel](const std::string& b) { return driverModel->NodeIndex(b) >= 0; };
-
-        SetupChecksUI::Draw(FPBody::Validate(in), "Setup: everything the body needs is there", "##bodysetup");
-        ImGui::Spacing();
-        // Live: what the body is doing right now (Play only).
-        const BodyDebug::Snapshot& d = BodyDebug::Info();
-        if (d.Valid && ImGui::TreeNodeEx("##bodylive", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth, "Live (Play)")) {
-            auto row = [](const char* label, const char* fmt, auto... args) {
-                ImGui::TextDisabled("%s", label);
-                ImGui::SameLine(190.0f * EditorTheme::Scale());
-                ImGui::Text(fmt, args...);
-            };
-            row("Animator state", "%s  (%.0f%% of the pass)", d.AnimatorState.c_str(), (d.StateTime - std::floor(d.StateTime)) * 100.0f);
-            row("Move / clips carry", "%.2f / %.2f m/s", d.MoveSpeed, d.RootSpeed);
-            row("Turning", "%s   view %+.0f deg off, chest twist %+.0f deg", d.Turning ? "yes" : "no", d.ViewOffsetDeg, d.TwistDeg);
-            row("Idle / run time", "%.2f s  /  %.2f s%s", d.IdleTime, d.MoveTime, d.Still ? "   (standing still)" : "");
-            if (!d.LastTrigger.empty()) row("Last trigger", "%s  %.1f s ago", d.LastTrigger.c_str(), d.LastTriggerAgo);
-            row("Foot IK", "%.0f%%   L %+.0f cm %s %.0f%%   R %+.0f cm %s %.0f%%", d.FootWeight * 100.0f,
-                d.FootOffset[0] * 100.0f, d.FootPlanted[0] ? "planted" : "air", d.FootLock[0] * 100.0f,
-                d.FootOffset[1] * 100.0f, d.FootPlanted[1] ? "planted" : "air", d.FootLock[1] * 100.0f);
-            row("Stair ease", "%+.1f cm", d.StepOffset * 100.0f);
-            row("Arms / eye", "arms follow weapon %.0f%%,  eye off shoulders %.1f cm", d.ArmsWeight * 100.0f, d.EyeSlack * 100.0f);
-            row("Arm steadying", "shoulders held L %.1f cm  R %.1f cm", d.ArmSteadyShift[0] * 100.0f, d.ArmSteadyShift[1] * 100.0f);
-            row("Shoulder shrug", "toward the gun L %.1f cm  R %.1f cm", d.ShrugShift[0] * 100.0f, d.ShrugShift[1] * 100.0f);
-            row("Reach", "L %.0f%%  R %.0f%% of the arm", d.Reach[0] * 100.0f, d.Reach[1] * 100.0f);
-            row("Hands off the gun", "L %.1f cm  R %.1f cm", d.HandGap[0] * 100.0f, d.HandGap[1] * 100.0f);
-            row("Shoulders vs rig", "L %.1f cm  R %.1f cm", d.ShoulderGap[0] * 100.0f, d.ShoulderGap[1] * 100.0f);
-            row("Shoulder line", "rig %+.1f deg  chest %+.1f deg", d.RigBlade, d.ChestBlade);
-            row("Reach lean", "chest toward the gun %.1f deg", d.ReachLean);
-            row("Eye to upper arm", "rig's L %.1f cm  R %.1f cm   body's L %.1f cm  R %.1f cm   (near plane %.1f cm)",
-                d.EyeToUpperArmRig[0] * 100.0f, d.EyeToUpperArmRig[1] * 100.0f, d.EyeToUpperArmBody[0] * 100.0f,
-                d.EyeToUpperArmBody[1] * 100.0f, d.NearPlane * 100.0f);
-            if (!d.ProbePiece.empty())
-                row("Nearest in view", "%s  %.1f cm ahead  (bone %s, %s pass)", d.ProbePiece.c_str(), d.ProbeDepth * 100.0f,
-                    d.ProbeBone.c_str(), d.ProbeViewModel ? "view-model" : "world");
-            row("Scene overlay", "%s   %d lines", BodyDebug::Enabled() ? "on" : "off (Gizmos > Player body)", (int)(BodyDebug::Verts().size() / 14));
-            ImGui::TreePop();
-        }
-        ImGui::Spacing();
-        return;
-    }
-
-    // First Person Controller: the weapon's tuning (recoil, sway, bob, IK, ...) lives in its
-    // weapon definition, stored alongside the weapon's prefab and animation controller.
-    if (std::strcmp(componentName, "First Person Controller") == 0 && phase == ReflectExtraPhase::Bottom) {
-        const auto* fp = registry.try_get<FirstPersonControllerComponent>(entity);
-        if (!fp) return;
-        for(const auto& slot:{std::pair<const char*,const std::string*>{"Edit Primary Weapon Definition",&fp->PrimaryWeaponPrefab},
-                              {"Edit Secondary Weapon Definition",&fp->SecondaryWeaponPrefab},
-                              {"Edit Sidearm Weapon Definition",&fp->SidearmWeaponPrefab}}) {
-            if(slot.second->empty())continue;
-            ImGui::BeginDisabled(m_InPlayMode);
-            if(ActionButton(slot.first,"Open the weapon prefab's Definition and muzzle-effect tabs",false,ImVec2(-FLT_MIN,0)))
-                m_InspectorRequestedPrefab=ProjectPaths::Resolve(*slot.second);
-            ImGui::EndDisabled();
-        }
-        if (fp->AnimationSet.empty()) return;
-        const std::string path = std::filesystem::u8path(ProjectPaths::Resolve(fp->AnimationSet)).generic_u8string();
-        std::error_code ec;
-        const bool exists = std::filesystem::exists(std::filesystem::u8path(path), ec);
-        ImGui::BeginDisabled(!exists);
-        if (ActionButton(ICON_FA_CROSSHAIRS "  Edit Animation Set",
-                         exists ? "Open this weapon's recoil, sway, bob, lean and IK tuning in the Inspector"
-                                : "The Animation Set file doesn't exist",
-                         false, ImVec2(-FLT_MIN, 0.0f))) {
-            ClearSelection();
-            m_SelectedAssetKey = path;
-            m_SelectedAssetIsFolder = false;
-            ClearExtraAssetSelection();
-            if (m_AssetsPtr) NavigateAssetFolder(m_AssetsPtr->DiskFolderFor(path));
-        }
-        ImGui::EndDisabled();
-        return;
-    }
-
-    // IK Rig: say why it would do nothing (no controller, no model, bones the model doesn't
-    // have), and offer the common rigs' bone names so nobody has to type them.
-    if (std::strcmp(componentName, "IK Rig") == 0 && phase == ReflectExtraPhase::Top) {
-        auto* rig = registry.try_get<IKRigComponent>(entity);
-        if (!rig) return;
-        const ImVec4 warn = EditorUIPrimitives::WarningColor();
-        const auto warning = [&](const std::string& text) {
-            ImGui::PushStyleColor(ImGuiCol_Text, warn);
-            ImGui::TextWrapped(ICON_FA_TRIANGLE_EXCLAMATION "  %s", text.c_str());
-            ImGui::PopStyleColor();
-        };
-        const auto* rc = registry.try_get<RenderableComponent>(entity);
-        const Model* model = rc ? rc->ModelRef.get() : nullptr;
-        if (!registry.all_of<AnimatorControllerComponent>(entity))
-            warning("Needs an Animator Controller on this object: the rig works on the controller's pose.");
-        if (!model) {
-            warning("Needs a Mesh Renderer with a rigged model.");
-        } else {
-            const std::vector<std::string> missing = IK::MissingBones(*rig, *model);
-            if (!missing.empty()) {
-                std::string list;
-                for (const auto& m : missing) list += (list.empty() ? "" : ", ") + m;
-                warning("Not on this model: " + list + ". The parts that use them are skipped.");
-            }
-        }
-        if (!rig->LimbA.Enabled && !rig->LimbB.Enabled && !rig->LookAtEnabled)
-            ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  Enable a limb or the look-at below, or pick a preset.");
-
-        if (EditorUIPrimitives::SecondaryButton(ICON_FA_WAND_MAGIC_SPARKLES "  Presets", ImVec2(-FLT_MIN, 0.0f))) ImGui::OpenPopup("##ikpresets");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Fill in the bone names of a common skeleton");
-        if (ImGui::BeginPopup("##ikpresets")) {
-            const auto limb = [](IKLimb& l, const char* upper, const char* lower, const char* end, const char* target) {
-                l.Enabled = true;
-                l.Upper = upper;
-                l.Lower = lower;
-                l.End = end;
-                l.Target = target;
-            };
-            if (ImGui::MenuItem("UE5 Mannequin: arms to IK hand bones")) {
-                PushUndo(world, "IK Rig Preset");
-                limb(rig->LimbA, "upperarm_r", "lowerarm_r", "hand_r", "ik_hand_r");
-                limb(rig->LimbB, "upperarm_l", "lowerarm_l", "hand_l", "ik_hand_l");
-                rig->LimbA.KeepAnimatedOffset = rig->LimbB.KeepAnimatedOffset = false;
-            }
-            if (ImGui::MenuItem("UE5 Mannequin: legs to IK foot bones")) {
-                PushUndo(world, "IK Rig Preset");
-                limb(rig->LimbA, "thigh_r", "calf_r", "foot_r", "ik_foot_r");
-                limb(rig->LimbB, "thigh_l", "calf_l", "foot_l", "ik_foot_l");
-                rig->LimbA.KeepAnimatedOffset = rig->LimbB.KeepAnimatedOffset = false;
-            }
-            if (ImGui::MenuItem("Mixamo: arms")) {
-                PushUndo(world, "IK Rig Preset");
-                limb(rig->LimbA, "mixamorig:RightArm", "mixamorig:RightForeArm", "mixamorig:RightHand", "");
-                limb(rig->LimbB, "mixamorig:LeftArm", "mixamorig:LeftForeArm", "mixamorig:LeftHand", "");
-            }
-            if (ImGui::MenuItem("Mixamo: legs")) {
-                PushUndo(world, "IK Rig Preset");
-                limb(rig->LimbA, "mixamorig:RightUpLeg", "mixamorig:RightLeg", "mixamorig:RightFoot", "");
-                limb(rig->LimbB, "mixamorig:LeftUpLeg", "mixamorig:LeftLeg", "mixamorig:LeftFoot", "");
-            }
-            ImGui::Separator();
-            HintText("Mixamo rigs have no IK target bones:\nset each limb's Target yourself.");
-            ImGui::EndPopup();
-        }
-        return;
-    }
-
-    if (std::strcmp(componentName, "Camera") == 0 && phase == ReflectExtraPhase::Bottom) {
-        auto* cam = registry.try_get<CameraComponent>(entity);
-        if (!cam) return;
-        // Keep Far strictly beyond Near — the reflected field clamps can't express a cross-field
-        // relation, and a degenerate range renders nothing.
-        if (cam->FarPlane <= cam->NearPlane) cam->FarPlane = cam->NearPlane + 1.0f;
-
-        ImGui::Spacing();
-        if (EditorUIPrimitives::SecondaryButton(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
-            AlignCameraToView(world, entity, *m_EditorCameraPtr); // world pose -> the camera's parent frame
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Snap this camera to the editor viewport's current position, aim and FOV.");
-        return;
-    }
-
-    if (std::strcmp(componentName, "Light") == 0) {
-        auto* light = registry.try_get<LightComponent>(entity);
-        if (!light) return;
-
-        // #110 — say so when this light's shadow isn't drawn because more important shadowed
-        // lights took every slot (it used to silently lose its shadow).
-        if (phase == ReflectExtraPhase::Bottom && light->Shadow.Enabled && m_ShadowOverBudget.count(entity)) {
-            const bool spot = light->Kind == LightComponent::Type::Spot;
-            ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::WarningColor());
-            ImGui::TextWrapped(ICON_FA_TRIANGLE_EXCLAMATION "  Shadow not rendered: over budget");
-            ImGui::PopStyleColor();
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("At most %d shadowed %s lights are drawn at once. The ones nearest and\n"
-                                     "brightest from the camera win; this one lost, so it lights without a shadow.\n"
-                                     "Raise Max %s shadows in Lighting > Shadows, move closer, raise its\n"
-                                     "intensity/range, or turn shadows off on other lights.",
-                                     spot ? m_SpotShadowBudget : m_PointShadowBudget,
-                                     spot ? "spot" : "point", spot ? "spot" : "point");
-        }
-
-        // #203 - Unity's Culling Mask: which layers this light reaches, as a layer checklist.
-        if (phase == ReflectExtraPhase::Bottom) {
-            const std::uint32_t mask = (std::uint32_t)light->CullingMask;
-            int on = 0, lastOn = -1;
-            for (int i = 0; i < LayerRegistry::kCount; ++i)
-                if (mask & (1u << i)) { ++on; lastOn = i; }
-            std::string preview = on == LayerRegistry::kCount ? std::string("Everything")
-                                : on == 0 ? std::string("Nothing")
-                                : on == 1 ? LayerRegistry::DisplayName(lastOn)
-                                          : std::string("Mixed...");
-            PropertyLabel("Culling Mask", "Which layers this light illuminates. Objects on other layers (the Layer\n"
-                                          "dropdown at the top of the Inspector) don't receive it. Shadows are unaffected.");
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::BeginCombo("##LightCullingMask", preview.c_str())) {
-                auto setMask = [&](std::uint32_t m) {
-                    PushUndo(world, "Edit Light Culling Mask");
-                    light->CullingMask = (int)m;
-                };
-                if (ImGui::Selectable("Everything", on == LayerRegistry::kCount, ImGuiSelectableFlags_DontClosePopups)) setMask(0xFFFFFFFFu);
-                if (ImGui::Selectable("Nothing", on == 0, ImGuiSelectableFlags_DontClosePopups)) setMask(0u);
-                ImGui::Separator();
-                for (int i = 0; i < LayerRegistry::kCount; ++i) {
-                    if (!LayerRegistry::IsListed(i)) continue; // named layers only, like Unity; unnamed bits keep their value
-                    bool bit = (mask & (1u << i)) != 0;
-                    const std::string label = LayerRegistry::DisplayName(i) + "##cm" + std::to_string(i);
-                    if (EditorUIPrimitives::Checkbox(label.c_str(), &bit))
-                        setMask(bit ? (mask | (1u << i)) : (mask & ~(1u << i)));
-                }
-                ImGui::EndCombo();
-            }
-        }
-
-        if (phase == ReflectExtraPhase::Top) {
-            // Colour: a raw swatch (+ eyedropper), or a Kelvin bar when ColorTempK > 0 (the
-            // swatch is then driven, not authored). The K / RGB button flips between the two.
-            // Ported verbatim from the old hand-coded Light section; sits above the reflected
-            // Type field is not possible, so it leads the section body instead.
-            PropertyLabel("Color", "The light's color. Toggle 'K' to drive it from a color temperature instead."); // #19
-            if (light->ColorTempK > 0.0f) {
-                float k = light->ColorTempK;
-                KelvinBarResult kr = KelvinBar("##LightKelvinBar", k);
-                if (kr.activated) PushUndo(world, "Edit Light");
-                if (kr.changed) { light->ColorTempK = k; light->Color = KelvinToRGB(k); }
-                ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-                if (ActionButton("RGB##LightKelvinOff", "Set the color directly (RGB)")) { // #19
-                    PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f;
-                }
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
-            } else {
-                // Defect #1 — this row's trailing space was a hardcoded -90.0f, sized for neither
-                // of the two buttons that actually follow (the eyedropper, then "K"): on any panel
-                // width the swatch claimed pixels the "K" button needed, clipping it off the right
-                // edge with no wrap/scroll (widening the panel didn't help — the reserve was fixed,
-                // not content-region-relative).
-                //
-                // Defect #1 follow-up — a first fix budgeted the reserve from CalcTextSize() sums fed
-                // into SetNextItemWidth(-trailing) on the ColorEdit3 (mirroring how KelvinBar budgets
-                // its own trailing "RGB" button). That neither clipped nor left a gap on paper, but
-                // live-verified (zoomed screenshots + a temporary solid-red-rect probe drawn over the
-                // K button's own item rect) it was clipped almost entirely — only a 2-3px sliver of a
-                // ~16px button painted, hitbox/tooltip unaffected since hover-testing ignores the clip
-                // rect. This component's body draws inside BeginComponentSection's card, a BeginChild
-                // with ImGuiChildFlags_AutoResizeY — CalcItemWidth()'s ContentRegionAvail()-relative
-                // math (correct on paper) and this child's actual live ClipRect disagreed by a wide
-                // margin in that context. GetWindowContentRegionMax().x is the anchor
-                // BeginComponentSection's own right-aligned "..."/remove buttons already use
-                // successfully in this exact child (confirmed live, they render fine) — anchor the
-                // eyedropper and K to that instead of trusting the child to honour a negative
-                // SetNextItemWidth budget.
-                const ImGuiStyle& lcStyle = ImGui::GetStyle();
-                const float eyedropW = ImGui::CalcTextSize(ICON_FA_EYE_DROPPER).x; // SmallButton: zero frame padding
-                const float kBtnW = ImGui::CalcTextSize("K").x + lcStyle.FramePadding.x * 2.0f;
-                const float contentRight = ImGui::GetWindowContentRegionMax().x;
-                const float kBtnX = contentRight - kBtnW;
-                const float eyedropX = kBtnX - lcStyle.ItemSpacing.x - eyedropW;
-                const float colorEditRight = eyedropX - 4.0f; // EyedropperButton's own SameLine gap
-                const float colorEditW = colorEditRight - ImGui::GetCursorPosX();
-                // At the default Inspector width the swatch, eyedropper and K leave the hex text a
-                // ~28px sliver ("#I"). Below what "#RRGGBB" needs, show the swatch alone; its
-                // picker popup still takes hex.
-                const float hexNeedW = ImGui::CalcTextSize("#DDDDDD").x + lcStyle.FramePadding.x * 2.0f +
-                                       lcStyle.ItemInnerSpacing.x + ImGui::GetFrameHeight();
-                ImGui::SetNextItemWidth(colorEditW);
-                EditorUI::ColorEditLinear("##LightColor", &light->Color.x,
-                                          ImGuiColorEditFlags_DisplayHex | (colorEditW < hexNeedW ? ImGuiColorEditFlags_NoInputs : 0));
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-                EyedropperButton(this, world, &light->Color);
-                ImGui::SameLine(kBtnX);
-                if (ActionButton("K##LightKelvinOn", "Drive the color from a temperature (Kelvin)")) { // #19
-                    PushUndo(world, "Edit Light");
-                    light->ColorTempK = 6500.0f;
-                    light->Color = KelvinToRGB(6500.0f);
-                }
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drive the color from a temperature in Kelvin (1500-15000).");
-            }
-            return;
-        }
-
-        // Bottom: viewport workflow buttons (#140 phase 4).
-        ImGui::Spacing();
-        if (EditorUIPrimitives::SecondaryButton(ICON_FA_EYE "  Look through", ImVec2(-FLT_MIN, 0.0f)))
-            m_PendingLookThrough = entity;
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("View from this light's POV. Fly the camera to move / re-aim the\nlight from there. Spot uses its cone angle for FOV; Esc restores the camera.");
-        if (EditorUIPrimitives::SecondaryButton(ICON_FA_DOWN_LONG "  Drop to surface", ImVec2(-FLT_MIN, 0.0f))) {
-            if (!DropLightToSurface(world, entity))
-                Log::Info("Drop to surface: nothing directly below this light.");
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Move the light straight down onto the nearest mesh surface below it.");
-        return;
-    }
-
-    if (std::strcmp(componentName, "Audio Source") == 0 && phase == ReflectExtraPhase::Bottom) {
-        auto* audio = registry.try_get<AudioSourceComponent>(entity);
-        if (!audio || audio->SoundPath.empty()) return;
-        if (ActionButton(ICON_FA_PLAY "  Preview", "Play the clip once, right now, to check how it sounds"))
-            AudioEngine::Play(audio->SoundPath);
-        return;
-    }
-
-    // Collider moved onto reflection (Phase 4 / #6 item 1): Shape/Is Trigger/Center/Bounciness/
-    // Friction come from the generic fields above. HalfExtents means something different per
-    // Shape (see ComponentRegistry.cpp's registration comment), so it stays hand-coded here,
-    // same escape hatch Light's Kelvin bar uses.
-    // #170 - Physic Material asset: pick / create a shared .physicmaterial and edit it in place
-    // (saved straight to the file, like an Animator Controller). Its values replace this
-    // collider's own surface fields below when the PhysX shape is built.
-    if (std::strcmp(componentName, "Collider") == 0 && phase == ReflectExtraPhase::Top) {
-        auto* col = registry.try_get<ColliderComponent>(entity);
-        if (!col) return;
-        ImGui::TextUnformatted("Material");
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.35f);
-        const float newW = ImGui::CalcTextSize(ICON_FA_PLUS " New").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - newW - ImGui::GetStyle().ItemSpacing.x);
-        if (ImGui::BeginCombo("##physmat", col->Material.empty() ? "(none - values below)" : col->Material.c_str())) {
-            if (ImGui::Selectable("(none - values below)", col->Material.empty())) {
-                PushUndo(world, "Set Physic Material");
-                col->Material.clear();
-            }
-            // Listed once as the popup opens: the lookup walks the whole project folder.
-            static std::vector<std::string> s_PhysicMaterials;
-            if (ImGui::IsWindowAppearing()) s_PhysicMaterials = FindPhysicMaterials();
-            for (const std::string& path : s_PhysicMaterials)
-                if (ImGui::Selectable(path.c_str(), path == col->Material)) {
-                    PushUndo(world, "Set Physic Material");
-                    col->Material = path;
-                }
-            ImGui::EndCombo();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("A shared Physic Material asset (.physicmaterial). When set, its friction and\n"
-                                 "bounciness replace this collider's own values below, for every collider using it.");
+    auto* ps=registry.try_get<ParticleSystemComponent>(entity);if(!ps)return;
+    // A narrow Inspector clipped "Clear" past the right edge: a button that doesn't fit after
+    // the previous one wraps onto the next line (as the X/Y/Z rows do).
+    auto nextButton=[](const char* label) {
         ImGui::SameLine();
-        if (ActionButton(ICON_FA_PLUS " New", "Create a Physic Material from this collider's current values and use it")) {
-            const auto* nc = registry.try_get<NameComponent>(entity);
-            std::string base = nc && !nc->Name.empty() ? nc->Name : std::string("Physic Material");
-            for (char& ch : base) if (std::strchr("<>:\"/\\|?*", ch)) ch = '_';
-            std::error_code ec;
-            std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve("physics")), ec);
-            std::string rel = "physics/" + base + ".physicmaterial";
-            for (int n = 2; std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(rel)), ec); ++n)
-                rel = "physics/" + base + " " + std::to_string(n) + ".physicmaterial";
-            PhysicMaterialAsset pm;
-            pm.DynamicFriction = col->Friction;
-            pm.StaticFriction = col->StaticFriction;
-            pm.Bounciness = col->Bounciness;
-            pm.FrictionCombine = col->FrictionCombine;
-            pm.BounceCombine = col->BounceCombine;
-            if (pm.SaveFile(ProjectPaths::Resolve(rel))) {
-                PushUndo(world, "New Physic Material");
-                col->Material = rel;
-                Log::Info("Created Physic Material " + rel + ".");
-            } else {
-                Log::Error("Couldn't write " + rel + ".");
-            }
+        if(ImGui::GetContentRegionAvail().x<ButtonWidth(label))ImGui::NewLine();
+    };
+    if(ImGui::Button("Restart"))RestartParticleSystem(*ps);
+    nextButton("Emit Burst");
+    if(ImGui::Button("Emit Burst"))EmitParticleBurst(world,entity,std::max(1,ps->BurstCount));
+    nextButton("Clear");if(ImGui::Button("Clear"))ps->Live.clear();
+    ImGui::TextDisabled("%zu / %d particles",ps->Live.size(),ps->MaxParticles);
+    // A narrow Inspector cut the header's title off mid-word at the right edge: when the full
+    // title doesn't fit beside the arrow, it shortens to "Curves" (same id, so the open state
+    // carries over) and the full title moves to the tooltip.
+    const char* curvesTitle="Lifetime & Emission Curves";
+    const float curvesNeed=ImGui::GetFontSize()+ImGui::GetStyle().FramePadding.x*4.0f+ImGui::CalcTextSize(curvesTitle).x;
+    const bool curvesFit=ImGui::GetContentRegionAvail().x>=curvesNeed;
+    const bool curvesOpen=ImGui::CollapsingHeader(curvesFit?"Lifetime & Emission Curves###ParticleCurves":"Curves###ParticleCurves");
+    if(!curvesFit && ImGui::IsItemHovered())EditorUI::SetTooltip("%s",curvesTitle);
+    if(curvesOpen) {
+        if(ps->EditorCurveIdentity.empty()) {
+            PushUndo(world,"Initialize Particle Curves");ps->EditorCurveIdentity=AssetGuid::Generate().ToString();
         }
-        if (col->Material.empty()) return;
+        const std::string identity=ps->EditorCurveIdentity;
+        const auto* orderComponent=registry.try_get<OrderComponent>(entity);
+        const int order=orderComponent?orderComponent->Value:-1;
+        const std::string ownerScene=m_CurrentScenePath,ownerPrefab=m_PrefabModePath;
+        const std::pair<const char*,std::string ParticleSystemComponent::*> fields[]={
+            {"Size over life",&ParticleSystemComponent::SizeCurve},
+            {"Alpha over life",&ParticleSystemComponent::AlphaCurve},
+            {"Speed over life",&ParticleSystemComponent::SpeedCurve},
+            {"Emission over cycle",&ParticleSystemComponent::EmissionCurve}};
+        for(const auto& field:fields) {
+            Curve curve=Curve::Constant(1);Curve::FromJson(nlohmann::json::parse(ps->*field.second,nullptr,false),curve);
+            CurveEditor::Options options;options.Title=field.first;
+            ImGui::TextUnformatted(field.first);
+            const auto member=field.second;
+            auto valid=[this,&world,order,identity,ownerScene,ownerPrefab]()->ParticleSystemComponent* {
+                if(m_CurrentScenePath!=ownerScene||m_PrefabModePath!=ownerPrefab)return nullptr;
+                for(auto [e,p,o]:world.Registry.view<ParticleSystemComponent,OrderComponent>().each())
+                    if(o.Value==order && p.EditorCurveIdentity==identity)return &p;
+                return nullptr;
+            };
+            CurveEditor::DrawBound(field.first,curve,{0,50},options,
+                "Particles "+identity+" "+std::to_string(order)+" - "+field.first,
+                [valid,member](Curve& c,std::string& error) {
+                    auto* p=valid();if(!p){error="This emitter was removed or its scene was replaced.";return false;}
+                    return Curve::FromJson(nlohmann::json::parse(p->*member,nullptr,false),c);
+                },
+                [this,&world,valid,member](const Curve& c,std::string& error) {
+                    auto* p=valid();if(!p){error="This emitter was removed or its scene was replaced.";return false;}
+                    PushUndo(world,"Edit Particle Curve");p->*member=c.ToJson(false).dump();return true;
+                });
+        }
+    }
+}
 
-        // Working copy, re-read when the file changes on disk (another collider's Inspector, a
-        // text editor, a VCS update).
-        static std::string s_PmPath;
-        static std::filesystem::file_time_type s_PmStamp;
-        static PhysicMaterialAsset s_Pm;
-        const std::string abs = ProjectPaths::Resolve(col->Material);
-        std::error_code ec;
-        const auto stamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
-        if (ec) {
-            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
-                               "The material file is missing - this collider's own values are used.");
-            return;
-        }
-        if (s_PmPath != abs || s_PmStamp != stamp) {
-            std::string err;
-            PhysicMaterialAsset loaded;
-            if (!PhysicMaterialAsset::LoadFile(abs, loaded, &err)) {
-                ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read it: %s", err.c_str());
-                return;
+// #128 — Unity's "needs a Collider" box: a Rigidbody with no Collider isn't added to the
+// physics world at all, so it silently never falls or collides.
+void EditorLayer::DrawRigidbodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Top) return;
+    if (world.Registry.all_of<ColliderComponent>(entity)) return;
+    ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                       "No Collider - this Rigidbody won't simulate. Add a Collider.");
+}
+
+// #175 — the Animation component's clip picker (the model's clip names) and an edit-mode
+// preview; the preview is the Mesh Renderer's old runtime-only Play button, now saved as a
+// component that also plays in Play mode.
+void EditorLayer::DrawAnimationExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    auto& registry = world.Registry;
+    if (phase == ReflectExtraPhase::Bottom) { // the Root Motion group: bone picker and live readout
+        if (auto* sa = registry.try_get<SkeletalAnimationComponent>(entity))
+            DrawRootMotionExtra(world, entity, sa->RootMotion, ModelOn(registry, entity));
+        return;
+    }
+    auto* anim = registry.try_get<SkeletalAnimationComponent>(entity);
+    const auto* rc = registry.try_get<RenderableComponent>(entity);
+    Model* model = rc ? rc->ModelRef.get() : nullptr;
+    if (!anim || !m_AssetsPtr) return;
+    AssetLibrary& assets = *m_AssetsPtr;
+    if (!model) {
+        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                           "Needs a Mesh Renderer with a rigged model.");
+        return;
+    }
+    PropertyLabel("Clip", "Which clip to play: one of this model's own, or a clip from another model file\n"
+                          "with the same skeleton (e.g. a Mixamo animation exported without skin).\n"
+                          "Empty = the model's first clip.");
+    const int resolved = ResolveAnimationClip(*model, anim->Clip, assets);
+    const std::string preview = anim->Clip.empty()
+        ? (model->OwnAnimationCount() > 0 ? model->AnimationName(0) + " (first)" : std::string("(none)"))
+        : (resolved >= 0 ? model->AnimationName(resolved) : anim->Clip);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (ImGui::BeginCombo("##animclip", preview.c_str(), ImGuiComboFlags_HeightLarge)) {
+        static char filter[128] = "";
+        ClipFilterBox(filter, sizeof filter);
+        auto pick = [&](const std::string& ref, const std::string& label, float seconds) {
+            if (!ClipFilterMatch(filter, label + " " + ref)) return;
+            char text[256];
+            std::snprintf(text, sizeof(text), "%s  (%.2fs)", label.c_str(), seconds);
+            if (ImGui::Selectable(text, ref == anim->Clip)) {
+                PushUndo(world, "Set Animation Clip");
+                anim->Clip = ref;
             }
-            s_Pm = loaded;
-            s_PmPath = abs;
-            s_PmStamp = stamp;
-        }
-        bool save = false;
-        ImGui::Indent();
-        auto slider = [&](const char* label, float* v, float hi, const char* tip) {
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-            ImGui::SliderFloat(label, v, 0.0f, hi, "%.2f");
-            if (ImGui::IsItemDeactivatedAfterEdit()) save = true;
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
         };
-        slider("Dynamic Friction", &s_Pm.DynamicFriction, 2.0f, "How much a sliding contact is slowed. 0 = ice.");
-        slider("Static Friction", &s_Pm.StaticFriction, 2.0f, "How hard it is to start sliding.");
-        slider("Bounciness", &s_Pm.Bounciness, 1.0f, "0 stops dead, 1 loses no energy on a bounce.");
-        static const char* kCombine = "Average\0Minimum\0Multiply\0Maximum\0";
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-        if (ImGui::Combo("Friction Combine", &s_Pm.FrictionCombine, kCombine)) save = true;
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-        if (ImGui::Combo("Bounce Combine", &s_Pm.BounceCombine, kCombine)) save = true;
-        ImGui::TextDisabled("Saved to %s - shared by every collider using it. Replaces the values below.",
-                            col->Material.c_str());
-        ImGui::Unindent();
-        if (save) {
-            if (s_Pm.SaveFile(abs)) s_PmStamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
-            else Log::Error("Couldn't save " + col->Material + ".");
+        for (int i = 0; i < model->OwnAnimationCount(); ++i)
+            pick(model->AnimationName(i), model->AnimationName(i), model->AnimationLength(i));
+        // Clips in other model files of the project that animate this skeleton (#175).
+        bool header = false;
+        for (const auto& src : assets.Models()) {
+            if (!src || src->Path() == model->Path() || src->OwnAnimationCount() == 0) continue;
+            for (int j = 0; j < src->OwnAnimationCount(); ++j) {
+                const std::string ref = AnimationClipRef(*src, j);
+                const int idx = ResolveAnimationClip(*model, ref, assets); // attaches if compatible
+                if (idx < 0) continue;
+                if (!header) { EditorUIPrimitives::SectionHeader("From other files"); header = true; }
+                pick(ref, model->AnimationName(idx), model->AnimationLength(idx));
+            }
+        }
+        // Animation files no scene has loaded yet (e.g. an imported pack).
+        std::string file = anim->Clip;
+        if (ProjectClipFileList(filter, file) && file != anim->Clip) {
+            PushUndo(world, "Set Animation Clip");
+            anim->Clip = file;
+        }
+        ImGui::EndCombo();
+    }
+    if (resolved < 0 && !anim->Clip.empty())
+        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  '%s' isn't a clip this model can play; the first clip plays.", anim->Clip.c_str());
+    if (!m_InPlayMode) {
+        PropertyLabel("Preview", "Plays the clip in the Scene view while editing (not saved).");
+        const bool previewing = model->IsPlayingAnimation();
+        if (EditorUIPrimitives::SecondaryButton(previewing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play")) {
+            if (previewing) model->StopAnimation();
+            else {
+                // With root motion on, preview in place: the object doesn't move in edit mode.
+                RootMotionSettings rms;
+                rms.Rotation = anim->RootMotion.Rotation;
+                rms.Vertical = anim->RootMotion.Vertical;
+                model->SetRootMotion(anim->RootMotion.Mode != 0 ? model->FindRootMotionNode(anim->RootMotion.Bone) : -1, rms);
+                model->PlayAnimation(resolved < 0 ? 0 : resolved, 0.0f, (AnimationWrapMode)std::clamp(anim->WrapMode, 0, 3), anim->Speed);
+            }
+        }
+    }
+}
+
+// #175 Part B: the controller picker and editor up top; the Root Motion group's extras below.
+void EditorLayer::DrawAnimatorComponentExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase == ReflectExtraPhase::Top) {
+        DrawAnimatorControllerExtra(world, entity);
+        return;
+    }
+    auto& registry = world.Registry;
+    if (auto* ac = registry.try_get<AnimatorControllerComponent>(entity))
+        DrawRootMotionExtra(world, entity, ac->RootMotion, ModelOn(registry, entity));
+}
+
+void EditorLayer::DrawCharacterOutfitExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase == ReflectExtraPhase::Bottom) DrawCharacterOutfitEditor(world, entity);
+}
+
+// Reflection Probe: captures only redo on their own when a probe moves; lights and props moving don't.
+void EditorLayer::DrawReflectionProbeExtra(World& /*world*/, entt::entity /*entity*/, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Bottom) return;
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_ROTATE "  Recapture Probes"))
+        ReflectionProbeCapture::RequestRecapture();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Render every Capture Scene probe's room again (a few frames each).\n"
+                             "They capture at scene load and when a probe moves; after moving lights or props, press this.");
+}
+
+// First Person Body: check the setup against what the body needs (the controller's parameters and
+// states, bones, piece names) so a missing piece is said out loud instead of a feature silently
+// doing nothing. FPBody::Validate is the same table.
+void EditorLayer::DrawFirstPersonBodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Top) return;
+    auto& registry = world.Registry;
+    const auto* cfg = registry.try_get<FirstPersonBodyComponent>(entity);
+    if (!cfg) return;
+    FPBody::ValidationInput in;
+    in.Config = cfg;
+    in.BodyCount = (int)registry.view<FirstPersonBodyComponent>().size();
+    std::vector<entt::entity> pieces;
+    auto rigged = [&](entt::entity e) {
+        const auto* rc = registry.try_get<RenderableComponent>(e);
+        return rc && rc->ModelRef && rc->ModelRef->NodeCount() > 0;
+    };
+    if (rigged(entity)) pieces.push_back(entity);
+    if (const auto* h = registry.try_get<HierarchyComponent>(entity))
+        for (entt::entity child : h->Children)
+            if (registry.valid(child) && rigged(child)) pieces.push_back(child);
+    in.HasPieces = !pieces.empty();
+    // The driver: the piece with the whole skeleton (FirstPersonBody::Start picks the same), named through the Bone Map.
+    entt::entity driver = entt::null;
+    {
+        const auto map = FPBody::ParseBoneMap(cfg->BoneMap);
+        const auto bone = [&](const std::string& b) { const auto it = map.find(b); return it != map.end() ? it->second : b; };
+        for (entt::entity e : pieces) {
+            const Model& m = *registry.get<RenderableComponent>(e).ModelRef;
+            if (m.NodeIndex(bone(FPBody::kBonePelvis)) >= 0 && m.NodeIndex(bone(cfg->HeadBone)) >= 0 && m.NodeIndex(bone(FPBody::kBoneHand[1])) >= 0) {
+                driver = e;
+                break;
+            }
+        }
+    }
+    in.HasDriverPiece = driver != entt::null;
+    for (entt::entity e : pieces)
+        if (const auto* n = registry.try_get<NameComponent>(e)) in.PieceNames.push_back(n->Name);
+    Model* driverModel = nullptr;
+    if (driver != entt::null) driverModel = registry.get<RenderableComponent>(driver).ModelRef.get();
+    if (driverModel) in.HasBone = [driverModel](const std::string& b) { return driverModel->NodeIndex(b) >= 0; };
+
+    SetupChecksUI::Draw(FPBody::Validate(in), "Setup: everything the body needs is there", "##bodysetup");
+    ImGui::Spacing();
+    // Live: what the body is doing right now (Play only).
+    const BodyDebug::Snapshot& d = BodyDebug::Info();
+    if (d.Valid && ImGui::TreeNodeEx("##bodylive", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth, "Live (Play)")) {
+        auto row = [](const char* label, const char* fmt, auto... args) {
+            ImGui::TextDisabled("%s", label);
+            ImGui::SameLine(190.0f * EditorTheme::Scale());
+            ImGui::Text(fmt, args...);
+        };
+        row("Animator state", "%s  (%.0f%% of the pass)", d.AnimatorState.c_str(), (d.StateTime - std::floor(d.StateTime)) * 100.0f);
+        row("Move / clips carry", "%.2f / %.2f m/s", d.MoveSpeed, d.RootSpeed);
+        row("Turning", "%s   view %+.0f deg off, chest twist %+.0f deg", d.Turning ? "yes" : "no", d.ViewOffsetDeg, d.TwistDeg);
+        row("Idle / run time", "%.2f s  /  %.2f s%s", d.IdleTime, d.MoveTime, d.Still ? "   (standing still)" : "");
+        if (!d.LastTrigger.empty()) row("Last trigger", "%s  %.1f s ago", d.LastTrigger.c_str(), d.LastTriggerAgo);
+        row("Foot IK", "%.0f%%   L %+.0f cm %s %.0f%%   R %+.0f cm %s %.0f%%", d.FootWeight * 100.0f,
+            d.FootOffset[0] * 100.0f, d.FootPlanted[0] ? "planted" : "air", d.FootLock[0] * 100.0f,
+            d.FootOffset[1] * 100.0f, d.FootPlanted[1] ? "planted" : "air", d.FootLock[1] * 100.0f);
+        row("Stair ease", "%+.1f cm", d.StepOffset * 100.0f);
+        row("Arms / eye", "arms follow weapon %.0f%%,  eye off shoulders %.1f cm", d.ArmsWeight * 100.0f, d.EyeSlack * 100.0f);
+        row("Arm steadying", "shoulders held L %.1f cm  R %.1f cm", d.ArmSteadyShift[0] * 100.0f, d.ArmSteadyShift[1] * 100.0f);
+        row("Shoulder shrug", "toward the gun L %.1f cm  R %.1f cm", d.ShrugShift[0] * 100.0f, d.ShrugShift[1] * 100.0f);
+        row("Reach", "L %.0f%%  R %.0f%% of the arm", d.Reach[0] * 100.0f, d.Reach[1] * 100.0f);
+        row("Hands off the gun", "L %.1f cm  R %.1f cm", d.HandGap[0] * 100.0f, d.HandGap[1] * 100.0f);
+        row("Shoulders vs rig", "L %.1f cm  R %.1f cm", d.ShoulderGap[0] * 100.0f, d.ShoulderGap[1] * 100.0f);
+        row("Shoulder line", "rig %+.1f deg  chest %+.1f deg", d.RigBlade, d.ChestBlade);
+        row("Reach lean", "chest toward the gun %.1f deg", d.ReachLean);
+        row("Eye to upper arm", "rig's L %.1f cm  R %.1f cm   body's L %.1f cm  R %.1f cm   (near plane %.1f cm)",
+            d.EyeToUpperArmRig[0] * 100.0f, d.EyeToUpperArmRig[1] * 100.0f, d.EyeToUpperArmBody[0] * 100.0f,
+            d.EyeToUpperArmBody[1] * 100.0f, d.NearPlane * 100.0f);
+        if (!d.ProbePiece.empty())
+            row("Nearest in view", "%s  %.1f cm ahead  (bone %s, %s pass)", d.ProbePiece.c_str(), d.ProbeDepth * 100.0f,
+                d.ProbeBone.c_str(), d.ProbeViewModel ? "view-model" : "world");
+        row("Scene overlay", "%s   %d lines", BodyDebug::Enabled() ? "on" : "off (Gizmos > Player body)", (int)(BodyDebug::Verts().size() / 14));
+        ImGui::TreePop();
+    }
+    ImGui::Spacing();
+}
+
+// First Person Controller: the weapon's tuning (recoil, sway, bob, IK, ...) lives in its
+// weapon definition, stored alongside the weapon's prefab and animation controller.
+void EditorLayer::DrawFirstPersonControllerExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Bottom) return;
+    auto& registry = world.Registry;
+    const auto* fp = registry.try_get<FirstPersonControllerComponent>(entity);
+    if (!fp) return;
+    for(const auto& slot:{std::pair<const char*,const std::string*>{"Edit Primary Weapon Definition",&fp->PrimaryWeaponPrefab},
+                          {"Edit Secondary Weapon Definition",&fp->SecondaryWeaponPrefab},
+                          {"Edit Sidearm Weapon Definition",&fp->SidearmWeaponPrefab}}) {
+        if(slot.second->empty())continue;
+        ImGui::BeginDisabled(m_InPlayMode);
+        if(ActionButton(slot.first,"Open the weapon prefab's Definition and muzzle-effect tabs",false,ImVec2(-FLT_MIN,0)))
+            m_InspectorRequestedPrefab=ProjectPaths::Resolve(*slot.second);
+        ImGui::EndDisabled();
+    }
+    if (fp->AnimationSet.empty()) return;
+    const std::string path = std::filesystem::u8path(ProjectPaths::Resolve(fp->AnimationSet)).generic_u8string();
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(std::filesystem::u8path(path), ec);
+    ImGui::BeginDisabled(!exists);
+    if (ActionButton(ICON_FA_CROSSHAIRS "  Edit Animation Set",
+                     exists ? "Open this weapon's recoil, sway, bob, lean and IK tuning in the Inspector"
+                            : "The Animation Set file doesn't exist",
+                     false, ImVec2(-FLT_MIN, 0.0f))) {
+        ClearSelection();
+        m_SelectedAssetKey = path;
+        m_SelectedAssetIsFolder = false;
+        ClearExtraAssetSelection();
+        if (m_AssetsPtr) NavigateAssetFolder(m_AssetsPtr->DiskFolderFor(path));
+    }
+    ImGui::EndDisabled();
+}
+
+// IK Rig: say why it would do nothing (no controller, no model, bones the model doesn't
+// have), and offer the common rigs' bone names so nobody has to type them.
+void EditorLayer::DrawIKRigExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Top) return;
+    auto& registry = world.Registry;
+    auto* rig = registry.try_get<IKRigComponent>(entity);
+    if (!rig) return;
+    const ImVec4 warn = EditorUIPrimitives::WarningColor();
+    const auto warning = [&](const std::string& text) {
+        ImGui::PushStyleColor(ImGuiCol_Text, warn);
+        ImGui::TextWrapped(ICON_FA_TRIANGLE_EXCLAMATION "  %s", text.c_str());
+        ImGui::PopStyleColor();
+    };
+    const auto* rc = registry.try_get<RenderableComponent>(entity);
+    const Model* model = rc ? rc->ModelRef.get() : nullptr;
+    if (!registry.all_of<AnimatorControllerComponent>(entity))
+        warning("Needs an Animator Controller on this object: the rig works on the controller's pose.");
+    if (!model) {
+        warning("Needs a Mesh Renderer with a rigged model.");
+    } else {
+        const std::vector<std::string> missing = IK::MissingBones(*rig, *model);
+        if (!missing.empty()) {
+            std::string list;
+            for (const auto& m : missing) list += (list.empty() ? "" : ", ") + m;
+            warning("Not on this model: " + list + ". The parts that use them are skipped.");
+        }
+    }
+    if (!rig->LimbA.Enabled && !rig->LimbB.Enabled && !rig->LookAtEnabled)
+        ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  Enable a limb or the look-at below, or pick a preset.");
+
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_WAND_MAGIC_SPARKLES "  Presets", ImVec2(-FLT_MIN, 0.0f))) ImGui::OpenPopup("##ikpresets");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Fill in the bone names of a common skeleton");
+    if (ImGui::BeginPopup("##ikpresets")) {
+        const auto limb = [](IKLimb& l, const char* upper, const char* lower, const char* end, const char* target) {
+            l.Enabled = true;
+            l.Upper = upper;
+            l.Lower = lower;
+            l.End = end;
+            l.Target = target;
+        };
+        if (ImGui::MenuItem("UE5 Mannequin: arms to IK hand bones")) {
+            PushUndo(world, "IK Rig Preset");
+            limb(rig->LimbA, "upperarm_r", "lowerarm_r", "hand_r", "ik_hand_r");
+            limb(rig->LimbB, "upperarm_l", "lowerarm_l", "hand_l", "ik_hand_l");
+            rig->LimbA.KeepAnimatedOffset = rig->LimbB.KeepAnimatedOffset = false;
+        }
+        if (ImGui::MenuItem("UE5 Mannequin: legs to IK foot bones")) {
+            PushUndo(world, "IK Rig Preset");
+            limb(rig->LimbA, "thigh_r", "calf_r", "foot_r", "ik_foot_r");
+            limb(rig->LimbB, "thigh_l", "calf_l", "foot_l", "ik_foot_l");
+            rig->LimbA.KeepAnimatedOffset = rig->LimbB.KeepAnimatedOffset = false;
+        }
+        if (ImGui::MenuItem("Mixamo: arms")) {
+            PushUndo(world, "IK Rig Preset");
+            limb(rig->LimbA, "mixamorig:RightArm", "mixamorig:RightForeArm", "mixamorig:RightHand", "");
+            limb(rig->LimbB, "mixamorig:LeftArm", "mixamorig:LeftForeArm", "mixamorig:LeftHand", "");
+        }
+        if (ImGui::MenuItem("Mixamo: legs")) {
+            PushUndo(world, "IK Rig Preset");
+            limb(rig->LimbA, "mixamorig:RightUpLeg", "mixamorig:RightLeg", "mixamorig:RightFoot", "");
+            limb(rig->LimbB, "mixamorig:LeftUpLeg", "mixamorig:LeftLeg", "mixamorig:LeftFoot", "");
+        }
+        ImGui::Separator();
+        HintText("Mixamo rigs have no IK target bones:\nset each limb's Target yourself.");
+        ImGui::EndPopup();
+    }
+}
+
+void EditorLayer::DrawCameraExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Bottom) return;
+    auto& registry = world.Registry;
+    auto* cam = registry.try_get<CameraComponent>(entity);
+    if (!cam) return;
+    // Keep Far strictly beyond Near — the reflected field clamps can't express a cross-field
+    // relation, and a degenerate range renders nothing.
+    if (cam->FarPlane <= cam->NearPlane) cam->FarPlane = cam->NearPlane + 1.0f;
+
+    ImGui::Spacing();
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
+        AlignCameraToView(world, entity, *m_EditorCameraPtr); // world pose -> the camera's parent frame
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Snap this camera to the editor viewport's current position, aim and FOV.");
+}
+
+void EditorLayer::DrawLightExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    auto& registry = world.Registry;
+    auto* light = registry.try_get<LightComponent>(entity);
+    if (!light) return;
+
+    // #110 — say so when this light's shadow isn't drawn because more important shadowed
+    // lights took every slot (it used to silently lose its shadow).
+    if (phase == ReflectExtraPhase::Bottom && light->Shadow.Enabled && m_ShadowOverBudget.count(entity)) {
+        const bool spot = light->Kind == LightComponent::Type::Spot;
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::WarningColor());
+        ImGui::TextWrapped(ICON_FA_TRIANGLE_EXCLAMATION "  Shadow not rendered: over budget");
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("At most %d shadowed %s lights are drawn at once. The ones nearest and\n"
+                                 "brightest from the camera win; this one lost, so it lights without a shadow.\n"
+                                 "Raise Max %s shadows in Lighting > Shadows, move closer, raise its\n"
+                                 "intensity/range, or turn shadows off on other lights.",
+                                 spot ? m_SpotShadowBudget : m_PointShadowBudget,
+                                 spot ? "spot" : "point", spot ? "spot" : "point");
+    }
+
+    // #203 - Unity's Culling Mask: which layers this light reaches, as a layer checklist.
+    if (phase == ReflectExtraPhase::Bottom) {
+        const std::uint32_t mask = (std::uint32_t)light->CullingMask;
+        int on = 0, lastOn = -1;
+        for (int i = 0; i < LayerRegistry::kCount; ++i)
+            if (mask & (1u << i)) { ++on; lastOn = i; }
+        std::string preview = on == LayerRegistry::kCount ? std::string("Everything")
+                            : on == 0 ? std::string("Nothing")
+                            : on == 1 ? LayerRegistry::DisplayName(lastOn)
+                                      : std::string("Mixed...");
+        PropertyLabel("Culling Mask", "Which layers this light illuminates. Objects on other layers (the Layer\n"
+                                      "dropdown at the top of the Inspector) don't receive it. Shadows are unaffected.");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##LightCullingMask", preview.c_str())) {
+            auto setMask = [&](std::uint32_t m) {
+                PushUndo(world, "Edit Light Culling Mask");
+                light->CullingMask = (int)m;
+            };
+            if (ImGui::Selectable("Everything", on == LayerRegistry::kCount, ImGuiSelectableFlags_DontClosePopups)) setMask(0xFFFFFFFFu);
+            if (ImGui::Selectable("Nothing", on == 0, ImGuiSelectableFlags_DontClosePopups)) setMask(0u);
+            ImGui::Separator();
+            for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                if (!LayerRegistry::IsListed(i)) continue; // named layers only, like Unity; unnamed bits keep their value
+                bool bit = (mask & (1u << i)) != 0;
+                const std::string label = LayerRegistry::DisplayName(i) + "##cm" + std::to_string(i);
+                if (EditorUIPrimitives::Checkbox(label.c_str(), &bit))
+                    setMask(bit ? (mask | (1u << i)) : (mask & ~(1u << i)));
+            }
+            ImGui::EndCombo();
+        }
+    }
+
+    if (phase == ReflectExtraPhase::Top) {
+        // Colour: a raw swatch (+ eyedropper), or a Kelvin bar when ColorTempK > 0 (the
+        // swatch is then driven, not authored). The K / RGB button flips between the two.
+        // Ported verbatim from the old hand-coded Light section; sits above the reflected
+        // Type field is not possible, so it leads the section body instead.
+        PropertyLabel("Color", "The light's color. Toggle 'K' to drive it from a color temperature instead."); // #19
+        if (light->ColorTempK > 0.0f) {
+            float k = light->ColorTempK;
+            KelvinBarResult kr = KelvinBar("##LightKelvinBar", k);
+            if (kr.activated) PushUndo(world, "Edit Light");
+            if (kr.changed) { light->ColorTempK = k; light->Color = KelvinToRGB(k); }
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+            if (ActionButton("RGB##LightKelvinOff", "Set the color directly (RGB)")) { // #19
+                PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f;
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
+        } else {
+            // Defect #1 — this row's trailing space was a hardcoded -90.0f, sized for neither
+            // of the two buttons that actually follow (the eyedropper, then "K"): on any panel
+            // width the swatch claimed pixels the "K" button needed, clipping it off the right
+            // edge with no wrap/scroll (widening the panel didn't help — the reserve was fixed,
+            // not content-region-relative).
+            //
+            // Defect #1 follow-up — a first fix budgeted the reserve from CalcTextSize() sums fed
+            // into SetNextItemWidth(-trailing) on the ColorEdit3 (mirroring how KelvinBar budgets
+            // its own trailing "RGB" button). That neither clipped nor left a gap on paper, but
+            // live-verified (zoomed screenshots + a temporary solid-red-rect probe drawn over the
+            // K button's own item rect) it was clipped almost entirely — only a 2-3px sliver of a
+            // ~16px button painted, hitbox/tooltip unaffected since hover-testing ignores the clip
+            // rect. This component's body draws inside BeginComponentSection's card, a BeginChild
+            // with ImGuiChildFlags_AutoResizeY — CalcItemWidth()'s ContentRegionAvail()-relative
+            // math (correct on paper) and this child's actual live ClipRect disagreed by a wide
+            // margin in that context. GetWindowContentRegionMax().x is the anchor
+            // BeginComponentSection's own right-aligned "..."/remove buttons already use
+            // successfully in this exact child (confirmed live, they render fine) — anchor the
+            // eyedropper and K to that instead of trusting the child to honour a negative
+            // SetNextItemWidth budget.
+            const ImGuiStyle& lcStyle = ImGui::GetStyle();
+            const float eyedropW = ImGui::CalcTextSize(ICON_FA_EYE_DROPPER).x; // SmallButton: zero frame padding
+            const float kBtnW = ImGui::CalcTextSize("K").x + lcStyle.FramePadding.x * 2.0f;
+            const float contentRight = ImGui::GetWindowContentRegionMax().x;
+            const float kBtnX = contentRight - kBtnW;
+            const float eyedropX = kBtnX - lcStyle.ItemSpacing.x - eyedropW;
+            const float colorEditRight = eyedropX - 4.0f; // EyedropperButton's own SameLine gap
+            const float colorEditW = colorEditRight - ImGui::GetCursorPosX();
+            // At the default Inspector width the swatch, eyedropper and K leave the hex text a
+            // ~28px sliver ("#I"). Below what "#RRGGBB" needs, show the swatch alone; its
+            // picker popup still takes hex.
+            const float hexNeedW = ImGui::CalcTextSize("#DDDDDD").x + lcStyle.FramePadding.x * 2.0f +
+                                   lcStyle.ItemInnerSpacing.x + ImGui::GetFrameHeight();
+            ImGui::SetNextItemWidth(colorEditW);
+            EditorUI::ColorEditLinear("##LightColor", &light->Color.x,
+                                      ImGuiColorEditFlags_DisplayHex | (colorEditW < hexNeedW ? ImGuiColorEditFlags_NoInputs : 0));
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            EyedropperButton(this, world, &light->Color);
+            ImGui::SameLine(kBtnX);
+            if (ActionButton("K##LightKelvinOn", "Drive the color from a temperature (Kelvin)")) { // #19
+                PushUndo(world, "Edit Light");
+                light->ColorTempK = 6500.0f;
+                light->Color = KelvinToRGB(6500.0f);
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drive the color from a temperature in Kelvin (1500-15000).");
         }
         return;
     }
-    if (std::strcmp(componentName, "Collider") == 0 && phase == ReflectExtraPhase::Bottom) {
+
+    // Bottom: viewport workflow buttons (#140 phase 4).
+    ImGui::Spacing();
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_EYE "  Look through", ImVec2(-FLT_MIN, 0.0f)))
+        m_PendingLookThrough = entity;
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("View from this light's POV. Fly the camera to move / re-aim the\nlight from there. Spot uses its cone angle for FOV; Esc restores the camera.");
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_DOWN_LONG "  Drop to surface", ImVec2(-FLT_MIN, 0.0f))) {
+        if (!DropLightToSurface(world, entity))
+            Log::Info("Drop to surface: nothing directly below this light.");
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Move the light straight down onto the nearest mesh surface below it.");
+}
+
+void EditorLayer::DrawAudioSourceExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Bottom) return;
+    auto& registry = world.Registry;
+    auto* audio = registry.try_get<AudioSourceComponent>(entity);
+    if (!audio || audio->SoundPath.empty()) return;
+    if (ActionButton(ICON_FA_PLAY "  Preview", "Play the clip once, right now, to check how it sounds"))
+        AudioEngine::Play(audio->SoundPath);
+}
+
+// Collider moved onto reflection (Phase 4 / #6 item 1): Shape/Is Trigger/Center/Bounciness/
+// Friction come from the generic fields above. HalfExtents means something different per
+// Shape (see ComponentRegistry.cpp's registration comment), so it stays hand-coded here,
+// same escape hatch Light's Kelvin bar uses.
+// #170 - Physic Material asset: pick / create a shared .physicmaterial and edit it in place
+// (saved straight to the file, like an Animator Controller). Its values replace this
+// collider's own surface fields below when the PhysX shape is built.
+void EditorLayer::DrawColliderExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    auto& registry = world.Registry;
+    if (phase == ReflectExtraPhase::Bottom) { // the shape's size rows
         auto* collider = registry.try_get<ColliderComponent>(entity);
         if (!collider) return;
         using Shape = ColliderComponent::Shape;
@@ -5475,84 +5373,224 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             ImGui::TextDisabled("Auto-fitted to the mesh bounds.");
         return;
     }
-
-    // Joint moved onto reflection (Phase 4 / #6 item 1): Type/Anchor/Break Force/Break Torque come
-    // from the generic fields above. ConnectedOrder needs a custom entity picker; Axis and the
-    // Use Limit block are only meaningful for a subset of Type values that VisibleIfField can't
-    // express (see ComponentRegistry.cpp's registration comment) — all hand-coded here together,
-    // in their original visual grouping.
-    if (std::strcmp(componentName, "Joint") == 0 && phase == ReflectExtraPhase::Bottom) {
-        auto* joint = registry.try_get<JointComponent>(entity);
-        if (!joint) return;
-
-        PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
-        std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
-        for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-            if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
-                const std::string& nm = registry.get<const NameComponent>(oe).Name;
-                if (!nm.empty()) preview = nm;
-                break;
-            }
+    auto* col = registry.try_get<ColliderComponent>(entity);
+    if (!col) return;
+    ImGui::TextUnformatted("Material");
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.35f);
+    const float newW = ImGui::CalcTextSize(ICON_FA_PLUS " New").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - newW - ImGui::GetStyle().ItemSpacing.x);
+    if (ImGui::BeginCombo("##physmat", col->Material.empty() ? "(none - values below)" : col->Material.c_str())) {
+        if (ImGui::Selectable("(none - values below)", col->Material.empty())) {
+            PushUndo(world, "Set Physic Material");
+            col->Material.clear();
         }
-        if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
-            if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
-                PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
+        // Listed once as the popup opens: the lookup walks the whole project folder.
+        static std::vector<std::string> s_PhysicMaterials;
+        if (ImGui::IsWindowAppearing()) s_PhysicMaterials = FindPhysicMaterials();
+        for (const std::string& path : s_PhysicMaterials)
+            if (ImGui::Selectable(path.c_str(), path == col->Material)) {
+                PushUndo(world, "Set Physic Material");
+                col->Material = path;
             }
-            for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-                if (oe == entity) continue;
-                const int ord = registry.get<const OrderComponent>(oe).Value;
-                const std::string& nm = registry.get<const NameComponent>(oe).Name;
-                std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
-                lbl += "##" + std::to_string(ord); // same-named objects are distinct items
-                if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
-                    PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
-                }
-            }
-            ImGui::EndCombo();
+        ImGui::EndCombo();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("A shared Physic Material asset (.physicmaterial). When set, its friction and\n"
+                             "bounciness replace this collider's own values below, for every collider using it.");
+    ImGui::SameLine();
+    if (ActionButton(ICON_FA_PLUS " New", "Create a Physic Material from this collider's current values and use it")) {
+        const auto* nc = registry.try_get<NameComponent>(entity);
+        std::string base = nc && !nc->Name.empty() ? nc->Name : std::string("Physic Material");
+        for (char& ch : base) if (std::strchr("<>:\"/\\|?*", ch)) ch = '_';
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve("physics")), ec);
+        std::string rel = "physics/" + base + ".physicmaterial";
+        for (int n = 2; std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(rel)), ec); ++n)
+            rel = "physics/" + base + " " + std::to_string(n) + ".physicmaterial";
+        PhysicMaterialAsset pm;
+        pm.DynamicFriction = col->Friction;
+        pm.StaticFriction = col->StaticFriction;
+        pm.Bounciness = col->Bounciness;
+        pm.FrictionCombine = col->FrictionCombine;
+        pm.BounceCombine = col->BounceCombine;
+        if (pm.SaveFile(ProjectPaths::Resolve(rel))) {
+            PushUndo(world, "New Physic Material");
+            col->Material = rel;
+            Log::Info("Created Physic Material " + rel + ".");
+        } else {
+            Log::Error("Couldn't write " + rel + ".");
         }
+    }
+    if (col->Material.empty()) return;
 
-        bool jRowActive = false, jRowCommitted = false;
-        if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider) {
-            DrawVec3Row("Axis", joint->Axis, 0.02f, 0.0f, 0.0f, jRowActive, jRowCommitted,
-                "Hinge rotation / slider travel axis, this object's local space.");
-            if (jRowActive) StageUndo(world);
-            if (jRowCommitted) CommitStagedUndo(world, "Set Joint Axis");
-        }
-
-        if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider ||
-            joint->Kind == JointComponent::Type::Distance) {
-            bool ul = joint->UseLimit;
-            PropertyLabel("Use Limit", "Hinge: degrees about Axis. Slider: units along Axis. Distance: min/max separation.");
-            if (EditorUIPrimitives::Checkbox("##JointUseLimit", &ul)) { PushUndo(world, "Toggle Joint Limit"); joint->UseLimit = ul; }
-            if (joint->UseLimit) {
-                PropertyLabel("Limit Lower", nullptr);
-                ImGui::DragFloat("##JointLimLo", &joint->LimitLower, 0.5f, -1000.0f, 1000.0f, "%.1f");
-                if (ImGui::IsItemActivated()) StageUndo(world);
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
-                PropertyLabel("Limit Upper", nullptr);
-                ImGui::DragFloat("##JointLimHi", &joint->LimitUpper, 0.5f, -1000.0f, 1000.0f, "%.1f");
-                if (ImGui::IsItemActivated()) StageUndo(world);
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
-            }
-        }
+    // Working copy, re-read when the file changes on disk (another collider's Inspector, a
+    // text editor, a VCS update).
+    static std::string s_PmPath;
+    static std::filesystem::file_time_type s_PmStamp;
+    static PhysicMaterialAsset s_Pm;
+    const std::string abs = ProjectPaths::Resolve(col->Material);
+    std::error_code ec;
+    const auto stamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
+    if (ec) {
+        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                           "The material file is missing - this collider's own values are used.");
         return;
+    }
+    if (s_PmPath != abs || s_PmStamp != stamp) {
+        std::string err;
+        PhysicMaterialAsset loaded;
+        if (!PhysicMaterialAsset::LoadFile(abs, loaded, &err)) {
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read it: %s", err.c_str());
+            return;
+        }
+        s_Pm = loaded;
+        s_PmPath = abs;
+        s_PmStamp = stamp;
+    }
+    bool save = false;
+    ImGui::Indent();
+    auto slider = [&](const char* label, float* v, float hi, const char* tip) {
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+        ImGui::SliderFloat(label, v, 0.0f, hi, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) save = true;
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+    };
+    slider("Dynamic Friction", &s_Pm.DynamicFriction, 2.0f, "How much a sliding contact is slowed. 0 = ice.");
+    slider("Static Friction", &s_Pm.StaticFriction, 2.0f, "How hard it is to start sliding.");
+    slider("Bounciness", &s_Pm.Bounciness, 1.0f, "0 stops dead, 1 loses no energy on a bounce.");
+    static const char* kCombine = "Average\0Minimum\0Multiply\0Maximum\0";
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+    if (ImGui::Combo("Friction Combine", &s_Pm.FrictionCombine, kCombine)) save = true;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+    if (ImGui::Combo("Bounce Combine", &s_Pm.BounceCombine, kCombine)) save = true;
+    ImGui::TextDisabled("Saved to %s - shared by every collider using it. Replaces the values below.",
+                        col->Material.c_str());
+    ImGui::Unindent();
+    if (save) {
+        if (s_Pm.SaveFile(abs)) s_PmStamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
+        else Log::Error("Couldn't save " + col->Material + ".");
     }
 }
 
-// Multi-select counterpart. Only Light needs one so far: the shared colour / Kelvin control
-// (the reflected Color field is EditorHidden). Ported from the old hand-coded multi-light block.
-void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, World& world,
-                                                   const std::vector<entt::entity>& sel,
-                                                   ReflectExtraPhase phase) {
-    if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top) { // #128
-        int missing = 0;
-        for (entt::entity e : sel) if (!world.Registry.all_of<ColliderComponent>(e)) ++missing;
-        if (missing > 0)
-            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %d of %d have no Collider and won't simulate.",
-                               missing, (int)sel.size());
-        return;
+// Joint moved onto reflection (Phase 4 / #6 item 1): Type/Anchor/Break Force/Break Torque come
+// from the generic fields above. ConnectedOrder needs a custom entity picker; Axis and the
+// Use Limit block are only meaningful for a subset of Type values that VisibleIfField can't
+// express (see ComponentRegistry.cpp's registration comment) — all hand-coded here together,
+// in their original visual grouping.
+void EditorLayer::DrawJointExtra(World& world, entt::entity entity, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Bottom) return;
+    auto& registry = world.Registry;
+    auto* joint = registry.try_get<JointComponent>(entity);
+    if (!joint) return;
+
+    PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
+    std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
+    for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+        if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
+            const std::string& nm = registry.get<const NameComponent>(oe).Name;
+            if (!nm.empty()) preview = nm;
+            break;
+        }
     }
-    if (std::strcmp(componentName, "Light") != 0 || phase != ReflectExtraPhase::Top) return;
+    if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
+        if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
+            PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
+        }
+        for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+            if (oe == entity) continue;
+            const int ord = registry.get<const OrderComponent>(oe).Value;
+            const std::string& nm = registry.get<const NameComponent>(oe).Name;
+            std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
+            lbl += "##" + std::to_string(ord); // same-named objects are distinct items
+            if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
+                PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    bool jRowActive = false, jRowCommitted = false;
+    if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider) {
+        DrawVec3Row("Axis", joint->Axis, 0.02f, 0.0f, 0.0f, jRowActive, jRowCommitted,
+            "Hinge rotation / slider travel axis, this object's local space.");
+        if (jRowActive) StageUndo(world);
+        if (jRowCommitted) CommitStagedUndo(world, "Set Joint Axis");
+    }
+
+    if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider ||
+        joint->Kind == JointComponent::Type::Distance) {
+        bool ul = joint->UseLimit;
+        PropertyLabel("Use Limit", "Hinge: degrees about Axis. Slider: units along Axis. Distance: min/max separation.");
+        if (EditorUIPrimitives::Checkbox("##JointUseLimit", &ul)) { PushUndo(world, "Toggle Joint Limit"); joint->UseLimit = ul; }
+        if (joint->UseLimit) {
+            PropertyLabel("Limit Lower", nullptr);
+            ImGui::DragFloat("##JointLimLo", &joint->LimitLower, 0.5f, -1000.0f, 1000.0f, "%.1f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
+            PropertyLabel("Limit Upper", nullptr);
+            ImGui::DragFloat("##JointLimHi", &joint->LimitUpper, 0.5f, -1000.0f, 1000.0f, "%.1f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
+        }
+    }
+}
+
+// #302: custom, editor-only controls a reflection-registered component wants inside its generic
+// Inspector section. Reflection covers the data (fields, serialization, Add/Remove, multi-edit);
+// anything that needs editor state the game module can't see (the editor camera for Camera, the
+// eyedropper / Kelvin bar / viewport actions for Light) lives in the handlers above. Keyed by
+// ReflectComponent::Name; `phase` is Top (before the generic fields) or Bottom (after). A name
+// that isn't a registered component is reported once (a rename would otherwise drop its extras).
+template <class Fn>
+static void CheckExtraNames(const std::unordered_map<std::string_view, Fn>& table, const char* what) {
+    for (const auto& [name, fn] : table) {
+        bool found = false;
+        for (const auto& rc : ComponentRegistry::All())
+            if (name == rc.Meta.Name) { found = true; break; }
+        if (!found) Log::Error(std::string(what) + ": no registered component is named '" + std::string(name) + "'");
+    }
+}
+
+void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& world,
+                                              entt::entity entity, ReflectExtraPhase phase) {
+    using ExtraFn = void (EditorLayer::*)(World&, entt::entity, ReflectExtraPhase);
+    static const std::unordered_map<std::string_view, ExtraFn> kExtras = {
+        {"Particle System", &EditorLayer::DrawParticleSystemExtra},
+        {"Rigidbody", &EditorLayer::DrawRigidbodyExtra},
+        {"Animation", &EditorLayer::DrawAnimationExtra},
+        {"Animator Controller", &EditorLayer::DrawAnimatorComponentExtra},
+        {"Character Outfit", &EditorLayer::DrawCharacterOutfitExtra},
+        {"Reflection Probe", &EditorLayer::DrawReflectionProbeExtra},
+        {"Decal", &EditorLayer::DrawDecalComponentExtra}, // EditorLayer_Decals.cpp
+        {"First Person Body", &EditorLayer::DrawFirstPersonBodyExtra},
+        {"First Person Controller", &EditorLayer::DrawFirstPersonControllerExtra},
+        {"IK Rig", &EditorLayer::DrawIKRigExtra},
+        {"Camera", &EditorLayer::DrawCameraExtra},
+        {"Light", &EditorLayer::DrawLightExtra},
+        {"Audio Source", &EditorLayer::DrawAudioSourceExtra},
+        {"Collider", &EditorLayer::DrawColliderExtra},
+        {"Joint", &EditorLayer::DrawJointExtra},
+    };
+    static const bool s_Checked = (CheckExtraNames(kExtras, "Inspector extras"), true);
+    (void)s_Checked;
+    const auto it = kExtras.find(componentName);
+    if (it != kExtras.end()) (this->*it->second)(world, entity, phase);
+}
+
+// #128: how many of the selected Rigidbodies have no Collider (they won't simulate).
+void EditorLayer::DrawRigidbodyExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Top) return;
+    int missing = 0;
+    for (entt::entity e : sel) if (!world.Registry.all_of<ColliderComponent>(e)) ++missing;
+    if (missing > 0)
+        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %d of %d have no Collider and won't simulate.",
+                           missing, (int)sel.size());
+}
+
+// The shared colour / Kelvin control for a multi-light selection (the reflected Color field is
+// EditorHidden). Ported from the old hand-coded multi-light block.
+void EditorLayer::DrawLightExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase) {
+    if (phase != ReflectExtraPhase::Top) return;
 
     const int count = (int)sel.size();
     if (count == 0) return;
@@ -5597,6 +5635,21 @@ void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, Wo
         }
         if (colMixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
     }
+}
+
+// Multi-select counterpart: `sel` is every selected entity that has the component.
+void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, World& world,
+                                                   const std::vector<entt::entity>& sel,
+                                                   ReflectExtraPhase phase) {
+    using ExtraFn = void (EditorLayer::*)(World&, const std::vector<entt::entity>&, ReflectExtraPhase);
+    static const std::unordered_map<std::string_view, ExtraFn> kExtras = {
+        {"Rigidbody", &EditorLayer::DrawRigidbodyExtraMulti},
+        {"Light", &EditorLayer::DrawLightExtraMulti},
+    };
+    static const bool s_Checked = (CheckExtraNames(kExtras, "Inspector multi-select extras"), true);
+    (void)s_Checked;
+    const auto it = kExtras.find(componentName);
+    if (it != kExtras.end()) (this->*it->second)(world, sel, phase);
 }
 
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
