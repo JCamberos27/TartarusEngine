@@ -56,6 +56,7 @@ private:
     std::vector<Vertex> m_Verts;
     std::unique_ptr<Shader> m_Shader;
     unsigned int m_VAO = 0, m_VBO = 0, m_Atlas = 0;
+    std::size_t m_VboCapacity = 0; // vertices the VBO's store holds (re-specified only to grow)
     int m_W = 0, m_H = 0;
     float m_Scale = 1.0f;
     bool m_Failed = false, m_Tried = false;

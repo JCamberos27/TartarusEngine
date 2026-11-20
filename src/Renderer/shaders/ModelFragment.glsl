@@ -62,12 +62,7 @@ uniform float uPuddleScale;
 uniform int   uNoWetness;
 uniform int   uFoliageSurface; // Material::Foliage (Model.cpp)
 
-float WetHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float WetNoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(WetHash(i), WetHash(i + vec2(1, 0)), u.x), mix(WetHash(i + vec2(0, 1)), WetHash(i + vec2(1, 1)), u.x), u.y);
-}
+#include "Noise.glsl" // WetNoise, Ign
 
 float gPuddle = 0.0; // this fragment's standing water (ApplyWetness): where the puddle SSR replaces the reflection
 
@@ -148,7 +143,7 @@ void main() {
     }
     if (uLodFade != 0.0) {
         // Interleaved gradient noise: a fine, even dither that TAA resolves to a smooth dissolve.
-        float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        float n = Ign(gl_FragCoord.xy);
         if (uLodFade > 0.0 ? n >= uLodFade : n < -uLodFade) discard;
     }
     if (uNearHide > 0.0) {

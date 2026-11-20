@@ -79,6 +79,11 @@ struct GraffitiDesigner {
     bool Stroking = false;
     bool StrokeInViewport = false;
     int StrokeLayer = -1;
+    // The stroke made its Spray layer: a click too short to be a stroke takes the layer back out
+    // (with the selection and the unsaved flag it found) instead of saving an empty layer.
+    bool StrokeAddedLayer = false;
+    int StrokePrevSelected = -1;
+    bool StrokePrevDirty = false;
     Graffiti::Stroke Live;
     Graffiti::StrokeBuilder Builder;
     std::vector<Graffiti::Splat> Pending; // emitted, not yet due

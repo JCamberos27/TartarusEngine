@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <vector>
 
 // Background asset uploads without the main-thread memcpy (AssetLibrary::PumpAsync). A big texture or mesh used to go
 // up in one glTextureSubImage2D / glNamedBufferStorage from client memory: the driver copies the whole thing before
@@ -64,3 +65,29 @@ void Warm();
 // span runs from `tail` to `head` (head == tail: empty unless `full`). Returns ~0 when it doesn't fit.
 std::size_t RingFit(std::size_t capacity, std::size_t head, std::size_t tail, bool empty, std::size_t size);
 }
+
+// A persistently mapped GL buffer (write-only, coherent) handed out in spans: each Take gets a fresh span, reused
+// `safeFrames` frames later (no fences; SwapBuffers keeps the CPU only a few frames ahead). The impostor and grass
+// renderers' per-frame instance / chunk uploads. Created on the first Take; lives (mapped) for the program's run.
+class MappedRing {
+public:
+    MappedRing(std::size_t bytes, const char* name, std::uint64_t safeFrames = 16) : m_Bytes(bytes), m_Name(name), m_SafeFrames(safeFrames) {}
+    MappedRing(const MappedRing&) = delete;
+    MappedRing& operator=(const MappedRing&) = delete;
+    // The offset of a `size`-byte span (256-aligned, so it binds as an SSBO range), or ~0 when the ring can't take it
+    // (too big for it, full for now, or no mapping on this driver): the caller uploads its own way.
+    std::size_t Take(std::size_t size);
+    unsigned Buffer() const { return m_Buffer; }
+    unsigned char* Base() const { return m_Base; }
+
+private:
+    struct Span { std::size_t Start; std::uint64_t Frame; };
+    std::size_t m_Bytes;
+    const char* m_Name;
+    std::uint64_t m_SafeFrames;
+    unsigned m_Buffer = 0;
+    unsigned char* m_Base = nullptr;
+    bool m_Failed = false;
+    std::size_t m_Head = 0;
+    std::vector<Span> m_Spans; // live spans, oldest first
+};

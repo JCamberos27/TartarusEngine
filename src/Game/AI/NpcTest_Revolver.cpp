@@ -345,10 +345,7 @@ void NpcTest::RevolverAfter(const Player& player) {
         m_CamPos = feet + ahead * 1.3f + side * (R.Cam == 4 ? 0.8f : -0.8f) + glm::vec3(0.0f, 1.35f, 0.0f);
         look = feet + glm::vec3(0.0f, 1.15f, 0.0f);
     }
-    const glm::vec3 d = glm::normalize(look - m_CamPos);
-    m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
-    m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
-    m_HaveCam = true;
+    LookAt(look);
 
     static const struct { float At; const char* Name; } kShots[] = {
         {2.5f, "hip_idle"}, {3.6f, "gun_closeup"}, {7.0f, "ads_enter"}, {9.5f, "ads_steady"}, {10.52f, "ads_fire1_flash"},

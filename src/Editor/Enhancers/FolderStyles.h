@@ -1,5 +1,6 @@
 #pragma once
 #include <json.hpp>
+#include "Palette.h" // IconColorStyle
 
 #include <cstdint>
 #include <map>
@@ -19,11 +20,7 @@
 //   matching rule -> the folder's own style.
 namespace Enhancers {
 
-struct FolderStyle {
-    std::string   Icon;      // Font Awesome name, "" = not set
-    std::uint32_t Color = 0; // IM_COL32-packed, 0 = not set
-    bool IsEmpty() const { return Icon.empty() && Color == 0; }
-};
+using FolderStyle = IconColorStyle;
 
 // Pattern is a case-insensitive glob (GlobMatch) tried against both the full folder path and its
 // leaf name: "Materials" styles every folder named Materials, "Art/*/Textures" only those.

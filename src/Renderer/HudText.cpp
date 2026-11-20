@@ -7,13 +7,9 @@
 #include "ShaderLibrary.h"
 #include "gl.h"
 
-// stb_truetype comes with Dear ImGui (imstb_truetype.h); the static copy here is this file's own.
-#define STBTT_STATIC
-#define STB_TRUETYPE_IMPLEMENTATION
 #pragma warning(push, 0)
-#include "imstb_truetype.h"
+#include "imstb_truetype.h" // declarations; the implementation is compiled once, in StbTrueType.cpp
 #pragma warning(pop)
-#pragma warning(disable : 4505) // the bake/render functions this file leaves unused
 
 #include <algorithm>
 #include <cmath>
@@ -204,7 +200,11 @@ void HudText::Flush(unsigned int dstFbo) {
     glBindTexture(GL_TEXTURE_2D, m_Atlas);
     glBindVertexArray(m_VAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(m_Verts.size() * sizeof(Vertex)), m_Verts.data(), GL_DYNAMIC_DRAW);
+    if (m_Verts.size() > m_VboCapacity) { // re-specifying the store every Flush waited on the threaded driver
+        m_VboCapacity = std::max<std::size_t>(m_Verts.size() * 2, 1024);
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(m_VboCapacity * sizeof(Vertex)), nullptr, GL_DYNAMIC_DRAW);
+    }
+    glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(m_Verts.size() * sizeof(Vertex)), m_Verts.data());
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)m_Verts.size());
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);

@@ -4,6 +4,8 @@
 // tests in its own file instead of everyone editing UnitTests.cpp and its one big test table.
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -31,6 +33,19 @@ inline std::string TempName(const std::string& stem, const std::string& ext = ""
 
 using TestList = std::vector<std::pair<const char*, std::function<void()>>>;
 
+// A scratch folder under the system temp directory (created when missing).
+inline std::filesystem::path TempDir() {
+    std::error_code ec;
+    auto dir = std::filesystem::temp_directory_path(ec) / "TartarusUnitTests";
+    std::filesystem::create_directories(dir, ec);
+    return dir;
+}
+// A whole file as bytes ("" when it can't be read).
+inline std::string ReadAll(const std::filesystem::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
 } // namespace UnitTestSupport
 
 #define CHECK(cond)                                                                              \
@@ -55,3 +70,23 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests);     // UnitTests_Bloo
 void RegisterGlassTests(UnitTestSupport::TestList& tests);     // UnitTests_Glass.cpp
 void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests); // UnitTests_CharacterMover.cpp
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests); // UnitTests_LaunchOptions.cpp
+void RegisterMotionMatchingTests(UnitTestSupport::TestList& tests); // UnitTests_MotionMatching.cpp
+void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests); // UnitTests_MotionMatchingRuntime.cpp
+void RegisterRenderTests(UnitTestSupport::TestList& tests); // UnitTests_Render.cpp
+void RegisterGrassTests(UnitTestSupport::TestList& tests); // UnitTests_Grass.cpp
+void RegisterWorldTextTests(UnitTestSupport::TestList& tests); // UnitTests_WorldText.cpp
+void RegisterOpenableTests(UnitTestSupport::TestList& tests); // UnitTests_Openable.cpp
+void RegisterLightSwitchTests(UnitTestSupport::TestList& tests); // UnitTests_LightSwitch.cpp
+void RegisterCinematicTests(UnitTestSupport::TestList& tests); // UnitTests_Cinematic.cpp
+void RegisterGameplayTests(UnitTestSupport::TestList& tests);
+void RegisterEditorSoundTests(UnitTestSupport::TestList& tests); // UnitTests_EditorSound.cpp
+void RegisterAudioTests(UnitTestSupport::TestList& tests); // UnitTests_Audio.cpp
+void RegisterDecalRenderTests(UnitTestSupport::TestList& tests); // UnitTests_DecalRender.cpp
+void RegisterDecalRuntimeTests(UnitTestSupport::TestList& tests); // UnitTests_DecalRuntime.cpp
+void RegisterDecalAssetTests(UnitTestSupport::TestList& tests); // UnitTests_DecalAssets.cpp
+void RegisterGraffitiTests(UnitTestSupport::TestList& tests); // UnitTests_Graffiti.cpp
+void RegisterGizmoIconTests(UnitTestSupport::TestList& tests); // UnitTests_GizmoIcons.cpp
+void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests); // UnitTests_AssetLibrary.cpp
+void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonBody.cpp
+void RegisterOutfitsTests(UnitTestSupport::TestList& tests); // UnitTests_Outfits.cpp
+void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonWeapons.cpp

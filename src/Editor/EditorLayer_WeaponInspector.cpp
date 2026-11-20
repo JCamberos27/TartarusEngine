@@ -122,8 +122,6 @@ void BindProceduralCurves(CurveEditor::AssetScope& scope,const WeaponProceduralS
     scope.Bind(p.Recoil.CameraPitch,"/procedural/recoil/cameraPitch","Camera pitch");
     scope.Bind(p.Recoil.CameraYaw,"/procedural/recoil/cameraYaw","Camera yaw");
     if(p.Recoil.UnityPort)BindRecoilData(scope,p.Recoil.Unity,"/procedural/recoil/recoilAnimData");
-    BindVectorCurve(scope,p.Bob.Walk,"/procedural/bob/walk","Walk bob");
-    BindVectorCurve(scope,p.Bob.Sprint,"/procedural/bob/sprint","Sprint bob");
     BindVectorCurve(scope,p.Breath.Position,"/procedural/breath/position","Breathing position");
     scope.Bind(p.Breath.Pitch,"/procedural/breath/pitch","Breathing pitch");
 }
@@ -541,7 +539,7 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm, bool profi
     // burst at the weapon's rpm, every random pick at its middle.
     WeaponProceduralSettings sim = kDefaults;
     sim.Recoil = rc;
-    sim.Sway.Enabled = sim.Bob.Enabled = sim.Breath.Enabled = sim.Lean.Enabled = false;
+    sim.Sway.Enabled = sim.Breath.Enabled = sim.Lean.Enabled = false;
     sim.StateOffsets.clear();
     auto& sr = sim.Recoil;
     for (glm::vec2* rg : {&sr.PitchRange, &sr.YawRange, &sr.RollRange, &sr.SideRange, &sr.UpRange, &sr.KickRange, &sr.CameraYawRange})
@@ -591,7 +589,6 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm, bool profi
 
 void DrawSourceSway(PropertyRows& r, WeaponSwaySettings& w, const WeaponContext& ctx) {
     r.Check("Enabled", w.Enabled, "KINEMATION SwayModifierJob: movement springs, aim springs, then additive-bone animation.");
-    if (!w.UnityPort) { w.UnityPort=true; r.MarkChanged(); }
     auto& s=w.Unity;
     r.Heading("Bones");
     r.Name("Weapon Bone",s.WeaponBone,ctx.Bones,ctx.Arms!=nullptr,"Bone moved before the arms solve their IK.","The arms rig has no bone named '%s'.");

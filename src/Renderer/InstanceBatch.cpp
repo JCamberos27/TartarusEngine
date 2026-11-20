@@ -1,4 +1,5 @@
 #include "InstanceBatch.h"
+#include "GpuMemTrack.h"
 #include "gl.h"
 #include "Model.h"
 #include "Shader.h"
@@ -90,6 +91,8 @@ bool EnsureRing() {
         glDeleteBuffers(1, &r.Buffer);
         r.Buffer = 0;
         r.Failed = true;
+    } else {
+        GpuMemTrack::Set("InstanceBuffer ring (persistently mapped)", kRingBytes);
     }
     return !r.Failed;
 }

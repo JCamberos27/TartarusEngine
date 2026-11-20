@@ -3,7 +3,7 @@
 whole editor (EditorUIPrimitives::ActionButton and ::PrimaryButton; ::DangerIconButton is the one
 sanctioned third-party-red variant of ActionButton). EditorUIPrimitives.h is the one place that's
 allowed to define those treatments by pushing ImGuiCol_Button/ButtonHovered/ButtonActive style
-colours directly — every other .cpp/.h in src/Editor should call the primitive instead of hand-
+colours directly — every other .cpp/.h in src/Editor (subfolders included) should call the primitive instead of hand-
 rolling its own copy of the same three PushStyleColor calls, which is exactly how #160 happened
 the first time (three panel .cpp files each carrying their own near-identical ActionButton before
 EditorUIPrimitives.h existed to share one implementation across the host/module DLL boundary).
@@ -60,14 +60,16 @@ def main() -> int:
     allowed = parse_allowlist(ALLOWLIST.read_text(encoding="utf-8"))
 
     violations: dict[str, list[int]] = {}
-    for path in sorted(list(EDITOR_DIR.glob("*.cpp")) + list(EDITOR_DIR.glob("*.h"))):
-        if path.name == SANCTIONED_FILE:
+    # Subfolders too (Glass/, Enhancers/): a file there is keyed by its path under src/Editor.
+    for path in sorted(list(EDITOR_DIR.rglob("*.cpp")) + list(EDITOR_DIR.rglob("*.h"))):
+        name = path.relative_to(EDITOR_DIR).as_posix()
+        if name == SANCTIONED_FILE:
             continue
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         # Check for both style color pushes and raw ImGui::Button/SmallButton calls
         hits = [i + 1 for i, line in enumerate(lines) if PUSH_RE.search(line) or BUTTON_RE.search(line)]
         if hits:
-            violations[path.name] = hits
+            violations[name] = hits
 
     errors = []
     for name, hits in violations.items():

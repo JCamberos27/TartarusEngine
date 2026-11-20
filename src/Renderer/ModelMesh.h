@@ -91,4 +91,6 @@ private:
     std::vector<unsigned int> m_LocalIndices;
     std::vector<SkinVertex> m_Skin;
     void KeepSkin(const std::vector<ModelVertex>& vertices);
+    // The building constructors' shared CPU side: counts, collision copies, the cache-optimised order, the skin.
+    void InitCpu(const std::vector<ModelVertex>& vertices, const std::vector<unsigned int>& indices);
 };

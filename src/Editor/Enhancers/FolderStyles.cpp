@@ -97,24 +97,6 @@ int FolderStyles::OnFolderPathChanged(const std::string& oldPath, const std::str
     return n;
 }
 
-namespace {
-json StyleToJson(const FolderStyle& s) {
-    json j = json::object();
-    if (!s.Icon.empty()) j["icon"] = s.Icon;
-    if (s.Color) j["color"] = ToHexColor(s.Color);
-    return j;
-}
-FolderStyle StyleFromJson(const json& j) {
-    FolderStyle s;
-    if (!j.is_object()) return s;
-    if (auto it = j.find("icon"); it != j.end() && it->is_string()) s.Icon = it->get<std::string>();
-    if (auto it = j.find("color"); it != j.end() && it->is_string()) {
-        std::uint32_t c = 0;
-        if (ParseHexColor(it->get<std::string>(), c)) s.Color = c;
-    }
-    return s;
-}
-} // namespace
 
 json FolderStyles::ToJson() const {
     json j = m_Unknown;

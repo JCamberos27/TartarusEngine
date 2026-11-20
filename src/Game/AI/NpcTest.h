@@ -90,7 +90,7 @@ public:
     const std::string& RecordDir() const { return m_RecordDir; }
     // Where a scenario's trace.csv goes: NPC_TEST_TRACE=<dir> (the trace alone, no frames - fast), else NPC_TEST_RECORD's.
     const std::string& TraceDir() const { return m_TraceDir; }
-    int RecordStep() const { return m_Scenario == "flame" || m_Scenario == "labloco" || m_Scenario == "testbed" || m_Scenario == "mmview" || m_Scenario == "mmdb" ? 1 : 2; } // every frame for the muzzle flame
+    int RecordStep() const; // 1: every frame (the muzzle flame, the matcher's poses), else 2
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -102,8 +102,8 @@ public:
     std::string m_Action;
     // World lines the host draws over the Game view (mmview: the generated root, the hips' facing, the ankles).
     void DebugLines(std::vector<float>& out) const;
-    bool RunsWithoutSquad() const { return m_Scenario == "mmview" || m_Scenario == "mmdb" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver" || m_Scenario == "stopsteps"; } // After() even in a scene with no dummies
-    bool WantsCleanViews() const { return m_Scenario == "mmview" || m_Scenario == "mmdb" || m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "revolver"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const; // After() even in a scene with no dummies
+    bool WantsCleanViews() const;  // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -249,7 +249,7 @@ private:
     void RoamSetUp(World& world, const Player& player);
     std::shared_ptr<NavMesh> m_RoNav; // its own, at the player's size: a scene without dummies builds none
     std::vector<glm::vec3> m_RoPoints, m_RoPath;
-    glm::vec3 m_RoStart{0.0f}, m_RoFrom{0.0f}, m_RoPrev{0.0f};
+    glm::vec3 m_RoFrom{0.0f}, m_RoPrev{0.0f};
     int m_RoLeg = 0, m_RoCorner = 0, m_RoOk = 0, m_RoTotal = 0, m_RoFalls = 0, m_RoStairs = 0, m_RoStairsOk = 0;
     int m_RoUnreachable = 0, m_RoOffMesh = 0, m_RoWorstAt = -1;
     float m_RoWait = 0.0f, m_RoClock = 0.0f, m_RoBudget = 0.0f, m_RoStuck = 0.0f, m_RoStuckSum = 0.0f, m_RoWorstStuck = 0.0f;
@@ -269,13 +269,13 @@ private:
     // decals
     int m_KStep = 0, m_KShot = 0;
     int m_KStressFrame = 0; // TARTARUS_DECAL_STRESS: frames of rounds and blood fired so far
-    float m_KAt = 0.0f, m_KClock = 0.0f;
+    float m_KClock = 0.0f;
     bool m_KMidChecked = false;
     int m_KPlacedStage = 0;
     // ragdoll
-    int m_RCase = -1, m_RStage = 0, m_RMoment = 0, m_RFrame = 0, m_RFrames = 0;
+    int m_RCase = -1, m_RStage = 0, m_RMoment = 0, m_RFrame = 0;
     float m_RAt = 0.0f, m_RKilledAt = 0.0f, m_RLastDeath = 0.0f, m_RYaw = 0.0f;
-    bool m_RFreeze = false, m_RKilled = false;
+    bool m_RFreeze = false;
     std::string m_RName;
     float m_RWorstSelf = 0.0f, m_RWorstGround = 0.0f, m_RWorstJoint = 0.0f;
     std::string m_RWorstSelfAt, m_RWorstGroundAt, m_RWorstJointAt;
@@ -321,16 +321,14 @@ private:
     bool m_Done = false;
     int m_Checks = 0, m_Failures = 0;
     std::string m_Shot;
-    float m_NextLog = 0.0f;
-    float m_NextShot = 0.0f;
     int m_ShotIndex = 0;
     glm::vec3 m_CamPos{0.0f};
     float m_CamYaw = 0.0f, m_CamPitch = 0.0f;
     bool m_HaveCam = false;
+    void LookAt(const glm::vec3& target); // the Scene view at m_CamPos, turned to `target` (m_CamYaw / m_CamPitch, m_HaveCam)
     std::string m_RecordDir, m_TraceDir;
     bool m_Firing = false;
     float m_FireHold = 0.0f;
-    float m_AimErr = -1.0f;
     bool m_Reload = false;
     std::string m_Target;
     int m_PlayerShots = 0, m_LastAmmo = -1;

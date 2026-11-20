@@ -113,7 +113,7 @@ Compositor::~Compositor() { Release(); }
 
 void Compositor::EnsureGl() {
     if (m_Splat) return;
-    const std::string fullscreen = ShaderLibrary::ReadFile("ScreenBlur.vert.glsl");
+    const std::string fullscreen = ShaderLibrary::ReadFile("Fullscreen.vert.glsl");
     m_Splat = std::make_unique<Shader>(ShaderLibrary::ReadFile("GraffitiSplat.vert.glsl"),
                                        ShaderLibrary::ReadFile("GraffitiSplat.frag.glsl"), "Graffiti Splat");
     m_Quad = std::make_unique<Shader>(ShaderLibrary::ReadFile("GraffitiQuad.vert.glsl"),

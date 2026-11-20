@@ -78,6 +78,8 @@ using namespace EditorInternal;
 
 
 namespace {
+// The 12 edges of a box whose 8 corners are indexed by bits (x = bit 0, y = bit 1, z = bit 2).
+constexpr int kCornerBitEdges[12][2] = {{0,1},{2,3},{4,5},{6,7}, {0,2},{1,3},{4,6},{5,7}, {0,4},{1,5},{2,6},{3,7}};
 
 // #236 A1 — an entity is unclickable in the viewport when its layer's bit is set in the
 // editor's pick-lock mask. Hierarchy selection is unaffected. Absent LayerComponent == layer 0.
@@ -366,6 +368,18 @@ bool EditorLayer::FrameFirstPersonBody(World& world, Camera& editorCamera) {
     return true;
 }
 
+// A camera move eased over the next frames: from the camera as it is, to the same pose until the caller
+// sets the target fields it changes.
+void EditorLayer::BeginViewTransition(const Camera& cam) {
+    m_ViewTransition.Active = true;
+    m_ViewTransition.T = 0.0f;
+    m_ViewTransition.FromPos = m_ViewTransition.ToPos = cam.Position;
+    m_ViewTransition.FromYaw = m_ViewTransition.ToYaw = cam.Yaw;
+    m_ViewTransition.FromPitch = m_ViewTransition.ToPitch = cam.Pitch;
+    m_ViewTransition.FromOrthoHalfHeight = m_ViewTransition.ToOrthoHalfHeight = cam.OrthoHalfHeight;
+    m_ViewTransition.FromFov = m_ViewTransition.ToFov = cam.Fov;
+}
+
 void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
     glm::vec3 mn, mx;
     if (!ComputeSceneBounds(world, mn, mx)) return;
@@ -380,16 +394,9 @@ void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
 
     // Glide there rather than teleport — same eased transition FocusOnSelection uses.
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = targetPos;
-    m_ViewTransition.ToYaw = editorCamera.Yaw;     // aim unchanged
-    m_ViewTransition.ToPitch = editorCamera.Pitch;
+    // aim unchanged
     m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
         ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
 }
@@ -412,16 +419,9 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
 
     // Glide there rather than teleport — same eased transition SnapToView uses (audit follow-up).
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = targetPos;
-    m_ViewTransition.ToYaw = editorCamera.Yaw;     // aim unchanged
-    m_ViewTransition.ToPitch = editorCamera.Pitch;
+    // aim unchanged
     m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
         ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
 }
@@ -620,13 +620,7 @@ void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, floa
     newFront = glm::normalize(newFront);
 
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToYaw = yaw;
     m_ViewTransition.ToPitch = pitch;
     m_ViewTransition.ToPos = pivot - newFront * distance;
@@ -816,13 +810,7 @@ void EditorLayer::LookThroughLight(World& world, Camera& editorCamera, entt::ent
                 : editorCamera.Fov;
 
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = pos;
     m_ViewTransition.ToYaw = yaw;
     m_ViewTransition.ToPitch = pitch;
@@ -841,13 +829,7 @@ void EditorLayer::ExitLookThrough(Camera& editorCamera) {
     if (!m_LookThroughActive) return;
     const CameraPose& r = m_LookThroughRestore;
     SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
-    m_ViewTransition.Active = true;
-    m_ViewTransition.T = 0.0f;
-    m_ViewTransition.FromPos = editorCamera.Position;
-    m_ViewTransition.FromYaw = editorCamera.Yaw;
-    m_ViewTransition.FromPitch = editorCamera.Pitch;
-    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-    m_ViewTransition.FromFov = editorCamera.Fov;
+    BeginViewTransition(editorCamera);
     m_ViewTransition.ToPos = r.Pos;
     m_ViewTransition.ToYaw = r.Yaw;
     m_ViewTransition.ToPitch = r.Pitch;
@@ -948,18 +930,9 @@ bool EditorLayer::DropLightToSurface(World& world, entt::entity light) {
     return true;
 }
 glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera, glm::vec3* outNormal) const {
-    glm::mat4 view = editorCamera.ViewMatrix();
-    glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
-    glm::mat4 invVP = glm::inverse(proj * view);
-    ImVec2 mousePos = ImGui::GetMousePos();
-    float ndcX = (2.0f * (mousePos.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
-    float ndcY = 1.0f - (2.0f * (mousePos.y - m_ViewportPos.y)) / m_ViewportSize.y;
-    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-    nearP /= nearP.w;
-    farP /= farP.w;
-    glm::vec3 origin = glm::vec3(nearP);
-    glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+    const ImVec2 mousePos = ImGui::GetMousePos();
+    glm::vec3 origin = editorCamera.Position, dir = editorCamera.Front();
+    ViewportRay(editorCamera, {mousePos.x, mousePos.y}, origin, dir);
 
     // Landing point: the nearest mesh surface (#116 — was the nearest collider's axis-aligned
     // box, so drops onto rotated geometry floated/embedded and collider-less models couldn't be
@@ -1149,16 +1122,10 @@ const std::vector<EditorLayer::DragPreview::Part>& EditorLayer::PrefabGhostParts
 entt::entity EditorLayer::ObjectUnderMouse(World& world, Camera& editorCamera, int& outSlot) const {
     outSlot = -1;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return entt::null;
-    const glm::mat4 invVP = glm::inverse(editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) *
-                                         editorCamera.ViewMatrix());
     const ImVec2 mouse = ImGui::GetMousePos();
-    const float ndcX = (2.0f * (mouse.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
-    const float ndcY = 1.0f - (2.0f * (mouse.y - m_ViewportPos.y)) / m_ViewportSize.y;
-    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-    nearP /= nearP.w;
-    farP /= farP.w;
-    const SurfaceHit h = RaycastRenderables(world, glm::vec3(nearP), glm::normalize(glm::vec3(farP - nearP)),
+    glm::vec3 origin, dir;
+    if (!ViewportRay(editorCamera, {mouse.x, mouse.y}, origin, dir)) return entt::null;
+    const SurfaceHit h = RaycastRenderables(world, origin, dir,
                                             [](entt::entity) { return false; }, 5000.0f);
     outSlot = h.Mesh;
     return h.Entity;
@@ -1480,15 +1447,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
     if (!isDragging) {
         // Plain click: single-object raycast pick straight through the cursor, same as before.
-        glm::mat4 invVP = glm::inverse(proj * view);
-        float ndcX = (2.0f * (current.x - vpPos.x)) / w - 1.0f;
-        float ndcY = 1.0f - (2.0f * (current.y - vpPos.y)) / h;
-        glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-        glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-        nearP /= nearP.w;
-        farP /= farP.w;
-        glm::vec3 origin = glm::vec3(nearP);
-        glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+        glm::vec3 origin = editorCamera.Position, dir = editorCamera.Front();
+        ViewportRay(editorCamera, {current.x, current.y}, origin, dir);
 
         // #116 — exact triangle picking (see RaycastRenderables).
         const SurfaceHit pick = RaycastRenderables(world, origin, dir, [&](entt::entity entity) {
@@ -1644,17 +1604,10 @@ void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
     // depth rather than needing an axis-constrained gizmo handle.
     glm::mat4 view = editorCamera.ViewMatrix();
     glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
-    glm::mat4 invVP = glm::inverse(proj * view);
 
     ImVec2 mouse = ImGui::GetIO().MousePos;
-    float ndcX = (2.0f * (mouse.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
-    float ndcY = 1.0f - (2.0f * (mouse.y - m_ViewportPos.y)) / m_ViewportSize.y;
-    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-    nearP /= nearP.w;
-    farP /= farP.w;
-    glm::vec3 rayOrigin = glm::vec3(nearP);
-    glm::vec3 rayDir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+    glm::vec3 rayOrigin = editorCamera.Position, rayDir = editorCamera.Front();
+    ViewportRay(editorCamera, {mouse.x, mouse.y}, rayOrigin, rayDir);
 
     glm::vec3 planeNormal = editorCamera.Front();
     float denom = glm::dot(rayDir, planeNormal);
@@ -2002,14 +1955,7 @@ void EditorLayer::DrawLightGizmos(World& world, Camera& editorCamera) {
     const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
     draw->PushClipRect(clipMin, clipMax, true);
 
-    auto project = [&](const glm::vec3& wp, ImVec2& out) -> bool {
-        glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
-        if (clip.w <= 0.0001f) return false;               // at/behind the eye
-        glm::vec3 ndc = glm::vec3(clip) / clip.w;
-        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
-                     m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
-        return true;
-    };
+    auto project = [&](const glm::vec3& wp, ImVec2& out) { return WorldToViewport(viewProj, wp, out); };
     // Project a world-space polyline and stroke it, dropping any segment with an endpoint that
     // failed to project (behind the camera) rather than drawing a wild line across the screen.
     auto stroke = [&](const std::vector<glm::vec3>& pts, bool closed, ImU32 col, float thick) {
@@ -2125,14 +2071,7 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
     const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
     draw->PushClipRect(clipMin, clipMax, true);
 
-    auto project = [&](const glm::vec3& wp, ImVec2& out) -> bool {
-        glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
-        if (clip.w <= 0.0001f) return false;
-        glm::vec3 ndc = glm::vec3(clip) / clip.w;
-        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
-                     m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
-        return true;
-    };
+    auto project = [&](const glm::vec3& wp, ImVec2& out) { return WorldToViewport(viewProj, wp, out); };
     auto strokeEdge = [&](const glm::vec3& a, const glm::vec3& b, ImU32 col, float thick) {
         ImVec2 sa, sb;
         if (project(a, sa) && project(b, sb))
@@ -2169,13 +2108,7 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
                 (i & 2) ? hs.y : -hs.y,
                 (i & 4) ? hs.z : -hs.z);
 
-        // 12 box edges
-        int edges[12][2] = {
-            {0,1},{2,3},{4,5},{6,7}, // along X
-            {0,2},{1,3},{4,6},{5,7}, // along Y
-            {0,4},{1,5},{2,6},{3,7}, // along Z
-        };
-        for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
+        for (auto& e : kCornerBitEdges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
     }
 
     // GI Volumes: the box, and when selected every probe as a dot in its baked colour (all layers at full weight, the
@@ -2189,9 +2122,8 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
         for (int i = 0; i < 8; ++i)
             c[i] = box.ToWorld({(i & 1) ? box.Half.x : -box.Half.x, (i & 2) ? box.Half.y : -box.Half.y,
                                 (i & 4) ? box.Half.z : -box.Half.z});
-        const int edges[12][2] = {{0,1},{2,3},{4,5},{6,7},{0,2},{1,3},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7}};
         const bool selected = IsSelected(entity);
-        for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], selected ? kProbeSelected : kGIColor, kThick);
+        for (auto& e : kCornerBitEdges) strokeEdge(c[e[0]], c[e[1]], selected ? kProbeSelected : kGIColor, kThick);
         if (!selected) continue;
         const glm::ivec3 dims = GI::GridDims(box.Half, gv.Spacing);
         if (dims.x * dims.y * dims.z > 20000) continue;
@@ -2234,9 +2166,8 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
         glm::vec3 c[8];
         for (int i = 0; i < 8; ++i)
             c[i] = glm::vec3(wt * glm::vec4((i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z, 1.0f));
-        const int edges[12][2] = {{0,1},{2,3},{4,5},{6,7},{0,2},{1,3},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7}};
         const ImU32 col = IsSelected(entity) ? kProbeSelected : kVolumeColor;
-        for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
+        for (auto& e : kCornerBitEdges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
     }
 
     // Decals: the projection box (its Size; the Scale gizmo edits it). The +Z face (out of the
@@ -2799,16 +2730,8 @@ void EditorLayer::DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& ro
 // over empty space). Shared by the Measure tool (#236 R2).
 bool EditorLayer::RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx,
                                          glm::vec3& outHit) const {
-    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
-    if (w <= 1.0f || h <= 1.0f) return false;
-    const glm::mat4 invVP = glm::inverse(cam.ProjectionMatrix(w / h) * cam.ViewMatrix());
-    const float ndcX = (2.0f * (screenPx.x - m_ViewportPos.x)) / w - 1.0f;
-    const float ndcY = 1.0f - (2.0f * (screenPx.y - m_ViewportPos.y)) / h;
-    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    glm::vec4 farP  = invVP * glm::vec4(ndcX, ndcY,  1.0f, 1.0f);
-    nearP /= nearP.w; farP /= farP.w;
-    const glm::vec3 origin = glm::vec3(nearP);
-    const glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+    glm::vec3 origin, dir;
+    if (!ViewportRay(cam, screenPx, origin, dir)) return false;
 
     // #116 — measure against real surfaces, not bounding boxes.
     const SurfaceHit surf = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; });
@@ -2915,14 +2838,7 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
     if (w <= 1.0f || h <= 1.0f) return;
     const glm::mat4 vp = cam.ProjectionMatrix(w / h) * cam.ViewMatrix();
-    auto toScreen = [&](const glm::vec3& p, ImVec2& out) -> bool {
-        glm::vec4 c = vp * glm::vec4(p, 1.0f);
-        if (c.w <= 1e-4f) return false;
-        glm::vec3 ndc = glm::vec3(c) / c.w;
-        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * w,
-                     m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
-        return true;
-    };
+    auto toScreen = [&](const glm::vec3& p, ImVec2& out) { return WorldToViewport(vp, p, out); };
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     const ImU32 col = EditorTheme::U32(EditorTheme::Info);
     RulerLabels labels{ImVec2(m_ViewportPos.x, m_ViewportPos.y), ImVec2(m_ViewportPos.x + w, m_ViewportPos.y + h), {}};
@@ -3019,6 +2935,15 @@ bool EditorLayer::RulerHeldNow() const {
     return EditorSettings::Get().Ruler && Shortcuts::Held("viewport.ruler");
 }
 
+bool EditorLayer::WorldToViewport(const glm::mat4& viewProj, const glm::vec3& p, ImVec2& out) const {
+    const glm::vec4 clip = viewProj * glm::vec4(p, 1.0f);
+    if (clip.w <= 1e-4f) return false; // at or behind the eye
+    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
+                 m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
+    return true;
+}
+
 bool EditorLayer::ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const {
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
     if (w <= 1.0f || h <= 1.0f) return false;
@@ -3059,13 +2984,7 @@ void EditorLayer::DrawRuler(World& world, Camera& cam) {
     if (!ViewportRay(cam, {mouse.x, mouse.y}, origin, dir)) return;
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
     const glm::mat4 vp = cam.ProjectionMatrix(w / h) * cam.ViewMatrix();
-    auto toScreen = [&](const glm::vec3& p, ImVec2& out) -> bool {
-        const glm::vec4 c = vp * glm::vec4(p, 1.0f);
-        if (c.w <= 1e-4f) return false;
-        const glm::vec3 ndc = glm::vec3(c) / c.w;
-        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * w, m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
-        return true;
-    };
+    auto toScreen = [&](const glm::vec3& p, ImVec2& out) { return WorldToViewport(vp, p, out); };
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     dl->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y), ImVec2(m_ViewportPos.x + w, m_ViewportPos.y + h), true);
     const ImU32 info = EditorTheme::U32(EditorTheme::Info), warn = EditorTheme::U32(EditorTheme::Warning);
@@ -3252,17 +3171,9 @@ void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::ent
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
     if (w <= 1.0f || h <= 1.0f || !world.Registry.valid(sel)) return;
 
-    const glm::mat4 view = editorCamera.ViewMatrix();
-    const glm::mat4 proj = editorCamera.ProjectionMatrix(w / h);
-    const glm::mat4 invVP = glm::inverse(proj * view);
     const ImVec2 m = ImGui::GetIO().MousePos;
-    const float ndcX = (2.0f * (m.x - m_ViewportPos.x)) / w - 1.0f;
-    const float ndcY = 1.0f - (2.0f * (m.y - m_ViewportPos.y)) / h;
-    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    glm::vec4 farP  = invVP * glm::vec4(ndcX, ndcY,  1.0f, 1.0f);
-    nearP /= nearP.w; farP /= farP.w;
-    const glm::vec3 origin = glm::vec3(nearP);
-    const glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+    glm::vec3 origin, dir;
+    if (!ViewportRay(editorCamera, {m.x, m.y}, origin, dir)) return;
 
     // Never snap to the moving object itself or anything parented under it.
     auto isSelfOrChild = [&](entt::entity e) {
@@ -3317,17 +3228,9 @@ void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::ent
 EditorLayer::DecalSpot EditorLayer::DecalSpotUnderMouse(World& world, Camera& editorCamera) const {
     DecalSpot spot;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return spot;
-    const glm::mat4 invVP = glm::inverse(editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) *
-                                         editorCamera.ViewMatrix());
     const ImVec2 mouse = ImGui::GetMousePos();
-    const float ndcX = (2.0f * (mouse.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
-    const float ndcY = 1.0f - (2.0f * (mouse.y - m_ViewportPos.y)) / m_ViewportSize.y;
-    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-    nearP /= nearP.w;
-    farP /= farP.w;
-    const glm::vec3 origin(nearP);
-    const glm::vec3 dir = glm::normalize(glm::vec3(farP) - origin);
+    glm::vec3 origin, dir;
+    if (!ViewportRay(editorCamera, {mouse.x, mouse.y}, origin, dir)) return spot;
 
     const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, 5000.0f);
     if (h.Entity != entt::null) {
@@ -3487,13 +3390,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     if (modified && !wasOrbitDrag && ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_NONE) {
         const glm::vec3 forward = glm::normalize(camRot * glm::vec3(0.0f, 0.0f, -1.0f));
         SettleViewMorph(editorCamera);
-        m_ViewTransition.Active = true;
-        m_ViewTransition.T = 0.0f;
-        m_ViewTransition.FromPos = editorCamera.Position;
-        m_ViewTransition.FromYaw = editorCamera.Yaw;
-        m_ViewTransition.FromPitch = editorCamera.Pitch;
-        m_ViewTransition.FromOrthoHalfHeight = m_ViewTransition.ToOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-        m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+        BeginViewTransition(editorCamera);
         m_ViewTransition.ToPos = camPos;
         m_ViewTransition.ToPitch = glm::clamp(glm::degrees(asinf(glm::clamp(forward.y, -1.0f, 1.0f))), -89.0f, 89.0f);
         // Straight up / down has no heading of its own: keep the current one rather than spinning
@@ -3692,14 +3589,9 @@ void EditorLayer::UpdateHoverPick(World& world, Camera& editorCamera) {
 
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
     if (w <= 0.0f || h <= 0.0f) { m_HoverEntity = entt::null; return; }
-    const glm::mat4 invVP = glm::inverse(editorCamera.ProjectionMatrix(w / h) * editorCamera.ViewMatrix());
-    const float ndcX = (2.0f * (mouse.x - m_ViewportPos.x)) / w - 1.0f;
-    const float ndcY = 1.0f - (2.0f * (mouse.y - m_ViewportPos.y)) / h;
-    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-    nearP /= nearP.w;
-    farP /= farP.w;
-    const SurfaceHit hit = RaycastRenderables(world, glm::vec3(nearP), glm::normalize(glm::vec3(farP) - glm::vec3(nearP)),
+    glm::vec3 origin, dir;
+    if (!ViewportRay(editorCamera, mouse, origin, dir)) { m_HoverEntity = entt::null; return; }
+    const SurfaceHit hit = RaycastRenderables(world, origin, dir,
                                               [&](entt::entity entity) { return ViewportUnpickable(world, entity); });
     m_HoverEntity = hit.Entity;
 }

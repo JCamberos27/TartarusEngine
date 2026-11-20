@@ -187,15 +187,10 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
                 p.Recoil.HipScale = 0.0f; // it used to kick in ADS only
             }
             if (const auto b = g->find("adsBob"); b != g->end() && b->is_object()) {
-                const float stride = Number(*b, "stride", 2.4f), fullSpeed = Number(*b, "fullSpeed", 3.5f);
-                if (!(stride > 0.0f) || !(fullSpeed > 0.0f))
-                    return Fail(error, "'gameplay.adsBob' stride and fullSpeed must be positive");
-                p.Bob.WalkStride = stride;
-                p.Bob.WalkFullSpeed = fullSpeed;
+                const float stride = Number(*b, "stride", 2.4f);
+                if (!(stride > 0.0f)) return Fail(error, "'gameplay.adsBob' stride must be positive");
+                p.Bob.WalkStride = stride; // (its curves were the gun bob, retired: the stride and ease still clock the camera bob)
                 p.Bob.Ease = Number(*b, "ease", p.Bob.Ease);
-                p.Bob.Walk = {FirstPersonSineCurve(Number(*b, "side", 0.003f)),
-                              FirstPersonSineCurve(Number(*b, "vertical", 0.0015f), 2.0f), {}};
-                p.Bob.HipScale = 0.0f;    // ADS only, as before
             }
         }
     }
@@ -471,7 +466,7 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     // Preserve their float values rather than rounding them into a different solver.
     const json sway=j["procedural"]["sway"];
     RoundFloats(j);
-    if (Procedural.Sway.UnityPort) j["procedural"]["sway"]=sway;
+    j["procedural"]["sway"]=sway;
     return j.dump(2);
 }
 

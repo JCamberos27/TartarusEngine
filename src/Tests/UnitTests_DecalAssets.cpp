@@ -10,7 +10,7 @@
 #include "../Game/Components.h"
 #include "../Game/ComponentRegistry.h"
 #include "../Game/SceneSerializer.h"
-#include "../Editor/AssetLibrary.h"
+#include "../Assets/AssetLibrary.h"
 #include <json.hpp>
 #include <cctype>
 #include <cmath>

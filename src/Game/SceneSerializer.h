@@ -113,7 +113,6 @@ namespace SceneSerializer {
     // `component` its .prefab counterpart doesn't. Revert removes it (undo-friendly via the
     // caller's PushUndo); Apply writes the whole component block into the .prefab file.
     bool IsPrefabComponentAdded(const World& world, entt::entity entity, const char* component);
-    void RevertPrefabComponent(World& world, AssetLibrary& assets, entt::entity entity, const char* component);
     bool ApplyPrefabComponent(World& world, entt::entity entity, const char* component);
 
     void ClearPrefabPristineCache();

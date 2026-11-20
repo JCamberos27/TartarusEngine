@@ -16,7 +16,7 @@ ScreenBlur::~ScreenBlur() {
 
 void ScreenBlur::Ensure(int halfW, int halfH) {
     if (!m_Shader) {
-        m_Shader = new Shader(ShaderLibrary::ReadFile("ScreenBlur.vert.glsl"),
+        m_Shader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                               ShaderLibrary::ReadFile("ScreenBlur.frag.glsl"));
         glGenVertexArrays(1, &m_Vao);
     }

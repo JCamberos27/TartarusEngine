@@ -67,6 +67,8 @@ private:
     std::vector<Slot> m_Slots;           // index = cube-array layer
     std::vector<int> m_Queue;            // slots waiting for a capture, in order
     std::vector<Volume> m_Pending;       // the last volumes seen, while they settle
+    std::vector<Volume> m_Want, m_Have;  // Sync's per-frame scratch (storage reused)
+    std::vector<int> m_SlotOf;
     int m_PendingFrames = 0;
     double m_PendingSince = 0.0;
     Job m_Cap, m_Pre;                    // the face being rendered / the face being prefiltered

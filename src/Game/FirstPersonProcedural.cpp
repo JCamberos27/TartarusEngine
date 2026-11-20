@@ -237,16 +237,6 @@ WeaponProceduralSettings WeaponProceduralSettings::Defaults() {
     r.SustainedRotation = r.Rotation;
     r.SustainedPosition = r.Position;
 
-    auto& b = s.Bob;
-    // A figure-eight: one side swing and two dips per stride (the old ADS bob's numbers).
-    b.Walk.X = FirstPersonSineCurve(0.003f);
-    b.Walk.Y = FirstPersonSineCurve(0.0015f, 2.0f);
-    b.Walk.Z = FirstPersonSineCurve(0.35f);
-    b.Sprint.X = FirstPersonSineCurve(0.008f);
-    b.Sprint.Y = FirstPersonSineCurve(0.005f, 2.0f);
-    b.Sprint.Z = FirstPersonSineCurve(1.2f);
-    b.HipScale = 0.5f;               // the walk/sprint clips already bob at the hip
-
     auto& br = s.Breath;
     br.Position.X = FirstPersonSineCurve(0.0003f, 1.0f, glm::half_pi<float>());
     br.Position.Y = FirstPersonSineCurve(0.0006f);
@@ -315,11 +305,7 @@ json WeaponProceduralSettings::ToJson() const {
     j["sway"] = SwayModifierToJson(Sway.Unity);
     j["sway"]["enabled"] = Sway.Enabled;
     const auto& b = Bob;
-    j["bob"] = {
-        {"enabled", b.Enabled}, {"walkStride", b.WalkStride}, {"sprintStride", b.SprintStride},
-        {"walk", Curve3Json(b.Walk)}, {"sprint", Curve3Json(b.Sprint)}, {"walkFullSpeed", b.WalkFullSpeed},
-        {"hipScale", b.HipScale}, {"adsScale", b.AdsScale}, {"ease", b.Ease},
-    };
+    j["bob"] = {{"walkStride", b.WalkStride}, {"sprintStride", b.SprintStride}, {"ease", b.Ease}};
     const auto& br = Breath;
     j["breath"] = {
         {"enabled", br.Enabled}, {"period", br.Period}, {"position", Curve3Json(br.Position)},
@@ -469,14 +455,8 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     root.Object("sway", [&](Reader& r) { r.Bool("enabled", s.Sway.Enabled); });
     root.Object("bob", [&](Reader& r) {
         auto& o = s.Bob;
-        r.Bool("enabled", o.Enabled);
-        r.Number("walkStride", o.WalkStride);
+        r.Number("walkStride", o.WalkStride); // (a retired gun bob's other keys are ignored)
         r.Number("sprintStride", o.SprintStride);
-        r.Curve3("walk", o.Walk);
-        r.Curve3("sprint", o.Sprint);
-        r.Number("walkFullSpeed", o.WalkFullSpeed);
-        r.Number("hipScale", o.HipScale);
-        r.Number("adsScale", o.AdsScale);
         r.Number("ease", o.Ease);
     });
     root.Object("breath", [&](Reader& r) {
@@ -628,7 +608,7 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         return false;
     };
     if (!positive(s.Recoil.Duration, "recoil.duration") || !positive(s.Bob.WalkStride, "bob.walkStride") ||
-        !positive(s.Bob.SprintStride, "bob.sprintStride") || !positive(s.Bob.WalkFullSpeed, "bob.walkFullSpeed") ||
+        !positive(s.Bob.SprintStride, "bob.sprintStride") ||
         !positive(s.Breath.Period, "breath.period") ||
         !positive(s.Recoil.Smoothing.Frequency, "recoil.smoothing.frequency"))
         return false;

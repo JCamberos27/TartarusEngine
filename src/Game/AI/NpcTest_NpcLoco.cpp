@@ -4,6 +4,7 @@
 // top speed, the start and stop clips, and that the body doesn't chatter between states (a start or a stop retriggered
 // while it's going one way).
 #include "NpcTest.h"
+#include "NpcTest_Common.h"
 #include "NpcDirector.h"
 #include "Player.h"
 #include "IK.h"
@@ -62,11 +63,6 @@ struct NLegStats {
 NLegStats g_N[kNLegCount];
 bool g_Mm = false;
 int g_MmUpdates = 0;
-float P99(std::vector<float> v) {
-    if (v.empty()) return 0.0f;
-    std::sort(v.begin(), v.end());
-    return v[(size_t)(0.99f * (float)(v.size() - 1))];
-}
 
 float Flat(const glm::vec3& a, const glm::vec3& b) { return glm::length(glm::vec2(a.x - b.x, a.z - b.z)); }
 } // namespace
@@ -159,10 +155,7 @@ void NpcTest::NpcLoco(World& world, NpcDirector& npcs, float now) {
     const glm::vec3 want(side, n.Feet.y + 1.05f, n.Feet.z);
     if (!m_HaveCam || std::abs(m_CamPos.x - want.x) > 1.0f) m_CamPos = want;
     else m_CamPos += (want - m_CamPos) * std::min(1.0f, dt * 4.0f);
-    const glm::vec3 look = glm::normalize(n.Feet + glm::vec3(0.0f, 0.85f, 0.0f) - m_CamPos);
-    m_CamYaw = glm::degrees(std::atan2(look.z, look.x));
-    m_CamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
-    m_HaveCam = true;
+    LookAt(n.Feet + glm::vec3(0.0f, 0.85f, 0.0f));
 }
 
 void NpcTest::NpcLocoReport() {
@@ -182,7 +175,7 @@ void NpcTest::NpcLocoReport() {
             const NLeg& L = kNLegs[i];
             if (Flat(L.To, kNLegs[i - 1].To) <= 0.5f) continue;
             const NLegStats& s = g_N[i];
-            const float jumps = s.MoveTime > 0.0f ? (float)s.MoveJumps / s.MoveTime : 0.0f, p99 = P99(s.PoseSteps);
+            const float jumps = s.MoveTime > 0.0f ? (float)s.MoveJumps / s.MoveTime : 0.0f, p99 = NpcTestCommon::Percentile(s.PoseSteps, 0.99f);
             const float cruiseJumps = s.CruiseTime > 0.0f ? (float)s.CruiseJumps / s.CruiseTime : 0.0f;
             const float style = s.Cruise ? 100.0f * (float)s.CruiseStyle / (float)s.Cruise : 0.0f;
             std::printf("[NpcLoco] MM %-22s pace %.2f m/s top %.2f; moving %.1f s, %d jumps (%.2f/s), pose step p99 %.2f deg; style %.0f %% of %d "

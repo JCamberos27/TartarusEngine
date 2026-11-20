@@ -326,7 +326,11 @@ float PenPressure(const GraffitiDesigner& g) {
 
 void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport) {
     if (!g.Piece) return;
+    const size_t layersBefore = g.Piece->Layers.size();
+    g.StrokePrevSelected = g.Selected;
+    g.StrokePrevDirty = g.Dirty;
     const int layer = EnsureSprayLayer(g);
+    g.StrokeAddedLayer = g.Piece->Layers.size() != layersBefore;
     if (g.NeedsBuild || g.Dirty) Rebuild(g); // the live layer must be in the program
     g.CascadeLayer = -1;
     g.Stroking = true;
@@ -397,7 +401,17 @@ void EndStroke(GraffitiDesigner& g) {
         g.Piece->Layers[(size_t)g.StrokeLayer].Strokes.push_back(std::move(g.Live));
         SaveNow(g); // one stroke, one undo step (the file journal)
         g.NeedsBuild = true;
+    } else if (g.StrokeAddedLayer && g.StrokeLayer >= 0 && g.StrokeLayer < (int)g.Piece->Layers.size() &&
+               g.Piece->Layers[(size_t)g.StrokeLayer].Strokes.empty()) {
+        // A click, not a stroke: the Spray layer it made goes again, so no empty layer is saved as its own step.
+        auto& L = g.Piece->Layers;
+        L.erase(L.begin() + g.StrokeLayer);
+        if (g.StrokeLayer < (int)g.LayerIds.size()) g.LayerIds.erase(g.LayerIds.begin() + g.StrokeLayer);
+        g.Selected = g.StrokePrevSelected < (int)L.size() ? g.StrokePrevSelected : (int)L.size() - 1;
+        g.Dirty = g.StrokePrevDirty;
+        g.NeedsBuild = true;
     }
+    g.StrokeAddedLayer = false;
     g.Live = Graffiti::Stroke{};
     if (g.BakeAgain) {
         g.BakeAgain = false;
@@ -855,109 +869,14 @@ void EditorLayer::DrawGraffitiViewportOverlay(World& world, Camera& editorCamera
 
 // --- The panel -----------------------------------------------------------------------------------------
 
-void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
-    if (!m_ShowGraffitiDesigner) {
-        if (m_Graffiti && m_Graffiti->Stroking) EndStroke(*m_Graffiti);
-        if (m_Graffiti) { // free the stamp picker's thumbnails
-            for (const std::string& p : m_Graffiti->Picker.Requested) m_AssetThumbs.Invalidate(p);
-            m_Graffiti->Picker.Requested.clear();
-            m_Graffiti->Picker.RequestedSet.clear();
-        }
-        return;
-    }
-    if (!m_Graffiti) m_Graffiti = std::make_shared<GraffitiDesigner>();
-    GraffitiDesigner& g = *m_Graffiti;
-    ImGui::SetNextWindowSize(ImVec2(1100, 680), ImGuiCond_FirstUseEver);
-    const bool open = ImGui::Begin(EditorPanels::GraffitiDesigner, &m_ShowGraffitiDesigner);
-    if (!open) {
-        ImGui::End();
-        return;
-    }
-    auto& M = Glass::Motion();
-    const ImGuiIO& io = ImGui::GetIO();
+namespace {
 
-    // ---- Top bar: file, bake, apply, Scene-view spray ----
-    if (EditorUIPrimitives::SecondaryButton(ICON_FA_PLUS "  New")) {
-        const std::string path = CreateGraffitiPiece(ProjectPaths::Resolve(kPiecesFolder), "Piece");
-        if (!path.empty()) OpenGraffitiPiece(path);
-    }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A new blank piece (GP_*.graffiti) in %s.", kPiecesFolder);
-    ImGui::SameLine();
-    {
-        const std::string current = g.Piece ? fs::u8path(g.Piece->Path).filename().u8string() : std::string("(no piece)");
-        ImGui::SetNextItemWidth(220.0f);
-        if (ImGui::BeginCombo("##piece", current.c_str())) {
-            std::error_code ec;
-            const fs::path dir = fs::u8path(ProjectPaths::Resolve(kPiecesFolder));
-            std::vector<fs::path> files;
-            for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
-                if (it->path().extension() == ".graffiti") files.push_back(it->path());
-            std::sort(files.begin(), files.end());
-            for (const fs::path& f : files)
-                if (ImGui::Selectable(f.filename().u8string().c_str(), g.Piece && fs::u8path(g.Piece->Path) == f))
-                    OpenGraffitiPiece(f.u8string());
-            if (files.empty()) ImGui::TextDisabled("No pieces yet");
-            ImGui::EndCombo();
-        }
-    }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!g.Piece);
-    if (EditorUIPrimitives::SecondaryButton(ICON_FA_FLOPPY_DISK "  Save")) SaveNow(g);
-    ImGui::SameLine();
-    if (EditorUIPrimitives::PrimaryButton(ICON_FA_FIRE "  Bake")) StartBake(g, true);
-    if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Bake the layers into %s (albedo, normal, surface and glow maps) and its .decal.",
-                             g.Piece ? ("DA_Piece_" + g.Piece->Name + ".decal").c_str() : "the piece's decal");
-    ImGui::SameLine();
-    const bool decalSelected = m_Selected != entt::null && world.Registry.valid(m_Selected) && world.Registry.all_of<DecalComponent>(m_Selected);
-    ImGui::BeginDisabled(!decalSelected);
-    if (EditorUIPrimitives::SecondaryButton(ICON_FA_CHECK "  Apply to selected decal")) {
-        // A piece never baked has no .decal yet: bake it first, and leave the decal alone if that fails.
-        if (fs::exists(fs::u8path(g.Piece->DecalPath())) || BakeNow(g)) {
-            PushUndo(world, "Apply Graffiti Piece");
-            auto& dc = world.Registry.get<DecalComponent>(m_Selected);
-            dc.AssetPath = g.Piece->DecalPath();
-            dc.Size = glm::vec3(g.Piece->Metres, dc.Size.z);
-            g.Target = m_Selected;
-        } else {
-            EditorSound::Play(EditorSound::Event::Blocked);
-        }
-    }
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    {
-        if (EditorUIPrimitives::ActionButton(ICON_FA_SPRAY_CAN "  Spray in Scene view", "##viewportSpray", nullptr,
-                                             g.ViewportSpray)) { // ActionButton plays the click / toggle-off sound
-            g.ViewportSpray = !g.ViewportSpray;
-            if (g.ViewportSpray && g.Active != GTool::Erase) g.Active = GTool::Spray;
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Aim at a wall in the Scene view and hold the left button to spray. Spraying off this "
-                                 "piece's decal starts a fresh piece with its own decal there.");
-    }
-    ImGui::EndDisabled();
-    if (!g.Status.empty()) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", g.Status.c_str());
-    }
-
-    if (!g.Piece) {
-        ImGui::Spacing();
-        ImGui::TextDisabled("Open a piece above or press New. With a piece open, Spray in Scene view puts it on the wall you spray.");
-        ImGui::End();
-        return;
-    }
-    SyncLayerIds(g);
-    auto& L = g.Piece->Layers;
-    if (g.Selected >= (int)L.size()) g.Selected = (int)L.size() - 1;
-
-    // ---- Left column: tools, brush, colour, layers, layer and piece settings ----
-    const float sideW = 300.0f * m_UIScale;
-    ImGui::BeginChild("##gside", ImVec2(sideW, 0), ImGuiChildFlags_Borders);
+// The tool row, and the stamp to place when Stamp is on.
+void DrawGraffitiTools(GraffitiDesigner& g, float ui, AssetThumbnailLoader& thumbs) {
     for (int t = 0; t < (int)GTool::Count; ++t) {
         if (t) ImGui::SameLine();
         if (EditorUIPrimitives::ActionButton(ToolIcon((GTool)t), ToolName((GTool)t), nullptr, (int)g.Active == t,
-                                             ImVec2(36.0f * m_UIScale, 0)))
+                                             ImVec2(36.0f * ui, 0)))
             g.Active = (GTool)t;
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", ToolName((GTool)t));
     }
@@ -966,14 +885,17 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         ImGui::AlignTextToFramePadding();
         ImGui::TextDisabled("Stamp");
         ImGui::SameLine();
-        if (StampThumbButton(g, m_AssetThumbs, g.StampTexture, 40.0f * m_UIScale, m_UIScale)) {
+        if (StampThumbButton(g, thumbs, g.StampTexture, 40.0f * ui, ui)) {
             g.Picker.WantOpen = true;
             g.Picker.Target = -1;
         }
         ImGui::SameLine();
         ImGui::TextDisabled("%s", ShortStampName(g.StampTexture).c_str());
     }
+}
 
+void DrawGraffitiBrush(GraffitiDesigner& g, float ui) {
+    auto& M = Glass::Motion();
     if (ImGui::CollapsingHeader("Brush", ImGuiTreeNodeFlags_DefaultOpen)) {
         static const char* caps[] = {"Fat", "Skinny", "Calligraphy"};
         int cap = (int)g.Cap;
@@ -983,11 +905,11 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         const ImU32 col = ImGui::GetColorU32(ImGuiCol_Text);
         ImVec2 at = ImGui::GetCursorScreenPos();
         ImGui::TextDisabled("Pressure");
-        ImGui::SameLine(90.0f * m_UIScale);
+        ImGui::SameLine(90.0f * ui);
         at = ImGui::GetCursorScreenPos();
         float w = M.Odometer(ImGui::GetID("##odoPressure"), dl, at, (double)((g.Stroking ? g.LivePressure : g.Pressure) * 100.0f), 0, col, "%");
         ImGui::Dummy(ImVec2(w, ImGui::GetTextLineHeight()));
-        ImGui::SameLine(160.0f * m_UIScale);
+        ImGui::SameLine(160.0f * ui);
         ImGui::TextDisabled("Distance");
         ImGui::SameLine();
         at = ImGui::GetCursorScreenPos();
@@ -1011,7 +933,9 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             else ImGui::TextDisabled("Pen pressure: none (mouse)");
         }
     }
+}
 
+void DrawGraffitiColour(GraffitiDesigner& g, float ui) {
     if (ImGui::CollapsingHeader("Colour", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::SetNextItemWidth(-1);
         ImGui::ColorEdit3("##colour", &g.Color.x, ImGuiColorEditFlags_DisplayHex);
@@ -1020,7 +944,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
                                               {0.95f, 0.35f, 0.7f},  {0.75f, 0.75f, 0.78f}};
         auto swatch = [&](const char* id, const glm::vec3& c, int i) {
             if (i % 10) ImGui::SameLine();
-            if (ImGui::ColorButton(id, ImVec4(c.x, c.y, c.z, 1.0f), ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20) * m_UIScale)) {
+            if (ImGui::ColorButton(id, ImVec4(c.x, c.y, c.z, 1.0f), ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20) * ui)) {
                 g.Color = c;
                 EditorSound::Play(EditorSound::Event::Click);
             }
@@ -1039,7 +963,12 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             }
         }
     }
+}
 
+// The layer list: order, visibility, add / duplicate / delete.
+void DrawGraffitiLayers(GraffitiDesigner& g, float ui) {
+    auto& L = g.Piece->Layers;
+    auto& M = Glass::Motion();
     if (ImGui::CollapsingHeader("Layers", ImGuiTreeNodeFlags_DefaultOpen)) {
         auto addLayer = [&](Graffiti::LayerType type) {
             Graffiti::Layer l;
@@ -1091,7 +1020,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
 
         // Top layer first. Rows glide to their new place when the order changes.
         int moveFrom = -1, moveTo = -1;
-        const float rowH = kRowH * m_UIScale;
+        const float rowH = kRowH * ui;
         const ImVec2 listStart = ImGui::GetCursorScreenPos();
         const float listW = ImGui::GetContentRegionAvail().x;
         ImGui::Dummy(ImVec2(listW, rowH * (float)L.size()));
@@ -1111,7 +1040,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             }
             ImGui::SameLine();
             const std::string label = std::string(LayerIcon(l.Type)) + "  " + l.Name;
-            if (ImGui::Selectable(label.c_str(), g.Selected == i, 0, ImVec2(listW - 60.0f * m_UIScale, 0))) g.Selected = i;
+            if (ImGui::Selectable(label.c_str(), g.Selected == i, 0, ImVec2(listW - 60.0f * ui, 0))) g.Selected = i;
             if (ImGui::BeginDragDropSource()) {
                 ImGui::SetDragDropPayload("GRAFFITI_LAYER", &i, sizeof(int));
                 ImGui::TextUnformatted(label.c_str());
@@ -1144,7 +1073,11 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             Edited(g);
         }
     }
+}
 
+// The selected layer's settings.
+void DrawGraffitiLayer(GraffitiDesigner& g, float ui) {
+    auto& L = g.Piece->Layers;
     if (g.Selected >= 0 && g.Selected < (int)L.size() && ImGui::CollapsingHeader("Layer", ImGuiTreeNodeFlags_DefaultOpen)) {
         Graffiti::Layer& l = L[(size_t)g.Selected];
         bool ch = false;
@@ -1154,7 +1087,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         if (ImGui::InputText("##lname", name, sizeof(name))) { l.Name = name; ch = true; }
         static const char* blends[] = {"Normal", "Multiply", "Screen", "Add", "Erase"};
         int blend = (int)l.Mode;
-        ImGui::SetNextItemWidth(120.0f * m_UIScale);
+        ImGui::SetNextItemWidth(120.0f * ui);
         if (ImGui::Combo("Blend", &blend, blends, 5)) { l.Mode = (Graffiti::Blend)blend; ch = true; }
         ch |= ImGui::SliderFloat("Opacity", &l.Opacity, 0.0f, 1.0f);
         ch |= ImGui::Checkbox("Clip to layers below", &l.Clip);
@@ -1191,7 +1124,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         if (l.Type == Graffiti::LayerType::Stamp) {
             char tex[260];
             std::snprintf(tex, sizeof(tex), "%s", l.Texture.c_str());
-            ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 36.0f * m_UIScale);
+            ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 36.0f * ui);
             if (ImGui::InputText("##Image", tex, sizeof(tex))) { l.Texture = tex; ch = true; }
             if (ImGui::BeginDragDropTarget()) { // an image from the Asset Browser
                 for (const char* type : {"ASSET_TEXTURE_PATH", "ASSET_FILE_PATH"})
@@ -1203,7 +1136,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
                 ImGui::EndDragDropTarget();
             }
             ImGui::SameLine();
-            if (EditorUIPrimitives::SecondaryButton(ICON_FA_IMAGE "##pickStamp", ImVec2(30.0f * m_UIScale, 0))) {
+            if (EditorUIPrimitives::SecondaryButton(ICON_FA_IMAGE "##pickStamp", ImVec2(30.0f * ui, 0))) {
                 g.Picker.WantOpen = true;
                 g.Picker.Target = g.Selected;
             }
@@ -1256,7 +1189,10 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             Edited(g);
         }
     }
+}
 
+// The piece's own settings.
+void DrawGraffitiPiece(GraffitiDesigner& g, float ui) {
     if (ImGui::CollapsingHeader("Piece")) {
         Graffiti::Piece& p = *g.Piece;
         bool ch = false;      // changes what the layers draw: a full render
@@ -1265,12 +1201,12 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         static const int sides[] = {512, 1024, 2048};
         static const char* sideNames[] = {"512", "1024", "2048"};
         int wi = p.Width == 512 ? 0 : p.Width == 1024 ? 1 : 2, hi = p.Height == 512 ? 0 : p.Height == 1024 ? 1 : 2;
-        ImGui::SetNextItemWidth(90.0f * m_UIScale);
+        ImGui::SetNextItemWidth(90.0f * ui);
         if (ImGui::Combo("##cw", &wi, sideNames, 3)) { p.Width = sides[wi]; ch = true; }
         ImGui::SameLine();
         ImGui::TextUnformatted("x");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(90.0f * m_UIScale);
+        ImGui::SetNextItemWidth(90.0f * ui);
         if (ImGui::Combo("Canvas##ch", &hi, sideNames, 3)) { p.Height = sides[hi]; ch = true; }
         ch |= ImGui::DragFloat2("Size (m)", &p.Metres.x, 0.01f, 0.1f, 10.0f, "%.2f");
         int seed = (int)p.Seed;
@@ -1294,10 +1230,13 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             else g.Dirty = true; // saved with the recipe; the canvas shows nothing of it
         }
     }
-    ImGui::EndChild();
+}
 
-    // ---- The canvas ----
-    ImGui::SameLine();
+// The canvas: pan and zoom, the brush footprint, the caps / colours radial, the tools and the footer.
+void DrawGraffitiCanvas(GraffitiDesigner& g, float ui) {
+    auto& L = g.Piece->Layers;
+    auto& M = Glass::Motion();
+    const ImGuiIO& io = ImGui::GetIO();
     ImGui::BeginChild("##gcanvas", ImVec2(0, 0), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if (g.NeedsBuild && !g.Stroking && g.BakeStage != 1) Rebuild(g);
     else if (g.PreviewOnly && !g.Stroking && g.BakeStage != 1) {
@@ -1367,7 +1306,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
     if (g.RadialOpen) {
         const int caps = 3, cols = std::min((int)g.Recent.size(), 6), n = caps + cols;
         const float bloom = M.AnimateToggle(ImGui::GetID("##radial"), true, g.RadialWasOpen, Glass::RevealOpen, Glass::RevealClose);
-        const float R = 70.0f * m_UIScale * (0.6f + 0.4f * bloom);
+        const float R = 70.0f * ui * (0.6f + 0.4f * bloom);
         const float dx = io.MousePos.x - g.RadialCenter.x, dy = io.MousePos.y - g.RadialCenter.y;
         g.RadialHovered = -1;
         if (dx * dx + dy * dy > 18.0f * 18.0f) {
@@ -1375,7 +1314,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             if (a < 0) a += 6.2831853f;
             g.RadialHovered = (int)(a / (6.2831853f / (float)n) + 0.5f) % n;
         }
-        dl->AddCircleFilled(g.RadialCenter, R + 26.0f * m_UIScale, IM_COL32(12, 12, 14, (int)(200 * bloom)), 48);
+        dl->AddCircleFilled(g.RadialCenter, R + 26.0f * ui, IM_COL32(12, 12, 14, (int)(200 * bloom)), 48);
         static const char* capNames[] = {"Fat", "Skinny", "Calli"};
         for (int i = 0; i < n; ++i) {
             const float a = (float)i / (float)n * 6.2831853f - 3.14159265f * 0.5f;
@@ -1383,13 +1322,13 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             const bool hot = g.RadialHovered == i;
             if (i < caps) {
                 const bool cur = (int)g.Cap == i;
-                dl->AddCircleFilled(p, 20.0f * m_UIScale, hot ? IM_COL32(255, 255, 255, 230) : IM_COL32(60, 60, 64, 230), 24);
+                dl->AddCircleFilled(p, 20.0f * ui, hot ? IM_COL32(255, 255, 255, 230) : IM_COL32(60, 60, 64, 230), 24);
                 const ImVec2 ts = ImGui::CalcTextSize(capNames[i]);
                 dl->AddText(ImVec2(p.x - ts.x * 0.5f, p.y - ts.y * 0.5f), hot ? IM_COL32(0, 0, 0, 255) : (cur ? IM_COL32(255, 255, 255, 255) : IM_COL32(190, 190, 190, 255)), capNames[i]);
             } else {
                 const glm::vec3& rc = g.Recent[(size_t)(i - caps)];
-                dl->AddCircleFilled(p, (hot ? 18.0f : 14.0f) * m_UIScale, ImGui::GetColorU32(ImVec4(rc.x, rc.y, rc.z, 1.0f)), 24);
-                if (hot) dl->AddCircle(p, 20.0f * m_UIScale, IM_COL32(255, 255, 255, 255), 24, 2.0f);
+                dl->AddCircleFilled(p, (hot ? 18.0f : 14.0f) * ui, ImGui::GetColorU32(ImVec4(rc.x, rc.y, rc.z, 1.0f)), 24);
+                if (hot) dl->AddCircle(p, 20.0f * ui, IM_COL32(255, 255, 255, 255), 24, 2.0f);
             }
         }
         if (ImGui::IsKeyReleased(ImGuiKey_Space)) {
@@ -1474,6 +1413,118 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
                         ToolName(g.Active), g.Piece->Width, g.Piece->Height, g.Piece->Metres.x, g.Piece->Metres.y, (int)L.size(),
                         g.Zoom * 100.0f);
     ImGui::EndChild();
+}
+
+} // namespace
+
+void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
+    if (!m_ShowGraffitiDesigner) {
+        if (m_Graffiti && m_Graffiti->Stroking) EndStroke(*m_Graffiti);
+        if (m_Graffiti) { // free the stamp picker's thumbnails
+            for (const std::string& p : m_Graffiti->Picker.Requested) m_AssetThumbs.Invalidate(p);
+            m_Graffiti->Picker.Requested.clear();
+            m_Graffiti->Picker.RequestedSet.clear();
+        }
+        return;
+    }
+    if (!m_Graffiti) m_Graffiti = std::make_shared<GraffitiDesigner>();
+    GraffitiDesigner& g = *m_Graffiti;
+    ImGui::SetNextWindowSize(ImVec2(1100, 680), ImGuiCond_FirstUseEver);
+    const bool open = ImGui::Begin(EditorPanels::GraffitiDesigner, &m_ShowGraffitiDesigner);
+    if (!open) {
+        ImGui::End();
+        return;
+    }
+
+    // ---- Top bar: file, bake, apply, Scene-view spray ----
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_PLUS "  New")) {
+        const std::string path = CreateGraffitiPiece(ProjectPaths::Resolve(kPiecesFolder), "Piece");
+        if (!path.empty()) OpenGraffitiPiece(path);
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A new blank piece (GP_*.graffiti) in %s.", kPiecesFolder);
+    ImGui::SameLine();
+    {
+        const std::string current = g.Piece ? fs::u8path(g.Piece->Path).filename().u8string() : std::string("(no piece)");
+        ImGui::SetNextItemWidth(220.0f);
+        if (ImGui::BeginCombo("##piece", current.c_str())) {
+            std::error_code ec;
+            const fs::path dir = fs::u8path(ProjectPaths::Resolve(kPiecesFolder));
+            std::vector<fs::path> files;
+            for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
+                if (it->path().extension() == ".graffiti") files.push_back(it->path());
+            std::sort(files.begin(), files.end());
+            for (const fs::path& f : files)
+                if (ImGui::Selectable(f.filename().u8string().c_str(), g.Piece && fs::u8path(g.Piece->Path) == f))
+                    OpenGraffitiPiece(f.u8string());
+            if (files.empty()) ImGui::TextDisabled("No pieces yet");
+            ImGui::EndCombo();
+        }
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!g.Piece);
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_FLOPPY_DISK "  Save")) SaveNow(g);
+    ImGui::SameLine();
+    if (EditorUIPrimitives::PrimaryButton(ICON_FA_FIRE "  Bake")) StartBake(g, true);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Bake the layers into %s (albedo, normal, surface and glow maps) and its .decal.",
+                             g.Piece ? ("DA_Piece_" + g.Piece->Name + ".decal").c_str() : "the piece's decal");
+    ImGui::SameLine();
+    const bool decalSelected = m_Selected != entt::null && world.Registry.valid(m_Selected) && world.Registry.all_of<DecalComponent>(m_Selected);
+    ImGui::BeginDisabled(!decalSelected);
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_CHECK "  Apply to selected decal")) {
+        // A piece never baked has no .decal yet: bake it first, and leave the decal alone if that fails.
+        if (fs::exists(fs::u8path(g.Piece->DecalPath())) || BakeNow(g)) {
+            PushUndo(world, "Apply Graffiti Piece");
+            auto& dc = world.Registry.get<DecalComponent>(m_Selected);
+            dc.AssetPath = g.Piece->DecalPath();
+            dc.Size = glm::vec3(g.Piece->Metres, dc.Size.z);
+            g.Target = m_Selected;
+        } else {
+            EditorSound::Play(EditorSound::Event::Blocked);
+        }
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    {
+        if (EditorUIPrimitives::ActionButton(ICON_FA_SPRAY_CAN "  Spray in Scene view", "##viewportSpray", nullptr,
+                                             g.ViewportSpray)) { // ActionButton plays the click / toggle-off sound
+            g.ViewportSpray = !g.ViewportSpray;
+            if (g.ViewportSpray && g.Active != GTool::Erase) g.Active = GTool::Spray;
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Aim at a wall in the Scene view and hold the left button to spray. Spraying off this "
+                                 "piece's decal starts a fresh piece with its own decal there.");
+    }
+    ImGui::EndDisabled();
+    if (!g.Status.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", g.Status.c_str());
+    }
+
+    if (!g.Piece) {
+        ImGui::Spacing();
+        ImGui::TextDisabled("Open a piece above or press New. With a piece open, Spray in Scene view puts it on the wall you spray.");
+        ImGui::End();
+        return;
+    }
+    SyncLayerIds(g);
+    auto& L = g.Piece->Layers;
+    if (g.Selected >= (int)L.size()) g.Selected = (int)L.size() - 1;
+
+    // ---- Left column: tools, brush, colour, layers, layer and piece settings ----
+    const float sideW = 300.0f * m_UIScale;
+    ImGui::BeginChild("##gside", ImVec2(sideW, 0), ImGuiChildFlags_Borders);
+    DrawGraffitiTools(g, m_UIScale, m_AssetThumbs);
+    DrawGraffitiBrush(g, m_UIScale);
+    DrawGraffitiColour(g, m_UIScale);
+    DrawGraffitiLayers(g, m_UIScale);
+    DrawGraffitiLayer(g, m_UIScale);
+    DrawGraffitiPiece(g, m_UIScale);
+    ImGui::EndChild();
+
+    // ---- The canvas ----
+    ImGui::SameLine();
+    DrawGraffitiCanvas(g, m_UIScale);
 
     {
         const std::string cur = g.Picker.Target >= 0 && g.Picker.Target < (int)L.size() ? L[(size_t)g.Picker.Target].Texture : g.StampTexture;

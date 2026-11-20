@@ -59,6 +59,8 @@ std::string CacheDir() {
     return dir;
 }
 
+} // namespace
+
 // Cache entries are keyed by the asset's GUID (16 hex chars) when registered in AssetDatabase,
 // falling back to an FNV hash of the absolute path for unregistered sources. The source path is
 // also written into the header and compared on load, so even with GUID keying a collision (two
@@ -83,6 +85,8 @@ std::string EntryPath(const std::string& sourcePath, const TextureImportSettings
     snprintf(variant, sizeof(variant), "_%08x", (unsigned)(HashSettings(settings) & 0xFFFFFFFFu));
     return (std::filesystem::path(CacheDir()) / (stem + variant + ".ttex")).string();
 }
+
+namespace {
 
 bool SourceStamp(const std::string& path, uint64_t& outSize, uint64_t& outMtime) {
     std::error_code ec;

@@ -433,9 +433,18 @@ public:
     // A key for sub-mesh `index`'s render state in the opaque pass (its shader's, plus Double Sided): meshes with the
     // same key draw under the same GL state.
     std::uint64_t MeshStateKey(int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots, bool forceDoubleSided) const;
+    // The pass's cull / depth / blend state as a run of DrawMeshIndirect calls found it: read with glGet once for the
+    // run instead of once per draw that overrides it (a double-sided material). A caller that changes one of these
+    // between calls updates it here too.
+    struct DrawPassState {
+        bool Saved = false;
+        bool CullEnabled = true, BlendEnabled = false, DepthMask = true;
+        int CullFace = 0x0405 /* GL_BACK */, DepthFunc = 0x0201 /* GL_LESS */;
+        int BlendSrcRgb = 1, BlendDstRgb = 0, BlendSrcA = 1, BlendDstA = 0;
+    };
     bool DrawMeshIndirect(Shader& fallback, int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                           const ProgramSelector& selectProgram, const std::function<void(Shader&)>& onProgramBound,
-                          bool forceDoubleSided, const void* indirect, int drawCount);
+                          bool forceDoubleSided, const void* indirect, int drawCount, DrawPassState* passState = nullptr);
 
     // Shell fur (FurRenderer): binds the model's skin (this frame's pre-skinned vertices or its bone palette) and
     // `xform` on `prog` the way DrawSelected does, then draws each opaque sub-mesh whose material has fur on as
@@ -629,16 +638,19 @@ private:
     static inline std::atomic<uint64_t> s_AnimationEpoch{0};
     static inline std::atomic<std::uint64_t> s_ImportStamps{0};
 
-    // Import-time only: each node's model-space bind transform, for the bind-pose palette (#98).
-    std::map<std::string, glm::mat4> m_ImportNodeGlobals;
-    // Import-time only (MergeByMaterial): the static meshes of each material, gathered for one ModelMesh apiece.
+    // Import-time only state, on ImportFromFile's stack while it runs (null otherwise): not carried by every placed
+    // instance (a forest has ~150k).
     struct MergeBucket {
         unsigned int MaterialIndex = 0;
         bool VertexColors = false;
         std::vector<ModelVertex> Vertices;
         std::vector<unsigned int> Indices;
     };
-    std::vector<MergeBucket> m_MergeBuckets;
+    struct ImportScratch {
+        std::map<std::string, glm::mat4> NodeGlobals; // each node's model-space bind transform (bind-pose palette, #98)
+        std::vector<MergeBucket> MergeBuckets;        // MergeByMaterial: each material's static meshes, one ModelMesh apiece
+    };
+    ImportScratch* m_Import = nullptr;
 
     // False when the file couldn't be read or parsed (a reimport then keeps the previous import).
     bool ImportFromFile(const ModelImportSettings& settings);

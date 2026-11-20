@@ -17,6 +17,8 @@
 #include "SceneSerializer.h"
 #include "ParticleSystem.h"
 #include <fstream>
+#include <functional>
+#include <limits>
 #include "Player.h"
 #include "PhysicsWorld.h"
 #include "GameModuleAPI.h"
@@ -94,6 +96,10 @@ void TestNativeWeaponRules() {
     player.Update(.1f,false);
     CHECK(std::abs(player.Velocity.z+6)<.001f);
     CHECK(std::abs(player.Cam.Position.z+.6f)<.001f);
+    // Without physics a fall still ends at KillY: back at the respawn point, at rest.
+    Player faller; faller.Cam.Position={0,2,0}; faller.KillY=-5; faller.RespawnFeet={1,1,1};
+    for (int i=0;i<200;++i) { faller.Update(.05f,false); if (faller.Velocity==glm::vec3(0)) break; }
+    CHECK(faller.Velocity==glm::vec3(0) && std::abs(faller.Cam.Position.x-1)<.001f && faller.Cam.Position.y>1);
 }
 void TestWeaponPrefabsAndComponents() {
     World world; AssetLibrary assets;
@@ -431,7 +437,31 @@ void TestGameRulesDispatch() {
     GameRules::UseModule(previous);
 }
 
+// A non-finite float field never breaks a scene: saved as 0 (JSON has no NaN; null used to fail the whole load), and a
+// null an older build wrote loads with the field's default.
+void TestSceneNonFiniteFloat() {
+    World world; AssetLibrary assets;
+    const auto e = world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Body");
+    world.Registry.emplace<FirstPersonBodyComponent>(e).FootIKMaxDrop = std::numeric_limits<float>::quiet_NaN();
+    const std::string text = SceneSerializer::SaveToString(world, assets);
+    World back;
+    CHECK(SceneSerializer::LoadFromString(back, assets, text));
+    int found = 0;
+    for (auto [ent, body] : back.Registry.view<FirstPersonBodyComponent>().each()) { CHECK(body.FootIKMaxDrop == 0.0f); ++found; }
+    CHECK(found == 1);
+    auto j = nlohmann::json::parse(text);
+    std::function<void(nlohmann::json&)> nullOut = [&](nlohmann::json& n) {
+        if (n.is_object()) { for (auto it = n.begin(); it != n.end(); ++it) { if (it.key() == "Foot IK Max Drop" || it.key() == "FootIKMaxDrop") *it = nullptr; else nullOut(*it); } }
+        else if (n.is_array()) for (auto& x : n) nullOut(x);
+    };
+    nullOut(j);
+    World old;
+    CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
+    for (auto [ent, body] : old.Registry.view<FirstPersonBodyComponent>().each()) CHECK(body.FootIKMaxDrop == FirstPersonBodyComponent{}.FootIKMaxDrop);
+}
+
 void RegisterGameplayTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Scene: a non-finite float field saves and loads",TestSceneNonFiniteFloat);
     tests.emplace_back("Game module weapon/body rules dispatch",TestGameRulesDispatch);
     tests.emplace_back("Native weapon loadout rules",TestProjectWeaponLoadout);
     tests.emplace_back("Project NPC configuration and scene migration",TestProjectNpcConfiguration);

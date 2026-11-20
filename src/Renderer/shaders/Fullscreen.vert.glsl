@@ -1,4 +1,5 @@
 #version 460 core
+// The fullscreen passes' vertex stage (tonemap, bloom, SSAO, TAA, upscale, blur, previews...): draw 3 vertices, no VBO.
 out vec2 vUV;
 void main() {
     // Single covering triangle from gl_VertexID: (0,0) (2,0) (0,2) in UV, mapped to clip.

@@ -30,9 +30,9 @@ Tonemapper::~Tonemapper() {
 
 void Tonemapper::EnsureCreated() {
     if (m_Shader) return;
-    m_Shader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+    m_Shader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                           ShaderLibrary::ReadFile("Tonemapper.frag.glsl"));
-    m_Fxaa = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+    m_Fxaa = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                         ShaderLibrary::ReadFile("Fxaa.frag.glsl"));
     m_Ldr = new Framebuffer();
     glGenVertexArrays(1, &m_Vao); // attribute-less; positions come from gl_VertexID
@@ -88,9 +88,9 @@ unsigned int MakeColorTarget(unsigned int& fbo, int size, GLenum internalFormat,
 unsigned int Tonemapper::UpdateAutoExposure(unsigned int srcHdrTexture, const PostSettings& post) {
     const int slot = std::clamp(post.ExposureSlot, 0, kExposureSlots - 1);
     if (!m_LumShader) {
-        m_LumShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+        m_LumShader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                  ShaderLibrary::ReadFile("AutoExposureLum.frag.glsl"));
-        m_AdaptShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+        m_AdaptShader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                    ShaderLibrary::ReadFile("AutoExposureAdapt.frag.glsl"));
         m_LumTex = MakeColorTarget(m_LumFbo, kLumSize, GL_R16F, true);
         for (int s = 0; s < kExposureSlots; ++s)
@@ -135,7 +135,7 @@ unsigned int Tonemapper::UpdateAutoExposure(unsigned int srcHdrTexture, const Po
 
 unsigned int Tonemapper::ApplyDepthOfField(unsigned int srcHdrTexture, int w, int h, const PostSettings& post) {
     if (!m_DofShader)
-        m_DofShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+        m_DofShader = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                  ShaderLibrary::ReadFile("DepthOfField.frag.glsl"));
     if (w != m_DofW || h != m_DofH || !m_DofTex) {
         if (m_DofTex) glDeleteTextures(1, &m_DofTex);

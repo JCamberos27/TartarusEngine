@@ -7,6 +7,7 @@
 // or more of those files, so they live here instead of being duplicated. Nothing in here is
 // part of EditorLayer's public interface - it is an implementation detail of those .cpp files.
 
+#include "EditorSearch.h"
 #include "World.h"
 #include "Texture.h"
 #include "EditorUIHelpers.h"
@@ -77,29 +78,11 @@ inline bool IsVertexDraggable(World& world, entt::entity entity) {
 }
 
 
-// Case-insensitive substring match — shared by the Console filter, Hierarchy filter, and (as
-// one piece of the richer parser below) the Asset Browser search.
-inline bool MatchesFilter(const std::string& filter, const std::string& text) {
-    if (filter.empty()) return true;
-    auto toLower = [](std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-        return s;
-    };
-    return toLower(text).find(toLower(filter)) != std::string::npos;
-}
-
-
-// Virtual folder paths are '/'-joined segments (e.g. "Props/Guns") — these split off the
-// last segment, used throughout the Asset Browser for breadcrumbs, rename, and re-parenting.
-inline std::string ParentFolderOf(const std::string& folderPath) {
-    size_t slash = folderPath.find_last_of('/');
-    return slash == std::string::npos ? std::string() : folderPath.substr(0, slash);
-}
-
-inline std::string LeafNameOf(const std::string& folderPath) {
-    size_t slash = folderPath.find_last_of('/');
-    return slash == std::string::npos ? folderPath : folderPath.substr(slash + 1);
-}
+// Case-insensitive substring match (Console, Hierarchy, Asset Browser filters) and the virtual
+// folder path helpers: EditorSearch.h, shared with the module DLL.
+using EditorSearch::MatchesFilter;
+using EditorSearch::ParentFolderOf;
+using EditorSearch::LeafNameOf;
 
 
 // Trims a byte-length-truncated UTF-8 string back to the last complete codepoint boundary.

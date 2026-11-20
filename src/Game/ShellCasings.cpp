@@ -208,7 +208,8 @@ void ShellCasings::Update(World& world, float dt, const Camera& camera, const gl
     // Who may go. Only cases a rule would remove need the (costly) line-of-sight check; the rest
     // keep Seen = in view. Checked oldest first, a few a frame - an unchecked one counts as seen.
     const glm::vec3 front = camera.Front(), right = camera.Right(), up = camera.Up();
-    std::vector<LifeInput> life(m_Cases.size());
+    thread_local std::vector<LifeInput> life; // (scratch kept between frames)
+    life.assign(m_Cases.size(), LifeInput{});
     const float far2 = m_Settings.DespawnDistance * m_Settings.DespawnDistance;
     const bool crowded = (int)m_Cases.size() > m_Settings.SoftCap;
     int rays = m_Settings.OcclusionRaysPerFrame;

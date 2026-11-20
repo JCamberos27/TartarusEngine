@@ -23,6 +23,17 @@ constexpr std::uint32_t PackRGBA(unsigned r, unsigned g, unsigned b, unsigned a 
 bool ParseHexColor(const std::string& s, std::uint32_t& out);
 std::string ToHexColor(std::uint32_t c); // "#RRGGBB" when opaque, else "#RRGGBBAA"
 
+// An icon and a colour, either of them optional: what a folder, a folder rule, a panel tab or a component
+// header is styled with (FolderStyles, UiStyles). On disk {"icon": "...", "color": "#RRGGBB"}, each key only
+// when set.
+struct IconColorStyle {
+    std::string   Icon;      // Font Awesome name, "" = not set
+    std::uint32_t Color = 0; // IM_COL32-packed, 0 = not set
+    bool IsEmpty() const { return Icon.empty() && Color == 0; }
+};
+nlohmann::json StyleToJson(const IconColorStyle& s);
+IconColorStyle StyleFromJson(const nlohmann::json& j); // a default style for anything that isn't an object
+
 struct Palette {
     std::vector<std::uint32_t> Colors;
     std::vector<std::string>   Icons; // Font Awesome names (see FAIconGlyph)

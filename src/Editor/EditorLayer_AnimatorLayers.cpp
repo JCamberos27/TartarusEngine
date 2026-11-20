@@ -389,7 +389,8 @@ void DrawLayersAndParameters(AnimCtx& cx) {
             ImGui::EndTabItem();
         }
         {
-            const std::vector<AnimatorLint::Issue> issues = AnimatorLint::Check(D);
+            if (W.LintRevision != W.Revision) { W.LintIssues = AnimatorLint::Check(D); W.LintRevision = W.Revision; }
+            const std::vector<AnimatorLint::Issue>& issues = W.LintIssues;
             int problems = 0;
             for (const auto& i : issues) problems += i.Severity != AnimatorLint::Level::Info;
             char tab[48];

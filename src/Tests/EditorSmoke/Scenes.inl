@@ -123,16 +123,15 @@ void RegisterScenesTests() {
             // Allowed first: the previous scene's async loads can still log while FreshScene runs.
             Do("allow errors naming the external files missing here", [](Ctx&) {
                 for (const std::string& name : MissingExternalFiles()) g_AllowLog.push_back(name);
-                // Logged without a file name when the soldier's (external) body meshes are missing.
+                // Logged without a file name when the Dummy's (external) body meshes are missing.
                 if (!MissingExternalFiles().empty())
-                    g_AllowLog.push_back("Enemy AI: the soldier's body has no animated skeleton");
+                    g_AllowLog.push_back("Dummies: the body has no animated skeleton");
             }),
             FreshScene(), Wait(2),
             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }), Wait(2),
             Do("open " + label, [path](Ctx& c) { SA::Open(c.E, c.W, c.A, path); }),
-            Expect("it is the open scene", [path](Ctx& c) {
-                return X::ScenePath(c.E) == path ? std::string() : "open scene is '" + X::ScenePath(c.E) + "'";
-            }),
+            // The open waits for the scene's models and materials to load on the asset workers first.
+            UntilSeconds("it is the open scene", [path](Ctx& c) { return X::ScenePath(c.E) == path; }, 600),
             UntilSeconds("assets streamed in", [](Ctx& c) { return c.A.AsyncInFlight() == 0; }, 120),
             WaitSeconds(1.5),
             UntilSeconds("assets still settled", [](Ctx& c) { return c.A.AsyncInFlight() == 0; }, 60),

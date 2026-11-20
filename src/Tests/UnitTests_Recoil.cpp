@@ -120,7 +120,7 @@ void TestUnityControllerRecoil() {
     RecoilAnimation hip,aim; hip.Play(d,false,600,RecoilFireMode::Semi,rng); aim.Play(d,true,600,RecoilFireMode::Semi,rng);
     hip.Update(d,false,0.1f,rng); aim.Update(d,true,0.1f,rng); CHECK(hip.RecoilDelta==aim.RecoilDelta);
     WeaponProceduralSettings s=WeaponProceduralSettings::Defaults(); s.Recoil.UnityPort=true; s.Recoil.Unity=d;
-    s.Sway.Enabled=s.Bob.Enabled=s.Breath.Enabled=s.Lean.Enabled=false;
+    s.Sway.Enabled=s.Breath.Enabled=s.Lean.Enabled=false;
     WeaponProceduralState host; WeaponProceduralInput input; input.Dt=0.1f;
     host.OnShot(s,false); host.Update(s,input); CHECK(Near(host.ConsumeAimKick().x,1));
     CHECK(host.ConsumeAimKick()==glm::vec2(0));
