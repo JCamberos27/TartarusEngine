@@ -29,8 +29,6 @@ data, the bake, the runtime, tuning and tests ([implementation notes](MOTION_MAT
 * [Procedural recoil](PROCEDURAL_RECOIL.md), [weapon camera](WEAPON_CAMERA.md),
   [weapon sway](WEAPON_SWAY.md).
 * [Particle system](PARTICLE_SYSTEM.md).
-* [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy/folder styling, bookmarks, hover keys, tabs,
-  favorites and the ruler (vHierarchy / vFolders / vInspector / vTabs / vFavorites / vRuler).
 * [Decals](DECALS.md) and the [Graffiti Designer](GRAFFITI_DESIGNER.md): the decal system, its editor tools and painted pieces.
 * [Character outfits](CHARACTER_OUTFITS.md) and the [Quantum swap](QUANTUM_SWAP.md): the wardrobe, outfit pieces and the character pack move.
 * [Revolver .38](WEAPON_REVOLVER38.md): the sidearm's import and setup.

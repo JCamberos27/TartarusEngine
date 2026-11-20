@@ -34,9 +34,9 @@ constexpr ImVec4 Rgb(int r, int g, int b, float a = 1.0f) { return ImVec4((float
 
 // --- Solid ----------------------------------------------------------------------------------------
 constexpr ImVec4 Base     = Rgb(0x00, 0x00, 0x00); // menu bar, status bar, dock gaps, the canvas
-constexpr ImVec4 Panel    = Rgb(0x05, 0x05, 0x05); // a docked panel (WindowBg)
+constexpr ImVec4 Panel    = Rgb(0x05, 0x05, 0x05); // a docked panel (WindowBg) and its selected tab
 constexpr ImVec4 Card     = Rgb(0x09, 0x09, 0x09); // a card inside a panel (component bodies)
-constexpr ImVec4 Raised   = Rgb(0x0E, 0x0E, 0x0E); // headers, the selected tab, table headers
+constexpr ImVec4 Raised   = Rgb(0x0E, 0x0E, 0x0E); // headers, table headers
 constexpr ImVec4 Hover    = Rgb(0x1C, 0x1C, 0x1C);
 constexpr ImVec4 Pressed  = Rgb(0x2A, 0x2A, 0x2A);
 constexpr ImVec4 Hairline = Rgb(0x24, 0x24, 0x24); // 1 px borders and rules on solid surfaces
