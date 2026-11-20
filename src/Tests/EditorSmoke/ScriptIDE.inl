@@ -19,11 +19,6 @@ namespace fs = std::filesystem;
 
 constexpr const char* kIde = "Script IDE";
 
-std::string ReadText(const fs::path& p) {
-    std::ifstream f(p, std::ios::binary);
-    if (!f) return {};
-    return {std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
-}
 bool WriteText(const fs::path& p, const std::string& text) {
     std::error_code ec;
     fs::create_directories(p.parent_path(), ec);
@@ -35,7 +30,7 @@ bool WriteText(const fs::path& p, const std::string& text) {
 fs::path Scratch(const std::string& name) { return fs::path(ProjectPaths::Resolve("work/editor-smoke-ide")) / name; }
 fs::path SessionFile() { return fs::u8path(ScriptIDE::SessionFile()); }
 int SessionTheme() {
-    const nlohmann::json j = nlohmann::json::parse(ReadText(SessionFile()), nullptr, false);
+    const nlohmann::json j = nlohmann::json::parse(ReadFileText(SessionFile()), nullptr, false);
     return j.is_object() ? j.value("theme", -1) : -1;
 }
 bool Under(const fs::path& path, const fs::path& root) {
@@ -48,11 +43,6 @@ bool Under(const fs::path& path, const fs::path& root) {
     return lower(p).rfind(lower(r) + "/", 0) == 0;
 }
 // Log lines containing `fragment`, counting collapsed repeats.
-int LogCount(const std::string& fragment) {
-    int n = 0;
-    for (const LogEntry& e : Log::Entries()) if (Contains(e.Message, fragment)) n += e.Count;
-    return n;
-}
 // Until, with a real-time limit (frame rates vary a lot between a desktop GPU and llvmpipe).
 Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
     auto start = std::make_shared<double>(-1.0);
@@ -152,7 +142,7 @@ Step ExpectDirty(const std::string& file) {
 }
 Step ExpectDisk(const fs::path& p, std::string want) {
     return Expect(p.filename().string() + " on disk", [p, want](Ctx&) {
-        const std::string got = ReadText(p);
+        const std::string got = ReadFileText(p);
         return got == want ? std::string() : "file holds '" + Trim(got, 200) + "', expected '" + Trim(want, 200) + "'";
     });
 }
@@ -633,7 +623,7 @@ void RegisterScriptIDETests() {
         Add("scriptide: a staged engine shader opens read-only; editing it on disk hot reloads, then it is restored", Join({
             {FreshScene(),
              Do("read the staged shader", [path, original, editable](Ctx&) {
-                 *original = ReadText(path());
+                 *original = ReadFileText(path());
                  if (original->empty()) Fail("no staged shader at " + path().string());
                  // Editable only from a source checkout (src/) or the project; the staged copy is neither.
                  *editable = (GameModuleBuild::Available() && Under(path(), GameModuleBuild::SourceRoot() / "src")) ||
@@ -657,7 +647,7 @@ void RegisterScriptIDETests() {
                  if (!WriteText(path(), *original)) Fail("couldn't restore " + path().string());
              }),
              UntilSeconds("recompiled again from the original", [base, reloaded](Ctx&) { return LogCount(reloaded) > *base + 1; }, 20),
-             ExpectTrue("the staged shader is byte-for-byte the original", [path, original](Ctx&) { return ReadText(path()) == *original; })},
+             ExpectTrue("the staged shader is byte-for-byte the original", [path, original](Ctx&) { return ReadFileText(path()) == *original; })},
             HideIde(),
             {Shot("after-reload", {kScene})},
         }));

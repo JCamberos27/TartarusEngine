@@ -770,6 +770,11 @@ bool StripToggle(const char* id, const char* icon, const char* label, bool on, c
     return clicked;
 }
 
+// The panel's motion ids (the tile cascade, heart pops, the hover card).
+ImGuiID DecalCascadeId() { static const ImGuiID id = ImHashStr("##decalCascade"); return id; }
+ImGuiID DecalHeartId() { static const ImGuiID id = ImHashStr("##decalHeart"); return id; }
+ImGuiID DecalCardId() { static const ImGuiID id = ImHashStr("##decalCard"); return id; }
+
 } // namespace
 
 void EditorLayer::DrawDecalLibraryPanel(World& world) {
@@ -780,12 +785,9 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
     DecalEditorState& ed = DecalEd();
     BeginScan(ed);
     ScanStep(ed);
-    EditorSettings& settings = EditorSettings::Get();
     Glass::ImAnimContext& motion = Glass::Motion();
     const bool animate = motion.CategoryOn(kViewport);
-    static const ImGuiID kCascadeId = ImHashStr("##decalCascade");
-    static const ImGuiID kHeartId = ImHashStr("##decalHeart");
-    static const ImGuiID kCardId = ImHashStr("##decalCard");
+    const ImGuiID kCascadeId = DecalCascadeId();
 
     ImGui::SetNextWindowSize(ImVec2(760.0f * m_UIScale, 560.0f * m_UIScale), ImGuiCond_FirstUseEver);
     const bool open = ImGui::Begin(EditorPanels::DecalLibrary, &m_ShowDecalLibrary);
@@ -798,111 +800,149 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
 
     // --- Strip: tools, source, popovers ---------------------------------------------------------
     EditorSoundEvents::ScopedClickSilence quiet; // pills and tile clicks make their own sounds
-    {
-        const DecalToolMode tool = m_DecalTool;
-        if (StripToggle("##place", ICON_FA_STAMP, "Place", tool == DecalToolMode::Place,
-                        "Place Decal (P): click a surface to stamp the selected decal. Scroll turns it, Shift+Scroll sizes it."))
-            SetDecalTool(DecalToolMode::Place);
-        ImGui::SameLine();
-        if (StripToggle("##brush", ICON_FA_SPRAY_CAN, "Brush", tool == DecalToolMode::Brush,
-                        "Decal Brush (B): paint along a stroke. Ctrl erases. Hold Space to pick what to paint."))
-            SetDecalTool(DecalToolMode::Brush);
-        ImGui::SameLine();
-        ImGui::TextColored(EditorTheme::Hairline, "|");
-        ImGui::SameLine();
+    DrawDecalStrip(ed);
+    DrawDecalBrushPopover(ed);
+    DrawDecalGrimePopover(world, ed);
+    DrawDecalPaletteStrip(ed);
+    ImGui::Dummy(ImVec2(0.0f, 2.0f * m_UIScale));
 
-        int src = SourceKind(ed);
-        static const char* const kSrc[3] = {"Decal", "Category", "Palette"};
-        if (EditorInternal::Segmented("##src", &src, kSrc, 3)) {
-            EditorSound::Play(EditorSound::Event::PaletteSwap);
-            if (src == 0) {
-                SetPalette(ed, -1);
-                settings.DecalSourceCategory.clear();
-            } else if (src == 1) {
-                SetPalette(ed, -1);
-                settings.DecalSourceCategory = ed.SelectedCategory >= 0 ? ed.Cats[ed.SelectedCategory].Path
-                                             : ed.Cats.empty() ? std::string() : ed.Cats.front().Path;
-            } else if (!ed.Palettes.empty()) {
-                SetPalette(ed, std::max(ed.ActivePalette, 0));
-            }
-            EditorSettings::Save();
+    DrawDecalSearchRow(ed);
+
+    // --- Body ------------------------------------------------------------------------------------
+    if (ed.Dirty) {
+        RebuildVisible(ed);
+        ed.CascadeKey++;
+    }
+    static int lastCascade = -1;
+    // Not drawn last frame = the panel just (re)opened: the tiles cascade in again.
+    static int lastDrawnFrame = -10;
+    const bool reopened = ImGui::GetFrameCount() - lastDrawnFrame > 1;
+    lastDrawnFrame = ImGui::GetFrameCount();
+    if (ed.CascadeKey != lastCascade || reopened) {
+        lastCascade = ed.CascadeKey;
+        if (animate && !ed.Visible.empty()) {
+            const float total = Glass::StaggerDelay(Glass::DecalTileStaggerCap, Glass::DecalTileStaggerMs, Glass::DecalTileStaggerCap) +
+                                Glass::DecalTileIn.durationMs * 0.001f;
+            motion.Pulse(kCascadeId, total);
         }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("What the Decal Brush paints from: the selected decal, a category, or a palette.");
-        ImGui::SameLine();
-
-        src = SourceKind(ed);
-        if (src == 2) {
-            ImGui::SetNextItemWidth(ImMin(ImGui::GetContentRegionAvail().x * 0.3f, 190.0f * m_UIScale));
-            const char* current = ed.ActivePalette >= 0 ? ed.Palettes[ed.ActivePalette]->Name.c_str() : "No palette";
-            if (ImGui::BeginCombo("##palette", current)) {
-                for (int i = 0; i < (int)ed.Palettes.size(); ++i) {
-                    ImGui::PushID(i);
-                    if (ImGui::Selectable(ed.Palettes[i]->Name.c_str(), i == ed.ActivePalette)) {
-                        SetPalette(ed, i);
-                        EditorSound::Play(EditorSound::Event::PaletteSwap);
-                    }
-                    if (ImGui::IsItemHovered() && !ed.Palettes[i]->Description.empty())
-                        EditorUI::SetTooltip("%s", ed.Palettes[i]->Description.c_str());
-                    ImGui::PopID();
-                }
-                ImGui::Separator();
-                if (ImGui::Selectable(ICON_FA_HEART "  New from favourites...")) ImGui::OpenPopup("##newPalette");
-                ImGui::EndCombo();
-            }
-        } else if (src == 1) {
-            ImGui::TextColored(EditorTheme::Secondary, "%s", settings.DecalSourceCategory.c_str());
-        } else {
-            const int cur = FindEntry(ed, ed.PlacePath);
-            ImGui::TextColored(EditorTheme::Secondary, "%s", cur >= 0 ? ed.Entries[cur].Name.c_str() : "Pick a decal below");
-        }
-
-        if (ImGui::BeginPopup("##newPalette")) {
-            ImGui::TextColored(EditorTheme::Secondary, "Save the %d favourites as a palette",
-                               (int)settings.DecalFavorites.size());
-            ImGui::SetNextItemWidth(220.0f * m_UIScale);
-            ImGui::InputTextWithHint("##pname", "Name", ed.PaletteName, sizeof(ed.PaletteName));
-            ImGui::BeginDisabled(!ed.PaletteName[0] || settings.DecalFavorites.empty());
-            if (EditorInternal::PrimaryButton("Save")) {
-                DecalPalette p;
-                std::string name = ed.PaletteName;
-                p.Name = name;
-                p.Description = "From the Decal Library favourites.";
-                for (const std::string& rel : settings.DecalFavorites) {
-                    DecalPaletteEntry e;
-                    e.DecalPath = rel;
-                    p.Entries.push_back(e);
-                }
-                std::string file = name;
-                for (char& c : file) if (!std::isalnum((unsigned char)c) && c != '_' && c != '-') c = '_';
-                std::error_code ec;
-                const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Decals/Palettes"));
-                fs::create_directories(dir, ec);
-                p.Path = GenericPath(dir / ("DP_" + file + ".decalpalette"));
-                if (p.Save()) {
-                    ed.Palettes.push_back(std::make_shared<DecalPalette>(p));
-                    SetPalette(ed, (int)ed.Palettes.size() - 1);
-                    EditorSound::Play(EditorSound::Event::PaletteSwap);
-                    ed.PaletteName[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-            ImGui::EndDisabled();
-            ImGui::EndPopup();
-        }
-
-        // Right end: popovers.
-        const float btnW = ImGui::CalcTextSize("Auto-grime").x + 56.0f * m_UIScale;
-        ImGui::SameLine(ImMax(ImGui::GetCursorPosX() + 8.0f * m_UIScale, ImGui::GetWindowContentRegionMax().x - btnW * 2.0f - 8.0f * m_UIScale));
-        if (StripToggle("##brushOpts", ICON_FA_SLIDERS, "Brush", false, "Brush settings: radius, spacing, density, size and rotation jitter."))
-            ImGui::OpenPopup("##brushPopup");
-        ImGui::SameLine();
-        if (StripToggle("##grimeOpts", ICON_FA_WAND_MAGIC_SPARKLES, "Auto-grime", false,
-                        "Probe the selected room and dress its wall bases, corners, windows, doors and pipes from the palette."))
-            ImGui::OpenPopup("##grimePopup");
     }
 
-    // Brush popover.
+    DrawDecalCategoryTree(ed);
+    ImGui::SameLine();
+
+    DrawDecalTiles(ed, animate);
+
+    // Dropping a decal onto the tile area does nothing; the panel only drags out.
+    ImGui::End();
+}
+
+// The strip: Place / Brush, the brush source (decal, category, palette), and the popover buttons.
+void EditorLayer::DrawDecalStrip(DecalEditorState& ed) {
+    EditorSettings& settings = EditorSettings::Get();
+    const DecalToolMode tool = m_DecalTool;
+    if (StripToggle("##place", ICON_FA_STAMP, "Place", tool == DecalToolMode::Place,
+                    "Place Decal (P): click a surface to stamp the selected decal. Scroll turns it, Shift+Scroll sizes it."))
+        SetDecalTool(DecalToolMode::Place);
+    ImGui::SameLine();
+    if (StripToggle("##brush", ICON_FA_SPRAY_CAN, "Brush", tool == DecalToolMode::Brush,
+                    "Decal Brush (B): paint along a stroke. Ctrl erases. Hold Space to pick what to paint."))
+        SetDecalTool(DecalToolMode::Brush);
+    ImGui::SameLine();
+    ImGui::TextColored(EditorTheme::Hairline, "|");
+    ImGui::SameLine();
+
+    int src = SourceKind(ed);
+    static const char* const kSrc[3] = {"Decal", "Category", "Palette"};
+    if (EditorInternal::Segmented("##src", &src, kSrc, 3)) {
+        EditorSound::Play(EditorSound::Event::PaletteSwap);
+        if (src == 0) {
+            SetPalette(ed, -1);
+            settings.DecalSourceCategory.clear();
+        } else if (src == 1) {
+            SetPalette(ed, -1);
+            settings.DecalSourceCategory = ed.SelectedCategory >= 0 ? ed.Cats[ed.SelectedCategory].Path
+                                         : ed.Cats.empty() ? std::string() : ed.Cats.front().Path;
+        } else if (!ed.Palettes.empty()) {
+            SetPalette(ed, std::max(ed.ActivePalette, 0));
+        }
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("What the Decal Brush paints from: the selected decal, a category, or a palette.");
+    ImGui::SameLine();
+
+    src = SourceKind(ed);
+    if (src == 2) {
+        ImGui::SetNextItemWidth(ImMin(ImGui::GetContentRegionAvail().x * 0.3f, 190.0f * m_UIScale));
+        const char* current = ed.ActivePalette >= 0 ? ed.Palettes[ed.ActivePalette]->Name.c_str() : "No palette";
+        if (ImGui::BeginCombo("##palette", current)) {
+            for (int i = 0; i < (int)ed.Palettes.size(); ++i) {
+                ImGui::PushID(i);
+                if (ImGui::Selectable(ed.Palettes[i]->Name.c_str(), i == ed.ActivePalette)) {
+                    SetPalette(ed, i);
+                    EditorSound::Play(EditorSound::Event::PaletteSwap);
+                }
+                if (ImGui::IsItemHovered() && !ed.Palettes[i]->Description.empty())
+                    EditorUI::SetTooltip("%s", ed.Palettes[i]->Description.c_str());
+                ImGui::PopID();
+            }
+            ImGui::Separator();
+            if (ImGui::Selectable(ICON_FA_HEART "  New from favourites...")) ImGui::OpenPopup("##newPalette");
+            ImGui::EndCombo();
+        }
+    } else if (src == 1) {
+        ImGui::TextColored(EditorTheme::Secondary, "%s", settings.DecalSourceCategory.c_str());
+    } else {
+        const int cur = FindEntry(ed, ed.PlacePath);
+        ImGui::TextColored(EditorTheme::Secondary, "%s", cur >= 0 ? ed.Entries[cur].Name.c_str() : "Pick a decal below");
+    }
+
+    if (ImGui::BeginPopup("##newPalette")) {
+        ImGui::TextColored(EditorTheme::Secondary, "Save the %d favourites as a palette",
+                           (int)settings.DecalFavorites.size());
+        ImGui::SetNextItemWidth(220.0f * m_UIScale);
+        ImGui::InputTextWithHint("##pname", "Name", ed.PaletteName, sizeof(ed.PaletteName));
+        ImGui::BeginDisabled(!ed.PaletteName[0] || settings.DecalFavorites.empty());
+        if (EditorInternal::PrimaryButton("Save")) {
+            DecalPalette p;
+            std::string name = ed.PaletteName;
+            p.Name = name;
+            p.Description = "From the Decal Library favourites.";
+            for (const std::string& rel : settings.DecalFavorites) {
+                DecalPaletteEntry e;
+                e.DecalPath = rel;
+                p.Entries.push_back(e);
+            }
+            std::string file = name;
+            for (char& c : file) if (!std::isalnum((unsigned char)c) && c != '_' && c != '-') c = '_';
+            std::error_code ec;
+            const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Decals/Palettes"));
+            fs::create_directories(dir, ec);
+            p.Path = GenericPath(dir / ("DP_" + file + ".decalpalette"));
+            if (p.Save()) {
+                ed.Palettes.push_back(std::make_shared<DecalPalette>(p));
+                SetPalette(ed, (int)ed.Palettes.size() - 1);
+                EditorSound::Play(EditorSound::Event::PaletteSwap);
+                ed.PaletteName[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::EndPopup();
+    }
+
+    // Right end: popovers.
+    const float btnW = ImGui::CalcTextSize("Auto-grime").x + 56.0f * m_UIScale;
+    ImGui::SameLine(ImMax(ImGui::GetCursorPosX() + 8.0f * m_UIScale, ImGui::GetWindowContentRegionMax().x - btnW * 2.0f - 8.0f * m_UIScale));
+    if (StripToggle("##brushOpts", ICON_FA_SLIDERS, "Brush", false, "Brush settings: radius, spacing, density, size and rotation jitter."))
+        ImGui::OpenPopup("##brushPopup");
+    ImGui::SameLine();
+    if (StripToggle("##grimeOpts", ICON_FA_WAND_MAGIC_SPARKLES, "Auto-grime", false,
+                    "Probe the selected room and dress its wall bases, corners, windows, doors and pipes from the palette."))
+        ImGui::OpenPopup("##grimePopup");
+}
+
+void EditorLayer::DrawDecalBrushPopover(DecalEditorState& ed) {
     if (ImGui::BeginPopup("##brushPopup")) {
         DecalTools::BrushSettings& b = ed.Brush;
         bool changed = false;
@@ -929,8 +969,9 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
         if (changed) SaveToolSettings(ed);
         ImGui::EndPopup();
     }
+}
 
-    // Auto-grime popover.
+void EditorLayer::DrawDecalGrimePopover(World& world, DecalEditorState& ed) {
     if (ImGui::BeginPopup("##grimePopup")) {
         ImGui::PushItemWidth(190.0f * m_UIScale);
         SectionHeader("Auto-grime");
@@ -987,8 +1028,10 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
         if (changed) SaveToolSettings(ed);
         ImGui::EndPopup();
     }
+}
 
-    // The palette's entries as a strip of previews.
+// The palette's entries as a strip of previews.
+void EditorLayer::DrawDecalPaletteStrip(DecalEditorState& ed) {
     if (SourceKind(ed) == 2 && ed.ActivePalette >= 0) {
         const DecalPalette& pal = *ed.Palettes[ed.ActivePalette];
         const float cell = 26.0f * m_UIScale;
@@ -1014,260 +1057,243 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
         }
         ImGui::NewLine();
     }
-    ImGui::Dummy(ImVec2(0.0f, 2.0f * m_UIScale));
+}
 
-    // --- Search row ------------------------------------------------------------------------------
-    {
-        const float controls = 140.0f * m_UIScale;
-        if (SearchField("decalSearch", ed.Search, sizeof(ed.Search), "Search decals, categories, tags", -controls)) ed.Dirty = true;
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(70.0f * m_UIScale);
-        float tile = settings.DecalLibraryTile;
-        if (EditorUI::SliderFloat("##tile", &tile, 48.0f, 160.0f, "")) {
-            settings.DecalLibraryTile = tile;
-            EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Tile size");
-        ImGui::SameLine();
-        static const char* const kTones[3] = {"Dark wall", "Mid wall", "Light wall"};
-        if (EditorInternal::ActionButton(ICON_FA_CIRCLE_HALF_STROKE, kTones[ImClamp(ed.WallTone, 0, 2)])) {
-            ed.WallTone = (ed.WallTone + 1) % 3;
-            EditorSound::Play(EditorSound::Event::SwatchPick);
-        }
+// The search field, tile size and wall tone; a changed search marks the list dirty.
+void EditorLayer::DrawDecalSearchRow(DecalEditorState& ed) {
+    EditorSettings& settings = EditorSettings::Get();
+    const float controls = 140.0f * m_UIScale;
+    if (SearchField("decalSearch", ed.Search, sizeof(ed.Search), "Search decals, categories, tags", -controls)) ed.Dirty = true;
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(70.0f * m_UIScale);
+    float tile = settings.DecalLibraryTile;
+    if (EditorUI::SliderFloat("##tile", &tile, 48.0f, 160.0f, "")) {
+        settings.DecalLibraryTile = tile;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Tile size");
+    ImGui::SameLine();
+    static const char* const kTones[3] = {"Dark wall", "Mid wall", "Light wall"};
+    if (EditorInternal::ActionButton(ICON_FA_CIRCLE_HALF_STROKE, kTones[ImClamp(ed.WallTone, 0, 2)])) {
+        ed.WallTone = (ed.WallTone + 1) % 3;
+        EditorSound::Play(EditorSound::Event::SwatchPick);
     }
     const uint32_t hash = HashText(ed.Search);
     if (hash != ed.SearchHash) {
         ed.SearchHash = hash;
         ed.Dirty = true;
     }
+}
 
-    // --- Body ------------------------------------------------------------------------------------
-    if (ed.Dirty) {
-        RebuildVisible(ed);
-        ed.CascadeKey++;
-    }
-    static int lastCascade = -1;
-    // Not drawn last frame = the panel just (re)opened: the tiles cascade in again.
-    static int lastDrawnFrame = -10;
-    const bool reopened = ImGui::GetFrameCount() - lastDrawnFrame > 1;
-    lastDrawnFrame = ImGui::GetFrameCount();
-    if (ed.CascadeKey != lastCascade || reopened) {
-        lastCascade = ed.CascadeKey;
-        if (animate && !ed.Visible.empty()) {
-            const float total = Glass::StaggerDelay(Glass::DecalTileStaggerCap, Glass::DecalTileStaggerMs, Glass::DecalTileStaggerCap) +
-                                Glass::DecalTileIn.durationMs * 0.001f;
-            motion.Pulse(kCascadeId, total);
-        }
-    }
-
+// Left: All / Favourites / Recent, then the category tree.
+void EditorLayer::DrawDecalCategoryTree(DecalEditorState& ed) {
+    const EditorSettings& settings = EditorSettings::Get();
     const float treeW = ImClamp(ImGui::GetContentRegionAvail().x * 0.24f, 130.0f * m_UIScale, 220.0f * m_UIScale);
     ImGui::BeginChild("##decalTree", ImVec2(treeW, 0.0f), ImGuiChildFlags_None);
-    {
-        auto row = [&](const char* icon, const char* label, int count, int id, int depth, bool hasKids, bool* openFlag) -> bool {
-            const bool sel = ed.SelectedCategory == id;
-            const float h = ImGui::GetFrameHeight();
-            const ImVec2 p = ImGui::GetCursorScreenPos();
-            const float w = ImGui::GetContentRegionAvail().x;
-            ImGui::PushID(id + 10);
-            ImGui::PushID(label);
-            const bool clicked = ImGui::InvisibleButton("##row", ImVec2(w, h));
-            const bool hov = ImGui::IsItemHovered();
-            ImGui::PopID();
-            ImGui::PopID();
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            EditorUIPrimitives::DrawRowState(dl, p, ImVec2(p.x + w, p.y + h), sel, hov);
-            const float indent = 6.0f * m_UIScale + depth * 12.0f * m_UIScale;
-            bool chevronHit = false;
-            if (hasKids && openFlag) {
-                const ImVec2 c(p.x + indent + 5.0f * m_UIScale, p.y + h * 0.5f);
-                const ImVec2 mouse = ImGui::GetIO().MousePos;
-                chevronHit = clicked && std::abs(mouse.x - c.x) < 9.0f * m_UIScale;
-                EditorUIPrimitives::DrawChevron(dl, c, 4.0f * m_UIScale, *openFlag ? IM_PI * 0.5f : 0.0f,
-                                                EditorTheme::U32(hov || sel ? EditorTheme::Text : EditorTheme::Dim));
-            }
-            float x = p.x + indent + 14.0f * m_UIScale;
-            if (icon) {
-                dl->AddText(ImVec2(x, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), EditorTheme::U32(sel ? EditorTheme::AccentBright : EditorTheme::Secondary), icon);
-                x += ImGui::CalcTextSize(icon).x + 6.0f * m_UIScale;
-            }
-            char cnt[16];
-            std::snprintf(cnt, sizeof(cnt), "%d", count);
-            const float cw = ImGui::CalcTextSize(cnt).x;
-            EditorUIPrimitives::TextEllipsis(dl, ImVec2(x, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), p.x + w - cw - 10.0f * m_UIScale,
-                                             EditorTheme::U32(sel ? EditorTheme::AccentBright : EditorTheme::Text), label);
-            dl->AddText(ImVec2(p.x + w - cw - 6.0f * m_UIScale, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), EditorTheme::U32(EditorTheme::Dim), cnt);
-            if (chevronHit) {
-                *openFlag = !*openFlag;
-                EditorSound::Play(*openFlag ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
-                return false;
-            }
-            if (clicked) {
-                ed.SelectedCategory = id;
-                if (openFlag && hasKids) *openFlag = true;
-                ed.Dirty = true;
-                EditorSound::Play(EditorSound::Event::TabSelect);
-            }
-            return clicked;
-        };
-        int favCount = 0;
-        for (const auto& e : ed.Entries) favCount += e.Favorite;
-        row(ICON_FA_LAYER_GROUP, "All Decals", (int)ed.Entries.size(), DecalEditorState::kAllCategories, 0, false, nullptr);
-        row(ICON_FA_HEART, "Favourites", favCount, DecalEditorState::kFavorites, 0, false, nullptr);
-        row(ICON_FA_CLOCK_ROTATE_LEFT, "Recent", (int)settings.DecalRecent.size(), DecalEditorState::kRecent, 0, false, nullptr);
+    auto row = [&](const char* icon, const char* label, int count, int id, int depth, bool hasKids, bool* openFlag) -> bool {
+        const bool sel = ed.SelectedCategory == id;
+        const float h = ImGui::GetFrameHeight();
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float w = ImGui::GetContentRegionAvail().x;
+        ImGui::PushID(id + 10);
+        ImGui::PushID(label);
+        const bool clicked = ImGui::InvisibleButton("##row", ImVec2(w, h));
+        const bool hov = ImGui::IsItemHovered();
+        ImGui::PopID();
+        ImGui::PopID();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        EditorUIPrimitives::DrawRowState(dl, p, ImVec2(p.x + w, p.y + h), sel, hov);
+        const float indent = 6.0f * m_UIScale + depth * 12.0f * m_UIScale;
+        bool chevronHit = false;
+        if (hasKids && openFlag) {
+            const ImVec2 c(p.x + indent + 5.0f * m_UIScale, p.y + h * 0.5f);
+            const ImVec2 mouse = ImGui::GetIO().MousePos;
+            chevronHit = clicked && std::abs(mouse.x - c.x) < 9.0f * m_UIScale;
+            EditorUIPrimitives::DrawChevron(dl, c, 4.0f * m_UIScale, *openFlag ? IM_PI * 0.5f : 0.0f,
+                                            EditorTheme::U32(hov || sel ? EditorTheme::Text : EditorTheme::Dim));
+        }
+        float x = p.x + indent + 14.0f * m_UIScale;
+        if (icon) {
+            dl->AddText(ImVec2(x, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), EditorTheme::U32(sel ? EditorTheme::AccentBright : EditorTheme::Secondary), icon);
+            x += ImGui::CalcTextSize(icon).x + 6.0f * m_UIScale;
+        }
+        char cnt[16];
+        std::snprintf(cnt, sizeof(cnt), "%d", count);
+        const float cw = ImGui::CalcTextSize(cnt).x;
+        EditorUIPrimitives::TextEllipsis(dl, ImVec2(x, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), p.x + w - cw - 10.0f * m_UIScale,
+                                         EditorTheme::U32(sel ? EditorTheme::AccentBright : EditorTheme::Text), label);
+        dl->AddText(ImVec2(p.x + w - cw - 6.0f * m_UIScale, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), EditorTheme::U32(EditorTheme::Dim), cnt);
+        if (chevronHit) {
+            *openFlag = !*openFlag;
+            EditorSound::Play(*openFlag ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
+            return false;
+        }
+        if (clicked) {
+            ed.SelectedCategory = id;
+            if (openFlag && hasKids) *openFlag = true;
+            ed.Dirty = true;
+            EditorSound::Play(EditorSound::Event::TabSelect);
+        }
+        return clicked;
+    };
+    int favCount = 0;
+    for (const auto& e : ed.Entries) favCount += e.Favorite;
+    row(ICON_FA_LAYER_GROUP, "All Decals", (int)ed.Entries.size(), DecalEditorState::kAllCategories, 0, false, nullptr);
+    row(ICON_FA_HEART, "Favourites", favCount, DecalEditorState::kFavorites, 0, false, nullptr);
+    row(ICON_FA_CLOCK_ROTATE_LEFT, "Recent", (int)settings.DecalRecent.size(), DecalEditorState::kRecent, 0, false, nullptr);
+    ImGui::Dummy(ImVec2(0.0f, 4.0f * m_UIScale));
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0.0f, 2.0f * m_UIScale));
+    const int n = (int)ed.Cats.size();
+    for (int i = 0; i < n; ++i) {
+        const bool hasKids = ed.Cats[i].End > i + 1;
+        bool& catOpen = ed.Cats[i].Open;
+        row(nullptr, ed.Cats[i].Name.c_str(), ed.Cats[i].Count, i, ed.Cats[i].Depth, hasKids, &catOpen);
+        if (hasKids && !catOpen) i = ed.Cats[i].End - 1; // skip the collapsed subtree
+    }
+    if (!ed.ScanDone) {
         ImGui::Dummy(ImVec2(0.0f, 4.0f * m_UIScale));
-        ImGui::Separator();
-        ImGui::Dummy(ImVec2(0.0f, 2.0f * m_UIScale));
-        const int n = (int)ed.Cats.size();
-        for (int i = 0; i < n; ++i) {
-            const bool hasKids = ed.Cats[i].End > i + 1;
-            bool& catOpen = ed.Cats[i].Open;
-            row(nullptr, ed.Cats[i].Name.c_str(), ed.Cats[i].Count, i, ed.Cats[i].Depth, hasKids, &catOpen);
-            if (hasKids && !catOpen) i = ed.Cats[i].End - 1; // skip the collapsed subtree
-        }
-        if (!ed.ScanDone) {
-            ImGui::Dummy(ImVec2(0.0f, 4.0f * m_UIScale));
-            ImGui::TextColored(EditorTheme::Dim, "Indexing %d / %d", (int)ed.Entries.size(), (int)(ed.ScanQueue.size()));
-        }
+        ImGui::TextColored(EditorTheme::Dim, "Indexing %d / %d", (int)ed.Entries.size(), (int)(ed.ScanQueue.size()));
     }
     ImGui::EndChild();
-    ImGui::SameLine();
+}
 
+// Right: the tiles (cascade, hover lift, heart, drag out, context menu) and the hover card.
+void EditorLayer::DrawDecalTiles(DecalEditorState& ed, bool animate) {
+    EditorSettings& settings = EditorSettings::Get();
+    Glass::ImAnimContext& motion = Glass::Motion();
+    const ImGuiID kCascadeId = DecalCascadeId(), kHeartId = DecalHeartId(), kCardId = DecalCardId();
     ImGui::BeginChild("##decalTiles", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-    {
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        const float tile = ImClamp(settings.DecalLibraryTile, 48.0f, 200.0f) * m_UIScale;
-        const float gap = 8.0f * m_UIScale;
-        const float availW = ImGui::GetContentRegionAvail().x;
-        const int cols = std::max(1, (int)std::floor((availW + gap) / (tile + gap)));
-        const int rows = ((int)ed.Visible.size() + cols - 1) / cols;
-        const double now = ImGui::GetTime();
-        const float cascade = animate ? motion.PulseElapsed(kCascadeId, 1.0e3f) : 1.0e3f;
-        int hoverNow = -1;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float tile = ImClamp(settings.DecalLibraryTile, 48.0f, 200.0f) * m_UIScale;
+    const float gap = 8.0f * m_UIScale;
+    const float availW = ImGui::GetContentRegionAvail().x;
+    const int cols = std::max(1, (int)std::floor((availW + gap) / (tile + gap)));
+    const int rows = ((int)ed.Visible.size() + cols - 1) / cols;
+    const double now = ImGui::GetTime();
+    const float cascade = animate ? motion.PulseElapsed(kCascadeId, 1.0e3f) : 1.0e3f;
+    int hoverNow = -1;
 
-        if (ed.Visible.empty()) {
-            if (!ed.ScanDone) EditorUIPrimitives::EmptyState(ICON_FA_STAMP, "Indexing the decal library...");
-            else if (ed.Entries.empty())
-                EditorUIPrimitives::EmptyState(ICON_FA_STAMP, "No decals yet", "Decals live under assets/Decals (tools/assets/cook_decal_library.py).");
-            else if (ed.SelectedCategory == DecalEditorState::kFavorites)
-                EditorUIPrimitives::EmptyState(ICON_FA_HEART, "No favourites yet", "Hover a decal and click its heart.");
-            else
-                EditorUIPrimitives::EmptyState(ICON_FA_MAGNIFYING_GLASS, "Nothing matches", "Try another word or category.");
-        } else {
-            ImGuiListClipper clipper;
-            clipper.Begin(rows, tile + gap);
-            while (clipper.Step()) {
-                for (int r = clipper.DisplayStart; r < clipper.DisplayEnd; ++r) {
-                    for (int c = 0; c < cols; ++c) {
-                        const int vi = r * cols + c;
-                        if (vi >= (int)ed.Visible.size()) break;
-                        const int ei = ed.Visible[vi];
-                        const DecalEditorState::Entry& e = ed.Entries[ei];
-                        const ImVec2 cell(ImGui::GetWindowContentRegionMin().x + c * (tile + gap),
-                                          ImGui::GetCursorStartPos().y + r * (tile + gap));
-                        ImGui::SetCursorPos(cell);
-                        const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    if (ed.Visible.empty()) {
+        if (!ed.ScanDone) EditorUIPrimitives::EmptyState(ICON_FA_STAMP, "Indexing the decal library...");
+        else if (ed.Entries.empty())
+            EditorUIPrimitives::EmptyState(ICON_FA_STAMP, "No decals yet", "Decals live under assets/Decals (tools/assets/cook_decal_library.py).");
+        else if (ed.SelectedCategory == DecalEditorState::kFavorites)
+            EditorUIPrimitives::EmptyState(ICON_FA_HEART, "No favourites yet", "Hover a decal and click its heart.");
+        else
+            EditorUIPrimitives::EmptyState(ICON_FA_MAGNIFYING_GLASS, "Nothing matches", "Try another word or category.");
+    } else {
+        ImGuiListClipper clipper;
+        clipper.Begin(rows, tile + gap);
+        while (clipper.Step()) {
+            for (int r = clipper.DisplayStart; r < clipper.DisplayEnd; ++r) {
+                for (int c = 0; c < cols; ++c) {
+                    const int vi = r * cols + c;
+                    if (vi >= (int)ed.Visible.size()) break;
+                    const int ei = ed.Visible[vi];
+                    const DecalEditorState::Entry& e = ed.Entries[ei];
+                    const ImVec2 cell(ImGui::GetWindowContentRegionMin().x + c * (tile + gap),
+                                      ImGui::GetCursorStartPos().y + r * (tile + gap));
+                    ImGui::SetCursorPos(cell);
+                    const ImVec2 p0 = ImGui::GetCursorScreenPos();
 
-                        // The cascade: each tile arrives a step after the one before, left to right, top to bottom.
-                        float arrive = 1.0f;
-                        if (cascade < 1.0e2f) {
-                            const float delay = Glass::ImAnimContext::GridRippleDelay(c, r, cols, rows, 0, 0, Glass::DecalTileStaggerMs, Glass::DecalTileStaggerCap);
-                            arrive = Glass::EaseProgress(Glass::DecalTileIn, (cascade - delay) / (Glass::DecalTileIn.durationMs * 0.001f));
-                        }
-                        const float a = ImClamp(arrive, 0.0f, 1.0f);
-
-                        ImGui::PushID(ei);
-                        // The heart's corner is tested first so a click there favourites instead of selecting.
-                        const float hr = 8.0f * m_UIScale;
-                        const ImVec2 hc(p0.x + tile - hr - 5.0f * m_UIScale, p0.y + hr + 5.0f * m_UIScale);
-                        const bool overHeart = ImGui::IsMouseHoveringRect(ImVec2(hc.x - hr - 3.0f, hc.y - hr - 3.0f), ImVec2(hc.x + hr + 3.0f, hc.y + hr + 3.0f));
-                        ImGui::InvisibleButton("##tile", ImVec2(tile, tile));
-                        const bool hovered = ImGui::IsItemHovered() && a >= 1.0f;
-                        const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
-                        if (clicked && overHeart) {
-                            ToggleFavorite(ed, ei);
-                        } else if (clicked) {
-                            ed.PlacePath = e.Path;
-                            EditorSound::Play(EditorSound::Event::Select); // the brush keeps its palette / category
-                        }
-                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_None) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !overHeart) {
-                            ed.PlacePath = e.Path;
-                            if (m_DecalTool != DecalToolMode::Brush) SetDecalTool(DecalToolMode::Place);
-                        }
-                        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
-                            ImGui::SetDragDropPayload("ASSET_DECAL_PATH", e.Path.c_str(), e.Path.size() + 1);
-                            Glass::DragGhostLabel(ICON_FA_STAMP, e.Name.c_str());
-                            ImGui::EndDragDropSource();
-                            hoverNow = -1;
-                        }
-                        if (ImGui::BeginPopupContextItem("##tileMenu")) {
-                            if (ImGui::MenuItem(e.Favorite ? ICON_FA_HEART "  Remove favourite" : ICON_FA_HEART "  Favourite")) ToggleFavorite(ed, ei);
-                            if (ImGui::MenuItem(ICON_FA_STAMP "  Place this decal")) { ed.PlacePath = e.Path; SetDecalTool(DecalToolMode::Place); }
-                            if (ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Paint with this decal")) {
-                                ed.PlacePath = e.Path;
-                                SetPalette(ed, -1);
-                                settings.DecalSourceCategory.clear();
-                                EditorSettings::Save();
-                                if (m_DecalTool != DecalToolMode::Brush) SetDecalTool(DecalToolMode::Brush);
-                            }
-                            if (ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Paint with this category")) {
-                                SetPalette(ed, -1);
-                                settings.DecalSourceCategory = ed.Cats[e.Category].Path;
-                                EditorSettings::Save();
-                                if (m_DecalTool != DecalToolMode::Brush) SetDecalTool(DecalToolMode::Brush);
-                            }
-                            ImGui::Separator();
-                            if (ImGui::MenuItem(ICON_FA_COPY "  Copy path")) ImGui::SetClipboardText(e.Rel.c_str());
-                            ImGui::EndPopup();
-                        }
-                        ImGui::PopID();
-                        if (hovered && ImGui::IsWindowHovered()) hoverNow = ei;
-
-                        // Hover: the tile lifts and brightens (HoverGlow: nothing is held at rest).
-                        const ImGuiID tid = ImGui::GetID(&e);
-                        const float glow = animate ? motion.HoverGlow(tid, hovered) : (hovered ? 1.0f : 0.0f);
-                        const float lift = Glass::TileHoverLiftPx * m_UIScale * glow;
-                        const float grow = (Glass::TileHoverScale - 1.0f) * tile * 0.5f * glow;
-                        const float rise = (1.0f - a) * Glass::DecalTileRisePx * m_UIScale;
-                        const ImVec2 mn(p0.x - grow, p0.y - grow - lift + rise), mx(p0.x + tile + grow, p0.y + tile + grow - lift + rise);
-                        const float rounding = 6.0f * m_UIScale;
-                        if (glow > 0.0f)
-                            EditorUIPrimitives::DrawSoftShadow(dl, mn, mx, rounding, 8.0f * m_UIScale, Glass::TileShadowAlpha * glow);
-                        DrawDecalOnWall(dl, m_AssetThumbs, ed, e, mn, mx, rounding, a, 4.0f * m_UIScale, 1.5f);
-                        const bool inUse = e.Path == ed.PlacePath;
-                        dl->AddRect(mn, mx, inUse ? White(0.9f * a) : EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Hairline, a)),
-                                    rounding, 0, inUse ? 2.0f : 1.0f);
-                        // The name, on a fade at the tile's foot.
-                        const float nh = ImGui::GetTextLineHeight() + 4.0f * m_UIScale;
-                        dl->AddRectFilledMultiColor(ImVec2(mn.x, mx.y - nh * 1.6f), ImVec2(mx.x, mx.y), Black(0.0f), Black(0.0f), Black(0.62f * a), Black(0.62f * a));
-                        EditorUIPrimitives::TextEllipsis(dl, ImVec2(mn.x + 5.0f * m_UIScale, mx.y - nh), mx.x - 4.0f * m_UIScale, White(0.85f * a), e.Name.c_str());
-
-                        // The heart: filled when favourited, an outline on hover; it pops (a spring) when toggled.
-                        float heartScale = 1.0f;
-                        for (int h = 0; h < 4; ++h)
-                            if (ed.HeartPops[h] == ei && motion.PulseActive(kHeartId + (ImGuiID)h))
-                                heartScale = ImLerp(Glass::DecalHeartFromScale, 1.0f, Glass::EaseProgress(Glass::DecalHeartPop, motion.PulseProgress(kHeartId + (ImGuiID)h)));
-                        if (e.Favorite || hovered)
-                            DrawHeart(dl, ImVec2(hc.x - grow, hc.y - grow - lift + rise), hr * heartScale * (overHeart ? 1.12f : 1.0f),
-                                      White(a), White((e.Favorite ? 1.0f : overHeart ? 0.95f : 0.7f) * a), e.Favorite);
+                    // The cascade: each tile arrives a step after the one before, left to right, top to bottom.
+                    float arrive = 1.0f;
+                    if (cascade < 1.0e2f) {
+                        const float delay = Glass::ImAnimContext::GridRippleDelay(c, r, cols, rows, 0, 0, Glass::DecalTileStaggerMs, Glass::DecalTileStaggerCap);
+                        arrive = Glass::EaseProgress(Glass::DecalTileIn, (cascade - delay) / (Glass::DecalTileIn.durationMs * 0.001f));
                     }
+                    const float a = ImClamp(arrive, 0.0f, 1.0f);
+
+                    ImGui::PushID(ei);
+                    // The heart's corner is tested first so a click there favourites instead of selecting.
+                    const float hr = 8.0f * m_UIScale;
+                    const ImVec2 hc(p0.x + tile - hr - 5.0f * m_UIScale, p0.y + hr + 5.0f * m_UIScale);
+                    const bool overHeart = ImGui::IsMouseHoveringRect(ImVec2(hc.x - hr - 3.0f, hc.y - hr - 3.0f), ImVec2(hc.x + hr + 3.0f, hc.y + hr + 3.0f));
+                    ImGui::InvisibleButton("##tile", ImVec2(tile, tile));
+                    const bool hovered = ImGui::IsItemHovered() && a >= 1.0f;
+                    const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                    if (clicked && overHeart) {
+                        ToggleFavorite(ed, ei);
+                    } else if (clicked) {
+                        ed.PlacePath = e.Path;
+                        EditorSound::Play(EditorSound::Event::Select); // the brush keeps its palette / category
+                    }
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_None) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !overHeart) {
+                        ed.PlacePath = e.Path;
+                        if (m_DecalTool != DecalToolMode::Brush) SetDecalTool(DecalToolMode::Place);
+                    }
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
+                        ImGui::SetDragDropPayload("ASSET_DECAL_PATH", e.Path.c_str(), e.Path.size() + 1);
+                        Glass::DragGhostLabel(ICON_FA_STAMP, e.Name.c_str());
+                        ImGui::EndDragDropSource();
+                        hoverNow = -1;
+                    }
+                    if (ImGui::BeginPopupContextItem("##tileMenu")) {
+                        if (ImGui::MenuItem(e.Favorite ? ICON_FA_HEART "  Remove favourite" : ICON_FA_HEART "  Favourite")) ToggleFavorite(ed, ei);
+                        if (ImGui::MenuItem(ICON_FA_STAMP "  Place this decal")) { ed.PlacePath = e.Path; SetDecalTool(DecalToolMode::Place); }
+                        if (ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Paint with this decal")) {
+                            ed.PlacePath = e.Path;
+                            SetPalette(ed, -1);
+                            settings.DecalSourceCategory.clear();
+                            EditorSettings::Save();
+                            if (m_DecalTool != DecalToolMode::Brush) SetDecalTool(DecalToolMode::Brush);
+                        }
+                        if (ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Paint with this category")) {
+                            SetPalette(ed, -1);
+                            settings.DecalSourceCategory = ed.Cats[e.Category].Path;
+                            EditorSettings::Save();
+                            if (m_DecalTool != DecalToolMode::Brush) SetDecalTool(DecalToolMode::Brush);
+                        }
+                        ImGui::Separator();
+                        if (ImGui::MenuItem(ICON_FA_COPY "  Copy path")) ImGui::SetClipboardText(e.Rel.c_str());
+                        ImGui::EndPopup();
+                    }
+                    ImGui::PopID();
+                    if (hovered && ImGui::IsWindowHovered()) hoverNow = ei;
+
+                    // Hover: the tile lifts and brightens (HoverGlow: nothing is held at rest).
+                    const ImGuiID tid = ImGui::GetID(&e);
+                    const float glow = animate ? motion.HoverGlow(tid, hovered) : (hovered ? 1.0f : 0.0f);
+                    const float lift = Glass::TileHoverLiftPx * m_UIScale * glow;
+                    const float grow = (Glass::TileHoverScale - 1.0f) * tile * 0.5f * glow;
+                    const float rise = (1.0f - a) * Glass::DecalTileRisePx * m_UIScale;
+                    const ImVec2 mn(p0.x - grow, p0.y - grow - lift + rise), mx(p0.x + tile + grow, p0.y + tile + grow - lift + rise);
+                    const float rounding = 6.0f * m_UIScale;
+                    if (glow > 0.0f)
+                        EditorUIPrimitives::DrawSoftShadow(dl, mn, mx, rounding, 8.0f * m_UIScale, Glass::TileShadowAlpha * glow);
+                    DrawDecalOnWall(dl, m_AssetThumbs, ed, e, mn, mx, rounding, a, 4.0f * m_UIScale, 1.5f);
+                    const bool inUse = e.Path == ed.PlacePath;
+                    dl->AddRect(mn, mx, inUse ? White(0.9f * a) : EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Hairline, a)),
+                                rounding, 0, inUse ? 2.0f : 1.0f);
+                    // The name, on a fade at the tile's foot.
+                    const float nh = ImGui::GetTextLineHeight() + 4.0f * m_UIScale;
+                    dl->AddRectFilledMultiColor(ImVec2(mn.x, mx.y - nh * 1.6f), ImVec2(mx.x, mx.y), Black(0.0f), Black(0.0f), Black(0.62f * a), Black(0.62f * a));
+                    EditorUIPrimitives::TextEllipsis(dl, ImVec2(mn.x + 5.0f * m_UIScale, mx.y - nh), mx.x - 4.0f * m_UIScale, White(0.85f * a), e.Name.c_str());
+
+                    // The heart: filled when favourited, an outline on hover; it pops (a spring) when toggled.
+                    float heartScale = 1.0f;
+                    for (int h = 0; h < 4; ++h)
+                        if (ed.HeartPops[h] == ei && motion.PulseActive(kHeartId + (ImGuiID)h))
+                            heartScale = ImLerp(Glass::DecalHeartFromScale, 1.0f, Glass::EaseProgress(Glass::DecalHeartPop, motion.PulseProgress(kHeartId + (ImGuiID)h)));
+                    if (e.Favorite || hovered)
+                        DrawHeart(dl, ImVec2(hc.x - grow, hc.y - grow - lift + rise), hr * heartScale * (overHeart ? 1.12f : 1.0f),
+                                  White(a), White((e.Favorite ? 1.0f : overHeart ? 0.95f : 0.7f) * a), e.Favorite);
                 }
             }
-            clipper.End();
         }
-
-        // The hover card: after a beat on one tile, a larger look at the decal on a wall.
-        if (hoverNow != ed.HoverEntry) {
-            ed.HoverEntry = hoverNow;
-            ed.HoverSince = now;
-        }
-        const bool wantCard = ed.HoverEntry >= 0 && (now - ed.HoverSince) * 1000.0 >= (double)Glass::DecalPreviewDelayMs && !ImGui::IsMouseDown(ImGuiMouseButton_Left);
-        if (wantCard) ed.PreviewEntry = ed.HoverEntry;
-        const float cardA = animate ? motion.Animate(kCardId, wantCard ? 1.0f : 0.0f, 0.0f, Glass::DecalPreviewIn) : (wantCard ? 1.0f : 0.0f);
-        if (cardA > 0.001f && ed.PreviewEntry >= 0 && ed.PreviewEntry < (int)ed.Entries.size())
-            DrawHoverCard(ed, m_AssetThumbs, ed.Entries[ed.PreviewEntry], cardA, m_UIScale);
+        clipper.End();
     }
-    ImGui::EndChild();
 
-    // Dropping a decal onto the tile area does nothing; the panel only drags out.
-    ImGui::End();
+    // The hover card: after a beat on one tile, a larger look at the decal on a wall.
+    if (hoverNow != ed.HoverEntry) {
+        ed.HoverEntry = hoverNow;
+        ed.HoverSince = now;
+    }
+    const bool wantCard = ed.HoverEntry >= 0 && (now - ed.HoverSince) * 1000.0 >= (double)Glass::DecalPreviewDelayMs && !ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    if (wantCard) ed.PreviewEntry = ed.HoverEntry;
+    const float cardA = animate ? motion.Animate(kCardId, wantCard ? 1.0f : 0.0f, 0.0f, Glass::DecalPreviewIn) : (wantCard ? 1.0f : 0.0f);
+    if (cardA > 0.001f && ed.PreviewEntry >= 0 && ed.PreviewEntry < (int)ed.Entries.size())
+        DrawHoverCard(ed, m_AssetThumbs, ed.Entries[ed.PreviewEntry], cardA, m_UIScale);
+    ImGui::EndChild();
 }

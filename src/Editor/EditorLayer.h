@@ -508,6 +508,13 @@ public:
     // EnhancerUserState::FavoritePages; everything below is session state.
     void DrawFavoritesOverlay(World& world, AssetLibrary& assets); // PostModuleDraw
     bool UpdateFavoritesVisibility(World& world, ImVec2& areaMin, ImVec2& areaMax); // its state; false = not shown
+    struct FavoritesFrame; // the open overlay's frame, shared by its parts (EditorLayer_Enhancers.cpp)
+    void DrawFavoritesKeys(FavoritesFrame& f);
+    void DrawFavoritesHeader(FavoritesFrame& f);
+    void DrawFavoritesTiles(World& world, AssetLibrary& assets, FavoritesFrame& f);
+    void AcceptFavoritesDrop(World& world, FavoritesFrame& f);
+    void DrawFavoritesFooter();
+    void ApplyFavoritesEdits(World& world, AssetLibrary& assets, FavoritesFrame& f);
     void ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r);
     void AddSelectionToFavorites(const World& world);
     void MigrateAssetFavorites(); // one-time import of asset_favorites.json into page 1
@@ -2465,6 +2472,14 @@ public:
     bool DecalGhostPreview(const DecalComponent*& comp, glm::mat4& world) const;
     void DrawDecalLibraryPanel(World& world);
 private:
+    // DrawDecalLibraryPanel's parts, top to bottom.
+    void DrawDecalStrip(DecalEditorState& ed);
+    void DrawDecalBrushPopover(DecalEditorState& ed);
+    void DrawDecalGrimePopover(World& world, DecalEditorState& ed);
+    void DrawDecalPaletteStrip(DecalEditorState& ed);
+    void DrawDecalSearchRow(DecalEditorState& ed);
+    void DrawDecalCategoryTree(DecalEditorState& ed);
+    void DrawDecalTiles(DecalEditorState& ed, bool animate);
     // The Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md; EditorLayer_GraffitiDesigner.cpp):
     // the panel editing one .graffiti recipe (layers, canvas, tools, bake), and spraying straight onto
     // a wall in the Scene view. The state lives in GraffitiDesigner (defined in that file).
@@ -2713,6 +2728,12 @@ private:
     void DrawGlassInspector(World& world, AssetLibrary& assets);
     void DrawGlassLibrary(World& world, AssetLibrary& assets);
     void DrawGlassViewportOverlays(World& world);                  // inside the Scene window
+    struct GlassHud; // DrawGlassViewportOverlays' frame, shared by its parts (EditorLayer_Glass.cpp)
+    void DrawGlassSelectionCard(World& world, GlassHud& h);
+    void DrawGlassStatsPill(GlassHud& h);
+    void DrawGlassToasts(GlassHud& h);
+    void DrawGlassSnapRing(GlassHud& h);
+    void FinishGlassFrostedBlur(GlassHud& h);
     void PollGlassNotifications();                                 // compile errors -> toasts
     // `chimed`: the toast's own event already sounded (ModuleReload, NotifyError...), so no ToastIn on top.
     void PushGlassToast(const std::string& title, const std::string& body, bool error, bool chimed = false);

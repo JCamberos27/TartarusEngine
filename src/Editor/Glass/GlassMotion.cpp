@@ -3,6 +3,7 @@
 #include "GlassLayout.h" // LayoutMotionNewFrame
 #include "GlassTheme.h"  // Scale
 #include "../EditorSound.h" // FlingRelease
+#include "../EditorUIPrimitives.h" // SecondaryButton
 
 // Vendored: compiled at the default warning level like the rest of extern code, so its header
 // must not trip this TU's /W4 /WX.
@@ -969,7 +970,7 @@ void ImAnimContext::DrawDebugger(bool* open) {
         float s = m_DebugScale;
         if (ImGui::SliderFloat("##slowmo", &s, 0.05f, 1.0f, "%.2fx")) SetDebugTimeScale(s);
         ImGui::SameLine();
-        if (ImGui::SmallButton("1x")) m_DebugScale = 1.0f;
+        if (EditorUIPrimitives::SecondaryButton("1x")) m_DebugScale = 1.0f;
         ImGui::Separator();
         ImGui::Text("Live entries   %d", LiveCount());
         ImGui::Text("Held bytes     %u", (unsigned)HeldBytes());

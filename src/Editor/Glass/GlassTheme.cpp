@@ -4,6 +4,7 @@
 
 #include <imgui_internal.h> // ShadeVertsLinearUV, ImClamp
 
+#include <array>
 #include <cmath>
 
 namespace Glass {
@@ -15,14 +16,31 @@ float Px(float designPx) { return designPx * Scale(); }
 // One corner of a superellipse |x/r|^n + |y/r|^n = 1, traced from angle a0 to a1 (radians, standard
 // orientation) around `centre`. The parametric form x = r * sgn(cos t) |cos t|^(2/n) keeps the
 // points evenly spread in angle, which is where the eye looks for smoothness.
-static void PathSuperellipseCorner(ImDrawList* dl, ImVec2 centre, float r, float a0, float a1, int segments) {
-    const float e = 2.0f / SquircleExponent;
+constexpr int kSquircleMinSegments = 4, kSquircleMaxSegments = 12;
+// (|cos t|^(2/n), |sin t|^(2/n)) for t = i/seg * pi/2, i = 0..seg: one quarter, built once per segment
+// count (the pow calls were per vertex, per squircle, per frame).
+static const ImVec2* SquircleQuarter(int segments) {
+    static const auto table = [] {
+        std::array<std::array<ImVec2, kSquircleMaxSegments + 1>, kSquircleMaxSegments + 1> t{};
+        const float e = 2.0f / SquircleExponent;
+        for (int seg = kSquircleMinSegments; seg <= kSquircleMaxSegments; ++seg)
+            for (int i = 0; i <= seg; ++i) {
+                const float a = 1.57079632679f * ((float)i / (float)seg);
+                t[seg][i] = ImVec2(std::pow(std::fabs(std::cos(a)), e), std::pow(std::fabs(std::sin(a)), e));
+            }
+        return t;
+    }();
+    return table[ImClamp(segments, kSquircleMinSegments, kSquircleMaxSegments)].data();
+}
+// The corner of quadrant q (angles q*pi/2 .. (q+1)*pi/2; 0 = bottom-right in screen space).
+static void PathSuperellipseCorner(ImDrawList* dl, ImVec2 centre, float r, int q, int segments) {
+    segments = ImClamp(segments, kSquircleMinSegments, kSquircleMaxSegments);
+    const ImVec2* u = SquircleQuarter(segments);
+    const float sx = (q == 1 || q == 2) ? -r : r, sy = q >= 2 ? -r : r;
+    const bool swap = q & 1; // cos(q*pi/2 + a) is +-sin(a) in the odd quadrants
     for (int i = 0; i <= segments; ++i) {
-        const float t = a0 + (a1 - a0) * ((float)i / (float)segments);
-        const float c = std::cos(t), s = std::sin(t);
-        const float x = r * (c < 0.0f ? -1.0f : 1.0f) * std::pow(std::fabs(c), e);
-        const float y = r * (s < 0.0f ? -1.0f : 1.0f) * std::pow(std::fabs(s), e);
-        dl->PathLineTo(ImVec2(centre.x + x, centre.y + y));
+        const ImVec2 m = swap ? ImVec2(u[i].y, u[i].x) : u[i];
+        dl->PathLineTo(ImVec2(centre.x + sx * m.x, centre.y + sy * m.y));
     }
 }
 
@@ -37,13 +55,12 @@ void PathSquircle(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius) {
     // Segment count follows the radius so a 4 px row corner isn't 12 points and a 24 px card corner
     // isn't 4. Same tessellation tolerance spirit as ImGui's own circle cache.
     const int seg = (int)ImClamp(r * 0.45f, 4.0f, 12.0f);
-    const float pi = 3.14159265358979f;
     // Clockwise in screen space (y down) from the top-left corner, matching PathRect's winding so
     // anti-aliased fills and strokes come out the same way.
-    PathSuperellipseCorner(dl, ImVec2(min.x + r, min.y + r), r, pi, pi * 1.5f, seg);
-    PathSuperellipseCorner(dl, ImVec2(max.x - r, min.y + r), r, pi * 1.5f, pi * 2.0f, seg);
-    PathSuperellipseCorner(dl, ImVec2(max.x - r, max.y - r), r, 0.0f, pi * 0.5f, seg);
-    PathSuperellipseCorner(dl, ImVec2(min.x + r, max.y - r), r, pi * 0.5f, pi, seg);
+    PathSuperellipseCorner(dl, ImVec2(min.x + r, min.y + r), r, 2, seg);
+    PathSuperellipseCorner(dl, ImVec2(max.x - r, min.y + r), r, 3, seg);
+    PathSuperellipseCorner(dl, ImVec2(max.x - r, max.y - r), r, 0, seg);
+    PathSuperellipseCorner(dl, ImVec2(min.x + r, max.y - r), r, 1, seg);
 }
 
 void DrawSquircle(ImDrawList* dl, ImVec2 min, ImVec2 max, ImU32 col, float radius) {

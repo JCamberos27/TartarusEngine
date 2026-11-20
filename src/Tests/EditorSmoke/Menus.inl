@@ -186,14 +186,9 @@ Step ResetCamera() {
 }
 
 // --- Files ---------------------------------------------------------------------------------------
-std::string ReadText(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    return s;
-}
 nlohmann::json ReadJson(const std::string& path) {
     try {
-        return nlohmann::json::parse(ReadText(path));
+        return nlohmann::json::parse(ReadFileText(path));
     } catch (...) {
         return nlohmann::json();
     }
@@ -248,7 +243,7 @@ void RegisterMenusTests() {
         MenuClick("File", "New Scene", MenuExact(ICON_FA_FLOPPY_DISK "  Save")),
         {Until("saved", [](Ctx& c) { return std::filesystem::exists(g_ScratchScene) && !A::Dirty(c.E); }),
          Expect("the file holds the scene", [](Ctx&) {
-             const std::string s = ReadText(g_ScratchScene);
+             const std::string s = ReadFileText(g_ScratchScene);
              return Contains(s, "Gamma Saved") && Contains(s, "Alpha") ? std::string() : std::string("Gamma Saved / Alpha not in the file");
          })},
         {Do("edit after the save", [](Ctx& c) { X::PushUndo(c.E, c.W, "Rename"); c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Alpha Unsaved"; }),

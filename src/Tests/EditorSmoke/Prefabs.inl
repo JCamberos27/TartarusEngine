@@ -47,13 +47,6 @@ std::string g_Before;   // a scene dump to come back to
 std::string g_After;    // a second one
 std::string g_Undo;     // undo labels to compare against
 
-std::string FirstDifference(const std::string& a, const std::string& b) {
-    size_t i = 0;
-    while (i < a.size() && i < b.size() && a[i] == b[i]) ++i;
-    const size_t from = i > 80 ? i - 80 : 0;
-    return "differs at byte " + std::to_string(i) + " of " + std::to_string(a.size()) + "/" + std::to_string(b.size()) +
-           ": '" + a.substr(from, 160) + "' vs '" + b.substr(from, 160) + "'";
-}
 // The scene dump minus the asset library's lists ("assetFolders", "assetMeta"...): the Asset
 // Browser adds the scratch folder to them whenever its rescan notices the new .prefab.
 std::string Dump(Ctx& c) {
@@ -70,10 +63,6 @@ Step ExpectDump(std::string what, const std::string* want) {
         const std::string now = Dump(c);
         return now == *want ? std::string() : FirstDifference(*want, now) + " | history: " + PA::UndoLabels(c.E);
     });
-}
-std::string ReadFile(const std::string& path) {
-    std::ifstream in(fs::path(path), std::ios::binary);
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
 // Starts every test: out of Prefab Mode, the fixture scene, no scratch prefab, Hierarchy unfiltered.
@@ -198,7 +187,7 @@ void RegisterPrefabsTests() {
             if (!SceneSerializer::SavePrefab(c.W, ByName(c.W, "Beta"), PrefabPath())) Fail("SavePrefab failed");
         }),
         Expect("the file holds Beta and Gamma, not Alpha", [](Ctx&) {
-            const std::string s = ReadFile(PrefabPath());
+            const std::string s = ReadFileText(PrefabPath());
             if (s.empty()) return std::string("no file written");
             return Contains(s, "\"Beta\"") && Contains(s, "\"Gamma\"") && !Contains(s, "\"Alpha\"") ? std::string() : "file: " + s.substr(0, 300);
         }),

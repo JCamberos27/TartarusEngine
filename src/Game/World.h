@@ -315,6 +315,10 @@ public:
     void EnsureNextOrderAtLeast(int value) { if (value > m_NextOrder) m_NextOrder = value; }
 
 private:
+    // Cycle guard for the parent-chain walks (the transform cache, LOD groups): no legitimate scene nests this
+    // deep, so exceeding it means a malformed hierarchy, not a tall one.
+    static constexpr size_t kMaxHierarchyDepth = 1024;
+
     // Flat, indexed by entity slot (entt::to_entity) rather than hashed: every render pass reads
     // it once per drawable, so a hash lookup per read added up. m_WorldTransformKeys holds the
     // full entity (slot + version) each slot was filled for; a mismatch (entt::null, or a slot
