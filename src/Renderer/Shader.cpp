@@ -4,9 +4,11 @@
 #include "Log.h"
 #include "gl.h"
 #include "GLStateCache.h"
+#include "FrameLoads.h"
 #include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
@@ -24,6 +26,12 @@ void TagProgram(unsigned int program, const char* debugName) {
         objectLabel(kProgramObject, program, -1, debugName);
     if (GLDebug::IsEnabled())
         Log::Info(std::string("[GL] program ") + std::to_string(program) + " = " + debugName);
+}
+// --perf-bench's per-frame load log: a program built mid-frame is a likely hitch.
+void NoteBuilt(const char* debugName, std::chrono::steady_clock::time_point start) {
+    if (!FrameLoads::Enabled()) return;
+    FrameLoads::Note("shader", debugName ? debugName : "(unnamed)",
+                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 }
 // #158 - full info logs (they used to be cut at 1024 chars, losing every error after the first
 // few), with source-string numbers mapped back to file names.
@@ -46,6 +54,7 @@ std::string ShaderLog(unsigned int shader) {
 } // namespace
 
 Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, const char* debugName) {
+    const auto start = std::chrono::steady_clock::now();
     unsigned int vs = Compile(GL_VERTEX_SHADER, vertexSrc);
     unsigned int fs = 0;
     try {
@@ -74,9 +83,11 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, con
         throw std::runtime_error(std::string("Shader link error: ") + log);
     }
     TagProgram(m_Program, debugName);
+    NoteBuilt(debugName, start);
 }
 
 Shader::Shader(const std::string& computeSrc, const char* debugName) {
+    const auto start = std::chrono::steady_clock::now();
     unsigned int cs = Compile(GL_COMPUTE_SHADER, computeSrc);
 
     m_Program = glCreateProgram();
@@ -94,6 +105,7 @@ Shader::Shader(const std::string& computeSrc, const char* debugName) {
         throw std::runtime_error(std::string("Compute shader link error: ") + log);
     }
     TagProgram(m_Program, debugName);
+    NoteBuilt(debugName, start);
 }
 
 Shader::~Shader() {
