@@ -255,4 +255,7 @@ def measure(repo, exe=None):
 
 if __name__ == '__main__':
     if '--measure' in sys.argv:
-        measure(os.path.abspath(sys.argv[1]))
+        paths = [a for a in sys.argv[1:] if not a.startswith('--')]
+        if not paths:
+            sys.exit('usage: house_fit.py --measure <repo>')
+        measure(os.path.abspath(paths[0]))

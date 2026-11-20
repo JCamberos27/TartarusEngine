@@ -38,9 +38,6 @@ def main():
 
     rooms = hl.named_rooms(pk.fit, fh.floor_rects(pk), fh)
 
-    def room_at(p):
-        return hl.room_of(rooms, p)
-
     # world transforms of the scene entities (position + yaw is enough for framing)
     def local(e):
         return e.get('position', [0, 0, 0]), e.get('rotation', [0, 0, 0, 1]), e.get('scale', [1, 1, 1])
@@ -113,10 +110,6 @@ def main():
         for e in kids.get(g['id'], []):
             add(e, f"Yard/{g['name']}", grouped=g['name'] in GROUPED)
             rows[-1]['room'] = 'yard'
-    porch = next((e for e in s.empties if e['name'] == 'Porch Light'), None)
-    if porch and porch['parentId'] != lay['id']:
-        for e in kids.get(porch['id'], []):
-            add(e, 'Porch Light')
     data = {'rooms': [{'name': r['name'], 'storey': r['storey'], 'floor': r['floor'], 'ceil': r['ceil'],
                        'area': round(len(r['cells']) * hl.ROOM_CELL ** 2, 1),
                        'centre': fh.to_world((sum(c[0] for c in r['cells']) / len(r['cells']), r['floor'],

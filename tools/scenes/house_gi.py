@@ -126,7 +126,8 @@ def read_peaks(path):
     """A .gi file's brightest probe per volume and layer (GIData.h's TGI1 layout): {volume: {circuit: peak}}."""
     import struct
     import numpy as np
-    data = open(path, 'rb').read()
+    with open(path, 'rb') as f:
+        data = f.read()
     assert data[:4] == b'TGI1', path
     o = 8
     (count,) = struct.unpack_from('<I', data, o)
@@ -180,8 +181,9 @@ def main():
     bake_file = 'scenes/Forest_preview.gi' if preview else BAKE_FILE
     out_scene = SCENE.replace('Forest.json', 'Forest_preview.json') if preview else SCENE
     pk, rooms = house_rooms()
-    sc = json.load(open(SCENE, encoding='utf-8'))
-    lights_root = next(e for e in sc['empties'] if e['name'] == 'House Lights')
+    with open(SCENE, encoding='utf-8') as f:
+        sc = json.load(f)
+    lights_root = fh.first((e for e in sc['empties'] if e['name'] == 'House Lights'), 'House Lights group')
     lights = [e for e in sc['empties'] if e.get('parentId') == lights_root['id'] and 'Light' in e and 'Light Circuit' in e
               and not e['name'].startswith('Bounce ')]
     # circuits by room: a light's room is where it hangs (or stands); the stairwell's belong to the landing and the hall
@@ -222,7 +224,10 @@ def main():
     # --prune-from <preview .gi>: drop the circuit layers the preview bake found empty in a volume (a neighbour behind a
     # shut door or a wall), so the full bake doesn't spend time on them. The Outside always stays.
     if '--prune-from' in sys.argv:
-        peaks = read_peaks(os.path.join(REPO, 'project', sys.argv[sys.argv.index('--prune-from') + 1]))
+        i_ = sys.argv.index('--prune-from') + 1
+        if i_ >= len(sys.argv):
+            sys.exit('house_gi: --prune-from needs a .gi path')
+        peaks = read_peaks(os.path.join(REPO, 'project', sys.argv[i_]))
         dropped = 0
         for i, (name, b, layers) in enumerate(vols):
             pk_ = peaks.get(name)

@@ -639,7 +639,7 @@ def dress_walls(s, root, repo):
             continue
         # Every lamp casts shadows; the renderer gives the scene's 8 spot-shadow slots to the ones nearest the
         # view. Nothing they light moves but grass and fronds, so the map is baked once.
-        light = s.light('Lamp Light', lamp, (0.0, -0.12, 0.25), intensity=7.0, rng=9.0, kelvin=2100.0, spot=72.0,
+        s.light('Lamp Light', lamp, (0.0, -0.12, 0.25), intensity=7.0, rng=9.0, kelvin=2100.0, spot=72.0,
                         pitch=-65.0, shadows=True,
                         **(k.light_flicker(0, 3.0, 9.0, 0.8, 7) if (side, i) in FLICKER_LAMPS else {}))
     s.empty('Decal Grading', grp, (0.0, 0.0, 0.0), **{'Decal Grading': {'Age': 0.25, 'Wear': 0.3}})

@@ -10,7 +10,7 @@
 # of where it meets the floor or wall, and for wall pieces a view along the wall. --lights 1 turns every circuit on
 # (TARTARUS_LIGHTS_ON), 0 leaves them as they start; --only lights just those circuits (TARTARUS_LIGHTS_ONLY) and --walls
 # looks square onto each wall of the rooms picked: a dark room beside a lit one shows any light leaking through. Editor gizmos, grid and colliders are off and the view Shaded for
-# the run (the prefs are put back after). Contact sheets of 20 go to <out dir>/sheet_*.png with each shot's name.
+# the run (the prefs are put back after). Contact sheets of 30 go to <out dir>/sheet_*.png with each shot's name.
 import json
 import math
 import os
@@ -73,7 +73,7 @@ def piece_cams(inv, p, angles):
     return out
 
 
-def room_cams(inv, room):
+def room_cams(room):
     c = room['centre']
     floor = room['floor'] - 0.485
     out = [('mid', [c[0], floor + EYE, c[2]], [c[0] + 1.0, floor + EYE - 0.3, c[2]])]
@@ -83,7 +83,7 @@ def room_cams(inv, room):
     return out
 
 
-def wall_cams(inv, room):
+def wall_cams(room):
     """From the room's middle, one view square onto each of its four walls (leak checks)."""
     c = room['centre']
     y = room['floor'] - 0.485 + 1.4
@@ -176,10 +176,15 @@ def sheets_to(src, dst, names, stem, size):
 
 def main():
     a = sys.argv[1:]
-    inv = json.load(open(a[0], encoding='utf-8'))
+    if len(a) < 2:
+        sys.exit('usage: house_shots.py <inventory.json> <out dir> [options]')
+    with open(a[0], encoding='utf-8') as f:
+        inv = json.load(f)
     out = a[1]
 
     def opt(name, default=None, many=False):
+        if a and a[-1] == name:
+            sys.exit(f'house_shots: {name} needs a value')
         vals = [a[i + 1] for i in range(len(a) - 1) if a[i] == name]
         return vals if many else (vals[-1] if vals else default)
     rooms = opt('--room', many=True)
@@ -193,13 +198,13 @@ def main():
         for r in inv['rooms']:
             if rooms and r['name'] not in rooms:
                 continue
-            for tag, cam, tgt in room_cams(inv, r):
+            for tag, cam, tgt in room_cams(r):
                 cams.append((f'{safe(r["name"])}_{tag}', cam, *look(cam, tgt)))
     if '--walls' in a:
         for r in inv['rooms']:
             if rooms and r['name'] not in rooms:
                 continue
-            for tag, cam, tgt in wall_cams(inv, r):
+            for tag, cam, tgt in wall_cams(r):
                 cams.append((f'{safe(r["name"])}_{tag}', cam, *look(cam, tgt)))
     if '--pieces' in a or ids:
         for p in inv['pieces']:
