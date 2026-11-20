@@ -840,6 +840,7 @@ void GIVolumeLookup() {
 namespace {
 using json = nlohmann::json;
 using UnitTestSupport::TempDir;
+using UnitTestSupport::ReadAll;
 
 void TestCameraRoll() {
     auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-4f; };
