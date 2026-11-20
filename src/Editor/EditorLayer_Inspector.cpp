@@ -2450,12 +2450,20 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                     forEach([&](entt::entity e) { reinterpret_cast<std::string*>(fieldPtr(e))->clear(); });
                     CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
                 }
-                for (const std::string& a : AssetRefChoices(assets, f.AssetKind))
-                    // "##" + the full path: two assets with the same file name in different folders are distinct items
-                    if (ImGui::Selectable((std::filesystem::path(a).filename().string() + "##" + a).c_str(), !mixed && a == shared)) {
-                        StageUndo(world);
-                        forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = a; });
-                        CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                // Built once when the combo opens (only one combo is open at a time), not every frame,
+                // and only the visible rows are submitted: Forest lists thousands of textures.
+                if (ImGui::IsWindowAppearing()) m_AssetRefChoiceCache = AssetRefChoices(assets, f.AssetKind);
+                const std::vector<AssetRefChoice>& choices = m_AssetRefChoiceCache;
+                ImGuiListClipper clipper;
+                clipper.Begin((int)choices.size());
+                while (clipper.Step())
+                    for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                        const AssetRefChoice& a = choices[(size_t)i];
+                        if (ImGui::Selectable(a.Label.c_str(), !mixed && a.Path == shared)) {
+                            StageUndo(world);
+                            forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = a.Path; });
+                            CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                        }
                     }
                 ImGui::EndCombo();
             }

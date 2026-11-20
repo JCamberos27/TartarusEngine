@@ -1407,32 +1407,49 @@ std::string EditorLayer::NewAssetFolder(const std::string& fallback) const {
     return std::filesystem::is_directory(ProjectPaths::Resolve(f), ec) ? f : fallback;
 }
 
-std::vector<std::string> EditorLayer::AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind) {
-    std::vector<std::string> out;
+std::vector<EditorLayer::AssetRefChoice> EditorLayer::AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind) {
+    std::vector<std::string> paths;
     Cell::Kind cellKind;
     switch (kind) {
-        case ReflectAssetKind::Sound:    out = assets.Sounds(); cellKind = Cell::Kind::Sound; break;
-        case ReflectAssetKind::Texture:  out = assets.TexturePaths(); cellKind = Cell::Kind::Texture; break;
-        case ReflectAssetKind::Material: out = assets.MaterialPaths(); cellKind = Cell::Kind::Material; break;
+        case ReflectAssetKind::Sound:    paths = assets.Sounds(); cellKind = Cell::Kind::Sound; break;
+        case ReflectAssetKind::Texture:  paths = assets.TexturePaths(); cellKind = Cell::Kind::Texture; break;
+        case ReflectAssetKind::Material: paths = assets.MaterialPaths(); cellKind = Cell::Kind::Material; break;
         case ReflectAssetKind::Model:
-            for (const auto& m : assets.Models()) out.push_back(m->Path());
+            for (const auto& m : assets.Models()) paths.push_back(m->Path());
             cellKind = Cell::Kind::Model;
             break;
         case ReflectAssetKind::Script:   cellKind = Cell::Kind::Script; break;
         case ReflectAssetKind::Decal:    cellKind = Cell::Kind::Decal; break;
-        default: return out;
+        default: return {};
     }
     std::unordered_set<std::string> have;
-    for (const std::string& p : out) have.insert(AssetDatabase::PathKey(p));
+    for (const std::string& p : paths) have.insert(AssetDatabase::PathKey(p));
     RefreshProjectAssetIndexIfNeeded(assets);
     for (const auto& f : m_ProjectAssetIndex.files)
-        if (f.Kind == cellKind && have.insert(f.Key).second) out.push_back(f.Path);
-    auto lowerName = [](const std::string& p) {
-        std::string n = std::filesystem::path(p).filename().string();
-        for (char& c : n) c = (char)std::tolower((unsigned char)c);
-        return n;
-    };
-    std::sort(out.begin(), out.end(), [&](const std::string& a, const std::string& b) { return lowerName(a) < lowerName(b); });
+        if (f.Kind == cellKind && have.insert(f.Key).second) paths.push_back(f.Path);
+    // The lower-case file name is worked out once per entry (it was rebuilt twice per comparison),
+    // and the path breaks ties so same-named files keep a stable order.
+    struct Keyed { std::string Lower, Name; size_t Index; };
+    std::vector<Keyed> keyed;
+    keyed.reserve(paths.size());
+    for (size_t i = 0; i < paths.size(); ++i) {
+        std::string name = std::filesystem::path(paths[i]).filename().string();
+        std::string lower = name;
+        for (char& c : lower) c = (char)std::tolower((unsigned char)c);
+        keyed.push_back({std::move(lower), std::move(name), i});
+    }
+    std::sort(keyed.begin(), keyed.end(), [&](const Keyed& a, const Keyed& b) {
+        if (a.Lower != b.Lower) return a.Lower < b.Lower;
+        return paths[a.Index] < paths[b.Index];
+    });
+    std::vector<AssetRefChoice> out;
+    out.reserve(keyed.size());
+    for (Keyed& k : keyed) {
+        std::string label = std::move(k.Name);
+        label += "##";
+        label += paths[k.Index];
+        out.push_back({std::move(paths[k.Index]), std::move(label)});
+    }
     return out;
 }
 
