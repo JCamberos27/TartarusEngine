@@ -77,6 +77,21 @@ void ReportSunTris(const std::vector<DepthCaster>& draws, int cascadeCount) {
 // frame to one camera while both the Scene and Game views sampled them, so the other view had missing or blurry
 // shadows. In the default layout Scene and Game are tabs and only one renders per frame, so this costs nothing extra;
 // with both on screen the cascades render twice. A second view with the same matrices in the same frame reuses them.
+// RenderSun's steps share one pass: the world and lights, the cascade map and depth program, the profiler stage,
+// and what the fit decides (the frame, the cascades drawn this frame, each cascade's frustum and the PCF reach).
+struct ShadowFrame::SunPass {
+    World& world;
+    const FrameLights& fl;
+    CascadedShadowMap& map;
+    Shader& shader;
+    std::optional<Profiler::ScopeTimer>& stage;
+    std::uint64_t frame = 0;
+    unsigned renderMask = 0;
+    Frustum cells[CascadedShadowMap::kMaxCascades];
+    int cascadeCount = 0;
+    float kernelTexels = 0.0f;
+};
+
 bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitView, const glm::mat4& fitProj) {
     World& world = *in.world;
     const FrameLights& fl = *in.lights;
@@ -96,6 +111,32 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
     // Sub-scopes for the pass's CPU stages (fit + gather, sort + cascade masks, caster draws, grass).
     std::optional<Profiler::ScopeTimer> stage;
+    SunPass p{world, fl, shadowMap, shadowShader, stage};
+    GatherSunCasters(p, fitView, fitProj);
+    p.cascadeCount = shadowMap.Count();
+    p.kernelTexels = CascadedShadowMap::SunKernelTexels(fl.SunAngularDeg, fl.SunShadowSoftness);
+    DrawSunCasters(p);
+    DrawSunImpostors(p);
+    shadowMap.MarkRendered(p.renderMask, p.frame);
+    DrawSunGrass(p, fitView);
+
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    glCullFace(GL_BACK);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    GLStateCache::Invalidate();
+    m_LastSunFit = {in.frame, fitView, fitProj};
+    return true;
+}
+
+// The cascades fitted to the view (near planes reaching every occluder), the casters gathered once against them,
+// and sorted by model for the per-draw path.
+void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const glm::mat4& fitProj) {
+    World& world = p.world;
+    const FrameLights& fl = p.fl;
+    CascadedShadowMap& shadowMap = p.map;
+    std::optional<Profiler::ScopeTimer>& stage = p.stage;
     stage.emplace("Sun: Fit + Gather");
     // Gather the casters once - registry lookups, world transform, world bounds - and reuse the list for every cascade.
     m_SunCasters.clear();
@@ -106,9 +147,9 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     RenderableBounds(world, casterMin, casterMax);
     shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
     shadowMap.Update(fitView, fitProj, fl.SunDir, world.ShadowDistance, &casterMin, &casterMax);
-    const std::uint64_t frame = Time::FrameCount();
-    const unsigned renderMask = shadowMap.PlanRender(frame); // the far cascades on alternate frames
-    Frustum casterCells[CascadedShadowMap::kMaxCascades];
+    p.frame = Time::FrameCount();
+    p.renderMask = shadowMap.PlanRender(p.frame); // the far cascades on alternate frames
+    Frustum (&casterCells)[CascadedShadowMap::kMaxCascades] = p.cells;
     for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
     VisibilityQuery casts; // #163 - Cast Shadows: Off skips
     casts.ShadowCasters = true;
@@ -136,7 +177,17 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     stage.emplace("Sun: Sort + Masks");
     if (!MultiDrawEnabled())
         std::sort(m_SunCasters.begin(), m_SunCasters.end(), [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
+}
 
+// The casters into the cascades: one layered pass (each caster once, instanced over its cascades), or one pass per
+// cascade where layered rendering isn't supported.
+void ShadowFrame::DrawSunCasters(SunPass& p) {
+    const FrameLights& fl = p.fl;
+    CascadedShadowMap& shadowMap = p.map;
+    Shader& shadowShader = p.shader;
+    std::optional<Profiler::ScopeTimer>& stage = p.stage;
+    const unsigned renderMask = p.renderMask;
+    const Frustum (&casterCells)[CascadedShadowMap::kMaxCascades] = p.cells;
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
     // Store the LIGHT-FACING surface (back-face cull), matching the spot/point passes. Front-face culling stored a
@@ -151,10 +202,10 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     shadowShader.Bind();
     // #194: resolve this hot uniform location once, outside the cascade loop below.
     const int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
-    const int cascadeCount = shadowMap.Count();
+    const int cascadeCount = p.cascadeCount;
     // A caster goes into a cascade only if its shadow can land where that cascade is read
     // (CascadedShadowMap::CasterReachesSlice), with the PCF kernel SunShadow uses.
-    const float sunKernelTexels = CascadedShadowMap::SunKernelTexels(fl.SunAngularDeg, fl.SunShadowSoftness);
+    const float sunKernelTexels = p.kernelTexels;
     auto castsInto = [&](const SunCaster& sc, int c, const Frustum& cascadeFrustum) {
         if (!(renderMask & (1u << c))) return false; // held from last frame
         if (!sc.bounded) return true;
@@ -224,7 +275,17 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
             DrawDepthCasters(shadowShader, m_Draws);
         }
     }
+}
 
+void ShadowFrame::DrawSunImpostors(SunPass& p) {
+    World& world = p.world;
+    const FrameLights& fl = p.fl;
+    CascadedShadowMap& shadowMap = p.map;
+    Shader& shadowShader = p.shader;
+    const unsigned renderMask = p.renderMask;
+    const Frustum (&casterCells)[CascadedShadowMap::kMaxCascades] = p.cells;
+    const int cascadeCount = p.cascadeCount;
+    const float sunKernelTexels = p.kernelTexels;
     // Octahedral impostors (ImpostorRenderer): the trees ApplyLod put on theirs cast as the sun sees their frames.
     {
         glm::mat4 cascadeVP[CascadedShadowMap::kMaxCascades];
@@ -244,9 +305,15 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
         glDisable(GL_SCISSOR_TEST);
         shadowShader.Bind();
     }
+}
 
-    shadowMap.MarkRendered(renderMask, frame);
-
+void ShadowFrame::DrawSunGrass(SunPass& p, const glm::mat4& fitView) {
+    World& world = p.world;
+    CascadedShadowMap& shadowMap = p.map;
+    Shader& shadowShader = p.shader;
+    std::optional<Profiler::ScopeTimer>& stage = p.stage;
+    const unsigned renderMask = p.renderMask;
+    const int cascadeCount = p.cascadeCount;
     // Grass (GrassRenderer): its blades into the nearest cascades, scattered and culled against each cascade's own
     // box (thinned by distance from the view's eye, as the view sees them), so the field shades itself and the
     // ground under it. Farther out a blade is under a texel and its shadow is only noise.
@@ -270,15 +337,6 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
             shadowShader.Bind();
         }
     }
-
-    glDisable(GL_POLYGON_OFFSET_FILL);
-    glCullFace(GL_BACK);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
-    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
-    GLStateCache::Invalidate();
-    m_LastSunFit = {in.frame, fitView, fitProj};
-    return true;
 }
 
 // Drawn with the moving casters for this light, this frame: animated, moving, or settling before the light's turn
