@@ -1034,7 +1034,7 @@ private:
         decalSystem.BindForShading(); // valid (placeholder) arrays on units 22-25 before any preview draws
         if (world.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
         SceneRenderer::WarmShaderVariants(world);
-        SceneRenderer::WarmEffects();
+        SceneRenderer::WarmEffects(world);
         glUseProgram(0);
         GLStateCache::Invalidate();
     }
