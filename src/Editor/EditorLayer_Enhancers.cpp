@@ -57,6 +57,12 @@ bool IsAssetDrag(const ImGuiPayload& p) {
         if (p.IsDataType(type)) return true;
     return false;
 }
+// Inside a drop target: the asset key of an asset dropped this frame (any of kAssetPayloads), else null.
+const char* AcceptAssetDrop() {
+    for (const char* type : kAssetPayloads)
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) return (const char*)p->Data;
+    return nullptr;
+}
 } // namespace
 
 namespace {
@@ -1288,14 +1294,12 @@ void EditorLayer::DrawInspectorNavBar(World& world, InspectorNavAction& act) {
                 us.MarkDirty();
             }
         }
-        for (const char* type : kAssetPayloads) {
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                if (!key.empty()) {
-                    Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)),
-                                         Enhancers::EnhancerUserState::kMaxBookmarks);
-                    us.MarkDirty();
-                }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            if (!key.empty()) {
+                Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)),
+                                     Enhancers::EnhancerUserState::kMaxBookmarks);
+                us.MarkDirty();
             }
         }
         ImGui::EndDragDropTarget();
@@ -1446,14 +1450,13 @@ void EditorLayer::DrawInspectorHeaderNav(World& world, InspectorNavAction& act, 
                 us.MarkDirty();
             }
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                if (!key.empty()) {
-                    Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)), Enhancers::EnhancerUserState::kMaxBookmarks);
-                    us.MarkDirty();
-                }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            if (!key.empty()) {
+                Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)), Enhancers::EnhancerUserState::kMaxBookmarks);
+                us.MarkDirty();
             }
+        }
         ImGui::EndDragDropTarget();
     }
 
@@ -2043,11 +2046,10 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
             strip.Open(Enhancers::EditorRef::MakeComponent(sceneKey, c->Order, c->Component, nm ? nm->Name : std::string()));
             ts.MarkDirty();
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                if (!key.empty()) { strip.Open(Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key))); ts.MarkDirty(); }
-            }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            if (!key.empty()) { strip.Open(Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key))); ts.MarkDirty(); }
+        }
     };
     DrawTabStrip("##inspTabs", strip, m_InspectorTabView, items, "Selection", ICON_FA_ARROW_POINTER, plusMenu, acceptDrop, dragging,
                  leftInset, rightInset);
@@ -2129,16 +2131,15 @@ bool EditorLayer::DrawAssetTabStrip(AssetLibrary& assets, float rightInset, bool
             strip.Open(folderRef((const char*)p->Data), true, true);
             ts.MarkDirty();
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                // A file opens its folder in a new tab, with the file selected.
-                const std::string key((const char*)p->Data);
-                strip.Open(folderRef(assets.AssetFolder(key)), true, true);
-                ts.MarkDirty();
-                ClearAssetSelection();
-                m_SelectedAssetKey = key;
-                m_SelectedAssetIsFolder = false;
-            }
+        if (const char* dropped = AcceptAssetDrop()) {
+            // A file opens its folder in a new tab, with the file selected.
+            const std::string key(dropped);
+            strip.Open(folderRef(assets.AssetFolder(key)), true, true);
+            ts.MarkDirty();
+            ClearAssetSelection();
+            m_SelectedAssetKey = key;
+            m_SelectedAssetIsFolder = false;
+        }
     };
     // With no tabs yet (the row is up for the bookmark button), the current folder shows as a live
     // tab, like a browser's first tab; Ctrl+T or "+" makes it a real one.
@@ -2761,11 +2762,10 @@ void EditorLayer::AcceptFavoritesDrop(World& world, FavoritesFrame& f) {
             const std::string path((const char*)p->Data);
             added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeFolder(path, FolderLeaf(path)));
         }
-        for (const char* type : kAssetPayloads)
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
-                const std::string key((const char*)p->Data);
-                added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)));
-            }
+        if (const char* dropped = AcceptAssetDrop()) {
+            const std::string key(dropped);
+            added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)));
+        }
         if (added) us.MarkDirty();
         ImGui::EndDragDropTarget();
     }
