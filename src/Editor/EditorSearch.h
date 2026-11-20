@@ -6,12 +6,13 @@
 #include <cctype>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace EditorSearch {
 
 // Case-insensitive substring match; an empty filter matches everything. No allocation.
-inline bool MatchesFilter(const std::string& filter, const std::string& text) {
+inline bool MatchesFilter(std::string_view filter, std::string_view text) {
     if (filter.empty()) return true;
     const auto eq = [](char a, char b) { return std::tolower((unsigned char)a) == std::tolower((unsigned char)b); };
     return std::search(text.begin(), text.end(), filter.begin(), filter.end(), eq) != text.end();

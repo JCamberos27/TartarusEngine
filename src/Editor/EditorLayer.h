@@ -2313,6 +2313,20 @@ private:
     // The flattened rows and the per-row ancestor chain used to be fresh vectors every frame
     // (one heap allocation per visible row for the chain); both are reused now.
     std::vector<HierarchyFlatRow> m_HierFlatRows;
+    // What m_HierFlatRows was flattened from (DrawHierarchyTreeBody keeps it while this matches).
+    struct HierarchyFlatKey {
+        const World* Owner = nullptr;
+        ImGuiID Window = 0;
+        std::uint64_t Order = 0, Hierarchy = 0, Open = 0;
+        entt::entity Renaming = entt::null;
+        bool Valid = false;
+        bool operator==(const HierarchyFlatKey& o) const {
+            return Owner == o.Owner && Window == o.Window && Order == o.Order && Hierarchy == o.Hierarchy &&
+                   Open == o.Open && Renaming == o.Renaming && Valid == o.Valid;
+        }
+    };
+    HierarchyFlatKey m_HierFlatKey;
+    std::uint64_t m_HierOpenGen = 0; // bumped by every write of a Hierarchy row's open/closed flag
     std::vector<entt::entity> m_HierRootScratch; // DrawHierarchyTreeBody's top-level rows, reused
     std::vector<entt::entity> m_HierChainScratch;
     // Every named entity in creation order (OrderComponent, entity handle as the tiebreak) - the
@@ -2326,6 +2340,7 @@ private:
         std::vector<entt::entity> Sorted;
         std::vector<int> Ordinal; // by entt::to_entity(e): 1-based position in Sorted, 0 = none
         int CheckedFrame = -1;    // HierarchyCreationOrdinal re-checks the pairs once per ImGui frame
+        std::uint64_t Generation = 0; // changes whenever Sorted is rebuilt
     };
     mutable HierarchyOrderCache m_HierOrder;
     const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
