@@ -144,9 +144,9 @@ def main():
                 n += 1
                 adsp.take_uses()
                 y = adsp.cut(x, a, len(x) if "dur" not in v else a + int(v["dur"] * SR))
-                y = adsp.fade(y, int(0.0008 * SR), int(0.12 * SR))
-                uses = adsp.take_uses()
-                emit(f"Impacts/{mat}_{n}.wav", post(y, v), f"snd.impact.{mat}", "impact",
+                y = post(adsp.fade(y, int(0.0008 * SR), int(0.12 * SR)), v)
+                uses = adsp.take_uses()                  # after post(): its pitch belongs in the provenance
+                emit(f"Impacts/{mat}_{n}.wav", y, f"snd.impact.{mat}", "impact",
                      {"material": mat, "variant": n, "anchor_ms": 0.0, "proxy": bool(m.get("proxy")),
                       "source": f"{os.path.basename(adsp.resolve_sonniss(spec['src']))} {json.dumps(v)}"}, uses)
     n = 0
@@ -156,8 +156,8 @@ def main():
             n += 1
             adsp.take_uses()
             y = adsp.fade(adsp.cut(x, 0, len(x)), int(0.003 * SR), int(0.1 * SR))
-            uses = adsp.take_uses()
             y = post(y, v)
+            uses = adsp.take_uses()                      # after post(): its pitch belongs in the provenance
             if cfg["flyby"].get("remove_tones"):              # the whine riding on the whoosh (user: "a high pitch that sounds goofy")
                 y = adsp.detone(y)
             emit(f"Impacts/flyby_{n}.wav", y, "snd.flyby", "flyby",

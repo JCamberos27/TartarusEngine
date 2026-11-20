@@ -19,7 +19,7 @@ variant's transient lands on the contact frame.
 
 snd.<gun>.fire is not placed on the Fire state: shots play from the round (WeaponAudio::Shot expands it to the fire_* layers),
 so hip and ADS fire sound the same. Every other event and field of a controller is left alone; the old snd.* events are
-replaced everywhere. Files keep their formatting (indent 2, sorted keys, CRLF / trailing newline as found).
+replaced everywhere. Files keep their formatting (indent 2, their own key order, CRLF / trailing newline as found).
 """
 import argparse
 import json
@@ -40,7 +40,7 @@ def load_controller(path):
 
 
 def dump_controller(data, crlf, trailing):
-    text = json.dumps(data, indent=2, sort_keys=True)
+    text = json.dumps(data, indent=2)               # the file's own key order (the editor writes it unsorted)
     if trailing:
         text += "\n"
     if crlf:

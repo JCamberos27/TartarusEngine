@@ -265,10 +265,11 @@ void RegisterCurvesTests() {
         EditInWindow([](Ctx&) { return RecoilCurve(); }, "recoil"),
         {CloseCurveWindows(), Wait(2),
          ExpectTrue("the window closed", [](Ctx&) { return CurveWindowCount() == 0; }),
-         Do("deselect and delete the scratch profile", [](Ctx& c) {
-             X::Deselect(c.E);
-             std::error_code ec;
-             fs::remove_all(fs::u8path(ScratchDir()), ec);
-         }), Wait(2)},
-    }));
+         Wait(2)},
+    }), [](Ctx& c) {
+        // Pass or fail: drop the selection and the scratch profile (project/editor-smoke-scratch-curves).
+        X::Deselect(c.E);
+        std::error_code ec;
+        fs::remove_all(fs::u8path(ScratchDir()), ec);
+    });
 }

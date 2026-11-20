@@ -38,14 +38,13 @@ def finish(x, layer, ceiling_db=None, max_gr_db=None, trim_edges=True, target=No
         x = adsp.remove_dc(x)
     if trim_edges and not loop:                        # a click-free start; an end that dies away, never a hard stop
         x = adsp.fade(x, int(0.0008 * adsp.SR), int(min(0.06, 0.2 * len(x) / adsp.SR) * adsp.SR))
-    _, m = adsp.lufs(x)
-    g0 = tgt - m
+    g0 = tgt - adsp.lufs_m(x)
     g = g0
-    y = adsp.gain_db(x, g)
     for _ in range(6):                                  # limiter-aware loudness loop: measure what we actually ship
-        y = adsp.limit(adsp.gain_db(x, g), ceiling) if adsp.true_peak_db(adsp.gain_db(x, g)) > ceiling \
-            else adsp.gain_db(x, g)
-        err = tgt - adsp.lufs(y)[1]
+        y = adsp.gain_db(x, g)
+        if adsp.true_peak_db(y) > ceiling:
+            y = adsp.limit(y, ceiling)
+        err = tgt - adsp.lufs_m(y)
         if abs(err) < 0.2:
             break
         g = min(g + err, g0 + max_gr_db)                # never let the limiter do more than max_gr_db of the work

@@ -51,6 +51,11 @@ const std::vector<float>* AssetWaveformCache::Get(const std::string& path) {
     return nullptr;
 }
 
+const std::vector<float>* AssetWaveformCache::Peek(const std::string& path) {
+    const Entry* e = m_Entries.Peek(path);
+    return e && !e->Pending ? &e->Peaks : nullptr;
+}
+
 void AssetWaveformCache::Pump() {
     std::vector<Result> done;
     {

@@ -15,7 +15,7 @@
 #
 # Usage: python tools/quantum/audit_quantum_assets.py [--csv out.csv] [--clothing-max 2048] [--body-max 4096]
 # Exit code: 0 clean, 1 problems found.
-import argparse, collections, glob, json, os, re, struct, sys
+import argparse, collections, csv, glob, json, os, re, struct, sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 PROJECT = os.path.join(REPO, 'project')
@@ -113,7 +113,7 @@ def vram(t, used_as_normal=False):
         w, h = max(1, w // 2), max(1, h // 2)
     ctype = t['ctype']
     if t['comp'] == COMP_NONE:
-        bpp = 4.0  # RGBA8 (Texture uploads 3/1-channel sources as RGB8/R8 too, but pads rows; close enough)
+        # RGBA8 (Texture uploads 3/1-channel sources as RGB8/R8 too, but pads rows; close enough)
         bpp = {0: 1.0, 4: 2.0, 2: 3.0}.get(ctype, 4.0)
     elif used_as_normal or t['type'] == TYPE_NORMAL:
         bpp = 1.0  # BC5
@@ -212,7 +212,7 @@ for t in textures:
 for r, t in textures.items():
     want = args.clothing_max if '/Textures/Clothing/' in r else args.body_max
     if want and t['max'] != want:
-        problems[f'maxTextureSize not the expected cap'].append(f'{r}: {t["max"]} (want {want})')
+        problems['maxTextureSize not the expected cap'].append(f'{r}: {t["max"]} (want {want})')
 
 # ---- VRAM -----------------------------------------------------------------------------------------------
 normal_used = {v for slots in materials.values() for s, v in slots.items() if s == '_NormalMap'}
@@ -250,10 +250,10 @@ for kind in sorted(problems):
     if len(items) > 15:
         print(f'    ... {len(items) - 15} more')
 if args.csv:
-    with open(args.csv, 'w', encoding='utf-8') as f:
-        f.write('kind,detail\n')
+    with open(args.csv, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f, lineterminator='\n')       # quotes details that hold commas or quotes
+        w.writerow(['kind', 'detail'])
         for kind, items in sorted(problems.items()):
-            for it in items:
-                f.write(f'"{kind}","{it}"\n')
+            w.writerows([kind, it] for it in items)
 print(f'[QuantumAudit] {bad} problem(s)')
 sys.exit(1 if bad else 0)

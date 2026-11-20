@@ -24,7 +24,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SPEC_PATH = os.path.join(HERE, "recipes", "mix.json")
 SPEC = json.load(open(SPEC_PATH))
 SHOT_LAYERS = ("close", "sub", "mech")
-SPACES = ("indoor_small", "indoor_large", "outdoor_urban", "outdoor_open")
 TOLERANCE_DB = 0.1
 PEAK_CAP_DB = -0.5        # a file's true peak + its mix_db (before the engine's Player Gain) never passes this
 REFERENCE_GUNS = ("ak", "870")            # the 0 dB shot is measured over these only: a new gun never moves the rest of the mix
@@ -71,6 +70,9 @@ def classify(e):
     m = re.fullmatch(r"snd\.foley\.door\.(\w+)", key)
     if m and m.group(1) in L["door"]:
         return "door", L["door"][m.group(1)], "played"
+    m = re.fullmatch(r"snd\.foley\.spider\.(\w+)", key)          # parked set (check_audio PARKED): keeps its shipped mix_db
+    if m and m.group(1) in L["spider"]:
+        return "spider", L["spider"][m.group(1)], "played"
     m = re.fullmatch(r"snd\.foley\.weapon\.(\w+)", key)
     if m and m.group(1) in L["gear"]:
         return "gear", L["gear"][m.group(1)], "played"

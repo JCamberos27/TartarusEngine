@@ -135,7 +135,7 @@ class Importer:
                 if not r.repo_path.startswith(QUANTUM + "/"):
                     self.problems.append(f"repo path outside the pack: {r.repo_path}")
                 if "/textures/clothing/hats/" in r.repo_path.casefold():
-                    self.problems.append(f"repo path in the excluded Hats folder (.gitignore:81): {r.repo_path}")
+                    self.problems.append(f"repo path in the excluded Hats folder (.gitignore:82): {r.repo_path}")
                 if not common.export_abs(r.source_file).exists():
                     self.problems.append(f"export file missing: {r.source_file}")
             if "UNCLASSIFIED" in r.notes:
@@ -200,11 +200,8 @@ class Importer:
                 self.problems.append(f"{r.repo_path}: {p}")
             remap = {}
             fallback_mi = inferred_material(r)
-            seen_slots: set[str] = set()
-            for i, s in enumerate(slots):
+            for i, (key, s) in enumerate(zip(metas.slot_keys(slots), slots)):   # the keys match_slots used
                 slot = s.get("slot", "") or f"slot{i}"
-                key = f"{slot}#{i}" if slot in seen_slots else slot      # match_slots keys repeats '<slot>#<i>'
-                seen_slots.add(slot)
                 fbx_name = pairs.get(key)
                 if not fbx_name:
                     continue                                    # slot without geometry: nothing to remap

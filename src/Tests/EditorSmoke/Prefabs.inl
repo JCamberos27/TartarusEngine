@@ -74,13 +74,13 @@ Step Fresh() {
         HX::ClearFilter(c.E);
     });
 }
-Step Cleanup() {
-    return Do("delete the scratch prefab", [](Ctx& c) {
-        PF::Leave(c.E, c.W, c.A);
-        c.A.RemovePrefab(PrefabPath());
-        RemoveScratchDir();
-        SceneSerializer::ClearPrefabPristineCache();
-    });
+// Every prefab test ends here, passed or failed (its Finally): a failed test used to leave prefab mode
+// open and project/editor-smoke-scratch on disk.
+void Cleanup(Ctx& c) {
+    PF::Leave(c.E, c.W, c.A);
+    c.A.RemovePrefab(PrefabPath());
+    RemoveScratchDir();
+    SceneSerializer::ClearPrefabPristineCache();
 }
 // The test prefab, built in a World of its own: "Crate" (root) with a child "Crate Lamp", a
 // Light of intensity 2 one metre up.
@@ -222,8 +222,7 @@ void RegisterPrefabsTests() {
             const entt::entity r = ByName(c.W, "Beta Copy");
             return r != entt::null && c.W.Registry.all_of<PrefabInstanceComponent>(r);
         }),
-        Cleanup(),
-    });
+    }, Cleanup);
 
     Add("prefabs: Open Prefab shows the prefab mode bar; edit, Ctrl+S, Save, Back to Scene; every instance updates", {
         Fresh(), FreshScene(), HierFresh(), MakePrefab(), Wait(2),
@@ -300,8 +299,7 @@ void RegisterPrefabsTests() {
             return PA::UndoLabels(c.E) == g_Undo ? std::string() : "was [" + g_Undo + "], now [" + PA::UndoLabels(c.E) + "]";
         }),
         Shot("back in the scene", {kScene, kHierarchy}),
-        Cleanup(),
-    });
+    }, Cleanup);
 
     Add("prefabs: an Inspector override shows; Revert to Prefab restores it; undo, undo", {
         Fresh(), FreshScene(), HierFresh(), MakePrefab(), Wait(2),
@@ -340,8 +338,7 @@ void RegisterPrefabsTests() {
         ExpectTrue("and it shows as one", [](Ctx& c) { return Overridden(c, "Crate A"); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectDump("undo again removes the edit", &g_Before),
-        Cleanup(),
-    });
+    }, Cleanup);
 
     Add("prefabs: Apply to Prefab writes the file, clears the override, and other instances pick it up", {
         Fresh(), FreshScene(), HierFresh(), MakePrefab(), Wait(2),
@@ -395,8 +392,7 @@ void RegisterPrefabsTests() {
         Expect("the history is back to before Apply", [](Ctx& c) {
             return PA::UndoLabels(c.E) == g_Undo ? std::string() : "was [" + g_Undo + "], now [" + PA::UndoLabels(c.E) + "]";
         }),
-        Cleanup(),
-    });
+    }, Cleanup);
 
     Add("prefabs: Select Prefab Root and Unpack Prefab Instance from the Hierarchy menu; undo each", {
         Fresh(), FreshScene(), HierFresh(), MakePrefab(), Wait(2),
@@ -445,6 +441,5 @@ void RegisterPrefabsTests() {
         ExpectTrue("an instance again", [](Ctx& c) { return c.W.Registry.all_of<PrefabInstanceComponent>(ByName(c.W, "Crate A")); }),
         Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
         ExpectDump("redo unpacks again", &g_After),
-        Cleanup(),
-    });
+    }, Cleanup);
 }

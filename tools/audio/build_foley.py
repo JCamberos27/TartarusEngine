@@ -211,7 +211,9 @@ def land_heavy(v):
 def main():
     cfg = json.load(open(os.path.join(abuild.HERE, "recipes", "foley.json")))
     entries = []
-    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv[:-1] else None
+    if only not in (None, "barefoot", "generic"):
+        sys.exit(f"unknown --only {only!r} (barefoot or generic)")
     if only == "barefoot":
         build_steps(cfg, entries, "barefoot")
         print("manifest files:", abuild.update_manifest(entries, ["Foley/barefoot_"]))

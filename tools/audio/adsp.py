@@ -4,6 +4,7 @@ All audio is float32 (n, 2) at 48 kHz inside the tools; mono assets are written 
 """
 import math
 import os
+import sys
 
 import numpy as np
 import soundfile as sf
@@ -111,7 +112,7 @@ def to_mono(x):
     return x.mean(axis=1) if x.ndim == 2 else x
 
 
-def write_wav(path, x, mono=False, dither_seed=0):
+def write_wav(path, x, mono=False):
     """16-bit PCM, plain rounding (no dither: nothing is generated, not even noise). mono=True writes 1 channel."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     y = to_mono(x)[:, None] if mono else x
@@ -139,16 +140,24 @@ def lufs(x):
         y = np.concatenate([y, np.zeros((n - len(y), y.shape[1]), np.float32)])
     try:
         integ = float(meter.integrated_loudness(y.astype(np.float64)))
-    except Exception:
+    except Exception as e:                              # report it: -120 would otherwise land in the manifest unexplained
+        print(f"warning: integrated loudness failed ({e!r}); lufs_i = -120", file=sys.stderr)
         integ = -120.0
-    # momentary max: K-weighted mean square over a sliding 400 ms window, 100 ms hop
-    kw = _k_weight(y)
+    return integ, lufs_m(y)
+
+
+def lufs_m(x):
+    """Max momentary loudness (LUFS-M): K-weighted mean square over a sliding 400 ms window, 100 ms hop; zero padded to one
+    block. The [1] of lufs() without its integrated measure (abuild.finish's loudness loop only needs this)."""
+    y = x if x.ndim == 2 else x[:, None]
     win, hop = int(0.4 * SR), int(0.1 * SR)
-    best = -120.0
-    for s in range(0, max(1, len(kw) - win + 1), hop):
-        ms = float(np.mean(np.sum(kw[s:s + win] ** 2, axis=1) if kw.shape[1] > 1 else kw[s:s + win] ** 2))
-        best = max(best, -0.691 + 10 * math.log10(max(ms, 1e-12)))
-    return integ, best
+    if len(y) < win + 1:
+        y = np.concatenate([y, np.zeros((win + 1 - len(y), y.shape[1]), np.float32)])
+    e = np.sum(_k_weight(y).astype(np.float64) ** 2, axis=1)
+    c = np.concatenate([[0.0], np.cumsum(e)])
+    starts = np.arange(0, max(1, len(e) - win + 1), hop)
+    ms = (c[starts + win] - c[starts]) / win
+    return float(-0.691 + 10 * np.log10(max(float(ms.max()), 1e-12)))
 
 
 def loudness_short(x, win_s=0.1, hop_s=0.025):
@@ -234,7 +243,7 @@ def anchor_ms(x, frac=0.5, hp=250.0):
     return float(int(np.argmax(h >= frac * h.max())) * 1000.0 / SR)
 
 
-def fade(x, n_in=0, n_out=0, curve="cos"):
+def fade(x, n_in=0, n_out=0):
     x = np.array(x, dtype=np.float32)
     if n_in > 0:
         n_in = min(n_in, len(x))

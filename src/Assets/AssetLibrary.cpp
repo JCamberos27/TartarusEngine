@@ -137,6 +137,10 @@ void RekeyMap(Map& m, const std::string& oldPath, const std::string& newPath) {
 void RenameInList(std::vector<std::string>& v, const std::string& oldPath, const std::string& newPath) {
     for (std::string& s : v) if (SamePath(s, oldPath)) s = newPath;
 }
+void RenameInSet(std::set<std::string>& s, const std::string& oldPath, const std::string& newPath) {
+    for (auto it = s.begin(); it != s.end(); ++it)
+        if (SamePath(*it, oldPath)) { s.erase(it); s.insert(newPath); return; }
+}
 } // namespace
 
 // The entry of `cache` for `path` under any spelling of it (slashes, case), or end(). `index`
@@ -976,6 +980,20 @@ bool AssetLibrary::RenamePath(const std::string& oldPath, const std::string& new
     RenameInList(m_MaterialPaths, oldPath, newPath);
     RenameInList(m_Sounds, oldPath, newPath);
     RenameInList(m_Prefabs, oldPath, newPath);
+    // Side caches keyed by path: a renamed clip source keeps its import, a model keeps its remap, and a scene
+    // asset stays eligible for ReleaseUnreferenced under its new key.
+    RekeyMap(m_ClipSourceCache, oldPath, AssetDatabase::PathKey(newPath));
+    if (auto it = m_ClipSourceCache.find(AssetDatabase::PathKey(newPath)); it != m_ClipSourceCache.end() && it->second)
+        it->second->SetPath(newPath);
+    RekeyMap(m_MaterialRemap, oldPath, AssetDatabase::PathKey(newPath));
+    for (auto it = m_MaterialRemap.begin(); it != m_MaterialRemap.end();) { // a renamed .mat: re-read those remaps from the .meta
+        bool uses = false;
+        for (const auto& [slot, mat] : it->second) uses = uses || SamePath(mat, oldPath);
+        it = uses ? m_MaterialRemap.erase(it) : std::next(it);
+    }
+    RenameInSet(m_SceneKeys.Models, oldPath, newPath);
+    RenameInSet(m_SceneKeys.Materials, oldPath, newPath);
+    RenameInSet(m_SceneKeys.Textures, oldPath, newPath);
     // A material's stored map paths come from its Texture objects, which now carry the new path.
     if (textureMoved)
         for (auto& mat : m_MaterialList) if (mat) mat->SyncTexturePathsFromMat();
@@ -1001,6 +1019,10 @@ int AssetLibrary::ForgetRemoved(const std::string& path) {
     for (const std::string& s : std::vector<std::string>(m_Sounds)) if (gone(s)) { RemoveSound(s); ++count; }
     for (const std::string& s : std::vector<std::string>(m_Prefabs)) if (gone(s)) { RemovePrefab(s); ++count; }
     for (auto it = m_ShaderCache.begin(); it != m_ShaderCache.end();) it = gone(it->first) ? m_ShaderCache.erase(it) : std::next(it);
+    for (auto it = m_ClipSourceCache.begin(); it != m_ClipSourceCache.end();) it = gone(it->first) ? m_ClipSourceCache.erase(it) : std::next(it);
+    for (auto it = m_MaterialRemap.begin(); it != m_MaterialRemap.end();) it = gone(it->first) ? m_MaterialRemap.erase(it) : std::next(it);
+    for (std::set<std::string>* keys : {&m_SceneKeys.Models, &m_SceneKeys.Materials, &m_SceneKeys.Textures})
+        for (auto it = keys->begin(); it != keys->end();) it = gone(*it) ? keys->erase(it) : std::next(it);
     return count;
 }
 
@@ -1089,7 +1111,7 @@ AssetLibrary::MaterialExtraction AssetLibrary::ExtractModelMaterials(const std::
     return result;
 }
 
-std::map<std::string, std::string> AssetLibrary::MaterialRemap(const std::string& modelPath) const {
+const std::map<std::string, std::string>& AssetLibrary::MaterialRemap(const std::string& modelPath) const {
     const std::string key = AssetDatabase::PathKey(modelPath);
     auto it = m_MaterialRemap.find(key);
     if (it != m_MaterialRemap.end()) return it->second;
@@ -1100,8 +1122,7 @@ std::map<std::string, std::string> AssetLibrary::MaterialRemap(const std::string
             for (const auto& [name, v] : j["materialRemap"].items())
                 if (v.is_string() && !v.get<std::string>().empty()) remap[name] = v.get<std::string>();
     } catch (...) { WarnBadMeta(modelPath); }
-    m_MaterialRemap[key] = remap;
-    return remap;
+    return m_MaterialRemap[key] = std::move(remap);
 }
 
 void AssetLibrary::SetMaterialRemap(const std::string& modelPath, const std::string& materialName,
@@ -1115,7 +1136,7 @@ void AssetLibrary::SetMaterialRemap(const std::string& modelPath, const std::str
 }
 
 int AssetLibrary::ApplyMaterialRemap(const Model& model, std::vector<std::shared_ptr<MaterialAsset>>& slots) {
-    const auto remap = MaterialRemap(model.Path());
+    const auto& remap = MaterialRemap(model.Path()); // no copy: called per placed model (22k on Forest)
     if (remap.empty()) return 0;
     int filled = 0;
     for (int i = 0; i < model.MeshCount(); ++i) {
