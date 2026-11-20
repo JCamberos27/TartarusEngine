@@ -102,7 +102,8 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
     if (!includeAssetMetadata) return; // scene file: per-asset data lives in .meta (#121)
 
     root["assetFolders"] = assets.Folders();
-    root["removedDiskFolders"] = assets.RemovedDiskFolders(); // folders Delete Folder took out, files still on disk
+    // Folders Delete Folder took out whose files are still on disk; only when there are any (same bytes otherwise).
+    if (!assets.RemovedDiskFolders().empty()) root["removedDiskFolders"] = assets.RemovedDiskFolders();
 
     root["assetMeta"] = BuildAssetMetaJson(assets);
 }
@@ -268,10 +269,12 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
     }
     // After the folders (CreateFolder clears marks): an undo snapshot's marks are the library's again, so a redo of
     // Delete Folder keeps the folder out of the browser while its files are on disk, and an undo lists it again.
-    if (fromUndoSnapshot && root.contains("removedDiskFolders") && root["removedDiskFolders"].is_array()) {
+    // A snapshot without the key had none.
+    if (fromUndoSnapshot && root.contains("assetFolders")) {
         std::vector<std::string> marks;
-        for (const auto& f : root["removedDiskFolders"])
-            if (f.is_string()) marks.push_back(f.get<std::string>());
+        if (auto it = root.find("removedDiskFolders"); it != root.end() && it->is_array())
+            for (const auto& f : *it)
+                if (f.is_string()) marks.push_back(f.get<std::string>());
         assets.SetRemovedDiskFolders(std::move(marks));
     }
 }
