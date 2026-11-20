@@ -1373,6 +1373,29 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
 
 // --- Viewport HUDs ------------------------------------------------------------------------------
 
+// One frame of the Scene view's Glass HUDs: where they sit, their shared metrics, and the frosted
+// plates drawn this frame (blurred and UV-mapped at the end by FinishGlassFrostedBlur).
+struct EditorLayer::GlassHud {
+    const EditorSettings& Prefs;
+    GlassEditorState& State;
+    ImVec2 VMin, VMax;
+    ImDrawList* Dl;
+    float Margin, Pad, Radius, LineH;
+    Glass::ImAnimContext& Motion;
+    entt::registry& Reg;
+    float Right;
+    float StackBottom; // the stats pill sits above whatever is in this corner
+    int SceneW, SceneH;
+    unsigned int BlurTarget;
+    ImTextureID Blur;
+    // A frosted plate: drawn with the blurred texture and remembered for its UVs.
+    void Frosted(ImDrawList* d, ImVec2 mn, ImVec2 mx, float rad, float alpha) {
+        int vtx[2];
+        Glass::DrawFrostedPlate(d, mn, mx, rad, Blur, VMin, VMax, alpha, vtx);
+        if (vtx[1] > vtx[0]) State.FrostedPlates.push_back({vtx[0], vtx[1], mn, mx});
+    }
+};
+
 void EditorLayer::DrawGlassViewportOverlays(World& world) {
     if (!GlassThemeActive() || OverlaysHidden()) return;
     const EditorSettings& prefs = EditorSettings::Get();
@@ -1392,13 +1415,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
     const unsigned int blurTarget = prefs.GlassFrostedBlur && m_SceneColorTexture != 0
                                         ? g.Backdrop.Reserve(sceneW, sceneH, Glass::GlassBlurLevels) : 0u;
     const ImTextureID blur = (ImTextureID)(intptr_t)blurTarget;
-    auto frosted = [&](ImDrawList* d, ImVec2 mn, ImVec2 mx, float rad, float alpha) {
-        int vtx[2];
-        Glass::DrawFrostedPlate(d, mn, mx, rad, blur, vMin, vMax, alpha, vtx);
-        if (vtx[1] > vtx[0]) g.FrostedPlates.push_back({vtx[0], vtx[1], mn, mx});
-    };
 
-    ImDrawList* dl = ImGui::GetWindowDrawList();
     // The HUDs are placed with SetCursorScreenPos and reserve their rects as items (so they're
     // hit-tested and block viewport picking). Snapshot the window's layout cursor and restore it
     // exactly at the end, so they leave no trace in the Scene window's layout or content size.
@@ -1414,68 +1431,103 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
     const LayoutCursor savedLayout{dc0.CursorPos, dc0.CursorPosPrevLine, dc0.CursorMaxPos, dc0.IdealMaxPos,
                                    dc0.CurrLineSize, dc0.PrevLineSize, dc0.CurrLineTextBaseOffset,
                                    dc0.PrevLineTextBaseOffset, dc0.IsSameLine, dc0.IsSetPos};
-    const float margin = Glass::Px(Glass::Space2);
-    const float pad = Glass::Px(Glass::Space1h);
-    const float radius = Glass::Px(Glass::GlassRadius); // floating surfaces: 14 px
-    const float lineH = ImGui::GetTextLineHeight();
-    Glass::ImAnimContext& motion = Glass::Motion();
-    auto& reg = world.Registry;
+    GlassHud h{prefs, g, vMin, vMax, ImGui::GetWindowDrawList(), Glass::Px(Glass::Space2), Glass::Px(Glass::Space1h),
+               Glass::Px(Glass::GlassRadius) /* floating surfaces: 14 px */, ImGui::GetTextLineHeight(), Glass::Motion(),
+               world.Registry, vMax.x - Glass::Px(Glass::Space2), vMax.y - Glass::Px(Glass::Space2), sceneW, sceneH,
+               blurTarget, blur};
+    DrawGlassSelectionCard(world, h);
+    DrawGlassStatsPill(h);
+    DrawGlassToasts(h);
+    DrawGlassSnapRing(h);
+    FinishGlassFrostedBlur(h);
 
-    // --- Selection card, bottom-right --------------------------------------------------------------
-    float stackBottom = vMax.y - margin; // the stats pill sits above whatever is in this corner
-    const float right = vMax.x - margin;
-    {
-        const bool has = reg.valid(m_Selected);
-        const ImGuiID presentId = ImGui::GetID("##hudSelPresent");
-        const bool was = g.HudWasShown;
-        g.HudWasShown = has;
-        if (has) g.HudEntity = m_Selected;
-        const entt::entity shown = has ? m_Selected : g.HudEntity; // fading out: the last selection
-        const float t = motion.AnimateToggle(presentId, has, was, Glass::RevealOpen, Glass::RevealClose);
-        if (!has && t <= 0.0f) g.HudEntity = entt::null;
-        if (t > 0.0f && reg.valid(shown)) {
-            const auto* nm = reg.try_get<NameComponent>(shown);
-            const std::string name = nm && !nm->Name.empty() ? nm->Name : "Object " + std::to_string(HierarchyCreationOrdinal(world, shown));
-            const auto* tf = reg.try_get<TransformComponent>(shown);
-            const float w = Glass::Px(260.0f);
-            const float h = pad * 2.0f + lineH * 2.0f + Glass::Px(Glass::SpaceHalf) + (tf ? lineH + Glass::Px(Glass::SpaceHalf) : 0.0f);
-            const ImRect rest(ImVec2(right - w, vMax.y - margin - h), ImVec2(right, vMax.y - margin));
-            const ImRect drawn = Scaled(rest, 0.96f + 0.04f * t, ImVec2(0.0f, Glass::Px(Glass::RevealRowShiftPx) * (1.0f - t)));
-            ImGui::SetCursorScreenPos(rest.Min);
-            bool hov = false, held = false;
-            if (Glass::MotionButton(ImGui::GetID("##hudSel"), rest, drawn, &hov, &held) && has) m_PendingFrameSelect = true;
-            if (hov) EditorUI::SetTooltip("Click to frame the selection");
-            frosted(dl, drawn.Min, drawn.Max, radius, t);
-            float y = drawn.Min.y + pad;
-            const float x = drawn.Min.x + pad;
-            const auto* hc = reg.try_get<HierarchyComponent>(shown);
-            dl->AddText(ImVec2(x, y), Col(Glass::TextSecondary, t), EntityGlyph(reg, shown, hc && !hc->Children.empty()));
-            DrawLabel(dl, x + ImGui::GetFontSize() * 1.5f, y, lineH, drawn.Max.x - pad, Col(Glass::TextPrimary, t), name.c_str());
-            y += lineH + Glass::Px(Glass::SpaceHalf);
-            char caption[96];
-            int comps = 0;
-            for (const auto& rc : ComponentRegistry::All()) comps += rc.Has(reg, shown) ? 1 : 0;
-            if (HasGroupSelection() && has) std::snprintf(caption, sizeof(caption), "%d selected", (int)m_ExtraSelection.size() + 1);
-            else std::snprintf(caption, sizeof(caption), "%d component%s", comps, comps == 1 ? "" : "s");
-            dl->AddText(ImVec2(x, y), Col(Glass::TextTertiary, t), caption);
-            y += lineH + Glass::Px(Glass::SpaceHalf);
-            if (tf) {
-                const ImVec4 axis[3] = {Glass::AxisX, Glass::AxisY, Glass::AxisZ};
-                const char* names[3] = {"X", "Y", "Z"};
-                const float colW = (drawn.GetWidth() - pad * 2.0f) / 3.0f;
-                for (int a = 0; a < 3; ++a) {
-                    char v[32];
-                    std::snprintf(v, sizeof(v), "%.2f", tf->Position[a]);
-                    const float cx = x + colW * (float)a;
-                    dl->AddText(ImVec2(cx, y), Col(axis[a], t), names[a]);
-                    dl->AddText(ImVec2(cx + ImGui::CalcTextSize("X ").x, y), Col(Glass::TextPrimary, t), v);
-                }
+    ImGuiWindowTempData& dc = sceneWindow->DC;
+    dc.CursorPos = savedLayout.pos;
+    dc.CursorPosPrevLine = savedLayout.prevLine;
+    dc.CursorMaxPos = savedLayout.max;
+    dc.IdealMaxPos = savedLayout.idealMax;
+    dc.CurrLineSize = savedLayout.currLine;
+    dc.PrevLineSize = savedLayout.prevLineSize;
+    dc.CurrLineTextBaseOffset = savedLayout.currBase;
+    dc.PrevLineTextBaseOffset = savedLayout.prevBase;
+    dc.IsSameLine = savedLayout.sameLine;
+    dc.IsSetPos = savedLayout.setPos;
+}
+
+// Selection card, bottom-right: name, component count, position; click to frame it. Sets
+// h.StackBottom to its top.
+void EditorLayer::DrawGlassSelectionCard(World& world, GlassHud& h) {
+    GlassEditorState& g = h.State;
+    const ImVec2 vMax = h.VMax;
+    ImDrawList* dl = h.Dl;
+    const float margin = h.Margin;
+    const float pad = h.Pad;
+    const float radius = h.Radius;
+    const float lineH = h.LineH;
+    Glass::ImAnimContext& motion = h.Motion;
+    auto& reg = h.Reg;
+    const float right = h.Right;
+    float& stackBottom = h.StackBottom;
+    const bool has = reg.valid(m_Selected);
+    const ImGuiID presentId = ImGui::GetID("##hudSelPresent");
+    const bool was = g.HudWasShown;
+    g.HudWasShown = has;
+    if (has) g.HudEntity = m_Selected;
+    const entt::entity shown = has ? m_Selected : g.HudEntity; // fading out: the last selection
+    const float t = motion.AnimateToggle(presentId, has, was, Glass::RevealOpen, Glass::RevealClose);
+    if (!has && t <= 0.0f) g.HudEntity = entt::null;
+    if (t > 0.0f && reg.valid(shown)) {
+        const auto* nm = reg.try_get<NameComponent>(shown);
+        const std::string name = nm && !nm->Name.empty() ? nm->Name : "Object " + std::to_string(HierarchyCreationOrdinal(world, shown));
+        const auto* tf = reg.try_get<TransformComponent>(shown);
+        const float w = Glass::Px(260.0f);
+        const float cardH = pad * 2.0f + lineH * 2.0f + Glass::Px(Glass::SpaceHalf) + (tf ? lineH + Glass::Px(Glass::SpaceHalf) : 0.0f);
+        const ImRect rest(ImVec2(right - w, vMax.y - margin - cardH), ImVec2(right, vMax.y - margin));
+        const ImRect drawn = Scaled(rest, 0.96f + 0.04f * t, ImVec2(0.0f, Glass::Px(Glass::RevealRowShiftPx) * (1.0f - t)));
+        ImGui::SetCursorScreenPos(rest.Min);
+        bool hov = false, held = false;
+        if (Glass::MotionButton(ImGui::GetID("##hudSel"), rest, drawn, &hov, &held) && has) m_PendingFrameSelect = true;
+        if (hov) EditorUI::SetTooltip("Click to frame the selection");
+        h.Frosted(dl, drawn.Min, drawn.Max, radius, t);
+        float y = drawn.Min.y + pad;
+        const float x = drawn.Min.x + pad;
+        const auto* hc = reg.try_get<HierarchyComponent>(shown);
+        dl->AddText(ImVec2(x, y), Col(Glass::TextSecondary, t), EntityGlyph(reg, shown, hc && !hc->Children.empty()));
+        DrawLabel(dl, x + ImGui::GetFontSize() * 1.5f, y, lineH, drawn.Max.x - pad, Col(Glass::TextPrimary, t), name.c_str());
+        y += lineH + Glass::Px(Glass::SpaceHalf);
+        char caption[96];
+        int comps = 0;
+        for (const auto& rc : ComponentRegistry::All()) comps += rc.Has(reg, shown) ? 1 : 0;
+        if (HasGroupSelection() && has) std::snprintf(caption, sizeof(caption), "%d selected", (int)m_ExtraSelection.size() + 1);
+        else std::snprintf(caption, sizeof(caption), "%d component%s", comps, comps == 1 ? "" : "s");
+        dl->AddText(ImVec2(x, y), Col(Glass::TextTertiary, t), caption);
+        y += lineH + Glass::Px(Glass::SpaceHalf);
+        if (tf) {
+            const ImVec4 axis[3] = {Glass::AxisX, Glass::AxisY, Glass::AxisZ};
+            const char* names[3] = {"X", "Y", "Z"};
+            const float colW = (drawn.GetWidth() - pad * 2.0f) / 3.0f;
+            for (int a = 0; a < 3; ++a) {
+                char v[32];
+                std::snprintf(v, sizeof(v), "%.2f", tf->Position[a]);
+                const float cx = x + colW * (float)a;
+                dl->AddText(ImVec2(cx, y), Col(axis[a], t), names[a]);
+                dl->AddText(ImVec2(cx + ImGui::CalcTextSize("X ").x, y), Col(Glass::TextPrimary, t), v);
             }
-            stackBottom = drawn.Min.y - Glass::Px(Glass::Space1);
         }
+        stackBottom = drawn.Min.y - Glass::Px(Glass::Space1);
     }
+}
 
-    // --- Scene stats pill, above the selection card (Gizmos popup > Stats pill; off by default) ----
+// --- Scene stats pill, above the selection card (Gizmos popup > Stats pill; off by default) ----
+void EditorLayer::DrawGlassStatsPill(GlassHud& h) {
+    const EditorSettings& prefs = h.Prefs;
+    ImDrawList* dl = h.Dl;
+    const float pad = h.Pad;
+    const float lineH = h.LineH;
+    Glass::ImAnimContext& motion = h.Motion;
+    auto& reg = h.Reg;
+    const float right = h.Right;
+    float& stackBottom = h.StackBottom;
     if (prefs.GlassStatsPill) {
         const int objects = (int)reg.view<const NameComponent>().size();
         const float ms = std::max(0.01f, m_SmoothedFrameMs);
@@ -1484,18 +1536,29 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         char frame[48];
         std::snprintf(frame, sizeof(frame), "   %.0f fps   %.1f ms", 1000.0f / ms, ms);
         const ImVec2 ts(Glass::ImAnimContext::OdometerWidth((double)objects, 0, " objects") + ImGui::CalcTextSize(frame).x, lineH);
-        const float h = lineH + Glass::Px(Glass::Space1) * 2.0f - Glass::Px(Glass::SpaceHalf);
-        const ImRect r(ImVec2(right - ts.x - pad * 2.0f, stackBottom - h), ImVec2(right, stackBottom));
+        const float pillH = lineH + Glass::Px(Glass::Space1) * 2.0f - Glass::Px(Glass::SpaceHalf);
+        const ImRect r(ImVec2(right - ts.x - pad * 2.0f, stackBottom - pillH), ImVec2(right, stackBottom));
         ImGui::SetCursorScreenPos(r.Min);
         bool hov = false, held = false;
         Glass::MotionButton(ImGui::GetID("##hudStats"), r, r, &hov, &held);
-        frosted(dl, r.Min, r.Max, r.GetHeight() * 0.5f, 1.0f);
+        h.Frosted(dl, r.Min, r.Max, r.GetHeight() * 0.5f, 1.0f);
         const ImVec2 at(r.Min.x + pad, r.GetCenter().y - lineH * 0.5f);
         const float ow = motion.Odometer(ImGui::GetID("##hudObjects"), dl, at, (double)objects, 0, Col(Glass::TextSecondary), " objects");
         dl->AddText(ImVec2(at.x + ow, at.y), Col(Glass::TextSecondary), frame);
     }
+}
 
-    // --- Toasts, bottom-centre, newest at the bottom -----------------------------------------------
+// --- Toasts, bottom-centre, newest at the bottom -----------------------------------------------
+void EditorLayer::DrawGlassToasts(GlassHud& h) {
+    GlassEditorState& g = h.State;
+    const ImVec2 vMin = h.VMin;
+    const ImVec2 vMax = h.VMax;
+    ImDrawList* dl = h.Dl;
+    const float margin = h.Margin;
+    const float pad = h.Pad;
+    const float radius = h.Radius;
+    const float lineH = h.LineH;
+    Glass::ImAnimContext& motion = h.Motion;
     if (!g.Toasts.empty()) {
         const double now = motion.Now();
         const float lifetime = Glass::ToastLifetimeMs * 0.001f;
@@ -1515,12 +1578,12 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             if (toast.Dismissed < 0.0 && !busy && sinceResult >= lifetime) toast.Dismissed = now;
             const float exit = toast.Dismissed < 0.0 ? 0.0f : std::min(1.0f, (float)(now - toast.Dismissed) / exitDur);
             const ImVec2 bodySize = ImGui::CalcTextSize(toast.Body.c_str(), nullptr, false, wrap);
-            const float h = pad * 2.0f + lineH + Glass::Px(Glass::SpaceHalf) + bodySize.y;
+            const float toastH = pad * 2.0f + lineH + Glass::Px(Glass::SpaceHalf) + bodySize.y;
 
             // Restack on a spring when a toast leaves: one that's leaving gives up its slot at once
             // (it fades where it is), so the ones above start settling into the gap straight away.
             const bool leaving = toast.Dismissed >= 0.0;
-            const float targetY = leaving && toast.Y >= 0.0f ? toast.Y : bottom - h;
+            const float targetY = leaving && toast.Y >= 0.0f ? toast.Y : bottom - toastH;
             const float prevY = toast.Y < 0.0f ? targetY : toast.Y;
             const float y = motion.Follow(ImGui::GetID((int)toast.Id), targetY, prevY, Glass::ToastRestack);
             toast.Y = targetY;
@@ -1536,7 +1599,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             if (toast.Error && !busy && !motion.ReduceMotion() && shakeAge * 1000.0f < Glass::ErrorShake.durationMs)
                 shake = Glass::SpringImpulse(shakeAge, Glass::ErrorShake.mass, Glass::ErrorShake.stiffness, Glass::ErrorShake.damping,
                                              Glass::Px(Glass::ErrorShake.amplitudePx));
-            const ImRect rest(ImVec2(vMin.x + (m_ViewportSize.x - w) * 0.5f, y), ImVec2(vMin.x + (m_ViewportSize.x + w) * 0.5f, y + h));
+            const ImRect rest(ImVec2(vMin.x + (m_ViewportSize.x - w) * 0.5f, y), ImVec2(vMin.x + (m_ViewportSize.x + w) * 0.5f, y + toastH));
             const ImRect drawn = Scaled(rest, scale, ImVec2(shake, Glass::Px(Glass::ToastPopRisePx) * (1.0f - pop)));
 
             ImGui::SetCursorScreenPos(rest.Min);
@@ -1553,7 +1616,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
                 EditorUI::SetTooltip("Click to dismiss. The full message is in the Console.");
             }
             if (alpha > 0.0f) {
-                frosted(dl, drawn.Min, drawn.Max, radius, alpha);
+                h.Frosted(dl, drawn.Min, drawn.Max, radius, alpha);
                 const ImVec4 status = toast.Error ? Glass::Danger : Glass::Accent;
                 const float barW = Glass::Px(3.0f);
                 dl->AddRectFilled(ImVec2(drawn.Min.x + pad * 0.5f, drawn.Min.y + pad), ImVec2(drawn.Min.x + pad * 0.5f + barW, drawn.Max.y - pad),
@@ -1613,8 +1676,13 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         if (m_RebuildToastId != 0 && std::none_of(g.Toasts.begin(), g.Toasts.end(), [&](const GlassEditorState::Toast& t) { return t.Id == m_RebuildToastId; }))
             m_RebuildToastId = 0;
     }
+}
 
-    // --- Snap ring: an elastic pop where a snapped gizmo drag landed -------------------------------
+// --- Snap ring: an elastic pop where a snapped gizmo drag landed -------------------------------
+void EditorLayer::DrawGlassSnapRing(GlassHud& h) {
+    GlassEditorState& g = h.State;
+    ImDrawList* dl = h.Dl;
+    Glass::ImAnimContext& motion = h.Motion;
     if (g.SnapShowing) {
         const float p = motion.PulseProgress(kSnapPulseId);
         if (p >= 1.0f) {
@@ -1627,9 +1695,18 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             dl->AddCircleFilled(g.SnapAt, Glass::Px(3.0f), Col(Glass::Accent, a));
         }
     }
+}
 
-    // Now the plates are drawn: blur the Scene image under them (out by the blur's reach, on its coarsest
-    // level's grid so it holds still as a plate moves) and point their UVs into that blurred rect.
+// Now the plates are drawn: blur the Scene image under them (out by the blur's reach, on its coarsest
+// level's grid so it holds still as a plate moves) and point their UVs into that blurred rect.
+void EditorLayer::FinishGlassFrostedBlur(GlassHud& h) {
+    GlassEditorState& g = h.State;
+    const ImVec2 vMin = h.VMin;
+    const ImVec2 vMax = h.VMax;
+    ImDrawList* dl = h.Dl;
+    const unsigned int blurTarget = h.BlurTarget;
+    const int sceneW = h.SceneW;
+    const int sceneH = h.SceneH;
     if (blurTarget != 0 && !g.FrostedPlates.empty()) {
         ImRect u(g.FrostedPlates[0].Min, g.FrostedPlates[0].Max);
         for (const auto& p : g.FrostedPlates) u.Add(ImRect(p.Min, p.Max));
@@ -1657,16 +1734,4 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             }
         }
     }
-
-    ImGuiWindowTempData& dc = sceneWindow->DC;
-    dc.CursorPos = savedLayout.pos;
-    dc.CursorPosPrevLine = savedLayout.prevLine;
-    dc.CursorMaxPos = savedLayout.max;
-    dc.IdealMaxPos = savedLayout.idealMax;
-    dc.CurrLineSize = savedLayout.currLine;
-    dc.PrevLineSize = savedLayout.prevLineSize;
-    dc.CurrLineTextBaseOffset = savedLayout.currBase;
-    dc.PrevLineTextBaseOffset = savedLayout.prevBase;
-    dc.IsSameLine = savedLayout.sameLine;
-    dc.IsSetPos = savedLayout.setPos;
 }

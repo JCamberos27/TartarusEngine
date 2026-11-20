@@ -33,6 +33,7 @@
 #include <cmath>
 #include <filesystem>
 #include <cstdio>
+#include <string_view>
 #include <unordered_map>
 
 using namespace FirstPersonPresentationDetail;
@@ -914,7 +915,12 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     if (WallBlocked() && m_PeekSide == 0) aiming = false;
     ac->SetBool(K::kAim, aiming);
     const float aimBlendTime=m_Set.Procedural.Aim.BlendTime;
-    ac->SetFloat("TransitionDuration:"+(m_Set.Ads.ReferenceState.empty()?std::string("Aim"):m_Set.Ads.ReferenceState),aimBlendTime);
+    {   // (the keys built in place: no string allocated per frame)
+        thread_local std::string key;
+        key.assign("TransitionDuration:");
+        key += m_Set.Ads.ReferenceState.empty() ? std::string_view("Aim") : std::string_view(m_Set.Ads.ReferenceState);
+        ac->SetFloat(key,aimBlendTime);
+    }
     // Gated on a gun in hand, as the procedural's in.Ads is: holstered with aim held, the ADS hold (the carried pose, the
     // optic's correction, the locomotion layers' ADS scale) must not ease in on the empty hands.
     const bool adsHeld = aiming && m_Equipped;
@@ -931,8 +937,10 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
         // The walk / run sway's clock: the body's feet (negative - none - leaves the clips on their own).
         ac->SetFloat(K::kGaitPhase, m_HaveGait ? m_GaitPhase : -1.0f);
     }
-    ac->SetFloat("LayerWeight:Weapon Locomotion",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
-    ac->SetFloat("LayerWeight:Weapon Walk",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
+    static const std::string kLayerLocomotion = "LayerWeight:Weapon Locomotion";
+    ac->SetFloat(kLayerLocomotion,glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
+    static const std::string kLayerWalk = "LayerWeight:Weapon Walk";
+    ac->SetFloat(kLayerWalk,glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
     // turns around smoothly instead of restarting.
@@ -1047,10 +1055,10 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
                              std::remainder(camera.Yaw - m_PlayerLookBaseline.y, 360.0f));
         controllerInput = delta;
     }
-    if (m_Set.Procedural.Recoil.UnityPort && m_HaveRawLookInput) controllerInput=m_RawLookInput;
+    if (m_HaveRawLookInput) controllerInput=m_RawLookInput;
     const glm::vec2 swayLook=m_HaveRawLookInput?m_RawLookInput:controllerInput;
     m_SwayLookInput+=glm::vec2(swayLook.y,swayLook.x);
-    if (m_Set.Procedural.Recoil.UnityPort || m_Set.Procedural.Recoil.AimCompensation) m_Procedural.CompensateAim(controllerInput);
+    m_Procedural.CompensateAim(controllerInput);
     m_HaveRawLookInput=false;
     {
         glm::vec3 f = camera.Front();
@@ -1062,10 +1070,8 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     // Aim climb: unlike the punch below it stays - the player has to pull it back down.
     {
         const glm::vec2 climb = m_Procedural.ConsumeAimKick();
-        const float before = camera.Pitch;
         camera.Pitch = std::clamp(camera.Pitch + climb.x, -89.0f, 89.0f);
         camera.Yaw += climb.y;
-        m_Procedural.DiscardClampedAim(glm::vec2(climb.x - (camera.Pitch - before), 0.0f));
     }
     m_PlayerLookBaseline = glm::vec2(camera.Pitch, camera.Yaw);
     m_HavePlayerLookBaseline = true;

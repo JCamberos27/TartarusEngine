@@ -3,7 +3,7 @@
 
 Every struct in src/Game/Components.h whose name ends in "Component" or "Tag" must be either:
   * registered with ComponentRegistry (a `Register<Name>` call or a `TARTARUS_REFLECT_FIELD(Name, ...)`
-    line in src/Game/ComponentRegistry.cpp), which auto-generates its serialization + Inspector
+    line in src/Game/ComponentRegistry*.cpp), which auto-generates its serialization + Inspector
     section + Add-Component entry, OR
   * listed in tools/component_registration_allowlist.txt with a reason.
 
@@ -56,7 +56,10 @@ def main() -> int:
             sys.exit(f"missing: {p}")
 
     structs = component_structs(COMPONENTS_H.read_text(encoding="utf-8"))
-    registered = registered_names(REGISTRY_CPP.read_text(encoding="utf-8"))
+    # the registry and its per-area registration files (ComponentRegistryGameplay.cpp, ...)
+    registered = set()
+    for cpp in sorted(REGISTRY_CPP.parent.glob("ComponentRegistry*.cpp")):
+        registered |= registered_names(cpp.read_text(encoding="utf-8"))
     allowed = parse_allowlist(ALLOWLIST.read_text(encoding="utf-8"))
 
     errors = []
@@ -67,7 +70,7 @@ def main() -> int:
         if not in_reg and not in_allow:
             errors.append(
                 f"{name}: not registered with ComponentRegistry and not in the allow-list.\n"
-                f"    Either register it in {REGISTRY_CPP.relative_to(ROOT)} (gets serialization +\n"
+                f"    Either register it in {REGISTRY_CPP.parent.relative_to(ROOT)}/ComponentRegistry*.cpp (gets serialization +\n"
                 f"    Inspector + Add Component for free), or add it to\n"
                 f"    {ALLOWLIST.relative_to(ROOT)} with a reason."
             )

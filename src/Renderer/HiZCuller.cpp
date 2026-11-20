@@ -1,4 +1,5 @@
 #include "HiZCuller.h"
+#include "GpuMemTrack.h"
 #include "gl.h"
 #include "Shader.h"
 #include "GLStateCache.h"
@@ -199,6 +200,7 @@ Resources::Pyramid& EnsurePyramid(int w, int h) {
     for (int m = std::max(w, h); m > 1; m >>= 1) ++p->Levels;
     glCreateTextures(GL_TEXTURE_2D, 1, &p->Tex);
     glTextureStorage2D(p->Tex, p->Levels, GL_R32F, w, h);
+    GpuMemTrack::Set("HiZ pyramid " + std::to_string(p - r.Pyramids.data()), (std::size_t)w * h * 4 * 4 / 3); // R32F + mips
     glTextureParameteri(p->Tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTextureParameteri(p->Tex, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTextureParameteri(p->Tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

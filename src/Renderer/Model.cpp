@@ -162,6 +162,9 @@ std::shared_ptr<Model> Model::CreateInstance() const {
 }
 
 bool Model::ImportFromFile(const ModelImportSettings& settings) {
+    ImportScratch scratch;
+    m_Import = &scratch;
+    struct ClearScratch { Model* M; ~ClearScratch() { M->m_Import = nullptr; } } clearScratch{this};
     BumpAnimationEpoch(); // bones or clips may appear (a reimport reaches every instance sharing m_D)
     Assimp::Importer importer;
     // FBX files embed their own unit scale (commonly centimeters, sometimes meters or
@@ -240,11 +243,11 @@ bool Model::ImportFromFile(const ModelImportSettings& settings) {
 
     m_D->GlobalInverseTransform = glm::inverse(AiToGlm(scene->mRootNode->mTransformation));
     m_D->BindPoseBones.assign(MAX_BONES, glm::mat4(1.0f));
-    m_ImportNodeGlobals.clear();
+    m_Import->NodeGlobals.clear();
     CollectNodeGlobals(scene->mRootNode, glm::mat4(1.0f));
 
     if (!settings.AnimationOnly) {
-        m_MergeBuckets.clear();
+        m_Import->MergeBuckets.clear();
         ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
         FlushMergeBuckets(scene);
         // RootNodeInModelSpace: the vertices were baked with the root node's frame (ProcessNode starts above it), so
@@ -262,7 +265,7 @@ bool Model::ImportFromFile(const ModelImportSettings& settings) {
     } else m_D->BoundsMin = m_D->BoundsMax = glm::vec3(0.0f);
     ReadHierarchy(scene->mRootNode, -1);
     if (settings.ImportAnimations) ReadAnimations(scene);
-    m_ImportNodeGlobals.clear();
+    m_Import->NodeGlobals.clear();
 
     *target = std::move(*m_D);
     m_D = target;
@@ -301,7 +304,7 @@ glm::mat4 Model::AxisCorrection(int upAxis, int upSign, int frontAxis, int front
 
 void Model::CollectNodeGlobals(const aiNode* node, const glm::mat4& parentTransform) {
     const glm::mat4 global = parentTransform * AiToGlm(node->mTransformation);
-    m_ImportNodeGlobals.emplace(node->mName.C_Str(), global);
+    m_Import->NodeGlobals.emplace(node->mName.C_Str(), global);
     for (unsigned int i = 0; i < node->mNumChildren; ++i) CollectNodeGlobals(node->mChildren[i], global);
 }
 
@@ -383,7 +386,7 @@ bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worl
     outT = bestWorldT;
     if (outMeshIndex) *outMeshIndex = bestMesh;
     if (outNormal) {
-        glm::vec3 n = glm::normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * bestLocalN);
+        glm::vec3 n = glm::normalize(NormalMatrix(modelMatrix) * bestLocalN);
         if (glm::dot(n, wd) > 0.0f) n = -n; // face the ray origin
         *outNormal = n;
     }
@@ -573,18 +576,18 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     glm::mat4 offsetFix(1.0f);
     if (skinned) {
         const aiBone* first = mesh->mBones[0];
-        if (auto g = m_ImportNodeGlobals.find(first->mName.C_Str()); g != m_ImportNodeGlobals.end()) {
+        if (auto g = m_Import->NodeGlobals.find(first->mName.C_Str()); g != m_Import->NodeGlobals.end()) {
             const glm::mat4 c = m_D->GlobalInverseTransform * g->second * AiToGlm(first->mOffsetMatrix);
             if (!IsNearlyIdentity(c)) {
                 bool nodeFrame = NearlyEqual(c, nodeTransform);
                 for (const aiNode* a = node ? node->mParent : nullptr; a && !nodeFrame; a = a->mParent)
-                    if (auto ag = m_ImportNodeGlobals.find(a->mName.C_Str()); ag != m_ImportNodeGlobals.end())
+                    if (auto ag = m_Import->NodeGlobals.find(a->mName.C_Str()); ag != m_Import->NodeGlobals.end())
                         nodeFrame = NearlyEqual(c, ag->second);
                 if (nodeFrame) offsetFix = glm::inverse(c);
             }
         }
     }
-    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(bake)));
+    glm::mat3 normalMatrix = NormalMatrix(bake);
 
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         ModelVertex v;
@@ -678,11 +681,11 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     }
     // MergeByMaterial: a static mesh joins its material's bucket (in file order), made into one mesh after the walk.
     if (m_D->Settings.MergeByMaterial && !skinned) {
-        auto it = std::find_if(m_MergeBuckets.begin(), m_MergeBuckets.end(),
+        auto it = std::find_if(m_Import->MergeBuckets.begin(), m_Import->MergeBuckets.end(),
                                [&](const MergeBucket& b) { return b.MaterialIndex == mesh->mMaterialIndex; });
-        if (it == m_MergeBuckets.end()) {
-            m_MergeBuckets.push_back({mesh->mMaterialIndex, false, {}, {}});
-            it = m_MergeBuckets.end() - 1;
+        if (it == m_Import->MergeBuckets.end()) {
+            m_Import->MergeBuckets.push_back({mesh->mMaterialIndex, false, {}, {}});
+            it = m_Import->MergeBuckets.end() - 1;
         }
         const unsigned int base = (unsigned int)it->Vertices.size();
         it->VertexColors = it->VertexColors || mesh->HasVertexColors(0);
@@ -700,13 +703,13 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 }
 
 void Model::FlushMergeBuckets(const aiScene* scene) {
-    for (MergeBucket& b : m_MergeBuckets) {
+    for (MergeBucket& b : m_Import->MergeBuckets) {
         auto gpuMesh = m_DeferGpu ? std::make_unique<ModelMesh>(std::move(b.Vertices), b.Indices, true)
                                   : std::make_unique<ModelMesh>(b.Vertices, b.Indices);
         AssignImportedMaterial(*gpuMesh, scene, b.MaterialIndex, b.VertexColors);
         m_D->Meshes.push_back(std::move(gpuMesh));
     }
-    m_MergeBuckets.clear();
+    m_Import->MergeBuckets.clear();
 }
 
 void Model::AssignImportedMaterial(ModelMesh& gpuMesh, const aiScene* scene, unsigned int materialIndex, bool vertexColors) {
@@ -899,14 +902,23 @@ bool IsTextureFileExt(std::string ext) {
            ext == ".psd" || ext == ".gif" || ext == ".hdr" || ext == ".pic" || ext == ".pnm";
 }
 
+std::string LooseName(const std::string& name); // below
+
 // Every image file up to three folders below `root`, shallowest first. Scene loads resolve many
 // textures for many models in the same few folders, so listings are cached briefly: long enough
 // to cover one load or one import batch, short enough that files copied in a moment ago show up.
-// The walk is capped so a model sitting near a huge folder can't stall an import.
-std::shared_ptr<const std::vector<std::filesystem::path>> ImageFilesUnder(const std::filesystem::path& root) {
+// The walk is capped so a model sitting near a huge folder can't stall an import. Each file carries the
+// lowered / loose names the lookups compare (worked out once per listing, not per lookup per file).
+struct ListedImage {
+    std::filesystem::path Path;
+    std::string Lower;    // LowerTextureName(filename)
+    std::string Loose;    // LooseTextureKey(filename)
+    std::string SetLoose; // the stem without a "T_" prefix, loose (FindTextureSetMap)
+};
+std::shared_ptr<const std::vector<ListedImage>> ImageFilesUnder(const std::filesystem::path& root) {
     namespace fs = std::filesystem;
     using Clock = std::chrono::steady_clock;
-    struct Listing { Clock::time_point Built; std::shared_ptr<const std::vector<fs::path>> Files; };
+    struct Listing { Clock::time_point Built; std::shared_ptr<const std::vector<ListedImage>> Files; };
     static std::mutex s_Mutex;
     static std::map<std::string, Listing> s_Cache;
     constexpr auto kLifetime = std::chrono::seconds(3);
@@ -935,9 +947,18 @@ std::shared_ptr<const std::vector<std::filesystem::path>> ImageFilesUnder(const 
         }
     }
     std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-    auto files = std::make_shared<std::vector<fs::path>>();
+    auto files = std::make_shared<std::vector<ListedImage>>();
     files->reserve(found.size());
-    for (auto& f : found) files->push_back(std::move(f.second));
+    for (auto& f : found) {
+        ListedImage li;
+        li.Lower = LowerTextureName(f.second.filename());
+        li.Loose = LooseTextureKey(f.second.filename());
+        std::string stem = f.second.stem().string();
+        if (stem.size() > 2 && (stem[0] == 'T' || stem[0] == 't') && stem[1] == '_') stem = stem.substr(2);
+        li.SetLoose = LooseName(stem);
+        li.Path = std::move(f.second);
+        files->push_back(std::move(li));
+    }
     if (s_Cache.size() > 256) s_Cache.clear();
     s_Cache[key] = Listing{now, files};
     return files;
@@ -1020,13 +1041,11 @@ std::string Model::FindTextureSetMap(const std::string& modelDirStr, const std::
     std::vector<std::pair<std::string, fs::path>> maps;
     for (const fs::path& root : roots) {
         const auto files = ImageFilesUnder(root);
-        for (const fs::path& f : *files) {
-            std::string stem = f.stem().string();
-            if (stem.size() > 2 && (stem[0] == 'T' || stem[0] == 't') && stem[1] == '_') stem = stem.substr(2);
-            const std::string loose = LooseName(stem);
+        for (const ListedImage& li : *files) {
+            const std::string& loose = li.SetLoose;
             for (const std::string& suf : suffixes) {
                 if (loose.size() <= suf.size() || loose.compare(loose.size() - suf.size(), suf.size(), suf) != 0) continue;
-                maps.emplace_back(loose.substr(0, loose.size() - suf.size()), f);
+                maps.emplace_back(loose.substr(0, loose.size() - suf.size()), li.Path);
                 break; // this file's map type is `suf`
             }
         }
@@ -1102,11 +1121,11 @@ std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const st
         const std::string wantLoose = LooseTextureKey(filename);
         for (const fs::path& root : roots) {
             const auto files = ImageFilesUnder(root);
-            for (const fs::path& f : *files)
-                if (LowerTextureName(f.filename()) == wantName) return f.string();
+            for (const ListedImage& li : *files)
+                if (li.Lower == wantName) return li.Path.string();
             if (wantLoose.empty()) continue;
-            for (const fs::path& f : *files)
-                if (LooseTextureKey(f.filename()) == wantLoose) return f.string();
+            for (const ListedImage& li : *files)
+                if (li.Loose == wantLoose) return li.Path.string();
         }
     }
 
@@ -1381,7 +1400,7 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh,
             }
             BoneInfo info{m_D->BoneCounter, AiToGlm(bone->mOffsetMatrix) * offsetFix};
             m_D->BoneInfoMap[boneName] = info;
-            if (auto g = m_ImportNodeGlobals.find(boneName); g != m_ImportNodeGlobals.end())
+            if (auto g = m_Import->NodeGlobals.find(boneName); g != m_Import->NodeGlobals.end())
                 m_D->BindPoseBones[info.ID] = m_D->GlobalInverseTransform * g->second * info.OffsetMatrix; // #98
             boneID = m_D->BoneCounter++;
         } else {
@@ -1489,10 +1508,11 @@ void Model::ReadAnimations(const aiScene* scene) {
             clip.Channels.push_back(std::move(bac));
         }
         // #113 — resolve node -> channel once here, not by name per node per frame.
+        // (NodeLookup holds each name's first node, as the old nested scan matched.)
         clip.NodeChannel.assign(m_D->Nodes.size(), -1);
         for (int c = 0; c < (int)clip.Channels.size(); ++c)
-            for (int n = 0; n < (int)m_D->Nodes.size(); ++n)
-                if (m_D->Nodes[n].Name == clip.Channels[c].BoneName) { clip.NodeChannel[n] = c; break; }
+            if (const auto it = m_D->NodeLookup.find(clip.Channels[c].BoneName); it != m_D->NodeLookup.end())
+                clip.NodeChannel[it->second] = c;
         m_D->Animations.push_back(std::move(clip));
     }
 }
@@ -1854,7 +1874,7 @@ void Model::EvaluatePose() {
                 local = LocalTRS::Blend(a, b, w).ToMatrix();
             }
         }
-        m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
+        m_NodeGlobals[i] = n.Parent >= 0 ? AffineMul(m_NodeGlobals[n.Parent], local) : local;
         if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
         if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = AffineMul(AffineMul(m_D->GlobalInverseTransform, m_NodeGlobals[i]), n.BoneOffset);
     }
@@ -2746,10 +2766,14 @@ namespace {
 // for a glGet or a state change.
 class ShaderStateScope {
 public:
+    // `shared`: a pass state read once for a run of draws (Model::DrawPassState); otherwise this scope's own.
+    explicit ShaderStateScope(Model::DrawPassState* shared = nullptr) : m_S(shared ? shared : &m_Own) {}
+    ShaderStateScope(const ShaderStateScope&) = delete;
+    ShaderStateScope& operator=(const ShaderStateScope&) = delete;
     void Apply(const ShaderRenderState* st) {
         const bool want = st && st->AffectsDraw();
         if (!want) { Restore(); return; }
-        if (!m_Saved) Save();
+        if (!m_S->Saved) Save();
         Restore(); // start from the pass state, so fields this shader leaves unset aren't stale
         if (st->Cull == ShaderRenderState::CullMode::Off) glDisable(GL_CULL_FACE);
         else if (st->Cull != ShaderRenderState::CullMode::Unset) {
@@ -2771,35 +2795,35 @@ public:
     }
     void Restore() {
         if (!m_Dirty) return;
-        m_CullEnabled ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
-        glCullFace((GLenum)m_CullFace);
-        glDepthMask(m_DepthMask);
-        glDepthFunc((GLenum)m_DepthFunc);
-        m_BlendEnabled ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
-        glBlendFuncSeparate((GLenum)m_BlendSrcRgb, (GLenum)m_BlendDstRgb, (GLenum)m_BlendSrcA, (GLenum)m_BlendDstA);
+        const Model::DrawPassState& s = *m_S;
+        s.CullEnabled ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
+        glCullFace((GLenum)s.CullFace);
+        glDepthMask(s.DepthMask ? GL_TRUE : GL_FALSE);
+        glDepthFunc((GLenum)s.DepthFunc);
+        s.BlendEnabled ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
+        glBlendFuncSeparate((GLenum)s.BlendSrcRgb, (GLenum)s.BlendDstRgb, (GLenum)s.BlendSrcA, (GLenum)s.BlendDstA);
         m_Dirty = false;
     }
     ~ShaderStateScope() { Restore(); }
 private:
     void Save() {
-        m_CullEnabled = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
-        glGetIntegerv(GL_CULL_FACE_MODE, &m_CullFace);
+        Model::DrawPassState& s = *m_S;
+        s.CullEnabled = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
+        glGetIntegerv(GL_CULL_FACE_MODE, &s.CullFace);
         GLint depthMask = GL_TRUE;
         glGetIntegerv(GL_DEPTH_WRITEMASK, &depthMask);
-        m_DepthMask = depthMask ? GL_TRUE : GL_FALSE;
-        glGetIntegerv(GL_DEPTH_FUNC, &m_DepthFunc);
-        m_BlendEnabled = glIsEnabled(GL_BLEND) == GL_TRUE;
-        glGetIntegerv(GL_BLEND_SRC_RGB, &m_BlendSrcRgb);
-        glGetIntegerv(GL_BLEND_DST_RGB, &m_BlendDstRgb);
-        glGetIntegerv(GL_BLEND_SRC_ALPHA, &m_BlendSrcA);
-        glGetIntegerv(GL_BLEND_DST_ALPHA, &m_BlendDstA);
-        m_Saved = true;
+        s.DepthMask = depthMask != 0;
+        glGetIntegerv(GL_DEPTH_FUNC, &s.DepthFunc);
+        s.BlendEnabled = glIsEnabled(GL_BLEND) == GL_TRUE;
+        glGetIntegerv(GL_BLEND_SRC_RGB, &s.BlendSrcRgb);
+        glGetIntegerv(GL_BLEND_DST_RGB, &s.BlendDstRgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &s.BlendSrcA);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &s.BlendDstA);
+        s.Saved = true;
     }
-    bool m_Saved = false, m_Dirty = false;
-    bool m_CullEnabled = true, m_BlendEnabled = false;
-    GLint m_CullFace = GL_BACK, m_DepthFunc = GL_LESS;
-    GLboolean m_DepthMask = GL_TRUE;
-    GLint m_BlendSrcRgb = GL_ONE, m_BlendDstRgb = GL_ZERO, m_BlendSrcA = GL_ONE, m_BlendDstA = GL_ZERO;
+    Model::DrawPassState m_Own;
+    Model::DrawPassState* m_S;
+    bool m_Dirty = false;
 };
 
 const ShaderRenderState* SlotRenderState(const std::vector<std::shared_ptr<MaterialAsset>>& slots, int i) {
@@ -2825,7 +2849,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const ProgramSelector& selectProgram, float opacity,
                          const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided,
                          const VisibleIndexBuffer* visible, int instances) {
-    const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
+    const glm::mat4 nrm = glm::mat4(NormalMatrix(xform));
 
     Shader*             lastProg = nullptr;
     const MaterialLocs* locs = nullptr;
@@ -2998,12 +3022,12 @@ std::uint64_t Model::MeshStateKey(int i, const std::vector<std::shared_ptr<Mater
 
 bool Model::DrawMeshIndirect(Shader& fallback, int i, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                              const ProgramSelector& selectProgram, const std::function<void(Shader&)>& onProgramBound,
-                             bool forceDoubleSided, const void* indirect, int drawCount) {
+                             bool forceDoubleSided, const void* indirect, int drawCount, DrawPassState* passState) {
     const bool hasSlot = i < (int)slots.size() && slots[i];
     if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) return false;
     const ModelMesh& mesh = *m_D->Meshes[i];
     if (!mesh.ArenaRange().Page) return false;
-    ShaderStateScope stateScope; // #104
+    ShaderStateScope stateScope(passState); // #104
     const Material& mat = hasSlot ? slots[i]->Mat : mesh.Mat;
     stateScope.Apply(EffectiveRenderState(slots, i, mat, forceDoubleSided));
     Shader* prog = &fallback;
@@ -3044,7 +3068,7 @@ long long Model::DrawFurShells(Shader& prog, const glm::mat4& xform, const std::
             preSkinned = UploadBoneMatrices(prog);
             locs = &CachedMaterialLocs(prog);
             prog.SetMat4(prog.Loc("uModel"), xform);
-            prog.SetMat4(prog.Loc("uNormalMatrix"), glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform)))));
+            prog.SetMat4(prog.Loc("uNormalMatrix"), glm::mat4(NormalMatrix(xform)));
             bound = true;
         }
         const int shells = bind(prog, mat, user);

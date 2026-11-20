@@ -28,7 +28,8 @@ public:
 private:
     struct Path { std::vector<glm::vec3> Points; glm::vec4 Color; int FadeIn; };
     struct Ring { glm::vec3 Center, Normal; float Radius; glm::vec4 Color; };
-    std::vector<Path> m_Paths;
+    std::vector<Path> m_Paths; // the first m_PathCount are this frame's (the rest keep their capacity for reuse)
+    std::size_t m_PathCount = 0;
     std::vector<Ring> m_Rings;
 
     std::unique_ptr<Shader> m_Shader;

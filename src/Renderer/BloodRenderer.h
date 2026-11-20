@@ -160,7 +160,9 @@ private:
     // The maps once they're made (GeneratedDecalMaps keeps them for good): looked up by set / (entry, mode)
     // instead of building a key string and a job per stain per frame.
     std::vector<const DecalTextureArrays::Source*> m_SetSrc;
+    std::vector<std::string> m_SetKeys; // GeneratedDecalMaps keys, built once (asked every frame until the maps exist)
     std::unordered_map<int, const DecalTextureArrays::Source*> m_KnifeSrc;
+    std::unordered_map<int, std::string> m_KnifeKeys;
     const DecalTextureArrays::Source* m_ProceduralHoleSrc = nullptr;
     // DA_Blood / DA_BulletHole, re-fetched when the DecalSystem re-reads a .decal (AssetGeneration).
     std::shared_ptr<DecalAsset> m_BloodAsset, m_HoleAsset;

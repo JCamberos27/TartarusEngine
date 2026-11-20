@@ -60,6 +60,12 @@ private:
         int       Layer = -1;      // captured cube-array layer, -1 = sky
     };
     std::vector<ProbeData> m_Probes;
+    // The last Select (SelectionKey and Bind ask for the same centre back to back, per draw); Update() drops it.
+    mutable bool m_MemoValid = false;
+    mutable glm::vec3 m_MemoCentre{0.0f};
+    mutable Scored m_MemoBest[kMaxDraw] = {};
+    mutable int m_MemoFound = 0;
+    mutable float m_MemoTotal = 1.0f;
     unsigned int m_CubeArray = 0;
     bool m_Capturing = false;
 };

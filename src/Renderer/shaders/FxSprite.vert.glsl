@@ -3,16 +3,7 @@
 // A sprite faces the camera (turned by its rotation), or stands along a world axis - its velocity, a
 // barrel - turned about it to face the eye, the texture's u along the axis.
 
-struct FxSprite {
-    vec4 PosSize;  // xyz world, w height
-    vec4 AxisRot;  // xyz axis (|axis| = length / height; 0 = camera-facing), w rotation
-    vec4 Color;    // rgb linear, a opacity
-    vec4 Params;   // x erosion, y softness, z aspect (w / h), w cell blend
-    ivec4 Tex;     // x colour layer (-1 procedural), y normal layer (-1 none), z cell a, w cell b
-    ivec4 Info;    // x cols, y rows, z mode (0 blood, 1 lit, 2 additive), w entry flags
-    vec4 Extra;    // x smoothness, y seed
-};
-layout(std430, binding = 10) readonly buffer FxSprites { FxSprite uSprites[]; };
+#include "FxSpriteCommon.glsl"
 
 uniform mat4 uView;
 uniform mat4 uProj;
@@ -50,7 +41,7 @@ void main() {
     viewPos += right * c.x + up * c.y;
     gl_Position = uProj * vec4(viewPos, 1.0);
     mat3 toWorld = transpose(mat3(uView)); // the view's rotation is orthonormal
-    vWorld = (inverse(uView) * vec4(viewPos, 1.0)).xyz;
+    vWorld = toWorld * (viewPos - uView[3].xyz); // the inverse view, without inverting a mat4 per vertex
     vRight = normalize(toWorld * right);
     vUp = normalize(toWorld * up);
     vFacing = normalize(cross(vRight, vUp));

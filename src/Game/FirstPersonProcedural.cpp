@@ -16,12 +16,7 @@
 using json = nlohmann::json;
 
 WeaponRecoilSettings RecoilAsset::Defaults() {
-    auto recoil = WeaponProceduralSettings::Defaults().Recoil;
-    recoil.AimPitch = {0.35f, 0.55f};
-    recoil.AimYaw = {-0.08f, 0.08f};
-    recoil.CameraScale = 0.25f;
-    recoil.UnityPort = true;
-    return recoil;
+    return WeaponRecoilSettings{}; // a new profile starts empty (RecoilAnimData's defaults) and is authored in the editor
 }
 
 bool RecoilAsset::FromJsonString(const std::string& text, RecoilAsset& out, std::string* error) {
@@ -32,16 +27,21 @@ bool RecoilAsset::FromJsonString(const std::string& text, RecoilAsset& out, std:
         if (error) *error = "Expected a version 2 RecoilAnimData asset (version 1 migrates on save)";
         return false;
     }
-    auto settings = WeaponProceduralSettings::Defaults();
-    settings.Recoil = Defaults();
-    if (j["version"] == 1) {
-        settings.Recoil.UnityPort = false;
-        if (!WeaponProceduralSettings::FromJson(json{{"recoil", j["recoil"]}}, settings, error)) return false;
-        settings.Recoil.Unity = RecoilAnimData::FromLegacy(settings.Recoil);
-    } else if (!RecoilAnimData::FromJson(j["recoil"],settings.Recoil.Unity,error)) return false;
-    settings.Recoil.UnityPort = true;
     RecoilAsset parsed;
-    parsed.Data = settings.Recoil;
+    parsed.Data = Defaults();
+    if (j["version"] == 1) {
+        // The old tuning over the old profile defaults, converted.
+        LegacyRecoilSettings legacy = LegacyRecoilSettings::Defaults();
+        legacy.AimPitch = {0.35f, 0.55f};
+        legacy.AimYaw = {-0.08f, 0.08f};
+        legacy.CameraScale = 0.25f;
+        if (!LegacyRecoilSettings::FromJson(j["recoil"], legacy, error)) return false;
+        parsed.Data.Unity = RecoilAnimData::FromLegacy(legacy);
+        if (const auto on = j["recoil"].find("enabled"); on != j["recoil"].end()) {
+            if (!on->is_boolean()) { if (error) *error = "'recoil.enabled' must be true or false"; return false; }
+            parsed.Data.Enabled = on->get<bool>();
+        }
+    } else if (!RecoilAnimData::FromJson(j["recoil"],parsed.Data.Unity,error)) return false;
     out = std::move(parsed);
     return true;
 }
@@ -53,8 +53,7 @@ bool RecoilAsset::LoadFile(const std::string& path, RecoilAsset& out, std::strin
 }
 
 std::string RecoilAsset::ToJsonString() const {
-    const auto recoil = Data.UnityPort ? Data.Unity : RecoilAnimData::FromLegacy(Data);
-    return json{{"type", "recoil"}, {"version", 2}, {"recoil", recoil.ToJson()}}.dump(2) + "\n";
+    return json{{"type", "recoil"}, {"version", 2}, {"recoil", Data.Unity.ToJson()}}.dump(2) + "\n";
 }
 
 bool RecoilAsset::SaveFile(const std::string& path) const {
@@ -65,15 +64,6 @@ bool RecoilAsset::SaveFile(const std::string& path) const {
 }
 
 namespace {
-
-float Pick(std::mt19937& rng, const glm::vec2& range) {
-    if (range.x == range.y) return range.x;
-    return std::uniform_real_distribution<float>(std::min(range.x, range.y), std::max(range.x, range.y))(rng);
-}
-
-float Gauss(std::mt19937& rng, float mean, float sigma) {
-    return sigma > 0.0f ? std::normal_distribution<float>(mean, sigma)(rng) : mean;
-}
 
 // Smooth 1D value noise in [-1, 1]: hashed lattice values, quintic-eased between them.
 float Noise1(float x, unsigned channel) {
@@ -223,9 +213,8 @@ Curve FirstPersonSineCurve(float amplitude, float cycles, float phase) {
     return c;
 }
 
-WeaponProceduralSettings WeaponProceduralSettings::Defaults() {
-    WeaponProceduralSettings s;
-    auto& r = s.Recoil;
+LegacyRecoilSettings LegacyRecoilSettings::Defaults() {
+    LegacyRecoilSettings r;
     r.Rotation.X = FirstPersonKickCurve(1.2f);   // pitch: the old ADS kick's 1.2 degrees
     r.Rotation.Y = FirstPersonKickCurve(0.25f);
     r.Rotation.Z = FirstPersonKickCurve(1.5f);
@@ -236,16 +225,12 @@ WeaponProceduralSettings WeaponProceduralSettings::Defaults() {
     r.CameraYaw = FirstPersonKickCurve(0.15f, 0.08f, 0.16f);
     r.SustainedRotation = r.Rotation;
     r.SustainedPosition = r.Position;
+    return r;
+}
 
-    auto& b = s.Bob;
-    // A figure-eight: one side swing and two dips per stride (the old ADS bob's numbers).
-    b.Walk.X = FirstPersonSineCurve(0.003f);
-    b.Walk.Y = FirstPersonSineCurve(0.0015f, 2.0f);
-    b.Walk.Z = FirstPersonSineCurve(0.35f);
-    b.Sprint.X = FirstPersonSineCurve(0.008f);
-    b.Sprint.Y = FirstPersonSineCurve(0.005f, 2.0f);
-    b.Sprint.Z = FirstPersonSineCurve(1.2f);
-    b.HipScale = 0.5f;               // the walk/sprint clips already bob at the hip
+WeaponProceduralSettings WeaponProceduralSettings::Defaults() {
+    WeaponProceduralSettings s;
+    s.Recoil.Unity = RecoilAnimData::FromLegacy(LegacyRecoilSettings::Defaults()); // a new weapon's kick, as it always was
 
     auto& br = s.Breath;
     br.Position.X = FirstPersonSineCurve(0.0003f, 1.0f, glm::half_pi<float>());
@@ -261,65 +246,14 @@ json WeaponProceduralSettings::ToJson() const {
     json j;
     const auto& r = Recoil;
     j["recoil"] = {
-        {"enabled", r.Enabled}, {"duration", r.Duration},
-        {"adsPivot", Vec(r.AdsPivot)},
-        {"adsRotationScale", Vec(r.AdsRotationScale)},
-        {"adsPositionScale", Vec(r.AdsPositionScale)},
-        {"sustainedCurves", r.SustainedCurves},
-        {"sustainedRotation", Curve3Json(r.SustainedRotation)},
-        {"sustainedPosition", Curve3Json(r.SustainedPosition)},
-        {"sustainedDuration", r.SustainedDuration},
-        {"noiseSide", Vec(r.NoiseSide)},
-        {"noiseUp", Vec(r.NoiseUp)},
-        {"noiseAcceleration", r.NoiseAcceleration},
-        {"noiseDamping", r.NoiseDamping},
-        {"noiseAdsScale", r.NoiseAdsScale},
-        {"pushAmount", r.PushAmount},
-        {"pushAcceleration", r.PushAcceleration},
-        {"pushDamping", r.PushDamping},
-        {"swayPitch", Vec(r.SwayPitch)},
-        {"swayYaw", Vec(r.SwayYaw)},
-        {"swayRoll", r.SwayRoll},
-        {"swayAcceleration", r.SwayAcceleration},
-        {"swayDamping", r.SwayDamping},
-        {"swayAdsScale", r.SwayAdsScale},
-        {"swayPivot", Vec(r.SwayPivot)},
-        {"pitchProgression", r.PitchProgression},
-        {"upProgression", r.UpProgression},
-        {"progressionAcceleration", r.ProgressionAcceleration},
-        {"progressionDamping", r.ProgressionDamping},
-        {"progressionAdsScale", r.ProgressionAdsScale},
-        {"aimSmoothing", Vec(r.AimSmoothing)},
-        {"aimCompensation", r.AimCompensation},
-        {"aimAdsScale", r.AimAdsScale},
-        {"boltTravel", Vec(r.BoltTravel)},
-        {"rotation", Curve3Json(r.Rotation)}, {"position", Curve3Json(r.Position)},
-        {"pitchRange", Vec(r.PitchRange)}, {"yawRange", Vec(r.YawRange)}, {"rollRange", Vec(r.RollRange)},
-        {"sideRange", Vec(r.SideRange)}, {"upRange", Vec(r.UpRange)}, {"kickRange", Vec(r.KickRange)},
-        {"kickSpread", r.KickSpread}, {"kickBias", r.KickBias}, {"timeJitter", r.TimeJitter},
-        {"firstShotScale", r.FirstShotScale}, {"wander", r.Wander}, {"wanderReturn", r.WanderReturn},
-        {"burstGrowth", r.BurstGrowth}, {"burstGrowthMax", r.BurstGrowthMax},
-        {"hipScale", r.HipScale}, {"adsScale", r.AdsScale}, {"pivot", Vec(r.Pivot)},
-        {"smoothing", SpringJson(r.Smoothing)},
-        {"cameraPitch", r.CameraPitch.ToJson()}, {"cameraYaw", r.CameraYaw.ToJson()},
-        {"cameraYawRange", Vec(r.CameraYawRange)}, {"cameraScale", r.CameraScale},
-        {"cameraSmoothing", SpringJson(r.CameraSmoothing)},
-        {"aimPitch", Vec(r.AimPitch)}, {"aimYaw", Vec(r.AimYaw)}, {"aimRecovery", r.AimRecovery},
-        {"aimRecoveryDelay", r.AimRecoveryDelay}, {"aimRecoverySpeed", r.AimRecoverySpeed},
-        {"shakeAmount", r.ShakeAmount}, {"shakeMax", Vec(r.ShakeMax)}, {"shakeFrequency", r.ShakeFrequency},
-        {"shakeDecay", r.ShakeDecay}, {"shakeAdsScale", r.ShakeAdsScale},
-        {"hipProcedural", r.HipProcedural}, {"boltCycle", r.BoltCycle}, {"boltBone", r.BoltBone},
-        {"cameraRoll", r.CameraRoll}, {"fovPunch", r.FovPunch}, {"punchSpring", SpringJson(r.PunchSpring)},
+        {"enabled", r.Enabled}, {"hipProcedural", r.HipProcedural},
+        {"boltCycle", r.BoltCycle}, {"boltBone", r.BoltBone}, {"boltTravel", Vec(r.BoltTravel)},
+        {"recoilAnimData", r.Unity.ToJson()},
     };
-    if (r.UnityPort) j["recoil"]["recoilAnimData"] = r.Unity.ToJson();
     j["sway"] = SwayModifierToJson(Sway.Unity);
     j["sway"]["enabled"] = Sway.Enabled;
     const auto& b = Bob;
-    j["bob"] = {
-        {"enabled", b.Enabled}, {"walkStride", b.WalkStride}, {"sprintStride", b.SprintStride},
-        {"walk", Curve3Json(b.Walk)}, {"sprint", Curve3Json(b.Sprint)}, {"walkFullSpeed", b.WalkFullSpeed},
-        {"hipScale", b.HipScale}, {"adsScale", b.AdsScale}, {"ease", b.Ease},
-    };
+    j["bob"] = {{"walkStride", b.WalkStride}, {"sprintStride", b.SprintStride}, {"ease", b.Ease}};
     const auto& br = Breath;
     j["breath"] = {
         {"enabled", br.Enabled}, {"period", br.Period}, {"position", Curve3Json(br.Position)},
@@ -390,93 +324,17 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     root.Object("recoil", [&](Reader& r) {
         auto& o = s.Recoil;
         r.Bool("enabled", o.Enabled);
-        r.Vector("adsPivot", o.AdsPivot);
-        r.Vector("adsRotationScale", o.AdsRotationScale);
-        r.Vector("adsPositionScale", o.AdsPositionScale);
-        r.Bool("sustainedCurves", o.SustainedCurves);
-        r.Curve3("sustainedRotation", o.SustainedRotation);
-        r.Curve3("sustainedPosition", o.SustainedPosition);
-        r.Number("sustainedDuration", o.SustainedDuration);
-        r.Vector("noiseSide", o.NoiseSide);
-        r.Vector("noiseUp", o.NoiseUp);
-        r.Number("noiseAcceleration", o.NoiseAcceleration);
-        r.Number("noiseDamping", o.NoiseDamping);
-        r.Number("noiseAdsScale", o.NoiseAdsScale);
-        r.Number("pushAmount", o.PushAmount);
-        r.Number("pushAcceleration", o.PushAcceleration);
-        r.Number("pushDamping", o.PushDamping);
-        r.Vector("swayPitch", o.SwayPitch);
-        r.Vector("swayYaw", o.SwayYaw);
-        r.Number("swayRoll", o.SwayRoll);
-        r.Number("swayAcceleration", o.SwayAcceleration);
-        r.Number("swayDamping", o.SwayDamping);
-        r.Number("swayAdsScale", o.SwayAdsScale);
-        r.Vector("swayPivot", o.SwayPivot);
-        r.Number("pitchProgression", o.PitchProgression);
-        r.Number("upProgression", o.UpProgression);
-        r.Number("progressionAcceleration", o.ProgressionAcceleration);
-        r.Number("progressionDamping", o.ProgressionDamping);
-        r.Number("progressionAdsScale", o.ProgressionAdsScale);
-        r.Vector("aimSmoothing", o.AimSmoothing);
-        r.Bool("aimCompensation", o.AimCompensation);
-        r.Number("aimAdsScale", o.AimAdsScale);
-        r.Vector("boltTravel", o.BoltTravel);
-        r.Number("duration", o.Duration);
-        r.Curve3("rotation", o.Rotation);
-        r.Curve3("position", o.Position);
-        r.Vector("pitchRange", o.PitchRange);
-        r.Vector("yawRange", o.YawRange);
-        r.Vector("rollRange", o.RollRange);
-        r.Vector("sideRange", o.SideRange);
-        r.Vector("upRange", o.UpRange);
-        r.Vector("kickRange", o.KickRange);
-        r.Number("kickSpread", o.KickSpread);
-        r.Number("kickBias", o.KickBias);
-        r.Number("timeJitter", o.TimeJitter);
-        r.Number("firstShotScale", o.FirstShotScale);
-        r.Number("wander", o.Wander);
-        r.Number("wanderReturn", o.WanderReturn);
-        r.Number("burstGrowth", o.BurstGrowth);
-        r.Number("burstGrowthMax", o.BurstGrowthMax);
-        r.Number("hipScale", o.HipScale);
-        r.Number("adsScale", o.AdsScale);
-        r.Vector("pivot", o.Pivot);
-        if (!r.J.contains("adsPivot")) o.AdsPivot = o.Pivot;
-        r.Spring("smoothing", o.Smoothing);
-        r.CurveField("cameraPitch", o.CameraPitch);
-        r.CurveField("cameraYaw", o.CameraYaw);
-        r.Vector("cameraYawRange", o.CameraYawRange);
-        r.Number("cameraScale", o.CameraScale);
-        r.Spring("cameraSmoothing", o.CameraSmoothing);
-        r.Vector("aimPitch", o.AimPitch);
-        r.Vector("aimYaw", o.AimYaw);
-        r.Number("aimRecovery", o.AimRecovery);
-        r.Number("aimRecoveryDelay", o.AimRecoveryDelay);
-        r.Number("aimRecoverySpeed", o.AimRecoverySpeed);
-        r.Number("shakeAmount", o.ShakeAmount);
-        r.Vector("shakeMax", o.ShakeMax);
-        r.Number("shakeFrequency", o.ShakeFrequency);
-        r.Number("shakeDecay", o.ShakeDecay);
-        r.Number("shakeAdsScale", o.ShakeAdsScale);
         r.Bool("hipProcedural", o.HipProcedural);
         r.Number("boltCycle", o.BoltCycle);
         r.String("boltBone", o.BoltBone);
-        r.Number("cameraRoll", o.CameraRoll);
-        r.Number("fovPunch", o.FovPunch);
-        r.Spring("punchSpring", o.PunchSpring);
+        r.Vector("boltTravel", o.BoltTravel);
     });
     // A pre-port sway block (lookRotation, ...) keeps only its "enabled": its other keys are ignored.
     root.Object("sway", [&](Reader& r) { r.Bool("enabled", s.Sway.Enabled); });
     root.Object("bob", [&](Reader& r) {
         auto& o = s.Bob;
-        r.Bool("enabled", o.Enabled);
-        r.Number("walkStride", o.WalkStride);
+        r.Number("walkStride", o.WalkStride); // (a retired gun bob's other keys are ignored)
         r.Number("sprintStride", o.SprintStride);
-        r.Curve3("walk", o.Walk);
-        r.Curve3("sprint", o.Sprint);
-        r.Number("walkFullSpeed", o.WalkFullSpeed);
-        r.Number("hipScale", o.HipScale);
-        r.Number("adsScale", o.AdsScale);
         r.Number("ease", o.Ease);
     });
     root.Object("breath", [&](Reader& r) {
@@ -617,9 +475,19 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     if (const auto it=j.find("sway"); it!=j.end() && it->is_object() && it->contains("aimingSway")) {
         if (!SwayModifierFromJson(*it,s.Sway.Unity,error)) return false;
     }
-    if (j.contains("recoil") && j["recoil"].contains("recoilAnimData")) {
-        if (!RecoilAnimData::FromJson(j["recoil"]["recoilAnimData"],s.Recoil.Unity,error)) return false;
-        s.Recoil.UnityPort = true;
+    if (const auto it = j.find("recoil"); it != j.end() && it->is_object()) {
+        if (it->contains("recoilAnimData")) {
+            if (!RecoilAnimData::FromJson((*it)["recoilAnimData"],s.Recoil.Unity,error)) return false;
+        } else {
+            // The pre-RecoilAnimData tuning: converted once, here (saving writes the converted form).
+            LegacyRecoilSettings legacy = LegacyRecoilSettings::Defaults();
+            if (!LegacyRecoilSettings::FromJson(*it, legacy, error)) return false;
+            s.Recoil.Unity = RecoilAnimData::FromLegacy(legacy);
+        }
+    }
+    if (!std::isfinite(s.Recoil.BoltCycle) || s.Recoil.BoltCycle < 0.0f) {
+        if (error) *error = "'procedural.recoil.boltCycle' must be finite and nonnegative";
+        return false;
     }
 
     const auto positive = [&](float v, const char* what) {
@@ -627,16 +495,101 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         if (error) *error = std::string("'procedural.") + what + "' must be positive";
         return false;
     };
-    if (!positive(s.Recoil.Duration, "recoil.duration") || !positive(s.Bob.WalkStride, "bob.walkStride") ||
-        !positive(s.Bob.SprintStride, "bob.sprintStride") || !positive(s.Bob.WalkFullSpeed, "bob.walkFullSpeed") ||
-        !positive(s.Breath.Period, "breath.period") ||
-        !positive(s.Recoil.Smoothing.Frequency, "recoil.smoothing.frequency"))
+    if (!positive(s.Bob.WalkStride, "bob.walkStride") || !positive(s.Bob.SprintStride, "bob.sprintStride") ||
+        !positive(s.Breath.Period, "breath.period"))
         return false;
     if (!(s.Locomotion.WalkReference >= 0.0f) || !(s.Locomotion.SprintReference >= 0.0f)) {
         if (error) *error = "'procedural.locomotion' references must be 0 (the player's speed) or positive";
         return false;
     }
-    const auto& rc = s.Recoil;
+    out = std::move(s);
+    return true;
+}
+
+bool LegacyRecoilSettings::FromJson(const json& recoil, LegacyRecoilSettings& io, std::string* error) {
+    if (!recoil.is_object()) { if (error) *error = "'procedural.recoil' must be an object"; return false; }
+    LegacyRecoilSettings o = io;
+    const json wrapped{{"recoil", recoil}};
+    Reader root{wrapped, error};
+    root.Object("recoil", [&](Reader& r) {
+        r.Vector("adsPivot", o.AdsPivot);
+        r.Vector("adsRotationScale", o.AdsRotationScale);
+        r.Vector("adsPositionScale", o.AdsPositionScale);
+        r.Bool("sustainedCurves", o.SustainedCurves);
+        r.Curve3("sustainedRotation", o.SustainedRotation);
+        r.Curve3("sustainedPosition", o.SustainedPosition);
+        r.Number("sustainedDuration", o.SustainedDuration);
+        r.Vector("noiseSide", o.NoiseSide);
+        r.Vector("noiseUp", o.NoiseUp);
+        r.Number("noiseAcceleration", o.NoiseAcceleration);
+        r.Number("noiseDamping", o.NoiseDamping);
+        r.Number("noiseAdsScale", o.NoiseAdsScale);
+        r.Number("pushAmount", o.PushAmount);
+        r.Number("pushAcceleration", o.PushAcceleration);
+        r.Number("pushDamping", o.PushDamping);
+        r.Vector("swayPitch", o.SwayPitch);
+        r.Vector("swayYaw", o.SwayYaw);
+        r.Number("swayRoll", o.SwayRoll);
+        r.Number("swayAcceleration", o.SwayAcceleration);
+        r.Number("swayDamping", o.SwayDamping);
+        r.Number("swayAdsScale", o.SwayAdsScale);
+        r.Vector("swayPivot", o.SwayPivot);
+        r.Number("pitchProgression", o.PitchProgression);
+        r.Number("upProgression", o.UpProgression);
+        r.Number("progressionAcceleration", o.ProgressionAcceleration);
+        r.Number("progressionDamping", o.ProgressionDamping);
+        r.Number("progressionAdsScale", o.ProgressionAdsScale);
+        r.Vector("aimSmoothing", o.AimSmoothing);
+        r.Number("aimAdsScale", o.AimAdsScale);
+        r.Number("duration", o.Duration);
+        r.Curve3("rotation", o.Rotation);
+        r.Curve3("position", o.Position);
+        r.Vector("pitchRange", o.PitchRange);
+        r.Vector("yawRange", o.YawRange);
+        r.Vector("rollRange", o.RollRange);
+        r.Vector("sideRange", o.SideRange);
+        r.Vector("upRange", o.UpRange);
+        r.Vector("kickRange", o.KickRange);
+        r.Number("kickSpread", o.KickSpread);
+        r.Number("kickBias", o.KickBias);
+        r.Number("timeJitter", o.TimeJitter);
+        r.Number("firstShotScale", o.FirstShotScale);
+        r.Number("wander", o.Wander);
+        r.Number("wanderReturn", o.WanderReturn);
+        r.Number("burstGrowth", o.BurstGrowth);
+        r.Number("burstGrowthMax", o.BurstGrowthMax);
+        r.Number("hipScale", o.HipScale);
+        r.Number("adsScale", o.AdsScale);
+        r.Vector("pivot", o.Pivot);
+        if (!r.J.contains("adsPivot")) o.AdsPivot = o.Pivot;
+        r.Spring("smoothing", o.Smoothing);
+        r.CurveField("cameraPitch", o.CameraPitch);
+        r.CurveField("cameraYaw", o.CameraYaw);
+        r.Vector("cameraYawRange", o.CameraYawRange);
+        r.Number("cameraScale", o.CameraScale);
+        r.Spring("cameraSmoothing", o.CameraSmoothing);
+        r.Vector("aimPitch", o.AimPitch);
+        r.Vector("aimYaw", o.AimYaw);
+        r.Number("aimRecovery", o.AimRecovery);
+        r.Number("aimRecoveryDelay", o.AimRecoveryDelay);
+        r.Number("aimRecoverySpeed", o.AimRecoverySpeed);
+        r.Number("shakeAmount", o.ShakeAmount);
+        r.Vector("shakeMax", o.ShakeMax);
+        r.Number("shakeFrequency", o.ShakeFrequency);
+        r.Number("shakeDecay", o.ShakeDecay);
+        r.Number("shakeAdsScale", o.ShakeAdsScale);
+        r.Number("cameraRoll", o.CameraRoll);
+        r.Number("fovPunch", o.FovPunch);
+        r.Spring("punchSpring", o.PunchSpring);
+    });
+    if (!root.Ok) return false;
+    const auto positive = [&](float v, const char* what) {
+        if (v > 0.0f) return true;
+        if (error) *error = std::string("'procedural.recoil.") + what + "' must be positive";
+        return false;
+    };
+    if (!positive(o.Duration, "duration") || !positive(o.Smoothing.Frequency, "smoothing.frequency")) return false;
+    const auto& rc = o;
     for (const auto* range : {&rc.PitchRange, &rc.YawRange, &rc.RollRange, &rc.SideRange, &rc.UpRange,
                              &rc.KickRange, &rc.AimPitch, &rc.AimYaw, &rc.CameraYawRange, &rc.NoiseSide,
                              &rc.NoiseUp, &rc.SwayPitch, &rc.SwayYaw}) {
@@ -645,12 +598,12 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     for (float value : {rc.AimSmoothing.x, rc.AimSmoothing.y, rc.AimRecoverySpeed, rc.AimRecoveryDelay,
                        rc.NoiseAcceleration, rc.NoiseDamping, rc.PushAcceleration, rc.PushDamping,
                        rc.SwayAcceleration, rc.SwayDamping, rc.ProgressionAcceleration, rc.ProgressionDamping,
-                       rc.BoltCycle, rc.HipScale, rc.AdsScale, rc.AimAdsScale}) {
+                       rc.HipScale, rc.AdsScale, rc.AimAdsScale}) {
         if (!std::isfinite(value) || value < 0.0f) { if (error) *error = "Recoil rates and scales must be finite and nonnegative"; return false; }
     }
-    if (!positive(rc.SustainedDuration, "recoil.sustainedDuration") || rc.AimRecovery < 0.0f || rc.AimRecovery > 1.0f)
-        return false;
-    out = std::move(s);
+    if (!positive(rc.SustainedDuration, "sustainedDuration")) return false;
+    if (!(rc.AimRecovery >= 0.0f && rc.AimRecovery <= 1.0f)) { if (error) *error = "'procedural.recoil.aimRecovery' must be 0..1"; return false; }
+    io = o;
     return true;
 }
 
@@ -683,77 +636,9 @@ void WeaponProceduralState::Reset() {
 void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt, float rpm, RecoilFireMode mode, double unscaledTime, float frameDt) {
     const auto& r = s.Recoil;
     if (!r.Enabled) return;
-    if (r.UnityPort) {
-        m_Unity.Play(r.Unity,ads,rpm,mode,m_Rng,unscaledTime,frameDt);
-        m_SemiRecoveryTime = mode == RecoilFireMode::Semi ? 60.0f / std::max(1.0f,rpm) : -1.0f;
-        if (cycleBolt) m_BoltTime = 0;
-        return;
-    }
-    // A pause longer than a couple of cycles at any sane rate starts a new burst.
-    m_BurstShots = m_BurstEnded || (!m_ControllerFiring && m_SinceShot > 0.25f) ? 0 : m_BurstShots + 1;
-    m_BurstEnded = false;
-    if (m_BurstShots == 0) m_Wander = 0.0f;
-    const float growth = std::clamp(1.0f + r.BurstGrowth * (float)m_BurstShots, 1.0f, std::max(1.0f, r.BurstGrowthMax));
-    Shot shot;
-    shot.Sustained = r.SustainedCurves && m_BurstShots > 0;
-    shot.RotScale = ads ? r.AdsRotationScale : glm::vec3(1.0f);
-    shot.PosScale = ads ? r.AdsPositionScale : glm::vec3(1.0f);
-    shot.Scale = (ads ? r.AdsScale : r.HipScale) * (m_BurstShots == 0 ? r.FirstShotScale : 1.0f);
-    const float jitter = std::clamp(r.TimeJitter, 0.0f, 0.9f);
-    shot.Duration = Pick(m_Rng, {1.0f - jitter, 1.0f + jitter});
-    shot.Rot = {Pick(m_Rng, r.PitchRange), Pick(m_Rng, r.YawRange), Pick(m_Rng, r.RollRange)};
-    shot.Pos = {Pick(m_Rng, r.SideRange), Pick(m_Rng, r.UpRange), Pick(m_Rng, r.KickRange)};
-    // The kick's direction: part of the rise swings sideways, and the camera punch follows it.
-    const float angle = glm::radians(std::clamp(Gauss(m_Rng, r.KickBias, r.KickSpread * growth), -75.0f, 75.0f));
-    shot.Lift = shot.Rot.x * std::sin(angle);
-    shot.Rot.x *= std::cos(angle);
-    shot.CamPitch = shot.Rot.x;
-    shot.CamYaw = Pick(m_Rng, r.CameraYawRange) + std::sin(angle) * 2.0f;
-    // Sideways climb: a random walk pulled back toward centre, so the burst meanders.
-    m_Wander = m_Wander * (1.0f - std::clamp(r.WanderReturn, 0.0f, 1.0f)) + Gauss(m_Rng, 0.0f, r.Wander * growth);
-    const glm::vec2 climb(Pick(m_Rng, r.AimPitch), Pick(m_Rng, r.AimYaw) + m_Wander);
-    m_AimPending += climb * (ads ? r.AimAdsScale : 1.0f);
-    const float noiseScale = ads ? r.NoiseAdsScale : 1.0f;
-    m_NoiseTarget += glm::vec3(Pick(m_Rng, r.NoiseSide), Pick(m_Rng, r.NoiseUp), 0.0f) * noiseScale;
-    m_LayerTarget += glm::vec3(r.PushAmount * shot.Scale,
-        r.PitchProgression * (ads ? r.ProgressionAdsScale : 1.0f),
-        r.UpProgression * (ads ? r.ProgressionAdsScale : 1.0f));
-    m_RecoilSwayTarget += glm::vec3(Pick(m_Rng, r.SwayPitch), Pick(m_Rng, r.SwayYaw), 0.0f) *
-        (ads ? r.SwayAdsScale : 1.0f);
-    m_SinceShot = 0.0f;
-    m_Trauma = std::min(1.0f, m_Trauma + std::max(r.ShakeAmount, 0.0f));
-    // The camera's per-round roll and FOV pulse: a kick of the punch spring's velocity, sized so
-    // the spring's first swing peaks near the amount.
-    {
-        const float w = glm::two_pi<float>() * std::max(r.PunchSpring.Frequency, 0.01f);
-        const float scale = shot.Scale * (ads ? r.ShakeAdsScale : 1.0f) * w * 1.6f;
-        const float side = std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < 0.5f ? -1.0f : 1.0f;
-        m_Punch.V.x += side * Pick(m_Rng, {0.5f, 1.0f}) * r.CameraRoll * scale;
-        m_Punch.V.y += r.FovPunch * scale;
-    }
-    if (cycleBolt) m_BoltTime = 0.0f;
-    // A runaway trigger can't grow this without bound: the oldest shot has done its work.
-    if (m_Shots.size() >= 32) m_Shots.erase(m_Shots.begin());
-    m_Shots.push_back(shot);
-}
-
-void WeaponProceduralState::CompensateAim(glm::vec2 delta) {
-    m_Unity.UpdateDeltaInput({delta.y,delta.x});
-    for (int i = 0; i < 2; ++i) {
-        if (delta[i] * m_AimOutstanding[i] >= 0.0f || std::fabs(m_AimOutstanding[i]) < 1e-6f) continue;
-        const float fraction = std::min(1.0f, std::fabs(delta[i] / m_AimOutstanding[i]));
-        m_AimRecoverable[i] *= 1.0f - fraction;
-        m_AimOutstanding[i] *= 1.0f - fraction;
-    }
-}
-
-void WeaponProceduralState::DiscardClampedAim(glm::vec2 delta) {
-    for (int i = 0; i < 2; ++i) {
-        if (delta[i] * m_AimOutstanding[i] <= 0.0f || std::fabs(m_AimOutstanding[i]) < 1e-6f) continue;
-        const float fraction = std::min(1.0f, std::fabs(delta[i] / m_AimOutstanding[i]));
-        m_AimRecoverable[i] *= 1.0f - fraction;
-        m_AimOutstanding[i] *= 1.0f - fraction;
-    }
+    m_Unity.Play(r.Unity,ads,rpm,mode,m_Rng,unscaledTime,frameDt);
+    m_SemiRecoveryTime = mode == RecoilFireMode::Semi ? 60.0f / std::max(1.0f,rpm) : -1.0f;
+    if (cycleBolt) m_BoltTime = 0;
 }
 
 IKCurveWeights SampleIKCurves(const WeaponIKSettings& ik, const AnimatorController& ctrl,
@@ -783,100 +668,9 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const auto adsMix = [ads](float hip, float aim) { return hip + (aim - hip) * ads; };
     pose.IKWeight = m_IK * std::clamp(in.IKCurve, 0.0f, 1.0f);
 
-    // Recoil: every live shot's curves, summed, then smoothed by a spring so full-auto builds
-    // into a climb and settles back instead of stepping.
+    // Recoil: RecoilAnimation's solver (RecoilAnimation.h).
     const auto& r = s.Recoil;
-    if (!r.UnityPort) {
-        // Guarded here as well as in FromJson: the Inspector edits these live.
-        const float duration = std::max(r.Duration, 0.01f);
-        glm::vec3 recoilRot(0.0f), recoilPos(0.0f);
-        glm::vec2 camera(0.0f);
-        for (Shot& shot : m_Shots) {
-            shot.Time += dt;
-            const float u = shot.Time / ((shot.Sustained ? r.SustainedDuration : duration) * shot.Duration);
-            const glm::vec3 rot = (shot.Sustained ? r.SustainedRotation : r.Rotation).Evaluate(u);
-            recoilRot += (rot * shot.Rot + glm::vec3(0.0f, rot.x * shot.Lift, 0.0f)) * shot.Scale * shot.RotScale;
-            recoilPos += (shot.Sustained ? r.SustainedPosition : r.Position).Evaluate(u) * shot.Pos * shot.Scale * shot.PosScale;
-            camera += glm::vec2(r.CameraPitch.Evaluate(u) * shot.CamPitch, r.CameraYaw.Evaluate(u) * shot.CamYaw) *
-                      shot.Scale * r.CameraScale;
-        }
-        m_Shots.erase(std::remove_if(m_Shots.begin(), m_Shots.end(),
-                                     [&](const Shot& sh) { return sh.Time >= (sh.Sustained ? r.SustainedDuration : duration) * sh.Duration; }),
-                      m_Shots.end());
-        if (!r.Enabled) {
-            recoilRot = recoilPos = glm::vec3(0.0f);
-            camera = glm::vec2(0.0f);
-        }
-        m_RecoilRot.Step(recoilRot, dt, r.Smoothing);
-        m_RecoilPos.Step(recoilPos, dt, r.Smoothing);
-        pose.Rotation += m_RecoilRot.X;
-        pose.Position += m_RecoilPos.X;
-        const auto layer = [dt](glm::vec3& target, glm::vec3& output, glm::vec3 acceleration, glm::vec3 damping) {
-            for (int i = 0; i < 3; ++i) {
-                output[i] += (target[i] - output[i]) * (1.0f - std::exp(-acceleration[i] * dt));
-                target[i] *= std::exp(-damping[i] * dt);
-            }
-        };
-        if (!r.Enabled) {
-            m_NoiseTarget = m_NoiseOut = m_LayerTarget = m_LayerOut = m_RecoilSwayTarget = m_RecoilSwayOut = glm::vec3(0.0f);
-        }
-        layer(m_NoiseTarget, m_NoiseOut, glm::vec3(r.NoiseAcceleration), glm::vec3(r.NoiseDamping));
-        layer(m_LayerTarget, m_LayerOut, glm::vec3(r.PushAcceleration, r.ProgressionAcceleration, r.ProgressionAcceleration),
-              glm::vec3(r.PushDamping, r.ProgressionDamping, r.ProgressionDamping));
-        layer(m_RecoilSwayTarget, m_RecoilSwayOut, glm::vec3(r.SwayAcceleration), glm::vec3(r.SwayDamping));
-        pose.Position += m_NoiseOut + glm::vec3(0.0f, m_LayerOut.z, m_LayerOut.x);
-        pose.Rotation.x += m_LayerOut.y;
-        WeaponProceduralPose sway;
-        sway.Rotation = {m_RecoilSwayOut.x, m_RecoilSwayOut.y, m_RecoilSwayOut.y * r.SwayRoll};
-        pose.Position += sway.RotationQuat() * r.SwayPivot - r.SwayPivot;
-        pose.Rotation += sway.Rotation;
-        if (r.CameraSmoothing.Frequency > 0.0f) {
-            m_Camera.Step(glm::vec3(camera, 0.0f), dt, r.CameraSmoothing);
-            camera = glm::vec2(m_Camera.X);
-        }
-        // Shake: smooth noise on each axis, sized by trauma squared, laid over the punch.
-        m_Trauma = std::max(0.0f, m_Trauma - std::max(r.ShakeDecay, 0.0f) * dt);
-        m_ShakeTime = std::fmod(m_ShakeTime + dt * std::max(r.ShakeFrequency, 0.0f), 4096.0f);
-        if (r.Enabled && m_Trauma > 0.0f) {
-            const float amount = m_Trauma * m_Trauma * adsMix(1.0f, r.ShakeAdsScale);
-            camera.x += amount * r.ShakeMax.x * Noise1(m_ShakeTime, 1u);
-            camera.y += amount * r.ShakeMax.y * Noise1(m_ShakeTime, 2u);
-            pose.CameraRoll += amount * r.ShakeMax.z * Noise1(m_ShakeTime, 3u);
-        }
-        m_Punch.Step(glm::vec3(0.0f), dt, r.PunchSpring);
-        if (r.Enabled) {
-            pose.CameraRoll += m_Punch.X.x;
-            pose.FovKick += m_Punch.X.y;
-        }
-        pose.CameraKick = camera;
-        pose.Pivot = glm::mix(r.Pivot, r.AdsPivot, ads);
-
-        // Aim climb: fed in over ~30 ms (a round's impulse, not a one-frame snap), then - once the
-        // trigger rests - the recoverable share eases back.
-        {
-            glm::vec2 kick;
-            for (int i = 0; i < 2; ++i) {
-                const float feed = r.AimSmoothing[i] > 0.0f ? 1.0f - std::exp(-r.AimSmoothing[i] * dt) : 1.0f;
-                kick[i] = m_AimPending[i] * feed;
-            }
-            m_AimPending -= kick;
-            m_AimOutstanding += kick;
-            m_AimRecoverable += kick * r.AimRecovery;
-            m_SinceShot += dt;
-            if (!m_ControllerFiring && m_SinceShot >= r.AimRecoveryDelay && r.AimRecoverySpeed > 0.0f) {
-                const float len = glm::length(m_AimRecoverable);
-                if (len > 1e-6f) {
-                    const float step = std::min(len, r.AimRecoverySpeed * dt);
-                    const glm::vec2 back = m_AimRecoverable * (step / len);
-                    m_AimRecoverable -= back;
-                    m_AimOutstanding -= back;
-                    kick -= back;
-                }
-            }
-            pose.AimKick = r.Enabled ? kick : glm::vec2(0.0f);
-            if (!r.Enabled) m_AimPending = m_AimRecoverable = m_AimOutstanding = glm::vec2(0.0f);
-        }
-    } else if (r.Enabled) {
+    if (r.Enabled) {
         m_Unity.Update(r.Unity,in.Ads,dt,m_Rng); // the clamped step: a hitch must not fling the recoil springs
         if (m_SemiRecoveryTime >= 0.0f) {
             m_SemiRecoveryTime = std::max(0.0f,m_SemiRecoveryTime - dt);

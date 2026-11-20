@@ -25,24 +25,22 @@ static void OptimizeTriangleOrder(std::vector<unsigned int>& indices, size_t ver
 // configured entirely through Direct State Access — no glBind* to edit. Building a ModelMesh
 // mid-frame (e.g. a drag-drop import) therefore leaves the renderer's bound VAO / array-buffer
 // / element-buffer untouched, which the old bind-to-edit path silently clobbered (#97).
-ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector<unsigned int>& indices) {
+void ModelMesh::InitCpu(const std::vector<ModelVertex>& vertices, const std::vector<unsigned int>& indices) {
     m_IndexCount = static_cast<unsigned int>(indices.size());
-
     m_LocalPositions.reserve(vertices.size());
     for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
     m_LocalIndices = indices; // kept for #185 PR 6 mesh-collider cooking
     OptimizeTriangleOrder(m_LocalIndices, vertices.size());
     KeepSkin(vertices);
+}
+
+ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector<unsigned int>& indices) {
+    InitCpu(vertices, indices);
     CreateGpu(vertices);
 }
 
 ModelMesh::ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsigned int>& indices, bool deferUpload) {
-    m_IndexCount = static_cast<unsigned int>(indices.size());
-    m_LocalPositions.reserve(vertices.size());
-    for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
-    m_LocalIndices = indices;
-    OptimizeTriangleOrder(m_LocalIndices, vertices.size());
-    KeepSkin(vertices);
+    InitCpu(vertices, indices);
     if (deferUpload) m_PendingVertices = std::move(vertices);
     else CreateGpu(vertices);
 }
