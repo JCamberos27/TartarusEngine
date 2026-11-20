@@ -1,12 +1,12 @@
 #include "Tests/Cinematic.h"
 
 #include "Core/Env.h"
+#include "Tests/FfmpegPipe.h"
 #include "Log.h"
 
 #include <json.hpp>
 
 #include <algorithm>
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -20,12 +20,9 @@ struct State {
     std::vector<LightCue> lights;
     std::string out = "cinematic.mp4", ffmpeg;
     int warmup = 240, crf = 14;
-    FILE* pipe = nullptr;
-    int w = 0, h = 0;
-    long long written = 0;
-    long long dropped = 0; // frames the pipe did not take (ffmpeg gone, full disk) or of the wrong size
+    FfmpegPipe pipe;
     std::string path;
-    int rc = -1;           // ffmpeg's exit code once Finish closed the pipe; -1 before
+    int rc = -1; // ffmpeg's exit code once Finish closed the pipe; -1 before
 };
 State s_State;
 
@@ -133,47 +130,26 @@ int Warmup() { return s_State.warmup; }
 
 bool Start(const std::string& shotsDir, int w, int h) {
     State& s = s_State;
-    if (s.pipe) return true;
+    if (s.pipe.IsOpen()) return true;
     std::error_code ec;
     std::filesystem::create_directories(shotsDir, ec);
     const std::string out = (std::filesystem::path(shotsDir) / s.out).string();
-    char size[32];
-    std::snprintf(size, sizeof(size), "%dx%d", w, h);
-    // Raw RGBA in, top row first; H.264 out at exactly 60 fps, quality-first (a trailer, not a test artifact).
-    // yuv420p needs even sizes: an odd width or height is cropped by one pixel, or libx264 quits after a few frames.
-    const std::string cmd = "\"\"" + s.ffmpeg + "\" -hide_banner -loglevel error -y -f rawvideo -pix_fmt rgba -s " + size +
-                            " -framerate 60 -i - -vf crop=trunc(iw/2)*2:trunc(ih/2)*2 -c:v libx264 -preset slow -tune film -crf " + std::to_string(s.crf) +
-                            " -pix_fmt yuv420p -r 60 -movflags +faststart \"" + out + "\"\"";
-    s.pipe = _popen(cmd.c_str(), "wb");
-    if (!s.pipe) { Log::Error("Cinematic: could not start ffmpeg"); return false; }
-    s.w = w;
-    s.h = h;
-    std::cout << "[Cinematic] recording " << size << " @ 60 fps, " << Duration() << " s -> " << out << std::endl;
+    // Top row first; quality-first encode (a trailer, not a test artifact).
+    if (!s.pipe.Open({s.ffmpeg, out, w, h, /*FlipY*/ false, "-preset slow -tune film -crf " + std::to_string(s.crf), "Cinematic"}))
+        return false;
+    std::cout << "[Cinematic] " << Duration() << " s of keys" << std::endl;
     return true;
 }
 
 void Write(const std::vector<unsigned char>& rgba) {
     State& s = s_State;
-    if (!s.pipe) return;
-    if (rgba.size() != (size_t)s.w * (size_t)s.h * 4) { ++s.dropped; return; } // the framebuffer changed size mid-clip
-    if (std::fwrite(rgba.data(), 1, rgba.size(), s.pipe) == rgba.size()) ++s.written;
-    else ++s.dropped;
+    s.pipe.Write(rgba.data(), rgba.size()); // a frame of another size (the framebuffer changed mid-clip) counts as dropped
 }
 
 bool Finish() {
     State& s = s_State;
-    if (s.pipe) {
-        s.rc = _pclose(s.pipe);
-        s.pipe = nullptr;
-        std::cout << "[Cinematic] " << s.written << " frames (" << (double)s.written / 60.0 << " s), ffmpeg exit " << s.rc
-                  << std::endl;
-        if (s.rc != 0 || s.dropped > 0)
-            Log::Error("Cinematic: ffmpeg exit " + std::to_string(s.rc) + ", " + std::to_string(s.dropped) +
-                       " frame(s) not written - the clip is incomplete");
-        else if (s.written == 0)
-            Log::Error("Cinematic: no frame was recorded");
-    }
-    return s.rc == 0 && s.dropped == 0 && s.written > 0;
+    if (s.pipe.IsOpen()) s.rc = s.pipe.Close(); // logs a broken clip
+    return s.rc == 0 && s.pipe.Dropped() == 0 && s.pipe.Written() > 0;
 }
 
 
