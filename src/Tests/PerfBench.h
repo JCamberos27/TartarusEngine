@@ -48,6 +48,9 @@ private:
         std::string Cpu, Gpu, Loads;
         bool HaveGpu = false;
         bool GpuStarved = false; // GpuStarvedFrame: its GPU scopes are mostly CPU time, not GPU work
+        // The profiler's frame (BeginFrame to BeginFrame) and the part of it no top-level scope covered: a hitch with
+        // no big scope shows here whether the time went outside every scope. -1 = no scopes for the frame.
+        float WallMs = -1.0f, UnscopedMs = -1.0f;
     };
     // One line of the hitch report: frame-time percentiles and hitch counts over a set of frames.
     struct Stats { double P50 = 0, P95 = 0, P99 = 0, P999 = 0, Max = 0; int Over2x = 0, Over33 = 0; size_t N = 0; };

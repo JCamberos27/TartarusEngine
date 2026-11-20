@@ -92,6 +92,7 @@
 #include "Texture.h"
 #include "PngWrite.h" // async decode test fixture
 #include "EditorLayerInternal.h" // ClipFilterMatch
+#include "Profiler.h"
 #include <set>
 #include <string>
 #include <thread>
@@ -460,6 +461,28 @@ void TestUtf8Truncate() {
 }
 
 // --- FrameLoads: off by default, Take() hands over a frame's loads once, Summarize groups them by kind ------------
+// --perf-bench's "unscoped" time: a scope inside another is Nested (not counted twice), and the frame's time outside
+// every top-level scope is what LastFrameUnscopedMs reports. Only lower bounds: the sleeps last at least as long.
+void TestProfilerUnscoped() {
+    using namespace std::chrono_literals;
+    Profiler::BeginFrame();
+    {
+        PROFILE_SCOPE("Unscoped Test Outer");
+        { PROFILE_SCOPE("Unscoped Test Inner"); std::this_thread::sleep_for(5ms); }
+    }
+    std::this_thread::sleep_for(20ms); // outside every scope
+    Profiler::BeginFrame();
+    int outer = 0, inner = 0;
+    for (const Profiler::Entry& e : Profiler::GetLastFrame()) {
+        if (e.Name == "Unscoped Test Outer") { ++outer; CHECK(!e.Nested); CHECK(e.Milliseconds >= 4.5f); }
+        if (e.Name == "Unscoped Test Inner") { ++inner; CHECK(e.Nested); }
+    }
+    CHECK(outer == 1 && inner == 1);
+    CHECK(Profiler::LastFrameWallMs() >= 24.5f);
+    CHECK(Profiler::LastFrameUnscopedMs() >= 19.5f);
+    Profiler::BeginFrame(); // leave an empty frame behind
+}
+
 void TestFrameLoads() {
     std::vector<FrameLoads::Event> got;
     FrameLoads::Enable(false);
@@ -581,6 +604,7 @@ void RegisterCoreTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AtomicFile", TestAtomicFile});
     tests.push_back({"Utf8Truncate", TestUtf8Truncate});
     tests.push_back({"FrameLoads", TestFrameLoads});
+    tests.push_back({"ProfilerUnscoped", TestProfilerUnscoped});
     tests.push_back({"PhysicMaterial", TestPhysicMaterial});
     tests.push_back({"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp});
     tests.push_back({"PhysicsWorldSync", TestPhysicsWorldSync});
