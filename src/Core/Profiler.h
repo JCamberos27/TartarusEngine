@@ -14,11 +14,16 @@ public:
     struct Entry {
         std::string Name;
         float Milliseconds;
+        bool Nested = false; // recorded inside another scope: its time is already in that one's
     };
 
     // Call once at the top of the frame, before any PROFILE_SCOPE for that frame starts -
     // rotates last frame's collected entries out for GetLastFrame() and starts a fresh list.
     static void BeginFrame();
+    // Wall-clock ms from the BeginFrame before last to the last one: the span GetLastFrame() covers.
+    static float LastFrameWallMs();
+    // The part of LastFrameWallMs() no top-level scope covered (never below 0): time a hitch report can't name.
+    static float LastFrameUnscopedMs();
 
     static void PushSample(const std::string& name, float milliseconds);
     static void PushSample(const char* name, float milliseconds); // builds the entry's name in place

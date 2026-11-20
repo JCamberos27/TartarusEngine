@@ -1149,10 +1149,13 @@ bool AppSession::Frame() {
         return true;
     }
     ++frameIndex;
-    if (!playerMode) editor.SyncProjectChanges(world, assets); // #132 - outside-the-editor file changes
+    // The work before Profiler::BeginFrame below is billed to the frame before: its scopes land in that frame's list,
+    // and BeginFrame-to-BeginFrame is the span --perf-bench's "unscoped" time is measured over.
+    if (!playerMode) { PROFILE_SCOPE("Project Sync"); editor.SyncProjectChanges(world, assets); } // #132 - outside-the-editor file changes
     // #132 - coming back to the editor (alt-tab from Photoshop, a git pull) picks up
     // textures that changed on disk, like Unity's reimport on focus.
     if (!headless) {
+        PROFILE_SCOPE("Focus Reimport");
         const bool focused = glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED) != 0;
         const bool focusRegained = focused && !wasFocused;
         if (focusRegained) {
@@ -1171,6 +1174,7 @@ bool AppSession::Frame() {
     // met, fall through and stop the whole loop below).
     if (opt.smokeTestMode) {
         if (smoke.AllDone()) return false;
+        PROFILE_SCOPE("Harness Begin"); // a scene switch loads the next scene here
         smoke.BeginFrame();
     }
     // #144: `dt` is unscaled (editor camera, UI, capture polling - never slowed or frozen
@@ -1204,6 +1208,7 @@ bool AppSession::Frame() {
     // --editor-tests runs "headless" (hidden window) but drives the editor like a user, and
     // its Script IDE suite checks this very path, so it keeps the poll.
     if ((!headless || opt.editorTestsMode) && !camDragActive && LiveReload::Enabled()) {
+        PROFILE_SCOPE("Shader Reload Poll");
         const std::vector<std::string> changedShaders =
             ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
         if (!changedShaders.empty()) {
@@ -1231,8 +1236,11 @@ bool AppSession::Frame() {
         window.SetVSync(appliedVSyncMode);
     }
 
-    window.PollEvents();
-    Input::Update();
+    {
+        PROFILE_SCOPE("Events + Input");
+        window.PollEvents();
+        Input::Update();
+    }
 
     if (window.ShouldClose()) {
         if (playerMode) return false; // #174 - a game just quits; there is no scene to save
@@ -2525,11 +2533,20 @@ bool AppSession::Frame() {
             static GLsync s_Pace[kHiddenFramesAhead] = {};
             static int s_PaceAt = 0;
             if (GLsync old = s_Pace[s_PaceAt]) {
-                glClientWaitSync(old, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ull); // at most 1 s
+                // The GPU finishing the frame kHiddenFramesAhead back. A long one is GPU-side (the GPU still busy with
+                // that frame, or the driver holding it); logged with how it ended, since a hidden run has no present.
+                PROFILE_SCOPE("Pace Wait");
+                const auto waitStart = std::chrono::steady_clock::now();
+                const GLenum waited = glClientWaitSync(old, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ull); // at most 1 s
+                const double waitMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - waitStart).count();
+                if (waitMs > 50.0)
+                    Log::Info("Hidden pacing: frame " + std::to_string(frameIndex) + " waited " + std::to_string((int)waitMs) +
+                              " ms for the GPU (" + (waited == GL_TIMEOUT_EXPIRED ? "timed out" : waited == GL_WAIT_FAILED ? "failed" : "done") + ")");
                 glDeleteSync(old);
             }
             s_Pace[s_PaceAt] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
             s_PaceAt = (s_PaceAt + 1) % kHiddenFramesAhead;
+            PROFILE_SCOPE("Pace Flush"); // hands the frame to the driver; it can block when the driver's queue is full
             glFlush();
         } else {
             window.SwapBuffers();
@@ -2550,7 +2567,7 @@ bool AppSession::Frame() {
     const int bgCap = uncapped ? 0 : EditorSettings::Get().UnfocusedFpsLimit;
     if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
         fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
-    Time::LimitFps(fpsCap);
+    { PROFILE_SCOPE("Frame Cap"); Time::LimitFps(fpsCap); }
 
     // The startup chime, a few frames after the window shows - not over the recovery / scene-version prompt.
     if (startChimeFrames > 0 && --startChimeFrames == 0 && !editor.IsStartupModalPending())
@@ -2589,7 +2606,7 @@ bool AppSession::Frame() {
             editorCamera.Pitch = pitch;
         }
     }
-    if (opt.smokeTestMode) smoke.EndFrame();
+    if (opt.smokeTestMode) { PROFILE_SCOPE("Harness End"); smoke.EndFrame(); }
     return true;
 }
 
