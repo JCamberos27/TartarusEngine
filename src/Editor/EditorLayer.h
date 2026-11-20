@@ -33,6 +33,7 @@
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
 #include "LruMap.h" // m_ModelThumbnails / m_MaterialThumbs
+#include "ThumbnailCache.h" // ThumbnailCache::AsyncProbe (m_ModelThumbProbe)
 #include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
@@ -1975,13 +1976,35 @@ private:
     // Keyed by asset path (#181) rather than the Model* — stable across a Model being destroyed
     // and a new allocation reusing the same address, unlike the pointer. Bounded to
     // kMaxModelThumbnails, least recently used evicted first, so browsing a large library over a
-    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps
-    // this well under a megabyte of VRAM.
+    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap is 16 MB.
+    //
+    // Nothing on the UI thread touches the disk: a new tile asks m_ModelThumbProbe (a worker) for
+    // its dependency key and cached PNG; a hit is uploaded when it comes back, a miss is rendered
+    // within this frame's budget (count and ~2 ms), and the render's pixels come back through a
+    // pixel-pack buffer a few frames later (no glReadPixels stall) to be saved for the next launch.
+    struct ModelThumb {
+        enum class Stage : unsigned char { Probing, Render, Ready };
+        unsigned int Tex = 0;
+        unsigned Ticket = 0;   // the probe this entry waits for; a stale result is ignored
+        std::uint64_t Key = 0; // ThumbnailCache key (set once the probe is back)
+        Stage St = Stage::Probing;
+    };
     ModelPreviewRenderer m_ThumbnailPreview;
-    static constexpr size_t kMaxModelThumbnails = 128;
-    LruMap<unsigned int> m_ModelThumbnails; // path -> GL texture
+    static constexpr int kModelThumbSize = 128;
+    static constexpr size_t kMaxModelThumbnails = 256;
+    static constexpr size_t kMaxMaterialThumbnails = 128;
+    static constexpr double kThumbnailFrameBudgetMs = 2.0; // model renders stop for the frame past this
+    LruMap<ModelThumb> m_ModelThumbnails; // path -> thumbnail
+    ThumbnailCache::AsyncProbe m_ModelThumbProbe;
+    unsigned m_NextModelThumbTicket = 1;
+    struct ThumbReadback { unsigned int Pbo = 0; void* Fence = nullptr; std::string Path; std::uint64_t Key = 0; };
+    std::vector<ThumbReadback> m_ThumbReadbacks; // renders whose pixels are on their way to the cache
+    std::vector<unsigned int> m_FreeThumbPbos;
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
+    double m_ThumbnailMsThisFrame = 0.0;
+    void PumpModelThumbnails(); // once a frame: probe results uploaded, finished readbacks saved
+    void FreeModelThumbnailReadbacks();
     // Thumbnails dropped mid-frame (a Reimport from a tile's menu, an LRU eviction) may already be
     // in this frame's draw lists, so their textures are deleted at the start of the next frame.
     std::vector<unsigned int> m_RetiredThumbnailTextures;
@@ -2004,7 +2027,8 @@ private:
     void ClearMaterialThumbnails();
     // Copies a `size`-square preview render into `dst` (allocated here when 0) through the
     // thumbnail blit FBO, optionally reading the pixels back for the persistent cache.
-    void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
+    // pixelsOut: read back now (stalls). packPbo: read into that pixel-pack buffer instead, collected later.
+    void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut, unsigned int packPbo = 0);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
     // Sound-cell waveform envelopes (#236 G), decoded off the UI thread (AssetWaveformCache).
