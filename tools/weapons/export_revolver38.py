@@ -222,7 +222,7 @@ FINGER = [("CB_index_01_r", 0.30), ("CB_index_02_r", 0.40), ("CB_index_03_r", 0.
 def fix_arms_fire(w_fire):
     act = copy_action("A_FP_Fire", "A_FP_Fire_fixed")
     pair(act, w_fire)
-    fs, fe = frange("A_FP_Fire")
+    fs, _ = frange("A_FP_Fire")
     scn.frame_set(0)
     tip = lambda: world(arm, "index_03_r").translation + (world(arm, "index_03_r").to_3x3() @ M.Vector((0, arm.pose.bones["index_03_r"].length, 0)))
     # The trigger face's travel in the right hand's space: the take's kick moves gun and hand together, and must not
@@ -298,7 +298,7 @@ def mesh_points_root():
 def solve_aim():
     pair("A_FP_Idle", "A_W_Idle")
     scn.frame_set(0)
-    notch, post, notch_a, post_a = mesh_points_root()
+    notch, post, _, _ = mesh_points_root()
     k = world(arm, "CB_Gun").inverted() @ world(wep, "Root")
     sight = (post - notch).normalized()
     # Root rotation R with R @ sight = look, and Root's up (its +Y, the rest pose's +Z) towards AK_UP.
@@ -363,7 +363,6 @@ def sample_bullets(arms_act, wep_act, fs, fe, hide):
     for b in BULLETS:
         s = out[b]
         for i in range(1, len(s) - 1):
-            run = [j for j in range(max(0, i - 1), min(len(s), i + 2))]
             if s[i - 1][3] == s[i + 1][3] != s[i][3]:
                 s[i][3] = s[i - 1][3]
     return out
