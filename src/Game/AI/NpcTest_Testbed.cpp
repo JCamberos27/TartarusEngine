@@ -456,6 +456,7 @@ struct NpcTest::TestbedRun {
         int LookFrames = 0, CutFrames = 0, CutNearMax = 0, CutCollarMax = 0, CutBonesMax = 0, CutHeadMax = 0;
         float ProbeDepthMin = 9.0f, NearPlane = 0.0f, EyePushMax = 0.0f;
         int RayFrames = 0, InsideFrames = 0, InsideMax = 0, HitsMax = 0; // the ray grid: frames with rays seeing the inside
+        int ArmedFrames = 0; // look-down frames with the body's arms on the weapon rig (ArmsWeight > 0)
         std::string InsideWhat;
         std::vector<float> EyeH, HeadH, CamH; // steady: the eye's, the clip head's and the camera's height over the capsule's feet (m)
         float PitchMin = 0.0f, LimitMax = -89.0f; // the view's steepest pitch (deg) and the look-down limit's highest
@@ -1179,6 +1180,7 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         q.CutHeadMax = std::max(q.CutHeadMax, bd.ProbeCutHead);
         if (bd.ProbeDepth > 0.0f) q.ProbeDepthMin = std::min(q.ProbeDepthMin, bd.ProbeDepth);
         q.NearPlane = bd.NearPlane;
+        if (bd.ArmsWeight > 1e-3f) ++q.ArmedFrames;
         R.NeckRimPoints = bd.NeckRimPoints;
         if (bd.ProbeRays > 0) {
             ++q.RayFrames;
@@ -1600,9 +1602,9 @@ void NpcTest::MmPlayerChecks() {
         const TestbedRun::MmStats& q = R.Mm[i];
         std::printf("[MmLookDown] %-28s %6d %7.0f %8d %8d %8d %8d %10.1f %9.1f %10.1f\n", kTb[i].Name, q.LookFrames, 100.0f * q.CutFrames / q.LookFrames,
                     q.CutNearMax, q.CutCollarMax, q.CutBonesMax, q.CutHeadMax, q.ProbeDepthMin * 100.0f, q.NearPlane * 100.0f, q.EyePushMax * 100.0f);
-        std::printf("[MmLookDown] %-28s rays: %d frames, the inside seen on %d (%.0f %%), at most %d of 336 rays (of %d hitting the body) - mostly %s\n",
+        std::printf("[MmLookDown] %-28s rays: %d frames, the inside seen on %d (%.0f %%), at most %d of 336 rays (of %d hitting the body) - mostly %s; armed on %d of %d frames\n",
                     kTb[i].Name, q.RayFrames, q.InsideFrames, q.RayFrames ? 100.0f * q.InsideFrames / q.RayFrames : 0.0f, q.InsideMax, q.HitsMax,
-                    q.InsideWhat.empty() ? "-" : q.InsideWhat.c_str());
+                    q.InsideWhat.empty() ? "-" : q.InsideWhat.c_str(), q.ArmedFrames, q.LookFrames);
         std::printf("[MmLookDown] %-28s the view looked down to %.1f deg (asked %.0f; steady p50 %.1f, p95 %.1f); the look-down limit p50 %.1f, "
                     "p95 %.1f, max %.1f deg\n", kTb[i].Name, q.PitchMin, kTb[i].Pitch, NpcTestCommon::Percentile(q.PitchSteady, 0.5f), NpcTestCommon::Percentile(q.PitchSteady, 0.95f),
                     NpcTestCommon::Percentile(q.Limit, 0.5f), NpcTestCommon::Percentile(q.Limit, 0.95f), q.LimitMax);

@@ -74,6 +74,7 @@ void RegisterMotionMatchingTests(UnitTestSupport::TestList& tests); // UnitTests
 void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests); // UnitTests_MotionMatchingRuntime.cpp
 void RegisterRenderTests(UnitTestSupport::TestList& tests); // UnitTests_Render.cpp
 void RegisterGrassTests(UnitTestSupport::TestList& tests); // UnitTests_Grass.cpp
+void RegisterTerrainTests(UnitTestSupport::TestList& tests); // UnitTests_Terrain.cpp
 void RegisterWorldTextTests(UnitTestSupport::TestList& tests); // UnitTests_WorldText.cpp
 void RegisterOpenableTests(UnitTestSupport::TestList& tests); // UnitTests_Openable.cpp
 void RegisterLightSwitchTests(UnitTestSupport::TestList& tests); // UnitTests_LightSwitch.cpp
