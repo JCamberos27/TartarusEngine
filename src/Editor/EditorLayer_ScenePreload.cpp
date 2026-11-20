@@ -126,6 +126,13 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
             }
         }
     }
+    // A model slot the scene leaves empty takes the model's material remap (its .meta's
+    // "materialRemap", read by ApplyMaterialRemap during the load). Those .mat files are in no
+    // scene or prefab field, so they used to load synchronously inside the open: ~3.4 s of the
+    // Forest's (22k placed models). The remap read here is cached for the load.
+    for (const std::string& m : refs.Models)
+        for (const auto& [name, mat] : assets.MaterialRemap(m))
+            if (!mat.empty()) refs.Materials.insert(ProjectPaths::Resolve(mat));
     auto state = std::make_shared<ScenePreloadState>();
     state->Path = path;
     state->Frame = frame;
