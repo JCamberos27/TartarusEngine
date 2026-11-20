@@ -120,7 +120,7 @@ void SelectionOutline::Render(const SelectionOutlineInputs& in) {
         dilate.SetVec2("uSweepCenter", uv);
     }
     glBindVertexArray(in.fsQuadVao);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
     glBindVertexArray(0);
 
     // Restore.

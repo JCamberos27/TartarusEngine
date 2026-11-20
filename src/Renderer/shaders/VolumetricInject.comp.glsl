@@ -34,23 +34,8 @@ uniform int uIBLEnabled;
 uniform float uIBLIntensity;
 layout(binding = 11) uniform samplerCube uIrradianceMap;
 
-// --- lights: the scene's light SSBO and the cluster lists (same layout as ModelShading.glsl) ---
-struct Light {
-    vec4 PositionType; // xyz = world pos; w = type: 0 directional, 1 point, 2 spot
-    vec4 ColorRange;   // rgb = colour * intensity; a = range
-    vec4 DirCutoff;    // xyz = aim; w = spot outer cos
-    vec4 Params;       // x = spot inner cos; y = shadow slot; z = excluded layers; w = volumetric intensity
-    vec4 BoxX, BoxY, BoxZ; // light bounds (LightBuffer::BoundLast)
-    vec4 BoxHalf;          // xyz = half extents; w = fade (< 0: unbounded)
-};
-layout(std430, binding = 0) readonly buffer LightBuffer {
-    uint uLightCount;
-    uint uDirectionalCount;
-    Light uLights[];
-};
-struct ClusterRange { uint offset; uint count; };
-layout(std430, binding = 3) readonly buffer ClusterCounts { ClusterRange uClusterRange[]; };
-layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
+// --- lights: the scene's light SSBO and the cluster lists (the model shader's) ---
+#include "LightBuffer.glsl"
 uniform int  uClusterEnabled;
 uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
 #include "ClusterGrid.glsl"
@@ -135,19 +120,11 @@ vec3 PointSpotScatter(uint i, vec3 p, vec3 V) {
     if (dist2 > range * range) return vec3(0.0);
     float dist = sqrt(dist2);
     vec3 L = toLight / max(dist, 1e-4);
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist2);
-    if (lt.BoxHalf.w >= 0.0) {
-        vec3 q = vec3(dot(lt.BoxX.xyz, p) + lt.BoxX.w, dot(lt.BoxY.xyz, p) + lt.BoxY.w, dot(lt.BoxZ.xyz, p) + lt.BoxZ.w);
-        vec3 in3 = lt.BoxHalf.xyz - abs(q);
-        atten *= clamp(min(in3.x, min(in3.y, in3.z)) / lt.BoxHalf.w, 0.0, 1.0);
-    }
+    float atten = LightDistanceAtten(dist, range) * LightBoxFade(i, p);
     if (int(lt.PositionType.w) == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L);
-        float outerCos = lt.DirCutoff.w;
-        if (cosAngle < outerCos) return vec3(0.0);
-        atten *= smoothstep(outerCos, max(lt.Params.x, outerCos + 1e-3), cosAngle);
+        float cone = SpotConeAtten(i, L);
+        if (cone <= 0.0) return vec3(0.0);
+        atten *= cone;
         if (atten <= 0.0) return vec3(0.0);
         atten *= SpotShadow(int(lt.Params.y), p);
     } else {

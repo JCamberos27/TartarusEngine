@@ -63,13 +63,13 @@ void IblProbe::EnsureCreated() {
     glTextureParameteri(m_BrdfLut, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(m_BrdfLut, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    m_EnvShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+    m_EnvShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                            ShaderLibrary::ReadFile("IblEnv.frag.glsl"));
-    m_IrradianceShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+    m_IrradianceShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                                   ShaderLibrary::ReadFile("IblIrradiance.frag.glsl"));
-    m_PrefilterShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+    m_PrefilterShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                                  ShaderLibrary::ReadFile("IblPrefilter.frag.glsl"));
-    m_BrdfShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+    m_BrdfShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                             ShaderLibrary::ReadFile("IblBrdf.frag.glsl"));
 
     if (!m_EnvCube || !m_IrradianceCube || !m_SpecularCube || !m_BrdfLut)
@@ -185,7 +185,7 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
             return;
         }
         SetFaceBasis(*m_EnvShader, face);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
     }
     m_FboComplete = true;
     glGenerateTextureMipmap(m_EnvCube);
@@ -201,7 +201,7 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     for (int face = 0; face < 6; ++face) {
         BeginCubeFace(m_IrradianceCube, face, 0, kIrradianceSize);
         SetFaceBasis(*m_IrradianceShader, face);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
     }
 
     // --- Pass 3: GGX prefilter -> specular cube, one mip per roughness step ---------------
@@ -217,7 +217,7 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
         for (int face = 0; face < 6; ++face) {
             BeginCubeFace(m_SpecularCube, face, mip, size);
             SetFaceBasis(*m_PrefilterShader, face);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
         }
     }
 
@@ -289,7 +289,7 @@ bool IblProbe::Convolve(unsigned int irradiance, unsigned int specular, unsigned
                                                            kIrradianceSize, kIrradianceSize))
                 return false;
             SetFaceBasis(*m_IrradianceShader, face);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
         }
     }
 
@@ -309,7 +309,7 @@ bool IblProbe::Convolve(unsigned int irradiance, unsigned int specular, unsigned
             for (int face = firstFace; face <= lastFace; ++face) {
                 BeginCubeFace(specular, face, mip, size);
                 SetFaceBasis(*m_PrefilterShader, face);
-                glDrawArrays(GL_TRIANGLES, 0, 6);
+                glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
             }
         }
     }
@@ -375,7 +375,7 @@ void IblProbe::BakeBrdfLut() {
     glViewport(0, 0, kBrdfLutSize, kBrdfLutSize);
 
     m_BrdfShader->Bind();
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
     m_BrdfLutBaked = true;
 }
 
@@ -395,6 +395,6 @@ void IblProbe::PrefilterIntoArray(unsigned int envCube, int faceSize, unsigned i
     for (int mip = 0; mip < kSpecularMips; ++mip) {
         m_PrefilterShader->SetFloat("uRoughness", (float)mip / (float)(kSpecularMips - 1));
         BeginCubeFace(cubeArray, layer * 6 + face, mip, kSpecularSize >> mip); // a cube array's layer-face
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArrays(GL_TRIANGLES, 0, 3); // Fullscreen.vert's covering triangle
     }
 }
