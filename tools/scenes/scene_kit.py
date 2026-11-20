@@ -36,11 +36,6 @@ def model_index(repo, exe=None):
     return index
 
 
-def yaw_quat(deg):
-    h = math.radians(deg) / 2
-    return [0.0, round(math.sin(h), 6), 0.0, round(math.cos(h), 6)]
-
-
 def euler_quat(yaw=0.0, pitch=0.0, roll=0.0):
     """[x, y, z, w] for yaw about Y, then pitch about X, then roll about Z (degrees; each in the frame left by the
     one before, so yaw turns the piece and pitch / roll tip it about its own axes)."""

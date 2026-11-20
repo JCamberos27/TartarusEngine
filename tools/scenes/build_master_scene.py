@@ -372,7 +372,6 @@ def npc_bay(s):
 
 def player(s, arena, repo):
     """Arena's player (controller, weapons, first-person body) at the hub, stripped to the bare body + underpants."""
-    ents = {e['id']: e for k in ('empties', 'models') for e in arena.get(k, [])}
     spawn = next(e for e in arena['empties'] if 'First Person Controller' in e)
     body = next(e for e in arena['empties'] if e.get('parentId') == spawn['id'] and 'First Person Body' in e)
     keep_slots = {'Torso', 'Head', 'Arms'}

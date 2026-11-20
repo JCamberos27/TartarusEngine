@@ -337,7 +337,7 @@ python -I tools/scenes/dress_corridor.py
   on top): a heavy skirting band, door surrounds, two hero patches a side, a water-damaged ceiling round
   the dead lamp and in the corners, the end walls round the windows, and dark `DA_LiquidSplatter_*` floor splashes by
   the doorways. A `Decal Grading` entity (Age 0.35, Wear 0.4) sits under the root.
-- **Limits** (asserted by the script): at most 80 decals, 22 unique 2K `.decal` maps and no 4K map, to stay inside
+- **Limits** (asserted by the script): at most 80 decals, 22 unique `.decal` maps (all 2K), to stay inside
   the decal texture budget. Only the `DA_PeelingPaint_*` sets that aren't tile or board grids are used.
 - **Reruns:** the script first removes the `Decal Lab` and `Corridor Wear` subtrees, so running it again leaves the
   scene byte-identical.
@@ -363,8 +363,8 @@ walls, water runs, a grime band and one dark `DA_LiquidSplatter_*` splash on the
 water marks are "stains": blotch maps with the component's Substrate set to Off and a neutral grey tint, so they never
 open the wall or warm the paint. Placement is read from the scene (wall planes, which side faces into the room, doors,
 windows, ceiling footprints) and a built-in self-check fails if a decal is off its wall, faces out of the room or covers
-an opening. Limits asserted: at most 600 decals, and across corridor + apartments at most 30 unique 2K maps and no 4K
-map (the apartments add eight flake and crack maps to the corridor's pool, `APT_POOL`; the stains reuse the blotch
+an opening. Limits asserted: at most 600 decals, and across corridor + apartments at most 30 unique (2K)
+maps (the apartments add eight flake and crack maps to the corridor's pool, `APT_POOL`; the stains reuse the blotch
 maps, so the extra decals cost no texture memory). 301 is the hand-edited NPC room: it only gains materials and decals.
 
 

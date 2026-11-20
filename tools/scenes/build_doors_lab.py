@@ -41,7 +41,8 @@ UP = 1.5               # the upper floor
 
 lab = LabScene(SRC)
 j = lab.data
-hall = json.load(open(HALLWAY, encoding='utf-8'))
+with open(HALLWAY, encoding='utf-8') as f:
+    hall = json.load(f)
 
 
 def door_template(stem):
