@@ -216,6 +216,9 @@ struct EditorUiTestAccess {
     static int& FavPage(EditorLayer& e) { return e.m_FavPage; }
     static bool& InspectorLocked(EditorLayer& e) { return e.m_InspectorLocked; }
     static std::string& CurrentFolder(EditorLayer& e) { return e.m_CurrentAssetFolder; }
+    // The Asset Browser's project index (what lists prefabs, controllers and other unlisted files) is
+    // waiting to rescan or still scanning. With the Drive assets linked it is ~11.6k files.
+    static bool AssetIndexBusy(EditorLayer& e) { return !e.m_ProjectAssetIndex.valid || e.m_ProjectAssetIndex.scan.valid(); }
     static void NavigateFolder(EditorLayer& e, const std::string& f) { e.NavigateAssetFolder(f); }
     static std::string SceneKey(EditorLayer& e) { return e.CurrentSceneKey(); }
     // The motion demo.
