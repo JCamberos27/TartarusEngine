@@ -230,13 +230,26 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
         ImGui_ImplOpenGL3_RenderDrawData(dd);
         return;
     }
+    Frame f;
+    f.dd = dd;
+    f.vp = dd->OwnerViewport ? dd->OwnerViewport : ImGui::GetMainViewport();
+    f.fbW = (int)(dd->DisplaySize.x * dd->FramebufferScale.x);
+    f.fbH = (int)(dd->DisplaySize.y * dd->FramebufferScale.y);
+    f.dispMin = dd->DisplayPos;
+    f.dispMax = ImVec2(dd->DisplayPos.x + dd->DisplaySize.x, dd->DisplayPos.y + dd->DisplaySize.y);
+    f.listCount = dd->CmdLists.Size;
+    PoseLists(f);
+    PlanCaptures(f, blur);
+    DrawLists(f);
+}
+
+// --- 1. Classify, convert and pose every list (CPU only) ---------------------------------------------
+void GlassCompositor::PoseLists(const Frame& f) {
     ImGuiContext& g = *GImGui;
-    ImGuiViewport* vp = dd->OwnerViewport ? dd->OwnerViewport : ImGui::GetMainViewport();
-    const int fbW = (int)(dd->DisplaySize.x * dd->FramebufferScale.x);
-    const int fbH = (int)(dd->DisplaySize.y * dd->FramebufferScale.y);
-    const ImVec2 dispMin = dd->DisplayPos;
-    const ImVec2 dispMax(dd->DisplayPos.x + dd->DisplaySize.x, dd->DisplayPos.y + dd->DisplaySize.y);
-    const int listCount = dd->CmdLists.Size;
+    ImGuiViewport* vp = f.vp;
+    ImDrawData* dd = f.dd;
+    const ImVec2 dispMin = f.dispMin, dispMax = f.dispMax;
+    const int listCount = f.listCount;
 
     // Which window drew each list (sorted, looked up by binary search).
     m_Owner.clear();
@@ -366,21 +379,25 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
     std::sort(m_SeenNext.begin(), m_SeenNext.end());
     m_SeenNext.erase(std::unique(m_SeenNext.begin(), m_SeenNext.end()), m_SeenNext.end());
     m_Seen.swap(m_SeenNext);
+}
 
-    // --- 2. Plan the captures (CPU only) -----------------------------------------------------------
+// --- 2. Plan the captures (CPU only) -----------------------------------------------------------------
+void GlassCompositor::PlanCaptures(const Frame& f, bool blur) {
+    ImDrawData* dd = f.dd;
+    const int fbW = f.fbW, fbH = f.fbH;
+    const ImVec2 dispMin = f.dispMin, dispMax = f.dispMax;
+    const int listCount = f.listCount;
+
     // The same walk as the render below: which capture each plate samples, and so the part of the
     // frame each capture has to blur - the union of its plates. A plate past kMaxCapturesPerFrame reuses
     // the last capture, so it widens that one.
-    auto drawsPlate = [&](const ListInfo& li) {
-        return li.Plate && li.Alpha > 0.0f && li.PlateRect.GetWidth() >= 1.0f && li.PlateRect.GetHeight() >= 1.0f;
-    };
     m_PlateCapture.assign((size_t)listCount, -1);
     m_CaptureUse.clear();
     if (blur) {
         m_Dirty.clear();
         for (int i = 0; i < listCount; ++i) {
             const ListInfo& li = m_Info[(size_t)i];
-            if (drawsPlate(li)) {
+            if (DrawsPlate(li)) {
                 const ImRect& r = li.PlateRect;
                 bool stale = m_CaptureUse.empty();
                 for (const ImRect& d : m_Dirty) stale = stale || Overlaps(d, r);
@@ -419,8 +436,15 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             m_CaptureRects.push_back(c);
         }
     }
+}
 
-    // --- 3. Render back to front, laying glass under each surface ----------------------------------
+// --- 3. Render back to front, laying glass under each surface ----------------------------------------
+void GlassCompositor::DrawLists(const Frame& f) {
+    ImDrawData* dd = f.dd;
+    const int fbW = f.fbW, fbH = f.fbH;
+    const ImVec2 dispMin = f.dispMin, dispMax = f.dispMax;
+    const int listCount = f.listCount;
+
     m_Pending.clear();
     int captured = -1;            // the capture the blur texture holds now
     bool texturesSent = false;
@@ -428,7 +452,7 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
     const ImU32 fallback = U32(GlassFallback);
     for (int i = 0; i < listCount; ++i) {
         const ListInfo& li = m_Info[(size_t)i];
-        if (drawsPlate(li)) {
+        if (DrawsPlate(li)) {
             ++m_StatSurfaces;
             const ImRect r = li.PlateRect;
             // Everything that floats (popups, menus, tooltips, floating windows, the Scene view's

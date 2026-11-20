@@ -66,6 +66,7 @@ struct Material;      // Material.h
 class ShaderAsset;    // ShaderAsset.h
 struct RegisteredComponent; // ComponentRegistry.h
 struct EditorFolderVisual;  // EditorModuleAPI.h
+namespace EditorSearch { struct ParsedAssetSearch; } // EditorSearch.h
 enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
@@ -1803,6 +1804,29 @@ private:
     // multi-select (m_AssetSelectionAnchorIndex indexes into this). Never mutated between
     // FrameBegin and the last DrawAssetCell of a frame.
     std::vector<AssetGridCell> m_AssetGridCells;
+    // AssetGridFrameBegin's parts and DrawAssetCell's / HandleAssetGridBackground's, all in EditorLayer_AssetBrowser.cpp.
+    struct AssetCellLook; // what one tile shows (thumbnail, glyph, folder tint, selected / renaming / playing)
+    void CollectAssetGridCells(AssetLibrary& assets, const EditorSearch::ParsedAssetSearch& search);
+    void AssetGridFrameEdges(); // the search-empty sound and Ctrl+A select-all
+    void BuildAssetCellLook(AssetLibrary& assets, const AssetGridCell& cell, AssetCellLook& look);
+    bool DrawAssetTile(World& world, AssetLibrary& assets, const AssetGridCell& cell, const AssetCellLook& look, float cellW, float cellH);
+    bool DrawAssetRow(World& world, AssetLibrary& assets, const AssetGridCell& cell, const AssetCellLook& look);
+    void DrawAssetRenameField(World& world, AssetLibrary& assets, float width);
+    void ClickAssetCell(const AssetGridCell& cell, size_t cellIndex, bool isFolder, bool playing);
+    void HandleAssetCellOpen(World& world, AssetLibrary& assets, const AssetGridCell& cell, int index, bool isFolder, bool isSelected);
+    void HandleAssetCellDragDrop(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder);
+    void DrawAssetCellContextMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder);
+    void DrawSceneCellMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell);
+    void DrawShaderCellMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell);
+    void DrawAssetItemMenu(World& world, AssetLibrary& assets, const AssetGridCell& cell, bool isFolder);
+    void SelectForAssetContextMenu(const std::string& key, bool isFolder);
+    void CopyAssetPathMenuItem(const std::string& key);
+    void AssetFavoritesMenuItem();
+    void EditAssetLabelsMenuItem(World& world, AssetLibrary& assets, const std::string& key);
+    void SelectSceneReferences(World& world, const AssetGridCell& cell);
+    void DrawAssetGridCreateMenu(World& world, AssetLibrary& assets);
+    void SelectCreatedAssetFile(const std::string& path);
+    void DrawWeaponWizardPopup();
     // Whether the Asset Browser's list and folder summaries are reused between frames during Play (above, and
     // RebuildFolderSummariesIfNeeded). TARTARUS_NO_UI_THROTTLE=1 turns it off for A/B benches.
     static bool PlayUiThrottle();
@@ -2086,6 +2110,7 @@ private:
         bool IsFolder = false;
         bool operator==(const AssetKeyRef& o) const { return Key == o.Key && IsFolder == o.IsFolder; }
     };
+    std::vector<AssetKeyRef> AssetSelectionForAction() const; // everything selected, primary first (EditorLayer_AssetBrowser.cpp)
     // m_SelectedAssetKey/m_SelectedAssetIsFolder is the "primary"/anchor selection (same role as
     // m_Selected for scene entities); m_ExtraAssetSelection holds everything else co-selected via
     // Ctrl/Shift-click — mirroring the m_Selected + m_ExtraSelection split already used for scene
@@ -2433,6 +2458,21 @@ private:
     std::shared_ptr<AnimatorWindowState> m_AnimatorWin; // shared_ptr: the type is only complete in EditorLayer_Animator.cpp
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
+    // Its handlers, one per component (EditorLayer_Inspector.cpp's name -> handler table).
+    void DrawParticleSystemExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawRigidbodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAnimationExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAnimatorComponentExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawCharacterOutfitExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawReflectionProbeExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawFirstPersonBodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawFirstPersonControllerExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawIKRigExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawCameraExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawLightExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAudioSourceExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawColliderExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawJointExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
     // Decals (docs/DECALS.md). EditorLayer_Decals.cpp: the .decal asset editor, the Decal
     // component's extras (preview + atlas-frame picker, channel matrix, fade curves, Fit to
     // Surface), Create Decal (writes a DA_*.decal) and the albedo an Asset Browser tile shows.
@@ -2508,6 +2548,8 @@ private:
     // Multi-select counterpart: `sel` is every selected entity that has this component.
     void DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                           const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
+    void DrawRigidbodyExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
+    void DrawLightExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
     // #6 Defect #44/#54 — the ReflectFieldType switch, shared by the single-select (`sel` of size
     // 1, no mixed-value branch ever taken) and multi-select Inspector loops so a new field type or
     // widget improvement is written once instead of drifting between two independent copies. Draws

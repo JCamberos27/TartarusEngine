@@ -67,6 +67,22 @@ private:
     GLint m_Mask = GL_TRUE, m_Func = GL_LESS;
 };
 
+// The blend function (all four factors) saved on entry and restored on scope exit, for passes that switch it per batch.
+class GLBlendFuncScope {
+public:
+    GLBlendFuncScope() {
+        glGetIntegerv(GL_BLEND_SRC_RGB, &m_F[0]);
+        glGetIntegerv(GL_BLEND_DST_RGB, &m_F[1]);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &m_F[2]);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &m_F[3]);
+    }
+    ~GLBlendFuncScope() { glBlendFuncSeparate((GLenum)m_F[0], (GLenum)m_F[1], (GLenum)m_F[2], (GLenum)m_F[3]); }
+    GLBlendFuncScope(const GLBlendFuncScope&) = delete;
+    GLBlendFuncScope& operator=(const GLBlendFuncScope&) = delete;
+private:
+    GLint m_F[4] = {GL_ONE, GL_ZERO, GL_ONE, GL_ZERO};
+};
+
 // Face culling off for a scope (double-sided cards, blades), the caller's setting restored after.
 class GLCullOffScope {
 public:

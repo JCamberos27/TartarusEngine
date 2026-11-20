@@ -521,7 +521,7 @@ void TestOutfitLandingKeepsUnrecordedChange() {
 void TestPrefsMigrationToCleanView() {
     EditorSettings& s = EditorSettings::Get();
     const EditorSettings saved = s;
-    s.EditorThemeId = 0;
+    s.EditorThemeId = EditorSettings::kTartarusTheme;
     s.ShowColliders = true;
     s.SceneShowStats = true;
     s.LightGizmoSelectedOnly = false;
@@ -532,7 +532,7 @@ void TestPrefsMigrationToCleanView() {
     CHECK(EditorSettings::MigratePrefs(s, 1)); // asks for the clean dock once
     CHECK(s.GizmoSize == EditorSettings{}.GizmoSize);
     CHECK(s.PrefsVersion == EditorSettings::kPrefsVersion);
-    CHECK(s.EditorThemeId == 1);
+    CHECK(s.EditorThemeId == EditorSettings::kGlassTheme);
     CHECK(!s.ShowColliders && s.CollidersSelectedOnly);
     CHECK(!s.SceneShowStats);
     CHECK(s.LightGizmoSelectedOnly && s.VolumeGizmosSelectedOnly);

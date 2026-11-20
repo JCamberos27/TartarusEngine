@@ -26,23 +26,15 @@ namespace fs = std::filesystem;
 bool Near(float a, float b, float eps = 1e-5f) { return std::abs(a - b) <= eps; }
 bool Near3(const glm::vec3& a, const glm::vec3& b, float eps = 1e-5f) { return glm::length(a - b) <= eps; }
 
-fs::path DecalTempDir() {
-    std::error_code ec;
-    const fs::path dir = fs::temp_directory_path(ec) / "TartarusUnitTests" / "Decals";
-    fs::create_directories(dir, ec);
-    return dir;
-}
-std::string ReadFile(const fs::path& p) {
-    std::ifstream f(p, std::ios::binary);
-    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
-}
+fs::path DecalTempDir() { return UnitTestSupport::TempDir("Decals"); }
+using UnitTestSupport::ReadAll;
 void WriteFile(const fs::path& p, const std::string& s) {
     std::ofstream f(p, std::ios::binary);
     f << s;
 }
 
 const RegisteredComponent* FindRegistered(const char* name) {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     for (const RegisteredComponent& rc : ComponentRegistry::All())
         if (std::strcmp(rc.Meta.Name, name) == 0) return &rc;
     return nullptr;
@@ -107,7 +99,7 @@ void AssetRoundTrip() {
     a.Category = "Graffiti/Tags";
     a.Tags = "graffiti, tag ,crown";
     CHECK(a.Save());
-    const std::string first = ReadFile(path);
+    const std::string first = ReadAll(path);
 
     const json j = json::parse(first, nullptr, false);
     CHECK(j.is_object() && j.value("decalVersion", 0) == 1);
@@ -134,7 +126,7 @@ void AssetRoundTrip() {
     CHECK(b->Category == "Graffiti/Tags" && b->Tags == "graffiti, tag, crown");
 
     CHECK(b->Save());
-    CHECK(ReadFile(path) == first); // a load + save changes nothing
+    CHECK(ReadAll(path) == first); // a load + save changes nothing
     std::error_code ec;
     fs::remove(path, ec);
 }
@@ -195,7 +187,7 @@ void AssetForgivingLoad() {
 
 // Decal and Decal Grading save with the scene and come back the same.
 void ComponentRoundTrip() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World w;
     AssetLibrary assets;
     const entt::entity e = w.CreateEmptyEntity(glm::vec3(1, 2, 3), glm::vec3(0, 90, 0), glm::vec3(1), "Tag");
@@ -318,14 +310,14 @@ void SubstrateRoundTrip() {
     CHECK(b && !b->Missing && b->Substrate == a.Substrate && b->Substrate.Enabled());
     if (b) {
         CHECK(b->Save());
-        CHECK(ReadFile(a.Path).find("\"substrate\"") != std::string::npos);
+        CHECK(ReadAll(a.Path).find("\"substrate\"") != std::string::npos);
     }
     // No albedo: nothing written, nothing enabled.
     DecalAsset none;
     none.Path = (DecalTempDir() / "DA_NoSubstrate.decal").u8string();
     none.AlbedoPath = "assets/Decals/T_Test.png";
     CHECK(none.Save());
-    CHECK(ReadFile(none.Path).find("substrate") == std::string::npos);
+    CHECK(ReadAll(none.Path).find("substrate") == std::string::npos);
     const auto nb = DecalAsset::Load(none.Path);
     CHECK(nb && !nb->Substrate.Enabled());
     // Wrong types keep the defaults; out-of-range values clamp.
@@ -337,7 +329,7 @@ void SubstrateRoundTrip() {
           bad->Substrate.RoughRange == glm::vec2(0.0f, 1.0f));
 
     // Component: Custom and its maps through the scene file, by the keys the dress scripts write.
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World w;
     AssetLibrary assets;
     const entt::entity e = w.CreateEmptyEntity(glm::vec3(0), glm::vec3(0), glm::vec3(1), "Peel");
