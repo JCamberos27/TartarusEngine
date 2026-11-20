@@ -48,14 +48,13 @@ struct SelectionPanel {
     AC& D;
     AssetLibrary* assets;
     AnimatorControllerComponent* live;
-    Model* rig;
     const float S;
     bool& changed;
     AC::Layer& L;
     const float labelW;
 
     explicit SelectionPanel(AnimCtx& c)
-        : cx(c), world(c.world), W(c.W), D(c.W.Doc), assets(c.assets), live(c.live), rig(c.rig), S(c.S), changed(c.changed),
+        : cx(c), world(c.world), W(c.W), D(c.W.Doc), assets(c.assets), live(c.live), S(c.S), changed(c.changed),
           L(c.W.L()), labelW(110.0f * c.S) {}
 
     void row(const char* label);
@@ -468,10 +467,8 @@ void SelectionPanel::DrawStateCurves(AC::State& s) {
         AC::Curve& cv = s.Curves[ci];
         ImGui::PushID(ci);
         row("Name");
-        ImGui::SetNextItemWidth(-FLT_MIN - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x);
-        char nameBuf[64];
-        std::snprintf(nameBuf, sizeof nameBuf, "%s", cv.Name.c_str());
-        if (ImGui::InputText("##cname", nameBuf, sizeof nameBuf)) { cv.Name = nameBuf; changed = true; }
+        // Commits once on Enter / focus loss (one save and one undo step, not one per keystroke); empty reverts.
+        if (InputName("##cname", cv.Name, -FLT_MIN - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x)) changed = true;
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("The curve's name. The first-person driver reads IK, IK_RightHand, IK_LeftHand and Look\n"
                                  "(0..1 scales on the arm IK, each hand and the look-at); any other name is for game code.");
@@ -720,6 +717,7 @@ void SelectionPanel::DrawStateTransitions(int si, AC::State& s) {
     if (ActionButton(ICON_FA_PLUS " Make Transition", "Then click the destination state in the graph")) {
         W.Linking = true;
         W.LinkFrom = {NodeKind::State, si};
+        W.LinkLayer = W.Layer; // the graph drops a link whose layer isn't the open one
     }
 }
 

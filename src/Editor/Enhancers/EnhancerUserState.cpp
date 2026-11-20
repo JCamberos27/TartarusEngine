@@ -15,18 +15,6 @@ using json = nlohmann::json;
 
 namespace Enhancers {
 
-namespace {
-// Keys this build reads/writes; anything else in the file is carried through untouched.
-const char* const kOwnedKeys[] = {
-    "version", "sceneBookmarks", "entityBookmarks", "folderBookmarks", "inspectorBookmarks", "defaultParents",
-    "favoritePages", "favoritesMigrated",
-};
-bool IsOwnedKey(const std::string& k) {
-    for (const char* o : kOwnedKeys) if (k == o) return true;
-    return false;
-}
-} // namespace
-
 EnhancerUserState& EnhancerUserState::Get() {
     static EnhancerUserState s;
     return s;
@@ -102,6 +90,10 @@ json EnhancerUserState::ToJson() const {
 void EnhancerUserState::FromJson(const json& root) {
     Reset();
     if (!root.is_object()) return;
+    NoteNewerVersion(root, kVersion, "Editor Enhancers bookmarks");
+    // Keys this build reads/writes; anything else in the file is carried through untouched.
+    m_Unknown = UnownedKeys(root, {"version", "sceneBookmarks", "entityBookmarks", "folderBookmarks", "inspectorBookmarks",
+                                   "defaultParents", "favoritePages", "favoritesMigrated"});
     auto list = [&](const char* key) {
         auto it = root.find(key);
         return it != root.end() ? RefsFromJson(*it) : std::vector<EditorRef>{};
@@ -122,8 +114,6 @@ void EnhancerUserState::FromJson(const json& root) {
             FavoritePages.push_back(std::move(page));
         }
     if (auto it = root.find("favoritesMigrated"); it != root.end() && it->is_boolean()) FavoritesMigrated = it->get<bool>();
-    for (auto kv = root.begin(); kv != root.end(); ++kv)
-        if (!IsOwnedKey(kv.key())) m_Unknown[kv.key()] = kv.value();
 }
 
 void EnhancerUserState::Load() {

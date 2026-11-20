@@ -576,7 +576,7 @@ std::string DrawStampPickerPopup(GraffitiDesigner& g, AssetThumbnailLoader& thum
                 ImGui::SetCursorScreenPos(p0);
                 ImGui::PushID(i);
                 ImGui::InvisibleButton("##cell", ImVec2(cell, cell));
-                EditorTestTag(("stamp:" + BaseName(rel)).c_str());
+                if (EditorTestProbeActive()) EditorTestTag(("stamp:" + BaseName(rel)).c_str()); // no string per cell outside tests
                 const bool hovered = ImGui::IsItemHovered();
                 const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
                 ImGui::PopID();

@@ -265,7 +265,6 @@ void GlassCompositor::PoseLists(const Frame& f) {
                                 ImGui::GetColorU32(ImGuiCol_TitleBgCollapsed)};
     const ImU32 border = ImGui::GetColorU32(ImGuiCol_Border);
 
-    // --- 1. Classify, convert and pose every list (CPU only) ---------------------------------------
     // The startup sequence: every docked panel and floating window assembles from its own pose (in
     // place of its ordinary arrival), and each dock node's tab bar, drawn in the dock host's list,
     // moves with its panel.

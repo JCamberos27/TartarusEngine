@@ -35,6 +35,20 @@ float StrandSpecular(vec3 T, vec3 H, float exponent) {
     return smoothstep(-1.0, 0.0, th) * pow(sinTH, exponent);
 }
 
+// What one light adds to a strand fragment: wrapped scatter through the coat, the two shifted specular lobes
+// and the back-lit rim. The directional and the point/spot loops both call it, so they can't drift apart.
+struct FurSurface { vec3 N, T, T1, T2, V, albedo; float occl, t, fresnel; };
+vec3 FurLight(FurSurface s, vec3 L, vec3 radiance) {
+    float NdotL = dot(s.N, L);
+    float tl = dot(s.T, L);
+    float diff = kScatter * clamp((NdotL + 0.5) / 1.5, 0.0, 1.0) * mix(1.0, sqrt(max(1.0 - tl * tl, 0.0)), 0.25);
+    vec3 H = normalize(L + s.V);
+    float lit = clamp(NdotL + 0.3, 0.0, 1.0);
+    vec3 spec = (vec3(0.07) * StrandSpecular(s.T1, H, 80.0) + s.albedo * 0.2 * StrandSpecular(s.T2, H, 18.0)) * lit * s.t * s.occl;
+    vec3 back = s.albedo * uFurRim * s.fresnel * pow(clamp(dot(-s.V, L), 0.0, 1.0), 2.0);
+    return (s.albedo / PI * diff * s.occl + spec + back) * radiance;
+}
+
 void main() {
     vec2 uv = vUV * (uUVTiling == vec2(0.0) ? vec2(1.0) : uUVTiling) + uUVOffset;
     float mask = uHasFurMask == 1 ? texture(uFurMask, vUV).r : 1.0;
@@ -77,19 +91,13 @@ void main() {
     vec3 T2 = normalize(T + N * 0.12);
     float fresnel = pow(1.0 - abs(dot(N, V)), 4.0);
 
+    FurSurface s = FurSurface(N, T, T1, T2, V, albedo, occl, t, fresnel);
     vec3 Lo = vec3(0.0);
     for (uint i = 0u; i < uDirectionalCount; ++i) {
         if (!LightAffects(i)) continue;
         vec3 L = normalize(-uLights[i].DirCutoff.xyz);
         vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, N, L) * CloudShadow(vWorldPos) : 1.0);
-        float NdotL = dot(N, L);
-        float tl = dot(T, L);
-        float diff = kScatter * clamp((NdotL + 0.5) / 1.5, 0.0, 1.0) * mix(1.0, sqrt(max(1.0 - tl * tl, 0.0)), 0.25);
-        vec3 H = normalize(L + V);
-        float lit = clamp(NdotL + 0.3, 0.0, 1.0);
-        vec3 spec = (vec3(0.07) * StrandSpecular(T1, H, 80.0) + albedo * 0.2 * StrandSpecular(T2, H, 18.0)) * lit * t * occl;
-        vec3 back = albedo * uFurRim * fresnel * pow(clamp(dot(-V, L), 0.0, 1.0), 2.0);
-        Lo += (albedo / PI * diff * occl + spec + back) * radiance;
+        Lo += FurLight(s, L, radiance);
     }
     bool clustered = uClusterEnabled == 1;
     uint cluster = clustered ? clusterIndex() : 0u;
@@ -101,14 +109,7 @@ void main() {
         if (!LightAffects(li)) continue;
         vec3 L, radiance;
         if (!PointSpotLight(li, N, L, radiance)) continue;
-        float NdotL = dot(N, L);
-        float tl = dot(T, L);
-        float diff = kScatter * clamp((NdotL + 0.5) / 1.5, 0.0, 1.0) * mix(1.0, sqrt(max(1.0 - tl * tl, 0.0)), 0.25);
-        vec3 H = normalize(L + V);
-        float lit = clamp(NdotL + 0.3, 0.0, 1.0);
-        vec3 spec = (vec3(0.07) * StrandSpecular(T1, H, 80.0) + albedo * 0.2 * StrandSpecular(T2, H, 18.0)) * lit * t * occl;
-        vec3 back = albedo * uFurRim * fresnel * pow(clamp(dot(-V, L), 0.0, 1.0), 2.0);
-        Lo += (albedo / PI * diff * occl + spec + back) * radiance;
+        Lo += FurLight(s, L, radiance);
     }
 
     vec3 irradiance = uIBLEnabled == 1 ? texture(uIrradianceMap, N).rgb * uIBLIntensity : vec3(0.03);

@@ -23,7 +23,6 @@
 #include "Glass/GlassMotion.h"
 #include "DecalAsset.h"
 #include "GLStateCache.h"
-#include "Log.h"
 #include "Core/Paths.h"
 #include "World.h"
 #include "gl.h"
@@ -36,7 +35,6 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <filesystem>
 #include <unordered_map>
 #include <unordered_set>
@@ -452,6 +450,10 @@ void AssetChanged(DecalEditorState& ed, const std::string& absPath) {
     ed.Assets.erase(abs); // the tools re-read its size
     ed.Assets.erase(absPath);
     if (!ed.ScanDone) return; // still indexing: the scan reads the file itself
+    // Only files under the decal root are indexed: one elsewhere (assets/Test/Decals) would restart the
+    // whole scan on every edit without ever being listed.
+    const std::string rel = fs::u8path(abs).lexically_relative(fs::u8path(GenericPath(fs::u8path(ProjectPaths::Resolve(kDecalRoot))))).generic_u8string();
+    if (rel.empty() || rel.rfind("..", 0) == 0) return;
     DecalEditorState::Entry e;
     std::string category;
     if (!BuildEntry(abs, e, category)) return;

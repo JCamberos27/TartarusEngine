@@ -10,6 +10,7 @@
 #include "AssetLibrary.h"
 #include "Core/Paths.h"
 #include "Log.h"
+#include "SceneFileJson.h"
 #include "World.h"
 
 #include <imgui.h>
@@ -32,6 +33,8 @@ struct EditorLayer::ScenePreloadState {
     // Revert); a step recorded while the assets load is a new edit, and the open asks again.
     size_t UndoSize = 0, RedoSize = 0;
     int ContentDepth = 0;
+    // The scene file as parsed here, handed to the load so it isn't parsed again in the open frame.
+    std::shared_ptr<SceneSerializer::ParsedSceneFile> Parsed;
 };
 
 namespace {
@@ -109,11 +112,11 @@ bool ReadJsonFile(const std::string& path, json& out) {
 
 void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::string& path, bool frame) {
     m_ScenePreload.reset();
-    json scene;
     PreloadRefs refs;
-    if (ReadJsonFile(path, scene)) {
-        CollectRefs(scene, refs);
-        CollectLibraryTextures(scene, refs);
+    std::shared_ptr<SceneSerializer::ParsedSceneFile> parsed = SceneSerializer::ReadSceneFile(path);
+    if (parsed) {
+        CollectRefs(parsed->Root, refs);
+        CollectLibraryTextures(parsed->Root, refs);
         // Prefabs place models too: follow them a few levels (a prefab can nest others).
         std::set<std::string> seen;
         for (int depth = 0; depth < 4 && !refs.Prefabs.empty(); ++depth) {
@@ -140,6 +143,7 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
     state->UndoSize = m_UndoStack.size();
     state->RedoSize = m_RedoStack.size();
     state->ContentDepth = m_ContentDepth;
+    state->Parsed = std::move(parsed);
     std::error_code ec;
     for (const std::string& m : refs.Models)
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestModelAsync(m));
@@ -167,6 +171,7 @@ void EditorLayer::PumpScenePreload(World& world, AssetLibrary& assets) {
     if (timedOut) Log::Warn("Opening '" + st.Path + "': some assets were still loading after 10 minutes; opening anyway.");
     const std::string path = st.Path;
     const bool frame = st.Frame;
+    const std::shared_ptr<SceneSerializer::ParsedSceneFile> parsed = std::move(st.Parsed);
     const bool editedSince = m_UndoStack.size() != st.UndoSize || m_RedoStack.size() != st.RedoSize ||
                              m_ContentDepth != st.ContentDepth;
     m_ScenePreload.reset();
@@ -181,7 +186,7 @@ void EditorLayer::PumpScenePreload(World& world, AssetLibrary& assets) {
         m_ScenePromptPending = true;
         return;
     }
-    OpenScene(world, assets, path);
+    OpenScene(world, assets, path, parsed.get());
     if (frame) FrameOpenedScene(world, path);
 }
 

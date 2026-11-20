@@ -114,13 +114,18 @@ struct AnimatorWindowState {
         Abs = ProjectPaths::Resolve(rel);
         AC doc;
         std::string err;
-        if (!AC::LoadFile(Abs, doc, &err)) { Loaded = false; Error = err; return false; }
+        std::error_code ec;
+        if (!AC::LoadFile(Abs, doc, &err)) {
+            Loaded = false;
+            Error = err;
+            Stamp = fs::last_write_time(fs::u8path(Abs), ec); // the reload poll retries only after the next change
+            return false;
+        }
         Doc = std::move(doc);
         Loaded = true;
         Error.clear();
         Saved = Doc.ToJsonString();
         ++Revision;
-        std::error_code ec;
         Stamp = fs::last_write_time(fs::u8path(Abs), ec);
         Layer = std::clamp(Layer, 0, (int)Doc.Layers.size() - 1);
         ClearSelection();

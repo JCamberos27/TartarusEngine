@@ -17,6 +17,7 @@
 #include "AssetDatabase.h"
 #include "AtomicFile.h"
 #include "SceneSerializer.h"
+#include "SceneFileJson.h"
 #include "World.h"
 #include "../Renderer/Model.h"
 #include "../Core/Paths.h"
@@ -733,6 +734,104 @@ void TestQuaternionTransformStorage() {
     std::filesystem::remove(backupPath, ec);
 }
 
+// An undo/redo snapshot carries every asset's folder, name, labels and import settings. Restoring one whose block
+// matches the live library skips the per-asset re-apply (it went through each .meta); a changed one still restores.
+void TestUndoSnapshotSkipsUnchangedAssetMeta() {
+    const auto file = TempDir() / "undo-meta-sound.wav";
+    std::error_code ec;
+    std::filesystem::remove(std::filesystem::path(file.string() + ".meta"), ec);
+    CHECK(AtomicFile::WriteBytes(file, std::string("RIFF"), true));
+    // A temp folder is outside the project, where EnsureGuid won't write .meta files: provide one.
+    CHECK(AtomicFile::WriteBytes(std::filesystem::path(file.string() + ".meta"),
+                                 json({{"guid", AssetGuid::Generate().ToString()}, {"type", "audio"}}).dump(), true));
+    const std::string path = file.string();
+    World w;
+    AssetLibrary a;
+    a.RegisterSound(path);
+    a.SetDisplayName(path, "Before");
+    const std::string snapshot = SceneSerializer::SaveToString(w, a);
+    auto metaName = [&] {
+        try { return json::parse(AssetDatabase::ReadMetaFields(path)).value("displayName", std::string()); }
+        catch (...) { return std::string(); }
+    };
+    CHECK(metaName() == "Before");
+    // The .meta changes on disk while the library still has the snapshot's name: an undo of a scene edit leaves it.
+    CHECK(AssetDatabase::MergeMetaFields(path, json{{"displayName", "OnDisk"}}.dump()));
+    CHECK(SceneSerializer::LoadFromString(w, a, snapshot));
+    CHECK(a.DisplayName(path) == "Before");
+    CHECK(metaName() == "OnDisk");
+    // A rename since the snapshot: undo takes it back, in the library and in the .meta.
+    a.SetDisplayName(path, "After");
+    CHECK(SceneSerializer::LoadFromString(w, a, snapshot));
+    CHECK(a.DisplayName(path) == "Before");
+    CHECK(metaName() == "Before");
+    // Labels added since the snapshot (a key the snapshot doesn't have): undo drops them, as ClearMetadataOnly did.
+    a.SetLabels(path, {"w5"});
+    CHECK(SceneSerializer::LoadFromString(w, a, snapshot));
+    CHECK(a.Labels(path).empty());
+    CHECK(a.DisplayName(path) == "Before");
+    std::filesystem::remove(file, ec);
+    std::filesystem::remove(std::filesystem::path(path + ".meta"), ec);
+}
+
+// The editor's scene open parses the file once (SceneSerializer::ReadSceneFile) and hands that to
+// Load: Load uses it as it is while the file is unchanged, and reads the file again once it isn't.
+void TestSceneLoadTakesParsedFile() {
+    auto names = [](const World& w) {
+        std::set<std::string> out;
+        for (entt::entity e : w.Registry.view<NameComponent>()) out.insert(w.Registry.get<NameComponent>(e).Name);
+        return out;
+    };
+    auto sceneNamed = [](const std::string& name) {
+        return R"({"formatVersion":4,"empties":[{"name":")" + name +
+               R"(","id":0,"parentId":-1,"position":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1]}]})";
+    };
+    const auto path = TempDir() / "parsed-scene-load.json";
+    std::error_code ec;
+    CHECK(AtomicFile::WriteBytes(path, sceneNamed("OnDisk"), false));
+    const auto parsed = SceneSerializer::ReadSceneFile(path.string());
+    CHECK(parsed != nullptr);
+    if (!parsed) return;
+    // A name only the parse has: seeing it after the load means the file wasn't read again.
+    parsed->Root["empties"][0]["name"] = "FromParse";
+    {
+        World w;
+        AssetLibrary assets;
+        CHECK(SceneSerializer::Load(w, assets, path.string(), false, parsed.get()));
+        CHECK(names(w) == std::set<std::string>{"FromParse"});
+    }
+    // The file changed after the parse (size differs): Load reads it again.
+    CHECK(AtomicFile::WriteBytes(path, sceneNamed("ChangedOnDisk"), false));
+    {
+        World w;
+        AssetLibrary assets;
+        CHECK(SceneSerializer::Load(w, assets, path.string(), false, parsed.get()));
+        CHECK(names(w) == std::set<std::string>{"ChangedOnDisk"});
+    }
+    // Same size, newer write time: read again too.
+    CHECK(AtomicFile::WriteBytes(path, sceneNamed("OnDisk"), false));
+    const auto again = SceneSerializer::ReadSceneFile(path.string());
+    CHECK(again != nullptr);
+    if (again) {
+        again->Root["empties"][0]["name"] = "FromParse";
+        std::filesystem::last_write_time(path, again->WriteTime + std::chrono::seconds(5), ec);
+        World w;
+        AssetLibrary assets;
+        CHECK(SceneSerializer::Load(w, assets, path.string(), false, again.get()));
+        CHECK(names(w) == std::set<std::string>{"OnDisk"});
+    }
+    // Missing or not JSON: no parse, and Load reports the file as before.
+    CHECK(AtomicFile::WriteBytes(path, std::string("{ not json"), false));
+    CHECK(SceneSerializer::ReadSceneFile(path.string()) == nullptr);
+    std::filesystem::remove(path, ec);
+    CHECK(SceneSerializer::ReadSceneFile(path.string()) == nullptr);
+    {
+        World w;
+        AssetLibrary assets;
+        CHECK(!SceneSerializer::Load(w, assets, path.string(), false, parsed.get()));
+    }
+}
+
 // #123 - spinning about a diagonal axis turns the object about that axis. Adding axis * angle to
 // the Euler components (the old behaviour) added equal pitch and yaw, which is another rotation.
 void TestRotateEulerAboutLocalAxis() {
@@ -1249,6 +1348,8 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"PlayerAcceleration", TestPlayerAcceleration});
     tests.push_back({"NearestEuler", TestNearestEuler});
     tests.push_back({"QuaternionTransformStorage", TestQuaternionTransformStorage});
+    tests.push_back({"UndoSnapshotSkipsUnchangedAssetMeta", TestUndoSnapshotSkipsUnchangedAssetMeta});
+    tests.push_back({"SceneLoadTakesParsedFile", TestSceneLoadTakesParsedFile});
     tests.push_back({"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis});
     tests.push_back({"SpinSystemsAboutDiagonalAxis", TestSpinSystemsAboutDiagonalAxis});
 }
