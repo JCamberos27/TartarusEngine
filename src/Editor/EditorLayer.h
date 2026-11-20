@@ -142,7 +142,7 @@ public:
     // otherwise the live world. True when a recovery snapshot was written.
     bool CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept;
     // --crash-test-in-editor: pretend there are unsaved edits, so the recovery path runs.
-    void MarkDirtyForCrashTest() { m_Dirty = true; }
+    void MarkDirtyForCrashTest() { m_Dirty = true; NoteChangeOutsideUndo(); }
     // Headless runs (--unit-tests, --smoke-test, etc.) should not persist editor_prefs.json.
     void SetHeadless(bool headless) { m_Headless = headless; }
     void Shutdown();
@@ -1315,6 +1315,13 @@ private:
     // recovery file waits for it first (WaitRecoveryWrite), so a late write can't revive a snapshot
     // that a Save just cleared.
     std::future<bool> m_RecoveryWrite;
+    // Scene changes no undo step recorded since m_CurrentUndoScene was last taken from the World
+    // (an external rename rewriting references, a failed restore, ...). While non-zero, or while
+    // an outfit landing isn't in the baseline yet, the auto-save reads the World itself; otherwise
+    // it writes the baseline (the same bytes, without walking every entity on the UI thread).
+    unsigned m_ChangesOutsideUndo = 0;
+    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; }
+    bool UndoBaselineIsCurrent() const;
     void WaitRecoveryWrite();
     void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent

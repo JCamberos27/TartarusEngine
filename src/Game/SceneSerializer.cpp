@@ -2,6 +2,8 @@
 #include "SceneFileJson.h"
 #include "SceneSnapshotJson.h"
 
+#include <stdexcept>
+
 using namespace SceneDetail;
 
 
@@ -277,6 +279,34 @@ std::string SceneSerializer::WithLibraryState(const std::string& scene, const st
     } catch (const std::exception&) {
         return {};
     }
+}
+
+std::function<bool()> SceneSerializer::PrepareSaveFromSnapshot(std::string snapshot, const AssetLibrary& assets,
+                                                              const std::string& path) {
+    auto library = std::make_shared<json>(json::object());
+    AppendAssetLibraryJson(*library, assets); // what Save() writes: no per-asset metadata (#121)
+    auto text = std::make_shared<std::string>(std::move(snapshot));
+    return [library, text, path]() {
+        std::string out;
+        try {
+            json root = json::parse(*text);
+            text->clear();
+            text->shrink_to_fit();
+            if (!root.is_object()) throw std::runtime_error("the snapshot isn't a JSON object");
+            for (const char* k : kLibraryKeys) root.erase(k); // the undo-only half
+            for (auto& [k, v] : library->items()) root[k] = v;
+            WarnNonPortablePaths(root, ""); // audit #364, as Save() does
+            out = root.dump(2);
+        } catch (const std::exception& e) {
+            Log::Error("Scene: couldn't build '" + path + "' from the undo snapshot (file left untouched): " + e.what());
+            return false;
+        }
+        if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), out, /*binary=*/false)) {
+            Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
+            return false;
+        }
+        return true;
+    };
 }
 
 std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::string& loadedText, const AssetLibrary& assets) {
