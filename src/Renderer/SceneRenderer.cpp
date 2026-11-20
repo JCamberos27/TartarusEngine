@@ -471,9 +471,9 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetMat4("uPrevViewProj", ctx.TaaPrevViewProj);
         program.SetVec2("uTaaJitter", ctx.TaaJitterNdc);
     }
-    program.SetFloat("uWetness", fs.world ? fs.world->Wetness : 0.0f);
-    program.SetFloat("uPuddleAmount", fs.world ? fs.world->PuddleAmount : 0.0f);
-    program.SetFloat("uPuddleScale", fs.world ? fs.world->PuddleScale : 4.0f);
+    program.SetFloat("uWetness", fs.world ? fs.world->Render.Wetness : 0.0f);
+    program.SetFloat("uPuddleAmount", fs.world ? fs.world->Render.PuddleAmount : 0.0f);
+    program.SetFloat("uPuddleScale", fs.world ? fs.world->Render.PuddleScale : 4.0f);
 
     // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
     program.SetInt("uShadowEnabled", fs.sunShadowsOn ? 1 : 0);
@@ -528,7 +528,7 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // IBL probes on units 11/12/13 (#196): the shader declares those units with layout(binding=)
     // qualifiers, so there's no SetInt. Unlit mode skips lighting entirely.
     if (fs.iblOn) {
-        program.SetFloat("uIBLIntensity", ctx.GIBake ? 0.0f : std::max(fs.world->SkyAmbientIntensity, 0.0f));
+        program.SetFloat("uIBLIntensity", ctx.GIBake ? 0.0f : std::max(fs.world->Render.SkyAmbientIntensity, 0.0f));
         program.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
     }
     program.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
@@ -545,16 +545,16 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     m_Volumetrics->SetProgramUniforms(program, ctx.TxHdr, fs.volOn);
 
     // #162 - fog.
-    program.SetInt("uFogMode", fs.fogOn && fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
-    if (fs.fogOn && fs.world && fs.world->FogEnabled) {
+    program.SetInt("uFogMode", fs.fogOn && fs.world && fs.world->Render.FogEnabled ? std::clamp(fs.world->Render.FogMode, 1, 3) : 0);
+    if (fs.fogOn && fs.world && fs.world->Render.FogEnabled) {
         const World& w = *fs.world;
         {
-            program.SetVec3("uFogColor", glm::max(w.FogColor, glm::vec3(0.0f)));
-            program.SetFloat("uFogDensity", std::max(w.FogDensity, 0.0f));
-            program.SetFloat("uFogStart", w.FogStart);
-            program.SetFloat("uFogEnd", w.FogEnd);
-            program.SetFloat("uFogHeightFalloff", std::max(w.FogHeightFalloff, 0.0f));
-            program.SetFloat("uFogBaseHeight", w.FogBaseHeight);
+            program.SetVec3("uFogColor", glm::max(w.Render.FogColor, glm::vec3(0.0f)));
+            program.SetFloat("uFogDensity", std::max(w.Render.FogDensity, 0.0f));
+            program.SetFloat("uFogStart", w.Render.FogStart);
+            program.SetFloat("uFogEnd", w.Render.FogEnd);
+            program.SetFloat("uFogHeightFalloff", std::max(w.Render.FogHeightFalloff, 0.0f));
+            program.SetFloat("uFogBaseHeight", w.Render.FogBaseHeight);
         }
     }
     program.SetInt("uSsrEnabled", fs.ssrTex ? 1 : 0);

@@ -718,7 +718,7 @@ void EditorLayer::DuplicateLayoutPreset(const std::string& name) {
 void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     // PR13: sky source selector
     {
-        int src = (int)world.SkySourceMode;
+        int src = (int)world.Render.SkySourceMode;
         bool changed = false;
         if (ImGui::RadioButton("Procedural", src == 0)) { src = 0; changed = true; }
         ImGui::SameLine();
@@ -727,23 +727,23 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         if (ImGui::RadioButton("Physical", src == 2)) { src = 2; changed = true; }
         if (changed) {
             PushUndo(world, "Change Sky Source");
-            world.SkySourceMode = (World::SkySource)src;
+            world.Render.SkySourceMode = (World::SkySource)src;
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Sky source: a procedural gradient, an equirectangular .hdr file, or the physical\n"
                                  "sky - atmosphere, volumetric clouds, sun, moon and stars on a time-of-day clock.");
     }
 
-    if (world.SkySourceMode == World::SkySource::Atmosphere) {
+    if (world.Render.SkySourceMode == World::SkySource::Atmosphere) {
         DrawPhysicalSkySettings(world, w);
-    } else if (world.SkySourceMode == World::SkySource::Hdri) {
+    } else if (world.Render.SkySourceMode == World::SkySource::Hdri) {
         // #136 - a picker (project .hdr/.exr files, Browse..., drops from the Asset Browser), not a typed path.
-        std::string hdri = world.SkyHdriPath;
+        std::string hdri = world.Render.SkyHdriPath;
         ImGui::SetNextItemWidth(w);
         if (AssetPathPicker("##HdriPath", hdri,
                 {AssetExts::Hdri, false, "ASSET_TEXTURE_PATH", true, "(none)", "HDR images\0*.hdr;*.exr\0All Files\0*.*\0", false, m_Window})) {
             PushUndo(world, "Set HDRI Path");
-            world.SkyHdriPath = hdri;
+            world.Render.SkyHdriPath = hdri;
         }
 
         // Rotation slider. EditorUI::SliderFloat's out-param is needed, not a bare
@@ -753,7 +753,7 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         ImGui::SetNextItemWidth(w);
         {
             bool activated = false;
-            EditorUI::SliderFloat("HDRI rotation", &world.SkyRotationDegrees, 0.0f, 360.0f, "%.1f deg",
+            EditorUI::SliderFloat("HDRI rotation", &world.Render.SkyRotationDegrees, 0.0f, 360.0f, "%.1f deg",
                                   0, &activated);
             if (activated) PushUndo(world, "Edit HDRI Rotation");
         }
@@ -762,11 +762,11 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         // #277 — HDRI sun vs. the directional light: don't light the scene with the sun twice.
         {
             static const char* kSunModes[] = {"Auto", "Keep", "Remove"};
-            int mode = (int)world.SkyHdriSun;
+            int mode = (int)world.Render.SkyHdriSun;
             ImGui::SetNextItemWidth(w);
             if (ImGui::Combo("HDRI sun in lighting", &mode, kSunModes, IM_ARRAYSIZE(kSunModes))) {
                 PushUndo(world, "Edit HDRI Sun Mode");
-                world.SkyHdriSun = (World::HdriSunMode)mode;
+                world.Render.SkyHdriSun = (World::HdriSunMode)mode;
             }
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("How the HDRI's own sun feeds ambient light and reflections.\n"
@@ -774,23 +774,23 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
                                      "kept otherwise. Stops the sun being counted twice and washing out the scene.\n"
                                      "Keep: always included.  Remove: always removed.\n"
                                      "The visible sky is never changed.");
-            if (world.SkyHdriSun != World::HdriSunMode::Keep) {
+            if (world.Render.SkyHdriSun != World::HdriSunMode::Keep) {
                 ImGui::SetNextItemWidth(w);
                 bool activated = false;
-                EditorUI::SliderFloat("Sun threshold", &world.SkyHdriSunThreshold, 1.0f, 1000.0f, "%.0f",
+                EditorUI::SliderFloat("Sun threshold", &world.Render.SkyHdriSunThreshold, 1.0f, 1000.0f, "%.0f",
                                       ImGuiSliderFlags_Logarithmic, &activated);
                 if (activated) PushUndo(world, "Edit HDRI Sun Threshold");
-                world.SkyHdriSunThreshold = std::max(1.0f, world.SkyHdriSunThreshold);
+                world.Render.SkyHdriSunThreshold = std::max(1.0f, world.Render.SkyHdriSunThreshold);
                 if (ImGui::IsItemHovered())
                     EditorUI::SetTooltip("Radiance above this is treated as the sun and capped when baking\n"
                                          "ambient/reflections. Open sky is ~1-10; a sun is ~10,000+.");
             }
         }
     } else {
-        EditorUI::ColorEditLinear("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
+        EditorUI::ColorEditLinear("Horizon color", &world.Render.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color at the horizon."); // #19
-        EditorUI::ColorEditLinear("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
+        EditorUI::ColorEditLinear("Zenith color", &world.Render.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color straight up."); // #19
     }
@@ -798,7 +798,7 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     ImGui::SetNextItemWidth(w);
     {
         bool activated = false;
-        EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x",
+        EditorUI::SliderFloat("Ambient intensity", &world.Render.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x",
                               0, &activated);
         if (activated) PushUndo(world, "Edit Ambient Intensity");
     }
@@ -841,7 +841,7 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     ImGui::SetNextItemWidth(w);
     {
         bool activated = false;
-        EditorUI::SliderFloat("Exposure (EV)", &world.ExposureEV, -6.0f, 6.0f, "%+.2f",
+        EditorUI::SliderFloat("Exposure (EV)", &world.Render.ExposureEV, -6.0f, 6.0f, "%+.2f",
                               0, &activated);
         if (activated) PushUndo(world, "Edit Exposure");
     }
@@ -849,12 +849,12 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
 
     // #162 - Unity's Exposure > Automatic: the Exposure above becomes compensation on top.
-    if (EditorUIPrimitives::Checkbox("Auto exposure", &world.AutoExposure)) PushUndo(world, "Toggle Auto Exposure");
+    if (EditorUIPrimitives::Checkbox("Auto exposure", &world.Render.AutoExposure)) PushUndo(world, "Toggle Auto Exposure");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Measures the average brightness of the view and eases exposure toward mid grey,\n"
                              "like an eye adjusting when walking from a dark room into daylight.\n"
                              "Exposure (EV) above still applies as compensation.");
-    if (world.AutoExposure) {
+    if (world.Render.AutoExposure) {
         auto aeSlider = [&](const char* label, float* v, float lo, float hi, const char* fmt, const char* tip) {
             ImGui::SetNextItemWidth(w);
             bool activated = false;
@@ -862,20 +862,20 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
             if (activated) PushUndo(world, "Edit Auto Exposure");
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
         };
-        aeSlider("Min EV", &world.AutoExposureMinEV, -12.0f, 0.0f, "%+.1f",
+        aeSlider("Min EV", &world.Render.AutoExposureMinEV, -12.0f, 0.0f, "%+.1f",
                  "Limit for dark scenes: how many stops auto exposure may brighten the image.");
-        aeSlider("Max EV", &world.AutoExposureMaxEV, 0.0f, 12.0f, "%+.1f",
+        aeSlider("Max EV", &world.Render.AutoExposureMaxEV, 0.0f, 12.0f, "%+.1f",
                  "Limit for bright scenes: how many stops auto exposure may darken the image.");
-        aeSlider("Speed up", &world.AutoExposureSpeedUp, 0.0f, 10.0f, "%.1f",
+        aeSlider("Speed up", &world.Render.AutoExposureSpeedUp, 0.0f, 10.0f, "%.1f",
                  "How quickly it adapts when the view gets brighter. 0 = never.");
-        aeSlider("Speed down", &world.AutoExposureSpeedDown, 0.0f, 10.0f, "%.1f",
+        aeSlider("Speed down", &world.Render.AutoExposureSpeedDown, 0.0f, 10.0f, "%.1f",
                  "How quickly it adapts when the view gets darker. 0 = never.");
     }
 
-    if (EditorUIPrimitives::Checkbox("SSAO", &world.SsaoEnabled)) PushUndo(world, "Toggle SSAO");
+    if (EditorUIPrimitives::Checkbox("SSAO", &world.Render.SsaoEnabled)) PushUndo(world, "Toggle SSAO");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur;\napplies to both the Scene and Game views.");
-    if (world.SsaoEnabled) { // #160 — were hard-coded
+    if (world.Render.SsaoEnabled) { // #160 — were hard-coded
         auto ssaoSlider = [&](const char* label, float* v, float lo, float hi, const char* fmt, const char* undo, const char* tip) {
             ImGui::SetNextItemWidth(w);
             bool activated = false;
@@ -883,22 +883,22 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
             if (activated) PushUndo(world, undo);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
         };
-        ssaoSlider("SSAO radius", &world.SsaoRadius, 0.05f, 5.0f, "%.2f m", "Edit SSAO Radius",
+        ssaoSlider("SSAO radius", &world.Render.SsaoRadius, 0.05f, 5.0f, "%.2f m", "Edit SSAO Radius",
                    "How far around each point to look for occluders. Small = fine crevices, large = broad contact shadows.");
-        ssaoSlider("SSAO intensity", &world.SsaoIntensity, 0.1f, 4.0f, "%.2f", "Edit SSAO Intensity",
+        ssaoSlider("SSAO intensity", &world.Render.SsaoIntensity, 0.1f, 4.0f, "%.2f", "Edit SSAO Intensity",
                    "Darkens (above 1) or lightens (below 1) the occlusion.");
-        ssaoSlider("SSAO bias", &world.SsaoBias, 0.0f, 0.2f, "%.3f", "Edit SSAO Bias",
+        ssaoSlider("SSAO bias", &world.Render.SsaoBias, 0.0f, 0.2f, "%.3f", "Edit SSAO Bias",
                    "Depth tolerance against self-occlusion. Raise it if flat surfaces show blotchy darkening.");
     }
 
-    if (EditorUIPrimitives::Checkbox("Bloom", &world.BloomEnabled)) PushUndo(world, "Toggle Bloom");
+    if (EditorUIPrimitives::Checkbox("Bloom", &world.Render.BloomEnabled)) PushUndo(world, "Toggle Bloom");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Bloom post-process: bright pixels bleed glow onto neighbors. Runs at half resolution before tone mapping.");
-    if (world.BloomEnabled) {
+    if (world.Render.BloomEnabled) {
         ImGui::SetNextItemWidth(w);
         {
             bool activated = false;
-            EditorUI::SliderFloat("Bloom threshold", &world.BloomThreshold, 0.1f, 4.0f, "%.2f",
+            EditorUI::SliderFloat("Bloom threshold", &world.Render.BloomThreshold, 0.1f, 4.0f, "%.2f",
                                   0, &activated);
             if (activated) PushUndo(world, "Edit Bloom Threshold");
         }
@@ -907,7 +907,7 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         ImGui::SetNextItemWidth(w);
         {
             bool activated = false;
-            EditorUI::SliderFloat("Bloom knee", &world.BloomKnee, 0.0f, 1.0f, "%.2f",
+            EditorUI::SliderFloat("Bloom knee", &world.Render.BloomKnee, 0.0f, 1.0f, "%.2f",
                                   0, &activated);
             if (activated) PushUndo(world, "Edit Bloom Knee");
         }
@@ -916,7 +916,7 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         ImGui::SetNextItemWidth(w);
         {
             bool activated = false;
-            EditorUI::SliderFloat("Bloom intensity", &world.BloomIntensity, 0.0f, 2.0f, "%.2f",
+            EditorUI::SliderFloat("Bloom intensity", &world.Render.BloomIntensity, 0.0f, 2.0f, "%.2f",
                                   0, &activated);
             if (activated) PushUndo(world, "Edit Bloom Intensity");
         }
@@ -925,11 +925,11 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     }
 
     static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
-    int tm = std::clamp(world.TonemapOperator, 0, 2);
+    int tm = std::clamp(world.Render.TonemapOperator, 0, 2);
     ImGui::SetNextItemWidth(w);
     if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
         PushUndo(world, "Change Tone Mapping");
-        world.TonemapOperator = tm;
+        world.Render.TonemapOperator = tm;
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
@@ -938,15 +938,15 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     {
         // Unity's Anti-aliasing mode. Off / FXAA / MSAA set the older MSAA + FXAA fields; TAA overrides both.
         static const char* kAaLabels[] = { "Off", "FXAA", "MSAA", "TAA" };
-        int aa = std::clamp((int)world.AntiAliasing, 0, 3);
+        int aa = std::clamp((int)world.Render.AntiAliasing, 0, 3);
         ImGui::SetNextItemWidth(w);
         if (ImGui::Combo("Anti-aliasing", &aa, kAaLabels, IM_ARRAYSIZE(kAaLabels))) {
             PushUndo(world, "Change Anti-aliasing");
-            world.AntiAliasing = (World::AntiAliasingMode)aa;
-            switch (world.AntiAliasing) {
-                case World::AntiAliasingMode::Off:  world.MsaaSamples = 1; world.FxaaEnabled = false; break;
-                case World::AntiAliasingMode::Fxaa: world.MsaaSamples = 1; world.FxaaEnabled = true; break;
-                case World::AntiAliasingMode::Msaa: if (world.MsaaSamples < 2) world.MsaaSamples = 4; world.FxaaEnabled = false; break;
+            world.Render.AntiAliasing = (World::AntiAliasingMode)aa;
+            switch (world.Render.AntiAliasing) {
+                case World::AntiAliasingMode::Off:  world.Render.MsaaSamples = 1; world.Render.FxaaEnabled = false; break;
+                case World::AntiAliasingMode::Fxaa: world.Render.MsaaSamples = 1; world.Render.FxaaEnabled = true; break;
+                case World::AntiAliasingMode::Msaa: if (world.Render.MsaaSamples < 2) world.Render.MsaaSamples = 4; world.Render.FxaaEnabled = false; break;
                 case World::AntiAliasingMode::Taa:  break; // keeps MSAA / FXAA for switching back
             }
         }
@@ -954,15 +954,15 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
             EditorUI::SetTooltip("FXAA: fast filter on the final image. MSAA: multisampled geometry edges.\n"
                                  "TAA: jittered frames blended over time with motion vectors - smooths alpha-cutout\n"
                                  "foliage, specular shimmer and thin lines that MSAA misses. ~0.5 ms at 1080p.");
-        if (world.AntiAliasing == World::AntiAliasingMode::Taa) {
+        if (world.Render.AntiAliasing == World::AntiAliasingMode::Taa) {
             ImGui::SetNextItemWidth(w);
             bool activated = false;
-            EditorUI::SliderFloat("TAA sharpness", &world.TaaSharpness, 0.0f, 1.0f, "%.2f", 0, &activated);
+            EditorUI::SliderFloat("TAA sharpness", &world.Render.TaaSharpness, 0.0f, 1.0f, "%.2f", 0, &activated);
             if (activated) PushUndo(world, "Edit TAA Sharpness");
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Sharpening after the temporal resolve, so 1080p doesn't read soft. 0 = none.");
-        } else if (world.AntiAliasing != World::AntiAliasingMode::Off) {
-            if (EditorUIPrimitives::Checkbox("FXAA", &world.FxaaEnabled)) PushUndo(world, "Toggle FXAA");
+        } else if (world.Render.AntiAliasing != World::AntiAliasingMode::Off) {
+            if (EditorUIPrimitives::Checkbox("FXAA", &world.Render.FxaaEnabled)) PushUndo(world, "Toggle FXAA");
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Fast approximate anti-aliasing on the final image. Smooths what MSAA misses:\n"
                                      "shiny highlights, alpha-cutout edges, thin lines. Slightly softens texture detail.");
@@ -978,125 +978,125 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
     };
     EditorUIPrimitives::SectionHeader("Color Grading");
-    postSlider("Temperature", &world.GradeTemperature, -100.0f, 100.0f, "%.0f", "Edit Temperature",
+    postSlider("Temperature", &world.Render.GradeTemperature, -100.0f, 100.0f, "%.0f", "Edit Temperature",
                "White balance: negative = cooler (bluer), positive = warmer (yellower).");
-    postSlider("Tint", &world.GradeTint, -100.0f, 100.0f, "%.0f", "Edit Tint",
+    postSlider("Tint", &world.Render.GradeTint, -100.0f, 100.0f, "%.0f", "Edit Tint",
                "White balance: negative = greener, positive = more magenta.");
-    postSlider("Contrast", &world.GradeContrast, -100.0f, 100.0f, "%.0f", "Edit Contrast",
+    postSlider("Contrast", &world.Render.GradeContrast, -100.0f, 100.0f, "%.0f", "Edit Contrast",
                "Spreads tones away from (positive) or toward (negative) mid grey.");
-    postSlider("Saturation", &world.GradeSaturation, -100.0f, 100.0f, "%.0f", "Edit Saturation",
+    postSlider("Saturation", &world.Render.GradeSaturation, -100.0f, 100.0f, "%.0f", "Edit Saturation",
                "-100 = greyscale, 0 = unchanged, 100 = double colour intensity.");
     {
-        EditorUI::ColorEditLinear("Color filter", &world.GradeColorFilter.x, ImGuiColorEditFlags_DisplayHex);
+        EditorUI::ColorEditLinear("Color filter", &world.Render.GradeColorFilter.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Color Filter");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Multiplies the whole image by this colour. White = no change.");
     }
     if (EditorUIPrimitives::SecondaryButton("Reset grading")) {
         PushUndo(world, "Reset Color Grading");
-        world.GradeTemperature = world.GradeTint = world.GradeContrast = world.GradeSaturation = 0.0f;
-        world.GradeColorFilter = glm::vec3(1.0f);
+        world.Render.GradeTemperature = world.Render.GradeTint = world.Render.GradeContrast = world.Render.GradeSaturation = 0.0f;
+        world.Render.GradeColorFilter = glm::vec3(1.0f);
     }
 
     EditorUIPrimitives::SectionHeader("Depth of Field");
-    if (EditorUIPrimitives::Checkbox("Depth of field", &world.DepthOfField)) PushUndo(world, "Toggle Depth of Field");
+    if (EditorUIPrimitives::Checkbox("Depth of field", &world.Render.DepthOfField)) PushUndo(world, "Toggle Depth of Field");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Blurs what's nearer or farther than the focus distance, like a camera lens.\n"
                              "Game view and built player only - the Scene view stays sharp for editing.");
-    if (world.DepthOfField) {
-        postSlider("Focus distance", &world.FocusDistance, 0.1f, 200.0f, "%.1f m", "Edit Depth of Field",
+    if (world.Render.DepthOfField) {
+        postSlider("Focus distance", &world.Render.FocusDistance, 0.1f, 200.0f, "%.1f m", "Edit Depth of Field",
                    "Distance from the camera that is perfectly sharp.");
-        postSlider("Focus range", &world.FocusRange, 0.1f, 100.0f, "%.1f m", "Edit Depth of Field",
+        postSlider("Focus range", &world.Render.FocusRange, 0.1f, 100.0f, "%.1f m", "Edit Depth of Field",
                    "Depth of the sharp band around the focus distance. Blur reaches full strength\n"
                    "one more range beyond it (in front and behind).");
-        postSlider("Max blur", &world.DofMaxBlur, 0.0f, 32.0f, "%.1f px", "Edit Depth of Field",
+        postSlider("Max blur", &world.Render.DofMaxBlur, 0.0f, 32.0f, "%.1f px", "Edit Depth of Field",
                    "Blur radius at full strength, in pixels at 1080p (scaled with resolution).");
     }
 
     EditorUIPrimitives::SectionHeader("Rain Wetness");
-    postSlider("Wetness", &world.Wetness, 0.0f, 1.0f, "%.2f", "Edit Wetness",
+    postSlider("Wetness", &world.Render.Wetness, 0.0f, 1.0f, "%.2f", "Edit Wetness",
                "Rain-soaked look: porous surfaces darken and every upward-facing surface gets glossier.\n"
                "0 = dry. Materials with No Wetness (interiors) stay dry.");
-    postSlider("Puddles", &world.PuddleAmount, 0.0f, 1.0f, "%.2f", "Edit Puddles",
+    postSlider("Puddles", &world.Render.PuddleAmount, 0.0f, 1.0f, "%.2f", "Edit Puddles",
                "Standing water on flat ground: mirror-flat, tinted patches from a world-space noise mask.");
-    if (world.PuddleAmount > 0.0f)
-        postSlider("Puddle scale", &world.PuddleScale, 0.5f, 20.0f, "%.1f m", "Edit Puddles",
+    if (world.Render.PuddleAmount > 0.0f)
+        postSlider("Puddle scale", &world.Render.PuddleScale, 0.5f, 20.0f, "%.1f m", "Edit Puddles",
                    "Size of the puddle pattern in metres.");
-    if (world.PuddleAmount > 0.0f) {
-        if (EditorUIPrimitives::Checkbox("Puddle reflections", &world.PuddleSsr)) PushUndo(world, "Toggle Puddle Reflections");
+    if (world.Render.PuddleAmount > 0.0f) {
+        if (EditorUIPrimitives::Checkbox("Puddle reflections", &world.Render.PuddleSsr)) PushUndo(world, "Toggle Puddle Reflections");
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Screen-space reflections in the puddles only: lamps and buildings show in the water.\n"
                                  "Where the reflection leaves the screen, the probe / sky reflection stays.");
     }
 
     EditorUIPrimitives::SectionHeader("Fog");
-    if (EditorUIPrimitives::Checkbox("Fog", &world.FogEnabled)) PushUndo(world, "Toggle Fog");
+    if (EditorUIPrimitives::Checkbox("Fog", &world.Render.FogEnabled)) PushUndo(world, "Toggle Fog");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Fades surfaces toward the fog colour with distance from the camera.\n"
                              "The sky itself isn't fogged, so pick a colour close to the horizon.");
-    if (world.FogEnabled) {
+    if (world.Render.FogEnabled) {
         static const char* kFogModes[] = {"Linear", "Exponential", "Exponential Squared"};
-        int mode = std::clamp(world.FogMode, 1, 3) - 1;
+        int mode = std::clamp(world.Render.FogMode, 1, 3) - 1;
         ImGui::SetNextItemWidth(w);
         if (ImGui::Combo("Fog mode", &mode, kFogModes, IM_ARRAYSIZE(kFogModes))) {
             PushUndo(world, "Change Fog Mode");
-            world.FogMode = mode + 1;
+            world.Render.FogMode = mode + 1;
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Linear: none before Start, full at End.\n"
                                  "Exponential: thickens steadily with distance (Density).\n"
                                  "Exponential Squared: clear up close, then thickens quickly.");
-        EditorUI::ColorEditLinear("Fog color", &world.FogColor.x, ImGuiColorEditFlags_DisplayHex);
+        EditorUI::ColorEditLinear("Fog color", &world.Render.FogColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Fog Color");
-        if (world.FogMode == 1) {
-            postSlider("Fog start", &world.FogStart, 0.0f, 500.0f, "%.1f m", "Edit Fog",
+        if (world.Render.FogMode == 1) {
+            postSlider("Fog start", &world.Render.FogStart, 0.0f, 500.0f, "%.1f m", "Edit Fog",
                        "Distance where fog begins.");
-            postSlider("Fog end", &world.FogEnd, 1.0f, 2000.0f, "%.1f m", "Edit Fog",
+            postSlider("Fog end", &world.Render.FogEnd, 1.0f, 2000.0f, "%.1f m", "Edit Fog",
                        "Distance where surfaces are fully fog-coloured.");
         } else {
-            postSlider("Fog density", &world.FogDensity, 0.0f, 0.2f, "%.4f", "Edit Fog",
+            postSlider("Fog density", &world.Render.FogDensity, 0.0f, 0.2f, "%.4f", "Edit Fog",
                        "How quickly fog thickens with distance.");
-            postSlider("Height falloff", &world.FogHeightFalloff, 0.0f, 1.0f, "%.3f", "Edit Fog",
+            postSlider("Height falloff", &world.Render.FogHeightFalloff, 0.0f, 1.0f, "%.3f", "Edit Fog",
                        "0 = same density at every height. Higher = fog settles near the ground\n"
                        "(below Fog base height) and thins out above it.");
-            if (world.FogHeightFalloff > 0.0f)
-                postSlider("Fog base height", &world.FogBaseHeight, -100.0f, 100.0f, "%.1f m", "Edit Fog",
+            if (world.Render.FogHeightFalloff > 0.0f)
+                postSlider("Fog base height", &world.Render.FogBaseHeight, -100.0f, 100.0f, "%.1f m", "Edit Fog",
                            "World height where the fog is at its full Density.");
         }
     }
 
     EditorUIPrimitives::SectionHeader("Volumetric Fog");
-    if (EditorUIPrimitives::Checkbox("Volumetric fog", &world.VolumetricEnabled)) PushUndo(world, "Toggle Volumetric Fog");
+    if (EditorUIPrimitives::Checkbox("Volumetric fog", &world.Render.VolumetricEnabled)) PushUndo(world, "Toggle Volumetric Fog");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Light scattering in the air: shafts from the sun or moon through windows, glow around\n"
                              "lamps and cones under spotlights, cut by each light's shadows (turn Cast Shadows on).\n"
                              "Each light's share is its Volumetric Intensity (Light component).");
-    if (world.VolumetricEnabled) {
-        postSlider("Density", &world.VolumetricDensity, 0.0f, 0.5f, "%.4f", "Edit Volumetric Fog",
+    if (world.Render.VolumetricEnabled) {
+        postSlider("Density", &world.Render.VolumetricDensity, 0.0f, 0.5f, "%.4f", "Edit Volumetric Fog",
                    "How thick the air is (extinction per metre). 0.01-0.05 is a light haze,\n"
                    "0.1 and up a smoky room.");
-        postSlider("Anisotropy", &world.VolumetricAnisotropy, -0.95f, 0.95f, "%.2f", "Edit Volumetric Fog",
+        postSlider("Anisotropy", &world.Render.VolumetricAnisotropy, -0.95f, 0.95f, "%.2f", "Edit Volumetric Fog",
                    "Which way the air scatters light. 0 = evenly in every direction; higher = mostly onward,\n"
                    "so shafts glow brightest looking toward the light (0.6 is typical of dusty air).");
-        EditorUI::ColorEditLinear("Albedo", &world.VolumetricAlbedo.x, ImGuiColorEditFlags_DisplayHex);
+        EditorUI::ColorEditLinear("Albedo", &world.Render.VolumetricAlbedo.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Volumetric Fog");
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How much of the light the air takes it scatters (the rest it absorbs), per channel.\n"
                                  "White = bright fog; darker = smoky. Tint it for coloured haze.");
-        postSlider("Height falloff", &world.VolumetricHeightFalloff, 0.0f, 2.0f, "%.3f", "Edit Volumetric Fog",
+        postSlider("Height falloff", &world.Render.VolumetricHeightFalloff, 0.0f, 2.0f, "%.3f", "Edit Volumetric Fog",
                    "0 = the same density at every height. Higher = the fog settles below the base height\n"
                    "and thins out above it.");
-        if (world.VolumetricHeightFalloff > 0.0f)
-            postSlider("Base height", &world.VolumetricBaseHeight, -100.0f, 100.0f, "%.1f m", "Edit Volumetric Fog",
+        if (world.Render.VolumetricHeightFalloff > 0.0f)
+            postSlider("Base height", &world.Render.VolumetricBaseHeight, -100.0f, 100.0f, "%.1f m", "Edit Volumetric Fog",
                        "World height below which the fog has its full Density.");
-        postSlider("Distance", &world.VolumetricDistance, 4.0f, 256.0f, "%.0f m", "Edit Volumetric Fog",
+        postSlider("Distance", &world.Render.VolumetricDistance, 4.0f, 256.0f, "%.0f m", "Edit Volumetric Fog",
                    "How far from the camera the volume reaches. Shorter = finer detail up close;\n"
                    "anything farther gets the fog of this distance.");
         static const char* kVolQuality[] = {"Low", "Medium", "High"};
-        int quality = std::clamp(world.VolumetricQuality, 0, 2);
+        int quality = std::clamp(world.Render.VolumetricQuality, 0, 2);
         ImGui::SetNextItemWidth(w);
         if (ImGui::Combo("Quality", &quality, kVolQuality, IM_ARRAYSIZE(kVolQuality))) {
             PushUndo(world, "Change Volumetric Quality");
-            world.VolumetricQuality = quality;
+            world.Render.VolumetricQuality = quality;
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Froxel grid resolution. Low 128x72x48, Medium 160x90x64 (under a millisecond at 1440p),\n"
@@ -1106,7 +1106,7 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
 
 void EditorLayer::DrawShadowSettings(World& world, float w) {
     // #136 — this switch gates every shadow (sun cascades AND spot/point maps), not just the sun.
-    if (EditorUIPrimitives::Checkbox("Shadows (all lights)", &world.ShadowsEnabled)) PushUndo(world, "Toggle Shadows");
+    if (EditorUIPrimitives::Checkbox("Shadows (all lights)", &world.Render.ShadowsEnabled)) PushUndo(world, "Toggle Shadows");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Master switch for all real-time shadows: the Directional light's cascades and\n"
                              "spot / point light shadow maps. Individual lights still need Shadows enabled.");
@@ -1114,23 +1114,23 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
     static const char* kShadowResLabels[] = { "1024", "2048", "4096", "8192" };
     static const int   kShadowResValues[] = { 1024, 2048, 4096, 8192 };
     int srIdx = 1;
-    for (int i = 0; i < IM_ARRAYSIZE(kShadowResValues); ++i) if (kShadowResValues[i] == world.ShadowResolution) { srIdx = i; break; }
-    if (!world.ShadowsEnabled) ImGui::BeginDisabled();
+    for (int i = 0; i < IM_ARRAYSIZE(kShadowResValues); ++i) if (kShadowResValues[i] == world.Render.ShadowResolution) { srIdx = i; break; }
+    if (!world.Render.ShadowsEnabled) ImGui::BeginDisabled();
     ImGui::SetNextItemWidth(w);
     if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
         PushUndo(world, "Edit Shadow Resolution");
-        world.ShadowResolution = kShadowResValues[srIdx];
+        world.Render.ShadowResolution = kShadowResValues[srIdx];
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Per-cascade shadow map size; spot lights use it too, up to 4096.\n"
                              "Each step is 4x the memory: one 4096 cascade is 64 MiB, one 8192 cascade 256 MiB.");
 
     static const char* kCascadeLabels[] = { "2", "3", "4" };
-    int ccIdx = std::clamp(world.ShadowCascades - 2, 0, 2);
+    int ccIdx = std::clamp(world.Render.ShadowCascades - 2, 0, 2);
     ImGui::SetNextItemWidth(w);
     if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
         PushUndo(world, "Edit Shadow Cascades");
-        world.ShadowCascades = ccIdx + 2;
+        world.Render.ShadowCascades = ccIdx + 2;
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
@@ -1138,7 +1138,7 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
     ImGui::SetNextItemWidth(w);
     {
         bool activated = false;
-        EditorUI::SliderFloat("Shadow distance", &world.ShadowDistance, 10.0f, 500.0f, "%.0f m",
+        EditorUI::SliderFloat("Shadow distance", &world.Render.ShadowDistance, 10.0f, 500.0f, "%.0f m",
                               0, &activated);
         if (activated) PushUndo(world, "Edit Shadow Distance");
     }
@@ -1148,7 +1148,7 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
     ImGui::SetNextItemWidth(w);
     {
         bool activated = false;
-        EditorUI::SliderFloat("Cascade split", &world.ShadowCascadeSplit, 0.5f, 0.98f, "%.2f",
+        EditorUI::SliderFloat("Cascade split", &world.Render.ShadowCascadeSplit, 0.5f, 0.98f, "%.2f",
                               ImGuiSliderFlags_AlwaysClamp, &activated);
         if (activated) PushUndo(world, "Edit Cascade Split");
     }
@@ -1162,7 +1162,7 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
     ImGui::SetNextItemWidth(w);
     {
         bool activated = false;
-        EditorUI::SliderInt("Max spot shadows", &world.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots, "%d",
+        EditorUI::SliderInt("Max spot shadows", &world.Render.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots, "%d",
                             ImGuiSliderFlags_AlwaysClamp, &activated);
         if (activated) PushUndo(world, "Edit Max Spot Shadows");
     }
@@ -1171,13 +1171,13 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
     ImGui::SetNextItemWidth(w);
     {
         bool activated = false;
-        EditorUI::SliderInt("Max point shadows", &world.MaxPointShadows, 0, PointShadowMap::kMaxPoints, "%d",
+        EditorUI::SliderInt("Max point shadows", &world.Render.MaxPointShadows, 0, PointShadowMap::kMaxPoints, "%d",
                             ImGuiSliderFlags_AlwaysClamp, &activated);
         if (activated) PushUndo(world, "Edit Max Point Shadows");
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("How many shadowed point lights get a shadow cube each frame (six depth passes each).");
-    if (!world.ShadowsEnabled) ImGui::EndDisabled();
+    if (!world.Render.ShadowsEnabled) ImGui::EndDisabled();
 }
 
 // Phase 6 item 9 — a Unity-style mixer list: click a name to select that light, Solo isolates it
@@ -1815,11 +1815,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         static const char* kMsaaLabels[] = { "Off", "2x", "4x", "8x" };
         static const int   kMsaaValues[] = { 1, 2, 4, 8 };
         int msIdx = 2;
-        for (int i = 0; i < 4; ++i) if (kMsaaValues[i] == world.MsaaSamples) { msIdx = i; break; }
+        for (int i = 0; i < 4; ++i) if (kMsaaValues[i] == world.Render.MsaaSamples) { msIdx = i; break; }
         SettingsLabel("MSAA");
         if (ImGui::Combo("##MSAA", &msIdx, kMsaaLabels, IM_ARRAYSIZE(kMsaaLabels))) {
             PushUndo(world, "Change MSAA");
-            world.MsaaSamples = kMsaaValues[msIdx];
+            world.Render.MsaaSamples = kMsaaValues[msIdx];
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Multisample level of the HDR scene/game target. Takes effect next frame.");

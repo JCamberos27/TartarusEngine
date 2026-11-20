@@ -1028,15 +1028,15 @@ private:
     // First-use stalls moved behind the load: the programs/volumes a scene is about to need are
     // built now instead of on its first frames (sky ~270 ms, SSAO ~100 ms, shadow array alloc).
     void warmRenderResources() {
-        if (world.SkySourceMode == World::SkySource::Atmosphere) skyAtmosphere.WarmUp(world.Sky.CloudsEnabled);
-        if (world.SsaoEnabled) Ssao::WarmUp(ssaoComputeShader, ssaoBlurShader);
-        if (world.ShadowsEnabled) shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
+        if (world.Render.SkySourceMode == World::SkySource::Atmosphere) skyAtmosphere.WarmUp(world.Render.Sky.CloudsEnabled);
+        if (world.Render.SsaoEnabled) Ssao::WarmUp(ssaoComputeShader, ssaoBlurShader);
+        if (world.Render.ShadowsEnabled) shadowMap.Configure(world.Render.ShadowResolution, world.Render.ShadowCascades);
         iblProbe.WarmUp();
         tonemapper.WarmUp();
         lightBuffer.WarmUp();
         clusterGrid.WarmUp();
         decalSystem.BindForShading(); // valid (placeholder) arrays on units 22-25 before any preview draws
-        if (world.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
+        if (world.Render.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
         SceneRenderer::WarmShaderVariants(world);
         SceneRenderer::WarmEffects(world);
         glUseProgram(0);
@@ -1663,18 +1663,18 @@ bool AppSession::Frame() {
     if (playing && playUsesPlayer) flashlight.Update(player.Cam, gameDt);
     // Physical sky: its clock places the sun and moon, and the first lit directional light takes the resolved direction
     // and the atmosphere-filtered colour (SkyAtmosphere) - warm and dim at sunset, the moon's by night.
-    const bool physicalSky = world.SkySourceMode == World::SkySource::Atmosphere;
+    const bool physicalSky = world.Render.SkySourceMode == World::SkySource::Atmosphere;
     const glm::vec3 skyCameraPos = (playing ? *gameCam : editorCamera).Position;
     // The scene's one wind (SkySettings): grass, plants, trees and impostors all read it, toward the clouds' bearing.
     {
         Material::WindField wind;
-        wind.Strength = world.Sky.WindStrength;
-        wind.Gustiness = world.Sky.WindGustiness;
-        wind.GustSpeed = world.Sky.WindGustSpeed;
+        wind.Strength = world.Render.Sky.WindStrength;
+        wind.Gustiness = world.Render.Sky.WindGustiness;
+        wind.GustSpeed = world.Render.Sky.WindGustSpeed;
         wind.CameraPos = skyCameraPos;
-        Material::SetWind(TimeOfDay::BearingToXZ(world.Sky.CloudWindDirectionDegrees, world.Sky.NorthOffsetDegrees), wind);
+        Material::SetWind(TimeOfDay::BearingToXZ(world.Render.Sky.CloudWindDirectionDegrees, world.Render.Sky.NorthOffsetDegrees), wind);
     }
-    if (physicalSky) skyAtmosphere.Tick(world.Sky, playing ? gameDt : dt, playing);
+    if (physicalSky) skyAtmosphere.Tick(world.Render.Sky, playing ? gameDt : dt, playing);
 
     // The frame's lights and shadow slots, built ONCE per frame and shared by the Scene and Game views (#122).
     FrameLights frameLights;
@@ -1751,10 +1751,10 @@ bool AppSession::Frame() {
     // light still gets a sun in its sky, just no light from it.
     if (physicalSky) {
         if (!frameLights.SkyResolved)
-            frameLights.Sky = skyAtmosphere.ResolveLighting(world.Sky, glm::normalize(lightDir),
+            frameLights.Sky = skyAtmosphere.ResolveLighting(world.Render.Sky, glm::normalize(lightDir),
                                                      glm::vec3(1.0f, 0.95f, 0.85f) * 5.0f, 0.53f, skyCameraPos);
         if (!prevWasAtmosphere) skyAtmosphere.ForceEnvironmentCapture();
-        skyAtmosphere.PrepareFrame(world.Sky, frameLights.Sky, skyCameraPos);
+        skyAtmosphere.PrepareFrame(world.Render.Sky, frameLights.Sky, skyCameraPos);
         editor.SetSkyClock(frameLights.Sky.ClockHours, skyAtmosphere.ClockOffsetHours() != 0.0f);
     }
 
@@ -1766,22 +1766,22 @@ bool AppSession::Frame() {
     // that can change the sky is covered without plumbing a dirty flag through the UI).
     // PR13: HDRI sky path — load/reload cubemap when path changes; bake IBL from it.
     // Procedural sky path — bake from gradient colours as before.
-    if (world.SkySourceMode == World::SkySource::Hdri) {
-        if (!world.SkyHdriPath.empty() && world.SkyHdriPath != hdriCubePath) {
+    if (world.Render.SkySourceMode == World::SkySource::Hdri) {
+        if (!world.Render.SkyHdriPath.empty() && world.Render.SkyHdriPath != hdriCubePath) {
             PROFILE_SCOPE("HDRI Load");
-            hdriCube     = Cubemap::LoadHdr(world.SkyHdriPath);
-            hdriCubePath = world.SkyHdriPath;
+            hdriCube     = Cubemap::LoadHdr(world.Render.SkyHdriPath);
+            hdriCubePath = world.Render.SkyHdriPath;
             hdriNeedsBake = true; // #200 — a new file needs its own IBL, not the last one's
         }
         // NeedsBake(-1,-1,-1) is true unless BakeFromCubemap already ran this HDRI;
         // the sentinel set by BakeFromCubemap makes the check false until we switch source.
         // #108 — also rebake when the HDRI rotation changes, so lighting follows the sky.
-        const float skyRot = glm::radians(world.SkyRotationDegrees);
+        const float skyRot = glm::radians(world.Render.SkyRotationDegrees);
         // #277 — keep the HDRI's sun out of ambient/reflections when a directional light
         // already supplies it (Auto), so it isn't counted twice.
-        const bool clampSun = world.SkyHdriSun == World::HdriSunMode::Remove ||
-            (world.SkyHdriSun == World::HdriSunMode::Auto && frameLights.HaveDirectional);
-        const float sunClamp = clampSun ? world.SkyHdriSunThreshold : 0.0f;
+        const bool clampSun = world.Render.SkyHdriSun == World::HdriSunMode::Remove ||
+            (world.Render.SkyHdriSun == World::HdriSunMode::Auto && frameLights.HaveDirectional);
+        const float sunClamp = clampSun ? world.Render.SkyHdriSunThreshold : 0.0f;
         if (hdriCube && (hdriNeedsBake || iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f)) ||
                          iblProbe.BakedRotation() != skyRot || iblProbe.BakedRadianceClamp() != sunClamp)) {
             hdriNeedsBake = false;
@@ -1828,10 +1828,10 @@ bool AppSession::Frame() {
             hdriCubePath.clear();
         }
         prevWasHdri = false;
-        if (iblProbe.NeedsBake(world.SkyHorizonColor, world.SkyZenithColor)) {
+        if (iblProbe.NeedsBake(world.Render.SkyHorizonColor, world.Render.SkyZenithColor)) {
             PROFILE_SCOPE("IBL Bake");
             PROFILE_GPU_SCOPE("IBL Bake");
-            iblProbe.Bake(world.SkyHorizonColor, world.SkyZenithColor);
+            iblProbe.Bake(world.Render.SkyHorizonColor, world.Render.SkyZenithColor);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, window.GetWidth(), window.GetHeight());
             GLStateCache::Invalidate();
@@ -1895,10 +1895,10 @@ bool AppSession::Frame() {
     sceneInputs.pointShadowFar        = frameLights.PointFar;
     sceneInputs.pointShadowBias       = frameLights.PointBias;
     sceneInputs.pointShadowNormalBias = frameLights.PointNormalBias;
-    sceneInputs.shadowsEnabled   = world.ShadowsEnabled;
-    sceneInputs.ssaoEnabled      = world.SsaoEnabled;
+    sceneInputs.shadowsEnabled   = world.Render.ShadowsEnabled;
+    sceneInputs.ssaoEnabled      = world.Render.SsaoEnabled;
     sceneInputs.postFxOff        = FKeyRow::PostFxOff(); // F8
-    sceneInputs.ssaoIntensity    = world.SsaoIntensity;
+    sceneInputs.ssaoIntensity    = world.Render.SsaoIntensity;
     sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
     // The Scene and Game view render paths (Renderer/ViewPipeline) and what they read this frame.
     ViewPipelineInputs viewIn;

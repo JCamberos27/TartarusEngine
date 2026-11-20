@@ -25,11 +25,20 @@ struct GpuFrame {
     int Used = 0;
     std::vector<GpuScopeRecord> Scopes;
     bool Pending = false; // recorded, results not read back yet
+    unsigned Serial = 0;  // the frame (BeginFrame count) it was recorded in
 };
 GpuFrame g_GpuFrames[kGpuFrames];
 int g_GpuCurrent = 0;
 unsigned g_GpuFrameSerial = 0; // bumped by BeginFrame so a scope that straddles one is detected
-std::vector<Profiler::Entry> g_GpuLastFrame;
+// The last few frames read back, by frame serial: --perf-bench attaches a slow frame's GPU scopes once they land, and
+// one BeginFrame can read back more than one frame. g_GpuNewest (-1 = none yet) is what GetLastFrameGpu shows.
+constexpr int kGpuHistory = 8;
+struct GpuDone {
+    unsigned Serial = 0;
+    std::vector<Profiler::Entry> Entries;
+};
+GpuDone g_GpuHistory[kGpuHistory];
+int g_GpuNewest = -1;
 
 int TakeQuery(GpuFrame& f) {
     if (f.Used == (int)f.Pool.size()) {
@@ -62,7 +71,8 @@ bool TryReadBack(GpuFrame& f) {
         if (it != out.end()) it->Milliseconds += ms;
         else out.push_back({r.Name, ms});
     }
-    g_GpuLastFrame = std::move(out);
+    g_GpuNewest = (g_GpuNewest + 1) % kGpuHistory;
+    g_GpuHistory[g_GpuNewest] = {f.Serial, std::move(out)};
     f.Pending = false;
     return true;
 }
@@ -88,6 +98,7 @@ void Profiler::BeginFrame() {
     next.Used = 0;
     next.Scopes.clear();
     next.Pending = false;
+    next.Serial = g_GpuFrameSerial;
 }
 
 namespace {
@@ -121,7 +132,17 @@ Profiler::ScopeTimer::~ScopeTimer() {
 }
 
 const std::vector<Profiler::Entry>& Profiler::GetLastFrameGpu() {
-    return g_GpuLastFrame;
+    static const std::vector<Entry> s_None;
+    return g_GpuNewest < 0 ? s_None : g_GpuHistory[g_GpuNewest].Entries;
+}
+
+unsigned Profiler::FrameSerial() { return g_GpuFrameSerial; }
+
+const std::vector<Profiler::Entry>* Profiler::GpuFrameScopes(unsigned serial) {
+    if (g_GpuNewest < 0) return nullptr;
+    for (const GpuDone& d : g_GpuHistory)
+        if (d.Serial == serial && !d.Entries.empty()) return &d.Entries;
+    return nullptr;
 }
 
 Profiler::GpuScopeTimer::GpuScopeTimer(const char* name) {

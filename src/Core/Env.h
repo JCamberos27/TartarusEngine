@@ -20,6 +20,7 @@
     X(WeaponLab, "TARTARUS_WEAPON_LAB", Flag, "same as --weapon-lab (run-weapon-lab.cmd)")                            \
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
+    X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
@@ -70,6 +71,7 @@
     X(HizStats, "TARTARUS_HIZ_STATS", Flag, "print Hi-Z culling stats")                                               \
     X(SampleHitchMs, "TARTARUS_SAMPLE_HITCH_MS", Float, "--perf-sample: keep only frames over this many ms")          \
     X(SampleFocus, "TARTARUS_SAMPLE_FOCUS", Str, "--perf-sample: report call chains through this function")           \
+    X(HoverEntity, "TARTARUS_HOVER_ENTITY", Str, "harness runs: hover pre-highlight this entity (by name), not the cursor") \
     X(SampleUnder, "TARTARUS_SAMPLE_UNDER", List, "--perf-sample: report time under these functions")                 \
     X(NodesPivots, "TARTARUS_NODES_PIVOTS", Flag, "--model-nodes: keep FBX pivot nodes")                              \
     X(GlDebug, "TARTARUS_GL_DEBUG", Flag, "GL debug output in Release builds")                                                     \

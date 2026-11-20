@@ -44,27 +44,27 @@ namespace {
 PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
                               float dt, int exposureSlot, const glm::vec3& cameraPos) {
     PostSettings p;
-    p.ExposureEV = world.ExposureEV;
-    p.Operator = world.TonemapOperator;
+    p.ExposureEV = world.Render.ExposureEV;
+    p.Operator = world.Render.TonemapOperator;
     p.DeltaTime = dt;
     p.ExposureSlot = exposureSlot;
     if (FKeyRow::PostFxOff()) return p; // F8: exposure and the tonemap only - no bloom, grade, lens or auto exposure
     p.BloomTexture = bloomTex;
     p.BloomIntensity = bloomIntensity;
-    p.Temperature = world.GradeTemperature;
-    p.Tint = world.GradeTint;
-    p.Contrast = world.GradeContrast;
-    p.Saturation = world.GradeSaturation;
-    for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.GradeColorFilter[i];
-    p.FocusDistance = world.FocusDistance;
-    p.FocusRange = world.FocusRange;
-    p.MaxBlur = world.DofMaxBlur;
-    p.Fxaa = world.EffectiveFxaa(); // TAA replaces it
-    p.AutoExposure = world.AutoExposure;
-    p.AutoExposureMinEV = world.AutoExposureMinEV;
-    p.AutoExposureMaxEV = world.AutoExposureMaxEV;
-    p.AutoExposureSpeedUp = world.AutoExposureSpeedUp;
-    p.AutoExposureSpeedDown = world.AutoExposureSpeedDown;
+    p.Temperature = world.Render.GradeTemperature;
+    p.Tint = world.Render.GradeTint;
+    p.Contrast = world.Render.GradeContrast;
+    p.Saturation = world.Render.GradeSaturation;
+    for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.Render.GradeColorFilter[i];
+    p.FocusDistance = world.Render.FocusDistance;
+    p.FocusRange = world.Render.FocusRange;
+    p.MaxBlur = world.Render.DofMaxBlur;
+    p.Fxaa = world.Render.EffectiveFxaa(); // TAA replaces it
+    p.AutoExposure = world.Render.AutoExposure;
+    p.AutoExposureMinEV = world.Render.AutoExposureMinEV;
+    p.AutoExposureMaxEV = world.Render.AutoExposureMaxEV;
+    p.AutoExposureSpeedUp = world.Render.AutoExposureSpeedUp;
+    p.AutoExposureSpeedDown = world.Render.AutoExposureSpeedDown;
     ApplyPostProcessVolumes(world, cameraPos, p); // #162 / #203 - local and global volumes
     return p;
 }
@@ -75,7 +75,7 @@ PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float b
 // Scene view would just get in the way of editing.
 PostSettings ViewPipeline::WithDepthEffects(PostSettings p, const World& world, const HdrTarget& hdr,
                                             const glm::mat4& proj) {
-    if (world.DepthOfField) {
+    if (world.Render.DepthOfField) {
         p.DepthOfField = true;
         p.ProjA = proj[2][2];
         p.ProjB = proj[3][2];
@@ -107,7 +107,7 @@ void ViewPipeline::DrawScene(const ViewPipelineInputs& in, const RenderFrameCont
 void ViewPipeline::SsaoCompute(const ViewPipelineInputs& in, Ssao& target, const glm::mat4& proj) {
     PROFILE_GPU_SCOPE("SSAO Compute + Blur");
     FullscreenPass pass; // one state save/restore for both passes
-    target.Compute(*in.ssaoComputeShader, proj, in.world->SsaoRadius, in.world->SsaoBias);
+    target.Compute(*in.ssaoComputeShader, proj, in.world->Render.SsaoRadius, in.world->Render.SsaoBias);
     target.Blur(*in.ssaoBlurShader);
     GLStateCache::Invalidate();
 }
@@ -177,9 +177,9 @@ void ViewPipeline::SsaoDepthPrepass(const ViewPipelineInputs& in, Ssao& target, 
 glm::mat4 ViewPipeline::BeginView(const ViewPipelineInputs& in, const ViewTargets& t, int w, int h,
                                   const glm::mat4& view, const glm::mat4& proj, bool& taaOn) {
     HdrTarget& hdr = *t.hdr;
-    hdr.Resize(w, h, in.world->EffectiveMsaaSamples());
+    hdr.Resize(w, h, in.world->Render.EffectiveMsaaSamples());
     // TAA: a velocity attachment and the resolved depth for the resolve; jitter goes on below.
-    taaOn = in.world->TaaEnabled() && hdr.IsValid();
+    taaOn = in.world->Render.TaaEnabled() && hdr.IsValid();
     hdr.SetVelocityEnabled(taaOn);
     if (taaOn) hdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
     else t.taa->Reset();
@@ -229,7 +229,7 @@ unsigned int ViewPipeline::ResolveTaa(const ViewPipelineInputs& in, const ViewTa
                                       const char* scope) {
     PROFILE_SCOPE(scope);
     PROFILE_GPU_SCOPE(scope);
-    return t.taa->Resolve(colorTex, t.hdr->ResolvedDepthTexture(), t.hdr->VelocityTexture(), in.world->TaaSharpness);
+    return t.taa->Resolve(colorTex, t.hdr->ResolvedDepthTexture(), t.hdr->VelocityTexture(), in.world->Render.TaaSharpness);
 }
 
 // PR16: Bloom — soft-knee threshold + mip-pyramid blur before tonemapping.
@@ -239,7 +239,7 @@ void ViewPipeline::ComputeBloom(const ViewPipelineInputs& in, const ViewTargets&
     World& world = *in.world;
     glowTex = 0u;
     glowIntensity = 0.0f;
-    if (!world.BloomEnabled || FKeyRow::PostFxOff()) return; // F8 off: no bloom
+    if (!world.Render.BloomEnabled || FKeyRow::PostFxOff()) return; // F8 off: no bloom
     PROFILE_GPU_SCOPE(scope);
     Bloom& bloom = *t.bloom;
     bloom.Resize(w, h);
@@ -248,10 +248,10 @@ void ViewPipeline::ComputeBloom(const ViewPipelineInputs& in, const ViewTargets&
     if (bloom.IsValid()) {
         bloom.Compute(*in.bloomThreshShader, *in.bloomDownsampleShader, *in.bloomUpsampleShader,
                       srcTex,
-                      world.BloomThreshold,
-                      world.BloomKnee);
+                      world.Render.BloomThreshold,
+                      world.Render.BloomKnee);
         glowTex = bloom.GlowTexture();
-        glowIntensity = world.BloomIntensity;
+        glowIntensity = world.Render.BloomIntensity;
     }
     GLStateCache::Invalidate();
 }
@@ -302,7 +302,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Skipped in unlit/wireframe modes where SSAO has no visual effect.
-    const bool sceneSsaoFromPrepass = SsaoPrepass(in, t, world.SsaoEnabled && !sceneUnlit && !sceneWireframe, scW, scH, sceneViewMat,
+    const bool sceneSsaoFromPrepass = SsaoPrepass(in, t, world.Render.SsaoEnabled && !sceneUnlit && !sceneWireframe, scW, scH, sceneViewMat,
                                                   sceneDrawProj, /*editorView=*/true, "SSAO Depth Pre-pass");
 
     EditorLayer::RenderStats sceneStats;
@@ -475,7 +475,7 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     const glm::mat4 drawProj = BeginView(in, t, rw, rh, view, proj, gameTaaOn);
     // SSAO depth pre-pass - the Game view's own Ssao instance/resolution, apart from the Scene view's (see the
     // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
-    const bool gameSsaoOn = world.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
+    const bool gameSsaoOn = world.Render.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
     const bool gameSsaoFromPrepass = SsaoPrepass(in, t, gameSsaoOn, rw, rh, view, drawProj, /*editorView=*/false,
                                                  "SSAO Depth Pre-pass (Game)");
 
