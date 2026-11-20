@@ -1266,10 +1266,9 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
                 f.MetaFolder = true;
             }
         }
-        // The main thread files it with DiskFolderFor when the scan lands, which canonicalizes the path on disk:
-        // done here on the scan's thread, it lands as a memoized lookup (ProjectPaths::Relativize) instead of a
-        // disk call per file in one frame.
-        if (!f.MetaFolder) (void)ProjectPaths::Relativize(f.Path);
+        // Its directory under the project, worked out here on the scan's thread; the main thread only registers
+        // each distinct directory once when the scan lands (AddFolderPath).
+        if (!f.MetaFolder) f.Folder = AssetLibrary::DiskDirOf(f.Path);
         if (IsLibraryKind(f)) LibraryGroupOf(library, f);
         files.push_back(std::move(f));
     }
@@ -1287,6 +1286,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
             if (!kindOf(f)) continue;
             f.Key = AssetDatabase::PathKey(f.Path);
             f.Name = p.filename().string();
+            f.Folder = AssetLibrary::DiskDirOf(f.Path);
             f.Unfetched = true;
             if (IsLibraryKind(f)) LibraryGroupOf(library, f);
             files.push_back(std::move(f));
@@ -1320,8 +1320,14 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
     if (index.scan.valid() && index.scan.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         index.files = index.scan.get();
         index.filesLibraryGen = index.scanLibraryGen;
-        for (ProjectAssetFile& f : index.files)
-            f.Folder = f.MetaFolder ? assets.AddFolderPath(f.Folder) : assets.DiskFolderFor(f.Path);
+        // ~11k files sit in a few hundred directories: AddFolderPath once per distinct one (its answer for a
+        // directory doesn't change while this loop runs: the first call registers it, later ones find it).
+        std::unordered_map<std::string, std::string> resolved;
+        for (ProjectAssetFile& f : index.files) {
+            auto [it, added] = resolved.try_emplace(f.Folder);
+            if (added) it->second = assets.AddFolderPath(f.Folder);
+            f.Folder = it->second;
+        }
         replaced = true;
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - index.scanStarted).count();
         char buf[128];

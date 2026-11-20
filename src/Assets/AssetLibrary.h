@@ -215,6 +215,9 @@ public:
     // The folder mirroring `path`'s directory on disk (registered in memory as AdoptDiskFolder
     // does); "" at the project root or outside the project.
     std::string DiskFolderFor(const std::string& path);
+    // DiskFolderFor's text part, safe off the main thread: `path`'s directory relative to the project
+    // ("a/b"), or "" at the project root or outside it. AddFolderPath of it equals DiskFolderFor(path).
+    static std::string DiskDirOf(const std::string& path);
     // Registers "a/b/c" and each parent in memory, reusing a registered folder of the same name
     // in any case; returns the registered spelling.
     std::string AddFolderPath(const std::string& dir);
