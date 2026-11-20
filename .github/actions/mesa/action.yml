@@ -44,6 +44,7 @@ runs:
         if ($got -ne $sha) { throw "Mesa archive SHA-256 mismatch: expected $sha, got $got" }
         Write-Host "Mesa $ver checksum verified"
         7z x $name -omesa -y | Out-Null
+        if ($LASTEXITCODE) { throw "7z failed to extract $name (exit $LASTEXITCODE)" }
         # Layout differs between Mesa builds, so find the 64-bit opengl32.dll rather than
         # assuming a path.
         $gl = Get-ChildItem -Path mesa -Recurse -Filter opengl32.dll |

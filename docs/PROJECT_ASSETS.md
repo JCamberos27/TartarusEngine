@@ -68,10 +68,8 @@ gender from their paths, and the female asset has an authored `fit: 1.06`
 override. Removing one would change outfit selection and fit. Their identities
 and settings are preserved.
 
-Original removed files and edited reference files are backed up under
-`build/project-cleanup-backup/`. Machine-readable audit and change manifests
-are `build/project-duplicate-audit.json` and `build/project-cleanup-result.json`.
-The backup is outside the project content and is not exported with the game.
+The cleanup's backup and its audit/change manifests were local build output on the machine that
+ran it; they are not part of a checkout.
 
 ## Asset Library
 

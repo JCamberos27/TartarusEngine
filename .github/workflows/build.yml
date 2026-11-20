@@ -48,6 +48,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only token by default; a job that needs more says so (release: contents: write).
+permissions:
+  contents: read
+
 # A new commit on a PR cancels that PR's run still in progress (it tests a commit nobody will merge).
 # Every push to main runs to completion in its own group: during a burst of merges a shared group cancelled
 # each run (a group also keeps only one queued run), so no main commit ever got a finished result. Tags and
@@ -480,7 +484,7 @@ jobs:
           MESA_GL_VERSION_OVERRIDE: "4.6"
           MESA_GLSL_VERSION_OVERRIDE: "460"
           TARTARUS_EDITOR_TEST_SHOTS: ${{ github.workspace }}\editor-test-shots
-          TARTARUS_EDITOR_TEST_SHOW: "1"
+          TARTARUS_SHOW: "1"
           TARTARUS_EDITOR_TEST_EXCLUDE: "scenes:"
           TARTARUS_EDITOR_TEST_SHARD: "${{ matrix.shard }}/2"
           # The run's own watchdog aborts (with a crash dump, uploaded below) before this step's
@@ -584,7 +588,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The tag reaches the shell as data (an env var), never pasted into the script.
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           zip=$(ls package/*.zip | head -n 1)
-          gh release create "${{ github.ref_name }}" "$zip"             --repo "${{ github.repository }}"             --title "Tartarus Engine ${{ github.ref_name }}"             --generate-notes
+          gh release create "$TAG" "$zip"             --repo "${{ github.repository }}"             --title "Tartarus Engine $TAG"             --generate-notes
