@@ -503,12 +503,15 @@ def room_box(cells, at, fit, floor, ceil, pad=0.05):
     bx0, bx1, bz0, bz1 = i0 * CELL, (i1 + 1) * CELL, j0 * CELL, (j1 + 1) * CELL
     # out to the wall faces (the cells stop short of them), but no further than one cell's slack
     y = floor + 1.2
-    walls = [b for b in fit.structure if b.ylo() < y < b.yhi()]
+    walls = []                    # each wall's footprint bounds (x0, x1, z0, z1), worked out once, not per probe
+    for b in fit.structure:
+        if b.ylo() < y < b.yhi():
+            ps = b.xz()
+            walls.append((min(p[0] for p in ps), max(p[0] for p in ps), min(p[1] for p in ps), max(p[1] for p in ps)))
 
     def hits(x, z):
-        for b in walls:
-            ps = b.xz()
-            if min(p[0] for p in ps) <= x <= max(p[0] for p in ps) and min(p[1] for p in ps) <= z <= max(p[1] for p in ps):
+        for x0, x1, z0, z1 in walls:
+            if x0 <= x <= x1 and z0 <= z <= z1:
                 return True
         return False
     mx, mz = (bx0 + bx1) / 2, (bz0 + bz1) / 2
