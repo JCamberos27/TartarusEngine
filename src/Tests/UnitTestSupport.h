@@ -95,3 +95,4 @@ void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests); // UnitTests_A
 void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonBody.cpp
 void RegisterOutfitsTests(UnitTestSupport::TestList& tests); // UnitTests_Outfits.cpp
 void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonWeapons.cpp
+void RegisterCoreTests(UnitTestSupport::TestList& tests); // UnitTests_Core.cpp
