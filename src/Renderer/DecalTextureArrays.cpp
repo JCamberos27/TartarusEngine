@@ -336,7 +336,7 @@ private:
 DecalTextureArrays::DecalTextureArrays() { UpdateMaxLayers(); }
 
 DecalTextureArrays::~DecalTextureArrays() {
-    for (auto& [key, e] : m_Slots) ReleaseEntry(*e); // let a decode in flight finish before its workers go
+    for (auto& [key, e] : m_Slots) ReleaseEntry(*e);
     m_Slots.clear();
     m_Workers.reset();
     for (unsigned int& t : m_Tex)
@@ -414,7 +414,10 @@ int DecalTextureArrays::ResidentCount() const {
 }
 
 void DecalTextureArrays::ReleaseEntry(Entry& e) {
-    if (e.Pending.valid()) e.Pending.wait();
+    // A decode in flight is left to finish on its worker and thrown away: its task owns copies of everything it reads
+    // and its result goes only to this future (a packaged_task's, which doesn't block when dropped). Waiting for it
+    // here stalled the main thread for up to a whole decode on every hot reload and Clear.
+    e.Pending = {};
     if (e.Stage.Valid()) UploadStaging::Abandon(e.Stage);
     e.Staged.reset();
 }
@@ -435,7 +438,7 @@ void DecalTextureArrays::Drop(const Source& src) {
     const auto it = m_Slots.find(key);
     if (it == m_Slots.end()) return;
     Entry& e = *it->second;
-    if (e.Pending.valid()) --m_InFlight; // its decode is of the old files: let it land, then throw it away
+    if (e.Pending.valid()) --m_InFlight; // its decode is of the old files: dropped unread (ReleaseEntry)
     ReleaseEntry(e);
     if (e.S.Alloc.Valid()) m_Alloc.Free(e.S.Alloc);
     m_Slots.erase(it);

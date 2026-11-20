@@ -542,7 +542,7 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
         return out;
     }
 
-    // Do NOT flip on load: Model.cpp already applies Assimp's aiProcess_FlipUVs to correct the
+    // Do NOT flip on load: ModelImport.cpp already applies Assimp's aiProcess_FlipUVs to correct the
     // top-left-origin (FBX/glTF) vs bottom-left-origin (OpenGL) mismatch on the mesh's own UVs.
     // Flipping the image here too double-corrects it. The per-thread setter, since this can run
     // on several AsyncAssetLoader workers at once.

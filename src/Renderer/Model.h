@@ -13,8 +13,9 @@ struct TerrainGrid; // Model::CreateTerrain
 #include "ModelMesh.h"
 #include "Animation.h"
 #include "Material.h"
-#include "MaterialAsset.h"
 #include "RootMotion.h"
+
+struct MaterialAsset;
 
 class Texture;
 class Shader;
@@ -45,7 +46,7 @@ struct ModelImportSettings {
 
     // Fed into Assimp's AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY alongside aiProcess_GlobalScale —
     // multiplies whatever unit-scale correction the importer already derives from the file's
-    // own metadata (see the comment on that in Model.cpp), rather than replacing it.
+    // own metadata (see the comment on that in ModelImport.cpp), rather than replacing it.
     float GlobalScale = 1.0f;
     bool ImportNormals = true;   // generate smooth normals + tangent space if the file lacks them
     bool ImportAnimations = true;
@@ -170,7 +171,7 @@ public:
     // under the model's directory, else just its filename (where the import also looks).
     static std::vector<std::pair<std::string, std::string>> SourceDependencies(const std::string& modelPath);
 
-    // The texture-path resolver behind every import (see Model.cpp for the full order). Public
+    // The texture-path resolver behind every import (see ModelTextures.cpp for the full order). Public
     // so the unit tests can drive it against a scratch folder layout.
     static std::string ResolveTexturePathIn(const std::string& modelDir, const std::string& raw);
 
@@ -671,7 +672,7 @@ private:
     // the machine the asset was authored on) into a real file on THIS disk. Tries the sensible
     // interpretations in order and returns the first that exists; falls back to a clean model-dir
     // join (so a failure logs a sane path, never "modelDir + C:\someone-else\..."). An embedded
-    // ("*0") reference is returned unchanged for the caller to handle. See Model.cpp for the
+    // ("*0") reference is returned unchanged for the caller to handle. See ModelTextures.cpp for the
     // full resolution order.
     std::string ResolveTexturePath(const std::string& raw) const;
     // offsetFix: folded into the offsets of bones this mesh registers (see ProcessMesh's bake).

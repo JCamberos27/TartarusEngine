@@ -518,9 +518,13 @@ void DecalSystem::FlushSubstrates() {
 DecalSystem::AssetEntry* DecalSystem::Asset(const std::string& path) {
     // Accepts project-relative or absolute (DecalComponent::AssetPath is absolute in memory, often the
     // lower-cased path key); the cache key is the absolute path, lower case with forward slashes.
+    if (auto it = m_AssetsByCallerPath.find(path); it != m_AssetsByCallerPath.end()) return it->second;
     const std::string abs = Resolve(path);
     std::string key = NormalPath(abs);
-    if (auto it = m_Assets.find(key); it != m_Assets.end()) return it->second.get();
+    if (auto it = m_Assets.find(key); it != m_Assets.end()) {
+        m_AssetsByCallerPath.emplace(path, it->second.get());
+        return it->second.get();
+    }
     auto e = std::make_unique<AssetEntry>();
     e->Path = abs;
     e->Asset = DecalAsset::Load(abs);
@@ -529,6 +533,7 @@ DecalSystem::AssetEntry* DecalSystem::Asset(const std::string& path) {
     if (e->Asset && !e->Asset->Missing) e->Src = SourceFor(*e->Asset);
     AssetEntry* raw = e.get();
     m_Assets.emplace(std::move(key), std::move(e));
+    m_AssetsByCallerPath.emplace(path, raw);
     m_AssetList.push_back(raw);
     return raw;
 }
