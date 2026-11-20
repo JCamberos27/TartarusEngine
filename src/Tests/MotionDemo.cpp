@@ -27,6 +27,7 @@ struct State {
     int    w = 0, h = 0;
     std::vector<unsigned char> pixels;
     long long written = 0;
+    long long dropped = 0; // frames the pipe did not take (ffmpeg gone or full disk)
     bool clockOnly = false;
 };
 State s_State;
@@ -78,6 +79,8 @@ void StopRecording() {
     const int rc = _pclose(s.pipe);
     s.pipe = nullptr;
     std::cout << "[MotionDemo] " << s.written << " frames (" << (double)s.written / 60.0 << " s), ffmpeg exit " << rc << std::endl;
+    if (rc != 0 || s.dropped > 0)
+        std::cerr << "[MotionDemo] FAILED: ffmpeg exit " << rc << ", " << s.dropped << " frame(s) not written - the clip is incomplete" << std::endl;
 }
 
 bool Recording() { return s_State.pipe != nullptr; }
@@ -108,6 +111,7 @@ void CaptureFrame(int width, int height) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
     if (std::fwrite(s.pixels.data(), 1, s.pixels.size(), s.pipe) == s.pixels.size()) ++s.written;
+    else ++s.dropped;
 }
 
 } // namespace MotionDemo

@@ -320,7 +320,7 @@ private:
     // Black Glass's see-through window: the editor only (never a player build or a headless or
     // screenshot run, whose frames must stay opaque). TARTARUS_SEE_THROUGH=1 forces it for a
     // screenshot run so its alpha can be checked.
-    bool seeThroughWindow = !playerMode && !headless && EditorSettings::Get().EditorThemeId == 1 &&
+    bool seeThroughWindow = !playerMode && !headless && EditorSettings::Get().EditorThemeId == EditorSettings::kGlassTheme &&
                             EditorSettings::Get().GlassSeeThroughWindow && opt.editorShotDir.empty();
     Step step8{[&] {
         if (Env::IsSet(Env::Var::SeeThrough)) seeThroughWindow = !playerMode && !headless && Env::Flag(Env::Var::SeeThrough);
@@ -1034,7 +1034,7 @@ private:
         decalSystem.BindForShading(); // valid (placeholder) arrays on units 22-25 before any preview draws
         if (world.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
         SceneRenderer::WarmShaderVariants(world);
-        SceneRenderer::WarmEffects();
+        SceneRenderer::WarmEffects(world);
         glUseProgram(0);
         GLStateCache::Invalidate();
     }

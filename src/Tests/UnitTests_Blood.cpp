@@ -32,6 +32,19 @@ void Put32(std::vector<std::uint8_t>& b, std::uint32_t v) { for (int i = 0; i < 
 void Put64(std::vector<std::uint8_t>& b, std::uint64_t v) { for (int i = 0; i < 8; ++i) b.push_back((std::uint8_t)(v >> (8 * i))); }
 void PutStr(std::vector<std::uint8_t>& b, const std::string& s) { b.insert(b.end(), s.begin(), s.end()); b.push_back(0); }
 
+// The BloodFx hooks the spray tests stub out: no renderer assets, no physics.
+int NoAsset(const char*) { return 0; }
+int NoKnife(const char*, int&) { return -1; }
+bool NoRay(const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; }
+bool NoBodyRay(const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; }
+// The floor at y = 0, hit from above only.
+bool FloorRay(const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+    if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false;
+    p = o + d * (-o.y / d.y);
+    n = glm::vec3(0, 1, 0);
+    return true;
+}
+
 // A zlib stream of one stored (uncompressed) deflate block - valid input for any inflater.
 std::vector<std::uint8_t> ZlibStored(const std::vector<std::uint8_t>& d) {
     std::vector<std::uint8_t> z = {0x78, 0x01, 0x01};
@@ -271,8 +284,8 @@ void Test_Blood_SprayTiming() {
 
 void Test_Blood_FleshHits() {
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; }); // no physics here
+    fx.SetSimLookup(NoAsset);
+    fx.SetBodyRay(NoBodyRay); // no physics here
     int rays = 0;
     // A wall 1 m along -Z, facing the spray.
     fx.SetRaycast([&](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
@@ -319,8 +332,8 @@ void Test_Blood_FleshHits() {
 }
 void Test_Blood_Decals() {
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
     glm::vec3 corpse(0.0f, 0.3f, -0.5f);
     bool corpseThere = true;
     fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return corpseThere; });
@@ -413,9 +426,9 @@ void Test_Blood_Decals() {
 }
 void Test_Blood_Splats() {
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetRaycast(NoRay);
     // Soldier 5: two meshes, each in its own bind space (one shifted 1 m up, one at 100x scale);
     // soldier 6 stands 1.5 m behind him, in the spray's path.
     std::vector<unsigned> alive = {5, 6};
@@ -526,8 +539,8 @@ void Test_Blood_ExitWound() {
 
     // Through OnFleshHit: a rifle exits where the body really ends; a graze stays in and sprays back out of the entry.
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetRaycast(NoRay);
     fx.SetBodyRay(ray);
     BloodFx::Hit h;
     h.Point = glm::vec3(0, 1.3f, 0);
@@ -551,9 +564,9 @@ void Test_Blood_Puffs() {
         return name == "blood_hit" ? 0 : name == "blood_burst" ? 1 : name == "blood_cloud" ? 2 : name == "blood_drop" ? 3 : -1;
     });
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetRaycast(NoRay);
+    fx.SetBodyRay(NoBodyRay);
     fx.SetSprites(&sprites);
     BloodFx::Hit h;
     h.Point = glm::vec3(0, 1.3f, 0);
@@ -605,14 +618,14 @@ void Test_Blood_Puffs() {
 
 void Test_Blood_KnifeDecals() {
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
     fx.SetKnifeLookup([](const char* e, int& cells) {
         const std::string n(e);
         cells = n.rfind("leak", 0) == 0 ? 30 : 4;
         return n == "pool_smooth" ? 10 : n == "pool_big" ? 11 : n.rfind("leak", 0) == 0 ? 20 : -1;
     });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetBodyRay(NoBodyRay);
     glm::vec3 corpse(0.0f, 0.3f, -0.5f);
     fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return true; });
     // A floor at y = 0 and a wall 1 m along -Z.
@@ -650,14 +663,14 @@ void Test_Blood_KnifeDecals() {
 
 void Test_Blood_Footprints() {
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
     fx.SetKnifeLookup([](const char* e, int& cells) {
         const std::string n(e);
         cells = n == "footprint" ? 8 : 4;
         return n == "pool_smooth" || n == "pool_big" ? 10 : n == "footprint" ? 30 : -1;
     });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetBodyRay(NoBodyRay);
     const glm::vec3 corpse(0.0f, 0.3f, 0.0f);
     fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return true; });
     fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
@@ -739,9 +752,9 @@ void Test_Blood_Perf() {
     CHECK(r.WorthDrawing(glm::vec3(0, 0, -0.1f), 0.5f, eye, 80.0f));   // inside it
     // Stain dedupe: a stain landing right on a fresh one like it is the same stain.
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetBodyRay(NoBodyRay);
     fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
         if (d.y > -0.5f || o.y > maxD) return false;
         p = glm::vec3(o.x, 0.0f, o.z);
@@ -769,7 +782,7 @@ void Test_Blood_Perf() {
 
 void Test_Blood_LabActions() {
     BloodFx fx;
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup(NoAsset);
     fx.SetKnifeLookup([](const char* e, int& cells) {
         const std::string n(e);
         cells = n.rfind("leak", 0) == 0 ? 30 : 4;
@@ -792,10 +805,10 @@ void Test_Blood_LabActions() {
 void Test_Blood_GroundSplatter() {
     // Every hit throws blood out along its line, landing on whatever it meets when it has fallen there; a head throws more.
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetKnifeLookup([](const char*, int&) { return -1; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetKnifeLookup(NoKnife);
+    fx.SetBodyRay(NoBodyRay);
     float wallX = 100.0f; // a wall facing -x at x = wallX, and the floor at y = 0
     fx.SetRaycast([&](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
         float best = maxD;
@@ -856,16 +869,11 @@ void Test_Blood_GroundSplatter() {
 void Test_Blood_CorpseSplash() {
     // Shooting a body lying on the floor: blood splashes round it on the floor, and the wound pools.
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetKnifeLookup([](const char*, int&) { return -1; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
-    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
-        if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false; // the floor at y = 0, from above only
-        p = o + d * (-o.y / d.y);
-        n = glm::vec3(0, 1, 0);
-        return true;
-    });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetKnifeLookup(NoKnife);
+    fx.SetBodyRay(NoBodyRay);
+    fx.SetRaycast(FloorRay);
     BloodFx::Hit h;
     h.Point = glm::vec3(0, 0.15f, 0);
     h.Direction = glm::normalize(glm::vec3(0, -0.6f, -1));
@@ -886,7 +894,7 @@ void Test_Blood_SplashVariety() {
     // The thrown blood draws on all the shapes there are: the KriptoFX stains and Real Blood's splatters, mirrored.
     BloodFx fx;
     std::vector<std::string> asked;
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup(NoAsset);
     fx.SetKnifeLookup([&](const char* e, int& cells) {
         asked.push_back(e);
         cells = std::string(e) == "drops" ? 16 : 4;
@@ -912,16 +920,11 @@ void Test_Blood_SplashVariety() {
 void Test_Blood_OnePool() {
     // One pool per body, from under its middle once it has stopped moving - not where it was mid-fall.
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetKnifeLookup([](const char*, int&) { return -1; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
-    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
-        if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false;
-        p = o + d * (-o.y / d.y);
-        n = glm::vec3(0, 1, 0);
-        return true;
-    });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetKnifeLookup(NoKnife);
+    fx.SetBodyRay(NoBodyRay);
+    fx.SetRaycast(FloorRay);
     glm::vec3 body(0.0f, 1.0f, 0.0f);
     fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = body; return true; });
     BloodFx::Hit h;
@@ -949,16 +952,11 @@ void Test_Blood_OnePool() {
 // A shotgun load: the first pellet only wounds, a later one in the same moment kills - the body still gets its pool.
 void Test_Blood_PelletKillPools() {
     BloodFx fx;
-    fx.SetSimLookup([](const char*) { return 0; });
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetKnifeLookup([](const char*, int&) { return -1; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
-    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
-        if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false;
-        p = o + d * (-o.y / d.y);
-        n = glm::vec3(0, 1, 0);
-        return true;
-    });
+    fx.SetSimLookup(NoAsset);
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetKnifeLookup(NoKnife);
+    fx.SetBodyRay(NoBodyRay);
+    fx.SetRaycast(FloorRay);
     const glm::vec3 body(0.0f, 1.0f, 0.0f);
     fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = body; return true; });
     BloodFx::Hit h;
@@ -978,10 +976,10 @@ void Test_Blood_PelletKillPools() {
 // What a creature's bleeding stamps goes back to a person's blood afterwards: a footprint in a person's pool is a person's.
 void Test_Blood_PaletteResets() {
     BloodFx fx;
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup(NoAsset);
     fx.SetKnifeLookup([](const char* e, int& cells) { cells = 8; return std::string(e) == "footprint" ? 30 : -1; });
     fx.SetRaycast([](const glm::vec3& o, const glm::vec3&, float, glm::vec3& p, glm::vec3& n) { p = glm::vec3(o.x, 0.0f, o.z); n = glm::vec3(0, 1, 0); return true; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetBodyRay(NoBodyRay);
     glm::vec3 spider(10.0f, 0.3f, 0.0f);
     fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = spider; return true; });
     BloodFx::Hit h; // a creature, wounded: it drips ichor as it goes
@@ -1002,7 +1000,7 @@ void Test_Blood_PaletteResets() {
 void Test_Blood_Gear() {
     // The player's gun: speckles that don't stack into a coat, never their own wound, and they stay - across a swap too.
     BloodFx fx;
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup(NoAsset);
     unsigned gunEntity = 70;
     const unsigned key = 0xABCDu;
     int bodyOnlyAsks = 0;
@@ -1034,9 +1032,9 @@ void Test_Blood_Gear() {
     near.Entity = 3;
     near.Damage = 40.0f;
     fx.SetSimLookup([](const char*) { return -1; });
-    fx.SetKnifeLookup([](const char*, int&) { return -1; });
-    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
-    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetKnifeLookup(NoKnife);
+    fx.SetRaycast(NoRay);
+    fx.SetBodyRay(NoBodyRay);
     int calls = 0;
     fx.SetPlayerGear([&](glm::vec3* p, glm::vec3* n, int max) {
         const int k = std::min(max, 8);
@@ -1073,8 +1071,8 @@ void Test_Blood_Gear() {
 void Test_Blood_DryOutOfView() {
     // Blood doesn't dry while you look at it; turned away, it does - slowly.
     BloodFx fx;
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetKnifeLookup(NoKnife);
     fx.SetViewer(glm::vec3(0.0f), glm::vec3(0, 0, -1));
     fx.SpatterWallAt(glm::vec3(0, 1, -5), glm::vec3(0, 0, 1), 0.5f);
     fx.Update(600.0f);
@@ -1087,7 +1085,7 @@ void Test_Blood_DryOutOfView() {
 void Test_Blood_PrintsStay() {
     // Footprints keep through the stain cap; old ones fade out slowly (the oldest first), never popping.
     BloodFx fx;
-    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup(NoAsset);
     fx.SetKnifeLookup([](const char* e, int& cells) { cells = 8; return std::string(e) == "footprint" ? 30 : -1; });
     fx.SetRaycast([](const glm::vec3& o, const glm::vec3&, float, glm::vec3& p, glm::vec3& n) { p = glm::vec3(o.x, 0.0f, o.z); n = glm::vec3(0, 1, 0); return true; });
     fx.Config.MaxDecals = 20;
@@ -1117,8 +1115,8 @@ void Test_Blood_PrintsStay() {
 void Test_Blood_Persist() {
     // Stains never leave in view: past their lifetime or over the cap, the one that goes is out of view (behind, far).
     BloodFx fx;
-    fx.SetDecalSetLookup([](const char*) { return 0; });
-    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetDecalSetLookup(NoAsset);
+    fx.SetKnifeLookup(NoKnife);
     fx.SetViewer(glm::vec3(0.0f), glm::vec3(0, 0, -1));
     fx.Config.MaxDecals = 3;
     fx.SpatterWallAt(glm::vec3(0, 1, -5), glm::vec3(0, 0, 1), 0.5f);  // ahead: in view
@@ -1163,11 +1161,11 @@ void Test_Blood_Speed() {
     auto spray = [](float speed) {
         BloodFx fx;
         fx.Config.Speed = speed;
-        fx.SetSimLookup([](const char*) { return 0; });
-        fx.SetDecalSetLookup([](const char*) { return 0; });
-        fx.SetKnifeLookup([](const char*, int&) { return -1; });
-        fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
-        fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+        fx.SetSimLookup(NoAsset);
+        fx.SetDecalSetLookup(NoAsset);
+        fx.SetKnifeLookup(NoKnife);
+        fx.SetRaycast(NoRay);
+        fx.SetBodyRay(NoBodyRay);
         BloodFx::Hit hit;
         hit.Point = glm::vec3(0, 1.3f, 0);
         hit.Entity = 4;
