@@ -84,10 +84,17 @@ ProjectFilesGuard::ProjectFilesGuard() {
         file.Existed = ReadBytes(file.Path, file.Bytes);
         m_Files.push_back(std::move(file));
     }
+    EditorUiTests::SetRunEndHook([this] { Restore(); });
 }
 
 ProjectFilesGuard::~ProjectFilesGuard() {
+    EditorUiTests::SetRunEndHook({}); // waits for a watchdog call in progress
+    Restore();
+}
+
+void ProjectFilesGuard::Restore() {
     namespace fs = std::filesystem;
+    std::lock_guard<std::mutex> lk(m_Mutex);
     for (const File& file : m_Files) {
         std::error_code ec;
         const fs::path path = fs::u8path(file.Path);
