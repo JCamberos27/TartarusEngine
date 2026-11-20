@@ -2,6 +2,7 @@
 
 #include "AI/NavMesh.h"
 #include "AI/NpcDirector.h"
+#include "Combat/Damage.h"
 #include "AssetLibrary.h"
 #include "ComponentRegistry.h"
 #include "Components.h"
@@ -1616,6 +1617,158 @@ void TestRagdollTablesAgree() {
 }
 } // namespace
 
+// Moved from UnitTests.cpp (pure move).
+namespace {
+
+// --- #201: the PhysX scene tracks the World while playing ----------------------------------
+// This lived only in --smoke-test, which CI runs with continue-on-error because the runners have
+// no GPU - so the check never actually gated anything. PhysX needs no GL, so it belongs here
+// where the exit code is enforced. It is the one test that stands a real PhysX world up.
+// Bones and ragdoll parts map to the regions of a hit, which map to the zones the damage multipliers are keyed on.
+void TestNpcHitRegions() {
+    // Every part of the soldier's table lands where its bone does: pelvis, spine_03, head, the arms, the legs.
+    static const HitRegion kWant[NpcRagdoll::kParts] = {HitRegion::Torso, HitRegion::Torso, HitRegion::Head, HitRegion::Arm, HitRegion::Arm,
+                                                        HitRegion::Arm, HitRegion::Arm, HitRegion::Leg, HitRegion::Leg, HitRegion::Leg, HitRegion::Leg};
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) CHECK(RegionFromPart(i) == kWant[i]);
+    CHECK(RegionFromPart(-1) == HitRegion::Torso && RegionFromPart(99) == HitRegion::Torso);
+    // Regions to zones: arms and legs are both "limb", with the weapon's limb multiplier.
+    CHECK(ZoneOfRegion(HitRegion::Head) == HitZone::Head);
+    CHECK(ZoneOfRegion(HitRegion::Torso) == HitZone::Torso);
+    CHECK(ZoneOfRegion(HitRegion::Arm) == HitZone::Limb && ZoneOfRegion(HitRegion::Leg) == HitZone::Limb);
+    FirstPersonWeaponGameplay w;
+    w.Damage = 30.0f;
+    w.HeadMultiplier = 2.0f;
+    w.LimbMultiplier = 0.5f;
+    w.FalloffStart = 1000.0f;
+    w.FalloffEnd = 2000.0f;
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(2)), 5.0f) - 60.0f) < 1e-3f);  // head
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(1)), 5.0f) - 30.0f) < 1e-3f);  // chest
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(4)), 5.0f) - 15.0f) < 1e-3f);  // forearm
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(9)), 5.0f) - 15.0f) < 1e-3f);  // thigh
+}
+
+// The per-bone hitboxes: while active the unscoped queries (the player's shots) hit them and skip the capsule; a scoped one
+// (an NPC's) is the other way round; a ray over body parts says which part; a ragdoll's parts answer the same ray.
+void TestNpcBodyParts() {
+    World world;
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+    constexpr unsigned kEntity = 4242u;
+    const float foot[3] = {0.0f, 0.0f, 0.0f};
+    const PhysicsWorld::CharacterId cct = PhysicsWorld::CreateNpcCharacter(kEntity, 0.3f, 0.6f, foot);
+    CHECK(cct != PhysicsWorld::kNoCharacter);
+    // Eleven short capsules stacked up the capsule's axis, part i at height 0.15 i + 0.1, lying along X.
+    PhysicsWorld::HitCapsule caps[NpcRagdoll::kParts];
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+        caps[i].Position[1] = 0.15f * (float)i + 0.1f;
+        caps[i].HalfLength = 0.1f;
+        caps[i].Radius = 0.05f;
+    }
+    const int boxes = PhysicsWorld::CreateNpcHitboxes(cct, caps, NpcRagdoll::kParts);
+    CHECK(boxes >= 0);
+    auto settle = [&] { PhysicsWorld::Step(1.0f / 60.0f, world, {}); };
+    settle();
+    QueryFilter all;
+    RaycastHit hit;
+    const float along[3] = {1.0f, 0.0f, 0.0f};
+    // Down the middle of each part: the player's ray hits that part's hitbox.
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+        const float o[3] = {-3.0f, caps[i].Position[1], 0.0f};
+        CHECK(PhysicsWorld::RaycastFiltered(o, along, 20.0f, all, hit) && hit.Entity == kEntity);
+        PhysicsWorld::BodyPartHit part;
+        CHECK(PhysicsWorld::RaycastBodyParts(o, along, 20.0f, part));
+        CHECK(part.Kind == 1 && part.Part == i && part.Entity == kEntity);
+        CHECK(std::fabs(part.Distance - (3.0f - 0.1f - 0.05f)) < 0.02f); // the capsule's near cap
+    }
+    // Inside the movement capsule but outside every hitbox: the player's ray passes through; an NPC's (scoped) hits the capsule.
+    const float graze[3] = {-3.0f, 0.9f, 0.22f};
+    CHECK(!PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit));
+    {
+        PhysicsWorld::ScopedQueryPolicy npc(0xFFFFFFFEu, /*hitPlayer=*/true);
+        CHECK(PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit) && hit.Entity == kEntity);
+        // ... and it does not see the hitboxes: down the middle of part 4 it meets the capsule's surface instead (z = -0.3).
+        const float mid[3] = {-3.0f, caps[4].Position[1], 0.0f};
+        CHECK(PhysicsWorld::RaycastFiltered(mid, along, 20.0f, all, hit) && hit.Distance > 2.5f && hit.Distance < 2.8f);
+    }
+    // Inactive (a soldier far from the player): the capsule answers every query again.
+    PhysicsWorld::SetNpcHitboxesActive(boxes, false);
+    settle();
+    CHECK(PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit) && hit.Entity == kEntity);
+    PhysicsWorld::SetNpcHitboxesActive(boxes, true);
+    settle();
+    CHECK(!PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit));
+    // Moved: the hitboxes go where they are put.
+    for (auto& c : caps) c.Position[2] = 1.0f;
+    PhysicsWorld::SetNpcHitboxPoses(boxes, caps, NpcRagdoll::kParts);
+    settle();
+    const float shifted[3] = {-3.0f, caps[2].Position[1], 1.0f};
+    PhysicsWorld::BodyPartHit moved;
+    CHECK(PhysicsWorld::RaycastBodyParts(shifted, along, 20.0f, moved) && moved.Part == 2);
+    PhysicsWorld::DestroyNpcHitboxes(boxes);
+    settle();
+    PhysicsWorld::BodyPartHit none;
+    CHECK(!PhysicsWorld::RaycastBodyParts(shifted, along, 20.0f, none));
+    CHECK(PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit) && hit.Entity == kEntity);
+    PhysicsWorld::DestroyNpcCharacter(cct);
+
+    // A ragdoll's parts are tagged the same way; its slerp drives can be set and cleared; a shove wakes it.
+    PhysicsWorld::RagdollPart parts[NpcRagdoll::kParts];
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+        parts[i].Parent = i == 0 ? -1 : i - 1;
+        parts[i].Position[0] = 20.0f;
+        parts[i].Position[1] = 10.0f + 0.3f * (float)i;
+        parts[i].Anchor[0] = 20.0f;
+        parts[i].Anchor[1] = parts[i].Position[1] - 0.15f;
+        parts[i].HalfLength = 0.1f;
+        parts[i].Radius = 0.05f;
+    }
+    const int ragdoll = PhysicsWorld::CreateRagdoll(kEntity, parts, NpcRagdoll::kParts);
+    CHECK(ragdoll >= 0);
+    PhysicsWorld::SetRagdollDrive(ragdoll, 700.0f, 60.0f);
+    const float ident[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    PhysicsWorld::SetRagdollDriveTarget(ragdoll, 3, ident);
+    settle();
+    const float o5[3] = {17.0f, parts[5].Position[1], 0.0f};
+    PhysicsWorld::BodyPartHit rp;
+    CHECK(PhysicsWorld::RaycastBodyParts(o5, along, 20.0f, rp) && rp.Kind == 2 && rp.Part == 5 && rp.Entity == kEntity);
+    PhysicsWorld::SetRagdollDrive(ragdoll, 0.0f, 0.0f);
+    const float j[3] = {0.0f, 0.0f, 5.0f}, at[3] = {20.0f, parts[5].Position[1], 0.0f};
+    PhysicsWorld::RagdollImpulse(ragdoll, 5, j, at);
+    CHECK(!PhysicsWorld::RagdollAsleep(ragdoll));
+    for (int i = 0; i < 30; ++i) settle();
+    float p[3], q[4];
+    CHECK(PhysicsWorld::GetRagdollPart(ragdoll, 5, p, q) && std::isfinite(p[0]) && std::isfinite(p[1]) && p[1] < parts[5].Position[1]);
+    PhysicsWorld::DestroyRagdoll(ragdoll);
+    // Ids are generational: a freed slot's next owner gets a new id, and the stale one finds nothing (nor destroys the new one).
+    const int ragdoll2 = PhysicsWorld::CreateRagdoll(kEntity, parts, NpcRagdoll::kParts);
+    CHECK(ragdoll2 >= 0 && ragdoll2 != ragdoll);
+    CHECK(!PhysicsWorld::GetRagdollPart(ragdoll, 5, p, q));
+    PhysicsWorld::DestroyRagdoll(ragdoll);
+    CHECK(PhysicsWorld::GetRagdollPart(ragdoll2, 5, p, q));
+    PhysicsWorld::DestroyRagdoll(ragdoll2);
+    // (cct and boxes were destroyed above.) Their slots' next owners get new ids; the stale ones touch nothing.
+    const PhysicsWorld::CharacterId cct2 = PhysicsWorld::CreateNpcCharacter(kEntity, 0.3f, 0.6f, foot);
+    CHECK(cct2 != PhysicsWorld::kNoCharacter && cct2 != cct);
+    float f3[3];
+    CHECK(!PhysicsWorld::GetNpcCapsule(cct, f3, nullptr, nullptr) && PhysicsWorld::GetNpcCapsule(cct2, f3, nullptr, nullptr));
+    const int boxes2 = PhysicsWorld::CreateNpcHitboxes(cct2, caps, NpcRagdoll::kParts);
+    CHECK(boxes2 >= 0 && boxes2 != boxes);
+    PhysicsWorld::SetNpcHitboxesActive(boxes, false); // stale: boxes2 stays active
+    PhysicsWorld::DestroyNpcHitboxes(boxes);
+    settle();
+    {
+        const float o[3] = {-3.0f, caps[2].Position[1], caps[2].Position[2]}; // (moved to z = 1 above)
+        PhysicsWorld::BodyPartHit part;
+        CHECK(PhysicsWorld::RaycastBodyParts(o, along, 20.0f, part) && part.Kind == 1 && part.Part == 2);
+    }
+    PhysicsWorld::DestroyNpcHitboxes(boxes2);
+    PhysicsWorld::DestroyNpcCharacter(cct2);
+    PhysicsWorld::Destroy(); // (the core stays up for the next test)
+}
+
+} // namespace
+
 void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollTablesAgree", TestRagdollTablesAgree});
     tests.push_back({"RagdollHingesDoNotHyperextend", TestRagdollHingesDoNotHyperextend});
@@ -1646,4 +1799,6 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollPartsCollideWithEachOther", TestRagdollPartsCollideWithEachOther});
     tests.push_back({"RagdollSkinKeepsItOnTheFloor", TestRagdollSkinKeepsItOnTheFloor});
     tests.push_back({"RagdollHasWeight", TestRagdollHasWeight});
+    tests.push_back({"NpcHitRegions", TestNpcHitRegions});
+    tests.push_back({"NpcBodyParts", TestNpcBodyParts});
 }
