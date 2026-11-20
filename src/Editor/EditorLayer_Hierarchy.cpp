@@ -139,6 +139,7 @@ const std::vector<entt::entity>& EditorLayer::HierarchyCreationOrder(const World
     if (c.Scratch == c.Keyed) return c.Sorted;
     c.Keyed.swap(c.Scratch);
     c.Scratch = c.Keyed;
+    ++c.Generation;
     std::sort(c.Scratch.begin(), c.Scratch.end());
     c.Sorted.clear();
     c.Sorted.reserve(c.Scratch.size());
@@ -469,6 +470,7 @@ void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
     auto nodeOpen    = [&](entt::entity e) { return ImGui::GetStateStorage()->GetInt(nodeId(e), 0) != 0; };
     auto setNodeOpen = [&](entt::entity e, bool open) {
         ImGui::GetStateStorage()->SetInt(nodeId(e), open ? 1 : 0);
+        ++m_HierOpenGen;
         EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
     };
 
@@ -944,7 +946,7 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
             for (size_t i = chain.size(); i-- > chain.size() - 1 - depth;) ImGui::PushID((int)entt::to_integral(chain[i]));
             ImGuiStorage* st = ImGui::GetStateStorage();
             const ImGuiID id = ImGui::GetID("##node");
-            if (st->GetInt(id, 0) == 0) { st->SetInt(id, 1); opened = true; }
+            if (st->GetInt(id, 0) == 0) { st->SetInt(id, 1); opened = true; ++m_HierOpenGen; }
             for (size_t i = 0; i <= depth; ++i) ImGui::PopID();
         }
         if (opened) m_HierarchyScrollToEntity = m_Selected;
@@ -984,14 +986,24 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // entity's row was walked and measured every frame regardless of scroll position: invisible at
     // 61 objects, ~4,000 text measurements/frame at 1,000+.
     // Reused member buffer (Editor Enhancers perf pass): clear() keeps its capacity.
+    // Kept between frames in the default view (no filter, creation order): rebuilt only when an
+    // input changed - the creation order (entities added / removed / reordered), the parent links
+    // (World::HierarchyVersion), a row opened or closed (every write of a "##node" flag bumps
+    // m_HierOpenGen), the row being renamed, or another world / window. A filter or a Name / Type
+    // sort reads names and components, which have no change counter: rebuilt every frame then.
     std::vector<HierarchyFlatRow>& flatRows = m_HierFlatRows;
+    const std::vector<entt::entity>& creationOrder = HierarchyCreationOrder(world);
+    const HierarchyFlatKey flatKey{&world, ImGui::GetCurrentWindow()->ID, m_HierOrder.Generation,
+                                   world.HierarchyVersion(), m_HierOpenGen, m_RenamingEntity, true};
+    const bool flatCacheable = !filtering && EditorSettings::Get().HierarchySortMode == 0;
+    if (!flatCacheable || !(flatKey == m_HierFlatKey)) {
     flatRows.clear();
     // The top-level rows: picked out of the cached creation order first, then display-sorted, so
     // the Name/Type sort only orders the rows that are shown (it used to sort every entity in the
     // scene, children included, every frame). A stable sort of the subset = the same order.
     std::vector<entt::entity>& rootEntities = m_HierRootScratch;
     rootEntities.clear();
-    for (entt::entity entity : HierarchyCreationOrder(world)) {
+    for (entt::entity entity : creationOrder) {
         // A parented entity draws nested under its parent, not as a sibling — except while
         // filtering, where the parent may be filtered out, so matches are shown flat instead.
         if (!filtering) {
@@ -1003,6 +1015,8 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     }
     ApplyHierarchyDisplaySort(world, rootEntities); // Phase 5 item 6 — display-only, doesn't touch OrderComponent
     for (entt::entity entity : rootEntities) FlattenHierarchyRows(world, entity, /*depth=*/0, flatRows);
+    m_HierFlatKey = flatCacheable ? flatKey : HierarchyFlatKey{};
+    }
 
     // Editor Enhancers / vHierarchy per-frame state, read by every row below.
     const EditorSettings& es = EditorSettings::Get();
@@ -1318,14 +1332,14 @@ bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity
     if (m_HierarchyFilter.empty()) return true;
 
     if (m_HierarchyFilter.rfind("t:", 0) == 0) {
-        std::string wanted = m_HierarchyFilter.substr(2);
+        const std::string_view wanted = std::string_view(m_HierarchyFilter).substr(2);
         if (wanted.empty()) return true;
         const auto* tag = world.Registry.try_get<TagComponent>(entity);
-        return MatchesFilter(wanted, tag ? tag->Tag : std::string("Untagged"));
+        return MatchesFilter(wanted, tag ? std::string_view(tag->Tag) : std::string_view("Untagged"));
     }
 
     const auto* name = world.Registry.try_get<NameComponent>(entity);
-    return MatchesFilter(m_HierarchyFilter, name ? name->Name : std::string());
+    return MatchesFilter(m_HierarchyFilter, name ? std::string_view(name->Name) : std::string_view());
 }
 
 void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int depth,
@@ -1593,6 +1607,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     if (ImGui::IsItemClicked() && clickOnArrow) {
         open = !open;
         ImGui::GetStateStorage()->SetInt(nodeStateId, open ? 1 : 0);
+        ++m_HierOpenGen;
         EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse, EditorSound::LastItemScreenX());
         if (ImGui::GetIO().KeyAlt) {
             for (entt::entity child : hier->Children) SetHierarchyExpandedRecursive(world, child, open);
@@ -1688,6 +1703,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 if (m_HierarchySpringRow != entity) { m_HierarchySpringRow = entity; m_HierarchySpringSince = now; }
                 else if (now - m_HierarchySpringSince > 0.5) {
                     ImGui::GetStateStorage()->SetInt(nodeStateId, 1);
+                    ++m_HierOpenGen;
                     open = true;
                     m_HierarchySpringRow = entt::null;
                 }
@@ -2003,6 +2019,7 @@ void EditorLayer::SetHierarchyExpandedRecursive(World& world, entt::entity entit
     ImGui::PushID((int)entt::to_integral(entity));
     ImGuiID nodeId = ImGui::GetID("##node");
     ImGui::GetStateStorage()->SetInt(nodeId, open ? 1 : 0);
+    ++m_HierOpenGen;
     if (const auto* hier = world.Registry.try_get<HierarchyComponent>(entity)) {
         for (entt::entity child : hier->Children) {
             SetHierarchyExpandedRecursive(world, child, open);
@@ -2291,21 +2308,32 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
     if (mode == 0 || rows.size() < 2) return;
     const bool desc = EditorSettings::Get().HierarchySortDesc;
     // Sort keys are computed once per row, not per comparison: the Name key for an unnamed row
-    // ("Object 7") used to cost a full creation-order sort of the scene on every compare.
-    struct Keyed { entt::entity E; std::string Name; int Kind; };
-    std::vector<Keyed> keyed;
+    // ("Object 7") used to cost a full creation-order sort of the scene on every compare. A named
+    // row's key points at its NameComponent (no copy); only unnamed rows build a string, into a
+    // buffer reserved up front so the pointers stay valid. Both buffers are reused between calls.
+    struct Keyed { entt::entity E; const std::string* Name; int Kind; };
+    thread_local std::vector<Keyed> keyed;
+    thread_local std::vector<std::string> unnamed;
+    keyed.clear();
     keyed.reserve(rows.size());
+    unnamed.clear();
+    if (mode == 1) unnamed.reserve(rows.size());
     for (entt::entity e : rows) {
-        Keyed k{e, {}, 0};
+        Keyed k{e, nullptr, 0};
         if (mode == 1) {
             const auto* nm = world.Registry.try_get<NameComponent>(e);
-            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(HierarchyCreationOrdinal(world, e)); // once a frame, only for unnamed rows
+            if (nm && !nm->Name.empty()) {
+                k.Name = &nm->Name;
+            } else {
+                unnamed.push_back("Object " + std::to_string(HierarchyCreationOrdinal(world, e)));
+                k.Name = &unnamed.back();
+            }
         } else {
             k.Kind = HierarchyKindMask(world.Registry, e);
         }
-        keyed.push_back(std::move(k));
+        keyed.push_back(k);
     }
-    auto less = [&](const Keyed& a, const Keyed& b) { return mode == 1 ? a.Name < b.Name : a.Kind < b.Kind; };
+    auto less = [&](const Keyed& a, const Keyed& b) { return mode == 1 ? *a.Name < *b.Name : a.Kind < b.Kind; };
     std::stable_sort(keyed.begin(), keyed.end(), [&](const Keyed& a, const Keyed& b) {
         return desc ? less(b, a) : less(a, b);
     });
@@ -2513,7 +2541,7 @@ void EditorLayer::HandleHierarchyHoverKeys(World& world) {
         const bool open = st->GetInt(HierarchyNodeStateId(world, hov, m_HierChainScratch), 0) == 0;
         bool any = false;
         for (entt::entity e : targets())
-            if (world.Registry.valid(e) && hasKids(e)) { st->SetInt(HierarchyNodeStateId(world, e, m_HierChainScratch), open ? 1 : 0); any = true; }
+            if (world.Registry.valid(e) && hasKids(e)) { st->SetInt(HierarchyNodeStateId(world, e, m_HierChainScratch), open ? 1 : 0); any = true; ++m_HierOpenGen; }
         if (any) EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
         m_HierarchyHoverKeyUsed = true;
     } else if (Shortcuts::Triggered("hierarchy.hover.isolate")) {
@@ -2523,7 +2551,7 @@ void EditorLayer::HandleHierarchyHoverKeys(World& world) {
         s_QuietExpandAll = false;
         EditorSound::Play(EditorSound::Event::Isolate);
         for (entt::entity w = hov; w != entt::null && world.Registry.valid(w);) {
-            if (w != hov || hasKids(w)) st->SetInt(HierarchyNodeStateId(world, w, m_HierChainScratch), 1);
+            if (w != hov || hasKids(w)) { st->SetInt(HierarchyNodeStateId(world, w, m_HierChainScratch), 1); ++m_HierOpenGen; }
             const auto* h = world.Registry.try_get<HierarchyComponent>(w);
             w = h ? h->Parent : entt::null;
         }

@@ -2979,6 +2979,7 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
     ++m_FolderSummaryWalkGen;
     m_FolderSummaries.clear();
     m_FolderIndexContrib.clear();
+    m_FolderIndexFolders.clear();
     // Only what RefreshProjectAssetIndexIfNeeded has keyed: the rest arrives through NoteListedInFolderSummaries.
     const auto listed = [&](int l, size_t size) { return std::min(size, m_ListedAssetCounts[l]); };
     for (size_t i = 0, n = listed(0, assets.Models().size()); i < n; ++i)
@@ -2991,15 +2992,58 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
         m_FolderSummaries[assets.AssetFolderRef(assets.Sounds()[i])].Add(kListedFolderKind[3]);
     for (size_t i = 0, n = listed(4, assets.Prefabs().size()); i < n; ++i)
         m_FolderSummaries[assets.AssetFolderRef(assets.Prefabs()[i])].Add(kListedFolderKind[4]);
-    m_FolderIndexContrib.reserve(m_ProjectAssetIndex.files.size());
-    for (const auto& f : m_ProjectAssetIndex.files) {
-        if (m_ListedAssetKeys.count(f.Key)) continue;
-        const std::string& moved = assets.AssetFolderRef(f.Path);
-        const std::string& folder = moved.empty() ? f.Folder : moved;
+    // ~11k index files, a directory's files next to each other (scan order): every file first counts in its scan
+    // folder, stored and hashed once per run of files, with no per-file lookup (three hashes of a long path per file
+    // made this the landing frame's ~6-10 ms). The few that moved since, or that the library lists, are fixed up after.
+    const auto& files = m_ProjectAssetIndex.files;
+    m_FolderIndexContrib.assign(files.size(), FolderIndexContribution{kIndexFileNotCounted, Enhancers::FolderKind::Other});
+    const std::string* runFolder = nullptr;
+    Enhancers::FolderSummary* runSummary = nullptr;
+    for (std::uint32_t i = 0; i < (std::uint32_t)files.size(); ++i) {
+        const ProjectAssetFile& f = files[i];
+        if (!f.FirstOfKey) continue; // a later file with the same key: the first one counts for it
+        if (!runFolder || *runFolder != f.Folder) {
+            runFolder = &f.Folder;
+            runSummary = &m_FolderSummaries[f.Folder];
+            m_FolderIndexFolders.push_back(f.Folder);
+        }
         const Enhancers::FolderKind kind = FolderKindOf(f.Kind);
-        if (m_FolderIndexContrib.try_emplace(f.Key, FolderIndexContribution{folder, kind}).second)
-            m_FolderSummaries[folder].Add(kind);
+        m_FolderIndexContrib[i] = FolderIndexContribution{(std::uint32_t)(m_FolderIndexFolders.size() - 1), kind};
+        runSummary->Add(kind);
     }
+    // Moved in the library since the scan: counts in its library folder instead (an entry only for assets given one).
+    const auto& byPath = m_ProjectAssetIndex.byPath;
+    for (const auto& [path, folder] : assets.AssetFolders()) {
+        const auto it = byPath.find(std::string_view(path));
+        if (it == byPath.end()) continue;
+        const FolderIndexContribution c = m_FolderIndexContrib[it->second];
+        if (c.Folder == kIndexFileNotCounted || m_FolderIndexFolders[c.Folder] == folder) continue;
+        UncountIndexFile(it->second);
+        m_FolderIndexFolders.push_back(folder);
+        m_FolderIndexContrib[it->second] = FolderIndexContribution{(std::uint32_t)(m_FolderIndexFolders.size() - 1), c.Kind};
+        m_FolderSummaries[folder].Add(c.Kind);
+    }
+    // Listed by the library (counted above, by its AssetFolder): its index file doesn't count.
+    const auto& byKey = m_ProjectAssetIndex.byKey;
+    for (const std::string& key : m_ListedAssetKeys) {
+        const auto it = byKey.find(std::string_view(key));
+        if (it != byKey.end()) UncountIndexFile(it->second);
+    }
+}
+
+// Index file `file` stops counting: its folder's summary loses it (and goes, as a full walk would leave it, when empty).
+const std::string* EditorLayer::UncountIndexFile(std::uint32_t file) {
+    if (file >= m_FolderIndexContrib.size()) return nullptr;
+    FolderIndexContribution& c = m_FolderIndexContrib[file];
+    if (c.Folder == kIndexFileNotCounted) return nullptr;
+    const std::string& counted = m_FolderIndexFolders[c.Folder];
+    c.Folder = kIndexFileNotCounted;
+    const auto s = m_FolderSummaries.find(counted);
+    if (s != m_FolderSummaries.end()) {
+        s->second.Remove(c.Kind);
+        if (s->second.Total == 0) m_FolderSummaries.erase(s);
+    }
+    return &counted;
 }
 
 // A library list entry just keyed by RefreshProjectAssetIndexIfNeeded: it counts in its folder, and the index file
@@ -3009,15 +3053,10 @@ void EditorLayer::NoteListedInFolderSummaries(AssetLibrary& assets, int list, co
     m_FolderSummaries[folder].Add(kListedFolderKind[list]);
     ++m_FolderContentGen[folder];
     ++m_AnyFolderContentGen;
-    const auto it = m_FolderIndexContrib.find(key);
-    if (it == m_FolderIndexContrib.end()) return;
-    if (it->second.Folder != folder) ++m_FolderContentGen[it->second.Folder]; // its unloaded tile goes
-    const auto s = m_FolderSummaries.find(it->second.Folder);
-    if (s != m_FolderSummaries.end()) {
-        s->second.Remove(it->second.Kind);
-        if (s->second.Total == 0) m_FolderSummaries.erase(s); // as a full walk would leave it: no entry
-    }
-    m_FolderIndexContrib.erase(it);
+    const auto it = m_ProjectAssetIndex.byKey.find(std::string_view(key));
+    if (it == m_ProjectAssetIndex.byKey.end()) return;
+    const std::string* counted = UncountIndexFile(it->second);
+    if (counted && *counted != folder) ++m_FolderContentGen[*counted]; // its unloaded tile goes
 }
 
 bool EditorLayer::GetFolderVisual(AssetLibrary& assets, const std::string& path, EditorFolderVisual& out) {

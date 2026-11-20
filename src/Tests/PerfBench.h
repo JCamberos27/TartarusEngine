@@ -47,6 +47,7 @@ private:
         unsigned Serial = 0; // the profiler's frame, to find its GPU scopes once they're read back
         std::string Cpu, Gpu, Loads;
         bool HaveGpu = false;
+        bool GpuStarved = false; // GpuStarvedFrame: its GPU scopes are mostly CPU time, not GPU work
     };
     // One line of the hitch report: frame-time percentiles and hitch counts over a set of frames.
     struct Stats { double P50 = 0, P95 = 0, P99 = 0, P999 = 0, Max = 0; int Over2x = 0, Over33 = 0; size_t N = 0; };

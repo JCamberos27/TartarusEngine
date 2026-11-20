@@ -216,62 +216,118 @@ void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool o
     EditorSound::Play(on ? EditorSound::Event::FavoriteOn : EditorSound::Event::FavoriteOff);
 }
 
-// Rendered once per Model into its own small texture, then cached. Returns 0 while this frame's
-// render budget is spent — the caller falls back to the type glyph and picks it up next frame.
+// Rendered once per Model into its own small texture, then cached (see ModelThumb in
+// EditorLayer.h). Returns 0 until the thumbnail is ready - the caller falls back to the type glyph.
 unsigned int EditorLayer::ModelThumbnail(Model& model) {
     const std::string& path = model.Path();
-    if (const unsigned int* cached = m_ModelThumbnails.Find(path)) return *cached;
-    if (m_ThumbnailBudgetThisFrame <= 0) return 0;
+    ModelThumb* e = m_ModelThumbnails.Find(path);
+    if (!e) {
+        // First sight: the worker works out the cache key and loads the persisted PNG (Phase 5
+        // item 9). #133 - the key covers the model file, its .meta import settings, every texture
+        // its materials sample and the .mat files of its material remap (what placing it uses, so
+        // the thumbnail is drawn with them too). The paths are gathered here, the stats on the worker.
+        std::vector<std::string> deps;
+        for (int i = 0; i < model.MeshCount(); ++i) {
+            const Material& m = model.MeshMaterial(i);
+            for (const auto* tex : { &m.AlbedoMap, &m.NormalMap, &m.MetallicRoughnessMap, &m.MetallicMap,
+                                     &m.RoughnessMap, &m.AOMap, &m.EmissiveMap, &m.ClearCoatMap, &m.ThicknessMap })
+                if (*tex && std::find(deps.begin(), deps.end(), (*tex)->Path()) == deps.end())
+                    deps.push_back((*tex)->Path());
+        }
+        if (m_AssetsPtr)
+            for (const auto& [slotName, matPath] : m_AssetsPtr->MaterialRemap(path)) { (void)slotName; deps.push_back(ProjectPaths::Resolve(matPath)); }
+        ModelThumb fresh;
+        fresh.Ticket = m_NextModelThumbTicket++;
+        m_ModelThumbProbe.Push(path, fresh.Ticket, kModelThumbSize, std::move(deps));
+        m_ModelThumbnails.Insert(path, fresh);
+        // Bounded so browsing a large asset library over a session doesn't accumulate GL textures.
+        // Retired, not deleted: a tile drawn earlier this frame may still use the evicted one.
+        m_ModelThumbnails.TrimTo(kMaxModelThumbnails, [this](ModelThumb& t) { if (t.Tex) m_RetiredThumbnailTextures.push_back(t.Tex); });
+        return 0;
+    }
+    if (e->St != ModelThumb::Stage::Render) return e->Tex; // ready, or 0 while the probe runs
+    if (m_ThumbnailBudgetThisFrame <= 0 || m_ThumbnailMsThisFrame >= kThumbnailFrameBudgetMs) return 0;
     m_ThumbnailBudgetThisFrame--;
+    const auto t0 = std::chrono::steady_clock::now();
 
-    const int kSize = 128;
-    unsigned int dst = 0;
+    const float dist = ModelPreviewRenderer::ComputeFramingDistance(model);
+    std::vector<std::shared_ptr<MaterialAsset>> slots;
+    if (m_AssetsPtr && !m_AssetsPtr->MaterialRemap(path).empty()) m_AssetsPtr->ApplyMaterialRemap(model, slots);
+    const unsigned int src = m_ThumbnailPreview.Render(model, 0.7f, 0.5f, dist, kModelThumbSize, kModelThumbSize, slots);
 
-    // Phase 5 item 9 — a persistent cache hit skips the render pass (and the model load it
-    // implies) entirely: just upload the decoded PNG. Still spends this frame's thumbnail
-    // budget above, since a decode-and-upload at scale (1,000+ objects) is exactly the frame-time
-    // cost item 9 was written to bound, not only the render.
-    // #133 — the cache key covers the model file, its .meta import settings and every texture
-    // its materials sample, so re-importing or editing any of those re-renders the thumbnail.
-    std::vector<std::string> deps;
-    for (int i = 0; i < model.MeshCount(); ++i) {
-        const Material& m = model.MeshMaterial(i);
-        for (const auto* tex : { &m.AlbedoMap, &m.NormalMap, &m.MetallicRoughnessMap, &m.MetallicMap,
-                                 &m.RoughnessMap, &m.AOMap, &m.EmissiveMap, &m.ClearCoatMap, &m.ThicknessMap })
-            if (*tex && std::find(deps.begin(), deps.end(), (*tex)->Path()) == deps.end())
-                deps.push_back((*tex)->Path());
-    }
-    // The model's material remap (its .mat per imported material) is what placing it uses, so the
-    // thumbnail is drawn with it too - and keyed on those .mat files.
-    std::map<std::string, std::string> remap;
-    if (m_AssetsPtr) remap = m_AssetsPtr->MaterialRemap(path);
-    for (const auto& [slotName, matPath] : remap) { (void)slotName; deps.push_back(ProjectPaths::Resolve(matPath)); }
-    const std::uint64_t cacheKey = ThumbnailCache::DependencyKey(path, deps);
-    std::vector<unsigned char> cachedPixels;
-    if (ThumbnailCache::Load(path, kSize, cacheKey, cachedPixels)) {
-        dst = AssetThumbnailLoader::MakeTexture(kSize, cachedPixels.data());
-        GLStateCache::Invalidate(); // raw glBindTexture
+    // Copied out of the shared preview target (CopyPreviewTexture resyncs GLStateCache, audit
+    // GL-202). The pixels go into a pixel-pack buffer and are persisted once the GPU is done
+    // (PumpModelThumbnails), so the NEXT launch is a cache hit without this frame waiting on a readback.
+    unsigned int pbo = 0;
+    if (!m_FreeThumbPbos.empty()) {
+        pbo = m_FreeThumbPbos.back();
+        m_FreeThumbPbos.pop_back();
     } else {
-        const float dist = ModelPreviewRenderer::ComputeFramingDistance(model);
-        std::vector<std::shared_ptr<MaterialAsset>> slots;
-        if (m_AssetsPtr && !remap.empty()) m_AssetsPtr->ApplyMaterialRemap(model, slots);
-        const unsigned int src = m_ThumbnailPreview.Render(model, 0.7f, 0.5f, dist, kSize, kSize, slots);
-
-        // Copied out of the shared preview target, and persisted so the NEXT launch is a cache hit
-        // (Phase 5 item 9); CopyPreviewTexture resyncs GLStateCache (audit GL-202).
-        std::vector<unsigned char> freshPixels;
-        CopyPreviewTexture(src, dst, kSize, &freshPixels);
-        ThumbnailCache::SaveAsync(path, kSize, cacheKey, std::move(freshPixels)); // encode + write off the UI thread
+        glGenBuffers(1, &pbo);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo);
+        glBufferData(GL_PIXEL_PACK_BUFFER, (GLsizeiptr)kModelThumbSize * kModelThumbSize * 4, nullptr, GL_STREAM_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
-
-    m_ModelThumbnails.Insert(path, dst);
-    // Bounded so browsing a large asset library over a session doesn't accumulate GL textures.
-    // Retired, not deleted: a tile drawn earlier this frame may still use the evicted one.
-    m_ModelThumbnails.TrimTo(kMaxModelThumbnails, [this](unsigned int& tex) { if (tex) m_RetiredThumbnailTextures.push_back(tex); });
-    return dst;
+    CopyPreviewTexture(src, e->Tex, kModelThumbSize, nullptr, pbo);
+    m_ThumbReadbacks.push_back({pbo, (void*)glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0), path, e->Key});
+    e->St = ModelThumb::Stage::Ready;
+    m_ThumbnailMsThisFrame += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    return e->Tex;
 }
 
-void EditorLayer::CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut) {
+void EditorLayer::PumpModelThumbnails() {
+    constexpr size_t kBytes = (size_t)kModelThumbSize * kModelThumbSize * 4;
+    // Probe results: a cache hit is a 64 KB upload; a miss waits for a frame with render budget.
+    std::vector<ThumbnailCache::AsyncProbe::Result> done;
+    m_ModelThumbProbe.Take(done, 16);
+    bool uploaded = false;
+    for (auto& r : done) {
+        ModelThumb* e = m_ModelThumbnails.Peek(r.Path);
+        if (!e || e->Ticket != r.Ticket || e->St != ModelThumb::Stage::Probing) continue; // evicted / invalidated since
+        e->Key = r.Key;
+        if (r.Pixels.size() == kBytes) {
+            e->Tex = AssetThumbnailLoader::MakeTexture(kModelThumbSize, r.Pixels.data());
+            e->St = ModelThumb::Stage::Ready;
+            uploaded = true;
+        } else {
+            e->St = ModelThumb::Stage::Render;
+        }
+    }
+    if (uploaded) GLStateCache::Invalidate(); // raw glBindTexture
+
+    // Readbacks the GPU has finished: copy out, hand to the cache's writer, recycle the buffer.
+    for (size_t i = 0; i < m_ThumbReadbacks.size();) {
+        ThumbReadback& rb = m_ThumbReadbacks[i];
+        const GLenum st = glClientWaitSync((GLsync)rb.Fence, 0, 0);
+        if (st == GL_TIMEOUT_EXPIRED) { ++i; continue; }
+        if (st != GL_WAIT_FAILED) {
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, rb.Pbo);
+            if (const void* p = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, (GLsizeiptr)kBytes, GL_MAP_READ_BIT)) {
+                const unsigned char* px = static_cast<const unsigned char*>(p);
+                std::vector<unsigned char> pixels(px, px + kBytes);
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                ThumbnailCache::SaveAsync(rb.Path, kModelThumbSize, rb.Key, std::move(pixels)); // encode + write off the UI thread
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        }
+        glDeleteSync((GLsync)rb.Fence);
+        m_FreeThumbPbos.push_back(rb.Pbo);
+        m_ThumbReadbacks[i] = std::move(m_ThumbReadbacks.back());
+        m_ThumbReadbacks.pop_back();
+    }
+}
+
+void EditorLayer::FreeModelThumbnailReadbacks() {
+    for (ThumbReadback& rb : m_ThumbReadbacks) {
+        glDeleteSync((GLsync)rb.Fence);
+        m_FreeThumbPbos.push_back(rb.Pbo);
+    }
+    m_ThumbReadbacks.clear();
+    if (!m_FreeThumbPbos.empty()) glDeleteBuffers((GLsizei)m_FreeThumbPbos.size(), m_FreeThumbPbos.data());
+    m_FreeThumbPbos.clear();
+}
+
+void EditorLayer::CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut, unsigned int packPbo) {
     if (!dst) dst = AssetThumbnailLoader::MakeTexture(size, nullptr);
     GLint prevRead = 0, prevDraw = 0;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
@@ -284,6 +340,11 @@ void EditorLayer::CopyPreviewTexture(unsigned int src, unsigned int& dst, int si
     if (pixelsOut) {
         pixelsOut->resize((size_t)size * size * 4);
         glReadPixels(0, 0, size, size, GL_RGBA, GL_UNSIGNED_BYTE, pixelsOut->data());
+    }
+    if (packPbo) {
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, packPbo);
+        glReadPixels(0, 0, size, size, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
     glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
@@ -347,7 +408,7 @@ unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>
 
     m_MaterialThumbs.Insert(path, entry);
     // Retired, not deleted: a tile drawn earlier this frame may still use it (as the model path).
-    m_MaterialThumbs.TrimTo(kMaxModelThumbnails, [this](MaterialThumb& t) { if (t.Tex) m_RetiredThumbnailTextures.push_back(t.Tex); });
+    m_MaterialThumbs.TrimTo(kMaxMaterialThumbnails, [this](MaterialThumb& t) { if (t.Tex) m_RetiredThumbnailTextures.push_back(t.Tex); });
     return entry.Tex;
 }
 
@@ -358,11 +419,11 @@ void EditorLayer::ClearMaterialThumbnails() {
 
 void EditorLayer::InvalidateModelThumbnail(const std::string& path) {
     if (path.empty()) { // clear all — a reimport can rebuild any model in place
-        m_ModelThumbnails.ForEach([this](unsigned int& tex) { if (tex) m_RetiredThumbnailTextures.push_back(tex); });
+        m_ModelThumbnails.ForEach([this](ModelThumb& t) { if (t.Tex) m_RetiredThumbnailTextures.push_back(t.Tex); });
         m_ModelThumbnails.Clear();
         return;
     }
-    m_ModelThumbnails.Erase(path, [this](unsigned int& tex) { if (tex) m_RetiredThumbnailTextures.push_back(tex); });
+    m_ModelThumbnails.Erase(path, [this](ModelThumb& t) { if (t.Tex) m_RetiredThumbnailTextures.push_back(t.Tex); });
 }
 void EditorLayer::FreeRetiredThumbnailTextures() {
     if (m_RetiredThumbnailTextures.empty()) return;
@@ -1237,10 +1298,11 @@ void EditorLayer::LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetF
 // Worker thread (m_ProjectAssetIndex): every model / texture / material / sound / prefab file
 // under `root`. Touches no editor or library state - the .meta's folder is read straight from the
 // file, and the main thread files each entry into the folder tree.
-std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library) {
+EditorLayer::ProjectAssetScan EditorLayer::ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library) {
     namespace fs = std::filesystem;
     const auto kindOf = [](ProjectAssetFile& f) { return ProjectAssetKindOf(f); };
-    std::vector<EditorLayer::ProjectAssetFile> files;
+    ProjectAssetScan scan;
+    std::vector<EditorLayer::ProjectAssetFile>& files = scan.files;
     std::error_code ec;
     for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
          !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
@@ -1266,10 +1328,10 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
                 f.MetaFolder = true;
             }
         }
-        // The main thread files it with DiskFolderFor when the scan lands, which canonicalizes the path on disk:
-        // done here on the scan's thread, it lands as a memoized lookup (ProjectPaths::Relativize) instead of a
-        // disk call per file in one frame.
-        if (!f.MetaFolder) (void)ProjectPaths::Relativize(f.Path);
+        // Its directory under the project, worked out here on the scan's thread; the main thread only registers
+        // each distinct directory once when the scan lands (AddFolderPath). DiskDirOf relativizes here, so the
+        // memoized ProjectPaths::Relativize is warm for later main-thread lookups too.
+        if (!f.MetaFolder) f.Folder = AssetLibrary::DiskDirOf(f.Path);
         if (IsLibraryKind(f)) LibraryGroupOf(library, f);
         files.push_back(std::move(f));
     }
@@ -1287,12 +1349,21 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
             if (!kindOf(f)) continue;
             f.Key = AssetDatabase::PathKey(f.Path);
             f.Name = p.filename().string();
+            f.Folder = AssetLibrary::DiskDirOf(f.Path);
             f.Unfetched = true;
             if (IsLibraryKind(f)) LibraryGroupOf(library, f);
             files.push_back(std::move(f));
         }
     }
-    return files;
+    // Lookups the main thread would otherwise hash ~11k long paths for (folder summaries): built here, once the
+    // vector stops growing.
+    scan.byKey.reserve(files.size());
+    scan.byPath.reserve(files.size());
+    for (std::uint32_t i = 0; i < (std::uint32_t)files.size(); ++i) {
+        files[i].FirstOfKey = scan.byKey.try_emplace(std::string_view(files[i].Key), i).second;
+        scan.byPath.try_emplace(std::string_view(files[i].Path), i);
+    }
+    return scan;
 }
 
 bool EditorLayer::ProjectAssetKindOf(ProjectAssetFile& f) {
@@ -1318,10 +1389,19 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
     auto& index = m_ProjectAssetIndex;
     bool replaced = false;
     if (index.scan.valid() && index.scan.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-        index.files = index.scan.get();
+        ProjectAssetScan landed = index.scan.get();
+        index.files = std::move(landed.files); // moves the buffer: the maps' views stay valid
+        index.byKey = std::move(landed.byKey);
+        index.byPath = std::move(landed.byPath);
         index.filesLibraryGen = index.scanLibraryGen;
-        for (ProjectAssetFile& f : index.files)
-            f.Folder = f.MetaFolder ? assets.AddFolderPath(f.Folder) : assets.DiskFolderFor(f.Path);
+        // ~11k files sit in a few hundred directories: AddFolderPath once per distinct one (its answer for a
+        // directory doesn't change while this loop runs: the first call registers it, later ones find it).
+        std::unordered_map<std::string, std::string> resolved;
+        for (ProjectAssetFile& f : index.files) {
+            auto [it, added] = resolved.try_emplace(f.Folder);
+            if (added) it->second = assets.AddFolderPath(f.Folder);
+            f.Folder = it->second;
+        }
         replaced = true;
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - index.scanStarted).count();
         char buf[128];
@@ -1407,32 +1487,49 @@ std::string EditorLayer::NewAssetFolder(const std::string& fallback) const {
     return std::filesystem::is_directory(ProjectPaths::Resolve(f), ec) ? f : fallback;
 }
 
-std::vector<std::string> EditorLayer::AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind) {
-    std::vector<std::string> out;
+std::vector<EditorLayer::AssetRefChoice> EditorLayer::AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind) {
+    std::vector<std::string> paths;
     Cell::Kind cellKind;
     switch (kind) {
-        case ReflectAssetKind::Sound:    out = assets.Sounds(); cellKind = Cell::Kind::Sound; break;
-        case ReflectAssetKind::Texture:  out = assets.TexturePaths(); cellKind = Cell::Kind::Texture; break;
-        case ReflectAssetKind::Material: out = assets.MaterialPaths(); cellKind = Cell::Kind::Material; break;
+        case ReflectAssetKind::Sound:    paths = assets.Sounds(); cellKind = Cell::Kind::Sound; break;
+        case ReflectAssetKind::Texture:  paths = assets.TexturePaths(); cellKind = Cell::Kind::Texture; break;
+        case ReflectAssetKind::Material: paths = assets.MaterialPaths(); cellKind = Cell::Kind::Material; break;
         case ReflectAssetKind::Model:
-            for (const auto& m : assets.Models()) out.push_back(m->Path());
+            for (const auto& m : assets.Models()) paths.push_back(m->Path());
             cellKind = Cell::Kind::Model;
             break;
         case ReflectAssetKind::Script:   cellKind = Cell::Kind::Script; break;
         case ReflectAssetKind::Decal:    cellKind = Cell::Kind::Decal; break;
-        default: return out;
+        default: return {};
     }
     std::unordered_set<std::string> have;
-    for (const std::string& p : out) have.insert(AssetDatabase::PathKey(p));
+    for (const std::string& p : paths) have.insert(AssetDatabase::PathKey(p));
     RefreshProjectAssetIndexIfNeeded(assets);
     for (const auto& f : m_ProjectAssetIndex.files)
-        if (f.Kind == cellKind && have.insert(f.Key).second) out.push_back(f.Path);
-    auto lowerName = [](const std::string& p) {
-        std::string n = std::filesystem::path(p).filename().string();
-        for (char& c : n) c = (char)std::tolower((unsigned char)c);
-        return n;
-    };
-    std::sort(out.begin(), out.end(), [&](const std::string& a, const std::string& b) { return lowerName(a) < lowerName(b); });
+        if (f.Kind == cellKind && have.insert(f.Key).second) paths.push_back(f.Path);
+    // The lower-case file name is worked out once per entry (it was rebuilt twice per comparison),
+    // and the path breaks ties so same-named files keep a stable order.
+    struct Keyed { std::string Lower, Name; size_t Index; };
+    std::vector<Keyed> keyed;
+    keyed.reserve(paths.size());
+    for (size_t i = 0; i < paths.size(); ++i) {
+        std::string name = std::filesystem::path(paths[i]).filename().string();
+        std::string lower = name;
+        for (char& c : lower) c = (char)std::tolower((unsigned char)c);
+        keyed.push_back({std::move(lower), std::move(name), i});
+    }
+    std::sort(keyed.begin(), keyed.end(), [&](const Keyed& a, const Keyed& b) {
+        if (a.Lower != b.Lower) return a.Lower < b.Lower;
+        return paths[a.Index] < paths[b.Index];
+    });
+    std::vector<AssetRefChoice> out;
+    out.reserve(keyed.size());
+    for (Keyed& k : keyed) {
+        std::string label = std::move(k.Name);
+        label += "##";
+        label += paths[k.Index];
+        out.push_back({std::move(paths[k.Index]), std::move(label)});
+    }
     return out;
 }
 

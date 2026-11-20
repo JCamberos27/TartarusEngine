@@ -672,7 +672,7 @@ void AssetLibrary::AdoptDiskFolder(const std::string& path, const std::string* m
     if (!folder.empty()) m_AssetFolder[path] = folder;
 }
 
-std::string AssetLibrary::DiskFolderFor(const std::string& path) {
+std::string AssetLibrary::DiskDirOf(const std::string& path) {
     if (path.empty() || path.find("://") != std::string::npos) return {};
     std::string dir = ProjectPaths::Relativize(path);
     std::replace(dir.begin(), dir.end(), '\\', '/');
@@ -680,8 +680,10 @@ std::string AssetLibrary::DiskFolderFor(const std::string& path) {
     const size_t slash = dir.find_last_of('/');
     if (slash == std::string::npos) return {};                       // already at the root
     dir.resize(slash);
-    return AddFolderPath(dir);
+    return dir;
 }
+
+std::string AssetLibrary::DiskFolderFor(const std::string& path) { return AddFolderPath(DiskDirOf(path)); }
 
 namespace {
 std::string LowerFolderKey(const std::string& s) {
