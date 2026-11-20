@@ -625,6 +625,20 @@ std::string NormalizedPathKey(const std::string& path) {
     for (char& c : k) c = (char)std::tolower((unsigned char)c);
     return k;
 }
+// Whether a scene file is on disk, for the scene list's rows. The list stats each scene it shows, every frame
+// while it is open; the answers are kept until the list opens again or for a second, whichever comes first.
+bool SceneFileExists(const std::string& path, bool listOpening) {
+    static std::unordered_map<std::string, bool> s_Exists;
+    static double s_At = -1.0;
+    const double now = ImGui::GetTime();
+    if (listOpening || now - s_At > 1.0) { s_Exists.clear(); s_At = now; }
+    const auto it = s_Exists.find(path);
+    if (it != s_Exists.end()) return it->second;
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(path, ec);
+    s_Exists.emplace(path, exists);
+    return exists;
+}
 Enhancers::EditorRef SceneRefFor(const std::string& path) {
     const AssetGuid g = AssetDatabase::GuidForPath(path);
     return Enhancers::EditorRef::MakeScene(g.IsValid() ? g.ToString() : std::string(), path, SceneDisplayName(path));
@@ -859,14 +873,14 @@ void EditorLayer::DrawHierarchyNavBar(World& world, AssetLibrary& assets) {
     if (ImGui::BeginCombo("##scene", comboLabel.c_str(), ImGuiComboFlags_HeightLarge)) {
         RefreshScenesListingIfNeeded();
         std::set<std::string> listed;
+        const bool listOpening = ImGui::IsWindowAppearing();
         const std::string curKey = m_CurrentScenePath.empty() ? std::string() : NormalizedPathKey(m_CurrentScenePath);
         std::string toggleBookmark; // applied after the loops - they iterate the bookmark list
         auto entry = [&](const std::string& path) {
             if (path.empty()) return;
             const std::string key = NormalizedPathKey(path);
             if (!listed.insert(key).second) return;
-            std::error_code ec;
-            const bool exists = std::filesystem::exists(path, ec);
+            const bool exists = SceneFileExists(path, listOpening);
             const Enhancers::EditorRef ref = SceneRefFor(path);
             const bool starred = Enhancers::FindRef(us.SceneBookmarks, ref) >= 0;
             ImGui::PushID(key.c_str());
