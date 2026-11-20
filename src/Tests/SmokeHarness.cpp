@@ -51,10 +51,15 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
                 m_ShotCameras.push_back(c);
         }
     }
-    if (Cinematic::Active() && !opt.smokeShotsDir.empty()) {
-        std::string error;
-        m_Cinematic = Cinematic::Load(Env::Str(Env::Var::Cinematic), error);
-        if (!m_Cinematic) Log::Error("Cinematic: " + error);
+    // A camera path that can't be used fails the first scene (ScoreScene): this runs before any scene's
+    // error baseline, so a logged error alone would never count and the run would exit 0 with no video.
+    if (Cinematic::Active()) {
+        std::string error = "TARTARUS_CINEMATIC needs --smoke-shots <dir> for the video";
+        if (!opt.smokeShotsDir.empty()) m_Cinematic = Cinematic::Load(Env::Str(Env::Var::Cinematic), error);
+        if (!m_Cinematic) {
+            Log::Error("Cinematic: " + error);
+            m_SetupError = "cinematic: " + error + "; ";
+        }
     }
     m_ShotCameraStart = Env::IsSet(Env::Var::ShotStart) ? std::max(1, Env::Int(Env::Var::ShotStart, 0)) : 40;
     m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * PerfBench::kPhaseFrames
@@ -99,7 +104,6 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         // testbed: the animation overhaul's clean scene, a project scene (tools/scenes/build_anim_testbed.py), not a tests/ one.
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty() && (opt.npcTestScenario == "testbed" || opt.npcTestScenario == "mmplayer" || opt.npcTestScenario == "mmstress"))
             m_ScenePaths.assign(1, ProjectPaths::Resolve("scenes/AnimTestbed.json"));
-#pragma warning(suppress : 4996)
         if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) { // e.g. doors in the Forest
             // A test scene (tests/scenes/) by that name first, else the project's scenes/.
             const std::string test = EnginePaths::Resolve("tests/scenes/" + scene + ".json");
@@ -380,7 +384,8 @@ void SmokeHarness::PerfFrame() {
 }
 
 void SmokeHarness::ScoreScene() {
-    if (m_Cinematic) Cinematic::Finish(); // a run cut short still leaves a playable file
+    // A run cut short still leaves a playable file; an incomplete or empty clip fails the scene.
+    const bool clipOk = !m_Cinematic || Cinematic::Finish();
     NpcTest* npcTest = m_Ctx.npcTest;
     int newErrors    = GLDebug::ErrorCount() - m_BaselineGlErrors;
     int newLogErrors = Log::CountOf(LogLevel::Error) - m_BaselineLogErrors;
@@ -393,6 +398,9 @@ void SmokeHarness::ScoreScene() {
 
     std::string cause;
     if (!m_SceneLoadOk)      cause += "Load() failed; ";
+    cause += m_SetupError;
+    m_SetupError.clear(); // counted once, against the first scene
+    if (!clipOk)             cause += "cinematic clip incomplete; ";
     if (newLogErrors > 0)    cause += std::to_string(newLogErrors) + " new log error(s); ";
     if (npcTest) {
         if (!npcTest->Done()) cause += "npc test didn't finish; ";
