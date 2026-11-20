@@ -1384,7 +1384,8 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
     EnsureUndoScene(world);
 }
 
-void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
+void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path,
+                            const SceneSerializer::ParsedSceneFile* parsed) {
     CancelEyedropper(); // #93
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
@@ -1395,7 +1396,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
         return;
     }
     const int warnsBefore = Log::CountOf(LogLevel::Warning);
-    if (path.empty() || !SceneSerializer::Load(world, assets, path)) return;
+    if (path.empty() || !SceneSerializer::Load(world, assets, path, /*persistMigration=*/true, parsed)) return;
     m_QuietDirtyEdgeFrames = 2;
     m_LoadFailedScenePath.clear(); // #84 — a real scene is loaded now
     InvalidateModelThumbnail();

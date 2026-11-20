@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include "SceneFileJson.h"
 
 using namespace SceneDetail;
 
@@ -32,22 +33,57 @@ std::string SceneSerializer::TakeLoadWarning() {
     return warning;
 }
 
-bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration) {
-    std::ifstream in(std::filesystem::u8path(path));
-    if (!in.is_open()) return false; // (before anything touches the world: a missing file leaves it as it was)
+namespace {
+// The file's size and write time, as ReadSceneFile records them; false when it can't be stat'ed.
+bool StatSceneFile(const std::string& path, std::uintmax_t& size, std::filesystem::file_time_type& time) {
+    std::error_code ec;
+    const auto p = std::filesystem::u8path(path);
+    size = std::filesystem::file_size(p, ec);
+    if (ec) return false;
+    time = std::filesystem::last_write_time(p, ec);
+    return !ec;
+}
+} // namespace
+
+std::shared_ptr<SceneSerializer::ParsedSceneFile> SceneSerializer::ReadSceneFile(const std::string& path) {
+    auto out = std::make_shared<ParsedSceneFile>();
+    // Stat before reading: a write that lands during the read changes the time, and Load re-reads.
+    if (!StatSceneFile(path, out->Size, out->WriteTime)) return nullptr;
+    std::ifstream f(std::filesystem::u8path(path), std::ios::binary);
+    if (!f.is_open()) return nullptr;
+    out->Root = json::parse(f, nullptr, /*allow_exceptions=*/false);
+    if (out->Root.is_discarded()) return nullptr;
+    return out;
+}
+
+bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration,
+                           const ParsedSceneFile* parsed) {
+    if (parsed) {
+        std::uintmax_t size = 0;
+        std::filesystem::file_time_type time{};
+        if (!StatSceneFile(path, size, time) || size != parsed->Size || time != parsed->WriteTime) parsed = nullptr;
+    }
+    std::ifstream in;
+    if (!parsed) {
+        in.open(std::filesystem::u8path(path));
+        if (!in.is_open()) return false; // (before anything touches the world: a missing file leaves it as it was)
+    }
     OutfitSystem::CancelPending(world); // the registry is about to be replaced
     struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
 
-    json root;
-    try {
-        in >> root;
-    } catch (const std::exception& e) {
-        Log::Error("Scene: failed to parse '" + path + "': " + e.what());
-        return false;
+    json read;
+    if (!parsed) {
+        try {
+            in >> read;
+        } catch (const std::exception& e) {
+            Log::Error("Scene: failed to parse '" + path + "': " + e.what());
+            return false;
+        }
+        // Release the file now: the migration write-back below replaces `path` atomically, and on
+        // Windows that fails with "Access is denied" while this stream still holds it open.
+        in.close();
     }
-    // Release the file now: the migration write-back below replaces `path` atomically, and on
-    // Windows that fails with "Access is denied" while this stream still holds it open.
-    in.close();
+    const json& root = parsed ? parsed->Root : read;
     // Valid JSON but the wrong shape (e.g. a bare `[]` or a number) parses fine above but throws
     // a json::type_error the moment anything below calls .value()/.contains() on it, since those
     // require an object. Reject it here as a load failure — same contract as a parse error —
