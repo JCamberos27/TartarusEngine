@@ -1,4 +1,5 @@
 #include "EnhancerCore.h"
+#include "Log.h"
 
 #include <cctype>
 #include <cmath>
@@ -304,6 +305,25 @@ const char* FAIconGlyph(const char* name) {
     const FAIcon* e = std::end(kFAIcons);
     const FAIcon* it = std::lower_bound(b, e, name, [](const FAIcon& a, const char* n) { return std::strcmp(a.Name, n) < 0; });
     return (it != e && std::strcmp(it->Name, name) == 0) ? it->Glyph : nullptr;
+}
+
+nlohmann::json UnownedKeys(const nlohmann::json& root, std::initializer_list<const char*> owned) {
+    nlohmann::json out = nlohmann::json::object();
+    if (!root.is_object()) return out;
+    for (auto kv = root.begin(); kv != root.end(); ++kv) {
+        bool mine = false;
+        for (const char* o : owned) mine |= kv.key() == o;
+        if (!mine) out[kv.key()] = kv.value();
+    }
+    return out;
+}
+
+void NoteNewerVersion(const nlohmann::json& root, int current, const char* what) {
+    if (!root.is_object()) return;
+    const auto it = root.find("version");
+    if (it == root.end() || !it->is_number_integer() || it->get<int>() <= current) return;
+    Log::Warn(std::string(what) + ": written by a newer build (version " + std::to_string(it->get<int>()) + ", this build reads " +
+              std::to_string(current) + "). Sections this build doesn't know are kept as they are.");
 }
 
 std::string KeepUnreadable(const std::string& path) {
