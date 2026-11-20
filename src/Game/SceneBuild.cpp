@@ -396,11 +396,9 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
             const auto& pi = world.Registry.get<PrefabInstanceComponent>(e);
             TransformComponent t = effectiveTransform(e);
             json s;
-            s["source"] = AssetPathForWrite(pi.SourcePath); // audit #364
-            {
-                AssetGuid g = AssetDatabase::GuidForPath(pi.SourcePath);
-                if (g.IsValid()) s["sourceGuid"] = g.ToString();
-            }
+            const AssetRefWriteCache::Ref& src = refs.Get(pi.SourcePath); // audit #364
+            s["source"] = src.WritePath;
+            if (!src.Guid.empty()) s["sourceGuid"] = src.Guid;
             s["name"]     = nameOf(e);
             s["position"] = Vec3ToJson(t.Position);
             s["rotation"] = QuatToJson(t.Rotation);
