@@ -1,6 +1,7 @@
 #include "UnitTestSupport.h"
 #include "../App/LaunchOptions.h"
 #include "../App/ScratchProfile.h"
+#include "../Core/ModuleCopies.h"
 #include "../Core/Env.h"
 #include "../Core/Paths.h"
 
@@ -120,6 +121,16 @@ void Test_ScratchProfile_InstanceNames() {
     CHECK(!ScratchInstanceNameValid("w1\\..") && !ScratchInstanceNameValid(std::string(33, 'a')));
 }
 
+void Test_ModuleCopies_OwnerPid() {
+    // The hot-reload sweep keeps copies a running instance owns; it reads the pid from the name.
+    CHECK(ModuleCopies::OwnerPid(L"TartarusEditor_1234_1.dll", L"TartarusEditor_") == 1234u);
+    CHECK(ModuleCopies::OwnerPid(L"TartarusGame_7_12.dll", L"TartarusGame_") == 7u);
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_3.dll", L"TartarusGame_"));       // old style: no pid
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_x_1.dll", L"TartarusGame_"));
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusEditor_5_1.dll", L"TartarusGame_"));
+    CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_99999999999_1.dll", L"TartarusGame_"));
+}
+
 } // namespace
 
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
@@ -129,4 +140,5 @@ void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Env::ReadsAndHelp", Test_Env_ReadsAndHelp});
     tests.push_back({"ProjectPaths::RelativizeUnder", Test_ProjectPaths_RelativizeUnder});
     tests.push_back({"ScratchProfile::InstanceNames", Test_ScratchProfile_InstanceNames});
+    tests.push_back({"ModuleCopies::OwnerPid", Test_ModuleCopies_OwnerPid});
 }

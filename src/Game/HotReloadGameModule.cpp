@@ -8,6 +8,7 @@
 #include "HotReloadSwap.h"
 #include "TimeService.h"
 #include "AudioEngine.h"
+#include "Core/ModuleCopies.h"
 #include "Core/Paths.h"
 #include "Input.h"
 #include "InputMap.h"
@@ -202,18 +203,8 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
     }
 
     // On startup, clear numbered copies orphaned by an earlier crash or force-kill (a clean
-    // Shutdown deletes its own). Anything still locked by another running instance just fails
-    // the remove and is left alone.
-    if (initialLoad) {
-        std::error_code sweepEc;
-        for (const auto& entry : fs::directory_iterator(cacheDir, sweepEc)) {
-            const std::wstring name = entry.path().filename().wstring();
-            if (name.rfind(L"TartarusGame_", 0) == 0 && entry.path().extension() == L".dll") {
-                std::error_code rmEc;
-                fs::remove(entry.path(), rmEc);
-            }
-        }
-    }
+    // Shutdown deletes its own). Copies owned by a running instance are left alone.
+    if (initialLoad) ModuleCopies::SweepOrphans(cacheDir, L"TartarusGame_");
 
     // Named per process: a second instance (another editor, the unit tests) shares this folder, and a bare
     // generation number would collide with the copy the first one has loaded and locked.
