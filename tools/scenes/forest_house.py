@@ -536,10 +536,7 @@ def trash_house(pk, rng, notes):
     for e in pk.named(r'Windowglass_singlewindow'):
         if rng.random() < 0.45:
             pos, rot = pk.world(e['id'])
-            nrm = qrot(rot, (0, 0, 1))
-            plain = abs(nrm[1]) < 0.05 and max(abs(nrm[0]), abs(nrm[2])) > 0.98 and \
-                abs(e.get('scale', [1, 1, 1])[0] - 1.0) < 0.05 and 'bay' not in pk.by[e['parentId']]['name']
-            broken.append((pos, rot, plain))
+            broken.append((pos, rot))
             pk.remove(e['id'])
     notes['broken windows'] = len(broken)
 
@@ -703,8 +700,8 @@ def trash_house(pk, rng, notes):
         """Pushed and turned a little, about its own middle, with what stands on it."""
         group = [j for j in fit.group_of(i) if j not in pk.gone]
         c = fit.centre(fit.boxes[i])
-        for k in range(tries):
-            f = 1.0 - k / tries
+        for step in range(tries):
+            f = 1.0 - step / tries
             turn = rng.uniform(6.0, 18.0) * rng.choice((-1, 1)) * f
             sh = (rng.uniform(-0.3, 0.3) * f, rng.uniform(-0.3, 0.3) * f)
             old = fit.transform_group(group, c, axis_q((0, 1, 0), turn), sh)
@@ -845,7 +842,7 @@ def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
         s.stamp(rng.choice(leaves), g, (round(x, 3), round(y + 0.004, 3), round(z, 3)),
                 yaw=round(rng.uniform(0, 360), 1), scale=scale)
         n += 1
-    for pos, rot, _plain in broken:
+    for pos, rot in broken:
         y = FLOOR_1 if pos[1] < 3.0 else FLOOR_2
         nrm = qrot(rot, (0, 0, 1))
         for side in (-1, 1):            # whichever side is indoors is where the floor is
@@ -889,7 +886,6 @@ def over_the_fireplace(s, lay, pk, notes):
 
 ALLEY = 'assets/Environments/ModularCityAlleyPack/Prefabs/Prefabs_Props/'
 BEDROOM = 'assets/Furniture/Bedroom/Models/'
-GARAGE = 'assets/Furniture/Garage/Models/'
 
 
 def wall_face(fit, x, z, y, dx, dz, reach=3.0):
@@ -974,7 +970,7 @@ def stories(s, lay, pk, rng, g, placed, notes):
                      rng.uniform(0, 360), LIE['side'], 1.0, placed)
             n += 1
             break
-    sink = next((e for e in pk.props() if fh_stem(e).startswith('Kitcabinet_low_1') and 'sink' in fh_stem(e)
+    sink = next((e for e in pk.props() if stem(e).startswith('Kitcabinet_low_1') and 'sink' in stem(e)
                  and pk.world(e['id'])[0][1] < 3.0 and e['id'] not in pk.gone), None)
     if sink:
         sp, sr = pk.world(sink['id'])
@@ -988,17 +984,12 @@ def stories(s, lay, pk, rng, g, placed, notes):
     notes['story pieces'] = n
 
 
-def fh_stem(e):
-    return stem(e)
-
-
 # Decals (docs/DECALS.md): a fixed handful of maps so the house stays well inside the decal texture budget. The plaster
 # is cracked where a settling house cracks - off the corners of the door and window openings, along the wall heads and
 # across the ceilings - with a leak's stain where a ceiling crack has let the rain through.
 D = 'assets/Decals/'
 CRACK = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}.decal'
 WALL_CRACKS = [CRACK.format(n) for n in (72, 79, 91)]   # crack lines only (the others carry pale paint flakes)
-CEIL_CRACKS = [CRACK.format(n) for n in (72, 79, 91)]   # long hairlines, the same as the walls'
 LEAK_DECALS = [D + f'Stains/LiquidSplatter/DA_LiquidSplatter_{n:03d}.decal' for n in (1, 10, 19)]
 BASE_DECALS = [D + f'Stains/LiquidSplatter/DA_LiquidSplatter_{n:03d}.decal' for n in (2, 9)]
 CAR_DECAL = D + 'Stains/Splatters/DA_Stain_591.decal'
@@ -1153,7 +1144,7 @@ def grime(s, lay, pk, rng, notes):
             continue
         yaw = rng.uniform(0, 360)
         w = rng.uniform(0.5, 0.9)
-        if put('Ceiling Crack', (x, ceil, z), qmul(axis_q((0, 1, 0), yaw), up), rng.choice(CEIL_CRACKS),
+        if put('Ceiling Crack', (x, ceil, z), qmul(axis_q((0, 1, 0), yaw), up), rng.choice(WALL_CRACKS),
                (w, w * 0.35, 0.12), rng.uniform(0.85, 1.0), CRACK_TINT) and rng.random() < (0.6 if upstairs else 0.3):
             a = math.radians(yaw)
             ex, ez = x + math.cos(a) * w * 0.35, z - math.sin(a) * w * 0.35
@@ -1333,15 +1324,15 @@ def add_house(s, root, repo, pack_path, notes):
 
 
 # --- the yard ---------------------------------------------------------------------------------------------------
-def fence_line(s, g, path, a, b, seg, rng, H, missing=0.12, lean=0.15, name='Fence', gaps=()):
-    """Segments of `seg` metres from a to b (world x, z); some gone, some leaning, `gaps` (t0, t1 along) left open."""
+def fence_line(s, g, path, a, b, seg, rng, H, missing=0.12, lean=0.15, name='Fence'):
+    """Segments of `seg` metres from a to b (world x, z); some gone, some leaning."""
     dx, dz = b[0] - a[0], b[1] - a[1]
     length = math.hypot(dx, dz)
     yaw = math.degrees(math.atan2(-dz, dx))
     n = 0
     t = 0.0
     while t + seg <= length + 0.05:
-        if any(g0 <= t + seg / 2 <= g1 for g0, g1 in gaps) or rng.random() < missing:
+        if rng.random() < missing:
             t += seg
             continue
         x, z = a[0] + dx / length * t, a[1] + dz / length * t

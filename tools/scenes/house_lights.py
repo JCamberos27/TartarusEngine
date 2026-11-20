@@ -108,7 +108,7 @@ class Wiring:
     # --- lights
     def light(self, name, parent, pos, f, circuit, pitch=-90.0, yaw=0.0, color=None, kelvin=None, intensity=None,
               rng=None, shadows=None, extra=None):
-        i = self.s.light(name, parent, pos, intensity=intensity if intensity is not None else f['I'],
+        self.s.light(name, parent, pos, intensity=intensity if intensity is not None else f['I'],
                          rng=rng if rng is not None else f['R'], color=color or (1.0, 0.86, 0.7),
                          kelvin=0.0 if color else float(kelvin or f['K']),
                          shadows=f['shadow'] if shadows is None else shadows, spot=f['spot'], pitch=pitch, yaw=yaw,
@@ -514,8 +514,8 @@ def room_box(cells, at, fit, floor, ceil, pad=0.05):
     mx, mz = (bx0 + bx1) / 2, (bz0 + bz1) / 2
 
     def push(edge, axis, sign):
-        for k in range(0, 13):
-            v = edge + sign * k * 0.01
+        for cm in range(0, 13):
+            v = edge + sign * cm * 0.01
             if (hits(v, mz) if axis == 0 else hits(mx, v)):
                 return v + sign * pad
         return edge + sign * 0.12

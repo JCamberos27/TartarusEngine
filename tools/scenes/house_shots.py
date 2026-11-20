@@ -73,7 +73,7 @@ def piece_cams(inv, p, angles):
     return out
 
 
-def room_cams(inv, room):
+def room_cams(room):
     c = room['centre']
     floor = room['floor'] - 0.485
     out = [('mid', [c[0], floor + EYE, c[2]], [c[0] + 1.0, floor + EYE - 0.3, c[2]])]
@@ -83,7 +83,7 @@ def room_cams(inv, room):
     return out
 
 
-def wall_cams(inv, room):
+def wall_cams(room):
     """From the room's middle, one view square onto each of its four walls (leak checks)."""
     c = room['centre']
     y = room['floor'] - 0.485 + 1.4
@@ -198,13 +198,13 @@ def main():
         for r in inv['rooms']:
             if rooms and r['name'] not in rooms:
                 continue
-            for tag, cam, tgt in room_cams(inv, r):
+            for tag, cam, tgt in room_cams(r):
                 cams.append((f'{safe(r["name"])}_{tag}', cam, *look(cam, tgt)))
     if '--walls' in a:
         for r in inv['rooms']:
             if rooms and r['name'] not in rooms:
                 continue
-            for tag, cam, tgt in wall_cams(inv, r):
+            for tag, cam, tgt in wall_cams(r):
                 cams.append((f'{safe(r["name"])}_{tag}', cam, *look(cam, tgt)))
     if '--pieces' in a or ids:
         for p in inv['pieces']:

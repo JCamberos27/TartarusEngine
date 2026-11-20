@@ -3,7 +3,6 @@
 #
 #   python tools/scenes/house_check.py project/scenes/Forest.json [--list]
 import json
-import math
 import os
 import re
 import sys
