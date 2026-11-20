@@ -3014,6 +3014,7 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
     // Moved in the library since the scan: counts in its library folder instead (an entry only for assets given one).
     const auto& byPath = m_ProjectAssetIndex.byPath;
     for (const auto& [path, folder] : assets.AssetFolders()) {
+        if (folder.empty()) continue; // as AssetFolderRef "" read before: not moved (SetAssetFolder never stores one)
         const auto it = byPath.find(std::string_view(path));
         if (it == byPath.end()) continue;
         const FolderIndexContribution c = m_FolderIndexContrib[it->second];

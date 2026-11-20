@@ -1329,8 +1329,7 @@ EditorLayer::ProjectAssetScan EditorLayer::ScanProjectAssetFiles(const std::stri
             }
         }
         // Its directory under the project, worked out here on the scan's thread; the main thread only registers
-        // each distinct directory once when the scan lands (AddFolderPath). DiskDirOf relativizes here, so the
-        // memoized ProjectPaths::Relativize is warm for later main-thread lookups too.
+        // each distinct directory once when the scan lands (AddFolderPath).
         if (!f.MetaFolder) f.Folder = AssetLibrary::DiskDirOf(f.Path);
         if (IsLibraryKind(f)) LibraryGroupOf(library, f);
         files.push_back(std::move(f));
@@ -1395,12 +1394,20 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
         index.byPath = std::move(landed.byPath);
         index.filesLibraryGen = index.scanLibraryGen;
         // ~11k files sit in a few hundred directories: AddFolderPath once per distinct one (its answer for a
-        // directory doesn't change while this loop runs: the first call registers it, later ones find it).
+        // directory doesn't change while this loop runs: the first call registers it, later ones find it). A
+        // directory's files are next to each other (scan order), so the map is only asked once per run, and a
+        // file keeps its own string when the answer is the same path (the usual case).
         std::unordered_map<std::string, std::string> resolved;
+        std::string runFolder;
+        const std::string* runResolved = nullptr;
         for (ProjectAssetFile& f : index.files) {
-            auto [it, added] = resolved.try_emplace(f.Folder);
-            if (added) it->second = assets.AddFolderPath(f.Folder);
-            f.Folder = it->second;
+            if (!runResolved || f.Folder != runFolder) {
+                auto [it, added] = resolved.try_emplace(f.Folder);
+                if (added) it->second = assets.AddFolderPath(f.Folder);
+                runFolder = f.Folder;
+                runResolved = &it->second; // node-based map: stays put as it grows
+            }
+            if (f.Folder != *runResolved) f.Folder = *runResolved;
         }
         replaced = true;
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - index.scanStarted).count();
