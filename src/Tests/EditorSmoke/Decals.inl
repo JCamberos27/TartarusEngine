@@ -51,10 +51,16 @@ Step ChooseDecal(const char* stem) {
     });
 }
 // The Apartment Hallway open has landed (its models preload on the asset workers first, #938): up to 60 s.
+// On a timeout it says what the open is still waiting on.
 Step UntilHallwayOpen() {
-    return Until("the Apartment Hallway is open", [](Ctx& c) {
-        return EditorSmokeAccess_Scenes::IsOpen(c.E, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
-    }, 3600);
+    auto frames = std::make_shared<int>(0);
+    return {"the Apartment Hallway is open", [frames](Ctx& c) {
+        if (EditorSmokeAccess_Scenes::IsOpen(c.E, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"))) { *frames = 0; return true; }
+        if (++*frames <= 3600) return false;
+        *frames = 0;
+        Fail("the Apartment Hallway is open: not after 3600 frames - " + EditorSmokeAccess_Scenes::OpenState(c.E, c.A));
+        return true;
+    }, 1000000};
 }
 Step SelectRoom() {
     return Do("select the Apartment 303 living room floor", [](Ctx& c) {
