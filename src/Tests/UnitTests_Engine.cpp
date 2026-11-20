@@ -1017,6 +1017,7 @@ void TestPlayerAcceleration() {
     CHECK(down > up);
 }
 
+// --- #202 / #122: a scene survives save -> load -> save unchanged ---------------------------
 // crash - the scene just quietly comes back different. Round-tripping and comparing the two
 // documents catches the whole class at once, which is what #202 asks for under "scene
 // round-trips" and what #121/#342 changed enough of to be worth pinning down.
