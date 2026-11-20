@@ -1624,6 +1624,7 @@ bool AppSession::Frame() {
             int done = loadsDone();
             while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) && assets.AsyncInFlight() > 0) {
                 assets.PumpAsync(50.0);
+                UploadStaging::Finish(); // no frames end while this waits: free the staging ring by hand (as CliTools' drain)
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 if (const int now = loadsDone(); now != done) {
                     done = now;
