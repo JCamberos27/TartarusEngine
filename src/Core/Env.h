@@ -13,7 +13,8 @@
 // X(Id, "NAME", Kind, "help")   Kind: Flag | Int | Float | Str | List (';'-separated)
 #define TARTARUS_ENV_VARS(X)                                                                                           \
     /* Harness runs */                                                                                                  \
-    X(Hidden, "TARTARUS_HIDDEN", Flag, "keep the window hidden during harness runs")                                  \
+    X(Hidden, "TARTARUS_HIDDEN", Flag, "harness runs: hidden (the default now; kept for old scripts)")                \
+    X(Show, "TARTARUS_SHOW", Flag, "harness runs: show the window (they are hidden by default)")                      \
     X(Mute, "TARTARUS_MUTE", Flag, "start with the master bus muted")                                                 \
     X(UnlockedFps, "TARTARUS_UNLOCKED_FPS", Flag, "VSync off and no FPS cap, whatever the prefs say (test runs)")     \
     X(WeaponLab, "TARTARUS_WEAPON_LAB", Flag, "same as --weapon-lab (run-weapon-lab.cmd)")                            \
@@ -32,7 +33,7 @@
     X(EditorTestInstance, "TARTARUS_EDITOR_TEST_INSTANCE", Str, "--editor-tests: scratch folder suffix")              \
     X(EditorTestScale, "TARTARUS_EDITOR_TEST_SCALE", Float, "--editor-tests: UI scale override")                      \
     X(EditorTestSize, "TARTARUS_EDITOR_TEST_SIZE", Str, "--editor-tests: window size WxH")                            \
-    X(EditorTestShow, "TARTARUS_EDITOR_TEST_SHOW", Flag, "--editor-tests: keep the window shown")                     \
+    X(EditorTestShow, "TARTARUS_EDITOR_TEST_SHOW", Flag, "--editor-tests: show the window (same as TARTARUS_SHOW)")   \
     X(EditorTestDeadline, "TARTARUS_EDITOR_TEST_DEADLINE", Float, "--editor-tests: watchdog deadline in minutes")     \
     X(EditorTestShots, "TARTARUS_EDITOR_TEST_SHOTS", Str, "--editor-tests: folder for failure screenshots")           \
     X(EditorTestExclude, "TARTARUS_EDITOR_TEST_EXCLUDE", List, "--editor-tests: test names to skip")                  \

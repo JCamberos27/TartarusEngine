@@ -84,7 +84,7 @@ UiStyles UiStyles::Spectrum(const std::vector<std::string>& extraComponents) {
 }
 
 json UiStyles::ToJson() const {
-    json j;
+    json j = m_Unknown;
     j["version"] = kVersion;
     j["panels"] = MapToJson(Panels);
     j["components"] = MapToJson(Components);
@@ -94,6 +94,8 @@ json UiStyles::ToJson() const {
 void UiStyles::FromJson(const json& j) {
     Reset();
     if (!j.is_object()) return;
+    NoteNewerVersion(j, kVersion, "Tab and header styles");
+    m_Unknown = UnownedKeys(j, {"version", "panels", "components"});
     MapFromJson(j, "panels", Panels);
     MapFromJson(j, "components", Components);
 }
@@ -101,6 +103,7 @@ void UiStyles::FromJson(const json& j) {
 void UiStyles::Reset() {
     Panels.clear();
     Components.clear();
+    m_Unknown = json::object();
     m_Dirty = false;
 }
 
