@@ -318,6 +318,8 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // #178 - Search in Scene: while the Hierarchy search is active, wash every visible
     // object that doesn't match it in flat grey, so the matches stand out (Unity).
     if (editor.SceneSearchActive() && !editor.OverlaysHidden()) {
+        PROFILE_SCOPE("Scene Search Wash");
+        PROFILE_GPU_SCOPE("Scene Search Wash");
         if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         for (auto e : world.Registry.view<const TransformComponent, const RenderableComponent>()) {
             if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag, PoseSourceTag, OwnerViewOnlyTag>(e)) continue;
@@ -356,6 +358,8 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         outlineIn.width = scW;
         outlineIn.height = scH;
         outlineIn.wireframe = sceneWireframe;
+        PROFILE_SCOPE("Selection Outline");
+        PROFILE_GPU_SCOPE("Selection Outline");
         in.selectionOutline->Render(outlineIn);
     }
 
@@ -368,6 +372,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // for why this is a flat tint rather than the real PBR material shader.
     const EditorLayer::DragPreview& dragPreview = editor.GetDragPreview();
     if (dragPreview.Active) {
+        PROFILE_GPU_SCOPE("Drag Preview");
         const glm::mat4 pose = glm::translate(glm::mat4(1.0f), dragPreview.Position) *
                                glm::mat4_cast(dragPreview.Rotation);
         for (const auto& part : dragPreview.Parts)
@@ -380,7 +385,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // below — this snapshot is what Bloom reads. Editor-only overlays are never real
     // scene lighting, so they must never bloom/glow; capturing the bloom source here,
     // before they're drawn, guarantees that regardless of their color or opacity.
-    sceneHdr.ResolveTo();
+    { PROFILE_GPU_SCOPE("MSAA Resolve"); sceneHdr.ResolveTo(); }
 
     unsigned int bloomGlowTex  = 0u;
     float        bloomIntensity = 0.0f;
@@ -401,6 +406,8 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
         if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !in.harnessCleanViews) {
             overlayDrawn = true;
+            PROFILE_SCOPE("Collider Overlay");
+            PROFILE_GPU_SCOPE("Collider Overlay");
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_FALSE);
             // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
@@ -415,7 +422,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // still shows them — only the earlier, overlay-free resolve above ever reached
     // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
     // (exposure -> curve -> gamma, once, in Tonemapper). Without the overlay the first resolve already holds it.
-    if (overlayDrawn) sceneHdr.ResolveTo();
+    if (overlayDrawn) { PROFILE_GPU_SCOPE("MSAA Resolve"); sceneHdr.ResolveTo(); }
     unsigned int sceneColorTex = sceneHdr.ResolvedColorTexture();
     {
     FullscreenPass post; // TAA + tonemap: one state save/restore for the chain
@@ -433,6 +440,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // never occluded against the scene, so no depth test is lost by drawing here.
     sceneFramebuffer.Bind();
     if (editor.ShowGrid() && !editor.OverlaysHidden() && !in.harnessCleanViews) { // (no grid lines through a test's shots)
+        PROFILE_GPU_SCOPE("Grid");
         const GLboolean gridHadDepthTest = glIsEnabled(GL_DEPTH_TEST);
         glDisable(GL_DEPTH_TEST);
         // The grid shader fades lines by literal world-space distance from the
