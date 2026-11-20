@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <map>
 #include <string>
 #include <vector>
@@ -156,5 +157,10 @@ const char* FAIconGlyph(const char* name);       // nullptr when unknown (or nam
 // would overwrite the file. This copies it to "<path>.bad" first, so nothing is lost; returns that path
 // ("" when the copy failed).
 std::string KeepUnreadable(const std::string& path);
+// The Enhancer stores carry a newer build's sections through untouched: the top-level keys of `root`
+// not in `owned` (an object; empty when `root` isn't one). A file whose "version" is above `current`
+// logs once, naming `what`, so an older build editing it is not silent.
+nlohmann::json UnownedKeys(const nlohmann::json& root, std::initializer_list<const char*> owned);
+void NoteNewerVersion(const nlohmann::json& root, int current, const char* what);
 
 } // namespace Enhancers

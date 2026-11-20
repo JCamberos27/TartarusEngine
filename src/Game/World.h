@@ -108,11 +108,15 @@ public:
     // Anti-aliasing mode (Unity's camera Anti-aliasing). Off / FXAA / MSAA only summarise the older
     // MsaaSamples + FxaaEnabled fields, which still drive those modes exactly as before (so a scene saved
     // before this existed renders the same). TAA is the new one: jittered projection, per-pixel motion
-    // vectors and a history resolve (TemporalAA.h); it forces the HDR target to 1 sample and skips FXAA.
+    // vectors and a history resolve (TemporalAA.h); it renders the HDR target at kTaaMsaaSamples and skips FXAA.
     enum class AntiAliasingMode { Off = 0, Fxaa = 1, Msaa = 2, Taa = 3 };
     AntiAliasingMode AntiAliasing{AntiAliasingMode::Msaa};
     float TaaSharpness{0.35f};          // 0..1, the post-resolve sharpen (TAA only)
-    int  EffectiveMsaaSamples() const { return AntiAliasing == AntiAliasingMode::Taa ? 1 : MsaaSamples; }
+    // TAA asked for 1 sample, but the driver rounds a 1-sample multisample texture up to 2: TAA has always rendered
+    // at 2x MSAA, resolved before the history pass. Asking for 2 says so, and keeps TAA's edges as they look (a true
+    // 1x target is a plain 2D texture since HdrTarget's single-sample path, and its edges come out more jagged).
+    static constexpr int kTaaMsaaSamples = 2;
+    int  EffectiveMsaaSamples() const { return AntiAliasing == AntiAliasingMode::Taa ? kTaaMsaaSamples : MsaaSamples; }
     bool EffectiveFxaa() const { return AntiAliasing != AntiAliasingMode::Taa && FxaaEnabled; }
     bool TaaEnabled() const { return AntiAliasing == AntiAliasingMode::Taa; }
     // What Off / FXAA / MSAA a scene without the key reads as (derived from the two older fields).
