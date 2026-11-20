@@ -4,7 +4,7 @@
 #include "AssetGuid.h"
 #include "AssetLibrary.h"
 #include "AtomicFile.h"
-#include "ClusterGrid.h"
+#include "ClusterDecalSnapshot.h"
 #include "Components.h"
 #include "DecalTypes.h"
 #include "EditorLayer.h"
@@ -320,10 +320,10 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
 // of the cull's test gives it (its top-most 256 where more touch it), in sort order, with the clamped
 // clusters counted in the overflow word.
 void DecalStress(const ClusterGrid& grid, int visible, int frame) {
-    static ClusterGrid::DecalSnapshot first;
+    static ClusterDecalSnapshot first;
     static int firstFrame = -1;
-    ClusterGrid::DecalSnapshot snap;
-    if (!grid.ReadDecalSnapshot(snap)) {
+    ClusterDecalSnapshot snap;
+    if (!ReadClusterDecalSnapshot(grid, snap)) {
         Log::Error("[SmokeTest] decal stress: no decal cull to read back");
         return;
     }
@@ -353,9 +353,9 @@ void DecalStress(const ClusterGrid& grid, int visible, int frame) {
         uint32_t lo = 0, hi = 0;
         for (int i = 0; i < snap.DecalCount; ++i) {
             const glm::vec4* box = &snap.ViewBoxes[(size_t)i * ClusterGrid::kDecalViewBoxVec4s];
-            if (!ClusterGrid::DecalBoxOverlaps(box, mn, mx, 1e-3f)) continue; // the narrow test can't pass either
+            if (!ClusterDecalBoxOverlaps(box, mn, mx, 1e-3f)) continue; // the narrow test can't pass either
             ++hi;
-            lo += ClusterGrid::DecalBoxOverlaps(box, mn, mx, -1e-3f);
+            lo += ClusterDecalBoxOverlaps(box, mn, mx, -1e-3f);
         }
         const uint32_t offset = snap.Ranges[c * 2], count = snap.Ranges[c * 2 + 1];
         total += count;
@@ -376,7 +376,7 @@ void DecalStress(const ClusterGrid& grid, int visible, int frame) {
             const uint32_t idx = snap.Indices[2 + offset + k];
             const bool ordered = k == 0 || idx > snap.Indices[2 + offset + k - 1];
             if (idx >= (uint32_t)snap.DecalCount || !ordered ||
-                !ClusterGrid::DecalBoxOverlaps(&snap.ViewBoxes[(size_t)idx * ClusterGrid::kDecalViewBoxVec4s], mn, mx, 1e-3f)) {
+                !ClusterDecalBoxOverlaps(&snap.ViewBoxes[(size_t)idx * ClusterGrid::kDecalViewBoxVec4s], mn, mx, 1e-3f)) {
                 why = "cluster " + std::to_string(c) + " lists decal " + std::to_string(idx) + " out of order or off it";
                 break;
             }
@@ -385,7 +385,7 @@ void DecalStress(const ClusterGrid& grid, int visible, int frame) {
         if (why.empty() && lo > cap && hi == lo && count > 0) {
             uint32_t top = 0;
             for (int i = snap.DecalCount - 1; i >= 0; --i)
-                if (ClusterGrid::DecalBoxOverlaps(&snap.ViewBoxes[(size_t)i * ClusterGrid::kDecalViewBoxVec4s], mn, mx, 0.0f)) {
+                if (ClusterDecalBoxOverlaps(&snap.ViewBoxes[(size_t)i * ClusterGrid::kDecalViewBoxVec4s], mn, mx, 0.0f)) {
                     top = (uint32_t)i;
                     break;
                 }
