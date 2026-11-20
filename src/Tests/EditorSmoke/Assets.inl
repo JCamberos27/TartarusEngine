@@ -429,7 +429,12 @@ void RegisterAssetsTests() {
          Click(Icon(ICON_FA_ARROW_DOWN_SHORT_WIDE)), Wait(3), Click(MenuItem("Name")), Wait(3),
          Click(Icon(ICON_FA_ARROW_DOWN_SHORT_WIDE)), Wait(3), Click(MenuItem("Ascending")), Wait(3),
          ExpectTrue("Name, ascending again", [](Ctx&) { return EditorSettings::Get().AssetSortMode == 0 && !EditorSettings::Get().AssetSortDesc; })},
-    }));
+    }), [](Ctx& c) {
+        // Pass or fail: no search, sorted by Name ascending (a failure used to leave later suites' grids sorted by size).
+        AX::Search(c.E).clear();
+        EditorSettings::Get().AssetSortMode = 0;
+        EditorSettings::Get().AssetSortDesc = false;
+    });
 
     // ------------------------------------------------------------------ views and zoom
     {
@@ -470,9 +475,12 @@ void RegisterAssetsTests() {
              Click(ByExact("##IconSize", kAssets), ImGuiMod_Ctrl), Wait(3),
              Key(ImGuiKey_A, ImGuiMod_Ctrl), TypeText("48"), Key(ImGuiKey_Enter), Wait(4),
              ExpectTrue("tiles at 48 px", [](Ctx& c) { return std::fabs(AX::IconSize(c.E) - 48.0f) < 0.5f; }),
-             Shot("zoom-48", {kAssets}),
-             Do("back to the size it had", [size](Ctx& c) { AX::IconSize(c.E) = *size; }), Wait(2)},
-        }));
+             Shot("zoom-48", {kAssets})},
+        }), [size](Ctx& c) {
+            // Pass or fail: grid view at the zoom it had (a failure used to leave the browser in list view at 48 px).
+            EditorSettings::Get().AssetDetailsMode = false;
+            if (*size > 0.0f) AX::IconSize(c.E) = *size;
+        });
     }
 
     // ------------------------------------------------------------------ the grid's background menu
@@ -528,7 +536,7 @@ void RegisterAssetsTests() {
 
     // ------------------------------------------------------------------ a tile's context menu
     {
-        auto clip = std::make_shared<std::string>();
+        auto clip = std::make_shared<std::optional<std::string>>();
         Add("assets: Edit Labels, favorites, Copy Path, Find References, Reimport, Place Instance", Cat({
             {FreshScene(), Wait(2)},
             EnsureScratch(),
@@ -575,7 +583,6 @@ void RegisterAssetsTests() {
                  const char* t = ImGui::GetClipboardText();
                  return t && std::string(t) == CellKey(c, "Smoke Cube.obj") ? std::string() : "clipboard: " + std::string(t ? t : "");
              }),
-             Do("put the clipboard back", [clip](Ctx&) { ImGui::SetClipboardText(clip->c_str()); }),
              MarkLog()},
             TileMenu("Smoke Cube.obj", "Find References in Scene"),
             {ExpectLogged("No objects in this scene use"), MarkLog()},
@@ -601,7 +608,12 @@ void RegisterAssetsTests() {
              ExpectTrue("the instance is still there", [](Ctx& c) { return ByName(c.W, "Smoke Prefab Root") != entt::null; }),
              Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
              Until("the third undo removes the instance", [](Ctx& c) { return ByName(c.W, "Smoke Prefab Root") == entt::null; }, 60)},
-        }));
+        }), [clip](Ctx& c) {
+            // Pass or fail: the clipboard as it was before Copy Path, all assets shown (not favorites only).
+            if (*clip) ImGui::SetClipboardText((*clip)->c_str());
+            clip->reset();
+            AX::FavoritesOnly(c.E) = false;
+        });
     }
 
     // ------------------------------------------------------------------ the Asset Library root
@@ -826,13 +838,14 @@ void RegisterAssetsTests() {
             return Find(ByLabel("Import 'Crate'", kLibraryPanel)) != nullptr;
         }, 60),
         Shot("crate", {kLibraryPanel}), // the Import button isn't clicked: it copies into the project
-        Do("close the panel and delete the library", [](Ctx&) {
-            EditorSettings::Get().ShowAssetLibrary = false;
-            EditorSettings::Get().AssetLibraryPath.clear();
-            std::error_code ec;
-            fs::remove_all(fs::u8path(LibraryDir()), ec);
-        }),
+        Do("close the panel", [](Ctx&) { EditorSettings::Get().ShowAssetLibrary = false; }),
         Until("the Asset Library is gone", [](Ctx&) { return !ChromeUi::Shown(EditorPanels::AssetLibrary); }, 60),
+    }, [](Ctx&) {
+        // Pass or fail: panel closed, no library path, the library folder gone (it lives in the user folder).
+        EditorSettings::Get().ShowAssetLibrary = false;
+        EditorSettings::Get().AssetLibraryPath.clear();
+        std::error_code ec;
+        fs::remove_all(fs::u8path(LibraryDir()), ec);
     });
 
     // ------------------------------------------------------------------ cleanup: Delete Folder
