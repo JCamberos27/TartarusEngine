@@ -56,6 +56,7 @@ public:
 
 private:
     bool m_Dirty = false;
+    nlohmann::json m_Unknown = nlohmann::json::object(); // a newer build's sections, written back as they were
 };
 
 } // namespace Enhancers
