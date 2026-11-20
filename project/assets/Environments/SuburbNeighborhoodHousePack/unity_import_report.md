@@ -1,6 +1,6 @@
 # SuburbNeighborhoodHousePack: Unity import report
 
-Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhoodHousePack`
+Source: `Assets/SuburbNeighborhoodHousePack`
 
 ## Counts
 

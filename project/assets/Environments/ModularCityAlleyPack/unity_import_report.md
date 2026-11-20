@@ -1,6 +1,6 @@
 # ModularCityAlleyPack: Unity import report
 
-Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPack`
+Source: `Assets/ModularCityAlleyPack`
 
 ## Counts
 
