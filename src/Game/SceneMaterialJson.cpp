@@ -8,20 +8,16 @@ namespace SceneDetail {
 // level-geometry box was silently dropped on save, on every undo/redo and on Play -> Stop.
 json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matSlots, AssetRefWriteCache* refs) {
     if (matSlots.empty()) return nullptr;
+    AssetRefWriteCache local; // a caller without a build-wide cache
+    if (!refs) refs = &local;
     json arr = json::array();
     for (const auto& slot : matSlots) {
         if (!slot) { arr.push_back(nullptr); continue; }
         if (!slot->Path.empty()) {
             json entry;
-            if (refs) {
-                const AssetRefWriteCache::Ref& r = refs->Get(slot->Path);
-                if (!r.Guid.empty()) entry["guid"] = r.Guid;
-                entry["path"] = r.WritePath; // audit #364
-            } else {
-                AssetGuid g = AssetDatabase::GuidForPath(slot->Path);
-                if (g.IsValid()) entry["guid"] = g.ToString();
-                entry["path"] = AssetPathForWrite(slot->Path); // audit #364
-            }
+            const AssetRefWriteCache::Ref& r = refs->Get(slot->Path);
+            if (!r.Guid.empty()) entry["guid"] = r.Guid;
+            entry["path"] = r.WritePath; // audit #364
             arr.push_back(std::move(entry));
         } else {
             const auto& smat = slot->Mat;

@@ -99,10 +99,6 @@ std::string AssetPathForWriteUncached(const std::string& path, const std::filesy
     return rel.generic_string();
 }
 
-// weakly_canonical opens each path on disk (CreateFile + GetFinalPathNameByHandle), and every undo
-// snapshot writes every asset reference in the scene: in a big scene that was most of the time of
-// each edit's commit. The answers are memoized per project root; a path string's answer only moves
-// if a folder on it is renamed by case alone, and a renamed asset gets a new path string anyway.
 const AssetRefWriteCache::Ref& AssetRefWriteCache::Get(const std::string& path) {
     auto it = m_Refs.find(path);
     if (it != m_Refs.end()) return it->second;
@@ -112,6 +108,10 @@ const AssetRefWriteCache::Ref& AssetRefWriteCache::Get(const std::string& path) 
     return m_Refs.emplace(path, std::move(r)).first->second;
 }
 
+// weakly_canonical opens each path on disk (CreateFile + GetFinalPathNameByHandle), and every undo
+// snapshot writes every asset reference in the scene: in a big scene that was most of the time of
+// each edit's commit. The answers are memoized per project root; a path string's answer only moves
+// if a folder on it is renamed by case alone, and a renamed asset gets a new path string anyway.
 std::string AssetPathForWrite(const std::string& path) {
     if (path.empty() || IsSyntheticRef(path)) return path;
     namespace fs = std::filesystem;
