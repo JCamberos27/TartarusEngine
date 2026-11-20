@@ -116,8 +116,8 @@ if (-not $VerifyOnly) {
         Write-Host "$($driveStale.Count) file(s) on the Drive don't match external_assets.csv (not re-exported yet?) and were not copied."
     }
     # What else is on the Drive: reported so someone moves it off, never copied.
-    $extra = Get-ChildItem -LiteralPath $from -Recurse -File -Force |
-        ForEach-Object { $_.FullName.Substring($from.Length + 1) } |
+    # -Name gives paths relative to $from: FullName can spell the root differently (8.3 short names like RUNNER~1).
+    $extra = Get-ChildItem -LiteralPath $from -Recurse -File -Force -Name |
         Where-Object { $_ -ne 'external_assets.csv' -and -not (Test-Clutter $_) -and -not $listed.Contains($_) }
     if ($extra) {
         $extra | Select-Object -First 10 | ForEach-Object { Write-Host "not copied (not a listed asset)  $_" }
