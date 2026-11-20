@@ -461,15 +461,24 @@ void TestSceneNonFiniteFloat() {
     for (auto [ent, body] : old.Registry.view<FirstPersonBodyComponent>().each()) CHECK(body.FootIKMaxDrop == FirstPersonBodyComponent{}.FootIKMaxDrop);
 }
 
-// A freshly added component's asset field holds a project-relative default (the muzzle flame
-// texture): it saves with its GUID, the same as after a load, so save(load(save)) == save.
+// A freshly added component's asset field holds a project-relative path (like the muzzle flame
+// texture default): it saves with its GUID, the same as after a load, so save(load(save)) == save.
+// The texture is the test's own (written under the project root, removed at the end), so it runs
+// without the Drive assets (CI).
 void TestFreshAssetRefRoundTrip() {
-    const std::string flame = MuzzleEffectSettings{}.FlameTexture;
+    namespace fs = std::filesystem;
+    const std::string scratchRel = UnitTestSupport::TempName("unit-test-scratch-assetref");
+    const fs::path scratch = fs::u8path(ProjectPaths::Resolve(scratchRel));
+    std::error_code ec;
+    fs::create_directories(scratch, ec);
+    struct Cleanup { fs::path dir; ~Cleanup() { std::error_code e; fs::remove_all(dir, e); } } cleanup{scratch};
+    const std::string flame = scratchRel + "/T_Flame.png";
+    std::ofstream(fs::u8path(ProjectPaths::Resolve(flame)), std::ios::binary) << "png";
     const AssetGuid guid = AssetDatabase::EnsureGuid(ProjectPaths::Resolve(flame));
     CHECK(guid.IsValid());
     World world; AssetLibrary assets;
     const auto e = world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Weapon");
-    CHECK(world.Registry.emplace<WeaponDefinitionComponent>(e).Muzzle.FlameTexture == flame);
+    world.Registry.emplace<WeaponDefinitionComponent>(e).Muzzle.FlameTexture = flame;
     const std::string first = SceneSerializer::SaveToString(world, assets);
     nlohmann::json saved;
     std::function<void(const nlohmann::json&)> find = [&](const nlohmann::json& n) {
