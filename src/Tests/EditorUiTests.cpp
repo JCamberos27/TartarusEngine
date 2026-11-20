@@ -964,13 +964,6 @@ std::function<bool(Ctx&, ImVec2&)> AtPoint(std::function<ImVec2(Ctx&)> p) {
 std::vector<Step> ClickHere(int holdFrames = 6) {
     return {MouseButton(0, true), Wait(holdFrames), MouseButton(0, false)};
 }
-// A docked panel's tab in the dock space (its label is the window's name).
-Query DockTab(const char* windowId) {
-    Query q;
-    const std::string id = windowId;
-    q.Pred = [id](const UiItem& it) { return Contains(it.Label, id) && it.Rect.GetHeight() < 60.0f && it.Rect.GetWidth() < 400.0f; };
-    return q;
-}
 std::vector<Step> Cat(std::initializer_list<std::vector<Step>> parts) {
     std::vector<Step> out;
     for (const auto& p : parts) out.insert(out.end(), p.begin(), p.end());
@@ -1026,10 +1019,10 @@ void RegisterMotionDemo() {
             // 4. Frame selection (F): the camera glides on the UI's curve.
             SelectByName("Far Cube"), Do("frame", [](Ctx& c) { X::Frame(c.E, c.W, c.Cam); }), WaitSeconds(1.2),
             SelectByName("Near Cube"), Do("frame", [](Ctx& c) { X::Frame(c.E, c.W, c.Cam); }), WaitSeconds(1.2),
-            // 5. Dock tabs: the overline glides, the focused panel's edge glints.
-            Glide(AtItem(DockTab("###Game")), 30), WaitSeconds(0.2),
+            // 5. The viewport's Scene | Game switch: the view dissolves to the game camera and back.
+            Glide(AtItem(ByExact(ICON_FA_GAMEPAD "  Game", "###Scene")), 30), WaitSeconds(0.2),
         },
-        ClickHere(), {WaitSeconds(0.9), Glide(AtItem(DockTab("###Scene")), 22), WaitSeconds(0.2)}, ClickHere(),
+        ClickHere(), {WaitSeconds(0.9), Glide(AtItem(ByExact(ICON_FA_CUBE "  Scene", "###Scene")), 22), WaitSeconds(0.2)}, ClickHere(),
         {
             WaitSeconds(0.9),
             // 6. Drag a row: the ghost trails, the reorder marker glides slot to slot, and on the
@@ -1056,11 +1049,11 @@ void RegisterMotionDemo() {
             // 8. Save: the unsaved dot becomes a check that draws on and fades.
             Key(ImGuiKey_S, ImGuiMod_Ctrl), WaitSeconds(1.6),
             // 9. Play: triangle morphs to square, the play frame breathes, dims on pause.
-            Glide(AtItem(ByExact("##transport")), 34), WaitSeconds(0.2),
+            Glide(AtItem(ByLabel("Play", "##MainToolbar")), 34), WaitSeconds(0.2),
         },
-        ClickHere(), {WaitSeconds(2.6), Glide(AtItem(ByLabel("Pause")), 22), WaitSeconds(0.2)}, ClickHere(),
-        {WaitSeconds(1.4), Glide(AtItem(ByLabel("Resume")), 10), WaitSeconds(0.2)}, ClickHere(),
-        {WaitSeconds(1.2), Glide(AtItem(ByExact("##transport")), 22), WaitSeconds(0.2)}, ClickHere(),
+        ClickHere(), {WaitSeconds(2.6), Glide(AtItem(ByLabel("Pause", "##MainToolbar")), 22), WaitSeconds(0.2)}, ClickHere(),
+        {WaitSeconds(1.4), Glide(AtItem(ByLabel("Resume", "##MainToolbar")), 10), WaitSeconds(0.2)}, ClickHere(),
+        {WaitSeconds(1.2), Glide(AtItem(ByLabel("Stop", "##MainToolbar")), 22), WaitSeconds(0.2)}, ClickHere(),
         {
             WaitSeconds(1.2),
             // 10. A module reload that landed: a toast whose check draws on.
