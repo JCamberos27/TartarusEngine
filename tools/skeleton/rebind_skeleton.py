@@ -14,12 +14,16 @@
 #   - the skull fitted inside the Quantum head with a little tissue, the neck vertebrae stretched up to its base
 #   - the ribcage's front pulled inside the chest (the spine stays), the pelvis's wings narrowed inside the hips, the feet
 #     fitted inside Quantum's bare feet
-# Check a new build with tools/skeleton/skeleton_overlay.py, and against the Quantum soldier in `--npc-test pose`.
+# Check a new build with tools/skeleton/skeleton_overlay.py, then in the editor's Outfit window (Race: Skeleton).
 import bpy, sys
 from mathutils import Matrix, Vector, Quaternion
 from collections import Counter
 
-qpath, spath, outdir = sys.argv[sys.argv.index('--') + 1:]
+_args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+if len(_args) != 3:
+    sys.exit('usage: blender -b --factory-startup --python tools/skeleton/rebind_skeleton.py -- '
+             '<Quantum_Torso.fbx> <Realistic_Skeleton.fbx> <out dir>')
+qpath, spath, outdir = _args
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
 bpy.ops.import_scene.fbx(filepath=qpath)
@@ -105,7 +109,6 @@ for side in ('_l', '_r'):
     cg = _body.vertex_groups['clavicle' + side]
     for isl in _islands:
         pts = [_body.matrix_world @ _body.data.vertices[i].co for i in isl]
-        c = sum(pts, Vector()) / len(pts)
         tops = Counter(_body.vertex_groups[max(_body.data.vertices[i].groups, key=lambda g: g.weight).group].name
                        for i in isl if _body.data.vertices[i].groups)
         if not (tops and tops.most_common(1)[0][0] == 'clavicle' + side and len(tops) > 1): continue
@@ -357,7 +360,6 @@ for side in ('_l', '_r'):
 # vertex less than TISSUE inside Quantum's skin moves along the skin's normal to TISSUE deep. The eyes, teeth and other
 # inner parts of the head aren't skin; a vertex more than REACH from the skin is left alone (the armpit, where the
 # torso and arm meshes meet, has no skin to measure against).
-import bmesh
 from mathutils.bvhtree import BVHTree
 TISSUE, REACH = 0.004, 0.03
 NOT_SKIN = ('eye', 'teeth', 'saliva', 'lash', 'brow', 'tongue', 'facial')
@@ -379,6 +381,8 @@ _skin.normal_update()
 _tree = BVHTree.FromBMesh(_skin)
 # The mouth: inside it the nearest 'skin' is the mouth's lining, and the skull's teeth belong where Quantum's are.
 MOUTH = 0.015
+if not _teeth:
+    sys.exit('rebind_skeleton: no teeth material in the Quantum head (the mouth box needs it): has Quantum_Head.fbx changed?')
 m_lo = Vector((min(p.x for p in _teeth), min(p.y for p in _teeth), min(p.z for p in _teeth))) - Vector((MOUTH,) * 3)
 m_hi = Vector((max(p.x for p in _teeth), max(p.y for p in _teeth), max(p.z for p in _teeth))) + Vector((MOUTH,) * 3)
 in_mouth = lambda p: all(m_lo[i] <= p[i] <= m_hi[i] for i in range(3))
@@ -393,7 +397,8 @@ for o in meshes:
         depth = dist if (p - loc).dot(nrm) < 0 else -dist
         if depth >= TISSUE: continue
         v.co = inv @ (loc - nrm.normalized() * TISSUE)
-        g = names[max(v.groups, key=lambda x: x.weight).group].rstrip('_lr') if v.groups else o.name
+        g = names[max(v.groups, key=lambda x: x.weight).group] if v.groups else o.name
+        g = g[:-2] if g.endswith(('_l', '_r')) else g  # one row per bone pair (rstrip('_lr') turned 'ball_l' into 'ba')
         n, worst = moved.get(g, (0, 0.0)); moved[g] = (n + 1, max(worst, TISSUE - depth))
     for g, (n, worst) in sorted(moved.items()):
         if worst > 0.002: print('UNDERSKIN %-14s %-18s %5d verts, furthest %.1f cm' % (o.name, g, n, worst * 100))
