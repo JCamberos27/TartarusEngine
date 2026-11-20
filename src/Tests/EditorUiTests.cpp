@@ -304,6 +304,14 @@ std::chrono::steady_clock::time_point g_TestStart;
 // thread names the test and step whenever no frame has finished for a minute or one test has run
 // for 3 minutes, and aborts the run (CrashHandler writes a minidump with every thread's stack)
 // when frames have stopped for 4 minutes or the run passes TARTARUS_EDITOR_TEST_DEADLINE minutes.
+// EditorUiTests::SetRunEndHook. Run under its mutex, so clearing it waits for a call in progress.
+std::mutex g_RunEndMutex;
+std::function<void()> g_RunEndHook;
+void RunEndHook() {
+    std::lock_guard<std::mutex> lk(g_RunEndMutex);
+    if (g_RunEndHook) g_RunEndHook();
+}
+
 namespace watchdog {
 extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
 extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
@@ -343,6 +351,7 @@ void Start() {
                 else if (now - doneAt >= std::chrono::seconds(60)) {
                     std::printf("[EditorTest] WATCHDOG: the editor hasn't exited a minute after the summary - ending it\n");
                     std::fflush(stdout);
+                    RunEndHook();
                     TerminateProcess(GetCurrentProcess(), g_Failed == 0 && g_Passed > 0 ? 0u : 1u);
                 }
                 continue;
@@ -370,6 +379,7 @@ void Start() {
                 std::printf("[EditorTest] WATCHDOG: %s - aborting in %s (frame %llu) for a crash dump\n",
                             hung ? "frames stopped for 4 minutes" : "past TARTARUS_EDITOR_TEST_DEADLINE", where.c_str(), (unsigned long long)frames);
                 std::fflush(stdout);
+                RunEndHook();
                 std::abort();
             }
             std::fflush(stdout);
@@ -1864,6 +1874,11 @@ bool Enabled() { return g_Enabled; }
 
 int ExitCode() { return g_Failed == 0 && g_Passed > 0 ? 0 : 1; }
 
+void SetRunEndHook(std::function<void()> hook) {
+    std::lock_guard<std::mutex> lk(g_RunEndMutex);
+    g_RunEndHook = std::move(hook);
+}
+
 // The last screenshot's PNG write. Encoding a full-window PNG took the test thread 100+ ms per shot (a
 // few hundred shots a run); it now runs beside the next frames, one at a time (PngWrite is serialized
 // anyway), and the summary waits for the last one.
@@ -2048,6 +2063,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     std::cout << std::endl;
     FinishShotWrite(); // the report links every shot
     WriteReport();
+    RunEndHook(); // also covers a teardown that later hangs and is cut short
     return true;
 }
 
