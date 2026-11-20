@@ -129,6 +129,7 @@ SkySettings SkySettingsFromJson(const json& j) {
 json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
                     bool flattenPrefabInstances) {
     json root;
+    AssetRefWriteCache refs; // per-path write path + GUID, worked out once per build
     std::unordered_map<std::string, std::optional<json>> prefabFiles; // each instance's .prefab, parsed once (nullopt: unreadable)
     auto included = [&](entt::entity e) { return !only || only->count(e) > 0; };
     // v4 changes the shape of every "rotation" value, so fragments and prefabs now need the
@@ -334,12 +335,12 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
             {"id", idOf[entity]},
             {"parentId", parentIdOf(entity)},
         };
-        if (json slots = MaterialSlotsToJson(renderable.Materials); !slots.is_null()) b["materials"] = std::move(slots); // #120
+        if (json slots = MaterialSlotsToJson(renderable.Materials, &refs); !slots.is_null()) b["materials"] = std::move(slots); // #120
         WriteRendererFlags(b, renderable); // #163
         WriteCommonComponents(b, world, entity);
-        boxes.push_back(b);
+        boxes.push_back(std::move(b));
     }
-    root["boxes"] = boxes;
+    root["boxes"] = std::move(boxes);
 
     json empties = json::array();
     for (auto entity : emptyEntities) {
@@ -354,9 +355,9 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
             {"parentId", parentIdOf(entity)},
         };
         WriteCommonComponents(e, world, entity);
-        empties.push_back(e);
+        empties.push_back(std::move(e));
     }
-    root["empties"] = empties;
+    root["empties"] = std::move(empties);
 
     json models = json::array();
     for (auto entity : modelEntities) {
@@ -366,11 +367,9 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
         if (!renderable.ModelRef) continue; // nothing to reload it from (a load always makes a Model)
 
         json m;
-        m["path"] = AssetPathForWrite(renderable.ModelRef->Path()); // audit #364
-        {
-            AssetGuid g = AssetDatabase::GuidForPath(renderable.ModelRef->Path());
-            if (g.IsValid()) m["pathGuid"] = g.ToString();
-        }
+        const AssetRefWriteCache::Ref& ref = refs.Get(renderable.ModelRef->Path());
+        m["path"] = ref.WritePath; // audit #364
+        if (!ref.Guid.empty()) m["pathGuid"] = ref.Guid;
         m["name"] = nameOf(entity);
         m["position"] = Vec3ToJson(transform.Position);
         m["rotation"] = QuatToJson(transform.Rotation);
@@ -381,12 +380,12 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
         m["id"] = idOf[entity];
         m["parentId"] = parentIdOf(entity);
 
-        if (json slots = MaterialSlotsToJson(renderable.Materials); !slots.is_null()) m["materials"] = std::move(slots);
+        if (json slots = MaterialSlotsToJson(renderable.Materials, &refs); !slots.is_null()) m["materials"] = std::move(slots);
         WriteRendererFlags(m, renderable); // #163
         WriteCommonComponents(m, world, entity);
-        models.push_back(m);
+        models.push_back(std::move(m));
     }
-    root["models"] = models;
+    root["models"] = std::move(models);
 
     // #236 A2 — prefab-instance stubs. Just the source path plus the root's own transform /
     // name / tags (the transform-only overrides); the subtree is rebuilt from the .prefab on

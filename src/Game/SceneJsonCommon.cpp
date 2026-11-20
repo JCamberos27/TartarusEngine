@@ -99,6 +99,15 @@ std::string AssetPathForWriteUncached(const std::string& path, const std::filesy
     return rel.generic_string();
 }
 
+const AssetRefWriteCache::Ref& AssetRefWriteCache::Get(const std::string& path) {
+    auto it = m_Refs.find(path);
+    if (it != m_Refs.end()) return it->second;
+    Ref r;
+    r.WritePath = AssetPathForWrite(path);
+    if (const AssetGuid g = AssetDatabase::GuidForPath(path); g.IsValid()) r.Guid = g.ToString();
+    return m_Refs.emplace(path, std::move(r)).first->second;
+}
+
 // weakly_canonical opens each path on disk (CreateFile + GetFinalPathNameByHandle), and every undo
 // snapshot writes every asset reference in the scene: in a big scene that was most of the time of
 // each edit's commit. The answers are memoized per project root; a path string's answer only moves

@@ -18,6 +18,8 @@
 #include "AtomicFile.h"
 #include "SceneSerializer.h"
 #include "World.h"
+#include "../Renderer/Model.h"
+#include "../Core/Paths.h"
 #include "../Renderer/Animation.h"
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/MaterialAsset.h"
@@ -1138,7 +1140,87 @@ void TestComponentRegistry() {
 
 } // namespace
 
+static constexpr size_t kSnapshotBytes = 28878;
+static constexpr std::uint64_t kSnapshotHash = 0x8f6b8763b0d778abull;
+// The scene snapshot (SaveToString: every undo step and the scene open take one) must keep its
+// exact bytes when its builder changes: the undo history compares and diffs these strings, and
+// the files Save writes come from the same builder. A fixed scene - models sharing a few paths,
+// .mat and embedded material slots, lights, colliders, tags, layers, parenting, empties, a
+// prefab instance stub, non-ASCII paths - is
+// pinned by the size and FNV-1a hash of its snapshot. A deliberate format change updates both
+// (the test prints the new values).
+static void Test_SceneSnapshot_BytesPinned() {
+    auto fnv = [](const std::string& s) {
+        std::uint64_t h = 1469598103934665603ull;
+        for (unsigned char c : s) { h ^= c; h *= 1099511628211ull; }
+        return h;
+    };
+    auto build = [](World& w, int count) {
+        std::vector<std::shared_ptr<MaterialAsset>> mats;
+        for (int i = 0; i < 3; ++i) {
+            auto m = std::make_shared<MaterialAsset>();
+            // One non-ASCII name (UTF-8 "\xC3\xA9"): the cache must give what AssetPathForWrite gives.
+            m->Path = ProjectPaths::Resolve("assets/Materials/w5_fixture_" + std::string(i == 2 ? "caf\xC3\xA9_" : "") + std::to_string(i) + ".mat");
+            m->Name = "w5_fixture_" + std::to_string(i);
+            mats.push_back(m);
+        }
+        auto embedded = std::make_shared<MaterialAsset>(); // no Path: written inline
+        embedded->Mat.BaseColor = glm::vec3(0.25f, 0.5f, 0.75f);
+        embedded->Mat.Roughness = 0.3f;
+        std::vector<entt::entity> groups; // a few dozen children each, like a real scene's folders
+        for (int g = 0; g < count / 30 + 1; ++g)
+            groups.push_back(w.CreateEmptyEntity({1.0f * g, 2, 3}, {0, 45, 0}, {1, 1, 1}, "Group " + std::to_string(g)));
+        for (int i = 0; i < count; ++i) {
+            const std::string path = ProjectPaths::Resolve("assets/Props/w5_fixture_" + std::string(i % 5 == 4 ? "\xC3\xBC" : "") + std::to_string(i % 5) + ".fbx");
+        entt::entity e = w.CreateModelEntity(Model::CreatePrimitive("terrain", path) /* CPU-only stand-in: no GL in unit tests */,
+                                                 {i * 0.5f, 0.25f * (i % 7), -i * 0.125f}, {0, (float)(i % 360), 0},
+                                                 {1, 1 + (i % 3) * 0.5f, 1}, "Prop " + std::to_string(i));
+            auto& rc = w.Registry.get<RenderableComponent>(e);
+            rc.Materials = {mats[i % 3], (i % 4 == 0) ? embedded : nullptr};
+            if (i % 10 == 0) w.Registry.emplace<LightComponent>(e);
+            if (i % 6 == 0) w.Registry.emplace<ColliderComponent>(e);
+            if (i % 5 == 0) w.Registry.emplace<TagComponent>(e).Tag = "Fixture";
+            if (i % 8 == 0) w.Registry.emplace<LayerComponent>(e).Layer = 3;
+            if (i % 3 == 0) w.SetParent(e, groups[(size_t)(i / 3) % groups.size()]);
+        }
+        for (int i = 0; i < count / 4; ++i)
+            w.CreateEmptyEntity({0, (float)i, 0}, {0, 0, 0}, {1, 1, 1}, "Pivot " + std::to_string(i));
+        // A prefab instance: written as a stub (its .prefab is absent here), its child not at all.
+        entt::entity inst = w.CreateEmptyEntity({4, 0, 4}, {0, 30, 0}, {1, 1, 1}, "Crate Stack");
+        w.Registry.emplace<PrefabInstanceComponent>(inst).SourcePath =
+            ProjectPaths::Resolve("assets/Prefabs/w5_fixture_\xC3\xA9.prefab");
+        entt::entity part = w.CreateModelEntity(Model::CreatePrimitive("terrain", ProjectPaths::Resolve("assets/Props/w5_fixture_0.fbx")),
+                                                {0, 1, 0}, {0, 0, 0}, {1, 1, 1}, "Crate");
+        w.SetParent(part, inst);
+    };
+    {
+        World w; AssetLibrary assets;
+        build(w, 60);
+        const std::string s = SceneSerializer::SaveToString(w, assets);
+        const std::uint64_t h = fnv(s);
+        std::printf("  scene snapshot: %zu bytes, fnv %016llx\n", s.size(), (unsigned long long)h);
+        std::fflush(stdout);
+        CHECK(s.size() == kSnapshotBytes);
+        CHECK(h == kSnapshotHash);
+        CHECK(s.find("\"prefabInstances\"") != std::string::npos);  // the stub is in it
+        CHECK(s.find("w5_fixture_\xC3\xBC" "4") != std::string::npos);  // and a non-ASCII path
+        CHECK(SceneSerializer::SaveToString(w, assets) == s); // deterministic
+    }
+    {   // Timing only (a Forest-sized scene): printed, not checked.
+        World w; AssetLibrary assets;
+        build(w, 20000);
+        SceneSerializer::SaveToString(w, assets); // warm the path caches
+        const auto t0 = std::chrono::steady_clock::now();
+        size_t bytes = 0;
+        for (int i = 0; i < 3; ++i) bytes += SceneSerializer::SaveToString(w, assets).size();
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / 3;
+        std::printf("  scene snapshot, 20k models + 5k empties: %.1f ms (%zu bytes)\n", ms, bytes / 3);
+        std::fflush(stdout);
+    }
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"SceneSerializer::SnapshotBytesPinned", Test_SceneSnapshot_BytesPinned});
     tests.push_back({"SamplingProfiler::SurvivesTheLoaderLock", Test_SamplingProfiler_SurvivesTheLoaderLock});
     tests.push_back({"PngWrite::LevelPerCallUnderThreads", Test_PngWrite_LevelPerCallUnderThreads});
     tests.push_back({"AssetDatabase::NonObjectMetaIsRewritten", Test_AssetDatabase_NonObjectMetaIsRewritten});
