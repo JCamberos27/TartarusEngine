@@ -183,8 +183,10 @@ std::vector<Step> OpenDoc(fs::path path) {
         Wait(3),
     };
 }
+std::vector<fs::path> g_Scratch; // files WriteDoc made this test; IdeFinally removes them
 std::vector<Step> WriteDoc(fs::path path, std::string text) {
     return {Do("write " + path.filename().string(), [path, text](Ctx&) {
+        g_Scratch.push_back(path);
         if (!WriteText(path, text)) Fail("couldn't write " + path.string());
     })};
 }
@@ -209,6 +211,17 @@ std::vector<Step> HideIde() {
     };
 }
 Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
+// Every Script IDE test ends here, passed or failed. A failed test stops before its own CloseTab /
+// RemoveDoc / HideIde steps: its unsaved buffer then failed every later ExpectClean (HasUnsavedScripts is
+// IDE-wide), its scratch file stayed in the project and the IDE stayed docked over Scene.
+void IdeFinally(Ctx& c) {
+    if (c.E.HasUnsavedScripts()) c.E.DiscardScripts();
+    std::error_code ec;
+    for (const fs::path& p : g_Scratch) fs::remove(p, ec);
+    g_Scratch.clear();
+    ImGui::ClosePopupsExceptModals();
+    ImGui::FocusWindow(ImGui::FindWindowByName(EditorPanels::Scene));
+}
 std::vector<Step> IdeMenu(const std::string& menu, const std::string& item) {
     return {Click(Ide(menu)), Wait(2), Click(PopupExact(item)), Wait(3)};
 }
@@ -296,7 +309,7 @@ void RegisterScriptIDETests() {
         }));
         steps.push_back(CloseMenus());
         for (Step& s : HideIde()) steps.push_back(std::move(s));
-        Add("scriptide: Window > Script IDE opens it docked with Scene; File/Edit/Navigate/Build/Appearance menus", std::move(steps));
+        Add("scriptide: Window > Script IDE opens it docked with Scene; File/Edit/Navigate/Build/Appearance menus", std::move(steps), IdeFinally);
     }
 
     Add("scriptide: Open in Script IDE from a shader's Asset Browser menu", Join({
@@ -326,7 +339,7 @@ void RegisterScriptIDETests() {
          ExpectTrue("its tab closed", [](Ctx&) { return Find(IdeTabEndingWith(".shader")) == nullptr; }),
          Do("back to the previous folder", [](Ctx& c) { X::NavigateFolder(c.E, g_Text); })},
         HideIde(),
-    }));
+    }), IdeFinally);
 
     // ------------------------------------------------------------------ editing
     {
@@ -350,7 +363,7 @@ void RegisterScriptIDETests() {
              ExpectDisk(p, orig + "7"),
              ExpectClean(f)},
             CloseTab(f), RemoveDoc(p), HideIde(),
-        }));
+        }), IdeFinally);
     }
     {
         const fs::path p = Scratch("SmokeFind.cpp");
@@ -375,7 +388,7 @@ void RegisterScriptIDETests() {
             {Click(Ide("Close find")), Wait(3),
              ExpectTrue("the find bar closed", [](Ctx&) { return Find(Ide("Find")) == nullptr; })},
             CloseTab(f), RemoveDoc(p), HideIde(),
-        }));
+        }), IdeFinally);
     }
     {
         const fs::path p = Scratch("SmokeGoto.cpp");
@@ -400,7 +413,7 @@ void RegisterScriptIDETests() {
              Click(Ide("Close find")), Wait(3),
              ExpectTrue("Close find hid it", [](Ctx&) { return Find(Ide("Find")) == nullptr; })},
             CloseTab(f), RemoveDoc(p), HideIde(),
-        }));
+        }), IdeFinally);
     }
     {
         const fs::path p = Scratch("SmokeShader.frag.glsl");
@@ -435,7 +448,7 @@ void RegisterScriptIDETests() {
              Key(ImGuiKey_S, ImGuiMod_Ctrl), Wait(3),
              ExpectDisk(p, orig + "// saved by the smoke test"), ExpectClean(f)},
             CloseTab(f), RemoveDoc(p), HideIde(),
-        }));
+        }), IdeFinally);
     }
     {
         const fs::path pa = Scratch("SmokeCloseA.cpp"), pb = Scratch("SmokeCloseB.cpp");
@@ -467,7 +480,7 @@ void RegisterScriptIDETests() {
              ExpectDisk(pb, "int B = 2;\nx"),
              ExpectTrue("nothing unsaved", [](Ctx& c) { return !c.E.HasUnsavedScripts(); })},
             RemoveDoc(pa), RemoveDoc(pb), HideIde(),
-        }));
+        }), IdeFinally);
     }
     {
         const fs::path pa = Scratch("SmokeAllA.cpp"), pb = Scratch("SmokeAllB.cpp");
@@ -482,7 +495,7 @@ void RegisterScriptIDETests() {
             {ExpectDisk(pa, "int A = 1;\na"), ExpectDisk(pb, "int B = 2;\nb"),
              ExpectTrue("nothing unsaved", [](Ctx& c) { return !c.E.HasUnsavedScripts(); })},
             CloseTab(fa), CloseTab(fb), RemoveDoc(pa), RemoveDoc(pb), HideIde(),
-        }));
+        }), IdeFinally);
     }
     {
         const fs::path p = Scratch("SmokeExternal.cpp");
@@ -520,7 +533,7 @@ void RegisterScriptIDETests() {
             {UntilSeconds("the unsaved prompt", [](Ctx&) { return Find(Prompt("Discard")) != nullptr; }, 5),
              Click(Prompt("Discard")), Wait(3), ExpectClean(f), ExpectDisk(p, "int V = 4;\n")},
             CloseTab(f), RemoveDoc(p), HideIde(),
-        }));
+        }), IdeFinally);
     }
     {
         const fs::path p = Scratch("SmokeComplete.cpp");
@@ -541,7 +554,7 @@ void RegisterScriptIDETests() {
             {Key(ImGuiKey_S, ImGuiMod_Ctrl), Wait(3),
              ExpectDisk(p, "int SmokeCompletionTarget = 1;\nSmokeCompletionTarget\nSmokeCompletionTarget")},
             CloseTab(f), RemoveDoc(p), HideIde(),
-        }));
+        }), IdeFinally);
     }
 
     // ------------------------------------------------------------------ appearance
@@ -584,7 +597,7 @@ void RegisterScriptIDETests() {
             return ide && scene && ide->DockId != 0 && ide->DockId == scene->DockId;
         }));
         for (Step& s : Join({CloseTab(f), RemoveDoc(p), HideIde()})) steps.push_back(std::move(s));
-        Add("scriptide: Appearance switches all twelve themes (saved with the session); Dock alongside Scene / Game", std::move(steps));
+        Add("scriptide: Appearance switches all twelve themes (saved with the session); Dock alongside Scene / Game", std::move(steps), IdeFinally);
     }
 
     // ------------------------------------------------------------------ panel close keeps buffers
@@ -609,7 +622,7 @@ void RegisterScriptIDETests() {
                            Do("discard the edit", [](Ctx& c) { c.E.DiscardScripts(); }), Wait(3),
                            ExpectClean(f)},
             CloseTab(f), RemoveDoc(p), HideIde(),
-        }));
+        }), IdeFinally);
     }
 
     // ------------------------------------------------------------------ engine shaders
