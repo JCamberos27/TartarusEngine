@@ -19,6 +19,16 @@ std::string CsvField(const std::string& s) {
     for (char c : s) out += c == '"' ? std::string("\"\"") : std::string(1, c);
     return out + "\"";
 }
+// A frame whose CPU work ran past a 60 Hz frame while the CPU never waited for the GPU ("Swap Buffers" is the
+// hidden run's fence wait): the GPU sat idle for the CPU. A GPU scope's end stamp then only runs once the CPU has
+// sent the commands after it, so the scope reads the CPU time in between, not GPU work (Pre-Skin over Local Shadow
+// Gather, Sky Atmosphere over Gather Visible). Its GPU column is flagged so nobody chases those numbers.
+bool GpuStarvedFrame(double frameMs, const std::vector<Profiler::Entry>& cpu) {
+    double waitMs = 0.0;
+    for (const Profiler::Entry& e : cpu)
+        if (e.Name == "Swap Buffers") waitMs = e.Milliseconds;
+    return waitMs < 1.0 && frameMs - waitMs > 16.7;
+}
 } // namespace
 
 PerfBench::PerfBench()
@@ -76,7 +86,10 @@ void PerfBench::FillGpu(Worst& w) {
 void PerfBench::Settle(bool haveScopes) {
     if (m_Pending.Ms < 0.0) return;
     if (m_Worst.size() < kKeepWorst || m_Pending.Ms > m_Worst.back().Ms) {
-        if (haveScopes) m_Pending.Cpu = TopScopes(Profiler::GetLastFrame());
+        if (haveScopes) {
+            m_Pending.Cpu = TopScopes(Profiler::GetLastFrame());
+            m_Pending.GpuStarved = GpuStarvedFrame(m_Pending.Ms, Profiler::GetLastFrame());
+        }
         m_Worst.push_back(std::move(m_Pending));
         std::sort(m_Worst.begin(), m_Worst.end(), [](const Worst& a, const Worst& b) { return a.Ms > b.Ms; });
         if (m_Worst.size() > kKeepWorst) m_Worst.pop_back();
@@ -120,9 +133,10 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
     for (const Worst& w : m_Worst)
-        std::printf("[PerfBench]   worst frame %d %.2f ms: CPU %s | GPU %s | loaded %s\n", w.Frame, w.Ms,
-                    w.Cpu.empty() ? "-" : w.Cpu.c_str(), !w.HaveGpu ? "(not read back)" : w.Gpu.empty() ? "-" : w.Gpu.c_str(),
-                    w.Loads.empty() ? "-" : w.Loads.c_str());
+        std::printf("[PerfBench]   worst frame %d %.2f ms: CPU %s | GPU%s %s | loaded %s\n", w.Frame, w.Ms,
+                    w.Cpu.empty() ? "-" : w.Cpu.c_str(),
+                    w.GpuStarved ? " (STARVED: CPU-bound frame, its GPU scopes include CPU time)" : "",
+                    !w.HaveGpu ? "(not read back)" : w.Gpu.empty() ? "-" : w.Gpu.c_str(), w.Loads.empty() ? "-" : w.Loads.c_str());
     AppendCsv(sceneFile, label, all, after2s);
     m_FrameTimes.clear();
     m_Worst.clear();
@@ -137,11 +151,11 @@ void PerfBench::AppendCsv(const std::string& sceneFile, const char* label, const
     const bool fresh = !std::filesystem::exists(path, ec) || std::filesystem::file_size(path, ec) == 0;
     std::ofstream out(path, std::ios::app);
     if (!out) { std::printf("[PerfBench] cannot write the CSV '%s'\n", path.c_str()); return; }
-    if (fresh) out << "scene,phase,row,rank,frame,ms,p50,p95,p99,p999,max,over2x,over33,frames,cpu,gpu,loads\n";
+    if (fresh) out << "scene,phase,row,rank,frame,ms,p50,p95,p99,p999,max,over2x,over33,frames,cpu,gpu,loads,gpu_starved\n";
     char buf[192];
     auto summary = [&](const char* row, const Stats& s) {
         if (s.N == 0) return;
-        std::snprintf(buf, sizeof(buf), ",,,,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%zu,,,\n", s.P50, s.P95, s.P99, s.P999, s.Max,
+        std::snprintf(buf, sizeof(buf), ",,,,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%zu,,,,\n", s.P50, s.P95, s.P99, s.P999, s.Max,
                       s.Over2x, s.Over33, s.N);
         out << CsvField(sceneFile) << ',' << label << ',' << row << buf;
     };
@@ -151,7 +165,7 @@ void PerfBench::AppendCsv(const std::string& sceneFile, const char* label, const
     for (const Worst& w : m_Worst) {
         std::snprintf(buf, sizeof(buf), ",worst,%d,%d,%.3f,,,,,,,,,", ++rank, w.Frame, w.Ms);
         out << CsvField(sceneFile) << ',' << label << buf << CsvField(w.Cpu) << ',' << CsvField(w.Gpu) << ','
-            << CsvField(w.Loads) << '\n';
+            << CsvField(w.Loads) << ',' << (w.GpuStarved ? 1 : 0) << '\n';
     }
 }
 
