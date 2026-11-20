@@ -285,7 +285,7 @@ void EndCard(float top) {
 
 // A full-width card header row: chevron (turning with the section), icon, title. Returns true on
 // click. `turn` is the chevron's 0..1 openness.
-bool SectionHeader(const char* strId, const char* icon, const char* title, float turn, bool* outHovered) {
+bool SectionHeader(const char* strId, const char* icon, const char* title, float turn) {
     const float h = ImGui::GetFrameHeight();
     const ImVec2 p = ImGui::GetCursorScreenPos();
     const float w = ImGui::GetContentRegionAvail().x;
@@ -310,7 +310,6 @@ bool SectionHeader(const char* strId, const char* icon, const char* title, float
         x += ImGui::GetFontSize() * 1.25f + Glass::Px(Glass::SpaceHalf);
     }
     DrawLabel(dl, x, r.Min.y, h, r.Max.x, Col(Glass::TextPrimary), title);
-    if (outHovered) *outHovered = hovered;
     return pressed;
 }
 
@@ -345,6 +344,9 @@ void EditorLayer::ReleaseGlass() {
         m_Glass->Compositor.Release();
         m_Glass.reset();
     }
+    // The next Glass state numbers its toasts from 1 again: a kept id would claim an unrelated toast.
+    m_RebuildToastId = 0;
+    m_RebuildToastResolvedAt = -1.0;
     Glass::Motion().Reset();
 }
 
@@ -919,7 +921,7 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
             bool open = storage->GetBool(openId, true);
             const bool wasOpen = open;
             const float turn = Glass::Motion().AnimateToggle(ImGui::GetID("turn"), open, open, Glass::ChevronTurn, Glass::ChevronTurn);
-            if (SectionHeader("##hdr", ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", turn, nullptr)) {
+            if (SectionHeader("##hdr", ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", turn)) {
                 open = !open;
                 storage->SetBool(openId, open);
                 Glass::Motion().AnimateToggle(ImGui::GetID("turn"), open, wasOpen, Glass::ChevronTurn, Glass::ChevronTurn);
@@ -1034,7 +1036,7 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
             bool open = storage->GetBool(openId, true);
             const bool wasOpen = open;
             const float turn = Glass::Motion().AnimateToggle(ImGui::GetID("turn"), open, open, Glass::ChevronTurn, Glass::ChevronTurn);
-            if (SectionHeader("##hdr", rc.Meta.Icon, rc.Meta.Name, turn, nullptr)) {
+            if (SectionHeader("##hdr", rc.Meta.Icon, rc.Meta.Name, turn)) {
                 open = !open;
                 storage->SetBool(openId, open);
                 Glass::Motion().AnimateToggle(ImGui::GetID("turn"), open, wasOpen, Glass::ChevronTurn, Glass::ChevronTurn);

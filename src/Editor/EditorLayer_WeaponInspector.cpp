@@ -905,6 +905,7 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     if(changed) {
         CameraShakeAsset valid;
         if(CameraShakeAsset::FromJsonString(s.ToJsonString(),valid,&cache.Error) && s.SaveFile(path)) {
+            cache.Error.clear(); // a corrected value clears the old rejection
             cache.Saved=s.ToJsonString(); cache.Stamp=fs::last_write_time(fs::u8path(path),ec);
         } else if(cache.Error.empty()) cache.Error="Could not save camera shake.";
     }
@@ -1328,7 +1329,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::PushTextWrapPos(0.0f);
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", cache.Error.c_str());
         ImGui::PopTextWrapPos();
-        if (s.Controller.empty()) return;
+        if (s.Controller.empty()) { if (copied) save(s); return; } // a Copy Settings From still saves
     }
 
     // Choices and checks: the controller's states and tags, the arms rig's bones once it is
@@ -1441,7 +1442,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                "Fixed socket -> weapon root translation, in the socket's frame (metres). Zero when the root sits on the socket.");
         // Measure it: the rotation between the socket and the weapon root at the first frame of the default
         // state's clips (how the two files were authored to sit together), Y-X-Z degrees.
-        const bool can = arms && weaponModel && ctx.Controller && !s.WeaponSocket.empty() && !s.WeaponRoot.empty() && m_AssetsPtr;
+        const bool can = arms && weaponModel && ctx.Controller && !ctx.Controller->Layers.empty() && !s.WeaponSocket.empty() && !s.WeaponRoot.empty() && m_AssetsPtr;
         ImGui::BeginDisabled(!can);
         if (ActionButton(ICON_FA_RULER "  Measure Mount Rotation",
                          "Reads the socket's and the weapon root's orientation on the first frame of the default state's clips\n"

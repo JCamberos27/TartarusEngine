@@ -273,19 +273,19 @@ void DecalAssetFields(PropertyRows& r, DecalAsset& d, GLFWwindow* owner) {
         r.Float("Emissive", d.EmissiveOp, 0.01f, 0.0f, 1.0f, "%.2f", "Glow.");
         // A colour edit (its field or its picker popup) commits once nothing is held any more - for the
         // asset it was made on (another asset drawn meanwhile neither commits it nor inherits it).
-        static const DecalAsset* s_ColorPending = nullptr;
-        if (s_ColorPending && s_ColorPending != &d && !ImGui::IsAnyItemActive()) s_ColorPending = nullptr;
+        static std::string s_ColorPending; // the asset path (d is one cached asset whose address never changes)
+        if (!s_ColorPending.empty() && s_ColorPending != d.Path && !ImGui::IsAnyItemActive()) s_ColorPending.clear();
         r.Label("Base Color", "Multiplies the albedo; the whole colour of a Luma Mask decal.");
-        if (EditorUI::ColorEditLinear("##baseColor", &d.BaseColor.x)) s_ColorPending = &d;
+        if (EditorUI::ColorEditLinear("##baseColor", &d.BaseColor.x)) s_ColorPending = d.Path;
         r.Float("Roughness Value", d.Roughness, 0.01f, 0.0f, 1.0f, "%.2f",
                 "Roughness written where there's no Surface map.");
         r.Float("Metal Value", d.Metal, 0.01f, 0.0f, 1.0f, "%.2f", "Metalness written where there's no Surface map.");
         r.Label("Emissive Color", "Glow colour (linear, may exceed 1), scaled by the Aux mask when there is one.");
         if (EditorUI::ColorEditLinear("##emissive", &d.Emissive.x, ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float))
-            s_ColorPending = &d;
+            s_ColorPending = d.Path;
         d.Emissive = glm::max(d.Emissive, glm::vec3(0.0f));
-        if (s_ColorPending == &d && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
-            s_ColorPending = nullptr;
+        if (!s_ColorPending.empty() && s_ColorPending == d.Path && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
+            s_ColorPending.clear();
             r.MarkChanged();
         }
     }
@@ -322,12 +322,12 @@ void DecalAssetFields(PropertyRows& r, DecalAsset& d, GLFWwindow* owner) {
         r.Path("Substrate Roughness", s.Roughness, img, "Optional greyscale roughness, remapped to Rough Min..Max.");
         r.Path("Substrate AO", s.AO, img, "Optional greyscale ambient occlusion.");
         r.Float("Tiling", s.Tiling, 0.01f, 0.05f, 50.0f, "%.2f m", "Metres per repeat, in world space.");
-        static const DecalAsset* s_TintPending = nullptr; // as Base Color above: per asset
-        if (s_TintPending && s_TintPending != &d && !ImGui::IsAnyItemActive()) s_TintPending = nullptr;
+        static std::string s_TintPending; // as Base Color above: per asset
+        if (!s_TintPending.empty() && s_TintPending != d.Path && !ImGui::IsAnyItemActive()) s_TintPending.clear();
         r.Label("Tint", "Multiplies the substrate's colour.");
-        if (EditorUI::ColorEditLinear("##subTint", &s.Tint.x)) s_TintPending = &d;
-        if (s_TintPending == &d && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
-            s_TintPending = nullptr;
+        if (EditorUI::ColorEditLinear("##subTint", &s.Tint.x)) s_TintPending = d.Path;
+        if (!s_TintPending.empty() && s_TintPending == d.Path && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
+            s_TintPending.clear();
             r.MarkChanged();
         }
         r.Float("Strength", s.Strength, 0.01f, 0.0f, 1.0f, "%.2f", "How fully it replaces the decal's own look.");

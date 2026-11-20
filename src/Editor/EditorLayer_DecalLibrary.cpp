@@ -452,6 +452,10 @@ void AssetChanged(DecalEditorState& ed, const std::string& absPath) {
     ed.Assets.erase(abs); // the tools re-read its size
     ed.Assets.erase(absPath);
     if (!ed.ScanDone) return; // still indexing: the scan reads the file itself
+    // Only files under the decal root are indexed: one elsewhere (assets/Test/Decals) would restart the
+    // whole scan on every edit without ever being listed.
+    const std::string rel = fs::u8path(abs).lexically_relative(fs::u8path(GenericPath(fs::u8path(ProjectPaths::Resolve(kDecalRoot))))).generic_u8string();
+    if (rel.empty() || rel.rfind("..", 0) == 0) return;
     DecalEditorState::Entry e;
     std::string category;
     if (!BuildEntry(abs, e, category)) return;
