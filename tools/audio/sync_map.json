@@ -706,5 +706,214 @@
    "src": "hand_r arrives / settles",
    "conf": "medium"
   }
+ ],
+ "revolver38/Regrip": [
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.03,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.6364,
+   "hand": true
+  }
+ ],
+ "revolver38/Inspect": [
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.02,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.0428,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.hammer_cock",
+   "time": 0.369,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.hammer_decock",
+   "time": 0.4866,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.crane_open",
+   "time": 0.6203,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.6283,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.7246,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.746,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cylinder_spin",
+   "time": 0.7487,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.crane_close",
+   "time": 0.8556,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.9358,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.9679,
+   "hand": true
+  }
+ ],
+ "revolver38/Mag_Check": [
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.02,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.0467,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.crane_open",
+   "time": 0.0654,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.crane_close",
+   "time": 0.729,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.8411,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.9065,
+   "hand": true
+  }
+ ],
+ "revolver38/Melee": [
+  {
+   "key": "snd.revolver38.melee_swing",
+   "time": 0.0,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.melee_hit",
+   "time": 0.1159,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.2609,
+   "hand": true
+  }
+ ],
+ "revolver38/Draw": [
+  {
+   "key": "snd.revolver38.draw",
+   "time": 0.08,
+   "hand": true
+  }
+ ],
+ "revolver38/Holster": [
+  {
+   "key": "snd.revolver38.holster",
+   "time": 0.3,
+   "hand": true
+  }
+ ],
+ "revolver38/Reload": [
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.0,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.0349,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.crane_open",
+   "time": 0.0376,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.086,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.1317,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.ejector",
+   "time": 0.1398,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.round_insert",
+   "time": 0.3387,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.3656,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.round_insert",
+   "time": 0.5484,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.round_insert",
+   "time": 0.7581,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.8011,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.crane_close",
+   "time": 0.8495,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.cloth",
+   "time": 0.914,
+   "hand": true
+  },
+  {
+   "key": "snd.revolver38.handle",
+   "time": 0.9543,
+   "hand": true
+  }
  ]
 }
