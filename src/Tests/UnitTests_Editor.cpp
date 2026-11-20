@@ -82,7 +82,7 @@ void TestEditorNavigationUndo() {
 
         // A checkbox-style control requests undo AFTER changing its value.
         ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
-        world.ExposureEV+=1;EditorHistoryTestAccess::Edit(editor,world);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        world.Render.ExposureEV+=1;EditorHistoryTestAccess::Edit(editor,world);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
         CHECK(EditorHistoryTestAccess::Count(editor)==1);CHECK(EditorHistoryTestAccess::Before(editor)==expected);
         const auto changed=SceneSerializer::SaveToString(world,assets);CHECK(EditorHistoryTestAccess::Current(editor)==changed);
         EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(SceneSerializer::SaveToString(world,assets)==expected);
@@ -92,21 +92,21 @@ void TestEditorNavigationUndo() {
         // A drag across frames coalesces to one entry, and an unchanged activation keeps redo.
         const auto count=EditorHistoryTestAccess::Count(editor);
         ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Stage(editor,world);
-        world.ExposureEV+=.25f;AtomicFile::SetChangeObserver({});ImGui::Render();
-        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);world.ExposureEV+=.25f;
+        world.Render.ExposureEV+=.25f;AtomicFile::SetChangeObserver({});ImGui::Render();
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);world.Render.ExposureEV+=.25f;
         EditorHistoryTestAccess::Commit(editor,world);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
         CHECK(EditorHistoryTestAccess::Count(editor)==count+1);CHECK(EditorHistoryTestAccess::Before(editor)==changed);
         EditorHistoryTestAccess::Undo(editor,world,assets);
         ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Stage(editor,world);
         EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();CHECK(EditorHistoryTestAccess::Count(editor)==count);
-        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(world.ExposureEV>nlohmann::json::parse(changed).value("exposureEV",0.0f));
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(world.Render.ExposureEV>nlohmann::json::parse(changed).value("exposureEV",0.0f));
 
         // The first selection entry needs no serialized scene anchor, but real edits after it do.
         EditorHistoryTestAccess::Clear(editor);
         auto entity=*world.Registry.view<OrderComponent>().begin();EditorHistoryTestAccess::Select(editor,world,entity);
         CHECK(EditorHistoryTestAccess::Before(editor)=="{}");
         ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
-        const auto preEdit=SceneSerializer::SaveToString(world,assets);world.ExposureEV+=1;
+        const auto preEdit=SceneSerializer::SaveToString(world,assets);world.Render.ExposureEV+=1;
         EditorHistoryTestAccess::Edit(editor,world);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
         EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(SceneSerializer::SaveToString(world,assets)==preEdit);
         EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(SceneSerializer::SaveToString(world,assets)==preEdit);
@@ -120,7 +120,7 @@ void TestEditorNavigationUndo() {
         EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(*EditorFileHistory::Capture(path).Bytes=="before");
         EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(*EditorFileHistory::Capture(path).Bytes=="after");
         ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
-        CHECK(AtomicFile::WriteBytes(path,"mixed",true));world.ExposureEV+=1;EditorHistoryTestAccess::Edit(editor,world);
+        CHECK(AtomicFile::WriteBytes(path,"mixed",true));world.Render.ExposureEV+=1;EditorHistoryTestAccess::Edit(editor,world);
         EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();EditorHistoryTestAccess::Undo(editor,world,assets);
         CHECK(*EditorFileHistory::Capture(path).Bytes=="after");CHECK(SceneSerializer::SaveToString(world,assets)==preEdit);
         // A file the next step restores can't be read any more (a folder now): Undo logs and keeps
