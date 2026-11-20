@@ -1491,9 +1491,20 @@ private:
     bool m_GizmosMasterVisible = true; // #236 "Gizmos" dropdown master switch — hides every viewport gizmo/icon at once
     bool m_ShowEntityIcons = true;     // #236 — scripted override (smoke tests / clean shots) ANDed with EditorSettings::EntityIconsMode
     // Entity-icon occlusion cache: one camera-to-icon ray per entity, refreshed round-robin (the
-    // stalest first, a few dozen per frame) — an entity never checked counts as visible.
-    struct IconOcclusion { bool Occluded = false; std::uint32_t FrameChecked = 0; };
+    // stalest first, a few dozen per frame) once the camera, the icon or any renderable moved;
+    // an entity never checked counts as visible.
+    struct IconOcclusion {
+        bool Occluded = false;
+        std::uint32_t FrameChecked = 0;        // last frame it was checked or found still current
+        glm::vec3 CamPos{0.0f}, IconPos{0.0f}; // the camera and the icon at its last ray
+        std::uint64_t GeometrySerial = 0;      // m_IconGeometrySerial at its last ray
+    };
     std::unordered_map<entt::entity, IconOcclusion> m_IconOcclusion;
+    // Bumped whenever a world-transform rebuild moved, added or removed a renderable.
+    std::uint64_t m_IconGeometrySerial = 0;
+    std::uint64_t m_IconGeometryStamp = 0;                              // the World::TransformCacheStamp it last looked at
+    std::vector<std::pair<std::uint32_t, size_t>> m_IconOcclusionStale; // DrawEntityIcons scratch
+    std::vector<entt::entity> m_IconOcclusionSkipChain;                 // DrawEntityIcons scratch
     std::uint32_t m_IconOcclusionFrame = 0;
     // True when `entity` is selected or sits under a selected entity (the Volume / Collider "selected only" rule).
     bool IsSelectedOrUnderSelected(const World& world, entt::entity entity) const;
