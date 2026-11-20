@@ -11,10 +11,15 @@
 
 #include <json.hpp>
 #include <algorithm>
+#include <array>
+#include <cfloat>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <unordered_set>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 
 using json = nlohmann::json;
 
@@ -92,6 +97,201 @@ struct Reader {
     }
 };
 
+
+// W2-084: every built-in Material field a .mat stores, in one table. Load, Save (v1 and v2),
+// IsBuiltinProp, the Get*/Set* accessors, ResolveBuiltin and SyncTexturePathsFromMat all walk
+// it, so a new field is one row here instead of edits in eight places.
+using TexUse = AssetLibrary::TextureUse;
+enum class BuiltinKind : std::uint8_t { Float, Int, Bool, Color, Vec2, Tex };
+constexpr float kNoMin = -FLT_MAX, kNoMax = FLT_MAX;
+
+struct Builtin {
+    const char* Name  = nullptr;  // the shader property name, also the v2 "properties" key
+    const char* V1Key = nullptr;  // the flat v1 key
+    BuiltinKind Kind  = BuiltinKind::Float;
+    // The field, by kind (only the one matching Kind is set).
+    float& (*F)(Material&) = nullptr;
+    int& (*I)(Material&) = nullptr;
+    bool& (*B)(Material&) = nullptr;
+    glm::vec3& (*C)(Material&) = nullptr;
+    glm::vec2& (*V2)(Material&) = nullptr;
+    std::shared_ptr<Texture>& (*T)(Material&) = nullptr;
+    std::string MaterialAsset::* Path = nullptr; // Tex: the saved path beside the texture
+    TexUse Use = TexUse::Data;                   // Tex: #369, only colour maps are sRGB
+    float Min = kNoMin, Max = kNoMax;            // Float / Int: Load and Set clamp to this
+    bool Always = false;          // Save writes it even at its default (the original core keys)
+    bool Prop = true;             // false: a variant opt-in kept in the file, not a shader property (#354)
+    bool TimesStrength = false;   // _EmissiveColor: GetColor / the bind pre-multiply _EmissiveStrength
+};
+
+constexpr Builtin Flt(const char* n, const char* v1, float& (*f)(Material&), bool always = false, float lo = kNoMin, float hi = kNoMax) {
+    Builtin b{}; b.Name = n; b.V1Key = v1; b.Kind = BuiltinKind::Float; b.F = f; b.Always = always; b.Min = lo; b.Max = hi; return b;
+}
+constexpr Builtin Int(const char* n, const char* v1, int& (*f)(Material&), int lo, int hi) {
+    Builtin b{}; b.Name = n; b.V1Key = v1; b.Kind = BuiltinKind::Int; b.I = f; b.Min = (float)lo; b.Max = (float)hi; return b;
+}
+constexpr Builtin Bln(const char* n, const char* v1, bool& (*f)(Material&), bool always = false, bool prop = true) {
+    Builtin b{}; b.Name = n; b.V1Key = v1; b.Kind = BuiltinKind::Bool; b.B = f; b.Always = always; b.Prop = prop; return b;
+}
+constexpr Builtin Col(const char* n, const char* v1, glm::vec3& (*f)(Material&), bool always = false, bool timesStrength = false) {
+    Builtin b{}; b.Name = n; b.V1Key = v1; b.Kind = BuiltinKind::Color; b.C = f; b.Always = always; b.TimesStrength = timesStrength; return b;
+}
+constexpr Builtin Vc2(const char* n, const char* v1, glm::vec2& (*f)(Material&)) {
+    Builtin b{}; b.Name = n; b.V1Key = v1; b.Kind = BuiltinKind::Vec2; b.V2 = f; return b;
+}
+constexpr Builtin Map(const char* n, const char* v1, std::shared_ptr<Texture>& (*f)(Material&), std::string MaterialAsset::* path,
+                      TexUse use = TexUse::Data, bool always = false) {
+    Builtin b{}; b.Name = n; b.V1Key = v1; b.Kind = BuiltinKind::Tex; b.T = f; b.Path = path; b.Use = use; b.Always = always; return b;
+}
+
+#define MAT_FIELD(T, field) [](Material& m) -> T& { return m.field; }
+constexpr Builtin kBuiltins[] = {
+    Col("_BaseColor",            "baseColor",            MAT_FIELD(glm::vec3, BaseColor), true),
+    Flt("_Metallic",             "metallic",             MAT_FIELD(float, Metallic), true),
+    Flt("_Roughness",            "roughness",            MAT_FIELD(float, Roughness), true),
+    Col("_EmissiveColor",        "emissiveColor",        MAT_FIELD(glm::vec3, EmissiveColor), true, true),
+    Flt("_EmissiveStrength",     "emissiveStrength",     MAT_FIELD(float, EmissiveStrength), true),
+    Bln("_Triplanar",            "triplanar",            MAT_FIELD(bool, Triplanar), true),
+    Flt("_TriplanarScale",       "triplanarScale",       MAT_FIELD(float, TriplanarScale), true),
+    Flt("_TriplanarBreakup",     "triplanarBreakup",     MAT_FIELD(float, TriplanarBreakup)),
+    // PR10-12 lobes
+    Flt("_ClearCoat",            "clearCoat",            MAT_FIELD(float, ClearCoat)),
+    Flt("_ClearCoatRoughness",   "clearCoatRoughness",   MAT_FIELD(float, ClearCoatRoughness)),
+    Flt("_Anisotropy",           "anisotropy",           MAT_FIELD(float, Anisotropy)),
+    Flt("_AnisotropyRotation",   "anisotropyRotation",   MAT_FIELD(float, AnisotropyRotation)),
+    Col("_Sheen",                "sheen",                MAT_FIELD(glm::vec3, Sheen)),
+    Flt("_SheenRoughness",       "sheenRoughness",       MAT_FIELD(float, SheenRoughness)),
+    Col("_SubsurfaceColor",      "subsurfaceColor",      MAT_FIELD(glm::vec3, SubsurfaceColor)),
+    Flt("_Thickness",            "thickness",            MAT_FIELD(float, Thickness)),
+    Flt("_TransmissionStrength", "transmission",         MAT_FIELD(float, TransmissionStrength)),
+    Flt("_IOR",                  "ior",                  MAT_FIELD(float, IOR)),
+    // #354: variant opt-ins with no natural "off" value (not shader Properties()).
+    Bln("_SubsurfaceEnabled",    "subsurface",           MAT_FIELD(bool, SubsurfaceEnabled), false, false),
+    Bln("_ReflectionProbes",     "reflectionProbes",     MAT_FIELD(bool, ReflectionProbes), false, false),
+    // Maps (the first seven are always written, even empty)
+    Map("_AlbedoMap",            "albedoMap",            MAT_FIELD(std::shared_ptr<Texture>, AlbedoMap), &MaterialAsset::AlbedoMapPath, TexUse::Color, true),
+    Map("_NormalMap",            "normalMap",            MAT_FIELD(std::shared_ptr<Texture>, NormalMap), &MaterialAsset::NormalMapPath, TexUse::Normal, true),
+    Map("_MetallicRoughnessMap", "metallicRoughnessMap", MAT_FIELD(std::shared_ptr<Texture>, MetallicRoughnessMap), &MaterialAsset::MetallicRoughnessMapPath, TexUse::Data, true),
+    Map("_MetallicMap",          "metallicMap",          MAT_FIELD(std::shared_ptr<Texture>, MetallicMap), &MaterialAsset::MetallicMapPath, TexUse::Data, true),
+    Map("_RoughnessMap",         "roughnessMap",         MAT_FIELD(std::shared_ptr<Texture>, RoughnessMap), &MaterialAsset::RoughnessMapPath, TexUse::Data, true),
+    Map("_AOMap",                "aoMap",                MAT_FIELD(std::shared_ptr<Texture>, AOMap), &MaterialAsset::AOMapPath, TexUse::Data, true),
+    Map("_EmissiveMap",          "emissiveMap",          MAT_FIELD(std::shared_ptr<Texture>, EmissiveMap), &MaterialAsset::EmissiveMapPath, TexUse::Color, true),
+    Map("_ClearCoatMap",         "clearCoatMap",         MAT_FIELD(std::shared_ptr<Texture>, ClearCoatMap), &MaterialAsset::ClearCoatMapPath),
+    Map("_ThicknessMap",         "thicknessMap",         MAT_FIELD(std::shared_ptr<Texture>, ThicknessMap), &MaterialAsset::ThicknessMapPath),
+    // #102 / #113 surface options
+    Map("_HeightMap",            "heightMap",            MAT_FIELD(std::shared_ptr<Texture>, HeightMap), &MaterialAsset::HeightMapPath),
+    Map("_DetailAlbedoMap",      "detailAlbedoMap",      MAT_FIELD(std::shared_ptr<Texture>, DetailAlbedoMap), &MaterialAsset::DetailAlbedoMapPath, TexUse::Color),
+    Map("_DetailNormalMap",      "detailNormalMap",      MAT_FIELD(std::shared_ptr<Texture>, DetailNormalMap), &MaterialAsset::DetailNormalMapPath, TexUse::Normal),
+    Map("_GrungeMap",            "grungeMap",            MAT_FIELD(std::shared_ptr<Texture>, GrungeMap), &MaterialAsset::GrungeMapPath, TexUse::Color),
+    Flt("_GrungeStrength",       "grungeStrength",       MAT_FIELD(float, GrungeStrength)),
+    Flt("_GrungeScale",          "grungeScale",          MAT_FIELD(float, GrungeScale)),
+    Bln("_ReceiveDecals",        "receiveDecals",        MAT_FIELD(bool, ReceiveDecals)),
+    Bln("_NoWetness",            "noWetness",            MAT_FIELD(bool, NoWetness)),
+    Bln("_Foliage",              "foliage",              MAT_FIELD(bool, Foliage)),
+    Flt("_WindStrength",         "windStrength",         MAT_FIELD(float, WindStrength)),
+    Flt("_WindFrequency",        "windFrequency",        MAT_FIELD(float, WindFrequency)),
+    Flt("_WindFlutter",          "windFlutter",          MAT_FIELD(float, WindFlutter)),
+    Flt("_WindHeight",           "windHeight",           MAT_FIELD(float, WindHeight)),
+    Flt("_Translucency",         "translucency",         MAT_FIELD(float, Translucency)),
+    Vc2("_UVTiling",             "uvTiling",             MAT_FIELD(glm::vec2, UVTiling)),
+    Vc2("_UVOffset",             "uvOffset",             MAT_FIELD(glm::vec2, UVOffset)),
+    Vc2("_DetailTiling",         "detailTiling",         MAT_FIELD(glm::vec2, DetailTiling)),
+    Flt("_NormalStrength",       "normalStrength",       MAT_FIELD(float, NormalStrength)),
+    Bln("_NormalFlipY",          "normalFlipY",          MAT_FIELD(bool, NormalFlipY)),
+    Bln("_DoubleSided",          "doubleSided",          MAT_FIELD(bool, DoubleSided)),
+    Bln("_VertexColors",         "vertexColors",         MAT_FIELD(bool, UseVertexColor)),
+    Bln("_SpecularHighlights",   "specularHighlights",   MAT_FIELD(bool, SpecularHighlights)),
+    Bln("_GlossyReflections",    "glossyReflections",    MAT_FIELD(bool, GlossyReflections)),
+    Flt("_ParallaxScale",        "parallaxScale",        MAT_FIELD(float, ParallaxScale)),
+    // Shell fur (Material::FurDesc); read by FurRenderer, not the surface program.
+    Bln("_FurEnabled",           "furEnabled",           MAT_FIELD(bool, Fur.Enabled)),
+    Flt("_FurLength",            "furLength",            MAT_FIELD(float, Fur.Length), false, 0.0f),
+    Flt("_FurDensity",           "furDensity",           MAT_FIELD(float, Fur.Density), false, 1.0f),
+    Int("_FurShells",            "furShells",            MAT_FIELD(int, Fur.Shells), 0, Material::kMaxFurShells),
+    Flt("_FurGravity",           "furGravity",           MAT_FIELD(float, Fur.Gravity)),
+    Col("_FurTint",              "furTint",              MAT_FIELD(glm::vec3, Fur.Tint)),
+    Flt("_FurRim",               "furRim",               MAT_FIELD(float, Fur.Rim), false, 0.0f),
+    Map("_FurMask",              "furMask",              MAT_FIELD(std::shared_ptr<Texture>, Fur.Mask), &MaterialAsset::FurMaskPath),
+};
+#undef MAT_FIELD
+constexpr std::size_t kBuiltinCount = sizeof(kBuiltins) / sizeof(kBuiltins[0]);
+
+// Field reads on a const Material (the table holds one mutable accessor per field).
+template <class T> const T& ReadField(T& (*f)(Material&), const Material& m) { return f(const_cast<Material&>(m)); }
+
+const Material& DefaultMaterial() { static const Material kDefault; return kDefault; }
+
+// A shader-property built-in by name (the variant opt-ins are not shader properties).
+const Builtin* FindBuiltin(const std::string& n) {
+    static const std::unordered_map<std::string_view, const Builtin*> kByName = [] {
+        std::unordered_map<std::string_view, const Builtin*> map;
+        for (const Builtin& b : kBuiltins) if (b.Prop) map.emplace(b.Name, &b);
+        return map;
+    }();
+    const auto it = kByName.find(n);
+    return it != kByName.end() ? it->second : nullptr;
+}
+const Builtin* FindBuiltin(const std::string& n, BuiltinKind k) {
+    const Builtin* b = FindBuiltin(n);
+    return b && b->Kind == k ? b : nullptr;
+}
+
+// The value the renderer binds: .x for Float / Int / Bool (0 or 1), .xy for Vec2, .xyz for Color.
+glm::vec4 BindValue(const Builtin& b, const Material& m) {
+    switch (b.Kind) {
+    case BuiltinKind::Float: return {ReadField(b.F, m), 0.0f, 0.0f, 0.0f};
+    case BuiltinKind::Int:   return {(float)ReadField(b.I, m), 0.0f, 0.0f, 0.0f};
+    case BuiltinKind::Bool:  return {ReadField(b.B, m) ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+    case BuiltinKind::Color: return glm::vec4(ReadField(b.C, m) * (b.TimesStrength ? m.EmissiveStrength : 1.0f), 0.0f);
+    case BuiltinKind::Vec2:  return glm::vec4(ReadField(b.V2, m), 0.0f, 0.0f);
+    case BuiltinKind::Tex:   break;
+    }
+    return glm::vec4(0.0f);
+}
+// ResolveBuiltin hands out plain function pointers (ShaderAsset keeps them per property), one per row.
+template <std::size_t I> glm::vec4 BindValueAt(const Material& m) { return BindValue(kBuiltins[I], m); }
+template <std::size_t I> const std::shared_ptr<Texture>& TextureAt(const Material& m) { return ReadField(kBuiltins[I].T, m); }
+using BindValFn = glm::vec4 (*)(const Material&);
+using BindTexFn = const std::shared_ptr<Texture>& (*)(const Material&);
+template <std::size_t... I> constexpr std::array<BindValFn, sizeof...(I)> BindValFns(std::index_sequence<I...>) { return {{&BindValueAt<I>...}}; }
+template <std::size_t... I> constexpr std::array<BindTexFn, sizeof...(I)> BindTexFns(std::index_sequence<I...>) { return {{&TextureAt<I>...}}; }
+constexpr auto kBindVal = BindValFns(std::make_index_sequence<kBuiltinCount>{});
+constexpr auto kBindTex = BindTexFns(std::make_index_sequence<kBuiltinCount>{});
+
+void LoadBuiltin(const Builtin& b, const Reader& r, const char* k, MaterialAsset& ma) {
+    Material& m = ma.Mat;
+    const Material& def = DefaultMaterial();
+    switch (b.Kind) {
+    case BuiltinKind::Float: b.F(m) = std::clamp(r.Num(k, ReadField(b.F, def)), b.Min, b.Max); break;
+    case BuiltinKind::Int:   b.I(m) = std::clamp((int)std::lround(r.Num(k, (float)ReadField(b.I, def))), (int)b.Min, (int)b.Max); break;
+    case BuiltinKind::Bool:  b.B(m) = r.Bool(k, ReadField(b.B, def)); break;
+    case BuiltinKind::Color: b.C(m) = r.Vec3(k, ReadField(b.C, def)); break;
+    case BuiltinKind::Vec2:  b.V2(m) = r.Vec2(k, ReadField(b.V2, def)); break;
+    case BuiltinKind::Tex:   ma.*b.Path = r.Str(k); break;
+    }
+}
+
+// Writes each built-in under its v2 or v1 key: the Always rows every time, the rest only when not
+// at Material's default (so a file only names what it changes).
+void SaveBuiltins(json& out, bool v2, const MaterialAsset& ma) {
+    const Material& m = ma.Mat;
+    const Material& def = DefaultMaterial();
+    for (const Builtin& b : kBuiltins) {
+        const char* k = v2 ? b.Name : b.V1Key;
+        switch (b.Kind) {
+        case BuiltinKind::Float: if (b.Always || ReadField(b.F, m) != ReadField(b.F, def)) out[k] = ReadField(b.F, m); break;
+        case BuiltinKind::Int:   if (b.Always || ReadField(b.I, m) != ReadField(b.I, def)) out[k] = ReadField(b.I, m); break;
+        case BuiltinKind::Bool:  if (b.Always || ReadField(b.B, m) != ReadField(b.B, def)) out[k] = ReadField(b.B, m); break;
+        case BuiltinKind::Color: if (b.Always || ReadField(b.C, m) != ReadField(b.C, def)) out[k] = Vec3ToJson(ReadField(b.C, m)); break;
+        case BuiltinKind::Vec2: {
+            const glm::vec2& v = ReadField(b.V2, m);
+            if (b.Always || v != ReadField(b.V2, def)) out[k] = {v.x, v.y};
+            break;
+        }
+        case BuiltinKind::Tex: if (b.Always || !(ma.*b.Path).empty()) out[k] = ma.*b.Path; break;
+        }
+    }
+}
 } // namespace
 
 
@@ -257,7 +457,6 @@ static std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const 
     static const json kEmpty = json::object();
     const json& propsJson = v2 ? ((j.contains("properties") && j["properties"].is_object()) ? j["properties"] : kEmpty) : j;
     const Reader r{propsJson, path};
-    auto key = [&](const char* v2Key, const char* v1Key) { return v2 ? v2Key : v1Key; };
 
     if (v2) {
         ma->ShaderPath = top.Str("shader");
@@ -275,100 +474,19 @@ static std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const 
             }
         }
     }
-    m.BaseColor        = r.Vec3(key("_BaseColor", "baseColor"), {1, 1, 1});
-    m.Metallic         = r.Num(key("_Metallic", "metallic"), 0.0f);
-    m.Roughness        = r.Num(key("_Roughness", "roughness"), 0.5f);
-    m.EmissiveColor    = r.Vec3(key("_EmissiveColor", "emissiveColor"), {});
-    m.EmissiveStrength = r.Num(key("_EmissiveStrength", "emissiveStrength"), 1.0f);
-    m.Triplanar        = r.Bool(key("_Triplanar", "triplanar"), false);
-    m.TriplanarScale   = r.Num(key("_TriplanarScale", "triplanarScale"), 1.0f);
-    m.TriplanarBreakup = r.Num(key("_TriplanarBreakup", "triplanarBreakup"), 0.0f);
-    // PR10-12 lobes
-    m.ClearCoat            = r.Num(key("_ClearCoat", "clearCoat"), 0.0f);
-    m.ClearCoatRoughness   = r.Num(key("_ClearCoatRoughness", "clearCoatRoughness"), 0.5f);
-    m.Anisotropy           = r.Num(key("_Anisotropy", "anisotropy"), 0.0f);
-    m.AnisotropyRotation   = r.Num(key("_AnisotropyRotation", "anisotropyRotation"), 0.0f);
-    m.Sheen                = r.Vec3(key("_Sheen", "sheen"), {});
-    m.SheenRoughness       = r.Num(key("_SheenRoughness", "sheenRoughness"), 0.5f);
-    m.SubsurfaceColor      = r.Vec3(key("_SubsurfaceColor", "subsurfaceColor"), {1, 0.8f, 0.6f});
-    m.Thickness            = r.Num(key("_Thickness", "thickness"), 0.5f);
-    m.TransmissionStrength = r.Num(key("_TransmissionStrength", "transmission"), 0.0f);
-    m.IOR                  = r.Num(key("_IOR", "ior"), 1.5f);
-    // #354: variant opt-ins with no natural "off" value (not shader Properties()).
-    m.SubsurfaceEnabled = r.Bool(key("_SubsurfaceEnabled", "subsurface"), false);
-    m.ReflectionProbes  = r.Bool(key("_ReflectionProbes", "reflectionProbes"), false);
-    // Texture paths
-    ma->AlbedoMapPath            = r.Str(key("_AlbedoMap", "albedoMap"));
-    ma->NormalMapPath            = r.Str(key("_NormalMap", "normalMap"));
-    ma->MetallicRoughnessMapPath = r.Str(key("_MetallicRoughnessMap", "metallicRoughnessMap"));
-    ma->MetallicMapPath          = r.Str(key("_MetallicMap", "metallicMap"));
-    ma->RoughnessMapPath         = r.Str(key("_RoughnessMap", "roughnessMap"));
-    ma->AOMapPath                = r.Str(key("_AOMap", "aoMap"));
-    ma->EmissiveMapPath          = r.Str(key("_EmissiveMap", "emissiveMap"));
-    ma->ClearCoatMapPath         = r.Str(key("_ClearCoatMap", "clearCoatMap"));
-    ma->ThicknessMapPath         = r.Str(key("_ThicknessMap", "thicknessMap"));
-    // #102 / #113 — surface options.
-    ma->HeightMapPath            = r.Str(key("_HeightMap", "heightMap"));
-    ma->DetailAlbedoMapPath      = r.Str(key("_DetailAlbedoMap", "detailAlbedoMap"));
-    ma->DetailNormalMapPath      = r.Str(key("_DetailNormalMap", "detailNormalMap"));
-    ma->GrungeMapPath            = r.Str(key("_GrungeMap", "grungeMap"));
-    m.GrungeStrength = r.Num(key("_GrungeStrength", "grungeStrength"), 0.0f);
-    m.GrungeScale    = r.Num(key("_GrungeScale", "grungeScale"), 0.5f);
-    m.ReceiveDecals  = r.Bool(key("_ReceiveDecals", "receiveDecals"), true);
-    m.NoWetness      = r.Bool(key("_NoWetness", "noWetness"), false);
-    m.Foliage        = r.Bool(key("_Foliage", "foliage"), false);
-    m.WindStrength   = r.Num(key("_WindStrength", "windStrength"), 0.15f);
-    m.WindFrequency  = r.Num(key("_WindFrequency", "windFrequency"), 1.0f);
-    m.WindFlutter    = r.Num(key("_WindFlutter", "windFlutter"), 0.3f);
-    m.WindHeight     = r.Num(key("_WindHeight", "windHeight"), 6.0f);
-    m.Translucency   = r.Num(key("_Translucency", "translucency"), 0.0f);
-    m.UVTiling     = r.Vec2(key("_UVTiling", "uvTiling"), {1, 1});
-    m.UVOffset     = r.Vec2(key("_UVOffset", "uvOffset"), {0, 0});
-    m.DetailTiling = r.Vec2(key("_DetailTiling", "detailTiling"), {4, 4});
-    m.NormalStrength = r.Num(key("_NormalStrength", "normalStrength"), 1.0f);
-    m.NormalFlipY    = r.Bool(key("_NormalFlipY", "normalFlipY"), false);
-    m.DoubleSided    = r.Bool(key("_DoubleSided", "doubleSided"), false);
-    m.UseVertexColor = r.Bool(key("_VertexColors", "vertexColors"), false);
-    m.SpecularHighlights = r.Bool(key("_SpecularHighlights", "specularHighlights"), true);
-    m.GlossyReflections  = r.Bool(key("_GlossyReflections", "glossyReflections"), true);
-    m.ParallaxScale  = r.Num(key("_ParallaxScale", "parallaxScale"), 0.02f);
-    // Shell fur (Material::FurDesc); a missing key is the default, so older files load without it.
-    {
-        const Material::FurDesc def;
-        m.Fur.Enabled = r.Bool(key("_FurEnabled", "furEnabled"), def.Enabled);
-        m.Fur.Length  = std::max(0.0f, r.Num(key("_FurLength", "furLength"), def.Length));
-        m.Fur.Density = std::max(1.0f, r.Num(key("_FurDensity", "furDensity"), def.Density));
-        m.Fur.Shells  = std::clamp((int)std::lround(r.Num(key("_FurShells", "furShells"), (float)def.Shells)), 0, Material::kMaxFurShells);
-        m.Fur.Gravity = r.Num(key("_FurGravity", "furGravity"), def.Gravity);
-        m.Fur.Tint    = r.Vec3(key("_FurTint", "furTint"), def.Tint);
-        m.Fur.Rim     = std::max(0.0f, r.Num(key("_FurRim", "furRim"), def.Rim));
-        ma->FurMaskPath = r.Str(key("_FurMask", "furMask"));
-    }
+    for (const Builtin& b : kBuiltins) LoadBuiltin(b, r, v2 ? b.Name : b.V1Key, *ma);
 
     if (lib) {
         // A project-relative path (what Save writes, so .mat files are portable) resolves
         // against the project root, not the process's working directory.
         // #369 - only albedo, detail albedo and emissive are colour; every other map holds raw
         // values, so it must not default to sRGB (see AssetLibrary::ResolveTextureSettings).
-        using Use = AssetLibrary::TextureUse;
-        auto loadTex = [&](const std::string& p, Use use = Use::Data) -> std::shared_ptr<Texture> {
-            return p.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(p), use);
-        };
-        m.AlbedoMap            = loadTex(ma->AlbedoMapPath, Use::Color);
-        m.NormalMap            = loadTex(ma->NormalMapPath, Use::Normal);
-        m.MetallicRoughnessMap = loadTex(ma->MetallicRoughnessMapPath);
-        m.MetallicMap          = loadTex(ma->MetallicMapPath);
-        m.RoughnessMap         = loadTex(ma->RoughnessMapPath);
-        m.AOMap                = loadTex(ma->AOMapPath);
-        m.EmissiveMap          = loadTex(ma->EmissiveMapPath, Use::Color);
-    MaterialAsset::UpgradeLegacyMapFactors(m, top.Bool("factorsScaleMaps", false)); // #102
-        m.ClearCoatMap         = loadTex(ma->ClearCoatMapPath);
-        m.ThicknessMap         = loadTex(ma->ThicknessMapPath);
-        m.HeightMap            = loadTex(ma->HeightMapPath);
-        m.DetailAlbedoMap      = loadTex(ma->DetailAlbedoMapPath, Use::Color);
-        m.DetailNormalMap      = loadTex(ma->DetailNormalMapPath, Use::Normal);
-        m.GrungeMap            = loadTex(ma->GrungeMapPath, Use::Color);
-        m.Fur.Mask             = loadTex(ma->FurMaskPath);
+        for (const Builtin& b : kBuiltins)
+            if (b.Kind == BuiltinKind::Tex) {
+                const std::string& texPath = (*ma).*b.Path;
+                b.T(m) = texPath.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(texPath), b.Use);
+            }
+        MaterialAsset::UpgradeLegacyMapFactors(m, top.Bool("factorsScaleMaps", false)); // #102
 
         // Resolve shader asset when path is set (AssetLibrary handles caching). A project-
         // relative "shader" value is resolved against the project root so a .mat works from any
@@ -471,73 +589,7 @@ bool MaterialAsset::Save() const {
         }
         if (!m.ShaderKeywords.empty()) j["keywords"] = m.ShaderKeywords; // #104 custom keywords
         json& props     = j["properties"];
-        props["_BaseColor"]           = Vec3ToJson(m.BaseColor);
-        props["_Metallic"]            = m.Metallic;
-        props["_Roughness"]           = m.Roughness;
-        props["_EmissiveColor"]       = Vec3ToJson(m.EmissiveColor);
-        props["_EmissiveStrength"]    = m.EmissiveStrength;
-        props["_Triplanar"]           = m.Triplanar;
-        props["_TriplanarScale"]      = m.TriplanarScale;
-        if (m.TriplanarBreakup != 0.0f)        props["_TriplanarBreakup"] = m.TriplanarBreakup;
-        props["_AlbedoMap"]           = AlbedoMapPath;
-        props["_NormalMap"]           = NormalMapPath;
-        props["_MetallicRoughnessMap"]= MetallicRoughnessMapPath;
-        props["_MetallicMap"]         = MetallicMapPath;
-        props["_RoughnessMap"]        = RoughnessMapPath;
-        props["_AOMap"]               = AOMapPath;
-        props["_EmissiveMap"]         = EmissiveMapPath;
-        if (m.ClearCoat           != 0.0f) props["_ClearCoat"]          = m.ClearCoat;
-        if (m.ClearCoatRoughness  != 0.5f) props["_ClearCoatRoughness"] = m.ClearCoatRoughness;
-        if (m.Anisotropy          != 0.0f) props["_Anisotropy"]         = m.Anisotropy;
-        if (m.AnisotropyRotation  != 0.0f) props["_AnisotropyRotation"] = m.AnisotropyRotation;
-        if (!ClearCoatMapPath.empty())      props["_ClearCoatMap"]         = ClearCoatMapPath;
-        if (m.Sheen != glm::vec3(0.0f))    props["_Sheen"]               = Vec3ToJson(m.Sheen);
-        if (m.SheenRoughness  != 0.5f)     props["_SheenRoughness"]      = m.SheenRoughness;
-        auto defSSS = glm::vec3(1.0f, 0.8f, 0.6f);
-        if (m.SubsurfaceColor != defSSS)   props["_SubsurfaceColor"]     = Vec3ToJson(m.SubsurfaceColor);
-        if (m.Thickness       != 0.5f)     props["_Thickness"]           = m.Thickness;
-        if (!ThicknessMapPath.empty())              props["_ThicknessMap"]            = ThicknessMapPath;
-        // #102 / #113 surface options (non-defaults only)
-        if (m.UVTiling != glm::vec2(1.0f))          props["_UVTiling"]       = {m.UVTiling.x, m.UVTiling.y};
-        if (m.UVOffset != glm::vec2(0.0f))          props["_UVOffset"]       = {m.UVOffset.x, m.UVOffset.y};
-        if (m.NormalStrength != 1.0f)               props["_NormalStrength"] = m.NormalStrength;
-        if (m.NormalFlipY)                          props["_NormalFlipY"]    = true;
-        if (m.DoubleSided)                          props["_DoubleSided"]    = true;
-        if (m.UseVertexColor)                       props["_VertexColors"]   = true;
-        if (!m.SpecularHighlights)                  props["_SpecularHighlights"] = false;
-        if (!m.GlossyReflections)                   props["_GlossyReflections"]  = false;
-        if (!HeightMapPath.empty())                 props["_HeightMap"]      = HeightMapPath;
-        if (m.ParallaxScale != 0.02f)               props["_ParallaxScale"]  = m.ParallaxScale;
-        if (!DetailAlbedoMapPath.empty())           props["_DetailAlbedoMap"] = DetailAlbedoMapPath;
-        if (!DetailNormalMapPath.empty())           props["_DetailNormalMap"] = DetailNormalMapPath;
-        if (m.DetailTiling != glm::vec2(4.0f))      props["_DetailTiling"]   = {m.DetailTiling.x, m.DetailTiling.y};
-        if (!GrungeMapPath.empty())                 props["_GrungeMap"]      = GrungeMapPath;
-        if (m.GrungeStrength != 0.0f)               props["_GrungeStrength"] = m.GrungeStrength;
-        if (m.GrungeScale != 0.5f)                  props["_GrungeScale"]    = m.GrungeScale;
-        if (!m.ReceiveDecals)                       props["_ReceiveDecals"]  = false;
-        if (m.NoWetness)                            props["_NoWetness"]      = true;
-        if (m.Foliage)                              props["_Foliage"]        = true;
-        if (m.WindStrength != 0.15f)                props["_WindStrength"]   = m.WindStrength;
-        if (m.WindFrequency != 1.0f)                props["_WindFrequency"]  = m.WindFrequency;
-        if (m.WindFlutter != 0.3f)                  props["_WindFlutter"]    = m.WindFlutter;
-        if (m.WindHeight != 6.0f)                   props["_WindHeight"]     = m.WindHeight;
-        if (m.Translucency != 0.0f)                 props["_Translucency"]   = m.Translucency;
-        if (m.TransmissionStrength != 0.0f)         props["_TransmissionStrength"]    = m.TransmissionStrength;
-        if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
-        if (m.SubsurfaceEnabled)                    props["_SubsurfaceEnabled"]      = true;
-        if (m.ReflectionProbes)                     props["_ReflectionProbes"]       = true;
-        // Shell fur: non-defaults only, so a material without fur saves exactly as before.
-        {
-            const Material::FurDesc def;
-            if (m.Fur.Enabled != def.Enabled) props["_FurEnabled"] = m.Fur.Enabled;
-            if (m.Fur.Length  != def.Length)  props["_FurLength"]  = m.Fur.Length;
-            if (m.Fur.Density != def.Density) props["_FurDensity"] = m.Fur.Density;
-            if (m.Fur.Shells  != def.Shells)  props["_FurShells"]  = m.Fur.Shells;
-            if (m.Fur.Gravity != def.Gravity) props["_FurGravity"] = m.Fur.Gravity;
-            if (m.Fur.Tint    != def.Tint)    props["_FurTint"]    = Vec3ToJson(m.Fur.Tint);
-            if (m.Fur.Rim     != def.Rim)     props["_FurRim"]     = m.Fur.Rim;
-            if (!FurMaskPath.empty())         props["_FurMask"]    = FurMaskPath;
-        }
+        SaveBuiltins(props, true, *this);
 
         // Non-builtin linked-shader properties (#354).
         for (const auto& [name, p] : m.ExtraProps) {
@@ -557,71 +609,7 @@ bool MaterialAsset::Save() const {
         // v1 format (backward compatible)
         j["matVersion"]          = 1;
         j["name"]                = Name;
-        j["baseColor"]           = Vec3ToJson(m.BaseColor);
-        j["metallic"]            = m.Metallic;
-        j["roughness"]           = m.Roughness;
-        j["emissiveColor"]       = Vec3ToJson(m.EmissiveColor);
-        j["emissiveStrength"]    = m.EmissiveStrength;
-        j["triplanar"]           = m.Triplanar;
-        j["triplanarScale"]      = m.TriplanarScale;
-        if (m.TriplanarBreakup != 0.0f) j["triplanarBreakup"] = m.TriplanarBreakup;
-        j["albedoMap"]           = AlbedoMapPath;
-        j["normalMap"]           = NormalMapPath;
-        j["metallicRoughnessMap"]= MetallicRoughnessMapPath;
-        j["metallicMap"]         = MetallicMapPath;
-        j["roughnessMap"]        = RoughnessMapPath;
-        j["aoMap"]               = AOMapPath;
-        j["emissiveMap"]         = EmissiveMapPath;
-        // #105 — v1 used to drop the lobes, so a clear-coat / sheen / transmission v1 material
-        // lost them on reload. Written only when not default.
-        if (m.ClearCoat           != 0.0f) j["clearCoat"]          = m.ClearCoat;
-        if (m.ClearCoatRoughness  != 0.5f) j["clearCoatRoughness"] = m.ClearCoatRoughness;
-        if (m.Anisotropy          != 0.0f) j["anisotropy"]         = m.Anisotropy;
-        if (m.AnisotropyRotation  != 0.0f) j["anisotropyRotation"] = m.AnisotropyRotation;
-        if (!ClearCoatMapPath.empty())      j["clearCoatMap"]       = ClearCoatMapPath;
-        if (m.Sheen != glm::vec3(0.0f))    j["sheen"]              = Vec3ToJson(m.Sheen);
-        if (m.SheenRoughness      != 0.5f) j["sheenRoughness"]     = m.SheenRoughness;
-        if (m.SubsurfaceColor != glm::vec3(1.0f, 0.8f, 0.6f)) j["subsurfaceColor"] = Vec3ToJson(m.SubsurfaceColor);
-        if (m.Thickness           != 0.5f) j["thickness"]          = m.Thickness;
-        if (!ThicknessMapPath.empty())      j["thicknessMap"]       = ThicknessMapPath;
-        if (m.UVTiling != glm::vec2(1.0f))  j["uvTiling"]           = {m.UVTiling.x, m.UVTiling.y};
-        if (m.UVOffset != glm::vec2(0.0f))  j["uvOffset"]           = {m.UVOffset.x, m.UVOffset.y};
-        if (m.NormalStrength != 1.0f)       j["normalStrength"]     = m.NormalStrength;
-        if (m.NormalFlipY)                  j["normalFlipY"]        = true;
-        if (m.DoubleSided)                  j["doubleSided"]        = true;
-        if (m.UseVertexColor)               j["vertexColors"]       = true;
-        if (!m.SpecularHighlights)          j["specularHighlights"] = false;
-        if (!m.GlossyReflections)           j["glossyReflections"]  = false;
-        if (!HeightMapPath.empty())         j["heightMap"]          = HeightMapPath;
-        if (m.ParallaxScale != 0.02f)       j["parallaxScale"]      = m.ParallaxScale;
-        if (!DetailAlbedoMapPath.empty())   j["detailAlbedoMap"]    = DetailAlbedoMapPath;
-        if (!DetailNormalMapPath.empty())   j["detailNormalMap"]    = DetailNormalMapPath;
-        if (m.DetailTiling != glm::vec2(4.0f)) j["detailTiling"]    = {m.DetailTiling.x, m.DetailTiling.y};
-        if (!GrungeMapPath.empty())         j["grungeMap"]          = GrungeMapPath;
-        if (m.GrungeStrength != 0.0f)       j["grungeStrength"]     = m.GrungeStrength;
-        if (m.GrungeScale != 0.5f)          j["grungeScale"]        = m.GrungeScale;
-        if (!m.ReceiveDecals)               j["receiveDecals"]      = false;
-        if (m.NoWetness)                    j["noWetness"]          = true;
-        if (m.Foliage)                      j["foliage"]            = true;
-        if (m.WindStrength != 0.15f)        j["windStrength"]       = m.WindStrength;
-        if (m.WindFrequency != 1.0f)        j["windFrequency"]      = m.WindFrequency;
-        if (m.WindFlutter != 0.3f)          j["windFlutter"]        = m.WindFlutter;
-        if (m.WindHeight != 6.0f)           j["windHeight"]         = m.WindHeight;
-        if (m.Translucency != 0.0f)         j["translucency"]       = m.Translucency;
-        if (m.TransmissionStrength != 0.0f) j["transmission"]      = m.TransmissionStrength;
-        if (m.IOR                 != 1.5f) j["ior"]                = m.IOR;
-        if (m.SubsurfaceEnabled)            j["subsurface"]         = true;
-        if (m.ReflectionProbes)             j["reflectionProbes"]   = true;
-        // Shell fur: the v1 keys Load reads (non-defaults only, as the v2 branch writes them).
-        const Material::FurDesc furDef;
-        if (m.Fur.Enabled != furDef.Enabled) j["furEnabled"] = m.Fur.Enabled;
-        if (m.Fur.Length  != furDef.Length)  j["furLength"]  = m.Fur.Length;
-        if (m.Fur.Density != furDef.Density) j["furDensity"] = m.Fur.Density;
-        if (m.Fur.Shells  != furDef.Shells)  j["furShells"]  = m.Fur.Shells;
-        if (m.Fur.Gravity != furDef.Gravity) j["furGravity"] = m.Fur.Gravity;
-        if (m.Fur.Tint    != furDef.Tint)    j["furTint"]    = Vec3ToJson(m.Fur.Tint);
-        if (m.Fur.Rim     != furDef.Rim)     j["furRim"]     = m.Fur.Rim;
-        if (!FurMaskPath.empty())            j["furMask"]    = FurMaskPath;
+        SaveBuiltins(j, false, *this); // v1 keys
     }
     // Queue / surface fields, both formats (#105 — v1 used to drop them).
     // Written explicitly when the shader declares a Queue, so choosing Opaque on a shader whose
@@ -652,324 +640,117 @@ void MaterialAsset::DefaultFactorsForNewMap(Material& m, const std::string& n) {
     if ((n == "_RoughnessMap" && m.RoughnessMap) || (n == "_MetallicRoughnessMap" && m.MetallicRoughnessMap)) m.Roughness = 1.0f;
 }
 
-bool MaterialAsset::IsBuiltinProp(const std::string& n) {
-    static const std::unordered_set<std::string> kBuiltin = {
-        "_BaseColor", "_Metallic", "_Roughness", "_EmissiveColor", "_EmissiveStrength",
-        "_Triplanar", "_TriplanarScale", "_TriplanarBreakup",
-        "_ClearCoat", "_ClearCoatRoughness", "_Anisotropy", "_AnisotropyRotation",
-        "_Sheen", "_SheenRoughness", "_SubsurfaceColor", "_Thickness",
-        "_TransmissionStrength", "_IOR",
-        "_AlbedoMap", "_NormalMap", "_MetallicRoughnessMap", "_MetallicMap", "_RoughnessMap",
-        "_AOMap", "_EmissiveMap", "_ClearCoatMap", "_ThicknessMap",
-        "_UVTiling", "_UVOffset", "_NormalStrength", "_NormalFlipY", "_DoubleSided", "_VertexColors",
-        "_SpecularHighlights", "_GlossyReflections",
-        "_HeightMap", "_ParallaxScale", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailTiling",
-        "_GrungeMap", "_GrungeStrength", "_GrungeScale", "_ReceiveDecals", "_NoWetness",
-        "_Foliage", "_WindStrength", "_WindFrequency", "_WindFlutter", "_WindHeight", "_Translucency",
-        "_FurEnabled", "_FurLength", "_FurDensity", "_FurShells", "_FurMask", "_FurGravity", "_FurTint", "_FurRim",
-    };
-    return kBuiltin.count(n) != 0;
-}
+bool MaterialAsset::IsBuiltinProp(const std::string& n) { return FindBuiltin(n) != nullptr; }
 
+// Get* / Set*: the built-in field of that name and kind, else the custom property (ExtraProps).
 const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, const std::string& n) {
     static const std::shared_ptr<Texture> sNull;
-    if (n == "_AlbedoMap")            return m.AlbedoMap;
-    if (n == "_NormalMap")            return m.NormalMap;
-    if (n == "_MetallicRoughnessMap") return m.MetallicRoughnessMap;
-    if (n == "_MetallicMap")          return m.MetallicMap;
-    if (n == "_RoughnessMap")         return m.RoughnessMap;
-    if (n == "_AOMap")                return m.AOMap;
-    if (n == "_EmissiveMap")          return m.EmissiveMap;
-    if (n == "_ClearCoatMap")         return m.ClearCoatMap;
-    if (n == "_ThicknessMap")         return m.ThicknessMap;
-    if (n == "_HeightMap")            return m.HeightMap;
-    if (n == "_DetailAlbedoMap")      return m.DetailAlbedoMap;
-    if (n == "_DetailNormalMap")      return m.DetailNormalMap;
-    if (n == "_GrungeMap")            return m.GrungeMap;
-    if (n == "_FurMask")              return m.Fur.Mask;
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Tex)) return ReadField(b->T, m);
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.Tex : sNull;
 }
 
 glm::vec3 MaterialAsset::GetColor(const Material& m, const std::string& n) {
-    if (n == "_BaseColor")      return m.BaseColor;
-    if (n == "_EmissiveColor")  return m.EmissiveColor * m.EmissiveStrength; // pre-multiply
-    if (n == "_Sheen")          return m.Sheen;
-    if (n == "_SubsurfaceColor")return m.SubsurfaceColor;
-    if (n == "_FurTint")        return m.Fur.Tint;
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Color)) return glm::vec3(BindValue(*b, m)); // emissive pre-multiplied
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? glm::vec3(it->second.V) : glm::vec3(0.0f);
 }
 
 glm::vec3 MaterialAsset::GetAuthoredColor(const Material& m, const std::string& n) {
-    if (n == "_EmissiveColor") return m.EmissiveColor;
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Color)) return ReadField(b->C, m);
     return GetColor(m, n);
 }
 
 int MaterialAsset::GetInt(const Material& m, const std::string& n) {
-    if (n == "_FurShells") return m.Fur.Shells;
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Int)) return ReadField(b->I, m);
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.I : 0;
 }
 
 glm::vec4 MaterialAsset::GetVec(const Material& m, const std::string& n) {
-    if (n == "_UVTiling")     return glm::vec4(m.UVTiling, 0.0f, 0.0f);
-    if (n == "_UVOffset")     return glm::vec4(m.UVOffset, 0.0f, 0.0f);
-    if (n == "_DetailTiling") return glm::vec4(m.DetailTiling, 0.0f, 0.0f);
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Vec2)) return glm::vec4(ReadField(b->V2, m), 0.0f, 0.0f);
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.V : glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void MaterialAsset::SetInt(Material& m, const std::string& n, int v) {
-    if (n == "_FurShells") { m.Fur.Shells = std::clamp(v, 0, Material::kMaxFurShells); return; }
-    auto it = m.ExtraProps.find(n);
-    if (it != m.ExtraProps.end()) { it->second.I = v; it->second.F = (float)v; }
-}
-
-void MaterialAsset::SetVec(Material& m, const std::string& n, const glm::vec4& v) {
-    if (n == "_UVTiling")     { m.UVTiling = glm::vec2(v); return; }
-    if (n == "_UVOffset")     { m.UVOffset = glm::vec2(v); return; }
-    if (n == "_DetailTiling") { m.DetailTiling = glm::vec2(v); return; }
-    auto it = m.ExtraProps.find(n);
-    if (it != m.ExtraProps.end()) it->second.V = v;
-}
-
-void MaterialAsset::SyncTexturePathsFromMat() {
-    auto pathOf = [](const std::shared_ptr<Texture>& t) { return t ? t->Path() : std::string(); };
-    AlbedoMapPath            = pathOf(Mat.AlbedoMap);
-    NormalMapPath            = pathOf(Mat.NormalMap);
-    MetallicRoughnessMapPath = pathOf(Mat.MetallicRoughnessMap);
-    MetallicMapPath          = pathOf(Mat.MetallicMap);
-    RoughnessMapPath         = pathOf(Mat.RoughnessMap);
-    AOMapPath                = pathOf(Mat.AOMap);
-    EmissiveMapPath          = pathOf(Mat.EmissiveMap);
-    ClearCoatMapPath         = pathOf(Mat.ClearCoatMap);  // #104 — these two were never synced by
-    ThicknessMapPath         = pathOf(Mat.ThicknessMap);  // the Inspector, so edits didn't save
-    HeightMapPath            = pathOf(Mat.HeightMap);
-    DetailAlbedoMapPath      = pathOf(Mat.DetailAlbedoMap);
-    DetailNormalMapPath      = pathOf(Mat.DetailNormalMap);
-    GrungeMapPath            = pathOf(Mat.GrungeMap);
-    FurMaskPath              = pathOf(Mat.Fur.Mask);
-    for (auto& [name, p] : Mat.ExtraProps)
-        if (p.Type == ShaderPropType::Texture2D) p.TexPath = pathOf(p.Tex);
-}
-
 float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
-    if (n == "_Metallic")            return m.Metallic;
-    if (n == "_Roughness")           return m.Roughness;
-    if (n == "_EmissiveStrength")    return m.EmissiveStrength;
-    if (n == "_TriplanarScale")      return m.TriplanarScale;
-    if (n == "_TriplanarBreakup")    return m.TriplanarBreakup;
-    if (n == "_ClearCoat")           return m.ClearCoat;
-    if (n == "_ClearCoatRoughness")  return m.ClearCoatRoughness;
-    if (n == "_Anisotropy")          return m.Anisotropy;
-    if (n == "_AnisotropyRotation")  return m.AnisotropyRotation;
-    if (n == "_SheenRoughness")          return m.SheenRoughness;
-    if (n == "_Thickness")               return m.Thickness;
-    if (n == "_TransmissionStrength")    return m.TransmissionStrength;
-    if (n == "_IOR")                     return m.IOR;
-    if (n == "_NormalStrength")          return m.NormalStrength;
-    if (n == "_ParallaxScale")           return m.ParallaxScale;
-    if (n == "_GrungeStrength")          return m.GrungeStrength;
-    if (n == "_GrungeScale")             return m.GrungeScale;
-    if (n == "_WindStrength")            return m.WindStrength;
-    if (n == "_WindFrequency")           return m.WindFrequency;
-    if (n == "_WindFlutter")             return m.WindFlutter;
-    if (n == "_WindHeight")              return m.WindHeight;
-    if (n == "_Translucency")            return m.Translucency;
-    if (n == "_FurLength")               return m.Fur.Length;
-    if (n == "_FurDensity")              return m.Fur.Density;
-    if (n == "_FurGravity")              return m.Fur.Gravity;
-    if (n == "_FurRim")                  return m.Fur.Rim;
-    if (n == "_FurShells")               return (float)m.Fur.Shells;
+    if (const Builtin* b = FindBuiltin(n); b && (b->Kind == BuiltinKind::Float || b->Kind == BuiltinKind::Int))
+        return BindValue(*b, m).x;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.F : 0.0f;
 }
 
 bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
-    if (n == "_Triplanar") return m.Triplanar;
-    if (n == "_NormalFlipY") return m.NormalFlipY;
-    if (n == "_DoubleSided") return m.DoubleSided;
-    if (n == "_VertexColors") return m.UseVertexColor;
-    if (n == "_SpecularHighlights") return m.SpecularHighlights;
-    if (n == "_GlossyReflections") return m.GlossyReflections;
-    if (n == "_ReceiveDecals") return m.ReceiveDecals;
-    if (n == "_NoWetness") return m.NoWetness;
-    if (n == "_Foliage") return m.Foliage;
-    if (n == "_FurEnabled") return m.Fur.Enabled;
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Bool)) return ReadField(b->B, m);
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() && it->second.B;
+}
+
+void MaterialAsset::SyncTexturePathsFromMat() {
+    auto pathOf = [](const std::shared_ptr<Texture>& t) { return t ? t->Path() : std::string(); };
+    for (const Builtin& b : kBuiltins)
+        if (b.Kind == BuiltinKind::Tex) this->*b.Path = pathOf(b.T(Mat));
+    for (auto& [name, p] : Mat.ExtraProps)
+        if (p.Type == ShaderPropType::Texture2D) p.TexPath = pathOf(p.Tex);
 }
 
 void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
                                    const std::shared_ptr<Texture>& (*&tex)(const Material&),
                                    glm::vec4 (*&val)(const Material&)) {
-    using TexFn = const std::shared_ptr<Texture>& (*)(const Material&);
-    using ValFn = glm::vec4 (*)(const Material&);
-    struct TexEntry { const char* Name; TexFn Fn; };
-    struct ValEntry { const char* Name; ValFn Fn; };
-    // Each table is the matching Get* above, field for field (same order, same pre-multiply).
-    static const TexEntry kTex[] = {
-        {"_AlbedoMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.AlbedoMap; }},
-        {"_NormalMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.NormalMap; }},
-        {"_MetallicRoughnessMap", [](const Material& m) -> const std::shared_ptr<Texture>& { return m.MetallicRoughnessMap; }},
-        {"_MetallicMap",          [](const Material& m) -> const std::shared_ptr<Texture>& { return m.MetallicMap; }},
-        {"_RoughnessMap",         [](const Material& m) -> const std::shared_ptr<Texture>& { return m.RoughnessMap; }},
-        {"_AOMap",                [](const Material& m) -> const std::shared_ptr<Texture>& { return m.AOMap; }},
-        {"_EmissiveMap",          [](const Material& m) -> const std::shared_ptr<Texture>& { return m.EmissiveMap; }},
-        {"_ClearCoatMap",         [](const Material& m) -> const std::shared_ptr<Texture>& { return m.ClearCoatMap; }},
-        {"_ThicknessMap",         [](const Material& m) -> const std::shared_ptr<Texture>& { return m.ThicknessMap; }},
-        {"_HeightMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.HeightMap; }},
-        {"_DetailAlbedoMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailAlbedoMap; }},
-        {"_DetailNormalMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailNormalMap; }},
-        {"_GrungeMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.GrungeMap; }},
-        {"_FurMask",              [](const Material& m) -> const std::shared_ptr<Texture>& { return m.Fur.Mask; }},
-    };
-    static const ValEntry kColor[] = {
-        {"_BaseColor",       [](const Material& m) { return glm::vec4(m.BaseColor, 0.0f); }},
-        {"_EmissiveColor",   [](const Material& m) { return glm::vec4(m.EmissiveColor * m.EmissiveStrength, 0.0f); }},
-        {"_Sheen",           [](const Material& m) { return glm::vec4(m.Sheen, 0.0f); }},
-        {"_SubsurfaceColor", [](const Material& m) { return glm::vec4(m.SubsurfaceColor, 0.0f); }},
-        {"_FurTint",         [](const Material& m) { return glm::vec4(m.Fur.Tint, 0.0f); }},
-    };
-    static const ValEntry kVec[] = {
-        {"_UVTiling",     [](const Material& m) { return glm::vec4(m.UVTiling, 0.0f, 0.0f); }},
-        {"_UVOffset",     [](const Material& m) { return glm::vec4(m.UVOffset, 0.0f, 0.0f); }},
-        {"_DetailTiling", [](const Material& m) { return glm::vec4(m.DetailTiling, 0.0f, 0.0f); }},
-    };
-    static const ValEntry kFloat[] = {
-        {"_Metallic",             [](const Material& m) { return glm::vec4(m.Metallic, 0, 0, 0); }},
-        {"_Roughness",            [](const Material& m) { return glm::vec4(m.Roughness, 0, 0, 0); }},
-        {"_EmissiveStrength",     [](const Material& m) { return glm::vec4(m.EmissiveStrength, 0, 0, 0); }},
-        {"_TriplanarScale",       [](const Material& m) { return glm::vec4(m.TriplanarScale, 0, 0, 0); }},
-        {"_TriplanarBreakup",     [](const Material& m) { return glm::vec4(m.TriplanarBreakup, 0, 0, 0); }},
-        {"_ClearCoat",            [](const Material& m) { return glm::vec4(m.ClearCoat, 0, 0, 0); }},
-        {"_ClearCoatRoughness",   [](const Material& m) { return glm::vec4(m.ClearCoatRoughness, 0, 0, 0); }},
-        {"_Anisotropy",           [](const Material& m) { return glm::vec4(m.Anisotropy, 0, 0, 0); }},
-        {"_AnisotropyRotation",   [](const Material& m) { return glm::vec4(m.AnisotropyRotation, 0, 0, 0); }},
-        {"_SheenRoughness",       [](const Material& m) { return glm::vec4(m.SheenRoughness, 0, 0, 0); }},
-        {"_Thickness",            [](const Material& m) { return glm::vec4(m.Thickness, 0, 0, 0); }},
-        {"_TransmissionStrength", [](const Material& m) { return glm::vec4(m.TransmissionStrength, 0, 0, 0); }},
-        {"_IOR",                  [](const Material& m) { return glm::vec4(m.IOR, 0, 0, 0); }},
-        {"_NormalStrength",       [](const Material& m) { return glm::vec4(m.NormalStrength, 0, 0, 0); }},
-        {"_ParallaxScale",        [](const Material& m) { return glm::vec4(m.ParallaxScale, 0, 0, 0); }},
-        {"_GrungeStrength",       [](const Material& m) { return glm::vec4(m.GrungeStrength, 0, 0, 0); }},
-        {"_GrungeScale",          [](const Material& m) { return glm::vec4(m.GrungeScale, 0, 0, 0); }},
-        {"_WindStrength",         [](const Material& m) { return glm::vec4(m.WindStrength, 0, 0, 0); }},
-        {"_WindFrequency",        [](const Material& m) { return glm::vec4(m.WindFrequency, 0, 0, 0); }},
-        {"_WindFlutter",          [](const Material& m) { return glm::vec4(m.WindFlutter, 0, 0, 0); }},
-        {"_WindHeight",           [](const Material& m) { return glm::vec4(m.WindHeight, 0, 0, 0); }},
-        {"_Translucency",         [](const Material& m) { return glm::vec4(m.Translucency, 0, 0, 0); }},
-        {"_FurLength",            [](const Material& m) { return glm::vec4(m.Fur.Length, 0, 0, 0); }},
-        {"_FurDensity",           [](const Material& m) { return glm::vec4(m.Fur.Density, 0, 0, 0); }},
-        {"_FurGravity",           [](const Material& m) { return glm::vec4(m.Fur.Gravity, 0, 0, 0); }},
-        {"_FurRim",               [](const Material& m) { return glm::vec4(m.Fur.Rim, 0, 0, 0); }},
-    };
-    static const ValEntry kBool[] = {
-        {"_Triplanar",          [](const Material& m) { return glm::vec4(m.Triplanar ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_NormalFlipY",        [](const Material& m) { return glm::vec4(m.NormalFlipY ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_DoubleSided",        [](const Material& m) { return glm::vec4(m.DoubleSided ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_VertexColors",       [](const Material& m) { return glm::vec4(m.UseVertexColor ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_SpecularHighlights", [](const Material& m) { return glm::vec4(m.SpecularHighlights ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_GlossyReflections",  [](const Material& m) { return glm::vec4(m.GlossyReflections ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_ReceiveDecals",      [](const Material& m) { return glm::vec4(m.ReceiveDecals ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_NoWetness",          [](const Material& m) { return glm::vec4(m.NoWetness ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_Foliage",            [](const Material& m) { return glm::vec4(m.Foliage ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_FurEnabled",         [](const Material& m) { return glm::vec4(m.Fur.Enabled ? 1.0f : 0.0f, 0, 0, 0); }},
-        {"_FurShells",          [](const Material& m) { return glm::vec4((float)m.Fur.Shells, 0, 0, 0); }}, // Int
-    };
     tex = nullptr;
     val = nullptr;
-    auto findVal = [&n](const ValEntry* begin, const ValEntry* end) -> ValFn {
-        for (const ValEntry* e = begin; e != end; ++e) if (n == e->Name) return e->Fn;
-        return nullptr;
-    };
+    const Builtin* b = FindBuiltin(n);
+    if (!b) return;
+    const std::size_t i = (std::size_t)(b - kBuiltins);
+    // The getter the inspector uses for that property type: GetTexture / GetColor / GetVec /
+    // GetFloat / GetBool (Bool, Int).
     switch (type) {
-    case ShaderPropType::Texture2D:
-        for (const TexEntry& e : kTex) if (n == e.Name) { tex = e.Fn; break; }
-        break;
+    case ShaderPropType::Texture2D: if (b->Kind == BuiltinKind::Tex) tex = kBindTex[i]; break;
     case ShaderPropType::Color:
-    case ShaderPropType::Vec3:  val = findVal(std::begin(kColor), std::end(kColor)); break;
-    case ShaderPropType::Vec2:  val = findVal(std::begin(kVec), std::end(kVec)); break;
-    case ShaderPropType::Float: val = findVal(std::begin(kFloat), std::end(kFloat)); break;
+    case ShaderPropType::Vec3:  if (b->Kind == BuiltinKind::Color) val = kBindVal[i]; break;
+    case ShaderPropType::Vec2:  if (b->Kind == BuiltinKind::Vec2) val = kBindVal[i]; break;
+    case ShaderPropType::Float: if (b->Kind == BuiltinKind::Float || b->Kind == BuiltinKind::Int) val = kBindVal[i]; break;
     case ShaderPropType::Bool:
-    case ShaderPropType::Int:   val = findVal(std::begin(kBool), std::end(kBool)); break;
+    case ShaderPropType::Int:   if (b->Kind == BuiltinKind::Bool || b->Kind == BuiltinKind::Int) val = kBindVal[i]; break;
     default: break;
     }
 }
 
 void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::shared_ptr<Texture>& tex) {
-    if (n == "_AlbedoMap")            { m.AlbedoMap = tex; return; }
-    if (n == "_NormalMap")            { m.NormalMap = tex; return; }
-    if (n == "_MetallicRoughnessMap") { m.MetallicRoughnessMap = tex; return; }
-    if (n == "_MetallicMap")          { m.MetallicMap = tex; return; }
-    if (n == "_RoughnessMap")         { m.RoughnessMap = tex; return; }
-    if (n == "_AOMap")                { m.AOMap = tex; return; }
-    if (n == "_EmissiveMap")          { m.EmissiveMap = tex; return; }
-    if (n == "_ClearCoatMap")         { m.ClearCoatMap = tex; return; }
-    if (n == "_ThicknessMap")         { m.ThicknessMap = tex; return; }
-    if (n == "_HeightMap")            { m.HeightMap = tex; return; }
-    if (n == "_DetailAlbedoMap")      { m.DetailAlbedoMap = tex; return; }
-    if (n == "_DetailNormalMap")      { m.DetailNormalMap = tex; return; }
-    if (n == "_GrungeMap")            { m.GrungeMap = tex; return; }
-    if (n == "_FurMask")              { m.Fur.Mask = tex; return; }
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Tex)) { b->T(m) = tex; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.Tex = tex; it->second.TexPath = tex ? tex->Path() : std::string(); }
 }
 
 void MaterialAsset::SetColor(Material& m, const std::string& n, const glm::vec3& v) {
-    if (n == "_BaseColor")       { m.BaseColor = v; return; }
-    if (n == "_EmissiveColor")   { m.EmissiveColor = v; return; }
-    if (n == "_Sheen")           { m.Sheen = v; return; }
-    if (n == "_SubsurfaceColor") { m.SubsurfaceColor = v; return; }
-    if (n == "_FurTint")         { m.Fur.Tint = v; return; }
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Color)) { b->C(m) = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.V = glm::vec4(v, it->second.V.w);
 }
 
 void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
-    if (n == "_Metallic")            { m.Metallic = v; return; }
-    if (n == "_Roughness")           { m.Roughness = v; return; }
-    if (n == "_EmissiveStrength")    { m.EmissiveStrength = v; return; }
-    if (n == "_TriplanarScale")      { m.TriplanarScale = v; return; }
-    if (n == "_TriplanarBreakup")    { m.TriplanarBreakup = v; return; }
-    if (n == "_ClearCoat")           { m.ClearCoat = v; return; }
-    if (n == "_ClearCoatRoughness")  { m.ClearCoatRoughness = v; return; }
-    if (n == "_Anisotropy")          { m.Anisotropy = v; return; }
-    if (n == "_AnisotropyRotation")  { m.AnisotropyRotation = v; return; }
-    if (n == "_SheenRoughness")          { m.SheenRoughness = v; return; }
-    if (n == "_Thickness")               { m.Thickness = v; return; }
-    if (n == "_TransmissionStrength")    { m.TransmissionStrength = v; return; }
-    if (n == "_IOR")                     { m.IOR = v; return; }
-    if (n == "_NormalStrength")          { m.NormalStrength = v; return; }
-    if (n == "_ParallaxScale")           { m.ParallaxScale = v; return; }
-    if (n == "_GrungeStrength")          { m.GrungeStrength = v; return; }
-    if (n == "_GrungeScale")             { m.GrungeScale = v; return; }
-    if (n == "_WindStrength")            { m.WindStrength = v; return; }
-    if (n == "_WindFrequency")           { m.WindFrequency = v; return; }
-    if (n == "_WindFlutter")             { m.WindFlutter = v; return; }
-    if (n == "_WindHeight")              { m.WindHeight = v; return; }
-    if (n == "_Translucency")            { m.Translucency = v; return; }
-    if (n == "_FurLength")               { m.Fur.Length = std::max(0.0f, v); return; }
-    if (n == "_FurDensity")              { m.Fur.Density = std::max(1.0f, v); return; }
-    if (n == "_FurGravity")              { m.Fur.Gravity = v; return; }
-    if (n == "_FurRim")                  { m.Fur.Rim = std::max(0.0f, v); return; }
-    if (n == "_FurShells")               { m.Fur.Shells = std::clamp((int)std::lround(v), 0, Material::kMaxFurShells); return; }
+    if (const Builtin* b = FindBuiltin(n)) {
+        if (b->Kind == BuiltinKind::Float) { b->F(m) = std::clamp(v, b->Min, b->Max); return; }
+        if (b->Kind == BuiltinKind::Int) { b->I(m) = std::clamp((int)std::lround(v), (int)b->Min, (int)b->Max); return; }
+    }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.F = v; it->second.I = (int)v; }
 }
 
+void MaterialAsset::SetInt(Material& m, const std::string& n, int v) {
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Int)) { b->I(m) = std::clamp(v, (int)b->Min, (int)b->Max); return; }
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) { it->second.I = v; it->second.F = (float)v; }
+}
+
+void MaterialAsset::SetVec(Material& m, const std::string& n, const glm::vec4& v) {
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Vec2)) { b->V2(m) = glm::vec2(v); return; }
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) it->second.V = v;
+}
+
 void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
-    if (n == "_Triplanar") { m.Triplanar = v; return; }
-    if (n == "_NormalFlipY") { m.NormalFlipY = v; return; }
-    if (n == "_DoubleSided") { m.DoubleSided = v; return; }
-    if (n == "_VertexColors") { m.UseVertexColor = v; return; }
-    if (n == "_SpecularHighlights") { m.SpecularHighlights = v; return; }
-    if (n == "_GlossyReflections") { m.GlossyReflections = v; return; }
-    if (n == "_ReceiveDecals") { m.ReceiveDecals = v; return; }
-    if (n == "_NoWetness") { m.NoWetness = v; return; }
-    if (n == "_Foliage") { m.Foliage = v; return; }
-    if (n == "_FurEnabled") { m.Fur.Enabled = v; return; }
+    if (const Builtin* b = FindBuiltin(n, BuiltinKind::Bool)) { b->B(m) = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.B = v;
 }

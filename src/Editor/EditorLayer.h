@@ -2309,11 +2309,23 @@ private:
     // The flattened rows and the per-row ancestor chain used to be fresh vectors every frame
     // (one heap allocation per visible row for the chain); both are reused now.
     std::vector<HierarchyFlatRow> m_HierFlatRows;
+    std::vector<entt::entity> m_HierRootScratch; // DrawHierarchyTreeBody's top-level rows, reused
     std::vector<entt::entity> m_HierChainScratch;
-    // CreationOrdinal ("Object 7") was a full sort of every entity PER unnamed row (and per
-    // comparison in the Name sort). Built lazily once per frame instead.
-    mutable std::unordered_map<entt::entity, int> m_HierOrdinals;
-    mutable int m_HierOrdinalsFrame = -1;
+    // Every named entity in creation order (OrderComponent, entity handle as the tiebreak) - the
+    // Hierarchy's root list, the "Object 7" ordinals and the scene-root siblings all read it.
+    // Each call re-reads the (order, entity) pairs (one linear pass) and re-sorts only when they
+    // changed, so it is always current; the sorted list and the ordinal index are kept between
+    // frames instead of being rebuilt (the Forest's 37k entities: a sort plus a 37k-entry hash map
+    // a frame). The reference stays valid until the next call.
+    struct HierarchyOrderCache {
+        std::vector<std::pair<int, entt::entity>> Keyed, Scratch; // last input / this call's input
+        std::vector<entt::entity> Sorted;
+        std::vector<int> Ordinal; // by entt::to_entity(e): 1-based position in Sorted, 0 = none
+        int CheckedFrame = -1;    // HierarchyCreationOrdinal re-checks the pairs once per ImGui frame
+    };
+    mutable HierarchyOrderCache m_HierOrder;
+    const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
+    // "Object 7" for an unnamed entity: its 1-based place in HierarchyCreationOrder (0 = not named).
     int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon
     // under the mouse names, and whether a hover key acted (type-to-select skips that frame).
@@ -2323,6 +2335,8 @@ private:
     void HandleHierarchyHoverKeys(World& world);
     // Per-scene user-state key: the scene's GUID, else its path ("" for an untitled scene).
     const std::string& CurrentSceneKey() const; // worked out once per frame
+    // Once per frame: entries a scene got while it was keyed by its path move to its GUID once it has one.
+    void TrackSceneKey();
     entt::entity FindEntityByOrder(const World& world, int order) const;
     // vHierarchy D key: new objects created without an explicit parent land under it.
     entt::entity ResolveDefaultParent(const World& world) const;
@@ -2456,6 +2470,21 @@ private:
     std::shared_ptr<AnimatorWindowState> m_AnimatorWin; // shared_ptr: the type is only complete in EditorLayer_Animator.cpp
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
+    // Its handlers, one per component (EditorLayer_Inspector.cpp's name -> handler table).
+    void DrawParticleSystemExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawRigidbodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAnimationExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAnimatorComponentExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawCharacterOutfitExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawReflectionProbeExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawFirstPersonBodyExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawFirstPersonControllerExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawIKRigExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawCameraExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawLightExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawAudioSourceExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawColliderExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    void DrawJointExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
     // Decals (docs/DECALS.md). EditorLayer_Decals.cpp: the .decal asset editor, the Decal
     // component's extras (preview + atlas-frame picker, channel matrix, fade curves, Fit to
     // Surface), Create Decal (writes a DA_*.decal) and the albedo an Asset Browser tile shows.
@@ -2531,6 +2560,8 @@ private:
     // Multi-select counterpart: `sel` is every selected entity that has this component.
     void DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                           const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
+    void DrawRigidbodyExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
+    void DrawLightExtraMulti(World& world, const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
     // #6 Defect #44/#54 — the ReflectFieldType switch, shared by the single-select (`sel` of size
     // 1, no mixed-value branch ever taken) and multi-select Inspector loops so a new field type or
     // widget improvement is written once instead of drifting between two independent copies. Draws

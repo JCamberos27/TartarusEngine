@@ -65,6 +65,10 @@ public:
     void Reset();                      // in-memory defaults (tests, project switch)
     void MarkDirty() { m_Dirty = true; ++m_Revision; }
     void Flush();                      // atomic write if dirty (call once per frame)
+    // Moves everything keyed by scene `from` (bookmarks, favorites, default parent) to `to`: a scene
+    // saved before it had a .meta was keyed by its path, and is keyed by its GUID once it has one.
+    // True (and dirty) when anything moved.
+    bool RekeyScene(const std::string& from, const std::string& to);
 
     nlohmann::json ToJson() const;
     void FromJson(const nlohmann::json& root);

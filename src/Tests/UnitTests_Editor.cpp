@@ -23,9 +23,13 @@
 #include <cmath>
 #include <chrono>
 #include <cstring>
+#include <cstdio>
 
 // Exercise the real transaction code without starting the renderer or writing user preferences.
 struct EditorHistoryTestAccess {
+    static const std::vector<entt::entity>& Order(const EditorLayer& e,const World& w) {return e.HierarchyCreationOrder(w);}
+    static int Ordinal(const EditorLayer& e,const World& w,entt::entity x) {return e.HierarchyCreationOrdinal(w,x);}
+    static std::vector<entt::entity> Siblings(const EditorLayer& e,const World& w,entt::entity p) {return e.HierarchySiblingsInOrder(w,p);}
     static void Begin(EditorLayer& e,World& w,AssetLibrary& a) {e.m_AssetsPtr=&a;e.BeginGlobalUndoFrame(w);}
     static void Finish(EditorLayer& e,World& w) {e.FinishGlobalUndo(w,true);AtomicFile::SetChangeObserver({});}
     static void Edit(EditorLayer& e,World& w) {e.PushUndo(w,"Test edit");}
@@ -521,7 +525,7 @@ void TestOutfitLandingKeepsUnrecordedChange() {
 void TestPrefsMigrationToCleanView() {
     EditorSettings& s = EditorSettings::Get();
     const EditorSettings saved = s;
-    s.EditorThemeId = 0;
+    s.EditorThemeId = EditorSettings::kTartarusTheme;
     s.ShowColliders = true;
     s.SceneShowStats = true;
     s.LightGizmoSelectedOnly = false;
@@ -532,7 +536,7 @@ void TestPrefsMigrationToCleanView() {
     CHECK(EditorSettings::MigratePrefs(s, 1)); // asks for the clean dock once
     CHECK(s.GizmoSize == EditorSettings{}.GizmoSize);
     CHECK(s.PrefsVersion == EditorSettings::kPrefsVersion);
-    CHECK(s.EditorThemeId == 1);
+    CHECK(s.EditorThemeId == EditorSettings::kGlassTheme);
     CHECK(!s.ShowColliders && s.CollidersSelectedOnly);
     CHECK(!s.SceneShowStats);
     CHECK(s.LightGizmoSelectedOnly && s.VolumeGizmosSelectedOnly);
@@ -622,7 +626,48 @@ void TestLruMap() {
     CHECK(m.Size() == 1 && *m.Find("x") == 9);
 }
 
+// The Hierarchy's cached creation order (kept between frames, re-sorted only when the
+// (OrderComponent, entity) pairs change) must still follow every create, destroy, slot reuse,
+// reorder and reparent, with no ImGui frame in between.
+void TestHierarchyCreationOrderCache() {
+    using X = EditorHistoryTestAccess;
+    World world; EditorLayer editor;
+    auto make = [&](const char* n) { return world.CreateEmptyEntity({}, {}, {1,1,1}, n); };
+    const entt::entity a = make("A"), b = make("B"), c = make("C");
+    CHECK((X::Order(editor, world) == std::vector<entt::entity>{a, b, c}));
+    CHECK(X::Ordinal(editor, world, a) == 1 && X::Ordinal(editor, world, c) == 3);
+    // Reordering by OrderComponent alone (no entity added or removed) re-sorts.
+    world.Registry.get<OrderComponent>(a).Value = world.Registry.get<OrderComponent>(c).Value + 1;
+    CHECK((X::Order(editor, world) == std::vector<entt::entity>{b, c, a}));
+    CHECK(X::Ordinal(editor, world, a) == 3 && X::Ordinal(editor, world, b) == 1);
+    // Destroy then create: the new entity may reuse b's slot; the stale handle must not match.
+    world.Registry.destroy(b);
+    const entt::entity d = make("D");
+    CHECK(X::Ordinal(editor, world, b) == 0);
+    CHECK(X::Order(editor, world).size() == 3 && X::Order(editor, world).back() == d);
+    CHECK(X::Ordinal(editor, world, d) == 3);
+    // Scene roots come out of the cache in creation order; a child leaves the roots and
+    // HierarchySiblingsInOrder sorts children by OrderComponent.
+    CHECK(world.SetParent(d, c));
+    const entt::entity e = make("E");
+    CHECK(world.SetParent(e, c));
+    CHECK((X::Siblings(editor, world, entt::null) == std::vector<entt::entity>{c, a}));
+    CHECK((X::Siblings(editor, world, c) == std::vector<entt::entity>{d, e}));
+    world.Registry.get<OrderComponent>(d).Value = world.Registry.get<OrderComponent>(e).Value + 1;
+    CHECK((X::Siblings(editor, world, c) == std::vector<entt::entity>{e, d}));
+    // Unchanged input: the same list comes back, cheaply (one linear compare, no sort).
+    std::vector<entt::entity> big;
+    for (int i = 0; i < 20000; ++i) big.push_back(make("Bulk"));
+    const auto& first = X::Order(editor, world);
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < 20; ++i) CHECK(&X::Order(editor, world) == &first);
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / 20;
+    std::printf("  hierarchy order, 20k unchanged: %.3f ms/call\n", ms);
+    CHECK(X::Ordinal(editor, world, big.back()) == (int)X::Order(editor, world).size());
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
     tests.emplace_back("Script IDE text editing, completion undo and source preservation",TestScriptIDETextEditing);

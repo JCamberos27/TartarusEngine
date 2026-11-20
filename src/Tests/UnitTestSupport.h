@@ -33,10 +33,12 @@ inline std::string TempName(const std::string& stem, const std::string& ext = ""
 
 using TestList = std::vector<std::pair<const char*, std::function<void()>>>;
 
-// A scratch folder under the system temp directory (created when missing).
-inline std::filesystem::path TempDir() {
+// A scratch folder under the system temp directory (created when missing), or its `sub` folder. The runner
+// points the temp directory at a folder of its own per run, so fixed names here don't collide across runs.
+inline std::filesystem::path TempDir(const std::string& sub = {}) {
     std::error_code ec;
     auto dir = std::filesystem::temp_directory_path(ec) / "TartarusUnitTests";
+    if (!sub.empty()) dir /= sub;
     std::filesystem::create_directories(dir, ec);
     return dir;
 }
@@ -45,6 +47,9 @@ inline std::string ReadAll(const std::filesystem::path& p) {
     std::ifstream f(p, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
 }
+
+// Registers the engine components once (tests that look components up by name or serialize a scene need them).
+void EnsureEngineComponents(); // UnitTests.cpp
 
 } // namespace UnitTestSupport
 

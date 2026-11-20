@@ -117,7 +117,7 @@ void TestEnhancerSelectionHistory() {
 
     // Entries survive a scene reload: the orders recorded before resolve to the same objects in
     // the reloaded registry, even though entt hands out different handles.
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World w;
     AssetLibrary assets;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -156,7 +156,7 @@ const char* RegistryNameOf(World& w, entt::entity e) {
 }
 
 void TestEnhancerComponentClipboard() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World w;
     AssetLibrary assets;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -196,7 +196,7 @@ void TestEnhancerComponentClipboard() {
 }
 
 void TestEnhancerKeepPlayChanges() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World w;
     AssetLibrary assets;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -310,14 +310,14 @@ void TestEnhancerFieldReset() {
     CHECK(c.On == def.On && c.Mode == def.Mode && c.Speed == def.Speed && c.Offset == def.Offset && c.Label == def.Label);
 
     // Every registered engine component gets a default instance from Register<T>.
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     bool allHaveDefaults = true;
     for (const auto& r : ComponentRegistry::All()) allHaveDefaults = allHaveDefaults && r.DefaultInstance != nullptr;
     CHECK(allHaveDefaults);
 }
 
 void TestEnhancerNonSerializedField() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World w;
     AssetLibrary assets;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -619,6 +619,30 @@ void TestEnhancerPalette() {
     CHECK(Palette::FromJson(nlohmann::json::object()) == Palette::Defaults());
 }
 
+// A scene saved before it had a .meta was keyed by its path; once it has a GUID its entries follow it.
+void TestEnhancerRekeyScene() {
+    auto& st = EnhancerUserState::Get();
+    const nlohmann::json saved = st.ToJson();
+    st.Reset();
+    const std::string path = "C:/p/assets/Scenes/Room.json", guid = "0123456789abcdef";
+    st.EntityBookmarks.push_back(EditorRef::MakeEntity(path, 3, "Lamp"));
+    st.EntityBookmarks.push_back(EditorRef::MakeEntity("other", 4, "Door"));
+    st.FavoritePages.push_back({"Page 1", {EditorRef::MakeEntity(path, 5, "Chair")}});
+    st.DefaultParents[path] = 9;
+    st.DefaultParents["other"] = 2;
+    CHECK(st.RekeyScene(path, guid));
+    CHECK(st.EntityBookmarks[0].Scene == guid && st.EntityBookmarks[1].Scene == "other");
+    CHECK(st.FavoritePages[0].Items[0].Scene == guid);
+    CHECK(st.DefaultParents.count(path) == 0 && st.DefaultParents[guid] == 9 && st.DefaultParents["other"] == 2);
+    CHECK(!st.RekeyScene(path, guid)); // nothing left under the path
+    CHECK(!st.RekeyScene("", guid) && !st.RekeyScene(guid, guid));
+    // A default parent already set under the GUID wins over the old path's.
+    st.DefaultParents["p2"] = 1;
+    st.DefaultParents["g2"] = 6;
+    CHECK(st.RekeyScene("p2", "g2") && st.DefaultParents["g2"] == 6 && !st.DefaultParents.count("p2"));
+    st.FromJson(saved);
+}
+
 void TestEnhancerUserStateRoundTrip() {
     auto& st = EnhancerUserState::Get();
     const nlohmann::json saved = st.ToJson(); // tests share the singleton - restore it after
@@ -677,7 +701,7 @@ void TestEnhancerTreeLineMasks() {
 }
 
 void TestEnhancerHierStyleRoundTrip() {
-    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    UnitTestSupport::EnsureEngineComponents();
     World a;
     AssetLibrary assets;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -884,7 +908,7 @@ void TestEnhancerStoresKeepUnknownKeys() {
 
 void TestEnhancerKeepUnreadable() {
     namespace fs = std::filesystem;
-    const fs::path dir = fs::temp_directory_path() / "TartarusUnitTests" / "enhancers_bad";
+    const fs::path dir = UnitTestSupport::TempDir("enhancers_bad");
     std::error_code ec;
     fs::remove_all(dir, ec);
     fs::create_directories(dir, ec);
@@ -892,11 +916,8 @@ void TestEnhancerKeepUnreadable() {
     { std::ofstream(file, std::ios::binary) << "<<<<<<< HEAD\n{\"version\": 1}\n"; }
     const std::string kept = KeepUnreadable(file.u8string());
     CHECK(kept == (dir / "editor_folders.json.bad").u8string());
-    std::ifstream in(fs::u8path(kept), std::ios::binary);
-    const std::string bytes((std::istreambuf_iterator<char>(in)), {});
-    CHECK(bytes.rfind("<<<<<<< HEAD", 0) == 0);
+    CHECK(UnitTestSupport::ReadAll(fs::u8path(kept)).rfind("<<<<<<< HEAD", 0) == 0);
     CHECK(KeepUnreadable((dir / "missing.json").u8string()).empty());
-    in.close();
     fs::remove_all(dir, ec);
 }
 
@@ -904,6 +925,7 @@ void TestEnhancerKeepUnreadable() {
 
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerKeepUnreadable", TestEnhancerKeepUnreadable);
+    tests.emplace_back("EnhancerRekeyScene", TestEnhancerRekeyScene);
     tests.emplace_back("EnhancerRefsRoundTrip", TestEnhancerRefsRoundTrip);
     tests.emplace_back("EnhancerStoresKeepUnknownKeys", TestEnhancerStoresKeepUnknownKeys);
     tests.emplace_back("EnhancerBookmarkList", TestEnhancerBookmarkList);

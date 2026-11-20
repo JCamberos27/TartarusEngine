@@ -6,6 +6,14 @@
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
 #include "../Renderer/MaterialAsset.h"
+#include "../Renderer/TextureCache.h"
+#include "../Renderer/Texture.h"
+#include "../Renderer/ImpostorLibrary.h"
+#include "../Renderer/SkyAtmosphere.h"
+#include "../Renderer/Camera.h"
+#include "../Game/SkySettings.h"
+#include "../Core/AtomicFile.h"
+#include "../Assets/AssetDatabase.h"
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
 #include "../Renderer/LightBuffer.h"
@@ -538,6 +546,110 @@ void FurMaterialRoundTrip() {
     std::filesystem::remove_all(dir, ec);
 }
 
+// The built-in property table: a default material writes only the core keys (v2 and v1 names); every field
+// round-trips through both formats; the accessors and the bind resolver agree on kinds, clamps and the emissive
+// pre-multiply.
+void MaterialBuiltinTable() {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_mat_table");
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    auto readJson = [](const std::string& path) {
+        std::ifstream in(path);
+        return nlohmann::json::parse(in, nullptr, false);
+    };
+    // Defaults: exactly the always-written keys.
+    MaterialAsset def;
+    def.Path = (dir / "M_Default.mat").string();
+    def.ShaderPath = "engine://Standard.shader";
+    CHECK(def.Save());
+    const nlohmann::json dj = readJson(def.Path);
+    CHECK(dj.contains("properties") && dj["properties"].size() == 14);
+    for (const char* k : {"_BaseColor", "_Metallic", "_Roughness", "_EmissiveColor", "_EmissiveStrength", "_Triplanar",
+                          "_TriplanarScale", "_AlbedoMap", "_NormalMap", "_MetallicRoughnessMap", "_MetallicMap",
+                          "_RoughnessMap", "_AOMap", "_EmissiveMap"})
+        CHECK(dj["properties"].contains(k));
+    MaterialAsset defV1 = def;
+    defV1.ShaderPath.clear();
+    defV1.Path = (dir / "M_DefaultV1.mat").string();
+    CHECK(defV1.Save());
+    const nlohmann::json dj1 = readJson(defV1.Path);
+    CHECK(dj1.contains("baseColor") && dj1.contains("emissiveMap") && !dj1.contains("transmission") && !dj1.contains("furEnabled"));
+
+    // Every field away from its default, through v2 and v1.
+    for (const bool v2 : {true, false}) {
+        MaterialAsset ma;
+        ma.Path = (dir / (v2 ? "M_All.mat" : "M_AllV1.mat")).string();
+        if (v2) ma.ShaderPath = "engine://Standard.shader";
+        Material& m = ma.Mat;
+        m.BaseColor = {0.1f, 0.2f, 0.3f}; m.Metallic = 0.7f; m.Roughness = 0.2f;
+        m.EmissiveColor = {0.5f, 0.25f, 0.0f}; m.EmissiveStrength = 3.0f;
+        m.Triplanar = true; m.TriplanarScale = 2.0f; m.TriplanarBreakup = 0.4f;
+        m.ClearCoat = 0.6f; m.ClearCoatRoughness = 0.1f; m.Anisotropy = -0.5f; m.AnisotropyRotation = 0.25f;
+        m.Sheen = {0.2f, 0.2f, 0.4f}; m.SheenRoughness = 0.3f; m.SubsurfaceColor = {0.9f, 0.1f, 0.1f}; m.Thickness = 0.8f;
+        m.TransmissionStrength = 0.5f; m.IOR = 1.33f; m.SubsurfaceEnabled = true; m.ReflectionProbes = true;
+        m.GrungeStrength = 0.5f; m.GrungeScale = 2.0f; m.ReceiveDecals = false; m.NoWetness = true; m.Foliage = true;
+        m.WindStrength = 0.3f; m.WindFrequency = 2.0f; m.WindFlutter = 0.1f; m.WindHeight = 3.0f; m.Translucency = 0.2f;
+        m.UVTiling = {2.0f, 3.0f}; m.UVOffset = {0.5f, 0.25f}; m.DetailTiling = {8.0f, 6.0f};
+        m.NormalStrength = 0.5f; m.NormalFlipY = true; m.DoubleSided = true; m.UseVertexColor = true;
+        m.SpecularHighlights = false; m.GlossyReflections = false; m.ParallaxScale = 0.05f;
+        m.Fur.Enabled = true; m.Fur.Shells = 8; m.Fur.Tint = glm::vec3(0.5f);
+        ma.AlbedoMapPath = "a.png"; ma.ThicknessMapPath = "t.png"; ma.GrungeMapPath = "g.png"; ma.FurMaskPath = "f.png";
+        CHECK(ma.Save());
+        if (!v2) {
+            const nlohmann::json j1 = readJson(ma.Path);
+            CHECK(j1.contains("transmission") && j1.contains("subsurface") && j1.contains("vertexColors") && j1["furShells"].is_number_integer());
+        }
+        const auto back = MaterialAsset::Load(ma.Path);
+        CHECK(back != nullptr);
+        if (!back) continue;
+        const Material& b = back->Mat;
+        CHECK(b.BaseColor == m.BaseColor && b.Metallic == m.Metallic && b.Roughness == m.Roughness);
+        CHECK(b.EmissiveColor == m.EmissiveColor && b.EmissiveStrength == m.EmissiveStrength);
+        CHECK(b.Triplanar && b.TriplanarScale == 2.0f && b.TriplanarBreakup == 0.4f);
+        CHECK(b.ClearCoat == 0.6f && b.ClearCoatRoughness == 0.1f && b.Anisotropy == -0.5f && b.AnisotropyRotation == 0.25f);
+        CHECK(b.Sheen == m.Sheen && b.SheenRoughness == 0.3f && b.SubsurfaceColor == m.SubsurfaceColor && b.Thickness == 0.8f);
+        CHECK(b.TransmissionStrength == 0.5f && b.IOR == 1.33f && b.SubsurfaceEnabled && b.ReflectionProbes);
+        CHECK(b.GrungeStrength == 0.5f && b.GrungeScale == 2.0f && !b.ReceiveDecals && b.NoWetness && b.Foliage);
+        CHECK(b.WindStrength == 0.3f && b.WindFrequency == 2.0f && b.WindFlutter == 0.1f && b.WindHeight == 3.0f && b.Translucency == 0.2f);
+        CHECK(b.UVTiling == m.UVTiling && b.UVOffset == m.UVOffset && b.DetailTiling == m.DetailTiling);
+        CHECK(b.NormalStrength == 0.5f && b.NormalFlipY && b.DoubleSided && b.UseVertexColor);
+        CHECK(!b.SpecularHighlights && !b.GlossyReflections && b.ParallaxScale == 0.05f);
+        CHECK(b.Fur.Enabled && b.Fur.Shells == 8 && b.Fur.Tint == glm::vec3(0.5f));
+        CHECK(back->AlbedoMapPath == "a.png" && back->ThicknessMapPath == "t.png" && back->GrungeMapPath == "g.png" && back->FurMaskPath == "f.png");
+        CHECK(back->NormalMapPath.empty());
+    }
+
+    // Accessors and the bind resolver.
+    Material m;
+    m.EmissiveColor = glm::vec3(0.5f);
+    m.EmissiveStrength = 4.0f;
+    CHECK(MaterialAsset::GetColor(m, "_EmissiveColor") == glm::vec3(2.0f));
+    CHECK(MaterialAsset::GetAuthoredColor(m, "_EmissiveColor") == glm::vec3(0.5f));
+    CHECK(!MaterialAsset::IsBuiltinProp("_SubsurfaceEnabled") && !MaterialAsset::IsBuiltinProp("_CoverStrength"));
+    MaterialAsset::SetFloat(m, "_FurShells", 7.6f);
+    CHECK(m.Fur.Shells == 8 && MaterialAsset::GetFloat(m, "_FurShells") == 8.0f);
+    MaterialAsset::SetFloat(m, "_FurDensity", 0.0f);
+    CHECK(m.Fur.Density == 1.0f);
+    MaterialAsset::SetVec(m, "_UVTiling", glm::vec4(3.0f, 4.0f, 9.0f, 9.0f));
+    CHECK(m.UVTiling == glm::vec2(3.0f, 4.0f) && MaterialAsset::GetVec(m, "_UVTiling") == glm::vec4(3.0f, 4.0f, 0.0f, 0.0f));
+    MaterialAsset::SetFloat(m, "_BaseColor", 9.0f); // wrong kind: ignored
+    CHECK(m.BaseColor == glm::vec3(1.0f) && MaterialAsset::GetFloat(m, "_BaseColor") == 0.0f);
+    const std::shared_ptr<Texture>& (*tex)(const Material&) = nullptr;
+    glm::vec4 (*val)(const Material&) = nullptr;
+    MaterialAsset::ResolveBuiltin("_EmissiveColor", ShaderPropType::Color, tex, val);
+    CHECK(!tex && val && glm::vec3(val(m)) == glm::vec3(2.0f));
+    MaterialAsset::ResolveBuiltin("_FurShells", ShaderPropType::Int, tex, val);
+    CHECK(val && val(m).x == 8.0f);
+    MaterialAsset::ResolveBuiltin("_NormalFlipY", ShaderPropType::Bool, tex, val);
+    m.NormalFlipY = true;
+    CHECK(val && val(m).x == 1.0f);
+    MaterialAsset::ResolveBuiltin("_Metallic", ShaderPropType::Color, tex, val);
+    CHECK(!tex && !val);
+    MaterialAsset::ResolveBuiltin("_DetailNormalMap", ShaderPropType::Texture2D, tex, val);
+    CHECK(tex && !val && !tex(m));
+    std::filesystem::remove_all(dir, ec);
+}
+
 // Reflection probe room captures: each cube face's view looks down its GL face axis and is a pure rotation (culling
 // holds); only probes whose volume changed are queued again. Puddle SSR: off by default, saved only when on, and a
 // probe's Capture Scene defaults on and survives a save.
@@ -828,6 +940,694 @@ void GIVolumeLookup() {
 
 } // namespace
 
+// Moved from UnitTests.cpp (pure move).
+namespace {
+using json = nlohmann::json;
+using UnitTestSupport::TempDir;
+using UnitTestSupport::ReadAll;
+
+void TestCameraRoll() {
+    auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-4f; };
+    Camera cam; // yaw -90: looking down -Z, right = +X, up = +Y
+    CHECK(near(cam.Right(), {1, 0, 0}));
+    CHECK(near(cam.Up(), {0, 1, 0}));
+    const glm::mat4 level = cam.ViewMatrix();
+    cam.Roll = 90.0f;
+    CHECK(near(cam.Front(), {0, 0, -1}));   // roll never changes where the camera looks
+    CHECK(near(cam.Right(), {0, 1, 0}));
+    CHECK(near(cam.Up(), {-1, 0, 0}));
+    // A point to the camera's rolled right lands on view-space +X.
+    const glm::vec4 v = cam.ViewMatrix() * glm::vec4(cam.Position + glm::vec3(0, 1, -5), 1.0f);
+    CHECK(v.x > 0.99f && std::abs(v.y) < 1e-4f);
+    cam.Roll = 0.0f;
+    const glm::mat4 back = cam.ViewMatrix();
+    bool same = true;
+    for (int c = 0; c < 4; ++c) same &= near(glm::vec3(level[c]), glm::vec3(back[c]));
+    CHECK(same);
+}
+
+// #369 - a texture a .mat names as a data map defaults to linear (and a normal map to the NormalMap
+// type) when its .meta has no importer block, instead of the sRGB colour default that bends normals.
+// An explicit importer block still wins. Only the settings step is exercised - it needs no GL.
+void TestMaterialTextureDefaults() {
+    namespace fs = std::filesystem;
+    const fs::path dir = TempDir() / "mat_tex_defaults";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    auto make = [&](const char* name, const char* metaJson) {
+        const fs::path p = dir / name;
+        std::ofstream(p, std::ios::binary) << "not decoded by this test";
+        if (metaJson) std::ofstream(fs::path(p.string() + ".meta"), std::ios::binary) << metaJson;
+        return p.generic_string();
+    };
+    const char* bare = R"({"guid":"a1b2c3d4e5f60718","metaVersion":1,"type":"texture"})";
+    AssetLibrary assets;
+    using Use = AssetLibrary::TextureUse;
+
+    // A bare sidecar: normal maps become linear NormalMap textures, other data maps linear.
+    const std::string normal = make("n.png", bare), rough = make("r.png", bare), albedo = make("a.png", bare);
+    assets.ResolveTextureSettings(normal, Use::Normal);
+    assets.ResolveTextureSettings(rough, Use::Data);
+    assets.ResolveTextureSettings(albedo, Use::Color);
+    CHECK(!assets.GetTextureSettings(normal).IsSRGB);
+    CHECK(assets.GetTextureSettings(normal).TextureType == TextureImportSettings::Type::NormalMap);
+    CHECK(!assets.GetTextureSettings(rough).IsSRGB);
+    CHECK(assets.GetTextureSettings(rough).TextureType == TextureImportSettings::Type::Default);
+    // Colour maps keep the sRGB default, and nothing is remembered for them.
+    CHECK(assets.GetTextureSettings(albedo).IsSRGB);
+    CHECK(assets.TextureSettingsMap().count(albedo) == 0);
+
+    // No .meta at all behaves the same as a bare one.
+    const std::string noMeta = make("m.png", nullptr);
+    assets.ResolveTextureSettings(noMeta, Use::Normal);
+    CHECK(!assets.GetTextureSettings(noMeta).IsSRGB);
+
+    // An explicit importer block is an override: even a normal-map slot keeps what the file says.
+    const std::string forced = make("f.png", R"({"guid":"0011223344556677","type":"texture","importer":{"isSRGB":true,"textureType":0,"anisoLevel":2}})");
+    assets.ResolveTextureSettings(forced, Use::Normal);
+    CHECK(assets.GetTextureSettings(forced).IsSRGB);
+    CHECK(assets.GetTextureSettings(forced).AnisoLevel == 2);
+
+    // Settings already known in memory are never replaced by a later, different use.
+    assets.ResolveTextureSettings(rough, Use::Normal);
+    CHECK(assets.GetTextureSettings(rough).TextureType == TextureImportSettings::Type::Default);
+
+    // Nothing was written to any sidecar.
+    CHECK(ReadAll(dir / "n.png.meta") == bare);
+    fs::remove_all(dir, ec);
+}
+
+void TestLodGroup() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = world.CreateEmptyEntity(zero, zero, one, "Group");
+    world.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    entt::entity lv[3];
+    for (int i = 0; i < 3; ++i) {
+        lv[i] = world.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i));
+        world.Registry.emplace<RenderableComponent>(lv[i]);
+        CHECK(world.SetParent(lv[i], group));
+    }
+    // 90 degree FOV: yScale = 1, so a 2 m object at distance d is 1/d of the view tall.
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto shown = [&](float dist) {
+        CHECK(world.ApplyLod(glm::vec3(0.0f, 0.0f, dist), proj) == 1);
+        int visible = -1, count = 0;
+        for (int i = 0; i < 3; ++i)
+            if (!world.Registry.all_of<LodCulledTag>(lv[i])) { visible = i; ++count; }
+        return count <= 1 ? visible : -2;
+    };
+    CHECK(shown(1.0f) == 0);   // 100% of the view  -> LOD 0 (>= 0.6)
+    CHECK(shown(2.0f) == 1);   // 50%               -> LOD 1 (>= 0.3)
+    CHECK(shown(5.0f) == 2);   // 20%               -> LOD 2 (>= 0.1)
+    CHECK(shown(20.0f) == -1); // 5%, below the last used level -> culled
+    world.Registry.destroy(group);
+    CHECK(world.ApplyLod(zero, proj) == 0); // no groups left: nothing stays tagged
+    CHECK(world.Registry.view<LodCulledTag>().empty());
+}
+
+// Octahedral impostors (ImpostorLibrary): past the start distance a matched group shows its impostor - every level
+// tagged, the group listed by ForEachImpostor - held a little either way, never where the levels cull it, and the
+// hand-over cross-fades both ways like a level change.
+void TestLodImpostor() {
+    ImpostorLibrary::TestOverride(0, 10.0f);
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = world.CreateEmptyEntity(zero, zero, one, "Group");
+    world.Registry.emplace<LODGroupComponent>(group).Size = 4.0f; // 4 m: LOD 2 from 6.7 m, culled past 20 m
+    entt::entity lv[3];
+    for (int i = 0; i < 3; ++i) {
+        lv[i] = world.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i));
+        world.Registry.emplace<RenderableComponent>(lv[i]);
+        world.SetParent(lv[i], group);
+    }
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    world.RebuildWorldTransformCache();
+    auto impostor = [&](float* fade = nullptr) {
+        int n = 0;
+        world.ForEachImpostor([&](entt::entity g, int set, float f) {
+            n += g == group && set == 0;
+            if (fade) *fade = f;
+        });
+        return n == 1;
+    };
+    auto tagged = [&](int i) { return world.Registry.all_of<LodCulledTag>(lv[i]); };
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 1.0f), proj);
+    CHECK(!impostor() && !tagged(0) && tagged(1) && tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj); // LOD 2, short of 10 m
+    CHECK(!impostor() && !tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 12.0f), proj); // past it: the impostor, every level tagged
+    CHECK(impostor() && tagged(0) && tagged(1) && tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj); // back on LOD 2
+    CHECK(!impostor() && !tagged(2));
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 25.0f), proj); // the levels cull it there: so does the impostor
+    CHECK(!impostor() && tagged(0) && tagged(1) && tagged(2));
+
+    // The hand-over fades: LOD 2 out as the impostor comes in, then the other way.
+    world.LodSmooth = true;
+    world.LodClockOverride = 10.0;
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj);
+    world.LodClockOverride += 1.0;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 12.0f), proj);
+    float fade = 0.0f;
+    CHECK(impostor(&fade) && fade > 0.0f && world.LodFadeOf(lv[2]) < 0.0f && !tagged(2));
+    world.LodClockOverride += World::kLodFadeSeconds + 0.1;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 12.0f), proj);
+    CHECK(impostor(&fade) && fade == 0.0f && world.LodFadeOf(lv[2]) == 0.0f && tagged(2));
+    world.LodClockOverride += 1.0;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.8f), proj); // held just inside the start (smooth views hold a level)
+    CHECK(impostor(&fade) && fade == 0.0f && tagged(2));
+    world.LodClockOverride += 1.0;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj);
+    CHECK(impostor(&fade) && fade < 0.0f && world.LodFadeOf(lv[2]) > 0.0f && !tagged(2));
+    world.LodClockOverride += World::kLodFadeSeconds + 0.1;
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj);
+    CHECK(!impostor() && world.LodFadeOf(lv[2]) == 0.0f && !tagged(2));
+    ImpostorLibrary::TestOverride(-1, 0.0f);
+}
+
+// Opening another scene: the editor keeps its World and the scene loader clears the registry in place, so nothing of
+// the outgoing scene's LOD state may outlive it. A scene with no LOD groups at all used to keep the outgoing scene's
+// records: every group then standing on its impostor stayed listed by ForEachImpostor, and ImpostorRenderer drew it
+// at the origin (its group gone, GetCachedWorldTransform answers identity) - a Forest tree standing in AnimTestbed.
+void TestLodImpostorSceneSwitch() {
+    ImpostorLibrary::TestOverride(0, 10.0f);
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    const glm::vec3 eye(0.0f, 0.0f, 12.0f); // past the 10 m start: a 4 m group on LOD 2 shows its impostor
+    std::string forest, testbed, grove;
+    {
+        // "Forest": a LOD group, three levels under it.
+        World a;
+        AssetLibrary assets;
+        const entt::entity group = a.CreateEmptyEntity(zero, zero, one, "Tree");
+        a.Registry.emplace<LODGroupComponent>(group).Size = 4.0f;
+        for (int i = 0; i < 3; ++i) a.SetParent(a.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i)), group);
+        forest = SceneSerializer::SaveToString(a, assets);
+        // "Grove": the same group further off, and a second one - a scene with groups of its own.
+        a.Registry.get<TransformComponent>(group).Position = glm::vec3(5.0f, 0.0f, 0.0f);
+        const entt::entity other = a.CreateEmptyEntity(glm::vec3(-5.0f, 0.0f, 0.0f), zero, one, "Tree 2");
+        a.Registry.emplace<LODGroupComponent>(other).Size = 4.0f;
+        for (int i = 0; i < 3; ++i) a.SetParent(a.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i)), other);
+        grove = SceneSerializer::SaveToString(a, assets);
+    }
+    {
+        // "AnimTestbed": no LOD group anywhere.
+        World b;
+        AssetLibrary assets;
+        b.CreateEmptyEntity(zero, zero, one, "Lane Post");
+        b.CreateEmptyEntity(glm::vec3(2.0f, 0.0f, 0.0f), zero, one, "Ledge");
+        testbed = SceneSerializer::SaveToString(b, assets);
+    }
+    World world; // one World and one library across the switches, as the editor's
+    AssetLibrary assets;
+    // What ImpostorRenderer would draw this view: each listed group's count, and how many are not this scene's groups.
+    int listed = 0, foreign = 0;
+    auto view = [&]() {
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(eye, proj);
+        listed = foreign = 0;
+        world.ForEachImpostor([&](entt::entity g, int, float) {
+            ++listed;
+            foreign += !world.Registry.valid(g) || !world.Registry.all_of<LODGroupComponent>(g);
+        });
+    };
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    view();
+    CHECK(listed == 1 && foreign == 0); // the Forest's tree, on its impostor
+    CHECK(SceneSerializer::LoadFromString(world, assets, testbed));
+    view();
+    std::printf("[UnitTest] LodImpostorSceneSwitch: after the switch to a scene with no LOD groups, %d impostor(s) "
+                "listed, %d of them not this scene's\n", listed, foreign);
+    CHECK(listed == 0 && foreign == 0); // nothing of the Forest's left to draw
+    CHECK(world.Registry.view<LodCulledTag>().empty());
+    // Back, and on to a scene with groups of its own: only its own, each once.
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    view();
+    CHECK(listed == 1 && foreign == 0);
+    CHECK(SceneSerializer::LoadFromString(world, assets, grove));
+    view();
+    CHECK(listed == 2 && foreign == 0);
+    // The smooth views (a fade under way when the scene goes) leave nothing behind either.
+    world.LodSmooth = true;
+    world.LodClockOverride = 100.0;
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    world.RebuildWorldTransformCache();
+    world.ApplyLod(glm::vec3(0.0f, 0.0f, 9.0f), proj); // LOD 2
+    world.LodClockOverride += 1.0;
+    view();                                            // and over to the impostor: a cross-fade begins
+    CHECK(listed == 1 && foreign == 0);
+    CHECK(SceneSerializer::LoadFromString(world, assets, testbed));
+    view();
+    CHECK(listed == 0 && foreign == 0);
+    // The same in one scene: the last LOD group deleted while it stands on its impostor.
+    world.LodSmooth = false;
+    CHECK(SceneSerializer::LoadFromString(world, assets, forest));
+    view();
+    CHECK(listed == 1 && foreign == 0);
+    for (entt::entity g : std::vector<entt::entity>(world.Registry.view<LODGroupComponent>().begin(),
+                                                    world.Registry.view<LODGroupComponent>().end()))
+        world.DestroyEntityAndChildren(g);
+    view();
+    CHECK(listed == 0 && foreign == 0);
+    ImpostorLibrary::TestOverride(-1, 0.0f);
+}
+
+// LodSmooth cross-fades end: one still view finishes its fade, and two views that disagree on a group's level (the
+// Scene and Game views, every frame) don't keep restarting it - each frame used to begin a fresh fade, so the plants
+// stayed dithered for as long as both views were up.
+void TestLodFadeCompletes() {
+    auto make = [](World& world, entt::entity* lv) {
+        const glm::vec3 zero(0.0f), one(1.0f);
+        const entt::entity group = world.CreateEmptyEntity(zero, zero, one, "Group");
+        world.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+        for (int i = 0; i < 3; ++i) {
+            lv[i] = world.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i));
+            world.Registry.emplace<RenderableComponent>(lv[i]);
+            world.SetParent(lv[i], group);
+        }
+        world.LodSmooth = true;
+        world.LodClockOverride = 10.0;
+    };
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    const glm::vec3 nearView(0.0f, 0.0f, 1.0f), farView(0.0f, 0.0f, 2.0f); // LOD 0 / LOD 1
+    // 60 Hz frames on the world's LOD clock.
+    auto frames = [&](World& world, double seconds, const std::function<void()>& each) {
+        for (int i = 0, n = (int)(seconds * 60.0); i < n; ++i) {
+            world.LodClockOverride += 1.0 / 60.0;
+            world.RebuildWorldTransformCache();
+            each();
+        }
+    };
+    {
+        World world;
+        entt::entity lv[3];
+        make(world, lv);
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(nearView, proj);
+        frames(world, 0.1, [&] { world.ApplyLod(nearView, proj); });
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(farView, proj);                  // 0 -> 1: a fade starts
+        CHECK(world.LodFadeOf(lv[1]) > 0.0f && world.LodFadeOf(lv[0]) < 0.0f);
+        frames(world, World::kLodFadeSeconds + 0.3, [&] { world.ApplyLod(farView, proj); });
+        CHECK(world.LodFadeOf(lv[0]) == 0.0f && world.LodFadeOf(lv[1]) == 0.0f);
+        CHECK(world.Registry.all_of<LodCulledTag>(lv[0]) && !world.Registry.all_of<LodCulledTag>(lv[1]));
+    }
+    {
+        World world;
+        entt::entity lv[3];
+        make(world, lv);
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(nearView, proj);
+        frames(world, World::kLodFadeSeconds + 0.4, [&] { world.ApplyLod(nearView, proj); world.ApplyLod(farView, proj); });
+        world.RebuildWorldTransformCache();
+        world.ApplyLod(nearView, proj);
+        CHECK(world.LodFadeOf(lv[0]) == 0.0f && world.LodFadeOf(lv[1]) == 0.0f); // whole, not dithered
+        CHECK(!world.Registry.all_of<LodCulledTag>(lv[0]) && world.Registry.all_of<LodCulledTag>(lv[1]));
+        world.ApplyLod(farView, proj);
+        CHECK(world.LodFadeOf(lv[0]) == 0.0f && world.LodFadeOf(lv[1]) == 0.0f);
+        CHECK(world.Registry.all_of<LodCulledTag>(lv[0]) && !world.Registry.all_of<LodCulledTag>(lv[1]));
+    }
+}
+
+// --- #202: a degenerate camera frustum must not produce a NaN projection -------------------
+void TestCameraFrustumValidation() {
+    auto finite = [](const glm::mat4& m) {
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                if (!std::isfinite(m[c][r])) return false;
+        return true;
+    };
+
+    // The guard is at the point of use, so it holds whatever the values came from.
+    Camera cam;
+    cam.NearPlane = 10.0f; cam.FarPlane = 10.0f;      // far == near: divides by zero
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.NearPlane = 0.0f;  cam.FarPlane = 100.0f;     // non-positive near
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.NearPlane = -5.0f; cam.FarPlane = -10.0f;     // both wrong, and inverted
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.NearPlane = 0.1f;  cam.FarPlane = 1000.0f;
+    CHECK(finite(cam.ProjectionMatrix(0.0f)));        // zero aspect
+    CHECK(finite(cam.ProjectionMatrix(std::numeric_limits<float>::quiet_NaN())));
+    cam.Orthographic = true;
+    cam.NearPlane = 5.0f; cam.FarPlane = 5.0f;
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    // The ortho path divides by the half-height too: glm::ortho computes 2/(top-bottom).
+    cam.NearPlane = 0.1f; cam.FarPlane = 100.0f;
+    cam.OrthoHalfHeight = 0.0f;
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.OrthoHalfHeight = -3.0f;
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.OrthoHalfHeight = std::numeric_limits<float>::quiet_NaN();
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    // A usable ortho camera is still passed through untouched.
+    cam.OrthoHalfHeight = 8.0f;
+    {
+        const glm::mat4 want = glm::ortho(-8.0f * 1.5f, 8.0f * 1.5f, -8.0f, 8.0f, 0.1f, 100.0f);
+        const glm::mat4 have = cam.ProjectionMatrix(1.5f);
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                CHECK(std::fabs(have[c][r] - want[c][r]) < 1e-6f);
+    }
+    cam.Orthographic = false;
+    cam.NearPlane = 0.1f; cam.FarPlane = 1000.0f;
+
+    // MakePerspective is the shared chokepoint every direct call site now goes through, so the
+    // same guarantees have to hold when it is called on its own.
+    const float inf = std::numeric_limits<float>::infinity();
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    CHECK(finite(MakePerspective(60.0f, inf, 0.1f, 100.0f)));   // zero-height viewport: w/0 == inf
+    CHECK(finite(MakePerspective(60.0f, nan, 0.1f, 100.0f)));   // 0x0 viewport: 0/0 == NaN
+    CHECK(finite(MakePerspective(60.0f, 0.0f, 0.1f, 100.0f)));
+    CHECK(finite(MakePerspective(60.0f, -2.0f, 0.1f, 100.0f)));
+    CHECK(finite(MakePerspective(0.0f, 1.5f, 0.1f, 100.0f)));   // degenerate fov
+    CHECK(finite(MakePerspective(180.0f, 1.5f, 0.1f, 100.0f))); // tan(90 deg) is infinite
+    CHECK(finite(MakePerspective(nan, 1.5f, 0.1f, 100.0f)));
+    CHECK(finite(MakePerspective(60.0f, 1.5f, 0.0f, 100.0f)));
+    CHECK(finite(MakePerspective(60.0f, 1.5f, 50.0f, 50.0f)));  // far == near
+    CHECK(finite(MakePerspective(60.0f, 1.5f, 100.0f, 1.0f)));  // inverted
+    CHECK(finite(MakePerspective(60.0f, 1.5f, nan, inf)));
+    // Valid input is reproduced exactly - the chokepoint must not reshape good cameras.
+    {
+        const glm::mat4 want = glm::perspective(glm::radians(55.0f), 1.5f, 0.2f, 300.0f);
+        const glm::mat4 have = MakePerspective(55.0f, 1.5f, 0.2f, 300.0f);
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                CHECK(std::fabs(have[c][r] - want[c][r]) < 1e-6f);
+    }
+
+    // A sane frustum is left exactly alone - the guard must not quietly reshape good cameras.
+    cam.NearPlane = 0.3f; cam.FarPlane = 250.0f;
+    const glm::mat4 expected = glm::perspective(glm::radians(cam.Fov), 1.5f, 0.3f, 250.0f);
+    const glm::mat4 got = cam.ProjectionMatrix(1.5f);
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            CHECK(std::fabs(got[c][r] - expected[c][r]) < 1e-6f);
+
+    // The first-person view-model sub-pass rebuilds a projection from the world's, changing only
+    // the FOV. It doesn't know the camera's near/far — it reads them back out of the matrix it
+    // was handed, so that readback is the thing to pin down: get it wrong and the arms and the
+    // scene they are composited over disagree about where the near plane sits.
+    {
+        const glm::mat4& worldProj = got;
+        const float nearZ = std::fabs(worldProj[3][2] / (worldProj[2][2] - 1.0f));
+        const float farZ  = std::fabs(worldProj[3][2] / (worldProj[2][2] + 1.0f));
+        CHECK(std::fabs(nearZ - cam.NearPlane) < 1e-4f);
+        // far recovers through a near-zero denominator (proj[2][2] + 1), so float rounding is
+        // amplified ~5 orders of magnitude here — exact to a few hundredths is the ceiling.
+        CHECK(std::fabs(farZ - cam.FarPlane) < 0.05f);
+
+        // What the sub-pass then builds: same clip range, different cone.
+        const glm::mat4 vm = MakePerspective(60.0f, 1.5f, nearZ, farZ);
+        const glm::mat4 want = glm::perspective(glm::radians(60.0f), 1.5f, nearZ, farZ);
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                CHECK(std::fabs(vm[c][r] - want[c][r]) < 1e-3f);
+        // 60 deg is narrower than the world's 75: a larger y scale, i.e. the held weapon is
+        // framed tighter than the scene behind it, not stretched to match it.
+        CHECK(vm[1][1] > worldProj[1][1]);
+    }
+
+    // And a scene carrying an unusable CameraComponent is corrected on load, not just tolerated.
+    World world;
+    AssetLibrary assets;
+    const std::string sceneJson = R"({"formatVersion":3,"empties":[{"name":"Cam","id":1,"parentId":-1,)"
+        R"("position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1],)"
+        R"("Camera":{"Field of View":0.0,"Near":0.0,"Far":-5.0}}]})";
+    CHECK(SceneSerializer::LoadFromString(world, assets, sceneJson));
+    int cams = 0;
+    for (entt::entity e : world.Registry.view<CameraComponent>()) {
+        ++cams;
+        const auto& cc = world.Registry.get<CameraComponent>(e);
+        CHECK(cc.NearPlane > 0.0f);
+        CHECK(cc.FarPlane > cc.NearPlane);
+        CHECK(cc.FovDegrees > 0.0f && cc.FovDegrees < 180.0f);
+    }
+    CHECK(cams == 1);
+}
+
+// The serializer is the one place where a silent mistake costs authored work: a field dropped on
+// load, an unstable entity order, a component written but not read. None of that shows up as a
+// The physical sky (World::SkySource::Atmosphere): the clock's sun/moon/star placement, the
+// CPU transmittance the directional light is filtered by, the day/night light hand-off, the
+// presets, and the scene file round trip. All CPU-side - the GPU passes are covered by the
+// smoke_sky_* scenes.
+void TestPhysicalSky() {
+    using namespace TimeOfDay;
+    auto Elevation = [](const glm::vec3& d) { return std::asin(glm::clamp(d.y, -1.0f, 1.0f)); }; // above the horizon (radians)
+    auto near = [](float a, float b, float eps) { return std::abs(a - b) <= eps; };
+
+    // Equinox at the equator: the noon sun is overhead, 06:00 on the eastern horizon (+X),
+    // 18:00 on the western (-X).
+    const glm::vec3 noon = SunDirection(12.0f, 80.0f, 0.0f, 0.0f);
+    CHECK(noon.y > 0.99f);
+    const glm::vec3 dawn = SunDirection(6.0f, 80.0f, 0.0f, 0.0f);
+    CHECK(std::abs(dawn.y) < 0.03f && dawn.x > 0.95f);
+    CHECK(SunDirection(18.0f, 80.0f, 0.0f, 0.0f).x < -0.95f);
+    // 38 N at the June solstice: noon elevation 90 - 38 + 23.44 = 75.4 deg, due south (+Z).
+    const glm::vec3 june = SunDirection(12.0f, 172.0f, 38.0f, 0.0f);
+    CHECK(near(glm::degrees(Elevation(june)), 75.44f, 0.6f));
+    CHECK(june.z > 0.0f && std::abs(june.x) < 1e-3f);
+    // Turning the compass rotates the sky about +Y and nothing else.
+    const glm::vec3 turned = SunDirection(12.0f, 172.0f, 38.0f, 90.0f);
+    CHECK(near(glm::length(turned), 1.0f, 1e-4f) && near(turned.y, june.y, 1e-5f));
+    CHECK(std::abs(turned.z) < 1e-3f);
+    // Day length: 12 h at the equinox anywhere, polar day and night past the circles.
+    CHECK(near(SunsetHour(80.0f, 45.0f), 18.0f, 0.1f));
+    CHECK(SunsetHour(172.0f, 80.0f) == 24.0f);
+    CHECK(SunsetHour(355.0f, 80.0f) == 12.0f);
+    CHECK(SunsetHour(172.0f, 38.0f) > 19.0f && SunsetHour(172.0f, 38.0f) < 19.6f);
+
+    // The moon: new = dark, full = lit, and a full moon sits opposite the sun.
+    CHECK(MoonIllumination(0.0f) < 1e-4f && MoonIllumination(0.5f) > 0.9999f);
+    CHECK(near(MoonIllumination(0.25f), 0.5f, 1e-4f));
+    const glm::vec3 fullMoon = MoonDirection(0.0f, 80.0f, 0.0f, 0.0f, 0.5f);
+    CHECK(glm::dot(fullMoon, SunDirection(0.0f, 80.0f, 0.0f, 0.0f)) < -0.9f);
+    CHECK(MoonPhase(80.0f, 0.0f, 0.3f) >= 0.0f && MoonPhase(80.0f, 0.0f, 0.3f) < 1.0f);
+
+    // The star field turns rigidly about the celestial pole, which stays put.
+    const glm::mat3 stars = StarRotation(3.0f, 100.0f, 38.0f, 0.0f);
+    CHECK(near(glm::determinant(stars), 1.0f, 1e-4f));
+    const glm::vec3 pole(0.0f, std::sin(glm::radians(38.0f)), -std::cos(glm::radians(38.0f)));
+    CHECK(glm::length(stars * pole - pole) < 1e-4f);
+
+    // Transmittance: blue is scattered most, the horizon passes far less than the zenith, the
+    // planet blocks everything below it, and thinner air higher up lets more through.
+    SkySettings s;
+    const glm::vec3 zenith = SkyAtmosphere::Transmittance(s, 0.0f, glm::vec3(0, 1, 0));
+    CHECK(zenith.b < zenith.g && zenith.g < zenith.r);
+    CHECK(zenith.r > 0.9f && zenith.b > 0.7f && zenith.b < 0.82f);
+    const glm::vec3 horizon = SkyAtmosphere::Transmittance(s, 0.0f, glm::normalize(glm::vec3(0.0f, 0.02f, 1.0f)));
+    CHECK(horizon.r < zenith.r * 0.7f && horizon.b < horizon.r * 0.5f);
+    CHECK(glm::length(SkyAtmosphere::Transmittance(s, 0.0f, glm::normalize(glm::vec3(0.0f, -0.2f, 1.0f)))) == 0.0f);
+    CHECK(SkyAtmosphere::Transmittance(s, 5.0f, glm::vec3(0, 1, 0)).b > zenith.b);
+    s.RayleighScale = 0.0f; s.MieScale = 0.0f; s.OzoneScale = 0.0f;
+    CHECK(glm::length(SkyAtmosphere::Transmittance(s, 0.0f, glm::vec3(0, 1, 0)) - glm::vec3(1.0f)) < 1e-5f);
+
+    // Resolved lighting: a warm, dimmed sun by day; the moon (brightened for the night) after.
+    SkyAtmosphere sky; // no GL until PrepareFrame
+    SkySettings clock;
+    clock.TimeOfDayHours = 12.0f;
+    SkyLighting day = sky.ResolveLighting(clock, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0, 2, 0));
+    CHECK(!day.LightIsMoon && day.LightDir.y > 0.9f && day.NightBoost == 1.0f);
+    CHECK(day.LightRadiance.r > day.LightRadiance.b && day.LightRadiance.r < 5.0f && day.LightRadiance.b > 3.0f);
+    clock.TimeOfDayHours = 0.5f;
+    const float phase = MoonPhase(clock.DayOfYear, clock.TimeOfDayHours, 0.0f);
+    clock.MoonPhaseOffset = 0.5f - phase - std::floor(0.5f - phase); // full moon
+    SkyLighting night = sky.ResolveLighting(clock, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0, 2, 0));
+    CHECK(night.LightIsMoon && night.LightDir.y > 0.2f && night.MoonLitFraction > 0.99f);
+    CHECK(night.NightBoost > 16.0f);
+    CHECK(glm::length(night.LightRadiance) < glm::length(day.LightRadiance));
+    CHECK(night.SunDir.y < 0.0f);
+    clock.MoonEnabled = false;
+    night = sky.ResolveLighting(clock, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0, 2, 0));
+    CHECK(!night.LightIsMoon && glm::length(night.LightRadiance) == 0.0f);
+    // Clock off: the directional light's own aim is the sun.
+    SkySettings authored;
+    authored.TimeOfDayEnabled = false;
+    const glm::vec3 aim = glm::normalize(glm::vec3(-0.3f, -0.8f, -0.5f));
+    const SkyLighting fixed = sky.ResolveLighting(authored, aim, glm::vec3(5.0f), 0.53f, glm::vec3(0.0f));
+    CHECK(glm::dot(fixed.SunDir, -aim) > 0.9999f && glm::dot(fixed.LightDir, -aim) > 0.9999f);
+
+    // Cloud wind at a high frame rate: each frame's step is tiny, and the texture offsets must
+    // still advance steadily. (They once wrapped at a period that wasn't a whole number of tiles
+    // and, with the step lost to rounding, flipped between two layouts every frame.)
+    {
+        SkyAtmosphere windSky; // Tick touches no GL
+        SkySettings w;
+        w.CloudWindSpeed = 8.0f;
+        const float tile = 45.0f; // the weather map's period at CloudScale 1
+        glm::vec2 prev = windSky.Clouds().WeatherOffset();
+        float travelled = 0.0f, worstStep = 0.0f;
+        for (int i = 0; i < 2400; ++i) { // 10 s at 240 fps
+            windSky.Tick(w, 1.0f / 240.0f, false);
+            const glm::vec2 cur = windSky.Clouds().WeatherOffset();
+            glm::vec2 step = cur - prev;
+            step -= glm::round(step / tile) * tile; // wrapping by a whole tile is invisible
+            travelled += glm::length(step);
+            worstStep = std::max(worstStep, glm::length(step));
+            prev = cur;
+        }
+        CHECK(worstStep < 1e-3f);                  // no jumps
+        CHECK(near(travelled, 0.08f, 0.004f));     // 8 m/s for 10 s
+    }
+
+    // Presets change the look but keep the location and quality; the timed ones land where named.
+    SkySettings p;
+    p.LatitudeDegrees = -33.0f;
+    p.CloudQuality = 3;
+    ApplySkyPreset(p, SkyPreset::Overcast);
+    CHECK(p.CloudCoverage > 0.9f && p.LatitudeDegrees == -33.0f && p.CloudQuality == 3);
+    ApplySkyPreset(p, SkyPreset::Sunset);
+    const float sunsetElev = glm::degrees(Elevation(SunDirection(p.TimeOfDayHours, p.DayOfYear, p.LatitudeDegrees, 0.0f)));
+    CHECK(sunsetElev > -0.5f && sunsetElev < 4.0f);
+    ApplySkyPreset(p, SkyPreset::Night);
+    CHECK(MoonIllumination(MoonPhase(p.DayOfYear, p.TimeOfDayHours, p.MoonPhaseOffset)) > 0.99f);
+    CHECK(SunDirection(p.TimeOfDayHours, p.DayOfYear, p.LatitudeDegrees, 0.0f).y < 0.0f);
+    SkySettings untouched = p;
+    ApplySkyPreset(untouched, SkyPreset::Custom);
+    CHECK(untouched == p);
+    for (int i = 0; i < (int)SkyPreset::Count; ++i) CHECK(std::string(SkyPresetName((SkyPreset)i)) != "?");
+
+    // Scene files: every field round-trips, old scenes load the defaults, bad values clamp.
+    World w;
+    w.SkySourceMode = World::SkySource::Atmosphere;
+    w.Sky.CloudCoverage = 0.77f;
+    w.Sky.RayleighTint = glm::vec3(0.5f, 1.0f, 0.625f);
+    w.Sky.CloudQuality = 2;
+    w.Sky.MoonEnabled = false;
+    w.Sky.NightBrightness = 2.5f;
+    w.Sky.TimeOfDayHours = 17.25f;
+    AssetLibrary assets;
+    const std::string saved = SceneSerializer::SaveToString(w, assets);
+    World r;
+    AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(r, assets2, saved));
+    CHECK(r.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(r.Sky == w.Sky);
+    World old;
+    AssetLibrary assets3;
+    CHECK(SceneSerializer::LoadFromString(old, assets3, R"({"formatVersion":4,"skySource":2})"));
+    CHECK(old.SkySourceMode == World::SkySource::Atmosphere && old.Sky == SkySettings{});
+    World clamped;
+    AssetLibrary assets4;
+    CHECK(SceneSerializer::LoadFromString(clamped, assets4,
+        R"({"formatVersion":4,"skySource":9,"sky":{"cloudCoverage":7,"cloudQuality":9,"latitude":-400,"clouds":"yes"}})"));
+    CHECK(clamped.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(clamped.Sky.CloudCoverage == 1.0f && clamped.Sky.CloudQuality == 3 && clamped.Sky.LatitudeDegrees == -90.0f);
+    CHECK(clamped.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
+}
+
+// --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
+// keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
+void TestTextureCacheVariants() {
+    const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
+    {
+        std::ofstream f(src, std::ios::binary);
+        f << "not really a png - only its size and time stamp key the entry";
+    }
+    TextureImportSettings a, b;
+    b.MaxTextureSize = 4096;
+    b.CompressionMode = TextureImportSettings::Compression::HighQuality;
+    TextureCache::Image ia, ib, out;
+    ia.SourceWidth = ia.Width = 2; ia.SourceHeight = ia.Height = 2; ia.Channels = 4; ia.Pixels.assign(16, 7);
+    ib = ia;
+    ib.Pixels.assign(16, 9);
+    TextureCache::Store(src, a, ia);
+    TextureCache::Store(src, b, ib);
+    CHECK(TextureCache::Load(src, a, out) && out.Pixels.size() == 16 && out.Pixels[0] == 7);
+    CHECK(TextureCache::Load(src, b, out) && out.Pixels.size() == 16 && out.Pixels[0] == 9);
+    // The entries land in the project's real Library/Textures: remove exactly the two this test wrote.
+    const std::string pa = TextureCache::EntryPath(src, a), pb = TextureCache::EntryPath(src, b);
+    CHECK(pa != pb);
+    std::error_code ec;
+    CHECK(std::filesystem::remove(std::filesystem::path(pa), ec));
+    CHECK(std::filesystem::remove(std::filesystem::path(pb), ec));
+    std::filesystem::remove(src, ec);
+}
+
+// --- TextureCache keys: pixel-affecting settings change the hash, sampler state doesn't ------
+void TestTextureCacheHash() {
+    TextureImportSettings a;
+    const uint64_t h = TextureCache::HashSettings(a);
+
+    TextureImportSettings b = a; b.AnisoLevel = 16;
+    CHECK(TextureCache::HashSettings(b) == h);
+    b = a; b.FilterMode = TextureImportSettings::Filter::Point;
+    CHECK(TextureCache::HashSettings(b) == h);
+    b = a; b.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
+    CHECK(TextureCache::HashSettings(b) == h);
+
+    b = a; b.MaxTextureSize = 512;
+    CHECK(TextureCache::HashSettings(b) != h);
+    b = a; b.IsSRGB = false;
+    CHECK(TextureCache::HashSettings(b) != h);
+    b = a; b.CompressionMode = TextureImportSettings::Compression::Normal;
+    const uint64_t hc = TextureCache::HashSettings(b);
+    CHECK(hc != h);
+    b.GenerateMipmaps = false; // compressed entries bake their mips, so this matters now
+    CHECK(TextureCache::HashSettings(b) != hc);
+    b = a; b.GenerateMipmaps = false; // uncompressed: mips are generated on the GPU, not cached
+    CHECK(TextureCache::HashSettings(b) == h);
+}
+
+// --- MaterialAsset: wrong-typed JSON must load with defaults, never throw ---------------------
+void TestMaterialRobustness() {
+    const auto path = TempDir() / "bad.mat";
+    const char* cases[] = {
+        R"({"baseColor":"red","metallic":"very","roughness":[1,2],"properties":5})",
+        R"({"baseColor":[1,2],"emissiveColor":null,"renderQueue":"x","opacity":{}})",
+        R"([1,2,3])",
+        R"({"albedoMap":42,"normalMap":{"a":1},"shader":7})",
+    };
+    for (const char* json : cases) {
+        CHECK(AtomicFile::WriteBytes(path, json, true));
+        bool threw = false;
+        std::shared_ptr<MaterialAsset> m;
+        try { m = MaterialAsset::Load(path.string(), nullptr); } catch (...) { threw = true; }
+        CHECK(!threw);
+    }
+    CHECK(AtomicFile::WriteBytes(path, "{ this is not json", true));
+    bool threw = false;
+    try { (void)MaterialAsset::Load(path.string(), nullptr); } catch (...) { threw = true; }
+    CHECK(!threw);
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+
+    // #208 - a material follows its shader by GUID when the .shader is renamed.
+    const auto dir = TempDir() / "shaderguid";
+    std::filesystem::remove_all(dir, ec);
+    std::filesystem::create_directories(dir, ec);
+    const auto oldShader = dir / "Old.shader", newShader = dir / "New.shader", mat = dir / "m.mat";
+    CHECK(AtomicFile::WriteBytes(oldShader, "Vertex { engine://ModelVertex.glsl }", true));
+    // A temp folder is outside the project, where EnsureGuid won't write .meta files: provide one.
+    const AssetGuid fresh = AssetGuid::Generate();
+    CHECK(AtomicFile::WriteBytes(dir / "Old.shader.meta", json({{"guid", fresh.ToString()}, {"type", "shader"}}).dump(), true));
+    const AssetGuid g = AssetDatabase::EnsureGuid(oldShader.string());
+    CHECK(g == fresh);
+    CHECK(g.IsValid());
+    const json mj = {{"matVersion", 2}, {"shader", oldShader.string()}, {"shaderGuid", g.ToString()}};
+    CHECK(AtomicFile::WriteBytes(mat, mj.dump(), true));
+    std::filesystem::rename(oldShader, newShader, ec);
+    AssetDatabase::NotifyMoved(oldShader.string(), newShader.string());
+    auto moved = MaterialAsset::Load(mat.string(), nullptr);
+    CHECK(moved && std::filesystem::path(moved->ShaderPath) == newShader);
+    // No GUID (or an unknown one) keeps the stored path.
+    CHECK(AtomicFile::WriteBytes(mat, json({{"matVersion", 2}, {"shader", "missing.shader"}}).dump(), true));
+    auto kept = MaterialAsset::Load(mat.string(), nullptr);
+    CHECK(kept && kept->ShaderPath == "missing.shader");
+    std::filesystem::remove_all(dir, ec);
+}
+
+} // namespace
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
     tests.push_back({"GI: volume lookup, bake file, weights follow circuits", GIVolumeLookup});
@@ -851,4 +1651,16 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TAA mode + rain wetness round-trip; old scenes keep MSAA/FXAA and stay dry; jitter un-jitters", TaaAndWetnessRoundTrip});
     tests.push_back({"Fur: shell count follows the hair's size on screen", FurShellLod});
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
+    tests.push_back({"Materials: built-in property table - default keys, v1/v2 round-trip, accessors and bind resolver", MaterialBuiltinTable});
+    tests.push_back({"LodGroup", TestLodGroup});
+    tests.push_back({"LodImpostor", TestLodImpostor});
+    tests.push_back({"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch});
+    tests.push_back({"LodFadeCompletes", TestLodFadeCompletes});
+    tests.push_back({"PhysicalSky", TestPhysicalSky});
+    tests.push_back({"MaterialRobustness", TestMaterialRobustness});
+    tests.push_back({"MaterialTextureDefaults", TestMaterialTextureDefaults});
+    tests.push_back({"TextureCacheVariants", TestTextureCacheVariants});
+    tests.push_back({"TextureCacheHash", TestTextureCacheHash});
+    tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
+    tests.push_back({"CameraRoll", TestCameraRoll});
 }
