@@ -3,9 +3,11 @@
 # moon, dim and flickering ceiling lights, doors that open with Interact (E), and the player in black classic pants,
 # classic shoes and a balaclava with the AKS-74U and Remington 870.
 #
-#   python tools/scenes/build_apartment_hallway.py [<repo>]
+#   python tools/scenes/build_apartment_hallway.py [<repo>] [--force]
 #
-# Writes tests/scenes/Apartment Hallway.json (+ .meta, its guid kept across rebuilds). Render settings and the
+# Writes tests/scenes/Apartment Hallway.json (+ .meta, its guid kept across rebuilds). The committed scene has hand
+# edits (the 301 test room) and dress_corridor.py / dress_apartments.py decals this script doesn't make, so it refuses
+# to overwrite an existing file unless --force is given. Render settings and the
 # player's rig come from tests/scenes/Arena.json.
 #
 # See-through walls: every wall face is a single-sided plane (Plane_1m) facing into its own room, so from inside the
@@ -111,7 +113,7 @@ class Hallway(k.Scene):
     def __init__(self, base, repo):
         super().__init__(base)
         self.repo = repo
-        self.idx = k.model_index(repo, os.environ.get('TARTARUS_EXE'))  # default: build/Release
+        self.idx = k.model_index(repo)  # TARTARUS_EXE, else build/Release, else b/Release
         self.plane = ref(repo, PLANE)
         self.mats = self._materials()
         self.rooms = {}        # 'Apartment 301/Bedroom' -> world rect (x0, z0, x1, z1)
@@ -583,7 +585,7 @@ def build(repo):
     s.empty('Moon', -1, (0, 30, 0), pitch=-25.0, yaw=-120.0, Light={
         'Type': 'Directional', 'Color': [0.78, 0.86, 1.0], 'Intensity': 0.8, 'Range': 200.0, 'Spot Angle': 35.0,
         'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'Shadow Normal Bias': 1.0,
-        'Shadow Softness': 0.05, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
+        'Shadow Softness': 0.05, 'ColorTempK': 0.0,
         'Culling Mask': -1})
     s.plan()
     # centred on the origin (the editor's default and smoke-test cameras orbit it); the plan stays in corridor coordinates
@@ -607,9 +609,11 @@ def write_meta(path):
 
 
 def main():
-    repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..'))
-    s = build(repo)
+    args = k.builder_args('Apartment Hallway', 'its hand edits and the dress_corridor.py / dress_apartments.py decals')
+    repo = args.repo
     out = os.path.join(repo, 'tests', 'scenes', 'Apartment Hallway.json')
+    k.refuse_overwrite(out, args, 'its hand edits and the dress_corridor.py / dress_apartments.py decals')
+    s = build(repo)
     s.write(out)
     write_meta(out)
     print(f'{out}: {len(s.boxes)} boxes, {len(s.models)} models, {len(s.empties)} empties; corridor {L:.1f} m; '

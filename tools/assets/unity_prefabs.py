@@ -826,8 +826,8 @@ class Converter:
             e['Light'] = {'Angular Size': 0.53, 'Cast Shadows': sh != 0, 'Color': r6([col.get('r', 1), col.get('g', 1), col.get('b', 1)]),
                           'ColorTempK': 0.0, 'Culling Mask': -1, 'Intensity': round(float(l.get('m_Intensity', 1.0)) * k, 4),
                           'Range': round(float(l.get('m_Range', 10.0)), 4), 'Shadow Bias': 1.0, 'Shadow Near Plane': 0.05,
-                          'Shadow Normal Bias': 1.0, 'Shadow Resolution': 'Follow global', 'Shadow Softness': 1.0,
-                          'Shadow Update Mode': 'Dynamic', 'Spot Angle': round(float(l.get('m_SpotAngle', 30.0)) / 2, 4),
+                          'Shadow Normal Bias': 1.0, 'Shadow Softness': 1.0,
+                          'Spot Angle': round(float(l.get('m_SpotAngle', 30.0)) / 2, 4),
                           'Type': kind}
             # Unity lights shine along +Z, the engine's along -Z: turn the light 180 degrees about its own Y (q * Ry180),
             # or every street lamp, spot and the moon lights the sky instead of the ground.

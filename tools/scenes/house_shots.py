@@ -17,6 +17,8 @@ import os
 import subprocess
 import sys
 
+import scene_kit
+
 from PIL import Image, ImageDraw
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -93,36 +95,50 @@ def safe(s):
     return ''.join(ch if ch.isalnum() else '_' for ch in s)[:48]
 
 
-def run_engine(cams, out_dir, lights, scene, only=None):
-    # TARTARUS_EXE picks another build (a worktree's); the repo's own Release build otherwise.
-    exe = os.environ.get('TARTARUS_EXE') or os.path.join(REPO, 'b', 'Release', 'TartarusEngine.exe')
-    prefs = os.path.expandvars(r'%LOCALAPPDATA%\TartarusEngine\editor_prefs.json')
-    os.makedirs(out_dir, exist_ok=True)  # before the prefs change, so a failure here leaves them untouched
-    backup = None
-    if os.path.exists(prefs):
-        with open(prefs, encoding='utf-8') as f:
-            backup = f.read()
-        d = json.loads(backup)
-        d.update({'viewShowGizmo': False, 'viewShowGrid': False, 'showColliders': False, 'showLightGizmos': False,
-                  'showProbeGizmos': False, 'showDecalGizmos': False, 'showVolumeGizmos': False, 'shadingMode': 0,
-                  'showBodyDebug': False, 'sceneShowStats': False})
-        with open(prefs, 'w', encoding='utf-8') as f:
-            json.dump(d, f, indent=4)
-    env = dict(os.environ, TARTARUS_HIDDEN='1', TARTARUS_MUTE='1',
+# The engine runs with its user folder under build/shot_profile: a copy of the real editor prefs with gizmos, grid,
+# stats and debug views off and Shaded on. The real prefs are never written; the folder's caches stay warm across runs.
+SHOT_PREFS = {'viewShowGizmo': False, 'viewShowGrid': False, 'showColliders': False, 'showLightGizmos': False,
+              'showProbeGizmos': False, 'showDecalGizmos': False, 'showVolumeGizmos': False, 'shadingMode': 0,
+              'showBodyDebug': False, 'sceneShowStats': False}
+
+
+def shot_profile():
+    base = os.path.join(REPO, 'build', 'shot_profile')
+    real = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'TartarusEngine', 'editor_prefs.json')
+    d = {}
+    if os.path.exists(real):
+        with open(real, encoding='utf-8') as f:
+            d = json.load(f)
+    d.update(SHOT_PREFS)
+    os.makedirs(os.path.join(base, 'TartarusEngine'), exist_ok=True)
+    with open(os.path.join(base, 'TartarusEngine', 'editor_prefs.json'), 'w', encoding='utf-8') as f:
+        json.dump(d, f, indent=4)
+    return base
+
+
+def run_engine(cams, out_dir, lights, scene, only=None, check=True):
+    """--smoke-shots of <scene> from each camera. lights: True every circuit on, False as the switches start, None
+    untouched; only: just these ';'-separated circuits on (';' alone = every circuit off). A failed run exits the
+    script with the engine's output unless check=False; returns the exit code."""
+    exe = scene_kit.find_exe(REPO)
+    os.makedirs(out_dir, exist_ok=True)
+    env = dict(os.environ, LOCALAPPDATA=shot_profile(), TARTARUS_HIDDEN='1', TARTARUS_MUTE='1',
                TARTARUS_SHOT_CAMERAS=';'.join(f'{n}:{p[0]:.3f},{p[1]:.3f},{p[2]:.3f},{yaw:.2f},{pitch:.2f}'
                                               for n, p, yaw, pitch in cams))
     if lights is not None:
         env['TARTARUS_LIGHTS_ON'] = '1' if lights else '0'
     if only:
         env['TARTARUS_LIGHTS_ONLY'] = only
-    try:
-        r = subprocess.run([exe, '--smoke-test', os.path.join(REPO, 'project', 'scenes', scene), '--smoke-shots', out_dir],
-                           cwd=REPO, env=env, capture_output=True, text=True, timeout=3600)
-        return r.returncode
-    finally:
-        if backup is not None:
-            with open(prefs, 'w', encoding='utf-8') as f:
-                f.write(backup)
+    r = subprocess.run([exe, '--smoke-test', os.path.join(REPO, 'project', 'scenes', scene), '--smoke-shots', out_dir],
+                       cwd=REPO, env=env, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=3600)
+    if r.returncode:
+        causes = [ln.strip() for ln in r.stdout.splitlines() if 'cause:' in ln or ln.startswith('[error]')]
+        msg = f'engine exit {r.returncode} ({scene}): ' + ('; '.join(dict.fromkeys(causes)) or
+                                                           r.stdout[-2000:] + r.stderr[-1000:])
+        if check:
+            sys.exit(msg)
+        print('warning: ' + msg, file=sys.stderr)   # the caller checks each shot itself
+    return r.returncode
 
 
 def sheets(out_dir, names, stem, size, per=30, cols=6):
@@ -204,7 +220,6 @@ def main():
     for ang in sorted({c[0].rsplit('_', 1)[1] for c in cams}):     # one set of sheets per angle
         sub = os.path.join(out, ang)
         names = [c[0] for c in cams if c[0].rsplit('_', 1)[1] == ang]
-        made += [m.replace(out, sub) for m in []]
         made += sheets_to(out, sub, names, os.path.splitext(scene)[0], size)
     print(f'engine exit {rc}; {len(made)} sheets')
     for m in made:
