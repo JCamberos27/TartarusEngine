@@ -19,11 +19,11 @@ box = lab.ground_box
 
 # The run: the player starts at the origin facing +Z (WeaponLab's spawn); everything off to the side of a 6 m wide lane.
 box('Ledge 1m', (-6.0, 0.5, 8.0), (4.0, 1.0, 4.0))
-# Stairs (0.25 m risers, 0.35 m treads) up to a 2.5 m platform.
+# Stairs (0.25 m risers, 0.35 m treads) up to a 2.5 m platform, flush with the last tread (it ends at z 7.325).
 for i in range(10):
     h = 0.25 * (i + 1)
     box('Stair %02d' % (i + 1), (8.0, h / 2.0, 4.0 + 0.35 * i), (2.0, h, 0.35))
-box('Platform 2.5m', (8.0, 1.25, 9.5), (4.0, 2.5, 4.0))
+box('Platform 2.5m', (8.0, 1.25, 4.0 + 0.35 * 10 + 2.0 - 0.35 / 2.0), (4.0, 2.5, 4.0))
 
 # A bare training dummy (stands, takes hits) - --npc-test drives it.
 lab.empty('Dummy', pos=(-3.0, 0.0, 14.0), rotation=(0.0, 1.0, 0.0, 0.0), **{'Dummy Spawn': {'Roam': True}})

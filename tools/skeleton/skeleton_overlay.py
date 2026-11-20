@@ -7,7 +7,11 @@
 # Writes <out prefix>side.png and <out prefix>front.png.
 import bpy, sys, math
 from mathutils import Vector
-qdir, sdir, out = sys.argv[sys.argv.index('--') + 1:]
+_args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+if len(_args) != 3:
+    sys.exit('usage: blender -b --factory-startup --python tools/skeleton/skeleton_overlay.py -- '
+             '<Quantum dir> <RealisticSkeleton dir> <out prefix>')
+qdir, sdir, out = _args
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
 def load(path, color, alpha):

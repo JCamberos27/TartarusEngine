@@ -87,7 +87,11 @@ void EditorShot::DrawPreviewWindows() {
         static RecoilAsset curvePreview;
         static bool loaded = false;
         if (!loaded) {
-            RecoilAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.recoil"), curvePreview);
+            std::string error;
+            if (!RecoilAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.recoil"), curvePreview, &error)) {
+                std::cerr << "[EditorShot] FAILED: the recoil preview did not load: " << error << std::endl;
+                ++m_Failures;
+            }
             loaded = true;
         }
         ImGui::SetNextWindowPos(ImVec2(600, 120), ImGuiCond_Always);
@@ -123,7 +127,13 @@ void EditorShot::AfterFrame(Window& window, bool& exitApproved) {
             std::vector<unsigned char> flipped = FrameCapture::GrabTopDown(0, w, h);
             for (size_t i = 3; i < flipped.size(); i += 4) flipped[i] = 255;
             const std::string out = FrameCapture::WritePngTo(m_Dir, m_Views[step], w, h, flipped);
-            if (!out.empty()) std::cout << "[EditorShot] " << out << std::endl;
+            if (!out.empty()) {
+                std::cout << "[EditorShot] " << out << std::endl;
+                ++m_Written;
+            } else {
+                std::cerr << "[EditorShot] FAILED: couldn't write " << m_Views[step] << " to " << m_Dir << std::endl;
+                ++m_Failures;
+            }
         }
         if (step + 1 >= (int)std::size(m_Views)) { exitApproved = true; window.SetShouldClose(true); }
     }

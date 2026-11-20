@@ -1,6 +1,6 @@
 # OfficeAndPoliceStation: Unity import report
 
-Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceStation`
+Source: `Assets/OfficeAndPoliceStation`
 
 ## Counts
 

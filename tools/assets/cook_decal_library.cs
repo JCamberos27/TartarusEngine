@@ -14,7 +14,8 @@ public class TartarusDecalOut {
 }
 
 public static class TartarusDecalCook {
-    public static double MaskFloor = 0.03, PeelLo = 0.15, PeelHi = 0.40, Vignette = 0.06;
+    // Set by cook_decal_library.ps1 before any cook (the values and why they are what they are live there).
+    public static double MaskFloor, PeelLo, PeelHi, Vignette;
 
     static double Smooth(double e0, double e1, double x) {
         double t = (x - e0) / (e1 - e0);
@@ -113,9 +114,10 @@ public static class TartarusDecalCook {
         int pad = ri + 1, len = n + 2 * pad;
         var line = new float[len];
         var pre = new double[len + 1];
-        var a = new float[src.Length];
-        Array.Copy(src, a, src.Length);
-        var b = dst;
+        // Six passes ping-pong between dst and a scratch array, so starting in dst ends in dst (no copy back).
+        var a = dst;
+        if (!ReferenceEquals(src, dst)) Array.Copy(src, dst, src.Length);
+        var b = new float[src.Length];
         for (int axis = 0; axis < 2; axis++) {
             for (int pass = 0; pass < 3; pass++) {
                 for (int k = 0; k < n; k++) {
@@ -134,8 +136,6 @@ public static class TartarusDecalCook {
                 var t2 = a; a = b; b = t2;
             }
         }
-        // 6 passes: the result is back in the array we started writing into first only if that is dst.
-        if (!ReferenceEquals(a, dst)) Array.Copy(a, dst, a.Length);
     }
 
     // Writes <stem>_N.png (tangent-space normal, OpenGL green-up, RGB = n * 0.5 + 0.5, opaque) and

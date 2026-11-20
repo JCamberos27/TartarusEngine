@@ -86,10 +86,15 @@ def main():
         try:
             px, w, h = load(job['src'])
             # Blender's pixel rows run bottom-up; so do the rows it saves, so nothing to flip.
+            sized = {}   # srgb flag -> the source halved down to the size cap, worked out once per job
             for out in job['outs']:
-                p = px
-                while max(p.shape[0], p.shape[1]) > job.get('max', 2048):
-                    p = halve(p, out.get('srgb', False))
+                srgb = out.get('srgb', False)
+                if srgb not in sized:
+                    p = px
+                    while max(p.shape[0], p.shape[1]) > job.get('max', 2048):
+                        p = halve(p, srgb)
+                    sized[srgb] = p
+                p = sized[srgb]
                 save(build(p, out['expr']), out['path'], out.get('alpha', False))
                 done += 1
         except Exception as e:  # report and carry on: unity_import.py lists what didn't cook

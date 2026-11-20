@@ -125,5 +125,5 @@ def apply(x, key, layer, loop=False):
         y = gate_pre_onset(y, rule)
     if rule.get("tail_s") and not loop:
         y = shape_tail(y, float(rule["tail_s"]))
-    y = abuild.finish(y, layer, target=before, trim_edges=False, loop=loop)
+    y = abuild.finish(y, layer, target=before, trim_edges=False, loop=loop, expand=False)   # the build already expanded its floor
     return y, rule["name"]

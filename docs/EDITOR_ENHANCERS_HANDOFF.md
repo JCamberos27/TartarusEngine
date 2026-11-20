@@ -34,16 +34,7 @@ Some of this already existed before the project, and the plan extends that code 
 - vTabs is a tab strip inside the Inspector and Asset Browser panels.
 - Keeping play-mode changes is opt-in per component.
 
-**How the user works:**
-
-- They do all visual testing themselves. Never drive the editor with computer-use.
-- After each phase:
-  1. Build.
-  2. Run the unit tests and the smoke test.
-  3. Commit.
-  4. Launch the editor with `run-editor.cmd`.
-  5. Give the user a short test checklist.
-- If the editor is running and blocks a build, close it with `taskkill /IM TartarusEngine.exe /F`. No need to ask.
+**After each phase:** build, run the unit tests and the smoke test, commit, then check it in the editor (`run-editor.cmd`).
 
 ## 2. Build, test and repo conventions
 
@@ -68,11 +59,6 @@ cmake --build build --config Release --target TartarusEngine -- /m /v:minimal
 **Side effect of test runs:** they rewrite line endings in `project/*.meta`. Run `git checkout -- project/` afterwards, but keep the untracked `project/editor_folders.json`.
 
 **Line endings:** the repo stores LF and the working copy is CRLF. Normalize every file you edit to CRLF; mixed endings showed up after Python edits.
-
-**Editing tips:**
-
-- Don't write Python heredocs containing backslashes through bash; one put a literal NUL into `SceneSerializer.cpp`.
-- For large inserts, write the snippet with the Write tool into the scratchpad, then apply it.
 
 **Host/module split:**
 
@@ -116,7 +102,7 @@ The user tested Phase 2 in the editor. No bugs were reported before handoff.
 
 ## 4. Remaining work
 
-The original plan file is `C:\Users\Jacob\plans\https-assetstore-unity-com-packages-tool-swift-popcorn.md` (310 lines). It is local to the user's machine; everything needed from it is restated below.
+The original plan was a local plan file (not in the repo); everything needed from it is restated below.
 
 ### Phase 3: vInspector (split into 3a UI, then 3b attributes)
 

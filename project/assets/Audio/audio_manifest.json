@@ -17850,7 +17850,7 @@
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
      "start": 0.064,
      "end": 1.705,
-     "pitch_st": 0.0
+     "pitch_st": 1.5
     }
    ],
    "anchor_ms": 0.0,
@@ -26894,25 +26894,25 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -2.69,
-   "length_s": 0.167,
-   "peak_ms": 22.8,
+   "true_peak_dbtp": -2.68,
+   "length_s": 0.169,
+   "peak_ms": 33.8,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/R08/S_R08_Reload_Empty.WAV",
      "start": 2.69,
      "end": 2.88,
-     "pitch_st": 2.2
+     "pitch_st": 2.0
     }
    ],
-   "anchor_ms": 20.5,
+   "anchor_ms": 20.7,
    "gun": "revolver38",
    "element": "hammer_cock",
    "variant": 2,
-   "source": "S_R08_Reload_Empty.WAV[2.69-2.88]@2.7745 st=2.2",
-   "mix_db": -17.23,
+   "source": "S_R08_Reload_Empty.WAV[2.69-2.88]@2.7745 st=2.0",
    "eq": 1,
-   "eq_rule": "gun handling"
+   "eq_rule": "gun handling",
+   "mix_db": -17.23
   },
   {
    "file": "Weapons/Revolver38/hammer_decock_1.wav",

@@ -128,7 +128,7 @@
  "ssaoIntensity": 1.0,
  "ssaoRadius": 0.5,
  "tonemapOperator": 1,
- "_comment": "The parts of the old Sandbox scene the generators still copy (scenes/Sandbox.json was replaced by the Master Scene): its render settings, and the Player Spawn (with the clothed Player Body and its weapons), Sun and Dummy Settings subtrees, ids unchanged. Read by gen_arena_scene.py, gen_blood_scene.py, gen_npc_soldier.py, apartment_kit.py and import_model_library.py.",
+ "_comment": "The parts of the old Sandbox scene the generators still copy (scenes/Sandbox.json was replaced by the Master Scene): its render settings, and the Player Spawn (with the clothed Player Body and its weapons), Sun and Dummy Settings subtrees, ids unchanged. Read by proto_scene.py (gen_arena_scene.py, gen_blood_scene.py, gen_perf_stress_scene.py), import_model_library.py and unity_prefabs.py.",
  "boxes": [],
  "empties": [
   {

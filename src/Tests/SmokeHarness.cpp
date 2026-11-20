@@ -306,7 +306,9 @@ void SmokeHarness::CinematicFrame() {
         --m_FramesRendered; // not before everything has streamed in
     } else if (r >= 0 && fb.IsValid()) {
         if (r == 0) Cinematic::Start(m_Opt.smokeShotsDir, fb.Width(), fb.Height());
-        Cinematic::Write(FrameCapture::GrabTopDown(fb.Handle(), fb.Width(), fb.Height()));
+        static std::vector<unsigned char> frame; // reused: a full frame per video frame (main thread only)
+        FrameCapture::GrabTopDown(fb.Handle(), fb.Width(), fb.Height(), frame);
+        Cinematic::Write(frame);
         if (r >= (int)(Cinematic::Duration() * 60.0f)) Cinematic::Finish();
     }
     const float next = std::max(0, r + 1) / 60.0f;

@@ -43,9 +43,20 @@ _REPORT_LINE = re.compile(
 _FAILED_LINE = re.compile(r"^\[ModelReport\] FAILED (?P<path>.+)$")
 
 
+# Cache keys never hold a user folder (the cache is tracked in a public repo): repo files are repo-relative,
+# export files are "<bundle>/..." (relative to common.EXPORT_ROOT); anything else stays absolute.
+_ROOTS = (("", common.REPO), ("<bundle>/", common.EXPORT_ROOT))
+
+
 def _norm(path) -> str:
-    """A file path as the cache stores it: absolute, forward slashes, case as given."""
-    return Path(os.path.abspath(str(path))).as_posix()
+    """A file path as the cache stores it: forward slashes, case as given, relative to the repo or the export root."""
+    p = Path(os.path.abspath(str(path)))
+    for tag, root in _ROOTS:
+        try:
+            return tag + p.relative_to(os.path.abspath(str(root))).as_posix()
+        except ValueError:
+            continue
+    return p.as_posix()
 
 
 def _key(path) -> str:
@@ -115,9 +126,9 @@ def fbx_material_names(fbx_paths, cache: Path | None = FBX_MATERIALS_CACHE, exe:
                        runner=run_model_report) -> dict[Path, list[str] | None]:
     """{fbx path: material names the engine sees, in first-use order} for each given FBX (None = failed to import).
 
-    Every file not already in the cache (keyed by absolute path, invalidated by size + mtime) is reported by one
-    batched --model-report run (one process per ~30000 characters of paths); results are merged back into the
-    cache JSON. `runner(inputs, exe) -> report text` is injectable for tests."""
+    Every file not already in the cache (keyed by repo- or export-relative path, see _norm; invalidated by size +
+    mtime) is reported by one batched --model-report run (one process per ~30000 characters of paths); results are
+    merged back into the cache JSON. `runner(inputs, exe) -> report text` is injectable for tests."""
     paths = [Path(p) for p in fbx_paths]
     store: dict = {}
     if cache is not None and cache.exists():
@@ -145,8 +156,9 @@ def fbx_material_names(fbx_paths, cache: Path | None = FBX_MATERIALS_CACHE, exe:
             index[_key(p)] = _norm(p)
         if cache is not None:
             store["note"] = ("FBX material names as TartarusEngine --model-report sees them (the materialRemap keys); "
-                             "written by tools/quantum/casual_bundle/metas.py fbx_material_names(). Keyed by absolute "
-                             "path; stamp = [size, mtime_ns] - a changed file is re-reported.")
+                             "written by tools/quantum/casual_bundle/metas.py fbx_material_names(). Keyed by "
+                             "repo-relative path (<bundle>/ = the UE export root); stamp = [size, mtime_ns] - a "
+                             "changed file is re-reported.")
             store["files"] = dict(sorted(entries.items()))
             common.write_json(cache, store)
     return {p: entry(p)["materials"] for p in paths}
