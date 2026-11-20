@@ -1268,7 +1268,6 @@ void TestCameraFrustumValidation() {
     CHECK(cams == 1);
 }
 
-// --- #202 / #122: a scene survives save -> load -> save unchanged ---------------------------
 // The serializer is the one place where a silent mistake costs authored work: a field dropped on
 // load, an unstable entity order, a component written but not read. None of that shows up as a
 // The physical sky (World::SkySource::Atmosphere): the clock's sun/moon/star placement, the
