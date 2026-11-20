@@ -1862,12 +1862,6 @@ void TestTextureCacheVariants() {
         std::ofstream f(src, std::ios::binary);
         f << "not really a png - only its size and time stamp key the entry";
     }
-    // The entries land in the project's real Library/Textures: remove the ones this test writes (new or
-    // rewritten since it started - an earlier run's leftovers have the same names).
-    namespace fs = std::filesystem;
-    const fs::path cacheDir = fs::u8path(ProjectPaths::Resolve("Library/Textures"));
-    const auto started = fs::file_time_type::clock::now() - std::chrono::seconds(2);
-    std::error_code dirEc;
     TextureImportSettings a, b;
     b.MaxTextureSize = 4096;
     b.CompressionMode = TextureImportSettings::Compression::HighQuality;
@@ -1879,13 +1873,13 @@ void TestTextureCacheVariants() {
     TextureCache::Store(src, b, ib);
     CHECK(TextureCache::Load(src, a, out) && out.Pixels.size() == 16 && out.Pixels[0] == 7);
     CHECK(TextureCache::Load(src, b, out) && out.Pixels.size() == 16 && out.Pixels[0] == 9);
+    // The entries land in the project's real Library/Textures: remove exactly the two this test wrote.
+    const std::string pa = TextureCache::EntryPath(src, a), pb = TextureCache::EntryPath(src, b);
+    CHECK(pa != pb);
     std::error_code ec;
+    CHECK(std::filesystem::remove(std::filesystem::path(pa), ec));
+    CHECK(std::filesystem::remove(std::filesystem::path(pb), ec));
     std::filesystem::remove(src, ec);
-    std::vector<fs::path> written;
-    for (const auto& e : fs::directory_iterator(cacheDir, dirEc))
-        if (e.is_regular_file(ec) && e.last_write_time(ec) >= started) written.push_back(e.path());
-    for (const auto& p : written) fs::remove(p, ec);
-    CHECK(written.size() == 2); // the two variants, and nothing left behind
 }
 
 // --- TextureCache keys: pixel-affecting settings change the hash, sampler state doesn't ------
