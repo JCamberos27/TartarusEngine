@@ -1307,8 +1307,16 @@ private:
     // changes only on an explicit Save/Save As. On launch, a recovery file newer than the scene
     // file raises a Restore/Discard modal (m_RecoveryPromptPending, drawn by DrawRecoveryPrompt).
     static std::string RecoveryPathFor(const std::string& scenePath);
-    bool WriteRecoverySnapshot(const World& world, const AssetLibrary& assets); // true: written (the timer plays Autosave)
+    // true: written, or (background = true) read and queued for m_RecoveryWrite (the timer plays Autosave).
+    bool WriteRecoverySnapshot(const World& world, const AssetLibrary& assets, bool background = false);
     void ClearRecoverySnapshot(); // deletes the recovery file for m_CurrentScenePath if present; silent
+    // The auto-save timer's write: the scene is read on the UI thread, formatted and written here
+    // (a Forest-size scene's text + write was a ~5-minutely hitch). Anything else that touches the
+    // recovery file waits for it first (WaitRecoveryWrite), so a late write can't revive a snapshot
+    // that a Save just cleared.
+    std::future<bool> m_RecoveryWrite;
+    void WaitRecoveryWrite();
+    void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;

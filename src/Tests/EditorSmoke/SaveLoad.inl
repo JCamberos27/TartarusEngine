@@ -13,6 +13,10 @@ struct EditorSmokeAccess_SaveLoad {
     static std::string Title(EditorLayer& e) { return e.SceneTitle(); }
     static bool SwitchPrompt(EditorLayer& e) { return e.m_ScenePromptPending; }
     static void Open(EditorLayer& e, World& w, AssetLibrary& a, const std::string& path) { e.RequestOpenScene(w, a, path); }
+    // The auto-save timer fires on the next Draw.
+    static void ForceAutoSave(EditorLayer& e) { e.m_AutoSaveTimer = 1.0e9f; }
+    static bool RecoveryWritePending(EditorLayer& e) { return e.m_RecoveryWrite.valid(); }
+    static std::string RecoveryPath(EditorLayer& e) { return EditorLayer::RecoveryPathFor(e.m_CurrentScenePath); }
 };
 namespace {
 namespace smoke_saveload {
@@ -97,6 +101,34 @@ void RegisterSaveLoadTests() {
         Expect("no undo history after the open", [](Ctx& c) {
             return X::UndoDepth(c.E) == 0 ? std::string() : "history: " + EditorSmokeAccess_PlayMode::UndoLabels(c.E);
         }),
+    });
+
+    // The timer's recovery snapshot is read on the UI thread and written on a worker; a Save right
+    // after it must still leave no snapshot behind (it waits for the write before clearing it).
+    Add("saveload: the auto-save timer writes the recovery snapshot in the background; a Save right after clears it", Cat({
+        {FreshScene(),
+         Do("save first, auto-save on", [](Ctx& c) {
+             c.E.SaveScene(c.W, c.A);
+             g_Dump = EditorSettings::Get().AutoSaveEnabled ? "1" : "0";
+             EditorSettings::Get().AutoSaveEnabled = true;
+             std::error_code ec; fs::remove(fs::u8path(SL::RecoveryPath(c.E)), ec);
+         }), Wait(3)},
+        {Rename("Alpha", "Alpha Autosaved"), Wait(3),
+         ExpectTrue("dirty after the edit", [](Ctx& c) { return X::Dirty(c.E); }),
+         Do("let the timer fire", [](Ctx& c) { SL::ForceAutoSave(c.E); }), Wait(1),
+         Until("the snapshot is written and the write is collected", [](Ctx& c) {
+             return !SL::RecoveryWritePending(c.E) && fs::exists(fs::u8path(SL::RecoveryPath(c.E)));
+         }, 600),
+         ExpectTrue("it holds the edit", [](Ctx& c) { return Contains(ReadFileText(SL::RecoveryPath(c.E)), "Alpha Autosaved"); }),
+         ExpectTrue("still dirty: the snapshot never stands in for a save", [](Ctx& c) { return X::Dirty(c.E); }),
+         Rename("Alpha Autosaved", "Alpha Autosaved 2"), Wait(3),
+         Do("let the timer fire again", [](Ctx& c) { SL::ForceAutoSave(c.E); }), Wait(1),
+         Do("save while that write may still run", [](Ctx& c) { c.E.SaveScene(c.W, c.A); }), Wait(3),
+         ExpectTrue("clean", [](Ctx& c) { return !X::Dirty(c.E); }),
+         ExpectTrue("no recovery snapshot left behind", [](Ctx& c) { return !fs::exists(fs::u8path(SL::RecoveryPath(c.E))); })},
+    }), [](Ctx& c) {
+        EditorSettings::Get().AutoSaveEnabled = g_Dump != "0";
+        std::error_code ec; fs::remove(fs::u8path(SL::RecoveryPath(c.E)), ec);
     });
 
     Add("saveload: undo back to the saved state clears the dirty flag; redo sets it again", {
