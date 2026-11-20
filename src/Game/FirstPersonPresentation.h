@@ -436,6 +436,8 @@ private:
     std::shared_ptr<Model> m_WorldWeaponModel; // the world copy's own model with a hand anchor (null: it shares the first-person one)
     void PoseWorldWeapon(World& world, const glm::mat4* holdingHand);
     bool CarriedBonePoses(std::vector<glm::mat4>& out) const;
+    // CarriedHeld from carried bone poses already taken (CarriedBonePoses).
+    bool CarriedHeldFrom(const std::vector<glm::mat4>& bones, std::vector<float>& held, float* heldGap = nullptr) const;
     // The first-person clips' free hand (the raw "arms" rig) in the weapon model's space, through where the gun sits.
     bool ClipHandInWeapon(glm::mat4& out) const;
     glm::mat4 m_ArmsWorld{1.0f}, m_WeaponWorld{1.0f}, m_View{1.0f}; // PlaceRigs': the arms entity's pose and the camera's view
