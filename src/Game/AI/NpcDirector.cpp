@@ -47,7 +47,7 @@ constexpr float kTravelTurnRate = 140.0f; // degrees/s the travel direction may 
 // takes (npcloco `walk left`: 2.40 jumps a second cruising against 2.30). Only for a body on motion matching (a body in its bind
 // pose never turns). Measured on npcloco: released within 66 deg (the Turn Threshold) or 60, every leg passes; at 50 walk back's
 // pose step p99 is 22.9 deg, at 30 walk forward and left jump 2.40/s, at 10 go home's turn slides a foot 21 cm (on the old slide meter).
-// The spot turn's own match is still poor (a jog take's standing frame): the handoff's Phase 5 open item 1.
+// The spot turn's own match is still poor (a jog take's standing frame): the handoff's open issue "The dummies' spot turn".
 constexpr float kTurnFirstOver = 90.0f, kTurnFirstMost = 2.0f; // degrees, s
 constexpr float kTurnFirstFrom = 0.3f; // m/s: a start is from below this
 
