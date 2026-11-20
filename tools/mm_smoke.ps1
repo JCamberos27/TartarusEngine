@@ -2,13 +2,13 @@
 #
 #   powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 [-Quick | -Full] [scenario ...] [-Runs N] [-PerfBench <scene.json>]
 #       [-TraceDir <dir>] [-UnitFilter <filter>] [-AllowErrors <regex>] [-SkipBuild] [-SkipUnit] [-SkipSmoke] [-Sound]
-#       [-TimeoutMinutes N] [-Legs <names>] [-Exe <path>] [-LogDir <dir>] [-Parallel N]
+#       [-TimeoutMinutes N] [-Legs <names>] [-Exe <path>] [-LogDir <dir>] [-Parallel N] [-Show]
 #
 # Presets (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration"):
 #   -Quick  unit, mmplayer, mmstress (~3-4 min): the check before committing motion matching work. Scenarios named after it
 #           are added - `-Quick mmview mmdb` when the bake or the database changed.
 #   -Full   the whole pass: unit, smoke, testbed, npcloco, stopsteps, feet, labloco, mmview, mmdb, mmplayer, npcperf,
-#           mmstress and the perf bench (tests\perf-scenes\perf_stress.json). Once per PR, before merging. The six old-locomotion
+#           mmstress and the perf bench (tests\perf-scenes\perf_stress.json). Once per PR, before merging. The five old-locomotion
 #           scenarios (testbed .. labloco) otherwise run only when a change touches what they share (foot IK, Player,
 #           FirstPersonBody's legacy path); Phase 6 retires them.
 #
@@ -66,8 +66,8 @@ if ($Quick) {
 }
 if ($Full) {
     $SkipUnit = $false; $SkipSmoke = $false
-    $all12 = @('testbed', 'npcloco', 'stopsteps', 'feet', 'labloco', 'mmview', 'mmdb', 'mmplayer', 'mmstress', 'npcperf')
-    $Scenarios = $all12 + @($Scenarios | Where-Object { $_ -notin $all12 })
+    $fullSet = @('testbed', 'npcloco', 'stopsteps', 'feet', 'labloco', 'mmview', 'mmdb', 'mmplayer', 'mmstress', 'npcperf')
+    $Scenarios = $fullSet + @($Scenarios | Where-Object { $_ -notin $fullSet })
     if (-not $PerfBench) { $PerfBench = 'tests\perf-scenes\perf_stress.json' }
 }
 # (Not "$exe": PowerShell's names ignore case, so it would be the -Exe parameter itself, always set.)
@@ -77,10 +77,8 @@ if (-not $LogDir) { $LogDir = Join-Path $repo ('work\mm_smoke\' + (Get-Date -For
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $LogDir = (Resolve-Path $LogDir).Path
 if (-not $TraceDir) { $TraceDir = Join-Path $LogDir 'traces' }
-if ($TraceDir) {
-    New-Item -ItemType Directory -Force -Path $TraceDir | Out-Null
-    $TraceDir = (Resolve-Path $TraceDir).Path
-}
+New-Item -ItemType Directory -Force -Path $TraceDir | Out-Null
+$TraceDir = (Resolve-Path $TraceDir).Path
 
 $results = New-Object System.Collections.Generic.List[object]
 
@@ -182,14 +180,11 @@ foreach ($scenario in $Scenarios) {
         $name = if ($Runs -gt 1) { "npc_${scenario}_$k" } else { "npc_$scenario" }
         $envs = @{}
         if ($Legs) { $envs['TARTARUS_TESTBED_LEGS'] = $Legs }
-        if ($TraceDir) {
-            $dir = Join-Path $TraceDir $(if ($Runs -gt 1) { "${scenario}_$k" } else { $scenario })
-            New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            $envs['NPC_TEST_TRACE'] = $dir
-        }
-        $engineScenario = $scenario
+        $dir = Join-Path $TraceDir $(if ($Runs -gt 1) { "${scenario}_$k" } else { $scenario })
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $envs['NPC_TEST_TRACE'] = $dir
         # (Timed runs alone: mmdb times the search, npcperf the dummies' cost and the frame.)
-        Add-Step $name @('--npc-test', $engineScenario) $envs 'npc' ($engineScenario -eq 'mmdb' -or $engineScenario -eq 'npcperf')
+        Add-Step $name @('--npc-test', $scenario) $envs 'npc' ($scenario -eq 'mmdb' -or $scenario -eq 'npcperf')
     }
 }
 if ($PerfBench) { Add-Step 'perf' @('--perf-bench', $PerfBench) $null 'perf' $true }
