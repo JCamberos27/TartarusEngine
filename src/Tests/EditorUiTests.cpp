@@ -66,6 +66,7 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include <mutex>
 #include <set>
 #include <string>
+#include <string_view>
 #include <future>
 #include <thread>
 #include <unordered_map>
@@ -421,13 +422,19 @@ std::string Trim(std::string s, size_t n = 300) {
 }
 void ResetHealth() {
     g_GlErrBase = GLDebug::ErrorCount();
-    for (const LogEntry& e : Log::Entries()) g_LogSeqSeen = std::max(g_LogSeqSeen, e.Seq);
+    const auto& entries = Log::Entries();
+    if (!entries.empty()) g_LogSeqSeen = std::max(g_LogSeqSeen, entries.back().Seq);
     g_AllowLog.clear();
     g_ImGuiErrors.clear();
 }
 void CheckHealth(World& w) {
-    for (const LogEntry& e : Log::Entries()) {
-        if (e.Seq <= g_LogSeqSeen) continue;
+    // Seq grows along the vector, so only the tail past g_LogSeqSeen is new: find it from the end
+    // instead of walking the whole log every frame.
+    const auto& entries = Log::Entries();
+    size_t first = entries.size();
+    while (first > 0 && entries[first - 1].Seq > g_LogSeqSeen) --first;
+    for (size_t i = first; i < entries.size(); ++i) {
+        const LogEntry& e = entries[i];
         g_LogSeqSeen = std::max(g_LogSeqSeen, e.Seq);
         if (e.Level == LogLevel::Warning) {
             if (g_Cur.Warnings.size() < 40) g_Cur.Warnings.push_back(Trim(e.Message));
@@ -482,11 +489,9 @@ std::string Slug(const std::string& s) {
 }
 
 // --- Item queries ------------------------------------------------------------------------------
-std::string Visible(const std::string& label) {
-    const size_t at = label.find("##");
-    return at == std::string::npos ? label : label.substr(0, at);
-}
-bool Contains(const std::string& hay, const std::string& needle) { return hay.find(needle) != std::string::npos; }
+// Views into the label: FindAll runs these on every registered item for every query each frame.
+std::string_view Visible(std::string_view label) { return label.substr(0, label.find("##")); }
+bool Contains(std::string_view hay, std::string_view needle) { return hay.find(needle) != std::string_view::npos; }
 
 struct Query {
     std::string Label;  // matched against the visible label (contains)
