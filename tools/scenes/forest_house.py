@@ -94,6 +94,14 @@ def yaw_of(q):
     return math.degrees(math.atan2(-v[2], v[0]))
 
 
+def first(it, what):
+    """The first item of `it`; exits naming `what` when there is none (instead of a bare StopIteration)."""
+    v = next(iter(it), None)
+    if v is None:
+        sys.exit(f'forest_house: no {what} found')
+    return v
+
+
 class Pack:
     """The house snapshot: entities by id, children, pack-space world transforms."""
     def __init__(self, path):

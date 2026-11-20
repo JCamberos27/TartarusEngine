@@ -98,21 +98,35 @@ def export(repo, used):
     rows = read_manifest(repo)
     on_disk = {c[len('project/'):].lower(): d for c, d in external_files(repo)}
     copied = 0
+    missing, stale = [], []
     for rel, size, digest in rows:
         src = os.path.join(repo, on_disk.get(rel.lower(), 'project/' + rel))
         dst = os.path.join(used, 'project', rel)
         if os.path.isfile(dst) and os.path.getsize(dst) == size and sha256(dst) == digest:
+            continue
+        # Copy only what the CSV describes: a checkout missing the file, or holding another version of it (edited
+        # since the last build), would put a file on the Drive that every clone's verify then fails on.
+        if not os.path.isfile(src):
+            missing.append(rel)
+            continue
+        if os.path.getsize(src) != size or sha256(src) != digest:
+            stale.append(rel)
             continue
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copy2(src, dst)
         copied += 1
     os.makedirs(os.path.join(used, 'project'), exist_ok=True)
     shutil.copy2(os.path.join(repo, CSV_REL), os.path.join(used, CSV_REL))
-    print(f'{used}: {copied} copied, {len(rows) - copied} already up to date')
+    for rel in missing[:20]: print('missing  ', rel)
+    for rel in stale[:20]: print('different', rel)
+    print(f'{used}: {copied} copied, {len(rows) - copied - len(missing) - len(stale)} already up to date'
+          + (f', {len(missing)} missing here, {len(stale)} differ from the CSV (not copied: run build first)'
+             if missing or stale else ''))
     extra = unlisted(used, rows)
     for rel in extra[:20]: print('unlisted ', rel)
     if extra:
         print(f'{len(extra)} file(s) on the Drive are not listed assets - move them off Used (code and .meta files belong in git)')
+    return 1 if missing or stale else 0
 
 
 def unlisted(used, rows):
@@ -150,7 +164,10 @@ def verify(root, check_hash):
 def prune(repo, folder, apply=False):
     """Git-ignored, untracked payload files under <folder> (repo-relative or absolute) that external_assets.csv
     doesn't list: printed, and deleted with apply. Returns their repo-relative paths."""
-    rel = os.path.relpath(os.path.abspath(os.path.join(repo, folder)), os.path.abspath(repo)).replace(os.sep, '/')
+    try:
+        rel = os.path.relpath(os.path.abspath(os.path.join(repo, folder)), os.path.abspath(repo)).replace(os.sep, '/')
+    except ValueError:  # another drive: no relative path exists
+        rel = '..'
     if rel == '..' or rel.startswith('../') or not (rel == 'project' or rel.startswith('project/')):
         raise SystemExit(f'prune: {folder} is not inside {repo}/project')
     listed = {r.lower() for r, _, _ in read_manifest(repo)}
@@ -171,7 +188,7 @@ if __name__ == '__main__':
     if len(sys.argv) >= 3 and sys.argv[1] == 'build':
         build(sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == 'export':
-        export(sys.argv[2], sys.argv[3])
+        sys.exit(export(sys.argv[2], sys.argv[3]))
     elif len(sys.argv) >= 3 and sys.argv[1] == 'verify':
         sys.exit(verify(sys.argv[2], '--hash' in sys.argv))
     elif len(sys.argv) >= 4 and sys.argv[1] == 'prune':

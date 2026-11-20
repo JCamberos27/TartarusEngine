@@ -56,7 +56,6 @@ ImGuiWindow* Shown(const char* name) {
     ImGuiWindow* w = ImGui::FindWindowByName(name);
     return w && w->WasActive && !w->Hidden ? w : nullptr;
 }
-Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
 // The scene FreshScene() builds plus the rename the swap tests make, still there.
 std::string SceneIntact(Ctx& c, const char* third) {
     for (const char* n : {"Alpha", "Beta", third})

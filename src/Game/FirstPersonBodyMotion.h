@@ -145,8 +145,12 @@ public:
     void SetDebug(MmPlayerDebug::Snapshot* d) { m_Debug = d; }
 
     // Binds the stream to every piece (the driver's pelvis height sets the translation scale for all). False (with
-    // `error`) when the database or a binding is missing.
-    bool Start(const std::vector<std::shared_ptr<Model>>& models, size_t driver, std::string& error);
+    // `error`) when the database or a binding is missing. `carry`: a stopped body's motion (the same database) plays on from
+    // where it was - the frame, its reselect history, the facings, the air state - instead of from the start frame (an
+    // outfit change in Play re-takes the pieces; the pose went back to the start frame and the next search replayed what
+    // had just been shown).
+    bool Start(const std::vector<std::shared_ptr<Model>>& models, size_t driver, std::string& error,
+               const FirstPersonBodyMotion* carry = nullptr);
     void Stop();
     bool Active() const { return m_Shared != nullptr; }
 

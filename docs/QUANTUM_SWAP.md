@@ -1,8 +1,8 @@
 # Quantum swap: partial Unity-version pack → complete Modular Casual Bundle
 
 Working log for replacing `project/assets/Characters/Quantum` with the complete Quantum Modular Casual Bundle
-(male + female "Vivian"), exported from Unreal to `D:\Jacob\JCamberos\Quantum - Modular Casual Bundle\`
-(`Export\`, `manifest.json`, `AUDIT_REPORT.md`). The full plan is `Quantum_Swap_Plan.md` (owner's Desktop).
+(male + female "Vivian"), exported from Unreal to a local `Quantum - Modular Casual Bundle\` folder
+(`Export\`, `manifest.json`, `AUDIT_REPORT.md`). The full plan was a local plan file, not in the repo.
 Branch: `dev/quantum-swap`.
 
 ## Phase 0 results (2026-11-18)
@@ -95,7 +95,7 @@ So no skin textures need keeping from the old copy.
 - **Engine limits handled:**
   - Glasses lenses and the female scalp are translucent in UE; they are rebuilt opaque or cut-out from their textures, like the old mats.
   - Roughness Intensity above 1 is capped (2 headphone mats).
-- **Pre-swap backup** (repo Quantum folder + CSV): `D:\Jacob\JCamberos\_backup_old_quantum\` on the first computer.
+- **Pre-swap backup** (repo Quantum folder + CSV): kept locally (`_backup_old_quantum\`).
 
 `tools/quantum/audit_quantum_assets.py` after the import: 110 notes, none blocking.
 - 15 "FBX material not remapped": FBX material entries with no geometry, which Assimp drops; every drawn material is remapped. The two team arm/hand exports carry them from before the swap.
@@ -214,8 +214,8 @@ Phases 0-3 merged in PR 831. The forest-lights PR 832 and the forest-trail scene
 
 - **Upload:** the 850 payloads main lists but the Drive lacked went to `Used`: 691 added and 159 replaced (3.6 GB), each
   checked by sha256. `Used\project\external_assets.csv` is main's copy again.
-- **Safety copy:** `C:\Users\jacob\_backup_old_quantum\` on the owner's PC holds the 515 retired `Used` files (1.9 GB)
-  and both old Raw folders (225 files, 4 GB). The plan said `D:\Jacob\JCamberos\`; this PC has no D:. The 159 replaced
+- **Safety copy:** a local `_backup_old_quantum\` folder holds the 515 retired `Used` files (1.9 GB)
+  and both old Raw folders (225 files, 4 GB). The 159 replaced
   files went up before the backup existed, so their old versions are only in the Drive's version history (30 days).
 - **Raw:** `Characters\Quantum - Extras (not in Casual Bundle)\` holds the 39 keep-list sources (3 GB): the team
   arm/hand exports, the male and female face rigs (`.dna`, `.mb`, FBX, beard combos), `SKM_F_Vivian_Parts` and
@@ -228,4 +228,4 @@ Phases 0-3 merged in PR 831. The forest-lights PR 832 and the forest-trail scene
   `fetch-assets.ps1`.
 - **Still open:**
   - the Fab receipt and the Epic Starter Pack terms in `Licenses\`;
-  - plan step 4: deleting `UE_Source\` on the computer with `D:\Jacob\JCamberos`.
+  - plan step 4: deleting `UE_Source\` on the export machine.

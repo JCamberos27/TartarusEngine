@@ -5,7 +5,8 @@
 # — that don't line up with the engine's Debug/Release. This script, run as the ExternalProject
 # install step, copies the .lib/.dll/.pdb set into <DST>/Debug and <DST>/Release so the engine
 # can link and copy-next-to-exe with a simple $<IF:$<CONFIG:Debug>,Debug,Release> switch and
-# never has to know PhysX's folder-naming scheme.
+# never has to know PhysX's folder-naming scheme. The stage folders are emptied first, so a DLL/PDB from an older
+# PhysX tag never lingers next to the exe.
 #
 #   -DSRC=<physx build-out>/bin   -DDST=<stage dir>   -P physx_harvest.cmake
 
@@ -18,6 +19,8 @@ if(NOT _platformDirs)
   message(FATAL_ERROR "physx_harvest: no 'win.*' output folder under ${SRC} — did the PhysX build run?")
 endif()
 
+file(REMOVE_RECURSE "${DST}/Debug" "${DST}/Release")
+
 set(_copied 0)
 foreach(_platformDir ${_platformDirs})
   foreach(_pair "debug:Debug" "release:Release")
@@ -29,10 +32,11 @@ foreach(_platformDir ${_platformDirs})
       set(_to "${DST}/${_engineCfg}")
       file(MAKE_DIRECTORY "${_to}")
       file(GLOB _files "${_from}/*.lib" "${_from}/*.dll" "${_from}/*.pdb")
-      foreach(_f ${_files})
-        file(COPY "${_f}" DESTINATION "${_to}")
-        math(EXPR _copied "${_copied} + 1")
-      endforeach()
+      if(_files)
+        file(COPY ${_files} DESTINATION "${_to}")
+        list(LENGTH _files _n)
+        math(EXPR _copied "${_copied} + ${_n}")
+      endif()
     endif()
   endforeach()
 endforeach()

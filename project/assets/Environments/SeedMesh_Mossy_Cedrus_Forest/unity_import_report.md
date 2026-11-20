@@ -1,6 +1,6 @@
 # SeedMesh_Mossy_Cedrus_Forest: Unity import report
 
-Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SeedMesh\Mossy_Cedrus_Forest`
+Source: `Assets/SeedMesh/Mossy_Cedrus_Forest`
 
 ## Counts
 

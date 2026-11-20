@@ -98,6 +98,9 @@ Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition (Get-Content -Raw 
 
 $decalsRoot = Join-Path $ProjectRoot 'project\assets\Decals'
 $rows = @(Import-Csv -LiteralPath $MapPath)
+# The kinds TartarusDecalCook.Cook knows; anything else would silently cook as a mask.
+$badKind = @($rows | Where-Object { $_.kind -notin @('mask', 'splatter', 'peel', 'grunge') })
+if ($badKind) { throw "Unknown kind in $MapPath (mask, splatter, peel, grunge): $(($badKind | Select-Object -First 5 | ForEach-Object { "$($_.dest_rel_path)=$($_.kind)" }) -join ', ')" }
 if ($Only) { $rows = @($rows | Where-Object { $_.dest_rel_path -match $Only }) }
 if (-not $rows) { throw "No rows in $MapPath$(if ($Only) { " match '$Only'" })" }
 
@@ -148,7 +151,7 @@ if ($Relief) {
     }
     "Relief: $reliefCount normal + surface pair(s) to cook."
 }
-$outCount = ($todo.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum
+$outCount = [int]($todo.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum
 "Cooking $outCount texture(s) from $($todo.Count) source(s) on $Threads thread(s); $skipped up to date."
 if ($todo.Count) {
     $srcs = [string[]]@($todo.Keys)
@@ -169,7 +172,8 @@ function New-Guid64 {
     $v.ToString('x16')
 }
 function Write-IfChanged([string]$path, [string]$text) {
-    if ((Test-Path -LiteralPath $path) -and [IO.File]::ReadAllText($path) -ceq $text) { return $false }
+    # (CRLF ignored: a Windows checkout has the files with CRLF, the cook writes LF; same content is no rewrite.)
+    if ((Test-Path -LiteralPath $path) -and [IO.File]::ReadAllText($path).Replace("`r`n", "`n") -ceq $text) { return $false }
     [IO.File]::WriteAllText($path, $text, $utf8); return $true
 }
 # JSON as nlohmann's dump(2) lays it out (2-space indent, arrays one element per line).
@@ -286,7 +290,7 @@ foreach ($r in $allRows) {
         $m = [regex]::Match([IO.File]::ReadAllText($meta), '"guid"\s*:\s*"([0-9a-fA-F]{16})"')
         if ($m.Success) { $guid = $m.Groups[1].Value.ToLowerInvariant() }
     }
-    if ($guid) { $metaKept++ } else { $guid = New-Guid64; $metaNew++ }
+    if ($guid) { $metaKept++ } elseif (-not $DecalsOnly) { $guid = New-Guid64; $metaNew++ }
     $folder = 'assets/Decals/' + ($r.dest_rel_path.Substring(0, $r.dest_rel_path.LastIndexOf('/')))
     $wrap = if ($r.kind -eq 'grunge') { 0 } else { 1 }
     $metaJson = [ordered]@{
@@ -333,7 +337,8 @@ foreach ($r in $allRows) {
         $decalCount++
     }
 }
-"Metas: $metaNew new, $metaKept kept. Decals: $decalCount ($decalWritten written)."
+if ($DecalsOnly) { "Metas: not touched (-DecalsOnly). Decals: $decalCount ($decalWritten written)." }
+else { "Metas: $metaNew new, $metaKept kept. Decals: $decalCount ($decalWritten written)." }
 "Textures took $([Math]::Round($texTime.TotalSeconds, 1)) s; total $([Math]::Round($sw.Elapsed.TotalSeconds, 1)) s."
 
 # ---- Contact sheets -------------------------------------------------------------------------------

@@ -20,16 +20,14 @@ import argparse
 import collections
 import json
 import os
-import re
-import subprocess
 import sys
 
+import model_report
 from import_model_library import write_json, write_meta
 
 ROOTS = ['Furniture', 'Architecture', 'Props', 'Environments/Apartment']
 MODEL_EXT = ('.fbx', '.obj', '.glb', '.gltf')
 THIN = 0.04
-REPORT = re.compile(r'\[ModelReport\] (.*) size (\S+) (\S+) (\S+) min (\S+) (\S+) (\S+) max (\S+) (\S+) (\S+) meshes ')
 
 
 def models(assets):
@@ -49,15 +47,10 @@ def bounds(exe, payload_assets, rels):
     folders = sorted({os.path.dirname(r) for r in rels})
     found = {}
     for folder in folders:
-        out = subprocess.run([exe, '--model-report', os.path.join(payload_assets, *folder.split('/'))],
-                             capture_output=True, text=True, encoding='utf-8', errors='replace').stdout
-        for line in out.splitlines():
-            m = REPORT.match(line.strip())
-            if m:
-                path = os.path.normpath(m.group(1)).replace(os.sep, '/')
-                rel = path[len(os.path.normpath(payload_assets).replace(os.sep, '/')) + 1:]
-                v = [float(x) for x in m.groups()[4:10]]
-                found[rel.lower()] = (v[0:3], v[3:6])
+        rows, _, _ = model_report.run(exe, [os.path.join(payload_assets, *folder.split('/'))])
+        base = model_report.key(payload_assets)
+        for path, r in rows.items():
+            found[path[len(base) + 1:].replace(os.sep, '/').lower()] = (r['min'], r['max'])
     return found
 
 

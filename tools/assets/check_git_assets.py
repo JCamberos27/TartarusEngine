@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def main():
     result = subprocess.run(
         ['git', '-C', str(ROOT), 'ls-files', '-z', '--cached', '--ignored',
-         '--exclude-standard', '--', 'project/assets'],
+         '--exclude-standard', '--', 'project/assets', 'project/scenes'],
         capture_output=True, check=True,
     )
     forbidden = [path.decode('utf-8') for path in result.stdout.split(b'\0') if path]
@@ -23,7 +23,7 @@ def main():
             print('  ' + path)
         print('Remove these from the index; keep the local files and their .meta sidecars.')
         return 1
-    print('Asset policy OK: no ignored project asset payloads are tracked.')
+    print('Asset policy OK: no ignored project asset or scene payloads are tracked.')
     return 0
 
 

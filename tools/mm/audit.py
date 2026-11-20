@@ -143,7 +143,7 @@ def quat_angle_deg(a, b):
 
 # --- per take ----------------------------------------------------------------------------------------------------------
 
-def style_of(group, tags):
+def style_of(group):
     g = group.lower()
     if g in ('stroll', 'walk', 'jog', 'run', 'crouch', 'stand'):
         return g
@@ -315,7 +315,7 @@ def main():
         tags = c['tags'].split(';')
         t = analyse_take(c, anim, db, quats, anim['bones'])
         t.update(name=c['name'], first=c['first'], tags=tags, group=row.get('group', ''), exaggerated='exaggerated' in tags,
-                 style=style_of(row.get('group', ''), tags), baked=False)
+                 style=style_of(row.get('group', '')), baked=False)
         fr = fingers.get(c['name'], {})
         t['fingerBonesMoving'], t['fingerRangeDeg'] = fr.get('fingerBonesMoving', 0), fr.get('fingerRangeDeg', 0.0)
         takes.append(t)

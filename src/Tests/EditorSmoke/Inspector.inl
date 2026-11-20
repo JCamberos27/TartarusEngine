@@ -137,8 +137,8 @@ void RegisterInspectorTests() {
             InspOpen(name), InspUntilOpen(name), WaitSeconds(0.3),
             Shot("section", {kInspector}),
             Click(MoreButton(name.c_str())), Wait(2),
-            Click(MenuItem("Remove Component")), WaitSeconds(0.5),
-            ExpectTrue("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
+            Click(MenuItem("Remove Component")),
+            Until("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }), Wait(3),
             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
             ExpectTrue("undo puts it back", [rcp](Ctx& c) { return rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
             Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
@@ -181,11 +181,11 @@ void RegisterInspectorTests() {
         ExpectTrue("undo", [](Ctx& c) { return (c.W.Registry.get<RenderableComponent>(ByName(c.W, "Alpha")).ReceiveShadows ? 1.0 : 0.0) == g_Number; }),
         // Remove from the section menu: the mesh is parked, not lost.
         Click(MoreButton("Mesh Renderer")), Wait(2),
-        Click(MenuItem("Remove Component")), WaitSeconds(0.5),
-        ExpectTrue("removed; mesh kept detached", [](Ctx& c) {
+        Click(MenuItem("Remove Component")),
+        Until("removed; mesh kept detached", [](Ctx& c) {
             const entt::entity a = ByName(c.W, "Alpha");
             return !c.W.Registry.all_of<RenderableComponent>(a) && c.W.Registry.all_of<DetachedMeshComponent>(a);
-        }),
+        }), Wait(3),
         // Transform first: "gone" alone also passes when the Inspector draws nothing.
         ExpectTrue("Material section gone (Transform still shown)", [](Ctx&) { return Find(Header("Transform")) && !Find(Header("Material")); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
@@ -360,8 +360,8 @@ void RegisterInspectorTests() {
              std::set<std::string> seen;
              for (const UiItem& it : g_Reg.Last)
                  if (Contains(it.Window, "Particle System") && (it.Status & ImGuiItemStatusFlags_Openable) &&
-                     !seen.insert(Visible(it.Label)).second)
-                     return "two '" + Visible(it.Label) + "' headers";
+                     !seen.insert(std::string(Visible(it.Label))).second)
+                     return "two '" + std::string(Visible(it.Label)) + "' headers";
              return std::string();
          }),
          // #13: the Restart / Emit Burst / Clear row ran past the right edge of a narrow Inspector.
@@ -383,7 +383,7 @@ void RegisterInspectorTests() {
              const UiItem* it = Find(ParticleCurvesHeader());
              if (!it) return std::string("no curves header");
              const ImGuiStyle& st = ImGui::GetStyle();
-             const std::string title = Visible(it->Label);
+             const std::string title(Visible(it->Label));
              // A framed header draws its title after the arrow: font size + 3 frame paddings in.
              const float textEnd = it->Rect.Min.x + ImGui::GetFontSize() + st.FramePadding.x * 3.0f + ImGui::CalcTextSize(title.c_str()).x;
              const float edge = std::min(it->Rect.Max.x - st.FramePadding.x, it->Clip.Max.x);
