@@ -304,6 +304,8 @@ public:
     ~AssetLibrary();
 
 private:
+    // Drops an (empty) folder from the lists and the saved folder list; no OnFolderPathChanged.
+    void EraseFolder(const std::string& folderPath);
     struct AsyncLoader;
     std::unique_ptr<AsyncLoader> m_Async;
     AsyncLoader& Async();
