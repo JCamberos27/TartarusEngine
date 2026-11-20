@@ -721,7 +721,8 @@ void TestFacingModel() {
     CHECK(std::fabs(MotionMath::WrapPi(yaw - sim)) < 1e-3f);
     // No feedback: the simulation facing is a spring toward the facing wanted alone - whatever the character's clips do.
     float s0 = 0.0f, r0 = 0.0f, s1 = 0.0f, r1 = 0.0f, c = 0.0f;
-    for (int i = 0; i < 90; ++i) {
+    const int settle = (int)std::ceil(8.0f * cfg.SimFacingHalflife / dt); // 8 halflives: settled within 0.01, whatever the default
+    for (int i = 0; i < settle; ++i) {
         TrajectoryPredictor::SpringScalar(s0, r0, 1.5f, cfg.SimFacingHalflife, dt);
         c = FirstPersonBodyMotion::StepCharacterFacing(c, (i % 2 ? 0.3f : -0.3f), s1, cfg, dt); // a wildly turning clip
         TrajectoryPredictor::SpringScalar(s1, r1, 1.5f, cfg.SimFacingHalflife, dt);

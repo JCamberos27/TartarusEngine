@@ -97,7 +97,7 @@ public:
         // (Holden's demo values, "Code vs Data Driven Displacement": simulation rotation 0.27 s, adjustment 0.2 s, clamp 90 deg.
         // At 0.12 / 0.15 / 45 deg the simulation turned with every sweep of the view faster than the walk data turns: the
         // matcher hopped between poor turning candidates - 6.4 jumps a second looking about, against 2 walking straight.)
-        float SimFacingHalflife = 0.27f;       // s: the simulation facing's spring toward the facing wanted (responsiveness)
+        float SimFacingHalflife = 0.4f;        // s: the simulation facing's spring toward the facing wanted (responsiveness)
         float CharacterFacingHalflife = 0.2f;  // s: the character facing's pull toward the simulation's (on top of the clip's turn)
         // ... while a sprint frame plays: the sprint set (the old locomotion's jog) has no curved runs, so its turns are steered -
         // the forward loop plays on while the facing follows. Measured on `M sprint turning` (60 deg/s): at 0.2, 2.25 jumps/s,
