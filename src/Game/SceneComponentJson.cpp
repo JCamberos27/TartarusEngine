@@ -272,19 +272,56 @@ JointComponent JointFromJson(const json& jc) {
     return joint;
 }
 
+namespace {
+// The registry's component names by JSON key, built once (the registry is fixed after start-up; rebuilt if it
+// grows). Loading a big scene reads every entity's keys against it instead of asking every registered component
+// for its key(s) per entity (~100 lookups per entity, the bulk of ReadCommonComponents on a 36k-entity scene).
+struct ComponentKeyIndex {
+    size_t registrySize = 0;
+    // A GenericSerialize component's Key/Name or LegacyKeys -> its registry indices (ascending).
+    std::unordered_map<std::string_view, std::vector<int>> readers;
+    // Every name ReflectComponentMatches accepts (Name, Key, LegacyKeys) of any registered component.
+    std::unordered_set<std::string_view> known;
+};
+const ComponentKeyIndex& KeyIndex() {
+    static std::mutex mutex;
+    static ComponentKeyIndex index;
+    std::lock_guard<std::mutex> lock(mutex);
+    const auto& all = ComponentRegistry::All();
+    if (index.registrySize != all.size() || all.empty()) {
+        index = ComponentKeyIndex{};
+        index.registrySize = all.size();
+        for (int i = 0; i < (int)all.size(); ++i) {
+            const ReflectComponent& meta = all[i].Meta;
+            auto addReader = [&](const char* key) {
+                if (!key) return;
+                auto& v = index.readers[key];
+                if (v.empty() || v.back() != i) v.push_back(i);
+            };
+            if (meta.GenericSerialize) {
+                addReader(ReflectComponentKey(meta));
+                for (const char* legacy : meta.LegacyKeys) addReader(legacy);
+            }
+            index.known.insert(meta.Name);
+            index.known.insert(ReflectComponentKey(meta));
+            for (const char* legacy : meta.LegacyKeys) if (legacy) index.known.insert(legacy);
+        }
+    }
+    return index;
+}
+} // namespace
+
 // A component block (an object under a capitalised key, the way the generic pass writes them) that no registered
 // component reads: a component that was renamed without a LegacyKeys entry, or removed. Its data is dropped on the
 // next save, so say so, once per key per run. (The hand-written blocks are lowercase: "collider", "joint", ...)
 void WarnUnknownComponentBlocks(const json& j) {
     static std::mutex warnedMutex;
     static std::set<std::string> warned;
+    const ComponentKeyIndex& index = KeyIndex();
     for (auto it = j.begin(); it != j.end(); ++it) {
         const std::string& key = it.key();
         if (!it->is_object() || key.empty() || !std::isupper((unsigned char)key[0])) continue;
-        bool known = false;
-        for (const auto& rc : ComponentRegistry::All())
-            if (ReflectComponentMatches(rc.Meta, key.c_str())) { known = true; break; }
-        if (known) continue;
+        if (index.known.count(std::string_view(key))) continue;
         std::lock_guard<std::mutex> lock(warnedMutex);
         if (warned.insert(key).second)
             Log::Warn("Scene: no component reads the \"" + key + "\" block; its data will be dropped on save.");
@@ -390,7 +427,18 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
 
     // #184: mirror of the generic write — restore each registered component present in `j`.
     // Missing fields keep the component's own default (the component was just default-added).
-    for (const auto& rc : ComponentRegistry::All()) {
+    // Only the components one of `j`'s keys names are visited, still in registration order.
+    const ComponentKeyIndex& index = KeyIndex();
+    std::vector<int> candidates;
+    if (j.is_object())
+        for (auto it = j.begin(); it != j.end(); ++it)
+            if (const auto r = index.readers.find(std::string_view(it.key())); r != index.readers.end())
+                candidates.insert(candidates.end(), r->second.begin(), r->second.end());
+    std::sort(candidates.begin(), candidates.end());
+    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+    const auto& all = ComponentRegistry::All();
+    for (int ci : candidates) {
+        const auto& rc = all[ci];
         if (!rc.Meta.GenericSerialize) continue; // hand-coded elsewhere (e.g. Mesh Renderer)
         const json* found = nullptr;
         if (auto it = j.find(ReflectComponentKey(rc.Meta)); it != j.end()) found = &*it;
