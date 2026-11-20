@@ -22,6 +22,8 @@ public:
     void DrawPreviewWindows();
     // After the editor has drawn: the whole window once the view has settled; the last one sets exitApproved and closes.
     void AfterFrame(Window& window, bool& exitApproved);
+    // The run's result for its exit code: every view captured and written, and the recoil preview loaded.
+    bool Succeeded() const { return m_Failures == 0 && m_Written == (int)m_Views.size(); }
 
 private:
     static constexpr int kFrames = 150;
@@ -29,4 +31,6 @@ private:
     bool m_Curves = false;
     std::vector<const char*> m_Views;
     int m_Frame = 0;
+    int m_Written = 0;  // views written to disk
+    int m_Failures = 0; // a PNG that could not be written, or the recoil preview that did not load
 };
