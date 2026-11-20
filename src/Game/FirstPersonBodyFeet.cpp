@@ -48,7 +48,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
     if (!rc || !rc->ModelRef) return;
     const Model& drv = *rc->ModelRef;
-    const IK::Pose driverPose = drv.AppliedLocalPose();
+    thread_local IK::Pose driverPose; // (a copy: the legs below re-pose the driver)
+    driverPose = drv.AppliedLocalPose();
     if (driverPose.empty() || (int)driverPose.size() != drv.NodeCount()) return;
     const int footNode[2] = {drv.NodeIndex(Bone(FPBody::kBoneFoot[0])), drv.NodeIndex(Bone(FPBody::kBoneFoot[1]))};
     if (footNode[0] < 0 || footNode[1] < 0) return;
@@ -56,9 +57,10 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     const auto& t = reg.get<TransformComponent>(m_Body);
     const float scale = std::max(t.Scale.y, 1e-3f);
     const glm::quat yaw = YawRotation(m_Yaw);
-    std::vector<int> parents(driverPose.size());
+    thread_local std::vector<int> parents; // (scratch kept between frames: no per-frame allocation)
+    thread_local std::vector<glm::mat4> globals;
+    parents.resize(driverPose.size());
     for (int i = 0; i < (int)driverPose.size(); ++i) parents[i] = drv.NodeParent(i);
-    std::vector<glm::mat4> globals;
     IK::ComputeGlobals(driverPose, parents, globals);
 
     const float maxDrop = std::max(cfg.FootIKMaxDrop, 0.0f);
@@ -170,7 +172,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     }
     for (const auto& mp : m_Models) {
         Model& m = *mp;
-        IK::Pose pose = m.AppliedLocalPose();
+        thread_local IK::Pose pose;
+        pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
         const int pelvis = m.NodeIndex(Bone(FPBody::kBonePelvis));
         if (pelvis < 0) continue;
