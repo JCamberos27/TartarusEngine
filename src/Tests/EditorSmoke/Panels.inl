@@ -49,7 +49,7 @@ void RegisterPanelsTests() {
         static const Core kCore[] = {
             {"Hierarchy", EditorPanels::Hierarchy, &A::ShowHierarchy},
             {"Inspector", EditorPanels::Inspector, &A::ShowInspector},
-            {"Assets", EditorPanels::Assets, &A::ShowAssets},
+            {"Assets", EditorPanels::Assets, &X::ShowAssets},
         };
         Steps s = {FreshScene(), Wait(2), SelectByName("Beta"), Wait(3)};
         for (const Core& k : kCore) {
@@ -203,17 +203,17 @@ void RegisterPanelsTests() {
         MenuClick("Create", "Cube", "Cube"),
         {Until("a cube", [](Ctx& c) { return ByName(c.W, "Cube") != entt::null; }),
          Key(ImGuiKey_H, ImGuiMod_Ctrl | ImGuiMod_Shift),
-         Until("History open", [](Ctx& c) { return A::ShowHistory(c.E) && Open(EditorPanels::History); }),
+         Until("History open", [](Ctx& c) { return X::ShowHistory(c.E) && Open(EditorPanels::History); }),
          BringToFront(EditorPanels::History), UntilShown(EditorPanels::History),
          Until("the edit is listed", [](Ctx&) { return Find(ByLabel("Create Cube", "###History")) && Find(ByLabel("Current", "###History")); }),
          Shot("history", {"###History"}),
          Click(ByLabel("Create Cube", "###History")),
-         Until("jumped back before the cube", [](Ctx& c) { return ByName(c.W, "Cube") == entt::null && A::RedoDepth(c.E) >= 1; }),
+         Until("jumped back before the cube", [](Ctx& c) { return ByName(c.W, "Cube") == entt::null && X::RedoDepth(c.E) >= 1; }),
          Until("the redo row", [](Ctx&) { return Find(ByLabel("Create Cube", "###History")) != nullptr; }),
          Click(ByLabel("Create Cube", "###History")),
          Until("jumped forward to the cube", [](Ctx& c) { return ByName(c.W, "Cube") != entt::null; }),
          Key(ImGuiKey_H, ImGuiMod_Ctrl | ImGuiMod_Shift),
-         Until("Ctrl+Shift+H closed it", [](Ctx& c) { return !A::ShowHistory(c.E) && Gone(EditorPanels::History); })},
+         Until("Ctrl+Shift+H closed it", [](Ctx& c) { return !X::ShowHistory(c.E) && Gone(EditorPanels::History); })},
     }));
 
     // ---------------------------------------------------------------------------------- Lighting
@@ -332,7 +332,7 @@ void RegisterPanelsTests() {
             s.push_back(UntilGone(other.Window));
         }
         s.push_back(ExpectTrue("their flags cleared", [](Ctx& c) {
-            return !A::ShowAudio(c.E) && !A::ShowAnimator(c.E) && !EditorSettings::Get().ShowAssetLibrary;
+            return !A::ShowAudio(c.E) && !X::ShowAnimator(c.E) && !EditorSettings::Get().ShowAssetLibrary;
         }));
         Add("panels: Audio, Animator and Asset Library open from the Window menu, close with their x", s);
     }
@@ -416,11 +416,11 @@ void RegisterPanelsTests() {
         Click(ByExact(EDITOR_ICON_STATISTICS, kBar)), Wait(3),
         ExpectTrue("stats overlay restored", [](Ctx&) { return EditorSettings::Get().GameViewShowStats == Noted(); }),
         Click(ByExact(EDITOR_ICON_HISTORY, kBar)),
-        Until("History open", [](Ctx& c) { return A::ShowHistory(c.E) && Open(EditorPanels::History); }),
+        Until("History open", [](Ctx& c) { return X::ShowHistory(c.E) && Open(EditorPanels::History); }),
         BringToFront(EditorPanels::History), UntilShown(EditorPanels::History),
         Shot("history-toggle", {"###History"}),
         Click(ByExact(EDITOR_ICON_HISTORY, kBar)),
-        Until("History closed", [](Ctx& c) { return !A::ShowHistory(c.E) && Gone(EditorPanels::History); }),
+        Until("History closed", [](Ctx& c) { return !X::ShowHistory(c.E) && Gone(EditorPanels::History); }),
         Click(ByExact(EDITOR_ICON_CONSOLE, kBar)),
         Until("Console open", [](Ctx&) { return EditorModuleHost::ConsoleState().Visible && Open(EditorPanels::Console); }),
         BringToFront(EditorPanels::Console), UntilShown(EditorPanels::Console),

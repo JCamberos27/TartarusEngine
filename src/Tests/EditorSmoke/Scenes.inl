@@ -63,6 +63,14 @@ const std::vector<std::string>& MissingExternalFiles() {
     }();
     return names;
 }
+// A step allowing the log errors that name those files (and the one the Dummy logs without a
+// name when its external body meshes are missing).
+Step AllowMissingExternal() {
+    return Do("allow errors naming the external files missing here", [](Ctx&) {
+        for (const std::string& name : MissingExternalFiles()) g_AllowLog.push_back(name);
+        if (!MissingExternalFiles().empty()) g_AllowLog.push_back("Dummies: the body has no animated skeleton");
+    });
+}
 Query Row(int nth) {
     Query q = ByTagPrefix("row:");
     q.Root = kHierarchy;
@@ -116,12 +124,7 @@ void RegisterScenesTests() {
 
         Add("scenes: " + label + " opens, settles, inspects and plays", {
             // Allowed first: the previous scene's async loads can still log while FreshScene runs.
-            Do("allow errors naming the external files missing here", [](Ctx&) {
-                for (const std::string& name : MissingExternalFiles()) g_AllowLog.push_back(name);
-                // Logged without a file name when the Dummy's (external) body meshes are missing.
-                if (!MissingExternalFiles().empty())
-                    g_AllowLog.push_back("Dummies: the body has no animated skeleton");
-            }),
+            AllowMissingExternal(),
             FreshScene(), Wait(2),
             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }), Wait(2),
             Do("open " + label, [path](Ctx& c) { SA::Open(c.E, c.W, c.A, path); }),

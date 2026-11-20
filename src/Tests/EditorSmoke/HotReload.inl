@@ -152,9 +152,7 @@ void RegisterHotReloadTests() {
             Do("no leftover from an earlier run", cleanup), WaitSeconds(1.0),
             ExpectTrue("not listed yet", [path](Ctx& c) { return !HA::SceneListed(c.E, path().string()); }),
             Do("write a scene file from outside", [path](Ctx&) {
-                std::ofstream f(path(), std::ios::binary | std::ios::trunc);
-                f << "{\n  \"formatVersion\": 4\n}\n";
-                if (!f) Fail("couldn't write " + path().string());
+                if (!WriteFile(path(), "{\n  \"formatVersion\": 4\n}\n")) Fail("couldn't write " + path().string());
             }),
             UntilSeconds("the Scenes listing picks it up", [path](Ctx& c) { return HA::SceneListed(c.E, path().string()); }, 15),
             UntilSeconds("it got a .meta sidecar", [path](Ctx&) {

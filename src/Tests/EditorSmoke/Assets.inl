@@ -25,7 +25,6 @@ struct EditorSmokeAccess_Assets {
     static bool Favorite(EditorLayer& e, const std::string& key) { return e.IsAssetFavorite(key); }
     static const std::string& Renaming(EditorLayer& e) { return e.m_RenamingAssetKey; }
     static unsigned ModelThumb(EditorLayer& e, Model& m) { return e.ModelThumbnail(m); }
-    static bool& ShowAnimator(EditorLayer& e) { return e.m_ShowAnimator; }
     static void ClearSelection(EditorLayer& e) { e.ClearAssetSelection(); }
     // Whether the undo step `fromTop` below the newest one only changed the selection.
     static bool SelectionStep(EditorLayer& e, size_t fromTop) {
@@ -514,8 +513,8 @@ void RegisterAssetsTests() {
          UntilListed("Smoke Mat.mat")},
         BackgroundMenu("Create Animator Controller"),
         {Until("New Animator Controller.controller written", [](Ctx&) { return FileExists(DirFile("New Animator Controller.controller")); }, 60),
-         ExpectTrue("it opened in the Animator", [](Ctx& c) { return AX::ShowAnimator(c.E); }),
-         Do("close the Animator", [](Ctx& c) { AX::ShowAnimator(c.E) = false; }), Wait(3)},
+         ExpectTrue("it opened in the Animator", [](Ctx& c) { return X::ShowAnimator(c.E); }),
+         Do("close the Animator", [](Ctx& c) { X::ShowAnimator(c.E) = false; }), Wait(3)},
         BackgroundMenu("Create Recoil Profile"),
         {Until("New Recoil.recoil written", [](Ctx&) { return FileExists(DirFile("New Recoil.recoil")); }, 60),
          ExpectTrue("and selected", [](Ctx& c) { return Leaf(X::AssetKey(c.E)) == "New Recoil.recoil"; })},
@@ -861,7 +860,7 @@ void RegisterAssetsTests() {
         Do("browser state back to normal", [](Ctx& c) {
             AX::Search(c.E).clear();
             AX::FavoritesOnly(c.E) = false;
-            AX::ShowAnimator(c.E) = false;
+            X::ShowAnimator(c.E) = false;
         }),
         Navigate(""), Wait(4),
         Do("find the folder (search for it)", [](Ctx& c) { AX::Search(c.E) = kFolder; }), Wait(4),

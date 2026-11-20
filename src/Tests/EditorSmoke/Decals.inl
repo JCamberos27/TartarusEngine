@@ -100,11 +100,7 @@ Step MoveOver(float dx, float dy) {
 void RegisterDecalsTests() {
     using namespace smoke_decals;
     Add("decals: library, place, brush, auto-grime, palettes, radial, save and reload", {
-        Do("allow errors naming the external files missing here", [](Ctx&) {
-            for (const std::string& name : smoke_scenes::MissingExternalFiles()) g_AllowLog.push_back(name);
-            if (!smoke_scenes::MissingExternalFiles().empty())
-                g_AllowLog.push_back("Dummies: the body has no animated skeleton");
-        }),
+        smoke_scenes::AllowMissingExternal(),
         FreshScene(), Wait(2),
         Do("open the Apartment Hallway", [](Ctx& c) {
             EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
@@ -183,11 +179,7 @@ void RegisterDecalsTests() {
 void RegisterDecalsLitTests() {
     using namespace smoke_decals;
     Add("decals: a lit render of an auto-grimed room", {
-        Do("allow errors naming the external files missing here", [](Ctx&) {
-            for (const std::string& name : smoke_scenes::MissingExternalFiles()) g_AllowLog.push_back(name);
-            if (!smoke_scenes::MissingExternalFiles().empty())
-                g_AllowLog.push_back("Dummies: the body has no animated skeleton");
-        }),
+        smoke_scenes::AllowMissingExternal(),
         FreshScene(), Wait(2),
         Do("open the Apartment Hallway", [](Ctx& c) {
             EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, EnginePaths::Resolve("tests/scenes/Apartment Hallway.json"));
