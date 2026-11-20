@@ -1,4 +1,7 @@
 #include "LightGather.h"
+#include "PointShadowMap.h"
+#include "SkyAtmosphere.h"
+#include "SpotShadowMap.h"
 
 #include <algorithm>
 #include <cmath>

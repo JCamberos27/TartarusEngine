@@ -3,7 +3,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <algorithm>
-#include "../Game/Components.h"
+#include "WeaponFxSettings.h"
 
 class Shader;
 
