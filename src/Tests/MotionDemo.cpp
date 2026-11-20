@@ -2,13 +2,13 @@
 
 #include "gl.h"
 #include "Core/Env.h"
+#include "Log.h"
 #include "Tests/Cinematic.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 
 #include <cstdio>
-#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -27,7 +27,7 @@ struct State {
     int    w = 0, h = 0;
     std::vector<unsigned char> pixels;
     long long written = 0;
-    long long dropped = 0; // frames the pipe did not take (ffmpeg gone or full disk)
+    long long dropped = 0; // frames the pipe did not take (ffmpeg gone, full disk) or of the wrong size
     bool clockOnly = false;
 };
 State s_State;
@@ -79,8 +79,10 @@ void StopRecording() {
     const int rc = _pclose(s.pipe);
     s.pipe = nullptr;
     std::cout << "[MotionDemo] " << s.written << " frames (" << (double)s.written / 60.0 << " s), ffmpeg exit " << rc << std::endl;
+    // A logged error fails the demo run (the editor-test health check), so a broken video is not a pass.
     if (rc != 0 || s.dropped > 0)
-        std::cerr << "[MotionDemo] FAILED: ffmpeg exit " << rc << ", " << s.dropped << " frame(s) not written - the clip is incomplete" << std::endl;
+        Log::Error("MotionDemo: ffmpeg exit " + std::to_string(rc) + ", " + std::to_string(s.dropped) +
+                   " frame(s) not written - the clip is incomplete");
 }
 
 bool Recording() { return s_State.pipe != nullptr; }
@@ -105,7 +107,7 @@ void DrawCursor() {
 void CaptureFrame(int width, int height) {
     State& s = s_State;
     if (!s.pipe) return;
-    if (width != s.w || height != s.h) return; // the window can't change size mid-video
+    if (width != s.w || height != s.h) { ++s.dropped; return; } // the window can't change size mid-video
     s.pixels.resize((size_t)width * (size_t)height * 4);
     // The default framebuffer reads from its back buffer; RGBA rows are 4-byte aligned already.
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);

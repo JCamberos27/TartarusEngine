@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-class World;
 
 // TARTARUS_CINEMATIC=<path.json> with --smoke-test <scene> --smoke-shots <dir>: a fly-through video of the scene. The
 // Scene view follows a camera path (a smooth spline through keyframes), the clock steps exactly 1/60 s a frame, and
@@ -59,9 +58,11 @@ float Duration();
 int Warmup();
 
 // The video: starts ffmpeg (w x h RGBA, top row first) into the --smoke-shots dir; Write sends one frame; Finish
-// closes it and reports. Start returns false if ffmpeg won't start.
+// closes it and reports. Start returns false if ffmpeg won't start. Finish logs an error and returns false when
+// the clip is incomplete (ffmpeg failed, a frame was dropped or the wrong size) or no frame was ever written;
+// calling it again returns the same answer.
 bool Start(const std::string& shotsDir, int w, int h);
 void Write(const std::vector<unsigned char>& rgbaTopDown);
-void Finish();
+bool Finish();
 
 } // namespace Cinematic

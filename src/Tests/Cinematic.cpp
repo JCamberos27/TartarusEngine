@@ -23,8 +23,9 @@ struct State {
     FILE* pipe = nullptr;
     int w = 0, h = 0;
     long long written = 0;
-    long long dropped = 0; // frames the pipe did not take (ffmpeg gone or full disk)
+    long long dropped = 0; // frames the pipe did not take (ffmpeg gone, full disk) or of the wrong size
     std::string path;
+    int rc = -1;           // ffmpeg's exit code once Finish closed the pipe; -1 before
 };
 State s_State;
 
@@ -153,20 +154,26 @@ bool Start(const std::string& shotsDir, int w, int h) {
 
 void Write(const std::vector<unsigned char>& rgba) {
     State& s = s_State;
-    if (!s.pipe || rgba.size() != (size_t)s.w * (size_t)s.h * 4) return;
+    if (!s.pipe) return;
+    if (rgba.size() != (size_t)s.w * (size_t)s.h * 4) { ++s.dropped; return; } // the framebuffer changed size mid-clip
     if (std::fwrite(rgba.data(), 1, rgba.size(), s.pipe) == rgba.size()) ++s.written;
     else ++s.dropped;
 }
 
-void Finish() {
+bool Finish() {
     State& s = s_State;
-    if (!s.pipe) return;
-    const int rc = _pclose(s.pipe);
-    s.pipe = nullptr;
-    std::cout << "[Cinematic] " << s.written << " frames (" << (double)s.written / 60.0 << " s), ffmpeg exit " << rc
-              << std::endl;
-    if (rc != 0 || s.dropped > 0)
-        std::cerr << "[Cinematic] FAILED: ffmpeg exit " << rc << ", " << s.dropped << " frame(s) not written - the clip is incomplete" << std::endl;
+    if (s.pipe) {
+        s.rc = _pclose(s.pipe);
+        s.pipe = nullptr;
+        std::cout << "[Cinematic] " << s.written << " frames (" << (double)s.written / 60.0 << " s), ffmpeg exit " << s.rc
+                  << std::endl;
+        if (s.rc != 0 || s.dropped > 0)
+            Log::Error("Cinematic: ffmpeg exit " + std::to_string(s.rc) + ", " + std::to_string(s.dropped) +
+                       " frame(s) not written - the clip is incomplete");
+        else if (s.written == 0)
+            Log::Error("Cinematic: no frame was recorded");
+    }
+    return s.rc == 0 && s.dropped == 0 && s.written > 0;
 }
 
 
