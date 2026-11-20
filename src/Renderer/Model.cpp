@@ -3067,8 +3067,8 @@ long long Model::DrawFurShells(Shader& prog, const glm::mat4& xform, const std::
             prog.Bind();
             preSkinned = UploadBoneMatrices(prog);
             locs = &CachedMaterialLocs(prog);
-            prog.SetMat4(prog.Loc("uModel"), xform);
-            prog.SetMat4(prog.Loc("uNormalMatrix"), glm::mat4(NormalMatrix(xform)));
+            prog.SetMat4(locs->model, xform);
+            prog.SetMat4(locs->normalMatrix, glm::mat4(NormalMatrix(xform)));
             bound = true;
         }
         const int shells = bind(prog, mat, user);
