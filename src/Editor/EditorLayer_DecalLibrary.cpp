@@ -23,7 +23,6 @@
 #include "Glass/GlassMotion.h"
 #include "DecalAsset.h"
 #include "GLStateCache.h"
-#include "Log.h"
 #include "Core/Paths.h"
 #include "World.h"
 #include "gl.h"
@@ -36,7 +35,6 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <filesystem>
 #include <unordered_map>
 #include <unordered_set>

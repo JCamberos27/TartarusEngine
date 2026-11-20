@@ -41,7 +41,6 @@
 namespace fs = std::filesystem;
 using namespace EditorInternal;
 
-void PropertyLabel(const char* label, const char* tooltip, bool highlighted); // EditorLayer_Inspector.cpp
 
 namespace {
 
