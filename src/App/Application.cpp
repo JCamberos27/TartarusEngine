@@ -140,6 +140,7 @@
 #include <chrono>
 #include <ctime>
 #include <future>
+#include <optional>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include "Renderer/UploadStaging.h"
 #include <cstdio>
@@ -208,6 +209,9 @@ int Application::Run() {
     }
     // A shipped game doesn't watch its files for edits; a development build still does.
     LiveReload::SetEnabled(!playerMode || playerCfg.DevelopmentBuild);
+    // --editor-tests: the tracked project/settings.json and layers.json go back as they were when the run ends.
+    std::optional<ProjectFilesGuard> projectFiles;
+    if (opt.editorTestsMode) projectFiles.emplace();
 
     // #132 - register the project's assets on a worker thread while the window, GL context and
     // shaders come up. Any GUID lookup made before it finishes waits for it.
