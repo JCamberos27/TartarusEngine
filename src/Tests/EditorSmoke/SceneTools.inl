@@ -949,7 +949,8 @@ void RegisterSceneToolsTests() {
              Expect("every step pushed at least one entry", [](Ctx& c) {
                  int recorded = 0;
                  for (const Snapshot& r : g_At) recorded += r.Has ? 1 : 0;
-                 return recorded >= 12 ? std::string() : std::to_string(recorded) + " depths recorded; history: " + ST::TopLabel(c.E);
+                 // 13 Records: "nothing" at depth 0, then 12 actions; one that pushed nothing overwrote the depth before it.
+                 return recorded == 13 ? std::string() : std::to_string(recorded) + " of 13 depths recorded; history: " + ST::TopLabel(c.E);
              })},
         });
         s.push_back(Walk(true, 0, checked));
