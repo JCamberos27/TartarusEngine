@@ -60,6 +60,167 @@ T SafeValue(const json& root, const char* key, const T& fallback) {
         return fallback;
     }
 }
+
+// Every preference that is just a value under its own key, listed once: Load() reads each with
+// SafeValue (a missing or mistyped key keeps the default) and Flush() writes each back. Keys with
+// their own rules (window placement, the last scene's GUID, recent scenes, the sound mastering
+// reset, mute-app names, the per-run theme, scene cameras) are handled by hand around this list,
+// and ranges are clamped after loading.
+// Not here on purpose: "editorTheme" (the removed theme picker; an old file's key is ignored),
+// exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* (#9: moved to scene data;
+// SceneSerializer reads an old file's keys directly to migrate a pre-v3 scene) and
+// PhysicsSimTimeScale (session-only, so a slowed or frozen session never carries over).
+template <class Visit>
+void ForEachPlainField(EditorSettings& s, Visit&& field) {
+    field("showTooltips", s.ShowTooltips);
+    field("uiScaleOverride", s.UiScaleOverride);
+    field("autoSaveEnabled", s.AutoSaveEnabled);
+    field("autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
+    field("vsyncMode", s.VSyncMode);
+    field("fpsLimit", s.FpsLimit);
+    field("unfocusedFpsLimit", s.UnfocusedFpsLimit);
+    field("renderHeight", s.RenderHeight);
+    field("renderSharpness", s.RenderSharpness);
+    field("fullscreenMode", s.FullscreenMode);
+    field("fullscreenMonitor", s.FullscreenMonitor);
+    field("gridOpacity", s.GridOpacity);
+    field("gridMinorSpacing", s.GridMinorSpacing);
+    field("gridMajorEvery", s.GridMajorEvery);
+    field("gridFadeDistance", s.GridFadeDistance);
+    field("gridShowAxisLines", s.GridShowAxisLines);
+    field("gridAxisThickness", s.GridAxisThickness);
+    field("lastScenePath", s.LastScenePath);
+    field("gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
+    field("playTransitionGlide", s.PlayTransitionGlide);
+    field("gameViewShowStats", s.GameViewShowStats);
+    field("sceneShowStats", s.SceneShowStats);
+    field("sceneCameraFov", s.SceneCameraFov);
+    field("sceneCameraFlySpeed", s.SceneCameraFlySpeed);
+    field("sceneCameraNear", s.SceneCameraNear);
+    field("sceneCameraFar", s.SceneCameraFar);
+    field("audioMuted", s.AudioMuted);
+    field("editorSoundsEnabled", s.EditorSoundsEnabled);
+    field("editorSoundsVolume", s.EditorSoundsVolume);
+    field("editorSoundsPremium", s.EditorSoundsPremium);
+    field("editorSoundCategoryOn", s.EditorSoundCategoryOn);
+    field("editorSoundCategoryVolume", s.EditorSoundCategoryVolume);
+    field("muteAppsWhileMoving", s.MuteAppsWhileMoving);
+    field("assetSearchGlobal", s.AssetSearchGlobal);
+    field("gameViewPresetLabel", s.GameViewPresetLabel);
+    field("gameViewPresetWidth", s.GameViewPresetWidth);
+    field("gameViewPresetHeight", s.GameViewPresetHeight);
+    field("assetBrowserTreeWidth", s.AssetBrowserTreeWidth);
+    field("assetBrowserIconSize", s.AssetBrowserIconSize);
+    field("assetSortMode", s.AssetSortMode);
+    field("assetSortDesc", s.AssetSortDesc);
+    field("assetDetailsMode", s.AssetDetailsMode);
+    field("hierarchySortMode", s.HierarchySortMode);
+    field("hierarchySortDesc", s.HierarchySortDesc);
+    field("hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
+    field("reduceMotion", s.ReduceMotion);
+    field("motionSpeed", s.MotionSpeed);
+    field("motionThemeTweens", s.MotionThemeTweens);
+    field("motionInertia", s.MotionInertia);
+    field("motionGradients", s.MotionGradients);
+    field("motionRollingNumbers", s.MotionRollingNumbers);
+    field("motionViewport", s.MotionViewport);
+    field("motionStartup", s.MotionStartup);
+    field("glassViewportHuds", s.GlassViewportHuds);
+    field("glassFrostedBlur", s.GlassFrostedBlur);
+    field("glassStatsPill", s.GlassStatsPill);
+    field("glassSeeThroughWindow", s.GlassSeeThroughWindow);
+    field("showGlassHierarchy", s.ShowGlassHierarchy);
+    field("showGlassInspector", s.ShowGlassInspector);
+    field("showGlassAssets", s.ShowGlassAssets);
+    field("defaultLayoutPreset", s.DefaultLayoutPreset);
+    field("showLightGizmos", s.ShowLightGizmos);
+    field("lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
+    field("lightGizmoOpacity", s.LightGizmoOpacity);
+    field("lightGizmoScale", s.LightGizmoScale);
+    field("showColliders", s.ShowColliders);
+    field("collidersSelectedOnly", s.CollidersSelectedOnly);
+    field("showDecalGizmos", s.ShowDecalGizmos);
+    field("showProbeGizmos", s.ShowProbeGizmos);
+    field("showVolumeGizmos", s.ShowVolumeGizmos);
+    field("volumeGizmosSelectedOnly", s.VolumeGizmosSelectedOnly);
+    field("entityIconsMode", s.EntityIconsMode);
+    field("entityIconsThroughWalls", s.EntityIconsThroughWalls);
+    field("showBodyDebug", s.ShowBodyDebug);
+    field("decalFavorites", s.DecalFavorites);
+    field("decalRecent", s.DecalRecent);
+    field("decalPalette", s.DecalPalette);
+    field("decalSourceCategory", s.DecalSourceCategory);
+    field("decalLibraryTile", s.DecalLibraryTile);
+    field("decalBrushRadius", s.DecalBrushRadius);
+    field("decalBrushSpacing", s.DecalBrushSpacing);
+    field("decalBrushDensity", s.DecalBrushDensity);
+    field("decalBrushSize", s.DecalBrushSize);
+    field("decalBrushSizeJitter", s.DecalBrushSizeJitter);
+    field("decalBrushRotationJitter", s.DecalBrushRotationJitter);
+    field("decalBrushOpacity", s.DecalBrushOpacity);
+    field("decalBrushAlign", s.DecalBrushAlign);
+    field("decalBrushFollowStroke", s.DecalBrushFollowStroke);
+    field("decalGrimeSpacing", s.DecalGrimeSpacing);
+    field("decalGrimeDensity", s.DecalGrimeDensity);
+    field("decalGrimeMax", s.DecalGrimeMax);
+    field("physicsDebugInput", s.PhysicsDebugInput);
+    field("showPhysicsPanel", s.ShowPhysicsPanel);
+    field("showAssetLibrary", s.ShowAssetLibrary);
+    field("assetLibraryPath", s.AssetLibraryPath);
+    field("physicsHudOverlay", s.PhysicsHudOverlay);
+    field("physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
+    field("logPhysicsEvents", s.LogPhysicsEvents);
+    field("playDebugOverlay", s.PlayDebugOverlay);
+    field("fRowOverlay", s.FRowOverlay);
+    field("fRowLightDebug", s.FRowLightDebug);
+    field("postFxOff", s.PostFxOff);
+    field("fRowLook", s.FRowLook);
+    field("fRowStyle", s.FRowStyle);
+    field("fRowOutfitSeed", s.FRowOutfitSeed);
+    field("layerVisibleMask", s.LayerVisibleMask);
+    field("layerPickLockMask", s.LayerPickLockMask);
+    field("viewShowGrid", s.ViewShowGrid);
+    field("viewShowGizmo", s.ViewShowGizmo);
+    field("viewFrameOnSelect", s.ViewFrameOnSelect);
+    field("gizmoSize", s.GizmoSize);
+    field("vertexPickPixels", s.VertexPickPixels);
+    field("snapEnabled", s.SnapEnabled);
+    field("snapTranslation", s.SnapTranslation);
+    field("snapRotationDeg", s.SnapRotationDeg);
+    field("snapScale", s.SnapScale);
+    field("gizmoLocalSpace", s.GizmoLocalSpace);
+    field("gizmoPivotCenter", s.GizmoPivotCenter);
+    field("activeTool", s.ActiveTool);
+    field("shadingMode", s.ShadingMode);
+    field("enhancerHoverKeys", s.EnhancerHoverKeys);
+    field("hierarchyRowStyles", s.HierarchyRowStyles);
+    field("hierarchyTreeLines", s.HierarchyTreeLines);
+    field("hierarchyMinimal", s.HierarchyMinimal);
+    field("hierarchyZebra", s.HierarchyZebra);
+    field("hierarchyMinimap", s.HierarchyMinimap);
+    field("hierarchyMinimapMax", s.HierarchyMinimapMax);
+    field("hierarchyMinimapWhen", s.HierarchyMinimapWhen);
+    field("hierarchyNavBar", s.HierarchyNavBar);
+    field("folderStyles", s.FolderStyles);
+    field("folderTreeLines", s.FolderTreeLines);
+    field("folderRowWash", s.FolderRowWash);
+    field("folderZebra", s.FolderZebra);
+    field("folderMinimal", s.FolderMinimal);
+    field("folderMinimap", s.FolderMinimap);
+    field("folderNavBar", s.FolderNavBar);
+    field("inspectorNavBar", s.InspectorNavBar);
+    field("bookmarkChips", s.BookmarkChips);
+    field("inspectorAnimations", s.InspectorAnimations);
+    field("inspectorMinimal", s.InspectorMinimal);
+    field("inspectorTabs", s.InspectorTabs);
+    field("assetTabs", s.AssetTabs);
+    field("panelTabColors", s.PanelTabColors);
+    field("componentHeaderColors", s.ComponentHeaderColors);
+    field("favorites", s.Favorites);
+    field("favoritesHoldAlt", s.FavoritesHoldAlt);
+    field("ruler", s.Ruler);
+    field("measureFeet", s.MeasureFeet);
+}
 }
 
 const std::string& EditorSettings::PrefsFilePath() {
@@ -80,19 +241,7 @@ void EditorSettings::Load() {
     }
 
     EditorSettings& s = Get();
-    // editorTheme (int) is intentionally no longer read: the theme picker was removed and the
-    // editor now has one style. An old prefs file's stray "editorTheme" key is simply ignored.
-    s.ShowTooltips = SafeValue(root, "showTooltips", s.ShowTooltips);
-    s.UiScaleOverride = SafeValue(root, "uiScaleOverride", s.UiScaleOverride);
-    s.AutoSaveEnabled = SafeValue(root, "autoSaveEnabled", s.AutoSaveEnabled);
-    s.AutoSaveIntervalMinutes = SafeValue(root, "autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
-    s.VSyncMode = SafeValue(root, "vsyncMode", s.VSyncMode);
-    s.FpsLimit = SafeValue(root, "fpsLimit", s.FpsLimit);
-    s.UnfocusedFpsLimit = SafeValue(root, "unfocusedFpsLimit", s.UnfocusedFpsLimit);
-    s.RenderHeight = std::clamp(SafeValue(root, "renderHeight", s.RenderHeight), 0, 4320);
-    s.RenderSharpness = std::clamp(SafeValue(root, "renderSharpness", s.RenderSharpness), 0.0f, 1.0f);
-    s.FullscreenMode = std::clamp(SafeValue(root, "fullscreenMode", s.FullscreenMode), 0, 1);
-    s.FullscreenMonitor = std::clamp(SafeValue(root, "fullscreenMonitor", s.FullscreenMonitor), -1, 15);
+    ForEachPlainField(s, [&](const char* key, auto& value) { value = SafeValue(root, key, value); });
     if (auto wp = root.find("windowPlacement"); wp != root.end() && wp->is_object()) {
         s.WindowX = SafeValue(*wp, "x", 0);
         s.WindowY = SafeValue(*wp, "y", 0);
@@ -101,17 +250,6 @@ void EditorSettings::Load() {
         s.WindowMaximized = SafeValue(*wp, "maximized", true);
         s.WindowPlacementValid = s.WindowWidth > 0 && s.WindowHeight > 0;
     }
-    // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
-    // read here (#9, Phase M item 1) — moved to World/scene data. A pre-v3 scene's values are
-    // migrated forward by SceneSerializer reading this file's legacy keys directly (see
-    // EditorSettings::PrefsFilePath()); an old prefs file's stray keys are simply ignored here.
-    s.GridOpacity = SafeValue(root, "gridOpacity", s.GridOpacity);
-    s.GridMinorSpacing = SafeValue(root, "gridMinorSpacing", s.GridMinorSpacing);
-    s.GridMajorEvery = SafeValue(root, "gridMajorEvery", s.GridMajorEvery);
-    s.GridFadeDistance = SafeValue(root, "gridFadeDistance", s.GridFadeDistance);
-    s.GridShowAxisLines = SafeValue(root, "gridShowAxisLines", s.GridShowAxisLines);
-    s.GridAxisThickness = SafeValue(root, "gridAxisThickness", s.GridAxisThickness);
-    s.LastScenePath = SafeValue(root, "lastScenePath", s.LastScenePath);
     {
         // #132 - the last scene was renamed or moved since: follow its GUID. Only looked up when
         // the path is gone, so the common case never waits on the background asset scan.
@@ -125,17 +263,6 @@ void EditorSettings::Load() {
     s.RecentScenes.clear();
     if (auto it = root.find("recentScenes"); it != root.end() && it->is_array())
         for (const auto& p : *it) if (p.is_string() && !p.get<std::string>().empty()) s.RecentScenes.push_back(p.get<std::string>());
-    s.GameViewMaximizeOnPlay = SafeValue(root, "gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
-    s.PlayTransitionGlide = SafeValue(root, "playTransitionGlide", s.PlayTransitionGlide);
-    s.GameViewShowStats = SafeValue(root, "gameViewShowStats", s.GameViewShowStats);
-    s.SceneShowStats = SafeValue(root, "sceneShowStats", s.SceneShowStats);
-    s.SceneCameraFov = SafeValue(root, "sceneCameraFov", s.SceneCameraFov);
-    s.SceneCameraFlySpeed = SafeValue(root, "sceneCameraFlySpeed", s.SceneCameraFlySpeed);
-    s.SceneCameraNear = SafeValue(root, "sceneCameraNear", s.SceneCameraNear);
-    s.SceneCameraFar = SafeValue(root, "sceneCameraFar", s.SceneCameraFar);
-    s.AudioMuted = SafeValue(root, "audioMuted", s.AudioMuted);
-    s.EditorSoundsEnabled = SafeValue(root, "editorSoundsEnabled", s.EditorSoundsEnabled);
-    s.EditorSoundsVolume = SafeValue(root, "editorSoundsVolume", s.EditorSoundsVolume);
     // The P6 remaster made every file about 10 dB louder, so a volume set against the old files (most likely turned all the
     // way up because they were too quiet) would now be far too loud: it starts again from the new default, once.
     s.EditorSoundsMastering = SafeValue(root, "editorSoundsMastering", 1);
@@ -143,57 +270,13 @@ void EditorSettings::Load() {
         s.EditorSoundsVolume = 0.70f; // the default above
         s.EditorSoundsMastering = 2;
     }
-    s.EditorSoundsPremium = SafeValue(root, "editorSoundsPremium", s.EditorSoundsPremium);
-    s.EditorSoundCategoryOn = SafeValue(root, "editorSoundCategoryOn", s.EditorSoundCategoryOn);
-    s.EditorSoundCategoryVolume = SafeValue(root, "editorSoundCategoryVolume", s.EditorSoundCategoryVolume);
-    s.MuteAppsWhileMoving = SafeValue(root, "muteAppsWhileMoving", s.MuteAppsWhileMoving);
     if (auto it = root.find("muteAppNames"); it != root.end() && it->is_array()) {
         s.MuteAppNames.clear();
         for (const auto& n : *it) if (n.is_string() && !n.get<std::string>().empty()) s.MuteAppNames.push_back(n.get<std::string>());
     }
-    s.AssetSearchGlobal = SafeValue(root, "assetSearchGlobal", s.AssetSearchGlobal);
-    s.GameViewPresetLabel = SafeValue(root, "gameViewPresetLabel", s.GameViewPresetLabel);
-    s.GameViewPresetWidth = SafeValue(root, "gameViewPresetWidth", s.GameViewPresetWidth);
-    s.GameViewPresetHeight = SafeValue(root, "gameViewPresetHeight", s.GameViewPresetHeight);
-    s.AssetBrowserTreeWidth = SafeValue(root, "assetBrowserTreeWidth", s.AssetBrowserTreeWidth);
-    s.AssetBrowserIconSize = SafeValue(root, "assetBrowserIconSize", s.AssetBrowserIconSize);
-    s.AssetSortMode = SafeValue(root, "assetSortMode", s.AssetSortMode);
-    s.AssetSortDesc = SafeValue(root, "assetSortDesc", s.AssetSortDesc);
-    s.AssetDetailsMode = SafeValue(root, "assetDetailsMode", s.AssetDetailsMode);
-    s.HierarchySortMode = SafeValue(root, "hierarchySortMode", s.HierarchySortMode);
-    s.HierarchySortDesc = SafeValue(root, "hierarchySortDesc", s.HierarchySortDesc);
-    s.HierarchyTypeFilterMask = SafeValue(root, "hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
-    s.ReduceMotion = SafeValue(root, "reduceMotion", s.ReduceMotion);
-    s.MotionSpeed = std::clamp(SafeValue(root, "motionSpeed", s.MotionSpeed), 0.5f, 2.0f);
-    s.MotionThemeTweens = SafeValue(root, "motionThemeTweens", s.MotionThemeTweens);
-    s.MotionInertia = SafeValue(root, "motionInertia", s.MotionInertia);
-    s.MotionGradients = SafeValue(root, "motionGradients", s.MotionGradients);
-    s.MotionRollingNumbers = SafeValue(root, "motionRollingNumbers", s.MotionRollingNumbers);
-    s.MotionViewport = SafeValue(root, "motionViewport", s.MotionViewport);
-    s.MotionStartup = SafeValue(root, "motionStartup", s.MotionStartup);
     // "glassTheme", not the retired "editorTheme": old prefs files still carry that key with
     // values from the removed theme picker, and must not switch Glass on by accident.
     s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), kTartarusTheme, kGlassTheme);
-    s.GlassViewportHuds = SafeValue(root, "glassViewportHuds", s.GlassViewportHuds);
-    s.GlassFrostedBlur = SafeValue(root, "glassFrostedBlur", s.GlassFrostedBlur);
-    s.GlassStatsPill = SafeValue(root, "glassStatsPill", s.GlassStatsPill);
-    s.GlassSeeThroughWindow = SafeValue(root, "glassSeeThroughWindow", s.GlassSeeThroughWindow);
-    s.ShowGlassHierarchy = SafeValue(root, "showGlassHierarchy", s.ShowGlassHierarchy);
-    s.ShowGlassInspector = SafeValue(root, "showGlassInspector", s.ShowGlassInspector);
-    s.ShowGlassAssets = SafeValue(root, "showGlassAssets", s.ShowGlassAssets);
-    s.DefaultLayoutPreset = SafeValue(root, "defaultLayoutPreset", s.DefaultLayoutPreset);
-    s.ShowLightGizmos = SafeValue(root, "showLightGizmos", s.ShowLightGizmos);
-    s.LightGizmoSelectedOnly = SafeValue(root, "lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
-    s.LightGizmoOpacity = SafeValue(root, "lightGizmoOpacity", s.LightGizmoOpacity);
-    s.LightGizmoScale = SafeValue(root, "lightGizmoScale", s.LightGizmoScale);
-    s.ShowColliders = SafeValue(root, "showColliders", s.ShowColliders);
-    s.CollidersSelectedOnly = SafeValue(root, "collidersSelectedOnly", s.CollidersSelectedOnly);
-    s.ShowDecalGizmos = SafeValue(root, "showDecalGizmos", s.ShowDecalGizmos);
-    s.ShowProbeGizmos = SafeValue(root, "showProbeGizmos", s.ShowProbeGizmos);
-    s.ShowVolumeGizmos = SafeValue(root, "showVolumeGizmos", s.ShowVolumeGizmos);
-    s.VolumeGizmosSelectedOnly = SafeValue(root, "volumeGizmosSelectedOnly", s.VolumeGizmosSelectedOnly);
-    s.EntityIconsMode = std::clamp(SafeValue(root, "entityIconsMode", s.EntityIconsMode), 0, 2);
-    s.EntityIconsThroughWalls = SafeValue(root, "entityIconsThroughWalls", s.EntityIconsThroughWalls);
     s.SceneCameras.clear();
     if (auto it = root.find("sceneCameras"); it != root.end() && it->is_array()) {
         for (const auto& c : *it) {
@@ -210,84 +293,6 @@ void EditorSettings::Load() {
             if ((int)s.SceneCameras.size() < kMaxSceneCameras) s.SceneCameras.push_back(pose);
         }
     }
-    s.ShowBodyDebug = SafeValue(root, "showBodyDebug", s.ShowBodyDebug);
-    s.DecalFavorites = SafeValue(root, "decalFavorites", s.DecalFavorites);
-    s.DecalRecent = SafeValue(root, "decalRecent", s.DecalRecent);
-    s.DecalPalette = SafeValue(root, "decalPalette", s.DecalPalette);
-    s.DecalSourceCategory = SafeValue(root, "decalSourceCategory", s.DecalSourceCategory);
-    s.DecalLibraryTile = std::clamp(SafeValue(root, "decalLibraryTile", s.DecalLibraryTile), 48.0f, 200.0f);
-    s.DecalBrushRadius = SafeValue(root, "decalBrushRadius", s.DecalBrushRadius);
-    s.DecalBrushSpacing = SafeValue(root, "decalBrushSpacing", s.DecalBrushSpacing);
-    s.DecalBrushDensity = SafeValue(root, "decalBrushDensity", s.DecalBrushDensity);
-    s.DecalBrushSize = SafeValue(root, "decalBrushSize", s.DecalBrushSize);
-    s.DecalBrushSizeJitter = SafeValue(root, "decalBrushSizeJitter", s.DecalBrushSizeJitter);
-    s.DecalBrushRotationJitter = SafeValue(root, "decalBrushRotationJitter", s.DecalBrushRotationJitter);
-    s.DecalBrushOpacity = SafeValue(root, "decalBrushOpacity", s.DecalBrushOpacity);
-    s.DecalBrushAlign = SafeValue(root, "decalBrushAlign", s.DecalBrushAlign);
-    s.DecalBrushFollowStroke = SafeValue(root, "decalBrushFollowStroke", s.DecalBrushFollowStroke);
-    s.DecalGrimeSpacing = SafeValue(root, "decalGrimeSpacing", s.DecalGrimeSpacing);
-    s.DecalGrimeDensity = SafeValue(root, "decalGrimeDensity", s.DecalGrimeDensity);
-    s.DecalGrimeMax = SafeValue(root, "decalGrimeMax", s.DecalGrimeMax);
-    s.PhysicsDebugInput = SafeValue(root, "physicsDebugInput", s.PhysicsDebugInput);
-    s.ShowPhysicsPanel = SafeValue(root, "showPhysicsPanel", s.ShowPhysicsPanel);
-    s.ShowAssetLibrary = SafeValue(root, "showAssetLibrary", s.ShowAssetLibrary);
-    s.AssetLibraryPath = SafeValue(root, "assetLibraryPath", s.AssetLibraryPath);
-    s.PhysicsHudOverlay = SafeValue(root, "physicsHudOverlay", s.PhysicsHudOverlay);
-    s.PhysicsDebugDrawFlags = SafeValue(root, "physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
-    s.LogPhysicsEvents = SafeValue(root, "logPhysicsEvents", s.LogPhysicsEvents);
-    // PhysicsSimTimeScale (Phase 6 item 13 / Appendix B #39) is deliberately NOT loaded - it stays
-    // session-only (see the struct field's comment), so a session left slowed/frozen can't leave
-    // physics silently frozen the next time the editor opens.
-    s.PlayDebugOverlay = SafeValue(root, "playDebugOverlay", s.PlayDebugOverlay);
-    s.FRowOverlay = SafeValue(root, "fRowOverlay", s.FRowOverlay);
-    s.FRowLightDebug = SafeValue(root, "fRowLightDebug", s.FRowLightDebug);
-    s.PostFxOff = SafeValue(root, "postFxOff", s.PostFxOff);
-    s.FRowLook = SafeValue(root, "fRowLook", s.FRowLook);
-    s.FRowStyle = SafeValue(root, "fRowStyle", s.FRowStyle);
-    s.FRowOutfitSeed = SafeValue(root, "fRowOutfitSeed", s.FRowOutfitSeed);
-    s.LayerVisibleMask = SafeValue(root, "layerVisibleMask", s.LayerVisibleMask);
-    s.LayerPickLockMask = SafeValue(root, "layerPickLockMask", s.LayerPickLockMask);
-    s.ViewShowGrid = SafeValue(root, "viewShowGrid", s.ViewShowGrid);
-    s.ViewShowGizmo = SafeValue(root, "viewShowGizmo", s.ViewShowGizmo);
-    s.ViewFrameOnSelect = SafeValue(root, "viewFrameOnSelect", s.ViewFrameOnSelect);
-    s.GizmoSize = SafeValue(root, "gizmoSize", s.GizmoSize);
-    s.VertexPickPixels = SafeValue(root, "vertexPickPixels", s.VertexPickPixels);
-    s.SnapEnabled = SafeValue(root, "snapEnabled", s.SnapEnabled);
-    s.SnapTranslation = SafeValue(root, "snapTranslation", s.SnapTranslation);
-    s.SnapRotationDeg = SafeValue(root, "snapRotationDeg", s.SnapRotationDeg);
-    s.SnapScale = SafeValue(root, "snapScale", s.SnapScale);
-    s.GizmoLocalSpace = SafeValue(root, "gizmoLocalSpace", s.GizmoLocalSpace);
-    s.GizmoPivotCenter = SafeValue(root, "gizmoPivotCenter", s.GizmoPivotCenter);
-    s.ActiveTool = SafeValue(root, "activeTool", s.ActiveTool);
-    s.ShadingMode = SafeValue(root, "shadingMode", s.ShadingMode);
-    s.EnhancerHoverKeys = SafeValue(root, "enhancerHoverKeys", s.EnhancerHoverKeys);
-    s.HierarchyRowStyles = SafeValue(root, "hierarchyRowStyles", s.HierarchyRowStyles);
-    s.HierarchyTreeLines = SafeValue(root, "hierarchyTreeLines", s.HierarchyTreeLines);
-    s.HierarchyMinimal = SafeValue(root, "hierarchyMinimal", s.HierarchyMinimal);
-    s.HierarchyZebra = SafeValue(root, "hierarchyZebra", s.HierarchyZebra);
-    s.HierarchyMinimap = SafeValue(root, "hierarchyMinimap", s.HierarchyMinimap);
-    s.HierarchyMinimapMax = std::clamp(SafeValue(root, "hierarchyMinimapMax", s.HierarchyMinimapMax), 1, 12);
-    s.HierarchyMinimapWhen = std::clamp(SafeValue(root, "hierarchyMinimapWhen", s.HierarchyMinimapWhen), 0, 1);
-    s.HierarchyNavBar = SafeValue(root, "hierarchyNavBar", s.HierarchyNavBar);
-    s.FolderStyles = SafeValue(root, "folderStyles", s.FolderStyles);
-    s.FolderTreeLines = SafeValue(root, "folderTreeLines", s.FolderTreeLines);
-    s.FolderRowWash = SafeValue(root, "folderRowWash", s.FolderRowWash);
-    s.FolderZebra = SafeValue(root, "folderZebra", s.FolderZebra);
-    s.FolderMinimal = SafeValue(root, "folderMinimal", s.FolderMinimal);
-    s.FolderMinimap = SafeValue(root, "folderMinimap", s.FolderMinimap);
-    s.FolderNavBar = SafeValue(root, "folderNavBar", s.FolderNavBar);
-    s.InspectorNavBar = SafeValue(root, "inspectorNavBar", s.InspectorNavBar);
-    s.BookmarkChips = SafeValue(root, "bookmarkChips", s.BookmarkChips);
-    s.InspectorAnimations = SafeValue(root, "inspectorAnimations", s.InspectorAnimations);
-    s.InspectorMinimal = SafeValue(root, "inspectorMinimal", s.InspectorMinimal);
-    s.InspectorTabs = SafeValue(root, "inspectorTabs", s.InspectorTabs);
-    s.AssetTabs = SafeValue(root, "assetTabs", s.AssetTabs);
-    s.PanelTabColors = SafeValue(root, "panelTabColors", s.PanelTabColors);
-    s.ComponentHeaderColors = SafeValue(root, "componentHeaderColors", s.ComponentHeaderColors);
-    s.Favorites = SafeValue(root, "favorites", s.Favorites);
-    s.FavoritesHoldAlt = SafeValue(root, "favoritesHoldAlt", s.FavoritesHoldAlt);
-    s.Ruler = SafeValue(root, "ruler", s.Ruler);
-    s.MeasureFeet = SafeValue(root, "measureFeet", s.MeasureFeet);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -322,6 +327,15 @@ void EditorSettings::Load() {
     clampF(s.SnapScale, 0.001f, 10.0f, 0.1f);
     s.ActiveTool = std::clamp(s.ActiveTool, 0, 4);   // GizmoOp::Translate..Universal
     s.ShadingMode = std::clamp(s.ShadingMode, 0, 5); // EditorLayer::ShadingMode::Shaded..Mip
+    s.RenderHeight = std::clamp(s.RenderHeight, 0, 4320);
+    s.RenderSharpness = std::clamp(s.RenderSharpness, 0.0f, 1.0f);
+    s.FullscreenMode = std::clamp(s.FullscreenMode, 0, 1);
+    s.FullscreenMonitor = std::clamp(s.FullscreenMonitor, -1, 15);
+    s.MotionSpeed = std::clamp(s.MotionSpeed, 0.5f, 2.0f);
+    s.EntityIconsMode = std::clamp(s.EntityIconsMode, 0, 2);
+    s.DecalLibraryTile = std::clamp(s.DecalLibraryTile, 48.0f, 200.0f);
+    s.HierarchyMinimapMax = std::clamp(s.HierarchyMinimapMax, 1, 12);
+    s.HierarchyMinimapWhen = std::clamp(s.HierarchyMinimapWhen, 0, 1);
 
     // A file from before kPrefsVersion (no "prefsVersion" key = v1): move it forward once and
     // write it straight back, so the migration never runs twice.
@@ -420,32 +434,12 @@ void EditorSettings::Flush() {
 
     json root;
     root["prefsVersion"] = kPrefsVersion;
-    root["showTooltips"] = Get().ShowTooltips;
-    root["uiScaleOverride"] = Get().UiScaleOverride;
-    root["autoSaveEnabled"] = Get().AutoSaveEnabled;
-    root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;
-    root["vsyncMode"] = Get().VSyncMode;
-    root["fpsLimit"] = Get().FpsLimit;
-    root["unfocusedFpsLimit"] = Get().UnfocusedFpsLimit;
-    root["renderHeight"] = Get().RenderHeight;
-    root["renderSharpness"] = Get().RenderSharpness;
-    root["fullscreenMode"] = Get().FullscreenMode;
-    root["fullscreenMonitor"] = Get().FullscreenMonitor;
+    ForEachPlainField(Get(), [&](const char* key, const auto& value) { root[key] = value; });
     if (Get().WindowPlacementValid) {
         root["windowPlacement"] = {{"x", Get().WindowX}, {"y", Get().WindowY},
                                    {"width", Get().WindowWidth}, {"height", Get().WindowHeight},
                                    {"maximized", Get().WindowMaximized}};
     }
-    // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
-    // written here — see the matching comment in Load(). Once every project has been opened at
-    // least once under formatVersion 3+, an old prefs file's stray legacy keys simply age out.
-    root["gridOpacity"] = Get().GridOpacity;
-    root["gridMinorSpacing"] = Get().GridMinorSpacing;
-    root["gridMajorEvery"] = Get().GridMajorEvery;
-    root["gridFadeDistance"] = Get().GridFadeDistance;
-    root["gridShowAxisLines"] = Get().GridShowAxisLines;
-    root["gridAxisThickness"] = Get().GridAxisThickness;
-    root["lastScenePath"] = Get().LastScenePath;
     {
         auto& recent = Get().RecentScenes;
         if (!Get().LastScenePath.empty()) {
@@ -461,64 +455,9 @@ void EditorSettings::Flush() {
         const AssetGuid g = AssetDatabase::GuidForPath(Get().LastScenePath);
         if (g.IsValid()) root["lastSceneGuid"] = g.ToString();
     }
-    root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
-    root["gameViewShowStats"] = Get().GameViewShowStats;
-    root["sceneShowStats"] = Get().SceneShowStats;
-    root["playTransitionGlide"] = Get().PlayTransitionGlide;
-    root["sceneCameraFov"] = Get().SceneCameraFov;
-    root["sceneCameraFlySpeed"] = Get().SceneCameraFlySpeed;
-    root["sceneCameraNear"] = Get().SceneCameraNear;
-    root["sceneCameraFar"] = Get().SceneCameraFar;
-    root["audioMuted"] = Get().AudioMuted;
-    root["editorSoundsEnabled"] = Get().EditorSoundsEnabled;
-    root["editorSoundsVolume"] = Get().EditorSoundsVolume;
     root["editorSoundsMastering"] = Get().EditorSoundsMastering;
-    root["editorSoundsPremium"] = Get().EditorSoundsPremium;
-    if (!Get().EditorSoundCategoryOn.empty()) root["editorSoundCategoryOn"] = Get().EditorSoundCategoryOn;
-    if (!Get().EditorSoundCategoryVolume.empty()) root["editorSoundCategoryVolume"] = Get().EditorSoundCategoryVolume;
-    root["muteAppsWhileMoving"] = Get().MuteAppsWhileMoving;
     root["muteAppNames"] = Get().MuteAppNames;
-    root["assetSearchGlobal"] = Get().AssetSearchGlobal;
-    root["gameViewPresetLabel"] = Get().GameViewPresetLabel;
-    root["gameViewPresetWidth"] = Get().GameViewPresetWidth;
-    root["gameViewPresetHeight"] = Get().GameViewPresetHeight;
-    root["assetBrowserTreeWidth"] = Get().AssetBrowserTreeWidth;
-    root["assetBrowserIconSize"] = Get().AssetBrowserIconSize;
-    root["assetSortMode"] = Get().AssetSortMode;
-    root["assetSortDesc"] = Get().AssetSortDesc;
-    root["assetDetailsMode"] = Get().AssetDetailsMode;
-    root["hierarchySortMode"] = Get().HierarchySortMode;
-    root["hierarchySortDesc"] = Get().HierarchySortDesc;
-    root["hierarchyTypeFilterMask"] = Get().HierarchyTypeFilterMask;
-    root["reduceMotion"] = Get().ReduceMotion;
-    root["motionSpeed"] = Get().MotionSpeed;
-    root["motionThemeTweens"] = Get().MotionThemeTweens;
-    root["motionInertia"] = Get().MotionInertia;
-    root["motionGradients"] = Get().MotionGradients;
-    root["motionRollingNumbers"] = Get().MotionRollingNumbers;
-    root["motionViewport"] = Get().MotionViewport;
-    root["motionStartup"] = Get().MotionStartup;
     root["glassTheme"] = g_SavedThemeId >= 0 ? g_SavedThemeId : Get().EditorThemeId;
-    root["glassViewportHuds"] = Get().GlassViewportHuds;
-    root["glassStatsPill"] = Get().GlassStatsPill;
-    root["glassFrostedBlur"] = Get().GlassFrostedBlur;
-    root["glassSeeThroughWindow"] = Get().GlassSeeThroughWindow;
-    root["showGlassHierarchy"] = Get().ShowGlassHierarchy;
-    root["showGlassInspector"] = Get().ShowGlassInspector;
-    root["showGlassAssets"] = Get().ShowGlassAssets;
-    root["defaultLayoutPreset"] = Get().DefaultLayoutPreset;
-    root["showLightGizmos"] = Get().ShowLightGizmos;
-    root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;
-    root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
-    root["lightGizmoScale"] = Get().LightGizmoScale;
-    root["showColliders"] = Get().ShowColliders;
-    root["collidersSelectedOnly"] = Get().CollidersSelectedOnly;
-    root["showDecalGizmos"] = Get().ShowDecalGizmos;
-    root["showProbeGizmos"] = Get().ShowProbeGizmos;
-    root["showVolumeGizmos"] = Get().ShowVolumeGizmos;
-    root["volumeGizmosSelectedOnly"] = Get().VolumeGizmosSelectedOnly;
-    root["entityIconsMode"] = Get().EntityIconsMode;
-    root["entityIconsThroughWalls"] = Get().EntityIconsThroughWalls;
     {
         json cams = json::array();
         for (const SceneCameraPose& p : Get().SceneCameras)
@@ -526,82 +465,6 @@ void EditorSettings::Flush() {
                             {"yaw", p.Yaw}, {"pitch", p.Pitch}, {"flySpeed", p.FlySpeed}});
         root["sceneCameras"] = std::move(cams);
     }
-    root["showBodyDebug"] = Get().ShowBodyDebug;
-    root["decalFavorites"] = Get().DecalFavorites;
-    root["decalRecent"] = Get().DecalRecent;
-    root["decalPalette"] = Get().DecalPalette;
-    root["decalSourceCategory"] = Get().DecalSourceCategory;
-    root["decalLibraryTile"] = Get().DecalLibraryTile;
-    root["decalBrushRadius"] = Get().DecalBrushRadius;
-    root["decalBrushSpacing"] = Get().DecalBrushSpacing;
-    root["decalBrushDensity"] = Get().DecalBrushDensity;
-    root["decalBrushSize"] = Get().DecalBrushSize;
-    root["decalBrushSizeJitter"] = Get().DecalBrushSizeJitter;
-    root["decalBrushRotationJitter"] = Get().DecalBrushRotationJitter;
-    root["decalBrushOpacity"] = Get().DecalBrushOpacity;
-    root["decalBrushAlign"] = Get().DecalBrushAlign;
-    root["decalBrushFollowStroke"] = Get().DecalBrushFollowStroke;
-    root["decalGrimeSpacing"] = Get().DecalGrimeSpacing;
-    root["decalGrimeDensity"] = Get().DecalGrimeDensity;
-    root["decalGrimeMax"] = Get().DecalGrimeMax;
-    root["physicsDebugInput"] = Get().PhysicsDebugInput;
-    root["showPhysicsPanel"] = Get().ShowPhysicsPanel;
-    root["showAssetLibrary"] = Get().ShowAssetLibrary;
-    root["assetLibraryPath"] = Get().AssetLibraryPath;
-    root["physicsHudOverlay"] = Get().PhysicsHudOverlay;
-    root["physicsDebugDrawFlags"] = Get().PhysicsDebugDrawFlags;
-    root["logPhysicsEvents"] = Get().LogPhysicsEvents;
-    // PhysicsSimTimeScale is session-only - see the matching comment in Load().
-    root["playDebugOverlay"] = Get().PlayDebugOverlay;
-    root["fRowOverlay"] = Get().FRowOverlay;
-    root["fRowLightDebug"] = Get().FRowLightDebug;
-    root["postFxOff"] = Get().PostFxOff;
-    root["fRowLook"] = Get().FRowLook;
-    root["fRowStyle"] = Get().FRowStyle;
-    root["fRowOutfitSeed"] = Get().FRowOutfitSeed;
-    root["layerVisibleMask"] = Get().LayerVisibleMask;
-    root["layerPickLockMask"] = Get().LayerPickLockMask;
-    root["viewShowGrid"] = Get().ViewShowGrid;
-    root["viewShowGizmo"] = Get().ViewShowGizmo;
-    root["viewFrameOnSelect"] = Get().ViewFrameOnSelect;
-    root["gizmoSize"] = Get().GizmoSize;
-    root["vertexPickPixels"] = Get().VertexPickPixels;
-    root["snapEnabled"] = Get().SnapEnabled;
-    root["snapTranslation"] = Get().SnapTranslation;
-    root["snapRotationDeg"] = Get().SnapRotationDeg;
-    root["snapScale"] = Get().SnapScale;
-    root["gizmoLocalSpace"] = Get().GizmoLocalSpace;
-    root["gizmoPivotCenter"] = Get().GizmoPivotCenter;
-    root["activeTool"] = Get().ActiveTool;
-    root["shadingMode"] = Get().ShadingMode;
-    root["enhancerHoverKeys"] = Get().EnhancerHoverKeys;
-    root["hierarchyRowStyles"] = Get().HierarchyRowStyles;
-    root["hierarchyTreeLines"] = Get().HierarchyTreeLines;
-    root["hierarchyMinimal"] = Get().HierarchyMinimal;
-    root["hierarchyZebra"] = Get().HierarchyZebra;
-    root["hierarchyMinimap"] = Get().HierarchyMinimap;
-    root["hierarchyMinimapMax"] = Get().HierarchyMinimapMax;
-    root["hierarchyMinimapWhen"] = Get().HierarchyMinimapWhen;
-    root["hierarchyNavBar"] = Get().HierarchyNavBar;
-    root["folderStyles"] = Get().FolderStyles;
-    root["folderTreeLines"] = Get().FolderTreeLines;
-    root["folderRowWash"] = Get().FolderRowWash;
-    root["folderZebra"] = Get().FolderZebra;
-    root["folderMinimal"] = Get().FolderMinimal;
-    root["folderMinimap"] = Get().FolderMinimap;
-    root["folderNavBar"] = Get().FolderNavBar;
-    root["inspectorNavBar"] = Get().InspectorNavBar;
-    root["bookmarkChips"] = Get().BookmarkChips;
-    root["inspectorAnimations"] = Get().InspectorAnimations;
-    root["inspectorMinimal"] = Get().InspectorMinimal;
-    root["inspectorTabs"] = Get().InspectorTabs;
-    root["assetTabs"] = Get().AssetTabs;
-    root["panelTabColors"] = Get().PanelTabColors;
-    root["componentHeaderColors"] = Get().ComponentHeaderColors;
-    root["favorites"] = Get().Favorites;
-    root["favoritesHoldAlt"] = Get().FavoritesHoldAlt;
-    root["ruler"] = Get().Ruler;
-    root["measureFeet"] = Get().MeasureFeet;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths
