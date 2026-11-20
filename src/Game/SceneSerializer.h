@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -16,6 +17,12 @@ namespace SceneSerializer {
     // Also persists the Asset Browser's virtual folder structure and any renamed assets
     // (AssetLibrary), so organizing your assets into folders survives a relaunch.
     bool Save(const World& world, const AssetLibrary& assets, const std::string& path);
+
+    // Save() split in two for a background write (the editor's auto-save): this reads the scene
+    // on the calling thread (it walks the World) and returns a job that formats the text and
+    // writes `path` through AtomicFile on any thread, true on success. Empty when the scene
+    // couldn't be serialized (logged).
+    std::function<bool()> PrepareSave(const World& world, const AssetLibrary& assets, const std::string& path);
 
     // Clears world.Boxes/world.Models and repopulates them from the file.
     // Returns false (leaving world untouched) if the file doesn't exist or fails to parse.
