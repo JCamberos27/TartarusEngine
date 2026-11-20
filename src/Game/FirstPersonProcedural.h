@@ -439,7 +439,7 @@ public:
     // A round was fired: starts one recoil instance.
     // `cycleBolt` false when the weapon's Fire clip is already cycling the bolt itself.
     void OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt = true, float rpm = 600.0f,
-                RecoilFireMode mode = RecoilFireMode::Semi, double unscaledTime = -1, float frameDt = -1);
+                RecoilFireMode mode = RecoilFireMode::Semi);
     const WeaponProceduralPose& Update(const WeaponProceduralSettings& s, const WeaponProceduralInput& in);
     const WeaponProceduralPose& Pose() const { return m_Pose; }
     int ActiveShots() const { return m_Unity.IsPlaying() ? 1 : 0; }

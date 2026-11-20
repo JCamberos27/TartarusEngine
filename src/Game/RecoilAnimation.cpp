@@ -156,15 +156,15 @@ void RecoilAnimation::SetupTransition(glm::vec3 rot,glm::vec3 loc,const RecoilVe
     m_CurveLength=std::max(rc.Length(),lc.Length()); m_LastFrameTime=m_CurveLength;
     m_Playback=0; m_IsPlaying=true;
 }
-void RecoilAnimation::Play(const RecoilAnimData& d,bool aiming,float rpm,RecoilFireMode mode,std::mt19937& rng,double unscaledTime,float frameDt) {
+void RecoilAnimation::Play(const RecoilAnimData& d,bool aiming,float rpm,RecoilFireMode mode,std::mt19937& rng) {
     (void)aiming; // Targets are sampled on the solver's first frame, as in Unity Update().
     if (!m_IsFiring) m_Compensation=RecoilDelta=glm::vec2(0);
     m_IsFiring=true;
     m_TargetRecoil.x+=Pick(rng,d.HorizontalRecoil); m_TargetRecoil.y+=Pick(rng,d.VerticalRecoil);
     if (m_EnableSmoothing && !m_IsLooping) m_EnableSmoothing=false;
     const float correction=60/std::max(rpm,0.001f);
-    const double elapsed=unscaledTime>=0?unscaledTime-m_LastShotTime:m_SinceShot;
-    const float delta=frameDt>=0?frameDt:m_Dt;
+    const double elapsed=m_SinceShot;
+    const float delta=m_Dt;
     const float timerError=delta>0?(correction/delta+1)*delta:std::numeric_limits<float>::quiet_NaN();
     if ((elapsed>timerError+0.01f && !m_IsLooping) || mode==RecoilFireMode::Semi) {
         m_StateIndex=0; SetupTransition(m_SmoothRot,m_SmoothLoc,d.SemiRotCurve,d.SemiLocCurve);
@@ -180,7 +180,6 @@ void RecoilAnimation::Play(const RecoilAnimData& d,bool aiming,float rpm,RecoilF
         }
     }
     m_SinceShot=0;
-    if (unscaledTime>=0) m_LastShotTime=unscaledTime;
 }
 void RecoilAnimation::Stop() {
     if (!m_IsFiring) return; // host may request Stop every idle frame; Unity invokes it on release
