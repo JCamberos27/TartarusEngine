@@ -49,12 +49,12 @@ on:
   workflow_dispatch:
 
 # A new commit on a PR cancels that PR's run still in progress (it tests a commit nobody will merge).
-# Main works the same way: a burst of merges would otherwise queue one full run per commit, and the newest
-# commit's run covers everything before it (an older run shows as cancelled, not failed). Tags and manual
-# runs keep a group per commit, so a release is never cancelled.
+# Every push to main runs to completion in its own group: during a burst of merges a shared group cancelled
+# each run (a group also keeps only one queued run), so no main commit ever got a finished result. Tags and
+# manual runs keep a group per commit too, so a release is never cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.ref == 'refs/heads/main' && 'main') || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Static checks, then the Debug build + unit tests. Debug only compiles and runs the headless tests: its render
