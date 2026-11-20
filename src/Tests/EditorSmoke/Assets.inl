@@ -33,6 +33,8 @@ struct EditorSmokeAccess_Assets {
     }
     static float& RefreshFlash(EditorLayer& e) { return e.m_AssetRefreshFlash; }
     static AssetLibraryIndex& Library(EditorLayer& e) { e.m_LibraryViewKey = (size_t)-1; return e.m_LibraryIndex; }
+    // A sound tile's decoded waveform (null until the worker's peaks are in); doesn't queue a decode itself.
+    static const std::vector<float>* Waveform(EditorLayer& e, const std::string& key) { return e.m_SoundWaveforms.Peek(key); }
 };
 namespace {
 namespace smoke_assets {
@@ -79,6 +81,20 @@ void WritePng(const std::string& path, unsigned char r, unsigned char g, unsigne
             p[0] = on ? r : 30; p[1] = on ? g : 30; p[2] = on ? b : 30; p[3] = 255;
         }
     PngWrite::ToFile(std::filesystem::path(path).u8string(), 16, 16, 4, px, 16 * 4);
+}
+// A half-second 440 Hz mono 16-bit tone at `amp` (0..1).
+void WriteToneWav(const std::string& path, float amp) {
+    const int rate = 48000, frames = rate / 2;
+    std::ofstream f(fs::u8path(path), std::ios::binary);
+    auto u32 = [&](uint32_t v) { f.write(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&](uint16_t v) { f.write(reinterpret_cast<const char*>(&v), 2); };
+    f.write("RIFF", 4); u32(36 + (uint32_t)frames * 2); f.write("WAVE", 4);
+    f.write("fmt ", 4); u32(16); u16(1); u16(1); u32((uint32_t)rate); u32((uint32_t)rate * 2); u16(2); u16(16);
+    f.write("data", 4); u32((uint32_t)frames * 2);
+    for (int i = 0; i < frames; ++i) {
+        const auto s = (int16_t)std::lround(amp * std::sin(6.2831853f * 440.0f * (float)i / (float)rate) * 32767.0f);
+        f.write(reinterpret_cast<const char*>(&s), 2);
+    }
 }
 // What the background-menu test creates: removed before it runs and after it (pass or fail), so a run
 // filtered to that test, or one that failed half-way, never leaves "New Material.mat" for the next run
@@ -714,6 +730,19 @@ void RegisterAssetsTests() {
                  const int i = CellIndex(c, "Smoke Tex.png");
                  return i >= 0 && (AX::Cells(c.E)[(size_t)i].texture || AX::Cells(c.E)[(size_t)i].unloaded);
              }, 120),
+             // A sound's tile draws its waveform once the worker has decoded it (the UI thread never decodes).
+             Do("write a tone .wav", [](Ctx& c) { WriteToneWav(DirFile("Smoke Tone.wav"), 0.5f); AX::Refresh(c.E); }),
+             UntilListed("Smoke Tone.wav"), RevealTile("Smoke Tone.wav"),
+             Until("the sound's tile shows its waveform", [](Ctx& c) {
+                 const std::vector<float>* w = AX::Waveform(c.E, CellKey(c, "Smoke Tone.wav"));
+                 return w && w->size() == (size_t)AssetWaveformCache::kBuckets;
+             }, 600),
+             Expect("the waveform is the tone's envelope", [](Ctx& c) {
+                 const std::vector<float>& w = *AX::Waveform(c.E, CellKey(c, "Smoke Tone.wav"));
+                 const float lo = *std::min_element(w.begin(), w.end()), hi = *std::max_element(w.begin(), w.end());
+                 return lo > 0.45f && hi < 0.55f ? std::string()
+                                                 : "peaks " + std::to_string(lo) + " .. " + std::to_string(hi) + ", expected ~0.5";
+             }),
              WaitSeconds(0.5),
              Shot("thumbnails", {kAssets}),
              // An inspector per kind.
@@ -759,7 +788,13 @@ void RegisterAssetsTests() {
                  X::Deselect(c.E);
                  std::error_code ec; fs::remove(fs::u8path(g_Text), ec); fs::remove(fs::u8path(g_Text + ".meta"), ec);
              }), Wait(2)},
-        }));
+        }), [](Ctx&) { // the tone isn't part of the scratch set: a filtered or failed run mustn't leave it behind
+            std::error_code ec;
+            for (const char* f : {"Smoke Tone.wav", "Smoke Tone.wav.meta"}) {
+                AtomicFile::NoteSelfWrite(fs::u8path(DirFile(f)));
+                fs::remove(fs::u8path(DirFile(f)), ec);
+            }
+        });
     }
 
     // ------------------------------------------------------------------ Asset Library panel
