@@ -190,6 +190,9 @@ private:
 
     std::unique_ptr<DecalTextureArrays> m_Textures;
     std::unordered_map<std::string, std::unique_ptr<AssetEntry>> m_Assets; // by NormalPath(absolute)
+    // The same entries by the path exactly as callers spell it, so a repeat lookup (the editor ghost each view,
+    // the spray can's Resident checks each frame) builds no strings. Entries are never erased: the pointers stay valid.
+    std::unordered_map<std::string, AssetEntry*> m_AssetsByCallerPath;
     std::vector<AssetEntry*> m_AssetList;                                 // hot reload's round robin
     std::size_t m_ReloadCursor = 0;
     std::uint32_t m_AssetGen = 1;
