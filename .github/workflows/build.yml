@@ -88,8 +88,12 @@ jobs:
       # explicitly allow-listed with a reason. Pure static check, no build needed - run it
       # first so "added a component, forgot to wire it up" fails in seconds. Only meaningful on
       # one config; the Debug job is enough.
+      # The self-test first: a scratch tree proves an unregistered component in a split header
+      # (ComponentsRender.h, ...) still fails, so the guard can't quietly stop seeing a header.
       - name: Component registration check
-        run: python tools/check_component_registration.py
+        run: |
+          python tools/check_component_registration.py --self-test
+          python tools/check_component_registration.py
 
       # Structural guard for #160 / Phase 1 item 7: "two - and only two - button treatments"
       # across the editor. Same pure-static, no-build-needed treatment as the component check above.
