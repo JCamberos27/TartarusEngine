@@ -2637,7 +2637,8 @@ int AppSession::Finish() {
         }
     }
     ShutdownEditor();
-    return 0;
+    // --editor-shot: a view that was not written (or a run closed before the last one) fails the run.
+    return editorShot.Active() && !editorShot.Succeeded() ? 1 : 0;
 }
 } // namespace
 
