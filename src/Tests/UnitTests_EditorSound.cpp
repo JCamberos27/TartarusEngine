@@ -1,12 +1,14 @@
 #include "UnitTestSupport.h"
 
 #include "../Audio/AudioEngine.h"
+#include "../Editor/AssetWaveformCache.h"
 #include "../Editor/EditorSettings.h"
 #include "../Editor/EditorSound.h"
 #include "../Core/AppAudioMuter.h"
 #include "../Core/Env.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -16,6 +18,7 @@
 #include <iterator>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 // Unit tests for the editor's UI sounds (Editor/EditorSound): the scheduler's rules and the engine's separate editor output.
@@ -163,6 +166,74 @@ void TestEditorSoundFindVariants() {
     CHECK(EditorSound::FindVariants(dir.string(), Event::Undo).empty());
     CHECK(EditorSound::FindVariants("", Event::Click).empty());
     CHECK(EditorSound::FindVariants((dir / "missing").string(), Event::Click).empty());
+    fs::remove_all(dir, ec);
+}
+
+// The Asset Browser's sound-tile waveforms (AssetWaveformCache): Get() never decodes on the caller's thread (the
+// first ask returns null at once, the peaks arrive through Pump), a changed file is decoded again after Invalidate,
+// and a file that can't be decoded is kept as an empty envelope.
+void TestAssetWaveformCacheOffThread() {
+    namespace fs = std::filesystem;
+    using Clock = std::chrono::steady_clock;
+    const fs::path dir = UnitTestSupport::TempDir("waveform_cache");
+    const std::string tone = (dir / "tone.wav").string(), longTone = (dir / "long.wav").string(), bad = (dir / "bad.wav").string();
+    WriteToneWav(tone, 48000, 1.0f, 0.5f);
+    WriteToneWav(longTone, 48000, 30.0f, 0.5f); // ~2.9 MB: a full decode takes milliseconds
+    std::ofstream(bad, std::ios::binary) << "not a sound file";
+
+    const auto maxPeak = [](const std::vector<float>& p) { return p.empty() ? 0.0f : *std::max_element(p.begin(), p.end()); };
+    // Pumps until `path` is in: waits for the worker's work, not a fixed time. The 60 s cap only turns a stuck worker
+    // into a failure instead of a hung run; the timings printed below are for reading, nothing checks them.
+    const auto waitFor = [](AssetWaveformCache& c, const std::string& path) -> const std::vector<float>* {
+        const auto deadline = Clock::now() + std::chrono::seconds(60);
+        for (;;) {
+            c.Pump();
+            if (const std::vector<float>* p = c.Peek(path)) return p;
+            if (Clock::now() > deadline) return nullptr;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    };
+
+    AssetWaveformCache cache;
+    // The first ask only queues: a decode on this thread would have the peaks ready to return.
+    auto t0 = Clock::now();
+    CHECK(cache.Get(longTone) == nullptr);
+    const double getMs = std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
+    CHECK(cache.Get(longTone) == nullptr); // still pending: asking again doesn't decode either
+    t0 = Clock::now();
+    std::vector<float> direct;
+    CHECK(AudioEngine::WaveformPeaks(longTone, AssetWaveformCache::kBuckets, direct));
+    const double decodeMs = std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
+    std::cout << "[UnitTest] waveform cache: Get() " << getMs << " ms on the caller's thread; a 30 s file's full decode "
+              << decodeMs << " ms\n";
+
+    const std::vector<float>* peaks = waitFor(cache, longTone);
+    CHECK(peaks && peaks->size() == (size_t)AssetWaveformCache::kBuckets);
+    CHECK(peaks && *peaks == direct); // the worker's envelope is the decoder's
+    CHECK(peaks && cache.Get(longTone) == peaks); // in: Get hands back the cached peaks
+
+    CHECK(cache.Get(tone) == nullptr);
+    peaks = waitFor(cache, tone);
+    CHECK(peaks && std::fabs(maxPeak(*peaks) - 0.5f) < 0.01f);
+
+    // The file changes: Invalidate, and the next Get decodes the new one.
+    WriteToneWav(tone, 48000, 1.0f, 0.25f);
+    cache.Invalidate(tone);
+    CHECK(cache.Peek(tone) == nullptr);
+    CHECK(cache.Get(tone) == nullptr);
+    peaks = waitFor(cache, tone);
+    CHECK(peaks && std::fabs(maxPeak(*peaks) - 0.25f) < 0.01f);
+
+    // Not a sound: an empty envelope, kept (the tile shows its type glyph and nothing re-probes the file).
+    CHECK(cache.Get(bad) == nullptr);
+    peaks = waitFor(cache, bad);
+    CHECK(peaks && peaks->empty());
+    CHECK(cache.Get(bad) == peaks);
+
+    // Clear drops everything; the destructor joins the worker with nothing left in flight.
+    cache.Clear();
+    CHECK(cache.Peek(tone) == nullptr && cache.Peek(longTone) == nullptr);
+    std::error_code ec;
     fs::remove_all(dir, ec);
 }
 
@@ -753,4 +824,6 @@ void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor sounds: held loops - slots, stale ids, gating, stopped on focus loss", TestEditorSoundLoops);
     tests.emplace_back("App audio muter: exe-name matching and the name list", TestAppAudioMuterNames);
     tests.emplace_back("Editor sounds: their own output, outside the game's mix, Mute and pause", TestEditorSoundSeparateOutput);
+    tests.emplace_back("Asset Browser waveforms: decoded on the worker, never on the caller's thread; Invalidate re-decodes",
+                       TestAssetWaveformCacheOffThread);
 }

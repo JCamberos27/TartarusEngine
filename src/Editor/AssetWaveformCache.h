@@ -22,6 +22,8 @@ public:
 
     // Null while pending; an empty vector when the file can't be decoded (kept, so it isn't re-probed).
     const std::vector<float>* Get(const std::string& path);
+    // The decoded peaks if they are in, without asking for them or counting as a use (tests).
+    const std::vector<float>* Peek(const std::string& path);
     // Main thread, once a frame: moves finished decodes in.
     void Pump();
     // The file changed: drop its peaks so the next Get() decodes it again.
