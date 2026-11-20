@@ -96,8 +96,8 @@ bool EditorLayer::ApplyAssetDrop(World& world, AssetLibrary& assets, entt::entit
     if (payloadType == "ASSET_TEXTURE_PATH" && (ext == ".hdr" || ext == ".exr")) {
         if (ext == ".exr") { Log::Warn("HDRI sky: .exr isn't supported - convert '" + FileName(path) + "' to .hdr."); return false; }
         PushUndo(world, "Set HDRI Sky");
-        world.SkyHdriPath = path;
-        world.SkySourceMode = World::SkySource::Hdri;
+        world.Render.SkyHdriPath = path;
+        world.Render.SkySourceMode = World::SkySource::Hdri;
         return true;
     }
 

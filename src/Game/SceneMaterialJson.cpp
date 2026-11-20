@@ -194,7 +194,11 @@ void ReadMaterialSlots(AssetLibrary& assets, const json& obj, RenderableComponen
             if (slot_j.contains("embedded")) {
                 rc.Materials.push_back(ReadEmbeddedMat(assets, slot_j["embedded"]));
             } else {
-                std::string path = ResolveAssetRef(slot_j);
+                // MaterialSlotsToJson writes a slot as {"guid","path"} (not the {"path","pathGuid"} of PathRef): read
+                // that GUID too, so a slot follows its .mat through a move/rename instead of keeping the stale path.
+                std::string path = slot_j.is_object()
+                    ? ResolveAssetRef(slot_j, "path", slot_j.contains("pathGuid") ? "pathGuid" : "guid")
+                    : ResolveAssetRef(slot_j);
                 rc.Materials.push_back(path.empty() ? nullptr : assets.LoadMaterial(path));
             }
         }

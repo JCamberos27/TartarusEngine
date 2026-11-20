@@ -1,5 +1,6 @@
 #include "SceneSerializerInternal.h"
 #include "SceneFileJson.h"
+#include "SceneSnapshotJson.h"
 
 using namespace SceneDetail;
 
@@ -275,8 +276,6 @@ std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary
 }
 
 bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const std::string& data) {
-    OutfitSystem::CancelPending(world); // the registry is about to be replaced
-    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     json root;
     try {
         root = json::parse(data);
@@ -284,6 +283,12 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
         Log::Error(std::string("Scene: failed to parse snapshot: ") + e.what());
         return false;
     }
+    return LoadFromJson(world, assets, root);
+}
+
+bool SceneSerializer::LoadFromJson(World& world, AssetLibrary& assets, const json& root) {
+    OutfitSystem::CancelPending(world); // the registry is about to be replaced
+    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     // Same guard as Load() (audit #76): valid-but-non-object JSON parses fine but throws on the
     // first .value()/.contains() call below, which would otherwise escape uncaught.
     if (!root.is_object()) {

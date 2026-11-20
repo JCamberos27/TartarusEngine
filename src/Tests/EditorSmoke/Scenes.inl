@@ -37,6 +37,25 @@ struct EditorSmokeAccess_Scenes {
             if (!u.SelectionOnly) s += (s.empty() ? "" : ", ") + u.Label;
         return s;
     }
+    // A root object with a transform, for the undo timing below (null when there is none).
+    static entt::entity MovableRoot(World& w) {
+        for (auto [ent, t, n] : w.Registry.view<TransformComponent, NameComponent>().each()) {
+            const auto* h = w.Registry.try_get<HierarchyComponent>(ent);
+            if (!h || h->Parent == entt::null) return ent;
+        }
+        return entt::null;
+    }
+    static double TimedHistoryStep(EditorLayer& e, World& w, AssetLibrary& a, bool redo) {
+        const auto t0 = std::chrono::steady_clock::now();
+        redo ? e.Redo(w, a) : e.Undo(w, a);
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    }
+    // Moves `ent` 1 m along x as one committed undo step.
+    static void MoveOneMetre(EditorLayer& e, World& w, entt::entity ent) {
+        e.PushUndo(w, "Move");
+        w.Registry.get<TransformComponent>(ent).Position.x += 1.0f;
+        e.FinishGlobalUndo(w, /*force=*/true);
+    }
 };
 namespace {
 namespace smoke_scenes {
@@ -163,6 +182,31 @@ void RegisterScenesTests() {
                 const std::string steps = SA::EditSteps(c.E);
                 if (!steps.empty()) return "undo steps: " + steps;
                 return c.E.IsDirty() ? std::string("the scene is dirty") : std::string();
+            }),
+            Expect("a 1 m move undoes, redoes and undoes again (timed)", [label](Ctx& c) {
+                const entt::entity ent = SA::MovableRoot(c.W);
+                if (ent == entt::null || !c.W.Registry.all_of<OrderComponent>(ent)) return std::string(); // nothing to move
+                const int order = c.W.Registry.get<OrderComponent>(ent).Value;
+                const float x0 = c.W.Registry.get<TransformComponent>(ent).Position.x;
+                auto xNow = [&c, order]() -> float {
+                    for (auto [e, o, t] : c.W.Registry.view<OrderComponent, TransformComponent>().each())
+                        if (o.Value == order) return t.Position.x;
+                    return -1e9f;
+                };
+                SA::MoveOneMetre(c.E, c.W, ent);
+                const double undo1 = SA::TimedHistoryStep(c.E, c.W, c.A, false);
+                const float afterUndo = xNow();
+                const double redo = SA::TimedHistoryStep(c.E, c.W, c.A, true);
+                const float afterRedo = xNow();
+                const double undo2 = SA::TimedHistoryStep(c.E, c.W, c.A, false);
+                const float afterUndo2 = xNow();
+                Log::Info("UNDO_TIMING " + label + " undo=" + std::to_string(undo1) + "ms redo=" + std::to_string(redo) +
+                          "ms undo2=" + std::to_string(undo2) + "ms");
+                if (afterUndo != x0 || afterRedo != x0 + 1.0f || afterUndo2 != x0)
+                    return "x went " + std::to_string(x0) + " -> undo " + std::to_string(afterUndo) + " -> redo " +
+                           std::to_string(afterRedo) + " -> undo " + std::to_string(afterUndo2);
+                const std::string steps = SA::EditSteps(c.E);
+                return steps.empty() ? std::string() : "undo steps left: " + steps; // no "Unrecorded Change"
             }),
             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }),
             FreshScene(), Wait(3), // back on the scratch scene: nothing can save over the real one
