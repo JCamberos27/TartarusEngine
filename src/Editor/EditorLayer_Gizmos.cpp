@@ -1012,22 +1012,54 @@ EditorLayer::DropPose EditorLayer::ComputeDropPose(World& world, Camera& editorC
 }
 
 std::vector<AABB> EditorLayer::NearbyBoxes(World& world, const AABB& box, float reach, entt::entity skip) const {
+    // The other kit pieces don't move during a drag (only `skip`'s subtree, which is left out), so their
+    // world boxes are gathered once when a drag starts and only the overlap test runs each frame. A
+    // drag calls this every frame: a gap of a frame, another skip entity or a renderable count change
+    // starts over.
+    auto view = world.Registry.view<RenderableComponent>();
+    const int frame = ImGui::GetFrameCount();
+    KitBoxCache& kc = m_KitBoxCache;
+    if (kc.Owner != &world || kc.Skip != skip || kc.Frame + 1 < frame || kc.Frame > frame || kc.Renderables != view.size()) {
+        kc.Owner = &world;
+        kc.Skip = skip;
+        kc.Renderables = view.size();
+        kc.Boxes.clear();
+        // Kit modules once per model / prefab source path (placed models are separate Model objects but
+        // share a handful of files), same rule as KitModuleOf.
+        std::unordered_map<std::string, float> pathModule;
+        auto moduleOf = [&](const std::string& path) {
+            auto [it, fresh] = pathModule.try_emplace(path, 0.0f);
+            if (fresh) it->second = m_LibraryIndex.KitModuleOf(ProjectRelative(path));
+            return it->second;
+        };
+        for (entt::entity e : view) {
+            const auto& rc = view.get<RenderableComponent>(e);
+            if (!rc.ModelRef) continue;
+            float module = moduleOf(rc.ModelRef->Path());
+            for (entt::entity c = e; module <= 0.0f && c != entt::null;) { // or the prefab instance it's part of
+                if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(c)) {
+                    module = moduleOf(pi->SourcePath);
+                    break;
+                }
+                const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+                c = hp ? hp->Parent : entt::null;
+            }
+            if (module <= 0.0f) continue;
+            bool inSkip = false;
+            for (entt::entity c = e; c != entt::null && !inSkip;) {
+                inSkip = c == skip;
+                const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+                c = hp ? hp->Parent : entt::null;
+            }
+            if (!inSkip)
+                kc.Boxes.push_back(AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e)));
+        }
+    }
+    kc.Frame = frame;
     const AABB grown{box.Min - glm::vec3(reach), box.Max + glm::vec3(reach)};
     std::vector<AABB> out;
-    auto view = world.Registry.view<RenderableComponent>();
-    for (entt::entity e : view) {
-        const auto& rc = view.get<RenderableComponent>(e);
-        if (!rc.ModelRef) continue;
-        bool inSkip = false;
-        for (entt::entity c = e; c != entt::null && !inSkip;) {
-            inSkip = c == skip;
-            const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
-            c = hp ? hp->Parent : entt::null;
-        }
-        if (inSkip || KitModuleOf(world, e) <= 0.0f) continue;
-        const AABB b = AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e));
+    for (const AABB& b : kc.Boxes)
         if (b.Intersects(grown)) out.push_back(b);
-    }
     return out;
 }
 
