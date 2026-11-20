@@ -24,6 +24,7 @@
 #include <cctype>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -112,6 +113,417 @@ bool SamePath(const std::string& a, const std::string& b) {
 
 ImU32 Col(const ImVec4& c, float alpha = 1.0f) { return ImGui::GetColorU32(ImVec4(c.x, c.y, c.z, c.w * alpha)); }
 
+// What every part of the editor works on, built once per frame by DrawCharacterOutfitEditor.
+struct OutfitCtx {
+    World& world;
+    entt::registry& reg;
+    AssetLibrary& assets;
+    entt::entity root;
+    CharacterOutfitComponent& outfit;
+    const OutfitSystem::Catalog& cat;
+    OutfitUiState& ui;
+    std::function<void(const std::string&)> pushUndo; // EditorLayer::PushUndo on this world
+    std::map<std::string, entt::entity> pieces;        // slot -> piece; re-read after any change
+    Wardrobe::Gender sex = Wardrobe::Gender::Male;
+    ImVec4 accent{};
+    ImDrawList* dl = nullptr;
+    const ImGuiStyle* style = nullptr;
+    // What the open slot wears. Equip / Remove apply at once when everything is loaded, which can destroy
+    // the old piece: they call ReadWorn so the rest of the frame never touches a gone entity.
+    std::map<std::string, entt::entity>::iterator worn{};
+    const Wardrobe::Item* wornItem = nullptr;
+
+    void Report(const OutfitSystem::Result& r) {
+        if (!r.Ok) Log::Warn("Character Outfit: " + r.Error);
+        ui.Notes = r.Notes;
+    }
+    // The same, with the change's own sound (Blocked when it failed).
+    void ReportSound(const OutfitSystem::Result& r, EditorSound::Event e) {
+        EditorSound::Play(r.Ok ? e : EditorSound::Event::Blocked);
+        Report(r);
+    }
+    void ReadPieces() { pieces = OutfitSystem::Pieces(world, root); }
+    void ReadWorn() {
+        worn = pieces.find(ui.Slot);
+        const std::string current = worn != pieces.end() ? reg.get<OutfitPieceComponent>(worn->second).Item : std::string();
+        wornItem = current.empty() ? nullptr : cat.Find(current);
+    }
+};
+
+// No pieces yet: build a body or adopt the children already there.
+void DrawOutfitStart(OutfitCtx& c) {
+    ImGui::Spacing();
+    ImGui::TextWrapped("No outfit yet. Build a body from the wardrobe, or adopt the pieces already under this object.");
+    ImGui::Spacing();
+    if (PrimaryButton(ICON_FA_PERSON "  Build body")) {
+        c.pushUndo("Build Outfit Body");
+        // Take over the body parts already under this object first (an existing Player Body's
+        // Torso, Legs, Head ...). Apply only sees tagged pieces, so without this it built a
+        // second body on top of the untagged one - a female body hidden inside the male one.
+        const int adopted = OutfitSystem::AdoptExisting(c.world, c.assets, c.root);
+        c.Report(OutfitSystem::Submit(c.world, c.assets, c.root, OutfitSystem::CurrentRequest(c.world, c.root)));
+        if (adopted) c.ui.Notes.insert(c.ui.Notes.begin(), "Adopted " + std::to_string(adopted) + " existing pieces");
+    }
+    ImGui::SameLine();
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt existing")) {
+        c.pushUndo("Adopt Outfit Pieces");
+        const int n = OutfitSystem::AdoptExisting(c.world, c.assets, c.root);
+        c.ui.Notes = {"Adopted " + std::to_string(n) + " pieces"};
+    }
+}
+
+// The "..." menu: save / load presets, adopt, take everything off, rescan, show fitted cuts.
+void DrawOutfitMenu(OutfitCtx& c) {
+    if (!ImGui::BeginPopup("##outfitMenu")) return;
+    OutfitUiState& ui = c.ui;
+    ImGui::TextDisabled("Presets");
+    ImGui::SetNextItemWidth(160.0f);
+    ImGui::InputText("##presetName", ui.PresetName, sizeof(ui.PresetName));
+    ImGui::SameLine();
+    bool save;
+    {
+        EditorSoundEvents::ScopedClickSilence quiet; // Save / Blocked instead of the click
+        save = EditorUIPrimitives::PrimaryButton("Save");
+    }
+    if (save) {
+        const std::string path = "assets/Characters/Outfits/" + std::string(ui.PresetName) + ".outfit";
+        std::error_code ec;
+        std::filesystem::create_directories(ProjectPaths::Resolve("assets/Characters/Outfits"), ec);
+        std::string err;
+        const bool saved = OutfitSystem::SavePreset(c.world, c.assets, c.root, path, &err);
+        EditorSound::Play(saved ? EditorSound::Event::Save : EditorSound::Event::Blocked);
+        ui.Notes = {saved ? "Saved " + path : err};
+        if (saved) ScanPresets(); // the new preset shows in the list below at once
+    }
+    for (const auto& [rel, label] : g_PresetFiles) {
+        if (ImGui::MenuItem(label.c_str())) {
+            c.pushUndo("Load Outfit Preset");
+            c.ReportSound(OutfitSystem::LoadPreset(c.world, c.assets, c.root, rel), EditorSound::Event::PresetApply);
+            c.ReadPieces(); // the old pieces may be gone
+        }
+    }
+    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt untagged children")) {
+        c.pushUndo("Adopt Outfit Pieces");
+        ui.Notes = {"Adopted " + std::to_string(OutfitSystem::AdoptExisting(c.world, c.assets, c.root)) + " pieces"};
+        c.ReadPieces();
+    }
+    if (ImGui::MenuItem(ICON_FA_ERASER "  Take everything off")) {
+        c.pushUndo("Clear Outfit");
+        Wardrobe::Request req = OutfitSystem::CurrentRequest(c.world, c.root);
+        req.Items.clear();
+        c.ReportSound(OutfitSystem::Submit(c.world, c.assets, c.root, req), EditorSound::Event::Unequip);
+        c.ReadPieces();
+    }
+    if (ImGui::MenuItem(ICON_FA_ROTATE "  Rescan wardrobe")) OutfitSystem::LoadCatalog(c.assets, c.outfit.Wardrobe, true);
+    ImGui::MenuItem("Show fitted cuts", nullptr, &ui.ShowVariants);
+    ImGui::EndPopup();
+}
+
+// Identity: gender pills, Randomize + the menu, race swatches, the loading line.
+void DrawOutfitIdentity(OutfitCtx& c) {
+    const ImGuiStyle& style = *c.style;
+    ImGui::Spacing();
+    const char* labels[2] = {ICON_FA_MARS "  Male", ICON_FA_VENUS "  Female"};
+    {
+        int gender = c.outfit.Gender;
+        if (EditorUIPrimitives::Segmented("##genderPills", &gender, labels, 2, nullptr, nullptr, EditorTheme::Px(96.0f))) {
+            c.pushUndo("Change Gender");
+            c.Report(OutfitSystem::SetGender(c.world, c.assets, c.root, (Wardrobe::Gender)gender));
+        }
+    }
+    // Randomize and the menu on the right.
+    const float right = ImGui::GetWindowContentRegionMax().x;
+    ImGui::SameLine(right - 2.0f * ImGui::GetFrameHeight() - style.ItemSpacing.x);
+    bool randomize;
+    {
+        EditorSoundEvents::ScopedClickSilence quiet; // Randomize instead of the click
+        randomize = EditorInternal::ActionButton(ICON_FA_DICE, "Randomize (locked slots stay)");
+    }
+    if (randomize) {
+        c.pushUndo("Randomize Outfit");
+        c.ReportSound(OutfitSystem::Randomize(c.world, c.assets, c.root,
+                                              (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count()),
+                      EditorSound::Event::Randomize);
+    }
+    ImGui::SameLine();
+    if (EditorInternal::ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "Presets and tools")) { ScanPresets(); ImGui::OpenPopup("##outfitMenu"); }
+    DrawOutfitMenu(c);
+
+    // Race: round skin-tone swatches.
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("Skin");
+    ImGui::SameLine(60.0f);
+    const float r = ImGui::GetFrameHeight() * 0.5f;
+    for (const auto& race : c.cat.W.Body(c.sex).Races) {
+        ImGui::PushID(race.Name.c_str());
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        if (ImGui::InvisibleButton("##race", ImVec2(2.0f * r + 4.0f, 2.0f * r + 4.0f)) && race.Name != c.outfit.Race) {
+            ClickSound(EditorSoundEvents::Event::SwatchPick);
+            c.pushUndo("Change Race");
+            c.Report(OutfitSystem::SetRace(c.world, c.assets, c.root, race.Name));
+        }
+        const ImVec2 ctr(p.x + r + 2.0f, p.y + r + 2.0f);
+        c.dl->AddCircleFilled(ctr, r, ImGui::GetColorU32(ImVec4(race.Tone.x, race.Tone.y, race.Tone.z, 1.0f)), 24);
+        if (race.Name == c.outfit.Race) c.dl->AddCircle(ctr, r + 2.0f, Col(c.accent), 24, 2.5f);
+        else if (ImGui::IsItemHovered()) c.dl->AddCircle(ctr, r + 1.5f, Col(style.Colors[ImGuiCol_Text], 0.5f), 24, 1.5f);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", race.Name.c_str());
+        ImGui::SameLine(0.0f, 4.0f);
+        ImGui::PopID();
+    }
+    ImGui::TextDisabled("%s", c.outfit.Race.c_str());
+
+    // A change still loading: the current pieces stay until everything it needs is in memory.
+    int done = 0, total = 0;
+    if (OutfitSystem::IsPending(c.world, c.root, &done, &total))
+        ImGui::TextColored(InfoColor(), ICON_FA_SPINNER "  Loading... %d / %d", done, total);
+}
+
+// A text tab per slot that has items for this body, flowing onto more lines as needed; a dot marks the
+// slots with something on. False when no slot has items.
+bool DrawSlotTabs(OutfitCtx& c) {
+    const ImGuiStyle& style = *c.style;
+    std::vector<const Wardrobe::SlotDef*> slots;
+    for (const auto& s : c.cat.W.Slots)
+        if (!c.cat.ForSlot(s.Id, c.sex).empty()) slots.push_back(&s);
+    if (slots.empty()) return false;
+    if (std::none_of(slots.begin(), slots.end(), [&](const Wardrobe::SlotDef* s) { return s->Id == c.ui.Slot; }))
+        c.ui.Slot = slots.front()->Id;
+    ImGui::Spacing();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    float x = 0.0f;
+    for (const auto* s : slots) {
+        const float w = ImGui::CalcTextSize(s->Label.c_str()).x + style.FramePadding.x * 2.0f + 8.0f;
+        if (x > 0.0f && x + w > avail) x = 0.0f;
+        else if (x > 0.0f) ImGui::SameLine(0.0f, 3.0f);
+        x += w + 3.0f;
+        const bool on = s->Id == c.ui.Slot, worn = c.pieces.count(s->Id) > 0;
+        ImGui::PushID(s->Id.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Button, on ? c.accent : style.Colors[ImGuiCol_FrameBg]);
+        if (ImGui::Button(s->Label.c_str(), ImVec2(w, 0.0f))) c.ui.Slot = s->Id;
+        ImGui::PopStyleColor();
+        if (worn) {
+            const ImVec2 mx = ImGui::GetItemRectMax();
+            c.dl->AddCircleFilled(ImVec2(mx.x - 4.0f, ImGui::GetItemRectMin().y + 4.0f), 2.5f, Col(SuccessColor()));
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s%s", s->Label.c_str(), worn ? " (worn)" : "");
+        ImGui::PopID();
+    }
+    return true;
+}
+
+// The open slot's header: its name and what it wears, Remove, the Randomize lock, the search box.
+void DrawSlotHeader(OutfitCtx& c, const Wardrobe::SlotDef& slot) {
+    const ImGuiStyle& style = *c.style;
+    ImGui::Spacing();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(slot.Label.c_str());
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", c.wornItem ? c.wornItem->Name.c_str() : "none");
+    const float lockX = ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight();
+    if (c.pieces.count(c.ui.Slot)) {
+        const float removeW = ImGui::CalcTextSize("Remove").x + style.FramePadding.x * 2.0f;
+        ImGui::SameLine(lockX - style.ItemSpacing.x - removeW);
+        const ImVec4 danger = DangerColor();
+        ImGui::PushStyleColor(ImGuiCol_Button, danger);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(danger.x + 0.12f, 1.0f), danger.y + 0.08f, danger.z + 0.08f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(danger.x * 0.8f, danger.y * 0.8f, danger.z * 0.8f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        if (ImGui::Button("Remove##outfitRemove")) {
+            c.pushUndo("Remove " + slot.Label);
+            c.ReportSound(OutfitSystem::Equip(c.world, c.assets, c.root, c.ui.Slot, std::string()), EditorSound::Event::Unequip);
+            c.ReadPieces();
+            c.ReadWorn();
+        }
+        ImGui::PopStyleColor(4);
+    }
+    {
+        std::vector<std::string> locks = OutfitSystem::ParseLocks(c.outfit.Locks);
+        const bool locked = std::find(locks.begin(), locks.end(), c.ui.Slot) != locks.end();
+        ImGui::SameLine(lockX);
+        if (EditorInternal::ActionButton(locked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN, locked ? "Locked: Randomize keeps it" : "Randomize may change it")) {
+            c.pushUndo("Lock Outfit Slot");
+            if (locked) locks.erase(std::remove(locks.begin(), locks.end(), c.ui.Slot), locks.end());
+            else locks.push_back(c.ui.Slot);
+            std::string joined;
+            for (const auto& l : locks) joined += (joined.empty() ? "" : ", ") + l;
+            c.outfit.Locks = joined;
+        }
+    }
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##outfitSearch", ICON_FA_MAGNIFYING_GLASS "  Search", c.ui.Search, sizeof(c.ui.Search));
+}
+
+// The slot's items, as a list. Pointing at one previews it below; clicking puts it on (Remove above takes it
+// off). Returns the item pointed at, if any.
+const Wardrobe::Item* DrawItemList(OutfitCtx& c) {
+    const ImGuiStyle& style = *c.style;
+    // What's worn in the other slots, to mark the items that don't go with it (Wardrobe::Conflicts).
+    std::vector<const Wardrobe::Item*> others;
+    for (const auto& [s, e] : c.pieces)
+        if (s != c.ui.Slot)
+            if (const auto* it = c.cat.Find(c.reg.get<OutfitPieceComponent>(e).Item)) others.push_back(it);
+    // The first worn item `it` can't go with (hard: equipping takes it off) or only looks odd with.
+    auto clashWith = [&](const Wardrobe::Item& it, bool& hard) -> const Wardrobe::Item* {
+        for (const auto* o : others)
+            if (Wardrobe::Conflicts(c.cat.W, it, *o, false)) { hard = true; return o; }
+        for (const auto* o : others)
+            if (Wardrobe::Conflicts(c.cat.W, it, *o, true)) { hard = false; return o; }
+        return nullptr;
+    };
+
+    std::vector<const Wardrobe::Item*> items;
+    for (const auto* it : c.cat.ForSlot(c.ui.Slot, c.sex))
+        if ((c.ui.ShowVariants || !it->Variant || it == c.wornItem) && ContainsI(it->Name, c.ui.Search)) items.push_back(it);
+    const Wardrobe::Item* hoveredItem = nullptr;
+    const float row = ImGui::GetTextLineHeightWithSpacing() + 4.0f;
+    ImGui::BeginChild("##outfitList", ImVec2(0.0f, std::min(260.0f, row * (float)items.size() + 6.0f)), true);
+    for (size_t i = 0; i < items.size(); ++i) {
+        const Wardrobe::Item* it = items[i];
+        ImGui::PushID((int)i);
+        const bool selected = it == c.wornItem;
+        if (ImGui::Selectable(it->Name.c_str(), selected, 0, ImVec2(0.0f, row - style.ItemSpacing.y)) && !selected) {
+            c.pushUndo("Equip " + it->Name);
+            c.ReportSound(OutfitSystem::Equip(c.world, c.assets, c.root, c.ui.Slot, it->Path), EditorSound::Event::Equip);
+            c.ReadPieces();
+            c.ReadWorn();
+        }
+        const bool hovered = ImGui::IsItemHovered();
+        if (hovered) hoveredItem = it;
+        // On the right: a clash with what's worn (amber: one comes off; grey: an odd pairing), a fitted cut.
+        bool hardClash = false;
+        const Wardrobe::Item* clash = !selected ? clashWith(*it, hardClash) : nullptr;
+        std::string tag = it->Variant ? "fitted cut" : "";
+        if (clash) tag = hardClash ? "takes off " + clash->Name : "odd with " + clash->Name;
+        if (!tag.empty()) {
+            const ImVec2 ts = ImGui::CalcTextSize(tag.c_str());
+            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddText(ImVec2(mx.x - ts.x - 6.0f, (mn.y + mx.y - ts.y) * 0.5f),
+                                                Col(clash && hardClash ? WarningColor() : style.Colors[ImGuiCol_TextDisabled]), tag.c_str());
+        }
+        if (hovered) EditorUI::SetTooltip("%s", it->Path.c_str());
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
+    return hoveredItem;
+}
+
+// The 3D preview of `shown` (the item pointed at in the list, else the one worn): drag to spin, scroll to
+// zoom, shading and reset under it; a "Loading..." box until the model is in memory.
+void DrawItemPreview(OutfitCtx& c, ModelPreviewRenderer& preview, const Wardrobe::Item& shown) {
+    const ImGuiStyle& style = *c.style;
+    OutfitUiState& ui = c.ui;
+    const std::string abs = ProjectPaths::Resolve(shown.Path);
+    std::shared_ptr<Model> model;
+    auto load = g_PreviewLoads.find(abs);
+    if (load == g_PreviewLoads.end()) load = g_PreviewLoads.emplace(abs, c.assets.RequestModelAsync(abs)).first;
+    if (AssetLibrary::IsReady(load->second)) model = c.assets.LoadModel(abs);
+    const float width = ImGui::GetContentRegionAvail().x;
+    const float height = std::clamp(width * 0.8f, 160.0f, 300.0f);
+    if (!model) {
+        ImGui::Dummy(ImVec2(width, height));
+        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddRectFilled(mn, mx, Col(style.Colors[ImGuiCol_FrameBg]), 4.0f);
+        const char* msg = "Loading...";
+        const ImVec2 ts = ImGui::CalcTextSize(msg);
+        ImGui::GetWindowDrawList()->AddText(ImVec2((mn.x + mx.x - ts.x) * 0.5f, (mn.y + mx.y - ts.y) * 0.5f),
+                                            Col(style.Colors[ImGuiCol_TextDisabled]), msg);
+        return;
+    }
+    const float fit = ModelPreviewRenderer::ComputeFramingDistance(*model) * 0.72f;
+    if (ui.PreviewFor != abs) { ui.PreviewFor = abs; ui.Distance = fit; }
+    // The worn one with the piece's own materials (its colourway), anything else as it comes.
+    const bool isWorn = &shown == c.wornItem;
+    std::vector<std::shared_ptr<MaterialAsset>> slotsMats;
+    if (isWorn && c.worn != c.pieces.end()) {
+        if (const auto* rc = c.reg.try_get<RenderableComponent>(c.worn->second)) slotsMats = rc->Materials;
+    } else {
+        c.assets.ApplyMaterialRemap(*model, slotsMats);
+    }
+    const float scale = ImGui::GetIO().DisplayFramebufferScale.x > 0.0f ? ImGui::GetIO().DisplayFramebufferScale.x : 1.0f;
+    const unsigned handle = preview.Render(*model, ui.Yaw, ui.Pitch, ui.Distance, (int)(width * scale),
+                                           (int)(height * scale), slotsMats,
+                                           (ModelPreviewRenderer::Shading)ui.Shading, true);
+    ImGui::Image((ImTextureID)(intptr_t)handle, ImVec2(width, height), ImVec2(0, 1), ImVec2(1, 0));
+    // Drag to spin, scroll to zoom (tracked by hand: an Image is never "active").
+    const bool over = ImGui::IsItemHovered();
+    if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ui.Dragging = true;
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) ui.Dragging = false;
+    if (over && ImGui::GetIO().MouseWheel != 0.0f) ui.Distance *= 1.0f - ImGui::GetIO().MouseWheel * 0.1f;
+    if (ui.Dragging) {
+        ui.Yaw += ImGui::GetIO().MouseDelta.x * 0.01f;
+        ui.Pitch = std::clamp(ui.Pitch - ImGui::GetIO().MouseDelta.y * 0.01f, -1.4f, 1.4f);
+    }
+    ui.Distance = std::clamp(ui.Distance, fit * 0.2f, fit * 6.0f);
+    // The name over the image's top-left corner.
+    const ImVec2 mn = ImGui::GetItemRectMin();
+    ImGui::GetWindowDrawList()->AddText(ImVec2(mn.x + 8.0f, mn.y + 6.0f), Col(style.Colors[ImGuiCol_Text]),
+                                        (shown.Name + (isWorn ? "  (worn)" : "")).c_str());
+    // Shading and reset, under it.
+    static const char* kShadingModes[] = {"Lit", "Unlit", "Wireframe"};
+    EditorUIPrimitives::Segmented("##shadingMode", &ui.Shading, kShadingModes, 3);
+    ImGui::SameLine();
+    ImGui::TextDisabled("Drag to spin, scroll to zoom");
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize("Reset view").x - style.FramePadding.x * 2.0f);
+    if (EditorUIPrimitives::SecondaryButton("Reset view")) { ui.Yaw = 0.6f; ui.Pitch = 0.25f; ui.Distance = fit; }
+}
+
+// The worn item's colourways, a row of named buttons per colour group.
+void DrawColourways(OutfitCtx& c) {
+    if (c.worn == c.pieces.end()) return;
+    const ImGuiStyle& style = *c.style;
+    const entt::entity piece = c.worn->second;
+    const auto groups = OutfitSystem::ColourGroups(c.world, c.assets, piece);
+    for (size_t gi = 0; gi < groups.size(); ++gi) {
+        const auto& g = groups[gi];
+        ImGui::PushID(g.Source.c_str());
+        ImGui::Spacing();
+        ImGui::TextDisabled("%s", groups.size() > 1 ? ("Colour " + std::to_string(gi + 1)).c_str() : "Colour");
+        const std::vector<std::string> labels = ColourwayLabels(g.Options);
+        const float avail = ImGui::GetContentRegionAvail().x;
+        float x = 0.0f;
+        for (size_t k = 0; k < g.Options.size(); ++k) {
+            const float w = ImGui::CalcTextSize(labels[k].c_str()).x + style.FramePadding.x * 2.0f + 6.0f;
+            if (x > 0.0f && x + w > avail) x = 0.0f;
+            else if (x > 0.0f) ImGui::SameLine(0.0f, 3.0f);
+            x += w + 3.0f;
+            ImGui::PushID((int)k);
+            const bool on = SamePath(g.Options[k], g.Current);
+            ImGui::PushStyleColor(ImGuiCol_Button, on ? c.accent : style.Colors[ImGuiCol_FrameBg]);
+            if (ImGui::Button(labels[k].c_str(), ImVec2(w, 0.0f)) && !on) {
+                c.pushUndo("Change Colourway");
+                OutfitSystem::SubmitColourway(c.world, c.assets, c.root, piece, g.Source, g.Options[k]);
+            }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", Wardrobe::Stem(g.Options[k]).c_str());
+            ImGui::PopID();
+        }
+        ImGui::PopID();
+    }
+}
+
+// What the rules did, the skin hidden under the clothes, and a note when nothing animates the pieces.
+void DrawOutfitFooter(OutfitCtx& c) {
+    for (const auto& n : c.ui.Notes) ImGui::TextColored(InfoColor(), ICON_FA_CIRCLE_INFO "  %s", n.c_str());
+    int hidden = 0, total = 0;
+    for (const auto& [s, e] : c.pieces)
+        if (const auto* h = c.reg.try_get<OutfitHideTag>(e)) { hidden += h->Hidden; total += h->Total; }
+    bool autoHide = c.outfit.AutoHide;
+    if (ImGui::Checkbox("Hide skin under clothes", &autoHide)) {
+        c.pushUndo("Toggle Outfit Skin Hiding");
+        c.outfit.AutoHide = autoHide;
+    }
+    if (total) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(%d vertices hidden)", hidden);
+    }
+    const bool animated = std::any_of(c.pieces.begin(), c.pieces.end(), [&](const auto& kv) {
+        return c.reg.all_of<AnimatorControllerComponent>(kv.second);
+    });
+    if (!animated)
+        ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  No piece has an Animator Controller: only motion matching (the player's body, the dummies) animates it.");
+}
+
 } // namespace
 
 void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
@@ -132,379 +544,22 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         if (EditorUIPrimitives::SecondaryButton(ICON_FA_ROTATE "  Try again")) OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, true);
         return;
     }
-    auto report = [&](const OutfitSystem::Result& r) {
-        if (!r.Ok) Log::Warn("Character Outfit: " + r.Error);
-        ui.Notes = r.Notes;
-    };
-    // The same, with the change's own sound (Blocked when it failed).
-    auto reportSound = [&](const OutfitSystem::Result& r, EditorSound::Event e) {
-        EditorSound::Play(r.Ok ? e : EditorSound::Event::Blocked);
-        report(r);
-    };
+    OutfitCtx c{world, reg, assets, root, *outfit, *cat, ui,
+                [this, &world](const std::string& label) { PushUndo(world, label); },
+                OutfitSystem::Pieces(world, root)};
+    if (c.pieces.empty()) { DrawOutfitStart(c); return; }
+    c.sex = outfit->Gender == 1 ? Wardrobe::Gender::Female : Wardrobe::Gender::Male;
+    c.accent = AccentColor();
+    c.dl = ImGui::GetWindowDrawList();
+    c.style = &ImGui::GetStyle();
 
-    auto pieces = OutfitSystem::Pieces(world, root);
-    if (pieces.empty()) {
-        ImGui::Spacing();
-        ImGui::TextWrapped("No outfit yet. Build a body from the wardrobe, or adopt the pieces already under this object.");
-        ImGui::Spacing();
-        if (PrimaryButton(ICON_FA_PERSON "  Build body")) {
-            PushUndo(world, "Build Outfit Body");
-            // Take over the body parts already under this object first (an existing Player Body's
-            // Torso, Legs, Head ...). Apply only sees tagged pieces, so without this it built a
-            // second body on top of the untagged one - a female body hidden inside the male one.
-            const int adopted = OutfitSystem::AdoptExisting(world, assets, root);
-            report(OutfitSystem::Submit(world, assets, root, OutfitSystem::CurrentRequest(world, root)));
-            if (adopted) ui.Notes.insert(ui.Notes.begin(), "Adopted " + std::to_string(adopted) + " existing pieces");
-        }
-        ImGui::SameLine();
-        if (EditorUIPrimitives::SecondaryButton(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt existing")) {
-            PushUndo(world, "Adopt Outfit Pieces");
-            const int n = OutfitSystem::AdoptExisting(world, assets, root);
-            ui.Notes = {"Adopted " + std::to_string(n) + " pieces"};
-        }
-        return;
-    }
-
-    const Wardrobe::Gender sex = outfit->Gender == 1 ? Wardrobe::Gender::Female : Wardrobe::Gender::Male;
-    const ImVec4 accent = AccentColor();
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImGuiStyle& style = ImGui::GetStyle();
-
-    // --- Identity: gender pills, race swatches ---------------------------------------------------
-    ImGui::Spacing();
-    {
-        const char* labels[2] = {ICON_FA_MARS "  Male", ICON_FA_VENUS "  Female"};
-        {
-            int gender = outfit->Gender;
-            if (EditorUIPrimitives::Segmented("##genderPills", &gender, labels, 2, nullptr, nullptr, EditorTheme::Px(96.0f))) {
-                PushUndo(world, "Change Gender");
-                report(OutfitSystem::SetGender(world, assets, root, (Wardrobe::Gender)gender));
-            }
-        }
-        // Randomize and the menu on the right.
-        const float right = ImGui::GetWindowContentRegionMax().x;
-        ImGui::SameLine(right - 2.0f * ImGui::GetFrameHeight() - style.ItemSpacing.x);
-        bool randomize;
-        {
-            EditorSoundEvents::ScopedClickSilence quiet; // Randomize instead of the click
-            randomize = EditorInternal::ActionButton(ICON_FA_DICE, "Randomize (locked slots stay)");
-        }
-        if (randomize) {
-            PushUndo(world, "Randomize Outfit");
-            reportSound(OutfitSystem::Randomize(world, assets, root,
-                                                (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count()),
-                        EditorSound::Event::Randomize);
-        }
-        ImGui::SameLine();
-        if (EditorInternal::ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "Presets and tools")) { ScanPresets(); ImGui::OpenPopup("##outfitMenu"); }
-        if (ImGui::BeginPopup("##outfitMenu")) {
-            ImGui::TextDisabled("Presets");
-            ImGui::SetNextItemWidth(160.0f);
-            ImGui::InputText("##presetName", ui.PresetName, sizeof(ui.PresetName));
-            ImGui::SameLine();
-            bool save;
-            {
-                EditorSoundEvents::ScopedClickSilence quiet; // Save / Blocked instead of the click
-                save = EditorUIPrimitives::PrimaryButton("Save");
-            }
-            if (save) {
-                const std::string path = "assets/Characters/Outfits/" + std::string(ui.PresetName) + ".outfit";
-                std::error_code ec;
-                std::filesystem::create_directories(ProjectPaths::Resolve("assets/Characters/Outfits"), ec);
-                std::string err;
-                const bool saved = OutfitSystem::SavePreset(world, assets, root, path, &err);
-                EditorSound::Play(saved ? EditorSound::Event::Save : EditorSound::Event::Blocked);
-                ui.Notes = {saved ? "Saved " + path : err};
-                if (saved) ScanPresets(); // the new preset shows in the list below at once
-            }
-            for (const auto& [rel, label] : g_PresetFiles) {
-                if (ImGui::MenuItem(label.c_str())) {
-                    PushUndo(world, "Load Outfit Preset");
-                    reportSound(OutfitSystem::LoadPreset(world, assets, root, rel), EditorSound::Event::PresetApply);
-                    pieces = OutfitSystem::Pieces(world, root); // the old pieces may be gone
-                }
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt untagged children")) {
-                PushUndo(world, "Adopt Outfit Pieces");
-                ui.Notes = {"Adopted " + std::to_string(OutfitSystem::AdoptExisting(world, assets, root)) + " pieces"};
-                pieces = OutfitSystem::Pieces(world, root);
-            }
-            if (ImGui::MenuItem(ICON_FA_ERASER "  Take everything off")) {
-                PushUndo(world, "Clear Outfit");
-                Wardrobe::Request req = OutfitSystem::CurrentRequest(world, root);
-                req.Items.clear();
-                reportSound(OutfitSystem::Submit(world, assets, root, req), EditorSound::Event::Unequip);
-                pieces = OutfitSystem::Pieces(world, root);
-            }
-            if (ImGui::MenuItem(ICON_FA_ROTATE "  Rescan wardrobe")) OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, true);
-            ImGui::MenuItem("Show fitted cuts", nullptr, &ui.ShowVariants);
-            ImGui::EndPopup();
-        }
-
-        // Race: round skin-tone swatches.
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("Skin");
-        ImGui::SameLine(60.0f);
-        const float r = ImGui::GetFrameHeight() * 0.5f;
-        for (const auto& race : cat->W.Body(sex).Races) {
-            ImGui::PushID(race.Name.c_str());
-            const ImVec2 p = ImGui::GetCursorScreenPos();
-            if (ImGui::InvisibleButton("##race", ImVec2(2.0f * r + 4.0f, 2.0f * r + 4.0f)) && race.Name != outfit->Race) {
-                ClickSound(EditorSoundEvents::Event::SwatchPick);
-                PushUndo(world, "Change Race");
-                report(OutfitSystem::SetRace(world, assets, root, race.Name));
-            }
-            const ImVec2 c(p.x + r + 2.0f, p.y + r + 2.0f);
-            dl->AddCircleFilled(c, r, ImGui::GetColorU32(ImVec4(race.Tone.x, race.Tone.y, race.Tone.z, 1.0f)), 24);
-            if (race.Name == outfit->Race) dl->AddCircle(c, r + 2.0f, Col(accent), 24, 2.5f);
-            else if (ImGui::IsItemHovered()) dl->AddCircle(c, r + 1.5f, Col(style.Colors[ImGuiCol_Text], 0.5f), 24, 1.5f);
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", race.Name.c_str());
-            ImGui::SameLine(0.0f, 4.0f);
-            ImGui::PopID();
-        }
-        ImGui::TextDisabled("%s", outfit->Race.c_str());
-
-        // A change still loading: the current pieces stay until everything it needs is in memory.
-        int done = 0, total = 0;
-        if (OutfitSystem::IsPending(world, root, &done, &total))
-            ImGui::TextColored(InfoColor(), ICON_FA_SPINNER "  Loading... %d / %d", done, total);
-    }
-
-    // --- Slot tabs ---------------------------------------------------------------------------------
-    std::vector<const Wardrobe::SlotDef*> slots;
-    for (const auto& s : cat->W.Slots)
-        if (!cat->ForSlot(s.Id, sex).empty()) slots.push_back(&s);
-    if (slots.empty()) return;
-    if (std::none_of(slots.begin(), slots.end(), [&](const Wardrobe::SlotDef* s) { return s->Id == ui.Slot; }))
-        ui.Slot = slots.front()->Id;
-    ImGui::Spacing();
-    {
-        // A text tab per slot, flowing onto more lines as needed; a dot marks the slots with something on.
-        const float avail = ImGui::GetContentRegionAvail().x;
-        float x = 0.0f;
-        for (const auto* s : slots) {
-            const float w = ImGui::CalcTextSize(s->Label.c_str()).x + style.FramePadding.x * 2.0f + 8.0f;
-            if (x > 0.0f && x + w > avail) x = 0.0f;
-            else if (x > 0.0f) ImGui::SameLine(0.0f, 3.0f);
-            x += w + 3.0f;
-            const bool on = s->Id == ui.Slot, worn = pieces.count(s->Id) > 0;
-            ImGui::PushID(s->Id.c_str());
-            ImGui::PushStyleColor(ImGuiCol_Button, on ? accent : style.Colors[ImGuiCol_FrameBg]);
-            if (ImGui::Button(s->Label.c_str(), ImVec2(w, 0.0f))) ui.Slot = s->Id;
-            ImGui::PopStyleColor();
-            if (worn) {
-                const ImVec2 mx = ImGui::GetItemRectMax();
-                dl->AddCircleFilled(ImVec2(mx.x - 4.0f, ImGui::GetItemRectMin().y + 4.0f), 2.5f, Col(SuccessColor()));
-            }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s%s", s->Label.c_str(), worn ? " (worn)" : "");
-            ImGui::PopID();
-        }
-    }
-
-    // --- The open slot -----------------------------------------------------------------------------
+    DrawOutfitIdentity(c);
+    if (!DrawSlotTabs(c)) return;
     const Wardrobe::SlotDef* slot = cat->W.Slot(ui.Slot);
-    // What the open slot wears. Equip / Remove below apply at once when everything is loaded, which can
-    // destroy the old piece: they re-read this so the rest of the frame never touches a gone entity.
-    auto worn = pieces.end();
-    const Wardrobe::Item* wornItem = nullptr;
-    const auto readWorn = [&] {
-        worn = pieces.find(ui.Slot);
-        const std::string current = worn != pieces.end() ? reg.get<OutfitPieceComponent>(worn->second).Item : std::string();
-        wornItem = current.empty() ? nullptr : cat->Find(current);
-    };
-    readWorn();
-    // What's worn in the other slots, to mark the cards that don't go with it (Wardrobe::Conflicts).
-    std::vector<const Wardrobe::Item*> others;
-    for (const auto& [s, e] : pieces)
-        if (s != ui.Slot)
-            if (const auto* it = cat->Find(reg.get<OutfitPieceComponent>(e).Item)) others.push_back(it);
-    // The first worn item `it` can't go with (hard: equipping takes it off) or only looks odd with.
-    auto clashWith = [&](const Wardrobe::Item& it, bool& hard) -> const Wardrobe::Item* {
-        for (const auto* o : others)
-            if (Wardrobe::Conflicts(cat->W, it, *o, false)) { hard = true; return o; }
-        for (const auto* o : others)
-            if (Wardrobe::Conflicts(cat->W, it, *o, true)) { hard = false; return o; }
-        return nullptr;
-    };
-    ImGui::Spacing();
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(slot->Label.c_str());
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s", wornItem ? wornItem->Name.c_str() : "none");
-    const float lockX = ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight();
-    if (pieces.count(ui.Slot)) {
-        const float removeW = ImGui::CalcTextSize("Remove").x + style.FramePadding.x * 2.0f;
-        ImGui::SameLine(lockX - style.ItemSpacing.x - removeW);
-        const ImVec4 danger = DangerColor();
-        ImGui::PushStyleColor(ImGuiCol_Button, danger);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(danger.x + 0.12f, 1.0f), danger.y + 0.08f, danger.z + 0.08f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(danger.x * 0.8f, danger.y * 0.8f, danger.z * 0.8f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-        if (ImGui::Button("Remove##outfitRemove")) {
-            PushUndo(world, "Remove " + slot->Label);
-            reportSound(OutfitSystem::Equip(world, assets, root, ui.Slot, std::string()), EditorSound::Event::Unequip);
-            pieces = OutfitSystem::Pieces(world, root);
-            readWorn();
-        }
-        ImGui::PopStyleColor(4);
-    }
-    {
-        std::vector<std::string> locks = OutfitSystem::ParseLocks(outfit->Locks);
-        const bool locked = std::find(locks.begin(), locks.end(), ui.Slot) != locks.end();
-        ImGui::SameLine(lockX);
-        if (EditorInternal::ActionButton(locked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN, locked ? "Locked: Randomize keeps it" : "Randomize may change it")) {
-            PushUndo(world, "Lock Outfit Slot");
-            if (locked) locks.erase(std::remove(locks.begin(), locks.end(), ui.Slot), locks.end());
-            else locks.push_back(ui.Slot);
-            std::string joined;
-            for (const auto& l : locks) joined += (joined.empty() ? "" : ", ") + l;
-            outfit->Locks = joined;
-        }
-    }
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##outfitSearch", ICON_FA_MAGNIFYING_GLASS "  Search", ui.Search, sizeof(ui.Search));
-
-    // The slot's items, as a list. Pointing at one previews it below; clicking puts it on (Remove above takes it off).
-    std::vector<const Wardrobe::Item*> items;
-    for (const auto* it : cat->ForSlot(ui.Slot, sex))
-        if ((ui.ShowVariants || !it->Variant || it == wornItem) && ContainsI(it->Name, ui.Search)) items.push_back(it);
-    const Wardrobe::Item* hoveredItem = nullptr;
-    const float row = ImGui::GetTextLineHeightWithSpacing() + 4.0f;
-    ImGui::BeginChild("##outfitList", ImVec2(0.0f, std::min(260.0f, row * (float)items.size() + 6.0f)), true);
-    for (size_t i = 0; i < items.size(); ++i) {
-        const Wardrobe::Item* it = items[i];
-        ImGui::PushID((int)i);
-        const bool selected = it == wornItem;
-        if (ImGui::Selectable(it->Name.c_str(), selected, 0, ImVec2(0.0f, row - ImGui::GetStyle().ItemSpacing.y)) && !selected) {
-            PushUndo(world, "Equip " + it->Name);
-            reportSound(OutfitSystem::Equip(world, assets, root, ui.Slot, it->Path), EditorSound::Event::Equip);
-            pieces = OutfitSystem::Pieces(world, root);
-            readWorn();
-        }
-        const bool hovered = ImGui::IsItemHovered();
-        if (hovered) hoveredItem = it;
-        // On the right: a clash with what's worn (amber: one comes off; grey: an odd pairing), a fitted cut.
-        bool hardClash = false;
-        const Wardrobe::Item* clash = !selected ? clashWith(*it, hardClash) : nullptr;
-        std::string tag = it->Variant ? "fitted cut" : "";
-        if (clash) tag = hardClash ? "takes off " + clash->Name : "odd with " + clash->Name;
-        if (!tag.empty()) {
-            const ImVec2 ts = ImGui::CalcTextSize(tag.c_str());
-            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-            ImGui::GetWindowDrawList()->AddText(ImVec2(mx.x - ts.x - 6.0f, (mn.y + mx.y - ts.y) * 0.5f),
-                                                Col(clash && hardClash ? WarningColor() : style.Colors[ImGuiCol_TextDisabled]), tag.c_str());
-        }
-        if (hovered) EditorUI::SetTooltip("%s", it->Path.c_str());
-        ImGui::PopID();
-    }
-    ImGui::EndChild();
-
-    // --- Preview: the item pointed at in the list, else the one worn --------------------------------
-    const Wardrobe::Item* shown = hoveredItem ? hoveredItem : wornItem;
-    if (shown) {
-        const std::string abs = ProjectPaths::Resolve(shown->Path);
-        std::shared_ptr<Model> model;
-        auto load = g_PreviewLoads.find(abs);
-        if (load == g_PreviewLoads.end()) load = g_PreviewLoads.emplace(abs, assets.RequestModelAsync(abs)).first;
-        if (AssetLibrary::IsReady(load->second)) model = assets.LoadModel(abs);
-        const float width = ImGui::GetContentRegionAvail().x;
-        const float height = std::clamp(width * 0.8f, 160.0f, 300.0f);
-        if (model) {
-            const float fit = ModelPreviewRenderer::ComputeFramingDistance(*model) * 0.72f;
-            if (ui.PreviewFor != abs) { ui.PreviewFor = abs; ui.Distance = fit; }
-            // The worn one with the piece's own materials (its colourway), anything else as it comes.
-            std::vector<std::shared_ptr<MaterialAsset>> slotsMats;
-            if (shown == wornItem && worn != pieces.end()) {
-                if (const auto* rc = reg.try_get<RenderableComponent>(worn->second)) slotsMats = rc->Materials;
-            } else {
-                assets.ApplyMaterialRemap(*model, slotsMats);
-            }
-            const float scale = ImGui::GetIO().DisplayFramebufferScale.x > 0.0f ? ImGui::GetIO().DisplayFramebufferScale.x : 1.0f;
-            const unsigned handle = m_OutfitPreview.Render(*model, ui.Yaw, ui.Pitch, ui.Distance, (int)(width * scale),
-                                                           (int)(height * scale), slotsMats,
-                                                           (ModelPreviewRenderer::Shading)ui.Shading, true);
-            ImGui::Image((ImTextureID)(intptr_t)handle, ImVec2(width, height), ImVec2(0, 1), ImVec2(1, 0));
-            // Drag to spin, scroll to zoom (tracked by hand: an Image is never "active").
-            const bool over = ImGui::IsItemHovered();
-            if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ui.Dragging = true;
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) ui.Dragging = false;
-            if (over && ImGui::GetIO().MouseWheel != 0.0f) ui.Distance *= 1.0f - ImGui::GetIO().MouseWheel * 0.1f;
-            if (ui.Dragging) {
-                ui.Yaw += ImGui::GetIO().MouseDelta.x * 0.01f;
-                ui.Pitch = std::clamp(ui.Pitch - ImGui::GetIO().MouseDelta.y * 0.01f, -1.4f, 1.4f);
-            }
-            ui.Distance = std::clamp(ui.Distance, fit * 0.2f, fit * 6.0f);
-            // The name over the image's top-left corner.
-            const ImVec2 mn = ImGui::GetItemRectMin();
-            ImGui::GetWindowDrawList()->AddText(ImVec2(mn.x + 8.0f, mn.y + 6.0f), Col(style.Colors[ImGuiCol_Text]),
-                                                (shown->Name + (shown == wornItem ? "  (worn)" : "")).c_str());
-            // Shading and reset, under it.
-            static const char* kShadingModes[] = {"Lit", "Unlit", "Wireframe"};
-            EditorUIPrimitives::Segmented("##shadingMode", &ui.Shading, kShadingModes, 3);
-            ImGui::SameLine();
-            ImGui::TextDisabled("Drag to spin, scroll to zoom");
-            ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize("Reset view").x - style.FramePadding.x * 2.0f);
-            if (EditorUIPrimitives::SecondaryButton("Reset view")) { ui.Yaw = 0.6f; ui.Pitch = 0.25f; ui.Distance = fit; }
-        } else {
-            ImGui::Dummy(ImVec2(width, height));
-            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-            ImGui::GetWindowDrawList()->AddRectFilled(mn, mx, Col(style.Colors[ImGuiCol_FrameBg]), 4.0f);
-            const char* msg = "Loading...";
-            const ImVec2 ts = ImGui::CalcTextSize(msg);
-            ImGui::GetWindowDrawList()->AddText(ImVec2((mn.x + mx.x - ts.x) * 0.5f, (mn.y + mx.y - ts.y) * 0.5f),
-                                                Col(style.Colors[ImGuiCol_TextDisabled]), msg);
-        }
-    }
-
-    // --- Colourways of the worn item, by name ------------------------------------------------------
-    if (worn != pieces.end()) {
-        const auto groups = OutfitSystem::ColourGroups(world, assets, worn->second);
-        for (size_t gi = 0; gi < groups.size(); ++gi) {
-            const auto& g = groups[gi];
-            ImGui::PushID(g.Source.c_str());
-            ImGui::Spacing();
-            ImGui::TextDisabled("%s", groups.size() > 1 ? ("Colour " + std::to_string(gi + 1)).c_str() : "Colour");
-            const std::vector<std::string> labels = ColourwayLabels(g.Options);
-            const float avail = ImGui::GetContentRegionAvail().x;
-            float x = 0.0f;
-            for (size_t k = 0; k < g.Options.size(); ++k) {
-                const float w = ImGui::CalcTextSize(labels[k].c_str()).x + style.FramePadding.x * 2.0f + 6.0f;
-                if (x > 0.0f && x + w > avail) x = 0.0f;
-                else if (x > 0.0f) ImGui::SameLine(0.0f, 3.0f);
-                x += w + 3.0f;
-                ImGui::PushID((int)k);
-                const bool on = SamePath(g.Options[k], g.Current);
-                ImGui::PushStyleColor(ImGuiCol_Button, on ? accent : style.Colors[ImGuiCol_FrameBg]);
-                if (ImGui::Button(labels[k].c_str(), ImVec2(w, 0.0f)) && !on) {
-                    PushUndo(world, "Change Colourway");
-                    OutfitSystem::SubmitColourway(world, assets, root, worn->second, g.Source, g.Options[k]);
-                }
-                ImGui::PopStyleColor();
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", Wardrobe::Stem(g.Options[k]).c_str());
-                ImGui::PopID();
-            }
-            ImGui::PopID();
-        }
-    }
-
-    // What the rules did, and the skin hidden under the clothes.
-    for (const auto& n : ui.Notes) ImGui::TextColored(InfoColor(), ICON_FA_CIRCLE_INFO "  %s", n.c_str());
-    int hidden = 0, total = 0;
-    for (const auto& [s, e] : pieces)
-        if (const auto* h = reg.try_get<OutfitHideTag>(e)) { hidden += h->Hidden; total += h->Total; }
-    bool autoHide = outfit->AutoHide;
-    if (ImGui::Checkbox("Hide skin under clothes", &autoHide)) {
-        PushUndo(world, "Toggle Outfit Skin Hiding");
-        outfit->AutoHide = autoHide;
-    }
-    if (total) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("(%d vertices hidden)", hidden);
-    }
-    const bool animated = std::any_of(pieces.begin(), pieces.end(), [&](const auto& kv) {
-        return reg.all_of<AnimatorControllerComponent>(kv.second);
-    });
-    if (!animated)
-        ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  No piece has an Animator Controller: only motion matching (the player's body, the dummies) animates it.");
+    c.ReadWorn();
+    DrawSlotHeader(c, *slot);
+    const Wardrobe::Item* hoveredItem = DrawItemList(c);
+    if (const Wardrobe::Item* shown = hoveredItem ? hoveredItem : c.wornItem) DrawItemPreview(c, m_OutfitPreview, *shown);
+    DrawColourways(c);
+    DrawOutfitFooter(c);
 }

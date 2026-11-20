@@ -1602,6 +1602,43 @@ bool AppSession::Frame() {
     {
     PROFILE_SCOPE("Asset Pump + Outfit Hiding");
     { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
+    // --npc-test: an outfit change in Play lands on the frame that asked for it, not when the machine finishes loading it
+    // (the player's pieces, asked for in Play's first frames, landed 0.2-0.5 s in and rebuilt the body - OutfitChanged -
+    // on a frame that followed the machine's load, so no two runs matched). It waits only while the loads progress: a
+    // change whose loads stall (5 s with none finishing - a file that never loads) stops the waiting until an outfit
+    // change lands again, and that change lands whenever it can, as in Play.
+    if (opt.npcTestMode && playing && OutfitSystem::AnyPending()) {
+        static unsigned s_stalledAt = ~0u; // the landed generation the last stall happened at
+        if (OutfitSystem::LandedGeneration() != s_stalledAt) {
+            // Progress: one more of the waiting changes' own loads done (not the library's in-flight count, which a
+            // load finishing while another queues leaves unchanged).
+            auto loadsDone = [&] {
+                int done = 0;
+                for (entt::entity root : world.Registry.view<const CharacterOutfitComponent>()) {
+                    int d = 0;
+                    if (OutfitSystem::IsPending(world, root, &d)) done += d;
+                }
+                return done;
+            };
+            auto lastProgress = std::chrono::steady_clock::now();
+            int done = loadsDone();
+            while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) && assets.AsyncInFlight() > 0) {
+                assets.PumpAsync(50.0);
+                UploadStaging::Finish(); // no frames end while this waits: free the staging ring by hand (as CliTools' drain)
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                if (const int now = loadsDone(); now != done) {
+                    done = now;
+                    lastProgress = std::chrono::steady_clock::now();
+                }
+                if (std::chrono::steady_clock::now() - lastProgress > std::chrono::seconds(5)) {
+                    s_stalledAt = OutfitSystem::LandedGeneration();
+                    std::printf("[NpcTest] an outfit change's loads stalled (none done in 5 s, %d in flight): no more waiting for it\n",
+                                assets.AsyncInFlight());
+                    break;
+                }
+            }
+        }
+    }
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
     { PROFILE_SCOPE("Outfit Pending");
       // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.

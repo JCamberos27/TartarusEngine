@@ -2309,11 +2309,23 @@ private:
     // The flattened rows and the per-row ancestor chain used to be fresh vectors every frame
     // (one heap allocation per visible row for the chain); both are reused now.
     std::vector<HierarchyFlatRow> m_HierFlatRows;
+    std::vector<entt::entity> m_HierRootScratch; // DrawHierarchyTreeBody's top-level rows, reused
     std::vector<entt::entity> m_HierChainScratch;
-    // CreationOrdinal ("Object 7") was a full sort of every entity PER unnamed row (and per
-    // comparison in the Name sort). Built lazily once per frame instead.
-    mutable std::unordered_map<entt::entity, int> m_HierOrdinals;
-    mutable int m_HierOrdinalsFrame = -1;
+    // Every named entity in creation order (OrderComponent, entity handle as the tiebreak) - the
+    // Hierarchy's root list, the "Object 7" ordinals and the scene-root siblings all read it.
+    // Each call re-reads the (order, entity) pairs (one linear pass) and re-sorts only when they
+    // changed, so it is always current; the sorted list and the ordinal index are kept between
+    // frames instead of being rebuilt (the Forest's 37k entities: a sort plus a 37k-entry hash map
+    // a frame). The reference stays valid until the next call.
+    struct HierarchyOrderCache {
+        std::vector<std::pair<int, entt::entity>> Keyed, Scratch; // last input / this call's input
+        std::vector<entt::entity> Sorted;
+        std::vector<int> Ordinal; // by entt::to_entity(e): 1-based position in Sorted, 0 = none
+        int CheckedFrame = -1;    // HierarchyCreationOrdinal re-checks the pairs once per ImGui frame
+    };
+    mutable HierarchyOrderCache m_HierOrder;
+    const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
+    // "Object 7" for an unnamed entity: its 1-based place in HierarchyCreationOrder (0 = not named).
     int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon
     // under the mouse names, and whether a hover key acted (type-to-select skips that frame).

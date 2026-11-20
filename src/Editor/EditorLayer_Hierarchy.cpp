@@ -91,34 +91,6 @@ inline void MakeDirectionalLight(World& world, entt::entity e) {
     world.Registry.get<TransformComponent>(e).SetRotationEuler(glm::vec3(-36.25f, 53.13f, 0.0f));
 }
 
-// The Hierarchy lists entities by OrderComponent (a stable per-entity sequence assigned at
-// creation and preserved through save/load), so a snapshot round-trip — undo/redo, Play->Stop —
-// no longer reshuffles the list. Entities predating OrderComponent (0) keep a stable relative
-// order via the entity-handle tiebreak.
-template <typename View>
-std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View view) {
-    // Each entity's order read once, then sorted as plain pairs: the comparator used to look up
-    // OrderComponent twice per comparison, every frame.
-    // The sort is the cost (37k entities in the Forest: ~2 ms a frame of the Hierarchy panel), and frame to frame the
-    // input is almost always identical: the same (order, entity) pairs in the same storage order. Then last frame's
-    // sorted list is the answer, after one linear compare.
-    thread_local std::vector<std::pair<int, entt::entity>> keyed, lastKeyed;
-    thread_local std::vector<entt::entity> lastSorted;
-    keyed.clear();
-    for (const entt::entity e : view) {
-        const auto* o = reg.try_get<OrderComponent>(e);
-        keyed.emplace_back(o ? o->Value : 0, e);
-    }
-    if (keyed == lastKeyed) return lastSorted;
-    lastKeyed = keyed;
-    std::sort(keyed.begin(), keyed.end());
-    std::vector<entt::entity> entities;
-    entities.reserve(keyed.size());
-    for (const auto& k : keyed) entities.push_back(k.second);
-    lastSorted = entities;
-    return entities;
-}
-
 // Phase 5 item 6 — the type-filter chips' bitmask, and the tiebreak key the Type sort mode uses.
 // Independent of the per-row kind BADGE (DrawHierarchyRowBody's own hasMesh/hasLight/hasCamera),
 // which picks one primary glyph by priority — this instead sets every bit an entity qualifies
@@ -152,19 +124,48 @@ ImGuiID HierarchyNodeStateId(const World& world, entt::entity e, std::vector<ent
 
 } // namespace
 
+// The Hierarchy lists entities by OrderComponent (a stable per-entity sequence assigned at
+// creation and preserved through save/load), so a snapshot round-trip - undo/redo, Play->Stop -
+// no longer reshuffles the list. Entities predating OrderComponent (0) keep a stable relative
+// order via the entity-handle tiebreak. Frame to frame the (order, entity) pairs are almost
+// always identical, so the sort and the ordinal index only run when they change.
+const std::vector<entt::entity>& EditorLayer::HierarchyCreationOrder(const World& world) const {
+    HierarchyOrderCache& c = m_HierOrder;
+    c.Scratch.clear();
+    for (const entt::entity e : world.Registry.view<const NameComponent>()) {
+        const auto* o = world.Registry.try_get<OrderComponent>(e);
+        c.Scratch.emplace_back(o ? o->Value : 0, e);
+    }
+    if (c.Scratch == c.Keyed) return c.Sorted;
+    c.Keyed.swap(c.Scratch);
+    c.Scratch = c.Keyed;
+    std::sort(c.Scratch.begin(), c.Scratch.end());
+    c.Sorted.clear();
+    c.Sorted.reserve(c.Scratch.size());
+    for (const auto& k : c.Scratch) c.Sorted.push_back(k.second);
+    std::fill(c.Ordinal.begin(), c.Ordinal.end(), 0);
+    for (size_t i = 0; i < c.Sorted.size(); ++i) {
+        const size_t idx = (size_t)entt::to_entity(c.Sorted[i]);
+        if (idx >= c.Ordinal.size()) c.Ordinal.resize(idx + 1, 0);
+        c.Ordinal[idx] = (int)i + 1;
+    }
+    return c.Sorted;
+}
+
 // "Object 7" for an entity the user never named (#21 P10): its 1-based position in creation
-// order. This used to re-sort every entity per call - once per unnamed visible row per frame -
-// so the ordinals are now built once per frame instead.
+// order. The pairs are re-checked once per frame (every call outside an ImGui frame, as in the
+// unit tests), and the lookup is an index, not a per-frame hash map of every entity.
 int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) const {
     const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
-    if (frame != m_HierOrdinalsFrame) {
-        m_HierOrdinalsFrame = frame;
-        m_HierOrdinals.clear();
-        const auto list = ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
-        for (size_t i = 0; i < list.size(); ++i) m_HierOrdinals[list[i]] = (int)i + 1;
+    if (frame == -2 || frame != m_HierOrder.CheckedFrame) {
+        m_HierOrder.CheckedFrame = frame;
+        HierarchyCreationOrder(world);
     }
-    const auto it = m_HierOrdinals.find(e);
-    return it != m_HierOrdinals.end() ? it->second : 0;
+    const size_t idx = (size_t)entt::to_entity(e);
+    if (idx >= m_HierOrder.Ordinal.size()) return 0;
+    const int ord = m_HierOrder.Ordinal[idx];
+    // The index is per entity slot: a recycled slot (another version of the handle) is not a match.
+    return ord > 0 && m_HierOrder.Sorted[(size_t)ord - 1] == e ? ord : 0;
 }
 
 
@@ -985,19 +986,23 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // Reused member buffer (Editor Enhancers perf pass): clear() keeps its capacity.
     std::vector<HierarchyFlatRow>& flatRows = m_HierFlatRows;
     flatRows.clear();
-    std::vector<entt::entity> rootEntities =
-        ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
-    ApplyHierarchyDisplaySort(world, rootEntities); // Phase 5 item 6 — display-only, doesn't touch OrderComponent
-    for (entt::entity entity : rootEntities) {
-        if (!MatchesHierarchyFilter(world, entity)) continue;
+    // The top-level rows: picked out of the cached creation order first, then display-sorted, so
+    // the Name/Type sort only orders the rows that are shown (it used to sort every entity in the
+    // scene, children included, every frame). A stable sort of the subset = the same order.
+    std::vector<entt::entity>& rootEntities = m_HierRootScratch;
+    rootEntities.clear();
+    for (entt::entity entity : HierarchyCreationOrder(world)) {
         // A parented entity draws nested under its parent, not as a sibling — except while
         // filtering, where the parent may be filtered out, so matches are shown flat instead.
         if (!filtering) {
             const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
             if (hier && hier->Parent != entt::null) continue;
         }
-        FlattenHierarchyRows(world, entity, /*depth=*/0, flatRows);
+        if (!MatchesHierarchyFilter(world, entity)) continue;
+        rootEntities.push_back(entity);
     }
+    ApplyHierarchyDisplaySort(world, rootEntities); // Phase 5 item 6 — display-only, doesn't touch OrderComponent
+    for (entt::entity entity : rootEntities) FlattenHierarchyRows(world, entity, /*depth=*/0, flatRows);
 
     // Editor Enhancers / vHierarchy per-frame state, read by every row below.
     const EditorSettings& es = EditorSettings::Get();
@@ -2253,24 +2258,31 @@ void EditorLayer::UnparentSelection(World& world) {
 std::vector<entt::entity> EditorLayer::HierarchySiblingsInOrder(const World& world, entt::entity parent) const {
     std::vector<entt::entity> out;
     if (parent == entt::null) {
-        for (entt::entity e : world.Registry.view<const NameComponent>()) {
+        // The cached creation order is already (OrderComponent, handle) sorted: no sort needed.
+        for (entt::entity e : HierarchyCreationOrder(world)) {
             const auto* h = world.Registry.try_get<HierarchyComponent>(e);
             if (!h || h->Parent == entt::null) out.push_back(e);
         }
-    } else if (const auto* h = world.Registry.try_get<HierarchyComponent>(parent)) {
-        out = h->Children;
+        return out;
     }
-    std::sort(out.begin(), out.end(), [&](entt::entity a, entt::entity b) {
-        const auto* oa = world.Registry.try_get<OrderComponent>(a);
-        const auto* ob = world.Registry.try_get<OrderComponent>(b);
-        int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
-        return va != vb ? va < vb : a < b;
-    });
+    const auto* h = world.Registry.try_get<HierarchyComponent>(parent);
+    if (!h) return out;
+    // Each child's order read once (the comparator used to look it up twice per comparison), and
+    // no sort at all for the usual already-in-order children list.
+    thread_local std::vector<std::pair<int, entt::entity>> keyed;
+    keyed.clear();
+    for (entt::entity e : h->Children) {
+        const auto* o = world.Registry.try_get<OrderComponent>(e);
+        keyed.emplace_back(o ? o->Value : 0, e);
+    }
+    if (!std::is_sorted(keyed.begin(), keyed.end())) std::sort(keyed.begin(), keyed.end());
+    out.reserve(keyed.size());
+    for (const auto& k : keyed) out.push_back(k.second);
     return out;
 }
 
 // Phase 5 item 6 — the sort control's display-only re-sort. Mode 0 (Creation order) is a no-op
-// since the caller's list already comes out of ViewInCreationOrder/HierarchySiblingsInOrder in
+// since the caller's list already comes out of HierarchyCreationOrder/HierarchySiblingsInOrder in
 // that order; modes 1/2 stable_sort by name or kind on top of it, so ties (e.g. two meshes) keep
 // their creation-order relative position. This never touches OrderComponent or Children — pure
 // display, so drag-drop / ReorderHierarchySiblings behave exactly as before regardless of sort.

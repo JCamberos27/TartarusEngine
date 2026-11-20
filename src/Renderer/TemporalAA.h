@@ -1,6 +1,9 @@
 #pragma once
 
+#include "FullscreenPass.h"
+
 #include <glm/glm.hpp>
+#include <memory>
 
 class Shader;
 
@@ -21,7 +24,7 @@ class Shader;
 // history, so the next frame starts clean instead of smearing the old view over the new one.
 class TemporalAA {
 public:
-    TemporalAA() = default;
+    TemporalAA();
     ~TemporalAA();
     TemporalAA(const TemporalAA&) = delete;
     TemporalAA& operator=(const TemporalAA&) = delete;
@@ -47,15 +50,9 @@ public:
 
 private:
     void EnsureShaders();
-    void EnsureTargets(int w, int h);
-    void ReleaseTargets();
 
-    Shader* m_Resolve = nullptr;
-    Shader* m_Sharpen = nullptr;
-    unsigned int m_Vao = 0;
-    unsigned int m_History[2] = {}, m_HistoryFbo[2] = {};
-    unsigned int m_Out = 0, m_OutFbo = 0;
-    int m_W = 0, m_H = 0;       // the history targets' size
+    std::unique_ptr<Shader> m_Resolve, m_Sharpen;
+    ColorTarget m_History[2], m_Out;
     int m_ReqW = 0, m_ReqH = 0; // this frame's (BeginFrame)
     int m_Cur = 0;            // which history the next Resolve writes
     bool m_HistoryValid = false;

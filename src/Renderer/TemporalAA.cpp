@@ -1,8 +1,6 @@
 #include "TemporalAA.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
-#include "GLStateCache.h"
-#include "GLStateScope.h"
 #include "gl.h"
 
 #include <algorithm>
@@ -20,12 +18,8 @@ float Halton(int index, int base) {
 }
 } // namespace
 
-TemporalAA::~TemporalAA() {
-    delete m_Resolve;
-    delete m_Sharpen;
-    if (m_Vao) glDeleteVertexArrays(1, &m_Vao);
-    ReleaseTargets();
-}
+TemporalAA::TemporalAA() = default;
+TemporalAA::~TemporalAA() = default;
 
 glm::vec2 TemporalAA::HaltonJitter(int index) {
     return glm::vec2(Halton(index, 2) - 0.5f, Halton(index, 3) - 0.5f);
@@ -77,71 +71,30 @@ glm::mat4 TemporalAA::BeginFrame(const glm::mat4& view, const glm::mat4& proj, i
 
 void TemporalAA::EnsureShaders() {
     if (m_Resolve) return;
-    m_Resolve = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"), ShaderLibrary::ReadFile("TaaResolve.frag.glsl"),
-                           "taaResolve");
-    m_Sharpen = new Shader(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"), ShaderLibrary::ReadFile("TaaSharpen.frag.glsl"),
-                           "taaSharpen");
-    glGenVertexArrays(1, &m_Vao);
-}
-
-void TemporalAA::ReleaseTargets() {
-    for (int i = 0; i < 2; ++i) {
-        if (m_History[i]) glDeleteTextures(1, &m_History[i]);
-        if (m_HistoryFbo[i]) glDeleteFramebuffers(1, &m_HistoryFbo[i]);
-        m_History[i] = m_HistoryFbo[i] = 0;
-    }
-    if (m_Out) glDeleteTextures(1, &m_Out);
-    if (m_OutFbo) glDeleteFramebuffers(1, &m_OutFbo);
-    m_Out = m_OutFbo = 0;
-}
-
-void TemporalAA::EnsureTargets(int w, int h) {
-    if (m_Out && w == m_W && h == m_H) return;
-    ReleaseTargets();
-    m_W = w;
-    m_H = h;
-    auto make = [w, h](unsigned int& tex, unsigned int& fbo) {
-        glCreateTextures(GL_TEXTURE_2D, 1, &tex);
-        glTextureStorage2D(tex, 1, GL_RGBA16F, w, h);
-        glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glCreateFramebuffers(1, &fbo);
-        glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, tex, 0);
-    };
-    make(m_History[0], m_HistoryFbo[0]);
-    make(m_History[1], m_HistoryFbo[1]);
-    make(m_Out, m_OutFbo);
-    m_HistoryValid = false;
+    m_Resolve = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
+                                         ShaderLibrary::ReadFile("TaaResolve.frag.glsl"), "taaResolve");
+    m_Sharpen = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
+                                         ShaderLibrary::ReadFile("TaaSharpen.frag.glsl"), "taaSharpen");
 }
 
 unsigned int TemporalAA::Resolve(unsigned int color, unsigned int depth, unsigned int velocityMs, float sharpness) {
     if (!color || !depth || !velocityMs || m_ReqW <= 0 || m_ReqH <= 0) return color;
     EnsureShaders();
-    EnsureTargets(m_ReqW, m_ReqH);
+    // A new size reallocates all three targets, so the old history is gone with it.
+    const bool resized = m_Out.Width() != m_ReqW || m_Out.Height() != m_ReqH || !m_Out.Fbo();
+    for (ColorTarget* t : {&m_History[0], &m_History[1], &m_Out}) t->Ensure(m_ReqW, m_ReqH, GL_RGBA16F, "TemporalAA target");
+    if (resized) m_HistoryValid = false;
 
     const int src = 1 - m_Cur, dst = m_Cur;
-    // Leave the caller's pipeline state as found (depth test/write, blend, cull, scissor, draw framebuffer).
-    GLStateScope stateScope;
-    const bool hadScissor = glIsEnabled(GL_SCISSOR_TEST) == GL_TRUE;
-    GLint prevDrawFbo = 0, prevReadFbo = 0;
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFbo);
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
-    glBindVertexArray(m_Vao);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_SCISSOR_TEST);
-    glViewport(0, 0, m_W, m_H);
+    FullscreenPass pass;
 
     // Resolve: current + reprojected history -> history[dst] (kept unsharpened, in the tone-mapped working space).
-    glBindFramebuffer(GL_FRAMEBUFFER, m_HistoryFbo[dst]);
+    m_History[dst].Bind();
     m_Resolve->Bind();
     glBindTextureUnit(0, color);
     glBindTextureUnit(1, depth);
     glBindTextureUnit(2, velocityMs);
-    glBindTextureUnit(3, m_History[src]);
+    glBindTextureUnit(3, m_History[src].Texture());
     m_Resolve->SetInt("uColor", 0);
     m_Resolve->SetInt("uDepth", 1);
     m_Resolve->SetInt("uVelocity", 2);
@@ -152,25 +105,19 @@ unsigned int TemporalAA::Resolve(unsigned int color, unsigned int depth, unsigne
     m_Resolve->SetMat4("uCurViewProj", m_CurVP);
     m_Resolve->SetMat4("uPrevViewProj", m_PrevVP);
     m_Resolve->SetVec2("uJitterUv", m_JitterNdc * 0.5f);
-    m_Resolve->SetVec2("uTexel", glm::vec2(1.0f / (float)m_W, 1.0f / (float)m_H));
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    m_Resolve->SetVec2("uTexel", glm::vec2(1.0f / (float)m_ReqW, 1.0f / (float)m_ReqH));
+    FullscreenPass::Draw();
 
     // Sharpen: history[dst] -> out (linear HDR again).
-    glBindFramebuffer(GL_FRAMEBUFFER, m_OutFbo);
+    m_Out.Bind();
     m_Sharpen->Bind();
-    glBindTextureUnit(0, m_History[dst]);
+    glBindTextureUnit(0, m_History[dst].Texture());
     m_Sharpen->SetInt("uSrc", 0);
     m_Sharpen->SetFloat("uSharpness", std::clamp(sharpness, 0.0f, 1.0f));
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-
-    glBindVertexArray(0);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
+    FullscreenPass::Draw();
     for (int u = 0; u < 4; ++u) glBindTextureUnit(u, 0);
-    GLStateCache::Invalidate(); // raw program / texture binds above
-    if (hadScissor) glEnable(GL_SCISSOR_TEST);
 
     m_HistoryValid = true;
     m_Cur = src;
-    return m_Out;
+    return m_Out.Texture();
 }
