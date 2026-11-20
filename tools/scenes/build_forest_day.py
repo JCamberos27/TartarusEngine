@@ -37,7 +37,7 @@ def main():
     s.boxes, s.empties, s.models = d['boxes'], d['empties'], d['models']
     out = os.path.join(scenes, 'ForestDay.json')
     s.write(out)
-    bf.write_meta(out)
+    k.write_scene_meta(out)
     print(f'build_forest_day: -> {out}')
 
 

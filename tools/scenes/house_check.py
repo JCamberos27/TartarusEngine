@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import forest_house as fh  # noqa: E402
+import scene_kit as k  # noqa: E402
 import house_fit as hf  # noqa: E402
 
 GROUPS = ('House_01_Props', 'Rubbish', 'House Lights', 'Porch Light', 'Store Room', 'Over The Fireplace')
@@ -44,8 +45,8 @@ def main():
             memo[i] = None
             return None
         pp, pr, ps = par
-        v = hf.qrot(pr, [p[k] * ps[k] for k in range(3)])
-        memo[i] = ([pp[k] + v[k] for k in range(3)], hf.qmul(pr, r), [ps[k] * s[k] for k in range(3)])
+        v = k.qrot(pr, [p[k] * ps[k] for k in range(3)])
+        memo[i] = ([pp[k] + v[k] for k in range(3)], k.qmul(pr, r), [ps[k] * s[k] for k in range(3)])
         return memo[i]
 
     def piece(i):
@@ -83,9 +84,9 @@ def main():
         if not o or not c or w is None or c['halfExtents'][1] * 2 < 1.8:
             continue
         he, ctr = c['halfExtents'], c.get('center', [0, 0, 0])
-        mid = hf.qrot(w[1], ctr)
+        mid = k.qrot(w[1], ctr)
         cx, cz = w[0][0] + mid[0], w[0][2] + mid[2]
-        al, th = hf.qrot(w[1], (1, 0, 0)), hf.qrot(w[1], (0, 0, 1))
+        al, th = k.qrot(w[1], (1, 0, 0)), k.qrot(w[1], (0, 0, 1))
         wd = he[0] * 2
         # looser than the builder's keep-out (forest_house Fit.zones): this flags only what really blocks the way
         hw, hd = wd / 2 + 0.05, 0.6

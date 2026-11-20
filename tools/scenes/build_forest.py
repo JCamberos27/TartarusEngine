@@ -33,7 +33,6 @@ import json
 import math
 import os
 import random
-import secrets
 import struct
 import sys
 import base64
@@ -1152,15 +1151,6 @@ def house(s, root, repo, H):
     return notes
 
 
-def write_meta(path):
-    meta = path + '.meta'
-    if os.path.exists(meta):
-        return
-    with open(meta, 'w', encoding='utf-8', newline='\n') as f:
-        json.dump({'guid': secrets.token_hex(8), 'metaVersion': 1, 'type': 'scene'}, f, indent=2)
-        f.write('\n')
-
-
 def main():
     args = k.builder_args('Forest', 'its hand edits')
     repo = args.repo
@@ -1168,7 +1158,7 @@ def main():
     k.refuse_overwrite(out, args, 'its hand edits (use forest_house_into.py for the house)')
     s, counts = build(repo)
     s.write(out)
-    write_meta(out)
+    k.write_scene_meta(out)
     for path, why in sorted(s.rejected.items()):
         print(f'build_forest: left out {path}: {why}')
     print('build_forest: ' + ', '.join(f'{v} {k_}' for k_, v in counts.items()) +

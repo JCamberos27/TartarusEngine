@@ -13,27 +13,11 @@ import sys
 from PIL import Image
 
 import house_shots as hs
+from scene_kit import qmul, qrot
 
 REPO = hs.REPO
 OFF_MAX = 0.55       # the brightest pixels (99th percentile, 0..1) at a fitting whose circuit is off: no glow there
 ON_SHARE = 0.75      # sanity: at least this share of the fittings are brighter on than off (the shots see them)
-
-
-def qrot(q, v):
-    x, y, z, w = q
-    ix = w * v[0] + y * v[2] - z * v[1]
-    iy = w * v[1] + z * v[0] - x * v[2]
-    iz = w * v[2] + x * v[1] - y * v[0]
-    iw = -x * v[0] - y * v[1] - z * v[2]
-    return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z,
-            iz * w + iw * -z + ix * -y - iy * -x]
-
-
-def qmul(a, b):
-    ax, ay, az, aw = a
-    bx, by, bz, bw = b
-    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
 
 
 def main():

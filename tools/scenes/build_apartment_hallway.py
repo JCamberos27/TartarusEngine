@@ -21,7 +21,6 @@
 import json
 import math
 import os
-import secrets
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -78,11 +77,6 @@ TEST_ROOM = 'Apartment 301/Living Room'   # the NPC / animation test room (its d
 NORTH_TARGET = (0.74, 0.42, 0.52)   # where the moon should hang (direction to it): 35 deg south of east, 25 deg up
 
 
-def ref(repo, path):
-    with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
-        return {'path': path, 'pathGuid': json.load(f)['guid']}
-
-
 # --- the moon: the engine's TimeOfDay::MoonDirection, to aim the sky so the moon shines in the south windows -----
 def moon_dir(hours, day, lat, north, phase):
     sun_dec = math.radians(-23.44) * math.cos(2 * math.pi * (day + 10) / 365)
@@ -114,7 +108,7 @@ class Hallway(k.Scene):
         super().__init__(base)
         self.repo = repo
         self.idx = k.model_index(repo)  # TARTARUS_EXE, else build/Release, else b/Release
-        self.plane = ref(repo, PLANE)
+        self.plane = k.ref(repo, PLANE)
         self.mats = self._materials()
         self.rooms = {}        # 'Apartment 301/Bedroom' -> world rect (x0, z0, x1, z1)
         self.room_mat = {}     # same key -> (wall material, floor material)
@@ -521,42 +515,22 @@ class Hallway(k.Scene):
         """Arena's player (controller, AKS-74U + Remington 870, first-person body) at the corridor's west end, facing
         east down it: bare chest, black classic pants and shoes, a black balaclava."""
         r = self.repo
-        spawn = next(e for e in arena['empties'] if 'First Person Controller' in e)
-        body = next(e for e in arena['empties'] if e.get('parentId') == spawn['id'] and 'First Person Body' in e)
-        pieces = [e for e in arena['models'] if e.get('parentId') == body['id']
-                  and e.get('Outfit Piece', {}).get('Slot') in {'Torso', 'Head', 'Arms'}]
-        anim = pieces[0]['Animator Controller']
-        ctrl = {kk: v for kk, v in spawn.items() if kk[0].isupper()}
-        fpc = ctrl['First Person Controller']
-        fpc['Primary Weapon Prefab'] = 'assets/Weapons/AKS74U/AKS74U.prefab'
-        fpc['Secondary Weapon Prefab'] = 'assets/Weapons/Remington870/Remington870.prefab'
         # Arena's 0.3 m capsule (0.7 m wide with PhysX's contact offset) scrapes the 0.87 m a door leaves open; 0.22
         # is a person's shoulders seen from above
-        fpc['Capsule Radius'] = 0.22
-        sid = self.empty('Player Spawn', -1, (1.0 - L / 2, 0.0, 0.0), yaw=-90.0, **ctrl)  # facing +X
-        bid = self.empty('Player Body', sid, tuple(body['position']), **{kk: v for kk, v in body.items() if kk[0].isupper()})
-        for p in pieces:
-            e = self._common(p['name'], bid, tuple(p['position']), 0.0)
-            e['rotation'] = p['rotation']
-            e.update({kk: v for kk, v in p.items() if kk in ('path', 'pathGuid', 'materials', 'Outfit Piece', 'Animator Controller')})
-            self.models.append(e)
+        bid = self.copy_player(arena, (1.0 - L / 2, 0.0, 0.0), yaw=-90.0, controller={   # facing +X
+            'Primary Weapon Prefab': 'assets/Weapons/AKS74U/AKS74U.prefab',
+            'Secondary Weapon Prefab': 'assets/Weapons/Remington870/Remington870.prefab', 'Capsule Radius': 0.22})
         body_mat = 'assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat'
         black = 'assets/Characters/Quantum/Materials/Clothing/Pants/Pants Classic/M_Pants_Classic_Black.mat'
         clothes = 'assets/Characters/Quantum/Models/Clothing/Male/'
-        for slot, path, mat, flags, skinned in (
-                ('Legs', 'assets/Characters/Quantum/Models/European/Quantum_Legs.fbx', body_mat, 1, True),
-                ('Feet', clothes + 'Shoes/Quantum_Feet_Shoes.fbx', body_mat, 1, True),
-                ('Pants', clothes + 'Pants/SKM_Pants_Classic.fbx', black, 0, True),
-                ('Shoes', clothes + 'Shoes/SKM_Shoes_Classic.fbx', black, 0, True),
+        for slot, path, mat, flags in (
+                ('Legs', 'assets/Characters/Quantum/Models/European/Quantum_Legs.fbx', body_mat, 1),
+                ('Feet', clothes + 'Shoes/Quantum_Feet_Shoes.fbx', body_mat, 1),
+                ('Pants', clothes + 'Pants/SKM_Pants_Classic.fbx', black, 0),
+                ('Shoes', clothes + 'Shoes/SKM_Shoes_Classic.fbx', black, 0),
                 ('Balaclava', clothes + 'Balaclava/SM_Balaclava_Crime.fbx',
-                 'assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat', 2, False)):
-            m = ref(r, path)
-            e = self._common(slot, bid, (0.0, 0.0, 0.0), 0.0)
-            e.update({**m, 'materials': [{'guid': ref(r, mat)['pathGuid'], 'path': mat}],
-                      'Outfit Piece': {'Flags': flags, 'Item': m, 'Slot': slot}})
-            if skinned:
-                e['Animator Controller'] = anim
-            self.models.append(e)
+                 'assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat', 2)):
+            self.outfit_piece(r, bid, slot, path, mat, flags)
 
 
 def build(repo):
@@ -601,15 +575,6 @@ def build(repo):
     return s
 
 
-def write_meta(path):
-    meta = path + '.meta'
-    if os.path.exists(meta):
-        return  # keep the guid: settings.json points at it
-    with open(meta, 'w', encoding='utf-8', newline='\n') as f:
-        json.dump({'guid': secrets.token_hex(8), 'metaVersion': 1, 'type': 'scene'}, f, indent=2)
-        f.write('\n')
-
-
 def main():
     args = k.builder_args('Apartment Hallway', 'its hand edits and the dress_corridor.py / dress_apartments.py decals')
     repo = args.repo
@@ -617,7 +582,7 @@ def main():
     k.refuse_overwrite(out, args, 'its hand edits and the dress_corridor.py / dress_apartments.py decals')
     s = build(repo)
     s.write(out)
-    write_meta(out)
+    k.write_scene_meta(out)
     print(f'{out}: {len(s.boxes)} boxes, {len(s.models)} models, {len(s.empties)} empties; corridor {L:.1f} m; '
           f'moon {s.data["sky"]["timeOfDayHours"]} h, north offset {s.data["sky"]["northOffset"]}')
 

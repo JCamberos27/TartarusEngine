@@ -29,6 +29,9 @@ import os
 import random
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from scene_kit import ref  # noqa: E402
+
 ROOTS = ('Decal Lab', 'Corridor Wear', 'Apartment Wear')   # dress_apartments.py re-adds the last (it runs after)
 MAX_DECALS, MAX_2K = 80, 22
 D = 'assets/Decals/'
@@ -103,11 +106,6 @@ def world_pos(by_id, e):
         assert abs(e['rotation'][3] - 1.0) < 1e-6, f"rotated parent {e['name']}: world maths assumes none"
         x, y, z = x + e['position'][0], y + e['position'][1], z + e['position'][2]
     return x, y, z
-
-
-def ref(repo, path):
-    with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
-        return {'path': path, 'pathGuid': json.load(f)['guid']}
 
 
 def substrate_block(repo, key):

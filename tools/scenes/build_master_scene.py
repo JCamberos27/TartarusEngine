@@ -20,11 +20,10 @@
 import json
 import math
 import os
-import secrets
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from scene_kit import Scene, euler_quat  # noqa: E402
+from scene_kit import Scene, euler_quat, ref, write_scene_meta  # noqa: E402
 
 MANNY_M = 1.80               # the UE5 mannequin (Manny) is ~180 cm; the Quantum rig is authored to match
 NORTH_OFFSET = 50.0         # degrees the sky is turned: the moon over the firing range
@@ -47,11 +46,6 @@ TEXT = (1.0, 0.95, 0.88)                         # warm off-white: every measure
 ACCENT = {'hub': (1.0, 0.95, 0.88), 'range': (1.0, 0.62, 0.25), 'traversal': (0.35, 0.95, 0.85),
           'arch': (0.55, 0.72, 1.0), 'npc': (1.0, 0.45, 0.62), 'lighting': (0.85, 0.85, 0.9)}
 WORK_LIGHT_K = 3000.0                            # warm sodium-ish work lights against the cool moon
-
-
-def ref(repo, path):
-    with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
-        return {'path': path, 'pathGuid': json.load(f)['guid']}
 
 
 def grid(repo, tint=(1.0, 1.0, 1.0), roughness=0.85, metallic=0.0, glow=0.0, glow_color=None):
@@ -372,37 +366,12 @@ def npc_bay(s):
 
 def player(s, arena, repo):
     """Arena's player (controller, weapons, first-person body) at the hub, stripped to the bare body + underpants."""
-    spawn = next(e for e in arena['empties'] if 'First Person Controller' in e)
-    body = next(e for e in arena['empties'] if e.get('parentId') == spawn['id'] and 'First Person Body' in e)
-    keep_slots = {'Torso', 'Head', 'Arms'}
-    pieces = [e for e in arena['models'] if e.get('parentId') == body['id'] and e.get('Outfit Piece', {}).get('Slot') in keep_slots]
-    anim = pieces[0]['Animator Controller']
-    sid = s.empty('Player Spawn', -1, (0.0, 0.0, 6.0), **{k: v for k, v in spawn.items() if k[0].isupper()})
-    bid = s.empty('Player Body', sid, tuple(body['position']), **{k: v for k, v in body.items() if k[0].isupper()})
-    for p in pieces:
-        e = s._common(p['name'], bid, tuple(p['position']), 0.0)
-        e['rotation'] = p['rotation']
-        e.update({k: v for k, v in p.items() if k in ('path', 'pathGuid', 'materials', 'Outfit Piece', 'Animator Controller')})
-        s.models.append(e)
-    body_mat = {'guid': ref(repo, 'assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat')['pathGuid'],
-                'path': 'assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat'}
+    bid = s.copy_player(arena, (0.0, 0.0, 6.0))
+    body_mat = 'assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat'
     for slot, path in (('Legs', 'assets/Characters/Quantum/Models/European/Quantum_Legs.fbx'),
                        ('Feet', 'assets/Characters/Quantum/Models/European/Quantum_Feet.fbx'),
                        ('UnderPants', 'assets/Characters/Quantum/Models/European/Quantum_UnderPants.fbx')):
-        r = ref(repo, path)
-        e = s._common(slot, bid, (0.0, 0.0, 0.0), 0.0)
-        e.update({'path': path, 'pathGuid': r['pathGuid'], 'materials': [body_mat], 'Animator Controller': anim,
-                  'Outfit Piece': {'Flags': 1, 'Item': {'path': path, 'pathGuid': r['pathGuid']}, 'Slot': slot}})
-        s.models.append(e)
-
-
-def write_meta(path):
-    meta = path + '.meta'
-    if os.path.exists(meta):
-        return  # keep the guid: settings.json and the build list point at it
-    with open(meta, 'w', encoding='utf-8', newline='\n') as f:
-        json.dump({'guid': secrets.token_hex(8), 'metaVersion': 1, 'type': 'scene'}, f, indent=2)
-        f.write('\n')
+        s.outfit_piece(repo, bid, slot, path, body_mat, 1)
 
 
 def main():
@@ -410,7 +379,7 @@ def main():
     s = build(repo)
     out = os.path.join(repo, 'project', 'scenes', 'Master Scene.json')
     s.write(out)
-    write_meta(out)
+    write_scene_meta(out)
     labels = sum(1 for e in s.empties if 'World Text' in e)
     print(f'{out}: {len(s.boxes)} boxes, {len(s.models)} models, {len(s.empties)} empties ({labels} labels)')
 

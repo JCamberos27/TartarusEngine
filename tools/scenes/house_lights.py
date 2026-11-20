@@ -137,7 +137,7 @@ class Wiring:
             # the shade's middle: just under the top of the whole lamp along its own up (a knocked-over lamp lies on
             # its side, its shade at one end)
             _, rot = self.pk.world(pack_id)
-            up = hf.qrot(rot, (0, 1, 0))
+            up = k.qrot(rot, (0, 1, 0))
             pts = [p for b in boxes for p in b.corners()]
             c = [sum(p[a] for p in pts) / len(pts) for a in range(3)]
             top = max(hf._dot(up, [p[a] - c[a] for a in range(3)]) for p in pts)
@@ -184,8 +184,8 @@ class Wiring:
             pos, rot = self.pk.world(e['id'])
             if abs(pos[1] - floor) > 0.6:
                 continue
-            ctr = hf.qrot(rot, c.get('center', [0, 0, 0]))
-            along, through = hf.qrot(rot, (1, 0, 0)), hf.qrot(rot, (0, 0, 1))
+            ctr = k.qrot(rot, c.get('center', [0, 0, 0]))
+            along, through = k.qrot(rot, (1, 0, 0)), k.qrot(rot, (0, 0, 1))
             cx, cz = pos[0] + ctr[0], pos[2] + ctr[2]
             # the pivot is the hinge: the latch is the other side of the middle
             s_ = 1.0 if (cx - pos[0]) * along[0] + (cz - pos[2]) * along[2] > 0 else -1.0
@@ -594,7 +594,7 @@ def wire(s, lay, pk, repo, fh, notes):
         fittings[e['id']] = st
 
     def upright(i):
-        return abs(hf.qrot(pk.world(i)[1], (0, 1, 0))[1]) > 0.7
+        return abs(k.qrot(pk.world(i)[1], (0, 1, 0))[1]) > 0.7
 
     def dead(i):
         for j in w.subtree(i):
