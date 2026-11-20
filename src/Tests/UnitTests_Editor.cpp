@@ -4,6 +4,7 @@
 #include "EditorFileHistory.h"
 #include "EditorLayer.h"
 #include "EditorSearch.h"
+#include "LruMap.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -595,6 +596,32 @@ void TestEditorSearch() {
     CHECK(f == "rock l:Hero");
 }
 
+// The editor caches' use-ordered map (LruMap.h): Find counts as a use, Peek doesn't, trims drop the oldest.
+void TestLruMap() {
+    LruMap<int> m;
+    m.Insert("a", 1); m.Insert("b", 2); m.Insert("c", 3); // oldest a, b, c newest
+    CHECK(m.Size() == 3 && m.Find("missing") == nullptr);
+    CHECK(m.Find("a") && *m.Find("a") == 1);             // a is now the newest: b, c, a
+    CHECK(m.Peek("b") && *m.Peek("b") == 2);             // no reorder
+    std::vector<int> dropped;
+    m.TrimTo(2, [&](int& v) { dropped.push_back(v); });
+    CHECK((dropped == std::vector<int>{2}) && !m.Peek("b") && m.Size() == 2);
+    m.Insert("c", 30);                                    // replace keeps one entry and makes it newest: a, c
+    CHECK(m.Size() == 2 && *m.Peek("c") == 30);
+    m.TrimTo(1);
+    CHECK(!m.Peek("a") && m.Peek("c"));
+    int erased = 0;
+    CHECK(m.Erase("c", [&](int& v) { erased = v; }) && erased == 30 && !m.Erase("c"));
+    m.Insert("x", 7); m.Insert("y", 8);
+    std::vector<int> order;
+    m.ForEach([&](int& v) { order.push_back(v); });
+    CHECK((order == std::vector<int>{8, 7}));             // newest first
+    m.Clear();
+    CHECK(m.Size() == 0 && !m.Peek("x"));
+    m.Insert("x", 9);                                     // usable after Clear
+    CHECK(m.Size() == 1 && *m.Find("x") == 9);
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
@@ -608,4 +635,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Outfit landing: an unrecorded change before it stays its own undo step",TestOutfitLandingKeepsUnrecordedChange);
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
+    tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
 }

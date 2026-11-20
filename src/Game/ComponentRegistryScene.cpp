@@ -184,10 +184,6 @@ void RegisterSceneComponents() {
             { "Shadow Near Plane", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.NearPlane), 0.01f,
               "Perspective near distance for this light's depth pass.\nRaise it to reclaim depth precision when the light sits far from what it lights.",
               0.001f, 10.0f },
-            { "Shadow Resolution", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.Resolution), 0.0f,
-              "Per-light shadow-map size (applies after per-light shadow maps)." },
-            { "Shadow Update Mode", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.UpdateMode), 0.0f,
-              "Dynamic re-renders every frame; Static bakes once (applies after per-light shadow maps)." },
             { "Volumetric Intensity", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, VolumetricIntensity), 0.02f,
               "How much this light scatters into the volumetric fog (Lighting > Volumetric Fog):\n"
               "its shafts and the glow around it. 1 = matched to Intensity, 0 = none.", 0.0f, 16.0f },
@@ -223,19 +219,14 @@ void RegisterSceneComponents() {
         F("Angular Size").VisibleIfField = "Type"; F("Angular Size").VisibleIfValue = 2;
         F("Volumetric Intensity").Slider = true; F("Volumetric Intensity").Format = "%.2f";
         for (const char* g : { "Cast Shadows", "Shadow Bias", "Shadow Normal Bias", "Shadow Softness",
-                               "Shadow Near Plane", "Shadow Resolution", "Shadow Update Mode" })
+                               "Shadow Near Plane" })
             F(g).Group = kMoonShadows;
         for (const char* s : { "Shadow Bias", "Shadow Normal Bias", "Shadow Softness" }) {
             F(s).Slider = true; F(s).Format = "x%.2f";
         }
         F("Shadow Near Plane").Slider = true; F("Shadow Near Plane").Logarithmic = true; F("Shadow Near Plane").Format = "%.3f";
-        for (const char* s : { "Shadow Near Plane", "Shadow Resolution", "Shadow Update Mode" }) {
-            F(s).VisibleIfField = "Type"; F(s).VisibleIfValue = 2; F(s).VisibleIfNot = true;
-        }
-        F("Shadow Resolution").EnumLabels = "Follow global\0" "512\0" "1024\0" "2048\0" "4096\0";
-        F("Shadow Resolution").EnumCount = 5;
-        F("Shadow Update Mode").EnumLabels = "Dynamic\0" "Static (bake once)\0" "Off\0";
-        F("Shadow Update Mode").EnumCount = 3;
+        F("Shadow Near Plane").VisibleIfField = "Type"; F("Shadow Near Plane").VisibleIfValue = 2;
+        F("Shadow Near Plane").VisibleIfNot = true;
         F("Culling Mask").EditorHidden = true;
         for (const char* b : { "Bounds", "Bounds Center", "Bounds Size", "Bounds Fade" }) {
             F(b).VisibleIfField = "Type"; F(b).VisibleIfValue = 2; F(b).VisibleIfNot = true;

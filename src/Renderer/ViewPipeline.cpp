@@ -337,8 +337,14 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     if (!editor.OverlaysHidden() && !editor.CleanShots()) {
         SelectionOutlineInputs outlineIn;
         outlineIn.world = &world;
-        outlineIn.editor = &editor;
-        outlineIn.editorCamera = &editorCamera;
+        const std::vector<entt::entity> selected = editor.GetSelectedItems();
+        outlineIn.selection = &selected;
+        if (!*in.playing) { // the hover pre-highlight: the mesh under the cursor (no pick in Play)
+            editor.UpdateHoverPick(world, editorCamera);
+            outlineIn.hovered = editor.HoveredEntity();
+        }
+        outlineIn.color = editor.SelectionOutlineColor(); // theme-driven: near-white on Glass
+        outlineIn.reveal = editor.SelectionOutlineReveal();
         outlineIn.maskShader = in.outlineModelShader;
         outlineIn.dilateShader = in.outlineDilateShader;
         outlineIn.fsQuadVao = in.fsQuadVao;
@@ -348,7 +354,6 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         outlineIn.width = scW;
         outlineIn.height = scH;
         outlineIn.wireframe = sceneWireframe;
-        outlineIn.playing = *in.playing;
         in.selectionOutline->Render(outlineIn);
     }
 

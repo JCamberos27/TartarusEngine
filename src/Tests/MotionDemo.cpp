@@ -61,10 +61,11 @@ void StartRecording(int width, int height) {
     s.w = width;
     s.h = height;
     // Raw RGBA in, bottom-up (GL's order, flipped by ffmpeg), H.264 out at exactly 60 fps.
+    // yuv420p needs even sizes: an odd width or height is cropped by one pixel, or libx264 quits after a few frames.
     char size[32];
     std::snprintf(size, sizeof(size), "%dx%d", width, height);
     const std::string cmd = "\"\"" + s.ffmpeg + "\" -hide_banner -loglevel error -y -f rawvideo -pix_fmt rgba -s " + size +
-                            " -framerate 60 -i - -vf vflip -c:v libx264 -preset slow -crf 15 -pix_fmt yuv420p"
+                            " -framerate 60 -i - -vf vflip,crop=trunc(iw/2)*2:trunc(ih/2)*2 -c:v libx264 -preset slow -crf 15 -pix_fmt yuv420p"
                             " -r 60 -movflags +faststart \"" + s.out + "\"\"";
     s.pipe = _popen(cmd.c_str(), "wb");
     if (!s.pipe) std::cerr << "[MotionDemo] could not start ffmpeg" << std::endl;

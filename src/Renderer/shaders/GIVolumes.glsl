@@ -3,13 +3,12 @@
 // L1 SH (vec4: DC, then the world-axis linear band) one slab after another along z. A layer's weight is its circuit's
 // state this frame (the Outside's is always 1). uGIEnabled == 0 (the GL default: preview renderers, no bake) skips it.
 #define GI_MAX_VOLUMES 64
-#define GI_MAX_LAYERS 4
 struct GIVolume {
     vec4 BoxX, BoxY, BoxZ; // world -> box rows: xyz unit axis, w = -dot(axis, centre)
     vec4 HalfFade;         // xyz half extents, w fade metres
-    vec4 Dims;             // xyz probe counts, w layer count
+    vec4 Dims;             // xyz probe counts, w 1 = lit (the layers are mixed into one brick on the CPU), 0 = dark
     vec4 Params;           // x intensity, y replaces the sky's ambient, z normal bias (m)
-    vec4 Brick[GI_MAX_LAYERS]; // xyz brick origin in the atlas (texels), w weight
+    vec4 Brick;            // xyz brick origin in the atlas (texels)
 };
 layout(std140, binding = 4) uniform GIBlock {
     ivec4 uGICount;   // x volumes
@@ -57,16 +56,13 @@ vec3 SampleGI(vec3 p, vec3 n, out float fade, out float replaceSky) {
         // Probe-grid coordinate 0..dims-1 (probes sit on the faces), +0.5 to the texel centre.
         vec3 g = clamp((q + hf.xyz) / max(2.0 * hf.xyz, vec3(1e-4)), 0.0, 1.0) * (dims - 1.0) + 0.5;
         vec3 e = vec3(0.0);
-        int layers = int(uGIVolumes[v].Dims.w);
-        vec4 nb = vec4(1.0, n);
-        for (int l = 0; l < layers && l < GI_MAX_LAYERS; ++l) {
-            vec4 br = uGIVolumes[v].Brick[l];
-            if (br.w <= 0.0) continue;
-            vec3 t = br.xyz + g;
+        if (uGIVolumes[v].Dims.w > 0.0) {
+            vec4 nb = vec4(1.0, n);
+            vec3 t = uGIVolumes[v].Brick.xyz + g;
             vec4 cr = texture(uGIAtlas, t * uGIAtlasInv.xyz);
             vec4 cg = texture(uGIAtlas, (t + vec3(0.0, 0.0, dims.z)) * uGIAtlasInv.xyz);
             vec4 cb = texture(uGIAtlas, (t + vec3(0.0, 0.0, 2.0 * dims.z)) * uGIAtlasInv.xyz);
-            e += max(vec3(dot(cr, nb), dot(cg, nb), dot(cb, nb)), vec3(0.0)) * br.w;
+            e = max(vec3(dot(cr, nb), dot(cg, nb), dot(cb, nb)), vec3(0.0));
         }
         sum += e * uGIVolumes[v].Params.x * f;
         wSum += f;
