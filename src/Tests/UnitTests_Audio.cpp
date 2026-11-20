@@ -3578,6 +3578,20 @@ void TestWeaponShooterBurstsUnknownGunAndDistances() {
     wa.Stop();
 }
 
+// Moved from UnitTests.cpp (pure move).
+namespace {
+
+// #171 - Doppler velocities: metres per second between frames, zero when there's no previous
+// frame and for teleports.
+void TestDopplerVelocity() {
+    const glm::vec3 v = AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 0.1f);
+    CHECK(std::abs(v.x - 10.0f) < 1e-4f && v.y == 0.0f && v.z == 0.0f);
+    CHECK(AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(1.0f), 0.0f) == glm::vec3(0.0f));
+    CHECK(AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(50.0f, 0.0f, 0.0f), 0.1f) == glm::vec3(0.0f));
+}
+
+} // namespace
+
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AudioNonFiniteInputIsScrubbed", TestAudioNonFiniteInputIsScrubbed});
     tests.push_back({"ConvolutionReverbPreDelayAtHighRates", TestConvolutionReverbPreDelayAtHighRates});
@@ -3641,4 +3655,5 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ZoneAmbienceBeds", TestZoneAmbienceBeds});
     tests.push_back({"ReverbZoneOldKeysAndNewFields", TestReverbZoneOldKeysAndNewFields});
     tests.push_back({"OfflineEngineLimiterAndReverbCalibration", TestOfflineEngineLimiterAndReverbCalibration});
+    tests.push_back({"DopplerVelocity", TestDopplerVelocity});
 }

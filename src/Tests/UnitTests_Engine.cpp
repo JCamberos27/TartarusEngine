@@ -1,6 +1,12 @@
 #include "UnitTestSupport.h"
 #include "../Game/Components.h"
 #include "../Game/ComponentRegistry.h"
+#include "../Game/ComponentReflection.h"
+#include "../Game/RotationMath.h"
+#include "../Game/Player.h"
+#include "../Game/GameRules.h"
+#include "../Game/AnimationSystem.h"
+#include "../Game/HotReloadGameModule.h"
 #include "../Game/GravityGun.h"
 #include "../Game/DevPanel.h"
 #include "../Game/AI/NpcDirector.h"
@@ -35,6 +41,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <json.hpp>
+#include <set>
 #include <random>
 #include <thread>
 #include <glm/gtc/quaternion.hpp>
@@ -623,6 +630,514 @@ static void Test_SamplingProfiler_SurvivesTheLoaderLock() {
 #endif
 }
 
+// Moved from UnitTests.cpp (pure move).
+namespace {
+using json = nlohmann::json;
+using UnitTestSupport::TempDir;
+using UnitTestSupport::ReadAll;
+
+// #123 - decomposes keep the Euler triple nearest the old one instead of flipping to an
+// equivalent (the alternate YXZ solution and +-360 wraps are the same rotation).
+void TestNearestEuler() {
+    auto sameRotation = [](const glm::vec3& a, const glm::vec3& b) {
+        const glm::mat4 ma = ComposeTransform(glm::vec3(0.0f), a, glm::vec3(1.0f));
+        const glm::mat4 mb = ComposeTransform(glm::vec3(0.0f), b, glm::vec3(1.0f));
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(ma[c][r] - mb[c][r]) > 1e-4f) return false;
+        return true;
+    };
+    const glm::vec3 flipped(180.0f, 0.0f, 180.0f);
+    const glm::vec3 near0 = NearestEquivalentEuler(flipped, glm::vec3(0.0f, 170.0f, 0.0f));
+    CHECK(sameRotation(near0, flipped));
+    CHECK(std::abs(near0.x) < 1e-3f && std::abs(near0.y - 180.0f) < 1e-3f && std::abs(near0.z) < 1e-3f);
+    const glm::vec3 e(30.0f, -20.0f, 50.0f);
+    CHECK(NearestEquivalentEuler(e, e) == e);
+    const glm::vec3 wrapped = NearestEquivalentEuler(glm::vec3(10.0f, -170.0f, 0.0f), glm::vec3(10.0f, 185.0f, 0.0f));
+    CHECK(std::abs(wrapped.y - 190.0f) < 1e-3f && sameRotation(wrapped, glm::vec3(10.0f, -170.0f, 0.0f)));
+    const glm::vec3 alt(180.0f - 25.0f, 40.0f + 180.0f, -60.0f + 180.0f);
+    CHECK(sameRotation(alt, glm::vec3(25.0f, 40.0f, -60.0f)));
+    const glm::vec3 back = NearestEquivalentEuler(alt, glm::vec3(20.0f, 45.0f, -55.0f));
+    CHECK(glm::length(back - glm::vec3(25.0f, 40.0f, -60.0f)) < 1e-3f);
+}
+
+// #123 - quaternion is the authoritative transform rotation; Euler is only a stable editor view,
+// and v3 Euler scene data migrates to the v4 quaternion representation without changing pose.
+void TestQuaternionTransformStorage() {
+    auto nearMatrix = [](const glm::mat3& a, const glm::mat3& b, float eps = 1e-4f) {
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(a[c][r] - b[c][r]) > eps) return false;
+        return true;
+    };
+
+    TransformComponent transform;
+    const glm::vec3 authored(0.0f, 180.0f, 0.0f);
+    transform.SetRotationEuler(authored);
+    CHECK(glm::length(transform.EulerDegrees() - authored) < 1e-3f); // preserve the authored hint
+    CHECK(std::abs(glm::length(transform.Rotation) - 1.0f) < 1e-5f);
+
+    // Cross the old Euler singularity by composing quaternions. The stored orientation remains
+    // exact even though no unique Euler triple exists at the middle pose.
+    const glm::quat base = QuaternionFromEulerYXZ(glm::vec3(89.9f, 15.0f, -20.0f));
+    const glm::quat turned = RotateAboutLocalAxis(base, glm::vec3(0.3f, 1.0f, 0.2f), 120.0f);
+    transform.SetRotationQuaternion(turned);
+    CHECK(SameRotation(transform.Rotation, turned));
+    CHECK(nearMatrix(glm::mat3(ComposeTransform(transform)), glm::mat3_cast(turned)));
+
+    World migrated;
+    AssetLibrary assets;
+    const std::string v3 = R"({"formatVersion":3,"empties":[{"name":"Legacy","id":0,"parentId":-1,)"
+        R"("position":[0,0,0],"rotation":[25,40,-60],"scale":[1,1,1]}]})";
+    CHECK(SceneSerializer::LoadFromString(migrated, assets, v3));
+    const auto view = migrated.Registry.view<TransformComponent>();
+    CHECK(view.size() == 1);
+    if (!view.empty()) {
+        const auto& loaded = migrated.Registry.get<TransformComponent>(*view.begin());
+        CHECK(SameRotation(loaded.Rotation, QuaternionFromEulerYXZ(glm::vec3(25.0f, 40.0f, -60.0f))));
+        CHECK(glm::length(loaded.EulerDegrees() - glm::vec3(25.0f, 40.0f, -60.0f)) < 1e-3f);
+    }
+
+    const json saved = json::parse(SceneSerializer::SaveToString(migrated, assets));
+    CHECK(saved.value("formatVersion", 0) == 4);
+    CHECK(saved["empties"].size() == 1);
+    CHECK(saved["empties"][0]["rotation"].is_array() && saved["empties"][0]["rotation"].size() == 4);
+
+    World reloaded;
+    AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(reloaded, assets2, saved.dump()));
+    const auto reloadedView = reloaded.Registry.view<TransformComponent>();
+    CHECK(reloadedView.size() == 1);
+    if (!reloadedView.empty()) {
+        CHECK(SameRotation(reloaded.Registry.get<TransformComponent>(*reloadedView.begin()).Rotation,
+                           QuaternionFromEulerYXZ(glm::vec3(25.0f, 40.0f, -60.0f))));
+    }
+
+    // File loads upgrade even an empty v3 scene: the format changed independently of whether
+    // that particular file happened to contain a transform, and the original remains backed up.
+    const auto migrationPath = TempDir() / "quaternion-v3-migration.json";
+    const auto backupPath = std::filesystem::path(migrationPath.string() + ".bak");
+    std::error_code ec;
+    std::filesystem::remove(migrationPath, ec);
+    std::filesystem::remove(backupPath, ec);
+    const std::string emptyV3 = R"({"formatVersion":3,"empties":[]})";
+    CHECK(AtomicFile::WriteBytes(migrationPath, emptyV3, false));
+    World emptyMigrated;
+    AssetLibrary assets3;
+    CHECK(SceneSerializer::Load(emptyMigrated, assets3, migrationPath.string(), true));
+    CHECK(json::parse(ReadAll(migrationPath)).value("formatVersion", 0) == 4);
+    CHECK(ReadAll(backupPath) == emptyV3);
+    std::filesystem::remove(migrationPath, ec);
+    std::filesystem::remove(backupPath, ec);
+}
+
+// #123 - spinning about a diagonal axis turns the object about that axis. Adding axis * angle to
+// the Euler components (the old behaviour) added equal pitch and yaw, which is another rotation.
+void TestRotateEulerAboutLocalAxis() {
+    auto rotationOf = [](const glm::vec3& euler) { return glm::mat3(ComposeTransform(glm::vec3(0.0f), euler, glm::vec3(1.0f))); };
+    auto sameRotation = [&](const glm::vec3& a, const glm::mat3& expected) {
+        const glm::mat3 m = rotationOf(a);
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(m[c][r] - expected[c][r]) > 1e-4f) return false;
+        return true;
+    };
+    // A diagonal axis from the identity is exactly angleAxis about it, at any angle...
+    const glm::vec3 diag(1.0f, 1.0f, 0.0f);
+    for (float angle : {10.0f, 90.0f, 200.0f, -45.0f}) {
+        const glm::mat3 expected = glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::normalize(diag)));
+        CHECK(sameRotation(RotateEulerAboutLocalAxis(glm::vec3(0.0f), diag, angle), expected));
+    }
+    // ...and the axis is left unmoved by the turn (the old add-to-Euler result moved it).
+    const glm::mat3 turned = rotationOf(RotateEulerAboutLocalAxis(glm::vec3(0.0f), diag, 90.0f));
+    CHECK(glm::length(turned * glm::normalize(diag) - glm::normalize(diag)) < 1e-4f);
+    CHECK(glm::length(rotationOf(glm::vec3(90.0f, 90.0f, 0.0f)) * glm::normalize(diag) - glm::normalize(diag)) > 0.1f);
+    // The axis is local: the result is the starting orientation followed by the turn.
+    const glm::vec3 start(30.0f, -20.0f, 50.0f);
+    const glm::mat3 local = rotationOf(start) * glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(60.0f), glm::normalize(diag)));
+    CHECK(sameRotation(RotateEulerAboutLocalAxis(start, diag, 60.0f), local));
+    // The default spin, +Y from an untilted start, is still plain yaw.
+    CHECK(sameRotation(RotateEulerAboutLocalAxis(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 37.0f), rotationOf(glm::vec3(0.0f, 37.0f, 0.0f))));
+    // Axis magnitude is irrelevant, and a zero axis or zero angle is a no-op.
+    CHECK(sameRotation(RotateEulerAboutLocalAxis(start, diag * 5.0f, 60.0f), local));
+    CHECK(RotateEulerAboutLocalAxis(start, glm::vec3(0.0f), 60.0f) == start);
+    CHECK(RotateEulerAboutLocalAxis(start, diag, 0.0f) == start);
+}
+
+// #123 - the Euler-driven spin systems (Animator, Transform Controller), run frame by frame, turn about the axis they were
+// given rather than adding it to the Euler components.
+void TestSpinSystemsAboutDiagonalAxis() {
+    auto matrixOf = [](const glm::vec3& euler) { return glm::mat3(ComposeTransform(glm::vec3(0.0f), euler, glm::vec3(1.0f))); };
+    auto turnAbout = [](const glm::vec3& axis, float deg) { return glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(deg), axis)); };
+    auto near = [](const glm::mat3& a, const glm::mat3& b, float eps) {
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(a[c][r] - b[c][r]) > eps) return false;
+        return true;
+    };
+
+    // TransformControllerSystem is compiled only into TartarusGame.dll, so run
+    // it the way the editor does: load the built module next to the exe and tick it.
+    HotReloadGameModule gameModule;
+    wchar_t exePath[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    gameModule.Initialize(std::filesystem::path(exePath).parent_path() / TARTARUS_GAME_MODULE_FILENAME);
+
+    // Animator: the base orientation turned by |w| * t about w's own direction.
+    {
+        World world;
+        const glm::vec3 base(20.0f, 30.0f, 0.0f);
+        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), base, glm::vec3(1.0f), "a");
+        AnimatorComponent anim; anim.SpinDegPerSec = glm::vec3(60.0f, 60.0f, 0.0f);
+        world.Registry.emplace<AnimatorComponent>(e, anim);
+        UpdateAnimators(world, 0.5f); // initialises and advances t to 0.5 s
+        const float angle = glm::length(anim.SpinDegPerSec) * 0.5f;
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
+                   matrixOf(base) * turnAbout(glm::normalize(anim.SpinDegPerSec), angle), 1e-3f));
+        UpdateAnimators(world, 100.0f); // a long time later: same form, still reversible and bounded
+        const float later = std::fmod(glm::length(anim.SpinDegPerSec) * 100.5f, 360.0f);
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
+                   matrixOf(base) * turnAbout(glm::normalize(anim.SpinDegPerSec), later), 2e-2f));
+    }
+
+    // Transform controller: same rule for RotationDegPerSec.
+    {
+        World world;
+        const glm::vec3 base(0.0f, 15.0f, 0.0f);
+        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), base, glm::vec3(1.0f), "t");
+        TransformControllerComponent ctl; ctl.RotationDegPerSec = glm::vec3(0.0f, 45.0f, 45.0f);
+        world.Registry.emplace<TransformControllerComponent>(e, ctl);
+        gameModule.Tick(world, 2.0f, 0.0f, true);
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
+                   matrixOf(base) * turnAbout(glm::normalize(ctl.RotationDegPerSec), glm::length(ctl.RotationDegPerSec) * 2.0f), 1e-3f));
+    }
+
+    // The module also carries the weapon/body rules, built against these same frames, so the
+    // engine calls its copies while it's loaded and its own again once it's gone.
+    CHECK(GameRules::FromModule());
+    gameModule.Shutdown();
+    CHECK(!GameRules::FromModule());
+}
+
+// --- Active in hierarchy (#201) -------------------------------------------------------------
+void TestActiveInHierarchy() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity parent = world.CreateEmptyEntity(zero, zero, one, "Parent");
+    const entt::entity child = world.CreateEmptyEntity(zero, zero, one, "Child");
+    const entt::entity grandchild = world.CreateEmptyEntity(zero, zero, one, "Grandchild");
+    CHECK(world.SetParent(child, parent));
+    CHECK(world.SetParent(grandchild, child));
+    auto inactive = [&](entt::entity e) { return world.Registry.all_of<InactiveTag>(e); };
+
+    world.Registry.emplace<DeactivatedTag>(parent);
+    world.SyncActiveInHierarchy();
+    CHECK(inactive(parent) && inactive(child) && inactive(grandchild)); // whole subtree hides
+
+    world.Registry.emplace<DeactivatedTag>(child);
+    world.Registry.remove<DeactivatedTag>(parent);
+    world.SyncActiveInHierarchy();
+    CHECK(!inactive(parent) && inactive(child) && inactive(grandchild));
+
+    world.Registry.remove<DeactivatedTag>(child);
+    world.SyncActiveInHierarchy();
+    CHECK(!inactive(parent) && !inactive(child) && !inactive(grandchild)); // nothing left behind
+}
+
+// --- #178: component presets round-trip through the scene field encoding --------------------
+void TestComponentPreset() {
+    UnitTestSupport::EnsureEngineComponents();
+    World world;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity src = world.CreateEmptyEntity(zero, zero, one, "Source");
+    const entt::entity dst = world.CreateEmptyEntity(zero, zero, one, "Target");
+
+    TransformControllerComponent ctl;
+    ctl.RotationDegPerSec = glm::vec3(1.0f, 0.0f, 0.0f);
+    ctl.ScalePulseFrequencyHz = 123.5f;
+    world.Registry.emplace<TransformControllerComponent>(src, ctl);
+
+    const std::string preset = SceneSerializer::ComponentToPresetJson(world, src, "Transform Controller");
+    CHECK(!preset.empty());
+    CHECK(SceneSerializer::PresetComponentName(preset) == "Transform Controller");
+
+    // Applies to an entity that does not have the component yet: it is added, not skipped.
+    CHECK(!world.Registry.all_of<TransformControllerComponent>(dst));
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst, preset));
+    CHECK(world.Registry.all_of<TransformControllerComponent>(dst));
+    const TransformControllerComponent& got = world.Registry.get<TransformControllerComponent>(dst);
+    CHECK(got.ScalePulseFrequencyHz == 123.5f);
+    CHECK(got.RotationDegPerSec.x == 1.0f && got.RotationDegPerSec.y == 0.0f && got.RotationDegPerSec.z == 0.0f);
+
+    // A field the preset does not mention keeps its current value rather than snapping to the
+    // default, so a preset saved before a field existed stays usable.
+    world.Registry.get<TransformControllerComponent>(dst).ScalePulseFrequencyHz = 7.0f;
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              R"({"preset":1,"component":"Transform Controller","fields":{"Rotation Deg/Sec":[0.0,0.0,1.0]}})"));
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).RotationDegPerSec.z == 1.0f);
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).ScalePulseFrequencyHz == 7.0f); // untouched
+
+    // #12: Script Path now defaults to empty (it named a script that never shipped). Files saved
+    // with the old default still read it back as written, and an empty path round-trips.
+    CHECK(TransformControllerComponent{}.ScriptPath.empty());
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              R"({"preset":1,"component":"Transform Controller","fields":{"Script Path":"scripts/TransformController.tescript"}})"));
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).ScriptPath == "scripts/TransformController.tescript");
+    world.Registry.get<TransformControllerComponent>(src).ScriptPath.clear();
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              SceneSerializer::ComponentToPresetJson(world, src, "Transform Controller")));
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).ScriptPath.empty());
+
+    // Rejections: malformed, unknown component, missing fields block, and a component that has
+    // no generic serialisation. None of these may half-write anything.
+    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, "not json"));
+    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              R"({"preset":1,"component":"NoSuchComponent","fields":{}})"));
+    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, R"({"preset":1,"component":"Transform Controller"})"));
+    CHECK(SceneSerializer::PresetComponentName("not json").empty());
+    CHECK(SceneSerializer::PresetComponentName(R"({"component":"NoSuchComponent"})").empty());
+
+    // A component the source entity does not have yields no preset at all.
+    CHECK(SceneSerializer::ComponentToPresetJson(world, src, "NoSuchComponent").empty());
+}
+
+// --- #202: a scene whose parentIds form a loop must not load a cyclic hierarchy -------------
+void TestHierarchyCycleRepair() {
+    // Built with AttachChildRaw, which is exactly what the scene loader uses: it only refuses
+    // self-parenting, so this is the shape a hand-edited or badly merged scene file produces.
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity a = world.CreateEmptyEntity(zero, zero, one, "A");
+    const entt::entity b = world.CreateEmptyEntity(zero, zero, one, "B");
+    const entt::entity c = world.CreateEmptyEntity(zero, zero, one, "C");
+
+    world.AttachChildRaw(b, a);   // B under A
+    world.AttachChildRaw(c, b);   // C under B
+    world.AttachChildRaw(a, c);   // ...and A under C: a three-entity loop
+
+    CHECK(world.RepairHierarchyCycles() == 1);
+
+    // Every entity now reaches a root in a bounded walk.
+    auto reachesRoot = [&](entt::entity e) {
+        int hops = 0;
+        for (entt::entity w = e; w != entt::null; ) {
+            if (++hops > 64) return false;
+            const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+        }
+        return true;
+    };
+    CHECK(reachesRoot(a) && reachesRoot(b) && reachesRoot(c));
+
+    // The cut is minimal: only the link that closed the loop went, so the rest of the chain
+    // is still parented and no Children list keeps a stale entry.
+    int parented = 0;
+    for (entt::entity e : {a, b, c})
+        if (const auto* h = world.Registry.try_get<HierarchyComponent>(e); h && h->Parent != entt::null) ++parented;
+    CHECK(parented == 2);
+    for (entt::entity e : {a, b, c}) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        if (!h) continue;
+        for (entt::entity kid : h->Children) {
+            const auto* kh = world.Registry.try_get<HierarchyComponent>(kid);
+            CHECK(kh && kh->Parent == e); // no orphaned child entry left behind
+        }
+    }
+
+    // Idempotent, and a healthy hierarchy is left completely alone.
+    CHECK(world.RepairHierarchyCycles() == 0);
+
+    World clean;
+    const entt::entity p1 = clean.CreateEmptyEntity(zero, zero, one, "P");
+    const entt::entity k1 = clean.CreateEmptyEntity(zero, zero, one, "K");
+    CHECK(clean.SetParent(k1, p1));
+    CHECK(clean.RepairHierarchyCycles() == 0);
+    CHECK(clean.Registry.get<HierarchyComponent>(k1).Parent == p1);
+
+    // End to end: this is the path that actually matters - a scene FILE whose parentIds form a
+    // loop must not produce a cyclic world. Two empties, each claiming the other as its parent.
+    World loaded;
+    AssetLibrary assets;
+    const std::string sceneJson = R"({"formatVersion":3,"empties":[
+        {"name":"X","id":1,"parentId":2,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]},
+        {"name":"Y","id":2,"parentId":1,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]}]})";
+    CHECK(SceneSerializer::LoadFromString(loaded, assets, sceneJson));
+    int loadedRoots = 0, loadedCount = 0;
+    for (entt::entity e : loaded.Registry.view<HierarchyComponent>()) {
+        ++loadedCount;
+        // Bounded walk that BREAKS, not just CHECKs: a surviving cycle would otherwise spin
+        // here forever and hang the whole suite instead of failing it.
+        int hops = 0;
+        bool terminated = true;
+        for (entt::entity w = e; w != entt::null; ) {
+            if (++hops > 64) { terminated = false; break; }
+            const auto* h = loaded.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+        }
+        CHECK(terminated);
+        const auto* h = loaded.Registry.try_get<HierarchyComponent>(e);
+        if (!h || h->Parent == entt::null) ++loadedRoots;
+    }
+    CHECK(loadedCount == 2);
+    CHECK(loadedRoots == 1); // one link cut, the other kept
+}
+
+// The player's acceleration: 0 = the move is the input (as before); otherwise an exponential approach
+// that lands in the same place whatever the frame rate, and arrives rather than creeping.
+void TestPlayerAcceleration() {
+    // Body clips have different root travel by direction; sprint input must have equal speed.
+    for (const glm::vec3 direction : {glm::vec3(0,0,1),glm::vec3(0,0,-1),glm::vec3(1,0,0),
+                                     glm::vec3(-1,0,0),glm::normalize(glm::vec3(1,0,1))}) {
+        const glm::vec3 wish=direction*6.8f;
+        for (float weight : {0.0f,0.5f,1.0f}) {
+            const glm::vec3 target=PlayerMovementTarget(wish,direction*2.0f,weight,true);
+            CHECK(glm::length(target-wish)<1e-5f);
+            CHECK(std::abs(glm::length(target)-6.8f)<1e-5f);
+        }
+    }
+    CHECK(PlayerMovementTarget(glm::vec3(0,0,4),glm::vec3(0,0,2),0.5f,false)==glm::vec3(0,0,3));
+    CHECK(PlayerMovementTarget(glm::vec3(0),glm::vec3(0,0,2),1.0f,true)==glm::vec3(0,0,2));
+    const glm::vec3 run(0.0f, 0.0f, 4.5f);
+    CHECK(PlayerApproachVelocity(glm::vec3(0.0f), run, 1.0f / 60.0f, 0.0f, 0.0f) == run);
+    CHECK(PlayerApproachVelocity(run, glm::vec3(0.0f), 1.0f / 60.0f, 0.07f, 0.0f) == glm::vec3(0.0f)); // no decel time: stops dead
+    auto after = [&](float hz, float seconds, glm::vec3 from, glm::vec3 to) {
+        glm::vec3 v = from;
+        for (int i = 0, n = (int)std::lround(seconds * hz); i < n; ++i) v = PlayerApproachVelocity(v, to, 1.0f / hz, 0.07f, 0.05f);
+        return v;
+    };
+    // 0.07 s: 63% of the way; the same at 30, 144 and 300 fps.
+    const float at30 = after(30.0f, 0.07f * 3.0f, glm::vec3(0.0f), run).z, at144 = after(144.0f, 0.07f * 3.0f, glm::vec3(0.0f), run).z,
+                at300 = after(300.0f, 0.07f * 3.0f, glm::vec3(0.0f), run).z;
+    CHECK(std::abs(at30 - at300) < 0.05f && std::abs(at144 - at300) < 0.05f && std::abs(at300 - 4.5f * (1.0f - std::exp(-3.0f))) < 0.05f);
+    CHECK(after(144.0f, 0.5f, glm::vec3(0.0f), run) == run);             // arrives
+    CHECK(after(144.0f, 0.4f, run, glm::vec3(0.0f)) == glm::vec3(0.0f)); // and stops
+    // Slowing down uses the deceleration time: quicker here than speeding up.
+    const float up = after(144.0f, 0.05f, glm::vec3(0.0f), run).z, down = 4.5f - after(144.0f, 0.05f, run, glm::vec3(0.0f)).z;
+    CHECK(down > up);
+}
+
+// --- #202 / #122: a scene survives save -> load -> save unchanged ---------------------------
+// crash - the scene just quietly comes back different. Round-tripping and comparing the two
+// documents catches the whole class at once, which is what #202 asks for under "scene
+// round-trips" and what #121/#342 changed enough of to be worth pinning down.
+void TestSceneRoundTrip() {
+    UnitTestSupport::EnsureEngineComponents();
+
+    World a;
+    AssetLibrary assetsA;
+    const glm::vec3 zero(0.0f), one(1.0f);
+
+    // A deliberately awkward scene: hierarchy, a nameless entity, non-default transforms, and
+    // components spanning every reflected field type (bool, int, float, vec3, colour, string,
+    // enum) plus the tag-style components that are written as flags.
+    const entt::entity parent = a.CreateEmptyEntity(glm::vec3(1.5f, -2.25f, 3.0f),
+                                                    glm::vec3(0.0f, 45.0f, 0.0f), one, "Parent");
+    const entt::entity child  = a.CreateEmptyEntity(glm::vec3(0.5f, 0.0f, 0.0f), zero,
+                                                    glm::vec3(2.0f, 2.0f, 2.0f), "Child");
+    CHECK(a.SetParent(child, parent));
+    const entt::entity nameless = a.CreateEmptyEntity(zero, zero, one, ""); // #122 - must survive
+    // Entities only, no CreateBox: a box carries a primitive Renderable, and building one calls
+    // into GL, which does not exist here. That is why this suite stays on empties.
+    const entt::entity box = a.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f),
+                                                 glm::vec3(0.0f, 30.0f, 0.0f),
+                                                 glm::vec3(2.0f, 0.5f, 2.0f), "Box");
+
+    TransformControllerComponent ctl; ctl.RotationDegPerSec = glm::vec3(0.0f, 0.0f, 1.0f); ctl.ScalePulseFrequencyHz = 42.5f;
+    a.Registry.emplace<TransformControllerComponent>(parent, ctl);
+
+    CameraComponent cam; cam.FovDegrees = 72.5f; cam.NearPlane = 0.25f; cam.FarPlane = 750.0f;
+    a.Registry.emplace<CameraComponent>(child, cam);
+
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Sphere;   // an enum, round-tripped by label
+    col.HalfExtents = glm::vec3(1.25f, 0.0f, 0.0f);
+    col.Center = glm::vec3(0.0f, 0.5f, 0.0f);
+    a.Registry.emplace<ColliderComponent>(box, col);
+
+    a.Registry.emplace<TagComponent>(nameless, TagComponent{"Ball"});
+    a.Registry.emplace<LayerComponent>(box, LayerComponent{3});
+    a.Registry.emplace<StaticTag>(box);
+    a.Registry.emplace<DeactivatedTag>(nameless);
+    a.SyncActiveInHierarchy();
+
+    const std::string first = SceneSerializer::SaveToString(a, assetsA);
+    CHECK(!first.empty());
+
+    World b;
+    AssetLibrary assetsB;
+    CHECK(SceneSerializer::LoadFromString(b, assetsB, first));
+    const std::string second = SceneSerializer::SaveToString(b, assetsB);
+
+    // Compared as parsed JSON, not as text: key order and whitespace are not the contract, the
+    // data is. A mismatch here means the scene came back different from the one that was saved.
+    const json j1 = json::parse(first, nullptr, false);
+    const json j2 = json::parse(second, nullptr, false);
+    CHECK(!j1.is_discarded() && !j2.is_discarded());
+    CHECK(j1 == j2);
+
+    // Spot-check the values themselves, so a round-trip that is merely self-consistent (both
+    // sides dropping the same field) still fails.
+    int found = 0;
+    for (entt::entity e : b.Registry.view<NameComponent>()) {
+        const std::string& n = b.Registry.get<NameComponent>(e).Name;
+        if (n == "Parent") {
+            ++found;
+            CHECK(b.Registry.all_of<TransformControllerComponent>(e));
+            const auto& tc = b.Registry.get<TransformControllerComponent>(e);
+            CHECK(tc.ScalePulseFrequencyHz == 42.5f && tc.RotationDegPerSec.z == 1.0f);
+            CHECK(b.Registry.all_of<HierarchyComponent>(e));
+            CHECK(b.Registry.get<HierarchyComponent>(e).Children.size() == 1);
+        } else if (n == "Child") {
+            ++found;
+            CHECK(b.Registry.all_of<CameraComponent>(e));
+            const auto& cc = b.Registry.get<CameraComponent>(e);
+            CHECK(cc.FovDegrees == 72.5f && cc.NearPlane == 0.25f && cc.FarPlane == 750.0f);
+        } else if (n == "Box") {
+            ++found;
+            CHECK(b.Registry.all_of<ColliderComponent>(e));
+            const auto& cl = b.Registry.get<ColliderComponent>(e);
+            CHECK(cl.Kind == ColliderComponent::Shape::Sphere);
+            CHECK(cl.HalfExtents.x == 1.25f && cl.Center.y == 0.5f);
+            CHECK(b.Registry.all_of<StaticTag>(e));
+            CHECK(b.Registry.all_of<LayerComponent>(e) && b.Registry.get<LayerComponent>(e).Layer == 3);
+        }
+    }
+    CHECK(found == 3);
+
+    // The nameless entity is still there, still deactivated, still tagged (#122).
+    int tagged = 0;
+    for (entt::entity e : b.Registry.view<TagComponent>())
+        if (b.Registry.get<TagComponent>(e).Tag == "Ball") {
+            ++tagged;
+            CHECK(b.Registry.all_of<DeactivatedTag>(e));
+        }
+    CHECK(tagged == 1);
+}
+
+// --- Component registry: unique names / keys, enum labels well-formed --------------------------
+void TestComponentRegistry() {
+    UnitTestSupport::EnsureEngineComponents();
+    CHECK(!ComponentRegistry::All().empty());
+    std::set<std::string> names;
+    for (const RegisteredComponent& rc : ComponentRegistry::All()) {
+        CHECK(rc.Meta.Name && *rc.Meta.Name);
+        CHECK(names.insert(rc.Meta.Name).second); // no duplicate display names (they're JSON keys)
+        CHECK(rc.Has && rc.Get && rc.Add && rc.Remove);
+        std::set<std::string> fields;
+        for (const ReflectField& f : rc.Meta.Fields) {
+            CHECK(fields.insert(f.Name).second);
+            if (f.Type == ReflectFieldType::Enum && !f.EditorHidden) {
+                CHECK(f.EnumLabels != nullptr && f.EnumCount > 0);
+                for (int i = 0; f.EnumLabels && i < f.EnumCount; ++i) CHECK(*ReflectEnumLabel(f, i) != '\0');
+                CHECK(*ReflectEnumLabel(f, f.EnumCount) == '\0'); // out of range -> ""
+            }
+        }
+    }
+}
+
+} // namespace
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SamplingProfiler::SurvivesTheLoaderLock", Test_SamplingProfiler_SurvivesTheLoaderLock});
     tests.push_back({"PngWrite::LevelPerCallUnderThreads", Test_PngWrite_LevelPerCallUnderThreads});
@@ -644,4 +1159,14 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SceneRenderer::WarmShaderVariantsSkipsShaderless", Test_SceneRenderer_WarmShaderVariantsSkipsShaderless});
     tests.push_back({"ShaderVariant: engine bits", Test_ShaderVariant_EngineBits});
     tests.push_back({"FxHud::SettingsDrivePureHelpers", Test_FxHud_SettingsDrivePureHelpers});
+    tests.push_back({"SceneRoundTrip", TestSceneRoundTrip});
+    tests.push_back({"ComponentRegistry", TestComponentRegistry});
+    tests.push_back({"ComponentPreset", TestComponentPreset});
+    tests.push_back({"HierarchyCycleRepair", TestHierarchyCycleRepair});
+    tests.push_back({"ActiveInHierarchy", TestActiveInHierarchy});
+    tests.push_back({"PlayerAcceleration", TestPlayerAcceleration});
+    tests.push_back({"NearestEuler", TestNearestEuler});
+    tests.push_back({"QuaternionTransformStorage", TestQuaternionTransformStorage});
+    tests.push_back({"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis});
+    tests.push_back({"SpinSystemsAboutDiagonalAxis", TestSpinSystemsAboutDiagonalAxis});
 }

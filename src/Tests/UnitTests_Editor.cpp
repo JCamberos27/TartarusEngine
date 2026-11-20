@@ -2,6 +2,7 @@
 #include "ImCurveAdapter.h"
 #include "CurveEditor.h"
 #include "EditorFileHistory.h"
+#include "UndoDeltaChain.h"
 #include "EditorLayer.h"
 #include "EditorSearch.h"
 #include "LruMap.h"
@@ -600,6 +601,47 @@ void TestEditorSearch() {
     CHECK(f == "rock l:Hero");
 }
 
+// Moved from UnitTests.cpp (pure move).
+namespace {
+
+// --- UndoDelta chain: push three states, pop them back in reverse ---------------------------
+struct TestEntry { UndoDelta::Patch Delta; int Tag = 0; };
+
+void TestUndoDeltaChain() {
+    const std::string s1 = R"({"entities":[{"name":"A","x":1}],"sky":1})";
+    const std::string s2 = R"({"entities":[{"name":"A","x":2}],"sky":1})";
+    const std::string s3 = R"({"entities":[{"name":"A","x":2},{"name":"B","x":5}],"sky":3})";
+
+    std::vector<TestEntry> stack;
+    std::string base;
+    UndoDelta::Push(stack, base, TestEntry{{}, 1}, s1);
+    UndoDelta::Push(stack, base, TestEntry{{}, 2}, s2);
+    UndoDelta::Push(stack, base, TestEntry{{}, 3}, s3);
+    CHECK(stack.size() == 3);
+    CHECK(stack.back().Delta.empty()); // the top is held in full
+
+    auto same = [](const std::string& a, const std::string& b) {
+        return nlohmann::json::parse(a) == nlohmann::json::parse(b);
+    };
+    TestEntry e;
+    std::string full;
+    CHECK(UndoDelta::Pop(stack, base, e, full) == UndoDelta::PopResult::Ok);
+    CHECK(e.Tag == 3 && same(full, s3));
+    CHECK(UndoDelta::Pop(stack, base, e, full) == UndoDelta::PopResult::Ok);
+    CHECK(e.Tag == 2 && same(full, s2));
+    CHECK(UndoDelta::Pop(stack, base, e, full) == UndoDelta::PopResult::Ok);
+    CHECK(e.Tag == 1 && same(full, s1));
+    CHECK(UndoDelta::Pop(stack, base, e, full) == UndoDelta::PopResult::Empty);
+
+    // Malformed input never throws out of the helpers.
+    std::string out;
+    CHECK(!UndoDelta::ApplyPatch(s1, "{not json", out));
+    CHECK(!UndoDelta::ApplyPatch(s1, "", out));
+    CHECK(UndoDelta::MakePatch("{broken", s1).empty());
+}
+
+} // namespace
+
 // The editor caches' use-ordered map (LruMap.h): Find counts as a use, Peek doesn't, trims drop the oldest.
 void TestLruMap() {
     LruMap<int> m;
@@ -680,5 +722,6 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Outfit landing: an unrecorded change before it stays its own undo step",TestOutfitLandingKeepsUnrecordedChange);
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
+    tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
 }
