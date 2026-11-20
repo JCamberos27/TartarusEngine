@@ -1843,9 +1843,9 @@ int ExitCode() { return g_Failed == 0 && g_Passed > 0 ? 0 : 1; }
 // The last screenshot's PNG write. Encoding a full-window PNG took the test thread 100+ ms per shot (a
 // few hundred shots a run); it now runs beside the next frames, one at a time (PngWrite is serialized
 // anyway), and the summary waits for the last one.
-std::future<void> g_ShotWrite;
+static std::future<void> g_ShotWrite;
 
-void FinishShotWrite() {
+static void FinishShotWrite() {
     if (g_ShotWrite.valid()) g_ShotWrite.get();
 }
 
