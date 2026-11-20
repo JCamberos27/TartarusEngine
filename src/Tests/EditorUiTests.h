@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <string>
 
 class EditorLayer;
@@ -23,5 +24,10 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
 void AfterFrame(int fbWidth, int fbHeight);
 // 0 when every test passed (valid after BeforeFrame returned true).
 int ExitCode();
+// Called when the summary prints and right before the watchdog ends the process (TerminateProcess
+// after a hung teardown, std::abort on a hang or TARTARUS_EDITOR_TEST_DEADLINE), so whoever set it
+// can put files back that a normal exit would. May run on the watchdog thread and more than once.
+// Set an empty function to clear it; that waits for a call already running.
+void SetRunEndHook(std::function<void()> hook);
 
 } // namespace EditorUiTests
