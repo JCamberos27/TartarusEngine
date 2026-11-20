@@ -159,7 +159,7 @@ struct Material {
     // Keywords{} block that the engine doesn't drive itself; see ShaderAsset::IsBuiltinKeyword).
     std::vector<std::string> ShaderKeywords;
 
-    // #192: a value hash of everything BindMaterial (Model.cpp) uploads — the scalar/vector
+    // #192: a value hash of everything BindMaterial (ModelDraw.cpp) uploads — the scalar/vector
     // factors plus the identity of each bound texture. The draw loop sorts by this and
     // GLStateCache skips BindMaterial when it matches the last-bound one, so value-identical
     // materials on separate objects (every placed primitive gets its own Material instance)
