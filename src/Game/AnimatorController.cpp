@@ -501,15 +501,18 @@ bool AnimatorController::SaveFile(const std::string& path) const {
     return AtomicFile::WriteJson(fs::u8path(path), json::parse(ToJsonString()));
 }
 
-std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value) {
-    std::vector<float> w(children.size(), 0.0f);
-    if (children.empty()) return w;
-    std::vector<int> order(children.size());
+void AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value, std::vector<float>& w) {
+    w.assign(children.size(), 0.0f);
+    if (children.empty()) return;
+    thread_local std::vector<int> order; // (scratch: this runs per blend tree per rig per frame)
+    order.resize(children.size());
     for (int i = 0; i < (int)order.size(); ++i) order[i] = i;
-    std::stable_sort(order.begin(), order.end(),
-                     [&](int a, int b) { return children[a].Threshold < children[b].Threshold; });
-    if (value <= children[order.front()].Threshold) { w[order.front()] = 1.0f; return w; }
-    if (value >= children[order.back()].Threshold) { w[order.back()] = 1.0f; return w; }
+    // By threshold, ties kept in order (an insertion sort: stable like std::stable_sort, without its buffer; a blend tree
+    // has a handful of children).
+    for (size_t i = 1; i < order.size(); ++i)
+        for (size_t j = i; j > 0 && children[order[j]].Threshold < children[order[j - 1]].Threshold; --j) std::swap(order[j], order[j - 1]);
+    if (value <= children[order.front()].Threshold) { w[order.front()] = 1.0f; return; }
+    if (value >= children[order.back()].Threshold) { w[order.back()] = 1.0f; return; }
     for (size_t k = 0; k + 1 < order.size(); ++k) {
         const float a = children[order[k]].Threshold, b = children[order[k + 1]].Threshold;
         if (value >= a && value <= b) {
@@ -519,14 +522,19 @@ std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::Bl
             break;
         }
     }
+}
+
+std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value) {
+    std::vector<float> w;
+    AnimatorBlendWeights(children, value, w);
     return w;
 }
 
-std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y) {
+void AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y, std::vector<float>& w) {
     const size_t n = children.size();
-    std::vector<float> w(n, 0.0f);
-    if (n == 0) return w;
-    if (n == 1) { w[0] = 1.0f; return w; }
+    w.assign(n, 0.0f);
+    if (n == 0) return;
+    if (n == 1) { w[0] = 1.0f; return; }
     const glm::vec2 p(x, y);
     float sum = 0.0f;
     for (size_t i = 0; i < n; ++i) {
@@ -544,7 +552,7 @@ std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::
     }
     if (sum > 1e-6f) {
         for (float& v : w) v /= sum;
-        return w;
+        return;
     }
     // Outside every band (can't happen with a finite set, but be safe): the nearest child.
     size_t best = 0;
@@ -554,25 +562,41 @@ std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::
         if (d < bestD) { bestD = d; best = i; }
     }
     w[best] = 1.0f;
+}
+
+std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y) {
+    std::vector<float> w;
+    AnimatorBlendWeights2D(children, x, y, w);
     return w;
 }
 
-std::vector<float> AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params) {
+void AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params, std::vector<float>& w) {
     if (m.Is2D())
-        return AnimatorBlendWeights2D(m.Children, ParamValue(params, m.BlendParam, 0.0f),
-                                      ParamValue(params, m.BlendParamY, 0.0f));
-    return AnimatorBlendWeights(m.Children, ParamValue(params, m.BlendParam, 0.0f));
+        AnimatorBlendWeights2D(m.Children, ParamValue(params, m.BlendParam, 0.0f), ParamValue(params, m.BlendParamY, 0.0f), w);
+    else
+        AnimatorBlendWeights(m.Children, ParamValue(params, m.BlendParam, 0.0f), w);
 }
 
-std::vector<float> AnimatorStackWeights(const std::vector<float>& fades) {
-    std::vector<float> w(fades.size(), 0.0f);
-    if (fades.empty()) return w;
+std::vector<float> AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params) {
+    std::vector<float> w;
+    AnimatorMotionWeights(m, params, w);
+    return w;
+}
+
+void AnimatorStackWeights(const std::vector<float>& fades, std::vector<float>& w) {
+    w.assign(fades.size(), 0.0f);
+    if (fades.empty()) return;
     w[0] = 1.0f;
     for (size_t k = 1; k < fades.size(); ++k) {
         const float a = AnimatorCrossfadeWeight(fades[k]);
         for (size_t j = 0; j < k; ++j) w[j] *= 1.0f - a;
         w[k] = a;
     }
+}
+
+std::vector<float> AnimatorStackWeights(const std::vector<float>& fades) {
+    std::vector<float> w;
+    AnimatorStackWeights(fades, w);
     return w;
 }
 
@@ -1034,7 +1058,8 @@ struct Sampler {
             const int c = Clip(m.Clip);
             return c >= 0 ? M.AnimationLength(c) : 0.0f;
         }
-        const auto w = AnimatorMotionWeights(m, params);
+        thread_local std::vector<float> w; // (scratch: per state per rig per frame)
+        AnimatorMotionWeights(m, params, w);
         float len = 0.0f;
         for (size_t i = 0; i < m.Children.size(); ++i) {
             if (w[i] <= 0.0f) continue;
@@ -1050,7 +1075,9 @@ struct Sampler {
                 const std::vector<AnimatorParam>& params, Pose& out) {
         const auto& m = s.MotionFor(Track);
         if (m.Empty()) return false;
-        const std::vector<float> w = m.IsBlendTree() ? AnimatorMotionWeights(m, params) : std::vector<float>{};
+        thread_local std::vector<float> w; // (scratch: per state per rig per frame)
+        if (m.IsBlendTree()) AnimatorMotionWeights(m, params, w);
+        else w.clear();
         thread_local Pose scratch; // a blend tree's second child (kept between calls: this runs per state per rig per frame)
         return AnimatorSampleMotion(M, Assets, m, w, s.Loop, s.RootMotion, RootNode, RM, phase, stateLen, out, scratch);
     }
@@ -1065,7 +1092,8 @@ struct Sampler {
             const int c = Clip(m.Clip);
             return c < 0 ? RootMotionDelta{} : M.ClipRootMotion(c, phase0 * stateLen, phase1 * stateLen, wrap, RootNode, RM);
         }
-        const auto w = AnimatorMotionWeights(m, params);
+        thread_local std::vector<float> w; // (scratch: per state per rig per frame)
+        AnimatorMotionWeights(m, params, w);
         RootMotionMix mix;
         for (size_t i = 0; i < m.Children.size(); ++i) {
             if (w[i] <= 0.0f) continue;
@@ -1185,7 +1213,8 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
                 thread_local std::vector<float> fades;
                 fades.clear();
                 for (const auto& it : rt.Stack) fades.push_back(it.Fade);
-                const std::vector<float> w = AnimatorStackWeights(fades);
+                thread_local std::vector<float> w;
+                AnimatorStackWeights(fades, w);
                 RootMotionMix mix;
                 for (size_t k = 0; k < rt.Stack.size(); ++k) {
                     const auto& it = rt.Stack[k];
@@ -1478,7 +1507,8 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
             };
             if (!m.IsBlendTree()) add(m.Clip, 1.0f);
             else {
-                const auto w = AnimatorMotionWeights(m, dac.Params);
+                thread_local std::vector<float> w;
+                AnimatorMotionWeights(m, dac.Params, w);
                 for (size_t i = 0; i < m.Children.size(); ++i) add(m.Children[i].Clip, w[i]);
             }
             if (weight <= 0.0f) return -1.0f;
