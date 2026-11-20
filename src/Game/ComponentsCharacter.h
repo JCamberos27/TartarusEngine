@@ -327,7 +327,8 @@ struct CharacterOutfitComponent {
     bool AutoHide = true;            // skin (and under-layers) covered by clothing isn't drawn
     bool RandomizeOnPlay = false;    // Play starts in a fresh random outfit (reverted on Stop, like any Play change)
     bool BareBody = false;           // debug: in Play the character drops its clothing (its own body parts only)
-    int Version = 0;                 // runtime: bumped on every change (FirstPersonBody re-reads its pieces)
+    int Version = 0;                 // runtime: bumped when its pieces change (added, removed, remodelled: FirstPersonBody re-reads them)
+    int LookVersion = 0;             // runtime: bumped when only a piece's look changes (a colourway: FirstPersonBody copies it to its twins)
     std::uint64_t HideSignature = 0; // runtime: the pieces the hiding was last worked out for
     int LinkedVersion = -1;          // runtime: the Version whose pieces were last linked to the driving animator
     std::uint64_t HideWaiting = 0;   // runtime: the pieces the hiding is waiting on coverage for ...
