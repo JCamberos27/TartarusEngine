@@ -18,13 +18,13 @@ import collections
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 import unity_yaml as uy  # noqa: E402
-from import_model_library import BLENDER_SCRIPT_ARGS, find_blender, standard_props, write_json, write_meta  # noqa: E402
+from import_model_library import (BLENDER_SCRIPT_ARGS, copy_if_changed, find_blender, standard_props,  # noqa: E402
+                                  write_json, write_meta)
 
 MAX_TEX = 2048
 
@@ -438,12 +438,6 @@ class Pack:
         self.models[guid] = rel_project(self.repo, dst)
         self.counts['models'] += 1
         return self.models[guid]
-
-
-def copy_if_changed(src, dst):
-    if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(src):
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.copy2(src, dst)
 
 
 def has_alpha_data(path):

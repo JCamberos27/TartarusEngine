@@ -4,7 +4,10 @@ The package itself is not in git; this script reads its Prefabs/*.prefab (Unity 
 and writes the numbers the game needs - each prefab's sprays (sim, transform, playback) and floor decals
 (decal set, box, height response, reveal curve) - converted to this engine's right-handed axes (z negated).
 
-    python tools/gen_blood_presets.py "<path to the VolumetricBloodFX package>"
+    python tools/gen_blood_presets.py ["<path to the VolumetricBloodFX package>"]
+
+The package must be the Unity export with its .meta files (they map each material guid to its folder); the default is
+the copy under the Drive's Raw folder ($TARTARUS_RAW).
 """
 import glob, os, re, sys
 
@@ -16,6 +19,19 @@ for _i in range(3, 10):
     SIM_OF_DIR["blood%d" % _i] = "blood%d" % _i
 # blood13.prefab's third sub-spray points at a mesh the package doesn't ship; its material is blood7's.
 MISSING_MESH_FIX = {"8b293307e3aec0141845b9f675b25b47": "BloodResources/blood7/blood_mesh.fbx"}
+
+
+DEFAULT_RAW = r"G:\My Drive\Tartarus Assets\Raw"
+PACK = os.path.join("Effects", "KriptoFX - Volumetric Blood Fluids")
+
+
+def fail(msg):
+    sys.exit("gen_blood_presets: " + msg)
+
+
+def read(path):
+    with open(path, encoding="latin-1") as fh:
+        return fh.read()
 
 
 def num(s, key):
@@ -69,17 +85,22 @@ def mirror(m):
 def main(root):
     guid2path = {}
     for m in glob.glob(root + "/**/*.meta", recursive=True):
-        g = re.search(r"^guid: (\w+)", open(m, encoding="latin-1").read(), re.M)
+        g = re.search(r"^guid: (\w+)", read(m), re.M)
         if g:
             guid2path[g.group(1)] = os.path.relpath(m[:-5], root).replace("\\", "/")
+    if not guid2path:
+        fail("no Unity .meta files under " + root + " (needed to map material guids): use the package as Unity exported it")
     guid2path.update(MISSING_MESH_FIX)
+    prefabs = sorted(glob.glob(root + "/Prefabs/*.prefab"), key=lambda p: os.path.basename(p).lower())
+    if not prefabs:
+        fail("no Prefabs/*.prefab under " + root)
 
     out = []
-    for pf in sorted(glob.glob(root + "/Prefabs/*.prefab"), key=lambda p: os.path.basename(p).lower()):
+    for pf in prefabs:
         name = os.path.splitext(os.path.basename(pf))[0]
         if name == "AttachedBloodDecal":
             continue
-        txt = open(pf, encoding="latin-1").read()
+        txt = read(pf)
         docs = {m.group(2): (int(m.group(1)), m.group(3))
                 for m in re.finditer(r"--- !u!(\d+) &(-?\d+)[^\n]*\n(.*?)(?=\n--- |\Z)", txt, re.S)}
         tr, items = {}, {}
@@ -97,7 +118,9 @@ def main(root):
                               r=(r["x"], r["y"], r["z"], r["w"]), p=(p["x"], p["y"], p["z"]), s=(sc["x"], sc["y"], sc["z"]))
             elif cls == 23:
                 mg = re.search(r"m_Materials:\s*\n\s*- \{fileID: \d+, guid: (\w+)", body)
-                it["mat"] = guid2path.get(mg.group(1)) if mg else None
+                if mg and mg.group(1) not in guid2path:
+                    fail("%s: material guid %s has no .meta in the package" % (name, mg.group(1)))
+                it["mat"] = guid2path[mg.group(1)] if mg else None
             elif cls == 114:
                 kind = SCRIPTS.get(re.search(r"m_Script: \{fileID: \d+, guid: (\w+)", body).group(1))
                 if kind == "BloodSettings":
@@ -112,7 +135,9 @@ def main(root):
                                     smax=vec(body, "TimeScaleMax"), smin=vec(body, "TimeScaleMin"),
                                     omax=vec(body, "TimeOffsetMax"), omin=vec(body, "TimeOffsetMin"),
                                     curve=curve(body, "TimeByHeight"))
-        root_go = next(g for g, t in tr.items() if t["father"] == "0")
+        root_go = next((g for g, t in tr.items() if t["father"] == "0"), None)
+        if root_go is None or "BloodSettings" not in items.get(root_go, {}):
+            fail(name + ": no root object with BloodSettings")
         fid2go = {t["fid"]: g for g, t in tr.items()}
 
         def world(go):  # prefab space: the root's own transform included (it only scales)
@@ -131,8 +156,6 @@ def main(root):
             if not mat or go == root_go:
                 continue
             t = tr[go]
-            parent = mirror(world(fid2go[t["father"]]))
-            whole = mirror(world(go))
             folder = os.path.dirname(mat).replace("BloodResources/", "")
             x, y, z, w = t["r"]
             qe = (-x, -y, z, w)  # S R S with S = diag(1, 1, -1)
@@ -140,12 +163,17 @@ def main(root):
             if "ManualAnim" in it:
                 a = it["ManualAnim"]
                 lin = len(a["curve"]) == 2 and abs(a["curve"][0][1]) < 1e-6 and abs(a["curve"][1][1] - 1) < 1e-6
-                assert lin and a["offset"] == 0, name + ": non-linear playback"
+                if not lin or a["offset"] != 0:
+                    fail(name + ": non-linear playback")
+                if folder not in SIM_OF_DIR:
+                    fail("%s: no imported sim for %s" % (name, folder))
+                whole = mirror(world(go))
                 sprays.append("{\"%s\", {%s}, %s, %s}" % (
                     SIM_OF_DIR[folder], ", ".join(f(whole[i][j]) for i in range(3) for j in range(4)), f(a["limit"]), f(a["frames"])))
             elif "DecalSettings" in it:
                 d = it["DecalSettings"]
                 sp = it["ShaderProps"]
+                parent = mirror(world(fid2go[t["father"]]))
                 dset = "char" if os.path.basename(mat) == "DecalPoint.mat" else folder.replace("Blood2/", "blood2_").lower()
                 o = lambda v: (v["x"], v["y"], -v["z"])
                 vals = ((dset, ", ".join(f(parent[i][j]) for i in range(3) for j in range(4))) + tuple(map(f, qe)) + tuple(map(f, pe)) + tuple(map(f, t["s"])) + (f(d["hmax"]), f(d["hmin"]))
@@ -164,9 +192,10 @@ def main(root):
            "//        TimeScaleMax, TimeOffsetMin, TimeOffsetMax, TimeByHeight, GraphTimeMultiplier, FloatCurve (the reveal / dry-up).\n"
            + "\n".join(out) + "\n")
     dst = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "Game", "Combat", "BloodFxPresets.inc")
-    open(dst, "w", newline="\n").write(src)
+    with open(dst, "w", newline="\n") as fh:
+        fh.write(src)
     print("wrote", os.path.normpath(dst), "-", len(out), "presets")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else r"G:/My Drive/Tartarus Assets/Raw/Effects/KriptoFX - Volumetric Blood Fluids")
+    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.environ.get("TARTARUS_RAW", DEFAULT_RAW), PACK))

@@ -1,13 +1,12 @@
 # Passes over a converted Unity scene before it is written: doors shut, small colliders stripped,
 # openables deduped, spawns put on the terrain, auto LODs, props settled. Split out of unity_prefabs.py.
 import copy
-import json
 import math
 import os
 import subprocess
 
 import model_report
-from import_model_library import write_json, write_meta
+from import_model_library import read_json, write_json, write_meta
 from unity_arch import ARCH_SCALE, arch_class
 from unity_space import _qmul, _qrot, _world_of, r6
 
@@ -178,7 +177,7 @@ def scene_bounds(conv, scene):
         res_path = os.path.join(tmp, 'scenes', 'bounds_tmp.json')
         if run.returncode != 0 or not os.path.exists(res_path):
             raise RuntimeError(f'--scene-bounds failed (exit {run.returncode}):\n' + (run.stdout or '')[-3000:])
-        res = json.load(open(res_path, encoding='utf-8'))
+        res = read_json(res_path)
         out = {}
         for x in res['entities']:
             out[int(x['path'].split('/')[-1].rsplit('~', 1)[1])] = (list(x['min']), list(x['max']))
@@ -210,7 +209,7 @@ def auto_lod(exe, repo, pack_name, scene, counts, report=None):
     cfg = AUTO_LOD.get(pack_name)
     if not cfg:
         return
-    from unity_import import copy_if_changed
+    from import_model_library import copy_if_changed
     every = scene['boxes'] + scene['empties'] + scene['models']
     ids = {e['id']: e for e in every}
 
@@ -233,7 +232,7 @@ def auto_lod(exe, repo, pack_name, scene, counts, report=None):
     variants = {}  # (path, level) -> (path, guid)
     for rel in heavy:
         src = os.path.join(repo, 'project', *rel.split('/'))
-        meta = json.load(open(src + '.meta', encoding='utf-8'))
+        meta = read_json(src + '.meta')
         stem, ext = os.path.splitext(rel)
         for i, (ratio, _) in enumerate(cfg['levels']):
             if ratio >= 1.0:
