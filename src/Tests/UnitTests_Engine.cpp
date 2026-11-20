@@ -1140,12 +1140,13 @@ void TestComponentRegistry() {
 
 } // namespace
 
-static constexpr size_t kSnapshotBytes = 28506;
-static constexpr std::uint64_t kSnapshotHash = 0x0fcdccd2abf27f69ull;
+static constexpr size_t kSnapshotBytes = 28878;
+static constexpr std::uint64_t kSnapshotHash = 0x8f6b8763b0d778abull;
 // The scene snapshot (SaveToString: every undo step and the scene open take one) must keep its
 // exact bytes when its builder changes: the undo history compares and diffs these strings, and
 // the files Save writes come from the same builder. A fixed scene - models sharing a few paths,
-// .mat and embedded material slots, lights, colliders, tags, layers, parenting, empties - is
+// .mat and embedded material slots, lights, colliders, tags, layers, parenting, empties, a
+// prefab instance stub, non-ASCII paths - is
 // pinned by the size and FNV-1a hash of its snapshot. A deliberate format change updates both
 // (the test prints the new values).
 static void Test_SceneSnapshot_BytesPinned() {
@@ -1158,7 +1159,8 @@ static void Test_SceneSnapshot_BytesPinned() {
         std::vector<std::shared_ptr<MaterialAsset>> mats;
         for (int i = 0; i < 3; ++i) {
             auto m = std::make_shared<MaterialAsset>();
-            m->Path = ProjectPaths::Resolve("assets/Materials/w5_fixture_" + std::to_string(i) + ".mat");
+            // One non-ASCII name (UTF-8 "\xC3\xA9"): the cache must give what AssetPathForWrite gives.
+            m->Path = ProjectPaths::Resolve("assets/Materials/w5_fixture_" + std::string(i == 2 ? "caf\xC3\xA9_" : "") + std::to_string(i) + ".mat");
             m->Name = "w5_fixture_" + std::to_string(i);
             mats.push_back(m);
         }
@@ -1169,7 +1171,7 @@ static void Test_SceneSnapshot_BytesPinned() {
         for (int g = 0; g < count / 30 + 1; ++g)
             groups.push_back(w.CreateEmptyEntity({1.0f * g, 2, 3}, {0, 45, 0}, {1, 1, 1}, "Group " + std::to_string(g)));
         for (int i = 0; i < count; ++i) {
-            const std::string path = ProjectPaths::Resolve("assets/Props/w5_fixture_" + std::to_string(i % 5) + ".fbx");
+            const std::string path = ProjectPaths::Resolve("assets/Props/w5_fixture_" + std::string(i % 5 == 4 ? "\xC3\xBC" : "") + std::to_string(i % 5) + ".fbx");
         entt::entity e = w.CreateModelEntity(Model::CreatePrimitive("terrain", path) /* CPU-only stand-in: no GL in unit tests */,
                                                  {i * 0.5f, 0.25f * (i % 7), -i * 0.125f}, {0, (float)(i % 360), 0},
                                                  {1, 1 + (i % 3) * 0.5f, 1}, "Prop " + std::to_string(i));
@@ -1183,6 +1185,13 @@ static void Test_SceneSnapshot_BytesPinned() {
         }
         for (int i = 0; i < count / 4; ++i)
             w.CreateEmptyEntity({0, (float)i, 0}, {0, 0, 0}, {1, 1, 1}, "Pivot " + std::to_string(i));
+        // A prefab instance: written as a stub (its .prefab is absent here), its child not at all.
+        entt::entity inst = w.CreateEmptyEntity({4, 0, 4}, {0, 30, 0}, {1, 1, 1}, "Crate Stack");
+        w.Registry.emplace<PrefabInstanceComponent>(inst).SourcePath =
+            ProjectPaths::Resolve("assets/Prefabs/w5_fixture_\xC3\xA9.prefab");
+        entt::entity part = w.CreateModelEntity(Model::CreatePrimitive("terrain", ProjectPaths::Resolve("assets/Props/w5_fixture_0.fbx")),
+                                                {0, 1, 0}, {0, 0, 0}, {1, 1, 1}, "Crate");
+        w.SetParent(part, inst);
     };
     {
         World w; AssetLibrary assets;
@@ -1193,6 +1202,8 @@ static void Test_SceneSnapshot_BytesPinned() {
         std::fflush(stdout);
         CHECK(s.size() == kSnapshotBytes);
         CHECK(h == kSnapshotHash);
+        CHECK(s.find("\"prefabInstances\"") != std::string::npos);  // the stub is in it
+        CHECK(s.find("w5_fixture_\xC3\xBC" "4") != std::string::npos);  // and a non-ASCII path
         CHECK(SceneSerializer::SaveToString(w, assets) == s); // deterministic
     }
     {   // Timing only (a Forest-sized scene): printed, not checked.
