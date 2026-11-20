@@ -1,9 +1,16 @@
 """Approximate the Quantum wardrobe's catalog (Wardrobe::Classify) and show which rules match what now.
 python wardrobe_audit.py <repo>"""
 import json, os, sys, glob, collections
+
+
+def load(path):
+    with open(path, encoding="utf-8-sig") as f:
+        return json.load(f)
+
+
 repo = sys.argv[1]
 P = os.path.join(repo, "project")
-w = json.load(open(os.path.join(P, "assets/Characters/Quantum/Quantum.wardrobe"), encoding="utf-8"))
+w = load(os.path.join(P, "assets/Characters/Quantum/Quantum.wardrobe"))
 root = w["root"]
 over = {i["path"]: i for i in w["items"]}
 items = []
@@ -22,12 +29,12 @@ for meta in glob.glob(os.path.join(P, root, "Models/Clothing/**/*.fbx.meta"), re
                     slot = s["id"]; break
             if slot: break
     gender = "Female" if ("Female" in parts or stem.startswith("SKM_F_") or stem.startswith("SM_F_")) else "Male"
-    remap = json.load(open(meta, encoding="utf-8")).get("materialRemap", {})
+    remap = load(meta).get("materialRemap", {})
     mats = " ".join(os.path.basename(v) for v in remap.values())
     items.append(dict(rel=rel, stem=stem, slot=slot, gender=gender, mats=mats, tags=set()))
 
 def low(s): return s.lower()
-def match(r, it, prefix=""):
+def match(r, it):
     if "slot" in r and r["slot"] != it["slot"]: return False
     if "gender" in r and r["gender"] != it["gender"]: return False
     if "nameHasAny" in r and not any(low(x) in low(it["stem"]) for x in r["nameHasAny"]): return False
