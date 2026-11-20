@@ -125,7 +125,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
     // An undo or redo of a scene edit leaves every asset's metadata as it was, and re-applying it went through each
     // asset's .meta (1,763 entries on the Forest, most of a second per step). When the snapshot's block is what the
     // live library would write now there is nothing to restore: skip it.
-    const bool metaUnchanged = fromUndoSnapshot && root.contains("assetMeta") && root["assetMeta"] == BuildAssetMetaJson(assets);
+    const bool metaUnchanged = fromUndoSnapshot && root.contains("assetMeta") && root.at("assetMeta") == BuildAssetMetaJson(assets);
     if (root.contains("assetMeta") && !metaUnchanged) {
         // An undo snapshot is authoritative: it is the in-memory record of what the library
         // looked like a moment ago, so restoring it is a true replace. The Set* calls below
