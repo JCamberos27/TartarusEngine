@@ -25,7 +25,7 @@
 #  * every decal is placed from geometry read off the scene (wall planes and which side faces into the room, door and
 #    window openings, ceiling footprints) and a self-check at the end fails loudly if one is off its wall, faces out of
 #    the room, sits outside the room's footprint or covers an opening. Asserted limits: <= MAX_DECALS decals,
-#    <= 30 unique 2K maps and no 4K map across the corridor AND the apartments (the stains reuse the blotch maps,
+#    <= 30 unique (2K) maps across the corridor AND the apartments (the stains reuse the blotch maps,
 #    so the denser dressing adds no texture memory; MAX_DECALS only bounds the per-cluster shading work).
 #
 # Idempotent: it removes "Apartment Wear" and re-adds it, so a second run leaves the file byte-identical.
@@ -40,7 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))     # python -I d
 import dress_corridor as dc                                          # noqa: E402
 
 ROOTS = ('Apartment Wear',)
-MAX_DECALS, MAX_2K, MAX_4K = 600, 30, 0
+MAX_DECALS, MAX_2K = 600, 30
 # The corridor's pool plus eight more flake / crack maps: more variety, and the chipping the corridor shows.
 APT_POOL = {k: v + {'flake': [21, 25, 29, 36], 'crack': [30, 37, 40, 69]}.get(k, []) for k, v in dc.POOL.items()}
 UNITS = (301, 302, 303, 304, 305, 306)
@@ -240,7 +240,7 @@ class AptWear(dc.Wear):
     MIDWALL_STRIP = 0.0     # strips read as boxes mid-wall on white plaster: holes only, strips stay on skirting
 
     def pick(self, r, tag):
-        return dc.PEEL.format(APT_POOL[tag][int(r.random() * len(APT_POOL[tag]))], '')
+        return dc.PEEL.format(APT_POOL[tag][int(r.random() * len(APT_POOL[tag]))])
 
     def __init__(self, d):
         super().__init__(d, 'Apartment Wear')
@@ -254,7 +254,7 @@ class AptWear(dc.Wear):
         self.root = self.empty(f'{unit} Wear', self.apt_root, (0.0, 0.0, 0.0))
         self.decals = []
 
-    def spot(self, line, u, y, off=0.0):
+    def spot(self, line, u, y):
         return line.pos(u, y), line.rot
 
     def decal(self, *a, **k):
@@ -273,7 +273,7 @@ class AptWear(dc.Wear):
         r = random.Random(seed)
         pos, rot = self.spot(line, u, y)
         self.stain(r, pos, (w * 1.3, h * 1.25, 0.25), rot, seed + 50, -1, 0.3 + r.random() * 0.12, spin=20.0)
-        base = dc.PEEL.format(dc.HERO, '') if hero else self.pick(r, 'blotch')
+        base = dc.PEEL.format(dc.HERO) if hero else self.pick(r, 'blotch')
         self.decal(base, pos, (w, h, 0.25), rot, seed, 0, 0.55, jitter=(25.0, 0.15))
         s = 0.5 + r.random() * 0.2
         pos, rot = self.spot(line, u + (r.random() - 0.5) * 0.3 * w, y + (r.random() - 0.5) * 0.2 * h)
@@ -333,7 +333,7 @@ def f_skirt(S, room, seed, trash):
     return False
 
 
-def f_hero(S, room, four_k, seed, trash):
+def f_hero(S, room, hero, seed, trash):
     r = random.Random(seed)
     for scale in ((0.85, 0.65, 0.5) if room.area < 10 else (1.0, 0.8, 0.6)):     # shrink to fit between the openings
         for line in shuffled(r, room.lines):
@@ -343,7 +343,7 @@ def f_hero(S, room, four_k, seed, trash):
             if u is None:
                 continue
             S.cur = ('wall', room, line, 'hero', (line, u, y, w, h))
-            S.patch(line, u, y, w, h, seed, hero=four_k, flakes=3 if trash else 2, crack=True)
+            S.patch(line, u, y, w, h, seed, hero=hero, flakes=3 if trash else 2, crack=True)
             line.taken.append((u - w / 2 - 0.3, u + w / 2 + 0.3, y - h / 2 - 0.3, y + h / 2 + 0.3))
             return True
     return False
@@ -446,17 +446,16 @@ def f_bath(S, room, seed, trash):
         f_streak(S, room, r.randint(0, 10 ** 6), trash)
     f_grime(S, room, r.randint(0, 10 ** 6), trash)
     placed = 0
-    for k in range(1):
-        for _ in range(60):
-            size = 0.9 + r.random() * 0.5
-            x = room.x0 + size / 2 + 0.2 + r.random() * (room.x1 - room.x0 - size - 0.4)
-            z = room.z0 + size / 2 + 0.2 + r.random() * (room.z1 - room.z0 - size - 0.4)
-            if all(math.hypot(x - dx, z - dz) >= size / 2 + 0.55 for dx, dz in room.doors):
-                S.cur = ('floor', room, None, 'splat', None)
-                S.decal(dc.SPLAT.format(1 + int(r.random() * 3)), (x, 0.0, z), (size, size, 0.25), dc.FLOOR_Q,
-                        seed + 300 + k, 0, 0.3, tint=SPLAT_TINT, jitter=(180.0, 0.15))
-                placed += 1
-                break
+    for _ in range(60):
+        size = 0.9 + r.random() * 0.5
+        x = room.x0 + size / 2 + 0.2 + r.random() * (room.x1 - room.x0 - size - 0.4)
+        z = room.z0 + size / 2 + 0.2 + r.random() * (room.z1 - room.z0 - size - 0.4)
+        if all(math.hypot(x - dx, z - dz) >= size / 2 + 0.55 for dx, dz in room.doors):
+            S.cur = ('floor', room, None, 'splat', None)
+            S.decal(dc.SPLAT.format(1 + int(r.random() * 3)), (x, 0.0, z), (size, size, 0.25), dc.FLOOR_Q,
+                    seed + 300, 0, 0.3, tint=SPLAT_TINT, jitter=(180.0, 0.15))
+            placed += 1
+            break
     return n >= 1 and placed >= 1
 
 
@@ -555,13 +554,13 @@ def room_queue(room, trash):
     return q
 
 
-def dress_unit(S, unit, rooms, trash, use_4k):
+def dress_unit(S, unit, rooms, trash, hero):
     r = random.Random(SEED + unit)
     target = r.randint(112, 124) if trash else r.randint(68, 78)
     mine = sorted((rm for rm in rooms.values() if rm.unit == unit), key=lambda rm: rm.name)
     S.start_unit(unit)
     counter = [0]
-    got = {'hero4k': use_4k}
+    got = {'hero': hero}
 
     def attempt(fn, *args):
         """Generate one feature into the buffer; returns (ok, items, wall-space marks to roll back to)."""
@@ -597,8 +596,8 @@ def dress_unit(S, unit, rooms, trash, use_4k):
                 continue
             kind, arg = q[rank]
             if kind == 'hero':
-                ok = accept(*attempt(f_hero, rm, got['hero4k']), target + 3)
-                got['hero4k'] = got['hero4k'] and not ok
+                ok = accept(*attempt(f_hero, rm, got['hero']), target + 3)
+                got['hero'] = got['hero'] and not ok      # only the unit's first hero patch uses the hero map
             elif kind == 'door':
                 accept(*attempt(f_door, rm, arg[0], arg[1]), target + 3)
             else:
@@ -608,7 +607,7 @@ def dress_unit(S, unit, rooms, trash, use_4k):
 
 
 # ---------------------------------------------------------------------------------------------------- self-check
-def self_check(d, S, rooms):
+def self_check(d, S):
     by_id = {e['id']: e for e in d['empties']}
     counts = {'wall': 0, 'ceil': 0, 'floor': 0}
     for eid, (kind, room, line, tag, info) in sorted(S.meta.items()):
@@ -650,7 +649,7 @@ def camera_poses(S, rooms):
         far = (room.x1 if line.sign > 0 else room.x0) if line.axis == 'x' else (room.z1 if line.sign > 0 else room.z0)
         stand = min(2.6, abs(far - line.off) - 0.4)
         px, pz = tx + line.n[0] * stand, tz + line.n[2] * stand
-        yaw = round(math.degrees(math.atan2(-line.n[2], -line.n[0]))) + 0
+        yaw = round(math.degrees(math.atan2(-line.n[2], -line.n[0])))
         pitch = math.degrees(math.atan2(y - EYE_Y, stand))
         poses.append(f'{unit}:{px:.2f},{EYE_Y},{pz:.2f},{yaw},{pitch:.0f}  ({room.name}{" +lamp" if room.lamps else ""})')
     return poses
@@ -669,21 +668,21 @@ def main():
     trashed = sorted(random.Random(SEED).sample(UNITS, 2))
     per_unit = {}
     for unit in UNITS:
-        per_unit[unit] = dress_unit(S, unit, rooms, unit in trashed, use_4k=unit in trashed)[0]
+        per_unit[unit] = dress_unit(S, unit, rooms, unit in trashed, hero=unit in trashed)[0]
     total = sum(per_unit.values())
     assert total <= MAX_DECALS, total
 
     used = [e['Decal']['Asset'] for e in d['empties'] if 'Decal' in e]       # corridor + apartments
-    two_k, four_k = {a for a in used if '_4K' not in a}, {a for a in used if '_4K' in a}
-    assert len(two_k) <= MAX_2K and len(four_k) <= MAX_4K, (len(two_k), len(four_k))
-    checked = self_check(d, S, rooms)
+    maps = len(set(used))
+    assert maps <= MAX_2K, maps
+    checked = self_check(d, S)
 
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(d, f, indent=2, sort_keys=True)
         f.write('\n')
     print(f'{path}: removed {removed} old entities; patched materials (walls, reveals, ceilings, baseboards) {mats}')
     print(f'{total} decals (' + ', '.join(f'{u}: {n}{" trashed" if u in trashed else ""}' for u, n in per_unit.items())
-          + f'); corridor + apartments use {len(two_k)} unique 2K maps, {len(four_k)} 4K, + {len(dc.SUBSTRATES)} substrate sets (a 2K slot each)')
+          + f'); corridor + apartments use {maps} unique 2K maps, + {len(dc.SUBSTRATES)} substrate sets (a 2K slot each)')
     print(f'self-check OK: {checked["wall"]} wall, {checked["ceil"]} ceiling, {checked["floor"]} floor decals')
     print('camera poses:')
     for p in camera_poses(S, rooms):

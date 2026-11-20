@@ -312,11 +312,11 @@ class Hallway(k.Scene):
                     mid = ((p0 + p1) / 2, (y0 + y1) / 2)
                     c = (mid[0], mid[1], inward) if axis == 'x' else (inward, mid[1], mid[0])
                     self.face(f'Wall - {label}', walls, c, normal, p1 - p0, y1 - y0, wall_mat)
-                self.reveals(walls, axis, line, a, b, inward, normal, wall_mat)
+                self.reveals(walls, axis, line, a, b, inward, wall_mat)
                 self.baseboard(trim, axis, line, a, b, inward, normal,
                                self.mats['corridor_trim' if key == 'Corridor' else 'trim'])
 
-    def reveals(self, parent, axis, line, a, b, inward, normal, mat):
+    def reveals(self, parent, axis, line, a, b, inward, mat):
         """The sides of each window and arch opening, from this room's face to the wall's centre line (the room on
         the other side does its own half)."""
         depth = abs(inward - line)
@@ -500,7 +500,7 @@ class Hallway(k.Scene):
                             'HF Damping dB': 2.0, 'Low Cut (Hz)': 100.0, 'Ambience': amb, 'Ambience Volume': vol}})
         # the corridor: hard and bare, a longer tail; the units: empty rooms, a little livelier than a furnished flat
         zone('Corridor Reverb', self.rooms['Corridor'], 'assets/Audio/IR/apartment_3.wav', 'snd.amb.indoor_small', 0.3, 2)
-        for number, plan, x0, sx, row in PLACEMENT:
+        for number, *_ in PLACEMENT:
             rects = [r for key, r in self.rooms.items() if key.startswith(f'Apartment {number}/')]
             rect = (min(r[0] for r in rects), min(r[1] for r in rects), max(r[2] for r in rects), max(r[3] for r in rects))
             # the night through the windows, faint

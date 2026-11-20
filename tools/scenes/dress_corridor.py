@@ -10,7 +10,7 @@
 #    Floor_Concrete on the ceiling, PH_Dark_Wooden_Planks on the baseboards (presets, SUBSTRATES below);
 #  * a seeded, layered set of decals goes under a "Corridor Wear" root: per patch a big soft base, a peel layer, then
 #    small sharp flakes and a crack on top. Only the DA_PeelingPaint_* sets (the tile / board-grid ones are skipped) and
-#    a few DA_LiquidSplatter_* floor splashes. Asserted limits: <= 80 decals, <= 22 unique 2K .decal maps, no 4K (textures are capped at 2K).
+#    a few DA_LiquidSplatter_* floor splashes. Asserted limits: <= 80 decals, <= 22 unique .decal maps (all 2K: textures are capped at 2K).
 #    Ceiling decals carry a Preset substrate override (Floor_Concrete); wall / skirting decals stay on Auto, so they
 #    show the substrate of whatever they land on (concrete on the wall, wood on the baseboard);
 #  * a "Decal Grading" entity (Age 0.35, Wear 0.4) under that root.
@@ -30,9 +30,9 @@ import random
 import sys
 
 ROOTS = ('Decal Lab', 'Corridor Wear', 'Apartment Wear')   # dress_apartments.py re-adds the last (it runs after)
-MAX_DECALS, MAX_2K, MAX_4K = 80, 22, 0
+MAX_DECALS, MAX_2K = 80, 22
 D = 'assets/Decals/'
-PEEL = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}{}.decal'
+PEEL = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}.decal'
 SPLAT = D + 'Stains/LiquidSplatter/DA_LiquidSplatter_{:03d}.decal'
 
 # Peel map tags (from the contact sheets); the tile / board grids (003 011 017 022 071 073 077 080 084 092) are skipped.
@@ -197,9 +197,9 @@ class Wear:
         self.decals.append(asset)
 
     def pick(self, r, tag):
-        return PEEL.format(POOL[tag][int(r.random() * len(POOL[tag]))], '')
+        return PEEL.format(POOL[tag][int(r.random() * len(POOL[tag]))])
 
-    def spot(self, wall, u, y, off=0.0):
+    def spot(self, wall, u, y):
         rot, axis, v = WALLS[wall]
         return ((u, y, v) if axis == 'z' else (v, y, u)), rot
 
@@ -207,7 +207,7 @@ class Wear:
         """One layered patch on a wall: soft base, peel layer, small sharp flakes, a crack on top."""
         r = random.Random(seed)
         j = (0.0, 0.1) if skirt else (8.0, 0.1)
-        base = PEEL.format(HERO, '') if hero else self.pick(r, 'blotch')
+        base = PEEL.format(HERO) if hero else self.pick(r, 'blotch')
         pos, rot = self.spot(wall, u, y)
         self.decal(base, pos, (w, h, 0.25), rot, seed, 0, 0.75 if skirt else 0.55, jitter=j)
         peel_tag = 'strip' if (skirt or r.random() < self.MIDWALL_STRIP) else 'hole'
@@ -271,11 +271,10 @@ def build(d):
                 tint=[0.2, 0.11, 0.07], jitter=(180.0, 0.15))
     s.empty('Decal Grading', s.root, (0.0, 0.0, 0.0), **{'Decal Grading': {'Age': 0.35, 'Wear': 0.4}})
 
-    two_k = {a for a in s.decals if '_4K' not in a}
-    four_k = {a for a in s.decals if '_4K' in a}
+    maps = len(set(s.decals))
     assert len(s.decals) <= MAX_DECALS, len(s.decals)
-    assert len(two_k) <= MAX_2K and len(four_k) <= MAX_4K, (len(two_k), len(four_k))
-    return len(s.decals), len(two_k), len(four_k)
+    assert maps <= MAX_2K, maps
+    return len(s.decals), maps
 
 
 def main():
@@ -285,12 +284,12 @@ def main():
         d = json.load(f)
     removed = remove_roots(d)
     mats = patch_materials(d, repo)
-    n, two_k, four_k = build(d)
+    n, maps = build(d)
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(d, f, indent=2, sort_keys=True)
         f.write('\n')
     print(f'{path}: removed {removed} old entities; patched materials (walls, ceilings, baseboards) {mats}; '
-          f'{n} decals, {two_k} unique 2K maps, {four_k} 4K, + {len(SUBSTRATES)} substrate sets (a 2K slot each)')
+          f'{n} decals, {maps} unique 2K maps, + {len(SUBSTRATES)} substrate sets (a 2K slot each)')
 
 
 if __name__ == '__main__':
