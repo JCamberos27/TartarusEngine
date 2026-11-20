@@ -24,7 +24,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SPEC_PATH = os.path.join(HERE, "recipes", "mix.json")
 SPEC = json.load(open(SPEC_PATH))
 SHOT_LAYERS = ("close", "sub", "mech")
-SPACES = ("indoor_small", "indoor_large", "outdoor_urban", "outdoor_open")
 TOLERANCE_DB = 0.1
 PEAK_CAP_DB = -0.5        # a file's true peak + its mix_db (before the engine's Player Gain) never passes this
 REFERENCE_GUNS = ("ak", "870")            # the 0 dB shot is measured over these only: a new gun never moves the rest of the mix
