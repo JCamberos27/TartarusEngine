@@ -650,6 +650,9 @@ void RegisterScriptIDETests() {
              ExpectTrue("the staged shader is byte-for-byte the original", [path, original](Ctx&) { return ReadFileText(path()) == *original; })},
             HideIde(),
             {Shot("after-reload", {kScene})},
-        }));
+        }), [path, original](Ctx&) {
+            // A timed-out step skips the restore above: put the staged shader back regardless.
+            if (!original->empty() && ReadFileText(path()) != *original) WriteText(path(), *original);
+        });
     }
 }

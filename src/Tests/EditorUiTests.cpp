@@ -56,7 +56,6 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include <chrono>
 #include <fstream>
 #include <cmath>
-#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -68,7 +67,6 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include <set>
 #include <string>
 #include <future>
-#include <memory>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -333,8 +331,11 @@ std::mutex g_Mutex;
 std::string g_Where = "startup"; // "<test> / step '<step>'", under g_Mutex
 size_t g_WhereTest = SIZE_MAX, g_WhereStep = SIZE_MAX;
 
+// Once per frame: the stall check watches this count.
+void Tick() { g_Frames.fetch_add(1, std::memory_order_relaxed); }
+
+// Where the run is; takes the lock only when the test or step changed.
 void Note(const std::string& test, const std::string& step, size_t testIndex, size_t stepIndex) {
-    g_Frames.fetch_add(1, std::memory_order_relaxed);
     if (testIndex == g_WhereTest && stepIndex == g_WhereStep) return;
     g_WhereTest = testIndex;
     g_WhereStep = stepIndex;
@@ -404,7 +405,6 @@ int g_GlErrBase = 0;
 unsigned long long g_LogSeqSeen = 0;
 std::vector<std::string> g_AllowLog;   // this test: error lines containing one of these are expected
 std::vector<std::string> g_ImGuiErrors; // filled by the ImGui error callback
-std::string g_LastImGuiError;
 
 void OnImGuiError(ImGuiContext*, void*, const char* msg) {
     const std::string m = msg ? msg : "(no message)";
@@ -776,8 +776,15 @@ std::string NameOf(World& w, entt::entity e) {
 }
 // A fresh scene: Alpha (empty), Beta (Light + Audio Source), Gamma (Light).
 Step FreshScene() {
-    return Do("fresh scene", [](Ctx& c) {
-        if (X::InPlay(c.E)) X::RequestPlayStop(c.E);
+    // A test that failed in Play leaves the editor there: ResetScene does nothing in Play, and the
+    // objects made below would land in the play world the pending stop throws away. Stop Play first.
+    auto stopAsked = std::make_shared<bool>(false);
+    return {"fresh scene", [stopAsked](Ctx& c) {
+        if (X::InPlay(c.E)) {
+            if (!*stopAsked) { X::RequestPlayStop(c.E); *stopAsked = true; }
+            return false;
+        }
+        *stopAsked = false;
         ImGui::ClosePopupsExceptModals(); // a menu or popover a previous test left open
         // A test that failed midway can leave a field mid-edit, keyboard focus in a panel, the
         // Settings window up or a Console filter typed: any of those swallows the next test's
@@ -800,7 +807,8 @@ Step FreshScene() {
         c.W.Registry.emplace<AudioSourceComponent>(beta).Volume = 0.3f;
         const entt::entity gamma = c.W.CreateEmptyEntity(glm::vec3(3, 0, 0), zero, one, "Gamma");
         c.W.Registry.emplace<LightComponent>(gamma).Intensity = 1.0f;
-    });
+        return true;
+    }};
 }
 Step SelectByName(const char* name) {
     return Do(std::string("select ") + name, [name](Ctx& c) {
@@ -1752,7 +1760,11 @@ void RegisterTests() {
         ExpectTrue("still open", [](Ctx& c) { return X::FavVisible(c.E); }),
         Key(ImGuiKey_1, ImGuiMod_Alt), Wait(2),
         ExpectTrue("Alt+1 picked page 1", [](Ctx& c) { return X::FavPage(c.E) == 0; }),
-        ExpectTrue("and did not focus the Hierarchy", [](Ctx&) { return !Shortcuts::Triggered("panel.focus.hierarchy"); }),
+        ExpectTrue("and did not focus the Hierarchy", [](Ctx&) {
+            // Shortcuts::Triggered is true only on the frame the chord lands, long gone here: check focus.
+            const ImGuiWindow* nav = ImGui::GetCurrentContext()->NavWindow;
+            return !nav || nav != ImGui::FindWindowByName(EditorPanels::Hierarchy);
+        }),
         Key(ImGuiKey_RightArrow), Wait(2),
         ExpectTrue("Right arrow -> page 2", [](Ctx& c) { return X::FavPage(c.E) == 1; }),
         Key(ImGuiKey_Escape), WaitSeconds(0.4),
@@ -1783,9 +1795,8 @@ void RegisterTests() {
     Add("ruler: Shift+R measures, the wheel steps objects, a click shows bounds without selecting", {
         FreshScene(),
         Do("two cubes in front of the camera", [](Ctx& c) {
-            const entt::entity a = c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), glm::vec3(0, 0, 0), glm::vec3(0), glm::vec3(1), "Near Cube");
-            const entt::entity b = c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), glm::vec3(0, 0, -4), glm::vec3(0), glm::vec3(2), "Far Cube");
-            (void)a; (void)b;
+            c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), glm::vec3(0, 0, 0), glm::vec3(0), glm::vec3(1), "Near Cube");
+            c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), glm::vec3(0, 0, -4), glm::vec3(0), glm::vec3(2), "Far Cube");
             c.Cam.Position = glm::vec3(0.0f, 0.0f, 6.0f);
             c.Cam.Yaw = -90.0f;
             c.Cam.Pitch = 0.0f;
@@ -1977,8 +1988,12 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         std::cout << "[EditorTest] " << g_Tests.size() << " test(s)" << std::endl;
         watchdog::Start();
     }
-    watchdog::Note("startup", "layout", SIZE_MAX, SIZE_MAX);
-    if (g_StepFrames < 0) { ++g_StepFrames; return false; }
+    watchdog::Tick();
+    if (g_StepFrames < 0) {
+        watchdog::Note("startup", "layout", SIZE_MAX, SIZE_MAX);
+        ++g_StepFrames;
+        return false;
+    }
 
     Ctx c{editor, world, assets, camera};
     while (g_TestIndex < g_Tests.size()) {
