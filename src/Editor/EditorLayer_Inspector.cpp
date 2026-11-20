@@ -1745,6 +1745,22 @@ static bool MaterialShaderDropdown(const MaterialAsset& material, std::string& s
     return changed;
 }
 
+// How a material property edit is recorded. Scene objects' materials (Save empty): a drag or
+// typed edit is one staged scene undo step, a one-click change pushes one first. A .mat file
+// (Save set): saved after each finished edit, which records its own file undo step.
+struct EditorLayer::MaterialEdits {
+    EditorLayer& Layer;
+    World& W;
+    std::function<void()> Save;
+    void Begin() const { if (!Save) Layer.StageUndo(W); }
+    void Commit() const { if (Save) Save(); else Layer.CommitStagedUndo(W, "Edit Material"); }
+    template <class F> void Instant(const std::string& label, F&& apply) const {
+        if (!Save) Layer.PushUndo(W, label);
+        apply();
+        if (Save) Save();
+    }
+};
+
 void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, const std::shared_ptr<MaterialAsset>& ma,
                                           const std::string& matPath) {
     Material& mat = ma->Mat;
@@ -1767,22 +1783,6 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
     // (.mat asset edits save to disk; they aren't scene undo steps.)
     DrawMaterialProperties(world, assets, {&mat}, {ma.get()}, ma->Shader.get(), MaterialEdits{*this, world, save});
 }
-
-// How a material property edit is recorded. Scene objects' materials (Save empty): a drag or
-// typed edit is one staged scene undo step, a one-click change pushes one first. A .mat file
-// (Save set): saved after each finished edit, which records its own file undo step.
-struct EditorLayer::MaterialEdits {
-    EditorLayer& Layer;
-    World& W;
-    std::function<void()> Save;
-    void Begin() const { if (!Save) Layer.StageUndo(W); }
-    void Commit() const { if (Save) Save(); else Layer.CommitStagedUndo(W, "Edit Material"); }
-    template <class F> void Instant(const std::string& label, F&& apply) const {
-        if (!Save) Layer.PushUndo(W, label);
-        apply();
-        if (Save) Save();
-    }
-};
 
 // The property rows for one or more materials: the shader's own Properties() when it has a linked
 // ShaderAsset, else the fixed PBR set. Several materials show "(mixed)" where they differ and an
