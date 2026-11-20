@@ -667,11 +667,12 @@ void TestAutoSaveFromUndoSnapshot() {
     AssetLibrary assets;
     for (int i = 0; i < 4; ++i) world.CreateEmptyEntity({(float)i, 0.5f, -2.25f}, {}, {1, 1, 1}, "Autosave fixture " + std::to_string(i));
     assets.AddFolderPath("unit-autosave/Sub"); // listed (so the snapshot has assetFolders), never written to project settings
+    assets.SetRemovedDiskFolders({"unit-autosave/Gone"}); // a Delete Folder mark (so the snapshot has removedDiskFolders)
     const std::filesystem::path dir = UnitTestSupport::TempDir("autosave-snapshot");
     const std::string fromSave = (dir / "save.json").string(), fromSnapshot = (dir / "snapshot.json").string();
     CHECK(SceneSerializer::Save(world, assets, fromSave));
     const std::string snapshot = SceneSerializer::SaveToString(world, assets);
-    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"assetFolders\"", "\"assetMeta\""})
+    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"assetFolders\"", "\"removedDiskFolders\"", "\"assetMeta\""})
         CHECK(snapshot.find(key) != std::string::npos);
     const std::function<bool()> write = SceneSerializer::PrepareSaveFromSnapshot(snapshot, assets, fromSnapshot);
     CHECK(write && write());
