@@ -2055,15 +2055,23 @@ private:
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
         bool Unfetched = false;  // an external_assets.csv row with no file on disk (AssetGridCell::unfetched)
+        bool FirstOfKey = true;  // the first file in the scan with its Key (the one the folder summaries count)
         // Library view placement (prefab / decal / hdri only), worked out on the scan's thread: the
         // asset_library.json category id and the pack folder (LibraryGroupOf).
         std::string LibraryCategory, LibraryPack;
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
+    // What a scan hands back. The maps view the files' own Key / Path strings (first file wins) and are built on the
+    // scan's thread; moving the vector keeps those strings where they are.
+    struct ProjectAssetScan {
+        std::vector<ProjectAssetFile> files;
+        std::unordered_map<std::string_view, std::uint32_t> byKey, byPath;
+    };
     struct {
         std::vector<ProjectAssetFile> files;
+        std::unordered_map<std::string_view, std::uint32_t> byKey, byPath; // into `files`, from the same scan
         bool valid = false; // false = scan again (when the one in flight, if any, finishes)
-        std::future<std::vector<ProjectAssetFile>> scan;
+        std::future<ProjectAssetScan> scan;
         std::chrono::steady_clock::time_point scanStarted;
         unsigned scanLibraryGen = 0, filesLibraryGen = 0; // m_LibraryIndexGen the scan in flight / `files` grouped by
     } m_ProjectAssetIndex;
@@ -2083,7 +2091,7 @@ private:
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
-    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
+    static ProjectAssetScan ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
     static bool IsLibraryKind(const ProjectAssetFile& f); // placeable: listed under the Library view
     static void LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetFile& f); // fills LibraryCategory/Pack
     static bool ProjectAssetKindOf(ProjectAssetFile& f); // sets f.Kind from its extension; false = not an asset
@@ -2402,9 +2410,10 @@ private:
     // list shrinks or a new scan lands, which asks for a full walk.
     bool m_FolderSummariesValid = false;
     struct FolderIndexContribution { std::uint32_t Folder; Enhancers::FolderKind Kind; }; // Folder: m_FolderIndexFolders
-    // Index file PathKey -> where it counts. The keys view m_ProjectAssetIndex.files[i].Key: a new scan replaces those
-    // strings, but it also clears m_FolderSummariesValid, so nothing looks a key up before the next walk rebuilds this.
-    std::unordered_map<std::string_view, FolderIndexContribution> m_FolderIndexContrib;
+    static constexpr std::uint32_t kIndexFileNotCounted = 0xFFFFFFFFu;
+    // Per m_ProjectAssetIndex.files entry: where it counts (Folder kIndexFileNotCounted: nowhere). A new scan replaces
+    // the files, but it also clears m_FolderSummariesValid, so nothing reads this before the next walk rebuilds it.
+    std::vector<FolderIndexContribution> m_FolderIndexContrib;
     std::vector<std::string> m_FolderIndexFolders; // the folders m_FolderIndexContrib names, one per run of files
     // What the Asset Browser grid keys its Play-mode cell cache on (AssetGridFrameBegin): full walks, and per folder
     // (and overall) how often a newly listed asset changed what it holds.
@@ -2412,6 +2421,7 @@ private:
     std::unordered_map<std::string, unsigned> m_FolderContentGen;
     void RebuildFolderSummariesIfNeeded(AssetLibrary& assets);
     void NoteListedInFolderSummaries(AssetLibrary& assets, int list, const std::string& path, const std::string& key);
+    const std::string* UncountIndexFile(std::uint32_t file); // the folder it counted in, or nullptr
     std::string m_HoverAssetFolder;       // the folder under the mouse this frame (tree or grid)
     bool m_HoverAssetFolderSet = false;
     void HandleFolderHoverKeys(AssetLibrary& assets); // PostModuleDraw, after the module drew the tree

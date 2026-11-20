@@ -1237,10 +1237,11 @@ void EditorLayer::LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetF
 // Worker thread (m_ProjectAssetIndex): every model / texture / material / sound / prefab file
 // under `root`. Touches no editor or library state - the .meta's folder is read straight from the
 // file, and the main thread files each entry into the folder tree.
-std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library) {
+EditorLayer::ProjectAssetScan EditorLayer::ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library) {
     namespace fs = std::filesystem;
     const auto kindOf = [](ProjectAssetFile& f) { return ProjectAssetKindOf(f); };
-    std::vector<EditorLayer::ProjectAssetFile> files;
+    ProjectAssetScan scan;
+    std::vector<EditorLayer::ProjectAssetFile>& files = scan.files;
     std::error_code ec;
     for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
          !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
@@ -1293,7 +1294,15 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
             files.push_back(std::move(f));
         }
     }
-    return files;
+    // Lookups the main thread would otherwise hash ~11k long paths for (folder summaries): built here, once the
+    // vector stops growing.
+    scan.byKey.reserve(files.size());
+    scan.byPath.reserve(files.size());
+    for (std::uint32_t i = 0; i < (std::uint32_t)files.size(); ++i) {
+        files[i].FirstOfKey = scan.byKey.try_emplace(std::string_view(files[i].Key), i).second;
+        scan.byPath.try_emplace(std::string_view(files[i].Path), i);
+    }
+    return scan;
 }
 
 bool EditorLayer::ProjectAssetKindOf(ProjectAssetFile& f) {
@@ -1319,7 +1328,10 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
     auto& index = m_ProjectAssetIndex;
     bool replaced = false;
     if (index.scan.valid() && index.scan.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-        index.files = index.scan.get();
+        ProjectAssetScan landed = index.scan.get();
+        index.files = std::move(landed.files); // moves the buffer: the maps' views stay valid
+        index.byKey = std::move(landed.byKey);
+        index.byPath = std::move(landed.byPath);
         index.filesLibraryGen = index.scanLibraryGen;
         // ~11k files sit in a few hundred directories: AddFolderPath once per distinct one (its answer for a
         // directory doesn't change while this loop runs: the first call registers it, later ones find it).
