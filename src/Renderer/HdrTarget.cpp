@@ -36,10 +36,12 @@ void HdrTarget::Release() {
     if (m_MsColor)      { glDeleteTextures(1, &m_MsColor);         m_MsColor = 0; }
     if (m_MsDepth)      { glDeleteTextures(1, &m_MsDepth);         m_MsDepth = 0; }
     if (m_MsVelocity)   { glDeleteTextures(1, &m_MsVelocity);      m_MsVelocity = 0; }
+    if (m_PrevColor)    { glDeleteTextures(1, &m_PrevColor);       m_PrevColor = 0; }
     GpuMemTrack::Set(MemKey(this, "MS color+depth"), 0);
     GpuMemTrack::Set(MemKey(this, "resolve color"), 0);
     GpuMemTrack::Set(MemKey(this, "resolve depth"), 0);
     GpuMemTrack::Set(MemKey(this, "MS velocity"), 0);
+    GpuMemTrack::Set(MemKey(this, "previous color"), 0);
     // m_DepthRequested is deliberately NOT reset - a Resize() calls Release() then Create(),
     // and if depth was already provisioned before that resize, Create() needs to know to
     // re-provision it rather than silently dropping it (#206).
@@ -213,8 +215,30 @@ unsigned int HdrTarget::ResolvedDepthTexture() const {
     return m_ResolveDepth;
 }
 
+unsigned int HdrTarget::PreviousColorTexture() const {
+    if (m_Samples != 1) return m_ResolveColor;
+    if (!m_PrevColor && m_MsFbo) {
+        glCreateTextures(GL_TEXTURE_2D, 1, &m_PrevColor);
+        glTextureStorage2D(m_PrevColor, 1, GL_RGBA16F, m_Width, m_Height);
+        glTextureParameteri(m_PrevColor, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(m_PrevColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(m_PrevColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(m_PrevColor, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        const float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        glClearTexImage(m_PrevColor, 0, GL_RGBA, GL_FLOAT, zero);
+        GpuMemTrack::Set(MemKey(this, "previous color"), (size_t)m_Width * m_Height * 8);
+    }
+    return m_PrevColor;
+}
+
 void HdrTarget::ResolveDepthOnly() const {
-    if (!m_MsFbo || !m_ResolveFbo) return; // (one sample: no resolve FBO - the depth is already single-sample)
+    if (m_Samples == 1 && m_MsFbo) {
+        // The depth is its own resolve, read while it stays attached (depth writes off): make the draws so far
+        // visible to texel fetches.
+        if (glTextureBarrier) glTextureBarrier();
+        return;
+    }
+    if (!m_MsFbo || !m_ResolveFbo) return;
     ResolvedDepthTexture();
     glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
         0, 0, m_Width, m_Height,
@@ -223,7 +247,13 @@ void HdrTarget::ResolveDepthOnly() const {
 }
 
 void HdrTarget::ResolveTo() const {
-    if (!m_MsFbo || !m_ResolveFbo) return; // one sample: the target is its own resolve
+    if (m_Samples == 1 && m_MsFbo) { // the target is its own resolve; only the previous-frame copy, when asked for
+        if (m_PrevColor)
+            glCopyImageSubData(m_MsColor, GL_TEXTURE_2D, 0, 0, 0, 0, m_PrevColor, GL_TEXTURE_2D, 0, 0, 0, 0,
+                               m_Width, m_Height, 1);
+        return;
+    }
+    if (!m_MsFbo || !m_ResolveFbo) return;
     // MSAA down-resolve. Colour always, for the tonemap pass.
     // Depth (#121) only once something has asked for it via ResolvedDepthTexture() - see #206.
     glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,

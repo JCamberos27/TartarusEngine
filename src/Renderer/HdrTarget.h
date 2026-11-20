@@ -35,6 +35,11 @@ public:
     // RGBA16F, linear-filtered, sampleable (with one sample, the render target itself)
     unsigned int ResolvedColorTexture() const { return m_Samples == 1 ? m_MsColor : m_ResolveColor; }
 
+    // The colour as the last ResolveTo() left it, for a pass that reads the previous frame while this one draws (the
+    // puddle SSR). With MSAA that is the resolve target; with one sample the target is its own resolve, so a copy is
+    // kept, made by ResolveTo() only once something has asked for it here (zero until the first copy).
+    unsigned int PreviousColorTexture() const;
+
     // Mid-pass: resolves only the depth into ResolvedDepthTexture() (provisioning it on first use) -
     // for a pass that reconstructs the surfaces drawn so far while the MSAA target stays bound (the
     // FX sprites' soft edges). Leaves the draw framebuffer binding alone.
@@ -74,6 +79,7 @@ private:
     mutable int m_DrawBuffersState = -1; // the MS FBO's draw buffers as SetVelocityWrites last set them (-1 unknown)
     mutable unsigned int m_ResolveDepth = 0; // 0 until ResolvedDepthTexture() is first called
     mutable bool m_DepthRequested = false;   // sticky, so a later Resize()/Create() still provisions it
+    mutable unsigned int m_PrevColor = 0;    // one sample only: last ResolveTo()'s colour, 0 until PreviousColorTexture()
     int m_Width = 0, m_Height = 0, m_Samples = 0;
     int m_FailW = 0, m_FailH = 0, m_FailSamples = 0; // the last request that came out incomplete (0 = none)
 
