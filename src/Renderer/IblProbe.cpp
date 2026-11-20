@@ -31,6 +31,8 @@ void IblProbe::Release() {
     m_Step = -1;
     m_StepQueued = false;
     if (m_BrdfLut)        { glDeleteTextures(1, &m_BrdfLut);          m_BrdfLut = 0; }
+    m_BrdfLutBaked = false; // the LUT is gone: the next bake makes it again
+    m_FboComplete = false;
     m_EnvShader.reset();
     m_IrradianceShader.reset();
     m_PrefilterShader.reset();

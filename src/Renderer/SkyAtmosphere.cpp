@@ -8,6 +8,7 @@
 #include "Core/Profiler.h"
 #include "gl.h"
 
+#include <cstring>
 #include <algorithm>
 #include <cmath>
 
@@ -314,7 +315,12 @@ void SkyAtmosphere::UpdateAtmosphereUniforms(const SkySettings& s, const SkyLigh
                          std::max(s.NightGlow, 0.0f), kKmPerWorldUnit);
     u.Params2 = glm::vec4(kAerialRangeKm, s.SeaLevel, s.AltitudeOffsetMeters * 0.001f, s.MoonEnabled ? 1.0f : 0.0f);
     u.StarRotation = glm::mat4(lit.StarRotation);
-    glNamedBufferSubData(m_Ubo, 0, sizeof(u), &u);
+    static_assert(sizeof(u) == sizeof(m_UboContents), "m_UboContents must mirror AtmosphereUbo");
+    if (!m_UboContentsValid || std::memcmp(m_UboContents, &u, sizeof(u)) != 0) {
+        glNamedBufferSubData(m_Ubo, 0, sizeof(u), &u);
+        std::memcpy(m_UboContents, &u, sizeof(u));
+        m_UboContentsValid = true;
+    }
     glBindBufferBase(GL_UNIFORM_BUFFER, 2, m_Ubo);
 }
 
