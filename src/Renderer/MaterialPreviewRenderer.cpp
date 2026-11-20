@@ -7,6 +7,7 @@
 #include "Log.h"
 #include "MaterialAsset.h"
 #include "Model.h"
+#include "Profiler.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "ShaderVariant.h"
@@ -186,6 +187,7 @@ void MaterialPreviewRenderer::DrawBackdrop(bool checker, bool tonemap, int width
 
 unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset>& material, Shape shape,
                                              float yaw, float pitch, int width, int height) {
+    PROFILE_GPU_SCOPE("Material Preview");
     if (!material || width <= 0 || height <= 0) return 0;
     width = std::min(width, 4096 / kSupersample);
     height = std::min(height, 4096 / kSupersample);
