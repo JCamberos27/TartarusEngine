@@ -60,6 +60,8 @@ class Wiring:
         self.by_id = {e['id']: e for e in s.empties + s.models + s.boxes}
         self.g = s.empty('House Lights', lay, (0, 0, 0), static=True)
         self.switches = []          # placed switch plates (centre)
+        self.rooms, self.by_room = [], {}   # set by wire() once the rooms are named
+        self.unplaced, self.plates, self.n_dead, self.circuit_I = [], [], 0, {}
         self.n_lights = self.n_shadow = 0
         # walls as world boxes (x0, x1, y0, y1, z0, z1): the switch and wall-light probes are point tests
         self.wall_aabb = []
@@ -236,6 +238,7 @@ class Wiring:
                 if o is None:
                     return None
                 c, along, n, hw = o
+                thr = n             # the way through the archway (the jamb probe looks across it)
                 cx_ = sum(x for x, _ in room['cells']) / len(room['cells'])
                 cz_ = sum(z for _, z in room['cells']) / len(room['cells'])
                 toward = 1.0 if (cx_ - c[0]) * along[0] + (cz_ - c[1]) * along[1] > 0 else -1.0
@@ -579,11 +582,7 @@ def wire(s, lay, pk, repo, fh, notes):
     rooms_ = named_rooms(fit, fh.floor_rects(pk), fh)
     w.rooms = rooms_
     w.by_room = by_name = {r['name']: r for r in rooms_}
-    w.unplaced = []
-    w.plates = []
-    w.n_dead = 0
     by_circuit = {}
-    w.circuit_I = {}
     fittings = {}
     for e in pk.props():
         st = fh.stem(e)
@@ -742,7 +741,7 @@ def wire(s, lay, pk, repo, fh, notes):
         room = by_name.get(rname)
         if room:
             n0 = len(w.plates)
-            w.place_plate('Stairs', room, how, room['floor'], False)
+            w.place_plate('Stairs', room, how, room['floor'], ROOM_CIRCUITS['landing'][1])
             light_switch('Stairs', room, n0)
     # The fittings no room circuit took: dead.
     for i, st in fittings.items():

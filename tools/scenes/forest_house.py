@@ -114,6 +114,14 @@ def yaw_of(q):
     return math.degrees(math.atan2(-v[2], v[0]))
 
 
+def first(it, what):
+    """The first item of `it`; exits naming `what` when there is none (instead of a bare StopIteration)."""
+    v = next(iter(it), None)
+    if v is None:
+        sys.exit(f'forest_house: no {what} found')
+    return v
+
+
 class Pack:
     """The house snapshot: entities by id, children, pack-space world transforms."""
     def __init__(self, path):
@@ -130,12 +138,22 @@ class Pack:
         p, r = e.get('position', [0, 0, 0]), e.get('rotation', [0, 0, 0, 1])
         if e['parentId'] in self.by:
             pp, pr = self.world(e['parentId'])
-            v = qrot(pr, p)
+            ps = self.wscale(e['parentId'])
+            v = qrot(pr, (p[0] * ps[0], p[1] * ps[1], p[2] * ps[2]))
             return [pp[0] + v[0], pp[1] + v[1], pp[2] + v[2]], qmul(pr, r)
         return list(p), list(r)
 
+    def wscale(self, i):
+        """The product of the scales from `i` up to the root (no shear: the pack never rotates a scaled parent)."""
+        sc = [1.0, 1.0, 1.0]
+        while i in self.by:
+            s = self.by[i].get('scale', [1, 1, 1])
+            sc = [sc[k] * s[k] for k in range(3)]
+            i = self.by[i]['parentId']
+        return sc
+
     def group(self, name):
-        return next(e['id'] for e in self.ents if e['name'] == name)
+        return first((e['id'] for e in self.ents if e['name'] == name), f'house group {name!r}')
 
     def props(self):
         """The furniture and dressing: House_01_Props' direct children."""
@@ -211,12 +229,7 @@ class Fit:
         return None
 
     def wscale(self, i):
-        sc = [1.0, 1.0, 1.0]
-        while i in self.pk.by:
-            s = self.pk.by[i].get('scale', [1, 1, 1])
-            sc = [sc[k] * s[k] for k in range(3)]
-            i = self.pk.by[i]['parentId']
-        return sc
+        return self.pk.wscale(i)
 
     def prop_boxes(self, i):
         """The prop's models as boxes (its own and its children's)."""
@@ -503,8 +516,8 @@ def floor_the_stairwell(pk, notes):
     if any(r[0] < hole[1] - 0.1 and r[1] > hole[0] + 0.1 and r[2] < hole[3] - 0.1 and r[3] > hole[2] + 0.1
            for r in floor_rects(pk) if r[4] < 3.0):
         return
-    template = next(e for e in pk.ents if e['kind'] == 'models' and stem(e) == 'Floor_3x_5x'
-                    and pk.by[e['parentId']]['name'] == 'Floors_1st')
+    template = first((e for e in pk.ents if e['kind'] == 'models' and stem(e) == 'Floor_3x_5x'
+                      and pk.by[e['parentId']]['name'] == 'Floors_1st'), 'Floors_1st Floor_3x_5x tile')
     c = json.loads(json.dumps(template))
     i = max(pk.by) + 1
     c.update({'id': i, 'order': i, 'name': 'Floor_3x_5x (stairwell fill)', 'position': [hole[0], 0.485, hole[3]],
@@ -789,7 +802,7 @@ def dress_inside(s, lay, pk, rng, broken, forest_litter, notes):
             walled = fit.near_wall(x, z, y, 0.45)
             if heavy and fit.near_corner(x, z, y, 0.5) and rng.random() < 0.6:
                 path, _w, how, _h = rng.choice(heavy)       # bags and boxes only in the corners
-            elif walled or rng.random() < 0.25:
+            elif loose and (walled or rng.random() < 0.25):
                 path, _w, how, _h = rng.choice(loose)
             else:
                 continue                # the middle of a room stays mostly bare: things get kicked to the sides
@@ -1013,7 +1026,7 @@ def grime(s, lay, pk, rng, notes):
     furniture = [b for i, bs in fit.boxes.items() if not stem(fit.props[i]).startswith('Carpet_') for b in bs]
 
     def lands_clean(pos, rot, size):
-        """The decal's box must not reach any furniture (a crack smeared across a couch back) or a doorway."""
+        """The decal's box must not reach any furniture (a crack smeared across a couch back)."""
         box = hf.Box(list(pos), [qrot(rot, a) for a in ((1, 0, 0), (0, 1, 0), (0, 0, 1))], [v / 2 for v in size])
         return not any(hf.overlap(box, b, 0.0) for b in furniture)
 
@@ -1152,7 +1165,9 @@ def grime(s, lay, pk, rng, notes):
     # Outside, on the outer face only: a thin band of damp along the foundation where the ground splashes it, and a
     # streak of grime under the sills of the windows on the ground floor, where the rain runs off them.
     for e in pk.named(r'Wall_(1st|2nd)_'):
-        if e['kind'] != 'models' or e['id'] in pk.gone or n >= MAX_DECALS - 2:
+        if n >= MAX_DECALS:
+            break
+        if e['kind'] != 'models' or e['id'] in pk.gone:
             continue
         m = re.match(r'Wall_\w+?_([\d½]+)x', e['name'])
         length = float(m.group(1).replace('½', '.5')) * 0.97 if m else 1.0
@@ -1170,6 +1185,8 @@ def grime(s, lay, pk, rng, notes):
         maps.update(BASE_DECALS)
         n += 1
     for e in pk.named(r'Windowglass_singlewindow'):
+        if n >= MAX_DECALS:
+            break
         b = fit.B.get(e.get('path', ''))
         pos, rot = pk.world(e['id'])
         if not b or pos[1] > 3.0 or rng.random() < 0.4:
@@ -1203,7 +1220,7 @@ def lights(s, lay, pk, repo, notes):
     """What lights the house: every fitting and lamp on its circuit, with switches (house_lights.py). The candles on
     the living room floor are burned out and give no light. Indoor lights scatter nothing into the fog (no fog indoors)."""
     # The master bedroom, upstairs at the front: its ceiling fitting holds a bare red bulb.
-    red = next(e for e in pk.named(r'Lamp_bedroom$'))
+    red = first(pk.named(r'Lamp_bedroom$'), 'Lamp_bedroom')
     red['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
                                                 emissiveColor=list(RED_GLOW), emissiveStrength=RED_GLOW_S)}]
     red['castShadows'] = 0      # the bulb hangs in it: its own shade would print a dark disc on the ceiling round it
@@ -1211,7 +1228,7 @@ def lights(s, lay, pk, repo, notes):
     g = pk.wiring.g
 
     # Candles burned down on the living room floor, in front of the couch: someone's been here.
-    couch = next(e for e in pk.props() if e['name'].startswith('Couch_3seat'))
+    couch = first((e for e in pk.props() if e['name'].startswith('Couch_3seat')), 'Couch_3seat')
     cb = pk.fit.boxes[couch['id']][0]
     front = qrot(pk.world(couch['id'])[1], (0, 0, 1))
     lit = []

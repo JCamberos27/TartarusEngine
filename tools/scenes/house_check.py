@@ -12,17 +12,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import forest_house as fh  # noqa: E402
 import house_fit as hf  # noqa: E402
 
-GROUPS = ('House_01_Props', 'Rubbish', 'House Lights', 'Porch Light')
+GROUPS = ('House_01_Props', 'Rubbish', 'House Lights', 'Porch Light', 'Store Room', 'Over The Fireplace')
 SKIP = ('Carpet_', 'Curtains_')
 
 
 def main():
-    path = sys.argv[1]
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    if not args:
+        sys.exit('usage: house_check.py <scene.json> [--list]')
+    path = args[0]
     show = '--list' in sys.argv
     with open(path, encoding='utf-8') as f:
         d = json.load(f)
     ents = {e['id']: e for key in ('empties', 'boxes', 'models') for e in d.get(key, [])}
-    lay = next(e['id'] for e in ents.values() if e['name'] == 'Pack Layout')
+    lay = fh.first((e['id'] for e in ents.values() if e['name'] == 'Pack Layout'), 'Pack Layout')
     B = hf.bounds()
     memo = {}
 
@@ -85,6 +88,7 @@ def main():
         cx, cz = w[0][0] + mid[0], w[0][2] + mid[2]
         al, th = hf.qrot(w[1], (1, 0, 0)), hf.qrot(w[1], (0, 0, 1))
         wd = he[0] * 2
+        # looser than the builder's keep-out (forest_house Fit.zones): this flags only what really blocks the way
         hw, hd = wd / 2 + 0.05, 0.6
         pts = [(cx + al[0] * sa * hw + th[0] * sd * hd, cz + al[2] * sa * hw + th[2] * sd * hd)
                for sa in (-1, 1) for sd in (-1, 1)]

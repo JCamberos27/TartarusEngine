@@ -88,6 +88,8 @@ def build(ffmpeg, out='trailer.mp4', warmup=300):
 
 def main():
     a = sys.argv[1:]
+    if not a or a[0].startswith('--') or (a[-1] == '--size'):
+        sys.exit('usage: forest_trailer.py <out dir> [--size WxH]')
     out = os.path.abspath(a[0])
     size = a[a.index('--size') + 1] if '--size' in a else '1920x1080'
     os.makedirs(out, exist_ok=True)

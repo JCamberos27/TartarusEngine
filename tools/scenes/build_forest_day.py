@@ -27,7 +27,9 @@ def main():
         d = json.load(f)
     d.update(SETTINGS)
     d['sky'].update(SKY)
-    moon = next(e for e in d['empties'] if e['name'] == 'Moon' and e['parentId'] == -1)
+    moon = next((e for e in d['empties'] if e['name'] == 'Moon' and e['parentId'] == -1), None)
+    if moon is None:
+        sys.exit('build_forest_day: Forest.json has no root "Moon" light')
     moon['name'] = 'Sun'
     moon['Light'].update(SUN)
     s = k.Scene({})

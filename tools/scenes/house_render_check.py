@@ -38,7 +38,12 @@ def qmul(a, b):
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else os.path.join(REPO, 'build', 'house_render_check')
-    cap = int(sys.argv[sys.argv.index('--max') + 1]) if '--max' in sys.argv else 999
+    cap = 999
+    if '--max' in sys.argv:
+        i_ = sys.argv.index('--max') + 1
+        if i_ >= len(sys.argv):
+            sys.exit('house_render_check: --max needs a number')
+        cap = int(sys.argv[i_])
     with open(os.path.join(REPO, 'project', 'scenes', 'Forest.json'), encoding='utf-8') as f:
         d = json.load(f)
     ents = d['empties'] + d['models'] + d['boxes']

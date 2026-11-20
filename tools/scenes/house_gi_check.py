@@ -57,12 +57,14 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, 'build', 'house_gi_check')
     pk, rooms = hg.house_rooms()
     cams = cams_for(pk, rooms)
-    sc = json.load(open(os.path.join(SCN, 'Forest.json'), encoding='utf-8'))
+    with open(os.path.join(SCN, 'Forest.json'), encoding='utf-8') as f:
+        sc = json.load(f)
     for e in sc['empties']:
         if 'GI Volume' in e:
             e['GI Volume']['Bake File'] = 'scenes/none.gi'
     nogi = os.path.join(SCN, 'Forest_gicheck_off.json')
-    open(nogi, 'w', encoding='utf-8', newline='\n').write(json.dumps(sc, indent=2) + '\n')
+    with open(nogi, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(json.dumps(sc, indent=2) + '\n')
     os.environ.setdefault('TARTARUS_SHOT_SIZE', '640x360')
     shots = {}
     try:
