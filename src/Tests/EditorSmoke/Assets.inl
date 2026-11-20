@@ -765,7 +765,16 @@ void RegisterAssetsTests() {
                  X::SelectAsset(c.E, g_Text);
              }), Wait(10),
              ExpectTrue("it loaded as a Missing placeholder", [](Ctx& c) { const auto ma = c.A.LoadMaterial(g_Text); return ma && ma->Missing; }),
-             ExpectTrue("its inspector shows no material fields", [](Ctx&) { return Find(ByLabel("(none)", kInspector)) == nullptr; }), // the texture-map slots
+             // Positive first: the Inspector is up and showing this file (otherwise "no fields" passes trivially).
+             ExpectTrue("the Inspector shows the broken .mat", [](Ctx& c) {
+                 if (X::AssetKey(c.E) != g_Text) return false;
+                 for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                     if (w->Active && !w->Hidden && Contains(w->Name, kInspector) && !Contains(w->Name, "/")) return true;
+                 return false;
+             }),
+             ExpectTrue("its inspector shows no material fields", [](Ctx&) {
+                 return Find(ByLabel("(none)", kInspector)) == nullptr && Find(ByExact("##f", kInspector)) == nullptr; // texture slots, sliders
+             }),
              ExpectTrue("the file is untouched", [](Ctx&) { return ReadFileText(g_Text) == "{ not json"; }),
              Do("deselect and remove it", [](Ctx& c) {
                  X::Deselect(c.E);
@@ -794,6 +803,9 @@ void RegisterAssetsTests() {
         Until("it lists Props", [](Ctx&) { return Find(ByLabel("Props", kLibraryPanel)) != nullptr; }, 60),
         Shot("library", {kLibraryPanel}),
         Click(ByExact("##libsearch", kLibraryPanel)), Wait(3), TypeText("crate"), Wait(4),
+        Until("the search lists Props/Crate and not Props/Barrel", [](Ctx&) {
+            return Find(ByLabel("Props/Crate", kLibraryPanel)) != nullptr && Find(ByLabel("Props/Barrel", kLibraryPanel)) == nullptr;
+        }, 60),
         Click(ByLabel("Props/Crate", kLibraryPanel)), Wait(4),
         // The summary (a preview image, the counts) runs below the panel: its Import button is
         // under the image, so scroll the details pane to its end.
@@ -838,6 +850,8 @@ void RegisterAssetsTests() {
                  (sub ? " the subfolder" : "") + "; on disk: " + (FileExists(Dir()) ? "still there" : "gone"));
             return true;
         }, 1000000},
+        // Delete Folder only takes a library folder out of the browser (undoable); the files stay on disk.
+        ExpectTrue("still on disk", [](Ctx&) { return FileExists(Dir()); }),
         Do("delete it from disk and rescan", [](Ctx& c) {
             AX::Search(c.E).clear();
             std::error_code ec;
