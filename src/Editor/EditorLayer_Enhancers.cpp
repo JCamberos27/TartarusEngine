@@ -570,6 +570,17 @@ const std::string& EditorLayer::CurrentSceneKey() const {
     return s_Key;
 }
 
+void EditorLayer::TrackSceneKey() {
+    static std::string s_Key = ""; // nothing yet
+    const std::string key = CurrentSceneKey();
+    if (key == s_Key) return;
+    s_Key = key;
+    const std::string pathKey = m_CurrentScenePath.empty() ? std::string()
+                              : std::filesystem::path(m_CurrentScenePath).lexically_normal().generic_string();
+    if (!pathKey.empty() && key != pathKey && Enhancers::EnhancerUserState::Get().RekeyScene(pathKey, key))
+        Log::Info("Bookmarks and favorites of " + std::filesystem::path(pathKey).filename().string() + " now follow its GUID.");
+}
+
 // Every bookmark chip, tab and pin resolves its entity each frame: one order -> entity map, rebuilt when the
 // registry or its entity count changes, when a hit turns out stale (a renumber), or once a second as a backstop,
 // instead of a walk over every entity per lookup.
@@ -602,7 +613,9 @@ entt::entity EditorLayer::FindEntityByOrder(const World& world, int order) const
 
 entt::entity EditorLayer::ResolveDefaultParent(const World& world) const {
     const auto& dp = Enhancers::EnhancerUserState::Get().DefaultParents;
-    const auto it = dp.find(CurrentSceneKey());
+    const std::string key = CurrentSceneKey();
+    if (key.empty()) return entt::null; // an unsaved scene has none (every untitled scene would share one)
+    const auto it = dp.find(key);
     if (it == dp.end()) return entt::null;
     // Kept (not erased) when the entity is missing: an undo can bring it back.
     return FindEntityByOrder(world, it->second);
@@ -621,6 +634,10 @@ void EditorLayer::ToggleDefaultParent(World& world, entt::entity entity) {
     if (!o) return;
     auto& us = Enhancers::EnhancerUserState::Get();
     const std::string key = CurrentSceneKey();
+    if (key.empty()) {
+        Log::Warn("Default parent: save the scene first (an unsaved scene can't keep one).");
+        return;
+    }
     const auto it = us.DefaultParents.find(key);
     const auto* nm = world.Registry.try_get<NameComponent>(entity);
     const std::string name = nm && !nm->Name.empty() ? nm->Name : std::string("object");
@@ -665,8 +682,10 @@ Enhancers::EditorRef SceneRefFor(const std::string& path) {
 // fallback for a scene that had no .meta when it was starred.
 std::string ResolveScenePath(const Enhancers::EditorRef& r) {
     if (!r.Scene.empty()) {
-        const std::string p = AssetDatabase::PathForGuid(AssetGuid::FromString(r.Scene));
-        if (!p.empty()) return p;
+        const AssetGuid g = AssetGuid::FromString(r.Scene);
+        if (const std::string p = AssetDatabase::PathForGuid(g); !p.empty()) return p;
+        // Keyed by its path (saved before the scene had a .meta): the key is the path.
+        if (!g.IsValid() && std::filesystem::exists(std::filesystem::u8path(r.Scene))) return r.Scene;
     }
     return r.Path;
 }

@@ -1421,7 +1421,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                                      "tooltips, dialogs, undocked windows, viewport overlays). It adds the Objects, Properties and Library panels\n"
                                      "(Window \xE2\x96\xB8 Glass Workspace). Applies immediately.");
         }
-        if (prefs.EditorThemeId == 1) {
+        if (prefs.EditorThemeId == EditorSettings::kGlassTheme) {
             if (SettingsCheckbox("See-through window", &prefs.GlassSeeThroughWindow)) EditorSettings::Save();
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("The editor window itself is glass: the desktop shows through the panels, blurred,\n"
@@ -4013,6 +4013,7 @@ void EditorLayer::PostModuleDraw(World& world) {
     if (m_AssetsPtr) DrawFavoritesOverlay(world, *m_AssetsPtr);
     // Tabs & Headers: a docked panel tab's right-click colour menu (every panel has begun by now).
     DrawPanelTabStyleMenu();
+    TrackSceneKey();
     EditorSettings::Flush();
     // The Enhancer stores are whole JSON files (two of them team-shared and watched by the undo history): a
     // colour drag or a typed glob pattern marks them dirty every frame, so they are written when the widget is
