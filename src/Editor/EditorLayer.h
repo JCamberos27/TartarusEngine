@@ -65,6 +65,7 @@ struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
 struct Material;      // Material.h
 class ShaderAsset;    // ShaderAsset.h
 struct RegisteredComponent; // ComponentRegistry.h
+namespace SceneSerializer { struct ParsedSceneFile; } // SceneFileJson.h
 struct EditorFolderVisual;  // EditorModuleAPI.h
 namespace EditorSearch { struct ParsedAssetSearch; } // EditorSearch.h
 enum class ReflectAssetKind; // ComponentReflection.h
@@ -1750,7 +1751,9 @@ private:
     // Loads `path` as the active scene, resetting selection/undo state the same way the
     // File > Open... dialog does — shared so the Asset Browser's Scenes folder can open a
     // scene with one double-click instead of going through the OS file dialog.
-    void OpenScene(World& world, AssetLibrary& assets, const std::string& path);
+    // `parsed`: the file already parsed by BeginOpenScene (SceneSerializer::Load's own argument).
+    void OpenScene(World& world, AssetLibrary& assets, const std::string& path,
+                   const SceneSerializer::ParsedSceneFile* parsed = nullptr);
     // A user's scene open (EditorLayer_ScenePreload.cpp): the scene's models and materials load on the
     // asset workers first, then OpenScene runs from warm caches. `frame` frames the camera after.
     void BeginOpenScene(World& world, AssetLibrary& assets, const std::string& path, bool frame);
