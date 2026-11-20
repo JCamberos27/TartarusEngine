@@ -18,7 +18,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import house_gi as hg  # noqa: E402
 import house_lights as hl  # noqa: E402
+import house_model as hm  # noqa: E402
 import house_shots as hs  # noqa: E402
+import scene_kit as k  # noqa: E402
 
 REPO = hs.REPO
 SCN = os.path.join(REPO, 'project', 'scenes')
@@ -27,10 +29,6 @@ DARK_MARGIN = 2.0     # the dark neighbour, mean luminance (0..255) with GI minu
 # (lit room, its dark neighbour)
 PAIRS = [('living room', 'entrance hall'), ('kitchen-dining', 'entrance hall'), ('entrance hall', 'living room'),
          ('master bedroom', 'upstairs den'), ("child's bedroom", 'landing'), ('upstairs den', 'upstairs bathroom')]
-
-
-def W(lx, ly, lz):  # house-lights (pack) space -> world: Pack Layout under Abandoned House, turned 90 deg
-    return (lz + 1.0, ly - 0.485, -7.0 - lx)
 
 
 def cams_for(pk, rooms):
@@ -49,7 +47,7 @@ def cams_for(pk, rooms):
             else:
                 cam, tgt = (cx, r['floor'] + 1.6, b[4] + 0.5), (cx, r['floor'] + 1.0, b[5])
             name = f"{role}_{lit.replace(' ', '_').replace(chr(39), '')}"
-            cams.append((name, W(*cam), *hs.look(W(*cam), W(*tgt)), hl.ROOM_CIRCUITS[lit][0]))
+            cams.append((name, hm.to_world(cam), *k.look(hm.to_world(cam), hm.to_world(tgt)), hl.ROOM_CIRCUITS[lit][0]))
     return cams
 
 

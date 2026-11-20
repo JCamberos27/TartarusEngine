@@ -10,6 +10,7 @@
 import math
 
 import house_fit as hf
+import house_model as hm
 import scene_kit as k
 
 SWITCH_MODELS = 'assets/Props/Electrical/Models/'
@@ -46,16 +47,9 @@ CEILING = ('Lamp_chandelier', 'Lamp_ceiling_circle', 'Lamp_bedroom', 'Lamp_kitch
 PLUGGED = ('Lamp_table_A', 'Lamp_table_B', 'Lamp_stand', 'Lamp_floor', 'Lamp_wall_desk')
 
 
-def guid(repo, path):
-    import json
-    import os
-    with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
-        return json.load(f)['guid']
-
-
 class Wiring:
-    def __init__(self, s, lay, pk, repo, fh):
-        self.s, self.lay, self.pk, self.repo, self.fh = s, lay, pk, repo, fh
+    def __init__(self, s, lay, pk, repo):
+        self.s, self.lay, self.pk, self.repo = s, lay, pk, repo
         self.fit = pk.fit
         self.by_id = {e['id']: e for e in s.empties + s.models + s.boxes}
         self.g = s.empty('House Lights', lay, (0, 0, 0), static=True)
@@ -321,7 +315,7 @@ class Wiring:
         pid = s._next()
         plate = {'id': pid, 'order': pid, 'parentId': self.g, 'name': f'Light Switch {circuit}',
                  'position': [round(v, 4) for v in pos], 'rotation': k.euler_quat(yaw), 'scale': [1.0, 1.0, 1.0],
-                 'path': plate_path, 'pathGuid': guid(self.repo, plate_path), 'static': False, 'castShadows': 0,
+                 'path': plate_path, 'pathGuid': k.guid(self.repo, plate_path), 'static': False, 'castShadows': 0,
                  'collider': {'center': [0.005, 0.0, 0.0], 'friction': 0.6, 'halfExtents': [0.005, 0.057, 0.035],
                               'isTrigger': False, 'shape': 0},
                  'Light Switch': {'Circuit': circuit, 'Start On': start_on, 'Rocker': 'Rocker', 'Rocker Angle': 12.0,
@@ -329,7 +323,7 @@ class Wiring:
         rid = s._next()
         rocker = {'id': rid, 'order': rid, 'parentId': pid, 'name': 'Rocker', 'position': [0.0, 0.0, 0.0],
                   'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0], 'path': rocker_path,
-                  'pathGuid': guid(self.repo, rocker_path), 'static': False, 'castShadows': 0,
+                  'pathGuid': k.guid(self.repo, rocker_path), 'static': False, 'castShadows': 0,
                   'materials': [{'embedded': k.from_mat(self.repo, ROCKER_MAT, **ROCKER_GLOW)}],
                   'Light Circuit': {'Circuit': circuit, 'Glow': 1.0, 'Glow When Off': True}}
         s.models += [plate, rocker]
@@ -449,10 +443,10 @@ ROOM_NAMES = [
 ]
 
 
-def named_rooms(fit, floor_rects, fh):
+def named_rooms(fit, floor_rects):
     """Every room of both storeys: {'name', 'storey', 'floor', 'ceil', 'cells'} (unnamed ones 'room N')."""
     out = []
-    for floor, ceil, storey in ((fh.FLOOR_1, fh.CEIL_1, 'ground'), (fh.FLOOR_2, fh.CEIL_2, 'upstairs')):
+    for floor, ceil, storey in ((hm.FLOOR_1, hm.CEIL_1, 'ground'), (hm.FLOOR_2, hm.CEIL_2, 'upstairs')):
         for n, cells in enumerate(rooms(fit, floor_rects, floor)):
             have = {cell_key(x, z) for x, z in cells}
             name = next((nm for st, x, z, nm in ROOM_NAMES if st == storey and
@@ -578,17 +572,17 @@ LAMP_MAT = 'assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_Ho
 DISC_PREFAB = 'assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Props_interior/Lamp_ceiling_circle.prefab'
 
 
-def wire(s, lay, pk, repo, fh, notes):
+def wire(s, lay, pk, repo, notes):
     """The house's lights, fittings, switches and lamps. Returns the Wiring (for the porch)."""
-    w = Wiring(s, lay, pk, repo, fh)
+    w = Wiring(s, lay, pk, repo)
     fit = pk.fit
-    rooms_ = named_rooms(fit, fh.floor_rects(pk), fh)
+    rooms_ = named_rooms(fit, hm.floor_rects(pk))
     w.rooms = rooms_
     w.by_room = by_name = {r['name']: r for r in rooms_}
     by_circuit = {}
     fittings = {}
     for e in pk.props():
-        st = fh.stem(e)
+        st = hm.stem(e)
         if e['id'] in pk.gone or st not in FIT:
             continue
         fittings[e['id']] = st
@@ -600,14 +594,14 @@ def wire(s, lay, pk, repo, fh, notes):
         for j in w.subtree(i):
             e = w.scene_of(j)
             if e is not None and 'path' in e:
-                e['materials'] = [dict(fh.OFF)]
+                e['materials'] = [dict(hm.OFF)]
         w.n_dead += 1
 
     def bounds_of(room, p):
         """The light's room box (pack space) round point p, as Light > Bounds keys."""
         if room is None:          # the stairwell
             x0, x1, z0, z1 = STAIRWELL
-            y0, y1 = fh.FLOOR_1 - 0.05, fh.CEIL_2 + 0.05
+            y0, y1 = hm.FLOOR_1 - 0.05, hm.CEIL_2 + 0.05
         else:
             x0, x1, y0, y1, z0, z1 = room_box(room['cells'], (p[0], p[2]), fit, room['floor'], room['ceil'])
         return {'Bounds': True,
@@ -674,7 +668,7 @@ def wire(s, lay, pk, repo, fh, notes):
             w.on_circuit(i, circuit, FIT[st]['glow'] if i != red else 1.0)
             pos, _ = w.anchor(i, FIT[st])
             if i == red:
-                lit('Red Bulb', pos, dict(FIT[st], shadow=True), circuit, room, color=fh.RED, intensity=fh.RED_I,
+                lit('Red Bulb', pos, dict(FIT[st], shadow=True), circuit, room, color=hm.RED, intensity=hm.RED_I,
                     rng=6.0, extra=k.light_flicker(Mode=0, MinInterval=7.0, MaxInterval=20.0, Depth=0.85, Seed=31))
             elif st in ('Lamp_kitchen_A', 'Lamp_kitchen_B'):
                 mains.append(('pendant', pos))
@@ -735,7 +729,7 @@ def wire(s, lay, pk, repo, fh, notes):
             lit(f'Bounce {circuit}', ((box[0] + box[1]) / 2, room['ceil'] - 0.7, (box[4] + box[5]) / 2),
                 dict(FIT['Lamp_ceiling_circle'], shadow=False, spot=None), circuit, room,
                 intensity=round(FILL_I * w.circuit_I[circuit], 3), rng=round(min(reach, 7.0), 2),
-                color=fh.RED if red_fill else None, kelvin=None if red_fill else 3000.0)
+                color=hm.RED if red_fill else None, kelvin=None if red_fill else 3000.0)
         n0 = len(w.plates)
         for how in plates:
             w.place_plate(circuit, room, how, room['floor'], start_on)
@@ -782,9 +776,9 @@ def wire(s, lay, pk, repo, fh, notes):
             for j in w.subtree(i):
                 m = w.scene_of(j)
                 if m is not None and 'path' in m:
-                    m['materials'] = [{'embedded': k.from_mat(repo, LAMP_MAT, emissiveColor=list(fh.RED_GLOW),
-                                                              emissiveStrength=fh.RED_GLOW_S)}]
-        lit(f'{st} {circuit}', pos, f, circuit, room, extra=extra, color=fh.RED if red_room else None)
+                    m['materials'] = [{'embedded': k.from_mat(repo, LAMP_MAT, emissiveColor=list(hm.RED_GLOW),
+                                                              emissiveStrength=hm.RED_GLOW_S)}]
+        lit(f'{st} {circuit}', pos, f, circuit, room, extra=extra, color=hm.RED if red_room else None)
     notes.update({'circuits': n_circuits, 'house lights': w.n_lights, 'shadow-capable': w.n_shadow,
                   'switches': len(w.switches), 'dead fittings': w.n_dead})
     if w.unplaced:

@@ -5,14 +5,13 @@
 #   python tools/scenes/house_inventory.py <out.json> [<repo>]
 # The JSON feeds house_shots.py (cameras framed on each piece) and the review checklist.
 import json
-import math
 import os
 import sys
 
 import build_forest as bf
-import forest_house as fh
 import scene_kit as k
 import house_lights as hl
+import house_model as hm
 
 # Groups reviewed as a whole per room (the plan's section G): rubbish, leaves, decals, the yard's overgrowth.
 GROUPED = ('Rubbish', 'Damage', 'Overgrowth')
@@ -21,23 +20,15 @@ GROUPED = ('Rubbish', 'Damage', 'Overgrowth')
 def main():
     out = sys.argv[1]
     repo = os.path.abspath(sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), '..', '..'))
-    got = {}
-    add_house = fh.add_house
-
-    def capture(*a, **kw):
-        r = add_house(*a, **kw)
-        got['pk'] = r[0]
-        return r
-    fh.add_house = capture
     s, _ = bf.build(repo)
-    pk = got['pk']
+    pk = s.house_pack
     ents = s.empties + s.models + s.boxes
     by = {e['id']: e for e in ents}
     kids = {}
     for e in ents:
         kids.setdefault(e['parentId'], []).append(e)
 
-    rooms = hl.named_rooms(pk.fit, fh.floor_rects(pk), fh)
+    rooms = hl.named_rooms(pk.fit, hm.floor_rects(pk))
 
     # world transforms of the scene entities (position + yaw is enough for framing)
     def local(e):
@@ -64,13 +55,6 @@ def main():
     yard = next(e for e in s.empties if e['name'] == 'Yard')
     inv_lay = {v: k_ for k_, v in pk.remap.items()}       # scene id -> pack id
 
-    def pack_point(w):
-        """A world point back in pack space (to_world inverted)."""
-        a = math.radians(fh.HOUSE_YAW)
-        dx, dz = w[0] - fh.HOUSE_AT[0], w[2] - fh.HOUSE_AT[2]
-        return [fh.PACK_C[0] + math.cos(a) * dx - math.sin(a) * dz, w[1] - fh.HOUSE_AT[1] + fh.PACK_C[1],
-                fh.PACK_C[2] + math.sin(a) * dx + math.cos(a) * dz]
-
     def wbox(e):
         """The piece's world box from the fit's measured bounds (pack pieces), else a small box at its origin."""
         pid = inv_lay.get(e['id'])
@@ -78,7 +62,7 @@ def main():
         if not boxes and pid is not None:
             boxes = pk.fit.prop_boxes(pid)
         if boxes:
-            pts = [fh.to_world(p) for b in boxes for p in b.corners()]
+            pts = [hm.to_world(p) for b in boxes for p in b.corners()]
             return [round(min(p[a] for p in pts), 3) for a in range(3)] + \
                    [round(max(p[a] for p in pts), 3) for a in range(3)]
         p = world(e['id'])[0]
@@ -89,7 +73,7 @@ def main():
     def add(e, group, grouped=False):
         p = world(e['id'])[0]
         bx = wbox(e)
-        r = hl.room_of(rooms, pack_point([(bx[k] + bx[k + 3]) / 2 for k in range(3)]), 0.6)   # by its middle
+        r = hl.room_of(rooms, hm.from_world([(bx[k] + bx[k + 3]) / 2 for k in range(3)]), 0.6)   # by its middle
         rows.append({'id': e['id'], 'name': e['name'], 'group': group, 'grouped': grouped,
                      'room': r['name'] if r else ('porch/outside' if group != 'Yard' else 'yard'),
                      'pos': [round(v, 3) for v in p], 'box': bx, 'path': e.get('path', ''),
@@ -113,7 +97,7 @@ def main():
             rows[-1]['room'] = 'yard'
     data = {'rooms': [{'name': r['name'], 'storey': r['storey'], 'floor': r['floor'], 'ceil': r['ceil'],
                        'area': round(len(r['cells']) * hl.ROOM_CELL ** 2, 1),
-                       'centre': fh.to_world((sum(c[0] for c in r['cells']) / len(r['cells']), r['floor'],
+                       'centre': hm.to_world((sum(c[0] for c in r['cells']) / len(r['cells']), r['floor'],
                                               sum(c[1] for c in r['cells']) / len(r['cells'])))} for r in rooms],
             'pieces': rows}
     with open(out, 'w', encoding='utf-8') as f:

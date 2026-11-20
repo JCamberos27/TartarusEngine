@@ -20,26 +20,17 @@ import math
 import random
 import re
 
-import sys
-
 import house_fit as hf
 import house_lights
 import scene_kit as k
-from scene_kit import axis_q, first, qinv, qmul, qrot  # noqa: F401 (first: fh.first)
+from house_model import (CEIL_1, CEIL_2, FLOOR_1, FLOOR_2, HOUSE_AT, HOUSE_YAW, LOT_Y, PACK, PACK_C,
+                         RED_GLOW, RED_GLOW_S, floor_rects, stem)
+from scene_kit import axis_q, first, qinv, qmul, qrot, smoothstep  # noqa: F401 (first: fh.first)
 
-PACK = 'assets/Environments/SuburbNeighborhoodHousePack/'
 PROPS_IN, PROPS_OUT = PACK + 'Prefabs/Props_interior/', PACK + 'Prefabs/Props_exterior/'
 GROUND_P = PACK + 'Prefabs/Ground/'
 
-# Where the house goes: pack point PACK_C lands at HOUSE_AT, turned HOUSE_YAW (pack +X, the porch side, faces
-# world -Z: north, toward the clearing). Pack y 0.485 is the walls' pivot: their foundation runs 0.485 m below it,
-# the floors' top is 0.194 above it.
-LOT_Y = 0.0
-PACK_C = (-33.0, 0.485, -1.0)
-HOUSE_AT = (0.0, LOT_Y, 26.0)
-HOUSE_YAW = 90.0
-FLOOR_1, FLOOR_2 = 0.68, 3.59          # pack y of the two floors' top
-CEIL_1, CEIL_2 = 3.395, 6.305          # pack y of the two ceilings
+# Where the house goes, its floors and ceilings: house_model.py (pack space, shared with the house tools).
 
 # The lot (world x0, x1, z0, z1), eased flat; trees, rocks and scans are kept out of it.
 LOT = (-21.0, 21.0, 11.0, 46.0)
@@ -50,14 +41,6 @@ WALK_X = 1.0                            # the front walk's centre line: the gap 
 DRIVE = (-19.6, -15.6, 11.0, 25.6)      # the driveway (x0, x1, z0, z1)
 OUTER_DOORS = ((1.0, 24.0), (14.6, 26.5))   # the front and side doors (world x, z)
 PORCH_DECK = (-6.76, 8.76, 20.64, 24.52, 0.165)   # the front porch's deck (world x0, x1, z0, z1, top y)
-
-RED = (1.0, 0.035, 0.02)
-
-
-def smoothstep(a, b, x):
-    t = min(max((x - a) / (b - a), 0.0), 1.0)
-    return t * t * (3 - 2 * t)
-
 
 def lot_dist(x, z):
     """How far (x, z) is outside the lot (0 inside)."""
@@ -78,14 +61,6 @@ def in_lot(x, z, pad=0.0):
 
 def in_house(x, z, pad=0.0):
     return HOUSE_BOX[0] - pad <= x <= HOUSE_BOX[1] + pad and HOUSE_BOX[2] - pad <= z <= HOUSE_BOX[3] + pad
-
-
-def to_world(p):
-    """A pack-space point in the world."""
-    a = math.radians(HOUSE_YAW)
-    dx, dz = p[0] - PACK_C[0], p[2] - PACK_C[2]
-    return (HOUSE_AT[0] + math.cos(a) * dx + math.sin(a) * dz, HOUSE_AT[1] + p[1] - PACK_C[1],
-            HOUSE_AT[2] - math.sin(a) * dx + math.cos(a) * dz)
 
 
 def yaw_of(q):
@@ -150,7 +125,6 @@ class Pack:
 
 
 # --- the house itself -------------------------------------------------------------------------------------------
-OFF = {'guid': 'af7ac0342f5de963', 'path': PACK + 'Materials/M_Lamps_House_Off.mat'}
 DEAD_SCREEN = {}    # filled by add_house: the devices' material with the emission off
 
 
@@ -162,10 +136,6 @@ FIXED = ('Painting_wide', 'Painting_large', 'Painting_photo', 'Painting_small', 
          'To_towel_hanging', 'To_showercurtain', 'Kitcabinet_upper', 'Wooden_wallpilar', 'Clothcloset_with_wall',
          'Fireplace_withwall', 'Carpet_', 'To_toilet_shelf')
 STRUCTURE_SKIP = ('Floor_', 'Ceiling_', 'Porch_floor', 'Carpet', 'Roof', 'Stair_carpet')
-
-
-def stem(e):
-    return re.sub(r' \(\d+\)$', '', e['name'])
 
 
 class Fit:
@@ -718,22 +688,6 @@ def trash_house(pk, rng, notes):
     return broken
 
 
-def floor_rects(pk):
-    """Every floor tile as (x0, x1, z0, z1, top y) in pack space."""
-    out = []
-    for e in pk.named(r'Floor_(\d+|½)'):
-        m = re.match(r'Floor_([\d½]+)x_([\d½]+)x', e['name'])
-        if not m or e['kind'] != 'models' or e['id'] in pk.gone:
-            continue
-        a, b = (float(v.replace('½', '.5')) * 0.97 for v in m.groups())
-        pos, rot = pk.world(e['id'])
-        corners = [qrot(rot, c) for c in ((0, 0, 0), (a, 0, 0), (0, 0, -b), (a, 0, -b))]
-        xs = [pos[0] + c[0] for c in corners]
-        zs = [pos[2] + c[2] for c in corners]
-        out.append((min(xs), max(xs), min(zs), max(zs), round(pos[1] + 0.194, 3)))
-    return out
-
-
 # Clutter: (prefab, weight, how it lies, against a wall only)
 CLUTTER = [(PROPS_IN + 'Newspaper.prefab', 5, 'flat', False), (PROPS_IN + 'LP_magazine.prefab', 4, 'flat', False),
            (PROPS_IN + 'Book_A.prefab', 2, 'book', False), (PROPS_IN + 'Book_B.prefab', 2, 'book', False),
@@ -924,7 +878,7 @@ def stories(s, lay, pk, rng, g, placed, notes):
     if couch:
         cp, _ = pk.world(couch['id'])
         # the nearest free stretch of floor by a wall in the living room, long enough for a mattress
-        rooms_ = house_lights.named_rooms(fit, floor_rects(pk), sys.modules[__name__])
+        rooms_ = house_lights.named_rooms(fit, floor_rects(pk))
         cells = [(x, z) for r in rooms_ if r['name'] == 'living room' for x, z in r['cells']]
         cells = [c for c in cells[::2] if fit.near_wall(c[0], c[1], y, 0.8) and not fit.near_wall(c[0], c[1], y, 0.42)]
         cells.sort(key=lambda c: math.hypot(c[0] - cp[0], c[1] - cp[2]))
@@ -978,12 +932,7 @@ CRACK_TINT = [0.6, 0.56, 0.5]
 
 
 def decal(s, parent, name, pos, rot, asset, size, seed, opacity, tint=None, sort=2):
-    dc = {'Asset': asset, 'Size': [round(v, 3) for v in size], 'Seed': seed, 'Sort Order': sort,
-          'Opacity': round(opacity, 3), 'Affect Static': True, 'Affect Dynamic': False,
-          'Rotation Jitter': 0.0, 'Scale Jitter': 0.0, 'Random Flip': True}
-    if tint:
-        dc['Tint'] = list(tint)
-    i = s.empty(name, parent, pos, **{'Decal': dc})
+    i = s.empty(name, parent, pos, **{'Decal': k.decal(asset, size, seed, sort, opacity, tint, flip=True)})
     s.empties[-1]['rotation'] = [round(v, 6) for v in rot]
     return i
 
@@ -1179,8 +1128,7 @@ def grime(s, lay, pk, rng, notes):
     notes['decals'] = n
 
 
-RED_I, PORCH_I = 1.6, 1.3
-RED_GLOW, RED_GLOW_S = (1.0, 0.012, 0.006), 2.2   # a red fitting's glass: the bulb's, and the master bedroom's lamps
+PORCH_I = 1.3
 # Shadow slots the engine hands to the shadow-capable lights nearest the player each frame. They are cached (a face
 # redraws only when something moving is in it), so a still room costs next to nothing once it has drawn.
 POINT_SHADOWS = 4
@@ -1195,7 +1143,7 @@ def lights(s, lay, pk, repo, notes):
     red['materials'] = [{'embedded': k.from_mat(repo, PACK + 'Materials/M_Lamps_House.mat',
                                                 emissiveColor=list(RED_GLOW), emissiveStrength=RED_GLOW_S)}]
     red['castShadows'] = 0      # the bulb hangs in it: its own shade would print a dark disc on the ceiling round it
-    pk.wiring = house_lights.wire(s, lay, pk, repo, sys.modules[__name__], notes)
+    pk.wiring = house_lights.wire(s, lay, pk, repo, notes)
     g = pk.wiring.g
 
     # Candles burned down on the living room floor, in front of the couch: someone's been here.
@@ -1274,17 +1222,22 @@ def quiet_shadows(s, house, rule=QUIET):
     return n
 
 
+def prepare_pack(pk, rng, notes):
+    """The pack's edits before it goes in (house_gi.py rebuilds its rooms the same way): returns trash_house's broken."""
+    open_sealed_doors(pk, notes)
+    floor_the_stairwell(pk, notes)
+    clear_walls(pk, notes)
+    ease_side_door(pk, notes)
+    return trash_house(pk, rng, notes)
+
+
 def add_house(s, root, repo, pack_path, notes):
     """The house: the pack snapshot under 'Abandoned House' / 'Pack Layout', trashed and dressed."""
     pk = Pack(pack_path)
     rng = random.Random(301)
     DEAD_SCREEN.update(k.from_mat(repo, PACK + 'Materials/M_Devices_On.mat', emissiveColor=[0.0, 0.0, 0.0],
                                   emissiveStrength=0.0))
-    open_sealed_doors(pk, notes)
-    floor_the_stairwell(pk, notes)
-    clear_walls(pk, notes)
-    ease_side_door(pk, notes)
-    broken = trash_house(pk, rng, notes)
+    broken = prepare_pack(pk, rng, notes)
     house = s.empty('Abandoned House', root, HOUSE_AT, yaw=HOUSE_YAW, static=True)
     lay = s.empty('Pack Layout', house, (-PACK_C[0], -PACK_C[1], -PACK_C[2]), static=True)
     remap = {}

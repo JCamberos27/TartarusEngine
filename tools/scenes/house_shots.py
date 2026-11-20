@@ -17,19 +17,13 @@ import os
 import subprocess
 import sys
 
+import house_model as hm
 import scene_kit
 
 from PIL import Image, ImageDraw
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 EYE = 1.6
-
-
-def look(cam, target):
-    """Yaw, pitch (degrees, the engine camera's convention) from cam to target."""
-    d = [target[i] - cam[i] for i in range(3)]
-    h = math.hypot(d[0], d[2]) or 1e-6
-    return math.degrees(math.atan2(d[2], d[0])), math.degrees(math.atan2(d[1], h))
 
 
 def room_floor(inv, piece):
@@ -44,7 +38,7 @@ def piece_cams(inv, p, angles):
     c = [(lo[i] + hi[i]) / 2 for i in range(3)]
     size = max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.25)
     r = room_floor(inv, p)
-    floor = r['floor'] - 0.485 if r else lo[1]      # pack floor -> world (PACK_C y)
+    floor = hm.world_y(r['floor']) if r else lo[1]
     centre = r['centre'] if r else [c[0] + 3.0, c[1], c[2]]
     # from the piece toward the room's middle: its open side
     dx, dz = centre[0] - c[0], centre[2] - c[2]
@@ -75,7 +69,7 @@ def piece_cams(inv, p, angles):
 
 def room_cams(room):
     c = room['centre']
-    floor = room['floor'] - 0.485
+    floor = hm.world_y(room['floor'])
     out = [('mid', [c[0], floor + EYE, c[2]], [c[0] + 1.0, floor + EYE - 0.3, c[2]])]
     for k, (ox, oz) in enumerate(((1, 1), (-1, 1), (-1, -1), (1, -1))):
         cam = [c[0] + ox * 1.2, floor + EYE, c[2] + oz * 1.2]
@@ -86,7 +80,7 @@ def room_cams(room):
 def wall_cams(room):
     """From the room's middle, one view square onto each of its four walls (leak checks)."""
     c = room['centre']
-    y = room['floor'] - 0.485 + 1.4
+    y = hm.world_y(room['floor']) + 1.4
     return [(f'w{k}', [c[0], y, c[2]], [c[0] + dx * 3.0, y - 0.4, c[2] + dz * 3.0])
             for k, (dx, dz) in enumerate(((1, 0), (-1, 0), (0, 1), (0, -1)))]
 
@@ -199,13 +193,13 @@ def main():
             if rooms and r['name'] not in rooms:
                 continue
             for tag, cam, tgt in room_cams(r):
-                cams.append((f'{safe(r["name"])}_{tag}', cam, *look(cam, tgt)))
+                cams.append((f'{safe(r["name"])}_{tag}', cam, *scene_kit.look(cam, tgt)))
     if '--walls' in a:
         for r in inv['rooms']:
             if rooms and r['name'] not in rooms:
                 continue
             for tag, cam, tgt in wall_cams(r):
-                cams.append((f'{safe(r["name"])}_{tag}', cam, *look(cam, tgt)))
+                cams.append((f'{safe(r["name"])}_{tag}', cam, *scene_kit.look(cam, tgt)))
     if '--pieces' in a or ids:
         for p in inv['pieces']:
             if ids and p['id'] not in ids:
@@ -214,7 +208,7 @@ def main():
                             (groups and not any(p['group'].startswith(g) for g in groups))):
                 continue
             for tag, cam, tgt in piece_cams(inv, p, angles):
-                cams.append((f'{p["id"]}_{safe(p["name"])}_{tag}', cam, *look(cam, tgt)))
+                cams.append((f'{p["id"]}_{safe(p["name"])}_{tag}', cam, *scene_kit.look(cam, tgt)))
     if not cams:
         print('no cameras')
         return

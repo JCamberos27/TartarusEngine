@@ -9,6 +9,7 @@ import os
 import sys
 
 import house_shots as hs
+import scene_kit
 
 
 # (name, seconds, fov, [(camera, look-at), ...] spread evenly over the shot, [(seconds in, circuit, on), ...]);
@@ -69,7 +70,7 @@ def build(ffmpeg, out='trailer.mp4', warmup=300):
     for name, dur, fov, pts, cues in SHOTS:
         n = len(pts)
         for k, (p, tg) in enumerate(pts):
-            yaw, pitch = hs.look(p, tg)
+            yaw, pitch = scene_kit.look(p, tg)
             keys.append({'t': round(t + dur * k / (n - 1), 3), 'pos': p, 'yaw': round(yaw, 2), 'pitch': round(pitch, 2),
                          'fov': fov, **({'cut': True} if k == 0 and keys else {})})
         lights += [{'t': round(t + off, 3), 'circuit': c, 'on': on} for off, c, on in cues]
@@ -88,7 +89,7 @@ def main():
     os.environ['TARTARUS_SHOT_SIZE'] = size
     if '--preview' in a:
         os.environ['TARTARUS_SHOT_FOV'] = '50'
-        cams = [(f'{n}_{k}', p, *hs.look(p, tg)) for n, _, _, pts, _ in SHOTS for k, (p, tg) in enumerate(pts)]
+        cams = [(f'{n}_{k}', p, *scene_kit.look(p, tg)) for n, _, _, pts, _ in SHOTS for k, (p, tg) in enumerate(pts)]
         hs.run_engine(cams, out, True, 'Forest.json')
         print('preview stills ->', out)
         return

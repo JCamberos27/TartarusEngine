@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import forest_house as fh  # noqa: E402
 import scene_kit as k  # noqa: E402
 import house_fit as hf  # noqa: E402
+import house_model as hm  # noqa: E402
 
 GROUPS = ('House_01_Props', 'Rubbish', 'House Lights', 'Porch Light', 'Store Room', 'Over The Fireplace')
 SKIP = ('Carpet_', 'Curtains_')
@@ -105,7 +106,7 @@ def main():
         if depth > 0.02:
             probs['into wall'].append((depth, name[i], i))
         bottom = min(b.ylo() for b in bs)
-        floor = fh.FLOOR_1 if bottom < 3.0 else fh.FLOOR_2
+        floor = hm.FLOOR_1 if bottom < 3.0 else hm.FLOOR_2
         if bottom < floor - 0.03:
             probs['sunk'].append((floor - bottom, name[i], i))
         elif bottom > floor + 0.04:
