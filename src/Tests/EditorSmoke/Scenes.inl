@@ -136,6 +136,29 @@ bool GameShown(Ctx& c) {
 void RegisterScenesTests() {
     using namespace smoke_scenes;
 
+    // The same round trip for every component Add Component offers, one at a time on the scratch
+    // scene's Alpha (the shipped scenes don't carry them all).
+    Add("scenes: every component round-trips through an undo snapshot", {
+        FreshScene(), Wait(2),
+        Expect("each component loads back to the same bytes", [](Ctx& c) {
+            std::string bad, prev;
+            for (const RegisteredComponent& rc : ComponentRegistry::All()) {
+                if (!rc.Add || !rc.Has || !rc.Remove || !rc.Meta.Name) continue;
+                entt::entity alpha = ByName(c.W, "Alpha");
+                if (alpha == entt::null) return bad + " || no Alpha after " + prev + ", before " + rc.Meta.Name;
+                const bool had = rc.Has(c.W.Registry, alpha);
+                if (!had) rc.Add(c.W.Registry, alpha);
+                const std::string diff = SA::RoundTripDifference(c.W, c.A);
+                if (!diff.empty()) bad += std::string(bad.empty() ? "" : " || ") + rc.Meta.Name + ": " + diff;
+                alpha = ByName(c.W, "Alpha"); // the round trip rebuilt the registry
+                if (!had && alpha != entt::null && rc.Has(c.W.Registry, alpha)) rc.Remove(c.W.Registry, alpha);
+                prev = rc.Meta.Name;
+            }
+            return bad;
+        }),
+        FreshScene(), Wait(3),
+    });
+
     // Found when the tests are registered (the first editor frame), in a stable order.
     std::vector<fs::path> scenes;
     for (const std::string& dir : {ProjectPaths::Resolve("scenes"), EnginePaths::Resolve("tests/scenes")}) {
