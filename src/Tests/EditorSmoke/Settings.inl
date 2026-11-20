@@ -452,7 +452,7 @@ void RegisterSettingsTests() {
     Add("settings: every theme - Black Glass and its options, then back to Tartarus", Seq({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 0),
-        {ExpectTrue("starts on Tartarus", [](Ctx&) { return EditorSettings::Get().EditorThemeId == 0; }),
+        {ExpectTrue("starts on Tartarus", [](Ctx&) { return EditorSettings::Get().EditorThemeId == EditorSettings::kTartarusTheme; }),
          ExpectTrue("no glass options on Tartarus", [](Ctx&) { return Find(SettingsCheck("Frosted blur")) == nullptr; })},
         PickTheme(1),
         {Until("the glass options appear", [](Ctx&) { return Find(SettingsCheck("Frosted blur")) != nullptr; }),

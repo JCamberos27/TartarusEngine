@@ -990,7 +990,7 @@ void RegisterMotionDemo() {
                 c.Cam.Yaw = -90.0f;
                 c.Cam.Pitch = -10.0f;
                 c.Cam.Orthographic = false;
-                c.E.RequestEditorTheme(1); // Black Glass
+                c.E.RequestEditorTheme(EditorSettings::kGlassTheme); // Black Glass
             }),
             WaitSeconds(2.0), // the theme and its glass settle
             Move("start at the viewport", [](Ctx& c) {
