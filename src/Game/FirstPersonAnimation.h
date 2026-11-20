@@ -212,7 +212,7 @@ struct FirstPersonAnimationSet {
     std::string WeaponRoot;
     glm::vec3 WeaponMountRotation{0.0f};
     // The mount's translation, in the socket's frame (model metres), for a rig whose weapon root
-    // doesn't sit exactly on the socket - socket_probe prints it as the mount's `t`. The
+    // doesn't sit exactly on the socket. The
     // Remington 870's Main rides 1.6 cm off its CB_Gun. Zero for the AKS-74U.
     glm::vec3 WeaponMountOffset{0.0f};
     // Spare magazine: weapon bones whose mesh only shows while the arms' left hand is within
