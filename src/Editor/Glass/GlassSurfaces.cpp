@@ -102,16 +102,23 @@ int GlassifySolids(ImDrawList* dl, float amount) {
     return changed;
 }
 
+namespace {
+// A posed vertex: moved by the pose and faded by its alpha `a` (0..1, already clamped).
+void PoseVertex(ImDrawVert& v, const SurfacePose& pose, float a) {
+    v.pos = pose.Apply(v.pos);
+    if (a < 1.0f) {
+        const unsigned int src = (v.col & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT;
+        v.col = (v.col & ~IM_COL32_A_MASK) | ((ImU32)((float)src * a + 0.5f) << IM_COL32_A_SHIFT);
+    }
+}
+} // namespace
+
 void ApplyPose(ImDrawList* dl, const SurfacePose& pose, ImU32 anchored) {
     if (!dl || pose.Identity()) return;
     const float a = pose.alpha < 0.0f ? 0.0f : (pose.alpha > 1.0f ? 1.0f : pose.alpha);
     for (ImDrawVert& v : dl->VtxBuffer) {
         if (anchored != 0 && v.col == anchored) continue;
-        v.pos = pose.Apply(v.pos);
-        if (a < 1.0f) {
-            const unsigned int src = (v.col & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT;
-            v.col = (v.col & ~IM_COL32_A_MASK) | ((ImU32)((float)src * a + 0.5f) << IM_COL32_A_SHIFT);
-        }
+        PoseVertex(v, pose, a);
     }
     if (!pose.moveClip) return;
     for (ImDrawCmd& cmd : dl->CmdBuffer) {
@@ -129,11 +136,7 @@ void ApplyPoseInRect(ImDrawList* dl, const SurfacePose& pose, const ImRect& regi
     const float a = pose.alpha < 0.0f ? 0.0f : (pose.alpha > 1.0f ? 1.0f : pose.alpha);
     for (ImDrawVert& v : dl->VtxBuffer) {
         if (!r.Contains(v.pos)) continue;
-        v.pos = pose.Apply(v.pos);
-        if (a < 1.0f) {
-            const unsigned int src = (v.col & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT;
-            v.col = (v.col & ~IM_COL32_A_MASK) | ((ImU32)((float)src * a + 0.5f) << IM_COL32_A_SHIFT);
-        }
+        PoseVertex(v, pose, a);
     }
     for (ImDrawCmd& cmd : dl->CmdBuffer) {
         const ImRect clip(cmd.ClipRect.x, cmd.ClipRect.y, cmd.ClipRect.z, cmd.ClipRect.w);
