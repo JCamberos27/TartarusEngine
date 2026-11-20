@@ -15,7 +15,7 @@
 # stale .meta or prefab) is reported, never copied over the checkout's own - those live in git. Nothing
 # in the checkout is deleted.
 # Hashing ~16 GB takes a few minutes the first time, so each checkout file's sha256 is cached by size + last-write time in
-# .git\tartarus-asset-hashes.csv; later runs only hash files that changed. -SizeOnly skips hashing.
+# the checkout's git dir (tartarus-asset-hashes.csv, per worktree); later runs only hash files that changed. -SizeOnly skips hashing.
 # Exit codes: 0 every listed file present and matching; 1 files missing or different; 2 bad arguments.
 param([string]$Source, [switch]$VerifyOnly, [switch]$SizeOnly)
 
@@ -23,7 +23,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $project = Join-Path $root 'project'
 $manifest = Join-Path $project 'external_assets.csv'
-$rows = Import-Csv $manifest
+$rows = @(Import-Csv $manifest)  # @(): a one-row CSV is still a list (.Count)
 
 function Get-Sha256([string]$path) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -32,8 +32,21 @@ function Get-Sha256([string]$path) {
     finally { $fs.Dispose(); $sha.Dispose() }
 }
 
-# Checkout hash cache: rel path -> size|ticks|sha256. Kept in .git so it is per checkout and never committed.
+# Checkout hash cache: rel path -> size|ticks|sha256. Kept in the git dir so it is per checkout and never committed.
+# A worktree's .git is a file: ask git for its own git dir so it gets a cache too.
 $cacheFile = if (Test-Path -LiteralPath (Join-Path $root '.git') -PathType Container) { Join-Path $root '.git\tartarus-asset-hashes.csv' } else { $null }
+if (-not $cacheFile -and (Test-Path -LiteralPath (Join-Path $root '.git') -PathType Leaf)) { try {
+    $gp = & git -C $root rev-parse --git-path tartarus-asset-hashes.csv 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gp) {
+        $cacheFile = if ([System.IO.Path]::IsPathRooted($gp)) { $gp } else { Join-Path $root $gp }
+    }
+} catch { $cacheFile = $null } }
+# Drive clutter that is never a listed asset; keep in step with EXCLUDE_SUFFIXES in asset_manifest.py.
+$clutterSuffixes = @('.bak', '.recovery.json', 'desktop.ini', 'Thumbs.db', '.fetchpart')
+function Test-Clutter([string]$rel) {
+    foreach ($s in $script:clutterSuffixes) { if ($rel.EndsWith($s, [StringComparison]::OrdinalIgnoreCase)) { return $true } }
+    return $false
+}
 $cache = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::OrdinalIgnoreCase)
 $cacheDirty = $false
 if ($cacheFile -and (Test-Path -LiteralPath $cacheFile)) {
@@ -69,6 +82,8 @@ if (-not $VerifyOnly) {
     $added = 0; $updated = 0; $current = 0; $absent = 0
     $driveStale = New-Object System.Collections.Generic.List[string]
     $listed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    # try/finally: a copy that throws mid-run still keeps the hashes worked out so far.
+    try {
     foreach ($r in $rows) {
         $rel = $r.path -replace '/', '\'
         [void]$listed.Add($rel)
@@ -82,15 +97,19 @@ if (-not $VerifyOnly) {
         New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
         # Copy beside the file, check the copy's hash, then swap it in: the Drive file is read once.
         $part = "$dst.fetchpart"
-        Copy-Item -LiteralPath $src -Destination $part -Force
-        $p = Get-Item -LiteralPath $part
-        $h = Get-Sha256 $part
-        if ($h -ne $r.sha256) { Remove-Item -LiteralPath $part -Force; $driveStale.Add($r.path); continue }
-        Move-Item -LiteralPath $part -Destination $dst -Force
+        try {
+            Copy-Item -LiteralPath $src -Destination $part -Force
+            $p = Get-Item -LiteralPath $part
+            $h = Get-Sha256 $part
+            if ($h -ne $r.sha256) { $driveStale.Add($r.path); continue }
+            Move-Item -LiteralPath $part -Destination $dst -Force
+        } finally {
+            if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
+        }
         $cache[$rel] = "$($p.Length)|$($p.LastWriteTimeUtc.Ticks)|$h"; $cacheDirty = $true
         if ($d) { $updated++ } else { $added++ }
     }
-    Save-Cache
+    } finally { Save-Cache }
     Write-Host "$added copied (missing), $updated updated (different size or sha256), $current already current, $absent not on the Drive."
     if ($driveStale.Count) {
         $driveStale | Select-Object -First 10 | ForEach-Object { Write-Host "not copied (Drive copy doesn't match the CSV)  $_" }
@@ -99,7 +118,7 @@ if (-not $VerifyOnly) {
     # What else is on the Drive: reported so someone moves it off, never copied.
     $extra = Get-ChildItem -LiteralPath $from -Recurse -File -Force |
         ForEach-Object { $_.FullName.Substring($from.Length + 1) } |
-        Where-Object { $_ -ne 'external_assets.csv' -and $_ -notmatch '(^|\\)desktop\.ini$' -and -not $listed.Contains($_) }
+        Where-Object { $_ -ne 'external_assets.csv' -and -not (Test-Clutter $_) -and -not $listed.Contains($_) }
     if ($extra) {
         $extra | Select-Object -First 10 | ForEach-Object { Write-Host "not copied (not a listed asset)  $_" }
         Write-Host "$(@($extra).Count) file(s) on the Drive are not listed assets and were not copied; they belong in git or off the Drive."

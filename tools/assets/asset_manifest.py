@@ -27,7 +27,8 @@ CSV_REL = os.path.join('project', 'external_assets.csv')
 EXCLUDE_PREFIXES = (
     'project/assets/Characters/ybot/',  # a local Mixamo experiment no committed scene uses (Raw\Animations)
 )
-EXCLUDE_SUFFIXES = ('.bak', '.recovery.json', 'desktop.ini', 'Thumbs.db')
+# fetch-assets.ps1 keeps the same list ($clutterSuffixes); .fetchpart is its half-copied file.
+EXCLUDE_SUFFIXES = ('.bak', '.recovery.json', 'desktop.ini', 'Thumbs.db', '.fetchpart')
 
 
 def git(repo, *args):

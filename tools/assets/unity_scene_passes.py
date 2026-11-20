@@ -117,9 +117,9 @@ def dedupe_openables(out):
             twins.append(e)
         else:
             kept.append((e['path'], pos, rot, e['Openable']['Motion']))
-    out['models'] = [e for e in out['models'] if not any(e is t for t in twins)]
-    dropped = len(twins)
-    return dropped
+    gone = {id(t) for t in twins}
+    out['models'] = [e for e in out['models'] if id(e) not in gone]
+    return len(twins)
 
 
 def _walk(objs):
@@ -163,7 +163,6 @@ def spawn_on_terrain(conv, pack, out, keep):
 def scene_bounds(conv, scene):
     """World AABB of every model/box entity of an in-memory scene, by entity id (the engine's --scene-bounds on a temp copy
     whose names carry the id, since bounds come back in registry order)."""
-    import copy
     import shutil
     import tempfile
     tmp = tempfile.mkdtemp(prefix='unity_bounds_')
@@ -307,7 +306,6 @@ def settle_props(pack, out, b0, b1):
     (a box on a table) must follow that prop, which kept its size. The gap above the support scales with a building
     support and stays as is on a prop."""
     s = ARCH_SCALE[pack.name]
-    ents = out['models'] + out['boxes']
     ids = {e['id']: e for e in out['boxes'] + out['empties'] + out['models']}
     skip = {e['id'] for e in ids.values() if e['name'] in ('Player Spawn', 'Sun')}
     for e in ids.values():

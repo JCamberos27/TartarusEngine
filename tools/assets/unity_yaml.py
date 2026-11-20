@@ -6,6 +6,11 @@ import re
 
 _DOC = re.compile(r'^--- !u!(\d+) &(-?\d+)( stripped)?\s*$', re.M)
 _GUID = re.compile(r'^[0-9a-f]{32}$')
+# Numbers as Unity writes them. Python's int()/float() alone also take '1_2' (12), 'nan', 'inf' and ' 1 ', so a name
+# like 'm_Name: 1_2' would turn into a number.
+_INT = re.compile(r'^[-+]?\d+$')
+_FLOAT = re.compile(r'^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$')
+_SPECIAL = {'Infinity': float('inf'), '-Infinity': float('-inf'), 'NaN': float('nan')}  # Unity's own spellings
 _ESC = {'n': '\n', 't': '\t', 'r': '\r', '0': '\0', '"': '"', '\\': '\\', '/': '/'}
 
 
@@ -27,14 +32,11 @@ def _scalar(s):
         return re.sub(r'\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|.)', _unescape, s[1:-1])
     if _GUID.match(s):  # a guid, even one that reads as a number ('0000000000000000e000000000000000' is 0.0)
         return s
-    try:
+    if _INT.match(s):
         return int(s)
-    except ValueError:
-        pass
-    try:
+    if _FLOAT.match(s):
         return float(s)
-    except ValueError:
-        return s
+    return _SPECIAL.get(s, s)
 
 
 def _flow(s, i=0):
@@ -48,7 +50,12 @@ def _flow(s, i=0):
                 i += 1
             if i >= len(s) or s[i] == '}':
                 return out, i + 1
-            j = s.index(':', i)
+            j = s.find(':', i)
+            stop = min((k for k in (s.find(',', i), s.find('}', i)) if k >= 0), default=len(s))
+            if j < 0 or j > stop:  # a key with no ':' (malformed): keep it as null instead of failing the whole file
+                out[s[i:stop].strip()] = None
+                i = stop
+                continue
             key = s[i:j].strip()
             val, i = _flow(s, j + 1)
             out[key] = val
