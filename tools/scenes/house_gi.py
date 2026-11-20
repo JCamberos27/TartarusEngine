@@ -24,6 +24,7 @@ sys.path.insert(0, HERE)
 import forest_house as fh  # noqa: E402
 import house_lights as hl  # noqa: E402
 import house_model as hm  # noqa: E402
+import scene_kit as k  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
 SCENE = os.path.join(REPO, 'project', 'scenes', 'Forest.json')
@@ -266,8 +267,7 @@ def main():
             'position': [round((b[0] + b[1]) / 2, 3), round((b[2] + b[3]) / 2, 3), round((b[4] + b[5]) / 2, 3)],
             'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0]})
         nid += 1
-    with open(out_scene, 'w', encoding='utf-8', newline='\n') as f:
-        f.write(json.dumps(sc, indent=2) + '\n')
+    k.write_json(out_scene, sc)
     print('->', out_scene)
 
 
