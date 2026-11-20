@@ -6,7 +6,7 @@
 #include <random>
 #include <string>
 
-struct WeaponRecoilSettings;
+struct LegacyRecoilSettings;
 struct RecoilVectorCurve {
     Curve X=Curve::Line(0,0,1,0), Y=X, Z=X;
     glm::vec3 Evaluate(float t) const { return {X.Evaluate(t),Y.Evaluate(t),Z.Evaluate(t)}; }
@@ -37,7 +37,7 @@ struct RecoilAnimData {
     RecoilVectorCurve SemiRotCurve, SemiLocCurve, AutoRotCurve, AutoLocCurve;
     nlohmann::json ToJson() const;
     static bool FromJson(const nlohmann::json&,RecoilAnimData&,std::string* error=nullptr);
-    static RecoilAnimData FromLegacy(const WeaponRecoilSettings&);
+    static RecoilAnimData FromLegacy(const LegacyRecoilSettings&); // the retired tuning, converted (on load)
 };
 
 enum class RecoilFireMode { Semi, Burst, Auto };

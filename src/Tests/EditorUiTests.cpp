@@ -67,6 +67,8 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include <mutex>
 #include <set>
 #include <string>
+#include <future>
+#include <memory>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -1877,6 +1879,15 @@ void SetRunEndHook(std::function<void()> hook) {
     g_RunEndHook = std::move(hook);
 }
 
+// The last screenshot's PNG write. Encoding a full-window PNG took the test thread 100+ ms per shot (a
+// few hundred shots a run); it now runs beside the next frames, one at a time (PngWrite is serialized
+// anyway), and the summary waits for the last one.
+static std::future<void> g_ShotWrite;
+
+static void FinishShotWrite() {
+    if (g_ShotWrite.valid()) g_ShotWrite.get();
+}
+
 bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera& camera) {
     if (!g_Enabled) return true;
     if (g_Done) return true;
@@ -2050,6 +2061,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     if (g_Skipped) std::cout << ", " << g_Skipped << " filtered out";
     if (g_ShardCount > 1) std::cout << " (shard " << g_ShardIndex << "/" << g_ShardCount << ")";
     std::cout << std::endl;
+    FinishShotWrite(); // the report links every shot
     WriteReport();
     RunEndHook(); // also covers a teardown that later hangs and is cut short
     return true;
@@ -2063,14 +2075,19 @@ void AfterFrame(int fbWidth, int fbHeight) {
     std::vector<unsigned char> px((size_t)fbWidth * fbHeight * 4);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadPixels(0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-    std::vector<unsigned char> top(px.size());
+    auto shot = std::make_shared<std::vector<unsigned char>>(px.size());
+    std::vector<unsigned char>& top = *shot; // read below by the blank checks and by the PNG worker (neither writes it)
     for (int y = 0; y < fbHeight; ++y)
         std::memcpy(&top[(size_t)y * fbWidth * 4], &px[(size_t)(fbHeight - 1 - y) * fbWidth * 4], (size_t)fbWidth * 4);
     for (size_t i = 3; i < top.size(); i += 4) top[i] = 255;
     const std::filesystem::path out = std::filesystem::path(g_ShotDir) / (rel + ".png");
     std::error_code ec;
     std::filesystem::create_directories(out.parent_path(), ec);
-    PngWrite::ToFile(out.u8string(), fbWidth, fbHeight, 4, top.data(), fbWidth * 4);
+    FinishShotWrite();
+    g_ShotWrite = std::async(std::launch::async, [shot, path = out.u8string(), fbWidth, fbHeight] {
+        if (!PngWrite::ToFile(path, fbWidth, fbHeight, 4, shot->data(), fbWidth * 4))
+            std::cout << "[EditorTest] WARNING: could not write " << path << std::endl;
+    });
     if (g_ShotForLastReport && !g_Reports.empty()) {
         g_Reports.back().Shots.push_back(rel + ".png");
         g_ShotForLastReport = false;
