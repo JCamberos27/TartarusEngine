@@ -623,7 +623,10 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
         // just hasn't had its contents pruned yet on this pass (RemoveModel/etc. above already
         // ran, so by this point anything real that shouldn't survive is already gone). Silently
         // skipping instead of forcing it is the safe fallback if that assumption is ever wrong.
-        if (!folderPaths.count(f) && CanDeleteFolder(f)) DeleteFolder(f);
+        // A restore, not a user delete: OnFolderPathChanged is left out, so folder styles and bookmarks keyed
+        // by the folder survive an undo/redo that briefly drops it (and no Enhancers file write lands on
+        // the undo stack as a step of its own).
+        if (!folderPaths.count(f) && CanDeleteFolder(f)) EraseFolder(f);
     }
 }
 
@@ -763,12 +766,16 @@ bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
     return true;
 }
 
-void AssetLibrary::DeleteFolder(const std::string& folderPath) {
-    if (!CanDeleteFolder(folderPath)) return;
+void AssetLibrary::EraseFolder(const std::string& folderPath) {
     m_Folders.erase(std::remove(m_Folders.begin(), m_Folders.end(), folderPath), m_Folders.end());
     FolderIndexDirty();
     m_SavedFolders.erase(std::remove(m_SavedFolders.begin(), m_SavedFolders.end(), folderPath), m_SavedFolders.end());
     PersistFolders();
+}
+
+void AssetLibrary::DeleteFolder(const std::string& folderPath) {
+    if (!CanDeleteFolder(folderPath)) return;
+    EraseFolder(folderPath);
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
 
