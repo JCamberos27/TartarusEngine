@@ -336,12 +336,14 @@ bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
     // What left: destroyed (the slot is dropped) or lost its transform (kept as a Transform-less ancestor, like the
     // full walk keeps one, and recomposed with its subtree). A Transform-less ancestor isn't in the scan: its own
     // re-parenting is found here.
+    bool dropped = false;
     for (size_t s = 0; s < m_WorldTransformKeys.size(); ++s) {
         const entt::entity k = m_WorldTransformKeys[s];
         if (k == entt::null) continue;
         if (!Registry.valid(k)) {
             m_WorldTransformKeys[s] = entt::null;
             m_TransformMembershipChanged = true;
+            dropped = true;
             continue;
         }
         LocalSnapshot& snap = m_LocalSnapshots[s];
@@ -351,6 +353,17 @@ bool World::ApplyTransformStructureChanges(std::vector<entt::entity>& dirty) {
             dirty.push_back(k);
         } else if (!snap.HasTransform && parentOf(k) != snap.Parent) {
             dirty.push_back(k);
+        }
+    }
+    // A destroyed parent orphans its children without touching their hierarchy entries. The scan only re-checks
+    // parents when the structure signature moved, and a destroy balanced by a create in the same frame (registry
+    // destroy + a new transform entity) leaves it unchanged: re-check every cached slot's parent here instead, so the
+    // orphans are read as roots like the full walk reads them.
+    if (dropped) {
+        for (size_t s = 0; s < m_WorldTransformKeys.size(); ++s) {
+            const entt::entity k = m_WorldTransformKeys[s];
+            if (k != entt::null && m_LocalSnapshots[s].HasTransform && parentOf(k) != m_LocalSnapshots[s].Parent)
+                dirty.push_back(k);
         }
     }
     for (entt::entity e : dirty) {

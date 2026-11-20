@@ -484,7 +484,8 @@ void TestFrameLoads() {
 } // namespace
 
 // The world transform cache across small structure changes (what an outfit piece landing does: create + attach,
-// re-parent, destroy a subtree, a destroy straight through the registry, a transform removed and added back): every
+// re-parent, destroy a subtree, a destroy straight through the registry (also with a create the same frame), a
+// transform removed and added back): every
 // frame's cached matrices match a fresh compose, each moved or new one is reported changed, membership changes are
 // flagged, and none of these frames takes the full walk.
 void TestTransformCacheStructureChanges() {
@@ -529,9 +530,9 @@ void TestTransformCacheStructureChanges() {
     auto prune = [&] {
         live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !world.Registry.valid(e); }), live.end());
     };
-    for (int frame = 0; frame < 60; ++frame) {
+    for (int frame = 0; frame < 70; ++frame) {
         bool membership = false;
-        switch (frame % 6) {
+        switch (frame % 7) {
         case 0: { // a piece lands: created and attached under a live entity
             const entt::entity e = world.CreateEmptyEntity(randVec(), glm::vec3(0.0f), glm::vec3(1.0f), "Piece");
             world.AttachChildRaw(e, pick());
@@ -551,6 +552,19 @@ void TestTransformCacheStructureChanges() {
             for (entt::entity e : live)
                 if (!world.Registry.all_of<TransformComponent>(e)) world.Registry.emplace<TransformComponent>(e, randVec(), glm::vec3(0.0f), glm::vec3(1.0f));
             break;
+        case 6: { // a parent destroyed straight through the registry and a piece created the same frame: the pool
+                  // sizes and the hierarchy version balance, yet the parent's children are now roots
+            entt::entity parent = entt::null;
+            for (entt::entity e : live)
+                if (const auto* h = world.Registry.try_get<HierarchyComponent>(e); h && !h->Children.empty()) { parent = e; break; }
+            if (parent != entt::null) world.Registry.destroy(parent);
+            const entt::entity piece = world.CreateEmptyEntity(randVec(), glm::vec3(0.0f), glm::vec3(1.0f), "Piece");
+            world.Registry.emplace<HierarchyComponent>(piece); // as a loader does: no hierarchy version bump
+            live.push_back(piece);
+            prune();
+            membership = true;
+            break;
+        }
         }
         world.Registry.get_or_emplace<TransformComponent>(pick()).Position += glm::vec3(0.5f, 0.0f, 0.0f); // and one moves
         check(membership);
