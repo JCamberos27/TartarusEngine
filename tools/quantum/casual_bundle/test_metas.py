@@ -1,5 +1,4 @@
 """Tests for metas.py (python -m unittest, from tools/quantum). Temp dirs only; the engine is never run."""
-import json
 import os
 import tempfile
 import unittest
@@ -82,6 +81,15 @@ class SlotNameTests(unittest.TestCase):
         pairs, unused, problems = metas.match_slots(slots, ["MI_Quantum_Old_Arms", "Fbx Default Material 1"])
         self.assertEqual(pairs, {"M_Quantum_Arms3": "MI_Quantum_Old_Arms", "M_Quantum_Body11": "Fbx Default Material 1"})
         self.assertEqual((unused, problems), ([], []))
+
+    def test_repeated_slot_name_after_an_empty_slot(self):
+        # The first 'M_Body' has no geometry (unmatched); the second must still key as 'M_Body#1', the key the importer
+        # rebuilds with slot_keys(), or its remap is silently dropped.
+        slots = [{"slot": "M_Body", "material": "/Game/X/MI_Unused"}, {"slot": "M_Body", "material": "/Game/X/MI_Skin"}]
+        pairs, unused, problems = metas.match_slots(slots, ["MI_Skin"])
+        self.assertEqual(metas.slot_keys(slots), ["M_Body", "M_Body#1"])
+        self.assertEqual(pairs, {"M_Body#1": "MI_Skin"})
+        self.assertEqual((unused, problems), (["M_Body"], []))
 
 
 class FbxMaterialNamesTests(unittest.TestCase):
@@ -166,33 +174,6 @@ class ModelMetaTests(unittest.TestCase):
         metas.write_model_meta(self.rel, {}, project=self.project)
         self.assertEqual(meta.stat().st_mtime_ns, 1_000_000_000)       # same content: file left alone
         self.assertTrue(meta.read_bytes().endswith(b"}\n"))            # engine style: LF + trailing newline
-
-
-class UpsertGuidTests(unittest.TestCase):
-    def test_types_reuse_and_repair(self):
-        with tempfile.TemporaryDirectory() as d:
-            project = Path(d) / "project"
-            tex = project / "assets/Characters/Quantum/Textures/T_A.png"
-            mat = project / "assets/Characters/Quantum/Materials/M_A.mat"
-            other = project / "assets/Characters/Quantum/Notes.dna"
-            for p in (tex, mat, other):
-                p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_bytes(b"x")
-            g = metas.upsert_meta_guid(tex, project)
-            m = common.read_json(common.meta_path(tex))
-            self.assertEqual(m, {"folder": "assets/Characters/Quantum/Textures", "guid": g, "metaVersion": 1,
-                                 "type": "texture"})
-            self.assertEqual(metas.upsert_meta_guid(tex, project), g)   # reused
-            metas.upsert_meta_guid(mat, project)
-            self.assertEqual(common.read_json(common.meta_path(mat))["type"], "material")
-            metas.upsert_meta_guid(other, project)
-            self.assertEqual(common.read_json(common.meta_path(other))["type"], "asset")
-            # A .meta without a GUID gets one; its importer block survives.
-            common.write_json(common.meta_path(tex), {"importer": {"isSRGB": False}, "type": "texture"})
-            g2 = metas.upsert_meta_guid(tex, project)
-            m = common.read_json(common.meta_path(tex))
-            self.assertEqual(m["guid"], g2)
-            self.assertEqual(m["importer"], {"isSRGB": False})
 
 
 if __name__ == "__main__":

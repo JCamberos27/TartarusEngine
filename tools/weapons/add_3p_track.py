@@ -33,7 +33,9 @@ def convert(motion):
     out = third_person(motion["clip"]) if motion.get("clip") else {}
     for k, v in motion.items():
         if k == "children":
-            out["children"] = [dict(c, **third_person(c["clip"])) if c.get("clip") else dict(c) for c in v]
+            # Drop the first-person child's clipGuid: when the 3P clip has no .meta yet it must not keep the FP GUID.
+            out["children"] = [dict({ck: cv for ck, cv in c.items() if ck != "clipGuid"}, **third_person(c["clip"]))
+                               if c.get("clip") else dict(c) for c in v]
         elif k not in ("clip", "clipGuid"):
             out[k] = v
     return out

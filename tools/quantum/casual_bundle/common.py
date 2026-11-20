@@ -16,7 +16,7 @@ import csv
 import json
 import os
 import secrets
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import dataclass, fields, asdict
 from pathlib import Path
 
 # ----------------------------------------------------------------------------------------------- locations ---
@@ -50,7 +50,7 @@ def new_guid() -> str:
 
 
 def read_json(path: Path) -> dict:
-    with open(path, encoding="utf-8") as f:
+    with open(path, encoding="utf-8-sig") as f:      # tolerate a BOM, like metas._read_meta and refs
         return json.load(f)
 
 
@@ -124,11 +124,6 @@ COLOUR_SYNONYMS = {
     "Bege": "Beige", "Beje": "Beige", "Bordo": "Burgundy", "Grey": "Gray", "BlueLight": "Light_Blue",
     "DarkBlue": "Dark_Blue", "BlueDark": "Blue_Dark", "Linen": "Lines", "Casua": "Casual",
 }
-
-# Engine wardrobe slot folders under Models/Clothing/<Male|Female>/ (existing + the three new ones).
-SLOT_FOLDERS = ("Tops", "Outerwear", "Pants", "Shoes", "Bags", "Glasses", "Balaclava", "Accessories",
-                "Hair", "FacialHair", "Headwear")
-
 
 def load_manifest() -> dict:
     return read_json(EXPORT_MANIFEST)
