@@ -227,6 +227,27 @@ int AssetLibrary::AsyncInFlight() const {
     return (int)m_Async->Active.size();
 }
 
+std::string AssetLibrary::AsyncDebugDump() const {
+    if (!m_Async) return "(no loader)";
+    std::string out;
+    size_t queued = 0;
+    {
+        std::lock_guard<std::mutex> lk(m_Async->Mutex);
+        queued = m_Async->Queue.size();
+    }
+    out += "queue " + std::to_string(queued) + ", active " + std::to_string(m_Async->Active.size()) + "\n";
+    for (const auto& j : m_Async->Active) {
+        const char* k = j->K == AsyncJob::Kind::Model ? "model" : j->K == AsyncJob::Kind::Texture ? "tex" : "mat";
+        out += std::string("  ") + k + " done=" + (j->Done.load() ? "1" : "0") + " fin=" + (j->Finalized ? "1" : "0") +
+               " forget=" + (j->Forget ? "1" : "0") + " gen=" + std::to_string(j->Gen) +
+               " model=" + (j->ModelResult ? "1" : "0") + " texOk=" + (j->TexResult.Ok ? "1" : "0") +
+               " texPending=" + (j->TexPending ? "1" : "0") + " has=" +
+               (j->K == AsyncJob::Kind::Model ? (HasModel(j->Path) ? "1" : "0") : (HasTexture(j->Path) ? "1" : "0")) +
+               " " + j->Path + "\n";
+    }
+    return out;
+}
+
 namespace {
 AssetLibrary::AsyncHandle ReadyTicket() {
     auto t = std::make_shared<AssetLibrary::AsyncTicket>();

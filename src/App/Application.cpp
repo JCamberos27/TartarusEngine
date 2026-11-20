@@ -1633,6 +1633,8 @@ bool AppSession::Frame() {
                     s_stalledAt = OutfitSystem::LandedGeneration();
                     std::printf("[NpcTest] an outfit change's loads stalled (none done in 5 s, %d in flight): no more waiting for it\n",
                                 assets.AsyncInFlight());
+                    std::printf("[X31] %s", assets.AsyncDebugDump().c_str());
+                    std::fflush(stdout);
                     break;
                 }
             }
