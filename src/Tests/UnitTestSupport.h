@@ -96,3 +96,4 @@ void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests); // UnitTest
 void RegisterOutfitsTests(UnitTestSupport::TestList& tests); // UnitTests_Outfits.cpp
 void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonWeapons.cpp
 void RegisterCoreTests(UnitTestSupport::TestList& tests); // UnitTests_Core.cpp
+void RegisterAssetsTests(UnitTestSupport::TestList& tests); // UnitTests_Assets.cpp
