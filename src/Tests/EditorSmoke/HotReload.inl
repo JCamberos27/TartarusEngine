@@ -181,8 +181,7 @@ void RegisterHotReloadTests() {
                 std::error_code ec;
                 return !fs::exists(fs::path(path().string() + ".meta"), ec);
             }, 10),
-            Do("clean up", cleanup),
-        });
+        }, cleanup); // pass or fail: a scene left in project/scenes would become a scenes: test of its own
     }
 
     // ------------------------------------------------------------------ the real rebuild

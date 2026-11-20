@@ -79,15 +79,16 @@ Step HierExpectRestored(const char* what) {
         return now == g_Text ? std::string() : "tree is [" + now + "], expected [" + g_Text + "]";
     });
 }
-// Every Hierarchy test starts here: the fixture scene, no search text / type filter / sort.
-Step HierFresh() {
-    return Do("hierarchy: clear search, type filter and sort", [](Ctx& c) {
-        HX::ClearFilter(c.E);
-        EditorSettings::Get().HierarchyTypeFilterMask = 0;
-        EditorSettings::Get().HierarchySortMode = 0;
-        EditorSettings::Get().HierarchySortDesc = false;
-    });
+// No search text / type filter / sort. Every Hierarchy test starts with it (HierFresh); the search and
+// filter/sort tests also end with it as their Finally, so a failure there can't leave the next suite's
+// Hierarchy filtered.
+void HierReset(Ctx& c) {
+    HX::ClearFilter(c.E);
+    EditorSettings::Get().HierarchyTypeFilterMask = 0;
+    EditorSettings::Get().HierarchySortMode = 0;
+    EditorSettings::Get().HierarchySortDesc = false;
 }
+Step HierFresh() { return Do("hierarchy: clear search, type filter and sort", HierReset); }
 // Parents `child` under `parent` in code (set-up only).
 Step HierParent(const char* child, const char* parent) {
     return Do(std::string("parent ") + child + " under " + parent, [child, parent](Ctx& c) {
@@ -692,8 +693,7 @@ void RegisterHierarchyTests() {
         Key(ImGuiKey_A, ImGuiMod_Ctrl), Key(ImGuiKey_Backspace), Wait(2),
         Key(ImGuiKey_Enter), Wait(2),
         Until("cleared: the tree is back", [](Ctx& c) { return HX::Filter(c.E).empty() && HierVisible(c) == 3; }),
-        HierFresh(),
-    });
+    }, HierReset);
     Add("hierarchy: type filter popup (Lights) and sort popup (Name, Descending)", {
         FreshScene(), HierFresh(), Wait(2),
         Click(ByExact(ICON_FA_FILTER, kHierarchy)), Wait(2),
@@ -717,8 +717,7 @@ void RegisterHierarchyTests() {
             return got == "Gamma,Beta,Alpha" ? std::string() : "rows " + got;
         }),
         ExpectTrue("display sort only: sibling order untouched", [](Ctx& c) { return HierRootOrder(c.W) == "Alpha,Beta,Gamma"; }),
-        HierFresh(),
-    });
+    }, HierReset);
     Add("hierarchy: chevron, Expand all / Collapse all buttons and the E hover key", {
         FreshScene(), HierFresh(), HierParent("Gamma", "Alpha"), Wait(2), HierExpandAll(), Wait(3),
         Until("expanded: 3 rows", [](Ctx& c) { return HierVisible(c) == 3; }),

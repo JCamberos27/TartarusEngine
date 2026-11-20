@@ -529,13 +529,13 @@ void RegisterMenusTests() {
             for (Step& st : MenuClick("Window", "Hierarchy", MenuItem(opt.Item))) s.push_back(st);
             s.push_back(UntilGone(opt.Window));
         }
-        s.push_back(Do("panels back to their defaults", [](Ctx&) {
+        Add("menus: Window opens and closes every optional panel", s, [](Ctx&) {
+            // Pass or fail: the panels this test can leave on go back to their defaults.
             EditorSettings::Get().SceneShowStats = false;
             EditorSettings::Get().ShowPhysicsPanel = false;
             EditorSettings::Get().ShowAssetLibrary = false;
             EditorSettings::Save();
-        }));
-        Add("menus: Window opens and closes every optional panel", s);
+        });
     }
 
     Add("menus: Window > Script IDE and Physics HUD overlay", Seq({
@@ -650,7 +650,12 @@ void RegisterMenusTests() {
              Click(ByLabel("Delete?", "##Menu")),
              Until("deleted", [presetPath](Ctx&) { return !std::filesystem::exists(presetPath()); }),
              CloseMenus(), Wait(2)},
-        }));
+        }), [presetPath](Ctx&) {
+            // Pass or fail: no Smoke Layout preset left in the user's layouts folder.
+            ImGui::ClosePopupsExceptModals();
+            std::error_code ec;
+            std::filesystem::remove(presetPath(), ec);
+        });
     }
 
     // ---------------------------------------------------------------------------------- Help
