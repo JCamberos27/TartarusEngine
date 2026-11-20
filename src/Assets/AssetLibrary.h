@@ -94,7 +94,8 @@ public:
     struct MaterialExtraction { int Created = 0, Reused = 0; std::string Folder; };
     MaterialExtraction ExtractModelMaterials(const std::string& modelPath, bool onlyTextured);
     // The model's saved material name -> .mat path (project-relative) mapping; empty if none.
-    std::map<std::string, std::string> MaterialRemap(const std::string& modelPath) const;
+    // By reference into the cache (read once from the .meta): valid until the next remap change, rename or removal.
+    const std::map<std::string, std::string>& MaterialRemap(const std::string& modelPath) const;
     // Sets (or, with an empty `matPath`, removes) one material's entry in that mapping.
     void SetMaterialRemap(const std::string& modelPath, const std::string& materialName, const std::string& matPath);
     // Fills every empty slot of `slots` whose submesh's imported material has a remapped .mat.
@@ -114,11 +115,6 @@ public:
     // Flat path list parallel to Materials(), for AssetRefPathList.
     const std::vector<std::string>& MaterialPaths() const { return m_MaterialPaths; }
 
-    // Removes an asset from the browser/cache only — safe to call even while placed objects
-    // still reference it, since they hold their own shared_ptr (Model/Texture) or plain path
-    // string (Sound) that keeps working independently. It just means a future LoadModel/
-    // LoadTexture for that same path re-imports fresh rather than reusing this instance, and
-    // the entry stops appearing in the Asset Browser.
     // Scene switch: the cached models/materials/textures that existed before the load (`before`) and that
     // nothing but this library still holds are dropped, so the previous scene's assets don't pile up in
     // RAM/VRAM. Whatever the new scene (or a system) references is kept, so reloading a scene reloads nothing.
@@ -127,6 +123,11 @@ public:
     // `keepModels`: model paths a live entity instantiates from (their cached original must stay, InstantiateModel re-imports without it).
     // Only assets that an earlier scene load brought in are eligible - startup assets (player, weapons) never are.
     int ReleaseUnreferenced(const CacheKeys& before, const std::set<std::string>& keepModels); // returns how many assets were dropped
+    // Removes an asset from the browser/cache only — safe to call even while placed objects
+    // still reference it, since they hold their own shared_ptr (Model/Texture) or plain path
+    // string (Sound) that keeps working independently. It just means a future LoadModel/
+    // LoadTexture for that same path re-imports fresh rather than reusing this instance, and
+    // the entry stops appearing in the Asset Browser.
     void RemoveModel(const std::shared_ptr<Model>& model);
     void RemoveTexture(const std::shared_ptr<Texture>& texture);
     void RemoveSound(const std::string& path);
