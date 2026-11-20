@@ -94,3 +94,9 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
 
 // The flag table and the environment variables (Core/Env.h), for --help.
 std::string LaunchHelpText();
+
+// True for a run that opens a window nobody drives: every window mode but the plain editor (smoke, perf-bench,
+// npc-test, editor-tests, editor-shot, bake-gi), unless TARTARUS_SHOW=1 (or TARTARUS_EDITOR_TEST_SHOW=1). Its window
+// never shows or takes the focus, VSync is off, and everything still renders to its framebuffers. The editor (Weapon
+// Lab included) and the built game always show.
+bool KeepsWindowHidden(const LaunchOptions& o);

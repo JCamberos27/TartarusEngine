@@ -322,7 +322,7 @@ constexpr ImGuiID kMaterialPulse = 0x4D41544Cu;      // "MATL": a theme switch i
 
 // --- Theme switching -------------------------------------------------------------------------------
 
-bool EditorLayer::GlassThemeActive() const { return EditorSettings::Get().EditorThemeId == 1; }
+bool EditorLayer::GlassThemeActive() const { return EditorSettings::Get().EditorThemeId == EditorSettings::kGlassTheme; }
 
 GlassEditorState& EditorLayer::GlassState() {
     if (!m_Glass) m_Glass = std::make_unique<GlassEditorState>();
@@ -350,7 +350,7 @@ void EditorLayer::ReleaseGlass() {
 
 void EditorLayer::ApplyPendingTheme() {
     if (m_PendingThemeId < 0) return;
-    const int themeId = std::clamp(m_PendingThemeId, 0, 1);
+    const int themeId = std::clamp(m_PendingThemeId, EditorSettings::kTartarusTheme, EditorSettings::kGlassTheme);
     m_PendingThemeId = -1;
     EditorSettings& prefs = EditorSettings::Get();
     if (prefs.EditorThemeId == themeId) return;
@@ -358,14 +358,14 @@ void EditorLayer::ApplyPendingTheme() {
     if (!m_Headless) EditorSettings::Save(); // a headless run (smoke test) never writes prefs
     // Leaving Glass frees its state first: ReleaseGlass resets the motion runtime, which done after
     // ApplyThemeStyle also dropped the theme tween it had just started, so Glass -> Tartarus snapped.
-    if (themeId == 0) ReleaseGlass();
+    if (themeId == EditorSettings::kTartarusTheme) ReleaseGlass();
     m_ThemeSwitchTween = true; // ease from the old theme to the new one (GlassStyleMotion.h)
     ApplyThemeStyle();
     m_ThemeSwitchTween = false;
     ApplyGizmoAccent();
     // Into Glass: the compositor turns the panels' solid fills to glass from this frame on; it eases
     // that in over the same time as the style (GlassChromeFrameEnd), so they don't clear in one frame.
-    if (themeId == 1 && Glass::Motion().CategoryOn(Glass::MotionCategory::ThemeTweens))
+    if (themeId == EditorSettings::kGlassTheme && Glass::Motion().CategoryOn(Glass::MotionCategory::ThemeTweens))
         Glass::Motion().Pulse(kMaterialPulse, Glass::ThemeTween.durationMs * 0.001f);
     if (!m_Headless) EditorSound::Play(EditorSound::Event::ThemeSwitch);
 }
@@ -379,7 +379,7 @@ void EditorLayer::SetGlassThemeForTest(bool on) {
         if (!s_On) s_Saved = {p.GlassViewportHuds, p.GlassFrostedBlur, p.ShowGlassHierarchy, p.ShowGlassInspector, p.ShowGlassAssets};
         p.GlassViewportHuds = p.GlassFrostedBlur = true;
         p.ShowGlassHierarchy = p.ShowGlassInspector = p.ShowGlassAssets = true;
-        m_PendingThemeId = 1;
+        m_PendingThemeId = EditorSettings::kGlassTheme;
         s_On = true;
     } else {
         s_On = false;
@@ -391,7 +391,7 @@ void EditorLayer::SetGlassThemeForTest(bool on) {
         // Always back to Tartarus, even when the user's own prefs have Glass selected: the smoke
         // check is "switching off releases everything", which restoring "on" would never test.
         // A headless run never writes prefs, so the user's saved choice is untouched.
-        m_PendingThemeId = 0;
+        m_PendingThemeId = EditorSettings::kTartarusTheme;
     }
 }
 
