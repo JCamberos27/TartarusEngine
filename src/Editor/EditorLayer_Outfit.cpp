@@ -145,7 +145,8 @@ struct OutfitCtx {
     void ReadPieces() { pieces = OutfitSystem::Pieces(world, root); }
     void ReadWorn() {
         worn = pieces.find(ui.Slot);
-        const std::string current = worn != pieces.end() ? reg.get<OutfitPieceComponent>(worn->second).Item : std::string();
+        const auto* piece = worn != pieces.end() ? reg.try_get<OutfitPieceComponent>(worn->second) : nullptr;
+        const std::string current = piece ? piece->Item : std::string();
         wornItem = current.empty() ? nullptr : cat.Find(current);
     }
 };
@@ -230,6 +231,7 @@ void DrawOutfitIdentity(OutfitCtx& c) {
         if (EditorUIPrimitives::Segmented("##genderPills", &gender, labels, 2, nullptr, nullptr, EditorTheme::Px(96.0f))) {
             c.pushUndo("Change Gender");
             c.Report(OutfitSystem::SetGender(c.world, c.assets, c.root, (Wardrobe::Gender)gender));
+            c.ReadPieces(); // a slot with no cut for the new gender is destroyed
         }
     }
     // Randomize and the menu on the right.
@@ -245,6 +247,7 @@ void DrawOutfitIdentity(OutfitCtx& c) {
         c.ReportSound(OutfitSystem::Randomize(c.world, c.assets, c.root,
                                               (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count()),
                       EditorSound::Event::Randomize);
+        c.ReadPieces(); // Randomize can drop or replace pieces
     }
     ImGui::SameLine();
     if (EditorInternal::ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "Presets and tools")) { ScanPresets(); ImGui::OpenPopup("##outfitMenu"); }
@@ -262,6 +265,7 @@ void DrawOutfitIdentity(OutfitCtx& c) {
             ClickSound(EditorSoundEvents::Event::SwatchPick);
             c.pushUndo("Change Race");
             c.Report(OutfitSystem::SetRace(c.world, c.assets, c.root, race.Name));
+            c.ReadPieces();
         }
         const ImVec2 ctr(p.x + r + 2.0f, p.y + r + 2.0f);
         c.dl->AddCircleFilled(ctr, r, ImGui::GetColorU32(ImVec4(race.Tone.x, race.Tone.y, race.Tone.z, 1.0f)), 24);
