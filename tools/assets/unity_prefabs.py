@@ -16,7 +16,7 @@ import re
 import sys
 
 import unity_yaml as uy
-from import_model_library import standard_props, write_json, write_meta
+from import_model_library import read_json, standard_props, write_json, write_meta
 from unity_arch import ARCH_SCALE, SCALE_OVERRIDES, arch_class, arch_mesh, arch_rescale
 from unity_look import apply_look
 from unity_scene_passes import (AUTO_LOD, _walk, auto_lod, dedupe_openables, scene_bounds, settle_props, shut_ajar,
@@ -57,7 +57,7 @@ def unity_fileids():
         d = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'unity_fileids')
         for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
             if f.endswith('.json'):
-                _FILEIDS.update(json.load(open(os.path.join(d, f), encoding='utf-8')))
+                _FILEIDS.update(read_json(os.path.join(d, f)))
     return _FILEIDS
 
 
@@ -152,10 +152,10 @@ class Converter:
             idx = os.path.join(src_dir, 'terrain_index.json')
         if os.path.exists(idx):
             # same-named meshes are the same Polybrush copy of one tree LOD; the first export stands for them
-            ents = json.load(open(idx, encoding='utf-8'))
+            ents = read_json(idx)
             tidx = os.path.join(src_dir, 'terrain_index.json')  # TartarusDump.Terrains: a Unity Terrain as an OBJ grid
             if os.path.exists(tidx):
-                ents += json.load(open(tidx, encoding='utf-8'))
+                ents += read_json(tidx)
             ent = next((e for e in ents if e['name'] == name), None)
             if ent:
                 dst = os.path.join(dst_dir, ent['file'])
@@ -215,7 +215,7 @@ class Converter:
             src = os.path.join(self.pack.repo, 'project', *base.split('/'))
             stem, ext = os.path.splitext(src)
             dst = f'{stem}@{re.sub(r"[^A-Za-z0-9_]+", "_", node)}{ext}'
-            from unity_import import copy_if_changed
+            from import_model_library import copy_if_changed
             copy_if_changed(src, dst)
             meta = self.meta(base)
             rel = os.path.relpath(dst, os.path.join(self.pack.repo, 'project')).replace(os.sep, '/')
@@ -1037,7 +1037,7 @@ def write_scene(conv, path):
     find_rig(roots)
     roots = strip_skipped(pack, roots, stem)
     tpl_path = os.path.join(pack.repo, 'tools', 'scenes', 'sandbox_template.json')
-    tpl = json.load(open(tpl_path, encoding='utf-8'))
+    tpl = read_json(tpl_path)
     scene = {k: v for k, v in tpl.items() if k not in ('boxes', 'empties', 'models', '_comment')}
     keep = [e for e in tpl.get('empties', []) if e['name'] in ('Player Spawn', 'Sun', 'Player Body')]
     ids = {e['id'] for e in keep}

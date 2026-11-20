@@ -61,8 +61,7 @@ def main():
         if 'GI Volume' in e:
             e['GI Volume']['Bake File'] = 'scenes/none.gi'
     nogi = os.path.join(SCN, 'Forest_gicheck_off.json')
-    with open(nogi, 'w', encoding='utf-8', newline='\n') as f:
-        f.write(json.dumps(sc, indent=2) + '\n')
+    k.write_json(nogi, sc)
     os.environ.setdefault('TARTARUS_SHOT_SIZE', '640x360')
     shots = {}
     try:

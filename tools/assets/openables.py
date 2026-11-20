@@ -1,4 +1,5 @@
-# Which library pieces open, and how: the engine's Openable component (src/Game/Openable.h), for the scene generators.
+# Which library pieces open, and how: the engine's Openable component (src/Game/Openable.h), for import_model_library's
+# gallery.
 # A kit's assembled body lists its parts in kit_parts.json (written by assemble_kits.py), each a file that lines up at the
 # body's origin; a loose part (seated on its body by a generator) opens the way its name says.
 import json
