@@ -1267,7 +1267,8 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
             }
         }
         // Its directory under the project, worked out here on the scan's thread; the main thread only registers
-        // each distinct directory once when the scan lands (AddFolderPath).
+        // each distinct directory once when the scan lands (AddFolderPath). DiskDirOf relativizes here, so the
+        // memoized ProjectPaths::Relativize is warm for later main-thread lookups too.
         if (!f.MetaFolder) f.Folder = AssetLibrary::DiskDirOf(f.Path);
         if (IsLibraryKind(f)) LibraryGroupOf(library, f);
         files.push_back(std::move(f));
