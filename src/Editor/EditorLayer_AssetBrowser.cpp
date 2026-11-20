@@ -1103,6 +1103,7 @@ void EditorLayer::RefreshAssetBrowser() {
     m_AssetListingRefreshTimer = 0.0f;
     m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
     m_LibraryIndex.Load(); // asset_library.json edits show on Refresh
+    ++m_LibraryIndexGen;
     m_LibraryViewKey = (size_t)-1;
     Log::Info("Asset Browser refreshed - re-scanned the project folder, dropped thumbnail caches.");
 }
@@ -1124,10 +1125,17 @@ void EditorLayer::RefreshScenesListingIfNeeded() {
 
 void EditorLayer::RefreshLibraryView() {
     const auto& files = m_ProjectAssetIndex.files;
-    const size_t key = std::hash<const void*>{}(files.data()) ^ (files.size() * 1315423911u + m_LibraryIndex.Categories().size());
+    const size_t key = std::hash<const void*>{}(files.data()) ^ (files.size() * 1315423911u + m_LibraryIndexGen);
     if (key == m_LibraryViewKey) return;
     m_LibraryViewKey = key;
     m_LibraryItems.clear();
+    // The scan grouped its files by the rules it started with; after a Refresh reloaded them mid-scan, group
+    // here until the next scan lands (the glob rules cost ~30 ms over the project's ~2.8k placeables).
+    if (m_ProjectAssetIndex.filesLibraryGen != m_LibraryIndexGen) {
+        for (ProjectAssetFile& f : m_ProjectAssetIndex.files)
+            if (IsLibraryKind(f)) LibraryGroupOf(m_LibraryIndex, f);
+        m_ProjectAssetIndex.filesLibraryGen = m_LibraryIndexGen;
+    }
 
     // Each category's folder: its name under its parent's ("Asset Library/Architecture/Walls").
     std::unordered_map<std::string, std::string> catFolder;
@@ -1146,18 +1154,9 @@ void EditorLayer::RefreshLibraryView() {
     }
     for (size_t i = 0; i < files.size(); ++i) {
         const ProjectAssetFile& f = files[i];
-        if (f.Kind != Cell::Kind::Prefab && f.Kind != Cell::Kind::Decal && f.Kind != Cell::Kind::Hdri) continue;
-        const std::string rel = AssetLibraryIndex::ProjectRelative(f.Path);
-        const auto it = catFolder.find(m_LibraryIndex.CategoryOf(rel));
-        // Grouped by pack: the folder under assets/<Top>/ (a vendor pack, or a library's room set).
-        std::vector<std::string> segs;
-        for (size_t a = 0, b; a < rel.size(); a = b + 1) {
-            b = rel.find('/', a);
-            if (b == std::string::npos) b = rel.size();
-            segs.push_back(rel.substr(a, b - a));
-        }
-        const std::string pack = segs.size() > 3 ? segs[2] : segs.size() > 2 ? segs[1] : segs[0];
-        const std::string folder = (it != catFolder.end() ? it->second : otherFolder) + "/" + pack;
+        if (!IsLibraryKind(f)) continue;
+        const auto it = catFolder.find(f.LibraryCategory);
+        const std::string folder = (it != catFolder.end() ? it->second : otherFolder) + "/" + f.LibraryPack;
         folders.insert(folder);
         m_LibraryItems[folder].push_back(i);
     }
@@ -1217,10 +1216,28 @@ void EditorLayer::RefreshAnimationListingIfNeeded() {
     m_AnimationListingCache.valid = true;
 }
 
+bool EditorLayer::IsLibraryKind(const ProjectAssetFile& f) {
+    return f.Kind == Cell::Kind::Prefab || f.Kind == Cell::Kind::Decal || f.Kind == Cell::Kind::Hdri;
+}
+
+// Any thread: `library` is only read.
+void EditorLayer::LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetFile& f) {
+    const std::string rel = AssetLibraryIndex::ProjectRelative(f.Path);
+    f.LibraryCategory = library.CategoryOf(rel);
+    // Grouped by pack: the folder under assets/<Top>/ (a vendor pack, or a library's room set).
+    std::vector<std::string> segs;
+    for (size_t a = 0, b; a < rel.size(); a = b + 1) {
+        b = rel.find('/', a);
+        if (b == std::string::npos) b = rel.size();
+        segs.push_back(rel.substr(a, b - a));
+    }
+    f.LibraryPack = segs.size() > 3 ? segs[2] : segs.size() > 2 ? segs[1] : segs[0];
+}
+
 // Worker thread (m_ProjectAssetIndex): every model / texture / material / sound / prefab file
 // under `root`. Touches no editor or library state - the .meta's folder is read straight from the
 // file, and the main thread files each entry into the folder tree.
-std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(const std::string& root) {
+std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library) {
     namespace fs = std::filesystem;
     const auto kindOf = [](ProjectAssetFile& f) { return ProjectAssetKindOf(f); };
     std::vector<EditorLayer::ProjectAssetFile> files;
@@ -1253,6 +1270,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         // done here on the scan's thread, it lands as a memoized lookup (ProjectPaths::Relativize) instead of a
         // disk call per file in one frame.
         if (!f.MetaFolder) (void)ProjectPaths::Relativize(f.Path);
+        if (IsLibraryKind(f)) LibraryGroupOf(library, f);
         files.push_back(std::move(f));
     }
     // Drive files this checkout hasn't fetched: listed in external_assets.csv, not on disk. They get a
@@ -1270,6 +1288,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
             f.Key = AssetDatabase::PathKey(f.Path);
             f.Name = p.filename().string();
             f.Unfetched = true;
+            if (IsLibraryKind(f)) LibraryGroupOf(library, f);
             files.push_back(std::move(f));
         }
     }
@@ -1300,6 +1319,7 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
     bool replaced = false;
     if (index.scan.valid() && index.scan.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         index.files = index.scan.get();
+        index.filesLibraryGen = index.scanLibraryGen;
         for (ProjectAssetFile& f : index.files)
             f.Folder = f.MetaFolder ? assets.AddFolderPath(f.Folder) : assets.DiskFolderFor(f.Path);
         replaced = true;
@@ -1311,7 +1331,9 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
     if (!index.valid && !index.scan.valid()) {
         index.valid = true; // an invalidation while this runs starts another scan after it
         index.scanStarted = std::chrono::steady_clock::now();
-        index.scan = std::async(std::launch::async, ScanProjectAssetFiles, ProjectPaths::Root());
+        index.scanLibraryGen = m_LibraryIndexGen;
+        // The task gets its own copy of the rules (std::async copies its arguments).
+        index.scan = std::async(std::launch::async, ScanProjectAssetFiles, ProjectPaths::Root(), m_LibraryIndex);
     }
 
     // What the library lists, by PathKey - the index shows only the rest. Rebuilt when a list

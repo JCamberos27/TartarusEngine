@@ -2034,6 +2034,7 @@ private:
     // "Asset Library/<Category>[/<Sub>]/<Pack>" by asset_library.json. Rebuilt when the index changes.
     void RefreshLibraryView();
     std::unordered_map<std::string, std::vector<size_t>> m_LibraryItems; // folder -> m_ProjectAssetIndex.files
+    unsigned m_LibraryIndexGen = 0; // bumped on each m_LibraryIndex.Load: a scan grouped by older rules is regrouped
     size_t m_LibraryViewKey = (size_t)-1;
     void RefreshShadersListingIfNeeded();
     void RefreshAnimationListingIfNeeded();
@@ -2054,6 +2055,9 @@ private:
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
         bool Unfetched = false;  // an external_assets.csv row with no file on disk (AssetGridCell::unfetched)
+        // Library view placement (prefab / decal / hdri only), worked out on the scan's thread: the
+        // asset_library.json category id and the pack folder (LibraryGroupOf).
+        std::string LibraryCategory, LibraryPack;
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
     struct {
@@ -2061,6 +2065,7 @@ private:
         bool valid = false; // false = scan again (when the one in flight, if any, finishes)
         std::future<std::vector<ProjectAssetFile>> scan;
         std::chrono::steady_clock::time_point scanStarted;
+        unsigned scanLibraryGen = 0, filesLibraryGen = 0; // m_LibraryIndexGen the scan in flight / `files` grouped by
     } m_ProjectAssetIndex;
     // PathKeys of everything the library lists, rebuilt when its list sizes change.
     std::unordered_set<std::string> m_ListedAssetKeys;
@@ -2078,7 +2083,9 @@ private:
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
-    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root); // worker thread
+    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
+    static bool IsLibraryKind(const ProjectAssetFile& f); // placeable: listed under the Library view
+    static void LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetFile& f); // fills LibraryCategory/Pack
     static bool ProjectAssetKindOf(ProjectAssetFile& f); // sets f.Kind from its extension; false = not an asset
     bool m_UnfetchedDragNoted = false; // the "not fetched" note already given for this drag
     void InvalidateProjectAssetIndex() { m_ProjectAssetIndex.valid = false; }
