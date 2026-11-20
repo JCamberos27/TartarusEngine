@@ -159,24 +159,14 @@ struct RecoilAsset {
 // The weapon sway is the SwayModifier port (SwayModifier.h), applied by the presentation on the arms rig's IK pass.
 struct WeaponSwaySettings {
     bool Enabled = true;
-    bool UnityPort = true; // always true: the pre-port sway is gone (still read by the Inspector and the .fpsanim writer)
     SwayModifierSettings Unity;
 };
 
-// The gun bob itself is retired (weapon locomotion comes from the additive animation layer); its stride, sprint stride and
-// ease still clock the camera bob (WeaponCameraMotionSettings). Enabled and the curves are kept for the Inspector and
-// for round-tripping the .fpsanim, and do nothing at runtime.
+// The camera bob's clock (WeaponCameraMotionSettings): one cycle = one stride (two steps). The gun bob itself is retired
+// (weapon locomotion comes from the additive animation layer); old files' bob curves, scales and walkFullSpeed are ignored.
 struct WeaponBobSettings {
-    bool Enabled = false;
-    // One cycle = one stride (two steps). Curves keyed over 0..1 of a cycle: side, up (metres),
-    // roll (degrees).
     float WalkStride = 2.4f;       // metres per cycle
     float SprintStride = 3.4f;
-    FirstPersonCurve3 Walk;        // X side, Y up, Z roll
-    FirstPersonCurve3 Sprint;
-    float WalkFullSpeed = 3.5f;    // m/s at full amplitude
-    float HipScale = 1.0f;
-    float AdsScale = 1.0f;
     float Ease = 8.0f;             // 1/s fade in and out
 };
 

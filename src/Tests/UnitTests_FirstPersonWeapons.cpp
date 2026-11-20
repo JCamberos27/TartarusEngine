@@ -1381,12 +1381,12 @@ void TestWeaponProcedural() {
     std::string error;
     CHECK(WeaponProceduralSettings::FromJson(defaults.ToJson(), loaded, &error));
     CHECK(std::fabs(loaded.Recoil.Rotation.X.Evaluate(0.2f) - defaults.Recoil.Rotation.X.Evaluate(0.2f)) < 1e-4f);
-    CHECK(std::fabs(loaded.Bob.Sprint.Z.Evaluate(0.3f) - defaults.Bob.Sprint.Z.Evaluate(0.3f)) < 1e-4f);
+    CHECK(loaded.Bob.SprintStride == defaults.Bob.SprintStride && loaded.Bob.Ease == defaults.Bob.Ease);
     CHECK(loaded.StateOffsets.size() == defaults.StateOffsets.size() && loaded.IK.GunBone == "ik_hand_gun");
     WeaponProceduralSettings untouched = defaults;
     CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"recoil":{"duration":0}})"), untouched, &error));
     CHECK(error.find("duration") != std::string::npos);
-    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"bob":{"walk":{"x":[[0,"a"]]}}})"), untouched, &error));
+    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"breath":{"position":{"x":[[0,"a"]]}}})"), untouched, &error));
     CHECK(untouched.Recoil.Duration == defaults.Recoil.Duration); // a bad load changes nothing
     // Partial blocks keep everything they don't name.
     CHECK(WeaponProceduralSettings::FromJson(json::parse(R"({"lean":{"angle":20}})"), untouched, &error));
@@ -1394,7 +1394,7 @@ void TestWeaponProcedural() {
 
     // One layer at a time, everything else off, so each can be read in isolation.
     WeaponProceduralSettings s = defaults;
-    s.Sway.Enabled = s.Bob.Enabled = s.Breath.Enabled = s.Lean.Enabled = false;
+    s.Sway.Enabled = s.Breath.Enabled = s.Lean.Enabled = false;
     s.StateOffsets.clear();
     const auto run = [](WeaponProceduralState& st, const WeaponProceduralSettings& set, WeaponProceduralInput in,
                         float seconds) {
@@ -1523,7 +1523,6 @@ void TestWeaponProcedural() {
         WeaponProceduralSettings z = WeaponProceduralSettings::Defaults();
         z.Recoil.Duration = 0.0f;
         z.Bob.WalkStride = z.Bob.SprintStride = 0.0f;
-        z.Bob.WalkFullSpeed = 0.0f;
         z.Breath.Period = 0.0f;
         z.Locomotion.MinRate = 1.3f;
         z.Locomotion.MaxRate = 0.7f;
