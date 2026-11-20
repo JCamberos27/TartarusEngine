@@ -338,8 +338,6 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
             light.Shadow.NormalBias = s.value("normalBias", 1.0f);
             light.Shadow.Softness   = s.value("softness", 1.0f);
             light.Shadow.NearPlane  = s.value("nearPlane", 0.05f);
-            light.Shadow.Resolution = s.value("resolution", 0);
-            light.Shadow.UpdateMode = s.value("updateMode", 0);
         } else {
             light.Shadow.Enabled = legacyCast;
         }
