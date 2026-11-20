@@ -13,6 +13,7 @@ import json
 import math
 import os
 import re
+import sys
 
 import unity_yaml as uy
 from import_model_library import write_json, write_meta
@@ -94,11 +95,8 @@ class Converter:
         self.parent_off = False
         self.embedded = {}       # (scene, mesh name) -> engine model path or None
         self.terrain_mats = {}   # engine path of a terrain OBJ -> its material path
-        self.prefab_cache = {}   # unity prefab guid -> (roots, objects by fileID)
         self.mat_guids = {}      # engine mat path -> guid
-        self.model_guids = {}    # engine model path -> guid
         self.clips = {}          # unity .anim guid -> clip summary
-        self.slot_cache = {}     # engine model path -> engine slot material names
 
     # models ---------------------------------------------------------------------------------------------------
     def load_fbx(self, guids):
@@ -157,7 +155,6 @@ class Converter:
                 ents += json.load(open(tidx, encoding='utf-8'))
             ent = next((e for e in ents if e['name'] == name), None)
             if ent:
-                from unity_import import copy_if_changed
                 dst = os.path.join(dst_dir, ent['file'])
                 os.makedirs(dst_dir, exist_ok=True)
                 mtl = os.path.splitext(dst)[0] + '.mtl'
@@ -186,7 +183,7 @@ class Converter:
              '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
              '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.9, '_RoughnessMap': '',
              '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
-        prev, self.pack.cur = getattr(self.pack, 'cur', '?'), 'terrain ' + name
+        prev, self.pack.cur = self.pack.cur, 'terrain ' + name
         if ent.get('albedo') in self.pack.guids:
             p['_AlbedoMap'] = self.pack.texture(ent['albedo'], 'rgb', 'albedo')
         if ent.get('normal') in self.pack.guids:
@@ -942,9 +939,12 @@ def pack_files(pack, ext):
     return sorted(out)
 
 
-def guid_for_path(pack, path):
+def guid_for_path(path):
     with open(path + '.meta', encoding='utf-8', errors='replace') as f:
-        return re.search(r'^guid: (\w+)', f.read(4096), re.M).group(1)
+        m = re.search(r'^guid: (\w+)', f.read(4096), re.M)
+    if not m:
+        sys.exit(f'unity_prefabs: {path}.meta has no guid line')
+    return m.group(1)
 
 
 def strip_skipped(pack, roots, where):
@@ -982,12 +982,12 @@ SKIP_SCENES = {('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail')}
 
 def convert(pack, exe):
     conv = Converter(pack, exe)
-    fbx = [guid_for_path(pack, p) for p in pack_files(pack, '.fbx')]
+    fbx = [guid_for_path(p) for p in pack_files(pack, '.fbx')]
     conv.load_fbx(fbx)
     for g in fbx:  # every model, used by a prefab or not
         conv.model_entity_path(g)
     for p in pack_files(pack, '.mat'):
-        pack.material(guid_for_path(pack, p))
+        pack.material(guid_for_path(p))
     for p in pack_files(pack, '.prefab'):
         roots, _, _ = conv.parse_file(p)
         roots = strip_skipped(pack, roots, os.path.basename(p))

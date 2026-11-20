@@ -81,7 +81,7 @@ def main():
         m['scenario'] = rn.group('scenario') if rn else stem
         for l in lines:
             s = SUMMARY.match(l)
-            if s and 'wall' not in m:
+            if s and 'wall_s' not in m:  # first summary line wins (multi-scene logs)
                 m.update(result=s['result'], rendered=int(s['rendered']), wall_s=float(s['wall']), fps=int(s['fps']),
                          ms_per_frame=round(1000.0 * float(s['wall']) / max(1, int(s['rendered'])), 2),
                          unfocused=int(s['unfocused']), cause=(s['cause'] or '').strip())

@@ -3,7 +3,12 @@
 #   python tools/gen_smoke_decals.py tests/smoke-scenes/smoke_decals.json
 #   python tools/gen_smoke_decals.py tests/smoke-scenes/smoke_decals_stress.json --stress
 import json, random, sys
-STRESS = "--stress" in sys.argv[2:]
+# Flag and output path in any order. Writes scene formatVersion 2 on purpose: the engine migrates it on load
+# (SceneApply / SceneComponentJson), and the committed scenes are this output.
+STRESS = "--stress" in sys.argv[1:]
+_paths = [a for a in sys.argv[1:] if a != "--stress"]
+if len(_paths) != 1: sys.exit("usage: gen_smoke_decals.py <out.json> [--stress]")
+OUT = _paths[0]
 A = "assets/Test/Decals/DA_Test_Grid.decal"
 def decal(i, name, pos, rot=(0,0,0), size=(0.5,0.5,0.25), seed=0, sort=0, static=True, dynamic=True, jit=0.0):
     return {"name": name, "id": i, "parentId": -1, "order": i, "position": list(pos), "rotation": list(rot), "scale": [1,1,1],
@@ -58,7 +63,7 @@ if STRESS:
              "rotation": [0, 0, round(rng.uniform(0, 360), 1)], "scale": [1, 1, 1],
              "Decal": {"Asset": A, "Size": [w, w, 8.0], "Seed": k, "Sort Order": k % 8}}
         scene["empties"].append(e)
-    with open(sys.argv[1], "w", newline="\n") as f:
+    with open(OUT, "w", newline="\n") as f:
         json.dump(scene, f, separators=(",", ":"))
         f.write("\n")
     print(4096, "decals")
@@ -83,7 +88,7 @@ scene["empties"].append(decal(nid, "StaticOnlyOnDynamic", (-3, 0.5, 1.5), rot=(0
 scene["empties"].append(decal(nid, "OnTransparent", (3, 1.0, 1.8), size=(0.6, 0.6, 0.4))); nid += 1
 # Floor decal facing up (+Z out of the surface = world +Y).
 scene["empties"].append(decal(nid, "FloorDecal", (0, 0.0, 1), rot=(-90,0,0), size=(1.5, 1.5, 0.3))); nid += 1
-with open(sys.argv[1], "w", newline="\n") as f:
+with open(OUT, "w", newline="\n") as f:
     json.dump(scene, f, indent=1)
     f.write("\n")
 print(nid - 10, "decals")

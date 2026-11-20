@@ -269,6 +269,18 @@ def guid():
             return g
 
 
+def find_blender():
+    """The newest Blender under Program Files (by version number: 4.10 is newer than 4.2), else 'blender' on PATH."""
+    import glob
+    found = glob.glob(r'C:\Program Files\Blender Foundation\*\blender.exe')
+    version = lambda p: [int(n) for n in re.findall(r'\d+', os.path.basename(os.path.dirname(p)))]
+    return max(found, key=version) if found else 'blender'
+
+
+# Blender runs a --python script and exits 0 even when the script raised; this makes an exception exit 1.
+BLENDER_SCRIPT_ARGS = ['-b', '--factory-startup', '--python-exit-code', '1', '--python']
+
+
 def glob_raw(raw, pattern):
     import glob
     return sorted(glob.glob(os.path.join(raw, pattern.replace('/', os.sep))))

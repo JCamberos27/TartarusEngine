@@ -184,6 +184,40 @@ class FetchAssetsTests(unittest.TestCase):
             code, out = self._run(repo, '-VerifyOnly', '-SizeOnly')
             self.assertEqual(code, 0, out)
 
+    def test_worktree_keeps_its_own_hash_cache(self):
+        # A git worktree's .git is a file: the cache goes in that worktree's git dir, so the second run hashes nothing.
+        # Drive clutter (Thumbs.db, *.bak) is not reported as an unlisted asset.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            main, tree, drive = root / 'main', root / 'tree', root / 'Tartarus Assets'
+            subprocess.run([GIT, 'init', '-q', str(main)], check=True)
+            (main / 'README').write_text('x')
+            git = [GIT, '-C', str(main), '-c', 'user.name=t', '-c', 'user.email=t@t']
+            subprocess.run(git + ['add', 'README'], check=True)
+            subprocess.run(git + ['commit', '-qm', 'init'], check=True)
+            subprocess.run(git + ['worktree', 'add', '-q', str(tree)], check=True)
+            self.assertTrue((tree / '.git').is_file())
+            (tree / 'tools/assets').mkdir(parents=True)
+            shutil.copy(Path(__file__).with_name('fetch-assets.ps1'), tree / 'tools/assets/fetch-assets.ps1')
+            (tree / 'project/assets/Audio').mkdir(parents=True)
+            (drive / 'Used/project/assets/Audio').mkdir(parents=True)
+            data = b'WAVE'
+            with (tree / 'project/external_assets.csv').open('w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['path', 'size', 'sha256'])
+                writer.writerow(['assets/Audio/a.wav', len(data), hashlib.sha256(data).hexdigest()])
+            (drive / 'Used/project/assets/Audio/a.wav').write_bytes(data)
+            (drive / 'Used/project/assets/Audio/Thumbs.db').write_bytes(b'x')
+            (drive / 'Used/project/assets/Audio/old.wav.bak').write_bytes(b'x')
+
+            code, out = self._run(tree, '-Source', str(drive))
+            self.assertEqual(code, 0, out)
+            self.assertNotIn('not a listed asset', out)
+            code, out = self._run(tree, '-VerifyOnly')
+            self.assertEqual(code, 0, out)
+            self.assertIn('(0 hashed, the rest cached)', out)
+            self.assertFalse((main / '.git/tartarus-asset-hashes.csv').exists())  # the worktree's own, not main's
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -30,7 +30,7 @@
 # Every run is hidden (the engine's default for harness runs; -Show sets TARTARUS_SHOW=1 to watch) at unlocked FPS (TARTARUS_UNLOCKED_FPS=1), muted unless -Sound.
 # Release is a GUI-subsystem build, so each run is a Start-Process -PassThru + WaitForExit() with stdout redirected to
 # its log. Each npc run gets NPC_TEST_TRACE=<TraceDir>\<scenario>[_<k>] (default <LogDir>\traces): testbed and labloco
-# write trace.csv there, and labloco's one check counts the traced frames, so it fails without it.
+# write trace.csv there (the checks pass without it; the trace is for reading a failure).
 # Logs land in work\mm_smoke\<timestamp>\ (git-ignored). Prints a pass/fail table; exit code 1 on any failure.
 # -AllowErrors: a run whose only failure is "N new log error(s)", every one of them matching this regex, is PASS* (and
 # doesn't fail the script). For a known broken local asset, never a default: e.g. -AllowErrors 'worklight_hum_1|T_Spider_AO'.

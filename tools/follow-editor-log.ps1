@@ -24,8 +24,9 @@ function Write-NewLines {
             if ($end -lt 0) { return } # wait for a whole line
             $script:pos += [Text.Encoding]::UTF8.GetByteCount($text.Substring(0, $end + 1))
             foreach ($line in ($text.Substring(0, $end) -split "`r?`n")) {
-                if ($line -match '^\[(error|fatal)') { Write-Host $line -ForegroundColor Red }
-                elseif ($line -match '^\[warn') { Write-Host $line -ForegroundColor Yellow }
+                # Editor.log lines start with the time ("12:34:56 [error] ...", Log.cpp WriteFileLine).
+                if ($line -match '^(\S+ )?\[error\]') { Write-Host $line -ForegroundColor Red }
+                elseif ($line -match '^(\S+ )?\[warn\]') { Write-Host $line -ForegroundColor Yellow }
                 else { Write-Host $line }
             }
         } finally { $fs.Dispose() }
