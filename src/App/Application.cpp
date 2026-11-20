@@ -543,6 +543,7 @@ private:
             npcTest = std::make_unique<NpcTest>(opt.npcTestScenario);
             FirstPersonPresentation::FixRandomSeed(1); // the same recoil and shake patterns every run
         }
+        if (opt.perfBenchMode && !opt.smokeShotsDir.empty() && std::getenv("TARTARUS_X32")) FirstPersonPresentation::FixRandomSeed(1);
     }};
     NpcTest::BloodView npcTestBlood; // what the blood scenario reads of the blood each frame
     Step step39{[&] {
@@ -1614,7 +1615,8 @@ bool AppSession::Frame() {
     // on a frame that followed the machine's load, so no two runs matched). It waits only while the loads progress: a
     // change whose loads stall (5 s with none finishing - a file that never loads) stops the waiting until an outfit
     // change lands again, and that change lands whenever it can, as in Play.
-    if (opt.npcTestMode && playing && OutfitSystem::AnyPending()) {
+    static const bool s_x32 = opt.perfBenchMode && !opt.smokeShotsDir.empty() && std::getenv("TARTARUS_X32");
+    if ((opt.npcTestMode || s_x32) && playing && OutfitSystem::AnyPending()) {
         static unsigned s_stalledAt = ~0u; // the landed generation the last stall happened at
         if (OutfitSystem::LandedGeneration() != s_stalledAt) {
             // Progress: one more of the waiting changes' own loads done (not the library's in-flight count, which a

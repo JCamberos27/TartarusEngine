@@ -189,6 +189,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                                glm::angleAxis(std::atan2(-std::cos(yaw), -std::sin(yaw)), glm::vec3(0.0f, 1.0f, 0.0f)));
         }
         if (firstPersonBody.OutfitChanged(world)) { // an outfit piece changed in Play: take the new pieces
+            std::printf("[X32] body rebuilt (outfit) at t=%.4f\n", Time::UnscaledTimeSinceStartup());
             firstPersonBody.Stop(world);
                     firstPersonBody.Start(world, player);
         }
