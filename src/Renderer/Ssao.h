@@ -1,11 +1,13 @@
 #pragma once
+#include "FullscreenPass.h"
+
 #include <glm/glm.hpp>
 #include <vector>
 
 class Shader;
 
 // Screen-space ambient occlusion (PR15). Owns:
-//   - A depth-only FBO for the camera pre-pass (filled by main.cpp using the shadow shader).
+//   - A depth-only FBO for the camera pre-pass (filled by ViewPipeline or copied from SceneRenderer's depth pre-pass).
 //   - A half-resolution RG16F raw occlusion FBO written by Compute() (occlusion + view z).
 //   - A full-resolution R8 blurred occlusion FBO written by Blur() (a depth-aware upsample) —
 //     this is what the model shader reads.
@@ -40,7 +42,7 @@ public:
     void Blur(Shader& blurShader);
 
     // Final blurred R8 occlusion texture. Bind as uSSAOMap (unit 15) before drawScene.
-    unsigned int OcclusionTexture() const { return m_BlurColor; }
+    unsigned int OcclusionTexture() const { return m_Blur.Texture(); }
 
     // True only when every owned FBO created AND validated complete (audit #358). Callers must
     // gate both the SSAO passes and the model shader's uSSAOMap read on this.
@@ -49,17 +51,15 @@ public:
     int  Height()  const { return m_Height; }
 
 private:
-    unsigned int m_DepthFbo  = 0, m_DepthTex  = 0;
-    unsigned int m_SsaoFbo   = 0, m_SsaoColor = 0;
-    unsigned int m_BlurFbo   = 0, m_BlurColor = 0;
-    unsigned int m_NoiseTex  = 0;
-    unsigned int m_Vao       = 0;
+    unsigned int m_DepthFbo = 0, m_DepthTex = 0;
+    ColorTarget  m_Raw;  // half resolution RG16F: occlusion + view z
+    ColorTarget  m_Blur; // full resolution R8, linear: what the model shader samples
+    unsigned int m_NoiseTex = 0;
 
     std::vector<glm::vec3> m_Kernel;
     unsigned int m_KernelUploadedTo = 0; // program the kernel uniforms were last set on (#160)
 
     int m_Width = 0, m_Height = 0;
-    int m_HalfWidth = 0, m_HalfHeight = 0; // the raw occlusion's size
     glm::mat4 m_Proj{1.0f};                // Compute()'s projection, for Blur()'s view depths
     bool m_Valid = false; // all FBOs validated complete this Create() (audit #358)
 

@@ -1,8 +1,10 @@
 #pragma once
 
+#include "FullscreenPass.h"
+
 // Captures the resolved opaque scene color into a separate RGBA16F texture with a full mip chain
 // so the _TRANSMISSION refraction lobe can sample it with roughness-blurred LODs.
-// The texture is (re)allocated lazily on the first CopyFrom() call and on resize.
+// The texture is (re)allocated lazily on the first CopyFrom() call and on resize; the copy is a blit.
 class OpaqueColorCopy {
 public:
     OpaqueColorCopy() = default;
@@ -14,11 +16,9 @@ public:
     // srcTex must be a GL_TEXTURE_2D; width/height is the resolved image size.
     void CopyFrom(unsigned int srcTex, int width, int height);
 
-    unsigned int Texture() const { return m_Tex; }
+    unsigned int Texture() const { return m_Copy.Texture(); }
 
 private:
-    unsigned int m_Tex     = 0;
-    unsigned int m_ReadFbo = 0;
-    unsigned int m_DrawFbo = 0;
-    int m_Width = 0, m_Height = 0;
+    ColorTarget  m_Copy;        // RGBA16F, full mip chain, trilinear
+    unsigned int m_ReadFbo = 0; // the source attached each call (the caller's texture may be reallocated)
 };

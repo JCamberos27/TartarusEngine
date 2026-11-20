@@ -1,4 +1,6 @@
 #pragma once
+#include "FullscreenPass.h"
+
 #include <memory>
 
 class Shader;
@@ -29,8 +31,6 @@ public:
 private:
     bool EnsureCreated();
     std::unique_ptr<Shader> m_Rcas, m_Upscale;
-    unsigned int m_Vao = 0;
-    unsigned int m_SharpTex = 0, m_SharpFbo = 0;
-    int m_SharpW = 0, m_SharpH = 0;
+    ColorTarget m_Sharp; // the RCAS output at the internal resolution
     bool m_Failed = false;
 };
