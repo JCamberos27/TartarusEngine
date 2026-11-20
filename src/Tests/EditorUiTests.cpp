@@ -1003,11 +1003,13 @@ std::function<bool(Ctx&, ImVec2&)> AtPoint(std::function<ImVec2(Ctx&)> p) {
 std::vector<Step> ClickHere(int holdFrames = 6) {
     return {MouseButton(0, true), Wait(holdFrames), MouseButton(0, false)};
 }
-std::vector<Step> Cat(std::initializer_list<std::vector<Step>> parts) {
+// The parts in order, as one step list.
+std::vector<Step> Cat(std::vector<std::vector<Step>> parts) {
     std::vector<Step> out;
-    for (const auto& p : parts) out.insert(out.end(), p.begin(), p.end());
+    for (auto& p : parts) for (auto& st : p) out.push_back(std::move(st));
     return out;
 }
+Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
 
 void RegisterMotionDemo() {
     Add("motion demo", Cat({
