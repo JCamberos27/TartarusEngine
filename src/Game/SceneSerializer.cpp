@@ -281,6 +281,12 @@ std::string SceneSerializer::WithLibraryState(const std::string& scene, const st
     }
 }
 
+// The keys SaveToString(world, assets) writes that Save() doesn't: the undo snapshot's marker and the
+// AssetLibrary state that lives in .meta files / the session (AppendAssetLibraryJson's metadata half).
+// UnitTests_Editor checks that a snapshot stripped of these and given Save()'s library half is
+// Save()'s output byte for byte, with every optional key present, so a new undo-only key fails there.
+constexpr const char* kUndoOnlyKeys[] = {"hasAssetLibrarySnapshot", "assetFolders", "removedDiskFolders", "assetMeta"};
+
 std::function<bool()> SceneSerializer::PrepareSaveFromSnapshot(std::string snapshot, const AssetLibrary& assets,
                                                               const std::string& path) {
     auto library = std::make_shared<json>(json::object());
@@ -293,7 +299,8 @@ std::function<bool()> SceneSerializer::PrepareSaveFromSnapshot(std::string snaps
             text->clear();
             text->shrink_to_fit();
             if (!root.is_object()) throw std::runtime_error("the snapshot isn't a JSON object");
-            for (const char* k : kLibraryKeys) root.erase(k); // the undo-only half
+            for (const char* k : kUndoOnlyKeys) root.erase(k);
+            for (const char* k : kLibraryKeys) root.erase(k); // the library half comes from the live library below
             for (auto& [k, v] : library->items()) root[k] = v;
             WarnNonPortablePaths(root, ""); // audit #364, as Save() does
             out = root.dump(2);
