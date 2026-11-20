@@ -734,6 +734,46 @@ void TestQuaternionTransformStorage() {
     std::filesystem::remove(backupPath, ec);
 }
 
+// An undo/redo snapshot carries every asset's folder, name, labels and import settings. Restoring one whose block
+// matches the live library skips the per-asset re-apply (it went through each .meta); a changed one still restores.
+void TestUndoSnapshotSkipsUnchangedAssetMeta() {
+    const auto file = TempDir() / "undo-meta-sound.wav";
+    std::error_code ec;
+    std::filesystem::remove(std::filesystem::path(file.string() + ".meta"), ec);
+    CHECK(AtomicFile::WriteBytes(file, std::string("RIFF"), true));
+    // A temp folder is outside the project, where EnsureGuid won't write .meta files: provide one.
+    CHECK(AtomicFile::WriteBytes(std::filesystem::path(file.string() + ".meta"),
+                                 json({{"guid", AssetGuid::Generate().ToString()}, {"type", "audio"}}).dump(), true));
+    const std::string path = file.string();
+    World w;
+    AssetLibrary a;
+    a.RegisterSound(path);
+    a.SetDisplayName(path, "Before");
+    const std::string snapshot = SceneSerializer::SaveToString(w, a);
+    auto metaName = [&] {
+        try { return json::parse(AssetDatabase::ReadMetaFields(path)).value("displayName", std::string()); }
+        catch (...) { return std::string(); }
+    };
+    CHECK(metaName() == "Before");
+    // The .meta changes on disk while the library still has the snapshot's name: an undo of a scene edit leaves it.
+    CHECK(AssetDatabase::MergeMetaFields(path, json{{"displayName", "OnDisk"}}.dump()));
+    CHECK(SceneSerializer::LoadFromString(w, a, snapshot));
+    CHECK(a.DisplayName(path) == "Before");
+    CHECK(metaName() == "OnDisk");
+    // A rename since the snapshot: undo takes it back, in the library and in the .meta.
+    a.SetDisplayName(path, "After");
+    CHECK(SceneSerializer::LoadFromString(w, a, snapshot));
+    CHECK(a.DisplayName(path) == "Before");
+    CHECK(metaName() == "Before");
+    // Labels added since the snapshot (a key the snapshot doesn't have): undo drops them, as ClearMetadataOnly did.
+    a.SetLabels(path, {"w5"});
+    CHECK(SceneSerializer::LoadFromString(w, a, snapshot));
+    CHECK(a.Labels(path).empty());
+    CHECK(a.DisplayName(path) == "Before");
+    std::filesystem::remove(file, ec);
+    std::filesystem::remove(std::filesystem::path(path + ".meta"), ec);
+}
+
 // The editor's scene open parses the file once (SceneSerializer::ReadSceneFile) and hands that to
 // Load: Load uses it as it is while the file is unchanged, and reads the file again once it isn't.
 void TestSceneLoadTakesParsedFile() {
@@ -1308,6 +1348,7 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"PlayerAcceleration", TestPlayerAcceleration});
     tests.push_back({"NearestEuler", TestNearestEuler});
     tests.push_back({"QuaternionTransformStorage", TestQuaternionTransformStorage});
+    tests.push_back({"UndoSnapshotSkipsUnchangedAssetMeta", TestUndoSnapshotSkipsUnchangedAssetMeta});
     tests.push_back({"SceneLoadTakesParsedFile", TestSceneLoadTakesParsedFile});
     tests.push_back({"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis});
     tests.push_back({"SpinSystemsAboutDiagonalAxis", TestSpinSystemsAboutDiagonalAxis});
