@@ -1,116 +1,39 @@
 // #173 - headless unit tests: `TartarusEngine.exe --unit-tests`.
 //
-// Runs before any window, GL context or audio device exists, so it works on a CI runner with no
-// GPU (unlike --smoke-test). Almost everything here is pure C++: undo deltas,
-// GUIDs, atomic file writes, texture-cache keys, material JSON robustness, the component
-// registry, the Animator Controller, asset identity / GUID-following references and the project
-// file watcher (#132). Each CHECK prints on failure; the run returns the number of failed checks (0 = pass).
-//
-// The one exception is PhysicsWorldSync (#201), which stands up a real PhysX world. PhysX needs
-// no GL, and that check previously lived only in --smoke-test, which CI runs with
-// continue-on-error for want of a GPU - so it never gated anything. It runs last, and shuts the
-// PhysX core back down when it is done.
+// The runner: every topic registers its tests from its own UnitTests_<Topic>.cpp (declared in
+// UnitTestSupport.h); this file holds the CHECK counters, the private temp folder and the run loop.
+// Runs before any window, GL context or audio device exists, so it works on a CI runner with no GPU.
+// Each CHECK prints on failure; the run returns the number of failed checks (0 = pass).
 //
 // Deliberately no test framework dependency: a CHECK macro and a list of functions is all this
 // needs, and it keeps the engine's third-party surface unchanged.
-#include "TimeService.h"
-#include "UnitTestSupport.h"
-#include "../Game/FirstPersonMovementInput.h"
 #include "UnitTests.h"
+#include "UnitTestSupport.h"
 
-#include "AnimatorController.h"
-#include "AnimatorLint.h"
-#include "RootMotion.h"
-#include "FirstPersonBody.h"
-#include "WeaponJankMeter.h"
-#include "FirstPersonBodyContract.h"
-#include "Curve.h"
-#include "IK.h"
-#include "FirstPersonWeaponWizard.h"
-#include "ClipAnalysis.h"
-#include "FirstPersonAnimation.h"
-#include "WeaponPrefab.h"
-#include "FirstPersonAdsCarry.h"
-#include "AudioEngine.h"
-#include <set>
-#include "Log.h" // #178 stack traces
-#include "InputMap.h"
-#include "AssetDatabase.h"
-#include "AssetGuid.h"
 #include "Components.h"
-#include "AtomicFile.h"
-#include "Utf8.h"
-#include "Camera.h"
-#include "PhysicsWorld.h"  // #201 - the physics sync regression test
-#include "Combat/Damage.h" // hit regions, damage zones
-#include "Npc/NpcRagdoll.h" // the soldier's part table
-#include "GameModuleAPI.h"  // QueryFilter / RaycastHit
-#include <cmath>   // #202 isfinite
-#include <limits>
-#include "ComponentReflection.h"
 #include "ComponentRegistry.h"
-#include "AssetLibrary.h" // #178 preset apply
-#include "MaterialAsset.h"
-#include "PhysicMaterialAsset.h"
-#include "PlayerConfig.h" // #174 - player.json round-trip
-#include "ProjectSettings.h"
-#include "Player.h"
+#include "EditorLayerInternal.h" // ClipFilterMatch
 #include "PostProcessVolume.h"
-#include "Tonemapper.h"
-#include "Core/Paths.h"
-#include "ProjectWatcher.h"
-#include "TextureCache.h"
-#include "Model.h"       // texture-path resolver
-#include "AssetImport.h" // folder import
-#include "ImportQueueManager.h"
-#include "SceneSerializer.h" // #121
-#include "AnimationSystem.h"           // #123 - the spin systems, driven frame by frame below
-#include "GameRules.h"
-#include "HotReloadGameModule.h"      // Spin / Transform Controller run inside TartarusGame.dll, not the exe
+#include "Tonemapper.h"          // PostSettings
+#include "World.h"
+
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <iostream>
+#include <set>
+#include <string>
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h> // GetModuleFileNameW: --unit-tests runs before EnginePaths::Init
-#undef near            // windows.h #defines these two, and the tests use them as variable names
-#undef far
-#include "UndoDeltaChain.h"
-#include "World.h"
-#include "ImpostorLibrary.h"
-#include "BulletHoles.h"
-#include "ShellCasings.h"
-#include "RotationMath.h"
-#include "SkyAtmosphere.h"
-#include "SkySettings.h"
-#include "TimeOfDay.h"
-
-#include <glm/gtc/matrix_transform.hpp>
-
-#include <json.hpp>
-
-#include <algorithm>
-#include <chrono>
-#include <cstdio>
-#include <filesystem>
-#include <fstream>
-#include <functional>
-#include <iostream>
-#include <iterator>
-#include "Wardrobe.h"
-#include "OutfitCoverage.h"
-#include "OutfitSystem.h"
-#include "Texture.h"
-#include "PngWrite.h" // async decode test fixture
-#include "EditorLayerInternal.h" // ClipFilterMatch
-#include <set>
-#include <string>
-#include <thread>
-#include <atomic>
-#include <vector>
-
-using json = nlohmann::json;
+#include <windows.h> // GetEnvironmentVariableW / GetCurrentProcessId: the run's private temp folder
 
 namespace UnitTestSupport {
 
@@ -124,12 +47,8 @@ std::string g_SkipReason;
 using UnitTestSupport::g_Checks;
 using UnitTestSupport::g_CurrentTest;
 using UnitTestSupport::g_Failures;
-using UnitTestSupport::TempDir;
-using UnitTestSupport::ReadAll;
 
 namespace {
-
-
 
 // #162 / #203 - Post-process Volumes: full weight inside the box, linear fade over the blend
 // distance, nothing beyond; overrides blend in priority order.
@@ -175,16 +94,6 @@ void TestClipFilterMatch() {
     CHECK(ClipFilterMatch("walk", path) && ClipFilterMatch("WALK fwd", path) && ClipFilterMatch("  norm  af_", path));
     CHECK(!ClipFilterMatch("run", path) && !ClipFilterMatch("walk run", path) && !ClipFilterMatch("fwdx", path));
 }
-
-
-
-
-
-
-
-
-
-
 
 // Every test writes under temp_directory_path(), and several runs can go at once (worktrees, CI-style queues): two runs
 // sharing %TEMP% wiped each other's fixture folders mid-test (the watcher and asset-identity tests failed "under load").
