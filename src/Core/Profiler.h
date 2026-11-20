@@ -50,6 +50,10 @@ public:
     // (typically 1-3). A scope that ran more than once that frame (e.g. "Scene Draw" for both
     // the Scene and Game views) is reported once, as the sum (#147).
     static const std::vector<Entry>& GetLastFrameGpu();
+    // The frame being recorded: BeginFrame counts them.
+    static unsigned FrameSerial();
+    // That frame's GPU timings once they've been read back, while they're among the last few; else null.
+    static const std::vector<Entry>* GpuFrameScopes(unsigned serial);
 
     // Constructed at the top of a scope, brackets it with a pair of GL_TIMESTAMP queries under
     // `name` (a string literal: it's stored, not copied). Scopes may nest (#147). Use via PROFILE_GPU_SCOPE(name). Must be constructed on the GL

@@ -1,4 +1,5 @@
 #include "ModelPreviewRenderer.h"
+#include "Profiler.h"
 #include "Camera.h" // #202 - MakePerspective
 #include "MaterialAsset.h"
 #include "Model.h"
@@ -37,6 +38,7 @@ float ModelPreviewRenderer::ComputeFramingDistance(const Model& model) {
 unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH,
                                           const std::vector<std::shared_ptr<MaterialAsset>>& slots, Shading shading,
                                           bool studio) {
+    PROFILE_GPU_SCOPE("Model Preview");
     if (!m_Shader) {
         m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ModelVertex.glsl"),
                                             ShaderLibrary::ReadFile("ModelFragment.glsl"));

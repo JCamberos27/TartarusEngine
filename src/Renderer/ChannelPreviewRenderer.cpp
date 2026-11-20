@@ -4,6 +4,7 @@
 #include "ShaderLibrary.h"
 #include "GLFramebufferCheck.h"
 #include "Log.h"
+#include "Profiler.h"
 #include "gl.h"
 
 #include <string>
@@ -17,6 +18,7 @@ ChannelPreviewRenderer::~ChannelPreviewRenderer() {
 }
 
 unsigned int ChannelPreviewRenderer::Render(const Texture& source, int channel, int previewW, int previewH) {
+    PROFILE_GPU_SCOPE("Channel Preview");
     if (!m_Shader) {
         m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Fullscreen.vert.glsl"),
                                             ShaderLibrary::ReadFile("ChannelPreview.frag.glsl"));

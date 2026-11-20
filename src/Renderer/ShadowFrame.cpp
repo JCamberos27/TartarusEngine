@@ -95,7 +95,7 @@ struct ShadowFrame::SunPass {
 bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitView, const glm::mat4& fitProj) {
     World& world = *in.world;
     const FrameLights& fl = *in.lights;
-    if (!(world.ShadowsEnabled && fl.HaveDirectional && fl.SunCastShadows)) return false;
+    if (!(world.Render.ShadowsEnabled && fl.HaveDirectional && fl.SunCastShadows)) return false;
     if (m_LastSunFit.frame == in.frame && m_LastSunFit.view == fitView && m_LastSunFit.proj == fitProj)
         return true; // already fitted to exactly this view this frame
     PROFILE_SCOPE("Sun Shadow Pass");
@@ -108,7 +108,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
     glGetIntegerv(GL_VIEWPORT, prevViewport);
 
-    shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
+    shadowMap.Configure(world.Render.ShadowResolution, world.Render.ShadowCascades);
     // Sub-scopes for the pass's CPU stages (fit + gather, sort + cascade masks, caster draws, grass).
     std::optional<Profiler::ScopeTimer> stage;
     SunPass p{world, fl, shadowMap, shadowShader, stage};
@@ -145,8 +145,8 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     // cascades - a forest's casters outside every cascade are never read at all.
     glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
     RenderableBounds(world, casterMin, casterMax);
-    shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
-    shadowMap.Update(fitView, fitProj, fl.SunDir, world.ShadowDistance, &casterMin, &casterMax);
+    shadowMap.SetSplitLambda(world.Render.ShadowCascadeSplit);
+    shadowMap.Update(fitView, fitProj, fl.SunDir, world.Render.ShadowDistance, &casterMin, &casterMax);
     p.frame = Time::FrameCount();
     p.renderMask = shadowMap.PlanRender(p.frame); // the far cascades on alternate frames
     Frustum (&casterCells)[CascadedShadowMap::kMaxCascades] = p.cells;
@@ -356,12 +356,12 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
     const FrameLights& fl = *in.lights;
     // Layers are allocated for the budget, not the hard ceiling (#110); a zero budget still keeps one layer so
     // sampler unit 9 is never unbound.
-    if (world.ShadowsEnabled) {
-        in.spotMap->Configure(std::min(world.ShadowResolution, 4096), std::max(fl.SpotCount, 1)); // sized to the slots in use (grow-only)
-        in.pointMap->Configure(std::min(world.ShadowResolution, 1024), std::max(fl.PointBudget, 1));
+    if (world.Render.ShadowsEnabled) {
+        in.spotMap->Configure(std::min(world.Render.ShadowResolution, 4096), std::max(fl.SpotCount, 1)); // sized to the slots in use (grow-only)
+        in.pointMap->Configure(std::min(world.Render.ShadowResolution, 1024), std::max(fl.PointBudget, 1));
     }
     m_LocalCasters.clear();
-    if (!world.ShadowsEnabled || (fl.SpotCount <= 0 && fl.PointCount <= 0)) return;
+    if (!world.Render.ShadowsEnabled || (fl.SpotCount <= 0 && fl.PointCount <= 0)) return;
     GatherLocalCasters(in);
     if (fl.SpotCount > 0) RenderSpots(in);
     if (fl.PointCount > 0) RenderPoints(in);

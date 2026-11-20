@@ -183,7 +183,8 @@ public:
     // `path` was last left; with no saved pose: behind the Player Spawn, else in front of a First
     // Person Body, else pulled back to fit the scene. Snaps (no glide). RememberSceneCamera stores
     // `cam` for `path`. Both do nothing saved/restored while SetDeterministicSceneCamera is on
-    // (smoke / screenshot runs always take the fallback chain).
+    // (smoke / screenshot runs always take the fallback chain). It also keeps the real OS cursor
+    // out of the hover pre-highlight (UpdateHoverPick).
     bool PlaceSceneCamera(World& world, Camera& cam, const std::string& path);
     void RememberSceneCamera(const std::string& path, const Camera& cam);
     void SetDeterministicSceneCamera(bool on) { m_DeterministicSceneCamera = on; }
@@ -1491,9 +1492,20 @@ private:
     bool m_GizmosMasterVisible = true; // #236 "Gizmos" dropdown master switch — hides every viewport gizmo/icon at once
     bool m_ShowEntityIcons = true;     // #236 — scripted override (smoke tests / clean shots) ANDed with EditorSettings::EntityIconsMode
     // Entity-icon occlusion cache: one camera-to-icon ray per entity, refreshed round-robin (the
-    // stalest first, a few dozen per frame) — an entity never checked counts as visible.
-    struct IconOcclusion { bool Occluded = false; std::uint32_t FrameChecked = 0; };
+    // stalest first, a few dozen per frame) once the camera, the icon or any renderable moved;
+    // an entity never checked counts as visible.
+    struct IconOcclusion {
+        bool Occluded = false;
+        std::uint32_t FrameChecked = 0;        // last frame it was checked or found still current
+        glm::vec3 CamPos{0.0f}, IconPos{0.0f}; // the camera and the icon at its last ray
+        std::uint64_t GeometrySerial = 0;      // m_IconGeometrySerial at its last ray
+    };
     std::unordered_map<entt::entity, IconOcclusion> m_IconOcclusion;
+    // Bumped whenever a world-transform rebuild moved, added or removed a renderable.
+    std::uint64_t m_IconGeometrySerial = 0;
+    std::uint64_t m_IconGeometryStamp = 0;                              // the World::TransformCacheStamp it last looked at
+    std::vector<std::pair<std::uint32_t, size_t>> m_IconOcclusionStale; // DrawEntityIcons scratch
+    std::vector<entt::entity> m_IconOcclusionSkipChain;                 // DrawEntityIcons scratch
     std::uint32_t m_IconOcclusionFrame = 0;
     // True when `entity` is selected or sits under a selected entity (the Volume / Collider "selected only" rule).
     bool IsSelectedOrUnderSelected(const World& world, entt::entity entity) const;
@@ -1627,8 +1639,9 @@ private:
                                  UndoEntry&& entry, const std::string& newFullJson);
     // Removes the top entry, handing back the entry itself and its full scene JSON, and
     // re-anchors `baseJson` on the entry underneath. Returns false only if the stack was empty.
+    // `outParsed` (optional): `outFullJson` parsed, a discarded value when it won't parse.
     static bool PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
-                                UndoEntry& outEntry, std::string& outFullJson);
+                                UndoEntry& outEntry, std::string& outFullJson, nlohmann::json* outParsed = nullptr);
     void ClearRedoHistory();  // redo stack + its base, kept in lockstep
     void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
     void RememberLastScene(const std::string& path); // LastScenePath, written now and never journaled as an undo step
@@ -2319,6 +2332,20 @@ private:
     // The flattened rows and the per-row ancestor chain used to be fresh vectors every frame
     // (one heap allocation per visible row for the chain); both are reused now.
     std::vector<HierarchyFlatRow> m_HierFlatRows;
+    // What m_HierFlatRows was flattened from (DrawHierarchyTreeBody keeps it while this matches).
+    struct HierarchyFlatKey {
+        const World* Owner = nullptr;
+        ImGuiID Window = 0;
+        std::uint64_t Order = 0, Hierarchy = 0, Open = 0;
+        entt::entity Renaming = entt::null;
+        bool Valid = false;
+        bool operator==(const HierarchyFlatKey& o) const {
+            return Owner == o.Owner && Window == o.Window && Order == o.Order && Hierarchy == o.Hierarchy &&
+                   Open == o.Open && Renaming == o.Renaming && Valid == o.Valid;
+        }
+    };
+    HierarchyFlatKey m_HierFlatKey;
+    std::uint64_t m_HierOpenGen = 0; // bumped by every write of a Hierarchy row's open/closed flag
     std::vector<entt::entity> m_HierRootScratch; // DrawHierarchyTreeBody's top-level rows, reused
     std::vector<entt::entity> m_HierChainScratch;
     // Every named entity in creation order (OrderComponent, entity handle as the tiebreak) - the
@@ -2332,6 +2359,7 @@ private:
         std::vector<entt::entity> Sorted;
         std::vector<int> Ordinal; // by entt::to_entity(e): 1-based position in Sorted, 0 = none
         int CheckedFrame = -1;    // HierarchyCreationOrdinal re-checks the pairs once per ImGui frame
+        std::uint64_t Generation = 0; // changes whenever Sorted is rebuilt
     };
     mutable HierarchyOrderCache m_HierOrder;
     const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
@@ -2877,6 +2905,15 @@ private:
     float KitModuleOf(World& world, entt::entity e) const;
     // World boxes of every renderable within `reach` of `box`, skipping `skip`'s own subtree.
     std::vector<AABB> NearbyBoxes(World& world, const AABB& box, float reach, entt::entity skip) const;
+    // NearbyBoxes' kit-piece world boxes, gathered once per drag (see NearbyBoxes).
+    struct KitBoxCache {
+        const World* Owner = nullptr;
+        entt::entity Skip = entt::null;
+        int Frame = -2;
+        size_t Renderables = 0;
+        std::vector<AABB> Boxes;
+    };
+    mutable KitBoxCache m_KitBoxCache;
     // Thin white outline of m_ModularSnapFace on the Scene view (drawn and cleared once a frame).
     void DrawModularSnapFace(Camera& editorCamera);
     // A prefab's renderables, stamped once into a scratch World per dragged path (so the ghost

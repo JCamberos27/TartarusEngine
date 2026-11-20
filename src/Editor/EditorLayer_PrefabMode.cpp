@@ -93,14 +93,14 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     world.Registry.remove<PrefabInstanceComponent>(root);
     // Preview environment belongs to the isolated world, not to the prefab hierarchy.
     // SavePrefab writes only the root and descendants, and Exit restores the scene's sky.
-    world.SkySourceMode = World::SkySource::Atmosphere;
-    ApplySkyPreset(world.Sky, SkyPreset::ClearDay);
-    world.Sky.DayLengthMinutes = 0.0f;
-    world.Sky.AnimateInEditor = false;
-    world.Sky.CloudsEnabled = false;
-    world.Sky.CloudShadows = false;
-    world.Sky.AerialPerspectiveScale = 0.0f;
-    world.SkyAmbientIntensity = 1.0f;
+    world.Render.SkySourceMode = World::SkySource::Atmosphere;
+    ApplySkyPreset(world.Render.Sky, SkyPreset::ClearDay);
+    world.Render.Sky.DayLengthMinutes = 0.0f;
+    world.Render.Sky.AnimateInEditor = false;
+    world.Render.Sky.CloudsEnabled = false;
+    world.Render.Sky.CloudShadows = false;
+    world.Render.Sky.AerialPerspectiveScale = 0.0f;
+    world.Render.SkyAmbientIntensity = 1.0f;
     m_PrefabModePath = path;
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth;
