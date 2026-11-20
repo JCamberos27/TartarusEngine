@@ -4,7 +4,6 @@
 // EditorLayer_ViewportMotion.cpp; this file only supplies the slots and what picking one does.
 #include "EditorLayer.h"
 #include "EditorGraffitiDesigner.h"
-#include "EditorSound.h"
 
 #include <IconsFontAwesome6.h>
 
