@@ -399,6 +399,30 @@ jobs:
           Write-Host "smoke test exited with $($p.ExitCode)"
           exit $p.ExitCode
 
+      # tests/smoke-scenes-invalid holds hand-written broken scenes (a missing model, a parent cycle, wrong field types).
+      # Nothing else opens them, so this is their only check: each must FAIL its own scene without taking the run down -
+      # the run exits nonzero, the summary reports all 3, none passes, and the crash-dump step below still finds no dump.
+      - name: Smoke test fails the broken fixtures (Mesa llvmpipe)
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+        run: |
+          $exe = "build\Release\TartarusEngine.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--smoke-test", "tests\smoke-scenes-invalid" -NoNewWindow -Wait -PassThru -RedirectStandardOutput invalid-smoke.log
+          $lines = @(Get-Content invalid-smoke.log | Where-Object { $_ -like "``[SmokeTest``]*" })
+          $lines | ForEach-Object { Write-Host $_ }
+          $passed = @($lines | Where-Object { $_ -match '^\[SmokeTest\] PASS' }).Count
+          $summary = @($lines | Where-Object { $_ -match '^\[SmokeTest\] 3 scene\(s\) - FAILURES DETECTED' }).Count
+          if ($p.ExitCode -eq 0 -or $passed -ne 0 -or $summary -ne 1) {
+            Write-Host "::error::the broken fixtures must each fail (exit $($p.ExitCode), $passed passed, summary found: $summary)"
+            exit 1
+          }
+          Write-Host "all 3 broken fixtures failed cleanly (exit $($p.ExitCode)) - ok"
+
       # The smoke step above gates on its own exit code, but a process can render every smoke scene,
       # report success and THEN fault on the way out. CrashHandler catches that and writes a
       # minidump, so a dump existing is a failure even when the exit code was 0. That teardown

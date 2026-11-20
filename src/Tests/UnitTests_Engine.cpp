@@ -21,7 +21,6 @@
 #include "World.h"
 #include "../Renderer/Model.h"
 #include "../Core/Paths.h"
-#include "../Core/Log.h"
 #include "../Renderer/Animation.h"
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/MaterialAsset.h"
@@ -833,43 +832,6 @@ void TestSceneLoadTakesParsedFile() {
     }
 }
 
-// tests/smoke-scenes-invalid/ holds hand-written broken scenes, one per load-time failure that used to crash or
-// pass silently. Nothing else opens them, so each one's outcome is pinned here: a wrong-typed field fails the load
-// cleanly (#83), a missing model is logged as an error (#356), and a parent cycle loads and composes with one error
-// instead of recursing forever (#371).
-void TestSceneLoadInvalidFixtures() {
-    auto fixture = [](const char* name) { return EnginePaths::Resolve(std::string("tests/smoke-scenes-invalid/") + name); };
-    CHECK(std::filesystem::exists(fixture("wrong_types.json")));
-    {
-        World w;
-        AssetLibrary assets;
-        CHECK(!SceneSerializer::Load(w, assets, fixture("wrong_types.json"), false));
-    }
-    {
-        World w;
-        AssetLibrary assets;
-        const int errors = Log::CountOf(LogLevel::Error);
-        SceneSerializer::Load(w, assets, fixture("missing_model.json"), false);
-        CHECK(Log::CountOf(LogLevel::Error) > errors);
-    }
-    {
-        World w;
-        AssetLibrary assets;
-        CHECK(SceneSerializer::Load(w, assets, fixture("parent_cycle.json"), false));
-        const int errors = Log::CountOf(LogLevel::Error);
-        int composed = 0;
-        for (entt::entity e : w.Registry.view<NameComponent>()) {
-            const std::string& name = w.Registry.get<NameComponent>(e).Name;
-            if (name != "A" && name != "B") continue;
-            const glm::mat4 m = w.ComposeWorldTransform(e);
-            CHECK(std::isfinite(m[3][1]));
-            ++composed;
-        }
-        CHECK(composed == 2);
-        CHECK(Log::CountOf(LogLevel::Error) > errors);
-    }
-}
-
 // #123 - spinning about a diagonal axis turns the object about that axis. Adding axis * angle to
 // the Euler components (the old behaviour) added equal pitch and yaw, which is another rotation.
 void TestRotateEulerAboutLocalAxis() {
@@ -1388,7 +1350,6 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"QuaternionTransformStorage", TestQuaternionTransformStorage});
     tests.push_back({"UndoSnapshotSkipsUnchangedAssetMeta", TestUndoSnapshotSkipsUnchangedAssetMeta});
     tests.push_back({"SceneLoadTakesParsedFile", TestSceneLoadTakesParsedFile});
-    tests.push_back({"SceneLoadInvalidFixtures", TestSceneLoadInvalidFixtures});
     tests.push_back({"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis});
     tests.push_back({"SpinSystemsAboutDiagonalAxis", TestSpinSystemsAboutDiagonalAxis});
 }
