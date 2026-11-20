@@ -140,6 +140,7 @@
 #include <chrono>
 #include <ctime>
 #include <future>
+#include <optional>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include "Renderer/UploadStaging.h"
 #include <cstdio>
@@ -208,6 +209,9 @@ int Application::Run() {
     }
     // A shipped game doesn't watch its files for edits; a development build still does.
     LiveReload::SetEnabled(!playerMode || playerCfg.DevelopmentBuild);
+    // --editor-tests: the tracked project/settings.json and layers.json go back as they were when the run ends.
+    std::optional<ProjectFilesGuard> projectFiles;
+    if (opt.editorTestsMode) projectFiles.emplace();
 
     // #132 - register the project's assets on a worker thread while the window, GL context and
     // shaders come up. Any GUID lookup made before it finishes waits for it.
@@ -264,6 +268,8 @@ private:
     const bool playerMode;
     PlayerConfig& playerCfg;
     const bool giBakeMode = opt.mode == LaunchMode::BakeGI;
+    // A harness run's window never shows (KeepsWindowHidden): not on a desktop someone is using.
+    const bool hiddenRun = !playerMode && KeepsWindowHidden(opt);
     const std::string& crashTestInEditor = opt.crashTestInEditor;
 
     // Per-user preferences, loaded before anything reads them. No GL or project state needed.
@@ -712,12 +718,10 @@ private:
                     glfwSetWindowSize(window.Handle(), std::max(1, 2 * testW - gotW), std::max(1, 2 * testH - gotH));
             }
             // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
-            // TARTARUS_EDITOR_TEST_SHOW=1 keeps it shown (CI, where nobody is at the desktop): the
-            // harness drops OS input either way, and a shown window's back buffer is always defined
-            // for its screenshots.
-            if (opt.editorTestsMode) {
-                if (!Env::Flag(Env::Var::EditorTestShow)) glfwHideWindow(window.Handle());
-            }
+            // TARTARUS_SHOW=1 (or TARTARUS_EDITOR_TEST_SHOW=1) keeps it shown (CI, where nobody is at the
+            // desktop): the harness drops OS input either way, and a shown window's back buffer is always
+            // defined for its screenshots.
+            if (opt.editorTestsMode && hiddenRun) glfwHideWindow(window.Handle());
         }
     }};
     Step step45{[&] {
@@ -1211,10 +1215,9 @@ bool AppSession::Frame() {
 
     // Frame-pacing preferences are live: changing VSync / FPS Limit in Preferences takes
     // effect on the very next frame. SetVSync only touches the driver on an actual change.
-    // A hidden run (TARTARUS_HIDDEN) has no display to wait for: with the screen asleep, a synced swap held each frame
+    // A hidden run (KeepsWindowHidden) has no display to wait for: with the screen asleep, a synced swap held each frame
     // for half a second and an NPC test crawled at 2 fps. (Harness runs step a fixed 1/60 s, so only the speed changes.)
     // TARTARUS_UNLOCKED_FPS: the same for a visible test run, so it goes as fast as the machine allows.
-    static const bool hiddenRun = Env::Flag(Env::Var::Hidden);
     static const bool unlockedFps = Env::Flag(Env::Var::UnlockedFps);
     if (const int wantVSync = opt.perfBenchMode || hiddenRun || unlockedFps ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
         wantVSync != appliedVSyncMode) {
@@ -2466,12 +2469,13 @@ bool AppSession::Frame() {
     lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
     {
         PROFILE_SCOPE("Swap Buffers");
-        // --perf-bench in a window that never shows (TARTARUS_HIDDEN): presenting a hidden window took NVIDIA's
-        // slow path, ~2.7 ms a frame with the GPU idle and the CPU blocked (the Forest's play-max read 14.2 ms
-        // hidden, 11.6 ms on screen). Nothing is on screen to present, so pace like a swap chain instead: a
-        // fence a frame, and wait for the one kHiddenFramesAhead frames back. The bench then measures the frame.
-        static const bool hiddenBench = opt.perfBenchMode && headless && Env::Flag(Env::Var::Hidden);
-        if (hiddenBench) {
+        // A smoke-harness run (smoke, perf-bench, npc-test) in a window that never shows (KeepsWindowHidden):
+        // presenting a hidden window took NVIDIA's slow path, ~2.7 ms a frame with the GPU idle and the CPU blocked
+        // (the Forest's play-max read 14.2 ms hidden, 11.6 ms on screen; a 21600-frame npc test ran about a minute
+        // longer). Nothing is on screen to present, so pace like a swap chain instead: a fence a frame, and wait for
+        // the one kHiddenFramesAhead frames back. Not for --editor-tests: its steps count frames while camera glides
+        // run on real time, and unthrottled frames timed 7 of them out; it keeps presenting, as it always has.
+        if (hiddenRun && opt.smokeTestMode) {
             constexpr int kHiddenFramesAhead = 2;
             static GLsync s_Pace[kHiddenFramesAhead] = {};
             static int s_PaceAt = 0;
@@ -2512,10 +2516,9 @@ bool AppSession::Frame() {
     if (!firstFramePresented) {
         firstFramePresented = true;
         if (editorChimes) startChimeFrames = 3;
-        // TARTARUS_HIDDEN=1 (a headless run on a desktop someone is using): the window never shows or takes the
-        // focus; everything renders to its framebuffers the same.
-        static const bool keepHidden = Env::Flag(Env::Var::Hidden);
-        if (!keepHidden || !headless) window.Show();
+        // A harness run (KeepsWindowHidden): the window never shows or takes the focus; everything renders to its
+        // framebuffers the same.
+        if (!hiddenRun) window.Show();
         if (playerMode && !playerCfg.Fullscreen) {
             // #174 - centre the windowed game in the primary monitor's work area. Done
             // once shown, when the frame size (title bar, borders) is known.

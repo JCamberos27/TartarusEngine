@@ -214,6 +214,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     const FirstPersonBodyComponent& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
     m_Spine = cfg.Spine;
     BodyDebug::Info().TwinHandGap[0] = BodyDebug::Info().TwinHandGap[1] = -1.0f; // (none this frame until the twins' solve)
+    if (camera) BodyDebug::Info().NearPlane = camera->NearPlane; // armed or not (the unarmed path returns before the arms debug)
     // The world twins start from the pieces' pose as it stands now: the same clips, spine passes and feet - one body. From
     // here both get their arms onto a gun: the pieces onto the rig's hands, the twins onto the world gun's hold.
     {
@@ -603,7 +604,6 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     PROFILE_SCOPE("FPB arms debug");
     if (camera) {
         const glm::vec3 eye = camera->Position, f = camera->Front(), r = camera->Right(), u = camera->Up();
-        BodyDebug::Info().NearPlane = camera->NearPlane;
         if (BodyDebug::Enabled()) {
             // Near plane (red), then the world's frustum (grey) and the view-model pass's (cyan) out to 40 cm.
             const float aspect = 16.0f / 9.0f;

@@ -24,17 +24,17 @@ namespace {
 struct GpuVolume {
     glm::vec4 BoxX, BoxY, BoxZ; // world -> box rows: xyz unit axis, w = -dot(axis, centre)
     glm::vec4 HalfFade;         // xyz half extents, w fade metres
-    glm::vec4 Dims;             // xyz probe counts, w layer count
+    glm::vec4 Dims;             // xyz probe counts, w 1 = lit (the layers are mixed into one brick on the CPU), 0 = dark
     glm::vec4 Params;           // x intensity, y replaces the sky's ambient, z normal bias (m)
-    glm::vec4 Brick[GIVolumes::kMaxLayers]; // xyz brick origin (texels), w weight
+    glm::vec4 Brick;            // xyz brick origin (texels)
 };
 struct GpuBlock {
     glm::ivec4 Count;   // x volumes
     glm::vec4 AtlasInv; // xyz 1 / atlas size
     GpuVolume V[GIVolumes::kMaxVolumes];
 };
-static_assert(sizeof(GpuVolume) == 160, "std140 layout");
-static_assert(sizeof(GpuBlock) == 32 + 160 * GIVolumes::kMaxVolumes, "std140 layout");
+static_assert(sizeof(GpuVolume) == 112, "std140 layout");
+static_assert(sizeof(GpuBlock) == 32 + sizeof(GpuVolume) * GIVolumes::kMaxVolumes, "std140 layout");
 
 std::string NameOf(const World& world, entt::entity e) {
     const auto* n = world.Registry.try_get<NameComponent>(e);
@@ -290,14 +290,14 @@ void GIVolumes::WriteUbo() {
         g.Dims = glm::vec4(glm::vec3(v.Dims), lit ? 1.0f : 0.0f); // the layers are mixed into one brick
         g.Params = glm::vec4(v.Intensity, v.ReplacesSky ? 1.0f : 0.0f, 0.25f * v.Spacing, 0.0f);
         const glm::ivec3 o = i < m_BrickOrigin.size() ? m_BrickOrigin[i] : glm::ivec3(0);
-        g.Brick[0] = glm::vec4(glm::vec3(o), 1.0f);
+        g.Brick = glm::vec4(glm::vec3(o), 0.0f);
     }
     if (!m_Ubo) {
         glCreateBuffers(1, &m_Ubo);
         glNamedBufferData(m_Ubo, sizeof(GpuBlock), nullptr, GL_DYNAMIC_DRAW);
     }
     // Only what is used, and only when it changed (a moved or new volume; a switch flip is Remix's).
-    const std::size_t bytes = 32 + 160 * std::max<std::size_t>(m_Volumes.size(), 1);
+    const std::size_t bytes = 32 + sizeof(GpuVolume) * std::max<std::size_t>(m_Volumes.size(), 1);
     const float* f = reinterpret_cast<const float*>(&b);
     if (m_LastUbo.size() == bytes / 4 && std::memcmp(m_LastUbo.data(), f, bytes) == 0) return;
     m_LastUbo.assign(f, f + bytes / 4);

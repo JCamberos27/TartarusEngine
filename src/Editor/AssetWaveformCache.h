@@ -1,12 +1,11 @@
 #pragma once
 #include <condition_variable>
 #include <deque>
-#include <list>
 #include <mutex>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <vector>
+#include "LruMap.h"
 
 // Waveform envelopes for the Asset Browser's sound tiles. Getting one means decoding the whole
 // file (AudioEngine::WaveformPeaks), tens of ms for a long clip, so it runs on a worker thread:
@@ -33,14 +32,12 @@ private:
     static constexpr size_t kMaxEntries = 1024, kMaxQueued = 256;
     struct Job { std::string Path; unsigned Ticket; };
     struct Result { std::string Path; std::vector<float> Peaks; unsigned Ticket; };
-    struct Entry { std::vector<float> Peaks; bool Pending = true; unsigned Ticket = 0; std::list<std::string>::iterator Lru; };
+    struct Entry { std::vector<float> Peaks; bool Pending = true; unsigned Ticket = 0; };
 
     void Worker();
-    void Remove(std::unordered_map<std::string, Entry>::iterator it);
 
-    std::unordered_map<std::string, Entry> m_Entries; // main thread only
-    std::list<std::string> m_Lru;                     // front = most recently used
-    unsigned m_NextTicket = 1;                        // a result is used only by the request that asked for it
+    LruMap<Entry> m_Entries;   // main thread only
+    unsigned m_NextTicket = 1; // a result is used only by the request that asked for it
 
     std::mutex m_Mutex; // guards everything below
     std::condition_variable m_Wake;
