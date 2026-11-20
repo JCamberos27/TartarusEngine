@@ -1604,14 +1604,26 @@ bool AppSession::Frame() {
     { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
     // --npc-test: an outfit change in Play lands on the frame that asked for it, not when the machine finishes loading it
     // (the player's pieces, asked for in Play's first frames, landed 0.2-0.5 s in and rebuilt the body - OutfitChanged -
-    // on a frame that followed the machine's load, so no two runs matched). Only while something is loading (a change
-    // waiting on a missing file never lands), and at most 30 s a frame.
+    // on a frame that followed the machine's load, so no two runs matched). It waits only while the loads progress: a
+    // change whose loads stall (5 s with none finishing - a file that never loads) stops the waiting until an outfit
+    // change lands again, and that change lands whenever it can, as in Play.
     if (opt.npcTestMode && playing && OutfitSystem::AnyPending()) {
-        const auto waitStart = std::chrono::steady_clock::now();
-        while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) && assets.AsyncInFlight() > 0 &&
-               std::chrono::steady_clock::now() - waitStart < std::chrono::seconds(30)) {
-            assets.PumpAsync(50.0);
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        static unsigned s_stalledAt = ~0u; // the landed generation the last stall happened at
+        if (OutfitSystem::LandedGeneration() != s_stalledAt) {
+            auto lastProgress = std::chrono::steady_clock::now();
+            int inFlight = assets.AsyncInFlight();
+            while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) && inFlight > 0) {
+                assets.PumpAsync(50.0);
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                const int now = assets.AsyncInFlight();
+                if (now < inFlight) lastProgress = std::chrono::steady_clock::now();
+                inFlight = now;
+                if (std::chrono::steady_clock::now() - lastProgress > std::chrono::seconds(5)) {
+                    s_stalledAt = OutfitSystem::LandedGeneration();
+                    std::printf("[NpcTest] an outfit change's loads stalled (%d in flight for 5 s): no more waiting for it\n", inFlight);
+                    break;
+                }
+            }
         }
     }
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
