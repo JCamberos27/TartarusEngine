@@ -412,6 +412,19 @@ public:
     // since that's a genuine import from outside the project, not an assignment). EditorLayer_Inspector.cpp.
     bool TexturePickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
     bool MaterialPickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
+private:
+    // The pickers' filtered rows, rebuilt only when the popup opens, the search text changes or the
+    // library's list changes size (they were re-filtered, and every row's texture looked up, each frame).
+    struct PickerRow { std::string Path, Name; };
+    struct PickerRowCache {
+        std::vector<PickerRow> Rows;
+        std::string Needle;
+        size_t SourceCount = (size_t)-1;
+    };
+    PickerRowCache m_TexturePickerRows, m_MaterialPickerRows;
+    static void RefreshPickerRows(PickerRowCache& cache, const std::vector<std::string>& source, const std::string& needle,
+                                  const std::function<std::string(const std::string&)>& nameOf);
+public:
     // Per-frame tree prep: virtual folders, listing-cache refresh, ancestor-expand on folder
     // change; returns the folder to scroll into view this frame ("" = none).
     std::string AssetBrowserTreeFrameSetup(AssetLibrary& assets);                // EditorLayer_AssetBrowser.cpp
