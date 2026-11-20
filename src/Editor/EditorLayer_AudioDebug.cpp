@@ -51,6 +51,7 @@ void EditorLayer::ApplyKeptAudioMix(World& world) {
     } else {
         PushUndo(world, "Keep Audio Mix");
         if (m_AudioKeepBus && host != entt::null) world.Registry.get<ReverbBusComponent>(host) = *m_AudioKeepBus;
+        else if (m_AudioKeepBus) Log::Warn("Audio: the reverb settings were not kept - the scene has no Reverb Bus component to hold them.");
         if (m_AudioKeepMix && mixHost != entt::null) world.Registry.emplace_or_replace<AudioMixComponent>(mixHost, *m_AudioKeepMix);
         Log::Info("Audio: kept the mix tuned in Play (Audio Mix / Reverb Bus); save the scene to keep it.");
     }
