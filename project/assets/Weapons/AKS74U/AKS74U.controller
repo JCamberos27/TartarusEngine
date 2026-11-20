@@ -143,20 +143,6 @@
           "speed": 0.0
         },
         {
-          "events": [
-            {
-              "name": "snd.ak.cloth@0",
-              "time": 0.275
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.5955
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.9955
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -178,6 +164,20 @@
           "tags": [
             "IKOff",
             "Shouldered"
+          ],
+          "events": [
+            {
+              "name": "snd.ak.cloth@183",
+              "time": 0.0
+            },
+            {
+              "name": "snd.ak.handle@10",
+              "time": 0.5856
+            },
+            {
+              "name": "snd.ak.handle@10",
+              "time": 0.9856
+            }
           ]
         },
         {
@@ -214,44 +214,6 @@
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.ak.cloth@0",
-              "time": 0.0177
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.1093
-            },
-            {
-              "name": "snd.ak.cloth@0",
-              "time": 0.4043
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.5242
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.5774
-            },
-            {
-              "name": "snd.ak.bolt_back@78",
-              "time": 0.5968
-            },
-            {
-              "name": "snd.ak.bolt_release@41",
-              "time": 0.7431
-            },
-            {
-              "name": "snd.ak.cloth@0",
-              "time": 0.7908
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.8823
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -276,43 +238,47 @@
           "speed": 1.0,
           "tags": [
             "Busy"
+          ],
+          "events": [
+            {
+              "name": "snd.ak.cloth@83",
+              "time": 0.0
+            },
+            {
+              "name": "snd.ak.handle@10",
+              "time": 0.1079
+            },
+            {
+              "name": "snd.ak.cloth@286",
+              "time": 0.3433
+            },
+            {
+              "name": "snd.ak.handle@10",
+              "time": 0.5228
+            },
+            {
+              "name": "snd.ak.handle@10",
+              "time": 0.576
+            },
+            {
+              "name": "snd.ak.bolt_back@102",
+              "time": 0.5918
+            },
+            {
+              "name": "snd.ak.cloth@286",
+              "time": 0.7299
+            },
+            {
+              "name": "snd.ak.bolt_release@46",
+              "time": 0.7419
+            },
+            {
+              "name": "snd.ak.handle@10",
+              "time": 0.8809
+            }
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.ak.cloth@0",
-              "time": 0.0192
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.0647
-            },
-            {
-              "name": "snd.ak.mag_release@3",
-              "time": 0.0916
-            },
-            {
-              "name": "snd.ak.cloth@0",
-              "time": 0.1115
-            },
-            {
-              "name": "snd.ak.mag_out@3",
-              "time": 0.1493
-            },
-            {
-              "name": "snd.ak.handle@3",
-              "time": 0.1762
-            },
-            {
-              "name": "snd.ak.mag_in@39",
-              "time": 0.7448
-            },
-            {
-              "name": "snd.ak.cloth@0",
-              "time": 0.8077
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -338,23 +304,43 @@
           "tags": [
             "Busy",
             "ADSCarry"
-          ]
-        },
-        {
+          ],
           "events": [
             {
-              "name": "snd.ak.melee_swing@0",
+              "name": "snd.ak.cloth@83",
               "time": 0.0
             },
             {
-              "name": "snd.ak.melee_hit@0",
-              "time": 0.0923
+              "name": "snd.ak.cloth@286",
+              "time": 0.0455
             },
             {
-              "name": "snd.ak.cloth@0",
-              "time": 0.3538
+              "name": "snd.ak.handle@10",
+              "time": 0.0632
+            },
+            {
+              "name": "snd.ak.mag_release@93",
+              "time": 0.0709
+            },
+            {
+              "name": "snd.ak.mag_out@42",
+              "time": 0.1403
+            },
+            {
+              "name": "snd.ak.handle@10",
+              "time": 0.1747
+            },
+            {
+              "name": "snd.ak.cloth@286",
+              "time": 0.7416
+            },
+            {
+              "name": "snd.ak.mag_in@44",
+              "time": 0.7437
             }
-          ],
+          ]
+        },
+        {
           "loop": false,
           "motions": {
             "arms": {
@@ -379,49 +365,63 @@
           "speed": 1.0,
           "tags": [
             "Busy"
+          ],
+          "events": [
+            {
+              "name": "snd.ak.melee_hit@100",
+              "time": 0.0
+            },
+            {
+              "name": "snd.ak.melee_swing@0",
+              "time": 0.0
+            },
+            {
+              "name": "snd.ak.cloth@286",
+              "time": 0.0896
+            }
           ]
         },
         {
           "events": [
             {
-              "name": "snd.ak.cloth@0",
-              "time": 0.0294
+              "name": "snd.ak.cloth@83",
+              "time": 0.0
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.1107
+              "name": "snd.ak.handle@10",
+              "time": 0.1084
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.1636
+              "name": "snd.ak.handle@10",
+              "time": 0.1613
             },
             {
-              "name": "snd.ak.mag_release@3",
-              "time": 0.2813
+              "name": "snd.ak.mag_release@93",
+              "time": 0.2496
             },
             {
-              "name": "snd.ak.mag_out@3",
-              "time": 0.3577
+              "name": "snd.ak.mag_out@42",
+              "time": 0.344
             },
             {
-              "name": "snd.ak.mag_in@39",
-              "time": 0.5273
+              "name": "snd.ak.mag_in@44",
+              "time": 0.5257
             },
             {
-              "name": "snd.ak.mag_tap@3",
-              "time": 0.6048
+              "name": "snd.ak.cloth@286",
+              "time": 0.5754
             },
             {
-              "name": "snd.ak.cloth@0",
-              "time": 0.6765
+              "name": "snd.ak.mag_tap@14",
+              "time": 0.6009
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.7695
+              "name": "snd.ak.handle@10",
+              "time": 0.7672
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.8754
+              "name": "snd.ak.handle@10",
+              "time": 0.8731
             },
             {
               "name": "Refill",
@@ -458,52 +458,52 @@
         {
           "events": [
             {
-              "name": "snd.ak.cloth@0",
-              "time": 0.0227
+              "name": "snd.ak.cloth@83",
+              "time": 0.0
             },
             {
-              "name": "snd.ak.mag_release@3",
-              "time": 0.1083
+              "name": "snd.ak.mag_release@93",
+              "time": 0.0838
             },
             {
-              "name": "snd.ak.mag_out@3",
-              "time": 0.1673
+              "name": "snd.ak.mag_out@42",
+              "time": 0.1568
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.1992
+              "name": "snd.ak.handle@10",
+              "time": 0.1974
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.3355
+              "name": "snd.ak.handle@10",
+              "time": 0.3337
             },
             {
-              "name": "snd.ak.mag_in@39",
-              "time": 0.4529
+              "name": "snd.ak.cloth@286",
+              "time": 0.4401
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.4855
+              "name": "snd.ak.mag_in@44",
+              "time": 0.4517
             },
             {
-              "name": "snd.ak.cloth@0",
-              "time": 0.5182
+              "name": "snd.ak.handle@10",
+              "time": 0.4837
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.5765
+              "name": "snd.ak.handle@10",
+              "time": 0.5747
             },
             {
-              "name": "snd.ak.bolt_back@78",
-              "time": 0.6423
+              "name": "snd.ak.bolt_back@102",
+              "time": 0.6358
             },
             {
-              "name": "snd.ak.bolt_release@41",
-              "time": 0.698
+              "name": "snd.ak.bolt_release@46",
+              "time": 0.6964
             },
             {
-              "name": "snd.ak.handle@3",
-              "time": 0.8537
+              "name": "snd.ak.handle@10",
+              "time": 0.8519
             },
             {
               "name": "Refill",
@@ -538,12 +538,6 @@
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.ak.draw@360",
-              "time": 0.0522
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -564,15 +558,15 @@
           "speed": 1.0,
           "tags": [
             "IKOff"
+          ],
+          "events": [
+            {
+              "name": "snd.ak.draw@363",
+              "time": 0.0483
+            }
           ]
         },
         {
-          "events": [
-            {
-              "name": "snd.ak.holster@300",
-              "time": 0.3214
-            }
-          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -597,6 +591,12 @@
           "speed": 1.0,
           "tags": [
             "IKOff"
+          ],
+          "events": [
+            {
+              "name": "snd.ak.holster@312",
+              "time": 0.2959
+            }
           ]
         },
         {
