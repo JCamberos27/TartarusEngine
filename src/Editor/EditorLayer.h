@@ -2867,6 +2867,15 @@ private:
     float KitModuleOf(World& world, entt::entity e) const;
     // World boxes of every renderable within `reach` of `box`, skipping `skip`'s own subtree.
     std::vector<AABB> NearbyBoxes(World& world, const AABB& box, float reach, entt::entity skip) const;
+    // NearbyBoxes' kit-piece world boxes, gathered once per drag (see NearbyBoxes).
+    struct KitBoxCache {
+        const World* Owner = nullptr;
+        entt::entity Skip = entt::null;
+        int Frame = -2;
+        size_t Renderables = 0;
+        std::vector<AABB> Boxes;
+    };
+    mutable KitBoxCache m_KitBoxCache;
     // Thin white outline of m_ModularSnapFace on the Scene view (drawn and cleared once a frame).
     void DrawModularSnapFace(Camera& editorCamera);
     // A prefab's renderables, stamped once into a scratch World per dragged path (so the ghost
