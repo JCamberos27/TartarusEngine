@@ -122,7 +122,16 @@ void Player::Update(float dt, bool readInput) {
     }
     Velocity.y += Gravity * dt;
     const glm::vec3 feet = Cam.Position - glm::vec3(0.0f, eye, 0.0f);
-    if (!PhysicsWorld::IsActive()) { Cam.Position += Velocity * dt; Grounded = false; return; }
+    if (!PhysicsWorld::IsActive()) {
+        // No physics: nothing to stand on, so the fall ends at KillY like the mover's (it used to fall forever, ever faster).
+        Cam.Position += Velocity * dt;
+        Grounded = false;
+        if (Cam.Position.y < KillY) {
+            Cam.Position = RespawnFeet + glm::vec3(0.0f, eye, 0.0f);
+            Velocity = glm::vec3(0.0f);
+        }
+        return;
+    }
     if (!hasCharacter) PhysicsWorld::CreateCharacter(radius, stand, &feet.x);
     PhysicsWorld::SetCharacterDoorwayAssist(DoorwayAssist, DoorwayAssistMaxAngle);
     const unsigned flags = MoveCharacter(Velocity * dt, dt, wasGrounded && !Jumped && Velocity.y <= 0.0f);

@@ -165,7 +165,8 @@ bool FirstPersonArmTwist::Apply(Model& m, float* roll, float* residual) {
         it = m_Rigs.insert_or_assign(&m, std::move(r)).first;
     }
     const Rig& r = it->second;
-    IK::Pose pose = m.AppliedLocalPose();
+    thread_local IK::Pose pose; // (scratch kept between frames: no per-frame allocation)
+    pose = m.AppliedLocalPose();
     if ((int)pose.size() != m.NodeCount() || pose.size() != r.Bind.size()) return false;
     bool any = false;
     for (int s = 0; s < 2; ++s) {
@@ -365,11 +366,14 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             if (models[k] && m_Pieces[k] == m_Driver) source = k;
         if (source >= models.size() || source >= ents.size() || !reg.valid(ents[source]) || !t.Shape) return;
         Model& m = *models[source];
-        IK::Pose pose = m.AppliedLocalPose();
+        // Scratch kept between frames (and between the pieces' and the twins' solves): no per-frame allocation.
+        thread_local IK::Pose pose;
+        thread_local std::vector<int> parents;
+        thread_local std::vector<glm::mat4> globals;
+        pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) return;
-        std::vector<int> parents(pose.size());
+        parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
-        std::vector<glm::mat4> globals;
         const glm::mat4 pieceWorld = world.ComposeWorldTransform(ents[source]);
         const glm::mat4 toModel = glm::inverse(pieceWorld);
         const glm::quat toModelRot = IK::Rotation(toModel);
@@ -529,7 +533,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         m.ApplyLocalPose(pose);
 
         // The rest of the pieces: the rig's arm shape and fingers (what the solve leaves alone), then the solved bones.
-        std::vector<std::string> solved;
+        thread_local std::vector<std::string> solved;
+        solved.clear();
         if (leaned) solved.push_back(m.NodeName(chest));
         for (int s = 0; s < 2; ++s)
             for (const char* b : {kSides[s].Clavicle, kSides[s].Upper, kSides[s].Lower, kSides[s].Hand}) solved.push_back(Bone(b));
@@ -540,7 +545,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             // A piece skinning nothing the solve moves (legs, feet) draws the same either way. The driver always takes it:
             // its shoulders are read for the camera.
             if (m_Pieces[k] != m_Driver && !SkinsUpperBody(o)) continue;
-            IK::Pose other = o.AppliedLocalPose();
+            thread_local IK::Pose other;
+            other = o.AppliedLocalPose();
             if (other.empty() || (int)other.size() != o.NodeCount()) continue;
             parents.resize(other.size());
             for (int i = 0; i < (int)other.size(); ++i) parents[i] = o.NodeParent(i);

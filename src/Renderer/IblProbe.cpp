@@ -1,4 +1,6 @@
 #include "IblProbe.h"
+#include "GLStateScope.h"
+#include "CubeFaces.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLFramebufferCheck.h"
@@ -11,18 +13,8 @@
 
 namespace {
 
-// Face-local bases for GL_TEXTURE_CUBE_MAP layers 0..5 (+X, -X, +Y, -Y, +Z, -Z). The V axis is
-// flipped relative to world up on the four side faces, matching OpenGL's (left-handed, +Y-down)
-// cube-face convention — get this wrong and reflections come out mirrored.
-struct FaceBasis { float forward[3]; float right[3]; float up[3]; };
-const FaceBasis kFaces[6] = {
-    {{ 1,  0,  0}, { 0,  0, -1}, { 0, -1,  0}}, // +X
-    {{-1,  0,  0}, { 0,  0,  1}, { 0, -1,  0}}, // -X
-    {{ 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // +Y
-    {{ 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // -Y
-    {{ 0,  0,  1}, { 1,  0,  0}, { 0, -1,  0}}, // +Z
-    {{ 0,  0, -1}, {-1,  0,  0}, { 0, -1,  0}}, // -Z
-};
+using CubeFaces::FaceBasis; // CubeFaces.h
+using CubeFaces::kFaces;
 
 } // namespace
 
@@ -253,28 +245,13 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
 namespace {
 // GL state the convolution passes change, restored on scope exit.
 struct BakeStateScope {
-    GLboolean WasDepthTest, WasCull, WasBlend;
-    GLint PrevDepthMask = GL_TRUE;
-    BakeStateScope() {
-        glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-        WasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-        WasCull      = glIsEnabled(GL_CULL_FACE);
-        WasBlend     = glIsEnabled(GL_BLEND);
-        glGetIntegerv(GL_DEPTH_WRITEMASK, &PrevDepthMask);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_BLEND);
-        glDepthMask(GL_FALSE);
-    }
+    GLPlainPassScope Plain; // depth / cull / blend off, the caller's restored after (members go before the body below)
+    BakeStateScope() { glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS); }
     ~BakeStateScope() {
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
         glUseProgram(0);
         glBindVertexArray(0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        if (WasDepthTest) glEnable(GL_DEPTH_TEST);
-        if (WasCull)      glEnable(GL_CULL_FACE);
-        if (WasBlend)     glEnable(GL_BLEND);
-        glDepthMask((GLboolean)PrevDepthMask);
         // Raw program / VAO / unit-0 texture binds - resync GLStateCache (audit GL-206).
         GLStateCache::Invalidate();
     }

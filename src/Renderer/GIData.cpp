@@ -268,9 +268,15 @@ bool Save(const BakeFile& file, const std::string& path, std::string* err) {
 }
 
 bool Load(BakeFile& file, const std::string& path, std::string* err) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) { if (err) *err = "cannot open " + path; return false; }
-    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    const std::streamoff size = f.tellg();
+    std::vector<std::uint8_t> bytes(size > 0 ? (std::size_t)size : 0);
+    f.seekg(0);
+    if (!bytes.empty() && !f.read((char*)bytes.data(), (std::streamsize)bytes.size())) {
+        if (err) *err = "read failed: " + path;
+        return false;
+    }
     return Deserialize(file, bytes.data(), bytes.size(), err);
 }
 

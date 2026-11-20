@@ -49,6 +49,9 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
 // duplicating the mix logic.
 uint64_t HashSettings(const TextureImportSettings& settings);
 
+// The file Store writes (and Load reads) for this source + settings pair, under Library/Textures.
+std::string EntryPath(const std::string& sourcePath, const TextureImportSettings& settings);
+
 // Startup maintenance pass (#226): the cache never evicts on its own, so a texture deleted from
 // the project, or reimported under different settings, leaves its old entry on disk forever.
 // This walks the cache directory once and deletes any entry that's provably stale:

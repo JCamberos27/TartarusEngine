@@ -1,4 +1,5 @@
 #include "MeshArena.h"
+#include "GpuMemTrack.h"
 #include "ModelVertex.h"
 #include "gl.h"
 #include "Core/Env.h"
@@ -75,7 +76,11 @@ bool CreatePageBuffers(Page& p, std::uint32_t verts, std::uint32_t indices) {
     glCreateBuffers(1, &p.Ebo);
     glNamedBufferStorage(p.Vbo, (GLsizeiptr)verts * (GLsizeiptr)sizeof(ModelVertex), nullptr, GL_DYNAMIC_STORAGE_BIT);
     glNamedBufferStorage(p.Ebo, (GLsizeiptr)indices * (GLsizeiptr)sizeof(std::uint32_t), nullptr, GL_DYNAMIC_STORAGE_BIT);
-    if (glGetError() == GL_NO_ERROR) return true;
+    if (glGetError() == GL_NO_ERROR) { // the page's capacity (MemReport's meshGpuMiB counts what meshes use of it)
+        GpuMemTrack::Set(GpuMemTrack::Key("MeshArena page", &p),
+                         (std::size_t)verts * sizeof(ModelVertex) + (std::size_t)indices * sizeof(std::uint32_t));
+        return true;
+    }
     glDeleteBuffers(1, &p.Vbo);
     glDeleteBuffers(1, &p.Ebo);
     p.Vbo = p.Ebo = 0;
@@ -142,6 +147,7 @@ public:
         if (p.Dedicated) {
             glDeleteBuffers(1, &p.Vbo);
             glDeleteBuffers(1, &p.Ebo);
+            GpuMemTrack::Set(GpuMemTrack::Key("MeshArena page", &p), 0);
             if (m_WithVao) glDeleteVertexArrays(1, &p.Vao);
             p.Vao = p.Vbo = p.Ebo = 0;
             p.Verts.Reset(0);

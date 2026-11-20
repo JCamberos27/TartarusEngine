@@ -238,7 +238,7 @@ void FirstPersonPresentation::PoseWorldWeapon(World& world, const glm::mat4* hol
     thread_local std::vector<float> held;
     pose = src;
     if (!CarriedBonePoses(bones)) return;
-    const bool haveHeld = CarriedHeld(held) && held.size() == bones.size();
+    const bool haveHeld = CarriedHeldFrom(bones, held) && held.size() == bones.size(); // (the poses just taken: not again)
     const glm::mat4 toModel = glm::inverse(world.ComposeWorldTransform(m_WorldWeapon));
     targets.assign(m_AnchorBones.size(), glm::mat4(1.0f));
     // With the world hand as solved: a part in the hand is held as the first-person clips hold it (its place off their hand),
@@ -297,11 +297,17 @@ bool FirstPersonPresentation::ClipHandInWeapon(glm::mat4& out) const {
     return true;
 }
 bool FirstPersonPresentation::CarriedHeld(std::vector<float>& held, float* heldGap) const {
+    thread_local std::vector<glm::mat4> bones;
+    held.clear();
+    if (heldGap) *heldGap = -1.0f;
+    return CarriedBonePoses(bones) && CarriedHeldFrom(bones, held, heldGap);
+}
+
+bool FirstPersonPresentation::CarriedHeldFrom(const std::vector<glm::mat4>& bones, std::vector<float>& held, float* heldGap) const {
     held.clear();
     if (heldGap) *heldGap = -1.0f;
     const auto* rig = m_AnchorLimb >= 0 && m_World && m_World->Registry.valid(m_Arms) ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
-    thread_local std::vector<glm::mat4> bones;
-    if (!rig || !m_ArmsModel || !CarriedBonePoses(bones)) return false;
+    if (!rig || !m_ArmsModel) return false;
     // The clips' own hand on their gun (the raw "arms" rig: the arms rig's own has the sights' anchor on it, held to the
     // eye), put in the weapon model's space through where the gun really sits on the socket.
     const IKLimb& limb = m_AnchorLimb == 0 ? rig->LimbA : rig->LimbB;

@@ -1,4 +1,5 @@
 #include "SceneRenderer.h"
+#include "Animation.h" // NormalMatrix
 #include <cstdio>
 #include <cstdlib>
 #include <array>
@@ -251,7 +252,7 @@ const CandidateCache& Candidates(World& world) {
             Candidate& c = cache.List[cache.Index[slot]];
             if (c.Entity != e) continue;
             c.V.Xform = world.GetCachedWorldTransform(e);
-            c.V.Normal = glm::transpose(glm::inverse(glm::mat3(c.V.Xform)));
+            c.V.Normal = NormalMatrix(c.V.Xform);
             FillBounds(c.V, *c.Renderable);
             CandidateCell& cell = cache.Cells[c.Cell];
             if (!cell.Always) {
@@ -299,7 +300,7 @@ const CandidateCache& Candidates(World& world) {
         c.V.Layer = c.Layer;
         c.V.Renderable = &r;
         c.V.Xform = world.GetCachedWorldTransform(entity);
-        c.V.Normal = glm::transpose(glm::inverse(glm::mat3(c.V.Xform)));
+        c.V.Normal = NormalMatrix(c.V.Xform);
         FillBounds(c.V, r);
         built.push_back(c);
     }
@@ -1591,6 +1592,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // street or a forest was shaded in full. With writes off the test runs first, and the pre-pass depth (the same
     // clip) already holds the answer.
     GLboolean depthWrites = GL_TRUE;
+    Model::DrawPassState passState; // read once for the batches below (not per double-sided batch)
     const auto drawBatch = [&](const IndirectBatch& b) {
         const OpaqueTag& t = opaqueTags[b.Tag];
         const DrawItem& lead = drawList[opaqueGroups.Order[opaqueGroups.Groups[t.Group].First]];
@@ -1598,6 +1600,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (leadWrites != depthWrites) {
             glDepthMask(depthWrites = leadWrites);
             glDepthFunc(depthWrites ? GL_LEQUAL : GL_EQUAL);
+            passState.DepthMask = depthWrites == GL_TRUE; // what the batches' render-state scopes restore to
+            passState.DepthFunc = depthWrites ? GL_LEQUAL : GL_EQUAL;
         }
         probeItem = &lead;
         instanceBase = 0; // uInstanced on; each command's baseInstance is its group's
@@ -1607,7 +1611,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                      ((std::uint64_t)lead.GIMask * 0x9E3779B97F4A7C15ull);
         perDrawKeyed = true;
         if (lead.Ref->DrawMeshIndirect(modelShader, t.Mesh, *lead.Slots, selectProgram, perDraw, lead.DoubleSided,
-                                       IndirectBuffer::Offset(b.First), (int)b.Count))
+                                       IndirectBuffer::Offset(b.First), (int)b.Count, &passState))
             ++localStats.DrawCalls;
         perDrawKeyed = false;
     };

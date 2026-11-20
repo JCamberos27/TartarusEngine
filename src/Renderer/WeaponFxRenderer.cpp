@@ -18,20 +18,16 @@ constexpr float kSpotQuad = 6.0f;        // the quad's half-size, in core radii 
 WeaponFxRenderer::WeaponFxRenderer() {
     m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("WeaponFx.vert.glsl"),
                                         ShaderLibrary::ReadFile("WeaponFx.frag.glsl"), "WeaponFx");
-    glGenVertexArrays(1, &m_VAO);
-    glGenBuffers(1, &m_VBO);
-    glBindVertexArray(m_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    const GLsizei stride = kStride * (GLsizei)sizeof(float);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)(5 * sizeof(float)));
-    glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(9 * sizeof(float)));
-    glBindVertexArray(0);
+    // Direct state access: building it binds nothing (a renderer made mid-frame leaves the bound VAO / buffer alone).
+    glCreateVertexArrays(1, &m_VAO);
+    glCreateBuffers(1, &m_VBO);
+    glVertexArrayVertexBuffer(m_VAO, 0, m_VBO, 0, kStride * (GLsizei)sizeof(float));
+    const struct { GLuint Size, Offset; } kAttribs[4] = {{3, 0}, {2, 3}, {4, 5}, {1, 9}}; // pos, uv, colour, glow
+    for (GLuint a = 0; a < 4; ++a) {
+        glEnableVertexArrayAttrib(m_VAO, a);
+        glVertexArrayAttribFormat(m_VAO, a, (GLint)kAttribs[a].Size, GL_FLOAT, GL_FALSE, kAttribs[a].Offset * (GLuint)sizeof(float));
+        glVertexArrayAttribBinding(m_VAO, a, 0);
+    }
 }
 
 WeaponFxRenderer::~WeaponFxRenderer() {
@@ -114,14 +110,13 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
     m_Spots.clear();
     if (V.empty()) return;
 
-    glBindVertexArray(m_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
     if (V.size() > m_Capacity) {
-        glBufferData(GL_ARRAY_BUFFER, V.size() * sizeof(float), V.data(), GL_DYNAMIC_DRAW);
+        glNamedBufferData(m_VBO, (GLsizeiptr)(V.size() * sizeof(float)), V.data(), GL_DYNAMIC_DRAW);
         m_Capacity = V.size();
     } else {
-        glBufferSubData(GL_ARRAY_BUFFER, 0, V.size() * sizeof(float), V.data());
+        glNamedBufferSubData(m_VBO, 0, (GLsizeiptr)(V.size() * sizeof(float)), V.data());
     }
+    glBindVertexArray(m_VAO);
     m_Shader->Bind();
     m_Shader->SetMat4("uViewProj", proj * view);
     m_Shader->SetFloat("uTime", time);

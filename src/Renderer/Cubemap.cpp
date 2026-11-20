@@ -1,4 +1,7 @@
 #include "Cubemap.h"
+#include "GLStateScope.h"
+#include <optional>
+#include "CubeFaces.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
@@ -8,15 +11,8 @@
 
 namespace {
 
-struct FaceBasis { float forward[3]; float right[3]; float up[3]; };
-const FaceBasis kFaces[6] = {
-    {{ 1,  0,  0}, { 0,  0, -1}, { 0, -1,  0}}, // +X
-    {{-1,  0,  0}, { 0,  0,  1}, { 0, -1,  0}}, // -X
-    {{ 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // +Y
-    {{ 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // -Y
-    {{ 0,  0,  1}, { 1,  0,  0}, { 0, -1,  0}}, // +Z
-    {{ 0,  0, -1}, {-1,  0,  0}, { 0, -1,  0}}, // -Z
-};
+using CubeFaces::FaceBasis; // CubeFaces.h
+using CubeFaces::kFaces;
 
 } // namespace
 
@@ -81,15 +77,7 @@ std::shared_ptr<Cubemap> Cubemap::LoadHdr(const std::string& path, int faceSize,
     glCreateFramebuffers(1, &fbo);
     glGenVertexArrays(1, &vao);
 
-    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-    const GLboolean wasCull      = glIsEnabled(GL_CULL_FACE);
-    const GLboolean wasBlend     = glIsEnabled(GL_BLEND);
-    GLint prevDepthMask = GL_TRUE;
-    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_BLEND);
-    glDepthMask(GL_FALSE);
+    std::optional<GLPlainPassScope> plain(std::in_place); // depth / cull / blend off until reset below
 
     glBindVertexArray(vao);
     glActiveTexture(GL_TEXTURE0);
@@ -120,10 +108,7 @@ std::shared_ptr<Cubemap> Cubemap::LoadHdr(const std::string& path, int faceSize,
     glDeleteTextures(1, &equiTex);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    if (wasDepthTest) glEnable(GL_DEPTH_TEST);
-    if (wasCull)      glEnable(GL_CULL_FACE);
-    if (wasBlend)     glEnable(GL_BLEND);
-    glDepthMask((GLboolean)prevDepthMask);
+    plain.reset();
 
     auto cube = std::shared_ptr<Cubemap>(new Cubemap());
     cube->m_Tex      = cubeTex;
