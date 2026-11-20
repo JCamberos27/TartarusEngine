@@ -43,19 +43,6 @@ constexpr const char* kEditorReloaded = "Editor hot reload: TartarusEditor modul
 constexpr const char* kGameReloaded = "Hot reload: TartarusGame module reloaded.";
 constexpr const char* kRebuildItem = "Rebuild Game & Editor Modules";
 
-Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
-    auto start = std::make_shared<double>(-1.0);
-    return {name, [name, pred, seconds, start](Ctx& c) {
-        const double now = ImGui::GetTime();
-        if (*start < 0.0) *start = now;
-        if (pred(c)) return true;
-        if (now - *start > seconds) {
-            Fail("step '" + name + "' timed out after " + std::to_string((int)seconds) + " s");
-            return true;
-        }
-        return false;
-    }, 100000000};
-}
 // Marks a file as just written (what the module watchers look at); false when it doesn't exist.
 bool Touch(const fs::path& p) {
     std::error_code ec;
@@ -69,7 +56,6 @@ ImGuiWindow* Shown(const char* name) {
     ImGuiWindow* w = ImGui::FindWindowByName(name);
     return w && w->WasActive && !w->Hidden ? w : nullptr;
 }
-Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
 // The scene FreshScene() builds plus the rename the swap tests make, still there.
 std::string SceneIntact(Ctx& c, const char* third) {
     for (const char* n : {"Alpha", "Beta", third})

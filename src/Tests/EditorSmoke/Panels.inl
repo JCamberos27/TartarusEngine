@@ -198,7 +198,7 @@ void RegisterPanelsTests() {
     }
 
     // ---------------------------------------------------------------------------------- History
-    Add("panels: History (Ctrl+Shift+H) lists an edit; its rows jump undo / redo", Seq({
+    Add("panels: History (Ctrl+Shift+H) lists an edit; its rows jump undo / redo", Cat({
         {FreshScene(), Wait(2)},
         MenuClick("Create", "Cube", "Cube"),
         {Until("a cube", [](Ctx& c) { return ByName(c.W, "Cube") != entt::null; }),
@@ -272,7 +272,7 @@ void RegisterPanelsTests() {
     });
 
     // ---------------------------------------------------------------------------------- Physics Debug
-    Add("panels: Physics Debug: draw channels and collider toggles persist; its x", Seq({
+    Add("panels: Physics Debug: draw channels and collider toggles persist; its x", Cat({
         {FreshScene(), Wait(2),
          Do("note", [](Ctx&) {
              g_Number = EditorSettings::Get().ShowColliders ? 1.0 : 0.0;
@@ -336,7 +336,7 @@ void RegisterPanelsTests() {
         Add("panels: Audio, Animator and Asset Library open from the Window menu, close with their x", s);
     }
 
-    Add("panels: Script IDE opens from the Window menu, closes with its x", Seq({
+    Add("panels: Script IDE opens from the Window menu, closes with its x", Cat({
         {FreshScene(), Wait(2)},
         MenuClick("Window", "Hierarchy", "Script IDE"),
         {UntilShown("Script IDE"), Wait(3),

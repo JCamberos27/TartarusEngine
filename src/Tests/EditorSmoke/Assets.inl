@@ -53,11 +53,6 @@ std::string Dir() { return ProjectPaths::Resolve(kFolder); }
 std::string DirFile(const std::string& name) { return (fs::path(Dir()) / name).generic_string(); }
 std::string LibraryDir() { return (fs::path(UserPaths::Root()) / "editor-smoke-asset-library").generic_string(); }
 
-Steps Cat(std::vector<Steps> parts) {
-    Steps out;
-    for (auto& p : parts) for (auto& s : p) out.push_back(std::move(s));
-    return out;
-}
 bool HasFolder(Ctx& c, const std::string& f) {
     const auto& v = c.A.Folders();
     return std::find(v.begin(), v.end(), f) != v.end();

@@ -215,7 +215,7 @@ void RegisterSettingsTests() {
     using namespace smoke_settings;
 
     // ------------------------------------------------------------------------- THIS MACHINE
-    Add("settings: General - tooltips checkbox persists to editor_prefs.json", Seq({
+    Add("settings: General - tooltips checkbox persists to editor_prefs.json", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 0),
         {Shot("general", {"###Settings"})},
@@ -223,7 +223,7 @@ void RegisterSettingsTests() {
         {CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
-    Add("settings: Viewport - Show grid persists", Seq({
+    Add("settings: Viewport - Show grid persists", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 1),
         {Shot("viewport", {"###Settings"})},
@@ -231,7 +231,7 @@ void RegisterSettingsTests() {
         {CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
-    Add("settings: Grid & Snapping - Show axis lines persists", Seq({
+    Add("settings: Grid & Snapping - Show axis lines persists", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 2),
         {Shot("grid", {"###Settings"})},
@@ -239,7 +239,7 @@ void RegisterSettingsTests() {
         {CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
-    Add("settings: Auto-Save - Enable auto-save persists", Seq({
+    Add("settings: Auto-Save - Enable auto-save persists", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 3),
         {Shot("autosave", {"###Settings"})},
@@ -249,7 +249,7 @@ void RegisterSettingsTests() {
 
     // Performance has no prefs checkbox: its first checkbox (Auto exposure) is a scene setting,
     // so it is an undo step; the render resolution combo is the prefs setting here.
-    Add("settings: Performance - Auto exposure undoes; render resolution persists", Seq({
+    Add("settings: Performance - Auto exposure undoes; render resolution persists", Cat({
         // A material whose folder comes from disk (its .meta has none), loaded before the scene
         // so the undo snapshot carries that folder - which the undo must not write to the .meta.
         {Do("load a material", [](Ctx& c) {
@@ -298,7 +298,7 @@ void RegisterSettingsTests() {
     // An undo restores every asset's import settings too. Settings held in memory only (like a
     // guessed normal-map import) used to land in the asset's .meta, and a model's clip trims were
     // dropped. Everything here is set in memory only, so no tracked file is touched.
-    Add("settings: an undo keeps in-memory import settings out of .meta and keeps clip trims", Seq({
+    Add("settings: an undo keeps in-memory import settings out of .meta and keeps clip trims", Cat({
         {Do("a normal-map import and a clip trim, in memory only", [](Ctx& c) {
              g_Text = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
              const std::string tex = ProjectPaths::Resolve(kGuessedTexture);
@@ -349,7 +349,7 @@ void RegisterSettingsTests() {
             return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
         };
         auto loaded = std::make_shared<std::shared_ptr<Model>>();
-        Add("settings: an undo leaves an unchanged model .meta as it was, byte for byte", Seq({
+        Add("settings: an undo leaves an unchanged model .meta as it was, byte for byte", Cat({
             {Do("a scratch model whose .meta is written like the door models'", [dir, model, loaded](Ctx& c) {
                  std::error_code ec;
                  fs::remove_all(fs::u8path(dir()), ec);
@@ -389,7 +389,7 @@ void RegisterSettingsTests() {
     }
 
     // Shortcuts has no checkbox either: rebind one (press-to-bind), then reset it from its row.
-    Add("settings: Shortcuts - rebind Invert Selection, then reset it", Seq({
+    Add("settings: Shortcuts - rebind Invert Selection, then reset it", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 5),
         {Shot("shortcuts", {"###Settings"}),
@@ -423,7 +423,7 @@ void RegisterSettingsTests() {
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
-    Add("settings: Editor Enhancers - Hover keys persists", Seq({
+    Add("settings: Editor Enhancers - Hover keys persists", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 6),
         {Shot("enhancers", {"###Settings"})},
@@ -431,7 +431,7 @@ void RegisterSettingsTests() {
         {CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
-    Add("settings: Sounds - Editor sounds persists", Seq({
+    Add("settings: Sounds - Editor sounds persists", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 7),
         {Shot("sounds", {"###Settings"})},
@@ -440,7 +440,7 @@ void RegisterSettingsTests() {
     }));
 
     // About has nothing to change (Copy report would overwrite the user's clipboard).
-    Add("settings: About shows the version and the system report", Seq({
+    Add("settings: About shows the version and the system report", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 8),
         {ExpectTrue("Copy report is there", [](Ctx&) { return Find(ByLabel("Copy report", "###Settings")) != nullptr; }),
@@ -449,7 +449,7 @@ void RegisterSettingsTests() {
     }));
 
     // ------------------------------------------------------------------------------ Themes
-    Add("settings: every theme - Black Glass and its options, then back to Tartarus", Seq({
+    Add("settings: every theme - Black Glass and its options, then back to Tartarus", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 0),
         {ExpectTrue("starts on Tartarus", [](Ctx&) { return EditorSettings::Get().EditorThemeId == EditorSettings::kTartarusTheme; }),
@@ -476,7 +476,7 @@ void RegisterSettingsTests() {
     });
 
     // ---------------------------------------------------------------------------- UI scale
-    Add("settings: UI scale override by typing, restart warning, Auto resets it", Seq({
+    Add("settings: UI scale override by typing, restart warning, Auto resets it", Cat({
         // TARTARUS_EDITOR_TEST_SCALE starts the run on an override, so note it and put it back.
         {FreshScene(), Wait(2),
          Do("note the starting override", [](Ctx&) { g_Vec.x = EditorSettings::Get().UiScaleOverride; }),
@@ -505,7 +505,7 @@ void RegisterSettingsTests() {
     });
 
     // ------------------------------------------------------------------------------ Search
-    Add("settings: search 'vsync' jumps to Performance; clearing it shows every category", Seq({
+    Add("settings: search 'vsync' jumps to Performance; clearing it shows every category", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(false, 0),
         {Click(ByExact("##search", "###Settings")), Wait(1),
@@ -532,7 +532,7 @@ void RegisterSettingsTests() {
     }));
 
     // ------------------------------------------------------------------------- THIS PROJECT
-    Add("settings: Physics - gravity and a collision-matrix cell persist to project/settings.json", Seq({
+    Add("settings: Physics - gravity and a collision-matrix cell persist to project/settings.json", Cat({
         {FreshScene(), Wait(2), SnapshotProjectFiles()},
         OpenCategory(true, 0),
         {Shot("physics", {"###Settings"}),
@@ -567,7 +567,7 @@ void RegisterSettingsTests() {
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }), RestoreProjectFilesNow);
 
-    Add("settings: Tags & Layers - add and remove a tag, name and unname a layer", Seq({
+    Add("settings: Tags & Layers - add and remove a tag, name and unname a layer", Cat({
         {FreshScene(), Wait(2), SnapshotProjectFiles(),
          ExpectTrue("no SmokeTag yet", [](Ctx&) { return !HasTag("SmokeTag"); }),
          Do("pick an unnamed layer slot", [](Ctx&) {
@@ -602,7 +602,7 @@ void RegisterSettingsTests() {
     }), RestoreProjectFilesNow);
 
     // Shot only: Build and Build and Run are never clicked.
-    Add("settings: Build page (shot only)", Seq({
+    Add("settings: Build page (shot only)", Cat({
         {FreshScene(), Wait(2)},
         OpenCategory(true, 2),
         {Shot("build", {"###Settings"}),

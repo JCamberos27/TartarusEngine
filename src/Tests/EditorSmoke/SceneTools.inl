@@ -95,7 +95,6 @@ namespace {
 namespace smoke_tools {
 using ST = EditorSmokeAccess_SceneTools;
 using ChromeUi::Steps;
-using ChromeUi::Seq;
 
 // A toolbar button whose label starts with `icon` (icon-only buttons, and the labelled ones -
 // "<icon>  Shaded", "<icon>  1 m" - alike): in the main toolbar row (tools, space, snap) or the
@@ -138,7 +137,7 @@ Query ProjButton() {
 // Every test ends here: tools back to their defaults, the camera reset, panels as they were.
 Steps Tidy() {
     return {
-        ChromeUi::CloseMenus(),
+        CloseMenus(),
         Do("tools back to their defaults, panels back", [](Ctx& c) {
             ST::Defaults(c.E);
             ST::ShowAssets(c.E) = true;
@@ -398,7 +397,7 @@ void RegisterSceneToolsTests() {
             {EDITOR_ICON_ROTATE, 1, "rotate"}, {EDITOR_ICON_SCALE, 2, "scale"}, {EDITOR_ICON_RECT_TOOL, 3, "rect"},
             {EDITOR_ICON_UNIVERSAL, 4, "universal"}, {EDITOR_ICON_TRANSLATE, 0, "translate"},
         };
-        Steps s = Seq({ToolScene(), {SelectByName("Cube"), Wait(3)}});
+        Steps s = Cat({ToolScene(), {SelectByName("Cube"), Wait(3)}});
         s.push_back(Click(Rail(EDITOR_ICON_HAND_TOOL)));
         s.push_back(Wait(2));
         s.push_back(ExpectTrue("Hand on", [](Ctx& c) { return ST::Hand(c.E); }));
@@ -423,7 +422,7 @@ void RegisterSceneToolsTests() {
         Add("scenetools: the palette picks Hand, Translate, Rotate, Scale, Rect and Universal", s);
     }
 
-    Add("scenetools: Q W E R T Y and M switch tools over the Scene view", Seq({
+    Add("scenetools: Q W E R T Y and M switch tools over the Scene view", Cat({
         ToolScene(),
         {SelectByName("Cube"), HoverPanel(kScene), Wait(2),
          Key(ImGuiKey_Q), Wait(2),
@@ -454,7 +453,7 @@ void RegisterSceneToolsTests() {
         Tidy(),
     }));
 
-    Add("scenetools: the Hand tool drag pans the camera and selects or moves nothing", Seq({
+    Add("scenetools: the Hand tool drag pans the camera and selects or moves nothing", Cat({
         ToolScene(),
         {SelectByName("Beta"), HoverPanel(kScene), Wait(2),
          Key(ImGuiKey_Q), Wait(2),
@@ -472,7 +471,7 @@ void RegisterSceneToolsTests() {
         Tidy(),
     }));
 
-    Add("scenetools: Measure chains points by click, right-click clears, Escape exits", Seq({
+    Add("scenetools: Measure chains points by click, right-click clears, Escape exits", Cat({
         ToolScene(),
         {SelectByName("Beta"), Wait(2),
          Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Measure")) != nullptr; }),
@@ -496,7 +495,7 @@ void RegisterSceneToolsTests() {
         Tidy(),
     }));
 
-    Add("scenetools: Duplicate Array from the palette lays out a 3 x 1 x 2 grid; undo removes it", Seq({
+    Add("scenetools: Duplicate Array from the palette lays out a 3 x 1 x 2 grid; undo removes it", Cat({
         ToolScene(),
         {Do("nothing selected", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
          Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Duplicate Array")) != nullptr; }),
@@ -543,7 +542,7 @@ void RegisterSceneToolsTests() {
         Tidy(),
     }));
 
-    Add("scenetools: Local/World, Pivot/Center, grid, snap and gizmo toggles by click and by shortcut", Seq({
+    Add("scenetools: Local/World, Pivot/Center, grid, snap and gizmo toggles by click and by shortcut", Cat({
         ToolScene(), RoomForRail(),
         {SelectByName("Cube"), Wait(2),
          Click(Rail(EDITOR_ICON_WORLD_SPACE)), Wait(2),
@@ -560,7 +559,7 @@ void RegisterSceneToolsTests() {
          Click(ShowButton()), Until("the Show menu", [](Ctx&) { return Find(MenuItem("Grid")) != nullptr; }),
          Click(MenuItem("Grid")), Wait(2),
          ExpectTrue("grid off", [](Ctx& c) { return !ST::Grid(c.E); }),
-         ChromeUi::CloseMenus(), Wait(2),
+         CloseMenus(), Wait(2),
          Shot("no-grid", {kScene}),
          HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Alt), Wait(2),
          ExpectTrue("Alt+G: grid on", [](Ctx& c) { return ST::Grid(c.E); }),
@@ -581,7 +580,7 @@ void RegisterSceneToolsTests() {
          ExpectTrue("its Show grid checkbox turns the grid off", [](Ctx& c) { return !ST::Grid(c.E); }),
          Click(PopupItem("Show grid")), Wait(2),
          ExpectTrue("and on", [](Ctx& c) { return ST::Grid(c.E); }),
-         ChromeUi::CloseMenus(), Wait(2),
+         CloseMenus(), Wait(2),
          Click(ShowButton()),
          Until("the gizmos popover", [](Ctx&) { return Find(PopupItem("Show transform gizmo")) != nullptr; }),
          Click(PopupItem("Show transform gizmo")), Wait(2),
@@ -601,7 +600,7 @@ void RegisterSceneToolsTests() {
             {"Wireframe", EDITOR_ICON_WIREFRAME_MODE}, {"Unlit", EDITOR_ICON_UNLIT_MODE}, {"Normals", EDITOR_ICON_NORMALS_MODE},
             {"Shadow Cascades", EDITOR_ICON_CASCADES_MODE}, {"Mip / Texel Density", EDITOR_ICON_MIP_MODE}, {"Shaded", EDITOR_ICON_SHADED_MODE},
         };
-        Steps s = Seq({ToolScene(), RoomForRail(), {SelectByName("Cube"), Wait(2)}});
+        Steps s = Cat({ToolScene(), RoomForRail(), {SelectByName("Cube"), Wait(2)}});
         const char* icon = EDITOR_ICON_SHADED_MODE;
         for (int i = 0; i < 6; ++i) {
             const Mode mode = kModes[i];
@@ -632,7 +631,7 @@ void RegisterSceneToolsTests() {
         Add("scenetools: every draw mode from the palette popup, and Alt+D / Alt+Shift+D cycle them", s);
     }
 
-    Add("scenetools: orthographic by click and 5; view presets 1 3 7 (Ctrl: opposite) and 0; the nav gizmo's axis", Seq({
+    Add("scenetools: orthographic by click and 5; view presets 1 3 7 (Ctrl: opposite) and 0; the nav gizmo's axis", Cat({
         ToolScene(), RoomForRail(),
         {Do("nothing selected (views pivot on the scene)", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
          Click(ProjButton()), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Orthographic")) != nullptr; }),
@@ -676,7 +675,7 @@ void RegisterSceneToolsTests() {
 
     // Every viewport pick is its own undo step, the first one after an edit too (that one used to
     // match the edit's own entry and was dropped as a duplicate).
-    Add("scenetools: a viewport pick right after an edit is its own undo step", Seq({
+    Add("scenetools: a viewport pick right after an edit is its own undo step", Cat({
         ToolScene(),
         {ClickAt("Gamma", AtObject("Gamma")), Wait(3),
          ExpectDepth("one selection step", 1),
@@ -709,7 +708,7 @@ void RegisterSceneToolsTests() {
         auto noteDrop = [dropDir, dropPath] {
             for (const std::string& p : {dropDir(), dropPath(), dropPath() + ".meta"}) AtomicFile::NoteSelfWrite(std::filesystem::u8path(p));
         };
-        Add("scenetools: a prefab dropped onto the editor is its own undo step; Ctrl+Z after an edit and a drop takes back only the drop", Seq({
+        Add("scenetools: a prefab dropped onto the editor is its own undo step; Ctrl+Z after an edit and a drop takes back only the drop", Cat({
             {Do("write a scratch prefab (Dropped Crate)", [dropDir, dropPath, noteDrop](Ctx&) {
                 noteDrop();
                 std::error_code ec;
@@ -755,7 +754,7 @@ void RegisterSceneToolsTests() {
 
     // Bug #15, for any path that still forgets its undo step: the change it made is not thrown
     // away with the edit before it. Ctrl+Z takes back only that change, as a step of its own.
-    Add("scenetools: a scene change made without an undo step is its own step at the next Ctrl+Z, not lost with the edit before it", Seq({
+    Add("scenetools: a scene change made without an undo step is its own step at the next Ctrl+Z, not lost with the edit before it", Cat({
         ToolScene(),
         {Do("note Gamma's intensity", [](Ctx& c) { g_Number = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity; }),
          Do("rename Alpha (an undo step)", [](Ctx& c) {
@@ -797,7 +796,7 @@ void RegisterSceneToolsTests() {
         auto watchDir = [] { return ProjectPaths::Resolve("editor-smoke-scratch-watch"); };
         auto watchFile = [watchDir] { return (std::filesystem::u8path(watchDir()) / "outside.txt").u8string(); };
         auto synced = std::make_shared<unsigned>(0);
-        Add("scenetools: a scene change in the frame an outside file change is synced is still its own step at the next Ctrl+Z", Seq({
+        Add("scenetools: a scene change in the frame an outside file change is synced is still its own step at the next Ctrl+Z", Cat({
             ToolScene(),
             {Do("note Gamma's intensity", [](Ctx& c) { g_Number = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity; }),
              Do("rename Alpha (an undo step)", [](Ctx& c) {
@@ -838,7 +837,7 @@ void RegisterSceneToolsTests() {
         });
     }
 
-    Add("scenetools: F frames the selection; viewport click selects, Ctrl+click adds, empty space clears, a box drag selects", Seq({
+    Add("scenetools: F frames the selection; viewport click selects, Ctrl+click adds, empty space clears, a box drag selects", Cat({
         ToolScene(),
         {SelectByName("Gamma"), Wait(2),
          ChromeUi::NoteCamera(),
@@ -877,7 +876,7 @@ void RegisterSceneToolsTests() {
         Tidy(),
     }));
 
-    Add("scenetools: a gizmo drag moves along X in grid steps, undo puts it back, redo again; snap off moves freely", Seq({
+    Add("scenetools: a gizmo drag moves along X in grid steps, undo puts it back, redo again; snap off moves freely", Cat({
         ToolScene(),
         {SelectByName("Beta"), Wait(3),
          Do("note the undo depth", [](Ctx& c) { g_Number = (double)X::UndoDepth(c.E); })},
@@ -914,7 +913,7 @@ void RegisterSceneToolsTests() {
     // back with Ctrl+Z and forward with Ctrl+Y, one press at a time, each depth matching its dump.
     {
         auto checked = std::make_shared<int>(0);
-        Steps s = Seq({
+        Steps s = Cat({
             ToolScene(),
             {Do("start recording", [checked](Ctx&) { g_At.clear(); g_TopDepth = 0; *checked = 0; }),
              Record("nothing"),
@@ -1025,7 +1024,7 @@ void RegisterSceneToolsTests() {
             q.Pred = [](const UiItem& it) { ImGuiWindow* w = ImGui::FindWindowByName(EditorPanels::History); return w && it.Window == w->Name; };
             return q;
         };
-        Steps s = Seq({
+        Steps s = Cat({
             ToolScene(),
             {Do("start recording", [](Ctx&) { g_At.clear(); g_TopDepth = 0; }),
              Record("nothing"),

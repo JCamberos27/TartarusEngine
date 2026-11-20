@@ -982,11 +982,27 @@ std::function<bool(Ctx&, ImVec2&)> AtPoint(std::function<ImVec2(Ctx&)> p) {
 std::vector<Step> ClickHere(int holdFrames = 6) {
     return {MouseButton(0, true), Wait(holdFrames), MouseButton(0, false)};
 }
-std::vector<Step> Cat(std::initializer_list<std::vector<Step>> parts) {
+// The parts in order, as one step list.
+std::vector<Step> Cat(std::vector<std::vector<Step>> parts) {
     std::vector<Step> out;
-    for (const auto& p : parts) out.insert(out.end(), p.begin(), p.end());
+    for (auto& p : parts) for (auto& st : p) out.push_back(std::move(st));
     return out;
 }
+// Until, with a real-time limit (frame rates vary a lot between a desktop GPU and llvmpipe).
+Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double seconds) {
+    auto start = std::make_shared<double>(-1.0);
+    return {name, [name, pred, seconds, start](Ctx& c) {
+        const double now = ImGui::GetTime();
+        if (*start < 0.0) *start = now;
+        if (pred(c)) return true;
+        if (now - *start > seconds) {
+            Fail("step '" + name + "' timed out after " + std::to_string((int)seconds) + " s");
+            return true;
+        }
+        return false;
+    }, 100000000};
+}
+Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
 
 void RegisterMotionDemo() {
     Add("motion demo", Cat({

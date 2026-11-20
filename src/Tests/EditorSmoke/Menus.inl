@@ -54,12 +54,6 @@ namespace ChromeUi {
 using A = EditorSmokeAccess_Menus;
 using Steps = std::vector<Step>;
 
-Steps Seq(std::initializer_list<Steps> parts) {
-    Steps out;
-    for (const Steps& p : parts) out.insert(out.end(), p.begin(), p.end());
-    return out;
-}
-
 // --- Windows -------------------------------------------------------------------------------------
 // Read in BeforeFrame, before NewFrame: Active = the window was begun last frame.
 ImGuiWindow* Win(const char* name) { return ImGui::FindWindowByName(name); }
@@ -164,7 +158,6 @@ Step ExpectListed(std::string what, std::vector<std::string> labels, bool enable
         return missing;
     });
 }
-Step CloseMenus() { return Do("close menus", [](Ctx&) { ImGui::ClosePopupsExceptModals(); }); }
 
 // --- Scene ---------------------------------------------------------------------------------------
 int EntityCount(World& w) {
@@ -218,7 +211,7 @@ void RegisterMenusTests() {
     using namespace ChromeUi;
 
     // ---------------------------------------------------------------------------------- File
-    Add("menus: File lists its items; Import's submenu too", Seq({
+    Add("menus: File lists its items; Import's submenu too", Cat({
         {FreshScene(), Wait(2)},
         OpenMenu("File", "New Scene"),
         {Shot("file", {"##Menu_00"}),
@@ -234,7 +227,7 @@ void RegisterMenusTests() {
          CloseMenus(), Wait(2)},
     }));
 
-    Add("menus: File > Save writes the scratch scene; Revert Scene reloads it", Seq({
+    Add("menus: File > Save writes the scratch scene; Revert Scene reloads it", Cat({
         {FreshScene(),
          Do("no scratch file yet", [](Ctx&) { std::error_code ec; std::filesystem::remove(g_ScratchScene, ec); }),
          Do("mark the scene edited", [](Ctx& c) { X::PushUndo(c.E, c.W, "Edit"); c.W.Registry.get<NameComponent>(ByName(c.W, "Gamma")).Name = "Gamma Saved"; }),
@@ -256,7 +249,7 @@ void RegisterMenusTests() {
          ExpectTrue("not dirty after the reload", [](Ctx& c) { return !A::Dirty(c.E); })},
     }));
 
-    Add("menus: File > New Scene starts an empty scene file", Seq({
+    Add("menus: File > New Scene starts an empty scene file", Cat({
         {FreshScene(), Wait(2), Do("note the scene", [](Ctx& c) { g_Text = X::ScenePath(c.E); })},
         MenuClick("File", "New Scene", "New Scene"),
         {Until("a new scene", [](Ctx& c) { return X::ScenePath(c.E) != g_Text; }),
@@ -282,7 +275,7 @@ void RegisterMenusTests() {
     });
 
     // ---------------------------------------------------------------------------------- Edit
-    Add("menus: Edit menu - Duplicate, Undo, Redo, Copy, Paste, Delete, Select All", Seq({
+    Add("menus: Edit menu - Duplicate, Undo, Redo, Copy, Paste, Delete, Select All", Cat({
         {FreshScene(), Wait(2), SelectByName("Beta"), Wait(3)},
         OpenMenu("Edit", "Undo"),
         {Shot("edit", {"##Menu_00"}),
@@ -316,7 +309,7 @@ void RegisterMenusTests() {
         {Until("everything selected", [](Ctx& c) { return X::Selection(c.E).size() == 3; })},
     }));
 
-    Add("menus: Edit > Preferences... and Project Settings... open the Settings window", Seq({
+    Add("menus: Edit > Preferences... and Project Settings... open the Settings window", Cat({
         {FreshScene(), Wait(2)},
         MenuClick("Edit", "Undo", "Preferences..."),
         {UntilShown(EditorPanels::Settings),
@@ -339,7 +332,7 @@ void RegisterMenusTests() {
             {"Spot Light", "Spot Light", 2}, {"Directional Light", "Directional Light", 2},
             {"First Person Player", "Player Spawn", 3}, {"Camera", "Camera", 4},
         };
-        Steps s = Seq({{FreshScene(), Wait(2)}, OpenMenu("Create", "Cube")});
+        Steps s = Cat({{FreshScene(), Wait(2)}, OpenMenu("Create", "Cube")});
         s.push_back(Shot("create", {"##Menu_00"}));
         {
             std::vector<std::string> labels;
@@ -386,7 +379,7 @@ void RegisterMenusTests() {
     }
 
     // ---------------------------------------------------------------------------------- View
-    Add("menus: View lists its items; Frame Selected, Frame All, Selection Back / Forward", Seq({
+    Add("menus: View lists its items; Frame Selected, Frame All, Selection Back / Forward", Cat({
         {FreshScene(), ResetCamera(), Wait(2), SelectByName("Alpha"), Wait(3), SelectByName("Gamma"), Wait(3)},
         OpenMenu("View", "Frame Selected"),
         {Shot("view", {"##Menu_00"}),
@@ -411,7 +404,7 @@ void RegisterMenusTests() {
          ResetCamera()},
     }));
 
-    Add("menus: View toggles - Transform Gizmo, Measure Tool, Frame on Select, Mute Audio", Seq({
+    Add("menus: View toggles - Transform Gizmo, Measure Tool, Frame on Select, Mute Audio", Cat({
         {FreshScene(), ResetCamera(), Wait(2), Do("note", [](Ctx& c) { g_Number = A::ShowGizmos(c.E) ? 1.0 : 0.0; })},
         MenuClick("View", "Frame Selected", "Transform Gizmo"),
         {ExpectTrue("gizmo toggled", [](Ctx& c) { return A::ShowGizmos(c.E) != Noted(); })},
@@ -465,7 +458,7 @@ void RegisterMenusTests() {
     }
 
     // ---------------------------------------------------------------------------------- Window
-    Add("menus: Window lists every panel", Seq({
+    Add("menus: Window lists every panel", Cat({
         {FreshScene(), Wait(2)},
         OpenMenu("Window", "Hierarchy"),
         {Shot("window", {"##Menu_00"}),
@@ -538,7 +531,7 @@ void RegisterMenusTests() {
         Add("menus: Window opens and closes every optional panel", s);
     }
 
-    Add("menus: Window > Script IDE and Physics HUD overlay", Seq({
+    Add("menus: Window > Script IDE and Physics HUD overlay", Cat({
         {FreshScene(), Wait(2)},
         MenuClick("Window", "Hierarchy", "Script IDE"),
         {UntilShown("Script IDE"), Wait(3),
@@ -579,7 +572,7 @@ void RegisterMenusTests() {
             return w && total > 0.0f ? (double)(w->Size.y / total) : 0.0;
         };
         static double s_DefaultW = 0.0, s_DefaultH = 0.0, s_WideW = 0.0;
-        Add("menus: Window > Layout Presets: Default, Wide, Tall, Focus, Reset Layout", Seq({
+        Add("menus: Window > Layout Presets: Default, Wide, Tall, Focus, Reset Layout", Cat({
             {FreshScene(), Wait(2)},
             preset("Default"),
             {UntilShown(EditorPanels::Hierarchy), UntilShown(EditorPanels::Inspector),
@@ -628,7 +621,7 @@ void RegisterMenusTests() {
         };
         static const std::string kFile = "Smoke Layout.ini";
         auto presetPath = []() { return (std::filesystem::path(UserPaths::Resolve("layouts")) / kFile).string(); };
-        Add("menus: Window > Layout Presets: save, load and delete a preset", Seq({
+        Add("menus: Window > Layout Presets: save, load and delete a preset", Cat({
             {FreshScene(), Wait(2), Do("no preset yet", [presetPath](Ctx&) { std::error_code ec; std::filesystem::remove(presetPath(), ec); })},
             openPresets(),
             {Click(MenuItem("Save Current Layout")),
@@ -654,7 +647,7 @@ void RegisterMenusTests() {
     }
 
     // ---------------------------------------------------------------------------------- Help
-    Add("menus: Help lists its items; Shortcuts and About open the Settings window", Seq({
+    Add("menus: Help lists its items; Shortcuts and About open the Settings window", Cat({
         {FreshScene(), Wait(2)},
         OpenMenu("Help", "Shortcuts"),
         {Shot("help", {"##Menu_00"}),
