@@ -628,7 +628,13 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
             if (!materialPaths.count(m->Path)) RemoveMaterial(m);
         }
     }
-    for (const auto& f : std::vector<std::string>(m_Folders)) {
+    // Deepest first: a parent is only empty (CanDeleteFolder) once its subfolders are gone, so walking the list
+    // parent-first kept the parent of a deleted folder tree (a redo of Delete Folder left it listed).
+    std::vector<std::string> byDepth(m_Folders);
+    std::stable_sort(byDepth.begin(), byDepth.end(), [](const std::string& a, const std::string& b) {
+        return std::count(a.begin(), a.end(), '/') > std::count(b.begin(), b.end(), '/');
+    });
+    for (const auto& f : byDepth) {
         // A folder that still has something under it isn't in the keep-set by mistake - it
         // just hasn't had its contents pruned yet on this pass (RemoveModel/etc. above already
         // ran, so by this point anything real that shouldn't survive is already gone). Silently
