@@ -2084,11 +2084,11 @@ bool AppSession::Frame() {
             if (wantNav || recordNav) {
                 // Named by the scene's file, not just its title: two "Hallway" scenes in different folders, or two
                 // unsaved scenes, used to share one note and draw each other's navmesh. An unsaved scene has none.
-                const std::string& scenePath = editor.CurrentScenePath();
-                if (scenePath.empty()) navNote.clear();
+                const std::string& sceneFile = editor.CurrentScenePath();
+                if (sceneFile.empty()) navNote.clear();
                 else {
                     std::uint64_t h = 1469598103934665603ull;
-                    for (char ch : ProjectPaths::Relativize(scenePath))
+                    for (char ch : ProjectPaths::Relativize(sceneFile))
                         h = (h ^ (unsigned char)(ch == '\\' ? '/' : std::tolower((unsigned char)ch))) * 1099511628211ull;
                     char tag[20];
                     std::snprintf(tag, sizeof(tag), "_%08llx", (unsigned long long)(h & 0xffffffffull));
