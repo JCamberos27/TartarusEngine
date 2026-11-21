@@ -79,9 +79,18 @@ bool EditorLayer::ApplyRestartState(World& world, AssetLibrary& assets, const st
         Log::Warn("Rebuild & Restart: the scene that was open (" + state->ScenePath + ") didn't reopen; selection and Play not restored.");
         return false;
     }
-    if (state->RestoreRecovery && m_RecoveryPromptPending) RestoreRecoverySnapshot(world, assets);
+    // Not gated on the startup recovery prompt: it compares file times, and on a coarse clock the snapshot written
+    // just before the restart can tie with the scene file, so the prompt never comes up.
+    bool restored = false;
+    if (state->RestoreRecovery) {
+        std::error_code fe;
+        if (std::filesystem::exists(RecoveryPathFor(m_CurrentScenePath), fe))
+            restored = RestoreRecoverySnapshot(world, assets); // logs its own error on a bad file
+        else
+            Log::Warn("Rebuild & Restart: the recovery snapshot with the unsaved edits is missing; the saved scene is open.");
+    }
     const std::vector<entt::entity> selection = RestartState::Resolve(world, state->Selection);
     if (!selection.empty()) SetSelectionToDistinct(selection);
-    Log::Info("Rebuild & Restart: back on the same scene" + std::string(state->RestoreRecovery ? " with its unsaved edits." : "."));
+    Log::Info("Rebuild & Restart: back on the same scene" + std::string(restored ? " with its unsaved edits." : "."));
     return state->WasPlaying;
 }

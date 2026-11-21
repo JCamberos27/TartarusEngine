@@ -213,12 +213,23 @@ void RegisterHotReloadTests() {
             return std::string();
         }),
         Expect("still editing (no relaunch happened)", [](Ctx& c) { return SceneIntact(c, "Gamma2"); }),
+        // The "new editor" starts on the saved scene. This process never raised the startup recovery prompt, the
+        // same as a restart whose snapshot ties with the scene file's time: the edits must come back anyway.
+        Do("back to the saved scene's content", [](Ctx& c) {
+            c.W.Registry.get<NameComponent>(ByName(c.W, "Gamma2")).Name = "Gamma";
+            g_Vec.z = (float)LogCount("with its unsaved edits");
+        }),
         SelectByName("Alpha"), Wait(3),
         Do("the new editor's side: apply the state", [](Ctx& c) {
             if (EditorRestart::Available()) c.E.ApplyRestartState(c.W, c.A, EditorRestart::StateFile());
         }), Wait(3),
         Expect("Beta selected again", [](Ctx& c) {
             return EditorRestart::Available() ? ExpectSelected(c, "Beta") : std::string();
+        }),
+        Expect("the unsaved edit is back, and the log says so", [](Ctx& c) {
+            if (!EditorRestart::Available()) return std::string();
+            if (ByName(c.W, "Gamma2") == entt::null) return std::string("Gamma2 not restored");
+            return (float)LogCount("with its unsaved edits") > g_Vec.z ? std::string() : std::string("no 'with its unsaved edits' line");
         }),
         ExpectTrue("the state file is consumed", [](Ctx&) {
             std::error_code ec;

@@ -66,15 +66,19 @@ void Run(fs::path exe) {
 bool Available() { return UnavailableReason().empty(); }
 
 std::string UnavailableReason() {
-    if (!GameModuleBuild::Available())
-        return "Only in an editor built from source: no CMake build folder (CMakeCache.txt) next to this exe.";
-    std::error_code ec;
-    const fs::path exe = ExePath();
-    // Multi-config generators put the exe in <build>/<Config>: anything under the build tree counts.
-    const fs::path rel = exe.empty() ? fs::path() : fs::relative(exe, GameModuleBuild::BinaryRoot(), ec);
-    if (ec || rel.empty() || *rel.begin() == "..")
-        return "This exe isn't inside the CMake build folder it was built in.";
-    return {};
+    // Fixed for the process (the exe and its build tree don't move); the File menu asks every frame it's open.
+    static const std::string reason = [] {
+        if (!GameModuleBuild::Available())
+            return std::string("Only in an editor built from source: no CMake build folder (CMakeCache.txt) next to this exe.");
+        std::error_code ec;
+        const fs::path exe = ExePath();
+        // Multi-config generators put the exe in <build>/<Config>: anything under the build tree counts.
+        const fs::path rel = exe.empty() ? fs::path() : fs::relative(exe, GameModuleBuild::BinaryRoot(), ec);
+        if (ec || rel.empty() || *rel.begin() == "..")
+            return std::string("This exe isn't inside the CMake build folder it was built in.");
+        return std::string();
+    }();
+    return reason;
 }
 
 bool Request() {
