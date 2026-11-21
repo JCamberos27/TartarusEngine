@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
+#include <string>
 
 void ConfigureModelVao(unsigned vao, unsigned vbo, unsigned ebo); // ModelMesh.cpp
 
@@ -101,6 +102,17 @@ public:
         if (m_WithVao) {
             glCreateVertexArrays(1, &p->Vao);
             ConfigureModelVao(p->Vao, p->Vbo, p->Ebo);
+            // P-40 EXPERIMENT (not for merge): static pages stop fetching the bone attributes (=1) and the colour too
+            // (=2, the bytes a 64 B static vertex would carry). Disabled arrays read the generic value instead.
+            static const int slim = [] { const char* e = std::getenv("TARTARUS_EXP_STATIC_SLIM"); return e ? std::atoi(e) : 0; }();
+            if (slim >= 1) {
+                for (GLuint a : {4u, 5u, 8u, 9u}) glDisableVertexArrayAttrib(p->Vao, a);
+                Log::Info("P-40 exp: static page VAO without bone attributes (slim=" + std::to_string(slim) + ")");
+            }
+            if (slim >= 2) {
+                glDisableVertexArrayAttrib(p->Vao, 7);
+                glVertexAttrib4f(7, 1.0f, 1.0f, 1.0f, 1.0f); // white, like a mesh without vertex colours
+            }
         }
         p->Verts.Reset(verts);
         p->Indices.Reset(indices);
