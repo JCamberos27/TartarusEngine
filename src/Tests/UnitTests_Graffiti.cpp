@@ -543,7 +543,8 @@ void BakeSnapshot() {
 }
 
 // A bake records the recipe it came from: the same recipe reads as baked, one edited since (on disk,
-// outside the Designer) or a bake without the hash reads as not baked, so the spray can bakes it again.
+// outside the Designer) reads as not baked, so the spray can bakes it again. A bake from before the hash
+// (none stored) still counts, so shipped pieces aren't re-baked in Play.
 void BakeRecipeHash() {
     Piece p = RichPiece();
     p.Path = (TempDir() / "GP_Hash.graffiti").u8string();
@@ -566,10 +567,13 @@ void BakeRecipeHash() {
     CHECK(edited && !BakeCurrent(*edited));
     // The spray can's way (the loaded recipe itself) bakes it again, and it's current once more.
     CHECK(WriteBake(*edited, files) && BakeCurrent(*edited));
-    // A .decal from before the hash (or hand-made) is not this recipe's bake.
     auto d = DecalAsset::Load(edited->DecalPath());
     CHECK(d && d->GraffitiRecipe == edited->RecipeHash());
+    // A .decal from before the hash: current (the old rule).
     d->GraffitiRecipe.clear();
+    CHECK(d->Save() && BakeCurrent(*edited));
+    // A stored hash of some other recipe: not current.
+    d->GraffitiRecipe = "0123456789abcdef";
     CHECK(d->Save() && !BakeCurrent(*edited));
 }
 

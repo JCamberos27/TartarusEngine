@@ -181,7 +181,7 @@ SprayCanSystem::PieceData* SprayCanSystem::Data(const std::string& piece) {
     d->Program = std::make_shared<Graffiti::Program>(Graffiti::Build(*d->Piece, m_Comp->MetricsCallback()));
     d->Timeline = std::make_shared<Graffiti::Timeline>(Graffiti::BuildTimeline(*d->Program));
     // Baked already, from this very recipe (the Designer, or an earlier spray)? Else bake it now: the GPU part here,
-    // the PNGs on a worker. A recipe edited since its bake (or a bake from before the hash) bakes again, so the maps
+    // the PNGs on a worker. A recipe edited since its bake (its .decal holds another recipe's hash) bakes again, so the maps
     // match the reveal order and timeline built from the recipe above.
     d->Baked = Graffiti::BakeCurrent(*d->Piece);
     if (d->Baked) SetRevealKey(*d);

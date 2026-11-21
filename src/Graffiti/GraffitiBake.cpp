@@ -78,7 +78,9 @@ bool BakeCurrent(const Piece& piece) {
     const std::string decalPath = piece.DecalPath();
     if (!fs::exists(fs::u8path(decalPath), ec) || !fs::exists(fs::u8path(piece.MapPath("Albedo")), ec)) return false;
     const std::shared_ptr<DecalAsset> d = DecalAsset::Load(decalPath);
-    return d && !d->Missing && !d->GraffitiRecipe.empty() && d->GraffitiRecipe == piece.RecipeHash();
+    // A .decal from before the hash counts as current (shipped pieces aren't re-baked in Play); only a stored
+    // hash that differs marks the bake stale.
+    return d && !d->Missing && (d->GraffitiRecipe.empty() || d->GraffitiRecipe == piece.RecipeHash());
 }
 
 std::shared_ptr<Piece> SnapshotForBake(const Piece& piece) {

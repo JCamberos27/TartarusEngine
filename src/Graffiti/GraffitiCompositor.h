@@ -151,7 +151,8 @@ BakeFiles EncodePngs(const BakeImages& images);
 // The .decal also records the recipe's hash (piece.BakeRecipe, else piece.RecipeHash()).
 bool WriteBake(const Piece& piece, const BakeFiles& files);
 // Whether `piece` (the recipe as loaded) has a bake of this very recipe: its .decal and albedo exist and
-// the .decal's recipe hash matches. A bake from before the hash was stored, or of an older recipe, is not.
+// the .decal's recipe hash matches. A bake from before the hash was stored (no hash) counts as current;
+// one stamped with another recipe's hash does not.
 bool BakeCurrent(const Piece& piece);
 // What WriteBake reads of `piece`, and nothing more: the paths (Path, Name), the canvas and paint
 // settings and the weathering, with the layers (and their strokes) reduced to one stand-in layer when
