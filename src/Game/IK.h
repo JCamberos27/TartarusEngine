@@ -170,6 +170,10 @@ struct FootLockSettings {
     float Speed = 2.0f;     // m/s the animated foot may move over the ground (the body's turn left out) and still plant
     float FlatHeight = 0.008f; // m over its lowest under which a foot the clip slides plants at any speed (the root's under Speed)
     float Reach = 0.98f;    // x the leg's length (hip to held foot) past which a planted foot lets go and steps
+    // Overreach lets go one frame early: on the frame the reach would cross the line at its last frame's rise. Let go on
+    // the crossing frame itself, the lock's shift is still applied that frame and the reach clamp drags the foot by the
+    // overshoot (up to ~1 cm at a jog, whose hips move ~3 cm a frame).
+    bool PredictReach = true;
     float MaxDrift = 0.25f; // m the animation may wander from a planted foot before it lets go (a safety: Reach goes first)
     float Release = 0.2f;   // s a released foot takes to catch up with the animation
     float StepHeight = 0.3f; // a let-go foot that was still down lifts this much per metre it has to go...
@@ -243,6 +247,7 @@ private:
         glm::vec3 PrevBallLocal{0.0f}; // last frame's ball in the body
         float PrevHeight = 0.0f;   // last frame's height (FootLockSettings::RestFloor)
         float Rest = 0.0f;         // seconds at rest near the ground
+        float LastReach = -1.0f;   // Overreach's reach last frame while held (< 0: none yet this hold)
     };
     static void LetGo(Foot& f, const FootLockSettings& set, bool step);
     Foot m_Foot[2];
