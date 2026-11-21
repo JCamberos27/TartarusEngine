@@ -50,6 +50,9 @@ struct PendingChange {
     bool HasRequest = true;
     Wardrobe::Request Request;
     std::vector<AssetLibrary::AsyncHandle> Tickets;
+    // The saved skin coverage the change's pieces need (PrefetchCoverage): read before it lands, so the frame
+    // it lands hides the skin from memory, as one with every file already read always did.
+    std::shared_future<void> Coverage;
     Then After;
 };
 
@@ -62,6 +65,12 @@ bool AllReady(const std::vector<AssetLibrary::AsyncHandle>& tickets) {
     return std::all_of(tickets.begin(), tickets.end(), [](const auto& t) { return AssetLibrary::IsReady(t); });
 }
 
+// Its assets loaded and its coverage read: it can land.
+bool Landable(const PendingChange& pc) {
+    return AllReady(pc.Tickets) &&
+           (!pc.Coverage.valid() || pc.Coverage.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+}
+
 void RequestMaterial(AssetLibrary& assets, const std::string& rel, std::vector<AssetLibrary::AsyncHandle>& out) {
     if (!rel.empty() && Exists(rel)) out.push_back(assets.RequestMaterialAsync(ProjectPaths::Resolve(Rel(rel))));
 }
@@ -70,12 +79,14 @@ void RequestMaterial(AssetLibrary& assets, const std::string& rel, std::vector<A
 // and the race's skin will choose for them (their remap's, and its skin variant). Anything this misses
 // still loads when the change is applied - correct, just not seamless.
 std::vector<AssetLibrary::AsyncHandle> Prefetch(World& world, AssetLibrary& assets, entt::entity root, const Catalog& cat,
-                                                const Wardrobe::Request& request, std::vector<std::string>& notes) {
+                                                const Wardrobe::Request& request, std::vector<std::string>& notes,
+                                                std::vector<Wardrobe::Piece>* outPieces) {
     std::vector<AssetLibrary::AsyncHandle> out;
     const Wardrobe::RaceDef* race = Wardrobe::FindRace(cat.W, request.Sex, request.Race);
     const Wardrobe::Resolved resolved = Wardrobe::Resolve(cat.W, cat.Items, request);
     notes = resolved.Notes;
     for (const auto& c : resolved.Clashes) notes.push_back("Odd pairing: " + c);
+    if (outPieces) *outPieces = resolved.Pieces;
     std::set<std::string> mats;
     auto want = [&](const std::string& path) {
         if (path.empty()) return;
@@ -130,13 +141,15 @@ Result Submit(World& world, AssetLibrary& assets, entt::entity root, const Wardr
     pc.W = &world;
     pc.Root = root;
     pc.Request = request;
-    pc.Tickets = Prefetch(world, assets, root, *cat, request, r.Notes);
+    std::vector<Wardrobe::Piece> pieces;
+    pc.Tickets = Prefetch(world, assets, root, *cat, request, r.Notes, &pieces);
     pc.After = std::move(then);
     if (AllReady(pc.Tickets)) {
         r = Apply(world, assets, root, request);
         if (r.Ok && pc.After) pc.After(world, assets, root);
         return r;
     }
+    pc.Coverage = PrefetchCoverage(world, root, pieces); // read while the assets load
     list.push_back(std::move(pc));
     r.Ok = true;
     r.Pending = true;
@@ -144,6 +157,12 @@ Result Submit(World& world, AssetLibrary& assets, entt::entity root, const Wardr
 }
 
 bool AnyPending() { return !Waiting().empty(); }
+
+bool CoverageReading() {
+    for (const auto& pc : Waiting())
+        if (pc.Coverage.valid() && pc.Coverage.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return true;
+    return false;
+}
 
 bool IsPending(const World& world, entt::entity root, int* done, int* total) {
     int d = 0, t = 0;
@@ -167,7 +186,7 @@ unsigned LandedGeneration() { return g_LandedGeneration; }
 
 bool LandingDue(const World& world) {
     for (const auto& pc : Waiting())
-        if (pc.W == &world && AllReady(pc.Tickets)) return true;
+        if (pc.W == &world && Landable(pc)) return true;
     for (auto [root, outfit] : world.Registry.view<const CharacterOutfitComponent>().each())
         if (outfit.BodyChecked != WardrobeGeneration() && !IsPending(world, root)) return true;
     return false;
@@ -183,7 +202,7 @@ void UpdatePending(World& world, AssetLibrary& assets) {
             list.erase(list.begin() + (std::ptrdiff_t)i);
             continue;
         }
-        if (!AllReady(pc.Tickets)) { ++i; continue; }
+        if (!Landable(pc)) { ++i; continue; }
         // Out of the list before running it: `After` may queue a follow-up step.
         PendingChange ready = std::move(pc);
         list.erase(list.begin() + (std::ptrdiff_t)i);

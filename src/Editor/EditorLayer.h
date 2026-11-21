@@ -33,6 +33,7 @@
 #include "ImportQueueManager.h"
 #include "AssetThumbnailLoader.h"
 #include "LruMap.h" // m_ModelThumbnails / m_MaterialThumbs
+#include "ThumbnailCache.h" // ThumbnailCache::AsyncProbe (m_ModelThumbProbe)
 #include "AssetWaveformCache.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
@@ -142,7 +143,7 @@ public:
     // otherwise the live world. True when a recovery snapshot was written.
     bool CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept;
     // --crash-test-in-editor: pretend there are unsaved edits, so the recovery path runs.
-    void MarkDirtyForCrashTest() { m_Dirty = true; }
+    void MarkDirtyForCrashTest() { m_Dirty = true; NoteChangeOutsideUndo(); }
     // Headless runs (--unit-tests, --smoke-test, etc.) should not persist editor_prefs.json.
     void SetHeadless(bool headless) { m_Headless = headless; }
     void Shutdown();
@@ -412,6 +413,19 @@ public:
     // since that's a genuine import from outside the project, not an assignment). EditorLayer_Inspector.cpp.
     bool TexturePickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
     bool MaterialPickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
+private:
+    // The pickers' filtered rows, rebuilt only when the popup opens, the search text changes or the
+    // library's list changes size (they were re-filtered, and every row's texture looked up, each frame).
+    struct PickerRow { std::string Path, Name; };
+    struct PickerRowCache {
+        std::vector<PickerRow> Rows;
+        std::string Needle;
+        size_t SourceCount = (size_t)-1;
+    };
+    PickerRowCache m_TexturePickerRows, m_MaterialPickerRows;
+    static void RefreshPickerRows(PickerRowCache& cache, const std::vector<std::string>& source, const std::string& needle,
+                                  const std::function<std::string(const std::string&)>& nameOf);
+public:
     // Per-frame tree prep: virtual folders, listing-cache refresh, ancestor-expand on folder
     // change; returns the folder to scroll into view this frame ("" = none).
     std::string AssetBrowserTreeFrameSetup(AssetLibrary& assets);                // EditorLayer_AssetBrowser.cpp
@@ -859,6 +873,18 @@ public:
     //   DiscardAndExit - main exits without saving
     //   None + ExitPromptActive() false again - the user picked Cancel; stay open
     enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
+    // Rebuild & Restart (File menu, Ctrl+Alt+R; EditorRestart.h), in EditorLayer_Restart.cpp.
+    // Why it can't start now ("" = it can): not a source build, an untitled scene with edits, unsaved scripts.
+    std::string RestartBlockedReason() const;
+    // The restart hand-over's way out of Prefab Mode: leaves a clean one without saving; false (stays, restart
+    // cancelled by the caller) when it has unsaved edits or is still open afterwards.
+    bool LeavePrefabModeForRestart(World& world, AssetLibrary& assets);
+    bool GlobalUndoActive() const { return m_GlobalUndoActive; } // a drag/edit's undo step is still open
+    void RequestRebuildRestart();
+    // The old editor, build done: writes the recovery snapshot (when dirty) and the hand-over file.
+    bool WriteRestartState(const World& world, const AssetLibrary& assets, const std::filesystem::path& file, bool wasPlaying);
+    // The new editor, scene loaded: restores the unsaved edits (no prompt) and the selection. Returns WasPlaying.
+    bool ApplyRestartState(World& world, AssetLibrary& assets, const std::filesystem::path& file);
     void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
     bool ExitPromptActive() const { return m_ExitPromptPending; }
     // #84 — path of a scene that failed to load at startup; Save to exactly this path is
@@ -1307,10 +1333,27 @@ private:
     // changes only on an explicit Save/Save As. On launch, a recovery file newer than the scene
     // file raises a Restore/Discard modal (m_RecoveryPromptPending, drawn by DrawRecoveryPrompt).
     static std::string RecoveryPathFor(const std::string& scenePath);
-    bool WriteRecoverySnapshot(const World& world, const AssetLibrary& assets); // true: written (the timer plays Autosave)
+    // true: written, or (background = true) read and queued for m_RecoveryWrite (the timer plays Autosave).
+    bool WriteRecoverySnapshot(const World& world, const AssetLibrary& assets, bool background = false);
     void ClearRecoverySnapshot(); // deletes the recovery file for m_CurrentScenePath if present; silent
+    // The auto-save timer's write: the scene is read on the UI thread, formatted and written here
+    // (a Forest-size scene's text + write was a ~5-minutely hitch). Anything else that touches the
+    // recovery file waits for it first (WaitRecoveryWrite), so a late write can't revive a snapshot
+    // that a Save just cleared.
+    std::future<bool> m_RecoveryWrite;
+    // Scene changes no undo step recorded since m_CurrentUndoScene was last taken from the World
+    // (an external rename rewriting references, a failed restore, ...). While non-zero, or while
+    // an outfit landing isn't in the baseline yet, the auto-save reads the World itself; otherwise
+    // it writes the baseline (the same bytes, without walking every entity on the UI thread).
+    unsigned m_ChangesOutsideUndo = 0;
+    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; }
+    bool UndoBaselineIsCurrent() const;
+    void WaitRecoveryWrite();
+    void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
+    // The prompt's Restore (and Rebuild & Restart's): load the snapshot as the dirty scene, then drop it.
+    bool RestoreRecoverySnapshot(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
     bool m_RecoveryPromptSounded = false; // RecoveryPrompt plays once, when the modal first shows
 
@@ -1606,6 +1649,7 @@ private:
     std::string m_CurrentUndoScene;
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
+    int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
@@ -1962,13 +2006,35 @@ private:
     // Keyed by asset path (#181) rather than the Model* — stable across a Model being destroyed
     // and a new allocation reusing the same address, unlike the pointer. Bounded to
     // kMaxModelThumbnails, least recently used evicted first, so browsing a large library over a
-    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps
-    // this well under a megabyte of VRAM.
+    // session doesn't leak GL textures; each 128x128 RGBA8 thumbnail is 64KB, so the cap is 16 MB.
+    //
+    // Nothing on the UI thread touches the disk: a new tile asks m_ModelThumbProbe (a worker) for
+    // its dependency key and cached PNG; a hit is uploaded when it comes back, a miss is rendered
+    // within this frame's budget (count and ~2 ms), and the render's pixels come back through a
+    // pixel-pack buffer a few frames later (no glReadPixels stall) to be saved for the next launch.
+    struct ModelThumb {
+        enum class Stage : unsigned char { Probing, Render, Ready };
+        unsigned int Tex = 0;
+        unsigned Ticket = 0;   // the probe this entry waits for; a stale result is ignored
+        std::uint64_t Key = 0; // ThumbnailCache key (set once the probe is back)
+        Stage St = Stage::Probing;
+    };
     ModelPreviewRenderer m_ThumbnailPreview;
-    static constexpr size_t kMaxModelThumbnails = 128;
-    LruMap<unsigned int> m_ModelThumbnails; // path -> GL texture
+    static constexpr int kModelThumbSize = 128;
+    static constexpr size_t kMaxModelThumbnails = 256;
+    static constexpr size_t kMaxMaterialThumbnails = 128;
+    static constexpr double kThumbnailFrameBudgetMs = 2.0; // model renders stop for the frame past this
+    LruMap<ModelThumb> m_ModelThumbnails; // path -> thumbnail
+    ThumbnailCache::AsyncProbe m_ModelThumbProbe;
+    unsigned m_NextModelThumbTicket = 1;
+    struct ThumbReadback { unsigned int Pbo = 0; void* Fence = nullptr; std::string Path; std::uint64_t Key = 0; };
+    std::vector<ThumbReadback> m_ThumbReadbacks; // renders whose pixels are on their way to the cache
+    std::vector<unsigned int> m_FreeThumbPbos;
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
+    double m_ThumbnailMsThisFrame = 0.0;
+    void PumpModelThumbnails(); // once a frame: probe results uploaded, finished readbacks saved
+    void FreeModelThumbnailReadbacks();
     // Thumbnails dropped mid-frame (a Reimport from a tile's menu, an LRU eviction) may already be
     // in this frame's draw lists, so their textures are deleted at the start of the next frame.
     std::vector<unsigned int> m_RetiredThumbnailTextures;
@@ -1991,7 +2057,8 @@ private:
     void ClearMaterialThumbnails();
     // Copies a `size`-square preview render into `dst` (allocated here when 0) through the
     // thumbnail blit FBO, optionally reading the pixels back for the persistent cache.
-    void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
+    // pixelsOut: read back now (stalls). packPbo: read into that pixel-pack buffer instead, collected later.
+    void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut, unsigned int packPbo = 0);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
     // Sound-cell waveform envelopes (#236 G), decoded off the UI thread (AssetWaveformCache).
@@ -2055,15 +2122,23 @@ private:
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
         bool Unfetched = false;  // an external_assets.csv row with no file on disk (AssetGridCell::unfetched)
+        bool FirstOfKey = true;  // the first file in the scan with its Key (the one the folder summaries count)
         // Library view placement (prefab / decal / hdri only), worked out on the scan's thread: the
         // asset_library.json category id and the pack folder (LibraryGroupOf).
         std::string LibraryCategory, LibraryPack;
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
+    // What a scan hands back. The maps view the files' own Key / Path strings (first file wins) and are built on the
+    // scan's thread; moving the vector keeps those strings where they are.
+    struct ProjectAssetScan {
+        std::vector<ProjectAssetFile> files;
+        std::unordered_map<std::string_view, std::uint32_t> byKey, byPath;
+    };
     struct {
         std::vector<ProjectAssetFile> files;
+        std::unordered_map<std::string_view, std::uint32_t> byKey, byPath; // into `files`, from the same scan
         bool valid = false; // false = scan again (when the one in flight, if any, finishes)
-        std::future<std::vector<ProjectAssetFile>> scan;
+        std::future<ProjectAssetScan> scan;
         std::chrono::steady_clock::time_point scanStarted;
         unsigned scanLibraryGen = 0, filesLibraryGen = 0; // m_LibraryIndexGen the scan in flight / `files` grouped by
     } m_ProjectAssetIndex;
@@ -2078,12 +2153,24 @@ private:
     AssetThumbnailLoader m_AssetThumbs; // tiles of unloaded assets
     void RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets);
     // What an Inspector asset field of `kind` offers: every such file in the project (loaded or
-    // not) plus anything loaded from outside it, sorted by file name.
-    std::vector<std::string> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // not) plus anything loaded from outside it, sorted by file name (then path).
+    struct AssetRefChoice {
+        std::string Path;
+        std::string Label; // file name + "##" + path: same-named files in different folders stay distinct ImGui items
+    };
+    std::vector<AssetRefChoice> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // The material Shader dropdown's list: engine://Standard.shader, the engine's own shaders, then the
+    // project's under shaders/ and assets/ from the Asset Browser index (a disk walk only before the
+    // first scan lands; the walk over assets/ took ~80 ms on every open).
+    std::vector<std::string> ShaderChoices(AssetLibrary& assets);
+    // The open Inspector asset combo's list: built when the combo opens, reused while it stays open.
+    std::vector<AssetRefChoice> m_AssetRefChoiceCache;
+    // The open Joint "Connected" combo's rows (order, label): built when it opens, reused while it stays open.
+    std::vector<std::pair<int, std::string>> m_JointTargetChoices;
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
-    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
+    static ProjectAssetScan ScanProjectAssetFiles(const std::string& root, const AssetLibraryIndex& library); // worker thread
     static bool IsLibraryKind(const ProjectAssetFile& f); // placeable: listed under the Library view
     static void LibraryGroupOf(const AssetLibraryIndex& library, ProjectAssetFile& f); // fills LibraryCategory/Pack
     static bool ProjectAssetKindOf(ProjectAssetFile& f); // sets f.Kind from its extension; false = not an asset
@@ -2363,6 +2450,9 @@ private:
     };
     mutable HierarchyOrderCache m_HierOrder;
     const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
+    // HierarchyOrderCache::Generation, the pairs re-checked at most once per ImGui frame (as HierarchyCreationOrdinal):
+    // with World::HierarchyVersion, what a cached tree of the scene is keyed on.
+    std::uint64_t HierarchyOrderGeneration(const World& world) const;
     // "Object 7" for an unnamed entity: its 1-based place in HierarchyCreationOrder (0 = not named).
     int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon
@@ -2401,14 +2491,19 @@ private:
     // RefreshProjectAssetIndexIfNeeded patches them as lists grow (NoteListedInFolderSummaries) and clears this when a
     // list shrinks or a new scan lands, which asks for a full walk.
     bool m_FolderSummariesValid = false;
-    struct FolderIndexContribution { std::string Folder; Enhancers::FolderKind Kind; };
-    std::unordered_map<std::string, FolderIndexContribution> m_FolderIndexContrib; // index file PathKey -> where it counts
+    struct FolderIndexContribution { std::uint32_t Folder; Enhancers::FolderKind Kind; }; // Folder: m_FolderIndexFolders
+    static constexpr std::uint32_t kIndexFileNotCounted = 0xFFFFFFFFu;
+    // Per m_ProjectAssetIndex.files entry: where it counts (Folder kIndexFileNotCounted: nowhere). A new scan replaces
+    // the files, but it also clears m_FolderSummariesValid, so nothing reads this before the next walk rebuilds it.
+    std::vector<FolderIndexContribution> m_FolderIndexContrib;
+    std::vector<std::string> m_FolderIndexFolders; // the folders m_FolderIndexContrib names, one per run of files
     // What the Asset Browser grid keys its Play-mode cell cache on (AssetGridFrameBegin): full walks, and per folder
     // (and overall) how often a newly listed asset changed what it holds.
     unsigned m_FolderSummaryWalkGen = 0, m_AnyFolderContentGen = 0;
     std::unordered_map<std::string, unsigned> m_FolderContentGen;
     void RebuildFolderSummariesIfNeeded(AssetLibrary& assets);
     void NoteListedInFolderSummaries(AssetLibrary& assets, int list, const std::string& path, const std::string& key);
+    const std::string* UncountIndexFile(std::uint32_t file); // the folder it counted in, or nullptr
     std::string m_HoverAssetFolder;       // the folder under the mouse this frame (tree or grid)
     bool m_HoverAssetFolderSet = false;
     void HandleFolderHoverKeys(AssetLibrary& assets); // PostModuleDraw, after the module drew the tree

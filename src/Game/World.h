@@ -93,6 +93,25 @@ public:
     uint64_t PreviousTransformCacheStamp() const { return m_PrevTransformCacheStamp; }
     const std::vector<entt::entity>& ChangedWorldTransforms() const { return m_ChangedTransforms; }
     bool TransformCacheMembershipChanged() const { return m_TransformMembershipChanged; }
+    // What the latest rebuild changed in the cache's STRUCTURE relative to the previous one, filled by the incremental
+    // pass's structure step and cleared by every rebuild (read only). Read this, not ChangedWorldTransforms, for who
+    // came, went or moved in the hierarchy: that one lists recomposed matrices and promises nothing about why, so a
+    // re-parent that keeps the world matrix (SetParent does) is listed here but need not be there. Valid is false
+    // after a rebuild that took the full walk, which keeps no lists: anything derived must be rebuilt in full.
+    // An entity that only lost or regained its TransformComponent stays in the cache and is not listed.
+    struct TransformStructureDelta {
+        bool Valid = false;
+        std::vector<entt::entity> Added;                               // new to the cache
+        std::vector<std::pair<entt::entity, entt::entity>> Reparented; // (entity, the parent it had)
+        std::vector<std::pair<entt::entity, entt::entity>> Dropped;    // (destroyed entity as cached, the parent it had)
+    };
+    const TransformStructureDelta& TransformStructureChanges() const { return m_StructureDelta; }
+    // How many ApplyLod calls rebuilt their records in full (tests: a small structure change patches them).
+    std::uint64_t LodFullPasses() const { return m_LodFullPasses; }
+    // How many rebuilds took the full walk (tests: a small structure change takes the incremental pass).
+    std::uint64_t TransformCacheFullWalks() const { return m_TransformFullWalks; }
+    // How many rebuilds re-derived active-in-hierarchy over every entity (tests: a small structure change patches it).
+    std::uint64_t ActiveFullSyncs() const { return m_ActiveFullSyncs; }
 
     // #163 - picks each LOD Group's level for a view (eye position + projection) and tags the
     // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
@@ -143,8 +162,8 @@ public:
     // spawned after the rebuild, or a caller running before the first one — so it is always
     // correct, never merely fast.
     glm::mat4 GetCachedWorldTransform(entt::entity entity) const;
-    // Changes whenever a parent link changes (SetParent, a destroy, a cut cycle): what is derived
-    // from the hierarchy is good while this stays the same.
+    // Changes whenever a parent link or the order of a parent's children changes (SetParent, a destroy, a cut cycle,
+    // SortChildrenByOrder): what is derived from the hierarchy is good while this stays the same.
     std::uint64_t HierarchyVersion() const { return m_HierarchyVersion; }
 
     // #114 — the entity's transform expressed in WORLD space (position / YXZ Euler degrees /
@@ -177,6 +196,13 @@ public:
     // whichever frame (local or world) it belongs in.
     void AttachChildRaw(entt::entity child, entt::entity parent);
 
+    // A parent's Children are kept in Hierarchy order: OrderComponent, then the entity handle (what the Hierarchy
+    // shows and the scene file saves). SetParent and AttachChildRaw insert in place; after OrderComponent values
+    // change (a Hierarchy drag-reorder) this re-sorts `parent`'s list and, when that moved anything, bumps
+    // HierarchyVersion, so LOD Groups (whose levels are the first four children) and every cache keyed on the
+    // version see the new order at once instead of after a save and reload.
+    void SortChildrenByOrder(entt::entity parent);
+
     // #202 - breaks any parent cycle in the hierarchy, returning how many were broken.
     // AttachChildRaw only rejects self-parenting, so a scene file whose parentIds form a loop
     // (A -> B -> A, hand-edited, merged badly, or written by an older build) loads a genuine
@@ -197,6 +223,7 @@ public:
     void EnsureNextOrderAtLeast(int value) { if (value > m_NextOrder) m_NextOrder = value; }
 
 private:
+    friend struct WorldLodTestAccess; // unit tests: reads the LOD records (src/Tests/UnitTests_Render.cpp)
     // Cycle guard for the parent-chain walks (the transform cache, LOD groups): no legitimate scene nests this
     // deep, so exceeding it means a malformed hierarchy, not a tall one.
     static constexpr size_t kMaxHierarchyDepth = 1024;
@@ -228,13 +255,26 @@ private:
     std::uint64_t m_TransformStructure[3] = {};
     bool m_TransformStructureValid = false;
     std::vector<entt::entity> m_DirtyScratch, m_PendingScratch, m_ChainScratch;
+    TransformStructureDelta m_StructureDelta;
     void TransformStructure(std::uint64_t out[3]);
     bool RebuildChangedTransformsOnly();
+    bool ApplyTransformStructureChanges(std::vector<entt::entity>& dirty);
+    void EnsureTransformSlots(size_t n);
+    std::uint64_t m_TransformFullWalks = 0;
+    size_t m_KeyedWithTransform = 0; // cache slots whose entity had a transform when last composed
+    void CountKeyedWithTransform();
     // SyncActiveInHierarchy's inputs as of its last run (hierarchy, transforms, Deactivated/InactiveTag sets): it is
     // skipped while they stay the same.
     std::uint64_t m_ActiveSignature[6] = {};
     bool m_ActiveSignatureValid = false;
     void ActiveSignature(std::uint64_t out[6]);
+    // RebuildWorldTransformCache's two halves: the transforms (and their structure delta), then active-in-hierarchy,
+    // patched from that delta when it can (false: the full SyncActiveInHierarchy instead).
+    void RebuildTransformsOnly();
+    bool PatchActiveInHierarchy(const std::uint64_t sig[6]);
+    std::vector<entt::entity> m_ActiveRoots;
+    std::vector<std::pair<entt::entity, bool>> m_ActiveWalk;
+    std::uint64_t m_ActiveFullSyncs = 0;
     // ApplyLod's memory of what it tagged, per LOD Group slot (see ApplyLod). Active is the level left untagged, -1 for
     // a culled group (every level tagged), kLodSkipped for one that tagged nothing (inactive, or not seen yet).
     static constexpr int kLodSkipped = -2;
@@ -272,6 +312,12 @@ private:
     std::vector<size_t> m_LodChunkIds;
     std::uint64_t m_LodSignature[4] = {};
     bool m_LodValid = false;  // the tags match m_LodState
+    std::uint64_t m_LodFullPasses = 0;
+    // Entity slot -> the entity that had a RenderableComponent as of the last ApplyLod (filled by its full pass, kept by
+    // its structure patch): tells which of the transform cache's dropped entities took a renderer with them.
+    std::vector<entt::entity> m_LodRenderOwner;
+    std::vector<entt::entity> m_LodTouched, m_LodRemeasure; // the structure patch's scratch
+    std::vector<std::pair<entt::entity, entt::entity>> m_LodDroppedSorted;
     // Bumped by every re-parent, attach and hierarchy destroy: ApplyLod's records are only good while it stays put.
     std::uint64_t m_HierarchyVersion = 0;
     bool IsWorldTransformCached(entt::entity e) const {

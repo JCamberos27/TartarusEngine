@@ -12,7 +12,7 @@
 #include "FullscreenPass.h"
 #include "BodyDebugDraw.h"
 #include "Camera.h"
-#include "ColliderGizmo.h"
+#include "DebugLineRenderer.h"
 #include "Components.h"
 #include "Core/Env.h"
 #include "EditorSettings.h"
@@ -40,6 +40,16 @@
 #include "World.h"
 
 namespace {
+
+// The collider overlay's line list, rebuilt per draw (single GL thread); kept to reuse its capacity.
+std::vector<float> s_DebugLineVerts;
+
+void DrawDebugLines(const ViewPipelineInputs& in, const World& world, const glm::mat4& view, const glm::mat4& proj,
+                    bool shapes, const std::function<bool(entt::entity)>* only) {
+    if (!in.debugLines || !in.gatherDebugLines) return;
+    in.gatherDebugLines(world, shapes, only, s_DebugLineVerts);
+    in.debugLines->Draw(proj * view, s_DebugLineVerts.data(), s_DebugLineVerts.size());
+}
 // #162 - the scene's post settings for the final tonemap pass.
 PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
                               float dt, int exposureSlot, const glm::vec3& cameraPos) {
@@ -412,8 +422,8 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
             glDepthMask(GL_FALSE);
             // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
             const std::function<bool(entt::entity)> inSelection = [&](entt::entity e) { return editor.InSelectionTree(world, e); };
-            in.colliderGizmo->Draw(sceneViewMat, sceneProjMat, world, showShapes,
-                                   EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
+            DrawDebugLines(in, world, sceneViewMat, sceneProjMat, showShapes,
+                           EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
             glDepthMask(GL_TRUE);
         }
     }
@@ -506,7 +516,7 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     // Physics debug overlay over the game view (#185, F6 Physics) - depth-tested, no depth write.
     if ((playing || !overlayInPlayOnly) && EditorSettings::Get().PlayDebugOverlay) {
         glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
-        in.colliderGizmo->Draw(view, proj, world, EditorSettings::Get().ShowColliders);
+        DrawDebugLines(in, world, view, proj, EditorSettings::Get().ShowColliders, nullptr);
         glDepthMask(GL_TRUE);
     }
     if (in.worldExtras) in.worldExtras(view, proj, eye);

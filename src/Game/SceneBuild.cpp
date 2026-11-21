@@ -7,15 +7,19 @@ namespace SceneDetail {
 // on every save (load re-creates in file order, the next save reverses it again), so the file
 // churns and the Hierarchy's ordering flips each time. Collecting and reversing restores
 // creation order, which is stable across any number of round-trips.
-template <typename View>
-std::vector<entt::entity> InCreationOrder(const entt::registry& reg, View view) {
-    std::vector<entt::entity> entities(view.begin(), view.end());
+static void SortInCreationOrder(const entt::registry& reg, std::vector<entt::entity>& entities) {
     std::sort(entities.begin(), entities.end(), [&](entt::entity a, entt::entity b) {
         const auto* oa = reg.try_get<OrderComponent>(a);
         const auto* ob = reg.try_get<OrderComponent>(b);
         int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
         return va != vb ? va < vb : a < b; // stable tiebreak for pre-OrderComponent data
     });
+}
+
+template <typename View>
+std::vector<entt::entity> InCreationOrder(const entt::registry& reg, View view) {
+    std::vector<entt::entity> entities(view.begin(), view.end());
+    SortInCreationOrder(reg, entities);
     return entities;
 }
 
@@ -282,6 +286,18 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
     std::vector<entt::entity> boxEntities = InCreationOrder(world.Registry, boxView);
     std::vector<entt::entity> modelEntities = InCreationOrder(world.Registry, modelViewForIds);
     std::vector<entt::entity> emptyEntities = InCreationOrder(world.Registry, emptyViewForIds);
+    // A Mesh Renderer with no mesh yet (Add Component on an empty) has nothing for "boxes" or "models"
+    // to reload, and both skip it: it used to vanish from the save, object and children's parent with
+    // it. It is written as an empty instead (the meshless renderer itself has nothing to keep).
+    {
+        auto meshless = [&](entt::entity e) { return !world.Registry.get<const RenderableComponent>(e).ModelRef; };
+        const size_t emptiesBefore = emptyEntities.size();
+        for (auto* list : {&boxEntities, &modelEntities}) {
+            for (entt::entity e : *list) if (meshless(e)) emptyEntities.push_back(e);
+            list->erase(std::remove_if(list->begin(), list->end(), meshless), list->end());
+        }
+        if (emptyEntities.size() != emptiesBefore) SortInCreationOrder(world.Registry, emptyEntities);
+    }
 
     // #236 A2 — a live prefab instance (root has PrefabInstanceComponent) is written as one
     // compact stub in "prefabInstances"; its descendants are not written at all. The owned set

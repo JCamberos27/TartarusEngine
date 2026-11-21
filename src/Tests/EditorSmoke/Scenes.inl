@@ -37,6 +37,20 @@ struct EditorSmokeAccess_Scenes {
             if (!u.SelectionOnly) s += (s.empty() ? "" : ", ") + u.Label;
         return s;
     }
+    // Undo / Redo keep the snapshot they just loaded as the new baseline instead of serializing the
+    // scene again, which needs a snapshot to load back to the same bytes. Empty when it does; else
+    // where the two first differ (and whether only the AssetLibrary half does).
+    static std::string RoundTripDifference(World& w, AssetLibrary& a) {
+        const std::string before = SceneSerializer::SaveToString(w, a);
+        if (!SceneSerializer::LoadFromString(w, a, before)) return "the snapshot didn't load";
+        const std::string after = SceneSerializer::SaveToString(w, a);
+        if (after == before) return {};
+        size_t i = 0;
+        while (i < before.size() && i < after.size() && before[i] == after[i]) ++i;
+        const size_t from = i > 80 ? i - 80 : 0;
+        return std::string(SceneSerializer::SameSceneContent(before, after) ? "library half only" : "scene differs") +
+               " at byte " + std::to_string(i) + ": was '" + before.substr(from, 200) + "' now '" + after.substr(from, 200) + "'";
+    }
     // A root object with a transform, for the undo timing below (null when there is none).
     static entt::entity MovableRoot(World& w) {
         for (auto [ent, t, n] : w.Registry.view<TransformComponent, NameComponent>().each()) {
@@ -122,6 +136,29 @@ bool GameShown(Ctx& c) {
 void RegisterScenesTests() {
     using namespace smoke_scenes;
 
+    // The same round trip for every component Add Component offers, one at a time on the scratch
+    // scene's Alpha (the shipped scenes don't carry them all).
+    Add("scenes: every component round-trips through an undo snapshot", {
+        FreshScene(), Wait(2),
+        Expect("each component loads back to the same bytes", [](Ctx& c) {
+            std::string bad, prev;
+            for (const RegisteredComponent& rc : ComponentRegistry::All()) {
+                if (!rc.Add || !rc.Has || !rc.Remove || !rc.Meta.Name) continue;
+                entt::entity alpha = ByName(c.W, "Alpha");
+                if (alpha == entt::null) return bad + " || no Alpha after " + prev + ", before " + rc.Meta.Name;
+                const bool had = rc.Has(c.W.Registry, alpha);
+                if (!had) rc.Add(c.W.Registry, alpha);
+                const std::string diff = SA::RoundTripDifference(c.W, c.A);
+                if (!diff.empty()) bad += std::string(bad.empty() ? "" : " || ") + rc.Meta.Name + ": " + diff;
+                alpha = ByName(c.W, "Alpha"); // the round trip rebuilt the registry
+                if (!had && alpha != entt::null && rc.Has(c.W.Registry, alpha)) rc.Remove(c.W.Registry, alpha);
+                prev = rc.Meta.Name;
+            }
+            return bad;
+        }),
+        FreshScene(), Wait(3),
+    });
+
     // Found when the tests are registered (the first editor frame), in a stable order.
     std::vector<fs::path> scenes;
     for (const std::string& dir : {ProjectPaths::Resolve("scenes"), EnginePaths::Resolve("tests/scenes")}) {
@@ -183,6 +220,7 @@ void RegisterScenesTests() {
                 if (!steps.empty()) return "undo steps: " + steps;
                 return c.E.IsDirty() ? std::string("the scene is dirty") : std::string();
             }),
+            Expect("a snapshot loads back to the same bytes", [](Ctx& c) { return SA::RoundTripDifference(c.W, c.A); }),
             Expect("a 1 m move undoes, redoes and undoes again (timed)", [label](Ctx& c) {
                 const entt::entity ent = SA::MovableRoot(c.W);
                 if (ent == entt::null || !c.W.Registry.all_of<OrderComponent>(ent)) return std::string(); // nothing to move

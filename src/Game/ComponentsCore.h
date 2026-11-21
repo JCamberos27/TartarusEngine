@@ -50,6 +50,9 @@ struct NameComponent {
 struct OrderComponent {
     int Value = 0;
 };
+// The sort key of an entity with no OrderComponent: last, in both the Hierarchy panel and a parent's Children
+// (World::SortChildrenByOrder), so the two orders agree and such an entity is never a LOD Group's level 0.
+inline constexpr int kOrderMissing = 2147483647; // INT_MAX
 
 // Tag only: which Hierarchy section an entity lists under ("Level Geometry" vs "Models") and
 // which JSON array (SceneSerializer's "boxes" vs "models") it round-trips through. Carries no

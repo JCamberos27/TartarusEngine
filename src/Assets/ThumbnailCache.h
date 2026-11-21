@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -53,5 +54,28 @@ void FlushAsync();
 // project or the engine's shipped assets carries it) and any stray non-thumbnail files in the
 // cache folder. Call once at startup, after AssetDatabase::ScanProject().
 void PruneOrphans();
+
+// DependencyKey() + Load() on a background worker: for the UI thread (Asset Browser model
+// thumbnails), where the file stats, the .meta read and the PNG decode cost a hitch per tile.
+// Newest requests run first, so the tiles on screen fill in before ones scrolled past.
+// Results carry the caller's ticket; Pixels is empty on a miss (render it, then SaveAsync with Key).
+class AsyncProbe {
+public:
+    struct Result {
+        std::string Path;
+        unsigned Ticket = 0;
+        std::uint64_t Key = 0;
+        std::vector<unsigned char> Pixels; // size*size*4 on a hit, empty on a miss
+    };
+    AsyncProbe();
+    ~AsyncProbe(); // drops queued work and joins the worker
+    void Push(std::string path, unsigned ticket, int size, std::vector<std::string> deps);
+    // Moves at most `max` finished results into `out` (appended). Main thread.
+    void Take(std::vector<Result>& out, size_t max);
+    void WaitIdle(); // tests: blocks until every queued probe is in the results
+private:
+    struct Impl;
+    std::unique_ptr<Impl> m_Impl;
+};
 
 } // namespace ThumbnailCache

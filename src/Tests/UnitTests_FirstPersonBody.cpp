@@ -452,6 +452,91 @@ void TestFirstPersonBodyValidate() {
 
 } // namespace
 
+// Twins without motion matching (Start needs the licensed mocap, which CI doesn't have): the pieces and their models as
+// Start would take them, then MakeTwins.
+struct FirstPersonBodyTestAccess {
+    static void MakeTwins(FirstPersonBody& b, World& world, entt::entity body, const std::vector<entt::entity>& pieces) {
+        b.m_Body = body;
+        b.m_Pieces = pieces;
+        b.m_Models.clear();
+        for (entt::entity p : pieces) b.m_Models.push_back(world.Registry.get<RenderableComponent>(p).ModelRef);
+        const auto& outfit = world.Registry.get<CharacterOutfitComponent>(body);
+        b.m_OutfitVersion = outfit.Version;
+        b.m_OutfitLookVersion = outfit.LookVersion;
+        b.MakeTwins(world);
+    }
+    // What a Restart did to the twins (Stop destroys them, Start makes new ones).
+    static void RemakeTwins(FirstPersonBody& b, World& world) {
+        for (entt::entity t : b.m_Twins) world.DestroyEntityAndChildren(t);
+        b.m_Twins.clear();
+        b.m_TwinModels.clear();
+        b.MakeTwins(world);
+    }
+    static const std::vector<entt::entity>& Twins(const FirstPersonBody& b) { return b.m_Twins; }
+};
+
+namespace {
+
+// A colourway landing in Play (OutfitSystem::SetColourway bumps only the look version) is copied onto the world twins
+// in place: the same twin entities, no structure change for the transform cache, LOD or the gather to rebuild over.
+void TestFirstPersonBodyLookOnlyKeepsTwins() {
+    World world;
+    auto prim = [] { return Model::CreatePrimitive("terrain", "primitive://terrain#0"); }; // CPU-only: no GL in unit tests
+    const entt::entity body = world.CreateModelEntity(prim(), glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Body");
+    world.Registry.emplace<FirstPersonBodyComponent>(body);
+    world.Registry.emplace<CharacterOutfitComponent>(body);
+    std::vector<entt::entity> pieces;
+    for (int i = 0; i < 2; ++i) {
+        const entt::entity p = world.CreateModelEntity(prim(), glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Piece");
+        CHECK(world.SetParent(p, body));
+        pieces.push_back(p);
+    }
+    FirstPersonBody fpb;
+    FirstPersonBodyTestAccess::MakeTwins(fpb, world, body, pieces);
+    const std::vector<entt::entity> twins = FirstPersonBodyTestAccess::Twins(fpb);
+    CHECK(twins.size() == 2);
+    world.RebuildWorldTransformCache();
+    world.RebuildWorldTransformCache(); // settled
+
+    // The look changes (what SetColourway, UpdateHiding and a layer edit leave on the pieces).
+    auto mat = std::make_shared<MaterialAsset>();
+    world.Registry.get<RenderableComponent>(pieces[0]).Materials = {mat};
+    world.Registry.emplace<OutfitHideTag>(pieces[0]).Hidden = 5;
+    world.Registry.emplace<OutfitLayerTag>(pieces[1]).Pull = 0.004f;
+    world.Registry.emplace_or_replace<LayerComponent>(pieces[1]).Layer = 3;
+    ++world.Registry.get<CharacterOutfitComponent>(body).LookVersion;
+
+    // PlayFrame's choice: a look-only change syncs, never restarts.
+    CHECK(!fpb.OutfitChanged(world));
+    CHECK(fpb.OutfitLookChanged(world));
+    fpb.SyncLook(world);
+    CHECK(!fpb.OutfitLookChanged(world));
+    CHECK(FirstPersonBodyTestAccess::Twins(fpb) == twins);
+    for (entt::entity t : twins) CHECK(world.Registry.valid(t));
+    const auto& r = world.Registry;
+    CHECK(r.get<RenderableComponent>(twins[0]).Materials.size() == 1 && r.get<RenderableComponent>(twins[0]).Materials[0] == mat);
+    CHECK(r.all_of<OutfitHideTag>(twins[0]) && r.get<OutfitHideTag>(twins[0]).Hidden == 5);
+    CHECK(r.all_of<OutfitLayerTag>(twins[1]) && r.get<OutfitLayerTag>(twins[1]).Pull == 0.004f);
+    CHECK(r.all_of<LayerComponent>(twins[1]) && r.get<LayerComponent>(twins[1]).Layer == 3);
+
+    const std::uint64_t fullWalks = world.TransformCacheFullWalks();
+    world.RebuildWorldTransformCache();
+    const auto& d = world.TransformStructureChanges();
+    CHECK(d.Valid && d.Added.empty() && d.Reparented.empty() && d.Dropped.empty());
+    CHECK(world.TransformCacheFullWalks() == fullWalks);
+
+    // The pieces' version still restarts: and a restart's new twins are a structure change (what the look version saves).
+    ++world.Registry.get<CharacterOutfitComponent>(body).Version;
+    CHECK(fpb.OutfitChanged(world));
+    FirstPersonBodyTestAccess::RemakeTwins(fpb, world);
+    world.RebuildWorldTransformCache();
+    const auto& d2 = world.TransformStructureChanges();
+    CHECK(!d2.Valid || !d2.Added.empty() || !d2.Dropped.empty());
+    CHECK(FirstPersonBodyTestAccess::Twins(fpb) != twins);
+}
+
+} // namespace
+
 void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests) {
     tests.insert(tests.end(), {
         {"FirstPersonBodyBoneMap", TestFirstPersonBodyBoneMap},
@@ -459,5 +544,6 @@ void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests) {
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonBodyClothingHide", TestFirstPersonBodyClothingHide},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
+        {"FirstPersonBodyLookOnlyKeepsTwins", TestFirstPersonBodyLookOnlyKeepsTwins},
     });
 }

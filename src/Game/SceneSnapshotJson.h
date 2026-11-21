@@ -11,4 +11,10 @@ namespace SceneSerializer {
     // LoadFromString on a snapshot the caller has already parsed (undo / redo get it parsed from
     // UndoDelta::Pop), so a multi-MB scene isn't parsed twice.
     bool LoadFromJson(World& world, AssetLibrary& assets, const nlohmann::json& root);
+    // What SaveToString(world, assets) returns right after LoadFromJson(world, assets, loaded)
+    // succeeded, without serializing every entity again: `loadedText` (the text `loaded` was
+    // parsed from) when the AssetLibrary half still matches, else `loaded` with the live
+    // AssetLibrary half. Relies on a snapshot loading back to the same scene, which the editor's
+    // "scenes:" tests check on every shipped scene and every component.
+    std::string SnapshotAfterLoad(const nlohmann::json& loaded, const std::string& loadedText, const AssetLibrary& assets);
 }

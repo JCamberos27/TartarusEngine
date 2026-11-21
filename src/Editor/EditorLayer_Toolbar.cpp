@@ -677,6 +677,16 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             }
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Reload the scene file from disk, discarding unsaved (and in-play) changes.");
+            {
+                const std::string restartBlocked = RestartBlockedReason();
+                if (ImGui::MenuItem(ICON_FA_ROTATE "  Rebuild && Restart", KEY_HINT("editor.rebuildRestart"), false,
+                                    restartBlocked.empty()))
+                    RequestRebuildRestart();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    EditorUI::SetTooltip("%s", restartBlocked.empty()
+                        ? "Build the engine, game and editor, then restart on this scene: unsaved edits, selection and Play come back."
+                        : restartBlocked.c_str());
+            }
             ImGui::Separator();
             {
                 std::string cur = std::filesystem::path(m_CurrentScenePath).filename().string();

@@ -190,6 +190,8 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         }
         if (firstPersonBody.OutfitChanged(world)) { // an outfit piece changed in Play: take the new pieces
             firstPersonBody.Restart(world, player);
+        } else if (firstPersonBody.OutfitLookChanged(world)) { // only a colourway: the twins take it, no rebuild
+            firstPersonBody.SyncLook(world);
         }
         firstPersonBody.Tick(world, player, player.Cam, gameDt);
         if (firstPersonPresentation.IsActive()) {

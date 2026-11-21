@@ -2,30 +2,46 @@
 #include "SceneFileJson.h"
 #include "SceneSnapshotJson.h"
 
+#include <stdexcept>
+
 using namespace SceneDetail;
 
 
 bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const std::string& path) {
-    // #82 — build the whole document in memory FIRST, and only then touch the file, through
+    const std::function<bool()> write = PrepareSave(world, assets, path);
+    return write && write();
+}
+
+std::function<bool()> SceneSerializer::PrepareSave(const World& world, const AssetLibrary& assets, const std::string& path) {
+    // #82 - build the whole document in memory FIRST, and only then touch the file, through
     // AtomicFile (temp + flush + atomic replace). The old version opened a truncating ofstream
     // before building, so any exception while building (e.g. a corrupt prefab) left the scene
     // file empty; and it never checked the write, so a full disk / locked file still reported
     // success.
-    std::string text;
+    auto root = std::make_shared<json>();
     try {
-        json root = BuildSceneJson(world);
-        AppendAssetLibraryJson(root, assets);
-        WarnNonPortablePaths(root, ""); // audit #364 — surface any absolute/'..' path before it's written
-        text = root.dump(2);
+        *root = BuildSceneJson(world);
+        AppendAssetLibraryJson(*root, assets);
+        WarnNonPortablePaths(*root, ""); // audit #364 - surface any absolute/'..' path before it's written
     } catch (const std::exception& e) {
         Log::Error("Scene: couldn't serialize the scene for '" + path + "' (file left untouched): " + e.what());
-        return false;
+        return {};
     }
-    if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), text, /*binary=*/false)) {
-        Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
-        return false;
-    }
-    return true;
+    // The tree is the scene's own copy: formatting and writing it no longer touch the World.
+    return [root, path]() {
+        std::string text;
+        try {
+            text = root->dump(2);
+        } catch (const std::exception& e) { // e.g. invalid UTF-8 in a name
+            Log::Error("Scene: couldn't format the scene for '" + path + "' (file left untouched): " + e.what());
+            return false;
+        }
+        if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), text, /*binary=*/false)) {
+            Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
+            return false;
+        }
+        return true;
+    };
 }
 
 std::string SceneSerializer::TakeLoadWarning() {
@@ -176,7 +192,7 @@ namespace {
 // The keys SaveToString(world, assets) adds on top of the scene: its own marker and every key
 // AppendAssetLibraryJson writes.
 constexpr const char* kLibraryKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures", "libraryMaterials",
-                                        "librarySounds", "libraryPrefabs", "assetFolders", "assetMeta"};
+                                        "librarySounds", "libraryPrefabs", "assetFolders", "removedDiskFolders", "assetMeta"};
 } // namespace
 
 bool SceneSerializer::SameSceneContent(const std::string& a, const std::string& b) {
@@ -263,6 +279,59 @@ std::string SceneSerializer::WithLibraryState(const std::string& scene, const st
     } catch (const std::exception&) {
         return {};
     }
+}
+
+// The keys SaveToString(world, assets) writes that Save() doesn't: the undo snapshot's marker and the
+// AssetLibrary state that lives in .meta files / the session (AppendAssetLibraryJson's metadata half).
+// UnitTests_Editor checks that a snapshot stripped of these and given Save()'s library half is
+// Save()'s output byte for byte, with every optional key present, so a new undo-only key fails there.
+constexpr const char* kUndoOnlyKeys[] = {"hasAssetLibrarySnapshot", "assetFolders", "removedDiskFolders", "assetMeta"};
+
+std::function<bool()> SceneSerializer::PrepareSaveFromSnapshot(std::string snapshot, const AssetLibrary& assets,
+                                                              const std::string& path) {
+    auto library = std::make_shared<json>(json::object());
+    AppendAssetLibraryJson(*library, assets); // what Save() writes: no per-asset metadata (#121)
+    auto text = std::make_shared<std::string>(std::move(snapshot));
+    return [library, text, path]() {
+        std::string out;
+        try {
+            json root = json::parse(*text);
+            text->clear();
+            text->shrink_to_fit();
+            if (!root.is_object()) throw std::runtime_error("the snapshot isn't a JSON object");
+            for (const char* k : kUndoOnlyKeys) root.erase(k);
+            for (const char* k : kLibraryKeys) root.erase(k); // the library half comes from the live library below
+            for (auto& [k, v] : library->items()) root[k] = v;
+            WarnNonPortablePaths(root, ""); // audit #364, as Save() does
+            out = root.dump(2);
+        } catch (const std::exception& e) {
+            Log::Error("Scene: couldn't build '" + path + "' from the undo snapshot (file left untouched): " + e.what());
+            return false;
+        }
+        if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), out, /*binary=*/false)) {
+            Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
+            return false;
+        }
+        return true;
+    };
+}
+
+std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::string& loadedText, const AssetLibrary& assets) {
+    json live;
+    live["hasAssetLibrarySnapshot"] = true;
+    AppendAssetLibraryJson(live, assets, /*includeAssetMetadata=*/true);
+    bool same = true;
+    for (const char* k : kLibraryKeys) {
+        const bool inLoaded = loaded.contains(k), inLive = live.contains(k);
+        if (inLoaded != inLive || (inLoaded && loaded.at(k) != live.at(k))) { same = false; break; }
+    }
+    if (same) return loadedText;
+    json out = loaded;
+    for (const char* k : kLibraryKeys) {
+        out.erase(k);
+        if (const auto it = live.find(k); it != live.end()) out[k] = *it;
+    }
+    return out.dump();
 }
 
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {
