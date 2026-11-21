@@ -1,6 +1,7 @@
 #include "Tests/PerfBench.h"
 
 #include "Core/Env.h"
+#include "AssetCost.h"
 #include "SamplingProfiler.h"
 #include "Texture.h"
 #include "TimeService.h"
@@ -32,7 +33,11 @@ bool GpuStarvedFrame(double frameMs, const std::vector<Profiler::Entry>& cpu) {
 } // namespace
 
 PerfBench::PerfBench()
-    : m_Warmup(std::max(0, Env::Int(Env::Var::PerfWarmup, 100))), m_LastFrameEnd(std::chrono::steady_clock::now()) {}
+    : m_Warmup(std::max(0, Env::Int(Env::Var::PerfWarmup, 100))), m_LastFrameEnd(std::chrono::steady_clock::now()) {
+    // The asset cost table wants every load, the first scene's own included (TakeFrameMs only turns the log on at
+    // the first frame, after that load).
+    if (AssetCost::Enabled()) FrameLoads::Enable(true);
+}
 
 double PerfBench::TakeFrameMs() {
     const auto now = std::chrono::steady_clock::now();
@@ -41,6 +46,7 @@ double PerfBench::TakeFrameMs() {
     SamplingProfiler::EndFrame(frameMs);
     if (!FrameLoads::Enabled()) FrameLoads::Enable(true); // only --perf-bench calls this: the log is off otherwise
     FrameLoads::Take(m_Loads);
+    if (AssetCost::Enabled()) AssetCost::NoteLoads(m_Loads);
     return frameMs;
 }
 
@@ -211,5 +217,6 @@ void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int 
     ReportHitches(sceneFile, mode);
     std::fflush(stdout);
     if (perfSample) SamplingProfiler::Report(mode, 60);
+    if (AssetCost::Enabled()) AssetCost::WritePhase(sceneFile, mode);
     m_Cpu.clear(); m_Gpu.clear(); m_Frame = {};
 }
