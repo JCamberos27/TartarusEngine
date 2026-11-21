@@ -655,7 +655,7 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
         std::sort(g.Rows.begin(), g.Rows.end(), [&](const GlassEditorState::Row& a, const GlassEditorState::Row& b) {
             const auto* oa = reg.try_get<OrderComponent>(a.Entity);
             const auto* ob = reg.try_get<OrderComponent>(b.Entity);
-            const int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
+            const int va = oa ? oa->Value : kOrderMissing, vb = ob ? ob->Value : kOrderMissing;
             return va != vb ? va < vb : a.Entity < b.Entity;
         });
     } else {
