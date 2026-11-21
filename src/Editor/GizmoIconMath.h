@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace GizmoIconMath {
@@ -48,14 +50,33 @@ inline void Declutter(std::vector<IconCandidate>& icons, float minSpacing) {
         return a.Distance < b.Distance;
     });
     const float minSq = minSpacing * minSpacing;
+    // Kept icons bucketed in minSpacing-sized cells: an icon only needs the kept ones in its own
+    // and the 8 surrounding cells (anything farther is >= minSpacing away). Same greedy order and
+    // result as testing every earlier kept icon, without the O(n * kept) walk (P-23: thousands of
+    // icons in All mode on Forest).
+    if (minSpacing <= 0.0f) {
+        for (auto& ic : icons) ic.Keep = true;
+        return;
+    }
+    const float inv = 1.0f / minSpacing;
+    auto cellOf = [inv](float v) { return (std::int64_t)std::floor(v * inv); };
+    auto key = [](std::int64_t cx, std::int64_t cy) { return (std::uint64_t)(cx * 73856093LL) ^ (std::uint64_t)(cy * 19349663LL); };
+    std::unordered_multimap<std::uint64_t, size_t> kept;
+    kept.reserve(icons.size());
     for (size_t i = 0; i < icons.size(); ++i) {
+        const std::int64_t cx = cellOf(icons[i].X), cy = cellOf(icons[i].Y);
         bool ok = true;
-        for (size_t j = 0; j < i && ok; ++j) {
-            if (!icons[j].Keep) continue;
-            const float dx = icons[i].X - icons[j].X, dy = icons[i].Y - icons[j].Y;
-            if (dx * dx + dy * dy < minSq) ok = false;
-        }
+        for (std::int64_t dy = -1; dy <= 1 && ok; ++dy)
+            for (std::int64_t dx = -1; dx <= 1 && ok; ++dx) {
+                auto range = kept.equal_range(key(cx + dx, cy + dy));
+                for (auto it = range.first; it != range.second && ok; ++it) {
+                    const IconCandidate& o = icons[it->second];
+                    const float ddx = icons[i].X - o.X, ddy = icons[i].Y - o.Y;
+                    if (ddx * ddx + ddy * ddy < minSq) ok = false;
+                }
+            }
         icons[i].Keep = ok;
+        if (ok) kept.emplace(key(cx, cy), i);
     }
 }
 
