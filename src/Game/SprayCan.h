@@ -100,6 +100,7 @@ private:
         const DecalTextureArrays::Source* Reveal = nullptr; // the reveal order's maps once made (GeneratedDecalMaps keeps them)
         std::future<bool> Bake; // the first bake's PNG encode + write, on a worker
         bool Baked = false, BakeFailed = false;
+        bool Stale = false; // its recipe changed while the bake was writing: read again once that's done
     };
     struct Active {
         AudioEngine::SoundHandle Hiss = AudioEngine::InvalidHandle;
@@ -116,4 +117,5 @@ private:
     SoundPlayer m_Sound;
     int m_SoundsPlayed = 0;
     int m_NextPiece = 0;
+    int m_RecipeHook = 0; // AssetChangeHooks id: .graffiti recipes changed on disk
 };
