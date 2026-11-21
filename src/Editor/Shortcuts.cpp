@@ -159,6 +159,7 @@ void BuildDefaultTable() {
     Register("editor.newScene",    "New Scene",               Ctx_Global, Ck(ImGuiKey_N));
     Register("editor.openScene",   "Open Scene",              Ctx_Global, Ck(ImGuiKey_O));
     Register("editor.preferences", "Open Preferences",        Ctx_Global, Ck(ImGuiKey_Comma));
+    Register("editor.rebuildRestart", "Rebuild && Restart",   Ctx_Global, CAk(ImGuiKey_R));
 
     // --- Edit (Global) ---
     Register("edit.duplicate",       "Duplicate (in place)",  Ctx_Global, Ck(ImGuiKey_D));
