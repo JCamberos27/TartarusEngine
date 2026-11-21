@@ -186,18 +186,78 @@ void World::RebuildWorldTransformCache() {
     static uint64_t s_Stamps = 0; // shared by every World, so two worlds never hand out the same stamp
     m_PrevTransformCacheStamp = m_TransformCacheStamp;
     m_TransformCacheStamp = ++s_Stamps;
+    RebuildTransformsOnly();
     // Active-in-hierarchy only changes with the hierarchy, the Deactivated set or someone else's InactiveTag edits (all
     // in the signature): re-derived only then. A destroy-and-create of an unparented entity leaves it out, which is fine
-    // - a fresh root without DeactivatedTag is active, which is what it starts as.
-    {
-        std::uint64_t sig[6];
-        ActiveSignature(sig);
-        if (!m_ActiveSignatureValid || !std::equal(sig, sig + 6, m_ActiveSignature)) {
-            SyncActiveInHierarchy();
-            ActiveSignature(m_ActiveSignature); // as Sync left it
-            m_ActiveSignatureValid = true;
+    // - a fresh root without DeactivatedTag is active, which is what it starts as. After the transforms (nothing there
+    // reads InactiveTag), so a small structure change can patch from their structure delta.
+    std::uint64_t sig[6];
+    ActiveSignature(sig);
+    if (m_ActiveSignatureValid && std::equal(sig, sig + 6, m_ActiveSignature)) return;
+    if (!PatchActiveInHierarchy(sig)) {
+        SyncActiveInHierarchy();
+        ++m_ActiveFullSyncs;
+    }
+    ActiveSignature(m_ActiveSignature); // as Sync left it
+    m_ActiveSignatureValid = true;
+}
+
+// SyncActiveInHierarchy for a small structure change (an outfit piece created, attached or destroyed: ~1 ms over the
+// forest each time): only the subtrees the transform cache lists as new or re-parented are walked, each from what its
+// parent chain says. Returns false, having changed nothing, when the full sync is needed: the delta doesn't cover the
+// change (the full walk ran), a Deactivated or InactiveTag set changed since the last sync (someone else's edits), or the
+// transform count isn't what the delta explains (a transform added or removed in place).
+bool World::PatchActiveInHierarchy(const std::uint64_t sig[6]) {
+    const TransformStructureDelta& d = m_StructureDelta;
+    if (!m_ActiveSignatureValid || !d.Valid || !std::equal(sig + 2, sig + 6, m_ActiveSignature + 2)) return false;
+    const auto& transforms = Registry.storage<TransformComponent>();
+    std::uint64_t added = 0;
+    for (entt::entity e : d.Added) added += transforms.contains(e) ? 1 : 0;
+    if (m_ActiveSignature[1] + added != sig[1] + (std::uint64_t)d.Dropped.size()) return false;
+    const auto& hierarchy = Registry.storage<HierarchyComponent>();
+    const auto& deactivated = Registry.storage<DeactivatedTag>();
+    const auto parentOf = [&](entt::entity e) {
+        if (!hierarchy.contains(e)) return entt::entity{entt::null};
+        const entt::entity p = hierarchy.get(e).Parent;
+        return p != entt::null && Registry.valid(p) ? p : entt::entity{entt::null};
+    };
+    // Whether `e`'s own chain (itself included) holds a Deactivated entity, as the full sync's walk up reads it.
+    const auto inactiveUp = [&](entt::entity e) {
+        int depth = 0;
+        for (entt::entity walk = e; walk != entt::null && depth <= (int)kMaxHierarchyDepth; walk = parentOf(walk), ++depth)
+            if (deactivated.contains(walk)) return true;
+        return false;
+    };
+    std::vector<entt::entity>& roots = m_ActiveRoots;
+    roots.assign(d.Added.begin(), d.Added.end());
+    for (const auto& [e, was] : d.Reparented) roots.push_back(e);
+    std::vector<std::pair<entt::entity, bool>>& walk = m_ActiveWalk;
+    std::vector<entt::entity> activate, deactivate;
+    for (entt::entity r : roots) {
+        if (!Registry.valid(r)) continue;
+        walk.assign(1, {r, inactiveUp(r)});
+        size_t visited = 0;
+        while (!walk.empty()) {
+            const auto [e, inactive] = walk.back();
+            walk.pop_back();
+            if (++visited > transforms.size() + hierarchy.size()) return false; // a loop: the full sync reports it
+            // Only entities with a transform take the hierarchy's answer (the rest keep their own checkbox's, unchanged).
+            if (transforms.contains(e)) {
+                const bool has = Registry.all_of<InactiveTag>(e);
+                if (inactive && !has) deactivate.push_back(e);
+                else if (!inactive && has) activate.push_back(e);
+            }
+            if (!hierarchy.contains(e)) continue;
+            for (entt::entity c : hierarchy.get(e).Children)
+                if (Registry.valid(c) && parentOf(c) == e) walk.emplace_back(c, inactive || deactivated.contains(c));
         }
     }
+    for (entt::entity e : deactivate) Registry.emplace_or_replace<InactiveTag>(e);
+    for (entt::entity e : activate) Registry.remove<InactiveTag>(e);
+    return true;
+}
+
+void World::RebuildTransformsOnly() {
     auto view = Registry.view<TransformComponent>();
     m_ChangedTransforms.clear();
     m_TransformMembershipChanged = false;
