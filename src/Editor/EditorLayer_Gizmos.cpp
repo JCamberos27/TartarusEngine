@@ -2501,7 +2501,7 @@ static void KeepFloatingWindowsAboveOverlay() {
 // resolves to a texture, with zero depth-buffer participation. Same story for the nav gizmo
 // (DrawViewGizmo), light gizmos and entity icons (DrawLightGizmos/DrawEntityIcons) — all project
 // world space into an ImDrawList by hand rather than rendering real 3D geometry. The one thing
-// that IS depth-tested, the collider wireframe (main.cpp, colliderGizmo.Draw), is deliberately so
+// that IS depth-tested, the collider wireframe (ViewPipeline, DebugLineRenderer), is deliberately so
 // per its own #185 PR 2 comment — "depth-tested so scene geometry occludes it" is the intended
 // reading (a collider behind a wall should look behind the wall), not a bug this item should undo.
 bool EditorLayer::BeginGizmoOverlay(Camera& editorCamera, const char* overlayName) {
