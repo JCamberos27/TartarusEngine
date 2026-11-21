@@ -316,8 +316,13 @@ void TestAssetChangeHooks() {
     });
     CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/p.prefab", "prefab")) == 1 && lateHits == 0);
     CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/p.prefab", "prefab")) == 2 && lateHits == 1);
+    // A hook unregistered by an earlier hook in the same Dispatch isn't called (its owner is gone).
+    int victimHits = 0, victim = 0;
+    const int killer = AssetChangeHooks::Register("mask", [&](const E&) { AssetChangeHooks::Unregister(victim); return true; });
+    victim = AssetChangeHooks::Register("mask", [&](const E&) { ++victimHits; return true; });
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/m.mask", "mask")) == 1 && victimHits == 0);
     // Unregistered hooks stop running.
-    for (int id : {a, b, c, d, late}) AssetChangeHooks::Unregister(id);
+    for (int id : {a, b, c, d, late, killer}) AssetChangeHooks::Unregister(id);
     CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Rescan, "", "")) == 0);
     CHECK(ctrlHits == 3 && styleHits == 3 && decalHits == 1 && lateHits == 1);
 }
