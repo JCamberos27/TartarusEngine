@@ -430,6 +430,8 @@ const CandidateCache& Candidates(World& world) {
         for (auto it = pool.cbegin(), end = pool.cend(); it != end; ++it) cache.PoolModels.push_back(it->ModelRef.get());
         return cache;
     }
+    std::fprintf(stderr, "[gather-probe] FULL BUILD stamp=%llu prevStamp=%llu cacheStamp=%llu sameSet=%d after1=%d flagsSame=%d membership=%d structValid=%d patchedIn=%zu list=%zu n=%zu%s", (unsigned long long)world.TransformCacheStamp(), (unsigned long long)world.PreviousTransformCacheStamp(), (unsigned long long)cache.Stamp, (int)sameSet, (int)afterOneRebuild, (int)(cache.Flags == flags), (int)world.TransformCacheMembershipChanged(), (int)world.TransformStructureChanges().Valid, patchedIn, cache.List.size(), storage.size(), "
+");
     ++cache.FullBuilds;
     cache.Owner = &world;
     cache.Stamp = world.TransformCacheStamp();
