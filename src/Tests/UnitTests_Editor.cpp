@@ -1017,7 +1017,7 @@ void TestRestartStateRoundTrip() {
     s.ScenePath = "assets/Scenes/Hallway.json";
     s.RestoreRecovery = true;
     s.WasPlaying = true;
-    s.Selection = {{7, "Door"}, {12, ""}};
+    s.Selection = {{7, "Door"}, {12, ""}, {3, "Lamp", 2}};
     CHECK(RS::Save(file, s));
     const std::int64_t now = RS::NowUnix();
     auto back = RS::Load(file, now);
@@ -1025,8 +1025,10 @@ void TestRestartStateRoundTrip() {
     if (back) {
         CHECK(back->ScenePath == s.ScenePath);
         CHECK(back->RestoreRecovery && back->WasPlaying);
-        CHECK(back->Selection.size() == 2 && back->Selection[0].Order == 7 && back->Selection[0].Name == "Door");
+        CHECK(back->Selection.size() == 3 && back->Selection[0].Order == 7 && back->Selection[0].Name == "Door");
+        CHECK(back->Selection[0].Local == -1);
         CHECK(back->Selection[1].Order == 12 && back->Selection[1].Name.empty());
+        CHECK(back->Selection[2].Order == 3 && back->Selection[2].Local == 2);
     }
     std::string why;
     CHECK(!RS::Load(file, now + RS::kMaxAgeSeconds + 5, &why) && why.find("stale") != std::string::npos);
@@ -1046,7 +1048,19 @@ void TestRestartStateRoundTrip() {
     CHECK((RS::Resolve(world, refs) == std::vector<entt::entity>{a}));
     world.Registry.destroy(a);
     CHECK(RS::Resolve(world, refs).empty());
-    (void)b;
+
+    // A prefab instance's member: by its root's order + prefab-local index (members get new orders on a reload).
+    const entt::entity root = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Crate");
+    const entt::entity body = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Body");
+    const entt::entity lamp = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Lamp");
+    world.SetParent(body, root);
+    world.SetParent(lamp, body);
+    world.Registry.emplace_or_replace<PrefabInstanceComponent>(root).InstanceEntities = {root, body, lamp};
+    const auto memberRefs = RS::RefsFor(world, {lamp, b});
+    CHECK(memberRefs.size() == 2 && memberRefs[0].Local == 2 && memberRefs[1].Local == -1);
+    CHECK(memberRefs[0].Order == world.Registry.get<OrderComponent>(root).Value && memberRefs[0].Name == "Lamp");
+    world.Registry.get<OrderComponent>(lamp).Value += 1000; // a rebuilt member's new order
+    CHECK((RS::Resolve(world, memberRefs) == std::vector<entt::entity>{lamp, b}));
 }
 
 // The relaunch command line: old hand-over flags dropped (both spellings), new ones last, Windows quoting.

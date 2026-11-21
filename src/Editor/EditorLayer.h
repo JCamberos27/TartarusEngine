@@ -1787,6 +1787,8 @@ private:
     // before the thing this entry undoes" contract), which by the time RecordSelectionHistory
     // notices the change is no longer what's live.
     std::vector<int> CaptureSelectedOrders(const World& world, const std::vector<entt::entity>& entities) const;
+    // The entities those orders name now (a prefab member by its root's order + local index).
+    std::vector<entt::entity> ResolveSelectionOrders(const World& world, const std::vector<int>& orders) const;
     void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;
