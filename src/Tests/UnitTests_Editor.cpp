@@ -883,19 +883,19 @@ void TestEditorFileStatCache() {
         static constexpr int kN = 2000; // static: the lambda below reads it without a capture (MSVC)
         auto us = [](C::duration d) { return std::chrono::duration<double, std::micro>(d).count() / kN; };
         bool sink = false;
-        auto t0 = C::now();
+        auto b0 = C::now();
         for (int i = 0; i < kN; ++i) sink ^= std::filesystem::exists(file, ec);
-        const double exUs = us(C::now() - t0);
-        t0 = C::now();
+        const double exUs = us(C::now() - b0);
+        b0 = C::now();
         for (int i = 0; i < kN; ++i) sink ^= std::filesystem::last_write_time(file, ec) == std::filesystem::file_time_type{};
-        const double mtUs = us(C::now() - t0);
-        t0 = C::now();
+        const double mtUs = us(C::now() - b0);
+        b0 = C::now();
         for (int i = 0; i < kN; ++i) sink ^= std::filesystem::equivalent(file, other, ec);
-        const double eqUs = us(C::now() - t0);
+        const double eqUs = us(C::now() - b0);
         FS::Clear();
-        t0 = C::now();
+        b0 = C::now();
         for (int i = 0; i < kN; ++i) sink ^= FS::Get(file).Exists;
-        const double cachedUs = us(C::now() - t0);
+        const double cachedUs = us(C::now() - b0);
         std::printf("[MicroBench] file stat: exists %.2f us, last_write_time %.2f us, equivalent %.2f us, cached Get %.3f us (sink=%d)\n",
                     exUs, mtUs, eqUs, cachedUs, (int)sink);
         std::filesystem::remove(file, ec);
