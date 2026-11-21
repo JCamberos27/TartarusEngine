@@ -120,6 +120,7 @@
 #include "ScriptIDE.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
+#include "AssetChangeHooks.h"
 #include "AssetDatabase.h"
 #include "ProjectWatcher.h" // #132
 #include "ThumbnailCache.h"
@@ -416,6 +417,21 @@ private:
     std::shared_ptr<Cubemap> hdriCube;
     std::string               hdriCubePath;
     bool                      hdriNeedsBake = false; // #200 — set when hdriCube is (re)loaded
+    // The loaded .hdr written on disk (re-exported, painted over) reloads in place: clearing the
+    // path makes the next HDRI frame load it again and rebake the IBL. Rescan may have changed it too.
+    struct HdriHook {
+        int id = 0;
+        ~HdriHook() { AssetChangeHooks::Unregister(id); }
+    } hdriHook;
+    hdriHook.id = AssetChangeHooks::Register("hdri", [&hdriCubePath](const AssetChangeHooks::Event& e) {
+        if (hdriCubePath.empty() || e.Type == AssetChangeHooks::Event::Kind::Removed) return false;
+        const bool rescan = e.Type == AssetChangeHooks::Event::Kind::Rescan;
+        const std::string loaded = std::filesystem::path(hdriCubePath).is_absolute()
+                                       ? hdriCubePath : ProjectPaths::Resolve(hdriCubePath);
+        if (!rescan && !AssetDatabase::SamePath(e.Path, loaded) && !AssetDatabase::SamePath(e.Path, hdriCubePath)) return false;
+        hdriCubePath.clear();
+        return true;
+    });
     bool                      prevWasHdri = false;
     bool                      prevWasAtmosphere = false;
     // PR14: reflection probe array — rebuilt from scene each frame, bound per scene draw
