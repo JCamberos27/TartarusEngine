@@ -843,6 +843,9 @@ public:
     // auto-save/auto-load default; changes when the user uses Open/Save As. main.cpp reads
     // this for the auto-save-on-exit so it writes back to wherever the user actually has open.
     const std::string& CurrentScenePath() const { return m_CurrentScenePath; }
+    // Before Init: the scene the app loaded instead of the usual startup pick (Rebuild & Restart's scene,
+    // RestartState::StartupScene; "" = an untitled scene), so both agree on what is open.
+    void SetStartupScene(std::string path) { m_StartupSceneOverride = std::move(path); }
     // True once any edit has happened since the last Save/Save As/Open/New — main.cpp reads
     // this to show an unsaved-changes indicator in the window title.
     bool IsDirty() const { return m_Dirty; }
@@ -1317,6 +1320,7 @@ private:
     // Set in Init() from the project startup scene — the project folder, not the
     // working directory. Left as a bare filename here only as a harmless pre-Init default.
     std::string m_CurrentScenePath;
+    std::optional<std::string> m_StartupSceneOverride; // SetStartupScene: Init's scene instead of the usual pick
     bool m_Dirty = false;
     // Count of real-edit (non-SelectionOnly) entries currently on m_UndoStack — NOT the same as
     // m_UndoStack.size() since Phase 6 item 6 / Q6, which also pushes a SelectionOnly entry for

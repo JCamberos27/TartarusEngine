@@ -151,6 +151,10 @@ const FlagDef kFlags[] = {
     {"--restore-state", Arity::Required, "file", false, kNoMode, Bit(LaunchMode::Editor),
      [](LaunchOptions& o, const std::string& v) { o.restoreStateFile = v; },
      "Rebuild & Restart: pick up the scene, unsaved edits, selection and Play from this file"},
+    {"--restore-check", Arity::Required, "report", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) { o.restoreCheckReport = v; },
+     "test --restore-state: hidden, in a scratch user folder (needs TARTARUS_EDITOR_TEST_INSTANCE); writes what was "
+     "restored to this JSON file, then quits"},
     {"--wait-pid", Arity::Required, "pid", false, kNoMode, Bit(LaunchMode::Editor),
      [](LaunchOptions& o, const std::string& v) {
          const bool digits = !v.empty() && v.size() <= 10 && v.find_first_not_of("0123456789") == std::string::npos;
@@ -190,7 +194,8 @@ bool IsValue(const char* a) { return a[0] != '-'; }
 } // namespace
 
 bool KeepsWindowHidden(const LaunchOptions& o) {
-    if (o.mode == LaunchMode::Editor || !(kGuiModes & Bit(o.mode))) return false;
+    if (!(kGuiModes & Bit(o.mode))) return false;
+    if (o.mode == LaunchMode::Editor && o.restoreCheckReport.empty()) return false; // --restore-check runs hidden
     return !Env::Flag(Env::Var::Show) && !Env::Flag(Env::Var::EditorTestShow);
 }
 
@@ -256,6 +261,10 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
     }
     if (o.waitPid == LaunchOptions::kBadWaitPid) {
         error = "'--wait-pid' needs a process id (a whole number above 0)";
+        return false;
+    }
+    if (!o.restoreCheckReport.empty() && o.restoreStateFile.empty()) {
+        error = "'--restore-check' needs '--restore-state <file>'";
         return false;
     }
 
