@@ -104,7 +104,10 @@ struct Registry {
 Registry g_Reg;
 } // namespace
 
-void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb, const ImGuiLastItemData* data) {
+namespace {
+// The harness's item hooks. ImGui reaches them through ImGuiTestHooks.cpp's forwarders, which call
+// the table a run stores in ImGuiContext::TestEngine (g_HookTable below).
+void HostItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb, const ImGuiLastItemData* data) {
     if (id == 0 || !ctx->CurrentWindow) return;
     UiItem& it = g_Reg.Get(id);
     it.Rect = bb;
@@ -113,22 +116,21 @@ void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb
     it.Root = ctx->CurrentWindow->RootWindow ? ctx->CurrentWindow->RootWindow->Name : it.Window;
     if (data) { it.ItemFlags = data->ItemFlags; it.Status = data->StatusFlags; }
 }
-void ImGuiTestEngineHook_ItemInfo(ImGuiContext*, ImGuiID id, const char* label, ImGuiItemStatusFlags flags) {
+void HostItemInfo(ImGuiContext*, ImGuiID id, const char* label, ImGuiItemStatusFlags flags) {
     if (id == 0) return;
     UiItem& it = g_Reg.Get(id);
     if (label) it.Label = label;
     it.Status |= flags;
 }
-void ImGuiTestEngineHook_Log(ImGuiContext*, const char*, ...) {}
-const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext*, ImGuiID) { return nullptr; }
+} // namespace
 void EditorTestProbe_Tag(ImGuiID id, const char* tag) {
     if (id == 0 || !tag) return;
     g_Reg.Get(id).Tag = tag;
 }
 namespace {
-// Handed to TartarusEditor.dll through ImGuiContext::TestEngine (EditorTestHooks.h), so items the
-// module draws land in the same registry.
-const EditorTestHookTable g_HookTable{&ImGuiTestEngineHook_ItemAdd, &ImGuiTestEngineHook_ItemInfo};
+// Stored in ImGuiContext::TestEngine for a run (EditorTestHooks.h): every item ImGui adds, from the
+// exe or TartarusEditor.dll, lands in the same registry.
+const EditorTestHookTable g_HookTable{&HostItemAdd, &HostItemInfo};
 } // namespace
 
 // =============================================================================================

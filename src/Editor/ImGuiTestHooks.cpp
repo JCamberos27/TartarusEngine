@@ -1,6 +1,7 @@
-// TartarusEditor.dll's ImGui test-engine hooks: forwarders to the host's harness through the
-// table it puts in ImGuiContext::TestEngine (see EditorTestHooks.h). Outside a test run
-// TestEngineHookItems is false and ImGui never calls these.
+// ImGui's test-engine hooks, built with ImGui's core (tartarus_imgui_core) so whichever module holds
+// ImGui has them: forwarders to the --editor-tests harness through the table it puts in
+// ImGuiContext::TestEngine (see EditorTestHooks.h). Outside a test run TestEngineHookItems is false
+// and ImGui never calls these.
 
 #include "EditorTestHooks.h"
 
