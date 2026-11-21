@@ -880,7 +880,7 @@ void TestEditorFileStatCache() {
         const auto other = dir / "b.txt";
         { std::ofstream(other) << "y"; }
         using C = std::chrono::steady_clock;
-        constexpr int kN = 2000;
+        static constexpr int kN = 2000; // static: the lambda below reads it without a capture (MSVC)
         auto us = [](C::duration d) { return std::chrono::duration<double, std::micro>(d).count() / kN; };
         bool sink = false;
         auto t0 = C::now();
