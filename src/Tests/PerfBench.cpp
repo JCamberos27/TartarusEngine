@@ -1,6 +1,7 @@
 #include "Tests/PerfBench.h"
 
 #include "Core/Env.h"
+#include "AssetCost.h"
 #include "SamplingProfiler.h"
 #include "Texture.h"
 #include "TimeService.h"
@@ -32,7 +33,11 @@ bool GpuStarvedFrame(double frameMs, const std::vector<Profiler::Entry>& cpu) {
 } // namespace
 
 PerfBench::PerfBench()
-    : m_Warmup(std::max(0, Env::Int(Env::Var::PerfWarmup, 100))), m_LastFrameEnd(std::chrono::steady_clock::now()) {}
+    : m_Warmup(std::max(0, Env::Int(Env::Var::PerfWarmup, 100))), m_LastFrameEnd(std::chrono::steady_clock::now()) {
+    // The asset cost table wants every load, the first scene's own included (TakeFrameMs only turns the log on at
+    // the first frame, after that load).
+    if (AssetCost::Enabled()) FrameLoads::Enable(true);
+}
 
 double PerfBench::TakeFrameMs() {
     const auto now = std::chrono::steady_clock::now();
@@ -41,10 +46,12 @@ double PerfBench::TakeFrameMs() {
     SamplingProfiler::EndFrame(frameMs);
     if (!FrameLoads::Enabled()) FrameLoads::Enable(true); // only --perf-bench calls this: the log is off otherwise
     FrameLoads::Take(m_Loads);
+    if (AssetCost::Enabled()) AssetCost::NoteLoads(m_Loads);
     return frameMs;
 }
 
 void PerfBench::Sample(double frameMs, int frameNo) {
+    if (m_Frame.N == 0) m_LoadStart = MachineLoad::Take();
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
     for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) Add(m_Gpu, e.Name, e.Milliseconds);
@@ -134,6 +141,10 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     Stats after2s;
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
+    // What else ran during the phase: hitches in a CONTENDED phase are likely other processes, not this one.
+    const int cores = MachineLoad::Cores();
+    const std::string machine = MachineLoad::Describe(MachineLoad::Between(m_LoadStart, MachineLoad::Take(), cores), cores);
+    if (!machine.empty()) std::printf("[PerfBench] %s machine: %s\n", label, machine.c_str());
     for (const Worst& w : m_Worst) {
         char unscoped[64] = "-";
         if (w.UnscopedMs >= 0.0f) std::snprintf(unscoped, sizeof(unscoped), "%.2f of %.2f", w.UnscopedMs, w.WallMs);
@@ -211,5 +222,6 @@ void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int 
     ReportHitches(sceneFile, mode);
     std::fflush(stdout);
     if (perfSample) SamplingProfiler::Report(mode, 60);
+    if (AssetCost::Enabled()) AssetCost::WritePhase(sceneFile, mode);
     m_Cpu.clear(); m_Gpu.clear(); m_Frame = {};
 }

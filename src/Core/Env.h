@@ -21,6 +21,7 @@
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
     X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
+    X(AssetCost, "TARTARUS_ASSET_COST", Str, "--perf-bench: append each phase's per-asset cost table to this CSV")    \
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
