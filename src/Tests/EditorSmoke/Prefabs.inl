@@ -477,8 +477,9 @@ void RegisterPrefabsTests() {
         Until("Stop brought the file's Crate Globe", [](Ctx& c) { return ChildOf(c.W, "Crate B", "Crate Globe") != entt::null; }, 600),
         Expect("A 5 (override), B 3 at x 6", [](Ctx& c) { return ExpectChild(c, "Crate Globe", 5.0f, 3.0f, 6.0f); }),
         // A prefab child is found again after Stop (by its root and prefab-local index), and that's no new step.
-        ExpectTrue("Stop kept Crate B's lamp selected", [](Ctx& c) {
-            return X::Selected(c.E) != entt::null && X::Selected(c.E) == ChildOf(c.W, "Crate B", "Crate Lamp");
+        Expect("Stop kept B's (rebuilt) lamp selected", [](Ctx& c) {
+            const entt::entity s = X::Selected(c.E);
+            return s != entt::null && s == ChildOf(c.W, "Crate B", "Crate Globe") ? std::string() : "selected: " + NameOf(c.W, s);
         }),
         ExpectTrue("Stop recorded no selection step", [](Ctx& c) {
             const std::string l = PA::UndoLabels(c.E);
@@ -492,8 +493,9 @@ void RegisterPrefabsTests() {
             const std::string why = ExpectChild(c, "Crate Globe", 3.0f, 3.0f, 6.0f);
             return why.empty() ? why : why + " | history: " + PA::UndoLabels(c.E);
         }),
-        ExpectTrue("undo kept Crate B's lamp selected", [](Ctx& c) {
-            return X::Selected(c.E) != entt::null && X::Selected(c.E) == ChildOf(c.W, "Crate B", "Crate Lamp");
+        Expect("undo kept B's (rebuilt) lamp selected", [](Ctx& c) {
+            const entt::entity s = X::Selected(c.E);
+            return s != entt::null && s == ChildOf(c.W, "Crate B", "Crate Globe") ? std::string() : "selected: " + NameOf(c.W, s);
         }),
         Do("undo", [](Ctx& c) { X::Undo(c.E, c.W, c.A); }), Wait(3),
         Expect("undo the move: B back at x 4, still the file's Crate Globe", [](Ctx& c) {
