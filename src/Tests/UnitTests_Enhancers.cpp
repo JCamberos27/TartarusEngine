@@ -13,6 +13,12 @@
 #include "Enhancers/TabState.h"
 #include "Shortcuts.h"
 #include "World.h"
+#include "EntityOrderIndex.h"
+#include <chrono>
+#include <cstdio>
+#include "Core/Env.h"
+#include <unordered_map>
+#include <vector>
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
 #include "ComponentRegistry.h"
@@ -937,6 +943,68 @@ void TestEnhancerKeepUnreadable() {
     fs::remove_all(dir, ec);
 }
 
+// P-11: the bookmark/tab/pin order lookup rebuilds its map only when the OrderComponent storage changed.
+void TestEntityOrderIndex() {
+    entt::registry reg;
+    std::vector<entt::entity> es;
+    for (int i = 0; i < 50; ++i) { es.push_back(reg.create()); reg.emplace<OrderComponent>(es.back(), i * 10); }
+    EntityOrderIndex idx;
+    std::int64_t frame = 1;
+    CHECK(idx.Find(reg, 30, frame) == es[3]);
+    CHECK(idx.Find(reg, 31, frame) == entt::null);
+    CHECK(idx.Find(reg, -1, frame) == entt::null);
+    CHECK(idx.Rebuilds() == 1 && idx.Fingerprints() == 1);
+    for (int f = 0; f < 600; ++f) { ++frame; CHECK(idx.Find(reg, 70, frame) == es[7]); CHECK(idx.Find(reg, 80, frame) == es[8]); }
+    CHECK(idx.Rebuilds() == 1);           // ten idle seconds: no rebuild (was one a second)
+    CHECK(idx.Fingerprints() == 601);     // one cheap check per frame, not per lookup
+    // A renumber that keeps the entity count: a new value is found on the next frame (was up to a second late).
+    reg.get<OrderComponent>(es[5]).Value = 55;
+    ++frame;
+    CHECK(idx.Find(reg, 55, frame) == es[5]);
+    CHECK(idx.Find(reg, 50, frame) == entt::null);
+    CHECK(idx.Rebuilds() == 2);
+    // Within one frame, a stale hit is verified and falls back to a scan.
+    reg.get<OrderComponent>(es[6]).Value = 66;
+    reg.get<OrderComponent>(es[9]).Value = 60;
+    CHECK(idx.Find(reg, 60, frame) == es[9]);
+    ++frame;
+    CHECK(idx.Find(reg, 66, frame) == es[6]);
+    // Destroy + create keeps the count but changes the pairs.
+    reg.destroy(es[1]);
+    const entt::entity n = reg.create(); reg.emplace<OrderComponent>(n, 1000);
+    ++frame;
+    CHECK(idx.Find(reg, 1000, frame) == n);
+    CHECK(idx.Find(reg, 10, frame) == entt::null);
+    // Another registry.
+    entt::registry other;
+    const entt::entity o = other.create(); other.emplace<OrderComponent>(o, 30);
+    CHECK(idx.Find(other, 30, frame) == o);
+    // No frame clock: every call re-checks.
+    reg.get<OrderComponent>(es[2]).Value = 22;
+    CHECK(idx.Find(reg, 22, -1) == es[2]);
+
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1). 5000 entities: the per-frame fingerprint vs the
+    // old once-a-second map rebuild.
+    if (Env::Flag(Env::Var::MicroBench)) {
+        entt::registry big;
+        for (int i = 0; i < 5000; ++i) big.emplace<OrderComponent>(big.create(), i);
+        using C = std::chrono::steady_clock;
+        std::uint64_t sink = 0;
+        auto t0 = C::now();
+        for (int i = 0; i < 6000; ++i) sink += EntityOrderIndex::Fingerprint(big);
+        const double fpUs = std::chrono::duration<double, std::micro>(C::now() - t0).count() / 6000.0;
+        std::unordered_map<int, entt::entity> m;
+        t0 = C::now();
+        for (int i = 0; i < 100; ++i) {
+            m.clear();
+            for (auto [e, oc] : big.view<const OrderComponent>().each()) m.emplace(oc.Value, e);
+        }
+        const double rbUs = std::chrono::duration<double, std::micro>(C::now() - t0).count() / 100.0;
+        std::printf("[MicroBench] EntityOrderIndex 5000 entities: fingerprint %.2f us/frame, map rebuild %.1f us (old: once per 60 frames = %.2f us/frame avg) sink=%llu\n",
+                    fpUs, rbUs, rbUs / 60.0, (unsigned long long)(sink & 1));
+    }
+}
+
 } // namespace
 
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
@@ -968,4 +1036,5 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerFolderKinds", TestEnhancerFolderKinds);
     tests.emplace_back("EnhancerFolderStyleResolve", TestEnhancerFolderStyleResolve);
     tests.emplace_back("EnhancerUiStyles", TestEnhancerUiStyles);
+    tests.emplace_back("Entity order index: rebuilds only when the order storage changes", TestEntityOrderIndex);
 }
