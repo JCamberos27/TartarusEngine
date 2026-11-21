@@ -224,7 +224,7 @@ void RegisterHotReloadTests() {
             std::error_code ec;
             return !std::filesystem::exists(EditorRestart::StateFile(), ec);
         }),
-    }, [](Ctx&) { Env::Set(Env::Var::RestartFakeBuild, ""); std::error_code ec; std::filesystem::remove(EditorRestart::StateFile(), ec); });
+    }, [](Ctx&) { EditorRestart::Cancel(); Env::Set(Env::Var::RestartFakeBuild, ""); std::error_code ec; std::filesystem::remove(EditorRestart::StateFile(), ec); });
 
     // ------------------------------------------------------------------ the real rebuild
     // cmake --build <build> --config <cfg> --target TartarusGame TartarusEditor, as the menu item

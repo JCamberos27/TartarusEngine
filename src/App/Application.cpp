@@ -1422,7 +1422,8 @@ bool AppSession::Frame() {
     // Rebuild & Restart (EditorRestart.h): the new exe is built. Leave Play (its world isn't the scene) and prefab
     // mode first, then hand the state over and start the new editor; this one closes without the Save prompt (the
     // dirty scene's recovery snapshot stays for the new one). Not mid-drag (an undo step still open).
-    if (!playerMode && !headless && EditorRestart::ReadyToRelaunch() && !editor.GlobalUndoActive()) {
+    // --editor-tests drives it too (headless, with TARTARUS_RESTART_FAKE_BUILD: no relaunch); --smoke-test never.
+    if (!playerMode && (!headless || opt.editorTestsMode) && EditorRestart::ReadyToRelaunch() && !editor.GlobalUndoActive()) {
         if (playing) { restartWasPlaying = true; stopPlay(); }
         else if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets);
         else {
