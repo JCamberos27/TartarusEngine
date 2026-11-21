@@ -421,17 +421,20 @@ private:
     // path makes the next HDRI frame load it again and rebake the IBL. Rescan may have changed it too.
     struct HdriHook {
         int id = 0;
+        explicit HdriHook(std::string& path) {
+            id = AssetChangeHooks::Register("hdri", [&path](const AssetChangeHooks::Event& e) {
+                if (path.empty() || e.Type == AssetChangeHooks::Event::Kind::Removed) return false;
+                const bool rescan = e.Type == AssetChangeHooks::Event::Kind::Rescan;
+                const std::string loaded = std::filesystem::path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
+                if (!rescan && !AssetDatabase::SamePath(e.Path, loaded) && !AssetDatabase::SamePath(e.Path, path)) return false;
+                path.clear();
+                return true;
+            });
+        }
         ~HdriHook() { AssetChangeHooks::Unregister(id); }
-    } hdriHook;
-    hdriHook.id = AssetChangeHooks::Register("hdri", [&hdriCubePath](const AssetChangeHooks::Event& e) {
-        if (hdriCubePath.empty() || e.Type == AssetChangeHooks::Event::Kind::Removed) return false;
-        const bool rescan = e.Type == AssetChangeHooks::Event::Kind::Rescan;
-        const std::string loaded = std::filesystem::path(hdriCubePath).is_absolute()
-                                       ? hdriCubePath : ProjectPaths::Resolve(hdriCubePath);
-        if (!rescan && !AssetDatabase::SamePath(e.Path, loaded) && !AssetDatabase::SamePath(e.Path, hdriCubePath)) return false;
-        hdriCubePath.clear();
-        return true;
-    });
+        HdriHook(const HdriHook&) = delete;
+        HdriHook& operator=(const HdriHook&) = delete;
+    } hdriHook{hdriCubePath};
     bool                      prevWasHdri = false;
     bool                      prevWasAtmosphere = false;
     // PR14: reflection probe array — rebuilt from scene each frame, bound per scene draw
