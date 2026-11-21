@@ -2137,6 +2137,10 @@ private:
         std::string Label; // file name + "##" + path: same-named files in different folders stay distinct ImGui items
     };
     std::vector<AssetRefChoice> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // The material Shader dropdown's list: engine://Standard.shader, the engine's own shaders, then the
+    // project's under shaders/ and assets/ from the Asset Browser index (a disk walk only before the
+    // first scan lands; the walk over assets/ took ~80 ms on every open).
+    std::vector<std::string> ShaderChoices(AssetLibrary& assets);
     // The open Inspector asset combo's list: built when the combo opens, reused while it stays open.
     std::vector<AssetRefChoice> m_AssetRefChoiceCache;
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
