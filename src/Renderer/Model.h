@@ -11,6 +11,7 @@ struct TerrainGrid; // Model::CreateTerrain
 #include <functional>
 #include <glm/glm.hpp>
 #include "ModelMesh.h"
+#include "../Core/CoreApi.h"
 #include "Animation.h"
 #include "Material.h"
 #include "RootMotion.h"
@@ -636,8 +637,9 @@ private:
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
     uint64_t m_LastTickedFrame = ~0ull;
-    static inline std::atomic<uint64_t> s_AnimationEpoch{0};
-    static inline std::atomic<std::uint64_t> s_ImportStamps{0};
+    // Defined in Model.cpp (one copy in TartarusCore.dll; an inline static would get one per module).
+    static TARTARUS_CORE_API std::atomic<uint64_t> s_AnimationEpoch;
+    static TARTARUS_CORE_API std::atomic<std::uint64_t> s_ImportStamps;
 
     // Import-time only state, on ImportFromFile's stack while it runs (null otherwise): not carried by every placed
     // instance (a forest has ~150k).
