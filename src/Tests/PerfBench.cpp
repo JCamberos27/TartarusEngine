@@ -51,6 +51,7 @@ double PerfBench::TakeFrameMs() {
 }
 
 void PerfBench::Sample(double frameMs, int frameNo) {
+    if (m_Frame.N == 0) m_LoadStart = MachineLoad::Take();
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
     for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) Add(m_Gpu, e.Name, e.Milliseconds);
@@ -140,6 +141,10 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     Stats after2s;
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
+    // What else ran during the phase: hitches in a CONTENDED phase are likely other processes, not this one.
+    const int cores = MachineLoad::Cores();
+    const std::string machine = MachineLoad::Describe(MachineLoad::Between(m_LoadStart, MachineLoad::Take(), cores), cores);
+    if (!machine.empty()) std::printf("[PerfBench] %s machine: %s\n", label, machine.c_str());
     for (const Worst& w : m_Worst) {
         char unscoped[64] = "-";
         if (w.UnscopedMs >= 0.0f) std::snprintf(unscoped, sizeof(unscoped), "%.2f of %.2f", w.UnscopedMs, w.WallMs);

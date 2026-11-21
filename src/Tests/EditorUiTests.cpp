@@ -1953,6 +1953,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     if (g_Done) return true;
     ImGuiContext* ctx = ImGui::GetCurrentContext();
     if (!ctx) return false;
+    editor.SetVerifyInPlaceUndo(true); // X-33 C: every in-place undo / redo is checked against the snapshot
     ctx->TestEngineHookItems = true;
     ctx->TestEngine = const_cast<EditorTestHookTable*>(&g_HookTable);
     ctx->ErrorCallback = &OnImGuiError;
