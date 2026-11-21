@@ -872,15 +872,61 @@ std::vector<int> EditorLayer::CaptureSelectedOrders(const World& world) const {
     return CaptureSelectedOrders(world, GetSelectedItems());
 }
 
+// A member of a placed prefab instance (not its root): the instance root's order and the member's
+// prefab-local index. Members are rebuilt from the .prefab on every scene load and get new orders
+// (only the root's is saved), so their own order can't find them again after Stop / Undo / Redo.
+static bool PrefabMemberRef(const World& world, entt::entity e, int& rootOrder, int& local) {
+    for (entt::entity cur = e; cur != entt::null && world.Registry.valid(cur);) {
+        if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(cur)) {
+            const auto at = std::find(pi->InstanceEntities.begin(), pi->InstanceEntities.end(), e);
+            if (cur == e || at == pi->InstanceEntities.end() || !world.Registry.all_of<OrderComponent>(cur)) return false;
+            rootOrder = world.Registry.get<OrderComponent>(cur).Value;
+            local = (int)(at - pi->InstanceEntities.begin());
+            return true;
+        }
+        const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
+        cur = h ? h->Parent : entt::null;
+    }
+    return false;
+}
+
+// Orders are never negative (World::AllocateOrder counts up from 0), so a prefab member is stored
+// as its root's order followed by ~local (negative); everything else as its own order.
 std::vector<int> EditorLayer::CaptureSelectedOrders(const World& world,
                                                      const std::vector<entt::entity>& entities) const {
     std::vector<int> orders;
     for (entt::entity e : entities) {
-        if (e != entt::null && world.Registry.valid(e) && world.Registry.all_of<OrderComponent>(e)) {
+        if (e == entt::null || !world.Registry.valid(e)) continue;
+        int rootOrder = -1, local = -1;
+        if (PrefabMemberRef(world, e, rootOrder, local)) {
+            orders.push_back(rootOrder);
+            orders.push_back(~local);
+        } else if (world.Registry.all_of<OrderComponent>(e)) {
             orders.push_back(world.Registry.get<OrderComponent>(e).Value);
         }
     }
     return orders;
+}
+
+std::vector<entt::entity> EditorLayer::ResolveSelectionOrders(const World& world, const std::vector<int>& orders) const {
+    std::vector<entt::entity> found;
+    if (orders.empty()) return found;
+    std::unordered_map<int, entt::entity> byOrder;
+    for (auto [e, o] : world.Registry.view<const OrderComponent>().each()) byOrder[o.Value] = e;
+    for (size_t i = 0; i < orders.size(); ++i) {
+        if (orders[i] < 0) continue; // a member index whose root wasn't found
+        const auto it = byOrder.find(orders[i]);
+        const int local = i + 1 < orders.size() && orders[i + 1] < 0 ? ~orders[++i] : -1;
+        if (it == byOrder.end()) continue; // that object doesn't exist at this point in history
+        entt::entity e = it->second;
+        if (local >= 0) {
+            const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(e);
+            e = pi && local < (int)pi->InstanceEntities.size() ? pi->InstanceEntities[local] : entt::null;
+        }
+        if (e != entt::null && world.Registry.valid(e) && std::find(found.begin(), found.end(), e) == found.end())
+            found.push_back(e);
+    }
+    return found;
 }
 
 void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& orders) {
@@ -898,17 +944,10 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
     // OnExitPlayMode already use to re-find the selection across a registry rebuild (#110).
     // Restoring by name instead let duplicate names collapse every match onto one entity, so
     // a multi-selected batch edit silently applied to the same object several times (#217).
-    std::unordered_map<int, entt::entity> byOrder;
-    for (auto e : world.Registry.view<OrderComponent>()) {
-        byOrder[world.Registry.get<OrderComponent>(e).Value] = e;
-    }
-
     bool first = true;
-    for (int wantedOrder : orders) {
-        auto it = byOrder.find(wantedOrder);
-        if (it == byOrder.end()) continue; // that object doesn't exist at this point in history
-        if (first) { m_Selected = it->second; first = false; }
-        else m_ExtraSelection.push_back(it->second);
+    for (entt::entity e : ResolveSelectionOrders(world, orders)) {
+        if (first) { m_Selected = e; first = false; }
+        else m_ExtraSelection.push_back(e);
     }
 }
 
@@ -1238,12 +1277,8 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
     // different object afterward (#110).
-    m_PlaySelectionOrders.clear();
+    m_PlaySelectionOrders = CaptureSelectedOrders(world);
     m_PlayKeep.clear(); // vInspector Keep Changes After Play: chosen anew each session
-    for (entt::entity e : GetSelectedItems()) {
-        if (const auto* o = world.Registry.try_get<OrderComponent>(e))
-            m_PlaySelectionOrders.push_back(o->Value);
-    }
 
     // #199: AudioSourceComponent used to do nothing at runtime - start every "Play On Start"
     // source now. Skips InactiveTag entities the same way other Play-mode iteration does (a
@@ -1378,14 +1413,9 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
 
     // Re-resolve the pre-Play selection against the freshly rebuilt entities by OrderComponent.
     if (!m_PlaySelectionOrders.empty()) {
-        std::unordered_map<int, entt::entity> byOrder;
-        for (entt::entity e : world.Registry.view<OrderComponent>())
-            byOrder[world.Registry.get<OrderComponent>(e).Value] = e;
         bool first = true;
-        for (int ord : m_PlaySelectionOrders) {
-            auto it = byOrder.find(ord);
-            if (it == byOrder.end() || !world.Registry.valid(it->second)) continue;
-            SelectItem(it->second, /*addToSelection=*/!first);
+        for (entt::entity e : ResolveSelectionOrders(world, m_PlaySelectionOrders)) {
+            SelectItem(e, /*addToSelection=*/!first);
             first = false;
         }
         m_PlaySelectionOrders.clear();
