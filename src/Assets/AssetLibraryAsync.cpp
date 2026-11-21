@@ -338,9 +338,18 @@ double AssetLibrary::PumpBudgetMs(bool playing, bool urgent, double lastFrameWor
 }
 
 int AssetLibrary::PumpAsync(double budgetMs) {
-    UploadStaging::Warm(); // the ring exists before anything loads in Play
-    MeshArena::WarmSkinned(); // and a skinned page with room (a new one is the one big allocation)
-    Texture::WarmNames();     // and texture names (glCreateTextures waits on the driver thread)
+    // Traced on their own (they run before the pump's clock and can stall on the driver).
+    const auto warm = [](const char* what, auto&& fn) {
+        const auto t0 = std::chrono::steady_clock::now();
+        fn();
+        if (PumpTrace()) {
+            const double ms = MsSince(t0);
+            if (ms >= 1.0) std::printf("[PumpTrace] %.2f ms warm %s\n", ms, what);
+        }
+    };
+    warm("staging ring", [] { UploadStaging::Warm(); });      // the ring exists before anything loads in Play
+    warm("skinned page", [] { MeshArena::WarmSkinned(); });   // and a skinned page with room (a new one is the one big allocation)
+    warm("texture names", [] { Texture::WarmNames(); });      // and texture names (glCreateTextures waits on the driver thread)
     if (!m_Async) return 0;
     AsyncLoader& a = *m_Async;
     const auto start = std::chrono::steady_clock::now();
@@ -447,7 +456,10 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         m->Maps.clear();
     }
 
-    // Tickets whose jobs are all in: a material now loads from warm caches (no decode, no GL).
+    // Tickets whose jobs are all in: a material now loads from warm caches (no decode, no GL), but still 1.5-3 ms
+    // each (an outfit lands 3-6 at once), so they share the budget. One always loads per pump: a queue that keeps the
+    // job loop over budget can't hold every material back.
+    int materialsLoaded = 0;
     for (auto it = a.Tickets.begin(); it != a.Tickets.end();) {
         std::shared_ptr<AsyncTicket> t = it->lock();
         if (!t || t->Ready) { it = a.Tickets.erase(it); continue; }
@@ -455,9 +467,15 @@ int AssetLibrary::PumpAsync(double budgetMs) {
                                      [](const std::shared_ptr<AsyncJob>& j) { return j->Complete(); });
         if (all) {
             if (!t->MaterialPath.empty() && !t->Forget) {
-                PumpStepTimer st{"material", t->MaterialPath};
-                LoadMaterial(t->MaterialPath);
+                if (materialsLoaded > 0 && overBudget()) break; // the rest next pump
+                timed([&] {
+                    PumpStepTimer st{"material", t->MaterialPath};
+                    LoadMaterial(t->MaterialPath);
+                    return 0;
+                });
                 KeepPastPlay(m_PlayMark, t->Gen, m_PlayMark.Materials, t->MaterialPath);
+                worked = true;
+                ++materialsLoaded;
             }
             t->Jobs.clear();
             t->Ready = true;
