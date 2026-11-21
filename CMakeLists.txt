@@ -318,7 +318,7 @@ set_source_files_properties(${TARTARUS_VENDORED_SOURCES} PROPERTIES
   COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/W1>$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>"
 )
 
-# --- TartarusCore.dll (hot-reload plan H-4: the build split) --------------------------------
+# --- TartarusCore.dll (the engine core as its own module, a step toward hot reload) ---------
 # The engine core builds as its own DLL, which the exe and TartarusEditor.dll link: Core, Renderer,
 # Physics, Audio, Assets, Graffiti, the scene data model they use (World, WorldLod, SkySettings,
 # TimeOfDay, RootMotion, PostProcessVolume, TerrainSystem), and the vendored code (glloader, stb,

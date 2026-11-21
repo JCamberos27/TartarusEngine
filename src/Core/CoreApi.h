@@ -1,5 +1,5 @@
 #pragma once
-// H-4 spike: data that lives in TartarusCore.dll. Functions are exported by
+// Data that lives in TartarusCore.dll (TARTARUS_CORE_DLL, CMakeLists.txt). Functions are exported by
 // WINDOWS_EXPORT_ALL_SYMBOLS; global/static DATA must be dllimport'ed by the
 // modules that read it, so mark every exported variable with TARTARUS_CORE_API.
 #if defined(_WIN32) && defined(TARTARUS_CORE_DLL_ON)
