@@ -148,6 +148,10 @@ struct Piece {
 
     std::vector<Layer> Layers;
 
+    // Not saved: SnapshotForBake keeps the full recipe's RecipeHash() here (its own layers are cut down),
+    // so the bake stamps the recipe it was started from.
+    std::string BakeRecipe;
+
     static constexpr int kMinSide = 512, kMaxSide = 2048;
     static int SnapSide(int s);
 
@@ -156,6 +160,9 @@ struct Piece {
     static std::shared_ptr<Piece> FromString(const std::string& json, const std::string& path);
     // Keys in schema order, so the same piece always writes the same bytes.
     std::string ToString() const;
+    // 16 hex digits (FNV-1a 64) of ToString(): a bake stores it in its .decal, so a recipe edited since
+    // (on disk, outside the Designer) reads as not baked.
+    std::string RecipeHash() const;
     bool Save() const; // atomic, to Path
 
     // The baked files beside the recipe (absolute): <dir>/<Name>/T_Decal_Piece_<Name>_<Map>.png and

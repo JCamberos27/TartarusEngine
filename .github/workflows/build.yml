@@ -541,6 +541,20 @@ jobs:
           }
           exit $p.ExitCode
 
+      # Rebuild & Restart's relaunch (--restore-state is editor-mode only, so --editor-tests can't reach it): a hidden
+      # editor in a scratch user folder reopens a scene outside the project with its selection and Play.
+      - name: Restart relaunch check (Mesa llvmpipe)
+        if: matrix.shard == 0
+        timeout-minutes: 6
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+          TARTARUS_EDITOR_TEST_INSTANCE: ci
+        run: python tools/restore_state_check.py build\Release\TartarusEngine.exe --timeout 300
+
       - name: Upload editor screenshots
         if: always() && hashFiles('editor-test-shots/**') != ''
         uses: actions/upload-artifact@v4

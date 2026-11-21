@@ -43,6 +43,20 @@ bool Save(const std::filesystem::path& file, const State& state);
 // Reads `file`. nullopt (with `why` filled) when missing, unreadable, malformed or older than
 // kMaxAgeSeconds as of `nowUnix`.
 std::optional<State> Load(const std::filesystem::path& file, std::int64_t nowUnix, std::string* why = nullptr);
+// The scene the restarted editor opens instead of its usual startup pick (EditorSettings::LastScenePath, which may
+// be another scene: one outside the project, prefs not flushed, another instance's): the state file's scene when
+// it still exists, "" for an untitled scene. nullopt (the usual pick stands) when the file doesn't load or its
+// scene is gone. Only reads the file; ApplyRestartState deletes it.
+std::optional<std::string> StartupScene(const std::filesystem::path& file, std::int64_t nowUnix);
+
+// --restore-check (the relaunch test): what the restarted editor came back with.
+struct CheckReport {
+    std::string ScenePath;              // the editor's current scene
+    bool SceneLoaded = false;           // the startup load read it
+    std::vector<std::string> Selection; // names of the selected entities after the restore
+    bool Playing = false;               // in Play a few frames later
+};
+bool WriteCheckReport(const std::filesystem::path& file, const CheckReport& report);
 
 // The references for `entities` (entities without an OrderComponent are skipped).
 std::vector<EntityRef> RefsFor(const World& world, const std::vector<entt::entity>& entities);
