@@ -191,7 +191,8 @@ def build(recipe_path, layers=None):
     entries = []
     closes = []
     want = lambda l: layers is None or l in layers
-    for n, v in enumerate(cfg["close"]["variants"], 1):
+    # the closes are rendered when they're built or a sub is (each sub is matched to a close); a mech / tail / far run skips them
+    for n, v in enumerate(cfg["close"]["variants"] if want("close") or want("sub") else [], 1):
         adsp.take_uses()
         y, note = render_close(v, cfg["close"])
         closes.append(y)
