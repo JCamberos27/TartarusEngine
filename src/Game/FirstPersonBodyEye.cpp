@@ -101,7 +101,7 @@ float FirstPersonBody::EyeBodyPush(World& world, const Camera& camera, const glm
         // The body's own pieces (not the arms, clothing or a Hidden Part): the vertices mostly on the upper spine and the
         // neck that the camera pass draws (not on a Camera Hidden Bone or the head) - every one, thinned to ~600; and the neck
         // opening's rim: the mesh's open border (its vertices welded by bind position - UV seams split them) within
-        // kNeckRimReach of the bind neck_01 -> head segment.
+        // kNeckRimReach of the bind neck_01 -> head segment. Clothing adds only its collar cut's edge to the rim.
         m_EyeClearBuilt = true;
         m_EyeClearPoints.clear();
         std::vector<EyeClearPoint> rim;
@@ -109,7 +109,33 @@ float FirstPersonBody::EyeBodyPush(World& world, const Camera& camera, const glm
             const entt::entity e = m_Pieces[k];
             if (!m_Models[k] || !reg.valid(e) || IsArmsPiece(reg, e) || reg.all_of<ViewModelTag>(e)) continue;
             const auto* tag = reg.try_get<PlayerBodyTag>(e);
-            if (!tag || tag->CameraHidden || tag->Clothing) continue;
+            if (!tag || tag->CameraHidden) continue;
+            if (tag->Clothing) {
+                // Clothing's collar is cut away for the camera (CollarBits): the cut's edge is an opening too, and through it
+                // a jacket's lining shows looking down. Its rim = the drawn vertices of the triangles the cut splits.
+                const std::vector<std::uint8_t>* collar = tag->CollarBits.get();
+                if (!collar) continue;
+                const Model& m = *m_Models[k];
+                size_t base = 0;
+                for (int mi = 0; mi < m.MeshCount(); ++mi) {
+                    const size_t count = m.MeshSkinVertices(mi).size();
+                    const auto& idx = m.Mesh(mi).LocalIndices();
+                    const auto hidden = [&](std::uint32_t vi) { return base + vi < collar->size() && (*collar)[base + vi] != 0; };
+                    std::vector<char> onCut(count, 0);
+                    for (size_t t = 0; t + 2 < idx.size(); t += 3) {
+                        const std::uint32_t tv[3] = {idx[t], idx[t + 1], idx[t + 2]};
+                        if (tv[0] >= count || tv[1] >= count || tv[2] >= count) continue;
+                        const int cut = (int)hidden(tv[0]) + (int)hidden(tv[1]) + (int)hidden(tv[2]);
+                        if (cut == 0 || cut == 3) continue;
+                        for (const std::uint32_t vi : tv)
+                            if (!hidden(vi)) onCut[vi] = 1;
+                    }
+                    for (std::uint32_t vi = 0; vi < (std::uint32_t)count; ++vi)
+                        if (onCut[vi]) rim.push_back({k, mi, vi, true});
+                    base += count;
+                }
+                continue;
+            }
             const Model& m = *m_Models[k];
             int want[4];
             const char* names[4] = {FPBody::kBoneSpine[2], FPBody::kBoneSpine[3], FPBody::kBoneSpine[4], "neck_01"};
