@@ -1631,25 +1631,12 @@ bool AppSession::Frame() {
         editor.KeepDockspaceAlive();
     }
 
-    // Every world matrix this frame's render passes need, computed once, top-down
-    // (#173). Placed here deliberately: player/animator/animation updates above have
-    // finished writing transforms, and the shadow + scene passes below (which each used
-    // to re-derive the same entity's parent chain per cascade, per spot, per cube face
-    // and per viewport) now just read it back. Editor edits — gizmo drags, Inspector
-    // fields — land in editor.Draw() further down and so take effect on the NEXT frame's
-    // rebuild. That is a small behavior change for the Game-view passes, which run after
-    // editor.Draw() and so used to see a mid-frame edit that the Scene pass above them
-    // did not: both views now agree on one snapshot instead of tearing between them.
-    // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
-    // falls back to composing on demand for anything the cache doesn't hold.
-    {
-    PROFILE_SCOPE("Outfits + Transform Cache");
-    { PROFILE_SCOPE("Outfit Attachments"); OutfitSystem::UpdateAttachments(world); } // rigid head wear onto the head bone, now it's posed
-    { PROFILE_SCOPE("Terrain Sync"); TerrainSystem::Sync(world); } // a Terrain edited in the Inspector, duplicated or reloaded
-    { PROFILE_SCOPE("Transform Cache"); world.RebuildWorldTransformCache(); }
-    }
     // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
-    // models and materials are now all in memory lands in one frame.
+    // models and materials are now all in memory lands in one frame. Before the Transform Cache below, so the
+    // landed pieces (and the ones they replace) are in this frame's rebuild: the transform, LOD and gather caches
+    // take the new structure in the landing frame instead of the next one (a landing used to cost two frames).
+    // Nothing here reads the cache. The player's first-person body still takes the new pieces next frame
+    // (PlayFrame's OutfitChanged runs before this).
     {
     PROFILE_SCOPE("Asset Pump + Outfit Hiding");
     { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
@@ -1698,6 +1685,24 @@ bool AppSession::Frame() {
       if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
       OutfitSystem::UpdatePending(world, assets); }
     { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
+    }
+
+    // Every world matrix this frame's render passes need, computed once, top-down
+    // (#173). Placed here deliberately: player/animator/animation updates above have
+    // finished writing transforms, and the shadow + scene passes below (which each used
+    // to re-derive the same entity's parent chain per cascade, per spot, per cube face
+    // and per viewport) now just read it back. Editor edits — gizmo drags, Inspector
+    // fields — land in editor.Draw() further down and so take effect on the NEXT frame's
+    // rebuild. That is a small behavior change for the Game-view passes, which run after
+    // editor.Draw() and so used to see a mid-frame edit that the Scene pass above them
+    // did not: both views now agree on one snapshot instead of tearing between them.
+    // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
+    // falls back to composing on demand for anything the cache doesn't hold.
+    {
+    PROFILE_SCOPE("Outfits + Transform Cache");
+    { PROFILE_SCOPE("Outfit Attachments"); OutfitSystem::UpdateAttachments(world); } // rigid head wear onto the head bone, now it's posed
+    { PROFILE_SCOPE("Terrain Sync"); TerrainSystem::Sync(world); } // a Terrain edited in the Inspector, duplicated or reloaded
+    { PROFILE_SCOPE("Transform Cache"); world.RebuildWorldTransformCache(); }
     }
 
     glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
