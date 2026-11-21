@@ -3,6 +3,7 @@
 #include "App/LaunchOptions.h"
 #include "App/PlaySession.h"
 #include "AI/NpcTest.h"
+#include "AssetDatabase.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
 #include "ClusterGrid.h"
@@ -26,6 +27,72 @@
 #include "Window.h"
 #include "World.h"
 #include "Renderer/MemReport.h"
+
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+#include <thread>
+
+// A harness run (--smoke-test, --perf-bench, --npc-test) whose frames stop - a hang, a wait that never ends - used to
+// spin until someone killed it. Like the editor tests' watchdog: a note each minute without a frame, and after
+// kStallSeconds an abort, which writes a crash dump (the stack of the hang) and fails the run. After the summary the
+// result is in, and a teardown that hangs (a wait on uploads that never come) ends the process with the run's own
+// exit code once kShutdownSeconds pass. Its state is process-wide, not the harness's, so the detached thread never
+// touches an object that is being destroyed.
+namespace stall_watch {
+extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
+extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
+extern "C" __declspec(dllimport) int __stdcall IsDebuggerPresent();
+constexpr long long kStallSeconds = 240; // longer than any scene load (Forest with its payloads: under a minute)
+constexpr long long kShutdownSeconds = 90; // teardown after the summary normally takes a few seconds
+std::atomic<unsigned long long> g_Frames{0};
+std::atomic<int> g_ExitCode{-1}; // set by the summary: from then on only the shutdown is watched
+std::mutex g_Mutex;
+std::string g_Where = "(startup)";
+void SetWhere(const std::string& where) { std::lock_guard<std::mutex> lk(g_Mutex); g_Where = where; }
+void Start() {
+    std::thread([] {
+        using clock = std::chrono::steady_clock;
+        unsigned long long lastFrames = g_Frames.load(std::memory_order_relaxed);
+        auto lastFrameAt = clock::now();
+        auto doneAt = clock::time_point{};
+        for (;;) {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            const auto now = clock::now();
+            if (const int code = g_ExitCode.load(std::memory_order_relaxed); code >= 0) {
+                // TerminateProcess, not exit(): ExitProcess runs DLL detach, which can block on the same lock the
+                // teardown is stuck behind.
+                if (doneAt == clock::time_point{}) doneAt = now;
+                else if (now - doneAt >= std::chrono::seconds(kShutdownSeconds)) {
+                    std::printf("[SmokeTest] WATCHDOG: the process hasn't exited %llds after the summary - ending it "
+                                "with the run's exit code %d\n", kShutdownSeconds, code);
+                    std::fflush(stdout);
+                    TerminateProcess(GetCurrentProcess(), (unsigned)code);
+                }
+                continue;
+            }
+            const unsigned long long frames = g_Frames.load(std::memory_order_relaxed);
+            if (frames != lastFrames) { lastFrames = frames; lastFrameAt = now; continue; }
+            const long long stalled = std::chrono::duration_cast<std::chrono::seconds>(now - lastFrameAt).count();
+            std::string where;
+            { std::lock_guard<std::mutex> lk(g_Mutex); where = g_Where; }
+            // Under a debugger a stop at a breakpoint is not a hang: keep the minute notes, never abort.
+            if (stalled >= kStallSeconds && !IsDebuggerPresent()) {
+                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu) - aborting for a crash dump\n",
+                            stalled, where.c_str(), frames);
+                std::fflush(stdout);
+                std::abort();
+            }
+            if (stalled >= 60 && stalled % 60 < 5) {
+                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu)\n", stalled, where.c_str(), frames);
+                std::fflush(stdout);
+            }
+        }
+    }).detach();
+}
+} // namespace stall_watch
 
 // sscanf, as main.cpp read it (the file-wide warning off there).
 #pragma warning(disable: 4996)
@@ -115,6 +182,17 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         if (m_ScenePaths.empty()) {
             std::cout << "[SmokeTest] ERROR: no scenes to test - failing." << std::endl;
         }
+        // --perf-bench without the Drive's asset payloads (a worktree with only their .meta files) measures
+        // placeholders, and one such run spun for half an hour: fail before the first scene instead.
+        if (opt.perfBenchMode) {
+            if (const int missing = AssetDatabase::MissingExternalCount(); missing > 0) {
+                std::cout << "[PerfBench] ERROR: " << missing << " third-party asset file(s) in external_assets.csv are "
+                             "missing (fetch them with tools/assets/fetch-assets.ps1, or hard-link them from a full "
+                             "checkout) - failing before the first scene." << std::endl;
+                m_ScenePaths.clear();
+            }
+        }
+        stall_watch::Start();
         if (!GLDebug::IsEnabled()) {
             // ForceEnable() above still could not wire up the callback (no KHR_debug on this
             // context, e.g. a GPU-less CI runner). GL error counts will read 0; the harness
@@ -146,6 +224,7 @@ void SmokeHarness::LoadScene() {
     // them - it must never rewrite a committed regression fixture on disk just
     // from loading it (audit #77; tests/smoke-scenes-invalid/ in particular is
     // documented as static, hand-authored fixtures).
+    stall_watch::SetWhere(std::filesystem::path(path).filename().string());
     if (m_SceneIndex == 0) MemSnapshot("00_start");
     m_SceneLoadOk = SceneSerializer::Load(world, m_Ctx.assets, path, /*persistMigration=*/false);
     m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
@@ -450,6 +529,7 @@ void SmokeHarness::ScoreScene() {
 void SmokeHarness::EndFrame() {
     // Count this frame toward the active scene's quota; once it's rendered enough,
     // score it (new GL errors + draw count) and advance to the next scene.
+    stall_watch::g_Frames.fetch_add(1, std::memory_order_relaxed);
     if (!m_SceneActive) return;
     const LaunchOptions& opt = m_Opt;
     NpcTest* npcTest = m_Ctx.npcTest;
@@ -501,6 +581,7 @@ bool SmokeHarness::Summary() const {
     // Deliberately skip the normal exit path entirely (no play-mode revert, no
     // save-on-exit) - smoke-tested scenes were never really "open" from the user's
     // point of view and must not get written back to disk.
+    stall_watch::SetWhere("shutdown after the summary");
     std::cout << "\n[SmokeTest] ==== Summary ====" << std::endl;
     // No scenes discovered is itself a failure - an empty scene folder must not read
     // as a green run (audit #356 / TEST-101).
@@ -518,5 +599,6 @@ bool SmokeHarness::Summary() const {
     }
     std::cout << "[SmokeTest] " << m_Results.size() << " scene(s) - "
               << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
+    stall_watch::g_ExitCode = allPassed ? 0 : 1; // Finish() returns the same code
     return allPassed;
 }

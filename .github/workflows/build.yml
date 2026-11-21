@@ -292,7 +292,7 @@ jobs:
           Write-Host "extracted to $root"
 
           $required = @(
-            "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
+            "TartarusEngine.exe", "TartarusCore.dll", "glfw3.dll", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXFoundation.dll", "PhysXCooking.dll",
             "LICENSE", "THIRD-PARTY-NOTICES.md", "README-FIRST-RUN.txt",
             "assets\shaders\ModelFragment.glsl", "assets\fonts\fa-solid-900.ttf",
@@ -315,7 +315,7 @@ jobs:
           # adds the next dependency finds out from a red build rather than from a user.
           $expected = @(
             "assets", "project", "LICENSE", "README-FIRST-RUN.txt", "THIRD-PARTY-NOTICES.md",
-            "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
+            "TartarusEngine.exe", "TartarusCore.dll", "glfw3.dll", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXCooking.dll", "PhysXFoundation.dll"
           )
           $actual = Get-ChildItem $root | ForEach-Object { $_.Name }

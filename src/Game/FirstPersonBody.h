@@ -120,6 +120,8 @@ public:
     bool Start(World& world, Player& player, const FirstPersonBodyMotion* carry = nullptr);
     // Stop + Start, the motion playing on from where it was (OutfitChanged: the new pieces, the same motion).
     bool Restart(World& world, Player& player);
+    // The motion matching database was rebaked while playing (MotionRebake): Restart takes the new one.
+    bool MotionStale() const { return m_Mm.Stale(); }
     // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).
     const std::string& Bone(const std::string& standard) const { return FPBody::MappedBone(m_BoneMap, standard); }
     void Stop(World& world);

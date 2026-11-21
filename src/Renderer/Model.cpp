@@ -191,3 +191,6 @@ bool Model::FindNearestVertexToScreenPoint(const glm::mat4& modelMatrix, const g
     }
     return found;
 }
+
+std::atomic<uint64_t> Model::s_AnimationEpoch{0};
+std::atomic<std::uint64_t> Model::s_ImportStamps{0};

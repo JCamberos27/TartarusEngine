@@ -138,7 +138,8 @@ void RegisterInspectorTests() {
             Shot("section", {kInspector}),
             Click(MoreButton(name.c_str())), Wait(2),
             Click(MenuItem("Remove Component")),
-            Until("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }), Wait(3),
+            // The section fades out first (0.26 s): a frame count is too short at a fast GPU's frame rate.
+            UntilSeconds("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }, 5.0), Wait(3),
             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
             ExpectTrue("undo puts it back", [rcp](Ctx& c) { return rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
             Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
@@ -213,10 +214,10 @@ void RegisterInspectorTests() {
         // Remove from the section menu: the mesh is parked, not lost.
         Click(MoreButton("Mesh Renderer")), Wait(2),
         Click(MenuItem("Remove Component")),
-        Until("removed; mesh kept detached", [](Ctx& c) {
+        UntilSeconds("removed; mesh kept detached", [](Ctx& c) {
             const entt::entity a = ByName(c.W, "Alpha");
             return !c.W.Registry.all_of<RenderableComponent>(a) && c.W.Registry.all_of<DetachedMeshComponent>(a);
-        }), Wait(3),
+        }, 5.0), Wait(3), // after the section's fade (see Add Component above)
         // Transform first: "gone" alone also passes when the Inspector draws nothing.
         ExpectTrue("Material section gone (Transform still shown)", [](Ctx&) { return Find(Header("Transform")) && !Find(Header("Material")); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),

@@ -104,7 +104,10 @@ struct Registry {
 Registry g_Reg;
 } // namespace
 
-void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb, const ImGuiLastItemData* data) {
+namespace {
+// The harness's item hooks. ImGui reaches them through ImGuiTestHooks.cpp's forwarders, which call
+// the table a run stores in ImGuiContext::TestEngine (g_HookTable below).
+void HostItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb, const ImGuiLastItemData* data) {
     if (id == 0 || !ctx->CurrentWindow) return;
     UiItem& it = g_Reg.Get(id);
     it.Rect = bb;
@@ -113,22 +116,21 @@ void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb
     it.Root = ctx->CurrentWindow->RootWindow ? ctx->CurrentWindow->RootWindow->Name : it.Window;
     if (data) { it.ItemFlags = data->ItemFlags; it.Status = data->StatusFlags; }
 }
-void ImGuiTestEngineHook_ItemInfo(ImGuiContext*, ImGuiID id, const char* label, ImGuiItemStatusFlags flags) {
+void HostItemInfo(ImGuiContext*, ImGuiID id, const char* label, ImGuiItemStatusFlags flags) {
     if (id == 0) return;
     UiItem& it = g_Reg.Get(id);
     if (label) it.Label = label;
     it.Status |= flags;
 }
-void ImGuiTestEngineHook_Log(ImGuiContext*, const char*, ...) {}
-const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext*, ImGuiID) { return nullptr; }
+} // namespace
 void EditorTestProbe_Tag(ImGuiID id, const char* tag) {
     if (id == 0 || !tag) return;
     g_Reg.Get(id).Tag = tag;
 }
 namespace {
-// Handed to TartarusEditor.dll through ImGuiContext::TestEngine (EditorTestHooks.h), so items the
-// module draws land in the same registry.
-const EditorTestHookTable g_HookTable{&ImGuiTestEngineHook_ItemAdd, &ImGuiTestEngineHook_ItemInfo};
+// Stored in ImGuiContext::TestEngine for a run (EditorTestHooks.h): every item ImGui adds, from the
+// exe or TartarusEditor.dll, lands in the same registry.
+const EditorTestHookTable g_HookTable{&HostItemAdd, &HostItemInfo};
 } // namespace
 
 // =============================================================================================
@@ -213,6 +215,7 @@ struct EditorUiTestAccess {
     }
     static std::string UndoTop(EditorLayer& e) { return e.m_UndoStack.empty() ? std::string("-") : e.m_UndoStack.back().Label; }
     static void PushUndo(EditorLayer& e, World& w, const char* label) { e.PushUndo(w, label); }
+    static void Undo(EditorLayer& e, World& w, AssetLibrary& a) { e.Undo(w, a); }
     static bool InPlay(EditorLayer& e) { return e.m_InPlayMode; }
     static void RequestPlayStop(EditorLayer& e) { e.m_PlayStopRequested = true; }
     static const std::vector<EditorLayer::PinnedComponent>& Pins(EditorLayer& e) { return e.m_Pins; }
@@ -253,7 +256,10 @@ using StepFn = std::function<bool(Ctx&)>; // true when the step is finished
 struct Step {
     std::string Name;
     StepFn Fn;
-    int Timeout = 240; // frames
+    // Frames, with a wall-time floor: the step fails only once it has run this many frames AND as long as
+    // they take at 60 fps (Timeout / 60 s). A hidden test window on a fast GPU runs ~800 fps, where 120 frames
+    // is ~0.15 s - shorter than a fade or a tooltip delay; slow CI keeps the frame budget.
+    int Timeout = 240;
 };
 struct Test {
     std::string Name;
@@ -271,6 +277,7 @@ bool g_Enabled = false;
 std::vector<Test> g_Tests;
 size_t g_TestIndex = 0, g_StepIndex = 0;
 int g_StepFrames = 0;
+std::chrono::steady_clock::time_point g_StepStartedAt; // wall clock when the current step began (Step::Timeout floor)
 bool g_TestFailed = false;
 std::string g_FailMessage;
 int g_Passed = 0, g_Failed = 0, g_Skipped = 0;
@@ -1953,6 +1960,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     if (g_Done) return true;
     ImGuiContext* ctx = ImGui::GetCurrentContext();
     if (!ctx) return false;
+    editor.SetVerifyInPlaceUndo(true); // X-33 C: every in-place undo / redo is checked against the snapshot
     ctx->TestEngineHookItems = true;
     ctx->TestEngine = const_cast<EditorTestHookTable*>(&g_HookTable);
     ctx->ErrorCallback = &OnImGuiError;
@@ -2109,10 +2117,15 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
 
         Step& s = t.Steps[g_StepIndex];
         watchdog::Note(t.Name, s.Name, g_TestIndex, g_StepIndex);
+        const auto now = std::chrono::steady_clock::now();
+        if (g_StepFrames == 0) g_StepStartedAt = now;
         const bool done = s.Fn(c);
         ++g_StepFrames;
         if (done) { ++g_StepIndex; g_StepFrames = 0; }
-        else if (g_StepFrames > s.Timeout) Fail("step '" + s.Name + "' timed out");
+        else if (g_StepFrames > s.Timeout &&
+                 std::chrono::duration<double>(now - g_StepStartedAt).count() >= s.Timeout / 60.0)
+            Fail("step '" + s.Name + "' timed out (" + std::to_string(g_StepFrames) + " frames, " +
+                 std::to_string((int)std::chrono::duration<double>(now - g_StepStartedAt).count()) + " s)");
         return false;
     }
 

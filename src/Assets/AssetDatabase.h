@@ -39,6 +39,8 @@ std::vector<std::string> ParseExternalAssetList(const std::string& csvText);
 // so loaders skip their per-file error for these; a missing file that isn't listed still errors.
 // The list is read once per process.
 bool IsUnfetchedExternal(const std::string& path);
+// How many external_assets.csv files the last ScanProject found missing (waits for a running scan).
+int MissingExternalCount();
 
 // #132 - ScanProject on a worker thread, so a big project's scan overlaps window / GL / shader
 // start-up instead of blocking it. Every lookup below (from another thread) waits for the scan
