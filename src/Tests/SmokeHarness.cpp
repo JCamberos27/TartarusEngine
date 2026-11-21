@@ -44,6 +44,7 @@
 namespace stall_watch {
 extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
 extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
+extern "C" __declspec(dllimport) int __stdcall IsDebuggerPresent();
 constexpr long long kStallSeconds = 240; // longer than any scene load (Forest with its payloads: under a minute)
 constexpr long long kShutdownSeconds = 90; // teardown after the summary normally takes a few seconds
 std::atomic<unsigned long long> g_Frames{0};
@@ -77,7 +78,8 @@ void Start() {
             const long long stalled = std::chrono::duration_cast<std::chrono::seconds>(now - lastFrameAt).count();
             std::string where;
             { std::lock_guard<std::mutex> lk(g_Mutex); where = g_Where; }
-            if (stalled >= kStallSeconds) {
+            // Under a debugger a stop at a breakpoint is not a hang: keep the minute notes, never abort.
+            if (stalled >= kStallSeconds && !IsDebuggerPresent()) {
                 std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu) - aborting for a crash dump\n",
                             stalled, where.c_str(), frames);
                 std::fflush(stdout);

@@ -297,6 +297,7 @@ inline constexpr const char* kTagIKOff = "IKOff";    // the default procedural I
 inline constexpr const char* kTagCycling = "Cycling";// the action is being worked (pump / bolt): no firing until it's done
 
 // Every tag above, with what it does - for the editors' tag pickers and tooltips.
+// Header data: each module (exe, a game DLL) holds its own copy, so compare Name / Description by text, never by address.
 struct KnownTag { const char* Name; const char* Description; };
 inline constexpr KnownTag kKnownTags[] = {
     {kTagAds, "Sights up. The ADS zoom, sight alignment and ADS recoil apply; firing is a procedural kick. "

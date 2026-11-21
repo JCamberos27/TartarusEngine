@@ -48,6 +48,9 @@ public:
                  const std::function<bool(int, const glm::vec3&, const glm::vec3&)>& reaches,
                  const std::function<void(int)>& bindCascade);
     int DrawCalls() const { return m_DrawCalls; }
+    // Builds the three programs now (scene load) instead of at the first Gather, which builds them anyway whenever
+    // impostors are wanted: a cold driver cache made that a ~2 s first frame (Hallway, P-39).
+    void WarmUp();
 
 private:
     struct alignas(16) Instance {

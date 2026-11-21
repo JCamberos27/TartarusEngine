@@ -2,6 +2,7 @@
 #include "SceneFileJson.h"
 #include "SceneSnapshotJson.h"
 
+#include <chrono>
 #include <stdexcept>
 
 using namespace SceneDetail;
@@ -75,6 +76,7 @@ std::shared_ptr<SceneSerializer::ParsedSceneFile> SceneSerializer::ReadSceneFile
 
 bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration,
                            const ParsedSceneFile* parsed) {
+    const auto loadStart = std::chrono::steady_clock::now();
     if (parsed) {
         std::uintmax_t size = 0;
         std::filesystem::file_time_type time{};
@@ -166,6 +168,9 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         // persistMigration == false: the migrated data lives only in `world`/`assets` for this
         // run (a --smoke-test scene) — `path` on disk is never touched.
     }
+    char took[64];
+    std::snprintf(took, sizeof(took), "%.0f ms", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+    Log::Info("Scene: loaded '" + std::filesystem::u8path(path).filename().u8string() + "' in " + took + ".");
     return ok;
 }
 
@@ -285,7 +290,8 @@ std::string SceneSerializer::WithLibraryState(const std::string& scene, const st
 // AssetLibrary state that lives in .meta files / the session (AppendAssetLibraryJson's metadata half).
 // UnitTests_Editor checks that a snapshot stripped of these and given Save()'s library half is
 // Save()'s output byte for byte, with every optional key present, so a new undo-only key fails there.
-constexpr const char* kUndoOnlyKeys[] = {"hasAssetLibrarySnapshot", "assetFolders", "removedDiskFolders", "assetMeta"};
+constexpr const char* kUndoOnlyKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures",
+                                         "assetFolders", "removedDiskFolders", "assetMeta"};
 
 std::function<bool()> SceneSerializer::PrepareSaveFromSnapshot(std::string snapshot, const AssetLibrary& assets,
                                                               const std::string& path) {
@@ -506,14 +512,28 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
         Log::Error("Prefab: '" + path + "' could not be opened.");
         return entt::null;
     }
-    std::stringstream buffer;
-    buffer << in.rdbuf();
+    // Parsed once: built from here, then kept as the content this instance was built from.
+    json parsed;
+    try {
+        in >> parsed;
+    } catch (const std::exception& e) {
+        Log::Error("Prefab: '" + path + "' could not be parsed: " + e.what());
+        return entt::null;
+    }
 
     std::vector<entt::entity> created;
-    if (!AppendEntitiesFromString(world, assets, buffer.str(), created) || created.empty()) {
+    if (!ApplySceneJson(world, assets, parsed, /*clearFirst=*/false, &created, nullptr) || created.empty()) {
         return entt::null;
     }
     if (outAll) outAll->insert(outAll->end(), created.begin(), created.end());
+    // Its overrides are diffed against that content (not the file, which may be edited before the
+    // next save). The first instance of a path caches it; later ones were built from the same
+    // content unless the file changed, and then the editor rebuilds them all
+    // (EditorLayer::RefreshPrefabInstances).
+    if (!g_prefabPristineCache.count(path)) {
+        UpgradeLegacyBoxKeys(parsed); // #122
+        g_prefabPristineCache.emplace(path, std::move(parsed));
+    }
 
     // The prefab's root is whichever created entity has no parent inside the fragment.
     entt::entity root = created.front();

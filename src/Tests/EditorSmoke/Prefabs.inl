@@ -169,6 +169,39 @@ bool ModeBarShown() { return Find(ByLabel("Scene", kModeBar)) != nullptr; }
 // The Play transport (in the title bar since the chrome moved out of the viewport) steps aside
 // for the prefab-mode bar.
 bool ActionBarShown() { return Find(ByLabel("Play", kActionBar)) != nullptr; }
+// A text editor / git rewriting SmokeCrate.prefab: not through AtomicFile, so the watcher reports
+// an outside change. The lamp child is renamed `child` with intensity `intensity`.
+Step WriteOutside(const char* child, float intensity) {
+    return Do(std::string("rewrite SmokeCrate.prefab outside the editor: ") + child, [child, intensity](Ctx&) {
+        World w;
+        const glm::vec3 zero(0.0f), one(1.0f);
+        const entt::entity root = w.CreateEmptyEntity(zero, zero, one, "Crate");
+        const entt::entity lamp = w.CreateEmptyEntity(glm::vec3(0, 1, 0), zero, one, child);
+        w.Registry.emplace<LightComponent>(lamp).Intensity = intensity;
+        if (!w.SetParent(lamp, root)) { Fail("could not parent the lamp"); return; }
+        const std::string text = SceneSerializer::SaveEntitiesToString(w, {root, lamp}, /*flattenPrefabInstances=*/true);
+        std::ofstream f(fs::u8path(PrefabPath()), std::ios::binary | std::ios::trunc);
+        f << text;
+        if (!f) Fail("could not write the prefab");
+    });
+}
+// Both instances hold `child`: A at intensity `a` (an override when it differs from B's), B at `b`
+// (never an override); A at x -4, B at x `bx`.
+std::string ExpectChild(Ctx& c, const char* child, float a, float b, float bx) {
+    const entt::entity ae = ChildOf(c.W, "Crate A", child), be = ChildOf(c.W, "Crate B", child);
+    if (ae == entt::null || be == entt::null) return std::string("no ") + child + " under both";
+    std::string out;
+    const float av = c.W.Registry.get<LightComponent>(ae).Intensity, bv = c.W.Registry.get<LightComponent>(be).Intensity;
+    if (std::fabs(av - a) > 1e-4f) out += "A intensity " + std::to_string(av) + "; ";
+    if (std::fabs(bv - b) > 1e-4f) out += "B intensity " + std::to_string(bv) + "; ";
+    const bool aOver = SceneSerializer::IsPrefabFieldOverridden(c.W, ae, "Light", "Intensity");
+    if (aOver != (a != b)) out += std::string("A ") + (aOver ? "shows" : "lost") + " an override; ";
+    if (SceneSerializer::IsPrefabFieldOverridden(c.W, be, "Light", "Intensity")) out += "B shows an override; ";
+    const float ax = c.W.Registry.get<TransformComponent>(ByName(c.W, "Crate A")).Position.x;
+    const float x = c.W.Registry.get<TransformComponent>(ByName(c.W, "Crate B")).Position.x;
+    if (ax != -4.0f || x != bx) out += "placements (" + std::to_string(ax) + ", " + std::to_string(x) + ")";
+    return out;
+}
 } // namespace smoke_prefabs
 
 void RegisterPrefabsTests() {
@@ -390,6 +423,84 @@ void RegisterPrefabsTests() {
         }),
         Expect("the history is back to before Apply", [](Ctx& c) {
             return PA::UndoLabels(c.E) == g_Undo ? std::string() : "was [" + g_Undo + "], now [" + PA::UndoLabels(c.E) + "]";
+        }),
+    }, Cleanup);
+
+    Add("prefabs: the .prefab edited outside the editor updates placed instances; overrides, placement, selection kept; no undo step; not during Play; undo after", {
+        Fresh(), FreshScene(), HierFresh(), MakePrefab(), Wait(2),
+        Place("Crate A", glm::vec3(-4, 0, 0)), Place("Crate B", glm::vec3(4, 0, 0)),
+        SelectLamp("Crate B"), Wait(3),
+        Do("a clean history", [](Ctx& c) { PA::ClearUndo(c.E); }), Wait(3),
+        Do("move Crate B to x 6", [](Ctx& c) {
+            X::PushUndo(c.E, c.W, "Move");
+            c.W.Registry.get<TransformComponent>(ByName(c.W, "Crate B")).Position.x = 6.0f;
+        }), Wait(3),
+        Do("override Crate A's lamp: 5", [](Ctx& c) {
+            X::PushUndo(c.E, c.W, "Edit Light");
+            c.W.Registry.get<LightComponent>(ChildOf(c.W, "Crate A", "Crate Lamp")).Intensity = 5.0f;
+        }), Wait(3),
+        ExpectTrue("an override on A only", [](Ctx& c) { return Overridden(c, "Crate A") && !Overridden(c, "Crate B"); }),
+        Do("note the history and the unsaved mark", [](Ctx& c) { g_Undo = PA::UndoLabels(c.E) + (X::Dirty(c.E) ? " *" : " (saved)"); }),
+        WriteOutside("Crate Bulb", 9.0f),
+        Until("both instances show the file's Crate Bulb", [](Ctx& c) {
+            return ChildOf(c.W, "Crate A", "Crate Bulb") != entt::null && ChildOf(c.W, "Crate B", "Crate Bulb") != entt::null;
+        }, 600), Wait(3),
+        Expect("B tracks the file (9), A keeps its override (5), placements and the move stay", [](Ctx& c) {
+            return ExpectChild(c, "Crate Bulb", 5.0f, 9.0f, 6.0f);
+        }),
+        Expect("B's (rebuilt) lamp is still the selection", [](Ctx& c) {
+            const entt::entity s = X::Selected(c.E);
+            return s != entt::null && s == ChildOf(c.W, "Crate B", "Crate Bulb") ? std::string() : "selected: " + NameOf(c.W, s);
+        }),
+        Expect("no undo step, the unsaved mark as it was", [](Ctx& c) {
+            const std::string now = PA::UndoLabels(c.E) + (X::Dirty(c.E) ? " *" : " (saved)");
+            return now == g_Undo ? std::string() : "was [" + g_Undo + "], now [" + now + "]";
+        }),
+        Expect("a save and reload gives the same: A 5, B 9", [](Ctx& c) {
+            World w;
+            if (!SceneSerializer::LoadFromString(w, c.A, Dump(c))) return std::string("reload failed");
+            const entt::entity a = ChildOf(w, "Crate A", "Crate Bulb"), b = ChildOf(w, "Crate B", "Crate Bulb");
+            if (a == entt::null || b == entt::null) return std::string("no Crate Bulb after reload");
+            const float av = w.Registry.get<LightComponent>(a).Intensity, bv = w.Registry.get<LightComponent>(b).Intensity;
+            return std::fabs(av - 5.0f) < 1e-4f && std::fabs(bv - 9.0f) < 1e-4f
+                ? std::string() : "reloads with A " + std::to_string(av) + ", B " + std::to_string(bv);
+        }),
+        // Edited during Play: the play world is left alone; Stop's reload picks the file up.
+        Do("F1: Play", [](Ctx&) { Input::SimulateKeyTap(GLFW_KEY_F1); }),
+        Until("in Play", [](Ctx& c) { return X::InPlay(c.E); }), Wait(10),
+        WriteOutside("Crate Globe", 3.0f), Wait(90),
+        ExpectTrue("the play world kept Crate Bulb", [](Ctx& c) {
+            return X::InPlay(c.E) && ChildOf(c.W, "Crate B", "Crate Bulb") != entt::null && ChildOf(c.W, "Crate B", "Crate Globe") == entt::null;
+        }),
+        Do("F1: Stop", [](Ctx&) { Input::SimulateKeyTap(GLFW_KEY_F1); }),
+        Until("stopped", [](Ctx& c) { return !X::InPlay(c.E); }), Wait(3),
+        Until("Stop brought the file's Crate Globe", [](Ctx& c) { return ChildOf(c.W, "Crate B", "Crate Globe") != entt::null; }, 600),
+        Expect("A 5 (override), B 3 at x 6", [](Ctx& c) { return ExpectChild(c, "Crate Globe", 5.0f, 3.0f, 6.0f); }),
+        // A prefab child is found again after Stop (by its root and prefab-local index), and that's no new step.
+        Expect("Stop kept B's (rebuilt) lamp selected", [](Ctx& c) {
+            const entt::entity s = X::Selected(c.E);
+            return s != entt::null && s == ChildOf(c.W, "Crate B", "Crate Globe") ? std::string() : "selected: " + NameOf(c.W, s);
+        }),
+        ExpectTrue("Stop recorded no selection step", [](Ctx& c) {
+            const std::string l = PA::UndoLabels(c.E);
+            return !(l.size() > 6 && l.compare(l.size() - 6, 6, " (sel)") == 0);
+        }),
+        // Undo across the refreshes: the steps were recorded before them, and load the file as it is now.
+        // (Called directly: after Stop the keyboard may still be with the Game view.)
+        Do("re-note the scratch files", [](Ctx&) { NoteScratch(); }), Wait(2),
+        Do("undo", [](Ctx& c) { X::Undo(c.E, c.W, c.A); }), Wait(3),
+        Expect("undo the override: A takes the file's 3 too", [](Ctx& c) {
+            const std::string why = ExpectChild(c, "Crate Globe", 3.0f, 3.0f, 6.0f);
+            return why.empty() ? why : why + " | history: " + PA::UndoLabels(c.E);
+        }),
+        Expect("undo kept B's (rebuilt) lamp selected", [](Ctx& c) {
+            const entt::entity s = X::Selected(c.E);
+            return s != entt::null && s == ChildOf(c.W, "Crate B", "Crate Globe") ? std::string() : "selected: " + NameOf(c.W, s);
+        }),
+        Do("undo", [](Ctx& c) { X::Undo(c.E, c.W, c.A); }), Wait(3),
+        Expect("undo the move: B back at x 4, still the file's Crate Globe", [](Ctx& c) {
+            const std::string why = ExpectChild(c, "Crate Globe", 3.0f, 3.0f, 4.0f);
+            return why.empty() ? why : why + " | history: " + PA::UndoLabels(c.E);
         }),
     }, Cleanup);
 

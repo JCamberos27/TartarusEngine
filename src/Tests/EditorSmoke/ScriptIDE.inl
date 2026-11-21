@@ -271,12 +271,12 @@ void RegisterScriptIDETests() {
         // Build: enabled exactly when the source checkout and CMake build tree are there.
         steps.push_back(Click(Ide("Build")));
         steps.push_back(Wait(3));
-        steps.push_back(Expect("Save All & Rebuild Modules enabled iff a build tree exists", [](Ctx&) {
+        steps.push_back(Expect("Save All & Rebuild Modules enabled iff this exe can rebuild them (in its build tree)", [](Ctx&) {
             const UiItem* it = Find(PopupExact("Save All & Rebuild Modules"));
             if (!it) return std::string("item missing");
             const bool enabled = !(it->ItemFlags & ImGuiItemFlags_Disabled);
-            return enabled == GameModuleBuild::Available() ? std::string()
-                : std::string(enabled ? "enabled" : "disabled") + " but Available() is " + (GameModuleBuild::Available() ? "true" : "false");
+            return enabled == GameModuleBuild::CanRebuild() ? std::string()
+                : std::string(enabled ? "enabled" : "disabled") + " but CanRebuild() is " + (GameModuleBuild::CanRebuild() ? "true" : "false");
         }));
         steps.push_back(CloseMenus());
         for (Step& s : HideIde()) steps.push_back(std::move(s));

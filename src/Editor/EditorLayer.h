@@ -855,6 +855,19 @@ public:
     // to the Asset Database, the library and the open scene. Call once per frame
     // (EditorLayer_ProjectSync.cpp).
     void SyncProjectChanges(World& world, AssetLibrary& assets);
+    // Placed instances of a queued .prefab that changed since they were built are rebuilt from the
+    // file with their own overrides, placement and selection kept: the whole scene reloads from its
+    // own snapshot, as an undo step does, but no step is added and the scene isn't marked unsaved
+    // (its file stores the same links and overrides). Skipped in Play and Prefab Mode, whose exits
+    // reload the scene from a snapshot anyway. Returns how many instances were rebuilt.
+    int RefreshPrefabInstances(World& world, AssetLibrary& assets);
+    // joinUndo (Apply to Prefab writing the file during its open undo step): the rebuild joins that
+    // step, so undoing it puts back the scene as it was before the Apply, not only the file. An
+    // external .prefab edit passes false: it must not join an unrelated open step (a drag, prefs).
+    void QueuePrefabRefresh(const std::string& path, bool joinUndo) {
+        m_PrefabRefreshQueue.push_back(path);
+        if (joinUndo && m_GlobalUndoActive && !m_GlobalUndoApplying) m_PrefabRefreshJoinsUndo = true;
+    }
     // #15 - call right before OutfitSystem::UpdatePending when OutfitSystem::LandingDue: the landing makes
     // the next frame take the whole scene as the undo baseline (RebaseAfterOutfitChanges), so a scene
     // change made since the last baseline without an undo step is journaled first, as "Unrecorded
@@ -1656,6 +1669,10 @@ private:
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
     int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
     int m_ProjectSettingsHook = 0;   // AssetChangeHooks id: settings.json edited outside the editor reloads + re-applies physics
+    int m_PrefabHook = 0;            // AssetChangeHooks id: an edited .prefab queues its placed instances' refresh
+    std::vector<std::string> m_PrefabRefreshQueue; // .prefab files changed since the last RefreshPrefabInstances
+    bool m_PrefabRefreshAll = false; // the watcher overflowed: check every placed prefab
+    bool m_PrefabRefreshJoinsUndo = false; // see QueuePrefabRefresh
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
@@ -1771,6 +1788,8 @@ private:
     // before the thing this entry undoes" contract), which by the time RecordSelectionHistory
     // notices the change is no longer what's live.
     std::vector<int> CaptureSelectedOrders(const World& world, const std::vector<entt::entity>& entities) const;
+    // The entities those orders name now (a prefab member by its root's order + local index).
+    std::vector<entt::entity> ResolveSelectionOrders(const World& world, const std::vector<int>& orders) const;
     void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;
@@ -2445,13 +2464,24 @@ private:
         const World* Owner = nullptr;
         ImGuiID Window = 0;
         std::uint64_t Order = 0, Hierarchy = 0, Open = 0;
+        // Filtered / sorted views: the view settings and a fingerprint of what they read
+        // (HierarchyContentFingerprint); 0 / empty in the default view.
+        std::uint64_t Content = 0;
+        int Sort = 0, TypeMask = 0;
+        bool Desc = false;
+        std::string Filter; // compared with m_HierarchyFilter directly (no per-frame copy)
         entt::entity Renaming = entt::null;
         bool Valid = false;
         bool operator==(const HierarchyFlatKey& o) const {
             return Owner == o.Owner && Window == o.Window && Order == o.Order && Hierarchy == o.Hierarchy &&
-                   Open == o.Open && Renaming == o.Renaming && Valid == o.Valid;
+                   Open == o.Open && Content == o.Content && Sort == o.Sort && TypeMask == o.TypeMask &&
+                   Desc == o.Desc && Renaming == o.Renaming && Valid == o.Valid; // Filter: checked apart
         }
     };
+    // Hash of the names / tags / kinds the current filter and sort read, over every entity in
+    // `order` (names and components have no change counter, so a filtered or sorted view checks
+    // them this way: one pass of hashing instead of the filter match, sorts and flatten).
+    std::uint64_t HierarchyContentFingerprint(const World& world, const std::vector<entt::entity>& order) const;
     HierarchyFlatKey m_HierFlatKey;
     std::uint64_t m_HierOpenGen = 0; // bumped by every write of a Hierarchy row's open/closed flag
     std::vector<entt::entity> m_HierRootScratch; // DrawHierarchyTreeBody's top-level rows, reused
@@ -2647,7 +2677,7 @@ private:
     void DrawDecalComponentExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
     // `folder` is absolute; `texture` (optional) becomes the albedo and names the file.
     void CreateDecalAsset(World& world, AssetLibrary& assets, const std::string& folder, const std::string& texture);
-    std::string DecalThumbnailSource(const std::string& decalPath); // absolute albedo path, "" = none
+    const std::string& DecalThumbnailSource(const std::string& decalPath); // absolute albedo path, "" = none (use it before the file is re-read)
     // EditorLayer_Gizmos.cpp: what a dragged .decal is over, placing one, and Fit to Surface.
     struct DecalSpot {
         entt::entity Decal = entt::null; // a placed decal whose box the cursor ray enters first

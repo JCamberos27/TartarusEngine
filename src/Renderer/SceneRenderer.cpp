@@ -828,6 +828,7 @@ void SceneRenderer::WarmEffects(const World& world) {
     BloodRenderer::Get().WarmUp();
     WorldTextRenderer::Get().WarmUp();
     GrassRenderer::Get().WarmUp();
+    ImpostorRenderer::Get().WarmUp();
 }
 
 namespace {

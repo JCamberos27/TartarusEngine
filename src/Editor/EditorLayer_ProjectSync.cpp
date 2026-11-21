@@ -10,10 +10,10 @@
 //                    folder matching its folder on disk.
 //   Removed          leaves the library; objects still using it keep their loaded copy until the
 //                    scene is reloaded; its now-orphaned .meta is deleted (as Unity does).
-//   Modified         textures / models reimport, materials reload in place, audio reloads; a
-//                    prefab only drops its pristine copy (placed instances keep their content
-//                    until the scene reloads). Files the editor just wrote itself (AtomicFile)
-//                    are ignored here.
+//   Modified         textures / models reimport, materials reload in place, audio reloads,
+//                    placed prefab instances rebuild from the edited .prefab with their
+//                    overrides kept (RefreshPrefabInstances, via the "prefab" hook). Files the
+//                    editor just wrote itself (AtomicFile) are ignored here.
 // After the editor's own handling every change also goes to AssetChangeHooks, where other
 // caches (controllers, decals, ...) register for their asset types instead of polling mtimes.
 #include "EditorLayer.h"
@@ -38,7 +38,9 @@
 #include "SceneSerializer.h"
 #include "World.h"
 
+#include <algorithm>
 #include <filesystem>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
@@ -121,7 +123,7 @@ bool IsWardrobe(const std::string& path) {
 } // namespace
 
 void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
-    if (!ProjectWatcher::IsRunning()) return;
+    if (!ProjectWatcher::IsRunning()) { RefreshPrefabInstances(world, assets); return; } // the editor's own Apply to Prefab still queues
     bool overflowed = false;
     const std::vector<ProjectWatcher::Change> changes = ProjectWatcher::Drain(300, overflowed);
     s_SyncApplied = 0;
@@ -183,6 +185,7 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
             OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.OldPath));
         if (!self) s_SyncApplied += applied;
     }
+    if (RefreshPrefabInstances(world, assets) > 0) ++s_SyncApplied; // queued by the "prefab" hook above
     if (!external) return;
     ++m_ExternalSyncs;
     if (s_SyncApplied > 0) EditorSound::Play(EditorSound::Event::SyncDone); // heard from the background too
@@ -192,6 +195,73 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
     m_AssetsPtr = &assets;
     EnsureUndoScene(world);
     if (!m_CurrentUndoScene.empty()) m_OutfitLandedSeen = OutfitSystem::LandedGeneration();
+}
+
+int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
+    if (m_PrefabRefreshQueue.empty() && !m_PrefabRefreshAll) return 0;
+    std::vector<std::string> queued = std::move(m_PrefabRefreshQueue);
+    m_PrefabRefreshQueue.clear();
+    const bool all = m_PrefabRefreshAll;
+    m_PrefabRefreshAll = false;
+    const bool joinsUndo = m_PrefabRefreshJoinsUndo && m_GlobalUndoActive;
+    m_PrefabRefreshJoinsUndo = false;
+    // Play and Prefab Mode end by reloading the scene from a snapshot taken before them, which
+    // rebuilds every instance from the file as it is then, with the snapshot's overrides.
+    if (m_InPlayMode || InPrefabMode()) return 0;
+
+    // Which placed instances are stale: built from content the file no longer holds, or a
+    // missing-source placeholder whose .prefab is back. Each source is checked once.
+    struct Source { bool Stale = false; std::string Name; };
+    std::unordered_map<std::string, Source> sources; // by PathKey
+    auto matches = [&](const PrefabInstanceComponent& pi) {
+        return !pi.SourcePath.empty() &&
+               (all || std::any_of(queued.begin(), queued.end(), [&](const std::string& q) { return SameFile(q, pi.SourcePath); }));
+    };
+    for (auto [root, pi] : world.Registry.view<const PrefabInstanceComponent>().each()) {
+        if (!matches(pi)) continue;
+        auto [it, fresh] = sources.try_emplace(AssetDatabase::PathKey(pi.SourcePath));
+        if (fresh) {
+            it->second.Stale = SceneSerializer::PrefabChangedSinceInstanced(pi.SourcePath);
+            it->second.Name = fs::u8path(pi.SourcePath).filename().u8string();
+        }
+        std::error_code ec;
+        if (pi.Missing && fs::exists(fs::u8path(pi.SourcePath), ec)) it->second.Stale = true;
+    }
+    int instances = 0;
+    std::string names;
+    for (auto [root, pi] : world.Registry.view<const PrefabInstanceComponent>().each())
+        if (matches(pi) && sources[AssetDatabase::PathKey(pi.SourcePath)].Stale) ++instances;
+    for (const auto& [key, src] : sources)
+        if (src.Stale) names += (names.empty() ? "" : ", ") + src.Name;
+    if (instances == 0) return 0;
+
+    // The scene as it stands, with every override diffed against what its instance was built
+    // from (the pristine cache still holds the old content), reloaded: each instance is rebuilt
+    // from the file now and its overrides replayed on top, like an undo step loading a snapshot.
+    // The scene file would store the same links and overrides, so no undo step and no "*".
+    // An open step that wrote the file (Apply to Prefab) takes the rebuild in (its commit sees the
+    // scene with the applied override gone); any other open edit is committed first.
+    if (!joinsUndo) FinishGlobalUndo(world, true);
+    // The selection, by order (a member of an instance by its root's order and prefab-local index:
+    // rebuilt members get new orders).
+    const std::vector<int> selected = CaptureSelectedOrders(world);
+    const std::string snapshot = !m_GlobalUndoActive && UndoBaselineIsCurrent() ? m_CurrentUndoScene : SceneSerializer::SaveToString(world, assets);
+    {
+        struct Applying { bool& Flag; Applying(bool& f) : Flag(f) { Flag = true; } ~Applying() { Flag = false; } } applying(m_GlobalUndoApplying);
+        if (!SceneSerializer::LoadFromString(world, assets, snapshot)) {
+            Log::Error("Couldn't rebuild the prefab instances from the edited .prefab; reload the scene to see the change.");
+            return 0;
+        }
+    }
+    RestoreSelectionByOrder(world, selected);
+    // The baseline is the World as it now saves: diffed against the new content, an override that
+    // now equals the file is gone (Apply to Prefab's own value). Left as the old snapshot, the next
+    // Undo journaled that difference as an unrecorded change and took back only that.
+    m_CurrentUndoScene = SceneSerializer::SaveToString(world, assets);
+    m_ChangesOutsideUndo = 0;
+    Log::Info("Updated " + std::to_string(instances) + " prefab instance" + (instances == 1 ? "" : "s") + " from " + names +
+              " (their overrides kept).");
+    return instances;
 }
 
 void EditorLayer::OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath) {
@@ -344,7 +414,8 @@ void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const
     if (fs::exists(path + ".meta", ec) && fs::remove(path + ".meta", ec))
         Log::Info("Removed '" + ProjectPaths::Relativize(path) + ".meta' (its asset was deleted).");
     if (type == "scene" || type.empty()) InvalidateScenesListing();
-    if (type == "prefab") SceneSerializer::ClearPrefabPristineCache();
+    // A deleted .prefab: its placed instances keep their content, and their overrides keep saving
+    // against what they were built from (the cache), not lost to an unreadable file.
     if (SameFile(m_CurrentScenePath, path))
         Log::Warn("The open scene's file was deleted outside the editor. Save to write it back.");
     if (dropped > 0)
@@ -365,9 +436,19 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
     if (listed.empty() && type != "scene" && type != "prefab") { OnExternalAdd(world, assets, path); return; }
     bool reloaded = false;
     if (type == "texture" && !listed.empty()) reloaded = assets.ReimportTexture(listed);
-    else if (type == "model" && !listed.empty()) reloaded = assets.ReimportModel(listed);
+    else if (type == "model" && !listed.empty()) {
+        reloaded = assets.ReimportModel(listed);
+        // Placed copies share the new meshes; their empty slots take the model's material remap,
+        // as a scene load does, so a submesh the file gained gets its .mat now, not at the next open.
+        if (reloaded) {
+            const std::string key = AssetDatabase::PathKey(listed);
+            for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
+                if (rc.ModelRef && AssetDatabase::PathKey(rc.ModelRef->Path()) == key)
+                    assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+        }
+    }
     else if (type == "material" && !listed.empty()) reloaded = assets.ReloadMaterial(listed);
-    else if (type == "prefab") { SceneSerializer::ClearPrefabPristineCache(); reloaded = !listed.empty(); }
+    else if (type == "prefab") reloaded = !listed.empty(); // its instances: the "prefab" hook
     else if (type == "audio") reloaded = AudioEngine::Reload(path); // preloaded clips; streamed ones re-read on play
     else if (type == "scene") {
         InvalidateScenesListing();

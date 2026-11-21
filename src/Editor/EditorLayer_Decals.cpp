@@ -17,6 +17,7 @@
 #include "AssetThumbnailLoader.h"
 #include "Components.h"
 #include "DecalAsset.h"
+#include "DecalAssetCache.h"
 #include "DecalSystem.h"
 #include "DecalEditorState.h"
 #include "Log.h"
@@ -30,13 +31,11 @@
 
 #include <algorithm>
 #include <cfloat>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 namespace fs = std::filesystem;
 using namespace EditorInternal;
@@ -49,31 +48,12 @@ std::string AbsoluteAssetPath(const std::string& p) {
     return fs::u8path(p).is_absolute() ? p : ProjectPaths::Resolve(p);
 }
 
-// .decal files as the editor reads them, re-read when the file changes. The Asset Browser asks
-// for every visible tile each frame, so the file's time stamp is checked at most once a second.
-struct CachedDecalEntry {
-    fs::file_time_type Stamp{};
-    std::chrono::steady_clock::time_point Checked{};
-    std::shared_ptr<DecalAsset> Asset;
-};
-std::unordered_map<std::string, CachedDecalEntry>& DecalCache() {
-    static std::unordered_map<std::string, CachedDecalEntry> cache;
-    return cache;
+// .decal files as the editor reads them (DecalAssetCache: cheap repeat asks, rare staggered disk checks).
+DecalAssetCache::Hit CachedDecalHit(const std::string& path, bool force = false) {
+    return DecalAssetCache::Get(path, (std::uint64_t)ImGui::GetFrameCount(), DecalAssetCache::Clock::now(), force);
 }
 std::shared_ptr<DecalAsset> CachedDecal(const std::string& path, bool force = false) {
-    if (path.empty()) return nullptr;
-    const std::string abs = AbsoluteAssetPath(path);
-    CachedDecalEntry& e = DecalCache()[AssetDatabase::PathKey(abs)];
-    const auto now = std::chrono::steady_clock::now();
-    if (e.Asset && !force && now - e.Checked < std::chrono::seconds(1)) return e.Asset;
-    e.Checked = now;
-    std::error_code ec;
-    const auto stamp = fs::last_write_time(fs::u8path(abs), ec);
-    if (!e.Asset || stamp != e.Stamp) {
-        e.Stamp = stamp;
-        e.Asset = DecalAsset::Load(abs);
-    }
-    return e.Asset;
+    return CachedDecalHit(path, force).Asset;
 }
 
 // The file's own spelling (an Asset Browser key is lower-cased), so a .decal written from it
@@ -347,9 +327,10 @@ void DecalAssetFields(PropertyRows& r, DecalAsset& d, GLFWwindow* owner) {
 
 } // namespace
 
-std::string EditorLayer::DecalThumbnailSource(const std::string& decalPath) {
-    const auto d = CachedDecal(decalPath);
-    return d && !d->Missing && !d->AlbedoPath.empty() ? AbsoluteAssetPath(d->AlbedoPath) : std::string();
+const std::string& EditorLayer::DecalThumbnailSource(const std::string& decalPath) {
+    static const std::string kNone;
+    const DecalAssetCache::Hit h = CachedDecalHit(decalPath);
+    return h.AlbedoAbs ? *h.AlbedoAbs : kNone;
 }
 
 void EditorLayer::CreateDecalAsset(World& world, AssetLibrary& assets, const std::string& folder,

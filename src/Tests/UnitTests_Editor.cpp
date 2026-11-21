@@ -9,6 +9,13 @@
 #include "LruMap.h"
 #include "RestartState.h"
 #include "EditorRestart.h"
+#include "GameModuleBuild.h"
+#include "EditorFileStat.h"
+#include "DecalAssetCache.h"
+#include "DecalAsset.h"
+#include "AssetDatabase.h"
+#include <unordered_map>
+#include "Core/Env.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -19,6 +26,7 @@
 #include "ProjectSettings.h"
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include "UndoTrigger.h"
 #include "EditorSettings.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
@@ -732,8 +740,26 @@ void TestAutoSaveFromUndoSnapshot() {
     const std::string fromSave = (dir / "save.json").string(), fromSnapshot = (dir / "snapshot.json").string();
     CHECK(SceneSerializer::Save(world, assets, fromSave));
     const std::string snapshot = SceneSerializer::SaveToString(world, assets);
-    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"assetFolders\"", "\"removedDiskFolders\"", "\"assetMeta\""})
+    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"libraryModels\"", "\"libraryTextures\"", "\"assetFolders\"",
+                            "\"removedDiskFolders\"", "\"assetMeta\""})
         CHECK(snapshot.find(key) != std::string::npos);
+    // The scene file has no model / texture list (P-45: the next open imported every listed model in full).
+    {
+        const std::string saved = UnitTestSupport::ReadAll(fromSave);
+        CHECK(saved.find("\"libraryModels\"") == std::string::npos && saved.find("\"libraryTextures\"") == std::string::npos);
+        CHECK(saved.find("\"libraryMaterials\"") != std::string::npos);
+        // An older file that still lists them loads, and its lists are not imported.
+        nlohmann::json old = nlohmann::json::parse(saved);
+        const std::string listedModel = (dir / "listed-only.fbx").string(), listedTexture = (dir / "listed-only.png").string();
+        old["libraryModels"] = nlohmann::json::array({listedModel});
+        old["libraryTextures"] = nlohmann::json::array({listedTexture});
+        const std::string oldPath = (dir / "old.json").string();
+        { std::ofstream(std::filesystem::u8path(oldPath), std::ios::binary) << old.dump(2); }
+        World loaded;
+        AssetLibrary loadedAssets;
+        CHECK(SceneSerializer::Load(loaded, loadedAssets, oldPath, /*persistMigration=*/false));
+        CHECK(loadedAssets.Models().empty() && loadedAssets.Textures().empty());
+    }
     const std::function<bool()> write = SceneSerializer::PrepareSaveFromSnapshot(snapshot, assets, fromSnapshot);
     CHECK(write && write());
     const std::string want = UnitTestSupport::ReadAll(fromSave), got = UnitTestSupport::ReadAll(fromSnapshot);
@@ -955,6 +981,137 @@ void TestHierarchyCreationOrderCache() {
     CHECK(X::Ordinal(editor, world, big.back()) == (int)X::Order(editor, world).size());
 }
 
+// P-24: the Inspector's per-frame exists / mtime checks hit the disk at most once per kMaxAge per path.
+void TestEditorFileStatCache() {
+    namespace FS = EditorFileStat;
+    const auto dir = UnitTestSupport::TempDir("editor_file_stat");
+    const auto file = dir / "a.txt";
+    std::error_code ec;
+    std::filesystem::remove(file, ec);
+    FS::Clear();
+    const auto t0 = FS::Clock::now();
+    const std::uint64_t r0 = FS::DiskReads();
+    CHECK(!FS::Get(file, t0).Exists);
+    for (int i = 0; i < 100; ++i) CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(i)).Exists); // 100 "frames"
+    CHECK(FS::DiskReads() - r0 == 1);
+    { std::ofstream(file) << "x"; }
+    CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(100)).Exists);            // still cached
+    CHECK(FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(1)).Exists); // re-read once it ages out
+    CHECK(FS::DiskReads() - r0 == 2);
+    const auto stamp = FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(2)).WriteTime;
+    CHECK(stamp == std::filesystem::last_write_time(file, ec));
+    std::filesystem::remove(file, ec);
+    CHECK(!FS::Refresh(file, t0 + FS::kMaxAge + std::chrono::milliseconds(3)).Exists); // own write: fresh at once
+    CHECK(FS::DiskReads() - r0 == 3);
+    CHECK(!FS::Get(std::filesystem::path(), t0).Exists);
+    CHECK(FS::DiskReads() - r0 == 3); // an empty path never touches the disk
+
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): the raw calls the Inspector
+    // made every frame, against a cached Get.
+    if (Env::Flag(Env::Var::MicroBench)) {
+        { std::ofstream(file) << "x"; }
+        using C = std::chrono::steady_clock;
+        static constexpr int kN = 2000; // static: the lambda below reads it without a capture (MSVC)
+        auto us = [](C::duration d) { return std::chrono::duration<double, std::micro>(d).count() / kN; };
+        int sink = 0;
+        auto b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += std::filesystem::exists(file, ec) ? 1 : 0;
+        const double exUs = us(C::now() - b0);
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += std::filesystem::last_write_time(file, ec) == std::filesystem::file_time_type{} ? 1 : 0;
+        const double mtUs = us(C::now() - b0);
+        FS::Clear();
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += FS::Get(file).Exists ? 1 : 0;
+        const double cachedUs = us(C::now() - b0);
+        std::printf("[MicroBench] file stat: exists %.2f us, last_write_time %.2f us, cached Get %.3f us (sink=%d)\n",
+                    exUs, mtUs, cachedUs, sink);
+        std::filesystem::remove(file, ec);
+    }
+    FS::Clear();
+}
+
+// P-27: the Asset Browser's decal tiles ask the .decal cache every frame. A repeat ask touches no disk
+// and makes no path; the once-a-second re-checks are spread at most kStatsPerFrame per frame.
+void TestDecalAssetCacheStagger() {
+    namespace DC = DecalAssetCache;
+    const auto dir = UnitTestSupport::TempDir("decal_asset_cache");
+    static constexpr int kTiles = 20;
+    std::vector<std::string> paths;
+    for (int i = 0; i < kTiles; ++i) {
+        DecalAsset d;
+        d.Path = (dir / ("DA_T" + std::to_string(i) + ".decal")).generic_u8string();
+        d.Name = "DA_T" + std::to_string(i);
+        d.AlbedoPath = "assets/Decals/T_" + std::to_string(i) + ".png";
+        CHECK(d.Save());
+        paths.push_back(d.Path);
+    }
+    DC::Clear();
+    const auto t0 = DC::Clock::now();
+    const std::uint64_t s0 = DC::DiskStats(), l0 = DC::Loads();
+    for (const auto& p : paths) { // first frame: every tile reads its file (never budgeted)
+        const DC::Hit h = DC::Get(p, 1, t0);
+        CHECK(h.Asset && h.AlbedoAbs && std::filesystem::u8path(*h.AlbedoAbs).is_absolute());
+    }
+    CHECK(DC::DiskStats() - s0 == kTiles);
+    CHECK(DC::Loads() - l0 == kTiles);
+    for (int f = 2; f < 60; ++f) // the next second: no disk at all
+        for (const auto& p : paths) DC::Get(p, (std::uint64_t)f, t0 + std::chrono::milliseconds(f * 16));
+    CHECK(DC::DiskStats() - s0 == kTiles);
+    // A second on, the re-checks come kStatsPerFrame per frame instead of all in one.
+    const auto t1 = t0 + DC::kMaxAge + std::chrono::milliseconds(1);
+    std::uint64_t before = DC::DiskStats();
+    int frames = 0, maxPerFrame = 0;
+    for (std::uint64_t f = 100; DC::DiskStats() - s0 < 2 * kTiles && frames < 50; ++f, ++frames) {
+        for (const auto& p : paths) DC::Get(p, f, t1 + std::chrono::milliseconds(frames));
+        maxPerFrame = std::max(maxPerFrame, (int)(DC::DiskStats() - before));
+        before = DC::DiskStats();
+    }
+    CHECK(maxPerFrame == DC::kStatsPerFrame);
+    CHECK(frames == kTiles / DC::kStatsPerFrame);
+    CHECK(DC::Loads() - l0 == kTiles); // nothing changed on disk: nothing re-read
+    // An edit shows once its entry is re-checked; force (the editor's own write) reads at once.
+    {
+        auto d = DecalAsset::Load(paths[0]);
+        d->AlbedoPath = "assets/Decals/T_new.png";
+        CHECK(d->Save());
+        std::error_code ec;
+        std::filesystem::last_write_time(std::filesystem::u8path(paths[0]),
+                                         std::filesystem::last_write_time(std::filesystem::u8path(paths[0]), ec) + std::chrono::seconds(5), ec);
+    }
+    const DC::Hit forced = DC::Get(paths[0], 200, t1 + std::chrono::milliseconds(100), true);
+    CHECK(DC::Loads() - l0 == kTiles + 1);
+    CHECK(forced.AlbedoAbs->find("T_new.png") != std::string::npos);
+    CHECK(!DC::Get(std::string(), 200).Asset);
+
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): one tile's per-frame cost before (resolve the
+    // path, lower-case key, map lookup, resolve + copy the albedo path) and now (one lookup, no allocation).
+    if (Env::Flag(Env::Var::MicroBench)) {
+        using C = std::chrono::steady_clock;
+        static constexpr int kN = 20000; // static: the lambda below reads it without a capture (MSVC)
+        auto us = [](C::duration dd) { return std::chrono::duration<double, std::micro>(dd).count() / kN; };
+        const std::string rel = ProjectPaths::Relativize(paths[1]);
+        std::unordered_map<std::string, int> old;
+        old[AssetDatabase::PathKey(ProjectPaths::Resolve(rel))] = 1;
+        size_t sink = 0;
+        auto b0 = C::now();
+        for (int i = 0; i < kN; ++i) {
+            const std::string abs = std::filesystem::u8path(rel).is_absolute() ? rel : ProjectPaths::Resolve(rel);
+            sink += old.count(AssetDatabase::PathKey(abs));
+            sink += ProjectPaths::Resolve("assets/Decals/T_1.png").size();
+        }
+        const double oldUs = us(C::now() - b0);
+        const auto tb = DC::Clock::now();
+        DC::Get(rel, 300, tb);
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += DC::Get(rel, 300, tb).AlbedoAbs->size();
+        const double newUs = us(C::now() - b0);
+        std::printf("[MicroBench] decal tile lookup: before %.3f us, after %.3f us; re-check stats in one frame: before %d (all visible), after %d (sink=%zu)\n",
+                    oldUs, newUs, kTiles, DC::kStatsPerFrame, sink);
+    }
+    DC::Clear();
+}
+
 // Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
 // selection comes back by order + name (a renamed or missing entity drops out).
 void TestRestartStateRoundTrip() {
@@ -964,7 +1121,7 @@ void TestRestartStateRoundTrip() {
     s.ScenePath = "assets/Scenes/Hallway.json";
     s.RestoreRecovery = true;
     s.WasPlaying = true;
-    s.Selection = {{7, "Door"}, {12, ""}};
+    s.Selection = {{7, "Door"}, {12, ""}, {3, "Lamp", 2}};
     CHECK(RS::Save(file, s));
     const std::int64_t now = RS::NowUnix();
     auto back = RS::Load(file, now);
@@ -972,8 +1129,10 @@ void TestRestartStateRoundTrip() {
     if (back) {
         CHECK(back->ScenePath == s.ScenePath);
         CHECK(back->RestoreRecovery && back->WasPlaying);
-        CHECK(back->Selection.size() == 2 && back->Selection[0].Order == 7 && back->Selection[0].Name == "Door");
+        CHECK(back->Selection.size() == 3 && back->Selection[0].Order == 7 && back->Selection[0].Name == "Door");
+        CHECK(back->Selection[0].Local == -1);
         CHECK(back->Selection[1].Order == 12 && back->Selection[1].Name.empty());
+        CHECK(back->Selection[2].Order == 3 && back->Selection[2].Local == 2);
     }
     std::string why;
     CHECK(!RS::Load(file, now + RS::kMaxAgeSeconds + 5, &why) && why.find("stale") != std::string::npos);
@@ -993,7 +1152,19 @@ void TestRestartStateRoundTrip() {
     CHECK((RS::Resolve(world, refs) == std::vector<entt::entity>{a}));
     world.Registry.destroy(a);
     CHECK(RS::Resolve(world, refs).empty());
-    (void)b;
+
+    // A prefab instance's member: by its root's order + prefab-local index (members get new orders on a reload).
+    const entt::entity root = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Crate");
+    const entt::entity body = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Body");
+    const entt::entity lamp = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Lamp");
+    world.SetParent(body, root);
+    world.SetParent(lamp, body);
+    world.Registry.emplace_or_replace<PrefabInstanceComponent>(root).InstanceEntities = {root, body, lamp};
+    const auto memberRefs = RS::RefsFor(world, {lamp, b});
+    CHECK(memberRefs.size() == 2 && memberRefs[0].Local == 2 && memberRefs[1].Local == -1);
+    CHECK(memberRefs[0].Order == world.Registry.get<OrderComponent>(root).Value && memberRefs[0].Name == "Lamp");
+    world.Registry.get<OrderComponent>(lamp).Value += 1000; // a rebuilt member's new order
+    CHECK((RS::Resolve(world, memberRefs) == std::vector<entt::entity>{lamp, b}));
 }
 
 // The relaunch command line: old hand-over flags dropped (both spellings), new ones last, Windows quoting.
@@ -1009,6 +1180,69 @@ void TestRestartRelaunchArgs() {
     CHECK(ER::QuoteArg(L"a b") == L"\"a b\"");
     CHECK(ER::QuoteArg(L"say \"hi\"") == L"\"say \\\"hi\\\"\"");
     CHECK(ER::QuoteArg(L"C:\\dir with space\\") == L"\"C:\\dir with space\\\\\"");
+}
+
+// Module rebuilds and Rebuild & Restart need the exe inside its CMake build tree: the build writes the
+// DLLs next to the exe it built, so a copy elsewhere would rebuild and never reload.
+void TestRebuildNeedsExeInBuildTree() {
+    namespace fs = std::filesystem;
+    const fs::path root = L"C:\\eng\\b";
+    CHECK(GameModuleBuild::InsideBuildTree(root / L"Release" / L"TartarusEngine.exe", root));
+    CHECK(GameModuleBuild::InsideBuildTree(root / L"TartarusEngine.exe", root));
+    CHECK(!GameModuleBuild::InsideBuildTree(L"C:\\copy\\TartarusEngine.exe", root));
+    CHECK(!GameModuleBuild::InsideBuildTree(L"C:\\eng\\b_copy\\TartarusEngine.exe", root)); // sibling, not inside
+    CHECK(!GameModuleBuild::InsideBuildTree(fs::path(), root));
+    CHECK(!GameModuleBuild::InsideBuildTree(root / L"x.exe", fs::path()));
+    // Restart shares the module rebuild's rule and reason.
+    CHECK(EditorRestart::UnavailableReason() == GameModuleBuild::RebuildUnavailableReason());
+}
+
+// Rebuild & Restart moves the exe and its DLLs aside as one set: a failed build puts the whole old
+// set back (no old exe with a new core DLL), a good one fills what it didn't relink, and a set that
+// can't fully move is undone.
+void TestRestartMoveAsideSet() {
+    namespace ER = EditorRestart;
+    namespace fs = std::filesystem;
+    const fs::path dir = UnitTestSupport::TempDir("restart_move_aside");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    const auto write = [](const fs::path& p, const std::string& text) { std::ofstream(p, std::ios::binary) << text; };
+    const auto read = [](const fs::path& p) {
+        std::ifstream in(p, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    const fs::path exe = dir / "TartarusEngine.exe", core = dir / "TartarusCore.dll", glfw = dir / "glfw3.dll";
+    const std::vector<fs::path> set = ER::LockedFiles(exe);
+    CHECK(set.size() == 3 && set[0] == exe && set[1] == core && set[2] == glfw);
+
+    // Failed build that left a new core DLL behind: the old pair comes back.
+    write(exe, "exe-old");
+    write(core, "core-old");
+    std::string error;
+    std::vector<fs::path> moved = ER::MoveAside(set, error);
+    CHECK(moved.size() == 2 && error.empty()); // glfw3.dll absent: skipped
+    CHECK(!fs::exists(exe) && !fs::exists(core) && fs::exists(ER::OldPath(exe)) && fs::exists(ER::OldPath(core)));
+    write(core, "core-new");
+    ER::PutBack(moved);
+    CHECK(read(exe) == "exe-old" && read(core) == "core-old");
+    CHECK(!fs::exists(ER::OldPath(exe)) && !fs::exists(ER::OldPath(core)));
+
+    // Good build that relinked only the exe: the core DLL is filled from its .old.
+    moved = ER::MoveAside(set, error);
+    write(exe, "exe-new");
+    CHECK(ER::FillMissing(moved));
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old");
+
+    // The core DLL can't move (a non-empty folder sits on its .old name): the exe is put back.
+    fs::remove(ER::OldPath(exe), ec);
+    fs::remove(ER::OldPath(core), ec);
+    fs::create_directories(ER::OldPath(core) / "busy", ec);
+    error.clear();
+    moved = ER::MoveAside(set, error);
+    CHECK(moved.empty() && !error.empty());
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old" && !fs::exists(ER::OldPath(exe)));
+    fs::remove_all(dir, ec);
 }
 
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
@@ -1032,6 +1266,10 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Undo in place: move / rename undo and redo match the full reload; structural steps reload",TestUndoInPlaceMatchesReload);
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
+    tests.emplace_back("Editor file stat cache: one disk read per path per half second, Refresh after own writes",TestEditorFileStatCache);
+    tests.emplace_back("Decal asset cache: repeat asks touch no disk, re-checks spread over frames, force re-reads",TestDecalAssetCacheStagger);
     tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
     tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
+    tests.emplace_back("Rebuild & Restart moves the exe and its DLLs aside as one set",TestRestartMoveAsideSet);
+    tests.emplace_back("Module rebuild and Restart need the exe inside its build tree",TestRebuildNeedsExeInBuildTree);
 }

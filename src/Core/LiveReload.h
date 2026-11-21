@@ -5,10 +5,9 @@
 // development builds; a shipped game turns it off at startup so it never polls the disk for
 // edits nobody will make.
 namespace LiveReload {
-inline bool& EnabledFlag() {
-    static bool enabled = true;
-    return enabled;
-}
+// Out of line (LiveReload.cpp): a function-local static in an inline function gets one copy per module, so with
+// the core built as TartarusCore.dll the exe's SetEnabled(false) would not reach the core's watchers.
+bool& EnabledFlag();
 inline bool Enabled() { return EnabledFlag(); }
 inline void SetEnabled(bool on) { EnabledFlag() = on; }
 }

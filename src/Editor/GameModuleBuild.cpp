@@ -96,8 +96,40 @@ bool Available() {
 fs::path SourceRoot() { return fs::u8path(TARTARUS_SOURCE_DIR); }
 fs::path BinaryRoot() { return fs::u8path(TARTARUS_BINARY_DIR); }
 
+fs::path ExePath() {
+    std::wstring buffer(MAX_PATH, L'\0');
+    for (;;) {
+        const DWORD n = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+        if (n == 0) return {};
+        if (n < buffer.size()) { buffer.resize(n); return fs::path(buffer); }
+        if (buffer.size() >= 32768) return {};
+        buffer.resize(buffer.size() * 2);
+    }
+}
+
+bool InsideBuildTree(const fs::path& exe, const fs::path& buildRoot) {
+    if (exe.empty() || buildRoot.empty()) return false;
+    std::error_code ec;
+    const fs::path rel = fs::relative(exe, buildRoot, ec);
+    return !ec && !rel.empty() && *rel.begin() != "..";
+}
+
+std::string RebuildUnavailableReason() {
+    // Fixed for the process (the exe and its build tree don't move); menus ask every frame they're open.
+    static const std::string reason = [] {
+        if (!Available())
+            return std::string("Only in an editor built from source: no CMake build folder (CMakeCache.txt) for this exe.");
+        if (!InsideBuildTree(ExePath(), BinaryRoot()))
+            return std::string("This exe isn't inside the CMake build folder it was built in, so a rebuild "
+                               "wouldn't update the DLLs next to it. Run the editor from its build folder.");
+        return std::string();
+    }();
+    return reason;
+}
+bool CanRebuild() { return RebuildUnavailableReason().empty(); }
+
 bool Start() {
-    if (!Available() || g_Running) return false;
+    if (!CanRebuild() || g_Running) return false;
     if (g_Held) { g_Queued = true; return false; }
     if (g_Worker.joinable()) g_Worker.join();
     g_Queued = false; g_Finished = false; g_Running = true;
@@ -107,7 +139,7 @@ bool Start() {
     return true;
 }
 bool Running() { return g_Running; }
-void Request() { if (!Start()) g_Queued = Available(); }
+void Request() { if (!Start()) g_Queued = CanRebuild(); }
 void Hold(bool held) { g_Held = held; }
 void Poll() {
     if (g_Running && g_Finished) {
