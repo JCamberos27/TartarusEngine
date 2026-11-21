@@ -873,6 +873,18 @@ public:
     //   DiscardAndExit - main exits without saving
     //   None + ExitPromptActive() false again - the user picked Cancel; stay open
     enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
+    // Rebuild & Restart (File menu, Ctrl+Alt+R; EditorRestart.h), in EditorLayer_Restart.cpp.
+    // Why it can't start now ("" = it can): not a source build, an untitled scene with edits, unsaved scripts.
+    std::string RestartBlockedReason() const;
+    // The restart hand-over's way out of Prefab Mode: leaves a clean one without saving; false (stays, restart
+    // cancelled by the caller) when it has unsaved edits or is still open afterwards.
+    bool LeavePrefabModeForRestart(World& world, AssetLibrary& assets);
+    bool GlobalUndoActive() const { return m_GlobalUndoActive; } // a drag/edit's undo step is still open
+    void RequestRebuildRestart();
+    // The old editor, build done: writes the recovery snapshot (when dirty) and the hand-over file.
+    bool WriteRestartState(const World& world, const AssetLibrary& assets, const std::filesystem::path& file, bool wasPlaying);
+    // The new editor, scene loaded: restores the unsaved edits (no prompt) and the selection. Returns WasPlaying.
+    bool ApplyRestartState(World& world, AssetLibrary& assets, const std::filesystem::path& file);
     void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
     bool ExitPromptActive() const { return m_ExitPromptPending; }
     // #84 — path of a scene that failed to load at startup; Save to exactly this path is
@@ -1340,6 +1352,8 @@ private:
     void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
+    // The prompt's Restore (and Rebuild & Restart's): load the snapshot as the dirty scene, then drop it.
+    bool RestoreRecoverySnapshot(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
     bool m_RecoveryPromptSounded = false; // RecoveryPrompt plays once, when the modal first shows
 
@@ -1635,6 +1649,7 @@ private:
     std::string m_CurrentUndoScene;
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
+    int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;

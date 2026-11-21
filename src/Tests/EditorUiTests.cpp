@@ -204,6 +204,7 @@ struct EditorUiTestAccess {
     static size_t UndoDepth(EditorLayer& e) { return e.m_UndoStack.size(); }
     static size_t RedoDepth(EditorLayer& e) { return e.m_RedoStack.size(); }
     static bool Dirty(EditorLayer& e) { return e.m_Dirty; }
+    static void MarkDirty(EditorLayer& e) { e.m_Dirty = true; }
     static bool& ShowAssets(EditorLayer& e) { return e.m_ShowAssetBrowser; }
     static bool& ShowAnimator(EditorLayer& e) { return e.m_ShowAnimator; }
     static bool& ShowHistory(EditorLayer& e) { return e.m_ShowHistory; }

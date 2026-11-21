@@ -32,6 +32,7 @@
     X(ShotSize, "TARTARUS_SHOT_SIZE", Str, "--smoke-shots / cinematic: Scene-view render size WxH")                    \
     X(Cinematic, "TARTARUS_CINEMATIC", Str, "--smoke-shots: fly a camera path json, record it at 60 fps")              \
     X(EditorTestInstance, "TARTARUS_EDITOR_TEST_INSTANCE", Str, "harness runs: own scratch user folder")              \
+    X(RestartFakeBuild, "TARTARUS_RESTART_FAKE_BUILD", Str, "Rebuild & Restart test hook: ok|fail, no CMake/relaunch")  \
     X(EditorTestScale, "TARTARUS_EDITOR_TEST_SCALE", Float, "--editor-tests: UI scale override")                      \
     X(EditorTestSize, "TARTARUS_EDITOR_TEST_SIZE", Str, "--editor-tests: window size WxH")                            \
     X(EditorTestShow, "TARTARUS_EDITOR_TEST_SHOW", Flag, "--editor-tests: show the window (same as TARTARUS_SHOW)")   \

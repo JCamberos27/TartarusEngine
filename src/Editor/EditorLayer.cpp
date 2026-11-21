@@ -1,5 +1,6 @@
 #include "EditorLayer.h"
 #include "ThumbnailCache.h"
+#include "AssetChangeHooks.h"
 #include "ScriptIDE.h"
 #include "CurveEditor.h"
 #include "EditorUIPrimitives.h"
@@ -14,6 +15,7 @@
 #include "AssetLibrary.h"
 #include "World.h"
 #include "GameModuleBuild.h"
+#include "EditorRestart.h"
 #include "Camera.h"
 #include "Model.h"
 #include "Texture.h"
@@ -143,6 +145,14 @@ void EditorLayer::Init(GLFWwindow* window) {
     m_LibraryIndex.Load(); // project/asset_library.json (Library root, kit modules)
     ++m_LibraryIndexGen;
     Enhancers::UiStyles::Get().Load();     // project/editor_ui_styles.json (tab / header colours)
+    // Edited outside the editor (a text editor, git): reload it like at startup. Its own saves (Flush) are skipped.
+    if (!m_UiStylesHook)
+        m_UiStylesHook = AssetChangeHooks::RegisterFile("editor_ui_styles.json", [](const AssetChangeHooks::Event& e) {
+            if (e.BySelf) return false;
+            Enhancers::UiStyles::Get().Load();
+            Log::Info("Reloaded tab and header styles (editor_ui_styles.json changed outside the editor).");
+            return true;
+        });
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -559,7 +569,10 @@ void EditorLayer::Shutdown() {
     // FreeGpuResources(), not this. ImGui_Impl*_Shutdown() and DestroyContext() must not run twice.
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
+    AssetChangeHooks::Unregister(m_UiStylesHook);
+    m_UiStylesHook = 0;
     GameModuleBuild::Shutdown();
+    EditorRestart::Shutdown(); // a restart build still running: wait, put the exe name back
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
     // A build still running: stop it at the next file and wait, so it isn't cut off mid-copy.
@@ -3006,6 +3019,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditWorldPtr = &world;
     BeginGlobalUndoFrame(world);
     GameModuleBuild::Poll();
+    EditorRestart::Poll();
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
@@ -3615,6 +3629,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // selection change is just another entry on it now, same as any edit. Ctrl+[ / Ctrl+]
         // stay their own, separate selection-only back/forward (SelectionHistoryBack/Forward).
         // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
+        if (Shortcuts::Triggered("editor.rebuildRestart")) RequestRebuildRestart();
         if (Shortcuts::Triggered("editor.saveAs")) {
             if (m_InPlayMode) {
                 Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");

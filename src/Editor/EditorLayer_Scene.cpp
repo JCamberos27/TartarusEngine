@@ -532,6 +532,30 @@ bool EditorLayer::CrashRecoverySave(const World& world, const AssetLibrary& asse
     }
 }
 
+bool EditorLayer::RestoreRecoverySnapshot(World& world, AssetLibrary& assets) {
+    const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
+    const int warnsBefore = Log::CountOf(LogLevel::Warning);
+    const bool ok = SceneSerializer::Load(world, assets, recoveryPath);
+    if (ok) {
+        CheckSceneVersionWarning();
+        ClearSelection();
+        ClearUndoHistory();
+        EnsureUndoScene(world);
+        m_Dirty = true; // recovered content isn't in the real scene file yet
+        m_QuietDirtyEdgeFrames = 2; // ...which is the restore's, not an edit's
+        m_LoadFailedScenePath.clear(); // #84 — the user chose this content for the path
+        m_SavedUndoDepth = -1;
+        PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
+        Log::Info("Restored unsaved changes from the recovery snapshot.");
+    } else {
+        Log::Error("Recovery snapshot could not be read - kept the saved scene instead.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+    }
+    ClearRecoverySnapshot();
+    m_RecoveryPromptPending = false;
+    return ok;
+}
+
 void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
     if (!m_RecoveryPromptPending) return;
 
@@ -555,25 +579,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             discard = PrimaryButton("Discard", ImVec2(120.0f * m_UIScale, 0.0f));
         }
         if (restore) {
-            const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
-            const int warnsBefore = Log::CountOf(LogLevel::Warning);
-            if (SceneSerializer::Load(world, assets, recoveryPath)) {
-                CheckSceneVersionWarning();
-                ClearSelection();
-                ClearUndoHistory();
-                EnsureUndoScene(world);
-                m_Dirty = true; // recovered content isn't in the real scene file yet
-                m_QuietDirtyEdgeFrames = 2; // ...which is the restore's, not an edit's
-                m_LoadFailedScenePath.clear(); // #84 — the user chose this content for the path
-                m_SavedUndoDepth = -1;
-                PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
-                Log::Info("Restored unsaved changes from the recovery snapshot.");
-            } else {
-                Log::Error("Recovery snapshot could not be read - kept the saved scene instead.");
-                EditorSound::Play(EditorSound::Event::Blocked);
-            }
-            ClearRecoverySnapshot();
-            m_RecoveryPromptPending = false;
+            RestoreRecoverySnapshot(world, assets);
             ImGui::CloseCurrentPopup();
         } else if (discard) {
             ClearRecoverySnapshot();
