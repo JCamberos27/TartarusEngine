@@ -93,7 +93,13 @@ uint64_t HashSceneJson(const std::string& s) {
 }
 
 // Loads an undo / redo step's scene: from the parse UndoDelta::Pop already did when it has one.
-bool LoadHistoryScene(World& world, AssetLibrary& assets, const std::string& text, const nlohmann::json& parsed) {
+bool LoadHistoryScene(World& world, AssetLibrary& assets, const std::string& text, const nlohmann::json& parsed,
+                      const std::vector<EditorFileHistory::State>& files) {
+    // A step that put a .prefab back (Apply to Prefab undone / redone): the instances are rebuilt
+    // from it now, so the content they were built from before is gone with them. Kept, the load
+    // would build them from that old content instead of the file.
+    for (const auto& f : files)
+        if (AssetDatabase::AssetType(f.Path.u8string()) == "prefab") { SceneSerializer::ClearPrefabPristineCache(); break; }
     return parsed.is_object() ? SceneSerializer::LoadFromJson(world, assets, parsed)
                               : SceneSerializer::LoadFromString(world, assets, text);
 }
@@ -1151,7 +1157,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash);
     bool targetLoaded = false;
     if (sceneReloaded) {
-        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot);
+        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot, entry.Files);
         if (!targetLoaded) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
             Log::Error("Undo failed - the scene was left as it was.");
@@ -1208,7 +1214,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash); // #138
     bool targetLoaded = false;
     if (sceneReloaded) {
-        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot);
+        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot, entry.Files);
         if (!targetLoaded) {
             Log::Error("Redo failed - the scene was left as it was."); // #83
             SceneSerializer::LoadFromString(world, assets, currentJson);
