@@ -104,6 +104,7 @@ public:
             ConfigureModelVao(p->Vao, p->Vbo, p->Ebo);
             // P-40 EXPERIMENT (not for merge): static pages stop fetching the bone attributes (=1) and the colour too
             // (=2, the bytes a 64 B static vertex would carry). Disabled arrays read the generic value instead.
+            #pragma warning(suppress : 4996) // experiment only
             static const int slim = [] { const char* e = std::getenv("TARTARUS_EXP_STATIC_SLIM"); return e ? std::atoi(e) : 0; }();
             if (slim >= 1) {
                 for (GLuint a : {4u, 5u, 8u, 9u}) glDisableVertexArrayAttrib(p->Vao, a);

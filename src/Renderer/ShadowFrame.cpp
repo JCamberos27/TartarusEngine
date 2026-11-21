@@ -338,6 +338,7 @@ void ShadowFrame::DrawSunGrass(SunPass& p, const glm::mat4& fitView) {
             PROFILE_GPU_SCOPE("Grass Shadow");
             const glm::vec3 eye = glm::vec3(glm::inverse(fitView)[3]);
             // P-14 EXPERIMENT (not for merge): grass shadow levers for a look call. Unset = today's values.
+            #pragma warning(suppress : 4996) // experiment only
             static const auto expInt = [](const char* n, int d) { const char* e = std::getenv(n); return e && *e ? std::atoi(e) : d; };
             static const int expCascades = expInt("TARTARUS_EXP_GRASS_SHADOW_CASCADES", GrassRenderer::kShadowCascades);
             static const float expDistance = (float)expInt("TARTARUS_EXP_GRASS_SHADOW_DIST", (int)GrassRenderer::kShadowDistance);
