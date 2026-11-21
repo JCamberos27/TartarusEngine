@@ -343,10 +343,11 @@ void SelectionPanel::DrawStateTravel(AC::State& s) {
             static Preview pv;
             const std::string key = W.Rel + "|" + s.Name + "|" + std::to_string(D.TrackIndex(rigAc ? rigAc->Track : std::string()));
             if (pv.Key != key) { pv.Key = key; pv.Params.clear(); pv.T = 0.0f; }
+            if (!pv.On) pv.Play = false; // switched off here or by EndPreview (state deselected): turning it on again starts paused
             ImGui::PushID("preview");
             row("Preview");
             if (EditorUIPrimitives::Checkbox("##pvon", &pv.On)) {
-                if (!pv.On) { pv.Play = false; rigModel->StopAnimation(); Previewing() = PreviewOwner{}; }
+                if (!pv.On) { rigModel->StopAnimation(); Previewing() = PreviewOwner{}; }
             }
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Pose the rig in this state's motion so you can scrub it (Edit mode). Off restores the bind pose.");
             if (pv.On) {
