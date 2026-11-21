@@ -160,7 +160,7 @@ void EditorLayer::Init(GLFWwindow* window) {
         m_PrefabHook = AssetChangeHooks::Register("prefab", [this](const AssetChangeHooks::Event& e) {
             using K = AssetChangeHooks::Event::Kind;
             if (e.Type == K::Rescan) m_PrefabRefreshAll = true;
-            else if (e.Type != K::Removed) QueuePrefabRefresh(e.Path); // removed: instances keep what they have
+            else if (e.Type != K::Removed) QueuePrefabRefresh(e.Path, /*joinUndo*/false); // removed: instances keep what they have
             return false;
         });
 

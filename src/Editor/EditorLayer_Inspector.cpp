@@ -3683,7 +3683,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // file (RefreshPrefabInstances, at the next project sync).
         if (reflPfApply && SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name))
             for (entt::entity cur = entity; cur != entt::null && registry.valid(cur);) {
-                if (const auto* pi = registry.try_get<PrefabInstanceComponent>(cur)) { QueuePrefabRefresh(pi->SourcePath); break; }
+                if (const auto* pi = registry.try_get<PrefabInstanceComponent>(cur)) { QueuePrefabRefresh(pi->SourcePath, /*joinUndo*/true); break; }
                 const auto* h = registry.try_get<HierarchyComponent>(cur);
                 cur = h ? h->Parent : entt::null;
             }
@@ -4798,7 +4798,7 @@ void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char*
     }
     if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab")) {
         PushUndo(world, "Apply to Prefab"); // one step with the .prefab write, which the file journal joins
-        if (const std::string src = ApplyPrefabFieldToInstances(world, entity, component, field); !src.empty()) QueuePrefabRefresh(src);
+        if (const std::string src = ApplyPrefabFieldToInstances(world, entity, component, field); !src.empty()) QueuePrefabRefresh(src, /*joinUndo*/true);
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write this value into the .prefab file. Other instances that\n"
@@ -4832,7 +4832,7 @@ void EditorLayer::PrefabFieldMenuMulti(World& world, const std::vector<entt::ent
         PushUndo(world, "Apply to Prefab");
         for (entt::entity e : sel)
             if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
-                if (const std::string src = ApplyPrefabFieldToInstances(world, e, component, field); !src.empty()) QueuePrefabRefresh(src);
+                if (const std::string src = ApplyPrefabFieldToInstances(world, e, component, field); !src.empty()) QueuePrefabRefresh(src, /*joinUndo*/true);
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write each selected instance's value into its .prefab file.\n"

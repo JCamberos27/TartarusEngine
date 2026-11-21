@@ -861,11 +861,12 @@ public:
     // (its file stores the same links and overrides). Skipped in Play and Prefab Mode, whose exits
     // reload the scene from a snapshot anyway. Returns how many instances were rebuilt.
     int RefreshPrefabInstances(World& world, AssetLibrary& assets);
-    // Queued during an open undo step (Apply to Prefab writing the file): the rebuild joins that
-    // step, so undoing it puts back the scene as it was before the Apply, not only the file.
-    void QueuePrefabRefresh(const std::string& path) {
+    // joinUndo (Apply to Prefab writing the file during its open undo step): the rebuild joins that
+    // step, so undoing it puts back the scene as it was before the Apply, not only the file. An
+    // external .prefab edit passes false: it must not join an unrelated open step (a drag, prefs).
+    void QueuePrefabRefresh(const std::string& path, bool joinUndo) {
         m_PrefabRefreshQueue.push_back(path);
-        if (m_GlobalUndoActive && !m_GlobalUndoApplying) m_PrefabRefreshJoinsUndo = true;
+        if (joinUndo && m_GlobalUndoActive && !m_GlobalUndoApplying) m_PrefabRefreshJoinsUndo = true;
     }
     // #15 - call right before OutfitSystem::UpdatePending when OutfitSystem::LandingDue: the landing makes
     // the next frame take the whole scene as the undo baseline (RebaseAfterOutfitChanges), so a scene
