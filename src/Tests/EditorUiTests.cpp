@@ -256,7 +256,10 @@ using StepFn = std::function<bool(Ctx&)>; // true when the step is finished
 struct Step {
     std::string Name;
     StepFn Fn;
-    int Timeout = 240; // frames
+    // Frames, with a wall-time floor: the step fails only once it has run this many frames AND as long as
+    // they take at 60 fps (Timeout / 60 s). A hidden test window on a fast GPU runs ~800 fps, where 120 frames
+    // is ~0.15 s - shorter than a fade or a tooltip delay; slow CI keeps the frame budget.
+    int Timeout = 240;
 };
 struct Test {
     std::string Name;
@@ -274,6 +277,7 @@ bool g_Enabled = false;
 std::vector<Test> g_Tests;
 size_t g_TestIndex = 0, g_StepIndex = 0;
 int g_StepFrames = 0;
+std::chrono::steady_clock::time_point g_StepStartedAt; // wall clock when the current step began (Step::Timeout floor)
 bool g_TestFailed = false;
 std::string g_FailMessage;
 int g_Passed = 0, g_Failed = 0, g_Skipped = 0;
@@ -2113,10 +2117,15 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
 
         Step& s = t.Steps[g_StepIndex];
         watchdog::Note(t.Name, s.Name, g_TestIndex, g_StepIndex);
+        const auto now = std::chrono::steady_clock::now();
+        if (g_StepFrames == 0) g_StepStartedAt = now;
         const bool done = s.Fn(c);
         ++g_StepFrames;
         if (done) { ++g_StepIndex; g_StepFrames = 0; }
-        else if (g_StepFrames > s.Timeout) Fail("step '" + s.Name + "' timed out");
+        else if (g_StepFrames > s.Timeout &&
+                 std::chrono::duration<double>(now - g_StepStartedAt).count() >= s.Timeout / 60.0)
+            Fail("step '" + s.Name + "' timed out (" + std::to_string(g_StepFrames) + " frames, " +
+                 std::to_string((int)std::chrono::duration<double>(now - g_StepStartedAt).count()) + " s)");
         return false;
     }
 

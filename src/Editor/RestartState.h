@@ -17,10 +17,12 @@ namespace RestartState {
 
 // A selected entity, found again after the reload by its OrderComponent value (kept through save and
 // the recovery snapshot) and checked against its name, so a mismatch drops it instead of selecting
-// something else.
+// something else. A prefab instance's member: Order is its instance root's and Local its prefab-local
+// index (members are rebuilt with new orders); Local is -1 for everything else.
 struct EntityRef {
     int Order = 0;
     std::string Name;
+    int Local = -1;
 };
 
 struct State {

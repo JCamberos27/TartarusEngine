@@ -2073,7 +2073,7 @@ bool AppSession::Frame() {
         if (editorShot.Active()) editorShot.BeforeUi(editor, world);
         if (editorUIVisible) { PROFILE_SCOPE("UI Editor Draw"); editor.Draw(world, assets, editorCamera, dt); }
         else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
-        // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
+        // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>_<path hash>.txt names
         // it), its edges drawn over the Scene view. The physics scene the navmesh is built from only exists in Play.
         {
             static std::string navRecorded;
@@ -2081,24 +2081,44 @@ bool AppSession::Frame() {
             const bool recordNav = playing && npcDirector.Started() && !npcDirector.NavCachePath().empty() && navRecorded.empty();
             // (the note's path is only built on the frames that need it: an editor frame allocates nothing here)
             static std::string navNote;
-            if (wantNav || recordNav) navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + ".txt");
+            if (wantNav || recordNav) {
+                // Named by the scene's file, not just its title: two "Hallway" scenes in different folders, or two
+                // unsaved scenes, used to share one note and draw each other's navmesh. An unsaved scene has none.
+                const std::string& sceneFile = editor.CurrentScenePath();
+                if (sceneFile.empty()) navNote.clear();
+                else {
+                    std::uint64_t h = 1469598103934665603ull;
+                    for (char ch : ProjectPaths::Relativize(sceneFile))
+                        h = (h ^ (unsigned char)(ch == '\\' ? '/' : std::tolower((unsigned char)ch))) * 1099511628211ull;
+                    char tag[20];
+                    std::snprintf(tag, sizeof(tag), "_%08llx", (unsigned long long)(h & 0xffffffffull));
+                    navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + tag + ".txt");
+                }
+            }
             if (recordNav) {
-                std::ofstream(std::filesystem::u8path(navNote)) << npcDirector.NavCachePath() << std::endl << npcDirector.NavHash() << std::endl;
-                navRecorded = navNote;
+                if (!navNote.empty())
+                    std::ofstream(std::filesystem::u8path(navNote)) << npcDirector.NavCachePath() << std::endl << npcDirector.NavHash() << std::endl;
+                navRecorded = navNote.empty() ? std::string("(unsaved scene)") : navNote; // once per Play either way
             }
             if (!playing) navRecorded.clear();
             static NavMesh editNav;
             static std::vector<NavMesh::Edge> editNavEdges;
             static std::string editNavFor;
-            if (!wantNav) editNavFor.clear();
-            else if (editNavFor != navNote) {
+            static bool editNavLoaded = false;
+            if (!wantNav) editNavLoaded = false;
+            else if (!editNavLoaded || editNavFor != navNote) {
+                editNavLoaded = true;
                 editNavFor = navNote;
                 editNavEdges.clear();
-                std::ifstream in(std::filesystem::u8path(navNote));
                 std::string cachePath;
                 unsigned long long hash = 0;
-                if (in && std::getline(in, cachePath) && (in >> hash) && editNav.Load(cachePath, hash)) editNav.BoundaryEdges(editNavEdges);
-                if (editNavEdges.empty()) FKeyRow::Show("F6", "Nav", "Play once to bake this scene's navmesh");
+                if (!navNote.empty()) {
+                    std::ifstream in(std::filesystem::u8path(navNote));
+                    if (in && std::getline(in, cachePath) && (in >> hash) && editNav.Load(cachePath, hash)) editNav.BoundaryEdges(editNavEdges);
+                }
+                if (editNavEdges.empty())
+                    FKeyRow::Show("F6", "Nav", navNote.empty() ? "Save the scene, then Play once to bake its navmesh"
+                                                               : "Play once to bake this scene's navmesh");
             }
             if (wantNav && !editNavEdges.empty() && editor.ViewportSize().x > 1.0f && editor.ViewportSize().y > 1.0f) {
                 const glm::vec2 vpPos = editor.ViewportPos(), vpSize = editor.ViewportSize();

@@ -1668,6 +1668,7 @@ private:
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
     int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
+    int m_ProjectSettingsHook = 0;   // AssetChangeHooks id: settings.json edited outside the editor reloads + re-applies physics
     int m_PrefabHook = 0;            // AssetChangeHooks id: an edited .prefab queues its placed instances' refresh
     std::vector<std::string> m_PrefabRefreshQueue; // .prefab files changed since the last RefreshPrefabInstances
     bool m_PrefabRefreshAll = false; // the watcher overflowed: check every placed prefab
@@ -1787,6 +1788,8 @@ private:
     // before the thing this entry undoes" contract), which by the time RecordSelectionHistory
     // notices the change is no longer what's live.
     std::vector<int> CaptureSelectedOrders(const World& world, const std::vector<entt::entity>& entities) const;
+    // The entities those orders name now (a prefab member by its root's order + local index).
+    std::vector<entt::entity> ResolveSelectionOrders(const World& world, const std::vector<int>& orders) const;
     void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;

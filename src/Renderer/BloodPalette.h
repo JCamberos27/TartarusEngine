@@ -43,9 +43,8 @@ constexpr Look Ichor{{0.42f, 0.52f, 0.075f},   // fresh
                      0.30f, 0.85f};
 
 // The palette of `kind` as the game runs (a tuning tool may change it; out of range: a person's).
-inline Look& Runtime(int kind) {
-    static Look table[kKinds] = {Human, Ichor};
-    return table[kind >= 0 && kind < kKinds ? kind : 0];
-}
+// Defined out of line (BloodRenderer.cpp): an inline function's static would be one table per module once the
+// engine core is its own DLL, so a write from the game side would never reach the renderer.
+Look& Runtime(int kind);
 inline const Look& Of(int kind) { return Runtime(kind); }
 } // namespace BloodPalette

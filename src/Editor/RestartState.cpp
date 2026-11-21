@@ -2,6 +2,7 @@
 
 #include "Components.h"
 #include "World.h"
+#include "PrefabMemberRef.h"
 
 #include <chrono>
 #include <fstream>
@@ -18,7 +19,11 @@ std::int64_t NowUnix() {
 
 bool Save(const std::filesystem::path& file, const State& state) {
     json selection = json::array();
-    for (const EntityRef& r : state.Selection) selection.push_back({{"order", r.Order}, {"name", r.Name}});
+    for (const EntityRef& r : state.Selection) {
+        json ref = {{"order", r.Order}, {"name", r.Name}};
+        if (r.Local >= 0) ref["local"] = r.Local;
+        selection.push_back(std::move(ref));
+    }
     const json j = {
         {"version", 1},
         {"scene", state.ScenePath},
@@ -55,7 +60,7 @@ std::optional<State> Load(const std::filesystem::path& file, std::int64_t nowUni
     if (const auto it = j.find("selection"); it != j.end() && it->is_array()) {
         for (const json& e : *it) {
             if (!e.is_object() || !e.contains("order")) continue;
-            s.Selection.push_back({e.value("order", 0), e.value("name", std::string{})});
+            s.Selection.push_back({e.value("order", 0), e.value("name", std::string{}), e.value("local", -1)});
         }
     }
     return s;
@@ -65,9 +70,14 @@ std::vector<EntityRef> RefsFor(const World& world, const std::vector<entt::entit
     std::vector<EntityRef> refs;
     for (entt::entity e : entities) {
         if (!world.Registry.valid(e)) continue;
+        const auto* name = world.Registry.try_get<NameComponent>(e);
+        int rootOrder = -1, local = -1;
+        if (PrefabMemberRef(world, e, rootOrder, local)) {
+            refs.push_back({rootOrder, name ? name->Name : std::string{}, local});
+            continue;
+        }
         const auto* order = world.Registry.try_get<OrderComponent>(e);
         if (!order) continue;
-        const auto* name = world.Registry.try_get<NameComponent>(e);
         refs.push_back({order->Value, name ? name->Name : std::string{}});
     }
     return refs;
@@ -81,9 +91,11 @@ std::vector<entt::entity> Resolve(const World& world, const std::vector<EntityRe
     for (const EntityRef& r : refs) {
         const auto it = byOrder.find(r.Order);
         if (it == byOrder.end()) continue;
-        const auto* name = world.Registry.try_get<NameComponent>(it->second);
+        const entt::entity e = r.Local >= 0 ? PrefabMemberAt(world, it->second, r.Local) : it->second;
+        if (e == entt::null) continue;
+        const auto* name = world.Registry.try_get<NameComponent>(e);
         if ((name ? name->Name : std::string{}) != r.Name) continue;
-        out.push_back(it->second);
+        out.push_back(e);
     }
     return out;
 }

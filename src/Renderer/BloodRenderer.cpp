@@ -19,6 +19,13 @@
 #include <cstring>
 #include <filesystem>
 
+#include "BloodPalette.h"
+
+BloodPalette::Look& BloodPalette::Runtime(int kind) {
+    static Look table[kKinds] = {Human, Ichor};
+    return table[kind >= 0 && kind < kKinds ? kind : 0];
+}
+
 #ifndef GL_CLIP_DISTANCE0
 #define GL_CLIP_DISTANCE0 0x3000
 #endif

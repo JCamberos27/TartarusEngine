@@ -31,6 +31,7 @@
 #include "Model.h"
 #include "MotionRebake.h"
 #include "OutfitSystem.h"
+#include "PhysicsWorld.h"
 #include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include "ProjectWatcher.h"
@@ -112,6 +113,13 @@ bool ChangesAssetIndex(const std::string& path) {
     return type.empty() && fs::path(path).extension().empty();
 }
 
+// A wardrobe definition (.wardrobe, any case, as the rest of the sync compares paths).
+bool IsWardrobe(const std::string& path) {
+    std::string ext = fs::path(path).extension().string();
+    for (char& ch : ext) ch = (char)std::tolower((unsigned char)ch);
+    return ext == ".wardrobe";
+}
+
 } // namespace
 
 void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
@@ -166,7 +174,15 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         e.OldPath = c.OldPath;
         e.AssetType = AssetDatabase::AssetType(c.Path);
         e.BySelf = self;
-        const int applied = AssetChangeHooks::Dispatch(e);
+        int applied = AssetChangeHooks::Dispatch(e);
+        // A Physic Material saved (the Inspector or outside) while playing: the colliders using it pick it up now.
+        if (e.AssetType == "physicmaterial" && e.Type != HK::Removed && PhysicsWorld::RefreshPhysicMaterial(world, c.Path) > 0)
+            ++applied;
+        // A wardrobe edited (it has no asset type: no .meta): the Character Outfit Inspector reads it again, as Rescan would.
+        if (IsWardrobe(c.Path) && OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.Path)))
+            ++applied;
+        if (!c.OldPath.empty() && IsWardrobe(c.OldPath))
+            OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.OldPath));
         if (!self) s_SyncApplied += applied;
     }
     if (RefreshPrefabInstances(world, assets) > 0) ++s_SyncApplied; // queued by the "prefab" hook above
@@ -226,28 +242,9 @@ int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
     // An open step that wrote the file (Apply to Prefab) takes the rebuild in (its commit sees the
     // scene with the applied override gone); any other open edit is committed first.
     if (!joinsUndo) FinishGlobalUndo(world, true);
-    // The selection, by OrderComponent; a member of an instance by its root's order and its
-    // prefab-local index instead: rebuilt members get new orders (only the root's is saved).
-    struct Picked { int Order = -1; int Local = -1; };
-    std::vector<Picked> picked;
-    for (entt::entity e : GetSelectedItems()) {
-        if (e == entt::null || !world.Registry.valid(e)) continue;
-        Picked p;
-        for (entt::entity cur = e; cur != entt::null && world.Registry.valid(cur);) {
-            if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(cur)) {
-                const auto at = std::find(pi->InstanceEntities.begin(), pi->InstanceEntities.end(), e);
-                if (cur != e && at != pi->InstanceEntities.end() && world.Registry.all_of<OrderComponent>(cur)) {
-                    p.Order = world.Registry.get<OrderComponent>(cur).Value;
-                    p.Local = (int)(at - pi->InstanceEntities.begin());
-                }
-                break;
-            }
-            const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
-            cur = h ? h->Parent : entt::null;
-        }
-        if (p.Local < 0 && world.Registry.all_of<OrderComponent>(e)) p.Order = world.Registry.get<OrderComponent>(e).Value;
-        if (p.Order >= 0) picked.push_back(p);
-    }
+    // The selection, by order (a member of an instance by its root's order and prefab-local index:
+    // rebuilt members get new orders).
+    const std::vector<int> selected = CaptureSelectedOrders(world);
     const std::string snapshot = !m_GlobalUndoActive && UndoBaselineIsCurrent() ? m_CurrentUndoScene : SceneSerializer::SaveToString(world, assets);
     {
         struct Applying { bool& Flag; Applying(bool& f) : Flag(f) { Flag = true; } ~Applying() { Flag = false; } } applying(m_GlobalUndoApplying);
@@ -255,20 +252,6 @@ int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
             Log::Error("Couldn't rebuild the prefab instances from the edited .prefab; reload the scene to see the change.");
             return 0;
         }
-    }
-    std::unordered_map<int, entt::entity> byOrder;
-    for (auto [e, o] : world.Registry.view<const OrderComponent>().each()) byOrder[o.Value] = e;
-    std::vector<int> selected;
-    for (const Picked& p : picked) {
-        const auto it = byOrder.find(p.Order);
-        if (it == byOrder.end()) continue;
-        entt::entity e = it->second;
-        if (p.Local >= 0) {
-            const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(e);
-            e = pi && p.Local < (int)pi->InstanceEntities.size() ? pi->InstanceEntities[p.Local] : entt::null;
-        }
-        if (e != entt::null && world.Registry.valid(e) && world.Registry.all_of<OrderComponent>(e))
-            selected.push_back(world.Registry.get<OrderComponent>(e).Value);
     }
     RestoreSelectionByOrder(world, selected);
     // The baseline is the World as it now saves: diffed against the new content, an override that
@@ -442,12 +425,6 @@ void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const
 
 void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std::string& path) {
     if (AtomicFile::WrittenBySelfRecently(path)) return; // our own save
-    if (SameFile(path, ProjectPaths::Resolve("settings.json"))) {
-        ProjectSettings::Load(); // the same reload an undo of a settings change does
-        ++s_SyncApplied;
-        Log::Info("Reloaded Project Settings (settings.json changed outside the editor).");
-        return;
-    }
     // Motion matching (hot reload): a saved bake config rebakes; a rewritten database reloads (no library entry either way).
     std::string mmBase;
     if (MotionRebake::IsConfig(path)) { MotionRebake::Request(path); ++s_SyncApplied; return; }
