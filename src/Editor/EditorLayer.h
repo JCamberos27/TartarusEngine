@@ -855,6 +855,19 @@ public:
     // to the Asset Database, the library and the open scene. Call once per frame
     // (EditorLayer_ProjectSync.cpp).
     void SyncProjectChanges(World& world, AssetLibrary& assets);
+    // Placed instances of a queued .prefab that changed since they were built are rebuilt from the
+    // file with their own overrides, placement and selection kept: the whole scene reloads from its
+    // own snapshot, as an undo step does, but no step is added and the scene isn't marked unsaved
+    // (its file stores the same links and overrides). Skipped in Play and Prefab Mode, whose exits
+    // reload the scene from a snapshot anyway. Returns how many instances were rebuilt.
+    int RefreshPrefabInstances(World& world, AssetLibrary& assets);
+    // joinUndo (Apply to Prefab writing the file during its open undo step): the rebuild joins that
+    // step, so undoing it puts back the scene as it was before the Apply, not only the file. An
+    // external .prefab edit passes false: it must not join an unrelated open step (a drag, prefs).
+    void QueuePrefabRefresh(const std::string& path, bool joinUndo) {
+        m_PrefabRefreshQueue.push_back(path);
+        if (joinUndo && m_GlobalUndoActive && !m_GlobalUndoApplying) m_PrefabRefreshJoinsUndo = true;
+    }
     // #15 - call right before OutfitSystem::UpdatePending when OutfitSystem::LandingDue: the landing makes
     // the next frame take the whole scene as the undo baseline (RebaseAfterOutfitChanges), so a scene
     // change made since the last baseline without an undo step is journaled first, as "Unrecorded
@@ -1656,6 +1669,10 @@ private:
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
     int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
     int m_ProjectSettingsHook = 0;   // AssetChangeHooks id: settings.json edited outside the editor reloads + re-applies physics
+    int m_PrefabHook = 0;            // AssetChangeHooks id: an edited .prefab queues its placed instances' refresh
+    std::vector<std::string> m_PrefabRefreshQueue; // .prefab files changed since the last RefreshPrefabInstances
+    bool m_PrefabRefreshAll = false; // the watcher overflowed: check every placed prefab
+    bool m_PrefabRefreshJoinsUndo = false; // see QueuePrefabRefresh
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;

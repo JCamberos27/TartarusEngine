@@ -112,8 +112,8 @@ namespace SceneSerializer {
     // True if `entity` (a member of a live prefab instance) currently holds a value for
     // (component, field) that differs from the .prefab it came from. Always false for a field
     // on the instance ROOT ("Transform" / "Name") — those are per-instance by design — and for
-    // an entity that isn't part of a prefab instance. The parsed .prefab is cached; call
-    // ClearPrefabPristineCache() when a scene loads or a .prefab is reimported.
+    // an entity that isn't part of a prefab instance. Compared against the .prefab content the
+    // instance was built from (cached at InstantiatePrefab), not the file as it is now.
     bool IsPrefabFieldOverridden(const World& world, entt::entity entity,
                                  const char* component, const char* field);
     // Set (component, field) on `entity` back to its .prefab value. No-op if not overridden.
@@ -132,6 +132,10 @@ namespace SceneSerializer {
     bool ApplyPrefabComponent(World& world, entt::entity entity, const char* component);
 
     void ClearPrefabPristineCache();
+    // True when `path` was edited after this scene's instances of it were built: the cached
+    // content they diff their overrides against differs from the file now. False when nothing
+    // is cached for it or the file can't be read (half-written: the next change retries).
+    bool PrefabChangedSinceInstanced(const std::string& path);
 
     // #178 - Preset assets: one reflected component's fields as JSON, using the exact same
     // encoding scenes use, so an asset reference in a preset round-trips by GUID like it does

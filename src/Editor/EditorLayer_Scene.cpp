@@ -84,7 +84,13 @@ namespace {
 uint64_t HashSceneJson(const std::string& s) { return UndoDelta::HashText(s); }
 
 // Loads an undo / redo step's scene: from the parse UndoDelta::Pop already did when it has one.
-bool LoadHistoryScene(World& world, AssetLibrary& assets, const std::string& text, const nlohmann::json& parsed) {
+bool LoadHistoryScene(World& world, AssetLibrary& assets, const std::string& text, const nlohmann::json& parsed,
+                      const std::vector<EditorFileHistory::State>& files) {
+    // A step that put a .prefab back (Apply to Prefab undone / redone): the instances are rebuilt
+    // from it now, so the content they were built from before is gone with them. Kept, the load
+    // would build them from that old content instead of the file.
+    for (const auto& f : files)
+        if (AssetDatabase::AssetType(f.Path.u8string()) == "prefab") { SceneSerializer::ClearPrefabPristineCache(); break; }
     return parsed.is_object() ? SceneSerializer::LoadFromJson(world, assets, parsed)
                               : SceneSerializer::LoadFromString(world, assets, text);
 }
@@ -187,6 +193,7 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
 void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if(!m_GlobalUndoActive || (!force && (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left)))) return;
     if(!force && m_InspectorValueCoasting) return; // a flung Inspector value: drag + coast are one undo step
+    if(!force && m_PrefabRefreshJoinsUndo) return; // Apply to Prefab: its instance rebuild (next sync) is part of the step
     PROFILE_SCOPE("Undo Commit");
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();Enhancers::FolderStyles::Get().Flush();Enhancers::UiStyles::Get().Flush();
@@ -1191,7 +1198,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     const bool inPlace = tryInPlace && ApplyHistoryStepInPlace(world, assets, entry, currentHash, targetJson);
     if (sceneReloaded && !inPlace) {
         if (tryInPlace) targetRoot = ParseHistoryScene(targetJson); // in place failed: the full reload
-        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot);
+        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot, entry.Files);
         if (!targetLoaded) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
             Log::Error("Undo failed - the scene was left as it was.");
@@ -1261,7 +1268,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     const bool inPlace = tryInPlace && ApplyHistoryStepInPlace(world, assets, entry, currentHash, targetJson);
     if (sceneReloaded && !inPlace) {
         if (tryInPlace) targetRoot = ParseHistoryScene(targetJson); // in place failed: the full reload
-        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot);
+        targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot, entry.Files);
         if (!targetLoaded) {
             Log::Error("Redo failed - the scene was left as it was."); // #83
             SceneSerializer::LoadFromString(world, assets, currentJson);

@@ -8,6 +8,8 @@ written to the registry. Everything the editor needs is in this folder.
 WHAT IS IN HERE
 ---------------
   TartarusEngine.exe        the editor
+  TartarusCore.dll          the engine core: renderer, physics, audio, assets, UI
+  glfw3.dll                 window and input (GLFW)
   TartarusEditor.dll        editor panels (hot-reloadable)
   TartarusGame.dll          gameplay systems (hot-reloadable)
   PhysX*.dll                NVIDIA PhysX 5 runtime
