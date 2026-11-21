@@ -516,11 +516,15 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
     // (nullptr) so it isn't recompiled every frame; SceneRenderer already falls back to the
     // built-in program when Variant() returns null. ForgetFailedVariants() (the Inspector's
     // shader preview calls it) retries after the file is fixed.
+    // The file and variant key name the program (GL debug label, --perf-bench load log), not "(unnamed)".
+    char keyHex[24];
+    std::snprintf(keyHex, sizeof(keyHex), " #%llx", (unsigned long long)key);
+    const std::string debugName = std::filesystem::path(m_Path).filename().string() + keyHex;
     try {
         if (fragSrc.empty())
-            m_Variants[key] = std::make_unique<Shader>(vertSrc);      // compute
+            m_Variants[key] = std::make_unique<Shader>(vertSrc, debugName.c_str());      // compute
         else
-            m_Variants[key] = std::make_unique<Shader>(vertSrc, fragSrc);
+            m_Variants[key] = std::make_unique<Shader>(vertSrc, fragSrc, debugName.c_str());
         // A material shader on ModelVertex.glsl reads its transforms per instance; one whose fragment stage reads
         // uModel itself (RedDot's projection) would see only the batch's first copy, so it draws one by one.
         if (m_Variants[key] && !fragSrc.empty())
