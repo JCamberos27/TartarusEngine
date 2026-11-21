@@ -3052,7 +3052,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (prefsForAutoSave.AutoSaveEnabled) {
         m_AutoSaveTimer += dt;
         float intervalSeconds = std::max(1.0f, prefsForAutoSave.AutoSaveIntervalMinutes * 60.0f);
-        if (m_AutoSaveTimer >= intervalSeconds) {
+        // An edit still open (a drag, a slider held): wait for it to commit, so the write can use
+        // the undo baseline it leaves rather than reading the World mid-edit.
+        if (m_AutoSaveTimer >= intervalSeconds && !m_GlobalUndoActive) {
             m_AutoSaveTimer = 0.0f;
             // #90 — Draw() also runs during in-panel Play, when the world holds transient play
             // state; the recovery file must only ever hold edit-mode content.

@@ -1,7 +1,7 @@
 #include "PhysicsInternal.h"
 
 namespace {
-// The legacy AABB collider size (Renderer/ColliderGizmo.cpp's AutoBoxWorld, kept in step): the entity's
+// The legacy AABB collider size (App/DebugLineGather.cpp's AutoBoxWorld, kept in step): the entity's
 // render bounds scaled by its transform, or a plain unit box for a mesh-less entity. Returned
 // as centre + half-extents in world space, axis-aligned.
 void AutoBoxWorld(const entt::registry& reg, entt::entity e, const TransformComponent& t,

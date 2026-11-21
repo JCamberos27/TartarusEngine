@@ -259,6 +259,20 @@ void TestWardrobe() {
     CHECK(Wardrobe::Hides(jeans, "Shoes", sneakers) && Wardrobe::Hides(boots, "Pants", jeans)); // hems over shoes, into boots
     CHECK(!Wardrobe::Hides(layer("Bag", "a/SKM_Bag.fbx"), "Torso", head) && !Wardrobe::Hides(tee, "Top", tee));
 
+    // Essential slots come from the styles: filled by every style open to the gender (a gender-only style counts
+    // only for that gender); none without styles.
+    Wardrobe::Wardrobe ew;
+    CHECK(Wardrobe::Parse(R"({"slots": [{"id": "Top"}, {"id": "Pants"}, {"id": "Hat"}, {"id": "Tie"}],
+                              "bodies": {"Male": {"parts": [{"part": "Torso", "model": "T.fbx"}]}},
+                              "styles": [{"name": "A", "fill": {"Top": 1.0, "Pants": 1.0, "Hat": 0.5}},
+                                         {"name": "B", "defaultFill": 1.0, "fill": {"Hat": 0.2}},
+                                         {"name": "Suit", "gender": "Male", "fill": {"Top": 1.0, "Pants": 1.0, "Tie": 1.0}}]})",
+                          ew, &err));
+    const auto M = Wardrobe::Gender::Male, F = Wardrobe::Gender::Female;
+    CHECK(Wardrobe::Essential(ew, "Top", M) && Wardrobe::Essential(ew, "Pants", F) && !Wardrobe::Essential(ew, "Hat", F));
+    CHECK(!Wardrobe::Essential(ew, "Tie", M) && !Wardrobe::Essential(ew, "Tie", F)); // style A never fills it
+    CHECK(!Wardrobe::Essential(lw, "Top", M));                                          // no styles: nothing is
+
     // Compatibility rules: tags from names, materials and earlier tags; hard and soft excludes; styles.
     Wardrobe::Wardrobe cw;
     CHECK(Wardrobe::Parse(R"({"slots": [{"id": "Top", "folders": ["Tops"]}, {"id": "Outerwear", "folders": ["Outerwear"]},
@@ -409,6 +423,12 @@ void TestWardrobeQuantum() {
     const auto cat = OutfitSystem::LoadCatalog(assets, "assets/Characters/Quantum/Quantum.wardrobe", true, &err);
     CHECK(cat != nullptr);
     if (!cat) { Log::Warn("Quantum wardrobe: " + err); return; }
+    // Its styles make tops, pants and shoes the essentials (and Socks, which has no items), as SetGender used to hard-code.
+    for (int g = 0; g < 2; ++g)
+        for (const auto& slot : cat->W.Slots) {
+            const bool want = slot.Id == "Top" || slot.Id == "Pants" || slot.Id == "Shoes" || slot.Id == "Socks";
+            CHECK(Wardrobe::Essential(cat->W, slot.Id, (Wardrobe::Gender)g) == want);
+        }
     CHECK(cat->Items.size() > 80);
     auto exists = [](const std::string& rel) { return std::filesystem::exists(ProjectPaths::Resolve(rel)); };
     for (const auto& body : cat->W.Bodies) {

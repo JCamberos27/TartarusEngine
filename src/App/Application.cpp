@@ -37,7 +37,8 @@
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "Grid.h"
-#include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
+#include "DebugLineGather.h"   // #185 collider overlay lines (Physics / Audio / Game state)
+#include "DebugLineRenderer.h" // ...drawn by the Renderer
 #include "Sky.h"
 #include "SkyAtmosphere.h"
 #include "TimeOfDay.h"
@@ -399,7 +400,8 @@ private:
     } glObjectGuard{fsQuadVao};
     TintOverlayRenderer tintOverlay;
     Grid grid;
-    ColliderGizmo colliderGizmo; // #185 PR 2
+    DebugLineRenderer debugLineRenderer; // #185 PR 2: collider overlay
+    DebugLineGather debugLineGather;
     Sky sky;
     SkyAtmosphere skyAtmosphere; // the physical sky (World::SkySource::Atmosphere)
     IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
@@ -1721,8 +1723,6 @@ bool AppSession::Frame() {
     shadowIn.spotMap = &spotShadowMap;
     shadowIn.pointMap = &pointShadowMap;
     shadowIn.frame = frameIndex;
-    shadowIn.windowWidth = window.GetWidth();
-    shadowIn.windowHeight = window.GetHeight();
 
     // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
     // camera the user is mainly looking through (each view's draw re-applies its own).
@@ -1931,7 +1931,10 @@ bool AppSession::Frame() {
     viewIn.outlineDilateShader = &outlineDilateShader;
     viewIn.fsQuadVao = fsQuadVao;
     viewIn.tonemapper = &tonemapper;
-    viewIn.colliderGizmo = &colliderGizmo;
+    viewIn.debugLines = &debugLineRenderer;
+    viewIn.gatherDebugLines = [gather = &debugLineGather](const World& w, bool shapes,
+                                                 const std::function<bool(entt::entity)>* only,
+                                                 std::vector<float>& out) { gather->Gather(w, shapes, only, out); };
     viewIn.scene = {&sceneHdr, &sceneTaa, &sceneOpaqueColor, &ssao, &bloom};
     viewIn.sceneLdr = &sceneFramebuffer;
     viewIn.tintOverlay = &tintOverlay;

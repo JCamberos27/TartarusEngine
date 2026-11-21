@@ -1752,30 +1752,47 @@ static std::string MaterialShaderLabel(const std::string& reference) {
 }
 
 // Selection only: the caller stages its own scene/asset undo before applying the result.
-static bool MaterialShaderDropdown(const MaterialAsset& material, std::string& selected, bool mixed = false) {
+std::vector<std::string> EditorLayer::ShaderChoices(AssetLibrary& assets) {
+    std::vector<std::string> out = {"engine://Standard.shader"};
+    auto add = [&](std::string ref) {
+        if (std::find(out.begin(), out.end(), ref) == out.end()) out.push_back(std::move(ref));
+    };
+    const std::string engineDir = ShaderLibrary::Dir();
+    auto walk = [&](const std::string& dir, bool engine) {
+        std::error_code ec;
+        for (std::filesystem::recursive_directory_iterator it(std::filesystem::u8path(dir), std::filesystem::directory_options::skip_permission_denied, ec), end;
+             !ec && it != end; it.increment(ec)) {
+            if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
+            add(engine ? "engine://" + std::filesystem::relative(it->path(), dir).generic_string() : ProjectPaths::Relativize(it->path().string()));
+        }
+    };
+    walk(engineDir, true); // the engine's own folder: a few files
+    RefreshProjectAssetIndexIfNeeded(assets);
+    if (m_ProjectAssetIndex.files.empty()) { // no scan has landed yet
+        walk(ProjectPaths::Resolve("shaders"), false);
+        walk(ProjectPaths::Resolve("assets"), false);
+        return out;
+    }
+    for (const auto& f : m_ProjectAssetIndex.files) {
+        if (f.Kind != AssetGridCell::Kind::Shader) continue;
+        std::string ref = ProjectPaths::Relativize(f.Path);
+        if (ref.rfind("shaders/", 0) == 0 || ref.rfind("assets/", 0) == 0) add(std::move(ref)); // the folders the walk covered
+    }
+    return out;
+}
+
+static bool MaterialShaderDropdown(const MaterialAsset& material, std::string& selected, const std::function<std::vector<std::string>()>& listShaders,
+                                   bool mixed = false) {
     PropertyLabel("Shader");
     ImGui::SetNextItemWidth(-FLT_MIN);
     bool changed = false;
     if (ImGui::BeginCombo("##materialShader", mixed ? "(mixed)" : MaterialShaderLabel(material.ShaderPath).c_str())) {
-        // The shader files on disk, walked when the list opens (it walked the whole assets tree every frame it was open).
+        // The shader list, worked out when the list opens (EditorLayer::ShaderChoices).
         static std::vector<std::string> s_Found;
-        if (ImGui::IsWindowAppearing() || s_Found.empty()) {
-            s_Found = {"engine://Standard.shader"};
-            for (const std::string dir : {ShaderLibrary::Dir(), ProjectPaths::Resolve("shaders"), ProjectPaths::Resolve("assets")}) {
-                std::error_code ec;
-                for (std::filesystem::recursive_directory_iterator it(std::filesystem::u8path(dir), std::filesystem::directory_options::skip_permission_denied, ec), end;
-                     !ec && it != end; it.increment(ec)) {
-                    if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
-                    const auto ref = dir == ShaderLibrary::Dir() ? "engine://" + std::filesystem::relative(it->path(), dir).generic_string()
-                                                                 : ProjectPaths::Relativize(it->path().string());
-                    if (std::find(s_Found.begin(), s_Found.end(), ref) == s_Found.end()) s_Found.push_back(ref);
-                }
-            }
-        }
-        std::vector<std::string> shaders = s_Found;
-        if (!material.ShaderPath.empty() && std::find(shaders.begin(), shaders.end(), material.ShaderPath) == shaders.end())
-            shaders.push_back(material.ShaderPath);
-        for (const auto& ref : shaders) {
+        if (ImGui::IsWindowAppearing() || s_Found.empty()) s_Found = listShaders();
+        const bool listed = material.ShaderPath.empty() || std::find(s_Found.begin(), s_Found.end(), material.ShaderPath) != s_Found.end();
+        for (size_t i = 0, n = s_Found.size() + (listed ? 0 : 1); i < n; ++i) {
+            const std::string& ref = i < s_Found.size() ? s_Found[i] : material.ShaderPath;
             ImGui::PushID(ref.c_str());
             const bool active = material.ShaderPath == ref || (material.ShaderPath.empty() && ref == "engine://Standard.shader");
             if (ImGui::Selectable(MaterialShaderLabel(ref).c_str(), active)) { selected = ref; changed = true; }
@@ -1820,7 +1837,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
     };
 
     std::string shaderSelection;
-    if (MaterialShaderDropdown(*ma, shaderSelection) && ma->SetShader(shaderSelection, assets)) save();
+    if (MaterialShaderDropdown(*ma, shaderSelection, [&] { return ShaderChoices(assets); }) && ma->SetShader(shaderSelection, assets)) save();
     // (.mat asset edits save to disk; they aren't scene undo steps.)
     DrawMaterialProperties(world, assets, {&mat}, {ma.get()}, ma->Shader.get(), MaterialEdits{*this, world, save});
 }
@@ -5521,28 +5538,35 @@ void EditorLayer::DrawJointExtra(World& world, entt::entity entity, ReflectExtra
     if (!joint) return;
 
     PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
+    // The target's name through the order -> entity map (a walk over every entity each frame cost ~0.6 ms on the Forest).
     std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
-    for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-        if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
-            const std::string& nm = registry.get<const NameComponent>(oe).Name;
-            if (!nm.empty()) preview = nm;
-            break;
-        }
-    }
+    if (const entt::entity target = FindEntityByOrder(world, joint->ConnectedOrder); target != entt::null)
+        if (const auto* nm = registry.try_get<const NameComponent>(target); nm && !nm->Name.empty()) preview = nm->Name;
     if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
         if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
             PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
         }
-        for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-            if (oe == entity) continue;
-            const int ord = registry.get<const OrderComponent>(oe).Value;
-            const std::string& nm = registry.get<const NameComponent>(oe).Name;
-            std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
-            lbl += "##" + std::to_string(ord); // same-named objects are distinct items
-            if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
-                PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+        // Rows built once per open, only the visible ones submitted (every entity's label each frame: ~46 ms on the Forest).
+        if (ImGui::IsWindowAppearing()) {
+            m_JointTargetChoices.clear();
+            for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+                if (oe == entity) continue;
+                const int ord = registry.get<const OrderComponent>(oe).Value;
+                const std::string& nm = registry.get<const NameComponent>(oe).Name;
+                std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
+                lbl += "##" + std::to_string(ord); // same-named objects are distinct items
+                m_JointTargetChoices.emplace_back(ord, std::move(lbl));
             }
         }
+        ImGuiListClipper clipper;
+        clipper.Begin((int)m_JointTargetChoices.size());
+        while (clipper.Step())
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const auto& [ord, lbl] = m_JointTargetChoices[(size_t)i];
+                if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
+                    PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+                }
+            }
         ImGui::EndCombo();
     }
 
@@ -5960,7 +5984,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             mats.push_back(&slot->Mat);
             matAssets.assign(1, slot.get());
             std::string shaderSelection;
-            if (MaterialShaderDropdown(*slot, shaderSelection)) {
+            if (MaterialShaderDropdown(*slot, shaderSelection, [&] { return ShaderChoices(assets); })) {
                 PushUndo(world, "Change Material Shader");
                 slot->SetShader(shaderSelection, assets);
             }
@@ -6109,7 +6133,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     for (const auto* material : matAssets)
         if (material->ShaderPath != matAssets.front()->ShaderPath) mixedShaders = true;
     std::string shaderSelection;
-    if (MaterialShaderDropdown(*matAssets.front(), shaderSelection, mixedShaders)) {
+    if (MaterialShaderDropdown(*matAssets.front(), shaderSelection, [&] { return ShaderChoices(assets); }, mixedShaders)) {
         PushUndo(world, "Change Material Shader");
         for (auto* material : matAssets) material->SetShader(shaderSelection, assets);
         mixedShaders = false;

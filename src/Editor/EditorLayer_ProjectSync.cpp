@@ -210,6 +210,7 @@ int EditorLayer::ApplyAssetMove(World& world, AssetLibrary& assets, const std::s
     if (refs > 0) { // the scene file's stored paths are stale until it's saved again
         m_SavedUndoDepth = -1;
         m_Dirty = true;
+        NoteChangeOutsideUndo(); // references rewritten in the World, not by an undo step
     }
     return refs;
 }

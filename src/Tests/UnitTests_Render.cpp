@@ -21,6 +21,7 @@
 #include "../Renderer/LightBuffer.h"
 #include "../Renderer/PointShadowMap.h"
 #include "../Renderer/SpotShadowMap.h"
+#include "../Renderer/ShadowFrame.h"
 #include "../Renderer/DecalTypes.h"
 #include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
@@ -1053,6 +1054,26 @@ using json = nlohmann::json;
 using UnitTestSupport::TempDir;
 using UnitTestSupport::ReadAll;
 
+// A still spot / point light redraws its static depth only when a caster's signature changes. A colourway swaps one
+// material slot in place (same count, same first slot): that must change the signature too.
+void TestLocalCasterHashSlots() {
+    auto a = std::make_shared<MaterialAsset>();
+    auto b = std::make_shared<MaterialAsset>();
+    auto c = std::make_shared<MaterialAsset>();
+    const glm::mat4 xf(1.0f);
+    const std::vector<std::shared_ptr<MaterialAsset>> before{a, b};
+    const std::vector<std::shared_ptr<MaterialAsset>> after{a, c}; // slot 1 recoloured
+    const std::uint64_t h0 = LocalCasterHash(7, nullptr, before, xf, 0, false);
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 0, false) == h0); // stable
+    CHECK(LocalCasterHash(7, nullptr, after, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, {b, a}, xf, 0, false) != h0); // slot order counts
+    CHECK(LocalCasterHash(7, nullptr, {a}, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 3, false) != h0); // hidden-triangle set
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 0, true) != h0);
+    CHECK(LocalCasterHash(8, nullptr, before, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
+}
+
 void TestCameraRoll() {
     auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-4f; };
     Camera cam; // yaw -90: looking down -Z, right = +X, up = +Y
@@ -1185,12 +1206,51 @@ void TestAssetCostLodLevel() {
     CHECK(lod(innerLv0) == 0); // the nearest group decides
     CHECK(lod(innerLv1) == 1);
 }
+} // namespace
+// Reads World's LOD records for the structure-patch test's oracle (outside the unnamed namespace: World's friend).
+struct WorldLodTestAccess {
+    // What the records say a renderer should be: culled when a group above it tags the child on the path down to it
+    // (neither the level it shows nor the one fading out); fading out (-1) or in (+1) when exactly one group above it
+    // is cross-fading and the path goes through that group's old or new level, 0 when none is; 2 when several are
+    // (the last fade written wins, so the test doesn't check those).
+    static void Expect(const World& world, entt::entity e, bool& culled, int& fade) {
+        culled = false;
+        fade = 0;
+        int fades = 0;
+        entt::entity child = e;
+        for (size_t depth = 0; depth <= World::kMaxHierarchyDepth; ++depth) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(child);
+            const entt::entity parent = h ? h->Parent : entt::null;
+            if (parent == entt::null || !world.Registry.valid(parent)) break;
+            const size_t s = (size_t)entt::to_entity(parent);
+            if (world.Registry.all_of<LODGroupComponent>(parent) && s < world.m_LodIndex.size() &&
+                world.m_LodIndex[s] < world.m_LodState.size() && world.m_LodState[world.m_LodIndex[s]].Group == parent) {
+                const World::LodGroupState& st = world.m_LodState[world.m_LodIndex[s]];
+                for (int j = 0; j < st.Levels; ++j) {
+                    if (st.Kids[j] != child) continue;
+                    if (st.Active >= -1 && j != st.Active && j != st.FadeFrom) culled = true;
+                    if (st.FadeFrom >= 0 && (j == st.FadeFrom || j == st.Active)) {
+                        ++fades;
+                        fade = j == st.FadeFrom ? -1 : 1;
+                    }
+                }
+            }
+            child = parent;
+        }
+        if (fades > 1) fade = 2;
+    }
+    static size_t Fading(const World& world) { return world.m_LodFading.size(); }
+};
+namespace {
 
 // ApplyLod's structure patch (renderers created, destroyed and re-parented in and around LOD Groups, nested ones
 // included) tags exactly what a full pass from scratch tags, frame after frame of random changes; and the small ones
-// do take the patch.
-void TestLodStructurePatch() {
+// do take the patch. With LodSmooth on (cross-fades under way while things come and go) every renderer's tag and fade
+// match what the groups above it say: a piece added under a level fading out fades out with it.
+static void RunLodStructurePatch(bool smooth) {
     World world;
+    world.LodSmooth = smooth;
+    world.LodClockOverride = smooth ? 10.0 : -1.0;
     const glm::vec3 zero(0.0f), one(1.0f);
     std::mt19937 rng(1107);
     auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
@@ -1234,7 +1294,27 @@ void TestLodStructurePatch() {
     auto alive = [&](std::vector<entt::entity>& v) {
         v.erase(std::remove_if(v.begin(), v.end(), [&](entt::entity e) { return !world.Registry.valid(e); }), v.end());
     };
-    int patched = 0, changedFrames = 0;
+    // The records' word for every renderer (see WorldLodTestAccess::Expect); false and a message on the first miss.
+    int fadingChecked = 0;
+    auto matchesRecords = [&](int frame) {
+        for (entt::entity e : world.Registry.view<RenderableComponent>()) {
+            bool culled = false;
+            int fade = 0;
+            WorldLodTestAccess::Expect(world, e, culled, fade);
+            const float got = world.LodFadeOf(e);
+            const bool fadeOk = fade == 2 || (fade == 0 ? got == 0.0f : fade < 0 ? got < 0.0f : got > 0.0f);
+            fadingChecked += fade == 1 || fade == -1 ? 1 : 0;
+            if (world.IsLodCulled(e) != culled || !fadeOk) {
+                std::printf("[LodStructurePatch%s] frame %d: entity %u culled %d (records say %d), fade %.3f (records say %d)\n",
+                            smooth ? " smooth" : "", frame, (unsigned)entt::to_integral(e), (int)world.IsLodCulled(e),
+                            (int)culled, got, fade);
+                return false;
+            }
+        }
+        return true;
+    };
+    int patched = 0, changedFrames = 0, fadingFrames = 0;
+    glm::vec3 view(0.0f, 0.0f, 1.0f);
     for (int frame = 0; frame < 400; ++frame) {
         alive(places);
         alive(spawned);
@@ -1267,7 +1347,10 @@ void TestLodStructurePatch() {
             }
         }
         world.RebuildWorldTransformCache();
-        const glm::vec3 view((float)pick(16), 0.0f, 1.0f + (float)pick(20));
+        // Smooth: the view holds a few frames (a group fades only once it has settled) and the clock runs 0.15 s a
+        // frame, so a fade spans about four frames of changes.
+        if (!smooth || frame % 6 == 0) view = glm::vec3((float)pick(16), 0.0f, 1.0f + (float)pick(20));
+        if (smooth) world.LodClockOverride += 0.15;
         const std::uint64_t fullBefore = world.LodFullPasses();
         world.ApplyLod(view, proj);
         const auto& d = world.TransformStructureChanges();
@@ -1275,6 +1358,11 @@ void TestLodStructurePatch() {
             ++changedFrames;
             patched += world.LodFullPasses() == fullBefore ? 1 : 0;
         }
+        fadingFrames += WorldLodTestAccess::Fading(world) > 0 ? 1 : 0;
+        const bool ok = matchesRecords(frame);
+        CHECK(ok);
+        if (!ok) break;
+        if (smooth) continue; // a pass from scratch would end the fades under way
         const auto incremental = tagged();
         world.ClearLod();
         world.ApplyLod(view, proj); // from scratch
@@ -1286,9 +1374,16 @@ void TestLodStructurePatch() {
             break;
         }
     }
-    std::printf("[LodStructurePatch] %d of %d structure-change frames patched\n", patched, changedFrames);
+    std::printf("[LodStructurePatch%s] %d of %d structure-change frames patched; %d frames fading, %d fading renderers checked\n",
+                smooth ? " smooth" : "", patched, changedFrames, fadingFrames, fadingChecked);
     CHECK(changedFrames > 100);
     CHECK(patched * 2 > changedFrames);
+    if (smooth) CHECK(fadingFrames > 40 && fadingChecked > 100);
+}
+
+void TestLodStructurePatch() {
+    RunLodStructurePatch(false);
+    RunLodStructurePatch(true);
 }
 
 // Octahedral impostors (ImpostorLibrary): past the start distance a matched group shows its impostor - every level
@@ -1910,4 +2005,5 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
+    tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
 }

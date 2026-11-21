@@ -17,6 +17,7 @@
 #include "DefaultTextures.h"
 #include "Frustum.h"
 #include "GLStateCache.h"
+#include "GLStateScope.h"
 #include "GrassRenderer.h"
 #include "ImpostorRenderer.h"
 #include "SkinHideBuffer.h"
@@ -73,6 +74,22 @@ void ReportSunTris(const std::vector<DepthCaster>& draws, int cascadeCount) {
 
 } // namespace
 
+// A change signature, not an identity: 64-bit words through a multiply-xorshift mix. Every material slot counts: a
+// colourway swaps one slot in place (same count), and its cutout or cull state changes the depth.
+std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::vector<std::shared_ptr<MaterialAsset>>& materials,
+                              const glm::mat4& xform, unsigned visibleId, bool twoSided) {
+    std::uint64_t h = kFnvOffset;
+    h = HashWord(h, id);
+    h = HashWord(h, (std::uint64_t)(std::uintptr_t)model);
+    h = HashWord(h, (std::uint64_t)materials.size());
+    for (const auto& m : materials) h = HashWord(h, (std::uint64_t)(std::uintptr_t)m.get());
+    std::uint64_t xw[8];
+    std::memcpy(xw, &xform, sizeof xw);
+    for (const std::uint64_t w : xw) h = HashWord(h, w);
+    h = HashWord(h, visibleId); // the outfit's hidden-triangle set
+    return HashWord(h, twoSided ? 1u : 0u);
+}
+
 // #109 - the sun's cascades are fitted to the view being RENDERED, per drawScene(): they used to be fitted once per
 // frame to one camera while both the Scene and Game views sampled them, so the other view had missing or blurry
 // shadows. In the default layout Scene and Game are tabs and only one renders per frame, so this costs nothing extra;
@@ -103,10 +120,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     CascadedShadowMap& shadowMap = *in.sunMap;
     Shader& shadowShader = *in.sunShader;
     // The caller has its own target bound; the pass renders into the cascade array.
-    GLint prevDrawFbo = 0, prevReadFbo = 0, prevViewport[4] = {0, 0, 0, 0};
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFbo);
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
-    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    GLTargetScope callerTarget; // its framebuffers + viewport come back on return
 
     shadowMap.Configure(world.Render.ShadowResolution, world.Render.ShadowCascades);
     // Sub-scopes for the pass's CPU stages (fit + gather, sort + cascade masks, caster draws, grass).
@@ -122,9 +136,6 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
 
     glDisable(GL_POLYGON_OFFSET_FILL);
     glCullFace(GL_BACK);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
-    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
     GLStateCache::Invalidate();
     m_LastSunFit = {in.frame, fitView, fitProj};
     return true;
@@ -363,6 +374,7 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
     m_LocalCasters.clear();
     if (!world.Render.ShadowsEnabled || (fl.SpotCount <= 0 && fl.PointCount <= 0)) return;
     GatherLocalCasters(in);
+    GLTargetScope callerTarget; // the caller's framebuffers + viewport come back after the local maps
     if (fl.SpotCount > 0) RenderSpots(in);
     if (fl.PointCount > 0) RenderPoints(in);
 }
@@ -438,17 +450,7 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
         lc.settling = !lc.moving && !lc.animated && now - lc.settleStart < kSettleFrames;
         lc.bounded = v.Bounded; // as posed, like the main pass
         lc.bounds = AABB{v.WorldMin, v.WorldMax};
-        // A change signature, not an identity: 64-bit words through a multiply-xorshift mix.
-        std::uint64_t h = kFnvOffset;
-        h = HashWord(h, lc.id);
-        h = HashWord(h, (std::uint64_t)(std::uintptr_t)lc.model);
-        h = HashWord(h, (std::uint64_t)(std::uintptr_t)(lc.materials->empty() ? nullptr : lc.materials->front().get()));
-        h = HashWord(h, (std::uint64_t)lc.materials->size());
-        std::uint64_t xw[8];
-        std::memcpy(xw, &lc.xform, sizeof xw);
-        for (const std::uint64_t w : xw) h = HashWord(h, w);
-        h = HashWord(h, lc.visible ? (std::uint64_t)lc.visible->Id() : 0u); // the outfit's hidden-triangle set
-        lc.hash = HashWord(h, lc.twoSided ? 1u : 0u);
+        lc.hash = LocalCasterHash(lc.id, lc.model, *lc.materials, lc.xform, lc.visible ? lc.visible->Id() : 0u, lc.twoSided);
     }
     // Drop the records of casters gone for a while so the map doesn't grow across scene loads.
     if ((now & 255) == 0)
@@ -508,12 +510,10 @@ void ShadowFrame::DrawLocalCasters(Shader& shader, bool animatedOnes, const Frus
     DrawDepthCasters(shader, m_Draws);
 }
 
-void ShadowFrame::EndLocalPass(const ShadowFrameInputs& in) {
+void ShadowFrame::EndLocalPass() {
     glDisable(GL_POLYGON_OFFSET_FILL);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, in.windowWidth, in.windowHeight);
     GLStateCache::Invalidate();
 }
 
@@ -602,7 +602,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         drawCasters(true);
         m_SpotDynamicRect[s] = dynRect;
     }
-    EndLocalPass(in);
+    EndLocalPass();
 }
 
 // Point-light cube shadow maps (#119) - six faces per casting point light.
@@ -659,5 +659,5 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
             if (dynamicHere) drawCasters(true);
         }
     }
-    EndLocalPass(in);
+    EndLocalPass();
 }

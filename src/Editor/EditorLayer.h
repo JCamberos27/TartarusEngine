@@ -143,7 +143,7 @@ public:
     // otherwise the live world. True when a recovery snapshot was written.
     bool CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept;
     // --crash-test-in-editor: pretend there are unsaved edits, so the recovery path runs.
-    void MarkDirtyForCrashTest() { m_Dirty = true; }
+    void MarkDirtyForCrashTest() { m_Dirty = true; NoteChangeOutsideUndo(); }
     // Headless runs (--unit-tests, --smoke-test, etc.) should not persist editor_prefs.json.
     void SetHeadless(bool headless) { m_Headless = headless; }
     void Shutdown();
@@ -1329,6 +1329,13 @@ private:
     // recovery file waits for it first (WaitRecoveryWrite), so a late write can't revive a snapshot
     // that a Save just cleared.
     std::future<bool> m_RecoveryWrite;
+    // Scene changes no undo step recorded since m_CurrentUndoScene was last taken from the World
+    // (an external rename rewriting references, a failed restore, ...). While non-zero, or while
+    // an outfit landing isn't in the baseline yet, the auto-save reads the World itself; otherwise
+    // it writes the baseline (the same bytes, without walking every entity on the UI thread).
+    unsigned m_ChangesOutsideUndo = 0;
+    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; }
+    bool UndoBaselineIsCurrent() const;
     void WaitRecoveryWrite();
     void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
@@ -2137,8 +2144,14 @@ private:
         std::string Label; // file name + "##" + path: same-named files in different folders stay distinct ImGui items
     };
     std::vector<AssetRefChoice> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // The material Shader dropdown's list: engine://Standard.shader, the engine's own shaders, then the
+    // project's under shaders/ and assets/ from the Asset Browser index (a disk walk only before the
+    // first scan lands; the walk over assets/ took ~80 ms on every open).
+    std::vector<std::string> ShaderChoices(AssetLibrary& assets);
     // The open Inspector asset combo's list: built when the combo opens, reused while it stays open.
     std::vector<AssetRefChoice> m_AssetRefChoiceCache;
+    // The open Joint "Connected" combo's rows (order, label): built when it opens, reused while it stays open.
+    std::vector<std::pair<int, std::string>> m_JointTargetChoices;
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
@@ -2422,6 +2435,9 @@ private:
     };
     mutable HierarchyOrderCache m_HierOrder;
     const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
+    // HierarchyOrderCache::Generation, the pairs re-checked at most once per ImGui frame (as HierarchyCreationOrdinal):
+    // with World::HierarchyVersion, what a cached tree of the scene is keyed on.
+    std::uint64_t HierarchyOrderGeneration(const World& world) const;
     // "Object 7" for an unnamed entity: its 1-based place in HierarchyCreationOrder (0 = not named).
     int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon

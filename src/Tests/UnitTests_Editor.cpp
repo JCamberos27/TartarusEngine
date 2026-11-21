@@ -22,6 +22,7 @@
 #include "../../extern/imcurve/imcurve_editor.hpp"
 #include <imgui_internal.h>
 #include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 #include <chrono>
 #include <cstring>
 #include <cstdio>
@@ -31,6 +32,7 @@ struct EditorHistoryTestAccess {
     static const std::vector<entt::entity>& Order(const EditorLayer& e,const World& w) {return e.HierarchyCreationOrder(w);}
     static int Ordinal(const EditorLayer& e,const World& w,entt::entity x) {return e.HierarchyCreationOrdinal(w,x);}
     static std::vector<entt::entity> Siblings(const EditorLayer& e,const World& w,entt::entity p) {return e.HierarchySiblingsInOrder(w,p);}
+    static void Reorder(EditorLayer& e,World& w,std::vector<entt::entity> m,entt::entity anchor,bool after) {e.ReorderHierarchySiblings(w,m,anchor,after,false);}
     static void Begin(EditorLayer& e,World& w,AssetLibrary& a) {e.m_AssetsPtr=&a;e.BeginGlobalUndoFrame(w);}
     static void Finish(EditorLayer& e,World& w) {e.FinishGlobalUndo(w,true);AtomicFile::SetChangeObserver({});}
     static void Edit(EditorLayer& e,World& w) {e.PushUndo(w,"Test edit");}
@@ -659,6 +661,33 @@ namespace {
 // --- UndoDelta chain: push three states, pop them back in reverse ---------------------------
 struct TestEntry { UndoDelta::Patch Delta; int Tag = 0; };
 
+// P-09: the auto-save writes the undo snapshot instead of reading the World. Stripped of its
+// undo-only keys and given Save()'s library half, it must be Save()'s file byte for byte, with every
+// optional key the snapshot can carry present (so a new undo-only key fails here, not in a user's file).
+void TestAutoSaveFromUndoSnapshot() {
+    World world;
+    AssetLibrary assets;
+    for (int i = 0; i < 4; ++i) world.CreateEmptyEntity({(float)i, 0.5f, -2.25f}, {}, {1, 1, 1}, "Autosave fixture " + std::to_string(i));
+    assets.AddFolderPath("unit-autosave/Sub"); // listed (so the snapshot has assetFolders), never written to project settings
+    assets.SetRemovedDiskFolders({"unit-autosave/Gone"}); // a Delete Folder mark (so the snapshot has removedDiskFolders)
+    const std::filesystem::path dir = UnitTestSupport::TempDir("autosave-snapshot");
+    const std::string fromSave = (dir / "save.json").string(), fromSnapshot = (dir / "snapshot.json").string();
+    CHECK(SceneSerializer::Save(world, assets, fromSave));
+    const std::string snapshot = SceneSerializer::SaveToString(world, assets);
+    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"assetFolders\"", "\"removedDiskFolders\"", "\"assetMeta\""})
+        CHECK(snapshot.find(key) != std::string::npos);
+    const std::function<bool()> write = SceneSerializer::PrepareSaveFromSnapshot(snapshot, assets, fromSnapshot);
+    CHECK(write && write());
+    const std::string want = UnitTestSupport::ReadAll(fromSave), got = UnitTestSupport::ReadAll(fromSnapshot);
+    CHECK(!want.empty() && got == want);
+    // A snapshot that won't parse writes nothing (and says so).
+    std::error_code ec;
+    std::filesystem::remove(fromSnapshot, ec);
+    const std::function<bool()> broken = SceneSerializer::PrepareSaveFromSnapshot("{not json", assets, fromSnapshot);
+    CHECK(broken && !broken() && !std::filesystem::exists(fromSnapshot));
+    std::filesystem::remove_all(dir, ec);
+}
+
 void TestUndoDeltaChain() {
     const std::string s1 = R"({"entities":[{"name":"A","x":1}],"sky":1})";
     const std::string s2 = R"({"entities":[{"name":"A","x":2}],"sky":1})";
@@ -738,6 +767,44 @@ void TestLruMap() {
 // The Hierarchy's cached creation order (kept between frames, re-sorted only when the
 // (OrderComponent, entity) pairs change) must still follow every create, destroy, slot reuse,
 // reorder and reparent, with no ImGui frame in between.
+// A parent's Children list follows the Hierarchy's order (OrderComponent): SetParent inserts in place, and a drag
+// reorder re-sorts it and bumps HierarchyVersion, so a LOD Group's levels are the rows in the order shown (they kept
+// the attach order until a save and reload), and caches keyed on the version rebuild.
+void TestHierarchyChildOrder() {
+    using X = EditorHistoryTestAccess;
+    World world; EditorLayer editor;
+    auto make = [&](const char* n) { return world.CreateEmptyEntity({}, {}, {1,1,1}, n); };
+    const entt::entity group = make("Group");
+    const entt::entity a = make("A"), b = make("B"), c = make("C");
+    auto kids = [&] { return world.Registry.get<HierarchyComponent>(group).Children; };
+    // Attached out of creation order: still listed in it.
+    CHECK(world.SetParent(c, group) && world.SetParent(a, group) && world.SetParent(b, group));
+    CHECK((kids() == std::vector<entt::entity>{a, b, c}));
+    world.AttachChildRaw(make("D"), group);
+    CHECK(kids().size() == 4 && kids().back() != a);
+    // The Hierarchy's drag reorder: C above A.
+    const std::uint64_t before = world.HierarchyVersion();
+    X::Reorder(editor, world, {c}, a, false);
+    CHECK((X::Siblings(editor, world, group) == std::vector<entt::entity>{c, a, b, kids().back()}));
+    const std::vector<entt::entity> now = kids();
+    CHECK((std::vector<entt::entity>(now.begin(), now.begin() + 3) == std::vector<entt::entity>{c, a, b}));
+    CHECK(world.HierarchyVersion() != before);
+    // Already in order: no bump.
+    const std::uint64_t after = world.HierarchyVersion();
+    world.SortChildrenByOrder(group);
+    CHECK(world.HierarchyVersion() == after);
+    // A LOD Group's LOD 0 is now C: a renderer only on C shows up close.
+    world.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    for (entt::entity e : kids()) world.Registry.emplace<RenderableComponent>(e);
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    CHECK(world.ApplyLod(glm::vec3(0.0f, 0.0f, 1.0f), proj) == 1);
+    CHECK(!world.IsLodCulled(c) && world.IsLodCulled(a) && world.IsLodCulled(b));
+    // A raw entity (no OrderComponent) attached later goes last, not to LOD 0.
+    const entt::entity raw = world.Registry.create();
+    world.AttachChildRaw(raw, group);
+    CHECK(kids().back() == raw && kids().front() == c);
+}
+
 void TestHierarchyCreationOrderCache() {
     using X = EditorHistoryTestAccess;
     World world; EditorLayer editor;
@@ -777,6 +844,7 @@ void TestHierarchyCreationOrderCache() {
 
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
+    tests.emplace_back("Hierarchy child order: Children follow OrderComponent, a reorder bumps the version and moves LOD levels",TestHierarchyChildOrder);
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
     tests.emplace_back("Script IDE text editing, completion undo and source preservation",TestScriptIDETextEditing);
@@ -791,5 +859,6 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
     tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
+    tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
 }

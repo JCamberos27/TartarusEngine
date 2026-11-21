@@ -207,6 +207,15 @@ void MarkVariants(const Wardrobe& w, std::vector<Item>& items);
 int DefaultLayer(const std::string& slot);
 bool DefaultHides(const std::string& slot);
 
+// The part a race's head (RaceDef::Head) is built as: the one body part that is also head-attached, so the scene
+// code finds it by its piece flags (OutfitPieceBodyPart | OutfitPieceHeadAttached), not by this name.
+inline constexpr const char* kHeadPart = "Head";
+
+// A slot an outfit can't do without: every Randomize style open to `g` always fills it (fill >= 1), e.g. Quantum's
+// tops, pants and shoes. A gender switch keeps such a slot filled with the closest cut even when nothing is close.
+// False when the wardrobe has no style for `g`.
+bool Essential(const Wardrobe& w, const std::string& slot, Gender g);
+
 // Where a worn piece sits: its layer (after the rules), whether it hides, the slots it hides regardless.
 struct Layering {
     int Layer = 0;
