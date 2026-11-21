@@ -63,6 +63,7 @@
     /* Traces and probes */                                                                                             \
     X(FoleyFeetLog, "FOLEY_FEET_LOG", Flag, "trace footstep foley")                                                    \
     X(MoverTrace, "MOVER_TRACE", Flag, "unit tests: trace the character mover")                                       \
+    X(MicroBench, "TARTARUS_MICROBENCH", Flag, "unit tests: print opt-in micro-timings")                              \
     X(PumpTrace, "TARTARUS_PUMP_TRACE", Flag, "trace the asset library pump")                                         \
     X(ProbeLog, "TARTARUS_PROBE_LOG", Flag, "log reflection probe captures")                                          \
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \

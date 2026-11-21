@@ -21,6 +21,7 @@ std::thread g_Worker;
 std::atomic<bool> g_Building{false}, g_Finished{false};
 bool g_Succeeded = false, g_Ready = false;
 std::string g_Log;
+std::vector<fs::path> g_Moved; // the files Request moved to <file>.old (main thread only)
 
 fs::path ExePath() {
     std::wstring buffer(MAX_PATH, L'\0');
@@ -31,15 +32,6 @@ fs::path ExePath() {
         buffer.resize(buffer.size() * 2);
     }
 }
-fs::path OldExePath(const fs::path& exe) { fs::path old = exe; old += L".old"; return old; }
-
-// Puts the exe name back when the build left no new exe (failed, or never ran).
-void RestoreExeName(const fs::path& exe) {
-    std::error_code ec;
-    const fs::path old = OldExePath(exe);
-    if (!fs::exists(exe, ec) && fs::exists(old, ec)) fs::rename(old, exe, ec);
-}
-
 // TARTARUS_RESTART_FAKE_BUILD=ok|fail (the hotreload smoke case): no CMake, the exe is never moved, and
 // Relaunch starts nothing (the state file stays for the test to read).
 std::string FakeBuild() { return Env::Str(Env::Var::RestartFakeBuild); }
@@ -62,6 +54,50 @@ void Run(fs::path exe) {
     g_Finished = true;
 }
 } // namespace
+
+fs::path OldPath(const fs::path& file) { fs::path old = file; old += L".old"; return old; }
+
+std::vector<fs::path> LockedFiles(const fs::path& exe) {
+    const fs::path dir = exe.parent_path();
+    return {exe, dir / L"TartarusCore.dll", dir / L"glfw3.dll"};
+}
+
+std::vector<fs::path> MoveAside(const std::vector<fs::path>& files, std::string& error) {
+    std::vector<fs::path> moved;
+    for (const fs::path& f : files) {
+        std::error_code ec;
+        if (!fs::exists(f, ec)) continue; // e.g. no core DLL in a TARTARUS_CORE_DLL=OFF build
+        fs::remove(OldPath(f), ec); // a stale one from an earlier restart
+        ec.clear();
+        fs::rename(f, OldPath(f), ec);
+        if (ec) {
+            error = f.filename().u8string() + ": " + ec.message();
+            PutBack(moved);
+            return {};
+        }
+        moved.push_back(f);
+    }
+    return moved;
+}
+
+void PutBack(const std::vector<fs::path>& moved) {
+    for (const fs::path& f : moved) {
+        std::error_code ec;
+        if (!fs::exists(OldPath(f), ec)) continue;
+        fs::remove(f, ec); // a half-built new copy: an old exe must not load a new core DLL
+        fs::rename(OldPath(f), f, ec);
+    }
+}
+
+bool FillMissing(const std::vector<fs::path>& moved) {
+    bool all = true;
+    for (const fs::path& f : moved) {
+        std::error_code ec;
+        if (!fs::exists(f, ec)) fs::copy_file(OldPath(f), f, ec);
+        all = all && fs::exists(f, ec);
+    }
+    return all;
+}
 
 bool Available() { return UnavailableReason().empty(); }
 
@@ -90,15 +126,16 @@ bool Request() {
     }
     if (g_Worker.joinable()) g_Worker.join();
     const fs::path exe = ExePath();
-    const fs::path old = OldExePath(exe);
-    std::error_code ec;
-    fs::remove(old, ec); // a stale one from an earlier restart
-    ec.clear();
-    if (FakeBuild().empty()) fs::rename(exe, old, ec);
-    if (ec) {
-        Log::Error("Rebuild & Restart: couldn't move the running exe aside (" + ec.message() + ").");
-        EditorSound::Play(EditorSound::Event::BuildFail);
-        return false;
+    g_Moved.clear();
+    if (FakeBuild().empty()) {
+        std::string error;
+        g_Moved = MoveAside(LockedFiles(exe), error);
+        if (g_Moved.empty()) {
+            Log::Error("Rebuild & Restart: couldn't move the running exe and its DLLs aside (" +
+                       (error.empty() ? std::string("no exe") : error) + ").");
+            EditorSound::Play(EditorSound::Event::BuildFail);
+            return false;
+        }
     }
     g_Ready = false; g_Finished = false; g_Building = true;
     GameModuleBuild::Hold(true); // one cmake at a time on the build tree
@@ -114,19 +151,17 @@ void Poll() {
     if (!g_Building || !g_Finished) return;
     g_Worker.join();
     g_Building = false;
-    const fs::path exe = ExePath();
-    std::error_code ec;
     bool ok;
     { std::lock_guard<std::mutex> lock(g_Mutex); ok = g_Succeeded; }
-    // An up-to-date build may not relink: the exe is the same code, so the old copy stands in.
-    if (ok && !fs::exists(exe, ec)) fs::copy_file(OldExePath(exe), exe, ec);
-    if (ok && fs::exists(exe, ec)) {
+    // An up-to-date build may not relink a file (or copy glfw3.dll): it's the same code, so the old copy stands in.
+    if (ok && FillMissing(g_Moved)) {
         g_Ready = true;
         EditorSound::Play(EditorSound::Event::BuildSuccess);
         Log::Info("Rebuild & Restart: build finished, restarting.");
         return;
     }
-    RestoreExeName(exe);
+    PutBack(g_Moved);
+    g_Moved.clear();
     GameModuleBuild::Hold(false);
     EditorSound::Play(EditorSound::Event::BuildFail);
     Log::Error("Rebuild & Restart: the build failed; the editor keeps running. Log: " +
@@ -208,8 +243,10 @@ bool CleanupAtStartup(unsigned long waitPid, unsigned long timeoutMs) {
     }
     const fs::path exe = ExePath();
     if (exe.empty()) return exited;
-    std::error_code ec;
-    fs::remove(OldExePath(exe), ec); // fails harmlessly while another copy still runs from it
+    for (const fs::path& f : LockedFiles(exe)) {
+        std::error_code ec;
+        fs::remove(OldPath(f), ec); // fails harmlessly while another copy still runs from it
+    }
     return exited;
 }
 
@@ -219,7 +256,13 @@ fs::path StateFile() {
 
 void Shutdown() {
     if (g_Worker.joinable()) g_Worker.join();
-    if (g_Building) RestoreExeName(ExePath());
+    if (g_Building) {
+        bool ok;
+        { std::lock_guard<std::mutex> lock(g_Mutex); ok = g_Succeeded; }
+        // Closing while the build finished unseen: keep a good build (filling gaps), else the old set.
+        if (!(ok && FillMissing(g_Moved))) PutBack(g_Moved);
+        g_Moved.clear();
+    }
     g_Building = false;
     g_Ready = false;
 }

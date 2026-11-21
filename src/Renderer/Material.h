@@ -10,6 +10,7 @@
 #include "ShaderPropType.h"
 #include "Substrate.h"
 #include "TimeService.h"
+#include "../Core/CoreApi.h"
 
 class Texture;
 
@@ -301,9 +302,11 @@ private:
     mutable HashCache m_ExtraHashCache;
     mutable HashCache m_VariantCache; // a copy drops it (HashCache), so the owner below needs no reset
     mutable const void* m_VariantOwner = nullptr;
-    inline static std::uint32_t s_HashFrame = 1;
-    inline static float s_WindTime = 0.0f;
-    inline static float s_PrevWindTime = 0.0f;
-    inline static glm::vec2 s_WindDir{0.8f, 0.6f}; // world XZ, unit length
-    inline static WindField s_Wind{};
+    // Defined in Material.cpp, not inline here: with the core built as TartarusCore.dll an inline static gets one
+    // copy per module that reads it, so the frame stamp and the wind would differ between the DLL and the exe.
+    static TARTARUS_CORE_API std::uint32_t s_HashFrame;
+    static TARTARUS_CORE_API float s_WindTime;
+    static TARTARUS_CORE_API float s_PrevWindTime;
+    static TARTARUS_CORE_API glm::vec2 s_WindDir; // world XZ, unit length
+    static TARTARUS_CORE_API WindField s_Wind;
 };
