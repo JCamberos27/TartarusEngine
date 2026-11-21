@@ -741,12 +741,12 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_CODE "  Rebuild Game & Editor Modules", nullptr, false,
-                                GameModuleBuild::Available() && !GameModuleBuild::Running()))
+                                GameModuleBuild::CanRebuild() && !GameModuleBuild::Running()))
                 GameModuleBuild::Start();
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip(GameModuleBuild::Available()
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("%s", GameModuleBuild::CanRebuild()
                     ? "Compiles TartarusGame and TartarusEditor; the running editor hot reloads them."
-                    : "Needs the engine's source checkout and CMake build folder.");
+                    : GameModuleBuild::RebuildUnavailableReason().c_str());
             // Same path as the window's close button, so unsaved changes still prompt first.
             if (ImGui::MenuItem(ICON_FA_RIGHT_FROM_BRACKET "  Exit", "Alt+F4") && m_Window)
                 glfwSetWindowShouldClose(m_Window, GLFW_TRUE);

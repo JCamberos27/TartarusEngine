@@ -211,7 +211,7 @@ struct ScriptIDE::Impl {
     void AfterSave(const Document& doc) {
         const auto file=fs::u8path(doc.Path);
         if(doc.Type==Kind::Cpp) {
-            if(GameModuleBuild::IsReloadableSource(file)){GameModuleBuild::Request();Status="Saved "+file.filename().u8string()+"; rebuilding the modules for hot reload.";}
+            if(GameModuleBuild::IsReloadableSource(file) && GameModuleBuild::CanRebuild()){GameModuleBuild::Request();Status="Saved "+file.filename().u8string()+"; rebuilding the modules for hot reload.";}
             else Status="Saved "+file.filename().u8string()+". It is part of the editor executable: rebuild and restart to use it.";
         } else if(doc.Type==Kind::Shader)Status="Saved "+file.filename().u8string()+"; shaders reload on their own.";
         else Status="Saved "+file.filename().u8string()+".";
@@ -380,7 +380,7 @@ struct ScriptIDE::Impl {
         }
         dl->PopClipRect();
     }
-    void Build() {if(!SaveAll())return;if(!GameModuleBuild::Available()){Status="Module rebuilds need the engine's source checkout and CMake build folder.";return;}GameModuleBuild::Request();}
+    void Build() {if(!SaveAll())return;if(!GameModuleBuild::CanRebuild()){Status=GameModuleBuild::RebuildUnavailableReason();return;}GameModuleBuild::Request();}
     void Draw();
     // Draw's parts, top to bottom: menu bar and shortcuts, the sources list, the conflict / find bar,
     // the code tabs over the build information, then the popups and the unsaved-changes prompt.
@@ -440,8 +440,8 @@ void ScriptIDE::Impl::DrawMenuBar(bool focused) {
             if(ImGui::MenuItem("Find in project","Ctrl+Shift+F"))ProjectFind=true;ImGui::EndMenu();
         }
         if(ImGui::BeginMenu("Build")) {
-            if(ImGui::MenuItem("Save All & Rebuild Modules","F6",false,GameModuleBuild::Available()))Build();
-            if(!GameModuleBuild::Available() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("Needs the engine's source checkout and CMake build folder.");
+            if(ImGui::MenuItem("Save All & Rebuild Modules","F6",false,GameModuleBuild::CanRebuild()))Build();
+            if(!GameModuleBuild::CanRebuild() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("%s",GameModuleBuild::RebuildUnavailableReason().c_str());
             ImGui::EndMenu();
         }
         if(ImGui::BeginMenu("Appearance")) {
@@ -539,7 +539,7 @@ void ScriptIDE::Impl::DrawCodeAndInformation(float scale,float divider) {
     ImGui::BeginChild("InformationPane",ImVec2(0,0));
     ImGui::PopStyleVar();
     const bool compileErrors=std::any_of(BuildProblems.begin(),BuildProblems.end(),[](const Json& d){return d["severity"]=="error";});
-    ImGui::TextDisabled("%s",GameModuleBuild::Running()?"Rebuilding modules...":!GameModuleBuild::Available()?"Module rebuilds unavailable (no source checkout)":
+    ImGui::TextDisabled("%s",GameModuleBuild::Running()?"Rebuilding modules...":!GameModuleBuild::Available()?"Module rebuilds unavailable (no source checkout)":!GameModuleBuild::CanRebuild()?"Module rebuilds unavailable (exe outside its build folder)":
                              compileErrors || !GameModuleBuild::LastSucceeded()?"Build failed - check Problems":"Modules ready");
     if(!Status.empty())ImGui::TextWrapped("%s",Status.c_str());
     if(ImGui::BeginTabBar("IDEInformation")) {
