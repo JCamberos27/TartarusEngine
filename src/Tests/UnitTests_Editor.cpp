@@ -8,6 +8,7 @@
 #include "LruMap.h"
 #include "RestartState.h"
 #include "EditorRestart.h"
+#include "EditorFileStat.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -846,6 +847,33 @@ void TestHierarchyCreationOrderCache() {
 
 // Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
 // selection comes back by order + name (a renamed or missing entity drops out).
+// P-24: the Inspector's per-frame exists / mtime checks hit the disk at most once per kMaxAge per path.
+void TestEditorFileStatCache() {
+    namespace FS = EditorFileStat;
+    const auto dir = UnitTestSupport::TempDir("editor_file_stat");
+    const auto file = dir / "a.txt";
+    std::error_code ec;
+    std::filesystem::remove(file, ec);
+    FS::Clear();
+    const auto t0 = FS::Clock::now();
+    const std::uint64_t r0 = FS::DiskReads();
+    CHECK(!FS::Get(file, t0).Exists);
+    for (int i = 0; i < 100; ++i) CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(i)).Exists); // 100 "frames"
+    CHECK(FS::DiskReads() - r0 == 1);
+    { std::ofstream(file) << "x"; }
+    CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(100)).Exists);            // still cached
+    CHECK(FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(1)).Exists); // re-read once it ages out
+    CHECK(FS::DiskReads() - r0 == 2);
+    const auto stamp = FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(2)).WriteTime;
+    CHECK(stamp == std::filesystem::last_write_time(file, ec));
+    std::filesystem::remove(file, ec);
+    CHECK(!FS::Refresh(file, t0 + FS::kMaxAge + std::chrono::milliseconds(3)).Exists); // own write: fresh at once
+    CHECK(FS::DiskReads() - r0 == 3);
+    CHECK(!FS::Get(std::filesystem::path(), t0).Exists);
+    CHECK(FS::DiskReads() - r0 == 3); // an empty path never touches the disk
+    FS::Clear();
+}
+
 void TestRestartStateRoundTrip() {
     namespace RS = RestartState;
     const auto file = UnitTestSupport::TempDir("restart_state") / "restart_state.json";
@@ -919,6 +947,7 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
+    tests.emplace_back("Editor file stat cache: one disk read per path per half second, Refresh after own writes",TestEditorFileStatCache);
     tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
     tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
 }
