@@ -73,6 +73,22 @@ void ReportSunTris(const std::vector<DepthCaster>& draws, int cascadeCount) {
 
 } // namespace
 
+// A change signature, not an identity: 64-bit words through a multiply-xorshift mix. Every material slot counts: a
+// colourway swaps one slot in place (same count), and its cutout or cull state changes the depth.
+std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::vector<std::shared_ptr<MaterialAsset>>& materials,
+                              const glm::mat4& xform, unsigned visibleId, bool twoSided) {
+    std::uint64_t h = kFnvOffset;
+    h = HashWord(h, id);
+    h = HashWord(h, (std::uint64_t)(std::uintptr_t)model);
+    h = HashWord(h, (std::uint64_t)materials.size());
+    for (const auto& m : materials) h = HashWord(h, (std::uint64_t)(std::uintptr_t)m.get());
+    std::uint64_t xw[8];
+    std::memcpy(xw, &xform, sizeof xw);
+    for (const std::uint64_t w : xw) h = HashWord(h, w);
+    h = HashWord(h, visibleId); // the outfit's hidden-triangle set
+    return HashWord(h, twoSided ? 1u : 0u);
+}
+
 // #109 - the sun's cascades are fitted to the view being RENDERED, per drawScene(): they used to be fitted once per
 // frame to one camera while both the Scene and Game views sampled them, so the other view had missing or blurry
 // shadows. In the default layout Scene and Game are tabs and only one renders per frame, so this costs nothing extra;
@@ -438,17 +454,7 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
         lc.settling = !lc.moving && !lc.animated && now - lc.settleStart < kSettleFrames;
         lc.bounded = v.Bounded; // as posed, like the main pass
         lc.bounds = AABB{v.WorldMin, v.WorldMax};
-        // A change signature, not an identity: 64-bit words through a multiply-xorshift mix.
-        std::uint64_t h = kFnvOffset;
-        h = HashWord(h, lc.id);
-        h = HashWord(h, (std::uint64_t)(std::uintptr_t)lc.model);
-        h = HashWord(h, (std::uint64_t)(std::uintptr_t)(lc.materials->empty() ? nullptr : lc.materials->front().get()));
-        h = HashWord(h, (std::uint64_t)lc.materials->size());
-        std::uint64_t xw[8];
-        std::memcpy(xw, &lc.xform, sizeof xw);
-        for (const std::uint64_t w : xw) h = HashWord(h, w);
-        h = HashWord(h, lc.visible ? (std::uint64_t)lc.visible->Id() : 0u); // the outfit's hidden-triangle set
-        lc.hash = HashWord(h, lc.twoSided ? 1u : 0u);
+        lc.hash = LocalCasterHash(lc.id, lc.model, *lc.materials, lc.xform, lc.visible ? lc.visible->Id() : 0u, lc.twoSided);
     }
     // Drop the records of casters gone for a while so the map doesn't grow across scene loads.
     if ((now & 255) == 0)
