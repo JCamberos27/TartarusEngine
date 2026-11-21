@@ -11,6 +11,10 @@
 #include "EditorRestart.h"
 #include "GameModuleBuild.h"
 #include "EditorFileStat.h"
+#include "DecalAssetCache.h"
+#include "DecalAsset.h"
+#include "AssetDatabase.h"
+#include <unordered_map>
 #include "Core/Env.h"
 #include "World.h"
 #include "AssetLibrary.h"
@@ -1027,6 +1031,87 @@ void TestEditorFileStatCache() {
     FS::Clear();
 }
 
+// P-27: the Asset Browser's decal tiles ask the .decal cache every frame. A repeat ask touches no disk
+// and makes no path; the once-a-second re-checks are spread at most kStatsPerFrame per frame.
+void TestDecalAssetCacheStagger() {
+    namespace DC = DecalAssetCache;
+    const auto dir = UnitTestSupport::TempDir("decal_asset_cache");
+    static constexpr int kTiles = 20;
+    std::vector<std::string> paths;
+    for (int i = 0; i < kTiles; ++i) {
+        DecalAsset d;
+        d.Path = (dir / ("DA_T" + std::to_string(i) + ".decal")).generic_u8string();
+        d.Name = "DA_T" + std::to_string(i);
+        d.AlbedoPath = "assets/Decals/T_" + std::to_string(i) + ".png";
+        CHECK(d.Save());
+        paths.push_back(d.Path);
+    }
+    DC::Clear();
+    const auto t0 = DC::Clock::now();
+    const std::uint64_t s0 = DC::DiskStats(), l0 = DC::Loads();
+    for (const auto& p : paths) { // first frame: every tile reads its file (never budgeted)
+        const DC::Hit h = DC::Get(p, 1, t0);
+        CHECK(h.Asset && h.AlbedoAbs && std::filesystem::u8path(*h.AlbedoAbs).is_absolute());
+    }
+    CHECK(DC::DiskStats() - s0 == kTiles);
+    CHECK(DC::Loads() - l0 == kTiles);
+    for (int f = 2; f < 60; ++f) // the next second: no disk at all
+        for (const auto& p : paths) DC::Get(p, (std::uint64_t)f, t0 + std::chrono::milliseconds(f * 16));
+    CHECK(DC::DiskStats() - s0 == kTiles);
+    // A second on, the re-checks come kStatsPerFrame per frame instead of all in one.
+    const auto t1 = t0 + DC::kMaxAge + std::chrono::milliseconds(1);
+    std::uint64_t before = DC::DiskStats();
+    int frames = 0, maxPerFrame = 0;
+    for (std::uint64_t f = 100; DC::DiskStats() - s0 < 2 * kTiles && frames < 50; ++f, ++frames) {
+        for (const auto& p : paths) DC::Get(p, f, t1 + std::chrono::milliseconds(frames));
+        maxPerFrame = std::max(maxPerFrame, (int)(DC::DiskStats() - before));
+        before = DC::DiskStats();
+    }
+    CHECK(maxPerFrame == DC::kStatsPerFrame);
+    CHECK(frames == kTiles / DC::kStatsPerFrame);
+    CHECK(DC::Loads() - l0 == kTiles); // nothing changed on disk: nothing re-read
+    // An edit shows once its entry is re-checked; force (the editor's own write) reads at once.
+    {
+        auto d = DecalAsset::Load(paths[0]);
+        d->AlbedoPath = "assets/Decals/T_new.png";
+        CHECK(d->Save());
+        std::error_code ec;
+        std::filesystem::last_write_time(std::filesystem::u8path(paths[0]),
+                                         std::filesystem::last_write_time(std::filesystem::u8path(paths[0]), ec) + std::chrono::seconds(5), ec);
+    }
+    const DC::Hit forced = DC::Get(paths[0], 200, t1 + std::chrono::milliseconds(100), true);
+    CHECK(DC::Loads() - l0 == kTiles + 1);
+    CHECK(forced.AlbedoAbs->find("T_new.png") != std::string::npos);
+    CHECK(!DC::Get(std::string(), 200).Asset);
+
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): one tile's per-frame cost before (resolve the
+    // path, lower-case key, map lookup, resolve + copy the albedo path) and now (one lookup, no allocation).
+    if (Env::Flag(Env::Var::MicroBench)) {
+        using C = std::chrono::steady_clock;
+        static constexpr int kN = 20000; // static: the lambda below reads it without a capture (MSVC)
+        auto us = [](C::duration dd) { return std::chrono::duration<double, std::micro>(dd).count() / kN; };
+        const std::string rel = ProjectPaths::Relativize(paths[1]);
+        std::unordered_map<std::string, int> old;
+        old[AssetDatabase::PathKey(ProjectPaths::Resolve(rel))] = 1;
+        size_t sink = 0;
+        auto b0 = C::now();
+        for (int i = 0; i < kN; ++i) {
+            const std::string abs = std::filesystem::u8path(rel).is_absolute() ? rel : ProjectPaths::Resolve(rel);
+            sink += old.count(AssetDatabase::PathKey(abs));
+            sink += ProjectPaths::Resolve("assets/Decals/T_1.png").size();
+        }
+        const double oldUs = us(C::now() - b0);
+        const auto tb = DC::Clock::now();
+        DC::Get(rel, 300, tb);
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += DC::Get(rel, 300, tb).AlbedoAbs->size();
+        const double newUs = us(C::now() - b0);
+        std::printf("[MicroBench] decal tile lookup: before %.3f us, after %.3f us; re-check stats in one frame: before %d (all visible), after %d (sink=%zu)\n",
+                    oldUs, newUs, kTiles, DC::kStatsPerFrame, sink);
+    }
+    DC::Clear();
+}
+
 // Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
 // selection comes back by order + name (a renamed or missing entity drops out).
 void TestRestartStateRoundTrip() {
@@ -1182,6 +1267,7 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
     tests.emplace_back("Editor file stat cache: one disk read per path per half second, Refresh after own writes",TestEditorFileStatCache);
+    tests.emplace_back("Decal asset cache: repeat asks touch no disk, re-checks spread over frames, force re-reads",TestDecalAssetCacheStagger);
     tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
     tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
     tests.emplace_back("Rebuild & Restart moves the exe and its DLLs aside as one set",TestRestartMoveAsideSet);

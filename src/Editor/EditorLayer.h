@@ -2677,7 +2677,7 @@ private:
     void DrawDecalComponentExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
     // `folder` is absolute; `texture` (optional) becomes the albedo and names the file.
     void CreateDecalAsset(World& world, AssetLibrary& assets, const std::string& folder, const std::string& texture);
-    std::string DecalThumbnailSource(const std::string& decalPath); // absolute albedo path, "" = none
+    const std::string& DecalThumbnailSource(const std::string& decalPath); // absolute albedo path, "" = none (use it before the file is re-read)
     // EditorLayer_Gizmos.cpp: what a dragged .decal is over, placing one, and Fit to Surface.
     struct DecalSpot {
         entt::entity Decal = entt::null; // a placed decal whose box the cursor ray enters first
