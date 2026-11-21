@@ -15,6 +15,7 @@
 #include "AssetLibrary.h"
 #include "World.h"
 #include "GameModuleBuild.h"
+#include "MotionRebake.h"
 #include "EditorRestart.h"
 #include "Camera.h"
 #include "Model.h"
@@ -572,6 +573,7 @@ void EditorLayer::Shutdown() {
     AssetChangeHooks::Unregister(m_UiStylesHook);
     m_UiStylesHook = 0;
     GameModuleBuild::Shutdown();
+    MotionRebake::Shutdown();
     EditorRestart::Shutdown(); // a restart build still running: wait, put the exe name back
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
@@ -3019,6 +3021,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditWorldPtr = &world;
     BeginGlobalUndoFrame(world);
     GameModuleBuild::Poll();
+    MotionRebake::Poll();
     EditorRestart::Poll();
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());

@@ -15,11 +15,13 @@
 #include "../Game/FirstPersonBody.h"
 #include "../Game/FirstPersonBodyMotion.h"
 #include "../Game/Player.h"
+#include "../Editor/MotionRebake.h"
 
 #include "Core/Paths.h"
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -970,9 +972,59 @@ void TestPredictAlong() {
     CHECK(std::fabs(MotionMath::WrapPi(out[2].Yaw - 1.5707963f)) < 0.05f);
     CHECK(glm::length(out[2].Position - there.Position) < 0.02f);
 }
+
+// Live rebake (hot reload): a rewritten database stays cached until Invalidate; after it, Get reads the new files while a
+// holder of the old load keeps its copy, and Generation moves (FirstPersonBodyMotion::Stale).
+void TestSharedDatabaseInvalidate() {
+    std::error_code ec;
+    const std::filesystem::path dir = UnitTestSupport::TempDir("mm_rebake");
+    std::filesystem::create_directories(dir, ec);
+    const std::string base = (dir / "Rebake").string();
+    const auto save = [&](const std::vector<TakeSpec>& takes) {
+        SynthDb s = Build(takes);
+        std::string err;
+        return s.Stream.Save(base + ".mmanim", &err) && s.Feat.Save(base + ".mmdb", &err);
+    };
+    std::vector<TakeSpec> takes = StandardTakes();
+    CHECK(save(takes));
+    auto first = SharedMotionDatabase::Get(base);
+    CHECK(first != nullptr);
+    if (!first) return;
+    const std::uint32_t before = first->Db.FrameCount();
+    CHECK(SharedMotionDatabase::Get(base) == first); // cached
+
+    takes.pop_back(); // a rebake with one take fewer
+    CHECK(save(takes));
+    CHECK(SharedMotionDatabase::Get(base) == first); // still the cached load until told
+    const std::uint64_t generation = SharedMotionDatabase::Generation();
+    // Another spelling of the same base (as the editor's file watcher reports it) drops it too.
+    std::string other = base;
+    for (char& c : other) c = c == '\\' ? '/' : (char)std::toupper((unsigned char)c);
+    SharedMotionDatabase::Invalidate(other);
+    CHECK(SharedMotionDatabase::Generation() == generation + 1);
+    auto second = SharedMotionDatabase::Get(base);
+    CHECK(second != nullptr && second != first);
+    CHECK(second && second->Db.FrameCount() < before);
+    CHECK(first->Db.FrameCount() == before); // the old holder's copy is untouched
+
+    // An unrelated base leaves the cache alone.
+    SharedMotionDatabase::Invalidate(base + "_other");
+    CHECK(SharedMotionDatabase::Get(base) == second);
+    first.reset();
+    second.reset();
+    std::filesystem::remove_all(dir, ec);
+
+    // What the editor's watcher hands the rebake.
+    std::string got;
+    CHECK(MotionRebake::IsConfig("assets/Animations/MotionMatching/Manny.mmconfig") && MotionRebake::IsConfig("X.MMCONFIG"));
+    CHECK(!MotionRebake::IsConfig("Manny.mmdb") && !MotionRebake::IsBakedDatabase("Manny.mmconfig"));
+    CHECK(MotionRebake::IsBakedDatabase("a/Manny.mmdb", &got) && got == "a/Manny");
+    CHECK(MotionRebake::IsBakedDatabase("a/Manny.mmanim", &got) && got == "a/Manny");
+}
 } // namespace
 
 void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Motion matching: shared database invalidate (live rebake)", TestSharedDatabaseInvalidate});
     tests.push_back({"Motion matching: database build and boxes", TestDatabaseBuild});
     tests.push_back({"Motion matching: search matches brute force", TestSearchMatchesBruteForce});
     tests.push_back({"Motion matching: search filters and ties", TestSearchFiltersAndTies});
