@@ -214,6 +214,7 @@ public:
     void EnsureNextOrderAtLeast(int value) { if (value > m_NextOrder) m_NextOrder = value; }
 
 private:
+    friend struct WorldLodTestAccess; // unit tests: reads the LOD records (src/Tests/UnitTests_Render.cpp)
     // Cycle guard for the parent-chain walks (the transform cache, LOD groups): no legitimate scene nests this
     // deep, so exceeding it means a malformed hierarchy, not a tall one.
     static constexpr size_t kMaxHierarchyDepth = 1024;
