@@ -266,7 +266,10 @@ int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
             selected.push_back(world.Registry.get<OrderComponent>(e).Value);
     }
     RestoreSelectionByOrder(world, selected);
-    m_CurrentUndoScene = snapshot; // what was just loaded: still the World
+    // The baseline is the World as it now saves: diffed against the new content, an override that
+    // now equals the file is gone (Apply to Prefab's own value). Left as the old snapshot, the next
+    // Undo journaled that difference as an unrecorded change and took back only that.
+    m_CurrentUndoScene = SceneSerializer::SaveToString(world, assets);
     m_ChangesOutsideUndo = 0;
     Log::Info("Updated " + std::to_string(instances) + " prefab instance" + (instances == 1 ? "" : "s") + " from " + names +
               " (their overrides kept).");
