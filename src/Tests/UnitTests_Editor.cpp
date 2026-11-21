@@ -1141,6 +1141,24 @@ void TestRestartStateRoundTrip() {
     std::filesystem::remove(file);
     CHECK(!RS::Load(file, now, &why) && why.find("no restart") != std::string::npos);
 
+    // The restarted editor's startup scene: the state's scene while it exists (a scene outside the project too),
+    // "" for an untitled one, none (the usual pick stands) when the file is stale/missing or the scene is gone.
+    const auto scene = file.parent_path() / "Outside Scene.json";
+    { std::ofstream(scene, std::ios::trunc) << "{}"; }
+    RS::State st;
+    st.ScenePath = scene.u8string();
+    CHECK(RS::Save(file, st));
+    CHECK(RS::StartupScene(file, now) == std::optional<std::string>(st.ScenePath));
+    CHECK(std::filesystem::exists(file)); // only read: ApplyRestartState deletes it
+    CHECK(!RS::StartupScene(file, now + RS::kMaxAgeSeconds + 5));
+    std::filesystem::remove(scene);
+    CHECK(!RS::StartupScene(file, now));
+    st.ScenePath.clear();
+    CHECK(RS::Save(file, st));
+    CHECK(RS::StartupScene(file, now) == std::optional<std::string>(std::string{}));
+    std::filesystem::remove(file);
+    CHECK(!RS::StartupScene(file, now));
+
     World world;
     const entt::entity a = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Alpha");
     const entt::entity b = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Beta");
