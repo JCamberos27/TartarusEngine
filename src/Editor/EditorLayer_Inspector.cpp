@@ -36,6 +36,7 @@
 #include "SetupChecksUI.h"
 #include "BodyDebugDraw.h"
 #include "EditorSettings.h"
+#include "EditorFileStat.h"   // cached exists / mtime for per-frame rows
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "ComponentRegistry.h"
@@ -1752,30 +1753,47 @@ static std::string MaterialShaderLabel(const std::string& reference) {
 }
 
 // Selection only: the caller stages its own scene/asset undo before applying the result.
-static bool MaterialShaderDropdown(const MaterialAsset& material, std::string& selected, bool mixed = false) {
+std::vector<std::string> EditorLayer::ShaderChoices(AssetLibrary& assets) {
+    std::vector<std::string> out = {"engine://Standard.shader"};
+    auto add = [&](std::string ref) {
+        if (std::find(out.begin(), out.end(), ref) == out.end()) out.push_back(std::move(ref));
+    };
+    const std::string engineDir = ShaderLibrary::Dir();
+    auto walk = [&](const std::string& dir, bool engine) {
+        std::error_code ec;
+        for (std::filesystem::recursive_directory_iterator it(std::filesystem::u8path(dir), std::filesystem::directory_options::skip_permission_denied, ec), end;
+             !ec && it != end; it.increment(ec)) {
+            if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
+            add(engine ? "engine://" + std::filesystem::relative(it->path(), dir).generic_string() : ProjectPaths::Relativize(it->path().string()));
+        }
+    };
+    walk(engineDir, true); // the engine's own folder: a few files
+    RefreshProjectAssetIndexIfNeeded(assets);
+    if (m_ProjectAssetIndex.files.empty()) { // no scan has landed yet
+        walk(ProjectPaths::Resolve("shaders"), false);
+        walk(ProjectPaths::Resolve("assets"), false);
+        return out;
+    }
+    for (const auto& f : m_ProjectAssetIndex.files) {
+        if (f.Kind != AssetGridCell::Kind::Shader) continue;
+        std::string ref = ProjectPaths::Relativize(f.Path);
+        if (ref.rfind("shaders/", 0) == 0 || ref.rfind("assets/", 0) == 0) add(std::move(ref)); // the folders the walk covered
+    }
+    return out;
+}
+
+static bool MaterialShaderDropdown(const MaterialAsset& material, std::string& selected, const std::function<std::vector<std::string>()>& listShaders,
+                                   bool mixed = false) {
     PropertyLabel("Shader");
     ImGui::SetNextItemWidth(-FLT_MIN);
     bool changed = false;
     if (ImGui::BeginCombo("##materialShader", mixed ? "(mixed)" : MaterialShaderLabel(material.ShaderPath).c_str())) {
-        // The shader files on disk, walked when the list opens (it walked the whole assets tree every frame it was open).
+        // The shader list, worked out when the list opens (EditorLayer::ShaderChoices).
         static std::vector<std::string> s_Found;
-        if (ImGui::IsWindowAppearing() || s_Found.empty()) {
-            s_Found = {"engine://Standard.shader"};
-            for (const std::string dir : {ShaderLibrary::Dir(), ProjectPaths::Resolve("shaders"), ProjectPaths::Resolve("assets")}) {
-                std::error_code ec;
-                for (std::filesystem::recursive_directory_iterator it(std::filesystem::u8path(dir), std::filesystem::directory_options::skip_permission_denied, ec), end;
-                     !ec && it != end; it.increment(ec)) {
-                    if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
-                    const auto ref = dir == ShaderLibrary::Dir() ? "engine://" + std::filesystem::relative(it->path(), dir).generic_string()
-                                                                 : ProjectPaths::Relativize(it->path().string());
-                    if (std::find(s_Found.begin(), s_Found.end(), ref) == s_Found.end()) s_Found.push_back(ref);
-                }
-            }
-        }
-        std::vector<std::string> shaders = s_Found;
-        if (!material.ShaderPath.empty() && std::find(shaders.begin(), shaders.end(), material.ShaderPath) == shaders.end())
-            shaders.push_back(material.ShaderPath);
-        for (const auto& ref : shaders) {
+        if (ImGui::IsWindowAppearing() || s_Found.empty()) s_Found = listShaders();
+        const bool listed = material.ShaderPath.empty() || std::find(s_Found.begin(), s_Found.end(), material.ShaderPath) != s_Found.end();
+        for (size_t i = 0, n = s_Found.size() + (listed ? 0 : 1); i < n; ++i) {
+            const std::string& ref = i < s_Found.size() ? s_Found[i] : material.ShaderPath;
             ImGui::PushID(ref.c_str());
             const bool active = material.ShaderPath == ref || (material.ShaderPath.empty() && ref == "engine://Standard.shader");
             if (ImGui::Selectable(MaterialShaderLabel(ref).c_str(), active)) { selected = ref; changed = true; }
@@ -1820,7 +1838,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
     };
 
     std::string shaderSelection;
-    if (MaterialShaderDropdown(*ma, shaderSelection) && ma->SetShader(shaderSelection, assets)) save();
+    if (MaterialShaderDropdown(*ma, shaderSelection, [&] { return ShaderChoices(assets); }) && ma->SetShader(shaderSelection, assets)) save();
     // (.mat asset edits save to disk; they aren't scene undo steps.)
     DrawMaterialProperties(world, assets, {&mat}, {ma.get()}, ma->Shader.get(), MaterialEdits{*this, world, save});
 }
@@ -2435,8 +2453,8 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             // identically to one pointing at a present file. Checked once here in the shared
             // renderer so every reflected asset field (Audio Source's Clip today, any future one)
             // gets it for free.
-            std::error_code existsEc; // the non-throwing overload: an odd path must not throw out of the frame
-            const bool missing = !mixed && !shared.empty() && !std::filesystem::exists(shared, existsEc);
+            // Cached (EditorFileStat): this row draws every frame; a deleted file shows within half a second.
+            const bool missing = !mixed && !shared.empty() && !EditorFileStat::Exists(std::filesystem::path(shared));
             const std::string preview = mixed ? "\xE2\x80\x94"
                 : (shared.empty() ? "(none)"
                    : (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string()) +
@@ -3662,7 +3680,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
         if (reflPfRevert) reflRemoved = true;
-        if (reflPfApply) SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name);
+        // The other instances gain the component when the scene's instances are rebuilt from the
+        // file (RefreshPrefabInstances, at the next project sync).
+        if (reflPfApply && SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name))
+            for (entt::entity cur = entity; cur != entt::null && registry.valid(cur);) {
+                if (const auto* pi = registry.try_get<PrefabInstanceComponent>(cur)) { QueuePrefabRefresh(pi->SourcePath, /*joinUndo*/true); break; }
+                const auto* h = registry.try_get<HierarchyComponent>(cur);
+                cur = h ? h->Parent : entt::null;
+            }
         if (reflReset) {
             PushUndo(world, std::string("Reset ") + rc.Meta.Name);
             rc.Add(registry, entity); // emplace_or_replace -> back to default-constructed
@@ -4746,27 +4771,18 @@ void EditorLayer::DrawComponentBackFace(World& world, entt::entity entity, const
 }
 
 namespace {
-// Apply to Prefab, then bring along every other instance of the same .prefab that wasn't
-// overriding the field: left alone, they kept the old value, which now differs from the file, so
-// the next scene save (or undo snapshot) stored it as an override and they never updated.
-void ApplyPrefabFieldToInstances(World& world, AssetLibrary* assets, entt::entity entity,
-                                 const char* component, const char* field) {
+// Apply to Prefab. Returns the .prefab written (empty when nothing was): the caller queues the
+// refresh that rebuilds every instance of it from the new file (EditorLayer::RefreshPrefabInstances),
+// so the instances that weren't overriding the field pick the value up and the ones that were keep
+// theirs. Left alone, they kept the old value, which the next save stored as an override.
+std::string ApplyPrefabFieldToInstances(World& world, entt::entity entity, const char* component, const char* field) {
     std::string source;
     for (entt::entity cur = entity; cur != entt::null && world.Registry.valid(cur);) {
         if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(cur)) { source = pi->SourcePath; break; }
         const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
         cur = h ? h->Parent : entt::null;
     }
-    std::vector<entt::entity> followers;
-    if (assets && !source.empty())
-        for (auto [root, pi] : world.Registry.view<const PrefabInstanceComponent>().each())
-            if (pi.SourcePath == source)
-                for (entt::entity e : pi.InstanceEntities)
-                    if (e != entity && e != entt::null && world.Registry.valid(e) &&
-                        !SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
-                        followers.push_back(e);
-    if (!SceneSerializer::ApplyPrefabField(world, entity, component, field)) return;
-    for (entt::entity e : followers) SceneSerializer::RevertPrefabField(world, *assets, e, component, field);
+    return SceneSerializer::ApplyPrefabField(world, entity, component, field) ? source : std::string();
 }
 } // namespace
 
@@ -4783,7 +4799,7 @@ void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char*
     }
     if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab")) {
         PushUndo(world, "Apply to Prefab"); // one step with the .prefab write, which the file journal joins
-        ApplyPrefabFieldToInstances(world, m_AssetsPtr, entity, component, field);
+        if (const std::string src = ApplyPrefabFieldToInstances(world, entity, component, field); !src.empty()) QueuePrefabRefresh(src, /*joinUndo*/true);
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write this value into the .prefab file. Other instances that\n"
@@ -4817,7 +4833,7 @@ void EditorLayer::PrefabFieldMenuMulti(World& world, const std::vector<entt::ent
         PushUndo(world, "Apply to Prefab");
         for (entt::entity e : sel)
             if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
-                ApplyPrefabFieldToInstances(world, m_AssetsPtr, e, component, field);
+                if (const std::string src = ApplyPrefabFieldToInstances(world, e, component, field); !src.empty()) QueuePrefabRefresh(src, /*joinUndo*/true);
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write each selected instance's value into its .prefab file.\n"
@@ -5123,8 +5139,7 @@ void EditorLayer::DrawFirstPersonControllerExtra(World& world, entt::entity enti
     }
     if (fp->AnimationSet.empty()) return;
     const std::string path = std::filesystem::u8path(ProjectPaths::Resolve(fp->AnimationSet)).generic_u8string();
-    std::error_code ec;
-    const bool exists = std::filesystem::exists(std::filesystem::u8path(path), ec);
+    const bool exists = EditorFileStat::Exists(std::filesystem::u8path(path));
     ImGui::BeginDisabled(!exists);
     if (ActionButton(ICON_FA_CROSSHAIRS "  Edit Animation Set",
                      exists ? "Open this weapon's recoil, sway, bob, lean and IK tuning in the Inspector"
@@ -5451,6 +5466,7 @@ void EditorLayer::DrawColliderExtra(World& world, entt::entity entity, ReflectEx
         pm.FrictionCombine = col->FrictionCombine;
         pm.BounceCombine = col->BounceCombine;
         if (pm.SaveFile(ProjectPaths::Resolve(rel))) {
+            EditorFileStat::Refresh(std::filesystem::u8path(ProjectPaths::Resolve(rel))); // no stale "missing" for it
             PushUndo(world, "New Physic Material");
             col->Material = rel;
             Log::Info("Created Physic Material " + rel + ".");
@@ -5466,9 +5482,9 @@ void EditorLayer::DrawColliderExtra(World& world, entt::entity entity, ReflectEx
     static std::filesystem::file_time_type s_PmStamp;
     static PhysicMaterialAsset s_Pm;
     const std::string abs = ProjectPaths::Resolve(col->Material);
-    std::error_code ec;
-    const auto stamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
-    if (ec) {
+    const EditorFileStat::Info stat = EditorFileStat::Get(std::filesystem::u8path(abs)); // cached, see EditorFileStat.h
+    const auto stamp = stat.WriteTime;
+    if (!stat.Exists) {
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
                            "The material file is missing - this collider's own values are used.");
         return;
@@ -5504,7 +5520,7 @@ void EditorLayer::DrawColliderExtra(World& world, entt::entity entity, ReflectEx
                         col->Material.c_str());
     ImGui::Unindent();
     if (save) {
-        if (s_Pm.SaveFile(abs)) s_PmStamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
+        if (s_Pm.SaveFile(abs)) s_PmStamp = EditorFileStat::Refresh(std::filesystem::u8path(abs)).WriteTime;
         else Log::Error("Couldn't save " + col->Material + ".");
     }
 }
@@ -5521,28 +5537,35 @@ void EditorLayer::DrawJointExtra(World& world, entt::entity entity, ReflectExtra
     if (!joint) return;
 
     PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
+    // The target's name through the order -> entity map (a walk over every entity each frame cost ~0.6 ms on the Forest).
     std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
-    for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-        if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
-            const std::string& nm = registry.get<const NameComponent>(oe).Name;
-            if (!nm.empty()) preview = nm;
-            break;
-        }
-    }
+    if (const entt::entity target = FindEntityByOrder(world, joint->ConnectedOrder); target != entt::null)
+        if (const auto* nm = registry.try_get<const NameComponent>(target); nm && !nm->Name.empty()) preview = nm->Name;
     if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
         if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
             PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
         }
-        for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-            if (oe == entity) continue;
-            const int ord = registry.get<const OrderComponent>(oe).Value;
-            const std::string& nm = registry.get<const NameComponent>(oe).Name;
-            std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
-            lbl += "##" + std::to_string(ord); // same-named objects are distinct items
-            if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
-                PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+        // Rows built once per open, only the visible ones submitted (every entity's label each frame: ~46 ms on the Forest).
+        if (ImGui::IsWindowAppearing()) {
+            m_JointTargetChoices.clear();
+            for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+                if (oe == entity) continue;
+                const int ord = registry.get<const OrderComponent>(oe).Value;
+                const std::string& nm = registry.get<const NameComponent>(oe).Name;
+                std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
+                lbl += "##" + std::to_string(ord); // same-named objects are distinct items
+                m_JointTargetChoices.emplace_back(ord, std::move(lbl));
             }
         }
+        ImGuiListClipper clipper;
+        clipper.Begin((int)m_JointTargetChoices.size());
+        while (clipper.Step())
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const auto& [ord, lbl] = m_JointTargetChoices[(size_t)i];
+                if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
+                    PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+                }
+            }
         ImGui::EndCombo();
     }
 
@@ -5960,7 +5983,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             mats.push_back(&slot->Mat);
             matAssets.assign(1, slot.get());
             std::string shaderSelection;
-            if (MaterialShaderDropdown(*slot, shaderSelection)) {
+            if (MaterialShaderDropdown(*slot, shaderSelection, [&] { return ShaderChoices(assets); })) {
                 PushUndo(world, "Change Material Shader");
                 slot->SetShader(shaderSelection, assets);
             }
@@ -6109,7 +6132,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     for (const auto* material : matAssets)
         if (material->ShaderPath != matAssets.front()->ShaderPath) mixedShaders = true;
     std::string shaderSelection;
-    if (MaterialShaderDropdown(*matAssets.front(), shaderSelection, mixedShaders)) {
+    if (MaterialShaderDropdown(*matAssets.front(), shaderSelection, [&] { return ShaderChoices(assets); }, mixedShaders)) {
         PushUndo(world, "Change Material Shader");
         for (auto* material : matAssets) material->SetShader(shaderSelection, assets);
         mixedShaders = false;

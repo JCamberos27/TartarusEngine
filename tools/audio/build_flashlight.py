@@ -20,10 +20,10 @@ LICENSE = "Public domain (released by its author 'stephan', pdsounds.org; Wikime
 
 def main():
     entries = []
+    x = adsp.load(SOURCE)                    # one recording for all four clicks (adsp.cut records each click's use)
     for stem, starts in CLICKS.items():
         for n, t in enumerate(starts, 1):
             adsp.take_uses()
-            x = adsp.load(SOURCE)
             a = int(t * adsp.SR)
             w = np.abs(x[a:a + int(0.12 * adsp.SR)]).max(axis=1)
             peak = a + int(np.argmax(w))

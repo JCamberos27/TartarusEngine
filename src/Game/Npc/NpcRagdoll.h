@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -164,6 +165,9 @@ public:
         glm::vec3 P[kSnapBones];
         bool Has[kSnapBones] = {};
         bool Valid = false;
+        // The bones' node indices in the driver skeleton, looked up once per import (Model::ImportStamp; 0 = not yet).
+        std::uint64_t NodeStamp = 0;
+        int Node[kSnapBones] = {};
     };
     static void Capture(const NpcBody& body, BoneSnapshot& out);
     // Adds each part's own motion to parts[].Velocity / AngularVelocity: the finite difference of its pose over `dt`, from

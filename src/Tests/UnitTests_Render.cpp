@@ -10,6 +10,8 @@
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
 #include "../Renderer/ImpostorLibrary.h"
+#include "../Renderer/AssetCost.h"
+#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
 #include "../Renderer/Camera.h"
 #include "../Game/SkySettings.h"
@@ -1174,11 +1176,110 @@ void TestLodGroup() {
     CHECK(world.Registry.view<LodCulledTag>().empty());
 }
 
+// The asset cost table's LOD level of a renderer: the index of the LOD Group child it sits under (at any depth), -1
+// outside a group or under a fifth child or later; the nearest group wins when they nest.
+void TestAssetCostLodLevel() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    auto make = [&](const char* name, entt::entity parent) {
+        const entt::entity e = world.CreateEmptyEntity(zero, zero, one, name);
+        if (parent != entt::null) CHECK(world.SetParent(e, parent));
+        return e;
+    };
+    auto lod = [&](entt::entity e) { return AssetCost::LodLevelOf(world, (unsigned)entt::to_integral(e)); };
+    const entt::entity loose = make("Loose", entt::null);
+    const entt::entity group = make("Group", entt::null);
+    world.Registry.emplace<LODGroupComponent>(group);
+    entt::entity lv[5];
+    for (int i = 0; i < 5; ++i) lv[i] = make("LOD", group);
+    const entt::entity deep = make("Deep", make("Mid", lv[2]));
+    const entt::entity inner = make("Inner", lv[1]);
+    world.Registry.emplace<LODGroupComponent>(inner);
+    const entt::entity innerLv0 = make("InnerLOD0", inner);
+    const entt::entity innerLv1 = make("InnerLOD1", inner);
+    CHECK(lod(loose) == -1);
+    CHECK(lod(group) == -1);
+    CHECK(lod(lv[0]) == 0);
+    CHECK(lod(lv[3]) == 3);
+    CHECK(lod(lv[4]) == -1); // a fifth child: always drawn, not a level
+    CHECK(lod(deep) == 2);
+    CHECK(lod(inner) == 1);
+    CHECK(lod(innerLv0) == 0); // the nearest group decides
+    CHECK(lod(innerLv1) == 1);
+}
+
+// A model drawn during a phase and unloaded before the phase is written (Forest's play phase streams outfits) still
+// gets its row: the table keeps what it measured at draw time, never a pointer to the model.
+void TestAssetCostModelFreedBeforeWrite() {
+    const std::filesystem::path csv = std::filesystem::temp_directory_path() / "asset_cost_freed.csv";
+    std::error_code ec;
+    std::filesystem::remove(csv, ec);
+    CHECK(_putenv_s("TARTARUS_ASSET_COST", csv.string().c_str()) == 0);
+    World world;
+    auto model = std::make_unique<Model>("no/such/AssetCostFreed.fbx");
+    SceneDrawItem item{};
+    item.Ref = model.get();
+    item.Tris = 12;
+    item.SortId = 0xFFFFFFFFu;
+    const std::vector<SceneDrawItem> list{item};
+    AssetCost::NoteView(world, false, {&list});
+    model.reset();
+    AssetCost::WritePhase("freed.json", "play-max");
+    CHECK(_putenv_s("TARTARUS_ASSET_COST", "") == 0);
+    std::ifstream in(csv);
+    std::string line, row;
+    while (std::getline(in, line))
+        if (line.find("AssetCostFreed.fbx") != std::string::npos) row = line;
+    in.close();
+    CHECK(row.find("\"freed.json\",play-max,game-view,model,") == 0);
+    CHECK(row.find(",-1,1,12.0,12,1.00,12,0.000,") != std::string::npos);
+    std::filesystem::remove(csv, ec);
+}
+} // namespace
+// Reads World's LOD records for the structure-patch test's oracle (outside the unnamed namespace: World's friend).
+struct WorldLodTestAccess {
+    // What the records say a renderer should be: culled when a group above it tags the child on the path down to it
+    // (neither the level it shows nor the one fading out); fading out (-1) or in (+1) when exactly one group above it
+    // is cross-fading and the path goes through that group's old or new level, 0 when none is; 2 when several are
+    // (the last fade written wins, so the test doesn't check those).
+    static void Expect(const World& world, entt::entity e, bool& culled, int& fade) {
+        culled = false;
+        fade = 0;
+        int fades = 0;
+        entt::entity child = e;
+        for (size_t depth = 0; depth <= World::kMaxHierarchyDepth; ++depth) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(child);
+            const entt::entity parent = h ? h->Parent : entt::null;
+            if (parent == entt::null || !world.Registry.valid(parent)) break;
+            const size_t s = (size_t)entt::to_entity(parent);
+            if (world.Registry.all_of<LODGroupComponent>(parent) && s < world.m_LodIndex.size() &&
+                world.m_LodIndex[s] < world.m_LodState.size() && world.m_LodState[world.m_LodIndex[s]].Group == parent) {
+                const World::LodGroupState& st = world.m_LodState[world.m_LodIndex[s]];
+                for (int j = 0; j < st.Levels; ++j) {
+                    if (st.Kids[j] != child) continue;
+                    if (st.Active >= -1 && j != st.Active && j != st.FadeFrom) culled = true;
+                    if (st.FadeFrom >= 0 && (j == st.FadeFrom || j == st.Active)) {
+                        ++fades;
+                        fade = j == st.FadeFrom ? -1 : 1;
+                    }
+                }
+            }
+            child = parent;
+        }
+        if (fades > 1) fade = 2;
+    }
+    static size_t Fading(const World& world) { return world.m_LodFading.size(); }
+};
+namespace {
+
 // ApplyLod's structure patch (renderers created, destroyed and re-parented in and around LOD Groups, nested ones
 // included) tags exactly what a full pass from scratch tags, frame after frame of random changes; and the small ones
-// do take the patch.
-void TestLodStructurePatch() {
+// do take the patch. With LodSmooth on (cross-fades under way while things come and go) every renderer's tag and fade
+// match what the groups above it say: a piece added under a level fading out fades out with it.
+static void RunLodStructurePatch(bool smooth) {
     World world;
+    world.LodSmooth = smooth;
+    world.LodClockOverride = smooth ? 10.0 : -1.0;
     const glm::vec3 zero(0.0f), one(1.0f);
     std::mt19937 rng(1107);
     auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
@@ -1222,7 +1323,27 @@ void TestLodStructurePatch() {
     auto alive = [&](std::vector<entt::entity>& v) {
         v.erase(std::remove_if(v.begin(), v.end(), [&](entt::entity e) { return !world.Registry.valid(e); }), v.end());
     };
-    int patched = 0, changedFrames = 0;
+    // The records' word for every renderer (see WorldLodTestAccess::Expect); false and a message on the first miss.
+    int fadingChecked = 0;
+    auto matchesRecords = [&](int frame) {
+        for (entt::entity e : world.Registry.view<RenderableComponent>()) {
+            bool culled = false;
+            int fade = 0;
+            WorldLodTestAccess::Expect(world, e, culled, fade);
+            const float got = world.LodFadeOf(e);
+            const bool fadeOk = fade == 2 || (fade == 0 ? got == 0.0f : fade < 0 ? got < 0.0f : got > 0.0f);
+            fadingChecked += fade == 1 || fade == -1 ? 1 : 0;
+            if (world.IsLodCulled(e) != culled || !fadeOk) {
+                std::printf("[LodStructurePatch%s] frame %d: entity %u culled %d (records say %d), fade %.3f (records say %d)\n",
+                            smooth ? " smooth" : "", frame, (unsigned)entt::to_integral(e), (int)world.IsLodCulled(e),
+                            (int)culled, got, fade);
+                return false;
+            }
+        }
+        return true;
+    };
+    int patched = 0, changedFrames = 0, fadingFrames = 0;
+    glm::vec3 view(0.0f, 0.0f, 1.0f);
     for (int frame = 0; frame < 400; ++frame) {
         alive(places);
         alive(spawned);
@@ -1255,7 +1376,10 @@ void TestLodStructurePatch() {
             }
         }
         world.RebuildWorldTransformCache();
-        const glm::vec3 view((float)pick(16), 0.0f, 1.0f + (float)pick(20));
+        // Smooth: the view holds a few frames (a group fades only once it has settled) and the clock runs 0.15 s a
+        // frame, so a fade spans about four frames of changes.
+        if (!smooth || frame % 6 == 0) view = glm::vec3((float)pick(16), 0.0f, 1.0f + (float)pick(20));
+        if (smooth) world.LodClockOverride += 0.15;
         const std::uint64_t fullBefore = world.LodFullPasses();
         world.ApplyLod(view, proj);
         const auto& d = world.TransformStructureChanges();
@@ -1263,6 +1387,11 @@ void TestLodStructurePatch() {
             ++changedFrames;
             patched += world.LodFullPasses() == fullBefore ? 1 : 0;
         }
+        fadingFrames += WorldLodTestAccess::Fading(world) > 0 ? 1 : 0;
+        const bool ok = matchesRecords(frame);
+        CHECK(ok);
+        if (!ok) break;
+        if (smooth) continue; // a pass from scratch would end the fades under way
         const auto incremental = tagged();
         world.ClearLod();
         world.ApplyLod(view, proj); // from scratch
@@ -1274,9 +1403,16 @@ void TestLodStructurePatch() {
             break;
         }
     }
-    std::printf("[LodStructurePatch] %d of %d structure-change frames patched\n", patched, changedFrames);
+    std::printf("[LodStructurePatch%s] %d of %d structure-change frames patched; %d frames fading, %d fading renderers checked\n",
+                smooth ? " smooth" : "", patched, changedFrames, fadingFrames, fadingChecked);
     CHECK(changedFrames > 100);
     CHECK(patched * 2 > changedFrames);
+    if (smooth) CHECK(fadingFrames > 40 && fadingChecked > 100);
+}
+
+void TestLodStructurePatch() {
+    RunLodStructurePatch(false);
+    RunLodStructurePatch(true);
 }
 
 // Octahedral impostors (ImpostorLibrary): past the start distance a matched group shows its impostor - every level
@@ -1886,6 +2022,8 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
     tests.push_back({"Materials: built-in property table - default keys, v1/v2 round-trip, accessors and bind resolver", MaterialBuiltinTable});
     tests.push_back({"LodGroup", TestLodGroup});
+    tests.push_back({"AssetCostLodLevel", TestAssetCostLodLevel});
+    tests.push_back({"AssetCostModelFreedBeforeWrite", TestAssetCostModelFreedBeforeWrite});
     tests.push_back({"LodStructurePatch", TestLodStructurePatch});
     tests.push_back({"LodImpostor", TestLodImpostor});
     tests.push_back({"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch});

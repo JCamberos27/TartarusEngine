@@ -13,6 +13,7 @@
 #include <entt/entt.hpp>
 #include <imgui.h>
 
+#include <cstdint>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -42,8 +43,20 @@ struct GlassEditorState {
         int          Depth;
         bool         HasChildren;
     };
-    std::vector<Row> Rows;                   // the flattened, visible tree, rebuilt every frame
+    std::vector<Row> Rows;                   // the flattened, visible tree
     std::unordered_set<entt::entity> Expanded;
+    std::uint64_t ExpandedGen = 0;           // bumped on every change to Expanded
+    // What Rows was built from when it is kept between frames (the tree, not a search): the world, the Hierarchy's
+    // creation order (EditorLayer::HierarchyOrderGeneration), the parent links and child order
+    // (World::HierarchyVersion) and the open rows. Names are read when drawn, so a rename needs no rebuild.
+    struct RowsKey {
+        const void* World = nullptr;
+        std::uint64_t Order = 0, Hierarchy = 0, Expanded = 0;
+        bool operator==(const RowsKey& o) const {
+            return World == o.World && Order == o.Order && Hierarchy == o.Hierarchy && Expanded == o.Expanded;
+        }
+    };
+    RowsKey RowsBuiltFor;
     char HierarchyFilter[64] = {};
     float SelectionRowPrev = -1.0f;          // the selection panel's target row last frame
     entt::entity RevealedFor = entt::null;   // the selection whose ancestors were last auto-expanded

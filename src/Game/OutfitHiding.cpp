@@ -485,7 +485,7 @@ void UpdateAttachments(World& world) {
         for (entt::entity c : h->Children) {
             const auto* p = reg.valid(c) ? reg.try_get<OutfitPieceComponent>(c) : nullptr;
             if (!p) continue;
-            if (head == entt::null && p->Slot == "Head") head = c;
+            if (head == entt::null && ExposedPiece(p->Flags)) head = c; // the race's head: the one head-attached body part
             if ((p->Flags & OutfitPieceHeadAttached) && !(p->Flags & OutfitPieceBodyPart)) anyRigid = true;
         }
         if (head == entt::null || !anyRigid) continue;

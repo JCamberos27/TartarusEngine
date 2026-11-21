@@ -3,6 +3,7 @@
 // SceneSerializer.h so its many includers don't all pull in json.hpp.
 #include <string>
 #include <json.hpp>
+#include <entt/entity/fwd.hpp>
 
 class World;
 class AssetLibrary;
@@ -17,4 +18,9 @@ namespace SceneSerializer {
     // AssetLibrary half. Relies on a snapshot loading back to the same scene, which the editor's
     // "scenes:" tests check on every shipped scene and every component.
     std::string SnapshotAfterLoad(const nlohmann::json& loaded, const std::string& loadedText, const AssetLibrary& assets);
+    // Writes ONE live entity's position, rotation, scale and name from its object in a snapshot
+    // (an element of "boxes", "models", "empties" or "prefabInstances"), reading them exactly as a
+    // full load of that snapshot does. The editor's undo uses it instead of LoadFromJson for a
+    // step that changed nothing else (X-33 C). False, entity untouched, when it isn't an object.
+    bool ApplyEntityTransformAndName(World& world, entt::entity entity, const nlohmann::json& entityJson);
 }

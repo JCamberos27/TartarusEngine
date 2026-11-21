@@ -77,11 +77,11 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         const LodGroupState& st = m_LodState[m_LodIndex[s]];
         return st.Group == e ? &st : nullptr;
     };
-    // Whether a recorded group tags its child `child` (not the level it uses).
+    // Whether a recorded group tags its child `child` (not the level it uses, nor the one fading out of it).
     auto levelTagged = [](const LodGroupState& st, entt::entity child) {
         if (st.Active < -1) return false;
         for (int j = 0; j < st.Levels; ++j)
-            if (st.Kids[j] == child) return j != st.Active;
+            if (st.Kids[j] == child) return j != st.Active && j != st.FadeFrom;
         return false; // a fifth child or later: always drawn
     };
     // Full pass: tag a level's whole subtree (an untouched renderer stays tagged by whichever group tagged it).

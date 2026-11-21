@@ -1,13 +1,9 @@
-#include "BodyDebugDraw.h"
-#include "ColliderGizmo.h"
+#include "DebugLineGather.h"
 
-#include "Shader.h"
-#include "ShaderLibrary.h"
-#include "gl.h"
+#include "BodyDebugDraw.h"
 #include "World.h"
 #include "Components.h"
 #include "Model.h"
-#include "GLStateCache.h"
 #include "PhysicsWorld.h"
 #include "Audio/WeaponAudio.h"
 
@@ -44,30 +40,10 @@ void AutoBoxWorld(const entt::registry& reg, entt::entity e, const TransformComp
 
 } // namespace
 
-ColliderGizmo::ColliderGizmo() {
-    m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ColliderGizmo.vert.glsl"),
-                                        ShaderLibrary::ReadFile("ColliderGizmo.frag.glsl"));
-    glGenVertexArrays(1, &m_VAO);
-    glGenBuffers(1, &m_VBO);
-    glBindVertexArray(m_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    const GLsizei stride = 7 * (GLsizei)sizeof(float);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-    glBindVertexArray(0);
-}
-
-ColliderGizmo::~ColliderGizmo() {
-    if (m_VBO) glDeleteBuffers(1, &m_VBO);
-    if (m_VAO) glDeleteVertexArrays(1, &m_VAO);
-}
-
-void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const World& world, bool drawShapes,
-                          const std::function<bool(entt::entity)>* only) {
-    m_Verts.clear();
-    auto& V = m_Verts;
+void DebugLineGather::Gather(const World& world, bool drawShapes, const std::function<bool(entt::entity)>* only,
+                             std::vector<float>& out) {
+    out.clear();
+    auto& V = out;
     glm::vec3 col = kSolidColor;
     auto seg = [&](const glm::vec3& a, const glm::vec3& b) {
         V.insert(V.end(), { a.x, a.y, a.z, col.r, col.g, col.b, 1.0f,
@@ -241,9 +217,6 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
 
     AppendAudioDebugLines(world, V, drawShapes); // Reverb Zone volumes (with the colliders) and, in Play, the audio probe rays (Env Debug Draw)
 
-    // The opaque wireframe part ends here; everything after is additive-blended glow.
-    const GLsizei wireVerts = (GLsizei)(V.size() / 7);
-
     // Physics visual debugger (#185): fading contact sparks, raycasts, velocity + sleep markers,
     // pre-coloured with alpha carrying the fade. 7 floats per vertex (pos.xyz, rgba); 14/line.
     if (PhysicsWorld::GetDebugDrawFlags() != 0u) {
@@ -257,29 +230,4 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
     }
     // The true-first-person body's overlay (BodyDebug, filled by FirstPersonBody while it plays).
     if (BodyDebug::Enabled() && !BodyDebug::Verts().empty()) V.insert(V.end(), BodyDebug::Verts().begin(), BodyDebug::Verts().end());
-    const GLsizei glowVerts = (GLsizei)(V.size() / 7) - wireVerts;
-
-    if (V.empty()) return;
-
-    glBindVertexArray(m_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    if (V.size() > m_Capacity) {
-        glBufferData(GL_ARRAY_BUFFER, V.size() * sizeof(float), V.data(), GL_DYNAMIC_DRAW);
-        m_Capacity = V.size();
-    } else {
-        glBufferSubData(GL_ARRAY_BUFFER, 0, V.size() * sizeof(float), V.data());
-    }
-
-    m_Shader->Bind();
-    m_Shader->SetMat4("uViewProj", proj * view);
-
-    glEnable(GL_BLEND);
-    // Straight alpha-over for everything so a pure-colour line renders as that exact colour
-    // (additive would tint it toward whatever is behind it). Alpha carries the fade.
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDrawArrays(GL_LINES, 0, wireVerts + glowVerts);
-    glDisable(GL_BLEND);
-    glBindVertexArray(0);
-
-    GLStateCache::Invalidate(); // raw program/VAO/buffer binds above bypass the cache
 }

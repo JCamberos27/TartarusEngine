@@ -110,6 +110,8 @@ public:
     std::uint64_t LodFullPasses() const { return m_LodFullPasses; }
     // How many rebuilds took the full walk (tests: a small structure change takes the incremental pass).
     std::uint64_t TransformCacheFullWalks() const { return m_TransformFullWalks; }
+    // How many rebuilds re-derived active-in-hierarchy over every entity (tests: a small structure change patches it).
+    std::uint64_t ActiveFullSyncs() const { return m_ActiveFullSyncs; }
 
     // #163 - picks each LOD Group's level for a view (eye position + projection) and tags the
     // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
@@ -160,8 +162,8 @@ public:
     // spawned after the rebuild, or a caller running before the first one — so it is always
     // correct, never merely fast.
     glm::mat4 GetCachedWorldTransform(entt::entity entity) const;
-    // Changes whenever a parent link changes (SetParent, a destroy, a cut cycle): what is derived
-    // from the hierarchy is good while this stays the same.
+    // Changes whenever a parent link or the order of a parent's children changes (SetParent, a destroy, a cut cycle,
+    // SortChildrenByOrder): what is derived from the hierarchy is good while this stays the same.
     std::uint64_t HierarchyVersion() const { return m_HierarchyVersion; }
 
     // #114 — the entity's transform expressed in WORLD space (position / YXZ Euler degrees /
@@ -194,6 +196,13 @@ public:
     // whichever frame (local or world) it belongs in.
     void AttachChildRaw(entt::entity child, entt::entity parent);
 
+    // A parent's Children are kept in Hierarchy order: OrderComponent, then the entity handle (what the Hierarchy
+    // shows and the scene file saves). SetParent and AttachChildRaw insert in place; after OrderComponent values
+    // change (a Hierarchy drag-reorder) this re-sorts `parent`'s list and, when that moved anything, bumps
+    // HierarchyVersion, so LOD Groups (whose levels are the first four children) and every cache keyed on the
+    // version see the new order at once instead of after a save and reload.
+    void SortChildrenByOrder(entt::entity parent);
+
     // #202 - breaks any parent cycle in the hierarchy, returning how many were broken.
     // AttachChildRaw only rejects self-parenting, so a scene file whose parentIds form a loop
     // (A -> B -> A, hand-edited, merged badly, or written by an older build) loads a genuine
@@ -214,6 +223,7 @@ public:
     void EnsureNextOrderAtLeast(int value) { if (value > m_NextOrder) m_NextOrder = value; }
 
 private:
+    friend struct WorldLodTestAccess; // unit tests: reads the LOD records (src/Tests/UnitTests_Render.cpp)
     // Cycle guard for the parent-chain walks (the transform cache, LOD groups): no legitimate scene nests this
     // deep, so exceeding it means a malformed hierarchy, not a tall one.
     static constexpr size_t kMaxHierarchyDepth = 1024;
@@ -258,6 +268,13 @@ private:
     std::uint64_t m_ActiveSignature[6] = {};
     bool m_ActiveSignatureValid = false;
     void ActiveSignature(std::uint64_t out[6]);
+    // RebuildWorldTransformCache's two halves: the transforms (and their structure delta), then active-in-hierarchy,
+    // patched from that delta when it can (false: the full SyncActiveInHierarchy instead).
+    void RebuildTransformsOnly();
+    bool PatchActiveInHierarchy(const std::uint64_t sig[6]);
+    std::vector<entt::entity> m_ActiveRoots;
+    std::vector<std::pair<entt::entity, bool>> m_ActiveWalk;
+    std::uint64_t m_ActiveFullSyncs = 0;
     // ApplyLod's memory of what it tagged, per LOD Group slot (see ApplyLod). Active is the level left untagged, -1 for
     // a culled group (every level tagged), kLodSkipped for one that tagged nothing (inactive, or not seen yet).
     static constexpr int kLodSkipped = -2;

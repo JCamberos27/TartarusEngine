@@ -558,16 +558,26 @@ constexpr int kRequiredSnapBones = 17;
 } // namespace
 
 void NpcRagdoll::Capture(const NpcBody& body, BoneSnapshot& out) {
-    const glm::mat4 inv = glm::inverse(body.RootMatrix());
+    // Every posed dummy, every frame: the node indices are cached per import instead of 21 name lookups. The root round trip
+    // (world, then back to root space) stays bit for bit as BoneWorld did it: the death velocities come from these points
+    // and the ragdoll's outcome follows the last float bit.
+    const glm::mat4 root = body.RootMatrix();
+    const glm::mat4 inv = glm::inverse(root);
+    const Model* m = body.DriverModel();
+    if (m && out.NodeStamp != m->ImportStamp()) {
+        for (int i = 0; i < kSnapBones; ++i) out.Node[i] = m->NodeIndex(kSnapNames[i]);
+        out.NodeStamp = m->ImportStamp();
+    }
     out.Valid = true;
     for (int i = 0; i < kSnapBones; ++i) {
-        glm::vec3 w;
-        out.Has[i] = body.BoneWorld(kSnapNames[i], w);
+        glm::mat4 g(1.0f);
+        out.Has[i] = m && m->NodeTransformAt(out.Node[i], g);
         if (!out.Has[i]) {
             out.P[i] = glm::vec3(0.0f);
             if (i < kRequiredSnapBones) { out.Valid = false; return; }
             continue;
         }
+        const glm::vec3 w = glm::vec3(root * g[3]);
         out.P[i] = glm::vec3(inv * glm::vec4(w, 1.0f));
     }
 }

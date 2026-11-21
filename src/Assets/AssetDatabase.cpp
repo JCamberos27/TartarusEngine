@@ -130,6 +130,7 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
 std::mutex              g_ScanMutex;
 std::condition_variable g_ScanDone;
 std::atomic<bool>       g_Scanning{false};
+std::atomic<int>        g_MissingExternal{0}; // the last scan's count of unfetched external_assets.csv files
 std::thread::id         g_ScanThread;
 // Joined on destruction so an early exit (a startup error) never destroys a joinable
 // std::thread, which would call std::terminate.
@@ -582,6 +583,7 @@ void ScanProject() {
         std::error_code existEc;
         if (!fs::exists(p, existEc)) ++missingExternal;
     }
+    g_MissingExternal.store(missingExternal, std::memory_order_relaxed);
     if (missingExternal > 0)
         Log::Warn("AssetDatabase: " + std::to_string(missingExternal) + " of " + std::to_string(external.size()) +
                   " third-party asset file(s) in external_assets.csv are missing - copy them from the shared Drive "
@@ -597,6 +599,11 @@ void ScanProject() {
     char buf[96];
     std::snprintf(buf, sizeof(buf), "AssetDatabase: %d asset(s) registered in %.0f ms.", assets, ms);
     Log::Info(buf);
+}
+
+int MissingExternalCount() {
+    WaitIfScanning();
+    return g_MissingExternal.load(std::memory_order_relaxed);
 }
 
 void BeginScanProject() {
