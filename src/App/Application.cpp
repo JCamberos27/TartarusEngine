@@ -277,6 +277,7 @@ private:
     Step step1{[&] {
         EditorSettings::Load();
         // SLOT EXPERIMENT (not for merge): collider overlay on for harness shots (the scratch prefs are copied per run).
+        #pragma warning(suppress : 4996) // experiment only
         if (const char* e = std::getenv("TARTARUS_EXP_SHOW_COLLIDERS"); e && *e == '1') EditorSettings::Get().ShowColliders = true;
     }};
     // TARTARUS_EDITOR_TEST_SCALE=1 (with TARTARUS_EDITOR_TEST_SIZE=1044x788) reproduces CI's
