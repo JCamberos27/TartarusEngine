@@ -124,6 +124,10 @@ int FirstPersonPresentation::PrefetchPlayAssets(World& world, AssetLibrary& asse
                      return !std::filesystem::exists(std::filesystem::u8path(p), ec);
                  }), v->end());
     }
+    // A clip file also loading as a full model (a gun's own take) plays from that one (LoadAnimationSource).
+    clips.erase(std::remove_if(clips.begin(), clips.end(), [&](const std::string& c) {
+                    return std::binary_search(models.begin(), models.end(), c);
+                }), clips.end());
     // The tickets are dropped: the loads still land in the caches. (A material's own entry is then made by Start's
     // LoadMaterial, from its maps already in the texture cache.)
     int asked = 0;
