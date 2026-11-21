@@ -40,6 +40,15 @@ if(WIN32)
   )
 endif()
 
+# TartarusCore.dll (see the TARTARUS_CORE_DLL block below). Set before the dependencies: GLFW then
+# builds as glfw3.dll, so the exe and the core DLL share one GLFW (a static copy in each would leave
+# the exe's never initialised: glfwGetTime() 0, its window calls ignored).
+option(TARTARUS_CORE_DLL "Build the engine core as TartarusCore.dll (OFF: one executable)" ON)
+if(TARTARUS_CORE_DLL)
+  set(GLFW_LIBRARY_TYPE SHARED CACHE STRING "" FORCE)
+else()
+  set(GLFW_LIBRARY_TYPE STATIC CACHE STRING "" FORCE)
+endif()
 include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/PhysX.cmake)
 
@@ -75,9 +84,9 @@ set(TARTARUS_EDITOR_MODULE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHistory.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleTestHooks.cpp
 )
-list(REMOVE_ITEM ENGINE_SOURCES ${TARTARUS_GAME_MODULE_ONLY_SOURCES} ${TARTARUS_EDITOR_MODULE_SOURCES})
+list(REMOVE_ITEM ENGINE_SOURCES ${TARTARUS_GAME_MODULE_ONLY_SOURCES} ${TARTARUS_EDITOR_MODULE_SOURCES}
+  ${CMAKE_SOURCE_DIR}/src/Editor/ImGuiTestHooks.cpp) # built with ImGui itself (tartarus_imgui_core)
 
 # The Script IDE asks for a module rebuild when it saves one of these (GameModuleBuild.cpp reads
 # this list), so the list lives here once instead of being copied into the editor.
@@ -108,18 +117,19 @@ function(tartarus_enable_release_debug_info target)
   endif()
 endfunction()
 
-# ImGui's core, compiled once and linked into both the host and TartarusEditor.dll. Each module
-# still gets its own copy of the code, as ImGui's multi-module setup needs (they share the host's
-# ImGuiContext), but the two copies can no longer drift: one set of objects, one set of defines.
-# IMGUI_ENABLE_TEST_ENGINE: the --editor-tests item hooks; the DLL forwards them to the host
-# through EditorModuleTestHooks.cpp (see EditorTestHooks.h).
+# ImGui's core, compiled once. With TARTARUS_CORE_DLL it goes into TartarusCore.dll, the one copy the
+# exe and TartarusEditor.dll both call; without it, the exe and TartarusEditor.dll each link these
+# objects and share the host's ImGuiContext (ImGui's multi-module setup).
+# IMGUI_ENABLE_TEST_ENGINE: the --editor-tests item hooks. ImGuiTestHooks.cpp, built with them,
+# forwards them to the harness's table in ImGuiContext::TestEngine (see EditorTestHooks.h).
 add_library(tartarus_imgui_core OBJECT
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/ImGuiTestHooks.cpp
 )
-target_include_directories(tartarus_imgui_core PRIVATE ${imgui_SOURCE_DIR})
+target_include_directories(tartarus_imgui_core PRIVATE ${imgui_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src/Editor)
 target_compile_definitions(tartarus_imgui_core PRIVATE IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_TEST_ENGINE)
 target_compile_options(tartarus_imgui_core PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W1 /MP>
@@ -308,6 +318,76 @@ set_source_files_properties(${TARTARUS_VENDORED_SOURCES} PROPERTIES
   COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/W1>$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>"
 )
 
+# --- TartarusCore.dll (hot-reload plan H-4: the build split) --------------------------------
+# The engine core builds as its own DLL, which the exe and TartarusEditor.dll link: Core, Renderer,
+# Physics, Audio, Assets, Graffiti, the scene data model they use (World, WorldLod, SkySettings,
+# TimeOfDay, RootMotion, PostProcessVolume, TerrainSystem), and the vendored code (glloader, stb,
+# miniaudio, meshoptimizer, Recast/Detour, ImGui with its backends, ImGuizmo, im_anim, ImViewGuizmo,
+# the code editor). That leaves one copy of every global those layers share (ImGui's context, the
+# GL function pointers, the material wind) and is the base a reloadable gameplay/editor DLL sits on.
+#
+# Functions are exported wholesale (WINDOWS_EXPORT_ALL_SYMBOLS). Exported DATA needs
+# TARTARUS_CORE_API (src/Core/CoreApi.h) or IMGUI_API on its declaration, and core state must not
+# live in a header-inline static (each module would get its own copy): define it in a core .cpp.
+if(TARTARUS_CORE_DLL)
+  get_target_property(_exe_sources TartarusEngine SOURCES)
+  set(_core_sources "")
+  foreach(_s IN LISTS _exe_sources)
+    if(_s MATCHES "/src/(Core|Renderer|Physics|Audio|Assets|Graffiti)/"
+       OR _s MATCHES "/src/Game/(World|WorldLod|SkySettings|TimeOfDay|RootMotion|PostProcessVolume|TerrainSystem)[.]cpp$"
+       OR _s MATCHES "/extern/glloader/"
+       OR _s MATCHES "/extern/(stb_image_impl|stb_dxt_impl|miniaudio_impl|ImViewGuizmo_impl)[.]cpp$"
+       OR _s MATCHES "/extern/ImGuiColorTextEdit/")
+      list(APPEND _core_sources ${_s})
+    endif()
+  endforeach()
+  # Renderer files that call into the editor/gameplay layer (outline/hover filters, the GI light
+  # switches, weapon audio debug lines). Nothing in the core calls them, so they stay in the exe.
+  list(FILTER _core_sources EXCLUDE REGEX "/src/Renderer/(ViewPipeline|GIBaker|ColliderGizmo)[.]cpp$")
+  list(APPEND _core_sources ${IMGUI_SOURCES} ${MESHOPT_SOURCES} ${RECAST_SOURCES})
+  list(REMOVE_ITEM _exe_sources ${_core_sources} "$<TARGET_OBJECTS:tartarus_imgui_core>")
+  set_property(TARGET TartarusEngine PROPERTY SOURCES ${_exe_sources})
+
+  add_library(TartarusCore SHARED ${_core_sources} $<TARGET_OBJECTS:tartarus_imgui_core>)
+  set_target_properties(TartarusCore PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  # The core compiles exactly as these files did inside the exe: same include paths, defines, flags.
+  foreach(_p INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS)
+    get_target_property(_v TartarusEngine ${_p})
+    if(_v)
+      set_property(TARGET TartarusCore PROPERTY ${_p} "${_v}")
+    endif()
+  endforeach()
+  target_link_libraries(TartarusCore PRIVATE glfw glm::glm assimp EnTT::EnTT physx)
+  if(WIN32)
+    target_link_libraries(TartarusCore PRIVATE opengl32 comdlg32 dwmapi winmm Dbghelp ole32 shell32 uuid)
+  endif()
+  add_dependencies(TartarusCore physx_external)
+  tartarus_enable_release_debug_info(TartarusCore)
+
+  # ImGui's API (its functions and GImGui) is exported by the core and imported by the exe and the
+  # editor module, which call the core's ImGui instead of linking their own.
+  set(_imgui_export "IMGUI_API=__declspec(dllexport)")
+  set(_imgui_import "IMGUI_API=__declspec(dllimport)")
+  target_compile_definitions(tartarus_imgui_core PRIVATE ${_imgui_export})
+  target_compile_definitions(TartarusCore PRIVATE TARTARUS_CORE_BUILD ${_imgui_export})
+  target_compile_definitions(TartarusEngine PRIVATE ${_imgui_import})
+  get_target_property(_editor_sources TartarusEditor SOURCES)
+  list(REMOVE_ITEM _editor_sources "$<TARGET_OBJECTS:tartarus_imgui_core>")
+  set_property(TARGET TartarusEditor PROPERTY SOURCES ${_editor_sources})
+  target_compile_definitions(TartarusEditor PRIVATE ${_imgui_import})
+  target_link_libraries(TartarusEditor PRIVATE TartarusCore)
+  foreach(_t TartarusCore TartarusEngine TartarusEditor TartarusGame)
+    target_compile_definitions(${_t} PRIVATE TARTARUS_CORE_DLL_ON)
+  endforeach()
+  target_link_libraries(TartarusEngine PRIVATE TartarusCore)
+
+  # glfw3.dll next to the exe (TartarusCore.dll is already built there).
+  add_custom_command(TARGET TartarusEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:glfw>" "$<TARGET_FILE_DIR:TartarusEngine>"
+    VERBATIM)
+  install(FILES $<TARGET_FILE:TartarusCore> $<TARGET_FILE:glfw> DESTINATION ".")
+endif()
+
 # Engine-owned content staged next to the exe (POST_BUILD) and shipped in the package (install),
 # from ONE list so the two can't drift. The layout is what EnginePaths resolves against at runtime.
 # Each entry: "<source, relative to the repo>|<destination folder>[|<new file name>]". A source
@@ -481,3 +561,4 @@ set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}/package")
 # than everything the engine actually ships).
 set(CPACK_SOURCE_IGNORE_FILES "/\\.git/;/build/;/_deps/")
 include(CPack)
+
