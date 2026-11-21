@@ -37,12 +37,17 @@
 
 // A harness run (--smoke-test, --perf-bench, --npc-test) whose frames stop - a hang, a wait that never ends - used to
 // spin until someone killed it. Like the editor tests' watchdog: a note each minute without a frame, and after
-// kStallSeconds an abort, which writes a crash dump (the stack of the hang) and fails the run. Its state is
-// process-wide, not the harness's, so the detached thread never touches an object that is being destroyed.
+// kStallSeconds an abort, which writes a crash dump (the stack of the hang) and fails the run. After the summary the
+// result is in, and a teardown that hangs (a wait on uploads that never come) ends the process with the run's own
+// exit code once kShutdownSeconds pass. Its state is process-wide, not the harness's, so the detached thread never
+// touches an object that is being destroyed.
 namespace stall_watch {
+extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
+extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
 constexpr long long kStallSeconds = 240; // longer than any scene load (Forest with its payloads: under a minute)
+constexpr long long kShutdownSeconds = 90; // teardown after the summary normally takes a few seconds
 std::atomic<unsigned long long> g_Frames{0};
-std::atomic<bool> g_Stopped{false}; // the summary is out: teardown is not a stall
+std::atomic<int> g_ExitCode{-1}; // set by the summary: from then on only the shutdown is watched
 std::mutex g_Mutex;
 std::string g_Where = "(startup)";
 void SetWhere(const std::string& where) { std::lock_guard<std::mutex> lk(g_Mutex); g_Where = where; }
@@ -51,10 +56,22 @@ void Start() {
         using clock = std::chrono::steady_clock;
         unsigned long long lastFrames = g_Frames.load(std::memory_order_relaxed);
         auto lastFrameAt = clock::now();
+        auto doneAt = clock::time_point{};
         for (;;) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
-            if (g_Stopped.load(std::memory_order_relaxed)) return;
             const auto now = clock::now();
+            if (const int code = g_ExitCode.load(std::memory_order_relaxed); code >= 0) {
+                // TerminateProcess, not exit(): ExitProcess runs DLL detach, which can block on the same lock the
+                // teardown is stuck behind.
+                if (doneAt == clock::time_point{}) doneAt = now;
+                else if (now - doneAt >= std::chrono::seconds(kShutdownSeconds)) {
+                    std::printf("[SmokeTest] WATCHDOG: the process hasn't exited %llds after the summary - ending it "
+                                "with the run's exit code %d\n", kShutdownSeconds, code);
+                    std::fflush(stdout);
+                    TerminateProcess(GetCurrentProcess(), (unsigned)code);
+                }
+                continue;
+            }
             const unsigned long long frames = g_Frames.load(std::memory_order_relaxed);
             if (frames != lastFrames) { lastFrames = frames; lastFrameAt = now; continue; }
             const long long stalled = std::chrono::duration_cast<std::chrono::seconds>(now - lastFrameAt).count();
@@ -562,7 +579,7 @@ bool SmokeHarness::Summary() const {
     // Deliberately skip the normal exit path entirely (no play-mode revert, no
     // save-on-exit) - smoke-tested scenes were never really "open" from the user's
     // point of view and must not get written back to disk.
-    stall_watch::g_Stopped = true;
+    stall_watch::SetWhere("shutdown after the summary");
     std::cout << "\n[SmokeTest] ==== Summary ====" << std::endl;
     // No scenes discovered is itself a failure - an empty scene folder must not read
     // as a green run (audit #356 / TEST-101).
@@ -580,5 +597,6 @@ bool SmokeHarness::Summary() const {
     }
     std::cout << "[SmokeTest] " << m_Results.size() << " scene(s) - "
               << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
+    stall_watch::g_ExitCode = allPassed ? 0 : 1; // Finish() returns the same code
     return allPassed;
 }
