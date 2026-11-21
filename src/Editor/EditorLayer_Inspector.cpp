@@ -36,6 +36,7 @@
 #include "SetupChecksUI.h"
 #include "BodyDebugDraw.h"
 #include "EditorSettings.h"
+#include "EditorFileStat.h"   // cached exists / mtime for per-frame rows
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "ComponentRegistry.h"
@@ -2452,8 +2453,8 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             // identically to one pointing at a present file. Checked once here in the shared
             // renderer so every reflected asset field (Audio Source's Clip today, any future one)
             // gets it for free.
-            std::error_code existsEc; // the non-throwing overload: an odd path must not throw out of the frame
-            const bool missing = !mixed && !shared.empty() && !std::filesystem::exists(shared, existsEc);
+            // Cached (EditorFileStat): this row draws every frame; a deleted file shows within half a second.
+            const bool missing = !mixed && !shared.empty() && !EditorFileStat::Exists(std::filesystem::path(shared));
             const std::string preview = mixed ? "\xE2\x80\x94"
                 : (shared.empty() ? "(none)"
                    : (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string()) +
@@ -5140,8 +5141,7 @@ void EditorLayer::DrawFirstPersonControllerExtra(World& world, entt::entity enti
     }
     if (fp->AnimationSet.empty()) return;
     const std::string path = std::filesystem::u8path(ProjectPaths::Resolve(fp->AnimationSet)).generic_u8string();
-    std::error_code ec;
-    const bool exists = std::filesystem::exists(std::filesystem::u8path(path), ec);
+    const bool exists = EditorFileStat::Exists(std::filesystem::u8path(path));
     ImGui::BeginDisabled(!exists);
     if (ActionButton(ICON_FA_CROSSHAIRS "  Edit Animation Set",
                      exists ? "Open this weapon's recoil, sway, bob, lean and IK tuning in the Inspector"
@@ -5468,6 +5468,7 @@ void EditorLayer::DrawColliderExtra(World& world, entt::entity entity, ReflectEx
         pm.FrictionCombine = col->FrictionCombine;
         pm.BounceCombine = col->BounceCombine;
         if (pm.SaveFile(ProjectPaths::Resolve(rel))) {
+            EditorFileStat::Refresh(std::filesystem::u8path(ProjectPaths::Resolve(rel))); // no stale "missing" for it
             PushUndo(world, "New Physic Material");
             col->Material = rel;
             Log::Info("Created Physic Material " + rel + ".");
@@ -5483,9 +5484,9 @@ void EditorLayer::DrawColliderExtra(World& world, entt::entity entity, ReflectEx
     static std::filesystem::file_time_type s_PmStamp;
     static PhysicMaterialAsset s_Pm;
     const std::string abs = ProjectPaths::Resolve(col->Material);
-    std::error_code ec;
-    const auto stamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
-    if (ec) {
+    const EditorFileStat::Info stat = EditorFileStat::Get(std::filesystem::u8path(abs)); // cached, see EditorFileStat.h
+    const auto stamp = stat.WriteTime;
+    if (!stat.Exists) {
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
                            "The material file is missing - this collider's own values are used.");
         return;
@@ -5521,7 +5522,7 @@ void EditorLayer::DrawColliderExtra(World& world, entt::entity entity, ReflectEx
                         col->Material.c_str());
     ImGui::Unindent();
     if (save) {
-        if (s_Pm.SaveFile(abs)) s_PmStamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
+        if (s_Pm.SaveFile(abs)) s_PmStamp = EditorFileStat::Refresh(std::filesystem::u8path(abs)).WriteTime;
         else Log::Error("Couldn't save " + col->Material + ".");
     }
 }
