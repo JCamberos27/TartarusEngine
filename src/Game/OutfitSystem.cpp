@@ -281,10 +281,22 @@ void RaceGrip(const World& world, entt::entity root, float& inset, float& curl) 
     }
 }
 
+// Failures too: the Inspector asks every frame, and a missing or broken file would be read each time.
+std::map<std::string, std::string>& FailedCatalogs() {
+    static std::map<std::string, std::string> failed;
+    return failed;
+}
+
+bool ForgetCatalog(const std::string& path) {
+    const std::string key = Lower(Rel(path));
+    const bool had = CatalogCache().erase(key) + FailedCatalogs().erase(key) + LayerWardrobes().erase(key) > 0;
+    if (had) SiblingCache().clear(); // its colourway .mat lists are read again with it
+    return had;
+}
+
 std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan, std::string* error) {
     auto& cache = CatalogCache();
-    // Failures too: the Inspector asks every frame, and a missing or broken file would be read each time.
-    static std::map<std::string, std::string> failed;
+    auto& failed = FailedCatalogs();
     const std::string key = Lower(Rel(path));
     if (!rescan) {
         if (auto it = cache.find(key); it != cache.end()) return it->second;

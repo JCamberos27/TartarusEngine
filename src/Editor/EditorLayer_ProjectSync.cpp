@@ -169,6 +169,11 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         // A Physic Material saved (the Inspector or outside) while playing: the colliders using it pick it up now.
         if (e.AssetType == "physicmaterial" && e.Type != HK::Removed && PhysicsWorld::RefreshPhysicMaterial(world, c.Path) > 0)
             ++applied;
+        // A wardrobe edited (it has no asset type: no .meta): the Character Outfit Inspector reads it again, as Rescan would.
+        if (fs::path(c.Path).extension() == ".wardrobe" && OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.Path)))
+            ++applied;
+        if (!c.OldPath.empty() && fs::path(c.OldPath).extension() == ".wardrobe")
+            OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.OldPath));
         if (!self) s_SyncApplied += applied;
     }
     if (!external) return;

@@ -40,6 +40,9 @@ private:
 // (and `error`) when the file can't be read or parsed.
 std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan = false,
                                            std::string* error = nullptr);
+// The wardrobe at `path` changed on disk: its cached catalog (or failure) is dropped, so the next LoadCatalog reads it
+// again. Outfits already worn keep their pieces until they change. True when something was cached.
+bool ForgetCatalog(const std::string& path);
 
 // The outfit's pieces: slot -> child entity.
 std::map<std::string, entt::entity> Pieces(const World& world, entt::entity root);
