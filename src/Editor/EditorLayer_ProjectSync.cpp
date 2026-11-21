@@ -111,6 +111,13 @@ bool ChangesAssetIndex(const std::string& path) {
     return type.empty() && fs::path(path).extension().empty();
 }
 
+// A wardrobe definition (.wardrobe, any case, as the rest of the sync compares paths).
+bool IsWardrobe(const std::string& path) {
+    std::string ext = fs::path(path).extension().string();
+    for (char& ch : ext) ch = (char)std::tolower((unsigned char)ch);
+    return ext == ".wardrobe";
+}
+
 } // namespace
 
 void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
@@ -170,9 +177,9 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         if (e.AssetType == "physicmaterial" && e.Type != HK::Removed && PhysicsWorld::RefreshPhysicMaterial(world, c.Path) > 0)
             ++applied;
         // A wardrobe edited (it has no asset type: no .meta): the Character Outfit Inspector reads it again, as Rescan would.
-        if (fs::path(c.Path).extension() == ".wardrobe" && OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.Path)))
+        if (IsWardrobe(c.Path) && OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.Path)))
             ++applied;
-        if (!c.OldPath.empty() && fs::path(c.OldPath).extension() == ".wardrobe")
+        if (!c.OldPath.empty() && IsWardrobe(c.OldPath))
             OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.OldPath));
         if (!self) s_SyncApplied += applied;
     }
@@ -347,12 +354,6 @@ void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const
 
 void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std::string& path) {
     if (AtomicFile::WrittenBySelfRecently(path)) return; // our own save
-    if (SameFile(path, ProjectPaths::Resolve("settings.json"))) {
-        ProjectSettings::Load(); // the same reload an undo of a settings change does
-        ++s_SyncApplied;
-        Log::Info("Reloaded Project Settings (settings.json changed outside the editor).");
-        return;
-    }
     // Motion matching (hot reload): a saved bake config rebakes; a rewritten database reloads (no library entry either way).
     std::string mmBase;
     if (MotionRebake::IsConfig(path)) { MotionRebake::Request(path); ++s_SyncApplied; return; }
