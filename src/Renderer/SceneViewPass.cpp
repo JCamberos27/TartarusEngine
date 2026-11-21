@@ -284,157 +284,160 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
     inView.CellCull = viewCells;
     inView.CellCullCount = m_ViewModelPass ? 2 : 1;
     GatherVisible(world, inView, m_S.Visible);
-    for (const VisibleRenderable& vis : m_S.Visible) {
-        const entt::entity entity = vis.Entity;
-        auto& renderable = *vis.Renderable;
-        // Tagged view-model geometry belongs to the sub-pass when there is one; with no
-        // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
-        // "route to the other list", not "hide".
-        const bool hasViewModelTag = (vis.CandFlags & kCandViewModel) != 0;
-        const bool isViewModel = m_ViewModelPass && hasViewModelTag;
-        // The player's own body, around the camera: not in the view-model pass (its arms must be whole there).
-        const auto* bodyTag = (vis.CandFlags & kCandPlayerBody) ? world.Registry.try_get<PlayerBodyTag>(entity) : nullptr;
-        const bool cameraBody = bodyTag && !isViewModel && !ctx.EditorView && ctx.OwnerView;
-        if (cameraBody && bodyTag->CameraHidden) continue; // the head: only the player's own camera skips it
-        const float nearHide = cameraBody ? bodyTag->NearHide : 0.0f;
-        const int* hideBones = cameraBody && bodyTag->CameraHideBones[0] >= 0 ? bodyTag->CameraHideBones : nullptr;
-        // The SSAO pre-pass skips view-model geometry always and the camera's own body (its hidden parts
-        // would occlude): read at their pixels, the map holds whatever stands behind them - see-through AO.
-        const bool noSsao = cameraBody || hasViewModelTag;
-        // Clothing on the player's arms while they're in the view-model pass: the sleeves are drawn there
-        // too (a second copy, only them), the rest here without them - see PlayerBodyTag.
-        const bool splitSleeves = m_ViewModelPass && cameraBody && bodyTag->SleevesInViewModel;
-        // What the camera's world pass leaves out of this piece: around the head, and the sleeves when split (or
-        // hidden with the arms).
-        std::array<std::uint32_t, 16> cameraMask{};
-        bool anyCameraMask = false;
-        if (cameraBody && bodyTag->HasHeadBones) {
-            for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->HeadBones[w];
-            anyCameraMask = true;
-        }
-        if (splitSleeves || (cameraBody && bodyTag->SleevesHidden)) {
-            for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
-            anyCameraMask = true;
-        }
-        const float nearHideWidth = cameraBody ? bodyTag->NearHideWidth : 0.0f;
-        const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
-        const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
-        const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
-        const auto* outfitLayer = world.Registry.try_get<OutfitLayerTag>(entity);
-        const float layerPull = outfitLayer ? outfitLayer->Pull : 0.0f;
-        const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
-        const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
-        const glm::mat4& model = vis.Xform;
-        const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
-        const bool staticReceiver = world.Registry.all_of<StaticTag>(entity) || !dynamicItem;
+    {
+        PROFILE_SCOPE("Scene: Classify Visible"); // per visible: cull, registry reads, draw items (P-42)
+        for (const VisibleRenderable& vis : m_S.Visible) {
+            const entt::entity entity = vis.Entity;
+            auto& renderable = *vis.Renderable;
+            // Tagged view-model geometry belongs to the sub-pass when there is one; with no
+            // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
+            // "route to the other list", not "hide".
+            const bool hasViewModelTag = (vis.CandFlags & kCandViewModel) != 0;
+            const bool isViewModel = m_ViewModelPass && hasViewModelTag;
+            // The player's own body, around the camera: not in the view-model pass (its arms must be whole there).
+            const auto* bodyTag = (vis.CandFlags & kCandPlayerBody) ? world.Registry.try_get<PlayerBodyTag>(entity) : nullptr;
+            const bool cameraBody = bodyTag && !isViewModel && !ctx.EditorView && ctx.OwnerView;
+            if (cameraBody && bodyTag->CameraHidden) continue; // the head: only the player's own camera skips it
+            const float nearHide = cameraBody ? bodyTag->NearHide : 0.0f;
+            const int* hideBones = cameraBody && bodyTag->CameraHideBones[0] >= 0 ? bodyTag->CameraHideBones : nullptr;
+            // The SSAO pre-pass skips view-model geometry always and the camera's own body (its hidden parts
+            // would occlude): read at their pixels, the map holds whatever stands behind them - see-through AO.
+            const bool noSsao = cameraBody || hasViewModelTag;
+            // Clothing on the player's arms while they're in the view-model pass: the sleeves are drawn there
+            // too (a second copy, only them), the rest here without them - see PlayerBodyTag.
+            const bool splitSleeves = m_ViewModelPass && cameraBody && bodyTag->SleevesInViewModel;
+            // What the camera's world pass leaves out of this piece: around the head, and the sleeves when split (or
+            // hidden with the arms).
+            std::array<std::uint32_t, 16> cameraMask{};
+            bool anyCameraMask = false;
+            if (cameraBody && bodyTag->HasHeadBones) {
+                for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->HeadBones[w];
+                anyCameraMask = true;
+            }
+            if (splitSleeves || (cameraBody && bodyTag->SleevesHidden)) {
+                for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
+                anyCameraMask = true;
+            }
+            const float nearHideWidth = cameraBody ? bodyTag->NearHideWidth : 0.0f;
+            const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
+            const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
+            const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
+            const auto* outfitLayer = world.Registry.try_get<OutfitLayerTag>(entity);
+            const float layerPull = outfitLayer ? outfitLayer->Pull : 0.0f;
+            const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
+            const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
+            const glm::mat4& model = vis.Xform;
+            const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
+            const bool staticReceiver = world.Registry.all_of<StaticTag>(entity) || !dynamicItem;
 
-        // Frustum culling: skip the draw call entirely for anything outside the camera's view.
-        // Bounds are the model's as posed (Model::PosedBounds: the bind bounds for anything unskinned or
-        // unposed) - an invalid (never-populated) bounds pair draws unconditionally. A skinned model's bind box,
-        // even padded, isn't enough: a ragdoll's root stays where the NPC stood, and its head, a body length
-        // away on the floor, was culled whenever that spot left the view - pieces blinking out up close.
-        // The player's own body in their camera (world or view-model pass) is never culled: the camera sits
-        // inside it, and a small piece's bind-pose bounds (a watch, a bracelet at the A-pose wrist, beside
-        // and below the eye) missed the frustum while the posed hand was right in front of it.
-        const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
-        const glm::vec3& boundsMin = vis.LocalMin; // (their centre also sorts the transparent draws)
-        const glm::vec3& boundsMax = vis.LocalMax;
-        const bool validBounds = vis.Bounded;
-        if (validBounds && !playerBody) {
-            const AABB worldBounds{vis.WorldMin, vis.WorldMax};
-            const bool seen = (isViewModel ? m_VmFrustum : m_CamFrustum).Intersects(worldBounds) ||
-                              (splitSleeves && m_VmFrustum.Intersects(worldBounds));
-            if (!seen) {
-                m_Stats.Culled++;
-                continue;
-            }
-        }
-
-        Model* m = renderable.ModelRef.get();
-        const auto& slots = renderable.Materials;
-        const std::uint64_t matKey = (!slots.empty() && slots[0]) ? slots[0]->Mat.Hash() : m->MaterialSortKey();
-        std::uint32_t progKeyUnused = 0;
-        const Shader* prog = ProgramFor(!slots.empty() ? slots[0].get() : nullptr, progKeyUnused);
-        // PR9 / #112: classify per submesh — a model whose slot 1 is transparent used to draw
-        // entirely opaque because only slot 0's queue was checked (and vice versa). A model
-        // with both kinds is queued in both passes, each drawing only its own submeshes.
-        const int layerBit = (int)(1u << std::clamp(vis.Layer, 0, 31)); // #203 lighting layers (0 without a LayerComponent)
-        bool anyOpaque = false, anyTransparent = false;
-        int qi = 2000; // QueueIndex of the first transparent slot
-        for (int i = 0; i < m->MeshCount(); ++i) {
-            const bool hasSlot = i < (int)slots.size() && slots[i];
-            if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) {
-                if (!anyTransparent) qi = slots[i]->QueueIndex;
-                anyTransparent = true;
-            } else {
-                anyOpaque = true;
-            }
-        }
-        const Model::MeshPass opaquePass = anyTransparent ? Model::MeshPass::Opaque : Model::MeshPass::All;
-        // #112 — depth from the world-space bounds centre, not the entity origin (a large mesh
-        // whose pivot sits at one end sorted as if it were all at that end).
-        const glm::vec3 centre = validBounds ? glm::vec3(model * glm::vec4((boundsMin + boundsMax) * 0.5f, 1.0f))
-                                             : glm::vec3(model[3]);
-        const float viewDepth = -(ctx.View * glm::vec4(centre, 1.0f)).z;
-        const std::uint64_t giMask =
-            m_In.giVolumes ? (validBounds ? m_In.giVolumes->MaskFor(vis.WorldMin, vis.WorldMax) : m_In.giVolumes->AllMask()) : 0ull;
-        // What both passes' items share; each pass then fills its own fields.
-        const auto makeItem = [&](int queueIndex, Model::MeshPass pass) {
-            DrawItem item{ model, m, &slots, matKey, prog,
-                m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                queueIndex, viewDepth, centre, pass,
-                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
-            item.StaticReceiver = staticReceiver;
-            item.GIMask = giMask;
-            item.SortId = (std::uint32_t)entt::to_integral(entity);
-            item.DoubleSided = clothing;
-            item.LayerPull = layerPull;
-            item.LodFade = world.LodFadeOf(entity);
-            if (outfitHide && outfitHide->Visible) {
-                item.Visible = outfitHide->Visible.get();
-                item.Tris = (int)item.Visible->Triangles();
-            }
-            if (anyCameraMask) {
-                item.BoneMaskMode = 1;
-                item.BoneMask = cameraMask;
-            }
-            return item;
-        };
-        // The view-model pass's copy of a split piece: only its sleeves.
-        const auto pushSleeves = [&](const DrawItem& item, std::vector<DrawItem>& to) {
-            DrawItem sleeves = item;
-            sleeves.BoneMaskMode = 2;
-            std::copy(std::begin(bodyTag->SleeveBones), std::end(bodyTag->SleeveBones), sleeves.BoneMask.begin());
-            // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
-            // projection, and its open end showed as black slivers there.
-            sleeves.HideBones = nullptr;
-            // The sleeves are the arms' own: not the collar, and their Near Hide a plain sphere.
-            sleeves.CollarVerts = 0;
-            sleeves.NearHideWidth = 0.0f;
-            to.push_back(sleeves);
-        };
-        if (anyTransparent) {
-            if (!m_AnyTransmission) {
-                for (int i = 0; i < m->MeshCount() && !m_AnyTransmission; ++i) {
-                    const bool hasSlot = i < (int)slots.size() && slots[i];
-                    if (!hasSlot || slots[i]->RenderQueue != MaterialAsset::Queue::Transparent) continue;
-                    m_AnyTransmission = slots[i]->Mat.TransmissionStrength > 0.0f;
+            // Frustum culling: skip the draw call entirely for anything outside the camera's view.
+            // Bounds are the model's as posed (Model::PosedBounds: the bind bounds for anything unskinned or
+            // unposed) - an invalid (never-populated) bounds pair draws unconditionally. A skinned model's bind box,
+            // even padded, isn't enough: a ragdoll's root stays where the NPC stood, and its head, a body length
+            // away on the floor, was culled whenever that spot left the view - pieces blinking out up close.
+            // The player's own body in their camera (world or view-model pass) is never culled: the camera sits
+            // inside it, and a small piece's bind-pose bounds (a watch, a bracelet at the A-pose wrist, beside
+            // and below the eye) missed the frustum while the posed hand was right in front of it.
+            const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
+            const glm::vec3& boundsMin = vis.LocalMin; // (their centre also sorts the transparent draws)
+            const glm::vec3& boundsMax = vis.LocalMax;
+            const bool validBounds = vis.Bounded;
+            if (validBounds && !playerBody) {
+                const AABB worldBounds{vis.WorldMin, vis.WorldMax};
+                const bool seen = (isViewModel ? m_VmFrustum : m_CamFrustum).Intersects(worldBounds) ||
+                                  (splitSleeves && m_VmFrustum.Intersects(worldBounds));
+                if (!seen) {
+                    m_Stats.Culled++;
+                    continue;
                 }
             }
-            const DrawItem item = makeItem(qi, Model::MeshPass::Transparent);
-            if (splitSleeves) pushSleeves(item, m_S.ViewModelTransparentList);
-            (isViewModel ? m_S.ViewModelTransparentList : m_S.TransparentList).push_back(item);
-        }
-        if (anyOpaque) {
-            DrawItem item = makeItem(2000, opaquePass);
-            item.Dynamic = dynamicItem;
-            item.Entity = (unsigned)entt::to_integral(entity);
-            item.WorldMin = vis.WorldMin;
-            item.WorldMax = vis.WorldMax;
-            item.Bounded = validBounds;
-            item.Normal = vis.Normal;
-            if (splitSleeves) pushSleeves(item, m_S.ViewModelList);
-            (isViewModel ? m_S.ViewModelList : m_S.DrawList).push_back(item);
+
+            Model* m = renderable.ModelRef.get();
+            const auto& slots = renderable.Materials;
+            const std::uint64_t matKey = (!slots.empty() && slots[0]) ? slots[0]->Mat.Hash() : m->MaterialSortKey();
+            std::uint32_t progKeyUnused = 0;
+            const Shader* prog = ProgramFor(!slots.empty() ? slots[0].get() : nullptr, progKeyUnused);
+            // PR9 / #112: classify per submesh — a model whose slot 1 is transparent used to draw
+            // entirely opaque because only slot 0's queue was checked (and vice versa). A model
+            // with both kinds is queued in both passes, each drawing only its own submeshes.
+            const int layerBit = (int)(1u << std::clamp(vis.Layer, 0, 31)); // #203 lighting layers (0 without a LayerComponent)
+            bool anyOpaque = false, anyTransparent = false;
+            int qi = 2000; // QueueIndex of the first transparent slot
+            for (int i = 0; i < m->MeshCount(); ++i) {
+                const bool hasSlot = i < (int)slots.size() && slots[i];
+                if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) {
+                    if (!anyTransparent) qi = slots[i]->QueueIndex;
+                    anyTransparent = true;
+                } else {
+                    anyOpaque = true;
+                }
+            }
+            const Model::MeshPass opaquePass = anyTransparent ? Model::MeshPass::Opaque : Model::MeshPass::All;
+            // #112 — depth from the world-space bounds centre, not the entity origin (a large mesh
+            // whose pivot sits at one end sorted as if it were all at that end).
+            const glm::vec3 centre = validBounds ? glm::vec3(model * glm::vec4((boundsMin + boundsMax) * 0.5f, 1.0f))
+                                                 : glm::vec3(model[3]);
+            const float viewDepth = -(ctx.View * glm::vec4(centre, 1.0f)).z;
+            const std::uint64_t giMask =
+                m_In.giVolumes ? (validBounds ? m_In.giVolumes->MaskFor(vis.WorldMin, vis.WorldMax) : m_In.giVolumes->AllMask()) : 0ull;
+            // What both passes' items share; each pass then fills its own fields.
+            const auto makeItem = [&](int queueIndex, Model::MeshPass pass) {
+                DrawItem item{ model, m, &slots, matKey, prog,
+                    m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
+                    queueIndex, viewDepth, centre, pass,
+                    renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
+                item.StaticReceiver = staticReceiver;
+                item.GIMask = giMask;
+                item.SortId = (std::uint32_t)entt::to_integral(entity);
+                item.DoubleSided = clothing;
+                item.LayerPull = layerPull;
+                item.LodFade = world.LodFadeOf(entity);
+                if (outfitHide && outfitHide->Visible) {
+                    item.Visible = outfitHide->Visible.get();
+                    item.Tris = (int)item.Visible->Triangles();
+                }
+                if (anyCameraMask) {
+                    item.BoneMaskMode = 1;
+                    item.BoneMask = cameraMask;
+                }
+                return item;
+            };
+            // The view-model pass's copy of a split piece: only its sleeves.
+            const auto pushSleeves = [&](const DrawItem& item, std::vector<DrawItem>& to) {
+                DrawItem sleeves = item;
+                sleeves.BoneMaskMode = 2;
+                std::copy(std::begin(bodyTag->SleeveBones), std::end(bodyTag->SleeveBones), sleeves.BoneMask.begin());
+                // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
+                // projection, and its open end showed as black slivers there.
+                sleeves.HideBones = nullptr;
+                // The sleeves are the arms' own: not the collar, and their Near Hide a plain sphere.
+                sleeves.CollarVerts = 0;
+                sleeves.NearHideWidth = 0.0f;
+                to.push_back(sleeves);
+            };
+            if (anyTransparent) {
+                if (!m_AnyTransmission) {
+                    for (int i = 0; i < m->MeshCount() && !m_AnyTransmission; ++i) {
+                        const bool hasSlot = i < (int)slots.size() && slots[i];
+                        if (!hasSlot || slots[i]->RenderQueue != MaterialAsset::Queue::Transparent) continue;
+                        m_AnyTransmission = slots[i]->Mat.TransmissionStrength > 0.0f;
+                    }
+                }
+                const DrawItem item = makeItem(qi, Model::MeshPass::Transparent);
+                if (splitSleeves) pushSleeves(item, m_S.ViewModelTransparentList);
+                (isViewModel ? m_S.ViewModelTransparentList : m_S.TransparentList).push_back(item);
+            }
+            if (anyOpaque) {
+                DrawItem item = makeItem(2000, opaquePass);
+                item.Dynamic = dynamicItem;
+                item.Entity = (unsigned)entt::to_integral(entity);
+                item.WorldMin = vis.WorldMin;
+                item.WorldMax = vis.WorldMax;
+                item.Bounded = validBounds;
+                item.Normal = vis.Normal;
+                if (splitSleeves) pushSleeves(item, m_S.ViewModelList);
+                (isViewModel ? m_S.ViewModelList : m_S.DrawList).push_back(item);
+            }
         }
     }
 }
