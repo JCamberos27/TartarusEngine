@@ -139,6 +139,111 @@ void GatherCache() {
     CHECK(Gather(other, all).empty());
 }
 
+// GatherVisible's candidate patch (renderables created, destroyed both ways, re-parented, given another model or none,
+// tags and layers changed, moved) hands every query exactly what a from-scratch build hands it, frame after frame of
+// random changes; and those frames do take the patch.
+void GatherPatch() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto modelA = Model::ImportDeferred(path, ModelImportSettings{});
+    const auto modelB = Model::ImportDeferred(path, ModelImportSettings{}); // another model, as a swap brings
+    CHECK(modelA && modelB);
+    if (!modelA || !modelB) return;
+    World w;
+    std::mt19937 rng(1124);
+    auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
+    auto at = [&]() { return glm::vec3((float)pick(200) - 100.0f, 0.0f, (float)pick(200) - 100.0f); };
+    std::vector<entt::entity> live;
+    auto spawn = [&]() {
+        const entt::entity e = w.CreateModelEntity(pick(2) ? modelA : modelB, at(), glm::vec3(0), glm::vec3(1), "R");
+        if (!live.empty() && pick(3) == 0) w.SetParent(e, live[pick(live.size())]);
+        live.push_back(e);
+    };
+    for (int i = 0; i < 300; ++i) spawn();
+    const glm::mat4 proj = glm::perspective(glm::radians(75.0f), 1.0f, 0.1f, 300.0f);
+    struct Result { std::vector<entt::entity> Ids; std::vector<glm::vec3> Mins; };
+    auto gather = [&](const VisibilityQuery& q) {
+        std::vector<VisibleRenderable> out;
+        GatherVisible(w, q, out);
+        std::sort(out.begin(), out.end(), [](const VisibleRenderable& a, const VisibleRenderable& b) { return a.Entity < b.Entity; });
+        Result r;
+        for (const auto& v : out) {
+            r.Ids.push_back(v.Entity);
+            r.Mins.push_back(v.WorldMin);
+        }
+        return r;
+    };
+    auto queries = [&](const glm::vec3& eye, const glm::vec3& look) {
+        std::vector<Result> rs;
+        const Frustum f = Frustum::FromViewProj(proj * glm::lookAt(eye, look, glm::vec3(0, 1, 0)));
+        VisibilityQuery all, view, casts, editor;
+        view.Cull = &f;
+        casts.Cull = &f;
+        casts.ShadowCasters = true;
+        editor.Cull = &f;
+        editor.EditorView = true;
+        editor.LayerVisibleMask = ~0u & ~(1u << 3);
+        for (const VisibilityQuery* q : {&all, &view, &casts, &editor}) rs.push_back(gather(*q));
+        glm::vec3 lo, hi;
+        if (RenderableBounds(w, lo, hi)) rs.push_back({{}, {lo, hi}});
+        return rs;
+    };
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    queries(glm::vec3(0, 2, 0), glm::vec3(0, 2, -1));
+    int patched = 0, frames = 0;
+    for (int frame = 0; frame < 300; ++frame) {
+        live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+        const int ops = 1 + (int)pick(4);
+        for (int op = 0; op < ops && !live.empty(); ++op) {
+            live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+            if (live.empty()) break;
+            const entt::entity e = live[pick(live.size())];
+            switch (pick(12)) {
+            case 0: case 1: spawn(); break;
+            case 2: w.DestroyEntityAndChildren(e); break;
+            case 3: w.Registry.destroy(e); break; // its children orphaned
+            case 4: w.SetParent(e, pick(3) == 0 ? entt::entity{entt::null} : live[pick(live.size())]); break;
+            case 5: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef == modelA ? modelB : modelA; break; }
+            case 6: if (w.Registry.all_of<DeactivatedTag>(e)) w.Registry.remove<DeactivatedTag>(e); else w.Registry.emplace<DeactivatedTag>(e); break;
+            case 7: if (w.Registry.all_of<HiddenInSceneTag>(e)) w.Registry.remove<HiddenInSceneTag>(e); else w.Registry.emplace<HiddenInSceneTag>(e); break;
+            case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(5); break;
+            case 9: w.Registry.get<RenderableComponent>(e).CastShadows = pick(2) ? RenderableComponent::ShadowCasting::Off
+                                                                                     : RenderableComponent::ShadowCasting::On; break;
+            case 10: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef ? nullptr : modelA; break; } // none, or one again
+            default: w.Registry.get<TransformComponent>(e).Position = at(); break;
+            }
+        }
+        w.RebuildWorldTransformCache();
+        const glm::vec3 eye((float)pick(100) - 50.0f, 2.0f, (float)pick(100) - 50.0f);
+        const glm::vec3 look = eye + glm::vec3((float)pick(3) - 1.0f, 0.0f, pick(2) ? 1.0f : -1.0f);
+        const std::uint64_t fullBefore = GatherCandidateFullBuilds();
+        const auto patchedResults = queries(eye, look);
+        ++frames;
+        patched += GatherCandidateFullBuilds() == fullBefore ? 1 : 0;
+        ForgetGatherCandidates();
+        const auto scratch = queries(eye, look);
+        bool same = patchedResults.size() == scratch.size();
+        for (size_t i = 0; same && i < 4; ++i) same = patchedResults[i].Ids == scratch[i].Ids && patchedResults[i].Mins == scratch[i].Mins;
+        CHECK(same);
+        if (!same) {
+            std::printf("[GatherPatch] frame %d differs from a from-scratch build\n", frame);
+            break;
+        }
+        // RenderableBounds: a superset either way (a patched cell only grows).
+        if (patchedResults.size() == 5 && scratch.size() == 5) {
+            const glm::vec3 plo = patchedResults[4].Mins[0], phi = patchedResults[4].Mins[1];
+            const glm::vec3 slo = scratch[4].Mins[0], shi = scratch[4].Mins[1];
+            CHECK(glm::all(glm::lessThanEqual(plo, slo + 1e-3f)) && glm::all(glm::greaterThanEqual(phi, shi - 1e-3f)));
+        }
+    }
+    std::printf("[GatherPatch] %d of %d frames patched\n", patched, frames);
+    CHECK(patched * 2 > frames);
+}
+
 // mergeByMaterial: the same geometry and bounds in fewer meshes. Needs the model library (Drive assets).
 void MergeByMaterial() {
     const char* rel = "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx";
@@ -1742,6 +1847,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
+    tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});

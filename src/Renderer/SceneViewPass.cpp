@@ -386,6 +386,7 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.StaticReceiver = staticReceiver;
             item.GIMask = giMask;
+            item.SortId = (std::uint32_t)entt::to_integral(entity);
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
             item.LodFade = world.LodFadeOf(entity);
@@ -441,16 +442,17 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
 // Opaque: the static world first, then by program (the costliest switch), material, and front to back within a
 // material (#112 — cheaper overdraw: nearer surfaces fill depth first). A user-space pointer leaves the top bit free
 // for Dynamic. Transparent: QueueIndex ascending, then ViewDepth descending (farthest first), then MatKey. Equal keys
-// keep their gather order (the index breaks the tie), so the order is the same every frame.
+// go by the entity drawn (SortId), then by list order (one entity's items), not by the order GatherVisible handed them
+// out in, which a patched candidate list changes: the order is the same every frame, patched or not.
 void SceneRenderer::ViewPass::SortItems(std::vector<DrawItem>& list, bool transparent) {
     std::vector<SceneSortKey>& keys = m_S.SortKeys;
     keys.clear();
     for (std::uint32_t i = 0; i < (std::uint32_t)list.size(); ++i) {
         const DrawItem& d = list[i];
         if (transparent)
-            keys.push_back({(std::uint64_t)((std::int64_t)d.QueueIndex) ^ (1ull << 63), d.MatKey, d.ViewDepth, i});
+            keys.push_back({(std::uint64_t)((std::int64_t)d.QueueIndex) ^ (1ull << 63), d.MatKey, d.ViewDepth, d.SortId, i});
         else
-            keys.push_back({(d.Dynamic ? 1ull << 63 : 0ull) | (std::uint64_t)(std::uintptr_t)d.Prog, d.MatKey, d.ViewDepth, i});
+            keys.push_back({(d.Dynamic ? 1ull << 63 : 0ull) | (std::uint64_t)(std::uintptr_t)d.Prog, d.MatKey, d.ViewDepth, d.SortId, i});
     }
     const auto less = [transparent](const SceneSortKey& a, const SceneSortKey& b) {
         if (a.A != b.A) return a.A < b.A;
@@ -464,6 +466,7 @@ void SceneRenderer::ViewPass::SortItems(std::vector<DrawItem>& list, bool transp
     std::sort(keys.begin(), keys.end(), [&less](const SceneSortKey& a, const SceneSortKey& b) {
         if (less(a, b)) return true;
         if (less(b, a)) return false;
+        if (a.Id != b.Id) return a.Id < b.Id;
         return a.Index < b.Index;
     });
     m_S.SortScratch.clear();

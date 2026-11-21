@@ -66,6 +66,9 @@ struct SceneDrawItem {
     // (Affect Dynamic off), so a character walking through a pool or a crate on a stain covers it.
     bool Dynamic = false;
     unsigned Entity = 0xFFFFFFFFu; // for the blood splats on it (BloodRenderer::SplatRange)
+    // The entity it draws, for every item (Entity above is opaque-only): SortItems breaks exact ties by it, so equal
+    // keys (coplanar surfaces) draw in the same order whatever order GatherVisible handed them out in.
+    std::uint32_t SortId = 0xFFFFFFFFu;
     // Which decals take to it (Affect Static / Dynamic): StaticTag, or nothing skinned or simulated.
     bool StaticReceiver = true;
     // World bounds (HiZCuller box test); Bounded false = none, never culled.
@@ -90,6 +93,7 @@ struct SceneOpaqueTag {
 struct SceneSortKey {
     std::uint64_t A, B; // A: Dynamic + program (opaque) or the queue index (transparent); B: material key
     float Depth;
+    std::uint32_t Id;    // DrawItem::SortId: exact ties go by entity, then by Index
     std::uint32_t Index;
 };
 
