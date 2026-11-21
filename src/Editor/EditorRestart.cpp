@@ -194,19 +194,19 @@ bool Relaunch(const fs::path& stateFile) {
     return true;
 }
 
-void CleanupAtStartup(unsigned long waitPid, unsigned long timeoutMs) {
+bool CleanupAtStartup(unsigned long waitPid, unsigned long timeoutMs) {
+    bool exited = true;
     if (waitPid != 0) {
         if (HANDLE old = OpenProcess(SYNCHRONIZE, FALSE, waitPid)) {
-            if (WaitForSingleObject(old, timeoutMs) == WAIT_TIMEOUT)
-                Log::Warn("Rebuild & Restart: the old editor (pid " + std::to_string(waitPid) + ") hasn't exited after " +
-                          std::to_string(timeoutMs) + " ms; going on.");
+            exited = WaitForSingleObject(old, timeoutMs) != WAIT_TIMEOUT;
             CloseHandle(old);
         }
     }
     const fs::path exe = ExePath();
-    if (exe.empty()) return;
+    if (exe.empty()) return exited;
     std::error_code ec;
     fs::remove(OldExePath(exe), ec); // fails harmlessly while another copy still runs from it
+    return exited;
 }
 
 fs::path StateFile() {

@@ -876,6 +876,9 @@ public:
     // Rebuild & Restart (File menu, Ctrl+Alt+R; EditorRestart.h), in EditorLayer_Restart.cpp.
     // Why it can't start now ("" = it can): not a source build, an untitled scene with edits, unsaved scripts.
     std::string RestartBlockedReason() const;
+    // The restart hand-over's way out of Prefab Mode: leaves a clean one without saving; false (stays, restart
+    // cancelled by the caller) when it has unsaved edits or is still open afterwards.
+    bool LeavePrefabModeForRestart(World& world, AssetLibrary& assets);
     bool GlobalUndoActive() const { return m_GlobalUndoActive; } // a drag/edit's undo step is still open
     void RequestRebuildRestart();
     // The old editor, build done: writes the recovery snapshot (when dirty) and the hand-over file.

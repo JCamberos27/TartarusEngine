@@ -65,6 +65,10 @@ void Test_LaunchOptions_Errors() {
     CHECK(!Parse({"--smoke-test", "--perf-sample"}, o, err) && err.find("only works with") != std::string::npos);
     CHECK(!Parse({"--perf-res", "1280x720"}, o, err)); // the editor doesn't take it
     CHECK(!Parse({"--perf-bench", "--perf-res", "big"}, o, err) && err.find("1920x1080") != std::string::npos);
+    for (const char* pid : {"abc", "0", "12x", "+12", " 12", "99999999999", "4294967295"})
+        CHECK(!Parse({"--wait-pid", pid}, o, err) && err.find("process id") != std::string::npos);
+    CHECK(!Parse({"--wait-pid", "-5"}, o, err)); // a value starting with '-' is a missing value
+    CHECK(Parse({"--wait-pid", "4294967294"}, o, err) && o.waitPid == 4294967294ul);
     CHECK(!Parse({"--project", "Z:/no/such/folder/anywhere"}, o, err));
 }
 

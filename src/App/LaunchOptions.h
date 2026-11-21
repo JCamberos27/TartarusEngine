@@ -90,6 +90,7 @@ struct LaunchOptions {
     // loads, then deleted. --wait-pid <pid> (editor): wait for the editor being replaced to exit first.
     std::string restoreStateFile;
     unsigned long waitPid = 0;
+    static constexpr unsigned long kBadWaitPid = 0xFFFFFFFFul; // set by a bad --wait-pid; the parse fails
 };
 
 // Parses argv into `out`. On a bad command line returns false with `error` set (and nothing applied). On success

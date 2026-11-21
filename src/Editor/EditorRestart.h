@@ -41,8 +41,10 @@ std::vector<std::wstring> RelaunchArgs(const std::vector<std::wstring>& args, co
 std::wstring QuoteArg(const std::wstring& arg);
 
 // At startup with --wait-pid: waits (up to `timeoutMs`) for the old editor to exit, then deletes
-// the <exe>.old it left. Without one, just deletes a stale <exe>.old.
-void CleanupAtStartup(unsigned long waitPid, unsigned long timeoutMs = 60000);
+// the <exe>.old it left. Without one, just deletes a stale <exe>.old. False when the old editor was
+// still running at the timeout; it runs before Log::OpenFile, so the caller logs that once the log is open.
+constexpr unsigned long kWaitOldEditorMs = 60000;
+bool CleanupAtStartup(unsigned long waitPid, unsigned long timeoutMs = kWaitOldEditorMs);
 
 // Where this editor writes its restart state: the per-instance user folder, keyed by this process's pid.
 std::filesystem::path StateFile();

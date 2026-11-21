@@ -17,7 +17,19 @@ std::string EditorLayer::RestartBlockedReason() const {
     if (m_Dirty && m_CurrentScenePath.empty())
         return "Save the untitled scene first: its unsaved edits have nowhere to be kept across the restart.";
     if (HasUnsavedScripts()) return "Save or close the Script IDE's unsaved files first.";
+    if (InPrefabMode() && m_Dirty) return "Save or leave Prefab Mode first.";
     return {};
+}
+
+bool EditorLayer::LeavePrefabModeForRestart(World& world, AssetLibrary& assets) {
+    if (!InPrefabMode()) return true;
+    if (m_Dirty) { // edited while the build ran: never write the prefab behind the user's back
+        Log::Warn("Rebuild & Restart: cancelled, the open prefab has unsaved edits. Save or leave Prefab Mode, then restart.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+        return false;
+    }
+    ExitPrefabMode(world, assets, /*save=*/false);
+    return !InPrefabMode();
 }
 
 void EditorLayer::RequestRebuildRestart() {
