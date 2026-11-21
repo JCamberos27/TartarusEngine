@@ -65,6 +65,7 @@ bool WriteBake(const Piece& piece, const BakeFiles& files) {
     d.PaintMetal = metal ? 1.0f : 0.0f;
     d.Relief = piece.Relief;
     d.UVPaint = piece.UV;
+    d.GraffitiRecipe = piece.BakeRecipe.empty() ? piece.RecipeHash() : piece.BakeRecipe;
     if (!d.Save()) {
         Log::Error("Graffiti: couldn't write '" + decalPath + "'.", LogContext::Asset(piece.Path));
         return false;
@@ -72,8 +73,17 @@ bool WriteBake(const Piece& piece, const BakeFiles& files) {
     return true;
 }
 
+bool BakeCurrent(const Piece& piece) {
+    std::error_code ec;
+    const std::string decalPath = piece.DecalPath();
+    if (!fs::exists(fs::u8path(decalPath), ec) || !fs::exists(fs::u8path(piece.MapPath("Albedo")), ec)) return false;
+    const std::shared_ptr<DecalAsset> d = DecalAsset::Load(decalPath);
+    return d && !d->Missing && !d->GraffitiRecipe.empty() && d->GraffitiRecipe == piece.RecipeHash();
+}
+
 std::shared_ptr<Piece> SnapshotForBake(const Piece& piece) {
     auto s = std::make_shared<Piece>();
+    s->BakeRecipe = piece.BakeRecipe.empty() ? piece.RecipeHash() : piece.BakeRecipe;
     s->Path = piece.Path;
     s->Name = piece.Name;
     s->Width = piece.Width;

@@ -148,7 +148,11 @@ BakeFiles EncodePngs(const BakeImages& images);
 // updates only what the bake owns (its maps, tier, paint, glow and channels) and keeps edits made
 // to it since (size, fades, category, weathering). Atomic writes; safe on a worker, where nothing
 // enters the editor's undo history (the recipe is the undo state: undoing re-bakes it).
+// The .decal also records the recipe's hash (piece.BakeRecipe, else piece.RecipeHash()).
 bool WriteBake(const Piece& piece, const BakeFiles& files);
+// Whether `piece` (the recipe as loaded) has a bake of this very recipe: its .decal and albedo exist and
+// the .decal's recipe hash matches. A bake from before the hash was stored, or of an older recipe, is not.
+bool BakeCurrent(const Piece& piece);
 // What WriteBake reads of `piece`, and nothing more: the paths (Path, Name), the canvas and paint
 // settings and the weathering, with the layers (and their strokes) reduced to one stand-in layer when
 // any visible one is metal. Taken when a bake starts, so a bake in flight keeps writing to the piece
