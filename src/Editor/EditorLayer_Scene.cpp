@@ -18,6 +18,7 @@
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
+#include "PrefabMemberRef.h"
 #include "Camera.h"
 #include "Model.h"
 #include "Texture.h"
@@ -872,24 +873,6 @@ std::vector<int> EditorLayer::CaptureSelectedOrders(const World& world) const {
     return CaptureSelectedOrders(world, GetSelectedItems());
 }
 
-// A member of a placed prefab instance (not its root): the instance root's order and the member's
-// prefab-local index. Members are rebuilt from the .prefab on every scene load and get new orders
-// (only the root's is saved), so their own order can't find them again after Stop / Undo / Redo.
-static bool PrefabMemberRef(const World& world, entt::entity e, int& rootOrder, int& local) {
-    for (entt::entity cur = e; cur != entt::null && world.Registry.valid(cur);) {
-        if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(cur)) {
-            const auto at = std::find(pi->InstanceEntities.begin(), pi->InstanceEntities.end(), e);
-            if (cur == e || at == pi->InstanceEntities.end() || !world.Registry.all_of<OrderComponent>(cur)) return false;
-            rootOrder = world.Registry.get<OrderComponent>(cur).Value;
-            local = (int)(at - pi->InstanceEntities.begin());
-            return true;
-        }
-        const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
-        cur = h ? h->Parent : entt::null;
-    }
-    return false;
-}
-
 // Orders are never negative (World::AllocateOrder counts up from 0), so a prefab member is stored
 // as its root's order followed by ~local (negative); everything else as its own order.
 std::vector<int> EditorLayer::CaptureSelectedOrders(const World& world,
@@ -919,10 +902,7 @@ std::vector<entt::entity> EditorLayer::ResolveSelectionOrders(const World& world
         const int local = i + 1 < orders.size() && orders[i + 1] < 0 ? ~orders[++i] : -1;
         if (it == byOrder.end()) continue; // that object doesn't exist at this point in history
         entt::entity e = it->second;
-        if (local >= 0) {
-            const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(e);
-            e = pi && local < (int)pi->InstanceEntities.size() ? pi->InstanceEntities[local] : entt::null;
-        }
+        if (local >= 0) e = PrefabMemberAt(world, e, local);
         if (e != entt::null && world.Registry.valid(e) && std::find(found.begin(), found.end(), e) == found.end())
             found.push_back(e);
     }
