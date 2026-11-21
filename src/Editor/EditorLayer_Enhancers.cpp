@@ -17,6 +17,7 @@
 #include "EditorPanels.h"   // vFavorites: the Asset Browser window it overlays
 #include "EditorTestProbe.h" // --editor-tests widget tags
 #include "World.h"
+#include "EntityOrderIndex.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
 #include "ComponentRegistry.h"
@@ -581,34 +582,11 @@ void EditorLayer::TrackSceneKey() {
         Log::Info("Bookmarks and favorites of " + std::filesystem::path(pathKey).filename().string() + " now follow its GUID.");
 }
 
-// Every bookmark chip, tab and pin resolves its entity each frame: one order -> entity map, rebuilt when the
-// registry or its entity count changes, when a hit turns out stale (a renumber), or once a second as a backstop,
-// instead of a walk over every entity per lookup.
+// Every bookmark chip, tab and pin resolves its entity each frame: one order -> entity map (EntityOrderIndex),
+// rebuilt only when the OrderComponent storage changed, instead of a walk over every entity per lookup.
 entt::entity EditorLayer::FindEntityByOrder(const World& world, int order) const {
-    if (order < 0) return entt::null;
-    static std::unordered_map<int, entt::entity> s_ByOrder;
-    static const void* s_Registry = nullptr;
-    static int s_Frame = -1;
-    static size_t s_Count = 0;
-    const auto* orders = world.Registry.storage<OrderComponent>(); // const registry: null until any entity has one
-    const size_t count = orders ? orders->size() : 0;
-    const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
-    if (frame < 0 || frame - s_Frame >= 60 || frame < s_Frame || s_Registry != &world.Registry || s_Count != count) {
-        s_ByOrder.clear();
-        for (auto [e, o] : world.Registry.view<const OrderComponent>().each()) s_ByOrder.emplace(o.Value, e);
-        s_Frame = frame;
-        s_Registry = &world.Registry;
-        s_Count = count;
-    }
-    const auto it = s_ByOrder.find(order);
-    if (it == s_ByOrder.end()) return entt::null;
-    // An entity renumbered since the map was built: check before trusting it, and rebuild on the next call.
-    const OrderComponent* o = world.Registry.valid(it->second) ? world.Registry.try_get<OrderComponent>(it->second) : nullptr;
-    if (o && o->Value == order) return it->second;
-    s_Frame = -1000;
-    for (auto [e, oc] : world.Registry.view<const OrderComponent>().each())
-        if (oc.Value == order) return e;
-    return entt::null;
+    static EntityOrderIndex s_Index;
+    return s_Index.Find(world.Registry, order, ImGui::GetCurrentContext() ? (std::int64_t)ImGui::GetFrameCount() : -1);
 }
 
 entt::entity EditorLayer::ResolveDefaultParent(const World& world) const {

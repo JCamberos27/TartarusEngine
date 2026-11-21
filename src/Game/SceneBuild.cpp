@@ -134,7 +134,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
                     bool flattenPrefabInstances) {
     json root;
     AssetRefWriteCache refs; // per-path write path + GUID, worked out once per build
-    std::unordered_map<std::string, std::optional<json>> prefabFiles; // each instance's .prefab, parsed once (nullopt: unreadable)
+    std::set<std::string> unreadablePrefabs; // warned once per build
     auto included = [&](entt::entity e) { return !only || only->count(e) > 0; };
     // v4 changes the shape of every "rotation" value, so fragments and prefabs now need the
     // version too even though they still omit scene environment settings.
@@ -435,25 +435,18 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
                 s["hierStyle"] = HierStyleToJson(*hs); // a styled prefab-instance root keeps its row style
 
             // #302 Part B — per-field overrides: diff each live instance entity against its
-            // pristine counterpart in the .prefab file, by prefab-local index.
+            // pristine counterpart, by prefab-local index. The pristine is the content the
+            // instance was built from (g_prefabPristineCache), parsed once per session, not per
+            // save (the save runs on every undo commit).
             if (!pi.InstanceEntities.empty()) {
-                // Read once per save, however many instances of it the scene holds (the save runs on every undo commit).
-                auto [slot, fresh] = prefabFiles.try_emplace(pi.SourcePath);
-                if (fresh) {
-                    std::ifstream pf(std::filesystem::u8path(pi.SourcePath));
-                    if (pf.is_open()) {
-                        // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
-                        // save: skip this instance's override diff (its stub still saves) and warn.
-                        try { json parsed; pf >> parsed; UpgradeLegacyBoxKeys(parsed); slot->second = std::move(parsed); }
-                        catch (const std::exception& ex) {
-                            Log::Warn("Scene: couldn't parse prefab '" + pi.SourcePath +
-                                      "' while saving - its per-field overrides were not re-diffed: " + ex.what());
-                        }
-                    }
-                }
-                const bool prefabOk = slot->second.has_value();
-                if (prefabOk) {
-                    const json& prefab = *slot->second;
+                const json* cached = CachedPrefabJson(pi.SourcePath);
+                // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
+                // save: skip this instance's override diff (its stub still saves) and warn.
+                if (!cached && unreadablePrefabs.insert(pi.SourcePath).second)
+                    Log::Warn("Scene: couldn't read prefab '" + pi.SourcePath +
+                              "' while saving - its per-field overrides were not re-diffed.");
+                if (cached) {
+                    const json& prefab = *cached;
                     std::vector<const json*> pristineEnts = PrefabEntityObjects(prefab);
                     json overrides = json::array();
                     const std::size_t n = std::min(pi.InstanceEntities.size(), pristineEnts.size());

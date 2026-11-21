@@ -3,6 +3,11 @@
 // conservative slice of the API — the 4.6 context mainly buys guaranteed KHR_debug, core
 // anisotropic filtering, and headroom for future features — so this stays deliberately short.
 #pragma once
+#if __has_include("CoreApi.h")
+#include "CoreApi.h"
+#else
+#define TARTARUS_CORE_API
+#endif
 #include <cstddef>
 
 #define GL_TRUE 1
@@ -452,109 +457,109 @@ typedef void (__stdcall* PFNGLTEXTUREBARRIERPROC)(void);
 typedef void (__stdcall* PFNGLUNIFORM2IPROC)(GLint, GLint, GLint);
 typedef void (__stdcall* PFNGLBINDIMAGETEXTUREPROC)(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum);
 
-extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
-extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
-extern PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays;
-extern PFNGLGENBUFFERSPROC glGenBuffers;
-extern PFNGLBINDBUFFERPROC glBindBuffer;
-extern PFNGLBUFFERDATAPROC glBufferData;
-extern PFNGLBUFFERSUBDATAPROC glBufferSubData;
-extern PFNGLDELETEBUFFERSPROC glDeleteBuffers;
-extern PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
-extern PFNGLVERTEXATTRIBIPOINTERPROC glVertexAttribIPointer;
-extern PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
-extern PFNGLCREATESHADERPROC glCreateShader;
-extern PFNGLSHADERSOURCEPROC glShaderSource;
-extern PFNGLCOMPILESHADERPROC glCompileShader;
-extern PFNGLGETSHADERIVPROC glGetShaderiv;
-extern PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
-extern PFNGLDELETESHADERPROC glDeleteShader;
-extern PFNGLCREATEPROGRAMPROC glCreateProgram;
-extern PFNGLATTACHSHADERPROC glAttachShader;
-extern PFNGLLINKPROGRAMPROC glLinkProgram;
-extern PFNGLGETPROGRAMIVPROC glGetProgramiv;
-extern PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
-extern PFNGLUSEPROGRAMPROC glUseProgram;
-extern PFNGLDELETEPROGRAMPROC glDeleteProgram;
-extern PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
-extern PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv;
-extern PFNGLUNIFORM2FPROC glUniform2f;
-extern PFNGLUNIFORM1IPROC glUniform1i;
-extern PFNGLUNIFORM1FPROC glUniform1f;
-extern PFNGLUNIFORM3FPROC glUniform3f;
-extern PFNGLUNIFORM3FVPROC glUniform3fv;
-extern PFNGLUNIFORM1FVPROC glUniform1fv;
-extern PFNGLUNIFORM1IVPROC glUniform1iv;
-extern PFNGLUNIFORM4FPROC glUniform4f;
-extern PFNGLACTIVETEXTUREPROC glActiveTexture;
-extern PFNGLGENERATEMIPMAPPROC glGenerateMipmap;
-extern PFNGLDRAWELEMENTSPROC glDrawElements;
-extern PFNGLDRAWELEMENTSBASEVERTEXPROC glDrawElementsBaseVertex;
-extern PFNGLGETATTRIBLOCATIONPROC glGetAttribLocation;
-extern PFNGLDETACHSHADERPROC glDetachShader;
-extern PFNGLBINDSAMPLERPROC glBindSampler;
-extern PFNGLBLENDEQUATIONPROC glBlendEquation;
-extern PFNGLBLENDEQUATIONSEPARATEPROC glBlendEquationSeparate;
-extern PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
-extern PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers;
-extern PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer;
-extern PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D;
-extern PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus;
-extern PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers;
-extern PFNGLGENRENDERBUFFERSPROC glGenRenderbuffers;
-extern PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer;
-extern PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage;
-extern PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer;
-extern PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers;
-extern PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer;
+extern TARTARUS_CORE_API PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
+extern TARTARUS_CORE_API PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
+extern TARTARUS_CORE_API PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays;
+extern TARTARUS_CORE_API PFNGLGENBUFFERSPROC glGenBuffers;
+extern TARTARUS_CORE_API PFNGLBINDBUFFERPROC glBindBuffer;
+extern TARTARUS_CORE_API PFNGLBUFFERDATAPROC glBufferData;
+extern TARTARUS_CORE_API PFNGLBUFFERSUBDATAPROC glBufferSubData;
+extern TARTARUS_CORE_API PFNGLDELETEBUFFERSPROC glDeleteBuffers;
+extern TARTARUS_CORE_API PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
+extern TARTARUS_CORE_API PFNGLVERTEXATTRIBIPOINTERPROC glVertexAttribIPointer;
+extern TARTARUS_CORE_API PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
+extern TARTARUS_CORE_API PFNGLCREATESHADERPROC glCreateShader;
+extern TARTARUS_CORE_API PFNGLSHADERSOURCEPROC glShaderSource;
+extern TARTARUS_CORE_API PFNGLCOMPILESHADERPROC glCompileShader;
+extern TARTARUS_CORE_API PFNGLGETSHADERIVPROC glGetShaderiv;
+extern TARTARUS_CORE_API PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
+extern TARTARUS_CORE_API PFNGLDELETESHADERPROC glDeleteShader;
+extern TARTARUS_CORE_API PFNGLCREATEPROGRAMPROC glCreateProgram;
+extern TARTARUS_CORE_API PFNGLATTACHSHADERPROC glAttachShader;
+extern TARTARUS_CORE_API PFNGLLINKPROGRAMPROC glLinkProgram;
+extern TARTARUS_CORE_API PFNGLGETPROGRAMIVPROC glGetProgramiv;
+extern TARTARUS_CORE_API PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
+extern TARTARUS_CORE_API PFNGLUSEPROGRAMPROC glUseProgram;
+extern TARTARUS_CORE_API PFNGLDELETEPROGRAMPROC glDeleteProgram;
+extern TARTARUS_CORE_API PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
+extern TARTARUS_CORE_API PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv;
+extern TARTARUS_CORE_API PFNGLUNIFORM2FPROC glUniform2f;
+extern TARTARUS_CORE_API PFNGLUNIFORM1IPROC glUniform1i;
+extern TARTARUS_CORE_API PFNGLUNIFORM1FPROC glUniform1f;
+extern TARTARUS_CORE_API PFNGLUNIFORM3FPROC glUniform3f;
+extern TARTARUS_CORE_API PFNGLUNIFORM3FVPROC glUniform3fv;
+extern TARTARUS_CORE_API PFNGLUNIFORM1FVPROC glUniform1fv;
+extern TARTARUS_CORE_API PFNGLUNIFORM1IVPROC glUniform1iv;
+extern TARTARUS_CORE_API PFNGLUNIFORM4FPROC glUniform4f;
+extern TARTARUS_CORE_API PFNGLACTIVETEXTUREPROC glActiveTexture;
+extern TARTARUS_CORE_API PFNGLGENERATEMIPMAPPROC glGenerateMipmap;
+extern TARTARUS_CORE_API PFNGLDRAWELEMENTSPROC glDrawElements;
+extern TARTARUS_CORE_API PFNGLDRAWELEMENTSBASEVERTEXPROC glDrawElementsBaseVertex;
+extern TARTARUS_CORE_API PFNGLGETATTRIBLOCATIONPROC glGetAttribLocation;
+extern TARTARUS_CORE_API PFNGLDETACHSHADERPROC glDetachShader;
+extern TARTARUS_CORE_API PFNGLBINDSAMPLERPROC glBindSampler;
+extern TARTARUS_CORE_API PFNGLBLENDEQUATIONPROC glBlendEquation;
+extern TARTARUS_CORE_API PFNGLBLENDEQUATIONSEPARATEPROC glBlendEquationSeparate;
+extern TARTARUS_CORE_API PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
+extern TARTARUS_CORE_API PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers;
+extern TARTARUS_CORE_API PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer;
+extern TARTARUS_CORE_API PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D;
+extern TARTARUS_CORE_API PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus;
+extern TARTARUS_CORE_API PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers;
+extern TARTARUS_CORE_API PFNGLGENRENDERBUFFERSPROC glGenRenderbuffers;
+extern TARTARUS_CORE_API PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer;
+extern TARTARUS_CORE_API PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage;
+extern TARTARUS_CORE_API PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer;
+extern TARTARUS_CORE_API PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers;
+extern TARTARUS_CORE_API PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer;
 
 // ---- Lighting / HDR overhaul: extended entry points -----------------------------------
-extern PFNGLGETSTRINGIPROC glGetStringi;
-extern PFNGLBINDBUFFERBASEPROC glBindBufferBase;
-extern PFNGLBINDBUFFERRANGEPROC glBindBufferRange;
-extern PFNGLDRAWBUFFERSPROC glDrawBuffers;
-extern PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC glRenderbufferStorageMultisample;
-extern PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample;
-extern PFNGLCREATEBUFFERSPROC glCreateBuffers;
-extern PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage;
-extern PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData;
-extern PFNGLNAMEDBUFFERDATAPROC glNamedBufferData;
-extern PFNGLVERTEXARRAYBINDINGDIVISORPROC glVertexArrayBindingDivisor;
-extern PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC glDrawArraysInstancedBaseInstance;
-extern PFNGLDRAWELEMENTSINSTANCEDPROC glDrawElementsInstanced;
-extern PFNGLGETNAMEDBUFFERSUBDATAPROC glGetNamedBufferSubData;
-extern PFNGLCREATETEXTURESPROC glCreateTextures;
-extern PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;
-extern PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D;
-extern PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC glTextureStorage2DMultisample;
-extern PFNGLTEXTURESUBIMAGE2DPROC glTextureSubImage2D;
-extern PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC glCompressedTextureSubImage2D; // #156
-extern PFNGLTEXTURESUBIMAGE3DPROC glTextureSubImage3D;
-extern PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC glCompressedTextureSubImage3D; // the blood / FX texture arrays (BC3, BC5)
-extern PFNGLTEXTUREPARAMETERIPROC glTextureParameteri;
-extern PFNGLTEXTUREPARAMETERFVPROC glTextureParameterfv;
-extern PFNGLGENERATETEXTUREMIPMAPPROC glGenerateTextureMipmap;
-extern PFNGLBINDTEXTUREUNITPROC glBindTextureUnit;
-extern PFNGLCREATEFRAMEBUFFERSPROC glCreateFramebuffers;
-extern PFNGLNAMEDFRAMEBUFFERTEXTUREPROC glNamedFramebufferTexture;
-extern PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC glNamedFramebufferTextureLayer;
-extern PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC glNamedFramebufferRenderbuffer;
-extern PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC glNamedFramebufferDrawBuffers;
-extern PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC glCheckNamedFramebufferStatus;
-extern PFNGLBLITNAMEDFRAMEBUFFERPROC glBlitNamedFramebuffer;
-extern PFNGLCLEARNAMEDFRAMEBUFFERFVPROC glClearNamedFramebufferfv;
-extern PFNGLCREATEVERTEXARRAYSPROC glCreateVertexArrays;
-extern PFNGLENABLEVERTEXARRAYATTRIBPROC glEnableVertexArrayAttrib;
-extern PFNGLVERTEXARRAYATTRIBFORMATPROC glVertexArrayAttribFormat;
-extern PFNGLVERTEXARRAYATTRIBIFORMATPROC glVertexArrayAttribIFormat;
-extern PFNGLVERTEXARRAYATTRIBBINDINGPROC glVertexArrayAttribBinding;
-extern PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer;
-extern PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer;
-extern PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
-extern PFNGLMEMORYBARRIERPROC glMemoryBarrier;
-extern PFNGLTEXTUREBARRIERPROC glTextureBarrier;
-extern PFNGLBINDIMAGETEXTUREPROC glBindImageTexture;
-extern PFNGLUNIFORM2IPROC glUniform2i;
+extern TARTARUS_CORE_API PFNGLGETSTRINGIPROC glGetStringi;
+extern TARTARUS_CORE_API PFNGLBINDBUFFERBASEPROC glBindBufferBase;
+extern TARTARUS_CORE_API PFNGLBINDBUFFERRANGEPROC glBindBufferRange;
+extern TARTARUS_CORE_API PFNGLDRAWBUFFERSPROC glDrawBuffers;
+extern TARTARUS_CORE_API PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC glRenderbufferStorageMultisample;
+extern TARTARUS_CORE_API PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample;
+extern TARTARUS_CORE_API PFNGLCREATEBUFFERSPROC glCreateBuffers;
+extern TARTARUS_CORE_API PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage;
+extern TARTARUS_CORE_API PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData;
+extern TARTARUS_CORE_API PFNGLNAMEDBUFFERDATAPROC glNamedBufferData;
+extern TARTARUS_CORE_API PFNGLVERTEXARRAYBINDINGDIVISORPROC glVertexArrayBindingDivisor;
+extern TARTARUS_CORE_API PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC glDrawArraysInstancedBaseInstance;
+extern TARTARUS_CORE_API PFNGLDRAWELEMENTSINSTANCEDPROC glDrawElementsInstanced;
+extern TARTARUS_CORE_API PFNGLGETNAMEDBUFFERSUBDATAPROC glGetNamedBufferSubData;
+extern TARTARUS_CORE_API PFNGLCREATETEXTURESPROC glCreateTextures;
+extern TARTARUS_CORE_API PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;
+extern TARTARUS_CORE_API PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D;
+extern TARTARUS_CORE_API PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC glTextureStorage2DMultisample;
+extern TARTARUS_CORE_API PFNGLTEXTURESUBIMAGE2DPROC glTextureSubImage2D;
+extern TARTARUS_CORE_API PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC glCompressedTextureSubImage2D; // #156
+extern TARTARUS_CORE_API PFNGLTEXTURESUBIMAGE3DPROC glTextureSubImage3D;
+extern TARTARUS_CORE_API PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC glCompressedTextureSubImage3D; // the blood / FX texture arrays (BC3, BC5)
+extern TARTARUS_CORE_API PFNGLTEXTUREPARAMETERIPROC glTextureParameteri;
+extern TARTARUS_CORE_API PFNGLTEXTUREPARAMETERFVPROC glTextureParameterfv;
+extern TARTARUS_CORE_API PFNGLGENERATETEXTUREMIPMAPPROC glGenerateTextureMipmap;
+extern TARTARUS_CORE_API PFNGLBINDTEXTUREUNITPROC glBindTextureUnit;
+extern TARTARUS_CORE_API PFNGLCREATEFRAMEBUFFERSPROC glCreateFramebuffers;
+extern TARTARUS_CORE_API PFNGLNAMEDFRAMEBUFFERTEXTUREPROC glNamedFramebufferTexture;
+extern TARTARUS_CORE_API PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC glNamedFramebufferTextureLayer;
+extern TARTARUS_CORE_API PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC glNamedFramebufferRenderbuffer;
+extern TARTARUS_CORE_API PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC glNamedFramebufferDrawBuffers;
+extern TARTARUS_CORE_API PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC glCheckNamedFramebufferStatus;
+extern TARTARUS_CORE_API PFNGLBLITNAMEDFRAMEBUFFERPROC glBlitNamedFramebuffer;
+extern TARTARUS_CORE_API PFNGLCLEARNAMEDFRAMEBUFFERFVPROC glClearNamedFramebufferfv;
+extern TARTARUS_CORE_API PFNGLCREATEVERTEXARRAYSPROC glCreateVertexArrays;
+extern TARTARUS_CORE_API PFNGLENABLEVERTEXARRAYATTRIBPROC glEnableVertexArrayAttrib;
+extern TARTARUS_CORE_API PFNGLVERTEXARRAYATTRIBFORMATPROC glVertexArrayAttribFormat;
+extern TARTARUS_CORE_API PFNGLVERTEXARRAYATTRIBIFORMATPROC glVertexArrayAttribIFormat;
+extern TARTARUS_CORE_API PFNGLVERTEXARRAYATTRIBBINDINGPROC glVertexArrayAttribBinding;
+extern TARTARUS_CORE_API PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer;
+extern TARTARUS_CORE_API PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer;
+extern TARTARUS_CORE_API PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
+extern TARTARUS_CORE_API PFNGLMEMORYBARRIERPROC glMemoryBarrier;
+extern TARTARUS_CORE_API PFNGLTEXTUREBARRIERPROC glTextureBarrier;
+extern TARTARUS_CORE_API PFNGLBINDIMAGETEXTUREPROC glBindImageTexture;
+extern TARTARUS_CORE_API PFNGLUNIFORM2IPROC glUniform2i;
 
 // GPU timer queries — Profiler's GPU-side timing (#197).
 typedef void (__stdcall* PFNGLGENQUERIESPROC)(GLsizei, GLuint*);
@@ -563,66 +568,66 @@ typedef void (__stdcall* PFNGLBEGINQUERYPROC)(GLenum, GLuint);
 typedef void (__stdcall* PFNGLENDQUERYPROC)(GLenum);
 typedef void (__stdcall* PFNGLGETQUERYOBJECTIVPROC)(GLuint, GLenum, GLint*);
 typedef void (__stdcall* PFNGLGETQUERYOBJECTUI64VPROC)(GLuint, GLenum, GLuint64*);
-extern PFNGLGENQUERIESPROC glGenQueries;
-extern PFNGLDELETEQUERIESPROC glDeleteQueries;
-extern PFNGLBEGINQUERYPROC glBeginQuery;
-extern PFNGLENDQUERYPROC glEndQuery;
-extern PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv;
-extern PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
+extern TARTARUS_CORE_API PFNGLGENQUERIESPROC glGenQueries;
+extern TARTARUS_CORE_API PFNGLDELETEQUERIESPROC glDeleteQueries;
+extern TARTARUS_CORE_API PFNGLBEGINQUERYPROC glBeginQuery;
+extern TARTARUS_CORE_API PFNGLENDQUERYPROC glEndQuery;
+extern TARTARUS_CORE_API PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv;
+extern TARTARUS_CORE_API PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
 // GPU-driven draws (InstanceBatch.h, MeshArena.h): meshes at a base vertex of shared buffers, many draws per call.
 #define GL_STREAM_DRAW 0x88E0
 #define GL_DRAW_INDIRECT_BUFFER 0x8F3F
 #define GL_COMMAND_BARRIER_BIT 0x00000040
 typedef void (__stdcall* PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC)(GLenum, GLsizei, GLenum, const void*, GLsizei, GLint);
 typedef void (__stdcall* PFNGLMULTIDRAWELEMENTSINDIRECTPROC)(GLenum, GLenum, const void*, GLsizei, GLsizei);
-extern PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC glDrawElementsInstancedBaseVertex;
-extern PFNGLMULTIDRAWELEMENTSINDIRECTPROC glMultiDrawElementsIndirect;
+extern TARTARUS_CORE_API PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC glDrawElementsInstancedBaseVertex;
+extern TARTARUS_CORE_API PFNGLMULTIDRAWELEMENTSINDIRECTPROC glMultiDrawElementsIndirect;
 typedef void (__stdcall* PFNGLDRAWARRAYSINDIRECTPROC)(GLenum, const void*);
-extern PFNGLDRAWARRAYSINDIRECTPROC glDrawArraysIndirect; // GrassRenderer
+extern TARTARUS_CORE_API PFNGLDRAWARRAYSINDIRECTPROC glDrawArraysIndirect; // GrassRenderer
 // Viewport arrays (GL 4.1): the sun's layered cascades scissor each layer on its own (CascadedShadowMap).
 typedef void (__stdcall* PFNGLVIEWPORTINDEXEDFPROC)(GLuint, GLfloat, GLfloat, GLfloat, GLfloat);
 typedef void (__stdcall* PFNGLSCISSORINDEXEDPROC)(GLuint, GLint, GLint, GLsizei, GLsizei);
-extern PFNGLVIEWPORTINDEXEDFPROC glViewportIndexedf;
-extern PFNGLSCISSORINDEXEDPROC glScissorIndexed;
+extern TARTARUS_CORE_API PFNGLVIEWPORTINDEXEDFPROC glViewportIndexedf;
+extern TARTARUS_CORE_API PFNGLSCISSORINDEXEDPROC glScissorIndexed;
 // Timestamp queries nest, unlike GL_TIME_ELAPSED (#147 GPU profiler).
 typedef void (__stdcall* PFNGLQUERYCOUNTERPROC)(GLuint, GLenum);
-extern PFNGLQUERYCOUNTERPROC glQueryCounter;
+extern TARTARUS_CORE_API PFNGLQUERYCOUNTERPROC glQueryCounter;
 
 // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
 typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERPROC)(GLuint, GLenum);
 typedef GLboolean (__stdcall* PFNGLUNMAPNAMEDBUFFERPROC)(GLuint);
-extern PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer;
+extern TARTARUS_CORE_API PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer;
 typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERRANGEPROC)(GLuint, GLintptr, GLsizeiptr, GLbitfield);
-extern PFNGLMAPNAMEDBUFFERRANGEPROC glMapNamedBufferRange;
-extern PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer;
+extern TARTARUS_CORE_API PFNGLMAPNAMEDBUFFERRANGEPROC glMapNamedBufferRange;
+extern TARTARUS_CORE_API PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer;
 
 // Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
 typedef void (__stdcall* PFNGLCOPYNAMEDBUFFERSUBDATAPROC)(GLuint, GLuint, GLintptr, GLintptr, GLsizeiptr);
 typedef GLsync (__stdcall* PFNGLFENCESYNCPROC)(GLenum, GLbitfield);
 typedef GLenum (__stdcall* PFNGLCLIENTWAITSYNCPROC)(GLsync, GLbitfield, GLuint64);
 typedef void (__stdcall* PFNGLDELETESYNCPROC)(GLsync);
-extern PFNGLCOPYNAMEDBUFFERSUBDATAPROC glCopyNamedBufferSubData;
-extern PFNGLFENCESYNCPROC glFenceSync;
-extern PFNGLCLIENTWAITSYNCPROC glClientWaitSync;
-extern PFNGLDELETESYNCPROC glDeleteSync;
+extern TARTARUS_CORE_API PFNGLCOPYNAMEDBUFFERSUBDATAPROC glCopyNamedBufferSubData;
+extern TARTARUS_CORE_API PFNGLFENCESYNCPROC glFenceSync;
+extern TARTARUS_CORE_API PFNGLCLIENTWAITSYNCPROC glClientWaitSync;
+extern TARTARUS_CORE_API PFNGLDELETESYNCPROC glDeleteSync;
 
 // GPU-side buffer clear (GL 4.5): zeroing a header that an earlier dispatch may still be reading,
 // without an upload (ClusterGrid).
 #define GL_R32UI 0x8236
 #define GL_RED_INTEGER 0x8D94
 typedef void (__stdcall* PFNGLCLEARNAMEDBUFFERSUBDATAPROC)(GLuint, GLenum, GLintptr, GLsizeiptr, GLenum, GLenum, const void*);
-extern PFNGLCLEARNAMEDBUFFERSUBDATAPROC glClearNamedBufferSubData;
+extern TARTARUS_CORE_API PFNGLCLEARNAMEDBUFFERSUBDATAPROC glClearNamedBufferSubData;
 
 // Texture-to-texture copy (GL 4.3) - growing the decal texture arrays keeps the resident pages
 // without re-decoding them (DecalTextureArrays).
 typedef void (__stdcall* PFNGLCOPYIMAGESUBDATAPROC)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint,
                                                     GLint, GLint, GLsizei, GLsizei, GLsizei);
-extern PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData;
+extern TARTARUS_CORE_API PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData;
 // GL 4.5: a region of a texture read back (decompressed when asked for an uncompressed format) - the runtime decals'
 // maps re-packed from the Knife libraries (BloodRenderer::KnifeMaps).
 typedef void (__stdcall* PFNGLGETTEXTURESUBIMAGEPROC)(GLuint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum,
                                                       GLsizei, void*);
-extern PFNGLGETTEXTURESUBIMAGEPROC glGetTextureSubImage;
+extern TARTARUS_CORE_API PFNGLGETTEXTURESUBIMAGEPROC glGetTextureSubImage;
 // The Graffiti Designer's compositor (src/Graffiti/GraffitiCompositor.cpp): immutable 2D storage,
 // per-attachment blending and clears, instanced splats, and PBO readback of the bake.
 #ifndef GL_TRIANGLE_STRIP
@@ -648,14 +653,14 @@ typedef void (__stdcall* PFNGLDRAWARRAYSINSTANCEDPROC)(GLenum, GLint, GLsizei, G
 typedef void* (__stdcall* PFNGLMAPBUFFERRANGEPROC)(GLenum, GLintptr, GLsizeiptr, GLbitfield);
 typedef GLboolean (__stdcall* PFNGLUNMAPBUFFERPROC)(GLenum);
 typedef void (__stdcall* PFNGLUNIFORM1UIPROC)(GLint, GLuint);
-extern PFNGLTEXSTORAGE2DPROC glTexStorage2D;
-extern PFNGLCLEARBUFFERFVPROC glClearBufferfv;
-extern PFNGLVERTEXATTRIBDIVISORPROC glVertexAttribDivisor;
-extern PFNGLBLENDFUNCIPROC glBlendFunci; // behind the render-state shadow's back: GLStateShadow_Invalidate() after
-extern PFNGLDRAWARRAYSINSTANCEDPROC glDrawArraysInstanced;
-extern PFNGLMAPBUFFERRANGEPROC glMapBufferRange;
-extern PFNGLUNMAPBUFFERPROC glUnmapBuffer;
-extern PFNGLUNIFORM1UIPROC glUniform1ui;
+extern TARTARUS_CORE_API PFNGLTEXSTORAGE2DPROC glTexStorage2D;
+extern TARTARUS_CORE_API PFNGLCLEARBUFFERFVPROC glClearBufferfv;
+extern TARTARUS_CORE_API PFNGLVERTEXATTRIBDIVISORPROC glVertexAttribDivisor;
+extern TARTARUS_CORE_API PFNGLBLENDFUNCIPROC glBlendFunci; // behind the render-state shadow's back: GLStateShadow_Invalidate() after
+extern TARTARUS_CORE_API PFNGLDRAWARRAYSINSTANCEDPROC glDrawArraysInstanced;
+extern TARTARUS_CORE_API PFNGLMAPBUFFERRANGEPROC glMapBufferRange;
+extern TARTARUS_CORE_API PFNGLUNMAPBUFFERPROC glUnmapBuffer;
+extern TARTARUS_CORE_API PFNGLUNIFORM1UIPROC glUniform1ui;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();

@@ -9,6 +9,8 @@
 #include "LruMap.h"
 #include "RestartState.h"
 #include "EditorRestart.h"
+#include "EditorFileStat.h"
+#include "Core/Env.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -19,6 +21,7 @@
 #include "ProjectSettings.h"
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include "UndoTrigger.h"
 #include "EditorSettings.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
@@ -955,6 +958,56 @@ void TestHierarchyCreationOrderCache() {
     CHECK(X::Ordinal(editor, world, big.back()) == (int)X::Order(editor, world).size());
 }
 
+// P-24: the Inspector's per-frame exists / mtime checks hit the disk at most once per kMaxAge per path.
+void TestEditorFileStatCache() {
+    namespace FS = EditorFileStat;
+    const auto dir = UnitTestSupport::TempDir("editor_file_stat");
+    const auto file = dir / "a.txt";
+    std::error_code ec;
+    std::filesystem::remove(file, ec);
+    FS::Clear();
+    const auto t0 = FS::Clock::now();
+    const std::uint64_t r0 = FS::DiskReads();
+    CHECK(!FS::Get(file, t0).Exists);
+    for (int i = 0; i < 100; ++i) CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(i)).Exists); // 100 "frames"
+    CHECK(FS::DiskReads() - r0 == 1);
+    { std::ofstream(file) << "x"; }
+    CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(100)).Exists);            // still cached
+    CHECK(FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(1)).Exists); // re-read once it ages out
+    CHECK(FS::DiskReads() - r0 == 2);
+    const auto stamp = FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(2)).WriteTime;
+    CHECK(stamp == std::filesystem::last_write_time(file, ec));
+    std::filesystem::remove(file, ec);
+    CHECK(!FS::Refresh(file, t0 + FS::kMaxAge + std::chrono::milliseconds(3)).Exists); // own write: fresh at once
+    CHECK(FS::DiskReads() - r0 == 3);
+    CHECK(!FS::Get(std::filesystem::path(), t0).Exists);
+    CHECK(FS::DiskReads() - r0 == 3); // an empty path never touches the disk
+
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): the raw calls the Inspector
+    // made every frame, against a cached Get.
+    if (Env::Flag(Env::Var::MicroBench)) {
+        { std::ofstream(file) << "x"; }
+        using C = std::chrono::steady_clock;
+        static constexpr int kN = 2000; // static: the lambda below reads it without a capture (MSVC)
+        auto us = [](C::duration d) { return std::chrono::duration<double, std::micro>(d).count() / kN; };
+        int sink = 0;
+        auto b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += std::filesystem::exists(file, ec) ? 1 : 0;
+        const double exUs = us(C::now() - b0);
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += std::filesystem::last_write_time(file, ec) == std::filesystem::file_time_type{} ? 1 : 0;
+        const double mtUs = us(C::now() - b0);
+        FS::Clear();
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += FS::Get(file).Exists ? 1 : 0;
+        const double cachedUs = us(C::now() - b0);
+        std::printf("[MicroBench] file stat: exists %.2f us, last_write_time %.2f us, cached Get %.3f us (sink=%d)\n",
+                    exUs, mtUs, cachedUs, sink);
+        std::filesystem::remove(file, ec);
+    }
+    FS::Clear();
+}
+
 // Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
 // selection comes back by order + name (a renamed or missing entity drops out).
 void TestRestartStateRoundTrip() {
@@ -1011,6 +1064,54 @@ void TestRestartRelaunchArgs() {
     CHECK(ER::QuoteArg(L"C:\\dir with space\\") == L"\"C:\\dir with space\\\\\"");
 }
 
+// Rebuild & Restart moves the exe and its DLLs aside as one set: a failed build puts the whole old
+// set back (no old exe with a new core DLL), a good one fills what it didn't relink, and a set that
+// can't fully move is undone.
+void TestRestartMoveAsideSet() {
+    namespace ER = EditorRestart;
+    namespace fs = std::filesystem;
+    const fs::path dir = UnitTestSupport::TempDir("restart_move_aside");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    const auto write = [](const fs::path& p, const std::string& text) { std::ofstream(p, std::ios::binary) << text; };
+    const auto read = [](const fs::path& p) {
+        std::ifstream in(p, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    const fs::path exe = dir / "TartarusEngine.exe", core = dir / "TartarusCore.dll", glfw = dir / "glfw3.dll";
+    const std::vector<fs::path> set = ER::LockedFiles(exe);
+    CHECK(set.size() == 3 && set[0] == exe && set[1] == core && set[2] == glfw);
+
+    // Failed build that left a new core DLL behind: the old pair comes back.
+    write(exe, "exe-old");
+    write(core, "core-old");
+    std::string error;
+    std::vector<fs::path> moved = ER::MoveAside(set, error);
+    CHECK(moved.size() == 2 && error.empty()); // glfw3.dll absent: skipped
+    CHECK(!fs::exists(exe) && !fs::exists(core) && fs::exists(ER::OldPath(exe)) && fs::exists(ER::OldPath(core)));
+    write(core, "core-new");
+    ER::PutBack(moved);
+    CHECK(read(exe) == "exe-old" && read(core) == "core-old");
+    CHECK(!fs::exists(ER::OldPath(exe)) && !fs::exists(ER::OldPath(core)));
+
+    // Good build that relinked only the exe: the core DLL is filled from its .old.
+    moved = ER::MoveAside(set, error);
+    write(exe, "exe-new");
+    CHECK(ER::FillMissing(moved));
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old");
+
+    // The core DLL can't move (a non-empty folder sits on its .old name): the exe is put back.
+    fs::remove(ER::OldPath(exe), ec);
+    fs::remove(ER::OldPath(core), ec);
+    fs::create_directories(ER::OldPath(core) / "busy", ec);
+    error.clear();
+    moved = ER::MoveAside(set, error);
+    CHECK(moved.empty() && !error.empty());
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old" && !fs::exists(ER::OldPath(exe)));
+    fs::remove_all(dir, ec);
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
     tests.emplace_back("Hierarchy child order: Children follow OrderComponent, a reorder bumps the version and moves LOD levels",TestHierarchyChildOrder);
@@ -1032,6 +1133,8 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Undo in place: move / rename undo and redo match the full reload; structural steps reload",TestUndoInPlaceMatchesReload);
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
+    tests.emplace_back("Editor file stat cache: one disk read per path per half second, Refresh after own writes",TestEditorFileStatCache);
     tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
     tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
+    tests.emplace_back("Rebuild & Restart moves the exe and its DLLs aside as one set",TestRestartMoveAsideSet);
 }
