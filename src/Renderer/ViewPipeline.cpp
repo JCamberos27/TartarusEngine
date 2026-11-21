@@ -48,6 +48,8 @@ void DrawDebugLines(const ViewPipelineInputs& in, const World& world, const glm:
                     bool shapes, const std::function<bool(entt::entity)>* only) {
     if (!in.debugLines || !in.gatherDebugLines) return;
     in.gatherDebugLines(world, shapes, only, s_DebugLineVerts);
+    { static int n = 0; if (n++ % 120 == 0) std::fprintf(stderr, "[overlay-probe] shapes=%d floats=%zu
+", (int)shapes, s_DebugLineVerts.size()); }
     in.debugLines->Draw(proj * view, s_DebugLineVerts.data(), s_DebugLineVerts.size());
 }
 // #162 - the scene's post settings for the final tonemap pass.
@@ -514,6 +516,8 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     // Physics debug overlay over the game view (#185, F6 Physics) - depth-tested, no depth write.
+    { static int n = 0; if (n++ % 120 == 0) std::fprintf(stderr, "[overlay-probe] game playing=%d inPlayOnly=%d pdo=%d sc=%d
+", (int)playing, (int)overlayInPlayOnly, (int)EditorSettings::Get().PlayDebugOverlay, (int)EditorSettings::Get().ShowColliders); }
     if ((playing || !overlayInPlayOnly) && EditorSettings::Get().PlayDebugOverlay) {
         glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
         DrawDebugLines(in, world, view, proj, EditorSettings::Get().ShowColliders, nullptr);

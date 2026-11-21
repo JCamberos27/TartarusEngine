@@ -284,6 +284,8 @@ private:
     // Per-user preferences, loaded before anything reads them. No GL or project state needed.
     Step step1{[&] {
         EditorSettings::Load();
+#pragma warning(suppress : 4996)
+        if (const char* e = std::getenv("TARTARUS_EXP_SHOW_COLLIDERS"); e && *e == '1') { EditorSettings::Get().ShowColliders = true; EditorSettings::Get().PlayDebugOverlay = true; }
     }};
     // TARTARUS_EDITOR_TEST_SCALE=1 (with TARTARUS_EDITOR_TEST_SIZE=1044x788) reproduces CI's
     // layout on a high-DPI desktop. Only the tests' scratch prefs are changed.
