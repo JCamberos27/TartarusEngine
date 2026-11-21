@@ -10,6 +10,7 @@
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
 #include "../Renderer/ImpostorLibrary.h"
+#include "../Renderer/AssetCost.h"
 #include "../Renderer/SkyAtmosphere.h"
 #include "../Renderer/Camera.h"
 #include "../Game/SkySettings.h"
@@ -1153,6 +1154,38 @@ void TestLodGroup() {
     CHECK(world.Registry.view<LodCulledTag>().empty());
 }
 
+// The asset cost table's LOD level of a renderer: the index of the LOD Group child it sits under (at any depth), -1
+// outside a group or under a fifth child or later; the nearest group wins when they nest.
+void TestAssetCostLodLevel() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    auto make = [&](const char* name, entt::entity parent) {
+        const entt::entity e = world.CreateEmptyEntity(zero, zero, one, name);
+        if (parent != entt::null) CHECK(world.SetParent(e, parent));
+        return e;
+    };
+    auto lod = [&](entt::entity e) { return AssetCost::LodLevelOf(world, (unsigned)entt::to_integral(e)); };
+    const entt::entity loose = make("Loose", entt::null);
+    const entt::entity group = make("Group", entt::null);
+    world.Registry.emplace<LODGroupComponent>(group);
+    entt::entity lv[5];
+    for (int i = 0; i < 5; ++i) lv[i] = make("LOD", group);
+    const entt::entity deep = make("Deep", make("Mid", lv[2]));
+    const entt::entity inner = make("Inner", lv[1]);
+    world.Registry.emplace<LODGroupComponent>(inner);
+    const entt::entity innerLv0 = make("InnerLOD0", inner);
+    const entt::entity innerLv1 = make("InnerLOD1", inner);
+    CHECK(lod(loose) == -1);
+    CHECK(lod(group) == -1);
+    CHECK(lod(lv[0]) == 0);
+    CHECK(lod(lv[3]) == 3);
+    CHECK(lod(lv[4]) == -1); // a fifth child: always drawn, not a level
+    CHECK(lod(deep) == 2);
+    CHECK(lod(inner) == 1);
+    CHECK(lod(innerLv0) == 0); // the nearest group decides
+    CHECK(lod(innerLv1) == 1);
+}
+
 // ApplyLod's structure patch (renderers created, destroyed and re-parented in and around LOD Groups, nested ones
 // included) tags exactly what a full pass from scratch tags, frame after frame of random changes; and the small ones
 // do take the patch.
@@ -1865,6 +1898,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
     tests.push_back({"Materials: built-in property table - default keys, v1/v2 round-trip, accessors and bind resolver", MaterialBuiltinTable});
     tests.push_back({"LodGroup", TestLodGroup});
+    tests.push_back({"AssetCostLodLevel", TestAssetCostLodLevel});
     tests.push_back({"LodStructurePatch", TestLodStructurePatch});
     tests.push_back({"LodImpostor", TestLodImpostor});
     tests.push_back({"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch});
