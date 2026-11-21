@@ -958,8 +958,6 @@ void TestHierarchyCreationOrderCache() {
     CHECK(X::Ordinal(editor, world, big.back()) == (int)X::Order(editor, world).size());
 }
 
-// Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
-// selection comes back by order + name (a renamed or missing entity drops out).
 // P-24: the Inspector's per-frame exists / mtime checks hit the disk at most once per kMaxAge per path.
 void TestEditorFileStatCache() {
     namespace FS = EditorFileStat;
@@ -985,12 +983,10 @@ void TestEditorFileStatCache() {
     CHECK(!FS::Get(std::filesystem::path(), t0).Exists);
     CHECK(FS::DiskReads() - r0 == 3); // an empty path never touches the disk
 
-    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): the raw calls the Inspector and the File menu
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): the raw calls the Inspector
     // made every frame, against a cached Get.
     if (Env::Flag(Env::Var::MicroBench)) {
         { std::ofstream(file) << "x"; }
-        const auto other = dir / "b.txt";
-        { std::ofstream(other) << "y"; }
         using C = std::chrono::steady_clock;
         static constexpr int kN = 2000; // static: the lambda below reads it without a capture (MSVC)
         auto us = [](C::duration d) { return std::chrono::duration<double, std::micro>(d).count() / kN; };
@@ -1001,21 +997,19 @@ void TestEditorFileStatCache() {
         b0 = C::now();
         for (int i = 0; i < kN; ++i) sink += std::filesystem::last_write_time(file, ec) == std::filesystem::file_time_type{} ? 1 : 0;
         const double mtUs = us(C::now() - b0);
-        b0 = C::now();
-        for (int i = 0; i < kN; ++i) sink += std::filesystem::equivalent(file, other, ec) ? 1 : 0;
-        const double eqUs = us(C::now() - b0);
         FS::Clear();
         b0 = C::now();
         for (int i = 0; i < kN; ++i) sink += FS::Get(file).Exists ? 1 : 0;
         const double cachedUs = us(C::now() - b0);
-        std::printf("[MicroBench] file stat: exists %.2f us, last_write_time %.2f us, equivalent %.2f us, cached Get %.3f us (sink=%d)\n",
-                    exUs, mtUs, eqUs, cachedUs, sink);
+        std::printf("[MicroBench] file stat: exists %.2f us, last_write_time %.2f us, cached Get %.3f us (sink=%d)\n",
+                    exUs, mtUs, cachedUs, sink);
         std::filesystem::remove(file, ec);
-        std::filesystem::remove(other, ec);
     }
     FS::Clear();
 }
 
+// Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
+// selection comes back by order + name (a renamed or missing entity drops out).
 void TestRestartStateRoundTrip() {
     namespace RS = RestartState;
     const auto file = UnitTestSupport::TempDir("restart_state") / "restart_state.json";
