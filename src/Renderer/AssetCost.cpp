@@ -28,7 +28,10 @@ struct DrawRow {
     int Lod = -1;
     long long Sum = 0, Cur = 0, Max = 0, Draws = 0;
     int TrisEach = 0;
-    const Model* M = nullptr;
+    // The model's mesh GPU MiB, read when it was last drawn: the row holds no Model pointer, since a model can be
+    // unloaded before the phase is written (Forest's play phase streams outfits in and out).
+    double GpuMiB = 0.0;
+    std::uint64_t MiBFrame = ~0ull;
 };
 
 struct Tally {
@@ -125,7 +128,8 @@ void NoteView(World& world, bool editorView, std::initializer_list<const std::ve
             key += '|';
             key += std::to_string(lod);
             DrawRow& r = t.Rows[key];
-            if (r.Path.empty()) { r.Path = it.Ref->Path(); r.Lod = lod; r.M = it.Ref; }
+            if (r.Path.empty()) { r.Path = it.Ref->Path(); r.Lod = lod; }
+            if (r.MiBFrame != frame) { r.GpuMiB = MeshMiB(it.Ref); r.MiBFrame = frame; }
             r.TrisEach = std::max(r.TrisEach, it.Tris);
             r.Cur += it.Tris;
             r.Sum += it.Tris;
@@ -184,7 +188,7 @@ void WritePhase(const std::string& sceneFile, const char* mode) {
         char buf[256];
         for (const DrawRow* r : rows) {
             std::snprintf(buf, sizeof(buf), "%d,%d,%.1f,%lld,%.2f,%d,%.3f,,,,,", r->Lod, t.Frames, r->Sum / frames,
-                          r->Max, r->Draws / frames, r->TrisEach, MeshMiB(r->M));
+                          r->Max, r->Draws / frames, r->TrisEach, r->GpuMiB);
             out << lead("model", r->Path) << buf << loadCols(r->Path) << '\n';
             listed.insert(NormPath(r->Path));
         }
