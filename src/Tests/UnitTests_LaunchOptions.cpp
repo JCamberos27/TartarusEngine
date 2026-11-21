@@ -41,6 +41,9 @@ void Test_LaunchOptions_Modes() {
     CHECK(Parse({"--restore-state", "s.json", "--wait-pid", "4242"}, o, err));
     CHECK(o.mode == LaunchMode::Editor && o.restoreStateFile == "s.json" && o.waitPid == 4242);
     CHECK(!Parse({"--unit-tests", "--restore-state", "s.json"}, o, err));
+    // Its relaunch test: only with a state file to restore.
+    CHECK(Parse({"--restore-state", "s.json", "--restore-check", "r.json"}, o, err) && o.restoreCheckReport == "r.json");
+    CHECK(!Parse({"--restore-check", "r.json"}, o, err) && err.find("--restore-state") != std::string::npos);
 }
 
 void Test_LaunchOptions_Lists() {

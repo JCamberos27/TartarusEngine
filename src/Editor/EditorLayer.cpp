@@ -177,7 +177,9 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
     // it still exists, else the built-in default (#95).
-    {
+    if (m_StartupSceneOverride) {
+        m_CurrentScenePath = *m_StartupSceneOverride;
+    } else {
         std::error_code ec;
         const std::string& last = EditorSettings::Get().LastScenePath;
         m_CurrentScenePath = (!last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, ec) && !ec)

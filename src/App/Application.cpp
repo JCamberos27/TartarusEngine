@@ -29,6 +29,7 @@
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorRestart.h"   // Rebuild & Restart
+#include "RestartState.h"    // its startup scene and --restore-check report
 #include "EditorSettings.h"
 #include "EditorSound.h"
 #include "AppAudioMuter.h"
@@ -179,8 +180,9 @@ int Application::Run() {
     // (audit BUG-102).
     m_Headless = opt.smokeTestMode || opt.editorTestsMode;
     if (opt.editorTestsMode && !PrepareEditorTestsProfile(opt)) return 1;
+    if (!opt.restoreCheckReport.empty() && !PrepareRestoreCheckProfile()) return 1; // never the real user folder
     const bool giBakeMode = opt.mode == LaunchMode::BakeGI;
-    CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty() && !giBakeMode); // #148: no crash dialog on an unattended run
+    CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty() && !giBakeMode && opt.restoreCheckReport.empty()); // #148: no crash dialog on an unattended run
     // --editor-shot and --bake-gi run on a copy of the user's prefs, so the run's window, camera and last scene stay its own.
     if ((!opt.editorShotDir.empty() || giBakeMode) && !PrepareEditorShotProfile(opt)) return 1;
     if (opt.smokeTestMode && !PrepareSmokeProfile()) return 1; // smoke / perf / npc: per-instance prefs when named
@@ -218,7 +220,7 @@ int Application::Run() {
     const bool oldEditorExited = headless || playerMode || EditorRestart::CleanupAtStartup(opt.waitPid);
     // --editor-tests: the tracked project/settings.json and layers.json go back as they were when the run ends.
     std::optional<ProjectFilesGuard> projectFiles;
-    if (opt.editorTestsMode) projectFiles.emplace();
+    if (opt.editorTestsMode || !opt.restoreCheckReport.empty()) projectFiles.emplace();
 
     // #132 - register the project's assets on a worker thread while the window, GL context and
     // shaders come up. Any GUID lookup made before it finishes waits for it.
@@ -768,12 +770,19 @@ private:
     std::future<void> thumbnailPrune = std::async(std::launch::async, ThumbnailCache::PruneOrphans);
     const std::string startup = ProjectSettings::Build().Scenes.empty()?ProjectSettings::StartupScene():ProjectSettings::Build().Scenes.front();
     std::string scenePath=startup.empty()?std::string{}:ProjectPaths::Resolve(startup);
+    // Rebuild & Restart: the scene that was open, which LastScenePath may not be (a scene outside the project, prefs
+    // not flushed, another instance's prefs); the editor is told the same before Init, so ApplyRestartState matches.
+    std::optional<std::string> restartScene;
     Step step47{[&] {
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
             std::error_code sceneEc;
             if (!opt.editorShotIDE && !last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, sceneEc) && !sceneEc)
                 scenePath = last;
+            if (!opt.restoreStateFile.empty() && !headless && !playerMode) {
+                restartScene = RestartState::StartupScene(std::filesystem::u8path(opt.restoreStateFile), RestartState::NowUnix());
+                if (restartScene) scenePath = *restartScene;
+            }
             if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
             if (opt.weaponLabMode) scenePath = EnginePaths::Resolve("tests/scenes/WeaponLab.json");
             if (giBakeMode) {
@@ -842,6 +851,7 @@ private:
         if (opt.npcTestMode || opt.weaponLabMode) editor.RequestSceneGameSplit();
     }};
     Step step54{[&] {
+        if (restartScene) editor.SetStartupScene(*restartScene);
         editor.Init(window.Handle());
         UsePrivateClipboardForInstance(); // parallel named harness runs don't share the system clipboard
     }};
@@ -940,9 +950,16 @@ private:
     }};
     // Rebuild & Restart: the unsaved edits and selection the old editor handed over; Play starts on the first frame.
     bool playAfterRestart = false;
+    RestartState::CheckReport restoreCheck; // --restore-check: what came back, written once Play has had time to start
     Step step67b{[&] {
         if (!opt.restoreStateFile.empty() && !headless && !playerMode)
             playAfterRestart = editor.ApplyRestartState(world, assets, std::filesystem::u8path(opt.restoreStateFile));
+        if (!opt.restoreCheckReport.empty()) {
+            restoreCheck.ScenePath = editor.CurrentScenePath();
+            restoreCheck.SceneLoaded = sceneLoaded;
+            for (const RestartState::EntityRef& r : RestartState::RefsFor(world, editor.GetSelectedItems()))
+                restoreCheck.Selection.push_back(r.Name);
+        }
     }};
 
     GameViewPanel gameView;
@@ -1443,6 +1460,13 @@ bool AppSession::Frame() {
     }
 
     if (playAfterRestart) { playAfterRestart = false; if (!playing) startPlay(); }
+    if (!opt.restoreCheckReport.empty() && frameIndex == 30) {
+        restoreCheck.Playing = playing;
+        if (!RestartState::WriteCheckReport(std::filesystem::u8path(opt.restoreCheckReport), restoreCheck))
+            std::cerr << "--restore-check: could not write " << opt.restoreCheckReport << std::endl;
+        exitApproved = true;
+        window.SetShouldClose(true);
+    }
     // Rebuild & Restart (EditorRestart.h): the new exe is built. Leave Play (its world isn't the scene) and prefab
     // mode first, then hand the state over and start the new editor; this one closes without the Save prompt (the
     // dirty scene's recovery snapshot stays for the new one). Not mid-drag (an undo step still open). Prefab mode is
