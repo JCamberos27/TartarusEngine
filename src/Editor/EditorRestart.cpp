@@ -40,8 +40,8 @@ void RestoreExeName(const fs::path& exe) {
     if (!fs::exists(exe, ec) && fs::exists(old, ec)) fs::rename(old, exe, ec);
 }
 
-// TARTARUS_RESTART_FAKE_BUILD=ok|fail (the hotreload smoke case): no CMake; "ok" copies the old exe
-// back as the "new" one, and Relaunch starts nothing.
+// TARTARUS_RESTART_FAKE_BUILD=ok|fail (the hotreload smoke case): no CMake, the exe is never moved, and
+// Relaunch starts nothing (the state file stays for the test to read).
 std::string FakeBuild() { return Env::Str(Env::Var::RestartFakeBuild); }
 
 void Run(fs::path exe) {
@@ -53,10 +53,8 @@ void Run(fs::path exe) {
                                             GameModuleBuild::BinaryRoot() / "TartarusRestart.build.log", log);
     } else {
         ok = fake == "ok";
-        std::error_code ec;
-        if (ok) fs::copy_file(OldExePath(exe), exe, fs::copy_options::overwrite_existing, ec);
-        log = ok ? (ec ? "Fake build: copy failed: " + ec.message() : "Fake build: ok.") : "Fake build: failed.";
-        ok = ok && !ec;
+        log = ok ? "Fake build: ok." : "Fake build: failed.";
+        (void)exe;
     }
     std::lock_guard<std::mutex> lock(g_Mutex);
     g_Log = std::move(log);
@@ -92,7 +90,7 @@ bool Request() {
     std::error_code ec;
     fs::remove(old, ec); // a stale one from an earlier restart
     ec.clear();
-    fs::rename(exe, old, ec);
+    if (FakeBuild().empty()) fs::rename(exe, old, ec);
     if (ec) {
         Log::Error("Rebuild & Restart: couldn't move the running exe aside (" + ec.message() + ").");
         EditorSound::Play(EditorSound::Event::BuildFail);

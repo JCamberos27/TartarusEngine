@@ -10,6 +10,8 @@
 } // namespace
 #include "Core/Paths.h"
 #include "GameModuleBuild.h"
+#include "EditorRestart.h"
+#include "RestartState.h"
 struct EditorSmokeAccess_HotReload {
     // Whether the Asset Browser's Scenes listing (refreshed from disk when invalidated) has `path`.
     static bool SceneListed(EditorLayer& e, const std::string& path) {
@@ -167,6 +169,62 @@ void RegisterHotReloadTests() {
             }, 10),
         }, cleanup); // pass or fail: a scene left in project/scenes would become a scenes: test of its own
     }
+
+    // ------------------------------------------------------------------ Rebuild & Restart (fake build)
+    // TARTARUS_RESTART_FAKE_BUILD stands in for CMake and stops the relaunch, so the hand-over runs end to end in
+    // this process: a failed build keeps the editor as it was; a good one writes the recovery snapshot and the state
+    // file, which a "new editor" (ApplyRestartState here) reads back into the same selection.
+    Add("hotreload: Rebuild & Restart: a failed build keeps editing; a good one hands over scene, edits, selection", {
+        FreshScene(), Wait(2),
+        SelectByName("Beta"), Wait(3),
+        Do("rename Gamma with undo (unsaved edit)", [](Ctx& c) {
+            X::PushUndo(c.E, c.W, "Rename");
+            c.W.Registry.get<NameComponent>(ByName(c.W, "Gamma")).Name = "Gamma2";
+            X::MarkDirty(c.E);
+        }), Wait(3),
+        AllowLogError("Rebuild & Restart: the build failed"),
+        Do("fake build: fail", [](Ctx& c) {
+            if (!EditorRestart::Available()) return; // packaged editor: the menu item is disabled, nothing to run
+            Env::Set(Env::Var::RestartFakeBuild, "fail");
+            c.E.RequestRebuildRestart();
+        }),
+        UntilSeconds("the failed build is reaped", [](Ctx&) { return !EditorRestart::Building(); }, 10),
+        Wait(3),
+        ExpectTrue("no relaunch after a failed build", [](Ctx&) { return !EditorRestart::ReadyToRelaunch(); }),
+        Expect("scene intact", [](Ctx& c) { return SceneIntact(c, "Gamma2"); }),
+        Do("fake build: ok", [](Ctx& c) {
+            g_Vec.x = (float)LogCount("fake build, no relaunch");
+            if (!EditorRestart::Available()) return;
+            Env::Set(Env::Var::RestartFakeBuild, "ok");
+            c.E.RequestRebuildRestart();
+        }),
+        UntilSeconds("the hand-over ran", [](Ctx&) {
+            return !EditorRestart::Available() || (float)LogCount("fake build, no relaunch") > g_Vec.x;
+        }, 10),
+        Do("clear the fake", [](Ctx&) { Env::Set(Env::Var::RestartFakeBuild, ""); }),
+        Expect("the state file names the scene, its edits and the selection", [](Ctx& c) {
+            if (!EditorRestart::Available()) return std::string();
+            std::string why;
+            const auto s = RestartState::Load(EditorRestart::StateFile(), RestartState::NowUnix(), &why);
+            if (!s) return "no state file: " + why;
+            if (s->ScenePath != X::ScenePath(c.E)) return "scene " + s->ScenePath;
+            if (!s->RestoreRecovery) return std::string("unsaved edits not handed over");
+            if (s->Selection.size() != 1 || s->Selection[0].Name != "Beta") return std::string("selection not Beta");
+            return std::string();
+        }),
+        Expect("still editing (no relaunch happened)", [](Ctx& c) { return SceneIntact(c, "Gamma2"); }),
+        SelectByName("Alpha"), Wait(3),
+        Do("the new editor's side: apply the state", [](Ctx& c) {
+            if (EditorRestart::Available()) c.E.ApplyRestartState(c.W, c.A, EditorRestart::StateFile());
+        }), Wait(3),
+        Expect("Beta selected again", [](Ctx& c) {
+            return EditorRestart::Available() ? ExpectSelected(c, "Beta") : std::string();
+        }),
+        ExpectTrue("the state file is consumed", [](Ctx&) {
+            std::error_code ec;
+            return !std::filesystem::exists(EditorRestart::StateFile(), ec);
+        }),
+    }, [](Ctx&) { Env::Set(Env::Var::RestartFakeBuild, ""); std::error_code ec; std::filesystem::remove(EditorRestart::StateFile(), ec); });
 
     // ------------------------------------------------------------------ the real rebuild
     // cmake --build <build> --config <cfg> --target TartarusGame TartarusEditor, as the menu item
