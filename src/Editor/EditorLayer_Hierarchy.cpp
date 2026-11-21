@@ -126,15 +126,15 @@ ImGuiID HierarchyNodeStateId(const World& world, entt::entity e, std::vector<ent
 
 // The Hierarchy lists entities by OrderComponent (a stable per-entity sequence assigned at
 // creation and preserved through save/load), so a snapshot round-trip - undo/redo, Play->Stop -
-// no longer reshuffles the list. Entities predating OrderComponent (0) keep a stable relative
-// order via the entity-handle tiebreak. Frame to frame the (order, entity) pairs are almost
+// no longer reshuffles the list. An entity without an OrderComponent sorts last (kOrderMissing, the
+// same key World::SortChildrenByOrder uses, so Children order == Hierarchy order); ties break on the handle. Frame to frame the (order, entity) pairs are almost
 // always identical, so the sort and the ordinal index only run when they change.
 const std::vector<entt::entity>& EditorLayer::HierarchyCreationOrder(const World& world) const {
     HierarchyOrderCache& c = m_HierOrder;
     c.Scratch.clear();
     for (const entt::entity e : world.Registry.view<const NameComponent>()) {
         const auto* o = world.Registry.try_get<OrderComponent>(e);
-        c.Scratch.emplace_back(o ? o->Value : 0, e);
+        c.Scratch.emplace_back(o ? o->Value : kOrderMissing, e);
     }
     if (c.Scratch == c.Keyed) return c.Sorted;
     c.Keyed.swap(c.Scratch);
@@ -151,6 +151,15 @@ const std::vector<entt::entity>& EditorLayer::HierarchyCreationOrder(const World
         c.Ordinal[idx] = (int)i + 1;
     }
     return c.Sorted;
+}
+
+std::uint64_t EditorLayer::HierarchyOrderGeneration(const World& world) const {
+    const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
+    if (frame == -2 || frame != m_HierOrder.CheckedFrame) {
+        m_HierOrder.CheckedFrame = frame;
+        HierarchyCreationOrder(world);
+    }
+    return m_HierOrder.Generation;
 }
 
 // "Object 7" for an entity the user never named (#21 P10): its 1-based position in creation
@@ -2290,7 +2299,7 @@ std::vector<entt::entity> EditorLayer::HierarchySiblingsInOrder(const World& wor
     keyed.clear();
     for (entt::entity e : h->Children) {
         const auto* o = world.Registry.try_get<OrderComponent>(e);
-        keyed.emplace_back(o ? o->Value : 0, e);
+        keyed.emplace_back(o ? o->Value : kOrderMissing, e);
     }
     if (!std::is_sorted(keyed.begin(), keyed.end())) std::sort(keyed.begin(), keyed.end());
     out.reserve(keyed.size());
@@ -2402,6 +2411,7 @@ void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt:
     }
     for (int i = 0; i < (int)rebuilt.size(); ++i)
         world.Registry.emplace_or_replace<OrderComponent>(rebuilt[i], values[i]);
+    world.SortChildrenByOrder(newParent); // LOD levels and the hierarchy caches follow the new order now
     for (auto [je, joint] : world.Registry.view<JointComponent>().each()) {
         auto it = remap.find(joint.ConnectedOrder);
         if (joint.ConnectedOrder >= 0 && it != remap.end()) joint.ConnectedOrder = it->second;

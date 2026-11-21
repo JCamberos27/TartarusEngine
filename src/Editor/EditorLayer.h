@@ -2435,6 +2435,9 @@ private:
     };
     mutable HierarchyOrderCache m_HierOrder;
     const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
+    // HierarchyOrderCache::Generation, the pairs re-checked at most once per ImGui frame (as HierarchyCreationOrdinal):
+    // with World::HierarchyVersion, what a cached tree of the scene is keyed on.
+    std::uint64_t HierarchyOrderGeneration(const World& world) const;
     // "Object 7" for an unnamed entity: its 1-based place in HierarchyCreationOrder (0 = not named).
     int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon

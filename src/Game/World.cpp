@@ -626,6 +626,32 @@ glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
     return ComposeWorldTransform(entity); // spawned since the rebuild, or none has run yet
 }
 
+namespace {
+// Hierarchy order (World::SortChildrenByOrder): OrderComponent, then the handle. An entity without one (a raw
+// Registry.create(); World's factories always give one) sorts last (kOrderMissing, as the Hierarchy panel's
+// HierarchyCreationOrder does), so it never takes a LOD Group's level 0.
+std::pair<int, entt::entity> ChildOrderKey(const entt::registry& reg, entt::entity e) {
+    const auto* o = reg.try_get<OrderComponent>(e);
+    return {o ? o->Value : kOrderMissing, e};
+}
+// Puts `child` into `kids` at its place in Hierarchy order (the rest already in it, or as near as it is).
+void InsertChildInOrder(const entt::registry& reg, std::vector<entt::entity>& kids, entt::entity child) {
+    const auto key = ChildOrderKey(reg, child);
+    auto at = kids.end();
+    while (at != kids.begin() && key < ChildOrderKey(reg, *(at - 1))) --at;
+    kids.insert(at, child);
+}
+} // namespace
+
+void World::SortChildrenByOrder(entt::entity parent) {
+    auto* h = Registry.valid(parent) ? Registry.try_get<HierarchyComponent>(parent) : nullptr;
+    if (!h || h->Children.size() < 2) return;
+    const auto less = [&](entt::entity a, entt::entity b) { return ChildOrderKey(Registry, a) < ChildOrderKey(Registry, b); };
+    if (std::is_sorted(h->Children.begin(), h->Children.end(), less)) return;
+    std::stable_sort(h->Children.begin(), h->Children.end(), less);
+    ++m_HierarchyVersion;
+}
+
 bool World::SetParent(entt::entity child, entt::entity parent) {
     if (!Registry.valid(child) || child == parent) return false;
     if (parent != entt::null && !Registry.valid(parent)) return false;
@@ -664,7 +690,7 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
     auto& childHier = Registry.get_or_emplace<HierarchyComponent>(child);
     childHier.Parent = parent;
     if (parent != entt::null) {
-        Registry.get_or_emplace<HierarchyComponent>(parent).Children.push_back(child);
+        InsertChildInOrder(Registry, Registry.get_or_emplace<HierarchyComponent>(parent).Children, child);
     }
 
     // Re-express TransformComponent in the new frame (local if parented, world if detached) so
@@ -687,7 +713,7 @@ void World::AttachChildRaw(entt::entity child, entt::entity parent) {
     ++m_HierarchyVersion;
     auto& childHier = Registry.get_or_emplace<HierarchyComponent>(child);
     childHier.Parent = parent;
-    Registry.get_or_emplace<HierarchyComponent>(parent).Children.push_back(child);
+    InsertChildInOrder(Registry, Registry.get_or_emplace<HierarchyComponent>(parent).Children, child);
 }
 
 // #202 - see the header. Walks every entity to its root, marking the chain as it goes. A node

@@ -162,8 +162,8 @@ public:
     // spawned after the rebuild, or a caller running before the first one — so it is always
     // correct, never merely fast.
     glm::mat4 GetCachedWorldTransform(entt::entity entity) const;
-    // Changes whenever a parent link changes (SetParent, a destroy, a cut cycle): what is derived
-    // from the hierarchy is good while this stays the same.
+    // Changes whenever a parent link or the order of a parent's children changes (SetParent, a destroy, a cut cycle,
+    // SortChildrenByOrder): what is derived from the hierarchy is good while this stays the same.
     std::uint64_t HierarchyVersion() const { return m_HierarchyVersion; }
 
     // #114 — the entity's transform expressed in WORLD space (position / YXZ Euler degrees /
@@ -195,6 +195,13 @@ public:
     // SceneSerializer, where a loaded entity's TransformComponent is already correct for
     // whichever frame (local or world) it belongs in.
     void AttachChildRaw(entt::entity child, entt::entity parent);
+
+    // A parent's Children are kept in Hierarchy order: OrderComponent, then the entity handle (what the Hierarchy
+    // shows and the scene file saves). SetParent and AttachChildRaw insert in place; after OrderComponent values
+    // change (a Hierarchy drag-reorder) this re-sorts `parent`'s list and, when that moved anything, bumps
+    // HierarchyVersion, so LOD Groups (whose levels are the first four children) and every cache keyed on the
+    // version see the new order at once instead of after a save and reload.
+    void SortChildrenByOrder(entt::entity parent);
 
     // #202 - breaks any parent cycle in the hierarchy, returning how many were broken.
     // AttachChildRaw only rejects self-parenting, so a scene file whose parentIds form a loop
