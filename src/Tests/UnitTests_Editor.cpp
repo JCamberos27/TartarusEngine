@@ -7,6 +7,7 @@
 #include "EditorSearch.h"
 #include "LruMap.h"
 #include "RestartState.h"
+#include "EditorRestart.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -844,6 +845,21 @@ void TestRestartStateRoundTrip() {
     (void)b;
 }
 
+// The relaunch command line: old hand-over flags dropped (both spellings), new ones last, Windows quoting.
+void TestRestartRelaunchArgs() {
+    namespace ER = EditorRestart;
+    const std::vector<std::wstring> in = {L"--scene", L"a b.json", L"--restore-state", L"old.json", L"--wait-pid=12", L"--x"};
+    const std::vector<std::wstring> out = ER::RelaunchArgs(in, L"C:/u/restart_state_9.json", 9);
+    const std::vector<std::wstring> want = {L"--scene", L"a b.json", L"--x", L"--restore-state", L"C:/u/restart_state_9.json",
+                                            L"--wait-pid", L"9"};
+    CHECK(out == want);
+    CHECK(ER::QuoteArg(L"plain") == L"plain");
+    CHECK(ER::QuoteArg(L"") == L"\"\"");
+    CHECK(ER::QuoteArg(L"a b") == L"\"a b\"");
+    CHECK(ER::QuoteArg(L"say \"hi\"") == L"\"say \\\"hi\\\"\"");
+    CHECK(ER::QuoteArg(L"C:\\dir with space\\") == L"\"C:\\dir with space\\\\\"");
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
@@ -863,4 +879,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
     tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
+    tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
 }
