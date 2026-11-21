@@ -89,6 +89,8 @@ void PerfBench::Settle(bool haveScopes) {
         if (haveScopes) {
             m_Pending.Cpu = TopScopes(Profiler::GetLastFrame());
             m_Pending.GpuStarved = GpuStarvedFrame(m_Pending.Ms, Profiler::GetLastFrame());
+            m_Pending.WallMs = Profiler::LastFrameWallMs();
+            m_Pending.UnscopedMs = Profiler::LastFrameUnscopedMs();
         }
         m_Worst.push_back(std::move(m_Pending));
         std::sort(m_Worst.begin(), m_Worst.end(), [](const Worst& a, const Worst& b) { return a.Ms > b.Ms; });
@@ -132,11 +134,16 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     Stats after2s;
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
-    for (const Worst& w : m_Worst)
-        std::printf("[PerfBench]   worst frame %d %.2f ms: CPU %s | GPU%s %s | loaded %s\n", w.Frame, w.Ms,
+    for (const Worst& w : m_Worst) {
+        char unscoped[64] = "-";
+        if (w.UnscopedMs >= 0.0f) std::snprintf(unscoped, sizeof(unscoped), "%.2f of %.2f", w.UnscopedMs, w.WallMs);
+        // "unscoped" goes last so scripts that split the line on "| GPU" / "| loaded" read it as before.
+        std::printf("[PerfBench]   worst frame %d %.2f ms: CPU %s | GPU%s %s | loaded %s | unscoped %s\n", w.Frame, w.Ms,
                     w.Cpu.empty() ? "-" : w.Cpu.c_str(),
                     w.GpuStarved ? " (STARVED: CPU-bound frame, its GPU scopes include CPU time)" : "",
-                    !w.HaveGpu ? "(not read back)" : w.Gpu.empty() ? "-" : w.Gpu.c_str(), w.Loads.empty() ? "-" : w.Loads.c_str());
+                    !w.HaveGpu ? "(not read back)" : w.Gpu.empty() ? "-" : w.Gpu.c_str(), w.Loads.empty() ? "-" : w.Loads.c_str(),
+                    unscoped);
+    }
     AppendCsv(sceneFile, label, all, after2s);
     m_FrameTimes.clear();
     m_Worst.clear();

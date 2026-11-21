@@ -1,4 +1,5 @@
 #include "UnitTestSupport.h"
+#include <random>
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
@@ -1047,6 +1048,111 @@ void TestLodGroup() {
     CHECK(world.Registry.view<LodCulledTag>().empty());
 }
 
+// ApplyLod's structure patch (renderers created, destroyed and re-parented in and around LOD Groups, nested ones
+// included) tags exactly what a full pass from scratch tags, frame after frame of random changes; and the small ones
+// do take the patch.
+void TestLodStructurePatch() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    std::mt19937 rng(1107);
+    auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
+    std::vector<entt::entity> places; // what new renderers go under (level children and what's under them, loose ones)
+    std::vector<entt::entity> spawned; // what the test creates, destroys and moves
+    auto renderer = [&](const glm::vec3& at) {
+        const entt::entity e = world.CreateEmptyEntity(at, zero, one, "R");
+        world.Registry.emplace<RenderableComponent>(e);
+        return e;
+    };
+    auto makeGroup = [&](entt::entity parent, const glm::vec3& at) {
+        const entt::entity g = world.CreateEmptyEntity(at, zero, one, "Group");
+        world.Registry.emplace<LODGroupComponent>(g).Size = 2.0f;
+        if (parent != entt::null) CHECK(world.SetParent(g, parent));
+        for (int i = 0; i < 3; ++i) {
+            const entt::entity level = renderer(at);
+            CHECK(world.SetParent(level, g));
+            places.push_back(level);
+            const entt::entity under = renderer(at);
+            CHECK(world.SetParent(under, level));
+            places.push_back(under);
+        }
+        return g;
+    };
+    std::vector<entt::entity> groups;
+    for (int i = 0; i < 4; ++i) groups.push_back(makeGroup(entt::null, glm::vec3(4.0f * i, 0.0f, 0.0f)));
+    groups.push_back(makeGroup(places[1], glm::vec3(0.0f, 1.0f, 0.0f)));  // inside group 0's LOD 0
+    groups.push_back(makeGroup(places[8], glm::vec3(4.0f, 1.0f, 0.0f)));  // inside group 1's LOD 1
+    for (int i = 0; i < 3; ++i) places.push_back(renderer(glm::vec3(0.0f, 0.0f, 3.0f * i))); // under no group
+
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto tagged = [&]() {
+        std::vector<std::uint32_t> out;
+        for (entt::entity e : world.Registry.view<LodCulledTag>()) {
+            CHECK(world.IsLodCulled(e));
+            out.push_back(entt::to_integral(e));
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    };
+    auto alive = [&](std::vector<entt::entity>& v) {
+        v.erase(std::remove_if(v.begin(), v.end(), [&](entt::entity e) { return !world.Registry.valid(e); }), v.end());
+    };
+    int patched = 0, changedFrames = 0;
+    for (int frame = 0; frame < 400; ++frame) {
+        alive(places);
+        alive(spawned);
+        const int ops = (int)pick(3);
+        for (int op = 0; op < ops; ++op) {
+            alive(spawned); // an earlier op may have destroyed some
+            const size_t kind = pick(10);
+            if (kind < 4 || spawned.empty()) { // a renderer (sometimes with a child) under some place, or under none
+                const entt::entity e = renderer(glm::vec3((float)pick(16), 0.0f, (float)pick(8)));
+                if (pick(6) != 0) CHECK(world.SetParent(e, places[pick(places.size())]));
+                spawned.push_back(e);
+                if (pick(3) == 0) {
+                    const entt::entity c = renderer(zero);
+                    CHECK(world.SetParent(c, e));
+                    spawned.push_back(c);
+                }
+            } else if (kind < 6) { // destroyed: with its children, or through the registry (its children orphaned)
+                const entt::entity e = spawned[pick(spawned.size())];
+                if (pick(2) == 0) world.DestroyEntityAndChildren(e);
+                else world.Registry.destroy(e);
+            } else if (kind < 8) { // moved to another place, or to none (a cycle is refused)
+                const entt::entity e = spawned[pick(spawned.size())];
+                world.SetParent(e, pick(5) == 0 ? entt::entity{entt::null} : places[pick(places.size())]);
+            } else if (kind < 9) { // a renderer added in place (the full pass's job)
+                const entt::entity e = spawned[pick(spawned.size())];
+                if (!world.Registry.all_of<RenderableComponent>(e)) world.Registry.emplace<RenderableComponent>(e);
+                else world.Registry.remove<RenderableComponent>(e);
+            } else { // only moved
+                world.Registry.get<TransformComponent>(spawned[pick(spawned.size())]).Position.y += 1.0f;
+            }
+        }
+        world.RebuildWorldTransformCache();
+        const glm::vec3 view((float)pick(16), 0.0f, 1.0f + (float)pick(20));
+        const std::uint64_t fullBefore = world.LodFullPasses();
+        world.ApplyLod(view, proj);
+        const auto& d = world.TransformStructureChanges();
+        if (ops > 0 && d.Valid && (!d.Added.empty() || !d.Reparented.empty() || !d.Dropped.empty())) {
+            ++changedFrames;
+            patched += world.LodFullPasses() == fullBefore ? 1 : 0;
+        }
+        const auto incremental = tagged();
+        world.ClearLod();
+        world.ApplyLod(view, proj); // from scratch
+        const auto fromScratch = tagged();
+        CHECK(incremental == fromScratch);
+        if (incremental != fromScratch) {
+            std::printf("[LodStructurePatch] frame %d: %zu tagged incrementally, %zu from scratch\n", frame,
+                        incremental.size(), fromScratch.size());
+            break;
+        }
+    }
+    std::printf("[LodStructurePatch] %d of %d structure-change frames patched\n", patched, changedFrames);
+    CHECK(changedFrames > 100);
+    CHECK(patched * 2 > changedFrames);
+}
+
 // Octahedral impostors (ImpostorLibrary): past the start distance a matched group shows its impostor - every level
 // tagged, the group listed by ForEachImpostor - held a little either way, never where the levels cull it, and the
 // hand-over cross-fades both ways like a level change.
@@ -1653,6 +1759,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
     tests.push_back({"Materials: built-in property table - default keys, v1/v2 round-trip, accessors and bind resolver", MaterialBuiltinTable});
     tests.push_back({"LodGroup", TestLodGroup});
+    tests.push_back({"LodStructurePatch", TestLodStructurePatch});
     tests.push_back({"LodImpostor", TestLodImpostor});
     tests.push_back({"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch});
     tests.push_back({"LodFadeCompletes", TestLodFadeCompletes});
