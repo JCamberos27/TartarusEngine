@@ -759,7 +759,8 @@ void TestHierarchyChildOrder() {
     const std::uint64_t before = world.HierarchyVersion();
     X::Reorder(editor, world, {c}, a, false);
     CHECK((X::Siblings(editor, world, group) == std::vector<entt::entity>{c, a, b, kids().back()}));
-    CHECK((std::vector<entt::entity>(kids().begin(), kids().begin() + 3) == std::vector<entt::entity>{c, a, b}));
+    const std::vector<entt::entity> now = kids();
+    CHECK((std::vector<entt::entity>(now.begin(), now.begin() + 3) == std::vector<entt::entity>{c, a, b}));
     CHECK(world.HierarchyVersion() != before);
     // Already in order: no bump.
     const std::uint64_t after = world.HierarchyVersion();
