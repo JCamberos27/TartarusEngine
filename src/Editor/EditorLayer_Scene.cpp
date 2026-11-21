@@ -25,6 +25,7 @@
 #include "Material.h"
 #include "AudioEngine.h"
 #include "SceneSerializer.h"
+#include "FirstPersonPresentation.h"
 #include "SceneSnapshotJson.h" // undo / redo load the snapshot UndoDelta::Pop already parsed
 #include "OutfitSystem.h"
 #include "AABB.h"
@@ -1587,6 +1588,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_AutoSaveTimer = 0.0f;
     PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
     Log::Info("Opened scene '" + path + "'.");
+    FirstPersonPresentation::PrefetchPlayAssets(world, assets); // Play's guns and clips load while editing
     EnsureUndoScene(world);
 }
 

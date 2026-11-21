@@ -12,6 +12,7 @@
 #include "Core/Paths.h"
 #include "DecalSystem.h"
 #include "EditorLayer.h"
+#include "FirstPersonPresentation.h"
 #include "Framebuffer.h"
 #include "GLDebug.h"
 #include "Log.h"
@@ -230,8 +231,10 @@ void SmokeHarness::LoadScene() {
     m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
     std::cout << "[SmokeTest] Loading " << path
               << (m_SceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
-    if (m_SceneLoadOk)
+    if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
+        FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open
+    }
     m_FramesRendered = 0;
     m_SceneStartSeconds = glfwGetTime();
     m_WallFrames = 0;

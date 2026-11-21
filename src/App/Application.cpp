@@ -816,6 +816,8 @@ private:
     Step step51{[&] {
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
+            // As the editor's scene open: Play's guns and clips load while the first frames run.
+            if (!headless && !giBakeMode) FirstPersonPresentation::PrefetchPlayAssets(world, assets);
         }
     }};
 

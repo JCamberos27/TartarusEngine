@@ -35,7 +35,7 @@
 namespace {
 
 struct AsyncJob {
-    enum class Kind { Model, Texture, Material };
+    enum class Kind { Model, Texture, Material, ClipSource };
     Kind K = Kind::Model;
     std::string Path; // the library key, as requested
     ModelImportSettings ModelSettings;
@@ -196,6 +196,8 @@ struct AssetLibrary::AsyncLoader {
             try {
                 if (job->K == AsyncJob::Kind::Model)
                     job->ModelResult = Model::ImportDeferred(job->Path, job->ModelSettings);
+                else if (job->K == AsyncJob::Kind::ClipSource) // as LoadAnimationSource: clip-only, no GL
+                    job->ModelResult = std::make_shared<Model>(job->Path, job->ModelSettings);
                 else if (job->K == AsyncJob::Kind::Texture)
                     job->TexResult = Texture::DecodeFile(job->Path, job->TexSettings);
                 else
@@ -331,6 +333,59 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestMaterialAsync(const std::string& 
     return ticket;
 }
 
+AssetLibrary::AsyncHandle AssetLibrary::RequestAnimationSourceAsync(const std::string& path) {
+    const std::string key = AssetDatabase::PathKey(path);
+    if (path.empty() || HasModel(path) || m_ClipSourceCache.count(key)) return ReadyTicket();
+    AsyncLoader& a = Async();
+    auto ticket = std::make_shared<AsyncTicket>();
+    std::shared_ptr<AsyncJob> job;
+    if (auto it = a.InFlight.find("clip|" + key); it != a.InFlight.end()) {
+        job = it->second;
+        job->Forget = false; // the clip cache isn't Play-scoped: a dropped one is filed anyway
+    } else {
+        PrepareModelImport(path); // the .meta's scale and clip trims, as LoadAnimationSource reads them
+        job = std::make_shared<AsyncJob>();
+        job->Gen = m_LoadGen;
+        job->K = AsyncJob::Kind::ClipSource;
+        job->Path = path;
+        job->ModelSettings = GetModelSettings(path);
+        job->ModelSettings.AnimationOnly = true;
+        a.InFlight["clip|" + key] = job;
+        a.Active.push_back(job);
+        a.Push(job);
+    }
+    ticket->Gen = m_LoadGen;
+    ticket->Jobs.push_back(job);
+    a.Tickets.push_back(ticket);
+    return ticket;
+}
+
+bool AssetLibrary::ClaimAsyncClipSource(const std::string& key) {
+    if (!m_Async) return false;
+    AsyncLoader& a = *m_Async;
+    const auto it = a.InFlight.find("clip|" + key);
+    if (it == a.InFlight.end()) return false;
+    const std::shared_ptr<AsyncJob> job = it->second;
+    bool queued = false;
+    {
+        std::lock_guard<std::mutex> lk(a.Mutex);
+        if (const auto q = std::find(a.Queue.begin(), a.Queue.end(), job); q != a.Queue.end()) {
+            a.Queue.erase(q);
+            queued = true;
+        }
+    }
+    if (!queued) {
+        // A worker has it: one file's import, well under what importing it again here would cost.
+        while (!job->Done.load(std::memory_order_acquire)) std::this_thread::sleep_for(std::chrono::microseconds(200));
+        if (job->ModelResult && !m_ClipSourceCache.count(key)) m_ClipSourceCache[key] = std::move(job->ModelResult);
+    }
+    job->ModelResult.reset();
+    job->Finalized = true; // its tickets turn ready on the next pump
+    a.InFlight.erase(it);
+    a.Active.erase(std::remove(a.Active.begin(), a.Active.end(), job), a.Active.end());
+    return !queued && m_ClipSourceCache.count(key) != 0;
+}
+
 double AssetLibrary::PumpBudgetMs(bool playing, bool urgent, double lastFrameWorkMs) {
     constexpr double kFull = 3.0, kFloor = 0.25, kFrameMs = 1000.0 / 120.0;
     if (!playing || urgent) return kFull;
@@ -379,6 +434,12 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         bool waiting = false; // a staged copy isn't in yet: other jobs go ahead, this one comes back next pump
         if (job.K == AsyncJob::Kind::Material) {
             materialsDone.push_back(*it);
+        } else if (job.K == AsyncJob::Kind::ClipSource) {
+            // Nothing to upload. A full model of the file loaded meanwhile wins, as in LoadAnimationSource.
+            const std::string key = AssetDatabase::PathKey(job.Path);
+            if (job.ModelResult && !HasModel(job.Path) && !m_ClipSourceCache.count(key))
+                m_ClipSourceCache[key] = std::move(job.ModelResult);
+            job.ModelResult.reset();
         } else if (job.K == AsyncJob::Kind::Model) {
             if (!job.ModelResult || HasModel(job.Path) || job.Forget) {
                 // Failed, or a synchronous LoadModel got there first: that one wins. Or Stop
@@ -429,8 +490,9 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         worked = true;
         if (!finished) break;
         job.Finalized = true;
-        a.InFlight.erase(job.K == AsyncJob::Kind::Material ? "mat|" + AssetDatabase::PathKey(job.Path)
-                                                           : AssetDatabase::PathKey(job.Path));
+        a.InFlight.erase(job.K == AsyncJob::Kind::Material     ? "mat|" + AssetDatabase::PathKey(job.Path)
+                         : job.K == AsyncJob::Kind::ClipSource ? "clip|" + AssetDatabase::PathKey(job.Path)
+                                                               : AssetDatabase::PathKey(job.Path));
         it = a.Active.erase(it);
     }
     for (const auto& m : materialsDone) {
