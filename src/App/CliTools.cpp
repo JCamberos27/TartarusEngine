@@ -22,6 +22,7 @@
 #include "Log.h"
 #include "Model.h"
 #include "ModelVertex.h" // MAX_BONE_INFLUENCE
+#include "Renderer/ModelCache.h"
 #include "ProjectSettings.h"
 #include "ShaderLibrary.h"
 #include "Tests/UnitTests.h"
@@ -40,6 +41,8 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <regex>
+#include <set>
 #include <vector>
 
 namespace {
@@ -120,6 +123,89 @@ int ModelReport(const std::vector<std::string>& inputs) {
     }
     std::cout << "[ModelReport] " << files.size() << " models, " << failed << " failed" << std::endl;
     return failed ? 1 : 0;
+}
+
+// `--model-cache-check <scene.json | folder | model> [more ...]`: every model a scene names (or a folder holds) imported
+// twice with its .meta's settings - from its file with the model cache bypassed, and from the cache (cooked first when
+// it isn't there yet) - and the two imports' digests compared (Model::ImportDigest: every mesh's vertices and indices,
+// materials, bones, nodes, clips, bounds). One line per input with the counts and the time each way, then the cache's
+// size. Exit 1 if any cached import differs from the fresh one, or a cooked file wasn't read back from the cache.
+int ModelCacheCheck(const std::vector<std::string>& inputs) {
+    namespace fs = std::filesystem;
+    const auto isModel = [](const fs::path& p) {
+        std::string e = p.extension().string();
+        for (char& c : e) c = (char)std::tolower((unsigned char)c);
+        return e == ".fbx" || e == ".obj" || e == ".gltf" || e == ".glb";
+    };
+    const auto nowMs = [] {
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    };
+    int mismatched = 0;
+    for (const std::string& in : inputs) {
+        std::vector<std::string> files;
+        std::error_code ec;
+        const fs::path inPath = fs::u8path(in);
+        if (fs::is_directory(inPath, ec)) {
+            for (const auto& f : fs::recursive_directory_iterator(inPath, ec))
+                if (f.is_regular_file() && isModel(f.path())) files.push_back(f.path().string());
+        } else if (isModel(inPath)) {
+            files.push_back(in);
+        } else {
+            // A scene: every model path it names, as the scene load resolves them.
+            std::ifstream sf(inPath, std::ios::binary);
+            const std::string text((std::istreambuf_iterator<char>(sf)), std::istreambuf_iterator<char>());
+            static const std::regex kModelRef(R"re("([^"]+\.(?:[fF][bB][xX]|[gG][lL][bB]|[oO][bB][jJ]|[gG][lL][tT][fF]))")re");
+            std::set<std::string> seen;
+            for (std::sregex_iterator it(text.begin(), text.end(), kModelRef), end; it != end; ++it) {
+                const std::string resolved = ProjectPaths::Resolve((*it)[1].str());
+                if (fs::is_regular_file(fs::u8path(resolved), ec) && seen.insert(AssetDatabase::PathKey(resolved)).second)
+                    files.push_back(resolved);
+            }
+        }
+        std::sort(files.begin(), files.end());
+        int same = 0, differ = 0, uncached = 0, failed = 0;
+        double freshMs = 0.0, cachedMs = 0.0;
+        for (const std::string& f : files) {
+            ModelImportSettings s;
+            AssetLibrary::ReadModelImportSettings(f + ".meta", s);
+            ModelCache::SetBypass(true);
+            double t0 = nowMs();
+            const auto fresh = Model::ImportDeferred(f, s);
+            freshMs += nowMs() - t0;
+            ModelCache::SetBypass(false);
+            if (!fresh || (fresh->MeshCount() == 0 && fresh->AnimationCount() == 0)) {
+                ++failed;
+                continue;
+            }
+            const ModelCache::Stats before = ModelCache::GetStats();
+            Model::ImportDeferred(f, s); // cooks the entry when it isn't there yet
+            const ModelCache::Stats mid = ModelCache::GetStats();
+            t0 = nowMs();
+            const auto cached = Model::ImportDeferred(f, s);
+            cachedMs += nowMs() - t0;
+            const ModelCache::Stats after = ModelCache::GetStats();
+            if (after.Hits == mid.Hits) {
+                // Not read from the cache: fine for a model the cache doesn't take (OBJ / glTF, embedded textures).
+                if (mid.Cooked > before.Cooked) {
+                    ++differ;
+                    std::cout << "[ModelCacheCheck] NOT READ BACK " << f << "\n";
+                } else ++uncached;
+                continue;
+            }
+            if (fresh->ImportDigest() == cached->ImportDigest()) ++same;
+            else {
+                ++differ;
+                std::cout << "[ModelCacheCheck] DIFFERS " << f << "\n";
+            }
+        }
+        mismatched += differ;
+        std::printf("[ModelCacheCheck] %s: %zu models, %d same, %d DIFFER, %d not cached, %d failed to import; "
+                    "fresh %.1f s, cached %.1f s\n",
+                    in.c_str(), files.size(), same, differ, uncached, failed, freshMs / 1000.0, cachedMs / 1000.0);
+    }
+    const ModelCache::Usage usage = ModelCache::DiskUsage();
+    std::printf("[ModelCacheCheck] cache: %d entries, %.1f MB\n", usage.Entries, (double)usage.Bytes / (1024.0 * 1024.0));
+    return mismatched ? 1 : 0;
 }
 
 // `--model-nodes <folder or model> [more ...]`: each model's node tree as Assimp reads it with the engine's import
@@ -348,6 +434,10 @@ int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
             return RunUnitTests(opt.unitTestsFilter.empty() ? nullptr : opt.unitTestsFilter.c_str()) == 0 ? 0 : 1;
         case LaunchMode::ModelReport: CrashHandler::SetInteractive(false); return ModelReport(opt.inputs);
         case LaunchMode::ModelNodes: CrashHandler::SetInteractive(false); return ModelNodes(opt.inputs);
+        case LaunchMode::ModelCacheCheck:
+            CrashHandler::SetInteractive(false);
+            EnginePaths::Init(argv0); // scene paths resolve under project/ from the exe
+            return ModelCacheCheck(opt.inputs);
         case LaunchMode::SceneBounds:
             CrashHandler::SetInteractive(false);
             return SceneBounds(opt.inputs, opt.sceneBoundsOut, argv0);

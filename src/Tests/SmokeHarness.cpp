@@ -226,9 +226,16 @@ void SmokeHarness::LoadScene() {
     // documented as static, hand-authored fixtures).
     stall_watch::SetWhere(std::filesystem::path(path).filename().string());
     if (m_SceneIndex == 0) MemSnapshot("00_start");
+    const double loadStart = glfwGetTime();
+    const ModelCache::Stats modelsBefore = ModelCache::GetStats();
     m_SceneLoadOk = SceneSerializer::Load(world, m_Ctx.assets, path, /*persistMigration=*/false);
     m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
-    std::cout << "[SmokeTest] Loading " << path
+    // How long the scene took to open, and how many of its models came from the model cache (Library/Models).
+    const ModelCache::Stats modelsAfter = ModelCache::GetStats();
+    char loadInfo[160];
+    std::snprintf(loadInfo, sizeof loadInfo, "  (opened in %.2f s; models: %d from the cache, %d imported and cooked)",
+                  glfwGetTime() - loadStart, modelsAfter.Hits - modelsBefore.Hits, modelsAfter.Cooked - modelsBefore.Cooked);
+    std::cout << "[SmokeTest] Loading " << path << loadInfo
               << (m_SceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
     if (m_SceneLoadOk)
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });

@@ -128,6 +128,7 @@
 #include "GLDebug.h"
 #include "Log.h"
 #include "TextureCache.h"
+#include "ModelCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -834,6 +835,12 @@ private:
                 return TextureCache::HashSettings(it->second);
             });
         }
+        // The cooked model cache: entries unused for a month, crash leftovers, the size cap (Library/Models).
+        ModelCache::Prune();
+        const ModelCache::Stats models = ModelCache::GetStats();
+        if (models.Hits + models.Cooked > 0)
+            Log::Info("Model cache: " + std::to_string(models.Hits) + " models read (" + std::to_string((int)models.HitMs) +
+                      " ms), " + std::to_string(models.Cooked) + " imported and cooked (" + std::to_string((int)models.CookMs) + " ms).");
     }};
 
     EditorLayer editor;
