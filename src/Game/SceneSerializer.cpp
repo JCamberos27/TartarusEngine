@@ -190,7 +190,7 @@ namespace {
 // The keys SaveToString(world, assets) adds on top of the scene: its own marker and every key
 // AppendAssetLibraryJson writes.
 constexpr const char* kLibraryKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures", "libraryMaterials",
-                                        "librarySounds", "libraryPrefabs", "assetFolders", "assetMeta"};
+                                        "librarySounds", "libraryPrefabs", "assetFolders", "removedDiskFolders", "assetMeta"};
 } // namespace
 
 bool SceneSerializer::SameSceneContent(const std::string& a, const std::string& b) {
@@ -277,6 +277,24 @@ std::string SceneSerializer::WithLibraryState(const std::string& scene, const st
     } catch (const std::exception&) {
         return {};
     }
+}
+
+std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::string& loadedText, const AssetLibrary& assets) {
+    json live;
+    live["hasAssetLibrarySnapshot"] = true;
+    AppendAssetLibraryJson(live, assets, /*includeAssetMetadata=*/true);
+    bool same = true;
+    for (const char* k : kLibraryKeys) {
+        const bool inLoaded = loaded.contains(k), inLive = live.contains(k);
+        if (inLoaded != inLive || (inLoaded && loaded.at(k) != live.at(k))) { same = false; break; }
+    }
+    if (same) return loadedText;
+    json out = loaded;
+    for (const char* k : kLibraryKeys) {
+        out.erase(k);
+        if (const auto it = live.find(k); it != live.end()) out[k] = *it;
+    }
+    return out.dump();
 }
 
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {
