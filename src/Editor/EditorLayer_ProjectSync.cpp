@@ -114,7 +114,7 @@ bool ChangesAssetIndex(const std::string& path) {
 } // namespace
 
 void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
-    if (!ProjectWatcher::IsRunning()) return;
+    if (!ProjectWatcher::IsRunning()) { RefreshPrefabInstances(world, assets); return; } // the editor's own Apply to Prefab still queues
     bool overflowed = false;
     const std::vector<ProjectWatcher::Change> changes = ProjectWatcher::Drain(300, overflowed);
     s_SyncApplied = 0;
@@ -186,6 +186,8 @@ int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
     m_PrefabRefreshQueue.clear();
     const bool all = m_PrefabRefreshAll;
     m_PrefabRefreshAll = false;
+    const bool joinsUndo = m_PrefabRefreshJoinsUndo && m_GlobalUndoActive;
+    m_PrefabRefreshJoinsUndo = false;
     // Play and Prefab Mode end by reloading the scene from a snapshot taken before them, which
     // rebuilds every instance from the file as it is then, with the snapshot's overrides.
     if (m_InPlayMode || InPrefabMode()) return 0;
@@ -220,7 +222,9 @@ int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
     // from (the pristine cache still holds the old content), reloaded: each instance is rebuilt
     // from the file now and its overrides replayed on top, like an undo step loading a snapshot.
     // The scene file would store the same links and overrides, so no undo step and no "*".
-    FinishGlobalUndo(world, true);
+    // An open step that wrote the file (Apply to Prefab) takes the rebuild in (its commit sees the
+    // scene with the applied override gone); any other open edit is committed first.
+    if (!joinsUndo) FinishGlobalUndo(world, true);
     // The selection, by OrderComponent; a member of an instance by its root's order and its
     // prefab-local index instead: rebuilt members get new orders (only the root's is saved).
     struct Picked { int Order = -1; int Local = -1; };
@@ -243,7 +247,7 @@ int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
         if (p.Local < 0 && world.Registry.all_of<OrderComponent>(e)) p.Order = world.Registry.get<OrderComponent>(e).Value;
         if (p.Order >= 0) picked.push_back(p);
     }
-    const std::string snapshot = UndoBaselineIsCurrent() ? m_CurrentUndoScene : SceneSerializer::SaveToString(world, assets);
+    const std::string snapshot = !m_GlobalUndoActive && UndoBaselineIsCurrent() ? m_CurrentUndoScene : SceneSerializer::SaveToString(world, assets);
     {
         struct Applying { bool& Flag; Applying(bool& f) : Flag(f) { Flag = true; } ~Applying() { Flag = false; } } applying(m_GlobalUndoApplying);
         if (!SceneSerializer::LoadFromString(world, assets, snapshot)) {

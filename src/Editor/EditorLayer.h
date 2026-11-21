@@ -860,7 +860,12 @@ public:
     // (its file stores the same links and overrides). Skipped in Play and Prefab Mode, whose exits
     // reload the scene from a snapshot anyway. Returns how many instances were rebuilt.
     int RefreshPrefabInstances(World& world, AssetLibrary& assets);
-    void QueuePrefabRefresh(const std::string& path) { m_PrefabRefreshQueue.push_back(path); }
+    // Queued during an open undo step (Apply to Prefab writing the file): the rebuild joins that
+    // step, so undoing it puts back the scene as it was before the Apply, not only the file.
+    void QueuePrefabRefresh(const std::string& path) {
+        m_PrefabRefreshQueue.push_back(path);
+        if (m_GlobalUndoActive && !m_GlobalUndoApplying) m_PrefabRefreshJoinsUndo = true;
+    }
     // #15 - call right before OutfitSystem::UpdatePending when OutfitSystem::LandingDue: the landing makes
     // the next frame take the whole scene as the undo baseline (RebaseAfterOutfitChanges), so a scene
     // change made since the last baseline without an undo step is journaled first, as "Unrecorded
@@ -1660,6 +1665,7 @@ private:
     int m_PrefabHook = 0;            // AssetChangeHooks id: an edited .prefab queues its placed instances' refresh
     std::vector<std::string> m_PrefabRefreshQueue; // .prefab files changed since the last RefreshPrefabInstances
     bool m_PrefabRefreshAll = false; // the watcher overflowed: check every placed prefab
+    bool m_PrefabRefreshJoinsUndo = false; // see QueuePrefabRefresh
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
