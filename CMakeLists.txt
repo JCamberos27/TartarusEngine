@@ -322,8 +322,9 @@ set_source_files_properties(${TARTARUS_VENDORED_SOURCES} PROPERTIES
 # The engine core builds as its own DLL, which the exe and TartarusEditor.dll link: Core, Renderer,
 # Physics, Audio, Assets, Graffiti, the scene data model they use (World, WorldLod, SkySettings,
 # TimeOfDay, RootMotion, PostProcessVolume, TerrainSystem), and the vendored code (glloader, stb,
-# miniaudio, meshoptimizer, Recast/Detour, ImGui with its backends, ImGuizmo, im_anim, ImViewGuizmo,
-# the code editor). That leaves one copy of every global those layers share (ImGui's context, the
+# miniaudio, meshoptimizer, Recast/Detour, ImGui with its backends, ImGuizmo, im_anim, the code
+# editor). ImViewGuizmo stays in the exe: its header keeps its state in an inline function's static
+# (GetContext), so the exe's inline calls and a core copy of the rest would each see their own. That leaves one copy of every global those layers share (ImGui's context, the
 # GL function pointers, the material wind) and is the base a reloadable gameplay/editor DLL sits on.
 #
 # Functions are exported wholesale (WINDOWS_EXPORT_ALL_SYMBOLS). Exported DATA needs
@@ -336,7 +337,7 @@ if(TARTARUS_CORE_DLL)
     if(_s MATCHES "/src/(Core|Renderer|Physics|Audio|Assets|Graffiti)/"
        OR _s MATCHES "/src/Game/(World|WorldLod|SkySettings|TimeOfDay|RootMotion|PostProcessVolume|TerrainSystem)[.]cpp$"
        OR _s MATCHES "/extern/glloader/"
-       OR _s MATCHES "/extern/(stb_image_impl|stb_dxt_impl|miniaudio_impl|ImViewGuizmo_impl)[.]cpp$"
+       OR _s MATCHES "/extern/(stb_image_impl|stb_dxt_impl|miniaudio_impl)[.]cpp$"
        OR _s MATCHES "/extern/ImGuiColorTextEdit/"
        OR _s MATCHES "/src/Editor/ImGuiGLHooks[.]cpp$") # the GL reads of the patched ImGui backend
       list(APPEND _core_sources ${_s})
