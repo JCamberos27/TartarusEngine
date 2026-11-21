@@ -440,6 +440,8 @@ typedef void (__stdcall* PFNGLCLEARNAMEDFRAMEBUFFERFVPROC)(GLuint, GLenum, GLint
 // binds/mutates the renderer's current VAO + array/element-buffer state (#97).
 typedef void (__stdcall* PFNGLCREATEVERTEXARRAYSPROC)(GLsizei, GLuint*);
 typedef void (__stdcall* PFNGLENABLEVERTEXARRAYATTRIBPROC)(GLuint, GLuint);
+typedef void (__stdcall* PFNGLDISABLEVERTEXARRAYATTRIBPROC)(GLuint, GLuint);
+typedef void (__stdcall* PFNGLVERTEXATTRIB4FPROC)(GLuint, GLfloat, GLfloat, GLfloat, GLfloat);
 typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBFORMATPROC)(GLuint, GLuint, GLint, GLenum, GLboolean, GLuint);
 typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBIFORMATPROC)(GLuint, GLuint, GLint, GLenum, GLuint);
 typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBBINDINGPROC)(GLuint, GLuint, GLuint);
@@ -545,6 +547,8 @@ extern PFNGLBLITNAMEDFRAMEBUFFERPROC glBlitNamedFramebuffer;
 extern PFNGLCLEARNAMEDFRAMEBUFFERFVPROC glClearNamedFramebufferfv;
 extern PFNGLCREATEVERTEXARRAYSPROC glCreateVertexArrays;
 extern PFNGLENABLEVERTEXARRAYATTRIBPROC glEnableVertexArrayAttrib;
+extern PFNGLDISABLEVERTEXARRAYATTRIBPROC glDisableVertexArrayAttrib;
+extern PFNGLVERTEXATTRIB4FPROC glVertexAttrib4f;
 extern PFNGLVERTEXARRAYATTRIBFORMATPROC glVertexArrayAttribFormat;
 extern PFNGLVERTEXARRAYATTRIBIFORMATPROC glVertexArrayAttribIFormat;
 extern PFNGLVERTEXARRAYATTRIBBINDINGPROC glVertexArrayAttribBinding;
