@@ -65,6 +65,16 @@ std::string SceneIntact(Ctx& c, const char* third) {
     if (X::ScenePath(c.E) != g_ScratchScene) return "scene path changed to " + X::ScenePath(c.E);
     return std::string();
 }
+// The prefab restart test's unsaved edit (Crate Lamp renamed Crate Bulb) still open in Prefab Mode, the prefab file
+// as it was (`fileUnchanged`), and no restart pending.
+std::string KeptPrefabEdit(Ctx& c, bool fileUnchanged) {
+    if (!c.E.InPrefabMode()) return "left Prefab Mode";
+    if (smoke_prefabs::ChildOf(c.W, "Crate", "Crate Bulb") == entt::null) return "the edit is gone";
+    if (!X::Dirty(c.E)) return "not dirty";
+    if (!fileUnchanged) return "the prefab file was written";
+    if (EditorRestart::ReadyToRelaunch() || EditorRestart::Building()) return "restart still pending";
+    return std::string();
+}
 } // namespace smoke_hotreload
 
 void RegisterHotReloadTests() {
@@ -277,6 +287,10 @@ void RegisterHotReloadTests() {
             }),
             Do("ask anyway", [](Ctx& c) { c.E.RequestRebuildRestart(); }), Wait(3),
             ExpectTrue("no build started", [](Ctx&) { return !EditorRestart::Building() && !EditorRestart::ReadyToRelaunch(); }),
+            // Blocked (or, on CI, unavailable: no CMake build folder): the request touched nothing.
+            Expect("the blocked request kept Prefab Mode and the edit, wrote nothing", [prefabBytes](Ctx& c) {
+                return KeptPrefabEdit(c, prefabBytes() == s_PrefabBytes);
+            }),
             // Dirty after the build started: the hand-over cancels and keeps the edits.
             Do("leave without saving, reopen clean", [](Ctx& c) { c.E.ExitPrefabMode(c.W, c.A, /*save=*/false); }), Wait(3),
             enter("reopen the prefab"), Wait(3),
@@ -295,11 +309,9 @@ void RegisterHotReloadTests() {
             }, 10),
             Wait(3),
             Expect("still in Prefab Mode with the edit, nothing written, no restart pending", [prefabBytes](Ctx& c) {
-                if (!c.E.InPrefabMode()) return std::string("left Prefab Mode");
-                if (SP::ChildOf(c.W, "Crate", "Crate Bulb") == entt::null) return std::string("the edit is gone");
-                if (!X::Dirty(c.E)) return std::string("not dirty");
-                if (prefabBytes() != s_PrefabBytes) return std::string("the prefab file was written");
-                if (EditorRestart::ReadyToRelaunch() || EditorRestart::Building()) return std::string("restart still pending");
+                if (!EditorRestart::Available()) return std::string(); // no build ran, so no edit was made either
+                const std::string kept = KeptPrefabEdit(c, prefabBytes() == s_PrefabBytes);
+                if (!kept.empty()) return kept;
                 std::error_code ec;
                 return std::filesystem::exists(EditorRestart::StateFile(), ec) ? std::string("a state file was written") : std::string();
             }),
