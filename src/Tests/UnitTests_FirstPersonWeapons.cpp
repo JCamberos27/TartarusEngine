@@ -66,6 +66,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -1189,7 +1190,11 @@ void TestFirstPersonAds() {
     CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), again, &error) && again.Ads.ReferenceState.empty());
 
     // Every known tag has a description; custom tags don't.
-    for (const auto& t : K::kKnownTags) CHECK(K::KnownTagDescription(t.Name) == t.Description);
+    // By text: the table is header data, one copy per module, so its addresses differ across a DLL boundary.
+    for (const auto& t : K::kKnownTags) {
+        const char* description = K::KnownTagDescription(t.Name);
+        CHECK(description && std::strcmp(description, t.Description) == 0);
+    }
     CHECK(K::KnownTagDescription("MyTag") == nullptr);
 
     // The generator: carry and busy tags, and an ADS clip becomes an aim-routed state.
