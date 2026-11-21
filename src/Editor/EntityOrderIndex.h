@@ -40,14 +40,15 @@ public:
 
     static std::uint64_t Fingerprint(const entt::registry& reg) {
         const auto* orders = reg.storage<OrderComponent>(); // const registry: null until any entity has one
-        std::uint64_t h = 1469598103934665603ull;
-        if (!orders) return h;
+        if (!orders) return 0;
+        // A sum of per-slot mixes: each term depends only on its own slot (entity, value, position), so the loop
+        // has no multiply chain to wait on; the position keeps a swap of two values from cancelling out.
+        std::uint64_t h = orders->size(), slot = 0;
         for (auto [e, o] : orders->each()) {
-            const std::uint64_t v = ((std::uint64_t)entt::to_integral(e) << 32) ^ (std::uint32_t)o.Value;
-            h = (h ^ v) * 1099511628211ull;
-            h ^= h >> 29;
+            const std::uint64_t v = ((std::uint64_t)entt::to_integral(e) << 32) | (std::uint32_t)o.Value;
+            h += (v ^ (++slot * 0x9E3779B97F4A7C15ull)) * 0xff51afd7ed558ccdull;
         }
-        return h ^ (std::uint64_t)orders->size();
+        return h;
     }
 
 private:
