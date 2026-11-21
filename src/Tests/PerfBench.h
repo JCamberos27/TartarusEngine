@@ -2,6 +2,7 @@
 
 #include "Core/FrameLoads.h"
 #include "Core/Profiler.h"
+#include "Tests/MachineLoad.h"
 
 #include <chrono>
 #include <string>
@@ -73,4 +74,5 @@ private:
     std::vector<Worst> m_Worst;
     Worst m_Pending;
     std::vector<FrameLoads::Event> m_Loads; // the frame's loads, from TakeFrameMs
+    MachineLoad::Snapshot m_LoadStart;      // at the phase's first measured frame
 };
