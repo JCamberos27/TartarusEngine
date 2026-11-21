@@ -153,6 +153,15 @@ void EditorLayer::Init(GLFWwindow* window) {
             Log::Info("Reloaded tab and header styles (editor_ui_styles.json changed outside the editor).");
             return true;
         });
+    // A .prefab written (outside, or by Apply to Prefab) or put back: its placed instances refresh
+    // at the end of this sync pass (RefreshPrefabInstances), which counts what it rebuilt.
+    if (!m_PrefabHook)
+        m_PrefabHook = AssetChangeHooks::Register("prefab", [this](const AssetChangeHooks::Event& e) {
+            using K = AssetChangeHooks::Event::Kind;
+            if (e.Type == K::Rescan) m_PrefabRefreshAll = true;
+            else if (e.Type != K::Removed) QueuePrefabRefresh(e.Path); // removed: instances keep what they have
+            return false;
+        });
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -570,7 +579,8 @@ void EditorLayer::Shutdown() {
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
     AssetChangeHooks::Unregister(m_UiStylesHook);
-    m_UiStylesHook = 0;
+    AssetChangeHooks::Unregister(m_PrefabHook);
+    m_UiStylesHook = m_PrefabHook = 0;
     GameModuleBuild::Shutdown();
     EditorRestart::Shutdown(); // a restart build still running: wait, put the exe name back
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist

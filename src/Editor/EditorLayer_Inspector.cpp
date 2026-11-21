@@ -3679,7 +3679,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
         if (reflPfRevert) reflRemoved = true;
-        if (reflPfApply) SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name);
+        // The other instances gain the component when the scene's instances are rebuilt from the
+        // file (RefreshPrefabInstances, at the next project sync).
+        if (reflPfApply && SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name))
+            for (entt::entity cur = entity; cur != entt::null && registry.valid(cur);) {
+                if (const auto* pi = registry.try_get<PrefabInstanceComponent>(cur)) { QueuePrefabRefresh(pi->SourcePath); break; }
+                const auto* h = registry.try_get<HierarchyComponent>(cur);
+                cur = h ? h->Parent : entt::null;
+            }
         if (reflReset) {
             PushUndo(world, std::string("Reset ") + rc.Meta.Name);
             rc.Add(registry, entity); // emplace_or_replace -> back to default-constructed
