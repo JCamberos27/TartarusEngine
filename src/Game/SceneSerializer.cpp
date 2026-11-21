@@ -2,6 +2,7 @@
 #include "SceneFileJson.h"
 #include "SceneSnapshotJson.h"
 
+#include <chrono>
 #include <stdexcept>
 
 using namespace SceneDetail;
@@ -75,6 +76,7 @@ std::shared_ptr<SceneSerializer::ParsedSceneFile> SceneSerializer::ReadSceneFile
 
 bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration,
                            const ParsedSceneFile* parsed) {
+    const auto loadStart = std::chrono::steady_clock::now();
     if (parsed) {
         std::uintmax_t size = 0;
         std::filesystem::file_time_type time{};
@@ -166,6 +168,9 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         // persistMigration == false: the migrated data lives only in `world`/`assets` for this
         // run (a --smoke-test scene) — `path` on disk is never touched.
     }
+    char took[64];
+    std::snprintf(took, sizeof(took), "%.0f ms", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+    Log::Info("Scene: loaded '" + std::filesystem::u8path(path).filename().u8string() + "' in " + took + ".");
     return ok;
 }
 
