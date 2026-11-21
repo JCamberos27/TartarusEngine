@@ -18,6 +18,7 @@
 #include "ProjectSettings.h"
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include "UndoTrigger.h"
 #include "EditorSettings.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
@@ -900,6 +901,54 @@ void TestRestartRelaunchArgs() {
     CHECK(ER::QuoteArg(L"C:\\dir with space\\") == L"\"C:\\dir with space\\\\\"");
 }
 
+// Rebuild & Restart moves the exe and its DLLs aside as one set: a failed build puts the whole old
+// set back (no old exe with a new core DLL), a good one fills what it didn't relink, and a set that
+// can't fully move is undone.
+void TestRestartMoveAsideSet() {
+    namespace ER = EditorRestart;
+    namespace fs = std::filesystem;
+    const fs::path dir = UnitTestSupport::TempDir("restart_move_aside");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    const auto write = [](const fs::path& p, const std::string& text) { std::ofstream(p, std::ios::binary) << text; };
+    const auto read = [](const fs::path& p) {
+        std::ifstream in(p, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    const fs::path exe = dir / "TartarusEngine.exe", core = dir / "TartarusCore.dll", glfw = dir / "glfw3.dll";
+    const std::vector<fs::path> set = ER::LockedFiles(exe);
+    CHECK(set.size() == 3 && set[0] == exe && set[1] == core && set[2] == glfw);
+
+    // Failed build that left a new core DLL behind: the old pair comes back.
+    write(exe, "exe-old");
+    write(core, "core-old");
+    std::string error;
+    std::vector<fs::path> moved = ER::MoveAside(set, error);
+    CHECK(moved.size() == 2 && error.empty()); // glfw3.dll absent: skipped
+    CHECK(!fs::exists(exe) && !fs::exists(core) && fs::exists(ER::OldPath(exe)) && fs::exists(ER::OldPath(core)));
+    write(core, "core-new");
+    ER::PutBack(moved);
+    CHECK(read(exe) == "exe-old" && read(core) == "core-old");
+    CHECK(!fs::exists(ER::OldPath(exe)) && !fs::exists(ER::OldPath(core)));
+
+    // Good build that relinked only the exe: the core DLL is filled from its .old.
+    moved = ER::MoveAside(set, error);
+    write(exe, "exe-new");
+    CHECK(ER::FillMissing(moved));
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old");
+
+    // The core DLL can't move (a non-empty folder sits on its .old name): the exe is put back.
+    fs::remove(ER::OldPath(exe), ec);
+    fs::remove(ER::OldPath(core), ec);
+    fs::create_directories(ER::OldPath(core) / "busy", ec);
+    error.clear();
+    moved = ER::MoveAside(set, error);
+    CHECK(moved.empty() && !error.empty());
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old" && !fs::exists(ER::OldPath(exe)));
+    fs::remove_all(dir, ec);
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
     tests.emplace_back("Hierarchy child order: Children follow OrderComponent, a reorder bumps the version and moves LOD levels",TestHierarchyChildOrder);
@@ -921,4 +970,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
     tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
     tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
+    tests.emplace_back("Rebuild & Restart moves the exe and its DLLs aside as one set",TestRestartMoveAsideSet);
 }
