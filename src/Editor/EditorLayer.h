@@ -2461,13 +2461,24 @@ private:
         const World* Owner = nullptr;
         ImGuiID Window = 0;
         std::uint64_t Order = 0, Hierarchy = 0, Open = 0;
+        // Filtered / sorted views: the view settings and a fingerprint of what they read
+        // (HierarchyContentFingerprint); 0 / empty in the default view.
+        std::uint64_t Content = 0;
+        int Sort = 0, TypeMask = 0;
+        bool Desc = false;
+        std::string Filter; // compared with m_HierarchyFilter directly (no per-frame copy)
         entt::entity Renaming = entt::null;
         bool Valid = false;
         bool operator==(const HierarchyFlatKey& o) const {
             return Owner == o.Owner && Window == o.Window && Order == o.Order && Hierarchy == o.Hierarchy &&
-                   Open == o.Open && Renaming == o.Renaming && Valid == o.Valid;
+                   Open == o.Open && Content == o.Content && Sort == o.Sort && TypeMask == o.TypeMask &&
+                   Desc == o.Desc && Renaming == o.Renaming && Valid == o.Valid; // Filter: checked apart
         }
     };
+    // Hash of the names / tags / kinds the current filter and sort read, over every entity in
+    // `order` (names and components have no change counter, so a filtered or sorted view checks
+    // them this way: one pass of hashing instead of the filter match, sorts and flatten).
+    std::uint64_t HierarchyContentFingerprint(const World& world, const std::vector<entt::entity>& order) const;
     HierarchyFlatKey m_HierFlatKey;
     std::uint64_t m_HierOpenGen = 0; // bumped by every write of a Hierarchy row's open/closed flag
     std::vector<entt::entity> m_HierRootScratch; // DrawHierarchyTreeBody's top-level rows, reused

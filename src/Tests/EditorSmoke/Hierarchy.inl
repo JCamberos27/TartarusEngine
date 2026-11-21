@@ -17,6 +17,7 @@ struct EditorSmokeAccess_Hierarchy {
     static entt::entity DefaultParent(EditorLayer& e, World& w) { return e.ResolveDefaultParent(w); }
     static void ClearFilter(EditorLayer& e) { e.m_HierarchyFilter.clear(); }
     static const std::string& Filter(EditorLayer& e) { return e.m_HierarchyFilter; }
+    static void SetFilter(EditorLayer& e, const std::string& f) { e.m_HierarchyFilter = f; }
     // Set-up edits made in code skip PushUndo; drop the cached undo baseline so the next real
     // edit snapshots the scene as it is now, not as it was before the set-up.
     static void RebaseUndo(EditorLayer& e) { e.m_CurrentUndoScene.clear(); }
@@ -712,6 +713,48 @@ void RegisterHierarchyTests() {
             return got == "Gamma,Beta,Alpha" ? std::string() : "rows " + got;
         }),
         ExpectTrue("display sort only: sibling order untouched", [](Ctx& c) { return HierRootOrder(c.W) == "Alpha,Beta,Gamma"; }),
+    }, HierReset);
+    // The flattened rows are kept between frames in filtered and sorted views too, keyed on a
+    // fingerprint of the names / tags / kinds those views read: edits made in code (no undo, no
+    // Hierarchy UI) must still show on the next frames.
+    Add("hierarchy: a filtered or sorted list follows renames, tags and components changed in code", {
+        FreshScene(), HierFresh(), Wait(2),
+        Do("filter amm", [](Ctx& c) { HX::SetFilter(c.E, "amm"); }), Wait(3),
+        Until("only Gamma listed", [](Ctx& c) {
+            const auto& v = HX::Visible(c.E);
+            return v.size() == 1 && v[0] == ByName(c.W, "Gamma");
+        }),
+        Do("rename Beta to Hammer in code", [](Ctx& c) { c.W.Registry.get<NameComponent>(ByName(c.W, "Beta")).Name = "Hammer"; }),
+        Until("Hammer joins the filtered list", [](Ctx& c) { return HierVisible(c) == 2; }),
+        Do("filter t:Enemy", [](Ctx& c) { HX::SetFilter(c.E, "t:Enemy"); }), Wait(3),
+        Until("nothing tagged yet", [](Ctx& c) { return HX::Visible(c.E).empty(); }),
+        Do("tag Alpha in code", [](Ctx& c) { TagComponent t; t.Tag = "Enemy"; c.W.Registry.emplace_or_replace<TagComponent>(ByName(c.W, "Alpha"), t); }),
+        Until("t:Enemy lists Alpha", [](Ctx& c) {
+            const auto& v = HX::Visible(c.E);
+            return v.size() == 1 && v[0] == ByName(c.W, "Alpha");
+        }),
+        Do("no filter, Name sort", [](Ctx& c) { HX::SetFilter(c.E, ""); EditorSettings::Get().HierarchySortMode = 1; }), Wait(3),
+        Expect("rows sorted Alpha, Gamma, Hammer", [](Ctx& c) {
+            const auto& v = HX::Visible(c.E);
+            std::string got;
+            for (entt::entity e : v) got += (got.empty() ? "" : ",") + NameOf(c.W, e);
+            return got == "Alpha,Gamma,Hammer" ? std::string() : "rows " + got;
+        }),
+        Do("rename Alpha to Zulu in code", [](Ctx& c) { c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Zulu"; }),
+        Until("Zulu sorts last", [](Ctx& c) {
+            const auto& v = HX::Visible(c.E);
+            return v.size() == 3 && NameOf(c.W, v[2]) == "Zulu";
+        }),
+        Do("creation order, Lights chip", [](Ctx&) {
+            EditorSettings::Get().HierarchySortMode = 0;
+            EditorSettings::Get().HierarchyTypeFilterMask = kHierarchyFilterLight;
+        }), Wait(3),
+        Until("the two lights listed", [](Ctx& c) { return HierVisible(c) == 2; }),
+        Do("remove Gamma's light in code", [](Ctx& c) { c.W.Registry.remove<LightComponent>(ByName(c.W, "Gamma")); }),
+        Until("one light left", [](Ctx& c) {
+            const auto& v = HX::Visible(c.E);
+            return v.size() == 1 && v[0] != ByName(c.W, "Gamma");
+        }),
     }, HierReset);
     Add("hierarchy: chevron, Expand all / Collapse all buttons and the E hover key", {
         FreshScene(), HierFresh(), HierParent("Gamma", "Alpha"), Wait(2), HierExpandAll(), Wait(3),

@@ -1001,17 +1001,28 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // entity's row was walked and measured every frame regardless of scroll position: invisible at
     // 61 objects, ~4,000 text measurements/frame at 1,000+.
     // Reused member buffer (Editor Enhancers perf pass): clear() keeps its capacity.
-    // Kept between frames in the default view (no filter, creation order): rebuilt only when an
-    // input changed - the creation order (entities added / removed / reordered), the parent links
-    // (World::HierarchyVersion), a row opened or closed (every write of a "##node" flag bumps
-    // m_HierOpenGen), the row being renamed, or another world / window. A filter or a Name / Type
-    // sort reads names and components, which have no change counter: rebuilt every frame then.
+    // Kept between frames: rebuilt only when an input changed - the creation order (entities added
+    // / removed / reordered), the parent links (World::HierarchyVersion), a row opened or closed
+    // (every write of a "##node" flag bumps m_HierOpenGen), the row being renamed, another world /
+    // window, or the filter / sort settings. A filter or a Name / Type sort also reads names, tags
+    // and components, which have no change counter: those views add a fingerprint of what they
+    // read (one hashing pass, far cheaper than the filter match + sorts + flatten it skips).
     std::vector<HierarchyFlatRow>& flatRows = m_HierFlatRows;
     const std::vector<entt::entity>& creationOrder = HierarchyCreationOrder(world);
-    const HierarchyFlatKey flatKey{&world, ImGui::GetCurrentWindow()->ID, m_HierOrder.Generation,
-                                   world.HierarchyVersion(), m_HierOpenGen, m_RenamingEntity, true};
-    const bool flatCacheable = !filtering && EditorSettings::Get().HierarchySortMode == 0;
-    if (!flatCacheable || !(flatKey == m_HierFlatKey)) {
+    const EditorSettings& viewSettings = EditorSettings::Get();
+    HierarchyFlatKey flatKey;
+    flatKey.Owner = &world;
+    flatKey.Window = ImGui::GetCurrentWindow()->ID;
+    flatKey.Order = m_HierOrder.Generation;
+    flatKey.Hierarchy = world.HierarchyVersion();
+    flatKey.Open = m_HierOpenGen;
+    flatKey.Sort = viewSettings.HierarchySortMode;
+    flatKey.TypeMask = viewSettings.HierarchyTypeFilterMask;
+    flatKey.Desc = flatKey.Sort != 0 && viewSettings.HierarchySortDesc;
+    if (filtering || flatKey.Sort != 0) flatKey.Content = HierarchyContentFingerprint(world, creationOrder);
+    flatKey.Renaming = m_RenamingEntity;
+    flatKey.Valid = true;
+    if (!(flatKey == m_HierFlatKey) || m_HierFlatKey.Filter != m_HierarchyFilter) {
     flatRows.clear();
     // The top-level rows: picked out of the cached creation order first, then display-sorted, so
     // the Name/Type sort only orders the rows that are shown (it used to sort every entity in the
@@ -1030,7 +1041,8 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     }
     ApplyHierarchyDisplaySort(world, rootEntities); // Phase 5 item 6 — display-only, doesn't touch OrderComponent
     for (entt::entity entity : rootEntities) FlattenHierarchyRows(world, entity, /*depth=*/0, flatRows);
-    m_HierFlatKey = flatCacheable ? flatKey : HierarchyFlatKey{};
+    m_HierFlatKey = std::move(flatKey);
+    m_HierFlatKey.Filter = m_HierarchyFilter;
     }
 
     // Editor Enhancers / vHierarchy per-frame state, read by every row below.
@@ -1355,6 +1367,34 @@ bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity
 
     const auto* name = world.Registry.try_get<NameComponent>(entity);
     return MatchesFilter(m_HierarchyFilter, name ? std::string_view(name->Name) : std::string_view());
+}
+
+std::uint64_t EditorLayer::HierarchyContentFingerprint(const World& world,
+                                                      const std::vector<entt::entity>& order) const {
+    // Only what the current view reads: names for a text filter or the Name sort, tags for a "t:"
+    // filter, the kind bits for the type chips or the Type sort. An unnamed row's Name key
+    // ("Object N") comes from its creation ordinal, already covered by the creation-order key.
+    const EditorSettings& es = EditorSettings::Get();
+    const bool tagFilter = m_HierarchyFilter.rfind("t:", 0) == 0;
+    const bool readNames = (!m_HierarchyFilter.empty() && !tagFilter) || es.HierarchySortMode == 1;
+    const bool readTags = tagFilter;
+    const bool readKinds = es.HierarchyTypeFilterMask != 0 || es.HierarchySortMode == 2;
+    const std::hash<std::string_view> hashText;
+    std::uint64_t h = 1469598103934665603ull;
+    const auto mix = [&h](std::uint64_t v) { h = (h ^ v) * 1099511628211ull; h ^= h >> 29; };
+    for (entt::entity e : order) {
+        mix(entt::to_integral(e));
+        if (readNames) {
+            const auto* nm = world.Registry.try_get<NameComponent>(e);
+            mix(nm ? hashText(nm->Name) : 0x9e3779b97f4a7c15ull);
+        }
+        if (readTags) {
+            const auto* tag = world.Registry.try_get<TagComponent>(e);
+            mix(tag ? hashText(tag->Tag) : 0x9e3779b97f4a7c15ull);
+        }
+        if (readKinds) mix((std::uint64_t)HierarchyKindMask(world.Registry, e));
+    }
+    return h;
 }
 
 void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int depth,
