@@ -3,9 +3,14 @@
 #include "CurveEditor.h"
 #include "EditorFileHistory.h"
 #include "UndoDeltaChain.h"
+#include "UndoInPlace.h"
 #include "EditorLayer.h"
 #include "EditorSearch.h"
 #include "LruMap.h"
+#include "RestartState.h"
+#include "EditorRestart.h"
+#include "EditorFileStat.h"
+#include "Core/Env.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -16,6 +21,7 @@
 #include "ProjectSettings.h"
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include "UndoTrigger.h"
 #include "EditorSettings.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
@@ -40,12 +46,13 @@ struct EditorHistoryTestAccess {
     static void Commit(EditorLayer& e,World& w) {e.CommitStagedUndo(w,"Test drag");}
     static bool Active(const EditorLayer& e) {return e.m_GlobalUndoActive;}
     static size_t Count(const EditorLayer& e) {return e.m_UndoStack.size();}
-    static const std::string& Before(const EditorLayer& e) {return e.m_UndoBaseJson;}
+    static const std::string& Before(const EditorLayer& e) {return e.m_UndoBaseJson.Text();}
     static const std::string& Current(const EditorLayer& e) {return e.m_CurrentUndoScene;}
     static void Clear(EditorLayer& e) {e.ClearUndoHistory();}
     static std::string TopLabel(const EditorLayer& e) {return e.m_UndoStack.empty()?std::string():e.m_UndoStack.back().Label;}
     static void Undo(EditorLayer& e,World& w,AssetLibrary& a) {e.Undo(w,a);}
     static void Redo(EditorLayer& e,World& w,AssetLibrary& a) {e.Redo(w,a);}
+    static int InPlaceSteps(const EditorLayer& e) {return e.m_InPlaceHistorySteps;}
     static void Select(EditorLayer& e,World& w,entt::entity entity) {
         e.m_EditPushedThisFrame=false;e.m_SelHistoryNavigating=false;
         e.m_Selected=entity;e.RecordSelectionHistory(w);
@@ -571,6 +578,60 @@ void TestOutfitLandingKeepsUnrecordedChange() {
     }
     AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
 }
+
+// X-33 C: undo / redo of a move, rotate, scale or rename writes those fields onto the live entities
+// instead of reloading the scene, and leaves exactly what the full reload would (the verify mode
+// also compares every in-place step with the snapshot). A structural step still reloads.
+void TestUndoInPlaceMatchesReload() {
+    auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
+    auto& io=ImGui::GetIO();io.DisplaySize={800,600};io.DeltaTime=1.0f/60;io.IniFilename=nullptr;
+    unsigned char* pixels;int width,height;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+    {
+        World world;AssetLibrary assets;EditorLayer editor;editor.SetVerifyInPlaceUndo(true);
+        const auto parent=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Parent");
+        const auto child=world.CreateEmptyEntity({1,0,0},{0,0,0},{1,1,1},"Child");world.AttachChildRaw(child,parent);
+        const auto other=world.CreateEmptyEntity({5,0,0},{0,0,0},{1,1,1},"Other");
+        auto frame=[&](const std::function<void()>& edit) {
+            ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
+            if(edit) {EditorHistoryTestAccess::Edit(editor,world);edit();}
+            EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        };
+        auto save=[&] {return SceneSerializer::SaveToString(world,assets);};
+        auto steps=[&] {return EditorHistoryTestAccess::InPlaceSteps(editor);};
+        frame({});
+        const auto s0=save();
+        frame([&] {
+            world.Registry.get<TransformComponent>(parent).Position={0,1,0};
+            world.Registry.get<TransformComponent>(other).SetRotationEuler({0,45,0});
+            world.Registry.get<TransformComponent>(child).Scale={2,2,2};
+            world.Registry.get<NameComponent>(child).Name="Renamed";
+        });
+        const auto s1=save();
+        CHECK(s1!=s0);CHECK(EditorHistoryTestAccess::Count(editor)==1);
+        EditorHistoryTestAccess::Undo(editor,world,assets);
+        CHECK(steps()==1);CHECK(save()==s0);CHECK(EditorHistoryTestAccess::Current(editor)==s0);
+        CHECK(world.Registry.valid(parent) && world.Registry.valid(child) && world.Registry.valid(other)); // not rebuilt
+        CHECK(world.Registry.get<NameComponent>(child).Name=="Child");
+        EditorHistoryTestAccess::Redo(editor,world,assets);
+        CHECK(steps()==2);CHECK(save()==s1);CHECK(EditorHistoryTestAccess::Current(editor)==s1);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==3);CHECK(save()==s0);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s1);
+
+        // A structural step (an entity added) reloads, and stays right both ways.
+        frame([&] {world.CreateEmptyEntity({9,9,9},{0,0,0},{1,1,1},"Added");});
+        const auto s2=save();
+        CHECK(s2!=s1);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s1);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s2);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s1);
+        // The move under it still goes in place on the reloaded entities (found by order, not handle).
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==5);CHECK(save()==s0);
+        CHECK(EditorHistoryTestAccess::Count(editor)==0);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==6);CHECK(save()==s1);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==6);CHECK(save()==s2);
+    }
+    AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
+}
 }
 
 // Unit tests for the editor UI. Add a function per test and list it below.
@@ -736,6 +797,61 @@ void TestUndoDeltaChain() {
     CHECK(UndoDelta::MakePatch("{broken", s1).empty());
 }
 
+// --- X-33 C: which history steps can be undone in place ------------------------------------
+void TestUndoInPlaceClassify() {
+    auto classify = [](const char* patch, std::vector<UndoInPlace::EntityRef>& out) {
+        return UndoInPlace::Classify(nlohmann::json::parse(patch), out);
+    };
+    std::vector<UndoInPlace::EntityRef> refs;
+    CHECK(classify("[]", refs) && refs.empty());
+    CHECK(classify(R"([{"op":"replace","path":"/models/12/position/0","value":1},
+                       {"op":"replace","path":"/models/12/rotation/3","value":1},
+                       {"op":"replace","path":"/empties/0/name","value":"B"},
+                       {"op":"replace","path":"/prefabInstances/2/scale","value":[1,1,1]}])", refs));
+    CHECK(refs.size() == 3); // sorted, model 12 once
+    CHECK(refs.size() == 3 && refs[0].Array == 1 && refs[0].Index == 12 && refs[1].Array == 2 && refs[1].Index == 0 &&
+          refs[2].Array == 3 && refs[2].Index == 2);
+    // Anything else: the full reload.
+    for (const char* p : {
+             R"([{"op":"add","path":"/models/3","value":{}}])",                         // an entity added
+             R"([{"op":"remove","path":"/empties/4"}])",                                // removed
+             R"([{"op":"replace","path":"/models/3/materials/0","value":"x"}])",        // a material slot
+             R"([{"op":"replace","path":"/models/3/Light/Intensity","value":2}])",      // a component field
+             R"([{"op":"replace","path":"/models/3/order","value":7}])",                // the order it's found by
+             R"([{"op":"replace","path":"/models/3/parentId","value":7}])",             // re-parented
+             R"([{"op":"replace","path":"/models/3","value":{}}])",                     // the whole entity
+             R"([{"op":"replace","path":"/models/3/name/0","value":"x"}])",             // not a vector
+             R"([{"op":"replace","path":"/models/03/position/0","value":1}])",          // not a plain index
+             R"([{"op":"replace","path":"/models/-/position/0","value":1}])",
+             R"([{"op":"replace","path":"/skyAmbientIntensity","value":2}])",           // scene settings
+             R"([{"op":"replace","path":"/assetMeta/a~1b/x","value":2}])",              // the asset library
+             R"([{"op":"replace","path":"/prefabInstances/0/overrides/1/v","value":2}])",
+             R"([{"op":"move","from":"/models/1/name","path":"/models/2/name"}])",
+             R"({"op":"replace"})"}) {
+        CHECK(!classify(p, refs));
+    }
+    // Too many entities in one step.
+    nlohmann::json many = nlohmann::json::array();
+    for (size_t i = 0; i <= UndoInPlace::kMaxEntities; ++i)
+        many.push_back({{"op", "replace"}, {"path", "/empties/" + std::to_string(i) + "/name"}, {"value", "n"}});
+    CHECK(!UndoInPlace::Classify(many, refs));
+
+    // The background verdict holds only for the scene it was worked out from.
+    const std::string after = R"({"empties":[{"name":"A","order":0,"position":[1,2,3]}],"sky":1})";
+    const std::string before = R"({"empties":[{"name":"A","order":0,"position":[0,0,0]}],"sky":1})";
+    UndoInPlace::StepPatch step;
+    step.Start(after, before);
+    const auto* result = step.ResultFrom(UndoDelta::HashText(after));
+    CHECK(result && result->Entities.size() == 1 && result->Targets.size() == 1);
+    CHECK(result && result->Targets.size() == 1 && result->Targets[0] == nlohmann::json::parse(R"({"name":"A","order":0,"position":[0,0,0]})"));
+    CHECK(!step.ResultFrom(UndoDelta::HashText(before)));
+    UndoInPlace::StepPatch structural;
+    structural.Start(R"({"empties":[]})", before);
+    CHECK(!structural.ResultFrom(UndoDelta::HashText(R"({"empties":[]})")));
+    UndoInPlace::StepPatch none;
+    CHECK(!none.ResultFrom(0));
+}
+
 } // namespace
 
 // The editor caches' use-ordered map (LruMap.h): Find counts as a use, Peek doesn't, trims drop the oldest.
@@ -842,6 +958,174 @@ void TestHierarchyCreationOrderCache() {
     CHECK(X::Ordinal(editor, world, big.back()) == (int)X::Order(editor, world).size());
 }
 
+// P-24: the Inspector's per-frame exists / mtime checks hit the disk at most once per kMaxAge per path.
+void TestEditorFileStatCache() {
+    namespace FS = EditorFileStat;
+    const auto dir = UnitTestSupport::TempDir("editor_file_stat");
+    const auto file = dir / "a.txt";
+    std::error_code ec;
+    std::filesystem::remove(file, ec);
+    FS::Clear();
+    const auto t0 = FS::Clock::now();
+    const std::uint64_t r0 = FS::DiskReads();
+    CHECK(!FS::Get(file, t0).Exists);
+    for (int i = 0; i < 100; ++i) CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(i)).Exists); // 100 "frames"
+    CHECK(FS::DiskReads() - r0 == 1);
+    { std::ofstream(file) << "x"; }
+    CHECK(!FS::Get(file, t0 + std::chrono::milliseconds(100)).Exists);            // still cached
+    CHECK(FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(1)).Exists); // re-read once it ages out
+    CHECK(FS::DiskReads() - r0 == 2);
+    const auto stamp = FS::Get(file, t0 + FS::kMaxAge + std::chrono::milliseconds(2)).WriteTime;
+    CHECK(stamp == std::filesystem::last_write_time(file, ec));
+    std::filesystem::remove(file, ec);
+    CHECK(!FS::Refresh(file, t0 + FS::kMaxAge + std::chrono::milliseconds(3)).Exists); // own write: fresh at once
+    CHECK(FS::DiskReads() - r0 == 3);
+    CHECK(!FS::Get(std::filesystem::path(), t0).Exists);
+    CHECK(FS::DiskReads() - r0 == 3); // an empty path never touches the disk
+
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): the raw calls the Inspector
+    // made every frame, against a cached Get.
+    if (Env::Flag(Env::Var::MicroBench)) {
+        { std::ofstream(file) << "x"; }
+        using C = std::chrono::steady_clock;
+        static constexpr int kN = 2000; // static: the lambda below reads it without a capture (MSVC)
+        auto us = [](C::duration d) { return std::chrono::duration<double, std::micro>(d).count() / kN; };
+        int sink = 0;
+        auto b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += std::filesystem::exists(file, ec) ? 1 : 0;
+        const double exUs = us(C::now() - b0);
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += std::filesystem::last_write_time(file, ec) == std::filesystem::file_time_type{} ? 1 : 0;
+        const double mtUs = us(C::now() - b0);
+        FS::Clear();
+        b0 = C::now();
+        for (int i = 0; i < kN; ++i) sink += FS::Get(file).Exists ? 1 : 0;
+        const double cachedUs = us(C::now() - b0);
+        std::printf("[MicroBench] file stat: exists %.2f us, last_write_time %.2f us, cached Get %.3f us (sink=%d)\n",
+                    exUs, mtUs, cachedUs, sink);
+        std::filesystem::remove(file, ec);
+    }
+    FS::Clear();
+}
+
+// Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
+// selection comes back by order + name (a renamed or missing entity drops out).
+void TestRestartStateRoundTrip() {
+    namespace RS = RestartState;
+    const auto file = UnitTestSupport::TempDir("restart_state") / "restart_state.json";
+    RS::State s;
+    s.ScenePath = "assets/Scenes/Hallway.json";
+    s.RestoreRecovery = true;
+    s.WasPlaying = true;
+    s.Selection = {{7, "Door"}, {12, ""}, {3, "Lamp", 2}};
+    CHECK(RS::Save(file, s));
+    const std::int64_t now = RS::NowUnix();
+    auto back = RS::Load(file, now);
+    CHECK(back.has_value());
+    if (back) {
+        CHECK(back->ScenePath == s.ScenePath);
+        CHECK(back->RestoreRecovery && back->WasPlaying);
+        CHECK(back->Selection.size() == 3 && back->Selection[0].Order == 7 && back->Selection[0].Name == "Door");
+        CHECK(back->Selection[0].Local == -1);
+        CHECK(back->Selection[1].Order == 12 && back->Selection[1].Name.empty());
+        CHECK(back->Selection[2].Order == 3 && back->Selection[2].Local == 2);
+    }
+    std::string why;
+    CHECK(!RS::Load(file, now + RS::kMaxAgeSeconds + 5, &why) && why.find("stale") != std::string::npos);
+    { std::ofstream(file, std::ios::trunc) << "{ not json"; }
+    CHECK(!RS::Load(file, now, &why) && why.find("malformed") != std::string::npos);
+    std::filesystem::remove(file);
+    CHECK(!RS::Load(file, now, &why) && why.find("no restart") != std::string::npos);
+
+    World world;
+    const entt::entity a = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Alpha");
+    const entt::entity b = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Beta");
+    const entt::entity c = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Gamma");
+    const auto refs = RS::RefsFor(world, {c, a, entt::null});
+    CHECK(refs.size() == 2 && refs[0].Name == "Gamma" && refs[1].Name == "Alpha");
+    CHECK((RS::Resolve(world, refs) == std::vector<entt::entity>{c, a}));
+    world.Registry.get<NameComponent>(c).Name = "Renamed";
+    CHECK((RS::Resolve(world, refs) == std::vector<entt::entity>{a}));
+    world.Registry.destroy(a);
+    CHECK(RS::Resolve(world, refs).empty());
+
+    // A prefab instance's member: by its root's order + prefab-local index (members get new orders on a reload).
+    const entt::entity root = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Crate");
+    const entt::entity body = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Body");
+    const entt::entity lamp = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Lamp");
+    world.SetParent(body, root);
+    world.SetParent(lamp, body);
+    world.Registry.emplace_or_replace<PrefabInstanceComponent>(root).InstanceEntities = {root, body, lamp};
+    const auto memberRefs = RS::RefsFor(world, {lamp, b});
+    CHECK(memberRefs.size() == 2 && memberRefs[0].Local == 2 && memberRefs[1].Local == -1);
+    CHECK(memberRefs[0].Order == world.Registry.get<OrderComponent>(root).Value && memberRefs[0].Name == "Lamp");
+    world.Registry.get<OrderComponent>(lamp).Value += 1000; // a rebuilt member's new order
+    CHECK((RS::Resolve(world, memberRefs) == std::vector<entt::entity>{lamp, b}));
+}
+
+// The relaunch command line: old hand-over flags dropped (both spellings), new ones last, Windows quoting.
+void TestRestartRelaunchArgs() {
+    namespace ER = EditorRestart;
+    const std::vector<std::wstring> in = {L"--scene", L"a b.json", L"--restore-state", L"old.json", L"--wait-pid=12", L"--x"};
+    const std::vector<std::wstring> out = ER::RelaunchArgs(in, L"C:/u/restart_state_9.json", 9);
+    const std::vector<std::wstring> want = {L"--scene", L"a b.json", L"--x", L"--restore-state", L"C:/u/restart_state_9.json",
+                                            L"--wait-pid", L"9"};
+    CHECK(out == want);
+    CHECK(ER::QuoteArg(L"plain") == L"plain");
+    CHECK(ER::QuoteArg(L"") == L"\"\"");
+    CHECK(ER::QuoteArg(L"a b") == L"\"a b\"");
+    CHECK(ER::QuoteArg(L"say \"hi\"") == L"\"say \\\"hi\\\"\"");
+    CHECK(ER::QuoteArg(L"C:\\dir with space\\") == L"\"C:\\dir with space\\\\\"");
+}
+
+// Rebuild & Restart moves the exe and its DLLs aside as one set: a failed build puts the whole old
+// set back (no old exe with a new core DLL), a good one fills what it didn't relink, and a set that
+// can't fully move is undone.
+void TestRestartMoveAsideSet() {
+    namespace ER = EditorRestart;
+    namespace fs = std::filesystem;
+    const fs::path dir = UnitTestSupport::TempDir("restart_move_aside");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    const auto write = [](const fs::path& p, const std::string& text) { std::ofstream(p, std::ios::binary) << text; };
+    const auto read = [](const fs::path& p) {
+        std::ifstream in(p, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    const fs::path exe = dir / "TartarusEngine.exe", core = dir / "TartarusCore.dll", glfw = dir / "glfw3.dll";
+    const std::vector<fs::path> set = ER::LockedFiles(exe);
+    CHECK(set.size() == 3 && set[0] == exe && set[1] == core && set[2] == glfw);
+
+    // Failed build that left a new core DLL behind: the old pair comes back.
+    write(exe, "exe-old");
+    write(core, "core-old");
+    std::string error;
+    std::vector<fs::path> moved = ER::MoveAside(set, error);
+    CHECK(moved.size() == 2 && error.empty()); // glfw3.dll absent: skipped
+    CHECK(!fs::exists(exe) && !fs::exists(core) && fs::exists(ER::OldPath(exe)) && fs::exists(ER::OldPath(core)));
+    write(core, "core-new");
+    ER::PutBack(moved);
+    CHECK(read(exe) == "exe-old" && read(core) == "core-old");
+    CHECK(!fs::exists(ER::OldPath(exe)) && !fs::exists(ER::OldPath(core)));
+
+    // Good build that relinked only the exe: the core DLL is filled from its .old.
+    moved = ER::MoveAside(set, error);
+    write(exe, "exe-new");
+    CHECK(ER::FillMissing(moved));
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old");
+
+    // The core DLL can't move (a non-empty folder sits on its .old name): the exe is put back.
+    fs::remove(ER::OldPath(exe), ec);
+    fs::remove(ER::OldPath(core), ec);
+    fs::create_directories(ER::OldPath(core) / "busy", ec);
+    error.clear();
+    moved = ER::MoveAside(set, error);
+    CHECK(moved.empty() && !error.empty());
+    CHECK(read(exe) == "exe-new" && read(core) == "core-old" && !fs::exists(ER::OldPath(exe)));
+    fs::remove_all(dir, ec);
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
     tests.emplace_back("Hierarchy child order: Children follow OrderComponent, a reorder bumps the version and moves LOD levels",TestHierarchyChildOrder);
@@ -859,6 +1143,12 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
     tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
+    tests.emplace_back("Undo in place: which steps qualify (move / rotate / scale / rename only)",TestUndoInPlaceClassify);
+    tests.emplace_back("Undo in place: move / rename undo and redo match the full reload; structural steps reload",TestUndoInPlaceMatchesReload);
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
+    tests.emplace_back("Editor file stat cache: one disk read per path per half second, Refresh after own writes",TestEditorFileStatCache);
+    tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
+    tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
+    tests.emplace_back("Rebuild & Restart moves the exe and its DLLs aside as one set",TestRestartMoveAsideSet);
 }

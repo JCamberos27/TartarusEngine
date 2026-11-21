@@ -1789,8 +1789,11 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
         // Lights & cameras mode: everything else only shows once it is selected.
         if (!allKinds && !selected && !light && !isCamera) continue;
 
-        glm::mat4 model = world.ComposeWorldTransform(entity);
-        const glm::vec3 wp = glm::vec3(model[3]);
+        // This frame's cached matrix (the meshes are drawn from the same one), not a parent-chain
+        // walk per icon (P-23).
+        const glm::vec3 wp = glm::vec3(world.GetCachedWorldTransform(entity)[3]);
+        const float dist = glm::length(wp - camPos);
+        if (GizmoIconMath::DistanceAlpha(dist, selected) <= 0.01f) continue; // faded out: pass 3 drops it anyway
         glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
         if (clip.w <= 0.0001f) continue; // behind the camera
 
@@ -1828,7 +1831,7 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
             glyph = ICON_FA_DIAGRAM_PROJECT;
         }
 
-        items.push_back({entity, glyph, screen, wp, glm::length(wp - camPos), selected,
+        items.push_back({entity, glyph, screen, wp, dist, selected,
                          world.Registry.all_of<InactiveTag>(entity), light != nullptr, isCamera,
                          light ? glm::clamp(light->Color, 0.0f, 1.0f) : glm::vec3(1.0f)});
     }

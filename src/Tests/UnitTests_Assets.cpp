@@ -316,8 +316,13 @@ void TestAssetChangeHooks() {
     });
     CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/p.prefab", "prefab")) == 1 && lateHits == 0);
     CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/p.prefab", "prefab")) == 2 && lateHits == 1);
+    // A hook unregistered by an earlier hook in the same Dispatch isn't called (its owner is gone).
+    int victimHits = 0, victim = 0;
+    const int killer = AssetChangeHooks::Register("mask", [&](const E&) { AssetChangeHooks::Unregister(victim); return true; });
+    victim = AssetChangeHooks::Register("mask", [&](const E&) { ++victimHits; return true; });
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/m.mask", "mask")) == 1 && victimHits == 0);
     // Unregistered hooks stop running.
-    for (int id : {a, b, c, d, late}) AssetChangeHooks::Unregister(id);
+    for (int id : {a, b, c, d, late, killer}) AssetChangeHooks::Unregister(id);
     CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Rescan, "", "")) == 0);
     CHECK(ctrlHits == 3 && styleHits == 3 && decalHits == 1 && lateHits == 1);
 }
@@ -386,6 +391,16 @@ void TestProjectWatcher() {
     auto c5 = settle([&](const Changes& v) { return has(v, K::Removed, moved); });
     CHECK(has(c5, K::Removed, moved));
     CHECK(!has(c5, K::Added, t) && !has(c5, K::Removed, t));
+
+    // Deleted, then put back by an atomic save before the delete settled: a write, not a delete
+    // (a test's cleanup deleting a .prefab, the next one saving it again).
+    const fs::path back = dir / "back.prefab";
+    CHECK(AtomicFile::WriteBytes(back, "1", true));
+    settle([&](const Changes& v) { return has(v, K::Added, back) || has(v, K::Modified, back); });
+    fs::remove(back, ec);
+    CHECK(AtomicFile::WriteBytes(back, "2", true));
+    auto cBack = settle([&](const Changes& v) { return has(v, K::Modified, back) || has(v, K::Removed, back); });
+    CHECK(has(cBack, K::Modified, back) && !has(cBack, K::Removed, back));
 
     // A file written continuously must not starve other settled changes.
     {

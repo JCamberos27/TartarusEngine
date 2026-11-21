@@ -1,6 +1,7 @@
 // SceneRenderer::RenderScene, stage by stage (SceneViewPass.h): one ViewPass per call holds the view's state, and
 // Run() calls the stages in drawing order.
 #include "SceneViewPass.h"
+#include "AssetCost.h"
 #include "RenderFrameContext.h"
 
 #include "World.h"
@@ -96,6 +97,9 @@ void SceneRenderer::ViewPass::Run() {
     BuildDrawLists();
     SortItems(m_S.DrawList, false);
     ReportTris();
+    if (AssetCost::Enabled() && !m_Ctx.ProbeCapture) // TARTARUS_ASSET_COST (--perf-bench): what this view drew
+        AssetCost::NoteView(m_World, m_Ctx.EditorView,
+                            {&m_S.DrawList, &m_S.TransparentList, &m_S.ViewModelList, &m_S.ViewModelTransparentList});
     DepthPrepass();
     BuildBatches();
     DrawOpaque();

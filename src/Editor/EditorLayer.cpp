@@ -15,6 +15,8 @@
 #include "AssetLibrary.h"
 #include "World.h"
 #include "GameModuleBuild.h"
+#include "MotionRebake.h"
+#include "EditorRestart.h"
 #include "Camera.h"
 #include "Model.h"
 #include "Texture.h"
@@ -151,6 +153,15 @@ void EditorLayer::Init(GLFWwindow* window) {
             Enhancers::UiStyles::Get().Load();
             Log::Info("Reloaded tab and header styles (editor_ui_styles.json changed outside the editor).");
             return true;
+        });
+    // A .prefab written (outside, or by Apply to Prefab) or put back: its placed instances refresh
+    // at the end of this sync pass (RefreshPrefabInstances), which counts what it rebuilt.
+    if (!m_PrefabHook)
+        m_PrefabHook = AssetChangeHooks::Register("prefab", [this](const AssetChangeHooks::Event& e) {
+            using K = AssetChangeHooks::Event::Kind;
+            if (e.Type == K::Rescan) m_PrefabRefreshAll = true;
+            else if (e.Type != K::Removed) QueuePrefabRefresh(e.Path, /*joinUndo*/false); // removed: instances keep what they have
+            return false;
         });
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
@@ -569,8 +580,11 @@ void EditorLayer::Shutdown() {
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
     AssetChangeHooks::Unregister(m_UiStylesHook);
-    m_UiStylesHook = 0;
+    AssetChangeHooks::Unregister(m_PrefabHook);
+    m_UiStylesHook = m_PrefabHook = 0;
     GameModuleBuild::Shutdown();
+    MotionRebake::Shutdown();
+    EditorRestart::Shutdown(); // a restart build still running: wait, put the exe name back
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
     // A build still running: stop it at the next file and wait, so it isn't cut off mid-copy.
@@ -3017,6 +3031,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditWorldPtr = &world;
     BeginGlobalUndoFrame(world);
     GameModuleBuild::Poll();
+    MotionRebake::Poll();
+    EditorRestart::Poll();
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
@@ -3626,6 +3642,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // selection change is just another entry on it now, same as any edit. Ctrl+[ / Ctrl+]
         // stay their own, separate selection-only back/forward (SelectionHistoryBack/Forward).
         // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
+        if (Shortcuts::Triggered("editor.rebuildRestart")) RequestRebuildRestart();
         if (Shortcuts::Triggered("editor.saveAs")) {
             if (m_InPlayMode) {
                 Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");

@@ -334,6 +334,19 @@ std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::st
     return out.dump();
 }
 
+bool SceneSerializer::ApplyEntityTransformAndName(World& world, entt::entity entity, const json& entityJson) {
+    if (!entityJson.is_object() || !world.Registry.valid(entity)) return false;
+    // The same reads, defaults and non-finite scrub as ApplySceneJson's per-kind loops.
+    auto& t = world.Registry.get_or_emplace<TransformComponent>(entity);
+    t.Position = JsonToVec3(entityJson.value("position", json::array({0, 0, 0})));
+    t.Scale = JsonToVec3(entityJson.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
+    if (const auto it = entityJson.find("rotation"); it != entityJson.end()) SetTransformRotationFromJson(t, *it);
+    else t.SetRotationQuaternion(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    if (const auto it = entityJson.find("name"); it != entityJson.end() && it->is_string())
+        world.Registry.emplace_or_replace<NameComponent>(entity, NameComponent{it->get<std::string>()});
+    return true;
+}
+
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {
     json root = BuildSceneJson(world);
     // Marks this snapshot as carrying real AssetLibrary state, so LoadFromString below knows to
@@ -493,14 +506,28 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
         Log::Error("Prefab: '" + path + "' could not be opened.");
         return entt::null;
     }
-    std::stringstream buffer;
-    buffer << in.rdbuf();
+    // Parsed once: built from here, then kept as the content this instance was built from.
+    json parsed;
+    try {
+        in >> parsed;
+    } catch (const std::exception& e) {
+        Log::Error("Prefab: '" + path + "' could not be parsed: " + e.what());
+        return entt::null;
+    }
 
     std::vector<entt::entity> created;
-    if (!AppendEntitiesFromString(world, assets, buffer.str(), created) || created.empty()) {
+    if (!ApplySceneJson(world, assets, parsed, /*clearFirst=*/false, &created, nullptr) || created.empty()) {
         return entt::null;
     }
     if (outAll) outAll->insert(outAll->end(), created.begin(), created.end());
+    // Its overrides are diffed against that content (not the file, which may be edited before the
+    // next save). The first instance of a path caches it; later ones were built from the same
+    // content unless the file changed, and then the editor rebuilds them all
+    // (EditorLayer::RefreshPrefabInstances).
+    if (!g_prefabPristineCache.count(path)) {
+        UpgradeLegacyBoxKeys(parsed); // #122
+        g_prefabPristineCache.emplace(path, std::move(parsed));
+    }
 
     // The prefab's root is whichever created entity has no parent inside the fragment.
     entt::entity root = created.front();

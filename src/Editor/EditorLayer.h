@@ -1,5 +1,6 @@
 #pragma once
 #include "UndoDeltaChain.h" // UndoEntry::Delta
+#include "UndoInPlace.h" // UndoEntry::Step
 #include "EditorFileHistory.h"
 #include "AnimatorController.h"
 #include <filesystem>
@@ -854,6 +855,19 @@ public:
     // to the Asset Database, the library and the open scene. Call once per frame
     // (EditorLayer_ProjectSync.cpp).
     void SyncProjectChanges(World& world, AssetLibrary& assets);
+    // Placed instances of a queued .prefab that changed since they were built are rebuilt from the
+    // file with their own overrides, placement and selection kept: the whole scene reloads from its
+    // own snapshot, as an undo step does, but no step is added and the scene isn't marked unsaved
+    // (its file stores the same links and overrides). Skipped in Play and Prefab Mode, whose exits
+    // reload the scene from a snapshot anyway. Returns how many instances were rebuilt.
+    int RefreshPrefabInstances(World& world, AssetLibrary& assets);
+    // joinUndo (Apply to Prefab writing the file during its open undo step): the rebuild joins that
+    // step, so undoing it puts back the scene as it was before the Apply, not only the file. An
+    // external .prefab edit passes false: it must not join an unrelated open step (a drag, prefs).
+    void QueuePrefabRefresh(const std::string& path, bool joinUndo) {
+        m_PrefabRefreshQueue.push_back(path);
+        if (joinUndo && m_GlobalUndoActive && !m_GlobalUndoApplying) m_PrefabRefreshJoinsUndo = true;
+    }
     // #15 - call right before OutfitSystem::UpdatePending when OutfitSystem::LandingDue: the landing makes
     // the next frame take the whole scene as the undo baseline (RebaseAfterOutfitChanges), so a scene
     // change made since the last baseline without an undo step is journaled first, as "Unrecorded
@@ -873,6 +887,18 @@ public:
     //   DiscardAndExit - main exits without saving
     //   None + ExitPromptActive() false again - the user picked Cancel; stay open
     enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
+    // Rebuild & Restart (File menu, Ctrl+Alt+R; EditorRestart.h), in EditorLayer_Restart.cpp.
+    // Why it can't start now ("" = it can): not a source build, an untitled scene with edits, unsaved scripts.
+    std::string RestartBlockedReason() const;
+    // The restart hand-over's way out of Prefab Mode: leaves a clean one without saving; false (stays, restart
+    // cancelled by the caller) when it has unsaved edits or is still open afterwards.
+    bool LeavePrefabModeForRestart(World& world, AssetLibrary& assets);
+    bool GlobalUndoActive() const { return m_GlobalUndoActive; } // a drag/edit's undo step is still open
+    void RequestRebuildRestart();
+    // The old editor, build done: writes the recovery snapshot (when dirty) and the hand-over file.
+    bool WriteRestartState(const World& world, const AssetLibrary& assets, const std::filesystem::path& file, bool wasPlaying);
+    // The new editor, scene loaded: restores the unsaved edits (no prompt) and the selection. Returns WasPlaying.
+    bool ApplyRestartState(World& world, AssetLibrary& assets, const std::filesystem::path& file);
     void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
     bool ExitPromptActive() const { return m_ExitPromptPending; }
     // #84 — path of a scene that failed to load at startup; Save to exactly this path is
@@ -1340,6 +1366,8 @@ private:
     void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
+    // The prompt's Restore (and Rebuild & Restart's): load the snapshot as the dirty scene, then drop it.
+    bool RestoreRecoverySnapshot(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
     bool m_RecoveryPromptSounded = false; // RecoveryPrompt plays once, when the modal first shows
 
@@ -1619,13 +1647,17 @@ private:
         // and never reloads the scene - so it also works in Play, where the scene must not be touched.
         bool AssetOnly = false;
         std::vector<EditorFileHistory::State> Files;
+        // X-33 C - whether popping this entry can write a few entities' transforms / names in
+        // place of a full reload, worked out on a background thread from the scene it will be
+        // popped FROM (UndoInPlace.h). Not started: the full reload.
+        UndoInPlace::StepPatch Step;
         bool CountsAsSceneEdit() const { return !SelectionOnly && !AssetOnly && AssetPath.empty(); }
     };
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
     // Full scene JSON of each stack's TOP entry; empty exactly when that stack is empty.
-    std::string m_UndoBaseJson;
-    std::string m_RedoBaseJson;
+    UndoDelta::Base m_UndoBaseJson; // may still be re-anchoring on a background thread (X-33 C)
+    UndoDelta::Base m_RedoBaseJson;
     static constexpr size_t kMaxHistory = 100;
     EditorFileHistory::Journal m_FileJournal;
     bool m_GlobalUndoActive = false, m_GlobalUndoApplying = false;
@@ -1636,6 +1668,10 @@ private:
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
     int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
+    int m_PrefabHook = 0;            // AssetChangeHooks id: an edited .prefab queues its placed instances' refresh
+    std::vector<std::string> m_PrefabRefreshQueue; // .prefab files changed since the last RefreshPrefabInstances
+    bool m_PrefabRefreshAll = false; // the watcher overflowed: check every placed prefab
+    bool m_PrefabRefreshJoinsUndo = false; // see QueuePrefabRefresh
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
@@ -1662,15 +1698,25 @@ private:
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
     void TrimUndoHistory(); // drops the oldest step past kMaxHistory (EditorLayer_Scene.cpp)
     void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
+    // X-33 C - undo / redo `entry` by writing the transforms / names it changed onto the live
+    // entities, when its in-place verdict holds for the scene being left (`currentHash`). False,
+    // world untouched (or, after a failed verify, to be reloaded by the caller): the full reload.
+    bool ApplyHistoryStepInPlace(World& world, AssetLibrary& assets, const UndoEntry& entry, uint64_t currentHash,
+                                 const std::string& targetText);
+    // Whether undoing / redoing `top` from the scene hashing to `currentHash` can be done in place.
+    bool InPlaceHistoryStep(const UndoEntry& top, uint64_t currentHash) const;
+    bool m_VerifyInPlaceUndo = false;
+    bool m_InPlaceUndo = true; // tests turn it off to time the full reload against it
+    int m_InPlaceHistorySteps = 0; // undo / redo steps done in place (tests read it)
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
     // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
-    static void PushHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+    static void PushHistoryEntry(std::vector<UndoEntry>& stack, UndoDelta::Base& base,
                                  UndoEntry&& entry, const std::string& newFullJson);
     // Removes the top entry, handing back the entry itself and its full scene JSON, and
     // re-anchors `baseJson` on the entry underneath. Returns false only if the stack was empty.
     // `outParsed` (optional): `outFullJson` parsed, a discarded value when it won't parse.
-    static bool PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+    static bool PopHistoryEntry(std::vector<UndoEntry>& stack, UndoDelta::Base& base,
                                 UndoEntry& outEntry, std::string& outFullJson, nlohmann::json* outParsed = nullptr);
     void ClearRedoHistory();  // redo stack + its base, kept in lockstep
     void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
@@ -1707,6 +1753,11 @@ private:
                   const std::vector<int>* selectedOrdersOverride = nullptr);
     void Undo(World& world, AssetLibrary& assets);
     void Redo(World& world, AssetLibrary& assets);
+public:
+    // X-33 C - test runs: after every in-place undo / redo, save the scene and compare it with the
+    // snapshot the step restores; on a difference, log it and take the full reload instead.
+    void SetVerifyInPlaceUndo(bool verify) { m_VerifyInPlaceUndo = verify; }
+private:
     // Phase 6 item 6 / Q6 — a plain-English label for the selection-change entry RecordSelectionHistory
     // pushes ("Select Cube", "Select 3 objects", "Deselect"), read off the CURRENT (post-change)
     // selection.
@@ -1736,6 +1787,8 @@ private:
     // before the thing this entry undoes" contract), which by the time RecordSelectionHistory
     // notices the change is no longer what's live.
     std::vector<int> CaptureSelectedOrders(const World& world, const std::vector<entt::entity>& entities) const;
+    // The entities those orders name now (a prefab member by its root's order + local index).
+    std::vector<entt::entity> ResolveSelectionOrders(const World& world, const std::vector<int>& orders) const;
     void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;

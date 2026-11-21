@@ -90,7 +90,9 @@ void Record(Change c) {
     Change& p = it->second.C;
     using K = Change::Kind;
     if (p.Type == K::Added && c.Type == K::Removed) { g_Pending.erase(it); return; }   // a temp file
-    if (p.Type == K::Removed && c.Type == K::Added) p.Type = K::Modified;              // replaced in place
+    // Replaced in place: deleted, then created again, or put back by an atomic save (a temp file
+    // renamed over it arrives as Modified) before the delete settled. It exists: report a write.
+    if (p.Type == K::Removed && (c.Type == K::Added || c.Type == K::Modified)) p.Type = K::Modified;
     else if (c.Type == K::Removed) { p.Type = K::Removed; p.OldPath.clear(); }
     // Added/Renamed followed by Modified stays Added/Renamed.
     it->second.Last = now;
