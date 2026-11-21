@@ -379,6 +379,35 @@ void TestPhysicsApplySettings() {
     p = saved;
 }
 
+// A Physic Material saved during Play reaches the running colliders that use it, and only those.
+void TestPhysicsRefreshPhysicMaterial() {
+    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_ut_live.physicmaterial").string();
+    PhysicMaterialAsset m;
+    m.DynamicFriction = 0.2f;
+    CHECK(m.SaveFile(path));
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    for (int i = 0; i < 3; ++i) {
+        const entt::entity e = world.CreateEmptyEntity(glm::vec3(3.0f * i, 0.0f, 0.0f), zero, one, "Slab");
+        ColliderComponent col;
+        col.Kind = ColliderComponent::Shape::Box;
+        if (i < 2) col.Material = path; // two use it, one doesn't
+        world.Registry.emplace<ColliderComponent>(e, col);
+    }
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    CHECK(PhysicsWorld::RefreshPhysicMaterial(world, path) == 0); // nothing running
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    m.DynamicFriction = 0.9f;
+    CHECK(m.SaveFile(path));
+    CHECK(PhysicsWorld::RefreshPhysicMaterial(world, path) == 2);
+    CHECK(PhysicsWorld::RefreshPhysicMaterial(world, path + ".other") == 0);
+    PhysicsWorld::Destroy();
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
 void TestPhysicsWorldSync() {
     World world;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -729,5 +758,6 @@ void RegisterCoreTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"PhysicMaterial", TestPhysicMaterial});
     tests.push_back({"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp});
     tests.push_back({"PhysicsApplySettings", TestPhysicsApplySettings});
+    tests.push_back({"PhysicsRefreshPhysicMaterial", TestPhysicsRefreshPhysicMaterial});
     tests.push_back({"PhysicsWorldSync", TestPhysicsWorldSync});
 }

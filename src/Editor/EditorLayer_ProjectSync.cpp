@@ -31,6 +31,7 @@
 #include "Model.h"
 #include "MotionRebake.h"
 #include "OutfitSystem.h"
+#include "PhysicsWorld.h"
 #include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include "ProjectWatcher.h"
@@ -164,7 +165,10 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         e.OldPath = c.OldPath;
         e.AssetType = AssetDatabase::AssetType(c.Path);
         e.BySelf = self;
-        const int applied = AssetChangeHooks::Dispatch(e);
+        int applied = AssetChangeHooks::Dispatch(e);
+        // A Physic Material saved (the Inspector or outside) while playing: the colliders using it pick it up now.
+        if (e.AssetType == "physicmaterial" && e.Type != HK::Removed && PhysicsWorld::RefreshPhysicMaterial(world, c.Path) > 0)
+            ++applied;
         if (!self) s_SyncApplied += applied;
     }
     if (!external) return;

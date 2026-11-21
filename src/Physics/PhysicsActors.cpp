@@ -1,4 +1,7 @@
 #include "PhysicsInternal.h"
+#include "Core/Paths.h"
+
+#include <cctype>
 
 namespace {
 // The legacy AABB collider size (App/DebugLineGather.cpp's AutoBoxWorld, kept in step): the entity's
@@ -594,5 +597,32 @@ bool GetActorPosition(unsigned entity, float out[3]) {
     const PxVec3 p = a->getGlobalPose().p;
     out[0] = p.x; out[1] = p.y; out[2] = p.z;
     return true;
+}
+
+int RefreshPhysicMaterial(const World& world, const std::string& absPath) {
+    if (!g_State || absPath.empty()) return 0;
+    PhysicsState& s = *g_State;
+    auto key = [](const std::string& p) {
+        std::string k = std::filesystem::path(p).lexically_normal().generic_string();
+        std::transform(k.begin(), k.end(), k.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+        return k;
+    };
+    const std::string changed = key(absPath);
+    int n = 0;
+    std::vector<PxShape*> shapes;
+    auto view = world.Registry.view<const ColliderComponent>(entt::exclude<InactiveTag>);
+    for (entt::entity e : view) {
+        const ColliderComponent& c = view.get<const ColliderComponent>(e);
+        if (c.Material.empty() || key(ProjectPaths::Resolve(c.Material)) != changed) continue;
+        PxRigidActor* a = detail::ActorFor(s, entt::to_integral(e));
+        if (!a) continue;
+        PxMaterial* mat = GetMaterial(s, ResolvePhysicMaterial(c)); // the file as it is now
+        shapes.resize(a->getNbShapes());
+        a->getShapes(shapes.data(), static_cast<PxU32>(shapes.size()));
+        for (PxShape* sh : shapes) sh->setMaterials(&mat, 1);
+        ++n;
+    }
+    if (n) Log::Info("Physic Material re-applied to " + std::to_string(n) + " collider(s) in the running world: " + absPath);
+    return n;
 }
 } // namespace PhysicsWorld
