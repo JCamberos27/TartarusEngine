@@ -1934,9 +1934,9 @@ bool AppSession::Frame() {
     viewIn.fsQuadVao = fsQuadVao;
     viewIn.tonemapper = &tonemapper;
     viewIn.debugLines = &debugLineRenderer;
-    viewIn.gatherDebugLines = [&debugLineGather](const World& w, bool shapes,
+    viewIn.gatherDebugLines = [gather = &debugLineGather](const World& w, bool shapes,
                                                  const std::function<bool(entt::entity)>* only,
-                                                 std::vector<float>& out) { debugLineGather.Gather(w, shapes, only, out); };
+                                                 std::vector<float>& out) { gather->Gather(w, shapes, only, out); };
     viewIn.scene = {&sceneHdr, &sceneTaa, &sceneOpaqueColor, &ssao, &bloom};
     viewIn.sceneLdr = &sceneFramebuffer;
     viewIn.tintOverlay = &tintOverlay;
