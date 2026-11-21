@@ -6,6 +6,7 @@
 #include "EditorLayer.h"
 #include "EditorSearch.h"
 #include "LruMap.h"
+#include "RestartState.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -802,6 +803,47 @@ void TestHierarchyCreationOrderCache() {
     CHECK(X::Ordinal(editor, world, big.back()) == (int)X::Order(editor, world).size());
 }
 
+// Rebuild & Restart: the state file round-trips, stale / malformed files are ignored, and a
+// selection comes back by order + name (a renamed or missing entity drops out).
+void TestRestartStateRoundTrip() {
+    namespace RS = RestartState;
+    const auto file = UnitTestSupport::TempDir("restart_state") / "restart_state.json";
+    RS::State s;
+    s.ScenePath = "assets/Scenes/Hallway.json";
+    s.RestoreRecovery = true;
+    s.WasPlaying = true;
+    s.Selection = {{7, "Door"}, {12, ""}};
+    CHECK(RS::Save(file, s));
+    const std::int64_t now = RS::NowUnix();
+    auto back = RS::Load(file, now);
+    CHECK(back.has_value());
+    if (back) {
+        CHECK(back->ScenePath == s.ScenePath);
+        CHECK(back->RestoreRecovery && back->WasPlaying);
+        CHECK(back->Selection.size() == 2 && back->Selection[0].Order == 7 && back->Selection[0].Name == "Door");
+        CHECK(back->Selection[1].Order == 12 && back->Selection[1].Name.empty());
+    }
+    std::string why;
+    CHECK(!RS::Load(file, now + RS::kMaxAgeSeconds + 5, &why) && why.find("stale") != std::string::npos);
+    { std::ofstream(file, std::ios::trunc) << "{ not json"; }
+    CHECK(!RS::Load(file, now, &why) && why.find("malformed") != std::string::npos);
+    std::filesystem::remove(file);
+    CHECK(!RS::Load(file, now, &why) && why.find("no restart") != std::string::npos);
+
+    World world;
+    const entt::entity a = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Alpha");
+    const entt::entity b = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Beta");
+    const entt::entity c = world.CreateEmptyEntity({}, {}, glm::vec3(1.0f), "Gamma");
+    const auto refs = RS::RefsFor(world, {c, a, entt::null});
+    CHECK(refs.size() == 2 && refs[0].Name == "Gamma" && refs[1].Name == "Alpha");
+    CHECK((RS::Resolve(world, refs) == std::vector<entt::entity>{c, a}));
+    world.Registry.get<NameComponent>(c).Name = "Renamed";
+    CHECK((RS::Resolve(world, refs) == std::vector<entt::entity>{a}));
+    world.Registry.destroy(a);
+    CHECK(RS::Resolve(world, refs).empty());
+    (void)b;
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
@@ -820,4 +862,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
+    tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
 }
