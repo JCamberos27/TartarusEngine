@@ -12,7 +12,8 @@ uses the harness helpers directly, and defines `void Register<Suite>Tests()`. Na
 ## Harness in one screen
 
 A test is a list of steps run one per frame, before ImGui reads input. A step returns true when
-done; it fails the test when it times out (default 240 frames).
+done; it fails the test when it times out (default 240 frames, and never sooner than those frames
+take at 60 fps, so a fast GPU waits as long as a 60 fps machine would).
 
 | Step | What it does |
 |---|---|
