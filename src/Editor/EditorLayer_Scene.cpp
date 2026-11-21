@@ -89,6 +89,13 @@ bool LoadHistoryScene(World& world, AssetLibrary& assets, const std::string& tex
                               : SceneSerializer::LoadFromString(world, assets, text);
 }
 
+// A history snapshot parsed, or a discarded value when it won't parse (LoadHistoryScene then
+// parses the text itself and reports it).
+nlohmann::json ParseHistoryScene(const std::string& text) {
+    try { return nlohmann::json::parse(text); }
+    catch (const std::exception&) { return nlohmann::json(nlohmann::json::value_t::discarded); }
+}
+
 // The undo baseline (m_CurrentUndoScene) after an undo / redo step, without serializing the whole
 // scene again when it's already known (X-33): the snapshot the step just loaded (with the live
 // AssetLibrary half), or the pre-step save when the step left the scene alone (a selection step).
@@ -195,7 +202,7 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
         // (or valid empty JSON for the first entry), avoiding a whole-scene save and diff.
         static const std::string emptyScene="{}";
         const std::string& before=m_GlobalUndoHasScene?m_GlobalUndoScene:
-            m_UndoBaseJson.empty()?emptyScene:m_UndoBaseJson;
+            m_UndoBaseJson.empty()?emptyScene:m_UndoBaseJson.Text();
         UndoEntry entry;entry.Hash=HashSceneJson(before);entry.SelectedOrders=m_GlobalUndoSelection;
         entry.Label=m_GlobalUndoLabel;entry.Files=std::move(files);
         entry.AssetOnly=!sceneChanged && !entry.Files.empty();entry.SelectionOnly=!sceneChanged && entry.Files.empty();
@@ -320,14 +327,26 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
 // Thin wrappers over the delta chain (UndoDeltaChain.h) - the mechanism lives there, isolated
 // from EditorLayer so it can be exercised on its own; these just bind it to UndoEntry and route
 // the one failure mode to the Console.
-void EditorLayer::PushHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
-                                   UndoEntry&& entry, const std::string& newFullJson) {
-    UndoDelta::Push(stack, baseJson, std::move(entry), newFullJson);
+// A deferred re-anchor (UndoDelta::PopDeferred) that failed leaves the entries under the top
+// unreachable: drop them, as a failed re-anchor in UndoDelta::Pop does.
+template <class Entry>
+static void DropBrokenHistory(std::vector<Entry>& stack, UndoDelta::Base& base) {
+    if (!base.TakeBroken()) return;
+    stack.clear();
+    base.clear();
+    Log::Error("Undo history: a step couldn't be reconstructed - earlier history was dropped.");
 }
 
-bool EditorLayer::PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+void EditorLayer::PushHistoryEntry(std::vector<UndoEntry>& stack, UndoDelta::Base& base,
+                                   UndoEntry&& entry, const std::string& newFullJson) {
+    DropBrokenHistory(stack, base);
+    UndoDelta::Push(stack, base.Text(), std::move(entry), newFullJson);
+}
+
+bool EditorLayer::PopHistoryEntry(std::vector<UndoEntry>& stack, UndoDelta::Base& base,
                                   UndoEntry& outEntry, std::string& outFullJson, nlohmann::json* outParsed) {
-    const UndoDelta::PopResult r = UndoDelta::Pop(stack, baseJson, outEntry, outFullJson, outParsed);
+    DropBrokenHistory(stack, base);
+    const UndoDelta::PopResult r = UndoDelta::Pop(stack, base.Text(), outEntry, outFullJson, outParsed);
     if (r == UndoDelta::PopResult::TailDropped)
         Log::Error("Undo history: a step couldn't be reconstructed - earlier history was dropped.");
     return r != UndoDelta::PopResult::Empty;
@@ -336,7 +355,6 @@ bool EditorLayer::PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& ba
 void EditorLayer::ClearRedoHistory() {
     m_RedoStack.clear();
     m_RedoBaseJson.clear();
-    m_RedoBaseJson.shrink_to_fit();
 }
 
 // Writes LastScenePath to the prefs now, outside the undo journal. Left to the frame's coalesced
@@ -356,7 +374,6 @@ void EditorLayer::ClearUndoHistory() {
     m_GlobalUndoHasScene=false;m_CurrentUndoScene.clear();
     m_UndoStack.clear();
     m_UndoBaseJson.clear();
-    m_UndoBaseJson.shrink_to_fit();
     m_ContentDepth = 0; // Q6 — the live stack is empty, so is its count of real (non-selection) edits
     ClearRedoHistory();
 }
@@ -908,7 +925,7 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     // viewport click used to cost a full save + diff. It records the top entry's state instead,
     // which keeps the delta chain intact (an empty patch) at the cost of a string copy.
     const bool reuseTop = selectionOnly && !m_UndoStack.empty() && !m_UndoBaseJson.empty();
-    const std::string sceneJson = selectionOnly ? (reuseTop ? m_UndoBaseJson : "{}")
+    const std::string sceneJson = selectionOnly ? (reuseTop ? m_UndoBaseJson.Text() : "{}")
                                 : m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;
@@ -1065,22 +1082,23 @@ void EditorLayer::RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::
     }
 }
 
+bool EditorLayer::InPlaceHistoryStep(const UndoEntry& top, uint64_t currentHash) const {
+    const bool reloads = !top.SelectionOnly && !top.AssetOnly && (top.AssetPath.empty() || currentHash != top.Hash);
+    // Files and .mat restores can change the asset library under the scene: those reload.
+    return reloads && m_InPlaceUndo && top.Files.empty() && top.AssetPath.empty() && top.Step.ResultFrom(currentHash);
+}
+
 bool EditorLayer::ApplyHistoryStepInPlace(World& world, AssetLibrary& assets, const UndoEntry& entry, uint64_t currentHash,
-                                          const nlohmann::json& target, const std::string& targetText) {
-    // Files and .mat restores can change the asset library under the scene: reload.
-    if (!m_InPlaceUndo || !entry.Files.empty() || !entry.AssetPath.empty() || !target.is_object()) return false;
-    const std::vector<UndoInPlace::EntityRef>* refs = entry.Step.EntitiesFrom(currentHash);
-    if (!refs) return false;
+                                          const std::string& targetText) {
+    const UndoInPlace::StepResult* step = entry.Step.ResultFrom(currentHash);
+    if (!step || step->Targets.size() != step->Entities.size()) return false;
     PROFILE_SCOPE("Undo In Place");
-    // Each changed entity's object in the target snapshot, and its live entity by "order" (the
+    // Each changed entity's fields in the target snapshot, and its live entity by "order" (the
     // step didn't change it: only the four fields differ). All found before anything is written.
     std::vector<std::pair<const nlohmann::json*, entt::entity>> writes;
     std::unordered_map<int, size_t> byOrder; // order -> index into writes
-    writes.reserve(refs->size());
-    for (const UndoInPlace::EntityRef& ref : *refs) {
-        const auto array = target.find(UndoInPlace::kEntityArrays[ref.Array]);
-        if (array == target.end() || !array->is_array() || ref.Index >= array->size()) return false;
-        const nlohmann::json& object = (*array)[ref.Index];
+    writes.reserve(step->Targets.size());
+    for (const nlohmann::json& object : step->Targets) {
         const auto order = object.find("order");
         if (order == object.end() || !order->is_number_integer()) return false;
         if (!byOrder.emplace(order->get<int>(), writes.size()).second) return false; // a repeated order: ambiguous
@@ -1107,6 +1125,7 @@ bool EditorLayer::ApplyHistoryStepInPlace(World& world, AssetLibrary& assets, co
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     FinishGlobalUndo(world,true);
     CancelEyedropper(); // #93 — the registry is about to be rebuilt
+    DropBrokenHistory(m_UndoStack, m_UndoBaseJson);
     if (m_UndoStack.empty()) return;
     struct Applying {bool& Flag;Applying(bool& flag):Flag(flag){Flag=true;}~Applying(){Flag=false;}} applying(m_GlobalUndoApplying);
     // #91 — Undo reloads the whole registry from a snapshot, which under a live PhysicsWorld
@@ -1140,16 +1159,20 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     UndoEntry entry;
     std::string targetJson;
     nlohmann::json targetRoot;
-    if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson, &targetRoot)) return;
+    // X-33 C - a step that only moved / renamed entities is written onto them, not reloaded: its
+    // target isn't parsed, and the chain re-anchors on a background thread.
+    const bool tryInPlace = InPlaceHistoryStep(m_UndoStack.back(), currentHash);
+    if (tryInPlace ? UndoDelta::PopDeferred(m_UndoStack, m_UndoBaseJson, entry, targetJson) == UndoDelta::PopResult::Empty
+                   : !PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson, &targetRoot)) return;
     if (entry.CountsAsSceneEdit()) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
     // An asset-only step leaves the scene as it is — skip the full registry rebuild. So does a
     // selection-only step (#138): its stored state is only a placeholder (see PushUndo).
     const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || currentHash != entry.Hash);
     bool targetLoaded = false;
-    // X-33 C - a step that only moved / renamed entities is written onto them, not reloaded.
-    const bool inPlace = sceneReloaded && ApplyHistoryStepInPlace(world, assets, entry, currentHash, targetRoot, targetJson);
+    const bool inPlace = tryInPlace && ApplyHistoryStepInPlace(world, assets, entry, currentHash, targetJson);
     if (sceneReloaded && !inPlace) {
+        if (tryInPlace) targetRoot = ParseHistoryScene(targetJson); // in place failed: the full reload
         targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot);
         if (!targetLoaded) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
@@ -1178,6 +1201,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     FinishGlobalUndo(world,true);
     CancelEyedropper(); // #93
+    DropBrokenHistory(m_RedoStack, m_RedoBaseJson);
     if (m_RedoStack.empty()) return;
     struct Applying {bool& Flag;Applying(bool& flag):Flag(flag){Flag=true;}~Applying(){Flag=false;}} applying(m_GlobalUndoApplying);
     if (m_InPlayMode && !m_RedoStack.back().AssetOnly && !m_RedoStack.back().SelectionOnly) { Log::Info("Scene redo requires stopping Play; asset redo remains available."); return; }
@@ -1207,12 +1231,17 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     UndoEntry entry;
     std::string targetJson;
     nlohmann::json targetRoot;
-    if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson, &targetRoot)) return;
+    // X-33 C - a step that only moved / renamed entities is written onto them, not reloaded: its
+    // target isn't parsed, and the chain re-anchors on a background thread.
+    const bool tryInPlace = InPlaceHistoryStep(m_RedoStack.back(), currentHash);
+    if (tryInPlace ? UndoDelta::PopDeferred(m_RedoStack, m_RedoBaseJson, entry, targetJson) == UndoDelta::PopResult::Empty
+                   : !PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson, &targetRoot)) return;
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
     const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || currentHash != entry.Hash); // #138
     bool targetLoaded = false;
-    const bool inPlace = sceneReloaded && ApplyHistoryStepInPlace(world, assets, entry, currentHash, targetRoot, targetJson); // X-33 C
+    const bool inPlace = tryInPlace && ApplyHistoryStepInPlace(world, assets, entry, currentHash, targetJson);
     if (sceneReloaded && !inPlace) {
+        if (tryInPlace) targetRoot = ParseHistoryScene(targetJson); // in place failed: the full reload
         targetLoaded = LoadHistoryScene(world, assets, targetJson, targetRoot);
         if (!targetLoaded) {
             Log::Error("Redo failed - the scene was left as it was."); // #83

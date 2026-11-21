@@ -39,7 +39,7 @@ struct EditorHistoryTestAccess {
     static void Commit(EditorLayer& e,World& w) {e.CommitStagedUndo(w,"Test drag");}
     static bool Active(const EditorLayer& e) {return e.m_GlobalUndoActive;}
     static size_t Count(const EditorLayer& e) {return e.m_UndoStack.size();}
-    static const std::string& Before(const EditorLayer& e) {return e.m_UndoBaseJson;}
+    static const std::string& Before(const EditorLayer& e) {return e.m_UndoBaseJson.Text();}
     static const std::string& Current(const EditorLayer& e) {return e.m_CurrentUndoScene;}
     static void Clear(EditorLayer& e) {e.ClearUndoHistory();}
     static std::string TopLabel(const EditorLayer& e) {return e.m_UndoStack.empty()?std::string():e.m_UndoStack.back().Label;}
@@ -807,14 +807,15 @@ void TestUndoInPlaceClassify() {
     const std::string before = R"({"empties":[{"name":"A","order":0,"position":[0,0,0]}],"sky":1})";
     UndoInPlace::StepPatch step;
     step.Start(after, before);
-    const auto* entities = step.EntitiesFrom(UndoDelta::HashText(after));
-    CHECK(entities && entities->size() == 1);
-    CHECK(!step.EntitiesFrom(UndoDelta::HashText(before)));
+    const auto* result = step.ResultFrom(UndoDelta::HashText(after));
+    CHECK(result && result->Entities.size() == 1 && result->Targets.size() == 1);
+    CHECK(result && result->Targets.size() == 1 && result->Targets[0] == nlohmann::json::parse(R"({"name":"A","order":0,"position":[0,0,0]})"));
+    CHECK(!step.ResultFrom(UndoDelta::HashText(before)));
     UndoInPlace::StepPatch structural;
     structural.Start(R"({"empties":[]})", before);
-    CHECK(!structural.EntitiesFrom(UndoDelta::HashText(R"({"empties":[]})")));
+    CHECK(!structural.ResultFrom(UndoDelta::HashText(R"({"empties":[]})")));
     UndoInPlace::StepPatch none;
-    CHECK(!none.EntitiesFrom(0));
+    CHECK(!none.ResultFrom(0));
 }
 
 } // namespace

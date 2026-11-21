@@ -107,35 +107,65 @@ struct StepResult {
     uint64_t FromHash = 0;           // UndoDelta::HashText of the scene the step is undone from
     bool InPlace = false;            // Classify accepted the patch
     std::vector<EntityRef> Entities; // what it changes, when InPlace
+    // Per entity (same order): its "order" and the four fields as the target snapshot has them,
+    // so an in-place undo never has to parse the whole target (only keys the snapshot has).
+    std::vector<nlohmann::json> Targets;
 };
 
-// Works out, on a background thread, whether going from `fromJson` to `toJson` can be done in
-// place, and which entities it touches. Only that verdict is kept (a few bytes per step), never
-// the patch. Copyable and movable like UndoDelta::Patch; dropping it never waits for the job.
+// The keys of a snapshot entity an in-place step writes, plus "order" to find it by.
+inline nlohmann::json TargetFields(const nlohmann::json& entity) {
+    nlohmann::json out = nlohmann::json::object();
+    for (const char* key : {"order", "position", "rotation", "scale", "name"})
+        if (const auto it = entity.find(key); it != entity.end()) out[key] = *it;
+    return out;
+}
+
+// The whole verdict for going from `fromJson` to `toJson` (what StepPatch's job works out).
+inline StepResult Judge(const std::string& fromJson, const std::string& toJson) {
+    StepResult r;
+    r.FromHash = UndoDelta::HashText(fromJson);
+    try {
+        const nlohmann::json to = nlohmann::json::parse(toJson);
+        const nlohmann::json patch = fromJson == toJson ? nlohmann::json::array()
+                                                        : nlohmann::json::diff(nlohmann::json::parse(fromJson), to);
+        r.InPlace = to.is_object() && Classify(patch, r.Entities);
+        for (const EntityRef& ref : r.Entities) {
+            if (!r.InPlace) break;
+            const auto array = to.find(kEntityArrays[ref.Array]);
+            if (array == to.end() || !array->is_array() || ref.Index >= array->size() || !(*array)[ref.Index].is_object()) {
+                r.InPlace = false;
+                break;
+            }
+            r.Targets.push_back(TargetFields((*array)[ref.Index]));
+        }
+    } catch (const std::exception&) {
+        r.InPlace = false;
+    }
+    if (!r.InPlace) {
+        r.Entities.clear();
+        r.Targets.clear();
+    }
+    return r;
+}
+
+// Works out Judge on a background thread. Only the verdict is kept (a few hundred bytes for a
+// move), never the patch or the snapshots. Copyable like UndoDelta::Patch; dropping it never
+// waits for the job.
 class StepPatch {
 public:
     void Start(std::string fromJson, std::string toJson) {
         auto promise = std::make_shared<std::promise<StepResult>>();
         m_Job = promise->get_future().share();
         std::thread([promise, from = std::move(fromJson), to = std::move(toJson)] {
-            StepResult r;
-            r.FromHash = UndoDelta::HashText(from);
-            try {
-                const std::string patch = UndoDelta::MakePatch(from, to);
-                if (!patch.empty()) r.InPlace = Classify(nlohmann::json::parse(patch), r.Entities);
-            } catch (const std::exception&) {
-                r.InPlace = false;
-            }
-            if (!r.InPlace) r.Entities.clear();
-            promise->set_value(std::move(r));
+            promise->set_value(Judge(from, to));
         }).detach();
     }
-    // The entities to write when the scene being left hashes to `fromHash` and the step can be
-    // done in place (waiting for the job if it's still running); null otherwise.
-    const std::vector<EntityRef>* EntitiesFrom(uint64_t fromHash) const {
+    // The verdict when the scene being left hashes to `fromHash` and the step can be done in
+    // place (waiting for the job if it's still running); null otherwise.
+    const StepResult* ResultFrom(uint64_t fromHash) const {
         if (!m_Job.valid()) return nullptr;
         const StepResult& r = m_Job.get();
-        return (r.InPlace && r.FromHash == fromHash) ? &r.Entities : nullptr;
+        return (r.InPlace && r.FromHash == fromHash) ? &r : nullptr;
     }
     void clear() { m_Job = {}; }
     void Wait() const { if (m_Job.valid()) m_Job.wait(); } // tests: time the step without the job

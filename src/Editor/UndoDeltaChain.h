@@ -184,4 +184,69 @@ PopResult Pop(std::vector<Entry>& stack, std::string& baseJson, Entry& outEntry,
     return PopResult::Ok;
 }
 
+// A stack's base (its top entry's full state) that a deferred Pop may still be working out on a
+// background thread. Every read waits for that first, so a caller can never see the old top's
+// text in its place. Empty when the stack is empty, or after a re-anchor that failed (TakeBroken).
+class Base {
+public:
+    std::string& Text() { Settle(); return m_Text; }
+    const std::string& Text() const { Settle(); return m_Text; }
+    bool empty() const { return Text().empty(); }
+    void clear() {
+        m_Job = {};
+        m_Text.clear();
+        m_Text.shrink_to_fit();
+        m_Broken = false;
+    }
+    // True once if a deferred re-anchor failed: the entries under the top can't be rebuilt.
+    bool TakeBroken() {
+        Settle();
+        const bool broken = m_Broken;
+        m_Broken = false;
+        return broken;
+    }
+    // The base becomes `source` with `patch` applied, worked out on a background thread.
+    void Defer(std::string source, std::string patch) {
+        m_Text.clear();
+        m_Broken = false;
+        auto promise = std::make_shared<std::promise<std::pair<bool, std::string>>>();
+        m_Job = promise->get_future();
+        std::thread([promise, source = std::move(source), patch = std::move(patch)] {
+            std::string out;
+            const bool ok = ApplyPatch(source, patch, out);
+            promise->set_value({ok, ok ? std::move(out) : std::string()});
+        }).detach();
+    }
+
+private:
+    void Settle() const {
+        if (!m_Job.valid()) return;
+        auto [ok, text] = m_Job.get();
+        m_Text = std::move(text);
+        m_Broken = !ok;
+    }
+    mutable std::string m_Text;
+    mutable bool m_Broken = false;
+    mutable std::future<std::pair<bool, std::string>> m_Job;
+};
+
+// Pop for a caller that doesn't need the popped state parsed (an in-place undo, X-33 C): hands
+// back the top entry and its full text at once, and re-anchors `base` on the entry underneath on
+// a background thread instead of parsing, patching and dumping the whole scene here.
+template <class Entry>
+PopResult PopDeferred(std::vector<Entry>& stack, Base& base, Entry& outEntry, std::string& outFullJson) {
+    if (stack.empty()) return PopResult::Empty;
+    outFullJson = base.Text();
+    outEntry = std::move(stack.back());
+    stack.pop_back();
+    if (stack.empty()) {
+        base.clear();
+        return PopResult::Ok;
+    }
+    std::string patch = stack.back().Delta.Text(); // waits for its diff, normally long done
+    stack.back().Delta.clear();                    // it's the top now, and the top is held in full
+    base.Defer(outFullJson, std::move(patch));
+    return PopResult::Ok;
+}
+
 } // namespace UndoDelta

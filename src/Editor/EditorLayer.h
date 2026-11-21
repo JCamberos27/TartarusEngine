@@ -1622,8 +1622,8 @@ private:
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
     // Full scene JSON of each stack's TOP entry; empty exactly when that stack is empty.
-    std::string m_UndoBaseJson;
-    std::string m_RedoBaseJson;
+    UndoDelta::Base m_UndoBaseJson; // may still be re-anchoring on a background thread (X-33 C)
+    UndoDelta::Base m_RedoBaseJson;
     static constexpr size_t kMaxHistory = 100;
     EditorFileHistory::Journal m_FileJournal;
     bool m_GlobalUndoActive = false, m_GlobalUndoApplying = false;
@@ -1663,19 +1663,21 @@ private:
     // entities, when its in-place verdict holds for the scene being left (`currentHash`). False,
     // world untouched (or, after a failed verify, to be reloaded by the caller): the full reload.
     bool ApplyHistoryStepInPlace(World& world, AssetLibrary& assets, const UndoEntry& entry, uint64_t currentHash,
-                                 const nlohmann::json& target, const std::string& targetText);
+                                 const std::string& targetText);
+    // Whether undoing / redoing `top` from the scene hashing to `currentHash` can be done in place.
+    bool InPlaceHistoryStep(const UndoEntry& top, uint64_t currentHash) const;
     bool m_VerifyInPlaceUndo = false;
     bool m_InPlaceUndo = true; // tests turn it off to time the full reload against it
     int m_InPlaceHistorySteps = 0; // undo / redo steps done in place (tests read it)
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
     // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
-    static void PushHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+    static void PushHistoryEntry(std::vector<UndoEntry>& stack, UndoDelta::Base& base,
                                  UndoEntry&& entry, const std::string& newFullJson);
     // Removes the top entry, handing back the entry itself and its full scene JSON, and
     // re-anchors `baseJson` on the entry underneath. Returns false only if the stack was empty.
     // `outParsed` (optional): `outFullJson` parsed, a discarded value when it won't parse.
-    static bool PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+    static bool PopHistoryEntry(std::vector<UndoEntry>& stack, UndoDelta::Base& base,
                                 UndoEntry& outEntry, std::string& outFullJson, nlohmann::json* outParsed = nullptr);
     void ClearRedoHistory();  // redo stack + its base, kept in lockstep
     void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
