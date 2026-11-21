@@ -501,6 +501,17 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
         return entt::null;
     }
     if (outAll) outAll->insert(outAll->end(), created.begin(), created.end());
+    // The content this instance was built from: its overrides are diffed against it (not the file,
+    // which may be edited before the next save). The first instance of a path caches it; later
+    // ones were built from the same content unless the file changed, and then the editor
+    // rebuilds them all (EditorLayer::RefreshPrefabInstances).
+    if (!g_prefabPristineCache.count(path)) {
+        json parsed = json::parse(buffer.str(), nullptr, /*allow_exceptions=*/false);
+        if (!parsed.is_discarded()) {
+            UpgradeLegacyBoxKeys(parsed); // #122
+            g_prefabPristineCache.emplace(path, std::move(parsed));
+        }
+    }
 
     // The prefab's root is whichever created entity has no parent inside the fragment.
     entt::entity root = created.front();

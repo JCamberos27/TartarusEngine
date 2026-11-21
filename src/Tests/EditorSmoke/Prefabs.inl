@@ -393,6 +393,70 @@ void RegisterPrefabsTests() {
         }),
     }, Cleanup);
 
+    Add("prefabs: the .prefab edited outside the editor updates placed instances; overrides and placement kept; no undo step", {
+        Fresh(), FreshScene(), HierFresh(), MakePrefab(), Wait(2),
+        Place("Crate A", glm::vec3(-4, 0, 0)), Place("Crate B", glm::vec3(4, 0, 0)),
+        Do("a clean history", [](Ctx& c) { PA::ClearUndo(c.E); }), Wait(3),
+        Do("override Crate A's lamp: 5", [](Ctx& c) {
+            X::PushUndo(c.E, c.W, "Edit Light");
+            c.W.Registry.get<LightComponent>(ChildOf(c.W, "Crate A", "Crate Lamp")).Intensity = 5.0f;
+        }), Wait(3),
+        ExpectTrue("an override on A only", [](Ctx& c) { return Overridden(c, "Crate A") && !Overridden(c, "Crate B"); }),
+        Do("note the history and the unsaved mark", [](Ctx& c) { g_Undo = PA::UndoLabels(c.E) + (X::Dirty(c.E) ? " *" : ""); }),
+        // A text editor / git writing the file: not through AtomicFile, so the watcher reports it as
+        // an outside change. The lamp becomes "Crate Bulb" at 9.
+        Do("rewrite SmokeCrate.prefab outside the editor", [](Ctx& c) {
+            World w;
+            const glm::vec3 zero(0.0f), one(1.0f);
+            const entt::entity root = w.CreateEmptyEntity(zero, zero, one, "Crate");
+            const entt::entity bulb = w.CreateEmptyEntity(glm::vec3(0, 1, 0), zero, one, "Crate Bulb");
+            w.Registry.emplace<LightComponent>(bulb).Intensity = 9.0f;
+            if (!w.SetParent(bulb, root)) { Fail("could not parent the bulb"); return; }
+            std::vector<entt::entity> all{root, bulb};
+            const std::string text = SceneSerializer::SaveEntitiesToString(w, all, /*flattenPrefabInstances=*/true);
+            std::ofstream f(fs::u8path(PrefabPath()), std::ios::binary | std::ios::trunc);
+            f << text;
+            if (!f) Fail("could not write the prefab");
+            (void)c;
+        }),
+        Until("both instances show the file's Crate Bulb", [](Ctx& c) {
+            return ChildOf(c.W, "Crate A", "Crate Bulb") != entt::null && ChildOf(c.W, "Crate B", "Crate Bulb") != entt::null;
+        }, 600), Wait(3),
+        Expect("B tracks the file (9); A keeps its override (5) and placements stay", [](Ctx& c) {
+            std::string out;
+            const entt::entity a = ChildOf(c.W, "Crate A", "Crate Bulb"), b = ChildOf(c.W, "Crate B", "Crate Bulb");
+            const float av = c.W.Registry.get<LightComponent>(a).Intensity, bv = c.W.Registry.get<LightComponent>(b).Intensity;
+            if (std::fabs(av - 5.0f) > 1e-4f) out += "A intensity " + std::to_string(av) + "; ";
+            if (std::fabs(bv - 9.0f) > 1e-4f) out += "B intensity " + std::to_string(bv) + "; ";
+            if (!SceneSerializer::IsPrefabFieldOverridden(c.W, a, "Light", "Intensity")) out += "A lost its override; ";
+            if (SceneSerializer::IsPrefabFieldOverridden(c.W, b, "Light", "Intensity")) out += "B shows an override; ";
+            const float ax = c.W.Registry.get<TransformComponent>(ByName(c.W, "Crate A")).Position.x;
+            const float bx = c.W.Registry.get<TransformComponent>(ByName(c.W, "Crate B")).Position.x;
+            if (ax != -4.0f || bx != 4.0f) out += "placements moved (" + std::to_string(ax) + ", " + std::to_string(bx) + ")";
+            return out;
+        }),
+        Expect("no undo step, the unsaved mark as it was", [](Ctx& c) {
+            const std::string now = PA::UndoLabels(c.E) + (X::Dirty(c.E) ? " *" : "");
+            return now == g_Undo ? std::string() : "was [" + g_Undo + "], now [" + now + "]";
+        }),
+        Expect("a save and reload gives the same: A 5, B 9", [](Ctx& c) {
+            World w;
+            if (!SceneSerializer::LoadFromString(w, c.A, Dump(c))) return std::string("reload failed");
+            const entt::entity a = ChildOf(w, "Crate A", "Crate Bulb"), b = ChildOf(w, "Crate B", "Crate Bulb");
+            if (a == entt::null || b == entt::null) return std::string("no Crate Bulb after reload");
+            const float av = w.Registry.get<LightComponent>(a).Intensity, bv = w.Registry.get<LightComponent>(b).Intensity;
+            return std::fabs(av - 5.0f) < 1e-4f && std::fabs(bv - 9.0f) < 1e-4f
+                ? std::string() : "reloads with A " + std::to_string(av) + ", B " + std::to_string(bv);
+        }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+        Expect("undoing the override gives A the file's 9 too", [](Ctx& c) {
+            const entt::entity a = ChildOf(c.W, "Crate A", "Crate Bulb");
+            if (a == entt::null) return "no Crate Bulb under A | history: " + PA::UndoLabels(c.E);
+            const float av = c.W.Registry.get<LightComponent>(a).Intensity;
+            return std::fabs(av - 9.0f) < 1e-4f ? std::string() : "A intensity " + std::to_string(av) + " | history: " + PA::UndoLabels(c.E);
+        }),
+    }, Cleanup);
+
     Add("prefabs: Select Prefab Root and Unpack Prefab Instance from the Hierarchy menu; undo each", {
         Fresh(), FreshScene(), HierFresh(), MakePrefab(), Wait(2),
         Place("Crate A", glm::vec3(0, 0, 0)),

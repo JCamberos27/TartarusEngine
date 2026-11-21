@@ -80,11 +80,16 @@ extern std::string g_LastLoadWarning;
 extern std::vector<std::string> g_MigrationLog;
 
 
-// #302 Part B — session-lived cache of parsed .prefab files for the Inspector's per-field
-// override check (called every frame per visible field on a prefab-instance entity). Cleared on
-// full scene load (ApplySceneJson) and via SceneSerializer::ClearPrefabPristineCache(). The
-// save-time diff reads the file directly — a save is rare and must see the latest on disk.
+// #302 Part B — the parsed .prefab content the scene's live instances were built from, by
+// SourcePath: filled by InstantiatePrefab, read by the Inspector's per-field override check
+// (every frame per visible field) and by the save-time override diff. Not the file as it is now:
+// an instance built from the old content and diffed against an edited file would save every
+// change the edit made as an override of its own, and never pick the edit up. The editor
+// rebuilds the instances when the file changes (EditorLayer::RefreshPrefabInstances), which
+// refills it. Cleared on full scene load (ApplySceneJson) and via ClearPrefabPristineCache().
 extern std::unordered_map<std::string, json> g_prefabPristineCache;
+// The cached content for `path`, read from disk when nothing is cached yet; null if unreadable.
+const json* CachedPrefabJson(const std::string& path);
 
 
 // A non-finite component anywhere in the scene (nan/inf slipped past the Inspector, or a

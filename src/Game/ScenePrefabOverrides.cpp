@@ -268,6 +268,19 @@ using namespace SceneDetail;
 
 void SceneSerializer::ClearPrefabPristineCache() { g_prefabPristineCache.clear(); }
 
+bool SceneSerializer::PrefabChangedSinceInstanced(const std::string& path) {
+    for (const auto& [key, cached] : g_prefabPristineCache) {
+        if (!AssetDatabase::SamePath(key, path)) continue;
+        std::ifstream f(std::filesystem::u8path(path));
+        if (!f.is_open()) return false;
+        json now;
+        try { f >> now; } catch (...) { return false; }
+        UpgradeLegacyBoxKeys(now); // #122: cached the same way
+        return now != cached;
+    }
+    return false;
+}
+
 bool SceneSerializer::IsPrefabFieldOverridden(const World& world, entt::entity entity,
                                               const char* component, const char* field) {
     PristineHit hit = FindPristineEntity(world, entity);
@@ -420,8 +433,10 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
 
     if (!AtomicFile::WriteJson(std::filesystem::u8path(pi.SourcePath), prefab)) return false; // #82
 
-    g_prefabPristineCache.erase(pi.SourcePath);
-    Log::Info("Applied component '" + std::string(component) + "' to prefab '" + pi.SourcePath +
-              "'. Other instances update on their next load.");
+    // The cache keeps the content the instances were built from until the editor rebuilds them
+    // from the new file (EditorLayer::RefreshPrefabInstances): dropping it here would make the
+    // next save diff the other instances against the new file and store their missing
+    // component as a "removeComponent" override of their own.
+    Log::Info("Applied component '" + std::string(component) + "' to prefab '" + pi.SourcePath + "'.");
     return true;
 }
