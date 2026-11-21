@@ -2139,6 +2139,8 @@ private:
     std::vector<AssetRefChoice> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
     // The open Inspector asset combo's list: built when the combo opens, reused while it stays open.
     std::vector<AssetRefChoice> m_AssetRefChoiceCache;
+    // The open Joint "Connected" combo's rows (order, label): built when it opens, reused while it stays open.
+    std::vector<std::pair<int, std::string>> m_JointTargetChoices;
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;

@@ -145,6 +145,26 @@ void RegisterInspectorTests() {
             ExpectTrue("redo removes it again", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
         });
     }
+    // Joint > Connected: the list is built when the combo opens and only its visible rows are drawn; picking a row
+    // aims the joint there in one undo step.
+    Add("inspector: Joint Connected picks another object from its list; undo", {
+        FreshScene(), Wait(2),
+        Do("Alpha gets a Joint anchored to World", [](Ctx& c) {
+            c.W.Registry.emplace_or_replace<JointComponent>(ByName(c.W, "Alpha")).ConnectedOrder = -1;
+        }),
+        SelectByName("Alpha"), Wait(3),
+        InspOpen("Joint"), InspUntilOpen("Joint"), WaitSeconds(0.3),
+        InspReveal(ByExact("##JointConnected", kInspector)),
+        Click(ByExact("##JointConnected", kInspector)), Wait(2),
+        ExpectTrue("Alpha itself isn't offered", [](Ctx&) { return Find(InspComboItem("Alpha")) == nullptr; }),
+        Click(InspComboItem("Beta")), Wait(3),
+        ExpectTrue("Connected = Beta", [](Ctx& c) {
+            return c.W.Registry.get<JointComponent>(ByName(c.W, "Alpha")).ConnectedOrder ==
+                   c.W.Registry.get<OrderComponent>(ByName(c.W, "Beta")).Value;
+        }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+        ExpectTrue("undo -> World", [](Ctx& c) { return c.W.Registry.get<JointComponent>(ByName(c.W, "Alpha")).ConnectedOrder == -1; }),
+    });
     Add("inspector: Add Component > Mesh Renderer: mesh, Lighting fields, Material; remove keeps the mesh; undo, redo", {
         FreshScene(), Wait(2),
         SelectByName("Alpha"), Wait(3),

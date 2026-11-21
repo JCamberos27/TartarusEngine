@@ -5521,28 +5521,35 @@ void EditorLayer::DrawJointExtra(World& world, entt::entity entity, ReflectExtra
     if (!joint) return;
 
     PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
+    // The target's name through the order -> entity map (a walk over every entity each frame cost ~0.6 ms on the Forest).
     std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
-    for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-        if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
-            const std::string& nm = registry.get<const NameComponent>(oe).Name;
-            if (!nm.empty()) preview = nm;
-            break;
-        }
-    }
+    if (const entt::entity target = FindEntityByOrder(world, joint->ConnectedOrder); target != entt::null)
+        if (const auto* nm = registry.try_get<const NameComponent>(target); nm && !nm->Name.empty()) preview = nm->Name;
     if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
         if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
             PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
         }
-        for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-            if (oe == entity) continue;
-            const int ord = registry.get<const OrderComponent>(oe).Value;
-            const std::string& nm = registry.get<const NameComponent>(oe).Name;
-            std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
-            lbl += "##" + std::to_string(ord); // same-named objects are distinct items
-            if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
-                PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+        // Rows built once per open, only the visible ones submitted (every entity's label each frame: ~46 ms on the Forest).
+        if (ImGui::IsWindowAppearing()) {
+            m_JointTargetChoices.clear();
+            for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+                if (oe == entity) continue;
+                const int ord = registry.get<const OrderComponent>(oe).Value;
+                const std::string& nm = registry.get<const NameComponent>(oe).Name;
+                std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
+                lbl += "##" + std::to_string(ord); // same-named objects are distinct items
+                m_JointTargetChoices.emplace_back(ord, std::move(lbl));
             }
         }
+        ImGuiListClipper clipper;
+        clipper.Begin((int)m_JointTargetChoices.size());
+        while (clipper.Step())
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const auto& [ord, lbl] = m_JointTargetChoices[(size_t)i];
+                if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
+                    PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+                }
+            }
         ImGui::EndCombo();
     }
 
