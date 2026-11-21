@@ -23,15 +23,7 @@ bool g_Succeeded = false, g_Ready = false;
 std::string g_Log;
 std::vector<fs::path> g_Moved; // the files Request moved to <file>.old (main thread only)
 
-fs::path ExePath() {
-    std::wstring buffer(MAX_PATH, L'\0');
-    for (;;) {
-        const DWORD n = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-        if (n == 0) return {};
-        if (n < buffer.size()) { buffer.resize(n); return fs::path(buffer); }
-        buffer.resize(buffer.size() * 2);
-    }
-}
+using GameModuleBuild::ExePath;
 // TARTARUS_RESTART_FAKE_BUILD=ok|fail (the hotreload smoke case): no CMake, the exe is never moved, and
 // Relaunch starts nothing (the state file stays for the test to read).
 std::string FakeBuild() { return Env::Str(Env::Var::RestartFakeBuild); }
@@ -101,21 +93,8 @@ bool FillMissing(const std::vector<fs::path>& moved) {
 
 bool Available() { return UnavailableReason().empty(); }
 
-std::string UnavailableReason() {
-    // Fixed for the process (the exe and its build tree don't move); the File menu asks every frame it's open.
-    static const std::string reason = [] {
-        if (!GameModuleBuild::Available())
-            return std::string("Only in an editor built from source: no CMake build folder (CMakeCache.txt) next to this exe.");
-        std::error_code ec;
-        const fs::path exe = ExePath();
-        // Multi-config generators put the exe in <build>/<Config>: anything under the build tree counts.
-        const fs::path rel = exe.empty() ? fs::path() : fs::relative(exe, GameModuleBuild::BinaryRoot(), ec);
-        if (ec || rel.empty() || *rel.begin() == "..")
-            return std::string("This exe isn't inside the CMake build folder it was built in.");
-        return std::string();
-    }();
-    return reason;
-}
+// Same rule as the module rebuild: both build into the exe's own build tree.
+std::string UnavailableReason() { return GameModuleBuild::RebuildUnavailableReason(); }
 
 bool Request() {
     if (g_Building) return false;

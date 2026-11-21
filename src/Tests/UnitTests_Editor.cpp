@@ -9,6 +9,7 @@
 #include "LruMap.h"
 #include "RestartState.h"
 #include "EditorRestart.h"
+#include "GameModuleBuild.h"
 #include "EditorFileStat.h"
 #include "Core/Env.h"
 #include "World.h"
@@ -1078,6 +1079,21 @@ void TestRestartRelaunchArgs() {
     CHECK(ER::QuoteArg(L"C:\\dir with space\\") == L"\"C:\\dir with space\\\\\"");
 }
 
+// Module rebuilds and Rebuild & Restart need the exe inside its CMake build tree: the build writes the
+// DLLs next to the exe it built, so a copy elsewhere would rebuild and never reload.
+void TestRebuildNeedsExeInBuildTree() {
+    namespace fs = std::filesystem;
+    const fs::path root = L"C:\\eng\\b";
+    CHECK(GameModuleBuild::InsideBuildTree(root / L"Release" / L"TartarusEngine.exe", root));
+    CHECK(GameModuleBuild::InsideBuildTree(root / L"TartarusEngine.exe", root));
+    CHECK(!GameModuleBuild::InsideBuildTree(L"C:\\copy\\TartarusEngine.exe", root));
+    CHECK(!GameModuleBuild::InsideBuildTree(L"C:\\eng\\b_copy\\TartarusEngine.exe", root)); // sibling, not inside
+    CHECK(!GameModuleBuild::InsideBuildTree(fs::path(), root));
+    CHECK(!GameModuleBuild::InsideBuildTree(root / L"x.exe", fs::path()));
+    // Restart shares the module rebuild's rule and reason.
+    CHECK(EditorRestart::UnavailableReason() == GameModuleBuild::RebuildUnavailableReason());
+}
+
 // Rebuild & Restart moves the exe and its DLLs aside as one set: a failed build puts the whole old
 // set back (no old exe with a new core DLL), a good one fills what it didn't relink, and a set that
 // can't fully move is undone.
@@ -1151,4 +1167,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Rebuild & Restart state file: round trip, stale, malformed, selection by order + name",TestRestartStateRoundTrip);
     tests.emplace_back("Rebuild & Restart relaunch arguments and quoting",TestRestartRelaunchArgs);
     tests.emplace_back("Rebuild & Restart moves the exe and its DLLs aside as one set",TestRestartMoveAsideSet);
+    tests.emplace_back("Module rebuild and Restart need the exe inside its build tree",TestRebuildNeedsExeInBuildTree);
 }
