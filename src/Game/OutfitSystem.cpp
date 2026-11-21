@@ -637,10 +637,11 @@ bool SetColourway(World& world, AssetLibrary& assets, entt::entity piece, const 
     bool any = false;
     for (size_t i = 0; i < sources.size(); ++i)
         if (!sources[i].empty() && Same(sources[i], source)) { rc->Materials[i] = mat; any = true; }
-    // What caches the outfit's look (the first-person body's twins, the editor) notices by the version.
+    // What caches the outfit's look (the first-person body's twins) notices by the look version: the pieces are the same
+    // (no Version bump, which would rebuild the body).
     if (any)
         if (const auto* h = world.Registry.try_get<HierarchyComponent>(piece); h && world.Registry.valid(h->Parent))
-            if (auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(h->Parent)) ++outfit->Version;
+            if (auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(h->Parent)) ++outfit->LookVersion;
     return any;
 }
 
