@@ -3,6 +3,7 @@
 #include "CurveEditor.h"
 #include "EditorFileHistory.h"
 #include "UndoDeltaChain.h"
+#include "UndoInPlace.h"
 #include "EditorLayer.h"
 #include "EditorSearch.h"
 #include "LruMap.h"
@@ -44,6 +45,7 @@ struct EditorHistoryTestAccess {
     static std::string TopLabel(const EditorLayer& e) {return e.m_UndoStack.empty()?std::string():e.m_UndoStack.back().Label;}
     static void Undo(EditorLayer& e,World& w,AssetLibrary& a) {e.Undo(w,a);}
     static void Redo(EditorLayer& e,World& w,AssetLibrary& a) {e.Redo(w,a);}
+    static int InPlaceSteps(const EditorLayer& e) {return e.m_InPlaceHistorySteps;}
     static void Select(EditorLayer& e,World& w,entt::entity entity) {
         e.m_EditPushedThisFrame=false;e.m_SelHistoryNavigating=false;
         e.m_Selected=entity;e.RecordSelectionHistory(w);
@@ -569,6 +571,60 @@ void TestOutfitLandingKeepsUnrecordedChange() {
     }
     AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
 }
+
+// X-33 C: undo / redo of a move, rotate, scale or rename writes those fields onto the live entities
+// instead of reloading the scene, and leaves exactly what the full reload would (the verify mode
+// also compares every in-place step with the snapshot). A structural step still reloads.
+void TestUndoInPlaceMatchesReload() {
+    auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
+    auto& io=ImGui::GetIO();io.DisplaySize={800,600};io.DeltaTime=1.0f/60;io.IniFilename=nullptr;
+    unsigned char* pixels;int width,height;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+    {
+        World world;AssetLibrary assets;EditorLayer editor;editor.SetVerifyInPlaceUndo(true);
+        const auto parent=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Parent");
+        const auto child=world.CreateEmptyEntity({1,0,0},{0,0,0},{1,1,1},"Child");world.AttachChildRaw(child,parent);
+        const auto other=world.CreateEmptyEntity({5,0,0},{0,0,0},{1,1,1},"Other");
+        auto frame=[&](const std::function<void()>& edit) {
+            ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
+            if(edit) {EditorHistoryTestAccess::Edit(editor,world);edit();}
+            EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        };
+        auto save=[&] {return SceneSerializer::SaveToString(world,assets);};
+        auto steps=[&] {return EditorHistoryTestAccess::InPlaceSteps(editor);};
+        frame({});
+        const auto s0=save();
+        frame([&] {
+            world.Registry.get<TransformComponent>(parent).Position={0,1,0};
+            world.Registry.get<TransformComponent>(other).SetRotationEuler({0,45,0});
+            world.Registry.get<TransformComponent>(child).Scale={2,2,2};
+            world.Registry.get<NameComponent>(child).Name="Renamed";
+        });
+        const auto s1=save();
+        CHECK(s1!=s0);CHECK(EditorHistoryTestAccess::Count(editor)==1);
+        EditorHistoryTestAccess::Undo(editor,world,assets);
+        CHECK(steps()==1);CHECK(save()==s0);CHECK(EditorHistoryTestAccess::Current(editor)==s0);
+        CHECK(world.Registry.valid(parent) && world.Registry.valid(child) && world.Registry.valid(other)); // not rebuilt
+        CHECK(world.Registry.get<NameComponent>(child).Name=="Child");
+        EditorHistoryTestAccess::Redo(editor,world,assets);
+        CHECK(steps()==2);CHECK(save()==s1);CHECK(EditorHistoryTestAccess::Current(editor)==s1);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==3);CHECK(save()==s0);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s1);
+
+        // A structural step (an entity added) reloads, and stays right both ways.
+        frame([&] {world.CreateEmptyEntity({9,9,9},{0,0,0},{1,1,1},"Added");});
+        const auto s2=save();
+        CHECK(s2!=s1);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s1);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s2);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==4);CHECK(save()==s1);
+        // The move under it still goes in place on the reloaded entities (found by order, not handle).
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(steps()==5);CHECK(save()==s0);
+        CHECK(EditorHistoryTestAccess::Count(editor)==0);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==6);CHECK(save()==s1);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(steps()==6);CHECK(save()==s2);
+    }
+    AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
+}
 }
 
 // Unit tests for the editor UI. Add a function per test and list it below.
@@ -707,6 +763,60 @@ void TestUndoDeltaChain() {
     CHECK(UndoDelta::MakePatch("{broken", s1).empty());
 }
 
+// --- X-33 C: which history steps can be undone in place ------------------------------------
+void TestUndoInPlaceClassify() {
+    auto classify = [](const char* patch, std::vector<UndoInPlace::EntityRef>& out) {
+        return UndoInPlace::Classify(nlohmann::json::parse(patch), out);
+    };
+    std::vector<UndoInPlace::EntityRef> refs;
+    CHECK(classify("[]", refs) && refs.empty());
+    CHECK(classify(R"([{"op":"replace","path":"/models/12/position/0","value":1},
+                       {"op":"replace","path":"/models/12/rotation/3","value":1},
+                       {"op":"replace","path":"/empties/0/name","value":"B"},
+                       {"op":"replace","path":"/prefabInstances/2/scale","value":[1,1,1]}])", refs));
+    CHECK(refs.size() == 3); // sorted, model 12 once
+    CHECK(refs.size() == 3 && refs[0].Array == 1 && refs[0].Index == 12 && refs[1].Array == 2 && refs[1].Index == 0 &&
+          refs[2].Array == 3 && refs[2].Index == 2);
+    // Anything else: the full reload.
+    for (const char* p : {
+             R"([{"op":"add","path":"/models/3","value":{}}])",                         // an entity added
+             R"([{"op":"remove","path":"/empties/4"}])",                                // removed
+             R"([{"op":"replace","path":"/models/3/materials/0","value":"x"}])",        // a material slot
+             R"([{"op":"replace","path":"/models/3/Light/Intensity","value":2}])",      // a component field
+             R"([{"op":"replace","path":"/models/3/order","value":7}])",                // the order it's found by
+             R"([{"op":"replace","path":"/models/3/parentId","value":7}])",             // re-parented
+             R"([{"op":"replace","path":"/models/3","value":{}}])",                     // the whole entity
+             R"([{"op":"replace","path":"/models/3/name/0","value":"x"}])",             // not a vector
+             R"([{"op":"replace","path":"/models/03/position/0","value":1}])",          // not a plain index
+             R"([{"op":"replace","path":"/models/-/position/0","value":1}])",
+             R"([{"op":"replace","path":"/skyAmbientIntensity","value":2}])",           // scene settings
+             R"([{"op":"replace","path":"/assetMeta/a~1b/x","value":2}])",              // the asset library
+             R"([{"op":"replace","path":"/prefabInstances/0/overrides/1/v","value":2}])",
+             R"([{"op":"move","from":"/models/1/name","path":"/models/2/name"}])",
+             R"({"op":"replace"})"}) {
+        CHECK(!classify(p, refs));
+    }
+    // Too many entities in one step.
+    nlohmann::json many = nlohmann::json::array();
+    for (size_t i = 0; i <= UndoInPlace::kMaxEntities; ++i)
+        many.push_back({{"op", "replace"}, {"path", "/empties/" + std::to_string(i) + "/name"}, {"value", "n"}});
+    CHECK(!UndoInPlace::Classify(many, refs));
+
+    // The background verdict holds only for the scene it was worked out from.
+    const std::string after = R"({"empties":[{"name":"A","order":0,"position":[1,2,3]}],"sky":1})";
+    const std::string before = R"({"empties":[{"name":"A","order":0,"position":[0,0,0]}],"sky":1})";
+    UndoInPlace::StepPatch step;
+    step.Start(after, before);
+    const auto* entities = step.EntitiesFrom(UndoDelta::HashText(after));
+    CHECK(entities && entities->size() == 1);
+    CHECK(!step.EntitiesFrom(UndoDelta::HashText(before)));
+    UndoInPlace::StepPatch structural;
+    structural.Start(R"({"empties":[]})", before);
+    CHECK(!structural.EntitiesFrom(UndoDelta::HashText(R"({"empties":[]})")));
+    UndoInPlace::StepPatch none;
+    CHECK(!none.EntitiesFrom(0));
+}
+
 } // namespace
 
 // The editor caches' use-ordered map (LruMap.h): Find counts as a use, Peek doesn't, trims drop the oldest.
@@ -791,5 +901,7 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
     tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
+    tests.emplace_back("Undo in place: which steps qualify (move / rotate / scale / rename only)",TestUndoInPlaceClassify);
+    tests.emplace_back("Undo in place: move / rename undo and redo match the full reload; structural steps reload",TestUndoInPlaceMatchesReload);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
 }

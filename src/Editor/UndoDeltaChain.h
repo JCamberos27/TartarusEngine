@@ -1,5 +1,6 @@
 #pragma once
 #include <json.hpp>
+#include <cstdint>
 #include <future>
 #include <memory>
 #include <string>
@@ -44,6 +45,18 @@
 // took ~27 ms, on every undoable edit, on the main thread. Pop - the only reader - waits for it,
 // and in practice it's long finished by then.
 namespace UndoDelta {
+
+// Cheap non-cryptographic FNV-1a hash of a serialized scene snapshot. Only ever compared with
+// another snapshot's hash to tell "the same scene" from "a different one", never used to rebuild
+// anything. Same constants and style as TextureCache::HashSettings.
+inline uint64_t HashText(const std::string& s) {
+    uint64_t h = 1469598103934665603ull; // FNV-1a offset basis
+    for (unsigned char c : s) {
+        h ^= c;
+        h *= 1099511628211ull; // FNV-1a prime
+    }
+    return h;
+}
 
 // JSON Patch that turns `fromJson` into `toJson`. Returns "" if either side won't parse, which
 // ApplyPatch treats as an unrecoverable link (a real empty patch dumps as "[]", never "").

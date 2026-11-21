@@ -1,5 +1,6 @@
 #pragma once
 #include "UndoDeltaChain.h" // UndoEntry::Delta
+#include "UndoInPlace.h" // UndoEntry::Step
 #include "EditorFileHistory.h"
 #include "AnimatorController.h"
 #include <filesystem>
@@ -1612,6 +1613,10 @@ private:
         // and never reloads the scene - so it also works in Play, where the scene must not be touched.
         bool AssetOnly = false;
         std::vector<EditorFileHistory::State> Files;
+        // X-33 C - whether popping this entry can write a few entities' transforms / names in
+        // place of a full reload, worked out on a background thread from the scene it will be
+        // popped FROM (UndoInPlace.h). Not started: the full reload.
+        UndoInPlace::StepPatch Step;
         bool CountsAsSceneEdit() const { return !SelectionOnly && !AssetOnly && AssetPath.empty(); }
     };
     std::vector<UndoEntry> m_UndoStack;
@@ -1654,6 +1659,13 @@ private:
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
     void TrimUndoHistory(); // drops the oldest step past kMaxHistory (EditorLayer_Scene.cpp)
     void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
+    // X-33 C - undo / redo `entry` by writing the transforms / names it changed onto the live
+    // entities, when its in-place verdict holds for the scene being left (`currentHash`). False,
+    // world untouched (or, after a failed verify, to be reloaded by the caller): the full reload.
+    bool ApplyHistoryStepInPlace(World& world, AssetLibrary& assets, const UndoEntry& entry, uint64_t currentHash,
+                                 const nlohmann::json& target, const std::string& targetText);
+    bool m_VerifyInPlaceUndo = false;
+    int m_InPlaceHistorySteps = 0; // undo / redo steps done in place (tests read it)
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
     // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
@@ -1699,6 +1711,9 @@ private:
                   const std::vector<int>* selectedOrdersOverride = nullptr);
     void Undo(World& world, AssetLibrary& assets);
     void Redo(World& world, AssetLibrary& assets);
+    // X-33 C - test runs: after every in-place undo / redo, save the scene and compare it with the
+    // snapshot the step restores; on a difference, log it and take the full reload instead.
+    void SetVerifyInPlaceUndo(bool verify) { m_VerifyInPlaceUndo = verify; }
     // Phase 6 item 6 / Q6 — a plain-English label for the selection-change entry RecordSelectionHistory
     // pushes ("Select Cube", "Select 3 objects", "Deselect"), read off the CURRENT (post-change)
     // selection.

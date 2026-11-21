@@ -297,6 +297,19 @@ std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::st
     return out.dump();
 }
 
+bool SceneSerializer::ApplyEntityTransformAndName(World& world, entt::entity entity, const json& entityJson) {
+    if (!entityJson.is_object() || !world.Registry.valid(entity)) return false;
+    // The same reads, defaults and non-finite scrub as ApplySceneJson's per-kind loops.
+    auto& t = world.Registry.get_or_emplace<TransformComponent>(entity);
+    t.Position = JsonToVec3(entityJson.value("position", json::array({0, 0, 0})));
+    t.Scale = JsonToVec3(entityJson.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
+    if (const auto it = entityJson.find("rotation"); it != entityJson.end()) SetTransformRotationFromJson(t, *it);
+    else t.SetRotationQuaternion(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    if (const auto it = entityJson.find("name"); it != entityJson.end() && it->is_string())
+        world.Registry.emplace_or_replace<NameComponent>(entity, NameComponent{it->get<std::string>()});
+    return true;
+}
+
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {
     json root = BuildSceneJson(world);
     // Marks this snapshot as carrying real AssetLibrary state, so LoadFromString below knows to
