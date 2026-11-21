@@ -35,8 +35,9 @@ int Register(const std::string& assetType, Hook hook);
 int RegisterFile(const std::string& path, Hook hook);
 void Unregister(int id);
 
-// Runs the matching hooks; returns how many reported applying something. A hook registered or
-// unregistered from inside a hook takes effect from the next Dispatch.
+// Runs the matching hooks; returns how many reported applying something. A hook registered from
+// inside a hook runs from the next Dispatch; one unregistered from inside a hook stops at once (it
+// isn't called later in the same Dispatch).
 int Dispatch(const Event& e);
 
 // True while ProjectWatcher is watching the project folder (the editor): changes arrive here,

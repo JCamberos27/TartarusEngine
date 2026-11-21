@@ -3680,7 +3680,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
         if (reflPfRevert) reflRemoved = true;
-        if (reflPfApply) SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name);
+        // The other instances gain the component when the scene's instances are rebuilt from the
+        // file (RefreshPrefabInstances, at the next project sync).
+        if (reflPfApply && SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name))
+            for (entt::entity cur = entity; cur != entt::null && registry.valid(cur);) {
+                if (const auto* pi = registry.try_get<PrefabInstanceComponent>(cur)) { QueuePrefabRefresh(pi->SourcePath, /*joinUndo*/true); break; }
+                const auto* h = registry.try_get<HierarchyComponent>(cur);
+                cur = h ? h->Parent : entt::null;
+            }
         if (reflReset) {
             PushUndo(world, std::string("Reset ") + rc.Meta.Name);
             rc.Add(registry, entity); // emplace_or_replace -> back to default-constructed
@@ -4764,27 +4771,18 @@ void EditorLayer::DrawComponentBackFace(World& world, entt::entity entity, const
 }
 
 namespace {
-// Apply to Prefab, then bring along every other instance of the same .prefab that wasn't
-// overriding the field: left alone, they kept the old value, which now differs from the file, so
-// the next scene save (or undo snapshot) stored it as an override and they never updated.
-void ApplyPrefabFieldToInstances(World& world, AssetLibrary* assets, entt::entity entity,
-                                 const char* component, const char* field) {
+// Apply to Prefab. Returns the .prefab written (empty when nothing was): the caller queues the
+// refresh that rebuilds every instance of it from the new file (EditorLayer::RefreshPrefabInstances),
+// so the instances that weren't overriding the field pick the value up and the ones that were keep
+// theirs. Left alone, they kept the old value, which the next save stored as an override.
+std::string ApplyPrefabFieldToInstances(World& world, entt::entity entity, const char* component, const char* field) {
     std::string source;
     for (entt::entity cur = entity; cur != entt::null && world.Registry.valid(cur);) {
         if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(cur)) { source = pi->SourcePath; break; }
         const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
         cur = h ? h->Parent : entt::null;
     }
-    std::vector<entt::entity> followers;
-    if (assets && !source.empty())
-        for (auto [root, pi] : world.Registry.view<const PrefabInstanceComponent>().each())
-            if (pi.SourcePath == source)
-                for (entt::entity e : pi.InstanceEntities)
-                    if (e != entity && e != entt::null && world.Registry.valid(e) &&
-                        !SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
-                        followers.push_back(e);
-    if (!SceneSerializer::ApplyPrefabField(world, entity, component, field)) return;
-    for (entt::entity e : followers) SceneSerializer::RevertPrefabField(world, *assets, e, component, field);
+    return SceneSerializer::ApplyPrefabField(world, entity, component, field) ? source : std::string();
 }
 } // namespace
 
@@ -4801,7 +4799,7 @@ void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char*
     }
     if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab")) {
         PushUndo(world, "Apply to Prefab"); // one step with the .prefab write, which the file journal joins
-        ApplyPrefabFieldToInstances(world, m_AssetsPtr, entity, component, field);
+        if (const std::string src = ApplyPrefabFieldToInstances(world, entity, component, field); !src.empty()) QueuePrefabRefresh(src, /*joinUndo*/true);
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write this value into the .prefab file. Other instances that\n"
@@ -4835,7 +4833,7 @@ void EditorLayer::PrefabFieldMenuMulti(World& world, const std::vector<entt::ent
         PushUndo(world, "Apply to Prefab");
         for (entt::entity e : sel)
             if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
-                ApplyPrefabFieldToInstances(world, m_AssetsPtr, e, component, field);
+                if (const std::string src = ApplyPrefabFieldToInstances(world, e, component, field); !src.empty()) QueuePrefabRefresh(src, /*joinUndo*/true);
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write each selected instance's value into its .prefab file.\n"

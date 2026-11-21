@@ -22,6 +22,12 @@ std::vector<Entry>& Entries() {
 }
 int s_NextId = 1;
 
+bool Registered(int id) {
+    for (const Entry& h : Entries())
+        if (h.Id == id) return true;
+    return false;
+}
+
 std::string FileKeyOf(const std::string& path) {
     if (path.empty()) return {};
     const std::string abs = std::filesystem::path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
@@ -64,7 +70,8 @@ int Dispatch(const Event& e) {
             const std::string fileKey = FileKeyOf(h.File);
             match = fileKey == key || (!oldKey.empty() && fileKey == oldKey);
         }
-        if (match && h.Fn(e)) ++applied;
+        // Unregistered by an earlier hook in this Dispatch (its owner went away): skip it.
+        if (match && Registered(h.Id) && h.Fn(e)) ++applied;
     }
     return applied;
 }
