@@ -633,15 +633,19 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
             const auto* h = reg.try_get<HierarchyComponent>(m_Selected);
             entt::entity p = h ? h->Parent : entt::null;
             for (int guard = 0; p != entt::null && reg.valid(p) && guard < 256; ++guard) {
-                g.Expanded.insert(p);
+                if (g.Expanded.insert(p).second) ++g.ExpandedGen;
                 const auto* ph = reg.try_get<HierarchyComponent>(p);
                 p = ph ? ph->Parent : entt::null;
             }
         }
     }
 
-    // The visible rows: a depth-first walk of the expanded tree, or a flat list of matches.
+    // The visible rows: a depth-first walk of the expanded tree (kept until the tree or the open rows change), or a
+    // flat list of matches (names have no change counter: rebuilt every frame while searching, as the Hierarchy).
+    const GlassEditorState::RowsKey rowsKey{&world, HierarchyOrderGeneration(world), world.HierarchyVersion(), g.ExpandedGen};
+    if (filtering || !(rowsKey == g.RowsBuiltFor)) {
     g.Rows.clear();
+    g.RowsBuiltFor = filtering ? GlassEditorState::RowsKey{} : rowsKey;
     if (filtering) {
         for (entt::entity e : reg.view<const NameComponent>()) {
             const std::string& n = reg.get<const NameComponent>(e).Name;
@@ -665,6 +669,7 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
             }
         };
         walk(entt::null, 0);
+    }
     }
 
     ImGui::BeginChild("##rows", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_None);
@@ -814,6 +819,7 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
             if (toggle != entt::null) {
                 if (g.Expanded.count(toggle)) g.Expanded.erase(toggle);
                 else g.Expanded.insert(toggle);
+                ++g.ExpandedGen;
             }
         }
         ImGui::PopStyleVar(2);

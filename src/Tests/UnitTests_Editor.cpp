@@ -22,6 +22,7 @@
 #include "../../extern/imcurve/imcurve_editor.hpp"
 #include <imgui_internal.h>
 #include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 #include <chrono>
 #include <cstring>
 #include <cstdio>
@@ -31,6 +32,7 @@ struct EditorHistoryTestAccess {
     static const std::vector<entt::entity>& Order(const EditorLayer& e,const World& w) {return e.HierarchyCreationOrder(w);}
     static int Ordinal(const EditorLayer& e,const World& w,entt::entity x) {return e.HierarchyCreationOrdinal(w,x);}
     static std::vector<entt::entity> Siblings(const EditorLayer& e,const World& w,entt::entity p) {return e.HierarchySiblingsInOrder(w,p);}
+    static void Reorder(EditorLayer& e,World& w,std::vector<entt::entity> m,entt::entity anchor,bool after) {e.ReorderHierarchySiblings(w,m,anchor,after,false);}
     static void Begin(EditorLayer& e,World& w,AssetLibrary& a) {e.m_AssetsPtr=&a;e.BeginGlobalUndoFrame(w);}
     static void Finish(EditorLayer& e,World& w) {e.FinishGlobalUndo(w,true);AtomicFile::SetChangeObserver({});}
     static void Edit(EditorLayer& e,World& w) {e.PushUndo(w,"Test edit");}
@@ -738,6 +740,39 @@ void TestLruMap() {
 // The Hierarchy's cached creation order (kept between frames, re-sorted only when the
 // (OrderComponent, entity) pairs change) must still follow every create, destroy, slot reuse,
 // reorder and reparent, with no ImGui frame in between.
+// A parent's Children list follows the Hierarchy's order (OrderComponent): SetParent inserts in place, and a drag
+// reorder re-sorts it and bumps HierarchyVersion, so a LOD Group's levels are the rows in the order shown (they kept
+// the attach order until a save and reload), and caches keyed on the version rebuild.
+void TestHierarchyChildOrder() {
+    using X = EditorHistoryTestAccess;
+    World world; EditorLayer editor;
+    auto make = [&](const char* n) { return world.CreateEmptyEntity({}, {}, {1,1,1}, n); };
+    const entt::entity group = make("Group");
+    const entt::entity a = make("A"), b = make("B"), c = make("C");
+    auto kids = [&] { return world.Registry.get<HierarchyComponent>(group).Children; };
+    // Attached out of creation order: still listed in it.
+    CHECK(world.SetParent(c, group) && world.SetParent(a, group) && world.SetParent(b, group));
+    CHECK((kids() == std::vector<entt::entity>{a, b, c}));
+    world.AttachChildRaw(make("D"), group);
+    CHECK(kids().size() == 4 && kids().back() != a);
+    // The Hierarchy's drag reorder: C above A.
+    const std::uint64_t before = world.HierarchyVersion();
+    X::Reorder(editor, world, {c}, a, false);
+    CHECK((X::Siblings(editor, world, group) == std::vector<entt::entity>{c, a, b, kids().back()}));
+    CHECK((std::vector<entt::entity>(kids().begin(), kids().begin() + 3) == std::vector<entt::entity>{c, a, b}));
+    CHECK(world.HierarchyVersion() != before);
+    // Already in order: no bump.
+    const std::uint64_t after = world.HierarchyVersion();
+    world.SortChildrenByOrder(group);
+    CHECK(world.HierarchyVersion() == after);
+    // A LOD Group's LOD 0 is now C: a renderer only on C shows up close.
+    world.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    for (entt::entity e : kids()) world.Registry.emplace<RenderableComponent>(e);
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    CHECK(world.ApplyLod(glm::vec3(0.0f, 0.0f, 1.0f), proj) == 1);
+    CHECK(!world.IsLodCulled(c) && world.IsLodCulled(a) && world.IsLodCulled(b));
+}
+
 void TestHierarchyCreationOrderCache() {
     using X = EditorHistoryTestAccess;
     World world; EditorLayer editor;
@@ -777,6 +812,7 @@ void TestHierarchyCreationOrderCache() {
 
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
+    tests.emplace_back("Hierarchy child order: Children follow OrderComponent, a reorder bumps the version and moves LOD levels",TestHierarchyChildOrder);
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
     tests.emplace_back("Script IDE text editing, completion undo and source preservation",TestScriptIDETextEditing);

@@ -156,6 +156,15 @@ const std::vector<entt::entity>& EditorLayer::HierarchyCreationOrder(const World
 // "Object 7" for an entity the user never named (#21 P10): its 1-based position in creation
 // order. The pairs are re-checked once per frame (every call outside an ImGui frame, as in the
 // unit tests), and the lookup is an index, not a per-frame hash map of every entity.
+std::uint64_t EditorLayer::HierarchyOrderGeneration(const World& world) const {
+    const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
+    if (frame == -2 || frame != m_HierOrder.CheckedFrame) {
+        m_HierOrder.CheckedFrame = frame;
+        HierarchyCreationOrder(world);
+    }
+    return m_HierOrder.Generation;
+}
+
 int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) const {
     const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
     if (frame == -2 || frame != m_HierOrder.CheckedFrame) {
@@ -2402,6 +2411,7 @@ void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt:
     }
     for (int i = 0; i < (int)rebuilt.size(); ++i)
         world.Registry.emplace_or_replace<OrderComponent>(rebuilt[i], values[i]);
+    world.SortChildrenByOrder(newParent); // LOD levels and the hierarchy caches follow the new order now
     for (auto [je, joint] : world.Registry.view<JointComponent>().each()) {
         auto it = remap.find(joint.ConnectedOrder);
         if (joint.ConnectedOrder >= 0 && it != remap.end()) joint.ConnectedOrder = it->second;
