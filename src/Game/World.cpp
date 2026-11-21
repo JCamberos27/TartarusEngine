@@ -567,10 +567,11 @@ glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
 }
 
 namespace {
-// Hierarchy order (World::SortChildrenByOrder): OrderComponent, then the handle; 0 for an entity without one.
+// Hierarchy order (World::SortChildrenByOrder): OrderComponent, then the handle. An entity without one (a raw
+// Registry.create(); World's factories always give one) sorts last, so it never takes a LOD Group's level 0.
 std::pair<int, entt::entity> ChildOrderKey(const entt::registry& reg, entt::entity e) {
     const auto* o = reg.try_get<OrderComponent>(e);
-    return {o ? o->Value : 0, e};
+    return {o ? o->Value : std::numeric_limits<int>::max(), e};
 }
 // Puts `child` into `kids` at its place in Hierarchy order (the rest already in it, or as near as it is).
 void InsertChildInOrder(const entt::registry& reg, std::vector<entt::entity>& kids, entt::entity child) {

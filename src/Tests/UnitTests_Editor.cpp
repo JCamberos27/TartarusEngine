@@ -772,6 +772,10 @@ void TestHierarchyChildOrder() {
     const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
     CHECK(world.ApplyLod(glm::vec3(0.0f, 0.0f, 1.0f), proj) == 1);
     CHECK(!world.IsLodCulled(c) && world.IsLodCulled(a) && world.IsLodCulled(b));
+    // A raw entity (no OrderComponent) attached later goes last, not to LOD 0.
+    const entt::entity raw = world.Registry.create();
+    world.AttachChildRaw(raw, group);
+    CHECK(kids().back() == raw && kids().front() == c);
 }
 
 void TestHierarchyCreationOrderCache() {
