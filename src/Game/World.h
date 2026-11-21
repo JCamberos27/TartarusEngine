@@ -110,6 +110,8 @@ public:
     std::uint64_t LodFullPasses() const { return m_LodFullPasses; }
     // How many rebuilds took the full walk (tests: a small structure change takes the incremental pass).
     std::uint64_t TransformCacheFullWalks() const { return m_TransformFullWalks; }
+    // How many rebuilds re-derived active-in-hierarchy over every entity (tests: a small structure change patches it).
+    std::uint64_t ActiveFullSyncs() const { return m_ActiveFullSyncs; }
 
     // #163 - picks each LOD Group's level for a view (eye position + projection) and tags the
     // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
@@ -258,6 +260,13 @@ private:
     std::uint64_t m_ActiveSignature[6] = {};
     bool m_ActiveSignatureValid = false;
     void ActiveSignature(std::uint64_t out[6]);
+    // RebuildWorldTransformCache's two halves: the transforms (and their structure delta), then active-in-hierarchy,
+    // patched from that delta when it can (false: the full SyncActiveInHierarchy instead).
+    void RebuildTransformsOnly();
+    bool PatchActiveInHierarchy(const std::uint64_t sig[6]);
+    std::vector<entt::entity> m_ActiveRoots;
+    std::vector<std::pair<entt::entity, bool>> m_ActiveWalk;
+    std::uint64_t m_ActiveFullSyncs = 0;
     // ApplyLod's memory of what it tagged, per LOD Group slot (see ApplyLod). Active is the level left untagged, -1 for
     // a culled group (every level tagged), kLodSkipped for one that tagged nothing (inactive, or not seen yet).
     static constexpr int kLodSkipped = -2;
