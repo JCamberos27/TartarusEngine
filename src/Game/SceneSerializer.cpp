@@ -285,7 +285,8 @@ std::string SceneSerializer::WithLibraryState(const std::string& scene, const st
 // AssetLibrary state that lives in .meta files / the session (AppendAssetLibraryJson's metadata half).
 // UnitTests_Editor checks that a snapshot stripped of these and given Save()'s library half is
 // Save()'s output byte for byte, with every optional key present, so a new undo-only key fails there.
-constexpr const char* kUndoOnlyKeys[] = {"hasAssetLibrarySnapshot", "assetFolders", "removedDiskFolders", "assetMeta"};
+constexpr const char* kUndoOnlyKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures",
+                                         "assetFolders", "removedDiskFolders", "assetMeta"};
 
 std::function<bool()> SceneSerializer::PrepareSaveFromSnapshot(std::string snapshot, const AssetLibrary& assets,
                                                               const std::string& path) {

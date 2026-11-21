@@ -676,8 +676,26 @@ void TestAutoSaveFromUndoSnapshot() {
     const std::string fromSave = (dir / "save.json").string(), fromSnapshot = (dir / "snapshot.json").string();
     CHECK(SceneSerializer::Save(world, assets, fromSave));
     const std::string snapshot = SceneSerializer::SaveToString(world, assets);
-    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"assetFolders\"", "\"removedDiskFolders\"", "\"assetMeta\""})
+    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"libraryModels\"", "\"libraryTextures\"", "\"assetFolders\"",
+                            "\"removedDiskFolders\"", "\"assetMeta\""})
         CHECK(snapshot.find(key) != std::string::npos);
+    // The scene file has no model / texture list (P-45: the next open imported every listed model in full).
+    {
+        const std::string saved = UnitTestSupport::ReadAll(fromSave);
+        CHECK(saved.find("\"libraryModels\"") == std::string::npos && saved.find("\"libraryTextures\"") == std::string::npos);
+        CHECK(saved.find("\"libraryMaterials\"") != std::string::npos);
+        // An older file that still lists them loads, and its lists are not imported.
+        nlohmann::json old = nlohmann::json::parse(saved);
+        const std::string listedModel = (dir / "listed-only.fbx").string(), listedTexture = (dir / "listed-only.png").string();
+        old["libraryModels"] = nlohmann::json::array({listedModel});
+        old["libraryTextures"] = nlohmann::json::array({listedTexture});
+        const std::string oldPath = (dir / "old.json").string();
+        { std::ofstream(std::filesystem::u8path(oldPath), std::ios::binary) << old.dump(2); }
+        World loaded;
+        AssetLibrary loadedAssets;
+        CHECK(SceneSerializer::Load(loaded, loadedAssets, oldPath, /*persistMigration=*/false));
+        CHECK(!loadedAssets.HasModel(listedModel) && !loadedAssets.HasTexture(listedTexture));
+    }
     const std::function<bool()> write = SceneSerializer::PrepareSaveFromSnapshot(snapshot, assets, fromSnapshot);
     CHECK(write && write());
     const std::string want = UnitTestSupport::ReadAll(fromSave), got = UnitTestSupport::ReadAll(fromSnapshot);
