@@ -9,7 +9,7 @@
 #include "RestartState.h"
 #include "EditorRestart.h"
 #include "EditorFileStat.h"
-#include <cstdlib>
+#include "Env.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -875,7 +875,7 @@ void TestEditorFileStatCache() {
 
     // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): the raw calls the Inspector and the File menu
     // made every frame, against a cached Get.
-    if (std::getenv("TARTARUS_MICROBENCH")) {
+    if (Env::Flag(Env::Var::MicroBench)) {
         { std::ofstream(file) << "x"; }
         const auto other = dir / "b.txt";
         { std::ofstream(other) << "y"; }
