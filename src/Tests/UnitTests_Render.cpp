@@ -33,6 +33,7 @@
 #include "../Game/SceneSerializer.h"
 #include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
+#include "AsyncTicketCount.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -368,6 +369,29 @@ void AssetPumpBudget() {
     CHECK(AssetLibrary::PumpBudgetMs(true, false, 20.0) == 0.25); // a slow frame: the floor
     CHECK(AssetLibrary::PumpBudgetMs(true, false, 7.0) > 1.3 && AssetLibrary::PumpBudgetMs(true, false, 7.0) < 1.4);
     CHECK(AssetLibrary::PumpBudgetMs(true, false, 1.0) == 3.0);   // lots of headroom: capped
+}
+
+// A ticket whose jobs are all in but whose material the pump's budget left for the next pump still counts as in
+// flight (AsyncInFlight), so a frameless drain (CLI tools, impostor bake) keeps pumping until it loads.
+void AssetPumpWaitingTickets() {
+    struct Job { bool Done = false; bool Complete() const { return Done; } };
+    struct Ticket { std::vector<std::shared_ptr<Job>> Jobs; bool Ready = false; };
+    auto done = std::make_shared<Job>(Job{true});
+    auto running = std::make_shared<Job>(Job{false});
+    auto deferred = std::make_shared<Ticket>(Ticket{{done}, false});      // jobs in, material not loaded: waiting
+    auto noJobs = std::make_shared<Ticket>(Ticket{{}, false});            // nothing to wait for, not ready yet: waiting
+    auto loading = std::make_shared<Ticket>(Ticket{{done, running}, false}); // a job still running: Active counts it
+    auto ready = std::make_shared<Ticket>(Ticket{{done}, true});
+    std::vector<std::weak_ptr<Ticket>> tickets{deferred, noJobs, loading, ready};
+    { auto gone = std::make_shared<Ticket>(); tickets.push_back(gone); } // dropped by its owner
+    CHECK(CountWaitingTickets(tickets) == 2);
+    deferred->Ready = true; // the next pump loads its material
+    CHECK(CountWaitingTickets(tickets) == 1);
+    noJobs->Ready = true;
+    running->Done = true;   // the last job lands: now waiting on the pump
+    CHECK(CountWaitingTickets(tickets) == 1);
+    loading->Ready = true;
+    CHECK(CountWaitingTickets(tickets) == 0);
 }
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
@@ -2010,6 +2034,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
     tests.push_back({"Async uploads: the pump budget follows the frame headroom in Play", AssetPumpBudget});
+    tests.push_back({"Async uploads: a ticket the budget deferred still counts as in flight", AssetPumpWaitingTickets});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});

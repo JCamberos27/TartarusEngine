@@ -13,6 +13,7 @@
 #include "AssetLibrary.h"
 #include "AssetDatabase.h"
 #include "MeshArena.h"
+#include "AsyncTicketCount.h"
 #include "Log.h"
 #include "Core/Paths.h"
 #include "ProjectSettings.h"
@@ -226,7 +227,8 @@ bool AssetLibrary::IsReady(const AsyncHandle& ticket) { return !ticket || ticket
 
 int AssetLibrary::AsyncInFlight() const {
     if (!m_Async) return 0;
-    return (int)m_Async->Active.size();
+    // Plus tickets the pump's budget left for the next pump (CLI tools and the impostor bake drain until this is 0).
+    return (int)m_Async->Active.size() + CountWaitingTickets(m_Async->Tickets);
 }
 
 namespace {
@@ -484,7 +486,7 @@ int AssetLibrary::PumpAsync(double budgetMs) {
             ++it;
         }
     }
-    return (int)a.Active.size();
+    return AsyncInFlight();
 }
 
 // --- Play scope (see AssetLibrary.h) -----------------------------------------------------------------
