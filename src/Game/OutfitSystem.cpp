@@ -504,7 +504,7 @@ Result SetGender(World& world, AssetLibrary& assets, entt::entity root, Wardrobe
             const float score = CutName(it->Stem) == cut ? 2.0f : CutLikeness(CutName(it->Stem), cut);
             if (score > bestScore) { bestScore = score; best = it; }
         }
-        const bool essential = slot == "Top" || slot == "Pants" || slot == "Shoes";
+        const bool essential = Wardrobe::Essential(cat->W, slot, gender);
         if (best && (bestScore >= 0.34f || essential)) next.Items[slot] = best->Path;
     }
     return Submit(world, assets, root, next);
@@ -668,19 +668,20 @@ int AdoptExisting(World& world, AssetLibrary& assets, entt::entity root) {
             for (const auto& [part, model] : body.Parts)
                 if (isPart(model)) { piece.Slot = part; outfit.Gender = g; }
             for (const auto& race : body.Races) {
-                if (isPart(race.Head)) { piece.Slot = "Head"; outfit.Gender = g; outfit.Race = race.Name; }
+                if (isPart(race.Head)) { piece.Slot = Wardrobe::kHeadPart; outfit.Gender = g; outfit.Race = race.Name; }
                 for (const auto& [part, model] : race.Parts)
                     if (isPart(model)) { piece.Slot = part; outfit.Gender = g; }
             }
-            // An alternate stands in for the part a cover rule replaces with it ("ShoeFeet" for "Feet").
+            // An alternate stands in for the part a cover rule replaces with it ("ShoeFeet" for "Feet"); one no rule
+            // uses keeps its own name.
             for (const auto& [name, model] : body.Alternates)
                 if (isPart(model)) {
-                    piece.Slot = "Feet";
+                    piece.Slot = name;
                     for (const auto& rule : cat->W.Covers)
                         if (rule.With == name && !rule.Replace.empty()) { piece.Slot = rule.Replace; break; }
                     outfit.Gender = g;
                 }
-            if (!piece.Slot.empty()) piece.Flags = OutfitPieceBodyPart | (piece.Slot == "Head" ? OutfitPieceHeadAttached : 0);
+            if (!piece.Slot.empty()) piece.Flags = OutfitPieceBodyPart | (piece.Slot == Wardrobe::kHeadPart ? OutfitPieceHeadAttached : 0);
         }
         if (piece.Slot.empty())
             if (const Wardrobe::Item* item = cat->Find(path)) {
