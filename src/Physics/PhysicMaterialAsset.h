@@ -1,6 +1,8 @@
 #pragma once
 
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct ColliderComponent;
@@ -29,4 +31,7 @@ std::vector<std::string> FindPhysicMaterials();
 
 // The collider's effective surface: its own fields, or its Physic Material's when it has one
 // that loads. `c` is left untouched when the asset is missing or unreadable (warns once).
-ColliderComponent ResolvePhysicMaterial(const ColliderComponent& c);
+// `reads` (optional) remembers each file read (or failed) by its path, so building many colliders that share a
+// material reads it once.
+using PhysicMaterialReads = std::unordered_map<std::string, std::optional<PhysicMaterialAsset>>;
+ColliderComponent ResolvePhysicMaterial(const ColliderComponent& c, PhysicMaterialReads* reads = nullptr);

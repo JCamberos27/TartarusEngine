@@ -1,5 +1,6 @@
 #include "SprayCan.h"
 
+#include "AssetChangeHooks.h"
 #include "Components.h"
 #include "DecalSystem.h"
 #include "Core/Paths.h"
@@ -76,12 +77,36 @@ SprayCanSystem::SprayCanSystem() {
         normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
         return true;
     };
+    // A recipe saved (the Graffiti Designer, or outside the editor) or a piece added: read it again at its next use. A
+    // piece whose first bake is still writing is marked and dropped once that finishes (Data).
+    m_RecipeHook = AssetChangeHooks::Register("graffiti", [this](const AssetChangeHooks::Event& e) {
+        int n = 0;
+        auto forget = [&](const std::string& path) {
+            if (path.empty()) return;
+            auto it = m_Pieces.find(Lower(Abs(path)));
+            if (it == m_Pieces.end()) return;
+            if (it->second && it->second->Bake.valid()) it->second->Stale = true;
+            else m_Pieces.erase(it);
+            ++n;
+        };
+        if (e.Type == AssetChangeHooks::Event::Kind::Rescan) {
+            n = (int)m_Pieces.size();
+            for (auto it = m_Pieces.begin(); it != m_Pieces.end();) {
+                if (it->second && it->second->Bake.valid()) { it->second->Stale = true; ++it; }
+                else it = m_Pieces.erase(it);
+            }
+        }
+        forget(e.Path);
+        forget(e.OldPath);
+        return n > 0;
+    });
 }
 
 SprayCanSystem::~SprayCanSystem() {
+    AssetChangeHooks::Unregister(m_RecipeHook);
     Stop();
     for (auto& [k, p] : m_Pieces)
-        if (p->Bake.valid()) p->Bake.wait();
+        if (p && p->Bake.valid()) p->Bake.wait(); // a missing piece is a null entry
 }
 
 float SprayCanSystem::Progress(const SprayPaintComponent& s) {
@@ -141,7 +166,10 @@ std::vector<std::string> SprayCanSystem::Pieces() {
 
 SprayCanSystem::PieceData* SprayCanSystem::Data(const std::string& piece) {
     const std::string key = Lower(Abs(piece));
-    if (auto it = m_Pieces.find(key); it != m_Pieces.end()) return it->second.get();
+    if (auto it = m_Pieces.find(key); it != m_Pieces.end()) {
+        if (!it->second || !it->second->Stale || it->second->Bake.valid()) return it->second.get();
+        m_Pieces.erase(it); // its recipe changed and its bake is done: read it again
+    }
     auto d = std::make_unique<PieceData>();
     d->Piece = Graffiti::Piece::Load(Abs(piece));
     if (!d->Piece || d->Piece->Missing) {

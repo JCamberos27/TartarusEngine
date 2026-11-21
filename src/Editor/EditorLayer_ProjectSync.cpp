@@ -31,6 +31,7 @@
 #include "Model.h"
 #include "MotionRebake.h"
 #include "OutfitSystem.h"
+#include "PhysicsWorld.h"
 #include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include "ProjectWatcher.h"
@@ -112,6 +113,13 @@ bool ChangesAssetIndex(const std::string& path) {
     return type.empty() && fs::path(path).extension().empty();
 }
 
+// A wardrobe definition (.wardrobe, any case, as the rest of the sync compares paths).
+bool IsWardrobe(const std::string& path) {
+    std::string ext = fs::path(path).extension().string();
+    for (char& ch : ext) ch = (char)std::tolower((unsigned char)ch);
+    return ext == ".wardrobe";
+}
+
 } // namespace
 
 void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
@@ -166,7 +174,15 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         e.OldPath = c.OldPath;
         e.AssetType = AssetDatabase::AssetType(c.Path);
         e.BySelf = self;
-        const int applied = AssetChangeHooks::Dispatch(e);
+        int applied = AssetChangeHooks::Dispatch(e);
+        // A Physic Material saved (the Inspector or outside) while playing: the colliders using it pick it up now.
+        if (e.AssetType == "physicmaterial" && e.Type != HK::Removed && PhysicsWorld::RefreshPhysicMaterial(world, c.Path) > 0)
+            ++applied;
+        // A wardrobe edited (it has no asset type: no .meta): the Character Outfit Inspector reads it again, as Rescan would.
+        if (IsWardrobe(c.Path) && OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.Path)))
+            ++applied;
+        if (!c.OldPath.empty() && IsWardrobe(c.OldPath))
+            OutfitSystem::ForgetCatalog(ProjectPaths::Relativize(c.OldPath));
         if (!self) s_SyncApplied += applied;
     }
     if (RefreshPrefabInstances(world, assets) > 0) ++s_SyncApplied; // queued by the "prefab" hook above
@@ -409,12 +425,6 @@ void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const
 
 void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std::string& path) {
     if (AtomicFile::WrittenBySelfRecently(path)) return; // our own save
-    if (SameFile(path, ProjectPaths::Resolve("settings.json"))) {
-        ProjectSettings::Load(); // the same reload an undo of a settings change does
-        ++s_SyncApplied;
-        Log::Info("Reloaded Project Settings (settings.json changed outside the editor).");
-        return;
-    }
     // Motion matching (hot reload): a saved bake config rebakes; a rewritten database reloads (no library entry either way).
     std::string mmBase;
     if (MotionRebake::IsConfig(path)) { MotionRebake::Request(path); ++s_SyncApplied; return; }

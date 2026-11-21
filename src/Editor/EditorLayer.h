@@ -1668,6 +1668,7 @@ private:
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
     int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
+    int m_ProjectSettingsHook = 0;   // AssetChangeHooks id: settings.json edited outside the editor reloads + re-applies physics
     int m_PrefabHook = 0;            // AssetChangeHooks id: an edited .prefab queues its placed instances' refresh
     std::vector<std::string> m_PrefabRefreshQueue; // .prefab files changed since the last RefreshPrefabInstances
     bool m_PrefabRefreshAll = false; // the watcher overflowed: check every placed prefab
