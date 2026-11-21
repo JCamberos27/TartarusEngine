@@ -10,9 +10,14 @@
 //                    folder matching its folder on disk.
 //   Removed          leaves the library; objects still using it keep their loaded copy until the
 //                    scene is reloaded; its now-orphaned .meta is deleted (as Unity does).
-//   Modified         textures / models reimport, materials reload in place, prefab links refresh.
-//                    Files the editor just wrote itself (AtomicFile) are ignored.
+//   Modified         textures / models reimport, materials reload in place, audio reloads; a
+//                    prefab only drops its pristine copy (placed instances keep their content
+//                    until the scene reloads). Files the editor just wrote itself (AtomicFile)
+//                    are ignored here.
+// After the editor's own handling every change also goes to AssetChangeHooks, where other
+// caches (controllers, decals, ...) register for their asset types instead of polling mtimes.
 #include "EditorLayer.h"
+#include "AssetChangeHooks.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
 #include "AudioEngine.h"
@@ -111,12 +116,14 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
     bool overflowed = false;
     const std::vector<ProjectWatcher::Change> changes = ProjectWatcher::Drain(300, overflowed);
     s_SyncApplied = 0;
-    const bool external=overflowed || std::any_of(changes.begin(),changes.end(),[this](const auto& c) {
-        if (AtomicFile::WrittenBySelfRecently(c.Path)) return false;
-        for (const auto& move:m_SelfMoves)
-            if (SameFile(move.first,c.OldPath) && SameFile(move.second,c.Path)) return false;
-        return true;
-    });
+    // Written or renamed by the editor itself: not news, though caches still hear of it (AssetChangeHooks).
+    auto bySelf = [this](const ProjectWatcher::Change& c) {
+        if (AtomicFile::WrittenBySelfRecently(c.Path)) return true;
+        for (const auto& move : m_SelfMoves)
+            if (SameFile(move.first, c.OldPath) && SameFile(move.second, c.Path)) return true;
+        return false;
+    };
+    const bool external = overflowed || !std::all_of(changes.begin(), changes.end(), bySelf);
     if (external) {
         FinishGlobalUndo(world,true);
         JournalUnrecordedChange(world); // #15 - the rebase below would fold it into the baseline
@@ -128,9 +135,13 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         InvalidateScenesListing();
         InvalidateProjectAssetIndex();
         ++s_SyncApplied;
+        AssetChangeHooks::Event e;
+        e.Type = AssetChangeHooks::Event::Kind::Rescan;
+        s_SyncApplied += AssetChangeHooks::Dispatch(e);
     }
     for (const auto& c : changes) {
         using K = ProjectWatcher::Change::Kind;
+        const bool self = bySelf(c); // before the handlers: OnExternalMove consumes the m_SelfMoves entry
         if (c.Type == K::Modified) {
             const std::string changed = fs::path(c.Path).lexically_normal().string();
             m_AssetThumbs.Invalidate(changed);
@@ -145,6 +156,15 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
             case K::Removed:  OnExternalRemove(world, assets, c.Path); break;
             case K::Modified: OnExternalModify(world, assets, c.Path); break;
         }
+        using HK = AssetChangeHooks::Event::Kind;
+        AssetChangeHooks::Event e;
+        e.Type = c.Type == K::Renamed ? HK::Moved : c.Type == K::Added ? HK::Added : c.Type == K::Removed ? HK::Removed : HK::Modified;
+        e.Path = c.Path;
+        e.OldPath = c.OldPath;
+        e.AssetType = AssetDatabase::AssetType(c.Path);
+        e.BySelf = self;
+        const int applied = AssetChangeHooks::Dispatch(e);
+        if (!self) s_SyncApplied += applied;
     }
     if (!external) return;
     ++m_ExternalSyncs;

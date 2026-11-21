@@ -1,5 +1,6 @@
 #include "EditorLayer.h"
 #include "ThumbnailCache.h"
+#include "AssetChangeHooks.h"
 #include "ScriptIDE.h"
 #include "CurveEditor.h"
 #include "EditorUIPrimitives.h"
@@ -143,6 +144,14 @@ void EditorLayer::Init(GLFWwindow* window) {
     m_LibraryIndex.Load(); // project/asset_library.json (Library root, kit modules)
     ++m_LibraryIndexGen;
     Enhancers::UiStyles::Get().Load();     // project/editor_ui_styles.json (tab / header colours)
+    // Edited outside the editor (a text editor, git): reload it like at startup. Its own saves (Flush) are skipped.
+    if (!m_UiStylesHook)
+        m_UiStylesHook = AssetChangeHooks::RegisterFile("editor_ui_styles.json", [](const AssetChangeHooks::Event& e) {
+            if (e.BySelf) return false;
+            Enhancers::UiStyles::Get().Load();
+            Log::Info("Reloaded tab and header styles (editor_ui_styles.json changed outside the editor).");
+            return true;
+        });
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -559,6 +568,8 @@ void EditorLayer::Shutdown() {
     // FreeGpuResources(), not this. ImGui_Impl*_Shutdown() and DestroyContext() must not run twice.
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
+    AssetChangeHooks::Unregister(m_UiStylesHook);
+    m_UiStylesHook = 0;
     GameModuleBuild::Shutdown();
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
