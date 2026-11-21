@@ -12,9 +12,11 @@ namespace CrashHandler {
 void Install();
 
 // Where this run's reports go once its user folder is known (a built game has its own, not the editor's):
-// <userRoot>\Crashes, with the dialog naming Logs\<logFile>. Call after UserPaths and the log are set up; until then
-// reports go to %LOCALAPPDATA%\TartarusEngine\Crashes.
-void SetReportLocation(const std::string& userRoot, const std::string& logFile);
+// <userRoot>\Crashes, with the dialog naming Logs\<file name of logPath>. Call after UserPaths and the log are set up;
+// until then reports go to %LOCALAPPDATA%\TartarusEngine\Crashes. With a full logPath (what Log::OpenFile returns),
+// each report also copies the log beside its dump (crash_<pid>_<time>.log): the next run rotates Logs\ and the one
+// after that drops the crashed run's log, but the copy is pruned only with its dump.
+void SetReportLocation(const std::string& userRoot, const std::string& logPath);
 
 // False for non-interactive runs (--smoke-test, ...): report to stderr only, never a
 // dialog nobody is there to dismiss. Defaults to true.
