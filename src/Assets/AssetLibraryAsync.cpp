@@ -493,6 +493,8 @@ void AssetLibrary::BeginPlayScope() {
     m = PlayMark{};
     m.Active = true;
     m.Gen = ++m_LoadGen;
+    // Play start already pauses to load; make the skinned page that Play's outfit loads would otherwise make mid-frame.
+    MeshArena::WarmSkinned(0.5f);
     for (const auto& [k, v] : m_ModelCache) m.Models.insert(k);
     for (const auto& [k, v] : m_TextureCache) m.Textures.insert(k);
     for (const auto& [k, v] : m_MaterialCache) m.Materials.insert(k);
