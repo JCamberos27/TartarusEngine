@@ -28,6 +28,7 @@
 #include "HotReloadEditorModule.h"
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
+#include "EditorRestart.h"   // Rebuild & Restart
 #include "EditorSettings.h"
 #include "EditorSound.h"
 #include "AppAudioMuter.h"
@@ -210,6 +211,9 @@ int Application::Run() {
     }
     // A shipped game doesn't watch its files for edits; a development build still does.
     LiveReload::SetEnabled(!playerMode || playerCfg.DevelopmentBuild);
+    // Rebuild & Restart: the editor that started this one (--wait-pid) is still closing and writing its prefs, log
+    // and recovery snapshot; let it finish before any of them is read, then delete the <exe>.old it ran from.
+    if (!headless && !playerMode) EditorRestart::CleanupAtStartup(opt.waitPid);
     // --editor-tests: the tracked project/settings.json and layers.json go back as they were when the run ends.
     std::optional<ProjectFilesGuard> projectFiles;
     if (opt.editorTestsMode) projectFiles.emplace();
@@ -910,6 +914,12 @@ private:
     Step step67{[&] {
         editor.SetSystemReport(sysReport); // shown in Preferences > About
     }};
+    // Rebuild & Restart: the unsaved edits and selection the old editor handed over; Play starts on the first frame.
+    bool playAfterRestart = false;
+    Step step67b{[&] {
+        if (!opt.restoreStateFile.empty() && !headless && !playerMode)
+            playAfterRestart = editor.ApplyRestartState(world, assets, std::filesystem::u8path(opt.restoreStateFile));
+    }};
 
     GameViewPanel gameView;
     Step step68{[&] {
@@ -1096,6 +1106,7 @@ private:
     // the user has chosen Don't Save, or Save and the save succeeded, so the next close
     // request goes through.
     bool exitApproved = false;
+    bool restartWasPlaying = false; // Rebuild & Restart stopped Play to hand the scene over; the new editor re-enters it
     // The EditorStart / EditorExit chimes: a person opening and closing the editor, not a test, a capture or a bench run.
     const bool editorChimes = !playerMode && !headless && opt.editorShotDir.empty() && !opt.npcTestMode &&
                               !opt.perfBenchMode;
@@ -1407,6 +1418,24 @@ bool AppSession::Frame() {
         else               imguiIO.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
     }
 
+    if (playAfterRestart) { playAfterRestart = false; if (!playing) startPlay(); }
+    // Rebuild & Restart (EditorRestart.h): the new exe is built. Leave Play (its world isn't the scene) and prefab
+    // mode first, then hand the state over and start the new editor; this one closes without the Save prompt (the
+    // dirty scene's recovery snapshot stays for the new one). Not mid-drag (an undo step still open).
+    if (!playerMode && !headless && EditorRestart::ReadyToRelaunch() && !editor.GlobalUndoActive()) {
+        if (playing) { restartWasPlaying = true; stopPlay(); }
+        else if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets);
+        else {
+            const std::filesystem::path stateFile = EditorRestart::StateFile();
+            if (editor.WriteRestartState(world, assets, stateFile, restartWasPlaying) && EditorRestart::Relaunch(stateFile)) {
+                exitApproved = true;
+                window.SetShouldClose(true);
+            } else {
+                EditorRestart::Cancel();
+            }
+            restartWasPlaying = false;
+        }
+    }
     // --editor-tests: this frame's synthetic input and checks, before ImGui reads input.
     if (opt.editorTestsMode && EditorUiTests::BeforeFrame(editor, world, assets, editorCamera)) {
         exitApproved = true;

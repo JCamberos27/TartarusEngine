@@ -873,6 +873,15 @@ public:
     //   DiscardAndExit - main exits without saving
     //   None + ExitPromptActive() false again - the user picked Cancel; stay open
     enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
+    // Rebuild & Restart (File menu, Ctrl+Alt+R; EditorRestart.h), in EditorLayer_Restart.cpp.
+    // Why it can't start now ("" = it can): not a source build, an untitled scene with edits, unsaved scripts.
+    std::string RestartBlockedReason() const;
+    bool GlobalUndoActive() const { return m_GlobalUndoActive; } // a drag/edit's undo step is still open
+    void RequestRebuildRestart();
+    // The old editor, build done: writes the recovery snapshot (when dirty) and the hand-over file.
+    bool WriteRestartState(const World& world, const AssetLibrary& assets, const std::filesystem::path& file, bool wasPlaying);
+    // The new editor, scene loaded: restores the unsaved edits (no prompt) and the selection. Returns WasPlaying.
+    bool ApplyRestartState(World& world, AssetLibrary& assets, const std::filesystem::path& file);
     void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
     bool ExitPromptActive() const { return m_ExitPromptPending; }
     // #84 — path of a scene that failed to load at startup; Save to exactly this path is
@@ -1340,6 +1349,8 @@ private:
     void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
+    // The prompt's Restore (and Rebuild & Restart's): load the snapshot as the dirty scene, then drop it.
+    bool RestoreRecoverySnapshot(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
     bool m_RecoveryPromptSounded = false; // RecoveryPrompt plays once, when the modal first shows
 

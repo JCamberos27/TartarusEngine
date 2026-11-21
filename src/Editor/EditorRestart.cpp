@@ -211,8 +211,8 @@ void CleanupAtStartup(unsigned long waitPid, unsigned long timeoutMs) {
     fs::remove(OldExePath(exe), ec); // fails harmlessly while another copy still runs from it
 }
 
-fs::path StateFileFor(unsigned long pid) {
-    return fs::u8path(UserPaths::Resolve("restart_state_" + std::to_string(pid) + ".json"));
+fs::path StateFile() {
+    return fs::u8path(UserPaths::Resolve("restart_state_" + std::to_string(GetCurrentProcessId()) + ".json"));
 }
 
 void Shutdown() {

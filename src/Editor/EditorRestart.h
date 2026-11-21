@@ -44,8 +44,8 @@ std::wstring QuoteArg(const std::wstring& arg);
 // the <exe>.old it left. Without one, just deletes a stale <exe>.old.
 void CleanupAtStartup(unsigned long waitPid, unsigned long timeoutMs = 60000);
 
-// Where this editor instance writes its restart state (the per-instance user folder, keyed by pid).
-std::filesystem::path StateFileFor(unsigned long pid);
+// Where this editor writes its restart state: the per-instance user folder, keyed by this process's pid.
+std::filesystem::path StateFile();
 
 // Waits for a running build (editor shutdown); renames the exe back if the build never finished.
 void Shutdown();
