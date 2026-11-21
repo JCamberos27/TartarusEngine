@@ -320,15 +320,7 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
             }
             const float nearHideWidth = cameraBody ? bodyTag->NearHideWidth : 0.0f;
             const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
-            const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
-            const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
-            const auto* outfitLayer = world.Registry.try_get<OutfitLayerTag>(entity);
-            const float layerPull = outfitLayer ? outfitLayer->Pull : 0.0f;
-            const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
-            const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
             const glm::mat4& model = vis.Xform;
-            const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
-            const bool staticReceiver = world.Registry.all_of<StaticTag>(entity) || !dynamicItem;
 
             // Frustum culling: skip the draw call entirely for anything outside the camera's view.
             // Bounds are the model's as posed (Model::PosedBounds: the bind bounds for anything unskinned or
@@ -352,6 +344,15 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
                 }
             }
 
+            // Registry reads only the drawn items need (after the cull: a culled one never pays for them).
+            const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
+            const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
+            const auto* outfitLayer = world.Registry.try_get<OutfitLayerTag>(entity);
+            const float layerPull = outfitLayer ? outfitLayer->Pull : 0.0f;
+            const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
+            const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
+            const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
+            const bool staticReceiver = !dynamicItem || world.Registry.all_of<StaticTag>(entity); // the tag only matters on a dynamic one
             Model* m = renderable.ModelRef.get();
             const auto& slots = renderable.Materials;
             const std::uint64_t matKey = (!slots.empty() && slots[0]) ? slots[0]->Mat.Hash() : m->MaterialSortKey();
