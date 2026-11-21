@@ -659,6 +659,33 @@ namespace {
 // --- UndoDelta chain: push three states, pop them back in reverse ---------------------------
 struct TestEntry { UndoDelta::Patch Delta; int Tag = 0; };
 
+// P-09: the auto-save writes the undo snapshot instead of reading the World. Stripped of its
+// undo-only keys and given Save()'s library half, it must be Save()'s file byte for byte, with every
+// optional key the snapshot can carry present (so a new undo-only key fails here, not in a user's file).
+void TestAutoSaveFromUndoSnapshot() {
+    World world;
+    AssetLibrary assets;
+    for (int i = 0; i < 4; ++i) world.CreateEmptyEntity({(float)i, 0.5f, -2.25f}, {}, {1, 1, 1}, "Autosave fixture " + std::to_string(i));
+    assets.AddFolderPath("unit-autosave/Sub"); // listed (so the snapshot has assetFolders), never written to project settings
+    assets.SetRemovedDiskFolders({"unit-autosave/Gone"}); // a Delete Folder mark (so the snapshot has removedDiskFolders)
+    const std::filesystem::path dir = UnitTestSupport::TempDir("autosave-snapshot");
+    const std::string fromSave = (dir / "save.json").string(), fromSnapshot = (dir / "snapshot.json").string();
+    CHECK(SceneSerializer::Save(world, assets, fromSave));
+    const std::string snapshot = SceneSerializer::SaveToString(world, assets);
+    for (const char* key : {"\"hasAssetLibrarySnapshot\"", "\"assetFolders\"", "\"removedDiskFolders\"", "\"assetMeta\""})
+        CHECK(snapshot.find(key) != std::string::npos);
+    const std::function<bool()> write = SceneSerializer::PrepareSaveFromSnapshot(snapshot, assets, fromSnapshot);
+    CHECK(write && write());
+    const std::string want = UnitTestSupport::ReadAll(fromSave), got = UnitTestSupport::ReadAll(fromSnapshot);
+    CHECK(!want.empty() && got == want);
+    // A snapshot that won't parse writes nothing (and says so).
+    std::error_code ec;
+    std::filesystem::remove(fromSnapshot, ec);
+    const std::function<bool()> broken = SceneSerializer::PrepareSaveFromSnapshot("{not json", assets, fromSnapshot);
+    CHECK(broken && !broken() && !std::filesystem::exists(fromSnapshot));
+    std::filesystem::remove_all(dir, ec);
+}
+
 void TestUndoDeltaChain() {
     const std::string s1 = R"({"entities":[{"name":"A","x":1}],"sky":1})";
     const std::string s2 = R"({"entities":[{"name":"A","x":2}],"sky":1})";
@@ -791,5 +818,6 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
     tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
+    tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
     tests.emplace_back("Editor LruMap: use order, peek, trim, erase",TestLruMap);
 }
