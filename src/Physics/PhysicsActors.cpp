@@ -76,6 +76,7 @@ namespace PhysicsWorld::detail {
 // Collider while playing (see SyncEntities). Null = every active collider (Play-enter).
 void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<std::uint32_t>* only) {
     int statics = 0, dynamic = 0, kinematic = 0, skipped = 0;
+    PhysicMaterialReads materialReads; // each Physic Material file read once, not once per collider using it
     s.orderByEntity.clear();
     for (auto [e, order] : world.Registry.view<const OrderComponent>().each())
         s.orderByEntity[entt::to_integral(e)] = order.Value;
@@ -96,7 +97,7 @@ void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<s
         PxTransform actorPose(PxIdentity);
         PxTransform shapeLocal(PxIdentity);
         PxShape* shape = nullptr;
-        PxMaterial* mat = GetMaterial(s, ResolvePhysicMaterial(c)); // #185 PR 7, #170 combine modes + Physic Material asset
+        PxMaterial* mat = GetMaterial(s, ResolvePhysicMaterial(c, &materialReads)); // #185 PR 7, #170 combine modes + Physic Material asset
         if (!mat) { ++skipped; continue; }
         auto make = [&](const PxGeometry& g) {
             shape = s.physics->createShape(g, *mat, /*isExclusive=*/true, flags);
@@ -609,6 +610,7 @@ int RefreshPhysicMaterial(const World& world, const std::string& absPath) {
     };
     const std::string changed = key(absPath);
     int n = 0;
+    PhysicMaterialReads reads;
     std::vector<PxShape*> shapes;
     auto view = world.Registry.view<const ColliderComponent>(entt::exclude<InactiveTag>);
     for (entt::entity e : view) {
@@ -616,7 +618,7 @@ int RefreshPhysicMaterial(const World& world, const std::string& absPath) {
         if (c.Material.empty() || key(ProjectPaths::Resolve(c.Material)) != changed) continue;
         PxRigidActor* a = detail::ActorFor(s, entt::to_integral(e));
         if (!a) continue;
-        PxMaterial* mat = GetMaterial(s, ResolvePhysicMaterial(c)); // the file as it is now
+        PxMaterial* mat = GetMaterial(s, ResolvePhysicMaterial(c, &reads)); // the file as it is now (read once)
         shapes.resize(a->getNbShapes());
         a->getShapes(shapes.data(), static_cast<PxU32>(shapes.size()));
         for (PxShape* sh : shapes) sh->setMaterials(&mat, 1);
