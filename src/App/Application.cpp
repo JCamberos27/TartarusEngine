@@ -28,6 +28,7 @@
 #include "HotReloadEditorModule.h"
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
+#include "EditorRestart.h"   // Rebuild & Restart
 #include "EditorSettings.h"
 #include "EditorSound.h"
 #include "AppAudioMuter.h"
@@ -37,7 +38,8 @@
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "Grid.h"
-#include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
+#include "DebugLineGather.h"   // #185 collider overlay lines (Physics / Audio / Game state)
+#include "DebugLineRenderer.h" // ...drawn by the Renderer
 #include "Sky.h"
 #include "SkyAtmosphere.h"
 #include "TimeOfDay.h"
@@ -210,6 +212,9 @@ int Application::Run() {
     }
     // A shipped game doesn't watch its files for edits; a development build still does.
     LiveReload::SetEnabled(!playerMode || playerCfg.DevelopmentBuild);
+    // Rebuild & Restart: the editor that started this one (--wait-pid) is still closing and writing its prefs, log
+    // and recovery snapshot; let it finish before any of them is read, then delete the <exe>.old it ran from.
+    const bool oldEditorExited = headless || playerMode || EditorRestart::CleanupAtStartup(opt.waitPid);
     // --editor-tests: the tracked project/settings.json and layers.json go back as they were when the run ends.
     std::optional<ProjectFilesGuard> projectFiles;
     if (opt.editorTestsMode) projectFiles.emplace();
@@ -222,6 +227,9 @@ int Application::Run() {
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
     const char* logName = headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log";
     Log::OpenFile(logName);
+    if (!oldEditorExited)
+        Log::Warn("Rebuild & Restart: the old editor (pid " + std::to_string(opt.waitPid) + ") hasn't exited after " +
+                  std::to_string(EditorRestart::kWaitOldEditorMs / 1000) + " s; going on.");
     CrashHandler::SetReportLocation(UserPaths::Root(), logName); // a built game's dumps go to its own user folder
     WireGameShell(); // gameplay's keys, sounds, F-row pill and look prefs come from the editor
     return RunSession();
@@ -399,7 +407,8 @@ private:
     } glObjectGuard{fsQuadVao};
     TintOverlayRenderer tintOverlay;
     Grid grid;
-    ColliderGizmo colliderGizmo; // #185 PR 2
+    DebugLineRenderer debugLineRenderer; // #185 PR 2: collider overlay
+    DebugLineGather debugLineGather;
     Sky sky;
     SkyAtmosphere skyAtmosphere; // the physical sky (World::SkySource::Atmosphere)
     IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
@@ -910,6 +919,12 @@ private:
     Step step67{[&] {
         editor.SetSystemReport(sysReport); // shown in Preferences > About
     }};
+    // Rebuild & Restart: the unsaved edits and selection the old editor handed over; Play starts on the first frame.
+    bool playAfterRestart = false;
+    Step step67b{[&] {
+        if (!opt.restoreStateFile.empty() && !headless && !playerMode)
+            playAfterRestart = editor.ApplyRestartState(world, assets, std::filesystem::u8path(opt.restoreStateFile));
+    }};
 
     GameViewPanel gameView;
     Step step68{[&] {
@@ -1096,6 +1111,7 @@ private:
     // the user has chosen Don't Save, or Save and the save succeeded, so the next close
     // request goes through.
     bool exitApproved = false;
+    bool restartWasPlaying = false; // Rebuild & Restart stopped Play to hand the scene over; the new editor re-enters it
     // The EditorStart / EditorExit chimes: a person opening and closing the editor, not a test, a capture or a bench run.
     const bool editorChimes = !playerMode && !headless && opt.editorShotDir.empty() && !opt.npcTestMode &&
                               !opt.perfBenchMode;
@@ -1407,6 +1423,27 @@ bool AppSession::Frame() {
         else               imguiIO.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
     }
 
+    if (playAfterRestart) { playAfterRestart = false; if (!playing) startPlay(); }
+    // Rebuild & Restart (EditorRestart.h): the new exe is built. Leave Play (its world isn't the scene) and prefab
+    // mode first, then hand the state over and start the new editor; this one closes without the Save prompt (the
+    // dirty scene's recovery snapshot stays for the new one). Not mid-drag (an undo step still open). Prefab mode is
+    // left without saving, and unsaved prefab edits (made while the build ran) cancel the restart: no silent writes.
+    // --editor-tests drives it too (headless, with TARTARUS_RESTART_FAKE_BUILD: no relaunch); --smoke-test never.
+    if (!playerMode && (!headless || opt.editorTestsMode) && EditorRestart::ReadyToRelaunch() && !editor.GlobalUndoActive()) {
+        if (playing) { restartWasPlaying = true; stopPlay(); }
+        else if (editor.InPrefabMode()) {
+            if (!editor.LeavePrefabModeForRestart(world, assets)) EditorRestart::Cancel();
+        } else {
+            const std::filesystem::path stateFile = EditorRestart::StateFile();
+            if (editor.WriteRestartState(world, assets, stateFile, restartWasPlaying) && EditorRestart::Relaunch(stateFile)) {
+                exitApproved = true;
+                window.SetShouldClose(true);
+            } else {
+                EditorRestart::Cancel();
+            }
+            restartWasPlaying = false;
+        }
+    }
     // --editor-tests: this frame's synthetic input and checks, before ImGui reads input.
     if (opt.editorTestsMode && EditorUiTests::BeforeFrame(editor, world, assets, editorCamera)) {
         exitApproved = true;
@@ -1721,8 +1758,6 @@ bool AppSession::Frame() {
     shadowIn.spotMap = &spotShadowMap;
     shadowIn.pointMap = &pointShadowMap;
     shadowIn.frame = frameIndex;
-    shadowIn.windowWidth = window.GetWidth();
-    shadowIn.windowHeight = window.GetHeight();
 
     // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
     // camera the user is mainly looking through (each view's draw re-applies its own).
@@ -1931,7 +1966,10 @@ bool AppSession::Frame() {
     viewIn.outlineDilateShader = &outlineDilateShader;
     viewIn.fsQuadVao = fsQuadVao;
     viewIn.tonemapper = &tonemapper;
-    viewIn.colliderGizmo = &colliderGizmo;
+    viewIn.debugLines = &debugLineRenderer;
+    viewIn.gatherDebugLines = [gather = &debugLineGather](const World& w, bool shapes,
+                                                 const std::function<bool(entt::entity)>* only,
+                                                 std::vector<float>& out) { gather->Gather(w, shapes, only, out); };
     viewIn.scene = {&sceneHdr, &sceneTaa, &sceneOpaqueColor, &ssao, &bloom};
     viewIn.sceneLdr = &sceneFramebuffer;
     viewIn.tintOverlay = &tintOverlay;

@@ -30,11 +30,9 @@ namespace {
 namespace fs = std::filesystem;
 std::mutex g_Mutex;
 std::thread g_Worker;
-std::atomic<bool> g_Running{false}, g_Finished{false}, g_Queued{false};
+std::atomic<bool> g_Running{false}, g_Finished{false}, g_Queued{false}, g_Held{false};
 bool g_Succeeded = true;
 std::string g_Log;
-
-fs::path BinaryRoot() { return fs::u8path(TARTARUS_BINARY_DIR); }
 
 // The sources the reloadable targets compile, as CMake lists them (TartarusModules.sources in the
 // build folder, one source-relative path per line). Read once.
@@ -52,11 +50,20 @@ const std::vector<std::string>& ReloadableSources() {
 }
 
 void Run() {
-    const fs::path log = BinaryRoot() / "TartarusModules.build.log";
+    std::string text;
+    const bool ok = RunCMakeBuild(L"TartarusGame TartarusEditor", BinaryRoot() / "TartarusModules.build.log", text);
+    std::lock_guard<std::mutex> lock(g_Mutex);
+    g_Log = std::move(text);
+    g_Succeeded = ok;
+    g_Finished = true;
+}
+}
+
+bool RunCMakeBuild(const std::wstring& targets, const fs::path& logPath, std::string& log) {
     std::wstring command = L"\"" + fs::u8path(TARTARUS_CMAKE_COMMAND).wstring() + L"\" --build \"" + BinaryRoot().wstring() +
-                           L"\" --config " + fs::u8path(TARTARUS_BUILD_CONFIG).wstring() + L" --target TartarusGame TartarusEditor";
+                           L"\" --config " + fs::u8path(TARTARUS_BUILD_CONFIG).wstring() + L" --target " + targets;
     SECURITY_ATTRIBUTES inherit{sizeof(inherit), nullptr, TRUE};
-    HANDLE out = CreateFileW(log.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE out = CreateFileW(logPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     bool ok = false;
     if (out != INVALID_HANDLE_VALUE) {
         STARTUPINFOW startup{}; startup.cb = sizeof(startup);
@@ -71,14 +78,11 @@ void Run() {
         }
         CloseHandle(out);
     }
-    std::ifstream in(log, std::ios::binary);
+    std::ifstream in(logPath, std::ios::binary);
     std::ostringstream text; text << in.rdbuf();
-    std::lock_guard<std::mutex> lock(g_Mutex);
-    g_Log = text.str();
-    if (g_Log.empty() && !ok) g_Log = "Couldn't start CMake for the module rebuild.";
-    g_Succeeded = ok;
-    g_Finished = true;
-}
+    log = text.str();
+    if (log.empty() && !ok) log = "Couldn't start CMake for the build.";
+    return ok;
 }
 
 bool Available() {
@@ -90,9 +94,11 @@ bool Available() {
     return available;
 }
 fs::path SourceRoot() { return fs::u8path(TARTARUS_SOURCE_DIR); }
+fs::path BinaryRoot() { return fs::u8path(TARTARUS_BINARY_DIR); }
 
 bool Start() {
     if (!Available() || g_Running) return false;
+    if (g_Held) { g_Queued = true; return false; }
     if (g_Worker.joinable()) g_Worker.join();
     g_Queued = false; g_Finished = false; g_Running = true;
     Log::Info("Rebuilding the game and editor modules; they reload when the build finishes.");
@@ -102,6 +108,7 @@ bool Start() {
 }
 bool Running() { return g_Running; }
 void Request() { if (!Start()) g_Queued = Available(); }
+void Hold(bool held) { g_Held = held; }
 void Poll() {
     if (g_Running && g_Finished) {
         g_Worker.join(); g_Running = false;
@@ -109,7 +116,7 @@ void Poll() {
         if (LastSucceeded()) Log::Info("Module rebuild finished; hot reload picks the new code up.");
         else Log::Error("Module rebuild failed. See the Script IDE's Build output.");
     }
-    if (!g_Running && g_Queued) Start();
+    if (!g_Running && g_Queued && !g_Held) Start();
 }
 bool LastSucceeded() { std::lock_guard<std::mutex> lock(g_Mutex); return g_Succeeded; }
 std::string LastLog() { std::lock_guard<std::mutex> lock(g_Mutex); return g_Log; }

@@ -186,18 +186,78 @@ void World::RebuildWorldTransformCache() {
     static uint64_t s_Stamps = 0; // shared by every World, so two worlds never hand out the same stamp
     m_PrevTransformCacheStamp = m_TransformCacheStamp;
     m_TransformCacheStamp = ++s_Stamps;
+    RebuildTransformsOnly();
     // Active-in-hierarchy only changes with the hierarchy, the Deactivated set or someone else's InactiveTag edits (all
     // in the signature): re-derived only then. A destroy-and-create of an unparented entity leaves it out, which is fine
-    // - a fresh root without DeactivatedTag is active, which is what it starts as.
-    {
-        std::uint64_t sig[6];
-        ActiveSignature(sig);
-        if (!m_ActiveSignatureValid || !std::equal(sig, sig + 6, m_ActiveSignature)) {
-            SyncActiveInHierarchy();
-            ActiveSignature(m_ActiveSignature); // as Sync left it
-            m_ActiveSignatureValid = true;
+    // - a fresh root without DeactivatedTag is active, which is what it starts as. After the transforms (nothing there
+    // reads InactiveTag), so a small structure change can patch from their structure delta.
+    std::uint64_t sig[6];
+    ActiveSignature(sig);
+    if (m_ActiveSignatureValid && std::equal(sig, sig + 6, m_ActiveSignature)) return;
+    if (!PatchActiveInHierarchy(sig)) {
+        SyncActiveInHierarchy();
+        ++m_ActiveFullSyncs;
+    }
+    ActiveSignature(m_ActiveSignature); // as Sync left it
+    m_ActiveSignatureValid = true;
+}
+
+// SyncActiveInHierarchy for a small structure change (an outfit piece created, attached or destroyed: ~1 ms over the
+// forest each time): only the subtrees the transform cache lists as new or re-parented are walked, each from what its
+// parent chain says. Returns false, having changed nothing, when the full sync is needed: the delta doesn't cover the
+// change (the full walk ran), a Deactivated or InactiveTag set changed since the last sync (someone else's edits), or the
+// transform count isn't what the delta explains (a transform added or removed in place).
+bool World::PatchActiveInHierarchy(const std::uint64_t sig[6]) {
+    const TransformStructureDelta& d = m_StructureDelta;
+    if (!m_ActiveSignatureValid || !d.Valid || !std::equal(sig + 2, sig + 6, m_ActiveSignature + 2)) return false;
+    const auto& transforms = Registry.storage<TransformComponent>();
+    std::uint64_t added = 0;
+    for (entt::entity e : d.Added) added += transforms.contains(e) ? 1 : 0;
+    if (m_ActiveSignature[1] + added != sig[1] + (std::uint64_t)d.Dropped.size()) return false;
+    const auto& hierarchy = Registry.storage<HierarchyComponent>();
+    const auto& deactivated = Registry.storage<DeactivatedTag>();
+    const auto parentOf = [&](entt::entity e) {
+        if (!hierarchy.contains(e)) return entt::entity{entt::null};
+        const entt::entity p = hierarchy.get(e).Parent;
+        return p != entt::null && Registry.valid(p) ? p : entt::entity{entt::null};
+    };
+    // Whether `e`'s own chain (itself included) holds a Deactivated entity, as the full sync's walk up reads it.
+    const auto inactiveUp = [&](entt::entity e) {
+        int depth = 0;
+        for (entt::entity walk = e; walk != entt::null && depth <= (int)kMaxHierarchyDepth; walk = parentOf(walk), ++depth)
+            if (deactivated.contains(walk)) return true;
+        return false;
+    };
+    std::vector<entt::entity>& roots = m_ActiveRoots;
+    roots.assign(d.Added.begin(), d.Added.end());
+    for (const auto& [e, was] : d.Reparented) roots.push_back(e);
+    std::vector<std::pair<entt::entity, bool>>& walk = m_ActiveWalk;
+    std::vector<entt::entity> activate, deactivate;
+    for (entt::entity r : roots) {
+        if (!Registry.valid(r)) continue;
+        walk.assign(1, {r, inactiveUp(r)});
+        size_t visited = 0;
+        while (!walk.empty()) {
+            const auto [e, inactive] = walk.back();
+            walk.pop_back();
+            if (++visited > transforms.size() + hierarchy.size()) return false; // a loop: the full sync reports it
+            // Only entities with a transform take the hierarchy's answer (the rest keep their own checkbox's, unchanged).
+            if (transforms.contains(e)) {
+                const bool has = Registry.all_of<InactiveTag>(e);
+                if (inactive && !has) deactivate.push_back(e);
+                else if (!inactive && has) activate.push_back(e);
+            }
+            if (!hierarchy.contains(e)) continue;
+            for (entt::entity c : hierarchy.get(e).Children)
+                if (Registry.valid(c) && parentOf(c) == e) walk.emplace_back(c, inactive || deactivated.contains(c));
         }
     }
+    for (entt::entity e : deactivate) Registry.emplace_or_replace<InactiveTag>(e);
+    for (entt::entity e : activate) Registry.remove<InactiveTag>(e);
+    return true;
+}
+
+void World::RebuildTransformsOnly() {
     auto view = Registry.view<TransformComponent>();
     m_ChangedTransforms.clear();
     m_TransformMembershipChanged = false;
@@ -566,6 +626,32 @@ glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
     return ComposeWorldTransform(entity); // spawned since the rebuild, or none has run yet
 }
 
+namespace {
+// Hierarchy order (World::SortChildrenByOrder): OrderComponent, then the handle. An entity without one (a raw
+// Registry.create(); World's factories always give one) sorts last (kOrderMissing, as the Hierarchy panel's
+// HierarchyCreationOrder does), so it never takes a LOD Group's level 0.
+std::pair<int, entt::entity> ChildOrderKey(const entt::registry& reg, entt::entity e) {
+    const auto* o = reg.try_get<OrderComponent>(e);
+    return {o ? o->Value : kOrderMissing, e};
+}
+// Puts `child` into `kids` at its place in Hierarchy order (the rest already in it, or as near as it is).
+void InsertChildInOrder(const entt::registry& reg, std::vector<entt::entity>& kids, entt::entity child) {
+    const auto key = ChildOrderKey(reg, child);
+    auto at = kids.end();
+    while (at != kids.begin() && key < ChildOrderKey(reg, *(at - 1))) --at;
+    kids.insert(at, child);
+}
+} // namespace
+
+void World::SortChildrenByOrder(entt::entity parent) {
+    auto* h = Registry.valid(parent) ? Registry.try_get<HierarchyComponent>(parent) : nullptr;
+    if (!h || h->Children.size() < 2) return;
+    const auto less = [&](entt::entity a, entt::entity b) { return ChildOrderKey(Registry, a) < ChildOrderKey(Registry, b); };
+    if (std::is_sorted(h->Children.begin(), h->Children.end(), less)) return;
+    std::stable_sort(h->Children.begin(), h->Children.end(), less);
+    ++m_HierarchyVersion;
+}
+
 bool World::SetParent(entt::entity child, entt::entity parent) {
     if (!Registry.valid(child) || child == parent) return false;
     if (parent != entt::null && !Registry.valid(parent)) return false;
@@ -604,7 +690,7 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
     auto& childHier = Registry.get_or_emplace<HierarchyComponent>(child);
     childHier.Parent = parent;
     if (parent != entt::null) {
-        Registry.get_or_emplace<HierarchyComponent>(parent).Children.push_back(child);
+        InsertChildInOrder(Registry, Registry.get_or_emplace<HierarchyComponent>(parent).Children, child);
     }
 
     // Re-express TransformComponent in the new frame (local if parented, world if detached) so
@@ -627,7 +713,7 @@ void World::AttachChildRaw(entt::entity child, entt::entity parent) {
     ++m_HierarchyVersion;
     auto& childHier = Registry.get_or_emplace<HierarchyComponent>(child);
     childHier.Parent = parent;
-    Registry.get_or_emplace<HierarchyComponent>(parent).Children.push_back(child);
+    InsertChildInOrder(Registry, Registry.get_or_emplace<HierarchyComponent>(parent).Children, child);
 }
 
 // #202 - see the header. Walks every entity to its root, marking the chain as it goes. A node

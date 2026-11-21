@@ -21,6 +21,7 @@
 #include <set>
 #include "Log.h" // #178 stack traces
 #include "InputMap.h"
+#include "AssetChangeHooks.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
 #include "Components.h"
@@ -271,6 +272,54 @@ void TestAssetIdentity() {
     auto back = MaterialAsset::Load(ma.Path, nullptr);
     CHECK(back && AssetDatabase::PathKey(back->AlbedoMapPath) == AssetDatabase::PathKey(tex2));
     fs::remove_all(dir, ec);
+}
+
+// --- Asset change hooks: what SyncProjectChanges hands each cache after a file changes -----------
+void TestAssetChangeHooks() {
+    using E = AssetChangeHooks::Event;
+    const std::string dir = (TempDir() / "hooks").string();
+    const std::string ctrl = dir + "/Run.controller", styles = dir + "/editor_ui_styles.json";
+    int ctrlHits = 0, styleHits = 0, decalHits = 0;
+    E last;
+    const int a = AssetChangeHooks::Register("animatorcontroller", [&](const E& e) { ++ctrlHits; last = e; return true; });
+    const int b = AssetChangeHooks::RegisterFile(styles, [&](const E&) { ++styleHits; return false; });
+    const int c = AssetChangeHooks::Register("decal", [&](const E&) { ++decalHits; return true; });
+    CHECK(a > 0 && b > 0 && c > 0 && a != b && b != c);
+    CHECK(AssetChangeHooks::Register("", [](const E&) { return true; }) == 0); // no type: refused
+    CHECK(AssetChangeHooks::Register("decal", {}) == 0);                       // no function: refused
+
+    auto make = [](E::Kind k, const std::string& path, const std::string& type, const std::string& old = {}) {
+        E e; e.Type = k; e.Path = path; e.OldPath = old; e.AssetType = type; return e;
+    };
+    // By type: only the controller hook runs, and the count is what reported applying something.
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, ctrl, "animatorcontroller")) == 1);
+    CHECK(ctrlHits == 1 && styleHits == 0 && decalHits == 0 && last.Path == ctrl);
+    // By file (a non-asset): runs, reports nothing applied; a differently spelled path still matches.
+    std::string stylesAlt = styles;
+    std::replace(stylesAlt.begin(), stylesAlt.end(), '/', '\\');
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, stylesAlt, "")) == 0);
+    CHECK(styleHits == 1 && ctrlHits == 1);
+    // A move reaches the hooks of either end: a .controller renamed to .txt still tells the controller cache.
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Moved, dir + "/Run.txt", "", ctrl)) == 1);
+    CHECK(ctrlHits == 2 && last.Type == E::Kind::Moved && last.OldPath == ctrl);
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Moved, dir + "/x.json", "", styles)) == 0 && styleHits == 2);
+    // Something nobody listens for.
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Added, dir + "/a.png", "texture")) == 0);
+    // Rescan reaches every hook.
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Rescan, "", "")) == 2);
+    CHECK(ctrlHits == 3 && styleHits == 3 && decalHits == 1);
+    // A hook added from inside a hook runs from the next Dispatch on.
+    int lateHits = 0, late = 0;
+    const int d = AssetChangeHooks::Register("prefab", [&](const E&) {
+        if (!late) late = AssetChangeHooks::Register("prefab", [&](const E&) { ++lateHits; return true; });
+        return true;
+    });
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/p.prefab", "prefab")) == 1 && lateHits == 0);
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Modified, dir + "/p.prefab", "prefab")) == 2 && lateHits == 1);
+    // Unregistered hooks stop running.
+    for (int id : {a, b, c, d, late}) AssetChangeHooks::Unregister(id);
+    CHECK(AssetChangeHooks::Dispatch(make(E::Kind::Rescan, "", "")) == 0);
+    CHECK(ctrlHits == 3 && styleHits == 3 && decalHits == 1 && lateHits == 1);
 }
 
 // --- #132: the project watcher reports adds, renames, moves, edits and deletes ----------------
@@ -558,5 +607,6 @@ void RegisterAssetsTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AsyncImportCpu", TestAsyncImportCpu});
     tests.push_back({"AssetIdentity", TestAssetIdentity});
     tests.push_back({"ProjectWatcher", TestProjectWatcher});
+    tests.push_back({"AssetChangeHooks", TestAssetChangeHooks});
     tests.push_back({"AssetPackImport", TestAssetPackImport});
 }

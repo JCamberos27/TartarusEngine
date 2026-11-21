@@ -86,6 +86,11 @@ struct LaunchOptions {
     std::string bakeGiOnly;       // --gi-only <name> (bake-gi): only the volumes whose name contains it
     // --project <dir> (any mode): open that project folder instead of the one next to the exe. Applied by the parse.
     std::string projectDir;
+    // --restore-state <file> (editor): Rebuild & Restart's state file (RestartState.h), applied after the scene
+    // loads, then deleted. --wait-pid <pid> (editor): wait for the editor being replaced to exit first.
+    std::string restoreStateFile;
+    unsigned long waitPid = 0;
+    static constexpr unsigned long kBadWaitPid = 0xFFFFFFFFul; // set by a bad --wait-pid; the parse fails
 };
 
 // Parses argv into `out`. On a bad command line returns false with `error` set (and nothing applied). On success

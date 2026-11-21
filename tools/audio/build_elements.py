@@ -101,7 +101,8 @@ def motion_variant(v, pre, post):
 def cut_variant(v):
     """An exact slice [cut[0], cut[1]] s of a real recording: 2 ms fade in, a fade out of min(80 ms, 25 % of the slice), pitched
     (st), high-passed at hp (default 70 Hz). No onset snap, no transient designer, no bleed trim: the slice is the sound (the .38's
-    actions, as approved in the AE showcase's build_38.py). The contact (the anchor) is v.contact, or the slice's loudest sample."""
+    actions, as approved in the AE showcase's build_38.py). Its anchor is measured on the finished file (abuild.emit), as
+    remaster.py does; v.contact only names the slice in the manifest's source line."""
     x = src(v["src"])
     a, b = v["cut"]
     seg = adsp.cut(x, int(a * SR), int(b * SR))
@@ -109,16 +110,6 @@ def cut_variant(v):
     if v.get("pitch"):
         seg = adsp.pitch(seg, v["pitch"])
     return adsp.filt(seg, "hp", v.get("hp", 70.0))
-
-
-def cut_anchor_ms(v):
-    """Where the contact lands in a cut_variant's file (pitch scales time)."""
-    a, b = v["cut"]
-    contact = v.get("contact")
-    if contact is None:                                  # the loudest transient of the (unprocessed) slice
-        x = src(v["src"])
-        contact = a + float(np.argmax(np.abs(adsp.to_mono(adsp.cut(x, int(a * SR), int(b * SR)))))) / SR
-    return (contact - a) * 1000.0 / (2 ** (v.get("pitch", 0.0) / 12.0))
 
 
 def thud_variant(v):
@@ -208,9 +199,9 @@ def main():
                 y = abuild.finish(y, "action", trim_bleed="layers" not in v and not v.get("motion_only") and not exact)   # (a composite's later layers are meant)
                 rel = f"{g['dir']}/{elem}_{n}.wav"
                 extra = {"gun": gun, "element": elem, "variant": n, "source": describe(v)}
-                if exact:                            # an exact slice: the contact's place in it
-                    extra["anchor_ms"] = round(cut_anchor_ms(v), 1)
-                elif "anchor_ms" in v:               # the recipe says where the contact is (a composite of several)
+                if exact:                            # an exact slice: keep emit's measured anchor (as remaster.py measures it)
+                    pass
+                elif "anchor_ms" in v:              # the recipe says where the contact is (a composite of several)
                     extra["anchor_ms"] = float(v["anchor_ms"])
                 elif "thud" in v:                    # contact = where the thud layer lands
                     extra["anchor_ms"] = float(v["thud"]["delay_ms"])

@@ -84,7 +84,15 @@ class Clip:
         return self.d is not None
 
     def pos(self, bone, space="rel_head"):
-        return self.np.array(self.d["bones"][bone][space], float)
+        """The bone's per-frame positions, built once per (bone, space): the contact scans index it frame by frame. Read-only,
+        so a caller can't change the cached copy."""
+        key = (bone, space)
+        cache = self.__dict__.setdefault("_pos", {})
+        if key not in cache:
+            a = self.np.array(self.d["bones"][bone][space], float)
+            a.setflags(write=False)
+            cache[key] = a
+        return cache[key]
 
     def rows(self, bone, space="rel_head", tele=True):
         """row i = distance moved between frame i and i+1; teleports (bone swaps / visibility pops) are zeroed."""

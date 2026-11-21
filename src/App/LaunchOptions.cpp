@@ -4,6 +4,7 @@
 #include "Core/Paths.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -147,6 +148,16 @@ const FlagDef kFlags[] = {
     {"--crash-dialog", Arity::None, "", false, kNoMode, Bit(LaunchMode::CrashTest) | Bit(LaunchMode::Editor),
      [](LaunchOptions& o, const std::string&) { o.crashDialog = true; },
      "show the crash dialog on a crash test"},
+    {"--restore-state", Arity::Required, "file", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) { o.restoreStateFile = v; },
+     "Rebuild & Restart: pick up the scene, unsaved edits, selection and Play from this file"},
+    {"--wait-pid", Arity::Required, "pid", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) {
+         const bool digits = !v.empty() && v.size() <= 10 && v.find_first_not_of("0123456789") == std::string::npos;
+         const unsigned long long pid = digits ? std::strtoull(v.c_str(), nullptr, 10) : 0;
+         o.waitPid = pid > 0 && pid < LaunchOptions::kBadWaitPid ? (unsigned long)pid : LaunchOptions::kBadWaitPid; // reported after the parse
+     },
+     "Rebuild & Restart: wait for this editor process to exit before starting"},
 };
 // clang-format on
 
@@ -241,6 +252,10 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
     }
     if (o.perfResW < 0) {
         error = "'--perf-res' needs a size like 1920x1080";
+        return false;
+    }
+    if (o.waitPid == LaunchOptions::kBadWaitPid) {
+        error = "'--wait-pid' needs a process id (a whole number above 0)";
         return false;
     }
 

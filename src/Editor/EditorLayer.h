@@ -144,7 +144,7 @@ public:
     // otherwise the live world. True when a recovery snapshot was written.
     bool CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept;
     // --crash-test-in-editor: pretend there are unsaved edits, so the recovery path runs.
-    void MarkDirtyForCrashTest() { m_Dirty = true; }
+    void MarkDirtyForCrashTest() { m_Dirty = true; NoteChangeOutsideUndo(); }
     // Headless runs (--unit-tests, --smoke-test, etc.) should not persist editor_prefs.json.
     void SetHeadless(bool headless) { m_Headless = headless; }
     void Shutdown();
@@ -874,6 +874,18 @@ public:
     //   DiscardAndExit - main exits without saving
     //   None + ExitPromptActive() false again - the user picked Cancel; stay open
     enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
+    // Rebuild & Restart (File menu, Ctrl+Alt+R; EditorRestart.h), in EditorLayer_Restart.cpp.
+    // Why it can't start now ("" = it can): not a source build, an untitled scene with edits, unsaved scripts.
+    std::string RestartBlockedReason() const;
+    // The restart hand-over's way out of Prefab Mode: leaves a clean one without saving; false (stays, restart
+    // cancelled by the caller) when it has unsaved edits or is still open afterwards.
+    bool LeavePrefabModeForRestart(World& world, AssetLibrary& assets);
+    bool GlobalUndoActive() const { return m_GlobalUndoActive; } // a drag/edit's undo step is still open
+    void RequestRebuildRestart();
+    // The old editor, build done: writes the recovery snapshot (when dirty) and the hand-over file.
+    bool WriteRestartState(const World& world, const AssetLibrary& assets, const std::filesystem::path& file, bool wasPlaying);
+    // The new editor, scene loaded: restores the unsaved edits (no prompt) and the selection. Returns WasPlaying.
+    bool ApplyRestartState(World& world, AssetLibrary& assets, const std::filesystem::path& file);
     void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
     bool ExitPromptActive() const { return m_ExitPromptPending; }
     // #84 — path of a scene that failed to load at startup; Save to exactly this path is
@@ -1330,10 +1342,19 @@ private:
     // recovery file waits for it first (WaitRecoveryWrite), so a late write can't revive a snapshot
     // that a Save just cleared.
     std::future<bool> m_RecoveryWrite;
+    // Scene changes no undo step recorded since m_CurrentUndoScene was last taken from the World
+    // (an external rename rewriting references, a failed restore, ...). While non-zero, or while
+    // an outfit landing isn't in the baseline yet, the auto-save reads the World itself; otherwise
+    // it writes the baseline (the same bytes, without walking every entity on the UI thread).
+    unsigned m_ChangesOutsideUndo = 0;
+    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; }
+    bool UndoBaselineIsCurrent() const;
     void WaitRecoveryWrite();
     void PollRecoveryWrite(); // once a frame: logs the finished write
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
+    // The prompt's Restore (and Rebuild & Restart's): load the snapshot as the dirty scene, then drop it.
+    bool RestoreRecoverySnapshot(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
     bool m_RecoveryPromptSounded = false; // RecoveryPrompt plays once, when the modal first shows
 
@@ -1633,6 +1654,7 @@ private:
     std::string m_CurrentUndoScene;
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
+    int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
@@ -2163,6 +2185,8 @@ private:
     std::vector<std::string> ShaderChoices(AssetLibrary& assets);
     // The open Inspector asset combo's list: built when the combo opens, reused while it stays open.
     std::vector<AssetRefChoice> m_AssetRefChoiceCache;
+    // The open Joint "Connected" combo's rows (order, label): built when it opens, reused while it stays open.
+    std::vector<std::pair<int, std::string>> m_JointTargetChoices;
     // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
@@ -2446,6 +2470,9 @@ private:
     };
     mutable HierarchyOrderCache m_HierOrder;
     const std::vector<entt::entity>& HierarchyCreationOrder(const World& world) const;
+    // HierarchyOrderCache::Generation, the pairs re-checked at most once per ImGui frame (as HierarchyCreationOrdinal):
+    // with World::HierarchyVersion, what a cached tree of the scene is keyed on.
+    std::uint64_t HierarchyOrderGeneration(const World& world) const;
     // "Object 7" for an unnamed entity: its 1-based place in HierarchyCreationOrder (0 = not named).
     int HierarchyCreationOrdinal(const World& world, entt::entity e) const;
     // The row under the mouse this frame (hover keys act on it), the component the minimap icon

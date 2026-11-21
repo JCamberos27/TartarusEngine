@@ -112,6 +112,7 @@ void EditorLayer::EnsureUndoScene(const World& world) {
     if (!m_CurrentUndoScene.empty() || m_InPlayMode || !m_AssetsPtr) return;
     PROFILE_SCOPE("Undo Scene Snapshot");
     m_CurrentUndoScene=SceneSerializer::SaveToString(world,*m_AssetsPtr);
+    m_ChangesOutsideUndo=0; // the baseline is the World again
 }
 
 void EditorLayer::BeginSceneUndo(const World& world, const std::string& label) {
@@ -217,6 +218,7 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if (m_GlobalUndoHasScene && !m_InPlayMode) {
         m_CurrentUndoScene=std::move(current);
         m_OutfitLandedSeen=OutfitSystem::LandedGeneration(); // #15 - the new baseline has what landed during the edit
+        m_ChangesOutsideUndo=0;
     }
     m_FileJournal.Clear();m_GlobalUndoActive=false;m_GlobalUndoHasScene=false;m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
 }
@@ -239,7 +241,7 @@ bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string&
     // BeginGlobalUndoFrame). Checked here too, for one that landed after this frame's check.
     if (OutfitSystem::LandedGeneration() != m_OutfitLandedSeen) {
         m_OutfitLandedSeen = OutfitSystem::LandedGeneration();
-        if (!m_InPlayMode) m_CurrentUndoScene = currentJson;
+        if (!m_InPlayMode) { m_CurrentUndoScene = currentJson; m_ChangesOutsideUndo = 0; }
         return false;
     }
     if (m_InPlayMode || m_CurrentUndoScene.empty() || SceneSerializer::SameSceneContent(currentJson, m_CurrentUndoScene)) return false;
@@ -248,6 +250,7 @@ bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string&
     // with no landing after it to rebase. The baseline's too, like a landing, not a step.
     if (SceneSerializer::SameSceneContentApartFromOutfits(currentJson, m_CurrentUndoScene)) {
         m_CurrentUndoScene = currentJson;
+        m_ChangesOutsideUndo = 0;
         return false;
     }
     return PushUnrecordedChange(world, currentJson);
@@ -269,6 +272,7 @@ bool EditorLayer::PushUnrecordedChange(const World& world, const std::string& cu
     ClearRedoHistory();
     RefreshDirtyFromHistory();
     m_CurrentUndoScene = currentJson;
+    m_ChangesOutsideUndo = 0;
     return true;
 }
 
@@ -402,7 +406,10 @@ bool EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& 
     if (InPrefabMode()) { // #176 - the world holds the prefab; the scene is the snapshot
         return m_PrefabModeSceneDirty && SceneSerializer::SaveSnapshotToFile(m_PrefabModeSceneSnapshot, assets, path);
     }
-    std::function<bool()> write = SceneSerializer::PrepareSave(world, assets, path);
+    // The timer's write: the undo baseline when it still is the World (no entity walk on the UI thread).
+    std::function<bool()> write = background && UndoBaselineIsCurrent()
+        ? SceneSerializer::PrepareSaveFromSnapshot(m_CurrentUndoScene, assets, path)
+        : SceneSerializer::PrepareSave(world, assets, path);
     if (!write) return false;
     if (background) {
         m_RecoveryWrite = std::async(std::launch::async, std::move(write));
@@ -411,6 +418,11 @@ bool EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& 
     if (!write()) return false;
     Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
     return true;
+}
+
+bool EditorLayer::UndoBaselineIsCurrent() const {
+    return !m_CurrentUndoScene.empty() && !m_InPlayMode && !InPrefabMode() && !m_GlobalUndoActive && !m_GlobalUndoApplying &&
+           m_ChangesOutsideUndo == 0 && OutfitSystem::LandedGeneration() == m_OutfitLandedSeen;
 }
 
 void EditorLayer::WaitRecoveryWrite() {
@@ -531,6 +543,30 @@ bool EditorLayer::CrashRecoverySave(const World& world, const AssetLibrary& asse
     }
 }
 
+bool EditorLayer::RestoreRecoverySnapshot(World& world, AssetLibrary& assets) {
+    const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
+    const int warnsBefore = Log::CountOf(LogLevel::Warning);
+    const bool ok = SceneSerializer::Load(world, assets, recoveryPath);
+    if (ok) {
+        CheckSceneVersionWarning();
+        ClearSelection();
+        ClearUndoHistory();
+        EnsureUndoScene(world);
+        m_Dirty = true; // recovered content isn't in the real scene file yet
+        m_QuietDirtyEdgeFrames = 2; // ...which is the restore's, not an edit's
+        m_LoadFailedScenePath.clear(); // #84 — the user chose this content for the path
+        m_SavedUndoDepth = -1;
+        PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
+        Log::Info("Restored unsaved changes from the recovery snapshot.");
+    } else {
+        Log::Error("Recovery snapshot could not be read - kept the saved scene instead.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+    }
+    ClearRecoverySnapshot();
+    m_RecoveryPromptPending = false;
+    return ok;
+}
+
 void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
     if (!m_RecoveryPromptPending) return;
 
@@ -554,25 +590,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             discard = PrimaryButton("Discard", ImVec2(120.0f * m_UIScale, 0.0f));
         }
         if (restore) {
-            const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
-            const int warnsBefore = Log::CountOf(LogLevel::Warning);
-            if (SceneSerializer::Load(world, assets, recoveryPath)) {
-                CheckSceneVersionWarning();
-                ClearSelection();
-                ClearUndoHistory();
-                EnsureUndoScene(world);
-                m_Dirty = true; // recovered content isn't in the real scene file yet
-                m_QuietDirtyEdgeFrames = 2; // ...which is the restore's, not an edit's
-                m_LoadFailedScenePath.clear(); // #84 — the user chose this content for the path
-                m_SavedUndoDepth = -1;
-                PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
-                Log::Info("Restored unsaved changes from the recovery snapshot.");
-            } else {
-                Log::Error("Recovery snapshot could not be read - kept the saved scene instead.");
-                EditorSound::Play(EditorSound::Event::Blocked);
-            }
-            ClearRecoverySnapshot();
-            m_RecoveryPromptPending = false;
+            RestoreRecoverySnapshot(world, assets);
             ImGui::CloseCurrentPopup();
         } else if (discard) {
             ClearRecoverySnapshot();
@@ -1191,6 +1209,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     m_CurrentUndoScene = m_InPlayMode ? std::string()
         : inPlace ? std::move(targetJson)
         : BaselineAfterHistoryStep(targetLoaded, targetRoot, targetJson, sceneUntouched, currentJson, assets);
+    if (!m_CurrentUndoScene.empty()) m_ChangesOutsideUndo = 0; // taken from the World (loaded, or saved above)
     EnsureUndoScene(world);
     // X-33 C - Ctrl+Y will leave this baseline for `currentJson`.
     if (sceneReloaded && !m_CurrentUndoScene.empty() && !m_RedoStack.empty() && m_RedoStack.back().Files.empty())
@@ -1258,6 +1277,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     m_CurrentUndoScene = m_InPlayMode ? std::string()
         : inPlace ? std::move(targetJson)
         : BaselineAfterHistoryStep(targetLoaded, targetRoot, targetJson, sceneUntouched, currentJson, assets);
+    if (!m_CurrentUndoScene.empty()) m_ChangesOutsideUndo = 0; // taken from the World (loaded, or saved above)
     EnsureUndoScene(world);
     // X-33 C - Ctrl+Z will leave this baseline for `currentJson`.
     if (sceneReloaded && !m_CurrentUndoScene.empty() && !m_UndoStack.empty() && m_UndoStack.back().Files.empty())
@@ -1379,6 +1399,7 @@ void EditorLayer::KeepUnrestoredSnapshot(const std::string& snapshot, const char
                (kept ? " The scene as it was is kept in " + ProjectPaths::Relativize(file.u8string()) + "." : ""));
     m_SavedUndoDepth = -1; // never "clean": the open world isn't the scene file's content
     m_Dirty = true;
+    NoteChangeOutsideUndo();
 }
 
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {

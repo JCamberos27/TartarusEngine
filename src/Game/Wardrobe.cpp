@@ -477,7 +477,7 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
     if (race) {
         for (auto& [part, model] : parts)
             if (auto o = race->Parts.find(part); o != race->Parts.end()) model = o->second;
-        if (!race->Head.empty()) parts.emplace_back("Head", race->Head);
+        if (!race->Head.empty()) parts.emplace_back(kHeadPart, race->Head);
     }
 
     // Covers: parts under an item aren't built, or are swapped for their alternate.
@@ -518,7 +518,7 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
 
     for (const auto& [part, model] : parts) {
         if (model.empty()) continue;
-        result.Pieces.push_back({part, model, true, part == "Head"});
+        result.Pieces.push_back({part, model, true, part == kHeadPart});
     }
     for (const auto& slot : w.Slots)
         if (auto it = chosen.find(slot.Id); it != chosen.end())
@@ -631,6 +631,17 @@ Request Randomize(const Wardrobe& w, const std::vector<Item>& catalog, const Req
         worn.push_back(pick);
     }
     return req;
+}
+
+bool Essential(const Wardrobe& w, const std::string& slot, Gender g) {
+    bool any = false;
+    for (const auto& st : w.Styles) {
+        if (st.Gender >= 0 && st.Gender != (int)g) continue;
+        const auto f = st.Fill.find(slot);
+        if ((f != st.Fill.end() ? f->second : st.DefaultFill) < 1.0f) return false;
+        any = true;
+    }
+    return any;
 }
 
 int DefaultLayer(const std::string& slot) {

@@ -496,8 +496,10 @@ void FirstPersonBody::PlaceHeadAttachedTwins(World& world) {
     // its own place), but off the head twin: rigid head wear then follows the world head's tilt, this frame.
     auto& reg = world.Registry;
     int headTwin = -1;
+    constexpr int kHead = OutfitPieceBodyPart | OutfitPieceHeadAttached; // the race's head: the one head-attached body part
     for (size_t k = 0; k < m_Pieces.size() && k < m_Twins.size(); ++k)
-        if (reg.valid(m_Pieces[k]) && reg.all_of<OutfitPieceComponent>(m_Pieces[k]) && reg.get<OutfitPieceComponent>(m_Pieces[k]).Slot == "Head")
+        if (reg.valid(m_Pieces[k]) && reg.all_of<OutfitPieceComponent>(m_Pieces[k]) &&
+            (reg.get<OutfitPieceComponent>(m_Pieces[k]).Flags & kHead) == kHead)
             headTwin = (int)k;
     if (headTwin < 0 || !reg.valid(m_Twins[headTwin]) || !m_TwinModels[headTwin]) return;
     const int bone = m_TwinModels[headTwin]->BoneId(m_HeadBone);
