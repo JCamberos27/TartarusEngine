@@ -1068,7 +1068,7 @@ void EditorLayer::RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::
 bool EditorLayer::ApplyHistoryStepInPlace(World& world, AssetLibrary& assets, const UndoEntry& entry, uint64_t currentHash,
                                           const nlohmann::json& target, const std::string& targetText) {
     // Files and .mat restores can change the asset library under the scene: reload.
-    if (!entry.Files.empty() || !entry.AssetPath.empty() || !target.is_object()) return false;
+    if (!m_InPlaceUndo || !entry.Files.empty() || !entry.AssetPath.empty() || !target.is_object()) return false;
     const std::vector<UndoInPlace::EntityRef>* refs = entry.Step.EntitiesFrom(currentHash);
     if (!refs) return false;
     PROFILE_SCOPE("Undo In Place");

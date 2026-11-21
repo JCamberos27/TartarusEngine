@@ -1665,6 +1665,7 @@ private:
     bool ApplyHistoryStepInPlace(World& world, AssetLibrary& assets, const UndoEntry& entry, uint64_t currentHash,
                                  const nlohmann::json& target, const std::string& targetText);
     bool m_VerifyInPlaceUndo = false;
+    bool m_InPlaceUndo = true; // tests turn it off to time the full reload against it
     int m_InPlaceHistorySteps = 0; // undo / redo steps done in place (tests read it)
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
@@ -1711,9 +1712,11 @@ private:
                   const std::vector<int>* selectedOrdersOverride = nullptr);
     void Undo(World& world, AssetLibrary& assets);
     void Redo(World& world, AssetLibrary& assets);
+public:
     // X-33 C - test runs: after every in-place undo / redo, save the scene and compare it with the
     // snapshot the step restores; on a difference, log it and take the full reload instead.
     void SetVerifyInPlaceUndo(bool verify) { m_VerifyInPlaceUndo = verify; }
+private:
     // Phase 6 item 6 / Q6 — a plain-English label for the selection-change entry RecordSelectionHistory
     // pushes ("Select Cube", "Select 3 objects", "Deselect"), read off the CURRENT (post-change)
     // selection.

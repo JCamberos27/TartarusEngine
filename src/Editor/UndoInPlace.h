@@ -138,6 +138,7 @@ public:
         return (r.InPlace && r.FromHash == fromHash) ? &r.Entities : nullptr;
     }
     void clear() { m_Job = {}; }
+    void Wait() const { if (m_Job.valid()) m_Job.wait(); } // tests: time the step without the job
 
 private:
     std::shared_future<StepResult> m_Job;
