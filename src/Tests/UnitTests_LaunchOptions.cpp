@@ -4,6 +4,7 @@
 #include "../Core/ModuleCopies.h"
 #include "../Core/Env.h"
 #include "../Core/Paths.h"
+#include "MachineLoad.h"
 
 #include <string>
 #include <vector>
@@ -141,6 +142,41 @@ void Test_ModuleCopies_OwnerPid() {
     CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_99999999999_1.dll", L"TartarusGame_"));
 }
 
+// --perf-bench's machine line: other processes' CPU share and the watched processes running, from two snapshots.
+void Test_MachineLoad_Between() {
+    using namespace MachineLoad;
+    Snapshot a, b;
+    a.Ok = b.Ok = true;
+    a.SysTotal = 1000; a.SysBusy = 100; a.SelfCpu = 50;
+    b.SysTotal = 2000; b.SysBusy = 500; b.SelfCpu = 250; // busy +400, self +200 -> others 20%
+    a.Procs = {{"TartarusEngine", 0}, {"cl", 3}};
+    b.Procs = {{"TartarusEngine", 0}, {"cl", 1}};
+    Result r = Between(a, b);
+    CHECK(r.Ok);
+    CHECK(r.OtherCpuPct > 19.9 && r.OtherCpuPct < 20.1);
+    CHECK(r.Procs == "cl x3"); // the larger count of the two snapshots
+    CHECK(r.Contended);        // a compiler ran, even below the CPU line
+    CHECK(Describe(r, 8) == "other CPU 20% (8 cores); running: cl x3 -> CONTENDED");
+
+    b.Procs = {{"TartarusEngine", 0}, {"cl", 0}};
+    a.Procs = b.Procs;
+    r = Between(a, b);
+    CHECK(r.Procs.empty() && !r.Contended); // 20% < kContendedCpuPct, nothing watched
+    CHECK(Describe(r, 8) == "other CPU 20% (8 cores); running: - -> quiet");
+    b.SysBusy = 800; // others 50%
+    CHECK(Between(a, b).Contended);
+
+    b.Ok = false; // a failed snapshot prints nothing
+    CHECK(!Between(a, b).Ok && Describe(Between(a, b), 8).empty());
+    b.Ok = true; b.SysTotal = a.SysTotal; // no time passed: no division by zero
+    CHECK(!Between(a, b).Ok);
+    const Snapshot live = Take(); // the real snapshot works and never counts this process
+    (void)live;
+#ifdef _WIN32
+    CHECK(live.Ok && live.SysTotal > 0);
+#endif
+}
+
 } // namespace
 
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
@@ -151,4 +187,5 @@ void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ProjectPaths::RelativizeUnder", Test_ProjectPaths_RelativizeUnder});
     tests.push_back({"ScratchProfile::InstanceNames", Test_ScratchProfile_InstanceNames});
     tests.push_back({"ModuleCopies::OwnerPid", Test_ModuleCopies_OwnerPid});
+    tests.push_back({"MachineLoad::Between", Test_MachineLoad_Between});
 }
