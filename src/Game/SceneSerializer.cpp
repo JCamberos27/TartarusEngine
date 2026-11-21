@@ -493,24 +493,27 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
         Log::Error("Prefab: '" + path + "' could not be opened.");
         return entt::null;
     }
-    std::stringstream buffer;
-    buffer << in.rdbuf();
+    // Parsed once: built from here, then kept as the content this instance was built from.
+    json parsed;
+    try {
+        in >> parsed;
+    } catch (const std::exception& e) {
+        Log::Error("Prefab: '" + path + "' could not be parsed: " + e.what());
+        return entt::null;
+    }
 
     std::vector<entt::entity> created;
-    if (!AppendEntitiesFromString(world, assets, buffer.str(), created) || created.empty()) {
+    if (!ApplySceneJson(world, assets, parsed, /*clearFirst=*/false, &created, nullptr) || created.empty()) {
         return entt::null;
     }
     if (outAll) outAll->insert(outAll->end(), created.begin(), created.end());
-    // The content this instance was built from: its overrides are diffed against it (not the file,
-    // which may be edited before the next save). The first instance of a path caches it; later
-    // ones were built from the same content unless the file changed, and then the editor
-    // rebuilds them all (EditorLayer::RefreshPrefabInstances).
+    // Its overrides are diffed against that content (not the file, which may be edited before the
+    // next save). The first instance of a path caches it; later ones were built from the same
+    // content unless the file changed, and then the editor rebuilds them all
+    // (EditorLayer::RefreshPrefabInstances).
     if (!g_prefabPristineCache.count(path)) {
-        json parsed = json::parse(buffer.str(), nullptr, /*allow_exceptions=*/false);
-        if (!parsed.is_discarded()) {
-            UpgradeLegacyBoxKeys(parsed); // #122
-            g_prefabPristineCache.emplace(path, std::move(parsed));
-        }
+        UpgradeLegacyBoxKeys(parsed); // #122
+        g_prefabPristineCache.emplace(path, std::move(parsed));
     }
 
     // The prefab's root is whichever created entity has no parent inside the fragment.

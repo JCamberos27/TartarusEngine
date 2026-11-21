@@ -374,9 +374,11 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
 
     if (!AtomicFile::WriteJson(std::filesystem::u8path(pi.SourcePath), prefab)) return false; // #82
 
-    g_prefabPristineCache.erase(pi.SourcePath); // Inspector re-reads -> override marker clears
-    Log::Info("Applied '" + std::string(component) + "." + field + "' to prefab '" + pi.SourcePath +
-              "'. Other instances update on their next load.");
+    // The cache keeps the content the instances were built from until the editor rebuilds them
+    // from the new file (EditorLayer::RefreshPrefabInstances): dropping it here would make the
+    // next save diff the other instances against the new file and store the field's old value
+    // as an override of their own.
+    Log::Info("Applied '" + std::string(component) + "." + field + "' to prefab '" + pi.SourcePath + "'.");
     return true;
 }
 
