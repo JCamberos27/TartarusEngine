@@ -39,6 +39,33 @@ using namespace AnimatorUI;
 
 namespace {
 
+// The Edit-mode preview posing a rig (a state's or a transition's): which rig, the switch that turned it on, and the
+// last frame it posed. A preview whose section isn't drawn any more (the state or transition deselected, another
+// one picked) is switched off and its rig back to the bind pose, instead of leaving the last preview pose on it.
+struct PreviewOwner {
+    std::weak_ptr<Model> Rig;
+    bool* On = nullptr;
+    int Frame = -1;
+};
+PreviewOwner& Previewing() {
+    static PreviewOwner p;
+    return p;
+}
+void EndPreview() {
+    PreviewOwner& p = Previewing();
+    if (const auto rig = p.Rig.lock()) rig->StopAnimation();
+    if (p.On) *p.On = false;
+    p = PreviewOwner{};
+}
+// A preview posed `rig` this frame (its switch is `on`). A different preview or rig than last frame ends that one.
+void NotePreview(const std::shared_ptr<Model>& rig, bool* on) {
+    PreviewOwner& p = Previewing();
+    if (p.On && (p.On != on || p.Rig.lock() != rig)) EndPreview();
+    p.Rig = rig;
+    p.On = on;
+    p.Frame = ImGui::GetFrameCount();
+}
+
 // One frame of the Animator's right panel: what the selection's sections share (the context, the
 // layer, the label column) and the clip / parameter pickers they use.
 struct SelectionPanel {
@@ -319,7 +346,7 @@ void SelectionPanel::DrawStateTravel(AC::State& s) {
             ImGui::PushID("preview");
             row("Preview");
             if (EditorUIPrimitives::Checkbox("##pvon", &pv.On)) {
-                if (!pv.On) { pv.Play = false; rigModel->StopAnimation(); }
+                if (!pv.On) { pv.Play = false; rigModel->StopAnimation(); Previewing() = PreviewOwner{}; }
             }
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Pose the rig in this state's motion so you can scrub it (Edit mode). Off restores the bind pose.");
             if (pv.On) {
@@ -366,6 +393,7 @@ void SelectionPanel::DrawStateTravel(AC::State& s) {
                 if (AnimatorSampleState(*rigModel, *assets, D, s, D.TrackIndex(rigAc ? rigAc->Track : std::string()),
                                         pv.T, pv.Params, node, rms, pose, &lenForPlay))
                     rigModel->ApplyLocalPose(pose);
+                NotePreview(world.Registry.get<RenderableComponent>(W.Entity).ModelRef, &pv.On);
                 if (pv.Play && lenForPlay > 0.0f) {
                     pv.T += ImGui::GetIO().DeltaTime * std::max(0.05f, s.Speed) / lenForPlay;
                     if (pv.T > 1.0f) pv.T -= 1.0f;
@@ -865,7 +893,7 @@ void SelectionPanel::DrawTransitionSettings(AC::Transition& tr) {
                 if (s_key != key) { s_key = key; s_t = 50.0f; }
                 ImGui::PushID("tpreview");
                 row("Preview");
-                if (EditorUIPrimitives::Checkbox("##tpon", &s_on) && !s_on) pm->StopAnimation();
+                if (EditorUIPrimitives::Checkbox("##tpon", &s_on) && !s_on) { pm->StopAnimation(); Previewing() = PreviewOwner{}; }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Pose the rig partway through this crossfade. Off restores the bind pose.");
                 if (s_on) {
                     ImGui::SameLine();
@@ -896,6 +924,7 @@ void SelectionPanel::DrawTransitionSettings(AC::Transition& tr) {
                         pm->ApplyLocalPose(haveA ? a : b);
                     }
                     ImGui::TextDisabled("%s at %.2f  " ICON_FA_ARROW_RIGHT "  %s from %.2f", tr.From.c_str(), fromPhase, tr.To.c_str(), tr.Offset);
+                    NotePreview(world.Registry.get<RenderableComponent>(W.Entity).ModelRef, &s_on);
                 }
                 ImGui::PopID();
             }
@@ -1028,6 +1057,12 @@ void DrawSelectionPanel(AnimCtx& cx) {
     else if (cx.W.SelSpecial) p.DrawSpecial();
     else p.DrawNothing();
     ImGui::EndChild();
+    // A preview left on whose section wasn't drawn this frame: the selection moved off it. In Play the previews
+    // aren't drawn either, and the running Animator owns the rig: only the switch goes off then, the pose is Play's.
+    if (Previewing().On && Previewing().Frame != ImGui::GetFrameCount()) {
+        if (cx.live) { *Previewing().On = false; Previewing() = PreviewOwner{}; }
+        else EndPreview();
+    }
 }
 
 } // namespace AnimatorUI
