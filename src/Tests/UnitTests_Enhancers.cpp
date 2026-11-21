@@ -16,7 +16,7 @@
 #include "EntityOrderIndex.h"
 #include <chrono>
 #include <cstdio>
-#include <cstdlib>
+#include "Env.h"
 #include <unordered_map>
 #include <vector>
 #include "AssetLibrary.h"
@@ -985,7 +985,7 @@ void TestEntityOrderIndex() {
 
     // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1). 5000 entities: the per-frame fingerprint vs the
     // old once-a-second map rebuild.
-    if (std::getenv("TARTARUS_MICROBENCH")) {
+    if (Env::Flag(Env::Var::MicroBench)) {
         entt::registry big;
         for (int i = 0; i < 5000; ++i) big.emplace<OrderComponent>(big.create(), i);
         using C = std::chrono::steady_clock;
