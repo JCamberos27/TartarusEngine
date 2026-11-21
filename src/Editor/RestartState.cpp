@@ -66,6 +66,27 @@ std::optional<State> Load(const std::filesystem::path& file, std::int64_t nowUni
     return s;
 }
 
+std::optional<std::string> StartupScene(const std::filesystem::path& file, std::int64_t nowUnix) {
+    const std::optional<State> s = Load(file, nowUnix);
+    if (!s) return std::nullopt;
+    if (s->ScenePath.empty()) return std::string{};
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(std::filesystem::u8path(s->ScenePath), ec)) return std::nullopt;
+    return s->ScenePath;
+}
+
+bool WriteCheckReport(const std::filesystem::path& file, const CheckReport& report) {
+    const json j = {{"scene", report.ScenePath},
+                    {"sceneLoaded", report.SceneLoaded},
+                    {"selection", report.Selection},
+                    {"playing", report.Playing}};
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out << j.dump(2);
+    out.flush();
+    return static_cast<bool>(out);
+}
+
 std::vector<EntityRef> RefsFor(const World& world, const std::vector<entt::entity>& entities) {
     std::vector<EntityRef> refs;
     for (entt::entity e : entities) {
