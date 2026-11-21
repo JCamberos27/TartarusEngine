@@ -1721,8 +1721,6 @@ bool AppSession::Frame() {
     shadowIn.spotMap = &spotShadowMap;
     shadowIn.pointMap = &pointShadowMap;
     shadowIn.frame = frameIndex;
-    shadowIn.windowWidth = window.GetWidth();
-    shadowIn.windowHeight = window.GetHeight();
 
     // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
     // camera the user is mainly looking through (each view's draw re-applies its own).

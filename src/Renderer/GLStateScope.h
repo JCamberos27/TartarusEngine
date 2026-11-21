@@ -112,3 +112,24 @@ public:
 private:
     GLint m_Mask = GL_TRUE, m_Func = GL_LESS;
 };
+
+// The caller's render target: draw + read framebuffers and the viewport, restored on scope exit. The queries are
+// answered by the GL loader's tracked state (extern/glloader), so saving costs no driver round trip.
+class GLTargetScope {
+public:
+    GLTargetScope() {
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &m_DrawFbo);
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &m_ReadFbo);
+        glGetIntegerv(GL_VIEWPORT, m_Viewport);
+    }
+    ~GLTargetScope() {
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)m_DrawFbo);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)m_ReadFbo);
+        glViewport(m_Viewport[0], m_Viewport[1], m_Viewport[2], m_Viewport[3]);
+    }
+    GLTargetScope(const GLTargetScope&) = delete;
+    GLTargetScope& operator=(const GLTargetScope&) = delete;
+
+private:
+    GLint m_DrawFbo = 0, m_ReadFbo = 0, m_Viewport[4] = {0, 0, 0, 0};
+};
