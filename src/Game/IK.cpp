@@ -603,6 +603,7 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
         if (seen && !stepping && (heel || onBall)) { // (a first frame has no speed yet)
             // Held where it is drawn now (a foot still catching up plants there, not where the animation is).
             f.Locked = true;
+            f.LastReach = -1.0f;
             f.OnBall = onBall;
             f.Pin = glm::vec3(anim.x + f.Offset.x, anim.y, anim.z + f.Offset.z);
             f.BallPin = glm::vec3(animBall.x + f.Offset.x, animBall.y, animBall.z + f.Offset.z);
@@ -638,7 +639,11 @@ bool FootLock::Overreach(int s, const FootLockSettings& set, float reach, float 
     Foot& f = m_Foot[s];
     // (A hundredth over the clip's own: a held foot that has not moved off its animation is not what stretches the leg -
     // but never past the whole leg, where the reach clamp would have to drag it.)
-    if (!f.Locked || reach <= std::max(set.Reach, std::min(own + 0.01f, 1.0f))) return false;
+    if (!f.Locked) return false;
+    // PredictReach: this frame's reach plus its rise since last frame - let go the frame before it crosses.
+    const float rise = set.PredictReach && f.LastReach >= 0.0f ? std::max(reach - f.LastReach, 0.0f) : 0.0f;
+    f.LastReach = reach;
+    if (reach + rise <= std::max(set.Reach, std::min(own + 0.01f, 1.0f))) return false;
     LetGo(f, set, true);
     return true;
 }
