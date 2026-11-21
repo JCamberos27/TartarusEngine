@@ -558,17 +558,23 @@ constexpr int kRequiredSnapBones = 17;
 } // namespace
 
 void NpcRagdoll::Capture(const NpcBody& body, BoneSnapshot& out) {
-    const glm::mat4 inv = glm::inverse(body.RootMatrix());
+    // Every posed dummy, every frame: the node indices are cached per import instead of 21 name lookups, and the root-space
+    // position is the node's model-space one (BoneWorld's root * g, times the root's inverse, was g back).
+    const Model* m = body.DriverModel();
+    if (m && out.NodeStamp != m->ImportStamp()) {
+        for (int i = 0; i < kSnapBones; ++i) out.Node[i] = m->NodeIndex(kSnapNames[i]);
+        out.NodeStamp = m->ImportStamp();
+    }
     out.Valid = true;
     for (int i = 0; i < kSnapBones; ++i) {
-        glm::vec3 w;
-        out.Has[i] = body.BoneWorld(kSnapNames[i], w);
+        glm::mat4 g(1.0f);
+        out.Has[i] = m && m->NodeTransformAt(out.Node[i], g);
         if (!out.Has[i]) {
             out.P[i] = glm::vec3(0.0f);
             if (i < kRequiredSnapBones) { out.Valid = false; return; }
             continue;
         }
-        out.P[i] = glm::vec3(inv * glm::vec4(w, 1.0f));
+        out.P[i] = glm::vec3(g[3]);
     }
 }
 
