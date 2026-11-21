@@ -212,6 +212,7 @@ struct ScriptIDE::Impl {
         const auto file=fs::u8path(doc.Path);
         if(doc.Type==Kind::Cpp) {
             if(GameModuleBuild::IsReloadableSource(file) && GameModuleBuild::CanRebuild()){GameModuleBuild::Request();Status="Saved "+file.filename().u8string()+"; rebuilding the modules for hot reload.";}
+            else if(GameModuleBuild::IsReloadableSource(file))Status="Saved "+file.filename().u8string()+". "+GameModuleBuild::RebuildUnavailableReason();
             else Status="Saved "+file.filename().u8string()+". It is part of the editor executable: rebuild and restart to use it.";
         } else if(doc.Type==Kind::Shader)Status="Saved "+file.filename().u8string()+"; shaders reload on their own.";
         else Status="Saved "+file.filename().u8string()+".";

@@ -86,7 +86,7 @@ void RegisterHotReloadTests() {
         Click(ByExact("File", "##Toolbar")), Wait(2),
         Until("the rebuild item is listed", [](Ctx&) { return Find(MenuItem(kRebuildItem)) != nullptr; }),
         Expect("enabled exactly when a build can start", [](Ctx&) {
-            const bool want = GameModuleBuild::Available() && !GameModuleBuild::Running();
+            const bool want = GameModuleBuild::CanRebuild() && !GameModuleBuild::Running();
             const bool enabled = !ItemDisabled(Find(MenuItem(kRebuildItem)));
             return enabled == want ? std::string() : std::string(enabled ? "enabled" : "disabled") + " but a build " +
                 (want ? "can start" : "can't start (no build tree, or one is running)");
@@ -344,7 +344,7 @@ void RegisterHotReloadTests() {
             Step click = Click(MenuItem(kRebuildItem));
             click.Name += " (when a build tree exists)";
             click.Fn = [inner = click.Fn](Ctx& c) {
-                if (!GameModuleBuild::Available()) { ImGui::ClosePopupsExceptModals(); return true; }
+                if (!GameModuleBuild::CanRebuild()) { ImGui::ClosePopupsExceptModals(); return true; }
                 return inner(c);
             };
             return click;
@@ -354,8 +354,8 @@ void RegisterHotReloadTests() {
             SelectByName("Beta"), Wait(3),
             Do("note reload counts; touch one source of each module", [](Ctx&) {
                 g_Vec = glm::vec3((float)LogCount(kGameReloaded), (float)LogCount(kEditorReloaded), 0.0f);
-                if (!GameModuleBuild::Available()) {
-                    std::printf("    [hotreload] no CMake build tree: only the disabled menu item is checked\n");
+                if (!GameModuleBuild::CanRebuild()) {
+                    std::printf("    [hotreload] can't rebuild here: %s\n", GameModuleBuild::RebuildUnavailableReason().c_str());
                     return;
                 }
                 const fs::path src = GameModuleBuild::SourceRoot() / "src";
@@ -368,24 +368,24 @@ void RegisterHotReloadTests() {
             Expect("the item is enabled exactly when a build tree exists", [](Ctx&) {
                 const UiItem* it = Find(MenuItem(kRebuildItem));
                 if (!it) return std::string("item missing");
-                return ItemDisabled(it) == !GameModuleBuild::Available() ? std::string() : std::string("wrong enabled state");
+                return ItemDisabled(it) == !GameModuleBuild::CanRebuild() ? std::string() : std::string("wrong enabled state");
             }),
             clickRebuild(), Wait(3),
-            ExpectTrue("a module build is running", [](Ctx&) { return !GameModuleBuild::Available() || GameModuleBuild::Running(); }),
+            ExpectTrue("a module build is running", [](Ctx&) { return !GameModuleBuild::CanRebuild() || GameModuleBuild::Running(); }),
             Click(ByExact("File", "##Toolbar")), Wait(3),
             ExpectTrue("the item is disabled while it builds", [](Ctx&) {
-                return !GameModuleBuild::Available() || !GameModuleBuild::Running() || ItemDisabled(Find(MenuItem(kRebuildItem)));
+                return !GameModuleBuild::CanRebuild() || !GameModuleBuild::Running() || ItemDisabled(Find(MenuItem(kRebuildItem)));
             }),
             Shot("building"),
             CloseMenus(), Wait(2),
             UntilSeconds("the build finished", [](Ctx&) { return !GameModuleBuild::Running(); }, 360),
             Expect("the build succeeded", [](Ctx&) {
-                if (!GameModuleBuild::Available() || GameModuleBuild::LastSucceeded()) return std::string();
+                if (!GameModuleBuild::CanRebuild() || GameModuleBuild::LastSucceeded()) return std::string();
                 const std::string out = GameModuleBuild::LastLog();
                 return "cmake --build failed: ..." + Trim(out.size() > 1500 ? out.substr(out.size() - 1500) : out, 1600);
             }),
             UntilSeconds("both modules hot reloaded", [](Ctx&) {
-                return !GameModuleBuild::Available() ||
+                return !GameModuleBuild::CanRebuild() ||
                        ((float)LogCount(kGameReloaded) > g_Vec.x && (float)LogCount(kEditorReloaded) > g_Vec.y);
             }, 30),
             Wait(10),
