@@ -186,6 +186,8 @@ void Shutdown() {
         std::lock_guard<std::mutex> lock(g_Mutex);
         g_QueuedConfig.clear();
     }
+    // Waited out, not killed: the bake writes .mmanim then .mmdb, so a cut-off bake could leave a new stream beside old features.
+    if (g_Running) Log::Info("Waiting for the motion bake to finish before closing...");
     if (g_Worker.joinable()) g_Worker.join();
     g_Running = false;
 }
