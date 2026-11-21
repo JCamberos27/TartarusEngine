@@ -59,11 +59,29 @@ struct EditorSmokeAccess_Scenes {
         }
         return entt::null;
     }
-    static double TimedHistoryStep(EditorLayer& e, World& w, AssetLibrary& a, bool redo) {
+    // Times one Undo / Redo call. The step's in-place check (X-33 C) runs on a background thread
+    // from the moment the step is recorded; a person takes longer than that to press Ctrl+Z, so it
+    // is waited for first, outside the timing (`jobMs` gets how long that took). The verify mode
+    // is off for the timed call (it saves the whole scene) and done after it instead: the scene
+    // must save as the new baseline.
+    static double TimedHistoryStep(EditorLayer& e, World& w, AssetLibrary& a, bool redo, double* jobMs = nullptr,
+                                   std::string* mismatch = nullptr) {
+        const auto& stack = redo ? e.m_RedoStack : e.m_UndoStack;
+        const auto w0 = std::chrono::steady_clock::now();
+        if (!stack.empty()) stack.back().Step.Wait();
+        if (jobMs) *jobMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - w0).count();
+        const bool verify = e.m_VerifyInPlaceUndo;
+        e.m_VerifyInPlaceUndo = false;
         const auto t0 = std::chrono::steady_clock::now();
         redo ? e.Redo(w, a) : e.Undo(w, a);
-        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        e.m_VerifyInPlaceUndo = verify;
+        if (mismatch && SceneSerializer::SaveToString(w, a) != e.m_CurrentUndoScene)
+            *mismatch += std::string(redo ? " redo" : " undo") + " left a scene that doesn't save as its baseline;";
+        return ms;
     }
+    static void SetInPlaceUndo(EditorLayer& e, bool on) { e.m_InPlaceUndo = on; }
+    static int InPlaceSteps(const EditorLayer& e) { return e.m_InPlaceHistorySteps; }
     // Moves `ent` 1 m along x as one committed undo step.
     static void MoveOneMetre(EditorLayer& e, World& w, entt::entity ent) {
         e.PushUndo(w, "Move");
@@ -231,15 +249,40 @@ void RegisterScenesTests() {
                         if (o.Value == order) return t.Position.x;
                     return -1e9f;
                 };
-                SA::MoveOneMetre(c.E, c.W, ent);
-                const double undo1 = SA::TimedHistoryStep(c.E, c.W, c.A, false);
+                // The same three steps with the in-place path off first: the full reload's times, from
+                // the same run (X-33 C A/B). The first move also warms the caches the timed ones use.
+                {
+                    SA::SetInPlaceUndo(c.E, false);
+                    SA::MoveOneMetre(c.E, c.W, ent);
+                    std::string fullMismatch;
+                    const double u1 = SA::TimedHistoryStep(c.E, c.W, c.A, false, nullptr, &fullMismatch);
+                    const double r1 = SA::TimedHistoryStep(c.E, c.W, c.A, true, nullptr, &fullMismatch);
+                    const double u2 = SA::TimedHistoryStep(c.E, c.W, c.A, false, nullptr, &fullMismatch);
+                    SA::SetInPlaceUndo(c.E, true);
+                    Log::Info("UNDO_TIMING_FULL " + label + " undo=" + std::to_string(u1) + "ms redo=" + std::to_string(r1) +
+                              "ms undo2=" + std::to_string(u2) + "ms");
+                    if (!fullMismatch.empty()) return "full reload:" + fullMismatch;
+                    if (xNow() != x0) return std::string("full reload: the move didn't undo");
+                }
+                entt::entity live = entt::null; // the reload made new entities: the same one by order
+                for (auto [e, o] : c.W.Registry.view<OrderComponent>().each())
+                    if (o.Value == order) live = e;
+                if (live == entt::null) return std::string("the moved object is gone after the full reload");
+                SA::MoveOneMetre(c.E, c.W, live);
+                const int inPlace0 = SA::InPlaceSteps(c.E);
+                double job = 0.0;
+                std::string mismatch;
+                const double undo1 = SA::TimedHistoryStep(c.E, c.W, c.A, false, &job, &mismatch);
                 const float afterUndo = xNow();
-                const double redo = SA::TimedHistoryStep(c.E, c.W, c.A, true);
+                const double redo = SA::TimedHistoryStep(c.E, c.W, c.A, true, nullptr, &mismatch);
                 const float afterRedo = xNow();
-                const double undo2 = SA::TimedHistoryStep(c.E, c.W, c.A, false);
+                const double undo2 = SA::TimedHistoryStep(c.E, c.W, c.A, false, nullptr, &mismatch);
                 const float afterUndo2 = xNow();
                 Log::Info("UNDO_TIMING " + label + " undo=" + std::to_string(undo1) + "ms redo=" + std::to_string(redo) +
-                          "ms undo2=" + std::to_string(undo2) + "ms");
+                          "ms undo2=" + std::to_string(undo2) + "ms inplace=" + std::to_string(SA::InPlaceSteps(c.E) - inPlace0) +
+                          "/3 stepjob=" + std::to_string(job) + "ms");
+                if (!mismatch.empty()) return mismatch;
+                if (SA::InPlaceSteps(c.E) - inPlace0 != 3) return std::string("a 1 m move didn't undo / redo in place");
                 if (afterUndo != x0 || afterRedo != x0 + 1.0f || afterUndo2 != x0)
                     return "x went " + std::to_string(x0) + " -> undo " + std::to_string(afterUndo) + " -> redo " +
                            std::to_string(afterRedo) + " -> undo " + std::to_string(afterUndo2);

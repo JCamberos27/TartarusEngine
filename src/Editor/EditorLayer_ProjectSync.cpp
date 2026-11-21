@@ -29,6 +29,7 @@
 #include "EditorSound.h"
 #include "Log.h"
 #include "Model.h"
+#include "MotionRebake.h"
 #include "OutfitSystem.h"
 #include "Core/Paths.h"
 #include "ProjectSettings.h"
@@ -343,6 +344,10 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
         Log::Info("Reloaded Project Settings (settings.json changed outside the editor).");
         return;
     }
+    // Motion matching (hot reload): a saved bake config rebakes; a rewritten database reloads (no library entry either way).
+    std::string mmBase;
+    if (MotionRebake::IsConfig(path)) { MotionRebake::Request(path); ++s_SyncApplied; return; }
+    if (MotionRebake::IsBakedDatabase(path, &mmBase)) { MotionRebake::NotifyDatabaseChanged(mmBase); return; }
     const std::string type = AssetDatabase::AssetType(path);
     const std::string listed = assets.FindListed(path);
     // A new file written the safe way (a temp file renamed over the target, as editors and

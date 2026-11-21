@@ -10,9 +10,12 @@
 #include "MotionMatching/MotionSearch.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -90,10 +93,36 @@ std::string SharedMotionDatabase::CacheKey(const std::string& base, bool hasRig,
     return base + "|" + (hasRig ? "rig:" + rigPath : std::string("no rig"));
 }
 
+namespace {
+std::mutex s_SharedLock;
+std::map<std::string, std::weak_ptr<const SharedMotionDatabase>> s_SharedLoaded; // CacheKey -> load
+std::atomic<std::uint64_t> s_SharedGeneration{0};
+
+// One spelling per file for comparing bases: absolute, normalized, forward slashes, lower case (Windows paths).
+std::string BaseSpelling(const std::string& base) {
+    std::error_code ec;
+    std::string s = std::filesystem::absolute(std::filesystem::u8path(base), ec).lexically_normal().generic_u8string();
+    for (char& c : s) c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+}
+
+void SharedMotionDatabase::Invalidate(const std::string& base) {
+    const std::string want = BaseSpelling(base);
+    std::lock_guard<std::mutex> lock(s_SharedLock);
+    for (auto it = s_SharedLoaded.begin(); it != s_SharedLoaded.end();) {
+        const size_t bar = it->first.rfind('|');
+        if (BaseSpelling(it->first.substr(0, bar)) == want) it = s_SharedLoaded.erase(it);
+        else ++it;
+    }
+    ++s_SharedGeneration;
+}
+
+std::uint64_t SharedMotionDatabase::Generation() { return s_SharedGeneration.load(); }
+
 std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std::string& base, std::string* error, const Model* rig) {
-    static std::mutex s_Lock;
-    static std::map<std::string, std::weak_ptr<const SharedMotionDatabase>> s_Loaded;
-    std::lock_guard<std::mutex> lock(s_Lock);
+    std::lock_guard<std::mutex> lock(s_SharedLock);
+    auto& s_Loaded = s_SharedLoaded;
     const std::string key = CacheKey(base, rig != nullptr, rig ? rig->Path() : std::string());
     if (auto live = s_Loaded[key].lock()) return live;
     auto shared = std::make_shared<SharedMotionDatabase>();
@@ -282,6 +311,7 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
                                   const FirstPersonBodyMotion* carry) {
     Stop();
     std::string err;
+    const std::uint64_t generation = SharedMotionDatabase::Generation(); // before the load: a rebake during it reads stale
     auto shared = SharedMotionDatabase::Get(ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny"), &err,
                                             driver < models.size() ? models[driver].get() : nullptr);
     if (!shared) { error = "the motion matching database isn't baked (" + err + ")"; return false; }
@@ -316,6 +346,7 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         m_BindPose.push_back(std::move(bind));
     }
     m_Shared = shared;
+    m_Generation = generation;
     // (Another driver rig is another cached instance - its own excluded stretches - of the same frames: the frame numbers hold.)
     const bool carried = carry && carry != this && carry->m_Shared &&
                          (carry->m_Shared == shared || (carry->m_Shared->Db.FrameCount() == shared->Db.FrameCount() &&

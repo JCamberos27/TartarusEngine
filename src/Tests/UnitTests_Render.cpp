@@ -10,6 +10,8 @@
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
 #include "../Renderer/ImpostorLibrary.h"
+#include "../Renderer/AssetCost.h"
+#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
 #include "../Renderer/Camera.h"
 #include "../Game/SkySettings.h"
@@ -1174,6 +1176,65 @@ void TestLodGroup() {
     CHECK(world.Registry.view<LodCulledTag>().empty());
 }
 
+// The asset cost table's LOD level of a renderer: the index of the LOD Group child it sits under (at any depth), -1
+// outside a group or under a fifth child or later; the nearest group wins when they nest.
+void TestAssetCostLodLevel() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    auto make = [&](const char* name, entt::entity parent) {
+        const entt::entity e = world.CreateEmptyEntity(zero, zero, one, name);
+        if (parent != entt::null) CHECK(world.SetParent(e, parent));
+        return e;
+    };
+    auto lod = [&](entt::entity e) { return AssetCost::LodLevelOf(world, (unsigned)entt::to_integral(e)); };
+    const entt::entity loose = make("Loose", entt::null);
+    const entt::entity group = make("Group", entt::null);
+    world.Registry.emplace<LODGroupComponent>(group);
+    entt::entity lv[5];
+    for (int i = 0; i < 5; ++i) lv[i] = make("LOD", group);
+    const entt::entity deep = make("Deep", make("Mid", lv[2]));
+    const entt::entity inner = make("Inner", lv[1]);
+    world.Registry.emplace<LODGroupComponent>(inner);
+    const entt::entity innerLv0 = make("InnerLOD0", inner);
+    const entt::entity innerLv1 = make("InnerLOD1", inner);
+    CHECK(lod(loose) == -1);
+    CHECK(lod(group) == -1);
+    CHECK(lod(lv[0]) == 0);
+    CHECK(lod(lv[3]) == 3);
+    CHECK(lod(lv[4]) == -1); // a fifth child: always drawn, not a level
+    CHECK(lod(deep) == 2);
+    CHECK(lod(inner) == 1);
+    CHECK(lod(innerLv0) == 0); // the nearest group decides
+    CHECK(lod(innerLv1) == 1);
+}
+
+// A model drawn during a phase and unloaded before the phase is written (Forest's play phase streams outfits) still
+// gets its row: the table keeps what it measured at draw time, never a pointer to the model.
+void TestAssetCostModelFreedBeforeWrite() {
+    const std::filesystem::path csv = std::filesystem::temp_directory_path() / "asset_cost_freed.csv";
+    std::error_code ec;
+    std::filesystem::remove(csv, ec);
+    CHECK(_putenv_s("TARTARUS_ASSET_COST", csv.string().c_str()) == 0);
+    World world;
+    auto model = std::make_unique<Model>("no/such/AssetCostFreed.fbx");
+    SceneDrawItem item{};
+    item.Ref = model.get();
+    item.Tris = 12;
+    item.SortId = 0xFFFFFFFFu;
+    const std::vector<SceneDrawItem> list{item};
+    AssetCost::NoteView(world, false, {&list});
+    model.reset();
+    AssetCost::WritePhase("freed.json", "play-max");
+    CHECK(_putenv_s("TARTARUS_ASSET_COST", "") == 0);
+    std::ifstream in(csv);
+    std::string line, row;
+    while (std::getline(in, line))
+        if (line.find("AssetCostFreed.fbx") != std::string::npos) row = line;
+    in.close();
+    CHECK(row.find("\"freed.json\",play-max,game-view,model,") == 0);
+    CHECK(row.find(",-1,1,12.0,12,1.00,12,0.000,") != std::string::npos);
+    std::filesystem::remove(csv, ec);
+}
 } // namespace
 // Reads World's LOD records for the structure-patch test's oracle (outside the unnamed namespace: World's friend).
 struct WorldLodTestAccess {
@@ -1961,6 +2022,8 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
     tests.push_back({"Materials: built-in property table - default keys, v1/v2 round-trip, accessors and bind resolver", MaterialBuiltinTable});
     tests.push_back({"LodGroup", TestLodGroup});
+    tests.push_back({"AssetCostLodLevel", TestAssetCostLodLevel});
+    tests.push_back({"AssetCostModelFreedBeforeWrite", TestAssetCostModelFreedBeforeWrite});
     tests.push_back({"LodStructurePatch", TestLodStructurePatch});
     tests.push_back({"LodImpostor", TestLodImpostor});
     tests.push_back({"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch});
