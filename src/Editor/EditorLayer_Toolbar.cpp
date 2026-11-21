@@ -654,18 +654,19 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                                             std::filesystem::equivalent(p, m_CurrentScenePath, ec)});
                     }
                 }
-                // A copy: a click below can change RecentScenes (and so s_Recent) mid-loop.
-                const std::vector<RecentRow> recent = s_Recent;
-                if (ImGui::BeginMenu(ICON_FA_CLOCK_ROTATE_LEFT "  Open Recent", !recent.empty() && !m_InPlayMode)) {
-                    for (size_t i = 0; i < recent.size(); ++i) {
+                // The click is acted on after the loop: opening a scene changes RecentScenes (and so s_Recent).
+                std::string toOpen;
+                if (ImGui::BeginMenu(ICON_FA_CLOCK_ROTATE_LEFT "  Open Recent", !s_Recent.empty() && !m_InPlayMode)) {
+                    for (size_t i = 0; i < s_Recent.size(); ++i) {
+                        const RecentRow& row = s_Recent[i];
                         ImGui::PushID((int)i);
-                        if (ImGui::MenuItem(recent[i].Name.c_str(), nullptr, recent[i].Current) && !recent[i].Current)
-                            RequestOpenScene(world, assets, recent[i].Path);
-                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", recent[i].Path.c_str());
+                        if (ImGui::MenuItem(row.Name.c_str(), nullptr, row.Current) && !row.Current) toOpen = row.Path;
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", row.Path.c_str());
                         ImGui::PopID();
                     }
                     ImGui::EndMenu();
                 }
+                if (!toOpen.empty()) RequestOpenScene(world, assets, toOpen);
                 if (m_InPlayMode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                     EditorUI::SetTooltip("Stop Play mode to open another scene.");
             }
