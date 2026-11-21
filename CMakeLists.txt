@@ -337,7 +337,8 @@ if(TARTARUS_CORE_DLL)
        OR _s MATCHES "/src/Game/(World|WorldLod|SkySettings|TimeOfDay|RootMotion|PostProcessVolume|TerrainSystem)[.]cpp$"
        OR _s MATCHES "/extern/glloader/"
        OR _s MATCHES "/extern/(stb_image_impl|stb_dxt_impl|miniaudio_impl|ImViewGuizmo_impl)[.]cpp$"
-       OR _s MATCHES "/extern/ImGuiColorTextEdit/")
+       OR _s MATCHES "/extern/ImGuiColorTextEdit/"
+       OR _s MATCHES "/src/Editor/ImGuiGLHooks[.]cpp$") # the GL reads of the patched ImGui backend
       list(APPEND _core_sources ${_s})
     endif()
   endforeach()
