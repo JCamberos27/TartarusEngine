@@ -17,6 +17,7 @@
 #include "DefaultTextures.h"
 #include "Frustum.h"
 #include "GLStateCache.h"
+#include "GLStateScope.h"
 #include "GrassRenderer.h"
 #include "ImpostorRenderer.h"
 #include "SkinHideBuffer.h"
@@ -119,10 +120,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     CascadedShadowMap& shadowMap = *in.sunMap;
     Shader& shadowShader = *in.sunShader;
     // The caller has its own target bound; the pass renders into the cascade array.
-    GLint prevDrawFbo = 0, prevReadFbo = 0, prevViewport[4] = {0, 0, 0, 0};
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFbo);
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
-    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    GLTargetScope callerTarget; // its framebuffers + viewport come back on return
 
     shadowMap.Configure(world.Render.ShadowResolution, world.Render.ShadowCascades);
     // Sub-scopes for the pass's CPU stages (fit + gather, sort + cascade masks, caster draws, grass).
@@ -138,9 +136,6 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
 
     glDisable(GL_POLYGON_OFFSET_FILL);
     glCullFace(GL_BACK);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
-    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
     GLStateCache::Invalidate();
     m_LastSunFit = {in.frame, fitView, fitProj};
     return true;
@@ -379,6 +374,7 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
     m_LocalCasters.clear();
     if (!world.Render.ShadowsEnabled || (fl.SpotCount <= 0 && fl.PointCount <= 0)) return;
     GatherLocalCasters(in);
+    GLTargetScope callerTarget; // the caller's framebuffers + viewport come back after the local maps
     if (fl.SpotCount > 0) RenderSpots(in);
     if (fl.PointCount > 0) RenderPoints(in);
 }
@@ -514,12 +510,10 @@ void ShadowFrame::DrawLocalCasters(Shader& shader, bool animatedOnes, const Frus
     DrawDepthCasters(shader, m_Draws);
 }
 
-void ShadowFrame::EndLocalPass(const ShadowFrameInputs& in) {
+void ShadowFrame::EndLocalPass() {
     glDisable(GL_POLYGON_OFFSET_FILL);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, in.windowWidth, in.windowHeight);
     GLStateCache::Invalidate();
 }
 
@@ -608,7 +602,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         drawCasters(true);
         m_SpotDynamicRect[s] = dynRect;
     }
-    EndLocalPass(in);
+    EndLocalPass();
 }
 
 // Point-light cube shadow maps (#119) - six faces per casting point light.
@@ -665,5 +659,5 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
             if (dynamicHere) drawCasters(true);
         }
     }
-    EndLocalPass(in);
+    EndLocalPass();
 }
