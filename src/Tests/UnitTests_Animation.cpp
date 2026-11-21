@@ -744,6 +744,7 @@ void TestFootLockPlantsWhileTheBodyTurns() {
 
 void TestFootLockLetsGoAtReach() {
     IK::FootLockSettings set;
+    set.PredictReach = false; // the line itself (TestFootLockPredictsReach covers letting go a frame early)
     const float dt = 1.0f / 60.0f;
     const glm::quat facing(1.0f, 0.0f, 0.0f, 0.0f);
     const glm::vec3 local(0.0f, 0.08f, 0.0f); // the clip's foot, down and still in the body
@@ -776,6 +777,45 @@ void TestFootLockLetsGoAtReach() {
     }
     CHECK(lifted);
     CHECK(lastGap < 1e-4f);
+}
+
+// PredictReach (the default): a held foot lets go on the frame its reach plus last frame's rise would cross the line.
+void TestFootLockPredictsReach() {
+    const float dt = 1.0f / 60.0f;
+    const glm::quat facing(1.0f, 0.0f, 0.0f, 0.0f);
+    const glm::vec3 local(0.0f, 0.08f, 0.0f);
+    auto held = [&](const IK::FootLockSettings& set, IK::FootLock& lock) {
+        glm::vec3 root(0.0f);
+        lock.Step(0, set, root, facing, local, local.y, dt);
+        for (int i = 0; i < 6; ++i) {
+            root.z += 1.0f * dt;
+            lock.Step(0, set, root, facing, local, local.y, dt);
+        }
+        return lock.Locked(0);
+    };
+    IK::FootLockSettings set;
+    CHECK(set.PredictReach);
+    IK::FootLock lock;
+    CHECK(held(set, lock));
+    CHECK(!lock.Overreach(0, set, 0.95f, 0.90f)); // first held frame: no rise known yet
+    CHECK(!lock.Overreach(0, set, 0.96f, 0.90f)); // rising 0.01: 0.97 next, still within 0.98
+    CHECK(lock.Overreach(0, set, 0.975f, 0.90f)); // rising 0.015: would be 0.99 next - lets go a frame early
+    CHECK(!lock.Locked(0));
+    // A reach that holds steady or falls never predicts: only the line itself lets go.
+    IK::FootLock steady;
+    CHECK(held(set, steady));
+    CHECK(!steady.Overreach(0, set, 0.979f, 0.90f));
+    CHECK(!steady.Overreach(0, set, 0.979f, 0.90f));
+    CHECK(!steady.Overreach(0, set, 0.97f, 0.90f));
+    CHECK(steady.Locked(0));
+    // Off: the old timing, letting go only past the line.
+    IK::FootLockSettings off;
+    off.PredictReach = false;
+    IK::FootLock late;
+    CHECK(held(off, late));
+    CHECK(!late.Overreach(0, off, 0.95f, 0.90f));
+    CHECK(!late.Overreach(0, off, 0.975f, 0.90f));
+    CHECK(late.Overreach(0, off, 0.985f, 0.90f));
 }
 
 void TestClampReachNeverStretchesTheLeg() {
@@ -1939,6 +1979,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Foot lock ignores a swinging foot and lets go past its drift", TestFootLockIgnoresSwingAndLetsGoOnDrift});
     tests.push_back({"Foot lock plants a still clip foot while the body turns 180 deg/s", TestFootLockPlantsWhileTheBodyTurns});
     tests.push_back({"Foot lock lets go and steps past 0.98 of the leg", TestFootLockLetsGoAtReach});
+    tests.push_back({"Foot lock lets go a frame before a rising reach crosses the line", TestFootLockPredictsReach});
     tests.push_back({"Clamp reach never asks a leg for more than 0.995 of it", TestClampReachNeverStretchesTheLeg});
     tests.push_back({"Foot slide meter counts plants and their drift", TestFootSlideMeterCountsPlants});
     tests.push_back({"Foot slide meter: a pivot on the ball is not a slide", TestFootSlideMeterContactPoint});
