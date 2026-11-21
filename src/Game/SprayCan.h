@@ -49,6 +49,9 @@ class SprayCanSystem {
 public:
     SprayCanSystem();
     ~SprayCanSystem();
+    // The graffiti change hook captures `this`: a copy would leave it pointing at the original.
+    SprayCanSystem(const SprayCanSystem&) = delete;
+    SprayCanSystem& operator=(const SprayCanSystem&) = delete;
 
     // A wall hit: true with the point, its normal (toward the can) and what was hit.
     using RayFn = std::function<bool(const glm::vec3& from, const glm::vec3& dir, float reach, glm::vec3& point, glm::vec3& normal)>;

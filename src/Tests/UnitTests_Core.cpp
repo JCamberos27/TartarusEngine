@@ -183,7 +183,7 @@ void TestInputMap() {
 // #170 - a Physic Material asset round-trips through its file and overrides the collider's own
 // surface values; a missing file leaves them alone.
 void TestPhysicMaterial() {
-    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_ut.physicmaterial").string();
+    const std::string path = (TempDir() / "tartarus_ut.physicmaterial").string();
     PhysicMaterialAsset m;
     m.DynamicFriction = 0.05f; m.StaticFriction = 0.1f; m.Bounciness = 0.9f; m.FrictionCombine = 1; m.BounceCombine = 3;
     CHECK(m.SaveFile(path));
@@ -381,7 +381,7 @@ void TestPhysicsApplySettings() {
 
 // A Physic Material saved during Play reaches the running colliders that use it, and only those.
 void TestPhysicsRefreshPhysicMaterial() {
-    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_ut_live.physicmaterial").string();
+    const std::string path = (TempDir() / "tartarus_ut_live.physicmaterial").string();
     PhysicMaterialAsset m;
     m.DynamicFriction = 0.2f;
     CHECK(m.SaveFile(path));
