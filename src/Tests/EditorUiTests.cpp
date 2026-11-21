@@ -215,6 +215,7 @@ struct EditorUiTestAccess {
     }
     static std::string UndoTop(EditorLayer& e) { return e.m_UndoStack.empty() ? std::string("-") : e.m_UndoStack.back().Label; }
     static void PushUndo(EditorLayer& e, World& w, const char* label) { e.PushUndo(w, label); }
+    static void Undo(EditorLayer& e, World& w, AssetLibrary& a) { e.Undo(w, a); }
     static bool InPlay(EditorLayer& e) { return e.m_InPlayMode; }
     static void RequestPlayStop(EditorLayer& e) { e.m_PlayStopRequested = true; }
     static const std::vector<EditorLayer::PinnedComponent>& Pins(EditorLayer& e) { return e.m_Pins; }
