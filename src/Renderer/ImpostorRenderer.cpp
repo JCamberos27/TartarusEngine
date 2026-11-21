@@ -71,6 +71,10 @@ ImpostorRenderer::~ImpostorRenderer() {
     if (m_Loader.joinable()) m_Loader.join();
 }
 
+void ImpostorRenderer::WarmUp() {
+    if (ImpostorLibrary::Wanted()) EnsurePrograms();
+}
+
 bool ImpostorRenderer::EnsurePrograms() {
     if (m_Depth) return true;
     if (m_ProgramsFailed) return false;
