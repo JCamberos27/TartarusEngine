@@ -1211,7 +1211,7 @@ void TestAssetCostLodLevel() {
 // A model drawn during a phase and unloaded before the phase is written (Forest's play phase streams outfits) still
 // gets its row: the table keeps what it measured at draw time, never a pointer to the model.
 void TestAssetCostModelFreedBeforeWrite() {
-    const std::filesystem::path csv = std::filesystem::temp_directory_path() / "asset_cost_freed.csv";
+    const std::filesystem::path csv = UnitTestSupport::TempDir("AssetCost") / "asset_cost_freed.csv";
     std::error_code ec;
     std::filesystem::remove(csv, ec);
     CHECK(_putenv_s("TARTARUS_ASSET_COST", csv.string().c_str()) == 0);
