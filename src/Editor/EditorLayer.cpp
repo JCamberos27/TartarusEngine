@@ -154,6 +154,16 @@ void EditorLayer::Init(GLFWwindow* window) {
             Log::Info("Reloaded tab and header styles (editor_ui_styles.json changed outside the editor).");
             return true;
         });
+    // project/settings.json edited outside the editor: reload it, and push what a running Play snapshotted (gravity, the
+    // layer collision matrix) into the physics world. Its own saves are skipped (the Gravity field applies directly).
+    if (!m_ProjectSettingsHook)
+        m_ProjectSettingsHook = AssetChangeHooks::RegisterFile("settings.json", [](const AssetChangeHooks::Event& e) {
+            if (e.BySelf || e.Type == AssetChangeHooks::Event::Kind::Removed) return false;
+            ProjectSettings::Load();
+            PhysicsWorld::ApplySettings();
+            Log::Info("Reloaded project settings (settings.json changed outside the editor).");
+            return true;
+        });
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -572,6 +582,8 @@ void EditorLayer::Shutdown() {
     m_ShutdownDone = true;
     AssetChangeHooks::Unregister(m_UiStylesHook);
     m_UiStylesHook = 0;
+    AssetChangeHooks::Unregister(m_ProjectSettingsHook);
+    m_ProjectSettingsHook = 0;
     GameModuleBuild::Shutdown();
     MotionRebake::Shutdown();
     EditorRestart::Shutdown(); // a restart build still running: wait, put the exe name back
@@ -2178,10 +2190,11 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         EditorUIPrimitives::SectionHeader("Gravity");
         SettingsLabel("Gravity (m/s\xC2\xB2)");
         ImGui::DragFloat3("##grav", &p.Gravity.x, 0.1f, -200.0f, 200.0f, "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemDeactivatedAfterEdit()) { ProjectSettings::Save(); PhysicsWorld::ApplySettings(); }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("World gravity for rigid bodies and particles (all three axes), applied when Play\n"
-                                 "starts. Earth's is 9.81. The player's fall is the First Person Controller's own Gravity.");
+                                 "starts and to a running Play. Earth's is 9.81. The player's fall is the First Person\n"
+                                 "Controller's own Gravity.");
 
         // #15 — Defect #15: this section's header used to read "Simulation (reserved for
         // #185)", an internal issue number leaked straight into shipped UI. #185 has since

@@ -358,6 +358,27 @@ void TestPhysicsHitchCatchUp() {
     PhysicsWorld::Destroy();
 }
 
+// Gravity and the layer collision matrix, snapshotted at Create, follow a settings change during Play.
+void TestPhysicsApplySettings() {
+    ProjectSettings::PhysicsSettings& p = ProjectSettings::MutablePhysics();
+    const ProjectSettings::PhysicsSettings saved = p;
+    CHECK(!PhysicsWorld::ApplySettings()); // nothing running
+    World world;
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (PhysicsWorld::IsActive()) {
+        CHECK(!PhysicsWorld::ApplySettings()); // same settings as Create: nothing to do
+        p.Gravity.y = saved.Gravity.y * 0.5f - 1.0f;
+        CHECK(PhysicsWorld::ApplySettings());
+        CHECK(!PhysicsWorld::ApplySettings()); // applied once
+        p.LayerCollisionMask[3] ^= 1u << 5;
+        CHECK(PhysicsWorld::ApplySettings());
+        CHECK(!PhysicsWorld::ApplySettings());
+        PhysicsWorld::Destroy();
+    }
+    p = saved;
+}
+
 void TestPhysicsWorldSync() {
     World world;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -707,5 +728,6 @@ void RegisterCoreTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ProfilerUnscoped", TestProfilerUnscoped});
     tests.push_back({"PhysicMaterial", TestPhysicMaterial});
     tests.push_back({"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp});
+    tests.push_back({"PhysicsApplySettings", TestPhysicsApplySettings});
     tests.push_back({"PhysicsWorldSync", TestPhysicsWorldSync});
 }
