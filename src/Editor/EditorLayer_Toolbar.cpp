@@ -635,19 +635,33 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                     "Scene Files\0*.json\0All Files\0*.*\0", m_Window));
             }
             {
-                // Scenes that no longer exist are hidden rather than offered and then refused.
-                std::vector<std::string> recent;
-                std::error_code ec;
-                for (const std::string& p : EditorSettings::Get().RecentScenes)
-                    if (std::filesystem::exists(p, ec)) recent.push_back(p);
+                // Scenes that no longer exist are hidden rather than offered and then refused. Worked out when
+                // the File menu opens (or the list / open scene changes), not every frame while it is open: each
+                // entry cost an exists() stat plus an equivalent() that opens both files.
+                struct RecentRow { std::string Path, Name; bool Current = false; };
+                static std::vector<RecentRow> s_Recent;
+                static std::vector<std::string> s_RecentFrom;
+                static std::string s_RecentCurrent;
+                const std::vector<std::string>& recentSrc = EditorSettings::Get().RecentScenes;
+                if (ImGui::IsWindowAppearing() || recentSrc != s_RecentFrom || m_CurrentScenePath != s_RecentCurrent) {
+                    s_RecentFrom = recentSrc;
+                    s_RecentCurrent = m_CurrentScenePath;
+                    s_Recent.clear();
+                    std::error_code ec;
+                    for (const std::string& p : recentSrc) {
+                        if (!std::filesystem::exists(p, ec)) continue;
+                        s_Recent.push_back({p, std::filesystem::path(p).filename().string(),
+                                            std::filesystem::equivalent(p, m_CurrentScenePath, ec)});
+                    }
+                }
+                // A copy: a click below can change RecentScenes (and so s_Recent) mid-loop.
+                const std::vector<RecentRow> recent = s_Recent;
                 if (ImGui::BeginMenu(ICON_FA_CLOCK_ROTATE_LEFT "  Open Recent", !recent.empty() && !m_InPlayMode)) {
                     for (size_t i = 0; i < recent.size(); ++i) {
-                        const std::string name = std::filesystem::path(recent[i]).filename().string();
-                        const bool isCurrent = std::filesystem::equivalent(recent[i], m_CurrentScenePath, ec);
                         ImGui::PushID((int)i);
-                        if (ImGui::MenuItem(name.c_str(), nullptr, isCurrent) && !isCurrent)
-                            RequestOpenScene(world, assets, recent[i]);
-                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", recent[i].c_str());
+                        if (ImGui::MenuItem(recent[i].Name.c_str(), nullptr, recent[i].Current) && !recent[i].Current)
+                            RequestOpenScene(world, assets, recent[i].Path);
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", recent[i].Path.c_str());
                         ImGui::PopID();
                     }
                     ImGui::EndMenu();
