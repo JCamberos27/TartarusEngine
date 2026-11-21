@@ -436,7 +436,17 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
     if (listed.empty() && type != "scene" && type != "prefab") { OnExternalAdd(world, assets, path); return; }
     bool reloaded = false;
     if (type == "texture" && !listed.empty()) reloaded = assets.ReimportTexture(listed);
-    else if (type == "model" && !listed.empty()) reloaded = assets.ReimportModel(listed);
+    else if (type == "model" && !listed.empty()) {
+        reloaded = assets.ReimportModel(listed);
+        // Placed copies share the new meshes; their empty slots take the model's material remap,
+        // as a scene load does, so a submesh the file gained gets its .mat now, not at the next open.
+        if (reloaded) {
+            const std::string key = AssetDatabase::PathKey(listed);
+            for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
+                if (rc.ModelRef && AssetDatabase::PathKey(rc.ModelRef->Path()) == key)
+                    assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+        }
+    }
     else if (type == "material" && !listed.empty()) reloaded = assets.ReloadMaterial(listed);
     else if (type == "prefab") reloaded = !listed.empty(); // its instances: the "prefab" hook
     else if (type == "audio") reloaded = AudioEngine::Reload(path); // preloaded clips; streamed ones re-read on play
