@@ -9,6 +9,7 @@
 #include "RestartState.h"
 #include "EditorRestart.h"
 #include "EditorFileStat.h"
+#include <cstdlib>
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -871,6 +872,35 @@ void TestEditorFileStatCache() {
     CHECK(FS::DiskReads() - r0 == 3);
     CHECK(!FS::Get(std::filesystem::path(), t0).Exists);
     CHECK(FS::DiskReads() - r0 == 3); // an empty path never touches the disk
+
+    // Micro-timing for the PR (opt in: TARTARUS_MICROBENCH=1): the raw calls the Inspector and the File menu
+    // made every frame, against a cached Get.
+    if (std::getenv("TARTARUS_MICROBENCH")) {
+        { std::ofstream(file) << "x"; }
+        const auto other = dir / "b.txt";
+        { std::ofstream(other) << "y"; }
+        using C = std::chrono::steady_clock;
+        constexpr int kN = 2000;
+        auto us = [](C::duration d) { return std::chrono::duration<double, std::micro>(d).count() / kN; };
+        bool sink = false;
+        auto t0 = C::now();
+        for (int i = 0; i < kN; ++i) sink ^= std::filesystem::exists(file, ec);
+        const double exUs = us(C::now() - t0);
+        t0 = C::now();
+        for (int i = 0; i < kN; ++i) sink ^= std::filesystem::last_write_time(file, ec) == std::filesystem::file_time_type{};
+        const double mtUs = us(C::now() - t0);
+        t0 = C::now();
+        for (int i = 0; i < kN; ++i) sink ^= std::filesystem::equivalent(file, other, ec);
+        const double eqUs = us(C::now() - t0);
+        FS::Clear();
+        t0 = C::now();
+        for (int i = 0; i < kN; ++i) sink ^= FS::Get(file).Exists;
+        const double cachedUs = us(C::now() - t0);
+        std::printf("[MicroBench] file stat: exists %.2f us, last_write_time %.2f us, equivalent %.2f us, cached Get %.3f us (sink=%d)\n",
+                    exUs, mtUs, eqUs, cachedUs, (int)sink);
+        std::filesystem::remove(file, ec);
+        std::filesystem::remove(other, ec);
+    }
     FS::Clear();
 }
 
