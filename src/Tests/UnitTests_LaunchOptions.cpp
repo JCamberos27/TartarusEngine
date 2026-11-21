@@ -36,6 +36,10 @@ void Test_LaunchOptions_Modes() {
     CHECK(!Parse({"--import-blood"}, o, err) && err.find("needs a value") != std::string::npos);
     // An empty value (a script whose path conversion failed) used to start a plain editor that never exits.
     CHECK(!Parse({"--editor-shot", ""}, o, err) && err.find("needs a value") != std::string::npos);
+    // Rebuild & Restart's relaunch: editor only.
+    CHECK(Parse({"--restore-state", "s.json", "--wait-pid", "4242"}, o, err));
+    CHECK(o.mode == LaunchMode::Editor && o.restoreStateFile == "s.json" && o.waitPid == 4242);
+    CHECK(!Parse({"--unit-tests", "--restore-state", "s.json"}, o, err));
 }
 
 void Test_LaunchOptions_Lists() {
@@ -61,6 +65,10 @@ void Test_LaunchOptions_Errors() {
     CHECK(!Parse({"--smoke-test", "--perf-sample"}, o, err) && err.find("only works with") != std::string::npos);
     CHECK(!Parse({"--perf-res", "1280x720"}, o, err)); // the editor doesn't take it
     CHECK(!Parse({"--perf-bench", "--perf-res", "big"}, o, err) && err.find("1920x1080") != std::string::npos);
+    for (const char* pid : {"abc", "0", "12x", "+12", " 12", "99999999999", "4294967295"})
+        CHECK(!Parse({"--wait-pid", pid}, o, err) && err.find("process id") != std::string::npos);
+    CHECK(!Parse({"--wait-pid", "-5"}, o, err)); // a value starting with '-' is a missing value
+    CHECK(Parse({"--wait-pid", "4294967294"}, o, err) && o.waitPid == 4294967294ul);
     CHECK(!Parse({"--project", "Z:/no/such/folder/anywhere"}, o, err));
 }
 

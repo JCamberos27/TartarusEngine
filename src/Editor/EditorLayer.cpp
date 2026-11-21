@@ -15,6 +15,7 @@
 #include "AssetLibrary.h"
 #include "World.h"
 #include "GameModuleBuild.h"
+#include "EditorRestart.h"
 #include "Camera.h"
 #include "Model.h"
 #include "Texture.h"
@@ -571,6 +572,7 @@ void EditorLayer::Shutdown() {
     AssetChangeHooks::Unregister(m_UiStylesHook);
     m_UiStylesHook = 0;
     GameModuleBuild::Shutdown();
+    EditorRestart::Shutdown(); // a restart build still running: wait, put the exe name back
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
     // A build still running: stop it at the next file and wait, so it isn't cut off mid-copy.
@@ -3017,6 +3019,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditWorldPtr = &world;
     BeginGlobalUndoFrame(world);
     GameModuleBuild::Poll();
+    EditorRestart::Poll();
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
@@ -3626,6 +3629,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // selection change is just another entry on it now, same as any edit. Ctrl+[ / Ctrl+]
         // stay their own, separate selection-only back/forward (SelectionHistoryBack/Forward).
         // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
+        if (Shortcuts::Triggered("editor.rebuildRestart")) RequestRebuildRestart();
         if (Shortcuts::Triggered("editor.saveAs")) {
             if (m_InPlayMode) {
                 Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
