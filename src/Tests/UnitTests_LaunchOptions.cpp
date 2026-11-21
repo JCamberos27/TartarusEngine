@@ -142,34 +142,41 @@ void Test_ModuleCopies_OwnerPid() {
     CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_99999999999_1.dll", L"TartarusGame_"));
 }
 
-// --perf-bench's machine line: other processes' CPU share and the watched processes running, from two snapshots.
+// --perf-bench's machine line: other processes' CPU share, and which watched processes took CPU during the phase.
 void Test_MachineLoad_Between() {
     using namespace MachineLoad;
+    using P = Snapshot::Proc;
     Snapshot a, b;
     a.Ok = b.Ok = true;
     a.SysTotal = 1000; a.SysBusy = 100; a.SelfCpu = 50;
-    b.SysTotal = 2000; b.SysBusy = 500; b.SelfCpu = 250; // busy +400, self +200 -> others 20%
-    a.Procs = {{"TartarusEngine", 0}, {"cl", 3}};
-    b.Procs = {{"TartarusEngine", 0}, {"cl", 1}};
-    Result r = Between(a, b);
+    b.SysTotal = 2000; b.SysBusy = 500; b.SelfCpu = 250; // busy +400, self +200 -> others 20%; 2 cores: 500 each
+    // MSBuild 7 idle (+10 <= 5% of 500), cl 8 busy (+100), cl 9 ended, cl 10 started, MSBuild 11 time unreadable.
+    a.Procs = {P{"MSBuild", 7, 100, true}, P{"cl", 8, 0, true}, P{"cl", 9, 0, true}, P{"MSBuild", 11, 0, false}};
+    b.Procs = {P{"MSBuild", 7, 110, true}, P{"cl", 8, 100, true}, P{"cl", 10, 0, true}, P{"MSBuild", 11, 0, false}};
+    Result r = Between(a, b, 2);
     CHECK(r.Ok);
     CHECK(r.OtherCpuPct > 19.9 && r.OtherCpuPct < 20.1);
-    CHECK(r.Procs == "cl x3"); // the larger count of the two snapshots
-    CHECK(r.Contended);        // a compiler ran, even below the CPU line
-    CHECK(Describe(r, 8) == "other CPU 20% (8 cores); running: cl x3 -> CONTENDED");
+    CHECK(r.Busy == "cl x3, MSBuild x1");
+    CHECK(r.Idle == "MSBuild x1");
+    CHECK(r.Contended);
+    CHECK(Describe(r, 2) == "other CPU 20% (2 cores); busy: cl x3, MSBuild x1; idle: MSBuild x1 -> CONTENDED");
 
-    b.Procs = {{"TartarusEngine", 0}, {"cl", 0}};
-    a.Procs = b.Procs;
-    r = Between(a, b);
-    CHECK(r.Procs.empty() && !r.Contended); // 20% < kContendedCpuPct, nothing watched
-    CHECK(Describe(r, 8) == "other CPU 20% (8 cores); running: - -> quiet");
+    // Only idle watched processes and 20% other CPU: quiet (the MSBuild nodes a build leaves behind).
+    a.Procs = {P{"MSBuild", 7, 100, true}, P{"TartarusEngine", 3, 5, true}};
+    b.Procs = {P{"MSBuild", 7, 100, true}, P{"TartarusEngine", 3, 30, true}};
+    r = Between(a, b, 2);
+    CHECK(r.Busy.empty() && r.Idle == "TartarusEngine x1, MSBuild x1" && !r.Contended);
+    CHECK(Describe(r, 2) == "other CPU 20% (2 cores); busy: -; idle: TartarusEngine x1, MSBuild x1 -> quiet");
+    b.Procs[1].Cpu = 31; // +26 > 25 (5% of a core over the phase): the other engine is busy
+    CHECK(Between(a, b, 2).Contended);
+    b.Procs[1].Cpu = 30;
     b.SysBusy = 800; // others 50%
-    CHECK(Between(a, b).Contended);
+    CHECK(Between(a, b, 2).Contended);
 
     b.Ok = false; // a failed snapshot prints nothing
-    CHECK(!Between(a, b).Ok && Describe(Between(a, b), 8).empty());
+    CHECK(!Between(a, b, 2).Ok && Describe(Between(a, b, 2), 2).empty());
     b.Ok = true; b.SysTotal = a.SysTotal; // no time passed: no division by zero
-    CHECK(!Between(a, b).Ok);
+    CHECK(!Between(a, b, 2).Ok);
     const Snapshot live = Take(); // the real snapshot works and never counts this process
     (void)live;
 #ifdef _WIN32

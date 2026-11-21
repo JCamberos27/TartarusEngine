@@ -49,7 +49,6 @@ Snapshot Take() {
     s.SysTotal = U64(kernel) + U64(user); // kernel time includes idle
     s.SysBusy = s.SysTotal - U64(idle);
     s.SelfCpu = U64(pk) + U64(pu);
-    for (const char* name : kWatched) s.Procs.emplace_back(name, 0);
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return s;
     const DWORD self = GetCurrentProcessId();
@@ -60,8 +59,17 @@ Snapshot Take() {
         std::string exe; // the watched names are ASCII: other characters only need to not match
         for (const wchar_t* w = pe.szExeFile; *w; ++w) exe += *w < 128 ? (char)*w : '?';
         if (exe.size() > 4 && SameNameNoCase(exe.substr(exe.size() - 4), ".exe")) exe.resize(exe.size() - 4);
-        for (auto& [name, count] : s.Procs)
-            if (SameNameNoCase(exe, name.c_str())) ++count;
+        const char* const* hit = std::find_if(std::begin(kWatched), std::end(kWatched),
+                                              [&](const char* name) { return SameNameNoCase(exe, name); });
+        if (hit == std::end(kWatched)) continue;
+        Snapshot::Proc p;
+        p.Name = *hit;
+        p.Pid = pe.th32ProcessID;
+        if (HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID)) {
+            if (GetProcessTimes(h, &c, &e, &pk, &pu)) { p.Cpu = U64(pk) + U64(pu); p.CpuKnown = true; }
+            CloseHandle(h);
+        }
+        s.Procs.push_back(std::move(p));
     }
     CloseHandle(snap);
     s.Ok = true;
@@ -69,7 +77,7 @@ Snapshot Take() {
     return s;
 }
 
-Result Between(const Snapshot& start, const Snapshot& end) {
+Result Between(const Snapshot& start, const Snapshot& end, int cores) {
     Result r;
     if (!start.Ok || !end.Ok || end.SysTotal <= start.SysTotal) return r;
     r.Ok = true;
@@ -77,26 +85,43 @@ Result Between(const Snapshot& start, const Snapshot& end) {
     const double busy = end.SysBusy >= start.SysBusy ? (double)(end.SysBusy - start.SysBusy) : 0.0;
     const double self = end.SelfCpu >= start.SelfCpu ? (double)(end.SelfCpu - start.SelfCpu) : 0.0;
     r.OtherCpuPct = std::clamp(100.0 * (busy - self) / total, 0.0, 100.0);
-    bool anyProc = false;
-    for (const auto& [name, n0] : start.Procs) {
-        int n = n0;
-        for (const auto& [name1, n1] : end.Procs)
-            if (name1 == name) n = std::max(n, n1);
-        if (n == 0) continue;
+    // Busy: took more than kBusyCorePct of one core, started or ended during the phase (a compile), or its time
+    // couldn't be read (not provably idle).
+    const double busyLine = kBusyCorePct / 100.0 * total / std::max(cores, 1);
+    auto find = [](const Snapshot& s, const Snapshot::Proc& p) -> const Snapshot::Proc* {
+        for (const Snapshot::Proc& q : s.Procs)
+            if (q.Pid == p.Pid && q.Name == p.Name) return &q;
+        return nullptr;
+    };
+    auto list = [](std::string& out, const char* name, int n) {
+        if (n == 0) return;
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "%s%s x%d", r.Procs.empty() ? "" : ", ", name.c_str(), n);
-        r.Procs += buf;
-        anyProc = true;
+        std::snprintf(buf, sizeof(buf), "%s%s x%d", out.empty() ? "" : ", ", name, n);
+        out += buf;
+    };
+    for (const char* name : kWatched) {
+        int nBusy = 0, nIdle = 0;
+        for (const Snapshot::Proc& p : end.Procs) {
+            if (p.Name != name) continue;
+            const Snapshot::Proc* was = find(start, p);
+            const bool idle = was && was->CpuKnown && p.CpuKnown && (double)(p.Cpu - std::min(p.Cpu, was->Cpu)) <= busyLine;
+            ++(idle ? nIdle : nBusy);
+        }
+        for (const Snapshot::Proc& p : start.Procs)
+            if (p.Name == name && !find(end, p)) ++nBusy; // ended during the phase
+        list(r.Busy, name, nBusy);
+        list(r.Idle, name, nIdle);
     }
-    r.Contended = anyProc || r.OtherCpuPct >= kContendedCpuPct;
+    r.Contended = !r.Busy.empty() || r.OtherCpuPct >= kContendedCpuPct;
     return r;
 }
 
 std::string Describe(const Result& r, int cores) {
     if (!r.Ok) return "";
     char buf[96];
-    std::snprintf(buf, sizeof(buf), "other CPU %.0f%% (%d cores); running: ", r.OtherCpuPct, cores);
-    return buf + (r.Procs.empty() ? std::string("-") : r.Procs) + (r.Contended ? " -> CONTENDED" : " -> quiet");
+    std::snprintf(buf, sizeof(buf), "other CPU %.0f%% (%d cores); busy: ", r.OtherCpuPct, cores);
+    return buf + (r.Busy.empty() ? std::string("-") : r.Busy) + "; idle: " + (r.Idle.empty() ? std::string("-") : r.Idle) +
+           (r.Contended ? " -> CONTENDED" : " -> quiet");
 }
 
 } // namespace MachineLoad

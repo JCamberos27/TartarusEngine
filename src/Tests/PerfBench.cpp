@@ -136,8 +136,8 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
     // What else ran during the phase: hitches in a CONTENDED phase are likely other processes, not this one.
-    const std::string machine =
-        MachineLoad::Describe(MachineLoad::Between(m_LoadStart, MachineLoad::Take()), MachineLoad::Cores());
+    const int cores = MachineLoad::Cores();
+    const std::string machine = MachineLoad::Describe(MachineLoad::Between(m_LoadStart, MachineLoad::Take(), cores), cores);
     if (!machine.empty()) std::printf("[PerfBench] %s machine: %s\n", label, machine.c_str());
     for (const Worst& w : m_Worst) {
         char unscoped[64] = "-";
