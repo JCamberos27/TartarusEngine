@@ -524,14 +524,20 @@ void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
             m_HierarchyTypeAhead += (char)std::tolower((unsigned char)c);
         }
         if (m_HierarchyTypeAhead.size() != before && !m_HierarchyTypeAhead.empty()) {
+            // Case-insensitive prefix test in place: a lowercase copy of every row's name per key
+            // was ~7 ms a keystroke on Forest (P-36b).
+            const std::string& prefix = m_HierarchyTypeAhead; // already lowercase
+            auto startsWithPrefix = [&prefix](const std::string& name) {
+                if (name.size() < prefix.size()) return false;
+                for (size_t i = 0; i < prefix.size(); ++i)
+                    if ((char)std::tolower((unsigned char)name[i]) != prefix[i]) return false;
+                return true;
+            };
             const int n = (int)vis.size();
             for (int step = 1; step <= n; ++step) {
                 entt::entity e = vis[(std::max(idx, 0) + step) % n];
                 const auto* nm = world.Registry.try_get<NameComponent>(e);
-                std::string lower = nm ? nm->Name : std::string();
-                std::transform(lower.begin(), lower.end(), lower.begin(),
-                               [](unsigned char ch) { return (char)std::tolower(ch); });
-                if (lower.rfind(m_HierarchyTypeAhead, 0) == 0) {
+                if (nm && startsWithPrefix(nm->Name)) {
                     SelectItem(e, false);
                     m_HierarchyScrollToEntity = e;
                     break;

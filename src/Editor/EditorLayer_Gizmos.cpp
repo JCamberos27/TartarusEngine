@@ -1506,7 +1506,9 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
                 if (ViewportPickLocked(world, entity)) continue;
                 if (NotSceneSelectable(world, entity)) continue; // #236 B
                 if (IconHiddenForPick(world, entity, IsSelected(entity))) continue;
-                glm::mat4 model = world.ComposeWorldTransform(entity);
+                // The frame's cached matrix (composed on the spot for one spawned since): walking
+                // each icon's parent chain was ~5 ms a click on Forest (P-36b).
+                const glm::mat4 model = world.GetCachedWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
                 glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
                 if (clip.w <= 0.0001f) continue;
