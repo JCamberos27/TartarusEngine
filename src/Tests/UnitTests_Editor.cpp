@@ -694,7 +694,7 @@ void TestAutoSaveFromUndoSnapshot() {
         World loaded;
         AssetLibrary loadedAssets;
         CHECK(SceneSerializer::Load(loaded, loadedAssets, oldPath, /*persistMigration=*/false));
-        CHECK(!loadedAssets.HasModel(listedModel) && !loadedAssets.HasTexture(listedTexture));
+        CHECK(loadedAssets.Models().empty() && loadedAssets.Textures().empty());
     }
     const std::function<bool()> write = SceneSerializer::PrepareSaveFromSnapshot(snapshot, assets, fromSnapshot);
     CHECK(write && write());
