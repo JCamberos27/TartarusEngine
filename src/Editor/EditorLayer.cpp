@@ -14,6 +14,7 @@
 #include "AssetLibrary.h"
 #include "World.h"
 #include "GameModuleBuild.h"
+#include "MotionRebake.h"
 #include "Camera.h"
 #include "Model.h"
 #include "Texture.h"
@@ -560,6 +561,7 @@ void EditorLayer::Shutdown() {
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
     GameModuleBuild::Shutdown();
+    MotionRebake::Shutdown();
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
     // A build still running: stop it at the next file and wait, so it isn't cut off mid-copy.
@@ -3006,6 +3008,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditWorldPtr = &world;
     BeginGlobalUndoFrame(world);
     GameModuleBuild::Poll();
+    MotionRebake::Poll();
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
