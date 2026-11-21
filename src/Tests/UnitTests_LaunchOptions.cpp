@@ -36,6 +36,10 @@ void Test_LaunchOptions_Modes() {
     CHECK(!Parse({"--import-blood"}, o, err) && err.find("needs a value") != std::string::npos);
     // An empty value (a script whose path conversion failed) used to start a plain editor that never exits.
     CHECK(!Parse({"--editor-shot", ""}, o, err) && err.find("needs a value") != std::string::npos);
+    // Rebuild & Restart's relaunch: editor only.
+    CHECK(Parse({"--restore-state", "s.json", "--wait-pid", "4242"}, o, err));
+    CHECK(o.mode == LaunchMode::Editor && o.restoreStateFile == "s.json" && o.waitPid == 4242);
+    CHECK(!Parse({"--unit-tests", "--restore-state", "s.json"}, o, err));
 }
 
 void Test_LaunchOptions_Lists() {

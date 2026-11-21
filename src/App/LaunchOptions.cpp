@@ -4,6 +4,7 @@
 #include "Core/Paths.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -147,6 +148,12 @@ const FlagDef kFlags[] = {
     {"--crash-dialog", Arity::None, "", false, kNoMode, Bit(LaunchMode::CrashTest) | Bit(LaunchMode::Editor),
      [](LaunchOptions& o, const std::string&) { o.crashDialog = true; },
      "show the crash dialog on a crash test"},
+    {"--restore-state", Arity::Required, "file", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) { o.restoreStateFile = v; },
+     "Rebuild & Restart: pick up the scene, unsaved edits, selection and Play from this file"},
+    {"--wait-pid", Arity::Required, "pid", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) { o.waitPid = std::strtoul(v.c_str(), nullptr, 10); },
+     "Rebuild & Restart: wait for this editor process to exit before starting"},
 };
 // clang-format on
 
