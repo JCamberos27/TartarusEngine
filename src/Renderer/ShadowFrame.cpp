@@ -1,5 +1,6 @@
 #include "ShadowFrame.h"
 #include <cstdio>
+#include <cstdlib>
 
 #include <algorithm>
 #include <cmath>
@@ -341,14 +342,19 @@ void ShadowFrame::DrawSunGrass(SunPass& p, const glm::mat4& fitView) {
         if (grass.HasAreas()) {
             PROFILE_GPU_SCOPE("Grass Shadow");
             const glm::vec3 eye = glm::vec3(glm::inverse(fitView)[3]);
-            const int grassCascades = std::min(cascadeCount, GrassRenderer::kShadowCascades);
+            // P-14 EXPERIMENT (not for merge): grass shadow levers for a look call. Unset = today's values.
+            static const auto expInt = [](const char* n, int d) { const char* e = std::getenv(n); return e && *e ? std::atoi(e) : d; };
+            static const int expCascades = expInt("TARTARUS_EXP_GRASS_SHADOW_CASCADES", GrassRenderer::kShadowCascades);
+            static const float expDistance = (float)expInt("TARTARUS_EXP_GRASS_SHADOW_DIST", (int)GrassRenderer::kShadowDistance);
+            static const int expNearSegs = expInt("TARTARUS_EXP_GRASS_SHADOW_NEAR_SEGS", GrassRenderer::kNearSegments);
+            const int grassCascades = std::min(cascadeCount, expCascades);
             for (int c = 0; c < grassCascades; ++c) {
                 if (!(renderMask & (1u << c))) continue;
                 const glm::mat4 vp = shadowMap.LightViewProj(c);
-                if (!grass.Cull(glm::mat4(1.0f), vp, eye, GrassRenderer::kShadowDistance)) continue;
+                if (!grass.Cull(glm::mat4(1.0f), vp, eye, expDistance)) continue;
                 shadowMap.Resume(c);
                 // The nearest cascade's texels are a few millimetres: full blades. Past it, two-segment ones.
-                grass.DrawShadow(vp, c == 0 ? GrassRenderer::kNearSegments : 2);
+                grass.DrawShadow(vp, c == 0 ? expNearSegs : 2);
             }
             shadowShader.Bind();
         }
