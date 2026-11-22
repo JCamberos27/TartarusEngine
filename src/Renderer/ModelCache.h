@@ -98,6 +98,12 @@ struct Key {
     std::uint64_t Settings = 0; // the import settings and the importer's version
     std::uint64_t SourceBytes = 0;
     bool Valid = false;         // false: this import isn't cached (off, not a cooked format, unreadable file)
+    // The file's size and write time as they were BEFORE it was hashed. Store checks them again: a file changed
+    // between the hash and the import's own read (a re-export, a Drive sync, a checkout) would otherwise file the new
+    // file's import under the old bytes' key, and a later return to those bytes would read the wrong geometry.
+    std::string Path;
+    std::uint64_t StampSize = 0;
+    std::int64_t StampTime = 0;
 };
 
 // Whether imports go through the cache: off with TARTARUS_NO_MODEL_CACHE=1 (A/B runs, the same-output check).

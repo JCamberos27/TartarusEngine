@@ -143,7 +143,9 @@ public:
     const void* ImportId() const { return m_D.get(); }
     // A hash of everything the import produced: each mesh's vertices (a deferred import's full vertices, else its CPU
     // copies) and indices, materials (texture paths included), bones, nodes, clips and bounds. Two imports with equal
-    // digests drew and animated the same; --model-cache-check compares a cooked import's with a fresh one's.
+    // digests drew and animated the same; --model-cache-check compares a cooked import's with a fresh one's. Only a
+    // deferred import (ImportDeferred) still holds every vertex attribute; a mesh already uploaded contributes its CPU
+    // copies (positions, indices, skin), so the check imports through ImportDeferred.
     std::uint64_t ImportDigest() const;
     // Unique per import (a Reimport gets a new one; never reused, unlike an address): caches built from the
     // imported geometry compare it to notice a reimport.

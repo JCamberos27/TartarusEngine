@@ -241,6 +241,18 @@ void TestModelCacheCooksAndReadsBack() {
     CHECK(ModelCache::GetStats().Cooked == s4.Cooked + 1);
     CHECK(changed && std::abs(changed->BoundsMax().x - 3.0f) < 1e-5f);
 
+    // The file changes between its hash and the import's own read: nothing is filed under the old bytes' key.
+    const ModelCache::Key stale = ModelCache::MakeKey(file.string(), settings);
+    CHECK(stale.Valid);
+    WriteTriangleGlb(file, 4.0f);
+    std::error_code tec;
+    std::filesystem::last_write_time(file, std::filesystem::last_write_time(file, tec) + std::chrono::seconds(5), tec);
+    const int entriesBefore = ModelCache::DiskUsage().Entries;
+    ModelCache::Store(stale, ModelCache::Cooked{});
+    CHECK(ModelCache::DiskUsage().Entries == entriesBefore);
+    ModelCache::Cooked none;
+    CHECK(!ModelCache::Load(stale, none));
+
     CHECK(ModelCache::Clear() >= 3);
     CHECK(ModelCache::DiskUsage().Entries == 0);
 }

@@ -2,6 +2,7 @@
 #include "Model.h"
 #include "Core/Env.h"
 #include "Core/Paths.h"
+#include "Log.h"
 #include "meshoptimizer.h"
 
 #include <assimp/version.h>
@@ -84,6 +85,19 @@ std::uint64_t HashRaw(const unsigned char* p, std::size_t n, std::uint64_t h) {
     std::uint64_t tail = 0;
     for (std::size_t k = 0; i + k < n; ++k) tail |= (std::uint64_t)p[i + k] << (8 * k);
     return Mix(h, tail ^ ((std::uint64_t)(n & 7) << 56));
+}
+
+// The file's size and last write time (false when it can't be read).
+bool SourceStamp(const std::string& path, std::uint64_t& size, std::int64_t& time) {
+    std::error_code ec;
+    const fs::path p = fs::u8path(path);
+    const auto bytes = fs::file_size(p, ec);
+    if (ec) return false;
+    const auto written = fs::last_write_time(p, ec);
+    if (ec) return false;
+    size = (std::uint64_t)bytes;
+    time = (std::int64_t)written.time_since_epoch().count();
+    return true;
 }
 
 bool IsCookedFormat(const std::string& path) {
@@ -407,6 +421,8 @@ Key MakeKey(const std::string& path, const ModelImportSettings& settings) {
     // The skin audit imports with Assimp's influence cap off (ImportFromFile): never cooked, never read.
     static const bool s_SkinAudit = Env::Flag(Env::Var::SkinAudit);
     if (s_SkinAudit) return key;
+    if (!SourceStamp(path, key.StampSize, key.StampTime)) return key; // before the read: Store compares against it
+    key.Path = path;
     std::ifstream f(fs::u8path(path), std::ios::binary);
     if (!f) return key;
     std::vector<unsigned char> buf(1 << 20);
@@ -464,6 +480,14 @@ void Store(const Key& key, const Cooked& cooked) {
     if (!key.Valid) return;
     for (const auto& m : cooked.Materials)
         if (m.AnyEmbedded()) return; // embedded textures live only in the source file
+    // The file changed after it was hashed: what was imported may be the new file, which this key doesn't describe.
+    // Nothing is filed; the next import hashes the file as it is then.
+    std::uint64_t size = 0;
+    std::int64_t time = 0;
+    if (!SourceStamp(key.Path, size, time) || size != key.StampSize || time != key.StampTime) {
+        Log::Warn("Model cache: '" + key.Path + "' changed while it was being imported; its import was not cached.");
+        return;
+    }
     Writer body;
     WriteBody(body, cooked);
     Writer head;
