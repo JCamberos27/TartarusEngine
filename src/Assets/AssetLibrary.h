@@ -27,7 +27,8 @@ public:
     // meshes, materials or textures), cached apart from full models. Already loaded as a full model: that one.
     std::shared_ptr<Model> LoadAnimationSource(const std::string& path);
     // Imports these clip sources clip-only on worker threads, waiting for them; the ones already loaded are skipped.
-    // Returns how many it imported.
+    // Returns how many it imported. One a RequestAnimationSourceAsync still holds is taken over (still queued) or
+    // waited for (already importing), never imported twice.
     int PreloadAnimationSources(const std::vector<std::string>& paths);
     // #369 - what a texture is used for, which decides its default import colour space. Colour
     // (albedo, emissive) is sRGB; Data (metallic, roughness, AO, height, ...) and Normal are raw
@@ -286,6 +287,9 @@ public:
     AsyncHandle RequestModelAsync(const std::string& path);
     AsyncHandle RequestMaterialAsync(const std::string& path);
     AsyncHandle RequestTextureAsync(const std::string& path, TextureUse use = TextureUse::Color);
+    // A clip source (LoadAnimationSource's import) on the workers: no GL, so it is in the cache as soon as the pump
+    // sees it done. A full model of the file already loaded counts as loaded.
+    AsyncHandle RequestAnimationSourceAsync(const std::string& path);
     static bool IsReady(const AsyncHandle& ticket);
     // Uploads finished work for about `budgetMs` (at least one step, so it always progresses)
     // and completes tickets. Call once per frame. Returns how many loads are still in flight.
@@ -323,6 +327,10 @@ private:
     std::shared_ptr<Model> RegisterModel(const std::string& path, std::shared_ptr<Model> model);
     std::shared_ptr<Texture> RegisterTexture(const std::string& path, std::shared_ptr<Texture> tex);
     AsyncHandle RequestTextureAsync(const std::string& path, TextureUse use, const std::string* metaJson);
+    // A RequestAnimationSourceAsync job for this PathKey, for the synchronous clip loads: one still queued is taken
+    // off the queue (returns false: the caller imports it) and one a worker has started is waited for and filed
+    // into m_ClipSourceCache (returns true).
+    bool ClaimAsyncClipSource(const std::string& key);
     bool HasModel(const std::string& path);    // in the cache, under any spelling (#132)
     bool HasTexture(const std::string& path);
     bool HasMaterial(const std::string& path);
