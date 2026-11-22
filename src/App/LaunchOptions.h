@@ -90,6 +90,9 @@ struct LaunchOptions {
     // --restore-state <file> (editor): Rebuild & Restart's state file (RestartState.h), applied after the scene
     // loads, then deleted. --wait-pid <pid> (editor): wait for the editor being replaced to exit first.
     std::string restoreStateFile;
+    // --restore-check <report> (editor, with --restore-state): the relaunch test. Hidden, scratch user folder, writes
+    // what was restored (RestartState::WriteCheckReport) and quits.
+    std::string restoreCheckReport;
     unsigned long waitPid = 0;
     static constexpr unsigned long kBadWaitPid = 0xFFFFFFFFul; // set by a bad --wait-pid; the parse fails
 };

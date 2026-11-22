@@ -7,6 +7,7 @@
 #include "../Graffiti/GraffitiCompositor.h"
 #include "../Graffiti/GraffitiPaint.h"
 #include "../Graffiti/GraffitiPiece.h"
+#include "../Renderer/DecalAsset.h"
 #include "../Core/PenInput.h"
 #include <algorithm>
 #include <cmath>
@@ -541,6 +542,41 @@ void BakeSnapshot() {
     CHECK(snap->DecalPath() != other.DecalPath());
 }
 
+// A bake records the recipe it came from: the same recipe reads as baked, one edited since (on disk,
+// outside the Designer) reads as not baked, so the spray can bakes it again. A bake from before the hash
+// (none stored) still counts, so shipped pieces aren't re-baked in Play.
+void BakeRecipeHash() {
+    Piece p = RichPiece();
+    p.Path = (TempDir() / "GP_Hash.graffiti").u8string();
+    p.Name = "Hash";
+    CHECK(p.Save());
+    CHECK(p.RecipeHash().size() == 16 && p.RecipeHash() == p.RecipeHash());
+    CHECK(!BakeCurrent(p)); // nothing baked yet
+    BakeFiles files;
+    files.Albedo = files.Normal = files.Surface = files.Aux = "png";
+    // The Designer's way: a snapshot (layers cut down) still stamps the full recipe's hash.
+    const auto snap = SnapshotForBake(p);
+    CHECK(snap->RecipeHash() != p.RecipeHash() && snap->BakeRecipe == p.RecipeHash());
+    CHECK(WriteBake(*snap, files));
+    const auto loaded = Piece::Load(p.Path);
+    CHECK(loaded && BakeCurrent(*loaded));
+    // The recipe edited outside the Designer: the old maps no longer count as its bake.
+    p.Seed += 1;
+    CHECK(p.Save());
+    const auto edited = Piece::Load(p.Path);
+    CHECK(edited && !BakeCurrent(*edited));
+    // The spray can's way (the loaded recipe itself) bakes it again, and it's current once more.
+    CHECK(WriteBake(*edited, files) && BakeCurrent(*edited));
+    auto d = DecalAsset::Load(edited->DecalPath());
+    CHECK(d && d->GraffitiRecipe == edited->RecipeHash());
+    // A .decal from before the hash: current (the old rule).
+    d->GraffitiRecipe.clear();
+    CHECK(d->Save() && BakeCurrent(*edited));
+    // A stored hash of some other recipe: not current.
+    d->GraffitiRecipe = "0123456789abcdef";
+    CHECK(d->Save() && !BakeCurrent(*edited));
+}
+
 } // namespace
 
 void RegisterGraffitiTests(UnitTestSupport::TestList& tests) {
@@ -551,6 +587,7 @@ void RegisterGraffitiTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Graffiti program determinism", ProgramDeterminism});
     tests.push_back({"Graffiti build cache matches a fresh build", BuildCacheMatches});
     tests.push_back({"Graffiti bake snapshot", BakeSnapshot});
+    tests.push_back({"Graffiti bake records its recipe", BakeRecipeHash});
     tests.push_back({"Graffiti live stream equals bake", LiveEqualsBake});
     tests.push_back({"Graffiti spray model", SprayModel});
     tests.push_back({"Graffiti text layout", TextLayout});

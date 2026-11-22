@@ -187,6 +187,7 @@ std::shared_ptr<DecalAsset> DecalAsset::Load(const std::string& path) {
             r.Warn("tags", "an array of strings");
         }
     }
+    d->GraffitiRecipe = r.Str("graffitiRecipe");
     return d;
 }
 
@@ -227,6 +228,7 @@ bool DecalAsset::Save() const {
         start = comma + 1;
     }
     j["tags"] = std::move(tags);
+    if (!GraffitiRecipe.empty()) j["graffitiRecipe"] = GraffitiRecipe;
 
     // Atomic write: a crash mid-save must not truncate the .decal (audit CPP-206).
     return AtomicFile::WriteBytes(Path, j.dump(2) + "\n");

@@ -61,6 +61,8 @@ struct DecalAsset {
 
     std::string Category;
     std::string Tags; // comma separated
+    // A Graffiti Designer piece's bake: the hash of the recipe it was baked from (Piece::RecipeHash). Empty otherwise.
+    std::string GraffitiRecipe;
 
     static std::shared_ptr<DecalAsset> Load(const std::string& path);
     bool Save() const;

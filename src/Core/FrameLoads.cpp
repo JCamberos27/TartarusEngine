@@ -7,6 +7,8 @@
 
 namespace {
 std::atomic<bool> g_On{false};
+std::atomic<unsigned long long> g_Count{0};
+std::atomic<const char*> g_LastKind{nullptr};
 std::mutex g_Mutex;
 std::vector<FrameLoads::Event> g_Events;
 } // namespace
@@ -17,7 +19,13 @@ void Enable(bool on) { g_On.store(on, std::memory_order_relaxed); }
 
 bool Enabled() { return g_On.load(std::memory_order_relaxed); }
 
+unsigned long long Count() { return g_Count.load(std::memory_order_relaxed); }
+
+const char* LastKind() { return g_LastKind.load(std::memory_order_relaxed); }
+
 void Note(const char* kind, std::string_view name, double ms) {
+    g_LastKind.store(kind, std::memory_order_relaxed);
+    g_Count.fetch_add(1, std::memory_order_relaxed);
     if (!Enabled()) return;
     std::lock_guard<std::mutex> lk(g_Mutex);
     g_Events.push_back({kind, std::string(name), ms});
