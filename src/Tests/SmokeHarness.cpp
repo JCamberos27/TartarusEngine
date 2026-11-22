@@ -9,6 +9,7 @@
 #include "ClusterGrid.h"
 #include "Components.h"
 #include "Core/Env.h"
+#include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "DecalSystem.h"
 #include "EditorLayer.h"
@@ -38,16 +39,20 @@
 
 // A harness run (--smoke-test, --perf-bench, --npc-test) whose frames stop - a hang, a wait that never ends - used to
 // spin until someone killed it. Like the editor tests' watchdog: a note each minute without a frame, and after
-// kStallSeconds an abort, which writes a crash dump (the stack of the hang) and fails the run. After the summary the
-// result is in, and a teardown that hangs (a wait on uploads that never come) ends the process with the run's own
+// kStallSeconds with neither a frame nor a load an abort, which writes a crash dump (the stack of the hang, with a copy
+// of the log beside it) and fails the run. A scene opening on frame 0 imports its models synchronously (the Forest:
+// ~250, each simplified for its LODs), which on a cold cache or a busy machine can take minutes with no frame, so every
+// finished load (FrameLoads::Count) also counts as progress, up to kLoadingSeconds without a frame. After the summary
+// the result is in, and a teardown that hangs (a wait on uploads that never come) ends the process with the run's own
 // exit code once kShutdownSeconds pass. Its state is process-wide, not the harness's, so the detached thread never
 // touches an object that is being destroyed.
 namespace stall_watch {
 extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
 extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
 extern "C" __declspec(dllimport) int __stdcall IsDebuggerPresent();
-constexpr long long kStallSeconds = 240; // longer than any scene load (Forest with its payloads: under a minute)
-constexpr long long kShutdownSeconds = 90; // teardown after the summary normally takes a few seconds
+constexpr long long kStallSeconds = 240;    // no frame and no load finished: a hang
+constexpr long long kLoadingSeconds = 1800; // no frame even with loads finishing: a load loop that never ends
+constexpr long long kShutdownSeconds = 90;  // teardown after the summary normally takes a few seconds
 std::atomic<unsigned long long> g_Frames{0};
 std::atomic<int> g_ExitCode{-1}; // set by the summary: from then on only the shutdown is watched
 std::mutex g_Mutex;
@@ -57,7 +62,9 @@ void Start() {
     std::thread([] {
         using clock = std::chrono::steady_clock;
         unsigned long long lastFrames = g_Frames.load(std::memory_order_relaxed);
+        unsigned long long lastLoads = FrameLoads::Count(), loadsAtFrame = lastLoads;
         auto lastFrameAt = clock::now();
+        auto lastProgressAt = lastFrameAt;
         auto doneAt = clock::time_point{};
         for (;;) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -75,19 +82,32 @@ void Start() {
                 continue;
             }
             const unsigned long long frames = g_Frames.load(std::memory_order_relaxed);
-            if (frames != lastFrames) { lastFrames = frames; lastFrameAt = now; continue; }
+            const unsigned long long loads = FrameLoads::Count();
+            if (frames != lastFrames) {
+                lastFrames = frames;
+                lastFrameAt = lastProgressAt = now;
+                lastLoads = loadsAtFrame = loads;
+                continue;
+            }
+            if (loads != lastLoads) { lastLoads = loads; lastProgressAt = now; }
             const long long stalled = std::chrono::duration_cast<std::chrono::seconds>(now - lastFrameAt).count();
+            const long long idle = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressAt).count();
             std::string where;
             { std::lock_guard<std::mutex> lk(g_Mutex); where = g_Where; }
+            const char* lastKind = FrameLoads::LastKind();
+            char loading[160];
+            std::snprintf(loading, sizeof(loading), "%llu load(s) finished since the last frame, the last %llds ago (%s)",
+                          loads - loadsAtFrame, idle, lastKind ? lastKind : "none yet");
             // Under a debugger a stop at a breakpoint is not a hang: keep the minute notes, never abort.
-            if (stalled >= kStallSeconds && !IsDebuggerPresent()) {
-                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu) - aborting for a crash dump\n",
-                            stalled, where.c_str(), frames);
+            if ((idle >= kStallSeconds || stalled >= kLoadingSeconds) && !IsDebuggerPresent()) {
+                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu; %s) - aborting for a "
+                            "crash dump\n", stalled, where.c_str(), frames, loading);
                 std::fflush(stdout);
                 std::abort();
             }
             if (stalled >= 60 && stalled % 60 < 5) {
-                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu)\n", stalled, where.c_str(), frames);
+                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu; %s)\n", stalled,
+                            where.c_str(), frames, loading);
                 std::fflush(stdout);
             }
         }
@@ -227,10 +247,19 @@ void SmokeHarness::LoadScene() {
     // documented as static, hand-authored fixtures).
     stall_watch::SetWhere(std::filesystem::path(path).filename().string());
     if (m_SceneIndex == 0) MemSnapshot("00_start");
+    // The open is the longest stretch without a frame: say when it starts and what it took, so a slow or stuck open
+    // reads as one in the log (the stall watchdog's notes name the same scene).
+    std::cout << "[SmokeTest] Opening " << path << std::endl;
+    const double openStart = glfwGetTime();
+    const unsigned long long loadsBefore = FrameLoads::Count();
     m_SceneLoadOk = SceneSerializer::Load(world, m_Ctx.assets, path, /*persistMigration=*/false);
+    const double loadedAt = glfwGetTime();
     m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
-    std::cout << "[SmokeTest] Loading " << path
-              << (m_SceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
+    const double warmedAt = glfwGetTime();
+    std::printf("[SmokeTest] Loading %s%s (open %.1f s: load %.1f s + warm-up %.1f s, %llu load(s))\n", path.c_str(),
+                m_SceneLoadOk ? "" : "  (Load() reported failure)", warmedAt - openStart, loadedAt - openStart,
+                warmedAt - loadedAt, FrameLoads::Count() - loadsBefore);
+    std::fflush(stdout);
     if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
         FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open

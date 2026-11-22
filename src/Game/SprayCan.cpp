@@ -180,9 +180,10 @@ SprayCanSystem::PieceData* SprayCanSystem::Data(const std::string& piece) {
     if (!m_Comp) m_Comp = std::make_unique<Graffiti::Compositor>();
     d->Program = std::make_shared<Graffiti::Program>(Graffiti::Build(*d->Piece, m_Comp->MetricsCallback()));
     d->Timeline = std::make_shared<Graffiti::Timeline>(Graffiti::BuildTimeline(*d->Program));
-    // Baked already (the Designer, or an earlier spray)? Else bake it now: the GPU part here, the PNGs on a worker.
-    std::error_code ec;
-    d->Baked = fs::exists(fs::u8path(d->Piece->DecalPath()), ec) && fs::exists(fs::u8path(d->Piece->MapPath("Albedo")), ec);
+    // Baked already, from this very recipe (the Designer, or an earlier spray)? Else bake it now: the GPU part here,
+    // the PNGs on a worker. A recipe edited since its bake (its .decal holds another recipe's hash) bakes again, so the maps
+    // match the reveal order and timeline built from the recipe above.
+    d->Baked = Graffiti::BakeCurrent(*d->Piece);
     if (d->Baked) SetRevealKey(*d);
     if (!d->Baked) {
         Graffiti::BakeImages img;

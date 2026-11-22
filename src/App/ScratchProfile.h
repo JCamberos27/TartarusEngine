@@ -22,6 +22,9 @@ bool PrepareEditorShotProfile(const LaunchOptions& opt);
 // the same prefs; unset, the run uses the real user folder as before.
 bool PrepareSmokeProfile();
 
+// --restore-check: a fresh scratch user folder (<base>-Restart-<instance>); refuses without an instance name.
+bool PrepareRestoreCheckProfile();
+
 // TARTARUS_EDITOR_TEST_INSTANCE (shared by every harness): "" when unset or not a valid name. Valid: at most 32
 // letters, digits, '-' or '_' (empty counts as valid). ScratchFolderName adds "-<instance>" to a folder name.
 std::string ScratchInstanceName();
