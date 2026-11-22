@@ -229,11 +229,12 @@ int Application::Run() {
     // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
     const char* logName = headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log";
-    Log::OpenFile(logName);
+    const std::string logPath = Log::OpenFile(logName); // "" when no file could be opened
     if (!oldEditorExited)
         Log::Warn("Rebuild & Restart: the old editor (pid " + std::to_string(opt.waitPid) + ") hasn't exited after " +
                   std::to_string(EditorRestart::kWaitOldEditorMs / 1000) + " s; going on.");
-    CrashHandler::SetReportLocation(UserPaths::Root(), logName); // a built game's dumps go to its own user folder
+    // A built game's dumps go to its own user folder; each keeps a copy of this run's log beside it.
+    CrashHandler::SetReportLocation(UserPaths::Root(), logPath.empty() ? std::string(logName) : logPath);
     WireGameShell(); // gameplay's keys, sounds, F-row pill and look prefs come from the editor
     return RunSession();
 }
