@@ -62,6 +62,29 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/extern/ImGuiColorTextEdit/TextEditor.cpp
 )
 
+# The cooked model cache (src/Renderer/ModelCache.h, project/Library/Models) keys every entry on the code that decides
+# what a model import produces, so an entry cooked by older import code is never read. Editing one of these files
+# re-runs configure, which re-hashes them into TARTARUS_MODEL_COOK_CODE.
+set(TARTARUS_MODEL_COOK_INPUTS
+  ${CMAKE_SOURCE_DIR}/src/Renderer/ModelImport.cpp
+  ${CMAKE_SOURCE_DIR}/src/Renderer/ModelCache.cpp
+  ${CMAKE_SOURCE_DIR}/src/Renderer/ModelCache.h
+  ${CMAKE_SOURCE_DIR}/src/Renderer/Model.h
+  ${CMAKE_SOURCE_DIR}/src/Renderer/ModelVertex.h
+  ${CMAKE_SOURCE_DIR}/src/Renderer/Animation.h
+  ${ASSIMP_LOCAL_PATCHES}
+)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TARTARUS_MODEL_COOK_INPUTS})
+set(_model_cook "")
+foreach(_f IN LISTS TARTARUS_MODEL_COOK_INPUTS)
+  file(SHA1 ${_f} _h)
+  string(APPEND _model_cook ${_h})
+endforeach()
+string(SHA1 _model_cook "${_model_cook}")
+string(SUBSTRING ${_model_cook} 0 16 _model_cook)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/Renderer/ModelCache.cpp PROPERTIES
+  COMPILE_DEFINITIONS "TARTARUS_MODEL_COOK_CODE=0x${_model_cook}ull")
+
 # Gameplay code lives in a separately-built DLL so it can be rebuilt and reloaded while the
 # editor executable remains open. Keep module entry points and systems out of the host target.
 # The reloadable modules' sources. Module-only files leave the engine; the first-person rules are

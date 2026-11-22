@@ -252,13 +252,20 @@ void SmokeHarness::LoadScene() {
     std::cout << "[SmokeTest] Opening " << path << std::endl;
     const double openStart = glfwGetTime();
     const unsigned long long loadsBefore = FrameLoads::Count();
+    const ModelCache::Stats modelsBefore = ModelCache::GetStats();
     m_SceneLoadOk = SceneSerializer::Load(world, m_Ctx.assets, path, /*persistMigration=*/false);
     const double loadedAt = glfwGetTime();
     m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
     const double warmedAt = glfwGetTime();
-    std::printf("[SmokeTest] Loading %s%s (open %.1f s: load %.1f s + warm-up %.1f s, %llu load(s))\n", path.c_str(),
-                m_SceneLoadOk ? "" : "  (Load() reported failure)", warmedAt - openStart, loadedAt - openStart,
-                warmedAt - loadedAt, FrameLoads::Count() - loadsBefore);
+    // ... and the model cache's share (Library/Models): models read from it and imported + cooked, with their time
+    // (summed over the threads that loaded them, so it can exceed the open's wall time).
+    const ModelCache::Stats modelsAfter = ModelCache::GetStats();
+    std::printf("[SmokeTest] Loading %s%s (open %.1f s: load %.1f s + warm-up %.1f s, %llu load(s); models: %d from the "
+                "cache in %.1f s, %d imported and cooked in %.1f s)\n",
+                path.c_str(), m_SceneLoadOk ? "" : "  (Load() reported failure)", warmedAt - openStart, loadedAt - openStart,
+                warmedAt - loadedAt, FrameLoads::Count() - loadsBefore, modelsAfter.Hits - modelsBefore.Hits,
+                (modelsAfter.HitMs - modelsBefore.HitMs) / 1000.0, modelsAfter.Cooked - modelsBefore.Cooked,
+                (modelsAfter.CookMs - modelsBefore.CookMs) / 1000.0);
     std::fflush(stdout);
     if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
