@@ -99,7 +99,7 @@ struct FadingSlots {
     // Every candidate is lit and nothing else is (no distance cull): the unit tests' short form.
     int Step(const std::vector<std::uint32_t>& want, const std::vector<std::uint32_t>& candidates, int budget,
              std::uint64_t frame, float dt, bool snap, std::uint32_t urgent = kNone) {
-        return Step(want, candidates, candidates, budget, frame, dt, snap, urgent);
+        return StepLit(want, candidates, candidates, budget, frame, dt, snap, urgent);
     }
     // want: the lights that should hold a shadow, best first (at most `budget` of them).
     // candidates: every light that could hold one this frame (sorted); a holder that is not a candidate any more
@@ -108,7 +108,7 @@ struct FadingSlots {
     // snap: no fades this frame (the GI bake, the first frame, a camera cut, a scene load).
     // urgent: a key that is always treated as arriving (the flashlight).
     // Writes slot -> owner for every slot in use (Owner/Weight), and returns how many slots changed hands.
-    int Step(const std::vector<std::uint32_t>& want, const std::vector<std::uint32_t>& candidates,
+    int StepLit(const std::vector<std::uint32_t>& want, const std::vector<std::uint32_t>& candidates,
              const std::vector<std::uint32_t>& lit, int budget, std::uint64_t frame, float dt, bool snap,
              std::uint32_t urgent = kNone) {
         budget = budget < 0 ? 0 : (budget > N ? N : budget);

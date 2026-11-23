@@ -137,9 +137,9 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
     const bool snap = in.snapShadowFades || !m_Gathered || sceneLoaded || cut;
     m_Gathered = true;
     const float dt = std::clamp(in.dt, 0.0f, 0.1f); // a hitch doesn't skip a whole fade
-    out.SlotChanges = m_SpotSlots.Step(chosenSpots, m_SpotKeys, m_SpotLit, out.SpotBudget, in.frame + 1, dt, snap,
+    out.SlotChanges = m_SpotSlots.StepLit(chosenSpots, m_SpotKeys, m_SpotLit, out.SpotBudget, in.frame + 1, dt, snap,
                                        torchWants ? torchKey : S::FadingSlots<1>::kNone);
-    out.SlotChanges += m_PointSlots.Step(chosenPoints, m_PointKeys, m_PointLit, out.PointBudget, in.frame + 1, dt, snap);
+    out.SlotChanges += m_PointSlots.StepLit(chosenPoints, m_PointKeys, m_PointLit, out.PointBudget, in.frame + 1, dt, snap);
 
     // This frame's holders - fading ones too - are next frame's hysteresis set and the slot maps Gather reads.
     m_SpotSlotOf.clear();
