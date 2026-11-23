@@ -163,9 +163,32 @@ Phase 1 (Nov 23) changes the direct light and the tooling, not the bake. Rollup 
   per-volume `Intensity`, not an engine change; see `docs/GI_BOUNCE_TUNE_PLAN.md`. Effect on checks: the by-design dark
   rooms get a **ceiling** (no brighter than their `before_gi` level, within the bake-noise tolerance), not only a floor, and
   the before/after pairs compare against the P0 pictures, not against the fresh bake.
-* **20 lamps get Cast Shadows** (Atlas, scene PR), **room-aware shadow slots** (Argus), **repeatable bake** (Kronos),
-  **SSAO-off GL bug** (Talos). Rollup: pending, filled in as each PR merges (PR, what changed, evidence, effect on the
-  PROPOSED thresholds).
+### Phase 1 rollup (status at 2026-11-23 evening; rows updated as PRs merge)
+
+| PR | Change | Evidence so far | Effect on the PROPOSED thresholds |
+|---|---|---|---|
+| #1187, #1191 (merged) | Bounce tune-down plan; Jacob's answers recorded PROVISIONAL / ON HOLD pending the stale-bake (H1) test | `docs/GI_BOUNCE_TUNE_PLAN.md` | Dark rooms get a ceiling as well as a floor (Phase 3). Nothing applies until Jacob re-confirms after H1. |
+| #1192 (draft, lands with #1189) | Cast Shadows ON for the 20 shadowless house lamps (Forest.json, exactly 20 flips; lamp list matches the P0 audit; second review PASS, W6) | Full-frame tour pairs change most in kitchen north, kitchen main, dining, living east bay, hall, landing. Tour ran about 22 fps vs 51 before (not perf numbers) | Check 1/2 expect fewer through-wall leaks. Check 5 (performance) is the risk: needs the #1189 sweep. |
+| #1189 (draft) | Room-aware, stable shadow slots that fade instead of popping | Pending GPU run | Check 1 (walk stability): slot hash changes should stop popping. |
+| #1190 (open) | `--bake-gi` pins every clock a capture sees | Targets the 2.8-6.6% bake-to-bake spread | Bake noise caveat can be tightened to the measured spread. |
+| #1188 (open) | SSAO-off sampler clash fix (impostor draws) | Smoke check; SSAO-off walk to follow | Cause #8 only. Talos's SSAO A/B is a walk comparison. |
+| #1193 (draft, on #1192) | Kitchen vestibule lit by Ceiling Kitchen 35588 | Bounds only | Kitchen doorway rows (doors before/in/after). |
+
+**Finding (found in the #1192 review, Nov 23): runtime GI values are BISTABLE run to run.** The GI-only view of the SAME
+inputs (same exe, same `.gi`, same lamp set; `slot_hash` equal on 66/66 waypoints) differs between runs: P0 vs Atlas's
+before run differ by more than 2% at 29 of 66 waypoints (18 over 10%), the same size as before vs after #1192 (29 / 20), with
+mirrored sign (correlation -0.76); the after run matches P0 at 61 of 66. Largest swings: landing corner +139%, kitchen
+north -53%, master den door in -40%. Consequences: the GI-only pairs are not a bake-unchanged check, and P0 verdicts that
+rest on runtime GI (#6 GI-only pops, the dark-spot spreads) are re-checked after Talos's fix; verdicts from `.gi` data and the
+offline audit stand. Residual possible #1192 effect: stairs_top (-66%) and child door before (+27% in both runs).
+Detail: `gi-p1/briareos/REVIEW_1192.md` (team folder).
+
+**Phase 1 exit criteria (additions):**
+* **GI identical across 5 launches** of the same scene and bake (per-waypoint GI-only luminance within the bake-noise
+  tolerance on every launch). This is a Phase 1 exit blocker until the live input behind the bistability is found and pinned.
+* #1192 and #1189 merged together, with the fps sweep near the old pace.
+* Jacob's bounce answers re-confirmed after the H1 stale-bake test, before Phase 3.
+
 * After Kronos's PR the bake noise caveat above can be tightened to the measured spread (target: byte-identical or under
   0.5% per layer).
 
