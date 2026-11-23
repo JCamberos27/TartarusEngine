@@ -157,6 +157,7 @@ int RunUnitTests(const char* filter) {
     RegisterOpenableTests(tests); // UnitTests_Openable.cpp
     RegisterLightSwitchTests(tests); // UnitTests_LightSwitch.cpp
     RegisterCinematicTests(tests); // UnitTests_Cinematic.cpp
+    RegisterGiTourTests(tests); // UnitTests_GiTour.cpp
     RegisterFirstPersonWeaponsTests(tests); // UnitTests_FirstPersonWeapons.cpp
     RegisterOutfitsTests(tests); // UnitTests_Outfits.cpp
     RegisterFirstPersonBodyTests(tests); // UnitTests_FirstPersonBody.cpp

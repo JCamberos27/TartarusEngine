@@ -53,6 +53,7 @@
 #include "TimeService.h"
 #include "Window.h" // Preferences > Display: connected monitors for fullscreen (#154) // play banner shows the effective time scale (#144)
 #include "TextureCache.h" // Preferences > Rendering's cache size + Clear button (#159)
+#include "ModelCache.h"   // ... and the cooked model cache's
 #include "gl.h"
 #include "ScreenBlur.h"
 #include "Framebuffer.h"
@@ -177,7 +178,9 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
     // it still exists, else the built-in default (#95).
-    {
+    if (m_StartupSceneOverride) {
+        m_CurrentScenePath = *m_StartupSceneOverride;
+    } else {
         std::error_code ec;
         const std::string& last = EditorSettings::Get().LastScenePath;
         m_CurrentScenePath = (!last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, ec) && !ec)
@@ -1896,6 +1899,37 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                                      "is re-decoded from its source file (and re-cached) the next time it loads,\n"
                                      "so the next scene open is slower. The cache is capped at 4 GB and\n"
                                      "cleans up stale entries on its own at startup.");
+        }
+
+        ImGui::Spacing();
+        EditorUIPrimitives::SectionHeader("Model cache");
+        {
+            // Library/Models: each model's import (meshes after merge and Simplify, skeleton, clips), so a scene open
+            // reads it instead of running Assimp. A directory walk, refreshed every couple of seconds like the above.
+            static ModelCache::Usage s_Usage;
+            static double s_UsageTime = -1.0;
+            const double nowT = ImGui::GetTime();
+            if (s_UsageTime < 0.0 || nowT - s_UsageTime > 2.0) {
+                s_Usage = ModelCache::DiskUsage();
+                s_UsageTime = nowT;
+            }
+            ImGui::Text("%d entr%s, %.1f MB", s_Usage.Entries, s_Usage.Entries == 1 ? "y" : "ies",
+                        (double)s_Usage.Bytes / (1024.0 * 1024.0));
+            ImGui::SameLine();
+            ImGui::BeginDisabled(s_Usage.Entries == 0);
+            if (EditorUIPrimitives::SecondaryButton(ICON_FA_TRASH "  Clear model cache")) {
+                const int removed = ModelCache::Clear();
+                Log::Info("Model cache cleared (" + std::to_string(removed) + " entries). Models re-import from source on next load.");
+                s_UsageTime = -1.0;
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("Deletes the cooked model cache in project/Library/Models.\n"
+                                     "Nothing is lost: models already loaded stay as they are, and each one is\n"
+                                     "imported from its source file (and cooked again) the next time it loads,\n"
+                                     "so the next scene open is slower. A changed file, import setting or importer\n"
+                                     "never reads an old entry; the cache is capped at 8 GB and drops entries\n"
+                                     "unused for a month at startup.");
         }
 
         ImGui::Spacing();

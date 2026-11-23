@@ -53,6 +53,8 @@ public:
     // The triangle index list (matches LocalPositions()), kept for triangle-mesh collider
     // cooking (#185 PR 6). size() == IndexCount().
     const std::vector<unsigned int>& LocalIndices() const { return m_LocalIndices; }
+    // A deferred mesh's full vertices until FinishUpload (empty after it, and for a mesh uploaded at once).
+    const std::vector<ModelVertex>& PendingVertices() const { return m_PendingVertices; }
 
     // A skinned mesh's vertices as the vertex shader takes them (mesh space, up to MAX_BONE_INFLUENCE bone influences), kept on
     // the CPU for queries of the posed surface (the first-person body's camera probe). Empty when not skinned.

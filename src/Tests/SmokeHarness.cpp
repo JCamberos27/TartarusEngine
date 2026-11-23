@@ -9,11 +9,20 @@
 #include "ClusterGrid.h"
 #include "Components.h"
 #include "Core/Env.h"
+#include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "DecalSystem.h"
 #include "EditorLayer.h"
+#include "EditorSettings.h"
+#include "FKeyRow.h"
+#include "FirstPersonPresentation.h"
 #include "Framebuffer.h"
+#include "GIVolumes.h"
 #include "GLDebug.h"
+#include "HdrTarget.h"
+#include "LightBuffer.h"
+#include "LightGather.h"
+#include "gl.h"
 #include "Log.h"
 #include "Model.h"
 #include "Openable.h"
@@ -34,19 +43,24 @@
 #include <cstdlib>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 
 // A harness run (--smoke-test, --perf-bench, --npc-test) whose frames stop - a hang, a wait that never ends - used to
 // spin until someone killed it. Like the editor tests' watchdog: a note each minute without a frame, and after
-// kStallSeconds an abort, which writes a crash dump (the stack of the hang) and fails the run. After the summary the
-// result is in, and a teardown that hangs (a wait on uploads that never come) ends the process with the run's own
+// kStallSeconds with neither a frame nor a load an abort, which writes a crash dump (the stack of the hang, with a copy
+// of the log beside it) and fails the run. A scene opening on frame 0 imports its models synchronously (the Forest:
+// ~250, each simplified for its LODs), which on a cold cache or a busy machine can take minutes with no frame, so every
+// finished load (FrameLoads::Count) also counts as progress, up to kLoadingSeconds without a frame. After the summary
+// the result is in, and a teardown that hangs (a wait on uploads that never come) ends the process with the run's own
 // exit code once kShutdownSeconds pass. Its state is process-wide, not the harness's, so the detached thread never
 // touches an object that is being destroyed.
 namespace stall_watch {
 extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
 extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
 extern "C" __declspec(dllimport) int __stdcall IsDebuggerPresent();
-constexpr long long kStallSeconds = 240; // longer than any scene load (Forest with its payloads: under a minute)
-constexpr long long kShutdownSeconds = 90; // teardown after the summary normally takes a few seconds
+constexpr long long kStallSeconds = 240;    // no frame and no load finished: a hang
+constexpr long long kLoadingSeconds = 1800; // no frame even with loads finishing: a load loop that never ends
+constexpr long long kShutdownSeconds = 90;  // teardown after the summary normally takes a few seconds
 std::atomic<unsigned long long> g_Frames{0};
 std::atomic<int> g_ExitCode{-1}; // set by the summary: from then on only the shutdown is watched
 std::mutex g_Mutex;
@@ -56,7 +70,9 @@ void Start() {
     std::thread([] {
         using clock = std::chrono::steady_clock;
         unsigned long long lastFrames = g_Frames.load(std::memory_order_relaxed);
+        unsigned long long lastLoads = FrameLoads::Count(), loadsAtFrame = lastLoads;
         auto lastFrameAt = clock::now();
+        auto lastProgressAt = lastFrameAt;
         auto doneAt = clock::time_point{};
         for (;;) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -74,19 +90,32 @@ void Start() {
                 continue;
             }
             const unsigned long long frames = g_Frames.load(std::memory_order_relaxed);
-            if (frames != lastFrames) { lastFrames = frames; lastFrameAt = now; continue; }
+            const unsigned long long loads = FrameLoads::Count();
+            if (frames != lastFrames) {
+                lastFrames = frames;
+                lastFrameAt = lastProgressAt = now;
+                lastLoads = loadsAtFrame = loads;
+                continue;
+            }
+            if (loads != lastLoads) { lastLoads = loads; lastProgressAt = now; }
             const long long stalled = std::chrono::duration_cast<std::chrono::seconds>(now - lastFrameAt).count();
+            const long long idle = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressAt).count();
             std::string where;
             { std::lock_guard<std::mutex> lk(g_Mutex); where = g_Where; }
+            const char* lastKind = FrameLoads::LastKind();
+            char loading[160];
+            std::snprintf(loading, sizeof(loading), "%llu load(s) finished since the last frame, the last %llds ago (%s)",
+                          loads - loadsAtFrame, idle, lastKind ? lastKind : "none yet");
             // Under a debugger a stop at a breakpoint is not a hang: keep the minute notes, never abort.
-            if (stalled >= kStallSeconds && !IsDebuggerPresent()) {
-                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu) - aborting for a crash dump\n",
-                            stalled, where.c_str(), frames);
+            if ((idle >= kStallSeconds || stalled >= kLoadingSeconds) && !IsDebuggerPresent()) {
+                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu; %s) - aborting for a "
+                            "crash dump\n", stalled, where.c_str(), frames, loading);
                 std::fflush(stdout);
                 std::abort();
             }
             if (stalled >= 60 && stalled % 60 < 5) {
-                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu)\n", stalled, where.c_str(), frames);
+                std::printf("[SmokeTest] WATCHDOG: no frame finished for %llds in %s (frame %llu; %s)\n", stalled,
+                            where.c_str(), frames, loading);
                 std::fflush(stdout);
             }
         }
@@ -157,6 +186,26 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
                 m_ScenePaths.push_back(entry.path().string());
         }
         std::sort(m_ScenePaths.begin(), m_ScenePaths.end());
+        // --gi-tour: the one scene the tour names, for as many frames as the tour takes (GiTourFrame ends it).
+        if (opt.giTourMode) {
+            m_ScenePaths.clear();
+            auto tour = std::make_unique<GiTour::Tour>();
+            std::string error;
+            std::vector<std::string> warnings;
+            if (GiTour::Load(opt.giTourFile, *tour, error, &warnings)) {
+                for (const std::string& w : warnings) std::cout << "[GiTour] note: " << w << std::endl;
+                m_TourFrames = GiTour::BuildTimeline(*tour);
+                m_ScenePaths.push_back(ProjectPaths::Resolve(tour->Scene));
+                // the start's streaming hold (up to 3000 frames) on top of the timeline, then the scoring frame
+                m_FrameBudget = 3000 + (int)m_TourFrames.size() + 2;
+                std::cout << "[GiTour] " << tour->Waypoints.size() << " waypoint(s), " << tour->Routes.size() << " route(s), "
+                          << m_TourFrames.size() << " frame(s) (" << m_TourFrames.size() / 60 << " s at 60 Hz) -> "
+                          << opt.sceneBoundsOut << std::endl;
+                m_Tour = std::move(tour);
+            } else {
+                std::cout << "[GiTour] ERROR: " << error << std::endl;
+            }
+        }
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
             m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" || opt.npcTestScenario == "mmview" || opt.npcTestScenario == "mmdb" ||
                                                                   opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" ||
@@ -226,12 +275,30 @@ void SmokeHarness::LoadScene() {
     // documented as static, hand-authored fixtures).
     stall_watch::SetWhere(std::filesystem::path(path).filename().string());
     if (m_SceneIndex == 0) MemSnapshot("00_start");
+    // The open is the longest stretch without a frame: say when it starts and what it took, so a slow or stuck open
+    // reads as one in the log (the stall watchdog's notes name the same scene).
+    std::cout << "[SmokeTest] Opening " << path << std::endl;
+    const double openStart = glfwGetTime();
+    const unsigned long long loadsBefore = FrameLoads::Count();
+    const ModelCache::Stats modelsBefore = ModelCache::GetStats();
     m_SceneLoadOk = SceneSerializer::Load(world, m_Ctx.assets, path, /*persistMigration=*/false);
+    const double loadedAt = glfwGetTime();
     m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
-    std::cout << "[SmokeTest] Loading " << path
-              << (m_SceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
-    if (m_SceneLoadOk)
+    const double warmedAt = glfwGetTime();
+    // ... and the model cache's share (Library/Models): models read from it and imported + cooked, with their time
+    // (summed over the threads that loaded them, so it can exceed the open's wall time).
+    const ModelCache::Stats modelsAfter = ModelCache::GetStats();
+    std::printf("[SmokeTest] Loading %s%s (open %.1f s: load %.1f s + warm-up %.1f s, %llu load(s); models: %d from the "
+                "cache in %.1f s, %d imported and cooked in %.1f s)\n",
+                path.c_str(), m_SceneLoadOk ? "" : "  (Load() reported failure)", warmedAt - openStart, loadedAt - openStart,
+                warmedAt - loadedAt, FrameLoads::Count() - loadsBefore, modelsAfter.Hits - modelsBefore.Hits,
+                (modelsAfter.HitMs - modelsBefore.HitMs) / 1000.0, modelsAfter.Cooked - modelsBefore.Cooked,
+                (modelsAfter.CookMs - modelsBefore.CookMs) / 1000.0);
+    std::fflush(stdout);
+    if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
+        FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open
+    }
     m_FramesRendered = 0;
     m_SceneStartSeconds = glfwGetTime();
     m_WallFrames = 0;
@@ -427,6 +494,207 @@ void SmokeHarness::PoseShotFrame() {
     editorCamera.Pitch = pose.Pitch;
 }
 
+// --gi-tour: the lamps as this waypoint's camera sees them, one CSV row each (its shadow slot or -1, and its
+// DistanceFade from here), with the slot holders summed up in the log.
+void SmokeHarness::GiTourLights(int waypoint) {
+    World& world = m_Ctx.world;
+    const Camera& cam = m_Ctx.editorCamera;
+    const GiTour::Waypoint& wp = m_Tour->Waypoints[waypoint];
+    std::unordered_map<entt::entity, int> spotSlot, pointSlot;
+    if (m_Ctx.lightGather) {
+        for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) if (world.Registry.valid(e)) spotSlot[e] = slot;
+        for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) if (world.Registry.valid(e)) pointSlot[e] = slot;
+    }
+    auto nameOf = [&](entt::entity e) {
+        const auto* n = world.Registry.try_get<NameComponent>(e);
+        return n && !n->Name.empty() ? n->Name : "entity " + std::to_string((std::uint32_t)e);
+    };
+    const float tanHalfFov = std::tan(glm::radians(cam.Fov) * 0.5f);
+    std::string spots, points;
+    int lit = 0, faded = 0, gone = 0;
+    for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
+        const auto& lc = world.Registry.get<LightComponent>(e);
+        if (lc.Kind == LightComponent::Type::Directional || world.Registry.all_of<InactiveTag>(e)) continue;
+        const bool on = lc.Intensity > 0.0f && glm::dot(lc.Color, lc.Color) > 0.0f;
+        const glm::vec3 pos(world.ComposeWorldTransform(e)[3]);
+        const float dist = glm::length(pos - cam.Position);
+        const float fade = LightBuffer::DistanceFade(lc.Range, dist, tanHalfFov);
+        const bool spot = lc.Kind == LightComponent::Type::Spot;
+        const auto& slots = spot ? spotSlot : pointSlot;
+        const auto it = slots.find(e);
+        const int slot = it != slots.end() ? it->second : -1;
+        const auto* circuit = world.Registry.try_get<LightCircuitComponent>(e);
+        if (on) {
+            ++lit;
+            if (fade <= 0.0f) ++gone;
+            else if (fade < 1.0f) ++faded;
+        }
+        if (slot >= 0) {
+            std::string& list = spot ? spots : points;
+            list += (list.empty() ? "" : "; ") + std::to_string(slot) + ":" + nameOf(e);
+        }
+        if (m_TourLightsCsv) {
+            char num[96];
+            std::snprintf(num, sizeof(num), "%.3f,%.3f,%.3f,%.3f", lc.Intensity, lc.Range, dist, fade);
+            *m_TourLightsCsv << GiTour::CsvField(wp.Id) << "," << GiTour::CsvField(wp.Room) << "," << GiTour::CsvField(nameOf(e))
+                             << "," << (std::uint32_t)e << "," << (spot ? "spot" : "point") << ","
+                             << GiTour::CsvField(circuit ? circuit->Circuit : std::string()) << "," << (on ? 1 : 0) << ","
+                             << (lc.Shadow.Enabled ? 1 : 0) << "," << num << "," << slot << "\n";
+        }
+    }
+    std::cout << "[GiTour] " << wp.Id << " (" << wp.Room << "): point slots [" << points << "] spot slots [" << spots << "]; "
+              << lit << " lamp(s) on, " << faded << " fading, " << gone << " faded out" << std::endl;
+}
+
+// --gi-tour: called after each frame has presented. The frame just drawn showed timeline frame m_TourAt: take what that
+// frame asks for (a shot, a CSV row), then pose the camera for the next one. The first pose waits for streaming.
+void SmokeHarness::GiTourFrame() {
+    namespace fs = std::filesystem;
+    Camera& cam = m_Ctx.editorCamera;
+    Framebuffer& fb = m_Ctx.sceneFramebuffer;
+    auto pose = [&](const GiTour::Frame& f) {
+        cam.Position = f.Eye;
+        cam.Yaw = f.Yaw;
+        cam.Pitch = f.Pitch;
+        cam.Fov = m_Tour->VerticalFovDeg;
+    };
+    // --gi-tour-view gi / nogi: the whole run in that view, the same timeline, luminance rows only (no PNGs).
+    const bool fullView = m_Opt.giTourView == "full";
+    auto finish = [&]() {
+        m_TourCsv.reset();       // flushed and closed
+        m_TourLightsCsv.reset();
+        EditorSettings::Get().FRowLightDebug = m_TourSavedLightView;
+        if (m_Ctx.giVolumes) m_Ctx.giVolumes->SetEnabled(true);
+        m_TourDone = true;
+        m_FramesRendered = m_FrameBudget; // score the scene now
+    };
+    if (m_TourDone) return;
+    if (!m_Tour || m_TourFrames.empty()) {
+        m_SetupError = "gi-tour: no tour to run; ";
+        m_FramesRendered = m_FrameBudget;
+        return;
+    }
+    if (m_FramesRendered == 1) {
+        m_ShotHold = 0;
+        m_TourAt = 0;
+        m_TourStarted = false;
+        m_TourSavedLightView = EditorSettings::Get().FRowLightDebug;
+        EditorSettings::Get().FRowLightDebug = m_Opt.giTourView == "gi" ? FKeyRow::LightGI : FKeyRow::LightOff;
+        if (m_Opt.giTourView == "nogi" && m_Ctx.giVolumes) m_Ctx.giVolumes->SetEnabled(false);
+        // Play's lighting state: every circuit as its switches start (Start On), as the cinematic does.
+        LightSwitch::Update(m_Ctx.world, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), false);
+        if (m_Tour->DoorState == "allOpen") Openable::SetAll(m_Ctx.world, 1.0f);
+        std::cout << "[GiTour] measuring view: " << m_Opt.giTourView << "; doors: " << m_Tour->DoorState << "; lights: Start On; view: Scene view at "
+                  << m_Ctx.sceneFramebuffer.Width() << "x" << m_Ctx.sceneFramebuffer.Height() << ", vertical FOV "
+                  << m_Tour->VerticalFovDeg << std::endl;
+        std::error_code ec;
+        fs::create_directories(m_Opt.sceneBoundsOut, ec);
+        m_TourCsv = std::make_unique<std::ofstream>(
+            fs::path(m_Opt.sceneBoundsOut) / (fullView ? "tour_luminance.csv" : "tour_luminance_" + m_Opt.giTourView + ".csv"), std::ios::binary);
+        if (fullView)
+            m_TourLightsCsv = std::make_unique<std::ofstream>(fs::path(m_Opt.sceneBoundsOut) / "tour_lights.csv", std::ios::binary);
+        if (!*m_TourCsv || (m_TourLightsCsv && !*m_TourLightsCsv)) {
+            Log::Error("[GiTour] can't write to " + m_Opt.sceneBoundsOut);
+            finish();
+            return;
+        }
+        *m_TourCsv << GiTour::CsvHeader() << "\n";
+        if (m_TourLightsCsv) *m_TourLightsCsv << "waypoint,room,light,entity,kind,circuit,on,shadow,intensity,range,distance,fade,slot\n";
+        pose(m_TourFrames[0]);
+        return;
+    }
+    // Hold the first pose until the scene's textures have streamed in.
+    if (!m_TourStarted) {
+        if ((m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0) && m_ShotHold < 3000) {
+            ++m_ShotHold;
+            pose(m_TourFrames[0]);
+            return;
+        }
+        if (m_ShotHold >= 3000) Log::Warn("[GiTour] still streaming after 3000 held frames - starting anyway.");
+        std::cout << "[GiTour] streaming done after " << m_ShotHold << " held frame(s); the tour starts" << std::endl;
+        m_TourStarted = true;
+        m_TourAt = 0;
+        pose(m_TourFrames[0]);
+        return; // the tour's frame 0 is the next one drawn
+    }
+
+    const GiTour::Frame& f = m_TourFrames[m_TourAt];
+    const GiTour::Waypoint& wp = m_Tour->Waypoints[std::max(f.Waypoint, 0)];
+    const int w = fb.Width(), h = fb.Height();
+    char prefix[16];
+    std::snprintf(prefix, sizeof(prefix), "%02d_", std::max(f.Waypoint, 0));
+    if (!fullView && (f.Kind == GiTour::Step::ShotFull || f.Kind == GiTour::Step::ShotGi)) {
+        // gi / nogi: no pictures; the view stays as set for the whole run
+    } else if (f.Kind == GiTour::Step::ShotFull && fb.IsValid()) {
+        FrameCapture::WritePngTo(m_Opt.sceneBoundsOut, prefix + wp.Id + "_full", w, h, FrameCapture::GrabTopDown(fb.Handle(), w, h));
+        GiTourLights(f.Waypoint);
+        EditorSettings::Get().FRowLightDebug = FKeyRow::LightGI; // debugView 8: the baked GI alone
+    } else if (f.Kind == GiTour::Step::ShotGi && fb.IsValid()) {
+        FrameCapture::WritePngTo(m_Opt.sceneBoundsOut, prefix + wp.Id + "_gi", w, h, FrameCapture::GrabTopDown(fb.Handle(), w, h));
+        EditorSettings::Get().FRowLightDebug = FKeyRow::LightOff;
+    } else if ((f.Kind == GiTour::Step::Still || f.Kind == GiTour::Step::Walk) && fb.IsValid() && m_TourCsv) {
+        // The frame's colour (the tonemapped Scene view) and depth (the static-surface mask: drawn geometry, not the
+        // sky), both bottom row first.
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, fb.Handle());
+        m_TourRgba = FrameCapture::GrabRegion(0, 0, w, h);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        double lum = -1.0;
+        int mask = 0;
+        if (HdrTarget* hdr = m_Ctx.sceneHdr) {
+            hdr->ResolveDepthOnly();
+            const int dw = hdr->Width(), dh = hdr->Height();
+            std::vector<float> depth((size_t)dw * dh);
+            // Read through a depth-only framebuffer of the harness's own (the loader has no glGetTextureImage). The
+            // resolved depth texture is attached each frame: a resize recreates it.
+            static GLuint s_DepthFbo = 0;
+            if (!s_DepthFbo) glCreateFramebuffers(1, &s_DepthFbo);
+            glNamedFramebufferTexture(s_DepthFbo, GL_DEPTH_ATTACHMENT, hdr->ResolvedDepthTexture(), 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, s_DepthFbo);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            glReadPixels(0, 0, dw, dh, GL_DEPTH_COMPONENT, GL_FLOAT, depth.data());
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            // The HDR target can be another size than the tonemapped image (render scale): the nearest depth sample.
+            m_TourDepth.resize((size_t)w * h);
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    m_TourDepth[(size_t)y * w + x] = depth[(size_t)std::min(y * dh / h, dh - 1) * dw + std::min(x * dw / w, dw - 1)];
+            lum = GiTour::MaskedMeanLuminance(m_TourRgba.data(), m_TourDepth.data(), w, h, 2, 0.999999f, &mask);
+            m_TourDepthStats = GiTour::MaskedDepthStats(m_TourDepth.data(), w, h, m_Ctx.editorCamera.NearPlane,
+                                                        m_Ctx.editorCamera.FarPlane, 4);
+        } else {
+            m_TourDepthStats = {};
+        }
+        std::vector<std::uint32_t> spots, points;
+        if (m_Ctx.lightGather) {
+            for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) if (m_Ctx.world.Registry.valid(e)) spots.push_back((std::uint32_t)e);
+            for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) if (m_Ctx.world.Registry.valid(e)) points.push_back((std::uint32_t)e);
+        }
+        GiTour::CsvRow row;
+        row.Frame = m_TourAt;
+        row.Mode = f.Kind == GiTour::Step::Walk ? "walk" : "still";
+        row.Segment = f.Segment;
+        row.Waypoint = wp.Id;
+        row.Room = wp.Room;
+        row.Luminance = lum;
+        row.MaskPixels = mask;
+        row.MedianDepthM = m_TourDepthStats.MedianM;
+        row.CloseFraction = m_TourDepthStats.CloseFraction;
+        row.SlotHash = GiTour::SlotSetHash(std::move(spots), std::move(points));
+        row.SlotsChanged = f.Segment == m_TourLastSegment && row.SlotHash != m_TourLastHash;
+        m_TourLastSegment = f.Segment;
+        m_TourLastHash = row.SlotHash;
+        *m_TourCsv << GiTour::CsvLine(row) << "\n";
+    }
+    if (++m_TourAt >= (int)m_TourFrames.size()) {
+        std::cout << "[GiTour] done: " << m_TourFrames.size() << " frame(s) -> " << m_Opt.sceneBoundsOut << std::endl;
+        finish();
+        return;
+    }
+    pose(m_TourFrames[m_TourAt]);
+    // Only a start held the full 3000 frames runs past the budget: keep it going to the tour's end.
+    if (m_FramesRendered >= m_FrameBudget - 1) m_FrameBudget = m_FramesRendered + 2;
+}
+
 // --perf-bench: this frame's measurement, and the report at the end of a phase.
 void SmokeHarness::PerfFrame() {
     NpcTest* npcTest = m_Ctx.npcTest;
@@ -537,7 +805,9 @@ void SmokeHarness::EndFrame() {
     ++m_FramesRendered;
     ++m_WallFrames;
     if (glfwGetWindowAttrib(m_Ctx.window.Handle(), GLFW_FOCUSED) == 0) ++m_UnfocusedFrames;
-    if (m_Cinematic && !opt.perfBenchMode) {
+    if (opt.giTourMode) {
+        GiTourFrame();
+    } else if (m_Cinematic && !opt.perfBenchMode) {
         CinematicFrame();
     } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !m_ShotCameras.empty()) {
         ShotCameraFrame();

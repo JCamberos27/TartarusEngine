@@ -31,6 +31,8 @@ bool g_Interactive = true;
 wchar_t g_Dir[MAX_PATH] = {0}; // %LOCALAPPDATA%\TartarusEngine\Crashes\ (trailing slash)
 wchar_t g_DumpPath[MAX_PATH] = {0};
 wchar_t g_LogName[64] = L"Editor.log"; // the run's log under <user folder>/Logs, named in the dialog
+wchar_t g_LogPath[MAX_PATH] = {0};     // its full path, copied beside the dump; empty = no copy
+wchar_t g_LogCopyPath[MAX_PATH] = {0};
 CrashHandler::EmergencySaveFn volatile g_EmergencySave = nullptr;
 LONG volatile g_EmergencySaved = 0; // 1 = the callback ran and reported success
 
@@ -68,8 +70,33 @@ void PruneOldDumps() {
     FindClose(h);
     if (dumps.size() <= kKeepDumps) return;
     std::sort(dumps.begin(), dumps.end(), [](const Dump& a, const Dump& b) { return a.Time > b.Time; });
-    for (size_t i = kKeepDumps; i < dumps.size(); ++i)
-        DeleteFileW((std::wstring(g_Dir) + dumps[i].Name).c_str());
+    for (size_t i = kKeepDumps; i < dumps.size(); ++i) {
+        const std::wstring dump = std::wstring(g_Dir) + dumps[i].Name;
+        DeleteFileW(dump.c_str());
+        DeleteFileW((dump.substr(0, dump.size() - 4) + L".log").c_str()); // its log copy (CopyLog), if any
+    }
+}
+
+// The run's log beside the dump, same name with .log. Raw Win32 reads with full sharing: the log is open for writing
+// (unbuffered, so every line is already on disk) and the crashed thread may hold the log's mutex, so no Log call.
+bool CopyLog() {
+    if (!g_LogPath[0]) return false;
+    const int n = lstrlenW(g_DumpPath);
+    if (n < 4) return false;
+    lstrcpynW(g_LogCopyPath, g_DumpPath, MAX_PATH);
+    lstrcpyW(g_LogCopyPath + n - 4, L".log");
+    HANDLE in = CreateFileW(g_LogPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (in == INVALID_HANDLE_VALUE) return false;
+    HANDLE out = CreateFileW(g_LogCopyPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    bool ok = out != INVALID_HANDLE_VALUE;
+    static char buffer[64 * 1024]; // static: the watchdog thread's stack is 256 KB
+    DWORD got = 0, put = 0;
+    while (ok && ReadFile(in, buffer, sizeof(buffer), &got, nullptr) && got > 0)
+        ok = WriteFile(out, buffer, got, &put, nullptr) && put == got;
+    if (out != INVALID_HANDLE_VALUE) CloseHandle(out);
+    CloseHandle(in);
+    return ok;
 }
 
 bool WriteDump() {
@@ -139,6 +166,10 @@ DWORD WINAPI Watchdog(void*) {
               g_Pointers && g_Pointers->ExceptionRecord ? g_Pointers->ExceptionRecord->ExceptionCode : 0,
               ok ? "written" : "FAILED", g_DumpPath);
     StderrLine(line);
+    if (ok && CopyLog()) {
+        wsprintfA(line, "[CrashHandler] log copied to %ls\n", g_LogCopyPath);
+        StderrLine(line);
+    }
     RunEmergencySave();
 
     if (g_Interactive) {
@@ -211,8 +242,13 @@ void OnAbort(int) { ReportHere("abort()"); }
 } // namespace
 
 namespace CrashHandler {
-void SetReportLocation(const std::string& userRoot, const std::string& logFile) {
+void SetReportLocation(const std::string& userRoot, const std::string& logPath) {
     if (userRoot.empty()) return;
+    const size_t slash = logPath.find_last_of("/\\");
+    const std::string logFile = slash == std::string::npos ? logPath : logPath.substr(slash + 1);
+    g_LogPath[0] = L'\0';
+    if (slash != std::string::npos && !MultiByteToWideChar(CP_UTF8, 0, logPath.c_str(), -1, g_LogPath, MAX_PATH))
+        g_LogPath[0] = L'\0'; // too long: no copy rather than a cut path
     wchar_t root[MAX_PATH] = {0};
     if (!MultiByteToWideChar(CP_UTF8, 0, userRoot.c_str(), -1, root, MAX_PATH - 16)) return;
     wchar_t dir[MAX_PATH] = {0};

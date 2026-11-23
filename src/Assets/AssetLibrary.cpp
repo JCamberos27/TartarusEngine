@@ -201,6 +201,7 @@ std::shared_ptr<Model> AssetLibrary::LoadAnimationSource(const std::string& path
     if (HasModel(path)) return LoadModel(path);
     const std::string key = AssetDatabase::PathKey(path);
     if (auto it = m_ClipSourceCache.find(key); it != m_ClipSourceCache.end()) return it->second;
+    if (ClaimAsyncClipSource(key)) return m_ClipSourceCache[key];
     PrepareModelImport(path);
     ModelImportSettings settings = GetModelSettings(path);
     settings.AnimationOnly = true;
@@ -218,6 +219,7 @@ int AssetLibrary::PreloadAnimationSources(const std::vector<std::string>& paths)
         const std::string key = AssetDatabase::PathKey(p);
         if (HasModel(p) || m_ClipSourceCache.count(key)) continue;
         if (std::any_of(jobs.begin(), jobs.end(), [&](const Job& j) { return j.Key == key; })) continue;
+        if (ClaimAsyncClipSource(key)) continue; // the scene-open prefetch got there
         PrepareModelImport(p);
         Job j{p, key, GetModelSettings(p), nullptr};
         j.Settings.AnimationOnly = true;

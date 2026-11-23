@@ -84,6 +84,7 @@ struct ViewPipelineInputs {
     Grid* grid = nullptr;
     SelectionOutline* selectionOutline = nullptr;
     bool harnessCleanViews = false; // --npc-test shots: no grid or collider overlay
+    glm::ivec2 harnessSceneSize{0}; // --gi-tour: the Scene view's render size (0 = the panel's)
 
     // The game camera (docked Game view and maximized Play)
     ViewTargets game;
