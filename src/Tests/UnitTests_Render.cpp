@@ -3,6 +3,7 @@
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
+#include "../Renderer/OpaqueBatchKey.h"
 #include "../Renderer/UploadStaging.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
@@ -1079,6 +1080,39 @@ using json = nlohmann::json;
 using UnitTestSupport::TempDir;
 using UnitTestSupport::ReadAll;
 
+// GI Phase 1 (W3): GPU-driven batches merge only groups the per-draw hook binds alike. The GI volume mask and every bit
+// of the probe selection must split them; otherwise a group is shaded with its batch lead's GI volumes (launch-dependent).
+void TestOpaqueBatchKey() {
+    namespace K = OpaqueBatchKey;
+    K::ObjectState a;
+    a.LayerBit = 1u;
+    a.ProbeKey = (2u << 30) | (3u << 20) | (7u << 10) | 40u;
+    a.GIMask = 0x0000000000000003ull;
+    const std::uint64_t ka = K::Object(a);
+    CHECK(K::Object(a) == ka); // deterministic: equal state, equal key
+    K::ObjectState b = a;
+    b.GIMask = 0x0000000000000006ull; // another room's volumes
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.GIMask = a.GIMask | (1ull << 40); // a high volume bit (the second mask word)
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.ProbeKey = a.ProbeKey + (16u << 20); // primary probe 3 -> 19: only bits 24-31 differ (lost by the old << 40)
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.ProbeKey = (1u << 30) | (a.ProbeKey & 0x3FFFFFFFu); // one probe instead of two: bits 30-31 only
+    CHECK(K::Object(b) != ka);
+    for (int f = 0; f < 5; ++f) { // each flag still splits
+        b = a;
+        bool* flags[5] = {&b.ReceiveShadows, &b.StaticReceiver, &b.NoSsao, &b.DoubleSided, &b.Prepassed};
+        *flags[f] = !*flags[f];
+        CHECK(K::Object(b) != ka);
+    }
+    b = a;
+    b.LayerBit = 2u;
+    CHECK(K::Object(b) != ka);
+}
+
 // A still spot / point light redraws its static depth only when a caster's signature changes. A colourway swaps one
 // material slot in place (same count, same first slot): that must change the signature too.
 void TestLocalCasterHashSlots() {
@@ -2060,5 +2094,6 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
+    tests.push_back({"OpaqueBatchKey", TestOpaqueBatchKey});
     tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
 }
