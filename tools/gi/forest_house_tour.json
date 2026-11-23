@@ -1,0 +1,952 @@
+{
+  "version": 1,
+  "scene": "scenes/Forest.json",
+  "player": {
+    "eyeHeight": 1.7,
+    "horizontalFovDeg": 90.0,
+    "verticalFovDeg": 58.72,
+    "walkSpeed": 4.0,
+    "source": "Forest.json 'Player Spawn' First Person Controller (Eye Height, Field of View, Move Speed)"
+  },
+  "doorState": "allOpen",
+  "waypoints": [
+    {
+      "id": "front_door_before",
+      "room": "Porch (outside)",
+      "giVolume": "",
+      "kind": "door_before",
+      "feet": [
+        1.0,
+        0.165,
+        23.44
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "front_door_in",
+      "room": "Porch (outside) | Entrance hall",
+      "giVolume": " | GI entrance hall 1",
+      "kind": "door_in",
+      "feet": [
+        1.0,
+        0.194,
+        24.04
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "front_door_after",
+      "room": "Entrance hall",
+      "giVolume": "GI entrance hall 1",
+      "kind": "door_after",
+      "feet": [
+        1.0,
+        0.194,
+        24.64
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "hall_east_corner",
+      "room": "Entrance hall",
+      "giVolume": "GI entrance hall 1",
+      "kind": "corner",
+      "feet": [
+        3.0,
+        0.194,
+        25.6
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "hall_center",
+      "room": "Entrance hall",
+      "giVolume": "GI entrance hall 2",
+      "kind": "room",
+      "feet": [
+        -1.5,
+        0.194,
+        25.4
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "hall_west_corner",
+      "room": "Entrance hall",
+      "giVolume": "GI entrance hall 2",
+      "kind": "corner",
+      "feet": [
+        -5.9,
+        0.194,
+        25.6
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "note": "Atlas gap: hall/kitchen seam at x -6.59 behind this point"
+    },
+    {
+      "id": "kitchen_door_before",
+      "room": "Entrance hall",
+      "giVolume": "GI entrance hall 2",
+      "kind": "door_before",
+      "feet": [
+        -4.82,
+        0.194,
+        26.35
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "kitchen_door_in",
+      "room": "Entrance hall | Kitchen-dining",
+      "giVolume": "GI entrance hall 2 | GI kitchen-dining 4",
+      "kind": "door_in",
+      "feet": [
+        -4.82,
+        0.194,
+        26.95
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "kitchen_door_after",
+      "room": "Kitchen-dining",
+      "giVolume": "GI kitchen-dining 4",
+      "kind": "door_after",
+      "feet": [
+        -4.82,
+        0.194,
+        27.55
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "kitchen_main",
+      "room": "Kitchen-dining",
+      "giVolume": "GI kitchen-dining 3",
+      "kind": "room",
+      "feet": [
+        -11.0,
+        0.194,
+        27.25
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "dining",
+      "room": "Kitchen-dining",
+      "giVolume": "GI kitchen-dining 1",
+      "kind": "room",
+      "feet": [
+        -10.6,
+        0.194,
+        22.7
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "kitchen_north",
+      "room": "Kitchen-dining",
+      "giVolume": "GI kitchen-dining 7",
+      "kind": "room",
+      "feet": [
+        -12.75,
+        0.194,
+        30.25
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "cut": true
+    },
+    {
+      "id": "kitchen_east",
+      "room": "Kitchen-dining",
+      "giVolume": "GI kitchen-dining 5",
+      "kind": "room",
+      "feet": [
+        -3.0,
+        0.194,
+        27.75
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "cut": true,
+      "note": "Atlas gap: half-wall seam at z 28.73 to the left"
+    },
+    {
+      "id": "kitchen_stair_side",
+      "room": "Kitchen-dining",
+      "giVolume": "GI kitchen-dining 6",
+      "kind": "corner",
+      "feet": [
+        -0.2,
+        0.194,
+        28.4
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "storeroom_door_before",
+      "room": "Kitchen-dining",
+      "giVolume": "GI kitchen-dining 6",
+      "kind": "door_before",
+      "feet": [
+        -1.31,
+        0.194,
+        30.35
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "storeroom_door_in",
+      "room": "Kitchen-dining | Stair storeroom",
+      "giVolume": "GI kitchen-dining 6 | GI stair storeroom",
+      "kind": "door_in",
+      "feet": [
+        -1.91,
+        0.194,
+        30.35
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "storeroom_door_after",
+      "room": "Stair storeroom",
+      "giVolume": "GI stair storeroom",
+      "kind": "door_after",
+      "feet": [
+        -2.51,
+        0.194,
+        30.35
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "hall_double_door_before",
+      "room": "Entrance hall",
+      "giVolume": "GI entrance hall 1",
+      "kind": "door_before",
+      "feet": [
+        2.46,
+        0.194,
+        26.35
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0,
+      "cut": true
+    },
+    {
+      "id": "hall_double_door_in",
+      "room": "Entrance hall | Entrance hall",
+      "giVolume": "GI entrance hall 1 | GI entrance hall 3",
+      "kind": "door_in",
+      "feet": [
+        2.46,
+        0.194,
+        26.95
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "hall_double_door_after",
+      "room": "Entrance hall",
+      "giVolume": "GI entrance hall 3",
+      "kind": "door_after",
+      "feet": [
+        2.46,
+        0.194,
+        27.55
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "corridor_east",
+      "room": "Living room corridor",
+      "giVolume": "GI living room 5",
+      "kind": "corner",
+      "feet": [
+        4.75,
+        0.194,
+        27.55
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "note": "Atlas gap: hall 4 / living room 9 seam at x 4.45"
+    },
+    {
+      "id": "bathroom_down_door_before",
+      "room": "Living room corridor",
+      "giVolume": "GI living room 5",
+      "kind": "door_before",
+      "feet": [
+        6.34,
+        0.194,
+        27.55
+      ],
+      "yawDeg": -90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "bathroom_down_door_in",
+      "room": "Living room corridor | Downstairs bathroom",
+      "giVolume": "GI living room 5 | GI downstairs bathroom 1",
+      "kind": "door_in",
+      "feet": [
+        6.34,
+        0.194,
+        26.95
+      ],
+      "yawDeg": -90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "bathroom_down_door_after",
+      "room": "Downstairs bathroom",
+      "giVolume": "GI downstairs bathroom 1",
+      "kind": "door_after",
+      "feet": [
+        6.34,
+        0.194,
+        26.35
+      ],
+      "yawDeg": -90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "living_door_before",
+      "room": "Living room",
+      "giVolume": "GI living room 3",
+      "kind": "door_before",
+      "feet": [
+        7.19,
+        0.194,
+        29.37
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "cut": true
+    },
+    {
+      "id": "living_door_in",
+      "room": "Living room | Living room",
+      "giVolume": "GI living room 3 | GI living room 1",
+      "kind": "door_in",
+      "feet": [
+        7.79,
+        0.194,
+        29.37
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "living_door_after",
+      "room": "Living room",
+      "giVolume": "GI living room 1",
+      "kind": "door_after",
+      "feet": [
+        8.39,
+        0.194,
+        29.37
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "living_room",
+      "room": "Living room",
+      "giVolume": "GI living room 1",
+      "kind": "room",
+      "feet": [
+        12.0,
+        0.194,
+        26.5
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "living_east_bay",
+      "room": "Living room",
+      "giVolume": "GI living room 4",
+      "kind": "room",
+      "feet": [
+        12.0,
+        0.194,
+        22.5
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "east_door_before",
+      "room": "Living room",
+      "giVolume": "GI living room 1",
+      "kind": "door_before",
+      "feet": [
+        13.88,
+        0.194,
+        25.98
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "cut": true
+    },
+    {
+      "id": "east_door_in",
+      "room": "Living room | Outside (east)",
+      "giVolume": "GI living room 1 | ",
+      "kind": "door_in",
+      "feet": [
+        14.48,
+        0.194,
+        25.98
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "east_door_after",
+      "room": "Outside (east)",
+      "giVolume": "",
+      "kind": "door_after",
+      "feet": [
+        15.08,
+        0.0,
+        25.98
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "stairs_foot",
+      "room": "Stairwell",
+      "giVolume": "GI stairwell",
+      "kind": "stairs",
+      "feet": [
+        1.4,
+        0.194,
+        30.75
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 10.0,
+      "cut": true
+    },
+    {
+      "id": "stairs_mid",
+      "room": "Stairwell",
+      "giVolume": "GI stairwell",
+      "kind": "stairs",
+      "feet": [
+        3.65,
+        1.638,
+        30.75
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 10.0
+    },
+    {
+      "id": "stairs_top",
+      "room": "Landing",
+      "giVolume": "GI landing",
+      "kind": "stairs",
+      "feet": [
+        6.05,
+        3.104,
+        30.75
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "landing_corner",
+      "room": "Landing",
+      "giVolume": "GI landing",
+      "kind": "corner",
+      "feet": [
+        8.4,
+        3.104,
+        31.0
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "child_door_before",
+      "room": "Landing",
+      "giVolume": "GI landing",
+      "kind": "door_before",
+      "feet": [
+        8.65,
+        3.104,
+        28.4
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "child_door_in",
+      "room": "Landing | Child's bedroom",
+      "giVolume": "GI landing | GI child's bedroom 1",
+      "kind": "door_in",
+      "feet": [
+        9.25,
+        3.104,
+        28.4
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "child_door_after",
+      "room": "Child's bedroom",
+      "giVolume": "GI child's bedroom 1",
+      "kind": "door_after",
+      "feet": [
+        9.85,
+        3.104,
+        28.4
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "child_bedroom",
+      "room": "Child's bedroom",
+      "giVolume": "GI child's bedroom 1",
+      "kind": "room",
+      "feet": [
+        11.9,
+        3.104,
+        26.75
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "closet_door_before",
+      "room": "Child's bedroom",
+      "giVolume": "GI child's bedroom 1",
+      "kind": "door_before",
+      "feet": [
+        11.67,
+        3.104,
+        28.77
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "closet_door_in",
+      "room": "Child's bedroom | Closet room",
+      "giVolume": "GI child's bedroom 1 | GI closet room",
+      "kind": "door_in",
+      "feet": [
+        11.67,
+        3.104,
+        29.37
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "closet_door_after",
+      "room": "Closet room",
+      "giVolume": "GI closet room",
+      "kind": "door_after",
+      "feet": [
+        11.67,
+        3.104,
+        29.97
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "upstairs_hall_door_before",
+      "room": "Stairwell gallery",
+      "giVolume": "GI stairwell",
+      "kind": "door_before",
+      "feet": [
+        4.4,
+        3.104,
+        28.52
+      ],
+      "yawDeg": -90.0,
+      "pitchDeg": 0.0,
+      "cut": true
+    },
+    {
+      "id": "upstairs_hall_door_in",
+      "room": "Stairwell gallery | Upstairs hall",
+      "giVolume": "GI stairwell | GI upstairs hall",
+      "kind": "door_in",
+      "feet": [
+        4.4,
+        3.104,
+        27.92
+      ],
+      "yawDeg": -90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "upstairs_hall_door_after",
+      "room": "Upstairs hall",
+      "giVolume": "GI upstairs hall",
+      "kind": "door_after",
+      "feet": [
+        4.4,
+        3.104,
+        27.32
+      ],
+      "yawDeg": -90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "upstairs_hall",
+      "room": "Upstairs hall",
+      "giVolume": "GI upstairs hall",
+      "kind": "room",
+      "feet": [
+        3.35,
+        3.104,
+        26.2
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "upstairs_hall_south",
+      "room": "Upstairs hall",
+      "giVolume": "GI upstairs hall",
+      "kind": "gap",
+      "feet": [
+        2.0,
+        3.104,
+        24.9
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0,
+      "note": "Atlas gap: 5.0 m2 strip x -0.34..5.72, z 24.31..25.11 in no volume"
+    },
+    {
+      "id": "den_east",
+      "room": "Upstairs den",
+      "giVolume": "GI upstairs den 2",
+      "kind": "room",
+      "feet": [
+        -1.15,
+        3.104,
+        29.9
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0,
+      "cut": true
+    },
+    {
+      "id": "den_west",
+      "room": "Upstairs den",
+      "giVolume": "GI upstairs den 1",
+      "kind": "room",
+      "feet": [
+        -4.4,
+        3.104,
+        29.8
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "master_den_door_before",
+      "room": "Upstairs den",
+      "giVolume": "GI upstairs den 1",
+      "kind": "door_before",
+      "feet": [
+        -6.16,
+        3.104,
+        29.38
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "master_den_door_in",
+      "room": "Upstairs den | Master bedroom",
+      "giVolume": "GI upstairs den 1 | GI master bedroom 3",
+      "kind": "door_in",
+      "feet": [
+        -6.76,
+        3.104,
+        29.38
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "master_den_door_after",
+      "room": "Master bedroom",
+      "giVolume": "GI master bedroom 3",
+      "kind": "door_after",
+      "feet": [
+        -7.36,
+        3.104,
+        29.38
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "master_bedroom",
+      "room": "Master bedroom",
+      "giVolume": "GI master bedroom 1",
+      "kind": "room",
+      "feet": [
+        -9.75,
+        3.104,
+        23.2
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0,
+      "note": "Atlas gap: looks at the 5.5 m2 west strip x -14.14..-13.39 in no volume"
+    },
+    {
+      "id": "box_room_door_before",
+      "room": "Master bedroom",
+      "giVolume": "GI master bedroom 2",
+      "kind": "door_before",
+      "feet": [
+        -10.53,
+        3.104,
+        27.44
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "box_room_door_in",
+      "room": "Master bedroom | Box room",
+      "giVolume": "GI master bedroom 2 | GI box room",
+      "kind": "door_in",
+      "feet": [
+        -11.13,
+        3.104,
+        27.44
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "box_room_door_after",
+      "room": "Box room",
+      "giVolume": "GI box room",
+      "kind": "door_after",
+      "feet": [
+        -11.73,
+        3.104,
+        27.44
+      ],
+      "yawDeg": 180.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "box_room",
+      "room": "Box room",
+      "giVolume": "GI box room",
+      "kind": "room",
+      "feet": [
+        -12.8,
+        3.104,
+        28.8
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "master_hall_door_before",
+      "room": "Master bedroom",
+      "giVolume": "GI master bedroom 2",
+      "kind": "door_before",
+      "feet": [
+        -7.36,
+        3.104,
+        26.47
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "cut": true
+    },
+    {
+      "id": "master_hall_door_in",
+      "room": "Master bedroom | Upstairs bathroom",
+      "giVolume": "GI master bedroom 2 | GI upstairs bathroom 1",
+      "kind": "door_in",
+      "feet": [
+        -6.76,
+        3.104,
+        26.47
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "master_hall_door_after",
+      "room": "Upstairs bathroom",
+      "giVolume": "GI upstairs bathroom 1",
+      "kind": "door_after",
+      "feet": [
+        -6.16,
+        3.104,
+        26.47
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "upstairs_bathroom",
+      "room": "Upstairs bathroom",
+      "giVolume": "GI upstairs bathroom 2",
+      "kind": "room",
+      "feet": [
+        -2.5,
+        3.104,
+        25.8
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "note": "Atlas gap: looks at the 3.1 m2 strip x -0.34..0.67 in no volume"
+    },
+    {
+      "id": "upstairs_bath_north",
+      "room": "Upstairs bathroom",
+      "giVolume": "GI upstairs bathroom 1",
+      "kind": "gap",
+      "feet": [
+        -2.5,
+        3.104,
+        27.25
+      ],
+      "yawDeg": 0.0,
+      "pitchDeg": 0.0,
+      "note": "Atlas gap: 1.75 m2 x -2.70..-0.66, z 26.73..28.05 in no volume"
+    },
+    {
+      "id": "den_door_before",
+      "room": "Upstairs bathroom",
+      "giVolume": "GI upstairs bathroom 1",
+      "kind": "door_before",
+      "feet": [
+        -4.34,
+        3.104,
+        27.32
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "den_door_in",
+      "room": "Upstairs bathroom | Upstairs den",
+      "giVolume": "GI upstairs bathroom 1 | GI upstairs den 1",
+      "kind": "door_in",
+      "feet": [
+        -4.34,
+        3.104,
+        27.92
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    },
+    {
+      "id": "den_door_after",
+      "room": "Upstairs den",
+      "giVolume": "GI upstairs den 1",
+      "kind": "door_after",
+      "feet": [
+        -4.34,
+        3.104,
+        28.52
+      ],
+      "yawDeg": 90.0,
+      "pitchDeg": 0.0
+    }
+  ],
+  "routes": [
+    {
+      "id": "route_front_door_to_living_room",
+      "name": "Come in the front door, through the hall's double doors and the corridor, into the living room",
+      "points": [
+        "front_door_before",
+        "front_door_in",
+        "front_door_after",
+        "hall_double_door_before",
+        "hall_double_door_in",
+        "hall_double_door_after",
+        "corridor_east",
+        "living_door_before",
+        "living_door_in",
+        "living_door_after",
+        "living_room"
+      ]
+    },
+    {
+      "id": "route_hall_to_kitchen_and_back",
+      "name": "Hall to the kitchen and dining room, round the kitchen, back out to the hall",
+      "points": [
+        "hall_east_corner",
+        "hall_center",
+        "hall_west_corner",
+        "kitchen_door_before",
+        "kitchen_door_in",
+        "kitchen_door_after",
+        "kitchen_main",
+        "dining",
+        "kitchen_main",
+        "kitchen_door_after",
+        "kitchen_door_in",
+        "kitchen_door_before",
+        "hall_center",
+        "hall_east_corner"
+      ]
+    },
+    {
+      "id": "route_upstairs_to_bedrooms",
+      "name": "Up the stairs, across the landing into the child's bedroom, back along the gallery to the den and master bedroom",
+      "points": [
+        "hall_double_door_after",
+        "stairs_foot",
+        "stairs_mid",
+        "stairs_top",
+        "landing_corner",
+        "child_door_before",
+        "child_door_in",
+        "child_door_after",
+        "child_bedroom",
+        "child_door_after",
+        "child_door_in",
+        "child_door_before",
+        "upstairs_hall_door_before",
+        "den_east",
+        "den_west",
+        "master_den_door_before",
+        "master_den_door_in",
+        "master_den_door_after",
+        "master_bedroom"
+      ]
+    }
+  ]
+}
