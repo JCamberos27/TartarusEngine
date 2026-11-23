@@ -159,15 +159,19 @@ are real), which is the baseline for each after-pair.
 
 Phase 1 (Nov 23) changes the direct light and the tooling, not the bake. Rollup rows are added as each PR lands.
 
-* **Bounce tune-down (plan only in Phase 1).** The brighter bounce is brought back toward the Nov 14 look in Phase 3 by
-  per-volume `Intensity`, not an engine change; see `docs/GI_BOUNCE_TUNE_PLAN.md`. Effect on checks: the by-design dark
-  rooms get a **ceiling** (no brighter than their `before_gi` level, within the bake-noise tolerance), not only a floor, and
-  the before/after pairs compare against the P0 pictures, not against the fresh bake.
+* **Bounce: keep the new bake, trim rooms on request (Jacob, Nov 23).** The blanket tune-down to the Nov 14 levels is cancelled:
+  H1 (Kronos) showed the committed Nov 14 `.gi` was stale for the room circuits, so the fresh bake is the correct brightness.
+  In Phase 3, Jacob marks rooms he dislikes on the sign-off sheet (per-room "darker / OK / lighter"); only those get a
+  per-volume `Intensity`; see `docs/GI_BOUNCE_TUNE_PLAN.md`. Effect on checks: **no brightness ceiling** for the by-design dark
+  rooms unless Jacob marks them; the before/after pairs for unmarked rooms must show no GI change from Phase 3's trim.
+* **20 lamps get Cast Shadows** (Atlas, scene PR), **room-aware shadow slots** (Argus), **repeatable bake** (Kronos),
+  **SSAO-off GL bug** (Talos).
+
 ### Phase 1 rollup (status at 2026-11-23 evening; rows updated as PRs merge)
 
 | PR | Change | Evidence so far | Effect on the PROPOSED thresholds |
 |---|---|---|---|
-| #1187, #1191 (merged) | Bounce tune-down plan; Jacob's answers recorded PROVISIONAL / ON HOLD pending the stale-bake (H1) test | `docs/GI_BOUNCE_TUNE_PLAN.md` | Dark rooms get a ceiling as well as a floor (Phase 3). Nothing applies until Jacob re-confirms after H1. |
+| #1187, #1191 (merged), #1195 (open) | Bounce plan; then Jacob's decision "Keep it, trim rooms" after H1: no blanket tune-down, per-room trims on request | H1: `gi-p2/kronos/h1/h1_result.md` (Nov 14 `.gi` stale; Hall/Master bedroom main/Nov14-code 1.0-1.05x, vs committed 1.6x; lamp circuits +1.68x from a later code change, likely 15930c7d, to confirm) | No dark-room ceiling; trims only where Jacob marks a room. |
 | #1192 (draft, lands with #1189) | Cast Shadows ON for the 20 shadowless house lamps (Forest.json, exactly 20 flips; lamp list matches the P0 audit; second review PASS, W6) | Full-frame tour pairs change most in kitchen north, kitchen main, dining, living east bay, hall, landing. Tour ran about 22 fps vs 51 before (not perf numbers) | Check 1/2 expect fewer through-wall leaks. Check 5 (performance) is the risk: needs the #1189 sweep. |
 | #1189 (draft) | Room-aware, stable shadow slots that fade instead of popping | Pending GPU run | Check 1 (walk stability): slot hash changes should stop popping. |
 | #1190 (open) | `--bake-gi` pins every clock a capture sees | Targets the 2.8-6.6% bake-to-bake spread | Bake noise caveat can be tightened to the measured spread. |
@@ -190,7 +194,7 @@ Detail: `gi-p1/briareos/REVIEW_1192.md` (team folder).
 * **GI identical across 5 launches** of the same scene and bake (per-waypoint GI-only luminance within the bake-noise
   tolerance on every launch). This is a Phase 1 exit blocker until the live input behind the bistability is found and pinned.
 * #1192 and #1189 merged together, with the fps sweep near the old pace.
-* Jacob's bounce answers re-confirmed after the H1 stale-bake test, before Phase 3.
+* Jacob marks his room trims on the sign-off sheet before Phase 3 applies any `Intensity` change (default: no change).
 
 * After Kronos's PR the bake noise caveat above can be tightened to the measured spread (target: byte-identical or under
   0.5% per layer).
