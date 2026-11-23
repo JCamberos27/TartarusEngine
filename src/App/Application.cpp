@@ -2086,7 +2086,11 @@ bool AppSession::Frame() {
     if (giBakeMode && !giBakeDone) {
         PROFILE_SCOPE("GI Bake");
         if (!giBaker) {
-            if (++giBakeWait >= 30 && iblProbe.IsValid() && !probeCapture.Busy()) {
+            // Pinned (repeatable) bakes also wait for every async load and GPU upload to land, so no capture draws a
+            // surface with its maps still missing (bindSlot falls back to the base colour alone).
+            const bool loadsSettled = !giPinClocks || assets.AsyncInFlight() == 0;
+            if (++giBakeWait >= 30 && iblProbe.IsValid() && !probeCapture.Busy() && loadsSettled) {
+                std::cout << "--bake-gi: starting after " << giBakeWait << " frames" << std::endl;
                 giBaker = std::make_unique<GIBaker>();
                 GIBaker::Options bo;
                 bo.Only = opt.bakeGiOnly;
