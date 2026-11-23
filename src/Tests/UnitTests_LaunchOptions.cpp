@@ -44,6 +44,19 @@ void Test_LaunchOptions_Modes() {
     // Its relaunch test: only with a state file to restore.
     CHECK(Parse({"--restore-state", "s.json", "--restore-check", "r.json"}, o, err) && o.restoreCheckReport == "r.json");
     CHECK(!Parse({"--restore-check", "r.json"}, o, err) && err.find("--restore-state") != std::string::npos);
+    // GI Phase 0's camera tour: on the smoke harness, hidden like the other harness runs, and it must say where to write.
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--perf-res", "1920x1080"}, o, err));
+    CHECK(o.mode == LaunchMode::GiTour && o.giTourMode && o.smokeTestMode && !o.perfBenchMode && o.giTourFile == "tour.json" &&
+          o.sceneBoundsOut == "o" && o.perfResW == 1920);
+    CHECK(Env::Flag(Env::Var::Show) || KeepsWindowHidden(o));
+    CHECK(!Parse({"--gi-tour", "tour.json"}, o, err) && err.find("--out") != std::string::npos);
+    CHECK(!Parse({"--gi-tour", "tour.json", "--out", "o", "--smoke-shots", "s"}, o, err));
+    // --gi-tour-view: full by default (the game's lighting), gi / nogi on request, nothing else, gi-tour only.
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o"}, o, err) && o.giTourView == "full");
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "nogi"}, o, err) && o.giTourView == "nogi");
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "gi"}, o, err) && o.giTourView == "gi");
+    CHECK(!Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "direct"}, o, err) && err.find("full, gi or nogi") != std::string::npos);
+    CHECK(!Parse({"--smoke-test", "--gi-tour-view", "gi"}, o, err));
 }
 
 void Test_LaunchOptions_Lists() {

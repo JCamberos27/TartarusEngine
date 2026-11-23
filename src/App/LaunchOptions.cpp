@@ -22,7 +22,7 @@ enum class Arity {
 constexpr unsigned Bit(LaunchMode m) { return 1u << (unsigned)m; }
 constexpr unsigned kGuiModes = Bit(LaunchMode::Editor) | Bit(LaunchMode::SmokeTest) | Bit(LaunchMode::PerfBench) |
                                Bit(LaunchMode::NpcTest) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::EditorShot) |
-                               Bit(LaunchMode::BakeGI);
+                               Bit(LaunchMode::BakeGI) | Bit(LaunchMode::GiTour);
 constexpr unsigned kAnyMode = ~0u;
 
 using Apply = void (*)(LaunchOptions&, const std::string&);
@@ -97,6 +97,9 @@ const FlagDef kFlags[] = {
     {"--crash-test", Arity::Required, "kind", true, LaunchMode::CrashTest, 0,
      [](LaunchOptions& o, const std::string& v) { o.crashTestKind = v; },
      "crash on purpose (av|overflow|abort|purecall|invalidparam|terminate) to check the crash handler"},
+    {"--gi-tour", Arity::Required, "tour.json", true, LaunchMode::GiTour, 0,
+     [](LaunchOptions& o, const std::string& v) { o.giTourFile = v; },
+     "walk the tour's waypoints and routes through its scene (hidden): PNGs, shadow slots, a luminance CSV (needs --out)"},
     {"--help", Arity::None, "", true, LaunchMode::Help, 0,
      [](LaunchOptions&, const std::string&) {},
      "this list"},
@@ -114,8 +117,11 @@ const FlagDef kFlags[] = {
     {"--perf-sample", Arity::None, "", false, kNoMode, Bit(LaunchMode::PerfBench) | Bit(LaunchMode::NpcTest),
      [](LaunchOptions& o, const std::string&) { o.perfSample = true; },
      "add a sampling CPU profile of each phase (--npc-test: of the scripted run, from its 900th frame)"},
+    {"--gi-tour-view", Arity::Required, "full|gi|nogi", false, kNoMode, Bit(LaunchMode::GiTour),
+     [](LaunchOptions& o, const std::string& v) { o.giTourView = v; },
+     "what the tour's luminance rows measure: the game's lighting, the baked GI alone, or the GI Volumes off"},
     {"--perf-res", Arity::Required, "WxH", false, kNoMode,
-     Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests),
+     Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::GiTour),
      [](LaunchOptions& o, const std::string& v) {
 #pragma warning(suppress : 4996)
          if (std::sscanf(v.c_str(), "%dx%d", &o.perfResW, &o.perfResH) != 2 || o.perfResW <= 0 || o.perfResH <= 0)
@@ -136,7 +142,7 @@ const FlagDef kFlags[] = {
      [](LaunchOptions& o, const std::string&) { o.editorShotIDE = true; },
      "one Script IDE capture"},
     {"--out", Arity::Required, "dir", false, kNoMode,
-     Bit(LaunchMode::SceneBounds) | Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion),
+     Bit(LaunchMode::SceneBounds) | Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion) | Bit(LaunchMode::GiTour),
      [](LaunchOptions& o, const std::string& v) { o.sceneBoundsOut = v; },
      "output folder (bake-motion: the output files' path, without extension)"},
     {"--match", Arity::Required, "text", false, kNoMode, Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion),
@@ -282,9 +288,19 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
     // run-weapon-lab.cmd starts the exe without arguments; only the windowed modes take it, as they do --weapon-lab.
     if (Env::Flag(Env::Var::WeaponLab) && (kGuiModes & Bit(o.mode))) o.weaponLabMode = true;
 
-    o.smokeTestMode = o.mode == LaunchMode::SmokeTest || o.mode == LaunchMode::PerfBench || o.mode == LaunchMode::NpcTest;
+    if (o.giTourView != "full" && o.giTourView != "gi" && o.giTourView != "nogi") {
+        error = "'--gi-tour-view' takes full, gi or nogi";
+        return false;
+    }
+    if (o.mode == LaunchMode::GiTour && o.sceneBoundsOut.empty()) {
+        error = "'--gi-tour' needs '--out <dir>'";
+        return false;
+    }
+    o.smokeTestMode = o.mode == LaunchMode::SmokeTest || o.mode == LaunchMode::PerfBench || o.mode == LaunchMode::NpcTest ||
+                      o.mode == LaunchMode::GiTour;
     o.perfBenchMode = o.mode == LaunchMode::PerfBench;
     o.npcTestMode = o.mode == LaunchMode::NpcTest;
+    o.giTourMode = o.mode == LaunchMode::GiTour;
     o.editorTestsMode = o.mode == LaunchMode::EditorTests;
     o.buildMode = o.mode == LaunchMode::Build;
 

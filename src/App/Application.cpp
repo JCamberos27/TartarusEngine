@@ -1194,7 +1194,7 @@ private:
     SmokeContext smokeContext{world, assets, editor, editorCamera, sceneFramebuffer, clusterGrid, decalSystem, window,
                               npcTest.get(), playing, playMaximized, playUsesPlayer, player.Cam, playSceneCam,
                               [&]() { togglePlay(); }, [&](bool maximize) { setMaximized(maximize); },
-                              [&]() { warmRenderResources(); }};
+                              [&]() { warmRenderResources(); }, &lightGather, &sceneHdr, &giVolumes};
     SmokeHarness smoke{opt, smokeContext};
 
     // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
@@ -1272,7 +1272,7 @@ bool AppSession::Frame() {
     // every run (a before/after pixel diff of a GPU change). The timings of such a run aren't the measurement.
     // --npc-test: 1/60 s, its game step (gameDt below), so what reads Time's clocks - the recoil's unscaled shot
     // timing among them - repeats run to run too, instead of following how long each frame really took.
-    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : opt.npcTestMode ? 1.0 / 60.0 : 0.0);
+    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : opt.npcTestMode || opt.giTourMode ? 1.0 / 60.0 : 0.0);
     Time::BeginFrame();
     const auto frameWorkStart = std::chrono::steady_clock::now(); // to SwapBuffers: this frame's own work
     const float dt = Time::UnscaledDeltaTime();
@@ -2048,11 +2048,13 @@ bool AppSession::Frame() {
                                                  std::vector<float>& out) { gather->Gather(w, shapes, only, out); };
     viewIn.scene = {&sceneHdr, &sceneTaa, &sceneOpaqueColor, &ssao, &bloom};
     viewIn.sceneLdr = &sceneFramebuffer;
+    // --gi-tour: the Scene view at the tour's fixed size (--perf-res, default 1920x1080), whatever the hidden window's layout.
+    if (opt.giTourMode) viewIn.harnessSceneSize = opt.perfResW > 0 ? glm::ivec2(opt.perfResW, opt.perfResH) : glm::ivec2(1920, 1080);
     viewIn.tintOverlay = &tintOverlay;
     viewIn.grid = &grid;
     viewIn.selectionOutline = &selectionOutline;
     // --smoke-shots with TARTARUS_SHOT_CAMERAS: review pictures, so no grid through them either.
-    viewIn.harnessCleanViews = (npcTest && npcTest->WantsCleanViews()) ||
+    viewIn.harnessCleanViews = (npcTest && npcTest->WantsCleanViews()) || opt.giTourMode ||
                                (opt.smokeTestMode && !opt.smokeShotsDir.empty() && Env::IsSet(Env::Var::ShotCameras));
     viewIn.game = {&gameHdr, &gameTaa, &gameOpaqueColor, &gameSsao, &gameBloom};
     viewIn.gameLdr = &gameLdr;
