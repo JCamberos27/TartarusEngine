@@ -300,7 +300,8 @@
         27.55
       ],
       "yawDeg": -90.0,
-      "pitchDeg": 0.0
+      "pitchDeg": 0.0,
+      "cut": true
     },
     {
       "id": "bathroom_down_door_in",
@@ -480,7 +481,7 @@
       "giVolume": "GI landing",
       "kind": "corner",
       "feet": [
-        8.4,
+        7.6,
         3.104,
         31.0
       ],

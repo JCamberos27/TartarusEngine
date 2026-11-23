@@ -107,7 +107,8 @@ door("storeroom_door", -1.91, 30.35, "W", GROUND, KITCHEN6, STORE)
 door("hall_double_door", 2.46, 26.95, "N", GROUND, HALL, HALL3, cut=True)
 wp("corridor_east", *CORR, "corner", 4.75, GROUND, 27.55, YAW["E"],
    note="Atlas gap: hall 4 / living room 9 seam at x 4.45")
-door("bathroom_down_door", 6.34, 26.95, "S", GROUND, CORR, BATH_D)
+# The bathroom door, held open, stands across the corridor between corridor_east and its doorway: a cut.
+door("bathroom_down_door", 6.34, 26.95, "S", GROUND, CORR, BATH_D, cut=True)
 door("living_door", 7.79, 29.37, "E", GROUND, LIV3, LIV1, cut=True)
 wp("living_room", *LIV1, "room", 12.00, GROUND, 26.50, YAW["N"])
 wp("living_east_bay", "Living room", "GI living room 4", "room", 12.00, GROUND, 22.50, YAW["N"])
@@ -120,7 +121,9 @@ wp("stairs_mid", "Stairwell", "GI stairwell", "stairs", 3.65, stair_y(3.65), STA
 wp("stairs_top", *LANDING, "stairs", 6.05, UPSTAIRS, STAIR_Z, YAW["E"])
 
 # ---- Upstairs -----------------------------------------------------------------------------------
-wp("landing_corner", *LANDING, "corner", 8.40, UPSTAIRS, 31.00, YAW["W"])
+# Kept 1 m west of the landing floor lamp (Lamp_floor at x 8.87, z 30.39: no collider), which the walk to the
+# child's door grazed at x 8.40.
+wp("landing_corner", *LANDING, "corner", 7.60, UPSTAIRS, 31.00, YAW["W"])
 door("child_door", 9.25, 28.40, "E", UPSTAIRS, LANDING, CHILD)
 wp("child_bedroom", *CHILD, "room", 11.90, UPSTAIRS, 26.75, YAW["N"])
 door("closet_door", 11.67, 29.37, "N", UPSTAIRS, CHILD, CLOSET)
