@@ -1819,6 +1819,8 @@ bool AppSession::Frame() {
         lightIn.physicalSky = physicalSky;
         lightIn.prefabMode = editor.InPrefabMode();
         lightIn.frame = frameIndex;
+        lightIn.dt = dt; // real time: the shadow fades run while paused too, like the editor camera
+        lightIn.snapShadowFades = giBakeMode; // the bake's probes see every shadow at full strength
         lightIn.torch = torchLit ? &torch : nullptr;
         // Lights panel solo/mute is an editing aid only - Play renders every light (#140).
         if (!playing) lightIn.suppressed = [&](entt::entity e) { return editor.IsLightSuppressed(world, e); };
@@ -2010,10 +2012,12 @@ bool AppSession::Frame() {
     sceneInputs.spotShadowBias       = frameLights.SpotBias;
     sceneInputs.spotShadowNormalBias = frameLights.SpotNormalBias;
     sceneInputs.spotShadowSoftness   = frameLights.SpotSoftness;
+    sceneInputs.spotShadowWeight     = frameLights.SpotWeight;
     sceneInputs.pointShadowCount      = frameLights.PointCount;
     sceneInputs.pointShadowFar        = frameLights.PointFar;
     sceneInputs.pointShadowBias       = frameLights.PointBias;
     sceneInputs.pointShadowNormalBias = frameLights.PointNormalBias;
+    sceneInputs.pointShadowWeight     = frameLights.PointWeight;
     sceneInputs.shadowsEnabled   = world.Render.ShadowsEnabled;
     sceneInputs.ssaoEnabled      = world.Render.SsaoEnabled;
     sceneInputs.postFxOff        = FKeyRow::PostFxOff(); // F8

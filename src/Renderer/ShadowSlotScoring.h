@@ -1,0 +1,135 @@
+#pragma once
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include <glm/glm.hpp>
+
+#include "GIData.h" // GI::Box
+
+// GI Phase 1 (W2): which local lights get a shadow slot, and how a slot fades in and out. Kept free of the registry and
+// GL so the unit test can drive it directly (UnitTests_Render.cpp, TestShadowSlotScoring).
+//
+// Rooms come from the scene's GI Volumes: one box per volume, grouped into a room by name with any trailing number
+// dropped ("GI living room 1" and "GI living room 2" are one room). The room the view is in, and the rooms whose
+// boxes touch it, light the player; their lamps score ahead of lamps elsewhere in the house, so a full budget goes
+// to the room you are standing in before the one behind the wall. Outside every volume, no lamp is boosted and the
+// score is the old #110 distance score.
+namespace ShadowSlotScoring {
+
+constexpr float kRoomBoost = 16.0f;        // a lamp in the view's room
+constexpr float kNeighbourBoost = 4.0f;    // a lamp in a room whose box touches it
+constexpr float kNeighbourGap = 0.35f;     // metres between two rooms' boxes that still count as touching (a wall)
+constexpr float kLightPad = 0.2f;          // a light this far outside a room's box still counts as in it
+constexpr float kHoldBonus = 1.25f;        // last frame's holders (hysteresis, #110)
+constexpr float kFadeSeconds = 0.25f;      // a shadow fades in, and out, over this long instead of popping
+
+enum class Tier : std::uint8_t { Other = 0, Neighbour = 1, Room = 2 };
+
+struct RoomBox {
+    GI::Box Box;
+    int Room = -1; // index into Rooms::Names
+};
+
+struct Rooms {
+    std::vector<RoomBox> Boxes;
+    std::vector<std::string> Names;  // one per room
+    int ViewRoom = -1;               // the room holding the view, or -1 (outside every volume)
+    std::vector<Tier> RoomTier;      // per room, relative to ViewRoom
+
+    void Clear() { Boxes.clear(); Names.clear(); RoomTier.clear(); ViewRoom = -1; }
+    // Adds a volume's box under its room (by RoomKey of its name).
+    void Add(const std::string& volumeName, const GI::Box& box);
+    // Finds the view's room (the smallest box holding `viewPos`) and ranks every room against it.
+    void Classify(const glm::vec3& viewPos);
+    // The best tier of any box holding `p` (Other outside them all).
+    Tier TierAt(const glm::vec3& p) const;
+};
+
+// "GI living room 2" -> "GI living room": the name less a trailing run of digits and the spaces/underscores before it.
+std::string RoomKey(const std::string& volumeName);
+
+// True when `p` is inside `b`, grown by `pad` metres on every face.
+bool Inside(const GI::Box& b, const glm::vec3& p, float pad = 0.0f);
+// True when the two boxes are within `gap` metres of each other (separating-axis test on the grown boxes).
+bool Touch(const GI::Box& a, const GI::Box& b, float gap);
+
+float TierBoost(Tier t);
+
+// The light's score: brightness reaching the view (intensity * range^2 over the squared gap from the view to the
+// light's sphere, #110), times its room's boost, times kHoldBonus for last frame's holders.
+float Score(float intensity, float range, float viewToLight, Tier tier, bool heldLastFrame);
+
+// Per-slot fades. A slot's light is either wanted (fading in to 1) or leaving (fading out to 0, and then the slot is
+// freed). A new light only gets a slot that is free, so it waits while a leaving light fades out: nothing pops on,
+// nothing pops off.
+template <int N>
+struct FadingSlots {
+    std::uint32_t Owner[N];        // the light's key, or kNone
+    float Weight[N] = {};          // 0..1, how much of the shadow shows
+    std::uint64_t Used[N] = {};    // last frame the slot was held (a new light takes the free slot unused longest)
+    static constexpr std::uint32_t kNone = 0xFFFFFFFFu;
+
+    FadingSlots() { for (auto& o : Owner) o = kNone; }
+
+    // want: the lights that should hold a shadow, best first (at most `budget` of them).
+    // candidates: every light that could hold one this frame (sorted); a holder that is not a candidate any more
+    //   (switched off, culled, gone) is freed at once, since there is no light left to fade.
+    // snap: no fades this frame (the GI bake, the first frame, a camera cut).
+    // urgent: a key that never waits or fades (the flashlight: its light switches on at once, so must its shadow).
+    //   If it wants a slot and none is free, the leaving holder with the least weight left gives its slot up.
+    // Writes slot -> owner for every slot in use (Owner/Weight), and returns how many slots changed hands.
+    int Step(const std::vector<std::uint32_t>& want, const std::vector<std::uint32_t>& candidates, int budget,
+             std::uint64_t frame, float dt, bool snap, std::uint32_t urgent = kNone) {
+        budget = budget < 0 ? 0 : (budget > N ? N : budget);
+        int changes = 0;
+        for (int i = budget; i < N; ++i)
+            if (Owner[i] != kNone) { Owner[i] = kNone; Weight[i] = 0.0f; ++changes; }
+        const float step = snap || kFadeSeconds <= 0.0f ? 1.0f : dt / kFadeSeconds;
+        auto wanted = [&](std::uint32_t k) {
+            for (std::uint32_t w : want) if (w == k) return true;
+            return false;
+        };
+        auto candidate = [&](std::uint32_t k) {
+            // candidates is sorted
+            std::size_t lo = 0, hi = candidates.size();
+            while (lo < hi) { const std::size_t mid = (lo + hi) / 2; if (candidates[mid] < k) lo = mid + 1; else hi = mid; }
+            return lo < candidates.size() && candidates[lo] == k;
+        };
+        // Holders: fade in if wanted, fade out (then free) if not.
+        for (int i = 0; i < budget; ++i) {
+            if (Owner[i] == kNone) continue;
+            if (wanted(Owner[i])) {
+                Weight[i] = Weight[i] + step > 1.0f ? 1.0f : Weight[i] + step;
+                Used[i] = frame;
+            } else if (snap || !candidate(Owner[i])) {
+                Owner[i] = kNone; Weight[i] = 0.0f; ++changes;
+            } else {
+                Weight[i] -= step;
+                Used[i] = frame;
+                if (Weight[i] <= 0.0f) { Owner[i] = kNone; Weight[i] = 0.0f; ++changes; }
+            }
+        }
+        // Newcomers take the free slot unused longest, in `want` order, and start dark (or full, on a snap).
+        for (std::uint32_t k : want) {
+            bool held = false;
+            for (int i = 0; i < budget && !held; ++i) held = Owner[i] == k;
+            if (held) continue;
+            int pick = -1;
+            for (int i = 0; i < budget; ++i)
+                if (Owner[i] == kNone && (pick < 0 || Used[i] < Used[pick])) pick = i;
+            if (pick < 0 && k == urgent)
+                for (int i = 0; i < budget; ++i)
+                    if (!wanted(Owner[i]) && (pick < 0 || Weight[i] < Weight[pick])) pick = i;
+            if (pick < 0) continue; // full: it waits for a leaving light to fade out (the urgent key may still evict)
+            Owner[pick] = k; Used[pick] = frame; ++changes;
+            Weight[pick] = snap || k == urgent ? 1.0f : step;
+        }
+        if (urgent != kNone)
+            for (int i = 0; i < budget; ++i)
+                if (Owner[i] == urgent) Weight[i] = 1.0f;
+        return changes;
+    }
+};
+
+} // namespace ShadowSlotScoring

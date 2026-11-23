@@ -68,6 +68,15 @@
 // program the sequence is byte-identical to pass 2 apart from the cluster-cull dispatch now
 // running just before the uniform set instead of in the middle of it.
 
+const float* ShadowWeightsOrFull(const float* weights) {
+    static const auto kFull = [] {
+        std::array<float, std::max(SpotShadowMap::kMaxSpots, PointShadowMap::kMaxPoints)> a{};
+        a.fill(1.0f);
+        return a;
+    }();
+    return weights ? weights : kFull.data();
+}
+
 FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContext& ctx,
                                            const SceneRenderInputs& in) const {
     FrameState fs;
@@ -693,6 +702,7 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uSpotShadowBias[0]",       fs.spotCountForView, in.spotShadowBias);
         program.SetFloatArray("uSpotShadowNormalBias[0]", fs.spotCountForView, in.spotShadowNormalBias);
         program.SetFloatArray("uSpotShadowSoftness[0]",   fs.spotCountForView, in.spotShadowSoftness);
+        program.SetFloatArray("uSpotShadowWeight[0]",     fs.spotCountForView, ShadowWeightsOrFull(in.spotShadowWeight));
     }
     program.SetInt("uSpotShadowMap", 9);
     program.SetFloat("uSpotShadowMapResolution", (float)spotShadowMap.Resolution()); // #190
@@ -703,6 +713,7 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uPointShadowFar[0]",        fs.pointCountForView, in.pointShadowFar);
         program.SetFloatArray("uPointShadowBias[0]",       fs.pointCountForView, in.pointShadowBias);
         program.SetFloatArray("uPointShadowNormalBias[0]", fs.pointCountForView, in.pointShadowNormalBias);
+        program.SetFloatArray("uPointShadowWeight[0]",     fs.pointCountForView, ShadowWeightsOrFull(in.pointShadowWeight));
     }
     program.SetInt("uPointShadowMap", 10);
     program.SetFloat("uPointShadowMapResolution", (float)pointShadowMap.Resolution()); // #190

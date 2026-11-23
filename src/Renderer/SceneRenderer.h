@@ -152,13 +152,18 @@ struct SceneRenderInputs {
     const float*     spotShadowBias       = nullptr;
     const float*     spotShadowNormalBias = nullptr;
     const float*     spotShadowSoftness   = nullptr;
+    const float*     spotShadowWeight     = nullptr; // 0..1 per slot: the shadow's fade (null = all full)
 
     // point-light cube shadow maps allocated this frame
     int          pointShadowCount      = 0;
     const float* pointShadowFar        = nullptr;
     const float* pointShadowBias       = nullptr;
     const float* pointShadowNormalBias = nullptr;
+    const float* pointShadowWeight     = nullptr; // 0..1 per slot (null = all full)
 };
+
+// The per-slot shadow weights to upload: `weights`, or all 1 when the caller has none (an offscreen preview).
+const float* ShadowWeightsOrFull(const float* weights);
 
 // The model-shader program state for one frame + view — computed once by RenderScene (the
 // viewport read, the shadow/IBL/SSAO/cluster enable flags, the cluster near/far), then applied
