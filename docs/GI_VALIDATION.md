@@ -5,8 +5,14 @@ look); Phase 3 runs them again after the rebake and every check must pass. Same 
 after are comparable.
 
 **Status of the numbers.** Every threshold marked **PROPOSED** is a starting value from the plan, to be firmed up from the
-Phase 0 baseline (W2 Argus's `gi-p0/argus/REPORT.md`). Once the baseline lands, each PROPOSED value is replaced by a
-measured one and the line says where it came from. Nothing here is a pass/fail gate until it has no PROPOSED tag.
+Phase 0 baseline (W2 Argus's `gi-p0/argus/REPORT.md`). Argus's baseline tour has landed and the checks below now cite
+it ("Baseline:" lines); a value stays PROPOSED until the follow-up GI-only / direct-only walks and the clipping
+waypoint fixes are in. Nothing here is a pass/fail gate until it has no PROPOSED tag.
+
+**By-design dark rooms.** A room whose lights are dead by design (the Nov 18 "dead fittings stay dark" change) is not a
+dark-spot failure. The exclusion list is kept in the report, with the reason per room, and must be confirmed (by design,
+not a defect) before a room goes on it. Candidates pending Atlas's check: the box room and the stair storeroom, which
+read 0 in the GI-only view.
 
 ## Setup (identical for baseline and after)
 
@@ -38,11 +44,15 @@ view-dependent GI. With lights and switches unchanged, moving the camera must no
 | Frame-to-frame luminance change, 99.9th percentile over a route | <= 0.5% of the route's median luminance (**PROPOSED**) |
 | Frame-to-frame luminance change, max | <= 2% of the route's median luminance (**PROPOSED**) |
 | Arrival vs stationary, every waypoint | <= 2% relative (**PROPOSED**) |
-| Shadow-slot set changes inside one room (lights and switches unchanged) | 0. Changes are allowed only while crossing a doorway, and then only as a fade, never a one-frame step |
-| A single-frame step larger than the frame-to-frame max while no slot hash changed | 0 (that would be a different cause, such as SSAO or GI sampling) |
+| Lamps with Shadow on, in range of the camera, left without a shadow slot, at any waypoint or frame | 0 (**baseline: 0 at all 66 waypoints**, so this is a no-regression gate) |
+| Shadow-slot set changes (any lamp) | allowed; they are not a failure by themselves (**baseline: 33 changes, none on a pop**). They fail only when they coincide with a pop |
+| Pops: a frame step above max(0.004, 3%) AND above 4x the segment's median step (Argus's definition) | Phase 3: 0 pops within 1 m of a door_in point; at most 5 in all route segments, none above 10% (**PROPOSED**). **Baseline: 31 pops in 14 of 97 segments, biggest +94%, 7 within 1 m of a door** |
+| Stationary holds: luminance range within a 2 s hold | <= 0.0005 absolute (**baseline: worst hold 0.00023**) |
 
-The baseline run also reports how many segments exceed these numbers and whether a slot change coincides with each
-exceedance (Argus's "shimmer" table). Phase 3 must show zero exceedances.
+Argus's follow-up (GI-only and direct-only walks) says which pops at doors are GI seams and which are view change; the
+door-pop row is tightened or relaxed from that. The near-black frames from camera positions inside geometry (12 tour
+waypoints, mostly door leaves) are excluded from the pop count and must be fixed in the tour before it is used as the
+Phase 3 acceptance path.
 
 ## 2. Dark-spot floor per lit room
 
@@ -59,9 +69,12 @@ Atlas's coverage script). Compare each point with that room's median.
 | Same, GI-only view, below `0.25 x room median` | <= 1% of the room's points, none larger than a 0.5 m cluster (**PROPOSED**) |
 | Walkable points inside no GI volume (fall back to reflection probe or sky ambient) | 0 |
 | Invalid-probe share (neighbour-averaged probes) per volume | <= 20% (Atlas's flag threshold) |
-| Absolute floor: no lit room's median below | to be set from the baseline; the plan only says "a luminance floor" (**OPEN**) |
+| Absolute floor: no valid walkable view below 0.005 mean linear luminance, circuit on (**PROPOSED**; baseline darkest valid views 0.0007-0.0028, a room mean range 0.006-0.064) |
+| In-room spread, brightest valid view / darkest valid view | <= 6x (**PROPOSED**; baseline 38.4x kitchen-dining, 12.5x upstairs den, 9.3x upstairs bathroom) |
 
-Rooms with their lamps off are exempt from the first two rows; they are covered by the switch check.
+Rooms with their lamps off are exempt from the dark-spot rows; they are covered by the switch check. So are **by-design
+dark rooms** (see the top of this document): they are listed with the reason, and a room that reads black but is not on
+that list counts as a failure. A black frame from a camera inside geometry is a tour fault, not a dark spot.
 
 ## 3. Doorway seam continuity
 
