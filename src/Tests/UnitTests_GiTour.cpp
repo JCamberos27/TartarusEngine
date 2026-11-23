@@ -36,6 +36,11 @@ void GiTourParse() {
     CHECK(!t.Waypoints[1].Cut && t.Waypoints[2].Cut && Near(t.Waypoints[1].Pitch, 10.0f));
     CHECK(t.Routes[0].Points.size() == 2 && t.Routes[0].Points[1] == 1 && t.Routes[0].Speed == 0.0f);
     CHECK(warn.size() == 1);
+    CHECK(t.DoorState == "allOpen"); // the default
+    CHECK(GiTour::Parse(R"({"scene":"s","doorState":"authored","waypoints":[{"id":"a","feet":[0,0,0]}]})", t, err) &&
+          t.DoorState == "authored");
+    CHECK(!GiTour::Parse(R"({"scene":"s","doorState":"ajar","waypoints":[{"id":"a","feet":[0,0,0]}]})", t, err) &&
+          err.find("doorState") != std::string::npos);
 }
 
 // A tour that can't run is refused with a reason, not run half-way.

@@ -13,7 +13,7 @@
 //
 // The tour file (tools/gi/forest_house_tour.json, plain JSON):
 //   { "version": 1, "scene": "scenes/Forest.json",
-//     "player": { "eyeHeight": 1.7, "verticalFovDeg": 58.72, "walkSpeed": 4.0 },
+//     "player": { "eyeHeight": 1.7, "verticalFovDeg": 58.72, "walkSpeed": 4.0 }, "doorState": "allOpen",
 //     "waypoints": [ { "id": "hall", "room": "Entrance hall", "giVolume": "...", "kind": "room",
 //                      "feet": [x, y, z], "yawDeg": 90, "pitchDeg": 0, "cut": false } ],
 //     "routes": [ { "id": "front_to_kitchen", "name": "...", "speed": 4.0, "points": ["hall", ...],
@@ -41,6 +41,9 @@ struct Tour {
     float EyeHeight = 1.7f;
     float VerticalFovDeg = 58.72f;
     float WalkSpeed = 1.4f;       // m/s
+    // "doorState": "allOpen" (the default: every Openable fully open for the whole tour, deterministic and how the
+    // house is walked) or "authored" (left as the scene saved them, shut).
+    std::string DoorState = "allOpen";
     std::vector<Waypoint> Waypoints;
     std::vector<Route> Routes;
 };

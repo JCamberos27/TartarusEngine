@@ -578,6 +578,10 @@ void SmokeHarness::GiTourFrame() {
         EditorSettings::Get().FRowLightDebug = FKeyRow::LightOff;
         // Play's lighting state: every circuit as its switches start (Start On), as the cinematic does.
         LightSwitch::Update(m_Ctx.world, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), false);
+        if (m_Tour->DoorState == "allOpen") Openable::SetAll(m_Ctx.world, 1.0f);
+        std::cout << "[GiTour] doors: " << m_Tour->DoorState << "; lights: Start On; view: Scene view at "
+                  << m_Ctx.sceneFramebuffer.Width() << "x" << m_Ctx.sceneFramebuffer.Height() << ", vertical FOV "
+                  << m_Tour->VerticalFovDeg << std::endl;
         std::error_code ec;
         fs::create_directories(m_Opt.sceneBoundsOut, ec);
         m_TourCsv = std::make_unique<std::ofstream>(fs::path(m_Opt.sceneBoundsOut) / "tour_luminance.csv", std::ios::binary);

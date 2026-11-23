@@ -60,6 +60,13 @@ bool Parse(const std::string& text, Tour& out, std::string& error, std::vector<s
     }
     if (out.WalkSpeed <= 0.0f) { error = "player.walkSpeed must be above 0"; return false; }
     if (out.VerticalFovDeg <= 1.0f || out.VerticalFovDeg >= 179.0f) { error = "player.verticalFovDeg out of range"; return false; }
+    if (doc.contains("doorState")) {
+        out.DoorState = doc["doorState"].is_string() ? doc["doorState"].get<std::string>() : std::string();
+        if (out.DoorState != "allOpen" && out.DoorState != "authored") {
+            error = "'doorState' must be \"allOpen\" or \"authored\"";
+            return false;
+        }
+    }
     if (doc.value("snapToFloor", false) && warnings)
         warnings->push_back("snapToFloor is ignored: the camera sits at feet.y + eyeHeight as given");
 
