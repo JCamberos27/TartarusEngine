@@ -600,6 +600,7 @@ void SmokeHarness::GiTourFrame() {
         }
         *m_TourCsv << GiTour::CsvHeader() << "\n";
         if (m_TourLightsCsv) *m_TourLightsCsv << "waypoint,room,light,entity,kind,circuit,on,shadow,intensity,range,distance,fade,slot\n";
+        if (m_Ctx.lightGather) m_Ctx.lightGather->RequestSnap(); // from wherever the scene opened
         pose(m_TourFrames[0]);
         return;
     }
@@ -690,7 +691,11 @@ void SmokeHarness::GiTourFrame() {
         finish();
         return;
     }
-    pose(m_TourFrames[m_TourAt]);
+    // A jump (a cut waypoint, a route's first point): anything but a walk that moves the eye. The next frame is a cut,
+    // so its shadows snap instead of fading in from the last place (the holds must not start mid-fade).
+    const GiTour::Frame& next = m_TourFrames[m_TourAt];
+    if (m_Ctx.lightGather && next.Kind != GiTour::Step::Walk && next.Eye != f.Eye) m_Ctx.lightGather->RequestSnap();
+    pose(next);
     // Only a start held the full 3000 frames runs past the budget: keep it going to the tour's end.
     if (m_FramesRendered >= m_FrameBudget - 1) m_FrameBudget = m_FramesRendered + 2;
 }

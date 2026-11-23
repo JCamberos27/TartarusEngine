@@ -74,16 +74,17 @@ float Score(float intensity, float range, float viewToLight, Tier tier, bool hel
 // Per-slot fades. A slot's light is either wanted (fading in to 1) or leaving (fading out to 0, and then the slot is
 // freed). A light that was lit but slot-less only gets a slot that is free, so it waits while a leaving light fades
 // out and then fades in: the hand-over between two lit lamps never pops.
-// A light that ARRIVES - not a candidate last frame: switched on, activated, spawned, come into DistanceFade range -
-// is different: its light appears at once, so its shadow must too, or it shines through walls until the fade is done
-// (Talos's #1189 review). It comes in at full strength, taking the leaving holder with the least shadow left if no
-// slot is free. The flashlight (urgent) is always treated so.
+// A light that ARRIVES - not LIT last frame: switched on, activated, spawned - is different: its light appears at
+// once, so its shadow must too, or it shines through walls until the fade is done (Talos's #1189 review). It comes in
+// at full strength, taking the leaving holder with the least shadow left if no slot is free. The flashlight (urgent)
+// is always treated so. "Lit" is taken before the distance cull: a lamp walking into DistanceFade range was lit all
+// along and its light ramps up from 0, so its shadow fades in like any hand-over (Talos's re-check).
 template <int N>
 struct FadingSlots {
     std::uint32_t Owner[N];        // the light's key, or kNone
     float Weight[N] = {};          // 0..1, how much of the shadow shows
     std::uint64_t Used[N] = {};    // last frame the slot was held (a new light takes the free slot unused longest)
-    std::vector<std::uint32_t> PrevCandidates; // last Step's candidates (sorted)
+    std::vector<std::uint32_t> PrevLit; // last Step's lit lights (sorted)
     static constexpr std::uint32_t kNone = 0xFFFFFFFFu;
 
     FadingSlots() { Reset(); }
@@ -92,17 +93,24 @@ struct FadingSlots {
         for (auto& o : Owner) o = kNone;
         for (auto& w : Weight) w = 0.0f;
         for (auto& u : Used) u = 0;
-        PrevCandidates.clear();
+        PrevLit.clear();
     }
 
+    // Every candidate is lit and nothing else is (no distance cull): the unit tests' short form.
+    int Step(const std::vector<std::uint32_t>& want, const std::vector<std::uint32_t>& candidates, int budget,
+             std::uint64_t frame, float dt, bool snap, std::uint32_t urgent = kNone) {
+        return Step(want, candidates, candidates, budget, frame, dt, snap, urgent);
+    }
     // want: the lights that should hold a shadow, best first (at most `budget` of them).
     // candidates: every light that could hold one this frame (sorted); a holder that is not a candidate any more
     //   (switched off, culled, gone) is freed at once, since there is no light left to fade.
+    // lit: every shadowed light that is on this frame, before the distance cull (sorted; holds the candidates).
     // snap: no fades this frame (the GI bake, the first frame, a camera cut, a scene load).
     // urgent: a key that is always treated as arriving (the flashlight).
     // Writes slot -> owner for every slot in use (Owner/Weight), and returns how many slots changed hands.
-    int Step(const std::vector<std::uint32_t>& want, const std::vector<std::uint32_t>& candidates, int budget,
-             std::uint64_t frame, float dt, bool snap, std::uint32_t urgent = kNone) {
+    int Step(const std::vector<std::uint32_t>& want, const std::vector<std::uint32_t>& candidates,
+             const std::vector<std::uint32_t>& lit, int budget, std::uint64_t frame, float dt, bool snap,
+             std::uint32_t urgent = kNone) {
         budget = budget < 0 ? 0 : (budget > N ? N : budget);
         int changes = 0;
         for (int i = budget; i < N; ++i)
@@ -118,7 +126,7 @@ struct FadingSlots {
             return lo < sorted.size() && sorted[lo] == k;
         };
         auto candidate = [&](std::uint32_t k) { return in(candidates, k); };
-        auto arriving = [&](std::uint32_t k) { return k == urgent || !in(PrevCandidates, k); };
+        auto arriving = [&](std::uint32_t k) { return k == urgent || !in(PrevLit, k); };
         // Holders: fade in if wanted, fade out (then free) if not.
         for (int i = 0; i < budget; ++i) {
             if (Owner[i] == kNone) continue;
@@ -156,7 +164,7 @@ struct FadingSlots {
         if (urgent != kNone)
             for (int i = 0; i < budget; ++i)
                 if (Owner[i] == urgent) Weight[i] = 1.0f;
-        PrevCandidates = candidates;
+        PrevLit = lit;
         return changes;
     }
 };

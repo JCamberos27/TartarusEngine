@@ -1246,9 +1246,22 @@ void TestShadowSlotScoring() {
         CHECK(lit.Owner[0] == A && lit.Weight[0] < 1.0f);    // A fading out, C waiting
         // Reset (a scene load): every holder gone, and everything after arrives.
         lit.Reset();
-        CHECK(lit.Owner[0] == Slots::kNone && lit.PrevCandidates.empty());
+        CHECK(lit.Owner[0] == Slots::kNone && lit.PrevLit.empty());
         lit.Step({C}, {C}, 1, 3, dt, false);
         CHECK(lit.Owner[0] == C && lit.Weight[0] == 1.0f);
+        // Walking into range (Talos's re-check): C was lit but past its DistanceFade range (lit, not a candidate). Its
+        // light ramps up from 0, so its shadow is a hand-over: it waits for A to fade out, then fades in - no pop.
+        Slots walk;
+        walk.Step({A}, {A}, {A, C}, 1, 1, dt, true);
+        walk.Step({C}, {A, C}, {A, C}, 1, 2, dt, false);
+        CHECK(walk.Owner[0] == A && walk.Weight[0] < 1.0f); // A fading; C waits
+        for (std::uint64_t f = 3; f < 60 && walk.Owner[0] != C; ++f) walk.Step({C}, {A, C}, {A, C}, 1, f, dt, false);
+        CHECK(walk.Owner[0] == C && std::abs(walk.Weight[0] - step) < 1e-5f); // in, fading from dark
+        // ...while the same lamp switched on (not lit last frame) snaps in at once.
+        Slots sw;
+        sw.Step({A}, {A}, {A}, 1, 1, dt, true);
+        sw.Step({C}, {A, C}, {A, C}, 1, 2, dt, false);
+        CHECK(sw.Owner[0] == C && sw.Weight[0] == 1.0f);
     }
     // The urgent key (the flashlight) never waits: it takes the leaving holder's slot at full strength.
     Slots torch;

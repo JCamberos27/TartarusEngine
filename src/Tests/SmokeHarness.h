@@ -47,7 +47,7 @@ struct SmokeContext {
     std::function<void()> togglePlay;           // the F1 / toolbar entry
     std::function<void(bool)> setMaximized;     // the Game view over the editor panels
     std::function<void()> warmRenderResources;  // what the editor does at startup, before its first frame
-    const LightGather* lightGather = nullptr;    // --gi-tour: the frame's shadow-slot holders
+    LightGather* lightGather = nullptr;          // --gi-tour: the frame's shadow-slot holders, and its cuts (RequestSnap)
     HdrTarget* sceneHdr = nullptr;              // --gi-tour: the Scene view's depth (the static-surface mask)
     GIVolumes* giVolumes = nullptr;             // --gi-tour-view nogi: switched off for the run
 };

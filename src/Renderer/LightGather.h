@@ -97,6 +97,9 @@ public:
 
     // The rooms the last Gather scored against (the scene's GI Volumes), for traces.
     const ShadowSlotScoring::Rooms& ShadowRooms() const { return m_Rooms; }
+    // The next Gather is a camera cut: its shadows snap instead of fading (--gi-tour asks on every waypoint jump, since
+    // it knows its cuts; short ones, a door's 0.6 m, are below what LightGather can tell from a step).
+    void RequestSnap() { m_SnapRequested = true; }
 
 private:
     void AssignShadowSlots(const LightGatherInputs& in, FrameLights& out);
@@ -121,5 +124,8 @@ private:
     std::uint64_t m_SceneLoads = 0;
     const Camera* m_LastViewCam = nullptr;
     glm::vec3 m_LastViewPos{0.0f};
-    static constexpr float kCutDistance = 1.0f;
+    bool m_SnapRequested = false;
+    std::vector<std::uint32_t> m_SpotLit, m_PointLit; // this frame's lit shadowed lights (before the distance cull)
+    static constexpr float kCutDistance = 1.0f; // metres in one Gather: below this a move is never a cut
+    static constexpr float kCutSpeed = 12.0f;   // m/s: past this the view jumped (a teleport), not moved
 };

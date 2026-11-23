@@ -73,8 +73,13 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
         m_PointSlots.Reset();
         m_PrevShadowed.clear();
     }
-    // A cut: nothing on screen continues from last frame, so there is nothing to fade from.
-    const bool cut = in.viewCam != m_LastViewCam || glm::length(viewPos - m_LastViewPos) > kCutDistance;
+    // A cut: nothing on screen continues from last frame, so there is nothing to fade from. Asked for (RequestSnap: the
+    // --gi-tour's waypoint jumps), another view camera (Play start / stop), or a move faster than anyone walks or flies
+    // (a teleport; a hitch at walking speed moves the view far but slowly, and isn't one).
+    const float moved = glm::length(viewPos - m_LastViewPos);
+    const bool cut = m_SnapRequested || in.viewCam != m_LastViewCam ||
+                     moved > std::max(kCutDistance, kCutSpeed * std::max(in.dt, 0.0f));
+    m_SnapRequested = false;
     m_LastViewCam = in.viewCam;
     m_LastViewPos = viewPos;
     if (sceneLoaded || cut) m_Rooms.Reset(); // no sticky room across a cut
@@ -84,6 +89,8 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
     std::vector<std::pair<float, entt::entity>>& points = m_PointCandidates;
     spots.clear();
     points.clear();
+    m_SpotLit.clear();
+    m_PointLit.clear();
     for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
         const auto& lc = world.Registry.get<LightComponent>(e);
         // (Scored on the intensity now: holding a flickering light's shadow through its bright peaks - a TV
@@ -91,6 +98,8 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
         if (!lc.Shadow.Enabled || !world.Render.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
             lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f || world.Registry.all_of<InactiveTag>(e) || (in.suppressed && in.suppressed(e)))
             continue;
+        // Lit (before the distance cull): what FadingSlots tells an arriving light by.
+        (lc.Kind == LightComponent::Type::Spot ? m_SpotLit : m_PointLit).push_back(entt::to_integral(e));
         const glm::mat4 lightXform = world.ComposeWorldTransform(e);
         m_LightXforms.emplace_back(e, lightXform);
         const glm::vec3 lpos = glm::vec3(lightXform[3]);
@@ -121,13 +130,16 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
     if (torchWants) {
         chosenSpots.insert(chosenSpots.begin(), torchKey);
         m_SpotKeys.insert(std::lower_bound(m_SpotKeys.begin(), m_SpotKeys.end(), torchKey), torchKey);
+        m_SpotLit.push_back(torchKey);
     }
+    std::sort(m_SpotLit.begin(), m_SpotLit.end());
+    std::sort(m_PointLit.begin(), m_PointLit.end());
     const bool snap = in.snapShadowFades || !m_Gathered || sceneLoaded || cut;
     m_Gathered = true;
     const float dt = std::clamp(in.dt, 0.0f, 0.1f); // a hitch doesn't skip a whole fade
-    out.SlotChanges = m_SpotSlots.Step(chosenSpots, m_SpotKeys, out.SpotBudget, in.frame + 1, dt, snap,
+    out.SlotChanges = m_SpotSlots.Step(chosenSpots, m_SpotKeys, m_SpotLit, out.SpotBudget, in.frame + 1, dt, snap,
                                        torchWants ? torchKey : S::FadingSlots<1>::kNone);
-    out.SlotChanges += m_PointSlots.Step(chosenPoints, m_PointKeys, out.PointBudget, in.frame + 1, dt, snap);
+    out.SlotChanges += m_PointSlots.Step(chosenPoints, m_PointKeys, m_PointLit, out.PointBudget, in.frame + 1, dt, snap);
 
     // This frame's holders - fading ones too - are next frame's hysteresis set and the slot maps Gather reads.
     m_SpotSlotOf.clear();
