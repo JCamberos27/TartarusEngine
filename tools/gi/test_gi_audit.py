@@ -206,6 +206,23 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(pts[0][0], "w1")
 
 
+class TourTests(unittest.TestCase):
+    def test_tour_waypoints_shape(self):
+        doc = {"player": {"eyeHeight": 1.6},
+               "waypoints": [{"id": "a", "room": "Hall", "feet": [0, 0, 0]}, {"id": "b", "feet": [2, 0, 0]}],
+               "routes": [{"id": "r", "points": ["a", "b", "missing"]}]}
+        eye, wps, routes = ga.tour_waypoints(doc)
+        self.assertEqual(eye, 1.6)
+        self.assertEqual([w[0] for w in wps], ["a", "b"])
+        self.assertEqual(routes, [("r", [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])])
+        self.assertIsNone(ga.tour_waypoints({"waypoints": [{"pos": [1, 2, 3]}]}))
+
+    def test_route_samples(self):
+        pts = ga.route_samples([[0, 0, 0], [1, 0, 0], [1, 0, 0.5]], 0.25)
+        self.assertEqual(len(pts), 4 + 2 + 1)
+        self.assertEqual(pts[-1], [1, 0, 0.5])
+
+
 class DiffTests(unittest.TestCase):
     def test_diff_lights(self):
         base = {"id": 1, "name": "Lamp", "type": "Point", "pos": [0, 0, 0], "circuit": "Kitchen", "shadow": True,

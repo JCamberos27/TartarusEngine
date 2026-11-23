@@ -1032,14 +1032,45 @@ def run(args):
             change["error"] = str(ex)
 
     # ---- tour cross-check
-    tour_rows = []
+    tour_rows, route_rows = [], []
+    state_of = lambda w: "gap" if w <= 0 else ("partial" if w < 1 else "covered")  # noqa: E731
     if args.tour:
         with open(args.tour, "r", encoding="utf-8") as f:
-            for name, p in tour_points(json.load(f)):
+            tdoc = json.load(f)
+        shaped = tour_waypoints(tdoc)
+        if shaped:
+            t_eye, wps, routes = shaped
+            for wid, room, feet in wps:
+                e = [feet[0], feet[1] + t_eye, feet[2]]
+                we, he = coverage_at(e, vols)
+                wf, _ = coverage_at(feet, vols, (0.0, 1.0, 0.0))
+                tour_rows.append({"waypoint": wid, "room": room, "eye": fmt3(e), "wsum": round(we, 3),
+                                  "state": state_of(we), "floor_state": state_of(wf),
+                                  "volumes": ";".join("%s=%.2f" % h for h in he)})
+            for rid, feet_list in routes:
+                pts = route_samples(feet_list, args.step)
+                states = [state_of(coverage_at([p[0], p[1] + t_eye, p[2]], vols)[0]) for p in pts]
+                # Runs of gap/partial along the walk, in metres.
+                runs, cur = [], 0
+                for s in states:
+                    if s != "covered":
+                        cur += 1
+                    elif cur:
+                        runs.append(cur)
+                        cur = 0
+                if cur:
+                    runs.append(cur)
+                route_rows.append({"route": rid, "length_m": round(args.step * max(len(pts) - 1, 0), 1),
+                                   "gap_m": round(args.step * states.count("gap"), 2),
+                                   "partial_m": round(args.step * states.count("partial"), 2),
+                                   "uncovered_stretches": len(runs),
+                                   "longest_stretch_m": round(args.step * max(runs, default=0), 2)})
+        else:
+            for name, p in tour_points(tdoc):
                 w, hits = coverage_at(p, vols)
-                tour_rows.append({"waypoint": name, "pos": fmt3(p), "wsum": round(w, 3),
-                                  "state": "gap" if w <= 0 else ("partial" if w < 1 else "covered"),
+                tour_rows.append({"waypoint": name, "eye": fmt3(p), "wsum": round(w, 3), "state": state_of(w),
                                   "volumes": ";".join("%s=%.2f" % h for h in hits)})
+    args.route_rows = route_rows
 
     # ---- write
     write_csv(os.path.join(args.out, "gi_audit_volumes.csv"), vol_rows)
@@ -1056,6 +1087,32 @@ def run(args):
     with open(os.path.join(args.out, "REPORT.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(report)
     return 0
+
+
+def tour_waypoints(doc):
+    """W3's tools/gi/forest_house_tour.json: {player: {eyeHeight}, waypoints: [{id, room, feet}], routes: [{id, points}]}.
+    -> (eye height, [(id, room, feet)], [(route id, [feet...])]). None when the file isn't in that shape."""
+    wps = doc.get("waypoints") if isinstance(doc, dict) else None
+    if not isinstance(wps, list) or not all(isinstance(w, dict) and "feet" in w for w in wps):
+        return None
+    eye = float((doc.get("player") or {}).get("eyeHeight", 1.7))
+    pts = [(str(w.get("id", i)), str(w.get("room", "")), [float(c) for c in w["feet"]]) for i, w in enumerate(wps)]
+    by = {p[0]: p[2] for p in pts}
+    routes = [(str(r.get("id", r.get("name", ""))), [by[i] for i in r.get("points", []) if i in by])
+              for r in doc.get("routes", []) if isinstance(r, dict)]
+    return eye, pts, routes
+
+
+def route_samples(feet_list, step):
+    """Points every `step` m along the polyline through the waypoints' feet (the walk between them)."""
+    out = []
+    for a, b in zip(feet_list, feet_list[1:]):
+        d = v_len(v_sub(b, a))
+        n = max(int(math.ceil(d / step)), 1)
+        out += [v_add(a, v_scale(v_sub(b, a), k / n)) for k in range(n)]
+    if feet_list:
+        out.append(list(feet_list[-1]))
+    return out
 
 
 def tour_points(doc):
@@ -1270,9 +1327,15 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
 
     L.append("## 6. Tour cross-check\n")
     if tour_rows:
-        bad = [r for r in tour_rows if r["state"] != "covered"]
-        L.append("%d waypoint(s) from `%s`; %d not fully covered.\n" % (len(tour_rows), args.tour, len(bad)))
-        L.append(md_table(bad, ["waypoint", "pos", "state", "wsum", "volumes"]))
+        bad = [r for r in tour_rows if r["state"] != "covered" or r.get("floor_state", "covered") != "covered"]
+        L.append("%d waypoint(s) from `%s`; %d not fully covered at the eye or under the feet.\n"
+                 % (len(tour_rows), args.tour, len(bad)))
+        L.append(md_table(bad, ["waypoint", "room", "eye", "state", "floor_state", "wsum", "volumes"]))
+        if getattr(args, "route_rows", None):
+            L.append("**Routes**, walked at eye height every %.2f m between their waypoints (straight lines):\n" % args.step)
+            L.append(md_table(args.route_rows, ["route", "length_m", "gap_m", "partial_m", "uncovered_stretches",
+                                                "longest_stretch_m"]))
+        L.append("Every waypoint: `gi_audit_tour.csv`.\n")
     else:
         L.append("Pending: Talos's `tools/gi/forest_house_tour.json` isn't in yet. Re-run with `--tour <file>`.\n")
     return "\n".join(L) + "\n"
