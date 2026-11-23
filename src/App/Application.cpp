@@ -434,6 +434,13 @@ private:
     DebugLineGather debugLineGather;
     Sky sky;
     SkyAtmosphere skyAtmosphere; // the physical sky (World::SkySource::Atmosphere)
+    // --bake-gi: pin every clock a capture can see, so two bakes of one scene match (GIBaker::Options::PinClocks).
+    const bool giPinClocks = giBakeMode && !Env::Flag(Env::Var::GiBakeLiveClocks);
+    Step stepPinBakeClocks{[&] {
+        skyAtmosphere.SetBakeClock(giPinClocks);
+        Material::PinWindTime(giPinClocks);
+        if (giBakeMode) std::cout << "--bake-gi: clocks " << (giPinClocks ? "pinned" : "live (TARTARUS_GI_BAKE_LIVE_CLOCKS)") << std::endl;
+    }};
     IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
     // PR13: HDRI state — non-null when an HDRI is loaded, path tracks the loaded file
     std::shared_ptr<Cubemap> hdriCube;
@@ -2083,6 +2090,7 @@ bool AppSession::Frame() {
                 giBaker = std::make_unique<GIBaker>();
                 GIBaker::Options bo;
                 bo.Only = opt.bakeGiOnly;
+                bo.PinClocks = giPinClocks;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
                 if (Env::Flag(Env::Var::GiBakeTrace))

@@ -82,6 +82,9 @@ struct RenderFrameContext {
     // GIBakeEmissive (the fittings' glow stands in for the lamp the light already is).
     int   GIBake = 0;
     float GIBakeEmissive = 0.0f;
+    // A GI bake capture on the pinned bake clock (GIBaker::Options::PinClocks): LOD picks are hard switches, never
+    // caught mid cross-fade (the fade runs on the wall clock), so a probe sees the same levels every run.
+    bool  GIBakePinClocks = false;
     // World box a GI bake capture draws inside (Min > Max = everything): the baked volumes plus a margin.
     glm::vec3 GIBakeClipMin{1.0f}, GIBakeClipMax{-1.0f};
 };
