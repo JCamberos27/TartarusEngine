@@ -1194,7 +1194,7 @@ private:
     SmokeContext smokeContext{world, assets, editor, editorCamera, sceneFramebuffer, clusterGrid, decalSystem, window,
                               npcTest.get(), playing, playMaximized, playUsesPlayer, player.Cam, playSceneCam,
                               [&]() { togglePlay(); }, [&](bool maximize) { setMaximized(maximize); },
-                              [&]() { warmRenderResources(); }, &lightGather, &sceneHdr, &giVolumes};
+                              [&]() { warmRenderResources(); }, &lightGather, &sceneHdr, &giVolumes, &shadowFrame};
     SmokeHarness smoke{opt, smokeContext};
 
     // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
