@@ -1,0 +1,35 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "decorations",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Christumas_tree_fbx/Christumas_tree.fbm/decorations_Base_color.png",
+    "_BaseColor": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929
+    ],
+    "_EmissiveColor": [
+      10.0,
+      10.0,
+      10.0
+    ],
+    "_EmissiveMap": "assets/Christumas_tree_fbx/Christumas_tree.fbm/decorations_Emissive.png",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_Roughness": 0.5,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AlbedoMap": "8e894b2aa70960c1",
+    "_EmissiveMap": "c14ac219cd2e5d05"
+  }
+}
