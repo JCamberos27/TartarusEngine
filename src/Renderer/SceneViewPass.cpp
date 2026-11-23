@@ -2,6 +2,7 @@
 // Run() calls the stages in drawing order.
 #include "SceneViewPass.h"
 #include "AssetCost.h"
+#include "OpaqueBatchKey.h"
 #include "RenderFrameContext.h"
 
 #include "World.h"
@@ -821,11 +822,18 @@ void SceneRenderer::ViewPass::BuildBatches() {
             }
             hizGroups.push_back({base, grp.Count, 0, 0});
         }
-        // Everything the per-draw hook and the material bind read, but the transforms.
-        const std::uint64_t objectKey = (std::uint64_t)lead.ReceiveShadows | ((std::uint64_t)lead.StaticReceiver << 1) |
-                                        ((std::uint64_t)lead.NoSsao << 2) | ((std::uint64_t)lead.DoubleSided << 3) |
-                                        ((std::uint64_t)Prepassed(lead) << 4) | ((std::uint64_t)(std::uint32_t)lead.LayerBit << 8) |
-                                        ((std::uint64_t)ProbeKey(leadIndex) << 40);
+        // Everything the per-draw hook and the material bind read, but the transforms: the GI volume mask and the whole
+        // probe selection too, or groups in different rooms share a batch and draw with its lead's (OpaqueBatchKey.h).
+        OpaqueBatchKey::ObjectState objectState;
+        objectState.ReceiveShadows = lead.ReceiveShadows;
+        objectState.StaticReceiver = lead.StaticReceiver;
+        objectState.NoSsao = lead.NoSsao;
+        objectState.DoubleSided = lead.DoubleSided;
+        objectState.Prepassed = Prepassed(lead);
+        objectState.LayerBit = (std::uint32_t)lead.LayerBit;
+        objectState.ProbeKey = ProbeKey(leadIndex);
+        objectState.GIMask = lead.GIMask;
+        const std::uint64_t objectKey = OpaqueBatchKey::Object(objectState);
         for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
             const MaterialAsset* ma = m < (int)lead.Slots->size() ? (*lead.Slots)[m].get() : nullptr;
             if (ma && ma->RenderQueue == MaterialAsset::Queue::Transparent) continue;
