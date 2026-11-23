@@ -34,14 +34,6 @@ void BoundLight(LightBuffer& buffer, World& world, entt::entity e, const LightCo
 }
 }
 
-std::vector<std::pair<entt::entity, int>> LightGather::Holders(const std::unordered_map<entt::entity, int>& slots) {
-    std::vector<std::pair<entt::entity, int>> out;
-    for (const auto& [e, slot] : slots)
-        if (e != kTorchSlotKey) out.emplace_back(e, slot);
-    std::sort(out.begin(), out.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
-    return out;
-}
-
 LightGather::StableSlots::StableSlots() { for (auto& o : Owner) o = entt::null; }
 
 void LightGather::StableSlots::Assign(const std::vector<entt::entity>& want, int budget, std::uint64_t frame,

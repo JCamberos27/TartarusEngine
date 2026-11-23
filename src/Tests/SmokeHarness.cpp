@@ -501,8 +501,8 @@ void SmokeHarness::GiTourLights(int waypoint) {
     const GiTour::Waypoint& wp = m_Tour->Waypoints[waypoint];
     std::unordered_map<entt::entity, int> spotSlot, pointSlot;
     if (m_Ctx.lightGather) {
-        for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) spotSlot[e] = slot;
-        for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) pointSlot[e] = slot;
+        for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) if (world.Registry.valid(e)) spotSlot[e] = slot;
+        for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) if (world.Registry.valid(e)) pointSlot[e] = slot;
     }
     auto nameOf = [&](entt::entity e) {
         const auto* n = world.Registry.try_get<NameComponent>(e);
@@ -646,8 +646,8 @@ void SmokeHarness::GiTourFrame() {
         }
         std::vector<std::uint32_t> spots, points;
         if (m_Ctx.lightGather) {
-            for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) spots.push_back((std::uint32_t)e);
-            for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) points.push_back((std::uint32_t)e);
+            for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) if (m_Ctx.world.Registry.valid(e)) spots.push_back((std::uint32_t)e);
+            for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) if (m_Ctx.world.Registry.valid(e)) points.push_back((std::uint32_t)e);
         }
         GiTour::CsvRow row;
         row.Frame = m_TourAt;
