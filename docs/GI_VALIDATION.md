@@ -11,8 +11,9 @@ waypoint fixes are in. Nothing here is a pass/fail gate until it has no PROPOSED
 
 **By-design dark rooms.** A room whose lights are dead by design (the Nov 18 "dead fittings stay dark" change) is not a
 dark-spot failure. The exclusion list is kept in the report, with the reason per room, and must be confirmed (by design,
-not a defect) before a room goes on it. Confirmed by Atlas's Phase 0 audit: the **box room** (no fitting, door shut, no
-window light) and the **closet** (no lamp of its own, bounce only). The stair storeroom is NOT on the list: it is a defect
+not a defect) before a room goes on it. Confirmed by Phase 0: the **box room** (no fitting, door shut, no
+window light), the **closet** (no lamp of its own, bounce only) and **master bedroom 3** (lit only by the red bulb, mean
+baked 0.00033; runtime matches the bake). Whether a deliberately dark room is acceptable is Jacob's call. The stair storeroom is NOT on the list: it is a defect
 (its door is baked shut but starts open in Play), and must pass the dark-spot rule after the fix.
 
 **Bake noise caveat.** Kronos's Phase 0 run found the bake is not deterministic: three bakes of the same scene, binary and
@@ -88,6 +89,14 @@ geometry, in which case it is a tour fault and the waypoint is moved.
 ## 3. Doorway seam continuity
 
 **What it tests.** Cause 6: a 0.05 m volume fade makes a doorway close to a hard switch between two lighting models.
+
+**Measure it on the GI-only view (debugView 8) as well as the full image.** Phase 0 found the seams are real but hidden:
+at the child's bedroom door the GI-only luminance swung +244% / -70% / +180% over about 40 frames while the full image
+moved under 7%, because direct light dominates today. The check must read the GI layer on its own, and the same walk with
+GI off (direct only) separates a seam from a view change.
+
+| GI-only pops, Phase 3 | 0 within 1 m of a door_in point (**baseline: 17 in the GI-only walk**, at the child's bedroom door, the box-room door, the stairs top and the landing) |
+|---|---|
 
 **Measure.** For every doorway, sample the static-surface luminance at 0.1 m steps along a straight line through the
 opening, from 1.0 m before to 1.0 m after, at eye height and at floor height. This is also captured as the tour's
