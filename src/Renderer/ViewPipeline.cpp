@@ -296,6 +296,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         return !s.empty() && sscanf_s(s.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0 ? glm::ivec2(w, h) : glm::ivec2(0);
     }();
     if (shotSize.x > 0) { scW = shotSize.x; scH = shotSize.y; }
+    if (in.harnessSceneSize.x > 0) { scW = in.harnessSceneSize.x; scH = in.harnessSceneSize.y; }
 
     sceneFramebuffer.Resize(scW, scH);
     float sceneAspect = (float)scW / (float)scH;

@@ -80,6 +80,10 @@ struct LightGatherInputs {
 class LightGather {
 public:
     void Gather(const LightGatherInputs& in, FrameLights& out);
+    // The last Gather's shadow-slot holders: entity -> slot. The flashlight's spot is not an entity and is left out.
+    // Read-only, for the --gi-tour harness's log.
+    std::vector<std::pair<entt::entity, int>> SpotSlotHolders() const { return Holders(m_SpotSlotOf); }
+    std::vector<std::pair<entt::entity, int>> PointSlotHolders() const { return Holders(m_PointSlotOf); }
 
 private:
     // Each light keeps its shadow slot - its layer, and with it the cached static depth - for as long as it holds a
@@ -91,6 +95,7 @@ private:
         void Assign(const std::vector<entt::entity>& want, int budget, std::uint64_t frame, std::unordered_map<entt::entity, int>& out);
     };
     void AssignShadowSlots(const LightGatherInputs& in, FrameLights& out);
+    static std::vector<std::pair<entt::entity, int>> Holders(const std::unordered_map<entt::entity, int>& slots);
 
     std::vector<entt::entity> m_PrevShadowed;   // last frame's shadow holders, sorted
     std::vector<entt::entity> m_ShadowedScratch; // this frame's, built here and swapped in (keeps its storage)

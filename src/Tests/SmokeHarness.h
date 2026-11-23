@@ -1,11 +1,15 @@
 #pragma once
 
+#include "Tests/GiTour.h"
 #include "Tests/PerfBench.h"
 
 #include <glm/glm.hpp>
 
 #include <cstddef>
+#include <cstdint>
+#include <fstream>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -16,6 +20,8 @@ class ClusterGrid;
 class DecalSystem;
 class EditorLayer;
 class Framebuffer;
+class HdrTarget;
+class LightGather;
 class NpcTest;
 class Window;
 class World;
@@ -40,6 +46,8 @@ struct SmokeContext {
     std::function<void()> togglePlay;           // the F1 / toolbar entry
     std::function<void(bool)> setMaximized;     // the Game view over the editor panels
     std::function<void()> warmRenderResources;  // what the editor does at startup, before its first frame
+    const LightGather* lightGather = nullptr;    // --gi-tour: the frame's shadow-slot holders
+    HdrTarget* sceneHdr = nullptr;              // --gi-tour: the Scene view's depth (the static-surface mask)
 };
 
 // --smoke-test (audit #187), and --perf-bench / --npc-test / --smoke-shots, which ride on it. Deliberately driven from
@@ -75,6 +83,8 @@ private:
     void CinematicFrame();
     void PoseShotFrame();
     void PerfFrame();
+    void GiTourFrame();
+    void GiTourLights(int waypoint);
     void ScoreScene();
 
     const LaunchOptions& m_Opt;
@@ -95,6 +105,18 @@ private:
     std::string m_LightsOnly; // TARTARUS_LIGHTS_ONLY: these circuits on, every other off
 
     PerfBench m_Perf;
+
+    // --gi-tour (Tests/GiTour.h): the tour, its frames, where it is, and its outputs.
+    std::unique_ptr<GiTour::Tour> m_Tour;
+    std::vector<GiTour::Frame> m_TourFrames;
+    int m_TourAt = 0;                  // the timeline frame the last drawn frame showed
+    bool m_TourStarted = false, m_TourDone = false;
+    int m_TourSavedLightView = 0;      // the F-row light view to put back (EditorSettings; the harness never saves them)
+    std::unique_ptr<std::ofstream> m_TourCsv, m_TourLightsCsv;
+    std::string m_TourLastSegment;
+    std::uint64_t m_TourLastHash = 0;
+    std::vector<unsigned char> m_TourRgba;
+    std::vector<float> m_TourDepth;
 
     std::vector<std::string> m_ScenePaths;
     std::vector<Result> m_Results;

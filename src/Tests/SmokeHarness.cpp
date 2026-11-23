@@ -13,9 +13,15 @@
 #include "Core/Paths.h"
 #include "DecalSystem.h"
 #include "EditorLayer.h"
+#include "EditorSettings.h"
+#include "FKeyRow.h"
 #include "FirstPersonPresentation.h"
 #include "Framebuffer.h"
 #include "GLDebug.h"
+#include "HdrTarget.h"
+#include "LightBuffer.h"
+#include "LightGather.h"
+#include "gl.h"
 #include "Log.h"
 #include "Model.h"
 #include "Openable.h"
@@ -36,6 +42,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 
 // A harness run (--smoke-test, --perf-bench, --npc-test) whose frames stop - a hang, a wait that never ends - used to
 // spin until someone killed it. Like the editor tests' watchdog: a note each minute without a frame, and after
@@ -178,6 +185,26 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
                 m_ScenePaths.push_back(entry.path().string());
         }
         std::sort(m_ScenePaths.begin(), m_ScenePaths.end());
+        // --gi-tour: the one scene the tour names, for as many frames as the tour takes (GiTourFrame ends it).
+        if (opt.giTourMode) {
+            m_ScenePaths.clear();
+            auto tour = std::make_unique<GiTour::Tour>();
+            std::string error;
+            std::vector<std::string> warnings;
+            if (GiTour::Load(opt.giTourFile, *tour, error, &warnings)) {
+                for (const std::string& w : warnings) std::cout << "[GiTour] note: " << w << std::endl;
+                m_TourFrames = GiTour::BuildTimeline(*tour);
+                m_ScenePaths.push_back(ProjectPaths::Resolve(tour->Scene));
+                // the start's streaming hold (up to 3000 frames) on top of the timeline, then the scoring frame
+                m_FrameBudget = 3000 + (int)m_TourFrames.size() + 2;
+                std::cout << "[GiTour] " << tour->Waypoints.size() << " waypoint(s), " << tour->Routes.size() << " route(s), "
+                          << m_TourFrames.size() << " frame(s) (" << m_TourFrames.size() / 60 << " s at 60 Hz) -> "
+                          << opt.sceneBoundsOut << std::endl;
+                m_Tour = std::move(tour);
+            } else {
+                std::cout << "[GiTour] ERROR: " << error << std::endl;
+            }
+        }
         if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
             m_ScenePaths.assign(1, EnginePaths::Resolve(opt.npcTestScenario.empty() || opt.npcTestScenario == "labloco" || opt.npcTestScenario == "mmview" || opt.npcTestScenario == "mmdb" ||
                                                                   opt.npcTestScenario == "npcloco" || opt.npcTestScenario == "stopsteps" ||
@@ -466,6 +493,182 @@ void SmokeHarness::PoseShotFrame() {
     editorCamera.Pitch = pose.Pitch;
 }
 
+// --gi-tour: the lamps as this waypoint's camera sees them, one CSV row each (its shadow slot or -1, and its
+// DistanceFade from here), with the slot holders summed up in the log.
+void SmokeHarness::GiTourLights(int waypoint) {
+    World& world = m_Ctx.world;
+    const Camera& cam = m_Ctx.editorCamera;
+    const GiTour::Waypoint& wp = m_Tour->Waypoints[waypoint];
+    std::unordered_map<entt::entity, int> spotSlot, pointSlot;
+    if (m_Ctx.lightGather) {
+        for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) spotSlot[e] = slot;
+        for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) pointSlot[e] = slot;
+    }
+    auto nameOf = [&](entt::entity e) {
+        const auto* n = world.Registry.try_get<NameComponent>(e);
+        return n && !n->Name.empty() ? n->Name : "entity " + std::to_string((std::uint32_t)e);
+    };
+    const float tanHalfFov = std::tan(glm::radians(cam.Fov) * 0.5f);
+    std::string spots, points;
+    int lit = 0, faded = 0, gone = 0;
+    for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
+        const auto& lc = world.Registry.get<LightComponent>(e);
+        if (lc.Kind == LightComponent::Type::Directional || world.Registry.all_of<InactiveTag>(e)) continue;
+        const bool on = lc.Intensity > 0.0f && glm::dot(lc.Color, lc.Color) > 0.0f;
+        const glm::vec3 pos(world.ComposeWorldTransform(e)[3]);
+        const float dist = glm::length(pos - cam.Position);
+        const float fade = LightBuffer::DistanceFade(lc.Range, dist, tanHalfFov);
+        const bool spot = lc.Kind == LightComponent::Type::Spot;
+        const auto& slots = spot ? spotSlot : pointSlot;
+        const auto it = slots.find(e);
+        const int slot = it != slots.end() ? it->second : -1;
+        const auto* circuit = world.Registry.try_get<LightCircuitComponent>(e);
+        if (on) {
+            ++lit;
+            if (fade <= 0.0f) ++gone;
+            else if (fade < 1.0f) ++faded;
+        }
+        if (slot >= 0) {
+            std::string& list = spot ? spots : points;
+            list += (list.empty() ? "" : "; ") + std::to_string(slot) + ":" + nameOf(e);
+        }
+        if (m_TourLightsCsv) {
+            char num[96];
+            std::snprintf(num, sizeof(num), "%.3f,%.3f,%.3f,%.3f", lc.Intensity, lc.Range, dist, fade);
+            *m_TourLightsCsv << GiTour::CsvField(wp.Id) << "," << GiTour::CsvField(wp.Room) << "," << GiTour::CsvField(nameOf(e))
+                             << "," << (std::uint32_t)e << "," << (spot ? "spot" : "point") << ","
+                             << GiTour::CsvField(circuit ? circuit->Circuit : std::string()) << "," << (on ? 1 : 0) << ","
+                             << (lc.Shadow.Enabled ? 1 : 0) << "," << num << "," << slot << "\n";
+        }
+    }
+    std::cout << "[GiTour] " << wp.Id << " (" << wp.Room << "): point slots [" << points << "] spot slots [" << spots << "]; "
+              << lit << " lamp(s) on, " << faded << " fading, " << gone << " faded out" << std::endl;
+}
+
+// --gi-tour: called after each frame has presented. The frame just drawn showed timeline frame m_TourAt: take what that
+// frame asks for (a shot, a CSV row), then pose the camera for the next one. The first pose waits for streaming.
+void SmokeHarness::GiTourFrame() {
+    namespace fs = std::filesystem;
+    Camera& cam = m_Ctx.editorCamera;
+    Framebuffer& fb = m_Ctx.sceneFramebuffer;
+    auto pose = [&](const GiTour::Frame& f) {
+        cam.Position = f.Eye;
+        cam.Yaw = f.Yaw;
+        cam.Pitch = f.Pitch;
+        cam.Fov = m_Tour->VerticalFovDeg;
+    };
+    auto finish = [&]() {
+        m_TourCsv.reset();       // flushed and closed
+        m_TourLightsCsv.reset();
+        EditorSettings::Get().FRowLightDebug = m_TourSavedLightView;
+        m_TourDone = true;
+        m_FramesRendered = m_FrameBudget; // score the scene now
+    };
+    if (m_TourDone) return;
+    if (!m_Tour || m_TourFrames.empty()) {
+        m_SetupError = "gi-tour: no tour to run; ";
+        m_FramesRendered = m_FrameBudget;
+        return;
+    }
+    if (m_FramesRendered == 1) {
+        m_ShotHold = 0;
+        m_TourAt = 0;
+        m_TourStarted = false;
+        m_TourSavedLightView = EditorSettings::Get().FRowLightDebug;
+        EditorSettings::Get().FRowLightDebug = FKeyRow::LightOff;
+        // Play's lighting state: every circuit as its switches start (Start On), as the cinematic does.
+        LightSwitch::Update(m_Ctx.world, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), false);
+        std::error_code ec;
+        fs::create_directories(m_Opt.sceneBoundsOut, ec);
+        m_TourCsv = std::make_unique<std::ofstream>(fs::path(m_Opt.sceneBoundsOut) / "tour_luminance.csv", std::ios::binary);
+        m_TourLightsCsv = std::make_unique<std::ofstream>(fs::path(m_Opt.sceneBoundsOut) / "tour_lights.csv", std::ios::binary);
+        if (!*m_TourCsv || !*m_TourLightsCsv) {
+            Log::Error("[GiTour] can't write to " + m_Opt.sceneBoundsOut);
+            finish();
+            return;
+        }
+        *m_TourCsv << GiTour::CsvHeader() << "\n";
+        *m_TourLightsCsv << "waypoint,room,light,entity,kind,circuit,on,shadow,intensity,range,distance,fade,slot\n";
+        pose(m_TourFrames[0]);
+        return;
+    }
+    // Hold the first pose until the scene's textures have streamed in.
+    if (!m_TourStarted) {
+        if ((m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0) && m_ShotHold < 3000) {
+            ++m_ShotHold;
+            pose(m_TourFrames[0]);
+            return;
+        }
+        if (m_ShotHold >= 3000) Log::Warn("[GiTour] still streaming after 3000 held frames - starting anyway.");
+        std::cout << "[GiTour] streaming done after " << m_ShotHold << " held frame(s); the tour starts" << std::endl;
+        m_TourStarted = true;
+        m_TourAt = 0;
+        pose(m_TourFrames[0]);
+        return; // the tour's frame 0 is the next one drawn
+    }
+
+    const GiTour::Frame& f = m_TourFrames[m_TourAt];
+    const GiTour::Waypoint& wp = m_Tour->Waypoints[std::max(f.Waypoint, 0)];
+    const int w = fb.Width(), h = fb.Height();
+    char prefix[16];
+    std::snprintf(prefix, sizeof(prefix), "%02d_", std::max(f.Waypoint, 0));
+    if (f.Kind == GiTour::Step::ShotFull && fb.IsValid()) {
+        FrameCapture::WritePngTo(m_Opt.sceneBoundsOut, prefix + wp.Id + "_full", w, h, FrameCapture::GrabTopDown(fb.Handle(), w, h));
+        GiTourLights(f.Waypoint);
+        EditorSettings::Get().FRowLightDebug = FKeyRow::LightGI; // debugView 8: the baked GI alone
+    } else if (f.Kind == GiTour::Step::ShotGi && fb.IsValid()) {
+        FrameCapture::WritePngTo(m_Opt.sceneBoundsOut, prefix + wp.Id + "_gi", w, h, FrameCapture::GrabTopDown(fb.Handle(), w, h));
+        EditorSettings::Get().FRowLightDebug = FKeyRow::LightOff;
+    } else if ((f.Kind == GiTour::Step::Still || f.Kind == GiTour::Step::Walk) && fb.IsValid() && m_TourCsv) {
+        // The frame's colour (the tonemapped Scene view) and depth (the static-surface mask: drawn geometry, not the
+        // sky), both bottom row first.
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, fb.Handle());
+        m_TourRgba = FrameCapture::GrabRegion(0, 0, w, h);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        double lum = -1.0;
+        int mask = 0;
+        if (HdrTarget* hdr = m_Ctx.sceneHdr) {
+            hdr->ResolveDepthOnly();
+            const int dw = hdr->Width(), dh = hdr->Height();
+            std::vector<float> depth((size_t)dw * dh);
+            glGetTextureImage(hdr->ResolvedDepthTexture(), 0, GL_DEPTH_COMPONENT, GL_FLOAT, (GLsizei)(depth.size() * sizeof(float)),
+                              depth.data());
+            // The HDR target can be another size than the tonemapped image (render scale): the nearest depth sample.
+            m_TourDepth.resize((size_t)w * h);
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    m_TourDepth[(size_t)y * w + x] = depth[(size_t)std::min(y * dh / h, dh - 1) * dw + std::min(x * dw / w, dw - 1)];
+            lum = GiTour::MaskedMeanLuminance(m_TourRgba.data(), m_TourDepth.data(), w, h, 2, 0.999999f, &mask);
+        }
+        std::vector<std::uint32_t> spots, points;
+        if (m_Ctx.lightGather) {
+            for (const auto& [e, slot] : m_Ctx.lightGather->SpotSlotHolders()) spots.push_back((std::uint32_t)e);
+            for (const auto& [e, slot] : m_Ctx.lightGather->PointSlotHolders()) points.push_back((std::uint32_t)e);
+        }
+        GiTour::CsvRow row;
+        row.Frame = m_TourAt;
+        row.Mode = f.Kind == GiTour::Step::Walk ? "walk" : "still";
+        row.Segment = f.Segment;
+        row.Waypoint = wp.Id;
+        row.Room = wp.Room;
+        row.Luminance = lum;
+        row.MaskPixels = mask;
+        row.SlotHash = GiTour::SlotSetHash(std::move(spots), std::move(points));
+        row.SlotsChanged = f.Segment == m_TourLastSegment && row.SlotHash != m_TourLastHash;
+        m_TourLastSegment = f.Segment;
+        m_TourLastHash = row.SlotHash;
+        *m_TourCsv << GiTour::CsvLine(row) << "\n";
+    }
+    if (++m_TourAt >= (int)m_TourFrames.size()) {
+        std::cout << "[GiTour] done: " << m_TourFrames.size() << " frame(s) -> " << m_Opt.sceneBoundsOut << std::endl;
+        finish();
+        return;
+    }
+    pose(m_TourFrames[m_TourAt]);
+    // Only a start held the full 3000 frames runs past the budget: keep it going to the tour's end.
+    if (m_FramesRendered >= m_FrameBudget - 1) m_FrameBudget = m_FramesRendered + 2;
+}
+
 // --perf-bench: this frame's measurement, and the report at the end of a phase.
 void SmokeHarness::PerfFrame() {
     NpcTest* npcTest = m_Ctx.npcTest;
@@ -576,7 +779,9 @@ void SmokeHarness::EndFrame() {
     ++m_FramesRendered;
     ++m_WallFrames;
     if (glfwGetWindowAttrib(m_Ctx.window.Handle(), GLFW_FOCUSED) == 0) ++m_UnfocusedFrames;
-    if (m_Cinematic && !opt.perfBenchMode) {
+    if (opt.giTourMode) {
+        GiTourFrame();
+    } else if (m_Cinematic && !opt.perfBenchMode) {
         CinematicFrame();
     } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !m_ShotCameras.empty()) {
         ShotCameraFrame();

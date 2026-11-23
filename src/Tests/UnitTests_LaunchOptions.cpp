@@ -44,6 +44,13 @@ void Test_LaunchOptions_Modes() {
     // Its relaunch test: only with a state file to restore.
     CHECK(Parse({"--restore-state", "s.json", "--restore-check", "r.json"}, o, err) && o.restoreCheckReport == "r.json");
     CHECK(!Parse({"--restore-check", "r.json"}, o, err) && err.find("--restore-state") != std::string::npos);
+    // GI Phase 0's camera tour: on the smoke harness, hidden like the other harness runs, and it must say where to write.
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--perf-res", "1920x1080"}, o, err));
+    CHECK(o.mode == LaunchMode::GiTour && o.giTourMode && o.smokeTestMode && !o.perfBenchMode && o.giTourFile == "tour.json" &&
+          o.sceneBoundsOut == "o" && o.perfResW == 1920);
+    CHECK(Env::Flag(Env::Var::Show) || KeepsWindowHidden(o));
+    CHECK(!Parse({"--gi-tour", "tour.json"}, o, err) && err.find("--out") != std::string::npos);
+    CHECK(!Parse({"--gi-tour", "tour.json", "--out", "o", "--smoke-shots", "s"}, o, err));
 }
 
 void Test_LaunchOptions_Lists() {
