@@ -1,5 +1,5 @@
-# Components in src/Game/Components.h that are DELIBERATELY not registered with
-# ComponentRegistry (src/Game/ComponentRegistry*.cpp). Every struct in Components.h whose name
+# Components in the component headers (src/Game/Components*.h) that are DELIBERATELY not registered
+# with ComponentRegistry (src/Game/ComponentRegistry*.cpp). Every struct in those headers whose name
 # ends in "Component" or "Tag" must be either registered there or listed here with a reason —
 # check_component_registration.py (run in CI and locally) fails otherwise. This is the
 # structural half of the "ship components fully wired, or not visible" rule (top of src/Game/ComponentRegistry.cpp):

@@ -7,15 +7,19 @@ namespace SceneDetail {
 // on every save (load re-creates in file order, the next save reverses it again), so the file
 // churns and the Hierarchy's ordering flips each time. Collecting and reversing restores
 // creation order, which is stable across any number of round-trips.
-template <typename View>
-std::vector<entt::entity> InCreationOrder(const entt::registry& reg, View view) {
-    std::vector<entt::entity> entities(view.begin(), view.end());
+static void SortInCreationOrder(const entt::registry& reg, std::vector<entt::entity>& entities) {
     std::sort(entities.begin(), entities.end(), [&](entt::entity a, entt::entity b) {
         const auto* oa = reg.try_get<OrderComponent>(a);
         const auto* ob = reg.try_get<OrderComponent>(b);
         int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
         return va != vb ? va < vb : a < b; // stable tiebreak for pre-OrderComponent data
     });
+}
+
+template <typename View>
+std::vector<entt::entity> InCreationOrder(const entt::registry& reg, View view) {
+    std::vector<entt::entity> entities(view.begin(), view.end());
+    SortInCreationOrder(reg, entities);
     return entities;
 }
 
@@ -130,96 +134,96 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
                     bool flattenPrefabInstances) {
     json root;
     AssetRefWriteCache refs; // per-path write path + GUID, worked out once per build
-    std::unordered_map<std::string, std::optional<json>> prefabFiles; // each instance's .prefab, parsed once (nullopt: unreadable)
+    std::set<std::string> unreadablePrefabs; // warned once per build
     auto included = [&](entt::entity e) { return !only || only->count(e) > 0; };
     // v4 changes the shape of every "rotation" value, so fragments and prefabs now need the
     // version too even though they still omit scene environment settings.
     root["formatVersion"] = kSceneFormatVersion;
     if (!only) {
-        root["skyHorizonColor"] = Vec3ToJson(world.SkyHorizonColor);
-        root["skyZenithColor"] = Vec3ToJson(world.SkyZenithColor);
-        root["skyAmbientIntensity"] = world.SkyAmbientIntensity; // #196
+        root["skyHorizonColor"] = Vec3ToJson(world.Render.SkyHorizonColor);
+        root["skyZenithColor"] = Vec3ToJson(world.Render.SkyZenithColor);
+        root["skyAmbientIntensity"] = world.Render.SkyAmbientIntensity; // #196
         // PR13: HDRI sky source (defaults omitted for backwards compatibility)
-        if (world.SkySourceMode != World::SkySource::Procedural)
-            root["skySource"] = (int)world.SkySourceMode;
+        if (world.Render.SkySourceMode != World::SkySource::Procedural)
+            root["skySource"] = (int)world.Render.SkySourceMode;
         // The physical sky's settings: written when the scene uses it or has changed them.
-        if (world.SkySourceMode == World::SkySource::Atmosphere || !(world.Sky == SkySettings{}))
-            root["sky"] = SkySettingsToJson(world.Sky);
-        if (!world.SkyHdriPath.empty()) {
-            root["skyHdriPath"] = AssetPathForWrite(world.SkyHdriPath); // audit #364 — was stored absolute
+        if (world.Render.SkySourceMode == World::SkySource::Atmosphere || !(world.Render.Sky == SkySettings{}))
+            root["sky"] = SkySettingsToJson(world.Render.Sky);
+        if (!world.Render.SkyHdriPath.empty()) {
+            root["skyHdriPath"] = AssetPathForWrite(world.Render.SkyHdriPath); // audit #364 — was stored absolute
             // #132 — and by GUID, so renaming/moving the .hdr doesn't break the sky.
-            AssetGuid g = AssetDatabase::GuidForPath(world.SkyHdriPath); // registered by ScanProject
+            AssetGuid g = AssetDatabase::GuidForPath(world.Render.SkyHdriPath); // registered by ScanProject
             if (g.IsValid()) root["skyHdriGuid"] = g.ToString();
         }
-        if (world.SkyRotationDegrees != 0.0f)
-            root["skyRotationDegrees"] = world.SkyRotationDegrees;
-        if (world.SkyHdriSun != World::HdriSunMode::Auto)
-            root["skyHdriSun"] = (int)world.SkyHdriSun; // #277
-        if (world.SkyHdriSunThreshold != 50.0f)
-            root["skyHdriSunThreshold"] = world.SkyHdriSunThreshold;
+        if (world.Render.SkyRotationDegrees != 0.0f)
+            root["skyRotationDegrees"] = world.Render.SkyRotationDegrees;
+        if (world.Render.SkyHdriSun != World::HdriSunMode::Auto)
+            root["skyHdriSun"] = (int)world.Render.SkyHdriSun; // #277
+        if (world.Render.SkyHdriSunThreshold != 50.0f)
+            root["skyHdriSunThreshold"] = world.Render.SkyHdriSunThreshold;
 
         // #9, Phase M item 1 — post-processing/shadow settings, scene-authored since v3.
-        root["exposureEV"] = world.ExposureEV;
-        root["tonemapOperator"] = world.TonemapOperator;
-        root["msaaSamples"] = world.MsaaSamples;
-        root["ssaoEnabled"] = world.SsaoEnabled;
-        root["ssaoRadius"] = world.SsaoRadius;
-        root["ssaoBias"] = world.SsaoBias;
-        root["ssaoIntensity"] = world.SsaoIntensity;
-        root["bloomEnabled"] = world.BloomEnabled;
-        root["bloomThreshold"] = world.BloomThreshold;
-        root["bloomKnee"] = world.BloomKnee;
-        root["bloomIntensity"] = world.BloomIntensity;
+        root["exposureEV"] = world.Render.ExposureEV;
+        root["tonemapOperator"] = world.Render.TonemapOperator;
+        root["msaaSamples"] = world.Render.MsaaSamples;
+        root["ssaoEnabled"] = world.Render.SsaoEnabled;
+        root["ssaoRadius"] = world.Render.SsaoRadius;
+        root["ssaoBias"] = world.Render.SsaoBias;
+        root["ssaoIntensity"] = world.Render.SsaoIntensity;
+        root["bloomEnabled"] = world.Render.BloomEnabled;
+        root["bloomThreshold"] = world.Render.BloomThreshold;
+        root["bloomKnee"] = world.Render.BloomKnee;
+        root["bloomIntensity"] = world.Render.BloomIntensity;
         // #162
-        root["fxaa"] = world.FxaaEnabled;
-        root["autoExposure"] = world.AutoExposure;
-        root["autoExposureMinEV"] = world.AutoExposureMinEV;
-        root["autoExposureMaxEV"] = world.AutoExposureMaxEV;
-        root["autoExposureSpeedUp"] = world.AutoExposureSpeedUp;
-        root["autoExposureSpeedDown"] = world.AutoExposureSpeedDown;
-        root["gradeTemperature"] = world.GradeTemperature;
-        root["gradeTint"] = world.GradeTint;
-        root["gradeContrast"] = world.GradeContrast;
-        root["gradeSaturation"] = world.GradeSaturation;
-        root["gradeColorFilter"] = {world.GradeColorFilter.r, world.GradeColorFilter.g, world.GradeColorFilter.b};
-    root["depthOfField"] = world.DepthOfField;
-    root["focusDistance"] = world.FocusDistance;
+        root["fxaa"] = world.Render.FxaaEnabled;
+        root["autoExposure"] = world.Render.AutoExposure;
+        root["autoExposureMinEV"] = world.Render.AutoExposureMinEV;
+        root["autoExposureMaxEV"] = world.Render.AutoExposureMaxEV;
+        root["autoExposureSpeedUp"] = world.Render.AutoExposureSpeedUp;
+        root["autoExposureSpeedDown"] = world.Render.AutoExposureSpeedDown;
+        root["gradeTemperature"] = world.Render.GradeTemperature;
+        root["gradeTint"] = world.Render.GradeTint;
+        root["gradeContrast"] = world.Render.GradeContrast;
+        root["gradeSaturation"] = world.Render.GradeSaturation;
+        root["gradeColorFilter"] = {world.Render.GradeColorFilter.r, world.Render.GradeColorFilter.g, world.Render.GradeColorFilter.b};
+    root["depthOfField"] = world.Render.DepthOfField;
+    root["focusDistance"] = world.Render.FocusDistance;
     // Anti-aliasing mode: written only when it says more than msaaSamples + fxaa already do (TAA), so
     // scenes that never touch it save byte-for-byte as before. Rain wetness likewise only when set.
-    if (world.AntiAliasing != World::LegacyAntiAliasing(world.MsaaSamples, world.FxaaEnabled)) {
+    if (world.Render.AntiAliasing != World::LegacyAntiAliasing(world.Render.MsaaSamples, world.Render.FxaaEnabled)) {
         static const char* const kAa[] = {"Off", "FXAA", "MSAA", "TAA"};
-        root["antiAliasing"] = kAa[std::clamp((int)world.AntiAliasing, 0, 3)];
+        root["antiAliasing"] = kAa[std::clamp((int)world.Render.AntiAliasing, 0, 3)];
     }
-    if (world.TaaSharpness != 0.35f) root["taaSharpness"] = world.TaaSharpness;
-    if (world.Wetness != 0.0f) root["wetness"] = world.Wetness;
-    if (world.PuddleAmount != 0.0f) root["puddleAmount"] = world.PuddleAmount;
-    if (world.PuddleScale != 4.0f) root["puddleScale"] = world.PuddleScale;
-    if (world.PuddleSsr) root["puddleSsr"] = true;
-    root["focusRange"] = world.FocusRange;
-    root["dofMaxBlur"] = world.DofMaxBlur;
-        root["fogEnabled"] = world.FogEnabled;
-        root["fogMode"] = world.FogMode;
-        root["fogColor"] = {world.FogColor.r, world.FogColor.g, world.FogColor.b};
-        root["fogDensity"] = world.FogDensity;
-        root["fogStart"] = world.FogStart;
-        root["fogEnd"] = world.FogEnd;
-        root["fogHeightFalloff"] = world.FogHeightFalloff;
-        root["fogBaseHeight"] = world.FogBaseHeight;
-        root["volumetricEnabled"] = world.VolumetricEnabled; // VolumetricFog
-        root["volDensity"] = world.VolumetricDensity;
-        root["volAnisotropy"] = world.VolumetricAnisotropy;
-        root["volHeightFalloff"] = world.VolumetricHeightFalloff;
-        root["volBaseHeight"] = world.VolumetricBaseHeight;
-        root["volAlbedo"] = {world.VolumetricAlbedo.r, world.VolumetricAlbedo.g, world.VolumetricAlbedo.b};
-        root["volDistance"] = world.VolumetricDistance;
-        root["volQuality"] = world.VolumetricQuality;
-        root["shadowsEnabled"] = world.ShadowsEnabled;
-        root["shadowResolution"] = world.ShadowResolution;
-        root["shadowCascades"] = world.ShadowCascades;
-        root["shadowDistance"] = world.ShadowDistance;
-        root["shadowCascadeSplit"] = world.ShadowCascadeSplit;
-        root["maxSpotShadows"] = world.MaxSpotShadows;
-        root["maxPointShadows"] = world.MaxPointShadows;
+    if (world.Render.TaaSharpness != 0.35f) root["taaSharpness"] = world.Render.TaaSharpness;
+    if (world.Render.Wetness != 0.0f) root["wetness"] = world.Render.Wetness;
+    if (world.Render.PuddleAmount != 0.0f) root["puddleAmount"] = world.Render.PuddleAmount;
+    if (world.Render.PuddleScale != 4.0f) root["puddleScale"] = world.Render.PuddleScale;
+    if (world.Render.PuddleSsr) root["puddleSsr"] = true;
+    root["focusRange"] = world.Render.FocusRange;
+    root["dofMaxBlur"] = world.Render.DofMaxBlur;
+        root["fogEnabled"] = world.Render.FogEnabled;
+        root["fogMode"] = world.Render.FogMode;
+        root["fogColor"] = {world.Render.FogColor.r, world.Render.FogColor.g, world.Render.FogColor.b};
+        root["fogDensity"] = world.Render.FogDensity;
+        root["fogStart"] = world.Render.FogStart;
+        root["fogEnd"] = world.Render.FogEnd;
+        root["fogHeightFalloff"] = world.Render.FogHeightFalloff;
+        root["fogBaseHeight"] = world.Render.FogBaseHeight;
+        root["volumetricEnabled"] = world.Render.VolumetricEnabled; // VolumetricFog
+        root["volDensity"] = world.Render.VolumetricDensity;
+        root["volAnisotropy"] = world.Render.VolumetricAnisotropy;
+        root["volHeightFalloff"] = world.Render.VolumetricHeightFalloff;
+        root["volBaseHeight"] = world.Render.VolumetricBaseHeight;
+        root["volAlbedo"] = {world.Render.VolumetricAlbedo.r, world.Render.VolumetricAlbedo.g, world.Render.VolumetricAlbedo.b};
+        root["volDistance"] = world.Render.VolumetricDistance;
+        root["volQuality"] = world.Render.VolumetricQuality;
+        root["shadowsEnabled"] = world.Render.ShadowsEnabled;
+        root["shadowResolution"] = world.Render.ShadowResolution;
+        root["shadowCascades"] = world.Render.ShadowCascades;
+        root["shadowDistance"] = world.Render.ShadowDistance;
+        root["shadowCascadeSplit"] = world.Render.ShadowCascadeSplit;
+        root["maxSpotShadows"] = world.Render.MaxSpotShadows;
+        root["maxPointShadows"] = world.Render.MaxPointShadows;
     }
 
     // Every box/model entity gets a stable 0-based id (assigned in the exact order written
@@ -282,6 +286,18 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
     std::vector<entt::entity> boxEntities = InCreationOrder(world.Registry, boxView);
     std::vector<entt::entity> modelEntities = InCreationOrder(world.Registry, modelViewForIds);
     std::vector<entt::entity> emptyEntities = InCreationOrder(world.Registry, emptyViewForIds);
+    // A Mesh Renderer with no mesh yet (Add Component on an empty) has nothing for "boxes" or "models"
+    // to reload, and both skip it: it used to vanish from the save, object and children's parent with
+    // it. It is written as an empty instead (the meshless renderer itself has nothing to keep).
+    {
+        auto meshless = [&](entt::entity e) { return !world.Registry.get<const RenderableComponent>(e).ModelRef; };
+        const size_t emptiesBefore = emptyEntities.size();
+        for (auto* list : {&boxEntities, &modelEntities}) {
+            for (entt::entity e : *list) if (meshless(e)) emptyEntities.push_back(e);
+            list->erase(std::remove_if(list->begin(), list->end(), meshless), list->end());
+        }
+        if (emptyEntities.size() != emptiesBefore) SortInCreationOrder(world.Registry, emptyEntities);
+    }
 
     // #236 A2 — a live prefab instance (root has PrefabInstanceComponent) is written as one
     // compact stub in "prefabInstances"; its descendants are not written at all. The owned set
@@ -419,25 +435,18 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only,
                 s["hierStyle"] = HierStyleToJson(*hs); // a styled prefab-instance root keeps its row style
 
             // #302 Part B — per-field overrides: diff each live instance entity against its
-            // pristine counterpart in the .prefab file, by prefab-local index.
+            // pristine counterpart, by prefab-local index. The pristine is the content the
+            // instance was built from (g_prefabPristineCache), parsed once per session, not per
+            // save (the save runs on every undo commit).
             if (!pi.InstanceEntities.empty()) {
-                // Read once per save, however many instances of it the scene holds (the save runs on every undo commit).
-                auto [slot, fresh] = prefabFiles.try_emplace(pi.SourcePath);
-                if (fresh) {
-                    std::ifstream pf(std::filesystem::u8path(pi.SourcePath));
-                    if (pf.is_open()) {
-                        // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
-                        // save: skip this instance's override diff (its stub still saves) and warn.
-                        try { json parsed; pf >> parsed; UpgradeLegacyBoxKeys(parsed); slot->second = std::move(parsed); }
-                        catch (const std::exception& ex) {
-                            Log::Warn("Scene: couldn't parse prefab '" + pi.SourcePath +
-                                      "' while saving - its per-field overrides were not re-diffed: " + ex.what());
-                        }
-                    }
-                }
-                const bool prefabOk = slot->second.has_value();
-                if (prefabOk) {
-                    const json& prefab = *slot->second;
+                const json* cached = CachedPrefabJson(pi.SourcePath);
+                // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
+                // save: skip this instance's override diff (its stub still saves) and warn.
+                if (!cached && unreadablePrefabs.insert(pi.SourcePath).second)
+                    Log::Warn("Scene: couldn't read prefab '" + pi.SourcePath +
+                              "' while saving - its per-field overrides were not re-diffed.");
+                if (cached) {
+                    const json& prefab = *cached;
                     std::vector<const json*> pristineEnts = PrefabEntityObjects(prefab);
                     json overrides = json::array();
                     const std::size_t n = std::min(pi.InstanceEntities.size(), pristineEnts.size());

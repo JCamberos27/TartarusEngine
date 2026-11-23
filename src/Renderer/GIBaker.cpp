@@ -62,6 +62,9 @@ bool GIBaker::Begin(World& world, const Options& opt) {
     m_Pass = -1;
     m_Vol = m_Probe = m_Settle = 0;
     m_Done = m_Total = 0;
+    m_PassFrames = 0;
+    m_CamKnown = false;
+    m_Trace = {};
 
     auto view = world.Registry.view<const TransformComponent, const GIVolumeComponent>();
     for (auto [e, tc, gv] : view.each()) {
@@ -144,7 +147,7 @@ float GIBaker::Progress() const { return m_Total > 0 ? (float)((double)m_Done / 
 
 void GIBaker::ApplyLighting(World& world, const Pass& p) {
     if (!m_LightingSaved) {
-        m_SkyAmbient = world.SkyAmbientIntensity;
+        m_SkyAmbient = world.Render.SkyAmbientIntensity;
         m_LightingSaved = true;
     }
     for (entt::entity e : m_Parked)
@@ -175,7 +178,7 @@ void GIBaker::RestoreLighting(World& world) {
         if (world.Registry.valid(e)) world.Registry.remove<DeactivatedTag>(e);
     m_Parked.clear();
     LightSwitch::Stop(world); // the switches and circuits as authored again (Play starts them from Start On)
-    if (m_LightingSaved) world.SkyAmbientIntensity = m_SkyAmbient;
+    if (m_LightingSaved) world.Render.SkyAmbientIntensity = m_SkyAmbient;
     m_LightingSaved = false;
     world.SyncActiveInHierarchy();
 }
@@ -196,6 +199,10 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         return std::find(v.Layers.begin(), v.Layers.end(), c) != v.Layers.end();
     };
     auto startPass = [&](int i) {
+        if (m_Pass >= 0) EndPass();
+        m_PassStart = Now();
+        m_PassFrames = 0;
+        m_Trace = {};
         m_Pass = i;
         m_Vol = 0;
         m_Probe = 0;
@@ -214,8 +221,16 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
                   (p.Circuit.empty() ? std::string("Outside") : p.Circuit) + ", bounce " + std::to_string(p.Bounce + 1));
     };
     if (m_Pass < 0) startPass(0);
+    ++m_PassFrames;
 
-    if (m_Vol < (int)m_Volumes.size()) moveCamera(m_Volumes[m_Vol].Bounds.Center);
+    // This frame's light gather (and so its shadow slots) already ran, from where the last Step put the camera.
+    const glm::vec3 gatherCam = m_CamSet;
+    const bool gatherCamKnown = m_CamKnown;
+    if (m_Vol < (int)m_Volumes.size()) {
+        m_CamSet = m_Volumes[m_Vol].Bounds.Center;
+        m_CamKnown = true;
+        moveCamera(m_CamSet);
+    }
     if (m_Settle > 0) { --m_Settle; return false; }
 
     const Pass& pass = m_Passes[m_Pass];
@@ -284,6 +299,27 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         glGetTextureSubImage(m_Atlas, 0, 0, 0, 0, atlasW, atlasH, 1, GL_RGBA, GL_FLOAT,
                              (GLsizei)(m_AtlasPixels.size() * sizeof(float)), m_AtlasPixels.data());
 
+    if (m_Opt.TraceShadowSet && !jobs.empty()) {
+        const std::string set = m_Opt.TraceShadowSet();
+        const VolumeJob& tv = m_Volumes[jobs.front().Vol];
+        // A batch whose gather ran from another spot (the previous volume's centre, on a volume's first batch) had its
+        // shadow slots scored from there.
+        const bool staleCam = !gatherCamKnown || glm::distance(gatherCam, tv.Bounds.Center) > 1e-3f;
+        const bool changed = m_Trace.Batches > 0 && set != m_Trace.Last;
+        ++m_Trace.Batches;
+        if (changed) ++m_Trace.Changes;
+        if (staleCam) ++m_Trace.StaleCamBatches;
+        if (std::find(m_Trace.Sets.begin(), m_Trace.Sets.end(), set) == m_Trace.Sets.end()) m_Trace.Sets.push_back(set);
+        m_Trace.Last = set;
+        char cam[96];
+        std::snprintf(cam, sizeof(cam), "(%.2f, %.2f, %.2f)", gatherCam.x, gatherCam.y, gatherCam.z);
+        Log::Info("[GI trace] pass " + std::to_string(m_Pass + 1) + "/" + std::to_string(m_Passes.size()) + " '" +
+                  (pass.Circuit.empty() ? std::string("Outside") : pass.Circuit) + "' b" + std::to_string(pass.Bounce + 1) +
+                  " | vol '" + tv.Name + "' probes " + std::to_string(jobs.front().Probe) + "-" +
+                  std::to_string(jobs.back().Probe) + " | gather cam " + (gatherCamKnown ? cam : "(none)") +
+                  (staleCam ? " STALE" : "") + " | " + set + (changed ? "  <- CHANGED" : ""));
+    }
+
     for (std::size_t k = 0; k < jobs.size(); ++k) {
         VolumeJob& v = m_Volumes[m_Vol];
         // the six faces of probe k, face-major, out of the atlas rows
@@ -320,8 +356,25 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         startPass(m_Pass + 1);
         return false;
     }
+    EndPass();
     m_Finished = true;
     return Finish(world, gi), true;
+}
+
+void GIBaker::EndPass() {
+    if (m_Pass < 0 || m_Pass >= (int)m_Passes.size()) return;
+    const Pass& p = m_Passes[m_Pass];
+    const std::string head = "pass " + std::to_string(m_Pass + 1) + "/" + std::to_string(m_Passes.size()) + " '" +
+                             (p.Circuit.empty() ? std::string("Outside") : p.Circuit) + "' b" + std::to_string(p.Bounce + 1);
+    Log::Info("[GI bake] " + head + " done: " + Fmt("%.1f s", Now() - m_PassStart) + ", " + std::to_string(m_PassFrames) +
+              " frames");
+    if (!m_Opt.TraceShadowSet) return;
+    Log::Info("[GI trace] " + head + " summary: " + std::to_string(m_Trace.Batches) + " batches, " +
+              std::to_string(m_Trace.Sets.size()) + " distinct shadow sets, " + std::to_string(m_Trace.Changes) +
+              " changes, " + std::to_string(m_Trace.StaleCamBatches) + " batches gathered from another camera");
+    if (m_Trace.Sets.size() > 1)
+        for (std::size_t i = 0; i < m_Trace.Sets.size(); ++i)
+            Log::Info("[GI trace] " + head + " set " + std::to_string(i + 1) + ": " + m_Trace.Sets[i]);
 }
 
 bool GIBaker::Finish(World& world, GIVolumes& gi) {

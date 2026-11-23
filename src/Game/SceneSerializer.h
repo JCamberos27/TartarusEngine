@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -16,6 +17,16 @@ namespace SceneSerializer {
     // Also persists the Asset Browser's virtual folder structure and any renamed assets
     // (AssetLibrary), so organizing your assets into folders survives a relaunch.
     bool Save(const World& world, const AssetLibrary& assets, const std::string& path);
+
+    // Save() split in two for a background write (the editor's auto-save): this reads the scene
+    // on the calling thread (it walks the World) and returns a job that formats the text and
+    // writes `path` through AtomicFile on any thread, true on success. Empty when the scene
+    // couldn't be serialized (logged).
+    std::function<bool()> PrepareSave(const World& world, const AssetLibrary& assets, const std::string& path);
+    // The same job built from an undo snapshot (SaveToString(world, assets)) that still matches the
+    // World, instead of reading the World: only the AssetLibrary's file half is read here; the
+    // snapshot is parsed, given that half and written on the job's thread. Same bytes as Save().
+    std::function<bool()> PrepareSaveFromSnapshot(std::string snapshot, const AssetLibrary& assets, const std::string& path);
 
     // Clears world.Boxes/world.Models and repopulates them from the file.
     // Returns false (leaving world untouched) if the file doesn't exist or fails to parse.
@@ -101,8 +112,8 @@ namespace SceneSerializer {
     // True if `entity` (a member of a live prefab instance) currently holds a value for
     // (component, field) that differs from the .prefab it came from. Always false for a field
     // on the instance ROOT ("Transform" / "Name") — those are per-instance by design — and for
-    // an entity that isn't part of a prefab instance. The parsed .prefab is cached; call
-    // ClearPrefabPristineCache() when a scene loads or a .prefab is reimported.
+    // an entity that isn't part of a prefab instance. Compared against the .prefab content the
+    // instance was built from (cached at InstantiatePrefab), not the file as it is now.
     bool IsPrefabFieldOverridden(const World& world, entt::entity entity,
                                  const char* component, const char* field);
     // Set (component, field) on `entity` back to its .prefab value. No-op if not overridden.
@@ -121,6 +132,10 @@ namespace SceneSerializer {
     bool ApplyPrefabComponent(World& world, entt::entity entity, const char* component);
 
     void ClearPrefabPristineCache();
+    // True when `path` was edited after this scene's instances of it were built: the cached
+    // content they diff their overrides against differs from the file now. False when nothing
+    // is cached for it or the file can't be read (half-written: the next change retries).
+    bool PrefabChangedSinceInstanced(const std::string& path);
 
     // #178 - Preset assets: one reflected component's fields as JSON, using the exact same
     // encoding scenes use, so an asset reference in a preset round-trips by GUID like it does

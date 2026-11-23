@@ -67,8 +67,8 @@ void PuddleSsr::Trace(const HdrTarget* target, unsigned int depthTex, const glm:
         p.SetMat4("uInvProj", glm::inverse(proj));
         p.SetMat4("uInvView", glm::inverse(view));
         p.SetMat4("uPrevViewProj", v.PrevViewProj);
-        p.SetFloat("uPuddleAmount", world.PuddleAmount);
-        p.SetFloat("uPuddleScale", world.PuddleScale);
+        p.SetFloat("uPuddleAmount", world.Render.PuddleAmount);
+        p.SetFloat("uPuddleScale", world.Render.PuddleScale);
         p.SetInt("uSteps", kSteps);
         p.SetFloat("uMaxDistance", kMaxDistance);
         p.SetInt("uFrame", ++m_Frame);

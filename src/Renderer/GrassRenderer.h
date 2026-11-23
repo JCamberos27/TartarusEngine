@@ -35,7 +35,8 @@ public:
     static constexpr std::uint32_t kNearCap = 400000u;  // instances per list; the cull drops the rest
     static constexpr std::uint32_t kFarCap  = 900000u;
     static constexpr float kMinKeep = 0.1f;         // the share of blades left at the draw distance
-    static constexpr int   kShadowCascades = 2;     // sun cascades the blades cast into
+    static constexpr int   kShadowCascades = 1;     // sun cascades the blades cast into: the nearest only (past it a
+                                                    // blade is under a texel, its shadow lost in the PCF blur)
     static constexpr float kShadowDistance = 14.0f; // metres from the eye that blades cast shadows
 
     // Cells (one blade each) per chunk side for `density` blades per square metre: a whole number of cells close

@@ -92,6 +92,23 @@ bool PrepareEditorShotProfile(const LaunchOptions& opt) {
            CopyUserPrefsToScratch("--editor-shot", "TartarusEngine-Shot", opt.editorShotDefaultLayout);
 }
 
+bool PrepareRestoreCheckProfile() {
+    // Plain editor mode writes prefs, layout, log and the Script IDE session on exit: all of it goes to a fresh
+    // scratch folder, and only for a named instance, so the check can never write the user's own files.
+    namespace fs = std::filesystem;
+    if (!InstanceNameOk("--restore-check")) return false;
+    if (ScratchInstanceName().empty()) {
+        std::cerr << "--restore-check: set TARTARUS_EDITOR_TEST_INSTANCE (it never runs on the real user folder); refusing to run."
+                  << std::endl;
+        return false;
+    }
+    if (!UseScratchFolder("--restore-check", "TartarusEngine-Restart")) return false;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(UserPaths::Root(), ec)) fs::remove_all(entry.path(), ec);
+    ScriptIDE::SetSessionDirectory(UserPaths::Resolve("IDE"));
+    return true;
+}
+
 bool PrepareSmokeProfile() {
     // Without an instance name the run keeps using the real user folder, as before.
     if (!InstanceNameOk("--smoke-test")) return false;

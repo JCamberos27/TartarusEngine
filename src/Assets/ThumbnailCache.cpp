@@ -6,6 +6,7 @@
 #include "stb_image.h"
 #include "PngWrite.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <cctype>
@@ -222,6 +223,67 @@ void SaveAsync(const std::string& path, int size, std::uint64_t key, std::vector
 }
 
 void FlushAsync() { Worker().Flush(); }
+
+struct AsyncProbe::Impl {
+    struct Job { std::string Path; unsigned Ticket = 0; int Size = 0; std::vector<std::string> Deps; };
+    std::mutex Mutex;
+    std::condition_variable Wake, Idle;
+    std::deque<Job> Jobs; // front = newest
+    std::vector<Result> Done;
+    std::thread Thread;
+    bool Busy = false, Stop = false;
+
+    void Run() {
+        std::unique_lock<std::mutex> lk(Mutex);
+        for (;;) {
+            Wake.wait(lk, [this] { return Stop || !Jobs.empty(); });
+            if (Stop) return;
+            Job job = std::move(Jobs.front());
+            Jobs.pop_front();
+            Busy = true;
+            lk.unlock();
+            Result r{job.Path, job.Ticket, DependencyKey(job.Path, job.Deps), {}};
+            Load(job.Path, job.Size, r.Key, r.Pixels);
+            lk.lock();
+            Done.push_back(std::move(r));
+            Busy = false;
+            if (Jobs.empty()) Idle.notify_all();
+        }
+    }
+};
+
+AsyncProbe::AsyncProbe() : m_Impl(std::make_unique<Impl>()) {}
+
+AsyncProbe::~AsyncProbe() {
+    {
+        std::lock_guard<std::mutex> lk(m_Impl->Mutex);
+        m_Impl->Stop = true;
+        m_Impl->Jobs.clear();
+    }
+    m_Impl->Wake.notify_one();
+    if (m_Impl->Thread.joinable()) m_Impl->Thread.join();
+}
+
+void AsyncProbe::Push(std::string path, unsigned ticket, int size, std::vector<std::string> deps) {
+    {
+        std::lock_guard<std::mutex> lk(m_Impl->Mutex);
+        m_Impl->Jobs.push_front({std::move(path), ticket, size, std::move(deps)});
+        if (!m_Impl->Thread.joinable()) m_Impl->Thread = std::thread([impl = m_Impl.get()] { impl->Run(); });
+    }
+    m_Impl->Wake.notify_one();
+}
+
+void AsyncProbe::Take(std::vector<Result>& out, size_t max) {
+    std::lock_guard<std::mutex> lk(m_Impl->Mutex);
+    const size_t n = std::min(max, m_Impl->Done.size());
+    for (size_t i = 0; i < n; ++i) out.push_back(std::move(m_Impl->Done[i]));
+    m_Impl->Done.erase(m_Impl->Done.begin(), m_Impl->Done.begin() + (std::ptrdiff_t)n);
+}
+
+void AsyncProbe::WaitIdle() {
+    std::unique_lock<std::mutex> lk(m_Impl->Mutex);
+    m_Impl->Idle.wait(lk, [this] { return m_Impl->Jobs.empty() && !m_Impl->Busy; });
+}
 
 void PruneOrphans() {
     namespace fs = std::filesystem;

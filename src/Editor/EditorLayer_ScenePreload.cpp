@@ -62,16 +62,18 @@ std::string ResolveRef(const json& obj, const std::string& key, const std::strin
 }
 
 struct PreloadRefs {
-    std::set<std::string> Models, Materials, Prefabs, Textures;
+    std::set<std::string> Models, Materials, Prefabs;
 };
 
-void CollectRefs(const json& node, PreloadRefs& out) {
+// `sceneRoot`: an older scene file's "libraryModels" / "libraryTextures" lists are skipped - the loader ignores them (P-45).
+void CollectRefs(const json& node, PreloadRefs& out, bool sceneRoot = false) {
     if (node.is_array()) {
         for (const json& v : node) CollectRefs(v, out);
         return;
     }
     if (!node.is_object()) return;
     for (auto it = node.begin(); it != node.end(); ++it) {
+        if (sceneRoot && (it.key() == "libraryModels" || it.key() == "libraryTextures")) continue;
         if (it->is_string()) {
             const std::string& value = it->get_ref<const std::string&>();
             const std::string ext = LowerExt(value.substr(0, value.find('#')));
@@ -84,20 +86,6 @@ void CollectRefs(const json& node, PreloadRefs& out) {
         } else if (it->is_structured()) {
             CollectRefs(*it, out);
         }
-    }
-}
-
-// The scene's "libraryTextures" list: textures the scene loader loads as they are (LoadTexture's
-// default use), whatever else references them. Only these: a texture named elsewhere (a sky HDRI,
-// a decal) has its own loader, and loading it here would add it to the library.
-void CollectLibraryTextures(const json& scene, PreloadRefs& out) {
-    const auto list = scene.find("libraryTextures");
-    if (list == scene.end() || !list->is_array()) return;
-    for (const json& v : *list) {
-        std::string path;
-        if (v.is_string()) path = ResolveRef(json::object(), "path", v.get<std::string>());
-        else if (v.is_object() && v.contains("path") && v["path"].is_string()) path = ResolveRef(v, "path", v["path"].get<std::string>());
-        if (!path.empty()) out.Textures.insert(path);
     }
 }
 
@@ -115,8 +103,7 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
     PreloadRefs refs;
     std::shared_ptr<SceneSerializer::ParsedSceneFile> parsed = SceneSerializer::ReadSceneFile(path);
     if (parsed) {
-        CollectRefs(parsed->Root, refs);
-        CollectLibraryTextures(parsed->Root, refs);
+        CollectRefs(parsed->Root, refs, /*sceneRoot=*/true);
         // Prefabs place models too: follow them a few levels (a prefab can nest others).
         std::set<std::string> seen;
         for (int depth = 0; depth < 4 && !refs.Prefabs.empty(); ++depth) {
@@ -149,8 +136,6 @@ void EditorLayer::BeginOpenScene(World& world, AssetLibrary& assets, const std::
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestModelAsync(m));
     for (const std::string& m : refs.Materials)
         if (fs::exists(fs::u8path(m), ec)) state->Tickets.push_back(assets.RequestMaterialAsync(m));
-    for (const std::string& t : refs.Textures)
-        if (fs::exists(fs::u8path(t), ec)) state->Tickets.push_back(assets.RequestTextureAsync(t));
     m_ScenePreload = std::move(state);
     PumpScenePreload(world, assets); // already loaded (or nothing to load): opens now
 }

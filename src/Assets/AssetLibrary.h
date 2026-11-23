@@ -27,7 +27,8 @@ public:
     // meshes, materials or textures), cached apart from full models. Already loaded as a full model: that one.
     std::shared_ptr<Model> LoadAnimationSource(const std::string& path);
     // Imports these clip sources clip-only on worker threads, waiting for them; the ones already loaded are skipped.
-    // Returns how many it imported.
+    // Returns how many it imported. One a RequestAnimationSourceAsync still holds is taken over (still queued) or
+    // waited for (already importing), never imported twice.
     int PreloadAnimationSources(const std::vector<std::string>& paths);
     // #369 - what a texture is used for, which decides its default import colour space. Colour
     // (albedo, emissive) is sRGB; Data (metallic, roughness, AO, height, ...) and Normal are raw
@@ -196,6 +197,11 @@ public:
     // subfolder itself. Real, irreversible-except-via-undo data loss if misused, which is why
     // the Asset Browser only offers this behind a confirmation dialog.
     void DeleteFolderRecursive(const std::string& folderPath);
+    // True while folderPath (or a folder above it) was deleted in the browser but its directory is still on disk.
+    bool IsRemovedDiskFolder(const std::string& folderPath);
+    // The marks behind IsRemovedDiskFolder, carried by undo snapshots so a redo of Delete Folder keeps it out too.
+    const std::vector<std::string>& RemovedDiskFolders() const { return m_RemovedDiskFolders; }
+    void SetRemovedDiskFolders(std::vector<std::string> marks) { m_RemovedDiskFolders = std::move(marks); }
     const std::vector<std::string>& Folders() const { return m_Folders; }
     // Fired after a folder is renamed / moved (newPath = where it went) or deleted (newPath "") -
     // for data keyed by folder path elsewhere (Editor Enhancers folder styles and bookmarks).
@@ -281,6 +287,9 @@ public:
     AsyncHandle RequestModelAsync(const std::string& path);
     AsyncHandle RequestMaterialAsync(const std::string& path);
     AsyncHandle RequestTextureAsync(const std::string& path, TextureUse use = TextureUse::Color);
+    // A clip source (LoadAnimationSource's import) on the workers: no GL, so it is in the cache as soon as the pump
+    // sees it done. A full model of the file already loaded counts as loaded.
+    AsyncHandle RequestAnimationSourceAsync(const std::string& path);
     static bool IsReady(const AsyncHandle& ticket);
     // Uploads finished work for about `budgetMs` (at least one step, so it always progresses)
     // and completes tickets. Call once per frame. Returns how many loads are still in flight.
@@ -318,6 +327,10 @@ private:
     std::shared_ptr<Model> RegisterModel(const std::string& path, std::shared_ptr<Model> model);
     std::shared_ptr<Texture> RegisterTexture(const std::string& path, std::shared_ptr<Texture> tex);
     AsyncHandle RequestTextureAsync(const std::string& path, TextureUse use, const std::string* metaJson);
+    // A RequestAnimationSourceAsync job for this PathKey, for the synchronous clip loads: one still queued is taken
+    // off the queue (returns false: the caller imports it) and one a worker has started is waited for and filed
+    // into m_ClipSourceCache (returns true).
+    bool ClaimAsyncClipSource(const std::string& key);
     bool HasModel(const std::string& path);    // in the cache, under any spelling (#132)
     bool HasTexture(const std::string& path);
     bool HasMaterial(const std::string& path);
@@ -372,6 +385,11 @@ private:
     std::unordered_map<std::string, size_t> m_FolderIndex;
     bool m_FolderIndexValid = false;
     void FolderIndexDirty() { m_FolderIndexValid = false; }
+    // Folders deleted in the browser (lower-cased) whose directory stayed on disk: Delete Folder only takes a folder
+    // out of the browser, so AddFolderPath (asset-index landings, async loads) must not list it again from the files
+    // still in it. A mark goes when the folder is made again (CreateFolder, an undo) or its directory is gone.
+    std::vector<std::string> m_RemovedDiskFolders;
+    void NoteRemovedDiskFolder(const std::string& folderPath);
     const std::string* FindFolderNoCase(const std::string& path);
     bool HasFolder(const std::string& path);
     void AppendFolder(const std::string& path);

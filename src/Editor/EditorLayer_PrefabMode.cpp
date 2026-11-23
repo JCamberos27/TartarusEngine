@@ -69,7 +69,7 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     JournalUnrecordedChange(world); // #15 - Back to Scene drops the baseline; keep that change a step
     CancelEyedropper();
     m_PrefabModeSceneSnapshot = SceneSerializer::SaveToString(world);
-    m_PrePrefabHistory = { m_UndoStack, m_RedoStack, m_UndoBaseJson, m_RedoBaseJson,
+    m_PrePrefabHistory = { m_UndoStack, m_RedoStack, m_UndoBaseJson.Text(), m_RedoBaseJson.Text(),
                            m_ContentDepth, m_SavedUndoDepth, true };
     m_PrefabModeSceneDirty = m_Dirty;
 
@@ -93,14 +93,14 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     world.Registry.remove<PrefabInstanceComponent>(root);
     // Preview environment belongs to the isolated world, not to the prefab hierarchy.
     // SavePrefab writes only the root and descendants, and Exit restores the scene's sky.
-    world.SkySourceMode = World::SkySource::Atmosphere;
-    ApplySkyPreset(world.Sky, SkyPreset::ClearDay);
-    world.Sky.DayLengthMinutes = 0.0f;
-    world.Sky.AnimateInEditor = false;
-    world.Sky.CloudsEnabled = false;
-    world.Sky.CloudShadows = false;
-    world.Sky.AerialPerspectiveScale = 0.0f;
-    world.SkyAmbientIntensity = 1.0f;
+    world.Render.SkySourceMode = World::SkySource::Atmosphere;
+    ApplySkyPreset(world.Render.Sky, SkyPreset::ClearDay);
+    world.Render.Sky.DayLengthMinutes = 0.0f;
+    world.Render.Sky.AnimateInEditor = false;
+    world.Render.Sky.CloudsEnabled = false;
+    world.Render.Sky.CloudShadows = false;
+    world.Render.Sky.AerialPerspectiveScale = 0.0f;
+    world.Render.SkyAmbientIntensity = 1.0f;
     m_PrefabModePath = path;
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth;
@@ -147,8 +147,8 @@ void EditorLayer::RestorePrePrefabHistory() {
     if (!m_PrePrefabHistory.Valid) return;
     m_UndoStack = std::move(m_PrePrefabHistory.Undo);
     m_RedoStack = std::move(m_PrePrefabHistory.Redo);
-    m_UndoBaseJson = std::move(m_PrePrefabHistory.UndoBase);
-    m_RedoBaseJson = std::move(m_PrePrefabHistory.RedoBase);
+    m_UndoBaseJson.Text() = std::move(m_PrePrefabHistory.UndoBase);
+    m_RedoBaseJson.Text() = std::move(m_PrePrefabHistory.RedoBase);
     m_ContentDepth = m_PrePrefabHistory.ContentDepth;
     m_SavedUndoDepth = m_PrePrefabHistory.SavedDepth;
     m_PrePrefabHistory = {};

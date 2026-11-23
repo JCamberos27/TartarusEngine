@@ -77,11 +77,11 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         const LodGroupState& st = m_LodState[m_LodIndex[s]];
         return st.Group == e ? &st : nullptr;
     };
-    // Whether a recorded group tags its child `child` (not the level it uses).
+    // Whether a recorded group tags its child `child` (not the level it uses, nor the one fading out of it).
     auto levelTagged = [](const LodGroupState& st, entt::entity child) {
         if (st.Active < -1) return false;
         for (int j = 0; j < st.Levels; ++j)
-            if (st.Kids[j] == child) return j != st.Active;
+            if (st.Kids[j] == child) return j != st.Active && j != st.FadeFrom;
         return false; // a fifth child or later: always drawn
     };
     // Full pass: tag a level's whole subtree (an untouched renderer stays tagged by whichever group tagged it).
@@ -256,15 +256,149 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         }
     };
 
+    // A small structure change (an outfit piece created, attached or destroyed somewhere in a forest of 40k groups)
+    // patches the records instead of the full clear-and-tag: the transform cache's structure delta says what came,
+    // went or moved; the groups above each of those are measured again, and each new or moved subtree is re-tagged
+    // to what the groups above it say. Returns false, having changed nothing, when only the full pass can tell: the
+    // delta doesn't cover everything since the last pass, a LOD Group came, went or moved, a group's level children
+    // changed, or the renderer count isn't what the delta explains (a renderer added or removed in place).
+    auto patchStructure = [&]() -> bool {
+        const TransformStructureDelta& d = m_StructureDelta;
+        if (!m_LodValid || !d.Valid || m_TransformCacheStamp == 0 || m_LodCentreStamp != m_PrevTransformCacheStamp)
+            return false;
+        std::uint64_t structure[3];
+        TransformStructure(structure); // nothing re-parented, created or destroyed since that rebuild
+        if (!std::equal(structure, structure + 3, m_TransformStructure)) return false;
+        const auto& groupPool = Registry.storage<LODGroupComponent>();
+        if (signature[3] != m_LodSignature[3] || groupPool.size() != m_LodState.size()) return false;
+        for (entt::entity e : d.Added)
+            if (!Registry.valid(e) || groupPool.contains(e)) return false;
+        for (const auto& [e, was] : d.Reparented)
+            if (!Registry.valid(e) || groupPool.contains(e)) return false;
+        // Every record still a group with the level children the full pass would read now (so, with the counts equal,
+        // the same set of groups); read only, across the cores.
+        const auto& hierarchyPool = Registry.storage<HierarchyComponent>();
+        const bool same = std::all_of(std::execution::par, m_LodState.begin(), m_LodState.end(), [&](const LodGroupState& st) {
+            if (!Registry.valid(st.Group) || !groupPool.contains(st.Group) || !hierarchyPool.contains(st.Group)) return false;
+            const auto& children = hierarchyPool.get(st.Group).Children;
+            if (std::min<size_t>(children.size(), 4) != st.Levels) return false;
+            for (int i = 0; i < st.Levels; ++i)
+                if (st.Kids[i] != children[i]) return false;
+            return true;
+        });
+        if (!same) return false;
+        // The renderers: what the last pass counted, plus the new ones, less the dropped ones that had one.
+        const auto& renderPool = Registry.storage<RenderableComponent>();
+        auto ownedRenderer = [&](entt::entity e) {
+            const size_t s = (size_t)entt::to_entity(e);
+            return s < m_LodRenderOwner.size() && m_LodRenderOwner[s] == e;
+        };
+        size_t added = 0, removed = 0;
+        for (entt::entity e : d.Added) added += renderPool.contains(e) && !ownedRenderer(e) ? 1 : 0;
+        for (const auto& [e, was] : d.Dropped) removed += ownedRenderer(e) ? 1 : 0;
+        if (m_LodSignature[1] + added - removed != (std::uint64_t)renderPool.size()) return false;
+
+        // The groups above a place something came, went or moved (`from` included): measured again below. False when
+        // one has no record (it can't: the set is the same), as a guard.
+        std::vector<std::pair<entt::entity, entt::entity>>& dropped = m_LodDroppedSorted;
+        dropped.assign(d.Dropped.begin(), d.Dropped.end());
+        std::sort(dropped.begin(), dropped.end());
+        // A place that was destroyed too: up its recorded parents to the first one still alive.
+        auto alive = [&](entt::entity p) {
+            for (size_t depth = 0; p != entt::null && !Registry.valid(p) && depth <= kMaxHierarchyDepth; ++depth) {
+                const auto it = std::lower_bound(dropped.begin(), dropped.end(), std::make_pair(p, entt::entity{entt::null}),
+                                                 [](const auto& a, const auto& b) { return a.first < b.first; });
+                p = it != dropped.end() && it->first == p ? it->second : entt::entity{entt::null};
+            }
+            return p != entt::null && Registry.valid(p) ? p : entt::entity{entt::null};
+        };
+        std::vector<entt::entity>& remeasure = m_LodRemeasure;
+        remeasure.clear();
+        auto groupsAbove = [&](entt::entity from) {
+            for (size_t depth = 0; from != entt::null && Registry.valid(from) && depth <= kMaxHierarchyDepth; ++depth) {
+                if (groupPool.contains(from)) {
+                    if (!recordOf(from)) return false;
+                    remeasure.push_back(from);
+                }
+                from = hierarchyPool.contains(from) ? hierarchyPool.get(from).Parent : entt::entity{entt::null};
+            }
+            return true;
+        };
+        std::vector<entt::entity>& touched = m_LodTouched;
+        touched.assign(d.Added.begin(), d.Added.end());
+        for (const auto& [e, was] : d.Reparented) touched.push_back(e);
+        for (entt::entity e : touched)
+            if (!groupsAbove(e)) return false;
+        for (const auto& [e, was] : d.Reparented)
+            if (!groupsAbove(alive(was))) return false;
+        for (const auto& [e, was] : d.Dropped)
+            if (!groupsAbove(alive(was))) return false;
+
+        // Checked: from here on it changes things.
+        for (const auto& [e, was] : d.Dropped)
+            if (ownedRenderer(e)) m_LodRenderOwner[(size_t)entt::to_entity(e)] = entt::null;
+        for (entt::entity e : d.Added) {
+            if (!renderPool.contains(e)) continue;
+            const size_t s = (size_t)entt::to_entity(e);
+            if (s >= m_LodRenderOwner.size()) m_LodRenderOwner.resize(s + 1, entt::null);
+            m_LodRenderOwner[s] = e;
+        }
+        std::sort(remeasure.begin(), remeasure.end());
+        remeasure.erase(std::unique(remeasure.begin(), remeasure.end()), remeasure.end());
+        for (entt::entity g : remeasure) {
+            LodGroupState& st = m_LodState[m_LodIndex[(size_t)entt::to_entity(g)]];
+            measure(st, groupPool.get(g));
+            if (impostors && st.Levels > 0) {
+                st.Impostor = (std::int16_t)impostorOf(st.Kids[0]);
+                m_LodImpostors |= st.Impostor >= 0;
+            }
+        }
+        // Each new or moved subtree, tagged as the groups above it say: culled where any of them tags the child on the
+        // path down to it (the groups' levels are the ones they had; the pass below changes those as usual).
+        for (entt::entity e : touched) {
+            bool culled = false;
+            entt::entity child = e;
+            for (size_t depth = 0; depth <= kMaxHierarchyDepth && !culled; ++depth) {
+                const entt::entity parent = hierarchyPool.contains(child) ? hierarchyPool.get(child).Parent : entt::entity{entt::null};
+                if (parent == entt::null || !Registry.valid(parent)) break;
+                if (groupPool.contains(parent))
+                    if (const LodGroupState* st = recordOf(parent)) culled = levelTagged(*st, child);
+                child = parent;
+            }
+            if (LodSmooth) setFade(e, 0.0f); // a fading level it sits under sets it again below
+            retagSubtree(e, culled);
+        }
+        return true;
+    };
+    // Under unchanged counts too: an entity destroyed and another created in its place since the last pass (the
+    // transform cache lists both) is a structure change the signature can't see.
+    if (!full && m_LodCentreStamp == m_PrevTransformCacheStamp && m_TransformCacheStamp != 0) {
+        const TransformStructureDelta& d = m_StructureDelta;
+        full = d.Valid ? !d.Added.empty() || !d.Reparented.empty() || !d.Dropped.empty() : m_TransformMembershipChanged;
+    }
+    bool structurePatched = false;
+    if (full && patchStructure()) {
+        full = false;
+        structurePatched = true;
+    }
+
     int evaluated = 0;
     auto pass = [&]() -> bool {
         evaluated = 0;
         if (full) {
             ClearLod(); // m_LodValid is set again once this pass is done
+            ++m_LodFullPasses;
+            std::fill(m_LodRenderOwner.begin(), m_LodRenderOwner.end(), entt::null);
+            for (entt::entity e : static_cast<const entt::sparse_set&>(Registry.storage<RenderableComponent>())) {
+                const size_t s = (size_t)entt::to_entity(e);
+                if (s >= m_LodRenderOwner.size()) m_LodRenderOwner.resize(s + 1, entt::null);
+                m_LodRenderOwner[s] = e;
+            }
         } else if (m_LodCentreStamp != m_TransformCacheStamp || m_TransformCacheStamp == 0) {
-            // Only what the transform cache moved since the records were measured, when it can say.
+            // Only what the transform cache moved since the records were measured, when it can say (after a structure
+            // patch it lists the new and moved subtrees too; the groups above them were measured by the patch).
             const bool patch = m_TransformCacheStamp != 0 && m_LodCentreStamp == m_PrevTransformCacheStamp &&
-                               !m_TransformMembershipChanged;
+                               (!m_TransformMembershipChanged || structurePatched);
             if (patch) {
                 for (entt::entity e : m_ChangedTransforms) {
                     const size_t s = (size_t)entt::to_entity(e);

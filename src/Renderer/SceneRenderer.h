@@ -68,6 +68,9 @@ struct VisibleRenderable {
 };
 // Clears `out` and fills it with what passes `q`.
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);
+// Tests: the next GatherVisible reads every renderable again (a from-scratch reference), and how many times it has.
+void ForgetGatherCandidates();
+std::uint64_t GatherCandidateFullBuilds();
 // A box holding every renderable GatherVisible knows (a superset of any query's result), cheaply: the sun's cascades
 // fit their near planes to it before the casters are gathered against them. False when there are none.
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax);

@@ -11,7 +11,9 @@ struct TerrainGrid; // Model::CreateTerrain
 #include <functional>
 #include <glm/glm.hpp>
 #include "ModelMesh.h"
+#include "../Core/CoreApi.h"
 #include "Animation.h"
+#include "ModelCache.h"
 #include "Material.h"
 #include "RootMotion.h"
 
@@ -139,6 +141,12 @@ public:
     // What the instances of one import share (meshes, GPU buffers, materials): two unskinned models with the same
     // value draw the same geometry, so GPU instancing groups placed copies by it (InstanceBatch.h).
     const void* ImportId() const { return m_D.get(); }
+    // A hash of everything the import produced: each mesh's vertices (a deferred import's full vertices, else its CPU
+    // copies) and indices, materials (texture paths included), bones, nodes, clips and bounds. Two imports with equal
+    // digests drew and animated the same; --model-cache-check compares a cooked import's with a fresh one's. Only a
+    // deferred import (ImportDeferred) still holds every vertex attribute; a mesh already uploaded contributes its CPU
+    // copies (positions, indices, skin), so the check imports through ImportDeferred.
+    std::uint64_t ImportDigest() const;
     // Unique per import (a Reimport gets a new one; never reused, unlike an address): caches built from the
     // imported geometry compare it to notice a reimport.
     std::uint64_t ImportStamp() const { return m_D->ImportStamp; }
@@ -636,8 +644,9 @@ private:
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
     uint64_t m_LastTickedFrame = ~0ull;
-    static inline std::atomic<uint64_t> s_AnimationEpoch{0};
-    static inline std::atomic<std::uint64_t> s_ImportStamps{0};
+    // Defined in Model.cpp (one copy in TartarusCore.dll; an inline static would get one per module).
+    static TARTARUS_CORE_API std::atomic<uint64_t> s_AnimationEpoch;
+    static TARTARUS_CORE_API std::atomic<std::uint64_t> s_ImportStamps;
 
     // Import-time only state, on ImportFromFile's stack while it runs (null otherwise): not carried by every placed
     // instance (a forest has ~150k).
@@ -650,6 +659,9 @@ private:
     struct ImportScratch {
         std::map<std::string, glm::mat4> NodeGlobals; // each node's model-space bind transform (bind-pose palette, #98)
         std::vector<MergeBucket> MergeBuckets;        // MergeByMaterial: each material's static meshes, one ModelMesh apiece
+        std::vector<ModelCache::MaterialSource> Materials; // the file's materials, as ExtractMaterial reads them
+        const aiScene* Scene = nullptr;               // the Assimp scene (null when built from the model cache)
+        ModelCache::Cooked* Cook = nullptr;           // collects what the import makes, for the model cache (or null)
     };
     ImportScratch* m_Import = nullptr;
 
@@ -657,12 +669,25 @@ private:
     bool ImportFromFile(const ModelImportSettings& settings);
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
     // Null when the mesh went into a MergeBucket instead (FlushMergeBuckets makes it later).
-    std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform,
+    std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const glm::mat4& nodeTransform,
                                            const aiNode* node);
-    void FlushMergeBuckets(const aiScene* scene);
+    void FlushMergeBuckets();
+    // A new ModelMesh from an import's vertices (deferred or uploaded now), its material assigned; recorded for the
+    // model cache when the import is being cooked. `posed`: a skinned mesh's bind-pose positions.
+    std::unique_ptr<ModelMesh> MakeImportedMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsigned int>& indices,
+                                                std::vector<glm::vec3>&& posed, bool skinned, unsigned int materialIndex,
+                                                bool vertexColors);
     // The mesh's material as the import settings ask (the file's, synthetic or none), keeping the file's name.
-    void AssignImportedMaterial(ModelMesh& mesh, const aiScene* scene, unsigned int materialIndex, bool vertexColors);
-    Material ExtractMaterial(const aiScene* scene, unsigned int materialIndex);
+    void AssignImportedMaterial(ModelMesh& mesh, unsigned int materialIndex, bool vertexColors);
+    // What ExtractMaterial needs from one of the scene's materials.
+    static ModelCache::MaterialSource ReadMaterialSource(const aiScene* scene, unsigned int materialIndex);
+    // `scene` only for embedded textures (a cooked model has none).
+    Material ExtractMaterial(const ModelCache::MaterialSource& source, const aiScene* scene);
+    // The model cache: the import's result as an entry, and an entry back into this model (no Assimp, no simplify).
+    void CookInto(ModelCache::Cooked& cooked) const;
+    void BuildFromCooked(ModelCache::Cooked&& cooked);
+    // After an import (fresh or cooked): this instance's playback and pose state start over on the new node list.
+    void ResetAfterImport();
     // #95 — what a material slot's texture holds, which decides its colour space.
     enum class TextureRole { Color, Normal, Data };
     std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath, TextureRole role);

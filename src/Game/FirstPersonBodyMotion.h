@@ -85,6 +85,11 @@ struct SharedMotionDatabase {
     static std::shared_ptr<const SharedMotionDatabase> Get(const std::string& base, std::string* error = nullptr, const Model* rig = nullptr);
     // The cache key Get files a load under: the base and the rig's file (`hasRig` false: none).
     static std::string CacheKey(const std::string& base, bool hasRig, const std::string& rigPath);
+    // A rebake rewrote `<base>.mmanim` / `.mmdb`: drops every cached load of it (each rig's) and bumps Generation(). A body
+    // still holding the old load keeps it alive and sees FirstPersonBodyMotion::Stale(); the next Get reads the new files.
+    static void Invalidate(const std::string& base);
+    // Bumped by every Invalidate (starts at 0).
+    static std::uint64_t Generation();
     // Per frame, the higher hand's height over its shoulder (upper arm bone), m, model space of `rig`.
     // ... and (chestTilt) the chest's tilt off its bind pose's upright (deg).
     static std::vector<float> HandOverShoulder(const MotionDatabase& db, const Model& rig, std::vector<float>* chestTilt = nullptr);
@@ -153,6 +158,8 @@ public:
                const FirstPersonBodyMotion* carry = nullptr);
     void Stop();
     bool Active() const { return m_Shared != nullptr; }
+    // The database was rebaked since Start (SharedMotionDatabase::Invalidate): Start again to play the new one.
+    bool Stale() const { return m_Shared && m_Generation != SharedMotionDatabase::Generation(); }
 
     // The matcher and the heading (`yaw`, in/out, radians about +Y) for this step.
     void Tick(const Input& in, float& yaw);
@@ -186,6 +193,7 @@ private:
     void EnterAir(const Input& in, const MotionMatcher::Input& query);
 
     std::shared_ptr<const SharedMotionDatabase> m_Shared;
+    std::uint64_t m_Generation = 0; // SharedMotionDatabase::Generation() when m_Shared was taken
     GaitSpeedTable m_NoGaits;
     MotionMatcher m_Matcher;
     TrajectoryPredictor m_Predictor;

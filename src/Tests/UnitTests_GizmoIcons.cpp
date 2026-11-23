@@ -5,6 +5,7 @@
 
 #include "GizmoIconMath.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -89,9 +90,59 @@ void TestDeclutter() {
     }
 }
 
+// The grid-bucketed Declutter gives exactly the brute-force answer (every earlier kept icon tested),
+// on clustered, spread, negative and on-cell-edge positions, and with no spacing at all.
+void TestDeclutterMatchesBruteForce() {
+    using namespace GizmoIconMath;
+    auto brute = [](std::vector<IconCandidate> v, float minSpacing) {
+        std::stable_sort(v.begin(), v.end(), [](const IconCandidate& a, const IconCandidate& b) {
+            if (a.Priority != b.Priority) return a.Priority < b.Priority;
+            return a.Distance < b.Distance;
+        });
+        const float minSq = minSpacing * minSpacing;
+        for (size_t i = 0; i < v.size(); ++i) {
+            bool ok = true;
+            for (size_t j = 0; j < i && ok; ++j) {
+                if (!v[j].Keep) continue;
+                const float dx = v[i].X - v[j].X, dy = v[i].Y - v[j].Y;
+                if (dx * dx + dy * dy < minSq) ok = false;
+            }
+            v[i].Keep = ok;
+        }
+        return v;
+    };
+    unsigned state = 12345u;
+    auto rnd = [&state](float lo, float hi) {
+        state = state * 1664525u + 1013904223u;
+        return lo + (hi - lo) * (float)(state >> 8) / 16777216.0f;
+    };
+    const float spacings[] = {0.0f, 9.6f, 10.0f, 37.5f};
+    for (int round = 0; round < 40; ++round) {
+        std::vector<IconCandidate> v;
+        const int n = 50 + round * 25;
+        const float span = round % 3 == 0 ? 60.0f : round % 3 == 1 ? 800.0f : 4000.0f; // clustered .. spread
+        for (int i = 0; i < n; ++i) {
+            IconCandidate c;
+            c.Id = i;
+            c.X = round % 4 == 0 ? std::floor(rnd(-span, span) / 10.0f) * 10.0f : rnd(-span, span); // some exactly on cell edges
+            c.Y = rnd(-span, span);
+            c.Priority = (int)rnd(0.0f, 4.0f);
+            c.Distance = rnd(0.0f, 45.0f);
+            v.push_back(c);
+        }
+        const float spacing = spacings[round % 4];
+        const std::vector<IconCandidate> want = brute(v, spacing);
+        Declutter(v, spacing);
+        bool same = v.size() == want.size();
+        for (size_t i = 0; same && i < v.size(); ++i) same = v[i].Id == want[i].Id && v[i].Keep == want[i].Keep;
+        CHECK(same);
+    }
+}
+
 } // namespace
 
 void RegisterGizmoIconTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Gizmo icons: distance fade and shrink curve", TestFadeAndSize);
     tests.emplace_back("Gizmo icons: declutter keeps the highest priority, nearest icon", TestDeclutter);
+    tests.emplace_back("Gizmo icons: grid declutter matches the brute-force answer", TestDeclutterMatchesBruteForce);
 }

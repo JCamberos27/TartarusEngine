@@ -12,6 +12,8 @@
 #include "Log.h"
 #include "ProjectSettings.h" // #121 - virtual folders are project data, not scene data
 #include "Core/Paths.h"
+#include "Core/FrameLoads.h"
+#include <chrono>
 #include <algorithm>
 #include <map>
 #include <set>
@@ -187,14 +189,19 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     auto it = FindAnySpelling(m_ModelCache, m_ModelKeys, m_KeyEpoch, path);
     if (it != m_ModelCache.end()) return it->second;
 
+    const auto start = std::chrono::steady_clock::now();
     PrepareModelImport(path);
-    return RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
+    auto model = RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
+    FrameLoads::Note("model load (sync)", path,
+                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+    return model;
 }
 
 std::shared_ptr<Model> AssetLibrary::LoadAnimationSource(const std::string& path) {
     if (HasModel(path)) return LoadModel(path);
     const std::string key = AssetDatabase::PathKey(path);
     if (auto it = m_ClipSourceCache.find(key); it != m_ClipSourceCache.end()) return it->second;
+    if (ClaimAsyncClipSource(key)) return m_ClipSourceCache[key];
     PrepareModelImport(path);
     ModelImportSettings settings = GetModelSettings(path);
     settings.AnimationOnly = true;
@@ -212,6 +219,7 @@ int AssetLibrary::PreloadAnimationSources(const std::vector<std::string>& paths)
         const std::string key = AssetDatabase::PathKey(p);
         if (HasModel(p) || m_ClipSourceCache.count(key)) continue;
         if (std::any_of(jobs.begin(), jobs.end(), [&](const Job& j) { return j.Key == key; })) continue;
+        if (ClaimAsyncClipSource(key)) continue; // the scene-open prefetch got there
         PrepareModelImport(p);
         Job j{p, key, GetModelSettings(p), nullptr};
         j.Settings.AnimationOnly = true;
@@ -622,7 +630,13 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
             if (!materialPaths.count(m->Path)) RemoveMaterial(m);
         }
     }
-    for (const auto& f : std::vector<std::string>(m_Folders)) {
+    // Deepest first: a parent is only empty (CanDeleteFolder) once its subfolders are gone, so walking the list
+    // parent-first kept the parent of a deleted folder tree (a redo of Delete Folder left it listed).
+    std::vector<std::string> byDepth(m_Folders);
+    std::stable_sort(byDepth.begin(), byDepth.end(), [](const std::string& a, const std::string& b) {
+        return std::count(a.begin(), a.end(), '/') > std::count(b.begin(), b.end(), '/');
+    });
+    for (const auto& f : byDepth) {
         // A folder that still has something under it isn't in the keep-set by mistake - it
         // just hasn't had its contents pruned yet on this pass (RemoveModel/etc. above already
         // ran, so by this point anything real that shouldn't survive is already gone). Silently
@@ -713,6 +727,7 @@ void AssetLibrary::AppendFolder(const std::string& path) {
 std::string AssetLibrary::AddFolderPath(const std::string& dir) {
     if (dir.empty()) return {};
     if (HasFolder(dir)) return dir; // the common case
+    if (IsRemovedDiskFolder(dir)) return dir; // deleted in the browser: its files are still on disk, the folder stays out
     // Walk the directories top-down, reusing "Shaders" for "shaders" and so on.
     std::string folder;
     for (size_t start = 0; start <= dir.size();) {
@@ -736,6 +751,12 @@ bool AssetLibrary::IsDiskFolder(const std::string& folderPath) {
 }
 
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
+    if (!m_RemovedDiskFolders.empty()) {
+        // Made again (or put back by an undo): it and the folders above it are listed from their files again.
+        const std::string key = LowerFolderKey(folderPath);
+        m_RemovedDiskFolders.erase(std::remove_if(m_RemovedDiskFolders.begin(), m_RemovedDiskFolders.end(),
+            [&](const std::string& r) { return key == r || key.rfind(r + "/", 0) == 0; }), m_RemovedDiskFolders.end());
+    }
     if (!HasFolder(folderPath)) {
         AppendFolder(folderPath);
         // A folder that is a real project directory is found again on every load (AddFolderPath),
@@ -779,9 +800,30 @@ void AssetLibrary::EraseFolder(const std::string& folderPath) {
     PersistFolders();
 }
 
+bool AssetLibrary::IsRemovedDiskFolder(const std::string& folderPath) {
+    if (m_RemovedDiskFolders.empty()) return false;
+    const std::string key = LowerFolderKey(folderPath);
+    for (auto it = m_RemovedDiskFolders.begin(); it != m_RemovedDiskFolders.end(); ++it) {
+        if (key != *it && key.rfind(*it + "/", 0) != 0) continue;
+        if (IsDiskFolder(*it)) return true;
+        m_RemovedDiskFolders.erase(it); // its directory is gone: a new one by that name is listed as usual
+        return false;
+    }
+    return false;
+}
+
+void AssetLibrary::NoteRemovedDiskFolder(const std::string& folderPath) {
+    if (!IsDiskFolder(folderPath)) return; // a browser-only folder never comes back by itself
+    const std::string key = LowerFolderKey(folderPath);
+    for (const std::string& r : m_RemovedDiskFolders)
+        if (key == r || key.rfind(r + "/", 0) == 0) return; // already under a mark
+    m_RemovedDiskFolders.push_back(key);
+}
+
 void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     EraseFolder(folderPath);
+    NoteRemovedDiskFolder(folderPath);
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
 
@@ -817,6 +859,7 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
     FolderIndexDirty();
     m_SavedFolders.erase(std::remove_if(m_SavedFolders.begin(), m_SavedFolders.end(), underFolder), m_SavedFolders.end());
     PersistFolders();
+    NoteRemovedDiskFolder(folderPath);
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
 

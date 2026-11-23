@@ -120,12 +120,18 @@ public:
     bool Start(World& world, Player& player, const FirstPersonBodyMotion* carry = nullptr);
     // Stop + Start, the motion playing on from where it was (OutfitChanged: the new pieces, the same motion).
     bool Restart(World& world, Player& player);
+    // The motion matching database was rebaked while playing (MotionRebake): Restart takes the new one.
+    bool MotionStale() const { return m_Mm.Stale(); }
     // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).
     const std::string& Bone(const std::string& standard) const { return FPBody::MappedBone(m_BoneMap, standard); }
     void Stop(World& world);
     bool IsActive() const { return m_Body != entt::null; }
     // The body's Character Outfit changed its pieces since Start (Stop + Start again to take them).
     bool OutfitChanged(const World& world) const;
+    // ... or only a piece's look (a colourway) since Start or the last SyncLook: SyncLook takes it, no restart.
+    bool OutfitLookChanged(const World& world) const;
+    // Each world twin takes its piece's look again (materials, outfit hiding and layer pull, layer). The twins stay.
+    void SyncLook(World& world);
 
     void BeforePlayerMove(Player& player, Camera& camera);
     void Tick(World& world, const Player& player, const Camera& camera, float dt);
@@ -215,6 +221,9 @@ private:
     void MakeTwins(World& world);
     // Each twin onto its piece: transform, and the pose as posed so far (one body: the twins differ only in the arms).
     void SyncTwins(World& world);
+    // Twin k takes piece k's look (SyncLook), copying only what differs.
+    void CopyLook(World& world, size_t k);
+    friend struct FirstPersonBodyTestAccess; // unit tests: twins without motion matching (CI has no licensed assets)
     // Rigid head wear's twins (a balaclava, glasses) onto the head twin's head bone, once the twins are posed.
     void PlaceHeadAttachedTwins(World& world);
     void ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt);
@@ -261,6 +270,7 @@ private:
     bool m_EyeClearBuilt = false;
     float m_EyeClear = 0.0f; // m the eye is moved forward by it (eased)
     int m_OutfitVersion = 0;       // CharacterOutfitComponent::Version at Start
+    int m_OutfitLookVersion = 0;   // ... LookVersion at Start or the last SyncLook
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
     bool m_HaveHeading = false;
     float m_CrouchHeight = 0.0f, m_CrouchSpeed = 0.42f; // the component's, from Start

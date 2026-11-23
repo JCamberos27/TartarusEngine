@@ -14,11 +14,16 @@ public:
     struct Entry {
         std::string Name;
         float Milliseconds;
+        bool Nested = false; // recorded inside another scope: its time is already in that one's
     };
 
     // Call once at the top of the frame, before any PROFILE_SCOPE for that frame starts -
     // rotates last frame's collected entries out for GetLastFrame() and starts a fresh list.
     static void BeginFrame();
+    // Wall-clock ms from the BeginFrame before last to the last one: the span GetLastFrame() covers.
+    static float LastFrameWallMs();
+    // The part of LastFrameWallMs() no top-level scope covered (never below 0): time a hitch report can't name.
+    static float LastFrameUnscopedMs();
 
     static void PushSample(const std::string& name, float milliseconds);
     static void PushSample(const char* name, float milliseconds); // builds the entry's name in place
@@ -50,6 +55,10 @@ public:
     // (typically 1-3). A scope that ran more than once that frame (e.g. "Scene Draw" for both
     // the Scene and Game views) is reported once, as the sum (#147).
     static const std::vector<Entry>& GetLastFrameGpu();
+    // The frame being recorded: BeginFrame counts them.
+    static unsigned FrameSerial();
+    // That frame's GPU timings once they've been read back, while they're among the last few; else null.
+    static const std::vector<Entry>* GpuFrameScopes(unsigned serial);
 
     // Constructed at the top of a scope, brackets it with a pair of GL_TIMESTAMP queries under
     // `name` (a string literal: it's stored, not copied). Scopes may nest (#147). Use via PROFILE_GPU_SCOPE(name). Must be constructed on the GL

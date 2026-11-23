@@ -8,6 +8,12 @@ std::vector<Profiler::Entry> g_LastFrame;
 // The entries used this frame. g_CurrentFrame keeps the slots (and their names' buffers) of the frame before last, so a
 // frame's samples overwrite them in place instead of building a string each: a long scope name allocated every frame.
 size_t g_CurrentCount = 0;
+// Open PROFILE_SCOPEs on this thread: an entry pushed while one is open is Nested (its time is inside the outer one's).
+thread_local int g_ScopeDepth = 0;
+// BeginFrame's clock: the last frame's wall time, so a hitch report can tell how much of it no scope covered.
+std::chrono::steady_clock::time_point g_FrameStart;
+bool g_HaveFrameStart = false;
+float g_LastFrameWallMs = 0.0f;
 
 // #147 - GPU scopes are timed with GL_TIMESTAMP pairs, not GL_TIME_ELAPSED: elapsed-time queries
 // can't nest (a nested scope made the outer one's glBeginQuery an error), timestamps can. Each
@@ -25,11 +31,20 @@ struct GpuFrame {
     int Used = 0;
     std::vector<GpuScopeRecord> Scopes;
     bool Pending = false; // recorded, results not read back yet
+    unsigned Serial = 0;  // the frame (BeginFrame count) it was recorded in
 };
 GpuFrame g_GpuFrames[kGpuFrames];
 int g_GpuCurrent = 0;
 unsigned g_GpuFrameSerial = 0; // bumped by BeginFrame so a scope that straddles one is detected
-std::vector<Profiler::Entry> g_GpuLastFrame;
+// The last few frames read back, by frame serial: --perf-bench attaches a slow frame's GPU scopes once they land, and
+// one BeginFrame can read back more than one frame. g_GpuNewest (-1 = none yet) is what GetLastFrameGpu shows.
+constexpr int kGpuHistory = 8;
+struct GpuDone {
+    unsigned Serial = 0;
+    std::vector<Profiler::Entry> Entries;
+};
+GpuDone g_GpuHistory[kGpuHistory];
+int g_GpuNewest = -1;
 
 int TakeQuery(GpuFrame& f) {
     if (f.Used == (int)f.Pool.size()) {
@@ -62,7 +77,8 @@ bool TryReadBack(GpuFrame& f) {
         if (it != out.end()) it->Milliseconds += ms;
         else out.push_back({r.Name, ms});
     }
-    g_GpuLastFrame = std::move(out);
+    g_GpuNewest = (g_GpuNewest + 1) % kGpuHistory;
+    g_GpuHistory[g_GpuNewest] = {f.Serial, std::move(out)};
     f.Pending = false;
     return true;
 }
@@ -73,6 +89,10 @@ void Profiler::BeginFrame() {
     g_CurrentFrame.resize(g_CurrentCount); // (exactly this frame's entries go out)
     std::swap(g_LastFrame, g_CurrentFrame);
     g_CurrentCount = 0;
+    const auto now = std::chrono::steady_clock::now();
+    g_LastFrameWallMs = g_HaveFrameStart ? std::chrono::duration<float, std::milli>(now - g_FrameStart).count() : 0.0f;
+    g_FrameStart = now;
+    g_HaveFrameStart = true;
     ++g_GpuFrameSerial;
 
     if (!glQueryCounter || !glGetQueryObjectiv || !glGetQueryObjectui64v) return;
@@ -88,6 +108,7 @@ void Profiler::BeginFrame() {
     next.Used = 0;
     next.Scopes.clear();
     next.Pending = false;
+    next.Serial = g_GpuFrameSerial;
 }
 
 namespace {
@@ -96,8 +117,9 @@ template <typename Name> void Push(const Name& name, float milliseconds) {
         Profiler::Entry& e = g_CurrentFrame[g_CurrentCount];
         e.Name.assign(name);
         e.Milliseconds = milliseconds;
+        e.Nested = g_ScopeDepth > 0;
     } else {
-        g_CurrentFrame.push_back({std::string(name), milliseconds});
+        g_CurrentFrame.push_back({std::string(name), milliseconds, g_ScopeDepth > 0});
     }
     ++g_CurrentCount;
 }
@@ -111,17 +133,39 @@ const std::vector<Profiler::Entry>& Profiler::GetLastFrame() {
     return g_LastFrame;
 }
 
+float Profiler::LastFrameWallMs() { return g_LastFrameWallMs; }
+
+float Profiler::LastFrameUnscopedMs() {
+    float scoped = 0.0f;
+    for (const Entry& e : g_LastFrame)
+        if (!e.Nested) scoped += e.Milliseconds;
+    return std::max(0.0f, g_LastFrameWallMs - scoped);
+}
+
 Profiler::ScopeTimer::ScopeTimer(const char* name)
-    : m_Name(name), m_Start(std::chrono::steady_clock::now()) {}
+    : m_Name(name), m_Start(std::chrono::steady_clock::now()) {
+    ++g_ScopeDepth;
+}
 
 Profiler::ScopeTimer::~ScopeTimer() {
+    --g_ScopeDepth; // before the push: this scope's own entry is top-level when it is the outermost
     auto elapsed = std::chrono::steady_clock::now() - m_Start;
     float ms = std::chrono::duration<float, std::milli>(elapsed).count();
     Profiler::PushSample(m_Name, ms);
 }
 
 const std::vector<Profiler::Entry>& Profiler::GetLastFrameGpu() {
-    return g_GpuLastFrame;
+    static const std::vector<Entry> s_None;
+    return g_GpuNewest < 0 ? s_None : g_GpuHistory[g_GpuNewest].Entries;
+}
+
+unsigned Profiler::FrameSerial() { return g_GpuFrameSerial; }
+
+const std::vector<Profiler::Entry>* Profiler::GpuFrameScopes(unsigned serial) {
+    if (g_GpuNewest < 0) return nullptr;
+    for (const GpuDone& d : g_GpuHistory)
+        if (d.Serial == serial && !d.Entries.empty()) return &d.Entries;
+    return nullptr;
 }
 
 Profiler::GpuScopeTimer::GpuScopeTimer(const char* name) {

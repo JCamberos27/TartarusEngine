@@ -21,6 +21,11 @@ class VisibleIndexBuffer;
 struct FrameLights;
 struct Frustum;
 
+// A local (spot / point) caster's change signature: its id, model, every material slot, transform, hidden-triangle set
+// (VisibleIndexBuffer id, 0 = none) and Two Sided. A still light keeps its static depth while the signatures hold.
+std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::vector<std::shared_ptr<MaterialAsset>>& materials,
+                              const glm::mat4& xform, unsigned visibleId, bool twoSided);
+
 struct ShadowFrameInputs {
     World* world = nullptr;
     const FrameLights* lights = nullptr;
@@ -30,7 +35,6 @@ struct ShadowFrameInputs {
     SpotShadowMap* spotMap = nullptr;
     PointShadowMap* pointMap = nullptr;
     std::uint64_t frame = 0;
-    int windowWidth = 0, windowHeight = 0; // the viewport the local passes restore
 };
 
 // The frame's shadow maps: the sun's cascades (per rendered view, #109) and the spot / point maps (once per frame, #119),
@@ -40,8 +44,8 @@ public:
     // Fits and renders the cascades to this view; a second view with the same matrices in the same frame reuses them.
     // False when the sun casts no shadows this frame. Restores the caller's framebuffer and viewport.
     bool RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitView, const glm::mat4& fitProj);
-    // Spot and point maps. Call once per frame after the characters are pre-skinned. Leaves the default framebuffer
-    // bound with the window viewport (in.windowWidth x in.windowHeight), not the caller's: call it between views.
+    // Spot and point maps. Call once per frame after the characters are pre-skinned. Restores the caller's
+    // framebuffer and viewport.
     void RenderLocal(const ShadowFrameInputs& in);
 
 private:
@@ -86,7 +90,7 @@ private:
     struct LocalPassLocs { int ViewProj = -1, LightPos = -1, Far = -1; };
     LocalPassLocs BeginLocalPass(Shader& shader);
     void DrawLocalCasters(Shader& shader, bool animatedOnes, const Frustum* clip);
-    static void EndLocalPass(const ShadowFrameInputs& in);
+    static void EndLocalPass();
 
     // Sun: RenderSun's steps, in order, over one SunPass (ShadowFrame.cpp).
     struct SunPass;

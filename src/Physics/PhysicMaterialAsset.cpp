@@ -85,17 +85,28 @@ std::vector<std::string> FindPhysicMaterials() {
     return out;
 }
 
-ColliderComponent ResolvePhysicMaterial(const ColliderComponent& c) {
+ColliderComponent ResolvePhysicMaterial(const ColliderComponent& c, PhysicMaterialReads* reads) {
     if (c.Material.empty()) return c;
-    PhysicMaterialAsset m;
-    std::string err;
-    if (!PhysicMaterialAsset::LoadFile(ProjectPaths::Resolve(c.Material), m, &err)) {
-        static std::unordered_set<std::string> warned;
-        if (warned.insert(c.Material).second)
-            Log::Warn("Physic Material '" + c.Material + "': " + err + " - the collider's own values are used.");
-        return c;
+    std::optional<PhysicMaterialAsset> local;
+    std::optional<PhysicMaterialAsset>* m = &local;
+    bool read = true;
+    if (reads) {
+        auto [it, fresh] = reads->try_emplace(c.Material);
+        m = &it->second;
+        read = fresh;
     }
+    if (read) {
+        PhysicMaterialAsset loaded;
+        std::string err;
+        if (PhysicMaterialAsset::LoadFile(ProjectPaths::Resolve(c.Material), loaded, &err)) *m = loaded;
+        else {
+            static std::unordered_set<std::string> warned;
+            if (warned.insert(c.Material).second)
+                Log::Warn("Physic Material '" + c.Material + "': " + err + " - the collider's own values are used.");
+        }
+    }
+    if (!m->has_value()) return c;
     ColliderComponent out = c;
-    m.ApplyTo(out);
+    (*m)->ApplyTo(out);
     return out;
 }

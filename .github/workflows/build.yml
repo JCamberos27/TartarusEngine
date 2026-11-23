@@ -83,13 +83,21 @@ jobs:
           python -m pip install --quiet --disable-pip-version-check pillow==11.3.0
           python -m unittest discover -s tools/quantum/casual_bundle -t tools/quantum -p 'test_*.py'
 
+      # The offline GI audit's pure parts (.gi parsing, GridDims, box fade, filled-probe detection, shadow-slot score).
+      - name: GI audit tool tests
+        run: python -m unittest discover -s tools/gi -p 'test_*.py'
+
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
       # explicitly allow-listed with a reason. Pure static check, no build needed - run it
       # first so "added a component, forgot to wire it up" fails in seconds. Only meaningful on
       # one config; the Debug job is enough.
+      # The self-test first: a scratch tree proves an unregistered component in a split header
+      # (ComponentsRender.h, ...) still fails, so the guard can't quietly stop seeing a header.
       - name: Component registration check
-        run: python tools/check_component_registration.py
+        run: |
+          python tools/check_component_registration.py --self-test
+          python tools/check_component_registration.py
 
       # Structural guard for #160 / Phase 1 item 7: "two - and only two - button treatments"
       # across the editor. Same pure-static, no-build-needed treatment as the component check above.
@@ -288,7 +296,7 @@ jobs:
           Write-Host "extracted to $root"
 
           $required = @(
-            "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
+            "TartarusEngine.exe", "TartarusCore.dll", "glfw3.dll", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXFoundation.dll", "PhysXCooking.dll",
             "LICENSE", "THIRD-PARTY-NOTICES.md", "README-FIRST-RUN.txt",
             "assets\shaders\ModelFragment.glsl", "assets\fonts\fa-solid-900.ttf",
@@ -311,7 +319,7 @@ jobs:
           # adds the next dependency finds out from a red build rather than from a user.
           $expected = @(
             "assets", "project", "LICENSE", "README-FIRST-RUN.txt", "THIRD-PARTY-NOTICES.md",
-            "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
+            "TartarusEngine.exe", "TartarusCore.dll", "glfw3.dll", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXCooking.dll", "PhysXFoundation.dll"
           )
           $actual = Get-ChildItem $root | ForEach-Object { $_.Name }
@@ -436,8 +444,9 @@ jobs:
       # directory is still checked because ResolveDumpDir() falls back to it when LOCALAPPDATA is
       # unset - both paths, so neither can go quiet again.
       #
-      # Only .dmp: the handler writes a minidump and a line to stderr, never a .txt. The old
-      # version cat'd crash_*.txt, which never existed either.
+      # Only .dmp counts: the handler writes a minidump, a line to stderr and a copy of the run's log
+      # (crash_*.log, uploaded with its dump), never a .txt. The old version cat'd crash_*.txt, which
+      # never existed either.
       - name: Assert smoke test left no crash dump
         if: always()
         shell: pwsh
@@ -449,7 +458,12 @@ jobs:
             foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
             Write-Host "::error::smoke test left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
             New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
-            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
+            $dumps | ForEach-Object {
+              Copy-Item $_.FullName crash-dumps -Force
+              # the run's log as it was at the crash (the handler copies it beside the dump)
+              $log = [IO.Path]::ChangeExtension($_.FullName, ".log")
+              if (Test-Path $log) { Copy-Item $log crash-dumps -Force }
+            }
             exit 1
           }
           Write-Host "no crash dump - ok"
@@ -531,6 +545,20 @@ jobs:
           }
           exit $p.ExitCode
 
+      # Rebuild & Restart's relaunch (--restore-state is editor-mode only, so --editor-tests can't reach it): a hidden
+      # editor in a scratch user folder reopens a scene outside the project with its selection and Play.
+      - name: Restart relaunch check (Mesa llvmpipe)
+        if: matrix.shard == 0
+        timeout-minutes: 6
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+          TARTARUS_EDITOR_TEST_INSTANCE: ci
+        run: python tools/restore_state_check.py build\Release\TartarusEngine.exe --timeout 300
+
       - name: Upload editor screenshots
         if: always() && hashFiles('editor-test-shots/**') != ''
         uses: actions/upload-artifact@v4
@@ -551,7 +579,12 @@ jobs:
             foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
             Write-Host "::error::editor tests left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
             New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
-            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
+            $dumps | ForEach-Object {
+              Copy-Item $_.FullName crash-dumps -Force
+              # the run's log as it was at the crash (the handler copies it beside the dump)
+              $log = [IO.Path]::ChangeExtension($_.FullName, ".log")
+              if (Test-Path $log) { Copy-Item $log crash-dumps -Force }
+            }
             exit 1
           }
           Write-Host "no crash dump - ok"

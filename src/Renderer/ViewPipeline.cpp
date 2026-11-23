@@ -12,7 +12,7 @@
 #include "FullscreenPass.h"
 #include "BodyDebugDraw.h"
 #include "Camera.h"
-#include "ColliderGizmo.h"
+#include "DebugLineRenderer.h"
 #include "Components.h"
 #include "Core/Env.h"
 #include "EditorSettings.h"
@@ -40,31 +40,41 @@
 #include "World.h"
 
 namespace {
+
+// The collider overlay's line list, rebuilt per draw (single GL thread); kept to reuse its capacity.
+std::vector<float> s_DebugLineVerts;
+
+void DrawDebugLines(const ViewPipelineInputs& in, const World& world, const glm::mat4& view, const glm::mat4& proj,
+                    bool shapes, const std::function<bool(entt::entity)>* only) {
+    if (!in.debugLines || !in.gatherDebugLines) return;
+    in.gatherDebugLines(world, shapes, only, s_DebugLineVerts);
+    in.debugLines->Draw(proj * view, s_DebugLineVerts.data(), s_DebugLineVerts.size());
+}
 // #162 - the scene's post settings for the final tonemap pass.
 PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
                               float dt, int exposureSlot, const glm::vec3& cameraPos) {
     PostSettings p;
-    p.ExposureEV = world.ExposureEV;
-    p.Operator = world.TonemapOperator;
+    p.ExposureEV = world.Render.ExposureEV;
+    p.Operator = world.Render.TonemapOperator;
     p.DeltaTime = dt;
     p.ExposureSlot = exposureSlot;
     if (FKeyRow::PostFxOff()) return p; // F8: exposure and the tonemap only - no bloom, grade, lens or auto exposure
     p.BloomTexture = bloomTex;
     p.BloomIntensity = bloomIntensity;
-    p.Temperature = world.GradeTemperature;
-    p.Tint = world.GradeTint;
-    p.Contrast = world.GradeContrast;
-    p.Saturation = world.GradeSaturation;
-    for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.GradeColorFilter[i];
-    p.FocusDistance = world.FocusDistance;
-    p.FocusRange = world.FocusRange;
-    p.MaxBlur = world.DofMaxBlur;
-    p.Fxaa = world.EffectiveFxaa(); // TAA replaces it
-    p.AutoExposure = world.AutoExposure;
-    p.AutoExposureMinEV = world.AutoExposureMinEV;
-    p.AutoExposureMaxEV = world.AutoExposureMaxEV;
-    p.AutoExposureSpeedUp = world.AutoExposureSpeedUp;
-    p.AutoExposureSpeedDown = world.AutoExposureSpeedDown;
+    p.Temperature = world.Render.GradeTemperature;
+    p.Tint = world.Render.GradeTint;
+    p.Contrast = world.Render.GradeContrast;
+    p.Saturation = world.Render.GradeSaturation;
+    for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.Render.GradeColorFilter[i];
+    p.FocusDistance = world.Render.FocusDistance;
+    p.FocusRange = world.Render.FocusRange;
+    p.MaxBlur = world.Render.DofMaxBlur;
+    p.Fxaa = world.Render.EffectiveFxaa(); // TAA replaces it
+    p.AutoExposure = world.Render.AutoExposure;
+    p.AutoExposureMinEV = world.Render.AutoExposureMinEV;
+    p.AutoExposureMaxEV = world.Render.AutoExposureMaxEV;
+    p.AutoExposureSpeedUp = world.Render.AutoExposureSpeedUp;
+    p.AutoExposureSpeedDown = world.Render.AutoExposureSpeedDown;
     ApplyPostProcessVolumes(world, cameraPos, p); // #162 / #203 - local and global volumes
     return p;
 }
@@ -75,7 +85,7 @@ PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float b
 // Scene view would just get in the way of editing.
 PostSettings ViewPipeline::WithDepthEffects(PostSettings p, const World& world, const HdrTarget& hdr,
                                             const glm::mat4& proj) {
-    if (world.DepthOfField) {
+    if (world.Render.DepthOfField) {
         p.DepthOfField = true;
         p.ProjA = proj[2][2];
         p.ProjB = proj[3][2];
@@ -107,7 +117,7 @@ void ViewPipeline::DrawScene(const ViewPipelineInputs& in, const RenderFrameCont
 void ViewPipeline::SsaoCompute(const ViewPipelineInputs& in, Ssao& target, const glm::mat4& proj) {
     PROFILE_GPU_SCOPE("SSAO Compute + Blur");
     FullscreenPass pass; // one state save/restore for both passes
-    target.Compute(*in.ssaoComputeShader, proj, in.world->SsaoRadius, in.world->SsaoBias);
+    target.Compute(*in.ssaoComputeShader, proj, in.world->Render.SsaoRadius, in.world->Render.SsaoBias);
     target.Blur(*in.ssaoBlurShader);
     GLStateCache::Invalidate();
 }
@@ -177,9 +187,9 @@ void ViewPipeline::SsaoDepthPrepass(const ViewPipelineInputs& in, Ssao& target, 
 glm::mat4 ViewPipeline::BeginView(const ViewPipelineInputs& in, const ViewTargets& t, int w, int h,
                                   const glm::mat4& view, const glm::mat4& proj, bool& taaOn) {
     HdrTarget& hdr = *t.hdr;
-    hdr.Resize(w, h, in.world->EffectiveMsaaSamples());
+    hdr.Resize(w, h, in.world->Render.EffectiveMsaaSamples());
     // TAA: a velocity attachment and the resolved depth for the resolve; jitter goes on below.
-    taaOn = in.world->TaaEnabled() && hdr.IsValid();
+    taaOn = in.world->Render.TaaEnabled() && hdr.IsValid();
     hdr.SetVelocityEnabled(taaOn);
     if (taaOn) hdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
     else t.taa->Reset();
@@ -229,7 +239,7 @@ unsigned int ViewPipeline::ResolveTaa(const ViewPipelineInputs& in, const ViewTa
                                       const char* scope) {
     PROFILE_SCOPE(scope);
     PROFILE_GPU_SCOPE(scope);
-    return t.taa->Resolve(colorTex, t.hdr->ResolvedDepthTexture(), t.hdr->VelocityTexture(), in.world->TaaSharpness);
+    return t.taa->Resolve(colorTex, t.hdr->ResolvedDepthTexture(), t.hdr->VelocityTexture(), in.world->Render.TaaSharpness);
 }
 
 // PR16: Bloom — soft-knee threshold + mip-pyramid blur before tonemapping.
@@ -239,7 +249,7 @@ void ViewPipeline::ComputeBloom(const ViewPipelineInputs& in, const ViewTargets&
     World& world = *in.world;
     glowTex = 0u;
     glowIntensity = 0.0f;
-    if (!world.BloomEnabled || FKeyRow::PostFxOff()) return; // F8 off: no bloom
+    if (!world.Render.BloomEnabled || FKeyRow::PostFxOff()) return; // F8 off: no bloom
     PROFILE_GPU_SCOPE(scope);
     Bloom& bloom = *t.bloom;
     bloom.Resize(w, h);
@@ -248,10 +258,10 @@ void ViewPipeline::ComputeBloom(const ViewPipelineInputs& in, const ViewTargets&
     if (bloom.IsValid()) {
         bloom.Compute(*in.bloomThreshShader, *in.bloomDownsampleShader, *in.bloomUpsampleShader,
                       srcTex,
-                      world.BloomThreshold,
-                      world.BloomKnee);
+                      world.Render.BloomThreshold,
+                      world.Render.BloomKnee);
         glowTex = bloom.GlowTexture();
-        glowIntensity = world.BloomIntensity;
+        glowIntensity = world.Render.BloomIntensity;
     }
     GLStateCache::Invalidate();
 }
@@ -286,6 +296,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         return !s.empty() && sscanf_s(s.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0 ? glm::ivec2(w, h) : glm::ivec2(0);
     }();
     if (shotSize.x > 0) { scW = shotSize.x; scH = shotSize.y; }
+    if (in.harnessSceneSize.x > 0) { scW = in.harnessSceneSize.x; scH = in.harnessSceneSize.y; }
 
     sceneFramebuffer.Resize(scW, scH);
     float sceneAspect = (float)scW / (float)scH;
@@ -302,7 +313,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Skipped in unlit/wireframe modes where SSAO has no visual effect.
-    const bool sceneSsaoFromPrepass = SsaoPrepass(in, t, world.SsaoEnabled && !sceneUnlit && !sceneWireframe, scW, scH, sceneViewMat,
+    const bool sceneSsaoFromPrepass = SsaoPrepass(in, t, world.Render.SsaoEnabled && !sceneUnlit && !sceneWireframe, scW, scH, sceneViewMat,
                                                   sceneDrawProj, /*editorView=*/true, "SSAO Depth Pre-pass");
 
     EditorLayer::RenderStats sceneStats;
@@ -318,6 +329,8 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // #178 - Search in Scene: while the Hierarchy search is active, wash every visible
     // object that doesn't match it in flat grey, so the matches stand out (Unity).
     if (editor.SceneSearchActive() && !editor.OverlaysHidden()) {
+        PROFILE_SCOPE("Scene Search Wash");
+        PROFILE_GPU_SCOPE("Scene Search Wash");
         if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         for (auto e : world.Registry.view<const TransformComponent, const RenderableComponent>()) {
             if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag, PoseSourceTag, OwnerViewOnlyTag>(e)) continue;
@@ -356,6 +369,8 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         outlineIn.width = scW;
         outlineIn.height = scH;
         outlineIn.wireframe = sceneWireframe;
+        PROFILE_SCOPE("Selection Outline");
+        PROFILE_GPU_SCOPE("Selection Outline");
         in.selectionOutline->Render(outlineIn);
     }
 
@@ -368,6 +383,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // for why this is a flat tint rather than the real PBR material shader.
     const EditorLayer::DragPreview& dragPreview = editor.GetDragPreview();
     if (dragPreview.Active) {
+        PROFILE_GPU_SCOPE("Drag Preview");
         const glm::mat4 pose = glm::translate(glm::mat4(1.0f), dragPreview.Position) *
                                glm::mat4_cast(dragPreview.Rotation);
         for (const auto& part : dragPreview.Parts)
@@ -380,7 +396,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // below — this snapshot is what Bloom reads. Editor-only overlays are never real
     // scene lighting, so they must never bloom/glow; capturing the bloom source here,
     // before they're drawn, guarantees that regardless of their color or opacity.
-    sceneHdr.ResolveTo();
+    { PROFILE_GPU_SCOPE("MSAA Resolve"); sceneHdr.ResolveTo(); }
 
     unsigned int bloomGlowTex  = 0u;
     float        bloomIntensity = 0.0f;
@@ -401,12 +417,14 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
         if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !in.harnessCleanViews) {
             overlayDrawn = true;
+            PROFILE_SCOPE("Collider Overlay");
+            PROFILE_GPU_SCOPE("Collider Overlay");
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_FALSE);
             // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
             const std::function<bool(entt::entity)> inSelection = [&](entt::entity e) { return editor.InSelectionTree(world, e); };
-            in.colliderGizmo->Draw(sceneViewMat, sceneProjMat, world, showShapes,
-                                   EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
+            DrawDebugLines(in, world, sceneViewMat, sceneProjMat, showShapes,
+                           EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
             glDepthMask(GL_TRUE);
         }
     }
@@ -415,7 +433,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // still shows them — only the earlier, overlay-free resolve above ever reached
     // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
     // (exposure -> curve -> gamma, once, in Tonemapper). Without the overlay the first resolve already holds it.
-    if (overlayDrawn) sceneHdr.ResolveTo();
+    if (overlayDrawn) { PROFILE_GPU_SCOPE("MSAA Resolve"); sceneHdr.ResolveTo(); }
     unsigned int sceneColorTex = sceneHdr.ResolvedColorTexture();
     {
     FullscreenPass post; // TAA + tonemap: one state save/restore for the chain
@@ -433,6 +451,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
     // never occluded against the scene, so no depth test is lost by drawing here.
     sceneFramebuffer.Bind();
     if (editor.ShowGrid() && !editor.OverlaysHidden() && !in.harnessCleanViews) { // (no grid lines through a test's shots)
+        PROFILE_GPU_SCOPE("Grid");
         const GLboolean gridHadDepthTest = glIsEnabled(GL_DEPTH_TEST);
         glDisable(GL_DEPTH_TEST);
         // The grid shader fades lines by literal world-space distance from the
@@ -475,7 +494,7 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     const glm::mat4 drawProj = BeginView(in, t, rw, rh, view, proj, gameTaaOn);
     // SSAO depth pre-pass - the Game view's own Ssao instance/resolution, apart from the Scene view's (see the
     // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
-    const bool gameSsaoOn = world.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
+    const bool gameSsaoOn = world.Render.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
     const bool gameSsaoFromPrepass = SsaoPrepass(in, t, gameSsaoOn, rw, rh, view, drawProj, /*editorView=*/false,
                                                  "SSAO Depth Pre-pass (Game)");
 
@@ -498,7 +517,7 @@ void ViewPipeline::RenderGameFrame(const ViewPipelineInputs& in, const glm::mat4
     // Physics debug overlay over the game view (#185, F6 Physics) - depth-tested, no depth write.
     if ((playing || !overlayInPlayOnly) && EditorSettings::Get().PlayDebugOverlay) {
         glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
-        in.colliderGizmo->Draw(view, proj, world, EditorSettings::Get().ShowColliders);
+        DrawDebugLines(in, world, view, proj, EditorSettings::Get().ShowColliders, nullptr);
         glDepthMask(GL_TRUE);
     }
     if (in.worldExtras) in.worldExtras(view, proj, eye);

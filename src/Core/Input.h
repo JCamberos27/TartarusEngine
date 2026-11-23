@@ -1,4 +1,5 @@
 #pragma once
+#include "CoreApi.h"
 
 struct GLFWwindow;
 
@@ -49,7 +50,7 @@ private:
     static GLFWwindow* s_Window;
     static double s_LastX, s_LastY;
     static double s_DeltaX, s_DeltaY;
-    static double s_ScrollAccum, s_ScrollY;
+    static TARTARUS_CORE_API double s_ScrollAccum, s_ScrollY;
     static bool s_FirstMouse;
     static bool s_PrevKeys[512];
     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);

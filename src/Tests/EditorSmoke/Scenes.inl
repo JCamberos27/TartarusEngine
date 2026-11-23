@@ -37,6 +37,57 @@ struct EditorSmokeAccess_Scenes {
             if (!u.SelectionOnly) s += (s.empty() ? "" : ", ") + u.Label;
         return s;
     }
+    // Undo / Redo keep the snapshot they just loaded as the new baseline instead of serializing the
+    // scene again, which needs a snapshot to load back to the same bytes. Empty when it does; else
+    // where the two first differ (and whether only the AssetLibrary half does).
+    static std::string RoundTripDifference(World& w, AssetLibrary& a) {
+        const std::string before = SceneSerializer::SaveToString(w, a);
+        if (!SceneSerializer::LoadFromString(w, a, before)) return "the snapshot didn't load";
+        const std::string after = SceneSerializer::SaveToString(w, a);
+        if (after == before) return {};
+        size_t i = 0;
+        while (i < before.size() && i < after.size() && before[i] == after[i]) ++i;
+        const size_t from = i > 80 ? i - 80 : 0;
+        return std::string(SceneSerializer::SameSceneContent(before, after) ? "library half only" : "scene differs") +
+               " at byte " + std::to_string(i) + ": was '" + before.substr(from, 200) + "' now '" + after.substr(from, 200) + "'";
+    }
+    // A root object with a transform, for the undo timing below (null when there is none).
+    static entt::entity MovableRoot(World& w) {
+        for (auto [ent, t, n] : w.Registry.view<TransformComponent, NameComponent>().each()) {
+            const auto* h = w.Registry.try_get<HierarchyComponent>(ent);
+            if (!h || h->Parent == entt::null) return ent;
+        }
+        return entt::null;
+    }
+    // Times one Undo / Redo call. The step's in-place check (X-33 C) runs on a background thread
+    // from the moment the step is recorded; a person takes longer than that to press Ctrl+Z, so it
+    // is waited for first, outside the timing (`jobMs` gets how long that took). The verify mode
+    // is off for the timed call (it saves the whole scene) and done after it instead: the scene
+    // must save as the new baseline.
+    static double TimedHistoryStep(EditorLayer& e, World& w, AssetLibrary& a, bool redo, double* jobMs = nullptr,
+                                   std::string* mismatch = nullptr) {
+        const auto& stack = redo ? e.m_RedoStack : e.m_UndoStack;
+        const auto w0 = std::chrono::steady_clock::now();
+        if (!stack.empty()) stack.back().Step.Wait();
+        if (jobMs) *jobMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - w0).count();
+        const bool verify = e.m_VerifyInPlaceUndo;
+        e.m_VerifyInPlaceUndo = false;
+        const auto t0 = std::chrono::steady_clock::now();
+        redo ? e.Redo(w, a) : e.Undo(w, a);
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        e.m_VerifyInPlaceUndo = verify;
+        if (mismatch && SceneSerializer::SaveToString(w, a) != e.m_CurrentUndoScene)
+            *mismatch += std::string(redo ? " redo" : " undo") + " left a scene that doesn't save as its baseline;";
+        return ms;
+    }
+    static void SetInPlaceUndo(EditorLayer& e, bool on) { e.m_InPlaceUndo = on; }
+    static int InPlaceSteps(const EditorLayer& e) { return e.m_InPlaceHistorySteps; }
+    // Moves `ent` 1 m along x as one committed undo step.
+    static void MoveOneMetre(EditorLayer& e, World& w, entt::entity ent) {
+        e.PushUndo(w, "Move");
+        w.Registry.get<TransformComponent>(ent).Position.x += 1.0f;
+        e.FinishGlobalUndo(w, /*force=*/true);
+    }
 };
 namespace {
 namespace smoke_scenes {
@@ -103,6 +154,29 @@ bool GameShown(Ctx& c) {
 void RegisterScenesTests() {
     using namespace smoke_scenes;
 
+    // The same round trip for every component Add Component offers, one at a time on the scratch
+    // scene's Alpha (the shipped scenes don't carry them all).
+    Add("scenes: every component round-trips through an undo snapshot", {
+        FreshScene(), Wait(2),
+        Expect("each component loads back to the same bytes", [](Ctx& c) {
+            std::string bad, prev;
+            for (const RegisteredComponent& rc : ComponentRegistry::All()) {
+                if (!rc.Add || !rc.Has || !rc.Remove || !rc.Meta.Name) continue;
+                entt::entity alpha = ByName(c.W, "Alpha");
+                if (alpha == entt::null) return bad + " || no Alpha after " + prev + ", before " + rc.Meta.Name;
+                const bool had = rc.Has(c.W.Registry, alpha);
+                if (!had) rc.Add(c.W.Registry, alpha);
+                const std::string diff = SA::RoundTripDifference(c.W, c.A);
+                if (!diff.empty()) bad += std::string(bad.empty() ? "" : " || ") + rc.Meta.Name + ": " + diff;
+                alpha = ByName(c.W, "Alpha"); // the round trip rebuilt the registry
+                if (!had && alpha != entt::null && rc.Has(c.W.Registry, alpha)) rc.Remove(c.W.Registry, alpha);
+                prev = rc.Meta.Name;
+            }
+            return bad;
+        }),
+        FreshScene(), Wait(3),
+    });
+
     // Found when the tests are registered (the first editor frame), in a stable order.
     std::vector<fs::path> scenes;
     for (const std::string& dir : {ProjectPaths::Resolve("scenes"), EnginePaths::Resolve("tests/scenes")}) {
@@ -163,6 +237,57 @@ void RegisterScenesTests() {
                 const std::string steps = SA::EditSteps(c.E);
                 if (!steps.empty()) return "undo steps: " + steps;
                 return c.E.IsDirty() ? std::string("the scene is dirty") : std::string();
+            }),
+            Expect("a snapshot loads back to the same bytes", [](Ctx& c) { return SA::RoundTripDifference(c.W, c.A); }),
+            Expect("a 1 m move undoes, redoes and undoes again (timed)", [label](Ctx& c) {
+                const entt::entity ent = SA::MovableRoot(c.W);
+                if (ent == entt::null || !c.W.Registry.all_of<OrderComponent>(ent)) return std::string(); // nothing to move
+                const int order = c.W.Registry.get<OrderComponent>(ent).Value;
+                const float x0 = c.W.Registry.get<TransformComponent>(ent).Position.x;
+                auto xNow = [&c, order]() -> float {
+                    for (auto [e, o, t] : c.W.Registry.view<OrderComponent, TransformComponent>().each())
+                        if (o.Value == order) return t.Position.x;
+                    return -1e9f;
+                };
+                // The same three steps with the in-place path off first: the full reload's times, from
+                // the same run (X-33 C A/B). The first move also warms the caches the timed ones use.
+                {
+                    SA::SetInPlaceUndo(c.E, false);
+                    SA::MoveOneMetre(c.E, c.W, ent);
+                    std::string fullMismatch;
+                    const double u1 = SA::TimedHistoryStep(c.E, c.W, c.A, false, nullptr, &fullMismatch);
+                    const double r1 = SA::TimedHistoryStep(c.E, c.W, c.A, true, nullptr, &fullMismatch);
+                    const double u2 = SA::TimedHistoryStep(c.E, c.W, c.A, false, nullptr, &fullMismatch);
+                    SA::SetInPlaceUndo(c.E, true);
+                    Log::Info("UNDO_TIMING_FULL " + label + " undo=" + std::to_string(u1) + "ms redo=" + std::to_string(r1) +
+                              "ms undo2=" + std::to_string(u2) + "ms");
+                    if (!fullMismatch.empty()) return "full reload:" + fullMismatch;
+                    if (xNow() != x0) return std::string("full reload: the move didn't undo");
+                }
+                entt::entity live = entt::null; // the reload made new entities: the same one by order
+                for (auto [e, o] : c.W.Registry.view<OrderComponent>().each())
+                    if (o.Value == order) live = e;
+                if (live == entt::null) return std::string("the moved object is gone after the full reload");
+                SA::MoveOneMetre(c.E, c.W, live);
+                const int inPlace0 = SA::InPlaceSteps(c.E);
+                double job = 0.0;
+                std::string mismatch;
+                const double undo1 = SA::TimedHistoryStep(c.E, c.W, c.A, false, &job, &mismatch);
+                const float afterUndo = xNow();
+                const double redo = SA::TimedHistoryStep(c.E, c.W, c.A, true, nullptr, &mismatch);
+                const float afterRedo = xNow();
+                const double undo2 = SA::TimedHistoryStep(c.E, c.W, c.A, false, nullptr, &mismatch);
+                const float afterUndo2 = xNow();
+                Log::Info("UNDO_TIMING " + label + " undo=" + std::to_string(undo1) + "ms redo=" + std::to_string(redo) +
+                          "ms undo2=" + std::to_string(undo2) + "ms inplace=" + std::to_string(SA::InPlaceSteps(c.E) - inPlace0) +
+                          "/3 stepjob=" + std::to_string(job) + "ms");
+                if (!mismatch.empty()) return mismatch;
+                if (SA::InPlaceSteps(c.E) - inPlace0 != 3) return std::string("a 1 m move didn't undo / redo in place");
+                if (afterUndo != x0 || afterRedo != x0 + 1.0f || afterUndo2 != x0)
+                    return "x went " + std::to_string(x0) + " -> undo " + std::to_string(afterUndo) + " -> redo " +
+                           std::to_string(afterRedo) + " -> undo " + std::to_string(afterUndo2);
+                const std::string steps = SA::EditSteps(c.E);
+                return steps.empty() ? std::string() : "undo steps left: " + steps; // no "Unrecorded Change"
             }),
             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }),
             FreshScene(), Wait(3), // back on the scratch scene: nothing can save over the real one

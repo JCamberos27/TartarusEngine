@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <string>
 #include <vector>
 
 // PhysX 5 simulation world — created when Play mode starts, destroyed when it ends (#185).
@@ -43,6 +44,16 @@ void Shutdown();
 
 // True between a successful Create() and the next Destroy().
 bool IsActive();
+
+// Re-applies the project's physics settings that Create() snapshots (gravity, the layer collision matrix) to the
+// running world: wakes sleeping bodies on a gravity change, re-filters existing pairs on a matrix change. Returns
+// true when something changed; false when nothing is active or nothing differs. The rest of the physics settings
+// are read live where they're used.
+bool ApplySettings();
+
+// A .physicmaterial file (absolute path) changed: every active collider in the running world that uses it gets the
+// material as the file now reads. Returns how many colliders changed; 0 when nothing is active.
+int RefreshPhysicMaterial(const World& world, const std::string& absPath);
 
 // Advance the simulation by `dt` game seconds (already time-scaled, see Core/Time.h),
 // accumulated into fixed Time::FixedDeltaTime() sub-steps (at most 4 per call, so a long hitch

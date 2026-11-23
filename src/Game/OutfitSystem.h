@@ -40,6 +40,9 @@ private:
 // (and `error`) when the file can't be read or parsed.
 std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan = false,
                                            std::string* error = nullptr);
+// The wardrobe at `path` changed on disk: its cached catalog (or failure) is dropped, so the next LoadCatalog reads it
+// again. Outfits already worn keep their pieces until they change. True when something was cached.
+bool ForgetCatalog(const std::string& path);
 
 // The outfit's pieces: slot -> child entity.
 std::map<std::string, entt::entity> Pieces(const World& world, entt::entity root);
@@ -80,6 +83,8 @@ void UpdatePending(World& world, AssetLibrary& assets);
 // or an outfit whose body it hasn't checked against the wardrobe yet (RefreshBodies). The editor journals
 // an edit made without an undo step before then (EditorLayer::JournalBeforeOutfitLanding).
 bool LandingDue(const World& world);
+// Whether a waiting change is still reading its saved skin coverage (it lands once that's done, as once its assets are).
+bool CoverageReading();
 // Goes up each time UpdatePending changes a world: a waiting change landing, or a stale body being rebuilt. Neither
 // is an edit of its own - one finishes an edit made frames earlier, the other brings a scene just opened up to
 // date - so the editor folds them into its undo baseline (EditorLayer::BeginGlobalUndoFrame).

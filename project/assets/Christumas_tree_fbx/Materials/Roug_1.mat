@@ -1,0 +1,35 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "Roug_1",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Christumas_tree_fbx/Christumas_tree.fbm/Christumus_Roug_upscayl_2x_upscayl-standard-4x.png",
+    "_BaseColor": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929
+    ],
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Christumas_tree_fbx/Christumas_tree.fbm/roug_nm.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AlbedoMap": "635a3c3595865f71",
+    "_NormalMap": "daa9a82179bcc11b"
+  }
+}

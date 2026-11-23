@@ -281,10 +281,22 @@ void RaceGrip(const World& world, entt::entity root, float& inset, float& curl) 
     }
 }
 
+// Failures too: the Inspector asks every frame, and a missing or broken file would be read each time.
+std::map<std::string, std::string>& FailedCatalogs() {
+    static std::map<std::string, std::string> failed;
+    return failed;
+}
+
+bool ForgetCatalog(const std::string& path) {
+    const std::string key = Lower(Rel(path));
+    const bool had = CatalogCache().erase(key) + FailedCatalogs().erase(key) + LayerWardrobes().erase(key) > 0;
+    if (had) SiblingCache().clear(); // its colourway .mat lists are read again with it
+    return had;
+}
+
 std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan, std::string* error) {
     auto& cache = CatalogCache();
-    // Failures too: the Inspector asks every frame, and a missing or broken file would be read each time.
-    static std::map<std::string, std::string> failed;
+    auto& failed = FailedCatalogs();
     const std::string key = Lower(Rel(path));
     if (!rescan) {
         if (auto it = cache.find(key); it != cache.end()) return it->second;
@@ -504,7 +516,7 @@ Result SetGender(World& world, AssetLibrary& assets, entt::entity root, Wardrobe
             const float score = CutName(it->Stem) == cut ? 2.0f : CutLikeness(CutName(it->Stem), cut);
             if (score > bestScore) { bestScore = score; best = it; }
         }
-        const bool essential = slot == "Top" || slot == "Pants" || slot == "Shoes";
+        const bool essential = Wardrobe::Essential(cat->W, slot, gender);
         if (best && (bestScore >= 0.34f || essential)) next.Items[slot] = best->Path;
     }
     return Submit(world, assets, root, next);
@@ -637,10 +649,11 @@ bool SetColourway(World& world, AssetLibrary& assets, entt::entity piece, const 
     bool any = false;
     for (size_t i = 0; i < sources.size(); ++i)
         if (!sources[i].empty() && Same(sources[i], source)) { rc->Materials[i] = mat; any = true; }
-    // What caches the outfit's look (the first-person body's twins, the editor) notices by the version.
+    // What caches the outfit's look (the first-person body's twins) notices by the look version: the pieces are the same
+    // (no Version bump, which would rebuild the body).
     if (any)
         if (const auto* h = world.Registry.try_get<HierarchyComponent>(piece); h && world.Registry.valid(h->Parent))
-            if (auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(h->Parent)) ++outfit->Version;
+            if (auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(h->Parent)) ++outfit->LookVersion;
     return any;
 }
 
@@ -667,19 +680,20 @@ int AdoptExisting(World& world, AssetLibrary& assets, entt::entity root) {
             for (const auto& [part, model] : body.Parts)
                 if (isPart(model)) { piece.Slot = part; outfit.Gender = g; }
             for (const auto& race : body.Races) {
-                if (isPart(race.Head)) { piece.Slot = "Head"; outfit.Gender = g; outfit.Race = race.Name; }
+                if (isPart(race.Head)) { piece.Slot = Wardrobe::kHeadPart; outfit.Gender = g; outfit.Race = race.Name; }
                 for (const auto& [part, model] : race.Parts)
                     if (isPart(model)) { piece.Slot = part; outfit.Gender = g; }
             }
-            // An alternate stands in for the part a cover rule replaces with it ("ShoeFeet" for "Feet").
+            // An alternate stands in for the part a cover rule replaces with it ("ShoeFeet" for "Feet"); one no rule
+            // uses keeps its own name.
             for (const auto& [name, model] : body.Alternates)
                 if (isPart(model)) {
-                    piece.Slot = "Feet";
+                    piece.Slot = name;
                     for (const auto& rule : cat->W.Covers)
                         if (rule.With == name && !rule.Replace.empty()) { piece.Slot = rule.Replace; break; }
                     outfit.Gender = g;
                 }
-            if (!piece.Slot.empty()) piece.Flags = OutfitPieceBodyPart | (piece.Slot == "Head" ? OutfitPieceHeadAttached : 0);
+            if (!piece.Slot.empty()) piece.Flags = OutfitPieceBodyPart | (piece.Slot == Wardrobe::kHeadPart ? OutfitPieceHeadAttached : 0);
         }
         if (piece.Slot.empty())
             if (const Wardrobe::Item* item = cat->Find(path)) {

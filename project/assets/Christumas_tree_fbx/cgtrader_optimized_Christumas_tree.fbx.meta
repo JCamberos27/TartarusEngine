@@ -1,0 +1,14 @@
+{
+  "folder": "Asset Library/Christumas_tree_fbx",
+  "guid": "74608fd1fc6047f7",
+  "materialRemap": {
+    "Christmas_Gifts": "assets/Christumas_tree_fbx/Materials/Christmas_Gifts.mat",
+    "Material__55": "assets/Christumas_tree_fbx/Materials/Material__55.mat",
+    "Material__56": "assets/Christumas_tree_fbx/Materials/Material__56.mat",
+    "Material__57": "assets/Christumas_tree_fbx/Materials/Material__57.mat",
+    "Roug_1": "assets/Christumas_tree_fbx/Materials/Roug_1.mat",
+    "decorations": "assets/Christumas_tree_fbx/Materials/decorations.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

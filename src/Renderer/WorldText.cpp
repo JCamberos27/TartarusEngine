@@ -226,7 +226,7 @@ int WorldTextRenderer::Draw(World& world, const glm::mat4& view, const glm::mat4
 
     const Frustum frustum = Frustum::FromViewProj(proj * view);
     const glm::vec3 camRight(view[0][0], view[1][0], view[2][0]), camUp(view[0][1], view[1][1], view[2][1]);
-    const float exposure = std::exp2(-world.ExposureEV); // undo the tonemapper's exposure: Brightness is on-screen
+    const float exposure = std::exp2(-world.Render.ExposureEV); // undo the tonemapper's exposure: Brightness is on-screen
     static std::vector<GpuGlyph> onTop;
     m_Glyphs.clear();
     onTop.clear();

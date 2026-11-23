@@ -1,4 +1,5 @@
 #include "UnitTestSupport.h"
+#include <random>
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
@@ -9,6 +10,8 @@
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
 #include "../Renderer/ImpostorLibrary.h"
+#include "../Renderer/AssetCost.h"
+#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
 #include "../Renderer/Camera.h"
 #include "../Game/SkySettings.h"
@@ -19,6 +22,7 @@
 #include "../Renderer/LightBuffer.h"
 #include "../Renderer/PointShadowMap.h"
 #include "../Renderer/SpotShadowMap.h"
+#include "../Renderer/ShadowFrame.h"
 #include "../Renderer/DecalTypes.h"
 #include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
@@ -29,6 +33,7 @@
 #include "../Game/SceneSerializer.h"
 #include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
+#include "AsyncTicketCount.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -136,6 +141,111 @@ void GatherCache() {
     World other;
     other.RebuildWorldTransformCache();
     CHECK(Gather(other, all).empty());
+}
+
+// GatherVisible's candidate patch (renderables created, destroyed both ways, re-parented, given another model or none,
+// tags and layers changed, moved) hands every query exactly what a from-scratch build hands it, frame after frame of
+// random changes; and those frames do take the patch.
+void GatherPatch() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto modelA = Model::ImportDeferred(path, ModelImportSettings{});
+    const auto modelB = Model::ImportDeferred(path, ModelImportSettings{}); // another model, as a swap brings
+    CHECK(modelA && modelB);
+    if (!modelA || !modelB) return;
+    World w;
+    std::mt19937 rng(1124);
+    auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
+    auto at = [&]() { return glm::vec3((float)pick(200) - 100.0f, 0.0f, (float)pick(200) - 100.0f); };
+    std::vector<entt::entity> live;
+    auto spawn = [&]() {
+        const entt::entity e = w.CreateModelEntity(pick(2) ? modelA : modelB, at(), glm::vec3(0), glm::vec3(1), "R");
+        if (!live.empty() && pick(3) == 0) w.SetParent(e, live[pick(live.size())]);
+        live.push_back(e);
+    };
+    for (int i = 0; i < 300; ++i) spawn();
+    const glm::mat4 proj = glm::perspective(glm::radians(75.0f), 1.0f, 0.1f, 300.0f);
+    struct Result { std::vector<entt::entity> Ids; std::vector<glm::vec3> Mins; };
+    auto gather = [&](const VisibilityQuery& q) {
+        std::vector<VisibleRenderable> out;
+        GatherVisible(w, q, out);
+        std::sort(out.begin(), out.end(), [](const VisibleRenderable& a, const VisibleRenderable& b) { return a.Entity < b.Entity; });
+        Result r;
+        for (const auto& v : out) {
+            r.Ids.push_back(v.Entity);
+            r.Mins.push_back(v.WorldMin);
+        }
+        return r;
+    };
+    auto queries = [&](const glm::vec3& eye, const glm::vec3& look) {
+        std::vector<Result> rs;
+        const Frustum f = Frustum::FromViewProj(proj * glm::lookAt(eye, look, glm::vec3(0, 1, 0)));
+        VisibilityQuery all, view, casts, editor;
+        view.Cull = &f;
+        casts.Cull = &f;
+        casts.ShadowCasters = true;
+        editor.Cull = &f;
+        editor.EditorView = true;
+        editor.LayerVisibleMask = ~0u & ~(1u << 3);
+        for (const VisibilityQuery* q : {&all, &view, &casts, &editor}) rs.push_back(gather(*q));
+        glm::vec3 lo, hi;
+        if (RenderableBounds(w, lo, hi)) rs.push_back({{}, {lo, hi}});
+        return rs;
+    };
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    queries(glm::vec3(0, 2, 0), glm::vec3(0, 2, -1));
+    int patched = 0, frames = 0;
+    for (int frame = 0; frame < 300; ++frame) {
+        live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+        const int ops = 1 + (int)pick(4);
+        for (int op = 0; op < ops && !live.empty(); ++op) {
+            live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+            if (live.empty()) break;
+            const entt::entity e = live[pick(live.size())];
+            switch (pick(12)) {
+            case 0: case 1: spawn(); break;
+            case 2: w.DestroyEntityAndChildren(e); break;
+            case 3: w.Registry.destroy(e); break; // its children orphaned
+            case 4: w.SetParent(e, pick(3) == 0 ? entt::entity{entt::null} : live[pick(live.size())]); break;
+            case 5: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef == modelA ? modelB : modelA; break; }
+            case 6: if (w.Registry.all_of<DeactivatedTag>(e)) w.Registry.remove<DeactivatedTag>(e); else w.Registry.emplace<DeactivatedTag>(e); break;
+            case 7: if (w.Registry.all_of<HiddenInSceneTag>(e)) w.Registry.remove<HiddenInSceneTag>(e); else w.Registry.emplace<HiddenInSceneTag>(e); break;
+            case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(5); break;
+            case 9: w.Registry.get<RenderableComponent>(e).CastShadows = pick(2) ? RenderableComponent::ShadowCasting::Off
+                                                                                     : RenderableComponent::ShadowCasting::On; break;
+            case 10: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef ? nullptr : modelA; break; } // none, or one again
+            default: w.Registry.get<TransformComponent>(e).Position = at(); break;
+            }
+        }
+        w.RebuildWorldTransformCache();
+        const glm::vec3 eye((float)pick(100) - 50.0f, 2.0f, (float)pick(100) - 50.0f);
+        const glm::vec3 look = eye + glm::vec3((float)pick(3) - 1.0f, 0.0f, pick(2) ? 1.0f : -1.0f);
+        const std::uint64_t fullBefore = GatherCandidateFullBuilds();
+        const auto patchedResults = queries(eye, look);
+        ++frames;
+        patched += GatherCandidateFullBuilds() == fullBefore ? 1 : 0;
+        ForgetGatherCandidates();
+        const auto scratch = queries(eye, look);
+        bool same = patchedResults.size() == scratch.size();
+        for (size_t i = 0; same && i < 4; ++i) same = patchedResults[i].Ids == scratch[i].Ids && patchedResults[i].Mins == scratch[i].Mins;
+        CHECK(same);
+        if (!same) {
+            std::printf("[GatherPatch] frame %d differs from a from-scratch build\n", frame);
+            break;
+        }
+        // RenderableBounds: a superset either way (a patched cell only grows).
+        if (patchedResults.size() == 5 && scratch.size() == 5) {
+            const glm::vec3 plo = patchedResults[4].Mins[0], phi = patchedResults[4].Mins[1];
+            const glm::vec3 slo = scratch[4].Mins[0], shi = scratch[4].Mins[1];
+            CHECK(glm::all(glm::lessThanEqual(plo, slo + 1e-3f)) && glm::all(glm::greaterThanEqual(phi, shi - 1e-3f)));
+        }
+    }
+    std::printf("[GatherPatch] %d of %d frames patched\n", patched, frames);
+    CHECK(patched * 2 > frames);
 }
 
 // mergeByMaterial: the same geometry and bounds in fewer meshes. Needs the model library (Drive assets).
@@ -261,6 +371,29 @@ void AssetPumpBudget() {
     CHECK(AssetLibrary::PumpBudgetMs(true, false, 1.0) == 3.0);   // lots of headroom: capped
 }
 
+// A ticket whose jobs are all in but whose material the pump's budget left for the next pump still counts as in
+// flight (AsyncInFlight), so a frameless drain (CLI tools, impostor bake) keeps pumping until it loads.
+void AssetPumpWaitingTickets() {
+    struct Job { bool Done = false; bool Complete() const { return Done; } };
+    struct Ticket { std::vector<std::shared_ptr<Job>> Jobs; bool Ready = false; };
+    auto done = std::make_shared<Job>(Job{true});
+    auto running = std::make_shared<Job>(Job{false});
+    auto deferred = std::make_shared<Ticket>(Ticket{{done}, false});      // jobs in, material not loaded: waiting
+    auto noJobs = std::make_shared<Ticket>(Ticket{{}, false});            // nothing to wait for, not ready yet: waiting
+    auto loading = std::make_shared<Ticket>(Ticket{{done, running}, false}); // a job still running: Active counts it
+    auto ready = std::make_shared<Ticket>(Ticket{{done}, true});
+    std::vector<std::weak_ptr<Ticket>> tickets{deferred, noJobs, loading, ready};
+    { auto gone = std::make_shared<Ticket>(); tickets.push_back(gone); } // dropped by its owner
+    CHECK(CountWaitingTickets(tickets) == 2);
+    deferred->Ready = true; // the next pump loads its material
+    CHECK(CountWaitingTickets(tickets) == 1);
+    noJobs->Ready = true;
+    running->Done = true;   // the last job lands: now waiting on the pump
+    CHECK(CountWaitingTickets(tickets) == 1);
+    loading->Ready = true;
+    CHECK(CountWaitingTickets(tickets) == 0);
+}
+
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
 // colour, queue or slot count keeps them apart, and the hash agrees with the comparison.
 void InstanceSlots() {
@@ -325,19 +458,19 @@ void VolumetricBlueNoise() {
 void TaaAndWetnessRoundTrip() {
     AssetLibrary assets;
     World world;
-    world.AntiAliasing = World::AntiAliasingMode::Taa;
-    world.TaaSharpness = 0.6f;
-    world.Wetness = 0.8f;
-    world.PuddleAmount = 0.4f;
-    world.PuddleScale = 7.5f;
+    world.Render.AntiAliasing = World::AntiAliasingMode::Taa;
+    world.Render.TaaSharpness = 0.6f;
+    world.Render.Wetness = 0.8f;
+    world.Render.PuddleAmount = 0.4f;
+    world.Render.PuddleScale = 7.5f;
     const std::string saved = SceneSerializer::SaveToString(world);
     {
         World reloaded;
         CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-        CHECK(reloaded.AntiAliasing == World::AntiAliasingMode::Taa && reloaded.TaaSharpness == 0.6f);
-        CHECK(reloaded.TaaEnabled() && reloaded.EffectiveMsaaSamples() == World::kTaaMsaaSamples && !reloaded.EffectiveFxaa());
-        CHECK(reloaded.Wetness == 0.8f && reloaded.PuddleAmount == 0.4f && reloaded.PuddleScale == 7.5f);
-        CHECK(reloaded.MsaaSamples == world.MsaaSamples); // kept for switching back
+        CHECK(reloaded.Render.AntiAliasing == World::AntiAliasingMode::Taa && reloaded.Render.TaaSharpness == 0.6f);
+        CHECK(reloaded.Render.TaaEnabled() && reloaded.Render.EffectiveMsaaSamples() == World::kTaaMsaaSamples && !reloaded.Render.EffectiveFxaa());
+        CHECK(reloaded.Render.Wetness == 0.8f && reloaded.Render.PuddleAmount == 0.4f && reloaded.Render.PuddleScale == 7.5f);
+        CHECK(reloaded.Render.MsaaSamples == world.Render.MsaaSamples); // kept for switching back
     }
     nlohmann::json j = nlohmann::json::parse(saved);
     for (const char* k : {"antiAliasing", "taaSharpness", "wetness", "puddleAmount", "puddleScale"}) CHECK(j.erase(k) == 1);
@@ -345,13 +478,13 @@ void TaaAndWetnessRoundTrip() {
     {
         World old;
         CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
-        CHECK(old.AntiAliasing == World::AntiAliasingMode::Fxaa && old.EffectiveFxaa() && !old.TaaEnabled());
-        CHECK(old.EffectiveMsaaSamples() == old.MsaaSamples);
-        CHECK(old.Wetness == 0.0f && old.PuddleAmount == 0.0f && old.PuddleScale == 4.0f && old.TaaSharpness == 0.35f);
+        CHECK(old.Render.AntiAliasing == World::AntiAliasingMode::Fxaa && old.Render.EffectiveFxaa() && !old.Render.TaaEnabled());
+        CHECK(old.Render.EffectiveMsaaSamples() == old.Render.MsaaSamples);
+        CHECK(old.Render.Wetness == 0.0f && old.Render.PuddleAmount == 0.0f && old.Render.PuddleScale == 4.0f && old.Render.TaaSharpness == 0.35f);
     }
     {
         const World plain;
-        CHECK(plain.AntiAliasing == World::AntiAliasingMode::Msaa && plain.EffectiveMsaaSamples() == plain.MsaaSamples);
+        CHECK(plain.Render.AntiAliasing == World::AntiAliasingMode::Msaa && plain.Render.EffectiveMsaaSamples() == plain.Render.MsaaSamples);
         const nlohmann::json pj = nlohmann::json::parse(SceneSerializer::SaveToString(plain));
         CHECK(!pj.contains("antiAliasing") && !pj.contains("wetness") && !pj.contains("puddleAmount"));
     }
@@ -372,17 +505,17 @@ void TaaAndWetnessRoundTrip() {
 void SceneWindSettings() {
     AssetLibrary assets;
     World world;
-    world.SkySourceMode = World::SkySource::Atmosphere;
-    world.Sky.CloudWindDirectionDegrees = 120.0f;
-    world.Sky.WindStrength = 0.6f;
-    world.Sky.WindGustiness = 0.3f;
-    world.Sky.WindGustSpeed = 6.5f;
+    world.Render.SkySourceMode = World::SkySource::Atmosphere;
+    world.Render.Sky.CloudWindDirectionDegrees = 120.0f;
+    world.Render.Sky.WindStrength = 0.6f;
+    world.Render.Sky.WindGustiness = 0.3f;
+    world.Render.Sky.WindGustSpeed = 6.5f;
     const std::string saved = SceneSerializer::SaveToString(world);
     {
         World reloaded;
         CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-        CHECK(reloaded.Sky.CloudWindDirectionDegrees == 120.0f && reloaded.Sky.WindStrength == 0.6f);
-        CHECK(reloaded.Sky.WindGustiness == 0.3f && reloaded.Sky.WindGustSpeed == 6.5f);
+        CHECK(reloaded.Render.Sky.CloudWindDirectionDegrees == 120.0f && reloaded.Render.Sky.WindStrength == 0.6f);
+        CHECK(reloaded.Render.Sky.WindGustiness == 0.3f && reloaded.Render.Sky.WindGustSpeed == 6.5f);
     }
     nlohmann::json j = nlohmann::json::parse(saved);
     CHECK(j.contains("sky"));
@@ -391,8 +524,8 @@ void SceneWindSettings() {
         World old;
         CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
         const SkySettings d;
-        CHECK(old.Sky.WindStrength == d.WindStrength && old.Sky.WindGustiness == d.WindGustiness);
-        CHECK(old.Sky.WindGustSpeed == d.WindGustSpeed && old.Sky.CloudWindDirectionDegrees == 120.0f);
+        CHECK(old.Render.Sky.WindStrength == d.WindStrength && old.Render.Sky.WindGustiness == d.WindGustiness);
+        CHECK(old.Render.Sky.WindGustSpeed == d.WindGustSpeed && old.Render.Sky.CloudWindDirectionDegrees == 120.0f);
     }
     const glm::vec2 north = TimeOfDay::BearingToXZ(0.0f, 0.0f), east = TimeOfDay::BearingToXZ(90.0f, 0.0f);
     CHECK(glm::length(north - glm::vec2(0.0f, -1.0f)) < 1e-5f && glm::length(east - glm::vec2(1.0f, 0.0f)) < 1e-5f);
@@ -417,22 +550,22 @@ void VolumetricSettingsRoundTrip() {
     const glm::vec3 zero(0.0f), one(1.0f);
     const entt::entity lamp = world.CreateEmptyEntity(zero, zero, one, "Lamp");
     world.Registry.emplace<LightComponent>(lamp).VolumetricIntensity = 3.5f;
-    world.VolumetricEnabled = true;
-    world.VolumetricDensity = 0.07f;
-    world.VolumetricAnisotropy = -0.3f;
-    world.VolumetricHeightFalloff = 0.25f;
-    world.VolumetricBaseHeight = 2.0f;
-    world.VolumetricAlbedo = glm::vec3(0.5f, 0.6f, 0.7f);
-    world.VolumetricDistance = 40.0f;
-    world.VolumetricQuality = 2;
+    world.Render.VolumetricEnabled = true;
+    world.Render.VolumetricDensity = 0.07f;
+    world.Render.VolumetricAnisotropy = -0.3f;
+    world.Render.VolumetricHeightFalloff = 0.25f;
+    world.Render.VolumetricBaseHeight = 2.0f;
+    world.Render.VolumetricAlbedo = glm::vec3(0.5f, 0.6f, 0.7f);
+    world.Render.VolumetricDistance = 40.0f;
+    world.Render.VolumetricQuality = 2;
     const std::string saved = SceneSerializer::SaveToString(world);
     {
         World reloaded;
         CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-        CHECK(reloaded.VolumetricEnabled && reloaded.VolumetricQuality == 2);
-        CHECK(reloaded.VolumetricDensity == 0.07f && reloaded.VolumetricAnisotropy == -0.3f);
-        CHECK(reloaded.VolumetricHeightFalloff == 0.25f && reloaded.VolumetricBaseHeight == 2.0f);
-        CHECK(reloaded.VolumetricAlbedo == glm::vec3(0.5f, 0.6f, 0.7f) && reloaded.VolumetricDistance == 40.0f);
+        CHECK(reloaded.Render.VolumetricEnabled && reloaded.Render.VolumetricQuality == 2);
+        CHECK(reloaded.Render.VolumetricDensity == 0.07f && reloaded.Render.VolumetricAnisotropy == -0.3f);
+        CHECK(reloaded.Render.VolumetricHeightFalloff == 0.25f && reloaded.Render.VolumetricBaseHeight == 2.0f);
+        CHECK(reloaded.Render.VolumetricAlbedo == glm::vec3(0.5f, 0.6f, 0.7f) && reloaded.Render.VolumetricDistance == 40.0f);
         float intensity = -1.0f;
         for (auto [e, l] : reloaded.Registry.view<const LightComponent>().each()) intensity = l.VolumetricIntensity;
         CHECK(intensity == 3.5f);
@@ -453,8 +586,8 @@ void VolumetricSettingsRoundTrip() {
         World old;
         CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
         const World defaults;
-        CHECK(!old.VolumetricEnabled && old.VolumetricDensity == defaults.VolumetricDensity &&
-              old.VolumetricAnisotropy == defaults.VolumetricAnisotropy && old.VolumetricQuality == 1);
+        CHECK(!old.Render.VolumetricEnabled && old.Render.VolumetricDensity == defaults.Render.VolumetricDensity &&
+              old.Render.VolumetricAnisotropy == defaults.Render.VolumetricAnisotropy && old.Render.VolumetricQuality == 1);
         bool sawLight = false;
         for (auto [e, l] : old.Registry.view<const LightComponent>().each()) {
             sawLight = true;
@@ -673,17 +806,17 @@ void ProbeCaptureAndPuddleSsr() {
 
     AssetLibrary assets;
     World world;
-    CHECK(!world.PuddleSsr);
+    CHECK(!world.Render.PuddleSsr);
     const entt::entity probe = world.Registry.create();
     world.Registry.emplace<TransformComponent>(probe);
     CHECK(world.Registry.emplace<ReflectionProbeComponent>(probe).CaptureScene);
     CHECK(!nlohmann::json::parse(SceneSerializer::SaveToString(world)).contains("puddleSsr"));
-    world.PuddleSsr = true;
+    world.Render.PuddleSsr = true;
     world.Registry.get<ReflectionProbeComponent>(probe).CaptureScene = false;
     const std::string saved = SceneSerializer::SaveToString(world);
     World reloaded;
     CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
-    CHECK(reloaded.PuddleSsr);
+    CHECK(reloaded.Render.PuddleSsr);
     int probes = 0;
     for (auto [e, rp] : reloaded.Registry.view<const ReflectionProbeComponent>().each()) { ++probes; CHECK(!rp.CaptureScene); }
     CHECK(probes == 1);
@@ -946,6 +1079,26 @@ using json = nlohmann::json;
 using UnitTestSupport::TempDir;
 using UnitTestSupport::ReadAll;
 
+// A still spot / point light redraws its static depth only when a caster's signature changes. A colourway swaps one
+// material slot in place (same count, same first slot): that must change the signature too.
+void TestLocalCasterHashSlots() {
+    auto a = std::make_shared<MaterialAsset>();
+    auto b = std::make_shared<MaterialAsset>();
+    auto c = std::make_shared<MaterialAsset>();
+    const glm::mat4 xf(1.0f);
+    const std::vector<std::shared_ptr<MaterialAsset>> before{a, b};
+    const std::vector<std::shared_ptr<MaterialAsset>> after{a, c}; // slot 1 recoloured
+    const std::uint64_t h0 = LocalCasterHash(7, nullptr, before, xf, 0, false);
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 0, false) == h0); // stable
+    CHECK(LocalCasterHash(7, nullptr, after, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, {b, a}, xf, 0, false) != h0); // slot order counts
+    CHECK(LocalCasterHash(7, nullptr, {a}, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 3, false) != h0); // hidden-triangle set
+    CHECK(LocalCasterHash(7, nullptr, before, xf, 0, true) != h0);
+    CHECK(LocalCasterHash(8, nullptr, before, xf, 0, false) != h0);
+    CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
+}
+
 void TestCameraRoll() {
     auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-4f; };
     Camera cam; // yaw -90: looking down -Z, right = +X, up = +Y
@@ -1045,6 +1198,245 @@ void TestLodGroup() {
     world.Registry.destroy(group);
     CHECK(world.ApplyLod(zero, proj) == 0); // no groups left: nothing stays tagged
     CHECK(world.Registry.view<LodCulledTag>().empty());
+}
+
+// The asset cost table's LOD level of a renderer: the index of the LOD Group child it sits under (at any depth), -1
+// outside a group or under a fifth child or later; the nearest group wins when they nest.
+void TestAssetCostLodLevel() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    auto make = [&](const char* name, entt::entity parent) {
+        const entt::entity e = world.CreateEmptyEntity(zero, zero, one, name);
+        if (parent != entt::null) CHECK(world.SetParent(e, parent));
+        return e;
+    };
+    auto lod = [&](entt::entity e) { return AssetCost::LodLevelOf(world, (unsigned)entt::to_integral(e)); };
+    const entt::entity loose = make("Loose", entt::null);
+    const entt::entity group = make("Group", entt::null);
+    world.Registry.emplace<LODGroupComponent>(group);
+    entt::entity lv[5];
+    for (int i = 0; i < 5; ++i) lv[i] = make("LOD", group);
+    const entt::entity deep = make("Deep", make("Mid", lv[2]));
+    const entt::entity inner = make("Inner", lv[1]);
+    world.Registry.emplace<LODGroupComponent>(inner);
+    const entt::entity innerLv0 = make("InnerLOD0", inner);
+    const entt::entity innerLv1 = make("InnerLOD1", inner);
+    CHECK(lod(loose) == -1);
+    CHECK(lod(group) == -1);
+    CHECK(lod(lv[0]) == 0);
+    CHECK(lod(lv[3]) == 3);
+    CHECK(lod(lv[4]) == -1); // a fifth child: always drawn, not a level
+    CHECK(lod(deep) == 2);
+    CHECK(lod(inner) == 1);
+    CHECK(lod(innerLv0) == 0); // the nearest group decides
+    CHECK(lod(innerLv1) == 1);
+}
+
+// A model drawn during a phase and unloaded before the phase is written (Forest's play phase streams outfits) still
+// gets its row: the table keeps what it measured at draw time, never a pointer to the model.
+void TestAssetCostModelFreedBeforeWrite() {
+    const std::filesystem::path csv = UnitTestSupport::TempDir("AssetCost") / "asset_cost_freed.csv";
+    std::error_code ec;
+    std::filesystem::remove(csv, ec);
+    CHECK(_putenv_s("TARTARUS_ASSET_COST", csv.string().c_str()) == 0);
+    World world;
+    auto model = std::make_unique<Model>("no/such/AssetCostFreed.fbx");
+    SceneDrawItem item{};
+    item.Ref = model.get();
+    item.Tris = 12;
+    item.SortId = 0xFFFFFFFFu;
+    const std::vector<SceneDrawItem> list{item};
+    AssetCost::NoteView(world, false, {&list});
+    model.reset();
+    AssetCost::WritePhase("freed.json", "play-max");
+    CHECK(_putenv_s("TARTARUS_ASSET_COST", "") == 0);
+    std::ifstream in(csv);
+    std::string line, row;
+    while (std::getline(in, line))
+        if (line.find("AssetCostFreed.fbx") != std::string::npos) row = line;
+    in.close();
+    CHECK(row.find("\"freed.json\",play-max,game-view,model,") == 0);
+    CHECK(row.find(",-1,1,12.0,12,1.00,12,0.000,") != std::string::npos);
+    std::filesystem::remove(csv, ec);
+}
+} // namespace
+// Reads World's LOD records for the structure-patch test's oracle (outside the unnamed namespace: World's friend).
+struct WorldLodTestAccess {
+    // What the records say a renderer should be: culled when a group above it tags the child on the path down to it
+    // (neither the level it shows nor the one fading out); fading out (-1) or in (+1) when exactly one group above it
+    // is cross-fading and the path goes through that group's old or new level, 0 when none is; 2 when several are
+    // (the last fade written wins, so the test doesn't check those).
+    static void Expect(const World& world, entt::entity e, bool& culled, int& fade) {
+        culled = false;
+        fade = 0;
+        int fades = 0;
+        entt::entity child = e;
+        for (size_t depth = 0; depth <= World::kMaxHierarchyDepth; ++depth) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(child);
+            const entt::entity parent = h ? h->Parent : entt::null;
+            if (parent == entt::null || !world.Registry.valid(parent)) break;
+            const size_t s = (size_t)entt::to_entity(parent);
+            if (world.Registry.all_of<LODGroupComponent>(parent) && s < world.m_LodIndex.size() &&
+                world.m_LodIndex[s] < world.m_LodState.size() && world.m_LodState[world.m_LodIndex[s]].Group == parent) {
+                const World::LodGroupState& st = world.m_LodState[world.m_LodIndex[s]];
+                for (int j = 0; j < st.Levels; ++j) {
+                    if (st.Kids[j] != child) continue;
+                    if (st.Active >= -1 && j != st.Active && j != st.FadeFrom) culled = true;
+                    if (st.FadeFrom >= 0 && (j == st.FadeFrom || j == st.Active)) {
+                        ++fades;
+                        fade = j == st.FadeFrom ? -1 : 1;
+                    }
+                }
+            }
+            child = parent;
+        }
+        if (fades > 1) fade = 2;
+    }
+    static size_t Fading(const World& world) { return world.m_LodFading.size(); }
+};
+namespace {
+
+// ApplyLod's structure patch (renderers created, destroyed and re-parented in and around LOD Groups, nested ones
+// included) tags exactly what a full pass from scratch tags, frame after frame of random changes; and the small ones
+// do take the patch. With LodSmooth on (cross-fades under way while things come and go) every renderer's tag and fade
+// match what the groups above it say: a piece added under a level fading out fades out with it.
+static void RunLodStructurePatch(bool smooth) {
+    World world;
+    world.LodSmooth = smooth;
+    world.LodClockOverride = smooth ? 10.0 : -1.0;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    std::mt19937 rng(1107);
+    auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
+    std::vector<entt::entity> places; // what new renderers go under (level children and what's under them, loose ones)
+    std::vector<entt::entity> spawned; // what the test creates, destroys and moves
+    auto renderer = [&](const glm::vec3& at) {
+        const entt::entity e = world.CreateEmptyEntity(at, zero, one, "R");
+        world.Registry.emplace<RenderableComponent>(e);
+        return e;
+    };
+    auto makeGroup = [&](entt::entity parent, const glm::vec3& at) {
+        const entt::entity g = world.CreateEmptyEntity(at, zero, one, "Group");
+        world.Registry.emplace<LODGroupComponent>(g).Size = 2.0f;
+        if (parent != entt::null) CHECK(world.SetParent(g, parent));
+        for (int i = 0; i < 3; ++i) {
+            const entt::entity level = renderer(at);
+            CHECK(world.SetParent(level, g));
+            places.push_back(level);
+            const entt::entity under = renderer(at);
+            CHECK(world.SetParent(under, level));
+            places.push_back(under);
+        }
+        return g;
+    };
+    std::vector<entt::entity> groups;
+    for (int i = 0; i < 4; ++i) groups.push_back(makeGroup(entt::null, glm::vec3(4.0f * i, 0.0f, 0.0f)));
+    groups.push_back(makeGroup(places[1], glm::vec3(0.0f, 1.0f, 0.0f)));  // inside group 0's LOD 0
+    groups.push_back(makeGroup(places[8], glm::vec3(4.0f, 1.0f, 0.0f)));  // inside group 1's LOD 1
+    for (int i = 0; i < 3; ++i) places.push_back(renderer(glm::vec3(0.0f, 0.0f, 3.0f * i))); // under no group
+
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto tagged = [&]() {
+        std::vector<std::uint32_t> out;
+        for (entt::entity e : world.Registry.view<LodCulledTag>()) {
+            CHECK(world.IsLodCulled(e));
+            out.push_back(entt::to_integral(e));
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    };
+    auto alive = [&](std::vector<entt::entity>& v) {
+        v.erase(std::remove_if(v.begin(), v.end(), [&](entt::entity e) { return !world.Registry.valid(e); }), v.end());
+    };
+    // The records' word for every renderer (see WorldLodTestAccess::Expect); false and a message on the first miss.
+    int fadingChecked = 0;
+    auto matchesRecords = [&](int frame) {
+        for (entt::entity e : world.Registry.view<RenderableComponent>()) {
+            bool culled = false;
+            int fade = 0;
+            WorldLodTestAccess::Expect(world, e, culled, fade);
+            const float got = world.LodFadeOf(e);
+            const bool fadeOk = fade == 2 || (fade == 0 ? got == 0.0f : fade < 0 ? got < 0.0f : got > 0.0f);
+            fadingChecked += fade == 1 || fade == -1 ? 1 : 0;
+            if (world.IsLodCulled(e) != culled || !fadeOk) {
+                std::printf("[LodStructurePatch%s] frame %d: entity %u culled %d (records say %d), fade %.3f (records say %d)\n",
+                            smooth ? " smooth" : "", frame, (unsigned)entt::to_integral(e), (int)world.IsLodCulled(e),
+                            (int)culled, got, fade);
+                return false;
+            }
+        }
+        return true;
+    };
+    int patched = 0, changedFrames = 0, fadingFrames = 0;
+    glm::vec3 view(0.0f, 0.0f, 1.0f);
+    for (int frame = 0; frame < 400; ++frame) {
+        alive(places);
+        alive(spawned);
+        const int ops = (int)pick(3);
+        for (int op = 0; op < ops; ++op) {
+            alive(spawned); // an earlier op may have destroyed some
+            const size_t kind = pick(10);
+            if (kind < 4 || spawned.empty()) { // a renderer (sometimes with a child) under some place, or under none
+                const entt::entity e = renderer(glm::vec3((float)pick(16), 0.0f, (float)pick(8)));
+                if (pick(6) != 0) CHECK(world.SetParent(e, places[pick(places.size())]));
+                spawned.push_back(e);
+                if (pick(3) == 0) {
+                    const entt::entity c = renderer(zero);
+                    CHECK(world.SetParent(c, e));
+                    spawned.push_back(c);
+                }
+            } else if (kind < 6) { // destroyed: with its children, or through the registry (its children orphaned)
+                const entt::entity e = spawned[pick(spawned.size())];
+                if (pick(2) == 0) world.DestroyEntityAndChildren(e);
+                else world.Registry.destroy(e);
+            } else if (kind < 8) { // moved to another place, or to none (a cycle is refused)
+                const entt::entity e = spawned[pick(spawned.size())];
+                world.SetParent(e, pick(5) == 0 ? entt::entity{entt::null} : places[pick(places.size())]);
+            } else if (kind < 9) { // a renderer added in place (the full pass's job)
+                const entt::entity e = spawned[pick(spawned.size())];
+                if (!world.Registry.all_of<RenderableComponent>(e)) world.Registry.emplace<RenderableComponent>(e);
+                else world.Registry.remove<RenderableComponent>(e);
+            } else { // only moved
+                world.Registry.get<TransformComponent>(spawned[pick(spawned.size())]).Position.y += 1.0f;
+            }
+        }
+        world.RebuildWorldTransformCache();
+        // Smooth: the view holds a few frames (a group fades only once it has settled) and the clock runs 0.15 s a
+        // frame, so a fade spans about four frames of changes.
+        if (!smooth || frame % 6 == 0) view = glm::vec3((float)pick(16), 0.0f, 1.0f + (float)pick(20));
+        if (smooth) world.LodClockOverride += 0.15;
+        const std::uint64_t fullBefore = world.LodFullPasses();
+        world.ApplyLod(view, proj);
+        const auto& d = world.TransformStructureChanges();
+        if (ops > 0 && d.Valid && (!d.Added.empty() || !d.Reparented.empty() || !d.Dropped.empty())) {
+            ++changedFrames;
+            patched += world.LodFullPasses() == fullBefore ? 1 : 0;
+        }
+        fadingFrames += WorldLodTestAccess::Fading(world) > 0 ? 1 : 0;
+        const bool ok = matchesRecords(frame);
+        CHECK(ok);
+        if (!ok) break;
+        if (smooth) continue; // a pass from scratch would end the fades under way
+        const auto incremental = tagged();
+        world.ClearLod();
+        world.ApplyLod(view, proj); // from scratch
+        const auto fromScratch = tagged();
+        CHECK(incremental == fromScratch);
+        if (incremental != fromScratch) {
+            std::printf("[LodStructurePatch] frame %d: %zu tagged incrementally, %zu from scratch\n", frame,
+                        incremental.size(), fromScratch.size());
+            break;
+        }
+    }
+    std::printf("[LodStructurePatch%s] %d of %d structure-change frames patched; %d frames fading, %d fading renderers checked\n",
+                smooth ? " smooth" : "", patched, changedFrames, fadingFrames, fadingChecked);
+    CHECK(changedFrames > 100);
+    CHECK(patched * 2 > changedFrames);
+    if (smooth) CHECK(fadingFrames > 40 && fadingChecked > 100);
+}
+
+void TestLodStructurePatch() {
+    RunLodStructurePatch(false);
+    RunLodStructurePatch(true);
 }
 
 // Octahedral impostors (ImpostorLibrary): past the start distance a matched group shows its impostor - every level
@@ -1498,31 +1890,31 @@ void TestPhysicalSky() {
 
     // Scene files: every field round-trips, old scenes load the defaults, bad values clamp.
     World w;
-    w.SkySourceMode = World::SkySource::Atmosphere;
-    w.Sky.CloudCoverage = 0.77f;
-    w.Sky.RayleighTint = glm::vec3(0.5f, 1.0f, 0.625f);
-    w.Sky.CloudQuality = 2;
-    w.Sky.MoonEnabled = false;
-    w.Sky.NightBrightness = 2.5f;
-    w.Sky.TimeOfDayHours = 17.25f;
+    w.Render.SkySourceMode = World::SkySource::Atmosphere;
+    w.Render.Sky.CloudCoverage = 0.77f;
+    w.Render.Sky.RayleighTint = glm::vec3(0.5f, 1.0f, 0.625f);
+    w.Render.Sky.CloudQuality = 2;
+    w.Render.Sky.MoonEnabled = false;
+    w.Render.Sky.NightBrightness = 2.5f;
+    w.Render.Sky.TimeOfDayHours = 17.25f;
     AssetLibrary assets;
     const std::string saved = SceneSerializer::SaveToString(w, assets);
     World r;
     AssetLibrary assets2;
     CHECK(SceneSerializer::LoadFromString(r, assets2, saved));
-    CHECK(r.SkySourceMode == World::SkySource::Atmosphere);
-    CHECK(r.Sky == w.Sky);
+    CHECK(r.Render.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(r.Render.Sky == w.Render.Sky);
     World old;
     AssetLibrary assets3;
     CHECK(SceneSerializer::LoadFromString(old, assets3, R"({"formatVersion":4,"skySource":2})"));
-    CHECK(old.SkySourceMode == World::SkySource::Atmosphere && old.Sky == SkySettings{});
+    CHECK(old.Render.SkySourceMode == World::SkySource::Atmosphere && old.Render.Sky == SkySettings{});
     World clamped;
     AssetLibrary assets4;
     CHECK(SceneSerializer::LoadFromString(clamped, assets4,
         R"({"formatVersion":4,"skySource":9,"sky":{"cloudCoverage":7,"cloudQuality":9,"latitude":-400,"clouds":"yes"}})"));
-    CHECK(clamped.SkySourceMode == World::SkySource::Atmosphere);
-    CHECK(clamped.Sky.CloudCoverage == 1.0f && clamped.Sky.CloudQuality == 3 && clamped.Sky.LatitudeDegrees == -90.0f);
-    CHECK(clamped.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
+    CHECK(clamped.Render.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(clamped.Render.Sky.CloudCoverage == 1.0f && clamped.Render.Sky.CloudQuality == 3 && clamped.Render.Sky.LatitudeDegrees == -90.0f);
+    CHECK(clamped.Render.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
 }
 
 // --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
@@ -1636,11 +2028,13 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
+    tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
     tests.push_back({"Async uploads: the pump budget follows the frame headroom in Play", AssetPumpBudget});
+    tests.push_back({"Async uploads: a ticket the budget deferred still counts as in flight", AssetPumpWaitingTickets});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
@@ -1653,6 +2047,9 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
     tests.push_back({"Materials: built-in property table - default keys, v1/v2 round-trip, accessors and bind resolver", MaterialBuiltinTable});
     tests.push_back({"LodGroup", TestLodGroup});
+    tests.push_back({"AssetCostLodLevel", TestAssetCostLodLevel});
+    tests.push_back({"AssetCostModelFreedBeforeWrite", TestAssetCostModelFreedBeforeWrite});
+    tests.push_back({"LodStructurePatch", TestLodStructurePatch});
     tests.push_back({"LodImpostor", TestLodImpostor});
     tests.push_back({"LodImpostorSceneSwitch", TestLodImpostorSceneSwitch});
     tests.push_back({"LodFadeCompletes", TestLodFadeCompletes});
@@ -1663,4 +2060,5 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
+    tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
 }

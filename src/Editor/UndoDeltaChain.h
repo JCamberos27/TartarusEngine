@@ -1,5 +1,6 @@
 #pragma once
 #include <json.hpp>
+#include <cstdint>
 #include <future>
 #include <memory>
 #include <string>
@@ -44,6 +45,18 @@
 // took ~27 ms, on every undoable edit, on the main thread. Pop - the only reader - waits for it,
 // and in practice it's long finished by then.
 namespace UndoDelta {
+
+// Cheap non-cryptographic FNV-1a hash of a serialized scene snapshot. Only ever compared with
+// another snapshot's hash to tell "the same scene" from "a different one", never used to rebuild
+// anything. Same constants and style as TextureCache::HashSettings.
+inline uint64_t HashText(const std::string& s) {
+    uint64_t h = 1469598103934665603ull; // FNV-1a offset basis
+    for (unsigned char c : s) {
+        h ^= c;
+        h *= 1099511628211ull; // FNV-1a prime
+    }
+    return h;
+}
 
 // JSON Patch that turns `fromJson` into `toJson`. Returns "" if either side won't parse, which
 // ApplyPatch treats as an unrecoverable link (a real empty patch dumps as "[]", never "").
@@ -96,11 +109,19 @@ private:
     mutable std::shared_future<std::string> m_Job;
 };
 
+inline bool ApplyPatch(const nlohmann::json& source, const std::string& patchJson, std::string& out) {
+    if (patchJson.empty()) return false;
+    try {
+        out = source.patch(nlohmann::json::parse(patchJson)).dump();
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
 inline bool ApplyPatch(const std::string& sourceJson, const std::string& patchJson, std::string& out) {
     if (patchJson.empty()) return false;
     try {
-        out = nlohmann::json::parse(sourceJson).patch(nlohmann::json::parse(patchJson)).dump();
-        return true;
+        return ApplyPatch(nlohmann::json::parse(sourceJson), patchJson, out);
     } catch (const std::exception&) {
         return false;
     }
@@ -129,21 +150,28 @@ enum class PopResult {
 };
 
 // Removes the top entry, handing back the entry itself and its full scene JSON, and re-anchors
-// `baseJson` on the entry underneath.
+// `baseJson` on the entry underneath. `outParsed`, when given, also gets `outFullJson` parsed (the
+// re-anchoring parses it anyway), or a discarded value when it won't parse.
 template <class Entry>
 PopResult Pop(std::vector<Entry>& stack, std::string& baseJson, Entry& outEntry,
-              std::string& outFullJson) {
+              std::string& outFullJson, nlohmann::json* outParsed = nullptr) {
     if (stack.empty()) return PopResult::Empty;
     outFullJson = baseJson; // the top entry is the one held in full
     outEntry = std::move(stack.back());
     stack.pop_back();
+    nlohmann::json parsed(nlohmann::json::value_t::discarded);
+    if (outParsed || !stack.empty()) {
+        try { parsed = nlohmann::json::parse(outFullJson); }
+        catch (const std::exception&) { parsed = nlohmann::json(nlohmann::json::value_t::discarded); }
+    }
+    struct HandOver { nlohmann::json& From; nlohmann::json* To; ~HandOver() { if (To) *To = std::move(From); } } handOver{parsed, outParsed};
     if (stack.empty()) {
         baseJson.clear();
         baseJson.shrink_to_fit();
         return PopResult::Ok;
     }
     // Re-anchor on the entry that's now on top by walking its patch back one step.
-    if (!ApplyPatch(outFullJson, stack.back().Delta.Text(), baseJson)) {
+    if (parsed.is_discarded() || !ApplyPatch(parsed, stack.back().Delta.Text(), baseJson)) {
         // Can't happen in practice (every link is built from our own serializer's output), but
         // if the chain ever did break, drop the unreachable tail rather than hand back a wrong
         // scene: the entry just popped still restores correctly, only the history behind it
@@ -153,6 +181,71 @@ PopResult Pop(std::vector<Entry>& stack, std::string& baseJson, Entry& outEntry,
         return PopResult::TailDropped;
     }
     stack.back().Delta.clear(); // it's the top now, and the top is held in full
+    return PopResult::Ok;
+}
+
+// A stack's base (its top entry's full state) that a deferred Pop may still be working out on a
+// background thread. Every read waits for that first, so a caller can never see the old top's
+// text in its place. Empty when the stack is empty, or after a re-anchor that failed (TakeBroken).
+class Base {
+public:
+    std::string& Text() { Settle(); return m_Text; }
+    const std::string& Text() const { Settle(); return m_Text; }
+    bool empty() const { return Text().empty(); }
+    void clear() {
+        m_Job = {};
+        m_Text.clear();
+        m_Text.shrink_to_fit();
+        m_Broken = false;
+    }
+    // True once if a deferred re-anchor failed: the entries under the top can't be rebuilt.
+    bool TakeBroken() {
+        Settle();
+        const bool broken = m_Broken;
+        m_Broken = false;
+        return broken;
+    }
+    // The base becomes `source` with `patch` applied, worked out on a background thread.
+    void Defer(std::string source, std::string patch) {
+        m_Text.clear();
+        m_Broken = false;
+        auto promise = std::make_shared<std::promise<std::pair<bool, std::string>>>();
+        m_Job = promise->get_future();
+        std::thread([promise, source = std::move(source), patch = std::move(patch)] {
+            std::string out;
+            const bool ok = ApplyPatch(source, patch, out);
+            promise->set_value({ok, ok ? std::move(out) : std::string()});
+        }).detach();
+    }
+
+private:
+    void Settle() const {
+        if (!m_Job.valid()) return;
+        auto [ok, text] = m_Job.get();
+        m_Text = std::move(text);
+        m_Broken = !ok;
+    }
+    mutable std::string m_Text;
+    mutable bool m_Broken = false;
+    mutable std::future<std::pair<bool, std::string>> m_Job;
+};
+
+// Pop for a caller that doesn't need the popped state parsed (an in-place undo, X-33 C): hands
+// back the top entry and its full text at once, and re-anchors `base` on the entry underneath on
+// a background thread instead of parsing, patching and dumping the whole scene here.
+template <class Entry>
+PopResult PopDeferred(std::vector<Entry>& stack, Base& base, Entry& outEntry, std::string& outFullJson) {
+    if (stack.empty()) return PopResult::Empty;
+    outFullJson = base.Text();
+    outEntry = std::move(stack.back());
+    stack.pop_back();
+    if (stack.empty()) {
+        base.clear();
+        return PopResult::Ok;
+    }
+    std::string patch = stack.back().Delta.Text(); // waits for its diff, normally long done
+    stack.back().Delta.clear();                    // it's the top now, and the top is held in full
+    base.Defer(outFullJson, std::move(patch));
     return PopResult::Ok;
 }
 

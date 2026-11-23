@@ -53,6 +53,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <execution>
+#include <numeric>
 #include <cstdint>
 #include <cmath>
 #include <limits>
@@ -142,6 +143,14 @@ struct CandidateCache {
     std::vector<CandidateCell> Cells;
     std::vector<std::uint32_t> Index; // entity slot -> List index (kNoCandidate when none)
     std::vector<const Model*> PoolModels; // each renderable's model, in pool order: a swapped model rebuilds
+    // Patched since the build (RefreshCandidates): the renderables that were no candidate (no model, or no transform),
+    // the trailing Always cell new renderables join, and how many candidates left (kept, flagged inactive, Renderable
+    // null) - too many of either and the next change rebuilds in full.
+    std::vector<entt::entity> Uncounted;
+    std::uint32_t PatchCell = ~0u;
+    size_t Dead = 0;
+    std::uint64_t FullBuilds = 0;
+    bool Forget = false; // tests: the next call rebuilds in full
 };
 constexpr std::uint32_t kNoCandidate = ~0u;
 
@@ -181,8 +190,191 @@ void FillBounds(VisibleRenderable& v, const RenderableComponent& r) {
     }
 }
 
-const CandidateCache& Candidates(World& world) {
+CandidateCache& CandidateStore() {
     static CandidateCache cache;
+    return cache;
+}
+
+// What a candidate's Flags are read from (read only: safe across the cores).
+std::uint16_t CandidateFlagsOf(const entt::registry& reg, entt::entity entity, const RenderableComponent& r) {
+    std::uint16_t f = 0;
+    if (reg.all_of<InactiveTag>(entity)) f |= kCandInactive;
+    if (reg.all_of<PoseSourceTag>(entity)) f |= kCandPoseSource;
+    if (reg.all_of<OwnerViewOnlyTag>(entity)) f |= kCandOwnerViewOnly;
+    if (reg.all_of<HiddenFromOwnerTag>(entity)) f |= kCandHiddenFromOwner;
+    if (reg.all_of<ViewModelTag>(entity)) f |= kCandViewModel;
+    if (reg.all_of<PlayerBodyTag>(entity)) f |= kCandPlayerBody;
+    if (reg.all_of<HiddenInSceneTag>(entity)) f |= kCandHiddenInScene;
+    if (r.ModelRef->HasBones()) f |= kCandPosed;
+    return f;
+}
+int CandidateLayerOf(const entt::registry& reg, entt::entity entity) {
+    const auto* lc = reg.try_get<LayerComponent>(entity);
+    return lc ? lc->Layer : 0;
+}
+// A renderable with a model, as a candidate (its Cell is set by the caller).
+Candidate MakeCandidate(World& world, entt::entity entity, RenderableComponent& r) {
+    Candidate c{entity, &r, r.ModelRef.get(), CandidateFlagsOf(world.Registry, entity, r), 0, 0, {}};
+    c.Layer = CandidateLayerOf(world.Registry, entity);
+    c.V.Entity = entity;
+    c.V.CandFlags = c.Flags;
+    c.V.Layer = c.Layer;
+    c.V.Renderable = &r;
+    c.V.Xform = world.GetCachedWorldTransform(entity);
+    c.V.Normal = NormalMatrix(c.V.Xform);
+    FillBounds(c.V, r);
+    return c;
+}
+
+// One rebuild on from the last build, the moved candidates: new transform and bounds, their cell grown to hold them.
+void PatchMovedCandidates(World& world, CandidateCache& cache) {
+    for (entt::entity e : world.ChangedWorldTransforms()) {
+        const size_t slot = (size_t)entt::to_entity(e);
+        if (slot >= cache.Index.size() || cache.Index[slot] == kNoCandidate) continue;
+        Candidate& c = cache.List[cache.Index[slot]];
+        if (c.Entity != e || !c.Renderable) continue;
+        c.V.Xform = world.GetCachedWorldTransform(e);
+        c.V.Normal = NormalMatrix(c.V.Xform);
+        FillBounds(c.V, *c.Renderable);
+        CandidateCell& cell = cache.Cells[c.Cell];
+        if (!cell.Always) {
+            if (!c.V.Bounded) {
+                cell.Always = true; // lost its bounds: the cell is tested member by member now
+            } else {
+                cell.Min = glm::min(cell.Min, c.V.WorldMin);
+                cell.Max = glm::max(cell.Max, c.V.WorldMax);
+            }
+        }
+    }
+}
+
+// One rebuild on from the last build, with tags, models or the set of renderables changed (an outfit landing: pieces
+// created and destroyed, hiding tags moved): every candidate re-reads its flags, layer and component (a destroy moves
+// another renderer's component in the pool) across the cores; the ones that left are flagged out where they stand,
+// the transform cache's new entities join the trailing Always cell, and the moved ones are patched as usual - instead
+// of re-reading, re-bounding and re-sorting every renderable (~10 ms on the forest, on each such frame). Returns false
+// when only the full build can tell: the renderable count isn't what that explains (a renderer added in place, or one
+// that had no transform or model given one).
+bool RefreshCandidates(World& world, CandidateCache& cache) {
+    auto& reg = world.Registry;
+    auto& renderPool = reg.storage<RenderableComponent>();
+    const auto& transformPool = reg.storage<TransformComponent>();
+    size_t counted = 0;
+    {
+        size_t keep = 0;
+        for (entt::entity e : cache.Uncounted) {
+            if (!reg.valid(e) || !renderPool.contains(e)) continue;
+            if (transformPool.contains(e) && renderPool.get(e).ModelRef) return false; // a candidate now
+            cache.Uncounted[keep++] = e;
+        }
+        cache.Uncounted.resize(keep);
+        counted += keep;
+    }
+    const size_t n = cache.List.size();
+    constexpr size_t kChunk = 8192;
+    const size_t chunks = (n + kChunk - 1) / kChunk;
+    static std::vector<size_t> chunkIds, chunkLive;
+    static std::vector<std::vector<std::uint32_t>> chunkGone, chunkFix;
+    chunkIds.resize(chunks);
+    std::iota(chunkIds.begin(), chunkIds.end(), size_t(0));
+    chunkLive.assign(chunks, 0);
+    if (chunkGone.size() < chunks) {
+        chunkGone.resize(chunks);
+        chunkFix.resize(chunks);
+    }
+    constexpr std::uint16_t kOwnCell = kCandPosed | kCandViewModel | kCandPlayerBody; // never in a static cell
+    const auto scan = [&](size_t ch) {
+        std::vector<std::uint32_t>& gone = chunkGone[ch];
+        std::vector<std::uint32_t>& fix = chunkFix[ch];
+        gone.clear();
+        fix.clear();
+        size_t live = 0;
+        for (size_t i = ch * kChunk, end = std::min(n, i + kChunk); i < end; ++i) {
+            Candidate& c = cache.List[i];
+            if (!c.Renderable) continue; // left at an earlier patch
+            const entt::entity e = c.Entity;
+            RenderableComponent* r = reg.valid(e) && renderPool.contains(e) && transformPool.contains(e) ? &renderPool.get(e) : nullptr;
+            if (!r || !r->ModelRef) {
+                gone.push_back((std::uint32_t)i);
+                continue;
+            }
+            const std::uint16_t flags = CandidateFlagsOf(reg, e, *r);
+            const bool modelChanged = r->ModelRef.get() != c.ModelAtBuild;
+            const bool ownCell = (flags & kOwnCell) && !(c.Flags & kOwnCell);
+            c.Renderable = c.V.Renderable = r;
+            c.Flags = c.V.CandFlags = cache.Hot[i].Flags = flags;
+            c.Layer = c.V.Layer = CandidateLayerOf(reg, e);
+            if (modelChanged) {
+                c.ModelAtBuild = r->ModelRef.get();
+                FillBounds(c.V, *r);
+            }
+            if (modelChanged || ownCell) fix.push_back((std::uint32_t)i);
+            ++live;
+        }
+        chunkLive[ch] = live;
+    };
+    if (chunks > 1) std::for_each(std::execution::par, chunkIds.begin(), chunkIds.end(), scan);
+    else if (chunks == 1) scan(0);
+    for (size_t ch = 0; ch < chunks; ++ch) {
+        counted += chunkLive[ch];
+        for (std::uint32_t i : chunkGone[ch]) {
+            Candidate& c = cache.List[i];
+            const size_t slot = (size_t)entt::to_entity(c.Entity);
+            if (slot < cache.Index.size() && cache.Index[slot] == i) cache.Index[slot] = kNoCandidate;
+            if (reg.valid(c.Entity) && renderPool.contains(c.Entity)) { // kept its renderer, lost its model or transform
+                cache.Uncounted.push_back(c.Entity);
+                ++counted;
+            }
+            c.Renderable = c.V.Renderable = nullptr;
+            c.Flags = c.V.CandFlags = cache.Hot[i].Flags = kCandInactive;
+            ++cache.Dead;
+        }
+        for (std::uint32_t i : chunkFix[ch]) {
+            const Candidate& c = cache.List[i];
+            CandidateCell& cell = cache.Cells[c.Cell];
+            if (cell.Always) continue;
+            if (!c.V.Bounded || (c.Flags & kOwnCell)) {
+                cell.Always = true;
+            } else {
+                cell.Min = glm::min(cell.Min, c.V.WorldMin);
+                cell.Max = glm::max(cell.Max, c.V.WorldMax);
+            }
+        }
+    }
+    for (entt::entity e : world.TransformStructureChanges().Added) {
+        if (!renderPool.contains(e) || !transformPool.contains(e)) continue;
+        const size_t slot = (size_t)entt::to_entity(e);
+        if (slot < cache.Index.size() && cache.Index[slot] != kNoCandidate && cache.List[cache.Index[slot]].Entity == e)
+            continue; // a candidate already
+        ++counted;
+        RenderableComponent& r = renderPool.get(e);
+        if (!r.ModelRef) {
+            cache.Uncounted.push_back(e);
+            continue;
+        }
+        Candidate c = MakeCandidate(world, e, r);
+        if (cache.PatchCell == ~0u) {
+            cache.Cells.push_back({c.V.WorldMin, c.V.WorldMax, (std::uint32_t)cache.List.size(), 0, true});
+            cache.PatchCell = (std::uint32_t)cache.Cells.size() - 1;
+        }
+        c.Cell = cache.PatchCell;
+        ++cache.Cells[cache.PatchCell].Count;
+        if (slot >= cache.Index.size()) cache.Index.resize(slot + 1, kNoCandidate);
+        cache.Index[slot] = (std::uint32_t)cache.List.size();
+        cache.Hot.push_back({c.Entity, c.Flags});
+        cache.List.push_back(c);
+    }
+    if (counted != renderPool.size()) return false;
+    PatchMovedCandidates(world, cache);
+    return true;
+}
+
+const CandidateCache& Candidates(World& world) {
+    CandidateCache& cache = CandidateStore();
+    if (cache.Forget) {
+        cache.Forget = false;
+        cache.Owner = nullptr;
+    }
     // Its entities (the storage's own iterators yield components): the first and last as a cheap check that the set
     // didn't change under an unchanged size.
     const entt::sparse_set& storage = world.Registry.storage<RenderableComponent>();
@@ -218,29 +410,27 @@ const CandidateCache& Candidates(World& world) {
     };
     // One rebuild on from the last build, nothing entered or left the transform cache and no flag or model changed:
     // patch the moved ones (and everything posed reads its bounds live anyway).
-    if (sameSet && cache.Flags == flags && cache.Stamp != 0 && cache.Stamp == world.PreviousTransformCacheStamp() &&
-        !world.TransformCacheMembershipChanged() && sameModels()) {
-        for (entt::entity e : world.ChangedWorldTransforms()) {
-            const size_t slot = (size_t)entt::to_entity(e);
-            if (slot >= cache.Index.size() || cache.Index[slot] == kNoCandidate) continue;
-            Candidate& c = cache.List[cache.Index[slot]];
-            if (c.Entity != e) continue;
-            c.V.Xform = world.GetCachedWorldTransform(e);
-            c.V.Normal = NormalMatrix(c.V.Xform);
-            FillBounds(c.V, *c.Renderable);
-            CandidateCell& cell = cache.Cells[c.Cell];
-            if (!cell.Always) {
-                if (!c.V.Bounded) {
-                    cell.Always = true; // lost its bounds: the cell is tested member by member now
-                } else {
-                    cell.Min = glm::min(cell.Min, c.V.WorldMin);
-                    cell.Max = glm::max(cell.Max, c.V.WorldMax);
-                }
-            }
-        }
+    const bool afterOneRebuild = cache.Owner == &world && cache.Stamp != 0 && cache.Stamp == world.PreviousTransformCacheStamp();
+    if (sameSet && afterOneRebuild && cache.Flags == flags && !world.TransformCacheMembershipChanged() && sameModels()) {
+        PatchMovedCandidates(world, cache);
         cache.Stamp = world.TransformCacheStamp();
         return cache;
     }
+    // Tags, models or the renderables changed (and the transform cache can say what came and went): patch those too,
+    // until what was patched in stops paying for itself.
+    const size_t patchedIn = cache.Dead + (cache.PatchCell != ~0u ? cache.Cells[cache.PatchCell].Count : 0);
+    if (afterOneRebuild && (!world.TransformCacheMembershipChanged() || world.TransformStructureChanges().Valid) &&
+        patchedIn <= std::max<size_t>(1024, cache.List.size() / 8) && RefreshCandidates(world, cache)) {
+        cache.Stamp = world.TransformCacheStamp();
+        cache.Renderables = storage.size();
+        cache.First = first;
+        cache.Last = last;
+        cache.Flags = flags;
+        cache.PoolModels.clear();
+        for (auto it = pool.cbegin(), end = pool.cend(); it != end; ++it) cache.PoolModels.push_back(it->ModelRef.get());
+        return cache;
+    }
+    ++cache.FullBuilds;
     cache.Owner = &world;
     cache.Stamp = world.TransformCacheStamp();
     cache.Renderables = storage.size();
@@ -250,33 +440,22 @@ const CandidateCache& Candidates(World& world) {
     cache.List.clear();
     cache.Hot.clear();
     cache.Cells.clear();
+    cache.Uncounted.clear();
+    cache.PatchCell = ~0u;
+    cache.Dead = 0;
     std::fill(cache.Index.begin(), cache.Index.end(), kNoCandidate);
     cache.PoolModels.clear();
     for (auto it = pool.cbegin(), end = pool.cend(); it != end; ++it) cache.PoolModels.push_back(it->ModelRef.get());
     static std::vector<Candidate> built;
     built.clear();
-    for (auto entity : reg.view<TransformComponent, RenderableComponent>()) {
+    for (entt::entity entity : storage) {
         auto& r = reg.get<RenderableComponent>(entity);
-        if (!r.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
-        Candidate c{entity, &r, r.ModelRef.get(), 0, 0, 0, {}};
-        if (reg.all_of<InactiveTag>(entity)) c.Flags |= kCandInactive;
-        if (reg.all_of<PoseSourceTag>(entity)) c.Flags |= kCandPoseSource;
-        if (reg.all_of<OwnerViewOnlyTag>(entity)) c.Flags |= kCandOwnerViewOnly;
-        if (reg.all_of<HiddenFromOwnerTag>(entity)) c.Flags |= kCandHiddenFromOwner;
-        if (reg.all_of<ViewModelTag>(entity)) c.Flags |= kCandViewModel;
-        if (reg.all_of<PlayerBodyTag>(entity)) c.Flags |= kCandPlayerBody;
-        if (reg.all_of<HiddenInSceneTag>(entity)) c.Flags |= kCandHiddenInScene;
-        if (r.ModelRef->HasBones()) c.Flags |= kCandPosed;
-        const auto* lc = reg.try_get<LayerComponent>(entity);
-        c.Layer = lc ? lc->Layer : 0;
-        c.V.Entity = entity;
-        c.V.CandFlags = c.Flags;
-        c.V.Layer = c.Layer;
-        c.V.Renderable = &r;
-        c.V.Xform = world.GetCachedWorldTransform(entity);
-        c.V.Normal = NormalMatrix(c.V.Xform);
-        FillBounds(c.V, r);
-        built.push_back(c);
+        // Its model failed to load (or isn't assigned yet), or it has no transform: nothing to draw.
+        if (!r.ModelRef || !reg.all_of<TransformComponent>(entity)) {
+            cache.Uncounted.push_back(entity);
+            continue;
+        }
+        built.push_back(MakeCandidate(world, entity, r));
     }
     // Bucket by ground-plan square: key = cell (0 = Always) above the candidate's index, sorted.
     constexpr float kCellSize = 32.0f;
@@ -320,6 +499,9 @@ const CandidateCache& Candidates(World& world) {
 }
 } // namespace
 
+void ForgetGatherCandidates() { CandidateStore().Forget = true; }
+std::uint64_t GatherCandidateFullBuilds() { return CandidateStore().FullBuilds; }
+
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) {
     const CandidateCache& cache = Candidates(world);
     glm::vec3 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
@@ -331,7 +513,7 @@ bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) {
         }
         for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) { // as they stand now
             VisibleRenderable v = cache.List[i].V;
-            if (!cache.List[i].Renderable->ModelRef) continue;
+            if (!cache.List[i].Renderable || !cache.List[i].Renderable->ModelRef) continue; // left since the build
             FillBounds(v, *cache.List[i].Renderable);
             if (!v.Bounded) continue;
             lo = glm::min(lo, v.WorldMin);
@@ -471,9 +653,9 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetMat4("uPrevViewProj", ctx.TaaPrevViewProj);
         program.SetVec2("uTaaJitter", ctx.TaaJitterNdc);
     }
-    program.SetFloat("uWetness", fs.world ? fs.world->Wetness : 0.0f);
-    program.SetFloat("uPuddleAmount", fs.world ? fs.world->PuddleAmount : 0.0f);
-    program.SetFloat("uPuddleScale", fs.world ? fs.world->PuddleScale : 4.0f);
+    program.SetFloat("uWetness", fs.world ? fs.world->Render.Wetness : 0.0f);
+    program.SetFloat("uPuddleAmount", fs.world ? fs.world->Render.PuddleAmount : 0.0f);
+    program.SetFloat("uPuddleScale", fs.world ? fs.world->Render.PuddleScale : 4.0f);
 
     // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
     program.SetInt("uShadowEnabled", fs.sunShadowsOn ? 1 : 0);
@@ -528,7 +710,7 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // IBL probes on units 11/12/13 (#196): the shader declares those units with layout(binding=)
     // qualifiers, so there's no SetInt. Unlit mode skips lighting entirely.
     if (fs.iblOn) {
-        program.SetFloat("uIBLIntensity", ctx.GIBake ? 0.0f : std::max(fs.world->SkyAmbientIntensity, 0.0f));
+        program.SetFloat("uIBLIntensity", ctx.GIBake ? 0.0f : std::max(fs.world->Render.SkyAmbientIntensity, 0.0f));
         program.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
     }
     program.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
@@ -545,16 +727,16 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     m_Volumetrics->SetProgramUniforms(program, ctx.TxHdr, fs.volOn);
 
     // #162 - fog.
-    program.SetInt("uFogMode", fs.fogOn && fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
-    if (fs.fogOn && fs.world && fs.world->FogEnabled) {
+    program.SetInt("uFogMode", fs.fogOn && fs.world && fs.world->Render.FogEnabled ? std::clamp(fs.world->Render.FogMode, 1, 3) : 0);
+    if (fs.fogOn && fs.world && fs.world->Render.FogEnabled) {
         const World& w = *fs.world;
         {
-            program.SetVec3("uFogColor", glm::max(w.FogColor, glm::vec3(0.0f)));
-            program.SetFloat("uFogDensity", std::max(w.FogDensity, 0.0f));
-            program.SetFloat("uFogStart", w.FogStart);
-            program.SetFloat("uFogEnd", w.FogEnd);
-            program.SetFloat("uFogHeightFalloff", std::max(w.FogHeightFalloff, 0.0f));
-            program.SetFloat("uFogBaseHeight", w.FogBaseHeight);
+            program.SetVec3("uFogColor", glm::max(w.Render.FogColor, glm::vec3(0.0f)));
+            program.SetFloat("uFogDensity", std::max(w.Render.FogDensity, 0.0f));
+            program.SetFloat("uFogStart", w.Render.FogStart);
+            program.SetFloat("uFogEnd", w.Render.FogEnd);
+            program.SetFloat("uFogHeightFalloff", std::max(w.Render.FogHeightFalloff, 0.0f));
+            program.SetFloat("uFogBaseHeight", w.Render.FogBaseHeight);
         }
     }
     program.SetInt("uSsrEnabled", fs.ssrTex ? 1 : 0);
@@ -646,6 +828,7 @@ void SceneRenderer::WarmEffects(const World& world) {
     BloodRenderer::Get().WarmUp();
     WorldTextRenderer::Get().WarmUp();
     GrassRenderer::Get().WarmUp();
+    ImpostorRenderer::Get().WarmUp();
 }
 
 namespace {

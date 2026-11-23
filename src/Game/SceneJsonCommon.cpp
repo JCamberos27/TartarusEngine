@@ -99,12 +99,21 @@ std::string AssetPathForWriteUncached(const std::string& path, const std::filesy
     return rel.generic_string();
 }
 
+// The GUID of a path about to be written. The database keys absolute paths, and a relative one is
+// made absolute against the working directory there, so a project-relative path (a component's
+// default, e.g. the muzzle flame texture) is resolved under the project root first, the way a load
+// resolves it. Without that a fresh component saved a bare path but loaded back as {path, pathGuid}.
+static AssetGuid GuidForWrite(const std::string& path) {
+    const bool relative = !IsSyntheticRef(path) && std::filesystem::path(path).is_relative();
+    return AssetDatabase::GuidForPath(relative ? AssetPathForRead(path) : path);
+}
+
 const AssetRefWriteCache::Ref& AssetRefWriteCache::Get(const std::string& path) {
     auto it = m_Refs.find(path);
     if (it != m_Refs.end()) return it->second;
     Ref r;
     r.WritePath = AssetPathForWrite(path);
-    if (const AssetGuid g = AssetDatabase::GuidForPath(path); g.IsValid()) r.Guid = g.ToString();
+    if (const AssetGuid g = GuidForWrite(path); g.IsValid()) r.Guid = g.ToString();
     return m_Refs.emplace(path, std::move(r)).first->second;
 }
 
@@ -161,25 +170,29 @@ std::string AssetPathForRead(const std::string& path) {
 json PathRef(const std::string& path) {
     if (path.empty()) return path;
     std::string stored = AssetPathForWrite(path);
-    AssetGuid g = AssetDatabase::GuidForPath(path); // GUID lookup needs the real (absolute) path
+    const AssetGuid g = GuidForWrite(path);
     if (g.IsValid()) return json{{"path", stored}, {"pathGuid", g.ToString()}};
     return stored;
 }
 
 // PR 2 (#333): dual path+guid READ. Prefers GUID if present and resolvable, falls back to
 // the plain path. Accepts both the v2 {"path","pathGuid"} object and the v1 plain string.
+// Same result as AssetDatabase::Resolve(guid, AssetPathForRead(path)), but the stored path is only
+// normalised when the GUID doesn't resolve (most refs carry a known GUID; a scene load does this
+// per model and per material slot).
+static std::string ResolveGuidOrPath(const json& obj, const char* pathKey, const char* guidKey) {
+    if (const AssetGuid g = AssetGuid::FromString(obj.value(guidKey, std::string())); g.IsValid())
+        if (std::string path = AssetDatabase::PathForGuid(g); !path.empty()) return path;
+    return AssetPathForRead(obj.value(pathKey, std::string()));
+}
 std::string ResolveAssetRef(const json& val) {
     if (val.is_string()) return AssetPathForRead(val.get<std::string>());
     if (!val.is_object()) return {};
-    std::string path = AssetPathForRead(val.value("path", std::string()));
-    AssetGuid g = AssetGuid::FromString(val.value("pathGuid", std::string()));
-    return AssetDatabase::Resolve(g, path);
+    return ResolveGuidOrPath(val, "path", "pathGuid");
 }
 // Overload for objects that carry the path and guid as sibling string keys.
 std::string ResolveAssetRef(const json& obj, const char* pathKey, const char* guidKey) {
-    std::string path = AssetPathForRead(obj.value(pathKey, std::string()));
-    AssetGuid g = AssetGuid::FromString(obj.value(guidKey, std::string()));
-    return AssetDatabase::Resolve(g, path);
+    return ResolveGuidOrPath(obj, pathKey, guidKey);
 }
 
 std::shared_ptr<Texture> LoadIfPresent(AssetLibrary& assets, const json& obj, const char* key) {

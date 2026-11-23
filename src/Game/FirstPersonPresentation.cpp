@@ -53,7 +53,95 @@ bool SameIKSetup(const WeaponIKSettings& a, const WeaponIKSettings& b) {
            a.LeftLower == b.LeftLower && a.LeftHand == b.LeftHand;
 }
 
+// The clip files a set's controller plays (each state's clip per track, blend children too) that import as models.
+void CollectClipFiles(const FirstPersonAnimationSet& set, std::vector<std::string>& files) {
+    if (set.Controller.empty()) return;
+    const auto ctrl = GetAnimatorController(set.Controller);
+    if (!ctrl) return;
+    auto add = [&](const std::string& clip) {
+        const std::string path = clip.substr(0, clip.find('#'));
+        if (path.empty()) return;
+        std::string ext = std::filesystem::u8path(path).extension().u8string();
+        for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+        if (ext != ".fbx" && ext != ".gltf" && ext != ".glb" && ext != ".dae") return;
+        const std::string abs = std::filesystem::u8path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
+        std::error_code ec;
+        if (std::filesystem::exists(std::filesystem::u8path(abs), ec)) files.push_back(abs);
+    };
+    for (const auto& layer : ctrl->Layers)
+        for (const auto& state : layer.States)
+            for (int track = 0; track < (int)ctrl->Tracks.size() || track < 2; ++track) {
+                const auto& m = state.MotionFor(track);
+                add(m.Clip);
+                for (const auto& child : m.Children) add(child.Clip);
+            }
+}
+
+// A controller's slots' animation sets, as Start resolves them (a weapon prefab names its set).
+std::vector<std::string> SlotSets(const FirstPersonControllerComponent& config) {
+    std::vector<std::string> sets;
+    for (auto slot : {std::pair<const std::string*, const std::string*>{&config.PrimaryWeaponPrefab, &config.AnimationSet},
+                      {&config.SecondaryWeaponPrefab, &config.SecondaryAnimationSet},
+                      {&config.SidearmWeaponPrefab, &config.SidearmAnimationSet}}) {
+        std::string set = *slot.second, why;
+        if (!slot.first->empty() && !Gameplay::ResolveWeaponPrefab(*slot.first, set, why, nullptr)) continue;
+        if (!set.empty()) sets.push_back(set);
+    }
+    return sets;
+}
+
+void SortUnique(std::vector<std::string>& v) {
+    std::sort(v.begin(), v.end());
+    v.erase(std::unique(v.begin(), v.end()), v.end());
+}
+
 } // namespace
+
+int FirstPersonPresentation::PrefetchPlayAssets(World& world, AssetLibrary& assets) {
+    std::vector<std::string> models, materials, clips;
+    for (const auto [entity, config] : world.Registry.view<FirstPersonControllerComponent>().each()) {
+        (void)entity;
+        for (const std::string& setRef : SlotSets(config)) {
+            FirstPersonAnimationSet set;
+            if (!FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(setRef), set, nullptr)) continue;
+            for (const std::string* m : {&set.ArmsModel, &set.WeaponModel})
+                if (!m->empty()) models.push_back(ProjectPaths::Resolve(*m));
+            for (const auto* overrides : {&set.ArmsMaterials, &set.WeaponMaterials})
+                for (const auto& [name, matPath] : *overrides) materials.push_back(ProjectPaths::Resolve(matPath));
+            if (set.Eject.Enabled && !set.Eject.Model.empty()) { // as WarmEjectAssets
+                models.push_back(ProjectPaths::Resolve(set.Eject.Model));
+                if (!set.Eject.LiveModel.empty()) models.push_back(ProjectPaths::Resolve(set.Eject.LiveModel));
+                if (!set.Eject.Material.empty()) materials.push_back(ProjectPaths::Resolve(set.Eject.Material));
+            }
+            CollectClipFiles(set, clips);
+        }
+    }
+    for (auto* v : {&models, &materials, &clips}) {
+        SortUnique(*v);
+        // A missing file stays Start's to report (a checkout without the Drive assets has none of them).
+        v->erase(std::remove_if(v->begin(), v->end(), [](const std::string& p) {
+                     std::error_code ec;
+                     return !std::filesystem::exists(std::filesystem::u8path(p), ec);
+                 }), v->end());
+    }
+    // A clip file also loading as a full model (a gun's own take) plays from that one (LoadAnimationSource).
+    clips.erase(std::remove_if(clips.begin(), clips.end(), [&](const std::string& c) {
+                    return std::binary_search(models.begin(), models.end(), c);
+                }), clips.end());
+    // The tickets are dropped: the loads still land in the caches. (A material's own entry is then made by Start's
+    // LoadMaterial, from its maps already in the texture cache.)
+    int asked = 0;
+    for (const std::string& m : models) asked += AssetLibrary::IsReady(assets.RequestModelAsync(m)) ? 0 : 1;
+    for (const std::string& m : materials) asked += AssetLibrary::IsReady(assets.RequestMaterialAsync(m)) ? 0 : 1;
+    for (const std::string& c : clips) asked += AssetLibrary::IsReady(assets.RequestAnimationSourceAsync(c)) ? 0 : 1;
+    if (asked > 0) {
+        char line[220];
+        std::snprintf(line, sizeof(line), "Scene open: first-person Play assets - %d load(s) started in the background (%zu model(s), %zu material(s), %zu clip file(s) in the slots' sets).",
+                      asked, models.size(), materials.size(), clips.size());
+        Log::Info(line);
+    }
+    return asked;
+}
 
 namespace K = FirstPersonAnimatorContract;
 
@@ -123,26 +211,7 @@ void FirstPersonPresentation::PreloadClips(AssetLibrary& assets) {
         if (const auto it = s_Preloaded.find(setPath); it != s_Preloaded.end() && it->second == setTime) continue;
         s_Preloaded[setPath] = setTime;
         FirstPersonAnimationSet set;
-        if (!FirstPersonAnimationSet::LoadFile(setPath, set, nullptr) || set.Controller.empty()) continue;
-        const auto ctrl = GetAnimatorController(set.Controller);
-        if (!ctrl) continue;
-        auto add = [&](const std::string& clip) {
-            const std::string path = clip.substr(0, clip.find('#'));
-            if (path.empty()) return;
-            std::string ext = std::filesystem::u8path(path).extension().u8string();
-            for (char& c : ext) c = (char)std::tolower((unsigned char)c);
-            if (ext != ".fbx" && ext != ".gltf" && ext != ".glb" && ext != ".dae") return;
-            const std::string abs = std::filesystem::u8path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
-            std::error_code ec;
-            if (std::filesystem::exists(std::filesystem::u8path(abs), ec)) files.push_back(abs);
-        };
-        for (const auto& layer : ctrl->Layers)
-            for (const auto& state : layer.States)
-                for (int track = 0; track < (int)ctrl->Tracks.size() || track < 2; ++track) {
-                    const auto& m = state.MotionFor(track);
-                    add(m.Clip);
-                    for (const auto& child : m.Children) add(child.Clip);
-                }
+        if (FirstPersonAnimationSet::LoadFile(setPath, set, nullptr)) CollectClipFiles(set, files);
     }
     if (files.empty()) return;
     const int imported = assets.PreloadAnimationSources(files);

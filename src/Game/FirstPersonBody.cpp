@@ -154,7 +154,10 @@ bool FirstPersonBody::Start(World& world, Player& player, const FirstPersonBodyM
         return false;
     }
     m_Body = body;
-    if (const auto* outfit = reg.try_get<CharacterOutfitComponent>(body)) m_OutfitVersion = outfit->Version;
+    if (const auto* outfit = reg.try_get<CharacterOutfitComponent>(body)) {
+        m_OutfitVersion = outfit->Version;
+        m_OutfitLookVersion = outfit->LookVersion;
+    }
 
     Model& model = *reg.get<RenderableComponent>(m_Driver).ModelRef;
     m_HeadBone = Bone(cfg.HeadBone); // through the Bone Map, as the driver was picked by it
@@ -370,6 +373,18 @@ bool FirstPersonBody::OutfitChanged(const World& world) const {
     return outfit && outfit->Version != m_OutfitVersion;
 }
 
+bool FirstPersonBody::OutfitLookChanged(const World& world) const {
+    if (m_Body == entt::null || !world.Registry.valid(m_Body)) return false;
+    const auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(m_Body);
+    return outfit && outfit->LookVersion != m_OutfitLookVersion;
+}
+
+void FirstPersonBody::SyncLook(World& world) {
+    if (m_Body == entt::null || !world.Registry.valid(m_Body)) return;
+    if (const auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(m_Body)) m_OutfitLookVersion = outfit->LookVersion;
+    for (size_t k = 0; k < m_Twins.size() && k < m_Pieces.size(); ++k) CopyLook(world, k);
+}
+
 void FirstPersonBody::Stop(World& world) {
     m_ArmShapeCache.clear(); // keyed by model address: the next Start's models may reuse this run's
     BodyDebug::Info() = BodyDebug::Snapshot{};
@@ -407,21 +422,8 @@ void FirstPersonBody::MakeTwins(World& world) {
         // Copied by value: adding a component can move its storage (and any reference into it).
         const RenderableComponent src = reg.get<RenderableComponent>(e);
         auto& dst = reg.get<RenderableComponent>(t);
-        dst.Materials = src.Materials;
         dst.CastShadows = src.CastShadows;
         dst.ReceiveShadows = src.ReceiveShadows;
-        if (const auto* hide = reg.try_get<OutfitHideTag>(e)) {
-            const OutfitHideTag copy = *hide;
-            reg.emplace_or_replace<OutfitHideTag>(t, copy);
-        }
-        if (const auto* pull = reg.try_get<OutfitLayerTag>(e)) {
-            const OutfitLayerTag copy = *pull;
-            reg.emplace_or_replace<OutfitLayerTag>(t, copy);
-        }
-        if (const auto* layer = reg.try_get<LayerComponent>(e)) {
-            const LayerComponent copy = *layer;
-            reg.emplace_or_replace<LayerComponent>(t, copy);
-        }
         std::vector<int> nodes;
         for (const std::string& b : hiddenBones)
             if (const int n = inst->NodeIndex(b); n >= 0) nodes.push_back(n);
@@ -431,7 +433,38 @@ void FirstPersonBody::MakeTwins(World& world) {
         m_Twins.push_back(t);
         m_TwinModels.push_back(std::move(inst));
     }
-    SyncTwins(world);
+    SyncTwins(world); // (the look too: CopyLook)
+}
+
+void FirstPersonBody::CopyLook(World& world, size_t k) {
+    auto& reg = world.Registry;
+    const entt::entity piece = m_Pieces[k], twin = m_Twins[k];
+    if (!reg.valid(twin) || !reg.valid(piece)) return;
+    const auto& src = reg.get<RenderableComponent>(piece);
+    auto& dst = reg.get<RenderableComponent>(twin);
+    if (dst.Materials != src.Materials) dst.Materials = src.Materials;
+    // Copied by value: adding a component can move its storage (and any reference into it).
+    const auto* hide = reg.try_get<OutfitHideTag>(piece);
+    const auto* twinHide = reg.try_get<OutfitHideTag>(twin);
+    if (!hide && twinHide) reg.remove<OutfitHideTag>(twin);
+    else if (hide && (!twinHide || twinHide->Buffer != hide->Buffer)) {
+        const OutfitHideTag copy = *hide;
+        reg.emplace_or_replace<OutfitHideTag>(twin, copy);
+    }
+    const auto* pull = reg.try_get<OutfitLayerTag>(piece);
+    const auto* twinPull = reg.try_get<OutfitLayerTag>(twin);
+    if (!pull && twinPull) reg.remove<OutfitLayerTag>(twin);
+    else if (pull && (!twinPull || twinPull->Pull != pull->Pull)) {
+        const float p = pull->Pull;
+        reg.emplace_or_replace<OutfitLayerTag>(twin).Pull = p;
+    }
+    const auto* layer = reg.try_get<LayerComponent>(piece);
+    const auto* twinLayer = reg.try_get<LayerComponent>(twin);
+    if (!layer && twinLayer) reg.remove<LayerComponent>(twin);
+    else if (layer && (!twinLayer || twinLayer->Layer != layer->Layer)) {
+        const int l = layer->Layer;
+        reg.emplace_or_replace<LayerComponent>(twin).Layer = l;
+    }
 }
 
 void FirstPersonBody::SyncTwins(World& world) {
@@ -452,22 +485,9 @@ void FirstPersonBody::SyncTwins(World& world) {
         const IK::Pose& pose = m_Models[k]->AppliedLocalPose();
         // The piece's pose, Spine Stability and all: one body, seen from inside and out (only the arms' targets differ).
         if (!pose.empty()) m_TwinModels[k]->ApplyLocalPose(pose);
-        // The piece's look can change without its outfit's version: the hiding lands when its coverage has
-        // been worked out (often after Start), and a colourway step after the pieces.
-        const auto& src = reg.get<RenderableComponent>(m_Pieces[k]);
-        auto& dst = reg.get<RenderableComponent>(m_Twins[k]);
-        if (dst.Materials != src.Materials) dst.Materials = src.Materials;
-        const auto* hide = reg.try_get<OutfitHideTag>(m_Pieces[k]);
-        const auto* twinHide = reg.try_get<OutfitHideTag>(m_Twins[k]);
-        if (!hide && twinHide) reg.remove<OutfitHideTag>(m_Twins[k]);
-        else if (hide && (!twinHide || twinHide->Buffer != hide->Buffer)) {
-            const OutfitHideTag copy = *hide;
-            reg.emplace_or_replace<OutfitHideTag>(m_Twins[k], copy);
-        }
-        const auto* pull = reg.try_get<OutfitLayerTag>(m_Pieces[k]);
-        const auto* twinPull = reg.try_get<OutfitLayerTag>(m_Twins[k]);
-        if (!pull && twinPull) reg.remove<OutfitLayerTag>(m_Twins[k]);
-        else if (pull && (!twinPull || twinPull->Pull != pull->Pull)) reg.emplace_or_replace<OutfitLayerTag>(m_Twins[k]).Pull = pull->Pull;
+        // The piece's look can change without either outfit version: the hiding lands when its coverage has been
+        // worked out (often after Start).
+        CopyLook(world, k);
     }
 }
 
@@ -476,8 +496,10 @@ void FirstPersonBody::PlaceHeadAttachedTwins(World& world) {
     // its own place), but off the head twin: rigid head wear then follows the world head's tilt, this frame.
     auto& reg = world.Registry;
     int headTwin = -1;
+    constexpr int kHead = OutfitPieceBodyPart | OutfitPieceHeadAttached; // the race's head: the one head-attached body part
     for (size_t k = 0; k < m_Pieces.size() && k < m_Twins.size(); ++k)
-        if (reg.valid(m_Pieces[k]) && reg.all_of<OutfitPieceComponent>(m_Pieces[k]) && reg.get<OutfitPieceComponent>(m_Pieces[k]).Slot == "Head")
+        if (reg.valid(m_Pieces[k]) && reg.all_of<OutfitPieceComponent>(m_Pieces[k]) &&
+            (reg.get<OutfitPieceComponent>(m_Pieces[k]).Flags & kHead) == kHead)
             headTwin = (int)k;
     if (headTwin < 0 || !reg.valid(m_Twins[headTwin]) || !m_TwinModels[headTwin]) return;
     const int bone = m_TwinModels[headTwin]->BoneId(m_HeadBone);
