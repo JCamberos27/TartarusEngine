@@ -335,6 +335,12 @@ void SmokeHarness::BeginFrame() {
         else Log::Error("[SmokeTest] pre-skin: " + preSkinWhy);
     }
 
+    // A smoke_ssao_off* scene: rendered with SSAO off; no program may put two sampler types on one unit.
+    if (m_SceneActive && m_FramesRendered == 15 &&
+        path.find("smoke_ssao_off") != std::string::npos) {
+        SmokeChecks::SamplerUnits();
+    }
+
     // A smoke_glass* scene: the opt-in Glass editor theme on, drawn, then off (Tests/SmokeChecks.cpp).
     if (m_SceneActive && path.find("smoke_glass") != std::string::npos)
         SmokeChecks::GlassTheme(m_Ctx.editor, world, m_FramesRendered);

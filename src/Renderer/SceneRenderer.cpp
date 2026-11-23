@@ -797,8 +797,9 @@ void SceneRenderer::BindFrameResources(const FrameState& fs) const {
         glBindTextureUnit(12, in.iblProbe->SpecularMap());
         glBindTextureUnit(13, in.iblProbe->BrdfLut());
     }
-    // PR15: SSAO occlusion map (unit 15), pre-computed before this pass.
-    if (fs.ssaoOn) glBindTextureUnit(15, ctx.SsaoSrc->OcclusionTexture());
+    // PR15: SSAO occlusion map (unit 15), pre-computed before this pass. With SSAO off, white (no occlusion), so the
+    // sampler is never backed by texture 0 either.
+    glBindTextureUnit(15, fs.ssaoOn ? ctx.SsaoSrc->OcclusionTexture() : DefaultTextures::White());
 
     // Captured room probes (ReflectionProbeCapture) on unit 26, the puddle SSR (PuddleSsr) on unit 29: units 1-7 and
     // 16-20 are material maps (ShaderAsset::BuildBindings) - a 2D map and the cube array sharing a unit made draws

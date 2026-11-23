@@ -20,6 +20,8 @@
 #include "MaterialPreviewRenderer.h"
 #include "Core/Paths.h"
 #include "SceneSerializer.h"
+#include "Shader.h"
+#include "ShaderLibrary.h"
 #include "World.h"
 #include "Glass/GlassFeedbackMotion.h"
 #include "Glass/GlassMotion.h"
@@ -604,6 +606,80 @@ void PlayProbe(World& world, const Camera& playCamera, bool playUsesPlayer) {
         if (!ps.Live.empty()) std::cout << " y=[" << lo.y << ", " << hi.y << "]";
         std::cout << "\n";
     }
+}
+
+namespace {
+bool IsSamplerType(GLenum t) {
+    switch (t) {
+    case GL_SAMPLER_1D: case GL_SAMPLER_2D: case GL_SAMPLER_3D: case GL_SAMPLER_CUBE:
+    case GL_SAMPLER_1D_SHADOW: case GL_SAMPLER_2D_SHADOW: case GL_SAMPLER_1D_ARRAY: case GL_SAMPLER_2D_ARRAY:
+    case GL_SAMPLER_1D_ARRAY_SHADOW: case GL_SAMPLER_2D_ARRAY_SHADOW: case GL_SAMPLER_2D_MULTISAMPLE:
+    case GL_SAMPLER_2D_MULTISAMPLE_ARRAY: case GL_SAMPLER_CUBE_SHADOW: case GL_SAMPLER_BUFFER: case GL_SAMPLER_2D_RECT:
+    case GL_SAMPLER_2D_RECT_SHADOW: case GL_SAMPLER_CUBE_MAP_ARRAY: case GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW:
+    case GL_INT_SAMPLER_2D: case GL_INT_SAMPLER_3D: case GL_INT_SAMPLER_2D_ARRAY: case GL_INT_SAMPLER_BUFFER:
+    case GL_UNSIGNED_INT_SAMPLER_2D: case GL_UNSIGNED_INT_SAMPLER_3D: case GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
+    case GL_UNSIGNED_INT_SAMPLER_BUFFER:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// One linked program's samplers: two of different types on one texture unit make every draw through it fail
+// GL_INVALID_OPERATION ("program texture usage"). Returns the clashes found; adds the samplers it read to `samplers`.
+int SamplerClashes(GLuint prog, const std::string& label, int& samplers) {
+    GLint linked = 0, count = 0, maxLen = 0;
+    glGetProgramiv(prog, GL_LINK_STATUS, &linked);
+    if (!linked) return 0;
+    glGetProgramiv(prog, GL_ACTIVE_UNIFORMS, &count);
+    glGetProgramiv(prog, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxLen);
+    std::vector<char> name((size_t)std::max(maxLen, 1));
+    std::map<GLint, std::pair<GLenum, std::string>> byUnit;
+    int clashes = 0;
+    for (GLint i = 0; i < count; ++i) {
+        GLint size = 0;
+        GLenum type = 0;
+        GLsizei len = 0;
+        glGetActiveUniform(prog, (GLuint)i, (GLsizei)name.size(), &len, &size, &type, name.data());
+        if (!IsSamplerType(type)) continue;
+        const std::string n(name.data(), (size_t)len);
+        const GLint loc = glGetUniformLocation(prog, n.c_str());
+        if (loc < 0) continue;
+        GLint unit = 0;
+        glGetUniformiv(prog, loc, &unit);
+        ++samplers;
+        auto [it, fresh] = byUnit.emplace(unit, std::make_pair(type, n));
+        if (!fresh && it->second.first != type) {
+            ++clashes;
+            Log::Error("[SmokeTest] sampler units: program " + std::to_string(prog) + " (" + label + "): '" + n +
+                       "' and '" + it->second.second + "' are different sampler types on texture unit " +
+                       std::to_string(unit));
+        }
+    }
+    return clashes;
+}
+} // namespace
+
+void SamplerUnits() {
+    // The impostor programs only build when a scene has impostor sets (ImpostorRenderer::WarmUp), and their atlases are
+    // asset payloads CI doesn't have: build the lit one here so its units are checked everywhere.
+    Shader impostorLit(ShaderLibrary::ReadFileRequired("Impostor.vert.glsl"),
+                       ShaderLibrary::ReadFileRequired("ImpostorLit.frag.glsl"), "SmokeImpostorLit");
+    int programs = 0, samplers = 0, clashes = 0;
+    if (impostorLit.Program()) {
+        ++programs;
+        clashes += SamplerClashes(impostorLit.Program(), "ImpostorLit", samplers);
+    } else {
+        Log::Error("[SmokeTest] sampler units: ImpostorLit didn't build");
+    }
+    // Every other live program: GL names are small and dense, so a scan of the low range finds them all.
+    for (GLuint p = 1; p < 8192; ++p) {
+        if (p == impostorLit.Program() || !glIsProgram(p)) continue;
+        ++programs;
+        clashes += SamplerClashes(p, "live", samplers);
+    }
+    std::cout << "[SmokeTest]   sampler units: " << programs << " program(s), " << samplers << " sampler(s), " << clashes
+              << " clash(es)" << std::endl;
 }
 
 } // namespace SmokeChecks
