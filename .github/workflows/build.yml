@@ -83,6 +83,10 @@ jobs:
           python -m pip install --quiet --disable-pip-version-check pillow==11.3.0
           python -m unittest discover -s tools/quantum/casual_bundle -t tools/quantum -p 'test_*.py'
 
+      # The offline GI audit's pure parts (.gi parsing, GridDims, box fade, filled-probe detection, shadow-slot score).
+      - name: GI audit tool tests
+        run: python -m unittest discover -s tools/gi -p 'test_*.py'
+
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
       # explicitly allow-listed with a reason. Pure static check, no build needed - run it
