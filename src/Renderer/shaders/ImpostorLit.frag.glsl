@@ -57,6 +57,14 @@ void main() {
     if (uDebugView == 4) albedo = vec3(0.75);
     if (uDebugView == 5) { FragColor = vec4(albedo, 1.0); return; }
     if (uDebugView == 1) { FragColor = vec4(N * 0.5 + 0.5, 1.0); return; }
+    if (uDebugView == 8) { // GI only, as ModelFragment.glsl draws it: the baked bounce on flat grey, with its SSAO
+        float giFade, giSky; // (no lamps, sun, shadows or fog: a tree outside every volume is black, as a wall there is)
+        vec3 gi = SampleGI(vWorldPos, N, giFade, giSky);
+        float ssao = uSSAOEnabled == 1
+            ? pow(texture(uSSAOMap, gl_FragCoord.xy / uScreenSize).r, uSSAOIntensity > 0.0 ? uSSAOIntensity : 1.0) : 1.0;
+        FragColor = vec4(gi * giFade * 0.75 * ssao, 1.0);
+        return;
+    }
 #endif
 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);

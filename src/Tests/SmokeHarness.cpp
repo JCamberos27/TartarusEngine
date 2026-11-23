@@ -587,6 +587,18 @@ void SmokeHarness::GiTourFrame() {
         std::cout << "[GiTour] measuring view: " << m_Opt.giTourView << "; doors: " << m_Tour->DoorState << "; lights: Start On; view: Scene view at "
                   << m_Ctx.sceneFramebuffer.Width() << "x" << m_Ctx.sceneFramebuffer.Height() << ", vertical FOV "
                   << m_Tour->VerticalFovDeg << std::endl;
+        // What could carry one frame's look into the next shot (the _gi.png follows the _full one 30 frames later):
+        // auto exposure eases toward the new view's brightness, and TAA blends in its history. With both off (Forest)
+        // nothing does; with either on, the GI stills can lean toward the full frame's look - said here, in the log.
+        {
+            const auto& r = m_Ctx.world.Render;
+            std::cout << "[GiTour] exposure: " << (r.AutoExposure ? "AUTO" : "fixed") << " EV " << r.ExposureEV << "; AA: "
+                      << (r.TaaEnabled() ? std::string("TAA") : r.EffectiveFxaa() ? std::string("FXAA")
+                                                            : "MSAA x" + std::to_string(r.EffectiveMsaaSamples()))
+                      << std::endl;
+            if (r.AutoExposure || r.TaaEnabled())
+                Log::Warn("[GiTour] auto exposure or TAA is on: the _gi stills can carry the _full frame's exposure / history");
+        }
         std::error_code ec;
         fs::create_directories(m_Opt.sceneBoundsOut, ec);
         m_TourCsv = std::make_unique<std::ofstream>(

@@ -64,6 +64,14 @@ void main() {
     if (!gl_FrontFacing) N = -N;
     float dist = length(uViewPos - vWorldPos);
     N = normalize(mix(N, vec3(0.0, 1.0, 0.0), smoothstep(6.0, 35.0, dist) * 0.65));
+#ifndef _ENGINE_NO_DEBUG_VIEW
+    if (uDebugView == 8) { // GI only, as ModelFragment.glsl draws it: the baked bounce on flat grey (no SSAO: see below)
+        float giFade, giSky;
+        vec3 gi = SampleGI(vWorldPos, N, giFade, giSky);
+        FragColor = vec4(gi * giFade * 0.75, 1.0);
+        return;
+    }
+#endif
 
     vec3 Lo = vec3(0.0);
     for (uint i = 0u; i < uDirectionalCount; ++i) {

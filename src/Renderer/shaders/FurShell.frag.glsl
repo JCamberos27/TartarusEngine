@@ -91,6 +91,14 @@ void main() {
     vec3 T2 = normalize(T + N * 0.12);
     float fresnel = pow(1.0 - abs(dot(N, V)), 4.0);
 
+#ifndef _ENGINE_NO_DEBUG_VIEW
+    if (uDebugView == 8) { // GI only, as ModelFragment.glsl draws it: the baked bounce on flat grey
+        float giFade, giSky;
+        vec3 gi = SampleGI(vWorldPos, N, giFade, giSky);
+        FragColor = vec4(gi * giFade * 0.75, uAlphaToCoverage == 1 ? coverage : 1.0);
+        return;
+    }
+#endif
     FurSurface s = FurSurface(N, T, T1, T2, V, albedo, occl, t, fresnel);
     vec3 Lo = vec3(0.0);
     for (uint i = 0u; i < uDirectionalCount; ++i) {
