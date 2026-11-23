@@ -635,8 +635,15 @@ void SmokeHarness::GiTourFrame() {
             hdr->ResolveDepthOnly();
             const int dw = hdr->Width(), dh = hdr->Height();
             std::vector<float> depth((size_t)dw * dh);
-            glGetTextureImage(hdr->ResolvedDepthTexture(), 0, GL_DEPTH_COMPONENT, GL_FLOAT, (GLsizei)(depth.size() * sizeof(float)),
-                              depth.data());
+            // Read through a depth-only framebuffer of the harness's own (the loader has no glGetTextureImage). The
+            // resolved depth texture is attached each frame: a resize recreates it.
+            static GLuint s_DepthFbo = 0;
+            if (!s_DepthFbo) glCreateFramebuffers(1, &s_DepthFbo);
+            glNamedFramebufferTexture(s_DepthFbo, GL_DEPTH_ATTACHMENT, hdr->ResolvedDepthTexture(), 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, s_DepthFbo);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            glReadPixels(0, 0, dw, dh, GL_DEPTH_COMPONENT, GL_FLOAT, depth.data());
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
             // The HDR target can be another size than the tonemapped image (render scale): the nearest depth sample.
             m_TourDepth.resize((size_t)w * h);
             for (int y = 0; y < h; ++y)
