@@ -113,6 +113,13 @@ nearby lit volumes' value** rather than trust the single ratio, unless the tour 
 
 ## Do not match to Nov 14
 
+* **Fixed dark spots stay fixed (Jacob's provisional answer 3, ON HOLD).** A volume that contains a fixed dark spot (the
+  kitchen-dining corner, the chandelier ring) must not be dimmed by a plain `2.0 / ratio`: that would dim the whole volume,
+  including the spot the new bake repaired. Phase 3 treats each such volume per room: pick `Intensity` from the part of the
+  volume that was NOT repaired (the over-bright area), check the repaired spot did not drop below its fresh-bake level,
+  and if one value cannot do both, report it to Jacob rather than choosing for him. List these volumes after Phase 2, when
+  the ceiling-row fill and gap fixes say which volumes changed.
+
 * **Defective old bake** (cause 5, 9): living room 7, kitchen-dining 8 (100% of inner probes invalid), the stair
   storeroom, the box room (94%), kitchen-dining 6, the closet room. The Nov 14 level there is an artefact (empty baked GI;
   the storeroom's bounce is ~1e-5 because its door was baked shut), not a look to preserve. After Phase 2 these get a
@@ -140,10 +147,15 @@ unchanged by this plan.
    Phase 3 measures on the final bake instead of committing the table above.
 3. Phase 3: rebake, measure, write the 46 values, run the tour, check against the P0 pictures, then GI_VALIDATION checks.
 
-## Open questions for Jacob / the SM
+## Jacob's provisional answers (Nov 23): ON HOLD pending the H1 test
 
-* Is the A recommendation (per-volume, no engine change) OK, or does Jacob want the single scene-level dimmer as well?
-* Rooms where the new bake is *better* than Nov 14 (dim places the old bake left black: the kitchen-dining corner,
-  the chandelier ring) are not a goal to dim back. The ratio method dims a whole volume. Per-room decision after Phase 2
-  if a volume contains both a fixed dark spot and an over-bright area.
-* Is "toward today's look" a match within the bake noise tolerance (proposed) or a fixed percentage?
+**Status: ON HOLD.** Jacob answered the three open questions on Nov 23 (via Muse), then told Hermes in person to "wait for the
+test": Kronos's stale-bake test (H1: was the Nov 14 `.gi` stale?). If H1 holds, the Nov 14 look is not the true "today's
+look" the ratios are measured against, so Jacob sees the result and **re-confirms before Phase 3 applies anything**. Planning
+the per-room mechanism continues; nothing is applied, edited or baked on these answers until then.
+
+1. **Mechanism: A, per-volume `Intensity`.** No global dimmer, no engine change.
+2. **"Toward today's look":** match each room's **old level within the bake-noise tolerance**, not a fixed percentage.
+3. **Keep the fixed dark spots** (the kitchen-dining corner, the chandelier ring): do not dim them back. Volumes holding a
+   fixed dark spot get **per-room handling in Phase 3, not a plain ratio** (see "Do not match to Nov 14" above).
+
