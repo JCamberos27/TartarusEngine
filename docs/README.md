@@ -32,4 +32,5 @@ data, the bake, the runtime, tuning and tests ([implementation notes](MOTION_MAT
 * [Decals](DECALS.md) and the [Graffiti Designer](GRAFFITI_DESIGNER.md): the decal system, its editor tools and painted pieces.
 * [Character outfits](CHARACTER_OUTFITS.md) and the [Quantum swap](QUANTUM_SWAP.md): the wardrobe, outfit pieces and the character pack move.
 * [Revolver .38](WEAPON_REVOLVER38.md): the sidearm's import and setup.
+* [House GI validation](GI_VALIDATION.md): the pass/fail checks for the Forest house lighting (walk stability, dark spots, seams, switches, perf).
 * [Mocap export findings](MOCAP_EXPORT_FINDINGS.md) and the [motion matching audit](mm_audit.md): notes behind the motion matching data.
