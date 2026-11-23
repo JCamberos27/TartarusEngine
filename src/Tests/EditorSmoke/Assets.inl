@@ -15,6 +15,7 @@
 } // namespace
 #include "AssetDatabase.h"
 #include "AssetLibraryIndex.h"
+#include "ShaderLibrary.h"
 struct EditorSmokeAccess_Assets {
     static const std::vector<AssetGridCell>& Cells(EditorLayer& e) { return e.m_AssetGridCells; }
     static void Refresh(EditorLayer& e) { e.RefreshAssetBrowser(); }
@@ -34,6 +35,12 @@ struct EditorSmokeAccess_Assets {
     static AssetLibraryIndex& Library(EditorLayer& e) { e.m_LibraryViewKey = (size_t)-1; return e.m_LibraryIndex; }
     // A sound tile's decoded waveform (null until the worker's peaks are in); doesn't queue a decode itself.
     static const std::vector<float>* Waveform(EditorLayer& e, const std::string& key) { return e.m_SoundWaveforms.Peek(key); }
+    // The project asset index has landed (asks for a scan if none is in flight).
+    static bool IndexReady(EditorLayer& e, AssetLibrary& a) {
+        e.RefreshProjectAssetIndexIfNeeded(a);
+        return e.m_ProjectAssetIndex.valid && !e.m_ProjectAssetIndex.files.empty();
+    }
+    static std::vector<std::string> ShaderChoices(EditorLayer& e, AssetLibrary& a) { return e.ShaderChoices(a); }
 };
 namespace {
 namespace smoke_assets {
@@ -855,6 +862,34 @@ void RegisterAssetsTests() {
     });
 
     // ------------------------------------------------------------------ cleanup: Delete Folder
+    // The material Shader dropdown lists the project's shaders from the index (it walked assets/ on every open):
+    // the same shaders a walk of the engine folder, shaders/ and assets/ finds.
+    Add("assets: the material Shader list comes from the index and matches a disk walk", {
+        FreshScene(), Wait(2),
+        UntilSeconds("the index has landed", [](Ctx& c) { return AX::IndexReady(c.E, c.A); }, 120),
+        Expect("the same shaders as a disk walk", [](Ctx& c) {
+            std::vector<std::string> got = AX::ShaderChoices(c.E, c.A), want = {"engine://Standard.shader"};
+            const std::string engineDir = ShaderLibrary::Dir();
+            for (const std::string dir : {engineDir, ProjectPaths::Resolve("shaders"), ProjectPaths::Resolve("assets")}) {
+                std::error_code ec;
+                for (fs::recursive_directory_iterator it(fs::u8path(dir), fs::directory_options::skip_permission_denied, ec), end; !ec && it != end; it.increment(ec)) {
+                    if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
+                    const std::string ref = dir == engineDir ? "engine://" + fs::relative(it->path(), dir).generic_string() : ProjectPaths::Relativize(it->path().string());
+                    if (std::find(want.begin(), want.end(), ref) == want.end()) want.push_back(ref);
+                }
+            }
+            if (got.empty() || got.front() != "engine://Standard.shader") return std::string("Standard isn't first");
+            std::sort(got.begin(), got.end());
+            std::sort(want.begin(), want.end());
+            if (got == want) return std::string();
+            std::string msg = "index:";
+            for (const auto& g : got) msg += " " + g;
+            msg += " | walk:";
+            for (const auto& w : want) msg += " " + w;
+            return msg;
+        }),
+    });
+
     Add("assets: Delete Folder removes the scratch folder (cleanup)", {
         FreshScene(), Wait(2),
         Do("browser state back to normal", [](Ctx& c) {

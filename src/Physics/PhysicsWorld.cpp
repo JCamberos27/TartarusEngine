@@ -234,4 +234,50 @@ bool IsActive() {
     return g_State != nullptr;
 }
 
+bool ApplySettings() {
+    PhysicsState* s = g_State;
+    if (!s || !s->scene) return false;
+    const ProjectSettings::PhysicsSettings& p = ProjectSettings::Physics();
+
+    bool changed = false;
+    const PxVec3 g(p.Gravity.x, p.Gravity.y, p.Gravity.z);
+    const bool gravityChanged = !(s->scene->getGravity() == g);
+    if (gravityChanged) { s->scene->setGravity(g); changed = true; }
+
+    bool layersChanged = false;
+    for (int i = 0; i < 32; ++i)
+        if (s->layerMask[i] != p.LayerCollisionMask[i]) { s->layerMask[i] = p.LayerCollisionMask[i]; layersChanged = true; }
+    if (layersChanged) {
+        // PhysX copied the block at createScene: hand it the new one, then re-run the filter on the pairs it already made.
+        s->scene->setFilterShaderData(s->layerMask, sizeof(s->layerMask));
+        changed = true;
+    }
+    if (!changed) return false;
+
+    const PxActorTypeFlags kinds = PxActorTypeFlag::eRIGID_STATIC | PxActorTypeFlag::eRIGID_DYNAMIC;
+    std::vector<PxActor*> actors(s->scene->getNbActors(kinds));
+    if (!actors.empty()) s->scene->getActors(kinds, actors.data(), static_cast<PxU32>(actors.size()));
+    for (PxActor* a : actors) {
+        if (layersChanged) s->scene->resetFiltering(*a);
+        // A body asleep under the old gravity would hang in the air until something touched it.
+        if (gravityChanged)
+            if (auto* d = a->is<PxRigidDynamic>(); d && !(d->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)) d->wakeUp();
+    }
+    // Ragdolls are articulations: their links aren't in getActors.
+    std::vector<PxArticulationReducedCoordinate*> arts(s->scene->getNbArticulations());
+    if (!arts.empty()) s->scene->getArticulations(arts.data(), static_cast<PxU32>(arts.size()));
+    std::vector<PxArticulationLink*> links;
+    for (PxArticulationReducedCoordinate* art : arts) {
+        if (layersChanged) {
+            links.resize(art->getNbLinks());
+            art->getLinks(links.data(), static_cast<PxU32>(links.size()));
+            for (PxArticulationLink* l : links) s->scene->resetFiltering(*l);
+        }
+        if (gravityChanged) art->wakeUp();
+    }
+    Log::Info(std::string("Physics settings re-applied to the running world (") + (gravityChanged ? "gravity" : "") +
+              (gravityChanged && layersChanged ? ", " : "") + (layersChanged ? "layer collision" : "") + ").");
+    return true;
+}
+
 } // namespace PhysicsWorld

@@ -9,7 +9,7 @@ class Shader;
 // rings lying on surfaces - the gravity gun's predicted throw arc, its bounces and where it comes
 // to rest (a plain GL line is one pixel wide and gets lost). Drawn into the HDR scene target after
 // the scene, depth-tested (walls hide the far part of the arc) with no depth write, alpha-blended.
-// Reuses the ColliderGizmo line program (pos.xyz + rgba per vertex).
+// Reuses the DebugLineRenderer line program (ColliderGizmo shaders) (pos.xyz + rgba per vertex).
 //
 // Usage per frame: AddPath / AddRing any number of times, then Draw (which clears the batch).
 class TrajectoryRibbon {

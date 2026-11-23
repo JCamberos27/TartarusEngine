@@ -183,7 +183,7 @@ void TestInputMap() {
 // #170 - a Physic Material asset round-trips through its file and overrides the collider's own
 // surface values; a missing file leaves them alone.
 void TestPhysicMaterial() {
-    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_ut.physicmaterial").string();
+    const std::string path = (TempDir() / "tartarus_ut.physicmaterial").string();
     PhysicMaterialAsset m;
     m.DynamicFriction = 0.05f; m.StaticFriction = 0.1f; m.Bounciness = 0.9f; m.FrictionCombine = 1; m.BounceCombine = 3;
     CHECK(m.SaveFile(path));
@@ -356,6 +356,56 @@ void TestPhysicsHitchCatchUp() {
     PhysicsWorld::Step(fixed * 2.0f, world, {});
     CHECK(PhysicsWorld::GetDebugStats().Substeps == 2);
     PhysicsWorld::Destroy();
+}
+
+// Gravity and the layer collision matrix, snapshotted at Create, follow a settings change during Play.
+void TestPhysicsApplySettings() {
+    ProjectSettings::PhysicsSettings& p = ProjectSettings::MutablePhysics();
+    const ProjectSettings::PhysicsSettings saved = p;
+    CHECK(!PhysicsWorld::ApplySettings()); // nothing running
+    World world;
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (PhysicsWorld::IsActive()) {
+        CHECK(!PhysicsWorld::ApplySettings()); // same settings as Create: nothing to do
+        p.Gravity.y = saved.Gravity.y * 0.5f - 1.0f;
+        CHECK(PhysicsWorld::ApplySettings());
+        CHECK(!PhysicsWorld::ApplySettings()); // applied once
+        p.LayerCollisionMask[3] ^= 1u << 5;
+        CHECK(PhysicsWorld::ApplySettings());
+        CHECK(!PhysicsWorld::ApplySettings());
+        PhysicsWorld::Destroy();
+    }
+    p = saved;
+}
+
+// A Physic Material saved during Play reaches the running colliders that use it, and only those.
+void TestPhysicsRefreshPhysicMaterial() {
+    const std::string path = (TempDir() / "tartarus_ut_live.physicmaterial").string();
+    PhysicMaterialAsset m;
+    m.DynamicFriction = 0.2f;
+    CHECK(m.SaveFile(path));
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    for (int i = 0; i < 3; ++i) {
+        const entt::entity e = world.CreateEmptyEntity(glm::vec3(3.0f * i, 0.0f, 0.0f), zero, one, "Slab");
+        ColliderComponent col;
+        col.Kind = ColliderComponent::Shape::Box;
+        if (i < 2) col.Material = path; // two use it, one doesn't
+        world.Registry.emplace<ColliderComponent>(e, col);
+    }
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    CHECK(PhysicsWorld::RefreshPhysicMaterial(world, path) == 0); // nothing running
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    m.DynamicFriction = 0.9f;
+    CHECK(m.SaveFile(path));
+    CHECK(PhysicsWorld::RefreshPhysicMaterial(world, path) == 2);
+    CHECK(PhysicsWorld::RefreshPhysicMaterial(world, path + ".other") == 0);
+    PhysicsWorld::Destroy();
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
 
 void TestPhysicsWorldSync() {
@@ -595,7 +645,107 @@ void TestTransformCacheStructureChanges() {
     CHECK(world.TransformCacheFullWalks() == fullAfterLoad);
 }
 
+// Active-in-hierarchy patched from the transform cache's structure delta (pieces created under deactivated and active
+// parents, re-parented across them, destroyed with or without their children, a destroy and a create in one frame, a
+// transform removed and added back, a checkbox flipped): the InactiveTag set is what a full SyncActiveInHierarchy
+// gives, every frame; and the small structure changes do take the patch.
+void TestActiveInHierarchyPatch() {
+    World world;
+    std::uint32_t rng = 777;
+    auto rand = [&](std::uint32_t n) { rng = rng * 1664525u + 1013904223u; return (rng >> 8) % n; };
+    std::vector<entt::entity> live;
+    auto make = [&](const char* name) {
+        return world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), name);
+    };
+    for (int i = 0; i < 200; ++i) {
+        const entt::entity e = make("E");
+        if (!live.empty() && rand(3) != 0) world.AttachChildRaw(e, live[rand((std::uint32_t)live.size())]);
+        if (rand(8) == 0) world.Registry.emplace<DeactivatedTag>(e);
+        live.push_back(e);
+    }
+    auto inactiveSet = [&] {
+        std::vector<std::uint32_t> out;
+        for (entt::entity e : world.Registry.view<InactiveTag>()) out.push_back(entt::to_integral(e));
+        std::sort(out.begin(), out.end());
+        return out;
+    };
+    auto pick = [&] { return live[rand((std::uint32_t)live.size())]; };
+    auto prune = [&] {
+        live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !world.Registry.valid(e); }), live.end());
+    };
+    world.RebuildWorldTransformCache();
+    int structureFrames = 0, patched = 0, mismatches = 0;
+    for (int frame = 0; frame < 200; ++frame) {
+        bool structure = true;
+        while (live.size() < 20) live.push_back(make("Root")); // destroys can empty the pool
+        switch (frame % 8) {
+        case 0: case 1: { // a piece (sometimes with a child) lands under some entity
+            const entt::entity e = make("Piece");
+            world.AttachChildRaw(e, pick());
+            live.push_back(e);
+            if (rand(2) == 0) {
+                const entt::entity c = make("Sub");
+                world.AttachChildRaw(c, e);
+                live.push_back(c);
+            }
+            break;
+        }
+        case 2: { // re-parented (SetParent keeps the world pose, so both ends need a transform; cycles refused)
+            auto pickT = [&] {
+                for (int tries = 0; tries < 64; ++tries)
+                    if (const entt::entity e = pick(); world.Registry.all_of<TransformComponent>(e)) return e;
+                return entt::entity{entt::null};
+            };
+            const entt::entity child = pickT(), parent = rand(4) == 0 ? entt::entity{entt::null} : pickT();
+            if (child != entt::null) world.SetParent(child, parent);
+            break;
+        }
+        case 3: world.DestroyEntityAndChildren(pick()); prune(); break;
+        case 4: world.Registry.destroy(pick()); prune(); break; // children keep a dead parent id: roots now
+        case 5: { // a destroy straight through the registry and a create in the same frame
+            world.Registry.destroy(pick());
+            prune();
+            const entt::entity e = make("Piece");
+            if (!live.empty()) world.AttachChildRaw(e, pick());
+            live.push_back(e);
+            break;
+        }
+        case 6: { // a transform removed in place (or added back): the full sync's job
+            const entt::entity e = pick();
+            if (world.Registry.all_of<TransformComponent>(e)) world.Registry.remove<TransformComponent>(e);
+            else world.Registry.emplace<TransformComponent>(e);
+            structure = false;
+            break;
+        }
+        default: { // a checkbox flipped: the full sync's job
+            const entt::entity e = pick();
+            if (world.Registry.all_of<DeactivatedTag>(e)) world.Registry.remove<DeactivatedTag>(e);
+            else world.Registry.emplace<DeactivatedTag>(e);
+            structure = false;
+            break;
+        }
+        }
+        const std::uint64_t fullBefore = world.ActiveFullSyncs();
+        world.RebuildWorldTransformCache();
+        if (structure && world.TransformStructureChanges().Valid) {
+            ++structureFrames;
+            patched += world.ActiveFullSyncs() == fullBefore ? 1 : 0;
+        }
+        const auto got = inactiveSet();
+        world.SyncActiveInHierarchy(); // from scratch: changes nothing when the patch was right
+        if (got != inactiveSet()) {
+            if (++mismatches == 1) std::printf("[ActiveInHierarchyPatch] frame %d: %zu inactive patched, %zu from scratch\n", frame,
+                                               got.size(), inactiveSet().size());
+        }
+    }
+    std::printf("[ActiveInHierarchyPatch] %d of %d structure-change frames patched\n", patched, structureFrames);
+    CHECK(mismatches == 0);
+    CHECK(structureFrames > 100);
+    CHECK(patched * 3 > structureFrames * 2);
+}
+
 void RegisterCoreTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"ActiveInHierarchyPatch", TestActiveInHierarchyPatch});
     tests.push_back({"TransformCacheStructureChanges", TestTransformCacheStructureChanges});
     tests.push_back({"InputMap", TestInputMap});
     tests.push_back({"LogStackTrace", TestLogStackTrace});
@@ -607,5 +757,7 @@ void RegisterCoreTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ProfilerUnscoped", TestProfilerUnscoped});
     tests.push_back({"PhysicMaterial", TestPhysicMaterial});
     tests.push_back({"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp});
+    tests.push_back({"PhysicsApplySettings", TestPhysicsApplySettings});
+    tests.push_back({"PhysicsRefreshPhysicMaterial", TestPhysicsRefreshPhysicMaterial});
     tests.push_back({"PhysicsWorldSync", TestPhysicsWorldSync});
 }

@@ -1,5 +1,6 @@
 #include "EditorLayer.h"
 #include "ThumbnailCache.h"
+#include "AssetChangeHooks.h"
 #include "ScriptIDE.h"
 #include "CurveEditor.h"
 #include "EditorUIPrimitives.h"
@@ -14,6 +15,8 @@
 #include "AssetLibrary.h"
 #include "World.h"
 #include "GameModuleBuild.h"
+#include "MotionRebake.h"
+#include "EditorRestart.h"
 #include "Camera.h"
 #include "Model.h"
 #include "Texture.h"
@@ -50,6 +53,7 @@
 #include "TimeService.h"
 #include "Window.h" // Preferences > Display: connected monitors for fullscreen (#154) // play banner shows the effective time scale (#144)
 #include "TextureCache.h" // Preferences > Rendering's cache size + Clear button (#159)
+#include "ModelCache.h"   // ... and the cooked model cache's
 #include "gl.h"
 #include "ScreenBlur.h"
 #include "Framebuffer.h"
@@ -143,11 +147,40 @@ void EditorLayer::Init(GLFWwindow* window) {
     m_LibraryIndex.Load(); // project/asset_library.json (Library root, kit modules)
     ++m_LibraryIndexGen;
     Enhancers::UiStyles::Get().Load();     // project/editor_ui_styles.json (tab / header colours)
+    // Edited outside the editor (a text editor, git): reload it like at startup. Its own saves (Flush) are skipped.
+    if (!m_UiStylesHook)
+        m_UiStylesHook = AssetChangeHooks::RegisterFile("editor_ui_styles.json", [](const AssetChangeHooks::Event& e) {
+            if (e.BySelf) return false;
+            Enhancers::UiStyles::Get().Load();
+            Log::Info("Reloaded tab and header styles (editor_ui_styles.json changed outside the editor).");
+            return true;
+        });
+    // project/settings.json edited outside the editor: reload it, and push what a running Play snapshotted (gravity, the
+    // layer collision matrix) into the physics world. Its own saves are skipped (the Gravity field applies directly).
+    if (!m_ProjectSettingsHook)
+        m_ProjectSettingsHook = AssetChangeHooks::RegisterFile("settings.json", [](const AssetChangeHooks::Event& e) {
+            if (e.BySelf || e.Type == AssetChangeHooks::Event::Kind::Removed) return false;
+            ProjectSettings::Load();
+            PhysicsWorld::ApplySettings();
+            Log::Info("Reloaded project settings (settings.json changed outside the editor).");
+            return true;
+        });
+    // A .prefab written (outside, or by Apply to Prefab) or put back: its placed instances refresh
+    // at the end of this sync pass (RefreshPrefabInstances), which counts what it rebuilt.
+    if (!m_PrefabHook)
+        m_PrefabHook = AssetChangeHooks::Register("prefab", [this](const AssetChangeHooks::Event& e) {
+            using K = AssetChangeHooks::Event::Kind;
+            if (e.Type == K::Rescan) m_PrefabRefreshAll = true;
+            else if (e.Type != K::Removed) QueuePrefabRefresh(e.Path, /*joinUndo*/false); // removed: instances keep what they have
+            return false;
+        });
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
     // it still exists, else the built-in default (#95).
-    {
+    if (m_StartupSceneOverride) {
+        m_CurrentScenePath = *m_StartupSceneOverride;
+    } else {
         std::error_code ec;
         const std::string& last = EditorSettings::Get().LastScenePath;
         m_CurrentScenePath = (!last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, ec) && !ec)
@@ -559,7 +592,13 @@ void EditorLayer::Shutdown() {
     // FreeGpuResources(), not this. ImGui_Impl*_Shutdown() and DestroyContext() must not run twice.
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
+    AssetChangeHooks::Unregister(m_UiStylesHook);
+    AssetChangeHooks::Unregister(m_ProjectSettingsHook);
+    AssetChangeHooks::Unregister(m_PrefabHook);
+    m_UiStylesHook = m_ProjectSettingsHook = m_PrefabHook = 0;
     GameModuleBuild::Shutdown();
+    MotionRebake::Shutdown();
+    EditorRestart::Shutdown(); // a restart build still running: wait, put the exe name back
     ThumbnailCache::FlushAsync(); // thumbnails rendered just before exit land while Log / paths still exist
 
     // A build still running: stop it at the next file and wait, so it isn't cut off mid-copy.
@@ -1863,6 +1902,37 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         }
 
         ImGui::Spacing();
+        EditorUIPrimitives::SectionHeader("Model cache");
+        {
+            // Library/Models: each model's import (meshes after merge and Simplify, skeleton, clips), so a scene open
+            // reads it instead of running Assimp. A directory walk, refreshed every couple of seconds like the above.
+            static ModelCache::Usage s_Usage;
+            static double s_UsageTime = -1.0;
+            const double nowT = ImGui::GetTime();
+            if (s_UsageTime < 0.0 || nowT - s_UsageTime > 2.0) {
+                s_Usage = ModelCache::DiskUsage();
+                s_UsageTime = nowT;
+            }
+            ImGui::Text("%d entr%s, %.1f MB", s_Usage.Entries, s_Usage.Entries == 1 ? "y" : "ies",
+                        (double)s_Usage.Bytes / (1024.0 * 1024.0));
+            ImGui::SameLine();
+            ImGui::BeginDisabled(s_Usage.Entries == 0);
+            if (EditorUIPrimitives::SecondaryButton(ICON_FA_TRASH "  Clear model cache")) {
+                const int removed = ModelCache::Clear();
+                Log::Info("Model cache cleared (" + std::to_string(removed) + " entries). Models re-import from source on next load.");
+                s_UsageTime = -1.0;
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("Deletes the cooked model cache in project/Library/Models.\n"
+                                     "Nothing is lost: models already loaded stay as they are, and each one is\n"
+                                     "imported from its source file (and cooked again) the next time it loads,\n"
+                                     "so the next scene open is slower. A changed file, import setting or importer\n"
+                                     "never reads an old entry; the cache is capped at 8 GB and drops entries\n"
+                                     "unused for a month at startup.");
+        }
+
+        ImGui::Spacing();
         HintText("Changes apply immediately and are saved with the scene.");
         ImGui::SameLine();
         if (EditorUIPrimitives::SecondaryButton(ICON_FA_LIGHTBULB "  Lighting panel")) m_ShowLighting = true;
@@ -2163,10 +2233,11 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         EditorUIPrimitives::SectionHeader("Gravity");
         SettingsLabel("Gravity (m/s\xC2\xB2)");
         ImGui::DragFloat3("##grav", &p.Gravity.x, 0.1f, -200.0f, 200.0f, "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemDeactivatedAfterEdit()) { ProjectSettings::Save(); PhysicsWorld::ApplySettings(); }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("World gravity for rigid bodies and particles (all three axes), applied when Play\n"
-                                 "starts. Earth's is 9.81. The player's fall is the First Person Controller's own Gravity.");
+                                 "starts and to a running Play. Earth's is 9.81. The player's fall is the First Person\n"
+                                 "Controller's own Gravity.");
 
         // #15 — Defect #15: this section's header used to read "Simulation (reserved for
         // #185)", an internal issue number leaked straight into shipped UI. #185 has since
@@ -3006,6 +3077,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditWorldPtr = &world;
     BeginGlobalUndoFrame(world);
     GameModuleBuild::Poll();
+    MotionRebake::Poll();
+    EditorRestart::Poll();
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
@@ -3052,7 +3125,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (prefsForAutoSave.AutoSaveEnabled) {
         m_AutoSaveTimer += dt;
         float intervalSeconds = std::max(1.0f, prefsForAutoSave.AutoSaveIntervalMinutes * 60.0f);
-        if (m_AutoSaveTimer >= intervalSeconds) {
+        // An edit still open (a drag, a slider held): wait for it to commit, so the write can use
+        // the undo baseline it leaves rather than reading the World mid-edit.
+        if (m_AutoSaveTimer >= intervalSeconds && !m_GlobalUndoActive) {
             m_AutoSaveTimer = 0.0f;
             // #90 — Draw() also runs during in-panel Play, when the world holds transient play
             // state; the recovery file must only ever hold edit-mode content.
@@ -3613,6 +3688,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // selection change is just another entry on it now, same as any edit. Ctrl+[ / Ctrl+]
         // stay their own, separate selection-only back/forward (SelectionHistoryBack/Forward).
         // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
+        if (Shortcuts::Triggered("editor.rebuildRestart")) RequestRebuildRestart();
         if (Shortcuts::Triggered("editor.saveAs")) {
             if (m_InPlayMode) {
                 Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");

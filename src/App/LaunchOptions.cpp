@@ -4,6 +4,7 @@
 #include "Core/Paths.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -21,7 +22,7 @@ enum class Arity {
 constexpr unsigned Bit(LaunchMode m) { return 1u << (unsigned)m; }
 constexpr unsigned kGuiModes = Bit(LaunchMode::Editor) | Bit(LaunchMode::SmokeTest) | Bit(LaunchMode::PerfBench) |
                                Bit(LaunchMode::NpcTest) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::EditorShot) |
-                               Bit(LaunchMode::BakeGI);
+                               Bit(LaunchMode::BakeGI) | Bit(LaunchMode::GiTour);
 constexpr unsigned kAnyMode = ~0u;
 
 using Apply = void (*)(LaunchOptions&, const std::string&);
@@ -66,6 +67,9 @@ const FlagDef kFlags[] = {
     {"--model-report", Arity::Many, "folder|model", true, LaunchMode::ModelReport, 0,
      [](LaunchOptions& o, const std::string& v) { o.inputs.push_back(v); },
      "print each model's size, bounds and mesh count"},
+    {"--model-cache-check", Arity::Many, "scene.json|folder|model", true, LaunchMode::ModelCacheCheck, 0,
+     [](LaunchOptions& o, const std::string& v) { o.inputs.push_back(v); },
+     "import each model fresh and from the model cache; exit 1 unless they match"},
     {"--model-nodes", Arity::Many, "folder|fbx", true, LaunchMode::ModelNodes, 0,
      [](LaunchOptions& o, const std::string& v) { o.inputs.push_back(v); },
      "print each FBX's node tree"},
@@ -93,6 +97,9 @@ const FlagDef kFlags[] = {
     {"--crash-test", Arity::Required, "kind", true, LaunchMode::CrashTest, 0,
      [](LaunchOptions& o, const std::string& v) { o.crashTestKind = v; },
      "crash on purpose (av|overflow|abort|purecall|invalidparam|terminate) to check the crash handler"},
+    {"--gi-tour", Arity::Required, "tour.json", true, LaunchMode::GiTour, 0,
+     [](LaunchOptions& o, const std::string& v) { o.giTourFile = v; },
+     "walk the tour's waypoints and routes through its scene (hidden): PNGs, shadow slots, a luminance CSV (needs --out)"},
     {"--help", Arity::None, "", true, LaunchMode::Help, 0,
      [](LaunchOptions&, const std::string&) {},
      "this list"},
@@ -110,8 +117,11 @@ const FlagDef kFlags[] = {
     {"--perf-sample", Arity::None, "", false, kNoMode, Bit(LaunchMode::PerfBench) | Bit(LaunchMode::NpcTest),
      [](LaunchOptions& o, const std::string&) { o.perfSample = true; },
      "add a sampling CPU profile of each phase (--npc-test: of the scripted run, from its 900th frame)"},
+    {"--gi-tour-view", Arity::Required, "full|gi|nogi", false, kNoMode, Bit(LaunchMode::GiTour),
+     [](LaunchOptions& o, const std::string& v) { o.giTourView = v; },
+     "what the tour's luminance rows measure: the game's lighting, the baked GI alone, or the GI Volumes off"},
     {"--perf-res", Arity::Required, "WxH", false, kNoMode,
-     Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests),
+     Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::GiTour),
      [](LaunchOptions& o, const std::string& v) {
 #pragma warning(suppress : 4996)
          if (std::sscanf(v.c_str(), "%dx%d", &o.perfResW, &o.perfResH) != 2 || o.perfResW <= 0 || o.perfResH <= 0)
@@ -132,7 +142,7 @@ const FlagDef kFlags[] = {
      [](LaunchOptions& o, const std::string&) { o.editorShotIDE = true; },
      "one Script IDE capture"},
     {"--out", Arity::Required, "dir", false, kNoMode,
-     Bit(LaunchMode::SceneBounds) | Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion),
+     Bit(LaunchMode::SceneBounds) | Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion) | Bit(LaunchMode::GiTour),
      [](LaunchOptions& o, const std::string& v) { o.sceneBoundsOut = v; },
      "output folder (bake-motion: the output files' path, without extension)"},
     {"--match", Arity::Required, "text", false, kNoMode, Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion),
@@ -147,6 +157,20 @@ const FlagDef kFlags[] = {
     {"--crash-dialog", Arity::None, "", false, kNoMode, Bit(LaunchMode::CrashTest) | Bit(LaunchMode::Editor),
      [](LaunchOptions& o, const std::string&) { o.crashDialog = true; },
      "show the crash dialog on a crash test"},
+    {"--restore-state", Arity::Required, "file", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) { o.restoreStateFile = v; },
+     "Rebuild & Restart: pick up the scene, unsaved edits, selection and Play from this file"},
+    {"--restore-check", Arity::Required, "report", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) { o.restoreCheckReport = v; },
+     "test --restore-state: hidden, in a scratch user folder (needs TARTARUS_EDITOR_TEST_INSTANCE); writes what was "
+     "restored to this JSON file, then quits"},
+    {"--wait-pid", Arity::Required, "pid", false, kNoMode, Bit(LaunchMode::Editor),
+     [](LaunchOptions& o, const std::string& v) {
+         const bool digits = !v.empty() && v.size() <= 10 && v.find_first_not_of("0123456789") == std::string::npos;
+         const unsigned long long pid = digits ? std::strtoull(v.c_str(), nullptr, 10) : 0;
+         o.waitPid = pid > 0 && pid < LaunchOptions::kBadWaitPid ? (unsigned long)pid : LaunchOptions::kBadWaitPid; // reported after the parse
+     },
+     "Rebuild & Restart: wait for this editor process to exit before starting"},
 };
 // clang-format on
 
@@ -179,7 +203,8 @@ bool IsValue(const char* a) { return a[0] != '-'; }
 } // namespace
 
 bool KeepsWindowHidden(const LaunchOptions& o) {
-    if (o.mode == LaunchMode::Editor || !(kGuiModes & Bit(o.mode))) return false;
+    if (!(kGuiModes & Bit(o.mode))) return false;
+    if (o.mode == LaunchMode::Editor && o.restoreCheckReport.empty()) return false; // --restore-check runs hidden
     return !Env::Flag(Env::Var::Show) && !Env::Flag(Env::Var::EditorTestShow);
 }
 
@@ -243,6 +268,14 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
         error = "'--perf-res' needs a size like 1920x1080";
         return false;
     }
+    if (o.waitPid == LaunchOptions::kBadWaitPid) {
+        error = "'--wait-pid' needs a process id (a whole number above 0)";
+        return false;
+    }
+    if (!o.restoreCheckReport.empty() && o.restoreStateFile.empty()) {
+        error = "'--restore-check' needs '--restore-state <file>'";
+        return false;
+    }
 
     // Loose words after a list mode (--scene-bounds a.json --out d b.json) are more of its inputs; anywhere else
     // (a file dragged onto the exe) they're ignored.
@@ -255,9 +288,19 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
     // run-weapon-lab.cmd starts the exe without arguments; only the windowed modes take it, as they do --weapon-lab.
     if (Env::Flag(Env::Var::WeaponLab) && (kGuiModes & Bit(o.mode))) o.weaponLabMode = true;
 
-    o.smokeTestMode = o.mode == LaunchMode::SmokeTest || o.mode == LaunchMode::PerfBench || o.mode == LaunchMode::NpcTest;
+    if (o.giTourView != "full" && o.giTourView != "gi" && o.giTourView != "nogi") {
+        error = "'--gi-tour-view' takes full, gi or nogi";
+        return false;
+    }
+    if (o.mode == LaunchMode::GiTour && o.sceneBoundsOut.empty()) {
+        error = "'--gi-tour' needs '--out <dir>'";
+        return false;
+    }
+    o.smokeTestMode = o.mode == LaunchMode::SmokeTest || o.mode == LaunchMode::PerfBench || o.mode == LaunchMode::NpcTest ||
+                      o.mode == LaunchMode::GiTour;
     o.perfBenchMode = o.mode == LaunchMode::PerfBench;
     o.npcTestMode = o.mode == LaunchMode::NpcTest;
+    o.giTourMode = o.mode == LaunchMode::GiTour;
     o.editorTestsMode = o.mode == LaunchMode::EditorTests;
     o.buildMode = o.mode == LaunchMode::Build;
 

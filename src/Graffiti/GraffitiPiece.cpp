@@ -455,6 +455,14 @@ std::string Piece::ToString() const {
     return CompactNumberArrays(j.dump(2)) + "\n";
 }
 
+std::string Piece::RecipeHash() const {
+    uint64_t h = 1469598103934665603ull;
+    for (const unsigned char c : ToString()) { h ^= c; h *= 1099511628211ull; }
+    char hex[17];
+    std::snprintf(hex, sizeof(hex), "%016llx", (unsigned long long)h);
+    return hex;
+}
+
 bool Piece::Save() const { return AtomicFile::WriteBytes(fs::u8path(Path), ToString(), /*binary=*/true); }
 
 std::string Piece::BakeDir() const {

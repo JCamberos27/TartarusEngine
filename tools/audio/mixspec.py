@@ -134,29 +134,33 @@ def shot_layer_mix_db(e, lufs_m, with_gun=True):
     return SPEC["reference"]["shot_layer_db"][_layer_of(e)] + shot_comp_db(e, lufs_m, g) + g
 
 
-def compute_reference(files, lufs_of, with_gun=False):
+def compute_reference(files, lufs_of):
     """Mean over variant combinations (both guns) of the LUFS-M of close + sub + mech at their mix_db, summed from t = 0.
-    -> (unscaled shot LUFS-M over REFERENCE_GUNS, per-gun means of every gun in GUNS). with_gun: as played, the guns' own offsets
-    (reference.gun_db) included."""
-    per_gun = {}
+    -> (unscaled shot LUFS-M over REFERENCE_GUNS, per-gun means of every gun in GUNS, the per-gun means as played: the guns' own
+    offsets (reference.gun_db) included). One pass: each combination's wavs are read once for both sums."""
+    per_gun, per_gun_played = {}, {}
     for gun in GUNS:
         by = {l: [e for e in files if e["key"] == f"snd.{gun}.fire_{l}"] for l in SHOT_LAYERS}
         if not all(by.values()):
             continue
-        res = []
+        res, res_played = [], []
         for i in range(max(len(v) for v in by.values())):
             mix = np.zeros((adsp.SR * 4, 2), np.float32)
+            played = np.zeros((adsp.SR * 4, 2), np.float32)
             for lay, v in by.items():
                 e = v[i % len(v)]
                 x = read_wav(e)
                 n = min(len(mix), len(x))
-                mix[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e), with_gun=with_gun) / 20)).astype(np.float32)
+                mix[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e), with_gun=False) / 20)).astype(np.float32)
+                played[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e), with_gun=True) / 20)).astype(np.float32)
             res.append(adsp.lufs(mix)[1])
+            res_played.append(adsp.lufs(played)[1])
         per_gun[gun] = float(np.mean(res))
+        per_gun_played[gun] = float(np.mean(res_played))
     ref = [v for g, v in per_gun.items() if g in REFERENCE_GUNS]
     if not ref:
         raise RuntimeError("no gun shot layers in the manifest: cannot measure the mix reference")
-    return float(np.mean(ref)), per_gun
+    return float(np.mean(ref)), per_gun, per_gun_played
 
 
 def compute(files, lufs_of=None):
@@ -165,8 +169,7 @@ def compute(files, lufs_of=None):
     key's median (a click's LUFS-M is dominated by its length, not its punch), and nothing is pushed past PEAK_CAP_DB (file true
     peak + mix_db, before the engine's Player Gain). Close / sub / mech are their nominal offset + the clamped compensation."""
     lufs_of = lufs_of or (lambda e: e["lufs_m_max"])
-    shot, per_gun = compute_reference(files, lufs_of)
-    _, per_gun_played = compute_reference(files, lufs_of, with_gun=True)
+    shot, per_gun, per_gun_played = compute_reference(files, lufs_of)
     ref = {"shot": shot, "played": shot + 20 * math.log10(SPEC["reference"]["player_gain"])}
     # Short keys (clicks, steps, impacts): each file's loudness for levelling is its 100 ms loudness, shifted by the key's median
     # (LUFS-M - short) so the key as a whole still sits at its spec level by LUFS-M; only the variants are evened out by what they

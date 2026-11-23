@@ -4,6 +4,7 @@
 #include "../Core/ModuleCopies.h"
 #include "../Core/Env.h"
 #include "../Core/Paths.h"
+#include "MachineLoad.h"
 
 #include <string>
 #include <vector>
@@ -36,6 +37,26 @@ void Test_LaunchOptions_Modes() {
     CHECK(!Parse({"--import-blood"}, o, err) && err.find("needs a value") != std::string::npos);
     // An empty value (a script whose path conversion failed) used to start a plain editor that never exits.
     CHECK(!Parse({"--editor-shot", ""}, o, err) && err.find("needs a value") != std::string::npos);
+    // Rebuild & Restart's relaunch: editor only.
+    CHECK(Parse({"--restore-state", "s.json", "--wait-pid", "4242"}, o, err));
+    CHECK(o.mode == LaunchMode::Editor && o.restoreStateFile == "s.json" && o.waitPid == 4242);
+    CHECK(!Parse({"--unit-tests", "--restore-state", "s.json"}, o, err));
+    // Its relaunch test: only with a state file to restore.
+    CHECK(Parse({"--restore-state", "s.json", "--restore-check", "r.json"}, o, err) && o.restoreCheckReport == "r.json");
+    CHECK(!Parse({"--restore-check", "r.json"}, o, err) && err.find("--restore-state") != std::string::npos);
+    // GI Phase 0's camera tour: on the smoke harness, hidden like the other harness runs, and it must say where to write.
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--perf-res", "1920x1080"}, o, err));
+    CHECK(o.mode == LaunchMode::GiTour && o.giTourMode && o.smokeTestMode && !o.perfBenchMode && o.giTourFile == "tour.json" &&
+          o.sceneBoundsOut == "o" && o.perfResW == 1920);
+    CHECK(Env::Flag(Env::Var::Show) || KeepsWindowHidden(o));
+    CHECK(!Parse({"--gi-tour", "tour.json"}, o, err) && err.find("--out") != std::string::npos);
+    CHECK(!Parse({"--gi-tour", "tour.json", "--out", "o", "--smoke-shots", "s"}, o, err));
+    // --gi-tour-view: full by default (the game's lighting), gi / nogi on request, nothing else, gi-tour only.
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o"}, o, err) && o.giTourView == "full");
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "nogi"}, o, err) && o.giTourView == "nogi");
+    CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "gi"}, o, err) && o.giTourView == "gi");
+    CHECK(!Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "direct"}, o, err) && err.find("full, gi or nogi") != std::string::npos);
+    CHECK(!Parse({"--smoke-test", "--gi-tour-view", "gi"}, o, err));
 }
 
 void Test_LaunchOptions_Lists() {
@@ -61,6 +82,10 @@ void Test_LaunchOptions_Errors() {
     CHECK(!Parse({"--smoke-test", "--perf-sample"}, o, err) && err.find("only works with") != std::string::npos);
     CHECK(!Parse({"--perf-res", "1280x720"}, o, err)); // the editor doesn't take it
     CHECK(!Parse({"--perf-bench", "--perf-res", "big"}, o, err) && err.find("1920x1080") != std::string::npos);
+    for (const char* pid : {"abc", "0", "12x", "+12", " 12", "99999999999", "4294967295"})
+        CHECK(!Parse({"--wait-pid", pid}, o, err) && err.find("process id") != std::string::npos);
+    CHECK(!Parse({"--wait-pid", "-5"}, o, err)); // a value starting with '-' is a missing value
+    CHECK(Parse({"--wait-pid", "4294967294"}, o, err) && o.waitPid == 4294967294ul);
     CHECK(!Parse({"--project", "Z:/no/such/folder/anywhere"}, o, err));
 }
 
@@ -133,6 +158,48 @@ void Test_ModuleCopies_OwnerPid() {
     CHECK(!ModuleCopies::OwnerPid(L"TartarusGame_99999999999_1.dll", L"TartarusGame_"));
 }
 
+// --perf-bench's machine line: other processes' CPU share, and which watched processes took CPU during the phase.
+void Test_MachineLoad_Between() {
+    using namespace MachineLoad;
+    using P = Snapshot::Proc;
+    Snapshot a, b;
+    a.Ok = b.Ok = true;
+    a.SysTotal = 1000; a.SysBusy = 100; a.SelfCpu = 50;
+    b.SysTotal = 2000; b.SysBusy = 500; b.SelfCpu = 250; // busy +400, self +200 -> others 20%; 2 cores: 500 each
+    // MSBuild 7 idle (+10 <= 5% of 500), cl 8 busy (+100), cl 9 ended, cl 10 started, MSBuild 11 time unreadable.
+    a.Procs = {P{"MSBuild", 7, 100, true}, P{"cl", 8, 0, true}, P{"cl", 9, 0, true}, P{"MSBuild", 11, 0, false}};
+    b.Procs = {P{"MSBuild", 7, 110, true}, P{"cl", 8, 100, true}, P{"cl", 10, 0, true}, P{"MSBuild", 11, 0, false}};
+    Result r = Between(a, b, 2);
+    CHECK(r.Ok);
+    CHECK(r.OtherCpuPct > 19.9 && r.OtherCpuPct < 20.1);
+    CHECK(r.Busy == "cl x3, MSBuild x1");
+    CHECK(r.Idle == "MSBuild x1");
+    CHECK(r.Contended);
+    CHECK(Describe(r, 2) == "other CPU 20% (2 cores); busy: cl x3, MSBuild x1; idle: MSBuild x1 -> CONTENDED");
+
+    // Only idle watched processes and 20% other CPU: quiet (the MSBuild nodes a build leaves behind).
+    a.Procs = {P{"MSBuild", 7, 100, true}, P{"TartarusEngine", 3, 5, true}};
+    b.Procs = {P{"MSBuild", 7, 100, true}, P{"TartarusEngine", 3, 30, true}};
+    r = Between(a, b, 2);
+    CHECK(r.Busy.empty() && r.Idle == "TartarusEngine x1, MSBuild x1" && !r.Contended);
+    CHECK(Describe(r, 2) == "other CPU 20% (2 cores); busy: -; idle: TartarusEngine x1, MSBuild x1 -> quiet");
+    b.Procs[1].Cpu = 31; // +26 > 25 (5% of a core over the phase): the other engine is busy
+    CHECK(Between(a, b, 2).Contended);
+    b.Procs[1].Cpu = 30;
+    b.SysBusy = 800; // others 50%
+    CHECK(Between(a, b, 2).Contended);
+
+    b.Ok = false; // a failed snapshot prints nothing
+    CHECK(!Between(a, b, 2).Ok && Describe(Between(a, b, 2), 2).empty());
+    b.Ok = true; b.SysTotal = a.SysTotal; // no time passed: no division by zero
+    CHECK(!Between(a, b, 2).Ok);
+    const Snapshot live = Take(); // the real snapshot works and never counts this process
+    (void)live;
+#ifdef _WIN32
+    CHECK(live.Ok && live.SysTotal > 0);
+#endif
+}
+
 } // namespace
 
 void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
@@ -143,4 +210,5 @@ void RegisterLaunchOptionsTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ProjectPaths::RelativizeUnder", Test_ProjectPaths_RelativizeUnder});
     tests.push_back({"ScratchProfile::InstanceNames", Test_ScratchProfile_InstanceNames});
     tests.push_back({"ModuleCopies::OwnerPid", Test_ModuleCopies_OwnerPid});
+    tests.push_back({"MachineLoad::Between", Test_MachineLoad_Between});
 }

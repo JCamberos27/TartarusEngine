@@ -84,6 +84,7 @@ void RegisterWorldTextTests(UnitTestSupport::TestList& tests); // UnitTests_Worl
 void RegisterOpenableTests(UnitTestSupport::TestList& tests); // UnitTests_Openable.cpp
 void RegisterLightSwitchTests(UnitTestSupport::TestList& tests); // UnitTests_LightSwitch.cpp
 void RegisterCinematicTests(UnitTestSupport::TestList& tests); // UnitTests_Cinematic.cpp
+void RegisterGiTourTests(UnitTestSupport::TestList& tests); // UnitTests_GiTour.cpp
 void RegisterGameplayTests(UnitTestSupport::TestList& tests);
 void RegisterEditorSoundTests(UnitTestSupport::TestList& tests); // UnitTests_EditorSound.cpp
 void RegisterAudioTests(UnitTestSupport::TestList& tests); // UnitTests_Audio.cpp

@@ -28,6 +28,8 @@
 #include "HotReloadEditorModule.h"
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
+#include "EditorRestart.h"   // Rebuild & Restart
+#include "RestartState.h"    // its startup scene and --restore-check report
 #include "EditorSettings.h"
 #include "EditorSound.h"
 #include "AppAudioMuter.h"
@@ -37,7 +39,8 @@
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "Grid.h"
-#include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
+#include "DebugLineGather.h"   // #185 collider overlay lines (Physics / Audio / Game state)
+#include "DebugLineRenderer.h" // ...drawn by the Renderer
 #include "Sky.h"
 #include "SkyAtmosphere.h"
 #include "TimeOfDay.h"
@@ -118,6 +121,7 @@
 #include "ScriptIDE.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
+#include "AssetChangeHooks.h"
 #include "AssetDatabase.h"
 #include "ProjectWatcher.h" // #132
 #include "ThumbnailCache.h"
@@ -125,6 +129,7 @@
 #include "GLDebug.h"
 #include "Log.h"
 #include "TextureCache.h"
+#include "ModelCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -157,6 +162,24 @@ static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
 }
 
+// --bake-gi TARTARUS_GI_BAKE_TRACE: the last light gather's shadow-slot holders as one stable line, names sorted
+// ("spots[2]: A, B | points[1]: C"), so the baker can tell when a pass's shadowed set changes between probe batches.
+static std::string DescribeShadowHolders(const World& world, const LightGather& gather) {
+    auto names = [&](const std::unordered_map<entt::entity, int>& slots) {
+        std::vector<std::string> v;
+        for (const auto& [e, slot] : slots) {
+            if (!world.Registry.valid(e)) { v.push_back("<flashlight>"); continue; } // the torch's key, not an entity
+            const auto* nc = world.Registry.try_get<NameComponent>(e);
+            v.push_back(nc && !nc->Name.empty() ? nc->Name : "#" + std::to_string((std::uint32_t)e));
+        }
+        std::sort(v.begin(), v.end());
+        std::string s = "[" + std::to_string(v.size()) + "]:";
+        for (std::size_t i = 0; i < v.size(); ++i) s += (i ? ", " : " ") + v[i];
+        return s;
+    };
+    return "spots" + names(gather.SpotSlotHolders()) + " | points" + names(gather.PointSlotHolders());
+}
+
 // Renderables that never animate, skipped by the animation tick and the pre-skin gather (Renderer/StillModelCache.h).
 static StillModelCache s_StillModels;
 
@@ -176,8 +199,9 @@ int Application::Run() {
     // (audit BUG-102).
     m_Headless = opt.smokeTestMode || opt.editorTestsMode;
     if (opt.editorTestsMode && !PrepareEditorTestsProfile(opt)) return 1;
+    if (!opt.restoreCheckReport.empty() && !PrepareRestoreCheckProfile()) return 1; // never the real user folder
     const bool giBakeMode = opt.mode == LaunchMode::BakeGI;
-    CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty() && !giBakeMode); // #148: no crash dialog on an unattended run
+    CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty() && !giBakeMode && opt.restoreCheckReport.empty()); // #148: no crash dialog on an unattended run
     // --editor-shot and --bake-gi run on a copy of the user's prefs, so the run's window, camera and last scene stay its own.
     if ((!opt.editorShotDir.empty() || giBakeMode) && !PrepareEditorShotProfile(opt)) return 1;
     if (opt.smokeTestMode && !PrepareSmokeProfile()) return 1; // smoke / perf / npc: per-instance prefs when named
@@ -210,9 +234,12 @@ int Application::Run() {
     }
     // A shipped game doesn't watch its files for edits; a development build still does.
     LiveReload::SetEnabled(!playerMode || playerCfg.DevelopmentBuild);
+    // Rebuild & Restart: the editor that started this one (--wait-pid) is still closing and writing its prefs, log
+    // and recovery snapshot; let it finish before any of them is read, then delete the <exe>.old it ran from.
+    const bool oldEditorExited = headless || playerMode || EditorRestart::CleanupAtStartup(opt.waitPid);
     // --editor-tests: the tracked project/settings.json and layers.json go back as they were when the run ends.
     std::optional<ProjectFilesGuard> projectFiles;
-    if (opt.editorTestsMode) projectFiles.emplace();
+    if (opt.editorTestsMode || !opt.restoreCheckReport.empty()) projectFiles.emplace();
 
     // #132 - register the project's assets on a worker thread while the window, GL context and
     // shaders come up. Any GUID lookup made before it finishes waits for it.
@@ -221,8 +248,12 @@ int Application::Run() {
     // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
     const char* logName = headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log";
-    Log::OpenFile(logName);
-    CrashHandler::SetReportLocation(UserPaths::Root(), logName); // a built game's dumps go to its own user folder
+    const std::string logPath = Log::OpenFile(logName); // "" when no file could be opened
+    if (!oldEditorExited)
+        Log::Warn("Rebuild & Restart: the old editor (pid " + std::to_string(opt.waitPid) + ") hasn't exited after " +
+                  std::to_string(EditorRestart::kWaitOldEditorMs / 1000) + " s; going on.");
+    // A built game's dumps go to its own user folder; each keeps a copy of this run's log beside it.
+    CrashHandler::SetReportLocation(UserPaths::Root(), logPath.empty() ? std::string(logName) : logPath);
     WireGameShell(); // gameplay's keys, sounds, F-row pill and look prefs come from the editor
     return RunSession();
 }
@@ -399,7 +430,8 @@ private:
     } glObjectGuard{fsQuadVao};
     TintOverlayRenderer tintOverlay;
     Grid grid;
-    ColliderGizmo colliderGizmo; // #185 PR 2
+    DebugLineRenderer debugLineRenderer; // #185 PR 2: collider overlay
+    DebugLineGather debugLineGather;
     Sky sky;
     SkyAtmosphere skyAtmosphere; // the physical sky (World::SkySource::Atmosphere)
     IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
@@ -407,6 +439,24 @@ private:
     std::shared_ptr<Cubemap> hdriCube;
     std::string               hdriCubePath;
     bool                      hdriNeedsBake = false; // #200 — set when hdriCube is (re)loaded
+    // The loaded .hdr written on disk (re-exported, painted over) reloads in place: clearing the
+    // path makes the next HDRI frame load it again and rebake the IBL. Rescan may have changed it too.
+    struct HdriHook {
+        int id = 0;
+        explicit HdriHook(std::string& path) {
+            id = AssetChangeHooks::Register("hdri", [&path](const AssetChangeHooks::Event& e) {
+                if (path.empty() || e.Type == AssetChangeHooks::Event::Kind::Removed) return false;
+                const bool rescan = e.Type == AssetChangeHooks::Event::Kind::Rescan;
+                const std::string loaded = std::filesystem::path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
+                if (!rescan && !AssetDatabase::SamePath(e.Path, loaded) && !AssetDatabase::SamePath(e.Path, path)) return false;
+                path.clear();
+                return true;
+            });
+        }
+        ~HdriHook() { AssetChangeHooks::Unregister(id); }
+        HdriHook(const HdriHook&) = delete;
+        HdriHook& operator=(const HdriHook&) = delete;
+    } hdriHook{hdriCubePath};
     bool                      prevWasHdri = false;
     bool                      prevWasAtmosphere = false;
     // PR14: reflection probe array — rebuilt from scene each frame, bound per scene draw
@@ -740,12 +790,19 @@ private:
     std::future<void> thumbnailPrune = std::async(std::launch::async, ThumbnailCache::PruneOrphans);
     const std::string startup = ProjectSettings::Build().Scenes.empty()?ProjectSettings::StartupScene():ProjectSettings::Build().Scenes.front();
     std::string scenePath=startup.empty()?std::string{}:ProjectPaths::Resolve(startup);
+    // Rebuild & Restart: the scene that was open, which LastScenePath may not be (a scene outside the project, prefs
+    // not flushed, another instance's prefs); the editor is told the same before Init, so ApplyRestartState matches.
+    std::optional<std::string> restartScene;
     Step step47{[&] {
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
             std::error_code sceneEc;
             if (!opt.editorShotIDE && !last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, sceneEc) && !sceneEc)
                 scenePath = last;
+            if (!opt.restoreStateFile.empty() && !headless && !playerMode) {
+                restartScene = RestartState::StartupScene(std::filesystem::u8path(opt.restoreStateFile), RestartState::NowUnix());
+                if (restartScene) scenePath = *restartScene;
+            }
             if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
             if (opt.weaponLabMode) scenePath = EnginePaths::Resolve("tests/scenes/WeaponLab.json");
             if (giBakeMode) {
@@ -788,6 +845,8 @@ private:
     Step step51{[&] {
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
+            // As the editor's scene open: Play's guns and clips load while the first frames run.
+            if (!headless && !giBakeMode) FirstPersonPresentation::PrefetchPlayAssets(world, assets);
         }
     }};
 
@@ -806,6 +865,12 @@ private:
                 return TextureCache::HashSettings(it->second);
             });
         }
+        // The cooked model cache: entries unused for a month, crash leftovers, the size cap (Library/Models).
+        ModelCache::Prune();
+        const ModelCache::Stats models = ModelCache::GetStats();
+        if (models.Hits + models.Cooked > 0)
+            Log::Info("Model cache: " + std::to_string(models.Hits) + " models read (" + std::to_string((int)models.HitMs) +
+                      " ms), " + std::to_string(models.Cooked) + " imported and cooked (" + std::to_string((int)models.CookMs) + " ms).");
     }};
 
     EditorLayer editor;
@@ -814,6 +879,7 @@ private:
         if (opt.npcTestMode || opt.weaponLabMode) editor.RequestSceneGameSplit();
     }};
     Step step54{[&] {
+        if (restartScene) editor.SetStartupScene(*restartScene);
         editor.Init(window.Handle());
         UsePrivateClipboardForInstance(); // parallel named harness runs don't share the system clipboard
     }};
@@ -909,6 +975,19 @@ private:
     }};
     Step step67{[&] {
         editor.SetSystemReport(sysReport); // shown in Preferences > About
+    }};
+    // Rebuild & Restart: the unsaved edits and selection the old editor handed over; Play starts on the first frame.
+    bool playAfterRestart = false;
+    RestartState::CheckReport restoreCheck; // --restore-check: what came back, written once Play has had time to start
+    Step step67b{[&] {
+        if (!opt.restoreStateFile.empty() && !headless && !playerMode)
+            playAfterRestart = editor.ApplyRestartState(world, assets, std::filesystem::u8path(opt.restoreStateFile));
+        if (!opt.restoreCheckReport.empty()) {
+            restoreCheck.ScenePath = editor.CurrentScenePath();
+            restoreCheck.SceneLoaded = sceneLoaded;
+            for (const RestartState::EntityRef& r : RestartState::RefsFor(world, editor.GetSelectedItems()))
+                restoreCheck.Selection.push_back(r.Name);
+        }
     }};
 
     GameViewPanel gameView;
@@ -1096,6 +1175,7 @@ private:
     // the user has chosen Don't Save, or Save and the save succeeded, so the next close
     // request goes through.
     bool exitApproved = false;
+    bool restartWasPlaying = false; // Rebuild & Restart stopped Play to hand the scene over; the new editor re-enters it
     // The EditorStart / EditorExit chimes: a person opening and closing the editor, not a test, a capture or a bench run.
     const bool editorChimes = !playerMode && !headless && opt.editorShotDir.empty() && !opt.npcTestMode &&
                               !opt.perfBenchMode;
@@ -1114,7 +1194,7 @@ private:
     SmokeContext smokeContext{world, assets, editor, editorCamera, sceneFramebuffer, clusterGrid, decalSystem, window,
                               npcTest.get(), playing, playMaximized, playUsesPlayer, player.Cam, playSceneCam,
                               [&]() { togglePlay(); }, [&](bool maximize) { setMaximized(maximize); },
-                              [&]() { warmRenderResources(); }};
+                              [&]() { warmRenderResources(); }, &lightGather, &sceneHdr, &giVolumes};
     SmokeHarness smoke{opt, smokeContext};
 
     // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
@@ -1192,7 +1272,7 @@ bool AppSession::Frame() {
     // every run (a before/after pixel diff of a GPU change). The timings of such a run aren't the measurement.
     // --npc-test: 1/60 s, its game step (gameDt below), so what reads Time's clocks - the recoil's unscaled shot
     // timing among them - repeats run to run too, instead of following how long each frame really took.
-    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : opt.npcTestMode ? 1.0 / 60.0 : 0.0);
+    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : opt.npcTestMode || opt.giTourMode ? 1.0 / 60.0 : 0.0);
     Time::BeginFrame();
     const auto frameWorkStart = std::chrono::steady_clock::now(); // to SwapBuffers: this frame's own work
     const float dt = Time::UnscaledDeltaTime();
@@ -1407,6 +1487,34 @@ bool AppSession::Frame() {
         else               imguiIO.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
     }
 
+    if (playAfterRestart) { playAfterRestart = false; if (!playing) startPlay(); }
+    if (!opt.restoreCheckReport.empty() && frameIndex == 30) {
+        restoreCheck.Playing = playing;
+        if (!RestartState::WriteCheckReport(std::filesystem::u8path(opt.restoreCheckReport), restoreCheck))
+            std::cerr << "--restore-check: could not write " << opt.restoreCheckReport << std::endl;
+        exitApproved = true;
+        window.SetShouldClose(true);
+    }
+    // Rebuild & Restart (EditorRestart.h): the new exe is built. Leave Play (its world isn't the scene) and prefab
+    // mode first, then hand the state over and start the new editor; this one closes without the Save prompt (the
+    // dirty scene's recovery snapshot stays for the new one). Not mid-drag (an undo step still open). Prefab mode is
+    // left without saving, and unsaved prefab edits (made while the build ran) cancel the restart: no silent writes.
+    // --editor-tests drives it too (headless, with TARTARUS_RESTART_FAKE_BUILD: no relaunch); --smoke-test never.
+    if (!playerMode && (!headless || opt.editorTestsMode) && EditorRestart::ReadyToRelaunch() && !editor.GlobalUndoActive()) {
+        if (playing) { restartWasPlaying = true; stopPlay(); }
+        else if (editor.InPrefabMode()) {
+            if (!editor.LeavePrefabModeForRestart(world, assets)) EditorRestart::Cancel();
+        } else {
+            const std::filesystem::path stateFile = EditorRestart::StateFile();
+            if (editor.WriteRestartState(world, assets, stateFile, restartWasPlaying) && EditorRestart::Relaunch(stateFile)) {
+                exitApproved = true;
+                window.SetShouldClose(true);
+            } else {
+                EditorRestart::Cancel();
+            }
+            restartWasPlaying = false;
+        }
+    }
     // --editor-tests: this frame's synthetic input and checks, before ImGui reads input.
     if (opt.editorTestsMode && EditorUiTests::BeforeFrame(editor, world, assets, editorCamera)) {
         exitApproved = true;
@@ -1594,25 +1702,12 @@ bool AppSession::Frame() {
         editor.KeepDockspaceAlive();
     }
 
-    // Every world matrix this frame's render passes need, computed once, top-down
-    // (#173). Placed here deliberately: player/animator/animation updates above have
-    // finished writing transforms, and the shadow + scene passes below (which each used
-    // to re-derive the same entity's parent chain per cascade, per spot, per cube face
-    // and per viewport) now just read it back. Editor edits — gizmo drags, Inspector
-    // fields — land in editor.Draw() further down and so take effect on the NEXT frame's
-    // rebuild. That is a small behavior change for the Game-view passes, which run after
-    // editor.Draw() and so used to see a mid-frame edit that the Scene pass above them
-    // did not: both views now agree on one snapshot instead of tearing between them.
-    // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
-    // falls back to composing on demand for anything the cache doesn't hold.
-    {
-    PROFILE_SCOPE("Outfits + Transform Cache");
-    { PROFILE_SCOPE("Outfit Attachments"); OutfitSystem::UpdateAttachments(world); } // rigid head wear onto the head bone, now it's posed
-    { PROFILE_SCOPE("Terrain Sync"); TerrainSystem::Sync(world); } // a Terrain edited in the Inspector, duplicated or reloaded
-    { PROFILE_SCOPE("Transform Cache"); world.RebuildWorldTransformCache(); }
-    }
     // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
-    // models and materials are now all in memory lands in one frame.
+    // models and materials are now all in memory lands in one frame. Before the Transform Cache below, so the
+    // landed pieces (and the ones they replace) are in this frame's rebuild: the transform, LOD and gather caches
+    // take the new structure in the landing frame instead of the next one (a landing used to cost two frames).
+    // Nothing here reads the cache. The player's first-person body still takes the new pieces next frame
+    // (PlayFrame's OutfitChanged runs before this).
     {
     PROFILE_SCOPE("Asset Pump + Outfit Hiding");
     { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
@@ -1661,6 +1756,24 @@ bool AppSession::Frame() {
       if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
       OutfitSystem::UpdatePending(world, assets); }
     { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
+    }
+
+    // Every world matrix this frame's render passes need, computed once, top-down
+    // (#173). Placed here deliberately: player/animator/animation updates above have
+    // finished writing transforms, and the shadow + scene passes below (which each used
+    // to re-derive the same entity's parent chain per cascade, per spot, per cube face
+    // and per viewport) now just read it back. Editor edits — gizmo drags, Inspector
+    // fields — land in editor.Draw() further down and so take effect on the NEXT frame's
+    // rebuild. That is a small behavior change for the Game-view passes, which run after
+    // editor.Draw() and so used to see a mid-frame edit that the Scene pass above them
+    // did not: both views now agree on one snapshot instead of tearing between them.
+    // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
+    // falls back to composing on demand for anything the cache doesn't hold.
+    {
+    PROFILE_SCOPE("Outfits + Transform Cache");
+    { PROFILE_SCOPE("Outfit Attachments"); OutfitSystem::UpdateAttachments(world); } // rigid head wear onto the head bone, now it's posed
+    { PROFILE_SCOPE("Terrain Sync"); TerrainSystem::Sync(world); } // a Terrain edited in the Inspector, duplicated or reloaded
+    { PROFILE_SCOPE("Transform Cache"); world.RebuildWorldTransformCache(); }
     }
 
     glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
@@ -1721,8 +1834,6 @@ bool AppSession::Frame() {
     shadowIn.spotMap = &spotShadowMap;
     shadowIn.pointMap = &pointShadowMap;
     shadowIn.frame = frameIndex;
-    shadowIn.windowWidth = window.GetWidth();
-    shadowIn.windowHeight = window.GetHeight();
 
     // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
     // camera the user is mainly looking through (each view's draw re-applies its own).
@@ -1931,14 +2042,19 @@ bool AppSession::Frame() {
     viewIn.outlineDilateShader = &outlineDilateShader;
     viewIn.fsQuadVao = fsQuadVao;
     viewIn.tonemapper = &tonemapper;
-    viewIn.colliderGizmo = &colliderGizmo;
+    viewIn.debugLines = &debugLineRenderer;
+    viewIn.gatherDebugLines = [gather = &debugLineGather](const World& w, bool shapes,
+                                                 const std::function<bool(entt::entity)>* only,
+                                                 std::vector<float>& out) { gather->Gather(w, shapes, only, out); };
     viewIn.scene = {&sceneHdr, &sceneTaa, &sceneOpaqueColor, &ssao, &bloom};
     viewIn.sceneLdr = &sceneFramebuffer;
+    // --gi-tour: the Scene view at the tour's fixed size (--perf-res, default 1920x1080), whatever the hidden window's layout.
+    if (opt.giTourMode) viewIn.harnessSceneSize = opt.perfResW > 0 ? glm::ivec2(opt.perfResW, opt.perfResH) : glm::ivec2(1920, 1080);
     viewIn.tintOverlay = &tintOverlay;
     viewIn.grid = &grid;
     viewIn.selectionOutline = &selectionOutline;
     // --smoke-shots with TARTARUS_SHOT_CAMERAS: review pictures, so no grid through them either.
-    viewIn.harnessCleanViews = (npcTest && npcTest->WantsCleanViews()) ||
+    viewIn.harnessCleanViews = (npcTest && npcTest->WantsCleanViews()) || opt.giTourMode ||
                                (opt.smokeTestMode && !opt.smokeShotsDir.empty() && Env::IsSet(Env::Var::ShotCameras));
     viewIn.game = {&gameHdr, &gameTaa, &gameOpaqueColor, &gameSsao, &gameBloom};
     viewIn.gameLdr = &gameLdr;
@@ -1969,6 +2085,8 @@ bool AppSession::Frame() {
                 bo.Only = opt.bakeGiOnly;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
+                if (Env::Flag(Env::Var::GiBakeTrace))
+                    bo.TraceShadowSet = [&] { return DescribeShadowHolders(world, lightGather); };
                 if (!giBaker->Begin(world, bo)) {
                     std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
                     giBakeExit = 1;
@@ -2030,7 +2148,7 @@ bool AppSession::Frame() {
         if (editorShot.Active()) editorShot.BeforeUi(editor, world);
         if (editorUIVisible) { PROFILE_SCOPE("UI Editor Draw"); editor.Draw(world, assets, editorCamera, dt); }
         else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
-        // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
+        // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>_<path hash>.txt names
         // it), its edges drawn over the Scene view. The physics scene the navmesh is built from only exists in Play.
         {
             static std::string navRecorded;
@@ -2038,24 +2156,44 @@ bool AppSession::Frame() {
             const bool recordNav = playing && npcDirector.Started() && !npcDirector.NavCachePath().empty() && navRecorded.empty();
             // (the note's path is only built on the frames that need it: an editor frame allocates nothing here)
             static std::string navNote;
-            if (wantNav || recordNav) navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + ".txt");
+            if (wantNav || recordNav) {
+                // Named by the scene's file, not just its title: two "Hallway" scenes in different folders, or two
+                // unsaved scenes, used to share one note and draw each other's navmesh. An unsaved scene has none.
+                const std::string& sceneFile = editor.CurrentScenePath();
+                if (sceneFile.empty()) navNote.clear();
+                else {
+                    std::uint64_t h = 1469598103934665603ull;
+                    for (char ch : ProjectPaths::Relativize(sceneFile))
+                        h = (h ^ (unsigned char)(ch == '\\' ? '/' : std::tolower((unsigned char)ch))) * 1099511628211ull;
+                    char tag[20];
+                    std::snprintf(tag, sizeof(tag), "_%08llx", (unsigned long long)(h & 0xffffffffull));
+                    navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + tag + ".txt");
+                }
+            }
             if (recordNav) {
-                std::ofstream(std::filesystem::u8path(navNote)) << npcDirector.NavCachePath() << std::endl << npcDirector.NavHash() << std::endl;
-                navRecorded = navNote;
+                if (!navNote.empty())
+                    std::ofstream(std::filesystem::u8path(navNote)) << npcDirector.NavCachePath() << std::endl << npcDirector.NavHash() << std::endl;
+                navRecorded = navNote.empty() ? std::string("(unsaved scene)") : navNote; // once per Play either way
             }
             if (!playing) navRecorded.clear();
             static NavMesh editNav;
             static std::vector<NavMesh::Edge> editNavEdges;
             static std::string editNavFor;
-            if (!wantNav) editNavFor.clear();
-            else if (editNavFor != navNote) {
+            static bool editNavLoaded = false;
+            if (!wantNav) editNavLoaded = false;
+            else if (!editNavLoaded || editNavFor != navNote) {
+                editNavLoaded = true;
                 editNavFor = navNote;
                 editNavEdges.clear();
-                std::ifstream in(std::filesystem::u8path(navNote));
                 std::string cachePath;
                 unsigned long long hash = 0;
-                if (in && std::getline(in, cachePath) && (in >> hash) && editNav.Load(cachePath, hash)) editNav.BoundaryEdges(editNavEdges);
-                if (editNavEdges.empty()) FKeyRow::Show("F6", "Nav", "Play once to bake this scene's navmesh");
+                if (!navNote.empty()) {
+                    std::ifstream in(std::filesystem::u8path(navNote));
+                    if (in && std::getline(in, cachePath) && (in >> hash) && editNav.Load(cachePath, hash)) editNav.BoundaryEdges(editNavEdges);
+                }
+                if (editNavEdges.empty())
+                    FKeyRow::Show("F6", "Nav", navNote.empty() ? "Save the scene, then Play once to bake its navmesh"
+                                                               : "Play once to bake this scene's navmesh");
             }
             if (wantNav && !editNavEdges.empty() && editor.ViewportSize().x > 1.0f && editor.ViewportSize().y > 1.0f) {
                 const glm::vec2 vpPos = editor.ViewportPos(), vpSize = editor.ViewportSize();

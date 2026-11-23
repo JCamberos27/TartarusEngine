@@ -1506,7 +1506,9 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
                 if (ViewportPickLocked(world, entity)) continue;
                 if (NotSceneSelectable(world, entity)) continue; // #236 B
                 if (IconHiddenForPick(world, entity, IsSelected(entity))) continue;
-                glm::mat4 model = world.ComposeWorldTransform(entity);
+                // The frame's cached matrix (composed on the spot for one spawned since): walking
+                // each icon's parent chain was ~5 ms a click on Forest (P-36b).
+                const glm::mat4 model = world.GetCachedWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
                 glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
                 if (clip.w <= 0.0001f) continue;
@@ -1787,8 +1789,11 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
         // Lights & cameras mode: everything else only shows once it is selected.
         if (!allKinds && !selected && !light && !isCamera) continue;
 
-        glm::mat4 model = world.ComposeWorldTransform(entity);
-        const glm::vec3 wp = glm::vec3(model[3]);
+        // This frame's cached matrix (the meshes are drawn from the same one), not a parent-chain
+        // walk per icon (P-23).
+        const glm::vec3 wp = glm::vec3(world.GetCachedWorldTransform(entity)[3]);
+        const float dist = glm::length(wp - camPos);
+        if (GizmoIconMath::DistanceAlpha(dist, selected) <= 0.01f) continue; // faded out: pass 3 drops it anyway
         glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
         if (clip.w <= 0.0001f) continue; // behind the camera
 
@@ -1826,7 +1831,7 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
             glyph = ICON_FA_DIAGRAM_PROJECT;
         }
 
-        items.push_back({entity, glyph, screen, wp, glm::length(wp - camPos), selected,
+        items.push_back({entity, glyph, screen, wp, dist, selected,
                          world.Registry.all_of<InactiveTag>(entity), light != nullptr, isCamera,
                          light ? glm::clamp(light->Color, 0.0f, 1.0f) : glm::vec3(1.0f)});
     }
@@ -2501,7 +2506,7 @@ static void KeepFloatingWindowsAboveOverlay() {
 // resolves to a texture, with zero depth-buffer participation. Same story for the nav gizmo
 // (DrawViewGizmo), light gizmos and entity icons (DrawLightGizmos/DrawEntityIcons) — all project
 // world space into an ImDrawList by hand rather than rendering real 3D geometry. The one thing
-// that IS depth-tested, the collider wireframe (main.cpp, colliderGizmo.Draw), is deliberately so
+// that IS depth-tested, the collider wireframe (ViewPipeline, DebugLineRenderer), is deliberately so
 // per its own #185 PR 2 comment — "depth-tested so scene geometry occludes it" is the intended
 // reading (a collider behind a wall should look behind the wall), not a bug this item should undo.
 bool EditorLayer::BeginGizmoOverlay(Camera& editorCamera, const char* overlayName) {

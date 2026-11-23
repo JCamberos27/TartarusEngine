@@ -21,6 +21,7 @@
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
     X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
+    X(AssetCost, "TARTARUS_ASSET_COST", Str, "--perf-bench: append each phase's per-asset cost table to this CSV")    \
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
@@ -32,6 +33,7 @@
     X(ShotSize, "TARTARUS_SHOT_SIZE", Str, "--smoke-shots / cinematic: Scene-view render size WxH")                    \
     X(Cinematic, "TARTARUS_CINEMATIC", Str, "--smoke-shots: fly a camera path json, record it at 60 fps")              \
     X(EditorTestInstance, "TARTARUS_EDITOR_TEST_INSTANCE", Str, "harness runs: own scratch user folder")              \
+    X(RestartFakeBuild, "TARTARUS_RESTART_FAKE_BUILD", Str, "Rebuild & Restart test hook: ok|fail, no CMake/relaunch")  \
     X(EditorTestScale, "TARTARUS_EDITOR_TEST_SCALE", Float, "--editor-tests: UI scale override")                      \
     X(EditorTestSize, "TARTARUS_EDITOR_TEST_SIZE", Str, "--editor-tests: window size WxH")                            \
     X(EditorTestShow, "TARTARUS_EDITOR_TEST_SHOW", Flag, "--editor-tests: show the window (same as TARTARUS_SHOW)")   \
@@ -61,11 +63,13 @@
     /* Traces and probes */                                                                                             \
     X(FoleyFeetLog, "FOLEY_FEET_LOG", Flag, "trace footstep foley")                                                    \
     X(MoverTrace, "MOVER_TRACE", Flag, "unit tests: trace the character mover")                                       \
+    X(MicroBench, "TARTARUS_MICROBENCH", Flag, "unit tests: print opt-in micro-timings")                              \
     X(PumpTrace, "TARTARUS_PUMP_TRACE", Flag, "trace the asset library pump")                                         \
     X(ProbeLog, "TARTARUS_PROBE_LOG", Flag, "log reflection probe captures")                                          \
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \
     X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Float, "--bake-gi: emission kept in the captures (default 0)")            \
     X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Int, "--bake-gi: light bounces to bake (default 2)")                      \
+    X(GiBakeTrace, "TARTARUS_GI_BAKE_TRACE", Flag, "--bake-gi: log the shadow-slot holders of every probe batch")     \
     X(SkinAudit, "TARTARUS_SKIN_AUDIT", Flag, "log skinning audit")                                                   \
     X(TrisReport, "TARTARUS_TRIS_REPORT", Int, "print a triangle report on this frame")                               \
     X(HizStats, "TARTARUS_HIZ_STATS", Flag, "print Hi-Z culling stats")                                               \
@@ -81,6 +85,7 @@
     X(NoHiz, "TARTARUS_NO_HIZ", Flag, "disable Hi-Z occlusion culling")                                               \
     X(NoMdi, "TARTARUS_NO_MDI", Flag, "disable multi-draw indirect")                                                  \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
+    X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
     X(NoSkinArena, "TARTARUS_NO_SKIN_ARENA", Flag, "disable the skinned mesh arena")                                  \
     X(NoPreskin, "TARTARUS_NO_PRESKIN", Flag, "disable compute pre-skinning")                                         \
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \

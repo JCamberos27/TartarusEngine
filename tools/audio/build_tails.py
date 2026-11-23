@@ -104,9 +104,10 @@ def annotate_generic():
                 if e["file"] != rel:
                     continue
                 path = os.path.join(adsp.TSP, v["src"].replace("/", os.sep))
-                on = build_fire.shot_onset(build_fire.src(path))
+                x = build_fire.src(path)
+                on = build_fire.shot_onset(x)
                 a = on + int(tail["start_s"] * SR)
-                b = min(len(build_fire.src(path)), on + int(tail["length_s"] * SR))
+                b = min(len(x), on + int(tail["length_s"] * SR))
                 e["sources"] = [{"file": "tsp/Tactical Shooter Pack/" + v["src"], "start_s": round(a / SR, 3), "end_s": round(b / SR, 3),
                                  "gain_db": 0.0, "pitch_st": v.get("pitch", 0.0)}]
                 changed += 1

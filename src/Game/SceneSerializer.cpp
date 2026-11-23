@@ -2,6 +2,9 @@
 #include "SceneFileJson.h"
 #include "SceneSnapshotJson.h"
 
+#include <chrono>
+#include <stdexcept>
+
 using namespace SceneDetail;
 
 
@@ -73,6 +76,7 @@ std::shared_ptr<SceneSerializer::ParsedSceneFile> SceneSerializer::ReadSceneFile
 
 bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration,
                            const ParsedSceneFile* parsed) {
+    const auto loadStart = std::chrono::steady_clock::now();
     if (parsed) {
         std::uintmax_t size = 0;
         std::filesystem::file_time_type time{};
@@ -164,6 +168,9 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         // persistMigration == false: the migrated data lives only in `world`/`assets` for this
         // run (a --smoke-test scene) — `path` on disk is never touched.
     }
+    char took[64];
+    std::snprintf(took, sizeof(took), "%.0f ms", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+    Log::Info("Scene: loaded '" + std::filesystem::u8path(path).filename().u8string() + "' in " + took + ".");
     return ok;
 }
 
@@ -279,6 +286,42 @@ std::string SceneSerializer::WithLibraryState(const std::string& scene, const st
     }
 }
 
+// The keys SaveToString(world, assets) writes that Save() doesn't: the undo snapshot's marker and the
+// AssetLibrary state that lives in .meta files / the session (AppendAssetLibraryJson's metadata half).
+// UnitTests_Editor checks that a snapshot stripped of these and given Save()'s library half is
+// Save()'s output byte for byte, with every optional key present, so a new undo-only key fails there.
+constexpr const char* kUndoOnlyKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures",
+                                         "assetFolders", "removedDiskFolders", "assetMeta"};
+
+std::function<bool()> SceneSerializer::PrepareSaveFromSnapshot(std::string snapshot, const AssetLibrary& assets,
+                                                              const std::string& path) {
+    auto library = std::make_shared<json>(json::object());
+    AppendAssetLibraryJson(*library, assets); // what Save() writes: no per-asset metadata (#121)
+    auto text = std::make_shared<std::string>(std::move(snapshot));
+    return [library, text, path]() {
+        std::string out;
+        try {
+            json root = json::parse(*text);
+            text->clear();
+            text->shrink_to_fit();
+            if (!root.is_object()) throw std::runtime_error("the snapshot isn't a JSON object");
+            for (const char* k : kUndoOnlyKeys) root.erase(k);
+            for (const char* k : kLibraryKeys) root.erase(k); // the library half comes from the live library below
+            for (auto& [k, v] : library->items()) root[k] = v;
+            WarnNonPortablePaths(root, ""); // audit #364, as Save() does
+            out = root.dump(2);
+        } catch (const std::exception& e) {
+            Log::Error("Scene: couldn't build '" + path + "' from the undo snapshot (file left untouched): " + e.what());
+            return false;
+        }
+        if (!AtomicFile::WriteBytes(std::filesystem::u8path(path), out, /*binary=*/false)) {
+            Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
+            return false;
+        }
+        return true;
+    };
+}
+
 std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::string& loadedText, const AssetLibrary& assets) {
     json live;
     live["hasAssetLibrarySnapshot"] = true;
@@ -295,6 +338,19 @@ std::string SceneSerializer::SnapshotAfterLoad(const json& loaded, const std::st
         if (const auto it = live.find(k); it != live.end()) out[k] = *it;
     }
     return out.dump();
+}
+
+bool SceneSerializer::ApplyEntityTransformAndName(World& world, entt::entity entity, const json& entityJson) {
+    if (!entityJson.is_object() || !world.Registry.valid(entity)) return false;
+    // The same reads, defaults and non-finite scrub as ApplySceneJson's per-kind loops.
+    auto& t = world.Registry.get_or_emplace<TransformComponent>(entity);
+    t.Position = JsonToVec3(entityJson.value("position", json::array({0, 0, 0})));
+    t.Scale = JsonToVec3(entityJson.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
+    if (const auto it = entityJson.find("rotation"); it != entityJson.end()) SetTransformRotationFromJson(t, *it);
+    else t.SetRotationQuaternion(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    if (const auto it = entityJson.find("name"); it != entityJson.end() && it->is_string())
+        world.Registry.emplace_or_replace<NameComponent>(entity, NameComponent{it->get<std::string>()});
+    return true;
 }
 
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {
@@ -456,14 +512,28 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
         Log::Error("Prefab: '" + path + "' could not be opened.");
         return entt::null;
     }
-    std::stringstream buffer;
-    buffer << in.rdbuf();
+    // Parsed once: built from here, then kept as the content this instance was built from.
+    json parsed;
+    try {
+        in >> parsed;
+    } catch (const std::exception& e) {
+        Log::Error("Prefab: '" + path + "' could not be parsed: " + e.what());
+        return entt::null;
+    }
 
     std::vector<entt::entity> created;
-    if (!AppendEntitiesFromString(world, assets, buffer.str(), created) || created.empty()) {
+    if (!ApplySceneJson(world, assets, parsed, /*clearFirst=*/false, &created, nullptr) || created.empty()) {
         return entt::null;
     }
     if (outAll) outAll->insert(outAll->end(), created.begin(), created.end());
+    // Its overrides are diffed against that content (not the file, which may be edited before the
+    // next save). The first instance of a path caches it; later ones were built from the same
+    // content unless the file changed, and then the editor rebuilds them all
+    // (EditorLayer::RefreshPrefabInstances).
+    if (!g_prefabPristineCache.count(path)) {
+        UpgradeLegacyBoxKeys(parsed); // #122
+        g_prefabPristineCache.emplace(path, std::move(parsed));
+    }
 
     // The prefab's root is whichever created entity has no parent inside the fragment.
     entt::entity root = created.front();

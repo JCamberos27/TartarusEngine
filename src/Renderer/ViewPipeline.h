@@ -2,6 +2,7 @@
 #include <functional>
 #include <vector>
 
+#include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
 #include "EditorLayer.h" // EditorLayer::RenderStats
@@ -22,7 +23,7 @@ class Bloom;
 class Tonemapper;
 class Upscaler;
 class Grid;
-class ColliderGizmo;
+class DebugLineRenderer;
 class TintOverlayRenderer;
 class SelectionOutline;
 class ShadowFrame;
@@ -70,7 +71,11 @@ struct ViewPipelineInputs {
 
     // Shared passes
     Tonemapper* tonemapper = nullptr;
-    ColliderGizmo* colliderGizmo = nullptr;
+    DebugLineRenderer* debugLines = nullptr;
+    // Fills the collider overlay's line list (world, draw collider shapes, optional entity filter, out). The App
+    // wires it to its DebugLineGather, which reads Physics / Audio / Game state the Renderer doesn't include.
+    std::function<void(const World&, bool, const std::function<bool(entt::entity)>*, std::vector<float>&)>
+        gatherDebugLines;
 
     // The Scene tab (editor viewport)
     ViewTargets scene;
@@ -79,6 +84,7 @@ struct ViewPipelineInputs {
     Grid* grid = nullptr;
     SelectionOutline* selectionOutline = nullptr;
     bool harnessCleanViews = false; // --npc-test shots: no grid or collider overlay
+    glm::ivec2 harnessSceneSize{0}; // --gi-tour: the Scene view's render size (0 = the panel's)
 
     // The game camera (docked Game view and maximized Play)
     ViewTargets game;

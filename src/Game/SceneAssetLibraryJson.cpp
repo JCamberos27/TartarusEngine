@@ -64,8 +64,8 @@ json BuildAssetMetaJson(const AssetLibrary& assets) {
     return meta;
 }
 
-// Persists the Asset Browser's library list (not just what's placed in the scene) — otherwise an
-// imported-but-unused asset would simply vanish on the next launch. Per-asset data (folder,
+// Writes the library lists: materials, sounds and prefabs in every scene file; models and textures only in
+// the undo snapshot (see below). Per-asset data (folder,
 // display name, labels, import settings) is NOT written here: it lives in the asset's .meta
 // sidecar, and the folder list lives in project/settings.json (#121).
 // `includeAssetMetadata` (#121): fold in the per-asset folder/display-name/labels/import-settings
@@ -74,14 +74,18 @@ json BuildAssetMetaJson(const AssetLibrary& assets) {
 // settings) stays undoable. It is FALSE for every scene FILE: that duplication is what #121 is
 // about - it forked the folder organisation across scenes, let one texture carry different import
 // settings per scene, and produced scene merge conflicts from unrelated Asset Browser edits.
+// The model and texture lists are undo-only too: a scene file listed every model the editor had ever loaded
+// (clip-only FBXs included) and the next open imported each in full; the Asset Browser lists from disk now.
 void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool includeAssetMetadata) {
-    json modelPaths = json::array();
-    for (const auto& m : assets.Models()) modelPaths.push_back(PathRef(m->Path()));
-    root["libraryModels"] = modelPaths;
+    if (includeAssetMetadata) {
+        json modelPaths = json::array();
+        for (const auto& m : assets.Models()) modelPaths.push_back(PathRef(m->Path()));
+        root["libraryModels"] = modelPaths;
 
-    json texPaths = json::array();
-    for (const auto& t : assets.Textures()) texPaths.push_back(PathRef(t->Path()));
-    root["libraryTextures"] = texPaths;
+        json texPaths = json::array();
+        for (const auto& t : assets.Textures()) texPaths.push_back(PathRef(t->Path()));
+        root["libraryTextures"] = texPaths;
+    }
 
     {
         json arr = json::array();
@@ -108,9 +112,10 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
     root["assetMeta"] = BuildAssetMetaJson(assets);
 }
 
-// `hold` (optional): receives a reference to every model/texture/material the file's library lists, so a
-// caller can keep them alive across AssetLibrary::ReleaseUnreferenced - they are scene content (the next save
-// writes them back) even when no entity uses them yet (wardrobe pieces, materials only Play applies).
+// `hold` (optional): receives a reference to every material the file's library lists (and, from an undo
+// snapshot, every model/texture), so a caller can keep them alive across AssetLibrary::ReleaseUnreferenced -
+// they are scene content (the next save writes them back) even when no entity uses them yet (materials only
+// Play applies).
 // `writeMeta` false (a read-only load, Load's persistMigration false): the old block is not folded into any .meta.
 void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndoSnapshot,
                            std::vector<std::shared_ptr<void>>* hold, bool writeMeta) {
@@ -224,7 +229,11 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                       " asset(s) out of the scene file and into their .meta sidecars (#121). "
                       "Save the scene to drop the old block.");
     }
-    if (root.contains("libraryModels")) {
+    // Models and textures: an undo snapshot only. A scene file's old lists are ignored (dropped on its next save):
+    // they named every model ever opened in the editor, clip-only FBXs included, and each was imported in full,
+    // synchronously, at scene open (Apartment Hallway: 168 models, ~23 s). What the scene uses loads through its
+    // entities; the Asset Browser lists from disk.
+    if (fromUndoSnapshot && root.contains("libraryModels")) {
         for (const auto& p : root["libraryModels"]) {
             std::string path = ResolveAssetRef(p);
             if (path.empty()) continue;
@@ -232,7 +241,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
             if (hold && a) hold->push_back(a);
         }
     }
-    if (root.contains("libraryTextures")) {
+    if (fromUndoSnapshot && root.contains("libraryTextures")) {
         for (const auto& p : root["libraryTextures"]) {
             std::string path = ResolveAssetRef(p);
             if (path.empty()) continue;
