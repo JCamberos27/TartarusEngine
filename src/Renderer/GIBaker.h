@@ -37,6 +37,10 @@ public:
         float ClipMargin = 8.0f;    // metres round the volumes that the captures still draw (the yard through the windows)
         int SettleFrames = 8;       // frames after a lighting change before capturing
         std::string SkipLightPrefix = "Bounce "; // hand-placed fakes of the bounce (house_lights.py FILL_I): never baked
+        // TARTARUS_GI_BAKE_TRACE: when set, called once per probe batch for this frame's shadow-slot holders (a stable
+        // text, e.g. "spots[2]: A, B | points[1]: C"). Each batch is logged with it, and each pass ends with how many
+        // different sets it saw (a pass whose set changes between batches bakes its probes under different shadows).
+        std::function<std::string()> TraceShadowSet;
     };
 
     GIBaker();
@@ -94,4 +98,17 @@ private:
     bool m_LightingSaved = false;
     double m_StartTime = 0.0;
     glm::vec3 m_ClipMin{0.0f}, m_ClipMax{0.0f};
+    // Per pass: when it started and its frames (settling included), for the pass-done line.
+    double m_PassStart = 0.0;
+    long long m_PassFrames = 0;
+    // The camera moveCamera last put (the next frame's light gather scores the shadow slots from it).
+    glm::vec3 m_CamSet{0.0f};
+    bool m_CamKnown = false;
+    // Trace (Options::TraceShadowSet): this pass's batches, distinct sets and changes.
+    struct PassTrace {
+        int Batches = 0, Changes = 0, StaleCamBatches = 0;
+        std::vector<std::string> Sets; // distinct, in first-seen order
+        std::string Last;
+    } m_Trace;
+    void EndPass();
 };

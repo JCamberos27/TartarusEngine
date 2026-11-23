@@ -162,6 +162,24 @@ static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
 }
 
+// --bake-gi TARTARUS_GI_BAKE_TRACE: the last light gather's shadow-slot holders as one stable line, names sorted
+// ("spots[2]: A, B | points[1]: C"), so the baker can tell when a pass's shadowed set changes between probe batches.
+static std::string DescribeShadowHolders(const World& world, const LightGather& gather) {
+    auto names = [&](const std::unordered_map<entt::entity, int>& slots) {
+        std::vector<std::string> v;
+        for (const auto& [e, slot] : slots) {
+            if (!world.Registry.valid(e)) { v.push_back("<flashlight>"); continue; } // the torch's key, not an entity
+            const auto* nc = world.Registry.try_get<NameComponent>(e);
+            v.push_back(nc && !nc->Name.empty() ? nc->Name : "#" + std::to_string((std::uint32_t)e));
+        }
+        std::sort(v.begin(), v.end());
+        std::string s = "[" + std::to_string(v.size()) + "]:";
+        for (std::size_t i = 0; i < v.size(); ++i) s += (i ? ", " : " ") + v[i];
+        return s;
+    };
+    return "spots" + names(gather.SpotSlotHolders()) + " | points" + names(gather.PointSlotHolders());
+}
+
 // Renderables that never animate, skipped by the animation tick and the pre-skin gather (Renderer/StillModelCache.h).
 static StillModelCache s_StillModels;
 
@@ -2065,6 +2083,8 @@ bool AppSession::Frame() {
                 bo.Only = opt.bakeGiOnly;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
+                if (Env::Flag(Env::Var::GiBakeTrace))
+                    bo.TraceShadowSet = [&] { return DescribeShadowHolders(world, lightGather); };
                 if (!giBaker->Begin(world, bo)) {
                     std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
                     giBakeExit = 1;
