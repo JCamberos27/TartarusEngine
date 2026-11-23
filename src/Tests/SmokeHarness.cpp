@@ -17,6 +17,7 @@
 #include "FKeyRow.h"
 #include "FirstPersonPresentation.h"
 #include "Framebuffer.h"
+#include "GIVolumes.h"
 #include "GLDebug.h"
 #include "HdrTarget.h"
 #include "LightBuffer.h"
@@ -557,10 +558,13 @@ void SmokeHarness::GiTourFrame() {
         cam.Pitch = f.Pitch;
         cam.Fov = m_Tour->VerticalFovDeg;
     };
+    // --gi-tour-view gi / nogi: the whole run in that view, the same timeline, luminance rows only (no PNGs).
+    const bool fullView = m_Opt.giTourView == "full";
     auto finish = [&]() {
         m_TourCsv.reset();       // flushed and closed
         m_TourLightsCsv.reset();
         EditorSettings::Get().FRowLightDebug = m_TourSavedLightView;
+        if (m_Ctx.giVolumes) m_Ctx.giVolumes->SetEnabled(true);
         m_TourDone = true;
         m_FramesRendered = m_FrameBudget; // score the scene now
     };
@@ -575,24 +579,27 @@ void SmokeHarness::GiTourFrame() {
         m_TourAt = 0;
         m_TourStarted = false;
         m_TourSavedLightView = EditorSettings::Get().FRowLightDebug;
-        EditorSettings::Get().FRowLightDebug = FKeyRow::LightOff;
+        EditorSettings::Get().FRowLightDebug = m_Opt.giTourView == "gi" ? FKeyRow::LightGI : FKeyRow::LightOff;
+        if (m_Opt.giTourView == "nogi" && m_Ctx.giVolumes) m_Ctx.giVolumes->SetEnabled(false);
         // Play's lighting state: every circuit as its switches start (Start On), as the cinematic does.
         LightSwitch::Update(m_Ctx.world, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), false);
         if (m_Tour->DoorState == "allOpen") Openable::SetAll(m_Ctx.world, 1.0f);
-        std::cout << "[GiTour] doors: " << m_Tour->DoorState << "; lights: Start On; view: Scene view at "
+        std::cout << "[GiTour] measuring view: " << m_Opt.giTourView << "; doors: " << m_Tour->DoorState << "; lights: Start On; view: Scene view at "
                   << m_Ctx.sceneFramebuffer.Width() << "x" << m_Ctx.sceneFramebuffer.Height() << ", vertical FOV "
                   << m_Tour->VerticalFovDeg << std::endl;
         std::error_code ec;
         fs::create_directories(m_Opt.sceneBoundsOut, ec);
-        m_TourCsv = std::make_unique<std::ofstream>(fs::path(m_Opt.sceneBoundsOut) / "tour_luminance.csv", std::ios::binary);
-        m_TourLightsCsv = std::make_unique<std::ofstream>(fs::path(m_Opt.sceneBoundsOut) / "tour_lights.csv", std::ios::binary);
-        if (!*m_TourCsv || !*m_TourLightsCsv) {
+        m_TourCsv = std::make_unique<std::ofstream>(
+            fs::path(m_Opt.sceneBoundsOut) / (fullView ? "tour_luminance.csv" : "tour_luminance_" + m_Opt.giTourView + ".csv"), std::ios::binary);
+        if (fullView)
+            m_TourLightsCsv = std::make_unique<std::ofstream>(fs::path(m_Opt.sceneBoundsOut) / "tour_lights.csv", std::ios::binary);
+        if (!*m_TourCsv || (m_TourLightsCsv && !*m_TourLightsCsv)) {
             Log::Error("[GiTour] can't write to " + m_Opt.sceneBoundsOut);
             finish();
             return;
         }
         *m_TourCsv << GiTour::CsvHeader() << "\n";
-        *m_TourLightsCsv << "waypoint,room,light,entity,kind,circuit,on,shadow,intensity,range,distance,fade,slot\n";
+        if (m_TourLightsCsv) *m_TourLightsCsv << "waypoint,room,light,entity,kind,circuit,on,shadow,intensity,range,distance,fade,slot\n";
         pose(m_TourFrames[0]);
         return;
     }
@@ -616,7 +623,9 @@ void SmokeHarness::GiTourFrame() {
     const int w = fb.Width(), h = fb.Height();
     char prefix[16];
     std::snprintf(prefix, sizeof(prefix), "%02d_", std::max(f.Waypoint, 0));
-    if (f.Kind == GiTour::Step::ShotFull && fb.IsValid()) {
+    if (!fullView && (f.Kind == GiTour::Step::ShotFull || f.Kind == GiTour::Step::ShotGi)) {
+        // gi / nogi: no pictures; the view stays as set for the whole run
+    } else if (f.Kind == GiTour::Step::ShotFull && fb.IsValid()) {
         FrameCapture::WritePngTo(m_Opt.sceneBoundsOut, prefix + wp.Id + "_full", w, h, FrameCapture::GrabTopDown(fb.Handle(), w, h));
         GiTourLights(f.Waypoint);
         EditorSettings::Get().FRowLightDebug = FKeyRow::LightGI; // debugView 8: the baked GI alone

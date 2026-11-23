@@ -64,6 +64,10 @@ struct LaunchOptions {
     std::string audioTestScene;     // --audio-test [scene]
     std::string bakeGiScene;        // --bake-gi <scene.json>: bake its GI Volumes (GIBaker), write their .gi, exit
     std::string giTourFile;         // --gi-tour <tour.json>
+    // --gi-tour-view full|gi|nogi (gi-tour): what the walk / still rows measure. full: the game's lighting (and the
+    // waypoint PNGs). gi: the baked GI alone (debugView 8). nogi: the GI Volumes off (uGIEnabled 0), so every pixel takes
+    // the reflection-probe / sky fallback. gi and nogi write tour_luminance_<view>.csv only, on the same frame timeline.
+    std::string giTourView = "full";
     std::string bakeMotionConfig;   // --bake-motion <file.mmconfig>: the motion matching bake (MotionBake), exit
     std::string crashTestKind;      // --crash-test <av|overflow|abort|purecall|invalidparam|terminate>
     std::string importDir;          // --import-blood / --import-knife <dir>: the vendor pack to convert

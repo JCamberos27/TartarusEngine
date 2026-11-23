@@ -117,6 +117,9 @@ const FlagDef kFlags[] = {
     {"--perf-sample", Arity::None, "", false, kNoMode, Bit(LaunchMode::PerfBench) | Bit(LaunchMode::NpcTest),
      [](LaunchOptions& o, const std::string&) { o.perfSample = true; },
      "add a sampling CPU profile of each phase (--npc-test: of the scripted run, from its 900th frame)"},
+    {"--gi-tour-view", Arity::Required, "full|gi|nogi", false, kNoMode, Bit(LaunchMode::GiTour),
+     [](LaunchOptions& o, const std::string& v) { o.giTourView = v; },
+     "what the tour's luminance rows measure: the game's lighting, the baked GI alone, or the GI Volumes off"},
     {"--perf-res", Arity::Required, "WxH", false, kNoMode,
      Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::GiTour),
      [](LaunchOptions& o, const std::string& v) {
@@ -285,6 +288,10 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
     // run-weapon-lab.cmd starts the exe without arguments; only the windowed modes take it, as they do --weapon-lab.
     if (Env::Flag(Env::Var::WeaponLab) && (kGuiModes & Bit(o.mode))) o.weaponLabMode = true;
 
+    if (o.giTourView != "full" && o.giTourView != "gi" && o.giTourView != "nogi") {
+        error = "'--gi-tour-view' takes full, gi or nogi";
+        return false;
+    }
     if (o.mode == LaunchMode::GiTour && o.sceneBoundsOut.empty()) {
         error = "'--gi-tour' needs '--out <dir>'";
         return false;

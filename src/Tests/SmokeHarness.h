@@ -20,6 +20,7 @@ class ClusterGrid;
 class DecalSystem;
 class EditorLayer;
 class Framebuffer;
+class GIVolumes;
 class HdrTarget;
 class LightGather;
 class NpcTest;
@@ -48,6 +49,7 @@ struct SmokeContext {
     std::function<void()> warmRenderResources;  // what the editor does at startup, before its first frame
     const LightGather* lightGather = nullptr;    // --gi-tour: the frame's shadow-slot holders
     HdrTarget* sceneHdr = nullptr;              // --gi-tour: the Scene view's depth (the static-surface mask)
+    GIVolumes* giVolumes = nullptr;             // --gi-tour-view nogi: switched off for the run
 };
 
 // --smoke-test (audit #187), and --perf-bench / --npc-test / --smoke-shots, which ride on it. Deliberately driven from
