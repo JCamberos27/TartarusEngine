@@ -15,6 +15,13 @@ not a defect) before a room goes on it. Confirmed by Atlas's Phase 0 audit: the 
 window light) and the **closet** (no lamp of its own, bounce only). The stair storeroom is NOT on the list: it is a defect
 (its door is baked shut but starts open in Play), and must pass the dark-spot rule after the fix.
 
+**Bake noise caveat.** Kronos's Phase 0 run found the bake is not deterministic: three bakes of the same scene, binary and
+settings differ by 2.8-6.6% mean per layer and up to 24% on some layers (worst: Downstairs bathroom, Lamp_table_A 15,
+Outside, Living room). Until that is fixed, any before/after GI comparison has a 5-20% per-room noise floor. Rules that
+compare two bakes (the before/after pairs and the switch check's on/off levels) use that tolerance per room, taken from
+the room's measured spread across repeated bakes; rules that measure one bake against fixed numbers (walk stability, seams,
+dark spots) are not affected.
+
 ## Setup (identical for baseline and after)
 
 * Scene: `project/scenes/Forest.json`, Play lighting state, every switch at its Start On value, flashlight off, no NPCs.
