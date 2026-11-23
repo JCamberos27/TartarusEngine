@@ -180,7 +180,10 @@ before run differ by more than 2% at 29 of 66 waypoints (18 over 10%), the same 
 mirrored sign (correlation -0.76); the after run matches P0 at 61 of 66. Largest swings: landing corner +139%, kitchen
 north -53%, master den door in -40%. Consequences: the GI-only pairs are not a bake-unchanged check, and P0 verdicts that
 rest on runtime GI (#6 GI-only pops, the dark-spot spreads) are re-checked after Talos's fix; verdicts from `.gi` data and the
-offline audit stand. Residual possible #1192 effect: stairs_top (-66%) and child door before (+27% in both runs).
+offline audit stand. Residual possible #1192 effect: stairs_top (-66%) and child door before (+27% in both runs). With bistable GI one more
+sample cannot separate #1192's shadowed Stairs lamp from the other GI state, so no resample run is planned: both waypoints
+are settled AFTER Talos's fix, by a deterministic GI run on #1192's scene. Atlas's kitchen-B tours are full-view only
+(their GI stills carry the exposure carry-over from the full frame).
 Detail: `gi-p1/briareos/REVIEW_1192.md` (team folder).
 
 **Phase 1 exit criteria (additions):**
