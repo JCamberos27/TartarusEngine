@@ -80,6 +80,10 @@ struct LightGatherInputs {
 class LightGather {
 public:
     void Gather(const LightGatherInputs& in, FrameLights& out);
+    // The last Gather's shadow-slot holders (light -> slot; the flashlight's key is not an entity in the registry).
+    // For traces (--bake-gi TARTARUS_GI_BAKE_TRACE).
+    const std::unordered_map<entt::entity, int>& SpotSlotHolders() const { return m_SpotSlotOf; }
+    const std::unordered_map<entt::entity, int>& PointSlotHolders() const { return m_PointSlotOf; }
 
 private:
     // Each light keeps its shadow slot - its layer, and with it the cached static depth - for as long as it holds a
