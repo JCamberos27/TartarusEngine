@@ -107,7 +107,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         g_LastLoadWarning = msg;
     }
 
-    if (clearFirst) { world.Registry.clear(); g_prefabPristineCache.clear(); } // #302 Part B
+    if (clearFirst) { world.Registry.clear(); g_prefabPristineCache.clear(); ++world.SceneLoads; } // #302 Part B
     if (!clearFirst) {
         // A fragment carries no environment settings (BuildSceneJson omits them for subsets),
         // and must not disturb the scene's own.

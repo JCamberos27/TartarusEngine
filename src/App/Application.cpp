@@ -1820,7 +1820,8 @@ bool AppSession::Frame() {
         lightIn.prefabMode = editor.InPrefabMode();
         lightIn.frame = frameIndex;
         lightIn.dt = dt; // real time: the shadow fades run while paused too, like the editor camera
-        lightIn.snapShadowFades = giBakeMode; // the bake's probes see every shadow at full strength
+        // The bake's probes see every shadow at full strength. (Scene loads and camera cuts LightGather sees itself.)
+        lightIn.snapShadowFades = giBakeMode;
         lightIn.torch = torchLit ? &torch : nullptr;
         // Lights panel solo/mute is an editing aid only - Play renders every light (#140).
         if (!playing) lightIn.suppressed = [&](entt::entity e) { return editor.IsLightSuppressed(world, e); };

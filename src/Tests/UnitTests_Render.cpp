@@ -1147,10 +1147,32 @@ void TestShadowSlotScoring() {
     nested.Add("GI closet", box({1, 1.5f, 1}, {1, 3, 1}));
     nested.Classify({1.0f, 1.0f, 1.0f});
     CHECK(nested.Names[nested.ViewRoom] == "GI closet");
-    // Outside every volume nothing is boosted: the old #110 score.
+    // A doorway gap (in no volume, between living 2 and the hall): the view keeps its last room, so crossing a door is
+    // one re-ranking, not two (Talos's #1189 review).
+    rooms.Classify({5.1f, 1.6f, 0.0f});
+    CHECK(rooms.ViewRoom >= 0 && rooms.Names[rooms.ViewRoom] == "GI living room");
+    rooms.Classify({6.2f, 1.6f, 0.0f}); // into the hall: now the hall
+    CHECK(rooms.Names[rooms.ViewRoom] == "GI hall" && rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Neighbour);
+    rooms.Classify({5.1f, 1.6f, 0.0f}); // back in the gap: still the hall
+    CHECK(rooms.Names[rooms.ViewRoom] == "GI hall");
+    // Outside every volume, and past kStickyPad from the last room, nothing is boosted: the old #110 score.
     rooms.Classify({0.0f, 1.6f, 20.0f});
-    CHECK(rooms.ViewRoom == -1 && rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Other);
+    CHECK(rooms.ViewRoom == -1 && rooms.StickyRoom.empty() && rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Other);
     rooms.Classify(view);
+    // The room upstairs, through a 0.2 m floor slab, touches the living room's box but is not its neighbour.
+    {
+        S::Rooms storeys;
+        storeys.Add("GI living room 1", box({0, 1.5f, 0}, {4, 3, 4}));
+        storeys.Add("GI den", box({0, 4.7f, 0}, {4, 3, 4}));       // y 3.2..6.2
+        storeys.Add("GI stairwell", box({2.5f, 3.1f, 0}, {1, 6.2f, 2})); // both storeys
+        CHECK(S::Touch(storeys.Boxes[0].Box, storeys.Boxes[1].Box, S::kNeighbourGap));
+        storeys.Classify({-1.0f, 1.6f, 0.0f});
+        CHECK(storeys.TierAt({0.0f, 5.0f, 0.0f}) == S::Tier::Other);       // the den lamp upstairs
+        CHECK(storeys.TierAt({2.5f, 2.0f, 0.0f}) == S::Tier::Neighbour);   // the stairwell, beside the living room
+        storeys.Classify({0.0f, 4.5f, 0.0f});                              // upstairs in the den
+        CHECK(storeys.Names[storeys.ViewRoom] == "GI den" && storeys.TierAt({0.0f, 1.0f, 0.0f}) == S::Tier::Other);
+        CHECK(storeys.TierAt({2.5f, 5.8f, 0.5f}) == S::Tier::Neighbour);   // the stairwell spans both storeys
+    }
 
     // Scores: the room first, then its neighbours, then the rest; held lights keep a 25% edge.
     const float base = S::Score(10.0f, 6.0f, 2.0f, S::Tier::Other, false);
@@ -1194,12 +1216,43 @@ void TestShadowSlotScoring() {
     }
     CHECK(bIn && shownB == 1.0f && shownA == 0.0f);
     CHECK(frames <= (int)std::ceil(2.0f / step) + 2); // out, then in: about two fade times
-    // A holder that is no candidate any more (switched off, culled) is freed at once: no light left to fade.
+    // B, holding the slot, is switched off (no candidate any more): freed at once, there is no light left to fade.
+    // A was lit all along (a candidate last frame), so it is a hand-over and A fades in.
+    CHECK(slots.Owner[0] == B);
     slots.Step({A}, {A}, 1, 300, dt, false);
     CHECK(slots.Owner[0] == A && std::abs(slots.Weight[0] - step) < 1e-5f);
+    // Switch-on (Talos's #1189 review): a lamp that was NOT a candidate last frame lights at once, so its shadow is
+    // full at once - with a free slot, or by taking a leaving holder's - never shining through walls while it fades.
+    {
+        Slots on;
+        on.Step({A}, {A}, 1, 1, dt, true);                  // A holds the one slot; C is off
+        on.Step({C}, {A, C}, 1, 2, dt, false);              // C switched on and outscores A
+        CHECK(on.Owner[0] == C && on.Weight[0] == 1.0f);    // full the same frame (A, a leaver, gave the slot up)
+        Slots free2;
+        free2.Step({A}, {A}, 2, 1, dt, true);
+        free2.Step({A, C}, {A, C}, 2, 2, dt, false);        // a free slot: C still comes in at full
+        int c = free2.Owner[0] == C ? 0 : 1;
+        CHECK(free2.Owner[c] == C && free2.Weight[c] == 1.0f);
+        // Switched off and on again (off for a frame): it arrives again, full again.
+        free2.Step({A}, {A}, 2, 3, dt, false);
+        CHECK(free2.Owner[0] != C && free2.Owner[1] != C);
+        free2.Step({A, C}, {A, C}, 2, 4, dt, false);
+        c = free2.Owner[0] == C ? 0 : 1;
+        CHECK(free2.Owner[c] == C && free2.Weight[c] == 1.0f);
+        // A lit lamp that was a candidate without a slot still waits and fades (the hand-over case above).
+        Slots lit;
+        lit.Step({A}, {A, C}, 1, 1, dt, true);
+        lit.Step({C}, {A, C}, 1, 2, dt, false);
+        CHECK(lit.Owner[0] == A && lit.Weight[0] < 1.0f);    // A fading out, C waiting
+        // Reset (a scene load): every holder gone, and everything after arrives.
+        lit.Reset();
+        CHECK(lit.Owner[0] == Slots::kNone && lit.PrevCandidates.empty());
+        lit.Step({C}, {C}, 1, 3, dt, false);
+        CHECK(lit.Owner[0] == C && lit.Weight[0] == 1.0f);
+    }
     // The urgent key (the flashlight) never waits: it takes the leaving holder's slot at full strength.
     Slots torch;
-    torch.Step({A, B}, {A, B}, 2, 1, dt, true);
+    torch.Step({A, B}, {A, B, C}, 2, 1, dt, true);           // C lit but slot-less
     torch.Step({T, C}, {A, B, C, T}, 2, 2, dt, false, T);
     int tSlot = -1;
     for (int i = 0; i < 2; ++i) if (torch.Owner[i] == T) tSlot = i;

@@ -116,4 +116,10 @@ private:
     std::unordered_map<entt::entity, int> m_SpotSlotOf, m_PointSlotOf;
     ShadowSlotScoring::Rooms m_Rooms;
     bool m_Gathered = false; // the first Gather snaps its fades
+    // Snaps: a new scene (World::SceneLoads; the slots are reset, entity ids are reused) or a camera cut (another
+    // view camera, or the view jumping kCutDistance in one Gather: a --gi-tour cut, a teleport).
+    std::uint64_t m_SceneLoads = 0;
+    const Camera* m_LastViewCam = nullptr;
+    glm::vec3 m_LastViewPos{0.0f};
+    static constexpr float kCutDistance = 1.0f;
 };

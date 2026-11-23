@@ -51,6 +51,14 @@ void Rooms::Add(const std::string& volumeName, const GI::Box& box) {
     Boxes.push_back({box, room});
 }
 
+float StoreyOverlap(const GI::Box& a, const GI::Box& b) {
+    auto yHalf = [](const GI::Box& x) {
+        return std::abs(x.Axis[0].y) * x.Half.x + std::abs(x.Axis[1].y) * x.Half.y + std::abs(x.Axis[2].y) * x.Half.z;
+    };
+    const float ha = yHalf(a), hb = yHalf(b);
+    return std::min(a.Center.y + ha, b.Center.y + hb) - std::max(a.Center.y - ha, b.Center.y - hb);
+}
+
 void Rooms::Classify(const glm::vec3& viewPos) {
     ViewRoom = -1;
     RoomTier.assign(Names.size(), Tier::Other);
@@ -60,12 +68,17 @@ void Rooms::Classify(const glm::vec3& viewPos) {
         const float vol = rb.Box.Half.x * rb.Box.Half.y * rb.Box.Half.z;
         if (ViewRoom < 0 || vol < best) { ViewRoom = rb.Room; best = vol; }
     }
-    if (ViewRoom < 0) return;
+    if (ViewRoom < 0 && !StickyRoom.empty()) // in no volume (a doorway gap): keep the last room while still near it
+        for (const auto& rb : Boxes)
+            if (Names[rb.Room] == StickyRoom && Inside(rb.Box, viewPos, kStickyPad)) { ViewRoom = rb.Room; break; }
+    if (ViewRoom < 0) { StickyRoom.clear(); return; }
+    StickyRoom = Names[ViewRoom];
     RoomTier[ViewRoom] = Tier::Room;
     for (const auto& mine : Boxes) {
         if (mine.Room != ViewRoom) continue;
         for (const auto& other : Boxes)
-            if (other.Room != ViewRoom && RoomTier[other.Room] == Tier::Other && Touch(mine.Box, other.Box, kNeighbourGap))
+            if (other.Room != ViewRoom && RoomTier[other.Room] == Tier::Other && Touch(mine.Box, other.Box, kNeighbourGap) &&
+                StoreyOverlap(mine.Box, other.Box) >= kMinStoreyOverlap) // not the room through the floor slab
                 RoomTier[other.Room] = Tier::Neighbour;
     }
 }

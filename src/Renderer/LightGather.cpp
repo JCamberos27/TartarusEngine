@@ -65,6 +65,19 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
     const int sceneSpotShadowBudget = std::max(out.SpotBudget - (in.torch ? 1 : 0), 0);
     const glm::vec3 viewPos = in.viewCam->Position;
     const float tanHalfFov = std::tan(glm::radians(in.viewCam->Fov) * 0.5f);
+    // A new scene: its entity ids are not the old scene's lights - drop every holder, and the hysteresis set with them.
+    const bool sceneLoaded = world.SceneLoads != m_SceneLoads;
+    if (sceneLoaded) {
+        m_SceneLoads = world.SceneLoads;
+        m_SpotSlots.Reset();
+        m_PointSlots.Reset();
+        m_PrevShadowed.clear();
+    }
+    // A cut: nothing on screen continues from last frame, so there is nothing to fade from.
+    const bool cut = in.viewCam != m_LastViewCam || glm::length(viewPos - m_LastViewPos) > kCutDistance;
+    m_LastViewCam = in.viewCam;
+    m_LastViewPos = viewPos;
+    if (sceneLoaded || cut) m_Rooms.Reset(); // no sticky room across a cut
     GatherRooms(world, viewPos);
     out.ShadowRoom = m_Rooms.ViewRoom;
     std::vector<std::pair<float, entt::entity>>& spots = m_SpotCandidates;
@@ -109,7 +122,7 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
         chosenSpots.insert(chosenSpots.begin(), torchKey);
         m_SpotKeys.insert(std::lower_bound(m_SpotKeys.begin(), m_SpotKeys.end(), torchKey), torchKey);
     }
-    const bool snap = in.snapShadowFades || !m_Gathered;
+    const bool snap = in.snapShadowFades || !m_Gathered || sceneLoaded || cut;
     m_Gathered = true;
     const float dt = std::clamp(in.dt, 0.0f, 0.1f); // a hitch doesn't skip a whole fade
     out.SlotChanges = m_SpotSlots.Step(chosenSpots, m_SpotKeys, out.SpotBudget, in.frame + 1, dt, snap,
