@@ -214,6 +214,30 @@ double MaskedMeanLuminance(const unsigned char* rgba, const float* depth, int w,
     return n > 0 ? sum / n : -1.0;
 }
 
+DepthStats MaskedDepthStats(const float* depth, int w, int h, float nearPlane, float farPlane, int stride, float closeM,
+                            float farDepth) {
+    DepthStats out;
+    stride = std::max(stride, 1);
+    std::vector<float> lin;
+    lin.reserve((size_t)(w / stride + 1) * (size_t)(h / stride + 1));
+    const double n = nearPlane, f = farPlane;
+    int close = 0;
+    for (int y = 0; y < h; y += stride)
+        for (int x = 0; x < w; x += stride) {
+            const float d = depth[(size_t)y * (size_t)w + (size_t)x];
+            if (!(d < farDepth)) continue;
+            const double ndc = 2.0 * d - 1.0;
+            const float z = (float)(2.0 * n * f / (f + n - ndc * (f - n)));
+            lin.push_back(z);
+            close += z < closeM;
+        }
+    if (lin.empty()) return out;
+    std::nth_element(lin.begin(), lin.begin() + lin.size() / 2, lin.end());
+    out.MedianM = lin[lin.size() / 2];
+    out.CloseFraction = (double)close / (double)lin.size();
+    return out;
+}
+
 std::uint64_t SlotSetHash(std::vector<std::uint32_t> spots, std::vector<std::uint32_t> points) {
     std::sort(spots.begin(), spots.end());
     std::sort(points.begin(), points.end());
@@ -234,14 +258,18 @@ std::string CsvField(const std::string& s) {
     return q + "\"";
 }
 
-std::string CsvHeader() { return "frame,mode,segment,waypoint,room,luminance,mask_pixels,slot_hash,slots_changed"; }
+std::string CsvHeader() {
+    return "frame,mode,segment,waypoint,room,luminance,mask_pixels,slot_hash,slots_changed,median_depth_m,close_fraction";
+}
 
 std::string CsvLine(const CsvRow& r) {
-    char lum[32], hash[24];
+    char lum[32], hash[24], depth[48];
     std::snprintf(lum, sizeof(lum), "%.6f", r.Luminance);
     std::snprintf(hash, sizeof(hash), "%016llx", (unsigned long long)r.SlotHash);
+    std::snprintf(depth, sizeof(depth), "%.3f,%.4f", r.MedianDepthM, r.CloseFraction);
     return std::to_string(r.Frame) + "," + CsvField(r.Mode) + "," + CsvField(r.Segment) + "," + CsvField(r.Waypoint) + "," +
-           CsvField(r.Room) + "," + lum + "," + std::to_string(r.MaskPixels) + "," + hash + "," + (r.SlotsChanged ? "1" : "0");
+           CsvField(r.Room) + "," + lum + "," + std::to_string(r.MaskPixels) + "," + hash + "," + (r.SlotsChanged ? "1" : "0") +
+           "," + depth;
 }
 
 } // namespace GiTour

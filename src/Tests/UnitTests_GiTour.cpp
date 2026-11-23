@@ -103,6 +103,13 @@ void GiTourLuminanceAndHash() {
     CHECK(GiTour::SlotSetHash({3, 1, 2}, {9}) == GiTour::SlotSetHash({1, 2, 3}, {9}));
     CHECK(GiTour::SlotSetHash({1, 2}, {9}) != GiTour::SlotSetHash({1, 9}, {2}));
     CHECK(GiTour::SlotSetHash({}, {}) != GiTour::SlotSetHash({0}, {}));
+    // Depth: window depth back to metres (near 0.1, far 100), the median over drawn pixels, the share nearer than 0.3 m.
+    auto win = [](float z) { const float n = 0.1f, f = 100.0f; return (float)(0.5 * ((f + n) / (f - n) - 2.0 * f * n / ((f - n) * z)) + 0.5); };
+    const float d4[4] = {win(0.2f), win(2.0f), win(2.0f), 1.0f}; // one pixel 20 cm away, two at 2 m, one sky
+    const GiTour::DepthStats ds = GiTour::MaskedDepthStats(d4, 2, 2, 0.1f, 100.0f);
+    CHECK(Near((float)ds.MedianM, 2.0f, 0.01f) && Near((float)ds.CloseFraction, 1.0f / 3.0f));
+    const float sky[2] = {1.0f, 1.0f};
+    CHECK(GiTour::MaskedDepthStats(sky, 2, 1, 0.1f, 100.0f).MedianM < 0.0);
 }
 
 // The CSV: the header's columns, quoted fields, fixed number formats.
@@ -110,10 +117,11 @@ void GiTourCsv() {
     GiTour::CsvRow r;
     r.Frame = 12; r.Mode = "walk"; r.Segment = "walk:a->b"; r.Waypoint = "b"; r.Room = "Hall, \"front\"";
     r.Luminance = 0.25; r.MaskPixels = 100; r.SlotHash = 0xABCull; r.SlotsChanged = true;
-    CHECK(GiTour::CsvLine(r) == "12,walk,walk:a->b,b,\"Hall, \"\"front\"\"\",0.250000,100,0000000000000abc,1");
+    r.MedianDepthM = 2.5; r.CloseFraction = 0.125;
+    CHECK(GiTour::CsvLine(r) == "12,walk,walk:a->b,b,\"Hall, \"\"front\"\"\",0.250000,100,0000000000000abc,1,2.500,0.1250");
     int commas = 0;
     for (char c : GiTour::CsvHeader()) commas += c == ',';
-    CHECK(commas == 8);
+    CHECK(commas == 10);
     CHECK(GiTour::CsvField("plain") == "plain" && GiTour::CsvField("a\nb") == "\"a\nb\"");
 }
 

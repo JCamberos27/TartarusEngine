@@ -659,6 +659,10 @@ void SmokeHarness::GiTourFrame() {
                 for (int x = 0; x < w; ++x)
                     m_TourDepth[(size_t)y * w + x] = depth[(size_t)std::min(y * dh / h, dh - 1) * dw + std::min(x * dw / w, dw - 1)];
             lum = GiTour::MaskedMeanLuminance(m_TourRgba.data(), m_TourDepth.data(), w, h, 2, 0.999999f, &mask);
+            m_TourDepthStats = GiTour::MaskedDepthStats(m_TourDepth.data(), w, h, m_Ctx.editorCamera.NearPlane,
+                                                        m_Ctx.editorCamera.FarPlane, 4);
+        } else {
+            m_TourDepthStats = {};
         }
         std::vector<std::uint32_t> spots, points;
         if (m_Ctx.lightGather) {
@@ -673,6 +677,8 @@ void SmokeHarness::GiTourFrame() {
         row.Room = wp.Room;
         row.Luminance = lum;
         row.MaskPixels = mask;
+        row.MedianDepthM = m_TourDepthStats.MedianM;
+        row.CloseFraction = m_TourDepthStats.CloseFraction;
         row.SlotHash = GiTour::SlotSetHash(std::move(spots), std::move(points));
         row.SlotsChanged = f.Segment == m_TourLastSegment && row.SlotHash != m_TourLastHash;
         m_TourLastSegment = f.Segment;

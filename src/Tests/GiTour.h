@@ -90,6 +90,13 @@ float LerpAngle(float a, float b, float t);
 double MaskedMeanLuminance(const unsigned char* rgba, const float* depth, int w, int h, int stride = 1,
                            float farDepth = 0.999999f, int* maskCount = nullptr);
 
+// Where the frame's drawn pixels are (all of them, sky excluded): the median view-space distance in metres, and the
+// share nearer than `closeM`. Tells a camera pressed against geometry (nearly all pixels within a few cm) from a dark
+// room (depth spread over metres). depth is the [0, 1] window depth of a glm::perspective(near, far) projection.
+struct DepthStats { double MedianM = -1.0; double CloseFraction = 0.0; };
+DepthStats MaskedDepthStats(const float* depth, int w, int h, float nearPlane, float farPlane, int stride = 1,
+                            float closeM = 0.3f, float farDepth = 0.999999f);
+
 // An order-independent hash of the frame's shadow-slot holders (entity ids), spots and points kept apart.
 std::uint64_t SlotSetHash(std::vector<std::uint32_t> spots, std::vector<std::uint32_t> points);
 
@@ -102,6 +109,8 @@ struct CsvRow {
     std::string Room;
     double Luminance = 0.0;
     int MaskPixels = 0;
+    double MedianDepthM = -1.0;   // MaskedDepthStats
+    double CloseFraction = 0.0;
     std::uint64_t SlotHash = 0;
     bool SlotsChanged = false;    // differs from the previous row in the same segment
 };

@@ -119,6 +119,7 @@ private:
     std::uint64_t m_TourLastHash = 0;
     std::vector<unsigned char> m_TourRgba;
     std::vector<float> m_TourDepth;
+    GiTour::DepthStats m_TourDepthStats;
 
     std::vector<std::string> m_ScenePaths;
     std::vector<Result> m_Results;
