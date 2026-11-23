@@ -40,6 +40,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <cstdio>
 #include <string>
@@ -609,20 +610,18 @@ void PlayProbe(World& world, const Camera& playCamera, bool playUsesPlayer) {
 }
 
 namespace {
+// Every sampler type of GL 4.6 core (spec table 7.3; the loader in extern/glloader defines none of them): all take a
+// texture unit. Images take image units, not these.
 bool IsSamplerType(GLenum t) {
-    switch (t) {
-    case GL_SAMPLER_1D: case GL_SAMPLER_2D: case GL_SAMPLER_3D: case GL_SAMPLER_CUBE:
-    case GL_SAMPLER_1D_SHADOW: case GL_SAMPLER_2D_SHADOW: case GL_SAMPLER_1D_ARRAY: case GL_SAMPLER_2D_ARRAY:
-    case GL_SAMPLER_1D_ARRAY_SHADOW: case GL_SAMPLER_2D_ARRAY_SHADOW: case GL_SAMPLER_2D_MULTISAMPLE:
-    case GL_SAMPLER_2D_MULTISAMPLE_ARRAY: case GL_SAMPLER_CUBE_SHADOW: case GL_SAMPLER_BUFFER: case GL_SAMPLER_2D_RECT:
-    case GL_SAMPLER_2D_RECT_SHADOW: case GL_SAMPLER_CUBE_MAP_ARRAY: case GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW:
-    case GL_INT_SAMPLER_2D: case GL_INT_SAMPLER_3D: case GL_INT_SAMPLER_2D_ARRAY: case GL_INT_SAMPLER_BUFFER:
-    case GL_UNSIGNED_INT_SAMPLER_2D: case GL_UNSIGNED_INT_SAMPLER_3D: case GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
-    case GL_UNSIGNED_INT_SAMPLER_BUFFER:
-        return true;
-    default:
-        return false;
-    }
+    static constexpr GLenum kSamplers[] = {
+        0x8B5D, 0x8B5E, 0x8B5F, 0x8B60, 0x8B61, 0x8B62, 0x8B63, 0x8B64, // 1D 2D 3D CUBE 1D_SHADOW 2D_SHADOW 2D_RECT(_SHADOW)
+        0x8DC0, 0x8DC1, 0x8DC2, 0x8DC3, 0x8DC4, 0x8DC5,                 // 1D/2D_ARRAY BUFFER 1D/2D_ARRAY_SHADOW CUBE_SHADOW
+        0x8DC9, 0x8DCA, 0x8DCB, 0x8DCC, 0x8DCD, 0x8DCE, 0x8DCF, 0x8DD0, // INT_SAMPLER_*
+        0x8DD1, 0x8DD2, 0x8DD3, 0x8DD4, 0x8DD5, 0x8DD6, 0x8DD7, 0x8DD8, // UNSIGNED_INT_SAMPLER_*
+        0x9108, 0x9109, 0x910A, 0x910B, 0x910C, 0x910D,                 // (INT_/UNSIGNED_INT_)SAMPLER_2D_MULTISAMPLE(_ARRAY)
+        0x900C, 0x900D, 0x900E, 0x900F,                                 // SAMPLER_CUBE_MAP_ARRAY(_SHADOW), INT_, UNSIGNED_INT_
+    };
+    return std::find(std::begin(kSamplers), std::end(kSamplers), t) != std::end(kSamplers);
 }
 
 // One linked program's samplers: two of different types on one texture unit make every draw through it fail
@@ -672,7 +671,8 @@ void SamplerUnits() {
     } else {
         Log::Error("[SmokeTest] sampler units: ImpostorLit didn't build");
     }
-    // Every other live program: GL names are small and dense, so a scan of the low range finds them all.
+    // Every other live program: GL names are small and dense, so a scan of the low range finds them all. Names past
+    // 8191 are not checked (a smoke run creates a few hundred programs and shaders between them).
     for (GLuint p = 1; p < 8192; ++p) {
         if (p == impostorLit.Program() || !glIsProgram(p)) continue;
         ++programs;
