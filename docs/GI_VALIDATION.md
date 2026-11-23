@@ -190,6 +190,12 @@ are settled AFTER Talos's fix, by a deterministic GI run on #1192's scene. Atlas
 (their GI stills carry the exposure carry-over from the full frame).
 Detail: `gi-p1/briareos/REVIEW_1192.md` (team folder).
 
+**Root cause of the bistability: PENDING PROOF (found by Talos; fix #1200, `dev/gi-p1-mdi-batch-key`).** The MDI batch key
+(`SceneViewPass.cpp:837-850`) lacked the GIMask and truncated the ProbeKey, so draw groups from different GI volumes merged,
+and `drawBatch` took the mask and probe from the lead group only. The result is darker GI that depends on pointer order, so it
+differs per launch. The fix adds both fields to the key (`OpaqueBatchKey.h` plus a unit test). Proof: a 5-launch GPU run is
+running; PASS = `gi_flips` 0 of 66 waypoints. Until it passes, this stays PENDING and the exit criterion below stays open.
+
 **Phase 1 exit criteria (additions):**
 * **GI identical across 5 launches** of the same scene and bake (per-waypoint GI-only luminance within the bake-noise
   tolerance on every launch). This is a Phase 1 exit blocker until the live input behind the bistability is found and pinned.
