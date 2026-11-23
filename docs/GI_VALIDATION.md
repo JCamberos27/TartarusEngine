@@ -11,8 +11,9 @@ waypoint fixes are in. Nothing here is a pass/fail gate until it has no PROPOSED
 
 **By-design dark rooms.** A room whose lights are dead by design (the Nov 18 "dead fittings stay dark" change) is not a
 dark-spot failure. The exclusion list is kept in the report, with the reason per room, and must be confirmed (by design,
-not a defect) before a room goes on it. Candidates pending Atlas's check: the box room and the stair storeroom, which
-read 0 in the GI-only view.
+not a defect) before a room goes on it. Confirmed by Atlas's Phase 0 audit: the **box room** (no fitting, door shut, no
+window light) and the **closet** (no lamp of its own, bounce only). The stair storeroom is NOT on the list: it is a defect
+(its door is baked shut but starts open in Play), and must pass the dark-spot rule after the fix.
 
 ## Setup (identical for baseline and after)
 
@@ -50,9 +51,9 @@ view-dependent GI. With lights and switches unchanged, moving the camera must no
 | Stationary holds: luminance range within a 2 s hold | <= 0.0005 absolute (**baseline: worst hold 0.00023**) |
 
 Argus's follow-up (GI-only and direct-only walks) says which pops at doors are GI seams and which are view change; the
-door-pop row is tightened or relaxed from that. The near-black frames from camera positions inside geometry (12 tour
-waypoints, mostly door leaves) are excluded from the pop count and must be fixed in the tour before it is used as the
-Phase 3 acceptance path.
+door-pop row is tightened or relaxed from that. Near-black frames are excluded from the pop count only where the depth
+check shows the camera inside geometry; those waypoints are moved before the tour is used as the Phase 3 acceptance path.
+(Phase 0 found most of the 12 black waypoints are genuinely unlit spaces, door gaps or the shut-door bake, not tour faults.)
 
 ## 2. Dark-spot floor per lit room
 
@@ -74,7 +75,8 @@ Atlas's coverage script). Compare each point with that room's median.
 
 Rooms with their lamps off are exempt from the dark-spot rows; they are covered by the switch check. So are **by-design
 dark rooms** (see the top of this document): they are listed with the reason, and a room that reads black but is not on
-that list counts as a failure. A black frame from a camera inside geometry is a tour fault, not a dark spot.
+that list counts as a failure. A black frame is a dark-spot failure unless Argus's depth check shows the camera is inside
+geometry, in which case it is a tour fault and the waypoint is moved.
 
 ## 3. Doorway seam continuity
 
