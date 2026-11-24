@@ -132,6 +132,17 @@ float Box::Fade(const glm::vec3& p, float fade) const {
     return std::clamp(m / fade, 0.0f, 1.0f);
 }
 
+float Box::FadeFaces(const glm::vec3& p, const glm::vec3& lo, const glm::vec3& hi) const {
+    const glm::vec3 q = ToLocal(p);
+    const glm::vec3 in3 = Half - glm::abs(q);
+    float f = 1.0f;
+    for (int i = 0; i < 3; ++i) {
+        const float fade = q[i] < 0.0f ? lo[i] : hi[i];
+        f = std::min(f, fade <= 0.0f ? (in3[i] >= 0.0f ? 1.0f : 0.0f) : std::clamp(in3[i] / fade, 0.0f, 1.0f));
+    }
+    return f;
+}
+
 glm::ivec3 GridDims(const glm::vec3& half, float spacing) {
     const float s = std::max(spacing, 0.05f);
     glm::ivec3 d;

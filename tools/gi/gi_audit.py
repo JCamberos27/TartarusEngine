@@ -149,6 +149,16 @@ class Box:
             return 1.0 if m >= 0.0 else 0.0
         return min(max(m / fade, 0.0), 1.0)
 
+    def fade_faces(self, p, lo, hi):
+        """GI::Box::FadeFaces: a fade per face, `lo` for the -x/-y/-z faces, `hi` for +x/+y/+z (box-local axes), 0 = hard."""
+        q = self.to_local(p)
+        f = 1.0
+        for i in range(3):
+            d = self.half[i] - abs(q[i])
+            fd = lo[i] if q[i] < 0.0 else hi[i]
+            f = min(f, (1.0 if d >= 0.0 else 0.0) if fd <= 0.0 else min(max(d / fd, 0.0), 1.0))
+        return f
+
     def contains(self, p, pad=0.0):
         return self.inside_margin(p) >= -pad
 
@@ -463,6 +473,8 @@ class Scene:
             out.append({
                 "id": e["id"], "name": e.get("name", ""), "order": e.get("order", 0), "box": box,
                 "spacing": spacing, "fade": float(g.get("Fade", 0.05)), "intensity": float(g.get("Intensity", 1.0)),
+                "fade_lo": [float(x) if x > 0 else float(g.get("Fade", 0.05)) for x in g.get("Fade Min", (0, 0, 0))],
+                "fade_hi": [float(x) if x > 0 else float(g.get("Fade", 0.05)) for x in g.get("Fade Max", (0, 0, 0))],
                 "circuits": split_circuits(g.get("Circuits", "")), "outside": bool(g.get("Outside", False)),
                 "bake_file": g.get("Bake File", ""), "dims": grid_dims(box.half, spacing), "active": self.active(e),
             })
@@ -577,6 +589,13 @@ def sample_top_face(box, step):
     return pts
 
 
+def volume_fade(v, p):
+    """The shader's per-volume weight at p, with the volume's per-face fades (Fade Min / Fade Max) when it has them."""
+    if "fade_lo" in v:
+        return v["box"].fade_faces(p, v["fade_lo"], v["fade_hi"])
+    return v["box"].fade(p, v["fade"])
+
+
 def coverage_at(p, volumes, normal=None):
     """(sum of the volumes' fades at p, [(name, fade)] for the volumes that reach p): the shader's wSum. With a surface
     `normal`, each volume tests p pushed off the surface by its normal bias (0.25 x Spacing, GIVolumes.cpp), as the
@@ -584,7 +603,7 @@ def coverage_at(p, volumes, normal=None):
     hits = []
     for v in volumes:
         q = p if normal is None else v_add(p, v_scale(normal, 0.25 * v.get("spacing", 0.0)))
-        hits.append((v["name"], v["box"].fade(q, v["fade"])))
+        hits.append((v["name"], volume_fade(v, q)))
     hits = [h for h in hits if h[1] > 0.0]
     return sum(f for _, f in hits), hits
 
@@ -781,7 +800,7 @@ def check_margins(volumes, walls, step=0.05, heights=(1.0, 1.7), deep=0.5):
                     qb = v_add(q, v_scale(nrm, 0.25 * min(a.get("spacing", 0.0), b.get("spacing", 0.0))))
                     cover_min = min(cover_min, min(coverage_at(q, volumes, nrm)[0], 1.0) - merged.fade(qb, fade))
                     qf = v_add(q, v_scale(nrm, 0.25 * far.get("spacing", 0.0)))
-                    leak_max = max(leak_max, far["box"].fade(qf, far["fade"]))
+                    leak_max = max(leak_max, volume_fade(far, qf))
         verdict = []
         if n_open and open_min < -1e-6:
             verdict.append("seam")

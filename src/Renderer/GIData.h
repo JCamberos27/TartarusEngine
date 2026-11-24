@@ -55,6 +55,9 @@ struct Box {
     // 1 well inside, falling linearly to 0 over `fade` metres at the faces (LightBoxFade in the shader); fade <= 0 is a
     // hard edge.
     float Fade(const glm::vec3& p, float fade) const;
+    // The same with a fade per face: `lo` for the -x/-y/-z faces, `hi` for +x/+y/+z (box-local axes; the face a point
+    // is nearest on its side of the centre). Equal values everywhere = Fade(p, that value).
+    float FadeFaces(const glm::vec3& p, const glm::vec3& lo, const glm::vec3& hi) const;
 };
 
 // Probes along each axis for a box of half-extents `half` at `spacing`: one at each face and about `spacing` apart,

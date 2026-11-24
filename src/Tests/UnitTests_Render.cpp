@@ -922,6 +922,14 @@ void GIVolumeLookup() {
     CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) > 0.45f);   // half way through the fade (local x is world -z)
     CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) < 0.55f);
     CHECK(box.Fade({2, 1, -3 + 2.5f}, 0.3f) == 0.0f);          // outside
+    // A fade per face (local x is world -z, so the +x face is at world z -5 and the -x face at z -1).
+    const glm::vec3 half3(0.3f);
+    CHECK(box.FadeFaces({2, 1, -3 + 2.0f - 0.15f}, half3, half3) == box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f)); // equal faces = the scalar
+    CHECK(box.FadeFaces({2, 1, -3}, half3, half3) == 1.0f && box.FadeFaces({2, 1, -3 + 2.5f}, half3, half3) == 0.0f);
+    const glm::vec3 lo(0.3f), hi(1.0f, 0.3f, 0.3f); // a wide fade on the +x face only
+    CHECK(std::fabs(box.FadeFaces({2, 1, -3 - 1.85f}, lo, hi) - 0.15f) < 1e-4f); // 0.15 m inside the +x face: 0.15 / 1.0
+    CHECK(std::fabs(box.FadeFaces({2, 1, -3 + 1.85f}, lo, hi) - 0.50f) < 1e-4f); // the -x face keeps 0.3: 0.15 / 0.3
+    CHECK(box.FadeFaces({2, 1, -3 - 2.05f}, lo, glm::vec3(0.0f)) == 0.0f && box.FadeFaces({2, 1, -3 - 1.99f}, lo, glm::vec3(0.0f)) == 1.0f); // 0 = hard edge
     const glm::ivec3 dims = GI::GridDims(box.Half, 0.5f);
     CHECK(glm::length(GI::ProbeLocal({0, 0, 0}, dims, box.Half) + box.Half) < 1e-5f);
     CHECK(glm::length(GI::ProbeLocal(dims - 1, dims, box.Half) - box.Half) < 1e-5f);
@@ -1091,6 +1099,13 @@ void GIVolumeLookup() {
     gi.SetOverride(std::make_shared<GI::BakeFile>(synth));
     gi.Gather(world);
     CHECK(gi.Count() == 1 && gi.Volumes()[0].ReplacesSky);
+    CHECK(gi.Volumes()[0].FadeLo == glm::vec3(gc.Fade) && gi.Volumes()[0].FadeHi == glm::vec3(gc.Fade)); // no per-face fade: the volume's
+    gc.FadeMax = glm::vec3(0.0f, 0.0f, 0.4f);
+    gc.FadeMin = glm::vec3(0.25f, 0.0f, 0.0f);
+    gi.Gather(world);
+    CHECK(gi.Volumes()[0].FadeHi == glm::vec3(gc.Fade, gc.Fade, 0.4f) && gi.Volumes()[0].FadeLo == glm::vec3(0.25f, gc.Fade, gc.Fade));
+    gc.FadeMax = gc.FadeMin = glm::vec3(0.0f);
+    gi.Gather(world);
     CHECK(gi.Volumes()[0].Weights == (std::vector<float>{1.0f, 1.0f}));
     float fade = 0.0f;
     const glm::vec3 lit = gi.SampleCPU({1.5f, 0, 0}, {0, 1, 0}, &fade);

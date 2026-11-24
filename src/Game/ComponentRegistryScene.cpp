@@ -533,6 +533,10 @@ void RegisterSceneComponents() {
             { "Size", T::Vec3, TARTARUS_REFLECT_FIELD(G, Size), 0.05f, "Full extents of the box, metres (x the scale).", 0.0f, 0.0f },
             { "Spacing", T::Float, TARTARUS_REFLECT_FIELD(G, Spacing), 0.05f, "Metres between probes. Re-bake after changing it.", 0.1f, 4.0f },
             { "Fade", T::Float, TARTARUS_REFLECT_FIELD(G, Fade), 0.01f, "Metres over which the light fades out at the box faces.", 0.0f, 4.0f },
+            { "Fade Min", T::Vec3, TARTARUS_REFLECT_FIELD(G, FadeMin), 0.01f,
+              "Per face, in the box's own axes: the fade of the -x, -y and -z faces. 0 = use Fade. A wider one blends two volumes\n"
+              "that share an open space (a wall between them leaks the neighbour's light through it: keep those at Fade).", 0.0f, 4.0f },
+            { "Fade Max", T::Vec3, TARTARUS_REFLECT_FIELD(G, FadeMax), 0.01f, "Per face: the fade of the +x, +y and +z faces. 0 = use Fade.", 0.0f, 4.0f },
             { "Intensity", T::Float, TARTARUS_REFLECT_FIELD(G, Intensity), 0.01f, "Scales the baked light.", 0.0f, 16.0f },
             { "Circuits", T::String, TARTARUS_REFLECT_FIELD(G, Circuits), 0.0f,
               "Light circuits to bake a layer each for, ';'-separated. Each layer shows while its circuit is on." },
