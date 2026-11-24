@@ -23,7 +23,8 @@ namespace {
 
 struct GpuVolume {
     glm::vec4 BoxX, BoxY, BoxZ; // world -> box rows: xyz unit axis, w = -dot(axis, centre)
-    glm::vec4 HalfFade;         // xyz half extents, w fade metres
+    glm::vec4 HalfFade;         // xyz half extents, w fade metres (the volume's base Fade)
+    glm::vec4 FadeLo, FadeHi;   // xyz the fade of the -x/-y/-z faces, of the +x/+y/+z faces (box-local axes)
     glm::vec4 Dims;             // xyz probe counts, w 1 = lit (the layers are mixed into one brick on the CPU), 0 = dark
     glm::vec4 Params;           // x intensity, y replaces the sky's ambient, z normal bias (m)
     glm::vec4 Brick;            // xyz brick origin (texels)
@@ -33,7 +34,7 @@ struct GpuBlock {
     glm::vec4 AtlasInv; // xyz 1 / atlas size
     GpuVolume V[GIVolumes::kMaxVolumes];
 };
-static_assert(sizeof(GpuVolume) == 112, "std140 layout");
+static_assert(sizeof(GpuVolume) == 144, "std140 layout");
 static_assert(sizeof(GpuBlock) == 32 + sizeof(GpuVolume) * GIVolumes::kMaxVolumes, "std140 layout");
 
 std::string NameOf(const World& world, entt::entity e) {
@@ -144,6 +145,10 @@ void GIVolumes::Gather(const World& world) {
         v.Spacing = gv.Spacing;
         v.Dims = GI::GridDims(v.Bounds.Half, gv.Spacing);
         v.Fade = std::max(gv.Fade, 0.0f);
+        for (int a = 0; a < 3; ++a) { // a face without its own fade takes the volume's
+            v.FadeLo[a] = gv.FadeMin[a] > 0.0f ? gv.FadeMin[a] : v.Fade;
+            v.FadeHi[a] = gv.FadeMax[a] > 0.0f ? gv.FadeMax[a] : v.Fade;
+        }
         v.Intensity = std::max(gv.Intensity, 0.0f);
         v.File = m_Override ? m_Override
                             : (gv.BakeFile.empty() ? nullptr : GI::Cached(ResolvedBake(gv.BakeFile)));
@@ -286,6 +291,8 @@ void GIVolumes::WriteUbo() {
         glm::vec4* rows[3] = {&g.BoxX, &g.BoxY, &g.BoxZ};
         for (int a = 0; a < 3; ++a) *rows[a] = glm::vec4(v.Bounds.Axis[a], -glm::dot(v.Bounds.Axis[a], v.Bounds.Center));
         g.HalfFade = glm::vec4(v.Bounds.Half, v.Fade);
+        g.FadeLo = glm::vec4(v.FadeLo, 0.0f);
+        g.FadeHi = glm::vec4(v.FadeHi, 0.0f);
         bool lit = false; // every layer dark (a room with its lights off and no Outside): the volume adds nothing
         for (float w : v.Weights) lit = lit || w > 0.0f;
         g.Dims = glm::vec4(glm::vec3(v.Dims), lit ? 1.0f : 0.0f); // the layers are mixed into one brick
@@ -325,7 +332,7 @@ glm::vec3 GIVolumes::SampleCPU(const glm::vec3& p, const glm::vec3& n, float* fa
     if (m_Enabled)
         for (const auto& v : m_Volumes) {
             const glm::vec3 pb = p + n * (0.25f * v.Spacing);
-            const float f = v.Bounds.Fade(pb, v.Fade);
+            const float f = v.Bounds.FadeFaces(pb, v.FadeLo, v.FadeHi);
             if (f <= 0.0f) continue;
             const glm::vec3 q = v.Bounds.ToLocal(pb);
             glm::vec3 e(0.0f); // the SH is in world axes: evaluated with the world normal

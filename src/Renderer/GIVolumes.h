@@ -76,6 +76,7 @@ public:
         GI::Box Bounds;
         glm::ivec3 Dims{0};
         float Fade = 0.05f, Intensity = 1.0f, Spacing = 0.5f;
+        glm::vec3 FadeLo{0.05f}, FadeHi{0.05f}; // the fade of each face (-x/-y/-z, +x/+y/+z): the component's Fade Min / Max, else Fade
         std::shared_ptr<const GI::BakeFile> File;
         const GI::VolumeBake* Bake = nullptr;
         std::vector<int> Layers;      // indices into Bake->Layers, at most kMaxLayers
