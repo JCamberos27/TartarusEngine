@@ -388908,13 +388908,13 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
-          -32.97999954223633,
+          -32.68000030517578,
           2.0380001068115234,
           -11.579999923706055
         ],
         "Bounds Fade": 0.05000000074505806,
         "Bounds Size": [
-          11.359999656677246,
+          11.959999084472656,
           2.815000057220459,
           7.599999904632568
         ],
@@ -389669,6 +389669,183 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upper hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36502,
+      "name": "Ceiling Upper hall",
+      "order": 160003,
+      "parentId": 35585,
+      "position": [
+        -33.65705871582031,
+        6.261999607086182,
+        2.6645898818969727
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upper hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36501,
+      "name": "Ceiling Upper hall",
+      "order": 160002,
+      "parentId": 35585,
+      "position": [
+        -32.2592887878418,
+        6.261999607086182,
+        2.6645898818969727
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upper hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36500,
+      "name": "Ceiling Upper hall",
+      "order": 160001,
+      "parentId": 35585,
+      "position": [
+        -33.65705871582031,
+        6.261999607086182,
+        0.990369975566864
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
           -37.53900146484375,
           4.947000026702881,
           10.1850004196167
@@ -390318,15 +390495,15 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
-          -33.380001068115234,
-          4.947000026702881,
-          2.3450000286102295
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
         ],
         "Bounds Fade": 0.05000000074505806,
         "Bounds Size": [
-          3.0,
-          2.815000057220459,
-          4.929999828338623
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
         ],
         "Cast Shadows": true,
         "Color": [
@@ -390336,14 +390513,14 @@
         ],
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
-        "Intensity": 1.5199999809265137,
-        "Range": 4.570000171661377,
+        "Intensity": 0.5,
+        "Range": 5.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
         "Spot Angle": 80.0,
-        "Type": "Spot",
+        "Type": "Point",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -390352,13 +390529,13 @@
         "Glow When Off": false
       },
       "id": 35603,
-      "name": "Ceiling Stairs",
+      "name": "Ceiling Upper hall",
       "order": 107504,
       "parentId": 35585,
       "position": [
-        -32.95819854736328,
-        6.085000038146973,
-        1.8274999856948853
+        -32.2592887878418,
+        6.261999607086182,
+        0.990369975566864
       ],
       "rotation": [
         -0.7071070075035095,
@@ -408559,6 +408736,41 @@
         -29.61750030517578,
         2.0380001068115234,
         -11.644042015075684
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_stand 19",
+        "Fade": 0.10000000149011612,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.6100000143051147,
+          2.809999942779541,
+          2.5999999046325684
+        ],
+        "Spacing": 0.5
+      },
+      "id": 36503,
+      "name": "GI dining bay",
+      "order": 160004,
+      "parentId": 35585,
+      "position": [
+        -27.145000457763672,
+        2.0399999618530273,
+        -10.149999618530273
       ],
       "rotation": [
         0.0,
