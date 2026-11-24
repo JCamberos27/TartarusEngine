@@ -1,8 +1,9 @@
 # Master-bedroom room probe A/B. Caller holds locks\perf (owner W2) after the SM's GO. Tour: tour_redroom_metals_w.json (warm-up shot, Jacob's camera, armchair rail, floor-lamp pole, table-lamp base, sink).
 #   base      = scene + shaders as built
-#   probe     = scene with 'Probe Master Bedroom' added (add_master_probe.py, TEST ids 39999/999999) ; wt-gpu Forest.json restored with git checkout afterwards
+#   probe     = scene with 'Probe Master Bedroom' added (add_master_probe.py, ids 36200/268794) ; wt-gpu Forest.json restored with git checkout afterwards
+#   imp05 / imp035 = probe at importance 0.5 / 0.35 (the leak fix); 'probe' = importance 3 (leaks into the kitchen)
 #   probefix6 = probe + the dev/argus-spec-fix ModelFragment.glsl with kRoomSpecFloor 0.6
-param([string[]]$Variants = @('base','probe','probefix6'),
+param([string[]]$Variants = @('imp05','imp035'),
       [string]$Gpu = 'D:\Jacob\tblocks\descent\wt-gpu',
       [string]$Fix = 'D:\Jacob\tblocks\descent\wt-argus-spec\src\Renderer\shaders\ModelFragment.glsl',
       [string]$Tool = 'D:\Jacob\tblocks\descent\wt-argus-spec\tools\descent\argus',
@@ -19,7 +20,7 @@ try {
     foreach ($v in $Variants) {
         git -C $Gpu checkout -- project/scenes/Forest.json
         [IO.File]::WriteAllText($sh, $origSh, $utf8)
-        if ($v -ne 'base') { python "$Tool\add_master_probe.py" $scene --id 39999 --order 999999 }
+        if ($v -ne 'base') { python "$Tool\add_master_probe.py" $scene --id 36200 --order 268794 }
         if ($v -eq 'probefix6') { [IO.File]::WriteAllText($sh, $fixT, $utf8) }
         $o = "$Out\$v"; New-Item -ItemType Directory -Force $o | Out-Null
         $env:TARTARUS_HIDDEN = '1'; $env:TARTARUS_MUTE = '1'
