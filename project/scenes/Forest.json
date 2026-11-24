@@ -404867,9 +404867,9 @@
         ],
         "Spacing": 0.5
       },
-      "id": 38103,
+      "id": 38106,
       "name": "GI bridge living 1-4",
-      "order": 160009,
+      "order": 160012,
       "parentId": 35585,
       "position": [
         -31.204030990600586,
@@ -405377,9 +405377,9 @@
         ],
         "Spacing": 0.5
       },
-      "id": 38104,
+      "id": 38107,
       "name": "GI bridge kitchen-dining 3-7",
-      "order": 160010,
+      "order": 160013,
       "parentId": 35585,
       "position": [
         -35.900001525878906,
@@ -405777,9 +405777,9 @@
         ],
         "Spacing": 0.5
       },
-      "id": 38105,
+      "id": 38108,
       "name": "GI bridge entrance hall 1-2",
-      "order": 160011,
+      "order": 160014,
       "parentId": 35585,
       "position": [
         -32.481998443603516,
