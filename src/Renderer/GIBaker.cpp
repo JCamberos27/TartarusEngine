@@ -256,13 +256,21 @@ void GIBaker::PlanNudges(World& world, const Options& opt) {
         all.push_back(b);
     }
     m_Nudged = m_NudgeBlocked = 0;
+    std::vector<std::pair<int, std::string>> blockedBy; // (face probes kept on the face, volume) for the top-10 list
     for (VolumeJob& v : m_Volumes) {
         int ok = 0, blocked = 0;
         v.Nudge = GI::PlanFaceNudges(v.Bounds, v.Dims, opt.FaceNudge, all, &ok, &blocked);
         m_Nudged += ok;
         m_NudgeBlocked += blocked;
-        if (blocked > 0) Log::Info("[GI bake] nudge blocked by geometry in '" + v.Name + "': " + std::to_string(blocked) + " face probes stay on the face");
+        if (blocked > 0) {
+            Log::Info("[GI bake] nudge blocked by geometry in '" + v.Name + "': " + std::to_string(blocked) + " face probes stay on the face");
+            blockedBy.emplace_back(blocked, v.Name);
+        }
     }
+    std::stable_sort(blockedBy.begin(), blockedBy.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (std::size_t i = 0; i < blockedBy.size() && i < 10; ++i)
+        Log::Info("[GI bake] nudge kept on the face, top " + std::to_string(i + 1) + ": '" + blockedBy[i].second + "' " +
+                  std::to_string(blockedBy[i].first));
     Log::Info("[GI bake] face probes nudged: " + std::to_string(m_Nudged) + ", kept on the face (blocked): " + std::to_string(m_NudgeBlocked) +
               Fmt(" (%.2f m inward)", opt.FaceNudge));
 }
