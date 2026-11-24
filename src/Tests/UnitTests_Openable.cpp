@@ -4,6 +4,7 @@
 #include "../Game/Components.h"
 #include "../Game/SceneSerializer.h"
 #include "../Renderer/Model.h"
+#include <cstring>
 #include "../Core/Paths.h"
 #include "../Core/Log.h"
 #include "AssetLibrary.h"
@@ -163,10 +164,59 @@ void OpenableInWorld() {
     Openable::Update(w, eye, aimAjar, true, 1.0f);
     CHECK(o.Target == 1.0f && Near(w.Registry.get<TransformComponent>(door).Position, doorAt + glm::vec3(0.5f, 0.0f, 0.0f)));
 }
+
+// --bake-gi's door pose (GI Phase 2 Part A): PoseStart opens only the Start Open doors, Restore puts back every
+// transform bit for bit and leaves them unstarted, as the scene was loaded.
+void OpenablePoseStartRestore() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        Log::Info("OpenablePoseStartRestore: no test model - skipped.");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const glm::vec3 openAt(1.0f, 0.0f, -1.5f), shutAt(-1.0f, 0.0f, -1.5f);
+    const entt::entity a = w.CreateModelEntity(model, openAt, glm::vec3(0.0f), glm::vec3(1.0f), "DoorStartOpen");
+    const entt::entity b = w.CreateModelEntity(model, shutAt, glm::vec3(0.0f, 30.0f, 0.0f), glm::vec3(1.0f), "DoorShut");
+    auto& oa = w.Registry.emplace<OpenableComponent>(a);
+    oa.Motion = (int)Kind::SlideRight;
+    oa.Amount = 0.5f;
+    oa.StartOpen = true;
+    auto& ob = w.Registry.emplace<OpenableComponent>(b);
+    ob.Motion = (int)Kind::HingeLeft;
+    w.RebuildWorldTransformCache();
+    const TransformComponent ta = w.Registry.get<TransformComponent>(a), tb = w.Registry.get<TransformComponent>(b);
+
+    const auto saved = Openable::Save(w);
+    CHECK(saved.size() == 2);
+    const auto open = Openable::PoseStart(w);
+    CHECK(open.size() == 1 && open[0] == "DoorStartOpen");
+    CHECK(Near(w.Registry.get<TransformComponent>(a).Position, openAt + glm::vec3(0.5f, 0.0f, 0.0f)));
+    CHECK(w.Registry.get<TransformComponent>(b).Position == tb.Position && w.Registry.get<TransformComponent>(b).Rotation == tb.Rotation);
+    CHECK(oa.Started && ob.Started && oa.Progress == 1.0f && ob.Progress == 0.0f);
+
+    // Posed again after something moved it (an earlier SetAll): back to the Play start pose, not left where it was.
+    Openable::SetAll(w, 1.0f);
+    CHECK(Openable::PoseStart(w).size() == 1 && ob.Progress == 0.0f);
+    CHECK(Near(w.Registry.get<TransformComponent>(b).Position, tb.Position));
+
+    Openable::Restore(w, saved);
+    const auto& ra = w.Registry.get<TransformComponent>(a);
+    const auto& rb = w.Registry.get<TransformComponent>(b);
+    CHECK(std::memcmp(&ra.Position, &ta.Position, sizeof(glm::vec3)) == 0 && std::memcmp(&ra.Rotation, &ta.Rotation, sizeof(glm::quat)) == 0);
+    CHECK(std::memcmp(&rb.Position, &tb.Position, sizeof(glm::vec3)) == 0 && std::memcmp(&rb.Rotation, &tb.Rotation, sizeof(glm::quat)) == 0);
+    CHECK(!oa.Started && !ob.Started && oa.Progress == 0.0f && oa.Target == 0.0f);
+    // Play still starts them as before.
+    Openable::Update(w, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), false, 0.0f);
+    CHECK(oa.Started && oa.Progress == 1.0f && Near(w.Registry.get<TransformComponent>(a).Position, openAt + glm::vec3(0.5f, 0.0f, 0.0f)));
+}
 } // namespace
 
 void RegisterOpenableTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Openable: each motion keeps its hinge and opens out the front", OpenablePoses});
     tests.push_back({"Openable: ray against a placed box", OpenableRayBox});
     tests.push_back({"Openable: scene block, Interact toggles, reach, SetAll, Start Open / Ajar", OpenableInWorld});
+    tests.push_back({"Openable: PoseStart opens only Start Open doors, Restore puts them back bit for bit", OpenablePoseStartRestore});
 }

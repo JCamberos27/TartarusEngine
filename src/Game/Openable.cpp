@@ -61,6 +61,11 @@ float ParentDepth(World& world, entt::entity e) {
     return (r->ModelRef->BoundsMax().z - r->ModelRef->BoundsMin().z) * (t ? std::abs(t->Scale.z) : 1.0f);
 }
 
+// Where Play starts it: shut, open, or (Start Ajar) part of the way, with its full swing still Amount.
+float StartProgress(const OpenableComponent& o) {
+    return o.StartOpen ? (o.StartAjar > 0.0f ? Uneased(std::max(o.StartAjar, 0.01f)) : 1.0f) : 0.0f;
+}
+
 void Apply(OpenableComponent& o, TransformComponent& t) {
     glm::vec3 pos;
     glm::quat rot;
@@ -84,7 +89,7 @@ void Start(World& world, entt::entity e, OpenableComponent& o, TransformComponen
     }
     o.ResolvedAmount = o.Amount > 0.0f ? o.Amount : DefaultAmount(o.Motion, m.BoundsMin(), m.BoundsMax(), ParentDepth(world, e));
     // Ajar: it starts part of the way, but its full swing is still Amount, so one Interact opens it the rest of the way.
-    o.Progress = o.Target = o.StartOpen ? (o.StartAjar > 0.0f ? Uneased(std::max(o.StartAjar, 0.01f)) : 1.0f) : 0.0f;
+    o.Progress = o.Target = StartProgress(o);
     if (o.Progress > 0.0f) Apply(o, t); // posed where it starts: a Start Open door is open when Play begins, not only flagged
 }
 
@@ -291,6 +296,50 @@ void SetAll(World& world, float t) {
         o.Progress = o.Target = std::clamp(t, 0.0f, 1.0f);
         Apply(o, view.get<TransformComponent>(e));
     }
+}
+
+std::vector<Saved> Save(World& world) {
+    std::vector<Saved> out;
+    auto view = world.Registry.view<OpenableComponent, TransformComponent>();
+    for (auto e : view) {
+        const auto& o = view.get<OpenableComponent>(e);
+        const auto& t = view.get<TransformComponent>(e);
+        out.push_back({e, t.Position, t.Rotation, o.Started, o.Progress, o.Target});
+    }
+    return out;
+}
+
+void Restore(World& world, const std::vector<Saved>& saved) {
+    for (const Saved& s : saved) {
+        if (!world.Registry.valid(s.Entity)) continue;
+        auto* o = world.Registry.try_get<OpenableComponent>(s.Entity);
+        auto* t = world.Registry.try_get<TransformComponent>(s.Entity);
+        if (!o || !t) continue;
+        t->Position = s.Position;
+        t->Rotation = s.Rotation;
+        o->Started = s.Started;
+        o->Progress = s.Progress;
+        o->Target = s.Target;
+    }
+}
+
+std::vector<std::string> PoseStart(World& world) {
+    std::vector<std::string> open;
+    auto view = world.Registry.view<OpenableComponent, TransformComponent, RenderableComponent>();
+    for (auto e : view) {
+        auto& o = view.get<OpenableComponent>(e);
+        const auto& r = view.get<RenderableComponent>(e);
+        if (!r.ModelRef) continue;
+        if (!o.Started) Start(world, e, o, view.get<TransformComponent>(e), *r.ModelRef);
+        // Already started (an earlier Play or SetAll): back to its start pose, as a fresh Play would begin it.
+        o.Progress = o.Target = StartProgress(o);
+        Apply(o, view.get<TransformComponent>(e));
+        if (o.Progress > 0.0f) {
+            const auto* nc = world.Registry.try_get<NameComponent>(e);
+            open.push_back(nc ? nc->Name : std::string("(unnamed)"));
+        }
+    }
+    return open;
 }
 
 bool Open(World& world, entt::entity e) {

@@ -129,6 +129,24 @@ bool GIBaker::Begin(World& world, const Options& opt) {
             m_ClipMin = glm::min(m_ClipMin, v.Bounds.ToWorld(q));
             m_ClipMax = glm::max(m_ClipMax, v.Bounds.ToWorld(q));
         }
+    // Doors as the bake should see them. Saved first, so every exit (Finish, an error) puts the scene back as loaded.
+    m_DoorsSaved = Openable::Save(world);
+    m_DoorsPosed = true;
+    if (opt.DoorPose == Options::Doors::Shut) {
+        Log::Info("[GI bake] doors: all shut as authored (--bake-gi-doors shut)");
+    } else if (opt.DoorPose == Options::Doors::Open) {
+        Openable::SetAll(world, 1.0f);
+        Log::Info("[GI bake] doors: all " + std::to_string(m_DoorsSaved.size()) + " openables open (--bake-gi-doors open)");
+    } else {
+        const std::vector<std::string> open = Openable::PoseStart(world);
+        std::string names;
+        for (const auto& n : open) names += (names.empty() ? "" : ", ") + n;
+        Log::Info("[GI bake] doors: " + std::to_string(open.size()) + " posed at their Play start" +
+                  (names.empty() ? std::string() : " (" + names + ")") + ", " +
+                  std::to_string(m_DoorsSaved.size() - open.size()) + " shut");
+    }
+    world.RebuildWorldTransformCache();
+
     m_ClipMin -= glm::vec3(opt.ClipMargin);
     m_ClipMax += glm::vec3(opt.ClipMargin);
     m_Target = std::make_unique<HdrTarget>();
@@ -180,6 +198,12 @@ void GIBaker::RestoreLighting(World& world) {
     LightSwitch::Stop(world); // the switches and circuits as authored again (Play starts them from Start On)
     if (m_LightingSaved) world.Render.SkyAmbientIntensity = m_SkyAmbient;
     m_LightingSaved = false;
+    if (m_DoorsPosed) { // the openables as loaded: the posed doors never reach an undo step or a save
+        Openable::Restore(world, m_DoorsSaved);
+        m_DoorsSaved.clear();
+        m_DoorsPosed = false;
+        world.RebuildWorldTransformCache();
+    }
     world.SyncActiveInHierarchy();
 }
 

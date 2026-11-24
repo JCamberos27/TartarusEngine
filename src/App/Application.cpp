@@ -2088,6 +2088,9 @@ bool AppSession::Frame() {
                 giBaker = std::make_unique<GIBaker>();
                 GIBaker::Options bo;
                 bo.Only = opt.bakeGiOnly;
+                bo.DoorPose = opt.bakeGiDoors == "open"   ? GIBaker::Options::Doors::Open
+                            : opt.bakeGiDoors == "shut" ? GIBaker::Options::Doors::Shut
+                                                        : GIBaker::Options::Doors::Start;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
                 if (Env::Flag(Env::Var::GiBakeTrace))
