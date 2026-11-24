@@ -1159,9 +1159,9 @@ void TestOpaqueBatchKey() {
     b = a;
     b.ProbeKey = (1u << 30) | (a.ProbeKey & 0x3FFFFFFFu); // one probe instead of two: bits 30-31 only
     CHECK(K::Object(b) != ka);
-    for (int f = 0; f < 5; ++f) { // each flag still splits
+    for (int f = 0; f < 6; ++f) { // each flag still splits
         b = a;
-        bool* flags[5] = {&b.ReceiveShadows, &b.StaticReceiver, &b.NoSsao, &b.DoubleSided, &b.Prepassed};
+        bool* flags[6] = {&b.ReceiveShadows, &b.StaticReceiver, &b.NoSsao, &b.DoubleSided, &b.Prepassed, &b.GIFlatL1};
         *flags[f] = !*flags[f];
         CHECK(K::Object(b) != ka);
     }

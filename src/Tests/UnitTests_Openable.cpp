@@ -438,7 +438,15 @@ void GIBakerHiddenDoorsGuard() {
 }
 } // namespace
 
+void OpenableIsLeaf() { // the draw flag for the doorway GI fix: hinge / slide leaves only
+    using M = OpenableComponent::MotionKind;
+    OpenableComponent o;
+    for (M m : {M::HingeLeft, M::HingeRight, M::SlideLeft, M::SlideRight}) { o.Motion = (int)m; CHECK(o.IsLeaf()); }
+    for (M m : {M::Lid, M::FlapDown, M::FlapUp, M::SlideOut}) { o.Motion = (int)m; CHECK(!o.IsLeaf()); }
+}
+
 void RegisterOpenableTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Openable: IsLeaf is hinge / slide doors only (the GI flat-L1 draw flag)", OpenableIsLeaf});
     tests.push_back({"Openable: each motion keeps its hinge and opens out the front", OpenablePoses});
     tests.push_back({"Openable: ray against a placed box", OpenableRayBox});
     tests.push_back({"Openable: scene block, Interact toggles, reach, SetAll, Start Open / Ajar", OpenableInWorld});

@@ -20,6 +20,7 @@ struct ObjectState {
     bool NoSsao = false;
     bool DoubleSided = false;
     bool Prepassed = false;
+    bool GIFlatL1 = false;       // an openable leaf: GIVolumes::SetMask(.., flatL1)
     std::uint32_t LayerBit = 0;
     std::uint32_t ProbeKey = 0;  // ReflectionProbeArray::SelectionKey (all 32 bits)
     std::uint64_t GIMask = 0;    // GIVolumes::MaskFor
@@ -28,7 +29,7 @@ struct ObjectState {
 // Equal for two groups only when the per-draw hook would bind them alike.
 inline std::uint64_t Object(const ObjectState& s) {
     std::uint64_t k = (std::uint64_t)s.ReceiveShadows | ((std::uint64_t)s.StaticReceiver << 1) | ((std::uint64_t)s.NoSsao << 2) |
-                      ((std::uint64_t)s.DoubleSided << 3) | ((std::uint64_t)s.Prepassed << 4);
+                      ((std::uint64_t)s.DoubleSided << 3) | ((std::uint64_t)s.Prepassed << 4) | ((std::uint64_t)s.GIFlatL1 << 5);
     k = Mix(k, s.LayerBit);
     k = Mix(k, s.ProbeKey);
     k = Mix(k, s.GIMask);

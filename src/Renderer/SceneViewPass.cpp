@@ -394,6 +394,7 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
                     renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
                 item.StaticReceiver = staticReceiver;
                 item.GIMask = giMask;
+                if (const auto* openable = world.Registry.try_get<OpenableComponent>(entity)) item.GIFlatL1 = openable->IsLeaf();
                 item.SortId = (std::uint32_t)entt::to_integral(entity);
                 item.DoubleSided = clothing;
                 item.LayerPull = layerPull;
@@ -523,7 +524,7 @@ void SceneRenderer::ViewPass::PerDraw(Shader& prog) {
     prog.SetInt("uInstanced", m_InstanceBase >= 0 ? m_InstanceMode : 0);
     if (m_InstanceBase >= 0) prog.SetInt("uInstanceBase", m_InstanceBase);
     if (m_AnyProbes) m_In.probeArray->Bind(prog, it.Centre);
-    if (m_In.giVolumes) GIVolumes::SetMask(prog, it.GIMask);
+    if (m_In.giVolumes) GIVolumes::SetMask(prog, it.GIMask, it.GIFlatL1);
     prog.SetInt("uNoReceiveShadows", it.ReceiveShadows ? 0 : 1);
     prog.SetInt("uObjectLayerBit", it.LayerBit); // #203
     prog.SetInt("uDecalStatic", it.StaticReceiver ? 1 : 0);
@@ -763,7 +764,7 @@ void SceneRenderer::ViewPass::BuildBatches() {
                 if (!Batchable(it)) return kNoBatch;
                 std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
                 seed ^= (std::uint64_t)it.Pass | ((std::uint64_t)it.DoubleSided << 4) | ((std::uint64_t)it.ReceiveShadows << 5) |
-                        ((std::uint64_t)it.NoSsao << 6) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
+                        ((std::uint64_t)it.NoSsao << 6) | ((std::uint64_t)it.GIFlatL1 << 7) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
                         ((std::uint64_t)ProbeKey(i) << 32) ^ ((std::uint64_t)it.GIMask * 0xC2B2AE3D27D4EB4Full);
                 return HashSlots(*it.Slots, seed);
             },
@@ -771,7 +772,7 @@ void SceneRenderer::ViewPass::BuildBatches() {
                 const DrawItem& x = drawList[a];
                 const DrawItem& y = drawList[b];
                 return x.Ref->ImportId() == y.Ref->ImportId() && x.Pass == y.Pass && x.DoubleSided == y.DoubleSided &&
-                       x.ReceiveShadows == y.ReceiveShadows && x.NoSsao == y.NoSsao && x.LayerBit == y.LayerBit &&
+                       x.ReceiveShadows == y.ReceiveShadows && x.NoSsao == y.NoSsao && x.GIFlatL1 == y.GIFlatL1 && x.LayerBit == y.LayerBit &&
                        ProbeKey(a) == ProbeKey(b) && x.GIMask == y.GIMask && SameSlots(*x.Slots, *y.Slots);
             },
             groups);
@@ -833,6 +834,7 @@ void SceneRenderer::ViewPass::BuildBatches() {
         objectState.LayerBit = (std::uint32_t)lead.LayerBit;
         objectState.ProbeKey = ProbeKey(leadIndex);
         objectState.GIMask = lead.GIMask;
+        objectState.GIFlatL1 = lead.GIFlatL1;
         const std::uint64_t objectKey = OpaqueBatchKey::Object(objectState);
         for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
             const MaterialAsset* ma = m < (int)lead.Slots->size() ? (*lead.Slots)[m].get() : nullptr;

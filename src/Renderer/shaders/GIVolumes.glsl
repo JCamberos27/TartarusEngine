@@ -19,6 +19,9 @@ layout(binding = 28) uniform sampler3D uGIAtlas;
 uniform int uGIEnabled;
 uniform int uGIMaskLo;      // the volumes this draw can touch (bit i = volume i), bits 0-31 ...
 uniform int uGIMaskHi;      // ... and 32-63; set per draw
+uniform int uGIFlatL1;      // 1 = scale the directional (L1) term by GI_FLAT_L1_SCALE: a door leaf in a doorway samples one room's
+                            // probes but faces the other, so its far face would read the clamped negative lobe = black
+const float GI_FLAT_L1_SCALE = 0.3;
 uniform vec3 uGIBoundsMin;  // every volume's AABB together: pixels outside it skip GI at once
 uniform vec3 uGIBoundsMax;
 // --bake-gi's captures (GIBaker): emission scaled by uGIBakeEmissive, one-sided back faces marked (alpha 0).
@@ -57,7 +60,7 @@ vec3 SampleGI(vec3 p, vec3 n, out float fade, out float replaceSky) {
         vec3 g = clamp((q + hf.xyz) / max(2.0 * hf.xyz, vec3(1e-4)), 0.0, 1.0) * (dims - 1.0) + 0.5;
         vec3 e = vec3(0.0);
         if (uGIVolumes[v].Dims.w > 0.0) {
-            vec4 nb = vec4(1.0, n);
+            vec4 nb = vec4(1.0, uGIFlatL1 == 1 ? n * GI_FLAT_L1_SCALE : n);
             vec3 t = uGIVolumes[v].Brick.xyz + g;
             vec4 cr = texture(uGIAtlas, t * uGIAtlasInv.xyz);
             vec4 cg = texture(uGIAtlas, (t + vec3(0.0, 0.0, dims.z)) * uGIAtlasInv.xyz);
