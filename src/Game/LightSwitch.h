@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
 #include <string>
+#include <vector>
 
 class World;
 
@@ -34,5 +35,9 @@ void Stop(World& world);
 
 // Whether `circuit` is on (false for one that hasn't started).
 bool IsOn(World& world, const std::string& circuit);
+
+// The circuits whose switches disagree on Start On (sorted, each once). Only the first-found switch decides how such
+// a circuit starts, so the others' Start On is ignored; Play start warns about each one in the Console.
+std::vector<std::string> StartOnConflicts(World& world);
 
 } // namespace LightSwitch
