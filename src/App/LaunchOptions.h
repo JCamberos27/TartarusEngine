@@ -23,7 +23,7 @@ enum class LaunchMode {
     SceneBounds,  // --scene-bounds <scene.json|prefab dir>... --out <dir>
     BakeImpostors, // --bake-impostors <scene.json>... --out <dir> [--match <text>]
     AudioTest,    // --audio-test [scene] [--report <file>]
-    BakeGI,       // --bake-gi <scene.json> [--gi-only <name>]
+    BakeGI,       // --bake-gi <scene.json> [--gi-only <name>] [--bake-gi-doors start|open|shut]
     BakeMotion,   // --bake-motion <file.mmconfig> [--match <text>] [--out <prefix>]
     ImportBlood,  // --import-blood <VolumetricBloodFX package dir>
     ImportKnife,  // --import-knife <folder holding the extracted Knife packs>
@@ -94,6 +94,7 @@ struct LaunchOptions {
     std::string bakeMatch;        // --match <text> (bake-impostors): the model path the LOD 0s must draw; (bake-motion) the takes
     std::string audioTestReport;  // --report <file> (audio-test)
     std::string bakeGiOnly;       // --gi-only <name> (bake-gi): only the volumes whose name contains it
+    std::string bakeGiDoors = "start"; // --bake-gi-doors start|open|shut (bake-gi): the doors in the captures
     // --project <dir> (any mode): open that project folder instead of the one next to the exe. Applied by the parse.
     std::string projectDir;
     // --restore-state <file> (editor): Rebuild & Restart's state file (RestartState.h), applied after the scene

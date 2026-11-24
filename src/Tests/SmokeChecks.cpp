@@ -20,6 +20,8 @@
 #include "MaterialPreviewRenderer.h"
 #include "Core/Paths.h"
 #include "SceneSerializer.h"
+#include "Shader.h"
+#include "ShaderLibrary.h"
 #include "World.h"
 #include "Glass/GlassFeedbackMotion.h"
 #include "Glass/GlassMotion.h"
@@ -38,6 +40,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <cstdio>
 #include <string>
@@ -604,6 +607,79 @@ void PlayProbe(World& world, const Camera& playCamera, bool playUsesPlayer) {
         if (!ps.Live.empty()) std::cout << " y=[" << lo.y << ", " << hi.y << "]";
         std::cout << "\n";
     }
+}
+
+namespace {
+// Every sampler type of GL 4.6 core (spec table 7.3; the loader in extern/glloader defines none of them): all take a
+// texture unit. Images take image units, not these.
+bool IsSamplerType(GLenum t) {
+    static constexpr GLenum kSamplers[] = {
+        0x8B5D, 0x8B5E, 0x8B5F, 0x8B60, 0x8B61, 0x8B62, 0x8B63, 0x8B64, // 1D 2D 3D CUBE 1D_SHADOW 2D_SHADOW 2D_RECT(_SHADOW)
+        0x8DC0, 0x8DC1, 0x8DC2, 0x8DC3, 0x8DC4, 0x8DC5,                 // 1D/2D_ARRAY BUFFER 1D/2D_ARRAY_SHADOW CUBE_SHADOW
+        0x8DC9, 0x8DCA, 0x8DCB, 0x8DCC, 0x8DCD, 0x8DCE, 0x8DCF, 0x8DD0, // INT_SAMPLER_*
+        0x8DD1, 0x8DD2, 0x8DD3, 0x8DD4, 0x8DD5, 0x8DD6, 0x8DD7, 0x8DD8, // UNSIGNED_INT_SAMPLER_*
+        0x9108, 0x9109, 0x910A, 0x910B, 0x910C, 0x910D,                 // (INT_/UNSIGNED_INT_)SAMPLER_2D_MULTISAMPLE(_ARRAY)
+        0x900C, 0x900D, 0x900E, 0x900F,                                 // SAMPLER_CUBE_MAP_ARRAY(_SHADOW), INT_, UNSIGNED_INT_
+    };
+    return std::find(std::begin(kSamplers), std::end(kSamplers), t) != std::end(kSamplers);
+}
+
+// One linked program's samplers: two of different types on one texture unit make every draw through it fail
+// GL_INVALID_OPERATION ("program texture usage"). Returns the clashes found; adds the samplers it read to `samplers`.
+int SamplerClashes(GLuint prog, const std::string& label, int& samplers) {
+    GLint linked = 0, count = 0, maxLen = 0;
+    glGetProgramiv(prog, GL_LINK_STATUS, &linked);
+    if (!linked) return 0;
+    glGetProgramiv(prog, GL_ACTIVE_UNIFORMS, &count);
+    glGetProgramiv(prog, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxLen);
+    std::vector<char> name((size_t)std::max(maxLen, 1));
+    std::map<GLint, std::pair<GLenum, std::string>> byUnit;
+    int clashes = 0;
+    for (GLint i = 0; i < count; ++i) {
+        GLint size = 0;
+        GLenum type = 0;
+        GLsizei len = 0;
+        glGetActiveUniform(prog, (GLuint)i, (GLsizei)name.size(), &len, &size, &type, name.data());
+        if (!IsSamplerType(type)) continue;
+        const std::string n(name.data(), (size_t)len);
+        const GLint loc = glGetUniformLocation(prog, n.c_str());
+        if (loc < 0) continue;
+        GLint unit = 0;
+        glGetUniformiv(prog, loc, &unit);
+        ++samplers;
+        auto [it, fresh] = byUnit.emplace(unit, std::make_pair(type, n));
+        if (!fresh && it->second.first != type) {
+            ++clashes;
+            Log::Error("[SmokeTest] sampler units: program " + std::to_string(prog) + " (" + label + "): '" + n +
+                       "' and '" + it->second.second + "' are different sampler types on texture unit " +
+                       std::to_string(unit));
+        }
+    }
+    return clashes;
+}
+} // namespace
+
+void SamplerUnits() {
+    // The impostor programs only build when a scene has impostor sets (ImpostorRenderer::WarmUp), and their atlases are
+    // asset payloads CI doesn't have: build the lit one here so its units are checked everywhere.
+    Shader impostorLit(ShaderLibrary::ReadFileRequired("Impostor.vert.glsl"),
+                       ShaderLibrary::ReadFileRequired("ImpostorLit.frag.glsl"), "SmokeImpostorLit");
+    int programs = 0, samplers = 0, clashes = 0;
+    if (impostorLit.Program()) {
+        ++programs;
+        clashes += SamplerClashes(impostorLit.Program(), "ImpostorLit", samplers);
+    } else {
+        Log::Error("[SmokeTest] sampler units: ImpostorLit didn't build");
+    }
+    // Every other live program: GL names are small and dense, so a scan of the low range finds them all. Names past
+    // 8191 are not checked (a smoke run creates a few hundred programs and shaders between them).
+    for (GLuint p = 1; p < 8192; ++p) {
+        if (p == impostorLit.Program() || !glIsProgram(p)) continue;
+        ++programs;
+        clashes += SamplerClashes(p, "live", samplers);
+    }
+    std::cout << "[SmokeTest]   sampler units: " << programs << " program(s), " << samplers << " sampler(s), " << clashes
+              << " clash(es)" << std::endl;
 }
 
 } // namespace SmokeChecks
