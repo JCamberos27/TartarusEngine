@@ -69,6 +69,12 @@ public:
     // The openables as loaded again (a no-op once done). RestoreLighting calls it; the app also calls it before an
     // emergency recovery save and at shutdown, for a bake that ends without Finish.
     void RestoreDoors(World& world);
+    // Begin's door step, public for the tests: saves every openable, poses them (start / open / shut), sets
+    // Openable::BakePosed and logs the "[GI bake] doors:" line (and a "[GI trace]" one under TARTARUS_GI_BAKE_TRACE).
+    void PoseDoors(World& world, Options::Doors pose);
+    // The error path of Step without the GIVolumes reset: sets the error (if none yet), puts the lighting and the doors
+    // back, and finishes. Public for the tests.
+    void Abort(World& world, const std::string& why);
     // Progress 0..1 and a line for the log.
     float Progress() const;
 

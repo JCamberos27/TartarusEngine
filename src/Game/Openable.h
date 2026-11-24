@@ -66,7 +66,16 @@ std::vector<Saved> Save(World& world);
 void Restore(World& world, const std::vector<Saved>& saved);
 
 // Every openable posed as Play starts it, outside Play: Start Open (and Start Ajar) ones open that far, the rest shut.
-// Returns the names of the ones left open (or ajar), in entity order. Openables whose model isn't loaded are skipped.
-std::vector<std::string> PoseStart(World& world);
+// Like Play, inactive openables and those whose model isn't loaded are skipped (left as they are).
+struct Posed {
+    std::vector<std::string> Open; // the names of the ones left open (or ajar), in entity order
+    int Shut = 0;                  // the ones posed shut
+};
+Posed PoseStart(World& world);
+
+// --bake-gi has the scene's openables posed for its captures (GIBaker sets it from PoseDoors until RestoreDoors). The
+// editor checks it: no undo step, no recovery snapshot and no crash save is ever made of a posed scene.
+void SetBakePosed(bool posed);
+bool BakePosed();
 
 } // namespace Openable

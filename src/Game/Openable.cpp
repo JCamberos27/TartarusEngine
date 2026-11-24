@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <sstream>
 
@@ -323,24 +324,36 @@ void Restore(World& world, const std::vector<Saved>& saved) {
     }
 }
 
-std::vector<std::string> PoseStart(World& world) {
-    std::vector<std::string> open;
-    auto view = world.Registry.view<OpenableComponent, TransformComponent, RenderableComponent>();
+Posed PoseStart(World& world) {
+    Posed out;
+    // The view Play's Update uses: an inactive openable isn't started by Play, so it isn't posed here either.
+    auto view = world.Registry.view<OpenableComponent, TransformComponent, RenderableComponent>(entt::exclude<InactiveTag>);
     for (auto e : view) {
         auto& o = view.get<OpenableComponent>(e);
         const auto& r = view.get<RenderableComponent>(e);
         if (!r.ModelRef) continue;
-        if (!o.Started) Start(world, e, o, view.get<TransformComponent>(e), *r.ModelRef);
-        // Already started (an earlier Play or SetAll): back to its start pose, as a fresh Play would begin it.
-        o.Progress = o.Target = StartProgress(o);
-        Apply(o, view.get<TransformComponent>(e));
+        if (!o.Started) {
+            Start(world, e, o, view.get<TransformComponent>(e), *r.ModelRef); // poses it only when it starts open
+        } else {
+            // Already started (an earlier Play or SetAll): back to its start pose, as a fresh Play would begin it.
+            o.Progress = o.Target = StartProgress(o);
+            Apply(o, view.get<TransformComponent>(e));
+        }
         if (o.Progress > 0.0f) {
             const auto* nc = world.Registry.try_get<NameComponent>(e);
-            open.push_back(nc ? nc->Name : std::string("(unnamed)"));
+            out.Open.push_back(nc ? nc->Name : std::string("(unnamed)"));
+        } else {
+            ++out.Shut;
         }
     }
-    return open;
+    return out;
 }
+
+namespace {
+std::atomic<bool> g_BakePosed{false};
+}
+void SetBakePosed(bool posed) { g_BakePosed.store(posed); }
+bool BakePosed() { return g_BakePosed.load(); }
 
 bool Open(World& world, entt::entity e) {
     auto* o = world.Registry.valid(e) ? world.Registry.try_get<OpenableComponent>(e) : nullptr;

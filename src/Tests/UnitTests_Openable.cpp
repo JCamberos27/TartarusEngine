@@ -4,6 +4,7 @@
 #include "../Game/Components.h"
 #include "../Game/SceneSerializer.h"
 #include "../Renderer/Model.h"
+#include "../Renderer/GIBaker.h"
 #include <cstring>
 #include "../Core/Paths.h"
 #include "../Core/Log.h"
@@ -191,15 +192,15 @@ void OpenablePoseStartRestore() {
 
     const auto saved = Openable::Save(w);
     CHECK(saved.size() == 2);
-    const auto open = Openable::PoseStart(w);
-    CHECK(open.size() == 1 && open[0] == "DoorStartOpen");
+    const auto posed = Openable::PoseStart(w);
+    CHECK(posed.Open.size() == 1 && posed.Open[0] == "DoorStartOpen" && posed.Shut == 1);
     CHECK(Near(w.Registry.get<TransformComponent>(a).Position, openAt + glm::vec3(0.5f, 0.0f, 0.0f)));
     CHECK(w.Registry.get<TransformComponent>(b).Position == tb.Position && w.Registry.get<TransformComponent>(b).Rotation == tb.Rotation);
     CHECK(oa.Started && ob.Started && oa.Progress == 1.0f && ob.Progress == 0.0f);
 
     // Posed again after something moved it (an earlier SetAll): back to the Play start pose, not left where it was.
     Openable::SetAll(w, 1.0f);
-    CHECK(Openable::PoseStart(w).size() == 1 && ob.Progress == 0.0f);
+    CHECK(Openable::PoseStart(w).Open.size() == 1 && ob.Progress == 0.0f);
     CHECK(Near(w.Registry.get<TransformComponent>(b).Position, tb.Position));
 
     Openable::Restore(w, saved);
@@ -212,6 +213,82 @@ void OpenablePoseStartRestore() {
     Openable::Update(w, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), false, 0.0f);
     CHECK(oa.Started && oa.Progress == 1.0f && Near(w.Registry.get<TransformComponent>(a).Position, openAt + glm::vec3(0.5f, 0.0f, 0.0f)));
 }
+
+// GIBaker's own door step and its exits (GI Phase 2 Part A; Argus's review): PoseDoors poses and flags the scene,
+// and the error path (Abort) and the shutdown / emergency path (RestoreDoors) each put every transform back bit for bit,
+// clear Openable::BakePosed, and are no-ops the second time. An inactive Start Open door isn't posed (Play skips it).
+void GIBakerDoorsRestoreAfterFailure() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        Log::Info("GIBakerDoorsRestoreAfterFailure: no test model - skipped.");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const glm::vec3 openAt(1.0f, 0.0f, -1.5f), shutAt(-1.0f, 0.0f, -1.5f), offAt(3.0f, 0.0f, -1.5f);
+    const entt::entity a = w.CreateModelEntity(model, openAt, glm::vec3(0.0f), glm::vec3(1.0f), "DoorStartOpen");
+    const entt::entity b = w.CreateModelEntity(model, shutAt, glm::vec3(0.0f, 30.0f, 0.0f), glm::vec3(1.0f), "DoorShut");
+    const entt::entity c = w.CreateModelEntity(model, offAt, glm::vec3(0.0f), glm::vec3(1.0f), "DoorInactive");
+    for (entt::entity e : {a, c}) {
+        auto& o = w.Registry.emplace<OpenableComponent>(e);
+        o.Motion = (int)Kind::SlideRight;
+        o.Amount = 0.5f;
+        o.StartOpen = true;
+    }
+    w.Registry.emplace<OpenableComponent>(b).Motion = (int)Kind::HingeLeft;
+    w.Registry.emplace<InactiveTag>(c);
+    w.RebuildWorldTransformCache();
+    const TransformComponent t0[3] = {w.Registry.get<TransformComponent>(a), w.Registry.get<TransformComponent>(b),
+                                      w.Registry.get<TransformComponent>(c)};
+    auto same = [&](entt::entity e, const TransformComponent& t) {
+        const auto& r = w.Registry.get<TransformComponent>(e);
+        return std::memcmp(&r.Position, &t.Position, sizeof(glm::vec3)) == 0 && std::memcmp(&r.Rotation, &t.Rotation, sizeof(glm::quat)) == 0;
+    };
+    auto allBack = [&] { return same(a, t0[0]) && same(b, t0[1]) && same(c, t0[2]); };
+
+    // (1) The error path: posed, then Abort (Step's error branch) -> as loaded, failed, flag down.
+    {
+        GIBaker baker;
+        CHECK(!Openable::BakePosed());
+        baker.PoseDoors(w, GIBaker::Options::Doors::Start);
+        CHECK(baker.DoorsPosed() && Openable::BakePosed());
+        CHECK(Near(w.Registry.get<TransformComponent>(a).Position, openAt + glm::vec3(0.5f, 0.0f, 0.0f)));
+        CHECK(same(c, t0[2]) && !w.Registry.get<OpenableComponent>(c).Started); // inactive: not posed, not started
+        baker.Abort(w, "test failure");
+        CHECK(allBack() && !baker.DoorsPosed() && !Openable::BakePosed() && baker.Failed());
+        CHECK(!w.Registry.get<OpenableComponent>(a).Started && !w.Registry.get<OpenableComponent>(b).Started);
+        baker.RestoreDoors(w); // a second put-back is a no-op
+        CHECK(allBack() && !Openable::BakePosed());
+    }
+    // (2) The shutdown / emergency path: posed all open, then RestoreDoors straight away.
+    {
+        GIBaker baker;
+        baker.PoseDoors(w, GIBaker::Options::Doors::Open);
+        CHECK(Openable::BakePosed() && !same(a, t0[0]) && !same(b, t0[1]));
+        baker.RestoreDoors(w);
+        CHECK(allBack() && !baker.DoorsPosed() && !Openable::BakePosed());
+        baker.RestoreDoors(w);
+        CHECK(allBack());
+    }
+    // (3) Posed twice (a re-entry): the second save must not take the posed doors for "as loaded".
+    {
+        GIBaker baker;
+        baker.PoseDoors(w, GIBaker::Options::Doors::Open);
+        baker.PoseDoors(w, GIBaker::Options::Doors::Start);
+        baker.RestoreDoors(w);
+        CHECK(allBack() && !Openable::BakePosed());
+    }
+    // (4) Shut: nothing moves, but the scene still counts as posed until put back.
+    {
+        GIBaker baker;
+        baker.PoseDoors(w, GIBaker::Options::Doors::Shut);
+        CHECK(allBack() && Openable::BakePosed());
+        baker.Abort(w, "");
+        CHECK(!Openable::BakePosed() && baker.Failed());
+    }
+}
 } // namespace
 
 void RegisterOpenableTests(UnitTestSupport::TestList& tests) {
@@ -219,4 +296,5 @@ void RegisterOpenableTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Openable: ray against a placed box", OpenableRayBox});
     tests.push_back({"Openable: scene block, Interact toggles, reach, SetAll, Start Open / Ajar", OpenableInWorld});
     tests.push_back({"Openable: PoseStart opens only Start Open doors, Restore puts them back bit for bit", OpenablePoseStartRestore});
+    tests.push_back({"GIBaker: posed doors come back bit for bit after a failure, at shutdown and on re-entry", GIBakerDoorsRestoreAfterFailure});
 }

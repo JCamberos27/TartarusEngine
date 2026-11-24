@@ -1766,9 +1766,8 @@ bool AppSession::Frame() {
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
     { PROFILE_SCOPE("Outfit Pending");
       // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.
-      // Not while --bake-gi has the doors posed: they would be journaled as an "Unrecorded Change" undo step.
-      if (!playerMode && !(giBaker && giBaker->DoorsPosed()) && OutfitSystem::LandingDue(world))
-          editor.JournalBeforeOutfitLanding(world);
+      // (Not while --bake-gi has the doors posed: the editor checks Openable::BakePosed itself.)
+      if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
       OutfitSystem::UpdatePending(world, assets); }
     { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
     }
