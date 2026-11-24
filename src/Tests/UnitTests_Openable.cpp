@@ -238,8 +238,9 @@ void GIBakerDoorsRestoreAfterFailure() {
         o.StartOpen = true;
     }
     w.Registry.emplace<OpenableComponent>(b).Motion = (int)Kind::HingeLeft;
-    w.Registry.emplace<InactiveTag>(c);
+    w.Registry.emplace<DeactivatedTag>(c); // the authored "active: false"; InactiveTag is derived from it
     w.RebuildWorldTransformCache();
+    CHECK(w.Registry.all_of<InactiveTag>(c));
     const TransformComponent t0[3] = {w.Registry.get<TransformComponent>(a), w.Registry.get<TransformComponent>(b),
                                       w.Registry.get<TransformComponent>(c)};
     auto same = [&](entt::entity e, const TransformComponent& t) {
