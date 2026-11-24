@@ -47,7 +47,6 @@ struct SceneDrawItem {
     float NearHide = 0.0f; // PlayerBodyTag: metres around the eye not drawn (the player's own body)
     const int* HideBones = nullptr; // PlayerBodyTag::CameraHideBones in the camera's view, else none
     bool NoSsao = false;  // left out of the SSAO depth pre-pass (ViewPipeline), so it must not sample the map
-    bool GIFlatL1 = false; // an OpenableComponent leaf: its GI lookup damps the directional term (GIVolumes::SetMask)
     unsigned HideVerts = 0; // OutfitHideTag: the piece's covered vertices (SkinHideBuffer), 0 = none
     float NearHideWidth = 0.0f; // PlayerBodyTag: clothing's Near Hide to either side (0 = a sphere)
     unsigned CollarVerts = 0;   // PlayerBodyTag::CollarVerts in the camera's world pass, 0 = none
@@ -77,6 +76,7 @@ struct SceneDrawItem {
     bool Bounded = false;
     glm::mat3 Normal{1.0f}; // transpose(inverse(mat3(Xform))), from the candidate cache (opaque items)
     float LodFade = 0.0f;   // World::LodFadeOf: a LOD cross-fade under way (dithered, drawn on its own)
+    bool GIFlatL1 = false; // an OpenableComponent leaf: its GI lookup damps the directional term (GIVolumes::SetMask)
 };
 
 // An opaque multi-draw batch's sub-mesh. Prog/State/Mat/Object: how the batch binds, for drawing the pre-passed
