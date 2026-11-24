@@ -14,6 +14,7 @@
 #include "LightBuffer.h"
 #include "DefaultTextures.h"
 #include "gl.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <cmath>
@@ -63,6 +64,12 @@ void VolumetricFog::ViewState::Release() {
 }
 
 unsigned long long VolumetricFog::RenderCount() { return g_RenderCount; }
+
+float VolumetricFog::CapInscatter(float lum, float cap) {
+    if (cap <= 0.0f || lum <= cap * 0.5f) return lum;
+    const float k = cap * 0.5f, span = cap - k;
+    return k + span * (1.0f - std::exp(-(lum - k) / span));
+}
 
 VolumetricFog::VolumetricFog() = default;
 
@@ -281,6 +288,7 @@ void VolumetricFog::Render(const FrameState& fs) {
     integrate.Bind();
     integrate.SetVec4("uProjParams", projParams);
     integrate.SetVec4("uSliceParams", sliceParams);
+    integrate.SetFloat("uInscatterCap", std::max(Env::Float(Env::Var::VolInscatterCap, kInscatterCap), 0.0f));
     glBindTextureUnit(6, vs.Scatter[cur]);
     glBindImageTexture(0, vs.Integrated, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     integrate.DispatchCompute(Groups(q.W, 8), Groups(q.H, 8), 1);
