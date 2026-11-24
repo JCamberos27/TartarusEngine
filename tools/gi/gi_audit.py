@@ -276,8 +276,38 @@ def split_circuits(s):
 NEIGHBOURS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
 
 
+# Black floor: a probe whose every coefficient (all layers) is under this, with all its neighbours under it too, is
+# 'uniform', never 'filled'. In an unlit room (SH ~1e-5) any neighbour average lands within _close's absolute term of
+# the probe, so the subset test can't tell a real probe from a fill there (the storeroom and box room read 98-100%
+# "filled" on final-1 while the baker logged 2% / 0% inner invalid). Absolute, not relative to the house: 1e-4 is
+# ~1/100 of the darkest lit room's DC term and well under the 0.002 luma bar, so no lit probe is affected.
+BLACK_FLOOR = 1e-4
+
+
+def _is_black(probes, idx):
+    return all(abs(x) < BLACK_FLOOR for l in range(len(probes)) for x in probes[l][idx])
+
+
 def _close(a, b):
     return abs(a - b) <= abs(b) * 2.0 ** -9 + 1e-6
+
+
+BAKE_LOG_LINE = re.compile(r"\[GI bake\] (GI .+?): (\d+) probes, (\d+) inside geometry")
+
+
+def parse_bake_log(text):
+    """--bake-gi stdout -> {volume: (probes, invalid)} from the baker's '[GI bake] <volume>: N probes, M inside geometry
+    (filled)' lines. The baker knows exactly which probes it filled; the classifier only guesses from the .gi."""
+    return {m.group(1): (int(m.group(2)), int(m.group(3))) for m in BAKE_LOG_LINE.finditer(text)}
+
+
+def bake_inner_invalid(probes, invalid, dims):
+    """-> (shell, inner, inner_invalid) for one volume from the baker's counts (Atlas's method, house-polish atlas.md
+    gap 2). The grid's outer shell sits in the walls by design, so every shell probe is taken as invalid and the rest
+    of the count as inner: a lower bound on the inner probes the room's air samples."""
+    inner = max(0, dims[0] - 2) * max(0, dims[1] - 2) * max(0, dims[2] - 2)
+    shell = probes - inner
+    return shell, inner, max(0, invalid - shell)
 
 
 def classify_probes(layers, dims):
@@ -332,8 +362,10 @@ def classify_probes(layers, dims):
 def _classify_one(probes, idx, nbs):
     # An exact copy of a neighbour in every layer is a fill from one done neighbour (a face probe in a wall copies the
     # one inside it) unless the probe is all black, where copies are just as likely to be real.
-    dark = all(abs(x) < 1e-4 for l in range(len(probes)) for x in probes[l][idx])
-    same = [all(probes[l][j] == probes[l][idx] for l in range(len(probes))) for j in nbs]
+    dark = _is_black(probes, idx)
+    if dark and all(_is_black(probes, j) for j in nbs):
+        return "uniform"  # below the black floor: can't be told from a fill (see BLACK_FLOOR)
+    same =[all(probes[l][j] == probes[l][idx] for l in range(len(probes))) for j in nbs]
     # Quick scalar screen on the layer-0 red DC term, then the full check.
     target = probes[0][idx][0]
     found_uniform = False
@@ -956,6 +988,10 @@ def run(args):
                 bakes[bf] = {g["name"]: g for g in parse_gi(f.read())}
         except (OSError, ValueError) as ex:
             bake_err[bf] = str(ex)
+    bake_log = {}
+    if getattr(args, "bake_log", ""):
+        with open(args.bake_log, "r", encoding="utf-8", errors="replace") as f:
+            bake_log = parse_bake_log(f.read())
 
     # ---- per volume: match + invalid share
     vol_rows = []
@@ -1001,9 +1037,21 @@ def run(args):
             row["invalid_share"] = round(nf / len(cls), 4)
             # Face probes sit in the walls by design (GIBaker's own check counts inner probes only), so the flag is on
             # the inner probes: those are the ones the room's air actually samples.
-            row["inner_invalid_share"] = round(inner.count("filled") / len(inner), 4) if inner else None
-            if inner and inner.count("filled") / len(inner) > INVALID_FLAG_SHARE:
-                issues.append("inner invalid share %.0f%% > 20%%" % (100 * inner.count("filled") / len(inner)))
+            row["classifier_inner_invalid_share"] = round(inner.count("filled") / len(inner), 4) if inner else None
+            row["inner_invalid_share"] = row["classifier_inner_invalid_share"]
+            row["inner_invalid_source"] = "classifier"
+            # The baker's own count wins when its log is given: it knows which probes it filled.
+            if v["name"] in bake_log:
+                probes_n, invalid_n = bake_log[v["name"]]
+                shell, n_inner, ii = bake_inner_invalid(probes_n, invalid_n, d)
+                row["bake_invalid"] = invalid_n
+                row["bake_shell"] = shell
+                row["bake_inner_invalid"] = ii
+                row["inner_invalid_share"] = round(ii / n_inner, 4) if n_inner else None
+                row["inner_invalid_source"] = "bake log"
+            if (row["inner_invalid_share"] or 0) > INVALID_FLAG_SHARE:
+                issues.append("inner invalid share %.0f%% > 20%% (%s)" % (100 * row["inner_invalid_share"],
+                                                                          row["inner_invalid_source"]))
         if len(([""] if v["outside"] else []) + v["circuits"]) > MAX_LAYERS:
             issues.append("wants more than %d layers" % MAX_LAYERS)
         row["issues"] = " | ".join(issues)
@@ -1451,8 +1499,12 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
              "6-neighbours averages to it in every coefficient of every layer within half-float rounding (what "
              "GI::FillInvalid leaves). A probe with one done neighbour is filled as a bit-exact copy of it: a group of "
              "identical neighbours counts all-but-one as filled (all of them when one member is an averaged fill). "
-             "All-black probes are ambiguous and counted apart (`dark_ambiguous`). The bake's own log line "
-             "`[GI bake] <volume>: N probes, X inside geometry (filled)` is the exact number: Kronos's bake gives it.")
+             "All-black probes are ambiguous and counted apart (`dark_ambiguous`), and so is a probe that is black "
+             "(every coefficient under %g) with all its neighbours black too: in an unlit room any neighbour average "
+             "matches it within rounding, so it can't be told from a fill. The bake's own log line "
+             "`[GI bake] <volume>: N probes, X inside geometry (filled)` is the exact number: pass the bake's stdout "
+             "with `--bake-log` and `inner_invalid_share` comes from it (shell = N - (x-2)(y-2)(z-2) taken as all "
+             "invalid, a lower bound; `inner_invalid_source` says which count was used)." % BLACK_FLOOR)
     L.append("- **Walkable floor** = the top faces of the box floor colliders under %s (%d slabs), less points inside a "
              "wall collider 0.3 m up. %d floor piece(s) have mesh colliders and are NOT sampled (%s): the stair runs, "
              "for one. Talos's tour waypoints cover those (see the cross-check). Furniture is not subtracted. "
@@ -1473,7 +1525,8 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
 
     L.append("## 1. Volumes and the bake\n")
     L.append(md_table(vol_rows, ["volume", "size", "dims", "baked_dims", "spacing", "fade", "circuits", "outside",
-                                 "invalid_share", "inner_invalid_share", "issues"]))
+                                 "invalid_share", "classifier_inner_invalid_share", "bake_inner_invalid",
+                                 "inner_invalid_share", "inner_invalid_source", "issues"]))
     L.append("Full table: `gi_audit_volumes.csv`.\n")
 
     L.append("## 2. Coverage gaps (eye height first)\n")
@@ -1598,6 +1651,9 @@ def main(argv=None):
     ap.add_argument("--step", type=float, default=0.25, help="floor sampling step, metres")
     ap.add_argument("--bake-fov", type=float, default=90.0, help="bake camera vertical FOV for DistanceFade")
     ap.add_argument("--notes", default="", help="optional markdown file inserted after the summary (hand-written findings)")
+    ap.add_argument("--bake-log", default="",
+                    help="the --bake-gi stdout of this bake: the baker's 'N probes, M inside geometry' lines give the "
+                         "inner-invalid share instead of the classifier's guess")
     ap.add_argument("--check-margins", action="store_true",
                     help="check every place two volumes meet: no leak through walls, no wSum dip across doorways and "
                          "seams; exit status 1 on a failure")

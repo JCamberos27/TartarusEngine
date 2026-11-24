@@ -202,9 +202,101 @@ void LightSwitchStopRestores() {
     CHECK(w.Registry.all_of<DeactivatedTag>(light) && !LightSwitch::IsOn(w, "Room"));
     CHECK(w.Registry.get<RenderableComponent>(fitting).Materials.at(0)->Mat.EmissiveStrength == 0.0f);
 }
+// Two switches on one circuit (a hall with a switch at each end): flipping either one flips the circuit, and both
+// switches always show the same state.
+void LightSwitchTwoSwitchesOneCircuit() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const entt::entity light = w.CreateEmptyEntity(glm::vec3(5.0f, 2.0f, -2.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Bulb");
+    w.Registry.emplace<LightComponent>(light);
+    w.Registry.emplace<LightCircuitComponent>(light).Circuit = "Stairs";
+    // One switch at each end, 10 m apart: each is only in reach from its own end.
+    const glm::vec3 atA(0.0f, 0.0f, -1.5f), atB(10.0f, 0.0f, -1.5f);
+    const glm::vec3 eyeA(0.0f), eyeB(10.0f, 0.0f, 0.0f);
+    const entt::entity a = w.CreateModelEntity(model, atA, glm::vec3(0.0f), glm::vec3(1.0f), "Switch Bottom");
+    const entt::entity b = w.CreateModelEntity(model, atB, glm::vec3(0.0f), glm::vec3(1.0f), "Switch Top");
+    w.Registry.emplace<LightSwitchComponent>(a).Circuit = "Stairs";
+    w.Registry.emplace<LightSwitchComponent>(b).Circuit = "Stairs";
+    w.RebuildWorldTransformCache();
+
+    const glm::vec3 mid = (model->BoundsMin() + model->BoundsMax()) * 0.5f;
+    const glm::vec3 aimA = glm::normalize(atA + mid - eyeA), aimB = glm::normalize(atB + mid - eyeB);
+    const auto on = [&](entt::entity e) { return w.Registry.get<LightSwitchComponent>(e).On; };
+    const auto lit = [&] { return !w.Registry.all_of<DeactivatedTag>(light); };
+    LightSwitch::Update(w, eyeA, aimA, false); // starts: off (both say Start On = false)
+    CHECK(!on(a) && !on(b) && !lit());
+    CHECK(LightSwitch::Pick(w, eyeA, aimA) == a && LightSwitch::Pick(w, eyeB, aimB) == b);
+    CHECK(LightSwitch::Pick(w, eyeA, glm::normalize(atB + mid - eyeA)) == entt::null); // the far switch: out of reach
+    LightSwitch::Update(w, eyeA, aimA, true); // bottom: on
+    CHECK(on(a) && on(b) && lit() && LightSwitch::IsOn(w, "Stairs"));
+    LightSwitch::Update(w, eyeB, aimB, true); // top: off
+    CHECK(!on(a) && !on(b) && !lit() && !LightSwitch::IsOn(w, "Stairs"));
+    LightSwitch::Update(w, eyeB, aimB, true); // top: on
+    CHECK(on(a) && on(b) && lit());
+    LightSwitch::Update(w, eyeA, aimA, true); // bottom: off
+    CHECK(!on(a) && !on(b) && !lit());
+    CHECK(LightSwitch::StartOnConflicts(w).empty());
+}
+
+// Switches on one circuit that disagree on Start On: StartOnConflicts names the circuit, Play start warns once, and
+// the circuit (and every switch on it) starts as the first-found switch says.
+void LightSwitchStartOnDisagreement() {
+    World w;
+    const entt::entity light = w.CreateEmptyEntity(glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Bulb");
+    w.Registry.emplace<LightComponent>(light);
+    w.Registry.emplace<LightCircuitComponent>(light).Circuit = "Hall";
+    const auto addSwitch = [&](const char* name, const char* circuit, bool startOn) {
+        const entt::entity e = w.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), name);
+        auto& s = w.Registry.emplace<LightSwitchComponent>(e);
+        s.Circuit = circuit;
+        s.StartOn = startOn;
+        return e;
+    };
+    const entt::entity h1 = addSwitch("Hall A", "Hall", true);
+    const entt::entity h2 = addSwitch("Hall B", "Hall", false);
+    addSwitch("Den A", "Den", false);
+    addSwitch("Den B", "Den", false); // agrees: no warning
+    w.RebuildWorldTransformCache();
+
+    const std::vector<std::string> conflicts = LightSwitch::StartOnConflicts(w);
+    CHECK(conflicts.size() == 1 && conflicts[0] == "Hall");
+
+    const auto lastSeq = [] { const auto& es = Log::Entries(); return es.empty() ? 0ull : es.back().Seq; };
+    const auto warnings = [](unsigned long long after, const std::string& text) {
+        int n = 0;
+        for (const LogEntry& e : Log::Entries())
+            if (e.Seq > after && e.Level == LogLevel::Warning && e.Message.find(text) != std::string::npos) ++n;
+        return n;
+    };
+    const unsigned long long before = lastSeq();
+    LightSwitch::Update(w, glm::vec3(0.0f), glm::vec3(0, 0, -1), false); // Play starts
+    CHECK(warnings(before, "circuit 'Hall' disagree on Start On") == 1);
+    CHECK(warnings(before, "circuit 'Den'") == 0);
+    // The first-found switch decides, and every switch on the circuit takes that state.
+    const bool first = w.Registry.get<LightSwitchComponent>(h1).On;
+    CHECK(first == w.Registry.get<LightSwitchComponent>(h2).On);
+    CHECK(LightSwitch::IsOn(w, "Hall") == first && !w.Registry.all_of<DeactivatedTag>(light) == first);
+    // Started: a later frame doesn't warn again.
+    const unsigned long long after = lastSeq();
+    LightSwitch::Update(w, glm::vec3(0.0f), glm::vec3(0, 0, -1), false);
+    CHECK(warnings(after, "disagree on Start On") == 0);
+
+    // Made to agree: no conflict left.
+    w.Registry.get<LightSwitchComponent>(h2).StartOn = true;
+    CHECK(LightSwitch::StartOnConflicts(w).empty());
+}
 } // namespace
 
 void RegisterLightSwitchTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"LightSwitch: two switches on one circuit flip it together and stay in sync", LightSwitchTwoSwitchesOneCircuit});
+    tests.push_back({"LightSwitch: switches disagreeing on Start On are reported and warned once", LightSwitchStartOnDisagreement});
     tests.push_back({"LightSwitch: Stop puts what SetAll did back as authored (the GI bake)", LightSwitchStopRestores});
     tests.push_back({"LightSwitch: scene blocks load and save", LightSwitchSceneBlocks});
     tests.push_back({"LightSwitch: start state, Interact flips the light and the fitting's glow", LightSwitchCircuit});

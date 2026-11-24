@@ -117,6 +117,32 @@ class InvalidProbeTests(unittest.TestCase):
         self.assertEqual(cls.count("filled"), 0)
         self.assertEqual(cls.count("uniform"), 27)
 
+    def test_black_room_is_not_filled(self):
+        # An unlit room (stair storeroom / box room on final-1): SH ~1e-5 with a little noise. Any neighbour average
+        # lands within _close's absolute term, so before the black floor nearly every probe read 'filled'.
+        dims = (6, 5, 5)
+        probes = self.field(dims, lambda i, j, k, c: 1e-5 * (1.0 + 0.3 * math.sin(1.7 * i + 2.3 * j + 0.9 * k + 0.4 * c)))
+        vol = {"name": "v", "box": axis_box((0, 0, 0), (1, 1, 1)), "dims": dims, "layers": [("", probes), ("Lamp", probes)]}
+        layers = ga.parse_gi(ga.serialize_gi([vol]))[0]["layers"]  # through half floats, as on disk
+        cls = ga.classify_probes(layers, dims)
+        self.assertEqual(cls.count("filled"), 0)
+        self.assertEqual(cls.count("uniform"), len(cls))
+        # A lit probe next to the black ones is still judged on its own (the floor needs ALL neighbours black).
+        lit = list(probes)
+        lit[ga.probe_index(2, 2, 2, dims)] = tuple(0.05 + 0.01 * c for c in range(12))
+        cls = ga.classify_probes([("", lit)], dims)
+        self.assertEqual(cls[ga.probe_index(2, 2, 2, dims)], "valid")
+
+    def test_bake_log_inner_invalid(self):
+        log = ("[info]  [GI bake] GI box room: 728 probes, 398 inside geometry (filled); mean irradiance (all layers) "
+               "0.0000 0.0000 0.0000\n"
+               "[info]  [GI bake] GI stair storeroom: 539 probes, 319 inside geometry (filled); mean irradiance\n"
+               "[info]  [GI bake] some other line\n")
+        rows = ga.parse_bake_log(log)
+        self.assertEqual(rows, {"GI box room": (728, 398), "GI stair storeroom": (539, 319)})
+        self.assertEqual(ga.bake_inner_invalid(728, 398, (13, 7, 8)), (398, 330, 0))  # every invalid probe is shell
+        self.assertEqual(ga.bake_inner_invalid(539, 319, (7, 7, 11)), (314, 225, 5))  # 5 inner = 2%
+
     def test_lit_exact_copy_is_filled(self):
         # A face probe in a wall filled from its one done neighbour is a bit-exact copy of it.
         dims = (3, 2, 2)
