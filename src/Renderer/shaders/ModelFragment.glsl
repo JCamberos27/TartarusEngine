@@ -526,6 +526,10 @@ void main() {
 
         vec3 R = reflect(-V, N);
         vec3 prefiltered = textureLod(uPrefilteredMap, R, roughness * uIBLSpecularMaxLod).rgb;
+        // How much of `prefiltered` came from a captured room's own cube (0..1). The sky's Ambient intensity scales the
+        // SKY's specular only: a room cube is the scene's own radiance (lamps, lit walls), so scaling it by 0.08 left every
+        // metal and mirror in a lit room near black (the kitchen sink, the bathroom mirrors).
+        float roomSpecW = 0.0;
 #ifdef _REFLECTION_PROBES
         // Parallax box projection: for each bound probe, clip R to the probe box and sample
         // the sky specular cube with the corrected direction, then blend by weight.
@@ -558,6 +562,7 @@ void main() {
                 else
                     probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
                 blendedPrefilter += probeSpec * uProbeBlend[pi];
+                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0) roomSpecW += uProbeBlend[pi];
                 // Room diffuse (a stand-in for baked GI): the captured room's widest GGX mip along N is close to its
                 // cosine-weighted irradiance - the lamps, the lit walls and the windows, not the open sky. It is the
                 // scene's own radiance, so the sky's Ambient intensity does not scale it. Full weight in the box's
@@ -595,13 +600,14 @@ void main() {
         vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * specW;
 
         vec3 diffuseIBL = irradiance * albedo; // already in Ambient-intensity terms (see above)
-        ambient = (kD * diffuseIBL + specularIBL * uIBLIntensity) * ao;
+        const float specIntensity = mix(uIBLIntensity, 1.0, clamp(roomSpecW, 0.0, 1.0)); // the sky's share keeps Ambient intensity
+        ambient = (kD * diffuseIBL + specularIBL * specIntensity) * ao;
         // Puddle SSR: where the traced ray found the scene, its radiance replaces the probe / sky reflection (which is
         // in ambient's ao * intensity terms; the trace is already radiance). Rough water fades back to the probe.
         if (uSsrEnabled == 1 && gPuddle > 0.0 && uNoGlossyReflections == 0) {
             vec4 ssr = texture(uSsrMap, gl_FragCoord.xy / uScreenSize);
             float w = ssr.a * gPuddle * (1.0 - smoothstep(0.08, 0.3, roughness));
-            if (w > 0.0 && !any(isnan(ssr.rgb)) && !any(isinf(ssr.rgb))) ssrAdd = (ssr.rgb - prefiltered * ao * uIBLIntensity * ssaoFactor) * specW * w;
+            if (w > 0.0 && !any(isnan(ssr.rgb)) && !any(isinf(ssr.rgb))) ssrAdd = (ssr.rgb - prefiltered * ao * specIntensity * ssaoFactor) * specW * w;
         }
     } else {
         ambient = vec3(0.03) * albedo * ao;
