@@ -656,10 +656,11 @@ float ShadowTap(int kind, int slot, vec3 u, float ref) {
 // kind 0 = a point light's cube, 1 = a spot's map (fix-3: the spots' 4-tap filter left ~6 cm stair-stepped edges).
 // Tent PCF (fix-3): a 4x4 GRID of taps with binomial weights (1,3,3,1) x (1,3,3,1) / 64, spaced h map texels apart
 // across the light direction. Every tap is a hardware 2x2 bilinear compare (DepthArrayTarget: GL_LINEAR + compare), i.e.
-// a 2-texel-wide ramp; with h <= 2 the ramps overlap, so the weighted sum is ONE continuous bell-shaped penumbra: no
+// a ramp ONE texel wide; with h <= 1 the ramps overlap, so the weighted sum is ONE continuous bell-shaped penumbra: no
 // 16-level bands (the equal-weight 16-tap Poisson disk showed separate edge copies on grazing walls, hall spot wedge)
-// and no per-pixel grain. h = (kernel - 1) / 1.5 puts the filter's reach (1.5 h + 1 texels) at `kernel` texels and moves
-// continuously with Softness (kernel <= 1: one bilinear tap). texelW = the map texel's world size at the receiver.
+// and no per-pixel grain (h > 1 would leave (h - 1)-texel plateaus: Argus's review). h = (kernel - 1) / 1.5 puts the
+// filter's reach (1.5 h + 1 texels) at `kernel` texels (<= 2.5, KernelTexels caps it) and moves continuously with
+// Softness (kernel <= 1: one bilinear tap). texelW = the map texel's world size at the receiver.
 // Each tap compares against the receiver plane's distance along its own ray (geometric N), as before.
 const ivec2 kTentOrder[16] = ivec2[](ivec2(0, 0), ivec2(3, 0), ivec2(0, 3), ivec2(3, 3), // corners first: early-out
     ivec2(1, 0), ivec2(2, 0), ivec2(0, 1), ivec2(1, 1), ivec2(2, 1), ivec2(3, 1),
@@ -669,9 +670,10 @@ float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW
     vec3 w = dir / d;
     vec3 t = normalize(cross(abs(w.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), w));
     vec3 b = cross(w, t);
-    float h = clamp((kernel - 1.0) / 1.5, 0.0, 2.0) * texelW; // tap spacing, world units at the receiver
+    float h = clamp((kernel - 1.0) / 1.5, 0.0, 1.0) * texelW; // tap spacing, world units at the receiver
     float pn = dot(dir, N); // light->receiver . N (the geometric normal): < 0 here (callers blend in at N.L >= 0.03)
-    if (h <= 0.0) return ShadowTap(kind, slot, dir, (d - biasW) / far);
+    float centre = ShadowTap(kind, slot, dir, (d - biasW) / far); // the receiver's own tap
+    if (h <= 0.0) return centre;
     float vis = 0.0;
     for (int i = 0; i < 16; ++i) {
         ivec2 g = kTentOrder[i];
@@ -682,9 +684,10 @@ float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW
         float tPlane = (un < -1e-4) ? clamp(pn / un, 0.5, 2.0) * length(u) : d;
         float v = ShadowTap(kind, slot, u, (tPlane - biasW) / far);
         vis += v * kTentW[g.x] * kTentW[g.y] * (1.0 / 64.0);
-        if (i == 3) { // the 4 corners carry 4/64 of the weight: all lit or all shadowed -> no edge in reach
-            if (vis <= 0.0) return 0.0;
-            if (vis >= 4.0 / 64.0 - 1e-6) return 1.0;
+        if (i == 3) { // 4 corners (4/64 of the weight) + the centre all lit or all shadowed -> no edge in reach. The centre
+                      // keeps a caster narrower than the corners' 3h spread (rails, chandelier arms) from vanishing.
+            if (vis <= 0.0 && centre <= 0.0) return 0.0;
+            if (vis >= 4.0 / 64.0 - 1e-6 && centre >= 1.0) return 1.0;
         }
     }
     return vis;
