@@ -390618,6 +390618,65 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
+          -36.810001373291016,
+          4.947000026702881,
+          0.24150000512599945
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.700000047683716,
+          2.815000057220459,
+          15.92300033569336
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.4,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Den",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36410,
+      "name": "Lamp_stand Den",
+      "order": 160008,
+      "parentId": 35585,
+      "position": [
+        -38.2,
+        4.789,
+        -0.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
           -37.53900146484375,
           4.947000026702881,
           10.1850004196167
@@ -1098228,6 +1098287,55 @@
         0.0,
         -0.0,
         -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Den",
+        "Glow": 0.20000000298023224,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.0013729999773204327,
+          0.6850889921188354,
+          -0.0037539999466389418
+        ],
+        "halfExtents": [
+          0.019999999552965164,
+          0.6898710131645203,
+          0.019999999552965164
+        ],
+        "isTrigger": false
+      },
+      "id": 36409,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_stand (den)",
+      "order": 160007,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_stand.FBX",
+      "pathGuid": "4f000d0cee8fb9bc",
+      "position": [
+        -38.2,
+        3.589,
+        -0.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
         1.0
       ],
       "scale": [
