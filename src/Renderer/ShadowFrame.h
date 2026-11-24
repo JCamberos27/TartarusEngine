@@ -48,7 +48,20 @@ public:
     // framebuffer and viewport.
     void RenderLocal(const ShadowFrameInputs& in);
 
+    // What the last RenderLocal redrew (GI Phase 1 perf: slot re-renders vs per-caster cost; --gi-tour writes it per
+    // frame). A "static redraw" rebuilds a cache from scratch - what a slot changing hands costs; a "dynamic" pass only
+    // draws the moving casters over the cache.
+    struct LocalStats {
+        int SpotLive = 0, SpotStaticRedraws = 0, SpotDynamicPasses = 0, SpotWholeRedraws = 0;
+        int PointLive = 0, PointStaticFaces = 0, PointDynamicFaces = 0, PointKeptFaces = 0;
+        int CasterDraws = 0;       // casters submitted across every local map this frame
+        int StaticCasterDraws = 0; // of them, into a static cache (the re-render cost)
+    };
+    const LocalStats& LastLocalStats() const { return m_Stats; }
+
 private:
+    LocalStats m_Stats;
+    bool m_CountingStatic = false; // DrawLocalCasters is filling a static cache (LocalStats::StaticCasterDraws)
     struct SunCaster {
         Model* model;
         const std::vector<std::shared_ptr<MaterialAsset>>* materials;

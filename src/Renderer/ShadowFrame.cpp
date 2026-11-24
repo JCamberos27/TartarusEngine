@@ -372,6 +372,7 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
         in.pointMap->Configure(std::min(world.Render.ShadowResolution, 1024), std::max(fl.PointBudget, 1));
     }
     m_LocalCasters.clear();
+    m_Stats = {};
     if (!world.Render.ShadowsEnabled || (fl.SpotCount <= 0 && fl.PointCount <= 0)) return;
     GatherLocalCasters(in);
     GLTargetScope callerTarget; // the caller's framebuffers + viewport come back after the local maps
@@ -507,6 +508,8 @@ void ShadowFrame::DrawLocalCasters(Shader& shader, bool animatedOnes, const Frus
         if (clip && c->bounded && !clip->Intersects(c->bounds)) continue;
         m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
     }
+    m_Stats.CasterDraws += (int)m_Draws.size();
+    if (m_CountingStatic) m_Stats.StaticCasterDraws += (int)m_Draws.size();
     DrawDepthCasters(shader, m_Draws);
 }
 
@@ -527,6 +530,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
     const LocalPassLocs locs = BeginLocalPass(localShadowShader);
     for (int s = 0; s < fl.SpotCount; ++s) {
         if (!fl.SpotLive[s]) continue;
+        ++m_Stats.SpotLive;
         // A light that moves (the flashlight) draws straight into its live layer - caching static depth it would throw
         // away next frame was a whole extra draw and layer copy.
         const bool lightMoved = fl.SpotVP[s] != m_SpotLastVP[s];
@@ -578,8 +582,11 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         }
         auto drawCasters = [&](bool animatedOnes) { DrawLocalCasters(localShadowShader, animatedOnes, nullptr); };
         if (lightMoved) {
+            ++m_Stats.SpotWholeRedraws;
             spotShadowMap.Begin(s);
+            m_CountingStatic = true;
             drawCasters(false);
+            m_CountingStatic = false;
             drawCasters(true);
             m_SpotShadowSig[s] = 0; // no cache: built on a later still frame (see spotTurn)
             m_SpotLiveSig[s] = sig;
@@ -589,10 +596,14 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         // Static casters into the cache only when they changed; then the live layer is that depth plus this frame's
         // animated casters (an NPC standing in the spot used to redraw the whole arena into it every frame).
         if (staticChanged) {
+            ++m_Stats.SpotStaticRedraws;
             spotShadowMap.BeginStatic(s);
+            m_CountingStatic = true;
             drawCasters(false);
+            m_CountingStatic = false;
             m_SpotShadowSig[s] = sig;
         }
+        ++m_Stats.SpotDynamicPasses;
         // The live layer is the cache plus last frame's animated casters, which stayed within their rect: restoring
         // that rect and this frame's from the cache is the whole layer's worth (a new cache is copied whole).
         const glm::ivec4 prev = m_SpotDynamicRect[s];
@@ -616,6 +627,7 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
     const LocalPassLocs locs = BeginLocalPass(localShadowShader);
     for (int s = 0; s < fl.PointCount; ++s) {
         if (!fl.PointLive[s]) continue;
+        ++m_Stats.PointLive;
         // The light's whole reach: casters outside it can't show on any face.
         const glm::vec3 lp = fl.PointPos[s];
         const float reach = fl.PointFar[s];
@@ -647,13 +659,18 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
                 const LocalCaster* c = m_Visible[vi];
                 if (m_VisibleDynamic[vi] && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
             }
-            if (!staticChanged && !dynamicHere && !m_PointFaceHadDynamic[s][f]) continue; // keep the face
+            if (!staticChanged && !dynamicHere && !m_PointFaceHadDynamic[s][f]) { ++m_Stats.PointKeptFaces; continue; } // keep the face
             m_PointFaceHadDynamic[s][f] = dynamicHere;
             localShadowShader.SetMat4(locs.ViewProj, vp);
             const auto drawCasters = [&](bool dynamicOnes) { DrawLocalCasters(localShadowShader, dynamicOnes, &lf); };
             if (staticChanged) {
+                ++m_Stats.PointStaticFaces;
                 pointShadowMap.BeginStaticFace(s, f);
+                m_CountingStatic = true;
                 drawCasters(false);
+                m_CountingStatic = false;
+            } else {
+                ++m_Stats.PointDynamicFaces;
             }
             pointShadowMap.BeginFaceFromStatic(s, f);
             if (dynamicHere) drawCasters(true);

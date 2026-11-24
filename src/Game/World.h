@@ -1,5 +1,6 @@
 #pragma once
 #include "Log.h" // LogContext
+#include <cstdint>
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -33,6 +34,9 @@ public:
     World();
 
     entt::registry Registry;
+    // Bumped each time a whole scene replaces the registry (ApplySceneJson with clearFirst): per-entity caches kept
+    // outside the registry (LightGather's shadow slots) drop what they hold when it changes - entity ids are reused.
+    std::uint64_t SceneLoads = 0;
 
     // The scene's render/post settings (sky, exposure, AA, SSAO, bloom, grading, DoF, wetness, fog,
     // volumetrics, shadows): SceneRenderSettings.h.

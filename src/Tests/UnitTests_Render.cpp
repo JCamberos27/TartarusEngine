@@ -3,6 +3,7 @@
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
+#include "../Renderer/OpaqueBatchKey.h"
 #include "../Renderer/UploadStaging.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
@@ -32,6 +33,7 @@
 #include "../Renderer/ReflectionProbeCapture.h"
 #include "../Renderer/GIData.h"
 #include "../Renderer/GIVolumes.h"
+#include "../Renderer/ShadowSlotScoring.h"
 #include "../Game/LightSwitch.h"
 #include "../Game/SceneSerializer.h"
 #include "../Game/TimeOfDay.h"
@@ -892,6 +894,8 @@ void ShaderConstantsMatch() {
     for (const std::string* text : {&shading, &fog}) {
         CHECK(has(*text, "uniform mat4 uSpotShadowVP[" + n(SpotShadowMap::kMaxSpots) + "];"));
         CHECK(has(*text, "uniform float uPointShadowFar[" + n(PointShadowMap::kMaxPoints) + "];"));
+        CHECK(has(*text, "uniform float uPointShadowWeight[" + n(PointShadowMap::kMaxPoints) + "];"));
+        CHECK(has(*text, "uniform float uSpotShadowWeight[" + n(SpotShadowMap::kMaxSpots) + "];"));
     }
 }
 
@@ -1082,6 +1086,39 @@ using json = nlohmann::json;
 using UnitTestSupport::TempDir;
 using UnitTestSupport::ReadAll;
 
+// GI Phase 1 (W3): GPU-driven batches merge only groups the per-draw hook binds alike. The GI volume mask and every bit
+// of the probe selection must split them; otherwise a group is shaded with its batch lead's GI volumes (launch-dependent).
+void TestOpaqueBatchKey() {
+    namespace K = OpaqueBatchKey;
+    K::ObjectState a;
+    a.LayerBit = 1u;
+    a.ProbeKey = (2u << 30) | (3u << 20) | (7u << 10) | 40u;
+    a.GIMask = 0x0000000000000003ull;
+    const std::uint64_t ka = K::Object(a);
+    CHECK(K::Object(a) == ka); // deterministic: equal state, equal key
+    K::ObjectState b = a;
+    b.GIMask = 0x0000000000000006ull; // another room's volumes
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.GIMask = a.GIMask | (1ull << 40); // a high volume bit (the second mask word)
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.ProbeKey = a.ProbeKey + (16u << 20); // primary probe 3 -> 19: only bits 24-31 differ (lost by the old << 40)
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.ProbeKey = (1u << 30) | (a.ProbeKey & 0x3FFFFFFFu); // one probe instead of two: bits 30-31 only
+    CHECK(K::Object(b) != ka);
+    for (int f = 0; f < 5; ++f) { // each flag still splits
+        b = a;
+        bool* flags[5] = {&b.ReceiveShadows, &b.StaticReceiver, &b.NoSsao, &b.DoubleSided, &b.Prepassed};
+        *flags[f] = !*flags[f];
+        CHECK(K::Object(b) != ka);
+    }
+    b = a;
+    b.LayerBit = 2u;
+    CHECK(K::Object(b) != ka);
+}
+
 // A still spot / point light redraws its static depth only when a caster's signature changes. A colourway swaps one
 // material slot in place (same count, same first slot): that must change the signature too.
 void TestLocalCasterHashSlots() {
@@ -1100,6 +1137,187 @@ void TestLocalCasterHashSlots() {
     CHECK(LocalCasterHash(7, nullptr, before, xf, 0, true) != h0);
     CHECK(LocalCasterHash(8, nullptr, before, xf, 0, false) != h0);
     CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
+}
+
+// GI Phase 1 (W2): room-aware, stable shadow slots that fade instead of popping (ShadowSlotScoring).
+void TestShadowSlotScoring() {
+    namespace S = ShadowSlotScoring;
+    // Room names: the trailing number (and the space before it) goes; nothing else does.
+    CHECK(S::RoomKey("GI living room 1") == "GI living room");
+    CHECK(S::RoomKey("GI living room 12") == "GI living room");
+    CHECK(S::RoomKey("GI_hall_2") == "GI_hall");
+    CHECK(S::RoomKey("GI kitchen") == "GI kitchen");
+    CHECK(S::RoomKey("Bedroom2") == "Bedroom");
+    CHECK(S::RoomKey("42") == "42");
+
+    auto box = [](glm::vec3 c, glm::vec3 size, float yawDeg = 0.0f) {
+        const glm::mat4 m = glm::rotate(glm::translate(glm::mat4(1.0f), c), glm::radians(yawDeg), glm::vec3(0, 1, 0));
+        return GI::Box::FromTransform(m, size);
+    };
+    // Touching: within the gap (a 0.2 m wall), not past it; rotated boxes use the full separating-axis test.
+    CHECK(S::Touch(box({0, 0, 0}, {4, 3, 4}), box({4.2f, 0, 0}, {4, 3, 4}), S::kNeighbourGap));
+    CHECK(!S::Touch(box({0, 0, 0}, {4, 3, 4}), box({4.6f, 0, 0}, {4, 3, 4}), S::kNeighbourGap));
+    CHECK(S::Touch(box({0, 0, 0}, {4, 3, 4}), box({4.6f, 0, 0}, {4, 3, 4}, 45.0f), S::kNeighbourGap)); // its corner reaches
+    CHECK(!S::Touch(box({0, 0, 0}, {2, 3, 2}), box({2.0f, 0, 2.0f}, {1, 3, 1}, 45.0f), 0.0f));          // diagonal gap
+
+    // A house: the living room is two volumes; the hall is through a wall from it; the bedroom is across the hall.
+    //   living 1: x -2..2   living 2: x 2..5   hall: x 5.2..7.2   bedroom: x 7.4..11.4 (touches the hall only)
+    S::Rooms rooms;
+    rooms.Add("GI living room 1", box({0, 1.5f, 0}, {4, 3, 4}));
+    rooms.Add("GI living room 2", box({3.5f, 1.5f, 0}, {3, 3, 4}));
+    rooms.Add("GI hall", box({6.2f, 1.5f, 0}, {2, 3, 4}));
+    rooms.Add("GI bedroom 1", box({9.4f, 1.5f, 0}, {4, 3, 4}));
+    CHECK(rooms.Names.size() == 3 && rooms.Boxes.size() == 4);
+    const glm::vec3 view(-1.0f, 1.6f, 0.0f); // in living 1
+    rooms.Classify(view);
+    CHECK(rooms.ViewRoom >= 0 && rooms.Names[rooms.ViewRoom] == "GI living room");
+    CHECK(rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Room);       // living 1
+    CHECK(rooms.TierAt({4.5f, 2.0f, 1.0f}) == S::Tier::Room);       // living 2: the same room
+    CHECK(rooms.TierAt({4.5f, 3.1f, 1.0f}) == S::Tier::Room);       // a ceiling fitting just above the box (kLightPad)
+    CHECK(rooms.TierAt({6.2f, 2.0f, 0.0f}) == S::Tier::Neighbour);  // the hall
+    CHECK(rooms.TierAt({5.25f, 2.0f, 0.0f}) == S::Tier::Neighbour); // a hall wall lamp, 5 cm from the living room's box
+    CHECK(rooms.TierAt({10.0f, 2.0f, 0.0f}) == S::Tier::Other);     // the bedroom: two rooms away
+    CHECK(rooms.TierAt({0.0f, 2.0f, 9.0f}) == S::Tier::Other);      // outdoors
+    // Overlapping volumes: the smallest one holding the view is its room.
+    S::Rooms nested;
+    nested.Add("GI house", box({0, 1.5f, 0}, {20, 3, 20}));
+    nested.Add("GI closet", box({1, 1.5f, 1}, {1, 3, 1}));
+    nested.Classify({1.0f, 1.0f, 1.0f});
+    CHECK(nested.Names[nested.ViewRoom] == "GI closet");
+    // A doorway gap (in no volume, between living 2 and the hall): the view keeps its last room, so crossing a door is
+    // one re-ranking, not two (Talos's #1189 review).
+    rooms.Classify({5.1f, 1.6f, 0.0f});
+    CHECK(rooms.ViewRoom >= 0 && rooms.Names[rooms.ViewRoom] == "GI living room");
+    rooms.Classify({6.2f, 1.6f, 0.0f}); // into the hall: now the hall
+    CHECK(rooms.Names[rooms.ViewRoom] == "GI hall" && rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Neighbour);
+    rooms.Classify({5.1f, 1.6f, 0.0f}); // back in the gap: still the hall
+    CHECK(rooms.Names[rooms.ViewRoom] == "GI hall");
+    // Outside every volume, and past kStickyPad from the last room, nothing is boosted: the old #110 score.
+    rooms.Classify({0.0f, 1.6f, 20.0f});
+    CHECK(rooms.ViewRoom == -1 && rooms.StickyRoom.empty() && rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Other);
+    rooms.Classify(view);
+    // The room upstairs, through a 0.2 m floor slab, touches the living room's box but is not its neighbour.
+    {
+        S::Rooms storeys;
+        storeys.Add("GI living room 1", box({0, 1.5f, 0}, {4, 3, 4}));
+        storeys.Add("GI den", box({0, 4.7f, 0}, {4, 3, 4}));       // y 3.2..6.2
+        storeys.Add("GI stairwell", box({2.5f, 3.1f, 0}, {1, 6.2f, 2})); // both storeys
+        CHECK(S::Touch(storeys.Boxes[0].Box, storeys.Boxes[1].Box, S::kNeighbourGap));
+        storeys.Classify({-1.0f, 1.6f, 0.0f});
+        CHECK(storeys.TierAt({0.0f, 5.0f, 0.0f}) == S::Tier::Other);       // the den lamp upstairs
+        CHECK(storeys.TierAt({2.5f, 2.0f, 0.0f}) == S::Tier::Neighbour);   // the stairwell, beside the living room
+        storeys.Classify({0.0f, 4.5f, 0.0f});                              // upstairs in the den
+        CHECK(storeys.Names[storeys.ViewRoom] == "GI den" && storeys.TierAt({0.0f, 1.0f, 0.0f}) == S::Tier::Other);
+        CHECK(storeys.TierAt({2.5f, 5.8f, 0.5f}) == S::Tier::Neighbour);   // the stairwell spans both storeys
+    }
+
+    // Scores: the room first, then its neighbours, then the rest; held lights keep a 25% edge.
+    const float base = S::Score(10.0f, 6.0f, 2.0f, S::Tier::Other, false);
+    CHECK(base == 10.0f * 36.0f);                                         // inside its range: the full score
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Neighbour, false) == base * S::kNeighbourBoost);
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Room, false) == base * S::kRoomBoost);
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Other, true) == base * S::kHoldBonus);
+    CHECK(S::Score(10.0f, 6.0f, 9.0f, S::Tier::Other, false) == 10.0f * 36.0f / 10.0f); // 3 m past its range
+    // The case the orders are about: a bright hall lamp right by the view, and a dimmer lamp across the living room.
+    // Before (#110's distance score) the hall lamp won the one slot; now the lamp in the player's room does.
+    const glm::vec3 hallLamp(5.3f, 2.4f, 0.0f), roomLamp(4.5f, 2.4f, 1.5f);
+    const float hallOld = S::Score(20.0f, 8.0f, glm::length(hallLamp - view), S::Tier::Other, false);
+    const float roomOld = S::Score(8.0f, 8.0f, glm::length(roomLamp - view), S::Tier::Other, false);
+    CHECK(hallOld > roomOld);
+    const float hallNew = S::Score(20.0f, 8.0f, glm::length(hallLamp - view), rooms.TierAt(hallLamp), false);
+    const float roomNew = S::Score(8.0f, 8.0f, glm::length(roomLamp - view), rooms.TierAt(roomLamp), false);
+    CHECK(roomNew > hallNew);
+    // Hysteresis: a holder keeps its slot against a challenger up to 25% better, and loses it past that.
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Room, true) > S::Score(12.0f, 6.0f, 2.0f, S::Tier::Room, false));
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Room, true) < S::Score(13.0f, 6.0f, 2.0f, S::Tier::Room, false));
+
+    // Fades: one slot, light A holds it, then B is wanted instead. A fades out, B waits, then B fades in.
+    using Slots = S::FadingSlots<4>;
+    const std::uint32_t A = 1, B = 2, C = 3, T = 99;
+    Slots slots;
+    const float dt = 1.0f / 60.0f, step = dt / S::kFadeSeconds;
+    CHECK(slots.Step({A}, {A, B}, 1, 1, dt, true) == 1); // snap: in at full strength
+    CHECK(slots.Owner[0] == A && slots.Weight[0] == 1.0f);
+    float shownA = 1.0f, shownB = 0.0f; // what each light's shadow shows (0 when it holds no slot)
+    bool bIn = false;
+    int frames = 0;
+    for (std::uint64_t f = 2; f < 200 && !(bIn && shownB == 1.0f); ++f, ++frames) {
+        slots.Step({B}, {A, B}, 1, f, dt, false);
+        const float a = slots.Owner[0] == A ? slots.Weight[0] : 0.0f;
+        const float b = slots.Owner[0] == B ? slots.Weight[0] : 0.0f;
+        CHECK(std::abs(a - shownA) <= step + 1e-5f); // never a jump bigger than one frame of fade
+        CHECK(std::abs(b - shownB) <= step + 1e-5f);
+        CHECK(a == 0.0f || b == 0.0f);               // one slot: never both
+        bIn = bIn || b > 0.0f;
+        shownA = a; shownB = b;
+    }
+    CHECK(bIn && shownB == 1.0f && shownA == 0.0f);
+    CHECK(frames <= (int)std::ceil(2.0f / step) + 2); // out, then in: about two fade times
+    // B, holding the slot, is switched off (no candidate any more): freed at once, there is no light left to fade.
+    // A was lit all along (a candidate last frame), so it is a hand-over and A fades in.
+    CHECK(slots.Owner[0] == B);
+    slots.Step({A}, {A}, 1, 300, dt, false);
+    CHECK(slots.Owner[0] == A && std::abs(slots.Weight[0] - step) < 1e-5f);
+    // Switch-on (Talos's #1189 review): a lamp that was NOT a candidate last frame lights at once, so its shadow is
+    // full at once - with a free slot, or by taking a leaving holder's - never shining through walls while it fades.
+    {
+        Slots on;
+        on.Step({A}, {A}, 1, 1, dt, true);                  // A holds the one slot; C is off
+        on.Step({C}, {A, C}, 1, 2, dt, false);              // C switched on and outscores A
+        CHECK(on.Owner[0] == C && on.Weight[0] == 1.0f);    // full the same frame (A, a leaver, gave the slot up)
+        Slots free2;
+        free2.Step({A}, {A}, 2, 1, dt, true);
+        free2.Step({A, C}, {A, C}, 2, 2, dt, false);        // a free slot: C still comes in at full
+        int c = free2.Owner[0] == C ? 0 : 1;
+        CHECK(free2.Owner[c] == C && free2.Weight[c] == 1.0f);
+        // Switched off and on again (off for a frame): it arrives again, full again.
+        free2.Step({A}, {A}, 2, 3, dt, false);
+        CHECK(free2.Owner[0] != C && free2.Owner[1] != C);
+        free2.Step({A, C}, {A, C}, 2, 4, dt, false);
+        c = free2.Owner[0] == C ? 0 : 1;
+        CHECK(free2.Owner[c] == C && free2.Weight[c] == 1.0f);
+        // A lit lamp that was a candidate without a slot still waits and fades (the hand-over case above).
+        Slots lit;
+        lit.Step({A}, {A, C}, 1, 1, dt, true);
+        lit.Step({C}, {A, C}, 1, 2, dt, false);
+        CHECK(lit.Owner[0] == A && lit.Weight[0] < 1.0f);    // A fading out, C waiting
+        // Reset (a scene load): every holder gone, and everything after arrives.
+        lit.Reset();
+        CHECK(lit.Owner[0] == Slots::kNone && lit.PrevLit.empty());
+        lit.Step({C}, {C}, 1, 3, dt, false);
+        CHECK(lit.Owner[0] == C && lit.Weight[0] == 1.0f);
+        // Walking into range (Talos's re-check): C was lit but past its DistanceFade range (lit, not a candidate). Its
+        // light ramps up from 0, so its shadow is a hand-over: it waits for A to fade out, then fades in - no pop.
+        Slots walk;
+        walk.StepLit({A}, {A}, {A, C}, 1, 1, dt, true);
+        walk.StepLit({C}, {A, C}, {A, C}, 1, 2, dt, false);
+        CHECK(walk.Owner[0] == A && walk.Weight[0] < 1.0f); // A fading; C waits
+        for (std::uint64_t f = 3; f < 60 && walk.Owner[0] != C; ++f) walk.StepLit({C}, {A, C}, {A, C}, 1, f, dt, false);
+        CHECK(walk.Owner[0] == C && std::abs(walk.Weight[0] - step) < 1e-5f); // in, fading from dark
+        // ...while the same lamp switched on (not lit last frame) snaps in at once.
+        Slots sw;
+        sw.StepLit({A}, {A}, {A}, 1, 1, dt, true);
+        sw.StepLit({C}, {A, C}, {A, C}, 1, 2, dt, false);
+        CHECK(sw.Owner[0] == C && sw.Weight[0] == 1.0f);
+    }
+    // The urgent key (the flashlight) never waits: it takes the leaving holder's slot at full strength.
+    Slots torch;
+    torch.Step({A, B}, {A, B, C}, 2, 1, dt, true);           // C lit but slot-less
+    torch.Step({T, C}, {A, B, C, T}, 2, 2, dt, false, T);
+    int tSlot = -1;
+    for (int i = 0; i < 2; ++i) if (torch.Owner[i] == T) tSlot = i;
+    CHECK(tSlot >= 0 && torch.Weight[tSlot] == 1.0f);
+    CHECK(torch.Owner[1 - tSlot] == A || torch.Owner[1 - tSlot] == B); // the other leaver still fading; C waits
+    // Stable: a wanted holder keeps its slot index while others come and go.
+    Slots stable;
+    stable.Step({A, B, C}, {A, B, C}, 3, 1, dt, true);
+    int slotOfC = -1;
+    for (int i = 0; i < 3; ++i) if (stable.Owner[i] == C) slotOfC = i;
+    for (std::uint64_t f = 2; f < 60; ++f) stable.Step({C, A}, {A, B, C}, 3, f, dt, false);
+    CHECK(stable.Owner[slotOfC] == C && stable.Weight[slotOfC] == 1.0f);
+    // A smaller budget frees the slots past it at once.
+    CHECK(stable.Step({C}, {A, B, C}, 1, 61, dt, false) >= 1);
+    for (int i = 1; i < 4; ++i) CHECK(stable.Owner[i] == Slots::kNone);
 }
 
 void TestCameraRoll() {
@@ -2100,5 +2318,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
+    tests.push_back({"OpaqueBatchKey", TestOpaqueBatchKey});
     tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
+    tests.push_back({"ShadowSlotScoring", TestShadowSlotScoring});
 }
