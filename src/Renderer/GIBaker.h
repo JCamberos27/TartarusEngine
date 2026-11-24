@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GIData.h"
+#include "../Game/Openable.h"
 #include <entt/entt.hpp>
 #include <functional>
 #include <memory>
@@ -41,6 +42,10 @@ public:
         // TARTARUS_GI_BAKE_LIVE_CLOCKS=1 turns all of it off, for an A/B against the old behaviour.
         bool PinClocks = true;
         std::string SkipLightPrefix = "Bounce "; // hand-placed fakes of the bounce (house_lights.py FILL_I): never baked
+        // The doors, drawers and lids (OpenableComponent) in the captures: as Play starts them (Start Open / Start Ajar
+        // open that far, the rest shut), all open, or all shut as authored (before GI Phase 2 every bake saw them shut).
+        enum class Doors { Start, Open, Shut };
+        Doors DoorPose = Doors::Start;
         // TARTARUS_GI_BAKE_TRACE: when set, called once per probe batch for this frame's shadow-slot holders (a stable
         // text, e.g. "spots[2]: A, B | points[1]: C"). Each batch is logged with it, and each pass ends with how many
         // different sets it saw (a pass whose set changes between batches bakes its probes under different shadows).
@@ -58,6 +63,18 @@ public:
               const std::function<void(const glm::vec3&)>& moveCamera);
     bool Failed() const { return !m_Error.empty(); }
     const std::string& Error() const { return m_Error; }
+    // True from Begin until the doors are put back (Finish, an error): the scene in memory then holds posed doors that
+    // must never reach an undo step, a save or a recovery file.
+    bool DoorsPosed() const { return m_DoorsPosed; }
+    // The openables as loaded again (a no-op once done). RestoreLighting calls it; the app also calls it before an
+    // emergency recovery save and at shutdown, for a bake that ends without Finish.
+    void RestoreDoors(World& world);
+    // Begin's door step, public for the tests: saves every openable, poses them (start / open / shut), sets
+    // Openable::BakePosed and logs the "[GI bake] doors:" line (and a "[GI trace]" one under TARTARUS_GI_BAKE_TRACE).
+    void PoseDoors(World& world, Options::Doors pose);
+    // The error path of Step without the GIVolumes reset: sets the error (if none yet), puts the lighting and the doors
+    // back, and finishes. Public for the tests.
+    void Abort(World& world, const std::string& why);
     // Progress 0..1 and a line for the log.
     float Progress() const;
 
@@ -100,6 +117,9 @@ private:
     std::vector<entt::entity> m_Parked;   // lights the bake deactivated
     float m_SkyAmbient = 0.0f;
     bool m_LightingSaved = false;
+    // The openables as loaded, put back by RestoreLighting (Begin poses them for the captures).
+    std::vector<Openable::Saved> m_DoorsSaved;
+    bool m_DoorsPosed = false;
     double m_StartTime = 0.0;
     glm::vec3 m_ClipMin{0.0f}, m_ClipMax{0.0f};
     // Per pass: when it started and its frames (settling included), for the pass-done line.
